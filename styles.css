@@ -1656,7 +1656,7 @@ main {
 }
 
 .overview-stats-grid {
-  grid-template-columns: minmax(0, 1.15fr) repeat(2, minmax(220px, 1fr));
+  grid-template-columns: minmax(0, 1.15fr) repeat(3, minmax(210px, 1fr));
 }
 
 .overview-stat-card {
@@ -1927,7 +1927,7 @@ main {
 
 .dashboard-secondary-grid {
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr) 220px;
+  grid-template-columns: 320px minmax(0, 1fr);
   gap: 16px;
   align-items: start;
 }
@@ -2057,6 +2057,14 @@ main {
 .streak-side-card {
   align-content: center;
   justify-items: start;
+}
+
+.streak-stat-card {
+  min-height: 168px;
+}
+
+.streak-stat-card strong {
+  margin-top: 18px;
 }
 
 .streak-header {
