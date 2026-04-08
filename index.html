@@ -284,120 +284,265 @@
         </header>
 
         <section class="platform-panel is-visible" data-panel="dashboard">
-          <div class="dashboard-layout">
-            <article class="focus-card">
-              <div class="focus-card-copy">
-                <span class="eyebrow">Próxima prioridade</span>
-                <div class="focus-meta">
-                  <span class="focus-chip">Ao vivo</span>
-                  <span class="focus-time">Hoje, 19:00</span>
-                </div>
+          <div class="dashboard-redesign">
+            <article class="priority-banner">
+              <div class="priority-banner-copy">
+                <span class="eyebrow">Próxima aula ao vivo</span>
                 <h2>Speaking Clinic</h2>
-                <p>Sua próxima aula já está definida. O foco agora é chegar no horário.</p>
+                <p>Hoje, 19:00. Sua próxima ação já está definida.</p>
               </div>
 
-              <div class="focus-card-aside">
-                <div class="focus-stat">
-                  <span>Horário</span>
-                  <strong>19:00</strong>
+              <div class="priority-banner-meta">
+                <div class="priority-meta-card">
+                  <span>Teacher</span>
+                  <strong>Amanda Lewis</strong>
                 </div>
-                <div class="focus-stat">
+                <div class="priority-meta-card">
                   <span>Formato</span>
                   <strong>Ao vivo</strong>
+                </div>
+                <div class="priority-meta-card">
+                  <span>Foco</span>
+                  <strong>Speaking</strong>
                 </div>
               </div>
             </article>
 
-            <div class="dashboard-aside">
-              <article class="surface-card progress-card">
-                <div class="progress-card-header">
-                  <div>
-                    <span class="card-kicker">Progresso da trilha</span>
-                    <strong>72%</strong>
-                  </div>
-                  <span class="progress-stage">trilha atual</span>
+            <div class="overview-stats-grid">
+              <article class="overview-stat-card overview-stat-level">
+                <div class="overview-stat-copy">
+                  <span class="card-kicker">Nível atual</span>
+                  <strong>B1</strong>
+                  <p>72% concluído deste nível</p>
                 </div>
-                <div class="progress-track" aria-hidden="true">
-                  <span class="progress-fill"></span>
+                <div
+                  class="level-progress-ring"
+                  style="--level-progress: 72"
+                  aria-label="72% do nível atual concluído"
+                >
+                  <span>72%</span>
                 </div>
-                <p>Você já está na reta final da metade mais forte do percurso.</p>
               </article>
 
-              <article class="surface-card streak-card">
+              <article class="overview-stat-card">
+                <span class="card-kicker">Horas estudadas</span>
+                <strong>84h</strong>
+                <p>acumuladas na trilha atual</p>
+              </article>
+
+              <article class="overview-stat-card">
+                <span class="card-kicker">Média por dia</span>
+                <strong>38 min</strong>
+                <p>tempo médio de estudo diário</p>
+              </article>
+            </div>
+
+            <div class="analytics-grid">
+              <article class="analytics-card analytics-card-line">
+                <div class="analytics-header">
+                  <div>
+                    <span class="card-kicker">Evolução pedagógica</span>
+                    <h3>Seu desempenho ao longo do tempo</h3>
+                  </div>
+
+                  <div class="chart-filter-group" data-chart-controls="learning">
+                    <button
+                      class="chart-filter-button is-active"
+                      type="button"
+                      data-chart-type="learning"
+                      data-chart-range="30d"
+                    >
+                      30 dias
+                    </button>
+                    <button
+                      class="chart-filter-button"
+                      type="button"
+                      data-chart-type="learning"
+                      data-chart-range="90d"
+                    >
+                      90 dias
+                    </button>
+                    <button
+                      class="chart-filter-button"
+                      type="button"
+                      data-chart-type="learning"
+                      data-chart-range="12m"
+                    >
+                      12 meses
+                    </button>
+                  </div>
+                </div>
+
+                <div class="line-chart-card-body">
+                  <div class="line-chart-scale">
+                    <span>100</span>
+                    <span>80</span>
+                    <span>60</span>
+                    <span>40</span>
+                  </div>
+
+                  <div class="line-chart-stage">
+                    <svg
+                      class="line-chart-svg"
+                      viewBox="0 0 720 280"
+                      aria-hidden="true"
+                      data-learning-chart
+                    >
+                      <g class="line-chart-grid">
+                        <line x1="0" y1="30" x2="720" y2="30"></line>
+                        <line x1="0" y1="95" x2="720" y2="95"></line>
+                        <line x1="0" y1="160" x2="720" y2="160"></line>
+                        <line x1="0" y1="225" x2="720" y2="225"></line>
+                      </g>
+                      <path class="line-chart-area" data-line-area d=""></path>
+                      <path class="line-chart-path" data-line-path d=""></path>
+                      <g class="line-chart-points" data-line-points></g>
+                    </svg>
+
+                    <div class="line-chart-labels" data-learning-labels></div>
+                  </div>
+                </div>
+              </article>
+
+              <article class="analytics-card analytics-card-bar">
+                <div class="analytics-header">
+                  <div>
+                    <span class="card-kicker">Tempo de estudo</span>
+                    <h3>Horas estudadas x tempo</h3>
+                  </div>
+
+                  <div class="chart-filter-group" data-chart-controls="study">
+                    <button
+                      class="chart-filter-button is-active"
+                      type="button"
+                      data-chart-type="study"
+                      data-chart-range="7d"
+                    >
+                      7 dias
+                    </button>
+                    <button
+                      class="chart-filter-button"
+                      type="button"
+                      data-chart-type="study"
+                      data-chart-range="30d"
+                    >
+                      30 dias
+                    </button>
+                    <button
+                      class="chart-filter-button"
+                      type="button"
+                      data-chart-type="study"
+                      data-chart-range="90d"
+                    >
+                      90 dias
+                    </button>
+                    <button
+                      class="chart-filter-button"
+                      type="button"
+                      data-chart-type="study"
+                      data-chart-range="all"
+                    >
+                      Todo período
+                    </button>
+                  </div>
+                </div>
+
+                <div class="bar-chart-shell">
+                  <div class="bar-chart-scale">
+                    <span>12h</span>
+                    <span>8h</span>
+                    <span>4h</span>
+                    <span>0h</span>
+                  </div>
+
+                  <div class="bar-chart-stage">
+                    <div class="bar-chart-grid">
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                    </div>
+                    <div class="bar-chart-bars" data-study-chart></div>
+                    <div class="bar-chart-labels" data-study-labels></div>
+                  </div>
+                </div>
+              </article>
+            </div>
+
+            <div class="dashboard-support-grid">
+              <article class="surface-card tasks-card-refined">
+                <div class="dashboard-section-header refined-header">
+                  <div>
+                    <span class="card-kicker">Hoje</span>
+                    <h3>Tarefas do dia</h3>
+                  </div>
+                  <span class="section-counter">3 tarefas</span>
+                </div>
+
+                <div class="task-list refined-task-list">
+                  <div class="task-item task-item-primary">
+                    <span class="task-index">1</span>
+                    <div class="task-copy">
+                      <strong>Assistir uma aula curta</strong>
+                      <span>Agora</span>
+                    </div>
+                  </div>
+                  <div class="task-item">
+                    <span class="task-index">2</span>
+                    <div class="task-copy">
+                      <strong>Revisar o material da trilha</strong>
+                      <span>Depois</span>
+                    </div>
+                  </div>
+                  <div class="task-item">
+                    <span class="task-index">3</span>
+                    <div class="task-copy">
+                      <strong>Entrar na live das 19:00</strong>
+                      <span>Hoje</span>
+                    </div>
+                  </div>
+                </div>
+              </article>
+
+              <article class="surface-card weekly-schedule-card">
+                <div class="dashboard-section-header refined-header">
+                  <div>
+                    <span class="card-kicker">Agenda</span>
+                    <h3>Próximas aulas</h3>
+                  </div>
+                  <span class="section-counter">Semana atual</span>
+                </div>
+
+                <div class="schedule-list refined-schedule-list">
+                  <div class="schedule-item schedule-item-next">
+                    <div class="schedule-item-top">
+                      <strong>Speaking Clinic</strong>
+                      <span class="schedule-type">Ao vivo</span>
+                    </div>
+                    <div class="schedule-item-bottom">
+                      <span>Terça, 19:00</span>
+                      <span class="schedule-emphasis">Mais próxima</span>
+                    </div>
+                  </div>
+                  <div class="schedule-item">
+                    <div class="schedule-item-top">
+                      <strong>Feedback Session</strong>
+                      <span class="schedule-type schedule-type-soft">1:1</span>
+                    </div>
+                    <div class="schedule-item-bottom">
+                      <span>Quinta, 18:30</span>
+                      <span>Depois</span>
+                    </div>
+                  </div>
+                </div>
+              </article>
+
+              <article class="surface-card streak-side-card">
                 <span class="card-kicker">Streak</span>
                 <strong>9 dias</strong>
                 <p>consistência em sequência</p>
               </article>
             </div>
-          </div>
-
-          <div class="dashboard-sections">
-            <article class="surface-card tasks-card">
-              <div class="dashboard-section-header">
-                <div>
-                  <span class="card-kicker">Hoje</span>
-                  <h3>Tarefas do dia</h3>
-                </div>
-                <span class="section-counter">3 passos</span>
-              </div>
-
-              <div class="task-list">
-                <div class="task-item task-item-primary">
-                  <span class="task-index">1</span>
-                  <div class="task-copy">
-                    <strong>Assistir uma aula curta</strong>
-                    <span>Agora</span>
-                  </div>
-                </div>
-                <div class="task-item">
-                  <span class="task-index">2</span>
-                  <div class="task-copy">
-                    <strong>Revisar o material da trilha</strong>
-                    <span>Depois</span>
-                  </div>
-                </div>
-                <div class="task-item">
-                  <span class="task-index">3</span>
-                  <div class="task-copy">
-                    <strong>Entrar na live das 19:00</strong>
-                    <span>Hoje</span>
-                  </div>
-                </div>
-              </div>
-            </article>
-
-            <article class="surface-card schedule-card">
-              <div class="dashboard-section-header">
-                <div>
-                  <span class="card-kicker">Semana</span>
-                  <h3>Próximas aulas</h3>
-                </div>
-                <span class="section-counter">2 aulas</span>
-              </div>
-
-              <div class="schedule-list schedule-list-compact">
-                <div class="schedule-item schedule-item-next">
-                  <div class="schedule-item-top">
-                    <strong>Speaking Clinic</strong>
-                    <span class="schedule-type">Ao vivo</span>
-                  </div>
-                  <div class="schedule-item-bottom">
-                    <span>Terça, 19:00</span>
-                    <span class="schedule-emphasis">Mais próxima</span>
-                  </div>
-                </div>
-                <div class="schedule-item">
-                  <div class="schedule-item-top">
-                    <strong>Feedback Session</strong>
-                    <span class="schedule-type schedule-type-soft">1:1</span>
-                  </div>
-                  <div class="schedule-item-bottom">
-                    <span>Quinta, 18:30</span>
-                    <span>Depois</span>
-                  </div>
-                </div>
-              </div>
-            </article>
           </div>
         </section>
 
