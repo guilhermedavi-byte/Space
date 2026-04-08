@@ -1635,12 +1635,19 @@ main {
 }
 
 .analytics-grid {
+  grid-template-columns: minmax(0, 1.5fr) minmax(300px, 0.9fr) minmax(300px, 0.72fr);
   gap: 16px;
 }
 
 .analytics-card {
   min-height: 430px;
   gap: 18px;
+}
+
+.analytics-card-score {
+  min-height: 430px;
+  align-items: center;
+  justify-items: center;
 }
 
 .analytics-header h3 {
@@ -1848,6 +1855,35 @@ main {
 .bar-chart-grid,
 .bar-chart-bars {
   inset: 6px 0 0 0;
+}
+
+.score-card-body {
+  width: 100%;
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+}
+
+.score-card-rating {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 4px;
+  letter-spacing: -0.06em;
+  line-height: 0.88;
+}
+
+.score-card-rating strong {
+  margin: 0;
+  font-size: clamp(3.6rem, 5.1vw, 4.8rem);
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.score-card-rating span {
+  margin-top: 0.62em;
+  font-size: clamp(1.7rem, 2.1vw, 2.35rem);
+  font-weight: 600;
+  color: var(--text-muted);
 }
 
 .dashboard-secondary-grid {
@@ -2627,28 +2663,26 @@ body[data-sidebar-expanded="true"] .platform-shell {
 }
 
 .ghost-action-button {
-  min-height: 34px;
-  padding: 0 14px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text-soft);
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #ffc9c3;
   cursor: pointer;
-  font-size: 0.78rem;
+  font-size: 0.68rem;
   font-weight: 600;
+  letter-spacing: 0.16em;
+  line-height: 1;
+  text-transform: none;
   transition:
-    border-color 180ms ease,
-    background-color 180ms ease,
     color 180ms ease,
-    transform 180ms ease;
+    opacity 180ms ease;
 }
 
 .ghost-action-button:hover,
 .ghost-action-button:focus-visible {
-  border-color: rgba(255, 86, 79, 0.28);
-  background: rgba(255, 86, 79, 0.12);
-  color: var(--text-main);
-  transform: translateY(-1px);
+  color: #ffd7d1;
+  opacity: 0.92;
 }
 
 .journey-chart-stage {
