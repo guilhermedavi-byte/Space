@@ -1,11 +1,13 @@
 const body = document.body;
 const openPlatformButtons = document.querySelectorAll("[data-open-platform]");
 const closePlatformButton = document.querySelector("[data-close-platform]");
+const openLivePanelButtons = document.querySelectorAll("[data-open-live-panel]");
 const sidebarLinks = document.querySelectorAll("[data-panel-target]");
 const panels = document.querySelectorAll("[data-panel]");
-const slotButtons = document.querySelectorAll("[data-slot]");
 const bookingFeedback = document.querySelector("[data-booking-feedback]");
 const greetingElement = document.querySelector("[data-greeting]");
+const platformHeader = document.querySelector(".platform-header");
+const platformSidebar = document.querySelector(".platform-sidebar");
 const chartDropdowns = document.querySelectorAll("[data-chart-dropdown]");
 const chartTriggers = document.querySelectorAll("[data-chart-trigger]");
 const chartOptions = document.querySelectorAll("[data-chart-option]");
@@ -16,8 +18,12 @@ const journeyNodes = document.querySelector("[data-journey-nodes]");
 const journeyLevels = document.querySelector("[data-learning-levels]");
 const journeyStartLabel = document.querySelector("[data-journey-start-label]");
 const journeyCurrentLabel = document.querySelector("[data-journey-current-label]");
+const journeyStartConnector = document.querySelector("[data-journey-start-connector]");
+const journeyCurrentConnector = document.querySelector("[data-journey-current-connector]");
 const studyChart = document.querySelector("[data-study-chart]");
 const studyScale = document.querySelector(".analytics-card-bar .bar-chart-scale");
+const liveSchedulerGrid = document.querySelector("[data-live-scheduler-grid]");
+const liveSchedulerTimezone = document.querySelector("[data-live-timezone]");
 
 const learningLevelNames = ["Pré A1", "A1", "A1+", "A2", "A2+", "B1", "B1+", "B2", "B2+", "C1", "C2"];
 const learningJourneyPoints = [
@@ -68,6 +74,15 @@ const dashboardChartData = {
 const chartState = {
   learning: "all",
   study: "7d",
+};
+
+const liveSlotPresets = {
+  1: ["09:00", "11:30", "16:30", "19:00"],
+  2: ["08:00", "10:30", "15:00", "18:30"],
+  3: ["09:30", "12:00", "14:30", "19:30"],
+  4: ["08:30", "11:00", "16:00", "18:00"],
+  5: ["09:00", "13:30", "15:30", "18:30"],
+  6: ["09:00", "10:30", "11:30", "13:00"],
 };
 
 const formatHours = (value) => {
@@ -139,6 +154,16 @@ const closeAllDropdowns = () => {
   });
 };
 
+const setSidebarExpanded = (isExpanded) => {
+  const desktopSidebarQuery = window.matchMedia("(hover: hover) and (pointer: fine) and (min-width: 1101px)");
+  body.dataset.sidebarExpanded = desktopSidebarQuery.matches ? String(isExpanded) : "true";
+};
+
+const syncSidebarMode = () => {
+  const isCurrentlyExpanded = body.dataset.sidebarExpanded === "true";
+  setSidebarExpanded(isCurrentlyExpanded);
+};
+
 const updateGreeting = () => {
   if (!greetingElement) return;
 
@@ -205,17 +230,37 @@ const renderLearningJourney = (range) => {
 
   const startPoint = learningJourneyPoints[0];
   const currentPoint = learningJourneyPoints[dataset.currentIndex];
+  const startX = (startPoint.x / viewBoxWidth) * 100;
+  const currentX = (currentPoint.x / viewBoxWidth) * 100;
 
   if (journeyStartLabel) {
-    journeyStartLabel.style.left = `${(startPoint.x / viewBoxWidth) * 100}%`;
-    journeyStartLabel.style.top = `${Math.min(startPoint.y + 10, 196)}px`;
+    const startTop = Math.min(startPoint.y + 34, 212);
+    const startHeight = journeyStartLabel.offsetHeight || 34;
+    journeyStartLabel.style.left = `${startX}%`;
+    journeyStartLabel.style.top = `${startTop}px`;
     journeyStartLabel.style.setProperty("--tag-shift", "0%");
+
+    if (journeyStartConnector) {
+      const connectorTop = startPoint.y + 12;
+      journeyStartConnector.style.left = `${startX}%`;
+      journeyStartConnector.style.top = `${connectorTop}px`;
+      journeyStartConnector.style.height = `${Math.max(startTop - connectorTop, startHeight * 0.5)}px`;
+    }
   }
 
   if (journeyCurrentLabel) {
-    journeyCurrentLabel.style.left = `${(currentPoint.x / viewBoxWidth) * 100}%`;
-    journeyCurrentLabel.style.top = `${Math.max(currentPoint.y - 54, 10)}px`;
+    const currentTop = Math.max(currentPoint.y - 86, 18);
+    const currentHeight = journeyCurrentLabel.offsetHeight || 34;
+    journeyCurrentLabel.style.left = `${currentX}%`;
+    journeyCurrentLabel.style.top = `${currentTop}px`;
     journeyCurrentLabel.style.setProperty("--tag-shift", "-100%");
+
+    if (journeyCurrentConnector) {
+      const connectorTop = currentTop + currentHeight;
+      journeyCurrentConnector.style.left = `${currentX}%`;
+      journeyCurrentConnector.style.top = `${connectorTop}px`;
+      journeyCurrentConnector.style.height = `${Math.max(currentPoint.y - 12 - connectorTop, 16)}px`;
+    }
   }
 };
 
@@ -254,6 +299,73 @@ const renderDashboardCharts = () => {
   renderStudyChart(chartState.study);
 };
 
+const formatTimeZoneOffset = (date) => {
+  const offsetMinutes = -date.getTimezoneOffset();
+  const sign = offsetMinutes >= 0 ? "+" : "-";
+  const absolute = Math.abs(offsetMinutes);
+  const hours = String(Math.floor(absolute / 60)).padStart(2, "0");
+  const minutes = String(absolute % 60).padStart(2, "0");
+  return `GMT${sign}${hours}:${minutes}`;
+};
+
+const getUpcomingBookableDays = (count) => {
+  const days = [];
+  const cursor = new Date();
+  cursor.setHours(0, 0, 0, 0);
+
+  while (days.length < count) {
+    if (cursor.getDay() !== 0) {
+      days.push(new Date(cursor));
+    }
+
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return days;
+};
+
+const renderLiveScheduler = () => {
+  if (!liveSchedulerGrid) return;
+
+  const days = getUpcomingBookableDays(4);
+  const weekdayFormatter = new Intl.DateTimeFormat("pt-BR", { weekday: "short" });
+  const timezoneName = Intl.DateTimeFormat().resolvedOptions().timeZone || "Horário local";
+
+  if (liveSchedulerTimezone) {
+    liveSchedulerTimezone.textContent = `${timezoneName.replace(/_/g, " ")} • ${formatTimeZoneOffset(new Date())}`;
+  }
+
+  liveSchedulerGrid.innerHTML = days
+    .map((date, index) => {
+      const weekday = weekdayFormatter.format(date).replace(".", "").toUpperCase();
+      const times = liveSlotPresets[date.getDay()] || ["09:00", "11:00", "15:00"];
+      const dateNumber = String(date.getDate());
+      const labelPrefix = index === 0 ? "Hoje" : weekday.toLowerCase();
+      const isToday = index === 0;
+
+      return `
+        <div class="live-day-column${isToday ? " is-today" : ""}">
+          <div class="live-day-head">
+            <span class="live-day-weekday">${weekday}</span>
+            <span class="live-day-date">${dateNumber}</span>
+          </div>
+          <div class="live-day-slots">
+            ${times
+              .map(
+                (time) => `
+                  <button class="scheduler-slot" type="button" data-slot="${labelPrefix}, ${dateNumber} às ${time}">
+                    ${time}
+                  </button>
+                `
+              )
+              .join("")}
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+};
+
 const setView = (view, smooth = true) => {
   body.dataset.view = view;
   window.scrollTo({ top: 0, behavior: smooth ? "smooth" : "auto" });
@@ -271,6 +383,22 @@ const showPanel = (panelName) => {
     panel.classList.toggle("is-visible", isVisible);
     panel.hidden = !isVisible;
   });
+
+  const activePanel = document.querySelector(`[data-panel="${panelName}"]`);
+  const shouldHidePlatformHeader = activePanel?.dataset.hidePlatformHeader === "true";
+  body.dataset.activePanel = panelName;
+
+  if (platformHeader) {
+    platformHeader.hidden = shouldHidePlatformHeader;
+  }
+
+  if (panelName === "ao-vivo") {
+    renderLiveScheduler();
+
+    if (bookingFeedback) {
+      bookingFeedback.textContent = "Selecione um horário abaixo.";
+    }
+  }
 };
 
 openPlatformButtons.forEach((button) => {
@@ -286,20 +414,15 @@ if (closePlatformButton) {
   });
 }
 
-sidebarLinks.forEach((link) => {
-  link.addEventListener("click", () => {
-    showPanel(link.dataset.panelTarget);
+openLivePanelButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    showPanel("ao-vivo");
   });
 });
 
-slotButtons.forEach((button) => {
-  button.addEventListener("click", () => {
-    slotButtons.forEach((slot) => slot.classList.remove("is-selected"));
-    button.classList.add("is-selected");
-
-    if (bookingFeedback) {
-      bookingFeedback.textContent = `Aula reservada para ${button.dataset.slot}.`;
-    }
+sidebarLinks.forEach((link) => {
+  link.addEventListener("click", () => {
+    showPanel(link.dataset.panelTarget);
   });
 });
 
@@ -348,6 +471,22 @@ chartOptions.forEach((option) => {
 document.addEventListener("click", (event) => {
   const target = event.target;
 
+  if (target instanceof Element) {
+    const slotButton = target.closest("[data-slot]");
+
+    if (slotButton instanceof HTMLButtonElement) {
+      document.querySelectorAll("[data-slot]").forEach((slot) => {
+        slot.classList.remove("is-selected");
+      });
+      slotButton.classList.add("is-selected");
+
+      if (bookingFeedback) {
+        bookingFeedback.textContent = `Aula reservada para ${slotButton.dataset.slot}.`;
+      }
+      return;
+    }
+  }
+
   if (!(target instanceof Element) || !target.closest("[data-chart-dropdown]")) {
     closeAllDropdowns();
   }
@@ -359,10 +498,40 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
+if (platformSidebar) {
+  platformSidebar.addEventListener("mouseenter", () => {
+    setSidebarExpanded(true);
+  });
+
+  platformSidebar.addEventListener("mouseleave", () => {
+    const activeElement = document.activeElement;
+
+    if (!(activeElement instanceof Node) || !platformSidebar.contains(activeElement)) {
+      setSidebarExpanded(false);
+    }
+  });
+
+  platformSidebar.addEventListener("focusin", () => {
+    setSidebarExpanded(true);
+  });
+
+  platformSidebar.addEventListener("focusout", (event) => {
+    const nextTarget = event.relatedTarget;
+
+    if (!(nextTarget instanceof Node) || !platformSidebar.contains(nextTarget)) {
+      setSidebarExpanded(false);
+    }
+  });
+}
+
+window.addEventListener("resize", syncSidebarMode);
+
 updateGreeting();
 setInterval(updateGreeting, 60000);
 setActiveChartOption("learning", chartState.learning);
 setActiveChartOption("study", chartState.study);
+setSidebarExpanded(false);
 showPanel("dashboard");
 renderDashboardCharts();
+renderLiveScheduler();
 setView("publico", false);
