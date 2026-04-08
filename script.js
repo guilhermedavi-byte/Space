@@ -396,13 +396,12 @@ const getAvailableSlots = (date, referenceDate = new Date()) => {
 
 const getUpcomingBookableDays = (count) => {
   const days = [];
-  const now = new Date();
-  const cursor = new Date(now);
+  const cursor = new Date();
   cursor.setHours(0, 0, 0, 0);
   let safety = 0;
 
   while (days.length < count && safety < 21) {
-    if (cursor.getDay() !== 0 && getAvailableSlots(cursor, now).length > 0) {
+    if (cursor.getDay() !== 0) {
       days.push(new Date(cursor));
     }
 
