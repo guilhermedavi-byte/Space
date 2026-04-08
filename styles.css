@@ -796,11 +796,12 @@ main {
 }
 
 .platform-main {
-  display: grid;
-  min-width: 0;
-  padding: 24px var(--platform-gutter) 34px 18px;
-  gap: 22px;
+  min-width: 0 !important;
+  width: 100% !important;
+  padding: 24px var(--platform-inline-padding) 0 18px !important;
+  gap: 0 !important;
   animation: rise-in 700ms ease both;
+  height: 100vh;
 }
 
 .platform-header {
@@ -2674,11 +2675,9 @@ body[data-sidebar-expanded="false"] .sidebar-toggle-icon {
   top: 0;
 }
 
-.platform-main {
-  min-width: 0;
-  width: 100%;
-  padding: 24px var(--platform-inline-padding) 34px 18px;
-  gap: 22px;
+body[data-active-panel="ao-vivo"] .platform-main {
+  padding: 0 var(--platform-inline-padding) 0 18px !important;
+  gap: 0 !important;
 }
 
 .platform-header {
@@ -3104,12 +3103,16 @@ body[data-active-panel="ao-vivo"] .platform-sidebar {
 }
 
 .platform-panel[data-panel="ao-vivo"] {
-  gap: 16px;
+  gap: 4px !important;
+  margin-top: -40px !important;
+  padding-top: 0 !important;
 }
 
 .schedule-page-header {
-  display: grid;
-  gap: 4px;
+  display: grid !important;
+  gap: 2px !important;
+  margin-bottom: 0 !important;
+  padding: 0 !important;
 }
 
 .schedule-breadcrumb {
@@ -3131,10 +3134,12 @@ body[data-active-panel="ao-vivo"] .platform-sidebar {
 }
 
 .schedule-context-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 24px;
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  gap: 24px !important;
+  margin-bottom: 0 !important;
+  padding: 0 !important;
 }
 
 .schedule-timezone-row {
@@ -3183,7 +3188,8 @@ body[data-active-panel="ao-vivo"] .platform-sidebar {
 }
 
 .live-booking-panel-header {
-  padding: 24px 24px 18px;
+  padding: 0 !important;
+  margin: 0 !important;
 }
 
 .live-week-control {
@@ -3240,20 +3246,22 @@ body[data-active-panel="ao-vivo"] .platform-sidebar {
 }
 
 .live-scheduler-grid {
-  padding: 0 24px 24px;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  padding: 0 24px 4px !important;
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 12px !important;
+  margin: 0 !important;
 }
 
 .live-day-column {
-  display: grid;
-  gap: 0;
-  min-width: 0;
-  padding: 12px 10px 14px;
-  border-radius: 14px;
-  border-top: 2px solid transparent;
-  background: transparent;
+  display: grid !important;
+  gap: 0 !important;
+  min-width: 0 !important;
+  padding: 0 10px 0 !important;
+  border-radius: 14px !important;
+  border-top: 2px solid transparent !important;
+  background: transparent !important;
+  margin: 0 !important;
 }
 
 .live-day-column.is-today {
@@ -3262,10 +3270,11 @@ body[data-active-panel="ao-vivo"] .platform-sidebar {
 }
 
 .live-day-head {
-  display: grid;
-  gap: 6px;
-  justify-items: start;
-  margin-bottom: 16px;
+  display: grid !important;
+  gap: 4px !important;
+  justify-items: start !important;
+  margin-bottom: 0 !important;
+  padding: 0 !important;
 }
 
 .live-day-weekday {

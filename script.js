@@ -354,7 +354,7 @@ const getUpcomingBookableDays = (count, weekOffset = 0) => {
   cursor.setHours(0, 0, 0, 0);
   cursor.setDate(cursor.getDate() + weekOffset * 7);
 
-  while (days.length < count) {
+  while (days.length < 4) {
     if (cursor.getDay() !== 0) {
       days.push(new Date(cursor));
     }
@@ -445,7 +445,7 @@ const updateLiveInstruction = () => {
 const renderLiveScheduler = () => {
   if (!liveSchedulerGrid) return;
 
-  const days = getUpcomingBookableDays(4, scheduleState.weekOffset);
+  const days = getUpcomingBookableDays(4, 0);
   const weekdayFormatter = new Intl.DateTimeFormat("pt-BR", { weekday: "short" });
   const now = new Date();
   const timezoneName = getDisplayTimeZoneName();
@@ -457,11 +457,6 @@ const renderLiveScheduler = () => {
   if (liveWeekRange) {
     liveWeekRange.textContent = formatWeekRange(days);
   }
-
-  liveWeekNavButtons.forEach((button) => {
-    const isPreviousButton = button.dataset.weekNav === "prev";
-    button.disabled = isPreviousButton && scheduleState.weekOffset === 0;
-  });
 
   liveSchedulerGrid.innerHTML = days
     .map((date) => {
@@ -487,16 +482,18 @@ const renderLiveScheduler = () => {
                 const isSelected = scheduleState.selectedSlotId === slotId;
                 const isDisabled = isSlotDisabled(date, time);
 
+                if (isDisabled) {
+                  return "";
+                }
+
                 return `
                   <button
-                    class="scheduler-slot${isSelected ? " is-selected" : ""}${isDisabled ? " is-disabled" : ""}"
+                    class="scheduler-slot${isSelected ? " is-selected" : ""}"
                     type="button"
                     data-slot="${slotLabel}"
                     data-slot-id="${slotId}"
                     data-slot-label="${slotLabel}"
                     aria-pressed="${isSelected ? "true" : "false"}"
-                    aria-disabled="${isDisabled ? "true" : "false"}"
-                    ${isDisabled ? "disabled" : ""}
                   >
                     <span>${time}</span>
                     ${isSelected ? '<span class="scheduler-slot-check" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none"><path d="m3.5 8.5 2.5 2.5 6-6"></path></svg></span>' : ""}
