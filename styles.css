@@ -3096,6 +3096,10 @@ body[data-active-panel="ao-vivo"] .platform-backdrop {
   background: #0d0f12;
 }
 
+body[data-active-panel="ao-vivo"] .platform-main {
+  padding-top: 14px;
+}
+
 body[data-active-panel="ao-vivo"] .platform-sidebar {
   background: #0d0f12;
   border-right: 1px solid rgba(255, 255, 255, 0.05);
@@ -3103,14 +3107,15 @@ body[data-active-panel="ao-vivo"] .platform-sidebar {
 }
 
 .platform-panel[data-panel="ao-vivo"] {
-  gap: 4px !important;
-  margin-top: -40px !important;
+  gap: 10px !important;
+  margin-top: -18px !important;
   padding-top: 0 !important;
+  align-content: start;
 }
 
 .schedule-page-header {
   display: grid !important;
-  gap: 2px !important;
+  gap: 0 !important;
   margin-bottom: 0 !important;
   padding: 0 !important;
 }
@@ -3126,7 +3131,7 @@ body[data-active-panel="ao-vivo"] .platform-sidebar {
 .schedule-page-title {
   margin: 0;
   font-family: "Inter", "Plus Jakarta Sans", "Avenir Next", sans-serif;
-  font-size: 28px;
+  font-size: 26px;
   font-weight: 700;
   letter-spacing: -0.04em;
   line-height: 1.1;
@@ -3137,7 +3142,7 @@ body[data-active-panel="ao-vivo"] .platform-sidebar {
   display: flex !important;
   justify-content: space-between !important;
   align-items: center !important;
-  gap: 24px !important;
+  gap: 14px !important;
   margin-bottom: 0 !important;
   padding: 0 !important;
 }
@@ -3188,65 +3193,26 @@ body[data-active-panel="ao-vivo"] .platform-sidebar {
 }
 
 .live-booking-panel-header {
-  padding: 0 !important;
+  padding: 14px 24px 10px !important;
   margin: 0 !important;
 }
 
 .live-week-control {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0;
   flex-wrap: wrap;
 }
 
-.week-nav-button {
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(255, 255, 255, 0.05);
-  color: #8a90a0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition:
-    background-color 150ms ease,
-    color 150ms ease,
-    border-color 150ms ease;
-}
-
-.week-nav-button svg {
-  width: 16px;
-  height: 16px;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.week-nav-button:hover:not(:disabled),
-.week-nav-button:focus-visible:not(:disabled) {
-  background: rgba(255, 255, 255, 0.1);
-  color: #ffffff;
-  border-color: rgba(255, 255, 255, 0.12);
-}
-
-.week-nav-button:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
 .live-week-range {
-  margin-left: 8px;
+  margin-left: 0;
   color: #ffffff;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
 }
 
 .live-scheduler-grid {
-  padding: 0 24px 4px !important;
+  padding: 0 24px 20px !important;
   display: grid !important;
   grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
   gap: 12px !important;
@@ -3257,7 +3223,7 @@ body[data-active-panel="ao-vivo"] .platform-sidebar {
   display: grid !important;
   gap: 0 !important;
   min-width: 0 !important;
-  padding: 0 10px 0 !important;
+  padding: 6px 10px 0 !important;
   border-radius: 14px !important;
   border-top: 2px solid transparent !important;
   background: transparent !important;
@@ -3273,7 +3239,7 @@ body[data-active-panel="ao-vivo"] .platform-sidebar {
   display: grid !important;
   gap: 4px !important;
   justify-items: start !important;
-  margin-bottom: 0 !important;
+  margin-bottom: 12px !important;
   padding: 0 !important;
 }
 
@@ -3466,12 +3432,7 @@ body[data-active-panel="ao-vivo"] .platform-sidebar {
     font-size: 24px;
   }
 
-  .live-week-control {
-    align-items: flex-start;
-  }
-
   .live-week-range {
-    margin-left: 0;
     width: 100%;
   }
 

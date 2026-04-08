@@ -25,7 +25,6 @@ const liveSchedulerGrid = document.querySelector("[data-live-scheduler-grid]");
 const liveSchedulerTimezone = document.querySelector("[data-live-timezone]");
 const liveInstruction = document.querySelector("[data-live-instruction]");
 const liveWeekRange = document.querySelector("[data-live-week-range]");
-const liveWeekNavButtons = document.querySelectorAll("[data-week-nav]");
 const liveConfirmBar = document.querySelector("[data-live-confirm]");
 const liveConfirmSummary = document.querySelector("[data-live-confirm-summary]");
 const liveConfirmButton = document.querySelector("[data-live-confirm-button]");
@@ -83,7 +82,6 @@ const chartState = {
 
 let sidebarExpanded = false;
 const scheduleState = {
-  weekOffset: 0,
   selectedSlotId: "",
   selectedSlotLabel: "",
   isConfirmed: false,
@@ -348,23 +346,6 @@ const getDisplayTimeZoneName = () => {
   return `${region}/${city.replace(/_/g, " ")}`;
 };
 
-const getUpcomingBookableDays = (count, weekOffset = 0) => {
-  const days = [];
-  const cursor = new Date();
-  cursor.setHours(0, 0, 0, 0);
-  cursor.setDate(cursor.getDate() + weekOffset * 7);
-
-  while (days.length < 4) {
-    if (cursor.getDay() !== 0) {
-      days.push(new Date(cursor));
-    }
-
-    cursor.setDate(cursor.getDate() + 1);
-  }
-
-  return days;
-};
-
 const createSlotId = (date, time) => {
   const dateKey = date.toISOString().slice(0, 10);
   return `${dateKey}-${time}`;
@@ -404,10 +385,32 @@ const getSlotDateTime = (date, time) => {
   return slotDate;
 };
 
-const isSlotDisabled = (date, time) => {
-  const today = new Date();
-  const slotDate = getSlotDateTime(date, time);
-  return slotDate.getTime() <= today.getTime();
+const getAvailableSlots = (date, referenceDate = new Date()) => {
+  const times = liveSlotPresets[date.getDay()] || ["09:00", "11:00", "15:00"];
+
+  return times.filter((time) => {
+    const slotDate = getSlotDateTime(date, time);
+    return slotDate.getTime() > referenceDate.getTime();
+  });
+};
+
+const getUpcomingBookableDays = (count) => {
+  const days = [];
+  const now = new Date();
+  const cursor = new Date(now);
+  cursor.setHours(0, 0, 0, 0);
+  let safety = 0;
+
+  while (days.length < count && safety < 21) {
+    if (cursor.getDay() !== 0 && getAvailableSlots(cursor, now).length > 0) {
+      days.push(new Date(cursor));
+    }
+
+    cursor.setDate(cursor.getDate() + 1);
+    safety += 1;
+  }
+
+  return days;
 };
 
 const updateLiveConfirmBar = () => {
@@ -445,10 +448,11 @@ const updateLiveInstruction = () => {
 const renderLiveScheduler = () => {
   if (!liveSchedulerGrid) return;
 
-  const days = getUpcomingBookableDays(4, 0);
+  const days = getUpcomingBookableDays(4);
   const weekdayFormatter = new Intl.DateTimeFormat("pt-BR", { weekday: "short" });
   const now = new Date();
   const timezoneName = getDisplayTimeZoneName();
+  const visibleSlotIds = new Set();
 
   if (liveSchedulerTimezone) {
     liveSchedulerTimezone.textContent = `${timezoneName} · ${formatTimeZoneOffset(now)}`;
@@ -458,10 +462,10 @@ const renderLiveScheduler = () => {
     liveWeekRange.textContent = formatWeekRange(days);
   }
 
-  liveSchedulerGrid.innerHTML = days
+  const schedulerMarkup = days
     .map((date) => {
       const weekday = weekdayFormatter.format(date).replace(".", "").toUpperCase();
-      const times = liveSlotPresets[date.getDay()] || ["09:00", "11:00", "15:00"];
+      const times = getAvailableSlots(date, now);
       const dateNumber = String(date.getDate());
       const isToday =
         date.getDate() === now.getDate() &&
@@ -480,11 +484,7 @@ const renderLiveScheduler = () => {
                 const slotId = createSlotId(date, time);
                 const slotLabel = formatSelectedSlotLabel(date, time);
                 const isSelected = scheduleState.selectedSlotId === slotId;
-                const isDisabled = isSlotDisabled(date, time);
-
-                if (isDisabled) {
-                  return "";
-                }
+                visibleSlotIds.add(slotId);
 
                 return `
                   <button
@@ -506,6 +506,14 @@ const renderLiveScheduler = () => {
       `;
     })
     .join("");
+
+  if (scheduleState.selectedSlotId && !visibleSlotIds.has(scheduleState.selectedSlotId)) {
+    scheduleState.selectedSlotId = "";
+    scheduleState.selectedSlotLabel = "";
+    scheduleState.isConfirmed = false;
+  }
+
+  liveSchedulerGrid.innerHTML = schedulerMarkup;
 
   updateLiveConfirmBar();
   updateLiveInstruction();
@@ -628,17 +636,6 @@ document.addEventListener("click", (event) => {
 
       scheduleState.selectedSlotId = slotButton.dataset.slotId || "";
       scheduleState.selectedSlotLabel = slotButton.dataset.slotLabel || slotButton.dataset.slot || "";
-      scheduleState.isConfirmed = false;
-      renderLiveScheduler();
-      return;
-    }
-
-    const weekNavButton = target.closest("[data-week-nav]");
-
-    if (weekNavButton instanceof HTMLButtonElement && !weekNavButton.disabled) {
-      scheduleState.weekOffset += weekNavButton.dataset.weekNav === "next" ? 1 : -1;
-      scheduleState.selectedSlotId = "";
-      scheduleState.selectedSlotLabel = "";
       scheduleState.isConfirmed = false;
       renderLiveScheduler();
       return;
