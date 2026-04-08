@@ -192,24 +192,75 @@
       <aside class="platform-sidebar">
         <div class="sidebar-brand">
           <img src="assets/space-symbol.png" alt="Símbolo da Space" />
-          <div>
+          <div class="sidebar-brand-copy">
             <strong>Space</strong>
             <span>Student Platform</span>
           </div>
         </div>
 
         <nav class="sidebar-nav" aria-label="Seções do aluno">
-          <button class="sidebar-link is-active" type="button" data-panel-target="dashboard">
-            Dashboard
+          <button
+            class="sidebar-link is-active"
+            type="button"
+            data-panel-target="dashboard"
+            title="Dashboard"
+          >
+            <span class="sidebar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <rect x="3.5" y="3.5" width="7" height="7" rx="1.5"></rect>
+                <rect x="13.5" y="3.5" width="7" height="7" rx="1.5"></rect>
+                <rect x="3.5" y="13.5" width="7" height="7" rx="1.5"></rect>
+                <rect x="13.5" y="13.5" width="7" height="7" rx="1.5"></rect>
+              </svg>
+            </span>
+            <span class="sidebar-text">Dashboard</span>
           </button>
-          <button class="sidebar-link" type="button" data-panel-target="gravadas">
-            Aulas gravadas
+          <button
+            class="sidebar-link"
+            type="button"
+            data-panel-target="gravadas"
+            title="Aulas gravadas"
+          >
+            <span class="sidebar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <rect x="3.5" y="5.5" width="17" height="13" rx="2"></rect>
+                <path d="M10 9.25 14.75 12 10 14.75Z"></path>
+              </svg>
+            </span>
+            <span class="sidebar-text">Aulas gravadas</span>
           </button>
-          <button class="sidebar-link" type="button" data-panel-target="ao-vivo">
-            Aulas ao vivo
+          <button
+            class="sidebar-link"
+            type="button"
+            data-panel-target="ao-vivo"
+            title="Aulas ao vivo"
+          >
+            <span class="sidebar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <rect x="3.5" y="5.5" width="17" height="15" rx="2"></rect>
+                <path d="M7 3.5V7"></path>
+                <path d="M17 3.5V7"></path>
+                <path d="M3.5 10.5H20.5"></path>
+                <circle cx="12" cy="15.5" r="2.25"></circle>
+              </svg>
+            </span>
+            <span class="sidebar-text">Aulas ao vivo</span>
           </button>
-          <button class="sidebar-link" type="button" data-panel-target="materiais">
-            Materiais
+          <button
+            class="sidebar-link"
+            type="button"
+            data-panel-target="materiais"
+            title="Materiais"
+          >
+            <span class="sidebar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M7 4.5h7l3 3v12H7a2 2 0 0 1-2-2v-11a2 2 0 0 1 2-2Z"></path>
+                <path d="M14 4.5v3h3"></path>
+                <path d="M9 12h6"></path>
+                <path d="M9 15.5h4.5"></path>
+              </svg>
+            </span>
+            <span class="sidebar-text">Materiais</span>
           </button>
         </nav>
       </aside>
