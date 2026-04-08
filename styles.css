@@ -696,10 +696,6 @@ main {
 }
 
 @media (hover: hover) and (pointer: fine) and (min-width: 1101px) {
-  .platform-shell {
-    grid-template-columns: var(--sidebar-collapsed) minmax(0, 1fr);
-  }
-
   .platform-sidebar {
     width: var(--sidebar-collapsed);
     padding: 20px 14px;
