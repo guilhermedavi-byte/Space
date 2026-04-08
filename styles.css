@@ -811,6 +811,11 @@ main {
   align-items: flex-start;
 }
 
+body[data-active-panel="gravadas"] .platform-header,
+body[data-active-panel="ao-vivo"] .platform-header {
+  display: none;
+}
+
 .platform-header h1 {
   font-size: clamp(2rem, 4vw, 3rem);
 }
