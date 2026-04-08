@@ -3084,3 +3084,389 @@ body[data-sidebar-expanded="false"] .sidebar-toggle-icon {
     grid-column: 2 / -1;
   }
 }
+
+body[data-active-panel="ao-vivo"] {
+  background: #0d0f12;
+}
+
+body[data-active-panel="ao-vivo"] .page-glow {
+  display: none;
+}
+
+body[data-active-panel="ao-vivo"] .platform-backdrop {
+  background: #0d0f12;
+}
+
+body[data-active-panel="ao-vivo"] .platform-sidebar {
+  background: #0d0f12;
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: none;
+}
+
+.platform-panel[data-panel="ao-vivo"] {
+  gap: 16px;
+}
+
+.schedule-page-header {
+  display: grid;
+  gap: 4px;
+}
+
+.schedule-breadcrumb {
+  color: #5a6070;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.schedule-page-title {
+  margin: 0;
+  font-family: "Inter", "Plus Jakarta Sans", "Avenir Next", sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+  color: #ffffff;
+}
+
+.schedule-context-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+}
+
+.schedule-timezone-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #5a6070;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.schedule-context-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+}
+
+.schedule-context-icon svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.schedule-context-copy {
+  color: #5a6070;
+  font-size: 13px;
+  font-style: italic;
+  font-weight: 400;
+  text-align: right;
+}
+
+.live-booking-panel {
+  display: grid;
+  gap: 0;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: #151820;
+  box-shadow: 0 2px 32px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+
+.live-booking-panel-header {
+  padding: 24px 24px 18px;
+}
+
+.live-week-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.week-nav-button {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.05);
+  color: #8a90a0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease,
+    border-color 150ms ease;
+}
+
+.week-nav-button svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.week-nav-button:hover:not(:disabled),
+.week-nav-button:focus-visible:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.week-nav-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.live-week-range {
+  margin-left: 8px;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.live-scheduler-grid {
+  padding: 0 24px 24px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.live-day-column {
+  display: grid;
+  gap: 0;
+  min-width: 0;
+  padding: 12px 10px 14px;
+  border-radius: 14px;
+  border-top: 2px solid transparent;
+  background: transparent;
+}
+
+.live-day-column.is-today {
+  background: rgba(232, 69, 60, 0.04);
+  border-top-color: rgba(232, 69, 60, 0.3);
+}
+
+.live-day-head {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+  margin-bottom: 16px;
+}
+
+.live-day-weekday {
+  color: #5a6070;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.live-day-date {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.live-day-column.is-today .live-day-date {
+  background: #e8453c;
+  border-color: #e8453c;
+  color: #ffffff;
+  font-weight: 700;
+  box-shadow: none;
+}
+
+.live-day-slots {
+  display: grid;
+  gap: 8px;
+}
+
+.scheduler-slot {
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: #c8cdd8;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease,
+    transform 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.scheduler-slot:not(:disabled):hover,
+.scheduler-slot:not(:disabled):focus-visible {
+  background: rgba(232, 69, 60, 0.12);
+  border-color: rgba(232, 69, 60, 0.4);
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.scheduler-slot.is-selected {
+  background: #e8453c;
+  border-color: #e8453c;
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: none;
+}
+
+.scheduler-slot.is-disabled,
+.scheduler-slot:disabled {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.03);
+  color: #3a3f50;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.scheduler-slot-check {
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.scheduler-slot-check svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.live-confirm-bar {
+  padding: 20px 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: #1a1d28;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.2);
+  animation: live-confirm-in 200ms ease both;
+}
+
+.live-confirm-summary {
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.live-confirm-button {
+  min-height: 44px;
+  padding: 0 24px;
+  border: 0;
+  border-radius: 10px;
+  background: #e8453c;
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition:
+    background-color 150ms ease,
+    transform 150ms ease;
+}
+
+.live-confirm-button:hover,
+.live-confirm-button:focus-visible {
+  background: #cc3530;
+  transform: translateY(-1px);
+}
+
+.live-confirm-bar[hidden] {
+  display: none;
+}
+
+@keyframes live-confirm-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 1280px) {
+  .schedule-context-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .schedule-context-copy {
+    text-align: left;
+  }
+
+  .live-scheduler-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 820px) {
+  .live-booking-panel-header,
+  .live-scheduler-grid,
+  .live-confirm-bar {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .live-confirm-bar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .schedule-page-title {
+    font-size: 24px;
+  }
+
+  .live-week-control {
+    align-items: flex-start;
+  }
+
+  .live-week-range {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .live-scheduler-grid {
+    grid-template-columns: 1fr;
+  }
+}

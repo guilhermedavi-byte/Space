@@ -5,7 +5,6 @@ const openLivePanelButtons = document.querySelectorAll("[data-open-live-panel]")
 const sidebarToggleButton = document.querySelector("[data-sidebar-toggle]");
 const sidebarLinks = document.querySelectorAll("[data-panel-target]");
 const panels = document.querySelectorAll("[data-panel]");
-const bookingFeedback = document.querySelector("[data-booking-feedback]");
 const greetingElement = document.querySelector("[data-greeting]");
 const platformHeader = document.querySelector(".platform-header");
 const chartDropdowns = document.querySelectorAll("[data-chart-dropdown]");
@@ -24,6 +23,12 @@ const studyChart = document.querySelector("[data-study-chart]");
 const studyScale = document.querySelector(".analytics-card-bar .bar-chart-scale");
 const liveSchedulerGrid = document.querySelector("[data-live-scheduler-grid]");
 const liveSchedulerTimezone = document.querySelector("[data-live-timezone]");
+const liveInstruction = document.querySelector("[data-live-instruction]");
+const liveWeekRange = document.querySelector("[data-live-week-range]");
+const liveWeekNavButtons = document.querySelectorAll("[data-week-nav]");
+const liveConfirmBar = document.querySelector("[data-live-confirm]");
+const liveConfirmSummary = document.querySelector("[data-live-confirm-summary]");
+const liveConfirmButton = document.querySelector("[data-live-confirm-button]");
 
 const learningLevelNames = ["Pré A1", "A1", "A1+", "A2", "A2+", "B1", "B1+", "B2", "B2+", "C1", "C2"];
 const learningJourneyPoints = [
@@ -77,6 +82,12 @@ const chartState = {
 };
 
 let sidebarExpanded = false;
+const scheduleState = {
+  weekOffset: 0,
+  selectedSlotId: "",
+  selectedSlotLabel: "",
+  isConfirmed: false,
+};
 
 const liveSlotPresets = {
   1: ["09:00", "11:30", "16:30", "19:00"],
@@ -319,10 +330,29 @@ const formatTimeZoneOffset = (date) => {
   return `GMT${sign}${hours}:${minutes}`;
 };
 
-const getUpcomingBookableDays = (count) => {
+const getDisplayTimeZoneName = () => {
+  const resolvedTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Sao_Paulo";
+  const knownTimeZones = {
+    "America/Sao_Paulo": "America/São Paulo",
+  };
+
+  if (knownTimeZones[resolvedTimeZone]) {
+    return knownTimeZones[resolvedTimeZone];
+  }
+
+  const [region, city] = resolvedTimeZone.split("/");
+  if (!city) {
+    return resolvedTimeZone.replace(/_/g, " ");
+  }
+
+  return `${region}/${city.replace(/_/g, " ")}`;
+};
+
+const getUpcomingBookableDays = (count, weekOffset = 0) => {
   const days = [];
   const cursor = new Date();
   cursor.setHours(0, 0, 0, 0);
+  cursor.setDate(cursor.getDate() + weekOffset * 7);
 
   while (days.length < count) {
     if (cursor.getDay() !== 0) {
@@ -335,24 +365,113 @@ const getUpcomingBookableDays = (count) => {
   return days;
 };
 
+const createSlotId = (date, time) => {
+  const dateKey = date.toISOString().slice(0, 10);
+  return `${dateKey}-${time}`;
+};
+
+const formatWeekRange = (days) => {
+  if (!days.length) return "";
+
+  const firstDay = days[0];
+  const lastDay = days[days.length - 1];
+  const sameMonth = firstDay.getMonth() === lastDay.getMonth();
+  const sameYear = firstDay.getFullYear() === lastDay.getFullYear();
+  const monthFormatter = new Intl.DateTimeFormat("pt-BR", { month: "long" });
+
+  if (sameMonth && sameYear) {
+    return `${firstDay.getDate()} – ${lastDay.getDate()} de ${monthFormatter.format(firstDay)} de ${firstDay.getFullYear()}`;
+  }
+
+  if (sameYear) {
+    return `${firstDay.getDate()} de ${monthFormatter.format(firstDay)} – ${lastDay.getDate()} de ${monthFormatter.format(lastDay)} de ${firstDay.getFullYear()}`;
+  }
+
+  return `${firstDay.getDate()} de ${monthFormatter.format(firstDay)} de ${firstDay.getFullYear()} – ${lastDay.getDate()} de ${monthFormatter.format(lastDay)} de ${lastDay.getFullYear()}`;
+};
+
+const formatSelectedSlotLabel = (date, time) => {
+  const weekday = new Intl.DateTimeFormat("pt-BR", { weekday: "long" }).format(date);
+  const month = new Intl.DateTimeFormat("pt-BR", { month: "long" }).format(date);
+  const capitalizedWeekday = weekday.charAt(0).toUpperCase() + weekday.slice(1);
+  return `${capitalizedWeekday}, ${date.getDate()} de ${month} · ${time}`;
+};
+
+const getSlotDateTime = (date, time) => {
+  const [hours, minutes] = time.split(":").map(Number);
+  const slotDate = new Date(date);
+  slotDate.setHours(hours, minutes, 0, 0);
+  return slotDate;
+};
+
+const isSlotDisabled = (date, time) => {
+  const today = new Date();
+  const slotDate = getSlotDateTime(date, time);
+  return slotDate.getTime() <= today.getTime();
+};
+
+const updateLiveConfirmBar = () => {
+  if (!liveConfirmBar || !liveConfirmSummary || !liveConfirmButton) return;
+
+  const hasSelection = Boolean(scheduleState.selectedSlotLabel);
+  liveConfirmBar.hidden = !hasSelection;
+
+  if (!hasSelection) {
+    liveConfirmSummary.textContent = "";
+    liveConfirmButton.textContent = "Confirmar agendamento";
+    return;
+  }
+
+  liveConfirmSummary.textContent = scheduleState.selectedSlotLabel;
+  liveConfirmButton.textContent = scheduleState.isConfirmed ? "Agendado" : "Confirmar agendamento";
+};
+
+const updateLiveInstruction = () => {
+  if (!liveInstruction) return;
+
+  if (scheduleState.isConfirmed && scheduleState.selectedSlotLabel) {
+    liveInstruction.textContent = `Agendamento confirmado para ${scheduleState.selectedSlotLabel}`;
+    return;
+  }
+
+  if (scheduleState.selectedSlotLabel) {
+    liveInstruction.textContent = "Horário selecionado. Confirme abaixo para finalizar.";
+    return;
+  }
+
+  liveInstruction.textContent = "Selecione um dia e horário para continuar";
+};
+
 const renderLiveScheduler = () => {
   if (!liveSchedulerGrid) return;
 
-  const days = getUpcomingBookableDays(4);
+  const days = getUpcomingBookableDays(4, scheduleState.weekOffset);
   const weekdayFormatter = new Intl.DateTimeFormat("pt-BR", { weekday: "short" });
-  const timezoneName = Intl.DateTimeFormat().resolvedOptions().timeZone || "Horário local";
+  const now = new Date();
+  const timezoneName = getDisplayTimeZoneName();
 
   if (liveSchedulerTimezone) {
-    liveSchedulerTimezone.textContent = `${timezoneName.replace(/_/g, " ")} • ${formatTimeZoneOffset(new Date())}`;
+    liveSchedulerTimezone.textContent = `${timezoneName} · ${formatTimeZoneOffset(now)}`;
   }
 
+  if (liveWeekRange) {
+    liveWeekRange.textContent = formatWeekRange(days);
+  }
+
+  liveWeekNavButtons.forEach((button) => {
+    const isPreviousButton = button.dataset.weekNav === "prev";
+    button.disabled = isPreviousButton && scheduleState.weekOffset === 0;
+  });
+
   liveSchedulerGrid.innerHTML = days
-    .map((date, index) => {
+    .map((date) => {
       const weekday = weekdayFormatter.format(date).replace(".", "").toUpperCase();
       const times = liveSlotPresets[date.getDay()] || ["09:00", "11:00", "15:00"];
       const dateNumber = String(date.getDate());
-      const labelPrefix = index === 0 ? "Hoje" : weekday.toLowerCase();
-      const isToday = index === 0;
+      const isToday =
+        date.getDate() === now.getDate() &&
+        date.getMonth() === now.getMonth() &&
+        date.getFullYear() === now.getFullYear();
 
       return `
         <div class="live-day-column${isToday ? " is-today" : ""}">
@@ -362,19 +481,37 @@ const renderLiveScheduler = () => {
           </div>
           <div class="live-day-slots">
             ${times
-              .map(
-                (time) => `
-                  <button class="scheduler-slot" type="button" data-slot="${labelPrefix}, ${dateNumber} às ${time}">
-                    ${time}
+              .map((time) => {
+                const slotId = createSlotId(date, time);
+                const slotLabel = formatSelectedSlotLabel(date, time);
+                const isSelected = scheduleState.selectedSlotId === slotId;
+                const isDisabled = isSlotDisabled(date, time);
+
+                return `
+                  <button
+                    class="scheduler-slot${isSelected ? " is-selected" : ""}${isDisabled ? " is-disabled" : ""}"
+                    type="button"
+                    data-slot="${slotLabel}"
+                    data-slot-id="${slotId}"
+                    data-slot-label="${slotLabel}"
+                    aria-pressed="${isSelected ? "true" : "false"}"
+                    aria-disabled="${isDisabled ? "true" : "false"}"
+                    ${isDisabled ? "disabled" : ""}
+                  >
+                    <span>${time}</span>
+                    ${isSelected ? '<span class="scheduler-slot-check" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none"><path d="m3.5 8.5 2.5 2.5 6-6"></path></svg></span>' : ""}
                   </button>
-                `
-              )
+                `;
+              })
               .join("")}
           </div>
         </div>
       `;
     })
     .join("");
+
+  updateLiveConfirmBar();
+  updateLiveInstruction();
 };
 
 const setView = (view, smooth = true) => {
@@ -405,10 +542,6 @@ const showPanel = (panelName) => {
 
   if (panelName === "ao-vivo") {
     renderLiveScheduler();
-
-    if (bookingFeedback) {
-      bookingFeedback.textContent = "Selecione um horário abaixo.";
-    }
   }
 };
 
@@ -492,14 +625,34 @@ document.addEventListener("click", (event) => {
     const slotButton = target.closest("[data-slot]");
 
     if (slotButton instanceof HTMLButtonElement) {
-      document.querySelectorAll("[data-slot]").forEach((slot) => {
-        slot.classList.remove("is-selected");
-      });
-      slotButton.classList.add("is-selected");
-
-      if (bookingFeedback) {
-        bookingFeedback.textContent = `Aula reservada para ${slotButton.dataset.slot}.`;
+      if (slotButton.disabled) {
+        return;
       }
+
+      scheduleState.selectedSlotId = slotButton.dataset.slotId || "";
+      scheduleState.selectedSlotLabel = slotButton.dataset.slotLabel || slotButton.dataset.slot || "";
+      scheduleState.isConfirmed = false;
+      renderLiveScheduler();
+      return;
+    }
+
+    const weekNavButton = target.closest("[data-week-nav]");
+
+    if (weekNavButton instanceof HTMLButtonElement && !weekNavButton.disabled) {
+      scheduleState.weekOffset += weekNavButton.dataset.weekNav === "next" ? 1 : -1;
+      scheduleState.selectedSlotId = "";
+      scheduleState.selectedSlotLabel = "";
+      scheduleState.isConfirmed = false;
+      renderLiveScheduler();
+      return;
+    }
+
+    const confirmButton = target.closest("[data-live-confirm-button]");
+
+    if (confirmButton instanceof HTMLButtonElement && scheduleState.selectedSlotLabel) {
+      scheduleState.isConfirmed = true;
+      updateLiveConfirmBar();
+      updateLiveInstruction();
       return;
     }
   }

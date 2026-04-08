@@ -614,34 +614,57 @@
         </section>
 
         <section class="platform-panel" data-panel="ao-vivo" data-hide-platform-header="true" hidden>
-          <div class="panel-heading panel-heading-schedule">
+          <div class="schedule-page-header">
             <div>
-              <span class="eyebrow">Agendamento</span>
-              <h2 class="panel-title-compact panel-title-schedule">Agende sua próxima aula</h2>
-            </div>
-            <div class="booking-feedback" data-booking-feedback aria-live="polite">
-              Selecione um horário abaixo.
+              <span class="schedule-breadcrumb">Agendamento</span>
+              <h2 class="schedule-page-title">Agende sua próxima aula</h2>
             </div>
           </div>
 
-          <article class="surface-card live-scheduler-shell">
-            <div class="live-scheduler-toolbar">
-              <button class="scheduler-nav-button" type="button" aria-label="Dias anteriores" disabled>
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="m14.5 5.5-6 6 6 6"></path>
+          <div class="schedule-context-row">
+            <div class="schedule-timezone-row">
+              <span class="schedule-context-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="8.5"></circle>
+                  <path d="M3.5 12h17"></path>
+                  <path d="M12 3.5c2.4 2.2 3.8 5.2 3.8 8.5S14.4 18.3 12 20.5C9.6 18.3 8.2 15.3 8.2 12S9.6 5.7 12 3.5Z"></path>
                 </svg>
-              </button>
+              </span>
+              <span data-live-timezone>America/São Paulo · GMT-03:00</span>
+            </div>
 
-              <div class="live-scheduler-timezone" data-live-timezone>Horário local</div>
+            <div class="schedule-context-copy" data-live-instruction aria-live="polite">
+              Selecione um dia e horário para continuar
+            </div>
+          </div>
 
-              <button class="scheduler-nav-button" type="button" aria-label="Próximos dias" disabled>
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="m9.5 5.5 6 6-6 6"></path>
-                </svg>
-              </button>
+          <article class="live-booking-panel">
+            <div class="live-booking-panel-header">
+              <div class="live-week-control">
+                <button class="week-nav-button" type="button" data-week-nav="prev" aria-label="Semana anterior" disabled>
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="m14.5 5.5-6 6 6 6"></path>
+                  </svg>
+                </button>
+                <button class="week-nav-button" type="button" data-week-nav="next" aria-label="Próxima semana">
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="m9.5 5.5 6 6-6 6"></path>
+                  </svg>
+                </button>
+                <div class="live-week-range" data-live-week-range>8 – 14 de abril de 2026</div>
+              </div>
             </div>
 
             <div class="live-scheduler-grid" data-live-scheduler-grid></div>
+
+            <div class="live-confirm-bar" data-live-confirm hidden>
+              <div class="live-confirm-summary" data-live-confirm-summary>
+                Quinta-feira, 9 de abril · 11:00
+              </div>
+              <button class="live-confirm-button" type="button" data-live-confirm-button>
+                Confirmar agendamento
+              </button>
+            </div>
           </article>
         </section>
 
