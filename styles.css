@@ -603,6 +603,50 @@ main {
     box-shadow 320ms ease;
 }
 
+.sidebar-topbar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.sidebar-toggle {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.42);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    color 180ms ease,
+    background-color 180ms ease;
+}
+
+.sidebar-toggle:hover,
+.sidebar-toggle:focus-visible {
+  color: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.sidebar-toggle-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 360ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.sidebar-toggle-icon svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .sidebar-brand {
   display: flex;
   gap: 14px;
@@ -707,8 +751,7 @@ main {
     padding: 20px 14px;
   }
 
-  .platform-sidebar:hover,
-  .platform-sidebar:focus-within {
+  body[data-sidebar-expanded="true"] .platform-sidebar {
     width: var(--sidebar-expanded);
     padding: 20px;
     box-shadow: 0 26px 64px rgba(0, 0, 0, 0.28);
@@ -733,24 +776,20 @@ main {
     gap: 0;
   }
 
-  .platform-sidebar:hover .sidebar-brand,
-  .platform-sidebar:focus-within .sidebar-brand {
+  body[data-sidebar-expanded="true"] .platform-sidebar .sidebar-brand {
     gap: 14px;
     padding-inline: 0;
   }
 
-  .platform-sidebar:hover .sidebar-brand-copy,
-  .platform-sidebar:hover .sidebar-text,
-  .platform-sidebar:focus-within .sidebar-brand-copy,
-  .platform-sidebar:focus-within .sidebar-text {
+  body[data-sidebar-expanded="true"] .platform-sidebar .sidebar-brand-copy,
+  body[data-sidebar-expanded="true"] .platform-sidebar .sidebar-text {
     max-width: 180px;
     opacity: 1;
     transform: translateX(0);
     pointer-events: auto;
   }
 
-  .platform-sidebar:hover .sidebar-link,
-  .platform-sidebar:focus-within .sidebar-link {
+  body[data-sidebar-expanded="true"] .platform-sidebar .sidebar-link {
     padding-inline: 14px;
     gap: 12px;
   }
@@ -2609,6 +2648,10 @@ body[data-sidebar-expanded="true"] .platform-shell {
   --sidebar-width: var(--sidebar-expanded);
 }
 
+body[data-sidebar-expanded="false"] .sidebar-toggle-icon {
+  transform: rotate(180deg);
+}
+
 .platform-sidebar {
   min-height: 100vh;
   padding: 24px 18px;
@@ -2951,6 +2994,10 @@ body[data-sidebar-expanded="true"] .platform-shell {
     position: static;
     border-radius: 26px;
     border-left: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .sidebar-topbar {
+    display: none;
   }
 
   .platform-main {

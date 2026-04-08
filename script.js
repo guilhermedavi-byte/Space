@@ -2,12 +2,12 @@ const body = document.body;
 const openPlatformButtons = document.querySelectorAll("[data-open-platform]");
 const closePlatformButton = document.querySelector("[data-close-platform]");
 const openLivePanelButtons = document.querySelectorAll("[data-open-live-panel]");
+const sidebarToggleButton = document.querySelector("[data-sidebar-toggle]");
 const sidebarLinks = document.querySelectorAll("[data-panel-target]");
 const panels = document.querySelectorAll("[data-panel]");
 const bookingFeedback = document.querySelector("[data-booking-feedback]");
 const greetingElement = document.querySelector("[data-greeting]");
 const platformHeader = document.querySelector(".platform-header");
-const platformSidebar = document.querySelector(".platform-sidebar");
 const chartDropdowns = document.querySelectorAll("[data-chart-dropdown]");
 const chartTriggers = document.querySelectorAll("[data-chart-trigger]");
 const chartOptions = document.querySelectorAll("[data-chart-option]");
@@ -75,6 +75,8 @@ const chartState = {
   learning: "all",
   study: "7d",
 };
+
+let sidebarExpanded = false;
 
 const liveSlotPresets = {
   1: ["09:00", "11:30", "16:30", "19:00"],
@@ -156,12 +158,21 @@ const closeAllDropdowns = () => {
 
 const setSidebarExpanded = (isExpanded) => {
   const desktopSidebarQuery = window.matchMedia("(hover: hover) and (pointer: fine) and (min-width: 1101px)");
-  body.dataset.sidebarExpanded = desktopSidebarQuery.matches ? String(isExpanded) : "true";
+  sidebarExpanded = isExpanded;
+  const shouldShowExpandedSidebar = desktopSidebarQuery.matches ? isExpanded : true;
+  body.dataset.sidebarExpanded = String(shouldShowExpandedSidebar);
+
+  if (sidebarToggleButton) {
+    sidebarToggleButton.setAttribute("aria-expanded", String(shouldShowExpandedSidebar));
+    sidebarToggleButton.setAttribute(
+      "aria-label",
+      shouldShowExpandedSidebar ? "Fechar barra lateral" : "Abrir barra lateral"
+    );
+  }
 };
 
 const syncSidebarMode = () => {
-  const isCurrentlyExpanded = body.dataset.sidebarExpanded === "true";
-  setSidebarExpanded(isCurrentlyExpanded);
+  setSidebarExpanded(sidebarExpanded);
 };
 
 const updateGreeting = () => {
@@ -414,6 +425,12 @@ if (closePlatformButton) {
   });
 }
 
+if (sidebarToggleButton) {
+  sidebarToggleButton.addEventListener("click", () => {
+    setSidebarExpanded(!sidebarExpanded);
+  });
+}
+
 openLivePanelButtons.forEach((button) => {
   button.addEventListener("click", () => {
     showPanel("ao-vivo");
@@ -497,32 +514,6 @@ document.addEventListener("keydown", (event) => {
     closeAllDropdowns();
   }
 });
-
-if (platformSidebar) {
-  platformSidebar.addEventListener("mouseenter", () => {
-    setSidebarExpanded(true);
-  });
-
-  platformSidebar.addEventListener("mouseleave", () => {
-    const activeElement = document.activeElement;
-
-    if (!(activeElement instanceof Node) || !platformSidebar.contains(activeElement)) {
-      setSidebarExpanded(false);
-    }
-  });
-
-  platformSidebar.addEventListener("focusin", () => {
-    setSidebarExpanded(true);
-  });
-
-  platformSidebar.addEventListener("focusout", (event) => {
-    const nextTarget = event.relatedTarget;
-
-    if (!(nextTarget instanceof Node) || !platformSidebar.contains(nextTarget)) {
-      setSidebarExpanded(false);
-    }
-  });
-}
 
 window.addEventListener("resize", syncSidebarMode);
 
