@@ -2676,7 +2676,7 @@ body[data-sidebar-expanded="false"] .sidebar-toggle-icon {
 }
 
 body[data-active-panel="ao-vivo"] .platform-main {
-  padding: 0 var(--platform-inline-padding) 0 18px !important;
+  padding: 24px var(--platform-inline-padding) 34px 18px !important;
   gap: 0 !important;
 }
 
@@ -3096,10 +3096,6 @@ body[data-active-panel="ao-vivo"] .platform-backdrop {
   background: #0d0f12;
 }
 
-body[data-active-panel="ao-vivo"] .platform-main {
-  padding-top: 14px;
-}
-
 body[data-active-panel="ao-vivo"] .platform-sidebar {
   background: #0d0f12;
   border-right: 1px solid rgba(255, 255, 255, 0.05);
@@ -3108,8 +3104,8 @@ body[data-active-panel="ao-vivo"] .platform-sidebar {
 
 .platform-panel[data-panel="ao-vivo"] {
   gap: 10px !important;
-  margin-top: -18px !important;
-  padding-top: 0 !important;
+  margin-top: 0 !important;
+  padding-top: 6px !important;
   align-content: start;
 }
 
@@ -3193,7 +3189,7 @@ body[data-active-panel="ao-vivo"] .platform-sidebar {
 }
 
 .live-booking-panel-header {
-  padding: 14px 24px 10px !important;
+  padding: 12px 24px 8px !important;
   margin: 0 !important;
 }
 
