@@ -301,12 +301,12 @@
               </article>
 
               <article class="overview-stat-card">
-                <span class="card-kicker">Horas estudadas</span>
+                <span class="card-kicker">Total de horas de estudo</span>
                 <strong>84h</strong>
               </article>
 
               <article class="overview-stat-card">
-                <span class="card-kicker">Média por dia</span>
+                <span class="card-kicker">Tempo médio diário</span>
                 <strong>38 min</strong>
               </article>
             </div>
@@ -314,55 +314,7 @@
             <div class="analytics-grid">
               <article class="analytics-card analytics-card-line">
                 <div class="analytics-header">
-                  <h3>Evolução pedagógica</h3>
-
-                  <div class="chart-filter-dropdown" data-chart-dropdown="learning">
-                    <button
-                      class="chart-filter-trigger"
-                      type="button"
-                      data-chart-trigger="learning"
-                      aria-expanded="false"
-                      aria-haspopup="true"
-                      aria-label="Filtrar evolução pedagógica"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <rect x="3.5" y="5.5" width="17" height="15" rx="2"></rect>
-                        <path d="M7 3.5V7"></path>
-                        <path d="M17 3.5V7"></path>
-                        <path d="M3.5 10.5H20.5"></path>
-                      </svg>
-                    </button>
-
-                    <div class="chart-filter-menu" data-chart-menu="learning" hidden>
-                      <button
-                        class="chart-filter-option is-active"
-                        type="button"
-                        data-chart-option
-                        data-chart-type="learning"
-                        data-chart-range="all"
-                      >
-                        Todo o período
-                      </button>
-                      <button
-                        class="chart-filter-option"
-                        type="button"
-                        data-chart-option
-                        data-chart-type="learning"
-                        data-chart-range="90d"
-                      >
-                        Últimos 90 dias
-                      </button>
-                      <button
-                        class="chart-filter-option"
-                        type="button"
-                        data-chart-option
-                        data-chart-type="learning"
-                        data-chart-range="30d"
-                      >
-                        Últimos 30 dias
-                      </button>
-                    </div>
-                  </div>
+                  <h3>Sua trilha de aprendizado</h3>
                 </div>
 
                 <div class="journey-chart-shell">
@@ -378,9 +330,17 @@
                       <g data-journey-nodes></g>
                     </svg>
 
+                    <div
+                      class="journey-tag-connector journey-tag-connector-start"
+                      data-journey-start-connector
+                    ></div>
                     <div class="journey-tag journey-tag-start" data-journey-start-label>
                       Você começou aqui!
                     </div>
+                    <div
+                      class="journey-tag-connector journey-tag-connector-current"
+                      data-journey-current-connector
+                    ></div>
                     <div class="journey-tag journey-tag-current" data-journey-current-label>
                       Você está aqui!
                     </div>
@@ -477,7 +437,9 @@
               <article class="surface-card today-availability-card">
                 <div class="dashboard-section-header refined-header">
                   <h3>Horários disponíveis hoje</h3>
-                  <span class="section-counter">5 horários</span>
+                  <button class="ghost-action-button" type="button" data-open-live-panel>
+                    Ver todos os horários
+                  </button>
                 </div>
 
                 <div class="today-slots-grid">
@@ -493,8 +455,7 @@
 
               <article class="surface-card ranking-card">
                 <div class="dashboard-section-header refined-header">
-                  <h3>Ranking</h3>
-                  <span class="section-counter">XP</span>
+                  <h3>Ranking Space</h3>
                 </div>
 
                 <div class="ranking-list">
@@ -528,36 +489,6 @@
                     <strong>Sophia Vega</strong>
                     <span class="ranking-xp">7.520 XP</span>
                   </div>
-                  <div class="ranking-row">
-                    <span class="ranking-position">6</span>
-                    <span class="ranking-avatar">DH</span>
-                    <strong>Daniel Hall</strong>
-                    <span class="ranking-xp">7.110 XP</span>
-                  </div>
-                  <div class="ranking-row">
-                    <span class="ranking-position">7</span>
-                    <span class="ranking-avatar">ER</span>
-                    <strong>Emma Ross</strong>
-                    <span class="ranking-xp">6.880 XP</span>
-                  </div>
-                  <div class="ranking-row">
-                    <span class="ranking-position">8</span>
-                    <span class="ranking-avatar">OC</span>
-                    <strong>Oliver Cruz</strong>
-                    <span class="ranking-xp">6.540 XP</span>
-                  </div>
-                  <div class="ranking-row">
-                    <span class="ranking-position">9</span>
-                    <span class="ranking-avatar">IB</span>
-                    <strong>Isabella Brooks</strong>
-                    <span class="ranking-xp">6.220 XP</span>
-                  </div>
-                  <div class="ranking-row">
-                    <span class="ranking-position">10</span>
-                    <span class="ranking-avatar">LH</span>
-                    <strong>Liam Hayes</strong>
-                    <span class="ranking-xp">5.980 XP</span>
-                  </div>
                 </div>
 
                 <div class="ranking-self-card">
@@ -589,7 +520,6 @@
             <article class="surface-card recommendations-card">
               <div class="dashboard-section-header refined-header">
                 <h3>Recomendações pedagógicas</h3>
-                <span class="section-counter">3 focos</span>
               </div>
 
               <div class="recommendations-grid">
@@ -610,11 +540,11 @@
           </div>
         </section>
 
-        <section class="platform-panel" data-panel="gravadas" hidden>
+        <section class="platform-panel" data-panel="gravadas" data-hide-platform-header="true" hidden>
           <div class="panel-heading">
             <div>
               <span class="eyebrow">Biblioteca</span>
-              <h2>Aulas gravadas</h2>
+              <h2 class="panel-title-compact">Aulas gravadas</h2>
             </div>
             <div class="chip-group">
               <span class="chip chip-active">Todos</span>
@@ -653,68 +583,36 @@
           </div>
         </section>
 
-        <section class="platform-panel" data-panel="ao-vivo" hidden>
-          <div class="panel-heading">
+        <section class="platform-panel" data-panel="ao-vivo" data-hide-platform-header="true" hidden>
+          <div class="panel-heading panel-heading-schedule">
             <div>
-              <span class="eyebrow">Agenda</span>
-              <h2>Agende sua próxima aula</h2>
+              <span class="eyebrow">Agendamento</span>
+              <h2 class="panel-title-compact panel-title-schedule">Agende sua próxima aula</h2>
             </div>
             <div class="booking-feedback" data-booking-feedback aria-live="polite">
               Selecione um horário abaixo.
             </div>
           </div>
 
-          <div class="live-grid">
-            <article class="surface-card">
-              <div class="card-heading">
-                <h3>Professores</h3>
-                <span>Disponíveis</span>
-              </div>
+          <article class="surface-card live-scheduler-shell">
+            <div class="live-scheduler-toolbar">
+              <button class="scheduler-nav-button" type="button" aria-label="Dias anteriores" disabled>
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="m14.5 5.5-6 6 6 6"></path>
+                </svg>
+              </button>
 
-              <div class="teacher-list">
-                <div class="teacher-card">
-                  <strong>Amanda Lewis</strong>
-                  <span>Speaking</span>
-                </div>
-                <div class="teacher-card">
-                  <strong>Diego Martins</strong>
-                  <span>Business</span>
-                </div>
-                <div class="teacher-card">
-                  <strong>Claire Foster</strong>
-                  <span>Travel</span>
-                </div>
-              </div>
-            </article>
+              <div class="live-scheduler-timezone" data-live-timezone>Horário local</div>
 
-            <article class="surface-card">
-              <div class="card-heading">
-                <h3>Horários livres</h3>
-                <span>Reserve</span>
-              </div>
+              <button class="scheduler-nav-button" type="button" aria-label="Próximos dias" disabled>
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="m9.5 5.5 6 6-6 6"></path>
+                </svg>
+              </button>
+            </div>
 
-              <div class="slot-grid">
-                <button class="slot-button" type="button" data-slot="Terça, 19:00">
-                  Terça, 19:00
-                </button>
-                <button class="slot-button" type="button" data-slot="Quarta, 12:30">
-                  Quarta, 12:30
-                </button>
-                <button class="slot-button" type="button" data-slot="Quinta, 18:30">
-                  Quinta, 18:30
-                </button>
-                <button class="slot-button" type="button" data-slot="Sexta, 08:00">
-                  Sexta, 08:00
-                </button>
-                <button class="slot-button" type="button" data-slot="Sábado, 10:00">
-                  Sábado, 10:00
-                </button>
-                <button class="slot-button" type="button" data-slot="Sábado, 11:30">
-                  Sábado, 11:30
-                </button>
-              </div>
-            </article>
-          </div>
+            <div class="live-scheduler-grid" data-live-scheduler-grid></div>
+          </article>
         </section>
 
         <section class="platform-panel" data-panel="materiais" hidden>
