@@ -284,79 +284,117 @@
         </header>
 
         <section class="platform-panel is-visible" data-panel="dashboard">
-          <div class="panel-hero">
-            <div class="panel-hero-copy">
-              <span class="eyebrow">Dashboard</span>
-              <h2>Seu estudo, mais organizado.</h2>
-              <p>Continue de onde parou e agende sua próxima aula.</p>
-            </div>
+          <div class="dashboard-layout">
+            <article class="focus-card">
+              <div class="focus-card-copy">
+                <span class="eyebrow">Próxima prioridade</span>
+                <div class="focus-meta">
+                  <span class="focus-chip">Ao vivo</span>
+                  <span class="focus-time">Hoje, 19:00</span>
+                </div>
+                <h2>Speaking Clinic</h2>
+                <p>Sua próxima aula já está definida. O foco agora é chegar no horário.</p>
+              </div>
 
-            <div class="panel-hero-card">
-              <span class="mini-label">Agora</span>
-              <strong>Listening for meetings</strong>
-              <p>12 min restantes</p>
+              <div class="focus-card-aside">
+                <div class="focus-stat">
+                  <span>Horário</span>
+                  <strong>19:00</strong>
+                </div>
+                <div class="focus-stat">
+                  <span>Formato</span>
+                  <strong>Ao vivo</strong>
+                </div>
+              </div>
+            </article>
+
+            <div class="dashboard-aside">
+              <article class="surface-card progress-card">
+                <div class="progress-card-header">
+                  <div>
+                    <span class="card-kicker">Progresso da trilha</span>
+                    <strong>72%</strong>
+                  </div>
+                  <span class="progress-stage">trilha atual</span>
+                </div>
+                <div class="progress-track" aria-hidden="true">
+                  <span class="progress-fill"></span>
+                </div>
+                <p>Você já está na reta final da metade mais forte do percurso.</p>
+              </article>
+
+              <article class="surface-card streak-card">
+                <span class="card-kicker">Streak</span>
+                <strong>9 dias</strong>
+                <p>consistência em sequência</p>
+              </article>
             </div>
           </div>
 
-          <div class="overview-grid">
-            <article class="overview-card">
-              <span class="card-kicker">Progresso</span>
-              <strong>72%</strong>
-              <p>da trilha atual</p>
-            </article>
-
-            <article class="overview-card">
-              <span class="card-kicker">Próxima live</span>
-              <strong>19:00</strong>
-              <p>Speaking Clinic</p>
-            </article>
-
-            <article class="overview-card">
-              <span class="card-kicker">Streak</span>
-              <strong>9 dias</strong>
-              <p>em sequência</p>
-            </article>
-          </div>
-
-          <div class="dashboard-grid">
-            <article class="surface-card">
-              <div class="card-heading">
-                <h3>Semana</h3>
-                <span>2 aulas</span>
+          <div class="dashboard-sections">
+            <article class="surface-card tasks-card">
+              <div class="dashboard-section-header">
+                <div>
+                  <span class="card-kicker">Hoje</span>
+                  <h3>Tarefas do dia</h3>
+                </div>
+                <span class="section-counter">3 passos</span>
               </div>
 
-              <div class="schedule-list">
+              <div class="task-list">
+                <div class="task-item task-item-primary">
+                  <span class="task-index">1</span>
+                  <div class="task-copy">
+                    <strong>Assistir uma aula curta</strong>
+                    <span>Agora</span>
+                  </div>
+                </div>
+                <div class="task-item">
+                  <span class="task-index">2</span>
+                  <div class="task-copy">
+                    <strong>Revisar o material da trilha</strong>
+                    <span>Depois</span>
+                  </div>
+                </div>
+                <div class="task-item">
+                  <span class="task-index">3</span>
+                  <div class="task-copy">
+                    <strong>Entrar na live das 19:00</strong>
+                    <span>Hoje</span>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <article class="surface-card schedule-card">
+              <div class="dashboard-section-header">
+                <div>
+                  <span class="card-kicker">Semana</span>
+                  <h3>Próximas aulas</h3>
+                </div>
+                <span class="section-counter">2 aulas</span>
+              </div>
+
+              <div class="schedule-list schedule-list-compact">
+                <div class="schedule-item schedule-item-next">
+                  <div class="schedule-item-top">
+                    <strong>Speaking Clinic</strong>
+                    <span class="schedule-type">Ao vivo</span>
+                  </div>
+                  <div class="schedule-item-bottom">
+                    <span>Terça, 19:00</span>
+                    <span class="schedule-emphasis">Mais próxima</span>
+                  </div>
+                </div>
                 <div class="schedule-item">
-                  <strong>Speaking Clinic</strong>
-                  <span>Terça, 19:00</span>
-                  <p>Ao vivo</p>
-                </div>
-                <div class="schedule-item">
-                  <strong>Feedback Session</strong>
-                  <span>Quinta, 18:30</span>
-                  <p>1:1</p>
-                </div>
-              </div>
-            </article>
-
-            <article class="surface-card">
-              <div class="card-heading">
-                <h3>Hoje</h3>
-                <span>3 passos</span>
-              </div>
-
-              <div class="routine-card">
-                <div class="routine-step">
-                  <span>1</span>
-                  <p>Assistir uma aula curta</p>
-                </div>
-                <div class="routine-step">
-                  <span>2</span>
-                  <p>Revisar o material da trilha</p>
-                </div>
-                <div class="routine-step">
-                  <span>3</span>
-                  <p>Entrar na live das 19:00</p>
+                  <div class="schedule-item-top">
+                    <strong>Feedback Session</strong>
+                    <span class="schedule-type schedule-type-soft">1:1</span>
+                  </div>
+                  <div class="schedule-item-bottom">
+                    <span>Quinta, 18:30</span>
+                    <span>Depois</span>
+                  </div>
                 </div>
               </div>
             </article>
