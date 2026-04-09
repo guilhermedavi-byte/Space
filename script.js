@@ -21,10 +21,7 @@ const journeyStartConnector = document.querySelector("[data-journey-start-connec
 const journeyCurrentConnector = document.querySelector("[data-journey-current-connector]");
 const studyChart = document.querySelector("[data-study-chart]");
 const studyScale = document.querySelector(".analytics-card-bar .bar-chart-scale");
-const planBadge = document.querySelector("[data-plan-badge]");
-const planBadgeText = document.querySelector("[data-plan-badge-text]");
-const planCredits = document.querySelector("[data-plan-credits]");
-const planRenewal = document.querySelector("[data-plan-renewal]");
+const planWidgets = document.querySelectorAll("[data-plan-topbar]");
 const liveSchedulerGrid = document.querySelector("[data-live-scheduler-grid]");
 const liveSchedulerTimezone = document.querySelector("[data-live-timezone]");
 const liveInstruction = document.querySelector("[data-live-instruction]");
@@ -276,24 +273,31 @@ const renderPlanUI = () => {
   const plan = getPlanDef(appState.planKey);
   const nextRenewal = syncCreditCycle(new Date());
 
-  if (planBadge) {
-    planBadge.classList.remove("is-gold", "is-diamond", "is-turma");
-    if (plan.badgeClass) {
-      planBadge.classList.add(plan.badgeClass);
+  planWidgets.forEach((widget) => {
+    const badge = widget.querySelector("[data-plan-badge]");
+    const badgeText = widget.querySelector("[data-plan-badge-text]");
+    const credits = widget.querySelector("[data-plan-credits]");
+    const renewal = widget.querySelector("[data-plan-renewal]");
+
+    if (badge instanceof HTMLElement) {
+      badge.classList.remove("is-gold", "is-diamond", "is-turma");
+      if (plan.badgeClass) {
+        badge.classList.add(plan.badgeClass);
+      }
     }
-  }
 
-  if (planBadgeText) {
-    planBadgeText.textContent = `Plano ${plan.label} ativo`;
-  }
+    if (badgeText instanceof HTMLElement) {
+      badgeText.textContent = `Plano ${plan.label} ativo`;
+    }
 
-  if (planCredits) {
-    planCredits.textContent = formatCreditsText(appState.creditsRemaining);
-  }
+    if (credits instanceof HTMLElement) {
+      credits.textContent = formatCreditsText(appState.creditsRemaining);
+    }
 
-  if (planRenewal) {
-    planRenewal.textContent = `Renovam automaticamente em ${formatRenewalDate(nextRenewal)}`;
-  }
+    if (renewal instanceof HTMLElement) {
+      renewal.textContent = `Renovam automaticamente em ${formatRenewalDate(nextRenewal)}`;
+    }
+  });
 
   if (liveCreditsDots) {
     const total = plan.creditsPerCycle;

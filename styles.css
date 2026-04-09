@@ -3191,10 +3191,16 @@ body[data-active-panel="ao-vivo"] .platform-sidebar {
 }
 
 .schedule-page-header {
-  display: grid !important;
-  gap: 0 !important;
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: flex-start !important;
+  gap: 18px !important;
   margin-bottom: 0 !important;
   padding: 0 !important;
+}
+
+.header-plan--schedule {
+  padding-top: 2px;
 }
 
 .schedule-breadcrumb {
@@ -3859,6 +3865,20 @@ body.is-modal-open {
 }
 
 @media (max-width: 820px) {
+  .schedule-page-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+  }
+
+  .header-plan--schedule {
+    justify-items: start;
+    text-align: left;
+  }
+
+  .header-plan--schedule .header-plan-row {
+    justify-content: flex-start;
+  }
+
   .live-booking-panel-header,
   .live-scheduler-grid,
   .live-confirm-bar {
