@@ -35,12 +35,20 @@ const liveScheduledList = document.querySelector("[data-live-scheduled-list]");
 const liveScheduledEmpty = document.querySelector("[data-live-scheduled-empty]");
 const liveCreditsDots = document.querySelector("[data-live-credits-dots]");
 const liveCreditsCaption = document.querySelector("[data-live-credits-caption]");
+const liveStudentRoot = document.querySelector("[data-live-student]");
+const liveTeacherRoot = document.querySelector("[data-live-teacher]");
 const modalOverlay = document.querySelector("[data-modal-overlay]");
 const modalTitle = document.querySelector("[data-modal-title]");
 const modalBody = document.querySelector("[data-modal-body]");
 const modalPrimary = document.querySelector("[data-modal-primary]");
 const modalSecondary = document.querySelector("[data-modal-secondary]");
 const modalClose = document.querySelector("[data-modal-close]");
+
+const teacherMiniTitle = document.querySelector("[data-teacher-mini-title]");
+const teacherMiniGrid = document.querySelector("[data-teacher-mini-grid]");
+const teacherCalViewport = document.querySelector("[data-teacher-cal-viewport]");
+const teacherCalDate = document.querySelector("[data-teacher-cal-date]");
+const teacherCalTimeZone = document.querySelector("[data-teacher-cal-tz]");
 
 const teacherLessonsTodayValue = document.querySelector("[data-teacher-lessons-today]");
 const teacherLessonsTodaySub = document.querySelector("[data-teacher-lessons-today-sub]");
@@ -130,6 +138,8 @@ const ROLE_STORAGE_KEY = "space-platform-role-v1";
 const CANCELLATION_STORAGE_KEY = "space-platform-cancellations-v1";
 const TEACHER_NOTICES_STORAGE_KEY = "space-platform-teacher-notices-v1";
 const TEACHER_NOTICE_READ_KEY = "space-platform-teacher-notices-read-v1";
+const TEACHER_CAL_EVENTS_STORAGE_KEY = "space-platform-teacher-calendar-events-v1";
+const TEACHER_WORK_HOURS_STORAGE_KEY = "space-platform-teacher-work-hours-v1";
 const CREDIT_CYCLE_BUSINESS_DAYS = 6;
 const LESSON_DURATION_MINUTES = 30;
 const CREDIT_REFUND_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -276,6 +286,14 @@ const syncRoleUI = () => {
   if (dashboardStudent) {
     dashboardStudent.hidden = currentRole === "teacher";
   }
+
+  if (liveTeacherRoot) {
+    liveTeacherRoot.hidden = currentRole !== "teacher";
+  }
+
+  if (liveStudentRoot) {
+    liveStudentRoot.hidden = currentRole === "teacher";
+  }
 };
 
 const setRole = (role, persist = true) => {
@@ -289,6 +307,14 @@ const setRole = (role, persist = true) => {
       renderTeacherDashboard();
     } else {
       renderPlanUI();
+    }
+  }
+
+  if (body.dataset.activePanel === "ao-vivo") {
+    if (currentRole === "teacher") {
+      renderTeacherCalendar();
+    } else {
+      renderLiveScheduler();
     }
   }
 
@@ -549,13 +575,87 @@ const openModal = ({
 // Hard guard: if any previous CSS/state made the modal visible, reset it on load.
 closeModal();
 
-const liveSlotPresets = {
+const liveSlotPresetsBase = {
   1: ["09:00", "11:30", "16:30", "19:00"],
   2: ["08:00", "10:30", "15:00", "18:30"],
   3: ["09:30", "12:00", "14:30", "19:30"],
   4: ["08:30", "11:00", "16:00", "18:00"],
   5: ["09:00", "13:30", "15:30", "18:30"],
   6: ["09:00", "10:30", "11:30", "13:00"],
+};
+
+const timeToMinutes = (time) => {
+  const [hours, minutes] = String(time || "")
+    .split(":")
+    .map((part) => Number(part));
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return 0;
+  return Math.max(0, Math.min(hours, 23)) * 60 + Math.max(0, Math.min(minutes, 59));
+};
+
+const clampTime = (value, fallback) => {
+  const raw = String(value || "").trim();
+  if (!/^\d{2}:\d{2}$/.test(raw)) return fallback;
+  const minutes = timeToMinutes(raw);
+  const h = String(Math.floor(minutes / 60)).padStart(2, "0");
+  const m = String(minutes % 60).padStart(2, "0");
+  return `${h}:${m}`;
+};
+
+const defaultWorkHours = () => {
+  const map = {};
+  Object.keys(liveSlotPresetsBase).forEach((key) => {
+    map[key] = { enabled: true, start: "00:00", end: "23:59" };
+  });
+  return map;
+};
+
+let teacherWorkHours = (() => {
+  if (!safeStorage) return defaultWorkHours();
+  try {
+    const raw = safeStorage.getItem(TEACHER_WORK_HOURS_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    const base = defaultWorkHours();
+    if (!parsed || typeof parsed !== "object") return base;
+    Object.keys(base).forEach((key) => {
+      const entry = parsed[key];
+      if (!entry || typeof entry !== "object") return;
+      base[key] = {
+        enabled: entry.enabled !== false,
+        start: clampTime(entry.start, base[key].start),
+        end: clampTime(entry.end, base[key].end),
+      };
+    });
+    return base;
+  } catch (error) {
+    return defaultWorkHours();
+  }
+})();
+
+const persistTeacherWorkHours = () => {
+  if (!safeStorage) return;
+  try {
+    safeStorage.setItem(TEACHER_WORK_HOURS_STORAGE_KEY, JSON.stringify(teacherWorkHours));
+  } catch (error) {
+    // ignore
+  }
+};
+
+const getLiveSlotPresets = () => {
+  const result = {};
+  Object.entries(liveSlotPresetsBase).forEach(([dayKey, times]) => {
+    const config = teacherWorkHours[dayKey] || { enabled: true, start: "00:00", end: "23:59" };
+    if (config.enabled === false) {
+      result[dayKey] = [];
+      return;
+    }
+    const startMin = timeToMinutes(config.start);
+    const endMin = timeToMinutes(config.end);
+    result[dayKey] = (times || []).filter((time) => {
+      const minutes = timeToMinutes(time);
+      return minutes >= startMin && minutes <= endMin;
+    });
+  });
+  return result;
 };
 
 const formatHours = (value) => {
@@ -1229,8 +1329,9 @@ const renderTeacherDashboard = () => {
 
   const weekDays = getWeekDaysMonToSat(now);
   const weekKeys = new Set(weekDays.map((date) => createDateKey(date)));
+  const presets = getLiveSlotPresets();
   const totalSlots = weekDays.reduce((acc, date) => {
-    const times = liveSlotPresets[date.getDay()] || [];
+    const times = presets[String(date.getDay())] || [];
     return acc + times.length;
   }, 0);
   const filledSlots = lessons.filter((lesson) => weekKeys.has(lesson.dateKey)).length;
@@ -1278,6 +1379,529 @@ const getDisplayTimeZoneName = () => {
   }
 
   return `${region}/${city.replace(/_/g, " ")}`;
+};
+
+const teacherCalendarState = (() => {
+  const today = startOfDay(new Date());
+  return {
+    view: "day", // day | week | month
+    focusDate: new Date(today),
+    selectedDate: new Date(today),
+    miniCursor: new Date(today.getFullYear(), today.getMonth(), 1),
+  };
+})();
+
+const loadTeacherCalendarEvents = () => {
+  if (!safeStorage) return [];
+  try {
+    const raw = safeStorage.getItem(TEACHER_CAL_EVENTS_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((event) => {
+        if (!event || typeof event !== "object") return null;
+        if (!event.id || typeof event.id !== "string") return null;
+        const startIso = typeof event.startIso === "string" ? event.startIso : "";
+        const endIso = typeof event.endIso === "string" ? event.endIso : "";
+        const start = startIso ? new Date(startIso) : null;
+        const end = endIso ? new Date(endIso) : null;
+        if (!start || Number.isNaN(start.getTime()) || !end || Number.isNaN(end.getTime())) return null;
+        if (end.getTime() <= start.getTime()) return null;
+        return {
+          id: event.id,
+          title: typeof event.title === "string" ? event.title : "Evento",
+          startIso,
+          endIso,
+        };
+      })
+      .filter(Boolean);
+  } catch (error) {
+    return [];
+  }
+};
+
+let teacherManualEvents = loadTeacherCalendarEvents();
+
+const persistTeacherCalendarEvents = () => {
+  if (!safeStorage) return;
+  try {
+    safeStorage.setItem(TEACHER_CAL_EVENTS_STORAGE_KEY, JSON.stringify(teacherManualEvents));
+  } catch (error) {
+    // ignore
+  }
+};
+
+const sameDateKey = (a, b) => createDateKey(a) === createDateKey(b);
+
+const addDays = (date, deltaDays) => {
+  const next = new Date(date);
+  next.setDate(next.getDate() + deltaDays);
+  return next;
+};
+
+const addMonths = (date, deltaMonths) => {
+  const next = new Date(date);
+  next.setMonth(next.getMonth() + deltaMonths);
+  return next;
+};
+
+const formatTeacherTopDate = (view, focusDate) => {
+  const dateFormatter = new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "long", year: "numeric" });
+  const monthFormatter = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" });
+
+  if (view === "month") {
+    return monthFormatter.format(focusDate);
+  }
+
+  if (view === "week") {
+    const days = getWeekDaysMonToSat(focusDate);
+    return formatWeekRange(days);
+  }
+
+  return dateFormatter.format(focusDate);
+};
+
+const setTeacherFocusDate = (date) => {
+  const normalized = startOfDay(date);
+  teacherCalendarState.focusDate = normalized;
+  teacherCalendarState.selectedDate = new Date(normalized);
+  teacherCalendarState.miniCursor = new Date(normalized.getFullYear(), normalized.getMonth(), 1);
+};
+
+const getLessonEvents = () => {
+  return scheduledLessons
+    .map((lesson) => {
+      const date = parseDateKey(lesson.dateKey);
+      if (!date) return null;
+      const start = getSlotDateTime(date, lesson.time);
+      const end = new Date(start);
+      end.setMinutes(end.getMinutes() + (lesson.durationMinutes || LESSON_DURATION_MINUTES));
+      return {
+        id: lesson.id,
+        type: "lesson",
+        title: lesson.studentName || "Aluno Space",
+        start,
+        end,
+      };
+    })
+    .filter(Boolean);
+};
+
+const getManualEvents = () => {
+  return teacherManualEvents
+    .map((event) => {
+      const start = new Date(event.startIso);
+      const end = new Date(event.endIso);
+      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+      return {
+        id: event.id,
+        type: "manual",
+        title: event.title,
+        start,
+        end,
+      };
+    })
+    .filter(Boolean);
+};
+
+const getTeacherEventsForRange = (rangeStart, rangeEnd) => {
+  const events = [...getLessonEvents(), ...getManualEvents()];
+  return events
+    .filter((event) => event.end.getTime() > rangeStart.getTime() && event.start.getTime() < rangeEnd.getTime())
+    .sort((a, b) => a.start.getTime() - b.start.getTime());
+};
+
+const layoutOverlappingEvents = (events) => {
+  if (!events.length) return [];
+
+  const overlaps = (a, b) => a.start.getTime() < b.end.getTime() && b.start.getTime() < a.end.getTime();
+
+  const components = [];
+  const visited = new Set();
+  for (let i = 0; i < events.length; i += 1) {
+    const seed = events[i];
+    if (visited.has(seed.id)) continue;
+    const queue = [seed];
+    visited.add(seed.id);
+    const component = [];
+
+    while (queue.length) {
+      const current = queue.pop();
+      component.push(current);
+      for (let j = 0; j < events.length; j += 1) {
+        const other = events[j];
+        if (visited.has(other.id)) continue;
+        if (overlaps(current, other)) {
+          visited.add(other.id);
+          queue.push(other);
+        }
+      }
+    }
+    components.push(component);
+  }
+
+  const laidOut = [];
+  components.forEach((component) => {
+    const sorted = component.slice().sort((a, b) => a.start.getTime() - b.start.getTime());
+
+    const endpoints = [];
+    sorted.forEach((event) => {
+      endpoints.push({ t: event.start.getTime(), d: +1 });
+      endpoints.push({ t: event.end.getTime(), d: -1 });
+    });
+    endpoints.sort((a, b) => (a.t === b.t ? a.d - b.d : a.t - b.t));
+    let activeCount = 0;
+    let maxSimul = 1;
+    endpoints.forEach((point) => {
+      activeCount += point.d;
+      maxSimul = Math.max(maxSimul, activeCount);
+    });
+
+    const colEndTimes = Array.from({ length: maxSimul }).map(() => 0);
+    sorted.forEach((event) => {
+      const start = event.start.getTime();
+      let colIndex = colEndTimes.findIndex((endTime) => endTime <= start);
+      if (colIndex < 0) colIndex = 0;
+      colEndTimes[colIndex] = event.end.getTime();
+      laidOut.push({ ...event, colIndex, colCount: maxSimul });
+    });
+  });
+
+  return laidOut;
+};
+
+const renderTeacherMiniCalendar = () => {
+  if (!teacherMiniGrid || !teacherMiniTitle) return;
+
+  const cursor = new Date(teacherCalendarState.miniCursor);
+  const monthFormatter = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" });
+  teacherMiniTitle.textContent = monthFormatter.format(cursor);
+
+  const today = startOfDay(new Date());
+  const firstOfMonth = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+  const start = new Date(firstOfMonth);
+  start.setDate(firstOfMonth.getDate() - firstOfMonth.getDay()); // Sunday start
+
+  const dow = ["D", "S", "T", "Q", "Q", "S", "S"];
+  const cells = [];
+  dow.forEach((label) => cells.push(`<div class="teacher-mini-cal-dow">${label}</div>`));
+
+  for (let i = 0; i < 42; i += 1) {
+    const day = addDays(start, i);
+    const isOutside = day.getMonth() !== cursor.getMonth();
+    const isToday = sameDateKey(day, today);
+    const isSelected = sameDateKey(day, teacherCalendarState.selectedDate);
+    const classes = [
+      "teacher-mini-cal-day",
+      isOutside ? "is-outside" : "",
+      isToday ? "is-today" : "",
+      isSelected ? "is-selected" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    cells.push(
+      `<button class="${classes}" type="button" data-teacher-mini-day="${createDateKey(day)}">${day.getDate()}</button>`
+    );
+  }
+
+  teacherMiniGrid.innerHTML = cells.join("");
+};
+
+const renderTeacherCalendarViewportDay = (date) => {
+  if (!teacherCalViewport) return;
+
+  const startHour = 6;
+  const endHour = 23;
+  const hourHeight = 56;
+  const dayStart = new Date(date);
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = addDays(dayStart, 1);
+  const events = getTeacherEventsForRange(dayStart, dayEnd);
+  const laidOut = layoutOverlappingEvents(events);
+
+  const weekdayLabel = new Intl.DateTimeFormat("pt-BR", { weekday: "short" }).format(date).replace(".", "").toUpperCase();
+  const today = startOfDay(new Date());
+  const isToday = sameDateKey(date, today);
+  const head = `
+    <div class="teacher-cal-head-cell"></div>
+    <div class="teacher-cal-head-cell">
+      <div class="teacher-cal-day-label">
+        <span>${weekdayLabel}</span>
+        <span class="teacher-cal-day-num${isToday ? " is-today" : ""}">${date.getDate()}</span>
+      </div>
+    </div>
+  `;
+
+  const times = [];
+  for (let h = startHour; h <= endHour; h += 1) {
+    const label = h === 12 ? "12 PM" : h === 0 ? "12 AM" : h < 12 ? `${h} AM` : `${h - 12} PM`;
+    times.push(`<div class="teacher-cal-time">${label}</div>`);
+  }
+
+  const rows = [];
+  for (let h = startHour; h <= endHour; h += 1) {
+    rows.push(`<div class="teacher-cal-hour-row"></div>`);
+  }
+
+  const dayIndex = String(date.getDay());
+  const work = teacherWorkHours[dayIndex] || { enabled: true, start: "00:00", end: "23:59" };
+  const gridStartMin = startHour * 60;
+  const gridEndMin = (endHour + 1) * 60;
+  const startMin = work.enabled === false ? gridEndMin : timeToMinutes(work.start);
+  const endMin = work.enabled === false ? gridStartMin : timeToMinutes(work.end);
+  const topHeight = Math.max(0, Math.min((startMin - gridStartMin) / 60, endHour - startHour + 1)) * hourHeight;
+  const bottomTop = Math.max(0, Math.min((endMin - gridStartMin) / 60, endHour - startHour + 1)) * hourHeight;
+
+  const offHours = `
+    <div class="teacher-cal-offhours" aria-hidden="true">
+      <div class="teacher-cal-offhours-top" style="top:0;height:${Math.max(0, topHeight)}px"></div>
+      <div class="teacher-cal-offhours-bottom" style="top:${Math.max(0, bottomTop)}px;bottom:0"></div>
+    </div>
+  `;
+
+  let nowLine = "";
+  if (isToday) {
+    const now = new Date();
+    const minutes = now.getHours() * 60 + now.getMinutes();
+    if (minutes >= gridStartMin && minutes <= gridEndMin) {
+      const y = ((minutes - gridStartMin) / 60) * hourHeight;
+      nowLine = `<div class="teacher-cal-now-line" style="top:${y}px"><span class="teacher-cal-now-dot" aria-hidden="true"></span></div>`;
+    }
+  }
+
+  const eventsMarkup = laidOut
+    .map((event) => {
+      const startMinutes = event.start.getHours() * 60 + event.start.getMinutes();
+      const endMinutes = event.end.getHours() * 60 + event.end.getMinutes();
+      const top = ((startMinutes - gridStartMin) / 60) * hourHeight;
+      const height = Math.max(18, ((endMinutes - startMinutes) / 60) * hourHeight);
+      const leftPct = (event.colIndex / event.colCount) * 100;
+      const widthPct = 100 / event.colCount;
+      const timeLabel = `${formatTimeHm(event.start)} – ${formatTimeHm(event.end)}`;
+      return `
+        <div
+          class="teacher-cal-event is-${event.type}"
+          style="top:${top}px;height:${height}px;left:calc(${leftPct}% + 8px);width:calc(${widthPct}% - 16px);"
+        >
+          <span class="teacher-cal-event-title">${escapeHtml(event.title)}</span>
+          <span class="teacher-cal-event-time">${escapeHtml(timeLabel)}</span>
+        </div>
+      `;
+    })
+    .join("");
+
+  teacherCalViewport.innerHTML = `
+    <div class="teacher-cal-day">
+      ${head}
+      <div class="teacher-cal-timecol">${times.join("")}</div>
+      <div class="teacher-cal-grid">
+        ${rows.join("")}
+        ${offHours}
+        ${nowLine}
+        <div class="teacher-cal-events-layer">${eventsMarkup}</div>
+      </div>
+    </div>
+  `;
+};
+
+const renderTeacherCalendarViewportWeek = (focusDate) => {
+  if (!teacherCalViewport) return;
+
+  const startHour = 6;
+  const endHour = 23;
+  const hourHeight = 56;
+  const days = getWeekDaysMonToSat(focusDate);
+  const weekStart = startOfDay(days[0]);
+  const weekEnd = addDays(startOfDay(days[days.length - 1]), 1);
+  const events = getTeacherEventsForRange(weekStart, weekEnd);
+  const today = startOfDay(new Date());
+
+  const weekdayLabel = new Intl.DateTimeFormat("pt-BR", { weekday: "short" });
+  const headDays = days
+    .map((date) => {
+      const label = weekdayLabel.format(date).replace(".", "").toUpperCase();
+      const isToday = sameDateKey(date, today);
+      return `
+        <div class="teacher-cal-week-dayhead">
+          <div class="teacher-cal-week-daylabel">
+            <span>${label}</span>
+            <span class="teacher-cal-week-daynum${isToday ? " is-today" : ""}">${date.getDate()}</span>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+
+  const times = [];
+  for (let h = startHour; h <= endHour; h += 1) {
+    const label = h === 12 ? "12 PM" : h === 0 ? "12 AM" : h < 12 ? `${h} AM` : `${h - 12} PM`;
+    times.push(`<div class="teacher-cal-time">${label}</div>`);
+  }
+
+  const rows = [];
+  for (let h = startHour; h <= endHour; h += 1) {
+    rows.push(`<div class="teacher-cal-hour-row"></div>`);
+  }
+
+  const dayColumns = days
+    .map((date) => {
+      const dayStart = startOfDay(date);
+      const dayEnd = addDays(dayStart, 1);
+      const dayEvents = events.filter((event) => event.end.getTime() > dayStart.getTime() && event.start.getTime() < dayEnd.getTime());
+      const laidOut = layoutOverlappingEvents(dayEvents);
+
+      const dayIndex = String(date.getDay());
+      const work = teacherWorkHours[dayIndex] || { enabled: true, start: "00:00", end: "23:59" };
+      const gridStartMin = startHour * 60;
+      const gridEndMin = (endHour + 1) * 60;
+      const startMin = work.enabled === false ? gridEndMin : timeToMinutes(work.start);
+      const endMin = work.enabled === false ? gridStartMin : timeToMinutes(work.end);
+      const topHeight = Math.max(0, Math.min((startMin - gridStartMin) / 60, endHour - startHour + 1)) * hourHeight;
+      const bottomTop = Math.max(0, Math.min((endMin - gridStartMin) / 60, endHour - startHour + 1)) * hourHeight;
+      const offHours = `
+        <div class="teacher-cal-offhours" aria-hidden="true">
+          <div class="teacher-cal-offhours-top" style="top:0;height:${Math.max(0, topHeight)}px"></div>
+          <div class="teacher-cal-offhours-bottom" style="top:${Math.max(0, bottomTop)}px;bottom:0"></div>
+        </div>
+      `;
+
+      let nowLine = "";
+      if (sameDateKey(date, today)) {
+        const now = new Date();
+        const minutes = now.getHours() * 60 + now.getMinutes();
+        if (minutes >= gridStartMin && minutes <= gridEndMin) {
+          const y = ((minutes - gridStartMin) / 60) * hourHeight;
+          nowLine = `<div class="teacher-cal-now-line" style="top:${y}px"><span class="teacher-cal-now-dot" aria-hidden="true"></span></div>`;
+        }
+      }
+
+      const eventsMarkup = laidOut
+        .map((event) => {
+          const startMinutes = event.start.getHours() * 60 + event.start.getMinutes();
+          const endMinutes = event.end.getHours() * 60 + event.end.getMinutes();
+          const top = ((startMinutes - gridStartMin) / 60) * hourHeight;
+          const height = Math.max(18, ((endMinutes - startMinutes) / 60) * hourHeight);
+          const leftPct = (event.colIndex / event.colCount) * 100;
+          const widthPct = 100 / event.colCount;
+          const timeLabel = `${formatTimeHm(event.start)} – ${formatTimeHm(event.end)}`;
+          return `
+            <div
+              class="teacher-cal-event is-${event.type}"
+              style="top:${top}px;height:${height}px;left:calc(${leftPct}% + 8px);width:calc(${widthPct}% - 16px);"
+            >
+              <span class="teacher-cal-event-title">${escapeHtml(event.title)}</span>
+              <span class="teacher-cal-event-time">${escapeHtml(timeLabel)}</span>
+            </div>
+          `;
+        })
+        .join("");
+
+      return `
+        <div class="teacher-cal-week-col">
+          <div class="teacher-cal-grid">
+            ${rows.join("")}
+            ${offHours}
+            ${nowLine}
+            <div class="teacher-cal-events-layer">${eventsMarkup}</div>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+
+  teacherCalViewport.innerHTML = `
+    <div class="teacher-cal-week">
+      <div class="teacher-cal-week-head">
+        <div class="teacher-cal-head-cell"></div>
+        <div class="teacher-cal-week-head-days">${headDays}</div>
+      </div>
+      <div class="teacher-cal-timecol">${times.join("")}</div>
+      <div class="teacher-cal-week-cols">${dayColumns}</div>
+    </div>
+  `;
+};
+
+const renderTeacherCalendarViewportMonth = (focusDate) => {
+  if (!teacherCalViewport) return;
+
+  const firstOfMonth = new Date(focusDate.getFullYear(), focusDate.getMonth(), 1);
+  const gridStart = new Date(firstOfMonth);
+  gridStart.setDate(firstOfMonth.getDate() - firstOfMonth.getDay()); // Sunday start
+  const today = startOfDay(new Date());
+  const rangeStart = startOfDay(gridStart);
+  const rangeEnd = addDays(rangeStart, 42);
+  const events = getTeacherEventsForRange(rangeStart, rangeEnd);
+
+  const dow = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+  const head = dow.map((label) => `<div class="teacher-cal-month-dow">${label}</div>`).join("");
+
+  const cellMarkup = Array.from({ length: 42 }).map((_, idx) => {
+    const date = addDays(gridStart, idx);
+    const isOutside = date.getMonth() !== focusDate.getMonth();
+    const isToday = sameDateKey(date, today);
+    const dayEvents = events.filter((event) => sameDateKey(event.start, date));
+    const pills = dayEvents
+      .slice(0, 3)
+      .map((event) => {
+        const time = `${formatTimeHm(event.start)} ${event.title}`;
+        return `<div class="teacher-cal-month-pill${event.type === "manual" ? " is-manual" : ""}">${escapeHtml(time)}</div>`;
+      })
+      .join("");
+    const moreCount = Math.max(0, dayEvents.length - 3);
+    const more = moreCount
+      ? `<button class="teacher-cal-month-more" type="button" data-teacher-month-more="${createDateKey(date)}">+ ${moreCount} mais</button>`
+      : "";
+    return `
+      <div class="teacher-cal-month-cell">
+        <div class="teacher-cal-month-date${isToday ? " is-today" : ""}${isOutside ? " is-outside" : ""}">${date.getDate()}</div>
+        ${pills}
+        ${more}
+      </div>
+    `;
+  }).join("");
+
+  teacherCalViewport.innerHTML = `
+    <div class="teacher-cal-month">
+      <div class="teacher-cal-month-head">${head}</div>
+      <div class="teacher-cal-month-grid">${cellMarkup}</div>
+    </div>
+  `;
+};
+
+const renderTeacherCalendar = () => {
+  if (currentRole !== "teacher") return;
+  if (!liveTeacherRoot || liveTeacherRoot.hidden) return;
+  if (!teacherCalViewport) return;
+
+  const now = new Date();
+  const timezoneName = getDisplayTimeZoneName();
+  if (teacherCalTimeZone) {
+    teacherCalTimeZone.textContent = `${timezoneName} · ${formatTimeZoneOffset(now)}`;
+  }
+
+  if (teacherCalDate) {
+    teacherCalDate.textContent = formatTeacherTopDate(teacherCalendarState.view, teacherCalendarState.focusDate);
+  }
+
+  document.querySelectorAll("[data-teacher-cal-view]").forEach((btn) => {
+    const isActive = btn.getAttribute("data-teacher-cal-view") === teacherCalendarState.view;
+    btn.classList.toggle("is-active", isActive);
+    btn.setAttribute("aria-selected", String(isActive));
+  });
+
+  renderTeacherMiniCalendar();
+
+  const view = teacherCalendarState.view;
+  if (view === "week") {
+    renderTeacherCalendarViewportWeek(teacherCalendarState.focusDate);
+    return;
+  }
+  if (view === "month") {
+    renderTeacherCalendarViewportMonth(teacherCalendarState.focusDate);
+    return;
+  }
+  renderTeacherCalendarViewportDay(teacherCalendarState.focusDate);
 };
 
 const createSlotId = (date, time) => {
@@ -1397,7 +2021,8 @@ const renderLiveScheduledLessons = () => {
 };
 
 const getAvailableSlots = (date, referenceDate = new Date()) => {
-  const times = liveSlotPresets[date.getDay()] || ["09:00", "11:00", "15:00"];
+  const presets = getLiveSlotPresets();
+  const times = presets[String(date.getDay())] || ["09:00", "11:00", "15:00"];
 
   return times.filter((time) => {
     const slotDate = getSlotDateTime(date, time);
@@ -1628,7 +2253,11 @@ const showPanel = (panelName) => {
 
   if (panelName === "ao-vivo") {
     window.scrollTo({ top: 0, behavior: "smooth" });
-    renderLiveScheduler();
+    if (currentRole === "teacher") {
+      renderTeacherCalendar();
+    } else {
+      renderLiveScheduler();
+    }
     return;
   }
 
@@ -1754,6 +2383,234 @@ document.addEventListener("click", (event) => {
       closeModal();
       setView("interno");
       showPanel("dashboard");
+      return;
+    }
+
+    const createEventButton = target.closest("[data-teacher-create-event]");
+    if (createEventButton instanceof HTMLButtonElement) {
+      if (currentRole !== "teacher") return;
+
+      const focus = teacherCalendarState.focusDate;
+      const startHour = Math.min(Math.max(new Date().getHours(), 6), 20);
+      const startDefault = `${String(startHour).padStart(2, "0")}:00`;
+      const endDefault = `${String(Math.min(startHour + 1, 23)).padStart(2, "0")}:00`;
+
+      openModal({
+        title: "Criar evento",
+        bodyHtml: `
+          <div class="modal-form">
+            <label class="modal-field">
+              <span>Título</span>
+              <input class="modal-input" type="text" data-teacher-event-title placeholder="Bloqueio / Reunião" />
+            </label>
+            <div class="modal-row">
+              <label class="modal-field">
+                <span>Data</span>
+                <input class="modal-input" type="date" data-teacher-event-date value="${createDateKey(focus)}" />
+              </label>
+              <label class="modal-field">
+                <span>Início</span>
+                <input class="modal-input" type="time" data-teacher-event-start value="${startDefault}" />
+              </label>
+              <label class="modal-field">
+                <span>Fim</span>
+                <input class="modal-input" type="time" data-teacher-event-end value="${endDefault}" />
+              </label>
+            </div>
+          </div>
+        `,
+        primaryLabel: "Salvar",
+        secondaryLabel: "Voltar",
+        onPrimary: () => {
+          const titleInput = modalBody?.querySelector("[data-teacher-event-title]");
+          const dateInput = modalBody?.querySelector("[data-teacher-event-date]");
+          const startInput = modalBody?.querySelector("[data-teacher-event-start]");
+          const endInput = modalBody?.querySelector("[data-teacher-event-end]");
+          if (!(titleInput instanceof HTMLInputElement)) return;
+          if (!(dateInput instanceof HTMLInputElement)) return;
+          if (!(startInput instanceof HTMLInputElement)) return;
+          if (!(endInput instanceof HTMLInputElement)) return;
+
+          const title = titleInput.value.trim() || "Evento";
+          const date = parseDateKey(dateInput.value);
+          if (!date) return;
+
+          const startTime = clampTime(startInput.value, "08:00");
+          const endTime = clampTime(endInput.value, "09:00");
+          const start = getSlotDateTime(date, startTime);
+          const end = getSlotDateTime(date, endTime);
+          if (end.getTime() <= start.getTime()) return;
+
+          const id = `m_${Date.now().toString(36)}`;
+          teacherManualEvents.unshift({
+            id,
+            title,
+            startIso: start.toISOString(),
+            endIso: end.toISOString(),
+          });
+          persistTeacherCalendarEvents();
+          setTeacherFocusDate(date);
+          renderTeacherCalendar();
+        },
+      });
+      return;
+    }
+
+    const workHoursButton = target.closest("[data-teacher-work-hours]");
+    if (workHoursButton instanceof HTMLButtonElement) {
+      if (currentRole !== "teacher") return;
+
+      const dayLabels = {
+        1: "Seg",
+        2: "Ter",
+        3: "Qua",
+        4: "Qui",
+        5: "Sex",
+        6: "Sáb",
+      };
+
+      const rows = Object.keys(liveSlotPresetsBase)
+        .map((dayKey) => {
+          const config = teacherWorkHours[dayKey] || { enabled: true, start: "00:00", end: "23:59" };
+          return `
+            <div class="modal-work-row" data-wh-row="${dayKey}">
+              <label class="modal-work-day">
+                <input type="checkbox" ${config.enabled !== false ? "checked" : ""} data-wh-enabled="${dayKey}" />
+                <span>${dayLabels[dayKey] || dayKey}</span>
+              </label>
+              <input class="modal-input modal-input-time" type="time" value="${config.start}" data-wh-start="${dayKey}" />
+              <span class="modal-work-sep">–</span>
+              <input class="modal-input modal-input-time" type="time" value="${config.end}" data-wh-end="${dayKey}" />
+            </div>
+          `;
+        })
+        .join("");
+
+      openModal({
+        title: "Horário de trabalho",
+        bodyHtml: `
+          <div class="modal-form">
+            <div class="modal-help">Defina quando você está disponível para receber agendamentos.</div>
+            <div class="modal-work-grid">
+              ${rows}
+            </div>
+          </div>
+        `,
+        primaryLabel: "Salvar",
+        secondaryLabel: "Voltar",
+        onPrimary: () => {
+          Object.keys(liveSlotPresetsBase).forEach((dayKey) => {
+            const enabledEl = modalBody?.querySelector(`[data-wh-enabled="${CSS.escape(dayKey)}"]`);
+            const startEl = modalBody?.querySelector(`[data-wh-start="${CSS.escape(dayKey)}"]`);
+            const endEl = modalBody?.querySelector(`[data-wh-end="${CSS.escape(dayKey)}"]`);
+            const enabled = enabledEl instanceof HTMLInputElement ? enabledEl.checked : true;
+            const start = startEl instanceof HTMLInputElement ? clampTime(startEl.value, "00:00") : "00:00";
+            const end = endEl instanceof HTMLInputElement ? clampTime(endEl.value, "23:59") : "23:59";
+            teacherWorkHours[dayKey] = { enabled, start, end };
+          });
+          persistTeacherWorkHours();
+          renderTeacherCalendar();
+          renderLiveScheduler();
+        },
+      });
+      return;
+    }
+
+    const miniPrev = target.closest("[data-teacher-mini-prev]");
+    if (miniPrev instanceof HTMLButtonElement) {
+      if (currentRole !== "teacher") return;
+      teacherCalendarState.miniCursor = new Date(teacherCalendarState.miniCursor.getFullYear(), teacherCalendarState.miniCursor.getMonth() - 1, 1);
+      renderTeacherMiniCalendar();
+      return;
+    }
+
+    const miniNext = target.closest("[data-teacher-mini-next]");
+    if (miniNext instanceof HTMLButtonElement) {
+      if (currentRole !== "teacher") return;
+      teacherCalendarState.miniCursor = new Date(teacherCalendarState.miniCursor.getFullYear(), teacherCalendarState.miniCursor.getMonth() + 1, 1);
+      renderTeacherMiniCalendar();
+      return;
+    }
+
+    const miniDay = target.closest("[data-teacher-mini-day]");
+    if (miniDay instanceof HTMLButtonElement) {
+      if (currentRole !== "teacher") return;
+      const key = miniDay.getAttribute("data-teacher-mini-day") || "";
+      const date = parseDateKey(key);
+      if (!date) return;
+      setTeacherFocusDate(date);
+      renderTeacherCalendar();
+      return;
+    }
+
+    const calToday = target.closest("[data-teacher-cal-today]");
+    if (calToday instanceof HTMLButtonElement) {
+      if (currentRole !== "teacher") return;
+      setTeacherFocusDate(new Date());
+      renderTeacherCalendar();
+      return;
+    }
+
+    const calPrev = target.closest("[data-teacher-cal-prev]");
+    if (calPrev instanceof HTMLButtonElement) {
+      if (currentRole !== "teacher") return;
+      const view = teacherCalendarState.view;
+      const delta = view === "month" ? -1 : view === "week" ? -7 : -1;
+      const next = view === "month"
+        ? addMonths(teacherCalendarState.focusDate, -1)
+        : addDays(teacherCalendarState.focusDate, delta);
+      setTeacherFocusDate(next);
+      renderTeacherCalendar();
+      return;
+    }
+
+    const calNext = target.closest("[data-teacher-cal-next]");
+    if (calNext instanceof HTMLButtonElement) {
+      if (currentRole !== "teacher") return;
+      const view = teacherCalendarState.view;
+      const delta = view === "month" ? 1 : view === "week" ? 7 : 1;
+      const next = view === "month"
+        ? addMonths(teacherCalendarState.focusDate, 1)
+        : addDays(teacherCalendarState.focusDate, delta);
+      setTeacherFocusDate(next);
+      renderTeacherCalendar();
+      return;
+    }
+
+    const viewBtn = target.closest("[data-teacher-cal-view]");
+    if (viewBtn instanceof HTMLButtonElement) {
+      if (currentRole !== "teacher") return;
+      const nextView = viewBtn.getAttribute("data-teacher-cal-view") || "day";
+      if (nextView !== "day" && nextView !== "week" && nextView !== "month") return;
+      teacherCalendarState.view = nextView;
+      renderTeacherCalendar();
+      return;
+    }
+
+    const monthMore = target.closest("[data-teacher-month-more]");
+    if (monthMore instanceof HTMLButtonElement) {
+      if (currentRole !== "teacher") return;
+      const key = monthMore.getAttribute("data-teacher-month-more") || "";
+      const date = parseDateKey(key);
+      if (!date) return;
+      const start = startOfDay(date);
+      const end = addDays(start, 1);
+      const events = getTeacherEventsForRange(start, end);
+      const bodyHtml = events.length
+        ? `<div class="modal-list">${events
+            .map((event) => {
+              const tag = event.type === "manual" ? "Evento" : "Aula";
+              const when = `${formatTimeHm(event.start)} – ${formatTimeHm(event.end)}`;
+              return `<div class="modal-list-row"><strong>${escapeHtml(event.title)}</strong><span>${escapeHtml(`${tag} · ${when}`)}</span></div>`;
+            })
+            .join("")}</div>`
+        : "Sem eventos neste dia.";
+      openModal({
+        title: `Eventos em ${formatShortDate(date)}`,
+        bodyHtml,
+        primaryLabel: "Fechar",
+        hideSecondary: true,
+      });
       return;
     }
 
@@ -1995,7 +2852,11 @@ setView("publico", false);
 
 setInterval(() => {
   if (body.dataset.activePanel === "ao-vivo") {
-    renderLiveScheduler();
+    if (currentRole === "teacher") {
+      renderTeacherCalendar();
+    } else {
+      renderLiveScheduler();
+    }
     return;
   }
 
