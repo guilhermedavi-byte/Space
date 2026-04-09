@@ -583,6 +583,12 @@ main {
   text-align: right;
 }
 
+/* `hidden` must always win over component display rules (author styles override UA `[hidden]`). */
+.header-plan[hidden],
+.header-role[hidden] {
+  display: none !important;
+}
+
 .header-plan-row {
   display: inline-flex;
   align-items: center;
@@ -1453,6 +1459,10 @@ body[data-active-panel="ao-vivo"] .platform-header {
   gap: 16px;
 }
 
+.dashboard-redesign[hidden] {
+  display: none !important;
+}
+
 .teacher-insights-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
@@ -1726,6 +1736,10 @@ body[data-active-panel="ao-vivo"] .platform-header {
   border-top: 1px solid rgba(255, 255, 255, 0.06);
   display: grid;
   gap: 12px;
+}
+
+.teacher-notice-thread[hidden] {
+  display: none !important;
 }
 
 .teacher-comments {
@@ -3809,6 +3823,10 @@ body[data-active-panel="ao-vivo"] .platform-sidebar {
   text-align: center;
 }
 
+.live-scheduled-empty[hidden] {
+  display: none !important;
+}
+
 .live-booking-panel-header {
   padding: 12px 24px 8px !important;
   margin: 0 !important;
@@ -3943,6 +3961,10 @@ body[data-active-panel="ao-vivo"] .platform-sidebar {
   font-weight: 600;
   letter-spacing: -0.01em;
   text-align: center;
+}
+
+.live-day-empty[hidden] {
+  display: none !important;
 }
 
 .scheduler-slot-row {

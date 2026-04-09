@@ -2027,6 +2027,7 @@ setInterval(updateGreeting, 60000);
 setRole(currentRole);
 setActiveChartOption("learning", chartState.learning);
 setActiveChartOption("study", chartState.study);
+setActiveChartOption("teacher-classes", chartState["teacher-classes"]);
 setSidebarExpanded(false);
 showPanel("dashboard");
 renderDashboardCharts();
