@@ -604,7 +604,7 @@ const clampTime = (value, fallback) => {
 const defaultWorkHours = () => {
   const map = {};
   Object.keys(liveSlotPresetsBase).forEach((key) => {
-    map[key] = { enabled: true, start: "00:00", end: "23:59" };
+    map[key] = { enabled: true, windows: [{ start: "00:00", end: "23:59" }] };
   });
   return map;
 };
@@ -619,10 +619,31 @@ let teacherWorkHours = (() => {
     Object.keys(base).forEach((key) => {
       const entry = parsed[key];
       if (!entry || typeof entry !== "object") return;
+      const enabled = entry.enabled !== false;
+      const windowsRaw = Array.isArray(entry.windows) ? entry.windows : null;
+      if (windowsRaw) {
+        const windows = windowsRaw
+          .map((window) => {
+            if (!window || typeof window !== "object") return null;
+            return {
+              start: clampTime(window.start, "00:00"),
+              end: clampTime(window.end, "23:59"),
+            };
+          })
+          .filter(Boolean);
+        base[key] = { enabled, windows: windows.length ? windows : [{ start: "00:00", end: "23:59" }] };
+        return;
+      }
+
+      // Backwards compat (v1): single start/end.
       base[key] = {
-        enabled: entry.enabled !== false,
-        start: clampTime(entry.start, base[key].start),
-        end: clampTime(entry.end, base[key].end),
+        enabled,
+        windows: [
+          {
+            start: clampTime(entry.start, "00:00"),
+            end: clampTime(entry.end, "23:59"),
+          },
+        ],
       };
     });
     return base;
@@ -643,16 +664,19 @@ const persistTeacherWorkHours = () => {
 const getLiveSlotPresets = () => {
   const result = {};
   Object.entries(liveSlotPresetsBase).forEach(([dayKey, times]) => {
-    const config = teacherWorkHours[dayKey] || { enabled: true, start: "00:00", end: "23:59" };
+    const config = teacherWorkHours[dayKey] || { enabled: true, windows: [{ start: "00:00", end: "23:59" }] };
     if (config.enabled === false) {
       result[dayKey] = [];
       return;
     }
-    const startMin = timeToMinutes(config.start);
-    const endMin = timeToMinutes(config.end);
+    const windows = Array.isArray(config.windows) ? config.windows : [];
+    const normalized = windows
+      .map((window) => ({ start: timeToMinutes(window.start), end: timeToMinutes(window.end) }))
+      .filter((window) => window.end > window.start)
+      .sort((a, b) => a.start - b.start);
     result[dayKey] = (times || []).filter((time) => {
       const minutes = timeToMinutes(time);
-      return minutes >= startMin && minutes <= endMin;
+      return normalized.some((window) => minutes >= window.start && minutes <= window.end);
     });
   });
   return result;
@@ -1570,6 +1594,54 @@ const layoutOverlappingEvents = (events) => {
   return laidOut;
 };
 
+const normalizeWorkWindows = (workConfig) => {
+  if (!workConfig || workConfig.enabled === false) return [];
+  const windows = Array.isArray(workConfig.windows) ? workConfig.windows : [];
+  const parsed = windows
+    .map((window) => ({
+      start: timeToMinutes(window.start),
+      end: timeToMinutes(window.end),
+    }))
+    .filter((window) => window.end > window.start)
+    .sort((a, b) => a.start - b.start);
+
+  const merged = [];
+  parsed.forEach((window) => {
+    const last = merged[merged.length - 1];
+    if (!last) {
+      merged.push({ ...window });
+      return;
+    }
+    if (window.start <= last.end) {
+      last.end = Math.max(last.end, window.end);
+      return;
+    }
+    merged.push({ ...window });
+  });
+  return merged;
+};
+
+const computeOffHoursSegments = ({ windows, gridStartMin, gridEndMin }) => {
+  if (!windows.length) {
+    return [{ start: gridStartMin, end: gridEndMin }];
+  }
+
+  const segments = [];
+  let cursor = gridStartMin;
+  windows.forEach((window) => {
+    const start = Math.max(gridStartMin, Math.min(window.start, gridEndMin));
+    const end = Math.max(gridStartMin, Math.min(window.end, gridEndMin));
+    if (start > cursor) {
+      segments.push({ start: cursor, end: start });
+    }
+    cursor = Math.max(cursor, end);
+  });
+  if (cursor < gridEndMin) {
+    segments.push({ start: cursor, end: gridEndMin });
+  }
+  return segments.filter((seg) => seg.end > seg.start);
+};
+
 const renderTeacherMiniCalendar = () => {
   if (!teacherMiniGrid || !teacherMiniTitle) return;
 
@@ -1645,18 +1717,20 @@ const renderTeacherCalendarViewportDay = (date) => {
   }
 
   const dayIndex = String(date.getDay());
-  const work = teacherWorkHours[dayIndex] || { enabled: true, start: "00:00", end: "23:59" };
   const gridStartMin = startHour * 60;
   const gridEndMin = (endHour + 1) * 60;
-  const startMin = work.enabled === false ? gridEndMin : timeToMinutes(work.start);
-  const endMin = work.enabled === false ? gridStartMin : timeToMinutes(work.end);
-  const topHeight = Math.max(0, Math.min((startMin - gridStartMin) / 60, endHour - startHour + 1)) * hourHeight;
-  const bottomTop = Math.max(0, Math.min((endMin - gridStartMin) / 60, endHour - startHour + 1)) * hourHeight;
-
+  const work = teacherWorkHours[dayIndex] || { enabled: true, windows: [{ start: "00:00", end: "23:59" }] };
+  const windows = normalizeWorkWindows(work);
+  const segments = computeOffHoursSegments({ windows, gridStartMin, gridEndMin });
   const offHours = `
     <div class="teacher-cal-offhours" aria-hidden="true">
-      <div class="teacher-cal-offhours-top" style="top:0;height:${Math.max(0, topHeight)}px"></div>
-      <div class="teacher-cal-offhours-bottom" style="top:${Math.max(0, bottomTop)}px;bottom:0"></div>
+      ${segments
+        .map((seg) => {
+          const top = ((seg.start - gridStartMin) / 60) * hourHeight;
+          const height = ((seg.end - seg.start) / 60) * hourHeight;
+          return `<div class="teacher-cal-offhours-seg" style="top:${top}px;height:${height}px"></div>`;
+        })
+        .join("")}
     </div>
   `;
 
@@ -1752,17 +1826,20 @@ const renderTeacherCalendarViewportWeek = (focusDate) => {
       const laidOut = layoutOverlappingEvents(dayEvents);
 
       const dayIndex = String(date.getDay());
-      const work = teacherWorkHours[dayIndex] || { enabled: true, start: "00:00", end: "23:59" };
       const gridStartMin = startHour * 60;
       const gridEndMin = (endHour + 1) * 60;
-      const startMin = work.enabled === false ? gridEndMin : timeToMinutes(work.start);
-      const endMin = work.enabled === false ? gridStartMin : timeToMinutes(work.end);
-      const topHeight = Math.max(0, Math.min((startMin - gridStartMin) / 60, endHour - startHour + 1)) * hourHeight;
-      const bottomTop = Math.max(0, Math.min((endMin - gridStartMin) / 60, endHour - startHour + 1)) * hourHeight;
+      const work = teacherWorkHours[dayIndex] || { enabled: true, windows: [{ start: "00:00", end: "23:59" }] };
+      const windows = normalizeWorkWindows(work);
+      const segments = computeOffHoursSegments({ windows, gridStartMin, gridEndMin });
       const offHours = `
         <div class="teacher-cal-offhours" aria-hidden="true">
-          <div class="teacher-cal-offhours-top" style="top:0;height:${Math.max(0, topHeight)}px"></div>
-          <div class="teacher-cal-offhours-bottom" style="top:${Math.max(0, bottomTop)}px;bottom:0"></div>
+          ${segments
+            .map((seg) => {
+              const top = ((seg.start - gridStartMin) / 60) * hourHeight;
+              const height = ((seg.end - seg.start) / 60) * hourHeight;
+              return `<div class="teacher-cal-offhours-seg" style="top:${top}px;height:${height}px"></div>`;
+            })
+            .join("")}
         </div>
       `;
 
@@ -1902,6 +1979,230 @@ const renderTeacherCalendar = () => {
     return;
   }
   renderTeacherCalendarViewportDay(teacherCalendarState.focusDate);
+};
+
+let workHoursDraft = null;
+
+const createWorkHoursDraft = () => {
+  const draft = {};
+  Object.keys(liveSlotPresetsBase).forEach((dayKey) => {
+    const source = teacherWorkHours[dayKey] || { enabled: true, windows: [{ start: "00:00", end: "23:59" }] };
+    const windows = Array.isArray(source.windows) ? source.windows : [{ start: "00:00", end: "23:59" }];
+    draft[dayKey] = {
+      enabled: source.enabled !== false,
+      windows: windows.map((window) => ({ start: String(window.start || ""), end: String(window.end || "") })),
+    };
+    if (!draft[dayKey].windows.length) {
+      draft[dayKey].windows = [{ start: "", end: "" }];
+    }
+  });
+  return draft;
+};
+
+const renderWorkHoursRow = ({ dayKey, index }) => {
+  const entry = workHoursDraft?.[dayKey] || { enabled: true, windows: [{ start: "", end: "" }] };
+  const window = entry.windows[index] || { start: "", end: "" };
+  const labelMap = { 1: "Seg", 2: "Ter", 3: "Qua", 4: "Qui", 5: "Sex", 6: "Sáb" };
+  const isFirst = index === 0;
+  const canRemove = index > 0;
+
+  const dayLabel = isFirst
+    ? `
+      <label class="modal-work-day">
+        <input type="checkbox" ${entry.enabled ? "checked" : ""} data-wh-enabled="${dayKey}" />
+        <span>${labelMap[dayKey] || dayKey}</span>
+      </label>
+    `
+    : `<span aria-hidden="true"></span>`;
+
+  const trash = canRemove
+    ? `
+      <button class="modal-icon-button is-danger" type="button" data-wh-remove="${dayKey}:${index}" aria-label="Remover janela">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M4.5 7.5h15"></path>
+          <path d="M10 11v6"></path>
+          <path d="M14 11v6"></path>
+          <path d="M8.5 7.5l1-2h5l1 2"></path>
+          <path d="M6.5 7.5l1 13h9l1-13"></path>
+        </svg>
+      </button>
+    `
+    : "";
+
+  return `
+    <div class="modal-work-row" data-wh-row="${dayKey}:${index}">
+      ${dayLabel}
+      <input class="modal-input modal-input-time" type="time" value="${escapeHtml(window.start)}" data-wh-start="${dayKey}:${index}" />
+      <span class="modal-work-sep">–</span>
+      <input class="modal-input modal-input-time" type="time" value="${escapeHtml(window.end)}" data-wh-end="${dayKey}:${index}" />
+      <div class="modal-work-actions">
+        ${trash}
+        <button class="modal-icon-button" type="button" data-wh-add="${dayKey}:${index}" aria-label="Adicionar janela">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M12 5v14"></path>
+            <path d="M5 12h14"></path>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-inline-error" data-wh-error="${dayKey}:${index}" hidden></div>
+    </div>
+  `;
+};
+
+const renderWorkHoursDayGroup = (dayKey) => {
+  const entry = workHoursDraft?.[dayKey] || { enabled: true, windows: [{ start: "", end: "" }] };
+  const windows = Array.isArray(entry.windows) ? entry.windows : [{ start: "", end: "" }];
+  return `
+    <div class="modal-work-daygroup" data-wh-daygroup="${dayKey}">
+      ${windows.map((_, index) => renderWorkHoursRow({ dayKey, index })).join("")}
+    </div>
+  `;
+};
+
+const renderWorkHoursModalBody = () => {
+  const keys = Object.keys(liveSlotPresetsBase);
+  return `
+    <div class="modal-form">
+      <div class="modal-help">Defina quando você está disponível para receber agendamentos.</div>
+      <div class="modal-work-grid" data-wh-grid>
+        ${keys.map((dayKey) => renderWorkHoursDayGroup(dayKey)).join("")}
+      </div>
+    </div>
+  `;
+};
+
+const setModalPrimaryDisabled = (disabled) => {
+  if (!modalPrimary) return;
+  modalPrimary.disabled = Boolean(disabled);
+};
+
+const parseWorkKey = (raw) => {
+  const [dayKey, indexRaw] = String(raw || "").split(":");
+  const index = Number(indexRaw);
+  if (!dayKey || !Number.isFinite(index)) return null;
+  return { dayKey, index };
+};
+
+const validateWorkHoursDraft = () => {
+  if (!workHoursDraft) return true;
+  if (!modalBody) return true;
+
+  let hasError = false;
+
+  // Reset UI
+  modalBody.querySelectorAll("[data-wh-start], [data-wh-end]").forEach((input) => {
+    input.classList.remove("is-error");
+  });
+  modalBody.querySelectorAll("[data-wh-error]").forEach((el) => {
+    el.hidden = true;
+    el.textContent = "";
+  });
+
+  Object.entries(workHoursDraft).forEach(([dayKey, entry]) => {
+    if (!entry) return;
+    const isEnabled = entry.enabled !== false;
+
+    // Disable/enable inputs and controls based on checkbox.
+    modalBody.querySelectorAll(`[data-wh-start^="${dayKey}:"]`).forEach((el) => {
+      if (el instanceof HTMLInputElement) el.disabled = !isEnabled;
+    });
+    modalBody.querySelectorAll(`[data-wh-end^="${dayKey}:"]`).forEach((el) => {
+      if (el instanceof HTMLInputElement) el.disabled = !isEnabled;
+    });
+    modalBody.querySelectorAll(`[data-wh-add^="${dayKey}:"]`).forEach((el) => {
+      if (el instanceof HTMLButtonElement) el.disabled = !isEnabled;
+    });
+    modalBody.querySelectorAll(`[data-wh-remove^="${dayKey}:"]`).forEach((el) => {
+      if (el instanceof HTMLButtonElement) el.disabled = !isEnabled;
+    });
+
+    if (!isEnabled) return;
+    const windows = Array.isArray(entry.windows) ? entry.windows : [];
+
+    const parsed = windows.map((window, index) => {
+      const startRaw = String(window.start || "");
+      const endRaw = String(window.end || "");
+      const startOk = /^\d{2}:\d{2}$/.test(startRaw);
+      const endOk = /^\d{2}:\d{2}$/.test(endRaw);
+      const startMin = startOk ? timeToMinutes(startRaw) : null;
+      const endMin = endOk ? timeToMinutes(endRaw) : null;
+      return { index, startRaw, endRaw, startOk, endOk, startMin, endMin };
+    });
+
+    parsed.forEach((row) => {
+      const startEl = modalBody.querySelector(`[data-wh-start="${CSS.escape(`${dayKey}:${row.index}`)}"]`);
+      const endEl = modalBody.querySelector(`[data-wh-end="${CSS.escape(`${dayKey}:${row.index}`)}"]`);
+      const errorEl = modalBody.querySelector(`[data-wh-error="${CSS.escape(`${dayKey}:${row.index}`)}"]`);
+
+      if (!row.startOk) {
+        if (startEl) startEl.classList.add("is-error");
+        hasError = true;
+      }
+      if (!row.endOk) {
+        if (endEl) endEl.classList.add("is-error");
+        hasError = true;
+      }
+      if (row.startOk && row.endOk && row.startMin !== null && row.endMin !== null && row.startMin >= row.endMin) {
+        if (startEl) startEl.classList.add("is-error");
+        if (endEl) endEl.classList.add("is-error");
+        if (errorEl) {
+          errorEl.hidden = false;
+          errorEl.textContent = "O horário de início deve ser anterior ao de fim";
+        }
+        hasError = true;
+      }
+    });
+
+    const okRows = parsed
+      .filter((row) => row.startOk && row.endOk && row.startMin !== null && row.endMin !== null && row.startMin < row.endMin)
+      .sort((a, b) => a.startMin - b.startMin);
+
+    for (let i = 0; i < okRows.length - 1; i += 1) {
+      const current = okRows[i];
+      const next = okRows[i + 1];
+      if (next.startMin < current.endMin) {
+        const mark = (row) => {
+          const startEl = modalBody.querySelector(`[data-wh-start="${CSS.escape(`${dayKey}:${row.index}`)}"]`);
+          const endEl = modalBody.querySelector(`[data-wh-end="${CSS.escape(`${dayKey}:${row.index}`)}"]`);
+          const errorEl = modalBody.querySelector(`[data-wh-error="${CSS.escape(`${dayKey}:${row.index}`)}"]`);
+          if (startEl) startEl.classList.add("is-error");
+          if (endEl) endEl.classList.add("is-error");
+          if (errorEl && errorEl.hidden) {
+            errorEl.hidden = false;
+            errorEl.textContent = "Este horário conflita com outra janela do mesmo dia";
+          }
+        };
+        mark(current);
+        mark(next);
+        hasError = true;
+      }
+    }
+  });
+
+  setModalPrimaryDisabled(hasError);
+  if (modalPrimary) {
+    modalPrimary.setAttribute("aria-disabled", String(hasError));
+  }
+  return !hasError;
+};
+
+const openWorkHoursModal = () => {
+  workHoursDraft = createWorkHoursDraft();
+  openModal({
+    title: "Horário de trabalho",
+    bodyHtml: renderWorkHoursModalBody(),
+    primaryLabel: "Salvar",
+    secondaryLabel: "Voltar",
+    onPrimary: () => {
+      const ok = validateWorkHoursDraft();
+      if (!ok) return false;
+      teacherWorkHours = workHoursDraft;
+      persistTeacherWorkHours();
+      renderTeacherCalendar();
+      renderLiveScheduler();
+    },
+  });
+  validateWorkHoursDraft();
 };
 
 const createSlotId = (date, time) => {
@@ -2459,60 +2760,7 @@ document.addEventListener("click", (event) => {
     const workHoursButton = target.closest("[data-teacher-work-hours]");
     if (workHoursButton instanceof HTMLButtonElement) {
       if (currentRole !== "teacher") return;
-
-      const dayLabels = {
-        1: "Seg",
-        2: "Ter",
-        3: "Qua",
-        4: "Qui",
-        5: "Sex",
-        6: "Sáb",
-      };
-
-      const rows = Object.keys(liveSlotPresetsBase)
-        .map((dayKey) => {
-          const config = teacherWorkHours[dayKey] || { enabled: true, start: "00:00", end: "23:59" };
-          return `
-            <div class="modal-work-row" data-wh-row="${dayKey}">
-              <label class="modal-work-day">
-                <input type="checkbox" ${config.enabled !== false ? "checked" : ""} data-wh-enabled="${dayKey}" />
-                <span>${dayLabels[dayKey] || dayKey}</span>
-              </label>
-              <input class="modal-input modal-input-time" type="time" value="${config.start}" data-wh-start="${dayKey}" />
-              <span class="modal-work-sep">–</span>
-              <input class="modal-input modal-input-time" type="time" value="${config.end}" data-wh-end="${dayKey}" />
-            </div>
-          `;
-        })
-        .join("");
-
-      openModal({
-        title: "Horário de trabalho",
-        bodyHtml: `
-          <div class="modal-form">
-            <div class="modal-help">Defina quando você está disponível para receber agendamentos.</div>
-            <div class="modal-work-grid">
-              ${rows}
-            </div>
-          </div>
-        `,
-        primaryLabel: "Salvar",
-        secondaryLabel: "Voltar",
-        onPrimary: () => {
-          Object.keys(liveSlotPresetsBase).forEach((dayKey) => {
-            const enabledEl = modalBody?.querySelector(`[data-wh-enabled="${CSS.escape(dayKey)}"]`);
-            const startEl = modalBody?.querySelector(`[data-wh-start="${CSS.escape(dayKey)}"]`);
-            const endEl = modalBody?.querySelector(`[data-wh-end="${CSS.escape(dayKey)}"]`);
-            const enabled = enabledEl instanceof HTMLInputElement ? enabledEl.checked : true;
-            const start = startEl instanceof HTMLInputElement ? clampTime(startEl.value, "00:00") : "00:00";
-            const end = endEl instanceof HTMLInputElement ? clampTime(endEl.value, "23:59") : "23:59";
-            teacherWorkHours[dayKey] = { enabled, start, end };
-          });
-          persistTeacherWorkHours();
-          renderTeacherCalendar();
-          renderLiveScheduler();
-        },
-      });
+      openWorkHoursModal();
       return;
     }
 
@@ -2611,6 +2859,43 @@ document.addEventListener("click", (event) => {
         primaryLabel: "Fechar",
         hideSecondary: true,
       });
+      return;
+    }
+
+    const whAdd = target.closest("[data-wh-add]");
+    if (whAdd instanceof HTMLButtonElement) {
+      const key = whAdd.getAttribute("data-wh-add") || "";
+      const parsed = parseWorkKey(key);
+      if (!parsed || !workHoursDraft) return;
+      const entry = workHoursDraft[parsed.dayKey];
+      if (!entry) return;
+      const insertAt = Math.max(0, Math.min(parsed.index + 1, entry.windows.length));
+      entry.windows.splice(insertAt, 0, { start: "", end: "" });
+      const dayGroup = modalBody?.querySelector(`[data-wh-daygroup="${CSS.escape(parsed.dayKey)}"]`);
+      if (dayGroup) {
+        dayGroup.innerHTML = entry.windows.map((_, idx) => renderWorkHoursRow({ dayKey: parsed.dayKey, index: idx })).join("");
+      }
+      validateWorkHoursDraft();
+      const focusEl = modalBody?.querySelector(`[data-wh-start="${CSS.escape(`${parsed.dayKey}:${insertAt}`)}"]`);
+      if (focusEl instanceof HTMLElement) focusEl.focus();
+      return;
+    }
+
+    const whRemove = target.closest("[data-wh-remove]");
+    if (whRemove instanceof HTMLButtonElement) {
+      const key = whRemove.getAttribute("data-wh-remove") || "";
+      const parsed = parseWorkKey(key);
+      if (!parsed || !workHoursDraft) return;
+      const entry = workHoursDraft[parsed.dayKey];
+      if (!entry) return;
+      if (parsed.index <= 0) return;
+      entry.windows.splice(parsed.index, 1);
+      if (!entry.windows.length) entry.windows = [{ start: "", end: "" }];
+      const dayGroup = modalBody?.querySelector(`[data-wh-daygroup="${CSS.escape(parsed.dayKey)}"]`);
+      if (dayGroup) {
+        dayGroup.innerHTML = entry.windows.map((_, idx) => renderWorkHoursRow({ dayKey: parsed.dayKey, index: idx })).join("");
+      }
+      validateWorkHoursDraft();
       return;
     }
 
@@ -2789,6 +3074,42 @@ document.addEventListener("keydown", (event) => {
     }
 
     closeAllDropdowns();
+  }
+});
+
+document.addEventListener("input", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement)) return;
+  if (!workHoursDraft || !modalBody || modalOverlay?.hidden) return;
+
+  if (target.matches("[data-wh-start], [data-wh-end]")) {
+    const raw = target.getAttribute(target.matches("[data-wh-start]") ? "data-wh-start" : "data-wh-end") || "";
+    const parsed = parseWorkKey(raw);
+    if (!parsed) return;
+    const entry = workHoursDraft[parsed.dayKey];
+    if (!entry) return;
+    if (!entry.windows[parsed.index]) return;
+    if (target.matches("[data-wh-start]")) {
+      entry.windows[parsed.index].start = target.value;
+    } else {
+      entry.windows[parsed.index].end = target.value;
+    }
+    validateWorkHoursDraft();
+    return;
+  }
+});
+
+document.addEventListener("change", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement)) return;
+  if (!workHoursDraft || !modalBody || modalOverlay?.hidden) return;
+
+  if (target.matches("[data-wh-enabled]")) {
+    const dayKey = target.getAttribute("data-wh-enabled") || "";
+    const entry = workHoursDraft[dayKey];
+    if (!entry) return;
+    entry.enabled = target.checked;
+    validateWorkHoursDraft();
   }
 });
 

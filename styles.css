@@ -4157,6 +4157,7 @@ body[data-role="teacher"] .schedule-page-title {
   pointer-events: none;
 }
 
+.teacher-cal-offhours-seg,
 .teacher-cal-offhours-top,
 .teacher-cal-offhours-bottom {
   position: absolute;
@@ -5046,6 +5047,74 @@ body[data-role="teacher"] .schedule-page-title {
   outline-offset: 2px;
 }
 
+.modal-input.is-error {
+  border-color: rgba(232, 69, 60, 0.7);
+}
+
+.modal-inline-error {
+  grid-column: 1 / -1;
+  margin-top: 6px;
+  color: rgba(232, 69, 60, 0.92);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.modal-work-actions {
+  display: inline-flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 6px;
+}
+
+.modal-icon-button {
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.44);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 150ms ease, transform 150ms ease, background-color 150ms ease;
+}
+
+.modal-icon-button svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.modal-icon-button:hover,
+.modal-icon-button:focus-visible {
+  color: rgba(232, 69, 60, 0.95);
+  background: rgba(232, 69, 60, 0.08);
+  transform: translateY(-1px);
+}
+
+.modal-icon-button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  transform: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.28);
+}
+
+.modal-icon-button.is-danger:hover,
+.modal-icon-button.is-danger:focus-visible {
+  color: rgba(232, 69, 60, 0.95);
+}
+
+.button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
 .modal-work-grid {
   display: grid;
   gap: 10px;
@@ -5054,9 +5123,9 @@ body[data-role="teacher"] .schedule-page-title {
 
 .modal-work-row {
   display: grid;
-  grid-template-columns: 1fr 110px 18px 110px;
+  grid-template-columns: 1fr 110px 18px 110px 64px;
   gap: 10px;
-  align-items: center;
+  align-items: start;
   padding: 10px 12px;
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.06);
