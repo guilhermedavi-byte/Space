@@ -3290,12 +3290,36 @@ body[data-active-panel="ao-vivo"] .platform-sidebar {
   text-align: center;
 }
 
-.scheduler-slot {
+.scheduler-slot-row {
   min-height: 44px;
-  padding: 0 12px;
+  width: 100%;
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.04);
+  overflow: hidden;
+  display: flex;
+  align-items: stretch;
+  transform: translateZ(0);
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    transform 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.scheduler-slot-row:not(.is-selected):hover,
+.scheduler-slot-row:not(.is-selected):focus-within {
+  background: rgba(232, 69, 60, 0.12);
+  border-color: rgba(232, 69, 60, 0.4);
+  transform: translateY(-1px);
+}
+
+.scheduler-slot-time,
+.scheduler-slot-advance {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
   color: #c8cdd8;
   display: inline-flex;
   align-items: center;
@@ -3304,55 +3328,79 @@ body[data-active-panel="ao-vivo"] .platform-sidebar {
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
-  transition:
-    background-color 150ms ease,
-    border-color 150ms ease,
-    color 150ms ease,
-    transform 150ms ease,
-    box-shadow 150ms ease;
+  outline: none;
 }
 
-.scheduler-slot:not(:disabled):hover,
-.scheduler-slot:not(:disabled):focus-visible {
-  background: rgba(232, 69, 60, 0.12);
-  border-color: rgba(232, 69, 60, 0.4);
+.scheduler-slot-row:not(.is-selected):hover .scheduler-slot-time,
+.scheduler-slot-row:not(.is-selected):focus-within .scheduler-slot-time {
   color: #ffffff;
-  transform: translateY(-1px);
 }
 
-.scheduler-slot.is-selected {
+.scheduler-slot-time {
+  flex: 1 1 100%;
+  flex-basis: 100%;
+  transition:
+    flex-basis 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 220ms ease,
+    color 220ms ease;
+}
+
+.scheduler-slot-advance {
+  flex: 0 0 0%;
+  flex-basis: 0%;
+  padding: 0;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(10px);
   background: #e8453c;
-  border-color: #e8453c;
   color: #ffffff;
   font-weight: 600;
-  box-shadow: none;
+  letter-spacing: -0.01em;
+  transition:
+    flex-basis 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 160ms ease,
+    transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 150ms ease;
 }
 
-.scheduler-slot.is-disabled,
-.scheduler-slot:disabled {
-  background: transparent;
-  border-color: rgba(255, 255, 255, 0.03);
-  color: #3a3f50;
-  cursor: not-allowed;
+.scheduler-slot-row.is-selected {
+  background: rgba(255, 255, 255, 0.02);
+  border-color: rgba(255, 255, 255, 0.1);
   transform: none;
-  box-shadow: none;
 }
 
-.scheduler-slot-check {
-  width: 14px;
-  height: 14px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+.scheduler-slot-row.is-selected .scheduler-slot-time {
+  flex: 0 0 50%;
+  flex-basis: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+  cursor: default;
 }
 
-.scheduler-slot-check svg {
-  width: 14px;
-  height: 14px;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+.scheduler-slot-row.is-selected .scheduler-slot-advance {
+  flex: 0 0 50%;
+  flex-basis: 50%;
+  padding: 0 12px;
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+
+.scheduler-slot-row.is-selected .scheduler-slot-advance:not(:disabled):hover,
+.scheduler-slot-row.is-selected .scheduler-slot-advance:not(:disabled):focus-visible {
+  background: #cc3530;
+}
+
+.scheduler-slot-advance:disabled {
+  cursor: default;
+  opacity: 1;
+  background: rgba(232, 69, 60, 0.55);
+}
+
+.scheduler-slot-time:focus-visible,
+.scheduler-slot-advance:focus-visible {
+  outline: 2px solid rgba(232, 69, 60, 0.45);
+  outline-offset: -2px;
 }
 
 .live-confirm-bar {

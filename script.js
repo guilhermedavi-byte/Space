@@ -25,9 +25,6 @@ const liveSchedulerGrid = document.querySelector("[data-live-scheduler-grid]");
 const liveSchedulerTimezone = document.querySelector("[data-live-timezone]");
 const liveInstruction = document.querySelector("[data-live-instruction]");
 const liveWeekRange = document.querySelector("[data-live-week-range]");
-const liveConfirmBar = document.querySelector("[data-live-confirm]");
-const liveConfirmSummary = document.querySelector("[data-live-confirm-summary]");
-const liveConfirmButton = document.querySelector("[data-live-confirm-button]");
 
 const learningLevelNames = ["Pré A1", "A1", "A1+", "A2", "A2+", "B1", "B1+", "B2", "B2+", "C1", "C2"];
 const learningJourneyPoints = [
@@ -412,22 +409,6 @@ const getUpcomingBookableDays = (count) => {
   return days;
 };
 
-const updateLiveConfirmBar = () => {
-  if (!liveConfirmBar || !liveConfirmSummary || !liveConfirmButton) return;
-
-  const hasSelection = Boolean(scheduleState.selectedSlotLabel);
-  liveConfirmBar.hidden = !hasSelection;
-
-  if (!hasSelection) {
-    liveConfirmSummary.textContent = "";
-    liveConfirmButton.textContent = "Confirmar agendamento";
-    return;
-  }
-
-  liveConfirmSummary.textContent = scheduleState.selectedSlotLabel;
-  liveConfirmButton.textContent = scheduleState.isConfirmed ? "Agendado" : "Confirmar agendamento";
-};
-
 const updateLiveInstruction = () => {
   if (!liveInstruction) return;
 
@@ -437,11 +418,39 @@ const updateLiveInstruction = () => {
   }
 
   if (scheduleState.selectedSlotLabel) {
-    liveInstruction.textContent = "Horário selecionado. Confirme abaixo para finalizar.";
+    liveInstruction.textContent = "Horário selecionado. Clique em Avançar para continuar.";
     return;
   }
 
   liveInstruction.textContent = "Selecione um dia e horário para continuar";
+};
+
+const syncLiveSchedulerSelection = () => {
+  if (!liveSchedulerGrid) return;
+
+  liveSchedulerGrid.querySelectorAll("[data-slot-row-id]").forEach((row) => {
+    const slotId = row.getAttribute("data-slot-row-id") || "";
+    const isSelected = Boolean(slotId) && slotId === scheduleState.selectedSlotId;
+    const isConfirmed = isSelected && scheduleState.isConfirmed;
+
+    row.classList.toggle("is-selected", isSelected);
+    row.classList.toggle("is-confirmed", isConfirmed);
+
+    const timeButton = row.querySelector("[data-slot]");
+    if (timeButton instanceof HTMLButtonElement) {
+      timeButton.setAttribute("aria-pressed", String(isSelected));
+    }
+
+    const advanceButton = row.querySelector("[data-slot-advance]");
+    if (advanceButton instanceof HTMLButtonElement) {
+      const label = advanceButton.querySelector(".scheduler-slot-advance-label");
+      if (label) {
+        label.textContent = isConfirmed ? "Agendado" : "Avançar";
+      }
+
+      advanceButton.disabled = isConfirmed;
+    }
+  });
 };
 
 const renderLiveScheduler = () => {
@@ -484,25 +493,31 @@ const renderLiveScheduler = () => {
                     .map((time) => {
                       const slotId = createSlotId(date, time);
                       const slotLabel = formatSelectedSlotLabel(date, time);
-                      const isSelected = scheduleState.selectedSlotId === slotId;
                       visibleSlotIds.add(slotId);
 
                       return `
-                        <button
-                          class="scheduler-slot${isSelected ? " is-selected" : ""}"
-                          type="button"
-                          data-slot="${slotLabel}"
-                          data-slot-id="${slotId}"
-                          data-slot-label="${slotLabel}"
-                          aria-pressed="${isSelected ? "true" : "false"}"
-                        >
-                          <span>${time}</span>
-                          ${
-                            isSelected
-                              ? '<span class="scheduler-slot-check" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none"><path d="m3.5 8.5 2.5 2.5 6-6"></path></svg></span>'
-                              : ""
-                          }
-                        </button>
+                        <div class="scheduler-slot-row" data-slot-row-id="${slotId}">
+                          <button
+                            class="scheduler-slot-time"
+                            type="button"
+                            data-slot="${slotLabel}"
+                            data-slot-id="${slotId}"
+                            data-slot-label="${slotLabel}"
+                            aria-pressed="false"
+                          >
+                            <span>${time}</span>
+                          </button>
+                          <button
+                            class="scheduler-slot-advance"
+                            type="button"
+                            data-slot-advance
+                            data-slot-id="${slotId}"
+                            data-slot-label="${slotLabel}"
+                            aria-label="Avançar"
+                          >
+                            <span class="scheduler-slot-advance-label">Avançar</span>
+                          </button>
+                        </div>
                       `;
                     })
                     .join("")
@@ -522,8 +537,8 @@ const renderLiveScheduler = () => {
 
   liveSchedulerGrid.innerHTML = schedulerMarkup;
 
-  updateLiveConfirmBar();
   updateLiveInstruction();
+  syncLiveSchedulerSelection();
 };
 
 const setView = (view, smooth = true) => {
@@ -634,6 +649,17 @@ document.addEventListener("click", (event) => {
   const target = event.target;
 
   if (target instanceof Element) {
+    const advanceButton = target.closest("[data-slot-advance]");
+
+    if (advanceButton instanceof HTMLButtonElement) {
+      scheduleState.selectedSlotId = advanceButton.dataset.slotId || scheduleState.selectedSlotId;
+      scheduleState.selectedSlotLabel = advanceButton.dataset.slotLabel || scheduleState.selectedSlotLabel;
+      scheduleState.isConfirmed = true;
+      syncLiveSchedulerSelection();
+      updateLiveInstruction();
+      return;
+    }
+
     const slotButton = target.closest("[data-slot]");
 
     if (slotButton instanceof HTMLButtonElement) {
@@ -644,15 +670,7 @@ document.addEventListener("click", (event) => {
       scheduleState.selectedSlotId = slotButton.dataset.slotId || "";
       scheduleState.selectedSlotLabel = slotButton.dataset.slotLabel || slotButton.dataset.slot || "";
       scheduleState.isConfirmed = false;
-      renderLiveScheduler();
-      return;
-    }
-
-    const confirmButton = target.closest("[data-live-confirm-button]");
-
-    if (confirmButton instanceof HTMLButtonElement && scheduleState.selectedSlotLabel) {
-      scheduleState.isConfirmed = true;
-      updateLiveConfirmBar();
+      syncLiveSchedulerSelection();
       updateLiveInstruction();
       return;
     }
