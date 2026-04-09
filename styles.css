@@ -4065,6 +4065,25 @@ body[data-role="teacher"] .schedule-page-title {
   height: 100%;
 }
 
+.teacher-cal-week {
+  grid-template-rows: auto 1fr;
+}
+
+.teacher-cal-week-head {
+  grid-column: 1 / -1;
+}
+
+.teacher-cal-week .teacher-cal-timecol {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.teacher-cal-week .teacher-cal-week-cols {
+  grid-column: 2;
+  grid-row: 2;
+  min-width: 0;
+}
+
 .teacher-cal-month {
   display: grid;
   grid-template-rows: auto 1fr;
