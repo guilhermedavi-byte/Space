@@ -1465,13 +1465,9 @@ body[data-active-panel="ao-vivo"] .platform-header {
 
 .teacher-insights-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   align-items: start;
-}
-
-.teacher-secondary-grid {
-  grid-template-columns: 320px minmax(0, 1fr);
 }
 
 .score-card-body-compact {
@@ -4157,9 +4153,7 @@ body[data-active-panel="ao-vivo"] .platform-sidebar {
     grid-template-columns: 1fr;
   }
 
-  .teacher-secondary-grid {
-    grid-template-columns: 1fr;
-  }
+  /* teacher-secondary-grid removed */
 }
 
 .modal-overlay {

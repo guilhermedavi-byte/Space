@@ -1250,9 +1250,6 @@ const renderTeacherDashboard = () => {
   }
 
   renderTeacherClassesChart(chartState["teacher-classes"]);
-  renderTeacherStudents();
-  renderTeacherCancellations();
-  renderTeacherTodaySlots();
   renderTeacherNotices();
 };
 
@@ -1757,45 +1754,6 @@ document.addEventListener("click", (event) => {
       closeModal();
       setView("interno");
       showPanel("dashboard");
-      return;
-    }
-
-    const viewAllStudents = target.closest("[data-teacher-view-all-students]");
-    if (viewAllStudents instanceof HTMLButtonElement) {
-      if (currentRole !== "teacher") return;
-
-      const lessons = getTeacherLessons()
-        .map((lesson) => {
-          const date = parseDateKey(lesson.dateKey);
-          if (!date) return null;
-          const dateTime = getSlotDateTime(date, lesson.time);
-          const studentName = lesson.studentName || "Aluno Space";
-          return { studentName, dateTime };
-        })
-        .filter(Boolean)
-        .sort((a, b) => b.dateTime.getTime() - a.dateTime.getTime());
-
-      const grouped = new Map();
-      lessons.forEach((item) => {
-        const entry = grouped.get(item.studentName) || item;
-        if (item.dateTime.getTime() > entry.dateTime.getTime()) {
-          grouped.set(item.studentName, item);
-        } else if (!grouped.has(item.studentName)) {
-          grouped.set(item.studentName, item);
-        }
-      });
-
-      const list = Array.from(grouped.values())
-        .sort((a, b) => b.dateTime.getTime() - a.dateTime.getTime())
-        .map((item) => `<div class="modal-list-row"><strong>${escapeHtml(item.studentName)}</strong><span>${formatShortDate(item.dateTime)}</span></div>`)
-        .join("");
-
-      openModal({
-        title: "Alunos",
-        bodyHtml: list || "Sem alunos para exibir.",
-        primaryLabel: "Fechar",
-        hideSecondary: true,
-      });
       return;
     }
 
