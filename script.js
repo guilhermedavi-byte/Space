@@ -478,28 +478,36 @@ const renderLiveScheduler = () => {
             <span class="live-day-date">${dateNumber}</span>
           </div>
           <div class="live-day-slots">
-            ${times
-              .map((time) => {
-                const slotId = createSlotId(date, time);
-                const slotLabel = formatSelectedSlotLabel(date, time);
-                const isSelected = scheduleState.selectedSlotId === slotId;
-                visibleSlotIds.add(slotId);
+            ${
+              times.length
+                ? times
+                    .map((time) => {
+                      const slotId = createSlotId(date, time);
+                      const slotLabel = formatSelectedSlotLabel(date, time);
+                      const isSelected = scheduleState.selectedSlotId === slotId;
+                      visibleSlotIds.add(slotId);
 
-                return `
-                  <button
-                    class="scheduler-slot${isSelected ? " is-selected" : ""}"
-                    type="button"
-                    data-slot="${slotLabel}"
-                    data-slot-id="${slotId}"
-                    data-slot-label="${slotLabel}"
-                    aria-pressed="${isSelected ? "true" : "false"}"
-                  >
-                    <span>${time}</span>
-                    ${isSelected ? '<span class="scheduler-slot-check" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none"><path d="m3.5 8.5 2.5 2.5 6-6"></path></svg></span>' : ""}
-                  </button>
-                `;
-              })
-              .join("")}
+                      return `
+                        <button
+                          class="scheduler-slot${isSelected ? " is-selected" : ""}"
+                          type="button"
+                          data-slot="${slotLabel}"
+                          data-slot-id="${slotId}"
+                          data-slot-label="${slotLabel}"
+                          aria-pressed="${isSelected ? "true" : "false"}"
+                        >
+                          <span>${time}</span>
+                          ${
+                            isSelected
+                              ? '<span class="scheduler-slot-check" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none"><path d="m3.5 8.5 2.5 2.5 6-6"></path></svg></span>'
+                              : ""
+                          }
+                        </button>
+                      `;
+                    })
+                    .join("")
+                : '<div class="live-day-empty" role="note">Horários esgotados</div>'
+            }
           </div>
         </div>
       `;
