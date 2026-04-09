@@ -189,6 +189,15 @@
     <div class="platform-shell" data-view="interno" hidden>
       <div class="platform-backdrop" aria-hidden="true"></div>
 
+      <div class="platform-topbar" data-plan-topbar aria-label="Plano e créditos">
+        <div class="plan-badge" data-plan-badge>
+          <span class="plan-dot" aria-hidden="true"></span>
+          <span data-plan-badge-text>Plano Gold ativo</span>
+        </div>
+        <div class="plan-credits" data-plan-credits>3 créditos disponíveis</div>
+        <div class="plan-renewal" data-plan-renewal>Renovam automaticamente em 15/04</div>
+      </div>
+
       <aside class="platform-sidebar">
         <div class="sidebar-topbar">
           <button
@@ -640,6 +649,10 @@
           <div class="live-schedule-layout">
             <article class="live-booking-panel">
               <div class="live-booking-panel-header">
+                <div class="live-credits-row">
+                  <div class="live-credits-dots" data-live-credits-dots aria-label="Créditos disponíveis"></div>
+                  <div class="live-credits-caption" data-live-credits-caption>3 créditos disponíveis</div>
+                </div>
                 <div class="live-week-control">
                   <div class="live-week-range" data-live-week-range>8 – 14 de abril de 2026</div>
                 </div>
@@ -689,6 +702,25 @@
           </div>
         </section>
       </main>
+    </div>
+
+    <div class="modal-overlay" data-modal-overlay hidden>
+      <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <div class="modal-header">
+          <h3 class="modal-title" id="modal-title" data-modal-title></h3>
+          <button class="modal-close" type="button" data-modal-close aria-label="Fechar">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M6.5 6.5 17.5 17.5"></path>
+              <path d="M17.5 6.5 6.5 17.5"></path>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body" data-modal-body></div>
+        <div class="modal-actions">
+          <button class="button button-outline" type="button" data-modal-secondary>Voltar</button>
+          <button class="button button-solid" type="button" data-modal-primary>Confirmar</button>
+        </div>
+      </div>
     </div>
 
     <script src="script.js"></script>

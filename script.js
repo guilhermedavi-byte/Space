@@ -21,12 +21,24 @@ const journeyStartConnector = document.querySelector("[data-journey-start-connec
 const journeyCurrentConnector = document.querySelector("[data-journey-current-connector]");
 const studyChart = document.querySelector("[data-study-chart]");
 const studyScale = document.querySelector(".analytics-card-bar .bar-chart-scale");
+const planBadge = document.querySelector("[data-plan-badge]");
+const planBadgeText = document.querySelector("[data-plan-badge-text]");
+const planCredits = document.querySelector("[data-plan-credits]");
+const planRenewal = document.querySelector("[data-plan-renewal]");
 const liveSchedulerGrid = document.querySelector("[data-live-scheduler-grid]");
 const liveSchedulerTimezone = document.querySelector("[data-live-timezone]");
 const liveInstruction = document.querySelector("[data-live-instruction]");
 const liveWeekRange = document.querySelector("[data-live-week-range]");
 const liveScheduledList = document.querySelector("[data-live-scheduled-list]");
 const liveScheduledEmpty = document.querySelector("[data-live-scheduled-empty]");
+const liveCreditsDots = document.querySelector("[data-live-credits-dots]");
+const liveCreditsCaption = document.querySelector("[data-live-credits-caption]");
+const modalOverlay = document.querySelector("[data-modal-overlay]");
+const modalTitle = document.querySelector("[data-modal-title]");
+const modalBody = document.querySelector("[data-modal-body]");
+const modalPrimary = document.querySelector("[data-modal-primary]");
+const modalSecondary = document.querySelector("[data-modal-secondary]");
+const modalClose = document.querySelector("[data-modal-close]");
 
 const learningLevelNames = ["Pré A1", "A1", "A1+", "A2", "A2+", "B1", "B1+", "B2", "B2+", "C1", "C2"];
 const learningJourneyPoints = [
@@ -86,8 +98,255 @@ const scheduleState = {
   isConfirmed: false,
 };
 
+const STORAGE_KEY = "space-platform-state-v1";
+const CREDIT_CYCLE_BUSINESS_DAYS = 6;
+const LESSON_DURATION_MINUTES = 30;
+const CREDIT_REFUND_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+const PLAN_DEFS = {
+  gold: { label: "Gold", creditsPerCycle: 3, creditType: "VIP", badgeClass: "is-gold", badgeDot: "ambar" },
+  diamond: { label: "Diamond", creditsPerCycle: 5, creditType: "VIP", badgeClass: "is-diamond", badgeDot: "azul" },
+  turma: { label: "Turma", creditsPerCycle: 4, creditType: "GROUP", badgeClass: "is-turma", badgeDot: "verde" },
+};
+
 const scheduledLessons = [];
 const scheduledSlotIds = new Set();
+
+const createDateKey = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const parseDateKey = (dateKey) => {
+  if (!dateKey || dateKey.length !== 10) return null;
+  const year = Number(dateKey.slice(0, 4));
+  const month = Number(dateKey.slice(5, 7));
+  const day = Number(dateKey.slice(8, 10));
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day);
+};
+
+const startOfDay = (date) => {
+  const normalized = new Date(date);
+  normalized.setHours(0, 0, 0, 0);
+  return normalized;
+};
+
+const addBusinessDaysSkippingSunday = (date, businessDays) => {
+  let cursor = startOfDay(date);
+  let added = 0;
+
+  while (added < businessDays) {
+    cursor.setDate(cursor.getDate() + 1);
+    if (cursor.getDay() === 0) continue;
+    added += 1;
+  }
+
+  return cursor;
+};
+
+const safeStorage = (() => {
+  try {
+    const testKey = "__space_platform_test__";
+    window.localStorage.setItem(testKey, "1");
+    window.localStorage.removeItem(testKey);
+    return window.localStorage;
+  } catch (error) {
+    return null;
+  }
+})();
+
+const getPlanDef = (planKey) => PLAN_DEFS[planKey] || PLAN_DEFS.gold;
+
+const clampCredits = (value, max) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(0, Math.min(Math.floor(parsed), max));
+};
+
+const sanitizeLesson = (lesson) => {
+  if (!lesson || typeof lesson !== "object") return null;
+  if (!lesson.id || typeof lesson.id !== "string") return null;
+  if (!lesson.dateKey || typeof lesson.dateKey !== "string") return null;
+  if (!lesson.time || typeof lesson.time !== "string") return null;
+  return {
+    id: lesson.id,
+    dateKey: lesson.dateKey,
+    time: lesson.time,
+    kind: lesson.kind === "GROUP" ? "GROUP" : "VIP",
+    title: typeof lesson.title === "string" ? lesson.title : "Aula ao vivo",
+    teacher: typeof lesson.teacher === "string" ? lesson.teacher : "Professor(a) Space",
+    durationMinutes: typeof lesson.durationMinutes === "number" ? lesson.durationMinutes : LESSON_DURATION_MINUTES,
+    createdAt: typeof lesson.createdAt === "string" ? lesson.createdAt : new Date().toISOString(),
+  };
+};
+
+const appState = (() => {
+  const todayKey = createDateKey(new Date());
+  const defaultPlanKey = "gold";
+  const defaultPlan = getPlanDef(defaultPlanKey);
+  const baseState = {
+    planKey: defaultPlanKey,
+    activatedAtKey: todayKey,
+    cycleStartedAtKey: todayKey,
+    creditsRemaining: defaultPlan.creditsPerCycle,
+  };
+
+  if (!safeStorage) return { ...baseState };
+
+  try {
+    const raw = safeStorage.getItem(STORAGE_KEY);
+    if (!raw) return { ...baseState };
+    const parsed = JSON.parse(raw);
+    const planKey = typeof parsed.planKey === "string" ? parsed.planKey : defaultPlanKey;
+    const plan = getPlanDef(planKey);
+    const activatedAtKey = typeof parsed.activatedAtKey === "string" ? parsed.activatedAtKey : todayKey;
+    const cycleStartedAtKey = typeof parsed.cycleStartedAtKey === "string" ? parsed.cycleStartedAtKey : activatedAtKey;
+    const creditsRemaining = clampCredits(parsed.creditsRemaining, plan.creditsPerCycle);
+
+    if (Array.isArray(parsed.scheduledLessons)) {
+      parsed.scheduledLessons
+        .map((lesson) => sanitizeLesson(lesson))
+        .filter(Boolean)
+        .forEach((lesson) => {
+          scheduledLessons.push(lesson);
+          scheduledSlotIds.add(lesson.id);
+        });
+    }
+
+    return {
+      planKey,
+      activatedAtKey,
+      cycleStartedAtKey,
+      creditsRemaining,
+    };
+  } catch (error) {
+    return { ...baseState };
+  }
+})();
+
+const persistAppState = () => {
+  if (!safeStorage) return;
+  const payload = {
+    ...appState,
+    scheduledLessons,
+  };
+
+  try {
+    safeStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  } catch (error) {
+    // ignore write failures (private mode, quota, etc.)
+  }
+};
+
+const syncCreditCycle = (referenceDate = new Date()) => {
+  const plan = getPlanDef(appState.planKey);
+  const cycleStart = parseDateKey(appState.cycleStartedAtKey) || parseDateKey(appState.activatedAtKey) || startOfDay(referenceDate);
+  let nextRenewal = addBusinessDaysSkippingSunday(cycleStart, CREDIT_CYCLE_BUSINESS_DAYS);
+  let didRenew = false;
+
+  while (referenceDate.getTime() >= nextRenewal.getTime()) {
+    didRenew = true;
+    appState.cycleStartedAtKey = createDateKey(nextRenewal);
+    appState.creditsRemaining = plan.creditsPerCycle;
+    nextRenewal = addBusinessDaysSkippingSunday(nextRenewal, CREDIT_CYCLE_BUSINESS_DAYS);
+  }
+
+  if (didRenew) {
+    persistAppState();
+  }
+
+  return nextRenewal;
+};
+
+const formatCreditsText = (value) => {
+  const amount = Number(value) || 0;
+  return `${amount} ${amount === 1 ? "crédito disponível" : "créditos disponíveis"}`;
+};
+
+const formatRenewalDate = (date) => {
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  return `${day}/${month}`;
+};
+
+const renderPlanUI = () => {
+  const plan = getPlanDef(appState.planKey);
+  const nextRenewal = syncCreditCycle(new Date());
+
+  if (planBadge) {
+    planBadge.classList.remove("is-gold", "is-diamond", "is-turma");
+    if (plan.badgeClass) {
+      planBadge.classList.add(plan.badgeClass);
+    }
+  }
+
+  if (planBadgeText) {
+    planBadgeText.textContent = `Plano ${plan.label} ativo`;
+  }
+
+  if (planCredits) {
+    planCredits.textContent = formatCreditsText(appState.creditsRemaining);
+  }
+
+  if (planRenewal) {
+    planRenewal.textContent = `Renovam automaticamente em ${formatRenewalDate(nextRenewal)}`;
+  }
+
+  if (liveCreditsDots) {
+    const total = plan.creditsPerCycle;
+    const filled = clampCredits(appState.creditsRemaining, total);
+
+    liveCreditsDots.innerHTML = Array.from({ length: total })
+      .map((_, index) => `<span class="live-credit-dot${index < filled ? " is-filled" : ""}" aria-hidden="true"></span>`)
+      .join("");
+    liveCreditsDots.setAttribute("aria-label", formatCreditsText(appState.creditsRemaining));
+  }
+
+  if (liveCreditsCaption) {
+    liveCreditsCaption.textContent = formatCreditsText(appState.creditsRemaining);
+  }
+};
+
+let modalPrimaryHandler = null;
+let modalSecondaryHandler = null;
+
+const closeModal = () => {
+  if (!modalOverlay) return;
+  modalOverlay.hidden = true;
+  body.classList.remove("is-modal-open");
+  modalPrimaryHandler = null;
+  modalSecondaryHandler = null;
+};
+
+const openModal = ({
+  title,
+  bodyHtml,
+  primaryLabel = "Confirmar",
+  secondaryLabel = "Voltar",
+  hideSecondary = false,
+  onPrimary,
+  onSecondary,
+} = {}) => {
+  if (!modalOverlay || !modalTitle || !modalBody || !modalPrimary || !modalSecondary) return;
+
+  modalTitle.textContent = title || "";
+  modalBody.innerHTML = bodyHtml || "";
+  modalPrimary.textContent = primaryLabel;
+  modalSecondary.textContent = secondaryLabel;
+  modalSecondary.hidden = hideSecondary;
+  modalOverlay.hidden = false;
+  body.classList.add("is-modal-open");
+
+  modalPrimaryHandler = typeof onPrimary === "function" ? onPrimary : null;
+  modalSecondaryHandler = typeof onSecondary === "function" ? onSecondary : null;
+
+  window.setTimeout(() => {
+    modalPrimary.focus();
+  }, 0);
+};
 
 const liveSlotPresets = {
   1: ["09:00", "11:30", "16:30", "19:00"],
@@ -349,10 +608,7 @@ const getDisplayTimeZoneName = () => {
 };
 
 const createSlotId = (date, time) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}-${time}`;
+  return `${createDateKey(date)}-${time}`;
 };
 
 const formatWeekRange = (days) => {
@@ -402,13 +658,10 @@ const parseSlotId = (slotId) => {
   const dateKey = slotId.slice(0, 10);
   const time = slotId.slice(11);
 
-  const year = Number(dateKey.slice(0, 4));
-  const month = Number(dateKey.slice(5, 7));
-  const day = Number(dateKey.slice(8, 10));
+  const date = parseDateKey(dateKey);
+  if (!date || !time) return null;
 
-  if (!year || !month || !day || !time) return null;
-
-  return { date: new Date(year, month - 1, day), time };
+  return { dateKey, date, time };
 };
 
 const registerScheduledLesson = (lesson) => {
@@ -417,6 +670,17 @@ const registerScheduledLesson = (lesson) => {
 
   scheduledLessons.push(lesson);
   scheduledSlotIds.add(lesson.id);
+  persistAppState();
+};
+
+const removeScheduledLesson = (lessonId) => {
+  if (!lessonId) return null;
+  const index = scheduledLessons.findIndex((lesson) => lesson.id === lessonId);
+  if (index < 0) return null;
+  const [removed] = scheduledLessons.splice(index, 1);
+  scheduledSlotIds.delete(lessonId);
+  persistAppState();
+  return removed;
 };
 
 const renderLiveScheduledLessons = () => {
@@ -426,7 +690,7 @@ const renderLiveScheduledLessons = () => {
   const upcoming = scheduledLessons
     .map((lesson) => ({
       ...lesson,
-      dateTime: getSlotDateTime(lesson.date, lesson.time),
+      dateTime: getSlotDateTime(parseDateKey(lesson.dateKey) || new Date(), lesson.time),
     }))
     .filter((lesson) => lesson.dateTime.getTime() > now.getTime())
     .sort((a, b) => a.dateTime.getTime() - b.dateTime.getTime())
@@ -438,14 +702,21 @@ const renderLiveScheduledLessons = () => {
 
   liveScheduledList.innerHTML = upcoming
     .map((lesson, index) => {
-      const when = formatScheduledWhen(lesson.date, lesson.time);
-      const title = lesson.title ? lesson.title : "Aula ao vivo";
+      const date = parseDateKey(lesson.dateKey) || new Date();
+      const when = formatScheduledWhen(date, lesson.time);
+      const kindLabel = lesson.kind === "GROUP" ? "Grupo" : "VIP";
+      const metaBits = [`${kindLabel}`, `${lesson.durationMinutes || LESSON_DURATION_MINUTES} min`];
       const teacher = lesson.teacher ? ` · ${lesson.teacher}` : "";
 
       return `
         <li class="live-scheduled-item${index === 0 ? " is-next" : ""}">
-          <div class="live-scheduled-when">${when}</div>
-          <div class="live-scheduled-meta">${title}${teacher}</div>
+          <div class="live-scheduled-content">
+            <div class="live-scheduled-when">${when}</div>
+            <div class="live-scheduled-meta">${metaBits.join(" · ")}${teacher}</div>
+          </div>
+          <button class="live-scheduled-cancel" type="button" data-live-cancel data-lesson-id="${lesson.id}">
+            Cancelar
+          </button>
         </li>
       `;
     })
@@ -483,6 +754,13 @@ const getUpcomingBookableDays = (count) => {
 const updateLiveInstruction = () => {
   if (!liveInstruction) return;
 
+  if (!scheduleState.isConfirmed && appState.creditsRemaining <= 0) {
+    liveInstruction.textContent = scheduleState.selectedSlotLabel
+      ? "Sem créditos disponíveis para confirmar este horário."
+      : "Sem créditos disponíveis para agendar agora.";
+    return;
+  }
+
   if (scheduleState.isConfirmed && scheduleState.selectedSlotLabel) {
     liveInstruction.textContent = `Agendamento confirmado para ${scheduleState.selectedSlotLabel}`;
     return;
@@ -519,7 +797,7 @@ const syncLiveSchedulerSelection = () => {
         label.textContent = isConfirmed ? "Agendado" : "Avançar";
       }
 
-      advanceButton.disabled = isConfirmed;
+      advanceButton.disabled = isConfirmed || appState.creditsRemaining <= 0;
     }
   });
 };
@@ -527,6 +805,7 @@ const syncLiveSchedulerSelection = () => {
 const renderLiveScheduler = () => {
   if (!liveSchedulerGrid) return;
 
+  renderPlanUI();
   renderLiveScheduledLessons();
 
   const days = getUpcomingBookableDays(4);
@@ -614,6 +893,39 @@ const renderLiveScheduler = () => {
   syncLiveSchedulerSelection();
 };
 
+if (modalOverlay) {
+  modalOverlay.addEventListener("click", (event) => {
+    if (event.target === modalOverlay) {
+      closeModal();
+    }
+  });
+}
+
+if (modalClose) {
+  modalClose.addEventListener("click", () => {
+    closeModal();
+  });
+}
+
+if (modalSecondary) {
+  modalSecondary.addEventListener("click", () => {
+    if (modalSecondaryHandler) {
+      modalSecondaryHandler();
+    }
+    closeModal();
+  });
+}
+
+if (modalPrimary) {
+  modalPrimary.addEventListener("click", () => {
+    if (modalPrimaryHandler) {
+      const shouldClose = modalPrimaryHandler();
+      if (shouldClose === false) return;
+    }
+    closeModal();
+  });
+}
+
 const setView = (view, smooth = true) => {
   body.dataset.view = view;
   window.scrollTo({ top: 0, behavior: smooth ? "smooth" : "auto" });
@@ -641,6 +953,7 @@ const showPanel = (panelName) => {
   }
 
   if (panelName === "ao-vivo") {
+    window.scrollTo({ top: 0, behavior: "smooth" });
     renderLiveScheduler();
   }
 };
@@ -722,6 +1035,46 @@ document.addEventListener("click", (event) => {
   const target = event.target;
 
   if (target instanceof Element) {
+    const cancelButton = target.closest("[data-live-cancel]");
+    if (cancelButton instanceof HTMLButtonElement) {
+      const lessonId = cancelButton.dataset.lessonId || "";
+      const lesson = scheduledLessons.find((item) => item.id === lessonId);
+      const parsed = lesson ? parseSlotId(lesson.id) : null;
+
+      if (lesson && parsed) {
+        const slotLabel = formatSelectedSlotLabel(parsed.date, parsed.time);
+        const slotDateTime = getSlotDateTime(parsed.date, parsed.time);
+        const now = new Date();
+        const isRefundable = slotDateTime.getTime() - now.getTime() >= CREDIT_REFUND_WINDOW_MS;
+        const plan = getPlanDef(appState.planKey);
+
+        openModal({
+          title: "Cancelar aula",
+          bodyHtml: `
+            <strong>${slotLabel}</strong><br />
+            ${isRefundable ? "Cancelamento com 24h ou mais: 1 crédito será devolvido." : "Faltam menos de 24h: o crédito será perdido."}
+          `,
+          primaryLabel: "Confirmar cancelamento",
+          secondaryLabel: "Voltar",
+          onPrimary: () => {
+            removeScheduledLesson(lessonId);
+
+            if (isRefundable) {
+              appState.creditsRemaining = clampCredits(appState.creditsRemaining + 1, plan.creditsPerCycle);
+              persistAppState();
+            }
+
+            scheduleState.selectedSlotId = "";
+            scheduleState.selectedSlotLabel = "";
+            scheduleState.isConfirmed = false;
+            renderLiveScheduler();
+          },
+        });
+      }
+
+      return;
+    }
+
     const advanceButton = target.closest("[data-slot-advance]");
 
     if (advanceButton instanceof HTMLButtonElement) {
@@ -729,20 +1082,55 @@ document.addEventListener("click", (event) => {
       const slotLabel = advanceButton.dataset.slotLabel || scheduleState.selectedSlotLabel;
       const parsed = parseSlotId(slotId);
 
-      if (parsed) {
-        registerScheduledLesson({
-          id: slotId,
-          date: parsed.date,
-          time: parsed.time,
-          title: "Aula ao vivo",
-          teacher: "Professor(a) Space",
+      if (!parsed) return;
+
+      const plan = getPlanDef(appState.planKey);
+      const kind = plan.creditType === "GROUP" ? "GROUP" : "VIP";
+
+      if (appState.creditsRemaining <= 0) {
+        openModal({
+          title: "Sem créditos disponíveis",
+          bodyHtml: "Você não tem créditos suficientes para agendar uma aula agora.",
+          primaryLabel: "Entendi",
+          hideSecondary: true,
         });
+        return;
       }
 
-      scheduleState.selectedSlotId = slotId;
-      scheduleState.selectedSlotLabel = slotLabel;
-      scheduleState.isConfirmed = true;
-      renderLiveScheduler();
+      openModal({
+        title: "Confirmar agendamento",
+        bodyHtml: `
+          <strong>${slotLabel}</strong><br />
+          ${kind === "GROUP" ? "Aula em grupo" : "Aula VIP"} · ${LESSON_DURATION_MINUTES} min<br />
+          Isso consome 1 crédito.
+        `,
+        primaryLabel: "Confirmar agendamento",
+        secondaryLabel: "Voltar",
+        onPrimary: () => {
+          if (appState.creditsRemaining <= 0) {
+            return false;
+          }
+
+          appState.creditsRemaining = clampCredits(appState.creditsRemaining - 1, plan.creditsPerCycle);
+
+          registerScheduledLesson({
+            id: slotId,
+            dateKey: parsed.dateKey,
+            time: parsed.time,
+            kind,
+            title: "Aula ao vivo",
+            teacher: "Professor(a) Space",
+            durationMinutes: LESSON_DURATION_MINUTES,
+            createdAt: new Date().toISOString(),
+          });
+
+          persistAppState();
+          scheduleState.selectedSlotId = slotId;
+          scheduleState.selectedSlotLabel = slotLabel;
+          scheduleState.isConfirmed = true;
+          renderLiveScheduler();
+        },
+      });
       return;
     }
 
@@ -769,6 +1157,11 @@ document.addEventListener("click", (event) => {
 
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
+    if (modalOverlay && !modalOverlay.hidden) {
+      closeModal();
+      return;
+    }
+
     closeAllDropdowns();
   }
 });
@@ -783,4 +1176,14 @@ setSidebarExpanded(false);
 showPanel("dashboard");
 renderDashboardCharts();
 renderLiveScheduler();
+renderPlanUI();
 setView("publico", false);
+
+setInterval(() => {
+  if (body.dataset.activePanel === "ao-vivo") {
+    renderLiveScheduler();
+    return;
+  }
+
+  renderPlanUI();
+}, 60000);
