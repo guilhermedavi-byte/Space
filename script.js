@@ -25,6 +25,8 @@ const liveSchedulerGrid = document.querySelector("[data-live-scheduler-grid]");
 const liveSchedulerTimezone = document.querySelector("[data-live-timezone]");
 const liveInstruction = document.querySelector("[data-live-instruction]");
 const liveWeekRange = document.querySelector("[data-live-week-range]");
+const liveScheduledList = document.querySelector("[data-live-scheduled-list]");
+const liveScheduledEmpty = document.querySelector("[data-live-scheduled-empty]");
 
 const learningLevelNames = ["Pré A1", "A1", "A1+", "A2", "A2+", "B1", "B1+", "B2", "B2+", "C1", "C2"];
 const learningJourneyPoints = [
@@ -83,6 +85,9 @@ const scheduleState = {
   selectedSlotLabel: "",
   isConfirmed: false,
 };
+
+const scheduledLessons = [];
+const scheduledSlotIds = new Set();
 
 const liveSlotPresets = {
   1: ["09:00", "11:30", "16:30", "19:00"],
@@ -344,8 +349,10 @@ const getDisplayTimeZoneName = () => {
 };
 
 const createSlotId = (date, time) => {
-  const dateKey = date.toISOString().slice(0, 10);
-  return `${dateKey}-${time}`;
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}-${time}`;
 };
 
 const formatWeekRange = (days) => {
@@ -382,12 +389,76 @@ const getSlotDateTime = (date, time) => {
   return slotDate;
 };
 
+const formatScheduledWhen = (date, time) => {
+  const weekdayRaw = new Intl.DateTimeFormat("pt-BR", { weekday: "short" }).format(date).replace(".", "");
+  const monthRaw = new Intl.DateTimeFormat("pt-BR", { month: "short" }).format(date).replace(".", "");
+  const weekday = weekdayRaw.charAt(0).toUpperCase() + weekdayRaw.slice(1);
+  return `${weekday}, ${date.getDate()} ${monthRaw} · ${time}`;
+};
+
+const parseSlotId = (slotId) => {
+  if (!slotId || slotId.length < 12) return null;
+
+  const dateKey = slotId.slice(0, 10);
+  const time = slotId.slice(11);
+
+  const year = Number(dateKey.slice(0, 4));
+  const month = Number(dateKey.slice(5, 7));
+  const day = Number(dateKey.slice(8, 10));
+
+  if (!year || !month || !day || !time) return null;
+
+  return { date: new Date(year, month - 1, day), time };
+};
+
+const registerScheduledLesson = (lesson) => {
+  if (!lesson?.id) return;
+  if (scheduledSlotIds.has(lesson.id)) return;
+
+  scheduledLessons.push(lesson);
+  scheduledSlotIds.add(lesson.id);
+};
+
+const renderLiveScheduledLessons = () => {
+  if (!liveScheduledList) return;
+
+  const now = new Date();
+  const upcoming = scheduledLessons
+    .map((lesson) => ({
+      ...lesson,
+      dateTime: getSlotDateTime(lesson.date, lesson.time),
+    }))
+    .filter((lesson) => lesson.dateTime.getTime() > now.getTime())
+    .sort((a, b) => a.dateTime.getTime() - b.dateTime.getTime())
+    .slice(0, 8);
+
+  if (liveScheduledEmpty) {
+    liveScheduledEmpty.hidden = upcoming.length > 0;
+  }
+
+  liveScheduledList.innerHTML = upcoming
+    .map((lesson, index) => {
+      const when = formatScheduledWhen(lesson.date, lesson.time);
+      const title = lesson.title ? lesson.title : "Aula ao vivo";
+      const teacher = lesson.teacher ? ` · ${lesson.teacher}` : "";
+
+      return `
+        <li class="live-scheduled-item${index === 0 ? " is-next" : ""}">
+          <div class="live-scheduled-when">${when}</div>
+          <div class="live-scheduled-meta">${title}${teacher}</div>
+        </li>
+      `;
+    })
+    .join("");
+};
+
 const getAvailableSlots = (date, referenceDate = new Date()) => {
   const times = liveSlotPresets[date.getDay()] || ["09:00", "11:00", "15:00"];
 
   return times.filter((time) => {
     const slotDate = getSlotDateTime(date, time);
-    return slotDate.getTime() > referenceDate.getTime();
+    const slotId = createSlotId(date, time);
+    return slotDate.getTime() > referenceDate.getTime() && !scheduledSlotIds.has(slotId);
   });
 };
 
@@ -455,6 +526,8 @@ const syncLiveSchedulerSelection = () => {
 
 const renderLiveScheduler = () => {
   if (!liveSchedulerGrid) return;
+
+  renderLiveScheduledLessons();
 
   const days = getUpcomingBookableDays(4);
   const weekdayFormatter = new Intl.DateTimeFormat("pt-BR", { weekday: "short" });
@@ -529,7 +602,7 @@ const renderLiveScheduler = () => {
     })
     .join("");
 
-  if (scheduleState.selectedSlotId && !visibleSlotIds.has(scheduleState.selectedSlotId)) {
+  if (scheduleState.selectedSlotId && !visibleSlotIds.has(scheduleState.selectedSlotId) && !scheduleState.isConfirmed) {
     scheduleState.selectedSlotId = "";
     scheduleState.selectedSlotLabel = "";
     scheduleState.isConfirmed = false;
@@ -652,11 +725,24 @@ document.addEventListener("click", (event) => {
     const advanceButton = target.closest("[data-slot-advance]");
 
     if (advanceButton instanceof HTMLButtonElement) {
-      scheduleState.selectedSlotId = advanceButton.dataset.slotId || scheduleState.selectedSlotId;
-      scheduleState.selectedSlotLabel = advanceButton.dataset.slotLabel || scheduleState.selectedSlotLabel;
+      const slotId = advanceButton.dataset.slotId || scheduleState.selectedSlotId;
+      const slotLabel = advanceButton.dataset.slotLabel || scheduleState.selectedSlotLabel;
+      const parsed = parseSlotId(slotId);
+
+      if (parsed) {
+        registerScheduledLesson({
+          id: slotId,
+          date: parsed.date,
+          time: parsed.time,
+          title: "Aula ao vivo",
+          teacher: "Professor(a) Space",
+        });
+      }
+
+      scheduleState.selectedSlotId = slotId;
+      scheduleState.selectedSlotLabel = slotLabel;
       scheduleState.isConfirmed = true;
-      syncLiveSchedulerSelection();
-      updateLiveInstruction();
+      renderLiveScheduler();
       return;
     }
 

@@ -637,15 +637,27 @@
             </div>
           </div>
 
-          <article class="live-booking-panel">
-            <div class="live-booking-panel-header">
-              <div class="live-week-control">
-                <div class="live-week-range" data-live-week-range>8 – 14 de abril de 2026</div>
+          <div class="live-schedule-layout">
+            <article class="live-booking-panel">
+              <div class="live-booking-panel-header">
+                <div class="live-week-control">
+                  <div class="live-week-range" data-live-week-range>8 – 14 de abril de 2026</div>
+                </div>
               </div>
-            </div>
 
-            <div class="live-scheduler-grid" data-live-scheduler-grid></div>
-          </article>
+              <div class="live-scheduler-grid" data-live-scheduler-grid></div>
+            </article>
+
+            <aside class="live-scheduled-panel" aria-label="Aulas agendadas">
+              <div class="live-scheduled-header">
+                <h3 class="live-scheduled-title">Aulas agendadas</h3>
+              </div>
+              <div class="live-scheduled-body">
+                <ul class="live-scheduled-list" data-live-scheduled-list></ul>
+                <div class="live-scheduled-empty" data-live-scheduled-empty hidden>Sem aulas agendadas</div>
+              </div>
+            </aside>
+          </div>
         </section>
 
         <section class="platform-panel" data-panel="materiais" hidden>
