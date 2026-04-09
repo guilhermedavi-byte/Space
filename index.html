@@ -309,11 +309,24 @@
               </div>
               <div class="plan-renewal" data-plan-renewal>Renovam automaticamente em 15/04</div>
             </div>
+
+            <div class="header-role" data-role-topbar hidden aria-label="Área do Professor">
+              <div class="role-pill">
+                <span class="role-icon" data-role-topbar-icon aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M3.5 8.5 12 4.5l8.5 4-8.5 4-8.5-4Z"></path>
+                    <path d="M6.5 10.2V15c0 1.6 2.5 3 5.5 3s5.5-1.4 5.5-3v-4.8"></path>
+                    <path d="M20.5 9v6"></path>
+                  </svg>
+                </span>
+                <span data-role-topbar-text>Área do Professor</span>
+              </div>
+            </div>
           </div>
         </header>
 
         <section class="platform-panel is-visible" data-panel="dashboard">
-          <div class="dashboard-redesign">
+          <div class="dashboard-redesign" data-dashboard-student>
             <div class="overview-stats-grid">
               <article class="overview-stat-card overview-stat-level">
                 <div class="overview-stat-copy">
@@ -581,6 +594,166 @@
               </div>
             </article>
           </div>
+
+          <div class="dashboard-redesign dashboard-teacher" data-dashboard-teacher hidden>
+            <div class="overview-stats-grid">
+              <article class="overview-stat-card">
+                <span class="card-kicker">AULAS HOJE</span>
+                <strong data-teacher-lessons-today>—</strong>
+                <p data-teacher-lessons-today-sub>—</p>
+              </article>
+
+              <article class="overview-stat-card">
+                <span class="card-kicker">PRÓXIMA AULA</span>
+                <strong data-teacher-next-class>—</strong>
+                <p data-teacher-next-countdown>—</p>
+              </article>
+
+              <article class="overview-stat-card overview-stat-score">
+                <span class="card-kicker">AVALIAÇÃO MÉDIA</span>
+                <div class="score-card-body score-card-body-compact">
+                  <div class="score-card-rating score-card-rating-compact" aria-label="Avaliação média do professor">
+                    <strong data-teacher-nps>—</strong>
+                    <span>/10</span>
+                  </div>
+                  <p class="teacher-score-sub" data-teacher-nps-sub>—</p>
+                </div>
+              </article>
+
+              <article class="overview-stat-card overview-stat-level">
+                <div class="overview-stat-copy">
+                  <span class="card-kicker">OCUPAÇÃO DA SEMANA</span>
+                  <strong data-teacher-occupancy-percent>—</strong>
+                  <p data-teacher-occupancy-sub>—</p>
+                </div>
+                <div
+                  class="level-progress-ring"
+                  data-teacher-occupancy-ring
+                  style="--level-progress: 0"
+                  aria-label="Ocupação semanal"
+                >
+                  <span data-teacher-occupancy-ring-text>—</span>
+                </div>
+              </article>
+            </div>
+
+            <div class="teacher-insights-grid">
+              <article class="analytics-card analytics-card-bar teacher-classes-card">
+                <div class="analytics-header">
+                  <h3>Histórico de aulas</h3>
+
+                  <div class="chart-filter-dropdown" data-chart-dropdown="teacher-classes">
+                    <button
+                      class="chart-filter-trigger"
+                      type="button"
+                      data-chart-trigger="teacher-classes"
+                      aria-expanded="false"
+                      aria-haspopup="true"
+                      aria-label="Filtrar histórico de aulas"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <rect x="3.5" y="5.5" width="17" height="15" rx="2"></rect>
+                        <path d="M7 3.5V7"></path>
+                        <path d="M17 3.5V7"></path>
+                        <path d="M3.5 10.5H20.5"></path>
+                      </svg>
+                    </button>
+
+                    <div class="chart-filter-menu" data-chart-menu="teacher-classes" hidden>
+                      <button
+                        class="chart-filter-option is-active"
+                        type="button"
+                        data-chart-option
+                        data-chart-type="teacher-classes"
+                        data-chart-range="week"
+                      >
+                        Semana atual
+                      </button>
+                      <button
+                        class="chart-filter-option"
+                        type="button"
+                        data-chart-option
+                        data-chart-type="teacher-classes"
+                        data-chart-range="month"
+                      >
+                        Mês atual
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="bar-chart-shell teacher-classes-shell">
+                  <div class="bar-chart-scale" data-teacher-classes-scale></div>
+
+                  <div class="bar-chart-stage">
+                    <div class="bar-chart-grid">
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                    </div>
+                    <div class="bar-chart-bars teacher-classes-bars" data-teacher-classes-chart></div>
+                    <div class="bar-chart-labels teacher-classes-labels" data-teacher-classes-labels></div>
+                  </div>
+                </div>
+              </article>
+
+              <article class="surface-card teacher-students-card">
+                <div class="dashboard-section-header refined-header">
+                  <h3>Alunos</h3>
+                  <button class="ghost-action-button" type="button" data-teacher-view-all-students>
+                    ver todos
+                  </button>
+                </div>
+
+                <div class="teacher-students-sections">
+                  <div class="teacher-students-section">
+                    <div class="teacher-section-head">Ativos esta semana</div>
+                    <ul class="teacher-students-list" data-teacher-active-list></ul>
+                    <div class="live-scheduled-empty" data-teacher-active-empty hidden>Sem alunos ativos</div>
+                  </div>
+
+                  <div class="teacher-students-section teacher-students-section-missing">
+                    <div class="teacher-section-head">Sumidos</div>
+                    <ul class="teacher-students-list" data-teacher-missing-list></ul>
+                    <div class="live-scheduled-empty" data-teacher-missing-empty hidden>Sem alunos sumidos</div>
+                  </div>
+                </div>
+              </article>
+            </div>
+
+            <div class="dashboard-secondary-grid teacher-secondary-grid">
+              <article class="surface-card today-availability-card teacher-today-availability-card">
+                <div class="dashboard-section-header refined-header">
+                  <h3>Horários disponíveis hoje</h3>
+                  <button class="ghost-action-button" type="button" data-open-live-panel>
+                    ver todos
+                  </button>
+                </div>
+
+                <div class="today-slots-grid" data-teacher-today-slots></div>
+                <div class="live-day-empty" data-teacher-today-slots-empty hidden>Horários esgotados</div>
+              </article>
+
+              <article class="surface-card teacher-cancellations-card">
+                <div class="dashboard-section-header refined-header">
+                  <h3>Cancelamentos recentes</h3>
+                </div>
+
+                <ul class="teacher-cancel-list" data-teacher-cancel-list></ul>
+                <div class="live-scheduled-empty" data-teacher-cancel-empty hidden>Sem cancelamentos recentes</div>
+              </article>
+            </div>
+
+            <article class="surface-card teacher-notices-card">
+              <div class="dashboard-section-header refined-header">
+                <h3>Avisos da coordenação</h3>
+              </div>
+
+              <ul class="teacher-notice-list" data-teacher-notice-list></ul>
+              <div class="live-scheduled-empty" data-teacher-notice-empty hidden>Sem avisos no momento</div>
+            </article>
+          </div>
         </section>
 
         <section class="platform-panel" data-panel="gravadas" data-hide-platform-header="true" hidden>
@@ -640,6 +813,18 @@
 	                <div class="plan-credits" data-plan-credits>3 créditos disponíveis</div>
 	              </div>
 	              <div class="plan-renewal" data-plan-renewal>Renovam automaticamente em 15/04</div>
+	            </div>
+	            <div class="header-role header-role--schedule" data-role-topbar hidden aria-label="Área do Professor">
+	              <div class="role-pill">
+	                <span class="role-icon" data-role-topbar-icon aria-hidden="true">
+	                  <svg viewBox="0 0 24 24" fill="none">
+	                    <path d="M3.5 8.5 12 4.5l8.5 4-8.5 4-8.5-4Z"></path>
+	                    <path d="M6.5 10.2V15c0 1.6 2.5 3 5.5 3s5.5-1.4 5.5-3v-4.8"></path>
+	                    <path d="M20.5 9v6"></path>
+	                  </svg>
+	                </span>
+	                <span data-role-topbar-text>Área do Professor</span>
+	              </div>
 	            </div>
 	          </div>
 
