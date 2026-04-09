@@ -189,15 +189,6 @@
     <div class="platform-shell" data-view="interno" hidden>
       <div class="platform-backdrop" aria-hidden="true"></div>
 
-      <div class="platform-topbar" data-plan-topbar aria-label="Plano e créditos">
-        <div class="plan-badge" data-plan-badge>
-          <span class="plan-dot" aria-hidden="true"></span>
-          <span data-plan-badge-text>Plano Gold ativo</span>
-        </div>
-        <div class="plan-credits" data-plan-credits>3 créditos disponíveis</div>
-        <div class="plan-renewal" data-plan-renewal>Renovam automaticamente em 15/04</div>
-      </div>
-
       <aside class="platform-sidebar">
         <div class="sidebar-topbar">
           <button
@@ -298,9 +289,13 @@
           </div>
 
           <div class="header-actions">
-            <div class="status-pill">
-              <span class="status-dot"></span>
-              Plano ativo
+            <div class="header-plan" data-plan-topbar aria-label="Plano e créditos">
+              <div class="plan-badge" data-plan-badge>
+                <span class="plan-dot" aria-hidden="true"></span>
+                <span data-plan-badge-text>Plano Gold ativo</span>
+              </div>
+              <div class="plan-credits" data-plan-credits>3 créditos disponíveis</div>
+              <div class="plan-renewal" data-plan-renewal>Renovam automaticamente em 15/04</div>
             </div>
             <button class="button button-outline" type="button" data-close-platform>
               Sair

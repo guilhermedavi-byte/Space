@@ -569,6 +569,13 @@ main {
   pointer-events: none;
 }
 
+.header-plan {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+  text-align: right;
+}
+
 .plan-badge {
   pointer-events: none;
   display: inline-flex;
