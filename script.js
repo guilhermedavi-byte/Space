@@ -348,6 +348,9 @@ const openModal = ({
   }, 0);
 };
 
+// Hard guard: if any previous CSS/state made the modal visible, reset it on load.
+closeModal();
+
 const liveSlotPresets = {
   1: ["09:00", "11:30", "16:30", "19:00"],
   2: ["08:00", "10:30", "15:00", "18:30"],

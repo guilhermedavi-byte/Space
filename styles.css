@@ -3731,6 +3731,10 @@ body[data-active-panel="ao-vivo"] .platform-sidebar {
   animation: modal-fade-in 160ms ease both;
 }
 
+.modal-overlay[hidden] {
+  display: none;
+}
+
 .modal-dialog {
   width: min(520px, 100%);
   border-radius: 16px;
