@@ -3826,6 +3826,50 @@ body[data-active-panel="ao-vivo"] .platform-sidebar {
   line-height: 1.65;
 }
 
+.role-picker {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.role-option {
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease,
+    transform 150ms ease;
+}
+
+.role-option:hover,
+.role-option:focus-visible {
+  background: rgba(232, 69, 60, 0.1);
+  border-color: rgba(232, 69, 60, 0.35);
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.role-option.is-active {
+  background: rgba(232, 69, 60, 0.14);
+  border-color: rgba(232, 69, 60, 0.42);
+  color: #ffffff;
+}
+
+.role-option:focus-visible {
+  outline: 2px solid rgba(232, 69, 60, 0.35);
+  outline-offset: 2px;
+}
+
 .modal-body strong {
   color: #ffffff;
   font-weight: 800;
@@ -3902,6 +3946,12 @@ body.is-modal-open {
   }
 
   .live-scheduler-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .role-picker {
     grid-template-columns: 1fr;
   }
 }

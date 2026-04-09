@@ -189,10 +189,10 @@
     <div class="platform-shell" data-view="interno" hidden>
       <div class="platform-backdrop" aria-hidden="true"></div>
 
-      <aside class="platform-sidebar">
-        <div class="sidebar-topbar">
-          <button
-            class="sidebar-toggle"
+	      <aside class="platform-sidebar">
+	        <div class="sidebar-topbar">
+	          <button
+	            class="sidebar-toggle"
             type="button"
             data-sidebar-toggle
             aria-expanded="false"
@@ -206,15 +206,15 @@
           </button>
         </div>
 
-        <div class="sidebar-brand">
-          <img src="assets/space-symbol.png" alt="Símbolo da Space" />
-          <div class="sidebar-brand-copy">
-            <strong>Space</strong>
-            <span>Student Platform</span>
-          </div>
-        </div>
+	        <div class="sidebar-brand">
+	          <img src="assets/space-symbol.png" alt="Símbolo da Space" />
+	          <div class="sidebar-brand-copy">
+	            <strong>Space</strong>
+	            <span data-role-sidebar-subtitle>Student Platform</span>
+	          </div>
+	        </div>
 
-        <nav class="sidebar-nav" aria-label="Seções do aluno">
+	        <nav class="sidebar-nav" aria-label="Seções do aluno">
           <button
             class="sidebar-link is-active"
             type="button"
@@ -262,12 +262,12 @@
             </span>
             <span class="sidebar-text">Aulas ao vivo</span>
           </button>
-          <button
-            class="sidebar-link"
-            type="button"
-            data-panel-target="materiais"
-            title="Materiais"
-          >
+	          <button
+	            class="sidebar-link"
+	            type="button"
+	            data-panel-target="materiais"
+	            title="Materiais"
+	          >
             <span class="sidebar-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none">
                 <path d="M7 4.5h7l3 3v12H7a2 2 0 0 1-2-2v-11a2 2 0 0 1 2-2Z"></path>
@@ -276,17 +276,27 @@
                 <path d="M9 15.5h4.5"></path>
               </svg>
             </span>
-            <span class="sidebar-text">Materiais</span>
-          </button>
-        </nav>
-      </aside>
+	            <span class="sidebar-text">Materiais</span>
+	          </button>
+	          <button class="sidebar-link" type="button" data-close-platform title="Sair">
+	            <span class="sidebar-icon" aria-hidden="true">
+	              <svg viewBox="0 0 24 24" fill="none">
+	                <path d="M10 7.5H6.8c-1.1 0-2 .9-2 2v7c0 1.1.9 2 2 2H10"></path>
+	                <path d="M15 16.5 19 12l-4-4.5"></path>
+	                <path d="M19 12H10"></path>
+	              </svg>
+	            </span>
+	            <span class="sidebar-text">Sair</span>
+	          </button>
+	        </nav>
+	      </aside>
 
-      <main class="platform-main">
-        <header class="platform-header">
-          <div>
-            <span class="eyebrow">Área do aluno</span>
-            <h1 data-greeting data-user-name="Camila">Boa tarde, Camila.</h1>
-          </div>
+	      <main class="platform-main">
+	        <header class="platform-header">
+	          <div>
+	            <span class="eyebrow" data-role-eyebrow>Área do aluno</span>
+	            <h1 data-greeting data-user-name="Camila">Boa tarde, Camila.</h1>
+	          </div>
 
           <div class="header-actions">
             <div class="header-plan" data-plan-topbar aria-label="Plano e créditos">

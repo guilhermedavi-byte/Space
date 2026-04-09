@@ -6,6 +6,8 @@ const sidebarToggleButton = document.querySelector("[data-sidebar-toggle]");
 const sidebarLinks = document.querySelectorAll("[data-panel-target]");
 const panels = document.querySelectorAll("[data-panel]");
 const greetingElement = document.querySelector("[data-greeting]");
+const roleEyebrow = document.querySelector("[data-role-eyebrow]");
+const roleSidebarSubtitle = document.querySelector("[data-role-sidebar-subtitle]");
 const platformHeader = document.querySelector(".platform-header");
 const chartDropdowns = document.querySelectorAll("[data-chart-dropdown]");
 const chartTriggers = document.querySelectorAll("[data-chart-trigger]");
@@ -96,6 +98,7 @@ const scheduleState = {
 };
 
 const STORAGE_KEY = "space-platform-state-v1";
+const ROLE_STORAGE_KEY = "space-platform-role-v1";
 const CREDIT_CYCLE_BUSINESS_DAYS = 6;
 const LESSON_DURATION_MINUTES = 30;
 const CREDIT_REFUND_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -154,6 +157,65 @@ const safeStorage = (() => {
     return null;
   }
 })();
+
+const ROLE_DEFS = {
+  student: { label: "Student", eyebrow: "Área do aluno", sidebarSubtitle: "Student Platform" },
+  teacher: { label: "Teacher", eyebrow: "Área do professor", sidebarSubtitle: "Teacher Portal" },
+  admin: { label: "Admin", eyebrow: "Administração", sidebarSubtitle: "Admin Console" },
+};
+
+const normalizeRole = (value) => {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw) return "student";
+  if (raw === "student" || raw === "aluno") return "student";
+  if (raw === "teacher" || raw === "professor") return "teacher";
+  if (raw === "admin" || raw === "administrador") return "admin";
+  return "student";
+};
+
+const getInitialRole = () => {
+  try {
+    const url = new URL(window.location.href);
+    const roleParam = url.searchParams.get("role");
+    if (roleParam) {
+      return normalizeRole(roleParam);
+    }
+  } catch (error) {
+    // ignore URL parsing errors
+  }
+
+  if (!safeStorage) return "student";
+  const stored = safeStorage.getItem(ROLE_STORAGE_KEY);
+  return normalizeRole(stored);
+};
+
+let currentRole = getInitialRole();
+
+const syncRoleUI = () => {
+  const def = ROLE_DEFS[currentRole] || ROLE_DEFS.student;
+
+  if (roleEyebrow) {
+    roleEyebrow.textContent = def.eyebrow;
+  }
+
+  if (roleSidebarSubtitle) {
+    roleSidebarSubtitle.textContent = def.sidebarSubtitle;
+  }
+};
+
+const setRole = (role, persist = true) => {
+  currentRole = normalizeRole(role);
+  body.dataset.role = currentRole;
+  syncRoleUI();
+
+  if (persist && safeStorage) {
+    try {
+      safeStorage.setItem(ROLE_STORAGE_KEY, currentRole);
+    } catch (error) {
+      // ignore
+    }
+  }
+};
 
 const getPlanDef = (planKey) => PLAN_DEFS[planKey] || PLAN_DEFS.gold;
 
@@ -967,13 +1029,39 @@ const showPanel = (panelName) => {
 
 openPlatformButtons.forEach((button) => {
   button.addEventListener("click", () => {
-    setView("interno");
-    showPanel("dashboard");
+    const activeRole = currentRole;
+    const bodyHtml = `
+      <div class="role-picker" role="list">
+        ${Object.entries(ROLE_DEFS)
+          .map(([roleKey, def]) => {
+            const isActive = roleKey === activeRole;
+            return `
+              <button
+                class="role-option${isActive ? " is-active" : ""}"
+                type="button"
+                data-role-option="${roleKey}"
+                aria-pressed="${isActive ? "true" : "false"}"
+              >
+                ${def.label}
+              </button>
+            `;
+          })
+          .join("")}
+      </div>
+    `;
+
+    openModal({
+      title: "Entrar",
+      bodyHtml,
+      primaryLabel: "Fechar",
+      hideSecondary: true,
+    });
   });
 });
 
 if (closePlatformButton) {
   closePlatformButton.addEventListener("click", () => {
+    closeModal();
     setView("publico");
   });
 }
@@ -1042,6 +1130,15 @@ document.addEventListener("click", (event) => {
   const target = event.target;
 
   if (target instanceof Element) {
+    const roleOption = target.closest("[data-role-option]");
+    if (roleOption instanceof HTMLButtonElement) {
+      setRole(roleOption.dataset.roleOption || "student");
+      closeModal();
+      setView("interno");
+      showPanel("dashboard");
+      return;
+    }
+
     const cancelButton = target.closest("[data-live-cancel]");
     if (cancelButton instanceof HTMLButtonElement) {
       const lessonId = cancelButton.dataset.lessonId || "";
@@ -1177,6 +1274,7 @@ window.addEventListener("resize", syncSidebarMode);
 
 updateGreeting();
 setInterval(updateGreeting, 60000);
+setRole(currentRole);
 setActiveChartOption("learning", chartState.learning);
 setActiveChartOption("study", chartState.study);
 setSidebarExpanded(false);
