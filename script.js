@@ -576,6 +576,17 @@ let modalSecondaryHandler = null;
 let modalTrashHandler = null;
 let activeModalKind = "";
 let createEventDraft = null;
+let teacherCalSelection = null;
+let teacherCalDrag = null;
+
+const clearTeacherCalendarSelection = () => {
+  if (teacherCalSelection?.el instanceof HTMLElement) {
+    teacherCalSelection.el.remove();
+  }
+  teacherCalSelection = null;
+  teacherCalDrag = null;
+  body.classList.remove("is-cal-dragging");
+};
 
 const closeModal = () => {
   if (!modalOverlay) return;
@@ -589,6 +600,7 @@ const closeModal = () => {
   }
   activeModalKind = "";
   createEventDraft = null;
+  clearTeacherCalendarSelection();
 };
 
 const openModal = ({
@@ -1528,6 +1540,91 @@ const teacherCalendarState = (() => {
   };
 })();
 
+const TEACHER_CAL_SLOT_MINUTES = 15;
+const TEACHER_CAL_MIN_DURATION_MINUTES = 15;
+const TEACHER_CAL_DEFAULT_DURATION_MINUTES = 30;
+
+const clampNumber = (value, min, max) => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return min;
+  return Math.min(Math.max(n, min), max);
+};
+
+const getTeacherGridMeta = (gridEl) => {
+  if (!(gridEl instanceof HTMLElement)) return null;
+  const startHour = Number(gridEl.dataset.teacherCalStart);
+  const endHour = Number(gridEl.dataset.teacherCalEnd);
+  if (!Number.isFinite(startHour) || !Number.isFinite(endHour) || endHour < startHour) return null;
+
+  const gridStartMin = startHour * 60;
+  const gridEndMin = (endHour + 1) * 60;
+  const selectableEndMin = gridEndMin - TEACHER_CAL_SLOT_MINUTES;
+  const rect = gridEl.getBoundingClientRect();
+  const spanMinutes = Math.max(1, gridEndMin - gridStartMin);
+  const pxPerMinute = rect.height ? rect.height / spanMinutes : 0;
+
+  return { startHour, endHour, gridStartMin, gridEndMin, selectableEndMin, rect, spanMinutes, pxPerMinute };
+};
+
+const roundToNearestSlotMin = (minutes) => {
+  const n = Number(minutes);
+  if (!Number.isFinite(n)) return 0;
+  return Math.round(n / TEACHER_CAL_SLOT_MINUTES) * TEACHER_CAL_SLOT_MINUTES;
+};
+
+const formatHmFromMinutes = (minutes) => {
+  const safe = clampNumber(Math.round(minutes), 0, 23 * 60 + 59);
+  const hours = String(Math.floor(safe / 60)).padStart(2, "0");
+  const mins = String(safe % 60).padStart(2, "0");
+  return `${hours}:${mins}`;
+};
+
+const calcTeacherSlotMinutesFromClientY = (gridEl, clientY) => {
+  const meta = getTeacherGridMeta(gridEl);
+  if (!meta) return null;
+  const y = clampNumber(clientY - meta.rect.top, 0, meta.rect.height);
+  const ratio = meta.rect.height ? y / meta.rect.height : 0;
+  return meta.gridStartMin + ratio * meta.spanMinutes;
+};
+
+const ensureTeacherCalSelectionEl = (gridEl) => {
+  if (teacherCalSelection?.el instanceof HTMLElement && teacherCalSelection.el.closest(".teacher-cal-grid") === gridEl) {
+    return teacherCalSelection.el;
+  }
+  if (teacherCalSelection?.el instanceof HTMLElement) {
+    teacherCalSelection.el.remove();
+  }
+
+  const el = document.createElement("div");
+  el.className = "teacher-cal-selection";
+  el.innerHTML = `<span class="teacher-cal-selection-time"></span>`;
+  gridEl.appendChild(el);
+  return el;
+};
+
+const syncTeacherCalSelectionUI = () => {
+  if (!teacherCalSelection) return;
+  const { gridEl, startMin, endMin } = teacherCalSelection;
+  if (!(gridEl instanceof HTMLElement)) return;
+
+  const meta = getTeacherGridMeta(gridEl);
+  if (!meta) return;
+
+  const el = ensureTeacherCalSelectionEl(gridEl);
+  const top = (startMin - meta.gridStartMin) * meta.pxPerMinute;
+  const height = Math.max(18, (endMin - startMin) * meta.pxPerMinute);
+
+  el.style.top = `${top}px`;
+  el.style.height = `${height}px`;
+
+  const label = el.querySelector(".teacher-cal-selection-time");
+  if (label instanceof HTMLElement) {
+    label.textContent = `${formatHmFromMinutes(startMin)} – ${formatHmFromMinutes(endMin)}`;
+  }
+
+  teacherCalSelection.el = el;
+};
+
 const loadTeacherCalendarEvents = () => {
   if (!safeStorage) return [];
   try {
@@ -1915,7 +2012,7 @@ const renderTeacherCalendarViewportDay = (date) => {
     <div class="teacher-cal-day">
       ${head}
       <div class="teacher-cal-timecol">${times.join("")}</div>
-      <div class="teacher-cal-grid">
+      <div class="teacher-cal-grid" data-teacher-cal-grid="${createDateKey(date)}" data-teacher-cal-start="${startHour}" data-teacher-cal-end="${endHour}">
         ${rows.join("")}
         ${offHours}
         ${nowLine}
@@ -2024,8 +2121,8 @@ const renderTeacherCalendarViewportWeek = (focusDate) => {
         .join("");
 
       return `
-        <div class="teacher-cal-week-col">
-          <div class="teacher-cal-grid">
+        <div class="teacher-cal-week-col" data-teacher-cal-col="${createDateKey(date)}">
+          <div class="teacher-cal-grid" data-teacher-cal-grid="${createDateKey(date)}" data-teacher-cal-start="${startHour}" data-teacher-cal-end="${endHour}">
             ${rows.join("")}
             ${offHours}
             ${nowLine}
@@ -2088,7 +2185,7 @@ const renderTeacherCalendarViewportMonth = (focusDate) => {
       ? `<button class="teacher-cal-month-more" type="button" data-teacher-month-more="${createDateKey(date)}">+ ${moreCount} mais</button>`
       : "";
     return `
-      <div class="teacher-cal-month-cell">
+      <div class="teacher-cal-month-cell" data-teacher-cal-month-day="${createDateKey(date)}">
         <div class="teacher-cal-month-date${isToday ? " is-today" : ""}${isOutside ? " is-outside" : ""}">${date.getDate()}</div>
         ${pills}
         ${more}
@@ -2108,6 +2205,9 @@ const renderTeacherCalendar = () => {
   if (currentRole !== "teacher") return;
   if (!liveTeacherRoot || liveTeacherRoot.hidden) return;
   if (!teacherCalViewport) return;
+
+  // Any in-progress drag selection should be cleared when re-rendering the calendar view.
+  clearTeacherCalendarSelection();
 
   const now = new Date();
   const timezoneName = getDisplayTimeZoneName();
@@ -2718,6 +2818,28 @@ const openTeacherEventFormModalFromDraft = () => {
   } else {
     setModalPrimaryDisabled(false);
   }
+};
+
+const openTeacherCreateEventModalAt = ({ dateKey, startTime, endTime } = {}) => {
+  const date = parseDateKey(dateKey);
+  if (!date) return;
+
+  createEventDraft = {
+    mode: "create",
+    readOnly: false,
+    eventType: "manual",
+    eventId: "",
+    title: "",
+    description: "",
+    guests: [],
+    guestQuery: "",
+    documents: [],
+    dateKey: createDateKey(date),
+    startTime: clampTime(startTime, "09:00"),
+    endTime: clampTime(endTime, "09:30"),
+  };
+
+  openTeacherEventFormModalFromDraft();
 };
 
 const openTeacherCreateEventModal = () => {
@@ -3631,6 +3753,17 @@ document.addEventListener("click", (event) => {
       return;
     }
 
+    const monthCell = target.closest("[data-teacher-cal-month-day]");
+    if (monthCell instanceof HTMLElement) {
+      if (currentRole !== "teacher") return;
+      if (body.dataset.activePanel !== "ao-vivo") return;
+      if (teacherCalendarState.view !== "month") return;
+      const key = monthCell.getAttribute("data-teacher-cal-month-day") || "";
+      // Month view does not have a time grid; open the same create modal with a clean default.
+      openTeacherCreateEventModalAt({ dateKey: key, startTime: "09:00", endTime: "09:30" });
+      return;
+    }
+
     const whAdd = target.closest("[data-wh-add]");
     if (whAdd instanceof HTMLButtonElement) {
       const key = whAdd.getAttribute("data-wh-add") || "";
@@ -3835,8 +3968,99 @@ document.addEventListener("click", (event) => {
   }
 });
 
+const isTeacherCalendarGridInteractive = () => {
+  if (currentRole !== "teacher") return false;
+  if (body.dataset.activePanel !== "ao-vivo") return false;
+  if (!liveTeacherRoot || liveTeacherRoot.hidden) return false;
+  if (!teacherCalViewport) return false;
+  if (teacherCalendarState.view !== "day" && teacherCalendarState.view !== "week") return false;
+  if (modalOverlay && !modalOverlay.hidden) return false;
+  return true;
+};
+
+document.addEventListener("mousedown", (event) => {
+  if (event.button !== 0) return;
+  if (!isTeacherCalendarGridInteractive()) return;
+  if (!(event.target instanceof Element)) return;
+
+  const gridEl = event.target.closest(".teacher-cal-grid");
+  if (!(gridEl instanceof HTMLElement)) return;
+  if (teacherCalViewport && !teacherCalViewport.contains(gridEl)) return;
+
+  // Clicking an existing event should keep the normal behavior.
+  if (event.target.closest("[data-teacher-cal-event-id]")) return;
+
+  const dateKey = gridEl.getAttribute("data-teacher-cal-grid") || "";
+  if (!parseDateKey(dateKey)) return;
+
+  const meta = getTeacherGridMeta(gridEl);
+  if (!meta) return;
+
+  const rawStart = calcTeacherSlotMinutesFromClientY(gridEl, event.clientY);
+  if (rawStart === null) return;
+
+  clearTeacherCalendarSelection();
+
+  const startMax = meta.selectableEndMin - TEACHER_CAL_MIN_DURATION_MINUTES;
+  const startMin = clampNumber(roundToNearestSlotMin(rawStart), meta.gridStartMin, startMax);
+  const endMin = clampNumber(
+    startMin + TEACHER_CAL_DEFAULT_DURATION_MINUTES,
+    startMin + TEACHER_CAL_MIN_DURATION_MINUTES,
+    meta.selectableEndMin
+  );
+
+  teacherCalSelection = { gridEl, dateKey, startMin, endMin, el: null };
+  teacherCalDrag = { gridEl, dateKey, startMin, endMin };
+  body.classList.add("is-cal-dragging");
+  syncTeacherCalSelectionUI();
+  event.preventDefault();
+});
+
+window.addEventListener("mousemove", (event) => {
+  if (!teacherCalDrag) return;
+  if (!isTeacherCalendarGridInteractive()) return;
+
+  const gridEl = teacherCalDrag.gridEl;
+  if (!(gridEl instanceof HTMLElement)) return;
+  const meta = getTeacherGridMeta(gridEl);
+  if (!meta) return;
+
+  const rawEnd = calcTeacherSlotMinutesFromClientY(gridEl, event.clientY);
+  if (rawEnd === null) return;
+
+  let endMin = roundToNearestSlotMin(rawEnd);
+  endMin = clampNumber(endMin, teacherCalDrag.startMin + TEACHER_CAL_MIN_DURATION_MINUTES, meta.selectableEndMin);
+
+  if (endMin === teacherCalDrag.endMin) return;
+  teacherCalDrag.endMin = endMin;
+  if (teacherCalSelection) teacherCalSelection.endMin = endMin;
+  syncTeacherCalSelectionUI();
+});
+
+window.addEventListener("mouseup", () => {
+  if (!teacherCalDrag) return;
+  const drag = teacherCalDrag;
+  teacherCalDrag = null;
+  body.classList.remove("is-cal-dragging");
+
+  const startTime = formatHmFromMinutes(drag.startMin);
+  const endTime = formatHmFromMinutes(drag.endMin);
+  openTeacherCreateEventModalAt({ dateKey: drag.dateKey, startTime, endTime });
+});
+
+window.addEventListener("blur", () => {
+  if (teacherCalDrag || teacherCalSelection) {
+    clearTeacherCalendarSelection();
+  }
+});
+
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
+    if (teacherCalDrag || teacherCalSelection) {
+      clearTeacherCalendarSelection();
+      return;
+    }
+
     if (modalOverlay && !modalOverlay.hidden) {
       closeModal();
       return;
