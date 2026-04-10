@@ -10,7 +10,7 @@
     />
     <link rel="stylesheet" href="styles.css" />
   </head>
-  <body data-view="publico">
+	  <body data-view="publico" data-page="landing">
     <div class="page-glow page-glow-left" aria-hidden="true"></div>
     <div class="page-glow page-glow-right" aria-hidden="true"></div>
 
@@ -184,10 +184,120 @@
           </button>
         </section>
       </main>
-    </div>
+	    </div>
 
-    <div class="platform-shell" data-view="interno" hidden>
-      <div class="platform-backdrop" aria-hidden="true"></div>
+	    <div class="auth-shell auth-shell-enter" data-auth-page="entrar" hidden>
+	      <div class="auth-top">
+	        <a class="auth-brand" href="/" data-nav-home aria-label="Voltar para a landing page">
+	          <img class="auth-brand-logo" src="assets/space-logo.png" alt="Logo Space" />
+	        </a>
+	      </div>
+
+	      <div class="auth-center">
+	        <h1 class="auth-title">Como você quer entrar?</h1>
+	        <p class="auth-subtitle">Selecione seu perfil para continuar</p>
+
+	        <div class="auth-role-grid" role="list">
+	          <button class="auth-role-card" type="button" data-enter-role="student" role="listitem">
+	            <span class="auth-role-icon" aria-hidden="true">
+	              <svg viewBox="0 0 24 24" fill="none">
+	                <path d="M5.5 5.5h13v13h-13z"></path>
+	                <path d="M8 9h8"></path>
+	                <path d="M8 12h8"></path>
+	                <path d="M8 15h5"></path>
+	              </svg>
+	            </span>
+	            <strong>Aluno</strong>
+	            <span>Acesse suas aulas e agenda</span>
+	          </button>
+
+	          <button class="auth-role-card" type="button" data-enter-role="teacher" role="listitem">
+	            <span class="auth-role-icon" aria-hidden="true">
+	              <svg viewBox="0 0 24 24" fill="none">
+	                <path d="M4.5 6.5h15v9h-15z"></path>
+	                <path d="M8 17.5h8"></path>
+	                <path d="M9 10h6"></path>
+	              </svg>
+	            </span>
+	            <strong>Professor</strong>
+	            <span>Gerencie sua agenda e alunos</span>
+	          </button>
+
+	          <button class="auth-role-card" type="button" data-enter-role="admin" role="listitem">
+	            <span class="auth-role-icon" aria-hidden="true">
+	              <svg viewBox="0 0 24 24" fill="none">
+	                <path d="M4.5 4.5h6v6h-6z"></path>
+	                <path d="M13.5 4.5h6v4h-6z"></path>
+	                <path d="M13.5 10.5h6v9h-6z"></path>
+	                <path d="M4.5 13.5h6v6h-6z"></path>
+	              </svg>
+	            </span>
+	            <strong>Administrador</strong>
+	            <span>Acesse o painel de gestão</span>
+	          </button>
+	        </div>
+	      </div>
+	    </div>
+
+	    <div class="auth-shell auth-shell-login" data-auth-page="login" hidden>
+	      <div class="auth-login-left">
+	        <a class="auth-login-logo" href="/" data-nav-home aria-label="Voltar para a landing page">
+	          <img class="auth-login-logo-img" src="assets/space-logo.png" alt="Logo Space" />
+	        </a>
+	        <div class="auth-login-copy">
+	          <h1 class="auth-login-phrase" data-login-phrase>Seu próximo nível começa aqui.</h1>
+	          <p class="auth-login-sub" data-login-sub>Entre com suas credenciais para continuar.</p>
+	        </div>
+	        <div class="auth-login-footer-shape" aria-hidden="true"></div>
+	      </div>
+
+	      <div class="auth-login-right">
+	        <div class="auth-login-form-shell">
+	          <a class="auth-back" href="/entrar" data-nav-enter>← Trocar perfil</a>
+	          <div class="auth-login-badge" data-login-badge>Entrando como Aluno</div>
+
+	          <form class="auth-form" data-login-form>
+	            <label class="auth-field">
+	              <span>E-mail</span>
+	              <input class="auth-input" type="email" autocomplete="email" data-login-email />
+	              <div class="auth-inline-error" data-login-email-error hidden>E-mail inválido</div>
+	            </label>
+
+	            <label class="auth-field">
+	              <span>Senha</span>
+	              <div class="auth-password">
+	                <input class="auth-input" type="password" autocomplete="current-password" data-login-password />
+	                <button class="auth-eye" type="button" data-login-eye aria-label="Mostrar senha">
+	                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+	                    <path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12Z"></path>
+	                    <path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z"></path>
+	                  </svg>
+	                </button>
+	              </div>
+	              <div class="auth-inline-error" data-login-password-error hidden>Senha obrigatória</div>
+	            </label>
+
+	            <div class="auth-forgot">
+	              <a href="#" data-login-forgot>Esqueci minha senha</a>
+	            </div>
+
+	            <button class="auth-submit" type="submit" data-login-submit>
+	              <span data-login-submit-label>Entrar</span>
+	              <span class="auth-spinner" data-login-spinner hidden aria-hidden="true"></span>
+	            </button>
+
+	            <div class="auth-form-error" data-login-error hidden>E-mail ou senha incorretos</div>
+
+	            <div class="auth-support">
+	              Problemas para acessar? <a href="#" data-login-support>Entre em contato com o suporte</a>
+	            </div>
+	          </form>
+	        </div>
+	      </div>
+	    </div>
+
+	    <div class="platform-shell" data-view="interno" hidden>
+	      <div class="platform-backdrop" aria-hidden="true"></div>
 
 	      <aside class="platform-sidebar">
 	        <div class="sidebar-topbar">

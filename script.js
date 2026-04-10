@@ -1,6 +1,22 @@
 const body = document.body;
 const openPlatformButtons = document.querySelectorAll("[data-open-platform]");
 const closePlatformButton = document.querySelector("[data-close-platform]");
+const authEnterShell = document.querySelector('[data-auth-page="entrar"]');
+const authLoginShell = document.querySelector('[data-auth-page="login"]');
+const authRoleCards = document.querySelectorAll("[data-enter-role]");
+const authLoginForm = document.querySelector("[data-login-form]");
+const authLoginEmail = document.querySelector("[data-login-email]");
+const authLoginPassword = document.querySelector("[data-login-password]");
+const authLoginEmailError = document.querySelector("[data-login-email-error]");
+const authLoginPasswordError = document.querySelector("[data-login-password-error]");
+const authLoginError = document.querySelector("[data-login-error]");
+const authLoginBadge = document.querySelector("[data-login-badge]");
+const authLoginPhrase = document.querySelector("[data-login-phrase]");
+const authLoginSpinner = document.querySelector("[data-login-spinner]");
+const authLoginSubmitLabel = document.querySelector("[data-login-submit-label]");
+const authLoginSubmit = document.querySelector("[data-login-submit]");
+const authLoginEye = document.querySelector("[data-login-eye]");
+const authLoginSub = document.querySelector("[data-login-sub]");
 const openLivePanelButtons = document.querySelectorAll("[data-open-live-panel]");
 const sidebarToggleButton = document.querySelector("[data-sidebar-toggle]");
 const sidebarLinks = document.querySelectorAll("[data-panel-target]");
@@ -135,6 +151,7 @@ const scheduleState = {
 };
 
 const STORAGE_KEY = "space-platform-state-v1";
+const AUTH_STORAGE_KEY = "space-platform-auth-v1";
 const ROLE_STORAGE_KEY = "space-platform-role-v1";
 const CANCELLATION_STORAGE_KEY = "space-platform-cancellations-v1";
 const TEACHER_NOTICES_STORAGE_KEY = "space-platform-teacher-notices-v1";
@@ -235,6 +252,97 @@ const normalizeRole = (value) => {
   return "student";
 };
 
+const AUTH_PROFILE_DEFS = {
+  student: {
+    label: "Aluno",
+    phrase: "Seu próximo nível começa aqui.",
+    sub: "Entre com suas credenciais para continuar.",
+    loginPath: "/login/aluno",
+  },
+  teacher: {
+    label: "Professor",
+    phrase: "Sua turma está esperando.",
+    sub: "Entre com suas credenciais para continuar.",
+    loginPath: "/login/professor",
+  },
+  admin: {
+    label: "Administrador",
+    phrase: "Tudo sob controle, de um só lugar.",
+    sub: "Entre com suas credenciais para continuar.",
+    loginPath: "/login/admin",
+  },
+};
+
+const AUTH_TEST_USERS = [
+  { role: "student", name: "Camila", email: "camila@space.com", password: "123456" },
+  { role: "teacher", name: "Amanda", email: "amanda@space.com", password: "123456" },
+  { role: "admin", name: "Space", email: "admin@space.com", password: "123456" },
+];
+
+const isValidEmail = (raw) => {
+  const email = String(raw || "").trim();
+  // Good-enough validation for this prototype.
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+};
+
+const findAuthUser = ({ role, email, password }) => {
+  const normalizedRole = normalizeRole(role);
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  const pass = String(password || "");
+  return AUTH_TEST_USERS.find(
+    (user) =>
+      normalizeRole(user.role) === normalizedRole &&
+      String(user.email || "").trim().toLowerCase() === normalizedEmail &&
+      String(user.password || "") === pass
+  );
+};
+
+const sanitizeAuthState = (value) => {
+  if (!value || typeof value !== "object") return null;
+  const role = normalizeRole(value.role);
+  const name = typeof value.name === "string" ? value.name.trim() : "";
+  const email = typeof value.email === "string" ? value.email.trim() : "";
+  if (!role || !name || !email) return null;
+  return { role, name, email };
+};
+
+const loadAuthState = () => {
+  if (!safeStorage) return null;
+  try {
+    const raw = safeStorage.getItem(AUTH_STORAGE_KEY);
+    if (!raw) return null;
+    return sanitizeAuthState(JSON.parse(raw));
+  } catch (error) {
+    return null;
+  }
+};
+
+const persistAuthState = () => {
+  if (!safeStorage) return;
+  try {
+    if (!authState) {
+      safeStorage.removeItem(AUTH_STORAGE_KEY);
+      return;
+    }
+    safeStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authState));
+  } catch (error) {
+    // ignore
+  }
+};
+
+const clearAuthState = () => {
+  authState = null;
+  if (!safeStorage) return;
+  try {
+    safeStorage.removeItem(AUTH_STORAGE_KEY);
+    safeStorage.removeItem(ROLE_STORAGE_KEY);
+  } catch (error) {
+    // ignore
+  }
+};
+
+let authState = loadAuthState();
+
 const getInitialRole = () => {
   try {
     const url = new URL(window.location.href);
@@ -251,7 +359,7 @@ const getInitialRole = () => {
   return normalizeRole(stored);
 };
 
-let currentRole = getInitialRole();
+let currentRole = authState?.role || getInitialRole();
 
 const syncRoleUI = () => {
   const def = ROLE_DEFS[currentRole] || ROLE_DEFS.student;
@@ -266,7 +374,8 @@ const syncRoleUI = () => {
   }
 
   if (greetingElement) {
-    greetingElement.dataset.userName = def.defaultName;
+    const authName = authState && authState.role === currentRole ? authState.name : "";
+    greetingElement.dataset.userName = authName || def.defaultName;
   }
 
   planWidgets.forEach((widget) => {
@@ -2354,19 +2463,25 @@ const formatLongEventDate = (date) => {
   return `${capitalizedWeekday}, ${date.getDate()} de ${month} de ${date.getFullYear()}`;
 };
 
-const buildCreateEventBody = () => {
+const buildCreateEventBody = ({ readOnly = false } = {}) => {
   const draft = createEventDraft || {};
   const guests = Array.isArray(draft.guests) ? draft.guests : [];
   const docs = Array.isArray(draft.documents) ? draft.documents : [];
 
   const chips = guests
     .map((guest) => {
-      return `<span class="guest-chip">${escapeHtml(guest.name)}<button type="button" data-ce-remove-guest="${escapeHtml(guest.id)}" aria-label="Remover convidado">×</button></span>`;
+      const remove = readOnly
+        ? ""
+        : `<button type="button" data-ce-remove-guest="${escapeHtml(guest.id)}" aria-label="Remover convidado">×</button>`;
+      return `<span class="guest-chip">${escapeHtml(guest.name)}${remove}</span>`;
     })
     .join("");
 
   const docRows = docs
     .map((doc) => {
+      const remove = readOnly
+        ? ""
+        : `<button class="upload-file-remove" type="button" data-ce-remove-doc="${escapeHtml(doc.id)}" aria-label="Remover documento">×</button>`;
       return `
         <div class="upload-file">
           <span class="upload-file-icon" aria-hidden="true">${getFileTypeIconSvg(doc.ext)}</span>
@@ -2374,37 +2489,41 @@ const buildCreateEventBody = () => {
             <strong>${escapeHtml(doc.name)}</strong>
             <span>${escapeHtml(`${formatBytes(doc.size)} · ${doc.ext.toUpperCase()}`)}</span>
           </div>
-          <button class="upload-file-remove" type="button" data-ce-remove-doc="${escapeHtml(doc.id)}" aria-label="Remover documento">×</button>
+          ${remove}
         </div>
       `;
     })
     .join("");
 
+  const disabledAttr = readOnly ? "disabled" : "";
+  const uploadDisabled = readOnly ? 'aria-disabled="true" tabindex="-1"' : 'role="button" tabindex="0"';
+  const uploadClass = readOnly ? "upload-zone is-disabled" : "upload-zone";
+
   return `
     <div class="modal-form">
       <label class="modal-field">
         <span>Título</span>
-        <input class="modal-input" type="text" data-ce-title value="${escapeHtml(draft.title || "")}" />
+        <input class="modal-input" type="text" data-ce-title value="${escapeHtml(draft.title || "")}" ${disabledAttr} />
       </label>
 
       <div class="modal-row" style="grid-template-columns: minmax(0, 1fr) 120px 120px;">
         <label class="modal-field">
           <span>Data</span>
-          <input class="modal-input" type="date" data-ce-date value="${escapeHtml(draft.dateKey || createDateKey(new Date()))}" />
+          <input class="modal-input" type="date" data-ce-date value="${escapeHtml(draft.dateKey || createDateKey(new Date()))}" ${disabledAttr} />
         </label>
         <label class="modal-field">
           <span>Início</span>
-          <input class="modal-input" type="time" data-ce-start value="${escapeHtml(draft.startTime || "08:00")}" />
+          <input class="modal-input" type="time" data-ce-start value="${escapeHtml(draft.startTime || "08:00")}" ${disabledAttr} />
         </label>
         <label class="modal-field">
           <span>Fim</span>
-          <input class="modal-input" type="time" data-ce-end value="${escapeHtml(draft.endTime || "09:00")}" />
+          <input class="modal-input" type="time" data-ce-end value="${escapeHtml(draft.endTime || "09:00")}" ${disabledAttr} />
         </label>
       </div>
 
       <label class="modal-field">
         <span>Descrição</span>
-        <textarea class="modal-textarea" data-ce-desc placeholder="Adicionar descrição...">${escapeHtml(draft.description || "")}</textarea>
+        <textarea class="modal-textarea" data-ce-desc placeholder="Adicionar descrição..." ${disabledAttr}>${escapeHtml(draft.description || "")}</textarea>
       </label>
 
       <div class="guest-field">
@@ -2413,14 +2532,14 @@ const buildCreateEventBody = () => {
         </div>
         <div class="guest-chipbox" data-ce-chipbox>
           ${chips}
-          <input class="guest-search" type="text" data-ce-guest-search placeholder="Buscar pessoas..." value="${escapeHtml(draft.guestQuery || "")}" />
+          <input class="guest-search" type="text" data-ce-guest-search placeholder="Buscar pessoas..." value="${escapeHtml(draft.guestQuery || "")}" ${disabledAttr} />
         </div>
         <div class="guest-dropdown" data-ce-guest-dropdown hidden></div>
       </div>
 
       <div class="modal-field">
         <span>Documentos</span>
-        <div class="upload-zone" tabindex="0" role="button" data-ce-upload>
+        <div class="${uploadClass}" data-ce-upload ${uploadDisabled}>
           <strong>Clique para anexar ou arraste aqui</strong>
           <span>PDF, MP3, MP4 ou PNG</span>
         </div>
@@ -2430,6 +2549,7 @@ const buildCreateEventBody = () => {
           hidden
           multiple
           accept=".pdf,.mp3,.mp4,.png"
+          ${disabledAttr}
         />
         <div class="upload-filelist" data-ce-doc-list>
           ${docRows}
@@ -2559,14 +2679,132 @@ const validateCreateEventDraft = () => {
   return !hasError;
 };
 
+const buildEventTimeHm = (date) => {
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+};
+
+const openTeacherEventFormModalFromDraft = () => {
+  if (!createEventDraft) return;
+
+  const readOnly = Boolean(createEventDraft.readOnly);
+  const mode = createEventDraft.mode === "edit" ? "edit" : createEventDraft.mode === "view" ? "view" : "create";
+  const eventType = createEventDraft.eventType === "lesson" ? "lesson" : "manual";
+
+  activeModalKind = "event-form";
+
+  const title = eventType === "lesson" ? "Aula" : mode === "create" ? "Criar evento" : "Evento";
+  const primaryLabel = readOnly ? "Fechar" : "Salvar";
+  const secondaryLabel = readOnly ? "" : "Voltar";
+  const hideSecondary = readOnly;
+  const showTrash = !readOnly && mode === "edit" && eventType === "manual";
+
+  const saveFromDraft = () => {
+    const ok = validateCreateEventDraft();
+    if (!ok) return false;
+    const date = parseDateKey(createEventDraft.dateKey);
+    if (!date) return false;
+    const start = getSlotDateTime(date, clampTime(createEventDraft.startTime, "08:00"));
+    const end = getSlotDateTime(date, clampTime(createEventDraft.endTime, "09:00"));
+    if (end.getTime() <= start.getTime()) return false;
+
+    const payload = {
+      id: createEventDraft.eventId || `m_${Date.now().toString(36)}`,
+      title: String(createEventDraft.title || "").trim(),
+      description: String(createEventDraft.description || "").trim(),
+      guests: (createEventDraft.guests || []).map((g) => g.id),
+      documents: (createEventDraft.documents || []).map((doc) => ({
+        id: doc.id,
+        name: doc.name,
+        ext: doc.ext,
+        type: doc.type,
+        size: doc.size,
+        dataUrl: doc.dataUrl || "",
+      })),
+      startIso: start.toISOString(),
+      endIso: end.toISOString(),
+    };
+
+    if (mode === "create") {
+      teacherManualEvents.unshift(payload);
+    } else {
+      const idx = teacherManualEvents.findIndex((evt) => evt && evt.id === payload.id);
+      if (idx >= 0) {
+        teacherManualEvents[idx] = payload;
+      }
+    }
+
+    persistTeacherCalendarEvents();
+    renderTeacherCalendar();
+  };
+
+  openModal({
+    title,
+    bodyHtml: buildCreateEventBody({ readOnly }),
+    primaryLabel,
+    secondaryLabel,
+    hideSecondary,
+    showTrash,
+    onTrash: showTrash
+      ? () => {
+          openModal({
+            title: "Remover evento",
+            bodyHtml: `Tem certeza que deseja remover este evento? Esta ação não pode ser desfeita.`,
+            primaryLabel: "Remover evento",
+            secondaryLabel: "Cancelar",
+            hideSecondary: false,
+            showTrash: false,
+            onSecondary: () => {
+              openTeacherEventFormModalFromDraft();
+              return false;
+            },
+            onPrimary: () => {
+              const id = createEventDraft?.eventId || "";
+              const idx = teacherManualEvents.findIndex((evt) => evt && evt.id === id);
+              if (idx >= 0) {
+                teacherManualEvents.splice(idx, 1);
+                persistTeacherCalendarEvents();
+                renderTeacherCalendar();
+              }
+            },
+          });
+          return false;
+        }
+      : null,
+    onPrimary: () => {
+      if (readOnly) {
+        activeModalKind = "";
+        createEventDraft = null;
+        return;
+      }
+      return saveFromDraft();
+    },
+    onSecondary: () => {
+      activeModalKind = "";
+      createEventDraft = null;
+    },
+  });
+
+  if (!readOnly) {
+    validateCreateEventDraft();
+    syncGuestDropdown();
+  } else {
+    setModalPrimaryDisabled(false);
+  }
+};
+
 const openTeacherCreateEventModal = () => {
   const focus = teacherCalendarState.focusDate;
   const startHour = Math.min(Math.max(new Date().getHours(), 6), 20);
   const startDefault = `${String(startHour).padStart(2, "0")}:00`;
   const endDefault = `${String(Math.min(startHour + 1, 23)).padStart(2, "0")}:00`;
 
-  activeModalKind = "create-event";
   createEventDraft = {
+    mode: "create",
+    readOnly: false,
+    eventType: "manual",
+    eventId: "",
     title: "",
     description: "",
     guests: [],
@@ -2577,51 +2815,10 @@ const openTeacherCreateEventModal = () => {
     endTime: endDefault,
   };
 
-  openModal({
-    title: "Criar evento",
-    bodyHtml: buildCreateEventBody(),
-    primaryLabel: "Salvar",
-    secondaryLabel: "Voltar",
-    showTrash: false,
-    onPrimary: () => {
-      const ok = validateCreateEventDraft();
-      if (!ok) return false;
-      const date = parseDateKey(createEventDraft.dateKey);
-      if (!date) return false;
-      const start = getSlotDateTime(date, clampTime(createEventDraft.startTime, "08:00"));
-      const end = getSlotDateTime(date, clampTime(createEventDraft.endTime, "09:00"));
-      if (end.getTime() <= start.getTime()) return false;
-      const id = `m_${Date.now().toString(36)}`;
-      teacherManualEvents.unshift({
-        id,
-        title: String(createEventDraft.title || "").trim(),
-        description: String(createEventDraft.description || "").trim(),
-        guests: (createEventDraft.guests || []).map((g) => g.id),
-        documents: (createEventDraft.documents || []).map((doc) => ({
-          id: doc.id,
-          name: doc.name,
-          ext: doc.ext,
-          type: doc.type,
-          size: doc.size,
-          dataUrl: doc.dataUrl || "",
-        })),
-        startIso: start.toISOString(),
-        endIso: end.toISOString(),
-      });
-      persistTeacherCalendarEvents();
-      renderTeacherCalendar();
-    },
-    onSecondary: () => {
-      activeModalKind = "";
-      createEventDraft = null;
-    },
-  });
-
-  validateCreateEventDraft();
-  syncGuestDropdown();
+  openTeacherEventFormModalFromDraft();
 };
 
-const openTeacherEventViewModal = ({ type, id }) => {
+const openTeacherEventModal = ({ type, id }) => {
   const staff = getStaffUsers();
   const staffMap = new Map(staff.map((u) => [u.id, u]));
 
@@ -2629,104 +2826,47 @@ const openTeacherEventViewModal = ({ type, id }) => {
   const target = allEvents.find((evt) => evt.id === id && evt.type === type);
   if (!target) return;
 
-  const title = target.title || "Evento";
-  const dateText = `${formatLongEventDate(target.start)} · ${formatTimeHm(target.start)} – ${formatTimeHm(target.end)}`;
-  const bodyParts = [];
-  bodyParts.push(`<div class="modal-event-title">${escapeHtml(title)}</div>`);
-  bodyParts.push(`<div class="modal-event-meta">${escapeHtml(dateText)}</div>`);
-
-  if (type === "manual" && target.description) {
-    bodyParts.push(`
-      <div class="modal-event-section">
-        <h4>Descrição</h4>
-        <div>${escapeHtml(target.description)}</div>
-      </div>
-    `);
+  if (type === "lesson") {
+    createEventDraft = {
+      mode: "view",
+      readOnly: true,
+      eventType: "lesson",
+      eventId: target.id,
+      title: target.title || "Aula ao vivo",
+      description: "",
+      guests: [],
+      guestQuery: "",
+      documents: [],
+      dateKey: createDateKey(target.start),
+      startTime: buildEventTimeHm(target.start),
+      endTime: buildEventTimeHm(target.end),
+    };
+    openTeacherEventFormModalFromDraft();
+    return;
   }
 
-  if (type === "manual" && Array.isArray(target.guests) && target.guests.length) {
-    const guests = target.guests
-      .map((guestId) => staffMap.get(guestId))
-      .filter(Boolean)
-      .map((user) => {
-        return `
-          <div class="modal-guest-row">
-            <span class="ranking-avatar">${escapeHtml(getInitials(user.name))}</span>
-            <div>
-              <strong>${escapeHtml(user.name)}</strong>
-              <div class="modal-event-meta">${escapeHtml(roleLabelForUser(user.role))}</div>
-            </div>
-          </div>
-        `;
-      })
-      .join("");
-    bodyParts.push(`
-      <div class="modal-event-section">
-        <h4>Convidados</h4>
-        <div class="modal-guest-list">${guests}</div>
-      </div>
-    `);
-  }
+  const rawGuests = Array.isArray(target.guests) ? target.guests : [];
+  const guests = rawGuests
+    .map((guestId) => staffMap.get(guestId))
+    .filter(Boolean)
+    .map((user) => ({ id: user.id, name: user.name, role: user.role }));
 
-  if (type === "manual" && Array.isArray(target.documents) && target.documents.length) {
-    const docs = target.documents
-      .map((doc) => {
-        const href = doc.dataUrl ? `href="${escapeHtml(doc.dataUrl)}"` : "";
-        const download = doc.dataUrl ? `download="${escapeHtml(doc.name)}"` : "";
-        const meta = `${formatBytes(doc.size)} · ${String(doc.ext || "").toUpperCase()}`;
-        return `
-          <div class="modal-doc-row">
-            <span class="upload-file-icon" aria-hidden="true">${getFileTypeIconSvg(doc.ext)}</span>
-            <div>
-              <a ${href} ${download}>${escapeHtml(doc.name)}</a>
-              <span>${escapeHtml(meta)}</span>
-            </div>
-          </div>
-        `;
-      })
-      .join("");
-    bodyParts.push(`
-      <div class="modal-event-section">
-        <h4>Documentos</h4>
-        <div class="modal-doc-list">${docs}</div>
-      </div>
-    `);
-  }
+  createEventDraft = {
+    mode: "edit",
+    readOnly: false,
+    eventType: "manual",
+    eventId: target.id,
+    title: target.title || "",
+    description: target.description || "",
+    guests,
+    guestQuery: "",
+    documents: Array.isArray(target.documents) ? target.documents : [],
+    dateKey: createDateKey(target.start),
+    startTime: buildEventTimeHm(target.start),
+    endTime: buildEventTimeHm(target.end),
+  };
 
-  activeModalKind = "view-event";
-  openModal({
-    title: "Evento",
-    bodyHtml: bodyParts.join(""),
-    primaryLabel: "Fechar",
-    hideSecondary: true,
-    showTrash: type === "manual",
-    onTrash: () => {
-      openModal({
-        title: "Remover evento",
-        bodyHtml: `Tem certeza que deseja remover este evento? Esta ação não pode ser desfeita.`,
-        primaryLabel: "Remover evento",
-        secondaryLabel: "Cancelar",
-        hideSecondary: false,
-        showTrash: false,
-        onSecondary: () => {
-          openTeacherEventViewModal({ type, id });
-          return false;
-        },
-        onPrimary: () => {
-          const idx = teacherManualEvents.findIndex((evt) => evt && evt.id === id);
-          if (idx >= 0) {
-            teacherManualEvents.splice(idx, 1);
-            persistTeacherCalendarEvents();
-            renderTeacherCalendar();
-          }
-        },
-      });
-      return false;
-    },
-    onPrimary: () => {
-      activeModalKind = "";
-    },
-  });
+  openTeacherEventFormModalFromDraft();
 };
 
 const createSlotId = (date, time) => {
@@ -3065,6 +3205,20 @@ const setView = (view, smooth = true) => {
   window.scrollTo({ top: 0, behavior: smooth ? "smooth" : "auto" });
 };
 
+const setPage = (page) => {
+  body.dataset.page = page;
+};
+
+const showAuthPage = (page) => {
+  if (authEnterShell) authEnterShell.hidden = page !== "entrar";
+  if (authLoginShell) authLoginShell.hidden = page !== "login";
+};
+
+const hideAuthPages = () => {
+  if (authEnterShell) authEnterShell.hidden = true;
+  if (authLoginShell) authLoginShell.hidden = true;
+};
+
 const showPanel = (panelName) => {
   sidebarLinks.forEach((link) => {
     const isActive = link.dataset.panelTarget === panelName;
@@ -3105,42 +3259,200 @@ const showPanel = (panelName) => {
   }
 };
 
+const normalizePathname = (pathname) => {
+  const raw = String(pathname || "/");
+  if (raw.length > 1 && raw.endsWith("/")) return raw.slice(0, -1);
+  return raw || "/";
+};
+
+let currentLoginRole = "student";
+
+const setLoginProfileUI = (role) => {
+  currentLoginRole = normalizeRole(role);
+  const def = AUTH_PROFILE_DEFS[currentLoginRole] || AUTH_PROFILE_DEFS.student;
+
+  if (authLoginBadge) authLoginBadge.textContent = `Entrando como ${def.label}`;
+  if (authLoginPhrase) authLoginPhrase.textContent = def.phrase;
+  if (authLoginSub) authLoginSub.textContent = def.sub;
+
+  if (authLoginEmail instanceof HTMLInputElement) authLoginEmail.value = "";
+  if (authLoginPassword instanceof HTMLInputElement) {
+    authLoginPassword.value = "";
+    authLoginPassword.type = "password";
+  }
+  if (authLoginEye instanceof HTMLElement) {
+    authLoginEye.setAttribute("aria-label", "Mostrar senha");
+  }
+
+  if (authLoginError instanceof HTMLElement) authLoginError.hidden = true;
+  if (authLoginEmailError instanceof HTMLElement) authLoginEmailError.hidden = true;
+  if (authLoginPasswordError instanceof HTMLElement) authLoginPasswordError.hidden = true;
+  if (authLoginEmail instanceof HTMLElement) authLoginEmail.classList.remove("is-error");
+  if (authLoginPassword instanceof HTMLElement) authLoginPassword.classList.remove("is-error");
+
+  if (authLoginSpinner instanceof HTMLElement) authLoginSpinner.hidden = true;
+  if (authLoginSubmitLabel instanceof HTMLElement) authLoginSubmitLabel.hidden = false;
+  if (authLoginSubmit instanceof HTMLButtonElement) authLoginSubmit.disabled = false;
+};
+
+const routeToRole = (path) => {
+  const segments = String(path || "").split("/").filter(Boolean);
+  const slug = segments[1] || "";
+  if (slug === "aluno") return "student";
+  if (slug === "professor") return "teacher";
+  if (slug === "admin") return "admin";
+  return "student";
+};
+
+const navigate = (path, { replace = false } = {}) => {
+  const next = String(path || "/");
+  if (replace) {
+    window.history.replaceState({}, "", next);
+  } else {
+    window.history.pushState({}, "", next);
+  }
+  handleRoute();
+};
+
+const showLanding = () => {
+  hideAuthPages();
+  setPage("landing");
+  setView("publico", false);
+};
+
+const showEnter = () => {
+  showAuthPage("entrar");
+  setPage("entrar");
+  setView("auth", false);
+};
+
+const showLogin = (role) => {
+  showAuthPage("login");
+  setPage("login");
+  setView("auth", false);
+  setLoginProfileUI(role);
+};
+
+const showApp = () => {
+  hideAuthPages();
+  setPage("app");
+  setView("interno", false);
+  if (authState?.role) {
+    setRole(authState.role);
+  }
+  showPanel("dashboard");
+};
+
+const handleRoute = () => {
+  const path = normalizePathname(window.location.pathname);
+
+  if (authState && (path === "/entrar" || path.startsWith("/login"))) {
+    navigate("/app", { replace: true });
+    return;
+  }
+
+  if (path === "/entrar") {
+    showEnter();
+    return;
+  }
+
+  if (path.startsWith("/login")) {
+    const role = routeToRole(path);
+    showLogin(role);
+    return;
+  }
+
+  if (path === "/app") {
+    if (!authState) {
+      navigate("/entrar", { replace: true });
+      return;
+    }
+    showApp();
+    return;
+  }
+
+  showLanding();
+};
+
+window.addEventListener("popstate", () => {
+  handleRoute();
+});
+
 openPlatformButtons.forEach((button) => {
   button.addEventListener("click", () => {
-    const activeRole = currentRole;
-    const bodyHtml = `
-      <div class="role-picker" role="list">
-        ${Object.entries(ROLE_DEFS)
-          .map(([roleKey, def]) => {
-            const isActive = roleKey === activeRole;
-            return `
-              <button
-                class="role-option${isActive ? " is-active" : ""}"
-                type="button"
-                data-role-option="${roleKey}"
-                aria-pressed="${isActive ? "true" : "false"}"
-              >
-                ${def.label}
-              </button>
-            `;
-          })
-          .join("")}
-      </div>
-    `;
-
-    openModal({
-      title: "Entrar",
-      bodyHtml,
-      primaryLabel: "Fechar",
-      hideSecondary: true,
-    });
+    navigate("/entrar");
   });
 });
+
+let loginInFlight = false;
+
+const setLoginLoading = (isLoading) => {
+  const loading = Boolean(isLoading);
+  if (authLoginSubmit instanceof HTMLButtonElement) authLoginSubmit.disabled = loading;
+  if (authLoginSpinner instanceof HTMLElement) authLoginSpinner.hidden = !loading;
+  if (authLoginSubmitLabel instanceof HTMLElement) authLoginSubmitLabel.hidden = loading;
+};
+
+if (authLoginEye) {
+  authLoginEye.addEventListener("click", () => {
+    if (!(authLoginPassword instanceof HTMLInputElement)) return;
+    const nextType = authLoginPassword.type === "password" ? "text" : "password";
+    authLoginPassword.type = nextType;
+    authLoginEye.setAttribute("aria-label", nextType === "password" ? "Mostrar senha" : "Ocultar senha");
+  });
+}
+
+if (authLoginForm) {
+  authLoginForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (loginInFlight) return;
+
+    const email = authLoginEmail instanceof HTMLInputElement ? authLoginEmail.value.trim() : "";
+    const password = authLoginPassword instanceof HTMLInputElement ? authLoginPassword.value : "";
+
+    const emailOk = isValidEmail(email);
+    const passOk = Boolean(password);
+
+    if (authLoginEmailError instanceof HTMLElement) authLoginEmailError.hidden = emailOk;
+    if (authLoginPasswordError instanceof HTMLElement) authLoginPasswordError.hidden = passOk;
+    if (authLoginError instanceof HTMLElement) authLoginError.hidden = true;
+
+    if (authLoginEmail instanceof HTMLElement) authLoginEmail.classList.toggle("is-error", !emailOk);
+    if (authLoginPassword instanceof HTMLElement) authLoginPassword.classList.toggle("is-error", !passOk);
+
+    if (!emailOk || !passOk) {
+      return;
+    }
+
+    loginInFlight = true;
+    setLoginLoading(true);
+
+    window.setTimeout(() => {
+      const user = findAuthUser({ role: currentLoginRole, email, password });
+
+      if (!user) {
+        if (authLoginError instanceof HTMLElement) authLoginError.hidden = false;
+        setLoginLoading(false);
+        loginInFlight = false;
+        return;
+      }
+
+      authState = { role: normalizeRole(user.role), name: String(user.name || "").trim(), email: String(user.email || "").trim() };
+      persistAuthState();
+      setRole(authState.role);
+      setLoginLoading(false);
+      loginInFlight = false;
+      navigate("/app", { replace: true });
+    }, 520);
+  });
+}
 
 if (closePlatformButton) {
   closePlatformButton.addEventListener("click", () => {
     closeModal();
-    setView("publico");
+    clearAuthState();
+    setRole("student", false);
+    navigate("/", { replace: true });
   });
 }
 
@@ -3212,7 +3524,30 @@ document.addEventListener("click", (event) => {
   const target = event.target;
 
   if (target instanceof Element) {
-    if (activeModalKind === "create-event" && createEventDraft && modalOverlay && !modalOverlay.hidden) {
+    const navLink = target.closest('a[href^="/"]');
+    if (navLink instanceof HTMLAnchorElement) {
+      const href = navLink.getAttribute("href") || "/";
+      event.preventDefault();
+      navigate(href);
+      return;
+    }
+
+    const enterRole = target.closest("[data-enter-role]");
+    if (enterRole instanceof HTMLButtonElement) {
+      const role = enterRole.getAttribute("data-enter-role") || "student";
+      const normalizedRole = normalizeRole(role);
+      const def = AUTH_PROFILE_DEFS[normalizedRole] || AUTH_PROFILE_DEFS.student;
+      navigate(def.loginPath);
+      return;
+    }
+
+    if (
+      activeModalKind === "event-form" &&
+      createEventDraft &&
+      !createEventDraft.readOnly &&
+      modalOverlay &&
+      !modalOverlay.hidden
+    ) {
       const pick = target.closest("[data-ce-guest-pick]");
       if (pick instanceof HTMLButtonElement) {
         const id = pick.getAttribute("data-ce-guest-pick") || "";
@@ -3304,18 +3639,9 @@ document.addEventListener("click", (event) => {
       const type = calEvent.getAttribute("data-teacher-cal-event-type") || "";
       const id = calEvent.getAttribute("data-teacher-cal-event-id") || "";
       if (type === "lesson" || type === "manual") {
-        openTeacherEventViewModal({ type, id });
+        openTeacherEventModal({ type, id });
         return;
       }
-    }
-
-    const roleOption = target.closest("[data-role-option]");
-    if (roleOption instanceof HTMLButtonElement) {
-      setRole(roleOption.dataset.roleOption || "student");
-      closeModal();
-      setView("interno");
-      showPanel("dashboard");
-      return;
     }
 
     const createEventButton = target.closest("[data-teacher-create-event]");
@@ -3684,7 +4010,8 @@ document.addEventListener("change", (event) => {
 document.addEventListener("input", (event) => {
   const target = event.target;
   if (!createEventDraft || !modalBody || modalOverlay?.hidden) return;
-  if (activeModalKind !== "create-event") return;
+  if (activeModalKind !== "event-form") return;
+  if (createEventDraft.readOnly) return;
 
   if (target instanceof HTMLInputElement && target.matches("[data-ce-title]")) {
     createEventDraft.title = target.value;
@@ -3726,7 +4053,8 @@ document.addEventListener("change", (event) => {
   const target = event.target;
   if (!(target instanceof HTMLInputElement)) return;
   if (!createEventDraft || !modalBody || modalOverlay?.hidden) return;
-  if (activeModalKind !== "create-event") return;
+  if (activeModalKind !== "event-form") return;
+  if (createEventDraft.readOnly) return;
 
   if (target.matches("[data-ce-doc-input]")) {
     const files = Array.from(target.files || []);
@@ -3821,7 +4149,8 @@ document.addEventListener("focusin", (event) => {
   const target = event.target;
   if (!(target instanceof Element)) return;
   if (!createEventDraft || !modalBody || modalOverlay?.hidden) return;
-  if (activeModalKind !== "create-event") return;
+  if (activeModalKind !== "event-form") return;
+  if (createEventDraft.readOnly) return;
   if (target.matches("[data-ce-guest-search]")) {
     syncGuestDropdown();
   }
@@ -3829,7 +4158,8 @@ document.addEventListener("focusin", (event) => {
 
 document.addEventListener("dragover", (event) => {
   if (!createEventDraft || !modalBody || modalOverlay?.hidden) return;
-  if (activeModalKind !== "create-event") return;
+  if (activeModalKind !== "event-form") return;
+  if (createEventDraft.readOnly) return;
   const zone = event.target instanceof Element ? event.target.closest("[data-ce-upload]") : null;
   if (!zone) return;
   event.preventDefault();
@@ -3837,7 +4167,8 @@ document.addEventListener("dragover", (event) => {
 
 document.addEventListener("drop", (event) => {
   if (!createEventDraft || !modalBody || modalOverlay?.hidden) return;
-  if (activeModalKind !== "create-event") return;
+  if (activeModalKind !== "event-form") return;
+  if (createEventDraft.readOnly) return;
   const zone = event.target instanceof Element ? event.target.closest("[data-ce-upload]") : null;
   if (!zone) return;
   event.preventDefault();
@@ -3895,11 +4226,10 @@ setActiveChartOption("learning", chartState.learning);
 setActiveChartOption("study", chartState.study);
 setActiveChartOption("teacher-classes", chartState["teacher-classes"]);
 setSidebarExpanded(false);
-showPanel("dashboard");
 renderDashboardCharts();
 renderLiveScheduler();
 renderPlanUI();
-setView("publico", false);
+handleRoute();
 
 setInterval(() => {
   if (body.dataset.activePanel === "ao-vivo") {
