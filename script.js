@@ -276,7 +276,9 @@ const AUTH_PROFILE_DEFS = {
 const AUTH_TEST_USERS = [
   { role: "student", name: "Camila", email: "camila@space.com", password: "123456" },
   { role: "teacher", name: "Amanda", email: "amanda@space.com", password: "123456" },
+  { role: "teacher", name: "Teacher", email: "teacher@spaceschoolbr.com", password: "teacher123" },
   { role: "admin", name: "Space", email: "admin@space.com", password: "123456" },
+  { role: "admin", name: "Guilherme Davi", email: "guilhermedavi@spaceschoolbr.com", password: "Helena0919@" },
 ];
 
 const isValidEmail = (raw) => {
