@@ -151,8 +151,6 @@ const scheduleState = {
 };
 
 const STORAGE_KEY = "space-platform-state-v1";
-const AUTH_STORAGE_KEY = "space-platform-auth-v1";
-const ROLE_STORAGE_KEY = "space-platform-role-v1";
 const CANCELLATION_STORAGE_KEY = "space-platform-cancellations-v1";
 const TEACHER_NOTICES_STORAGE_KEY = "space-platform-teacher-notices-v1";
 const TEACHER_NOTICE_READ_KEY = "space-platform-teacher-notices-read-v1";
@@ -273,95 +271,27 @@ const AUTH_PROFILE_DEFS = {
   },
 };
 
-const AUTH_TEST_USERS = [
-  { role: "student", name: "Camila", email: "camila@space.com", password: "123456" },
-  { role: "teacher", name: "Amanda", email: "amanda@space.com", password: "123456" },
-  { role: "teacher", name: "Teacher", email: "teacher@spaceschoolbr.com", password: "teacher123" },
-  { role: "admin", name: "Space", email: "admin@space.com", password: "123456" },
-  { role: "admin", name: "Guilherme Davi", email: "guilhermedavi@spaceschoolbr.com", password: "Helena0919@" },
-];
-
 const isValidEmail = (raw) => {
   const email = String(raw || "").trim();
   // Good-enough validation for this prototype.
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 };
 
-const findAuthUser = ({ role, email, password }) => {
-  const normalizedRole = normalizeRole(role);
-  const normalizedEmail = String(email || "").trim().toLowerCase();
-  const pass = String(password || "");
-  return AUTH_TEST_USERS.find(
-    (user) =>
-      normalizeRole(user.role) === normalizedRole &&
-      String(user.email || "").trim().toLowerCase() === normalizedEmail &&
-      String(user.password || "") === pass
-  );
-};
-
-const sanitizeAuthState = (value) => {
+const sanitizeSessionUser = (value) => {
   if (!value || typeof value !== "object") return null;
   const role = normalizeRole(value.role);
   const name = typeof value.name === "string" ? value.name.trim() : "";
   const email = typeof value.email === "string" ? value.email.trim() : "";
+  const id = typeof value.id === "string" ? value.id.trim() : "";
   if (!role || !name || !email) return null;
-  return { role, name, email };
+  return { id, role, name, email };
 };
 
-const loadAuthState = () => {
-  if (!safeStorage) return null;
-  try {
-    const raw = safeStorage.getItem(AUTH_STORAGE_KEY);
-    if (!raw) return null;
-    return sanitizeAuthState(JSON.parse(raw));
-  } catch (error) {
-    return null;
-  }
-};
+let sessionUser = null;
+let sessionChecked = false;
+let sessionRefreshPromise = null;
 
-const persistAuthState = () => {
-  if (!safeStorage) return;
-  try {
-    if (!authState) {
-      safeStorage.removeItem(AUTH_STORAGE_KEY);
-      return;
-    }
-    safeStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authState));
-  } catch (error) {
-    // ignore
-  }
-};
-
-const clearAuthState = () => {
-  authState = null;
-  if (!safeStorage) return;
-  try {
-    safeStorage.removeItem(AUTH_STORAGE_KEY);
-    safeStorage.removeItem(ROLE_STORAGE_KEY);
-  } catch (error) {
-    // ignore
-  }
-};
-
-let authState = loadAuthState();
-
-const getInitialRole = () => {
-  try {
-    const url = new URL(window.location.href);
-    const roleParam = url.searchParams.get("role");
-    if (roleParam) {
-      return normalizeRole(roleParam);
-    }
-  } catch (error) {
-    // ignore URL parsing errors
-  }
-
-  if (!safeStorage) return "student";
-  const stored = safeStorage.getItem(ROLE_STORAGE_KEY);
-  return normalizeRole(stored);
-};
-
-let currentRole = authState?.role || getInitialRole();
+let currentRole = "student";
 
 const syncRoleUI = () => {
   const def = ROLE_DEFS[currentRole] || ROLE_DEFS.student;
@@ -376,8 +306,8 @@ const syncRoleUI = () => {
   }
 
   if (greetingElement) {
-    const authName = authState && authState.role === currentRole ? authState.name : "";
-    greetingElement.dataset.userName = authName || def.defaultName;
+    const sessionName = sessionUser && sessionUser.role === currentRole ? sessionUser.name : "";
+    greetingElement.dataset.userName = sessionName || def.defaultName;
   }
 
   planWidgets.forEach((widget) => {
@@ -409,7 +339,7 @@ const syncRoleUI = () => {
   }
 };
 
-const setRole = (role, persist = true) => {
+const setRole = (role) => {
   currentRole = normalizeRole(role);
   body.dataset.role = currentRole;
   syncRoleUI();
@@ -428,14 +358,6 @@ const setRole = (role, persist = true) => {
       renderTeacherCalendar();
     } else {
       renderLiveScheduler();
-    }
-  }
-
-  if (persist && safeStorage) {
-    try {
-      safeStorage.setItem(ROLE_STORAGE_KEY, currentRole);
-    } catch (error) {
-      // ignore
     }
   }
 };
@@ -3303,7 +3225,94 @@ const routeToRole = (path) => {
   if (slug === "aluno") return "student";
   if (slug === "professor") return "teacher";
   if (slug === "admin") return "admin";
-  return "student";
+  return "";
+};
+
+const roleBasePath = (role) => {
+  const normalized = normalizeRole(role);
+  if (normalized === "teacher") return "/app/professor";
+  if (normalized === "admin") return "/app/admin";
+  return "/app/aluno";
+};
+
+const panelPathForRole = (role, panel) => {
+  const normalized = normalizeRole(role);
+  const p = String(panel || "");
+
+  if (normalized === "teacher") {
+    if (p === "ao-vivo") return "/app/professor/agenda";
+    if (p === "gravadas") return "/app/professor/gravadas";
+    if (p === "materiais") return "/app/professor/materiais";
+    return "/app/professor";
+  }
+
+  if (normalized === "admin") {
+    if (p === "gravadas") return "/app/admin/gravadas";
+    if (p === "ao-vivo") return "/app/admin/ao-vivo";
+    if (p === "materiais") return "/app/admin/materiais";
+    return "/app/admin";
+  }
+
+  if (p === "gravadas") return "/app/aluno/gravadas";
+  if (p === "ao-vivo") return "/app/aluno/ao-vivo";
+  if (p === "materiais") return "/app/aluno/materiais";
+  return "/app/aluno";
+};
+
+const parseAppRoute = (path) => {
+  const segments = String(path || "").split("/").filter(Boolean);
+  // /app/<role>/<sub>
+  const roleSlug = segments[1] || "";
+  const sub = segments[2] || "";
+  const role =
+    roleSlug === "aluno" ? "student" : roleSlug === "professor" ? "teacher" : roleSlug === "admin" ? "admin" : "";
+  if (!role) return null;
+
+  if (role === "teacher") {
+    if (sub === "agenda") return { role, panel: "ao-vivo" };
+    if (sub === "gravadas") return { role, panel: "gravadas" };
+    if (sub === "materiais") return { role, panel: "materiais" };
+    return { role, panel: "dashboard" };
+  }
+
+  if (role === "admin") {
+    if (sub === "ao-vivo") return { role, panel: "ao-vivo" };
+    if (sub === "gravadas") return { role, panel: "gravadas" };
+    if (sub === "materiais") return { role, panel: "materiais" };
+    return { role, panel: "dashboard" };
+  }
+
+  if (sub === "ao-vivo") return { role, panel: "ao-vivo" };
+  if (sub === "gravadas") return { role, panel: "gravadas" };
+  if (sub === "materiais") return { role, panel: "materiais" };
+  return { role, panel: "dashboard" };
+};
+
+const refreshSession = async () => {
+  if (sessionRefreshPromise) return sessionRefreshPromise;
+
+  sessionRefreshPromise = fetch("/api/me", { credentials: "include" })
+    .then(async (res) => {
+      if (!res.ok) {
+        sessionUser = null;
+        sessionChecked = true;
+        return null;
+      }
+      const data = await res.json().catch(() => null);
+      sessionUser = sanitizeSessionUser(data?.user) || null;
+      sessionChecked = true;
+      return sessionUser;
+    })
+    .catch(() => {
+      sessionUser = null;
+      sessionChecked = true;
+      return null;
+    })
+    .finally(() => {
+      sessionRefreshPromise = null;
+    });
+
+  return sessionRefreshPromise;
 };
 
 const navigate = (path, { replace = false } = {}) => {
@@ -3335,41 +3344,67 @@ const showLogin = (role) => {
   setLoginProfileUI(role);
 };
 
-const showApp = () => {
+const showApp = ({ role, panel }) => {
   hideAuthPages();
   setPage("app");
   setView("interno", false);
-  if (authState?.role) {
-    setRole(authState.role);
-  }
-  showPanel("dashboard");
+  setRole(role);
+  showPanel(panel);
 };
 
 const handleRoute = () => {
   const path = normalizePathname(window.location.pathname);
 
-  if (authState && (path === "/entrar" || path.startsWith("/login"))) {
-    navigate("/app", { replace: true });
-    return;
-  }
-
   if (path === "/entrar") {
+    if (sessionUser) {
+      navigate(roleBasePath(sessionUser.role), { replace: true });
+      return;
+    }
     showEnter();
     return;
   }
 
   if (path.startsWith("/login")) {
+    if (sessionUser) {
+      navigate(roleBasePath(sessionUser.role), { replace: true });
+      return;
+    }
     const role = routeToRole(path);
+    if (!role) {
+      navigate("/entrar", { replace: true });
+      return;
+    }
     showLogin(role);
     return;
   }
 
   if (path === "/app") {
-    if (!authState) {
+    if (!sessionUser) {
       navigate("/entrar", { replace: true });
       return;
     }
-    showApp();
+    navigate(roleBasePath(sessionUser.role), { replace: true });
+    return;
+  }
+
+  if (path.startsWith("/app/")) {
+    if (!sessionUser) {
+      navigate("/entrar", { replace: true });
+      return;
+    }
+
+    const parsed = parseAppRoute(path);
+    if (!parsed) {
+      navigate(roleBasePath(sessionUser.role), { replace: true });
+      return;
+    }
+
+    if (normalizeRole(parsed.role) !== normalizeRole(sessionUser.role)) {
+      navigate(roleBasePath(sessionUser.role), { replace: true });
+      return;
+    }
+
+    showApp({ role: sessionUser.role, panel: parsed.panel });
     return;
   }
 
@@ -3429,31 +3464,47 @@ if (authLoginForm) {
     loginInFlight = true;
     setLoginLoading(true);
 
-    window.setTimeout(() => {
-      const user = findAuthUser({ role: currentLoginRole, email, password });
-
-      if (!user) {
+    fetch("/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        role: currentLoginRole,
+        email,
+        password,
+      }),
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          throw new Error("invalid_credentials");
+        }
+        const data = await res.json().catch(() => null);
+        const user = sanitizeSessionUser(data?.user);
+        if (!user) {
+          throw new Error("invalid_response");
+        }
+        sessionUser = user;
+        sessionChecked = true;
+        setRole(user.role);
+        navigate(roleBasePath(user.role), { replace: true });
+      })
+      .catch(() => {
         if (authLoginError instanceof HTMLElement) authLoginError.hidden = false;
+      })
+      .finally(() => {
         setLoginLoading(false);
         loginInFlight = false;
-        return;
-      }
-
-      authState = { role: normalizeRole(user.role), name: String(user.name || "").trim(), email: String(user.email || "").trim() };
-      persistAuthState();
-      setRole(authState.role);
-      setLoginLoading(false);
-      loginInFlight = false;
-      navigate("/app", { replace: true });
-    }, 520);
+      });
   });
 }
 
 if (closePlatformButton) {
   closePlatformButton.addEventListener("click", () => {
     closeModal();
-    clearAuthState();
-    setRole("student", false);
+    fetch("/api/logout", { method: "POST", credentials: "include" }).catch(() => {});
+    sessionUser = null;
+    sessionChecked = true;
+    setRole("student");
     navigate("/", { replace: true });
   });
 }
@@ -3466,13 +3517,16 @@ if (sidebarToggleButton) {
 
 openLivePanelButtons.forEach((button) => {
   button.addEventListener("click", () => {
-    showPanel("ao-vivo");
+    const role = sessionUser?.role || currentRole;
+    navigate(panelPathForRole(role, "ao-vivo"));
   });
 });
 
 sidebarLinks.forEach((link) => {
   link.addEventListener("click", () => {
-    showPanel(link.dataset.panelTarget);
+    const panel = link.dataset.panelTarget || "dashboard";
+    const role = sessionUser?.role || currentRole;
+    navigate(panelPathForRole(role, panel));
   });
 });
 
@@ -4231,7 +4285,9 @@ setSidebarExpanded(false);
 renderDashboardCharts();
 renderLiveScheduler();
 renderPlanUI();
-handleRoute();
+refreshSession().finally(() => {
+  handleRoute();
+});
 
 setInterval(() => {
   if (body.dataset.activePanel === "ao-vivo") {

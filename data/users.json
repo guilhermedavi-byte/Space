@@ -1,0 +1,24 @@
+[
+  {
+    "id": "u_admin_guilherme",
+    "name": "Guilherme Davi",
+    "email": "guilhermedavi@spaceschoolbr.com",
+    "role": "admin",
+    "passwordHash": "pbkdf2$sha256$210000$ZnquV0SRVWtO+qZGHdX53g==$SPoGSP1hUA9rvnVSX7WyIJpV1qPk3PCQTE5epsCKn9w="
+  },
+  {
+    "id": "u_teacher_space",
+    "name": "Teacher Space",
+    "email": "teacher@spaceschoolbr.com",
+    "role": "teacher",
+    "passwordHash": "pbkdf2$sha256$210000$KkTUv7Q54MwDXPOt3DThtg==$cThXjnuOGNVgGdgIj1+2Zf0uti+zW8SZ/sW5+J98EMc="
+  },
+  {
+    "id": "u_student_space",
+    "name": "Student Space",
+    "email": "student@spaceschoolbr.com",
+    "role": "student",
+    "passwordHash": "pbkdf2$sha256$210000$EHReJ8S1I6dZWF4i1qsFFw==$Sbqkg8FcQeLdi3nBDRST7uTRVwDlj37G5CRLi2NyVTY="
+  }
+]
+

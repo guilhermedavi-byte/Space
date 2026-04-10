@@ -5743,8 +5743,8 @@ body.is-modal-open {
 }
 
 .auth-role-grid {
-  margin: 30px auto 0;
-  width: min(720px, 100%);
+  margin: 22px auto 0;
+  width: min(860px, 100%);
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
@@ -5757,6 +5757,11 @@ body.is-modal-open {
   padding: 28px;
   text-align: center;
   cursor: pointer;
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   transition:
     background 150ms ease,
     border-color 150ms ease,
@@ -5765,11 +5770,14 @@ body.is-modal-open {
 
 .auth-role-card strong {
   display: block;
-  font-size: 16px;
-  font-weight: 500;
+  font-size: clamp(24px, 2.4vw, 30px);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: #ffffff;
-  letter-spacing: -0.02em;
-  margin-top: 0;
+  background-clip: text;
+  -webkit-background-clip: text;
+  white-space: nowrap;
 }
 
 .auth-role-sub {
@@ -5779,6 +5787,10 @@ body.is-modal-open {
   font-size: 13px;
   font-weight: 400;
   line-height: 1.4;
+}
+
+.auth-role-sub[hidden] {
+  display: none;
 }
 
 .auth-role-card:hover,
@@ -5806,6 +5818,26 @@ body.is-modal-open {
   stroke-width: 1.7;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+.auth-role-card[data-enter-role="student"] strong {
+  background-image: linear-gradient(90deg, rgba(96, 165, 250, 1), rgba(160, 188, 255, 1));
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+.auth-role-card[data-enter-role="teacher"] strong {
+  background-image: linear-gradient(90deg, rgba(255, 86, 79, 1), rgba(255, 175, 160, 1));
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+.auth-role-card[data-enter-role="admin"] strong {
+  background-image: linear-gradient(90deg, rgba(34, 197, 94, 1), rgba(134, 239, 172, 1));
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  font-size: clamp(22px, 2.2vw, 26px);
+  letter-spacing: 0.06em;
 }
 
 .auth-role-card[data-enter-role="student"] .auth-role-icon {
