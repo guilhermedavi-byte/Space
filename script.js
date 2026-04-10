@@ -4,6 +4,7 @@ const closePlatformButton = document.querySelector("[data-close-platform]");
 const authEnterShell = document.querySelector('[data-auth-page="entrar"]');
 const authLoginShell = document.querySelector('[data-auth-page="login"]');
 const authRoleCards = document.querySelectorAll("[data-enter-role]");
+const authBackLink = document.querySelector("[data-nav-enter]");
 const authLoginForm = document.querySelector("[data-login-form]");
 const authLoginEmail = document.querySelector("[data-login-email]");
 const authLoginPassword = document.querySelector("[data-login-password]");
@@ -3326,18 +3327,21 @@ const navigate = (path, { replace = false } = {}) => {
 };
 
 const showLanding = () => {
+  closeModal();
   hideAuthPages();
   setPage("landing");
   setView("publico", false);
 };
 
 const showEnter = () => {
+  closeModal();
   showAuthPage("entrar");
   setPage("entrar");
   setView("auth", false);
 };
 
 const showLogin = (role) => {
+  closeModal();
   showAuthPage("login");
   setPage("login");
   setView("auth", false);
@@ -3414,6 +3418,14 @@ const handleRoute = () => {
 window.addEventListener("popstate", () => {
   handleRoute();
 });
+
+if (authBackLink) {
+  authBackLink.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    navigate("/entrar");
+  });
+}
 
 openPlatformButtons.forEach((button) => {
   button.addEventListener("click", () => {
@@ -3495,6 +3507,20 @@ if (authLoginForm) {
         setLoginLoading(false);
         loginInFlight = false;
       });
+  });
+}
+
+// Hard guarantee: clicking the button always triggers a submit cycle (even if native form submission is blocked).
+if (authLoginSubmit instanceof HTMLButtonElement && authLoginForm instanceof HTMLFormElement) {
+  authLoginSubmit.addEventListener("click", (event) => {
+    // Let our JS handle validation + request consistently.
+    event.preventDefault();
+    if (loginInFlight) return;
+    if (typeof authLoginForm.requestSubmit === "function") {
+      authLoginForm.requestSubmit();
+      return;
+    }
+    authLoginForm.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   });
 }
 
