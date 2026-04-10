@@ -998,6 +998,27 @@
               <div class="teacher-cal-viewport" data-teacher-cal-viewport></div>
             </div>
           </div>
+
+          <!-- Admin: ranking de professores (prioridade de atribuição). -->
+          <div class="admin-schedule-shell" data-live-admin hidden>
+            <div class="admin-schedule-layout">
+              <article class="surface-card admin-ranking-card" aria-label="Ranking de professores">
+                <div class="dashboard-section-header refined-header">
+                  <h3>Ranking de professores</h3>
+                  <p class="admin-ranking-help">Arraste para reordenar. A posição 1 recebe novas aulas primeiro.</p>
+                </div>
+
+                <ul class="admin-ranking-list" data-admin-ranking-list></ul>
+
+                <div class="admin-ranking-actions">
+                  <button class="button button-solid button-small" type="button" data-admin-ranking-save>
+                    Salvar ranking
+                  </button>
+                  <span class="admin-ranking-status" data-admin-ranking-status aria-live="polite"></span>
+                </div>
+              </article>
+            </div>
+          </div>
 	        </section>
 
         <section class="platform-panel" data-panel="materiais" hidden>

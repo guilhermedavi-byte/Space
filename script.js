@@ -54,6 +54,10 @@ const liveCreditsDots = document.querySelector("[data-live-credits-dots]");
 const liveCreditsCaption = document.querySelector("[data-live-credits-caption]");
 const liveStudentRoot = document.querySelector("[data-live-student]");
 const liveTeacherRoot = document.querySelector("[data-live-teacher]");
+const liveAdminRoot = document.querySelector("[data-live-admin]");
+const adminRankingList = document.querySelector("[data-admin-ranking-list]");
+const adminRankingSave = document.querySelector("[data-admin-ranking-save]");
+const adminRankingStatus = document.querySelector("[data-admin-ranking-status]");
 const modalOverlay = document.querySelector("[data-modal-overlay]");
 const modalTitle = document.querySelector("[data-modal-title]");
 const modalBody = document.querySelector("[data-modal-body]");
@@ -149,6 +153,18 @@ const scheduleState = {
   selectedSlotId: "",
   selectedSlotLabel: "",
   isConfirmed: false,
+};
+
+let studentSlotsState = {
+  startDateKey: "",
+  days: [],
+  isLoading: false,
+  lastLoadedAt: 0,
+};
+
+let studentLessonsState = {
+  isLoading: false,
+  lastLoadedAt: 0,
 };
 
 const STORAGE_KEY = "space-platform-state-v1";
@@ -337,7 +353,11 @@ const syncRoleUI = () => {
   }
 
   if (liveStudentRoot) {
-    liveStudentRoot.hidden = currentRole === "teacher";
+    liveStudentRoot.hidden = currentRole !== "student";
+  }
+
+  if (liveAdminRoot) {
+    liveAdminRoot.hidden = currentRole !== "admin";
   }
 };
 
@@ -377,13 +397,16 @@ const sanitizeLesson = (lesson) => {
   if (!lesson.id || typeof lesson.id !== "string") return null;
   if (!lesson.dateKey || typeof lesson.dateKey !== "string") return null;
   if (!lesson.time || typeof lesson.time !== "string") return null;
+  const slotId =
+    typeof lesson.slotId === "string" && lesson.slotId.length >= 12 ? lesson.slotId : `${lesson.dateKey}-${lesson.time}`;
   return {
     id: lesson.id,
+    slotId,
     dateKey: lesson.dateKey,
     time: lesson.time,
     kind: lesson.kind === "GROUP" ? "GROUP" : "VIP",
     title: typeof lesson.title === "string" ? lesson.title : "Aula ao vivo",
-    teacher: typeof lesson.teacher === "string" ? lesson.teacher : "Professor(a) Space",
+    teacher: typeof lesson.teacher === "string" ? lesson.teacher : null,
     studentName: typeof lesson.studentName === "string" ? lesson.studentName : "",
     durationMinutes: typeof lesson.durationMinutes === "number" ? lesson.durationMinutes : LESSON_DURATION_MINUTES,
     createdAt: typeof lesson.createdAt === "string" ? lesson.createdAt : new Date().toISOString(),
@@ -419,7 +442,7 @@ const appState = (() => {
         .filter(Boolean)
         .forEach((lesson) => {
           scheduledLessons.push(lesson);
-          scheduledSlotIds.add(lesson.id);
+          scheduledSlotIds.add(lesson.slotId);
         });
     }
 
@@ -578,6 +601,17 @@ let activeModalKind = "";
 let createEventDraft = null;
 let teacherCalSelection = null;
 let teacherCalDrag = null;
+let teacherEventsState = {
+  events: [],
+  isLoading: false,
+  rangeKey: "",
+  lastLoadedAt: 0,
+};
+
+let teacherWorkHoursApiState = {
+  isLoading: false,
+  lastLoadedAt: 0,
+};
 
 const clearTeacherCalendarSelection = () => {
   if (teacherCalSelection?.el instanceof HTMLElement) {
@@ -1706,6 +1740,161 @@ const addMonths = (date, deltaMonths) => {
   return next;
 };
 
+const buildDateFromDateKeyAndMinutes = (dateKey, minutes) => {
+  const base = parseDateKey(dateKey);
+  if (!base) return null;
+  const start = new Date(base);
+  const safe = clampNumber(Math.round(minutes), 0, 23 * 60 + 59);
+  start.setHours(Math.floor(safe / 60), safe % 60, 0, 0);
+  return start;
+};
+
+const getTeacherEventsRangeForView = () => {
+  const view = teacherCalendarState.view;
+  const focus = teacherCalendarState.focusDate;
+
+  if (view === "week") {
+    const days = getWeekDaysMonToSat(focus);
+    const from = createDateKey(days[0]);
+    const to = createDateKey(days[days.length - 1]);
+    return { from, to };
+  }
+
+  if (view === "month") {
+    const fromDate = new Date(focus.getFullYear(), focus.getMonth(), 1);
+    const toDate = new Date(focus.getFullYear(), focus.getMonth() + 1, 0);
+    return { from: createDateKey(fromDate), to: createDateKey(toDate) };
+  }
+
+  const dayKey = createDateKey(focus);
+  return { from: dayKey, to: dayKey };
+};
+
+const refreshTeacherEvents = async ({ force = false } = {}) => {
+  if (currentRole !== "teacher") return;
+  if (teacherEventsState.isLoading) return;
+  const { from, to } = getTeacherEventsRangeForView();
+  const rangeKey = `${from}:${to}`;
+  const now = Date.now();
+
+  if (!force && teacherEventsState.rangeKey === rangeKey && teacherEventsState.lastLoadedAt && now - teacherEventsState.lastLoadedAt < 15_000) {
+    return;
+  }
+
+  teacherEventsState.isLoading = true;
+  try {
+    const res = await fetch(`/api/teacher/events?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, {
+      credentials: "include",
+    });
+    if (!res.ok) throw new Error("teacher_events_fetch_failed");
+    const data = await res.json().catch(() => null);
+    const raw = Array.isArray(data?.events) ? data.events : [];
+    teacherEventsState.events = raw
+      .map((evt) => {
+        if (!evt || typeof evt !== "object") return null;
+        if (typeof evt.id !== "string" || typeof evt.type !== "string") return null;
+        if (typeof evt.dateKey !== "string") return null;
+        const startMin = Number(evt.startMin);
+        const endMin = Number(evt.endMin);
+        if (!Number.isFinite(startMin) || !Number.isFinite(endMin) || endMin <= startMin) return null;
+        return {
+          id: evt.id,
+          type: evt.type === "lesson" ? "lesson" : "manual",
+          dateKey: evt.dateKey,
+          startMin,
+          endMin,
+          title: typeof evt.title === "string" ? evt.title : "",
+          description: typeof evt.description === "string" ? evt.description : "",
+          guests: Array.isArray(evt.guests) ? evt.guests : [],
+          documents: Array.isArray(evt.documents) ? evt.documents : [],
+        };
+      })
+      .filter(Boolean);
+    teacherEventsState.rangeKey = rangeKey;
+    teacherEventsState.lastLoadedAt = Date.now();
+
+    if (body.dataset.activePanel === "ao-vivo") {
+      renderTeacherCalendar();
+    }
+  } catch (error) {
+    // Keep last known snapshot if backend is unreachable.
+  } finally {
+    teacherEventsState.isLoading = false;
+  }
+};
+
+const apiWorkHoursToLocalWorkHours = (apiWorkHours) => {
+  const base = defaultWorkHours();
+  Object.keys(liveSlotPresetsBase).forEach((dayKey) => {
+    const windowsRaw = apiWorkHours && typeof apiWorkHours === "object" ? apiWorkHours[String(dayKey)] : null;
+    const windows = Array.isArray(windowsRaw) ? windowsRaw : [];
+    const normalized = windows
+      .map((w) => {
+        if (!w || typeof w !== "object") return null;
+        const startMin = Number(w.startMin);
+        const endMin = Number(w.endMin);
+        if (!Number.isFinite(startMin) || !Number.isFinite(endMin) || endMin <= startMin) return null;
+        return { start: formatHmFromMinutes(startMin), end: formatHmFromMinutes(endMin) };
+      })
+      .filter(Boolean);
+
+    if (!normalized.length) {
+      base[dayKey] = { enabled: false, windows: [{ start: "", end: "" }] };
+      return;
+    }
+
+    base[dayKey] = { enabled: true, windows: normalized };
+  });
+  return base;
+};
+
+const workHoursDraftToApiPayload = (draft) => {
+  const out = {};
+  out["0"] = [];
+  Object.keys(liveSlotPresetsBase).forEach((dayKey) => {
+    const entry = draft?.[dayKey];
+    if (!entry || entry.enabled === false) {
+      out[String(dayKey)] = [];
+      return;
+    }
+    const windows = Array.isArray(entry.windows) ? entry.windows : [];
+    out[String(dayKey)] = windows
+      .map((w) => {
+        const startMin = timeToMinutes(w?.start);
+        const endMin = timeToMinutes(w?.end);
+        if (!Number.isFinite(startMin) || !Number.isFinite(endMin) || endMin <= startMin) return null;
+        return { startMin, endMin };
+      })
+      .filter(Boolean);
+  });
+  return { workHours: out };
+};
+
+const refreshTeacherWorkHours = async ({ force = false } = {}) => {
+  if (currentRole !== "teacher") return;
+  if (teacherWorkHoursApiState.isLoading) return;
+  const now = Date.now();
+  if (!force && teacherWorkHoursApiState.lastLoadedAt && now - teacherWorkHoursApiState.lastLoadedAt < 30_000) return;
+
+  teacherWorkHoursApiState.isLoading = true;
+  try {
+    const res = await fetch("/api/teacher/work-hours", { credentials: "include" });
+    if (!res.ok) throw new Error("work_hours_fetch_failed");
+    const data = await res.json().catch(() => null);
+    teacherWorkHours = apiWorkHoursToLocalWorkHours(data?.workHours);
+    persistTeacherWorkHours();
+    teacherWorkHoursApiState.lastLoadedAt = Date.now();
+
+    if (body.dataset.activePanel === "ao-vivo") {
+      renderTeacherCalendar();
+    }
+  } catch (error) {
+    // ignore
+  } finally {
+    teacherWorkHoursApiState.isLoading = false;
+  }
+};
+
 const formatTeacherTopDate = (view, focusDate) => {
   const dateFormatter = new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "long", year: "numeric" });
   const monthFormatter = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" });
@@ -1730,6 +1919,24 @@ const setTeacherFocusDate = (date) => {
 };
 
 const getLessonEvents = () => {
+  if (currentRole === "teacher" && teacherEventsState.lastLoadedAt) {
+    return teacherEventsState.events
+      .filter((evt) => evt.type === "lesson")
+      .map((evt) => {
+        const start = buildDateFromDateKeyAndMinutes(evt.dateKey, evt.startMin);
+        const end = buildDateFromDateKeyAndMinutes(evt.dateKey, evt.endMin);
+        if (!start || !end) return null;
+        return {
+          id: evt.id,
+          type: "lesson",
+          title: evt.title || "Aluno",
+          start,
+          end,
+        };
+      })
+      .filter(Boolean);
+  }
+
   return scheduledLessons
     .map((lesson) => {
       const date = parseDateKey(lesson.dateKey);
@@ -1749,6 +1956,27 @@ const getLessonEvents = () => {
 };
 
 const getManualEvents = () => {
+  if (currentRole === "teacher" && teacherEventsState.lastLoadedAt) {
+    return teacherEventsState.events
+      .filter((evt) => evt.type === "manual")
+      .map((evt) => {
+        const start = buildDateFromDateKeyAndMinutes(evt.dateKey, evt.startMin);
+        const end = buildDateFromDateKeyAndMinutes(evt.dateKey, evt.endMin);
+        if (!start || !end) return null;
+        return {
+          id: evt.id,
+          type: "manual",
+          title: evt.title || "",
+          description: evt.description || "",
+          guests: Array.isArray(evt.guests) ? evt.guests : [],
+          documents: Array.isArray(evt.documents) ? evt.documents : [],
+          start,
+          end,
+        };
+      })
+      .filter(Boolean);
+  }
+
   return teacherManualEvents
     .map((event) => {
       const start = new Date(event.startIso);
@@ -2208,6 +2436,8 @@ const renderTeacherCalendar = () => {
 
   // Any in-progress drag selection should be cleared when re-rendering the calendar view.
   clearTeacherCalendarSelection();
+  refreshTeacherWorkHours();
+  refreshTeacherEvents();
 
   const now = new Date();
   const timezoneName = getDisplayTimeZoneName();
@@ -2322,6 +2552,7 @@ const renderWorkHoursModalBody = () => {
   return `
     <div class="modal-form">
       <div class="modal-help">Defina quando você está disponível para receber agendamentos.</div>
+      <div class="modal-inline-error" data-wh-global-error hidden></div>
       <div class="modal-work-grid" data-wh-grid>
         ${keys.map((dayKey) => renderWorkHoursDayGroup(dayKey)).join("")}
       </div>
@@ -2456,8 +2687,38 @@ const openWorkHoursModal = () => {
       if (!ok) return false;
       teacherWorkHours = workHoursDraft;
       persistTeacherWorkHours();
-      renderTeacherCalendar();
-      renderLiveScheduler();
+
+      const globalError = modalBody?.querySelector("[data-wh-global-error]");
+      if (globalError instanceof HTMLElement) {
+        globalError.hidden = true;
+        globalError.textContent = "";
+      }
+
+      if (modalPrimary) modalPrimary.disabled = true;
+      if (modalSecondary) modalSecondary.disabled = true;
+
+      fetch("/api/teacher/work-hours", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(workHoursDraftToApiPayload(workHoursDraft)),
+      })
+        .then(async (res) => {
+          if (!res.ok) throw new Error("save_failed");
+          teacherWorkHoursApiState.lastLoadedAt = Date.now();
+          closeModal();
+          renderTeacherCalendar();
+        })
+        .catch(() => {
+          if (globalError instanceof HTMLElement) {
+            globalError.hidden = false;
+            globalError.textContent = "Nao foi possivel salvar agora. Tente novamente.";
+          }
+          if (modalPrimary) modalPrimary.disabled = false;
+          if (modalSecondary) modalSecondary.disabled = false;
+        });
+
+      return false;
     },
   });
   validateWorkHoursDraft();
@@ -2734,9 +2995,11 @@ const openTeacherEventFormModalFromDraft = () => {
     const start = getSlotDateTime(date, clampTime(createEventDraft.startTime, "08:00"));
     const end = getSlotDateTime(date, clampTime(createEventDraft.endTime, "09:00"));
     if (end.getTime() <= start.getTime()) return false;
+    const startMin = start.getHours() * 60 + start.getMinutes();
+    const endMin = end.getHours() * 60 + end.getMinutes();
 
     const payload = {
-      id: createEventDraft.eventId || `m_${Date.now().toString(36)}`,
+      id: createEventDraft.eventId || undefined,
       title: String(createEventDraft.title || "").trim(),
       description: String(createEventDraft.description || "").trim(),
       guests: (createEventDraft.guests || []).map((g) => g.id),
@@ -2748,21 +3011,59 @@ const openTeacherEventFormModalFromDraft = () => {
         size: doc.size,
         dataUrl: doc.dataUrl || "",
       })),
-      startIso: start.toISOString(),
-      endIso: end.toISOString(),
+      dateKey: createEventDraft.dateKey,
+      startMin,
+      endMin,
     };
 
-    if (mode === "create") {
-      teacherManualEvents.unshift(payload);
-    } else {
-      const idx = teacherManualEvents.findIndex((evt) => evt && evt.id === payload.id);
-      if (idx >= 0) {
-        teacherManualEvents[idx] = payload;
-      }
+    const errorEl = modalBody?.querySelector("[data-ce-error]");
+    if (errorEl instanceof HTMLElement) {
+      errorEl.hidden = true;
+      errorEl.textContent = "";
     }
 
-    persistTeacherCalendarEvents();
-    renderTeacherCalendar();
+    if (modalPrimary) modalPrimary.disabled = true;
+    if (modalSecondary) modalSecondary.disabled = true;
+
+    const method = mode === "create" ? "POST" : "PUT";
+    fetch("/api/teacher/events", {
+      method,
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+      .then(async (res) => {
+        const data = await res.json().catch(() => null);
+        if (!res.ok) {
+          const msg =
+            data?.error === "title_required"
+              ? "Preencha o titulo para salvar."
+              : data?.error === "invalid_time"
+                ? "O horario de inicio deve ser anterior ao de fim."
+                : "Nao foi possivel salvar agora.";
+          if (errorEl instanceof HTMLElement) {
+            errorEl.hidden = false;
+            errorEl.textContent = msg;
+          }
+          if (modalPrimary) modalPrimary.disabled = false;
+          if (modalSecondary) modalSecondary.disabled = false;
+          return;
+        }
+
+        closeModal();
+        refreshTeacherEvents({ force: true });
+        renderTeacherCalendar();
+      })
+      .catch(() => {
+        if (errorEl instanceof HTMLElement) {
+          errorEl.hidden = false;
+          errorEl.textContent = "Nao foi possivel salvar agora. Tente novamente.";
+        }
+        if (modalPrimary) modalPrimary.disabled = false;
+        if (modalSecondary) modalSecondary.disabled = false;
+      });
+
+    return false;
   };
 
   openModal({
@@ -2787,12 +3088,32 @@ const openTeacherEventFormModalFromDraft = () => {
             },
             onPrimary: () => {
               const id = createEventDraft?.eventId || "";
-              const idx = teacherManualEvents.findIndex((evt) => evt && evt.id === id);
-              if (idx >= 0) {
-                teacherManualEvents.splice(idx, 1);
-                persistTeacherCalendarEvents();
-                renderTeacherCalendar();
-              }
+              if (!id) return;
+
+              if (modalPrimary) modalPrimary.disabled = true;
+              if (modalSecondary) modalSecondary.disabled = true;
+
+              fetch("/api/teacher/events", {
+                method: "DELETE",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ id }),
+              })
+                .then(async (res) => {
+                  if (!res.ok) throw new Error("delete_failed");
+                  closeModal();
+                  refreshTeacherEvents({ force: true });
+                  renderTeacherCalendar();
+                })
+                .catch(() => {
+                  if (modalBody) {
+                    modalBody.innerHTML = "Nao foi possivel remover agora. Tente novamente.";
+                  }
+                  if (modalPrimary) modalPrimary.disabled = false;
+                  if (modalSecondary) modalSecondary.disabled = false;
+                });
+
+              return false;
             },
           });
           return false;
@@ -2975,11 +3296,11 @@ const parseSlotId = (slotId) => {
 };
 
 const registerScheduledLesson = (lesson) => {
-  if (!lesson?.id) return;
-  if (scheduledSlotIds.has(lesson.id)) return;
+  if (!lesson?.id || !lesson?.slotId) return;
+  if (scheduledSlotIds.has(lesson.slotId)) return;
 
   scheduledLessons.push(lesson);
-  scheduledSlotIds.add(lesson.id);
+  scheduledSlotIds.add(lesson.slotId);
   persistAppState();
 };
 
@@ -2988,9 +3309,124 @@ const removeScheduledLesson = (lessonId) => {
   const index = scheduledLessons.findIndex((lesson) => lesson.id === lessonId);
   if (index < 0) return null;
   const [removed] = scheduledLessons.splice(index, 1);
-  scheduledSlotIds.delete(lessonId);
+  if (removed?.slotId) {
+    scheduledSlotIds.delete(removed.slotId);
+  }
   persistAppState();
   return removed;
+};
+
+const replaceScheduledLessons = (nextLessons) => {
+  scheduledLessons.splice(0, scheduledLessons.length);
+  scheduledSlotIds.clear();
+  nextLessons.forEach((lesson) => {
+    if (!lesson || typeof lesson !== "object") return;
+    if (!lesson.id || !lesson.slotId) return;
+    scheduledLessons.push(lesson);
+    scheduledSlotIds.add(lesson.slotId);
+  });
+  persistAppState();
+};
+
+const refreshStudentLessons = async ({ force = false } = {}) => {
+  if (currentRole !== "student") return;
+  if (studentLessonsState.isLoading) return;
+  const now = Date.now();
+  if (!force && studentLessonsState.lastLoadedAt && now - studentLessonsState.lastLoadedAt < 15_000) return;
+
+  studentLessonsState.isLoading = true;
+  try {
+    const res = await fetch("/api/schedule/my-lessons", { credentials: "include" });
+    if (!res.ok) throw new Error("lessons_fetch_failed");
+    const data = await res.json().catch(() => null);
+    const raw = Array.isArray(data?.lessons) ? data.lessons : [];
+    const plan = getPlanDef(appState.planKey);
+    const kind = plan.creditType === "GROUP" ? "GROUP" : "VIP";
+
+    const next = raw
+      .map((lesson) => {
+        if (!lesson || typeof lesson !== "object") return null;
+        const id = typeof lesson.id === "string" ? lesson.id : "";
+        const dateKey = typeof lesson.dateKey === "string" ? lesson.dateKey : "";
+        const startMin = Number(lesson.startMin);
+        const endMin = Number(lesson.endMin);
+        if (!id || !dateKey || !Number.isFinite(startMin) || !Number.isFinite(endMin)) return null;
+        const time = formatHmFromMinutes(startMin);
+        const slotId = `${dateKey}-${time}`;
+        const teacherName = typeof lesson.professor_nome === "string" ? lesson.professor_nome : null;
+        return {
+          id,
+          slotId,
+          dateKey,
+          time,
+          kind,
+          title: "Aula ao vivo",
+          teacher: teacherName,
+          studentName: greetingElement?.dataset.userName || "",
+          durationMinutes: Math.max(1, Math.round(endMin - startMin)),
+          createdAt: "",
+        };
+      })
+      .filter(Boolean);
+
+    replaceScheduledLessons(next);
+    studentLessonsState.lastLoadedAt = Date.now();
+
+    if (body.dataset.activePanel === "ao-vivo") {
+      renderLiveScheduler();
+    }
+  } catch (error) {
+    // Keep the last known list if the backend is unreachable.
+  } finally {
+    studentLessonsState.isLoading = false;
+  }
+};
+
+const refreshStudentSlots = async ({ force = false } = {}) => {
+  if (currentRole !== "student") return;
+  if (studentSlotsState.isLoading) return;
+  const now = Date.now();
+  const startDateKey = createDateKey(new Date());
+  const stale = !studentSlotsState.lastLoadedAt || now - studentSlotsState.lastLoadedAt > 15_000;
+  const startChanged = studentSlotsState.startDateKey !== startDateKey;
+  if (!force && !stale && !startChanged) return;
+
+  studentSlotsState.isLoading = true;
+  try {
+    const res = await fetch(`/api/schedule/slots?start=${encodeURIComponent(startDateKey)}&days=4`, {
+      credentials: "include",
+    });
+    if (!res.ok) throw new Error("slots_fetch_failed");
+    const data = await res.json().catch(() => null);
+    const days = Array.isArray(data?.days) ? data.days : [];
+    studentSlotsState.startDateKey = startDateKey;
+    studentSlotsState.days = days
+      .map((day) => {
+        if (!day || typeof day !== "object") return null;
+        const dateKey = typeof day.dateKey === "string" ? day.dateKey : "";
+        const slots = Array.isArray(day.slots) ? day.slots : [];
+        return {
+          dateKey,
+          slots: slots
+            .map((slot) => {
+              if (!slot || typeof slot !== "object") return null;
+              const time = typeof slot.time === "string" ? slot.time : "";
+              return time ? { time } : null;
+            })
+            .filter(Boolean),
+        };
+      })
+      .filter((day) => day && day.dateKey);
+    studentSlotsState.lastLoadedAt = Date.now();
+
+    if (body.dataset.activePanel === "ao-vivo") {
+      renderLiveScheduler();
+    }
+  } catch (error) {
+    // Keep the last known slots if the backend is unreachable.
+  } finally {
+    studentSlotsState.isLoading = false;
+  }
 };
 
 const renderLiveScheduledLessons = () => {
@@ -3034,8 +3470,12 @@ const renderLiveScheduledLessons = () => {
 };
 
 const getAvailableSlots = (date, referenceDate = new Date()) => {
+  const dateKey = createDateKey(date);
+  const apiDay = studentSlotsState.days.find((day) => day && day.dateKey === dateKey);
+  const apiTimes = apiDay ? apiDay.slots.map((slot) => slot.time).filter(Boolean) : null;
+
   const presets = getLiveSlotPresets();
-  const times = presets[String(date.getDay())] || ["09:00", "11:00", "15:00"];
+  const times = apiTimes || presets[String(date.getDay())] || ["09:00", "11:00", "15:00"];
 
   return times.filter((time) => {
     const slotDate = getSlotDateTime(date, time);
@@ -3118,9 +3558,14 @@ const renderLiveScheduler = () => {
   if (!liveSchedulerGrid) return;
 
   renderPlanUI();
+  refreshStudentLessons();
+  refreshStudentSlots();
   renderLiveScheduledLessons();
 
-  const days = getUpcomingBookableDays(4);
+  const apiDays = studentSlotsState.days
+    .map((day) => parseDateKey(day.dateKey))
+    .filter(Boolean);
+  const days = apiDays.length ? apiDays : getUpcomingBookableDays(4);
   const weekdayFormatter = new Intl.DateTimeFormat("pt-BR", { weekday: "short" });
   const now = new Date();
   const timezoneName = getDisplayTimeZoneName();
@@ -3204,6 +3649,210 @@ const renderLiveScheduler = () => {
   updateLiveInstruction();
   syncLiveSchedulerSelection();
 };
+
+let adminRankingState = {
+  teachers: [],
+  order: [],
+  draggingId: "",
+  dropTargetId: "",
+  dropBefore: true,
+  isDirty: false,
+  isLoading: false,
+  lastLoadedAt: 0,
+};
+
+const setAdminRankingStatus = (text, tone = "") => {
+  if (!adminRankingStatus) return;
+  adminRankingStatus.textContent = text || "";
+  adminRankingStatus.dataset.tone = tone || "";
+};
+
+const fetchAdminRanking = async () => {
+  const res = await fetch("/api/admin/ranking", { credentials: "include" });
+  if (!res.ok) {
+    throw new Error("admin_ranking_fetch_failed");
+  }
+  const data = await res.json().catch(() => null);
+  const teachers = Array.isArray(data?.teachers) ? data.teachers : [];
+  const order = Array.isArray(data?.order) ? data.order : [];
+  return {
+    teachers: teachers
+      .map((t) => {
+        if (!t || typeof t !== "object") return null;
+        if (typeof t.id !== "string" || typeof t.name !== "string") return null;
+        return { id: t.id, name: t.name };
+      })
+      .filter(Boolean),
+    order: order.filter((id) => typeof id === "string"),
+  };
+};
+
+const renderAdminRankingList = () => {
+  if (!adminRankingList) return;
+  const teacherMap = new Map(adminRankingState.teachers.map((t) => [t.id, t]));
+  const order = adminRankingState.order.filter((id) => teacherMap.has(id));
+
+  adminRankingList.innerHTML = order
+    .map((id, idx) => {
+      const teacher = teacherMap.get(id);
+      const position = idx + 1;
+      return `
+        <li class="admin-ranking-item" draggable="true" data-admin-teacher-id="${escapeHtml(id)}">
+          <span class="admin-ranking-position">#${position}</span>
+          <strong class="admin-ranking-name">${escapeHtml(teacher?.name || "Professor")}</strong>
+          <span class="admin-ranking-handle" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M9 7h.01"></path>
+              <path d="M9 12h.01"></path>
+              <path d="M9 17h.01"></path>
+              <path d="M15 7h.01"></path>
+              <path d="M15 12h.01"></path>
+              <path d="M15 17h.01"></path>
+            </svg>
+          </span>
+        </li>
+      `;
+    })
+    .join("");
+};
+
+const renderAdminRanking = async () => {
+  if (currentRole !== "admin") return;
+  if (!adminRankingList) return;
+
+  const now = Date.now();
+  const shouldRefetch = !adminRankingState.lastLoadedAt || now - adminRankingState.lastLoadedAt > 30_000;
+  if (!shouldRefetch || adminRankingState.isLoading) {
+    renderAdminRankingList();
+    return;
+  }
+
+  adminRankingState.isLoading = true;
+  setAdminRankingStatus("Carregando…");
+
+  try {
+    const { teachers, order } = await fetchAdminRanking();
+    adminRankingState.teachers = teachers;
+    const ids = new Set(teachers.map((t) => t.id));
+    const deduped = [];
+    const seen = new Set();
+    order.forEach((id) => {
+      if (!ids.has(id) || seen.has(id)) return;
+      seen.add(id);
+      deduped.push(id);
+    });
+    teachers.forEach((t) => {
+      if (!seen.has(t.id)) deduped.push(t.id);
+    });
+    adminRankingState.order = deduped;
+    adminRankingState.isDirty = false;
+    adminRankingState.lastLoadedAt = Date.now();
+    setAdminRankingStatus("");
+    renderAdminRankingList();
+  } catch (error) {
+    setAdminRankingStatus("Nao foi possivel carregar o ranking.", "error");
+  } finally {
+    adminRankingState.isLoading = false;
+  }
+};
+
+if (adminRankingList) {
+  adminRankingList.addEventListener("dragstart", (event) => {
+    const target = event.target?.closest?.("[data-admin-teacher-id]");
+    if (!(target instanceof HTMLElement)) return;
+    const id = target.getAttribute("data-admin-teacher-id") || "";
+    adminRankingState.draggingId = id;
+    target.classList.add("is-dragging");
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", id);
+    }
+  });
+
+  adminRankingList.addEventListener("dragend", (event) => {
+    const target = event.target?.closest?.("[data-admin-teacher-id]");
+    if (target instanceof HTMLElement) {
+      target.classList.remove("is-dragging");
+    }
+    adminRankingState.draggingId = "";
+    adminRankingState.dropTargetId = "";
+    adminRankingList.querySelectorAll(".is-drop-target").forEach((el) => el.classList.remove("is-drop-target"));
+  });
+
+  adminRankingList.addEventListener("dragover", (event) => {
+    if (!adminRankingState.draggingId) return;
+    event.preventDefault();
+
+    const target = event.target?.closest?.("[data-admin-teacher-id]");
+    if (!(target instanceof HTMLElement)) return;
+    const targetId = target.getAttribute("data-admin-teacher-id") || "";
+    const draggingId = adminRankingState.draggingId;
+    if (!targetId || targetId === draggingId) return;
+
+    const rect = target.getBoundingClientRect();
+    const before = event.clientY < rect.top + rect.height / 2;
+
+    adminRankingState.dropTargetId = targetId;
+    adminRankingState.dropBefore = before;
+
+    adminRankingList.querySelectorAll(".is-drop-target").forEach((el) => el.classList.remove("is-drop-target"));
+    target.classList.add("is-drop-target");
+  });
+
+  adminRankingList.addEventListener("drop", (event) => {
+    if (!adminRankingState.draggingId) return;
+    event.preventDefault();
+
+    const draggingId = adminRankingState.draggingId;
+    const targetId = adminRankingState.dropTargetId;
+    if (!targetId || targetId === draggingId) return;
+
+    const order = [...adminRankingState.order];
+    const fromIdx = order.indexOf(draggingId);
+    const toIdx = order.indexOf(targetId);
+    if (fromIdx < 0 || toIdx < 0) return;
+
+    order.splice(fromIdx, 1);
+    const nextIdx = adminRankingState.dropBefore ? toIdx : toIdx + (fromIdx < toIdx ? 0 : 1);
+    order.splice(nextIdx, 0, draggingId);
+    adminRankingState.order = order;
+    adminRankingState.isDirty = true;
+    adminRankingState.dropTargetId = "";
+    adminRankingList.querySelectorAll(".is-drop-target").forEach((el) => el.classList.remove("is-drop-target"));
+    renderAdminRankingList();
+  });
+}
+
+if (adminRankingSave) {
+  adminRankingSave.addEventListener("click", async () => {
+    if (currentRole !== "admin") return;
+    if (!adminRankingState.isDirty) {
+      setAdminRankingStatus("Nenhuma alteracao para salvar.");
+      window.setTimeout(() => setAdminRankingStatus(""), 1200);
+      return;
+    }
+
+    setAdminRankingStatus("Salvando…");
+    adminRankingSave.disabled = true;
+
+    try {
+      const res = await fetch("/api/admin/ranking", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order: adminRankingState.order }),
+      });
+      if (!res.ok) throw new Error("save_failed");
+      adminRankingState.isDirty = false;
+      setAdminRankingStatus("Salvo.", "success");
+      window.setTimeout(() => setAdminRankingStatus(""), 1200);
+    } catch (error) {
+      setAdminRankingStatus("Nao foi possivel salvar.", "error");
+    } finally {
+      adminRankingSave.disabled = false;
+    }
+  });
+}
 
 if (modalOverlay) {
   modalOverlay.addEventListener("click", (event) => {
@@ -3292,6 +3941,8 @@ const showPanel = (panelName) => {
     window.scrollTo({ top: 0, behavior: "smooth" });
     if (currentRole === "teacher") {
       renderTeacherCalendar();
+    } else if (currentRole === "admin") {
+      renderAdminRanking();
     } else {
       renderLiveScheduler();
     }
@@ -3827,12 +4478,13 @@ document.addEventListener("click", (event) => {
     if (cancelButton instanceof HTMLButtonElement) {
       const lessonId = cancelButton.dataset.lessonId || "";
       const lesson = scheduledLessons.find((item) => item.id === lessonId);
-      const parsed = lesson ? parseSlotId(lesson.id) : null;
 
-      if (lesson && parsed) {
+      if (lesson) {
         const isStudent = currentRole === "student";
-        const slotLabel = formatSelectedSlotLabel(parsed.date, parsed.time);
-        const slotDateTime = getSlotDateTime(parsed.date, parsed.time);
+        const parsedDate = parseDateKey(lesson.dateKey);
+        if (!parsedDate) return;
+        const slotLabel = formatSelectedSlotLabel(parsedDate, lesson.time);
+        const slotDateTime = getSlotDateTime(parsedDate, lesson.time);
         const now = new Date();
         const isRefundable = slotDateTime.getTime() - now.getTime() >= CREDIT_REFUND_WINDOW_MS;
         const plan = getPlanDef(appState.planKey);
@@ -3852,30 +4504,56 @@ document.addEventListener("click", (event) => {
           primaryLabel: "Confirmar cancelamento",
           secondaryLabel: "Voltar",
           onPrimary: () => {
-            const removed = removeScheduledLesson(lessonId);
+            if (modalPrimary) modalPrimary.disabled = true;
+            if (modalSecondary) modalSecondary.disabled = true;
 
-            if (removed) {
-              cancellationEvents.unshift({
-                id: removed.id,
-                dateKey: removed.dateKey,
-                time: removed.time,
-                studentName: removed.studentName || "",
-                cancelledAt: new Date().toISOString(),
-                isLastMinute: !isRefundable,
+            fetch("/api/schedule/cancel", {
+              method: "POST",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id: lessonId }),
+            })
+              .then(async (res) => {
+                if (!res.ok) throw new Error("cancel_failed");
+
+                const removed = removeScheduledLesson(lessonId);
+
+                if (removed) {
+                  cancellationEvents.unshift({
+                    id: removed.id,
+                    dateKey: removed.dateKey,
+                    time: removed.time,
+                    studentName: removed.studentName || "",
+                    cancelledAt: new Date().toISOString(),
+                    isLastMinute: !isRefundable,
+                  });
+                  persistCancellationEvents();
+                }
+
+                if (isStudent && isRefundable) {
+                  appState.creditsRemaining = clampCredits(appState.creditsRemaining + 1, plan.creditsPerCycle);
+                  persistAppState();
+                }
+
+                scheduleState.selectedSlotId = "";
+                scheduleState.selectedSlotLabel = "";
+                scheduleState.isConfirmed = false;
+
+                refreshStudentLessons({ force: true });
+                refreshStudentSlots({ force: true });
+                closeModal();
+                renderLiveScheduler();
+                renderTeacherDashboard();
+              })
+              .catch(() => {
+                if (modalBody) {
+                  modalBody.innerHTML = "Nao foi possivel cancelar agora. Tente novamente.";
+                }
+                if (modalPrimary) modalPrimary.disabled = false;
+                if (modalSecondary) modalSecondary.disabled = false;
               });
-              persistCancellationEvents();
-            }
 
-            if (isStudent && isRefundable) {
-              appState.creditsRemaining = clampCredits(appState.creditsRemaining + 1, plan.creditsPerCycle);
-              persistAppState();
-            }
-
-            scheduleState.selectedSlotId = "";
-            scheduleState.selectedSlotLabel = "";
-            scheduleState.isConfirmed = false;
-            renderLiveScheduler();
-            renderTeacherDashboard();
+            return false;
           },
         });
       }
@@ -3920,28 +4598,75 @@ document.addEventListener("click", (event) => {
             return false;
           }
 
-          if (isStudent) {
-            appState.creditsRemaining = clampCredits(appState.creditsRemaining - 1, plan.creditsPerCycle);
-          }
+          const startMin = timeToMinutes(parsed.time);
+          if (!Number.isFinite(startMin)) return false;
 
-          registerScheduledLesson({
-            id: slotId,
-            dateKey: parsed.dateKey,
-            time: parsed.time,
-            kind,
-            title: "Aula ao vivo",
-            teacher: "Professor(a) Space",
-            studentName: greetingElement?.dataset.userName || "",
-            durationMinutes: LESSON_DURATION_MINUTES,
-            createdAt: new Date().toISOString(),
-          });
+          if (modalPrimary) modalPrimary.disabled = true;
+          if (modalSecondary) modalSecondary.disabled = true;
 
-          persistAppState();
-          scheduleState.selectedSlotId = slotId;
-          scheduleState.selectedSlotLabel = slotLabel;
-          scheduleState.isConfirmed = true;
-          renderLiveScheduler();
-          renderTeacherDashboard();
+          fetch("/api/schedule/book", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ dateKey: parsed.dateKey, startMin }),
+          })
+            .then(async (res) => {
+              const data = await res.json().catch(() => null);
+              if (!res.ok) {
+                const msg =
+                  data?.error === "slot_unavailable"
+                    ? "Esse horario nao esta mais disponivel."
+                    : data?.error === "student_conflict"
+                      ? "Voce ja tem uma aula nesse horario."
+                      : "Nao foi possivel agendar agora.";
+                if (modalBody) {
+                  modalBody.innerHTML = msg;
+                }
+                if (modalPrimary) modalPrimary.disabled = false;
+                if (modalSecondary) modalSecondary.disabled = false;
+                return;
+              }
+
+              if (isStudent) {
+                appState.creditsRemaining = clampCredits(appState.creditsRemaining - 1, plan.creditsPerCycle);
+              }
+
+              const eventId = typeof data?.event?.id === "string" ? data.event.id : "";
+              if (eventId) {
+                registerScheduledLesson({
+                  id: eventId,
+                  slotId,
+                  dateKey: parsed.dateKey,
+                  time: parsed.time,
+                  kind,
+                  title: "Aula ao vivo",
+                  teacher: null,
+                  studentName: greetingElement?.dataset.userName || "",
+                  durationMinutes: LESSON_DURATION_MINUTES,
+                  createdAt: new Date().toISOString(),
+                });
+              }
+
+              persistAppState();
+              scheduleState.selectedSlotId = slotId;
+              scheduleState.selectedSlotLabel = slotLabel;
+              scheduleState.isConfirmed = true;
+
+              refreshStudentLessons({ force: true });
+              refreshStudentSlots({ force: true });
+              closeModal();
+              renderLiveScheduler();
+              renderTeacherDashboard();
+            })
+            .catch(() => {
+              if (modalBody) {
+                modalBody.innerHTML = "Nao foi possivel agendar agora. Tente novamente.";
+              }
+              if (modalPrimary) modalPrimary.disabled = false;
+              if (modalSecondary) modalSecondary.disabled = false;
+            });
+
+          return false;
         },
       });
       return;
