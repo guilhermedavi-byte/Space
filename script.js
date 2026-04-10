@@ -3549,7 +3549,9 @@ const syncLiveSchedulerSelection = () => {
         label.textContent = isConfirmed ? "Agendado" : "Avançar";
       }
 
-      advanceButton.disabled = isConfirmed || (shouldGateByCredits && appState.creditsRemaining <= 0);
+      // Keep the button clickable even when out of credits so we can show the "Sem créditos"
+      // modal on click. Only disable when the slot is already confirmed.
+      advanceButton.disabled = isConfirmed;
     }
   });
 };

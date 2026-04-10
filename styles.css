@@ -4839,7 +4839,6 @@ body.is-cal-dragging .teacher-cal-grid {
 
 .scheduler-slot-advance:disabled {
   cursor: default;
-  opacity: 1;
   background: rgba(232, 69, 60, 0.55);
 }
 
