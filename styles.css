@@ -4202,6 +4202,25 @@ body[data-role="teacher"] .schedule-page-title {
   font-weight: 700;
   letter-spacing: -0.01em;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.25);
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.teacher-cal-event:focus-visible {
+  outline: 2px solid rgba(232, 69, 60, 0.35);
+  outline-offset: 2px;
+}
+
+.teacher-cal-month-pill {
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.teacher-cal-month-pill:focus-visible {
+  outline: 2px solid rgba(232, 69, 60, 0.35);
+  outline-offset: 2px;
 }
 
 .teacher-cal-event .teacher-cal-event-title {
@@ -4904,6 +4923,7 @@ body[data-role="teacher"] .schedule-page-title {
   font-size: 18px;
   font-weight: 800;
   letter-spacing: -0.03em;
+  margin-right: auto;
 }
 
 .modal-close {
@@ -5157,6 +5177,345 @@ body[data-role="teacher"] .schedule-page-title {
   padding: 0 10px;
 }
 
+.modal-textarea {
+  width: 100%;
+  min-height: 84px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.modal-textarea:focus {
+  outline: 2px solid rgba(232, 69, 60, 0.35);
+  outline-offset: 2px;
+}
+
+.guest-field {
+  position: relative;
+  display: grid;
+  gap: 8px;
+}
+
+.guest-chipbox {
+  min-height: 42px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.guest-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.guest-chip button {
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.52);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 150ms ease, background-color 150ms ease;
+}
+
+.guest-chip button:hover,
+.guest-chip button:focus-visible {
+  color: rgba(232, 69, 60, 0.95);
+  background: rgba(232, 69, 60, 0.12);
+}
+
+.guest-search {
+  flex: 1 1 160px;
+  min-width: 140px;
+  border: 0;
+  background: transparent;
+  padding: 6px 6px;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.guest-search:focus {
+  outline: none;
+}
+
+.guest-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #151820;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+  z-index: 5;
+}
+
+.guest-option {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  padding: 10px 12px;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 10px;
+  cursor: pointer;
+  transition: background-color 150ms ease;
+}
+
+.guest-option:hover,
+.guest-option:focus-visible {
+  background: rgba(232, 69, 60, 0.08);
+}
+
+.guest-option .ranking-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  font-size: 12px;
+}
+
+.guest-option strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.guest-option span {
+  display: block;
+  color: #8a90a0;
+  font-size: 12px;
+  font-weight: 700;
+  margin-top: 2px;
+}
+
+.guest-empty {
+  padding: 12px;
+  color: #8a90a0;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.upload-zone {
+  border-radius: 14px;
+  border: 1px dashed rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.02);
+  padding: 18px 14px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+
+.upload-zone:hover,
+.upload-zone:focus-visible {
+  border-color: rgba(232, 69, 60, 0.35);
+  background: rgba(232, 69, 60, 0.06);
+}
+
+.upload-zone strong {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.upload-zone span {
+  display: block;
+  color: #8a90a0;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.upload-filelist {
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.upload-file {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 18px;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.upload-file-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(232, 69, 60, 0.14);
+  color: rgba(255, 216, 211, 0.95);
+}
+
+.upload-file-icon svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.upload-file strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.upload-file span {
+  display: block;
+  color: #8a90a0;
+  font-size: 12px;
+  font-weight: 700;
+  margin-top: 2px;
+}
+
+.upload-file-remove {
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.52);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 150ms ease, background-color 150ms ease;
+}
+
+.upload-file-remove:hover,
+.upload-file-remove:focus-visible {
+  color: rgba(232, 69, 60, 0.95);
+  background: rgba(232, 69, 60, 0.12);
+}
+
+.modal-event-title {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #ffffff;
+  margin: 6px 0 12px;
+}
+
+.modal-event-meta {
+  color: #8a90a0;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.modal-event-section {
+  margin-top: 14px;
+}
+
+.modal-event-section h4 {
+  margin: 0 0 8px;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.modal-guest-list {
+  display: grid;
+  gap: 8px;
+}
+
+.modal-guest-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.modal-guest-row .ranking-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 12px;
+  font-size: 12px;
+}
+
+.modal-doc-list {
+  display: grid;
+  gap: 8px;
+}
+
+.modal-doc-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.modal-doc-row a {
+  color: rgba(255, 255, 255, 0.92);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.modal-doc-row a:hover,
+.modal-doc-row a:focus-visible {
+  color: rgba(232, 69, 60, 0.95);
+}
+
+.modal-doc-row span {
+  display: block;
+  color: #8a90a0;
+  font-size: 12px;
+  font-weight: 700;
+  margin-top: 2px;
+}
+
+.modal-doc-row .upload-file-icon {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.84);
+}
+
 .modal-list-row {
   display: flex;
   justify-content: space-between;
@@ -5194,6 +5553,43 @@ body.is-modal-open {
   to {
     opacity: 1;
   }
+}
+
+.modal-trash {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.46);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease,
+    transform 150ms ease;
+}
+
+.modal-trash svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.modal-trash:hover,
+.modal-trash:focus-visible {
+  background: rgba(232, 69, 60, 0.08);
+  color: rgba(232, 69, 60, 0.95);
+  transform: translateY(-1px);
+}
+
+.modal-trash[hidden] {
+  display: none;
 }
 
 @keyframes modal-pop-in {

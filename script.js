@@ -43,6 +43,7 @@ const modalBody = document.querySelector("[data-modal-body]");
 const modalPrimary = document.querySelector("[data-modal-primary]");
 const modalSecondary = document.querySelector("[data-modal-secondary]");
 const modalClose = document.querySelector("[data-modal-close]");
+const modalTrash = document.querySelector("[data-modal-trash]");
 
 const teacherMiniTitle = document.querySelector("[data-teacher-mini-title]");
 const teacherMiniGrid = document.querySelector("[data-teacher-mini-grid]");
@@ -140,6 +141,7 @@ const TEACHER_NOTICES_STORAGE_KEY = "space-platform-teacher-notices-v1";
 const TEACHER_NOTICE_READ_KEY = "space-platform-teacher-notices-read-v1";
 const TEACHER_CAL_EVENTS_STORAGE_KEY = "space-platform-teacher-calendar-events-v1";
 const TEACHER_WORK_HOURS_STORAGE_KEY = "space-platform-teacher-work-hours-v1";
+const STAFF_USERS_STORAGE_KEY = "space-platform-staff-users-v1";
 const CREDIT_CYCLE_BUSINESS_DAYS = 6;
 const LESSON_DURATION_MINUTES = 30;
 const CREDIT_REFUND_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -536,6 +538,9 @@ const renderPlanUI = () => {
 
 let modalPrimaryHandler = null;
 let modalSecondaryHandler = null;
+let modalTrashHandler = null;
+let activeModalKind = "";
+let createEventDraft = null;
 
 const closeModal = () => {
   if (!modalOverlay) return;
@@ -543,6 +548,12 @@ const closeModal = () => {
   body.classList.remove("is-modal-open");
   modalPrimaryHandler = null;
   modalSecondaryHandler = null;
+  modalTrashHandler = null;
+  if (modalTrash) {
+    modalTrash.hidden = true;
+  }
+  activeModalKind = "";
+  createEventDraft = null;
 };
 
 const openModal = ({
@@ -551,8 +562,10 @@ const openModal = ({
   primaryLabel = "Confirmar",
   secondaryLabel = "Voltar",
   hideSecondary = false,
+  showTrash = false,
   onPrimary,
   onSecondary,
+  onTrash,
 } = {}) => {
   if (!modalOverlay || !modalTitle || !modalBody || !modalPrimary || !modalSecondary) return;
 
@@ -566,6 +579,11 @@ const openModal = ({
 
   modalPrimaryHandler = typeof onPrimary === "function" ? onPrimary : null;
   modalSecondaryHandler = typeof onSecondary === "function" ? onSecondary : null;
+  modalTrashHandler = typeof onTrash === "function" ? onTrash : null;
+
+  if (modalTrash) {
+    modalTrash.hidden = !showTrash;
+  }
 
   window.setTimeout(() => {
     modalPrimary.focus();
@@ -978,6 +996,66 @@ const escapeHtml = (value) => {
     .replace(/>/g, "&gt;")
     .replace(/\"/g, "&quot;")
     .replace(/'/g, "&#039;");
+};
+
+const formatBytes = (bytes) => {
+  const value = Number(bytes);
+  if (!Number.isFinite(value) || value <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  let idx = 0;
+  let size = value;
+  while (size >= 1024 && idx < units.length - 1) {
+    size /= 1024;
+    idx += 1;
+  }
+  const display = idx === 0 ? String(Math.round(size)) : size.toFixed(size < 10 ? 1 : 0);
+  return `${display} ${units[idx]}`;
+};
+
+const getStaffUsers = () => {
+  // Prototype: read from storage when available; falls back to teacher/admin defs (never include students).
+  if (safeStorage) {
+    try {
+      const raw = safeStorage.getItem(STAFF_USERS_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((user) => {
+            if (!user || typeof user !== "object") return null;
+            if (!user.id || typeof user.id !== "string") return null;
+            if (!user.name || typeof user.name !== "string") return null;
+            const role = user.role === "admin" ? "admin" : "teacher";
+            return { id: user.id, name: user.name, role };
+          })
+          .filter(Boolean);
+      }
+    } catch (error) {
+      // ignore
+    }
+  }
+
+  const teacherName = ROLE_DEFS.teacher.defaultName || "Professor";
+  const adminName = ROLE_DEFS.admin.defaultName || "Admin";
+  return [
+    { id: "u_teacher_1", name: teacherName, role: "teacher" },
+    { id: "u_admin_1", name: adminName, role: "admin" },
+  ];
+};
+
+const roleLabelForUser = (role) => (role === "admin" ? "Administrador" : "Professor");
+
+const getFileTypeIconSvg = (ext) => {
+  const safeExt = String(ext || "").toLowerCase();
+  if (safeExt === "pdf") {
+    return `<svg viewBox="0 0 24 24" fill="none"><path d="M8 3.5h6l4 4V20a1.5 1.5 0 0 1-1.5 1.5H8A1.5 1.5 0 0 1 6.5 20V5A1.5 1.5 0 0 1 8 3.5Z"></path><path d="M14 3.5V8h4"></path></svg>`;
+  }
+  if (safeExt === "png" || safeExt === "jpg" || safeExt === "jpeg") {
+    return `<svg viewBox="0 0 24 24" fill="none"><rect x="4.5" y="5.5" width="15" height="13" rx="2"></rect><path d="M8.5 10a1.5 1.5 0 1 0 0-.01"></path><path d="M19 16l-4.2-4.2a1.5 1.5 0 0 0-2.1 0L7 17"></path></svg>`;
+  }
+  if (safeExt === "mp3" || safeExt === "mp4") {
+    return `<svg viewBox="0 0 24 24" fill="none"><path d="M9 18a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"></path><path d="M11 16V6l10-2v10"></path><path d="M19 18a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"></path></svg>`;
+  }
+  return `<svg viewBox="0 0 24 24" fill="none"><path d="M8 3.5h6l4 4V20a1.5 1.5 0 0 1-1.5 1.5H8A1.5 1.5 0 0 1 6.5 20V5A1.5 1.5 0 0 1 8 3.5Z"></path><path d="M14 3.5V8h4"></path></svg>`;
 };
 
 const getTeacherLessons = () => scheduledLessons;
@@ -1421,24 +1499,8 @@ const loadTeacherCalendarEvents = () => {
     const raw = safeStorage.getItem(TEACHER_CAL_EVENTS_STORAGE_KEY);
     const parsed = raw ? JSON.parse(raw) : null;
     if (!Array.isArray(parsed)) return [];
-    return parsed
-      .map((event) => {
-        if (!event || typeof event !== "object") return null;
-        if (!event.id || typeof event.id !== "string") return null;
-        const startIso = typeof event.startIso === "string" ? event.startIso : "";
-        const endIso = typeof event.endIso === "string" ? event.endIso : "";
-        const start = startIso ? new Date(startIso) : null;
-        const end = endIso ? new Date(endIso) : null;
-        if (!start || Number.isNaN(start.getTime()) || !end || Number.isNaN(end.getTime())) return null;
-        if (end.getTime() <= start.getTime()) return null;
-        return {
-          id: event.id,
-          title: typeof event.title === "string" ? event.title : "Evento",
-          startIso,
-          endIso,
-        };
-      })
-      .filter(Boolean);
+    // Keep the raw payload shape; normalization happens in `sanitizeManualEvent`.
+    return parsed.filter((event) => event && typeof event === "object" && typeof event.id === "string");
   } catch (error) {
     return [];
   }
@@ -1454,6 +1516,49 @@ const persistTeacherCalendarEvents = () => {
     // ignore
   }
 };
+
+const sanitizeManualEvent = (event) => {
+  if (!event || typeof event !== "object") return null;
+  if (!event.id || typeof event.id !== "string") return null;
+  const title = typeof event.title === "string" ? event.title : "";
+  const startIso = typeof event.startIso === "string" ? event.startIso : "";
+  const endIso = typeof event.endIso === "string" ? event.endIso : "";
+  const start = startIso ? new Date(startIso) : null;
+  const end = endIso ? new Date(endIso) : null;
+  if (!start || Number.isNaN(start.getTime()) || !end || Number.isNaN(end.getTime())) return null;
+  if (end.getTime() <= start.getTime()) return null;
+  const description = typeof event.description === "string" ? event.description : "";
+  const guests = Array.isArray(event.guests) ? event.guests.filter((id) => typeof id === "string") : [];
+  const documents = Array.isArray(event.documents)
+    ? event.documents
+        .map((doc) => {
+          if (!doc || typeof doc !== "object") return null;
+          if (!doc.id || typeof doc.id !== "string") return null;
+          if (!doc.name || typeof doc.name !== "string") return null;
+          if (!doc.ext || typeof doc.ext !== "string") return null;
+          const size = Number(doc.size);
+          return {
+            id: doc.id,
+            name: doc.name,
+            ext: doc.ext,
+            type: typeof doc.type === "string" ? doc.type : "",
+            size: Number.isFinite(size) ? size : 0,
+            dataUrl: typeof doc.dataUrl === "string" ? doc.dataUrl : "",
+          };
+        })
+        .filter(Boolean)
+    : [];
+
+  return { id: event.id, title, startIso, endIso, description, guests, documents };
+};
+
+const rehydrateTeacherManualEvents = () => {
+  teacherManualEvents = teacherManualEvents
+    .map((event) => sanitizeManualEvent(event))
+    .filter(Boolean);
+};
+
+rehydrateTeacherManualEvents();
 
 const sameDateKey = (a, b) => createDateKey(a) === createDateKey(b);
 
@@ -1521,6 +1626,9 @@ const getManualEvents = () => {
         id: event.id,
         type: "manual",
         title: event.title,
+        description: event.description || "",
+        guests: Array.isArray(event.guests) ? event.guests : [],
+        documents: Array.isArray(event.documents) ? event.documents : [],
         start,
         end,
       };
@@ -1754,13 +1862,16 @@ const renderTeacherCalendarViewportDay = (date) => {
       const widthPct = 100 / event.colCount;
       const timeLabel = `${formatTimeHm(event.start)} – ${formatTimeHm(event.end)}`;
       return `
-        <div
+        <button
           class="teacher-cal-event is-${event.type}"
           style="top:${top}px;height:${height}px;left:calc(${leftPct}% + 8px);width:calc(${widthPct}% - 16px);"
+          type="button"
+          data-teacher-cal-event-type="${event.type}"
+          data-teacher-cal-event-id="${escapeHtml(event.id)}"
         >
           <span class="teacher-cal-event-title">${escapeHtml(event.title)}</span>
           <span class="teacher-cal-event-time">${escapeHtml(timeLabel)}</span>
-        </div>
+        </button>
       `;
     })
     .join("");
@@ -1863,13 +1974,16 @@ const renderTeacherCalendarViewportWeek = (focusDate) => {
           const widthPct = 100 / event.colCount;
           const timeLabel = `${formatTimeHm(event.start)} – ${formatTimeHm(event.end)}`;
           return `
-            <div
+            <button
               class="teacher-cal-event is-${event.type}"
               style="top:${top}px;height:${height}px;left:calc(${leftPct}% + 8px);width:calc(${widthPct}% - 16px);"
+              type="button"
+              data-teacher-cal-event-type="${event.type}"
+              data-teacher-cal-event-id="${escapeHtml(event.id)}"
             >
               <span class="teacher-cal-event-title">${escapeHtml(event.title)}</span>
               <span class="teacher-cal-event-time">${escapeHtml(timeLabel)}</span>
-            </div>
+            </button>
           `;
         })
         .join("");
@@ -1922,7 +2036,16 @@ const renderTeacherCalendarViewportMonth = (focusDate) => {
       .slice(0, 3)
       .map((event) => {
         const time = `${formatTimeHm(event.start)} ${event.title}`;
-        return `<div class="teacher-cal-month-pill${event.type === "manual" ? " is-manual" : ""}">${escapeHtml(time)}</div>`;
+        return `
+          <button
+            class="teacher-cal-month-pill${event.type === "manual" ? " is-manual" : ""}"
+            type="button"
+            data-teacher-cal-event-type="${event.type}"
+            data-teacher-cal-event-id="${escapeHtml(event.id)}"
+          >
+            ${escapeHtml(time)}
+          </button>
+        `;
       })
       .join("");
     const moreCount = Math.max(0, dayEvents.length - 3);
@@ -2203,6 +2326,407 @@ const openWorkHoursModal = () => {
     },
   });
   validateWorkHoursDraft();
+};
+
+const acceptedDocExts = ["pdf", "mp3", "mp4", "png"];
+const MAX_DOC_BYTES = 2 * 1024 * 1024; // localStorage-friendly limit for prototype
+
+const guessExt = (filename) => {
+  const name = String(filename || "");
+  const idx = name.lastIndexOf(".");
+  if (idx < 0) return "";
+  return name.slice(idx + 1).toLowerCase();
+};
+
+const fileToDataUrl = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("read_failed"));
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.readAsDataURL(file);
+  });
+};
+
+const formatLongEventDate = (date) => {
+  const weekday = new Intl.DateTimeFormat("pt-BR", { weekday: "long" }).format(date);
+  const month = new Intl.DateTimeFormat("pt-BR", { month: "long" }).format(date);
+  const capitalizedWeekday = weekday.charAt(0).toUpperCase() + weekday.slice(1);
+  return `${capitalizedWeekday}, ${date.getDate()} de ${month} de ${date.getFullYear()}`;
+};
+
+const buildCreateEventBody = () => {
+  const draft = createEventDraft || {};
+  const guests = Array.isArray(draft.guests) ? draft.guests : [];
+  const docs = Array.isArray(draft.documents) ? draft.documents : [];
+
+  const chips = guests
+    .map((guest) => {
+      return `<span class="guest-chip">${escapeHtml(guest.name)}<button type="button" data-ce-remove-guest="${escapeHtml(guest.id)}" aria-label="Remover convidado">×</button></span>`;
+    })
+    .join("");
+
+  const docRows = docs
+    .map((doc) => {
+      return `
+        <div class="upload-file">
+          <span class="upload-file-icon" aria-hidden="true">${getFileTypeIconSvg(doc.ext)}</span>
+          <div>
+            <strong>${escapeHtml(doc.name)}</strong>
+            <span>${escapeHtml(`${formatBytes(doc.size)} · ${doc.ext.toUpperCase()}`)}</span>
+          </div>
+          <button class="upload-file-remove" type="button" data-ce-remove-doc="${escapeHtml(doc.id)}" aria-label="Remover documento">×</button>
+        </div>
+      `;
+    })
+    .join("");
+
+  return `
+    <div class="modal-form">
+      <label class="modal-field">
+        <span>Título</span>
+        <input class="modal-input" type="text" data-ce-title value="${escapeHtml(draft.title || "")}" />
+      </label>
+
+      <div class="modal-row" style="grid-template-columns: minmax(0, 1fr) 120px 120px;">
+        <label class="modal-field">
+          <span>Data</span>
+          <input class="modal-input" type="date" data-ce-date value="${escapeHtml(draft.dateKey || createDateKey(new Date()))}" />
+        </label>
+        <label class="modal-field">
+          <span>Início</span>
+          <input class="modal-input" type="time" data-ce-start value="${escapeHtml(draft.startTime || "08:00")}" />
+        </label>
+        <label class="modal-field">
+          <span>Fim</span>
+          <input class="modal-input" type="time" data-ce-end value="${escapeHtml(draft.endTime || "09:00")}" />
+        </label>
+      </div>
+
+      <label class="modal-field">
+        <span>Descrição</span>
+        <textarea class="modal-textarea" data-ce-desc placeholder="Adicionar descrição...">${escapeHtml(draft.description || "")}</textarea>
+      </label>
+
+      <div class="guest-field">
+        <div class="modal-field">
+          <span>Convidados</span>
+        </div>
+        <div class="guest-chipbox" data-ce-chipbox>
+          ${chips}
+          <input class="guest-search" type="text" data-ce-guest-search placeholder="Buscar pessoas..." value="${escapeHtml(draft.guestQuery || "")}" />
+        </div>
+        <div class="guest-dropdown" data-ce-guest-dropdown hidden></div>
+      </div>
+
+      <div class="modal-field">
+        <span>Documentos</span>
+        <div class="upload-zone" tabindex="0" role="button" data-ce-upload>
+          <strong>Clique para anexar ou arraste aqui</strong>
+          <span>PDF, MP3, MP4 ou PNG</span>
+        </div>
+        <input
+          type="file"
+          data-ce-doc-input
+          hidden
+          multiple
+          accept=".pdf,.mp3,.mp4,.png"
+        />
+        <div class="upload-filelist" data-ce-doc-list>
+          ${docRows}
+        </div>
+      </div>
+
+      <div class="modal-inline-error" data-ce-error hidden></div>
+    </div>
+  `;
+};
+
+const computeGuestDropdownItems = () => {
+  const query = String(createEventDraft?.guestQuery || "").trim().toLowerCase();
+  const staff = getStaffUsers();
+  const selectedIds = new Set((createEventDraft?.guests || []).map((g) => g.id));
+  return staff
+    .filter((user) => !selectedIds.has(user.id))
+    .filter((user) => (query ? user.name.toLowerCase().includes(query) : true))
+    .slice(0, 8);
+};
+
+const syncGuestDropdown = () => {
+  const dropdown = modalBody?.querySelector("[data-ce-guest-dropdown]");
+  if (!(dropdown instanceof HTMLElement)) return;
+
+  const input = modalBody?.querySelector("[data-ce-guest-search]");
+  if (!(input instanceof HTMLInputElement)) return;
+
+  const isOpen = document.activeElement === input || String(input.value || "").trim().length > 0;
+  const items = computeGuestDropdownItems();
+
+  if (!isOpen) {
+    dropdown.hidden = true;
+    dropdown.innerHTML = "";
+    return;
+  }
+
+  if (!items.length) {
+    dropdown.hidden = false;
+    dropdown.innerHTML = `<div class="guest-empty">Nenhum usuário encontrado</div>`;
+    return;
+  }
+
+  dropdown.hidden = false;
+  dropdown.innerHTML = items
+    .map((user) => {
+      return `
+        <button class="guest-option" type="button" data-ce-guest-pick="${escapeHtml(user.id)}">
+          <span class="ranking-avatar">${escapeHtml(getInitials(user.name))}</span>
+          <div>
+            <strong>${escapeHtml(user.name)}</strong>
+            <span>${escapeHtml(roleLabelForUser(user.role))}</span>
+          </div>
+        </button>
+      `;
+    })
+    .join("");
+};
+
+const validateCreateEventDraft = () => {
+  if (!createEventDraft || !modalBody) return true;
+  let hasError = false;
+  const errorEl = modalBody.querySelector("[data-ce-error]");
+
+  const titleEl = modalBody.querySelector("[data-ce-title]");
+  const dateEl = modalBody.querySelector("[data-ce-date]");
+  const startEl = modalBody.querySelector("[data-ce-start]");
+  const endEl = modalBody.querySelector("[data-ce-end]");
+
+  [titleEl, dateEl, startEl, endEl].forEach((el) => {
+    if (el instanceof HTMLElement) el.classList.remove("is-error");
+  });
+
+  const title = String(createEventDraft.title || "").trim();
+  if (!title) {
+    if (titleEl instanceof HTMLElement) titleEl.classList.add("is-error");
+    hasError = true;
+  }
+
+  const date = parseDateKey(createEventDraft.dateKey);
+  const startOk = /^\d{2}:\d{2}$/.test(String(createEventDraft.startTime || ""));
+  const endOk = /^\d{2}:\d{2}$/.test(String(createEventDraft.endTime || ""));
+
+  if (!date) {
+    if (dateEl instanceof HTMLElement) dateEl.classList.add("is-error");
+    hasError = true;
+  }
+  if (!startOk) {
+    if (startEl instanceof HTMLElement) startEl.classList.add("is-error");
+    hasError = true;
+  }
+  if (!endOk) {
+    if (endEl instanceof HTMLElement) endEl.classList.add("is-error");
+    hasError = true;
+  }
+
+  if (date && startOk && endOk) {
+    const start = getSlotDateTime(date, clampTime(createEventDraft.startTime, "08:00"));
+    const end = getSlotDateTime(date, clampTime(createEventDraft.endTime, "09:00"));
+    if (end.getTime() <= start.getTime()) {
+      if (startEl instanceof HTMLElement) startEl.classList.add("is-error");
+      if (endEl instanceof HTMLElement) endEl.classList.add("is-error");
+      hasError = true;
+      if (errorEl instanceof HTMLElement) {
+        errorEl.hidden = false;
+        errorEl.textContent = "O horário de início deve ser anterior ao de fim";
+      }
+    }
+  }
+
+  const docsLoading = (createEventDraft.documents || []).some((doc) => doc && doc.loading);
+  if (docsLoading) {
+    hasError = true;
+  }
+
+  if (!hasError) {
+    if (errorEl instanceof HTMLElement) {
+      errorEl.hidden = true;
+      errorEl.textContent = "";
+    }
+  } else if (errorEl instanceof HTMLElement && errorEl.hidden) {
+    errorEl.hidden = false;
+    errorEl.textContent = errorEl.textContent || "Preencha os campos obrigatórios para salvar.";
+  }
+
+  setModalPrimaryDisabled(hasError);
+  return !hasError;
+};
+
+const openTeacherCreateEventModal = () => {
+  const focus = teacherCalendarState.focusDate;
+  const startHour = Math.min(Math.max(new Date().getHours(), 6), 20);
+  const startDefault = `${String(startHour).padStart(2, "0")}:00`;
+  const endDefault = `${String(Math.min(startHour + 1, 23)).padStart(2, "0")}:00`;
+
+  activeModalKind = "create-event";
+  createEventDraft = {
+    title: "",
+    description: "",
+    guests: [],
+    guestQuery: "",
+    documents: [],
+    dateKey: createDateKey(focus),
+    startTime: startDefault,
+    endTime: endDefault,
+  };
+
+  openModal({
+    title: "Criar evento",
+    bodyHtml: buildCreateEventBody(),
+    primaryLabel: "Salvar",
+    secondaryLabel: "Voltar",
+    showTrash: false,
+    onPrimary: () => {
+      const ok = validateCreateEventDraft();
+      if (!ok) return false;
+      const date = parseDateKey(createEventDraft.dateKey);
+      if (!date) return false;
+      const start = getSlotDateTime(date, clampTime(createEventDraft.startTime, "08:00"));
+      const end = getSlotDateTime(date, clampTime(createEventDraft.endTime, "09:00"));
+      if (end.getTime() <= start.getTime()) return false;
+      const id = `m_${Date.now().toString(36)}`;
+      teacherManualEvents.unshift({
+        id,
+        title: String(createEventDraft.title || "").trim(),
+        description: String(createEventDraft.description || "").trim(),
+        guests: (createEventDraft.guests || []).map((g) => g.id),
+        documents: (createEventDraft.documents || []).map((doc) => ({
+          id: doc.id,
+          name: doc.name,
+          ext: doc.ext,
+          type: doc.type,
+          size: doc.size,
+          dataUrl: doc.dataUrl || "",
+        })),
+        startIso: start.toISOString(),
+        endIso: end.toISOString(),
+      });
+      persistTeacherCalendarEvents();
+      renderTeacherCalendar();
+    },
+    onSecondary: () => {
+      activeModalKind = "";
+      createEventDraft = null;
+    },
+  });
+
+  validateCreateEventDraft();
+  syncGuestDropdown();
+};
+
+const openTeacherEventViewModal = ({ type, id }) => {
+  const staff = getStaffUsers();
+  const staffMap = new Map(staff.map((u) => [u.id, u]));
+
+  const allEvents = [...getLessonEvents(), ...getManualEvents()];
+  const target = allEvents.find((evt) => evt.id === id && evt.type === type);
+  if (!target) return;
+
+  const title = target.title || "Evento";
+  const dateText = `${formatLongEventDate(target.start)} · ${formatTimeHm(target.start)} – ${formatTimeHm(target.end)}`;
+  const bodyParts = [];
+  bodyParts.push(`<div class="modal-event-title">${escapeHtml(title)}</div>`);
+  bodyParts.push(`<div class="modal-event-meta">${escapeHtml(dateText)}</div>`);
+
+  if (type === "manual" && target.description) {
+    bodyParts.push(`
+      <div class="modal-event-section">
+        <h4>Descrição</h4>
+        <div>${escapeHtml(target.description)}</div>
+      </div>
+    `);
+  }
+
+  if (type === "manual" && Array.isArray(target.guests) && target.guests.length) {
+    const guests = target.guests
+      .map((guestId) => staffMap.get(guestId))
+      .filter(Boolean)
+      .map((user) => {
+        return `
+          <div class="modal-guest-row">
+            <span class="ranking-avatar">${escapeHtml(getInitials(user.name))}</span>
+            <div>
+              <strong>${escapeHtml(user.name)}</strong>
+              <div class="modal-event-meta">${escapeHtml(roleLabelForUser(user.role))}</div>
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+    bodyParts.push(`
+      <div class="modal-event-section">
+        <h4>Convidados</h4>
+        <div class="modal-guest-list">${guests}</div>
+      </div>
+    `);
+  }
+
+  if (type === "manual" && Array.isArray(target.documents) && target.documents.length) {
+    const docs = target.documents
+      .map((doc) => {
+        const href = doc.dataUrl ? `href="${escapeHtml(doc.dataUrl)}"` : "";
+        const download = doc.dataUrl ? `download="${escapeHtml(doc.name)}"` : "";
+        const meta = `${formatBytes(doc.size)} · ${String(doc.ext || "").toUpperCase()}`;
+        return `
+          <div class="modal-doc-row">
+            <span class="upload-file-icon" aria-hidden="true">${getFileTypeIconSvg(doc.ext)}</span>
+            <div>
+              <a ${href} ${download}>${escapeHtml(doc.name)}</a>
+              <span>${escapeHtml(meta)}</span>
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+    bodyParts.push(`
+      <div class="modal-event-section">
+        <h4>Documentos</h4>
+        <div class="modal-doc-list">${docs}</div>
+      </div>
+    `);
+  }
+
+  activeModalKind = "view-event";
+  openModal({
+    title: "Evento",
+    bodyHtml: bodyParts.join(""),
+    primaryLabel: "Fechar",
+    hideSecondary: true,
+    showTrash: type === "manual",
+    onTrash: () => {
+      openModal({
+        title: "Remover evento",
+        bodyHtml: `Tem certeza que deseja remover este evento? Esta ação não pode ser desfeita.`,
+        primaryLabel: "Remover evento",
+        secondaryLabel: "Cancelar",
+        hideSecondary: false,
+        showTrash: false,
+        onSecondary: () => {
+          openTeacherEventViewModal({ type, id });
+          return false;
+        },
+        onPrimary: () => {
+          const idx = teacherManualEvents.findIndex((evt) => evt && evt.id === id);
+          if (idx >= 0) {
+            teacherManualEvents.splice(idx, 1);
+            persistTeacherCalendarEvents();
+            renderTeacherCalendar();
+          }
+        },
+      });
+      return false;
+    },
+    onPrimary: () => {
+      activeModalKind = "";
+    },
+  });
 };
 
 const createSlotId = (date, time) => {
@@ -2510,7 +3034,8 @@ if (modalClose) {
 if (modalSecondary) {
   modalSecondary.addEventListener("click", () => {
     if (modalSecondaryHandler) {
-      modalSecondaryHandler();
+      const shouldClose = modalSecondaryHandler();
+      if (shouldClose === false) return;
     }
     closeModal();
   });
@@ -2523,6 +3048,15 @@ if (modalPrimary) {
       if (shouldClose === false) return;
     }
     closeModal();
+  });
+}
+
+if (modalTrash) {
+  modalTrash.addEventListener("click", () => {
+    if (modalTrashHandler) {
+      const shouldClose = modalTrashHandler();
+      if (shouldClose === false) return;
+    }
   });
 }
 
@@ -2678,6 +3212,103 @@ document.addEventListener("click", (event) => {
   const target = event.target;
 
   if (target instanceof Element) {
+    if (activeModalKind === "create-event" && createEventDraft && modalOverlay && !modalOverlay.hidden) {
+      const pick = target.closest("[data-ce-guest-pick]");
+      if (pick instanceof HTMLButtonElement) {
+        const id = pick.getAttribute("data-ce-guest-pick") || "";
+        const staff = getStaffUsers();
+        const user = staff.find((u) => u.id === id);
+        if (!user) return;
+        createEventDraft.guests.push({ id: user.id, name: user.name, role: user.role });
+        createEventDraft.guestQuery = "";
+        const chipbox = modalBody?.querySelector("[data-ce-chipbox]");
+        if (chipbox instanceof HTMLElement) {
+          // Re-render minimal chipbox content.
+          chipbox.innerHTML =
+            (createEventDraft.guests || [])
+              .map((guest) => `<span class="guest-chip">${escapeHtml(guest.name)}<button type="button" data-ce-remove-guest="${escapeHtml(guest.id)}" aria-label="Remover convidado">×</button></span>`)
+              .join("") +
+            `<input class="guest-search" type="text" data-ce-guest-search placeholder="Buscar pessoas..." value="" />`;
+        }
+        syncGuestDropdown();
+        validateCreateEventDraft();
+        const input = modalBody?.querySelector("[data-ce-guest-search]");
+        if (input instanceof HTMLInputElement) input.focus();
+        return;
+      }
+
+      const removeGuest = target.closest("[data-ce-remove-guest]");
+      if (removeGuest instanceof HTMLButtonElement) {
+        const id = removeGuest.getAttribute("data-ce-remove-guest") || "";
+        createEventDraft.guests = (createEventDraft.guests || []).filter((g) => g.id !== id);
+        const chipbox = modalBody?.querySelector("[data-ce-chipbox]");
+        if (chipbox instanceof HTMLElement) {
+          chipbox.innerHTML =
+            (createEventDraft.guests || [])
+              .map((guest) => `<span class="guest-chip">${escapeHtml(guest.name)}<button type="button" data-ce-remove-guest="${escapeHtml(guest.id)}" aria-label="Remover convidado">×</button></span>`)
+              .join("") +
+            `<input class="guest-search" type="text" data-ce-guest-search placeholder="Buscar pessoas..." value="${escapeHtml(createEventDraft.guestQuery || "")}" />`;
+        }
+        syncGuestDropdown();
+        validateCreateEventDraft();
+        return;
+      }
+
+      const uploadZone = target.closest("[data-ce-upload]");
+      if (uploadZone instanceof HTMLElement) {
+        const input = modalBody?.querySelector("[data-ce-doc-input]");
+        if (input instanceof HTMLInputElement) {
+          input.click();
+        }
+        return;
+      }
+
+      const removeDoc = target.closest("[data-ce-remove-doc]");
+      if (removeDoc instanceof HTMLButtonElement) {
+        const id = removeDoc.getAttribute("data-ce-remove-doc") || "";
+        createEventDraft.documents = (createEventDraft.documents || []).filter((doc) => doc.id !== id);
+        const list = modalBody?.querySelector("[data-ce-doc-list]");
+        if (list instanceof HTMLElement) {
+          list.innerHTML = (createEventDraft.documents || [])
+            .map((doc) => {
+              return `
+                <div class="upload-file">
+                  <span class="upload-file-icon" aria-hidden="true">${getFileTypeIconSvg(doc.ext)}</span>
+                  <div>
+                    <strong>${escapeHtml(doc.name)}</strong>
+                    <span>${escapeHtml(`${formatBytes(doc.size)} · ${doc.ext.toUpperCase()}`)}</span>
+                  </div>
+                  <button class="upload-file-remove" type="button" data-ce-remove-doc="${escapeHtml(doc.id)}" aria-label="Remover documento">×</button>
+                </div>
+              `;
+            })
+            .join("");
+        }
+        validateCreateEventDraft();
+        return;
+      }
+
+      // Click outside guest field closes dropdown.
+      const guestField = modalBody?.querySelector(".guest-field");
+      const dropdown = modalBody?.querySelector("[data-ce-guest-dropdown]");
+      if (dropdown instanceof HTMLElement && guestField instanceof HTMLElement) {
+        if (!target.closest(".guest-field")) {
+          dropdown.hidden = true;
+          dropdown.innerHTML = "";
+        }
+      }
+    }
+
+    const calEvent = target.closest("[data-teacher-cal-event-id]");
+    if (calEvent instanceof HTMLElement && currentRole === "teacher" && body.dataset.activePanel === "ao-vivo") {
+      const type = calEvent.getAttribute("data-teacher-cal-event-type") || "";
+      const id = calEvent.getAttribute("data-teacher-cal-event-id") || "";
+      if (type === "lesson" || type === "manual") {
+        openTeacherEventViewModal({ type, id });
+        return;
+      }
+    }
+
     const roleOption = target.closest("[data-role-option]");
     if (roleOption instanceof HTMLButtonElement) {
       setRole(roleOption.dataset.roleOption || "student");
@@ -2690,70 +3321,7 @@ document.addEventListener("click", (event) => {
     const createEventButton = target.closest("[data-teacher-create-event]");
     if (createEventButton instanceof HTMLButtonElement) {
       if (currentRole !== "teacher") return;
-
-      const focus = teacherCalendarState.focusDate;
-      const startHour = Math.min(Math.max(new Date().getHours(), 6), 20);
-      const startDefault = `${String(startHour).padStart(2, "0")}:00`;
-      const endDefault = `${String(Math.min(startHour + 1, 23)).padStart(2, "0")}:00`;
-
-      openModal({
-        title: "Criar evento",
-        bodyHtml: `
-          <div class="modal-form">
-            <label class="modal-field">
-              <span>Título</span>
-              <input class="modal-input" type="text" data-teacher-event-title placeholder="Bloqueio / Reunião" />
-            </label>
-            <div class="modal-row">
-              <label class="modal-field">
-                <span>Data</span>
-                <input class="modal-input" type="date" data-teacher-event-date value="${createDateKey(focus)}" />
-              </label>
-              <label class="modal-field">
-                <span>Início</span>
-                <input class="modal-input" type="time" data-teacher-event-start value="${startDefault}" />
-              </label>
-              <label class="modal-field">
-                <span>Fim</span>
-                <input class="modal-input" type="time" data-teacher-event-end value="${endDefault}" />
-              </label>
-            </div>
-          </div>
-        `,
-        primaryLabel: "Salvar",
-        secondaryLabel: "Voltar",
-        onPrimary: () => {
-          const titleInput = modalBody?.querySelector("[data-teacher-event-title]");
-          const dateInput = modalBody?.querySelector("[data-teacher-event-date]");
-          const startInput = modalBody?.querySelector("[data-teacher-event-start]");
-          const endInput = modalBody?.querySelector("[data-teacher-event-end]");
-          if (!(titleInput instanceof HTMLInputElement)) return;
-          if (!(dateInput instanceof HTMLInputElement)) return;
-          if (!(startInput instanceof HTMLInputElement)) return;
-          if (!(endInput instanceof HTMLInputElement)) return;
-
-          const title = titleInput.value.trim() || "Evento";
-          const date = parseDateKey(dateInput.value);
-          if (!date) return;
-
-          const startTime = clampTime(startInput.value, "08:00");
-          const endTime = clampTime(endInput.value, "09:00");
-          const start = getSlotDateTime(date, startTime);
-          const end = getSlotDateTime(date, endTime);
-          if (end.getTime() <= start.getTime()) return;
-
-          const id = `m_${Date.now().toString(36)}`;
-          teacherManualEvents.unshift({
-            id,
-            title,
-            startIso: start.toISOString(),
-            endIso: end.toISOString(),
-          });
-          persistTeacherCalendarEvents();
-          setTeacherFocusDate(date);
-          renderTeacherCalendar();
-        },
-      });
+      openTeacherCreateEventModal();
       return;
     }
 
@@ -3113,6 +3681,99 @@ document.addEventListener("change", (event) => {
   }
 });
 
+document.addEventListener("input", (event) => {
+  const target = event.target;
+  if (!createEventDraft || !modalBody || modalOverlay?.hidden) return;
+  if (activeModalKind !== "create-event") return;
+
+  if (target instanceof HTMLInputElement && target.matches("[data-ce-title]")) {
+    createEventDraft.title = target.value;
+    validateCreateEventDraft();
+    return;
+  }
+
+  if (target instanceof HTMLInputElement && target.matches("[data-ce-date]")) {
+    createEventDraft.dateKey = target.value;
+    validateCreateEventDraft();
+    return;
+  }
+
+  if (target instanceof HTMLInputElement && target.matches("[data-ce-start]")) {
+    createEventDraft.startTime = target.value;
+    validateCreateEventDraft();
+    return;
+  }
+
+  if (target instanceof HTMLInputElement && target.matches("[data-ce-end]")) {
+    createEventDraft.endTime = target.value;
+    validateCreateEventDraft();
+    return;
+  }
+
+  if (target instanceof HTMLTextAreaElement && target.matches("[data-ce-desc]")) {
+    createEventDraft.description = target.value;
+    validateCreateEventDraft();
+    return;
+  }
+
+  if (target instanceof HTMLInputElement && target.matches("[data-ce-guest-search]")) {
+    createEventDraft.guestQuery = target.value;
+    syncGuestDropdown();
+  }
+});
+
+document.addEventListener("change", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement)) return;
+  if (!createEventDraft || !modalBody || modalOverlay?.hidden) return;
+  if (activeModalKind !== "create-event") return;
+
+  if (target.matches("[data-ce-doc-input]")) {
+    const files = Array.from(target.files || []);
+    target.value = "";
+    if (!files.length) return;
+
+    (async () => {
+      for (const file of files) {
+        const ext = guessExt(file.name);
+        if (!acceptedDocExts.includes(ext)) continue;
+        if (file.size > MAX_DOC_BYTES) continue;
+        const id = `d_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+        const doc = { id, name: file.name, ext, type: file.type || "", size: file.size, dataUrl: "", loading: true };
+        createEventDraft.documents.push(doc);
+        validateCreateEventDraft();
+        try {
+          doc.dataUrl = await fileToDataUrl(file);
+        } catch (error) {
+          doc.dataUrl = "";
+        } finally {
+          doc.loading = false;
+        }
+      }
+
+      const list = modalBody.querySelector("[data-ce-doc-list]");
+      if (list instanceof HTMLElement) {
+        list.innerHTML = (createEventDraft.documents || [])
+          .map((doc) => {
+            return `
+              <div class="upload-file">
+                <span class="upload-file-icon" aria-hidden="true">${getFileTypeIconSvg(doc.ext)}</span>
+                <div>
+                  <strong>${escapeHtml(doc.name)}</strong>
+                  <span>${escapeHtml(`${formatBytes(doc.size)} · ${doc.ext.toUpperCase()}`)}</span>
+                </div>
+                <button class="upload-file-remove" type="button" data-ce-remove-doc="${escapeHtml(doc.id)}" aria-label="Remover documento">×</button>
+              </div>
+            `;
+          })
+          .join("");
+      }
+
+      validateCreateEventDraft();
+    })();
+  }
+});
+
 document.addEventListener("submit", (event) => {
   const target = event.target;
   if (!(target instanceof HTMLFormElement)) return;
@@ -3154,6 +3815,75 @@ document.addEventListener("submit", (event) => {
   if (refreshedThread instanceof HTMLElement) {
     refreshedThread.hidden = false;
   }
+});
+
+document.addEventListener("focusin", (event) => {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  if (!createEventDraft || !modalBody || modalOverlay?.hidden) return;
+  if (activeModalKind !== "create-event") return;
+  if (target.matches("[data-ce-guest-search]")) {
+    syncGuestDropdown();
+  }
+});
+
+document.addEventListener("dragover", (event) => {
+  if (!createEventDraft || !modalBody || modalOverlay?.hidden) return;
+  if (activeModalKind !== "create-event") return;
+  const zone = event.target instanceof Element ? event.target.closest("[data-ce-upload]") : null;
+  if (!zone) return;
+  event.preventDefault();
+});
+
+document.addEventListener("drop", (event) => {
+  if (!createEventDraft || !modalBody || modalOverlay?.hidden) return;
+  if (activeModalKind !== "create-event") return;
+  const zone = event.target instanceof Element ? event.target.closest("[data-ce-upload]") : null;
+  if (!zone) return;
+  event.preventDefault();
+  const dt = event.dataTransfer;
+  if (!dt) return;
+  const files = Array.from(dt.files || []);
+  if (!files.length) return;
+  const input = modalBody.querySelector("[data-ce-doc-input]");
+  if (!(input instanceof HTMLInputElement)) return;
+  // Trigger the same handler via a synthetic change: process files inline.
+  (async () => {
+    for (const file of files) {
+      const ext = guessExt(file.name);
+      if (!acceptedDocExts.includes(ext)) continue;
+      if (file.size > MAX_DOC_BYTES) continue;
+      const id = `d_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+      const doc = { id, name: file.name, ext, type: file.type || "", size: file.size, dataUrl: "", loading: true };
+      createEventDraft.documents.push(doc);
+      validateCreateEventDraft();
+      try {
+        doc.dataUrl = await fileToDataUrl(file);
+      } catch (error) {
+        doc.dataUrl = "";
+      } finally {
+        doc.loading = false;
+      }
+    }
+    const list = modalBody.querySelector("[data-ce-doc-list]");
+    if (list instanceof HTMLElement) {
+      list.innerHTML = (createEventDraft.documents || [])
+        .map((doc) => {
+          return `
+            <div class="upload-file">
+              <span class="upload-file-icon" aria-hidden="true">${getFileTypeIconSvg(doc.ext)}</span>
+              <div>
+                <strong>${escapeHtml(doc.name)}</strong>
+                <span>${escapeHtml(`${formatBytes(doc.size)} · ${doc.ext.toUpperCase()}`)}</span>
+              </div>
+              <button class="upload-file-remove" type="button" data-ce-remove-doc="${escapeHtml(doc.id)}" aria-label="Remover documento">×</button>
+            </div>
+          `;
+        })
+        .join("");
+    }
+    validateCreateEventDraft();
+  })();
 });
 
 window.addEventListener("resize", syncSidebarMode);
