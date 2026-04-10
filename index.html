@@ -8,16 +8,16 @@
       name="description"
       content="Plataforma da Space com aulas gravadas, aulas ao vivo e uma experiência mais clean para estudar inglês online."
     />
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="/styles.css" />
   </head>
-	  <body data-view="publico" data-page="landing">
+  <body data-view="publico" data-page="landing">
     <div class="page-glow page-glow-left" aria-hidden="true"></div>
     <div class="page-glow page-glow-right" aria-hidden="true"></div>
 
-    <div class="site-shell" data-view="publico">
+    <div class="site-shell">
       <header class="site-header">
         <a class="brand" href="#topo" aria-label="Space home">
-          <img class="brand-logo" src="assets/space-logo.png" alt="Logo Space" />
+          <img class="brand-logo" src="/assets/space-logo.png" alt="Logo Space" />
         </a>
 
         <nav class="site-nav" aria-label="Navegação principal">
@@ -25,9 +25,7 @@
           <a href="#recursos">Inside Space</a>
         </nav>
 
-        <button class="button button-outline" type="button" data-open-platform>
-          Login
-        </button>
+        <a class="button button-outline" href="/entrar">Login</a>
       </header>
 
       <main id="topo">
@@ -36,15 +34,12 @@
             <span class="eyebrow">Escola de inglês online</span>
             <h1>English for your next chapter.</h1>
             <p class="hero-text">
-              Aulas gravadas, encontros ao vivo e uma experiência simples para
-              estudar com constância.
+              Aulas gravadas, encontros ao vivo e uma experiência simples para estudar com constância.
             </p>
 
             <div class="hero-actions">
               <a class="button button-solid" href="#metodo">Conhecer</a>
-              <button class="button button-ghost" type="button" data-open-platform>
-                Ver plataforma
-              </button>
+              <a class="button button-ghost" href="/entrar">Ver plataforma</a>
             </div>
 
             <div class="hero-stats" aria-label="Destaques da plataforma">
@@ -65,11 +60,7 @@
 
           <div class="hero-visual">
             <div class="hero-orbit">
-              <img
-                class="hero-feed"
-                src="assets/space-feed.png"
-                alt="Identidade visual da Space"
-              />
+              <img class="hero-feed" src="/assets/space-feed.png" alt="Identidade visual da Space" />
             </div>
 
             <div class="floating-card floating-card-top">
@@ -82,7 +73,7 @@
 
         <section class="feature-strip" aria-label="Pilares da plataforma">
           <article class="feature-strip-card">
-            <img src="assets/space-symbol.png" alt="" aria-hidden="true" />
+            <img src="/assets/space-symbol.png" alt="" aria-hidden="true" />
             <div>
               <h2>Aprenda no seu tempo</h2>
               <p>Trilhas curtas e diretas.</p>
@@ -90,7 +81,7 @@
           </article>
 
           <article class="feature-strip-card">
-            <img src="assets/space-symbol.png" alt="" aria-hidden="true" />
+            <img src="/assets/space-symbol.png" alt="" aria-hidden="true" />
             <div>
               <h2>Agende ao vivo</h2>
               <p>Horários claros e rápidos de reservar.</p>
@@ -98,7 +89,7 @@
           </article>
 
           <article class="feature-strip-card">
-            <img src="assets/space-symbol.png" alt="" aria-hidden="true" />
+            <img src="/assets/space-symbol.png" alt="" aria-hidden="true" />
             <div>
               <h2>Veja o essencial</h2>
               <p>Sem excesso de informação.</p>
@@ -118,58 +109,62 @@
               <h3>Aulas gravadas</h3>
               <p>Biblioteca limpa e fácil de navegar.</p>
             </article>
-
             <article class="method-card">
               <span class="card-kicker">02</span>
-              <h3>Aulas ao vivo</h3>
-              <p>Agenda objetiva para reservar horários.</p>
+              <h3>Ao vivo com professores</h3>
+              <p>Agendamento simples, sem fricção.</p>
             </article>
-
-            <article class="method-card method-card-highlight">
+            <article class="method-card">
               <span class="card-kicker">03</span>
-              <h3>Dashboard</h3>
-              <p>O aluno entra e entende o que fazer.</p>
+              <h3>Dashboard objetivo</h3>
+              <p>Progresso, consistência e próximos passos.</p>
+            </article>
+            <article class="method-card">
+              <span class="card-kicker">04</span>
+              <h3>Materiais essenciais</h3>
+              <p>Apoio direto para a sua rotina.</p>
             </article>
           </div>
         </section>
 
-        <section class="section-split" id="recursos">
-          <div class="split-copy">
+        <section class="section-grid section-grid-compact" id="recursos">
+          <div class="section-heading">
             <span class="eyebrow">Inside Space</span>
-            <h2>Uma área interna mais leve e mais focada.</h2>
-            <p>
-              Sidebar simples, cards mais calmos e foco no que importa agora.
-            </p>
+            <h2>Uma plataforma que respeita seu tempo.</h2>
           </div>
 
-          <div class="split-preview">
-            <div class="mini-platform">
-              <aside class="mini-sidebar">
-                <span class="mini-brand">Space</span>
-                <span class="mini-item mini-item-active">Dashboard</span>
-                <span class="mini-item">Aulas gravadas</span>
-                <span class="mini-item">Ao vivo</span>
-                <span class="mini-item">Materiais</span>
-              </aside>
-
-              <div class="mini-content">
-                <div class="mini-panel large">
-                  <span class="mini-label">Próxima aula</span>
-                  <strong>Speaking Clinic</strong>
-                  <p>Hoje, 19:00 com teacher Amanda.</p>
-                </div>
-                <div class="mini-panel">
-                  <span class="mini-label">Progresso</span>
-                  <strong>72%</strong>
-                  <p>Trilha Career English.</p>
-                </div>
-                <div class="mini-panel">
-                  <span class="mini-label">Continue</span>
-                  <strong>Listening for Meetings</strong>
-                  <p>Faltam 12 min para concluir.</p>
-                </div>
+          <div class="class-grid">
+            <article class="class-card">
+              <div class="class-card-head">
+                <span class="card-kicker">Aulas gravadas</span>
+                <strong>Trilhas curtas</strong>
               </div>
-            </div>
+              <p>Foco em aulas que cabem na rotina.</p>
+            </article>
+
+            <article class="class-card">
+              <div class="class-card-head">
+                <span class="card-kicker">Ao vivo</span>
+                <strong>Agenda rápida</strong>
+              </div>
+              <p>Escolha um horário e avance sem ruído.</p>
+            </article>
+
+            <article class="class-card">
+              <div class="class-card-head">
+                <span class="card-kicker">Progresso</span>
+                <strong>Trilha visual</strong>
+              </div>
+              <p>Do Pré A1 ao C2, com clareza.</p>
+            </article>
+
+            <article class="class-card">
+              <div class="class-card-head">
+                <span class="card-kicker">Consistência</span>
+                <strong>Streak</strong>
+              </div>
+              <p>Um lembrete visual para manter o ritmo.</p>
+            </article>
           </div>
         </section>
 
@@ -179,886 +174,10 @@
             <h2>Uma experiência mais clean para receber e reter alunos.</h2>
           </div>
 
-          <button class="button button-solid" type="button" data-open-platform>
-            Ver área interna
-          </button>
-        </section>
-      </main>
-	    </div>
-
-	    <div class="auth-shell auth-shell-enter" data-auth-page="entrar" hidden>
-	      <div class="auth-top">
-	        <a class="auth-brand" href="/" data-nav-home aria-label="Voltar para a landing page">
-	          <img class="auth-brand-logo" src="assets/space-logo.png" alt="Logo Space" />
-	        </a>
-	      </div>
-
-		      <div class="auth-center">
-		        <h1 class="auth-title">Como você quer entrar?</h1>
-
-		        <div class="auth-role-grid" role="list">
-		          <button class="auth-role-card" type="button" data-enter-role="student" role="listitem">
-		            <strong>ALUNO</strong>
-		          </button>
-
-	          <button class="auth-role-card" type="button" data-enter-role="teacher" role="listitem">
-	            <strong>PROFESSOR</strong>
-	          </button>
-
-	          <button class="auth-role-card" type="button" data-enter-role="admin" role="listitem">
-	            <strong>ADMINISTRADOR</strong>
-	          </button>
-	        </div>
-	      </div>
-	    </div>
-
-	    <div class="auth-shell auth-shell-login" data-auth-page="login" hidden>
-	      <div class="auth-login-left">
-	        <a class="auth-login-logo" href="/" data-nav-home aria-label="Voltar para a landing page">
-	          <img class="auth-login-logo-img" src="assets/space-logo.png" alt="Logo Space" />
-	        </a>
-	        <div class="auth-login-copy">
-	          <h1 class="auth-login-phrase" data-login-phrase>Seu próximo nível começa aqui.</h1>
-	          <p class="auth-login-sub" data-login-sub>Entre com suas credenciais para continuar.</p>
-	        </div>
-	        <div class="auth-login-footer-shape" aria-hidden="true"></div>
-	      </div>
-
-	      <div class="auth-login-right">
-	        <div class="auth-login-form-shell">
-	          <a class="auth-back" href="/entrar" data-nav-enter>← Trocar perfil</a>
-	          <div class="auth-login-badge" data-login-badge>Entrando como Aluno</div>
-
-	          <form class="auth-form" data-login-form novalidate>
-	            <label class="auth-field">
-	              <span>E-mail</span>
-	              <input class="auth-input" type="email" autocomplete="email" data-login-email />
-	              <div class="auth-inline-error" data-login-email-error hidden>E-mail inválido</div>
-	            </label>
-
-	            <label class="auth-field">
-	              <span>Senha</span>
-	              <div class="auth-password">
-	                <input class="auth-input" type="password" autocomplete="current-password" data-login-password />
-	                <button class="auth-eye" type="button" data-login-eye aria-label="Mostrar senha">
-	                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-	                    <path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12Z"></path>
-	                    <path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z"></path>
-	                  </svg>
-	                </button>
-	              </div>
-	              <div class="auth-inline-error" data-login-password-error hidden>Senha obrigatória</div>
-	            </label>
-
-	            <div class="auth-forgot">
-	              <a href="#" data-login-forgot>Esqueci minha senha</a>
-	            </div>
-
-	            <button class="auth-submit" type="submit" data-login-submit>
-	              <span data-login-submit-label>Entrar</span>
-	              <span class="auth-spinner" data-login-spinner hidden aria-hidden="true"></span>
-	            </button>
-
-	            <div class="auth-form-error" data-login-error hidden>E-mail ou senha incorretos</div>
-
-	            <div class="auth-support">
-	              Problemas para acessar? <a href="#" data-login-support>Entre em contato com o suporte</a>
-	            </div>
-	          </form>
-	        </div>
-	      </div>
-	    </div>
-
-	    <div class="platform-shell" data-view="interno" hidden>
-	      <div class="platform-backdrop" aria-hidden="true"></div>
-
-	      <aside class="platform-sidebar">
-	        <div class="sidebar-topbar">
-	          <button
-	            class="sidebar-toggle"
-            type="button"
-            data-sidebar-toggle
-            aria-expanded="false"
-            aria-label="Abrir barra lateral"
-          >
-            <span class="sidebar-toggle-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none">
-                <path d="m14.5 5.5-6 6 6 6"></path>
-              </svg>
-            </span>
-          </button>
-        </div>
-
-	        <div class="sidebar-brand">
-	          <img src="assets/space-symbol.png" alt="Símbolo da Space" />
-	          <div class="sidebar-brand-copy">
-	            <strong>Space</strong>
-	            <span data-role-sidebar-subtitle>Student Platform</span>
-	          </div>
-	        </div>
-
-	        <nav class="sidebar-nav" aria-label="Seções do aluno">
-          <button
-            class="sidebar-link is-active"
-            type="button"
-            data-panel-target="dashboard"
-            title="Dashboard"
-          >
-            <span class="sidebar-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none">
-                <rect x="3.5" y="3.5" width="7" height="7" rx="1.5"></rect>
-                <rect x="13.5" y="3.5" width="7" height="7" rx="1.5"></rect>
-                <rect x="3.5" y="13.5" width="7" height="7" rx="1.5"></rect>
-                <rect x="13.5" y="13.5" width="7" height="7" rx="1.5"></rect>
-              </svg>
-            </span>
-            <span class="sidebar-text">Dashboard</span>
-          </button>
-          <button
-            class="sidebar-link"
-            type="button"
-            data-panel-target="gravadas"
-            title="Aulas gravadas"
-          >
-            <span class="sidebar-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none">
-                <rect x="3.5" y="5.5" width="17" height="13" rx="2"></rect>
-                <path d="M10 9.25 14.75 12 10 14.75Z"></path>
-              </svg>
-            </span>
-            <span class="sidebar-text">Aulas gravadas</span>
-          </button>
-          <button
-            class="sidebar-link"
-            type="button"
-            data-panel-target="ao-vivo"
-            title="Aulas ao vivo"
-          >
-            <span class="sidebar-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none">
-                <rect x="3.5" y="5.5" width="17" height="15" rx="2"></rect>
-                <path d="M7 3.5V7"></path>
-                <path d="M17 3.5V7"></path>
-                <path d="M3.5 10.5H20.5"></path>
-                <circle cx="12" cy="15.5" r="2.25"></circle>
-              </svg>
-            </span>
-            <span class="sidebar-text">Aulas ao vivo</span>
-          </button>
-	          <button
-	            class="sidebar-link"
-	            type="button"
-	            data-panel-target="materiais"
-	            title="Materiais"
-	          >
-            <span class="sidebar-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none">
-                <path d="M7 4.5h7l3 3v12H7a2 2 0 0 1-2-2v-11a2 2 0 0 1 2-2Z"></path>
-                <path d="M14 4.5v3h3"></path>
-                <path d="M9 12h6"></path>
-                <path d="M9 15.5h4.5"></path>
-              </svg>
-            </span>
-	            <span class="sidebar-text">Materiais</span>
-	          </button>
-	          <button class="sidebar-link" type="button" data-close-platform title="Sair">
-	            <span class="sidebar-icon" aria-hidden="true">
-	              <svg viewBox="0 0 24 24" fill="none">
-	                <path d="M10 7.5H6.8c-1.1 0-2 .9-2 2v7c0 1.1.9 2 2 2H10"></path>
-	                <path d="M15 16.5 19 12l-4-4.5"></path>
-	                <path d="M19 12H10"></path>
-	              </svg>
-	            </span>
-	            <span class="sidebar-text">Sair</span>
-	          </button>
-	        </nav>
-	      </aside>
-
-	      <main class="platform-main">
-	        <header class="platform-header">
-	          <div>
-	            <span class="eyebrow" data-role-eyebrow>Área do aluno</span>
-	            <h1 data-greeting data-user-name="Camila">Boa tarde, Camila.</h1>
-	          </div>
-
-          <div class="header-actions">
-            <div class="header-plan" data-plan-topbar aria-label="Plano e créditos">
-              <div class="header-plan-row">
-                <div class="plan-badge" data-plan-badge>
-                  <span class="plan-dot" aria-hidden="true"></span>
-                  <span data-plan-badge-text>Plano Gold ativo</span>
-                </div>
-                <div class="plan-credits" data-plan-credits>3 créditos disponíveis</div>
-              </div>
-              <div class="plan-renewal" data-plan-renewal>Renovam automaticamente em 15/04</div>
-            </div>
-
-            <div class="header-role" data-role-topbar hidden aria-label="Área do Professor">
-              <div class="role-pill">
-                <span class="role-icon" data-role-topbar-icon aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none">
-                    <path d="M3.5 8.5 12 4.5l8.5 4-8.5 4-8.5-4Z"></path>
-                    <path d="M6.5 10.2V15c0 1.6 2.5 3 5.5 3s5.5-1.4 5.5-3v-4.8"></path>
-                    <path d="M20.5 9v6"></path>
-                  </svg>
-                </span>
-                <span data-role-topbar-text>Área do Professor</span>
-              </div>
-            </div>
-          </div>
-        </header>
-
-        <section class="platform-panel is-visible" data-panel="dashboard">
-          <div class="dashboard-redesign" data-dashboard-student>
-            <div class="overview-stats-grid">
-              <article class="overview-stat-card overview-stat-level">
-                <div class="overview-stat-copy">
-                  <span class="card-kicker">Nível atual</span>
-                  <strong>B1</strong>
-                </div>
-                <div
-                  class="level-progress-ring"
-                  style="--level-progress: 72"
-                  aria-label="72% do nível atual concluído"
-                >
-                  <span>72%</span>
-                </div>
-              </article>
-
-              <article class="overview-stat-card">
-                <span class="card-kicker">Total de horas de estudo</span>
-                <strong>84h</strong>
-              </article>
-
-              <article class="overview-stat-card">
-                <span class="card-kicker">Tempo médio diário</span>
-                <strong>38 min</strong>
-              </article>
-
-              <article class="overview-stat-card streak-side-card streak-stat-card">
-                <div class="streak-header">
-                  <span class="streak-fire" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none">
-                      <path
-                        d="M12.2 2.8c.5 2.4-.4 4.4-2.1 6.1-1.1 1.1-1.8 2.3-1.8 3.9 0 2.2 1.8 3.9 4 3.9 2.5 0 4.4-2 4.4-4.7 0-2.1-1.1-3.9-2.8-5.6-.6 1.2-1.5 2-2.8 2.5.8-1.8.6-3.9-.5-6.1-3.3 1.7-5.5 5.1-5.5 8.9 0 4.9 3.6 8.4 8 8.4s8-3.4 8-8c0-4.4-2.5-7.7-6.9-10.3Z"
-                      ></path>
-                    </svg>
-                  </span>
-                  <span class="card-kicker">Streak</span>
-                </div>
-                <strong>9 dias</strong>
-              </article>
-            </div>
-
-            <div class="analytics-grid">
-              <article class="analytics-card analytics-card-line">
-                <div class="analytics-header">
-                  <h3>Sua trilha de aprendizado</h3>
-                </div>
-
-                <div class="journey-chart-shell">
-                  <div class="journey-chart-stage">
-                    <svg
-                      class="journey-chart-svg"
-                      viewBox="0 0 960 250"
-                      aria-hidden="true"
-                      data-learning-journey-svg
-                    >
-                      <path class="journey-track-base" data-journey-base d=""></path>
-                      <path class="journey-track-progress" data-journey-progress d=""></path>
-                      <g data-journey-nodes></g>
-                    </svg>
-
-                    <div
-                      class="journey-tag-connector journey-tag-connector-start"
-                      data-journey-start-connector
-                    ></div>
-                    <div class="journey-tag journey-tag-start" data-journey-start-label>
-                      Você começou aqui!
-                    </div>
-                    <div
-                      class="journey-tag-connector journey-tag-connector-current"
-                      data-journey-current-connector
-                    ></div>
-                    <div class="journey-tag journey-tag-current" data-journey-current-label>
-                      Você está aqui!
-                    </div>
-                  </div>
-
-                  <div class="journey-levels" data-learning-levels></div>
-                </div>
-              </article>
-
-              <article class="analytics-card analytics-card-bar">
-                <div class="analytics-header">
-                  <h3>Tempo de estudo</h3>
-
-                  <div class="chart-filter-dropdown" data-chart-dropdown="study">
-                    <button
-                      class="chart-filter-trigger"
-                      type="button"
-                      data-chart-trigger="study"
-                      aria-expanded="false"
-                      aria-haspopup="true"
-                      aria-label="Filtrar tempo de estudo"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <rect x="3.5" y="5.5" width="17" height="15" rx="2"></rect>
-                        <path d="M7 3.5V7"></path>
-                        <path d="M17 3.5V7"></path>
-                        <path d="M3.5 10.5H20.5"></path>
-                      </svg>
-                    </button>
-
-                    <div class="chart-filter-menu" data-chart-menu="study" hidden>
-                      <button
-                        class="chart-filter-option is-active"
-                        type="button"
-                        data-chart-option
-                        data-chart-type="study"
-                        data-chart-range="7d"
-                      >
-                        Últimos 7 dias
-                      </button>
-                      <button
-                        class="chart-filter-option"
-                        type="button"
-                        data-chart-option
-                        data-chart-type="study"
-                        data-chart-range="30d"
-                      >
-                        Últimos 30 dias
-                      </button>
-                      <button
-                        class="chart-filter-option"
-                        type="button"
-                        data-chart-option
-                        data-chart-type="study"
-                        data-chart-range="90d"
-                      >
-                        Últimos 90 dias
-                      </button>
-                      <button
-                        class="chart-filter-option"
-                        type="button"
-                        data-chart-option
-                        data-chart-type="study"
-                        data-chart-range="all"
-                      >
-                        Todo o período
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="bar-chart-shell">
-                  <div class="bar-chart-scale">
-                    <span>12h</span>
-                    <span>8h</span>
-                    <span>4h</span>
-                    <span>0h</span>
-                  </div>
-
-                  <div class="bar-chart-stage">
-                    <div class="bar-chart-grid">
-                      <span></span>
-                      <span></span>
-                      <span></span>
-                      <span></span>
-                    </div>
-                    <div class="bar-chart-bars" data-study-chart></div>
-                  </div>
-                </div>
-              </article>
-
-              <article class="analytics-card analytics-card-score">
-                <div class="analytics-header">
-                  <h3>Taxa de agendamento de aulas</h3>
-                </div>
-
-                <div class="score-card-body" aria-label="Taxa de agendamento de aulas: 8.0 de 10">
-                  <div class="score-card-rating">
-                    <strong>8.0</strong>
-                    <span>/10</span>
-                  </div>
-                </div>
-              </article>
-            </div>
-
-            <div class="dashboard-secondary-grid">
-              <article class="surface-card today-availability-card">
-                <div class="dashboard-section-header refined-header">
-                  <h3>Horários disponíveis hoje</h3>
-                  <button class="ghost-action-button" type="button" data-open-live-panel>
-                    ver todos
-                  </button>
-                </div>
-
-                <div class="today-slots-grid">
-                  <button class="today-slot-button" type="button">09:00</button>
-                  <button class="today-slot-button" type="button">11:30</button>
-                  <button class="today-slot-button" type="button">14:00</button>
-                  <button class="today-slot-button" type="button">16:30</button>
-                  <button class="today-slot-button today-slot-button-primary" type="button">
-                    19:00
-                  </button>
-                </div>
-              </article>
-
-              <article class="surface-card ranking-card">
-                <div class="dashboard-section-header refined-header">
-                  <h3>Ranking Space</h3>
-                </div>
-
-                <div class="ranking-list">
-                  <div class="ranking-row ranking-row-top">
-                    <span class="ranking-position">1</span>
-                    <span class="ranking-avatar">AL</span>
-                    <strong>Amanda Lee</strong>
-                    <span class="ranking-xp">8.940 XP</span>
-                  </div>
-                  <div class="ranking-row ranking-row-top">
-                    <span class="ranking-position">2</span>
-                    <span class="ranking-avatar">MR</span>
-                    <strong>Marcus Reed</strong>
-                    <span class="ranking-xp">8.510 XP</span>
-                  </div>
-                  <div class="ranking-row ranking-row-top">
-                    <span class="ranking-position">3</span>
-                    <span class="ranking-avatar">JL</span>
-                    <strong>Julia Long</strong>
-                    <span class="ranking-xp">8.180 XP</span>
-                  </div>
-                  <div class="ranking-row">
-                    <span class="ranking-position">4</span>
-                    <span class="ranking-avatar">NT</span>
-                    <strong>Noah Taylor</strong>
-                    <span class="ranking-xp">7.940 XP</span>
-                  </div>
-                  <div class="ranking-row">
-                    <span class="ranking-position">5</span>
-                    <span class="ranking-avatar">SV</span>
-                    <strong>Sophia Vega</strong>
-                    <span class="ranking-xp">7.520 XP</span>
-                  </div>
-                </div>
-
-                <div class="ranking-self-card">
-                  <span class="card-kicker">Sua posição</span>
-                  <div class="ranking-row ranking-row-self">
-                    <span class="ranking-position">23</span>
-                    <span class="ranking-avatar ranking-avatar-self">CA</span>
-                    <strong>Camila</strong>
-                    <span class="ranking-xp">3.420 XP</span>
-                  </div>
-                </div>
-              </article>
-
-            </div>
-
-            <article class="surface-card recommendations-card">
-              <div class="dashboard-section-header refined-header">
-                <h3>Recomendações pedagógicas</h3>
-              </div>
-
-              <div class="recommendations-grid">
-                <div class="recommendation-item">
-                  <span class="recommendation-tag">Speaking</span>
-                  <strong>Priorizar duas aulas ao vivo de speaking nesta semana</strong>
-                </div>
-                <div class="recommendation-item">
-                  <span class="recommendation-tag">Listening</span>
-                  <strong>Repetir a aula “Listening for meetings” antes da próxima live</strong>
-                </div>
-                <div class="recommendation-item">
-                  <span class="recommendation-tag">Review</span>
-                  <strong>Revisar estruturas de B1 para consolidar a passagem ao B1+</strong>
-                </div>
-              </div>
-            </article>
-          </div>
-
-          <div class="dashboard-redesign dashboard-teacher" data-dashboard-teacher hidden>
-            <div class="overview-stats-grid">
-              <article class="overview-stat-card">
-                <span class="card-kicker">AULAS HOJE</span>
-                <strong data-teacher-lessons-today>—</strong>
-                <p data-teacher-lessons-today-sub>—</p>
-              </article>
-
-              <article class="overview-stat-card">
-                <span class="card-kicker">PRÓXIMA AULA</span>
-                <strong data-teacher-next-class>—</strong>
-                <p data-teacher-next-countdown>—</p>
-              </article>
-
-              <article class="overview-stat-card overview-stat-score">
-                <span class="card-kicker">AVALIAÇÃO MÉDIA</span>
-                <div class="score-card-body score-card-body-compact">
-                  <div class="score-card-rating score-card-rating-compact" aria-label="Avaliação média do professor">
-                    <strong data-teacher-nps>—</strong>
-                    <span>/10</span>
-                  </div>
-                  <p class="teacher-score-sub" data-teacher-nps-sub>—</p>
-                </div>
-              </article>
-
-              <article class="overview-stat-card overview-stat-level">
-                <div class="overview-stat-copy">
-                  <span class="card-kicker">OCUPAÇÃO DA SEMANA</span>
-                  <strong data-teacher-occupancy-percent>—</strong>
-                  <p data-teacher-occupancy-sub>—</p>
-                </div>
-                <div
-                  class="level-progress-ring"
-                  data-teacher-occupancy-ring
-                  style="--level-progress: 0"
-                  aria-label="Ocupação semanal"
-                >
-                  <span data-teacher-occupancy-ring-text>—</span>
-                </div>
-              </article>
-            </div>
-
-            <div class="teacher-insights-grid">
-              <article class="analytics-card analytics-card-bar teacher-classes-card">
-                <div class="analytics-header">
-                  <h3>Histórico de aulas</h3>
-
-                  <div class="chart-filter-dropdown" data-chart-dropdown="teacher-classes">
-                    <button
-                      class="chart-filter-trigger"
-                      type="button"
-                      data-chart-trigger="teacher-classes"
-                      aria-expanded="false"
-                      aria-haspopup="true"
-                      aria-label="Filtrar histórico de aulas"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <rect x="3.5" y="5.5" width="17" height="15" rx="2"></rect>
-                        <path d="M7 3.5V7"></path>
-                        <path d="M17 3.5V7"></path>
-                        <path d="M3.5 10.5H20.5"></path>
-                      </svg>
-                    </button>
-
-                    <div class="chart-filter-menu" data-chart-menu="teacher-classes" hidden>
-                      <button
-                        class="chart-filter-option is-active"
-                        type="button"
-                        data-chart-option
-                        data-chart-type="teacher-classes"
-                        data-chart-range="week"
-                      >
-                        Semana atual
-                      </button>
-                      <button
-                        class="chart-filter-option"
-                        type="button"
-                        data-chart-option
-                        data-chart-type="teacher-classes"
-                        data-chart-range="month"
-                      >
-                        Mês atual
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="bar-chart-shell teacher-classes-shell">
-                  <div class="bar-chart-scale" data-teacher-classes-scale></div>
-
-                  <div class="bar-chart-stage">
-                    <div class="bar-chart-grid">
-                      <span></span>
-                      <span></span>
-                      <span></span>
-                      <span></span>
-                    </div>
-                    <div class="bar-chart-bars teacher-classes-bars" data-teacher-classes-chart></div>
-                    <div class="bar-chart-labels teacher-classes-labels" data-teacher-classes-labels></div>
-                  </div>
-                </div>
-              </article>
-            </div>
-
-            <article class="surface-card teacher-notices-card">
-              <div class="dashboard-section-header refined-header">
-                <h3>Avisos da coordenação</h3>
-              </div>
-
-              <ul class="teacher-notice-list" data-teacher-notice-list></ul>
-              <div class="live-scheduled-empty" data-teacher-notice-empty hidden>Sem avisos no momento</div>
-            </article>
-          </div>
-        </section>
-
-        <section class="platform-panel" data-panel="gravadas" data-hide-platform-header="true" hidden>
-          <div class="panel-heading">
-            <div>
-              <span class="eyebrow">Biblioteca</span>
-              <h2 class="panel-title-compact">Aulas gravadas</h2>
-            </div>
-            <div class="chip-group">
-              <span class="chip chip-active">Todos</span>
-              <span class="chip">Speaking</span>
-              <span class="chip">Business</span>
-            </div>
-          </div>
-
-          <div class="class-grid">
-            <article class="class-card">
-              <img src="assets/space-feed.png" alt="Preview de aula gravada" />
-              <div class="class-card-copy">
-                <span class="card-kicker">Career English</span>
-                <h3>Listening for meetings</h3>
-                <p>12 min</p>
-              </div>
-            </article>
-
-            <article class="class-card">
-              <img src="assets/space-pattern.png" alt="Padronagem da marca Space" />
-              <div class="class-card-copy">
-                <span class="card-kicker">Speaking</span>
-                <h3>Small talk that feels natural</h3>
-                <p>18 min</p>
-              </div>
-            </article>
-
-            <article class="class-card">
-              <img src="assets/space-feed.png" alt="Preview de aula gravada" />
-              <div class="class-card-copy">
-                <span class="card-kicker">Travel English</span>
-                <h3>Airport conversations</h3>
-                <p>10 min</p>
-              </div>
-            </article>
-          </div>
-        </section>
-
-	        <section class="platform-panel" data-panel="ao-vivo" data-hide-platform-header="true" hidden>
-	          <div class="schedule-page-header">
-	            <div>
-	              <h2 class="schedule-page-title">Agende sua próxima aula</h2>
-	            </div>
-	            <div class="header-plan header-plan--schedule" data-plan-topbar aria-label="Plano e créditos">
-	              <div class="header-plan-row">
-	                <div class="plan-badge" data-plan-badge>
-	                  <span class="plan-dot" aria-hidden="true"></span>
-	                  <span data-plan-badge-text>Plano Gold ativo</span>
-	                </div>
-	                <div class="plan-credits" data-plan-credits>3 créditos disponíveis</div>
-	              </div>
-	              <div class="plan-renewal" data-plan-renewal>Renovam automaticamente em 15/04</div>
-	            </div>
-	            <div class="header-role header-role--schedule" data-role-topbar hidden aria-label="Área do Professor">
-	              <div class="role-pill">
-	                <span class="role-icon" data-role-topbar-icon aria-hidden="true">
-	                  <svg viewBox="0 0 24 24" fill="none">
-	                    <path d="M3.5 8.5 12 4.5l8.5 4-8.5 4-8.5-4Z"></path>
-	                    <path d="M6.5 10.2V15c0 1.6 2.5 3 5.5 3s5.5-1.4 5.5-3v-4.8"></path>
-	                    <path d="M20.5 9v6"></path>
-	                  </svg>
-	                </span>
-	                <span data-role-topbar-text>Área do Professor</span>
-	              </div>
-	            </div>
-	          </div>
-
-          <!-- Student scheduling UI (unchanged). -->
-          <div data-live-student>
-            <div class="schedule-context-row">
-              <div class="schedule-timezone-row">
-                <span class="schedule-context-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none">
-                    <circle cx="12" cy="12" r="8.5"></circle>
-                    <path d="M3.5 12h17"></path>
-                    <path d="M12 3.5c2.4 2.2 3.8 5.2 3.8 8.5S14.4 18.3 12 20.5C9.6 18.3 8.2 15.3 8.2 12S9.6 5.7 12 3.5Z"></path>
-                  </svg>
-                </span>
-                <span data-live-timezone>America/São Paulo · GMT-03:00</span>
-              </div>
-
-              <div class="schedule-context-copy" data-live-instruction aria-live="polite">
-                Selecione um dia e horário para continuar
-              </div>
-            </div>
-
-            <div class="live-schedule-layout">
-              <article class="live-booking-panel">
-                <div class="live-booking-panel-header">
-                  <div class="live-credits-row">
-                    <div class="live-credits-dots" data-live-credits-dots aria-label="Créditos disponíveis"></div>
-                    <div class="live-credits-caption" data-live-credits-caption>3 créditos disponíveis</div>
-                  </div>
-                  <div class="live-week-control">
-                    <div class="live-week-range" data-live-week-range>8 – 14 de abril de 2026</div>
-                  </div>
-                </div>
-
-                <div class="live-scheduler-grid" data-live-scheduler-grid></div>
-              </article>
-
-              <aside class="live-scheduled-panel" aria-label="Aulas agendadas">
-                <div class="live-scheduled-header">
-                  <h3 class="live-scheduled-title">Aulas agendadas</h3>
-                </div>
-                <div class="live-scheduled-body">
-                  <ul class="live-scheduled-list" data-live-scheduled-list></ul>
-                  <div class="live-scheduled-empty" data-live-scheduled-empty hidden>Sem aulas agendadas</div>
-                </div>
-              </aside>
-            </div>
-          </div>
-
-          <!-- Teacher calendar UI (Google Calendar-like). -->
-          <div class="teacher-calendar-shell" data-live-teacher hidden>
-            <div class="teacher-calendar-left" aria-label="Painel lateral">
-              <div class="teacher-calendar-actions">
-                <button class="teacher-calendar-button teacher-calendar-button-primary" type="button" data-teacher-create-event>
-                  <span class="teacher-calendar-button-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none">
-                      <path d="M12 5v14"></path>
-                      <path d="M5 12h14"></path>
-                    </svg>
-                  </span>
-                  <span>Criar</span>
-                </button>
-
-                <button class="teacher-calendar-button teacher-calendar-button-outline" type="button" data-teacher-work-hours>
-                  <span class="teacher-calendar-button-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none">
-                      <circle cx="12" cy="12" r="8.5"></circle>
-                      <path d="M12 7.5v5l3 2"></path>
-                    </svg>
-                  </span>
-                  <span>Definir horário de trabalho</span>
-                </button>
-              </div>
-
-              <div class="teacher-mini-cal" aria-label="Calendário mensal">
-                <div class="teacher-mini-cal-head">
-                  <div class="teacher-mini-cal-title" data-teacher-mini-title>Abril de 2026</div>
-                  <div class="teacher-mini-cal-nav">
-                    <button class="teacher-mini-cal-nav-btn" type="button" data-teacher-mini-prev aria-label="Mês anterior">
-                      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <path d="M14.5 7.5 10 12l4.5 4.5"></path>
-                      </svg>
-                    </button>
-                    <button class="teacher-mini-cal-nav-btn" type="button" data-teacher-mini-next aria-label="Próximo mês">
-                      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <path d="M9.5 7.5 14 12l-4.5 4.5"></path>
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-
-                <div class="teacher-mini-cal-grid" data-teacher-mini-grid></div>
-              </div>
-
-              <div class="teacher-cal-list">
-                <div class="teacher-cal-list-title">Minhas agendas</div>
-                <div class="teacher-cal-list-item" aria-label="Agenda do professor">
-                  <span class="teacher-cal-check is-checked" aria-hidden="true"></span>
-                  <span>Agenda do professor</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="teacher-calendar-main" aria-label="Calendário">
-              <div class="teacher-cal-topbar">
-                <div class="teacher-cal-topbar-left">
-                  <button class="teacher-cal-today" type="button" data-teacher-cal-today>Hoje</button>
-                  <div class="teacher-cal-arrows" aria-label="Navegação">
-                    <button class="teacher-cal-arrow" type="button" data-teacher-cal-prev aria-label="Anterior">
-                      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <path d="M14.5 7.5 10 12l4.5 4.5"></path>
-                      </svg>
-                    </button>
-                    <button class="teacher-cal-arrow" type="button" data-teacher-cal-next aria-label="Próximo">
-                      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <path d="M9.5 7.5 14 12l-4.5 4.5"></path>
-                      </svg>
-                    </button>
-                  </div>
-                  <div class="teacher-cal-date" data-teacher-cal-date>9 de abril de 2026</div>
-                </div>
-
-                <div class="teacher-cal-topbar-right">
-                  <div class="teacher-cal-view" role="tablist" aria-label="Visualização">
-                    <button class="teacher-cal-view-btn is-active" type="button" data-teacher-cal-view="day" role="tab" aria-selected="true">Dia</button>
-                    <button class="teacher-cal-view-btn" type="button" data-teacher-cal-view="week" role="tab" aria-selected="false">Semana</button>
-                    <button class="teacher-cal-view-btn" type="button" data-teacher-cal-view="month" role="tab" aria-selected="false">Mês</button>
-                  </div>
-                </div>
-              </div>
-
-              <div class="teacher-cal-tz" data-teacher-cal-tz>America/São Paulo · GMT-03:00</div>
-
-              <div class="teacher-cal-viewport" data-teacher-cal-viewport></div>
-            </div>
-          </div>
-	        </section>
-
-        <section class="platform-panel" data-panel="materiais" hidden>
-          <div class="panel-heading">
-            <div>
-              <span class="eyebrow">Materiais</span>
-              <h2>Arquivos de apoio</h2>
-            </div>
-          </div>
-
-          <div class="materials-grid">
-            <article class="material-card">
-              <span class="card-kicker">Workbook</span>
-              <h3>Meeting phrases pack</h3>
-              <p>Expressões essenciais.</p>
-            </article>
-
-            <article class="material-card">
-              <span class="card-kicker">Checklist</span>
-              <h3>Weekly study planner</h3>
-              <p>Planejamento rápido.</p>
-            </article>
-
-            <article class="material-card">
-              <span class="card-kicker">Revision</span>
-              <h3>Pronunciation drills</h3>
-              <p>Exercícios curtos.</p>
-            </article>
-          </div>
+          <a class="button button-solid" href="/entrar">Ver área interna</a>
         </section>
       </main>
     </div>
-
-	    <div class="modal-overlay" data-modal-overlay hidden>
-	      <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-	        <div class="modal-header">
-	          <h3 class="modal-title" id="modal-title" data-modal-title></h3>
-	          <button class="modal-trash" type="button" data-modal-trash hidden aria-label="Excluir evento">
-	            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-	              <path d="M4.5 7.5h15"></path>
-	              <path d="M10 11v6"></path>
-	              <path d="M14 11v6"></path>
-	              <path d="M8.5 7.5l1-2h5l1 2"></path>
-	              <path d="M6.5 7.5l1 13h9l1-13"></path>
-	            </svg>
-	          </button>
-	          <button class="modal-close" type="button" data-modal-close aria-label="Fechar">
-	            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-	              <path d="M6.5 6.5 17.5 17.5"></path>
-	              <path d="M17.5 6.5 6.5 17.5"></path>
-	            </svg>
-          </button>
-        </div>
-        <div class="modal-body" data-modal-body></div>
-        <div class="modal-actions">
-          <button class="button button-outline" type="button" data-modal-secondary>Voltar</button>
-          <button class="button button-solid" type="button" data-modal-primary>Confirmar</button>
-        </div>
-      </div>
-    </div>
-
-    <script src="script.js"></script>
   </body>
 </html>
+

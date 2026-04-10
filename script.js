@@ -288,11 +288,12 @@ const sanitizeSessionUser = (value) => {
   return { id, role, name, email };
 };
 
-let sessionUser = null;
-let sessionChecked = false;
+const embeddedSession = sanitizeSessionUser(window.__SPACE_SESSION__);
+let sessionUser = embeddedSession;
+let sessionChecked = Boolean(embeddedSession);
 let sessionRefreshPromise = null;
 
-let currentRole = "student";
+let currentRole = embeddedSession?.role || "student";
 
 const syncRoleUI = () => {
   const def = ROLE_DEFS[currentRole] || ROLE_DEFS.student;
@@ -3190,45 +3191,6 @@ const normalizePathname = (pathname) => {
   return raw || "/";
 };
 
-let currentLoginRole = "student";
-
-const setLoginProfileUI = (role) => {
-  currentLoginRole = normalizeRole(role);
-  const def = AUTH_PROFILE_DEFS[currentLoginRole] || AUTH_PROFILE_DEFS.student;
-
-  if (authLoginBadge) authLoginBadge.textContent = `Entrando como ${def.label}`;
-  if (authLoginPhrase) authLoginPhrase.textContent = def.phrase;
-  if (authLoginSub) authLoginSub.textContent = def.sub;
-
-  if (authLoginEmail instanceof HTMLInputElement) authLoginEmail.value = "";
-  if (authLoginPassword instanceof HTMLInputElement) {
-    authLoginPassword.value = "";
-    authLoginPassword.type = "password";
-  }
-  if (authLoginEye instanceof HTMLElement) {
-    authLoginEye.setAttribute("aria-label", "Mostrar senha");
-  }
-
-  if (authLoginError instanceof HTMLElement) authLoginError.hidden = true;
-  if (authLoginEmailError instanceof HTMLElement) authLoginEmailError.hidden = true;
-  if (authLoginPasswordError instanceof HTMLElement) authLoginPasswordError.hidden = true;
-  if (authLoginEmail instanceof HTMLElement) authLoginEmail.classList.remove("is-error");
-  if (authLoginPassword instanceof HTMLElement) authLoginPassword.classList.remove("is-error");
-
-  if (authLoginSpinner instanceof HTMLElement) authLoginSpinner.hidden = true;
-  if (authLoginSubmitLabel instanceof HTMLElement) authLoginSubmitLabel.hidden = false;
-  if (authLoginSubmit instanceof HTMLButtonElement) authLoginSubmit.disabled = false;
-};
-
-const routeToRole = (path) => {
-  const segments = String(path || "").split("/").filter(Boolean);
-  const slug = segments[1] || "";
-  if (slug === "aluno") return "student";
-  if (slug === "professor") return "teacher";
-  if (slug === "admin") return "admin";
-  return "";
-};
-
 const roleBasePath = (role) => {
   const normalized = normalizeRole(role);
   if (normalized === "teacher") return "/app/professor";
@@ -3289,9 +3251,14 @@ const parseAppRoute = (path) => {
   return { role, panel: "dashboard" };
 };
 
-const refreshSession = async () => {
-  if (sessionRefreshPromise) return sessionRefreshPromise;
+const ensureSessionOrRedirect = async () => {
+  if (sessionUser) {
+    sessionChecked = true;
+    return sessionUser;
+  }
 
+  // Fallback: if the template didn't embed session info, verify via backend.
+  if (sessionRefreshPromise) return sessionRefreshPromise;
   sessionRefreshPromise = fetch("/api/me", { credentials: "include" })
     .then(async (res) => {
       if (!res.ok) {
@@ -3313,216 +3280,59 @@ const refreshSession = async () => {
       sessionRefreshPromise = null;
     });
 
-  return sessionRefreshPromise;
+  const resolved = await sessionRefreshPromise;
+  if (!resolved) {
+    window.location.replace("/entrar");
+    return null;
+  }
+  return resolved;
 };
 
-const navigate = (path, { replace = false } = {}) => {
-  const next = String(path || "/");
+const initAppShell = async () => {
+  const user = await ensureSessionOrRedirect();
+  if (!user) return;
+
+  setActiveChartOption("learning", chartState.learning);
+  setActiveChartOption("study", chartState.study);
+  setActiveChartOption("teacher-classes", chartState["teacher-classes"]);
+  setSidebarExpanded(false);
+
+  setRole(user.role);
+  const parsed = parseAppRoute(normalizePathname(window.location.pathname));
+  showPanel(parsed?.panel || "dashboard");
+
+  renderDashboardCharts();
+  renderPlanUI();
+};
+
+initAppShell();
+
+const navigateApp = (path, { replace = false } = {}) => {
+  const next = normalizePathname(String(path || roleBasePath(sessionUser?.role || currentRole)));
   if (replace) {
     window.history.replaceState({}, "", next);
   } else {
     window.history.pushState({}, "", next);
   }
-  handleRoute();
-};
 
-const showLanding = () => {
-  closeModal();
-  hideAuthPages();
-  setPage("landing");
-  setView("publico", false);
-};
+  const parsed = parseAppRoute(next);
+  if (!parsed) return;
 
-const showEnter = () => {
-  closeModal();
-  showAuthPage("entrar");
-  setPage("entrar");
-  setView("auth", false);
-};
-
-const showLogin = (role) => {
-  closeModal();
-  showAuthPage("login");
-  setPage("login");
-  setView("auth", false);
-  setLoginProfileUI(role);
-};
-
-const showApp = ({ role, panel }) => {
-  hideAuthPages();
-  setPage("app");
-  setView("interno", false);
-  setRole(role);
-  showPanel(panel);
-};
-
-const handleRoute = () => {
-  const path = normalizePathname(window.location.pathname);
-
-  if (path === "/entrar") {
-    if (sessionUser) {
-      navigate(roleBasePath(sessionUser.role), { replace: true });
-      return;
-    }
-    showEnter();
+  // Hard safety: keep the UI on the authenticated role.
+  if (sessionUser && normalizeRole(parsed.role) !== normalizeRole(sessionUser.role)) {
+    navigateApp(roleBasePath(sessionUser.role), { replace: true });
     return;
   }
 
-  if (path.startsWith("/login")) {
-    if (sessionUser) {
-      navigate(roleBasePath(sessionUser.role), { replace: true });
-      return;
-    }
-    const role = routeToRole(path);
-    if (!role) {
-      navigate("/entrar", { replace: true });
-      return;
-    }
-    showLogin(role);
-    return;
-  }
-
-  if (path === "/app") {
-    if (!sessionUser) {
-      navigate("/entrar", { replace: true });
-      return;
-    }
-    navigate(roleBasePath(sessionUser.role), { replace: true });
-    return;
-  }
-
-  if (path.startsWith("/app/")) {
-    if (!sessionUser) {
-      navigate("/entrar", { replace: true });
-      return;
-    }
-
-    const parsed = parseAppRoute(path);
-    if (!parsed) {
-      navigate(roleBasePath(sessionUser.role), { replace: true });
-      return;
-    }
-
-    if (normalizeRole(parsed.role) !== normalizeRole(sessionUser.role)) {
-      navigate(roleBasePath(sessionUser.role), { replace: true });
-      return;
-    }
-
-    showApp({ role: sessionUser.role, panel: parsed.panel });
-    return;
-  }
-
-  showLanding();
+  showPanel(parsed.panel);
 };
 
 window.addEventListener("popstate", () => {
-  handleRoute();
+  const parsed = parseAppRoute(normalizePathname(window.location.pathname));
+  if (parsed) {
+    showPanel(parsed.panel);
+  }
 });
-
-if (authBackLink) {
-  authBackLink.addEventListener("click", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    navigate("/entrar");
-  });
-}
-
-openPlatformButtons.forEach((button) => {
-  button.addEventListener("click", () => {
-    navigate("/entrar");
-  });
-});
-
-let loginInFlight = false;
-
-const setLoginLoading = (isLoading) => {
-  const loading = Boolean(isLoading);
-  if (authLoginSubmit instanceof HTMLButtonElement) authLoginSubmit.disabled = loading;
-  if (authLoginSpinner instanceof HTMLElement) authLoginSpinner.hidden = !loading;
-  if (authLoginSubmitLabel instanceof HTMLElement) authLoginSubmitLabel.hidden = loading;
-};
-
-if (authLoginEye) {
-  authLoginEye.addEventListener("click", () => {
-    if (!(authLoginPassword instanceof HTMLInputElement)) return;
-    const nextType = authLoginPassword.type === "password" ? "text" : "password";
-    authLoginPassword.type = nextType;
-    authLoginEye.setAttribute("aria-label", nextType === "password" ? "Mostrar senha" : "Ocultar senha");
-  });
-}
-
-if (authLoginForm) {
-  authLoginForm.addEventListener("submit", (event) => {
-    event.preventDefault();
-    if (loginInFlight) return;
-
-    const email = authLoginEmail instanceof HTMLInputElement ? authLoginEmail.value.trim() : "";
-    const password = authLoginPassword instanceof HTMLInputElement ? authLoginPassword.value : "";
-
-    const emailOk = isValidEmail(email);
-    const passOk = Boolean(password);
-
-    if (authLoginEmailError instanceof HTMLElement) authLoginEmailError.hidden = emailOk;
-    if (authLoginPasswordError instanceof HTMLElement) authLoginPasswordError.hidden = passOk;
-    if (authLoginError instanceof HTMLElement) authLoginError.hidden = true;
-
-    if (authLoginEmail instanceof HTMLElement) authLoginEmail.classList.toggle("is-error", !emailOk);
-    if (authLoginPassword instanceof HTMLElement) authLoginPassword.classList.toggle("is-error", !passOk);
-
-    if (!emailOk || !passOk) {
-      return;
-    }
-
-    loginInFlight = true;
-    setLoginLoading(true);
-
-    fetch("/api/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({
-        role: currentLoginRole,
-        email,
-        password,
-      }),
-    })
-      .then(async (res) => {
-        if (!res.ok) {
-          throw new Error("invalid_credentials");
-        }
-        const data = await res.json().catch(() => null);
-        const user = sanitizeSessionUser(data?.user);
-        if (!user) {
-          throw new Error("invalid_response");
-        }
-        sessionUser = user;
-        sessionChecked = true;
-        setRole(user.role);
-        navigate(roleBasePath(user.role), { replace: true });
-      })
-      .catch(() => {
-        if (authLoginError instanceof HTMLElement) authLoginError.hidden = false;
-      })
-      .finally(() => {
-        setLoginLoading(false);
-        loginInFlight = false;
-      });
-  });
-}
-
-// Hard guarantee: clicking the button always triggers a submit cycle (even if native form submission is blocked).
-if (authLoginSubmit instanceof HTMLButtonElement && authLoginForm instanceof HTMLFormElement) {
-  authLoginSubmit.addEventListener("click", (event) => {
-    // Let our JS handle validation + request consistently.
-    event.preventDefault();
-    if (loginInFlight) return;
-    if (typeof authLoginForm.requestSubmit === "function") {
-      authLoginForm.requestSubmit();
-      return;
-    }
-    authLoginForm.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-  });
-}
 
 if (closePlatformButton) {
   closePlatformButton.addEventListener("click", () => {
@@ -3531,7 +3341,7 @@ if (closePlatformButton) {
     sessionUser = null;
     sessionChecked = true;
     setRole("student");
-    navigate("/", { replace: true });
+    window.location.replace("/entrar");
   });
 }
 
@@ -3544,7 +3354,7 @@ if (sidebarToggleButton) {
 openLivePanelButtons.forEach((button) => {
   button.addEventListener("click", () => {
     const role = sessionUser?.role || currentRole;
-    navigate(panelPathForRole(role, "ao-vivo"));
+    navigateApp(panelPathForRole(role, "ao-vivo"));
   });
 });
 
@@ -3552,7 +3362,7 @@ sidebarLinks.forEach((link) => {
   link.addEventListener("click", () => {
     const panel = link.dataset.panelTarget || "dashboard";
     const role = sessionUser?.role || currentRole;
-    navigate(panelPathForRole(role, panel));
+    navigateApp(panelPathForRole(role, panel));
   });
 });
 
@@ -3606,23 +3416,6 @@ document.addEventListener("click", (event) => {
   const target = event.target;
 
   if (target instanceof Element) {
-    const navLink = target.closest('a[href^="/"]');
-    if (navLink instanceof HTMLAnchorElement) {
-      const href = navLink.getAttribute("href") || "/";
-      event.preventDefault();
-      navigate(href);
-      return;
-    }
-
-    const enterRole = target.closest("[data-enter-role]");
-    if (enterRole instanceof HTMLButtonElement) {
-      const role = enterRole.getAttribute("data-enter-role") || "student";
-      const normalizedRole = normalizeRole(role);
-      const def = AUTH_PROFILE_DEFS[normalizedRole] || AUTH_PROFILE_DEFS.student;
-      navigate(def.loginPath);
-      return;
-    }
-
     if (
       activeModalKind === "event-form" &&
       createEventDraft &&
@@ -4301,19 +4094,8 @@ document.addEventListener("drop", (event) => {
 
 window.addEventListener("resize", syncSidebarMode);
 
-updateGreeting();
 setInterval(updateGreeting, 60000);
-setRole(currentRole);
-setActiveChartOption("learning", chartState.learning);
-setActiveChartOption("study", chartState.study);
-setActiveChartOption("teacher-classes", chartState["teacher-classes"]);
-setSidebarExpanded(false);
-renderDashboardCharts();
-renderLiveScheduler();
-renderPlanUI();
-refreshSession().finally(() => {
-  handleRoute();
-});
+updateGreeting();
 
 setInterval(() => {
   if (body.dataset.activePanel === "ao-vivo") {

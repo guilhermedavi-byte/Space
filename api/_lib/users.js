@@ -1,8 +1,3 @@
-const fs = require("fs");
-const path = require("path");
-
-const USERS_PATH = path.join(process.cwd(), "data", "users.json");
-
 const SEED_USERS = [
   {
     id: "u_admin_guilherme",
@@ -47,22 +42,6 @@ const sanitizeUser = (value) => {
 };
 
 const loadUsers = () => {
-  try {
-    const raw = fs.readFileSync(USERS_PATH, "utf8");
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    const users = parsed.map(sanitizeUser).filter(Boolean);
-    if (users.length) return users;
-  } catch (error) {
-    // ignore
-  }
-  // Fallback seed: also try to write it for local development.
-  try {
-    fs.mkdirSync(path.dirname(USERS_PATH), { recursive: true });
-    fs.writeFileSync(USERS_PATH, JSON.stringify(SEED_USERS, null, 2), "utf8");
-  } catch (error) {
-    // ignore write errors (serverless fs, permissions, etc.)
-  }
   return SEED_USERS.map(sanitizeUser).filter(Boolean);
 };
 
@@ -73,4 +52,4 @@ const findUserByEmailAndRole = (users, { email, role }) => {
   return users.find((u) => u.email === normalizedEmail && u.role === normalizedRole) || null;
 };
 
-module.exports = { USERS_PATH, loadUsers, findUserByEmailAndRole, normalizeRole };
+module.exports = { loadUsers, findUserByEmailAndRole, normalizeRole };

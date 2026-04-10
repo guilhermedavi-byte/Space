@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Entrar | Space</title>
+    <meta name="description" content="Selecione seu perfil para entrar na plataforma da Space." />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body data-view="auth" data-page="entrar">
+    <div class="page-glow page-glow-left" aria-hidden="true"></div>
+    <div class="page-glow page-glow-right" aria-hidden="true"></div>
+
+    <div class="auth-shell auth-shell-enter">
+      <div class="auth-top">
+        <a class="auth-brand" href="/" aria-label="Voltar para a landing page">
+          <img class="auth-brand-logo" src="/assets/space-logo.png" alt="Logo Space" />
+        </a>
+      </div>
+
+      <div class="auth-center">
+        <h1 class="auth-title">Como você quer entrar?</h1>
+
+        <div class="auth-role-grid" role="list">
+          <a class="auth-role-card" href="/login/aluno" role="listitem" data-enter-role="student">
+            <strong>ALUNO</strong>
+          </a>
+
+          <a class="auth-role-card" href="/login/professor" role="listitem" data-enter-role="teacher">
+            <strong>PROFESSOR</strong>
+          </a>
+
+          <a class="auth-role-card" href="/login/admin" role="listitem" data-enter-role="admin">
+            <strong>ADMINISTRADOR</strong>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <script src="/auth.js" defer></script>
+  </body>
+</html>
