@@ -3337,7 +3337,7 @@ window.addEventListener("popstate", () => {
 if (closePlatformButton) {
   closePlatformButton.addEventListener("click", () => {
     closeModal();
-    fetch("/api/logout", { method: "POST", credentials: "include" }).catch(() => {});
+    fetch("/api/logout", { method: "POST", credentials: "include", keepalive: true }).catch(() => {});
     sessionUser = null;
     sessionChecked = true;
     setRole("student");

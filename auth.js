@@ -168,10 +168,10 @@ const detectRoleForLoginPage = () => {
 const initAuthPages = async () => {
   const page = String(document.body?.dataset?.page || "");
 
-  // If already authenticated, skip auth pages and go straight to the correct dashboard.
-  const session = await fetchSession().catch(() => null);
-  if (session) {
-    window.location.replace(roleBasePath(session.role));
+  // Public auth routes must always be reachable. Visiting `/entrar` clears any previous session
+  // so the user can pick a profile and log in again without getting auto-redirected.
+  if (page === "entrar") {
+    fetch("/api/logout", { method: "POST", credentials: "include", keepalive: true }).catch(() => {});
     return;
   }
 
@@ -198,4 +198,3 @@ document.addEventListener("click", (event) => {
 });
 
 initAuthPages();
-
