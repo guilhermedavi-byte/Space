@@ -49,6 +49,36 @@ const sanitizeSessionUser = (value) => {
   return { id, role, name, email };
 };
 
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyD0qyhYh6MWRPMRDN_SYqdDEeogS3thQPE",
+  authDomain: "plataforma-space.firebaseapp.com",
+  projectId: "plataforma-space",
+  storageBucket: "plataforma-space.firebasestorage.app",
+  messagingSenderId: "984031970274",
+  appId: "1:984031970274:web:fff5da2fe5e318b04aefbb",
+  measurementId: "G-X28MKDJPKE",
+};
+
+let firebaseAuthApiPromise = null;
+
+const loadFirebaseAuthApi = () => {
+  if (firebaseAuthApiPromise) return firebaseAuthApiPromise;
+
+  firebaseAuthApiPromise = Promise.all([
+    import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"),
+    import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js"),
+  ]).then(([appMod, authMod]) => {
+    const app = appMod.initializeApp(FIREBASE_CONFIG);
+    const auth = authMod.getAuth(app);
+    return {
+      auth,
+      sendPasswordResetEmail: authMod.sendPasswordResetEmail,
+    };
+  });
+
+  return firebaseAuthApiPromise;
+};
+
 const fetchSession = async () => {
   const res = await fetch("/api/me", { credentials: "include" }).catch(() => null);
   if (!res || !res.ok) return null;
@@ -101,12 +131,131 @@ const initLoginForm = (role) => {
   const emailError = document.querySelector("[data-login-email-error]");
   const passError = document.querySelector("[data-login-password-error]");
   const formError = document.querySelector("[data-login-error]");
+  const forgotLink = document.querySelector("[data-login-forgot]");
+  const formShell = form.closest(".auth-login-form-shell");
 
   let inFlight = false;
 
   const clearFormError = () => {
     if (formError instanceof HTMLElement) formError.hidden = true;
   };
+
+  const mountResetForm = () => {
+    if (!(formShell instanceof HTMLElement)) return null;
+    const existing = formShell.querySelector("[data-reset-form]");
+    if (existing instanceof HTMLFormElement) return existing;
+
+    const reset = document.createElement("form");
+    reset.className = "auth-form auth-form-reset";
+    reset.noValidate = true;
+    reset.hidden = true;
+    reset.setAttribute("data-reset-form", "");
+    reset.innerHTML = `
+      <button class="auth-back auth-reset-back" type="button" data-reset-back>← Voltar ao login</button>
+      <div class="auth-reset-head">
+        <strong class="auth-reset-title">Recuperar senha</strong>
+        <p class="auth-reset-sub">Envie um link de redefinição para o seu e-mail.</p>
+      </div>
+      <label class="auth-field">
+        <span>E-mail</span>
+        <input class="auth-input" type="email" autocomplete="email" data-reset-email />
+        <div class="auth-inline-error" data-reset-email-error hidden>E-mail inválido</div>
+      </label>
+      <button class="auth-submit" type="submit" data-reset-submit>
+        <span data-reset-submit-label>Enviar link de redefinição</span>
+        <span class="auth-spinner" data-reset-spinner hidden aria-hidden="true"></span>
+      </button>
+      <div class="auth-form-success" data-reset-success hidden>E-mail de redefinição enviado! Verifique sua caixa de entrada.</div>
+      <div class="auth-form-error" data-reset-error hidden>Erro ao enviar. Tente novamente.</div>
+    `;
+
+    formShell.appendChild(reset);
+    return reset;
+  };
+
+  const setResetLoading = (resetForm, isLoading) => {
+    if (!(resetForm instanceof HTMLFormElement)) return;
+    const submit = resetForm.querySelector("[data-reset-submit]");
+    const spinner = resetForm.querySelector("[data-reset-spinner]");
+    const label = resetForm.querySelector("[data-reset-submit-label]");
+    const loading = Boolean(isLoading);
+    if (submit instanceof HTMLButtonElement) submit.disabled = loading;
+    if (spinner instanceof HTMLElement) spinner.hidden = !loading;
+    if (label instanceof HTMLElement) label.hidden = loading;
+  };
+
+  const openResetView = () => {
+    const resetForm = mountResetForm();
+    if (!(resetForm instanceof HTMLFormElement)) return;
+    resetForm.hidden = false;
+    form.hidden = true;
+    clearFormError();
+
+    const resetEmail = resetForm.querySelector("[data-reset-email]");
+    const resetEmailError = resetForm.querySelector("[data-reset-email-error]");
+    const resetError = resetForm.querySelector("[data-reset-error]");
+    const resetSuccess = resetForm.querySelector("[data-reset-success]");
+
+    if (resetError instanceof HTMLElement) resetError.hidden = true;
+    if (resetSuccess instanceof HTMLElement) resetSuccess.hidden = true;
+    if (resetEmailError instanceof HTMLElement) resetEmailError.hidden = true;
+
+    const currentEmail = emailInput instanceof HTMLInputElement ? emailInput.value.trim() : "";
+    if (resetEmail instanceof HTMLInputElement && isValidEmail(currentEmail)) {
+      resetEmail.value = currentEmail;
+    }
+
+    if (resetEmail instanceof HTMLInputElement) {
+      resetEmail.classList.remove("is-error");
+      resetEmail.focus();
+    }
+
+    const back = resetForm.querySelector("[data-reset-back]");
+    if (back instanceof HTMLButtonElement) {
+      back.onclick = () => {
+        resetForm.hidden = true;
+        form.hidden = false;
+      };
+    }
+
+    resetForm.onsubmit = async (event) => {
+      event.preventDefault();
+      const email = resetEmail instanceof HTMLInputElement ? resetEmail.value.trim() : "";
+      const emailOk = isValidEmail(email);
+
+      if (resetEmailError instanceof HTMLElement) resetEmailError.hidden = emailOk;
+      if (resetEmail instanceof HTMLElement) resetEmail.classList.toggle("is-error", !emailOk);
+      if (resetError instanceof HTMLElement) resetError.hidden = true;
+      if (resetSuccess instanceof HTMLElement) resetSuccess.hidden = true;
+
+      if (!emailOk) return;
+
+      setResetLoading(resetForm, true);
+      try {
+        const api = await loadFirebaseAuthApi();
+        await api.sendPasswordResetEmail(api.auth, email);
+        if (resetSuccess instanceof HTMLElement) resetSuccess.hidden = false;
+      } catch (err) {
+        const code = typeof err?.code === "string" ? err.code : "";
+        let message = "Erro ao enviar. Tente novamente.";
+        if (code === "auth/user-not-found") message = "Nenhuma conta encontrada com este e-mail.";
+        if (code === "auth/invalid-email") message = "E-mail inválido.";
+        if (resetError instanceof HTMLElement) {
+          resetError.textContent = message;
+          resetError.hidden = false;
+        }
+      } finally {
+        setResetLoading(resetForm, false);
+      }
+    };
+  };
+
+  if (forgotLink instanceof HTMLAnchorElement) {
+    forgotLink.addEventListener("click", (event) => {
+      event.preventDefault();
+      openResetView();
+    });
+  }
 
   form.addEventListener("submit", (event) => {
     event.preventDefault();

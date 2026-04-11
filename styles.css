@@ -6198,6 +6198,40 @@ body.is-modal-open {
   font-size: 13px;
 }
 
+.auth-form-success {
+  margin-top: 6px;
+  color: rgba(170, 255, 214, 0.92);
+  font-size: 13px;
+}
+
+.auth-reset-back {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  justify-self: start;
+  width: max-content;
+}
+
+.auth-reset-head {
+  display: grid;
+  gap: 6px;
+}
+
+.auth-reset-title {
+  font-size: 16px;
+  letter-spacing: -0.02em;
+  color: var(--text-main);
+}
+
+.auth-reset-sub {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.66);
+}
+
 .auth-support {
   margin-top: 8px;
   color: rgba(255, 255, 255, 0.6);
