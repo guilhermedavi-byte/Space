@@ -25,7 +25,22 @@
           <a href="#recursos">Inside Space</a>
         </nav>
 
-        <a class="button button-outline" href="/entrar">Login</a>
+        <div class="login-menu" data-login-menu>
+          <button
+            class="button button-outline"
+            type="button"
+            data-login-menu-trigger
+            aria-haspopup="menu"
+            aria-expanded="false"
+          >
+            Login
+          </button>
+          <div class="login-menu-dropdown" data-login-menu-dropdown role="menu" aria-label="Selecionar perfil">
+            <a class="login-menu-item" href="/login/aluno" role="menuitem">Student</a>
+            <a class="login-menu-item" href="/login/professor" role="menuitem">Teacher</a>
+            <a class="login-menu-item" href="/login/admin" role="menuitem">Admin</a>
+          </div>
+        </div>
       </header>
 
       <main id="topo">
@@ -178,6 +193,7 @@
         </section>
       </main>
     </div>
+
+    <script src="/landing.js" defer></script>
   </body>
 </html>
-
