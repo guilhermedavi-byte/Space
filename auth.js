@@ -73,6 +73,7 @@ const loadFirebaseAuthApi = () => {
     return {
       auth,
       sendPasswordResetEmail: authMod.sendPasswordResetEmail,
+      signInWithEmailAndPassword: authMod.signInWithEmailAndPassword,
     };
   });
 
@@ -278,21 +279,40 @@ const initLoginForm = (role) => {
     inFlight = true;
     setLoginLoading(true);
 
-    fetch("/api/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ role: normalizeRole(role), email, password }),
-    })
-      .then(async (res) => {
-        if (!res.ok) throw new Error("invalid_credentials");
+    Promise.resolve()
+      .then(async () => {
+        const api = await loadFirebaseAuthApi();
+        const credential = await api.signInWithEmailAndPassword(api.auth, email, password);
+        const idToken = typeof credential?.user?.getIdToken === "function" ? await credential.user.getIdToken() : "";
+        if (!idToken) throw new Error("missing_id_token");
+
+        const res = await fetch("/api/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ role: normalizeRole(role), idToken }),
+        });
+
+        if (!res.ok) {
+          throw new Error("backend_login_failed");
+        }
+
         const data = await res.json().catch(() => null);
         const user = sanitizeSessionUser(data?.user);
         if (!user) throw new Error("invalid_response");
         window.location.replace(roleBasePath(user.role));
       })
-      .catch(() => {
-        if (formError instanceof HTMLElement) formError.hidden = false;
+      .catch((err) => {
+        const code = typeof err?.code === "string" ? err.code : "";
+        let message = "E-mail ou senha incorretos";
+        if (code === "auth/wrong-password") message = "Senha incorreta";
+        if (code === "auth/user-not-found") message = "Nenhuma conta encontrada com este e-mail";
+        if (code === "auth/too-many-requests") message = "Muitas tentativas. Tente novamente mais tarde";
+
+        if (formError instanceof HTMLElement) {
+          formError.textContent = message;
+          formError.hidden = false;
+        }
       })
       .finally(() => {
         setLoginLoading(false);

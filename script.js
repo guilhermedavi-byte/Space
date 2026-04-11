@@ -58,6 +58,18 @@ const liveAdminRoot = document.querySelector("[data-live-admin]");
 const adminRankingList = document.querySelector("[data-admin-ranking-list]");
 const adminRankingSave = document.querySelector("[data-admin-ranking-save]");
 const adminRankingStatus = document.querySelector("[data-admin-ranking-status]");
+const adminUserForm = document.querySelector("[data-admin-user-form]");
+const adminUserName = document.querySelector("[data-admin-user-name]");
+const adminUserEmail = document.querySelector("[data-admin-user-email]");
+const adminUserPassword = document.querySelector("[data-admin-user-password]");
+const adminUserRole = document.querySelector("[data-admin-user-role]");
+const adminUserNameError = document.querySelector("[data-admin-user-name-error]");
+const adminUserEmailError = document.querySelector("[data-admin-user-email-error]");
+const adminUserPasswordError = document.querySelector("[data-admin-user-password-error]");
+const adminUserSubmit = document.querySelector("[data-admin-user-submit]");
+const adminUserSubmitLabel = document.querySelector("[data-admin-user-submit-label]");
+const adminUserSpinner = document.querySelector("[data-admin-user-spinner]");
+const adminUserStatus = document.querySelector("[data-admin-user-status]");
 const modalOverlay = document.querySelector("[data-modal-overlay]");
 const modalTitle = document.querySelector("[data-modal-title]");
 const modalBody = document.querySelector("[data-modal-body]");
@@ -3651,6 +3663,175 @@ const renderLiveScheduler = () => {
   updateLiveInstruction();
   syncLiveSchedulerSelection();
 };
+
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyD0qyhYh6MWRPMRDN_SYqdDEeogS3thQPE",
+  authDomain: "plataforma-space.firebaseapp.com",
+  projectId: "plataforma-space",
+  storageBucket: "plataforma-space.firebasestorage.app",
+  messagingSenderId: "984031970274",
+  appId: "1:984031970274:web:fff5da2fe5e318b04aefbb",
+  measurementId: "G-X28MKDJPKE",
+};
+
+let firebaseAdminApiPromise = null;
+
+const loadFirebaseAdminApi = () => {
+  if (firebaseAdminApiPromise) return firebaseAdminApiPromise;
+
+  firebaseAdminApiPromise = Promise.all([
+    import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"),
+    import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js"),
+    import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"),
+  ]).then(([appMod, authMod, fsMod]) => {
+    const getOrInitApp = (name) => {
+      try {
+        return name ? appMod.getApp(name) : appMod.getApp();
+      } catch (error) {
+        return name ? appMod.initializeApp(FIREBASE_CONFIG, name) : appMod.initializeApp(FIREBASE_CONFIG);
+      }
+    };
+
+    const primaryApp = getOrInitApp();
+    const secondaryApp = getOrInitApp("secondary");
+
+    const primaryAuth = authMod.getAuth(primaryApp);
+    const secondaryAuth = authMod.getAuth(secondaryApp);
+    const primaryDb = fsMod.getFirestore(primaryApp);
+    const secondaryDb = fsMod.getFirestore(secondaryApp);
+
+    return {
+      primaryAuth,
+      secondaryAuth,
+      primaryDb,
+      secondaryDb,
+      createUserWithEmailAndPassword: authMod.createUserWithEmailAndPassword,
+      signOut: authMod.signOut,
+      doc: fsMod.doc,
+      setDoc: fsMod.setDoc,
+      serverTimestamp: fsMod.serverTimestamp,
+    };
+  });
+
+  return firebaseAdminApiPromise;
+};
+
+const normalizeUserCreationRole = (value) => {
+  const role = normalizeRole(value);
+  if (role === "student" || role === "teacher") return role;
+  return "";
+};
+
+const setAdminUserLoading = (isLoading) => {
+  const loading = Boolean(isLoading);
+  if (adminUserSubmit instanceof HTMLButtonElement) adminUserSubmit.disabled = loading;
+  if (adminUserSpinner instanceof HTMLElement) adminUserSpinner.hidden = !loading;
+  if (adminUserSubmitLabel instanceof HTMLElement) adminUserSubmitLabel.hidden = loading;
+};
+
+const setAdminUserStatus = (text, tone = "") => {
+  if (!(adminUserStatus instanceof HTMLElement)) return;
+  adminUserStatus.textContent = text || "";
+  adminUserStatus.dataset.tone = tone || "";
+};
+
+if (adminUserForm instanceof HTMLFormElement) {
+  adminUserForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (currentRole !== "admin") return;
+
+    const name = adminUserName instanceof HTMLInputElement ? adminUserName.value.trim() : "";
+    const email = adminUserEmail instanceof HTMLInputElement ? adminUserEmail.value.trim().toLowerCase() : "";
+    const password = adminUserPassword instanceof HTMLInputElement ? adminUserPassword.value : "";
+    const role = normalizeUserCreationRole(adminUserRole instanceof HTMLSelectElement ? adminUserRole.value : "");
+
+    const nameOk = Boolean(name);
+    const emailOk = isValidEmail(email);
+    const passOk = Boolean(password);
+    const roleOk = Boolean(role);
+
+    if (adminUserNameError instanceof HTMLElement) adminUserNameError.hidden = nameOk;
+    if (adminUserEmailError instanceof HTMLElement) adminUserEmailError.hidden = emailOk;
+    if (adminUserPasswordError instanceof HTMLElement) adminUserPasswordError.hidden = passOk;
+
+    if (adminUserName instanceof HTMLElement) adminUserName.classList.toggle("is-error", !nameOk);
+    if (adminUserEmail instanceof HTMLElement) adminUserEmail.classList.toggle("is-error", !emailOk);
+    if (adminUserPassword instanceof HTMLElement) adminUserPassword.classList.toggle("is-error", !passOk);
+
+    setAdminUserStatus("");
+
+    if (!nameOk || !emailOk || !passOk || !roleOk) {
+      setAdminUserStatus("Preencha os campos para continuar.", "error");
+      return;
+    }
+
+    setAdminUserLoading(true);
+    setAdminUserStatus("Criando…");
+
+    let secondaryAuth = null;
+
+    try {
+      const firebase = await loadFirebaseAdminApi();
+      secondaryAuth = firebase.secondaryAuth;
+
+      const credential = await firebase.createUserWithEmailAndPassword(firebase.secondaryAuth, email, password);
+      const uid = String(credential?.user?.uid || "").trim();
+      if (!uid) {
+        throw new Error("missing_uid");
+      }
+
+      const payload = {
+        nome: name,
+        email,
+        tipo: role,
+        ativo: true,
+        criadoEm: firebase.serverTimestamp(),
+      };
+
+      // Prefer the admin's session to write, but fall back to the secondary session (new user) if needed.
+      try {
+        await firebase.setDoc(firebase.doc(firebase.primaryDb, "users", uid), payload, { merge: true });
+      } catch (error) {
+        await firebase.setDoc(firebase.doc(firebase.secondaryDb, "users", uid), payload, { merge: true });
+      }
+
+      await fetch("/api/admin/users", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ uid, role, name }),
+      }).catch(() => {});
+
+      setAdminUserStatus("Usuário criado com sucesso.", "success");
+      if (adminUserPassword instanceof HTMLInputElement) adminUserPassword.value = "";
+      if (adminUserEmail instanceof HTMLInputElement) adminUserEmail.value = "";
+      if (adminUserName instanceof HTMLInputElement) adminUserName.value = "";
+
+      // Refresh ranking to include the new teacher when applicable.
+      if (role === "teacher") {
+        adminRankingState.lastLoadedAt = 0;
+        renderAdminRanking();
+      }
+    } catch (error) {
+      const code = typeof error?.code === "string" ? error.code : "";
+      let message = "Nao foi possivel criar o usuario.";
+      if (code === "auth/email-already-in-use") message = "Este e-mail já está em uso.";
+      if (code === "auth/invalid-email") message = "E-mail inválido.";
+      if (code === "auth/weak-password") message = "Senha fraca. Use uma senha mais forte.";
+      setAdminUserStatus(message, "error");
+    } finally {
+      try {
+        const firebase = await loadFirebaseAdminApi();
+        if (secondaryAuth) {
+          await firebase.signOut(secondaryAuth);
+        }
+      } catch (error) {
+        // ignore
+      }
+      setAdminUserLoading(false);
+    }
+  });
+}
 
 let adminRankingState = {
   teachers: [],

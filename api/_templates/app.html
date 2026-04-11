@@ -1017,6 +1017,48 @@
                   <span class="admin-ranking-status" data-admin-ranking-status aria-live="polite"></span>
                 </div>
               </article>
+
+              <article class="surface-card admin-user-card" aria-label="Cadastrar usuários">
+                <div class="dashboard-section-header refined-header">
+                  <h3>Novo usuário</h3>
+                </div>
+
+                <form class="admin-user-form" data-admin-user-form novalidate>
+                  <label class="auth-field">
+                    <span>Nome</span>
+                    <input class="auth-input" type="text" autocomplete="name" data-admin-user-name />
+                    <div class="auth-inline-error" data-admin-user-name-error hidden>Nome obrigatório</div>
+                  </label>
+
+                  <label class="auth-field">
+                    <span>E-mail</span>
+                    <input class="auth-input" type="email" autocomplete="email" data-admin-user-email />
+                    <div class="auth-inline-error" data-admin-user-email-error hidden>E-mail inválido</div>
+                  </label>
+
+                  <label class="auth-field">
+                    <span>Senha</span>
+                    <input class="auth-input" type="password" autocomplete="new-password" data-admin-user-password />
+                    <div class="auth-inline-error" data-admin-user-password-error hidden>Senha obrigatória</div>
+                  </label>
+
+                  <label class="auth-field">
+                    <span>Tipo</span>
+                    <select class="auth-input" data-admin-user-role>
+                      <option value="student">Aluno</option>
+                      <option value="teacher">Professor</option>
+                    </select>
+                  </label>
+
+                  <div class="admin-user-actions">
+                    <button class="button button-solid button-small" type="submit" data-admin-user-submit>
+                      <span data-admin-user-submit-label>Cadastrar</span>
+                      <span class="auth-spinner" data-admin-user-spinner hidden aria-hidden="true"></span>
+                    </button>
+                    <span class="admin-user-status" data-admin-user-status aria-live="polite"></span>
+                  </div>
+                </form>
+              </article>
             </div>
           </div>
 	        </section>
