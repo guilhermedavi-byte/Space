@@ -6,193 +6,188 @@
     <title>Space | Escola de inglês online</title>
     <meta
       name="description"
-      content="Plataforma da Space com aulas gravadas, aulas ao vivo e uma experiência mais clean para estudar inglês online."
+      content="Acompanhe suas aulas, tire dúvidas e avance rumo à fluência com a Space."
     />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body data-view="publico" data-page="landing">
-    <div class="page-glow page-glow-left" aria-hidden="true"></div>
-    <div class="page-glow page-glow-right" aria-hidden="true"></div>
-
-    <div class="site-shell">
-      <header class="site-header">
-        <a class="brand" href="#topo" aria-label="Space home">
-          <img class="brand-logo" src="/assets/space-logo.png" alt="Logo Space" />
+    <header class="lp-nav" data-lp-nav>
+      <div class="lp-nav-inner">
+        <a class="lp-brand" href="/" aria-label="Space home">
+          <img class="lp-brand-mark" src="/assets/space-symbol.png" alt="" aria-hidden="true" />
+          <span class="lp-brand-text">Space</span>
         </a>
 
-        <nav class="site-nav" aria-label="Navegação principal">
-          <a href="#metodo">Plataforma</a>
-          <a href="#recursos">Inside Space</a>
+        <nav class="lp-nav-links" aria-label="Navegação principal">
+          <a href="#integracoes">Integrações</a>
+          <a href="#professores">Professores</a>
+          <a href="#conteudos">Conteúdos Gratuitos</a>
+          <a href="#faq">FAQ</a>
         </nav>
 
-        <div class="login-menu" data-login-menu>
-          <button
-            class="button button-outline"
-            type="button"
-            data-login-menu-trigger
-            aria-haspopup="menu"
-            aria-expanded="false"
-          >
-            Login
-          </button>
-          <div class="login-menu-dropdown" data-login-menu-dropdown role="menu" aria-label="Selecionar perfil">
-            <a class="login-menu-item" href="/login/aluno" role="menuitem">Student</a>
-            <a class="login-menu-item" href="/login/professor" role="menuitem">Teacher</a>
-            <a class="login-menu-item" href="/login/admin" role="menuitem">Admin</a>
+        <div class="lp-nav-actions">
+          <div class="login-menu lp-login-menu" data-login-menu>
+            <button
+              class="lp-login-button"
+              type="button"
+              data-login-menu-trigger
+              aria-haspopup="menu"
+              aria-expanded="false"
+            >
+              LOGIN
+            </button>
+            <div class="login-menu-dropdown lp-login-dropdown" data-login-menu-dropdown role="menu" aria-label="Selecionar perfil">
+              <a class="login-menu-item" href="/login/aluno" role="menuitem">Student</a>
+              <a class="login-menu-item" href="/login/professor" role="menuitem">Teacher</a>
+              <a class="login-menu-item" href="/login/admin" role="menuitem">Admin</a>
+            </div>
           </div>
         </div>
-      </header>
+      </div>
+    </header>
 
-      <main id="topo">
-        <section class="hero">
-          <div class="hero-copy">
-            <span class="eyebrow">Escola de inglês online</span>
-            <h1>English for your next chapter.</h1>
-            <p class="hero-text">
-              Aulas gravadas, encontros ao vivo e uma experiência simples para estudar com constância.
+    <main class="lp-main" id="topo">
+      <section class="lp-hero">
+        <div class="lp-container lp-hero-inner">
+          <div class="lp-hero-copy" data-reveal style="--reveal-delay: 0ms;">
+            <h1 class="lp-hero-title">
+              <span>Seu inglês,</span>
+              <span>sua jornada.</span>
+              <span>Na palma da mão.</span>
+            </h1>
+            <p class="lp-hero-desc">
+              Acompanhe suas aulas, tire dúvidas e avance rumo à fluência com nosso app intuitivo e feito para transformar vidas.
             </p>
+            <a class="lp-hero-cta" href="#depoimentos">QUERO SER FLUENTE</a>
+          </div>
 
-            <div class="hero-actions">
-              <a class="button button-solid" href="#metodo">Conhecer</a>
-              <a class="button button-ghost" href="/entrar">Ver plataforma</a>
-            </div>
+          <div class="lp-hero-visual" data-reveal style="--reveal-delay: 90ms;">
+            <div class="lp-phone-wrap" aria-hidden="true">
+              <div class="lp-phone">
+                <div class="lp-phone-notch"></div>
+                <div class="lp-phone-screen">
+                  <img class="lp-phone-screen-img" src="/assets/space-feed.png" alt="" aria-hidden="true" />
+                </div>
+              </div>
 
-            <div class="hero-stats" aria-label="Destaques da plataforma">
-              <div class="stat-card">
-                <strong>On-demand</strong>
-                <span>estude no seu ritmo</span>
+              <div class="lp-push lp-push-1" data-float style="--float-delay: 0.0s;">
+                <span class="lp-push-icon">
+                  <img src="/assets/space-symbol.png" alt="" aria-hidden="true" />
+                </span>
+                <span class="lp-push-text">Novo conteúdo extra liberado!</span>
               </div>
-              <div class="stat-card">
-                <strong>Ao vivo</strong>
-                <span>reserve com 1 clique</span>
+
+              <div class="lp-push lp-push-2" data-float style="--float-delay: 0.2s;">
+                <span class="lp-push-icon">
+                  <img src="/assets/space-symbol.png" alt="" aria-hidden="true" />
+                </span>
+                <span class="lp-push-text">Parabéns! Você completou 50% da sua jornada</span>
               </div>
-              <div class="stat-card">
-                <strong>Dashboard</strong>
-                <span>foco no próximo passo</span>
+
+              <div class="lp-push lp-push-3" data-float style="--float-delay: 0.4s;">
+                <span class="lp-push-icon">
+                  <img src="/assets/space-symbol.png" alt="" aria-hidden="true" />
+                </span>
+                <span class="lp-push-text">Nova aula com Prof. Lucas já está no ar!</span>
+              </div>
+
+              <div class="lp-push lp-push-4" data-float style="--float-delay: 0.6s;">
+                <span class="lp-push-icon">
+                  <img src="/assets/space-symbol.png" alt="" aria-hidden="true" />
+                </span>
+                <span class="lp-push-text">Lembrete: 10 min hoje já contam</span>
               </div>
             </div>
           </div>
+        </div>
+      </section>
 
-          <div class="hero-visual">
-            <div class="hero-orbit">
-              <img class="hero-feed" src="/assets/space-feed.png" alt="Identidade visual da Space" />
-            </div>
+      <section class="lp-band" id="depoimentos" data-reveal style="--reveal-delay: 0ms;">
+        <div class="lp-container lp-band-inner">
+          <div class="lp-band-kicker">+2000 MIL ALUNOS FLUENTES!</div>
+          <h2 class="lp-band-title">Depoimentos de alunos</h2>
+          <p class="lp-band-sub">Eles aprenderam inglês com a Space e agora contam pra você!</p>
+        </div>
+      </section>
 
-            <div class="floating-card floating-card-top">
-              <span class="floating-label">Live next</span>
-              <strong>Speaking Clinic</strong>
-              <p>Hoje, 19:00</p>
-            </div>
-          </div>
-        </section>
-
-        <section class="feature-strip" aria-label="Pilares da plataforma">
-          <article class="feature-strip-card">
-            <img src="/assets/space-symbol.png" alt="" aria-hidden="true" />
-            <div>
-              <h2>Aprenda no seu tempo</h2>
-              <p>Trilhas curtas e diretas.</p>
-            </div>
-          </article>
-
-          <article class="feature-strip-card">
-            <img src="/assets/space-symbol.png" alt="" aria-hidden="true" />
-            <div>
-              <h2>Agende ao vivo</h2>
-              <p>Horários claros e rápidos de reservar.</p>
-            </div>
-          </article>
-
-          <article class="feature-strip-card">
-            <img src="/assets/space-symbol.png" alt="" aria-hidden="true" />
-            <div>
-              <h2>Veja o essencial</h2>
-              <p>Sem excesso de informação.</p>
-            </div>
-          </article>
-        </section>
-
-        <section class="section-grid" id="metodo">
-          <div class="section-heading">
-            <span class="eyebrow">Plataforma</span>
-            <h2>Menos ruído. Mais clareza para estudar.</h2>
-          </div>
-
-          <div class="method-grid">
-            <article class="method-card">
-              <span class="card-kicker">01</span>
-              <h3>Aulas gravadas</h3>
-              <p>Biblioteca limpa e fácil de navegar.</p>
-            </article>
-            <article class="method-card">
-              <span class="card-kicker">02</span>
-              <h3>Ao vivo com professores</h3>
-              <p>Agendamento simples, sem fricção.</p>
-            </article>
-            <article class="method-card">
-              <span class="card-kicker">03</span>
-              <h3>Dashboard objetivo</h3>
-              <p>Progresso, consistência e próximos passos.</p>
-            </article>
-            <article class="method-card">
-              <span class="card-kicker">04</span>
-              <h3>Materiais essenciais</h3>
-              <p>Apoio direto para a sua rotina.</p>
-            </article>
-          </div>
-        </section>
-
-        <section class="section-grid section-grid-compact" id="recursos">
-          <div class="section-heading">
-            <span class="eyebrow">Inside Space</span>
-            <h2>Uma plataforma que respeita seu tempo.</h2>
-          </div>
-
-          <div class="class-grid">
-            <article class="class-card">
-              <div class="class-card-head">
-                <span class="card-kicker">Aulas gravadas</span>
-                <strong>Trilhas curtas</strong>
+      <section class="lp-testimonials">
+        <div class="lp-container lp-testimonials-inner" data-reveal style="--reveal-delay: 0ms;">
+          <div class="lp-video-grid" aria-label="Depoimentos em vídeo">
+            <article class="lp-video-card">
+              <div class="lp-video-thumb lp-thumb-1">
+                <span class="lp-quote-badge" aria-hidden="true">“</span>
+                <span class="lp-play" aria-hidden="true"></span>
               </div>
-              <p>Foco em aulas que cabem na rotina.</p>
             </article>
-
-            <article class="class-card">
-              <div class="class-card-head">
-                <span class="card-kicker">Ao vivo</span>
-                <strong>Agenda rápida</strong>
+            <article class="lp-video-card">
+              <div class="lp-video-thumb lp-thumb-2">
+                <span class="lp-quote-badge" aria-hidden="true">“</span>
+                <span class="lp-play" aria-hidden="true"></span>
               </div>
-              <p>Escolha um horário e avance sem ruído.</p>
             </article>
-
-            <article class="class-card">
-              <div class="class-card-head">
-                <span class="card-kicker">Progresso</span>
-                <strong>Trilha visual</strong>
+            <article class="lp-video-card">
+              <div class="lp-video-thumb lp-thumb-3">
+                <span class="lp-quote-badge" aria-hidden="true">“</span>
+                <span class="lp-play" aria-hidden="true"></span>
               </div>
-              <p>Do Pré A1 ao C2, com clareza.</p>
             </article>
-
-            <article class="class-card">
-              <div class="class-card-head">
-                <span class="card-kicker">Consistência</span>
-                <strong>Streak</strong>
+            <article class="lp-video-card">
+              <div class="lp-video-thumb lp-thumb-4">
+                <span class="lp-quote-badge" aria-hidden="true">“</span>
+                <span class="lp-play" aria-hidden="true"></span>
               </div>
-              <p>Um lembrete visual para manter o ritmo.</p>
+            </article>
+            <article class="lp-video-card">
+              <div class="lp-video-thumb lp-thumb-5">
+                <span class="lp-quote-badge" aria-hidden="true">“</span>
+                <span class="lp-play" aria-hidden="true"></span>
+              </div>
             </article>
           </div>
-        </section>
+        </div>
+      </section>
 
-        <section class="cta-panel">
-          <div>
-            <span class="eyebrow">Space platform</span>
-            <h2>Uma experiência mais clean para receber e reter alunos.</h2>
+      <section class="lp-section" id="integracoes" data-reveal style="--reveal-delay: 0ms;">
+        <div class="lp-container">
+          <h2 class="lp-section-title">Integrações</h2>
+          <p class="lp-section-sub">Tudo no ritmo da sua rotina, com uma experiência sem fricção.</p>
+        </div>
+      </section>
+
+      <section class="lp-section" id="professores" data-reveal style="--reveal-delay: 0ms;">
+        <div class="lp-container">
+          <h2 class="lp-section-title">Professores</h2>
+          <p class="lp-section-sub">Aulas ao vivo com foco em clareza, prática e evolução contínua.</p>
+        </div>
+      </section>
+
+      <section class="lp-section" id="conteudos" data-reveal style="--reveal-delay: 0ms;">
+        <div class="lp-container">
+          <h2 class="lp-section-title">Conteúdos Gratuitos</h2>
+          <p class="lp-section-sub">Materiais diretos para você começar hoje e manter constância.</p>
+        </div>
+      </section>
+
+      <section class="lp-section lp-section-last" id="faq" data-reveal style="--reveal-delay: 0ms;">
+        <div class="lp-container">
+          <h2 class="lp-section-title">FAQ</h2>
+          <div class="lp-faq">
+            <details class="lp-faq-item">
+              <summary>Como funciona a plataforma?</summary>
+              <p>Você acompanha aulas e agenda sessões ao vivo em poucos cliques, sem excesso de informação.</p>
+            </details>
+            <details class="lp-faq-item">
+              <summary>Posso assistir pelo celular?</summary>
+              <p>Sim. A experiência foi pensada para caber na rotina, em qualquer tela.</p>
+            </details>
+            <details class="lp-faq-item">
+              <summary>Como faço login?</summary>
+              <p>Clique em LOGIN e selecione seu perfil para entrar com e-mail e senha.</p>
+            </details>
           </div>
-
-          <a class="button button-solid" href="/entrar">Ver área interna</a>
-        </section>
-      </main>
-    </div>
+        </div>
+      </section>
+    </main>
 
     <script src="/landing.js" defer></script>
   </body>

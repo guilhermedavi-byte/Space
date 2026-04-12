@@ -1,6 +1,7 @@
 const loginMenu = document.querySelector("[data-login-menu]");
 const loginTrigger = document.querySelector("[data-login-menu-trigger]");
 const loginDropdown = document.querySelector("[data-login-menu-dropdown]");
+const nav = document.querySelector("[data-lp-nav]");
 
 if (loginMenu instanceof HTMLElement && loginTrigger instanceof HTMLButtonElement && loginDropdown instanceof HTMLElement) {
   let isOpen = false;
@@ -35,3 +36,41 @@ if (loginMenu instanceof HTMLElement && loginTrigger instanceof HTMLButtonElemen
   });
 }
 
+// Navbar background on scroll (transparent -> solid).
+if (nav instanceof HTMLElement) {
+  const update = () => {
+    nav.classList.toggle("is-scrolled", window.scrollY > 12);
+  };
+  update();
+  window.addEventListener("scroll", update, { passive: true });
+}
+
+// Subtle reveal animations on scroll.
+const revealEls = Array.from(document.querySelectorAll("[data-reveal]"));
+if (revealEls.length) {
+  const reveal = (el) => el.classList.add("is-revealed");
+
+  if ("IntersectionObserver" in window) {
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          const el = entry.target;
+          if (!(el instanceof HTMLElement)) return;
+          reveal(el);
+          io.unobserve(el);
+        });
+      },
+      { threshold: 0.16 }
+    );
+
+    revealEls.forEach((el) => {
+      if (el instanceof HTMLElement) io.observe(el);
+    });
+  } else {
+    // Fallback: reveal everything.
+    revealEls.forEach((el) => {
+      if (el instanceof HTMLElement) reveal(el);
+    });
+  }
+}
