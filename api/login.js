@@ -38,7 +38,16 @@ module.exports = async (req, res) => {
     }
 
     try {
-      user = await fetchUserProfileByUid({ uid: decoded.uid, idToken });
+      const profile = await fetchUserProfileByUid({ uid: decoded.uid, idToken });
+      if (profile && profile.user) {
+        if (!profile.active) {
+          return sendJson(res, 403, { error: "user_disabled" });
+        }
+        if (normalizeRole(profile.user.role) !== role) {
+          return sendJson(res, 401, { error: "invalid_credentials" });
+        }
+        user = profile.user;
+      }
     } catch (error) {
       user = null;
     }

@@ -3751,6 +3751,188 @@ const setAdminUserStatus = (text, tone = "") => {
   adminUserStatus.dataset.tone = tone || "";
 };
 
+const formatAdminDate = (value) => {
+  if (!value) return "—";
+  try {
+    const date =
+      value instanceof Date
+        ? value
+        : typeof value?.toDate === "function"
+          ? value.toDate()
+          : typeof value === "number"
+            ? new Date(value)
+            : new Date(String(value));
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "—";
+    const d = String(date.getDate()).padStart(2, "0");
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const y = String(date.getFullYear());
+    return `${d}/${m}/${y}`;
+  } catch (error) {
+    return "—";
+  }
+};
+
+const setAdminManageStatus = (type, text, tone = "") => {
+  const el = type === "teacher" ? adminManageStatusTeacher : adminManageStatusStudent;
+  if (!(el instanceof HTMLElement)) return;
+  el.textContent = text || "";
+  el.dataset.tone = tone || "";
+};
+
+let adminUsersState = {
+  teacher: { rows: [], query: "", loadedAt: 0, isLoading: false },
+  student: { rows: [], query: "", loadedAt: 0, isLoading: false },
+};
+
+const getAdminUsersUiRefs = (type) => {
+  return {
+    table: type === "teacher" ? adminUsersTableTeacher : adminUsersTableStudent,
+    empty: type === "teacher" ? adminUsersEmptyTeacher : adminUsersEmptyStudent,
+    error: type === "teacher" ? adminUsersErrorTeacher : adminUsersErrorStudent,
+  };
+};
+
+const normalizeFirestoreRole = (value) => {
+  const raw = String(value || "").trim().toLowerCase();
+  if (raw === "teacher" || raw === "professor") return "teacher";
+  if (raw === "student" || raw === "aluno") return "student";
+  if (raw === "admin" || raw === "administrador") return "admin";
+  return "";
+};
+
+const normalizeFirestoreActive = (value) => {
+  if (typeof value === "boolean") return value;
+  return true;
+};
+
+const normalizeUserRow = ({ id, nome, email, tipo, ativo, criadoEm }) => {
+  const uid = String(id || "").trim();
+  const name = String(nome || "").trim();
+  const safeEmail = String(email || "").trim().toLowerCase();
+  const role = normalizeFirestoreRole(tipo);
+  if (!uid || !name || !safeEmail || !role) return null;
+  return {
+    id: uid,
+    nome: name,
+    email: safeEmail,
+    tipo: role,
+    ativo: normalizeFirestoreActive(ativo),
+    criadoEm: criadoEm || null,
+    initials: getInitials(name),
+  };
+};
+
+const loadUsersFromFirestore = async (type) => {
+  const safeType = type === "teacher" ? "teacher" : "student";
+  const state = adminUsersState[safeType];
+  if (state.isLoading) return;
+
+  state.isLoading = true;
+  setAdminManageStatus(safeType, "Carregando…");
+
+  const { table, empty, error } = getAdminUsersUiRefs(safeType);
+  if (error instanceof HTMLElement) error.hidden = true;
+
+  try {
+    const firebase = await loadFirebaseAdminApi();
+    const q = firebase.query(
+      firebase.collection(firebase.primaryDb, "users"),
+      firebase.where("tipo", "==", safeType)
+    );
+    const snap = await firebase.getDocs(q);
+    const rows = [];
+    snap.forEach((docSnap) => {
+      const data = docSnap.data ? docSnap.data() : null;
+      if (!data || typeof data !== "object") return;
+      rows.push(
+        normalizeUserRow({
+          id: docSnap.id,
+          nome: data.nome,
+          email: data.email,
+          tipo: data.tipo,
+          ativo: data.ativo,
+          criadoEm: data.criadoEm,
+        })
+      );
+    });
+
+    state.rows = rows.filter(Boolean).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+    state.loadedAt = Date.now();
+    setAdminManageStatus(safeType, "");
+    renderAdminUsersTable(safeType);
+  } catch (err) {
+    if (table instanceof HTMLElement) table.innerHTML = "";
+    if (empty instanceof HTMLElement) empty.hidden = true;
+    if (error instanceof HTMLElement) error.hidden = false;
+    setAdminManageStatus(safeType, "Não foi possível carregar.", "error");
+  } finally {
+    state.isLoading = false;
+  }
+};
+
+const renderAdminUsersTable = (type) => {
+  const safeType = type === "teacher" ? "teacher" : "student";
+  const state = adminUsersState[safeType];
+  const { table, empty, error } = getAdminUsersUiRefs(safeType);
+  if (!(table instanceof HTMLElement)) return;
+  if (error instanceof HTMLElement) error.hidden = true;
+
+  const q = String(state.query || "").trim().toLowerCase();
+  const filtered = q
+    ? state.rows.filter((row) => row.nome.toLowerCase().includes(q) || row.email.toLowerCase().includes(q))
+    : state.rows;
+
+  if (empty instanceof HTMLElement) empty.hidden = filtered.length > 0;
+  table.innerHTML = `
+    <div class="admin-users-row admin-users-head">
+      <span> </span>
+      <span>Nome</span>
+      <span>E-mail</span>
+      <span>Status</span>
+      <span>Cadastro</span>
+      <span> </span>
+    </div>
+    ${filtered
+      .map((row) => {
+        const badgeClass = row.ativo ? "admin-badge is-active" : "admin-badge is-inactive";
+        const badgeLabel = row.ativo ? "Ativo" : "Inativo";
+        return `
+          <div class="admin-users-row" data-admin-user-row="${escapeHtml(row.id)}" data-admin-user-email="${escapeHtml(
+          row.email
+        )}" data-admin-user-name="${escapeHtml(row.nome)}" data-admin-user-active="${row.ativo ? "1" : "0"}">
+            <div class="admin-user-avatar" aria-hidden="true">${escapeHtml(row.initials)}</div>
+            <div class="admin-user-name">${escapeHtml(row.nome)}</div>
+            <div class="admin-user-email">${escapeHtml(row.email)}</div>
+            <div><span class="${badgeClass}">${badgeLabel}</span></div>
+            <div class="admin-user-date">${escapeHtml(formatAdminDate(row.criadoEm))}</div>
+            <div class="admin-row-actions" data-admin-actions>
+              <button class="admin-actions-trigger" type="button" aria-label="Ações" data-admin-actions-trigger>
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M6.5 12h.01"></path>
+                  <path d="M12 12h.01"></path>
+                  <path d="M17.5 12h.01"></path>
+                </svg>
+              </button>
+              <div class="admin-actions-menu" role="menu" aria-label="Ações do usuário">
+                <button class="admin-action-item${row.ativo ? " is-danger" : ""}" type="button" data-admin-action-toggle>
+                  ${row.ativo ? "Desativar" : "Ativar"}
+                </button>
+                <button class="admin-action-item" type="button" data-admin-action-reset>
+                  Redefinir senha
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+      })
+      .join("")}
+  `;
+};
+
+const closeAllAdminActionMenus = () => {
+  document.querySelectorAll("[data-admin-actions].is-open").forEach((el) => el.classList.remove("is-open"));
+};
+
 if (adminUserForm instanceof HTMLFormElement) {
   adminUserForm.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -3763,12 +3945,15 @@ if (adminUserForm instanceof HTMLFormElement) {
 
     const nameOk = Boolean(name);
     const emailOk = isValidEmail(email);
-    const passOk = Boolean(password);
+    const passOk = Boolean(password) && password.length >= 6;
     const roleOk = Boolean(role);
 
     if (adminUserNameError instanceof HTMLElement) adminUserNameError.hidden = nameOk;
     if (adminUserEmailError instanceof HTMLElement) adminUserEmailError.hidden = emailOk;
-    if (adminUserPasswordError instanceof HTMLElement) adminUserPasswordError.hidden = passOk;
+    if (adminUserPasswordError instanceof HTMLElement) {
+      adminUserPasswordError.textContent = password ? "Senha mínimo 6 caracteres" : "Senha obrigatória";
+      adminUserPasswordError.hidden = passOk;
+    }
 
     if (adminUserName instanceof HTMLElement) adminUserName.classList.toggle("is-error", !nameOk);
     if (adminUserEmail instanceof HTMLElement) adminUserEmail.classList.toggle("is-error", !emailOk);
@@ -3828,6 +4013,16 @@ if (adminUserForm instanceof HTMLFormElement) {
         adminRankingState.lastLoadedAt = 0;
         renderAdminRanking();
       }
+
+      // Refresh lists if visible.
+      adminUsersState.teacher.loadedAt = 0;
+      adminUsersState.student.loadedAt = 0;
+      if (body.dataset.activePanel === "professores") {
+        loadUsersFromFirestore("teacher");
+      }
+      if (body.dataset.activePanel === "alunos") {
+        loadUsersFromFirestore("student");
+      }
     } catch (error) {
       const code = typeof error?.code === "string" ? error.code : "";
       let message = "Nao foi possivel criar o usuario.";
@@ -3848,6 +4043,182 @@ if (adminUserForm instanceof HTMLFormElement) {
     }
   });
 }
+
+const openAdminCreateUserModal = ({ presetRole } = {}) => {
+  if (currentRole !== "admin") return;
+  const role = presetRole === "teacher" ? "teacher" : "student";
+  activeModalKind = "admin-create-user";
+
+  const title = role === "teacher" ? "Novo Professor" : "Novo Aluno";
+
+  const bodyHtml = `
+    <form class="auth-form admin-create-form" data-admin-create-form novalidate>
+      <label class="auth-field">
+        <span>Nome completo</span>
+        <input class="auth-input" type="text" autocomplete="name" data-ac-name />
+        <div class="auth-inline-error" data-ac-name-error hidden>Nome obrigatório</div>
+      </label>
+      <label class="auth-field">
+        <span>E-mail</span>
+        <input class="auth-input" type="email" autocomplete="email" data-ac-email />
+        <div class="auth-inline-error" data-ac-email-error hidden>E-mail inválido</div>
+      </label>
+      <label class="auth-field">
+        <span>Senha</span>
+        <div class="auth-password">
+          <input class="auth-input" type="password" autocomplete="new-password" data-ac-password />
+          <button class="auth-eye" type="button" data-ac-eye aria-label="Mostrar senha">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12Z"></path>
+              <path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z"></path>
+            </svg>
+          </button>
+        </div>
+        <div class="auth-inline-error" data-ac-password-error hidden>Senha obrigatória</div>
+      </label>
+      <label class="auth-field">
+        <span>Confirmar senha</span>
+        <input class="auth-input" type="password" autocomplete="new-password" data-ac-confirm />
+        <div class="auth-inline-error" data-ac-confirm-error hidden>As senhas precisam coincidir</div>
+      </label>
+      <div class="auth-form-error" data-ac-error hidden>Não foi possível criar agora.</div>
+      <div class="auth-form-success" data-ac-success hidden>Criado com sucesso.</div>
+    </form>
+  `;
+
+  openModal({
+    title,
+    bodyHtml,
+    primaryLabel: "Cadastrar",
+    secondaryLabel: "Voltar",
+    hideSecondary: false,
+    showTrash: false,
+    onPrimary: () => {
+      const form = modalBody?.querySelector("[data-admin-create-form]");
+      if (!(form instanceof HTMLFormElement)) return false;
+      const nameEl = form.querySelector("[data-ac-name]");
+      const emailEl = form.querySelector("[data-ac-email]");
+      const passEl = form.querySelector("[data-ac-password]");
+      const confirmEl = form.querySelector("[data-ac-confirm]");
+      const nameError = form.querySelector("[data-ac-name-error]");
+      const emailError = form.querySelector("[data-ac-email-error]");
+      const passError = form.querySelector("[data-ac-password-error]");
+      const confirmError = form.querySelector("[data-ac-confirm-error]");
+      const errorEl = form.querySelector("[data-ac-error]");
+      const successEl = form.querySelector("[data-ac-success]");
+
+      const name = nameEl instanceof HTMLInputElement ? nameEl.value.trim() : "";
+      const email = emailEl instanceof HTMLInputElement ? emailEl.value.trim().toLowerCase() : "";
+      const password = passEl instanceof HTMLInputElement ? passEl.value : "";
+      const confirm = confirmEl instanceof HTMLInputElement ? confirmEl.value : "";
+
+      const nameOk = Boolean(name);
+      const emailOk = isValidEmail(email);
+      const passOk = Boolean(password) && password.length >= 6;
+      const confirmOk = password === confirm && Boolean(confirm);
+
+      if (nameError instanceof HTMLElement) nameError.hidden = nameOk;
+      if (emailError instanceof HTMLElement) emailError.hidden = emailOk;
+      if (passError instanceof HTMLElement) {
+        passError.textContent = password ? "Senha mínimo 6 caracteres" : "Senha obrigatória";
+        passError.hidden = passOk;
+      }
+      if (confirmError instanceof HTMLElement) confirmError.hidden = confirmOk;
+
+      if (nameEl instanceof HTMLElement) nameEl.classList.toggle("is-error", !nameOk);
+      if (emailEl instanceof HTMLElement) emailEl.classList.toggle("is-error", !emailOk);
+      if (passEl instanceof HTMLElement) passEl.classList.toggle("is-error", !passOk);
+      if (confirmEl instanceof HTMLElement) confirmEl.classList.toggle("is-error", !confirmOk);
+
+      if (errorEl instanceof HTMLElement) errorEl.hidden = true;
+      if (successEl instanceof HTMLElement) successEl.hidden = true;
+
+      if (!nameOk || !emailOk || !passOk || !confirmOk) return false;
+
+      (async () => {
+        try {
+          if (modalPrimary) modalPrimary.disabled = true;
+          if (modalSecondary) modalSecondary.disabled = true;
+
+          const firebase = await loadFirebaseAdminApi();
+          const credential = await firebase.createUserWithEmailAndPassword(firebase.secondaryAuth, email, password);
+          const uid = String(credential?.user?.uid || "").trim();
+          if (!uid) throw new Error("missing_uid");
+
+          const payload = { nome: name, email, tipo: role, ativo: true, criadoEm: firebase.serverTimestamp() };
+          try {
+            await firebase.setDoc(firebase.doc(firebase.primaryDb, "users", uid), payload, { merge: true });
+          } catch (e) {
+            await firebase.setDoc(firebase.doc(firebase.secondaryDb, "users", uid), payload, { merge: true });
+          }
+
+          await fetch("/api/admin/users", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ uid, role, name }),
+          }).catch(() => {});
+
+          adminUsersState.teacher.loadedAt = 0;
+          adminUsersState.student.loadedAt = 0;
+
+          if (successEl instanceof HTMLElement) successEl.hidden = false;
+          closeModal();
+          if (role === "teacher") loadUsersFromFirestore("teacher");
+          if (role === "student") loadUsersFromFirestore("student");
+        } catch (e) {
+          const code = typeof e?.code === "string" ? e.code : "";
+          let msg = "Não foi possível criar agora.";
+          if (code === "auth/email-already-in-use") msg = "Este e-mail já está cadastrado";
+          if (code === "auth/weak-password") msg = "Senha muito fraca";
+          if (code === "auth/invalid-email") msg = "E-mail inválido";
+          if (errorEl instanceof HTMLElement) {
+            errorEl.textContent = msg;
+            errorEl.hidden = false;
+          }
+        } finally {
+          try {
+            const firebase = await loadFirebaseAdminApi();
+            await firebase.signOut(firebase.secondaryAuth);
+          } catch (e) {
+            // ignore
+          }
+          if (modalPrimary) modalPrimary.disabled = false;
+          if (modalSecondary) modalSecondary.disabled = false;
+        }
+      })();
+
+      return false;
+    },
+    onSecondary: () => {
+      activeModalKind = "";
+    },
+  });
+
+  const eye = modalBody?.querySelector("[data-ac-eye]");
+  const passEl = modalBody?.querySelector("[data-ac-password]");
+  if (eye instanceof HTMLButtonElement && passEl instanceof HTMLInputElement) {
+    eye.addEventListener("click", () => {
+      passEl.type = passEl.type === "password" ? "text" : "password";
+    });
+  }
+};
+
+adminNewUserButtons.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const raw = btn.getAttribute("data-admin-new-user");
+    openAdminCreateUserModal({ presetRole: raw === "teacher" ? "teacher" : "student" });
+  });
+});
+
+adminSearchInputs.forEach((input) => {
+  input.addEventListener("input", () => {
+    const type = input.getAttribute("data-admin-search") === "teacher" ? "teacher" : "student";
+    adminUsersState[type].query = input instanceof HTMLInputElement ? input.value : "";
+    renderAdminUsersTable(type);
+  });
+});
+
 
 let adminRankingState = {
   teachers: [],
@@ -4148,6 +4519,22 @@ const showPanel = (panelName) => {
     return;
   }
 
+  if (panelName === "professores") {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (currentRole === "admin") {
+      loadUsersFromFirestore("teacher");
+    }
+    return;
+  }
+
+  if (panelName === "alunos") {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (currentRole === "admin") {
+      loadUsersFromFirestore("student");
+    }
+    return;
+  }
+
   if (panelName === "dashboard") {
     if (currentRole === "teacher") {
       renderTeacherDashboard();
@@ -4182,6 +4569,8 @@ const panelPathForRole = (role, panel) => {
   }
 
   if (normalized === "admin") {
+    if (p === "professores") return "/app/admin/professores";
+    if (p === "alunos") return "/app/admin/alunos";
     if (p === "gravadas") return "/app/admin/gravadas";
     if (p === "ao-vivo") return "/app/admin/ao-vivo";
     if (p === "materiais") return "/app/admin/materiais";
@@ -4211,6 +4600,8 @@ const parseAppRoute = (path) => {
   }
 
   if (role === "admin") {
+    if (sub === "professores") return { role, panel: "professores" };
+    if (sub === "alunos") return { role, panel: "alunos" };
     if (sub === "ao-vivo") return { role, panel: "ao-vivo" };
     if (sub === "gravadas") return { role, panel: "gravadas" };
     if (sub === "materiais") return { role, panel: "materiais" };
@@ -4388,6 +4779,121 @@ document.addEventListener("click", (event) => {
   const target = event.target;
 
   if (target instanceof Element) {
+    // Admin manage tables: actions menu + operations.
+    if (currentRole === "admin") {
+      const trigger = target.closest("[data-admin-actions-trigger]");
+      if (trigger instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const container = trigger.closest("[data-admin-actions]");
+        if (container instanceof HTMLElement) {
+          const wasOpen = container.classList.contains("is-open");
+          closeAllAdminActionMenus();
+          container.classList.toggle("is-open", !wasOpen);
+        }
+        return;
+      }
+
+      const toggleAction = target.closest("[data-admin-action-toggle]");
+      if (toggleAction instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const row = toggleAction.closest("[data-admin-user-row]");
+        if (!(row instanceof HTMLElement)) return;
+        const uid = row.getAttribute("data-admin-user-row") || "";
+        const name = row.getAttribute("data-admin-user-name") || "Usuário";
+        const email = row.getAttribute("data-admin-user-email") || "";
+        const isActive = row.getAttribute("data-admin-user-active") === "1";
+        const type = body.dataset.activePanel === "professores" ? "teacher" : "student";
+
+        closeAllAdminActionMenus();
+
+        const applyToggle = async (nextActive) => {
+          setAdminManageStatus(type, nextActive ? "Ativando…" : "Desativando…");
+          try {
+            const firebase = await loadFirebaseAdminApi();
+            await firebase.setDoc(firebase.doc(firebase.primaryDb, "users", uid), { ativo: nextActive }, { merge: true });
+
+            const list = adminUsersState[type].rows;
+            const idx = list.findIndex((u) => u.id === uid);
+            if (idx >= 0) {
+              list[idx] = { ...list[idx], ativo: nextActive };
+              adminUsersState[type].rows = [...list].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+            }
+            setAdminManageStatus(type, nextActive ? "Usuário ativado." : "Usuário desativado.", "success");
+            window.setTimeout(() => setAdminManageStatus(type, ""), 1200);
+            renderAdminUsersTable(type);
+          } catch (error) {
+            setAdminManageStatus(type, "Não foi possível atualizar o status.", "error");
+          }
+        };
+
+        if (isActive) {
+          openModal({
+            title: "Desativar usuário",
+            bodyHtml: `Tem certeza que deseja desativar ${escapeHtml(name)}? O usuário não conseguirá mais acessar a plataforma.`,
+            primaryLabel: "Desativar",
+            secondaryLabel: "Cancelar",
+            hideSecondary: false,
+            showTrash: false,
+            onPrimary: () => {
+              if (modalPrimary) modalPrimary.disabled = true;
+              if (modalSecondary) modalSecondary.disabled = true;
+              applyToggle(false).finally(() => closeModal());
+              return false;
+            },
+          });
+          return;
+        }
+
+        applyToggle(true);
+        return;
+      }
+
+      const resetAction = target.closest("[data-admin-action-reset]");
+      if (resetAction instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const row = resetAction.closest("[data-admin-user-row]");
+        if (!(row instanceof HTMLElement)) return;
+        const email = row.getAttribute("data-admin-user-email") || "";
+        const type = body.dataset.activePanel === "professores" ? "teacher" : "student";
+
+        closeAllAdminActionMenus();
+
+        openModal({
+          title: "Redefinir senha",
+          bodyHtml: `Enviar link de redefinição de senha para ${escapeHtml(email)}?`,
+          primaryLabel: "Enviar link",
+          secondaryLabel: "Cancelar",
+          hideSecondary: false,
+          showTrash: false,
+          onPrimary: () => {
+            (async () => {
+              if (modalPrimary) modalPrimary.disabled = true;
+              if (modalSecondary) modalSecondary.disabled = true;
+              setAdminManageStatus(type, "Enviando link…");
+              try {
+                const firebase = await loadFirebaseAdminApi();
+                await firebase.sendPasswordResetEmail(firebase.primaryAuth, email);
+                setAdminManageStatus(type, "Link enviado com sucesso.", "success");
+                window.setTimeout(() => setAdminManageStatus(type, ""), 1200);
+                closeModal();
+              } catch (error) {
+                setAdminManageStatus(type, "Não foi possível enviar o link.", "error");
+                if (modalPrimary) modalPrimary.disabled = false;
+                if (modalSecondary) modalSecondary.disabled = false;
+              }
+            })();
+            return false;
+          },
+        });
+        return;
+      }
+
+      // Click outside closes any open action menu.
+      if (!target.closest("[data-admin-actions]")) {
+        closeAllAdminActionMenus();
+      }
+    }
+
     if (
       activeModalKind === "event-form" &&
       createEventDraft &&

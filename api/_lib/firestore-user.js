@@ -90,14 +90,16 @@ const fetchUserProfileByUid = async ({ uid, idToken }) => {
   const role = normalizeRole(readStringField(fields, "tipo"));
   const active = readBooleanField(fields, "ativo", true);
 
-  if (!active) return null;
   if (!name || !email || !role) return null;
 
   return {
-    id: safeUid,
-    role,
-    name,
-    email,
+    user: {
+      id: safeUid,
+      role,
+      name,
+      email,
+    },
+    active,
   };
 };
 

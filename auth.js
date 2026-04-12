@@ -293,11 +293,14 @@ const initLoginForm = (role) => {
           body: JSON.stringify({ role: normalizeRole(role), idToken }),
         });
 
+        const data = await res.json().catch(() => null);
         if (!res.ok) {
-          throw new Error("backend_login_failed");
+          const backendError = typeof data?.error === "string" ? data.error : "";
+          const error = new Error("backend_login_failed");
+          if (backendError) error.code = backendError;
+          throw error;
         }
 
-        const data = await res.json().catch(() => null);
         const user = sanitizeSessionUser(data?.user);
         if (!user) throw new Error("invalid_response");
         window.location.replace(roleBasePath(user.role));
@@ -305,6 +308,7 @@ const initLoginForm = (role) => {
       .catch((err) => {
         const code = typeof err?.code === "string" ? err.code : "";
         let message = "E-mail ou senha incorretos";
+        if (code === "user_disabled") message = "Sua conta foi desativada. Entre em contato com o suporte.";
         if (code === "auth/wrong-password") message = "Senha incorreta";
         if (code === "auth/user-not-found") message = "Nenhuma conta encontrada com este e-mail";
         if (code === "auth/too-many-requests") message = "Muitas tentativas. Tente novamente mais tarde";
