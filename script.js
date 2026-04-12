@@ -3686,6 +3686,25 @@ const FIREBASE_CONFIG = {
 
 let firebaseAdminApiPromise = null;
 
+const withTimeout = (promise, ms, label) => {
+  const timeoutMs = Number(ms);
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return promise;
+
+  let timeoutId;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = window.setTimeout(() => {
+      const error = new Error("timeout");
+      error.code = "timeout";
+      error.label = label || "";
+      reject(error);
+    }, timeoutMs);
+  });
+
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timeoutId) window.clearTimeout(timeoutId);
+  });
+};
+
 const loadFirebaseAdminApi = () => {
   if (firebaseAdminApiPromise) return firebaseAdminApiPromise;
 
@@ -3717,6 +3736,7 @@ const loadFirebaseAdminApi = () => {
       secondaryDb,
       createUserWithEmailAndPassword: authMod.createUserWithEmailAndPassword,
       sendPasswordResetEmail: authMod.sendPasswordResetEmail,
+      onAuthStateChanged: authMod.onAuthStateChanged,
       signOut: authMod.signOut,
       collection: fsMod.collection,
       doc: fsMod.doc,
@@ -3730,6 +3750,33 @@ const loadFirebaseAdminApi = () => {
   });
 
   return firebaseAdminApiPromise;
+};
+
+const waitForFirebaseAuthReady = (firebase, timeoutMs = 4000) => {
+  if (!firebase || !firebase.primaryAuth || typeof firebase.onAuthStateChanged !== "function") return Promise.resolve(null);
+  if (firebase.primaryAuth.currentUser) return Promise.resolve(firebase.primaryAuth.currentUser);
+
+  const ms = Number(timeoutMs);
+  const safeTimeout = Number.isFinite(ms) && ms > 0 ? ms : 4000;
+
+  return new Promise((resolve) => {
+    let settled = false;
+    let unsub = null;
+
+    const finish = (user) => {
+      if (settled) return;
+      settled = true;
+      try {
+        if (typeof unsub === "function") unsub();
+      } catch (error) {
+        // ignore
+      }
+      resolve(user || null);
+    };
+
+    unsub = firebase.onAuthStateChanged(firebase.primaryAuth, (user) => finish(user));
+    window.setTimeout(() => finish(null), safeTimeout);
+  });
 };
 
 const normalizeUserCreationRole = (value) => {
@@ -3834,12 +3881,19 @@ const loadUsersFromFirestore = async (type) => {
   if (error instanceof HTMLElement) error.hidden = true;
 
   try {
-    const firebase = await loadFirebaseAdminApi();
+    const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init");
+    const user = await waitForFirebaseAuthReady(firebase, 5000);
+    if (!user) {
+      const e = new Error("firebase_not_authenticated");
+      e.code = "auth/no-current-user";
+      throw e;
+    }
+
     const q = firebase.query(
       firebase.collection(firebase.primaryDb, "users"),
       firebase.where("tipo", "==", safeType)
     );
-    const snap = await firebase.getDocs(q);
+    const snap = await withTimeout(firebase.getDocs(q), 12_000, "firestore_getDocs");
     const rows = [];
     snap.forEach((docSnap) => {
       const data = docSnap.data ? docSnap.data() : null;
@@ -3861,10 +3915,16 @@ const loadUsersFromFirestore = async (type) => {
     setAdminManageStatus(safeType, "");
     renderAdminUsersTable(safeType);
   } catch (err) {
+    // Surface the root cause for debugging (rules, connectivity, etc.).
+    console.error("[admin] loadUsersFromFirestore failed:", safeType, err);
     if (table instanceof HTMLElement) table.innerHTML = "";
     if (empty instanceof HTMLElement) empty.hidden = true;
     if (error instanceof HTMLElement) error.hidden = false;
-    setAdminManageStatus(safeType, "Não foi possível carregar.", "error");
+    const code = typeof err?.code === "string" ? err.code : "";
+    let message = "Não foi possível carregar.";
+    if (code === "timeout") message = "Tempo esgotado ao carregar. Tente novamente.";
+    if (code === "auth/no-current-user") message = "Sessão expirada. Faça login novamente.";
+    setAdminManageStatus(safeType, message, "error");
   } finally {
     state.isLoading = false;
   }
@@ -3972,10 +4032,20 @@ if (adminUserForm instanceof HTMLFormElement) {
     let secondaryAuth = null;
 
     try {
-      const firebase = await loadFirebaseAdminApi();
+      const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init");
       secondaryAuth = firebase.secondaryAuth;
 
-      const credential = await firebase.createUserWithEmailAndPassword(firebase.secondaryAuth, email, password);
+      let credential;
+      try {
+        credential = await withTimeout(
+          firebase.createUserWithEmailAndPassword(firebase.secondaryAuth, email, password),
+          12_000,
+          "auth_create_user"
+        );
+      } catch (authErr) {
+        console.error("[admin] create user (auth) failed:", authErr);
+        throw authErr;
+      }
       const uid = String(credential?.user?.uid || "").trim();
       if (!uid) {
         throw new Error("missing_uid");
@@ -3991,17 +4061,35 @@ if (adminUserForm instanceof HTMLFormElement) {
 
       // Prefer the admin's session to write, but fall back to the secondary session (new user) if needed.
       try {
-        await firebase.setDoc(firebase.doc(firebase.primaryDb, "users", uid), payload, { merge: true });
-      } catch (error) {
-        await firebase.setDoc(firebase.doc(firebase.secondaryDb, "users", uid), payload, { merge: true });
+        await withTimeout(
+          firebase.setDoc(firebase.doc(firebase.primaryDb, "users", uid), payload, { merge: true }),
+          12_000,
+          "firestore_setDoc_primary"
+        );
+      } catch (primaryErr) {
+        console.error("[admin] create user (firestore primary) failed:", primaryErr);
+        try {
+          await withTimeout(
+            firebase.setDoc(firebase.doc(firebase.secondaryDb, "users", uid), payload, { merge: true }),
+            12_000,
+            "firestore_setDoc_secondary"
+          );
+        } catch (secondaryErr) {
+          console.error("[admin] create user (firestore secondary) failed:", secondaryErr);
+          throw secondaryErr;
+        }
       }
 
-      await fetch("/api/admin/users", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ uid, role, name }),
-      }).catch(() => {});
+      await withTimeout(
+        fetch("/api/admin/users", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ uid, role, name }),
+        }).catch(() => {}),
+        8000,
+        "admin_users_sync"
+      );
 
       setAdminUserStatus("Usuário criado com sucesso.", "success");
       if (adminUserPassword instanceof HTMLInputElement) adminUserPassword.value = "";
@@ -4024,17 +4112,19 @@ if (adminUserForm instanceof HTMLFormElement) {
         loadUsersFromFirestore("student");
       }
     } catch (error) {
+      console.error("[admin] create user failed:", error);
       const code = typeof error?.code === "string" ? error.code : "";
       let message = "Nao foi possivel criar o usuario.";
       if (code === "auth/email-already-in-use") message = "Este e-mail já está em uso.";
       if (code === "auth/invalid-email") message = "E-mail inválido.";
       if (code === "auth/weak-password") message = "Senha fraca. Use uma senha mais forte.";
+      if (code === "timeout") message = "Tempo esgotado. Tente novamente.";
       setAdminUserStatus(message, "error");
     } finally {
       try {
-        const firebase = await loadFirebaseAdminApi();
+        const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init");
         if (secondaryAuth) {
-          await firebase.signOut(secondaryAuth);
+          await withTimeout(firebase.signOut(secondaryAuth), 6000, "auth_secondary_signout");
         }
       } catch (error) {
         // ignore
@@ -4136,55 +4226,92 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
       if (!nameOk || !emailOk || !passOk || !confirmOk) return false;
 
       (async () => {
+        const previousPrimaryLabel = modalPrimary ? modalPrimary.textContent : "";
         try {
           if (modalPrimary) modalPrimary.disabled = true;
           if (modalSecondary) modalSecondary.disabled = true;
+          if (modalPrimary) modalPrimary.textContent = "Cadastrando…";
 
-          const firebase = await loadFirebaseAdminApi();
-          const credential = await firebase.createUserWithEmailAndPassword(firebase.secondaryAuth, email, password);
+          const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init");
+
+          let credential;
+          try {
+            credential = await withTimeout(
+              firebase.createUserWithEmailAndPassword(firebase.secondaryAuth, email, password),
+              12_000,
+              "auth_create_user"
+            );
+          } catch (authErr) {
+            console.error("[admin] create teacher/student (auth) failed:", authErr);
+            throw authErr;
+          }
+
           const uid = String(credential?.user?.uid || "").trim();
           if (!uid) throw new Error("missing_uid");
 
           const payload = { nome: name, email, tipo: role, ativo: true, criadoEm: firebase.serverTimestamp() };
           try {
-            await firebase.setDoc(firebase.doc(firebase.primaryDb, "users", uid), payload, { merge: true });
-          } catch (e) {
-            await firebase.setDoc(firebase.doc(firebase.secondaryDb, "users", uid), payload, { merge: true });
+            await withTimeout(
+              firebase.setDoc(firebase.doc(firebase.primaryDb, "users", uid), payload, { merge: true }),
+              12_000,
+              "firestore_setDoc_primary"
+            );
+          } catch (primaryErr) {
+            console.error("[admin] create teacher/student (firestore primary) failed:", primaryErr);
+            try {
+              await withTimeout(
+                firebase.setDoc(firebase.doc(firebase.secondaryDb, "users", uid), payload, { merge: true }),
+                12_000,
+                "firestore_setDoc_secondary"
+              );
+            } catch (secondaryErr) {
+              console.error("[admin] create teacher/student (firestore secondary) failed:", secondaryErr);
+              throw secondaryErr;
+            }
           }
 
-          await fetch("/api/admin/users", {
-            method: "POST",
-            credentials: "include",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ uid, role, name }),
-          }).catch(() => {});
+          await withTimeout(
+            fetch("/api/admin/users", {
+              method: "POST",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ uid, role, name }),
+            }).catch(() => {}),
+            8000,
+            "admin_users_sync"
+          );
 
           adminUsersState.teacher.loadedAt = 0;
           adminUsersState.student.loadedAt = 0;
 
           if (successEl instanceof HTMLElement) successEl.hidden = false;
+          setAdminManageStatus(role === "teacher" ? "teacher" : "student", "Criado com sucesso.", "success");
+          window.setTimeout(() => setAdminManageStatus(role === "teacher" ? "teacher" : "student", ""), 1200);
           closeModal();
           if (role === "teacher") loadUsersFromFirestore("teacher");
           if (role === "student") loadUsersFromFirestore("student");
         } catch (e) {
+          console.error("[admin] create teacher/student failed:", e);
           const code = typeof e?.code === "string" ? e.code : "";
           let msg = "Não foi possível criar agora.";
           if (code === "auth/email-already-in-use") msg = "Este e-mail já está cadastrado";
           if (code === "auth/weak-password") msg = "Senha muito fraca";
           if (code === "auth/invalid-email") msg = "E-mail inválido";
+          if (code === "timeout") msg = "Tempo esgotado. Tente novamente.";
           if (errorEl instanceof HTMLElement) {
             errorEl.textContent = msg;
             errorEl.hidden = false;
           }
         } finally {
           try {
-            const firebase = await loadFirebaseAdminApi();
-            await firebase.signOut(firebase.secondaryAuth);
+            const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init");
+            await withTimeout(firebase.signOut(firebase.secondaryAuth), 6000, "auth_secondary_signout");
           } catch (e) {
             // ignore
           }
           if (modalPrimary) modalPrimary.disabled = false;
           if (modalSecondary) modalSecondary.disabled = false;
+          if (modalPrimary && previousPrimaryLabel) modalPrimary.textContent = previousPrimaryLabel;
         }
       })();
 
@@ -4809,8 +4936,12 @@ document.addEventListener("click", (event) => {
         const applyToggle = async (nextActive) => {
           setAdminManageStatus(type, nextActive ? "Ativando…" : "Desativando…");
           try {
-            const firebase = await loadFirebaseAdminApi();
-            await firebase.setDoc(firebase.doc(firebase.primaryDb, "users", uid), { ativo: nextActive }, { merge: true });
+            const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init");
+            await withTimeout(
+              firebase.setDoc(firebase.doc(firebase.primaryDb, "users", uid), { ativo: nextActive }, { merge: true }),
+              12_000,
+              "firestore_toggle_active"
+            );
 
             const list = adminUsersState[type].rows;
             const idx = list.findIndex((u) => u.id === uid);
@@ -4822,6 +4953,7 @@ document.addEventListener("click", (event) => {
             window.setTimeout(() => setAdminManageStatus(type, ""), 1200);
             renderAdminUsersTable(type);
           } catch (error) {
+            console.error("[admin] toggle active failed:", error);
             setAdminManageStatus(type, "Não foi possível atualizar o status.", "error");
           }
         };
@@ -4868,19 +5000,20 @@ document.addEventListener("click", (event) => {
           onPrimary: () => {
             (async () => {
               if (modalPrimary) modalPrimary.disabled = true;
-              if (modalSecondary) modalSecondary.disabled = true;
-              setAdminManageStatus(type, "Enviando link…");
-              try {
-                const firebase = await loadFirebaseAdminApi();
-                await firebase.sendPasswordResetEmail(firebase.primaryAuth, email);
-                setAdminManageStatus(type, "Link enviado com sucesso.", "success");
-                window.setTimeout(() => setAdminManageStatus(type, ""), 1200);
-                closeModal();
-              } catch (error) {
-                setAdminManageStatus(type, "Não foi possível enviar o link.", "error");
-                if (modalPrimary) modalPrimary.disabled = false;
-                if (modalSecondary) modalSecondary.disabled = false;
-              }
+                if (modalSecondary) modalSecondary.disabled = true;
+                setAdminManageStatus(type, "Enviando link…");
+                try {
+                  const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init");
+                  await withTimeout(firebase.sendPasswordResetEmail(firebase.primaryAuth, email), 12_000, "auth_reset_email");
+                  setAdminManageStatus(type, "Link enviado com sucesso.", "success");
+                  window.setTimeout(() => setAdminManageStatus(type, ""), 1200);
+                  closeModal();
+                } catch (error) {
+                  console.error("[admin] sendPasswordResetEmail failed:", error);
+                  setAdminManageStatus(type, "Não foi possível enviar o link.", "error");
+                  if (modalPrimary) modalPrimary.disabled = false;
+                  if (modalSecondary) modalSecondary.disabled = false;
+                }
             })();
             return false;
           },
