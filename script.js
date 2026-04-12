@@ -4355,6 +4355,7 @@ let adminRankingState = {
   dropBefore: true,
   isDirty: false,
   isLoading: false,
+  lastSyncedAt: 0,
   lastLoadedAt: 0,
 };
 
@@ -4382,6 +4383,46 @@ const fetchAdminRanking = async () => {
       .filter(Boolean),
     order: order.filter((id) => typeof id === "string"),
   };
+};
+
+const syncTeachersFromFirestoreIntoStore = async () => {
+  // Best-effort: keep the scheduling store aligned with Firestore (registered teachers + ativo flag).
+  try {
+    const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init");
+    const user = await waitForFirebaseAuthReady(firebase, 5000);
+    if (!user) return;
+
+    const q = firebase.query(firebase.collection(firebase.primaryDb, "users"), firebase.where("tipo", "==", "teacher"));
+    const snap = await withTimeout(firebase.getDocs(q), 12_000, "firestore_list_teachers");
+    const teachers = [];
+    snap.forEach((doc) => {
+      const data = typeof doc.data === "function" ? doc.data() : null;
+      const name = String(data?.nome || "").trim();
+      const active = typeof data?.ativo === "boolean" ? data.ativo : true;
+      const id = String(doc.id || "").trim();
+      if (!id || !name) return;
+      teachers.push({ id, name, active });
+    });
+
+    if (!teachers.length) return;
+
+    await withTimeout(
+      Promise.allSettled(
+        teachers.map((t) =>
+          fetch("/api/admin/users", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ uid: t.id, role: "teacher", name: t.name, active: t.active }),
+          }).catch(() => null)
+        )
+      ),
+      12_000,
+      "admin_users_teacher_bulk_sync"
+    );
+  } catch (error) {
+    console.warn("[admin] teacher store sync skipped:", error);
+  }
 };
 
 const renderAdminRankingList = () => {
@@ -4417,6 +4458,11 @@ const renderAdminRanking = async () => {
   if (currentRole !== "admin") return;
   if (!adminRankingList) return;
 
+  if (adminRankingState.isDirty) {
+    renderAdminRankingList();
+    return;
+  }
+
   const now = Date.now();
   const shouldRefetch = !adminRankingState.lastLoadedAt || now - adminRankingState.lastLoadedAt > 30_000;
   if (!shouldRefetch || adminRankingState.isLoading) {
@@ -4428,6 +4474,12 @@ const renderAdminRanking = async () => {
   setAdminRankingStatus("Carregando…");
 
   try {
+    const shouldSync = !adminRankingState.lastSyncedAt || now - adminRankingState.lastSyncedAt > 30_000;
+    if (shouldSync) {
+      await syncTeachersFromFirestoreIntoStore();
+      adminRankingState.lastSyncedAt = Date.now();
+    }
+
     const { teachers, order } = await fetchAdminRanking();
     adminRankingState.teachers = teachers;
     const ids = new Set(teachers.map((t) => t.id));
@@ -4937,15 +4989,32 @@ document.addEventListener("click", (event) => {
           setAdminManageStatus(type, nextActive ? "Ativando…" : "Desativando…");
           try {
             const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init");
-            await withTimeout(
-              firebase.setDoc(firebase.doc(firebase.primaryDb, "users", uid), { ativo: nextActive }, { merge: true }),
-              12_000,
-              "firestore_toggle_active"
-            );
+	            await withTimeout(
+	              firebase.setDoc(firebase.doc(firebase.primaryDb, "users", uid), { ativo: nextActive }, { merge: true }),
+	              12_000,
+	              "firestore_toggle_active"
+	            );
 
-            const list = adminUsersState[type].rows;
-            const idx = list.findIndex((u) => u.id === uid);
-            if (idx >= 0) {
+	            // Keep the scheduling store in sync so admin ranking/slot assignment respects active teachers.
+	            await withTimeout(
+	              fetch("/api/admin/users", {
+	                method: "POST",
+	                credentials: "include",
+	                headers: { "Content-Type": "application/json" },
+	                body: JSON.stringify({ uid, role: type, name, active: nextActive }),
+	              }).catch((error) => {
+	                console.warn("[admin] toggle active sync failed:", error);
+	              }),
+	              8000,
+	              "admin_users_toggle_sync"
+	            );
+	            if (type === "teacher") {
+	              adminRankingState.lastLoadedAt = 0;
+	            }
+
+	            const list = adminUsersState[type].rows;
+	            const idx = list.findIndex((u) => u.id === uid);
+	            if (idx >= 0) {
               list[idx] = { ...list[idx], ativo: nextActive };
               adminUsersState[type].rows = [...list].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
             }

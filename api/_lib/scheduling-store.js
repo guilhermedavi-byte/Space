@@ -119,10 +119,13 @@ const normalizeTeacher = (value) => {
   if (!value || typeof value !== "object") return null;
   const id = typeof value.id === "string" ? value.id : "";
   const name = typeof value.name === "string" ? value.name : "";
+  const active =
+    typeof value.active === "boolean" ? value.active : typeof value.ativo === "boolean" ? value.ativo : true;
   if (!id || !name) return null;
   return {
     id,
     name,
+    active,
     workHours: normalizeWorkHours(value.workHours),
   };
 };
@@ -175,6 +178,7 @@ const buildInitialStore = () => {
   const teachers = users.filter((u) => u.role === "teacher").map((u) => ({
     id: u.id,
     name: u.name,
+    active: true,
     workHours: defaultTeacherWorkHours(),
   }));
   const students = users.filter((u) => u.role === "student").map((u) => ({ id: u.id, name: u.name }));
@@ -219,7 +223,8 @@ const normalizeStore = (value) => {
   const students = studentsRaw.map(normalizeStudent).filter(Boolean);
   const events = eventsRaw.map(normalizeEvent).filter(Boolean);
 
-  const teacherIds = new Set(teachers.map((t) => t.id));
+  const activeTeachers = teachers.filter((t) => t && t.active !== false);
+  const teacherIds = new Set(activeTeachers.map((t) => t.id));
   const order = Array.isArray(rankingRaw.order) ? rankingRaw.order.filter((id) => typeof id === "string") : [];
   const dedupedOrder = [];
   const seen = new Set();
@@ -231,7 +236,7 @@ const normalizeStore = (value) => {
   });
 
   // Ensure all teachers are present in the ranking order.
-  teachers.forEach((t) => {
+  activeTeachers.forEach((t) => {
     if (!seen.has(t.id)) dedupedOrder.push(t.id);
   });
 
@@ -255,7 +260,7 @@ const seedUsersIntoStore = (store) => {
   const teachersById = new Map(store.teachers.map((t) => [t.id, t]));
   teacherUsers.forEach((u) => {
     if (teachersById.has(u.id)) return;
-    const record = { id: u.id, name: u.name, workHours: defaultTeacherWorkHours() };
+    const record = { id: u.id, name: u.name, active: true, workHours: defaultTeacherWorkHours() };
     store.teachers.push(record);
     teachersById.set(u.id, record);
   });
@@ -269,11 +274,27 @@ const seedUsersIntoStore = (store) => {
   });
 
   const rankingOrder = Array.isArray(store.ranking?.order) ? store.ranking.order : [];
-  const seen = new Set(rankingOrder);
-  store.ranking = { order: rankingOrder.filter((id) => teachersById.has(id)) };
-  teacherUsers.forEach((u) => {
-    if (!seen.has(u.id)) store.ranking.order.push(u.id);
+  const activeTeacherIds = new Set(
+    store.teachers
+      .filter((t) => t && typeof t === "object" && typeof t.id === "string" && t.active !== false)
+      .map((t) => t.id)
+  );
+  const dedupedOrder = [];
+  const seen = new Set();
+  rankingOrder.forEach((id) => {
+    if (typeof id !== "string") return;
+    if (!activeTeacherIds.has(id) || seen.has(id)) return;
+    seen.add(id);
+    dedupedOrder.push(id);
   });
+  store.teachers.forEach((t) => {
+    if (!t || typeof t !== "object" || typeof t.id !== "string") return;
+    if (t.active === false) return;
+    if (seen.has(t.id)) return;
+    seen.add(t.id);
+    dedupedOrder.push(t.id);
+  });
+  store.ranking = { order: dedupedOrder };
 
   return store;
 };

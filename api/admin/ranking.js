@@ -5,7 +5,7 @@ const { mutateStore, readStore } = require("../_lib/scheduling-store");
 const listTeachers = (store) => {
   const teachers = Array.isArray(store.teachers) ? store.teachers : [];
   return teachers
-    .filter((t) => t && typeof t === "object" && typeof t.id === "string" && typeof t.name === "string")
+    .filter((t) => t && typeof t === "object" && t.active !== false && typeof t.id === "string" && typeof t.name === "string")
     .map((t) => ({ id: t.id, name: t.name }));
 };
 
@@ -71,4 +71,3 @@ module.exports = async (req, res) => {
 
   sendJson(res, 200, { ok: true });
 };
-

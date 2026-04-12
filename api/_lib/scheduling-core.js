@@ -87,6 +87,7 @@ const computeTeachersBySlot = (store, dateKey) => {
 
   for (const teacher of teachers) {
     if (!teacher || typeof teacher !== "object" || !teacher.id) continue;
+    if (teacher.active === false) continue;
     const windows = getTeacherWorkWindowsForDow(teacher, dow);
     if (!windows.length) continue;
     const blocking = getBlockingEventsForTeacherOnDate(store, teacher.id, dateKey);

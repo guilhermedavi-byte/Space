@@ -46,6 +46,8 @@ module.exports = async (req, res) => {
   const uid = String(body?.uid || "").trim();
   const name = String(body?.name || "").trim();
   const role = normalizeRole(body?.role);
+  const hasActive = typeof body?.active === "boolean";
+  const nextActive = hasActive ? Boolean(body.active) : null;
 
   if (!uid || !name || !role) {
     sendJson(res, 400, { error: "invalid_request" });
@@ -57,13 +59,24 @@ module.exports = async (req, res) => {
       store.teachers = Array.isArray(store.teachers) ? store.teachers : [];
       const idx = store.teachers.findIndex((t) => t && t.id === uid);
       if (idx < 0) {
-        store.teachers.push({ id: uid, name, workHours: defaultTeacherWorkHours() });
+        store.teachers.push({
+          id: uid,
+          name,
+          active: nextActive == null ? true : nextActive,
+          workHours: defaultTeacherWorkHours(),
+        });
       } else {
-        store.teachers[idx] = { ...store.teachers[idx], name };
+        const prev = store.teachers[idx] || {};
+        store.teachers[idx] = {
+          ...prev,
+          name,
+          ...(nextActive == null ? {} : { active: nextActive }),
+        };
       }
 
       const order = Array.isArray(store?.ranking?.order) ? store.ranking.order : [];
-      store.ranking = { order: order.includes(uid) ? order : [...order, uid] };
+      const shouldInclude = nextActive == null ? true : nextActive;
+      store.ranking = { order: shouldInclude && !order.includes(uid) ? [...order, uid] : order };
       return store;
     }
 
