@@ -317,6 +317,40 @@
           <button
             class="sidebar-link"
             type="button"
+            data-panel-target="professores"
+            data-admin-only
+            title="Professores"
+          >
+            <span class="sidebar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M17 21v-2a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v2"></path>
+                <circle cx="10.5" cy="8" r="3.5"></circle>
+                <path d="M20.5 21v-2.2a2.6 2.6 0 0 0-2-2.5"></path>
+                <path d="M16.8 6.2a3.2 3.2 0 0 1 0 6.2"></path>
+              </svg>
+            </span>
+            <span class="sidebar-text">Professores</span>
+          </button>
+          <button
+            class="sidebar-link"
+            type="button"
+            data-panel-target="alunos"
+            data-admin-only
+            title="Alunos"
+          >
+            <span class="sidebar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M3.5 19.5v-1.2a3.3 3.3 0 0 1 3.3-3.3h6.4a3.3 3.3 0 0 1 3.3 3.3v1.2"></path>
+                <circle cx="10" cy="8.2" r="3.2"></circle>
+                <path d="M18.5 9.5h3"></path>
+                <path d="M20 8v3"></path>
+              </svg>
+            </span>
+            <span class="sidebar-text">Alunos</span>
+          </button>
+          <button
+            class="sidebar-link"
+            type="button"
             data-panel-target="gravadas"
             title="Aulas gravadas"
           >
@@ -1062,6 +1096,62 @@
             </div>
           </div>
 	        </section>
+
+        <section class="platform-panel" data-panel="professores" data-hide-platform-header="true" hidden>
+          <div class="admin-manage-shell" data-admin-manage="teacher">
+            <div class="admin-manage-head">
+              <h2 class="admin-manage-title">Gerenciar Professores</h2>
+              <button class="button button-solid button-small" type="button" data-admin-new-user="teacher">
+                + Novo Professor
+              </button>
+            </div>
+
+            <div class="admin-manage-tools">
+              <input
+                class="admin-search"
+                type="search"
+                inputmode="search"
+                placeholder="Buscar por nome ou e-mail"
+                data-admin-search="teacher"
+              />
+              <div class="admin-manage-status" data-admin-manage-status="teacher" aria-live="polite"></div>
+            </div>
+
+            <article class="surface-card admin-users-card" aria-label="Lista de professores">
+              <div class="admin-users-table" data-admin-users-table="teacher"></div>
+              <div class="admin-users-empty" data-admin-users-empty="teacher" hidden>Nenhum professor encontrado.</div>
+              <div class="admin-users-error" data-admin-users-error="teacher" hidden>Não foi possível carregar os professores.</div>
+            </article>
+          </div>
+        </section>
+
+        <section class="platform-panel" data-panel="alunos" data-hide-platform-header="true" hidden>
+          <div class="admin-manage-shell" data-admin-manage="student">
+            <div class="admin-manage-head">
+              <h2 class="admin-manage-title">Gerenciar Alunos</h2>
+              <button class="button button-solid button-small" type="button" data-admin-new-user="student">
+                + Novo Aluno
+              </button>
+            </div>
+
+            <div class="admin-manage-tools">
+              <input
+                class="admin-search"
+                type="search"
+                inputmode="search"
+                placeholder="Buscar por nome ou e-mail"
+                data-admin-search="student"
+              />
+              <div class="admin-manage-status" data-admin-manage-status="student" aria-live="polite"></div>
+            </div>
+
+            <article class="surface-card admin-users-card" aria-label="Lista de alunos">
+              <div class="admin-users-table" data-admin-users-table="student"></div>
+              <div class="admin-users-empty" data-admin-users-empty="student" hidden>Nenhum aluno encontrado.</div>
+              <div class="admin-users-error" data-admin-users-error="student" hidden>Não foi possível carregar os alunos.</div>
+            </article>
+          </div>
+        </section>
 
         <section class="platform-panel" data-panel="materiais" hidden>
           <div class="panel-heading">

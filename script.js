@@ -70,6 +70,16 @@ const adminUserSubmit = document.querySelector("[data-admin-user-submit]");
 const adminUserSubmitLabel = document.querySelector("[data-admin-user-submit-label]");
 const adminUserSpinner = document.querySelector("[data-admin-user-spinner]");
 const adminUserStatus = document.querySelector("[data-admin-user-status]");
+const adminNewUserButtons = document.querySelectorAll("[data-admin-new-user]");
+const adminSearchInputs = document.querySelectorAll("[data-admin-search]");
+const adminManageStatusTeacher = document.querySelector('[data-admin-manage-status="teacher"]');
+const adminManageStatusStudent = document.querySelector('[data-admin-manage-status="student"]');
+const adminUsersTableTeacher = document.querySelector('[data-admin-users-table="teacher"]');
+const adminUsersTableStudent = document.querySelector('[data-admin-users-table="student"]');
+const adminUsersEmptyTeacher = document.querySelector('[data-admin-users-empty="teacher"]');
+const adminUsersEmptyStudent = document.querySelector('[data-admin-users-empty="student"]');
+const adminUsersErrorTeacher = document.querySelector('[data-admin-users-error="teacher"]');
+const adminUsersErrorStudent = document.querySelector('[data-admin-users-error="student"]');
 const modalOverlay = document.querySelector("[data-modal-overlay]");
 const modalTitle = document.querySelector("[data-modal-title]");
 const modalBody = document.querySelector("[data-modal-body]");
@@ -3706,10 +3716,16 @@ const loadFirebaseAdminApi = () => {
       primaryDb,
       secondaryDb,
       createUserWithEmailAndPassword: authMod.createUserWithEmailAndPassword,
+      sendPasswordResetEmail: authMod.sendPasswordResetEmail,
       signOut: authMod.signOut,
+      collection: fsMod.collection,
       doc: fsMod.doc,
+      getDocs: fsMod.getDocs,
+      orderBy: fsMod.orderBy,
+      query: fsMod.query,
       setDoc: fsMod.setDoc,
       serverTimestamp: fsMod.serverTimestamp,
+      where: fsMod.where,
     };
   });
 
