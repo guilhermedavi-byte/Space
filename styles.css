@@ -6771,6 +6771,93 @@ body[data-page="landing"] .page-glow {
   color: rgba(255, 255, 255, 0.96);
 }
 
+.lp-nav-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.lp-nav-toggle {
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.85);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 180ms ease, background-color 180ms ease, border-color 180ms ease;
+}
+
+.lp-nav-toggle:hover,
+.lp-nav-toggle:focus-visible {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(232, 83, 74, 0.28);
+  outline: none;
+}
+
+.lp-nav-toggle-icon {
+  width: 18px;
+  height: 12px;
+  position: relative;
+  display: block;
+}
+
+.lp-nav-toggle-icon::before,
+.lp-nav-toggle-icon::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.lp-nav-toggle-icon::before {
+  top: 0;
+  box-shadow: 0 5px 0 rgba(255, 255, 255, 0.86);
+}
+
+.lp-nav-toggle-icon::after {
+  bottom: 0;
+}
+
+.lp-mobile-menu {
+  position: absolute;
+  top: 74px;
+  right: 16px;
+  width: min(240px, calc(100vw - 32px));
+  padding: 10px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(13, 17, 23, 0.92);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.44);
+  display: grid;
+  gap: 4px;
+  z-index: 130;
+}
+
+.lp-mobile-menu a {
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: rgba(255, 255, 255, 0.88);
+  transition: background-color 180ms ease, color 180ms ease;
+}
+
+.lp-mobile-menu a:hover,
+.lp-mobile-menu a:focus-visible {
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+  outline: none;
+}
+
 .lp-login-menu {
   justify-content: flex-end;
 }
@@ -6787,7 +6874,7 @@ body[data-page="landing"] .page-glow {
   border: 1px solid rgba(255, 255, 255, 0.12);
   font-size: 0.82rem;
   font-weight: 800;
-  letter-spacing: 0.12em;
+  letter-spacing: 1px;
   text-transform: uppercase;
   cursor: pointer;
   transition: transform 180ms ease, filter 180ms ease, background-color 180ms ease;
@@ -6831,56 +6918,367 @@ body[data-page="landing"] .page-glow {
 .lp-hero-inner {
   position: relative;
   display: grid;
-  grid-template-columns: 1.05fr 0.95fr;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
   gap: clamp(28px, 5vw, 72px);
   align-items: center;
 }
 
-.lp-hero-copy {
-  max-width: 560px;
+.lp-hero-form-layout {
+  padding-top: 8px;
 }
 
-.lp-hero-title {
-  margin: 0;
-  font-size: clamp(42px, 5.2vw, 56px);
-  line-height: 0.98;
-  letter-spacing: -0.04em;
+.lp-hero-left {
+  max-width: 640px;
+}
+
+.lp-hero-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--accent);
+  font-size: 0.8rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
   font-weight: 800;
-  font-style: italic;
+  margin-bottom: 18px;
+}
+
+.lp-hero-kicker::before {
+  content: "";
+  width: 44px;
+  height: 1px;
+  background: rgba(232, 83, 74, 0.7);
+}
+
+.lp-hero-headline {
+  margin: 0;
+  font-size: clamp(34px, 4.2vw, 46px);
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+  font-weight: 700;
   color: #ffffff;
 }
 
-.lp-hero-title span {
-  display: block;
+.lp-accent {
+  color: var(--accent);
 }
 
-.lp-hero-desc {
-  margin: 18px 0 28px;
-  max-width: 450px;
-  font-size: 1rem;
-  line-height: 1.55;
+.lp-hero-subtitle {
+  margin: 18px 0 22px;
+  max-width: 460px;
+  font-size: 1.06rem;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.lp-hero-proof {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 0 0 24px;
+  flex-wrap: wrap;
+}
+
+.lp-hero-avatars {
+  display: flex;
+  align-items: center;
+}
+
+.lp-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 2px solid rgba(13, 17, 23, 0.85);
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 0.74rem;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.92);
+  margin-left: -10px;
+}
+
+.lp-avatar:first-child {
+  margin-left: 0;
+}
+
+.lp-avatar-1 {
+  background: rgba(120, 160, 255, 0.28);
+}
+
+.lp-avatar-2 {
+  background: rgba(232, 83, 74, 0.26);
+}
+
+.lp-avatar-3 {
+  background: rgba(34, 197, 94, 0.22);
+}
+
+.lp-avatar-4 {
+  background: rgba(245, 158, 11, 0.22);
+}
+
+.lp-avatar-5 {
+  background: rgba(148, 163, 184, 0.2);
+}
+
+.lp-hero-stars {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.lp-star {
+  width: 15px;
+  height: 15px;
+  fill: rgba(245, 158, 11, 0.96);
+  opacity: 0.92;
+}
+
+.lp-hero-proof-text {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.lp-hero-benefits {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 18px;
+  max-width: 580px;
+}
+
+.lp-hero-benefits li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 0.82rem;
+  line-height: 1.35;
   color: rgba(255, 255, 255, 0.72);
 }
 
-.lp-hero-cta {
+.lp-benefit-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  margin-top: 1px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.lp-benefit-icon svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.lp-benefit-icon.is-green {
+  background: rgba(34, 197, 94, 0.14);
+  border-color: rgba(34, 197, 94, 0.24);
+}
+
+.lp-benefit-icon.is-green svg {
+  stroke: rgba(34, 197, 94, 0.92);
+}
+
+.lp-benefit-icon.is-gold {
+  background: rgba(245, 158, 11, 0.14);
+  border-color: rgba(245, 158, 11, 0.28);
+}
+
+.lp-benefit-icon.is-gold svg {
+  stroke: rgba(245, 158, 11, 0.95);
+}
+
+.lp-hero-benefits li.is-award {
+  color: rgba(245, 158, 11, 0.95);
+  font-weight: 600;
+}
+
+.lp-lead-card {
+  border-radius: 20px;
+  padding: 32px 28px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.28);
+  display: grid;
+  gap: 14px;
+}
+
+.lp-field {
+  display: grid;
+  gap: 8px;
+}
+
+.lp-field-label {
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.lp-input {
+  width: 100%;
+  border-radius: 10px;
+  padding: 14px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.94);
+  font-size: 0.95rem;
+  outline: none;
+  transition: border-color 180ms ease, background-color 180ms ease;
+}
+
+.lp-input:focus {
+  border-color: rgba(232, 83, 74, 0.38);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.lp-input.is-error {
+  border-color: rgba(232, 83, 74, 0.7);
+}
+
+.lp-field-error {
+  font-size: 0.76rem;
+  color: rgba(232, 83, 74, 0.9);
+}
+
+.lp-whatsapp {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.lp-whatsapp-prefix {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.lp-flag-br {
+  width: 18px;
+  height: 12px;
+  border-radius: 3px;
+  position: relative;
+  background: #1f9a3b;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+
+.lp-flag-br::before {
+  content: "";
+  position: absolute;
+  inset: 2px 4px;
+  background: #f7d046;
+  transform: rotate(45deg);
+}
+
+.lp-flag-br::after {
+  content: "";
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #1b4fb8;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.lp-whatsapp-input {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.lp-whatsapp:focus-within {
+  border-color: rgba(232, 83, 74, 0.38);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.lp-whatsapp.is-error {
+  border-color: rgba(232, 83, 74, 0.7);
+}
+
+.lp-lead-submit {
+  margin-top: 6px;
+  width: 100%;
+  border-radius: 10px;
+  padding: 16px;
+  background: var(--accent);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: min(280px, 100%);
-  height: 52px;
-  border-radius: 10px;
-  background: var(--accent);
-  color: #ffffff;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  transition: transform 220ms ease, filter 220ms ease, background-color 220ms ease;
+  gap: 10px;
+  transition: filter 180ms ease, transform 180ms ease, background-color 180ms ease;
 }
 
-.lp-hero-cta:hover,
-.lp-hero-cta:focus-visible {
-  transform: translateY(-2px);
-  filter: brightness(1.04);
+.lp-lead-submit:hover,
+.lp-lead-submit:focus-visible {
+  transform: translateY(-1px);
+  filter: brightness(0.98);
+  outline: none;
+}
+
+.lp-lead-submit:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.lp-spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: rgba(255, 255, 255, 0.95);
+  animation: lp-spin 900ms linear infinite;
+}
+
+@keyframes lp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.lp-lead-feedback {
+  font-size: 0.9rem;
+  line-height: 1.4;
+  padding-top: 6px;
+}
+
+.lp-lead-feedback.is-success {
+  color: rgba(34, 197, 94, 0.9);
+}
+
+.lp-lead-feedback.is-error {
+  color: rgba(232, 83, 74, 0.92);
+}
+
+.lp-lead-legal {
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.45);
+  line-height: 1.4;
+  margin-top: 4px;
 }
 
 .lp-hero-visual {
@@ -7047,6 +7445,13 @@ body[data-page="landing"] .page-glow {
   gap: 16px;
 }
 
+/* Hero v2: hide old phone mockup blocks if any lingering markup exists */
+body[data-page="landing"] .lp-hero-visual,
+body[data-page="landing"] .lp-phone-wrap,
+body[data-page="landing"] .lp-push {
+  display: none;
+}
+
 .lp-video-card {
   border-radius: 14px;
   overflow: hidden;
@@ -7210,16 +7615,16 @@ body[data-page="landing"] [data-reveal].is-revealed {
     display: none;
   }
 
+  .lp-nav-toggle {
+    display: inline-flex;
+  }
+
   .lp-hero-inner {
     grid-template-columns: 1fr;
   }
 
-  .lp-hero-copy {
-    max-width: 100%;
-  }
-
-  .lp-hero-desc {
-    max-width: 560px;
+  .lp-hero-benefits {
+    grid-template-columns: 1fr;
   }
 
   .lp-phone {
@@ -7258,7 +7663,6 @@ body[data-page="landing"] [data-reveal].is-revealed {
 
 @media (prefers-reduced-motion: reduce) {
   .lp-login-button,
-  .lp-hero-cta,
   .lp-video-card,
   [data-reveal] {
     transition: none !important;

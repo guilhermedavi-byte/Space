@@ -19,13 +19,16 @@
         </a>
 
         <nav class="lp-nav-links" aria-label="Navegação principal">
-          <a href="#integracoes">Integrações</a>
-          <a href="#professores">Professores</a>
-          <a href="#conteudos">Conteúdos Gratuitos</a>
+          <a href="#integracoes">Como funciona</a>
+          <a href="#professores">Time Space</a>
+          <a href="#depoimentos">Depoimentos</a>
           <a href="#faq">FAQ</a>
         </nav>
 
         <div class="lp-nav-actions">
+          <button class="lp-nav-toggle" type="button" data-lp-nav-toggle aria-label="Abrir menu" aria-expanded="false">
+            <span aria-hidden="true" class="lp-nav-toggle-icon"></span>
+          </button>
           <div class="login-menu lp-login-menu" data-login-menu>
             <button
               class="lp-login-button"
@@ -44,60 +47,153 @@
           </div>
         </div>
       </div>
+
+      <div class="lp-mobile-menu" data-lp-mobile-menu hidden>
+        <a href="#integracoes">Como funciona</a>
+        <a href="#professores">Time Space</a>
+        <a href="#depoimentos">Depoimentos</a>
+        <a href="#faq">FAQ</a>
+      </div>
     </header>
 
     <main class="lp-main" id="topo">
       <section class="lp-hero">
-        <div class="lp-container lp-hero-inner">
-          <div class="lp-hero-copy" data-reveal style="--reveal-delay: 0ms;">
-            <h1 class="lp-hero-title">
-              <span>Seu inglês,</span>
-              <span>sua jornada.</span>
-              <span>Na palma da mão.</span>
+        <div class="lp-container lp-hero-inner lp-hero-form-layout">
+          <div class="lp-hero-left" data-reveal style="--reveal-delay: 0ms;">
+            <div class="lp-hero-kicker">ESCOLA DE INGLÊS ONLINE</div>
+
+            <h1 class="lp-hero-headline">
+              Fique fluente em <span class="lp-accent">12 meses</span> com aulas particulares.
             </h1>
-            <p class="lp-hero-desc">
-              Acompanhe suas aulas, tire dúvidas e avance rumo à fluência com nosso app intuitivo e feito para transformar vidas.
+
+            <p class="lp-hero-subtitle">
+              Professores dedicados, plataforma intuitiva e um plano feito sob medida para o seu nível e objetivo.
             </p>
-            <a class="lp-hero-cta" href="#depoimentos">QUERO SER FLUENTE</a>
+
+            <div class="lp-hero-proof" aria-label="Prova social">
+              <div class="lp-hero-avatars" aria-hidden="true">
+                <span class="lp-avatar lp-avatar-1">AD</span>
+                <span class="lp-avatar lp-avatar-2">BM</span>
+                <span class="lp-avatar lp-avatar-3">CS</span>
+                <span class="lp-avatar lp-avatar-4">DL</span>
+                <span class="lp-avatar lp-avatar-5">EF</span>
+              </div>
+
+              <div class="lp-hero-stars" aria-hidden="true">
+                <svg class="lp-star" viewBox="0 0 24 24">
+                  <path d="M12 2.6 14.9 8.7l6.7.6-5 4.3 1.6 6.5L12 16.9 5.8 20.1l1.6-6.5-5-4.3 6.7-.6L12 2.6Z"></path>
+                </svg>
+                <svg class="lp-star" viewBox="0 0 24 24">
+                  <path d="M12 2.6 14.9 8.7l6.7.6-5 4.3 1.6 6.5L12 16.9 5.8 20.1l1.6-6.5-5-4.3 6.7-.6L12 2.6Z"></path>
+                </svg>
+                <svg class="lp-star" viewBox="0 0 24 24">
+                  <path d="M12 2.6 14.9 8.7l6.7.6-5 4.3 1.6 6.5L12 16.9 5.8 20.1l1.6-6.5-5-4.3 6.7-.6L12 2.6Z"></path>
+                </svg>
+                <svg class="lp-star" viewBox="0 0 24 24">
+                  <path d="M12 2.6 14.9 8.7l6.7.6-5 4.3 1.6 6.5L12 16.9 5.8 20.1l1.6-6.5-5-4.3 6.7-.6L12 2.6Z"></path>
+                </svg>
+                <svg class="lp-star" viewBox="0 0 24 24">
+                  <path d="M12 2.6 14.9 8.7l6.7.6-5 4.3 1.6 6.5L12 16.9 5.8 20.1l1.6-6.5-5-4.3 6.7-.6L12 2.6Z"></path>
+                </svg>
+              </div>
+
+              <div class="lp-hero-proof-text">+3.000 alunos satisfeitos</div>
+            </div>
+
+            <ul class="lp-hero-benefits" aria-label="Benefícios">
+              <li>
+                <span class="lp-benefit-icon is-green" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M20 6 9 17l-5-5"></path>
+                  </svg>
+                </span>
+                <span>Aulas particulares</span>
+              </li>
+              <li>
+                <span class="lp-benefit-icon is-green" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M20 6 9 17l-5-5"></path>
+                  </svg>
+                </span>
+                <span>Método focado em conversação</span>
+              </li>
+              <li>
+                <span class="lp-benefit-icon is-green" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M20 6 9 17l-5-5"></path>
+                  </svg>
+                </span>
+                <span>Do zero ao avançado em 12 meses</span>
+              </li>
+              <li>
+                <span class="lp-benefit-icon is-green" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M20 6 9 17l-5-5"></path>
+                  </svg>
+                </span>
+                <span>Aplicativo de conversação com IA</span>
+              </li>
+              <li>
+                <span class="lp-benefit-icon is-green" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M20 6 9 17l-5-5"></path>
+                  </svg>
+                </span>
+                <span>Suporte 24h</span>
+              </li>
+              <li class="is-award">
+                <span class="lp-benefit-icon is-gold" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M20 6 9 17l-5-5"></path>
+                  </svg>
+                </span>
+                <span>Melhor gestão pedagógica do país — 2x consecutivo</span>
+              </li>
+            </ul>
           </div>
 
-          <div class="lp-hero-visual" data-reveal style="--reveal-delay: 90ms;">
-            <div class="lp-phone-wrap" aria-hidden="true">
-              <div class="lp-phone">
-                <div class="lp-phone-notch"></div>
-                <div class="lp-phone-screen">
-                  <img class="lp-phone-screen-img" src="/assets/space-feed.png" alt="" aria-hidden="true" />
+          <div class="lp-hero-right" data-reveal style="--reveal-delay: 120ms;">
+            <form class="lp-lead-card" data-lead-form novalidate>
+              <label class="lp-field">
+                <span class="lp-field-label">NOME COMPLETO</span>
+                <input class="lp-input" type="text" autocomplete="name" data-lead-name />
+                <span class="lp-field-error" data-lead-name-error hidden>Nome obrigatório.</span>
+              </label>
+
+              <label class="lp-field">
+                <span class="lp-field-label">E-MAIL</span>
+                <input class="lp-input" type="email" autocomplete="email" data-lead-email />
+                <span class="lp-field-error" data-lead-email-error hidden>E-mail inválido.</span>
+              </label>
+
+              <div class="lp-field">
+                <span class="lp-field-label">WHATSAPP</span>
+                <div class="lp-whatsapp">
+                  <span class="lp-whatsapp-prefix" aria-hidden="true">
+                    <span class="lp-flag-br"></span>
+                    <span class="lp-whatsapp-code">+55</span>
+                  </span>
+                  <input class="lp-input lp-whatsapp-input" type="tel" inputmode="tel" autocomplete="tel" data-lead-whatsapp />
                 </div>
+                <span class="lp-field-error" data-lead-whatsapp-error hidden>WhatsApp obrigatório.</span>
               </div>
 
-              <div class="lp-push lp-push-1" data-float style="--float-delay: 0.0s;">
-                <span class="lp-push-icon">
-                  <img src="/assets/space-symbol.png" alt="" aria-hidden="true" />
-                </span>
-                <span class="lp-push-text">Novo conteúdo extra liberado!</span>
+              <button class="lp-lead-submit" type="submit" data-lead-submit>
+                <span data-lead-submit-label>QUERO SER FLUENTE</span>
+                <span class="lp-spinner" data-lead-spinner hidden aria-hidden="true"></span>
+              </button>
+
+              <div class="lp-lead-feedback is-success" data-lead-success hidden>
+                Recebemos seu contato! Em breve falaremos com você.
+              </div>
+              <div class="lp-lead-feedback is-error" data-lead-error hidden>
+                Erro ao enviar. Tente novamente.
               </div>
 
-              <div class="lp-push lp-push-2" data-float style="--float-delay: 0.2s;">
-                <span class="lp-push-icon">
-                  <img src="/assets/space-symbol.png" alt="" aria-hidden="true" />
-                </span>
-                <span class="lp-push-text">Parabéns! Você completou 50% da sua jornada</span>
+              <div class="lp-lead-legal">
+                Ao continuar, você concorda com nossa política de privacidade.
               </div>
-
-              <div class="lp-push lp-push-3" data-float style="--float-delay: 0.4s;">
-                <span class="lp-push-icon">
-                  <img src="/assets/space-symbol.png" alt="" aria-hidden="true" />
-                </span>
-                <span class="lp-push-text">Nova aula com Prof. Lucas já está no ar!</span>
-              </div>
-
-              <div class="lp-push lp-push-4" data-float style="--float-delay: 0.6s;">
-                <span class="lp-push-icon">
-                  <img src="/assets/space-symbol.png" alt="" aria-hidden="true" />
-                </span>
-                <span class="lp-push-text">Lembrete: 10 min hoje já contam</span>
-              </div>
-            </div>
+            </form>
           </div>
         </div>
       </section>
