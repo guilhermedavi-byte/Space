@@ -28,6 +28,9 @@ const roleSidebarSubtitle = document.querySelector("[data-role-sidebar-subtitle]
 const roleTopbars = document.querySelectorAll("[data-role-topbar]");
 const dashboardStudent = document.querySelector("[data-dashboard-student]");
 const dashboardTeacher = document.querySelector("[data-dashboard-teacher]");
+const dashboardAdmin = document.querySelector("[data-dashboard-admin]");
+const adminDashboardGreeting = document.querySelector("[data-admin-dashboard-greeting]");
+const adminDashboardMonth = document.querySelector("[data-admin-dashboard-month]");
 const platformHeader = document.querySelector(".platform-header");
 const chartDropdowns = document.querySelectorAll("[data-chart-dropdown]");
 const chartTriggers = document.querySelectorAll("[data-chart-trigger]");
@@ -390,7 +393,11 @@ const syncRoleUI = () => {
   }
 
   if (dashboardStudent) {
-    dashboardStudent.hidden = currentRole === "teacher";
+    dashboardStudent.hidden = currentRole !== "student";
+  }
+
+  if (dashboardAdmin) {
+    dashboardAdmin.hidden = currentRole !== "admin";
   }
 
   if (liveTeacherRoot) {
@@ -415,6 +422,8 @@ const setRole = (role) => {
   if (body.dataset.activePanel === "dashboard") {
     if (currentRole === "teacher") {
       renderTeacherDashboard();
+    } else if (currentRole === "admin") {
+      renderAdminDashboard();
     } else {
       renderPlanUI();
     }
@@ -928,6 +937,36 @@ const updateGreeting = () => {
   }
 
   greetingElement.textContent = `${greeting}, ${userName}.`;
+};
+
+const renderAdminDashboard = () => {
+  if (currentRole !== "admin") return;
+
+  const now = new Date();
+  const hour = now.getHours();
+  let greeting = "Boa noite";
+
+  if (hour >= 5 && hour < 12) {
+    greeting = "Bom dia";
+  } else if (hour >= 12 && hour < 18) {
+    greeting = "Boa tarde";
+  }
+
+  const name =
+    sessionUser && sessionUser.role === "admin"
+      ? sessionUser.name
+      : ROLE_DEFS.admin.defaultName || "Admin";
+
+  if (adminDashboardGreeting) {
+    adminDashboardGreeting.textContent = `${greeting}, ${name}.`;
+  }
+
+  if (adminDashboardMonth) {
+    const monthFormatter = new Intl.DateTimeFormat("pt-BR", { month: "long" });
+    const monthRaw = monthFormatter.format(now);
+    const month = monthRaw.charAt(0).toUpperCase() + monthRaw.slice(1);
+    adminDashboardMonth.textContent = `${month} ${now.getFullYear()}`;
+  }
 };
 
 const renderLearningJourney = (range) => {
@@ -4811,7 +4850,8 @@ const showPanel = (panelName) => {
   });
 
   const activePanel = document.querySelector(`[data-panel="${panelName}"]`);
-  const shouldHidePlatformHeader = activePanel?.dataset.hidePlatformHeader === "true";
+  const shouldHidePlatformHeader =
+    activePanel?.dataset.hidePlatformHeader === "true" || (panelName === "dashboard" && currentRole === "admin");
   body.dataset.activePanel = panelName;
 
   if (platformHeader) {
@@ -4849,6 +4889,8 @@ const showPanel = (panelName) => {
   if (panelName === "dashboard") {
     if (currentRole === "teacher") {
       renderTeacherDashboard();
+    } else if (currentRole === "admin") {
+      renderAdminDashboard();
     } else {
       renderPlanUI();
     }
