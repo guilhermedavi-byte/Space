@@ -5672,6 +5672,20 @@ body.is-cal-dragging .teacher-cal-grid {
   background: rgba(255, 255, 255, 0.02);
 }
 
+.modal-work-row.is-disabled {
+  background: rgba(255, 255, 255, 0.015);
+  border-color: rgba(255, 255, 255, 0.04);
+}
+
+.modal-work-unavailable {
+  grid-column: 2 / -1;
+  align-self: center;
+  justify-self: end;
+  color: rgba(255, 255, 255, 0.36);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .modal-work-day {
   display: inline-flex;
   align-items: center;

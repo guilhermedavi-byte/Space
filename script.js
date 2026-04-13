@@ -2583,9 +2583,24 @@ const renderWorkHoursRow = ({ dayKey, index }) => {
 const renderWorkHoursDayGroup = (dayKey) => {
   const entry = workHoursDraft?.[dayKey] || { enabled: true, windows: [{ start: "", end: "" }] };
   const windows = Array.isArray(entry.windows) ? entry.windows : [{ start: "", end: "" }];
+  const labelMap = { 1: "Seg", 2: "Ter", 3: "Qua", 4: "Qui", 5: "Sex", 6: "Sáb" };
+  const isEnabled = entry.enabled !== false;
+
+  const disabledRow = `
+    <div class="modal-work-row is-disabled" data-wh-row="${dayKey}:0">
+      <label class="modal-work-day">
+        <input type="checkbox" ${isEnabled ? "checked" : ""} data-wh-enabled="${dayKey}" />
+        <span>${labelMap[dayKey] || dayKey}</span>
+      </label>
+      <div class="modal-work-unavailable">Indisponível</div>
+    </div>
+  `;
+
+  const enabledRows = windows.map((_, index) => renderWorkHoursRow({ dayKey, index })).join("");
+
   return `
     <div class="modal-work-daygroup" data-wh-daygroup="${dayKey}">
-      ${windows.map((_, index) => renderWorkHoursRow({ dayKey, index })).join("")}
+      ${isEnabled ? enabledRows : disabledRow}
     </div>
   `;
 };
@@ -2728,8 +2743,6 @@ const openWorkHoursModal = () => {
     onPrimary: () => {
       const ok = validateWorkHoursDraft();
       if (!ok) return false;
-      teacherWorkHours = workHoursDraft;
-      persistTeacherWorkHours();
 
       const globalError = modalBody?.querySelector("[data-wh-global-error]");
       if (globalError instanceof HTMLElement) {
@@ -2737,27 +2750,61 @@ const openWorkHoursModal = () => {
         globalError.textContent = "";
       }
 
-      if (modalPrimary) modalPrimary.disabled = true;
+      const previousPrimaryLabel = modalPrimary ? modalPrimary.textContent : "";
+      if (modalPrimary) {
+        modalPrimary.disabled = true;
+        modalPrimary.textContent = "Salvando…";
+      }
       if (modalSecondary) modalSecondary.disabled = true;
 
-      fetch("/api/teacher/work-hours", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(workHoursDraftToApiPayload(workHoursDraft)),
-      })
-        .then(async (res) => {
-          if (!res.ok) throw new Error("save_failed");
+      Promise.resolve()
+        .then(async () => {
+          const res = await fetch("/api/teacher/work-hours", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(workHoursDraftToApiPayload(workHoursDraft)),
+          });
+
+          const data = await res.json().catch(() => null);
+          if (!res.ok) {
+            const error = new Error("save_failed");
+            error.status = res.status;
+            error.payload = data;
+            throw error;
+          }
+
+          teacherWorkHours = workHoursDraft;
+          persistTeacherWorkHours();
           teacherWorkHoursApiState.lastLoadedAt = Date.now();
           closeModal();
           renderTeacherCalendar();
         })
-        .catch(() => {
+        .catch((error) => {
+          // Log the root cause so it shows up in the browser console when debugging.
+          // eslint-disable-next-line no-console
+          console.error("[work-hours] save failed", error);
+
+          let message = "Não foi possível salvar agora. Tente novamente.";
+          const status = Number(error?.status) || 0;
+          const payload = error?.payload && typeof error.payload === "object" ? error.payload : null;
+          const code = typeof payload?.error === "string" ? payload.error : "";
+
+          if (status === 401) message = "Sua sessão expirou. Faça login novamente.";
+          if (status === 403) message = "Sem permissão para salvar seus horários.";
+          if (code === "invalid_work_hours") message = "Revise os horários e tente novamente.";
+          if (code === "invalid_json") message = "Erro ao enviar os dados. Tente novamente.";
+
           if (globalError instanceof HTMLElement) {
             globalError.hidden = false;
-            globalError.textContent = "Nao foi possivel salvar agora. Tente novamente.";
+            globalError.textContent = message;
           }
-          if (modalPrimary) modalPrimary.disabled = false;
+        })
+        .finally(() => {
+          if (modalPrimary) {
+            modalPrimary.disabled = false;
+            modalPrimary.textContent = previousPrimaryLabel || "Salvar";
+          }
           if (modalSecondary) modalSecondary.disabled = false;
         });
 
@@ -5772,6 +5819,11 @@ document.addEventListener("change", (event) => {
     const entry = workHoursDraft[dayKey];
     if (!entry) return;
     entry.enabled = target.checked;
+    const dayGroup = modalBody.querySelector(`[data-wh-daygroup="${CSS.escape(dayKey)}"]`);
+    if (dayGroup instanceof HTMLElement) {
+      // Re-render the group so disabled days collapse into the "Indisponível" UI (and vice-versa).
+      dayGroup.outerHTML = renderWorkHoursDayGroup(dayKey);
+    }
     validateWorkHoursDraft();
   }
 });
