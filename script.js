@@ -2734,13 +2734,15 @@ const validateWorkHoursDraft = () => {
 };
 
 const openWorkHoursModal = () => {
-  workHoursDraft = createWorkHoursDraft();
-  openModal({
-    title: "Horário de trabalho",
-    bodyHtml: renderWorkHoursModalBody(),
-    primaryLabel: "Salvar",
-    secondaryLabel: "Voltar",
-    onPrimary: () => {
+  // Try to load the server-side snapshot before editing, so the modal reflects what's actually saved.
+  refreshTeacherWorkHours({ force: true }).finally(() => {
+    workHoursDraft = createWorkHoursDraft();
+    openModal({
+      title: "Horário de trabalho",
+      bodyHtml: renderWorkHoursModalBody(),
+      primaryLabel: "Salvar",
+      secondaryLabel: "Voltar",
+      onPrimary: () => {
       const ok = validateWorkHoursDraft();
       if (!ok) return false;
 
@@ -2794,6 +2796,12 @@ const openWorkHoursModal = () => {
           if (status === 403) message = "Sem permissão para salvar seus horários.";
           if (code === "invalid_work_hours") message = "Revise os horários e tente novamente.";
           if (code === "invalid_json") message = "Erro ao enviar os dados. Tente novamente.";
+          if (code === "internal_error") message = "Erro interno ao salvar. Tente novamente em instantes.";
+
+          // Helpful for debugging (kept subtle, avoids polluting the UI too much).
+          if (status && message.includes("Tente novamente")) {
+            message = `${message} (Erro ${status})`;
+          }
 
           if (globalError instanceof HTMLElement) {
             globalError.hidden = false;
@@ -2809,9 +2817,10 @@ const openWorkHoursModal = () => {
         });
 
       return false;
-    },
+      },
+    });
+    validateWorkHoursDraft();
   });
-  validateWorkHoursDraft();
 };
 
 const acceptedDocExts = ["pdf", "mp3", "mp4", "png"];

@@ -50,62 +50,67 @@ const getTeacherRecord = (store, teacherId) => {
 };
 
 module.exports = async (req, res) => {
-  const session = getSessionFromRequest(req);
-  if (!session) {
-    sendJson(res, 401, { error: "unauthorized" });
-    return;
-  }
-
-  if (String(session.role || "") !== "teacher") {
-    sendJson(res, 403, { error: "forbidden" });
-    return;
-  }
-
-  const teacherId = String(session.sub || "");
-  if (!teacherId) {
-    sendJson(res, 401, { error: "unauthorized" });
-    return;
-  }
-
-  if (req.method === "GET" || req.method === "HEAD") {
-    const store = readStore();
-    const teacher = getTeacherRecord(store, teacherId);
-    sendJson(res, 200, { workHours: teacher ? teacher.workHours : {} });
-    return;
-  }
-
-  if (req.method !== "POST") {
-    res.setHeader("Allow", "GET, HEAD, POST");
-    sendJson(res, 405, { error: "method_not_allowed" });
-    return;
-  }
-
-  let body;
   try {
-    body = await readJsonBody(req);
-  } catch (error) {
-    sendJson(res, 400, { error: "invalid_json" });
-    return;
-  }
-
-  const workHours = normalizeWorkHoursPayload(body);
-  const errors = validateWorkHours(workHours);
-  if (errors.length) {
-    sendJson(res, 400, { error: "invalid_work_hours", details: errors });
-    return;
-  }
-
-  await mutateStore((store) => {
-    store.teachers = Array.isArray(store.teachers) ? store.teachers : [];
-    const idx = store.teachers.findIndex((t) => t && t.id === teacherId);
-    if (idx < 0) {
-      store.teachers.push({ id: teacherId, name: String(session.name || "Professor"), workHours });
-    } else {
-      store.teachers[idx] = { ...store.teachers[idx], workHours };
+    const session = getSessionFromRequest(req);
+    if (!session) {
+      sendJson(res, 401, { error: "unauthorized" });
+      return;
     }
-    return store;
-  });
 
-  sendJson(res, 200, { ok: true });
+    if (String(session.role || "") !== "teacher") {
+      sendJson(res, 403, { error: "forbidden" });
+      return;
+    }
+
+    const teacherId = String(session.sub || "");
+    if (!teacherId) {
+      sendJson(res, 401, { error: "unauthorized" });
+      return;
+    }
+
+    if (req.method === "GET" || req.method === "HEAD") {
+      const store = readStore();
+      const teacher = getTeacherRecord(store, teacherId);
+      sendJson(res, 200, { workHours: teacher ? teacher.workHours : {} });
+      return;
+    }
+
+    if (req.method !== "POST") {
+      res.setHeader("Allow", "GET, HEAD, POST");
+      sendJson(res, 405, { error: "method_not_allowed" });
+      return;
+    }
+
+    let body;
+    try {
+      body = await readJsonBody(req);
+    } catch (error) {
+      sendJson(res, 400, { error: "invalid_json" });
+      return;
+    }
+
+    const workHours = normalizeWorkHoursPayload(body);
+    const errors = validateWorkHours(workHours);
+    if (errors.length) {
+      sendJson(res, 400, { error: "invalid_work_hours", details: errors });
+      return;
+    }
+
+    await mutateStore((store) => {
+      store.teachers = Array.isArray(store.teachers) ? store.teachers : [];
+      const idx = store.teachers.findIndex((t) => t && t.id === teacherId);
+      if (idx < 0) {
+        store.teachers.push({ id: teacherId, name: String(session.name || "Professor"), workHours });
+      } else {
+        store.teachers[idx] = { ...store.teachers[idx], workHours };
+      }
+      return store;
+    });
+
+    sendJson(res, 200, { ok: true });
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error("[api] teacher work-hours failed", error);
+    sendJson(res, 500, { error: "internal_error" });
+  }
 };
-
