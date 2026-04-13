@@ -5240,6 +5240,7 @@ body.is-cal-dragging .teacher-cal-grid {
   align-items: center;
   justify-content: center;
   gap: 8px;
+  min-width: 0;
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
@@ -5263,8 +5264,10 @@ body.is-cal-dragging .teacher-cal-grid {
 .scheduler-slot-advance {
   flex: 0 0 0%;
   flex-basis: 0%;
+  max-width: 0;
   padding: 0;
   opacity: 0;
+  visibility: hidden;
   pointer-events: none;
   transform: translateX(10px);
   background: #e8453c;
@@ -5295,8 +5298,10 @@ body.is-cal-dragging .teacher-cal-grid {
 .scheduler-slot-row.is-selected .scheduler-slot-advance {
   flex: 0 0 50%;
   flex-basis: 50%;
+  max-width: none;
   padding: 0 12px;
   opacity: 1;
+  visibility: visible;
   pointer-events: auto;
   transform: translateX(0);
 }

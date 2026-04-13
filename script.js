@@ -178,8 +178,10 @@ const scheduleState = {
 };
 
 let studentSlotsState = {
-  startDateKey: "",
   days: [],
+  timeZone: "America/Sao_Paulo",
+  tzOffsetMinutes: -180,
+  slotDurationMinutes: 30,
   isLoading: false,
   lastLoadedAt: 0,
 };
@@ -1390,7 +1392,7 @@ const renderTeacherTodaySlots = () => {
 
   const now = new Date();
   const today = startOfDay(now);
-  const slots = getAvailableSlots(today, now).slice(0, 6);
+  const slots = getAvailableSlots(today).slice(0, 6);
 
   teacherTodaySlotsEmpty.hidden = slots.length > 0;
   teacherTodaySlots.innerHTML = slots
@@ -1587,6 +1589,28 @@ const formatTimeZoneOffset = (date) => {
   const hours = String(Math.floor(absolute / 60)).padStart(2, "0");
   const minutes = String(absolute % 60).padStart(2, "0");
   return `GMT${sign}${hours}:${minutes}`;
+};
+
+const formatTimeZoneOffsetFromMinutes = (offsetMinutes) => {
+  const safe = clampNumber(Math.round(offsetMinutes), -12 * 60, 14 * 60);
+  const sign = safe >= 0 ? "+" : "-";
+  const absolute = Math.abs(safe);
+  const hours = String(Math.floor(absolute / 60)).padStart(2, "0");
+  const minutes = String(absolute % 60).padStart(2, "0");
+  return `GMT${sign}${hours}:${minutes}`;
+};
+
+const getDisplayTimeZoneNameFromKey = (timeZoneKey) => {
+  const safe = String(timeZoneKey || "").trim() || "America/Sao_Paulo";
+  const knownTimeZones = {
+    "America/Sao_Paulo": "America/São Paulo",
+  };
+
+  if (knownTimeZones[safe]) {
+    return knownTimeZones[safe];
+  }
+
+  return safe.replace(/_/g, " ");
 };
 
 const getDisplayTimeZoneName = () => {
@@ -3480,18 +3504,25 @@ const refreshStudentSlots = async ({ force = false } = {}) => {
   if (currentRole !== "student") return;
   if (studentSlotsState.isLoading) return;
   const now = Date.now();
-  const startDateKey = createDateKey(new Date());
   const stale = !studentSlotsState.lastLoadedAt || now - studentSlotsState.lastLoadedAt > 15_000;
-  const startChanged = studentSlotsState.startDateKey !== startDateKey;
-  if (!force && !stale && !startChanged) return;
+  if (!force && !stale) return;
 
   studentSlotsState.isLoading = true;
   try {
-    const res = await fetchWithAuth(`/api/schedule/slots?start=${encodeURIComponent(startDateKey)}&days=4`);
+    // Let the backend decide "today" using America/Sao_Paulo (GMT-03:00).
+    const res = await fetchWithAuth(`/api/schedule/slots?days=4`);
     if (!res.ok) throw new Error("slots_fetch_failed");
     const data = await res.json().catch(() => null);
     const days = Array.isArray(data?.days) ? data.days : [];
-    studentSlotsState.startDateKey = startDateKey;
+    if (typeof data?.timeZone === "string" && data.timeZone.trim()) {
+      studentSlotsState.timeZone = data.timeZone.trim();
+    }
+    if (Number.isFinite(data?.tzOffsetMinutes)) {
+      studentSlotsState.tzOffsetMinutes = Number(data.tzOffsetMinutes);
+    }
+    if (Number.isFinite(data?.slotDurationMinutes)) {
+      studentSlotsState.slotDurationMinutes = Number(data.slotDurationMinutes);
+    }
     studentSlotsState.days = days
       .map((day) => {
         if (!day || typeof day !== "object") return null;
@@ -3561,19 +3592,15 @@ const renderLiveScheduledLessons = () => {
     .join("");
 };
 
-const getAvailableSlots = (date, referenceDate = new Date()) => {
+const getAvailableSlots = (date) => {
+  if (currentRole !== "student") return [];
   const dateKey = createDateKey(date);
   const apiDay = studentSlotsState.days.find((day) => day && day.dateKey === dateKey);
-  const apiTimes = apiDay ? apiDay.slots.map((slot) => slot.time).filter(Boolean) : null;
+  const apiTimes = apiDay ? apiDay.slots.map((slot) => slot.time).filter(Boolean) : [];
 
-  const presets = getLiveSlotPresets();
-  const times = apiTimes || presets[String(date.getDay())] || ["09:00", "11:00", "15:00"];
-
-  return times.filter((time) => {
-    const slotDate = getSlotDateTime(date, time);
-    const slotId = createSlotId(date, time);
-    return slotDate.getTime() > referenceDate.getTime() && !scheduledSlotIds.has(slotId);
-  });
+  // Backend already filters past slots and applies the 2h lead time rule using America/Sao_Paulo.
+  // Here we only hide slots the student already booked.
+  return apiTimes.filter((time) => !scheduledSlotIds.has(createSlotId(date, time)));
 };
 
 const getUpcomingBookableDays = (count) => {
@@ -3620,6 +3647,7 @@ const updateLiveInstruction = () => {
 const syncLiveSchedulerSelection = () => {
   if (!liveSchedulerGrid) return;
   const shouldGateByCredits = currentRole === "student";
+  const outOfCredits = shouldGateByCredits && !scheduleState.isConfirmed && appState.creditsRemaining <= 0;
 
   liveSchedulerGrid.querySelectorAll("[data-slot-row-id]").forEach((row) => {
     const slotId = row.getAttribute("data-slot-row-id") || "";
@@ -3641,9 +3669,8 @@ const syncLiveSchedulerSelection = () => {
         label.textContent = isConfirmed ? "Agendado" : "Avançar";
       }
 
-      // Keep the button clickable even when out of credits so we can show the "Sem créditos"
-      // modal on click. Only disable when the slot is already confirmed.
-      advanceButton.disabled = isConfirmed;
+      // Disable when confirmed or when the student is out of credits.
+      advanceButton.disabled = isConfirmed || outOfCredits;
     }
   });
 };
@@ -3662,11 +3689,11 @@ const renderLiveScheduler = () => {
   const days = apiDays.length ? apiDays : getUpcomingBookableDays(4);
   const weekdayFormatter = new Intl.DateTimeFormat("pt-BR", { weekday: "short" });
   const now = new Date();
-  const timezoneName = getDisplayTimeZoneName();
+  const timezoneName = getDisplayTimeZoneNameFromKey(studentSlotsState.timeZone);
   const visibleSlotIds = new Set();
 
   if (liveSchedulerTimezone) {
-    liveSchedulerTimezone.textContent = `${timezoneName} · ${formatTimeZoneOffset(now)}`;
+    liveSchedulerTimezone.textContent = `${timezoneName} · ${formatTimeZoneOffsetFromMinutes(studentSlotsState.tzOffsetMinutes)}`;
   }
 
   if (liveWeekRange) {
@@ -3676,7 +3703,7 @@ const renderLiveScheduler = () => {
   const schedulerMarkup = days
     .map((date) => {
       const weekday = weekdayFormatter.format(date).replace(".", "").toUpperCase();
-      const times = getAvailableSlots(date, now);
+      const times = getAvailableSlots(date);
       const dateNumber = String(date.getDate());
       const isToday =
         date.getDate() === now.getDate() &&
@@ -5602,12 +5629,6 @@ document.addEventListener("click", (event) => {
       const kind = plan.creditType === "GROUP" ? "GROUP" : "VIP";
 
       if (isStudent && appState.creditsRemaining <= 0) {
-        openModal({
-          title: "Sem créditos disponíveis",
-          bodyHtml: "Você não tem créditos suficientes para agendar uma aula agora.",
-          primaryLabel: "Entendi",
-          hideSecondary: true,
-        });
         return;
       }
 

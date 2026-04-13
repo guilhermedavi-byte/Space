@@ -4,7 +4,6 @@ const {
   clampInt,
   getDayOfWeekFromDateKey,
   rangesOverlap,
-  timeToMinutes,
   toUtcMsForDateKeyAndMinutes,
 } = require("./scheduling-utils");
 
@@ -65,22 +64,39 @@ const slotConflictsWithEvents = ({ events, startMin, endMin, bufferMinutes }) =>
   return false;
 };
 
-const getSchoolSlotStartMinutes = (store, dow) => {
-  const schoolSlots = store && store.config && typeof store.config.schoolSlots === "object" ? store.config.schoolSlots : {};
-  const times = Array.isArray(schoolSlots[String(dow)]) ? schoolSlots[String(dow)] : [];
-  return times
-    .map((t) => timeToMinutes(t))
-    .filter((m) => Number.isFinite(m))
-    .sort((a, b) => a - b);
+const getSlotStartMinutesFromWorkWindows = ({ windows, slotDurationMinutes }) => {
+  const duration = clampInt(slotDurationMinutes, 15, 180);
+  const step = duration; // non-overlapping cadence by default
+  const starts = [];
+  const safeWindows = Array.isArray(windows) ? windows : [];
+
+  for (const win of safeWindows) {
+    if (!win || typeof win !== "object") continue;
+    const rawStart = clampInt(win.startMin, 0, 1440);
+    const rawEnd = clampInt(win.endMin, 0, 1440);
+    if (rawEnd <= rawStart) continue;
+
+    // Snap to the slot grid so the student sees consistent start times.
+    let cursor = Math.ceil(rawStart / step) * step;
+    while (cursor + duration <= rawEnd && cursor + duration <= 1440) {
+      starts.push(cursor);
+      cursor += step;
+    }
+  }
+
+  return Array.from(new Set(starts)).sort((a, b) => a - b);
 };
 
 const computeTeachersBySlot = (store, dateKey) => {
   const dow = getDayOfWeekFromDateKey(dateKey);
   if (dow == null) return new Map();
+  if (dow === 0) return new Map(); // Sunday: no student scheduling
 
   const duration = clampInt(store?.config?.slotDurationMinutes, 15, 180);
   const bufferMinutes = clampInt(store?.config?.bufferMinutes, 0, 60);
-  const starts = getSchoolSlotStartMinutes(store, dow);
+  const minLeadTimeMinutes = clampInt(store?.config?.minLeadTimeMinutes, 0, 24 * 60);
+  const tzOffsetMinutes = clampInt(store?.config?.tzOffsetMinutes, -12 * 60, 14 * 60);
+  const minStartMs = Date.now() + minLeadTimeMinutes * 60 * 1000;
 
   const out = new Map();
   const teachers = Array.isArray(store.teachers) ? store.teachers : [];
@@ -92,10 +108,14 @@ const computeTeachersBySlot = (store, dateKey) => {
     if (!windows.length) continue;
     const blocking = getBlockingEventsForTeacherOnDate(store, teacher.id, dateKey);
 
+    const starts = getSlotStartMinutesFromWorkWindows({ windows, slotDurationMinutes: duration });
+
     for (const startMin of starts) {
       const endMin = startMin + duration;
       if (endMin > 1440) continue;
       if (!slotFitsWorkHours({ windows, startMin, endMin })) continue;
+      const startMs = toUtcMsForDateKeyAndMinutes(dateKey, startMin, { tzOffsetMinutes });
+      if (!startMs || startMs < minStartMs) continue;
       if (slotConflictsWithEvents({ events: blocking, startMin, endMin, bufferMinutes })) continue;
 
       const key = String(startMin);
@@ -147,8 +167,10 @@ const bookSlotForStudent = ({ store, studentId, dateKey, startMin, endMin }) => 
   }
 
   const tzOffsetMinutes = clampInt(store?.config?.tzOffsetMinutes, -12 * 60, 14 * 60);
+  const minLeadTimeMinutes = clampInt(store?.config?.minLeadTimeMinutes, 0, 24 * 60);
   const startMs = toUtcMsForDateKeyAndMinutes(dateKey, safeStart, { tzOffsetMinutes });
-  if (!startMs || startMs <= Date.now()) {
+  const minStartMs = Date.now() + minLeadTimeMinutes * 60 * 1000;
+  if (!startMs || startMs < minStartMs) {
     return { ok: false, error: "slot_unavailable" };
   }
 

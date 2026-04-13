@@ -14,6 +14,8 @@ const DEFAULT_CONFIG = {
   tzOffsetMinutes: -180,
   slotDurationMinutes: 30,
   bufferMinutes: 10,
+  // Student-facing schedule should not show slots too close to "now".
+  minLeadTimeMinutes: 120,
   schoolSlots: {
     // Keys follow Date.getDay(): 0 (Sun) - 6 (Sat). Sunday intentionally empty.
     0: [],
