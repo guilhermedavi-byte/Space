@@ -1,122 +1,106 @@
 const { readJsonBody, sendJson } = require("../_lib/http");
 const { getSessionFromRequest } = require("../_lib/session");
-const { mutateStore, readStore } = require("../_lib/scheduling-store");
+const { verifyFirebaseIdToken } = require("../_lib/firebase-id-token");
 const { normalizeStatus } = require("../_lib/scheduling-core");
 const { clampInt, isValidDateKey } = require("../_lib/scheduling-utils");
+const {
+  decodeFields,
+  firestoreDeleteDocument,
+  firestoreGetDocument,
+  firestoreListDocuments,
+  firestorePatchDocument,
+  getBearerTokenFromRequest,
+  getDocIdFromName,
+} = require("../_lib/firestore-rest");
 
-const findStudentName = (store, studentId) => {
-  if (!studentId) return null;
-  const students = Array.isArray(store.students) ? store.students : [];
-  return students.find((s) => s && s.id === studentId)?.name || null;
+const normalizeGuestIds = (raw) => {
+  const arr = Array.isArray(raw) ? raw : [];
+  return arr.filter((g) => typeof g === "string" && g.trim());
 };
 
-const listTeacherEvents = (store, teacherId, { from, to } = {}) => {
-  const events = Array.isArray(store.events) ? store.events : [];
-  const fromKey = isValidDateKey(from) ? from : null;
-  const toKey = isValidDateKey(to) ? to : null;
-
-  return events
-    .filter((evt) => evt && evt.teacherId === teacherId)
-    .filter((evt) => {
-      if (fromKey && String(evt.dateKey) < fromKey) return false;
-      if (toKey && String(evt.dateKey) > toKey) return false;
-      return true;
-    })
-    .map((evt) => {
-      const isLesson = evt.studentId != null;
+const normalizeDocuments = (raw) => {
+  const arr = Array.isArray(raw) ? raw : [];
+  return arr
+    .map((doc) => {
+      if (!doc || typeof doc !== "object") return null;
+      const id = typeof doc.id === "string" ? doc.id : `doc_${Math.random().toString(16).slice(2)}`;
+      const name = typeof doc.name === "string" ? doc.name : "";
+      if (!name) return null;
       return {
-        id: evt.id,
-        type: isLesson ? "lesson" : "manual",
-        dateKey: evt.dateKey,
-        startMin: evt.startMin,
-        endMin: evt.endMin,
-        status: normalizeStatus(evt.status),
-        title: isLesson ? findStudentName(store, evt.studentId) || "Aluno" : evt.title || "",
-        description: isLesson ? "" : evt.description || "",
-        guests: isLesson ? [] : Array.isArray(evt.guests) ? evt.guests : [],
-        documents: isLesson ? [] : Array.isArray(evt.documents) ? evt.documents : [],
+        id,
+        name,
+        ext: typeof doc.ext === "string" ? doc.ext : "",
+        type: typeof doc.type === "string" ? doc.type : "",
+        size: typeof doc.size === "number" ? doc.size : 0,
+        dataUrl: typeof doc.dataUrl === "string" ? doc.dataUrl : "",
       };
     })
-    .sort((a, b) => (a.dateKey === b.dateKey ? a.startMin - b.startMin : a.dateKey.localeCompare(b.dateKey)));
+    .filter(Boolean);
 };
 
-const createManualEvent = (store, teacherId, payload) => {
-  const dateKey = String(payload?.dateKey || "").trim();
-  const startMin = clampInt(payload?.startMin, 0, 1440);
-  const endMin = clampInt(payload?.endMin, 0, 1440);
-  const title = String(payload?.title || "").trim();
-  const description = String(payload?.description || "");
-  const guests = Array.isArray(payload?.guests) ? payload.guests.filter((g) => typeof g === "string") : [];
-  const documents = Array.isArray(payload?.documents) ? payload.documents.filter((d) => d && typeof d === "object") : [];
+const decodeEventFromFirestore = (doc) => {
+  if (!doc || typeof doc !== "object") return null;
+  const id = getDocIdFromName(doc.name);
+  const fields = decodeFields(doc);
 
-  if (!isValidDateKey(dateKey)) return { ok: false, error: "invalid_date" };
-  if (endMin <= startMin) return { ok: false, error: "invalid_time" };
-  if (!title) return { ok: false, error: "title_required" };
+  const teacherId = typeof fields.teacherId === "string" ? fields.teacherId : "";
+  const dateKey = typeof fields.dateKey === "string" ? fields.dateKey : "";
+  const startMin = Number(fields.startMin);
+  const endMin = Number(fields.endMin);
+  if (!id || !teacherId || !isValidDateKey(dateKey)) return null;
+  if (!Number.isFinite(startMin) || !Number.isFinite(endMin) || endMin <= startMin) return null;
 
-  const event = {
-    id: `m_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`,
+  const studentId = fields.studentId == null ? null : typeof fields.studentId === "string" ? fields.studentId : null;
+  const studentName = typeof fields.studentName === "string" ? fields.studentName : "";
+
+  const isLesson = Boolean(studentId);
+
+  return {
+    id,
     teacherId,
-    studentId: null,
+    type: isLesson ? "lesson" : "manual",
     dateKey,
     startMin,
     endMin,
-    status: "agendado",
-    createdAt: new Date().toISOString(),
-    title,
-    description,
-    guests,
-    documents,
+    status: normalizeStatus(fields.status),
+    title: isLesson ? studentName || "Aluno" : String(fields.title || ""),
+    description: isLesson ? "" : String(fields.description || ""),
+    guests: isLesson ? [] : normalizeGuestIds(fields.guests),
+    documents: isLesson ? [] : normalizeDocuments(fields.documents),
+    studentId,
   };
-
-  store.events = Array.isArray(store.events) ? store.events : [];
-  store.events.push(event);
-  return { ok: true, event };
 };
 
-const updateManualEvent = (store, teacherId, payload) => {
-  const id = String(payload?.id || "").trim();
-  if (!id) return { ok: false, error: "id_required" };
-  store.events = Array.isArray(store.events) ? store.events : [];
-  const idx = store.events.findIndex((evt) => evt && evt.id === id && evt.teacherId === teacherId);
-  if (idx < 0) return { ok: false, error: "not_found" };
+const listTeacherEvents = async ({ teacherId, from, to, idToken }) => {
+  const fromKey = isValidDateKey(from) ? String(from) : null;
+  const toKey = isValidDateKey(to) ? String(to) : null;
 
-  const existing = store.events[idx];
-  if (existing.studentId != null) return { ok: false, error: "forbidden" };
+  const res = await firestoreListDocuments({ collectionPath: "events", idToken, pageSize: 1200 });
+  if (!res.ok) throw new Error("firestore_list_failed");
+  const docs = Array.isArray(res.documents) ? res.documents : Array.isArray(res.data?.documents) ? res.data.documents : [];
 
-  const dateKey = String(payload?.dateKey || existing.dateKey || "").trim();
-  const startMin = clampInt(payload?.startMin ?? existing.startMin, 0, 1440);
-  const endMin = clampInt(payload?.endMin ?? existing.endMin, 0, 1440);
-  const title = String(payload?.title ?? existing.title || "").trim();
-  const description = String(payload?.description ?? existing.description || "");
-  const guests = Array.isArray(payload?.guests) ? payload.guests.filter((g) => typeof g === "string") : existing.guests || [];
-  const documents = Array.isArray(payload?.documents) ? payload.documents.filter((d) => d && typeof d === "object") : existing.documents || [];
-
-  if (!isValidDateKey(dateKey)) return { ok: false, error: "invalid_date" };
-  if (endMin <= startMin) return { ok: false, error: "invalid_time" };
-  if (!title) return { ok: false, error: "title_required" };
-
-  store.events[idx] = {
-    ...existing,
-    dateKey,
-    startMin,
-    endMin,
-    title,
-    description,
-    guests,
-    documents,
-  };
-
-  return { ok: true, event: store.events[idx] };
-};
-
-const deleteManualEvent = (store, teacherId, id) => {
-  store.events = Array.isArray(store.events) ? store.events : [];
-  const idx = store.events.findIndex((evt) => evt && evt.id === id && evt.teacherId === teacherId);
-  if (idx < 0) return { ok: false, error: "not_found" };
-  const existing = store.events[idx];
-  if (existing.studentId != null) return { ok: false, error: "forbidden" };
-  store.events.splice(idx, 1);
-  return { ok: true };
+  return docs
+    .map((doc) => decodeEventFromFirestore(doc))
+    .filter(Boolean)
+    .filter((evt) => evt.teacherId === teacherId)
+    .filter((evt) => {
+      if (fromKey && evt.dateKey < fromKey) return false;
+      if (toKey && evt.dateKey > toKey) return false;
+      return true;
+    })
+    .sort((a, b) => (a.dateKey === b.dateKey ? a.startMin - b.startMin : a.dateKey.localeCompare(b.dateKey)))
+    .map((evt) => ({
+      id: evt.id,
+      type: evt.type,
+      dateKey: evt.dateKey,
+      startMin: evt.startMin,
+      endMin: evt.endMin,
+      status: evt.status,
+      title: evt.title,
+      description: evt.description,
+      guests: evt.guests,
+      documents: evt.documents,
+    }));
 };
 
 module.exports = async (req, res) => {
@@ -137,14 +121,36 @@ module.exports = async (req, res) => {
     return;
   }
 
+  const idToken = getBearerTokenFromRequest(req);
+  if (!idToken) {
+    sendJson(res, 401, { error: "missing_id_token" });
+    return;
+  }
+
+  try {
+    const decoded = await verifyFirebaseIdToken(idToken);
+    if (decoded.uid !== teacherId) {
+      sendJson(res, 401, { error: "invalid_credentials" });
+      return;
+    }
+  } catch (error) {
+    sendJson(res, 401, { error: "invalid_credentials" });
+    return;
+  }
+
   if (req.method === "GET" || req.method === "HEAD") {
-    const store = readStore();
     const host = String(req.headers.host || "localhost");
     const url = new URL(req.url || "/api/teacher/events", `https://${host}`);
     const from = url.searchParams.get("from") || "";
     const to = url.searchParams.get("to") || "";
-    const events = listTeacherEvents(store, teacherId, { from, to });
-    sendJson(res, 200, { events });
+    try {
+      const events = await listTeacherEvents({ teacherId, from, to, idToken });
+      sendJson(res, 200, { events });
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error("[api] teacher events list failed", error);
+      sendJson(res, 500, { error: "internal_error" });
+    }
     return;
   }
 
@@ -157,41 +163,203 @@ module.exports = async (req, res) => {
       return;
     }
 
-    let result = null;
-
-    await mutateStore((store) => {
+    try {
       if (req.method === "POST") {
-        result = createManualEvent(store, teacherId, body);
-        return store;
+        const dateKey = String(body?.dateKey || "").trim();
+        const startMin = clampInt(body?.startMin, 0, 1440);
+        const endMin = clampInt(body?.endMin, 0, 1440);
+        const title = String(body?.title || "").trim();
+        const description = String(body?.description || "");
+        const guests = normalizeGuestIds(body?.guests);
+        const documents = normalizeDocuments(body?.documents);
+
+        if (!isValidDateKey(dateKey)) {
+          sendJson(res, 400, { error: "invalid_date" });
+          return;
+        }
+        if (endMin <= startMin) {
+          sendJson(res, 400, { error: "invalid_time" });
+          return;
+        }
+        if (!title) {
+          sendJson(res, 400, { error: "title_required" });
+          return;
+        }
+
+        const id = `m_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
+        const docPath = `events/${encodeURIComponent(id)}`;
+        const patch = await firestorePatchDocument({
+          docPath,
+          idToken,
+          data: {
+            teacherId,
+            studentId: null,
+            dateKey,
+            startMin,
+            endMin,
+            status: "agendado",
+            createdAt: new Date(),
+            title,
+            description,
+            guests,
+            documents,
+            kind: "manual",
+          },
+          updateMaskPaths: [
+            "teacherId",
+            "studentId",
+            "dateKey",
+            "startMin",
+            "endMin",
+            "status",
+            "createdAt",
+            "title",
+            "description",
+            "guests",
+            "documents",
+            "kind",
+          ],
+        });
+
+        if (!patch.ok) throw new Error("firestore_patch_failed");
+
+        sendJson(res, 200, {
+          ok: true,
+          event: {
+            id,
+            type: "manual",
+            dateKey,
+            startMin,
+            endMin,
+            status: "agendado",
+            title,
+            description,
+            guests,
+            documents,
+          },
+        });
+        return;
       }
+
       if (req.method === "PUT") {
-        result = updateManualEvent(store, teacherId, body);
-        return store;
+        const id = String(body?.id || "").trim();
+        if (!id) {
+          sendJson(res, 400, { error: "id_required" });
+          return;
+        }
+
+        const docPath = `events/${encodeURIComponent(id)}`;
+        const snap = await firestoreGetDocument({ docPath, idToken });
+        if (!snap.ok) {
+          sendJson(res, snap.status === 404 ? 404 : 500, { error: snap.status === 404 ? "not_found" : "internal_error" });
+          return;
+        }
+
+        const existingFields = decodeFields(snap.data);
+        if (String(existingFields.teacherId || "") !== teacherId) {
+          sendJson(res, 403, { error: "forbidden" });
+          return;
+        }
+        if (existingFields.studentId != null) {
+          sendJson(res, 403, { error: "forbidden" });
+          return;
+        }
+
+        const dateKey = String(body?.dateKey || existingFields.dateKey || "").trim();
+        const startMin = clampInt(body?.startMin ?? existingFields.startMin, 0, 1440);
+        const endMin = clampInt(body?.endMin ?? existingFields.endMin, 0, 1440);
+        const title = String(body?.title ?? existingFields.title || "").trim();
+        const description = String(body?.description ?? existingFields.description || "");
+        const guests = body?.guests ? normalizeGuestIds(body.guests) : normalizeGuestIds(existingFields.guests);
+        const documents = body?.documents ? normalizeDocuments(body.documents) : normalizeDocuments(existingFields.documents);
+
+        if (!isValidDateKey(dateKey)) {
+          sendJson(res, 400, { error: "invalid_date" });
+          return;
+        }
+        if (endMin <= startMin) {
+          sendJson(res, 400, { error: "invalid_time" });
+          return;
+        }
+        if (!title) {
+          sendJson(res, 400, { error: "title_required" });
+          return;
+        }
+
+        const patch = await firestorePatchDocument({
+          docPath,
+          idToken,
+          data: {
+            dateKey,
+            startMin,
+            endMin,
+            title,
+            description,
+            guests,
+            documents,
+            updatedAt: new Date(),
+          },
+          updateMaskPaths: ["dateKey", "startMin", "endMin", "title", "description", "guests", "documents", "updatedAt"],
+        });
+
+        if (!patch.ok) throw new Error("firestore_patch_failed");
+
+        sendJson(res, 200, {
+          ok: true,
+          event: {
+            id,
+            type: "manual",
+            dateKey,
+            startMin,
+            endMin,
+            status: normalizeStatus(existingFields.status),
+            title,
+            description,
+            guests,
+            documents,
+          },
+        });
+        return;
       }
+
       if (req.method === "DELETE") {
         const id = String(body?.id || "").trim();
         if (!id) {
-          result = { ok: false, error: "id_required" };
-          return store;
+          sendJson(res, 400, { error: "id_required" });
+          return;
         }
-        result = deleteManualEvent(store, teacherId, id);
-        return store;
+
+        const docPath = `events/${encodeURIComponent(id)}`;
+        const snap = await firestoreGetDocument({ docPath, idToken });
+        if (!snap.ok) {
+          sendJson(res, snap.status === 404 ? 404 : 500, { error: snap.status === 404 ? "not_found" : "internal_error" });
+          return;
+        }
+
+        const existingFields = decodeFields(snap.data);
+        if (String(existingFields.teacherId || "") !== teacherId) {
+          sendJson(res, 403, { error: "forbidden" });
+          return;
+        }
+        if (existingFields.studentId != null) {
+          sendJson(res, 403, { error: "forbidden" });
+          return;
+        }
+
+        const del = await firestoreDeleteDocument({ docPath, idToken });
+        if (!del.ok) throw new Error("firestore_delete_failed");
+        sendJson(res, 200, { ok: true });
+        return;
       }
-      return store;
-    });
 
-    if (!result || !result.ok) {
-      const err = result?.error || "unknown";
-      const status = err === "not_found" ? 404 : err === "forbidden" ? 403 : 400;
-      sendJson(res, status, { error: err });
-      return;
+      sendJson(res, 405, { error: "method_not_allowed" });
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error("[api] teacher events mutate failed", error);
+      sendJson(res, 500, { error: "internal_error" });
     }
-
-    sendJson(res, 200, result.event ? { ok: true, event: result.event } : { ok: true });
-    return;
   }
 
   res.setHeader("Allow", "GET, HEAD, POST, PUT, DELETE");
   sendJson(res, 405, { error: "method_not_allowed" });
 };
-

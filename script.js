@@ -1826,9 +1826,7 @@ const refreshTeacherEvents = async ({ force = false } = {}) => {
 
   teacherEventsState.isLoading = true;
   try {
-    const res = await fetch(`/api/teacher/events?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, {
-      credentials: "include",
-    });
+    const res = await fetchWithAuth(`/api/teacher/events?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
     if (!res.ok) throw new Error("teacher_events_fetch_failed");
     const data = await res.json().catch(() => null);
     const raw = Array.isArray(data?.events) ? data.events : [];
@@ -1921,7 +1919,7 @@ const refreshTeacherWorkHours = async ({ force = false } = {}) => {
 
   teacherWorkHoursApiState.isLoading = true;
   try {
-    const res = await fetch("/api/teacher/work-hours", { credentials: "include" });
+    const res = await fetchWithAuth("/api/teacher/work-hours");
     if (!res.ok) throw new Error("work_hours_fetch_failed");
     const data = await res.json().catch(() => null);
     teacherWorkHours = apiWorkHoursToLocalWorkHours(data?.workHours);
@@ -2761,9 +2759,8 @@ const openWorkHoursModal = () => {
 
       Promise.resolve()
         .then(async () => {
-          const res = await fetch("/api/teacher/work-hours", {
+          const res = await fetchWithAuth("/api/teacher/work-hours", {
             method: "POST",
-            credentials: "include",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(workHoursDraftToApiPayload(workHoursDraft)),
           });
@@ -3125,9 +3122,8 @@ const openTeacherEventFormModalFromDraft = () => {
     if (modalSecondary) modalSecondary.disabled = true;
 
     const method = mode === "create" ? "POST" : "PUT";
-    fetch("/api/teacher/events", {
+    fetchWithAuth("/api/teacher/events", {
       method,
-      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     })
@@ -3192,9 +3188,8 @@ const openTeacherEventFormModalFromDraft = () => {
               if (modalPrimary) modalPrimary.disabled = true;
               if (modalSecondary) modalSecondary.disabled = true;
 
-              fetch("/api/teacher/events", {
+              fetchWithAuth("/api/teacher/events", {
                 method: "DELETE",
-                credentials: "include",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ id }),
               })
@@ -3435,7 +3430,7 @@ const refreshStudentLessons = async ({ force = false } = {}) => {
 
   studentLessonsState.isLoading = true;
   try {
-    const res = await fetch("/api/schedule/my-lessons", { credentials: "include" });
+    const res = await fetchWithAuth("/api/schedule/my-lessons");
     if (!res.ok) throw new Error("lessons_fetch_failed");
     const data = await res.json().catch(() => null);
     const raw = Array.isArray(data?.lessons) ? data.lessons : [];
@@ -3492,9 +3487,7 @@ const refreshStudentSlots = async ({ force = false } = {}) => {
 
   studentSlotsState.isLoading = true;
   try {
-    const res = await fetch(`/api/schedule/slots?start=${encodeURIComponent(startDateKey)}&days=4`, {
-      credentials: "include",
-    });
+    const res = await fetchWithAuth(`/api/schedule/slots?start=${encodeURIComponent(startDateKey)}&days=4`);
     if (!res.ok) throw new Error("slots_fetch_failed");
     const data = await res.json().catch(() => null);
     const days = Array.isArray(data?.days) ? data.days : [];
@@ -3856,6 +3849,45 @@ const waitForFirebaseAuthReady = (firebase, timeoutMs = 4000) => {
   });
 };
 
+let cachedFirebaseIdToken = {
+  uid: "",
+  token: "",
+  expiresAt: 0,
+};
+
+const getFirebaseIdTokenForApi = async () => {
+  try {
+    const firebase = await loadFirebaseAdminApi();
+    const user = await waitForFirebaseAuthReady(firebase, 3500);
+    if (!user || typeof user.getIdToken !== "function") return "";
+
+    const uid = String(user.uid || "");
+    const now = Date.now();
+    if (cachedFirebaseIdToken.uid === uid && cachedFirebaseIdToken.token && cachedFirebaseIdToken.expiresAt > now) {
+      return cachedFirebaseIdToken.token;
+    }
+
+    const token = await user.getIdToken();
+    cachedFirebaseIdToken = {
+      uid,
+      token: String(token || ""),
+      // Firebase ID tokens are valid for ~1h; we refresh frequently to keep API calls snappy.
+      expiresAt: now + 180_000,
+    };
+    return cachedFirebaseIdToken.token;
+  } catch (error) {
+    return "";
+  }
+};
+
+const fetchWithAuth = async (input, init = {}) => {
+  const opts = init && typeof init === "object" ? init : {};
+  const headers = new Headers(opts.headers || {});
+  const token = await getFirebaseIdTokenForApi();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  return fetch(input, { ...opts, headers, credentials: opts.credentials || "include" });
+};
+
 const normalizeUserCreationRole = (value) => {
   const role = normalizeRole(value);
   if (role === "student" || role === "teacher") return role;
@@ -4158,9 +4190,8 @@ if (adminUserForm instanceof HTMLFormElement) {
       }
 
       await withTimeout(
-        fetch("/api/admin/users", {
+        fetchWithAuth("/api/admin/users", {
           method: "POST",
-          credentials: "include",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ uid, role, name }),
         }).catch(() => {}),
@@ -4348,9 +4379,8 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
           }
 
           await withTimeout(
-            fetch("/api/admin/users", {
+            fetchWithAuth("/api/admin/users", {
               method: "POST",
-              credentials: "include",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ uid, role, name }),
             }).catch(() => {}),
@@ -4443,7 +4473,7 @@ const setAdminRankingStatus = (text, tone = "") => {
 };
 
 const fetchAdminRanking = async () => {
-  const res = await fetch("/api/admin/ranking", { credentials: "include" });
+  const res = await fetchWithAuth("/api/admin/ranking");
   if (!res.ok) {
     throw new Error("admin_ranking_fetch_failed");
   }
@@ -4486,9 +4516,8 @@ const syncTeachersFromFirestoreIntoStore = async () => {
     await withTimeout(
       Promise.allSettled(
         teachers.map((t) =>
-          fetch("/api/admin/users", {
+          fetchWithAuth("/api/admin/users", {
             method: "POST",
-            credentials: "include",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ uid: t.id, role: "teacher", name: t.name, active: t.active }),
           }).catch(() => null)
@@ -4662,9 +4691,8 @@ if (adminRankingSave) {
     adminRankingSave.disabled = true;
 
     try {
-      const res = await fetch("/api/admin/ranking", {
+      const res = await fetchWithAuth("/api/admin/ranking", {
         method: "POST",
-        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ order: adminRankingState.order }),
       });
@@ -5091,9 +5119,8 @@ document.addEventListener("click", (event) => {
 
 	            // Keep the scheduling store in sync so admin ranking/slot assignment respects active teachers.
 	            await withTimeout(
-	              fetch("/api/admin/users", {
+	              fetchWithAuth("/api/admin/users", {
 	                method: "POST",
-	                credentials: "include",
 	                headers: { "Content-Type": "application/json" },
 	                body: JSON.stringify({ uid, role: type, name, active: nextActive }),
 	              }).catch((error) => {
@@ -5508,9 +5535,8 @@ document.addEventListener("click", (event) => {
             if (modalPrimary) modalPrimary.disabled = true;
             if (modalSecondary) modalSecondary.disabled = true;
 
-            fetch("/api/schedule/cancel", {
+            fetchWithAuth("/api/schedule/cancel", {
               method: "POST",
-              credentials: "include",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ id: lessonId }),
             })
@@ -5605,9 +5631,8 @@ document.addEventListener("click", (event) => {
           if (modalPrimary) modalPrimary.disabled = true;
           if (modalSecondary) modalSecondary.disabled = true;
 
-          fetch("/api/schedule/book", {
+          fetchWithAuth("/api/schedule/book", {
             method: "POST",
-            credentials: "include",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ dateKey: parsed.dateKey, startMin }),
           })

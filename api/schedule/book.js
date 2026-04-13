@@ -1,8 +1,16 @@
 const { readJsonBody, sendJson } = require("../_lib/http");
 const { getSessionFromRequest } = require("../_lib/session");
-const { mutateStore } = require("../_lib/scheduling-store");
 const { bookSlotForStudent } = require("../_lib/scheduling-core");
 const { clampInt, isValidDateKey } = require("../_lib/scheduling-utils");
+const { verifyFirebaseIdToken } = require("../_lib/firebase-id-token");
+const { firestorePatchDocument, getBearerTokenFromRequest } = require("../_lib/firestore-rest");
+const {
+  DEFAULT_CONFIG,
+  fetchActiveTeachers,
+  fetchEventsForDateKey,
+  fetchRankingOrder,
+  fetchTeacherWorkHours,
+} = require("../_lib/scheduling-firestore");
 
 module.exports = async (req, res) => {
   if (req.method !== "POST") {
@@ -19,6 +27,24 @@ module.exports = async (req, res) => {
 
   if (String(session.role || "") !== "student") {
     sendJson(res, 403, { error: "forbidden" });
+    return;
+  }
+
+  const studentId = String(session.sub || "");
+  const idToken = getBearerTokenFromRequest(req);
+  if (!studentId || !idToken) {
+    sendJson(res, 401, { error: "unauthorized" });
+    return;
+  }
+
+  try {
+    const decoded = await verifyFirebaseIdToken(idToken);
+    if (decoded.uid !== studentId) {
+      sendJson(res, 401, { error: "invalid_credentials" });
+      return;
+    }
+  } catch (error) {
+    sendJson(res, 401, { error: "invalid_credentials" });
     return;
   }
 
@@ -39,28 +65,94 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const studentId = String(session.sub || "");
-  if (!studentId) {
-    sendJson(res, 401, { error: "unauthorized" });
+  let teachers = [];
+  let order = [];
+  let events = [];
+
+  try {
+    const activeTeachers = await fetchActiveTeachers({ idToken });
+    const teacherIds = activeTeachers.map((t) => t.id);
+    const storedOrder = await fetchRankingOrder({ idToken });
+    const deduped = [];
+    const seen = new Set();
+    storedOrder.forEach((id) => {
+      if (!teacherIds.includes(id)) return;
+      if (seen.has(id)) return;
+      seen.add(id);
+      deduped.push(id);
+    });
+    teacherIds.forEach((id) => {
+      if (seen.has(id)) return;
+      seen.add(id);
+      deduped.push(id);
+    });
+    order = deduped;
+
+    teachers = await Promise.all(
+      activeTeachers.map(async (teacher) => {
+        const workHours = await fetchTeacherWorkHours({ idToken, teacherId: teacher.id });
+        return { id: teacher.id, name: teacher.name, active: teacher.active !== false, workHours };
+      })
+    );
+
+    events = await fetchEventsForDateKey({ idToken, dateKey });
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error("[api] schedule book load failed", error);
+    sendJson(res, 500, { error: "internal_error" });
     return;
   }
 
-  let created = null;
-  let failure = null;
+  const store = {
+    config: DEFAULT_CONFIG,
+    teachers,
+    ranking: { order },
+    events: Array.isArray(events) ? events : [],
+  };
 
-  await mutateStore((store) => {
-    const result = bookSlotForStudent({ store, studentId, dateKey, startMin, endMin });
-    if (!result.ok) {
-      failure = result.error || "unknown";
-      return store;
-    }
-    created = result.event;
-    return store;
-  });
-
-  if (!created) {
+  const result = bookSlotForStudent({ store, studentId, dateKey, startMin, endMin });
+  if (!result.ok || !result.event) {
+    const failure = result.error || "unknown";
     const status = failure === "student_conflict" ? 409 : failure === "slot_unavailable" ? 409 : 400;
     sendJson(res, status, { error: failure || "booking_failed" });
+    return;
+  }
+
+  const created = result.event;
+
+  try {
+    const docPath = `events/${encodeURIComponent(created.id)}`;
+    const patch = await firestorePatchDocument({
+      docPath,
+      idToken,
+      data: {
+        teacherId: created.teacherId,
+        studentId: created.studentId,
+        studentName: String(session.name || "").trim() || "Aluno",
+        dateKey: created.dateKey,
+        startMin: created.startMin,
+        endMin: created.endMin,
+        status: created.status,
+        createdAt: new Date(),
+        kind: "lesson",
+      },
+      updateMaskPaths: [
+        "teacherId",
+        "studentId",
+        "studentName",
+        "dateKey",
+        "startMin",
+        "endMin",
+        "status",
+        "createdAt",
+        "kind",
+      ],
+    });
+    if (!patch.ok) throw new Error("firestore_patch_failed");
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error("[api] schedule book save failed", error);
+    sendJson(res, 500, { error: "internal_error" });
     return;
   }
 
@@ -77,4 +169,3 @@ module.exports = async (req, res) => {
     message: "Aula agendada com sucesso! O professor sera revelado 12h antes da aula.",
   });
 };
-

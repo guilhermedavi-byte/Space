@@ -1,7 +1,15 @@
 const { sendJson } = require("../_lib/http");
 const { getSessionFromRequest } = require("../_lib/session");
-const { readStore } = require("../_lib/scheduling-store");
 const { computeAvailableSlotsForDate } = require("../_lib/scheduling-core");
+const { verifyFirebaseIdToken } = require("../_lib/firebase-id-token");
+const { firestoreListDocuments, getBearerTokenFromRequest } = require("../_lib/firestore-rest");
+const {
+  DEFAULT_CONFIG,
+  decodeStoreEvent,
+  fetchActiveTeachers,
+  fetchRankingOrder,
+  fetchTeacherWorkHours,
+} = require("../_lib/scheduling-firestore");
 const {
   addDaysToDateKey,
   clampInt,
@@ -55,17 +63,107 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const store = readStore();
+  const studentId = String(session.sub || "");
+  const idToken = getBearerTokenFromRequest(req);
+  if (!studentId || !idToken) {
+    sendJson(res, 401, { error: "unauthorized" });
+    return;
+  }
+
+  try {
+    const decoded = await verifyFirebaseIdToken(idToken);
+    if (decoded.uid !== studentId) {
+      sendJson(res, 401, { error: "invalid_credentials" });
+      return;
+    }
+  } catch (error) {
+    sendJson(res, 401, { error: "invalid_credentials" });
+    return;
+  }
+
   const host = String(req.headers.host || "localhost");
   const url = new URL(req.url || "/api/schedule/slots", `https://${host}`);
 
   const daysCount = clampInt(url.searchParams.get("days") || 4, 1, 7);
   const startParam = String(url.searchParams.get("start") || "").trim();
-  const start = isValidDateKey(startParam) ? startParam : dateKeyNowForOffset(store.config.tzOffsetMinutes);
+  const start = isValidDateKey(startParam) ? startParam : dateKeyNowForOffset(DEFAULT_CONFIG.tzOffsetMinutes);
 
-  const days = collectValidDateKeys(start, daysCount).map(({ dateKey, dow }) => {
+  let teachers = [];
+  let order = [];
+
+  try {
+    const activeTeachers = await fetchActiveTeachers({ idToken });
+    const teacherIds = activeTeachers.map((t) => t.id);
+    const storedOrder = await fetchRankingOrder({ idToken });
+    const deduped = [];
+    const seen = new Set();
+    storedOrder.forEach((id) => {
+      if (!teacherIds.includes(id)) return;
+      if (seen.has(id)) return;
+      seen.add(id);
+      deduped.push(id);
+    });
+    teacherIds.forEach((id) => {
+      if (seen.has(id)) return;
+      seen.add(id);
+      deduped.push(id);
+    });
+
+    order = deduped;
+    teachers = await Promise.all(
+      activeTeachers.map(async (teacher) => {
+        const workHours = await fetchTeacherWorkHours({ idToken, teacherId: teacher.id });
+        return { id: teacher.id, name: teacher.name, active: teacher.active !== false, workHours };
+      })
+    );
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error("[api] schedule slots teachers fetch failed", error);
+    sendJson(res, 500, { error: "internal_error" });
+    return;
+  }
+
+  const days = [];
+  const dateKeys = collectValidDateKeys(start, daysCount);
+  const requestedKeys = new Set(dateKeys.map((d) => d.dateKey));
+
+  let allEvents = [];
+  try {
+    const resEvents = await firestoreListDocuments({ collectionPath: "events", idToken, pageSize: 1600 });
+    if (!resEvents.ok) throw new Error("firestore_list_failed");
+    const docs = Array.isArray(resEvents.documents)
+      ? resEvents.documents
+      : Array.isArray(resEvents.data?.documents)
+        ? resEvents.data.documents
+        : [];
+    allEvents = docs.map((doc) => decodeStoreEvent(doc)).filter(Boolean).filter((evt) => requestedKeys.has(evt.dateKey));
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error("[api] schedule slots events prefetch failed", error);
+    allEvents = [];
+  }
+
+  const eventsByDate = new Map();
+  allEvents.forEach((evt) => {
+    const key = String(evt.dateKey || "");
+    if (!eventsByDate.has(key)) eventsByDate.set(key, []);
+    eventsByDate.get(key).push(evt);
+  });
+
+  for (const entry of dateKeys) {
+    const dateKey = entry.dateKey;
+    const dow = entry.dow;
+    const events = eventsByDate.get(dateKey) || [];
+
+    const store = {
+      config: DEFAULT_CONFIG,
+      teachers,
+      ranking: { order },
+      events,
+    };
+
     const { slots } = computeAvailableSlotsForDate(store, dateKey);
-    return {
+    days.push({
       dateKey,
       dow,
       slots: slots.map((slot) => ({
@@ -73,14 +171,13 @@ module.exports = async (req, res) => {
         endMin: slot.endMin,
         time: minutesToTime(slot.startMin),
       })),
-    };
-  });
+    });
+  }
 
   sendJson(res, 200, {
-    timeZone: store.config.timeZone,
-    tzOffsetMinutes: store.config.tzOffsetMinutes,
-    slotDurationMinutes: store.config.slotDurationMinutes,
+    timeZone: DEFAULT_CONFIG.timeZone,
+    tzOffsetMinutes: DEFAULT_CONFIG.tzOffsetMinutes,
+    slotDurationMinutes: DEFAULT_CONFIG.slotDurationMinutes,
     days,
   });
 };
-
