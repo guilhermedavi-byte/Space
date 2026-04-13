@@ -341,13 +341,6 @@ const detectRoleForLoginPage = () => {
 const initAuthPages = async () => {
   const page = String(document.body?.dataset?.page || "");
 
-  // Public auth routes must always be reachable. Visiting `/entrar` clears any previous session
-  // so the user can pick a profile and log in again without getting auto-redirected.
-  if (page === "entrar") {
-    fetch("/api/logout", { method: "POST", credentials: "include", keepalive: true }).catch(() => {});
-    return;
-  }
-
   if (page !== "login") return;
   const role = detectRoleForLoginPage();
   setLoginProfileUI(role);

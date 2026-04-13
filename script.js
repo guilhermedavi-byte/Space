@@ -256,6 +256,27 @@ const safeStorage = (() => {
   }
 })();
 
+const clearPlatformStorage = () => {
+  if (!safeStorage) return;
+  const keys = [
+    STORAGE_KEY,
+    CANCELLATION_STORAGE_KEY,
+    TEACHER_NOTICES_STORAGE_KEY,
+    TEACHER_NOTICE_READ_KEY,
+    TEACHER_CAL_EVENTS_STORAGE_KEY,
+    TEACHER_WORK_HOURS_STORAGE_KEY,
+    STAFF_USERS_STORAGE_KEY,
+  ];
+
+  keys.forEach((key) => {
+    try {
+      safeStorage.removeItem(key);
+    } catch (error) {
+      // ignore
+    }
+  });
+};
+
 const ROLE_DEFS = {
   student: {
     label: "Student",
@@ -4824,7 +4845,7 @@ const ensureSessionOrRedirect = async () => {
 
   const resolved = await sessionRefreshPromise;
   if (!resolved) {
-    window.location.replace("/entrar");
+    window.location.replace("/");
     return null;
   }
   return resolved;
@@ -4877,13 +4898,30 @@ window.addEventListener("popstate", () => {
 });
 
 if (closePlatformButton) {
-  closePlatformButton.addEventListener("click", () => {
+  closePlatformButton.addEventListener("click", async () => {
     closeModal();
+
+    // Always clear local state first so protected UI doesn't linger if navigation is delayed.
+    try {
+      clearPlatformStorage();
+    } catch (error) {
+      // ignore
+    }
+
     fetch("/api/logout", { method: "POST", credentials: "include", keepalive: true }).catch(() => {});
     sessionUser = null;
     sessionChecked = true;
-    setRole("student");
-    window.location.replace("/entrar");
+
+    // Best-effort Firebase signOut. Keep the UI snappy: don't block for long.
+    try {
+      const firebase = await loadFirebaseAdminApi();
+      await waitForFirebaseAuthReady(firebase, 800);
+      await withTimeout(firebase.signOut(firebase.primaryAuth), 1500, "auth_signout");
+    } catch (error) {
+      // ignore
+    }
+
+    window.location.replace("/");
   });
 }
 

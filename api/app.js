@@ -91,7 +91,7 @@ module.exports = async (req, res) => {
 
   const session = getSessionFromRequest(req);
   if (!session) {
-    sendRedirect(res, "/entrar");
+    sendRedirect(res, "/");
     return;
   }
 
