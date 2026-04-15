@@ -4850,8 +4850,7 @@ const showPanel = (panelName) => {
   });
 
   const activePanel = document.querySelector(`[data-panel="${panelName}"]`);
-  const shouldHidePlatformHeader =
-    activePanel?.dataset.hidePlatformHeader === "true" || (panelName === "dashboard" && currentRole === "admin");
+  const shouldHidePlatformHeader = activePanel?.dataset.hidePlatformHeader === "true";
   body.dataset.activePanel = panelName;
 
   if (platformHeader) {
