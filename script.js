@@ -47,20 +47,13 @@ const journeyCurrentConnector = document.querySelector("[data-journey-current-co
 const studyChart = document.querySelector("[data-study-chart]");
 const studyScale = document.querySelector(".analytics-card-bar .bar-chart-scale");
 const planWidgets = document.querySelectorAll("[data-plan-topbar]");
-const liveSchedulerGrid = document.querySelector("[data-live-scheduler-grid]");
-const liveSchedulerTimezone = document.querySelector("[data-live-timezone]");
-const liveInstruction = document.querySelector("[data-live-instruction]");
-const liveWeekRange = document.querySelector("[data-live-week-range]");
-const liveScheduledList = document.querySelector("[data-live-scheduled-list]");
-const liveScheduledEmpty = document.querySelector("[data-live-scheduled-empty]");
-const liveCreditsDots = document.querySelector("[data-live-credits-dots]");
-const liveCreditsCaption = document.querySelector("[data-live-credits-caption]");
 const liveStudentRoot = document.querySelector("[data-live-student]");
 const liveTeacherRoot = document.querySelector("[data-live-teacher]");
-const liveAdminRoot = document.querySelector("[data-live-admin]");
-const adminRankingList = document.querySelector("[data-admin-ranking-list]");
-const adminRankingSave = document.querySelector("[data-admin-ranking-save]");
-const adminRankingStatus = document.querySelector("[data-admin-ranking-status]");
+const liveSchedulerTimezone = document.querySelector("[data-live-timezone]");
+const liveStudentLessonsList = document.querySelector("[data-live-student-lessons]");
+const liveStudentEmpty = document.querySelector("[data-live-student-empty]");
+const adminRescheduleList = document.querySelector("[data-admin-reschedule-list]");
+const adminRescheduleEmpty = document.querySelector("[data-admin-reschedule-empty]");
 const adminUserForm = document.querySelector("[data-admin-user-form]");
 const adminUserName = document.querySelector("[data-admin-user-name]");
 const adminUserEmail = document.querySelector("[data-admin-user-email]");
@@ -174,28 +167,13 @@ const chartState = {
 };
 
 let sidebarExpanded = false;
-const scheduleState = {
-  selectedSlotId: "",
-  selectedSlotLabel: "",
-  isConfirmed: false,
-};
-
-let studentSlotsState = {
-  days: [],
-  timeZone: "America/Sao_Paulo",
-  tzOffsetMinutes: -180,
-  slotDurationMinutes: 30,
-  isLoading: false,
-  lastLoadedAt: 0,
-};
-
 let studentLessonsState = {
   isLoading: false,
   lastLoadedAt: 0,
+  lessons: [],
 };
 
 const STORAGE_KEY = "space-platform-state-v1";
-const CANCELLATION_STORAGE_KEY = "space-platform-cancellations-v1";
 const TEACHER_NOTICES_STORAGE_KEY = "space-platform-teacher-notices-v1";
 const TEACHER_NOTICE_READ_KEY = "space-platform-teacher-notices-read-v1";
 const TEACHER_CAL_EVENTS_STORAGE_KEY = "space-platform-teacher-calendar-events-v1";
@@ -203,17 +181,12 @@ const TEACHER_WORK_HOURS_STORAGE_KEY = "space-platform-teacher-work-hours-v1";
 const STAFF_USERS_STORAGE_KEY = "space-platform-staff-users-v1";
 const CREDIT_CYCLE_BUSINESS_DAYS = 6;
 const LESSON_DURATION_MINUTES = 30;
-const CREDIT_REFUND_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 const PLAN_DEFS = {
   gold: { label: "Gold", creditsPerCycle: 3, creditType: "VIP", badgeClass: "is-gold", badgeDot: "ambar" },
   diamond: { label: "Diamond", creditsPerCycle: 5, creditType: "VIP", badgeClass: "is-diamond", badgeDot: "azul" },
   turma: { label: "Turma", creditsPerCycle: 4, creditType: "GROUP", badgeClass: "is-turma", badgeDot: "verde" },
 };
-
-const scheduledLessons = [];
-const scheduledSlotIds = new Set();
-const cancellationEvents = [];
 
 const createDateKey = (date) => {
   const year = date.getFullYear();
@@ -265,7 +238,6 @@ const clearPlatformStorage = () => {
   if (!safeStorage) return;
   const keys = [
     STORAGE_KEY,
-    CANCELLATION_STORAGE_KEY,
     TEACHER_NOTICES_STORAGE_KEY,
     TEACHER_NOTICE_READ_KEY,
     TEACHER_CAL_EVENTS_STORAGE_KEY,
@@ -401,15 +373,22 @@ const syncRoleUI = () => {
   }
 
   if (liveTeacherRoot) {
-    liveTeacherRoot.hidden = currentRole !== "teacher";
+    liveTeacherRoot.hidden = currentRole !== "teacher" && currentRole !== "admin";
   }
 
   if (liveStudentRoot) {
     liveStudentRoot.hidden = currentRole !== "student";
   }
 
-  if (liveAdminRoot) {
-    liveAdminRoot.hidden = currentRole !== "admin";
+  document.querySelectorAll("[data-admin-only]").forEach((el) => {
+    if (el instanceof HTMLElement) {
+      el.hidden = currentRole !== "admin";
+    }
+  });
+
+  const teacherWorkHoursBtn = document.querySelector("[data-teacher-work-hours]");
+  if (teacherWorkHoursBtn instanceof HTMLElement) {
+    teacherWorkHoursBtn.hidden = currentRole === "admin";
   }
 };
 
@@ -430,10 +409,10 @@ const setRole = (role) => {
   }
 
   if (body.dataset.activePanel === "ao-vivo") {
-    if (currentRole === "teacher") {
+    if (currentRole === "teacher" || currentRole === "admin") {
       renderTeacherCalendar();
     } else {
-      renderLiveScheduler();
+      renderStudentLiveLessons();
     }
   }
 };
@@ -444,27 +423,6 @@ const clampCredits = (value, max) => {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return 0;
   return Math.max(0, Math.min(Math.floor(parsed), max));
-};
-
-const sanitizeLesson = (lesson) => {
-  if (!lesson || typeof lesson !== "object") return null;
-  if (!lesson.id || typeof lesson.id !== "string") return null;
-  if (!lesson.dateKey || typeof lesson.dateKey !== "string") return null;
-  if (!lesson.time || typeof lesson.time !== "string") return null;
-  const slotId =
-    typeof lesson.slotId === "string" && lesson.slotId.length >= 12 ? lesson.slotId : `${lesson.dateKey}-${lesson.time}`;
-  return {
-    id: lesson.id,
-    slotId,
-    dateKey: lesson.dateKey,
-    time: lesson.time,
-    kind: lesson.kind === "GROUP" ? "GROUP" : "VIP",
-    title: typeof lesson.title === "string" ? lesson.title : "Aula ao vivo",
-    teacher: typeof lesson.teacher === "string" ? lesson.teacher : null,
-    studentName: typeof lesson.studentName === "string" ? lesson.studentName : "",
-    durationMinutes: typeof lesson.durationMinutes === "number" ? lesson.durationMinutes : LESSON_DURATION_MINUTES,
-    createdAt: typeof lesson.createdAt === "string" ? lesson.createdAt : new Date().toISOString(),
-  };
 };
 
 const appState = (() => {
@@ -490,16 +448,6 @@ const appState = (() => {
     const cycleStartedAtKey = typeof parsed.cycleStartedAtKey === "string" ? parsed.cycleStartedAtKey : activatedAtKey;
     const creditsRemaining = clampCredits(parsed.creditsRemaining, plan.creditsPerCycle);
 
-    if (Array.isArray(parsed.scheduledLessons)) {
-      parsed.scheduledLessons
-        .map((lesson) => sanitizeLesson(lesson))
-        .filter(Boolean)
-        .forEach((lesson) => {
-          scheduledLessons.push(lesson);
-          scheduledSlotIds.add(lesson.slotId);
-        });
-    }
-
     return {
       planKey,
       activatedAtKey,
@@ -511,55 +459,9 @@ const appState = (() => {
   }
 })();
 
-const sanitizeCancellationEvent = (event) => {
-  if (!event || typeof event !== "object") return null;
-  if (!event.id || typeof event.id !== "string") return null;
-  if (!event.dateKey || typeof event.dateKey !== "string") return null;
-  if (!event.time || typeof event.time !== "string") return null;
-
-  return {
-    id: event.id,
-    dateKey: event.dateKey,
-    time: event.time,
-    studentName: typeof event.studentName === "string" ? event.studentName : "",
-    cancelledAt: typeof event.cancelledAt === "string" ? event.cancelledAt : new Date().toISOString(),
-    isLastMinute: Boolean(event.isLastMinute),
-  };
-};
-
-const persistCancellationEvents = () => {
-  if (!safeStorage) return;
-  try {
-    safeStorage.setItem(CANCELLATION_STORAGE_KEY, JSON.stringify(cancellationEvents));
-  } catch (error) {
-    // ignore
-  }
-};
-
-const loadCancellationEvents = () => {
-  if (!safeStorage) return;
-  try {
-    const raw = safeStorage.getItem(CANCELLATION_STORAGE_KEY);
-    if (!raw) return;
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return;
-    parsed
-      .map((event) => sanitizeCancellationEvent(event))
-      .filter(Boolean)
-      .forEach((event) => cancellationEvents.push(event));
-  } catch (error) {
-    // ignore
-  }
-};
-
-loadCancellationEvents();
-
 const persistAppState = () => {
   if (!safeStorage) return;
-  const payload = {
-    ...appState,
-    scheduledLessons,
-  };
+  const payload = { ...appState };
 
   try {
     safeStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
@@ -659,6 +561,12 @@ let teacherEventsState = {
   events: [],
   isLoading: false,
   rangeKey: "",
+  lastLoadedAt: 0,
+};
+
+let adminRescheduleState = {
+  requests: [],
+  isLoading: false,
   lastLoadedAt: 0,
 };
 
@@ -1223,9 +1131,23 @@ const getFileTypeIconSvg = (ext) => {
   return `<svg viewBox="0 0 24 24" fill="none"><path d="M8 3.5h6l4 4V20a1.5 1.5 0 0 1-1.5 1.5H8A1.5 1.5 0 0 1 6.5 20V5A1.5 1.5 0 0 1 8 3.5Z"></path><path d="M14 3.5V8h4"></path></svg>`;
 };
 
-const getTeacherLessons = () => scheduledLessons;
+const getTeacherLessons = () => {
+  const events = Array.isArray(teacherEventsState?.events) ? teacherEventsState.events : [];
+  return events
+    .filter((evt) => evt && evt.type === "lesson")
+    .map((evt) => {
+      const time = formatHmFromMinutes(evt.startMin);
+      return {
+        id: evt.id,
+        dateKey: evt.dateKey,
+        time,
+        studentName: typeof evt.title === "string" ? evt.title : "",
+        durationMinutes: Math.max(1, Math.round((evt.endMin || 0) - (evt.startMin || 0))),
+      };
+    });
+};
 
-const getTeacherCancellationEvents = () => cancellationEvents;
+const getTeacherCancellationEvents = () => [];
 
 const computeTeacherNps = () => {
   // Placeholder for backend: currently reads from localStorage if present.
@@ -1877,7 +1799,7 @@ const getTeacherEventsRangeForView = () => {
 };
 
 const refreshTeacherEvents = async ({ force = false } = {}) => {
-  if (currentRole !== "teacher") return;
+  if (currentRole !== "teacher" && currentRole !== "admin") return;
   if (teacherEventsState.isLoading) return;
   const { from, to } = getTeacherEventsRangeForView();
   const rangeKey = `${from}:${to}`;
@@ -1889,7 +1811,7 @@ const refreshTeacherEvents = async ({ force = false } = {}) => {
 
   teacherEventsState.isLoading = true;
   try {
-    const res = await fetchWithAuth(`/api/teacher/events?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+    const res = await fetchWithAuth(`/api/schedule/events?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
     if (!res.ok) throw new Error("teacher_events_fetch_failed");
     const data = await res.json().catch(() => null);
     const raw = Array.isArray(data?.events) ? data.events : [];
@@ -1911,6 +1833,8 @@ const refreshTeacherEvents = async ({ force = false } = {}) => {
           description: typeof evt.description === "string" ? evt.description : "",
           guests: Array.isArray(evt.guests) ? evt.guests : [],
           documents: Array.isArray(evt.documents) ? evt.documents : [],
+          recorrente: Boolean(evt.recorrente),
+          grupoRecorrenciaId: typeof evt.grupoRecorrenciaId === "string" ? evt.grupoRecorrenciaId : null,
         };
       })
       .filter(Boolean);
@@ -1925,6 +1849,79 @@ const refreshTeacherEvents = async ({ force = false } = {}) => {
   } finally {
     teacherEventsState.isLoading = false;
   }
+};
+
+const refreshAdminRescheduleRequests = async ({ force = false } = {}) => {
+  if (currentRole !== "admin") return;
+  if (adminRescheduleState.isLoading) return;
+  const now = Date.now();
+  if (!force && adminRescheduleState.lastLoadedAt && now - adminRescheduleState.lastLoadedAt < 15_000) return;
+
+  adminRescheduleState.isLoading = true;
+  try {
+    const res = await fetchWithAuth("/api/schedule/reschedule");
+    if (!res.ok) throw new Error("reschedule_fetch_failed");
+    const data = await res.json().catch(() => null);
+    const raw = Array.isArray(data?.requests) ? data.requests : [];
+    adminRescheduleState.requests = raw
+      .map((req) => {
+        if (!req || typeof req !== "object") return null;
+        const id = typeof req.id === "string" ? req.id : "";
+        const aulaId = typeof req.aulaId === "string" ? req.aulaId : "";
+        const motivo = typeof req.motivo === "string" ? req.motivo : "";
+        const criadoEm = typeof req.criadoEm === "string" ? req.criadoEm : "";
+        const alunoNome = typeof req?.aluno?.nome === "string" ? req.aluno.nome : "";
+        const aula = req?.aula && typeof req.aula === "object" ? req.aula : null;
+        const dateKey = typeof aula?.dateKey === "string" ? aula.dateKey : "";
+        const horaInicio = typeof aula?.horaInicio === "string" ? aula.horaInicio : "";
+        const horaFim = typeof aula?.horaFim === "string" ? aula.horaFim : "";
+        const professorNome = typeof aula?.professorNome === "string" ? aula.professorNome : "";
+        if (!id || !aulaId) return null;
+        return { id, aulaId, motivo, criadoEm, alunoNome, dateKey, horaInicio, horaFim, professorNome };
+      })
+      .filter(Boolean);
+
+    adminRescheduleState.lastLoadedAt = Date.now();
+    if (body.dataset.activePanel === "ao-vivo") {
+      renderAdminRescheduleRequests();
+    }
+  } catch (error) {
+    // keep last snapshot
+  } finally {
+    adminRescheduleState.isLoading = false;
+  }
+};
+
+const renderAdminRescheduleRequests = () => {
+  if (!(adminRescheduleList instanceof HTMLElement)) return;
+  refreshAdminRescheduleRequests();
+  const items = Array.isArray(adminRescheduleState.requests) ? adminRescheduleState.requests : [];
+
+  if (adminRescheduleEmpty instanceof HTMLElement) {
+    adminRescheduleEmpty.hidden = items.length > 0;
+  }
+
+  adminRescheduleList.innerHTML = items
+    .map((req) => {
+      const weekday = weekdayLongFromDateKey(req.dateKey);
+      const dateLabel = formatBrDateFromDateKey(req.dateKey);
+      const when = `${weekday} · ${dateLabel} · ${req.horaInicio || ""}`;
+      const prof = req.professorNome ? ` · ${req.professorNome}` : "";
+      return `
+        <li class="admin-requests-item">
+          <div class="admin-requests-main">
+            <div class="admin-requests-title">${escapeHtml(req.alunoNome || "Aluno")}</div>
+            <div class="admin-requests-meta">${escapeHtml(when)}${escapeHtml(prof)}</div>
+            <div class="admin-requests-reason">${escapeHtml(req.motivo || "")}</div>
+          </div>
+          <div class="admin-requests-actions">
+            <button class="admin-requests-btn" type="button" data-admin-reschedule-approve="${escapeHtml(req.id)}">Aprovar</button>
+            <button class="admin-requests-btn is-danger" type="button" data-admin-reschedule-reject="${escapeHtml(req.id)}">Recusar</button>
+          </div>
+        </li>
+      `;
+    })
+    .join("");
 };
 
 const apiWorkHoursToLocalWorkHours = (apiWorkHours) => {
@@ -2023,7 +2020,7 @@ const setTeacherFocusDate = (date) => {
 };
 
 const getLessonEvents = () => {
-  if (currentRole === "teacher" && teacherEventsState.lastLoadedAt) {
+  if ((currentRole === "teacher" || currentRole === "admin") && teacherEventsState.lastLoadedAt) {
     return teacherEventsState.events
       .filter((evt) => evt.type === "lesson")
       .map((evt) => {
@@ -2036,31 +2033,18 @@ const getLessonEvents = () => {
           title: evt.title || "Aluno",
           start,
           end,
+          recorrente: Boolean(evt.recorrente),
+          grupoRecorrenciaId: evt.grupoRecorrenciaId || null,
         };
       })
       .filter(Boolean);
   }
 
-  return scheduledLessons
-    .map((lesson) => {
-      const date = parseDateKey(lesson.dateKey);
-      if (!date) return null;
-      const start = getSlotDateTime(date, lesson.time);
-      const end = new Date(start);
-      end.setMinutes(end.getMinutes() + (lesson.durationMinutes || LESSON_DURATION_MINUTES));
-      return {
-        id: lesson.id,
-        type: "lesson",
-        title: lesson.studentName || "Aluno Space",
-        start,
-        end,
-      };
-    })
-    .filter(Boolean);
+  return [];
 };
 
 const getManualEvents = () => {
-  if (currentRole === "teacher" && teacherEventsState.lastLoadedAt) {
+  if ((currentRole === "teacher" || currentRole === "admin") && teacherEventsState.lastLoadedAt) {
     return teacherEventsState.events
       .filter((evt) => evt.type === "manual")
       .map((evt) => {
@@ -2076,28 +2060,14 @@ const getManualEvents = () => {
           documents: Array.isArray(evt.documents) ? evt.documents : [],
           start,
           end,
+          recorrente: Boolean(evt.recorrente),
+          grupoRecorrenciaId: evt.grupoRecorrenciaId || null,
         };
       })
       .filter(Boolean);
   }
 
-  return teacherManualEvents
-    .map((event) => {
-      const start = new Date(event.startIso);
-      const end = new Date(event.endIso);
-      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
-      return {
-        id: event.id,
-        type: "manual",
-        title: event.title,
-        description: event.description || "",
-        guests: Array.isArray(event.guests) ? event.guests : [],
-        documents: Array.isArray(event.documents) ? event.documents : [],
-        start,
-        end,
-      };
-    })
-    .filter(Boolean);
+  return [];
 };
 
 const getTeacherEventsForRange = (rangeStart, rangeEnd) => {
@@ -3431,6 +3401,215 @@ const getSlotDateTime = (date, time) => {
   const slotDate = new Date(date);
   slotDate.setHours(hours, minutes, 0, 0);
   return slotDate;
+};
+
+// Student "Aulas ao vivo" (modelo novo): lista fixa de aulas + solicitação de reagendamento.
+const WEEKDAY_LONG = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
+
+const weekdayLongFromDateKey = (dateKey) => {
+  const raw = String(dateKey || "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return "";
+  const [y, m, d] = raw.split("-").map((v) => Number(v));
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  return WEEKDAY_LONG[dow] || "";
+};
+
+const formatBrDateFromDateKey = (dateKey) => {
+  const raw = String(dateKey || "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return "";
+  const y = raw.slice(0, 4);
+  const m = raw.slice(5, 7);
+  const d = raw.slice(8, 10);
+  return `${d}/${m}/${y}`;
+};
+
+const statusLabelForRequest = (status) => {
+  const s = String(status || "").trim().toLowerCase();
+  if (s === "aprovado") return "Aprovado";
+  if (s === "recusado") return "Recusado";
+  return "Pendente";
+};
+
+const statusClassForRequest = (status) => {
+  const s = String(status || "").trim().toLowerCase();
+  if (s === "aprovado") return "badge-aprovado";
+  if (s === "recusado") return "badge-recusado";
+  return "badge-pendente";
+};
+
+const refreshStudentFixedLessons = async ({ force = false } = {}) => {
+  if (currentRole !== "student") return;
+  if (studentLessonsState.isLoading) return;
+  const now = Date.now();
+  if (!force && studentLessonsState.lastLoadedAt && now - studentLessonsState.lastLoadedAt < 15_000) return;
+
+  studentLessonsState.isLoading = true;
+  try {
+    const res = await fetchWithAuth("/api/schedule/my-lessons");
+    if (!res.ok) throw new Error("lessons_fetch_failed");
+    const data = await res.json().catch(() => null);
+    const raw = Array.isArray(data?.lessons) ? data.lessons : [];
+
+    studentLessonsState.lessons = raw
+      .map((lesson) => {
+        if (!lesson || typeof lesson !== "object") return null;
+        const id = typeof lesson.id === "string" ? lesson.id : "";
+        const dateKey = typeof lesson.dateKey === "string" ? lesson.dateKey : "";
+        const startMin = Number(lesson.startMin);
+        const endMin = Number(lesson.endMin);
+        if (!id || !dateKey || !Number.isFinite(startMin) || !Number.isFinite(endMin)) return null;
+        const professor = typeof lesson.professor_nome === "string" ? lesson.professor_nome : "";
+        const req = lesson.reagendamento && typeof lesson.reagendamento === "object" ? lesson.reagendamento : null;
+        const reqStatus = req && typeof req.status === "string" ? req.status : "";
+        const reqId = req && typeof req.id === "string" ? req.id : "";
+        return {
+          id,
+          dateKey,
+          startMin,
+          endMin,
+          time: formatHmFromMinutes(startMin),
+          professor,
+          request: reqId ? { id: reqId, status: reqStatus || "pendente" } : null,
+        };
+      })
+      .filter(Boolean);
+
+    studentLessonsState.lastLoadedAt = Date.now();
+    if (body.dataset.activePanel === "ao-vivo") {
+      renderStudentLiveLessons();
+    }
+  } catch (error) {
+    // keep last snapshot
+  } finally {
+    studentLessonsState.isLoading = false;
+  }
+};
+
+const openStudentRescheduleModal = (lesson) => {
+  if (!lesson) return;
+  const weekday = weekdayLongFromDateKey(lesson.dateKey);
+  const dateLabel = formatBrDateFromDateKey(lesson.dateKey);
+  const timeLabel = lesson.time || "";
+
+  openModal({
+    title: "Solicitar reagendamento",
+    bodyHtml: `
+      <div class="modal-form">
+        <div class="modal-inline-note">Aula: <strong>${escapeHtml(weekday)}</strong> · ${escapeHtml(dateLabel)} · ${escapeHtml(timeLabel)}</div>
+        <label class="modal-field">
+          <span>Motivo</span>
+          <textarea class="modal-textarea" data-reschedule-reason placeholder="Escreva o motivo do reagendamento..."></textarea>
+        </label>
+        <div class="modal-inline-error" data-reschedule-error hidden></div>
+      </div>
+    `,
+    primaryLabel: "Enviar",
+    secondaryLabel: "Voltar",
+    hideSecondary: false,
+    showTrash: false,
+    onPrimary: () => {
+      const reasonEl = modalBody?.querySelector("[data-reschedule-reason]");
+      const errEl = modalBody?.querySelector("[data-reschedule-error]");
+      const motivo = reasonEl instanceof HTMLTextAreaElement ? reasonEl.value.trim() : "";
+
+      if (errEl instanceof HTMLElement) {
+        errEl.hidden = true;
+        errEl.textContent = "";
+      }
+
+      if (!motivo) {
+        if (errEl instanceof HTMLElement) {
+          errEl.hidden = false;
+          errEl.textContent = "Escreva um motivo para continuar.";
+        }
+        return false;
+      }
+
+      if (modalPrimary) modalPrimary.disabled = true;
+      if (modalSecondary) modalSecondary.disabled = true;
+
+      fetchWithAuth("/api/schedule/reschedule", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ aulaId: lesson.id, motivo }),
+      })
+        .then(async (res) => {
+          const data = await res.json().catch(() => null);
+          if (!res.ok) {
+            const msg =
+              data?.error === "motivo_required"
+                ? "Escreva um motivo para continuar."
+                : data?.error === "not_found"
+                  ? "Aula não encontrada."
+                  : "Não foi possível enviar agora. Tente novamente.";
+            if (errEl instanceof HTMLElement) {
+              errEl.hidden = false;
+              errEl.textContent = msg;
+            }
+            if (modalPrimary) modalPrimary.disabled = false;
+            if (modalSecondary) modalSecondary.disabled = false;
+            return;
+          }
+
+          closeModal();
+          refreshStudentFixedLessons({ force: true });
+        })
+        .catch(() => {
+          if (errEl instanceof HTMLElement) {
+            errEl.hidden = false;
+            errEl.textContent = "Não foi possível enviar agora. Tente novamente.";
+          }
+          if (modalPrimary) modalPrimary.disabled = false;
+          if (modalSecondary) modalSecondary.disabled = false;
+        });
+
+      return false;
+    },
+  });
+};
+
+const renderStudentLiveLessons = () => {
+  if (!(liveStudentLessonsList instanceof HTMLElement)) return;
+
+  refreshStudentFixedLessons();
+
+  const lessons = Array.isArray(studentLessonsState.lessons) ? studentLessonsState.lessons : [];
+  if (liveStudentEmpty instanceof HTMLElement) {
+    liveStudentEmpty.hidden = lessons.length > 0;
+  }
+
+  liveStudentLessonsList.innerHTML = lessons
+    .map((lesson) => {
+      const weekday = weekdayLongFromDateKey(lesson.dateKey);
+      const dateLabel = formatBrDateFromDateKey(lesson.dateKey);
+      const professor = lesson.professor ? lesson.professor : "Professor";
+      const req = lesson.request;
+      const badge = req
+        ? `<span class="live-fixed-badge ${statusClassForRequest(req.status)}">${escapeHtml(statusLabelForRequest(req.status))}</span>`
+        : "";
+      const disabled = req && String(req.status || "").toLowerCase() === "pendente" ? "disabled" : "";
+      return `
+        <li class="live-fixed-item">
+          <div class="live-fixed-main">
+            <div class="live-fixed-when">
+              <span class="live-fixed-weekday">${escapeHtml(weekday)}</span>
+              <span class="live-fixed-date">${escapeHtml(dateLabel)}</span>
+            </div>
+            <div class="live-fixed-meta">
+              <span class="live-fixed-time">${escapeHtml(lesson.time)}</span>
+              <span class="live-fixed-prof">${escapeHtml(professor)}</span>
+            </div>
+          </div>
+          <div class="live-fixed-actions">
+            ${badge}
+            <button class="live-fixed-action" type="button" data-live-reschedule="${escapeHtml(lesson.id)}" ${disabled}>
+              Solicitar reagendamento
+            </button>
+          </div>
+        </li>
+      `;
+    })
+    .join("");
 };
 
 const formatScheduledWhen = (date, time) => {
@@ -4859,12 +5038,13 @@ const showPanel = (panelName) => {
 
   if (panelName === "ao-vivo") {
     window.scrollTo({ top: 0, behavior: "smooth" });
-    if (currentRole === "teacher") {
+    if (currentRole === "teacher" || currentRole === "admin") {
       renderTeacherCalendar();
-    } else if (currentRole === "admin") {
-      renderAdminRanking();
+      if (currentRole === "admin") {
+        renderAdminRescheduleRequests();
+      }
     } else {
-      renderLiveScheduler();
+      renderStudentLiveLessons();
     }
     return;
   }

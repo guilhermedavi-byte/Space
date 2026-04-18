@@ -415,20 +415,18 @@
 	            <h1 data-greeting data-user-name="Camila">Boa tarde, Camila.</h1>
 	          </div>
 
-          <div class="header-actions">
-            <div class="header-plan" data-plan-topbar aria-label="Plano e créditos">
-              <div class="header-plan-row">
-                <div class="plan-badge" data-plan-badge>
-                  <span class="plan-dot" aria-hidden="true"></span>
-                  <span data-plan-badge-text>Plano Gold ativo</span>
-                </div>
-                <div class="plan-credits" data-plan-credits>3 créditos disponíveis</div>
-              </div>
-              <div class="plan-renewal" data-plan-renewal>Renovam automaticamente em 15/04</div>
-            </div>
+	          <div class="header-actions">
+	            <div class="header-plan" data-plan-topbar aria-label="Plano e créditos">
+	              <div class="header-plan-row">
+	                <div class="plan-badge" data-plan-badge>
+	                  <span class="plan-dot" aria-hidden="true"></span>
+	                  <span data-plan-badge-text>Plano Gold ativo</span>
+	                </div>
+	              </div>
+	            </div>
 
-            <div class="header-role" data-role-topbar hidden aria-label="Área do Professor">
-              <div class="role-pill">
+	            <div class="header-role" data-role-topbar hidden aria-label="Área do Professor">
+	              <div class="role-pill">
                 <span class="role-icon" data-role-topbar-icon aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none">
                     <path d="M3.5 8.5 12 4.5l8.5 4-8.5 4-8.5-4Z"></path>
@@ -1152,24 +1150,22 @@
           </div>
         </section>
 
-	        <section class="platform-panel" data-panel="ao-vivo" data-hide-platform-header="true" hidden>
-	          <div class="schedule-page-header">
-	            <div>
-	              <h2 class="schedule-page-title">Agende sua próxima aula</h2>
-	            </div>
-	            <div class="header-plan header-plan--schedule" data-plan-topbar aria-label="Plano e créditos">
-	              <div class="header-plan-row">
-	                <div class="plan-badge" data-plan-badge>
-	                  <span class="plan-dot" aria-hidden="true"></span>
-	                  <span data-plan-badge-text>Plano Gold ativo</span>
-	                </div>
-	                <div class="plan-credits" data-plan-credits>3 créditos disponíveis</div>
-	              </div>
-	              <div class="plan-renewal" data-plan-renewal>Renovam automaticamente em 15/04</div>
-	            </div>
-	            <div class="header-role header-role--schedule" data-role-topbar hidden aria-label="Área do Professor">
-	              <div class="role-pill">
-	                <span class="role-icon" data-role-topbar-icon aria-hidden="true">
+		        <section class="platform-panel" data-panel="ao-vivo" data-hide-platform-header="true" hidden>
+		          <div class="schedule-page-header">
+		            <div>
+		              <h2 class="schedule-page-title" data-live-page-title>Aulas ao vivo</h2>
+		            </div>
+		            <div class="header-plan header-plan--schedule" data-plan-topbar aria-label="Plano">
+		              <div class="header-plan-row">
+		                <div class="plan-badge" data-plan-badge>
+		                  <span class="plan-dot" aria-hidden="true"></span>
+		                  <span data-plan-badge-text>Plano Gold ativo</span>
+		                </div>
+		              </div>
+		            </div>
+		            <div class="header-role header-role--schedule" data-role-topbar hidden aria-label="Área do Professor">
+		              <div class="role-pill">
+		                <span class="role-icon" data-role-topbar-icon aria-hidden="true">
 	                  <svg viewBox="0 0 24 24" fill="none">
 	                    <path d="M3.5 8.5 12 4.5l8.5 4-8.5 4-8.5-4Z"></path>
 	                    <path d="M6.5 10.2V15c0 1.6 2.5 3 5.5 3s5.5-1.4 5.5-3v-4.8"></path>
@@ -1181,58 +1177,40 @@
 	            </div>
 	          </div>
 
-          <!-- Student scheduling UI (unchanged). -->
-          <div data-live-student>
-            <div class="schedule-context-row">
-              <div class="schedule-timezone-row">
-                <span class="schedule-context-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none">
-                    <circle cx="12" cy="12" r="8.5"></circle>
-                    <path d="M3.5 12h17"></path>
-                    <path d="M12 3.5c2.4 2.2 3.8 5.2 3.8 8.5S14.4 18.3 12 20.5C9.6 18.3 8.2 15.3 8.2 12S9.6 5.7 12 3.5Z"></path>
-                  </svg>
-                </span>
-                <span data-live-timezone>America/São Paulo · GMT-03:00</span>
-              </div>
+	          <!-- Student: lista de aulas futuras fixas. -->
+	          <div data-live-student>
+	            <div class="schedule-context-row">
+	              <div class="schedule-timezone-row">
+	                <span class="schedule-context-icon" aria-hidden="true">
+	                  <svg viewBox="0 0 24 24" fill="none">
+	                    <circle cx="12" cy="12" r="8.5"></circle>
+	                    <path d="M3.5 12h17"></path>
+	                    <path d="M12 3.5c2.4 2.2 3.8 5.2 3.8 8.5S14.4 18.3 12 20.5C9.6 18.3 8.2 15.3 8.2 12S9.6 5.7 12 3.5Z"></path>
+	                  </svg>
+	                </span>
+	                <span data-live-timezone>America/São Paulo · GMT-03:00</span>
+	              </div>
 
-              <div class="schedule-context-copy" data-live-instruction aria-live="polite">
-                Selecione um dia e horário para continuar
-              </div>
-            </div>
+	              <div class="schedule-context-copy" aria-live="polite">
+	                Seus horários são definidos de forma recorrente pela coordenação.
+	              </div>
+	            </div>
 
-            <div class="live-schedule-layout">
-              <article class="live-booking-panel">
-                <div class="live-booking-panel-header">
-                  <div class="live-credits-row">
-                    <div class="live-credits-dots" data-live-credits-dots aria-label="Créditos disponíveis"></div>
-                    <div class="live-credits-caption" data-live-credits-caption>3 créditos disponíveis</div>
-                  </div>
-                  <div class="live-week-control">
-                    <div class="live-week-range" data-live-week-range>8 – 14 de abril de 2026</div>
-                  </div>
-                </div>
+	            <article class="surface-card live-fixed-card" aria-label="Próximas aulas ao vivo">
+	              <div class="dashboard-section-header refined-header live-fixed-head">
+	                <h3>Próximas aulas</h3>
+	              </div>
+	              <ul class="live-fixed-list" data-live-student-lessons></ul>
+	              <div class="live-fixed-empty" data-live-student-empty hidden>Sem aulas agendadas.</div>
+	            </article>
+	          </div>
 
-                <div class="live-scheduler-grid" data-live-scheduler-grid></div>
-              </article>
-
-              <aside class="live-scheduled-panel" aria-label="Aulas agendadas">
-                <div class="live-scheduled-header">
-                  <h3 class="live-scheduled-title">Aulas agendadas</h3>
-                </div>
-                <div class="live-scheduled-body">
-                  <ul class="live-scheduled-list" data-live-scheduled-list></ul>
-                  <div class="live-scheduled-empty" data-live-scheduled-empty hidden>Sem aulas agendadas</div>
-                </div>
-              </aside>
-            </div>
-          </div>
-
-          <!-- Teacher calendar UI (Google Calendar-like). -->
-          <div class="teacher-calendar-shell" data-live-teacher hidden>
-            <div class="teacher-calendar-left" aria-label="Painel lateral">
-              <div class="teacher-calendar-actions">
-                <button class="teacher-calendar-button teacher-calendar-button-primary" type="button" data-teacher-create-event>
-                  <span class="teacher-calendar-button-icon" aria-hidden="true">
+	          <!-- Teacher/Admin calendar UI (Google Calendar-like). -->
+	          <div class="teacher-calendar-shell" data-live-teacher hidden>
+	            <div class="teacher-calendar-left" aria-label="Painel lateral">
+	              <div class="teacher-calendar-actions">
+	                <button class="teacher-calendar-button teacher-calendar-button-primary" type="button" data-teacher-create-event>
+	                  <span class="teacher-calendar-button-icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="none">
                       <path d="M12 5v14"></path>
                       <path d="M5 12h14"></path>
@@ -1241,16 +1219,16 @@
                   <span>Criar</span>
                 </button>
 
-                <button class="teacher-calendar-button teacher-calendar-button-outline" type="button" data-teacher-work-hours>
-                  <span class="teacher-calendar-button-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none">
-                      <circle cx="12" cy="12" r="8.5"></circle>
-                      <path d="M12 7.5v5l3 2"></path>
-                    </svg>
-                  </span>
-                  <span>Definir horário de trabalho</span>
-                </button>
-              </div>
+	                <button class="teacher-calendar-button teacher-calendar-button-outline" type="button" data-teacher-work-hours>
+	                  <span class="teacher-calendar-button-icon" aria-hidden="true">
+	                    <svg viewBox="0 0 24 24" fill="none">
+	                      <circle cx="12" cy="12" r="8.5"></circle>
+	                      <path d="M12 7.5v5l3 2"></path>
+	                    </svg>
+	                  </span>
+	                  <span>Definir horário de trabalho</span>
+	                </button>
+	              </div>
 
               <div class="teacher-mini-cal" aria-label="Calendário mensal">
                 <div class="teacher-mini-cal-head">
@@ -1272,14 +1250,24 @@
                 <div class="teacher-mini-cal-grid" data-teacher-mini-grid></div>
               </div>
 
-              <div class="teacher-cal-list">
-                <div class="teacher-cal-list-title">Minhas agendas</div>
-                <div class="teacher-cal-list-item" aria-label="Agenda do professor">
-                  <span class="teacher-cal-check is-checked" aria-hidden="true"></span>
-                  <span>Agenda do professor</span>
-                </div>
-              </div>
-            </div>
+	              <div class="teacher-cal-list">
+	                <div class="teacher-cal-list-title">Minhas agendas</div>
+	                <div class="teacher-cal-list-item" aria-label="Agenda do professor">
+	                  <span class="teacher-cal-check is-checked" aria-hidden="true"></span>
+	                  <span>Agenda do professor</span>
+	                </div>
+	              </div>
+
+	              <article class="surface-card admin-requests-card" data-admin-only aria-label="Solicitações de reagendamento">
+	                <div class="dashboard-section-header refined-header admin-requests-head">
+	                  <h3>Solicitações de reagendamento</h3>
+	                </div>
+	                <div class="admin-requests-body">
+	                  <ul class="admin-requests-list" data-admin-reschedule-list></ul>
+	                  <div class="admin-requests-empty" data-admin-reschedule-empty hidden>Nenhuma solicitação pendente.</div>
+	                </div>
+	              </article>
+	            </div>
 
             <div class="teacher-calendar-main" aria-label="Calendário">
               <div class="teacher-cal-topbar">
@@ -1315,69 +1303,7 @@
             </div>
           </div>
 
-          <!-- Admin: ranking de professores (prioridade de atribuição). -->
-          <div class="admin-schedule-shell" data-live-admin hidden>
-            <div class="admin-schedule-layout">
-              <article class="surface-card admin-ranking-card" aria-label="Ranking de professores">
-                <div class="dashboard-section-header refined-header">
-                  <h3>Ranking de professores</h3>
-                  <p class="admin-ranking-help">Arraste para reordenar. A posição 1 recebe novas aulas primeiro.</p>
-                </div>
-
-                <ul class="admin-ranking-list" data-admin-ranking-list></ul>
-
-                <div class="admin-ranking-actions">
-                  <button class="button button-solid button-small" type="button" data-admin-ranking-save>
-                    Salvar ranking
-                  </button>
-                  <span class="admin-ranking-status" data-admin-ranking-status aria-live="polite"></span>
-                </div>
-              </article>
-
-              <article class="surface-card admin-user-card" aria-label="Cadastrar usuários">
-                <div class="dashboard-section-header refined-header">
-                  <h3>Novo usuário</h3>
-                </div>
-
-                <form class="admin-user-form" data-admin-user-form novalidate>
-                  <label class="auth-field">
-                    <span>Nome</span>
-                    <input class="auth-input" type="text" autocomplete="name" data-admin-user-name />
-                    <div class="auth-inline-error" data-admin-user-name-error hidden>Nome obrigatório</div>
-                  </label>
-
-                  <label class="auth-field">
-                    <span>E-mail</span>
-                    <input class="auth-input" type="email" autocomplete="email" data-admin-user-email />
-                    <div class="auth-inline-error" data-admin-user-email-error hidden>E-mail inválido</div>
-                  </label>
-
-                  <label class="auth-field">
-                    <span>Senha</span>
-                    <input class="auth-input" type="password" autocomplete="new-password" data-admin-user-password />
-                    <div class="auth-inline-error" data-admin-user-password-error hidden>Senha obrigatória</div>
-                  </label>
-
-                  <label class="auth-field">
-                    <span>Tipo</span>
-                    <select class="auth-input" data-admin-user-role>
-                      <option value="student">Aluno</option>
-                      <option value="teacher">Professor</option>
-                    </select>
-                  </label>
-
-                  <div class="admin-user-actions">
-                    <button class="button button-solid button-small" type="submit" data-admin-user-submit>
-                      <span data-admin-user-submit-label>Cadastrar</span>
-                      <span class="auth-spinner" data-admin-user-spinner hidden aria-hidden="true"></span>
-                    </button>
-                    <span class="admin-user-status" data-admin-user-status aria-live="polite"></span>
-                  </div>
-                </form>
-              </article>
-            </div>
-          </div>
-	        </section>
+		        </section>
 
         <section class="platform-panel" data-panel="professores" data-hide-platform-header="true" hidden>
           <div class="admin-manage-shell" data-admin-manage="teacher">

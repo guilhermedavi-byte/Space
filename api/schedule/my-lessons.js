@@ -1,17 +1,15 @@
 const { sendJson } = require("../_lib/http");
 const { getSessionFromRequest } = require("../_lib/session");
-const { normalizeStatus } = require("../_lib/scheduling-core");
 const { verifyFirebaseIdToken } = require("../_lib/firebase-id-token");
-const { toUtcMsForDateKeyAndMinutes } = require("../_lib/scheduling-utils");
+const { DEFAULT_CONFIG } = require("../_lib/scheduling-firestore");
+const { clampInt, isValidDateKey, timeToMinutes, toUtcMsForDateKeyAndMinutes } = require("../_lib/scheduling-utils");
 const {
   decodeFields,
   firestoreGetDocument,
   firestoreListDocuments,
   getBearerTokenFromRequest,
+  getDocIdFromName,
 } = require("../_lib/firestore-rest");
-const { DEFAULT_CONFIG, decodeStoreEvent } = require("../_lib/scheduling-firestore");
-
-const hoursBetween = (fromMs, toMs) => (toMs - fromMs) / (1000 * 60 * 60);
 
 module.exports = async (req, res) => {
   if (req.method !== "GET" && req.method !== "HEAD") {
@@ -26,21 +24,23 @@ module.exports = async (req, res) => {
     return;
   }
 
-  if (String(session.role || "") !== "student") {
+  const role = String(session.role || "").trim().toLowerCase();
+  const normalizedRole = role === "admin" || role === "teacher" || role === "student" ? role : "";
+  if (normalizedRole !== "student" && normalizedRole !== "teacher") {
     sendJson(res, 403, { error: "forbidden" });
     return;
   }
 
-  const studentId = String(session.sub || "");
+  const userId = String(session.sub || "");
   const idToken = getBearerTokenFromRequest(req);
-  if (!studentId || !idToken) {
+  if (!userId || !idToken) {
     sendJson(res, 401, { error: "unauthorized" });
     return;
   }
 
   try {
     const decoded = await verifyFirebaseIdToken(idToken);
-    if (decoded.uid !== studentId) {
+    if (decoded.uid !== userId) {
       sendJson(res, 401, { error: "invalid_credentials" });
       return;
     }
@@ -52,16 +52,50 @@ module.exports = async (req, res) => {
   const tzOffsetMinutes = DEFAULT_CONFIG.tzOffsetMinutes;
   const now = Date.now();
 
-  let rawEvents = [];
+  let rawAulas = [];
   try {
-    const resList = await firestoreListDocuments({ collectionPath: "events", idToken, pageSize: 1200 });
+    const resList = await firestoreListDocuments({ collectionPath: "aulas", idToken, pageSize: 2000 });
     if (!resList.ok) throw new Error("firestore_list_failed");
     const docs = Array.isArray(resList.documents) ? resList.documents : Array.isArray(resList.data?.documents) ? resList.data.documents : [];
-    rawEvents = docs
-      .map((doc) => decodeStoreEvent(doc))
-      .filter(Boolean)
-      .filter((evt) => evt.studentId === studentId)
-      .filter((evt) => normalizeStatus(evt.status) !== "cancelado");
+    rawAulas = docs
+      .map((doc) => {
+        if (!doc || typeof doc !== "object") return null;
+        const id = getDocIdFromName(doc.name);
+        if (!id) return null;
+        const fields = decodeFields(doc);
+
+        const professorId = typeof fields.professorId === "string" ? fields.professorId : "";
+        const alunoId = fields.alunoId == null ? null : typeof fields.alunoId === "string" ? fields.alunoId : null;
+
+        const dateKey = typeof fields.dateKey === "string" ? fields.dateKey : "";
+        const startMinRaw = Number(fields.startMin);
+        const endMinRaw = Number(fields.endMin);
+        const startMin = Number.isFinite(startMinRaw) ? clampInt(startMinRaw, 0, 1440) : timeToMinutes(fields.horaInicio);
+        const endMin = Number.isFinite(endMinRaw) ? clampInt(endMinRaw, 0, 1440) : timeToMinutes(fields.horaFim);
+        if (!professorId || !isValidDateKey(dateKey)) return null;
+        if (!Number.isFinite(startMin) || !Number.isFinite(endMin) || endMin <= startMin) return null;
+
+        const status = String(fields.status || "").trim().toLowerCase() || "agendada";
+        const professorNome = typeof fields.professorNome === "string" ? fields.professorNome.trim() : "";
+        const alunoNome = typeof fields.alunoNome === "string" ? fields.alunoNome.trim() : "";
+        const grupoRecorrenciaId = typeof fields.grupoRecorrenciaId === "string" ? fields.grupoRecorrenciaId : "";
+        const recorrente = typeof fields.recorrente === "boolean" ? fields.recorrente : false;
+
+        return {
+          id,
+          professorId,
+          alunoId,
+          dateKey,
+          startMin,
+          endMin,
+          status,
+          professorNome: professorNome || null,
+          alunoNome: alunoNome || null,
+          grupoRecorrenciaId: grupoRecorrenciaId || null,
+          recorrente,
+        };
+      })
+      .filter(Boolean);
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error("[api] schedule my-lessons query failed", error);
@@ -69,61 +103,104 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const upcoming = rawEvents
-    .filter((evt) => normalizeStatus(evt.status) !== "cancelado")
+  const filtered = rawAulas
+    .filter((evt) => {
+      if (normalizedRole === "student") return evt.alunoId === userId;
+      return evt.professorId === userId;
+    })
+    .filter((evt) => evt.status !== "cancelada" && evt.status !== "cancelado")
     .map((evt) => {
       const startMs = toUtcMsForDateKeyAndMinutes(evt.dateKey, evt.startMin, { tzOffsetMinutes });
       const endMs = toUtcMsForDateKeyAndMinutes(evt.dateKey, evt.endMin, { tzOffsetMinutes });
-      return startMs && endMs
-        ? {
-            id: evt.id,
-            dateKey: evt.dateKey,
-            startMin: evt.startMin,
-            endMin: evt.endMin,
-            status: normalizeStatus(evt.status),
-            teacherId: evt.teacherId,
-            startMs,
-            endMs,
-          }
-        : null;
+      return startMs && endMs ? { ...evt, startMs, endMs } : null;
     })
     .filter(Boolean)
     .filter((evt) => evt.endMs > now)
     .sort((a, b) => a.startMs - b.startMs);
 
-  const teacherCache = new Map();
-
-  const getTeacherName = async (teacherId) => {
-    if (!teacherId) return null;
-    if (teacherCache.has(teacherId)) return teacherCache.get(teacherId);
+  // Student view needs rescheduling statuses. We attach the latest request status per aulaId.
+  const rescheduleByAula = new Map();
+  if (normalizedRole === "student") {
     try {
-      const snap = await firestoreGetDocument({ docPath: `users/${encodeURIComponent(teacherId)}`, idToken });
+      const resReq = await firestoreListDocuments({ collectionPath: "reagendamentos", idToken, pageSize: 2000 });
+      if (resReq.ok) {
+        const docs = Array.isArray(resReq.documents)
+          ? resReq.documents
+          : Array.isArray(resReq.data?.documents)
+            ? resReq.data.documents
+            : [];
+        docs
+          .map((doc) => {
+            if (!doc || typeof doc !== "object") return null;
+            const id = getDocIdFromName(doc.name);
+            if (!id) return null;
+            const fields = decodeFields(doc);
+            const alunoId = typeof fields.alunoId === "string" ? fields.alunoId : "";
+            const aulaId = typeof fields.aulaId === "string" ? fields.aulaId : "";
+            const status = String(fields.status || "").trim().toLowerCase() || "pendente";
+            const criadoEm = fields.criadoEm instanceof Date ? fields.criadoEm.getTime() : 0;
+            if (!alunoId || !aulaId) return null;
+            return { id, alunoId, aulaId, status, criadoEm };
+          })
+          .filter(Boolean)
+          .filter((r) => r.alunoId === userId)
+          .forEach((r) => {
+            const prev = rescheduleByAula.get(r.aulaId);
+            if (!prev || (r.criadoEm || 0) >= (prev.criadoEm || 0)) {
+              rescheduleByAula.set(r.aulaId, r);
+            }
+          });
+      }
+    } catch (error) {
+      // ignore
+    }
+  }
+
+  const nameCache = new Map();
+  const getName = async (uid) => {
+    const safeId = String(uid || "").trim();
+    if (!safeId) return null;
+    if (nameCache.has(safeId)) return nameCache.get(safeId);
+    try {
+      const snap = await firestoreGetDocument({ docPath: `users/${encodeURIComponent(safeId)}`, idToken });
       if (!snap.ok) {
-        teacherCache.set(teacherId, null);
+        nameCache.set(safeId, null);
         return null;
       }
       const fields = decodeFields(snap.data);
       const name = typeof fields?.nome === "string" ? fields.nome.trim() : "";
-      teacherCache.set(teacherId, name || null);
+      nameCache.set(safeId, name || null);
       return name || null;
     } catch (error) {
-      teacherCache.set(teacherId, null);
+      nameCache.set(safeId, null);
       return null;
     }
   };
 
   const lessons = [];
-  for (const evt of upcoming) {
-    const hoursRestantes = hoursBetween(now, evt.startMs);
-    const teacherVisible = evt.status === "agendado" && hoursRestantes <= 12;
-    const teacherName = teacherVisible ? await getTeacherName(evt.teacherId) : null;
+  for (const evt of filtered) {
+    const professorNome = evt.professorNome || (await getName(evt.professorId));
+    const alunoNome = evt.alunoId ? evt.alunoNome || (await getName(evt.alunoId)) : null;
+    const reqInfo = normalizedRole === "student" ? rescheduleByAula.get(evt.id) : null;
+
     lessons.push({
       id: evt.id,
       dateKey: evt.dateKey,
       startMin: evt.startMin,
       endMin: evt.endMin,
       status: evt.status,
-      professor_nome: teacherName,
+      professorId: evt.professorId,
+      alunoId: evt.alunoId,
+      professor_nome: professorNome || null,
+      aluno_nome: alunoNome || null,
+      recorrente: Boolean(evt.recorrente),
+      grupoRecorrenciaId: evt.grupoRecorrenciaId || null,
+      reagendamento: reqInfo
+        ? {
+            id: reqInfo.id,
+            status: reqInfo.status,
+          }
+        : null,
     });
   }
 
