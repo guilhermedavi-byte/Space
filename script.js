@@ -403,8 +403,6 @@ const setRole = (role) => {
       renderTeacherDashboard();
     } else if (currentRole === "admin") {
       renderAdminDashboard();
-    } else {
-      renderPlanUI();
     }
   }
 
@@ -499,55 +497,6 @@ const formatRenewalDate = (date) => {
   const day = String(date.getDate()).padStart(2, "0");
   const month = String(date.getMonth() + 1).padStart(2, "0");
   return `${day}/${month}`;
-};
-
-const renderPlanUI = () => {
-  if (currentRole !== "student") {
-    return;
-  }
-
-  const plan = getPlanDef(appState.planKey);
-  const nextRenewal = syncCreditCycle(new Date());
-
-  planWidgets.forEach((widget) => {
-    const badge = widget.querySelector("[data-plan-badge]");
-    const badgeText = widget.querySelector("[data-plan-badge-text]");
-    const credits = widget.querySelector("[data-plan-credits]");
-    const renewal = widget.querySelector("[data-plan-renewal]");
-
-    if (badge instanceof HTMLElement) {
-      badge.classList.remove("is-gold", "is-diamond", "is-turma");
-      if (plan.badgeClass) {
-        badge.classList.add(plan.badgeClass);
-      }
-    }
-
-    if (badgeText instanceof HTMLElement) {
-      badgeText.textContent = `Plano ${plan.label} ativo`;
-    }
-
-    if (credits instanceof HTMLElement) {
-      credits.textContent = formatCreditsText(appState.creditsRemaining);
-    }
-
-    if (renewal instanceof HTMLElement) {
-      renewal.textContent = `Renovam automaticamente em ${formatRenewalDate(nextRenewal)}`;
-    }
-  });
-
-  if (liveCreditsDots) {
-    const total = plan.creditsPerCycle;
-    const filled = clampCredits(appState.creditsRemaining, total);
-
-    liveCreditsDots.innerHTML = Array.from({ length: total })
-      .map((_, index) => `<span class="live-credit-dot${index < filled ? " is-filled" : ""}" aria-hidden="true"></span>`)
-      .join("");
-    liveCreditsDots.setAttribute("aria-label", formatCreditsText(appState.creditsRemaining));
-  }
-
-  if (liveCreditsCaption) {
-    liveCreditsCaption.textContent = formatCreditsText(appState.creditsRemaining);
-  }
 };
 
 let modalPrimaryHandler = null;
@@ -1835,6 +1784,8 @@ const refreshTeacherEvents = async ({ force = false } = {}) => {
           documents: Array.isArray(evt.documents) ? evt.documents : [],
           recorrente: Boolean(evt.recorrente),
           grupoRecorrenciaId: typeof evt.grupoRecorrenciaId === "string" ? evt.grupoRecorrenciaId : null,
+          alunoId: typeof evt.alunoId === "string" ? evt.alunoId : null,
+          professorId: typeof evt.professorId === "string" ? evt.professorId : "",
         };
       })
       .filter(Boolean);
@@ -2035,6 +1986,8 @@ const getLessonEvents = () => {
           end,
           recorrente: Boolean(evt.recorrente),
           grupoRecorrenciaId: evt.grupoRecorrenciaId || null,
+          alunoId: evt.alunoId || null,
+          professorId: evt.professorId || "",
         };
       })
       .filter(Boolean);
@@ -2062,6 +2015,8 @@ const getManualEvents = () => {
           end,
           recorrente: Boolean(evt.recorrente),
           grupoRecorrenciaId: evt.grupoRecorrenciaId || null,
+          alunoId: evt.alunoId || null,
+          professorId: evt.professorId || "",
         };
       })
       .filter(Boolean);
@@ -2504,7 +2459,7 @@ const renderTeacherCalendarViewportMonth = (focusDate) => {
 };
 
 const renderTeacherCalendar = () => {
-  if (currentRole !== "teacher") return;
+  if (currentRole !== "teacher" && currentRole !== "admin") return;
   if (!liveTeacherRoot || liveTeacherRoot.hidden) return;
   if (!teacherCalViewport) return;
 
@@ -2879,10 +2834,62 @@ const formatLongEventDate = (date) => {
   return `${capitalizedWeekday}, ${date.getDate()} de ${month} de ${date.getFullYear()}`;
 };
 
+function syncAdminEventUserSelects() {
+  if (currentRole !== "admin") return;
+  if (!createEventDraft || !modalBody || modalOverlay?.hidden) return;
+  if (activeModalKind !== "event-form") return;
+
+  const studentSelect = modalBody.querySelector("[data-ce-admin-student]");
+  const teacherSelect = modalBody.querySelector("[data-ce-admin-teacher]");
+  if (!(studentSelect instanceof HTMLSelectElement) || !(teacherSelect instanceof HTMLSelectElement)) return;
+
+  const teacherRows = adminUsersState?.teacher?.rows ? adminUsersState.teacher.rows : [];
+  const studentRows = adminUsersState?.student?.rows ? adminUsersState.student.rows : [];
+
+  const teachersSorted = (Array.isArray(teacherRows) ? teacherRows : [])
+    .filter((r) => r && r.ativo)
+    .slice()
+    .sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"));
+
+  const studentsSorted = (Array.isArray(studentRows) ? studentRows : [])
+    .filter((r) => r && r.ativo)
+    .slice()
+    .sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"));
+
+  const selectedTeacherId = String(createEventDraft.professorId || "").trim();
+  const selectedStudentId = String(createEventDraft.alunoId || "").trim();
+
+  teacherSelect.innerHTML = teachersSorted.length
+    ? `<option value="">Selecione um professor</option>${teachersSorted
+        .map((row) => {
+          const isSelected = selectedTeacherId && row.id === selectedTeacherId;
+          return `<option value="${escapeHtml(row.id)}" ${isSelected ? "selected" : ""}>${escapeHtml(row.nome)}</option>`;
+        })
+        .join("")}`
+    : `<option value="">Carregando professores…</option>`;
+
+  studentSelect.innerHTML = studentsSorted.length
+    ? `<option value="">Selecione um aluno</option>${studentsSorted
+        .map((row) => {
+          const isSelected = selectedStudentId && row.id === selectedStudentId;
+          return `<option value="${escapeHtml(row.id)}" ${isSelected ? "selected" : ""}>${escapeHtml(row.nome)}</option>`;
+        })
+        .join("")}`
+    : `<option value="">Carregando alunos…</option>`;
+}
+
 const buildCreateEventBody = ({ readOnly = false } = {}) => {
   const draft = createEventDraft || {};
   const guests = Array.isArray(draft.guests) ? draft.guests : [];
   const docs = Array.isArray(draft.documents) ? draft.documents : [];
+  const isAdmin = currentRole === "admin";
+  const showAdminLinks = isAdmin && !readOnly;
+  const teacherRows = showAdminLinks && adminUsersState?.teacher?.rows ? adminUsersState.teacher.rows : [];
+  const studentRows = showAdminLinks && adminUsersState?.student?.rows ? adminUsersState.student.rows : [];
+  const activeTeachers = Array.isArray(teacherRows) ? teacherRows.filter((r) => r && r.ativo) : [];
+  const activeStudents = Array.isArray(studentRows) ? studentRows.filter((r) => r && r.ativo) : [];
+  const teachersSorted = activeTeachers.slice().sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"));
+  const studentsSorted = activeStudents.slice().sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"));
 
   const chips = guests
     .map((guest) => {
@@ -2914,9 +2921,53 @@ const buildCreateEventBody = ({ readOnly = false } = {}) => {
   const disabledAttr = readOnly ? "disabled" : "";
   const uploadDisabled = readOnly ? 'aria-disabled="true" tabindex="-1"' : 'role="button" tabindex="0"';
   const uploadClass = readOnly ? "upload-zone is-disabled" : "upload-zone";
+  const repeatEnabled = Boolean(draft.recorrente);
+  const repeatMode = String(draft.repeatMode || "weekly");
+  const weeklyLabel = (() => {
+    const weekday = weekdayLongFromDateKey(String(draft.dateKey || ""));
+    return weekday ? `Semanal: cada ${weekday.toLowerCase()}` : "Semanal: toda semana";
+  })();
+
+  const selectedTeacherId = String(draft.professorId || "").trim();
+  const selectedStudentId = String(draft.alunoId || "").trim();
+
+  const teacherOptions = teachersSorted.length
+    ? `<option value="">Selecione um professor</option>${teachersSorted
+        .map((row) => {
+          const isSelected = selectedTeacherId && row.id === selectedTeacherId;
+          return `<option value="${escapeHtml(row.id)}" ${isSelected ? "selected" : ""}>${escapeHtml(row.nome)}</option>`;
+        })
+        .join("")}`
+    : `<option value="">Carregando professores…</option>`;
+
+  const studentOptions = studentsSorted.length
+    ? `<option value="">Selecione um aluno</option>${studentsSorted
+        .map((row) => {
+          const isSelected = selectedStudentId && row.id === selectedStudentId;
+          return `<option value="${escapeHtml(row.id)}" ${isSelected ? "selected" : ""}>${escapeHtml(row.nome)}</option>`;
+        })
+        .join("")}`
+    : `<option value="">Carregando alunos…</option>`;
 
   return `
     <div class="modal-form">
+      ${
+        showAdminLinks
+          ? `
+            <div class="modal-row" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);">
+              <label class="modal-field">
+                <span>Aluno</span>
+                <select class="modal-input" data-ce-admin-student ${disabledAttr}>${studentOptions}</select>
+              </label>
+              <label class="modal-field">
+                <span>Professor</span>
+                <select class="modal-input" data-ce-admin-teacher ${disabledAttr}>${teacherOptions}</select>
+              </label>
+            </div>
+          `
+          : ""
+      }
+
       <label class="modal-field">
         <span>Título</span>
         <input class="modal-input" type="text" data-ce-title value="${escapeHtml(draft.title || "")}" ${disabledAttr} />
@@ -2934,6 +2985,23 @@ const buildCreateEventBody = ({ readOnly = false } = {}) => {
         <label class="modal-field">
           <span>Fim</span>
           <input class="modal-input" type="time" data-ce-end value="${escapeHtml(draft.endTime || "09:00")}" ${disabledAttr} />
+        </label>
+      </div>
+
+      <div class="modal-row" style="grid-template-columns: minmax(0, 1fr);">
+        <label class="modal-field modal-field-inline">
+          <span>Se repete</span>
+          <input type="checkbox" data-ce-repeat ${repeatEnabled ? "checked" : ""} ${disabledAttr} />
+        </label>
+      </div>
+
+      <div class="modal-row" data-ce-repeat-options ${repeatEnabled ? "" : "hidden"} style="grid-template-columns: minmax(0, 1fr);">
+        <label class="modal-field">
+          <span>Frequência</span>
+          <select class="modal-input" data-ce-repeat-mode ${disabledAttr}>
+            <option value="weekly" ${repeatMode !== "daily" ? "selected" : ""}>${escapeHtml(weeklyLabel)}</option>
+            <option value="daily" ${repeatMode === "daily" ? "selected" : ""}>Todos os dias (segunda a sábado)</option>
+          </select>
         </label>
       </div>
 
@@ -3031,18 +3099,35 @@ const validateCreateEventDraft = () => {
   const errorEl = modalBody.querySelector("[data-ce-error]");
 
   const titleEl = modalBody.querySelector("[data-ce-title]");
+  const adminStudentEl = modalBody.querySelector("[data-ce-admin-student]");
+  const adminTeacherEl = modalBody.querySelector("[data-ce-admin-teacher]");
   const dateEl = modalBody.querySelector("[data-ce-date]");
   const startEl = modalBody.querySelector("[data-ce-start]");
   const endEl = modalBody.querySelector("[data-ce-end]");
 
-  [titleEl, dateEl, startEl, endEl].forEach((el) => {
+  [titleEl, adminStudentEl, adminTeacherEl, dateEl, startEl, endEl].forEach((el) => {
     if (el instanceof HTMLElement) el.classList.remove("is-error");
   });
 
   const title = String(createEventDraft.title || "").trim();
-  if (!title) {
+  const requiresTitle = currentRole === "teacher" && createEventDraft.eventType !== "lesson";
+  if (requiresTitle && !title) {
     if (titleEl instanceof HTMLElement) titleEl.classList.add("is-error");
     hasError = true;
+  }
+
+  const requiresLinks = currentRole === "admin" && createEventDraft.eventType === "lesson";
+  if (requiresLinks) {
+    const alunoId = String(createEventDraft.alunoId || "").trim();
+    const professorId = String(createEventDraft.professorId || "").trim();
+    if (!alunoId) {
+      if (adminStudentEl instanceof HTMLElement) adminStudentEl.classList.add("is-error");
+      hasError = true;
+    }
+    if (!professorId) {
+      if (adminTeacherEl instanceof HTMLElement) adminTeacherEl.classList.add("is-error");
+      hasError = true;
+    }
   }
 
   const date = parseDateKey(createEventDraft.dateKey);
@@ -3072,6 +3157,17 @@ const validateCreateEventDraft = () => {
       if (errorEl instanceof HTMLElement) {
         errorEl.hidden = false;
         errorEl.textContent = "O horário de início deve ser anterior ao de fim";
+      }
+    }
+  }
+
+  if (createEventDraft.recorrente) {
+    const mode = String(createEventDraft.repeatMode || "").trim().toLowerCase();
+    if (mode !== "weekly" && mode !== "daily") {
+      hasError = true;
+      if (errorEl instanceof HTMLElement) {
+        errorEl.hidden = false;
+        errorEl.textContent = "Selecione uma frequência válida.";
       }
     }
   }
@@ -3114,7 +3210,7 @@ const openTeacherEventFormModalFromDraft = () => {
   const primaryLabel = readOnly ? "Fechar" : "Salvar";
   const secondaryLabel = readOnly ? "" : "Voltar";
   const hideSecondary = readOnly;
-  const showTrash = !readOnly && mode === "edit" && eventType === "manual";
+  const showTrash = !readOnly && mode === "edit" && (currentRole === "admin" || eventType === "manual");
 
   const saveFromDraft = () => {
     const ok = validateCreateEventDraft();
@@ -3145,6 +3241,17 @@ const openTeacherEventFormModalFromDraft = () => {
       endMin,
     };
 
+    if (mode === "create" && createEventDraft.recorrente) {
+      payload.recorrente = true;
+      payload.repeatMode = String(createEventDraft.repeatMode || "weekly");
+    }
+
+    if (currentRole === "admin") {
+      payload.professorId = String(createEventDraft.professorId || "").trim();
+      const alunoId = String(createEventDraft.alunoId || "").trim();
+      payload.alunoId = alunoId ? alunoId : null;
+    }
+
     const errorEl = modalBody?.querySelector("[data-ce-error]");
     if (errorEl instanceof HTMLElement) {
       errorEl.hidden = true;
@@ -3155,7 +3262,7 @@ const openTeacherEventFormModalFromDraft = () => {
     if (modalSecondary) modalSecondary.disabled = true;
 
     const method = mode === "create" ? "POST" : "PUT";
-    fetchWithAuth("/api/teacher/events", {
+    fetchWithAuth("/api/schedule/events", {
       method,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -3165,10 +3272,12 @@ const openTeacherEventFormModalFromDraft = () => {
         if (!res.ok) {
           const msg =
             data?.error === "title_required"
-              ? "Preencha o titulo para salvar."
+              ? "Preencha o título para salvar."
               : data?.error === "invalid_time"
-                ? "O horario de inicio deve ser anterior ao de fim."
-                : "Nao foi possivel salvar agora.";
+                ? "O horário de início deve ser anterior ao de fim."
+                : data?.error === "professor_required"
+                  ? "Selecione um professor para salvar."
+                  : "Não foi possível salvar agora.";
           if (errorEl instanceof HTMLElement) {
             errorEl.hidden = false;
             errorEl.textContent = msg;
@@ -3185,7 +3294,7 @@ const openTeacherEventFormModalFromDraft = () => {
       .catch(() => {
         if (errorEl instanceof HTMLElement) {
           errorEl.hidden = false;
-          errorEl.textContent = "Nao foi possivel salvar agora. Tente novamente.";
+          errorEl.textContent = "Não foi possível salvar agora. Tente novamente.";
         }
         if (modalPrimary) modalPrimary.disabled = false;
         if (modalSecondary) modalSecondary.disabled = false;
@@ -3203,9 +3312,55 @@ const openTeacherEventFormModalFromDraft = () => {
     showTrash,
     onTrash: showTrash
       ? () => {
+          const id = createEventDraft?.eventId || "";
+          if (!id) return false;
+
+          const runDelete = (mode) => {
+            if (modalPrimary) modalPrimary.disabled = true;
+            if (modalSecondary) modalSecondary.disabled = true;
+
+            fetchWithAuth(`/api/schedule/events/${encodeURIComponent(id)}?mode=${encodeURIComponent(mode || "single")}`, {
+              method: "DELETE",
+            })
+              .then(async (res) => {
+                if (!res.ok) throw new Error("delete_failed");
+                closeModal();
+                refreshTeacherEvents({ force: true });
+                renderTeacherCalendar();
+              })
+              .catch(() => {
+                if (modalBody) {
+                  modalBody.innerHTML = "Não foi possível remover agora. Tente novamente.";
+                }
+                if (modalPrimary) modalPrimary.disabled = false;
+                if (modalSecondary) modalSecondary.disabled = false;
+              });
+          };
+
+          const groupId = String(createEventDraft?.grupoRecorrenciaId || "").trim();
+          if (groupId) {
+            openModal({
+              title: "Remover evento recorrente",
+              bodyHtml: "Este evento faz parte de uma recorrência. O que você deseja fazer?",
+              primaryLabel: "Excluir apenas este",
+              secondaryLabel: "Excluir todos os futuros",
+              hideSecondary: false,
+              showTrash: false,
+              onPrimary: () => {
+                runDelete("single");
+                return false;
+              },
+              onSecondary: () => {
+                runDelete("future");
+                return false;
+              },
+            });
+            return false;
+          }
+
           openModal({
             title: "Remover evento",
-            bodyHtml: `Tem certeza que deseja remover este evento? Esta ação não pode ser desfeita.`,
+            bodyHtml: "Tem certeza que deseja remover este evento? Esta ação não pode ser desfeita.",
             primaryLabel: "Remover evento",
             secondaryLabel: "Cancelar",
             hideSecondary: false,
@@ -3215,31 +3370,7 @@ const openTeacherEventFormModalFromDraft = () => {
               return false;
             },
             onPrimary: () => {
-              const id = createEventDraft?.eventId || "";
-              if (!id) return;
-
-              if (modalPrimary) modalPrimary.disabled = true;
-              if (modalSecondary) modalSecondary.disabled = true;
-
-              fetchWithAuth("/api/teacher/events", {
-                method: "DELETE",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ id }),
-              })
-                .then(async (res) => {
-                  if (!res.ok) throw new Error("delete_failed");
-                  closeModal();
-                  refreshTeacherEvents({ force: true });
-                  renderTeacherCalendar();
-                })
-                .catch(() => {
-                  if (modalBody) {
-                    modalBody.innerHTML = "Nao foi possivel remover agora. Tente novamente.";
-                  }
-                  if (modalPrimary) modalPrimary.disabled = false;
-                  if (modalSecondary) modalSecondary.disabled = false;
-                });
-
+              runDelete("single");
               return false;
             },
           });
@@ -3261,6 +3392,11 @@ const openTeacherEventFormModalFromDraft = () => {
   });
 
   if (!readOnly) {
+    if (currentRole === "admin") {
+      loadUsersFromFirestore("teacher");
+      loadUsersFromFirestore("student");
+      syncAdminEventUserSelects();
+    }
     validateCreateEventDraft();
     syncGuestDropdown();
   } else {
@@ -3271,17 +3407,23 @@ const openTeacherEventFormModalFromDraft = () => {
 const openTeacherCreateEventModalAt = ({ dateKey, startTime, endTime } = {}) => {
   const date = parseDateKey(dateKey);
   if (!date) return;
+  const eventType = currentRole === "admin" ? "lesson" : "manual";
 
   createEventDraft = {
     mode: "create",
     readOnly: false,
-    eventType: "manual",
+    eventType,
     eventId: "",
+    alunoId: "",
+    professorId: "",
     title: "",
     description: "",
     guests: [],
     guestQuery: "",
     documents: [],
+    recorrente: false,
+    repeatMode: "weekly",
+    grupoRecorrenciaId: "",
     dateKey: createDateKey(date),
     startTime: clampTime(startTime, "09:00"),
     endTime: clampTime(endTime, "09:30"),
@@ -3295,17 +3437,23 @@ const openTeacherCreateEventModal = () => {
   const startHour = Math.min(Math.max(new Date().getHours(), 6), 20);
   const startDefault = `${String(startHour).padStart(2, "0")}:00`;
   const endDefault = `${String(Math.min(startHour + 1, 23)).padStart(2, "0")}:00`;
+  const eventType = currentRole === "admin" ? "lesson" : "manual";
 
   createEventDraft = {
     mode: "create",
     readOnly: false,
-    eventType: "manual",
+    eventType,
     eventId: "",
+    alunoId: "",
+    professorId: "",
     title: "",
     description: "",
     guests: [],
     guestQuery: "",
     documents: [],
+    recorrente: false,
+    repeatMode: "weekly",
+    grupoRecorrenciaId: "",
     dateKey: createDateKey(focus),
     startTime: startDefault,
     endTime: endDefault,
@@ -3323,9 +3471,10 @@ const openTeacherEventModal = ({ type, id }) => {
   if (!target) return;
 
   if (type === "lesson") {
+    const isAdmin = currentRole === "admin";
     createEventDraft = {
-      mode: "view",
-      readOnly: true,
+      mode: isAdmin ? "edit" : "view",
+      readOnly: !isAdmin,
       eventType: "lesson",
       eventId: target.id,
       title: target.title || "Aula ao vivo",
@@ -3336,6 +3485,11 @@ const openTeacherEventModal = ({ type, id }) => {
       dateKey: createDateKey(target.start),
       startTime: buildEventTimeHm(target.start),
       endTime: buildEventTimeHm(target.end),
+      alunoId: target.alunoId || "",
+      professorId: target.professorId || "",
+      recorrente: Boolean(target.recorrente),
+      repeatMode: "weekly",
+      grupoRecorrenciaId: target.grupoRecorrenciaId || "",
     };
     openTeacherEventFormModalFromDraft();
     return;
@@ -3352,6 +3506,8 @@ const openTeacherEventModal = ({ type, id }) => {
     readOnly: false,
     eventType: "manual",
     eventId: target.id,
+    alunoId: "",
+    professorId: target.professorId || "",
     title: target.title || "",
     description: target.description || "",
     guests,
@@ -3360,40 +3516,12 @@ const openTeacherEventModal = ({ type, id }) => {
     dateKey: createDateKey(target.start),
     startTime: buildEventTimeHm(target.start),
     endTime: buildEventTimeHm(target.end),
+    recorrente: Boolean(target.recorrente),
+    repeatMode: "weekly",
+    grupoRecorrenciaId: target.grupoRecorrenciaId || "",
   };
 
   openTeacherEventFormModalFromDraft();
-};
-
-const createSlotId = (date, time) => {
-  return `${createDateKey(date)}-${time}`;
-};
-
-const formatWeekRange = (days) => {
-  if (!days.length) return "";
-
-  const firstDay = days[0];
-  const lastDay = days[days.length - 1];
-  const sameMonth = firstDay.getMonth() === lastDay.getMonth();
-  const sameYear = firstDay.getFullYear() === lastDay.getFullYear();
-  const monthFormatter = new Intl.DateTimeFormat("pt-BR", { month: "long" });
-
-  if (sameMonth && sameYear) {
-    return `${firstDay.getDate()} – ${lastDay.getDate()} de ${monthFormatter.format(firstDay)} de ${firstDay.getFullYear()}`;
-  }
-
-  if (sameYear) {
-    return `${firstDay.getDate()} de ${monthFormatter.format(firstDay)} – ${lastDay.getDate()} de ${monthFormatter.format(lastDay)} de ${firstDay.getFullYear()}`;
-  }
-
-  return `${firstDay.getDate()} de ${monthFormatter.format(firstDay)} de ${firstDay.getFullYear()} – ${lastDay.getDate()} de ${monthFormatter.format(lastDay)} de ${lastDay.getFullYear()}`;
-};
-
-const formatSelectedSlotLabel = (date, time) => {
-  const weekday = new Intl.DateTimeFormat("pt-BR", { weekday: "long" }).format(date);
-  const month = new Intl.DateTimeFormat("pt-BR", { month: "long" }).format(date);
-  const capitalizedWeekday = weekday.charAt(0).toUpperCase() + weekday.slice(1);
-  return `${capitalizedWeekday}, ${date.getDate()} de ${month} · ${time}`;
 };
 
 const getSlotDateTime = (date, time) => {
@@ -3435,54 +3563,6 @@ const statusClassForRequest = (status) => {
   if (s === "aprovado") return "badge-aprovado";
   if (s === "recusado") return "badge-recusado";
   return "badge-pendente";
-};
-
-const refreshStudentFixedLessons = async ({ force = false } = {}) => {
-  if (currentRole !== "student") return;
-  if (studentLessonsState.isLoading) return;
-  const now = Date.now();
-  if (!force && studentLessonsState.lastLoadedAt && now - studentLessonsState.lastLoadedAt < 15_000) return;
-
-  studentLessonsState.isLoading = true;
-  try {
-    const res = await fetchWithAuth("/api/schedule/my-lessons");
-    if (!res.ok) throw new Error("lessons_fetch_failed");
-    const data = await res.json().catch(() => null);
-    const raw = Array.isArray(data?.lessons) ? data.lessons : [];
-
-    studentLessonsState.lessons = raw
-      .map((lesson) => {
-        if (!lesson || typeof lesson !== "object") return null;
-        const id = typeof lesson.id === "string" ? lesson.id : "";
-        const dateKey = typeof lesson.dateKey === "string" ? lesson.dateKey : "";
-        const startMin = Number(lesson.startMin);
-        const endMin = Number(lesson.endMin);
-        if (!id || !dateKey || !Number.isFinite(startMin) || !Number.isFinite(endMin)) return null;
-        const professor = typeof lesson.professor_nome === "string" ? lesson.professor_nome : "";
-        const req = lesson.reagendamento && typeof lesson.reagendamento === "object" ? lesson.reagendamento : null;
-        const reqStatus = req && typeof req.status === "string" ? req.status : "";
-        const reqId = req && typeof req.id === "string" ? req.id : "";
-        return {
-          id,
-          dateKey,
-          startMin,
-          endMin,
-          time: formatHmFromMinutes(startMin),
-          professor,
-          request: reqId ? { id: reqId, status: reqStatus || "pendente" } : null,
-        };
-      })
-      .filter(Boolean);
-
-    studentLessonsState.lastLoadedAt = Date.now();
-    if (body.dataset.activePanel === "ao-vivo") {
-      renderStudentLiveLessons();
-    }
-  } catch (error) {
-    // keep last snapshot
-  } finally {
-    studentLessonsState.isLoading = false;
-  }
 };
 
 const openStudentRescheduleModal = (lesson) => {
@@ -3552,7 +3632,7 @@ const openStudentRescheduleModal = (lesson) => {
           }
 
           closeModal();
-          refreshStudentFixedLessons({ force: true });
+          renderStudentLiveLessons({ force: true });
         })
         .catch(() => {
           if (errEl instanceof HTMLElement) {
@@ -3568,10 +3648,52 @@ const openStudentRescheduleModal = (lesson) => {
   });
 };
 
-const renderStudentLiveLessons = () => {
+const renderStudentLiveLessons = async ({ force = false } = {}) => {
   if (!(liveStudentLessonsList instanceof HTMLElement)) return;
+  if (currentRole !== "student") return;
 
-  refreshStudentFixedLessons();
+  const now = Date.now();
+  const shouldFetch = Boolean(force) || !studentLessonsState.lastLoadedAt || now - studentLessonsState.lastLoadedAt >= 15_000;
+
+  if (shouldFetch && !studentLessonsState.isLoading) {
+    studentLessonsState.isLoading = true;
+    try {
+      const res = await fetchWithAuth("/api/schedule/my-lessons");
+      if (!res.ok) throw new Error("lessons_fetch_failed");
+      const data = await res.json().catch(() => null);
+      const raw = Array.isArray(data?.lessons) ? data.lessons : [];
+
+      studentLessonsState.lessons = raw
+        .map((lesson) => {
+          if (!lesson || typeof lesson !== "object") return null;
+          const id = typeof lesson.id === "string" ? lesson.id : "";
+          const dateKey = typeof lesson.dateKey === "string" ? lesson.dateKey : "";
+          const startMin = Number(lesson.startMin);
+          const endMin = Number(lesson.endMin);
+          if (!id || !dateKey || !Number.isFinite(startMin) || !Number.isFinite(endMin)) return null;
+          const professor = typeof lesson.professor_nome === "string" ? lesson.professor_nome : "";
+          const req = lesson.reagendamento && typeof lesson.reagendamento === "object" ? lesson.reagendamento : null;
+          const reqStatus = req && typeof req.status === "string" ? req.status : "";
+          const reqId = req && typeof req.id === "string" ? req.id : "";
+          return {
+            id,
+            dateKey,
+            startMin,
+            endMin,
+            time: formatHmFromMinutes(startMin),
+            professor,
+            request: reqId ? { id: reqId, status: reqStatus || "pendente" } : null,
+          };
+        })
+        .filter(Boolean);
+
+      studentLessonsState.lastLoadedAt = Date.now();
+    } catch (error) {
+      // keep last snapshot
+    } finally {
+      studentLessonsState.isLoading = false;
+    }
+  }
 
   const lessons = Array.isArray(studentLessonsState.lessons) ? studentLessonsState.lessons : [];
   if (liveStudentEmpty instanceof HTMLElement) {
@@ -3610,383 +3732,6 @@ const renderStudentLiveLessons = () => {
       `;
     })
     .join("");
-};
-
-const formatScheduledWhen = (date, time) => {
-  const weekdayRaw = new Intl.DateTimeFormat("pt-BR", { weekday: "short" }).format(date).replace(".", "");
-  const monthRaw = new Intl.DateTimeFormat("pt-BR", { month: "short" }).format(date).replace(".", "");
-  const weekday = weekdayRaw.charAt(0).toUpperCase() + weekdayRaw.slice(1);
-  return `${weekday}, ${date.getDate()} ${monthRaw} · ${time}`;
-};
-
-const parseSlotId = (slotId) => {
-  if (!slotId || slotId.length < 12) return null;
-
-  const dateKey = slotId.slice(0, 10);
-  const time = slotId.slice(11);
-
-  const date = parseDateKey(dateKey);
-  if (!date || !time) return null;
-
-  return { dateKey, date, time };
-};
-
-const registerScheduledLesson = (lesson) => {
-  if (!lesson?.id || !lesson?.slotId) return;
-  if (scheduledSlotIds.has(lesson.slotId)) return;
-
-  scheduledLessons.push(lesson);
-  scheduledSlotIds.add(lesson.slotId);
-  persistAppState();
-};
-
-const removeScheduledLesson = (lessonId) => {
-  if (!lessonId) return null;
-  const index = scheduledLessons.findIndex((lesson) => lesson.id === lessonId);
-  if (index < 0) return null;
-  const [removed] = scheduledLessons.splice(index, 1);
-  if (removed?.slotId) {
-    scheduledSlotIds.delete(removed.slotId);
-  }
-  persistAppState();
-  return removed;
-};
-
-const replaceScheduledLessons = (nextLessons) => {
-  scheduledLessons.splice(0, scheduledLessons.length);
-  scheduledSlotIds.clear();
-  nextLessons.forEach((lesson) => {
-    if (!lesson || typeof lesson !== "object") return;
-    if (!lesson.id || !lesson.slotId) return;
-    scheduledLessons.push(lesson);
-    scheduledSlotIds.add(lesson.slotId);
-  });
-  persistAppState();
-};
-
-const refreshStudentLessons = async ({ force = false } = {}) => {
-  if (currentRole !== "student") return;
-  if (studentLessonsState.isLoading) return;
-  const now = Date.now();
-  if (!force && studentLessonsState.lastLoadedAt && now - studentLessonsState.lastLoadedAt < 15_000) return;
-
-  studentLessonsState.isLoading = true;
-  try {
-    const res = await fetchWithAuth("/api/schedule/my-lessons");
-    if (!res.ok) throw new Error("lessons_fetch_failed");
-    const data = await res.json().catch(() => null);
-    const raw = Array.isArray(data?.lessons) ? data.lessons : [];
-    const plan = getPlanDef(appState.planKey);
-    const kind = plan.creditType === "GROUP" ? "GROUP" : "VIP";
-
-    const next = raw
-      .map((lesson) => {
-        if (!lesson || typeof lesson !== "object") return null;
-        const id = typeof lesson.id === "string" ? lesson.id : "";
-        const dateKey = typeof lesson.dateKey === "string" ? lesson.dateKey : "";
-        const startMin = Number(lesson.startMin);
-        const endMin = Number(lesson.endMin);
-        if (!id || !dateKey || !Number.isFinite(startMin) || !Number.isFinite(endMin)) return null;
-        const time = formatHmFromMinutes(startMin);
-        const slotId = `${dateKey}-${time}`;
-        const teacherName = typeof lesson.professor_nome === "string" ? lesson.professor_nome : null;
-        return {
-          id,
-          slotId,
-          dateKey,
-          time,
-          kind,
-          title: "Aula ao vivo",
-          teacher: teacherName,
-          studentName: greetingElement?.dataset.userName || "",
-          durationMinutes: Math.max(1, Math.round(endMin - startMin)),
-          createdAt: "",
-        };
-      })
-      .filter(Boolean);
-
-    replaceScheduledLessons(next);
-    studentLessonsState.lastLoadedAt = Date.now();
-
-    if (body.dataset.activePanel === "ao-vivo") {
-      renderLiveScheduler();
-    }
-  } catch (error) {
-    // Keep the last known list if the backend is unreachable.
-  } finally {
-    studentLessonsState.isLoading = false;
-  }
-};
-
-const refreshStudentSlots = async ({ force = false } = {}) => {
-  if (currentRole !== "student") return;
-  if (studentSlotsState.isLoading) return;
-  const now = Date.now();
-  const stale = !studentSlotsState.lastLoadedAt || now - studentSlotsState.lastLoadedAt > 15_000;
-  if (!force && !stale) return;
-
-  studentSlotsState.isLoading = true;
-  try {
-    // Let the backend decide "today" using America/Sao_Paulo (GMT-03:00).
-    const res = await fetchWithAuth(`/api/schedule/slots?days=4`);
-    if (!res.ok) throw new Error("slots_fetch_failed");
-    const data = await res.json().catch(() => null);
-    const days = Array.isArray(data?.days) ? data.days : [];
-    if (typeof data?.timeZone === "string" && data.timeZone.trim()) {
-      studentSlotsState.timeZone = data.timeZone.trim();
-    }
-    if (Number.isFinite(data?.tzOffsetMinutes)) {
-      studentSlotsState.tzOffsetMinutes = Number(data.tzOffsetMinutes);
-    }
-    if (Number.isFinite(data?.slotDurationMinutes)) {
-      studentSlotsState.slotDurationMinutes = Number(data.slotDurationMinutes);
-    }
-    studentSlotsState.days = days
-      .map((day) => {
-        if (!day || typeof day !== "object") return null;
-        const dateKey = typeof day.dateKey === "string" ? day.dateKey : "";
-        const slots = Array.isArray(day.slots) ? day.slots : [];
-        return {
-          dateKey,
-          slots: slots
-            .map((slot) => {
-              if (!slot || typeof slot !== "object") return null;
-              const time = typeof slot.time === "string" ? slot.time : "";
-              return time ? { time } : null;
-            })
-            .filter(Boolean),
-        };
-      })
-      .filter((day) => day && day.dateKey);
-    studentSlotsState.lastLoadedAt = Date.now();
-
-    if (body.dataset.activePanel === "ao-vivo") {
-      renderLiveScheduler();
-    }
-  } catch (error) {
-    // Keep the last known slots if the backend is unreachable.
-  } finally {
-    studentSlotsState.isLoading = false;
-  }
-};
-
-const renderLiveScheduledLessons = () => {
-  if (!liveScheduledList) return;
-
-  const now = new Date();
-  const upcoming = scheduledLessons
-    .map((lesson) => ({
-      ...lesson,
-      dateTime: getSlotDateTime(parseDateKey(lesson.dateKey) || new Date(), lesson.time),
-    }))
-    .filter((lesson) => lesson.dateTime.getTime() > now.getTime())
-    .sort((a, b) => a.dateTime.getTime() - b.dateTime.getTime())
-    .slice(0, 8);
-
-  if (liveScheduledEmpty) {
-    liveScheduledEmpty.hidden = upcoming.length > 0;
-  }
-
-  liveScheduledList.innerHTML = upcoming
-    .map((lesson, index) => {
-      const date = parseDateKey(lesson.dateKey) || new Date();
-      const when = formatScheduledWhen(date, lesson.time);
-      const kindLabel = lesson.kind === "GROUP" ? "Grupo" : "VIP";
-      const metaBits = [`${kindLabel}`, `${lesson.durationMinutes || LESSON_DURATION_MINUTES} min`];
-      const teacher = lesson.teacher ? ` · ${lesson.teacher}` : "";
-
-      return `
-        <li class="live-scheduled-item${index === 0 ? " is-next" : ""}">
-          <div class="live-scheduled-content">
-            <div class="live-scheduled-when">${when}</div>
-            <div class="live-scheduled-meta">${metaBits.join(" · ")}${teacher}</div>
-          </div>
-          <button class="live-scheduled-cancel" type="button" data-live-cancel data-lesson-id="${lesson.id}">
-            Cancelar
-          </button>
-        </li>
-      `;
-    })
-    .join("");
-};
-
-const getAvailableSlots = (date) => {
-  if (currentRole !== "student") return [];
-  const dateKey = createDateKey(date);
-  const apiDay = studentSlotsState.days.find((day) => day && day.dateKey === dateKey);
-  const apiTimes = apiDay ? apiDay.slots.map((slot) => slot.time).filter(Boolean) : [];
-
-  // Backend already filters past slots and applies the 2h lead time rule using America/Sao_Paulo.
-  // Here we only hide slots the student already booked.
-  return apiTimes.filter((time) => !scheduledSlotIds.has(createSlotId(date, time)));
-};
-
-const getUpcomingBookableDays = (count) => {
-  const days = [];
-  const cursor = new Date();
-  cursor.setHours(0, 0, 0, 0);
-  let safety = 0;
-
-  while (days.length < count && safety < 21) {
-    if (cursor.getDay() !== 0) {
-      days.push(new Date(cursor));
-    }
-
-    cursor.setDate(cursor.getDate() + 1);
-    safety += 1;
-  }
-
-  return days;
-};
-
-const updateLiveInstruction = () => {
-  if (!liveInstruction) return;
-
-  if (currentRole === "student" && !scheduleState.isConfirmed && appState.creditsRemaining <= 0) {
-    liveInstruction.textContent = scheduleState.selectedSlotLabel
-      ? "Sem créditos disponíveis para confirmar este horário."
-      : "Sem créditos disponíveis para agendar agora.";
-    return;
-  }
-
-  if (scheduleState.isConfirmed && scheduleState.selectedSlotLabel) {
-    liveInstruction.textContent = `Agendamento confirmado para ${scheduleState.selectedSlotLabel}`;
-    return;
-  }
-
-  if (scheduleState.selectedSlotLabel) {
-    liveInstruction.textContent = "Horário selecionado. Clique em Avançar para continuar.";
-    return;
-  }
-
-  liveInstruction.textContent = "Selecione um dia e horário para continuar";
-};
-
-const syncLiveSchedulerSelection = () => {
-  if (!liveSchedulerGrid) return;
-  const shouldGateByCredits = currentRole === "student";
-  const outOfCredits = shouldGateByCredits && !scheduleState.isConfirmed && appState.creditsRemaining <= 0;
-
-  liveSchedulerGrid.querySelectorAll("[data-slot-row-id]").forEach((row) => {
-    const slotId = row.getAttribute("data-slot-row-id") || "";
-    const isSelected = Boolean(slotId) && slotId === scheduleState.selectedSlotId;
-    const isConfirmed = isSelected && scheduleState.isConfirmed;
-
-    row.classList.toggle("is-selected", isSelected);
-    row.classList.toggle("is-confirmed", isConfirmed);
-
-    const timeButton = row.querySelector("[data-slot]");
-    if (timeButton instanceof HTMLButtonElement) {
-      timeButton.setAttribute("aria-pressed", String(isSelected));
-    }
-
-    const advanceButton = row.querySelector("[data-slot-advance]");
-    if (advanceButton instanceof HTMLButtonElement) {
-      const label = advanceButton.querySelector(".scheduler-slot-advance-label");
-      if (label) {
-        label.textContent = isConfirmed ? "Agendado" : "Avançar";
-      }
-
-      // Disable when confirmed or when the student is out of credits.
-      advanceButton.disabled = isConfirmed || outOfCredits;
-    }
-  });
-};
-
-const renderLiveScheduler = () => {
-  if (!liveSchedulerGrid) return;
-
-  renderPlanUI();
-  refreshStudentLessons();
-  refreshStudentSlots();
-  renderLiveScheduledLessons();
-
-  const apiDays = studentSlotsState.days
-    .map((day) => parseDateKey(day.dateKey))
-    .filter(Boolean);
-  const days = apiDays.length ? apiDays : getUpcomingBookableDays(4);
-  const weekdayFormatter = new Intl.DateTimeFormat("pt-BR", { weekday: "short" });
-  const now = new Date();
-  const timezoneName = getDisplayTimeZoneNameFromKey(studentSlotsState.timeZone);
-  const visibleSlotIds = new Set();
-
-  if (liveSchedulerTimezone) {
-    liveSchedulerTimezone.textContent = `${timezoneName} · ${formatTimeZoneOffsetFromMinutes(studentSlotsState.tzOffsetMinutes)}`;
-  }
-
-  if (liveWeekRange) {
-    liveWeekRange.textContent = formatWeekRange(days);
-  }
-
-  const schedulerMarkup = days
-    .map((date) => {
-      const weekday = weekdayFormatter.format(date).replace(".", "").toUpperCase();
-      const times = getAvailableSlots(date);
-      const dateNumber = String(date.getDate());
-      const isToday =
-        date.getDate() === now.getDate() &&
-        date.getMonth() === now.getMonth() &&
-        date.getFullYear() === now.getFullYear();
-
-      return `
-        <div class="live-day-column${isToday ? " is-today" : ""}">
-          <div class="live-day-head">
-            <span class="live-day-weekday">${weekday}</span>
-            <span class="live-day-date">${dateNumber}</span>
-          </div>
-          <div class="live-day-slots">
-            ${
-              times.length
-                ? times
-                    .map((time) => {
-                      const slotId = createSlotId(date, time);
-                      const slotLabel = formatSelectedSlotLabel(date, time);
-                      visibleSlotIds.add(slotId);
-
-                      return `
-                        <div class="scheduler-slot-row" data-slot-row-id="${slotId}">
-                          <button
-                            class="scheduler-slot-time"
-                            type="button"
-                            data-slot="${slotLabel}"
-                            data-slot-id="${slotId}"
-                            data-slot-label="${slotLabel}"
-                            aria-pressed="false"
-                          >
-                            <span>${time}</span>
-                          </button>
-                          <button
-                            class="scheduler-slot-advance"
-                            type="button"
-                            data-slot-advance
-                            data-slot-id="${slotId}"
-                            data-slot-label="${slotLabel}"
-                            aria-label="Avançar"
-                          >
-                            <span class="scheduler-slot-advance-label">Avançar</span>
-                          </button>
-                        </div>
-                      `;
-                    })
-                    .join("")
-                : '<div class="live-day-empty" role="note">Horários esgotados</div>'
-            }
-          </div>
-        </div>
-      `;
-    })
-    .join("");
-
-  if (scheduleState.selectedSlotId && !visibleSlotIds.has(scheduleState.selectedSlotId) && !scheduleState.isConfirmed) {
-    scheduleState.selectedSlotId = "";
-    scheduleState.selectedSlotLabel = "";
-    scheduleState.isConfirmed = false;
-  }
-
-  liveSchedulerGrid.innerHTML = schedulerMarkup;
-
-  updateLiveInstruction();
-  syncLiveSchedulerSelection();
 };
 
 const FIREBASE_CONFIG = {
@@ -4268,6 +4013,10 @@ const loadUsersFromFirestore = async (type) => {
     state.loadedAt = Date.now();
     setAdminManageStatus(safeType, "");
     renderAdminUsersTable(safeType);
+    if (currentRole === "admin" && activeModalKind === "event-form") {
+      syncAdminEventUserSelects();
+      validateCreateEventDraft();
+    }
   } catch (err) {
     // Surface the root cause for debugging (rules, connectivity, etc.).
     console.error("[admin] loadUsersFromFirestore failed:", safeType, err);
@@ -4448,12 +4197,6 @@ if (adminUserForm instanceof HTMLFormElement) {
       if (adminUserPassword instanceof HTMLInputElement) adminUserPassword.value = "";
       if (adminUserEmail instanceof HTMLInputElement) adminUserEmail.value = "";
       if (adminUserName instanceof HTMLInputElement) adminUserName.value = "";
-
-      // Refresh ranking to include the new teacher when applicable.
-      if (role === "teacher") {
-        adminRankingState.lastLoadedAt = 0;
-        renderAdminRanking();
-      }
 
       // Refresh lists if visible.
       adminUsersState.teacher.loadedAt = 0;
@@ -4697,262 +4440,6 @@ adminSearchInputs.forEach((input) => {
     renderAdminUsersTable(type);
   });
 });
-
-
-let adminRankingState = {
-  teachers: [],
-  order: [],
-  draggingId: "",
-  dropTargetId: "",
-  dropBefore: true,
-  isDirty: false,
-  isLoading: false,
-  lastSyncedAt: 0,
-  lastLoadedAt: 0,
-};
-
-const setAdminRankingStatus = (text, tone = "") => {
-  if (!adminRankingStatus) return;
-  adminRankingStatus.textContent = text || "";
-  adminRankingStatus.dataset.tone = tone || "";
-};
-
-const fetchAdminRanking = async () => {
-  const res = await fetchWithAuth("/api/admin/ranking");
-  if (!res.ok) {
-    throw new Error("admin_ranking_fetch_failed");
-  }
-  const data = await res.json().catch(() => null);
-  const teachers = Array.isArray(data?.teachers) ? data.teachers : [];
-  const order = Array.isArray(data?.order) ? data.order : [];
-  return {
-    teachers: teachers
-      .map((t) => {
-        if (!t || typeof t !== "object") return null;
-        if (typeof t.id !== "string" || typeof t.name !== "string") return null;
-        return { id: t.id, name: t.name };
-      })
-      .filter(Boolean),
-    order: order.filter((id) => typeof id === "string"),
-  };
-};
-
-const syncTeachersFromFirestoreIntoStore = async () => {
-  // Best-effort: keep the scheduling store aligned with Firestore (registered teachers + ativo flag).
-  try {
-    const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init");
-    const user = await waitForFirebaseAuthReady(firebase, 5000);
-    if (!user) return;
-
-    const q = firebase.query(firebase.collection(firebase.primaryDb, "users"), firebase.where("tipo", "==", "teacher"));
-    const snap = await withTimeout(firebase.getDocs(q), 12_000, "firestore_list_teachers");
-    const teachers = [];
-    snap.forEach((doc) => {
-      const data = typeof doc.data === "function" ? doc.data() : null;
-      const name = String(data?.nome || "").trim();
-      const active = typeof data?.ativo === "boolean" ? data.ativo : true;
-      const id = String(doc.id || "").trim();
-      if (!id || !name) return;
-      teachers.push({ id, name, active });
-    });
-
-    if (!teachers.length) return;
-
-    await withTimeout(
-      Promise.allSettled(
-        teachers.map((t) =>
-          fetchWithAuth("/api/admin/users", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ uid: t.id, role: "teacher", name: t.name, active: t.active }),
-          }).catch(() => null)
-        )
-      ),
-      12_000,
-      "admin_users_teacher_bulk_sync"
-    );
-  } catch (error) {
-    console.warn("[admin] teacher store sync skipped:", error);
-  }
-};
-
-const renderAdminRankingList = () => {
-  if (!adminRankingList) return;
-  const teacherMap = new Map(adminRankingState.teachers.map((t) => [t.id, t]));
-  const order = adminRankingState.order.filter((id) => teacherMap.has(id));
-
-  adminRankingList.innerHTML = order
-    .map((id, idx) => {
-      const teacher = teacherMap.get(id);
-      const position = idx + 1;
-      return `
-        <li class="admin-ranking-item" draggable="true" data-admin-teacher-id="${escapeHtml(id)}">
-          <span class="admin-ranking-position">#${position}</span>
-          <strong class="admin-ranking-name">${escapeHtml(teacher?.name || "Professor")}</strong>
-          <span class="admin-ranking-handle" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none">
-              <path d="M9 7h.01"></path>
-              <path d="M9 12h.01"></path>
-              <path d="M9 17h.01"></path>
-              <path d="M15 7h.01"></path>
-              <path d="M15 12h.01"></path>
-              <path d="M15 17h.01"></path>
-            </svg>
-          </span>
-        </li>
-      `;
-    })
-    .join("");
-};
-
-const renderAdminRanking = async () => {
-  if (currentRole !== "admin") return;
-  if (!adminRankingList) return;
-
-  if (adminRankingState.isDirty) {
-    renderAdminRankingList();
-    return;
-  }
-
-  const now = Date.now();
-  const shouldRefetch = !adminRankingState.lastLoadedAt || now - adminRankingState.lastLoadedAt > 30_000;
-  if (!shouldRefetch || adminRankingState.isLoading) {
-    renderAdminRankingList();
-    return;
-  }
-
-  adminRankingState.isLoading = true;
-  setAdminRankingStatus("Carregando…");
-
-  try {
-    const shouldSync = !adminRankingState.lastSyncedAt || now - adminRankingState.lastSyncedAt > 30_000;
-    if (shouldSync) {
-      await syncTeachersFromFirestoreIntoStore();
-      adminRankingState.lastSyncedAt = Date.now();
-    }
-
-    const { teachers, order } = await fetchAdminRanking();
-    adminRankingState.teachers = teachers;
-    const ids = new Set(teachers.map((t) => t.id));
-    const deduped = [];
-    const seen = new Set();
-    order.forEach((id) => {
-      if (!ids.has(id) || seen.has(id)) return;
-      seen.add(id);
-      deduped.push(id);
-    });
-    teachers.forEach((t) => {
-      if (!seen.has(t.id)) deduped.push(t.id);
-    });
-    adminRankingState.order = deduped;
-    adminRankingState.isDirty = false;
-    adminRankingState.lastLoadedAt = Date.now();
-    setAdminRankingStatus("");
-    renderAdminRankingList();
-  } catch (error) {
-    setAdminRankingStatus("Nao foi possivel carregar o ranking.", "error");
-  } finally {
-    adminRankingState.isLoading = false;
-  }
-};
-
-if (adminRankingList) {
-  adminRankingList.addEventListener("dragstart", (event) => {
-    const target = event.target?.closest?.("[data-admin-teacher-id]");
-    if (!(target instanceof HTMLElement)) return;
-    const id = target.getAttribute("data-admin-teacher-id") || "";
-    adminRankingState.draggingId = id;
-    target.classList.add("is-dragging");
-    if (event.dataTransfer) {
-      event.dataTransfer.effectAllowed = "move";
-      event.dataTransfer.setData("text/plain", id);
-    }
-  });
-
-  adminRankingList.addEventListener("dragend", (event) => {
-    const target = event.target?.closest?.("[data-admin-teacher-id]");
-    if (target instanceof HTMLElement) {
-      target.classList.remove("is-dragging");
-    }
-    adminRankingState.draggingId = "";
-    adminRankingState.dropTargetId = "";
-    adminRankingList.querySelectorAll(".is-drop-target").forEach((el) => el.classList.remove("is-drop-target"));
-  });
-
-  adminRankingList.addEventListener("dragover", (event) => {
-    if (!adminRankingState.draggingId) return;
-    event.preventDefault();
-
-    const target = event.target?.closest?.("[data-admin-teacher-id]");
-    if (!(target instanceof HTMLElement)) return;
-    const targetId = target.getAttribute("data-admin-teacher-id") || "";
-    const draggingId = adminRankingState.draggingId;
-    if (!targetId || targetId === draggingId) return;
-
-    const rect = target.getBoundingClientRect();
-    const before = event.clientY < rect.top + rect.height / 2;
-
-    adminRankingState.dropTargetId = targetId;
-    adminRankingState.dropBefore = before;
-
-    adminRankingList.querySelectorAll(".is-drop-target").forEach((el) => el.classList.remove("is-drop-target"));
-    target.classList.add("is-drop-target");
-  });
-
-  adminRankingList.addEventListener("drop", (event) => {
-    if (!adminRankingState.draggingId) return;
-    event.preventDefault();
-
-    const draggingId = adminRankingState.draggingId;
-    const targetId = adminRankingState.dropTargetId;
-    if (!targetId || targetId === draggingId) return;
-
-    const order = [...adminRankingState.order];
-    const fromIdx = order.indexOf(draggingId);
-    const toIdx = order.indexOf(targetId);
-    if (fromIdx < 0 || toIdx < 0) return;
-
-    order.splice(fromIdx, 1);
-    const nextIdx = adminRankingState.dropBefore ? toIdx : toIdx + (fromIdx < toIdx ? 0 : 1);
-    order.splice(nextIdx, 0, draggingId);
-    adminRankingState.order = order;
-    adminRankingState.isDirty = true;
-    adminRankingState.dropTargetId = "";
-    adminRankingList.querySelectorAll(".is-drop-target").forEach((el) => el.classList.remove("is-drop-target"));
-    renderAdminRankingList();
-  });
-}
-
-if (adminRankingSave) {
-  adminRankingSave.addEventListener("click", async () => {
-    if (currentRole !== "admin") return;
-    if (!adminRankingState.isDirty) {
-      setAdminRankingStatus("Nenhuma alteracao para salvar.");
-      window.setTimeout(() => setAdminRankingStatus(""), 1200);
-      return;
-    }
-
-    setAdminRankingStatus("Salvando…");
-    adminRankingSave.disabled = true;
-
-    try {
-      const res = await fetchWithAuth("/api/admin/ranking", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ order: adminRankingState.order }),
-      });
-      if (!res.ok) throw new Error("save_failed");
-      adminRankingState.isDirty = false;
-      setAdminRankingStatus("Salvo.", "success");
-      window.setTimeout(() => setAdminRankingStatus(""), 1200);
-    } catch (error) {
-      setAdminRankingStatus("Nao foi possivel salvar.", "error");
-    } finally {
-      adminRankingSave.disabled = false;
-    }
-  });
-}
-
 if (modalOverlay) {
   modalOverlay.addEventListener("click", (event) => {
     if (event.target === modalOverlay) {
@@ -5070,8 +4557,6 @@ const showPanel = (panelName) => {
       renderTeacherDashboard();
     } else if (currentRole === "admin") {
       renderAdminDashboard();
-    } else {
-      renderPlanUI();
     }
   }
 };
@@ -5197,7 +4682,6 @@ const initAppShell = async () => {
   showPanel(parsed?.panel || "dashboard");
 
   renderDashboardCharts();
-  renderPlanUI();
 };
 
 initAppShell();
@@ -5366,22 +4850,19 @@ document.addEventListener("click", (event) => {
 	            );
 
 	            // Keep the scheduling store in sync so admin ranking/slot assignment respects active teachers.
-	            await withTimeout(
-	              fetchWithAuth("/api/admin/users", {
-	                method: "POST",
-	                headers: { "Content-Type": "application/json" },
-	                body: JSON.stringify({ uid, role: type, name, active: nextActive }),
-	              }).catch((error) => {
-	                console.warn("[admin] toggle active sync failed:", error);
-	              }),
-	              8000,
-	              "admin_users_toggle_sync"
-	            );
-	            if (type === "teacher") {
-	              adminRankingState.lastLoadedAt = 0;
-	            }
+		            await withTimeout(
+		              fetchWithAuth("/api/admin/users", {
+		                method: "POST",
+		                headers: { "Content-Type": "application/json" },
+		                body: JSON.stringify({ uid, role: type, name, active: nextActive }),
+		              }).catch((error) => {
+		                console.warn("[admin] toggle active sync failed:", error);
+		              }),
+		              8000,
+		              "admin_users_toggle_sync"
+		            );
 
-	            const list = adminUsersState[type].rows;
+		            const list = adminUsersState[type].rows;
 	            const idx = list.findIndex((u) => u.id === uid);
 	            if (idx >= 0) {
               list[idx] = { ...list[idx], ativo: nextActive };
@@ -5559,7 +5040,11 @@ document.addEventListener("click", (event) => {
     }
 
     const calEvent = target.closest("[data-teacher-cal-event-id]");
-    if (calEvent instanceof HTMLElement && currentRole === "teacher" && body.dataset.activePanel === "ao-vivo") {
+    if (
+      calEvent instanceof HTMLElement &&
+      (currentRole === "teacher" || currentRole === "admin") &&
+      body.dataset.activePanel === "ao-vivo"
+    ) {
       const type = calEvent.getAttribute("data-teacher-cal-event-type") || "";
       const id = calEvent.getAttribute("data-teacher-cal-event-id") || "";
       if (type === "lesson" || type === "manual") {
@@ -5570,7 +5055,7 @@ document.addEventListener("click", (event) => {
 
     const createEventButton = target.closest("[data-teacher-create-event]");
     if (createEventButton instanceof HTMLButtonElement) {
-      if (currentRole !== "teacher") return;
+      if (currentRole !== "teacher" && currentRole !== "admin") return;
       openTeacherCreateEventModal();
       return;
     }
@@ -5584,7 +5069,7 @@ document.addEventListener("click", (event) => {
 
     const miniPrev = target.closest("[data-teacher-mini-prev]");
     if (miniPrev instanceof HTMLButtonElement) {
-      if (currentRole !== "teacher") return;
+      if (currentRole !== "teacher" && currentRole !== "admin") return;
       teacherCalendarState.miniCursor = new Date(teacherCalendarState.miniCursor.getFullYear(), teacherCalendarState.miniCursor.getMonth() - 1, 1);
       renderTeacherMiniCalendar();
       return;
@@ -5592,7 +5077,7 @@ document.addEventListener("click", (event) => {
 
     const miniNext = target.closest("[data-teacher-mini-next]");
     if (miniNext instanceof HTMLButtonElement) {
-      if (currentRole !== "teacher") return;
+      if (currentRole !== "teacher" && currentRole !== "admin") return;
       teacherCalendarState.miniCursor = new Date(teacherCalendarState.miniCursor.getFullYear(), teacherCalendarState.miniCursor.getMonth() + 1, 1);
       renderTeacherMiniCalendar();
       return;
@@ -5600,7 +5085,7 @@ document.addEventListener("click", (event) => {
 
     const miniDay = target.closest("[data-teacher-mini-day]");
     if (miniDay instanceof HTMLButtonElement) {
-      if (currentRole !== "teacher") return;
+      if (currentRole !== "teacher" && currentRole !== "admin") return;
       const key = miniDay.getAttribute("data-teacher-mini-day") || "";
       const date = parseDateKey(key);
       if (!date) return;
@@ -5611,7 +5096,7 @@ document.addEventListener("click", (event) => {
 
     const calToday = target.closest("[data-teacher-cal-today]");
     if (calToday instanceof HTMLButtonElement) {
-      if (currentRole !== "teacher") return;
+      if (currentRole !== "teacher" && currentRole !== "admin") return;
       setTeacherFocusDate(new Date());
       renderTeacherCalendar();
       return;
@@ -5619,7 +5104,7 @@ document.addEventListener("click", (event) => {
 
     const calPrev = target.closest("[data-teacher-cal-prev]");
     if (calPrev instanceof HTMLButtonElement) {
-      if (currentRole !== "teacher") return;
+      if (currentRole !== "teacher" && currentRole !== "admin") return;
       const view = teacherCalendarState.view;
       const delta = view === "month" ? -1 : view === "week" ? -7 : -1;
       const next = view === "month"
@@ -5632,7 +5117,7 @@ document.addEventListener("click", (event) => {
 
     const calNext = target.closest("[data-teacher-cal-next]");
     if (calNext instanceof HTMLButtonElement) {
-      if (currentRole !== "teacher") return;
+      if (currentRole !== "teacher" && currentRole !== "admin") return;
       const view = teacherCalendarState.view;
       const delta = view === "month" ? 1 : view === "week" ? 7 : 1;
       const next = view === "month"
@@ -5645,7 +5130,7 @@ document.addEventListener("click", (event) => {
 
     const viewBtn = target.closest("[data-teacher-cal-view]");
     if (viewBtn instanceof HTMLButtonElement) {
-      if (currentRole !== "teacher") return;
+      if (currentRole !== "teacher" && currentRole !== "admin") return;
       const nextView = viewBtn.getAttribute("data-teacher-cal-view") || "day";
       if (nextView !== "day" && nextView !== "week" && nextView !== "month") return;
       teacherCalendarState.view = nextView;
@@ -5655,7 +5140,7 @@ document.addEventListener("click", (event) => {
 
     const monthMore = target.closest("[data-teacher-month-more]");
     if (monthMore instanceof HTMLButtonElement) {
-      if (currentRole !== "teacher") return;
+      if (currentRole !== "teacher" && currentRole !== "admin") return;
       const key = monthMore.getAttribute("data-teacher-month-more") || "";
       const date = parseDateKey(key);
       if (!date) return;
@@ -5682,7 +5167,7 @@ document.addEventListener("click", (event) => {
 
     const monthCell = target.closest("[data-teacher-cal-month-day]");
     if (monthCell instanceof HTMLElement) {
-      if (currentRole !== "teacher") return;
+      if (currentRole !== "teacher" && currentRole !== "admin") return;
       if (body.dataset.activePanel !== "ao-vivo") return;
       if (teacherCalendarState.view !== "month") return;
       const key = monthCell.getAttribute("data-teacher-cal-month-day") || "";
@@ -5750,208 +5235,110 @@ document.addEventListener("click", (event) => {
       return;
     }
 
-    const cancelButton = target.closest("[data-live-cancel]");
-    if (cancelButton instanceof HTMLButtonElement) {
-      const lessonId = cancelButton.dataset.lessonId || "";
-      const lesson = scheduledLessons.find((item) => item.id === lessonId);
-
-      if (lesson) {
-        const isStudent = currentRole === "student";
-        const parsedDate = parseDateKey(lesson.dateKey);
-        if (!parsedDate) return;
-        const slotLabel = formatSelectedSlotLabel(parsedDate, lesson.time);
-        const slotDateTime = getSlotDateTime(parsedDate, lesson.time);
-        const now = new Date();
-        const isRefundable = slotDateTime.getTime() - now.getTime() >= CREDIT_REFUND_WINDOW_MS;
-        const plan = getPlanDef(appState.planKey);
-
-        openModal({
-          title: "Cancelar aula",
-          bodyHtml: `
-            <strong>${slotLabel}</strong><br />
-            ${
-              isStudent
-                ? isRefundable
-                  ? "Cancelamento com 24h ou mais: 1 crédito será devolvido."
-                  : "Faltam menos de 24h: o crédito será perdido."
-                : "Confirme para cancelar este horário."
-            }
-          `,
-          primaryLabel: "Confirmar cancelamento",
-          secondaryLabel: "Voltar",
-          onPrimary: () => {
-            if (modalPrimary) modalPrimary.disabled = true;
-            if (modalSecondary) modalSecondary.disabled = true;
-
-            fetchWithAuth("/api/schedule/cancel", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ id: lessonId }),
-            })
-              .then(async (res) => {
-                if (!res.ok) throw new Error("cancel_failed");
-
-                const removed = removeScheduledLesson(lessonId);
-
-                if (removed) {
-                  cancellationEvents.unshift({
-                    id: removed.id,
-                    dateKey: removed.dateKey,
-                    time: removed.time,
-                    studentName: removed.studentName || "",
-                    cancelledAt: new Date().toISOString(),
-                    isLastMinute: !isRefundable,
-                  });
-                  persistCancellationEvents();
-                }
-
-                if (isStudent && isRefundable) {
-                  appState.creditsRemaining = clampCredits(appState.creditsRemaining + 1, plan.creditsPerCycle);
-                  persistAppState();
-                }
-
-                scheduleState.selectedSlotId = "";
-                scheduleState.selectedSlotLabel = "";
-                scheduleState.isConfirmed = false;
-
-                refreshStudentLessons({ force: true });
-                refreshStudentSlots({ force: true });
-                closeModal();
-                renderLiveScheduler();
-                renderTeacherDashboard();
-              })
-              .catch(() => {
-                if (modalBody) {
-                  modalBody.innerHTML = "Nao foi possivel cancelar agora. Tente novamente.";
-                }
-                if (modalPrimary) modalPrimary.disabled = false;
-                if (modalSecondary) modalSecondary.disabled = false;
-              });
-
-            return false;
-          },
-        });
-      }
-
+    const studentRescheduleButton = target.closest("[data-live-reschedule]");
+    if (studentRescheduleButton instanceof HTMLButtonElement) {
+      if (currentRole !== "student") return;
+      const lessonId = studentRescheduleButton.getAttribute("data-live-reschedule") || "";
+      const lessons = Array.isArray(studentLessonsState.lessons) ? studentLessonsState.lessons : [];
+      const lesson = lessons.find((l) => l && l.id === lessonId) || null;
+      if (!lesson) return;
+      openStudentRescheduleModal(lesson);
       return;
     }
 
-    const advanceButton = target.closest("[data-slot-advance]");
+    const approveReq = target.closest("[data-admin-reschedule-approve]");
+    if (approveReq instanceof HTMLButtonElement) {
+      if (currentRole !== "admin") return;
+      const id = approveReq.getAttribute("data-admin-reschedule-approve") || "";
+      if (!id) return;
 
-    if (advanceButton instanceof HTMLButtonElement) {
-      const slotId = advanceButton.dataset.slotId || scheduleState.selectedSlotId;
-      const slotLabel = advanceButton.dataset.slotLabel || scheduleState.selectedSlotLabel;
-      const parsed = parseSlotId(slotId);
+      const row = approveReq.closest(".admin-requests-item");
+      const rejectBtn = row?.querySelector("[data-admin-reschedule-reject]");
+      const previousLabel = approveReq.textContent || "Aprovar";
+      approveReq.disabled = true;
+      approveReq.textContent = "Aprovando…";
+      if (rejectBtn instanceof HTMLButtonElement) rejectBtn.disabled = true;
 
-      if (!parsed) return;
-
-      const isStudent = currentRole === "student";
-      const plan = getPlanDef(appState.planKey);
-      const kind = plan.creditType === "GROUP" ? "GROUP" : "VIP";
-
-      if (isStudent && appState.creditsRemaining <= 0) {
-        return;
-      }
-
-      openModal({
-        title: "Confirmar agendamento",
-        bodyHtml: `
-          <strong>${slotLabel}</strong><br />
-          ${kind === "GROUP" ? "Aula em grupo" : "Aula VIP"} · ${LESSON_DURATION_MINUTES} min<br />
-          ${isStudent ? "Isso consome 1 crédito." : ""}
-        `,
-        primaryLabel: "Confirmar agendamento",
-        secondaryLabel: "Voltar",
-        onPrimary: () => {
-          if (isStudent && appState.creditsRemaining <= 0) {
-            return false;
+      fetchWithAuth(`/api/schedule/reschedule/${encodeURIComponent(id)}/resolve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ acao: "aprovar" }),
+      })
+        .then(async (res) => {
+          const data = await res.json().catch(() => null);
+          if (!res.ok) {
+            const msg =
+              data?.error === "already_resolved"
+                ? "Essa solicitação já foi resolvida."
+                : "Não foi possível aprovar agora. Tente novamente.";
+            openModal({ title: "Não foi possível aprovar", bodyHtml: escapeHtml(msg), primaryLabel: "Fechar", hideSecondary: true });
+            return;
           }
+          refreshAdminRescheduleRequests({ force: true });
+          refreshTeacherEvents({ force: true });
+        })
+        .catch(() => {
+          openModal({
+            title: "Não foi possível aprovar",
+            bodyHtml: "Não foi possível aprovar agora. Tente novamente.",
+            primaryLabel: "Fechar",
+            hideSecondary: true,
+          });
+        })
+        .finally(() => {
+          approveReq.disabled = false;
+          approveReq.textContent = previousLabel;
+          if (rejectBtn instanceof HTMLButtonElement) rejectBtn.disabled = false;
+        });
 
-          const startMin = timeToMinutes(parsed.time);
-          if (!Number.isFinite(startMin)) return false;
-
-          if (modalPrimary) modalPrimary.disabled = true;
-          if (modalSecondary) modalSecondary.disabled = true;
-
-          fetchWithAuth("/api/schedule/book", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ dateKey: parsed.dateKey, startMin }),
-          })
-            .then(async (res) => {
-              const data = await res.json().catch(() => null);
-              if (!res.ok) {
-                const msg =
-                  data?.error === "slot_unavailable"
-                    ? "Esse horario nao esta mais disponivel."
-                    : data?.error === "student_conflict"
-                      ? "Voce ja tem uma aula nesse horario."
-                      : "Nao foi possivel agendar agora.";
-                if (modalBody) {
-                  modalBody.innerHTML = msg;
-                }
-                if (modalPrimary) modalPrimary.disabled = false;
-                if (modalSecondary) modalSecondary.disabled = false;
-                return;
-              }
-
-              if (isStudent) {
-                appState.creditsRemaining = clampCredits(appState.creditsRemaining - 1, plan.creditsPerCycle);
-              }
-
-              const eventId = typeof data?.event?.id === "string" ? data.event.id : "";
-              if (eventId) {
-                registerScheduledLesson({
-                  id: eventId,
-                  slotId,
-                  dateKey: parsed.dateKey,
-                  time: parsed.time,
-                  kind,
-                  title: "Aula ao vivo",
-                  teacher: null,
-                  studentName: greetingElement?.dataset.userName || "",
-                  durationMinutes: LESSON_DURATION_MINUTES,
-                  createdAt: new Date().toISOString(),
-                });
-              }
-
-              persistAppState();
-              scheduleState.selectedSlotId = slotId;
-              scheduleState.selectedSlotLabel = slotLabel;
-              scheduleState.isConfirmed = true;
-
-              refreshStudentLessons({ force: true });
-              refreshStudentSlots({ force: true });
-              closeModal();
-              renderLiveScheduler();
-              renderTeacherDashboard();
-            })
-            .catch(() => {
-              if (modalBody) {
-                modalBody.innerHTML = "Nao foi possivel agendar agora. Tente novamente.";
-              }
-              if (modalPrimary) modalPrimary.disabled = false;
-              if (modalSecondary) modalSecondary.disabled = false;
-            });
-
-          return false;
-        },
-      });
       return;
     }
 
-    const slotButton = target.closest("[data-slot]");
+    const rejectReq = target.closest("[data-admin-reschedule-reject]");
+    if (rejectReq instanceof HTMLButtonElement) {
+      if (currentRole !== "admin") return;
+      const id = rejectReq.getAttribute("data-admin-reschedule-reject") || "";
+      if (!id) return;
 
-    if (slotButton instanceof HTMLButtonElement) {
-      if (slotButton.disabled) {
-        return;
-      }
+      const row = rejectReq.closest(".admin-requests-item");
+      const approveBtn = row?.querySelector("[data-admin-reschedule-approve]");
+      const previousLabel = rejectReq.textContent || "Recusar";
+      rejectReq.disabled = true;
+      rejectReq.textContent = "Recusando…";
+      if (approveBtn instanceof HTMLButtonElement) approveBtn.disabled = true;
 
-      scheduleState.selectedSlotId = slotButton.dataset.slotId || "";
-      scheduleState.selectedSlotLabel = slotButton.dataset.slotLabel || slotButton.dataset.slot || "";
-      scheduleState.isConfirmed = false;
-      syncLiveSchedulerSelection();
-      updateLiveInstruction();
+      fetchWithAuth(`/api/schedule/reschedule/${encodeURIComponent(id)}/resolve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ acao: "recusar" }),
+      })
+        .then(async (res) => {
+          const data = await res.json().catch(() => null);
+          if (!res.ok) {
+            const msg =
+              data?.error === "already_resolved"
+                ? "Essa solicitação já foi resolvida."
+                : "Não foi possível recusar agora. Tente novamente.";
+            openModal({ title: "Não foi possível recusar", bodyHtml: escapeHtml(msg), primaryLabel: "Fechar", hideSecondary: true });
+            return;
+          }
+          refreshAdminRescheduleRequests({ force: true });
+          refreshTeacherEvents({ force: true });
+        })
+        .catch(() => {
+          openModal({
+            title: "Não foi possível recusar",
+            bodyHtml: "Não foi possível recusar agora. Tente novamente.",
+            primaryLabel: "Fechar",
+            hideSecondary: true,
+          });
+        })
+        .finally(() => {
+          rejectReq.disabled = false;
+          rejectReq.textContent = previousLabel;
+          if (approveBtn instanceof HTMLButtonElement) approveBtn.disabled = false;
+        });
+
       return;
     }
   }
@@ -5962,7 +5349,7 @@ document.addEventListener("click", (event) => {
 });
 
 const isTeacherCalendarGridInteractive = () => {
-  if (currentRole !== "teacher") return false;
+  if (currentRole !== "teacher" && currentRole !== "admin") return false;
   if (body.dataset.activePanel !== "ao-vivo") return false;
   if (!liveTeacherRoot || liveTeacherRoot.hidden) return false;
   if (!teacherCalViewport) return false;
@@ -6118,6 +5505,14 @@ document.addEventListener("input", (event) => {
 
   if (target instanceof HTMLInputElement && target.matches("[data-ce-date]")) {
     createEventDraft.dateKey = target.value;
+    const repeatSelect = modalBody.querySelector("[data-ce-repeat-mode]");
+    if (repeatSelect instanceof HTMLSelectElement) {
+      const weeklyOpt = repeatSelect.querySelector('option[value="weekly"]');
+      if (weeklyOpt instanceof HTMLOptionElement) {
+        const weekday = weekdayLongFromDateKey(String(target.value || ""));
+        weeklyOpt.textContent = weekday ? `Semanal: cada ${weekday.toLowerCase()}` : "Semanal: toda semana";
+      }
+    }
     validateCreateEventDraft();
     return;
   }
@@ -6148,12 +5543,39 @@ document.addEventListener("input", (event) => {
 
 document.addEventListener("change", (event) => {
   const target = event.target;
-  if (!(target instanceof HTMLInputElement)) return;
   if (!createEventDraft || !modalBody || modalOverlay?.hidden) return;
   if (activeModalKind !== "event-form") return;
   if (createEventDraft.readOnly) return;
 
-  if (target.matches("[data-ce-doc-input]")) {
+  if (target instanceof HTMLInputElement && target.matches("[data-ce-repeat]")) {
+    createEventDraft.recorrente = Boolean(target.checked);
+    const options = modalBody.querySelector("[data-ce-repeat-options]");
+    if (options instanceof HTMLElement) {
+      options.hidden = !createEventDraft.recorrente;
+    }
+    validateCreateEventDraft();
+    return;
+  }
+
+  if (target instanceof HTMLSelectElement && target.matches("[data-ce-repeat-mode]")) {
+    createEventDraft.repeatMode = target.value;
+    validateCreateEventDraft();
+    return;
+  }
+
+  if (target instanceof HTMLSelectElement && target.matches("[data-ce-admin-student]")) {
+    createEventDraft.alunoId = target.value;
+    validateCreateEventDraft();
+    return;
+  }
+
+  if (target instanceof HTMLSelectElement && target.matches("[data-ce-admin-teacher]")) {
+    createEventDraft.professorId = target.value;
+    validateCreateEventDraft();
+    return;
+  }
+
+  if (target instanceof HTMLInputElement && target.matches("[data-ce-doc-input]")) {
     const files = Array.from(target.files || []);
     target.value = "";
     if (!files.length) return;
@@ -6321,10 +5743,13 @@ updateGreeting();
 
 setInterval(() => {
   if (body.dataset.activePanel === "ao-vivo") {
-    if (currentRole === "teacher") {
+    if (currentRole === "teacher" || currentRole === "admin") {
       renderTeacherCalendar();
+      if (currentRole === "admin") {
+        renderAdminRescheduleRequests();
+      }
     } else {
-      renderLiveScheduler();
+      renderStudentLiveLessons();
     }
     return;
   }
@@ -6333,6 +5758,4 @@ setInterval(() => {
     renderTeacherDashboard();
     return;
   }
-
-  renderPlanUI();
 }, 60000);

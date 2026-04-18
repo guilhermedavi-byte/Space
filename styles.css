@@ -8370,3 +8370,52 @@ body[data-page="landing"] [data-reveal].is-revealed {
     animation: none !important;
   }
 }
+
+.live-fixed-list {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.live-fixed-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 0.5px solid rgba(89, 144, 189, 0.08);
+  border-radius: 12px;
+}
+
+.badge-pendente {
+  background: rgba(251, 191, 36, 0.12);
+  color: #FBBF24;
+  font-size: 11px;
+  padding: 2px 10px;
+  border-radius: 50px;
+}
+
+.badge-aprovado {
+  background: rgba(93, 202, 165, 0.12);
+  color: #5DCAA5;
+  font-size: 11px;
+  padding: 2px 10px;
+  border-radius: 50px;
+}
+
+.badge-recusado {
+  background: rgba(255, 78, 70, 0.12);
+  color: #FF4E46;
+  font-size: 11px;
+  padding: 2px 10px;
+  border-radius: 50px;
+}
+
+.admin-requests-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 0.5px solid rgba(89, 144, 189, 0.08);
+  border-radius: 14px;
+  padding: 20px;
+}
