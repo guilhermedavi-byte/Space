@@ -3319,9 +3319,12 @@ const openTeacherEventFormModalFromDraft = () => {
             if (modalPrimary) modalPrimary.disabled = true;
             if (modalSecondary) modalSecondary.disabled = true;
 
-            fetchWithAuth(`/api/schedule/events/${encodeURIComponent(id)}?mode=${encodeURIComponent(mode || "single")}`, {
-              method: "DELETE",
-            })
+            fetchWithAuth(
+              `/api/schedule/events?id=${encodeURIComponent(id)}&mode=${encodeURIComponent(mode || "single")}`,
+              {
+                method: "DELETE",
+              }
+            )
               .then(async (res) => {
                 if (!res.ok) throw new Error("delete_failed");
                 closeModal();
@@ -5259,10 +5262,10 @@ document.addEventListener("click", (event) => {
       approveReq.textContent = "Aprovando…";
       if (rejectBtn instanceof HTMLButtonElement) rejectBtn.disabled = true;
 
-      fetchWithAuth(`/api/schedule/reschedule/${encodeURIComponent(id)}/resolve`, {
+      fetchWithAuth("/api/schedule/reschedule", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ acao: "aprovar" }),
+        body: JSON.stringify({ id, acao: "aprovar" }),
       })
         .then(async (res) => {
           const data = await res.json().catch(() => null);
@@ -5307,10 +5310,10 @@ document.addEventListener("click", (event) => {
       rejectReq.textContent = "Recusando…";
       if (approveBtn instanceof HTMLButtonElement) approveBtn.disabled = true;
 
-      fetchWithAuth(`/api/schedule/reschedule/${encodeURIComponent(id)}/resolve`, {
+      fetchWithAuth("/api/schedule/reschedule", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ acao: "recusar" }),
+        body: JSON.stringify({ id, acao: "recusar" }),
       })
         .then(async (res) => {
           const data = await res.json().catch(() => null);

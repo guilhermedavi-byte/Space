@@ -1,9 +1,9 @@
 const crypto = require("crypto");
 
-const { readJsonBody, sendJson } = require("../../_lib/http");
-const { getSessionFromRequest } = require("../../_lib/session");
-const { verifyFirebaseIdToken } = require("../../_lib/firebase-id-token");
-const { DEFAULT_CONFIG } = require("../../_lib/scheduling-firestore");
+const { readJsonBody, sendJson } = require("../../../_lib/http");
+const { getSessionFromRequest } = require("../../../_lib/session");
+const { verifyFirebaseIdToken } = require("../../../_lib/firebase-id-token");
+const { DEFAULT_CONFIG } = require("../../../_lib/scheduling-firestore");
 const {
   addDaysToDateKey,
   clampInt,
@@ -12,15 +12,16 @@ const {
   minutesToTime,
   timeToMinutes,
   toUtcMsForDateKeyAndMinutes,
-} = require("../../_lib/scheduling-utils");
+} = require("../../../_lib/scheduling-utils");
 const {
   decodeFields,
+  firestoreDeleteDocument,
   firestoreGetDocument,
   firestoreListDocuments,
   firestorePatchDocument,
   getBearerTokenFromRequest,
   getDocIdFromName,
-} = require("../../_lib/firestore-rest");
+} = require("../../../_lib/firestore-rest");
 
 const DOW_TO_KEY = {
   0: "dom",
@@ -145,6 +146,53 @@ const decodeAulaDoc = (doc) => {
   };
 };
 
+const parseDeleteModeFromUrl = (url) => {
+  const mode = String(url?.searchParams?.get("mode") || "")
+    .trim()
+    .toLowerCase();
+  return mode === "future" ? "future" : "single";
+};
+
+const parseDeleteIdFromUrl = (url, body) => {
+  const fromQuery = String(url?.searchParams?.get("id") || "").trim();
+  if (fromQuery) return fromQuery;
+  const fromBody = String(body?.id || "").trim();
+  return fromBody || "";
+};
+
+const decodeAulaCoreForDelete = (doc) => {
+  if (!doc || typeof doc !== "object") return null;
+  const id = getDocIdFromName(doc.name);
+  if (!id) return null;
+  const fields = decodeFields(doc);
+  const professorId = typeof fields.professorId === "string" ? fields.professorId : "";
+  const alunoId = fields.alunoId == null ? null : typeof fields.alunoId === "string" ? fields.alunoId : null;
+  const dateKey = typeof fields.dateKey === "string" ? fields.dateKey : "";
+  const startMinRaw = Number(fields.startMin);
+  const endMinRaw = Number(fields.endMin);
+  const startMin = Number.isFinite(startMinRaw) ? clampInt(startMinRaw, 0, 1440) : timeToMinutes(fields.horaInicio);
+  const endMin = Number.isFinite(endMinRaw) ? clampInt(endMinRaw, 0, 1440) : timeToMinutes(fields.horaFim);
+  const grupoRecorrenciaId = typeof fields.grupoRecorrenciaId === "string" ? fields.grupoRecorrenciaId : "";
+  const criadoPor = typeof fields.criadoPor === "string" ? fields.criadoPor : "";
+
+  if (!professorId) return null;
+  if (!isValidDateKey(dateKey)) return null;
+  if (!Number.isFinite(startMin) || !Number.isFinite(endMin) || endMin <= startMin) return null;
+
+  const startMs = toUtcMsForDateKeyAndMinutes(dateKey, startMin, { tzOffsetMinutes: DEFAULT_CONFIG.tzOffsetMinutes });
+  return {
+    id,
+    professorId,
+    alunoId,
+    dateKey,
+    startMin,
+    endMin,
+    startMs: startMs || 0,
+    grupoRecorrenciaId: grupoRecorrenciaId || null,
+    criadoPor,
+  };
+};
+
 module.exports = async (req, res) => {
   const session = getSessionFromRequest(req);
   if (!session) {
@@ -239,8 +287,84 @@ module.exports = async (req, res) => {
     return;
   }
 
+  if (req.method === "DELETE") {
+    const id = parseDeleteIdFromUrl(url);
+    if (!id) {
+      sendJson(res, 400, { error: "id_required" });
+      return;
+    }
+    const mode = parseDeleteModeFromUrl(url);
+
+    try {
+      const docPath = `aulas/${encodeURIComponent(id)}`;
+      const snap = await firestoreGetDocument({ docPath, idToken });
+      if (!snap.ok) {
+        sendJson(res, snap.status === 404 ? 404 : 500, { error: snap.status === 404 ? "not_found" : "internal_error" });
+        return;
+      }
+
+      const evt = decodeAulaCoreForDelete(snap.data);
+      if (!evt) {
+        sendJson(res, 404, { error: "not_found" });
+        return;
+      }
+
+      if (role === "teacher") {
+        if (evt.professorId !== requesterId) {
+          sendJson(res, 403, { error: "forbidden" });
+          return;
+        }
+        if (evt.criadoPor !== "professor") {
+          sendJson(res, 403, { error: "forbidden" });
+          return;
+        }
+      }
+
+      if (mode !== "future" || !evt.grupoRecorrenciaId) {
+        const del = await firestoreDeleteDocument({ docPath, idToken });
+        if (!del.ok) throw new Error("firestore_delete_failed");
+        sendJson(res, 200, { ok: true, deleted: 1 });
+        return;
+      }
+
+      const resList = await firestoreListDocuments({ collectionPath: "aulas", idToken, pageSize: 2000 });
+      if (!resList.ok) throw new Error("firestore_list_failed");
+      const docs = Array.isArray(resList.documents)
+        ? resList.documents
+        : Array.isArray(resList.data?.documents)
+          ? resList.data.documents
+          : [];
+
+      const toDelete = docs
+        .map((doc) => decodeAulaCoreForDelete(doc))
+        .filter(Boolean)
+        .filter((row) => row.grupoRecorrenciaId === evt.grupoRecorrenciaId)
+        .filter((row) => (row.startMs || 0) >= (evt.startMs || 0));
+
+      if (role === "teacher") {
+        if (toDelete.some((row) => row.professorId !== requesterId || row.criadoPor !== "professor")) {
+          sendJson(res, 403, { error: "forbidden" });
+          return;
+        }
+      }
+
+      let deleted = 0;
+      for (const row of toDelete) {
+        const del = await firestoreDeleteDocument({ docPath: `aulas/${encodeURIComponent(row.id)}`, idToken });
+        if (del.ok) deleted += 1;
+      }
+
+      sendJson(res, 200, { ok: true, deleted });
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error("[api] schedule events delete failed", error);
+      sendJson(res, 500, { error: "internal_error" });
+    }
+    return;
+  }
+
   if (req.method !== "POST" && req.method !== "PUT") {
-    res.setHeader("Allow", "GET, HEAD, POST, PUT");
+    res.setHeader("Allow", "GET, HEAD, POST, PUT, DELETE");
     sendJson(res, 405, { error: "method_not_allowed" });
     return;
   }

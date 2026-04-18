@@ -1,13 +1,13 @@
-const { readJsonBody, sendJson } = require("../_lib/http");
-const { getSessionFromRequest } = require("../_lib/session");
-const { clampInt } = require("../_lib/scheduling-utils");
-const { verifyFirebaseIdToken } = require("../_lib/firebase-id-token");
+const { readJsonBody, sendJson } = require("../../_lib/http");
+const { getSessionFromRequest } = require("../../_lib/session");
+const { clampInt } = require("../../_lib/scheduling-utils");
+const { verifyFirebaseIdToken } = require("../../_lib/firebase-id-token");
 const {
   decodeFields,
   firestoreGetDocument,
   firestorePatchDocument,
   getBearerTokenFromRequest,
-} = require("../_lib/firestore-rest");
+} = require("../../_lib/firestore-rest");
 
 const DOW_TO_KEY = {
   0: "dom",

@@ -1,6 +1,6 @@
-const { readJsonBody, sendJson } = require("../_lib/http");
-const { getSessionFromRequest } = require("../_lib/session");
-const { verifyFirebaseIdToken } = require("../_lib/firebase-id-token");
+const { readJsonBody, sendJson } = require("../../_lib/http");
+const { getSessionFromRequest } = require("../../_lib/session");
+const { verifyFirebaseIdToken } = require("../../_lib/firebase-id-token");
 const {
   decodeFields,
   firestoreGetDocument,
@@ -8,7 +8,7 @@ const {
   firestorePatchDocument,
   getBearerTokenFromRequest,
   getDocIdFromName,
-} = require("../_lib/firestore-rest");
+} = require("../../_lib/firestore-rest");
 
 const listActiveTeachers = async ({ idToken }) => {
   const res = await firestoreListDocuments({ collectionPath: "users", idToken, pageSize: 800 });

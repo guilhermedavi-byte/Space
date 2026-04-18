@@ -1,15 +1,15 @@
-const { sendJson } = require("../_lib/http");
-const { getSessionFromRequest } = require("../_lib/session");
-const { verifyFirebaseIdToken } = require("../_lib/firebase-id-token");
-const { DEFAULT_CONFIG } = require("../_lib/scheduling-firestore");
-const { clampInt, isValidDateKey, timeToMinutes, toUtcMsForDateKeyAndMinutes } = require("../_lib/scheduling-utils");
+const { sendJson } = require("../../_lib/http");
+const { getSessionFromRequest } = require("../../_lib/session");
+const { verifyFirebaseIdToken } = require("../../_lib/firebase-id-token");
+const { DEFAULT_CONFIG } = require("../../_lib/scheduling-firestore");
+const { clampInt, isValidDateKey, timeToMinutes, toUtcMsForDateKeyAndMinutes } = require("../../_lib/scheduling-utils");
 const {
   decodeFields,
   firestoreGetDocument,
   firestoreListDocuments,
   getBearerTokenFromRequest,
   getDocIdFromName,
-} = require("../_lib/firestore-rest");
+} = require("../../_lib/firestore-rest");
 
 module.exports = async (req, res) => {
   if (req.method !== "GET" && req.method !== "HEAD") {

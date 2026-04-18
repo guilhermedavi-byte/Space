@@ -1,8 +1,8 @@
-const { readJsonBody, sendJson } = require("./_lib/http");
-const { loadUsers, findUserByEmailAndRole, normalizeRole } = require("./_lib/users");
-const { createSessionForUser, buildSessionCookie, isSecureRequest } = require("./_lib/session");
-const { verifyFirebaseIdToken } = require("./_lib/firebase-id-token");
-const { fetchUserProfileByUid } = require("./_lib/firestore-user");
+const { readJsonBody, sendJson } = require("../_lib/http");
+const { loadUsers, findUserByEmailAndRole, normalizeRole } = require("../_lib/users");
+const { createSessionForUser, buildSessionCookie, isSecureRequest } = require("../_lib/session");
+const { verifyFirebaseIdToken } = require("../_lib/firebase-id-token");
+const { fetchUserProfileByUid } = require("../_lib/firestore-user");
 
 module.exports = async (req, res) => {
   if (req.method !== "POST") {
@@ -72,7 +72,7 @@ module.exports = async (req, res) => {
     }
 
     // eslint-disable-next-line global-require
-    const { verifyPassword } = require("./_lib/password");
+    const { verifyPassword } = require("../_lib/password");
     const ok = verifyPassword(password, user.passwordHash);
     if (!ok) {
       return sendJson(res, 401, { error: "invalid_credentials" });

@@ -1,5 +1,5 @@
-const { sendJson } = require("./_lib/http");
-const { buildClearCookie, isSecureRequest } = require("./_lib/session");
+const { sendJson } = require("../_lib/http");
+const { buildClearCookie, isSecureRequest } = require("../_lib/session");
 
 module.exports = async (req, res) => {
   if (req.method !== "POST") {

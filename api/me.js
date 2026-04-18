@@ -1,5 +1,5 @@
-const { sendJson } = require("./_lib/http");
-const { getSessionFromRequest } = require("./_lib/session");
+const { sendJson } = require("../_lib/http");
+const { getSessionFromRequest } = require("../_lib/session");
 
 module.exports = async (req, res) => {
   if (req.method !== "GET") {
@@ -21,4 +21,3 @@ module.exports = async (req, res) => {
     },
   });
 };
-

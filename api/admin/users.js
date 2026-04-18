@@ -1,7 +1,7 @@
-const { readJsonBody, sendJson } = require("../_lib/http");
-const { getSessionFromRequest } = require("../_lib/session");
-const { verifyFirebaseIdToken } = require("../_lib/firebase-id-token");
-const { getBearerTokenFromRequest } = require("../_lib/firestore-rest");
+const { readJsonBody, sendJson } = require("../../_lib/http");
+const { getSessionFromRequest } = require("../../_lib/session");
+const { verifyFirebaseIdToken } = require("../../_lib/firebase-id-token");
+const { getBearerTokenFromRequest } = require("../../_lib/firestore-rest");
 
 const normalizeRole = (value) => {
   const raw = String(value || "").trim().toLowerCase();

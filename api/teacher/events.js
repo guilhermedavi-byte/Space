@@ -1,8 +1,8 @@
-const { readJsonBody, sendJson } = require("../_lib/http");
-const { getSessionFromRequest } = require("../_lib/session");
-const { verifyFirebaseIdToken } = require("../_lib/firebase-id-token");
-const { normalizeStatus } = require("../_lib/scheduling-core");
-const { clampInt, isValidDateKey } = require("../_lib/scheduling-utils");
+const { readJsonBody, sendJson } = require("../../_lib/http");
+const { getSessionFromRequest } = require("../../_lib/session");
+const { verifyFirebaseIdToken } = require("../../_lib/firebase-id-token");
+const { normalizeStatus } = require("../../_lib/scheduling-core");
+const { clampInt, isValidDateKey } = require("../../_lib/scheduling-utils");
 const {
   decodeFields,
   firestoreDeleteDocument,
@@ -11,7 +11,7 @@ const {
   firestorePatchDocument,
   getBearerTokenFromRequest,
   getDocIdFromName,
-} = require("../_lib/firestore-rest");
+} = require("../../_lib/firestore-rest");
 
 const normalizeGuestIds = (raw) => {
   const arr = Array.isArray(raw) ? raw : [];

@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const { getSessionFromRequest } = require("./_lib/session");
+const { getSessionFromRequest } = require("../_lib/session");
 
 const ROLE_TO_SLUG = {
   student: "aluno",

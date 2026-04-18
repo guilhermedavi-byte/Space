@@ -1,8 +1,17 @@
 const crypto = require("crypto");
 
-const { readJsonBody, sendJson } = require("../../_lib/http");
-const { getSessionFromRequest } = require("../../_lib/session");
-const { verifyFirebaseIdToken } = require("../../_lib/firebase-id-token");
+const { readJsonBody, sendJson } = require("../../../_lib/http");
+const { getSessionFromRequest } = require("../../../_lib/session");
+const { verifyFirebaseIdToken } = require("../../../_lib/firebase-id-token");
+const { DEFAULT_CONFIG } = require("../../../_lib/scheduling-firestore");
+const {
+  clampInt,
+  getDayOfWeekFromDateKey,
+  isValidDateKey,
+  minutesToTime,
+  timeToMinutes,
+  toUtcMsForDateKeyAndMinutes,
+} = require("../../../_lib/scheduling-utils");
 const {
   decodeFields,
   firestoreGetDocument,
@@ -10,7 +19,7 @@ const {
   firestorePatchDocument,
   getBearerTokenFromRequest,
   getDocIdFromName,
-} = require("../../_lib/firestore-rest");
+} = require("../../../_lib/firestore-rest");
 
 const normalizeRole = (role) => {
   const raw = String(role || "").trim().toLowerCase();
@@ -53,6 +62,24 @@ const decodeAulaSnapshot = (doc) => {
   };
 };
 
+const parseMinutes = (value) => {
+  if (typeof value === "number" && Number.isFinite(value)) return clampInt(value, 0, 1440);
+  const str = typeof value === "string" ? value.trim() : "";
+  if (!str) return null;
+  const parsed = timeToMinutes(str);
+  return Number.isFinite(parsed) ? clampInt(parsed, 0, 1440) : null;
+};
+
+const DOW_TO_KEY = {
+  0: "dom",
+  1: "seg",
+  2: "ter",
+  3: "qua",
+  4: "qui",
+  5: "sex",
+  6: "sab",
+};
+
 module.exports = async (req, res) => {
   const session = getSessionFromRequest(req);
   if (!session) {
@@ -80,16 +107,142 @@ module.exports = async (req, res) => {
   }
 
   if (req.method === "POST") {
-    if (role !== "student") {
-      sendJson(res, 403, { error: "forbidden" });
-      return;
-    }
-
     let body;
     try {
       body = await readJsonBody(req);
     } catch (error) {
       sendJson(res, 400, { error: "invalid_json" });
+      return;
+    }
+
+    const acao = String(body?.acao || "").trim().toLowerCase();
+    const resolveId = String(body?.id || body?.requestId || body?.resolveId || "").trim();
+    const isResolve = resolveId && (acao === "aprovar" || acao === "recusar");
+
+    if (isResolve) {
+      if (role !== "admin") {
+        sendJson(res, 403, { error: "forbidden" });
+        return;
+      }
+
+      const motivoResposta = String(body?.motivo || "").trim();
+
+      const requestPath = `reagendamentos/${encodeURIComponent(resolveId)}`;
+      let reqFields;
+      try {
+        const snap = await firestoreGetDocument({ docPath: requestPath, idToken });
+        if (!snap.ok) {
+          sendJson(res, snap.status === 404 ? 404 : 500, { error: snap.status === 404 ? "not_found" : "internal_error" });
+          return;
+        }
+        reqFields = decodeFields(snap.data);
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.error("[api] reschedule resolve load failed", error);
+        sendJson(res, 500, { error: "internal_error" });
+        return;
+      }
+
+      const currentStatus = String(reqFields?.status || "").trim().toLowerCase() || "pendente";
+      if (currentStatus !== "pendente") {
+        sendJson(res, 400, { error: "already_resolved" });
+        return;
+      }
+
+      const aulaId = typeof reqFields?.aulaId === "string" ? reqFields.aulaId : "";
+      if (!aulaId) {
+        sendJson(res, 400, { error: "aula_required" });
+        return;
+      }
+
+      const aulaPath = `aulas/${encodeURIComponent(aulaId)}`;
+
+      const patchReq = {
+        status: acao === "aprovar" ? "aprovado" : "recusado",
+        resolvidoEm: new Date(),
+        resolvidoPor: requesterId,
+        motivoResposta: motivoResposta || null,
+      };
+
+      try {
+        if (acao === "aprovar") {
+          const dateKey = String(body?.dateKey || body?.novaDataKey || "").trim();
+          const startMin = parseMinutes(body?.startMin ?? body?.horaInicio ?? body?.novaHoraInicio ?? body?.startTime);
+          const endMin = parseMinutes(body?.endMin ?? body?.horaFim ?? body?.novaHoraFim ?? body?.endTime);
+
+          if (dateKey && isValidDateKey(dateKey) && Number.isFinite(startMin) && Number.isFinite(endMin) && endMin > startMin) {
+            const startMs = toUtcMsForDateKeyAndMinutes(dateKey, startMin, { tzOffsetMinutes: DEFAULT_CONFIG.tzOffsetMinutes });
+            const dow = getDayOfWeekFromDateKey(dateKey);
+            const diaSemana = dow == null ? "" : DOW_TO_KEY[dow] || "";
+            const data = startMs ? new Date(startMs) : new Date();
+
+            await firestorePatchDocument({
+              docPath: aulaPath,
+              idToken,
+              data: {
+                dateKey,
+                startMin,
+                endMin,
+                data,
+                diaSemana,
+                horaInicio: minutesToTime(startMin),
+                horaFim: minutesToTime(endMin),
+                status: "agendada",
+                atualizadoEm: new Date(),
+              },
+              updateMaskPaths: [
+                "dateKey",
+                "startMin",
+                "endMin",
+                "data",
+                "diaSemana",
+                "horaInicio",
+                "horaFim",
+                "status",
+                "atualizadoEm",
+              ],
+            });
+
+            patchReq.novoDateKey = dateKey;
+            patchReq.novaHoraInicio = minutesToTime(startMin);
+            patchReq.novaHoraFim = minutesToTime(endMin);
+          } else {
+            await firestorePatchDocument({
+              docPath: aulaPath,
+              idToken,
+              data: { status: "agendada", atualizadoEm: new Date() },
+              updateMaskPaths: ["status", "atualizadoEm"],
+            }).catch(() => null);
+          }
+        } else {
+          await firestorePatchDocument({
+            docPath: aulaPath,
+            idToken,
+            data: { status: "agendada", atualizadoEm: new Date() },
+            updateMaskPaths: ["status", "atualizadoEm"],
+          }).catch(() => null);
+        }
+
+        const patch = await firestorePatchDocument({
+          docPath: requestPath,
+          idToken,
+          data: patchReq,
+          updateMaskPaths: Object.keys(patchReq),
+        });
+        if (!patch.ok) throw new Error("firestore_patch_failed");
+
+        sendJson(res, 200, { ok: true, status: patchReq.status });
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.error("[api] reschedule resolve failed", error);
+        sendJson(res, 500, { error: "internal_error" });
+      }
+      return;
+    }
+
+    // Create request (student)
+    if (role !== "student") {
+      sendJson(res, 403, { error: "forbidden" });
       return;
     }
 
@@ -150,7 +303,6 @@ module.exports = async (req, res) => {
       });
       if (!patch.ok) throw new Error("firestore_patch_failed");
 
-      // Mark aula with a reschedule flag for visibility.
       await firestorePatchDocument({
         docPath: aulaPath,
         idToken,
@@ -238,4 +390,3 @@ module.exports = async (req, res) => {
   res.setHeader("Allow", "GET, HEAD, POST");
   sendJson(res, 405, { error: "method_not_allowed" });
 };
-
