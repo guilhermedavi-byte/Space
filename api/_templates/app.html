@@ -441,272 +441,197 @@
         </header>
 
         <section class="platform-panel is-visible" data-panel="dashboard">
-          <div class="dashboard-redesign" data-dashboard-student>
-            <div class="overview-stats-grid">
-              <article class="overview-stat-card overview-stat-level">
-                <div class="overview-stat-copy">
-                  <span class="card-kicker">Nível atual</span>
-                  <strong>B1</strong>
+          <div class="student-v5" data-dashboard-student>
+            <div class="student-v5-glow student-v5-glow-blue" aria-hidden="true"></div>
+            <div class="student-v5-glow student-v5-glow-coral" aria-hidden="true"></div>
+
+            <header class="student-v5-header">
+              <div>
+                <p class="student-v5-eyebrow">ÁREA DO ALUNO</p>
+                <p class="student-v5-greeting" data-student-v5-greeting>Boa tarde, Aluno.</p>
+                <p class="student-v5-date" data-student-v5-date>—</p>
+              </div>
+
+              <div class="student-v5-header-right">
+                <div class="student-v5-plan" aria-label="Plano ativo">
+                  <span class="student-v5-plan-dot" aria-hidden="true"></span>
+                  <span data-student-v5-plan>Plano Gold ativo</span>
                 </div>
-                <div
-                  class="level-progress-ring"
-                  style="--level-progress: 72"
-                  aria-label="72% do nível atual concluído"
-                >
-                  <span>72%</span>
+                <div class="student-v5-avatar" data-student-v5-avatar aria-label="Avatar do aluno">SP</div>
+              </div>
+            </header>
+
+            <section class="student-v5-row student-v5-row-top" aria-label="Resumo principal">
+              <article class="student-v5-card student-v5-card-next" aria-label="Próximas aulas">
+                <div class="student-v5-card-head">
+                  <div>
+                    <p class="student-v5-card-title">Suas próximas aulas</p>
+                    <p class="student-v5-card-sub">Esta semana</p>
+                  </div>
                 </div>
+
+                <ul class="student-v5-lessons" data-student-v5-lessons></ul>
+                <div class="student-v5-card-empty" data-student-v5-lessons-empty hidden>Nenhuma aula agendada.</div>
               </article>
 
-              <article class="overview-stat-card">
-                <span class="card-kicker">Total de horas de estudo</span>
-                <strong>84h</strong>
-              </article>
-
-              <article class="overview-stat-card">
-                <span class="card-kicker">Tempo médio diário</span>
-                <strong>38 min</strong>
-              </article>
-
-              <article class="overview-stat-card streak-side-card streak-stat-card">
-                <div class="streak-header">
-                  <span class="streak-fire" aria-hidden="true">
+              <div class="student-v5-metrics" aria-label="Métricas do aluno">
+                <article class="student-v5-metric">
+                  <div class="student-v5-metric-icon is-blue" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="none">
-                      <path
-                        d="M12.2 2.8c.5 2.4-.4 4.4-2.1 6.1-1.1 1.1-1.8 2.3-1.8 3.9 0 2.2 1.8 3.9 4 3.9 2.5 0 4.4-2 4.4-4.7 0-2.1-1.1-3.9-2.8-5.6-.6 1.2-1.5 2-2.8 2.5.8-1.8.6-3.9-.5-6.1-3.3 1.7-5.5 5.1-5.5 8.9 0 4.9 3.6 8.4 8 8.4s8-3.4 8-8c0-4.4-2.5-7.7-6.9-10.3Z"
-                      ></path>
+                      <path d="M20 6 9 17l-5-5"></path>
+                    </svg>
+                  </div>
+                  <p class="student-v5-metric-label">NÍVEL ATUAL</p>
+                  <p class="student-v5-metric-value" data-student-v5-level>—</p>
+                  <div class="student-v5-progress">
+                    <div class="student-v5-progress-fill" data-student-v5-level-bar style="width: 0%"></div>
+                  </div>
+                  <p class="student-v5-metric-sub student-v5-metric-sub-green" data-student-v5-level-sub>—</p>
+                </article>
+
+                <article class="student-v5-metric">
+                  <div class="student-v5-metric-icon is-coral" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none">
+                      <path d="M12 21s-7-4.6-7-11a4 4 0 0 1 7-2.3A4 4 0 0 1 19 10c0 6.4-7 11-7 11Z"></path>
+                    </svg>
+                  </div>
+                  <p class="student-v5-metric-label">STREAK</p>
+                  <p class="student-v5-metric-value"><span data-student-v5-streak>—</span> <span class="student-v5-unit">dias</span></p>
+                  <p class="student-v5-metric-sub student-v5-metric-sub-coral" data-student-v5-streak-record>—</p>
+                </article>
+
+                <article class="student-v5-metric">
+                  <div class="student-v5-metric-icon is-green" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none">
+                      <circle cx="12" cy="12" r="9"></circle>
+                      <path d="M12 7v5l3 2"></path>
+                    </svg>
+                  </div>
+                  <p class="student-v5-metric-label">HORAS DE ESTUDO</p>
+                  <p class="student-v5-metric-value" data-student-v5-hours>—</p>
+                  <p class="student-v5-metric-sub student-v5-metric-sub-green" data-student-v5-hours-delta>—</p>
+                </article>
+
+                <article class="student-v5-metric">
+                  <div class="student-v5-metric-icon is-yellow" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none">
+                      <rect x="3.5" y="5.5" width="17" height="15" rx="2"></rect>
+                      <path d="M7 3.5V7"></path>
+                      <path d="M17 3.5V7"></path>
+                      <path d="M3.5 10.5H20.5"></path>
+                    </svg>
+                  </div>
+                  <p class="student-v5-metric-label">AULAS REALIZADAS</p>
+                  <p class="student-v5-metric-value" data-student-v5-lessons-done>—</p>
+                  <p class="student-v5-metric-sub" data-student-v5-lessons-since>desde o início</p>
+                </article>
+              </div>
+            </section>
+
+            <section class="student-v5-row student-v5-row-mid" aria-label="Professora e NPS">
+              <article class="student-v5-card student-v5-teacher" aria-label="Sua professora">
+                <div class="student-v5-teacher-head">
+                  <div class="student-v5-teacher-avatar" data-student-v5-teacher-avatar aria-hidden="true">—</div>
+                  <div style="min-width:0;">
+                    <p class="student-v5-teacher-name" data-student-v5-teacher-name>—</p>
+                    <p class="student-v5-teacher-spec" data-student-v5-teacher-spec>—</p>
+                  </div>
+                </div>
+
+                <div class="student-v5-teacher-stats" aria-label="Métricas da professora">
+                  <div class="student-v5-teacher-stat">
+                    <p>Aulas juntos</p>
+                    <strong data-student-v5-teacher-classes>—</strong>
+                  </div>
+                  <div class="student-v5-teacher-stat">
+                    <p>Meses</p>
+                    <strong data-student-v5-teacher-months>—</strong>
+                  </div>
+                  <div class="student-v5-teacher-stat">
+                    <p>Sua nota</p>
+                    <strong><span class="student-v5-star" aria-hidden="true">★</span> <span data-student-v5-teacher-rating>—</span></strong>
+                  </div>
+                </div>
+
+                <div class="student-v5-divider"></div>
+
+                <button class="student-v5-ghost" type="button" data-student-v5-teacher-change>
+                  <span class="student-v5-ghost-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none">
+                      <path d="M16 3h5v5"></path>
+                      <path d="M21 3 14 10"></path>
+                      <path d="M8 21H3v-5"></path>
+                      <path d="M3 21l7-7"></path>
                     </svg>
                   </span>
-                  <span class="card-kicker">Streak</span>
-                </div>
-                <strong>9 dias</strong>
+                  Solicitar troca de professor
+                </button>
               </article>
-            </div>
 
-            <div class="analytics-grid">
-              <article class="analytics-card analytics-card-line">
-                <div class="analytics-header">
-                  <h3>Sua trilha de aprendizado</h3>
-                </div>
-
-                <div class="journey-chart-shell">
-                  <div class="journey-chart-stage">
-                    <svg
-                      class="journey-chart-svg"
-                      viewBox="0 0 960 250"
-                      aria-hidden="true"
-                      data-learning-journey-svg
-                    >
-                      <path class="journey-track-base" data-journey-base d=""></path>
-                      <path class="journey-track-progress" data-journey-progress d=""></path>
-                      <g data-journey-nodes></g>
+              <article class="student-v5-card student-v5-nps" aria-label="NPS do aluno" data-student-v5-nps-card>
+                <div class="student-v5-nps-head">
+                  <span class="student-v5-nps-like" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none">
+                      <path d="M7.5 11v10H4.7a2.2 2.2 0 0 1-2.2-2.2V13.2A2.2 2.2 0 0 1 4.7 11h2.8Z"></path>
+                      <path d="M7.5 11l4.3-7.2a2 2 0 0 1 3.6 1.2l-1 4.7H20a2 2 0 0 1 2 2.4l-1.1 6.5a2 2 0 0 1-2 1.6H7.5"></path>
                     </svg>
+                  </span>
+                  <div>
+                    <p class="student-v5-card-title">Como está sua experiência?</p>
+                    <p class="student-v5-nps-question">O quanto você indicaria a Space para um amigo?</p>
+                  </div>
+                </div>
 
-                    <div
-                      class="journey-tag-connector journey-tag-connector-start"
-                      data-journey-start-connector
-                    ></div>
-                    <div class="journey-tag journey-tag-start" data-journey-start-label>
-                      Você começou aqui!
-                    </div>
-                    <div
-                      class="journey-tag-connector journey-tag-connector-current"
-                      data-journey-current-connector
-                    ></div>
-                    <div class="journey-tag journey-tag-current" data-journey-current-label>
-                      Você está aqui!
-                    </div>
+                <div class="student-v5-nps-survey" data-student-v5-nps-survey>
+                  <div class="student-v5-nps-scale" data-student-v5-nps-scale aria-label="Escala de 0 a 10"></div>
+                  <div class="student-v5-nps-labels" aria-hidden="true">
+                    <span>Nada provável</span>
+                    <span>Muito provável</span>
                   </div>
 
-                  <div class="journey-levels" data-learning-levels></div>
+                  <p class="student-v5-nps-tone" data-student-v5-nps-tone hidden>—</p>
+
+                  <textarea class="student-v5-nps-textarea" rows="3" placeholder="Quer nos contar o motivo? (opcional)" data-student-v5-nps-comment></textarea>
+                  <button class="student-v5-nps-submit" type="button" data-student-v5-nps-submit disabled>Enviar avaliação</button>
+                  <div class="student-v5-nps-feedback" data-student-v5-nps-feedback hidden></div>
+                </div>
+
+                <div class="student-v5-nps-thanks" data-student-v5-nps-thanks hidden>
+                  <p class="student-v5-nps-thanks-title">Obrigado pelo seu feedback!</p>
+                  <p class="student-v5-nps-thanks-sub">Sua nota: <strong data-student-v5-nps-last-score>—</strong></p>
                 </div>
               </article>
+            </section>
 
-              <article class="analytics-card analytics-card-bar">
-                <div class="analytics-header">
-                  <h3>Tempo de estudo</h3>
-
-                  <div class="chart-filter-dropdown" data-chart-dropdown="study">
-                    <button
-                      class="chart-filter-trigger"
-                      type="button"
-                      data-chart-trigger="study"
-                      aria-expanded="false"
-                      aria-haspopup="true"
-                      aria-label="Filtrar tempo de estudo"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <rect x="3.5" y="5.5" width="17" height="15" rx="2"></rect>
-                        <path d="M7 3.5V7"></path>
-                        <path d="M17 3.5V7"></path>
-                        <path d="M3.5 10.5H20.5"></path>
-                      </svg>
-                    </button>
-
-                    <div class="chart-filter-menu" data-chart-menu="study" hidden>
-                      <button
-                        class="chart-filter-option is-active"
-                        type="button"
-                        data-chart-option
-                        data-chart-type="study"
-                        data-chart-range="7d"
-                      >
-                        Últimos 7 dias
-                      </button>
-                      <button
-                        class="chart-filter-option"
-                        type="button"
-                        data-chart-option
-                        data-chart-type="study"
-                        data-chart-range="30d"
-                      >
-                        Últimos 30 dias
-                      </button>
-                      <button
-                        class="chart-filter-option"
-                        type="button"
-                        data-chart-option
-                        data-chart-type="study"
-                        data-chart-range="90d"
-                      >
-                        Últimos 90 dias
-                      </button>
-                      <button
-                        class="chart-filter-option"
-                        type="button"
-                        data-chart-option
-                        data-chart-type="study"
-                        data-chart-range="all"
-                      >
-                        Todo o período
-                      </button>
-                    </div>
-                  </div>
+            <article class="student-v5-card student-v5-path" aria-label="Trilha de aprendizado">
+              <div class="student-v5-card-head student-v5-card-head-row">
+                <p class="student-v5-card-title">Sua trilha de aprendizado</p>
+                <div class="student-v5-path-legend">
+                  <span class="student-v5-path-dot" aria-hidden="true"></span>
+                  <span>Você está aqui</span>
                 </div>
-
-                <div class="bar-chart-shell">
-                  <div class="bar-chart-scale">
-                    <span>12h</span>
-                    <span>8h</span>
-                    <span>4h</span>
-                    <span>0h</span>
-                  </div>
-
-                  <div class="bar-chart-stage">
-                    <div class="bar-chart-grid">
-                      <span></span>
-                      <span></span>
-                      <span></span>
-                      <span></span>
-                    </div>
-                    <div class="bar-chart-bars" data-study-chart></div>
-                  </div>
-                </div>
-              </article>
-
-              <article class="analytics-card analytics-card-score">
-                <div class="analytics-header">
-                  <h3>Taxa de agendamento de aulas</h3>
-                </div>
-
-                <div class="score-card-body" aria-label="Taxa de agendamento de aulas: 8.0 de 10">
-                  <div class="score-card-rating">
-                    <strong>8.0</strong>
-                    <span>/10</span>
-                  </div>
-                </div>
-              </article>
-            </div>
-
-            <div class="dashboard-secondary-grid">
-              <article class="surface-card today-availability-card">
-                <div class="dashboard-section-header refined-header">
-                  <h3>Horários disponíveis hoje</h3>
-                  <button class="ghost-action-button" type="button" data-open-live-panel>
-                    ver todos
-                  </button>
-                </div>
-
-                <div class="today-slots-grid">
-                  <button class="today-slot-button" type="button">09:00</button>
-                  <button class="today-slot-button" type="button">11:30</button>
-                  <button class="today-slot-button" type="button">14:00</button>
-                  <button class="today-slot-button" type="button">16:30</button>
-                  <button class="today-slot-button today-slot-button-primary" type="button">
-                    19:00
-                  </button>
-                </div>
-              </article>
-
-              <article class="surface-card ranking-card">
-                <div class="dashboard-section-header refined-header">
-                  <h3>Ranking Space</h3>
-                </div>
-
-                <div class="ranking-list">
-                  <div class="ranking-row ranking-row-top">
-                    <span class="ranking-position">1</span>
-                    <span class="ranking-avatar">AL</span>
-                    <strong>Amanda Lee</strong>
-                    <span class="ranking-xp">8.940 XP</span>
-                  </div>
-                  <div class="ranking-row ranking-row-top">
-                    <span class="ranking-position">2</span>
-                    <span class="ranking-avatar">MR</span>
-                    <strong>Marcus Reed</strong>
-                    <span class="ranking-xp">8.510 XP</span>
-                  </div>
-                  <div class="ranking-row ranking-row-top">
-                    <span class="ranking-position">3</span>
-                    <span class="ranking-avatar">JL</span>
-                    <strong>Julia Long</strong>
-                    <span class="ranking-xp">8.180 XP</span>
-                  </div>
-                  <div class="ranking-row">
-                    <span class="ranking-position">4</span>
-                    <span class="ranking-avatar">NT</span>
-                    <strong>Noah Taylor</strong>
-                    <span class="ranking-xp">7.940 XP</span>
-                  </div>
-                  <div class="ranking-row">
-                    <span class="ranking-position">5</span>
-                    <span class="ranking-avatar">SV</span>
-                    <strong>Sophia Vega</strong>
-                    <span class="ranking-xp">7.520 XP</span>
-                  </div>
-                </div>
-
-                <div class="ranking-self-card">
-                  <span class="card-kicker">Sua posição</span>
-                  <div class="ranking-row ranking-row-self">
-                    <span class="ranking-position">23</span>
-                    <span class="ranking-avatar ranking-avatar-self">CA</span>
-                    <strong>Camila</strong>
-                    <span class="ranking-xp">3.420 XP</span>
-                  </div>
-                </div>
-              </article>
-
-            </div>
-
-            <article class="surface-card recommendations-card">
-              <div class="dashboard-section-header refined-header">
-                <h3>Recomendações pedagógicas</h3>
               </div>
 
-              <div class="recommendations-grid">
-                <div class="recommendation-item">
-                  <span class="recommendation-tag">Speaking</span>
-                  <strong>Priorizar duas aulas ao vivo de speaking nesta semana</strong>
-                </div>
-                <div class="recommendation-item">
-                  <span class="recommendation-tag">Listening</span>
-                  <strong>Repetir a aula “Listening for meetings” antes da próxima live</strong>
-                </div>
-                <div class="recommendation-item">
-                  <span class="recommendation-tag">Review</span>
-                  <strong>Revisar estruturas de B1 para consolidar a passagem ao B1+</strong>
+              <div class="student-v5-path-bars" data-student-v5-path></div>
+            </article>
+
+            <article class="student-v5-card student-v5-recs" aria-label="Recomendações para você">
+              <div class="student-v5-card-head">
+                <div class="student-v5-recs-head">
+                  <span class="student-v5-recs-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none">
+                      <path d="M7 4.5h7l3 3v12H7a2 2 0 0 1-2-2v-11a2 2 0 0 1 2-2Z"></path>
+                      <path d="M14 4.5v3h3"></path>
+                      <path d="M9 12h6"></path>
+                      <path d="M9 15.5h4.5"></path>
+                    </svg>
+                  </span>
+                  <p class="student-v5-card-title">Recomendações para você</p>
                 </div>
               </div>
+
+              <div class="student-v5-recs-grid" data-student-v5-recs></div>
+              <div class="student-v5-card-empty" data-student-v5-recs-empty hidden>Sem recomendações por enquanto.</div>
             </article>
           </div>
 

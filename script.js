@@ -114,6 +114,40 @@ const teacherTodaySlotsEmpty = document.querySelector("[data-teacher-today-slots
 const teacherNoticeList = document.querySelector("[data-teacher-notice-list]");
 const teacherNoticeEmpty = document.querySelector("[data-teacher-notice-empty]");
 
+// Student dashboard v5 (new home screen for students).
+const studentV5Greeting = document.querySelector("[data-student-v5-greeting]");
+const studentV5Date = document.querySelector("[data-student-v5-date]");
+const studentV5Plan = document.querySelector("[data-student-v5-plan]");
+const studentV5Avatar = document.querySelector("[data-student-v5-avatar]");
+const studentV5LessonsList = document.querySelector("[data-student-v5-lessons]");
+const studentV5LessonsEmpty = document.querySelector("[data-student-v5-lessons-empty]");
+const studentV5Level = document.querySelector("[data-student-v5-level]");
+const studentV5LevelBar = document.querySelector("[data-student-v5-level-bar]");
+const studentV5LevelSub = document.querySelector("[data-student-v5-level-sub]");
+const studentV5Streak = document.querySelector("[data-student-v5-streak]");
+const studentV5StreakRecord = document.querySelector("[data-student-v5-streak-record]");
+const studentV5Hours = document.querySelector("[data-student-v5-hours]");
+const studentV5HoursDelta = document.querySelector("[data-student-v5-hours-delta]");
+const studentV5LessonsDone = document.querySelector("[data-student-v5-lessons-done]");
+const studentV5TeacherAvatar = document.querySelector("[data-student-v5-teacher-avatar]");
+const studentV5TeacherName = document.querySelector("[data-student-v5-teacher-name]");
+const studentV5TeacherSpec = document.querySelector("[data-student-v5-teacher-spec]");
+const studentV5TeacherClasses = document.querySelector("[data-student-v5-teacher-classes]");
+const studentV5TeacherMonths = document.querySelector("[data-student-v5-teacher-months]");
+const studentV5TeacherRating = document.querySelector("[data-student-v5-teacher-rating]");
+const studentV5Path = document.querySelector("[data-student-v5-path]");
+const studentV5Recs = document.querySelector("[data-student-v5-recs]");
+const studentV5RecsEmpty = document.querySelector("[data-student-v5-recs-empty]");
+const studentV5NpsCard = document.querySelector("[data-student-v5-nps-card]");
+const studentV5NpsSurvey = document.querySelector("[data-student-v5-nps-survey]");
+const studentV5NpsScale = document.querySelector("[data-student-v5-nps-scale]");
+const studentV5NpsTone = document.querySelector("[data-student-v5-nps-tone]");
+const studentV5NpsComment = document.querySelector("[data-student-v5-nps-comment]");
+const studentV5NpsSubmit = document.querySelector("[data-student-v5-nps-submit]");
+const studentV5NpsFeedback = document.querySelector("[data-student-v5-nps-feedback]");
+const studentV5NpsThanks = document.querySelector("[data-student-v5-nps-thanks]");
+const studentV5NpsLastScore = document.querySelector("[data-student-v5-nps-last-score]");
+
 // Teacher dashboard v4 (new home screen for teachers).
 const teacherV4Greeting = document.querySelector("[data-teacher-v4-greeting]");
 const teacherV4Date = document.querySelector("[data-teacher-v4-date]");
@@ -218,6 +252,25 @@ let studentLessonsState = {
   isLoading: false,
   lastLoadedAt: 0,
   lessons: [],
+};
+
+let studentV5DashboardState = {
+  isLoading: false,
+  loadedAt: 0,
+  alunoId: "",
+  userData: null,
+  aulas: [],
+  avaliacoes: [],
+  recomendacoes: [],
+  teacherId: "",
+  teacherData: null,
+  lastNps: null,
+  npsCooldownUntilMs: 0,
+};
+
+let studentV5NpsDraft = {
+  score: null,
+  isSubmitting: false,
 };
 
 let teacherV4DashboardState = {
@@ -464,6 +517,8 @@ const setRole = (role) => {
       renderTeacherDashboard();
     } else if (currentRole === "admin") {
       renderAdminDashboard();
+    } else {
+      renderStudentDashboard();
     }
   }
 
@@ -885,6 +940,642 @@ const renderAdminDashboard = () => {
     const month = monthRaw.charAt(0).toUpperCase() + monthRaw.slice(1);
     adminDashboardMonth.textContent = `${month} ${now.getFullYear()}`;
   }
+};
+
+const STUDENT_V5_LEVELS = ["Pré A1", "A1", "A1+", "A2", "A2+", "B1", "B1+", "B2", "B2+", "C1", "C2"];
+const STUDENT_V5_WEEKDAY_ABBR = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"];
+
+const normalizeStudentLevelKey = (value) => {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .replace("pré", "pre");
+};
+
+const levelIndexFromValue = (raw) => {
+  const key = normalizeStudentLevelKey(raw);
+  if (!key) return -1;
+  return STUDENT_V5_LEVELS.findIndex((lvl) => normalizeStudentLevelKey(lvl) === key);
+};
+
+const formatStudentLongDate = (date) => {
+  try {
+    const fmt = new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
+    const raw = fmt.format(date);
+    return raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : "";
+  } catch (error) {
+    return "";
+  }
+};
+
+const parseFirestoreDateToMs = (value) => {
+  if (!value) return 0;
+  try {
+    if (value instanceof Date) return value.getTime();
+    if (typeof value?.toDate === "function") {
+      const d = value.toDate();
+      return d instanceof Date && !Number.isNaN(d.getTime()) ? d.getTime() : 0;
+    }
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    const d = new Date(String(value));
+    return Number.isNaN(d.getTime()) ? 0 : d.getTime();
+  } catch (error) {
+    return 0;
+  }
+};
+
+const isCancelledStatus = (status) => {
+  const s = String(status || "").trim().toLowerCase();
+  return s === "cancelada" || s === "cancelado" || s === "cancelled" || s === "canceled";
+};
+
+const isDoneStatus = (status) => {
+  const s = String(status || "").trim().toLowerCase();
+  return s === "realizada" || s === "concluida" || s === "concluído" || s === "concluída" || s === "concluido";
+};
+
+const calcStreakFromDateKeys = (dateKeys, referenceDate = new Date()) => {
+  const set = new Set((Array.isArray(dateKeys) ? dateKeys : []).filter(Boolean));
+  if (!set.size) return { current: 0, record: 0 };
+
+  const toKey = (d) => createDateKey(d);
+
+  const ref = startOfDay(referenceDate);
+  let current = 0;
+  for (let i = 0; i < 365; i += 1) {
+    const cursor = new Date(ref);
+    cursor.setDate(ref.getDate() - i);
+    const key = toKey(cursor);
+    if (!set.has(key)) break;
+    current += 1;
+  }
+
+  let record = 0;
+  const sorted = [...set].sort();
+  let streak = 0;
+  let prev = null;
+  sorted.forEach((key) => {
+    const date = parseDateKey(key);
+    if (!date) return;
+    if (!prev) {
+      streak = 1;
+      record = Math.max(record, streak);
+      prev = date;
+      return;
+    }
+    const next = new Date(prev);
+    next.setDate(prev.getDate() + 1);
+    if (createDateKey(next) === key) {
+      streak += 1;
+    } else {
+      streak = 1;
+    }
+    record = Math.max(record, streak);
+    prev = date;
+  });
+
+  return { current, record };
+};
+
+const ensureStudentV5NpsScale = () => {
+  if (!(studentV5NpsScale instanceof HTMLElement)) return;
+  if (studentV5NpsScale.childElementCount) return;
+
+  studentV5NpsScale.innerHTML = Array.from({ length: 11 })
+    .map((_, idx) => `<button class="student-v5-nps-btn" type="button" data-student-v5-nps-score="${idx}">${idx}</button>`)
+    .join("");
+};
+
+const syncStudentV5NpsScaleUI = () => {
+  if (!(studentV5NpsScale instanceof HTMLElement)) return;
+  const score = studentV5NpsDraft.score;
+  const buttons = [...studentV5NpsScale.querySelectorAll("[data-student-v5-nps-score]")];
+  buttons.forEach((btn) => {
+    if (!(btn instanceof HTMLButtonElement)) return;
+    const value = Number(btn.getAttribute("data-student-v5-nps-score"));
+    btn.classList.remove("is-bad", "is-mid", "is-good");
+    if (!Number.isFinite(score) || !Number.isFinite(value)) return;
+    if (value > score) return;
+    if (score <= 6) btn.classList.add("is-bad");
+    else if (score <= 8) btn.classList.add("is-mid");
+    else btn.classList.add("is-good");
+  });
+
+  if (studentV5NpsSubmit instanceof HTMLButtonElement) {
+    studentV5NpsSubmit.disabled = !Number.isFinite(score) || studentV5NpsDraft.isSubmitting;
+  }
+
+  if (studentV5NpsTone instanceof HTMLElement) {
+    if (!Number.isFinite(score)) {
+      studentV5NpsTone.hidden = true;
+      studentV5NpsTone.textContent = "";
+    } else {
+      const tone = (() => {
+        if (score <= 2) return "Péssima";
+        if (score <= 4) return "Muito ruim";
+        if (score <= 6) return "Ruim";
+        if (score === 7) return "Razoável";
+        if (score === 8) return "Boa";
+        if (score === 9) return "Ótima";
+        return "Excelente!";
+      })();
+      studentV5NpsTone.hidden = false;
+      studentV5NpsTone.textContent = tone;
+    }
+  }
+};
+
+const openStudentTeacherChangeModal = ({ alunoId, professorId, professorNome }) => {
+  if (!alunoId || !professorId) return;
+
+  openModal({
+    title: "Solicitar troca de professor",
+    bodyHtml: `
+      <div class="modal-form">
+        <div class="modal-inline-note">Professor atual: <strong>${escapeHtml(professorNome || "Professor")}</strong></div>
+        <div class="modal-field">
+          <span style="display:block; font-weight:800; margin-bottom:10px;">Motivo</span>
+          <div class="modal-radio" data-teacher-change-reasons>
+            ${[
+              "Não me adapto ao estilo de ensino",
+              "Prefiro outro horário que este professor não tem",
+              "Quero experimentar outro professor",
+              "Dificuldade de comunicação",
+              "Outro motivo",
+            ]
+              .map(
+                (label, idx) => `
+                <label class="modal-radio-option">
+                  <input type="radio" name="teacherChangeReason" value="${escapeHtml(label)}" ${idx === 0 ? "checked" : ""} />
+                  <span>${escapeHtml(label)}</span>
+                </label>
+              `
+              )
+              .join("")}
+          </div>
+        </div>
+        <label class="modal-field">
+          <span>Comentário (opcional)</span>
+          <textarea class="modal-textarea" data-teacher-change-comment placeholder="Se quiser, conte mais detalhes..."></textarea>
+        </label>
+        <div class="modal-inline-error" data-teacher-change-error hidden></div>
+      </div>
+    `,
+    primaryLabel: "Enviar solicitação",
+    secondaryLabel: "Cancelar",
+    hideSecondary: false,
+    showTrash: false,
+    onPrimary: () => {
+      const reasons = modalBody?.querySelector('input[name="teacherChangeReason"]:checked');
+      const commentEl = modalBody?.querySelector("[data-teacher-change-comment]");
+      const errEl = modalBody?.querySelector("[data-teacher-change-error]");
+      const motivo = reasons instanceof HTMLInputElement ? reasons.value.trim() : "";
+      const comentario = commentEl instanceof HTMLTextAreaElement ? commentEl.value.trim() : "";
+
+      if (errEl instanceof HTMLElement) {
+        errEl.hidden = true;
+        errEl.textContent = "";
+      }
+
+      if (!motivo) {
+        if (errEl instanceof HTMLElement) {
+          errEl.hidden = false;
+          errEl.textContent = "Selecione um motivo para continuar.";
+        }
+        return false;
+      }
+
+      if (modalPrimary) modalPrimary.disabled = true;
+      if (modalSecondary) modalSecondary.disabled = true;
+
+      (async () => {
+        try {
+          const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init");
+          const docRef = firebase.doc(firebase.collection(firebase.primaryDb, "trocaProfessor"));
+          await withTimeout(
+            firebase.setDoc(docRef, {
+              alunoId,
+              professorAtualId: professorId,
+              motivo,
+              comentario,
+              status: "pendente",
+              criadoEm: firebase.serverTimestamp(),
+            }),
+            12_000,
+            "student_teacher_change_save"
+          );
+          closeModal();
+        } catch (error) {
+          console.error("[student] teacher change request failed:", error);
+          if (errEl instanceof HTMLElement) {
+            errEl.hidden = false;
+            errEl.textContent = "Não foi possível enviar agora. Tente novamente.";
+          }
+          if (modalPrimary) modalPrimary.disabled = false;
+          if (modalSecondary) modalSecondary.disabled = false;
+        }
+      })();
+
+      return false;
+    },
+  });
+};
+
+const renderStudentDashboard = () => {
+  if (currentRole !== "student") return;
+  if (!(dashboardStudent instanceof HTMLElement)) return;
+
+  const now = new Date();
+  const hour = now.getHours();
+  let greeting = "Boa noite";
+  if (hour >= 6 && hour < 12) greeting = "Bom dia";
+  else if (hour >= 12 && hour < 18) greeting = "Boa tarde";
+
+  const studentName =
+    sessionUser && sessionUser.role === "student" ? sessionUser.name : ROLE_DEFS.student?.defaultName || "Aluno";
+
+  if (studentV5Greeting instanceof HTMLElement) {
+    studentV5Greeting.textContent = `${greeting}, ${studentName}.`;
+  }
+  if (studentV5Date instanceof HTMLElement) {
+    studentV5Date.textContent = formatStudentLongDate(now);
+  }
+  if (studentV5Avatar instanceof HTMLElement) {
+    studentV5Avatar.textContent = getInitials(studentName);
+  }
+  if (studentV5Plan instanceof HTMLElement) {
+    studentV5Plan.textContent = "Plano Gold ativo";
+  }
+
+  ensureStudentV5NpsScale();
+
+  const renderFromCache = () => {
+    const userData = studentV5DashboardState.userData && typeof studentV5DashboardState.userData === "object" ? studentV5DashboardState.userData : {};
+    const nivel = typeof userData.nivel === "string" ? userData.nivel.trim() : "";
+    const progressRaw = Number(userData.progressoNivel);
+    const progressPct = Number.isFinite(progressRaw) ? (progressRaw > 1 ? clampNumber(progressRaw, 0, 100) : clampNumber(progressRaw * 100, 0, 100)) : 0;
+
+    if (studentV5Level instanceof HTMLElement) studentV5Level.textContent = nivel || "—";
+    if (studentV5LevelBar instanceof HTMLElement) studentV5LevelBar.style.width = `${progressPct}%`;
+    if (studentV5LevelSub instanceof HTMLElement) {
+      studentV5LevelSub.textContent = nivel ? `${Math.round(progressPct)}% concluído` : "—";
+    }
+
+    const aulas = Array.isArray(studentV5DashboardState.aulas) ? studentV5DashboardState.aulas : [];
+    const done = aulas.filter((a) => a && !isCancelledStatus(a.status) && isDoneStatus(a.status));
+    const doneMinutes = done.reduce((acc, a) => acc + Math.max(0, (a.endMin || 0) - (a.startMin || 0)), 0);
+    const totalHours = doneMinutes / 60;
+
+    if (studentV5Hours instanceof HTMLElement) studentV5Hours.textContent = done.length ? formatHours(totalHours) : "0h";
+
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    const monthMinutes = done
+      .filter((a) => a.startMs && a.startMs >= monthStart.getTime() && a.startMs <= monthEnd.getTime())
+      .reduce((acc, a) => acc + Math.max(0, (a.endMin || 0) - (a.startMin || 0)), 0);
+    if (studentV5HoursDelta instanceof HTMLElement) {
+      studentV5HoursDelta.textContent = `+${formatHours(monthMinutes / 60)} este mês`;
+    }
+
+    if (studentV5LessonsDone instanceof HTMLElement) studentV5LessonsDone.textContent = String(done.length);
+
+    const activeDays = done.map((a) => a.dateKey).filter(Boolean);
+    const streakData = calcStreakFromDateKeys(activeDays, now);
+    if (studentV5Streak instanceof HTMLElement) studentV5Streak.textContent = String(streakData.current);
+    if (studentV5StreakRecord instanceof HTMLElement) studentV5StreakRecord.textContent = `Recorde: ${streakData.record} dias`;
+
+    // Upcoming lessons (top card): reuse the same state used in "Aulas ao vivo" so reschedule works everywhere.
+    const lessons = Array.isArray(studentLessonsState.lessons) ? studentLessonsState.lessons : [];
+    const next3 = lessons.slice(0, 3);
+    if (studentV5LessonsEmpty instanceof HTMLElement) studentV5LessonsEmpty.hidden = next3.length > 0;
+    if (studentV5LessonsList instanceof HTMLElement) {
+      studentV5LessonsList.innerHTML = next3
+        .map((lesson, idx) => {
+          const date = parseDateKey(lesson.dateKey);
+          const day = date ? date.getDate() : 0;
+          const dow = date ? date.getDay() : 0;
+          const abbr = STUDENT_V5_WEEKDAY_ABBR[dow] || "";
+          const timeLabel = `${formatHmFromMinutes(lesson.startMin)} — ${formatHmFromMinutes(lesson.endMin)}`;
+          const prof = lesson.professor || "Professor";
+
+          const badge = (() => {
+            if (idx !== 0 || !date) return "";
+            const start = new Date(date);
+            start.setMinutes(lesson.startMin);
+            const diffDays = Math.max(0, Math.round((startOfDay(start).getTime() - startOfDay(now).getTime()) / 86400000));
+            const label = diffDays === 0 ? "Hoje" : diffDays === 1 ? "Amanhã" : `Em ${diffDays} dias`;
+            return `<span class="student-v5-lesson-badge">${escapeHtml(label)}</span>`;
+          })();
+
+          const action = (() => {
+            if (idx === 0) return badge;
+            const req = lesson.request;
+            const disabled = req && String(req.status || "").toLowerCase() === "pendente";
+            const statusPill = req ? `<span class="${statusClassForRequest(req.status)}">${escapeHtml(statusLabelForRequest(req.status))}</span>` : "";
+            return `
+              <div class="student-v5-lesson-actions">
+                ${statusPill}
+                <button class="student-v5-lesson-link" type="button" data-live-reschedule="${escapeHtml(lesson.id)}" ${disabled ? "disabled" : ""}>
+                  Reagendar
+                </button>
+              </div>
+            `;
+          })();
+
+          return `
+            <li class="student-v5-lesson ${idx === 0 ? "is-primary" : ""}">
+              <div class="student-v5-lesson-left">
+                <div class="student-v5-lesson-datechip" aria-hidden="true">
+                  <strong>${day ? String(day).padStart(2, "0") : "—"}</strong>
+                  <span>${escapeHtml(abbr)}</span>
+                </div>
+                <div class="student-v5-lesson-meta">
+                  <span class="student-v5-lesson-time">${escapeHtml(timeLabel)}</span>
+                  <span class="student-v5-lesson-prof">${escapeHtml(prof)}</span>
+                </div>
+              </div>
+              ${idx === 0 ? `<div class="student-v5-lesson-actions">${badge}</div>` : action}
+            </li>
+          `;
+        })
+        .join("");
+    }
+
+    // Teacher card: inferred from the next lesson (if any).
+    const teacherName = studentV5DashboardState.teacherData?.nome || lessons[0]?.professor || "";
+    if (studentV5TeacherName instanceof HTMLElement) {
+      studentV5TeacherName.textContent = teacherName || "Nenhuma informação cadastrada";
+      studentV5TeacherName.classList.toggle("is-placeholder", !teacherName);
+    }
+    if (studentV5TeacherAvatar instanceof HTMLElement) {
+      studentV5TeacherAvatar.textContent = teacherName ? getInitials(teacherName) : "—";
+    }
+    const teacherSpec =
+      (studentV5DashboardState.teacherData && (studentV5DashboardState.teacherData.especialidade || studentV5DashboardState.teacherData.specialty)) ||
+      (teacherName ? "Professora particular" : "");
+    if (studentV5TeacherSpec instanceof HTMLElement) {
+      studentV5TeacherSpec.textContent = teacherSpec || "Nenhuma informação cadastrada";
+      studentV5TeacherSpec.classList.toggle("is-placeholder", !teacherSpec);
+    }
+
+    const teacherId = studentV5DashboardState.teacherId;
+    const aulasTeacher = teacherId ? aulas.filter((a) => a && a.professorId === teacherId && !isCancelledStatus(a.status)) : [];
+    if (studentV5TeacherClasses instanceof HTMLElement) studentV5TeacherClasses.textContent = String(aulasTeacher.length || 0);
+    if (studentV5TeacherMonths instanceof HTMLElement) {
+      const first = aulasTeacher
+        .filter((a) => a.startMs)
+        .sort((a, b) => (a.startMs || 0) - (b.startMs || 0))[0];
+      if (first && first.startMs) {
+        const firstDate = new Date(first.startMs);
+        const months = (now.getFullYear() * 12 + now.getMonth()) - (firstDate.getFullYear() * 12 + firstDate.getMonth()) + 1;
+        studentV5TeacherMonths.textContent = String(Math.max(1, months));
+      } else {
+        studentV5TeacherMonths.textContent = "—";
+      }
+    }
+
+    if (studentV5TeacherRating instanceof HTMLElement) {
+      const evals = Array.isArray(studentV5DashboardState.avaliacoes) ? studentV5DashboardState.avaliacoes : [];
+      const relevant = teacherId ? evals.filter((e) => e && e.professorId === teacherId && Number.isFinite(e.score10)) : [];
+      const avg = relevant.length ? relevant.reduce((acc, e) => acc + (Number(e.score10) || 0), 0) / relevant.length : null;
+      studentV5TeacherRating.textContent = avg == null ? "—" : String(Math.round(avg * 10) / 10).replace(".", ",");
+    }
+
+    // NPS (90 days cooldown).
+    const cooldownActive = Boolean(studentV5DashboardState.lastNps && studentV5DashboardState.npsCooldownUntilMs > now.getTime());
+    if (studentV5NpsSurvey instanceof HTMLElement) studentV5NpsSurvey.hidden = cooldownActive;
+    if (studentV5NpsThanks instanceof HTMLElement) studentV5NpsThanks.hidden = !cooldownActive;
+    if (cooldownActive && studentV5NpsLastScore instanceof HTMLElement) {
+      studentV5NpsLastScore.textContent = String(studentV5DashboardState.lastNps?.nota ?? "—");
+    }
+    if (!cooldownActive) {
+      syncStudentV5NpsScaleUI();
+    }
+
+    // Learning path.
+    if (studentV5Path instanceof HTMLElement) {
+      const idx = levelIndexFromValue(nivel);
+      const currentIdx = idx >= 0 ? idx : 0;
+      const fillPct = Math.round(progressPct);
+      studentV5Path.innerHTML = STUDENT_V5_LEVELS.map((label, i) => {
+        const isDone = i < currentIdx;
+        const isCurrent = i === currentIdx;
+        const isFuture = i > currentIdx;
+        const cls = isCurrent ? "is-current" : isFuture ? "is-future" : "";
+        const doneOpacity = isDone ? 0.15 + (0.2 * i) / Math.max(1, currentIdx) : 0;
+        const fillHeight = isDone ? 100 : isCurrent ? fillPct : 0;
+        const fillColor = isDone
+          ? `rgba(93,202,165,${doneOpacity.toFixed(3)})`
+          : isCurrent
+            ? "linear-gradient(180deg, rgba(255,78,70,0.95) 0%, rgba(255,78,70,0.55) 100%)"
+            : "transparent";
+        const fillStyle = `height:${fillHeight}%; background:${fillColor};`;
+        const badge = isCurrent && nivel ? `<div class="student-v5-path-badge">${fillPct}%</div>` : "";
+        return `
+          <div class="student-v5-path-item">
+            <div class="student-v5-path-bar ${cls}">
+              <div class="student-v5-path-fill" style="${fillStyle}"></div>
+              ${badge}
+            </div>
+            <div class="student-v5-path-label">${escapeHtml(label)}</div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    // Recommendations.
+    const recs = Array.isArray(studentV5DashboardState.recomendacoes) ? studentV5DashboardState.recomendacoes : [];
+    const top3 = recs.slice(0, 3);
+    if (studentV5RecsEmpty instanceof HTMLElement) studentV5RecsEmpty.hidden = top3.length > 0;
+    if (studentV5Recs instanceof HTMLElement) {
+      studentV5Recs.innerHTML = top3
+        .map((rec, idx) => {
+          const rawTag = String(rec.tag || "").trim().toUpperCase();
+          const tag = rawTag || (idx === 1 ? "LISTENING" : idx === 2 ? "REVIEW" : "SPEAKING");
+          const cls = tag.includes("LISTEN") ? "is-listening" : tag.includes("REVIEW") || tag.includes("REVIS") ? "is-review" : "is-speaking";
+          const text = rec.text || "Nenhuma informação cadastrada";
+          return `
+            <div class="student-v5-rec">
+              <div class="student-v5-rec-tag ${cls}">${escapeHtml(tag)}</div>
+              <p class="student-v5-rec-text">${escapeHtml(text)}</p>
+            </div>
+          `;
+        })
+        .join("");
+    }
+  };
+
+  renderFromCache();
+
+  const nowMs = now.getTime();
+  const studentId = sessionUser && sessionUser.role === "student" ? sessionUser.id : "";
+  const shouldReload = !studentV5DashboardState.loadedAt || nowMs - studentV5DashboardState.loadedAt > 20_000 || studentV5DashboardState.alunoId !== studentId;
+
+  if (!shouldReload || studentV5DashboardState.isLoading) return;
+  studentV5DashboardState.isLoading = true;
+
+  (async () => {
+    try {
+      const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init");
+      const user = await waitForFirebaseAuthReady(firebase, 5000);
+      if (!user) throw new Error("auth/no-current-user");
+
+      const alunoId = studentId || String(user.uid || "");
+      studentV5DashboardState.alunoId = alunoId;
+
+      // Refresh shared lessons state (used by "Aulas ao vivo" and dashboard quick actions).
+      await renderStudentLiveLessons({ force: true });
+
+      // User document (nivel / progresso / etc).
+      try {
+        const snap = firebase.getDoc ? await withTimeout(firebase.getDoc(firebase.doc(firebase.primaryDb, "users", alunoId)), 10_000, "student_v5_user") : null;
+        studentV5DashboardState.userData = snap && typeof snap.data === "function" ? snap.data() : null;
+      } catch (error) {
+        studentV5DashboardState.userData = null;
+      }
+
+      // All lessons for metrics (completed count, hours, streak, teacher inference).
+      try {
+        const snap = await withTimeout(
+          firebase.getDocs(firebase.query(firebase.collection(firebase.primaryDb, "aulas"), firebase.where("alunoId", "==", alunoId))),
+          12_000,
+          "student_v5_aulas"
+        );
+        const aulas = [];
+        snap.forEach((docSnap) => {
+          const data = docSnap.data ? docSnap.data() : null;
+          if (!data || typeof data !== "object") return;
+          const professorId = typeof data.professorId === "string" ? data.professorId.trim() : "";
+          const dateKey = typeof data.dateKey === "string" ? data.dateKey.trim() : "";
+          const startMin = Number.isFinite(Number(data.startMin)) ? clampNumber(data.startMin, 0, 1440) : timeToMinutes(data.horaInicio);
+          const endMin = Number.isFinite(Number(data.endMin)) ? clampNumber(data.endMin, 0, 1440) : timeToMinutes(data.horaFim);
+          if (!dateKey || !Number.isFinite(startMin) || !Number.isFinite(endMin) || endMin <= startMin) return;
+          const startDate = parseDateKey(dateKey);
+          const startMs = startDate ? new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate(), 0, 0, 0, 0).getTime() + startMin * 60000 : 0;
+          const endMs = startDate ? new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate(), 0, 0, 0, 0).getTime() + endMin * 60000 : 0;
+          aulas.push({
+            professorId,
+            dateKey,
+            startMin,
+            endMin,
+            startMs,
+            endMs,
+            status: String(data.status || "").trim().toLowerCase() || "agendada",
+          });
+        });
+        studentV5DashboardState.aulas = aulas;
+      } catch (error) {
+        studentV5DashboardState.aulas = [];
+      }
+
+      // Teacher inference (use the next scheduled lesson if available).
+      const lessons = Array.isArray(studentLessonsState.lessons) ? studentLessonsState.lessons : [];
+      const inferredTeacherId = lessons[0] && lessons[0].professorId ? String(lessons[0].professorId) : "";
+      studentV5DashboardState.teacherId = inferredTeacherId;
+      studentV5DashboardState.teacherData = null;
+      if (inferredTeacherId) {
+        try {
+          const snap = firebase.getDoc ? await withTimeout(firebase.getDoc(firebase.doc(firebase.primaryDb, "users", inferredTeacherId)), 10_000, "student_v5_teacher") : null;
+          studentV5DashboardState.teacherData = snap && typeof snap.data === "function" ? snap.data() : null;
+        } catch (error) {
+          studentV5DashboardState.teacherData = null;
+        }
+      }
+
+      // Avaliacoes (optional): used for teacher rating.
+      try {
+        const snap = await withTimeout(
+          firebase.getDocs(firebase.query(firebase.collection(firebase.primaryDb, "avaliacoes"), firebase.where("alunoId", "==", alunoId))),
+          12_000,
+          "student_v5_avaliacoes"
+        );
+        const rows = [];
+        snap.forEach((docSnap) => {
+          const data = docSnap.data ? docSnap.data() : null;
+          if (!data || typeof data !== "object") return;
+          const professorId = typeof data.professorId === "string" ? data.professorId.trim() : "";
+          const score10 = Number(data.score10 ?? data.nota ?? data.score ?? data.rating ?? null);
+          if (!professorId || !Number.isFinite(score10)) return;
+          rows.push({ professorId, score10 });
+        });
+        studentV5DashboardState.avaliacoes = rows;
+      } catch (error) {
+        studentV5DashboardState.avaliacoes = [];
+      }
+
+      // Recomendacoes (optional).
+      try {
+        const snap = await withTimeout(
+          firebase.getDocs(firebase.query(firebase.collection(firebase.primaryDb, "recomendacoes"), firebase.where("alunoId", "==", alunoId))),
+          12_000,
+          "student_v5_recs"
+        );
+        const rows = [];
+        snap.forEach((docSnap) => {
+          const data = docSnap.data ? docSnap.data() : null;
+          if (!data || typeof data !== "object") return;
+          const text =
+            typeof data.texto === "string"
+              ? data.texto.trim()
+              : typeof data.text === "string"
+                ? data.text.trim()
+                : typeof data.recomendacao === "string"
+                  ? data.recomendacao.trim()
+                  : typeof data.descricao === "string"
+                    ? data.descricao.trim()
+                    : "";
+          const tag =
+            typeof data.tag === "string"
+              ? data.tag.trim()
+              : typeof data.tipo === "string"
+                ? data.tipo.trim()
+                : typeof data.categoria === "string"
+                  ? data.categoria.trim()
+                  : "";
+          if (!text) return;
+          rows.push({ text, tag });
+        });
+        studentV5DashboardState.recomendacoes = rows;
+      } catch (error) {
+        studentV5DashboardState.recomendacoes = [];
+      }
+
+      // NPS (cooldown 90d).
+      try {
+        const snap = await withTimeout(
+          firebase.getDocs(firebase.query(firebase.collection(firebase.primaryDb, "nps"), firebase.where("alunoId", "==", alunoId))),
+          12_000,
+          "student_v5_nps"
+        );
+        let last = null;
+        snap.forEach((docSnap) => {
+          const data = docSnap.data ? docSnap.data() : null;
+          if (!data || typeof data !== "object") return;
+          const nota = Number(data.nota ?? data.score ?? data.rating ?? null);
+          const createdAtMs = parseFirestoreDateToMs(data.criadoEm ?? data.createdAt ?? data.data ?? null);
+          if (!Number.isFinite(nota) || nota < 0 || nota > 10) return;
+          if (!createdAtMs) return;
+          if (!last || createdAtMs > last.createdAtMs) {
+            last = { nota: Math.round(nota), createdAtMs };
+          }
+        });
+        studentV5DashboardState.lastNps = last;
+        studentV5DashboardState.npsCooldownUntilMs = last ? last.createdAtMs + 90 * 24 * 60 * 60 * 1000 : 0;
+      } catch (error) {
+        studentV5DashboardState.lastNps = null;
+        studentV5DashboardState.npsCooldownUntilMs = 0;
+      }
+
+      studentV5DashboardState.loadedAt = Date.now();
+      renderFromCache();
+    } catch (error) {
+      console.error("[student] dashboard load failed:", error);
+    } finally {
+      studentV5DashboardState.isLoading = false;
+      studentV5DashboardState.loadedAt = Date.now();
+    }
+  })();
 };
 
 const renderLearningJourney = (range) => {
@@ -4468,6 +5159,7 @@ const renderStudentLiveLessons = async ({ force = false } = {}) => {
           const startMin = Number(lesson.startMin);
           const endMin = Number(lesson.endMin);
           if (!id || !dateKey || !Number.isFinite(startMin) || !Number.isFinite(endMin)) return null;
+          const professorId = typeof lesson.professorId === "string" ? lesson.professorId : "";
           const professor = typeof lesson.professor_nome === "string" ? lesson.professor_nome : "";
           const req = lesson.reagendamento && typeof lesson.reagendamento === "object" ? lesson.reagendamento : null;
           const reqStatus = req && typeof req.status === "string" ? req.status : "";
@@ -4478,6 +5170,7 @@ const renderStudentLiveLessons = async ({ force = false } = {}) => {
             startMin,
             endMin,
             time: formatHmFromMinutes(startMin),
+            professorId,
             professor,
             request: reqId ? { id: reqId, status: reqStatus || "pendente" } : null,
           };
@@ -4599,6 +5292,7 @@ const loadFirebaseAdminApi = () => {
       doc: fsMod.doc,
       getDoc: fsMod.getDoc,
       getDocs: fsMod.getDocs,
+      limit: fsMod.limit,
       orderBy: fsMod.orderBy,
       query: fsMod.query,
       setDoc: fsMod.setDoc,
@@ -5316,7 +6010,7 @@ const showPanel = (panelName) => {
   const activePanel = document.querySelector(`[data-panel="${panelName}"]`);
   const shouldHidePlatformHeader =
     activePanel?.dataset.hidePlatformHeader === "true" ||
-    (panelName === "dashboard" && currentRole === "teacher") ||
+    (panelName === "dashboard" && (currentRole === "teacher" || currentRole === "student")) ||
     (currentRole === "admin" && panelName !== "dashboard");
   body.dataset.activePanel = panelName;
 
@@ -5358,6 +6052,8 @@ const showPanel = (panelName) => {
       renderTeacherDashboard();
     } else if (currentRole === "admin") {
       renderAdminDashboard();
+    } else {
+      renderStudentDashboard();
     }
   }
 };
@@ -6047,6 +6743,97 @@ document.addEventListener("click", (event) => {
       return;
     }
 
+    const teacherChangeBtn = target.closest("[data-student-v5-teacher-change]");
+    if (teacherChangeBtn instanceof HTMLButtonElement) {
+      if (currentRole !== "student") return;
+      const alunoId = sessionUser && sessionUser.role === "student" ? sessionUser.id : "";
+      const professorId = studentV5DashboardState.teacherId || "";
+      const professorNome = studentV5DashboardState.teacherData?.nome || "";
+      if (!alunoId || !professorId) {
+        openModal({
+          title: "Solicitar troca de professor",
+          bodyHtml: "Nenhuma professora vinculada no momento.",
+          primaryLabel: "Fechar",
+          hideSecondary: true,
+        });
+        return;
+      }
+      openStudentTeacherChangeModal({ alunoId, professorId, professorNome });
+      return;
+    }
+
+    const npsScoreBtn = target.closest("[data-student-v5-nps-score]");
+    if (npsScoreBtn instanceof HTMLButtonElement) {
+      if (currentRole !== "student") return;
+      const score = Number(npsScoreBtn.getAttribute("data-student-v5-nps-score"));
+      if (!Number.isFinite(score) || score < 0 || score > 10) return;
+      studentV5NpsDraft.score = score;
+      if (studentV5NpsFeedback instanceof HTMLElement) {
+        studentV5NpsFeedback.hidden = true;
+        studentV5NpsFeedback.textContent = "";
+        studentV5NpsFeedback.classList.remove("is-error");
+      }
+      syncStudentV5NpsScaleUI();
+      return;
+    }
+
+    const npsSubmitBtn = target.closest("[data-student-v5-nps-submit]");
+    if (npsSubmitBtn instanceof HTMLButtonElement) {
+      if (currentRole !== "student") return;
+      if (npsSubmitBtn.disabled) return;
+      const alunoId = sessionUser && sessionUser.role === "student" ? sessionUser.id : "";
+      const score = studentV5NpsDraft.score;
+      if (!alunoId || !Number.isFinite(score)) return;
+      if (studentV5NpsDraft.isSubmitting) return;
+
+      const comment = studentV5NpsComment instanceof HTMLTextAreaElement ? studentV5NpsComment.value.trim() : "";
+      studentV5NpsDraft.isSubmitting = true;
+      syncStudentV5NpsScaleUI();
+
+      const prevLabel = npsSubmitBtn.textContent || "Enviar avaliação";
+      npsSubmitBtn.textContent = "Enviando…";
+
+      if (studentV5NpsFeedback instanceof HTMLElement) {
+        studentV5NpsFeedback.hidden = true;
+        studentV5NpsFeedback.textContent = "";
+        studentV5NpsFeedback.classList.remove("is-error");
+      }
+
+      (async () => {
+        try {
+          const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init");
+          const docRef = firebase.doc(firebase.collection(firebase.primaryDb, "nps"));
+          await withTimeout(
+            firebase.setDoc(docRef, { alunoId, nota: Math.round(score), comentario: comment, criadoEm: firebase.serverTimestamp() }),
+            12_000,
+            "student_nps_save"
+          );
+
+          const createdAtMs = Date.now();
+          studentV5DashboardState.lastNps = { nota: Math.round(score), createdAtMs };
+          studentV5DashboardState.npsCooldownUntilMs = createdAtMs + 90 * 24 * 60 * 60 * 1000;
+
+          studentV5NpsDraft.score = null;
+          if (studentV5NpsComment instanceof HTMLTextAreaElement) studentV5NpsComment.value = "";
+
+          renderStudentDashboard();
+        } catch (error) {
+          console.error("[student] NPS save failed:", error);
+          if (studentV5NpsFeedback instanceof HTMLElement) {
+            studentV5NpsFeedback.hidden = false;
+            studentV5NpsFeedback.textContent = "Não foi possível enviar agora. Tente novamente.";
+            studentV5NpsFeedback.classList.add("is-error");
+          }
+        } finally {
+          studentV5NpsDraft.isSubmitting = false;
+          npsSubmitBtn.textContent = prevLabel;
+          syncStudentV5NpsScaleUI();
+        }
+      })();
+
+      return;
+    }
+
     const approveReq = target.closest("[data-admin-reschedule-approve]");
     if (approveReq instanceof HTMLButtonElement) {
       if (currentRole !== "admin") return;
@@ -6557,6 +7344,11 @@ setInterval(() => {
 
   if (currentRole === "teacher" && body.dataset.activePanel === "dashboard") {
     renderTeacherDashboard();
+    return;
+  }
+
+  if (currentRole === "student" && body.dataset.activePanel === "dashboard") {
+    renderStudentDashboard();
     return;
   }
 }, 60000);
