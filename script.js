@@ -1760,7 +1760,7 @@ const refreshTeacherEvents = async ({ force = false } = {}) => {
 
   teacherEventsState.isLoading = true;
   try {
-    const res = await fetchWithAuth(`/api/schedule/events?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+    const res = await fetchWithAuth(`/api/schedule-events?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
     if (!res.ok) throw new Error("teacher_events_fetch_failed");
     const data = await res.json().catch(() => null);
     const raw = Array.isArray(data?.events) ? data.events : [];
@@ -1810,7 +1810,7 @@ const refreshAdminRescheduleRequests = async ({ force = false } = {}) => {
 
   adminRescheduleState.isLoading = true;
   try {
-    const res = await fetchWithAuth("/api/schedule/reschedule");
+    const res = await fetchWithAuth("/api/schedule-reschedule");
     if (!res.ok) throw new Error("reschedule_fetch_failed");
     const data = await res.json().catch(() => null);
     const raw = Array.isArray(data?.requests) ? data.requests : [];
@@ -1930,7 +1930,7 @@ const refreshTeacherWorkHours = async ({ force = false } = {}) => {
 
   teacherWorkHoursApiState.isLoading = true;
   try {
-    const res = await fetchWithAuth("/api/teacher/work-hours");
+    const res = await fetchWithAuth("/api/teacher-workhours");
     if (!res.ok) throw new Error("work_hours_fetch_failed");
     const data = await res.json().catch(() => null);
     teacherWorkHours = apiWorkHoursToLocalWorkHours(data?.workHours);
@@ -2747,7 +2747,7 @@ const openWorkHoursModal = () => {
 
       Promise.resolve()
         .then(async () => {
-          const res = await fetchWithAuth("/api/teacher/work-hours", {
+          const res = await fetchWithAuth("/api/teacher-workhours", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(workHoursDraftToApiPayload(workHoursDraft)),
@@ -3262,7 +3262,7 @@ const openTeacherEventFormModalFromDraft = () => {
     if (modalSecondary) modalSecondary.disabled = true;
 
     const method = mode === "create" ? "POST" : "PUT";
-    fetchWithAuth("/api/schedule/events", {
+    fetchWithAuth("/api/schedule-events", {
       method,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -3320,7 +3320,7 @@ const openTeacherEventFormModalFromDraft = () => {
             if (modalSecondary) modalSecondary.disabled = true;
 
             fetchWithAuth(
-              `/api/schedule/events?id=${encodeURIComponent(id)}&mode=${encodeURIComponent(mode || "single")}`,
+              `/api/schedule-events?id=${encodeURIComponent(id)}&mode=${encodeURIComponent(mode || "single")}`,
               {
                 method: "DELETE",
               }
@@ -3611,7 +3611,7 @@ const openStudentRescheduleModal = (lesson) => {
       if (modalPrimary) modalPrimary.disabled = true;
       if (modalSecondary) modalSecondary.disabled = true;
 
-      fetchWithAuth("/api/schedule/reschedule", {
+      fetchWithAuth("/api/schedule-reschedule", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ aulaId: lesson.id, motivo }),
@@ -3661,7 +3661,7 @@ const renderStudentLiveLessons = async ({ force = false } = {}) => {
   if (shouldFetch && !studentLessonsState.isLoading) {
     studentLessonsState.isLoading = true;
     try {
-      const res = await fetchWithAuth("/api/schedule/my-lessons");
+      const res = await fetchWithAuth("/api/schedule-lessons");
       if (!res.ok) throw new Error("lessons_fetch_failed");
       const data = await res.json().catch(() => null);
       const raw = Array.isArray(data?.lessons) ? data.lessons : [];
@@ -4187,7 +4187,7 @@ if (adminUserForm instanceof HTMLFormElement) {
       }
 
       await withTimeout(
-        fetchWithAuth("/api/admin/users", {
+        fetchWithAuth("/api/admin-users", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ uid, role, name }),
@@ -4370,7 +4370,7 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
           }
 
           await withTimeout(
-            fetchWithAuth("/api/admin/users", {
+            fetchWithAuth("/api/admin-users", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ uid, role, name }),
@@ -4854,7 +4854,7 @@ document.addEventListener("click", (event) => {
 
 	            // Keep the scheduling store in sync so admin ranking/slot assignment respects active teachers.
 		            await withTimeout(
-		              fetchWithAuth("/api/admin/users", {
+		              fetchWithAuth("/api/admin-users", {
 		                method: "POST",
 		                headers: { "Content-Type": "application/json" },
 		                body: JSON.stringify({ uid, role: type, name, active: nextActive }),
@@ -5262,7 +5262,7 @@ document.addEventListener("click", (event) => {
       approveReq.textContent = "Aprovando…";
       if (rejectBtn instanceof HTMLButtonElement) rejectBtn.disabled = true;
 
-      fetchWithAuth("/api/schedule/reschedule", {
+      fetchWithAuth("/api/schedule-reschedule", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, acao: "aprovar" }),
@@ -5310,7 +5310,7 @@ document.addEventListener("click", (event) => {
       rejectReq.textContent = "Recusando…";
       if (approveBtn instanceof HTMLButtonElement) approveBtn.disabled = true;
 
-      fetchWithAuth("/api/schedule/reschedule", {
+      fetchWithAuth("/api/schedule-reschedule", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, acao: "recusar" }),
