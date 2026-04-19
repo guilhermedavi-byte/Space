@@ -8560,10 +8560,15 @@ body[data-role="student"][data-active-panel="dashboard"] .platform-header {
   display: none;
 }
 
+body[data-role="student"][data-active-panel="dashboard"] .platform-main {
+  padding-left: 18px !important;
+  padding-right: 18px !important;
+}
+
 .student-v5 {
   position: relative;
   overflow: hidden;
-  width: min(980px, 100%);
+  width: min(100%, clamp(980px, 90vw, 1400px));
   margin: 8px auto 40px;
   padding: 24px 32px;
   border-radius: 18px;
