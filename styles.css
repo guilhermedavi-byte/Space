@@ -8563,11 +8563,14 @@ body[data-role="teacher"][data-active-panel="dashboard"] .platform-header {
 .teacher-v4 {
   position: relative;
   overflow: hidden;
-  max-width: 980px;
-  margin: 8px auto 40px;
-  padding: 24px 32px;
-  border-radius: 10px;
+  width: 100%;
+  max-width: 100%;
+  margin: 8px 0 40px;
+  padding: clamp(20px, 2.2vw, 34px) clamp(18px, 2.6vw, 44px);
+  border-radius: 18px;
   background: #0f1d2d;
+  border: 0.5px solid rgba(89, 144, 189, 0.08);
+  box-shadow: 0 18px 54px rgba(0, 0, 0, 0.35);
 }
 
 .teacher-v4-glow {
@@ -8773,7 +8776,7 @@ body[data-role="teacher"][data-active-panel="dashboard"] .platform-header {
 
 .teacher-v4-next-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
   gap: 12px;
 }
 
@@ -9068,7 +9071,7 @@ body[data-role="teacher"][data-active-panel="dashboard"] .platform-header {
 }
 
 .teacher-v4-grid-3 {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
 }
 
 .teacher-v4-grid-2 {
@@ -9643,5 +9646,41 @@ body[data-role="teacher"][data-active-panel="dashboard"] .platform-header {
 
   .teacher-v4-weekgrid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1200px) {
+  .teacher-v4 {
+    padding: clamp(26px, 2.4vw, 40px) clamp(24px, 3vw, 56px);
+  }
+
+  .teacher-v4-header {
+    margin-bottom: 32px;
+  }
+
+  .teacher-v4-greeting {
+    font-size: 24px;
+  }
+
+  .teacher-v4-next {
+    padding: 28px;
+  }
+
+  .teacher-v4-next-grid {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.95fr) minmax(0, 1fr);
+  }
+
+  .teacher-v4-grid {
+    gap: 14px;
+    margin-bottom: 18px;
+  }
+
+  .teacher-v4-metric-value,
+  .teacher-v4-perf-value {
+    font-size: 26px;
+  }
+
+  .teacher-v4-card {
+    padding: 22px;
   }
 }
