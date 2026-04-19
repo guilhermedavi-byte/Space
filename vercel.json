@@ -1,6 +1,7 @@
 {
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/$1" },
+    { "source": "/growth/dashboard", "destination": "/api/growth-dashboard" },
     { "source": "/app", "destination": "/api/app" },
     { "source": "/app/(.*)", "destination": "/api/app?path=$1" }
   ]

@@ -17,6 +17,12 @@ const AUTH_PROFILE_DEFS = {
     sub: "Entre com suas credenciais para continuar.",
     role: "admin",
   },
+  growth: {
+    label: "Growth",
+    phrase: "Performance do time em tempo real.",
+    sub: "Entre com suas credenciais para continuar.",
+    role: "growth",
+  },
 };
 
 const normalizeRole = (value) => {
@@ -24,11 +30,13 @@ const normalizeRole = (value) => {
   if (raw === "student" || raw === "aluno") return "student";
   if (raw === "teacher" || raw === "professor") return "teacher";
   if (raw === "admin" || raw === "administrador") return "admin";
+  if (raw === "growth") return "growth";
   return "";
 };
 
 const roleBasePath = (role) => {
   const normalized = normalizeRole(role);
+  if (normalized === "growth") return "/growth/dashboard";
   if (normalized === "teacher") return "/app/professor";
   if (normalized === "admin") return "/app/admin";
   return "/app/aluno";
@@ -335,6 +343,7 @@ const detectRoleForLoginPage = () => {
   if (slug === "aluno") return "student";
   if (slug === "professor") return "teacher";
   if (slug === "admin") return "admin";
+  if (slug === "growth") return "growth";
   return "student";
 };
 

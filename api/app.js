@@ -18,6 +18,7 @@ const slugToRole = (slug) => {
 };
 
 const roleToBasePath = (role) => {
+  if (String(role || "").trim().toLowerCase() === "growth") return "/growth/dashboard";
   const slug = ROLE_TO_SLUG[String(role || "")] || ROLE_TO_SLUG.student;
   return `/app/${slug}`;
 };
