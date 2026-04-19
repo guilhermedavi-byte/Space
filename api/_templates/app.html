@@ -710,117 +710,268 @@
             </article>
           </div>
 
-          <div class="dashboard-redesign dashboard-teacher" data-dashboard-teacher hidden>
-            <div class="overview-stats-grid">
-              <article class="overview-stat-card">
-                <span class="card-kicker">AULAS HOJE</span>
-                <strong data-teacher-lessons-today>—</strong>
-                <p data-teacher-lessons-today-sub>—</p>
-              </article>
+          <div class="teacher-v4" data-dashboard-teacher hidden>
+            <div class="teacher-v4-glow teacher-v4-glow-coral" aria-hidden="true"></div>
+            <div class="teacher-v4-glow teacher-v4-glow-blue" aria-hidden="true"></div>
 
-              <article class="overview-stat-card">
-                <span class="card-kicker">PRÓXIMA AULA</span>
-                <strong data-teacher-next-class>—</strong>
-                <p data-teacher-next-countdown>—</p>
-              </article>
-
-              <article class="overview-stat-card overview-stat-score">
-                <span class="card-kicker">AVALIAÇÃO MÉDIA</span>
-                <div class="score-card-body score-card-body-compact">
-                  <div class="score-card-rating score-card-rating-compact" aria-label="Avaliação média do professor">
-                    <strong data-teacher-nps>—</strong>
-                    <span>/10</span>
-                  </div>
-                  <p class="teacher-score-sub" data-teacher-nps-sub>—</p>
-                </div>
-              </article>
-
-              <article class="overview-stat-card overview-stat-level">
-                <div class="overview-stat-copy">
-                  <span class="card-kicker">OCUPAÇÃO DA SEMANA</span>
-                  <strong data-teacher-occupancy-percent>—</strong>
-                  <p data-teacher-occupancy-sub>—</p>
-                </div>
-                <div
-                  class="level-progress-ring"
-                  data-teacher-occupancy-ring
-                  style="--level-progress: 0"
-                  aria-label="Ocupação semanal"
-                >
-                  <span data-teacher-occupancy-ring-text>—</span>
-                </div>
-              </article>
-            </div>
-
-            <div class="teacher-insights-grid">
-              <article class="analytics-card analytics-card-bar teacher-classes-card">
-                <div class="analytics-header">
-                  <h3>Histórico de aulas</h3>
-
-                  <div class="chart-filter-dropdown" data-chart-dropdown="teacher-classes">
-                    <button
-                      class="chart-filter-trigger"
-                      type="button"
-                      data-chart-trigger="teacher-classes"
-                      aria-expanded="false"
-                      aria-haspopup="true"
-                      aria-label="Filtrar histórico de aulas"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <rect x="3.5" y="5.5" width="17" height="15" rx="2"></rect>
-                        <path d="M7 3.5V7"></path>
-                        <path d="M17 3.5V7"></path>
-                        <path d="M3.5 10.5H20.5"></path>
-                      </svg>
-                    </button>
-
-                    <div class="chart-filter-menu" data-chart-menu="teacher-classes" hidden>
-                      <button
-                        class="chart-filter-option is-active"
-                        type="button"
-                        data-chart-option
-                        data-chart-type="teacher-classes"
-                        data-chart-range="week"
-                      >
-                        Semana atual
-                      </button>
-                      <button
-                        class="chart-filter-option"
-                        type="button"
-                        data-chart-option
-                        data-chart-type="teacher-classes"
-                        data-chart-range="month"
-                      >
-                        Mês atual
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="bar-chart-shell teacher-classes-shell">
-                  <div class="bar-chart-scale" data-teacher-classes-scale></div>
-
-                  <div class="bar-chart-stage">
-                    <div class="bar-chart-grid">
-                      <span></span>
-                      <span></span>
-                      <span></span>
-                      <span></span>
-                    </div>
-                    <div class="bar-chart-bars teacher-classes-bars" data-teacher-classes-chart></div>
-                    <div class="bar-chart-labels teacher-classes-labels" data-teacher-classes-labels></div>
-                  </div>
-                </div>
-              </article>
-            </div>
-
-            <article class="surface-card teacher-notices-card">
-              <div class="dashboard-section-header refined-header">
-                <h3>Avisos da coordenação</h3>
+            <header class="teacher-v4-header">
+              <div>
+                <p class="teacher-v4-eyebrow">ÁREA DO PROFESSOR</p>
+                <p class="teacher-v4-greeting" data-teacher-v4-greeting>Boa tarde, Professor.</p>
+                <p class="teacher-v4-date" data-teacher-v4-date>—</p>
               </div>
 
-              <ul class="teacher-notice-list" data-teacher-notice-list></ul>
-              <div class="live-scheduled-empty" data-teacher-notice-empty hidden>Sem avisos no momento</div>
+              <div class="teacher-v4-header-right">
+                <div class="teacher-v4-rating" aria-label="Nota média do professor">
+                  <p class="teacher-v4-rating-label">SUA NOTA</p>
+                  <p class="teacher-v4-rating-value" data-teacher-v4-rating>—</p>
+                </div>
+
+                <div class="teacher-v4-avatar" data-teacher-v4-avatar aria-label="Avatar do professor">SP</div>
+              </div>
+            </header>
+
+            <article class="teacher-v4-next" data-teacher-v4-next-card aria-label="Próxima aula">
+              <div class="teacher-v4-next-top" data-teacher-v4-next-top>
+                <div class="teacher-v4-next-left">
+                  <div class="teacher-v4-next-icon" aria-hidden="true">
+                    <div class="teacher-v4-next-ring"></div>
+                    <svg viewBox="0 0 24 24" fill="none">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <path d="M12 6v6l4 2"></path>
+                    </svg>
+                  </div>
+
+                  <div>
+                    <p class="teacher-v4-next-kicker">PRÓXIMA AULA EM</p>
+                    <div class="teacher-v4-next-countline">
+                      <p class="teacher-v4-next-count" data-teacher-v4-next-minutes>—</p>
+                      <p class="teacher-v4-next-unit">minutos</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="teacher-v4-next-time" data-teacher-v4-next-time>—</div>
+              </div>
+
+              <div class="teacher-v4-next-grid" data-teacher-v4-next-grid>
+                <section class="teacher-v4-box">
+                  <div class="teacher-v4-student-head">
+                    <div class="teacher-v4-student-avatar" data-teacher-v4-student-avatar>—</div>
+                    <div>
+                      <p class="teacher-v4-student-name" data-teacher-v4-student-name>—</p>
+                      <p class="teacher-v4-student-meta" data-teacher-v4-student-meta>—</p>
+                    </div>
+                  </div>
+
+                  <div class="teacher-v4-divider"></div>
+
+                  <div class="teacher-v4-labelrow">
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" class="teacher-v4-labelicon teacher-v4-labelicon-info">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <path d="M12 16v-4"></path>
+                      <path d="M12 8h.01"></path>
+                    </svg>
+                    <p class="teacher-v4-label">PERFIL DO ALUNO</p>
+                  </div>
+                  <p class="teacher-v4-text" data-teacher-v4-student-profile>—</p>
+
+                  <div class="teacher-v4-divider"></div>
+
+                  <div class="teacher-v4-labelrow">
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" class="teacher-v4-labelicon teacher-v4-labelicon-goal">
+                      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                      <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                    </svg>
+                    <p class="teacher-v4-label teacher-v4-label-goal">OBJETIVO</p>
+                  </div>
+                  <p class="teacher-v4-text" data-teacher-v4-student-goal>—</p>
+                </section>
+
+                <section class="teacher-v4-box">
+                  <div class="teacher-v4-labelrow">
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" class="teacher-v4-labelicon teacher-v4-labelicon-doc">
+                      <path d="M7 4.5h7l3 3v12H7a2 2 0 0 1-2-2v-11a2 2 0 0 1 2-2Z"></path>
+                      <path d="M14 4.5v3h3"></path>
+                      <path d="M9 12h6"></path>
+                      <path d="M9 15.5h4.5"></path>
+                    </svg>
+                    <p class="teacher-v4-label teacher-v4-label-plan">PLANO DA AULA DE HOJE</p>
+                  </div>
+
+                  <p class="teacher-v4-plan-title" data-teacher-v4-plan-theme>—</p>
+                  <ul class="teacher-v4-topics" data-teacher-v4-plan-topics></ul>
+
+                  <div class="teacher-v4-material" data-teacher-v4-plan-material hidden>
+                    <div class="teacher-v4-material-head">
+                      <p>MATERIAL</p>
+                    </div>
+                    <p class="teacher-v4-material-title" data-teacher-v4-plan-material-title>—</p>
+                  </div>
+                </section>
+
+                <section class="teacher-v4-box">
+                  <div class="teacher-v4-labelrow">
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" class="teacher-v4-labelicon teacher-v4-labelicon-clock">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <path d="M12 7v5l3 2"></path>
+                    </svg>
+                    <p class="teacher-v4-label">RESUMO DA ÚLTIMA AULA</p>
+                  </div>
+
+                  <p class="teacher-v4-last-meta" data-teacher-v4-last-meta>—</p>
+                  <p class="teacher-v4-last-theme" data-teacher-v4-last-theme>—</p>
+                  <p class="teacher-v4-text" data-teacher-v4-last-notes>—</p>
+
+                  <div class="teacher-v4-divider"></div>
+
+                  <p class="teacher-v4-attn">PONTOS DE ATENÇÃO</p>
+                  <div class="teacher-v4-tags" data-teacher-v4-last-tags></div>
+                </section>
+              </div>
+
+              <div class="teacher-v4-next-empty" data-teacher-v4-next-empty hidden>
+                <div class="teacher-v4-empty-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <rect x="3.5" y="5.5" width="17" height="15" rx="2"></rect>
+                    <path d="M7 3.5V7"></path>
+                    <path d="M17 3.5V7"></path>
+                    <path d="M3.5 10.5H20.5"></path>
+                    <path d="M8 15h8"></path>
+                  </svg>
+                </div>
+                <div>
+                  <p class="teacher-v4-empty-title">Nenhuma aula agendada para hoje</p>
+                  <p class="teacher-v4-empty-sub">Quando houver uma próxima aula, os detalhes aparecem aqui.</p>
+                </div>
+              </div>
+            </article>
+
+            <section class="teacher-v4-grid teacher-v4-grid-3" aria-label="Métricas rápidas">
+              <article class="teacher-v4-metric">
+                <div class="teacher-v4-metric-icon teacher-v4-metric-icon-blue" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <rect x="3.5" y="5.5" width="17" height="15" rx="2"></rect>
+                    <path d="M7 3.5V7"></path>
+                    <path d="M17 3.5V7"></path>
+                    <path d="M3.5 10.5H20.5"></path>
+                  </svg>
+                </div>
+                <p class="teacher-v4-metric-label">Aulas hoje</p>
+                <p class="teacher-v4-metric-value" data-teacher-v4-today-count>—</p>
+                <p class="teacher-v4-metric-sub" data-teacher-v4-today-sub>—</p>
+              </article>
+
+              <article class="teacher-v4-metric">
+                <div class="teacher-v4-metric-icon teacher-v4-metric-icon-green" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                  </svg>
+                </div>
+                <p class="teacher-v4-metric-label">Horas-aula no mês</p>
+                <p class="teacher-v4-metric-value" data-teacher-v4-month-hours>—</p>
+                <p class="teacher-v4-metric-sub teacher-v4-metric-sub-positive" data-teacher-v4-month-delta>—</p>
+              </article>
+
+              <article class="teacher-v4-metric">
+                <div class="teacher-v4-metric-icon teacher-v4-metric-icon-yellow" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M16 11c1.7 0 3-1.3 3-3S17.7 5 16 5s-3 1.3-3 3 1.3 3 3 3Z"></path>
+                    <path d="M8 11c1.7 0 3-1.3 3-3S9.7 5 8 5 5 6.3 5 8s1.3 3 3 3Z"></path>
+                    <path d="M2.8 19c.5-2.6 2.8-4.5 5.6-4.5h0c2.8 0 5.1 1.9 5.6 4.5"></path>
+                    <path d="M13.2 19c.3-1.8 1.4-3.3 3-4.1"></path>
+                    <path d="M21.2 19c-.3-1.8-1.4-3.3-3-4.1"></path>
+                  </svg>
+                </div>
+                <p class="teacher-v4-metric-label">Seus alunos</p>
+                <p class="teacher-v4-metric-value" data-teacher-v4-students-count>—</p>
+              </article>
+            </section>
+
+            <section class="teacher-v4-grid teacher-v4-grid-2" aria-label="Agenda e visão da semana">
+              <article class="teacher-v4-card teacher-v4-card-timeline">
+                <div class="teacher-v4-card-head">
+                  <p class="teacher-v4-card-title">Agenda de hoje</p>
+                </div>
+                <div class="teacher-v4-timeline" data-teacher-v4-timeline></div>
+                <div class="teacher-v4-card-empty" data-teacher-v4-timeline-empty hidden>Sem aulas hoje.</div>
+              </article>
+
+              <div class="teacher-v4-rightcol">
+                <article class="teacher-v4-card">
+                  <div class="teacher-v4-card-head">
+                    <p class="teacher-v4-card-title">Visão da semana</p>
+                  </div>
+                  <div class="teacher-v4-weekgrid" data-teacher-v4-weekgrid></div>
+                  <div class="teacher-v4-weekfoot">
+                    <span>Total</span>
+                    <strong data-teacher-v4-week-total>—</strong>
+                  </div>
+                </article>
+
+                <article class="teacher-v4-card teacher-v4-card-pending">
+                  <div class="teacher-v4-card-head">
+                    <p class="teacher-v4-card-title">Pendências</p>
+                    <span class="teacher-v4-pending-badge" data-teacher-v4-pending-count>—</span>
+                  </div>
+                  <div class="teacher-v4-pending-list" data-teacher-v4-pending-list></div>
+                  <div class="teacher-v4-card-empty" data-teacher-v4-pending-empty hidden>Sem pendências.</div>
+                </article>
+              </div>
+            </section>
+
+            <section class="teacher-v4-grid teacher-v4-grid-3" aria-label="Performance">
+              <article class="teacher-v4-perf">
+                <p class="teacher-v4-perf-label">Taxa de presença</p>
+                <div class="teacher-v4-perf-line">
+                  <p class="teacher-v4-perf-value" data-teacher-v4-presence>—</p>
+                  <span class="teacher-v4-perf-pill teacher-v4-perf-pill-green" data-teacher-v4-presence-pill hidden>Saudável</span>
+                </div>
+                <div class="teacher-v4-bar">
+                  <div class="teacher-v4-bar-fill teacher-v4-bar-fill-bluegreen" data-teacher-v4-presence-bar style="width: 0%"></div>
+                </div>
+              </article>
+
+              <article class="teacher-v4-perf">
+                <p class="teacher-v4-perf-label">Avaliações</p>
+                <div class="teacher-v4-perf-line">
+                  <p class="teacher-v4-perf-value" data-teacher-v4-reviews-count>—</p>
+                  <div class="teacher-v4-stars" aria-hidden="true" data-teacher-v4-reviews-stars></div>
+                </div>
+                <p class="teacher-v4-perf-sub"><span data-teacher-v4-reviews-average>—</span> média</p>
+              </article>
+
+              <article class="teacher-v4-perf">
+                <p class="teacher-v4-perf-label">Ocupação</p>
+                <div class="teacher-v4-perf-line">
+                  <p class="teacher-v4-perf-value" data-teacher-v4-occupancy>—</p>
+                  <span class="teacher-v4-perf-pill teacher-v4-perf-pill-green" data-teacher-v4-occupancy-pill hidden>Bom</span>
+                </div>
+                <div class="teacher-v4-bar">
+                  <div class="teacher-v4-bar-fill teacher-v4-bar-fill-coralyellow" data-teacher-v4-occupancy-bar style="width: 0%"></div>
+                </div>
+              </article>
+            </section>
+
+            <article class="teacher-v4-notices" aria-label="Avisos da coordenação">
+              <div class="teacher-v4-notices-head">
+                <div class="teacher-v4-notices-title">
+                  <span class="teacher-v4-notices-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none">
+                      <path d="M6 13c.8 0 1.5-.7 1.5-1.5S6.8 10 6 10s-1.5.7-1.5 1.5S5.2 13 6 13Z"></path>
+                      <path d="M12 13c.8 0 1.5-.7 1.5-1.5S12.8 10 12 10s-1.5.7-1.5 1.5S11.2 13 12 13Z"></path>
+                      <path d="M18 13c.8 0 1.5-.7 1.5-1.5S18.8 10 18 10s-1.5.7-1.5 1.5S17.2 13 18 13Z"></path>
+                      <path d="M4 18c2.2 2 5.1 3.2 8 3.2s5.8-1.2 8-3.2"></path>
+                      <path d="M4 6c2.2-2 5.1-3.2 8-3.2s5.8 1.2 8 3.2"></path>
+                    </svg>
+                  </span>
+                  <p>Avisos da Coordenação</p>
+                </div>
+              </div>
+
+              <div class="teacher-v4-notices-list" data-teacher-v4-notices></div>
+              <div class="teacher-v4-card-empty" data-teacher-v4-notices-empty hidden>Sem avisos no momento.</div>
             </article>
           </div>
 

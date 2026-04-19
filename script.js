@@ -114,6 +114,53 @@ const teacherTodaySlotsEmpty = document.querySelector("[data-teacher-today-slots
 const teacherNoticeList = document.querySelector("[data-teacher-notice-list]");
 const teacherNoticeEmpty = document.querySelector("[data-teacher-notice-empty]");
 
+// Teacher dashboard v4 (new home screen for teachers).
+const teacherV4Greeting = document.querySelector("[data-teacher-v4-greeting]");
+const teacherV4Date = document.querySelector("[data-teacher-v4-date]");
+const teacherV4Rating = document.querySelector("[data-teacher-v4-rating]");
+const teacherV4Avatar = document.querySelector("[data-teacher-v4-avatar]");
+const teacherV4NextTop = document.querySelector("[data-teacher-v4-next-top]");
+const teacherV4NextGrid = document.querySelector("[data-teacher-v4-next-grid]");
+const teacherV4NextEmpty = document.querySelector("[data-teacher-v4-next-empty]");
+const teacherV4NextMinutes = document.querySelector("[data-teacher-v4-next-minutes]");
+const teacherV4NextTime = document.querySelector("[data-teacher-v4-next-time]");
+const teacherV4StudentAvatar = document.querySelector("[data-teacher-v4-student-avatar]");
+const teacherV4StudentName = document.querySelector("[data-teacher-v4-student-name]");
+const teacherV4StudentMeta = document.querySelector("[data-teacher-v4-student-meta]");
+const teacherV4StudentProfile = document.querySelector("[data-teacher-v4-student-profile]");
+const teacherV4StudentGoal = document.querySelector("[data-teacher-v4-student-goal]");
+const teacherV4PlanTheme = document.querySelector("[data-teacher-v4-plan-theme]");
+const teacherV4PlanTopics = document.querySelector("[data-teacher-v4-plan-topics]");
+const teacherV4PlanMaterial = document.querySelector("[data-teacher-v4-plan-material]");
+const teacherV4PlanMaterialTitle = document.querySelector("[data-teacher-v4-plan-material-title]");
+const teacherV4LastMeta = document.querySelector("[data-teacher-v4-last-meta]");
+const teacherV4LastTheme = document.querySelector("[data-teacher-v4-last-theme]");
+const teacherV4LastNotes = document.querySelector("[data-teacher-v4-last-notes]");
+const teacherV4LastTags = document.querySelector("[data-teacher-v4-last-tags]");
+const teacherV4TodayCount = document.querySelector("[data-teacher-v4-today-count]");
+const teacherV4TodaySub = document.querySelector("[data-teacher-v4-today-sub]");
+const teacherV4MonthHours = document.querySelector("[data-teacher-v4-month-hours]");
+const teacherV4MonthDelta = document.querySelector("[data-teacher-v4-month-delta]");
+const teacherV4StudentsCount = document.querySelector("[data-teacher-v4-students-count]");
+const teacherV4Timeline = document.querySelector("[data-teacher-v4-timeline]");
+const teacherV4TimelineEmpty = document.querySelector("[data-teacher-v4-timeline-empty]");
+const teacherV4WeekGrid = document.querySelector("[data-teacher-v4-weekgrid]");
+const teacherV4WeekTotal = document.querySelector("[data-teacher-v4-week-total]");
+const teacherV4PendingCount = document.querySelector("[data-teacher-v4-pending-count]");
+const teacherV4PendingList = document.querySelector("[data-teacher-v4-pending-list]");
+const teacherV4PendingEmpty = document.querySelector("[data-teacher-v4-pending-empty]");
+const teacherV4PresenceValue = document.querySelector("[data-teacher-v4-presence]");
+const teacherV4PresencePill = document.querySelector("[data-teacher-v4-presence-pill]");
+const teacherV4PresenceBar = document.querySelector("[data-teacher-v4-presence-bar]");
+const teacherV4ReviewsCount = document.querySelector("[data-teacher-v4-reviews-count]");
+const teacherV4ReviewsStars = document.querySelector("[data-teacher-v4-reviews-stars]");
+const teacherV4ReviewsAverage = document.querySelector("[data-teacher-v4-reviews-average]");
+const teacherV4OccupancyValue = document.querySelector("[data-teacher-v4-occupancy]");
+const teacherV4OccupancyPill = document.querySelector("[data-teacher-v4-occupancy-pill]");
+const teacherV4OccupancyBar = document.querySelector("[data-teacher-v4-occupancy-bar]");
+const teacherV4NoticesList = document.querySelector("[data-teacher-v4-notices]");
+const teacherV4NoticesEmpty = document.querySelector("[data-teacher-v4-notices-empty]");
+
 const learningLevelNames = ["Pré A1", "A1", "A1+", "A2", "A2+", "B1", "B1+", "B2", "B2+", "C1", "C2"];
 const learningJourneyPoints = [
   { x: 42, y: 194 },
@@ -171,6 +218,20 @@ let studentLessonsState = {
   isLoading: false,
   lastLoadedAt: 0,
   lessons: [],
+};
+
+let teacherV4DashboardState = {
+  isLoading: false,
+  loadedAt: 0,
+  teacherId: "",
+  aulas: [],
+  avaliacoes: [],
+  avisos: [],
+  reagendamentos: [],
+  workHours: null,
+  nextLessonId: "",
+  nextLessonStartMs: 0,
+  refreshTimer: 0,
 };
 
 const STORAGE_KEY = "space-platform-state-v1";
@@ -1413,83 +1474,816 @@ const renderTeacherNotices = () => {
 };
 
 const renderTeacherDashboard = () => {
-  if (currentRole !== "teacher") {
+  if (currentRole !== "teacher") return;
+  if (!(dashboardTeacher instanceof HTMLElement)) return;
+
+  const now = new Date();
+
+  // Keep the countdown fresh while the teacher stays on the dashboard.
+  if (!teacherV4DashboardState.refreshTimer) {
+    teacherV4DashboardState.refreshTimer = window.setInterval(() => {
+      if (currentRole !== "teacher" || body.dataset.activePanel !== "dashboard") {
+        window.clearInterval(teacherV4DashboardState.refreshTimer);
+        teacherV4DashboardState.refreshTimer = 0;
+        return;
+      }
+      renderTeacherDashboard();
+    }, 60_000);
+  }
+  const hour = now.getHours();
+  let greeting = "Boa noite";
+  if (hour >= 6 && hour < 12) greeting = "Bom dia";
+  else if (hour >= 12 && hour < 18) greeting = "Boa tarde";
+
+  const teacherName =
+    sessionUser && sessionUser.role === "teacher" ? sessionUser.name : ROLE_DEFS.teacher?.defaultName || "Professor";
+
+  const capitalize = (value) => {
+    const text = String(value || "");
+    if (!text) return "";
+    return text.charAt(0).toUpperCase() + text.slice(1);
+  };
+
+  const formatTeacherLongDate = (date) => {
+    try {
+      const fmt = new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
+      return capitalize(fmt.format(date));
+    } catch (error) {
+      return "";
+    }
+  };
+
+  if (teacherV4Greeting instanceof HTMLElement) {
+    teacherV4Greeting.textContent = `${greeting}, ${teacherName}.`;
+  }
+  if (teacherV4Date instanceof HTMLElement) {
+    teacherV4Date.textContent = formatTeacherLongDate(now);
+  }
+  if (teacherV4Avatar instanceof HTMLElement) {
+    teacherV4Avatar.textContent = getInitials(teacherName);
+  }
+
+  const setPlaceholderText = (el, text = "Nenhuma informação cadastrada") => {
+    if (!(el instanceof HTMLElement)) return;
+    el.textContent = text;
+    el.classList.add("is-placeholder");
+  };
+
+  const clearPlaceholderText = (el) => {
+    if (!(el instanceof HTMLElement)) return;
+    el.classList.remove("is-placeholder");
+  };
+
+  const parseMinutesNullable = (value) => {
+    if (typeof value === "number" && Number.isFinite(value)) return clampNumber(value, 0, 1440);
+    const raw = String(value || "").trim();
+    if (!/^\d{2}:\d{2}$/.test(raw)) return null;
+    return timeToMinutes(raw);
+  };
+
+  const buildDateFromKey = (dateKey) => {
+    const raw = String(dateKey || "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+    const y = Number(raw.slice(0, 4));
+    const m = Number(raw.slice(5, 7));
+    const d = Number(raw.slice(8, 10));
+    const date = new Date(y, m - 1, d);
+    if (Number.isNaN(date.getTime())) return null;
+    date.setHours(0, 0, 0, 0);
+    return date;
+  };
+
+  const dateTimeFromKeyMinutes = (dateKey, minutes) => {
+    const base = buildDateFromKey(dateKey);
+    if (!base) return null;
+    const safeMin = clampNumber(minutes, 0, 24 * 60 - 1);
+    const dt = new Date(base);
+    dt.setMinutes(safeMin);
+    return dt;
+  };
+
+  const isCancelledStatus = (status) => {
+    const s = String(status || "").trim().toLowerCase();
+    return s === "cancelada" || s === "cancelado" || s === "cancelled" || s === "canceled";
+  };
+
+  const isPendingRescheduleStatus = (status) => {
+    const s = String(status || "").trim().toLowerCase();
+    return s === "pendente" || s === "pending";
+  };
+
+  const formatDecimalPt = (num, digits = 1) => {
+    const n = Number(num);
+    if (!Number.isFinite(n)) return "—";
+    try {
+      return n.toLocaleString("pt-BR", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+    } catch (error) {
+      return String(n.toFixed(digits)).replace(".", ",");
+    }
+  };
+
+  const formatHoursLabel = (minutesTotal) => {
+    const minutes = Number(minutesTotal);
+    if (!Number.isFinite(minutes) || minutes <= 0) return "0h";
+    const hours = minutes / 60;
+    const rounded = Math.round(hours * 10) / 10;
+    const str = rounded % 1 === 0 ? String(Math.round(rounded)) : formatDecimalPt(rounded, 1);
+    return `${str}h`;
+  };
+
+  const getMonthWindow = (reference) => {
+    const base = new Date(reference);
+    base.setHours(0, 0, 0, 0);
+    const start = new Date(base.getFullYear(), base.getMonth(), 1);
+    const end = new Date(base.getFullYear(), base.getMonth() + 1, 0);
+    return { start, end };
+  };
+
+  const shiftMonth = (date, deltaMonths) => {
+    const d = new Date(date);
+    d.setMonth(d.getMonth() + deltaMonths);
+    return d;
+  };
+
+  const renderStars = (container, avg10) => {
+    if (!(container instanceof HTMLElement)) return;
+    const score = Number(avg10);
+    if (!Number.isFinite(score) || score <= 0) {
+      container.innerHTML = "";
+      return;
+    }
+    const stars = Math.max(0, Math.min(5, Math.floor((score / 10) * 5 + 1e-6)));
+    const filled = `<svg viewBox="0 0 24 24" fill="#FBBF24" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>`;
+    const empty = `<svg viewBox="0 0 24 24" fill="rgba(255,255,255,0.08)" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>`;
+    container.innerHTML = Array.from({ length: 5 })
+      .map((_, idx) => (idx < stars ? filled : empty))
+      .join("");
+  };
+
+  if (teacherV4PendingList instanceof HTMLElement) teacherV4PendingList.innerHTML = "";
+  if (teacherV4Timeline instanceof HTMLElement) teacherV4Timeline.innerHTML = "";
+  if (teacherV4WeekGrid instanceof HTMLElement) teacherV4WeekGrid.innerHTML = "";
+  if (teacherV4NoticesList instanceof HTMLElement) teacherV4NoticesList.innerHTML = "";
+
+  const todayKey = createDateKey(now);
+  const weekDays = getWeekDaysMonToSat(now);
+  const weekKeys = weekDays.map((d) => createDateKey(d));
+  const weekStartKey = weekKeys[0];
+  const weekEndKey = weekKeys[weekKeys.length - 1];
+
+  const { start: monthStart, end: monthEnd } = getMonthWindow(now);
+  const { start: lastMonthStart, end: lastMonthEnd } = getMonthWindow(shiftMonth(now, -1));
+
+  const shouldReload = Date.now() - (teacherV4DashboardState.loadedAt || 0) > 120_000;
+  if (teacherV4DashboardState.isLoading) return;
+
+  const renderFromCache = () => {
+    const aulas = Array.isArray(teacherV4DashboardState.aulas) ? teacherV4DashboardState.aulas : [];
+    const avaliacoes = Array.isArray(teacherV4DashboardState.avaliacoes) ? teacherV4DashboardState.avaliacoes : [];
+    const avisos = Array.isArray(teacherV4DashboardState.avisos) ? teacherV4DashboardState.avisos : [];
+    const reag = Array.isArray(teacherV4DashboardState.reagendamentos) ? teacherV4DashboardState.reagendamentos : [];
+    const workHours = teacherV4DashboardState.workHours;
+
+    const lessonsOnly = aulas.filter((evt) => evt && evt.type === "lesson" && !isCancelledStatus(evt.status));
+    const lessonsToday = lessonsOnly.filter((evt) => evt.dateKey === todayKey);
+    const doneToday = lessonsToday.filter((evt) => evt.endMs <= now.getTime());
+    const remainingToday = lessonsToday.filter((evt) => evt.endMs > now.getTime());
+
+    if (teacherV4TodayCount instanceof HTMLElement) teacherV4TodayCount.textContent = String(lessonsToday.length);
+    if (teacherV4TodaySub instanceof HTMLElement) {
+      teacherV4TodaySub.textContent = `${doneToday.length} feitas · ${remainingToday.length} restantes`;
+    }
+
+    const isInRange = (ms, start, end) => {
+      if (!ms) return false;
+      const date = new Date(ms);
+      return date >= start && date <= new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999);
+    };
+
+    const monthLessons = lessonsOnly.filter((evt) => isInRange(evt.startMs, monthStart, monthEnd));
+    const lastMonthLessons = lessonsOnly.filter((evt) => isInRange(evt.startMs, lastMonthStart, lastMonthEnd));
+    const monthMinutes = monthLessons.reduce((acc, evt) => acc + Math.max(0, evt.endMin - evt.startMin), 0);
+    const lastMonthMinutes = lastMonthLessons.reduce((acc, evt) => acc + Math.max(0, evt.endMin - evt.startMin), 0);
+
+    if (teacherV4MonthHours instanceof HTMLElement) teacherV4MonthHours.textContent = formatHoursLabel(monthMinutes);
+    if (teacherV4MonthDelta instanceof HTMLElement) {
+      const deltaMin = monthMinutes - lastMonthMinutes;
+      const sign = deltaMin >= 0 ? "+" : "−";
+      const deltaAbs = Math.abs(deltaMin);
+      teacherV4MonthDelta.textContent = `${sign}${formatHoursLabel(deltaAbs)} vs mês anterior`;
+    }
+
+    if (teacherV4StudentsCount instanceof HTMLElement) {
+      const unique = new Set(monthLessons.map((evt) => evt.alunoId).filter(Boolean));
+      teacherV4StudentsCount.textContent = String(unique.size);
+    }
+
+    // Próxima aula (hoje)
+    const nextToday = lessonsToday
+      .filter((evt) => evt.startMs > now.getTime())
+      .sort((a, b) => a.startMs - b.startMs)[0];
+
+    const showNext = Boolean(nextToday);
+    if (teacherV4NextTop instanceof HTMLElement) teacherV4NextTop.hidden = !showNext;
+    if (teacherV4NextGrid instanceof HTMLElement) teacherV4NextGrid.hidden = !showNext;
+    if (teacherV4NextEmpty instanceof HTMLElement) teacherV4NextEmpty.hidden = showNext;
+
+    if (!nextToday) {
+      if (teacherV4NextMinutes instanceof HTMLElement) teacherV4NextMinutes.textContent = "—";
+      if (teacherV4NextTime instanceof HTMLElement) teacherV4NextTime.textContent = "—";
+      if (teacherV4StudentName instanceof HTMLElement) teacherV4StudentName.textContent = "—";
+      if (teacherV4StudentMeta instanceof HTMLElement) teacherV4StudentMeta.textContent = "—";
+      setPlaceholderText(teacherV4StudentProfile, "Nenhuma informação cadastrada");
+      setPlaceholderText(teacherV4StudentGoal, "Nenhuma informação cadastrada");
+      setPlaceholderText(teacherV4PlanTheme, "Nenhuma informação cadastrada");
+      if (teacherV4PlanTopics instanceof HTMLElement) teacherV4PlanTopics.innerHTML = "";
+      if (teacherV4PlanMaterial instanceof HTMLElement) teacherV4PlanMaterial.hidden = true;
+      if (teacherV4LastMeta instanceof HTMLElement) teacherV4LastMeta.textContent = "—";
+      if (teacherV4LastTheme instanceof HTMLElement) teacherV4LastTheme.textContent = "—";
+      setPlaceholderText(teacherV4LastNotes, "Nenhuma informação cadastrada");
+      if (teacherV4LastTags instanceof HTMLElement) teacherV4LastTags.innerHTML = "";
+    } else {
+      const minutesUntil = Math.max(0, Math.ceil((nextToday.startMs - now.getTime()) / 60000));
+      if (teacherV4NextMinutes instanceof HTMLElement) teacherV4NextMinutes.textContent = String(minutesUntil);
+      if (teacherV4NextTime instanceof HTMLElement) {
+        teacherV4NextTime.textContent = `${formatHmFromMinutes(nextToday.startMin)} — ${formatHmFromMinutes(nextToday.endMin)}`;
+      }
+
+      if (teacherV4StudentAvatar instanceof HTMLElement) {
+        teacherV4StudentAvatar.textContent = getInitials(nextToday.alunoNome || "Aluno");
+      }
+      if (teacherV4StudentName instanceof HTMLElement) teacherV4StudentName.textContent = nextToday.alunoNome || "Aluno";
+      if (teacherV4StudentMeta instanceof HTMLElement) {
+        const metaParts = [];
+        if (nextToday.nivelAluno) metaParts.push(nextToday.nivelAluno);
+        if (nextToday.idadeAluno) metaParts.push(`${nextToday.idadeAluno} anos`);
+        teacherV4StudentMeta.textContent = metaParts.length ? metaParts.join(" · ") : "—";
+      }
+
+      if (teacherV4StudentProfile instanceof HTMLElement) {
+        if (nextToday.alunoPerfil) {
+          clearPlaceholderText(teacherV4StudentProfile);
+          teacherV4StudentProfile.textContent = nextToday.alunoPerfil;
+        } else {
+          setPlaceholderText(teacherV4StudentProfile, "Nenhuma informação cadastrada");
+        }
+      }
+
+      if (teacherV4StudentGoal instanceof HTMLElement) {
+        if (nextToday.alunoObjetivo) {
+          clearPlaceholderText(teacherV4StudentGoal);
+          teacherV4StudentGoal.textContent = nextToday.alunoObjetivo;
+        } else {
+          setPlaceholderText(teacherV4StudentGoal, "Nenhuma informação cadastrada");
+        }
+      }
+
+      if (teacherV4PlanTheme instanceof HTMLElement) {
+        if (nextToday.tema) {
+          clearPlaceholderText(teacherV4PlanTheme);
+          teacherV4PlanTheme.textContent = nextToday.tema;
+        } else {
+          setPlaceholderText(teacherV4PlanTheme, "Nenhuma informação cadastrada");
+        }
+      }
+
+      if (teacherV4PlanTopics instanceof HTMLElement) {
+        const topics = Array.isArray(nextToday.topicos) ? nextToday.topicos : [];
+        teacherV4PlanTopics.innerHTML = topics
+          .map(
+            (topic) => `
+              <li class="teacher-v4-topic">
+                <span class="teacher-v4-topic-dot" aria-hidden="true"></span>
+                <p class="teacher-v4-topic-text">${escapeHtml(topic)}</p>
+              </li>
+            `
+          )
+          .join("");
+      }
+
+      if (teacherV4PlanMaterial instanceof HTMLElement && teacherV4PlanMaterialTitle instanceof HTMLElement) {
+        const material = String(nextToday.material || "").trim();
+        teacherV4PlanMaterial.hidden = !material;
+        teacherV4PlanMaterialTitle.textContent = material;
+      }
+
+      // Last lesson summary (previous, same student).
+      const prev = lessonsOnly
+        .filter((evt) => evt.alunoId && evt.alunoId === nextToday.alunoId)
+        .filter((evt) => evt.endMs < now.getTime())
+        .sort((a, b) => b.endMs - a.endMs)[0];
+
+      if (!prev) {
+        if (teacherV4LastMeta instanceof HTMLElement) teacherV4LastMeta.textContent = "—";
+        if (teacherV4LastTheme instanceof HTMLElement) teacherV4LastTheme.textContent = "—";
+        setPlaceholderText(teacherV4LastNotes, "Nenhuma informação cadastrada");
+        if (teacherV4LastTags instanceof HTMLElement) teacherV4LastTags.innerHTML = "";
+      } else {
+        // Meta: date + optional rating.
+        const dateLabel = formatBrDateFromDateKey(prev.dateKey || "");
+        let meta = dateLabel || "—";
+        if (prev.weekdayLabel) meta = `${dateLabel} — ${prev.weekdayLabel}`;
+
+        const rating = avaliacoes.find((a) => a && a.aulaId === prev.id);
+
+        if (teacherV4LastMeta instanceof HTMLElement) {
+          const left = meta || "—";
+          const ratingMarkup =
+            rating && Number.isFinite(rating.score10)
+              ? `
+                <span class="teacher-v4-last-rating">
+                  <svg viewBox="0 0 24 24" fill="#FBBF24" aria-hidden="true">
+                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path>
+                  </svg>
+                  <span>${escapeHtml(formatDecimalPt(rating.score10, 1))}</span>
+                </span>
+              `
+              : "";
+          teacherV4LastMeta.innerHTML = `<span>${escapeHtml(left)}</span>${ratingMarkup}`;
+        }
+        if (teacherV4LastTheme instanceof HTMLElement) teacherV4LastTheme.textContent = prev.tema || "—";
+        if (teacherV4LastNotes instanceof HTMLElement) {
+          const notes = String(prev.observacoes || "").trim();
+          if (notes) {
+            clearPlaceholderText(teacherV4LastNotes);
+            teacherV4LastNotes.textContent = notes;
+          } else {
+            setPlaceholderText(teacherV4LastNotes, "Nenhuma informação cadastrada");
+          }
+        }
+
+        if (teacherV4LastTags instanceof HTMLElement) {
+          const tags = Array.isArray(prev.pontosAtencao) ? prev.pontosAtencao : [];
+          teacherV4LastTags.innerHTML = tags
+            .map((tag) => {
+              if (!tag || typeof tag !== "object") return "";
+              const text = String(tag.texto || tag.text || "").trim();
+              if (!text) return "";
+              const kind = String(tag.tipo || "").trim().toLowerCase();
+              const cls = kind === "positivo" ? "is-positive" : "is-weak";
+              return `<span class="teacher-v4-tag ${cls}">${escapeHtml(text)}</span>`;
+            })
+            .join("");
+        }
+      }
+    }
+
+    // Timeline today.
+    if (teacherV4Timeline instanceof HTMLElement && teacherV4TimelineEmpty instanceof HTMLElement) {
+      teacherV4TimelineEmpty.hidden = lessonsToday.length > 0;
+      const nextId = nextToday ? nextToday.id : "";
+      teacherV4Timeline.innerHTML = lessonsToday
+        .sort((a, b) => a.startMs - b.startMs)
+        .map((evt) => {
+          const isDone = evt.endMs <= now.getTime();
+          const isNext = !isDone && nextId && evt.id === nextId;
+          const itemClass = isDone ? "is-completed" : isNext ? "is-next" : "";
+          const badge = isDone ? "Concluída" : isNext ? `Em ${Math.max(1, Math.ceil((evt.startMs - now.getTime()) / 60000))} min` : "";
+          const meta = evt.timelineMeta || "";
+          return `
+            <div class="teacher-v4-timeline-item ${itemClass}">
+              <div class="teacher-v4-timeline-dot" aria-hidden="true"></div>
+              <div class="teacher-v4-timeline-card">
+                <div class="teacher-v4-timeline-left">
+                  <p class="teacher-v4-timeline-time">${escapeHtml(formatHmFromMinutes(evt.startMin))}</p>
+                  <div class="teacher-v4-timeline-sep" aria-hidden="true"></div>
+                  <div style="min-width:0;">
+                    <p class="teacher-v4-timeline-name">${escapeHtml(evt.alunoNome || evt.title || "Aula")}</p>
+                    <p class="teacher-v4-timeline-meta">${escapeHtml(meta)}</p>
+                  </div>
+                </div>
+                <span class="teacher-v4-timeline-badge">${escapeHtml(badge)}</span>
+              </div>
+            </div>
+          `;
+        })
+        .join("");
+    }
+
+    // Week grid.
+    if (teacherV4WeekGrid instanceof HTMLElement && teacherV4WeekTotal instanceof HTMLElement) {
+      const weekLessons = lessonsOnly.filter((evt) => evt.dateKey >= weekStartKey && evt.dateKey <= weekEndKey);
+      const totals = { count: 0, minutes: 0 };
+      const byKey = new Map();
+      weekKeys.forEach((k) => byKey.set(k, []));
+      weekLessons.forEach((evt) => {
+        if (!byKey.has(evt.dateKey)) return;
+        byKey.get(evt.dateKey).push(evt);
+      });
+
+      teacherV4WeekGrid.innerHTML = weekDays
+        .map((day) => {
+          const key = createDateKey(day);
+          const entries = byKey.get(key) || [];
+          const count = entries.length;
+          const minutes = entries.reduce((acc, evt) => acc + Math.max(0, evt.endMin - evt.startMin), 0);
+          totals.count += count;
+          totals.minutes += minutes;
+          const isToday = key === todayKey;
+          const label = ["SEG", "TER", "QUA", "QUI", "SEX", "SÁB"][Math.max(0, Math.min(5, (day.getDay() + 6) % 7))] || "";
+          return `
+            <div class="teacher-v4-weekday ${isToday ? "is-today" : ""}">
+              <p class="teacher-v4-weekday-label">${label}</p>
+              <p class="teacher-v4-weekday-date">${String(day.getDate())}</p>
+              <p class="teacher-v4-weekday-count">${count}</p>
+              <p class="teacher-v4-weekday-sub">aulas</p>
+            </div>
+          `;
+        })
+        .join("");
+
+      teacherV4WeekTotal.textContent = `${totals.count} aulas · ${formatHoursLabel(totals.minutes)}`;
+    }
+
+    // Pendências.
+    const pendingReschedules = reag
+      .filter((r) => r && isPendingRescheduleStatus(r.status))
+      .slice(0, 3)
+      .map((r) => ({
+        kind: "reschedule",
+        title: "Reagendamento solicitado",
+        meta: `${r.alunoNome || "Aluno"} · ${formatBrDateFromDateKey(r.dateKey)} ${r.horaInicio ? `· ${r.horaInicio}` : ""}`.trim(),
+      }));
+
+    const expiring = (() => {
+      const groups = new Map();
+      lessonsOnly
+        .filter((evt) => evt.recorrente && evt.grupoRecorrenciaId)
+        .forEach((evt) => {
+          const key = evt.grupoRecorrenciaId;
+          const prev = groups.get(key);
+          if (!prev || evt.startMs > prev.maxStartMs) {
+            groups.set(key, { maxStartMs: evt.startMs, alunoNome: evt.alunoNome || "", dateKey: evt.dateKey || "" });
+          }
+        });
+
+      const horizonMs = now.getTime() + 14 * 24 * 60 * 60 * 1000;
+      const items = Array.from(groups.values())
+        .filter((g) => g.maxStartMs && g.maxStartMs <= horizonMs && g.maxStartMs >= now.getTime())
+        .sort((a, b) => a.maxStartMs - b.maxStartMs)
+        .slice(0, 2)
+        .map((g) => ({
+          kind: "recurrence",
+          title: "Recorrência expirando",
+          meta: `${g.alunoNome || "Aluno"} · Renovar até ${formatBrDateFromDateKey(g.dateKey)}`,
+        }));
+      return items;
+    })();
+
+    const pendingItems = [...pendingReschedules, ...expiring];
+
+    if (teacherV4PendingCount instanceof HTMLElement) teacherV4PendingCount.textContent = String(pendingItems.length);
+    if (teacherV4PendingList instanceof HTMLElement && teacherV4PendingEmpty instanceof HTMLElement) {
+      teacherV4PendingEmpty.hidden = pendingItems.length > 0;
+      teacherV4PendingList.innerHTML = pendingItems
+        .map((item) => {
+          const cls = item.kind === "reschedule" ? "is-yellow" : "is-blue";
+          return `
+            <div class="teacher-v4-pending-item ${cls}">
+              <div>
+                <p class="teacher-v4-pending-item-title">${escapeHtml(item.title)}</p>
+                <p class="teacher-v4-pending-item-meta">${escapeHtml(item.meta)}</p>
+              </div>
+              <svg class="teacher-v4-pending-item-chevron" viewBox="0 0 24 24" aria-hidden="true">
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+            </div>
+          `;
+        })
+        .join("");
+    }
+
+    // Performance.
+    const pastLessons = lessonsOnly.filter((evt) => evt.endMs < now.getTime());
+    const pastMonth = pastLessons.filter((evt) => isInRange(evt.startMs, monthStart, monthEnd));
+    const present = pastMonth.length;
+    const canceledPastMonth = aulas.filter((evt) => evt && evt.type === "lesson" && isCancelledStatus(evt.status)).filter((evt) =>
+      isInRange(evt.startMs, monthStart, monthEnd)
+    ).length;
+    const denom = present + canceledPastMonth;
+    const presencePct = denom ? Math.round((present / denom) * 100) : 0;
+
+    if (teacherV4PresenceValue instanceof HTMLElement) teacherV4PresenceValue.textContent = `${presencePct}%`;
+    if (teacherV4PresenceBar instanceof HTMLElement) teacherV4PresenceBar.style.width = `${presencePct}%`;
+    if (teacherV4PresencePill instanceof HTMLElement) {
+      const ok = presencePct >= 85;
+      teacherV4PresencePill.hidden = false;
+      teacherV4PresencePill.textContent = ok ? "Saudável" : "Atenção";
+    }
+
+    const monthEval = avaliacoes.filter((a) => a && isInRange(a.createdAtMs, monthStart, monthEnd));
+    const avgEval = monthEval.length
+      ? monthEval.reduce((acc, row) => acc + (Number(row.score10) || 0), 0) / monthEval.length
+      : null;
+
+    if (teacherV4ReviewsCount instanceof HTMLElement) teacherV4ReviewsCount.textContent = String(monthEval.length);
+    if (teacherV4ReviewsAverage instanceof HTMLElement) teacherV4ReviewsAverage.textContent = avgEval == null ? "—" : formatDecimalPt(avgEval, 1);
+    renderStars(teacherV4ReviewsStars, avgEval || 0);
+
+    // Occupancy: scheduled minutes / available minutes for the current week (Mon-Sat).
+    const weekLessons = lessonsOnly.filter((evt) => evt.dateKey >= weekStartKey && evt.dateKey <= weekEndKey);
+    const scheduledMinutesWeek = weekLessons.reduce((acc, evt) => acc + Math.max(0, evt.endMin - evt.startMin), 0);
+    let availableMinutesWeek = 0;
+    if (workHours && typeof workHours === "object") {
+      weekDays.forEach((day) => {
+        const dow = day.getDay();
+        const windows = Array.isArray(workHours[String(dow)]) ? workHours[String(dow)] : [];
+        windows.forEach((w) => {
+          if (!w) return;
+          const start = clampNumber(w.startMin, 0, 1440);
+          const end = clampNumber(w.endMin, 0, 1440);
+          if (end > start) availableMinutesWeek += end - start;
+        });
+      });
+    }
+    const occupancyPct = availableMinutesWeek ? Math.min(100, Math.round((scheduledMinutesWeek / availableMinutesWeek) * 100)) : 0;
+    if (teacherV4OccupancyValue instanceof HTMLElement) teacherV4OccupancyValue.textContent = `${occupancyPct}%`;
+    if (teacherV4OccupancyBar instanceof HTMLElement) teacherV4OccupancyBar.style.width = `${occupancyPct}%`;
+    if (teacherV4OccupancyPill instanceof HTMLElement) {
+      teacherV4OccupancyPill.hidden = false;
+      teacherV4OccupancyPill.textContent = occupancyPct >= 70 ? "Bom" : "Baixo";
+    }
+
+    // Rating badge (header): use overall average, fallback to month average.
+    const avgAll = avaliacoes.length
+      ? avaliacoes.reduce((acc, row) => acc + (Number(row.score10) || 0), 0) / avaliacoes.length
+      : null;
+    if (teacherV4Rating instanceof HTMLElement) {
+      teacherV4Rating.textContent = avgAll == null ? "—" : formatDecimalPt(avgAll, 1);
+    }
+
+    // Notices.
+    if (teacherV4NoticesList instanceof HTMLElement && teacherV4NoticesEmpty instanceof HTMLElement) {
+      teacherV4NoticesEmpty.hidden = avisos.length > 0;
+      teacherV4NoticesList.innerHTML = avisos
+        .slice(0, 3)
+        .map((n) => {
+          const important = Boolean(n.important);
+          const title = n.title || "Aviso";
+          const meta = n.meta || "";
+          const text = n.text || "";
+          const tag = important ? `<span class="teacher-v4-notice-tag">Importante</span>` : "";
+          return `
+            <div class="teacher-v4-notice ${important ? "is-important" : ""}">
+              <div class="teacher-v4-notice-head">
+                <div style="display:flex; align-items:center; gap:6px; min-width:0;">
+                  <p class="teacher-v4-notice-title">${escapeHtml(title)}</p>
+                  ${tag}
+                </div>
+                <span class="teacher-v4-notice-meta">${escapeHtml(meta)}</span>
+              </div>
+              <p class="teacher-v4-notice-text">${escapeHtml(text)}</p>
+            </div>
+          `;
+        })
+        .join("");
+    }
+  };
+
+  if (!shouldReload && teacherV4DashboardState.teacherId) {
+    renderFromCache();
     return;
   }
 
-  const now = new Date();
-  const todayKey = createDateKey(now);
-  const lessons = getTeacherLessons();
-  const cancellations = getTeacherCancellationEvents();
+  teacherV4DashboardState.isLoading = true;
 
-  const lessonsToday = lessons.filter((lesson) => lesson.dateKey === todayKey);
-  const cancelledToday = cancellations.filter((event) => event.dateKey === todayKey);
+  (async () => {
+    try {
+      const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init");
+      const user = await waitForFirebaseAuthReady(firebase, 5000);
+      if (!user) throw new Error("auth/no-current-user");
 
-  if (teacherLessonsTodayValue) {
-    teacherLessonsTodayValue.textContent = String(lessonsToday.length);
-  }
+      const teacherId = String(user.uid || "");
+      teacherV4DashboardState.teacherId = teacherId;
 
-  if (teacherLessonsTodaySub) {
-    teacherLessonsTodaySub.textContent = `${lessonsToday.length} confirmadas · ${cancelledToday.length} canceladas`;
-  }
+      // Fetch aulas for this teacher (single-field query avoids composite indexes).
+      const aulasSnap = await withTimeout(
+        firebase.getDocs(firebase.query(firebase.collection(firebase.primaryDb, "aulas"), firebase.where("professorId", "==", teacherId))),
+        16_000,
+        "teacher_v4_aulas"
+      );
 
-  const upcomingToday = lessonsToday
-    .map((lesson) => {
-      const date = parseDateKey(lesson.dateKey);
-      if (!date) return null;
-      const dateTime = getSlotDateTime(date, lesson.time);
-      return { ...lesson, dateTime };
-    })
-    .filter(Boolean)
-    .filter((lesson) => lesson.dateTime.getTime() > now.getTime())
-    .sort((a, b) => a.dateTime.getTime() - b.dateTime.getTime());
+      const aulas = [];
+      aulasSnap.forEach((docSnap) => {
+        const data = docSnap.data ? docSnap.data() : null;
+        if (!data || typeof data !== "object") return;
+        const id = String(docSnap.id || "").trim();
+        const professorId = String(data.professorId || "").trim();
+        if (!id || !professorId) return;
 
-  const nextLesson = upcomingToday[0] || null;
+        const alunoIdRaw = data.alunoId == null ? null : String(data.alunoId || "").trim();
+        const alunoId = alunoIdRaw || null;
+        const dateKey = String(data.dateKey || "").trim();
+        const startMin = Number.isFinite(Number(data.startMin)) ? clampNumber(Number(data.startMin), 0, 1440) : parseMinutesNullable(data.horaInicio);
+        const endMin = Number.isFinite(Number(data.endMin)) ? clampNumber(Number(data.endMin), 0, 1440) : parseMinutesNullable(data.horaFim);
+        if (!dateKey || !Number.isFinite(startMin) || !Number.isFinite(endMin) || endMin <= startMin) return;
 
-  if (teacherNextClassValue && teacherNextCountdown) {
-    if (!nextLesson) {
-      teacherNextClassValue.textContent = "Sem mais aulas hoje";
-      teacherNextCountdown.textContent = "";
-    } else {
-      const name = nextLesson.studentName || "Aluno Space";
-      teacherNextClassValue.textContent = `${name} · ${formatTimeHm(nextLesson.dateTime)}`;
-      teacherNextCountdown.textContent = formatCountdown(nextLesson.dateTime, now);
+        const start = dateTimeFromKeyMinutes(dateKey, startMin);
+        const end = dateTimeFromKeyMinutes(dateKey, endMin);
+        if (!start || !end) return;
+
+        const status = String(data.status || "").trim().toLowerCase() || "agendada";
+        const alunoNome = typeof data.alunoNome === "string" ? data.alunoNome.trim() : "";
+        const professorNome = typeof data.professorNome === "string" ? data.professorNome.trim() : "";
+        const recorrente = typeof data.recorrente === "boolean" ? data.recorrente : false;
+        const grupoRecorrenciaId = typeof data.grupoRecorrenciaId === "string" && data.grupoRecorrenciaId.trim() ? data.grupoRecorrenciaId.trim() : null;
+
+        const tema = typeof data.tema === "string" ? data.tema.trim() : "";
+        const topicos = Array.isArray(data.topicos) ? data.topicos.filter((t) => typeof t === "string" && t.trim()).map((t) => t.trim()) : [];
+        const material = typeof data.material === "string" ? data.material.trim() : "";
+        const observacoes = typeof data.observacoes === "string" ? data.observacoes.trim() : "";
+        const pontosAtencao = Array.isArray(data.pontosAtencao) ? data.pontosAtencao : [];
+
+        const nivelAluno =
+          typeof data.nivelAluno === "string"
+            ? data.nivelAluno.trim()
+            : typeof data.nivel === "string"
+              ? data.nivel.trim()
+              : typeof data.level === "string"
+                ? data.level.trim()
+                : "";
+        const idadeAlunoRaw = data.idadeAluno ?? data.idade ?? data.age ?? null;
+        const idadeAluno = Number.isFinite(Number(idadeAlunoRaw)) ? Math.max(0, Math.floor(Number(idadeAlunoRaw))) : null;
+
+        const type = alunoId ? "lesson" : "manual";
+        const title = type === "lesson" ? alunoNome || "Aluno" : String(data.title || "").trim() || "Evento";
+        const cat = tema ? String(tema.split(":")[0]).trim() : "";
+        const timelineMeta = [nivelAluno || "", cat || ""].filter(Boolean).join(" · ");
+
+        aulas.push({
+          id,
+          professorId,
+          professorNome: professorNome || null,
+          alunoId,
+          alunoNome: alunoNome || null,
+          dateKey,
+          startMin,
+          endMin,
+          startMs: start.getTime(),
+          endMs: end.getTime(),
+          status,
+          type,
+          title,
+          recorrente: Boolean(recorrente),
+          grupoRecorrenciaId,
+          tema,
+          topicos,
+          material,
+          observacoes,
+          pontosAtencao,
+          nivelAluno: nivelAluno || "",
+          idadeAluno,
+          timelineMeta,
+          weekdayLabel: (() => {
+            const wd = weekdayLongFromDateKey(dateKey);
+            return wd ? wd.replace(/^\w/, (c) => c.toUpperCase()) : "";
+          })(),
+          alunoPerfil: "",
+          alunoObjetivo: "",
+        });
+      });
+
+      // Determine next lesson for today and fetch student profile/goal for it (single doc read).
+      const lessonsToday = aulas.filter((evt) => evt.type === "lesson" && evt.dateKey === todayKey && !isCancelledStatus(evt.status));
+      const nextToday = lessonsToday
+        .filter((evt) => evt.startMs > now.getTime())
+        .sort((a, b) => a.startMs - b.startMs)[0];
+
+      if (nextToday && nextToday.alunoId) {
+        try {
+          // We request getDoc lazily; if the module isn't exported, fall back to a query.
+          const docRef = firebase.doc(firebase.primaryDb, "users", nextToday.alunoId);
+          const snap = firebase.getDoc ? await withTimeout(firebase.getDoc(docRef), 10_000, "teacher_v4_student_doc") : null;
+          const studentData = snap && typeof snap.data === "function" ? snap.data() : null;
+          if (studentData && typeof studentData === "object") {
+            const perfil = typeof studentData.perfil === "string" ? studentData.perfil.trim() : "";
+            const objetivo = typeof studentData.objetivo === "string" ? studentData.objetivo.trim() : "";
+            nextToday.alunoPerfil = perfil;
+            nextToday.alunoObjetivo = objetivo;
+          }
+        } catch (error) {
+          // ignore, keep placeholders
+        }
+      }
+
+      // Avaliacoes (optional).
+      let avaliacoes = [];
+      try {
+        const snap = await withTimeout(
+          firebase.getDocs(firebase.query(firebase.collection(firebase.primaryDb, "avaliacoes"), firebase.where("professorId", "==", teacherId))),
+          12_000,
+          "teacher_v4_avaliacoes"
+        );
+        const rows = [];
+        snap.forEach((docSnap) => {
+          const data = docSnap.data ? docSnap.data() : null;
+          if (!data || typeof data !== "object") return;
+          const aulaId = typeof data.aulaId === "string" ? data.aulaId.trim() : typeof data.lessonId === "string" ? data.lessonId.trim() : "";
+          const created = data.criadoEm ?? data.createdAt ?? data.data ?? null;
+          const createdAt =
+            created && typeof created.toDate === "function"
+              ? created.toDate()
+              : created instanceof Date
+                ? created
+                : typeof created === "number"
+                  ? new Date(created)
+                  : null;
+          const createdAtMs = createdAt instanceof Date && !Number.isNaN(createdAt.getTime()) ? createdAt.getTime() : 0;
+          const rawScore = data.nota ?? data.score ?? data.rating ?? data.value ?? null;
+          const scoreNum = Number(rawScore);
+          if (!Number.isFinite(scoreNum)) return;
+          const score10 = scoreNum <= 5 ? scoreNum * 2 : scoreNum;
+          rows.push({ id: docSnap.id, aulaId: aulaId || "", score10: clampNumber(score10, 0, 10), createdAtMs });
+        });
+        avaliacoes = rows;
+      } catch (error) {
+        avaliacoes = [];
+      }
+
+      // Avisos (optional).
+      let avisos = [];
+      try {
+        const snap = await withTimeout(firebase.getDocs(firebase.collection(firebase.primaryDb, "avisos")), 12_000, "teacher_v4_avisos");
+        const rows = [];
+        snap.forEach((docSnap) => {
+          const data = docSnap.data ? docSnap.data() : null;
+          if (!data || typeof data !== "object") return;
+          const title = typeof data.titulo === "string" ? data.titulo.trim() : typeof data.title === "string" ? data.title.trim() : "";
+          const text = typeof data.texto === "string" ? data.texto.trim() : typeof data.text === "string" ? data.text.trim() : "";
+          const important = Boolean(data.importante ?? data.important ?? false);
+          const created = data.criadoEm ?? data.createdAt ?? data.data ?? null;
+          const createdAt =
+            created && typeof created.toDate === "function"
+              ? created.toDate()
+              : created instanceof Date
+                ? created
+                : typeof created === "number"
+                  ? new Date(created)
+                  : null;
+          const createdAtMs = createdAt instanceof Date && !Number.isNaN(createdAt.getTime()) ? createdAt.getTime() : 0;
+          rows.push({
+            id: docSnap.id,
+            title: title || "Aviso",
+            text,
+            important,
+            createdAtMs,
+            meta: createdAt ? `${formatShortDate(createdAt)}${createdAtMs ? ` · ${formatTimeHm(createdAt)}` : ""}` : "",
+          });
+        });
+        avisos = rows.sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0));
+      } catch (error) {
+        avisos = [];
+      }
+
+      // Reagendamentos pendentes para o professor (optional).
+      let reagendamentos = [];
+      try {
+        const snap = await withTimeout(
+          firebase.getDocs(firebase.query(firebase.collection(firebase.primaryDb, "reagendamentos"), firebase.where("professorId", "==", teacherId))),
+          12_000,
+          "teacher_v4_reagendamentos"
+        );
+        const rows = [];
+        snap.forEach((docSnap) => {
+          const data = docSnap.data ? docSnap.data() : null;
+          if (!data || typeof data !== "object") return;
+          const status = String(data.status || "").trim().toLowerCase() || "pendente";
+          const alunoNome = typeof data.alunoNome === "string" ? data.alunoNome.trim() : "";
+          const dateKey = typeof data.dateKey === "string" ? data.dateKey.trim() : "";
+          const horaInicio = typeof data.horaInicio === "string" ? data.horaInicio.trim() : "";
+          const horaFim = typeof data.horaFim === "string" ? data.horaFim.trim() : "";
+          rows.push({ id: docSnap.id, status, alunoNome, dateKey, horaInicio, horaFim });
+        });
+        reagendamentos = rows;
+      } catch (error) {
+        reagendamentos = [];
+      }
+
+      // Work hours (optional, used for occupancy).
+      let workHours = null;
+      try {
+        const res = await withTimeout(fetchWithAuth("/api/teacher-workhours"), 10_000, "teacher_v4_workhours");
+        const json = await res.json().catch(() => null);
+        if (res.ok && json && typeof json === "object") {
+          workHours = json.workHours && typeof json.workHours === "object" ? json.workHours : null;
+        }
+      } catch (error) {
+        workHours = null;
+      }
+
+      teacherV4DashboardState.aulas = aulas;
+      teacherV4DashboardState.avaliacoes = avaliacoes;
+      teacherV4DashboardState.avisos = avisos;
+      teacherV4DashboardState.reagendamentos = reagendamentos;
+      teacherV4DashboardState.workHours = workHours;
+      teacherV4DashboardState.loadedAt = Date.now();
+    } catch (error) {
+      console.error("[teacher-v4] renderTeacherDashboard failed:", error);
+    } finally {
+      teacherV4DashboardState.isLoading = false;
+      renderFromCache();
     }
-  }
-
-  const nps = computeTeacherNps();
-  if (teacherNpsValue) {
-    teacherNpsValue.textContent = nps.average === null ? "—" : nps.average.toFixed(1);
-  }
-  if (teacherNpsSub) {
-    teacherNpsSub.textContent = `Baseado em ${nps.count} ${nps.count === 1 ? "avaliação" : "avaliações"}`;
-  }
-
-  const weekDays = getWeekDaysMonToSat(now);
-  const weekKeys = new Set(weekDays.map((date) => createDateKey(date)));
-  const presets = getLiveSlotPresets();
-  const totalSlots = weekDays.reduce((acc, date) => {
-    const times = presets[String(date.getDay())] || [];
-    return acc + times.length;
-  }, 0);
-  const filledSlots = lessons.filter((lesson) => weekKeys.has(lesson.dateKey)).length;
-  const percent = totalSlots ? Math.round((filledSlots / totalSlots) * 100) : 0;
-
-  if (teacherOccupancyPercent) {
-    teacherOccupancyPercent.textContent = `${percent}%`;
-  }
-  if (teacherOccupancySub) {
-    teacherOccupancySub.textContent = `${filledSlots} de ${totalSlots} slots preenchidos`;
-  }
-  if (teacherOccupancyRing) {
-    teacherOccupancyRing.style.setProperty("--level-progress", String(percent));
-  }
-  if (teacherOccupancyRingText) {
-    teacherOccupancyRingText.textContent = `${percent}%`;
-  }
-
-  renderTeacherClassesChart(chartState["teacher-classes"]);
-  renderTeacherNotices();
+  })();
 };
 
 const formatTimeZoneOffset = (date) => {
@@ -3803,6 +4597,7 @@ const loadFirebaseAdminApi = () => {
       signOut: authMod.signOut,
       collection: fsMod.collection,
       doc: fsMod.doc,
+      getDoc: fsMod.getDoc,
       getDocs: fsMod.getDocs,
       orderBy: fsMod.orderBy,
       query: fsMod.query,
@@ -4519,7 +5314,8 @@ const showPanel = (panelName) => {
   });
 
   const activePanel = document.querySelector(`[data-panel="${panelName}"]`);
-  const shouldHidePlatformHeader = activePanel?.dataset.hidePlatformHeader === "true";
+  const shouldHidePlatformHeader =
+    activePanel?.dataset.hidePlatformHeader === "true" || (panelName === "dashboard" && currentRole === "teacher");
   body.dataset.activePanel = panelName;
 
   if (platformHeader) {
