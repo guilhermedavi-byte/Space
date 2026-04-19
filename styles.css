@@ -3238,6 +3238,7 @@ body[data-sidebar-expanded="false"] .sidebar-toggle-icon {
 body[data-active-panel="ao-vivo"] .platform-main {
   padding: 24px var(--platform-inline-padding) 34px 18px !important;
   gap: 0 !important;
+  overflow-y: auto;
 }
 
 .platform-header {
@@ -4846,20 +4847,28 @@ body:not([data-role="admin"]) [data-admin-only] {
   align-items: stretch;
   width: 100%;
   min-height: calc(100vh - 120px);
+  position: relative;
+  isolation: isolate;
 }
 
 .teacher-calendar-left {
+  grid-column: 1;
   background: rgba(255, 255, 255, 0.03);
   border-radius: 16px;
   padding: 16px 14px;
   display: grid;
   align-content: start;
   gap: 16px;
+  min-width: 0;
+  position: relative;
+  z-index: 2;
 }
 
 .teacher-calendar-actions {
   display: grid;
-  gap: 10px;
+  gap: 12px;
+  position: relative;
+  z-index: 3;
 }
 
 .teacher-calendar-button {
@@ -4899,27 +4908,40 @@ body:not([data-role="admin"]) [data-admin-only] {
 }
 
 .teacher-calendar-button-primary {
-  background: #e8453c;
-  border-color: rgba(232, 69, 60, 0.6);
+  background: #FF4E46;
+  border-color: rgba(255, 78, 70, 0.65);
   color: #ffffff;
 }
 
 .teacher-calendar-button-primary:hover,
 .teacher-calendar-button-primary:focus-visible {
-  background: #cc3530;
+  background: #e03e36;
   transform: translateY(-1px);
 }
 
 .teacher-calendar-button-outline {
+  justify-content: flex-start;
+  padding: 0 12px;
   background: transparent;
-  color: rgba(255, 255, 255, 0.86);
+  border-color: transparent;
+  color: rgba(255, 255, 255, 0.72);
+  font-weight: 700;
 }
 
 .teacher-calendar-button-outline:hover,
 .teacher-calendar-button-outline:focus-visible {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(89, 144, 189, 0.08);
+  border-color: rgba(89, 144, 189, 0.22);
+  color: rgba(255, 255, 255, 0.86);
   transform: translateY(-1px);
+}
+
+.teacher-calendar-button-outline span:last-child {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  white-space: normal;
+  line-height: 1.2;
 }
 
 .teacher-mini-cal {
@@ -5070,10 +5092,13 @@ body:not([data-role="admin"]) [data-admin-only] {
 }
 
 .teacher-calendar-main {
+  grid-column: 2;
   min-width: 0;
   display: grid;
   grid-template-rows: auto auto 1fr;
   gap: 10px;
+  position: relative;
+  z-index: 1;
 }
 
 .teacher-cal-topbar {
@@ -6058,6 +6083,11 @@ body.is-cal-dragging .teacher-cal-grid {
   .teacher-calendar-shell {
     grid-template-columns: 1fr;
     min-height: auto;
+  }
+
+  .teacher-calendar-left,
+  .teacher-calendar-main {
+    grid-column: auto;
   }
 
   /* teacher-secondary-grid removed */
@@ -8418,4 +8448,108 @@ body[data-page="landing"] [data-reveal].is-revealed {
   border: 0.5px solid rgba(89, 144, 189, 0.08);
   border-radius: 14px;
   padding: 20px;
+  margin-top: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.admin-requests-body {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-requests-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.admin-requests-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(13, 15, 18, 0.24);
+  min-width: 0;
+}
+
+.admin-requests-main {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.admin-requests-title {
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+}
+
+.admin-requests-meta {
+  color: rgba(255, 255, 255, 0.52);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.admin-requests-reason {
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.admin-requests-actions {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.admin-requests-btn {
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 150ms ease, background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.admin-requests-btn:hover,
+.admin-requests-btn:focus-visible {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.admin-requests-btn.is-danger {
+  background: rgba(255, 78, 70, 0.12);
+  border-color: rgba(255, 78, 70, 0.24);
+  color: #FF4E46;
+}
+
+.admin-requests-btn.is-danger:hover,
+.admin-requests-btn.is-danger:focus-visible {
+  background: rgba(255, 78, 70, 0.16);
+  border-color: rgba(255, 78, 70, 0.34);
+  color: rgba(255, 255, 255, 0.95);
 }
