@@ -351,6 +351,21 @@
           <button
             class="sidebar-link"
             type="button"
+            data-panel-target="growth"
+            data-admin-only
+            title="Growth"
+          >
+            <span class="sidebar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M4.5 16.5 10 11l3.25 3.25L20 7.5"></path>
+                <path d="M20 13.5v6h-6"></path>
+              </svg>
+            </span>
+            <span class="sidebar-text">Growth</span>
+          </button>
+          <button
+            class="sidebar-link"
+            type="button"
             data-panel-target="gravadas"
             title="Aulas gravadas"
           >
@@ -1433,6 +1448,34 @@
               <div class="admin-users-table" data-admin-users-table="student"></div>
               <div class="admin-users-empty" data-admin-users-empty="student" hidden>Nenhum aluno encontrado.</div>
               <div class="admin-users-error" data-admin-users-error="student" hidden>Não foi possível carregar os alunos.</div>
+            </article>
+          </div>
+        </section>
+
+        <section class="platform-panel" data-panel="growth" data-hide-platform-header="true" hidden>
+          <div class="admin-manage-shell" data-admin-manage="growth">
+            <div class="admin-manage-head">
+              <h2 class="admin-manage-title">Growth</h2>
+              <button class="button button-solid button-small" type="button" data-admin-new-user="growth">
+                + Adicionar usuário
+              </button>
+            </div>
+
+            <div class="admin-manage-tools">
+              <input
+                class="admin-search"
+                type="search"
+                inputmode="search"
+                placeholder="Buscar por nome ou e-mail"
+                data-admin-search="growth"
+              />
+              <div class="admin-manage-status" data-admin-manage-status="growth" aria-live="polite"></div>
+            </div>
+
+            <article class="surface-card admin-users-card" aria-label="Lista de usuários Growth">
+              <div class="admin-users-table" data-admin-users-table="growth"></div>
+              <div class="admin-users-empty" data-admin-users-empty="growth" hidden>Nenhum usuário Growth encontrado.</div>
+              <div class="admin-users-error" data-admin-users-error="growth" hidden>Não foi possível carregar os usuários Growth.</div>
             </article>
           </div>
         </section>

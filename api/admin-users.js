@@ -7,6 +7,7 @@ const normalizeRole = (value) => {
   const raw = String(value || "").trim().toLowerCase();
   if (raw === "teacher" || raw === "professor") return "teacher";
   if (raw === "student" || raw === "aluno") return "student";
+  if (raw === "growth") return "growth";
   return "";
 };
 

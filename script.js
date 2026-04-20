@@ -70,12 +70,16 @@ const adminNewUserButtons = document.querySelectorAll("[data-admin-new-user]");
 const adminSearchInputs = document.querySelectorAll("[data-admin-search]");
 const adminManageStatusTeacher = document.querySelector('[data-admin-manage-status="teacher"]');
 const adminManageStatusStudent = document.querySelector('[data-admin-manage-status="student"]');
+const adminManageStatusGrowth = document.querySelector('[data-admin-manage-status="growth"]');
 const adminUsersTableTeacher = document.querySelector('[data-admin-users-table="teacher"]');
 const adminUsersTableStudent = document.querySelector('[data-admin-users-table="student"]');
+const adminUsersTableGrowth = document.querySelector('[data-admin-users-table="growth"]');
 const adminUsersEmptyTeacher = document.querySelector('[data-admin-users-empty="teacher"]');
 const adminUsersEmptyStudent = document.querySelector('[data-admin-users-empty="student"]');
+const adminUsersEmptyGrowth = document.querySelector('[data-admin-users-empty="growth"]');
 const adminUsersErrorTeacher = document.querySelector('[data-admin-users-error="teacher"]');
 const adminUsersErrorStudent = document.querySelector('[data-admin-users-error="student"]');
+const adminUsersErrorGrowth = document.querySelector('[data-admin-users-error="growth"]');
 const modalOverlay = document.querySelector("[data-modal-overlay]");
 const modalTitle = document.querySelector("[data-modal-title]");
 const modalBody = document.querySelector("[data-modal-body]");
@@ -5411,7 +5415,13 @@ const formatAdminDate = (value) => {
 };
 
 const setAdminManageStatus = (type, text, tone = "") => {
-  const el = type === "teacher" ? adminManageStatusTeacher : adminManageStatusStudent;
+  const safeType = type === "teacher" ? "teacher" : type === "growth" ? "growth" : "student";
+  const el =
+    safeType === "teacher"
+      ? adminManageStatusTeacher
+      : safeType === "growth"
+        ? adminManageStatusGrowth
+        : adminManageStatusStudent;
   if (!(el instanceof HTMLElement)) return;
   el.textContent = text || "";
   el.dataset.tone = tone || "";
@@ -5420,14 +5430,18 @@ const setAdminManageStatus = (type, text, tone = "") => {
 let adminUsersState = {
   teacher: { rows: [], query: "", loadedAt: 0, isLoading: false },
   student: { rows: [], query: "", loadedAt: 0, isLoading: false },
+  growth: { rows: [], query: "", loadedAt: 0, isLoading: false },
 };
 
 const getAdminUsersUiRefs = (type) => {
-  return {
-    table: type === "teacher" ? adminUsersTableTeacher : adminUsersTableStudent,
-    empty: type === "teacher" ? adminUsersEmptyTeacher : adminUsersEmptyStudent,
-    error: type === "teacher" ? adminUsersErrorTeacher : adminUsersErrorStudent,
-  };
+  const safeType = type === "teacher" ? "teacher" : type === "growth" ? "growth" : "student";
+  if (safeType === "teacher") {
+    return { table: adminUsersTableTeacher, empty: adminUsersEmptyTeacher, error: adminUsersErrorTeacher };
+  }
+  if (safeType === "growth") {
+    return { table: adminUsersTableGrowth, empty: adminUsersEmptyGrowth, error: adminUsersErrorGrowth };
+  }
+  return { table: adminUsersTableStudent, empty: adminUsersEmptyStudent, error: adminUsersErrorStudent };
 };
 
 const normalizeFirestoreRole = (value) => {
@@ -5435,6 +5449,7 @@ const normalizeFirestoreRole = (value) => {
   if (raw === "teacher" || raw === "professor") return "teacher";
   if (raw === "student" || raw === "aluno") return "student";
   if (raw === "admin" || raw === "administrador") return "admin";
+  if (raw === "growth") return "growth";
   return "";
 };
 
@@ -5461,7 +5476,7 @@ const normalizeUserRow = ({ id, nome, email, tipo, ativo, criadoEm }) => {
 };
 
 const loadUsersFromFirestore = async (type) => {
-  const safeType = type === "teacher" ? "teacher" : "student";
+  const safeType = type === "teacher" ? "teacher" : type === "growth" ? "growth" : "student";
   const state = adminUsersState[safeType];
   if (state.isLoading) return;
 
@@ -5526,7 +5541,7 @@ const loadUsersFromFirestore = async (type) => {
 };
 
 const renderAdminUsersTable = (type) => {
-  const safeType = type === "teacher" ? "teacher" : "student";
+  const safeType = type === "teacher" ? "teacher" : type === "growth" ? "growth" : "student";
   const state = adminUsersState[safeType];
   const { table, empty, error } = getAdminUsersUiRefs(safeType);
   if (!(table instanceof HTMLElement)) return;
@@ -5724,10 +5739,10 @@ if (adminUserForm instanceof HTMLFormElement) {
 
 const openAdminCreateUserModal = ({ presetRole } = {}) => {
   if (currentRole !== "admin") return;
-  const role = presetRole === "teacher" ? "teacher" : "student";
+  const role = presetRole === "teacher" ? "teacher" : presetRole === "growth" ? "growth" : "student";
   activeModalKind = "admin-create-user";
 
-  const title = role === "teacher" ? "Novo Professor" : "Novo Aluno";
+  const title = role === "teacher" ? "Novo Professor" : role === "growth" ? "Novo usuário Growth" : "Novo Aluno";
 
   const bodyHtml = `
     <form class="auth-form admin-create-form" data-admin-create-form novalidate>
@@ -5870,13 +5885,15 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
 
           adminUsersState.teacher.loadedAt = 0;
           adminUsersState.student.loadedAt = 0;
+          adminUsersState.growth.loadedAt = 0;
 
           if (successEl instanceof HTMLElement) successEl.hidden = false;
-          setAdminManageStatus(role === "teacher" ? "teacher" : "student", "Criado com sucesso.", "success");
-          window.setTimeout(() => setAdminManageStatus(role === "teacher" ? "teacher" : "student", ""), 1200);
+          setAdminManageStatus(role, "Criado com sucesso.", "success");
+          window.setTimeout(() => setAdminManageStatus(role, ""), 1200);
           closeModal();
           if (role === "teacher") loadUsersFromFirestore("teacher");
           if (role === "student") loadUsersFromFirestore("student");
+          if (role === "growth") loadUsersFromFirestore("growth");
         } catch (e) {
           console.error("[admin] create teacher/student failed:", e);
           const code = typeof e?.code === "string" ? e.code : "";
@@ -5920,14 +5937,16 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
 
 adminNewUserButtons.forEach((btn) => {
   btn.addEventListener("click", () => {
-    const raw = btn.getAttribute("data-admin-new-user");
-    openAdminCreateUserModal({ presetRole: raw === "teacher" ? "teacher" : "student" });
+    const raw = String(btn.getAttribute("data-admin-new-user") || "").trim().toLowerCase();
+    const presetRole = raw === "teacher" ? "teacher" : raw === "growth" ? "growth" : "student";
+    openAdminCreateUserModal({ presetRole });
   });
 });
 
 adminSearchInputs.forEach((input) => {
   input.addEventListener("input", () => {
-    const type = input.getAttribute("data-admin-search") === "teacher" ? "teacher" : "student";
+    const raw = String(input.getAttribute("data-admin-search") || "").trim().toLowerCase();
+    const type = raw === "teacher" ? "teacher" : raw === "growth" ? "growth" : "student";
     adminUsersState[type].query = input instanceof HTMLInputElement ? input.value : "";
     renderAdminUsersTable(type);
   });
@@ -6047,6 +6066,14 @@ const showPanel = (panelName) => {
     return;
   }
 
+  if (panelName === "growth") {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (currentRole === "admin") {
+      loadUsersFromFirestore("growth");
+    }
+    return;
+  }
+
   if (panelName === "dashboard") {
     if (currentRole === "teacher") {
       renderTeacherDashboard();
@@ -6085,6 +6112,7 @@ const panelPathForRole = (role, panel) => {
   if (normalized === "admin") {
     if (p === "professores") return "/app/admin/professores";
     if (p === "alunos") return "/app/admin/alunos";
+    if (p === "growth") return "/app/admin/growth";
     if (p === "gravadas") return "/app/admin/gravadas";
     if (p === "ao-vivo") return "/app/admin/ao-vivo";
     if (p === "materiais") return "/app/admin/materiais";
@@ -6116,6 +6144,7 @@ const parseAppRoute = (path) => {
   if (role === "admin") {
     if (sub === "professores") return { role, panel: "professores" };
     if (sub === "alunos") return { role, panel: "alunos" };
+    if (sub === "growth") return { role, panel: "growth" };
     if (sub === "ao-vivo") return { role, panel: "ao-vivo" };
     if (sub === "gravadas") return { role, panel: "gravadas" };
     if (sub === "materiais") return { role, panel: "materiais" };
@@ -6332,7 +6361,8 @@ document.addEventListener("click", (event) => {
         const name = row.getAttribute("data-admin-user-name") || "Usuário";
         const email = row.getAttribute("data-admin-user-email") || "";
         const isActive = row.getAttribute("data-admin-user-active") === "1";
-        const type = body.dataset.activePanel === "professores" ? "teacher" : "student";
+        const activePanel = String(body.dataset.activePanel || "");
+        const type = activePanel === "professores" ? "teacher" : activePanel === "growth" ? "growth" : "student";
 
         closeAllAdminActionMenus();
 
@@ -6402,7 +6432,8 @@ document.addEventListener("click", (event) => {
         const row = resetAction.closest("[data-admin-user-row]");
         if (!(row instanceof HTMLElement)) return;
         const email = row.getAttribute("data-admin-user-email") || "";
-        const type = body.dataset.activePanel === "professores" ? "teacher" : "student";
+        const activePanel = String(body.dataset.activePanel || "");
+        const type = activePanel === "professores" ? "teacher" : activePanel === "growth" ? "growth" : "student";
 
         closeAllAdminActionMenus();
 
