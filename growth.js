@@ -16,6 +16,28 @@ if (userNameEl instanceof HTMLElement) {
   userNameEl.textContent = name ? name : "Growth";
 }
 
+const sidebarToggle = document.querySelector("[data-sidebar-toggle]");
+
+let sidebarExpanded = false;
+
+const setSidebarExpanded = (next) => {
+  const expanded = Boolean(next);
+  sidebarExpanded = expanded;
+  document.body.dataset.sidebarExpanded = expanded ? "true" : "false";
+  if (sidebarToggle instanceof HTMLButtonElement) {
+    sidebarToggle.setAttribute("aria-expanded", String(expanded));
+    sidebarToggle.setAttribute("aria-label", expanded ? "Fechar barra lateral" : "Abrir barra lateral");
+  }
+};
+
+setSidebarExpanded(false);
+
+if (sidebarToggle instanceof HTMLButtonElement) {
+  sidebarToggle.addEventListener("click", () => {
+    setSidebarExpanded(!sidebarExpanded);
+  });
+}
+
 let firebaseAuthPromise = null;
 
 const loadFirebaseAuth = () => {
@@ -42,10 +64,19 @@ const loadFirebaseAuth = () => {
   return firebaseAuthPromise;
 };
 
-const logoutButton = document.querySelector("[data-growth-logout]");
-if (logoutButton instanceof HTMLButtonElement) {
-  logoutButton.addEventListener("click", async () => {
-    logoutButton.disabled = true;
+const logoutButtons = Array.from(document.querySelectorAll("[data-growth-logout]")).filter(
+  (el) => el instanceof HTMLButtonElement
+);
+
+const setLogoutButtonsDisabled = (isDisabled) => {
+  logoutButtons.forEach((btn) => {
+    btn.disabled = Boolean(isDisabled);
+  });
+};
+
+logoutButtons.forEach((btn) => {
+  btn.addEventListener("click", async () => {
+    setLogoutButtonsDisabled(true);
 
     try {
       const api = await loadFirebaseAuth();
@@ -62,5 +93,4 @@ if (logoutButton instanceof HTMLButtonElement) {
 
     window.location.replace("/");
   });
-}
-
+});

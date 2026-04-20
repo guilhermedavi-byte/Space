@@ -10658,7 +10658,7 @@ body[data-page="growth"] .page-glow {
 }
 
 .growth-shell {
-  width: min(1760px, calc(100vw - 64px));
+  width: min(1720px, 100%);
   margin: 0 auto;
   padding: 32px 0 74px;
 }
