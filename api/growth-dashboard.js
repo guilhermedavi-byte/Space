@@ -217,6 +217,7 @@ const decodeContratoDoc = (doc) => {
   const email = typeof fields.email === "string" ? fields.email.trim().toLowerCase() : "";
   const whatsapp = typeof fields.whatsapp === "string" ? digitsOnly(fields.whatsapp) : "";
   const telefoneCountry = typeof fields.telefoneCountry === "string" ? digitsOnly(fields.telefoneCountry) : "";
+  const contrato = typeof fields.contrato === "string" ? fields.contrato.trim().toLowerCase() : "";
   const cpf = typeof fields.cpf === "string" ? digitsOnly(fields.cpf) : "";
   const endereco = typeof fields.endereco === "string" ? fields.endereco.trim() : "";
   const status = String(fields.status || "").trim().toLowerCase() || "rascunho";
@@ -240,6 +241,7 @@ const decodeContratoDoc = (doc) => {
     email: email || null,
     whatsapp: whatsapp || null,
     telefoneCountry: telefoneCountry || "55",
+    contrato: contrato || null,
     cpf,
     endereco,
     valorOriginal,
@@ -489,6 +491,7 @@ const handleGrowthContractsApi = async (req, res, url) => {
   const email = String(body?.email || "").trim().toLowerCase();
   const telefoneCountry = digitsOnly(body?.telefoneCountry || "55").slice(0, 4) || "55";
   const whatsappDigits = digitsOnly(body?.whatsapp);
+  const contrato = String(body?.contrato || "").trim().toLowerCase();
   const cpfDigits = digitsOnly(body?.cpf);
   const endereco = String(body?.endereco || "").trim();
   const valorOriginal = parseNumber(body?.valorOriginal);
@@ -500,8 +503,12 @@ const handleGrowthContractsApi = async (req, res, url) => {
 
   const sendNow = Boolean(body?.sendNow || body?.enviarAgora);
 
-  if (!nomeCompleto || !email || !whatsappDigits || !cpfDigits || !endereco || !Number.isFinite(valorOriginal)) {
+  if (!nomeCompleto || !email || !whatsappDigits || !cpfDigits || !endereco || !Number.isFinite(valorOriginal) || !contrato) {
     sendJson(res, 400, { error: "invalid_request" });
+    return;
+  }
+  if (!["diamond", "gold", "turma"].includes(contrato)) {
+    sendJson(res, 400, { error: "invalid_contrato" });
     return;
   }
   if (!isValidEmail(email)) {
@@ -531,6 +538,7 @@ const handleGrowthContractsApi = async (req, res, url) => {
     email,
     whatsapp: whatsappDigits,
     telefoneCountry,
+    contrato,
     cpf: cpfDigits,
     endereco,
     valorOriginal,
@@ -1222,6 +1230,17 @@ module.exports = async (req, res) => {
                 />
               </div>
               <div class="modal-inline-error" data-contract-error="whatsapp" hidden>Informe um WhatsApp válido.</div>
+            </label>
+
+            <label class="modal-field">
+              <span>CONTRATO</span>
+              <select class="modal-input" data-contract-field="contrato" aria-label="Contrato">
+                <option value="">Selecione</option>
+                <option value="diamond">Diamond</option>
+                <option value="gold">Gold</option>
+                <option value="turma">Turma</option>
+              </select>
+              <div class="modal-inline-error" data-contract-error="contrato" hidden>Selecione um contrato.</div>
             </label>
 
             <label class="modal-field">

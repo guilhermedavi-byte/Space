@@ -497,6 +497,8 @@ const openCreateModal = () => {
   });
   const country = getCreateCountry();
   if (country instanceof HTMLSelectElement) country.value = "55";
+  const contrato = getCreateField("contrato");
+  if (contrato instanceof HTMLSelectElement) contrato.value = "";
 
   setModalOpen(contractsEls.createOverlay, true);
 
@@ -522,6 +524,7 @@ const createContract = async (sendNow) => {
   const emailEl = getCreateField("email");
   const whatsappEl = getCreateField("whatsapp");
   const countryEl = getCreateCountry();
+  const contratoEl = getCreateField("contrato");
   const cpfEl = getCreateField("cpf");
   const endEl = getCreateField("endereco");
   const origEl = getCreateField("valorOriginal");
@@ -532,6 +535,7 @@ const createContract = async (sendNow) => {
   const email = emailEl instanceof HTMLInputElement ? emailEl.value.trim().toLowerCase() : "";
   const whatsapp = whatsappEl instanceof HTMLInputElement ? digitsOnly(whatsappEl.value) : "";
   const telefoneCountry = countryEl instanceof HTMLSelectElement ? String(countryEl.value || "55") : "55";
+  const contrato = contratoEl instanceof HTMLSelectElement ? String(contratoEl.value || "").trim().toLowerCase() : "";
   const cpf = cpfEl instanceof HTMLInputElement ? digitsOnly(cpfEl.value) : "";
   const endereco = endEl instanceof HTMLInputElement ? endEl.value.trim() : "";
   const valorOriginalRaw = origEl instanceof HTMLInputElement ? origEl.value.trim() : "";
@@ -551,6 +555,10 @@ const createContract = async (sendNow) => {
   }
   if (!whatsapp || whatsapp.length < 6) {
     showCreateError("whatsapp", "Informe um WhatsApp válido.");
+    ok = false;
+  }
+  if (!contrato || !["diamond", "gold", "turma"].includes(contrato)) {
+    showCreateError("contrato", "Selecione um contrato.");
     ok = false;
   }
   if (!cpf || cpf.length !== 11) {
@@ -587,6 +595,7 @@ const createContract = async (sendNow) => {
         email,
         whatsapp,
         telefoneCountry,
+        contrato,
         cpf,
         endereco,
         valorOriginal,
@@ -612,6 +621,8 @@ const createContract = async (sendNow) => {
               ? "E-mail inválido."
               : dataRes?.error === "invalid_whatsapp"
                 ? "WhatsApp inválido."
+            : dataRes?.error === "invalid_contrato"
+              ? "Selecione um contrato."
             : dataRes?.error === "invalid_discount"
               ? "O desconto não pode ser maior que o valor original."
               : dataRes?.error === "zapsign_failed"
