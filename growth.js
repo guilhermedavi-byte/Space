@@ -196,6 +196,31 @@ logoutButtons.forEach((btn) => {
    ========================= */
 
 const dashboardRoot = document.querySelector("[data-growth-dashboard]");
+const dashboardResultGrid = document.querySelector(
+  '.growth-v2-section[aria-label="Resultado do mês"] .growth-v2-grid'
+);
+const dashboardIndicatorsPrimaryGrid = document.querySelector(
+  '.growth-v2-section[aria-label="Indicadores comerciais"] .growth-v2-grid.growth-v2-grid-4'
+);
+const dashboardIndicatorsSecondaryGrid = document.querySelector(
+  '.growth-v2-section[aria-label="Indicadores comerciais"] .growth-v2-grid.growth-v2-grid-3'
+);
+
+const parseMoneyLoose = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw) return NaN;
+  const sanitized = raw.replace(/[^\d.,-]/g, "");
+  let normalized = sanitized;
+  if (normalized.includes(",")) {
+    normalized = normalized.replace(/\./g, "").replace(/,/g, ".");
+  } else if (normalized.includes(".")) {
+    const parts = normalized.split(".");
+    const last = parts[parts.length - 1] || "";
+    if (parts.length > 2 || last.length === 3) normalized = parts.join("");
+  }
+  const n = Number(normalized);
+  return Number.isFinite(n) ? n : NaN;
+};
 
 const formatPercentPtBr = (value, decimals = 1) => {
   const n = Number(value);
@@ -257,6 +282,101 @@ const buildPlansPieBackground = ({ turma = 0, gold = 0, diamond = 0 } = {}) => {
   return `conic-gradient(${cTurma} 0deg ${a1}deg, ${cGold} ${a1}deg ${a2}deg, ${cDiamond} ${a2}deg 360deg)`;
 };
 
+const adjustGrowthDashboardLayout = () => {
+  if (!(dashboardRoot instanceof HTMLElement)) return;
+
+  // Move Forecast card to "Resultado do mês" to match the visual hierarchy (no backend changes).
+  const forecastValue = document.querySelector('[data-growth-indicator="forecast"]');
+  const forecastCard = forecastValue instanceof HTMLElement ? forecastValue.closest("article") : null;
+  if (forecastCard instanceof HTMLElement && dashboardResultGrid instanceof HTMLElement) {
+    if (!dashboardResultGrid.contains(forecastCard)) {
+      dashboardResultGrid.appendChild(forecastCard);
+    }
+    forecastCard.classList.add("is-forecast");
+    forecastCard.setAttribute("aria-label", "Forecast");
+  }
+
+  // Move Ticket card to the secondary indicators grid (No Show / Agendamento / Funil).
+  const ticketValue = document.querySelector('[data-growth-indicator="ticket"]');
+  const ticketCard = ticketValue instanceof HTMLElement ? ticketValue.closest("article") : null;
+  if (ticketCard instanceof HTMLElement && dashboardIndicatorsSecondaryGrid instanceof HTMLElement) {
+    if (!dashboardIndicatorsSecondaryGrid.contains(ticketCard)) {
+      dashboardIndicatorsSecondaryGrid.appendChild(ticketCard);
+    }
+  }
+
+  // Ensure the primary indicators grid only contains the two main cards visually.
+  if (dashboardIndicatorsPrimaryGrid instanceof HTMLElement) {
+    Array.from(dashboardIndicatorsPrimaryGrid.querySelectorAll("article")).forEach((el) => {
+      const hasVendas = el.querySelector('[data-growth-indicator="vendas"]');
+      const hasConversao = el.querySelector('[data-growth-indicator="conversao"]');
+      if (!hasVendas && !hasConversao) el.style.display = "none";
+    });
+  }
+};
+
+const ensureRealizadoProgressUi = () => {
+  if (!(dashboardRoot instanceof HTMLElement)) return;
+  const realizedValueEl = document.querySelector('[data-growth-kpi="realizado"]');
+  const realizedCard = realizedValueEl instanceof HTMLElement ? realizedValueEl.closest("article") : null;
+  if (!(realizedCard instanceof HTMLElement)) return;
+
+  if (!realizedCard.querySelector(".growth-v2-realizado-progress")) {
+    const bar = document.createElement("div");
+    bar.className = "growth-v2-realizado-progress";
+    bar.setAttribute("aria-hidden", "true");
+    bar.innerHTML = "<span></span>";
+    realizedCard.appendChild(bar);
+  }
+
+  if (!realizedCard.querySelector(".growth-v2-realizado-sub")) {
+    const sub = document.createElement("div");
+    sub.className = "growth-v2-realizado-sub";
+    sub.dataset.growthRealizadoSub = "true";
+    realizedCard.appendChild(sub);
+  }
+};
+
+const updateRealizadoProgressUi = ({ meta, realizado } = {}) => {
+  const metaNum = Number(meta);
+  const realizadoNum = Number(realizado);
+  if (!Number.isFinite(metaNum) || metaNum <= 0 || !Number.isFinite(realizadoNum) || realizadoNum < 0) return;
+
+  const realizedValueEl = document.querySelector('[data-growth-kpi="realizado"]');
+  const realizedCard = realizedValueEl instanceof HTMLElement ? realizedValueEl.closest("article") : null;
+  if (!(realizedCard instanceof HTMLElement)) return;
+
+  const pct = Math.max(0, Math.min(100, (realizadoNum / metaNum) * 100));
+  realizedCard.style.setProperty("--growth-realizado-progress", `${pct}%`);
+
+  const remaining = Math.max(0, metaNum - realizadoNum);
+  const sub = realizedCard.querySelector(".growth-v2-realizado-sub");
+  if (sub instanceof HTMLElement) {
+    const pctText = `${pct.toFixed(1).replace(".", ",")}%`;
+    sub.textContent = `${pctText} da meta · faltam ${formatMoneyNoCentsPtBr(remaining)}`;
+  }
+};
+
+const updateForecastMetaSub = () => {
+  if (!(dashboardRoot instanceof HTMLElement)) return;
+  const forecastValueEl = document.querySelector('[data-growth-indicator="forecast"]');
+  const forecastCard = forecastValueEl instanceof HTMLElement ? forecastValueEl.closest("article") : null;
+  if (!(forecastCard instanceof HTMLElement)) return;
+
+  const metaEl = document.querySelector('[data-growth-kpi="meta"]');
+  const meta = metaEl instanceof HTMLElement ? parseMoneyLoose(metaEl.textContent) : NaN;
+  const forecast = forecastValueEl instanceof HTMLElement ? parseMoneyLoose(forecastValueEl.textContent) : NaN;
+  if (!Number.isFinite(meta) || meta <= 0 || !Number.isFinite(forecast) || forecast < 0) return;
+
+  const pct = Math.max(0, Math.min(100, (forecast / meta) * 100));
+  const sub = forecastCard.querySelector(".growth-v2-card-sub");
+  if (sub instanceof HTMLElement) {
+    sub.classList.remove("is-yellow");
+    sub.classList.add("is-green");
+    sub.textContent = `${pct.toFixed(1).replace(".", ",")}% da meta`;
+  }
+};
+
 const renderGrowthRanking = (rows) => {
   const list = document.querySelector("[data-growth-ranking]");
   if (!(list instanceof HTMLElement)) return;
@@ -280,6 +400,8 @@ const renderGrowthRanking = (rows) => {
 
   const top = items[0];
   const topValue = Math.max(0, Number(top?.valor) || 0);
+  const metaEl = document.querySelector('[data-growth-kpi="meta"]');
+  const metaValue = metaEl instanceof HTMLElement ? parseMoneyLoose(metaEl.textContent) : NaN;
   const maxRows = 4;
   const palette = ["coral", "blue", "green", "yellow"];
 
@@ -289,8 +411,14 @@ const renderGrowthRanking = (rows) => {
     const nome = String(row?.nome || "").trim() || "Sem vendedor";
     const vendas = Math.max(0, Number(row?.vendas) || 0);
     const valor = Math.max(0, Number(row?.valor) || 0);
-    const ratio = topValue > 0 ? Math.max(0, Math.min(1, valor / topValue)) : 0;
-    const width = Math.round(ratio * 100);
+    let width = 0;
+    if (items.length === 1 && Number.isFinite(metaValue) && metaValue > 0) {
+      // With a single vendor, use % of the monthly meta to avoid a misleading 100% bar.
+      width = Math.round(Math.max(0, Math.min(1, valor / metaValue)) * 100);
+    } else {
+      const ratio = topValue > 0 ? Math.max(0, Math.min(1, valor / topValue)) : 0;
+      width = Math.round(ratio * 100);
+    }
 
     const colorKey = palette[Math.min(idx, palette.length - 1)];
     const rowClass = idx === 0 ? "growth-v2-rank-row is-top" : "growth-v2-rank-row";
@@ -319,6 +447,13 @@ const applyGrowthMetricsToDom = (payload) => {
 
   const realizadoEl = document.querySelector('[data-growth-kpi="realizado"]');
   if (realizadoEl instanceof HTMLElement) realizadoEl.textContent = formatMoneyNoCentsPtBr(summary.realizado);
+
+  const metaEl = document.querySelector('[data-growth-kpi="meta"]');
+  const metaValue = metaEl instanceof HTMLElement ? parseMoneyLoose(metaEl.textContent) : NaN;
+  if (Number.isFinite(metaValue) && metaValue > 0) {
+    ensureRealizadoProgressUi();
+    updateRealizadoProgressUi({ meta: metaValue, realizado: Number(summary.realizado) });
+  }
 
   const vendasEl = document.querySelector('[data-growth-indicator="vendas"]');
   if (vendasEl instanceof HTMLElement) vendasEl.textContent = String(Math.max(0, Number(summary.totalVendas) || 0));
@@ -372,12 +507,17 @@ const applyGrowthMetricsToDom = (payload) => {
 const initGrowthDashboardMetrics = () => {
   if (!(dashboardRoot instanceof HTMLElement)) return;
 
+  adjustGrowthDashboardLayout();
+  ensureRealizadoProgressUi();
+  updateForecastMetaSub();
+
   const load = async () => {
     try {
       const res = await fetchWithAuth("/api/growth-metrics", { method: "GET" });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error || "request_failed");
       applyGrowthMetricsToDom(data);
+      updateForecastMetaSub();
     } catch (error) {
       // Keep mock values as a safe fallback.
     }

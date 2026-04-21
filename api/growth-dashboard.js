@@ -326,6 +326,8 @@ const getBusinessWonLostDate = (business) => {
   // If DataCrazy adds an explicit field (ex: `wonAt`), we can switch here without touching the rest of the metrics.
   const b = business && typeof business === "object" ? business : {};
   const candidates = [
+    "statusChangedAt",
+    "stageChangedAt",
     "wonAt",
     "wonDate",
     "gainedAt",
@@ -346,6 +348,61 @@ const getBusinessWonLostDate = (business) => {
   }
 
   return { date: null, field: "" };
+};
+
+const getBusinessId = (business) => {
+  const b = business && typeof business === "object" ? business : {};
+  const raw =
+    typeof b.id === "string"
+      ? b.id
+      : typeof b.id === "number"
+        ? String(b.id)
+        : typeof b._id === "string"
+          ? b._id
+          : typeof b.uuid === "string"
+            ? b.uuid
+            : typeof b.businessId === "string"
+              ? b.businessId
+              : "";
+  return String(raw || "").trim();
+};
+
+const pickBusinessDebugFields = (business, { statusChangedField } = {}) => {
+  const b = business && typeof business === "object" ? business : {};
+  const stageName = b?.stage?.name != null ? String(b.stage.name) : "";
+  const status = b?.status != null ? String(b.status) : "";
+  const planName = b?.products?.[0]?.product?.name != null ? String(b.products[0].product.name) : "";
+  const attendantName = b?.attendant?.name != null ? String(b.attendant.name) : "";
+  const leadName = b?.lead?.name != null ? String(b.lead.name) : "";
+  const code = b?.code != null ? String(b.code) : "";
+
+  const createdAt = b?.createdAt != null ? String(b.createdAt) : "";
+  const lastMovedAt = b?.lastMovedAt != null ? String(b.lastMovedAt) : "";
+
+  const field = typeof statusChangedField === "string" ? statusChangedField : "";
+  const statusChangedAt =
+    field && b[field] != null
+      ? String(b[field])
+      : b?.statusChangedAt != null
+        ? String(b.statusChangedAt)
+        : b?.stageChangedAt != null
+          ? String(b.stageChangedAt)
+          : "";
+
+  return {
+    id: getBusinessId(b),
+    code,
+    leadName,
+    stageName,
+    status,
+    total: safeNumber(b?.total),
+    attendantName,
+    planName,
+    createdAt,
+    lastMovedAt,
+    statusChangedAt,
+    statusChangedField: field || "",
+  };
 };
 
 const fetchCrmBusinessesPage = async ({ base, apiKey, skip, take } = {}) => {
@@ -515,6 +572,15 @@ const handleGrowthMetricsApi = async (req, res) => {
     Array.from(dateFieldCounts.entries())
       .sort((a, b) => b[1] - a[1])[0]?.[0] || "";
 
+  const totalFechadoStage = closedDeals.length;
+
+  const closedDealsMonthIds = new Set(closedDealsMonth.map((b) => getBusinessId(b)).filter(Boolean));
+  const closedDealsStageOutsideMonth = closedDeals.filter((b) => {
+    const id = getBusinessId(b);
+    if (!id) return true;
+    return !closedDealsMonthIds.has(id);
+  });
+
   const realizado = closedDealsMonth.reduce((sum, b) => sum + safeNumber(b?.total), 0);
   const totalVendas = closedDealsMonth.length;
   const ticketMedio = totalVendas > 0 ? realizado / totalVendas : 0;
@@ -578,9 +644,52 @@ const handleGrowthMetricsApi = async (req, res) => {
       totalFetched: Number(crm?.pagination?.totalFetched) || businesses.length,
       paginationPages: Number(crm?.pagination?.pages) || 1,
       totalPipelineConversao: totalPipeline,
+      totalFechadoStage,
       totalFechadoMes: totalVendas,
       somaFechadoMes: realizado,
       dateFieldUsed,
+      first10FechadoStage: closedDeals
+        .slice()
+        .sort((a, b) => {
+          const daInfo = getBusinessWonLostDate(a);
+          const dbInfo = getBusinessWonLostDate(b);
+          const da = daInfo.date ? daInfo.date.getTime() : 0;
+          const db = dbInfo.date ? dbInfo.date.getTime() : 0;
+          return db - da;
+        })
+        .slice(0, 10)
+        .map((b) => {
+          const info = getBusinessWonLostDate(b);
+          return pickBusinessDebugFields(b, { statusChangedField: info.field || "" });
+        }),
+      first10FechadoMes: closedDealsMonth
+        .slice()
+        .sort((a, b) => {
+          const daInfo = getBusinessWonLostDate(a);
+          const dbInfo = getBusinessWonLostDate(b);
+          const da = daInfo.date ? daInfo.date.getTime() : 0;
+          const db = dbInfo.date ? dbInfo.date.getTime() : 0;
+          return db - da;
+        })
+        .slice(0, 10)
+        .map((b) => {
+          const info = getBusinessWonLostDate(b);
+          return pickBusinessDebugFields(b, { statusChangedField: info.field || "" });
+        }),
+      first10FechadoStageForaMes: closedDealsStageOutsideMonth
+        .slice()
+        .sort((a, b) => {
+          const daInfo = getBusinessWonLostDate(a);
+          const dbInfo = getBusinessWonLostDate(b);
+          const da = daInfo.date ? daInfo.date.getTime() : 0;
+          const db = dbInfo.date ? dbInfo.date.getTime() : 0;
+          return db - da;
+        })
+        .slice(0, 10)
+        .map((b) => {
+          const info = getBusinessWonLostDate(b);
+          return pickBusinessDebugFields(b, { statusChangedField: info.field || "" });
+        }),
       agendamentos,
       fechados,
       noShow,
