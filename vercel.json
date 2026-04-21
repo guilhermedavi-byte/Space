@@ -1,5 +1,6 @@
 {
   "rewrites": [
+    { "source": "/api/crm-test", "destination": "/api/growth-dashboard?api=crm-test" },
     { "source": "/api/growth-contratos", "destination": "/api/growth-dashboard?api=growth-contratos" },
     { "source": "/api/zapsign-webhook", "destination": "/api/growth-dashboard?api=zapsign-webhook" },
     { "source": "/api/(.*)", "destination": "/api/$1" },

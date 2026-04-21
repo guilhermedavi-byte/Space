@@ -223,6 +223,27 @@ const requireGrowthAuth = async (req, res) => {
   return { session, requesterId, idToken };
 };
 
+const requireInternalAuth = (req, res) => {
+  const session = getSessionFromRequest(req);
+  if (!session) {
+    sendJson(res, 401, { error: "unauthorized" });
+    return null;
+  }
+
+  const role = normalizeRole(session.role);
+  if (role !== "growth" && role !== "admin") {
+    sendJson(res, 403, { error: "forbidden" });
+    return null;
+  }
+
+  return {
+    id: String(session.sub || ""),
+    role,
+    name: String(session.name || ""),
+    email: String(session.email || ""),
+  };
+};
+
 const decodeContratoDoc = (doc) => {
   if (!doc || typeof doc !== "object") return null;
   const id = getDocIdFromName(doc.name);
@@ -765,10 +786,60 @@ const handleZapSignWebhook = async (req, res) => {
   }
 };
 
+const handleCrmTestApi = async (req, res) => {
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    res.setHeader("Allow", "GET, HEAD");
+    sendJson(res, 405, { error: "method_not_allowed" });
+    return;
+  }
+
+  const auth = requireInternalAuth(req, res);
+  if (!auth) return;
+
+  const apiKey = String(process.env.CRM_API_KEY || "").trim();
+  const base = String(process.env.CRM_API_BASE_URL || "").trim().replace(/\/+$/, "");
+
+  if (!apiKey || !base) {
+    sendJson(res, 500, {
+      error: "missing_env",
+      missing: [
+        ...(!apiKey ? ["CRM_API_KEY"] : []),
+        ...(!base ? ["CRM_API_BASE_URL"] : []),
+      ],
+    });
+    return;
+  }
+
+  const url = `${base}/api/v1/businesses`;
+  try {
+    const crmRes = await requestJsonRaw(url, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+
+    // Mirror the CRM response status to make debugging easier.
+    sendJson(res, crmRes.status || 500, {
+      status: crmRes.status || 500,
+      ok: Boolean(crmRes.ok),
+      data: crmRes.data ?? null,
+      text: crmRes.data == null ? (crmRes.text || null) : null,
+    });
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error("[api] crm-test failed", error);
+    sendJson(res, 500, { error: "internal_error" });
+  }
+};
+
 module.exports = async (req, res) => {
   const host = String(req.headers.host || "localhost");
   const url = new URL(req.url || "/api/growth-dashboard", `https://${host}`);
   const api = String(url.searchParams.get("api") || "").trim().toLowerCase();
+
+  if (api === "crm-test") {
+    await handleCrmTestApi(req, res);
+    return;
+  }
 
   if (api === "growth-contratos") {
     await handleGrowthContractsApi(req, res, url);
