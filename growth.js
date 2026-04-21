@@ -594,7 +594,10 @@ const createContract = async (sendNow) => {
         const debugDetail =
           dataRes?.zapsignPayload && typeof dataRes.zapsignPayload === "object"
             ? String(dataRes.zapsignPayload.detail || dataRes.zapsignPayload.message || "").trim()
+            : typeof dataRes?.zapsignPayload === "string"
+              ? dataRes.zapsignPayload.trim()
             : "";
+        const debugStatus = Number.isFinite(Number(dataRes?.zapsignStatus)) ? Number(dataRes.zapsignStatus) : 0;
         const msg =
           dataRes?.error === "invalid_cpf"
             ? "CPF inválido."
@@ -606,7 +609,7 @@ const createContract = async (sendNow) => {
               ? "O desconto não pode ser maior que o valor original."
               : dataRes?.error === "zapsign_failed"
                 ? debugDetail
-                  ? `Erro ao enviar para assinatura: ${debugDetail}`
+                  ? `Erro ao enviar para assinatura${debugStatus ? ` (${debugStatus})` : ""}: ${debugDetail}`
                   : "Erro ao enviar para assinatura. Tente novamente."
                 : "Não foi possível salvar agora. Tente novamente.";
 

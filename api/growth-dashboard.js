@@ -302,7 +302,7 @@ const callZapSignCreateDoc = async ({ nomeCompleto, cpf, endereco, valorOriginal
   if (!res.ok) {
     const error = new Error("zapsign_failed");
     error.status = res.status;
-    error.payload = res.data || null;
+    error.payload = res.data || res.text || null;
     throw error;
   }
 
