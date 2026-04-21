@@ -114,6 +114,22 @@ const currencyPtBr = (value) => {
   }
 };
 
+const templateEnvForContrato = (contrato) => {
+  const key = String(contrato || "").trim().toLowerCase();
+  if (key === "diamond") return "ZAPSIGN_TEMPLATE_TOKEN_DIAMOND";
+  if (key === "gold") return "ZAPSIGN_TEMPLATE_TOKEN_GOLD";
+  if (key === "turma") return "ZAPSIGN_TEMPLATE_TOKEN_TURMA";
+  return "";
+};
+
+const getZapSignTemplateToken = (contrato) => {
+  const envName = templateEnvForContrato(contrato);
+  if (!envName) return { ok: false, error: "invalid_contrato", envName: "" };
+  const token = String(process.env[envName] || "").trim();
+  if (!token) return { ok: false, error: "missing_template_token", envName };
+  return { ok: true, token, envName };
+};
+
 const requestJsonRaw = async (url, { method = "GET", headers, body } = {}) => {
   const safeHeaders = headers && typeof headers === "object" ? headers : {};
   const upper = String(method || "GET").toUpperCase();
@@ -258,16 +274,33 @@ const decodeContratoDoc = (doc) => {
   };
 };
 
-const callZapSignCreateDoc = async ({ nomeCompleto, cpf, endereco, valorOriginal, valorDesconto, dataPt, email, telefone, telefoneCountry } = {}) => {
+const callZapSignCreateDoc = async ({
+  nomeCompleto,
+  cpf,
+  endereco,
+  valorOriginal,
+  valorDesconto,
+  dataPt,
+  email,
+  telefone,
+  telefoneCountry,
+  contrato,
+} = {}) => {
   // Env vars required on Vercel:
   // - ZAPSIGN_API_TOKEN
-  // - ZAPSIGN_TEMPLATE_TOKEN
+  // - ZAPSIGN_TEMPLATE_TOKEN_DIAMOND / _GOLD / _TURMA
   const apiToken = String(process.env.ZAPSIGN_API_TOKEN || "").trim();
-  const templateToken = String(process.env.ZAPSIGN_TEMPLATE_TOKEN || "").trim();
-  if (!apiToken || !templateToken) {
-    const missing = !apiToken ? "ZAPSIGN_API_TOKEN" : "ZAPSIGN_TEMPLATE_TOKEN";
-    const error = new Error(`missing_env_${missing}`);
+  if (!apiToken) {
+    const error = new Error("missing_env_ZAPSIGN_API_TOKEN");
     error.code = "missing_env";
+    throw error;
+  }
+
+  const template = getZapSignTemplateToken(contrato);
+  if (!template.ok) {
+    const error = new Error(template.error);
+    error.code = template.error;
+    error.envName = template.envName || "";
     throw error;
   }
 
@@ -278,7 +311,7 @@ const callZapSignCreateDoc = async ({ nomeCompleto, cpf, endereco, valorOriginal
   const telefoneValue = telefoneDigits ? `+${country} ${telefoneDigits}` : "";
   const payload = {
     // ZapSign expects `template_id` (token shown in the template URL /conta/modelos/<TEMPLATE_ID>).
-    template_id: templateToken,
+    template_id: template.token,
     signer_name: String(nomeCompleto || "").trim(),
     signer_email: emailValue,
     signer_phone_country: country,
@@ -446,16 +479,17 @@ const handleGrowthContractsApi = async (req, res, url) => {
     }
 
 	    try {
-	      const z = await callZapSignCreateDoc({
-	        nomeCompleto: contrato.nomeCompleto,
-	        email: contrato.email,
-	        telefone: contrato.whatsapp,
-	        telefoneCountry: contrato.telefoneCountry,
-	        cpf: contrato.cpf,
-	        endereco: contrato.endereco,
-	        valorOriginal: contrato.valorOriginal,
-	        valorDesconto: contrato.valorDesconto,
-	        dataPt: contrato.data || dateToPtBr(new Date()),
+    const z = await callZapSignCreateDoc({
+      nomeCompleto: contrato.nomeCompleto,
+      email: contrato.email,
+      telefone: contrato.whatsapp,
+      telefoneCountry: contrato.telefoneCountry,
+      contrato: contrato.contrato,
+      cpf: contrato.cpf,
+      endereco: contrato.endereco,
+      valorOriginal: contrato.valorOriginal,
+      valorDesconto: contrato.valorDesconto,
+      dataPt: contrato.data || dateToPtBr(new Date()),
 	      });
 
       const patchData = {
@@ -481,6 +515,8 @@ const handleGrowthContractsApi = async (req, res, url) => {
         error: "zapsign_failed",
         zapsignStatus: Number(error?.status) || null,
         zapsignPayload: error?.payload || null,
+        zapsignCode: typeof error?.code === "string" ? error.code : null,
+        zapsignMissingEnv: typeof error?.envName === "string" && error.envName ? error.envName : null,
       });
     }
     return;
@@ -580,6 +616,7 @@ const handleGrowthContractsApi = async (req, res, url) => {
       email,
       telefone: whatsappDigits,
       telefoneCountry,
+      contrato,
       cpf: cpfDigits,
       endereco,
       valorOriginal,
@@ -611,6 +648,8 @@ const handleGrowthContractsApi = async (req, res, url) => {
       id,
       zapsignStatus: Number(error?.status) || null,
       zapsignPayload: error?.payload || null,
+      zapsignCode: typeof error?.code === "string" ? error.code : null,
+      zapsignMissingEnv: typeof error?.envName === "string" && error.envName ? error.envName : null,
     });
   }
 };
