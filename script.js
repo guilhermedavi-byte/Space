@@ -5659,7 +5659,13 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
             body: JSON.stringify({ competencia: competenciaValue, valorMeta }),
           });
           const data = await res.json().catch(() => null);
-          if (!res.ok) throw new Error(data?.error || "request_failed");
+          if (!res.ok) {
+            const code = String(data?.error || "request_failed");
+            const details = data && typeof data === "object" ? data : null;
+            const err = new Error(code);
+            err.details = details;
+            throw err;
+          }
 
           if (okEl instanceof HTMLElement) okEl.hidden = false;
           window.setTimeout(() => {
@@ -5669,8 +5675,22 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
           await loadAdminGrowthGoals();
         } catch (e) {
           console.error("[admin] save growth-goal failed:", e);
+          const code = typeof e?.message === "string" ? e.message : "";
+          const details = e?.details && typeof e.details === "object" ? e.details : null;
+          let msg = "Não foi possível salvar agora. Tente novamente.";
+          if (code === "past_competencia_not_allowed") msg = "Não é possível cadastrar meta para um mês passado.";
+          if (code === "invalid_competencia") msg = "Competência inválida. Selecione mês/ano corretamente.";
+          if (code === "invalid_valor") msg = "Valor inválido. Use um número maior que zero.";
+          if (code === "firestore_write_failed") {
+            const sa = typeof details?.serviceAccountError === "string" ? details.serviceAccountError : "";
+            if (sa && sa.includes("missing_service_account")) {
+              msg = "Servidor sem credenciais de service account para salvar metas. Configure GOOGLE_CLIENT_EMAIL e GOOGLE_PRIVATE_KEY no Vercel.";
+            } else {
+              msg = "Sem permissão para salvar a meta (Firestore). Verifique as regras ou credenciais do backend.";
+            }
+          }
           if (errEl instanceof HTMLElement) {
-            errEl.textContent = "Não foi possível salvar agora. Tente novamente.";
+            errEl.textContent = msg;
             errEl.hidden = false;
           }
         } finally {

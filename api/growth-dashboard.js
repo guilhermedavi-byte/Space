@@ -721,11 +721,13 @@ const handleGrowthGoalsApi = async (req, res, url) => {
   }
 
   let accessToken = "";
+  let serviceAccountError = "";
   try {
     const t = await getGoogleAccessToken({ scope: "https://www.googleapis.com/auth/datastore" });
     accessToken = String(t?.accessToken || "").trim();
   } catch (error) {
     accessToken = "";
+    serviceAccountError = typeof error?.message === "string" ? error.message : "missing_service_account";
   }
 
   const docPath = `${GOALS_COLLECTION}/${encodeURIComponent(competencia)}`;
@@ -758,21 +760,49 @@ const handleGrowthGoalsApi = async (req, res, url) => {
       };
 
   try {
-    const patch = accessToken
-      ? await firestorePatchDocumentWithAccessToken({
+    const doPatch = async (useAccessToken) => {
+      if (useAccessToken) {
+        return firestorePatchDocumentWithAccessToken({
           docPath,
           accessToken,
           data,
           updateMaskPaths: Object.keys(data),
-        })
-      : await firestorePatchDocument({
-          docPath,
-          idToken: auth.idToken,
-          data,
-          updateMaskPaths: Object.keys(data),
         });
+      }
+      return firestorePatchDocument({
+        docPath,
+        idToken: auth.idToken,
+        data,
+        updateMaskPaths: Object.keys(data),
+      });
+    };
 
-    if (!patch.ok) throw new Error("firestore_patch_failed");
+    let patch = null;
+
+    if (accessToken) {
+      patch = await doPatch(true);
+    } else {
+      patch = await doPatch(false);
+    }
+
+    // If the main attempt failed and we have the other auth method available, retry once.
+    if (!patch.ok && accessToken) {
+      // If service-account patch failed (misconfigured SA), try the user token as fallback.
+      patch = await doPatch(false);
+    } else if (!patch.ok && !accessToken) {
+      // If user-token patch failed (rules), but SA is missing, we'll return a more explicit error.
+      patch = patch;
+    }
+
+    if (!patch.ok) {
+      sendJson(res, patch.status || 500, {
+        error: "firestore_write_failed",
+        firestoreStatus: patch.status || null,
+        firestorePayload: patch.data ?? patch.text ?? null,
+        serviceAccountError: accessToken ? null : serviceAccountError || "missing_service_account",
+      });
+      return;
+    }
 
     sendJson(res, 200, { ok: true, competencia, action: exists ? "updated" : "created" });
   } catch (error) {

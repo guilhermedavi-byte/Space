@@ -11438,6 +11438,49 @@ body[data-page="growth"] .platform-main {
   color: var(--growth-green);
 }
 
+.growth-v2-skeleton {
+  position: relative;
+  color: transparent !important;
+  user-select: none;
+}
+
+.growth-v2-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.05) 0%,
+    rgba(255, 255, 255, 0.1) 45%,
+    rgba(255, 255, 255, 0.05) 100%
+  );
+  background-size: 200% 100%;
+  animation: growth-shimmer 1.1s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes growth-shimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-card-value,
+body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-sales,
+body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-value,
+body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-last-value,
+body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-last-sub {
+  letter-spacing: 0;
+}
+
+body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .growth-v2-rank-bar span {
+  width: 0% !important;
+}
+
 .growth-v2[data-growth-view="dashboard"] .growth-v2-exec-grid .growth-v2-mini-card:nth-child(2) .growth-v2-mini-label {
   font-size: 0;
 }

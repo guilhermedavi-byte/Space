@@ -377,6 +377,146 @@ const updateForecastMetaSub = () => {
   }
 };
 
+const crmConnectedEls = () => {
+  return {
+    realizado: document.querySelector('[data-growth-kpi="realizado"]'),
+    vendas: document.querySelector('[data-growth-indicator="vendas"]'),
+    conversao: document.querySelector('[data-growth-indicator="conversao"]'),
+    ticket: document.querySelector('[data-growth-indicator="ticket"]'),
+    noshow: document.querySelector('[data-growth-rate="noshow"]'),
+    agendamento: document.querySelector('[data-growth-rate="agendamento"]'),
+    funil: document.querySelector('[data-growth-rate="funil"]'),
+    planTurma: document.querySelector('[data-growth-plan="turma"]'),
+    planGold: document.querySelector('[data-growth-plan="gold"]'),
+    planDiamond: document.querySelector('[data-growth-plan="diamond"]'),
+    ranking: document.querySelector("[data-growth-ranking]"),
+    lastTime: document.querySelector("[data-growth-last-time]"),
+    lastSub: document.querySelector("[data-growth-last-sub]"),
+  };
+};
+
+const setGrowthCrmState = (state) => {
+  if (!(dashboardRoot instanceof HTMLElement)) return;
+  const next = String(state || "").trim().toLowerCase();
+  dashboardRoot.dataset.growthCrmState = next || "";
+};
+
+const setSkeleton = (el, on) => {
+  if (!(el instanceof HTMLElement)) return;
+  el.classList.toggle("growth-v2-skeleton", Boolean(on));
+};
+
+const renderRankingSkeleton = () => {
+  const { ranking } = crmConnectedEls();
+  if (!(ranking instanceof HTMLElement)) return;
+  ranking.innerHTML = Array.from({ length: 4 })
+    .map(
+      (_, idx) => `
+        <div class="growth-v2-rank-row ${idx === 0 ? "is-top" : ""}">
+          <div class="growth-v2-rank-pos">${idx + 1}</div>
+          <div class="growth-v2-rank-vendor">
+            <span class="growth-v2-rank-avatar ${idx === 0 ? "is-coral" : "is-blue"}" aria-hidden="true">--</span>
+            <span class="growth-v2-rank-name growth-v2-skeleton">&nbsp;</span>
+          </div>
+          <div class="growth-v2-rank-sales growth-v2-skeleton">&nbsp;</div>
+          <div class="growth-v2-rank-value growth-v2-skeleton">&nbsp;</div>
+          <div class="growth-v2-rank-bar" aria-hidden="true"><span style="width: 0%"></span></div>
+        </div>
+      `
+    )
+    .join("");
+};
+
+const renderRankingError = () => {
+  const { ranking } = crmConnectedEls();
+  if (!(ranking instanceof HTMLElement)) return;
+  ranking.innerHTML = `
+    <div class="growth-v2-rank-row" style="padding: 18px 16px; opacity: 0.75;">
+      <div class="growth-v2-rank-pos">—</div>
+      <div class="growth-v2-rank-vendor">
+        <span class="growth-v2-rank-avatar is-blue" aria-hidden="true">--</span>
+        <span class="growth-v2-rank-name">—</span>
+      </div>
+      <div class="growth-v2-rank-sales">—</div>
+      <div class="growth-v2-rank-value">—</div>
+      <div class="growth-v2-rank-bar" aria-hidden="true"><span class="is-blue" style="width: 0%"></span></div>
+    </div>
+  `;
+};
+
+const applyCrmLoadingUi = () => {
+  const els = crmConnectedEls();
+  setGrowthCrmState("loading");
+
+  // Replace any server-rendered mock values with neutral placeholders.
+  [
+    els.realizado,
+    els.vendas,
+    els.conversao,
+    els.ticket,
+    els.noshow,
+    els.agendamento,
+    els.funil,
+    els.planTurma,
+    els.planGold,
+    els.planDiamond,
+    els.lastTime,
+    els.lastSub,
+  ].forEach((el) => {
+    if (!(el instanceof HTMLElement)) return;
+    el.textContent = "—";
+    setSkeleton(el, true);
+  });
+
+  renderRankingSkeleton();
+};
+
+const applyCrmErrorUi = () => {
+  const els = crmConnectedEls();
+  setGrowthCrmState("error");
+
+  [
+    els.realizado,
+    els.vendas,
+    els.conversao,
+    els.ticket,
+    els.noshow,
+    els.agendamento,
+    els.funil,
+    els.planTurma,
+    els.planGold,
+    els.planDiamond,
+    els.lastTime,
+    els.lastSub,
+  ].forEach((el) => {
+    if (!(el instanceof HTMLElement)) return;
+    el.textContent = "—";
+    setSkeleton(el, false);
+  });
+
+  renderRankingError();
+};
+
+const clearCrmLoadingUi = () => {
+  const els = crmConnectedEls();
+  setGrowthCrmState("ready");
+
+  [
+    els.realizado,
+    els.vendas,
+    els.conversao,
+    els.ticket,
+    els.noshow,
+    els.agendamento,
+    els.funil,
+    els.planTurma,
+    els.planGold,
+    els.planDiamond,
+    els.lastTime,
+    els.lastSub,
+  ].forEach((el) => setSkeleton(el, false));
+};
+
 const renderGrowthRanking = (rows) => {
   const list = document.querySelector("[data-growth-ranking]");
   if (!(list instanceof HTMLElement)) return;
@@ -443,6 +583,7 @@ const renderGrowthRanking = (rows) => {
 
 const applyGrowthMetricsToDom = (payload) => {
   if (!payload || typeof payload !== "object") return;
+  clearCrmLoadingUi();
   const summary = payload.summary && typeof payload.summary === "object" ? payload.summary : {};
 
   const realizadoEl = document.querySelector('[data-growth-kpi="realizado"]');
@@ -511,6 +652,8 @@ const initGrowthDashboardMetrics = () => {
   ensureRealizadoProgressUi();
   updateForecastMetaSub();
 
+  applyCrmLoadingUi();
+
   const loadGoal = async () => {
     const metaEl = document.querySelector('[data-growth-kpi="meta"]');
     if (!(metaEl instanceof HTMLElement)) return;
@@ -543,7 +686,7 @@ const initGrowthDashboardMetrics = () => {
       applyGrowthMetricsToDom(data);
       updateForecastMetaSub();
     } catch (error) {
-      // Keep mock values as a safe fallback.
+      applyCrmErrorUi();
     }
   };
 
