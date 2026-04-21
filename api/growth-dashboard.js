@@ -1,6 +1,5 @@
 const { getSessionFromRequest } = require("../_lib/session");
 const { readJsonBody, sendJson } = require("../_lib/http");
-const { verifyFirebaseIdToken } = require("../_lib/firebase-id-token");
 const { getGoogleAccessToken } = require("../_lib/google-service-account");
 const {
   decodeFields,
@@ -16,6 +15,31 @@ const {
   API_KEY,
 } = require("../_lib/firestore-rest");
 const crypto = require("crypto");
+
+const verifyFirebaseTokenViaRest = async (idToken) => {
+  const token = String(idToken || "").trim();
+  if (!token) throw new Error("invalid_token");
+
+  const apiKey = String(process.env.FIREBASE_API_KEY || API_KEY || "").trim();
+  if (!apiKey) throw new Error("missing_firebase_api_key");
+
+  const url = `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${encodeURIComponent(apiKey)}`;
+  const res = await requestJson(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ idToken: token }),
+  });
+
+  if (!res.ok) throw new Error("invalid_token");
+
+  const users = Array.isArray(res.data?.users) ? res.data.users : [];
+  const user = users[0] && typeof users[0] === "object" ? users[0] : null;
+  const uid = user && typeof user.localId === "string" ? user.localId.trim() : "";
+  if (!uid) throw new Error("invalid_token");
+  const email = user && typeof user.email === "string" ? user.email.trim().toLowerCase() : "";
+
+  return { uid, email };
+};
 
 const sendRedirect = (res, location) => {
   res.statusCode = 302;
@@ -212,7 +236,7 @@ const requireGrowthAuth = async (req, res) => {
   }
 
   try {
-    const decoded = await verifyFirebaseIdToken(idToken);
+    const decoded = await verifyFirebaseTokenViaRest(idToken);
     if (decoded.uid !== requesterId) {
       sendJson(res, 401, { error: "invalid_credentials" });
       return null;
@@ -268,12 +292,14 @@ const requireRoleAuthWithFirebaseToken = async (req, res, allowedRoles) => {
   }
 
   try {
-    const decoded = await verifyFirebaseIdToken(idToken);
+    const decoded = await verifyFirebaseTokenViaRest(idToken);
     if (decoded.uid !== requesterId) {
       sendJson(res, 401, { error: "invalid_credentials" });
       return null;
     }
   } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error("[api] idToken verify failed", { error: typeof error?.message === "string" ? error.message : "unknown" });
     sendJson(res, 401, { error: "invalid_credentials" });
     return null;
   }
