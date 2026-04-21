@@ -5649,6 +5649,10 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
       (async () => {
         const previousPrimaryLabel = modalPrimary ? modalPrimary.textContent : "";
         try {
+          const token = await getFirebaseIdTokenForApi();
+          if (!token) {
+            throw new Error("invalid_credentials");
+          }
           if (modalPrimary) modalPrimary.disabled = true;
           if (modalSecondary) modalSecondary.disabled = true;
           if (modalPrimary) modalPrimary.textContent = "Salvando…";
@@ -5687,15 +5691,13 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
           if (code === "past_competencia_not_allowed") msg = "Não é possível cadastrar meta para um mês passado.";
           if (code === "invalid_competencia") msg = "Competência inválida. Selecione mês/ano corretamente.";
           if (code === "invalid_valor") msg = "Valor inválido. Use um número maior que zero.";
-          if (code === "missing_firestore_auth") {
-            msg = "Servidor sem credenciais para salvar metas. Configure o service account do Google no Vercel (GOOGLE_CLIENT_EMAIL e GOOGLE_PRIVATE_KEY).";
-          }
           if (code === "firestore_write_failed") {
-            const sa = typeof details?.serviceAccountError === "string" ? details.serviceAccountError : "";
-            if (sa && sa.includes("missing_service_account")) {
-              msg = "Servidor sem credenciais de service account para salvar metas. Configure GOOGLE_CLIENT_EMAIL e GOOGLE_PRIVATE_KEY no Vercel.";
+            const st = Number(details?.firestoreStatus) || 0;
+            if (st === 403) {
+              msg =
+                "Permissão negada ao salvar a meta (Firestore). Atualize as Firestore Rules para permitir write em growthGoals para admins.";
             } else {
-              msg = "Sem permissão para salvar a meta (Firestore). Verifique as regras ou credenciais do backend.";
+              msg = "Não foi possível salvar a meta (Firestore). Verifique as regras/permissões e tente novamente.";
             }
           }
           if (errEl instanceof HTMLElement) {

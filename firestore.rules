@@ -1,0 +1,17 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // NOTE:
+    // This repo does not deploy Firebase rules automatically.
+    // Copy/paste the match below into your existing Firestore Rules in the Firebase Console,
+    // merging it with your current rules.
+
+    // Growth goals (monthly targets)
+    match /growthGoals/{docId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.tipo == "admin";
+    }
+  }
+}
+
