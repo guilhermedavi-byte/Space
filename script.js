@@ -5341,6 +5341,8 @@ const waitForFirebaseAuthReady = (firebase, timeoutMs = 4000) => {
 
 const waitForAuthToken = async (firebase, timeoutMs = 12000) => {
   if (!firebase || !firebase.primaryAuth || typeof firebase.onAuthStateChanged !== "function") {
+    // eslint-disable-next-line no-console
+    console.log("[waitForAuthToken] iniciado (firebase inválido)");
     throw new Error("not-authenticated");
   }
 
@@ -5348,6 +5350,8 @@ const waitForAuthToken = async (firebase, timeoutMs = 12000) => {
   const safeTimeout = Number.isFinite(ms) && ms > 0 ? ms : 12000;
 
   return new Promise((resolve, reject) => {
+    // eslint-disable-next-line no-console
+    console.log("[waitForAuthToken] iniciado");
     let settled = false;
     let unsub = null;
 
@@ -5366,6 +5370,8 @@ const waitForAuthToken = async (firebase, timeoutMs = 12000) => {
     const timer = window.setTimeout(() => finish(new Error("not-authenticated"), ""), safeTimeout);
 
     unsub = firebase.onAuthStateChanged(firebase.primaryAuth, async (user) => {
+      // eslint-disable-next-line no-console
+      console.log("[waitForAuthToken] user:", user?.uid ?? "null");
       window.clearTimeout(timer);
       if (!user || typeof user.getIdToken !== "function") {
         finish(new Error("not-authenticated"), "");
@@ -5418,6 +5424,7 @@ const getFirebaseIdTokenForApi = async (forceRefresh = false) => {
     };
     return cachedFirebaseIdToken.token;
   } catch (error) {
+    if (forceRefresh) throw error;
     return "";
   }
 };
@@ -5704,6 +5711,11 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
       (async () => {
         const previousPrimaryLabel = modalPrimary ? modalPrimary.textContent : "";
         try {
+          const firebase = await loadFirebaseAdminApi();
+          // eslint-disable-next-line no-console
+          console.log("[meta] currentUser:", firebase?.primaryAuth?.currentUser?.uid ?? "null");
+          // eslint-disable-next-line no-console
+          console.log("[meta] tentando obter token...");
           const token = await getFirebaseIdTokenForApi(true);
           if (!token) {
             throw new Error("invalid_credentials");
@@ -5737,9 +5749,9 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
           console.error("[admin] save growth-goal failed:", e);
           const code = typeof e?.message === "string" ? e.message : "";
           const details = e?.details && typeof e.details === "object" ? e.details : null;
-          let msg = "Não foi possível salvar agora. Tente novamente.";
+          let msg = code ? `Erro: ${code}` : "Não foi possível salvar agora. Tente novamente.";
           if (code === "unauthorized" || code === "invalid_credentials") {
-            msg = "Sua sessão expirou. Recarregue a página e faça login novamente.";
+            msg = `Erro: ${code}`;
           }
           if (code === "forbidden") {
             msg = "Você não tem permissão para definir metas.";

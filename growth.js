@@ -124,6 +124,8 @@ const waitForFirebaseAuthReady = async (api, timeoutMs = 3500) => {
 
 const waitForAuthToken = async (api, timeoutMs = 12000) => {
   if (!api || !api.auth || typeof api.onAuthStateChanged !== "function") {
+    // eslint-disable-next-line no-console
+    console.log("[waitForAuthToken] iniciado (firebase inválido)");
     throw new Error("not-authenticated");
   }
 
@@ -131,6 +133,8 @@ const waitForAuthToken = async (api, timeoutMs = 12000) => {
   const safeTimeout = Number.isFinite(ms) && ms > 0 ? ms : 12000;
 
   return new Promise((resolve, reject) => {
+    // eslint-disable-next-line no-console
+    console.log("[waitForAuthToken] iniciado");
     let settled = false;
     let unsub = null;
 
@@ -149,6 +153,8 @@ const waitForAuthToken = async (api, timeoutMs = 12000) => {
     const timer = window.setTimeout(() => finish(new Error("not-authenticated"), ""), safeTimeout);
 
     unsub = api.onAuthStateChanged(api.auth, async (user) => {
+      // eslint-disable-next-line no-console
+      console.log("[waitForAuthToken] user:", user?.uid ?? "null");
       window.clearTimeout(timer);
       if (!user || typeof user.getIdToken !== "function") {
         finish(new Error("not-authenticated"), "");
@@ -199,6 +205,7 @@ const getFirebaseIdTokenForApi = async (forceRefresh = false) => {
     };
     return cachedFirebaseIdToken.token;
   } catch (error) {
+    if (forceRefresh) throw error;
     return "";
   }
 };
