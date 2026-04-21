@@ -1,4 +1,21 @@
 const { getSessionFromRequest } = require("../_lib/session");
+const { readJsonBody, sendJson } = require("../_lib/http");
+const { verifyFirebaseIdToken } = require("../_lib/firebase-id-token");
+const { getGoogleAccessToken } = require("../_lib/google-service-account");
+const {
+  decodeFields,
+  encodeFields,
+  firestoreDeleteDocument,
+  firestoreGetDocument,
+  firestoreListDocuments,
+  firestorePatchDocument,
+  getBearerTokenFromRequest,
+  getDocIdFromName,
+  requestJson,
+  FIRESTORE_BASE,
+  API_KEY,
+} = require("../_lib/firestore-rest");
+const crypto = require("crypto");
 
 const sendRedirect = (res, location) => {
   res.statusCode = 302;
@@ -20,7 +37,627 @@ const roleToBasePath = (role) => {
   return "/app/aluno";
 };
 
+const normalizeRole = (role) => {
+  const raw = String(role || "").trim().toLowerCase();
+  if (raw === "growth") return "growth";
+  if (raw === "teacher" || raw === "professor") return "teacher";
+  if (raw === "admin" || raw === "administrador") return "admin";
+  if (raw === "student" || raw === "aluno") return "student";
+  return "";
+};
+
+const buildId = (prefix) => {
+  const rand = crypto.randomBytes(6).toString("hex");
+  return `${prefix}_${Date.now()}_${rand}`;
+};
+
+const parseNumber = (value) => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  const raw = typeof value === "string" ? value.trim().replace(",", ".") : "";
+  if (!raw) return NaN;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : NaN;
+};
+
+const digitsOnly = (value) => String(value || "").replace(/\D+/g, "");
+
+const dateToPtBr = (date) => {
+  try {
+    const d = date instanceof Date ? date : new Date(date);
+    if (!(d instanceof Date) || Number.isNaN(d.getTime())) return "";
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const yyyy = String(d.getFullYear());
+    return `${dd}/${mm}/${yyyy}`;
+  } catch (error) {
+    return "";
+  }
+};
+
+const currencyPtBr = (value) => {
+  try {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return "";
+    return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n);
+  } catch (error) {
+    return "";
+  }
+};
+
+const requestJsonRaw = async (url, { method = "GET", headers, body } = {}) => {
+  const safeHeaders = headers && typeof headers === "object" ? headers : {};
+  const upper = String(method || "GET").toUpperCase();
+  return requestJson(url, { method: upper, headers: safeHeaders, body });
+};
+
+const firestoreListDocumentsWithAccessToken = async ({ collectionPath, accessToken, pageSize = 1000 } = {}) => {
+  const path = String(collectionPath || "").replace(/^\/+/, "");
+  const token = String(accessToken || "").trim();
+  if (!path) throw new Error("missing_collection");
+  const safeSize = Math.max(1, Math.min(Number(pageSize) || 1000, 2000));
+
+  const all = [];
+  let pageToken = "";
+  let safety = 0;
+
+  while (safety < 20) {
+    safety += 1;
+    const params = new URLSearchParams();
+    params.set("key", API_KEY);
+    params.set("pageSize", String(safeSize));
+    if (pageToken) params.set("pageToken", pageToken);
+
+    const url = `${FIRESTORE_BASE}/${encodeURI(path)}?${params.toString()}`;
+    const res = await requestJsonRaw(url, {
+      method: "GET",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+
+    if (!res.ok) return res;
+    const docs = Array.isArray(res.data?.documents) ? res.data.documents : [];
+    docs.forEach((doc) => all.push(doc));
+    pageToken = typeof res.data?.nextPageToken === "string" ? res.data.nextPageToken : "";
+    if (!pageToken) return { ...res, documents: all };
+  }
+
+  return { ok: true, status: 200, data: null, text: "", documents: all };
+};
+
+const firestorePatchDocumentWithAccessToken = async ({ docPath, accessToken, data, updateMaskPaths } = {}) => {
+  const path = String(docPath || "").replace(/^\/+/, "");
+  if (!path) throw new Error("missing_doc");
+  const token = String(accessToken || "").trim();
+
+  const params = new URLSearchParams();
+  params.set("key", API_KEY);
+  const mask = Array.isArray(updateMaskPaths) ? updateMaskPaths.filter((p) => typeof p === "string" && p) : [];
+  mask.forEach((fieldPath) => {
+    params.append("updateMask.fieldPaths", fieldPath);
+  });
+
+  const url = `${FIRESTORE_BASE}/${encodeURI(path)}?${params.toString()}`;
+  return requestJsonRaw(url, {
+    method: "PATCH",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: encodeFields(data),
+  });
+};
+
+const requireGrowthAuth = async (req, res) => {
+  const session = getSessionFromRequest(req);
+  if (!session) {
+    sendJson(res, 401, { error: "unauthorized" });
+    return null;
+  }
+
+  const role = normalizeRole(session.role);
+  if (role !== "growth") {
+    sendJson(res, 403, { error: "forbidden" });
+    return null;
+  }
+
+  const requesterId = String(session.sub || "");
+  const idToken = getBearerTokenFromRequest(req);
+  if (!requesterId || !idToken) {
+    sendJson(res, 401, { error: "unauthorized" });
+    return null;
+  }
+
+  try {
+    const decoded = await verifyFirebaseIdToken(idToken);
+    if (decoded.uid !== requesterId) {
+      sendJson(res, 401, { error: "invalid_credentials" });
+      return null;
+    }
+  } catch (error) {
+    sendJson(res, 401, { error: "invalid_credentials" });
+    return null;
+  }
+
+  return { session, requesterId, idToken };
+};
+
+const decodeContratoDoc = (doc) => {
+  if (!doc || typeof doc !== "object") return null;
+  const id = getDocIdFromName(doc.name);
+  if (!id) return null;
+  const fields = decodeFields(doc);
+
+  const nomeCompleto = typeof fields.nomeCompleto === "string" ? fields.nomeCompleto.trim() : "";
+  const cpf = typeof fields.cpf === "string" ? digitsOnly(fields.cpf) : "";
+  const endereco = typeof fields.endereco === "string" ? fields.endereco.trim() : "";
+  const status = String(fields.status || "").trim().toLowerCase() || "rascunho";
+
+  const criadoPor = typeof fields.criadoPor === "string" ? fields.criadoPor : "";
+  const criadoEm = fields.criadoEm instanceof Date ? fields.criadoEm : null;
+  const enviadoEm = fields.enviadoEm instanceof Date ? fields.enviadoEm : null;
+  const assinadoEm = fields.assinadoEm instanceof Date ? fields.assinadoEm : null;
+
+  const zapsignToken = typeof fields.zapsignToken === "string" ? fields.zapsignToken : "";
+  const zapsignSignUrl = typeof fields.zapsignSignUrl === "string" ? fields.zapsignSignUrl : "";
+  const documentoAssinado = typeof fields.documentoAssinado === "string" ? fields.documentoAssinado : "";
+
+  const valorOriginal = Number.isFinite(Number(fields.valorOriginal)) ? Number(fields.valorOriginal) : null;
+  const valorDesconto = Number.isFinite(Number(fields.valorDesconto)) ? Number(fields.valorDesconto) : null;
+  const data = typeof fields.data === "string" ? fields.data.trim() : "";
+
+  return {
+    id,
+    nomeCompleto,
+    cpf,
+    endereco,
+    valorOriginal,
+    valorDesconto,
+    data,
+    status,
+    criadoPor: criadoPor || null,
+    criadoEm: criadoEm ? criadoEm.toISOString() : null,
+    enviadoEm: enviadoEm ? enviadoEm.toISOString() : null,
+    assinadoEm: assinadoEm ? assinadoEm.toISOString() : null,
+    zapsignToken: zapsignToken || null,
+    zapsignSignUrl: zapsignSignUrl || null,
+    documentoAssinado: documentoAssinado || null,
+  };
+};
+
+const callZapSignCreateDoc = async ({ nomeCompleto, cpf, endereco, valorOriginal, valorDesconto, dataPt } = {}) => {
+  // Env vars required on Vercel:
+  // - ZAPSIGN_API_TOKEN
+  // - ZAPSIGN_TEMPLATE_TOKEN
+  const apiToken = String(process.env.ZAPSIGN_API_TOKEN || "").trim();
+  const templateToken = String(process.env.ZAPSIGN_TEMPLATE_TOKEN || "").trim();
+  if (!apiToken || !templateToken) {
+    const missing = !apiToken ? "ZAPSIGN_API_TOKEN" : "ZAPSIGN_TEMPLATE_TOKEN";
+    const error = new Error(`missing_env_${missing}`);
+    error.code = "missing_env";
+    throw error;
+  }
+
+  const url = "https://api.zapsign.com.br/api/v1/models/create-doc/";
+  const payload = {
+    template_token: templateToken,
+    signer_name: String(nomeCompleto || "").trim(),
+    data: [
+      { de: "{{NOME_COMPLETO}}", para: String(nomeCompleto || "").trim() },
+      { de: "{{CPF}}", para: String(cpf || "").trim() },
+      { de: "{{ENDERECO}}", para: String(endereco || "").trim() },
+      { de: "{{VALOR_ORIGINAL}}", para: currencyPtBr(valorOriginal) },
+      { de: "{{VALOR_DESCONTO}}", para: currencyPtBr(valorDesconto) },
+      { de: "{{DATA}}", para: String(dataPt || "").trim() },
+    ],
+  };
+
+  const res = await requestJsonRaw(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiToken}`,
+      "Content-Type": "application/json",
+    },
+    body: payload,
+  });
+
+  if (!res.ok) {
+    const error = new Error("zapsign_failed");
+    error.status = res.status;
+    error.payload = res.data || null;
+    throw error;
+  }
+
+  const data = res.data && typeof res.data === "object" ? res.data : {};
+  const token =
+    typeof data.token === "string"
+      ? data.token
+      : typeof data.doc_token === "string"
+        ? data.doc_token
+        : typeof data.document_token === "string"
+          ? data.document_token
+          : "";
+
+  const signUrl =
+    typeof data.sign_url === "string"
+      ? data.sign_url
+      : typeof data.signUrl === "string"
+        ? data.signUrl
+        : Array.isArray(data.signers) && typeof data.signers?.[0]?.sign_url === "string"
+          ? data.signers[0].sign_url
+          : "";
+
+  return { token: token || null, signUrl: signUrl || null, raw: data };
+};
+
+const handleGrowthContractsApi = async (req, res, url) => {
+  const auth = await requireGrowthAuth(req, res);
+  if (!auth) return;
+
+  const { requesterId, idToken } = auth;
+
+  if (req.method === "GET" || req.method === "HEAD") {
+    const statusFilter = String(url.searchParams.get("status") || "").trim().toLowerCase();
+    const q = String(url.searchParams.get("q") || "").trim();
+    const qLower = q.toLowerCase();
+    const qDigits = digitsOnly(q);
+
+    let docs = [];
+    try {
+      const resList = await firestoreListDocuments({ collectionPath: "contratos", idToken, pageSize: 2000 });
+      if (!resList.ok) throw new Error("firestore_list_failed");
+      docs = Array.isArray(resList.documents)
+        ? resList.documents
+        : Array.isArray(resList.data?.documents)
+          ? resList.data.documents
+          : [];
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error("[api] growth contratos list failed", error);
+      sendJson(res, 500, { error: "internal_error" });
+      return;
+    }
+
+    const contracts = docs
+      .map((doc) => decodeContratoDoc(doc))
+      .filter(Boolean)
+      .filter((c) => {
+        if (statusFilter && statusFilter !== "todos" && statusFilter !== "all") {
+          if (c.status !== statusFilter) return false;
+        }
+        if (qLower) {
+          const name = String(c.nomeCompleto || "").toLowerCase();
+          const cpf = String(c.cpf || "");
+          const hitName = name.includes(qLower);
+          const hitCpf = qDigits ? cpf.includes(qDigits) : false;
+          if (!hitName && !hitCpf) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => String(b.criadoEm || "").localeCompare(String(a.criadoEm || "")));
+
+    sendJson(res, 200, { contracts });
+    return;
+  }
+
+  if (req.method === "DELETE") {
+    const id = String(url.searchParams.get("id") || "").trim();
+    if (!id) {
+      sendJson(res, 400, { error: "invalid_request" });
+      return;
+    }
+
+    try {
+      const del = await firestoreDeleteDocument({ docPath: `contratos/${encodeURIComponent(id)}`, idToken });
+      if (!del.ok && del.status !== 404) throw new Error("firestore_delete_failed");
+      sendJson(res, 200, { ok: true });
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error("[api] growth contratos delete failed", error);
+      sendJson(res, 500, { error: "internal_error" });
+    }
+    return;
+  }
+
+  if (req.method !== "POST") {
+    res.setHeader("Allow", "GET, HEAD, POST, DELETE");
+    sendJson(res, 405, { error: "method_not_allowed" });
+    return;
+  }
+
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch (error) {
+    sendJson(res, 400, { error: "invalid_json" });
+    return;
+  }
+
+  const action = String(body?.action || "create").trim().toLowerCase();
+
+  if (action === "send" || action === "reenviar" || action === "resend") {
+    const id = String(body?.id || "").trim();
+    if (!id) {
+      sendJson(res, 400, { error: "invalid_request" });
+      return;
+    }
+
+    let snap;
+    try {
+      snap = await firestoreGetDocument({ docPath: `contratos/${encodeURIComponent(id)}`, idToken });
+      if (!snap.ok) {
+        sendJson(res, snap.status === 404 ? 404 : 500, { error: snap.status === 404 ? "not_found" : "internal_error" });
+        return;
+      }
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error("[api] growth contratos send load failed", error);
+      sendJson(res, 500, { error: "internal_error" });
+      return;
+    }
+
+    const contrato = decodeContratoDoc(snap.data);
+    if (!contrato) {
+      sendJson(res, 400, { error: "invalid_contract" });
+      return;
+    }
+
+    try {
+      const z = await callZapSignCreateDoc({
+        nomeCompleto: contrato.nomeCompleto,
+        cpf: contrato.cpf,
+        endereco: contrato.endereco,
+        valorOriginal: contrato.valorOriginal,
+        valorDesconto: contrato.valorDesconto,
+        dataPt: contrato.data || dateToPtBr(new Date()),
+      });
+
+      const patchData = {
+        status: "enviado",
+        enviadoEm: new Date(),
+        zapsignToken: z.token,
+        zapsignSignUrl: z.signUrl,
+      };
+
+      const patch = await firestorePatchDocument({
+        docPath: `contratos/${encodeURIComponent(id)}`,
+        idToken,
+        data: patchData,
+        updateMaskPaths: Object.keys(patchData),
+      });
+      if (!patch.ok) throw new Error("firestore_patch_failed");
+
+      sendJson(res, 200, { ok: true });
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error("[api] growth contratos send failed", error);
+      sendJson(res, 500, { error: "zapsign_failed" });
+    }
+    return;
+  }
+
+  // Create
+  const nomeCompleto = String(body?.nomeCompleto || "").trim();
+  const cpfDigits = digitsOnly(body?.cpf);
+  const endereco = String(body?.endereco || "").trim();
+  const valorOriginal = parseNumber(body?.valorOriginal);
+  const valorDescontoRaw = body?.valorDesconto;
+  const valorDesconto = valorDescontoRaw == null || String(valorDescontoRaw).trim() === "" ? valorOriginal : parseNumber(valorDescontoRaw);
+  const dataRaw = body?.data;
+  const dataDate = dataRaw ? new Date(String(dataRaw)) : new Date();
+  const dataPt = dateToPtBr(dataDate);
+
+  const sendNow = Boolean(body?.sendNow || body?.enviarAgora);
+
+  if (!nomeCompleto || !cpfDigits || !endereco || !Number.isFinite(valorOriginal)) {
+    sendJson(res, 400, { error: "invalid_request" });
+    return;
+  }
+  if (cpfDigits.length !== 11) {
+    sendJson(res, 400, { error: "invalid_cpf" });
+    return;
+  }
+  if (!Number.isFinite(valorDesconto)) {
+    sendJson(res, 400, { error: "invalid_request" });
+    return;
+  }
+  if (valorDesconto > valorOriginal) {
+    sendJson(res, 400, { error: "invalid_discount" });
+    return;
+  }
+
+  const id = buildId("contr");
+  const baseData = {
+    nomeCompleto,
+    cpf: cpfDigits,
+    endereco,
+    valorOriginal,
+    valorDesconto,
+    data: dataPt,
+    status: "rascunho",
+    criadoPor: requesterId,
+    criadoEm: new Date(),
+    enviadoEm: null,
+    assinadoEm: null,
+    zapsignToken: null,
+    zapsignSignUrl: null,
+    documentoAssinado: null,
+  };
+
+  try {
+    const patch = await firestorePatchDocument({
+      docPath: `contratos/${encodeURIComponent(id)}`,
+      idToken,
+      data: baseData,
+      updateMaskPaths: Object.keys(baseData),
+    });
+    if (!patch.ok) throw new Error("firestore_patch_failed");
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error("[api] growth contratos create failed", error);
+    sendJson(res, 500, { error: "internal_error" });
+    return;
+  }
+
+  if (!sendNow) {
+    sendJson(res, 200, { ok: true, id });
+    return;
+  }
+
+  try {
+    const z = await callZapSignCreateDoc({
+      nomeCompleto,
+      cpf: cpfDigits,
+      endereco,
+      valorOriginal,
+      valorDesconto,
+      dataPt,
+    });
+
+    const patchData = {
+      status: "enviado",
+      enviadoEm: new Date(),
+      zapsignToken: z.token,
+      zapsignSignUrl: z.signUrl,
+    };
+
+    const patch = await firestorePatchDocument({
+      docPath: `contratos/${encodeURIComponent(id)}`,
+      idToken,
+      data: patchData,
+      updateMaskPaths: Object.keys(patchData),
+    });
+    if (!patch.ok) throw new Error("firestore_patch_failed");
+
+    sendJson(res, 200, { ok: true, id });
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error("[api] growth contratos create+send failed", error);
+    sendJson(res, 500, { error: "zapsign_failed", id });
+  }
+};
+
+const handleZapSignWebhook = async (req, res) => {
+  if (req.method !== "POST") {
+    res.setHeader("Allow", "POST");
+    sendJson(res, 405, { error: "method_not_allowed" });
+    return;
+  }
+
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch (error) {
+    sendJson(res, 400, { error: "invalid_json" });
+    return;
+  }
+
+  const eventType = String(body?.event || body?.type || body?.event_type || "").trim().toLowerCase();
+  if (eventType && !eventType.includes("signed")) {
+    sendJson(res, 200, { ok: true });
+    return;
+  }
+
+  const token =
+    String(body?.doc_token || body?.token || body?.document_token || body?.documentToken || body?.document?.token || "")
+      .trim()
+      .toString() || "";
+
+  const signedUrl =
+    String(body?.signed_file_url || body?.signedUrl || body?.documentoAssinado || body?.document?.signed_file_url || "")
+      .trim()
+      .toString() || "";
+
+  if (!token) {
+    sendJson(res, 400, { error: "missing_token" });
+    return;
+  }
+
+  let accessToken = "";
+  try {
+    const t = await getGoogleAccessToken({ scope: "https://www.googleapis.com/auth/datastore" });
+    accessToken = String(t?.accessToken || "").trim();
+  } catch (error) {
+    accessToken = "";
+  }
+
+  // As a fallback, attempt unauthenticated access (useful while Firestore rules are permissive in development).
+  let docs = [];
+  try {
+    const resList = await firestoreListDocumentsWithAccessToken({ collectionPath: "contratos", accessToken, pageSize: 2000 });
+    if (!resList.ok) {
+      if (!accessToken && (resList.status === 401 || resList.status === 403)) {
+        sendJson(res, 500, { error: "missing_service_account" });
+        return;
+      }
+      throw new Error("firestore_list_failed");
+    }
+    docs = Array.isArray(resList.documents)
+      ? resList.documents
+      : Array.isArray(resList.data?.documents)
+        ? resList.data.documents
+        : [];
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error("[api] zapsign webhook list failed", error);
+    sendJson(res, 500, { error: "firestore_unavailable" });
+    return;
+  }
+
+  const match = docs
+    .map((doc) => {
+      if (!doc || typeof doc !== "object") return null;
+      const id = getDocIdFromName(doc.name);
+      if (!id) return null;
+      const fields = decodeFields(doc);
+      const stored = typeof fields.zapsignToken === "string" ? fields.zapsignToken : "";
+      return stored === token ? id : null;
+    })
+    .filter(Boolean)[0];
+
+  if (!match) {
+    sendJson(res, 200, { ok: true, ignored: true });
+    return;
+  }
+
+  const patchData = {
+    status: "assinado",
+    assinadoEm: new Date(),
+    documentoAssinado: signedUrl || null,
+  };
+
+  try {
+    const patch = await firestorePatchDocumentWithAccessToken({
+      docPath: `contratos/${encodeURIComponent(match)}`,
+      accessToken,
+      data: patchData,
+      updateMaskPaths: Object.keys(patchData),
+    });
+    if (!patch.ok) {
+      if (!accessToken && (patch.status === 401 || patch.status === 403)) {
+        sendJson(res, 500, { error: "missing_service_account" });
+        return;
+      }
+      throw new Error("firestore_patch_failed");
+    }
+    sendJson(res, 200, { ok: true });
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error("[api] zapsign webhook patch failed", error);
+    sendJson(res, 500, { error: "internal_error" });
+  }
+};
+
 module.exports = async (req, res) => {
+  const host = String(req.headers.host || "localhost");
+  const url = new URL(req.url || "/api/growth-dashboard", `https://${host}`);
+  const api = String(url.searchParams.get("api") || "").trim().toLowerCase();
+
+  if (api === "growth-contratos") {
+    await handleGrowthContractsApi(req, res, url);
+    return;
+  }
+
+  if (api === "zapsign-webhook") {
+    await handleZapSignWebhook(req, res);
+    return;
+  }
+
   if (req.method !== "GET" && req.method !== "HEAD") {
     res.setHeader("Allow", "GET, HEAD");
     res.statusCode = 405;
@@ -48,78 +685,77 @@ module.exports = async (req, res) => {
 
   const sessionJson = safeJsonForHtml(user);
 
-  const html = `<!DOCTYPE html>
-<html lang="pt-BR">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Space | Growth</title>
-    <meta name="robots" content="noindex, nofollow" />
-    <base href="/" />
-    <link rel="stylesheet" href="/styles.css" />
-  </head>
-  <body data-view="interno" data-page="growth" data-sidebar-expanded="false">
-    <div class="page-glow page-glow-left" aria-hidden="true"></div>
-    <div class="page-glow page-glow-right" aria-hidden="true"></div>
-    <script>
-      window.__SPACE_SESSION__ = ${sessionJson};
-    </script>
+  const page = String(url.searchParams.get("page") || "").trim().toLowerCase();
+  const isContracts = page === "contracts" || page === "contratos";
 
-    <div class="platform-shell" data-view="interno">
-      <div class="platform-backdrop" aria-hidden="true"></div>
-      <aside class="platform-sidebar" aria-label="Navegação">
-        <div class="sidebar-topbar">
-          <button
-            class="sidebar-toggle"
-            type="button"
-            data-sidebar-toggle
-            aria-expanded="false"
-            aria-label="Abrir barra lateral"
-          >
-            <span class="sidebar-toggle-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none">
-                <path d="m14.5 5.5-6 6 6 6"></path>
-              </svg>
-            </span>
-          </button>
-        </div>
+  const navDashboardClass = isContracts ? "sidebar-link" : "sidebar-link is-active";
+  const navContractsClass = isContracts ? "sidebar-link is-active" : "sidebar-link";
+  const pageTitle = isContracts ? "Space | Contratos" : "Space | Growth";
 
-        <div class="sidebar-brand">
-          <img src="/assets/space-symbol.png" alt="Símbolo da Space" />
-          <div class="sidebar-brand-copy">
-            <strong>Space</strong>
-            <span>Growth Console</span>
+  const mainHtml = isContracts
+    ? `
+        <div class="growth-v2 growth-contracts" data-growth-view="contracts">
+          <header class="growth-v2-header growth-contracts-header" aria-label="Cabeçalho de contratos">
+            <div class="growth-v2-head-left">
+              <div class="growth-v2-eyebrow">GROWTH</div>
+              <div class="growth-v2-title">Contratos</div>
+            </div>
+
+            <div class="growth-v2-head-right growth-contracts-head-right" aria-label="Ações">
+              <button class="growth-contracts-new" type="button" data-contract-new>+ Novo contrato</button>
+              <div class="growth-v2-usercard">
+                <div class="growth-v2-user-name" data-growth-user-name></div>
+                <div class="growth-v2-user-role">Acesso Growth</div>
+              </div>
+              <div class="growth-v2-avatar" data-growth-avatar aria-label="Avatar do usuário">GR</div>
+            </div>
+          </header>
+
+          <div class="growth-contracts-searchbar" aria-label="Buscar contratos">
+            <input
+              class="growth-contracts-search"
+              type="text"
+              inputmode="search"
+              placeholder="Buscar por nome ou CPF"
+              data-contract-search
+            />
           </div>
+
+          <div class="growth-contracts-tabs" role="tablist" aria-label="Filtro de status">
+            <button class="growth-contracts-tab is-active" type="button" data-contract-status="all" role="tab">Todos</button>
+            <button class="growth-contracts-tab" type="button" data-contract-status="rascunho" role="tab">Rascunho</button>
+            <button class="growth-contracts-tab" type="button" data-contract-status="enviado" role="tab">Enviado</button>
+            <button class="growth-contracts-tab" type="button" data-contract-status="assinado" role="tab">Assinado</button>
+          </div>
+
+          <section class="growth-contracts-table-card" aria-label="Lista de contratos">
+            <div class="growth-contracts-table" role="table">
+              <div class="growth-contracts-row growth-contracts-head" role="row">
+                <span role="columnheader">Nome completo</span>
+                <span role="columnheader">CPF</span>
+                <span role="columnheader">Valor</span>
+                <span role="columnheader">Status</span>
+                <span role="columnheader">Data de criação</span>
+                <span role="columnheader"></span>
+              </div>
+              <div class="growth-contracts-body" data-contract-list></div>
+            </div>
+            <div class="growth-contracts-empty" data-contract-empty hidden>
+              <div class="growth-contracts-empty-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M8 7h8"></path>
+                  <path d="M8 11h8"></path>
+                  <path d="M8 15h6"></path>
+                  <path d="M7 3.5h7l3 3V20a1.5 1.5 0 0 1-1.5 1.5H7A1.5 1.5 0 0 1 5.5 20V5A1.5 1.5 0 0 1 7 3.5Z"></path>
+                </svg>
+              </div>
+              <strong>Nenhum contrato encontrado</strong>
+            </div>
+          </section>
         </div>
-
-        <nav class="sidebar-nav" aria-label="Seções Growth">
-          <a class="sidebar-link is-active" href="/growth/dashboard" title="Dashboard">
-            <span class="sidebar-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none">
-                <rect x="3.5" y="3.5" width="7" height="7" rx="1.5"></rect>
-                <rect x="13.5" y="3.5" width="7" height="7" rx="1.5"></rect>
-                <rect x="3.5" y="13.5" width="7" height="7" rx="1.5"></rect>
-                <rect x="13.5" y="13.5" width="7" height="7" rx="1.5"></rect>
-              </svg>
-            </span>
-            <span class="sidebar-text">Dashboard</span>
-          </a>
-
-          <button class="sidebar-link" type="button" data-growth-logout title="Sair">
-            <span class="sidebar-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none">
-                <path d="M10 7.5H6.8c-1.1 0-2 .9-2 2v7c0 1.1.9 2 2 2H10"></path>
-                <path d="M15 16.5 19 12l-4-4.5"></path>
-                <path d="M19 12H10"></path>
-              </svg>
-            </span>
-            <span class="sidebar-text">Sair</span>
-          </button>
-        </nav>
-      </aside>
-
-      <main class="platform-main" aria-label="Painel Growth">
-        <div class="growth-v2" data-growth-dashboard>
+      `
+    : `
+        <div class="growth-v2" data-growth-dashboard data-growth-view="dashboard">
           <header class="growth-v2-header" aria-label="Cabeçalho do dashboard Growth">
             <div class="growth-v2-head-left">
               <div class="growth-v2-eyebrow">GROWTH</div>
@@ -369,7 +1005,205 @@ module.exports = async (req, res) => {
             </div>
           </section>
         </div>
+      `;
+
+  const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${pageTitle}</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <base href="/" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body data-view="interno" data-page="growth" data-sidebar-expanded="false">
+    <div class="page-glow page-glow-left" aria-hidden="true"></div>
+    <div class="page-glow page-glow-right" aria-hidden="true"></div>
+    <script>
+      window.__SPACE_SESSION__ = ${sessionJson};
+    </script>
+
+    <div class="platform-shell" data-view="interno">
+      <div class="platform-backdrop" aria-hidden="true"></div>
+      <aside class="platform-sidebar" aria-label="Navegação">
+        <div class="sidebar-topbar">
+          <button
+            class="sidebar-toggle"
+            type="button"
+            data-sidebar-toggle
+            aria-expanded="false"
+            aria-label="Abrir barra lateral"
+          >
+            <span class="sidebar-toggle-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="m14.5 5.5-6 6 6 6"></path>
+              </svg>
+            </span>
+          </button>
+        </div>
+
+        <div class="sidebar-brand">
+          <img src="/assets/space-symbol.png" alt="Símbolo da Space" />
+          <div class="sidebar-brand-copy">
+            <strong>Space</strong>
+            <span>Growth Console</span>
+          </div>
+        </div>
+
+        <nav class="sidebar-nav" aria-label="Seções Growth">
+          <a class="${navDashboardClass}" href="/growth/dashboard" title="Dashboard">
+            <span class="sidebar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <rect x="3.5" y="3.5" width="7" height="7" rx="1.5"></rect>
+                <rect x="13.5" y="3.5" width="7" height="7" rx="1.5"></rect>
+                <rect x="3.5" y="13.5" width="7" height="7" rx="1.5"></rect>
+                <rect x="13.5" y="13.5" width="7" height="7" rx="1.5"></rect>
+              </svg>
+            </span>
+            <span class="sidebar-text">Dashboard</span>
+          </a>
+
+          <a class="${navContractsClass}" href="/growth/contratos" title="Contratos">
+            <span class="sidebar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M8 7h8"></path>
+                <path d="M8 11h8"></path>
+                <path d="M8 15h6"></path>
+                <path d="M7 3.5h7l3 3V20a1.5 1.5 0 0 1-1.5 1.5H7A1.5 1.5 0 0 1 5.5 20V5A1.5 1.5 0 0 1 7 3.5Z"></path>
+              </svg>
+            </span>
+            <span class="sidebar-text">Contratos</span>
+          </a>
+
+          <button class="sidebar-link" type="button" data-growth-logout title="Sair">
+            <span class="sidebar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M10 7.5H6.8c-1.1 0-2 .9-2 2v7c0 1.1.9 2 2 2H10"></path>
+                <path d="M15 16.5 19 12l-4-4.5"></path>
+                <path d="M19 12H10"></path>
+              </svg>
+            </span>
+            <span class="sidebar-text">Sair</span>
+          </button>
+        </nav>
+      </aside>
+
+      <main class="platform-main" aria-label="Painel Growth">
+        ${mainHtml}
       </main>
+    </div>
+
+    <div class="modal-overlay" hidden data-contract-create-overlay>
+      <div class="modal-dialog growth-contract-modal">
+        <div class="modal-header">
+          <h3 class="modal-title">Novo contrato</h3>
+          <button class="modal-close" type="button" data-contract-create-close aria-label="Fechar">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M6 6l12 12"></path>
+              <path d="M18 6 6 18"></path>
+            </svg>
+          </button>
+        </div>
+
+        <div class="modal-body">
+          <form class="modal-form" data-contract-create-form>
+            <label class="modal-field">
+              <span>NOME COMPLETO</span>
+              <input class="modal-input" type="text" placeholder="Nome completo do aluno" data-contract-field="nomeCompleto" />
+              <div class="modal-inline-error" data-contract-error="nomeCompleto" hidden>Informe o nome completo.</div>
+            </label>
+
+            <label class="modal-field">
+              <span>CPF</span>
+              <input class="modal-input" type="text" inputmode="numeric" placeholder="000.000.000-00" data-contract-field="cpf" />
+              <div class="modal-inline-error" data-contract-error="cpf" hidden>CPF inválido.</div>
+            </label>
+
+            <label class="modal-field">
+              <span>ENDEREÇO</span>
+              <input class="modal-input" type="text" placeholder="Endereço completo" data-contract-field="endereco" />
+              <div class="modal-inline-error" data-contract-error="endereco" hidden>Informe o endereço.</div>
+            </label>
+
+            <div class="growth-contract-money-row">
+              <label class="modal-field">
+                <span>VALOR ORIGINAL</span>
+                <div class="growth-contract-money">
+                  <span>R$</span>
+                  <input class="modal-input" type="number" step="0.01" placeholder="0,00" data-contract-field="valorOriginal" />
+                </div>
+                <div class="modal-inline-error" data-contract-error="valorOriginal" hidden>Informe o valor original.</div>
+              </label>
+
+              <label class="modal-field">
+                <span>VALOR COM DESCONTO</span>
+                <div class="growth-contract-money">
+                  <span>R$</span>
+                  <input class="modal-input" type="number" step="0.01" placeholder="0,00" data-contract-field="valorDesconto" />
+                </div>
+                <div class="modal-inline-error" data-contract-error="valorDesconto" hidden>O desconto não pode ser maior que o valor original.</div>
+              </label>
+            </div>
+
+            <label class="modal-field">
+              <span>DATA</span>
+              <input class="modal-input" type="date" data-contract-field="data" />
+            </label>
+          </form>
+
+          <div class="growth-contract-feedback" data-contract-create-feedback hidden></div>
+        </div>
+
+        <div class="modal-actions">
+          <button class="growth-contract-btn is-outline" type="button" data-contract-create-cancel>Cancelar</button>
+          <button class="growth-contract-btn is-blue" type="button" data-contract-create-draft>Salvar como rascunho</button>
+          <button class="growth-contract-btn is-coral" type="button" data-contract-create-send>Salvar e enviar para assinatura</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-overlay" hidden data-contract-details-overlay>
+      <div class="modal-dialog growth-contract-modal">
+        <div class="modal-header">
+          <h3 class="modal-title">Detalhes do contrato</h3>
+          <button class="modal-close" type="button" data-contract-details-close aria-label="Fechar">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M6 6l12 12"></path>
+              <path d="M18 6 6 18"></path>
+            </svg>
+          </button>
+        </div>
+
+        <div class="modal-body" data-contract-details-body></div>
+
+        <div class="modal-actions">
+          <button class="growth-contract-btn is-outline" type="button" data-contract-details-ok>Fechar</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-overlay" hidden data-contract-confirm-overlay>
+      <div class="modal-dialog growth-contract-modal">
+        <div class="modal-header">
+          <h3 class="modal-title">Confirmar</h3>
+          <button class="modal-close" type="button" data-contract-confirm-close aria-label="Fechar">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M6 6l12 12"></path>
+              <path d="M18 6 6 18"></path>
+            </svg>
+          </button>
+        </div>
+
+        <div class="modal-body">
+          <div class="growth-contract-confirm-text" data-contract-confirm-text></div>
+        </div>
+
+        <div class="modal-actions">
+          <button class="growth-contract-btn is-outline" type="button" data-contract-confirm-cancel>Cancelar</button>
+          <button class="growth-contract-btn is-coral" type="button" data-contract-confirm-ok>Excluir</button>
+        </div>
+      </div>
     </div>
 
     <script src="/growth.js" defer></script>

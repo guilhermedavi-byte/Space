@@ -90,10 +90,74 @@ const loadFirebaseAuth = () => {
     const app = getOrInitApp();
     const auth = authMod.getAuth(app);
 
-    return { auth, signOut: authMod.signOut };
+    return { auth, signOut: authMod.signOut, onAuthStateChanged: authMod.onAuthStateChanged };
   });
 
   return firebaseAuthPromise;
+};
+
+const waitForFirebaseAuthReady = async (api, timeoutMs = 3500) => {
+  if (!api || !api.auth || typeof api.onAuthStateChanged !== "function") return null;
+  if (api.auth.currentUser) return api.auth.currentUser;
+
+  const safeTimeout = Number.isFinite(Number(timeoutMs)) && Number(timeoutMs) > 0 ? Number(timeoutMs) : 3500;
+
+  return new Promise((resolve) => {
+    let settled = false;
+    let unsub = null;
+
+    const finish = (user) => {
+      if (settled) return;
+      settled = true;
+      try {
+        if (typeof unsub === "function") unsub();
+      } catch (error) {
+        // ignore
+      }
+      resolve(user || null);
+    };
+
+    unsub = api.onAuthStateChanged(api.auth, (user) => finish(user));
+    window.setTimeout(() => finish(null), safeTimeout);
+  });
+};
+
+let cachedFirebaseIdToken = {
+  uid: "",
+  token: "",
+  expiresAt: 0,
+};
+
+const getFirebaseIdTokenForApi = async () => {
+  try {
+    const api = await loadFirebaseAuth();
+    const user = await waitForFirebaseAuthReady(api, 3500);
+    if (!user || typeof user.getIdToken !== "function") return "";
+
+    const uid = String(user.uid || "");
+    const now = Date.now();
+    if (cachedFirebaseIdToken.uid === uid && cachedFirebaseIdToken.token && cachedFirebaseIdToken.expiresAt > now) {
+      return cachedFirebaseIdToken.token;
+    }
+
+    const token = await user.getIdToken();
+    cachedFirebaseIdToken = {
+      uid,
+      token: String(token || ""),
+      expiresAt: now + 180_000,
+    };
+    return cachedFirebaseIdToken.token;
+  } catch (error) {
+    return "";
+  }
+};
+
+const fetchWithAuth = async (input, init = {}) => {
+  const opts = init && typeof init === "object" ? init : {};
+  const headers = new Headers(opts.headers || {});
+  const token = await getFirebaseIdTokenForApi();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  return fetch(input, { ...opts, headers, credentials: opts.credentials || "include" });
 };
 
 const logoutButtons = Array.from(document.querySelectorAll("[data-growth-logout]")).filter(
@@ -126,3 +190,603 @@ logoutButtons.forEach((btn) => {
     window.location.replace("/");
   });
 });
+
+/* =========================
+   Contratos (Growth)
+   ========================= */
+
+const contractsRoot = document.querySelector("[data-growth-view=\"contracts\"]");
+
+const digitsOnly = (value) => String(value || "").replace(/\D+/g, "");
+
+const formatCpf = (value) => {
+  const digits = digitsOnly(value).slice(0, 11);
+  const p1 = digits.slice(0, 3);
+  const p2 = digits.slice(3, 6);
+  const p3 = digits.slice(6, 9);
+  const p4 = digits.slice(9, 11);
+  let out = p1;
+  if (p2) out += `.${p2}`;
+  if (p3) out += `.${p3}`;
+  if (p4) out += `-${p4}`;
+  return out;
+};
+
+const currencyPtBr = (value) => {
+  try {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return "—";
+    return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n);
+  } catch (error) {
+    return "—";
+  }
+};
+
+const datePtBr = (iso) => {
+  if (!iso) return "—";
+  try {
+    const d = new Date(String(iso));
+    if (!(d instanceof Date) || Number.isNaN(d.getTime())) return "—";
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const yyyy = String(d.getFullYear());
+    return `${dd}/${mm}/${yyyy}`;
+  } catch (error) {
+    return "—";
+  }
+};
+
+const dateTimePtBr = (iso) => {
+  if (!iso) return null;
+  try {
+    const d = new Date(String(iso));
+    if (!(d instanceof Date) || Number.isNaN(d.getTime())) return null;
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const hh = String(d.getHours()).padStart(2, "0");
+    const min = String(d.getMinutes()).padStart(2, "0");
+    return `${dd}/${mm} às ${hh}:${min}`;
+  } catch (error) {
+    return null;
+  }
+};
+
+const statusMeta = (status) => {
+  const key = String(status || "").trim().toLowerCase();
+  if (key === "assinado") return { label: "Assinado", cls: "is-signed" };
+  if (key === "enviado") return { label: "Enviado", cls: "is-sent" };
+  return { label: "Rascunho", cls: "is-draft" };
+};
+
+let contractsState = {
+  status: "all",
+  query: "",
+  rows: [],
+  byId: new Map(),
+  isLoading: false,
+};
+
+let contractsSearchTimer = null;
+let openActionsMenu = null;
+let pendingDeleteId = "";
+
+const contractsEls = {
+  search: document.querySelector("[data-contract-search]"),
+  list: document.querySelector("[data-contract-list]"),
+  empty: document.querySelector("[data-contract-empty]"),
+  tabs: Array.from(document.querySelectorAll("[data-contract-status]")).filter((el) => el instanceof HTMLButtonElement),
+  newBtn: document.querySelector("[data-contract-new]"),
+  createOverlay: document.querySelector("[data-contract-create-overlay]"),
+  createForm: document.querySelector("[data-contract-create-form]"),
+  createFeedback: document.querySelector("[data-contract-create-feedback]"),
+  createClose: document.querySelector("[data-contract-create-close]"),
+  createCancel: document.querySelector("[data-contract-create-cancel]"),
+  createDraft: document.querySelector("[data-contract-create-draft]"),
+  createSend: document.querySelector("[data-contract-create-send]"),
+  detailsOverlay: document.querySelector("[data-contract-details-overlay]"),
+  detailsBody: document.querySelector("[data-contract-details-body]"),
+  detailsClose: document.querySelector("[data-contract-details-close]"),
+  detailsOk: document.querySelector("[data-contract-details-ok]"),
+  confirmOverlay: document.querySelector("[data-contract-confirm-overlay]"),
+  confirmText: document.querySelector("[data-contract-confirm-text]"),
+  confirmClose: document.querySelector("[data-contract-confirm-close]"),
+  confirmCancel: document.querySelector("[data-contract-confirm-cancel]"),
+  confirmOk: document.querySelector("[data-contract-confirm-ok]"),
+};
+
+const setModalOpen = (overlay, open) => {
+  if (!(overlay instanceof HTMLElement)) return;
+  overlay.hidden = !open;
+  document.body.classList.toggle("is-modal-open", Boolean(open));
+};
+
+const closeAllActionsMenus = () => {
+  if (openActionsMenu instanceof HTMLElement) {
+    openActionsMenu.classList.remove("is-open");
+  }
+  openActionsMenu = null;
+};
+
+const renderContracts = () => {
+  if (!(contractsEls.list instanceof HTMLElement) || !(contractsEls.empty instanceof HTMLElement)) return;
+
+  contractsEls.list.innerHTML = "";
+  const rows = Array.isArray(contractsState.rows) ? contractsState.rows : [];
+
+  if (!rows.length) {
+    contractsEls.empty.hidden = false;
+    return;
+  }
+
+  contractsEls.empty.hidden = true;
+
+  rows.forEach((c) => {
+    const row = document.createElement("div");
+    row.className = "growth-contracts-row";
+    row.setAttribute("role", "row");
+    row.dataset.contractId = c.id;
+
+    const status = statusMeta(c.status);
+    const orig = typeof c.valorOriginal === "number" ? c.valorOriginal : NaN;
+    const disc = typeof c.valorDesconto === "number" ? c.valorDesconto : NaN;
+    const valorOriginal = currencyPtBr(orig);
+    const valorDesconto = currencyPtBr(disc);
+    const showDiscount = Number.isFinite(orig) && Number.isFinite(disc) && disc < orig;
+
+    const actionSend =
+      String(c.status || "").trim().toLowerCase() === "rascunho"
+        ? `<button class="admin-action-item" type="button" data-contract-action="send" data-contract-id="${c.id}">Enviar para assinatura</button>`
+        : "";
+    const actionResend =
+      String(c.status || "").trim().toLowerCase() === "enviado"
+        ? `<button class="admin-action-item" type="button" data-contract-action="send" data-contract-id="${c.id}">Reenviar</button>`
+        : "";
+
+    row.innerHTML = `
+      <div class="growth-contracts-name" role="cell">${c.nomeCompleto || "—"}</div>
+      <div class="growth-contracts-cpf" role="cell">${formatCpf(c.cpf || "")}</div>
+      <div class="growth-contracts-value" role="cell">
+        <strong>${valorDesconto}</strong>
+        ${showDiscount ? `<span class="growth-contracts-old">${valorOriginal}</span>` : ""}
+      </div>
+      <div role="cell">
+        <span class="growth-contract-badge ${status.cls}">${status.label}</span>
+      </div>
+      <div class="growth-contracts-date" role="cell">${datePtBr(c.criadoEm)}</div>
+      <div class="admin-row-actions" role="cell">
+        <button class="admin-actions-trigger" type="button" aria-label="Ações" data-contract-menu-trigger>
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M12 5.5h.01"></path>
+            <path d="M12 12h.01"></path>
+            <path d="M12 18.5h.01"></path>
+          </svg>
+        </button>
+        <div class="admin-actions-menu" role="menu">
+          <button class="admin-action-item" type="button" data-contract-action="details" data-contract-id="${c.id}">Ver detalhes</button>
+          ${actionSend}
+          ${actionResend}
+          <button class="admin-action-item is-danger" type="button" data-contract-action="delete" data-contract-id="${c.id}">Excluir</button>
+        </div>
+      </div>
+    `;
+
+    contractsEls.list.appendChild(row);
+  });
+};
+
+const setActiveTab = (status) => {
+  contractsEls.tabs.forEach((btn) => {
+    const value = String(btn.dataset.contractStatus || "");
+    btn.classList.toggle("is-active", value === status);
+    btn.setAttribute("aria-selected", value === status ? "true" : "false");
+  });
+};
+
+const loadContracts = async () => {
+  if (contractsState.isLoading) return;
+  if (!(contractsEls.list instanceof HTMLElement) || !(contractsEls.empty instanceof HTMLElement)) return;
+
+  contractsState.isLoading = true;
+  contractsEls.empty.hidden = true;
+  contractsEls.list.innerHTML = `<div class="growth-contracts-loading">Carregando...</div>`;
+
+  const statusParam = contractsState.status || "all";
+  const q = contractsState.query || "";
+
+  const params = new URLSearchParams();
+  if (statusParam && statusParam !== "all") params.set("status", statusParam);
+  if (q) params.set("q", q);
+
+  try {
+    const res = await fetchWithAuth(`/api/growth-contratos?${params.toString()}`, { method: "GET" });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error || "request_failed");
+
+    const rows = Array.isArray(data?.contracts) ? data.contracts : [];
+    contractsState.rows = rows;
+    contractsState.byId = new Map(rows.map((c) => [c.id, c]));
+    renderContracts();
+  } catch (error) {
+    contractsState.rows = [];
+    contractsState.byId = new Map();
+    contractsEls.list.innerHTML = "";
+    contractsEls.empty.hidden = false;
+    const label = contractsEls.empty.querySelector("strong");
+    if (label instanceof HTMLElement) label.textContent = "Não foi possível carregar os contratos.";
+  } finally {
+    contractsState.isLoading = false;
+  }
+};
+
+const clearCreateErrors = () => {
+  document.querySelectorAll("[data-contract-error]").forEach((el) => {
+    if (el instanceof HTMLElement) el.hidden = true;
+  });
+  document.querySelectorAll(".modal-input").forEach((el) => {
+    if (el instanceof HTMLElement) el.classList.remove("is-error");
+  });
+  if (contractsEls.createFeedback instanceof HTMLElement) {
+    contractsEls.createFeedback.hidden = true;
+    contractsEls.createFeedback.textContent = "";
+  }
+};
+
+const showCreateError = (fieldKey, message) => {
+  const err = document.querySelector(`[data-contract-error="${fieldKey}"]`);
+  if (err instanceof HTMLElement) {
+    err.textContent = message;
+    err.hidden = false;
+  }
+  const input = document.querySelector(`[data-contract-field="${fieldKey}"]`);
+  if (input instanceof HTMLElement) input.classList.add("is-error");
+};
+
+const getCreateField = (key) => document.querySelector(`[data-contract-field="${key}"]`);
+
+const openCreateModal = () => {
+  clearCreateErrors();
+  const dateField = getCreateField("data");
+  if (dateField instanceof HTMLInputElement) {
+    const now = new Date();
+    const yyyy = String(now.getFullYear());
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const dd = String(now.getDate()).padStart(2, "0");
+    dateField.value = `${yyyy}-${mm}-${dd}`;
+  }
+
+  ["nomeCompleto", "cpf", "endereco", "valorOriginal", "valorDesconto"].forEach((k) => {
+    const el = getCreateField(k);
+    if (el instanceof HTMLInputElement) el.value = "";
+  });
+
+  setModalOpen(contractsEls.createOverlay, true);
+
+  const focus = getCreateField("nomeCompleto");
+  if (focus instanceof HTMLInputElement) focus.focus();
+};
+
+const closeCreateModal = () => setModalOpen(contractsEls.createOverlay, false);
+const closeDetailsModal = () => setModalOpen(contractsEls.detailsOverlay, false);
+const closeConfirmModal = () => setModalOpen(contractsEls.confirmOverlay, false);
+
+const setCreateButtonsDisabled = (disabled) => {
+  const d = Boolean(disabled);
+  [contractsEls.createDraft, contractsEls.createSend, contractsEls.createCancel].forEach((el) => {
+    if (el instanceof HTMLButtonElement) el.disabled = d;
+  });
+};
+
+const createContract = async (sendNow) => {
+  clearCreateErrors();
+
+  const nomeEl = getCreateField("nomeCompleto");
+  const cpfEl = getCreateField("cpf");
+  const endEl = getCreateField("endereco");
+  const origEl = getCreateField("valorOriginal");
+  const discEl = getCreateField("valorDesconto");
+  const dateEl = getCreateField("data");
+
+  const nomeCompleto = nomeEl instanceof HTMLInputElement ? nomeEl.value.trim() : "";
+  const cpf = cpfEl instanceof HTMLInputElement ? digitsOnly(cpfEl.value) : "";
+  const endereco = endEl instanceof HTMLInputElement ? endEl.value.trim() : "";
+  const valorOriginalRaw = origEl instanceof HTMLInputElement ? origEl.value.trim() : "";
+  const valorOriginal = valorOriginalRaw ? Number(valorOriginalRaw) : NaN;
+  const valorDescontoRaw = discEl instanceof HTMLInputElement ? discEl.value.trim() : "";
+  const valorDesconto = valorDescontoRaw ? Number(valorDescontoRaw) : valorOriginal;
+  const data = dateEl instanceof HTMLInputElement ? dateEl.value : "";
+
+  let ok = true;
+  if (!nomeCompleto) {
+    showCreateError("nomeCompleto", "Informe o nome completo.");
+    ok = false;
+  }
+  if (!cpf || cpf.length !== 11) {
+    showCreateError("cpf", "CPF deve ter 11 dígitos.");
+    ok = false;
+  }
+  if (!endereco) {
+    showCreateError("endereco", "Informe o endereço.");
+    ok = false;
+  }
+  if (!Number.isFinite(valorOriginal) || valorOriginal <= 0) {
+    showCreateError("valorOriginal", "Informe o valor original.");
+    ok = false;
+  }
+  if (!Number.isFinite(valorDesconto) || valorDesconto <= 0 || valorDesconto > valorOriginal) {
+    showCreateError("valorDesconto", "O desconto não pode ser maior que o valor original.");
+    ok = false;
+  }
+
+  if (!ok) return;
+
+  setCreateButtonsDisabled(true);
+
+  try {
+    const res = await fetchWithAuth("/api/growth-contratos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "create",
+        nomeCompleto,
+        cpf,
+        endereco,
+        valorOriginal,
+        valorDesconto,
+        data,
+        sendNow: Boolean(sendNow),
+      }),
+    });
+
+    const dataRes = await res.json().catch(() => null);
+    if (!res.ok) {
+      const msg =
+        dataRes?.error === "invalid_cpf"
+          ? "CPF inválido."
+          : dataRes?.error === "invalid_discount"
+            ? "O desconto não pode ser maior que o valor original."
+            : dataRes?.error === "zapsign_failed"
+              ? "Erro ao enviar para assinatura. Tente novamente."
+              : "Não foi possível salvar agora. Tente novamente.";
+
+      if (contractsEls.createFeedback instanceof HTMLElement) {
+        contractsEls.createFeedback.textContent = msg;
+        contractsEls.createFeedback.hidden = false;
+      }
+      return;
+    }
+
+    closeCreateModal();
+    await loadContracts();
+  } catch (error) {
+    if (contractsEls.createFeedback instanceof HTMLElement) {
+      contractsEls.createFeedback.textContent = "Não foi possível salvar agora. Tente novamente.";
+      contractsEls.createFeedback.hidden = false;
+    }
+  } finally {
+    setCreateButtonsDisabled(false);
+  }
+};
+
+const openDetailsModal = (contract) => {
+  if (!(contractsEls.detailsBody instanceof HTMLElement)) return;
+
+  const status = statusMeta(contract?.status);
+  const history = [];
+  const created = dateTimePtBr(contract?.criadoEm);
+  const sent = dateTimePtBr(contract?.enviadoEm);
+  const signed = dateTimePtBr(contract?.assinadoEm);
+  if (created) history.push(`Criado em ${created}`);
+  if (sent) history.push(`Enviado em ${sent}`);
+  if (signed) history.push(`Assinado em ${signed}`);
+
+  const links = [];
+  if (contract?.zapsignSignUrl) {
+    links.push(`
+      <div class="modal-doc-row">
+        <span class="upload-file-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M10 13a5 5 0 0 1 0-7l.7-.7a5 5 0 0 1 7.1 7.1l-1 1"></path>
+            <path d="M14 11a5 5 0 0 1 0 7l-.7.7a5 5 0 0 1-7.1-7.1l1-1"></path>
+          </svg>
+        </span>
+        <div>
+          <a href="${contract.zapsignSignUrl}" target="_blank" rel="noreferrer">Visualizar/assinar documento</a>
+          <span>Link da ZapSign</span>
+        </div>
+      </div>
+    `);
+  }
+  if (contract?.documentoAssinado) {
+    links.push(`
+      <div class="modal-doc-row">
+        <span class="upload-file-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M12 3v10"></path>
+            <path d="M8 9l4 4 4-4"></path>
+            <path d="M5 21h14"></path>
+          </svg>
+        </span>
+        <div>
+          <a href="${contract.documentoAssinado}" target="_blank" rel="noreferrer">Baixar documento assinado</a>
+          <span>PDF assinado</span>
+        </div>
+      </div>
+    `);
+  }
+
+  contractsEls.detailsBody.innerHTML = `
+    <div class="modal-list-row"><strong>Nome</strong><span>${contract?.nomeCompleto || "—"}</span></div>
+    <div class="modal-list-row"><strong>CPF</strong><span>${formatCpf(contract?.cpf || "")}</span></div>
+    <div class="modal-list-row"><strong>Endereço</strong><span>${contract?.endereco || "—"}</span></div>
+    <div class="modal-list-row"><strong>Valor original</strong><span>${currencyPtBr(contract?.valorOriginal)}</span></div>
+    <div class="modal-list-row"><strong>Valor com desconto</strong><span>${currencyPtBr(contract?.valorDesconto)}</span></div>
+    <div class="modal-list-row"><strong>Data</strong><span>${contract?.data || "—"}</span></div>
+    <div class="modal-list-row"><strong>Status</strong><span class="growth-contract-badge ${status.cls}">${status.label}</span></div>
+    ${links.length ? `<div class="modal-event-section"><h4>Links</h4>${links.join("")}</div>` : ""}
+    ${history.length ? `<div class="modal-event-section"><h4>Histórico</h4><div class="growth-contract-history">${history
+      .map((h) => `<div class="growth-contract-history-item">${h}</div>`)
+      .join("")}</div></div>` : ""}
+  `;
+
+  setModalOpen(contractsEls.detailsOverlay, true);
+};
+
+const openConfirmDelete = (contractId) => {
+  pendingDeleteId = String(contractId || "");
+  if (contractsEls.confirmText instanceof HTMLElement) {
+    const c = contractsState.byId.get(pendingDeleteId);
+    const name = c?.nomeCompleto ? ` "${c.nomeCompleto}"` : "";
+    contractsEls.confirmText.textContent = `Tem certeza que deseja excluir o contrato${name}? Esta ação não pode ser desfeita.`;
+  }
+  setModalOpen(contractsEls.confirmOverlay, true);
+};
+
+const deleteContract = async (contractId) => {
+  const id = String(contractId || "").trim();
+  if (!id) return;
+  closeConfirmModal();
+  try {
+    const res = await fetchWithAuth(`/api/growth-contratos?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error || "delete_failed");
+    await loadContracts();
+  } catch (error) {
+    // ignore for now
+  }
+};
+
+const sendContractToZapSign = async (contractId) => {
+  const id = String(contractId || "").trim();
+  if (!id) return;
+  try {
+    await fetchWithAuth("/api/growth-contratos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "send", id }),
+    });
+    await loadContracts();
+  } catch (error) {
+    // ignore for now
+  }
+};
+
+const initContracts = () => {
+  if (!(contractsRoot instanceof HTMLElement)) return;
+
+  if (contractsEls.newBtn instanceof HTMLButtonElement) {
+    contractsEls.newBtn.addEventListener("click", () => openCreateModal());
+  }
+
+  if (contractsEls.search instanceof HTMLInputElement) {
+    contractsEls.search.addEventListener("input", () => {
+      const value = contractsEls.search.value.trim();
+      contractsState.query = value;
+      if (contractsSearchTimer) window.clearTimeout(contractsSearchTimer);
+      contractsSearchTimer = window.setTimeout(() => {
+        loadContracts();
+      }, 240);
+    });
+  }
+
+  contractsEls.tabs.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const value = String(btn.dataset.contractStatus || "all");
+      contractsState.status = value || "all";
+      setActiveTab(contractsState.status);
+      loadContracts();
+    });
+  });
+
+  // Modal wiring
+  if (contractsEls.createClose instanceof HTMLButtonElement) contractsEls.createClose.addEventListener("click", closeCreateModal);
+  if (contractsEls.createCancel instanceof HTMLButtonElement) contractsEls.createCancel.addEventListener("click", closeCreateModal);
+  if (contractsEls.createDraft instanceof HTMLButtonElement)
+    contractsEls.createDraft.addEventListener("click", () => createContract(false));
+  if (contractsEls.createSend instanceof HTMLButtonElement) contractsEls.createSend.addEventListener("click", () => createContract(true));
+
+  if (contractsEls.detailsClose instanceof HTMLButtonElement) contractsEls.detailsClose.addEventListener("click", closeDetailsModal);
+  if (contractsEls.detailsOk instanceof HTMLButtonElement) contractsEls.detailsOk.addEventListener("click", closeDetailsModal);
+
+  if (contractsEls.confirmClose instanceof HTMLButtonElement) contractsEls.confirmClose.addEventListener("click", closeConfirmModal);
+  if (contractsEls.confirmCancel instanceof HTMLButtonElement) contractsEls.confirmCancel.addEventListener("click", closeConfirmModal);
+  if (contractsEls.confirmOk instanceof HTMLButtonElement)
+    contractsEls.confirmOk.addEventListener("click", () => deleteContract(pendingDeleteId));
+
+  const cpfInput = getCreateField("cpf");
+  if (cpfInput instanceof HTMLInputElement) {
+    cpfInput.addEventListener("input", () => {
+      cpfInput.value = formatCpf(cpfInput.value);
+    });
+  }
+
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Escape") return;
+    if (contractsEls.confirmOverlay instanceof HTMLElement && !contractsEls.confirmOverlay.hidden) closeConfirmModal();
+    if (contractsEls.detailsOverlay instanceof HTMLElement && !contractsEls.detailsOverlay.hidden) closeDetailsModal();
+    if (contractsEls.createOverlay instanceof HTMLElement && !contractsEls.createOverlay.hidden) closeCreateModal();
+    closeAllActionsMenus();
+  });
+
+  document.addEventListener("click", (ev) => {
+    const target = ev.target instanceof Element ? ev.target : null;
+    if (!target) return;
+
+    const trigger = target.closest("[data-contract-menu-trigger]");
+    if (trigger) {
+      const wrap = trigger.closest(".admin-row-actions");
+      if (wrap instanceof HTMLElement) {
+        const isOpen = wrap.classList.contains("is-open");
+        closeAllActionsMenus();
+        if (!isOpen) {
+          wrap.classList.add("is-open");
+          openActionsMenu = wrap;
+        }
+      }
+      return;
+    }
+
+    const actionBtn = target.closest("[data-contract-action]");
+    if (actionBtn instanceof HTMLElement) {
+      const action = String(actionBtn.dataset.contractAction || "");
+      const id = String(actionBtn.dataset.contractId || "");
+      closeAllActionsMenus();
+
+      if (action === "details") {
+        const c = contractsState.byId.get(id);
+        openDetailsModal(c);
+        return;
+      }
+
+      if (action === "delete") {
+        openConfirmDelete(id);
+        return;
+      }
+
+      if (action === "send") {
+        sendContractToZapSign(id);
+        return;
+      }
+    }
+
+    // Close menus when clicking outside.
+    if (openActionsMenu && !target.closest(".admin-row-actions")) {
+      closeAllActionsMenus();
+    }
+  });
+
+  // Overlay click to close
+  [contractsEls.createOverlay, contractsEls.detailsOverlay, contractsEls.confirmOverlay].forEach((overlay) => {
+    if (!(overlay instanceof HTMLElement)) return;
+    overlay.addEventListener("click", (ev) => {
+      if (ev.target !== overlay) return;
+      if (overlay === contractsEls.createOverlay) closeCreateModal();
+      if (overlay === contractsEls.detailsOverlay) closeDetailsModal();
+      if (overlay === contractsEls.confirmOverlay) closeConfirmModal();
+    });
+  });
+
+  setActiveTab(contractsState.status);
+  loadContracts();
+};
+
+initContracts();

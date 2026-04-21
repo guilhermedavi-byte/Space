@@ -1,7 +1,10 @@
 {
   "rewrites": [
+    { "source": "/api/growth-contratos", "destination": "/api/growth-dashboard?api=growth-contratos" },
+    { "source": "/api/zapsign-webhook", "destination": "/api/growth-dashboard?api=zapsign-webhook" },
     { "source": "/api/(.*)", "destination": "/api/$1" },
     { "source": "/growth/dashboard", "destination": "/api/growth-dashboard" },
+    { "source": "/growth/contratos", "destination": "/api/growth-dashboard?page=contracts" },
     { "source": "/app", "destination": "/api/app" },
     { "source": "/app/(.*)", "destination": "/api/app?path=$1" }
   ]
