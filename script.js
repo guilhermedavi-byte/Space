@@ -5678,9 +5678,18 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
           const code = typeof e?.message === "string" ? e.message : "";
           const details = e?.details && typeof e.details === "object" ? e.details : null;
           let msg = "Não foi possível salvar agora. Tente novamente.";
+          if (code === "unauthorized" || code === "invalid_credentials") {
+            msg = "Sua sessão expirou. Recarregue a página e faça login novamente.";
+          }
+          if (code === "forbidden") {
+            msg = "Você não tem permissão para definir metas.";
+          }
           if (code === "past_competencia_not_allowed") msg = "Não é possível cadastrar meta para um mês passado.";
           if (code === "invalid_competencia") msg = "Competência inválida. Selecione mês/ano corretamente.";
           if (code === "invalid_valor") msg = "Valor inválido. Use um número maior que zero.";
+          if (code === "missing_firestore_auth") {
+            msg = "Servidor sem credenciais para salvar metas. Configure o service account do Google no Vercel (GOOGLE_CLIENT_EMAIL e GOOGLE_PRIVATE_KEY).";
+          }
           if (code === "firestore_write_failed") {
             const sa = typeof details?.serviceAccountError === "string" ? details.serviceAccountError : "";
             if (sa && sa.includes("missing_service_account")) {

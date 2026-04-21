@@ -607,13 +607,28 @@ const decodeGoalDoc = (doc) => {
 const handleGrowthGoalsApi = async (req, res, url) => {
   const mode = String(url.searchParams.get("mode") || "").trim().toLowerCase();
 
+  const getOptionalVerifiedIdToken = async (sessionUserId) => {
+    const requesterId = String(sessionUserId || "").trim();
+    const idToken = getBearerTokenFromRequest(req);
+    if (!requesterId || !idToken) return "";
+    try {
+      const decoded = await verifyFirebaseIdToken(idToken);
+      if (decoded?.uid !== requesterId) return "";
+      return idToken;
+    } catch (error) {
+      return "";
+    }
+  };
+
   if (req.method === "GET" || req.method === "HEAD") {
-    const auth = await requireRoleAuthWithFirebaseToken(req, res, ["admin", "growth"]);
+    const auth = requireInternalAuth(req, res);
     if (!auth) return;
 
     const currentKey = getCurrentCompetenciaKeySaoPaulo();
     const requestedCompetencia = String(url.searchParams.get("competencia") || "").trim();
     const competencia = mode === "current" ? currentKey : requestedCompetencia;
+
+    const verifiedIdToken = await getOptionalVerifiedIdToken(auth.id);
 
     let accessToken = "";
     try {
@@ -621,6 +636,11 @@ const handleGrowthGoalsApi = async (req, res, url) => {
       accessToken = String(t?.accessToken || "").trim();
     } catch (error) {
       accessToken = "";
+    }
+
+    if (!accessToken && !verifiedIdToken) {
+      sendJson(res, 500, { error: "missing_firestore_auth" });
+      return;
     }
 
     // Single goal (current or explicit competence)
@@ -634,7 +654,9 @@ const handleGrowthGoalsApi = async (req, res, url) => {
         const docPath = `${GOALS_COLLECTION}/${encodeURIComponent(competencia)}`;
         const snap = accessToken
           ? await firestoreGetDocumentWithAccessToken({ docPath, accessToken })
-          : await firestoreGetDocument({ docPath, idToken: auth.idToken });
+          : verifiedIdToken
+            ? await firestoreGetDocument({ docPath, idToken: verifiedIdToken })
+            : { ok: false, status: 500, data: null, text: "missing_firestore_auth" };
 
         if (!snap.ok) {
           if (snap.status === 404) {
@@ -659,7 +681,9 @@ const handleGrowthGoalsApi = async (req, res, url) => {
     try {
       const resList = accessToken
         ? await firestoreListDocumentsWithAccessToken({ collectionPath: GOALS_COLLECTION, accessToken, pageSize: 2000 })
-        : await firestoreListDocuments({ collectionPath: GOALS_COLLECTION, idToken: auth.idToken, pageSize: 2000 });
+        : verifiedIdToken
+          ? await firestoreListDocuments({ collectionPath: GOALS_COLLECTION, idToken: verifiedIdToken, pageSize: 2000 })
+          : { ok: false, status: 500, data: null, text: "missing_firestore_auth" };
 
       if (!resList.ok) throw new Error("firestore_list_failed");
       const docs = Array.isArray(resList.documents)
@@ -692,8 +716,12 @@ const handleGrowthGoalsApi = async (req, res, url) => {
     return;
   }
 
-  const auth = await requireRoleAuthWithFirebaseToken(req, res, ["admin"]);
+  const auth = requireInternalAuth(req, res);
   if (!auth) return;
+  if (auth.role !== "admin") {
+    sendJson(res, 403, { error: "forbidden" });
+    return;
+  }
 
   let body;
   try {
@@ -730,6 +758,12 @@ const handleGrowthGoalsApi = async (req, res, url) => {
     serviceAccountError = typeof error?.message === "string" ? error.message : "missing_service_account";
   }
 
+  const verifiedIdToken = await getOptionalVerifiedIdToken(auth.id);
+  if (!accessToken && !verifiedIdToken) {
+    sendJson(res, 500, { error: "missing_firestore_auth", serviceAccountError: serviceAccountError || "missing_service_account" });
+    return;
+  }
+
   const docPath = `${GOALS_COLLECTION}/${encodeURIComponent(competencia)}`;
   const now = new Date();
 
@@ -737,7 +771,7 @@ const handleGrowthGoalsApi = async (req, res, url) => {
   try {
     const snap = accessToken
       ? await firestoreGetDocumentWithAccessToken({ docPath, accessToken })
-      : await firestoreGetDocument({ docPath, idToken: auth.idToken });
+      : await firestoreGetDocument({ docPath, idToken: verifiedIdToken });
     exists = snap.ok;
   } catch (error) {
     exists = false;
@@ -771,7 +805,7 @@ const handleGrowthGoalsApi = async (req, res, url) => {
       }
       return firestorePatchDocument({
         docPath,
-        idToken: auth.idToken,
+        idToken: verifiedIdToken,
         data,
         updateMaskPaths: Object.keys(data),
       });
@@ -786,12 +820,9 @@ const handleGrowthGoalsApi = async (req, res, url) => {
     }
 
     // If the main attempt failed and we have the other auth method available, retry once.
-    if (!patch.ok && accessToken) {
-      // If service-account patch failed (misconfigured SA), try the user token as fallback.
+    if (!patch.ok && accessToken && verifiedIdToken) {
+      // If service-account patch failed, try the user token as fallback (useful when SA env is misconfigured).
       patch = await doPatch(false);
-    } else if (!patch.ok && !accessToken) {
-      // If user-token patch failed (rules), but SA is missing, we'll return a more explicit error.
-      patch = patch;
     }
 
     if (!patch.ok) {
