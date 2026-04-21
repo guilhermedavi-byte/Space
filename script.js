@@ -5345,7 +5345,7 @@ let cachedFirebaseIdToken = {
   expiresAt: 0,
 };
 
-const getFirebaseIdTokenForApi = async () => {
+const getFirebaseIdTokenForApi = async (forceRefresh = false) => {
   try {
     const firebase = await loadFirebaseAdminApi();
     const user = await waitForFirebaseAuthReady(firebase, 3500);
@@ -5353,11 +5353,12 @@ const getFirebaseIdTokenForApi = async () => {
 
     const uid = String(user.uid || "");
     const now = Date.now();
-    if (cachedFirebaseIdToken.uid === uid && cachedFirebaseIdToken.token && cachedFirebaseIdToken.expiresAt > now) {
+    if (!forceRefresh && cachedFirebaseIdToken.uid === uid && cachedFirebaseIdToken.token && cachedFirebaseIdToken.expiresAt > now) {
       return cachedFirebaseIdToken.token;
     }
 
-    const token = await user.getIdToken();
+    // Use `true` to force refresh when needed (ex: growth-goals save right after login).
+    const token = await user.getIdToken(Boolean(forceRefresh));
     cachedFirebaseIdToken = {
       uid,
       token: String(token || ""),
@@ -5373,8 +5374,11 @@ const getFirebaseIdTokenForApi = async () => {
 const fetchWithAuth = async (input, init = {}) => {
   const opts = init && typeof init === "object" ? init : {};
   const headers = new Headers(opts.headers || {});
-  const token = await getFirebaseIdTokenForApi();
+  const force = Boolean(opts.forceRefreshIdToken);
+  const token = await getFirebaseIdTokenForApi(force);
   if (token) headers.set("Authorization", `Bearer ${token}`);
+  // Do not forward our custom option to `fetch`.
+  if (Object.prototype.hasOwnProperty.call(opts, "forceRefreshIdToken")) delete opts.forceRefreshIdToken;
   return fetch(input, { ...opts, headers, credentials: opts.credentials || "include" });
 };
 
@@ -5560,7 +5564,7 @@ const loadAdminGrowthGoals = async () => {
   adminGoalsTable.innerHTML = `<div class="growth-contracts-loading">Carregando...</div>`;
 
   try {
-    const res = await fetchWithAuth("/api/growth-goals", { method: "GET" });
+    const res = await fetchWithAuth("/api/growth-goals", { method: "GET", forceRefreshIdToken: true });
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(data?.error || "request_failed");
 
@@ -5649,7 +5653,7 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
       (async () => {
         const previousPrimaryLabel = modalPrimary ? modalPrimary.textContent : "";
         try {
-          const token = await getFirebaseIdTokenForApi();
+          const token = await getFirebaseIdTokenForApi(true);
           if (!token) {
             throw new Error("invalid_credentials");
           }
@@ -5661,6 +5665,7 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ competencia: competenciaValue, valorMeta }),
+            forceRefreshIdToken: true,
           });
           const data = await res.json().catch(() => null);
           if (!res.ok) {

@@ -128,7 +128,7 @@ let cachedFirebaseIdToken = {
   expiresAt: 0,
 };
 
-const getFirebaseIdTokenForApi = async () => {
+const getFirebaseIdTokenForApi = async (forceRefresh = false) => {
   try {
     const api = await loadFirebaseAuth();
     const user = await waitForFirebaseAuthReady(api, 3500);
@@ -136,11 +136,11 @@ const getFirebaseIdTokenForApi = async () => {
 
     const uid = String(user.uid || "");
     const now = Date.now();
-    if (cachedFirebaseIdToken.uid === uid && cachedFirebaseIdToken.token && cachedFirebaseIdToken.expiresAt > now) {
+    if (!forceRefresh && cachedFirebaseIdToken.uid === uid && cachedFirebaseIdToken.token && cachedFirebaseIdToken.expiresAt > now) {
       return cachedFirebaseIdToken.token;
     }
 
-    const token = await user.getIdToken();
+    const token = await user.getIdToken(Boolean(forceRefresh));
     cachedFirebaseIdToken = {
       uid,
       token: String(token || ""),
@@ -155,8 +155,10 @@ const getFirebaseIdTokenForApi = async () => {
 const fetchWithAuth = async (input, init = {}) => {
   const opts = init && typeof init === "object" ? init : {};
   const headers = new Headers(opts.headers || {});
-  const token = await getFirebaseIdTokenForApi();
+  const force = Boolean(opts.forceRefreshIdToken);
+  const token = await getFirebaseIdTokenForApi(force);
   if (token) headers.set("Authorization", `Bearer ${token}`);
+  if (Object.prototype.hasOwnProperty.call(opts, "forceRefreshIdToken")) delete opts.forceRefreshIdToken;
   return fetch(input, { ...opts, headers, credentials: opts.credentials || "include" });
 };
 
@@ -658,7 +660,7 @@ const initGrowthDashboardMetrics = () => {
     const metaEl = document.querySelector('[data-growth-kpi="meta"]');
     if (!(metaEl instanceof HTMLElement)) return;
     try {
-      const res = await fetchWithAuth("/api/growth-goals/current", { method: "GET" });
+      const res = await fetchWithAuth("/api/growth-goals/current", { method: "GET", forceRefreshIdToken: true });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error || "request_failed");
       const goal = data?.goal && typeof data.goal === "object" ? data.goal : null;
