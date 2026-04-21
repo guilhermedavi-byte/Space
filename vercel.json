@@ -1,6 +1,8 @@
 {
   "rewrites": [
     { "source": "/api/crm-test", "destination": "/api/growth-dashboard?api=crm-test" },
+    { "source": "/api/growth-goals/current", "destination": "/api/growth-dashboard?api=growth-goals&mode=current" },
+    { "source": "/api/growth-goals", "destination": "/api/growth-dashboard?api=growth-goals" },
     { "source": "/api/growth-metrics", "destination": "/api/growth-dashboard?api=growth-metrics" },
     { "source": "/api/growth-contratos", "destination": "/api/growth-dashboard?api=growth-contratos" },
     { "source": "/api/zapsign-webhook", "destination": "/api/growth-dashboard?api=zapsign-webhook" },

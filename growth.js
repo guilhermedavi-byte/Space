@@ -511,6 +511,30 @@ const initGrowthDashboardMetrics = () => {
   ensureRealizadoProgressUi();
   updateForecastMetaSub();
 
+  const loadGoal = async () => {
+    const metaEl = document.querySelector('[data-growth-kpi="meta"]');
+    if (!(metaEl instanceof HTMLElement)) return;
+    try {
+      const res = await fetchWithAuth("/api/growth-goals/current", { method: "GET" });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || "request_failed");
+      const goal = data?.goal && typeof data.goal === "object" ? data.goal : null;
+      const valorMeta = goal && Number.isFinite(Number(goal.valorMeta)) ? Number(goal.valorMeta) : NaN;
+      if (!Number.isFinite(valorMeta) || valorMeta <= 0) {
+        metaEl.textContent = "Meta não definida";
+        metaEl.dataset.tone = "muted";
+        return;
+      }
+      metaEl.textContent = formatMoneyNoCentsPtBr(valorMeta);
+      metaEl.dataset.tone = "";
+      ensureRealizadoProgressUi();
+      updateRealizadoProgressUi({ meta: valorMeta, realizado: parseMoneyLoose(document.querySelector('[data-growth-kpi="realizado"]')?.textContent) });
+      updateForecastMetaSub();
+    } catch (error) {
+      // Keep the placeholder meta.
+    }
+  };
+
   const load = async () => {
     try {
       const res = await fetchWithAuth("/api/growth-metrics", { method: "GET" });
@@ -523,6 +547,7 @@ const initGrowthDashboardMetrics = () => {
     }
   };
 
+  loadGoal();
   load();
 };
 

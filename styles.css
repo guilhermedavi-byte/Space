@@ -3924,6 +3924,14 @@ body:not([data-role="admin"]) [data-admin-only] {
   gap: 14px;
 }
 
+.admin-manage-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .admin-manage-title {
   margin: 0;
   font-family: "Inter", "Plus Jakarta Sans", "Avenir Next", sans-serif;
@@ -3932,6 +3940,169 @@ body:not([data-role="admin"]) [data-admin-only] {
   letter-spacing: -0.04em;
   line-height: 1.12;
   color: #ffffff;
+}
+
+.admin-goals-card {
+  padding: 16px 16px;
+  overflow: hidden;
+}
+
+.admin-goals-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.admin-goals-title {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.admin-goals-sub {
+  margin-top: 4px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.admin-goals-table {
+  display: grid;
+  width: 100%;
+  min-width: 620px;
+}
+
+.admin-goals-row {
+  display: grid;
+  grid-template-columns: 140px 160px 120px 170px minmax(0, 1fr) 80px;
+  gap: 10px;
+  align-items: center;
+  padding: 12px 10px;
+  border-radius: 14px;
+}
+
+.admin-goals-row + .admin-goals-row {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.admin-goals-row.is-head {
+  padding-top: 10px;
+  padding-bottom: 10px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.admin-goals-row.is-head span {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.admin-goals-competencia {
+  font-size: 13px;
+  font-weight: 750;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.admin-goals-value {
+  font-size: 13px;
+  font-weight: 750;
+  color: rgba(255, 255, 255, 0.86);
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-goals-updated {
+  font-size: 12px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.admin-goals-by {
+  font-size: 12px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.5);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-badge.is-current {
+  border-color: rgba(255, 86, 79, 0.22);
+  background: rgba(255, 86, 79, 0.08);
+  color: rgba(255, 86, 79, 0.92);
+}
+
+.admin-badge.is-current::before {
+  background: rgba(255, 86, 79, 0.92);
+}
+
+.admin-badge.is-future {
+  border-color: rgba(89, 144, 189, 0.22);
+  background: rgba(89, 144, 189, 0.08);
+  color: rgba(89, 144, 189, 0.92);
+}
+
+.admin-badge.is-future::before {
+  background: rgba(89, 144, 189, 0.92);
+}
+
+.admin-badge.is-past {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.admin-badge.is-past::before {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.admin-goals-action {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.admin-goals-edit {
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  font-weight: 700;
+  transition:
+    transform 160ms ease,
+    background 160ms ease,
+    border-color 160ms ease;
+}
+
+.admin-goals-edit:hover {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 86, 79, 0.22);
+}
+
+.admin-goals-empty,
+.admin-goals-error {
+  margin-top: 12px;
+  font-size: 13px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.admin-goals-error {
+  color: rgba(255, 118, 110, 0.96);
+}
+
+@media (max-width: 840px) {
+  .admin-goals-table {
+    min-width: 0;
+    overflow-x: auto;
+  }
 }
 
 .admin-manage-tools {

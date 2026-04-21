@@ -80,6 +80,10 @@ const adminUsersEmptyGrowth = document.querySelector('[data-admin-users-empty="g
 const adminUsersErrorTeacher = document.querySelector('[data-admin-users-error="teacher"]');
 const adminUsersErrorStudent = document.querySelector('[data-admin-users-error="student"]');
 const adminUsersErrorGrowth = document.querySelector('[data-admin-users-error="growth"]');
+const adminGrowthGoalOpen = document.querySelector("[data-admin-growth-goal-open]");
+const adminGoalsTable = document.querySelector("[data-admin-goals-table]");
+const adminGoalsEmpty = document.querySelector("[data-admin-goals-empty]");
+const adminGoalsError = document.querySelector("[data-admin-goals-error]");
 const modalOverlay = document.querySelector("[data-modal-overlay]");
 const modalTitle = document.querySelector("[data-modal-title]");
 const modalBody = document.querySelector("[data-modal-body]");
@@ -5433,6 +5437,260 @@ let adminUsersState = {
   growth: { rows: [], query: "", loadedAt: 0, isLoading: false },
 };
 
+let adminGrowthGoalsState = {
+  rows: [],
+  byCompetencia: new Map(),
+  currentCompetencia: "",
+  isLoading: false,
+  loadedAt: 0,
+};
+
+const getCompetenciaKeySaoPaulo = (date = new Date()) => {
+  try {
+    const parts = new Intl.DateTimeFormat("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      year: "numeric",
+      month: "2-digit",
+    }).formatToParts(date);
+    const year = parts.find((p) => p.type === "year")?.value || "";
+    const month = parts.find((p) => p.type === "month")?.value || "";
+    if (!year || !month) return "";
+    return `${year}-${month}`;
+  } catch (error) {
+    return "";
+  }
+};
+
+const isValidCompetenciaKey = (value) => /^\d{4}-(0[1-9]|1[0-2])$/.test(String(value || "").trim());
+
+const parseMoneyPtBrLoose = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw) return NaN;
+  const sanitized = raw.replace(/[^\d.,-]/g, "");
+  let normalized = sanitized;
+  if (normalized.includes(",")) {
+    normalized = normalized.replace(/\./g, "").replace(/,/g, ".");
+  } else if (normalized.includes(".")) {
+    const parts = normalized.split(".");
+    const last = parts[parts.length - 1] || "";
+    if (parts.length > 2 || last.length === 3) normalized = parts.join("");
+  }
+  const n = Number(normalized);
+  return Number.isFinite(n) ? n : NaN;
+};
+
+const currencyPtBrNoCents = (value) => {
+  try {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return "—";
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+      maximumFractionDigits: 0,
+      minimumFractionDigits: 0,
+    }).format(n);
+  } catch (error) {
+    return "—";
+  }
+};
+
+const formatCompetenciaLabelPtBr = (competencia) => {
+  const key = String(competencia || "").trim();
+  if (!isValidCompetenciaKey(key)) return key || "—";
+  const [y, m] = key.split("-");
+  const date = new Date(`${y}-${m}-01T12:00:00.000Z`);
+  try {
+    const fmt = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", month: "long", year: "numeric" });
+    const text = fmt.format(date);
+    return text.charAt(0).toUpperCase() + text.slice(1);
+  } catch (error) {
+    return key;
+  }
+};
+
+const renderAdminGrowthGoals = () => {
+  if (!(adminGoalsTable instanceof HTMLElement)) return;
+  if (adminGoalsError instanceof HTMLElement) adminGoalsError.hidden = true;
+
+  const rows = Array.isArray(adminGrowthGoalsState.rows) ? adminGrowthGoalsState.rows : [];
+  if (adminGoalsEmpty instanceof HTMLElement) adminGoalsEmpty.hidden = rows.length > 0;
+
+  adminGoalsTable.innerHTML = `
+    <div class="admin-goals-row is-head">
+      <span>Competência</span>
+      <span>Meta</span>
+      <span>Status</span>
+      <span>Atualizado em</span>
+      <span>Atualizado por</span>
+      <span></span>
+    </div>
+    ${rows
+      .map((g) => {
+        const status = String(g.status || "");
+        const badgeClass =
+          status === "atual" ? "admin-badge is-current" : status === "futura" ? "admin-badge is-future" : "admin-badge is-past";
+        const badgeLabel = status === "atual" ? "Atual" : status === "futura" ? "Futura" : "Passada";
+        const by = String(g.updatedByName || "").trim() || "—";
+        const updatedAt = String(g.updatedAt || "");
+        return `
+          <div class="admin-goals-row" data-admin-goal-row="${escapeHtml(g.competencia)}">
+            <div class="admin-goals-competencia">${escapeHtml(formatCompetenciaLabelPtBr(g.competencia))}</div>
+            <div class="admin-goals-value">${escapeHtml(currencyPtBrNoCents(g.valorMeta))}</div>
+            <div><span class="${badgeClass}">${badgeLabel}</span></div>
+            <div class="admin-goals-updated">${escapeHtml(formatAdminDate(updatedAt))}</div>
+            <div class="admin-goals-by" title="${escapeHtml(by)}">${escapeHtml(by)}</div>
+            <div class="admin-goals-action">
+              <button class="admin-goals-edit" type="button" data-admin-goal-edit="${escapeHtml(g.competencia)}">Editar</button>
+            </div>
+          </div>
+        `;
+      })
+      .join("")}
+  `;
+};
+
+const loadAdminGrowthGoals = async () => {
+  if (adminGrowthGoalsState.isLoading) return;
+  if (currentRole !== "admin") return;
+  if (!(adminGoalsTable instanceof HTMLElement)) return;
+
+  adminGrowthGoalsState.isLoading = true;
+  if (adminGoalsError instanceof HTMLElement) adminGoalsError.hidden = true;
+  if (adminGoalsEmpty instanceof HTMLElement) adminGoalsEmpty.hidden = true;
+  adminGoalsTable.innerHTML = `<div class="growth-contracts-loading">Carregando...</div>`;
+
+  try {
+    const res = await fetchWithAuth("/api/growth-goals", { method: "GET" });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error || "request_failed");
+
+    const goals = Array.isArray(data?.goals) ? data.goals : [];
+    adminGrowthGoalsState.currentCompetencia = String(data?.currentCompetencia || getCompetenciaKeySaoPaulo());
+    adminGrowthGoalsState.rows = goals;
+    adminGrowthGoalsState.byCompetencia = new Map(goals.map((g) => [String(g.competencia || ""), g]));
+    adminGrowthGoalsState.loadedAt = Date.now();
+    renderAdminGrowthGoals();
+  } catch (error) {
+    console.error("[admin] load growth-goals failed:", error);
+    adminGrowthGoalsState.rows = [];
+    adminGrowthGoalsState.byCompetencia = new Map();
+    adminGoalsTable.innerHTML = "";
+    if (adminGoalsEmpty instanceof HTMLElement) adminGoalsEmpty.hidden = true;
+    if (adminGoalsError instanceof HTMLElement) adminGoalsError.hidden = false;
+  } finally {
+    adminGrowthGoalsState.isLoading = false;
+  }
+};
+
+const openAdminGrowthGoalModal = (presetCompetencia) => {
+  if (currentRole !== "admin") return;
+  const currentKey = adminGrowthGoalsState.currentCompetencia || getCompetenciaKeySaoPaulo();
+  const competencia = presetCompetencia && isValidCompetenciaKey(presetCompetencia) ? presetCompetencia : currentKey;
+  const existing = adminGrowthGoalsState.byCompetencia.get(competencia);
+
+  const bodyHtml = `
+    <form class="auth-form" data-growth-goal-form>
+      <div class="auth-field">
+        <div class="auth-label">COMPETÊNCIA</div>
+        <input class="auth-input" type="month" data-goal-competencia value="${escapeHtml(competencia)}" />
+        <div class="auth-field-hint">Selecione mês/ano. Metas passadas não podem ser criadas.</div>
+      </div>
+
+      <div class="auth-field">
+        <div class="auth-label">VALOR DA META</div>
+        <input class="auth-input" type="text" inputmode="decimal" placeholder="R$ 80.000" data-goal-valor value="${
+          existing?.valorMeta ? escapeHtml(String(existing.valorMeta)) : ""
+        }" />
+        <div class="auth-field-error" data-goal-valor-error hidden>Valor inválido.</div>
+      </div>
+
+      <div class="auth-form-error" data-goal-error hidden>Não foi possível salvar agora.</div>
+      <div class="auth-form-success" data-goal-success hidden>Meta salva com sucesso.</div>
+    </form>
+  `;
+
+  openModal({
+    title: "Definir meta do mês",
+    bodyHtml,
+    primaryLabel: "Salvar",
+    secondaryLabel: "Voltar",
+    hideSecondary: false,
+    showTrash: false,
+    onPrimary: () => {
+      const form = modalBody?.querySelector("[data-growth-goal-form]");
+      if (!(form instanceof HTMLFormElement)) return false;
+      const competenciaEl = form.querySelector("[data-goal-competencia]");
+      const valorEl = form.querySelector("[data-goal-valor]");
+      const valorErr = form.querySelector("[data-goal-valor-error]");
+      const errEl = form.querySelector("[data-goal-error]");
+      const okEl = form.querySelector("[data-goal-success]");
+
+      const competenciaValue = competenciaEl instanceof HTMLInputElement ? String(competenciaEl.value || "").trim() : "";
+      const valorRaw = valorEl instanceof HTMLInputElement ? String(valorEl.value || "").trim() : "";
+      const valorMeta = parseMoneyPtBrLoose(valorRaw);
+
+      const competenciaOk = isValidCompetenciaKey(competenciaValue);
+      const valorOk = Number.isFinite(valorMeta) && valorMeta > 0;
+
+      if (valorErr instanceof HTMLElement) valorErr.hidden = valorOk;
+      if (valorEl instanceof HTMLElement) valorEl.classList.toggle("is-error", !valorOk);
+      if (errEl instanceof HTMLElement) errEl.hidden = true;
+      if (okEl instanceof HTMLElement) okEl.hidden = true;
+
+      if (!competenciaOk || !valorOk) return false;
+      if (competenciaValue < currentKey) {
+        if (errEl instanceof HTMLElement) {
+          errEl.textContent = "Não é possível cadastrar meta para um mês passado.";
+          errEl.hidden = false;
+        }
+        return false;
+      }
+
+      (async () => {
+        const previousPrimaryLabel = modalPrimary ? modalPrimary.textContent : "";
+        try {
+          if (modalPrimary) modalPrimary.disabled = true;
+          if (modalSecondary) modalSecondary.disabled = true;
+          if (modalPrimary) modalPrimary.textContent = "Salvando…";
+
+          const res = await fetchWithAuth("/api/growth-goals", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ competencia: competenciaValue, valorMeta }),
+          });
+          const data = await res.json().catch(() => null);
+          if (!res.ok) throw new Error(data?.error || "request_failed");
+
+          if (okEl instanceof HTMLElement) okEl.hidden = false;
+          window.setTimeout(() => {
+            closeModal();
+          }, 450);
+
+          await loadAdminGrowthGoals();
+        } catch (e) {
+          console.error("[admin] save growth-goal failed:", e);
+          if (errEl instanceof HTMLElement) {
+            errEl.textContent = "Não foi possível salvar agora. Tente novamente.";
+            errEl.hidden = false;
+          }
+        } finally {
+          if (modalPrimary) modalPrimary.disabled = false;
+          if (modalSecondary) modalSecondary.disabled = false;
+          if (modalPrimary) modalPrimary.textContent = previousPrimaryLabel || "Salvar";
+        }
+      })();
+
+      return false;
+    },
+  });
+
+  window.setTimeout(() => {
+    const form = modalBody?.querySelector("[data-growth-goal-form]");
+    const competenciaEl = form?.querySelector("[data-goal-competencia]");
+    if (competenciaEl instanceof HTMLInputElement) competenciaEl.focus();
+  }, 0);
+};
+
 const getAdminUsersUiRefs = (type) => {
   const safeType = type === "teacher" ? "teacher" : type === "growth" ? "growth" : "student";
   if (safeType === "teacher") {
@@ -6070,6 +6328,7 @@ const showPanel = (panelName) => {
     window.scrollTo({ top: 0, behavior: "smooth" });
     if (currentRole === "admin") {
       loadUsersFromFirestore("growth");
+      loadAdminGrowthGoals();
     }
     return;
   }
@@ -6340,6 +6599,21 @@ document.addEventListener("click", (event) => {
   if (target instanceof Element) {
     // Admin manage tables: actions menu + operations.
     if (currentRole === "admin") {
+      const goalOpen = target.closest("[data-admin-growth-goal-open]");
+      if (goalOpen instanceof HTMLButtonElement) {
+        event.preventDefault();
+        openAdminGrowthGoalModal();
+        return;
+      }
+
+      const goalEdit = target.closest("[data-admin-goal-edit]");
+      if (goalEdit instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const competencia = String(goalEdit.getAttribute("data-admin-goal-edit") || "").trim();
+        openAdminGrowthGoalModal(competencia);
+        return;
+      }
+
       const trigger = target.closest("[data-admin-actions-trigger]");
       if (trigger instanceof HTMLButtonElement) {
         event.preventDefault();

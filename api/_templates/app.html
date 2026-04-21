@@ -1456,9 +1456,14 @@
           <div class="admin-manage-shell" data-admin-manage="growth">
             <div class="admin-manage-head">
               <h2 class="admin-manage-title">Growth</h2>
-              <button class="button button-solid button-small" type="button" data-admin-new-user="growth">
-                + Adicionar usuário
-              </button>
+              <div class="admin-manage-actions">
+                <button class="button button-outline button-small" type="button" data-admin-growth-goal-open>
+                  Definir meta do mês
+                </button>
+                <button class="button button-solid button-small" type="button" data-admin-new-user="growth">
+                  + Adicionar usuário
+                </button>
+              </div>
             </div>
 
             <div class="admin-manage-tools">
@@ -1476,6 +1481,18 @@
               <div class="admin-users-table" data-admin-users-table="growth"></div>
               <div class="admin-users-empty" data-admin-users-empty="growth" hidden>Nenhum usuário Growth encontrado.</div>
               <div class="admin-users-error" data-admin-users-error="growth" hidden>Não foi possível carregar os usuários Growth.</div>
+            </article>
+
+            <article class="surface-card admin-goals-card" aria-label="Metas mensais do Growth">
+              <div class="admin-goals-head">
+                <div>
+                  <div class="admin-goals-title">Metas mensais</div>
+                  <div class="admin-goals-sub">Uma meta por competência (mês/ano). Atualize o mês atual ou programe meses futuros.</div>
+                </div>
+              </div>
+              <div class="admin-goals-table" data-admin-goals-table></div>
+              <div class="admin-goals-empty" data-admin-goals-empty hidden>Nenhuma meta cadastrada.</div>
+              <div class="admin-goals-error" data-admin-goals-error hidden>Não foi possível carregar as metas.</div>
             </article>
           </div>
         </section>

@@ -24,6 +24,8 @@ const sendRedirect = (res, location) => {
   res.end("");
 };
 
+const GOALS_COLLECTION = "growthGoals";
+
 const safeJsonForHtml = (value) => {
   // Prevent `</script>` injection when embedding JSON in HTML.
   return JSON.stringify(value ?? {}).replace(/</g, "\\u003c");
@@ -244,6 +246,47 @@ const requireInternalAuth = (req, res) => {
   };
 };
 
+const requireRoleAuthWithFirebaseToken = async (req, res, allowedRoles) => {
+  const session = getSessionFromRequest(req);
+  if (!session) {
+    sendJson(res, 401, { error: "unauthorized" });
+    return null;
+  }
+
+  const role = normalizeRole(session.role);
+  const allowed = Array.isArray(allowedRoles) ? allowedRoles : [];
+  if (!allowed.includes(role)) {
+    sendJson(res, 403, { error: "forbidden" });
+    return null;
+  }
+
+  const requesterId = String(session.sub || "");
+  const idToken = getBearerTokenFromRequest(req);
+  if (!requesterId || !idToken) {
+    sendJson(res, 401, { error: "unauthorized" });
+    return null;
+  }
+
+  try {
+    const decoded = await verifyFirebaseIdToken(idToken);
+    if (decoded.uid !== requesterId) {
+      sendJson(res, 401, { error: "invalid_credentials" });
+      return null;
+    }
+  } catch (error) {
+    sendJson(res, 401, { error: "invalid_credentials" });
+    return null;
+  }
+
+  return {
+    id: requesterId,
+    role,
+    name: String(session.name || ""),
+    email: String(session.email || ""),
+    idToken,
+  };
+};
+
 const normalizeKey = (value) => {
   const raw = String(value || "").trim();
   if (!raw) return "";
@@ -301,6 +344,37 @@ const extractBusinessesArray = (payload) => {
   if (Array.isArray(payload.data)) return payload.data;
   if (payload.data && Array.isArray(payload.data.businesses)) return payload.data.businesses;
   return [];
+};
+
+const isValidCompetencia = (value) => {
+  const raw = String(value || "").trim();
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(raw)) return false;
+  return true;
+};
+
+const getCurrentCompetenciaKeySaoPaulo = () => getMonthKeySaoPaulo(new Date());
+
+const competenciaStatus = (competenciaKey, currentKey) => {
+  const c = String(competenciaKey || "").trim();
+  const cur = String(currentKey || "").trim();
+  if (!c || !cur) return "unknown";
+  if (c === cur) return "atual";
+  return c > cur ? "futura" : "passada";
+};
+
+const firestoreGetDocumentWithAccessToken = async ({ docPath, accessToken } = {}) => {
+  const path = String(docPath || "").replace(/^\/+/, "");
+  if (!path) throw new Error("missing_doc");
+  const token = String(accessToken || "").trim();
+
+  const params = new URLSearchParams();
+  params.set("key", API_KEY);
+  const url = `${FIRESTORE_BASE}/${encodeURI(path)}?${params.toString()}`;
+
+  return requestJsonRaw(url, {
+    method: "GET",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
 };
 
 const getMonthKeySaoPaulo = (date) => {
@@ -498,6 +572,214 @@ const fetchAllCrmBusinesses = async () => {
       expectedTotal,
     },
   };
+};
+
+const decodeGoalDoc = (doc) => {
+  if (!doc || typeof doc !== "object") return null;
+  const id = getDocIdFromName(doc.name);
+  if (!id) return null;
+  const fields = decodeFields(doc);
+
+  const competencia = typeof fields.competencia === "string" ? fields.competencia.trim() : id;
+  const valorMeta = Number.isFinite(Number(fields.valorMeta)) ? Number(fields.valorMeta) : null;
+  const createdAt = fields.createdAt instanceof Date ? fields.createdAt : null;
+  const updatedAt = fields.updatedAt instanceof Date ? fields.updatedAt : null;
+  const createdBy = typeof fields.createdBy === "string" ? fields.createdBy : "";
+  const updatedBy = typeof fields.updatedBy === "string" ? fields.updatedBy : "";
+  const createdByName = typeof fields.createdByName === "string" ? fields.createdByName : "";
+  const updatedByName = typeof fields.updatedByName === "string" ? fields.updatedByName : "";
+
+  if (!isValidCompetencia(competencia)) return null;
+
+  return {
+    id,
+    competencia,
+    valorMeta,
+    createdAt: createdAt ? createdAt.toISOString() : null,
+    updatedAt: updatedAt ? updatedAt.toISOString() : null,
+    createdBy: createdBy || null,
+    updatedBy: updatedBy || null,
+    createdByName: createdByName || null,
+    updatedByName: updatedByName || null,
+  };
+};
+
+const handleGrowthGoalsApi = async (req, res, url) => {
+  const mode = String(url.searchParams.get("mode") || "").trim().toLowerCase();
+
+  if (req.method === "GET" || req.method === "HEAD") {
+    const auth = await requireRoleAuthWithFirebaseToken(req, res, ["admin", "growth"]);
+    if (!auth) return;
+
+    const currentKey = getCurrentCompetenciaKeySaoPaulo();
+    const requestedCompetencia = String(url.searchParams.get("competencia") || "").trim();
+    const competencia = mode === "current" ? currentKey : requestedCompetencia;
+
+    let accessToken = "";
+    try {
+      const t = await getGoogleAccessToken({ scope: "https://www.googleapis.com/auth/datastore" });
+      accessToken = String(t?.accessToken || "").trim();
+    } catch (error) {
+      accessToken = "";
+    }
+
+    // Single goal (current or explicit competence)
+    if (competencia) {
+      if (!isValidCompetencia(competencia)) {
+        sendJson(res, 400, { error: "invalid_competencia" });
+        return;
+      }
+
+      try {
+        const docPath = `${GOALS_COLLECTION}/${encodeURIComponent(competencia)}`;
+        const snap = accessToken
+          ? await firestoreGetDocumentWithAccessToken({ docPath, accessToken })
+          : await firestoreGetDocument({ docPath, idToken: auth.idToken });
+
+        if (!snap.ok) {
+          if (snap.status === 404) {
+            sendJson(res, 200, { competencia, goal: null });
+            return;
+          }
+          throw new Error("firestore_get_failed");
+        }
+
+        const goal = decodeGoalDoc(snap.data);
+        sendJson(res, 200, { competencia, goal });
+        return;
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.error("[api] growth-goals get failed", error);
+        sendJson(res, 500, { error: "internal_error" });
+        return;
+      }
+    }
+
+    // List goals
+    try {
+      const resList = accessToken
+        ? await firestoreListDocumentsWithAccessToken({ collectionPath: GOALS_COLLECTION, accessToken, pageSize: 2000 })
+        : await firestoreListDocuments({ collectionPath: GOALS_COLLECTION, idToken: auth.idToken, pageSize: 2000 });
+
+      if (!resList.ok) throw new Error("firestore_list_failed");
+      const docs = Array.isArray(resList.documents)
+        ? resList.documents
+        : Array.isArray(resList.data?.documents)
+          ? resList.data.documents
+          : [];
+
+      const goals = docs
+        .map((doc) => decodeGoalDoc(doc))
+        .filter(Boolean)
+        .sort((a, b) => String(b.competencia || "").localeCompare(String(a.competencia || "")))
+        .map((g) => ({
+          ...g,
+          status: competenciaStatus(g.competencia, currentKey),
+        }));
+
+      sendJson(res, 200, { currentCompetencia: currentKey, goals });
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error("[api] growth-goals list failed", error);
+      sendJson(res, 500, { error: "internal_error" });
+    }
+    return;
+  }
+
+  if (req.method !== "POST") {
+    res.setHeader("Allow", "GET, HEAD, POST");
+    sendJson(res, 405, { error: "method_not_allowed" });
+    return;
+  }
+
+  const auth = await requireRoleAuthWithFirebaseToken(req, res, ["admin"]);
+  if (!auth) return;
+
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch (error) {
+    sendJson(res, 400, { error: "invalid_json" });
+    return;
+  }
+
+  const competencia = String(body?.competencia || "").trim();
+  const valorMeta = parseNumber(body?.valorMeta);
+  if (!isValidCompetencia(competencia)) {
+    sendJson(res, 400, { error: "invalid_competencia" });
+    return;
+  }
+  if (!Number.isFinite(valorMeta) || valorMeta <= 0) {
+    sendJson(res, 400, { error: "invalid_valor" });
+    return;
+  }
+
+  const currentKey = getCurrentCompetenciaKeySaoPaulo();
+  if (competencia < currentKey) {
+    sendJson(res, 400, { error: "past_competencia_not_allowed" });
+    return;
+  }
+
+  let accessToken = "";
+  try {
+    const t = await getGoogleAccessToken({ scope: "https://www.googleapis.com/auth/datastore" });
+    accessToken = String(t?.accessToken || "").trim();
+  } catch (error) {
+    accessToken = "";
+  }
+
+  const docPath = `${GOALS_COLLECTION}/${encodeURIComponent(competencia)}`;
+  const now = new Date();
+
+  let exists = false;
+  try {
+    const snap = accessToken
+      ? await firestoreGetDocumentWithAccessToken({ docPath, accessToken })
+      : await firestoreGetDocument({ docPath, idToken: auth.idToken });
+    exists = snap.ok;
+  } catch (error) {
+    exists = false;
+  }
+
+  const base = {
+    competencia,
+    valorMeta,
+    updatedAt: now,
+    updatedBy: auth.id,
+    updatedByName: auth.name || null,
+  };
+  const data = exists
+    ? base
+    : {
+        ...base,
+        createdAt: now,
+        createdBy: auth.id,
+        createdByName: auth.name || null,
+      };
+
+  try {
+    const patch = accessToken
+      ? await firestorePatchDocumentWithAccessToken({
+          docPath,
+          accessToken,
+          data,
+          updateMaskPaths: Object.keys(data),
+        })
+      : await firestorePatchDocument({
+          docPath,
+          idToken: auth.idToken,
+          data,
+          updateMaskPaths: Object.keys(data),
+        });
+
+    if (!patch.ok) throw new Error("firestore_patch_failed");
+
+    sendJson(res, 200, { ok: true, competencia, action: exists ? "updated" : "created" });
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error("[api] growth-goals upsert failed", error);
+    sendJson(res, 500, { error: "internal_error" });
+  }
 };
 
 const handleGrowthMetricsApi = async (req, res) => {
@@ -1297,6 +1579,11 @@ module.exports = async (req, res) => {
 
   if (api === "growth-metrics") {
     await handleGrowthMetricsApi(req, res);
+    return;
+  }
+
+  if (api === "growth-goals") {
+    await handleGrowthGoalsApi(req, res, url);
     return;
   }
 
