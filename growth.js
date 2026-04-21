@@ -212,6 +212,23 @@ const formatCpf = (value) => {
   return out;
 };
 
+const formatWhatsapp = (value) => {
+  const digits = digitsOnly(value).slice(0, 11);
+  if (!digits) return "";
+  if (digits.length <= 2) return digits;
+  const ddd = digits.slice(0, 2);
+  const rest = digits.slice(2);
+  if (rest.length <= 4) return `(${ddd}) ${rest}`;
+  if (rest.length <= 8) return `(${ddd}) ${rest.slice(0, 4)}-${rest.slice(4)}`;
+  return `(${ddd}) ${rest.slice(0, 5)}-${rest.slice(5, 9)}`;
+};
+
+const isValidEmail = (value) => {
+  const email = String(value || "").trim();
+  if (!email) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+};
+
 const currencyPtBr = (value) => {
   try {
     const n = Number(value);
@@ -454,7 +471,7 @@ const openCreateModal = () => {
     dateField.value = `${yyyy}-${mm}-${dd}`;
   }
 
-  ["nomeCompleto", "cpf", "endereco", "valorOriginal", "valorDesconto"].forEach((k) => {
+  ["nomeCompleto", "email", "whatsapp", "cpf", "endereco", "valorOriginal", "valorDesconto"].forEach((k) => {
     const el = getCreateField(k);
     if (el instanceof HTMLInputElement) el.value = "";
   });
@@ -480,6 +497,8 @@ const createContract = async (sendNow) => {
   clearCreateErrors();
 
   const nomeEl = getCreateField("nomeCompleto");
+  const emailEl = getCreateField("email");
+  const whatsappEl = getCreateField("whatsapp");
   const cpfEl = getCreateField("cpf");
   const endEl = getCreateField("endereco");
   const origEl = getCreateField("valorOriginal");
@@ -487,6 +506,8 @@ const createContract = async (sendNow) => {
   const dateEl = getCreateField("data");
 
   const nomeCompleto = nomeEl instanceof HTMLInputElement ? nomeEl.value.trim() : "";
+  const email = emailEl instanceof HTMLInputElement ? emailEl.value.trim().toLowerCase() : "";
+  const whatsapp = whatsappEl instanceof HTMLInputElement ? digitsOnly(whatsappEl.value) : "";
   const cpf = cpfEl instanceof HTMLInputElement ? digitsOnly(cpfEl.value) : "";
   const endereco = endEl instanceof HTMLInputElement ? endEl.value.trim() : "";
   const valorOriginalRaw = origEl instanceof HTMLInputElement ? origEl.value.trim() : "";
@@ -498,6 +519,14 @@ const createContract = async (sendNow) => {
   let ok = true;
   if (!nomeCompleto) {
     showCreateError("nomeCompleto", "Informe o nome completo.");
+    ok = false;
+  }
+  if (!email || !isValidEmail(email)) {
+    showCreateError("email", email ? "E-mail inválido." : "Informe o e-mail.");
+    ok = false;
+  }
+  if (!whatsapp || whatsapp.length < 10) {
+    showCreateError("whatsapp", "Informe um WhatsApp válido.");
     ok = false;
   }
   if (!cpf || cpf.length !== 11) {
@@ -528,6 +557,8 @@ const createContract = async (sendNow) => {
       body: JSON.stringify({
         action: "create",
         nomeCompleto,
+        email,
+        whatsapp,
         cpf,
         endereco,
         valorOriginal,
@@ -538,15 +569,19 @@ const createContract = async (sendNow) => {
     });
 
     const dataRes = await res.json().catch(() => null);
-    if (!res.ok) {
-      const msg =
-        dataRes?.error === "invalid_cpf"
-          ? "CPF inválido."
-          : dataRes?.error === "invalid_discount"
-            ? "O desconto não pode ser maior que o valor original."
-            : dataRes?.error === "zapsign_failed"
-              ? "Erro ao enviar para assinatura. Tente novamente."
-              : "Não foi possível salvar agora. Tente novamente.";
+      if (!res.ok) {
+        const msg =
+          dataRes?.error === "invalid_cpf"
+            ? "CPF inválido."
+            : dataRes?.error === "invalid_email"
+              ? "E-mail inválido."
+              : dataRes?.error === "invalid_whatsapp"
+                ? "WhatsApp inválido."
+            : dataRes?.error === "invalid_discount"
+              ? "O desconto não pode ser maior que o valor original."
+              : dataRes?.error === "zapsign_failed"
+                ? "Erro ao enviar para assinatura. Tente novamente."
+                : "Não foi possível salvar agora. Tente novamente.";
 
       if (contractsEls.createFeedback instanceof HTMLElement) {
         contractsEls.createFeedback.textContent = msg;
@@ -616,6 +651,8 @@ const openDetailsModal = (contract) => {
 
   contractsEls.detailsBody.innerHTML = `
     <div class="modal-list-row"><strong>Nome</strong><span>${contract?.nomeCompleto || "—"}</span></div>
+    <div class="modal-list-row"><strong>E-mail</strong><span>${contract?.email || "—"}</span></div>
+    <div class="modal-list-row"><strong>WhatsApp</strong><span>${formatWhatsapp(contract?.whatsapp || "") || "—"}</span></div>
     <div class="modal-list-row"><strong>CPF</strong><span>${formatCpf(contract?.cpf || "")}</span></div>
     <div class="modal-list-row"><strong>Endereço</strong><span>${contract?.endereco || "—"}</span></div>
     <div class="modal-list-row"><strong>Valor original</strong><span>${currencyPtBr(contract?.valorOriginal)}</span></div>
@@ -716,6 +753,13 @@ const initContracts = () => {
   if (cpfInput instanceof HTMLInputElement) {
     cpfInput.addEventListener("input", () => {
       cpfInput.value = formatCpf(cpfInput.value);
+    });
+  }
+
+  const whatsappInput = getCreateField("whatsapp");
+  if (whatsappInput instanceof HTMLInputElement) {
+    whatsappInput.addEventListener("input", () => {
+      whatsappInput.value = formatWhatsapp(whatsappInput.value);
     });
   }
 

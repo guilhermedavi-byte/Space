@@ -61,6 +61,23 @@ const parseNumber = (value) => {
 
 const digitsOnly = (value) => String(value || "").replace(/\D+/g, "");
 
+const formatWhatsapp = (value) => {
+  const digits = digitsOnly(value).slice(0, 11);
+  if (!digits) return "";
+  if (digits.length <= 2) return digits;
+  const ddd = digits.slice(0, 2);
+  const rest = digits.slice(2);
+  if (rest.length <= 4) return `(${ddd}) ${rest}`;
+  if (rest.length <= 8) return `(${ddd}) ${rest.slice(0, 4)}-${rest.slice(4)}`;
+  return `(${ddd}) ${rest.slice(0, 5)}-${rest.slice(5, 9)}`;
+};
+
+const isValidEmail = (value) => {
+  const email = String(value || "").trim();
+  if (!email) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+};
+
 const dateToPtBr = (date) => {
   try {
     const d = date instanceof Date ? date : new Date(date);
@@ -184,6 +201,8 @@ const decodeContratoDoc = (doc) => {
   const fields = decodeFields(doc);
 
   const nomeCompleto = typeof fields.nomeCompleto === "string" ? fields.nomeCompleto.trim() : "";
+  const email = typeof fields.email === "string" ? fields.email.trim().toLowerCase() : "";
+  const whatsapp = typeof fields.whatsapp === "string" ? digitsOnly(fields.whatsapp) : "";
   const cpf = typeof fields.cpf === "string" ? digitsOnly(fields.cpf) : "";
   const endereco = typeof fields.endereco === "string" ? fields.endereco.trim() : "";
   const status = String(fields.status || "").trim().toLowerCase() || "rascunho";
@@ -204,6 +223,8 @@ const decodeContratoDoc = (doc) => {
   return {
     id,
     nomeCompleto,
+    email: email || null,
+    whatsapp: whatsapp || null,
     cpf,
     endereco,
     valorOriginal,
@@ -220,7 +241,7 @@ const decodeContratoDoc = (doc) => {
   };
 };
 
-const callZapSignCreateDoc = async ({ nomeCompleto, cpf, endereco, valorOriginal, valorDesconto, dataPt } = {}) => {
+const callZapSignCreateDoc = async ({ nomeCompleto, cpf, endereco, valorOriginal, valorDesconto, dataPt, email, telefone } = {}) => {
   // Env vars required on Vercel:
   // - ZAPSIGN_API_TOKEN
   // - ZAPSIGN_TEMPLATE_TOKEN
@@ -234,11 +255,27 @@ const callZapSignCreateDoc = async ({ nomeCompleto, cpf, endereco, valorOriginal
   }
 
   const url = "https://api.zapsign.com.br/api/v1/models/create-doc/";
+  const emailValue = String(email || "").trim();
+  const telefoneDigits = digitsOnly(telefone).slice(-11);
+  const telefoneValue = formatWhatsapp(telefoneDigits);
   const payload = {
     template_token: templateToken,
     signer_name: String(nomeCompleto || "").trim(),
+    signers: [
+      {
+        name: String(nomeCompleto || "").trim(),
+        email: emailValue,
+        phone_country: "55",
+        phone_number: telefoneDigits,
+        lock_name: true,
+        lock_email: true,
+        lock_phone: true,
+      },
+    ],
     data: [
       { de: "{{NOME_COMPLETO}}", para: String(nomeCompleto || "").trim() },
+      { de: "{{EMAIL}}", para: emailValue },
+      { de: "{{TELEFONE}}", para: telefoneValue || telefoneDigits },
       { de: "{{CPF}}", para: String(cpf || "").trim() },
       { de: "{{ENDERECO}}", para: String(endereco || "").trim() },
       { de: "{{VALOR_ORIGINAL}}", para: currencyPtBr(valorOriginal) },
@@ -397,15 +434,17 @@ const handleGrowthContractsApi = async (req, res, url) => {
       return;
     }
 
-    try {
-      const z = await callZapSignCreateDoc({
-        nomeCompleto: contrato.nomeCompleto,
-        cpf: contrato.cpf,
-        endereco: contrato.endereco,
-        valorOriginal: contrato.valorOriginal,
-        valorDesconto: contrato.valorDesconto,
-        dataPt: contrato.data || dateToPtBr(new Date()),
-      });
+	    try {
+	      const z = await callZapSignCreateDoc({
+	        nomeCompleto: contrato.nomeCompleto,
+	        email: contrato.email,
+	        telefone: contrato.whatsapp,
+	        cpf: contrato.cpf,
+	        endereco: contrato.endereco,
+	        valorOriginal: contrato.valorOriginal,
+	        valorDesconto: contrato.valorDesconto,
+	        dataPt: contrato.data || dateToPtBr(new Date()),
+	      });
 
       const patchData = {
         status: "enviado",
@@ -433,6 +472,8 @@ const handleGrowthContractsApi = async (req, res, url) => {
 
   // Create
   const nomeCompleto = String(body?.nomeCompleto || "").trim();
+  const email = String(body?.email || "").trim().toLowerCase();
+  const whatsappDigits = digitsOnly(body?.whatsapp).slice(-11);
   const cpfDigits = digitsOnly(body?.cpf);
   const endereco = String(body?.endereco || "").trim();
   const valorOriginal = parseNumber(body?.valorOriginal);
@@ -444,8 +485,16 @@ const handleGrowthContractsApi = async (req, res, url) => {
 
   const sendNow = Boolean(body?.sendNow || body?.enviarAgora);
 
-  if (!nomeCompleto || !cpfDigits || !endereco || !Number.isFinite(valorOriginal)) {
+  if (!nomeCompleto || !email || !whatsappDigits || !cpfDigits || !endereco || !Number.isFinite(valorOriginal)) {
     sendJson(res, 400, { error: "invalid_request" });
+    return;
+  }
+  if (!isValidEmail(email)) {
+    sendJson(res, 400, { error: "invalid_email" });
+    return;
+  }
+  if (whatsappDigits.length < 10) {
+    sendJson(res, 400, { error: "invalid_whatsapp" });
     return;
   }
   if (cpfDigits.length !== 11) {
@@ -464,6 +513,8 @@ const handleGrowthContractsApi = async (req, res, url) => {
   const id = buildId("contr");
   const baseData = {
     nomeCompleto,
+    email,
+    whatsapp: whatsappDigits,
     cpf: cpfDigits,
     endereco,
     valorOriginal,
@@ -499,15 +550,17 @@ const handleGrowthContractsApi = async (req, res, url) => {
     return;
   }
 
-  try {
-    const z = await callZapSignCreateDoc({
-      nomeCompleto,
-      cpf: cpfDigits,
-      endereco,
-      valorOriginal,
-      valorDesconto,
-      dataPt,
-    });
+	  try {
+	    const z = await callZapSignCreateDoc({
+	      nomeCompleto,
+	      email,
+	      telefone: whatsappDigits,
+	      cpf: cpfDigits,
+	      endereco,
+	      valorOriginal,
+	      valorDesconto,
+	      dataPt,
+	    });
 
     const patchData = {
       status: "enviado",
@@ -1112,6 +1165,25 @@ module.exports = async (req, res) => {
               <span>NOME COMPLETO</span>
               <input class="modal-input" type="text" placeholder="Nome completo do aluno" data-contract-field="nomeCompleto" />
               <div class="modal-inline-error" data-contract-error="nomeCompleto" hidden>Informe o nome completo.</div>
+            </label>
+
+            <label class="modal-field">
+              <span>E-MAIL</span>
+              <input class="modal-input" type="email" placeholder="seu@email.com" autocomplete="email" data-contract-field="email" />
+              <div class="modal-inline-error" data-contract-error="email" hidden>E-mail inválido.</div>
+            </label>
+
+            <label class="modal-field">
+              <span>WHATSAPP</span>
+              <input
+                class="modal-input"
+                type="tel"
+                inputmode="numeric"
+                placeholder="(11) 99999-9999"
+                autocomplete="tel"
+                data-contract-field="whatsapp"
+              />
+              <div class="modal-inline-error" data-contract-error="whatsapp" hidden>Informe um WhatsApp válido.</div>
             </label>
 
             <label class="modal-field">
