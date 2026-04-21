@@ -192,6 +192,203 @@ logoutButtons.forEach((btn) => {
 });
 
 /* =========================
+   Métricas (Growth Dashboard)
+   ========================= */
+
+const dashboardRoot = document.querySelector("[data-growth-dashboard]");
+
+const formatPercentPtBr = (value, decimals = 1) => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "—";
+  const d = Number.isFinite(Number(decimals)) ? Number(decimals) : 1;
+  return `${n.toFixed(Math.max(0, Math.min(d, 2))).replace(".", ",")}%`;
+};
+
+const formatMoneyNoCentsPtBr = (value) => {
+  try {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return "—";
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+      maximumFractionDigits: 0,
+      minimumFractionDigits: 0,
+    }).format(n);
+  } catch (error) {
+    return "—";
+  }
+};
+
+const getInitialsShort = (rawName) => {
+  const name = String(rawName || "").trim();
+  if (!name) return "--";
+  const parts = name.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+};
+
+const planLabelForUi = (raw) => {
+  const name = String(raw || "").toLowerCase();
+  if (name.includes("diamond")) return "Diamond";
+  if (name.includes("gold")) return "Gold";
+  if (name.includes("turma")) return "Turma";
+  return "Sem plano";
+};
+
+const buildPlansPieBackground = ({ turma = 0, gold = 0, diamond = 0 } = {}) => {
+  const t = Math.max(0, Number(turma) || 0);
+  const g = Math.max(0, Number(gold) || 0);
+  const d = Math.max(0, Number(diamond) || 0);
+  const total = t + g + d;
+  if (total <= 0) {
+    return "conic-gradient(rgba(255,255,255,0.06) 0deg 360deg)";
+  }
+
+  const tDeg = (t / total) * 360;
+  const gDeg = (g / total) * 360;
+  const a1 = tDeg;
+  const a2 = tDeg + gDeg;
+
+  // Keep the same palette used in CSS for the dashboard.
+  const cTurma = "rgba(251, 191, 36, 0.92)";
+  const cGold = "rgba(89, 144, 189, 0.92)";
+  const cDiamond = "rgba(255, 78, 70, 0.92)";
+
+  return `conic-gradient(${cTurma} 0deg ${a1}deg, ${cGold} ${a1}deg ${a2}deg, ${cDiamond} ${a2}deg 360deg)`;
+};
+
+const renderGrowthRanking = (rows) => {
+  const list = document.querySelector("[data-growth-ranking]");
+  if (!(list instanceof HTMLElement)) return;
+
+  const items = Array.isArray(rows) ? rows.filter(Boolean) : [];
+  if (!items.length) {
+    list.innerHTML = `
+      <div class="growth-v2-rank-row" style="padding: 18px 16px; opacity: 0.7;">
+        <div class="growth-v2-rank-pos">—</div>
+        <div class="growth-v2-rank-vendor">
+          <span class="growth-v2-rank-avatar is-blue" aria-hidden="true">--</span>
+          <span class="growth-v2-rank-name">Nenhuma venda no período</span>
+        </div>
+        <div class="growth-v2-rank-sales">0</div>
+        <div class="growth-v2-rank-value">${formatMoneyNoCentsPtBr(0)}</div>
+        <div class="growth-v2-rank-bar" aria-hidden="true"><span class="is-blue" style="width: 0%"></span></div>
+      </div>
+    `;
+    return;
+  }
+
+  const top = items[0];
+  const topValue = Math.max(0, Number(top?.valor) || 0);
+  const maxRows = 4;
+  const palette = ["coral", "blue", "green", "yellow"];
+
+  list.innerHTML = "";
+
+  items.slice(0, maxRows).forEach((row, idx) => {
+    const nome = String(row?.nome || "").trim() || "Sem vendedor";
+    const vendas = Math.max(0, Number(row?.vendas) || 0);
+    const valor = Math.max(0, Number(row?.valor) || 0);
+    const ratio = topValue > 0 ? Math.max(0, Math.min(1, valor / topValue)) : 0;
+    const width = Math.round(ratio * 100);
+
+    const colorKey = palette[Math.min(idx, palette.length - 1)];
+    const rowClass = idx === 0 ? "growth-v2-rank-row is-top" : "growth-v2-rank-row";
+    const avatarClass = idx === 0 ? "growth-v2-rank-avatar is-coral" : `growth-v2-rank-avatar is-${colorKey}`;
+    const barClass = idx === 0 ? "" : `class="is-${colorKey}"`;
+
+    const el = document.createElement("div");
+    el.className = rowClass;
+    el.innerHTML = `
+      <div class="growth-v2-rank-pos">${idx + 1}</div>
+      <div class="growth-v2-rank-vendor">
+        <span class="${avatarClass}" aria-hidden="true">${getInitialsShort(nome)}</span>
+        <span class="growth-v2-rank-name">${nome}</span>
+      </div>
+      <div class="growth-v2-rank-sales">${vendas}</div>
+      <div class="growth-v2-rank-value">${formatMoneyNoCentsPtBr(valor)}</div>
+      <div class="growth-v2-rank-bar" aria-hidden="true"><span ${barClass} style="width: ${width}%"></span></div>
+    `;
+    list.appendChild(el);
+  });
+};
+
+const applyGrowthMetricsToDom = (payload) => {
+  if (!payload || typeof payload !== "object") return;
+  const summary = payload.summary && typeof payload.summary === "object" ? payload.summary : {};
+
+  const realizadoEl = document.querySelector('[data-growth-kpi="realizado"]');
+  if (realizadoEl instanceof HTMLElement) realizadoEl.textContent = formatMoneyNoCentsPtBr(summary.realizado);
+
+  const vendasEl = document.querySelector('[data-growth-indicator="vendas"]');
+  if (vendasEl instanceof HTMLElement) vendasEl.textContent = String(Math.max(0, Number(summary.totalVendas) || 0));
+
+  const conversaoEl = document.querySelector('[data-growth-indicator="conversao"]');
+  if (conversaoEl instanceof HTMLElement) conversaoEl.textContent = formatPercentPtBr(summary.conversao, 1);
+
+  const ticketEl = document.querySelector('[data-growth-indicator="ticket"]');
+  if (ticketEl instanceof HTMLElement) ticketEl.textContent = formatMoneyNoCentsPtBr(summary.ticketMedio);
+
+  const noShowEl = document.querySelector('[data-growth-rate="noshow"]');
+  if (noShowEl instanceof HTMLElement) noShowEl.textContent = formatPercentPtBr(summary.noShowPercent, 1);
+
+  const agendamentoEl = document.querySelector('[data-growth-rate="agendamento"]');
+  if (agendamentoEl instanceof HTMLElement) agendamentoEl.textContent = formatPercentPtBr(summary.taxaAgendamento, 1);
+
+  const funilEl = document.querySelector('[data-growth-rate="funil"]');
+  if (funilEl instanceof HTMLElement) funilEl.textContent = formatPercentPtBr(summary.taxaFunil, 1);
+
+  const planos = payload.planosVendidos && typeof payload.planosVendidos === "object" ? payload.planosVendidos : {};
+  const turmaCount = Math.max(0, Number(planos.turma) || 0);
+  const goldCount = Math.max(0, Number(planos.gold) || 0);
+  const diamondCount = Math.max(0, Number(planos.diamond) || 0);
+
+  const planTurma = document.querySelector('[data-growth-plan="turma"]');
+  if (planTurma instanceof HTMLElement) planTurma.textContent = String(turmaCount);
+  const planGold = document.querySelector('[data-growth-plan="gold"]');
+  if (planGold instanceof HTMLElement) planGold.textContent = String(goldCount);
+  const planDiamond = document.querySelector('[data-growth-plan="diamond"]');
+  if (planDiamond instanceof HTMLElement) planDiamond.textContent = String(diamondCount);
+
+  const pie = document.querySelector("[data-growth-plans-pie]");
+  if (pie instanceof HTMLElement) {
+    pie.style.background = buildPlansPieBackground({ turma: turmaCount, gold: goldCount, diamond: diamondCount });
+  }
+
+  renderGrowthRanking(payload.rankingTime);
+
+  const lastTime = document.querySelector("[data-growth-last-time]");
+  if (lastTime instanceof HTMLElement) {
+    lastTime.textContent = payload?.ultimaVenda?.relativeTime ? String(payload.ultimaVenda.relativeTime) : "—";
+  }
+  const lastSub = document.querySelector("[data-growth-last-sub]");
+  if (lastSub instanceof HTMLElement) {
+    const plan = planLabelForUi(payload?.ultimaVenda?.plano);
+    const value = formatMoneyNoCentsPtBr(payload?.ultimaVenda?.valor);
+    lastSub.textContent = `${plan} · ${value}`;
+  }
+};
+
+const initGrowthDashboardMetrics = () => {
+  if (!(dashboardRoot instanceof HTMLElement)) return;
+
+  const load = async () => {
+    try {
+      const res = await fetchWithAuth("/api/growth-metrics", { method: "GET" });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || "request_failed");
+      applyGrowthMetricsToDom(data);
+    } catch (error) {
+      // Keep mock values as a safe fallback.
+    }
+  };
+
+  load();
+};
+
+initGrowthDashboardMetrics();
+
+/* =========================
    Contratos (Growth)
    ========================= */
 

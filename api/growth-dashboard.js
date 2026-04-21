@@ -244,6 +244,223 @@ const requireInternalAuth = (req, res) => {
   };
 };
 
+const normalizeKey = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  // Make comparisons tolerant to case and diacritics: "Conversão" vs "conversao".
+  return raw
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+};
+
+const normalizeStageName = (value) => String(value || "").trim();
+const normalizePipelineName = (value) => String(value || "").trim();
+
+const safeNumber = (value) => {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+};
+
+const percent = (num, den) => {
+  const n = safeNumber(num);
+  const d = safeNumber(den);
+  if (d <= 0) return 0;
+  return (n / d) * 100;
+};
+
+const mapPlano = (rawProductName) => {
+  const name = String(rawProductName || "").trim().toLowerCase();
+  if (name.includes("diamond")) return "diamond";
+  if (name.includes("gold")) return "gold";
+  if (name.includes("turma")) return "turma";
+  return "semPlano";
+};
+
+const relativeTimePtBr = (isoDate) => {
+  const d = isoDate ? new Date(String(isoDate)) : null;
+  if (!(d instanceof Date) || Number.isNaN(d.getTime())) return "";
+  const diff = Date.now() - d.getTime();
+  const abs = Math.abs(diff);
+  const min = Math.floor(abs / 60000);
+  const hr = Math.floor(abs / 3600000);
+  const day = Math.floor(abs / 86400000);
+
+  const suffix = diff >= 0 ? "há" : "em";
+  if (min < 1) return diff >= 0 ? "agora" : "em instantes";
+  if (min < 60) return `${suffix} ${min} minuto${min === 1 ? "" : "s"}`;
+  if (hr < 24) return `${suffix} ${hr} hora${hr === 1 ? "" : "s"}`;
+  return `${suffix} ${day} dia${day === 1 ? "" : "s"}`;
+};
+
+const extractBusinessesArray = (payload) => {
+  if (!payload) return [];
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload.businesses)) return payload.businesses;
+  if (Array.isArray(payload.items)) return payload.items;
+  if (Array.isArray(payload.data)) return payload.data;
+  if (payload.data && Array.isArray(payload.data.businesses)) return payload.data.businesses;
+  return [];
+};
+
+const fetchAllCrmBusinesses = async () => {
+  const apiKey = String(process.env.CRM_API_KEY || "").trim();
+  const base = String(process.env.CRM_API_BASE_URL || "").trim().replace(/\/+$/, "");
+  if (!apiKey || !base) {
+    return {
+      ok: false,
+      status: 500,
+      error: "missing_env",
+      missing: [
+        ...(!apiKey ? ["CRM_API_KEY"] : []),
+        ...(!base ? ["CRM_API_BASE_URL"] : []),
+      ],
+    };
+  }
+
+  const url = `${base}/api/v1/businesses`;
+  const res = await requestJsonRaw(url, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${apiKey}` },
+  });
+
+  if (!res.ok) {
+    return {
+      ok: false,
+      status: res.status || 500,
+      error: "crm_error",
+      data: res.data ?? null,
+      text: res.data == null ? (res.text || null) : null,
+    };
+  }
+
+  return { ok: true, status: res.status || 200, businesses: extractBusinessesArray(res.data) };
+};
+
+const handleGrowthMetricsApi = async (req, res) => {
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    res.setHeader("Allow", "GET, HEAD");
+    sendJson(res, 405, { error: "method_not_allowed" });
+    return;
+  }
+
+  const auth = requireInternalAuth(req, res);
+  if (!auth) return;
+
+  const crm = await fetchAllCrmBusinesses();
+  if (!crm.ok) {
+    sendJson(res, crm.status || 500, crm);
+    return;
+  }
+
+  const pipelineTarget = normalizeKey("Conversão");
+  const businesses = Array.isArray(crm.businesses) ? crm.businesses : [];
+
+  const filtered = businesses.filter((b) => normalizeKey(b?.stage?.pipeline?.name) === pipelineTarget);
+
+  const stageCounts = new Map();
+  const stageTotals = new Map();
+
+  const closedDeals = [];
+
+  filtered.forEach((b) => {
+    const stageName = normalizeKey(b?.stage?.name);
+    const total = safeNumber(b?.total);
+    stageCounts.set(stageName, (stageCounts.get(stageName) || 0) + 1);
+    stageTotals.set(stageName, (stageTotals.get(stageName) || 0) + total);
+    if (stageName === "fechado") closedDeals.push(b);
+  });
+
+  const totalPipeline = filtered.length;
+
+  const agendamentoStages = new Set([
+    normalizeKey("Agendado"),
+    normalizeKey("No-show"),
+    normalizeKey("Reunião Reagendada"),
+    normalizeKey("Reunião feita (Follow-up)"),
+    normalizeKey("Hot Lead"),
+    normalizeKey("Em fechamento"),
+    normalizeKey("Fechado"),
+  ]);
+
+  const agendamentos =
+    Array.from(agendamentoStages).reduce((sum, name) => sum + (stageCounts.get(name) || 0), 0);
+  const fechados = stageCounts.get(normalizeKey("Fechado")) || 0;
+  const noShow = stageCounts.get(normalizeKey("No-show")) || 0;
+
+  const baseConversao =
+    (stageCounts.get(normalizeKey("Reunião feita (Follow-up)")) || 0) +
+    (stageCounts.get(normalizeKey("Hot Lead")) || 0) +
+    (stageCounts.get(normalizeKey("Em fechamento")) || 0) +
+    (stageCounts.get(normalizeKey("Fechado")) || 0);
+
+  const realizado = closedDeals.reduce((sum, b) => sum + safeNumber(b?.total), 0);
+  const totalVendas = fechados;
+  const ticketMedio = totalVendas > 0 ? realizado / totalVendas : 0;
+
+  const conversao = percent(fechados, baseConversao);
+  const taxaAgendamento = percent(agendamentos, totalPipeline);
+  const taxaFunil = percent(fechados, totalPipeline);
+  const noShowPercent = percent(noShow, agendamentos);
+
+  const planosVendidos = { diamond: 0, gold: 0, turma: 0, semPlano: 0 };
+  const rankingMap = new Map();
+
+  closedDeals.forEach((b) => {
+    const planName = b?.products?.[0]?.product?.name;
+    const planoKey = mapPlano(planName);
+    planosVendidos[planoKey] = (planosVendidos[planoKey] || 0) + 1;
+
+    const vendor = b?.attendant?.name ? String(b.attendant.name).trim() : "Sem vendedor";
+    const entry = rankingMap.get(vendor) || { nome: vendor, vendas: 0, valor: 0 };
+    entry.vendas += 1;
+    entry.valor += safeNumber(b?.total);
+    rankingMap.set(vendor, entry);
+  });
+
+  const rankingTime = Array.from(rankingMap.values()).sort((a, b) => b.valor - a.valor);
+
+  const latest = closedDeals
+    .slice()
+    .sort((a, b) => {
+      const da = new Date(String(a?.lastMovedAt || a?.createdAt || 0)).getTime();
+      const db = new Date(String(b?.lastMovedAt || b?.createdAt || 0)).getTime();
+      return db - da;
+    })[0];
+
+  const ultimaVenda = latest
+    ? {
+        lead: latest?.lead?.name ? String(latest.lead.name).trim() : "",
+        plano: latest?.products?.[0]?.product?.name ? String(latest.products[0].product.name).trim() : "",
+        valor: safeNumber(latest?.total),
+        lastMovedAt: latest?.lastMovedAt ? String(latest.lastMovedAt) : "",
+        relativeTime: relativeTimePtBr(latest?.lastMovedAt || latest?.createdAt),
+      }
+    : { lead: "", plano: "", valor: 0, lastMovedAt: "", relativeTime: "" };
+
+  sendJson(res, 200, {
+    summary: {
+      realizado,
+      totalVendas,
+      conversao,
+      ticketMedio,
+      taxaAgendamento,
+      taxaFunil,
+      noShowPercent,
+    },
+    planosVendidos,
+    rankingTime,
+    ultimaVenda,
+    debug: {
+      totalPipeline,
+      agendamentos,
+      fechados,
+      noShow,
+      baseConversao,
+    },
+  });
+};
+
 const decodeContratoDoc = (doc) => {
   if (!doc || typeof doc !== "object") return null;
   const id = getDocIdFromName(doc.name);
@@ -841,6 +1058,11 @@ module.exports = async (req, res) => {
     return;
   }
 
+  if (api === "growth-metrics") {
+    await handleGrowthMetricsApi(req, res);
+    return;
+  }
+
   if (api === "growth-contratos") {
     await handleGrowthContractsApi(req, res, url);
     return;
@@ -1017,22 +1239,22 @@ module.exports = async (req, res) => {
 	                </div>
 	                <div class="growth-v2-card-label is-green">Planos vendidos</div>
 	                <div class="growth-v2-plans">
-	                  <div class="growth-v2-pie" aria-hidden="true"></div>
+	                  <div class="growth-v2-pie" aria-hidden="true" data-growth-plans-pie></div>
 	                  <div class="growth-v2-plans-legend" aria-label="Distribuição de planos vendidos no mês">
 	                    <div class="growth-v2-plans-item">
 	                      <span class="growth-v2-dot is-turma" aria-hidden="true"></span>
 	                      <span>Turma</span>
-	                      <strong>6</strong>
+	                      <strong data-growth-plan="turma">6</strong>
 	                    </div>
 	                    <div class="growth-v2-plans-item">
 	                      <span class="growth-v2-dot is-gold" aria-hidden="true"></span>
 	                      <span>Gold</span>
-	                      <strong>20</strong>
+	                      <strong data-growth-plan="gold">20</strong>
 	                    </div>
 	                    <div class="growth-v2-plans-item">
 	                      <span class="growth-v2-dot is-diamond" aria-hidden="true"></span>
 	                      <span>Diamond</span>
-	                      <strong>12</strong>
+	                      <strong data-growth-plan="diamond">12</strong>
 	                    </div>
 	                  </div>
 	                </div>
@@ -1107,7 +1329,7 @@ module.exports = async (req, res) => {
 	                  </svg>
 	                </div>
 	                <div class="growth-v2-card-label">% No Show</div>
-	                <div class="growth-v2-card-value">6%</div>
+	                <div class="growth-v2-card-value" data-growth-rate="noshow">6%</div>
 	              </article>
 
 	              <article class="growth-v2-card">
@@ -1118,7 +1340,7 @@ module.exports = async (req, res) => {
 	                  </svg>
 	                </div>
 	                <div class="growth-v2-card-label">% Agendamento</div>
-	                <div class="growth-v2-card-value">78%</div>
+	                <div class="growth-v2-card-value" data-growth-rate="agendamento">78%</div>
 	              </article>
 
 	              <article class="growth-v2-card">
@@ -1128,7 +1350,7 @@ module.exports = async (req, res) => {
 	                  </svg>
 	                </div>
 	                <div class="growth-v2-card-label">% Funil</div>
-	                <div class="growth-v2-card-value">42%</div>
+	                <div class="growth-v2-card-value" data-growth-rate="funil">42%</div>
 	              </article>
 	            </div>
 	          </section>
@@ -1148,7 +1370,7 @@ module.exports = async (req, res) => {
                   <span>VALOR</span>
                 </div>
 
-                <div class="growth-v2-rank-list">
+                <div class="growth-v2-rank-list" data-growth-ranking>
                   <div class="growth-v2-rank-row is-top">
                     <div class="growth-v2-rank-pos">1</div>
                     <div class="growth-v2-rank-vendor">
@@ -1214,8 +1436,8 @@ module.exports = async (req, res) => {
 
                   <div class="growth-v2-last-sale">
                     <div class="growth-v2-mini-label">ÚLTIMA VENDA</div>
-                    <div class="growth-v2-last-value">há 18 minutos</div>
-                    <div class="growth-v2-last-sub">Plano Diamond · R$ 2.400</div>
+                    <div class="growth-v2-last-value" data-growth-last-time>há 18 minutos</div>
+                    <div class="growth-v2-last-sub" data-growth-last-sub>Plano Diamond · R$ 2.400</div>
                   </div>
                 </article>
 
