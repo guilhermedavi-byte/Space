@@ -10788,6 +10788,10 @@ body[data-page="growth"] .platform-main {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.growth-v2-grid-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .growth-v2-card {
   position: relative;
   overflow: hidden;

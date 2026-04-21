@@ -1040,10 +1040,10 @@ module.exports = async (req, res) => {
 	            </div>
 	          </section>
 
-          <section class="growth-v2-section" aria-label="Indicadores comerciais">
-            <div class="growth-v2-section-label">INDICADORES COMERCIAIS</div>
+	          <section class="growth-v2-section" aria-label="Indicadores comerciais">
+	            <div class="growth-v2-section-label">INDICADORES COMERCIAIS</div>
 
-            <div class="growth-v2-grid growth-v2-grid-4">
+	            <div class="growth-v2-grid growth-v2-grid-4">
               <article class="growth-v2-card">
                 <div class="growth-v2-icon is-blue" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none">
@@ -1083,20 +1083,55 @@ module.exports = async (req, res) => {
                 <div class="growth-v2-card-sub">Plano médio: Gold</div>
               </article>
 
-              <article class="growth-v2-card">
-                <div class="growth-v2-icon is-yellow" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none">
-                    <path d="M4.5 18.5V6.5"></path>
-                    <path d="M4.5 6.5h15"></path>
-                    <path d="M7.5 16 11 12.5l3 3 4-4"></path>
-                  </svg>
-                </div>
-                <div class="growth-v2-card-label">Forecast</div>
-                <div class="growth-v2-card-value" data-growth-indicator="forecast">R$ 74.000</div>
-                <div class="growth-v2-card-sub is-yellow">Projeção de fechamento</div>
-              </article>
-            </div>
-          </section>
+	              <article class="growth-v2-card">
+	                <div class="growth-v2-icon is-yellow" aria-hidden="true">
+	                  <svg viewBox="0 0 24 24" fill="none">
+	                    <path d="M4.5 18.5V6.5"></path>
+	                    <path d="M4.5 6.5h15"></path>
+	                    <path d="M7.5 16 11 12.5l3 3 4-4"></path>
+	                  </svg>
+	                </div>
+	                <div class="growth-v2-card-label">Forecast</div>
+	                <div class="growth-v2-card-value" data-growth-indicator="forecast">R$ 74.000</div>
+	                <div class="growth-v2-card-sub is-yellow">Projeção de fechamento</div>
+	              </article>
+	            </div>
+
+	            <div class="growth-v2-grid growth-v2-grid-3" aria-label="Qualidade e conversão">
+	              <article class="growth-v2-card">
+	                <div class="growth-v2-icon is-coral" aria-hidden="true">
+	                  <svg viewBox="0 0 24 24" fill="none">
+	                    <path d="M12 8v4"></path>
+	                    <path d="M12 16h.01"></path>
+	                    <path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"></path>
+	                  </svg>
+	                </div>
+	                <div class="growth-v2-card-label">% No Show</div>
+	                <div class="growth-v2-card-value">6%</div>
+	              </article>
+
+	              <article class="growth-v2-card">
+	                <div class="growth-v2-icon is-green" aria-hidden="true">
+	                  <svg viewBox="0 0 24 24" fill="none">
+	                    <path d="M6 12.5 10 16.5 18 8.5"></path>
+	                    <path d="M12 21a9 9 0 1 0-9-9"></path>
+	                  </svg>
+	                </div>
+	                <div class="growth-v2-card-label">% Agendamento</div>
+	                <div class="growth-v2-card-value">78%</div>
+	              </article>
+
+	              <article class="growth-v2-card">
+	                <div class="growth-v2-icon is-blue" aria-hidden="true">
+	                  <svg viewBox="0 0 24 24" fill="none">
+	                    <path d="M5 4h14l-5 8v6l-4 2v-8L5 4Z"></path>
+	                  </svg>
+	                </div>
+	                <div class="growth-v2-card-label">% Funil</div>
+	                <div class="growth-v2-card-value">42%</div>
+	              </article>
+	            </div>
+	          </section>
 
           <section class="growth-v2-section" aria-label="Ranking e execução">
             <div class="growth-v2-two-col">
@@ -1174,10 +1209,6 @@ module.exports = async (req, res) => {
 	                    <div class="growth-v2-mini-card">
 	                      <div class="growth-v2-mini-label">FORECAST DE HOJE</div>
 	                      <div class="growth-v2-mini-value">47</div>
-	                    </div>
-	                    <div class="growth-v2-mini-card">
-	                      <div class="growth-v2-mini-label">% NO SHOW</div>
-	                      <div class="growth-v2-mini-value">6%</div>
 	                    </div>
 	                  </div>
 
