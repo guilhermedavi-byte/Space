@@ -948,8 +948,8 @@ module.exports = async (req, res) => {
         </div>
       `
     : `
-        <div class="growth-v2" data-growth-dashboard data-growth-view="dashboard">
-          <header class="growth-v2-header" aria-label="Cabeçalho do dashboard Growth">
+	        <div class="growth-v2" data-growth-dashboard data-growth-view="dashboard">
+	          <header class="growth-v2-header" aria-label="Cabeçalho do dashboard Growth">
             <div class="growth-v2-head-left">
               <div class="growth-v2-eyebrow">GROWTH</div>
               <div class="growth-v2-title">Dashboard Comercial</div>
@@ -968,8 +968,8 @@ module.exports = async (req, res) => {
           <section class="growth-v2-section" aria-label="Resultado do mês">
             <div class="growth-v2-section-label">RESULTADO DO MÊS</div>
 
-            <div class="growth-v2-grid growth-v2-grid-4">
-              <article class="growth-v2-card">
+	            <div class="growth-v2-grid growth-v2-grid-4">
+	              <article class="growth-v2-card">
                 <div class="growth-v2-icon is-blue" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none">
                     <path d="M4 13.5h3l2.2-6.2 3.2 12.7 2.4-6.5H20"></path>
@@ -992,7 +992,7 @@ module.exports = async (req, res) => {
                 <div class="growth-v2-card-value is-coral" data-growth-kpi="realizado">R$ 52.400</div>
               </article>
 
-              <article class="growth-v2-card">
+	              <article class="growth-v2-card">
                 <div class="growth-v2-icon is-yellow" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none">
                     <circle cx="12" cy="12" r="8"></circle>
@@ -1004,19 +1004,41 @@ module.exports = async (req, res) => {
                 <div class="growth-v2-progress" aria-hidden="true">
                   <span class="growth-v2-progress-fill" style="width: 65.5%"></span>
                 </div>
-              </article>
+	              </article>
 
-              <article class="growth-v2-card is-receita">
-                <div class="growth-v2-icon is-green" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none">
-                    <path d="M20 6 9 17l-5-5"></path>
-                  </svg>
-                </div>
-                <div class="growth-v2-card-label is-green">Receita do mês</div>
-                <div class="growth-v2-card-value is-green" data-growth-kpi="receita">R$ 52.400</div>
-              </article>
-            </div>
-          </section>
+	              <article class="growth-v2-card growth-v2-card-plans" aria-label="Planos vendidos no mês">
+	                <div class="growth-v2-icon is-green" aria-hidden="true">
+	                  <svg viewBox="0 0 24 24" fill="none">
+	                    <path d="M8 7h8"></path>
+	                    <path d="M8 11h8"></path>
+	                    <path d="M8 15h6"></path>
+	                    <path d="M7 3.5h7l3 3V20a1.5 1.5 0 0 1-1.5 1.5H7A1.5 1.5 0 0 1 5.5 20V5A1.5 1.5 0 0 1 7 3.5Z"></path>
+	                  </svg>
+	                </div>
+	                <div class="growth-v2-card-label is-green">Planos vendidos</div>
+	                <div class="growth-v2-plans">
+	                  <div class="growth-v2-pie" aria-hidden="true"></div>
+	                  <div class="growth-v2-plans-legend" aria-label="Distribuição de planos vendidos no mês">
+	                    <div class="growth-v2-plans-item">
+	                      <span class="growth-v2-dot is-turma" aria-hidden="true"></span>
+	                      <span>Turma</span>
+	                      <strong>6</strong>
+	                    </div>
+	                    <div class="growth-v2-plans-item">
+	                      <span class="growth-v2-dot is-gold" aria-hidden="true"></span>
+	                      <span>Gold</span>
+	                      <strong>20</strong>
+	                    </div>
+	                    <div class="growth-v2-plans-item">
+	                      <span class="growth-v2-dot is-diamond" aria-hidden="true"></span>
+	                      <span>Diamond</span>
+	                      <strong>12</strong>
+	                    </div>
+	                  </div>
+	                </div>
+	              </article>
+	            </div>
+	          </section>
 
           <section class="growth-v2-section" aria-label="Indicadores comerciais">
             <div class="growth-v2-section-label">INDICADORES COMERCIAIS</div>
@@ -1144,16 +1166,20 @@ module.exports = async (req, res) => {
                     <div class="growth-v2-card-title">Execução do dia</div>
                   </div>
 
-                  <div class="growth-v2-exec-grid">
-                    <div class="growth-v2-mini-card">
-                      <div class="growth-v2-mini-label">REUNIÕES HOJE</div>
-                      <div class="growth-v2-mini-value">11</div>
-                    </div>
-                    <div class="growth-v2-mini-card">
-                      <div class="growth-v2-mini-label">CALLS HOJE</div>
-                      <div class="growth-v2-mini-value">47</div>
-                    </div>
-                  </div>
+	                  <div class="growth-v2-exec-grid">
+	                    <div class="growth-v2-mini-card">
+	                      <div class="growth-v2-mini-label">REUNIÕES HOJE</div>
+	                      <div class="growth-v2-mini-value">11</div>
+	                    </div>
+	                    <div class="growth-v2-mini-card">
+	                      <div class="growth-v2-mini-label">FORECAST DE HOJE</div>
+	                      <div class="growth-v2-mini-value">47</div>
+	                    </div>
+	                    <div class="growth-v2-mini-card">
+	                      <div class="growth-v2-mini-label">% NO SHOW</div>
+	                      <div class="growth-v2-mini-value">6%</div>
+	                    </div>
+	                  </div>
 
                   <div class="growth-v2-last-sale">
                     <div class="growth-v2-mini-label">ÚLTIMA VENDA</div>
