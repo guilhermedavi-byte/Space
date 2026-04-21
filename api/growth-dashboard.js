@@ -53,9 +53,22 @@ const buildId = (prefix) => {
 
 const parseNumber = (value) => {
   if (typeof value === "number" && Number.isFinite(value)) return value;
-  const raw = typeof value === "string" ? value.trim().replace(",", ".") : "";
+  const raw = typeof value === "string" ? value.trim() : "";
   if (!raw) return NaN;
-  const n = Number(raw);
+  const sanitized = raw.replace(/[^\d.,-]/g, "");
+  let normalized = sanitized;
+  if (normalized.includes(",")) {
+    // pt-BR: "." milhares, "," decimal
+    normalized = normalized.replace(/\./g, "").replace(/,/g, ".");
+  } else if (normalized.includes(".")) {
+    const parts = normalized.split(".");
+    const last = parts[parts.length - 1] || "";
+    // Heuristic: "80.000" => 80000 (milhares), "80.00" => 80.00 (decimal)
+    if (parts.length > 2 || last.length === 3) {
+      normalized = parts.join("");
+    }
+  }
+  const n = Number(normalized);
   return Number.isFinite(n) ? n : NaN;
 };
 
@@ -259,19 +272,12 @@ const callZapSignCreateDoc = async ({ nomeCompleto, cpf, endereco, valorOriginal
   const telefoneDigits = digitsOnly(telefone).slice(-11);
   const telefoneValue = formatWhatsapp(telefoneDigits);
   const payload = {
-    template_token: templateToken,
+    // ZapSign expects `template_id` (token shown in the template URL /conta/modelos/<TEMPLATE_ID>).
+    template_id: templateToken,
     signer_name: String(nomeCompleto || "").trim(),
-    signers: [
-      {
-        name: String(nomeCompleto || "").trim(),
-        email: emailValue,
-        phone_country: "55",
-        phone_number: telefoneDigits,
-        lock_name: true,
-        lock_email: true,
-        lock_phone: true,
-      },
-    ],
+    signer_email: emailValue,
+    signer_phone_country: "55",
+    signer_phone_number: telefoneDigits,
     data: [
       { de: "{{NOME_COMPLETO}}", para: String(nomeCompleto || "").trim() },
       { de: "{{EMAIL}}", para: emailValue },
@@ -465,7 +471,11 @@ const handleGrowthContractsApi = async (req, res, url) => {
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error("[api] growth contratos send failed", error);
-      sendJson(res, 500, { error: "zapsign_failed" });
+      sendJson(res, 500, {
+        error: "zapsign_failed",
+        zapsignStatus: Number(error?.status) || null,
+        zapsignPayload: error?.payload || null,
+      });
     }
     return;
   }
@@ -581,7 +591,12 @@ const handleGrowthContractsApi = async (req, res, url) => {
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error("[api] growth contratos create+send failed", error);
-    sendJson(res, 500, { error: "zapsign_failed", id });
+    sendJson(res, 500, {
+      error: "zapsign_failed",
+      id,
+      zapsignStatus: Number(error?.status) || null,
+      zapsignPayload: error?.payload || null,
+    });
   }
 };
 
@@ -1203,7 +1218,14 @@ module.exports = async (req, res) => {
                 <span>VALOR ORIGINAL</span>
                 <div class="growth-contract-money">
                   <span>R$</span>
-                  <input class="modal-input" type="number" step="0.01" placeholder="0,00" data-contract-field="valorOriginal" />
+                  <input
+                    class="modal-input"
+                    type="text"
+                    inputmode="decimal"
+                    placeholder="0,00"
+                    autocomplete="off"
+                    data-contract-field="valorOriginal"
+                  />
                 </div>
                 <div class="modal-inline-error" data-contract-error="valorOriginal" hidden>Informe o valor original.</div>
               </label>
@@ -1212,7 +1234,14 @@ module.exports = async (req, res) => {
                 <span>VALOR COM DESCONTO</span>
                 <div class="growth-contract-money">
                   <span>R$</span>
-                  <input class="modal-input" type="number" step="0.01" placeholder="0,00" data-contract-field="valorDesconto" />
+                  <input
+                    class="modal-input"
+                    type="text"
+                    inputmode="decimal"
+                    placeholder="0,00"
+                    autocomplete="off"
+                    data-contract-field="valorDesconto"
+                  />
                 </div>
                 <div class="modal-inline-error" data-contract-error="valorDesconto" hidden>O desconto não pode ser maior que o valor original.</div>
               </label>

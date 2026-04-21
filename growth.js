@@ -229,6 +229,24 @@ const isValidEmail = (value) => {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 };
 
+const parseMoneyPtBr = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw) return NaN;
+  const sanitized = raw.replace(/[^\d.,-]/g, "");
+  let normalized = sanitized;
+  if (normalized.includes(",")) {
+    normalized = normalized.replace(/\./g, "").replace(/,/g, ".");
+  } else if (normalized.includes(".")) {
+    const parts = normalized.split(".");
+    const last = parts[parts.length - 1] || "";
+    if (parts.length > 2 || last.length === 3) {
+      normalized = parts.join("");
+    }
+  }
+  const n = Number(normalized);
+  return Number.isFinite(n) ? n : NaN;
+};
+
 const currencyPtBr = (value) => {
   try {
     const n = Number(value);
@@ -511,9 +529,9 @@ const createContract = async (sendNow) => {
   const cpf = cpfEl instanceof HTMLInputElement ? digitsOnly(cpfEl.value) : "";
   const endereco = endEl instanceof HTMLInputElement ? endEl.value.trim() : "";
   const valorOriginalRaw = origEl instanceof HTMLInputElement ? origEl.value.trim() : "";
-  const valorOriginal = valorOriginalRaw ? Number(valorOriginalRaw) : NaN;
+  const valorOriginal = valorOriginalRaw ? parseMoneyPtBr(valorOriginalRaw) : NaN;
   const valorDescontoRaw = discEl instanceof HTMLInputElement ? discEl.value.trim() : "";
-  const valorDesconto = valorDescontoRaw ? Number(valorDescontoRaw) : valorOriginal;
+  const valorDesconto = valorDescontoRaw ? parseMoneyPtBr(valorDescontoRaw) : valorOriginal;
   const data = dateEl instanceof HTMLInputElement ? dateEl.value : "";
 
   let ok = true;
@@ -541,7 +559,10 @@ const createContract = async (sendNow) => {
     showCreateError("valorOriginal", "Informe o valor original.");
     ok = false;
   }
-  if (!Number.isFinite(valorDesconto) || valorDesconto <= 0 || valorDesconto > valorOriginal) {
+  if (!Number.isFinite(valorDesconto) || valorDesconto <= 0) {
+    showCreateError("valorDesconto", "Informe o valor com desconto.");
+    ok = false;
+  } else if (valorDesconto > valorOriginal) {
     showCreateError("valorDesconto", "O desconto não pode ser maior que o valor original.");
     ok = false;
   }
@@ -570,6 +591,10 @@ const createContract = async (sendNow) => {
 
     const dataRes = await res.json().catch(() => null);
       if (!res.ok) {
+        const debugDetail =
+          dataRes?.zapsignPayload && typeof dataRes.zapsignPayload === "object"
+            ? String(dataRes.zapsignPayload.detail || dataRes.zapsignPayload.message || "").trim()
+            : "";
         const msg =
           dataRes?.error === "invalid_cpf"
             ? "CPF inválido."
@@ -580,7 +605,9 @@ const createContract = async (sendNow) => {
             : dataRes?.error === "invalid_discount"
               ? "O desconto não pode ser maior que o valor original."
               : dataRes?.error === "zapsign_failed"
-                ? "Erro ao enviar para assinatura. Tente novamente."
+                ? debugDetail
+                  ? `Erro ao enviar para assinatura: ${debugDetail}`
+                  : "Erro ao enviar para assinatura. Tente novamente."
                 : "Não foi possível salvar agora. Tente novamente.";
 
       if (contractsEls.createFeedback instanceof HTMLElement) {
