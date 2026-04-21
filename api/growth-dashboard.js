@@ -216,6 +216,7 @@ const decodeContratoDoc = (doc) => {
   const nomeCompleto = typeof fields.nomeCompleto === "string" ? fields.nomeCompleto.trim() : "";
   const email = typeof fields.email === "string" ? fields.email.trim().toLowerCase() : "";
   const whatsapp = typeof fields.whatsapp === "string" ? digitsOnly(fields.whatsapp) : "";
+  const telefoneCountry = typeof fields.telefoneCountry === "string" ? digitsOnly(fields.telefoneCountry) : "";
   const cpf = typeof fields.cpf === "string" ? digitsOnly(fields.cpf) : "";
   const endereco = typeof fields.endereco === "string" ? fields.endereco.trim() : "";
   const status = String(fields.status || "").trim().toLowerCase() || "rascunho";
@@ -238,6 +239,7 @@ const decodeContratoDoc = (doc) => {
     nomeCompleto,
     email: email || null,
     whatsapp: whatsapp || null,
+    telefoneCountry: telefoneCountry || "55",
     cpf,
     endereco,
     valorOriginal,
@@ -254,7 +256,7 @@ const decodeContratoDoc = (doc) => {
   };
 };
 
-const callZapSignCreateDoc = async ({ nomeCompleto, cpf, endereco, valorOriginal, valorDesconto, dataPt, email, telefone } = {}) => {
+const callZapSignCreateDoc = async ({ nomeCompleto, cpf, endereco, valorOriginal, valorDesconto, dataPt, email, telefone, telefoneCountry } = {}) => {
   // Env vars required on Vercel:
   // - ZAPSIGN_API_TOKEN
   // - ZAPSIGN_TEMPLATE_TOKEN
@@ -269,14 +271,15 @@ const callZapSignCreateDoc = async ({ nomeCompleto, cpf, endereco, valorOriginal
 
   const url = "https://api.zapsign.com.br/api/v1/models/create-doc/";
   const emailValue = String(email || "").trim();
-  const telefoneDigits = digitsOnly(telefone).slice(-11);
-  const telefoneValue = formatWhatsapp(telefoneDigits);
+  const country = digitsOnly(telefoneCountry) || "55";
+  const telefoneDigits = digitsOnly(telefone);
+  const telefoneValue = telefoneDigits ? `+${country} ${telefoneDigits}` : "";
   const payload = {
     // ZapSign expects `template_id` (token shown in the template URL /conta/modelos/<TEMPLATE_ID>).
     template_id: templateToken,
     signer_name: String(nomeCompleto || "").trim(),
     signer_email: emailValue,
-    signer_phone_country: "55",
+    signer_phone_country: country,
     signer_phone_number: telefoneDigits,
     data: [
       { de: "{{NOME_COMPLETO}}", para: String(nomeCompleto || "").trim() },
@@ -445,6 +448,7 @@ const handleGrowthContractsApi = async (req, res, url) => {
 	        nomeCompleto: contrato.nomeCompleto,
 	        email: contrato.email,
 	        telefone: contrato.whatsapp,
+	        telefoneCountry: contrato.telefoneCountry,
 	        cpf: contrato.cpf,
 	        endereco: contrato.endereco,
 	        valorOriginal: contrato.valorOriginal,
@@ -483,7 +487,8 @@ const handleGrowthContractsApi = async (req, res, url) => {
   // Create
   const nomeCompleto = String(body?.nomeCompleto || "").trim();
   const email = String(body?.email || "").trim().toLowerCase();
-  const whatsappDigits = digitsOnly(body?.whatsapp).slice(-11);
+  const telefoneCountry = digitsOnly(body?.telefoneCountry || "55").slice(0, 4) || "55";
+  const whatsappDigits = digitsOnly(body?.whatsapp);
   const cpfDigits = digitsOnly(body?.cpf);
   const endereco = String(body?.endereco || "").trim();
   const valorOriginal = parseNumber(body?.valorOriginal);
@@ -503,7 +508,7 @@ const handleGrowthContractsApi = async (req, res, url) => {
     sendJson(res, 400, { error: "invalid_email" });
     return;
   }
-  if (whatsappDigits.length < 10) {
+  if (whatsappDigits.length < 6 || whatsappDigits.length > 15) {
     sendJson(res, 400, { error: "invalid_whatsapp" });
     return;
   }
@@ -525,6 +530,7 @@ const handleGrowthContractsApi = async (req, res, url) => {
     nomeCompleto,
     email,
     whatsapp: whatsappDigits,
+    telefoneCountry,
     cpf: cpfDigits,
     endereco,
     valorOriginal,
@@ -561,16 +567,17 @@ const handleGrowthContractsApi = async (req, res, url) => {
   }
 
 	  try {
-	    const z = await callZapSignCreateDoc({
-	      nomeCompleto,
-	      email,
-	      telefone: whatsappDigits,
-	      cpf: cpfDigits,
-	      endereco,
-	      valorOriginal,
-	      valorDesconto,
-	      dataPt,
-	    });
+    const z = await callZapSignCreateDoc({
+      nomeCompleto,
+      email,
+      telefone: whatsappDigits,
+      telefoneCountry,
+      cpf: cpfDigits,
+      endereco,
+      valorOriginal,
+      valorDesconto,
+      dataPt,
+    });
 
     const patchData = {
       status: "enviado",
@@ -1190,14 +1197,30 @@ module.exports = async (req, res) => {
 
             <label class="modal-field">
               <span>WHATSAPP</span>
-              <input
-                class="modal-input"
-                type="tel"
-                inputmode="numeric"
-                placeholder="(11) 99999-9999"
-                autocomplete="tel"
-                data-contract-field="whatsapp"
-              />
+              <div class="growth-contract-phone">
+                <select class="modal-input growth-contract-country" data-contract-field="telefoneCountry" aria-label="Codigo do pais">
+                  <option value="55">+55 Brasil</option>
+                  <option value="1">+1 EUA/Canada</option>
+                  <option value="351">+351 Portugal</option>
+                  <option value="44">+44 Reino Unido</option>
+                  <option value="34">+34 Espanha</option>
+                  <option value="49">+49 Alemanha</option>
+                  <option value="33">+33 Franca</option>
+                  <option value="39">+39 Italia</option>
+                  <option value="54">+54 Argentina</option>
+                  <option value="56">+56 Chile</option>
+                  <option value="57">+57 Colombia</option>
+                  <option value="52">+52 Mexico</option>
+                </select>
+                <input
+                  class="modal-input"
+                  type="tel"
+                  inputmode="numeric"
+                  placeholder="Numero de WhatsApp"
+                  autocomplete="tel"
+                  data-contract-field="whatsapp"
+                />
+              </div>
               <div class="modal-inline-error" data-contract-error="whatsapp" hidden>Informe um WhatsApp válido.</div>
             </label>
 

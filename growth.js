@@ -342,6 +342,8 @@ const closeAllActionsMenus = () => {
   openActionsMenu = null;
 };
 
+const getCreateCountry = () => document.querySelector('[data-contract-field="telefoneCountry"]');
+
 const renderContracts = () => {
   if (!(contractsEls.list instanceof HTMLElement) || !(contractsEls.empty instanceof HTMLElement)) return;
 
@@ -493,6 +495,8 @@ const openCreateModal = () => {
     const el = getCreateField(k);
     if (el instanceof HTMLInputElement) el.value = "";
   });
+  const country = getCreateCountry();
+  if (country instanceof HTMLSelectElement) country.value = "55";
 
   setModalOpen(contractsEls.createOverlay, true);
 
@@ -517,6 +521,7 @@ const createContract = async (sendNow) => {
   const nomeEl = getCreateField("nomeCompleto");
   const emailEl = getCreateField("email");
   const whatsappEl = getCreateField("whatsapp");
+  const countryEl = getCreateCountry();
   const cpfEl = getCreateField("cpf");
   const endEl = getCreateField("endereco");
   const origEl = getCreateField("valorOriginal");
@@ -526,6 +531,7 @@ const createContract = async (sendNow) => {
   const nomeCompleto = nomeEl instanceof HTMLInputElement ? nomeEl.value.trim() : "";
   const email = emailEl instanceof HTMLInputElement ? emailEl.value.trim().toLowerCase() : "";
   const whatsapp = whatsappEl instanceof HTMLInputElement ? digitsOnly(whatsappEl.value) : "";
+  const telefoneCountry = countryEl instanceof HTMLSelectElement ? String(countryEl.value || "55") : "55";
   const cpf = cpfEl instanceof HTMLInputElement ? digitsOnly(cpfEl.value) : "";
   const endereco = endEl instanceof HTMLInputElement ? endEl.value.trim() : "";
   const valorOriginalRaw = origEl instanceof HTMLInputElement ? origEl.value.trim() : "";
@@ -543,7 +549,7 @@ const createContract = async (sendNow) => {
     showCreateError("email", email ? "E-mail inválido." : "Informe o e-mail.");
     ok = false;
   }
-  if (!whatsapp || whatsapp.length < 10) {
+  if (!whatsapp || whatsapp.length < 6) {
     showCreateError("whatsapp", "Informe um WhatsApp válido.");
     ok = false;
   }
@@ -580,6 +586,7 @@ const createContract = async (sendNow) => {
         nomeCompleto,
         email,
         whatsapp,
+        telefoneCountry,
         cpf,
         endereco,
         valorOriginal,
@@ -679,10 +686,14 @@ const openDetailsModal = (contract) => {
     `);
   }
 
+  const country = contract?.telefoneCountry ? String(contract.telefoneCountry) : "55";
+  const phoneDigits = digitsOnly(contract?.whatsapp || "");
+  const phoneDisplay = phoneDigits ? `+${country} ${country === "55" ? formatWhatsapp(phoneDigits) : phoneDigits}` : "—";
+
   contractsEls.detailsBody.innerHTML = `
     <div class="modal-list-row"><strong>Nome</strong><span>${contract?.nomeCompleto || "—"}</span></div>
     <div class="modal-list-row"><strong>E-mail</strong><span>${contract?.email || "—"}</span></div>
-    <div class="modal-list-row"><strong>WhatsApp</strong><span>${formatWhatsapp(contract?.whatsapp || "") || "—"}</span></div>
+    <div class="modal-list-row"><strong>WhatsApp</strong><span>${phoneDisplay}</span></div>
     <div class="modal-list-row"><strong>CPF</strong><span>${formatCpf(contract?.cpf || "")}</span></div>
     <div class="modal-list-row"><strong>Endereço</strong><span>${contract?.endereco || "—"}</span></div>
     <div class="modal-list-row"><strong>Valor original</strong><span>${currencyPtBr(contract?.valorOriginal)}</span></div>
@@ -789,7 +800,21 @@ const initContracts = () => {
   const whatsappInput = getCreateField("whatsapp");
   if (whatsappInput instanceof HTMLInputElement) {
     whatsappInput.addEventListener("input", () => {
-      whatsappInput.value = formatWhatsapp(whatsappInput.value);
+      const countryEl = getCreateCountry();
+      const country = countryEl instanceof HTMLSelectElement ? String(countryEl.value || "55") : "55";
+      if (country === "55") whatsappInput.value = formatWhatsapp(whatsappInput.value);
+    });
+  }
+
+  const countrySelect = getCreateCountry();
+  if (countrySelect instanceof HTMLSelectElement && whatsappInput instanceof HTMLInputElement) {
+    countrySelect.addEventListener("change", () => {
+      const country = String(countrySelect.value || "55");
+      if (country === "55") {
+        whatsappInput.value = formatWhatsapp(whatsappInput.value);
+      } else {
+        whatsappInput.value = digitsOnly(whatsappInput.value);
+      }
     });
   }
 

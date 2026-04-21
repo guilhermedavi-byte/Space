@@ -11496,6 +11496,23 @@ body[data-page="growth"] .platform-main {
   padding-left: 34px;
 }
 
+.growth-contract-phone {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.growth-contract-country {
+  flex: 0 0 150px;
+  padding-right: 34px;
+  cursor: pointer;
+}
+
+.growth-contract-phone input.modal-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .growth-contract-feedback {
   margin-top: 10px;
   color: rgba(255, 78, 70, 0.92);
