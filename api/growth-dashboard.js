@@ -689,6 +689,9 @@ const handleGrowthGoalsApi = async (req, res, url) => {
     return;
   }
 
+  // eslint-disable-next-line no-console
+  console.log("[growth-goals] auth header:", req?.headers?.authorization ? "present" : "missing");
+
   const auth = await requireRoleAuthWithFirebaseToken(req, res, ["admin"]);
   if (!auth) return;
 
@@ -762,6 +765,8 @@ const handleGrowthGoalsApi = async (req, res, url) => {
         uid: auth.id,
         competencia,
       });
+      // eslint-disable-next-line no-console
+      console.log("[growth-goals] error:", JSON.stringify(patch));
       sendJson(res, patch.status || 500, {
         error: "firestore_write_failed",
         firestoreStatus: patch.status || null,
@@ -774,6 +779,8 @@ const handleGrowthGoalsApi = async (req, res, url) => {
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error("[api] growth-goals upsert failed", error);
+    // eslint-disable-next-line no-console
+    console.log("[growth-goals] error:", JSON.stringify(error));
     sendJson(res, 500, { error: "internal_error" });
   }
 };

@@ -122,6 +122,48 @@ const waitForFirebaseAuthReady = async (api, timeoutMs = 3500) => {
   });
 };
 
+const waitForAuthToken = async (api, timeoutMs = 12000) => {
+  if (!api || !api.auth || typeof api.onAuthStateChanged !== "function") {
+    throw new Error("not-authenticated");
+  }
+
+  const ms = Number(timeoutMs);
+  const safeTimeout = Number.isFinite(ms) && ms > 0 ? ms : 12000;
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let unsub = null;
+
+    const finish = (err, token) => {
+      if (settled) return;
+      settled = true;
+      try {
+        if (typeof unsub === "function") unsub();
+      } catch (e) {
+        // ignore
+      }
+      if (err) reject(err);
+      else resolve(String(token || ""));
+    };
+
+    const timer = window.setTimeout(() => finish(new Error("not-authenticated"), ""), safeTimeout);
+
+    unsub = api.onAuthStateChanged(api.auth, async (user) => {
+      window.clearTimeout(timer);
+      if (!user || typeof user.getIdToken !== "function") {
+        finish(new Error("not-authenticated"), "");
+        return;
+      }
+      try {
+        const token = await user.getIdToken(true);
+        finish(null, token);
+      } catch (e) {
+        finish(e, "");
+      }
+    });
+  });
+};
+
 let cachedFirebaseIdToken = {
   uid: "",
   token: "",
@@ -131,6 +173,15 @@ let cachedFirebaseIdToken = {
 const getFirebaseIdTokenForApi = async (forceRefresh = false) => {
   try {
     const api = await loadFirebaseAuth();
+    if (forceRefresh) {
+      const token = await waitForAuthToken(api, 12000);
+      const user = api?.auth?.currentUser;
+      const uid = user ? String(user.uid || "") : "";
+      const now = Date.now();
+      cachedFirebaseIdToken = { uid, token: String(token || ""), expiresAt: now + 180_000 };
+      return cachedFirebaseIdToken.token;
+    }
+
     const user = await waitForFirebaseAuthReady(api, 3500);
     if (!user || typeof user.getIdToken !== "function") return "";
 
@@ -140,7 +191,7 @@ const getFirebaseIdTokenForApi = async (forceRefresh = false) => {
       return cachedFirebaseIdToken.token;
     }
 
-    const token = await user.getIdToken(Boolean(forceRefresh));
+    const token = await user.getIdToken(false);
     cachedFirebaseIdToken = {
       uid,
       token: String(token || ""),
