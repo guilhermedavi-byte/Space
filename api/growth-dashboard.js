@@ -303,22 +303,60 @@ const extractBusinessesArray = (payload) => {
   return [];
 };
 
-const fetchAllCrmBusinesses = async () => {
-  const apiKey = String(process.env.CRM_API_KEY || "").trim();
-  const base = String(process.env.CRM_API_BASE_URL || "").trim().replace(/\/+$/, "");
-  if (!apiKey || !base) {
-    return {
-      ok: false,
-      status: 500,
-      error: "missing_env",
-      missing: [
-        ...(!apiKey ? ["CRM_API_KEY"] : []),
-        ...(!base ? ["CRM_API_BASE_URL"] : []),
-      ],
-    };
+const getMonthKeySaoPaulo = (date) => {
+  try {
+    const d = date instanceof Date ? date : new Date(String(date || ""));
+    if (!(d instanceof Date) || Number.isNaN(d.getTime())) return "";
+    const parts = new Intl.DateTimeFormat("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      year: "numeric",
+      month: "2-digit",
+    }).formatToParts(d);
+    const year = parts.find((p) => p.type === "year")?.value || "";
+    const month = parts.find((p) => p.type === "month")?.value || "";
+    if (!year || !month) return "";
+    return `${year}-${month}`;
+  } catch (error) {
+    return "";
+  }
+};
+
+const getBusinessWonLostDate = (business) => {
+  // Best approximation for "Data de Ganho/Perdido" used by the CRM UI.
+  // If DataCrazy adds an explicit field (ex: `wonAt`), we can switch here without touching the rest of the metrics.
+  const b = business && typeof business === "object" ? business : {};
+  const candidates = [
+    "wonAt",
+    "wonDate",
+    "gainedAt",
+    "gainAt",
+    "closedAt",
+    "finishedAt",
+    "lastMovedAt",
+    "updatedAt",
+    "createdAt",
+  ];
+
+  for (const field of candidates) {
+    const raw = b[field];
+    if (!raw) continue;
+    const d = new Date(String(raw));
+    if (!(d instanceof Date) || Number.isNaN(d.getTime())) continue;
+    return { date: d, field };
   }
 
-  const url = `${base}/api/v1/businesses`;
+  return { date: null, field: "" };
+};
+
+const fetchCrmBusinessesPage = async ({ base, apiKey, skip, take } = {}) => {
+  const safeSkip = Math.max(0, Number(skip) || 0);
+  const safeTake = Math.max(1, Math.min(Number(take) || 200, 500));
+
+  const params = new URLSearchParams();
+  params.set("skip", String(safeSkip));
+  params.set("take", String(safeTake));
+
+  const url = `${base}/api/v1/businesses?${params.toString()}`;
   const res = await requestJsonRaw(url, {
     method: "GET",
     headers: { Authorization: `Bearer ${apiKey}` },
@@ -334,7 +372,75 @@ const fetchAllCrmBusinesses = async () => {
     };
   }
 
-  return { ok: true, status: res.status || 200, businesses: extractBusinessesArray(res.data) };
+  const items = extractBusinessesArray(res.data);
+  const total =
+    typeof res.data?.total === "number"
+      ? res.data.total
+      : typeof res.data?.count === "number"
+        ? res.data.count
+        : typeof res.data?.meta?.total === "number"
+          ? res.data.meta.total
+          : null;
+
+  return { ok: true, status: res.status || 200, items, total };
+};
+
+const fetchAllCrmBusinesses = async () => {
+  const apiKey = String(process.env.CRM_API_KEY || "").trim();
+  const base = String(process.env.CRM_API_BASE_URL || "").trim().replace(/\/+$/, "");
+  if (!apiKey || !base) {
+    return {
+      ok: false,
+      status: 500,
+      error: "missing_env",
+      missing: [
+        ...(!apiKey ? ["CRM_API_KEY"] : []),
+        ...(!base ? ["CRM_API_BASE_URL"] : []),
+      ],
+    };
+  }
+
+  const take = 200;
+  let skip = 0;
+  let pages = 0;
+  let totalFetched = 0;
+  let expectedTotal = null;
+  const all = [];
+
+  // DataCrazy supports pagination with skip/take.
+  // Keep fetching until we reach the last page (items < take), or until we hit the reported `total` (when available).
+  while (pages < 200) {
+    // Safety cap to avoid infinite loops if the CRM misbehaves.
+    const page = await fetchCrmBusinessesPage({ base, apiKey, skip, take });
+    if (!page.ok) return page;
+
+    pages += 1;
+    const items = Array.isArray(page.items) ? page.items : [];
+    all.push(...items);
+    totalFetched += items.length;
+
+    if (typeof page.total === "number" && Number.isFinite(page.total) && page.total >= 0) {
+      expectedTotal = page.total;
+    }
+
+    // Stop conditions.
+    if (items.length < take) break;
+    if (expectedTotal != null && totalFetched >= expectedTotal) break;
+
+    skip += take;
+  }
+
+  return {
+    ok: true,
+    status: 200,
+    businesses: all,
+    pagination: {
+      pages,
+      take,
+      totalFetched,
+      expectedTotal,
+    },
+  };
 };
 
 const handleGrowthMetricsApi = async (req, res) => {
@@ -394,8 +500,23 @@ const handleGrowthMetricsApi = async (req, res) => {
     (stageCounts.get(normalizeKey("Em fechamento")) || 0) +
     (stageCounts.get(normalizeKey("Fechado")) || 0);
 
-  const realizado = closedDeals.reduce((sum, b) => sum + safeNumber(b?.total), 0);
-  const totalVendas = fechados;
+  const nowMonthKey = getMonthKeySaoPaulo(new Date());
+  const dateFieldCounts = new Map();
+
+  const closedDealsMonth = closedDeals.filter((b) => {
+    const info = getBusinessWonLostDate(b);
+    const field = info.field || "unknown";
+    dateFieldCounts.set(field, (dateFieldCounts.get(field) || 0) + 1);
+    const key = info.date ? getMonthKeySaoPaulo(info.date) : "";
+    return key && nowMonthKey ? key === nowMonthKey : false;
+  });
+
+  const dateFieldUsed =
+    Array.from(dateFieldCounts.entries())
+      .sort((a, b) => b[1] - a[1])[0]?.[0] || "";
+
+  const realizado = closedDealsMonth.reduce((sum, b) => sum + safeNumber(b?.total), 0);
+  const totalVendas = closedDealsMonth.length;
   const ticketMedio = totalVendas > 0 ? realizado / totalVendas : 0;
 
   const conversao = percent(fechados, baseConversao);
@@ -406,7 +527,7 @@ const handleGrowthMetricsApi = async (req, res) => {
   const planosVendidos = { diamond: 0, gold: 0, turma: 0, semPlano: 0 };
   const rankingMap = new Map();
 
-  closedDeals.forEach((b) => {
+  closedDealsMonth.forEach((b) => {
     const planName = b?.products?.[0]?.product?.name;
     const planoKey = mapPlano(planName);
     planosVendidos[planoKey] = (planosVendidos[planoKey] || 0) + 1;
@@ -420,11 +541,13 @@ const handleGrowthMetricsApi = async (req, res) => {
 
   const rankingTime = Array.from(rankingMap.values()).sort((a, b) => b.valor - a.valor);
 
-  const latest = closedDeals
+  const latest = closedDealsMonth
     .slice()
     .sort((a, b) => {
-      const da = new Date(String(a?.lastMovedAt || a?.createdAt || 0)).getTime();
-      const db = new Date(String(b?.lastMovedAt || b?.createdAt || 0)).getTime();
+      const daInfo = getBusinessWonLostDate(a);
+      const dbInfo = getBusinessWonLostDate(b);
+      const da = daInfo.date ? daInfo.date.getTime() : 0;
+      const db = dbInfo.date ? dbInfo.date.getTime() : 0;
       return db - da;
     })[0];
 
@@ -434,7 +557,7 @@ const handleGrowthMetricsApi = async (req, res) => {
         plano: latest?.products?.[0]?.product?.name ? String(latest.products[0].product.name).trim() : "",
         valor: safeNumber(latest?.total),
         lastMovedAt: latest?.lastMovedAt ? String(latest.lastMovedAt) : "",
-        relativeTime: relativeTimePtBr(latest?.lastMovedAt || latest?.createdAt),
+        relativeTime: relativeTimePtBr(getBusinessWonLostDate(latest).date || latest?.lastMovedAt || latest?.createdAt),
       }
     : { lead: "", plano: "", valor: 0, lastMovedAt: "", relativeTime: "" };
 
@@ -452,7 +575,12 @@ const handleGrowthMetricsApi = async (req, res) => {
     rankingTime,
     ultimaVenda,
     debug: {
-      totalPipeline,
+      totalFetched: Number(crm?.pagination?.totalFetched) || businesses.length,
+      paginationPages: Number(crm?.pagination?.pages) || 1,
+      totalPipelineConversao: totalPipeline,
+      totalFechadoMes: totalVendas,
+      somaFechadoMes: realizado,
+      dateFieldUsed,
       agendamentos,
       fechados,
       noShow,
