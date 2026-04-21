@@ -11,9 +11,41 @@ const FIREBASE_CONFIG = {
 const session = window.__SPACE_SESSION__ && typeof window.__SPACE_SESSION__ === "object" ? window.__SPACE_SESSION__ : null;
 
 const userNameEl = document.querySelector("[data-growth-user-name]");
+const userAvatarEl = document.querySelector("[data-growth-avatar]");
+const monthLabelEl = document.querySelector("[data-growth-month]");
+
+const getInitials = (rawName) => {
+  const name = String(rawName || "").trim();
+  if (!name) return "GR";
+  const parts = name.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+};
+
+const capitalizeFirst = (value) => {
+  const str = String(value || "").trim();
+  if (!str) return "";
+  return str.charAt(0).toUpperCase() + str.slice(1);
+};
+
 if (userNameEl instanceof HTMLElement) {
   const name = typeof session?.name === "string" ? session.name.trim() : "";
   userNameEl.textContent = name ? name : "Growth";
+}
+
+if (userAvatarEl instanceof HTMLElement) {
+  userAvatarEl.textContent = getInitials(session?.name);
+}
+
+if (monthLabelEl instanceof HTMLElement) {
+  const now = new Date();
+  const formatter = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    month: "long",
+    year: "numeric",
+  });
+  const formatted = capitalizeFirst(formatter.format(now));
+  monthLabelEl.textContent = `Gestão à vista do mês · ${formatted}`;
 }
 
 const sidebarToggle = document.querySelector("[data-sidebar-toggle]");

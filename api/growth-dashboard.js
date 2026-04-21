@@ -66,6 +66,7 @@ module.exports = async (req, res) => {
     </script>
 
     <div class="platform-shell" data-view="interno">
+      <div class="platform-backdrop" aria-hidden="true"></div>
       <aside class="platform-sidebar" aria-label="Navegação">
         <div class="sidebar-topbar">
           <button
@@ -118,134 +119,254 @@ module.exports = async (req, res) => {
       </aside>
 
       <main class="platform-main" aria-label="Painel Growth">
-        <div class="growth-shell">
-          <header class="growth-header">
-            <div class="growth-head-left">
-              <div class="growth-kicker">GROWTH</div>
-              <h1 class="growth-headline">Dashboard Comercial</h1>
-              <div class="growth-subhead">Gestão à vista do mês</div>
+        <div class="growth-v2" data-growth-dashboard>
+          <header class="growth-v2-header" aria-label="Cabeçalho do dashboard Growth">
+            <div class="growth-v2-head-left">
+              <div class="growth-v2-eyebrow">GROWTH</div>
+              <div class="growth-v2-title">Dashboard Comercial</div>
+              <div class="growth-v2-subtitle" data-growth-month>Gestão à vista do mês · Abril 2026</div>
             </div>
 
-            <div class="growth-head-right">
-              <div class="growth-user" aria-label="Usuário logado">
-                <div class="growth-user-name" data-growth-user-name></div>
-                <div class="growth-user-role">Acesso Growth</div>
+            <div class="growth-v2-head-right" aria-label="Usuário logado">
+              <div class="growth-v2-usercard">
+                <div class="growth-v2-user-name" data-growth-user-name></div>
+                <div class="growth-v2-user-role">Acesso Growth</div>
               </div>
+              <div class="growth-v2-avatar" data-growth-avatar aria-label="Avatar do usuário">GR</div>
             </div>
           </header>
 
-          <section class="growth-grid growth-grid-kpis" aria-label="KPIs principais">
-            <article class="growth-card growth-card-kpi">
-              <div class="growth-label">Meta do mês</div>
-              <div class="growth-value">R$ 80.000</div>
-            </article>
+          <section class="growth-v2-section" aria-label="Resultado do mês">
+            <div class="growth-v2-section-label">RESULTADO DO MÊS</div>
 
-            <article class="growth-card growth-card-kpi">
-              <div class="growth-label">Realizado do mês</div>
-              <div class="growth-value is-accent">R$ 52.400</div>
-            </article>
+            <div class="growth-v2-grid growth-v2-grid-4">
+              <article class="growth-v2-card">
+                <div class="growth-v2-icon is-blue" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M4 13.5h3l2.2-6.2 3.2 12.7 2.4-6.5H20"></path>
+                  </svg>
+                </div>
+                <div class="growth-v2-card-label">Meta do mês</div>
+                <div class="growth-v2-card-value" data-growth-kpi="meta">R$ 80.000</div>
+              </article>
 
-            <article class="growth-card growth-card-kpi">
-              <div class="growth-label">% de atingimento</div>
-              <div class="growth-value">65,5%</div>
-              <div class="growth-meter" aria-hidden="true">
-                <span class="growth-meter-fill" style="--meter: 65.5%;"></span>
-              </div>
-            </article>
+              <article class="growth-v2-card is-realizado">
+                <div class="growth-v2-icon is-coral" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M5 18V9"></path>
+                    <path d="M10 18V6"></path>
+                    <path d="M15 18v-7"></path>
+                    <path d="M20 18V4"></path>
+                  </svg>
+                </div>
+                <div class="growth-v2-card-label is-coral">Realizado</div>
+                <div class="growth-v2-card-value is-coral" data-growth-kpi="realizado">R$ 52.400</div>
+              </article>
 
-            <article class="growth-card growth-card-kpi">
-              <div class="growth-label">Receita do mês</div>
-              <div class="growth-value is-accent">R$ 52.400</div>
-            </article>
+              <article class="growth-v2-card">
+                <div class="growth-v2-icon is-yellow" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="8"></circle>
+                    <path d="M12 7v5l3 2"></path>
+                  </svg>
+                </div>
+                <div class="growth-v2-card-label">% de atingimento</div>
+                <div class="growth-v2-card-value" data-growth-kpi="atingimento">65,5%</div>
+                <div class="growth-v2-progress" aria-hidden="true">
+                  <span class="growth-v2-progress-fill" style="width: 65.5%"></span>
+                </div>
+              </article>
+
+              <article class="growth-v2-card is-receita">
+                <div class="growth-v2-icon is-green" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M20 6 9 17l-5-5"></path>
+                  </svg>
+                </div>
+                <div class="growth-v2-card-label is-green">Receita do mês</div>
+                <div class="growth-v2-card-value is-green" data-growth-kpi="receita">R$ 52.400</div>
+              </article>
+            </div>
           </section>
 
-          <section class="growth-grid growth-grid-perf" aria-label="Performance do mês">
-            <article class="growth-card growth-card-mini">
-              <div class="growth-label">Total de vendas</div>
-              <div class="growth-value-sm">38</div>
-            </article>
-            <article class="growth-card growth-card-mini">
-              <div class="growth-label">Conversão</div>
-              <div class="growth-value-sm">27%</div>
-            </article>
-            <article class="growth-card growth-card-mini">
-              <div class="growth-label">Ticket médio</div>
-              <div class="growth-value-sm">R$ 1.379</div>
-            </article>
-            <article class="growth-card growth-card-mini">
-              <div class="growth-label">Forecast</div>
-              <div class="growth-value-sm">R$ 74.000</div>
-            </article>
+          <section class="growth-v2-section" aria-label="Indicadores comerciais">
+            <div class="growth-v2-section-label">INDICADORES COMERCIAIS</div>
+
+            <div class="growth-v2-grid growth-v2-grid-4">
+              <article class="growth-v2-card">
+                <div class="growth-v2-icon is-blue" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <rect x="4.5" y="6.5" width="15" height="13" rx="2"></rect>
+                    <path d="M7.5 10h9"></path>
+                    <path d="M7.5 13.5h6.5"></path>
+                  </svg>
+                </div>
+                <div class="growth-v2-card-label">Total de vendas</div>
+                <div class="growth-v2-card-value" data-growth-indicator="vendas">38</div>
+                <div class="growth-v2-card-sub is-green">+12 vs mês anterior</div>
+              </article>
+
+              <article class="growth-v2-card">
+                <div class="growth-v2-icon is-green" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M7 14.5 11 10.5l3 3 5-5"></path>
+                    <path d="M19 14.5v5H4.5V5h5"></path>
+                  </svg>
+                </div>
+                <div class="growth-v2-card-label">Conversão</div>
+                <div class="growth-v2-card-value" data-growth-indicator="conversao">27%</div>
+                <div class="growth-v2-card-sub is-green">+3% vs mês anterior</div>
+              </article>
+
+              <article class="growth-v2-card">
+                <div class="growth-v2-icon is-yellow" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M8 8h8"></path>
+                    <path d="M8 12h8"></path>
+                    <path d="M8 16h6"></path>
+                    <path d="M6 4.5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-11a2 2 0 0 1 2-2Z"></path>
+                  </svg>
+                </div>
+                <div class="growth-v2-card-label">Ticket médio</div>
+                <div class="growth-v2-card-value" data-growth-indicator="ticket">R$ 1.379</div>
+                <div class="growth-v2-card-sub">Plano médio: Gold</div>
+              </article>
+
+              <article class="growth-v2-card">
+                <div class="growth-v2-icon is-yellow" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M4.5 18.5V6.5"></path>
+                    <path d="M4.5 6.5h15"></path>
+                    <path d="M7.5 16 11 12.5l3 3 4-4"></path>
+                  </svg>
+                </div>
+                <div class="growth-v2-card-label">Forecast</div>
+                <div class="growth-v2-card-value" data-growth-indicator="forecast">R$ 74.000</div>
+                <div class="growth-v2-card-sub is-yellow">Projeção de fechamento</div>
+              </article>
+            </div>
           </section>
 
-          <section class="growth-grid growth-grid-bottom" aria-label="Ranking e execução">
-            <article class="growth-card growth-card-ranking">
-              <div class="growth-card-head">
-                <h2 class="growth-card-title">Ranking do time</h2>
-                <div class="growth-chip">Mês atual</div>
-              </div>
+          <section class="growth-v2-section" aria-label="Ranking e execução">
+            <div class="growth-v2-two-col">
+              <article class="growth-v2-card growth-v2-card-ranking" aria-label="Ranking do time">
+                <div class="growth-v2-card-head">
+                  <div class="growth-v2-card-title">Ranking do time</div>
+                  <div class="growth-v2-pill is-coral">Mês atual</div>
+                </div>
 
-              <div class="growth-ranking">
-                <div class="growth-ranking-head" aria-hidden="true">
+                <div class="growth-v2-table-head" aria-hidden="true">
                   <span>#</span>
-                  <span>Vendedor</span>
-                  <span>Vendas</span>
-                  <span>Valor</span>
+                  <span>VENDEDOR</span>
+                  <span>VENDAS</span>
+                  <span>VALOR</span>
                 </div>
 
-                <ol class="growth-ranking-list">
-                  <li class="growth-rank-item is-top">
-                    <div class="growth-rank-pos">1</div>
-                    <div class="growth-rank-name">Guilherme</div>
-                    <div class="growth-rank-sales">14</div>
-                    <div class="growth-rank-value">R$ 19.800</div>
-                    <div class="growth-rank-bar" aria-hidden="true"><span style="--bar: 100%;"></span></div>
-                  </li>
-                  <li class="growth-rank-item">
-                    <div class="growth-rank-pos">2</div>
-                    <div class="growth-rank-name">Matheus</div>
-                    <div class="growth-rank-sales">10</div>
-                    <div class="growth-rank-value">R$ 14.300</div>
-                    <div class="growth-rank-bar" aria-hidden="true"><span style="--bar: 72%;"></span></div>
-                  </li>
-                  <li class="growth-rank-item">
-                    <div class="growth-rank-pos">3</div>
-                    <div class="growth-rank-name">Ana</div>
-                    <div class="growth-rank-sales">8</div>
-                    <div class="growth-rank-value">R$ 10.900</div>
-                    <div class="growth-rank-bar" aria-hidden="true"><span style="--bar: 55%;"></span></div>
-                  </li>
-                  <li class="growth-rank-item">
-                    <div class="growth-rank-pos">4</div>
-                    <div class="growth-rank-name">Giovana</div>
-                    <div class="growth-rank-sales">6</div>
-                    <div class="growth-rank-value">R$ 7.400</div>
-                    <div class="growth-rank-bar" aria-hidden="true"><span style="--bar: 37%;"></span></div>
-                  </li>
-                </ol>
-              </div>
-            </article>
+                <div class="growth-v2-rank-list">
+                  <div class="growth-v2-rank-row is-top">
+                    <div class="growth-v2-rank-pos">1</div>
+                    <div class="growth-v2-rank-vendor">
+                      <span class="growth-v2-rank-avatar is-coral" aria-hidden="true">GD</span>
+                      <span class="growth-v2-rank-name">Guilherme</span>
+                    </div>
+                    <div class="growth-v2-rank-sales">14</div>
+                    <div class="growth-v2-rank-value">R$ 19.800</div>
+                    <div class="growth-v2-rank-bar" aria-hidden="true"><span style="width: 100%"></span></div>
+                  </div>
 
-            <aside class="growth-card growth-card-exec">
-              <div class="growth-card-head">
-                <h2 class="growth-card-title">Execução do dia</h2>
-              </div>
+                  <div class="growth-v2-rank-row">
+                    <div class="growth-v2-rank-pos">2</div>
+                    <div class="growth-v2-rank-vendor">
+                      <span class="growth-v2-rank-avatar is-blue" aria-hidden="true">MT</span>
+                      <span class="growth-v2-rank-name">Matheus</span>
+                    </div>
+                    <div class="growth-v2-rank-sales">10</div>
+                    <div class="growth-v2-rank-value">R$ 14.300</div>
+                    <div class="growth-v2-rank-bar" aria-hidden="true"><span class="is-blue" style="width: 72%"></span></div>
+                  </div>
 
-              <div class="growth-exec-grid">
-                <div class="growth-exec-item">
-                  <div class="growth-label">Reuniões hoje</div>
-                  <div class="growth-value-sm">11</div>
+                  <div class="growth-v2-rank-row">
+                    <div class="growth-v2-rank-pos">3</div>
+                    <div class="growth-v2-rank-vendor">
+                      <span class="growth-v2-rank-avatar is-green" aria-hidden="true">AN</span>
+                      <span class="growth-v2-rank-name">Ana</span>
+                    </div>
+                    <div class="growth-v2-rank-sales">8</div>
+                    <div class="growth-v2-rank-value">R$ 10.900</div>
+                    <div class="growth-v2-rank-bar" aria-hidden="true"><span class="is-green" style="width: 55%"></span></div>
+                  </div>
+
+                  <div class="growth-v2-rank-row">
+                    <div class="growth-v2-rank-pos">4</div>
+                    <div class="growth-v2-rank-vendor">
+                      <span class="growth-v2-rank-avatar is-yellow" aria-hidden="true">GI</span>
+                      <span class="growth-v2-rank-name">Giovana</span>
+                    </div>
+                    <div class="growth-v2-rank-sales">6</div>
+                    <div class="growth-v2-rank-value">R$ 7.400</div>
+                    <div class="growth-v2-rank-bar" aria-hidden="true"><span class="is-yellow" style="width: 37%"></span></div>
+                  </div>
                 </div>
-                <div class="growth-exec-item">
-                  <div class="growth-label">Calls hoje</div>
-                  <div class="growth-value-sm">47</div>
-                </div>
-                <div class="growth-exec-item is-wide">
-                  <div class="growth-label">Última venda</div>
-                  <div class="growth-value-sm">há 18 minutos</div>
-                </div>
+              </article>
+
+              <div class="growth-v2-stack">
+                <article class="growth-v2-card" aria-label="Execução do dia">
+                  <div class="growth-v2-card-head">
+                    <div class="growth-v2-card-title">Execução do dia</div>
+                  </div>
+
+                  <div class="growth-v2-exec-grid">
+                    <div class="growth-v2-mini-card">
+                      <div class="growth-v2-mini-label">REUNIÕES HOJE</div>
+                      <div class="growth-v2-mini-value">11</div>
+                    </div>
+                    <div class="growth-v2-mini-card">
+                      <div class="growth-v2-mini-label">CALLS HOJE</div>
+                      <div class="growth-v2-mini-value">47</div>
+                    </div>
+                  </div>
+
+                  <div class="growth-v2-last-sale">
+                    <div class="growth-v2-mini-label">ÚLTIMA VENDA</div>
+                    <div class="growth-v2-last-value">há 18 minutos</div>
+                    <div class="growth-v2-last-sub">Plano Diamond · R$ 2.400</div>
+                  </div>
+                </article>
+
+                <article class="growth-v2-card" aria-label="Leads pendentes">
+                  <div class="growth-v2-card-head">
+                    <div class="growth-v2-card-title">Leads pendentes</div>
+                    <div class="growth-v2-pill is-danger">12</div>
+                  </div>
+
+                  <div class="growth-v2-leads">
+                    <button class="growth-v2-lead-row is-danger" type="button">
+                      <div>
+                        <div class="growth-v2-lead-title">5 sem contato há +48h</div>
+                        <div class="growth-v2-lead-sub">Requer ação urgente</div>
+                      </div>
+                      <span class="growth-v2-chevron" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none">
+                          <path d="M9.5 7.5 14 12l-4.5 4.5"></path>
+                        </svg>
+                      </span>
+                    </button>
+
+                    <button class="growth-v2-lead-row is-warn" type="button">
+                      <div>
+                        <div class="growth-v2-lead-title">7 em negociação</div>
+                        <div class="growth-v2-lead-sub">Follow-up programado</div>
+                      </div>
+                      <span class="growth-v2-chevron" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none">
+                          <path d="M9.5 7.5 14 12l-4.5 4.5"></path>
+                        </svg>
+                      </span>
+                    </button>
+                  </div>
+                </article>
               </div>
-            </aside>
+            </div>
           </section>
         </div>
       </main>
