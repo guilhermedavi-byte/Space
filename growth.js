@@ -711,7 +711,10 @@ const initGrowthDashboardMetrics = () => {
     const metaEl = document.querySelector('[data-growth-kpi="meta"]');
     if (!(metaEl instanceof HTMLElement)) return;
     try {
-      const res = await fetchWithAuth("/api/growth-goals/current", { method: "GET", forceRefreshIdToken: true });
+      const res = await fetchWithAuth("/api/growth-dashboard?api=growth-goals&mode=current", {
+        method: "GET",
+        forceRefreshIdToken: true,
+      });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error || "request_failed");
       const goal = data?.goal && typeof data.goal === "object" ? data.goal : null;

@@ -5339,6 +5339,48 @@ const waitForFirebaseAuthReady = (firebase, timeoutMs = 4000) => {
   });
 };
 
+const waitForAuthToken = async (firebase, timeoutMs = 12000) => {
+  if (!firebase || !firebase.primaryAuth || typeof firebase.onAuthStateChanged !== "function") {
+    throw new Error("not-authenticated");
+  }
+
+  const ms = Number(timeoutMs);
+  const safeTimeout = Number.isFinite(ms) && ms > 0 ? ms : 12000;
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let unsub = null;
+
+    const finish = (err, token) => {
+      if (settled) return;
+      settled = true;
+      try {
+        if (typeof unsub === "function") unsub();
+      } catch (e) {
+        // ignore
+      }
+      if (err) reject(err);
+      else resolve(String(token || ""));
+    };
+
+    const timer = window.setTimeout(() => finish(new Error("not-authenticated"), ""), safeTimeout);
+
+    unsub = firebase.onAuthStateChanged(firebase.primaryAuth, async (user) => {
+      window.clearTimeout(timer);
+      if (!user || typeof user.getIdToken !== "function") {
+        finish(new Error("not-authenticated"), "");
+        return;
+      }
+      try {
+        const token = await user.getIdToken(true);
+        finish(null, token);
+      } catch (e) {
+        finish(e, "");
+      }
+    });
+  });
+};
+
 let cachedFirebaseIdToken = {
   uid: "",
   token: "",
@@ -5348,6 +5390,15 @@ let cachedFirebaseIdToken = {
 const getFirebaseIdTokenForApi = async (forceRefresh = false) => {
   try {
     const firebase = await loadFirebaseAdminApi();
+    if (forceRefresh) {
+      const token = await waitForAuthToken(firebase, 12000);
+      const user = firebase?.primaryAuth?.currentUser;
+      const uid = user ? String(user.uid || "") : "";
+      const now = Date.now();
+      cachedFirebaseIdToken = { uid, token: String(token || ""), expiresAt: now + 180_000 };
+      return cachedFirebaseIdToken.token;
+    }
+
     const user = await waitForFirebaseAuthReady(firebase, 3500);
     if (!user || typeof user.getIdToken !== "function") return "";
 
@@ -5358,7 +5409,7 @@ const getFirebaseIdTokenForApi = async (forceRefresh = false) => {
     }
 
     // Use `true` to force refresh when needed (ex: growth-goals save right after login).
-    const token = await user.getIdToken(Boolean(forceRefresh));
+    const token = await user.getIdToken(false);
     cachedFirebaseIdToken = {
       uid,
       token: String(token || ""),
@@ -5564,7 +5615,7 @@ const loadAdminGrowthGoals = async () => {
   adminGoalsTable.innerHTML = `<div class="growth-contracts-loading">Carregando...</div>`;
 
   try {
-    const res = await fetchWithAuth("/api/growth-goals", { method: "GET", forceRefreshIdToken: true });
+    const res = await fetchWithAuth("/api/growth-dashboard?api=growth-goals", { method: "GET", forceRefreshIdToken: true });
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(data?.error || "request_failed");
 
@@ -5661,7 +5712,7 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
           if (modalSecondary) modalSecondary.disabled = true;
           if (modalPrimary) modalPrimary.textContent = "Salvando…";
 
-          const res = await fetchWithAuth("/api/growth-goals", {
+          const res = await fetchWithAuth("/api/growth-dashboard?api=growth-goals", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ competencia: competenciaValue, valorMeta }),
