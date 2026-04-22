@@ -440,6 +440,7 @@ const updateForecastMetaSub = () => {
 const crmConnectedEls = () => {
   return {
     realizado: document.querySelector('[data-growth-kpi="realizado"]'),
+    forecast: document.querySelector('[data-growth-indicator="forecast"]'),
     vendas: document.querySelector('[data-growth-indicator="vendas"]'),
     conversao: document.querySelector('[data-growth-indicator="conversao"]'),
     ticket: document.querySelector('[data-growth-indicator="ticket"]'),
@@ -511,6 +512,7 @@ const applyCrmLoadingUi = () => {
   // Replace any server-rendered mock values with neutral placeholders.
   [
     els.realizado,
+    els.forecast,
     els.vendas,
     els.conversao,
     els.ticket,
@@ -537,6 +539,7 @@ const applyCrmErrorUi = () => {
 
   [
     els.realizado,
+    els.forecast,
     els.vendas,
     els.conversao,
     els.ticket,
@@ -563,6 +566,7 @@ const clearCrmLoadingUi = () => {
 
   [
     els.realizado,
+    els.forecast,
     els.vendas,
     els.conversao,
     els.ticket,
@@ -649,6 +653,12 @@ const applyGrowthMetricsToDom = (payload) => {
   const realizadoEl = document.querySelector('[data-growth-kpi="realizado"]');
   if (realizadoEl instanceof HTMLElement) realizadoEl.textContent = formatMoneyNoCentsPtBr(summary.realizado);
 
+  const forecastEl = document.querySelector('[data-growth-indicator="forecast"]');
+  if (forecastEl instanceof HTMLElement) {
+    const n = Number(summary.forecast);
+    forecastEl.textContent = Number.isFinite(n) && n >= 0 ? formatMoneyNoCentsPtBr(n) : "—";
+  }
+
   const metaEl = document.querySelector('[data-growth-kpi="meta"]');
   const metaValue = metaEl instanceof HTMLElement ? parseMoneyLoose(metaEl.textContent) : NaN;
   if (Number.isFinite(metaValue) && metaValue > 0) {
@@ -703,6 +713,8 @@ const applyGrowthMetricsToDom = (payload) => {
     const value = formatMoneyNoCentsPtBr(payload?.ultimaVenda?.valor);
     lastSub.textContent = `${plan} · ${value}`;
   }
+
+  updateForecastMetaSub();
 };
 
 const initGrowthDashboardMetrics = () => {

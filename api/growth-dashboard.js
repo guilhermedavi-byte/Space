@@ -297,6 +297,46 @@ const mapPlano = (rawProductName) => {
   return "semPlano";
 };
 
+const STAGE_WEIGHTS = {
+  [normalizeKey("Contato inicial feito")]: 0.05,
+  [normalizeKey("Follow Up")]: 0.1,
+  [normalizeKey("Agendado")]: 0.25,
+  [normalizeKey("No-show")]: 0.08,
+  [normalizeKey("Reunião Reagendada")]: 0.3,
+  [normalizeKey("Reunião feita (Follow-up)")]: 0.45,
+  [normalizeKey("Hot Lead")]: 0.65,
+  [normalizeKey("Em fechamento")]: 0.8,
+  [normalizeKey("Fechado")]: 1.0,
+};
+
+const isMonthKeyEqualSaoPaulo = (dateLike, monthKey) => {
+  const key = getMonthKeySaoPaulo(dateLike);
+  return Boolean(key && monthKey && key === monthKey);
+};
+
+const getDealValueForForecast = (deal) => {
+  const raw = safeNumber(deal?.total);
+  if (raw > 0) return raw;
+
+  const productName = deal?.products?.[0]?.product?.name ? String(deal.products[0].product.name).trim() : "";
+  if (productName === "Programa Diamond") return 1190;
+  if (productName === "Programa Gold") return 897;
+  if (productName === "Programa Turma") return 350;
+
+  return 1057;
+};
+
+const calculateForecast = (deals) => {
+  const items = Array.isArray(deals) ? deals : [];
+  return items.reduce((sum, deal) => {
+    const stageKey = normalizeKey(deal?.stage?.name);
+    const weight = Number(STAGE_WEIGHTS[stageKey] ?? 0);
+    if (!Number.isFinite(weight) || weight <= 0) return sum;
+    const value = getDealValueForForecast(deal);
+    return sum + value * weight;
+  }, 0);
+};
+
 const relativeTimePtBr = (isoDate) => {
   const d = isoDate ? new Date(String(isoDate)) : null;
   if (!(d instanceof Date) || Number.isNaN(d.getTime())) return "";
@@ -847,6 +887,42 @@ const handleGrowthMetricsApi = async (req, res) => {
   const totalVendas = closedDealsMonth.length;
   const ticketMedio = totalVendas > 0 ? realizado / totalVendas : 0;
 
+  // Forecast (receita projetada) para o mês corrente:
+  // Soma ponderada (valor * probabilidade) por etapa do funil.
+  // Preferimos o pipeline "Funil principal" e caímos no "Conversão" quando ele não existir no CRM.
+  const funilPipelineKey = normalizeKey("Funil principal");
+  const funilDealsAll = businesses.filter((b) => normalizeKey(b?.stage?.pipeline?.name) === funilPipelineKey);
+  const forecastBase = funilDealsAll.length ? funilDealsAll : filtered;
+  // Garantir que o realizado (Fechado no mês) entre no forecast com peso 1.0,
+  // mesmo que o pipeline "Funil principal" não contenha esses negócios.
+  const forecastIds = new Set(forecastBase.map((d) => getBusinessId(d)).filter(Boolean));
+  const forecastCandidates = forecastBase.slice();
+  closedDealsMonth.forEach((d) => {
+    const id = getBusinessId(d);
+    if (id && !forecastIds.has(id)) forecastCandidates.push(d);
+  });
+
+  const dealsForForecast = forecastCandidates.filter((deal) => {
+    const stageKey = normalizeKey(deal?.stage?.name);
+    const weight = Number(STAGE_WEIGHTS[stageKey] ?? 0);
+    if (!Number.isFinite(weight) || weight <= 0) return false;
+
+    if (stageKey === normalizeKey("Fechado")) {
+      const info = getBusinessWonLostDate(deal);
+      const closeDate = info.date || deal?.closedAt || deal?.closed_at || deal?.lastMovedAt || null;
+      return closeDate ? isMonthKeyEqualSaoPaulo(closeDate, nowMonthKey) : false;
+    }
+
+    const createdAt = deal?.createdAt || deal?.created_at || null;
+    const movedAt = deal?.lastMovedAt || deal?.last_moved_at || null;
+    return (
+      (createdAt && isMonthKeyEqualSaoPaulo(createdAt, nowMonthKey)) ||
+      (movedAt && isMonthKeyEqualSaoPaulo(movedAt, nowMonthKey))
+    );
+  });
+
+  const forecast = calculateForecast(dealsForForecast);
+
   const conversao = percent(fechados, baseConversao);
   const taxaAgendamento = percent(agendamentos, totalPipeline);
   const taxaFunil = percent(fechados, totalPipeline);
@@ -895,6 +971,7 @@ const handleGrowthMetricsApi = async (req, res) => {
       totalVendas,
       conversao,
       ticketMedio,
+      forecast,
       taxaAgendamento,
       taxaFunil,
       noShowPercent,
