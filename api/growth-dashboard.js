@@ -1895,7 +1895,7 @@ module.exports = async (req, res) => {
 	                  </svg>
 	                </div>
 	                <div class="growth-v2-card-label">Forecast</div>
-	                <div class="growth-v2-card-value" data-growth-indicator="forecast">R$ 74.000</div>
+	                <div class="growth-v2-card-value" data-growth-indicator="forecast">—</div>
 	                <div class="growth-v2-card-sub is-yellow">Projeção de fechamento</div>
 	              </article>
 	            </div>
