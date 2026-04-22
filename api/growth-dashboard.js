@@ -1,6 +1,7 @@
 const { getSessionFromRequest } = require("../_lib/session");
 const { readJsonBody, sendJson } = require("../_lib/http");
 const { getGoogleAccessToken } = require("../_lib/google-service-account");
+const { calculateGrowthForecast3Parts, getDealValue: getDealValueForecast, normalizeKey: normalizeKeyForecast } = require("../_lib/forecast-service");
 const {
   decodeFields,
   encodeFields,
@@ -295,46 +296,6 @@ const mapPlano = (rawProductName) => {
   if (name.includes("gold")) return "gold";
   if (name.includes("turma")) return "turma";
   return "semPlano";
-};
-
-const STAGE_WEIGHTS = {
-  [normalizeKey("Contato inicial feito")]: 0.05,
-  [normalizeKey("Follow Up")]: 0.1,
-  [normalizeKey("Agendado")]: 0.25,
-  [normalizeKey("No-show")]: 0.08,
-  [normalizeKey("Reunião Reagendada")]: 0.3,
-  [normalizeKey("Reunião feita (Follow-up)")]: 0.45,
-  [normalizeKey("Hot Lead")]: 0.65,
-  [normalizeKey("Em fechamento")]: 0.8,
-  [normalizeKey("Fechado")]: 1.0,
-};
-
-const isMonthKeyEqualSaoPaulo = (dateLike, monthKey) => {
-  const key = getMonthKeySaoPaulo(dateLike);
-  return Boolean(key && monthKey && key === monthKey);
-};
-
-const getDealValueForForecast = (deal) => {
-  const raw = safeNumber(deal?.total);
-  if (raw > 0) return raw;
-
-  const productName = deal?.products?.[0]?.product?.name ? String(deal.products[0].product.name).trim() : "";
-  if (productName === "Programa Diamond") return 1190;
-  if (productName === "Programa Gold") return 897;
-  if (productName === "Programa Turma") return 350;
-
-  return 1057;
-};
-
-const calculateForecast = (deals) => {
-  const items = Array.isArray(deals) ? deals : [];
-  return items.reduce((sum, deal) => {
-    const stageKey = normalizeKey(deal?.stage?.name);
-    const weight = Number(STAGE_WEIGHTS[stageKey] ?? 0);
-    if (!Number.isFinite(weight) || weight <= 0) return sum;
-    const value = getDealValueForForecast(deal);
-    return sum + value * weight;
-  }, 0);
 };
 
 const relativeTimePtBr = (isoDate) => {
@@ -812,14 +773,25 @@ const handleGrowthMetricsApi = async (req, res) => {
   const auth = requireInternalAuth(req, res);
   if (!auth) return;
 
+  // In-memory cache (best-effort) to reduce CRM load. TTL: 15 minutes.
+  const nowMs = Date.now();
+  if (globalThis.__growthMetricsCache && globalThis.__growthMetricsCache.expiresAt > nowMs) {
+    sendJson(res, 200, { ...globalThis.__growthMetricsCache.payload, cached: true });
+    return;
+  }
+
   const crm = await fetchAllCrmBusinesses();
   if (!crm.ok) {
     sendJson(res, crm.status || 500, crm);
     return;
   }
 
-  const pipelineTarget = normalizeKey("Conversão");
   const businesses = Array.isArray(crm.businesses) ? crm.businesses : [];
+
+  // Prefer the main pipeline name used by the commercial team. Fall back to the old "Conversão" pipeline if needed.
+  const pipelinePreferred = normalizeKey("Funil principal");
+  const preferredDeals = businesses.filter((b) => normalizeKey(b?.stage?.pipeline?.name) === pipelinePreferred);
+  const pipelineTarget = preferredDeals.length ? pipelinePreferred : normalizeKey("Conversão");
 
   const filtered = businesses.filter((b) => normalizeKey(b?.stage?.pipeline?.name) === pipelineTarget);
 
@@ -883,50 +855,62 @@ const handleGrowthMetricsApi = async (req, res) => {
     return !closedDealsMonthIds.has(id);
   });
 
-  const realizado = closedDealsMonth.reduce((sum, b) => sum + safeNumber(b?.total), 0);
+  const realizado = closedDealsMonth.reduce((sum, b) => sum + getDealValueForecast(b), 0);
   const totalVendas = closedDealsMonth.length;
   const ticketMedio = totalVendas > 0 ? realizado / totalVendas : 0;
-
-  // Forecast (receita projetada) para o mês corrente:
-  // Soma ponderada (valor * probabilidade) por etapa do funil.
-  // Preferimos o pipeline "Funil principal" e caímos no "Conversão" quando ele não existir no CRM.
-  const funilPipelineKey = normalizeKey("Funil principal");
-  const funilDealsAll = businesses.filter((b) => normalizeKey(b?.stage?.pipeline?.name) === funilPipelineKey);
-  const forecastBase = funilDealsAll.length ? funilDealsAll : filtered;
-  // Garantir que o realizado (Fechado no mês) entre no forecast com peso 1.0,
-  // mesmo que o pipeline "Funil principal" não contenha esses negócios.
-  const forecastIds = new Set(forecastBase.map((d) => getBusinessId(d)).filter(Boolean));
-  const forecastCandidates = forecastBase.slice();
-  closedDealsMonth.forEach((d) => {
-    const id = getBusinessId(d);
-    if (id && !forecastIds.has(id)) forecastCandidates.push(d);
-  });
-
-  const dealsForForecast = forecastCandidates.filter((deal) => {
-    const stageKey = normalizeKey(deal?.stage?.name);
-    const weight = Number(STAGE_WEIGHTS[stageKey] ?? 0);
-    if (!Number.isFinite(weight) || weight <= 0) return false;
-
-    if (stageKey === normalizeKey("Fechado")) {
-      const info = getBusinessWonLostDate(deal);
-      const closeDate = info.date || deal?.closedAt || deal?.closed_at || deal?.lastMovedAt || null;
-      return closeDate ? isMonthKeyEqualSaoPaulo(closeDate, nowMonthKey) : false;
-    }
-
-    const createdAt = deal?.createdAt || deal?.created_at || null;
-    const movedAt = deal?.lastMovedAt || deal?.last_moved_at || null;
-    return (
-      (createdAt && isMonthKeyEqualSaoPaulo(createdAt, nowMonthKey)) ||
-      (movedAt && isMonthKeyEqualSaoPaulo(movedAt, nowMonthKey))
-    );
-  });
-
-  const forecast = calculateForecast(dealsForForecast);
 
   const conversao = percent(fechados, baseConversao);
   const taxaAgendamento = percent(agendamentos, totalPipeline);
   const taxaFunil = percent(fechados, totalPipeline);
   const noShowPercent = percent(noShow, agendamentos);
+
+  // Forecast (3 partes): fechado + pipeline (3 etapas) + projeção de novos leads.
+  const getSaoPauloDayParts = () => {
+    try {
+      const parts = new Intl.DateTimeFormat("pt-BR", {
+        timeZone: "America/Sao_Paulo",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).formatToParts(new Date());
+      const year = Number(parts.find((p) => p.type === "year")?.value || 0);
+      const month = Number(parts.find((p) => p.type === "month")?.value || 0); // 1-12
+      const day = Number(parts.find((p) => p.type === "day")?.value || 0);
+      const daysInMonth = year && month ? new Date(year, month, 0).getDate() : 30;
+      return { year, month, day, daysInMonth };
+    } catch (error) {
+      const d = new Date();
+      const year = d.getFullYear();
+      const month = d.getMonth() + 1;
+      const day = d.getDate();
+      const daysInMonth = new Date(year, month, 0).getDate();
+      return { year, month, day, daysInMonth };
+    }
+  };
+
+  const { day: diasPassados, daysInMonth } = getSaoPauloDayParts();
+  const diasTotaisDoMes = Math.max(28, Number(daysInMonth) || 30);
+  const diasRestantes = Math.max(0, diasTotaisDoMes - Math.max(1, Number(diasPassados) || 1));
+
+  const forecastBreakdown = calculateGrowthForecast3Parts({
+    deals: filtered,
+    nowMonthKey,
+    getMonthKey: getMonthKeySaoPaulo,
+    getClosedDate: (deal) => getBusinessWonLostDate(deal).date || null,
+    daysPassed: Math.max(1, Number(diasPassados) || 1),
+    daysRemaining: diasRestantes,
+    rates: {
+      taxaAgendamento: Number.isFinite(taxaAgendamento) ? Math.max(0, Math.min(1, taxaAgendamento / 100)) : undefined,
+      taxaNoShow: Number.isFinite(noShowPercent) ? Math.max(0, Math.min(1, noShowPercent / 100)) : undefined,
+      taxaConversao: Number.isFinite(conversao) ? Math.max(0, Math.min(1, conversao / 100)) : undefined,
+      ticketMedio: Number.isFinite(ticketMedio) && ticketMedio > 0 ? ticketMedio : undefined,
+    },
+  });
+
+  // Garantir que Parte 1 bata com o card "Realizado".
+  forecastBreakdown.parte1_fechado = realizado;
+  const forecast = Math.max(0, realizado + safeNumber(forecastBreakdown.parte2_pipeline) + safeNumber(forecastBreakdown.parte3_novosLeads));
+  forecastBreakdown.total = forecast;
 
   const planosVendidos = { diamond: 0, gold: 0, turma: 0, semPlano: 0 };
   const rankingMap = new Map();
@@ -939,7 +923,7 @@ const handleGrowthMetricsApi = async (req, res) => {
     const vendor = b?.attendant?.name ? String(b.attendant.name).trim() : "Sem vendedor";
     const entry = rankingMap.get(vendor) || { nome: vendor, vendas: 0, valor: 0 };
     entry.vendas += 1;
-    entry.valor += safeNumber(b?.total);
+    entry.valor += getDealValueForecast(b);
     rankingMap.set(vendor, entry);
   });
 
@@ -959,13 +943,13 @@ const handleGrowthMetricsApi = async (req, res) => {
     ? {
         lead: latest?.lead?.name ? String(latest.lead.name).trim() : "",
         plano: latest?.products?.[0]?.product?.name ? String(latest.products[0].product.name).trim() : "",
-        valor: safeNumber(latest?.total),
+        valor: getDealValueForecast(latest),
         lastMovedAt: latest?.lastMovedAt ? String(latest.lastMovedAt) : "",
         relativeTime: relativeTimePtBr(getBusinessWonLostDate(latest).date || latest?.lastMovedAt || latest?.createdAt),
       }
     : { lead: "", plano: "", valor: 0, lastMovedAt: "", relativeTime: "" };
 
-  sendJson(res, 200, {
+  const payload = {
     summary: {
       realizado,
       totalVendas,
@@ -979,6 +963,7 @@ const handleGrowthMetricsApi = async (req, res) => {
     planosVendidos,
     rankingTime,
     ultimaVenda,
+    forecastBreakdown,
     debug: {
       totalFetched: Number(crm?.pagination?.totalFetched) || businesses.length,
       paginationPages: Number(crm?.pagination?.pages) || 1,
@@ -1034,7 +1019,10 @@ const handleGrowthMetricsApi = async (req, res) => {
       noShow,
       baseConversao,
     },
-  });
+  };
+
+  globalThis.__growthMetricsCache = { payload, expiresAt: Date.now() + 15 * 60 * 1000 };
+  sendJson(res, 200, payload);
 };
 
 const decodeContratoDoc = (doc) => {
