@@ -776,6 +776,27 @@ const handleGrowthMetricsApi = async (req, res) => {
   // In-memory cache (best-effort) to reduce CRM load. TTL: 15 minutes.
   const nowMs = Date.now();
   if (globalThis.__growthMetricsCache && globalThis.__growthMetricsCache.expiresAt > nowMs) {
+    try {
+      const cached = globalThis.__growthMetricsCache.payload;
+      const fb = cached?.forecastBreakdown && typeof cached.forecastBreakdown === "object" ? cached.forecastBreakdown : null;
+      if (fb) {
+        const dbg = fb.debug && typeof fb.debug === "object" ? fb.debug : {};
+        // eslint-disable-next-line no-console
+        console.log("[FORECAST DEBUG]", {
+          parte1_fechado: Number(fb.parte1_fechado) || 0,
+          parte2_pipeline: Number(fb.parte2_pipeline) || 0,
+          parte3_novosLeads: Number(fb.parte3_novosLeads) || 0,
+          forecast_total: Number(fb.total) || 0,
+          diasPassados: Number(dbg.diasPassados) || 0,
+          diasRestantes: Number(dbg.diasRestantes) || 0,
+          mediaDiariaLeads: Number(dbg.mediaDiariaLeads) || 0,
+          novosLeadsEsperados: Number(dbg.novosLeadsEsperados) || 0,
+          dealsPipeline_count: Number(dbg.deals_parte2) || 0,
+        });
+      }
+    } catch {
+      // ignore logging failures
+    }
     sendJson(res, 200, { ...globalThis.__growthMetricsCache.payload, cached: true });
     return;
   }
@@ -911,6 +932,24 @@ const handleGrowthMetricsApi = async (req, res) => {
   forecastBreakdown.parte1_fechado = realizado;
   const forecast = Math.max(0, realizado + safeNumber(forecastBreakdown.parte2_pipeline) + safeNumber(forecastBreakdown.parte3_novosLeads));
   forecastBreakdown.total = forecast;
+
+  try {
+    const dbg = forecastBreakdown.debug && typeof forecastBreakdown.debug === "object" ? forecastBreakdown.debug : {};
+    // eslint-disable-next-line no-console
+    console.log("[FORECAST DEBUG]", {
+      parte1_fechado: realizado,
+      parte2_pipeline: safeNumber(forecastBreakdown.parte2_pipeline),
+      parte3_novosLeads: safeNumber(forecastBreakdown.parte3_novosLeads),
+      forecast_total: forecast,
+      diasPassados: Number(dbg.diasPassados) || Math.max(1, Number(diasPassados) || 1),
+      diasRestantes: Number(dbg.diasRestantes) || diasRestantes,
+      mediaDiariaLeads: Number(dbg.mediaDiariaLeads) || 0,
+      novosLeadsEsperados: Number(dbg.novosLeadsEsperados) || 0,
+      dealsPipeline_count: Number(dbg.deals_parte2) || 0,
+    });
+  } catch {
+    // ignore logging failures
+  }
 
   const planosVendidos = { diamond: 0, gold: 0, turma: 0, semPlano: 0 };
   const rankingMap = new Map();
