@@ -714,6 +714,31 @@ const applyGrowthMetricsToDom = (payload) => {
     lastSub.textContent = `${plan} · ${value}`;
   }
 
+  try {
+    const fb = payload?.forecastBreakdown && typeof payload.forecastBreakdown === "object" ? payload.forecastBreakdown : null;
+    if (fb) {
+      const parte1 = Number(fb.parte1_fechado) || 0;
+      const parte2 = Number(fb.parte2_pipeline) || 0;
+      const parte3 = Number(fb.parte3_novosLeads) || 0;
+      const forecastTotal = Number.isFinite(Number(fb.total)) ? Number(fb.total) : Number(summary.forecast) || 0;
+      const dbg = fb.debug && typeof fb.debug === "object" ? fb.debug : {};
+      // eslint-disable-next-line no-console
+      console.log({
+        parte1_fechado: parte1,
+        parte2_pipeline: parte2,
+        parte3_novosLeads: parte3,
+        forecast_total: forecastTotal,
+        diasPassados: Number(dbg.diasPassados) || 0,
+        diasRestantes: Number(dbg.diasRestantes) || 0,
+        mediaDiariaLeads: Number(dbg.mediaDiariaLeads) || 0,
+        novosLeadsEsperados: Number(dbg.novosLeadsEsperados) || 0,
+        dealsPipeline_count: Number(dbg.deals_parte2) || 0,
+      });
+    }
+  } catch (e) {
+    // ignore debug log failures
+  }
+
   updateForecastMetaSub();
 };
 
