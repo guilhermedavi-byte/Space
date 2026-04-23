@@ -814,6 +814,24 @@ const handleGrowthMetricsApi = async (req, res) => {
 
   const filtered = businesses.filter((b) => normalizeKey(b?.stage?.pipeline?.name) === pipelineTarget);
 
+  // Temporary debug: inspect fields for a deal in "Em fechamento" to identify lost flags/status fields.
+  try {
+    const sampleDeal = filtered.find((b) => {
+      const stageKey = normalizeKey(b?.stage?.name);
+      if (stageKey !== normalizeKey("Em fechamento")) return false;
+      const createdAt = b?.createdAt || b?.created_at || null;
+      return createdAt ? getMonthKeySaoPaulo(createdAt) === getMonthKeySaoPaulo(new Date()) : true;
+    });
+    if (sampleDeal) {
+      // eslint-disable-next-line no-console
+      console.log("[DEAL FIELDS]", JSON.stringify(Object.keys(sampleDeal)));
+      // eslint-disable-next-line no-console
+      console.log("[DEAL SAMPLE]", JSON.stringify(sampleDeal));
+    }
+  } catch {
+    // ignore debug failures
+  }
+
   const stageCounts = new Map();
   const stageTotals = new Map();
 

@@ -53,6 +53,34 @@ const PIPELINE_STAGE_KEYS = new Set([
 
 const PIPELINE_WEIGHT = 0.35;
 
+const isDealLost = (deal) => {
+  const d = deal && typeof deal === "object" ? deal : {};
+  if (d.isLost === true || d.lost === true) return true;
+
+  // Common timestamp-ish markers.
+  if (d.lostAt || d.lost_at || d.lostDate || d.lostOn) return true;
+
+  const candidates = [
+    d.status,
+    d.situation,
+    d.statusType,
+    d.dealStatus,
+    d.flag,
+    d.flagType,
+    d.situationType,
+  ];
+
+  for (const v of candidates) {
+    if (typeof v !== "string") continue;
+    const key = normalizeKey(v);
+    if (!key) continue;
+    // "lost" (EN) or "perdido/perdida" (PT-BR)
+    if (key.includes("lost") || key.includes("perdid")) return true;
+  }
+
+  return false;
+};
+
 const calculateGrowthForecast3Parts = ({
   deals = [],
   nowMonthKey = "",
@@ -85,6 +113,7 @@ const calculateGrowthForecast3Parts = ({
 
   // Parte 2: pipeline ativo (3 etapas) ponderado
   const pipelineDeals = createdThisMonth.filter((d) => {
+    if (isDealLost(d)) return false;
     const stageKey = normalizeKey(d?.stage?.name ?? d?.stage);
     return PIPELINE_STAGE_KEYS.has(stageKey);
   });
@@ -127,4 +156,3 @@ const calculateGrowthForecast3Parts = ({
 };
 
 module.exports = { calculateGrowthForecast3Parts, getDealValue, normalizeKey };
-
