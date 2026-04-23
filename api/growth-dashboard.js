@@ -771,136 +771,41 @@ const handleGrowthMetricsApi = async (req, res) => {
   const auth = requireInternalAuth(req, res);
   if (!auth) return;
 
-  // SWR cache headers (Vercel/CDN) + local in-memory cache.
-  // NOTE: The response is session-protected; vary by Cookie to avoid cross-session leakage.
-  res.setHeader("Cache-Control", "public, s-maxage=60, stale-while-revalidate=300");
-  res.setHeader("Vary", "Cookie");
-
-  const TTL_MS = 60 * 1000;
-  const SWR_MS = 300 * 1000;
-  const CRM_TIMEOUT_MS = 5000;
-
+  // In-memory cache (best-effort) to reduce CRM load. TTL: 60 seconds.
   const nowMs = Date.now();
-  const idToken = getBearerTokenFromRequest(req);
-
-  const cacheEntry = globalThis.__growthMetricsCache && typeof globalThis.__growthMetricsCache === "object" ? globalThis.__growthMetricsCache : null;
-  const cachedPayload = cacheEntry && cacheEntry.payload && typeof cacheEntry.payload === "object" ? cacheEntry.payload : null;
-  const cacheFetchedAt = cacheEntry && Number.isFinite(Number(cacheEntry.fetchedAt)) ? Number(cacheEntry.fetchedAt) : 0;
-  const cacheExpiresAt =
-    cacheEntry && Number.isFinite(Number(cacheEntry.expiresAt)) ? Number(cacheEntry.expiresAt) : cacheFetchedAt ? cacheFetchedAt + TTL_MS : 0;
-  const cacheStaleExpiresAt =
-    cacheEntry && Number.isFinite(Number(cacheEntry.staleExpiresAt))
-      ? Number(cacheEntry.staleExpiresAt)
-      : cacheFetchedAt
-        ? cacheFetchedAt + TTL_MS + SWR_MS
-        : 0;
-
-  const withTimeout = (promise, ms) =>
-    Promise.race([
-      promise,
-      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), ms)),
-    ]);
-
-  const setCache = (payload) => {
-    const fetchedAt = Date.now();
-    globalThis.__growthMetricsCache = {
-      payload,
-      fetchedAt,
-      expiresAt: fetchedAt + TTL_MS,
-      staleExpiresAt: fetchedAt + TTL_MS + SWR_MS,
-    };
-  };
-
-  const logForecastDebug = (payload, tag = "CACHE") => {
-    try {
-      const fb = payload?.forecastBreakdown && typeof payload.forecastBreakdown === "object" ? payload.forecastBreakdown : null;
-      if (!fb) return;
-      const dbg = fb.debug && typeof fb.debug === "object" ? fb.debug : {};
-      // eslint-disable-next-line no-console
-      console.log("[FORECAST DEBUG]", {
-        source: tag,
-        parte1_fechado: Number(fb.parte1_fechado) || 0,
-        parte2_pipeline: Number(fb.parte2_pipeline) || 0,
-        parte3_novosLeads: Number(fb.parte3_novosLeads) || 0,
-        forecast_total: Number(fb.total) || 0,
-        diasPassados: Number(dbg.diasPassados) || 0,
-        diasRestantes: Number(dbg.diasRestantes) || 0,
-        mediaDiariaLeads: Number(dbg.mediaDiariaLeads) || 0,
-        novosLeadsEsperados: Number(dbg.novosLeadsEsperados) || 0,
-        dealsPipeline_count: Number(dbg.deals_parte2) || 0,
-      });
-    } catch {
-      // ignore logging failures
-    }
-  };
-
-  const computeFreshPayload = async () => {
-    const nowMonthKey = getMonthKeySaoPaulo(new Date());
-
-    // Fetch meta and CRM in parallel.
-    const goalPromise =
-      idToken
-        ? firestoreGetDocument({ docPath: `${GOALS_COLLECTION}/${encodeURIComponent(nowMonthKey)}`, idToken })
-        : Promise.resolve({ ok: false, status: 0, data: null, text: "" });
-
-    const crmPromise = withTimeout(fetchAllCrmBusinesses(), CRM_TIMEOUT_MS);
-
-    const [crmSettled, goalSettled] = await Promise.allSettled([crmPromise, goalPromise]);
-    if (crmSettled.status !== "fulfilled") throw crmSettled.reason || new Error("crm_failed");
-    const crm = crmSettled.value;
-    if (!crm || !crm.ok) {
-      const err = new Error("crm_failed");
-      err.status = crm?.status || 500;
-      err.payload = crm || null;
-      throw err;
-    }
-
-    let metaDoMes = null;
-    if (goalSettled.status === "fulfilled" && goalSettled.value && goalSettled.value.ok) {
-      const goal = decodeGoalDoc(goalSettled.value.data);
-      const v = Number(goal?.valorMeta);
-      if (Number.isFinite(v) && v > 0) metaDoMes = v;
-    }
-
-    return { crm, businesses: Array.isArray(crm.businesses) ? crm.businesses : [], metaDoMes, nowMonthKey };
-  };
-
-  // Local SWR:
-  // - If cache is fresh: serve immediately and stop.
-  // - If cache is stale (but within SWR window): serve immediately, then keep running to refresh the cache in background.
-  let servedStaleResponse = false;
-  if (cachedPayload && cacheStaleExpiresAt > nowMs) {
-    const stale = !(cacheExpiresAt > nowMs);
-    logForecastDebug(cachedPayload, stale ? "STALE" : "FRESH");
-    sendJson(res, 200, { ...cachedPayload, cached: true, stale });
-    if (!stale) return;
-    servedStaleResponse = true;
-    // Continue execution to refresh the cache; do not write to `res` again.
+  if (globalThis.__growthMetricsCache && globalThis.__growthMetricsCache.expiresAt > nowMs) {
+    sendJson(res, 200, { ...globalThis.__growthMetricsCache.payload, cached: true });
+    return;
   }
 
-  // No usable cache. Fetch fresh with timeout; if it times out, fall back to any cache we might have (even old).
-  let crm;
-  let businesses;
-  let metaDoMes = null;
-  let nowMonthKey = getMonthKeySaoPaulo(new Date());
-  try {
-    const fresh = await computeFreshPayload();
-    crm = fresh.crm;
-    businesses = fresh.businesses;
-    metaDoMes = fresh.metaDoMes;
-    nowMonthKey = fresh.nowMonthKey;
-  } catch (error) {
-    if (servedStaleResponse) {
-      return;
-    }
-    if (cachedPayload) {
-      logForecastDebug(cachedPayload, "TIMEOUT_FALLBACK");
-      sendJson(res, 200, { ...cachedPayload, cached: true, stale: true, timedOut: true });
-      return;
-    }
-    const status = error && Number.isFinite(Number(error.status)) ? Number(error.status) : error?.message === "timeout" ? 504 : 500;
-    sendJson(res, status, { error: error?.message === "timeout" ? "crm_timeout" : "crm_failed" });
+  const crm = await fetchAllCrmBusinesses();
+  const businesses = Array.isArray(crm?.businesses) ? crm.businesses : [];
+  // eslint-disable-next-line no-console
+  console.log("[CRM FETCH]", {
+    businessesCount: businesses.length,
+    error: crm?.ok ? null : crm?.error || crm?.text || "crm_failed",
+  });
+  if (!crm || !crm.ok) {
+    sendJson(res, crm?.status || 500, crm || { error: "crm_failed" });
     return;
+  }
+
+  const idToken = getBearerTokenFromRequest(req);
+  const nowMonthKey = getMonthKeySaoPaulo(new Date());
+
+  // Load Growth goal (meta do mês) from Firestore (REST) if the client provided a Firebase idToken.
+  let metaDoMes = null;
+  try {
+    if (idToken) {
+      const snap = await firestoreGetDocument({ docPath: `${GOALS_COLLECTION}/${encodeURIComponent(nowMonthKey)}`, idToken });
+      if (snap.ok) {
+        const goal = decodeGoalDoc(snap.data);
+        const v = Number(goal?.valorMeta);
+        if (Number.isFinite(v) && v > 0) metaDoMes = v;
+      }
+    }
+  } catch {
+    metaDoMes = null;
   }
 
   // Prefer the main pipeline name used by the commercial team. Fall back to the old "Conversão" pipeline if needed.
@@ -1230,8 +1135,7 @@ const handleGrowthMetricsApi = async (req, res) => {
     },
   };
 
-  setCache(payload);
-  if (servedStaleResponse) return;
+  globalThis.__growthMetricsCache = { payload, expiresAt: Date.now() + 60 * 1000 };
   sendJson(res, 200, payload);
 };
 
