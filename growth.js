@@ -453,6 +453,14 @@ const crmConnectedEls = () => {
     ranking: document.querySelector("[data-growth-ranking]"),
     lastTime: document.querySelector("[data-growth-last-time]"),
     lastSub: document.querySelector("[data-growth-last-sub]"),
+    paceDias: document.querySelector('[data-growth-pace="dias"]'),
+    paceReceitaDia: document.querySelector('[data-growth-pace="receitaDia"]'),
+    paceAgendamentosDia: document.querySelector('[data-growth-pace="agendamentosDia"]'),
+    paceProspeccoesDia: document.querySelector('[data-growth-pace="prospeccoesDia"]'),
+    paceCardDias: document.querySelector('[data-growth-pace-card="dias"]'),
+    paceCardReceita: document.querySelector('[data-growth-pace-card="receita"]'),
+    paceCardAgendamentos: document.querySelector('[data-growth-pace-card="agendamentos"]'),
+    paceCardProspeccoes: document.querySelector('[data-growth-pace-card="prospeccoes"]'),
   };
 };
 
@@ -524,6 +532,10 @@ const applyCrmLoadingUi = () => {
     els.planDiamond,
     els.lastTime,
     els.lastSub,
+    els.paceDias,
+    els.paceReceitaDia,
+    els.paceAgendamentosDia,
+    els.paceProspeccoesDia,
   ].forEach((el) => {
     if (!(el instanceof HTMLElement)) return;
     el.textContent = "—";
@@ -551,6 +563,10 @@ const applyCrmErrorUi = () => {
     els.planDiamond,
     els.lastTime,
     els.lastSub,
+    els.paceDias,
+    els.paceReceitaDia,
+    els.paceAgendamentosDia,
+    els.paceProspeccoesDia,
   ].forEach((el) => {
     if (!(el instanceof HTMLElement)) return;
     el.textContent = "—";
@@ -578,6 +594,10 @@ const clearCrmLoadingUi = () => {
     els.planDiamond,
     els.lastTime,
     els.lastSub,
+    els.paceDias,
+    els.paceReceitaDia,
+    els.paceAgendamentosDia,
+    els.paceProspeccoesDia,
   ].forEach((el) => setSkeleton(el, false));
 };
 
@@ -712,6 +732,28 @@ const applyGrowthMetricsToDom = (payload) => {
     const plan = planLabelForUi(payload?.ultimaVenda?.plano);
     const value = formatMoneyNoCentsPtBr(payload?.ultimaVenda?.valor);
     lastSub.textContent = `${plan} · ${value}`;
+  }
+
+  const ritmo = payload.ritmoNecessario && typeof payload.ritmoNecessario === "object" ? payload.ritmoNecessario : null;
+  if (ritmo) {
+    const els = crmConnectedEls();
+    if (els.paceDias instanceof HTMLElement) els.paceDias.textContent = String(Math.max(0, Number(ritmo.diasUteisRestantes) || 0));
+    if (els.paceReceitaDia instanceof HTMLElement)
+      els.paceReceitaDia.textContent = formatMoneyNoCentsPtBr(Number(ritmo.receitaNecessariaDia) || 0);
+    if (els.paceAgendamentosDia instanceof HTMLElement)
+      els.paceAgendamentosDia.textContent = String(Math.max(0, Number(ritmo.agendamentosDia) || 0));
+    if (els.paceProspeccoesDia instanceof HTMLElement)
+      els.paceProspeccoesDia.textContent = String(Math.max(0, Number(ritmo.prospeccoesDia) || 0));
+
+    const critical = ritmo.critical && typeof ritmo.critical === "object" ? ritmo.critical : {};
+    const setCritical = (cardEl, on) => {
+      if (!(cardEl instanceof HTMLElement)) return;
+      cardEl.classList.toggle("is-critical", Boolean(on));
+    };
+    setCritical(els.paceCardDias, Boolean(critical.dias));
+    setCritical(els.paceCardReceita, Boolean(critical.receitaDia));
+    setCritical(els.paceCardAgendamentos, Boolean(critical.agendamentosDia));
+    setCritical(els.paceCardProspeccoes, Boolean(critical.prospeccoesDia));
   }
 
   try {

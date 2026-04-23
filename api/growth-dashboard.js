@@ -901,6 +901,22 @@ const handleGrowthMetricsApi = async (req, res) => {
   const taxaFunil = percent(fechados, totalPipeline);
   const noShowPercent = percent(noShow, agendamentos);
 
+  // Load Growth goal (meta do mês) from Firestore if the client provided a Firebase idToken.
+  let metaDoMes = null;
+  try {
+    const idToken = getBearerTokenFromRequest(req);
+    if (idToken) {
+      const snap = await firestoreGetDocument({ docPath: `${GOALS_COLLECTION}/${encodeURIComponent(nowMonthKey)}`, idToken });
+      if (snap.ok) {
+        const goal = decodeGoalDoc(snap.data);
+        const v = Number(goal?.valorMeta);
+        if (Number.isFinite(v) && v > 0) metaDoMes = v;
+      }
+    }
+  } catch {
+    metaDoMes = null;
+  }
+
   // Forecast (3 partes): fechado + pipeline (3 etapas) + projeção de novos leads.
   // Para a parte 3, contamos apenas dias úteis (seg-sex) restantes no mês na timezone de SP.
   const getSaoPauloNow = () => {
@@ -939,6 +955,50 @@ const handleGrowthMetricsApi = async (req, res) => {
   const spNow = getSaoPauloNow();
   const diasPassados = spNow.getUTCDate();
   const diasRestantes = getWorkdaysRemaining(); // ex: hoje dia 22 -> 6 dias úteis restantes
+
+  // Ritmo necessário (seg-sáb): time comercial trabalha sábado, exclui apenas domingo.
+  const getDiasUteisRestantesSegSab = () => {
+    const now = getSaoPauloNow();
+    const year = now.getUTCFullYear();
+    const month = now.getUTCMonth();
+    const today = now.getUTCDate();
+    const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+    let count = 0;
+    for (let d = today + 1; d <= lastDay; d++) {
+      const weekday = new Date(Date.UTC(year, month, d)).getUTCDay();
+      if (weekday !== 0) count++; // exclui apenas domingo
+    }
+    return count;
+  };
+
+  const diasUteisRestantes = getDiasUteisRestantesSegSab();
+  const faltaParaMeta = Number.isFinite(metaDoMes) && metaDoMes > 0 ? Math.max(0, metaDoMes - realizado) : 0;
+  const ticketBase = Number.isFinite(ticketMedio) && ticketMedio > 0 ? ticketMedio : 1057;
+  const taxaAgendamentoFrac = Math.max(0, Math.min(1, safeNumber(taxaAgendamento) / 100));
+  const taxaNoShowFrac = Math.max(0, Math.min(1, safeNumber(noShowPercent) / 100));
+  const taxaConversaoFrac = Math.max(0, Math.min(1, safeNumber(conversao) / 100));
+
+  const vendasNecessariasDia =
+    diasUteisRestantes > 0 && ticketBase > 0 ? faltaParaMeta / (ticketBase * diasUteisRestantes) : 0;
+  const receitaNecessariaDia = diasUteisRestantes > 0 ? Math.ceil(faltaParaMeta / diasUteisRestantes) : 0;
+
+  const showsNecessariosDia = taxaConversaoFrac > 0 ? vendasNecessariasDia / taxaConversaoFrac : 0;
+  const agendamentosNecessariosDia = 1 - taxaNoShowFrac > 0 ? showsNecessariosDia / (1 - taxaNoShowFrac) : 0;
+  const agendamentosDia = Math.max(0, Math.ceil(agendamentosNecessariosDia));
+  const prospeccoesDia = taxaAgendamentoFrac > 0 ? Math.max(0, Math.ceil(agendamentosNecessariosDia / taxaAgendamentoFrac)) : 0;
+
+  const ritmoNecessario = {
+    diasUteisRestantes,
+    receitaNecessariaDia,
+    agendamentosDia,
+    prospeccoesDia,
+    critical: {
+      dias: diasUteisRestantes <= 3,
+      receitaDia: receitaNecessariaDia > 3000,
+      agendamentosDia: agendamentosDia > 8,
+      prospeccoesDia: prospeccoesDia > 20,
+    },
+  };
 
   const forecastBreakdown = calculateGrowthForecast3Parts({
     deals: filtered,
@@ -1026,6 +1086,7 @@ const handleGrowthMetricsApi = async (req, res) => {
       taxaFunil,
       noShowPercent,
     },
+    ritmoNecessario,
     planosVendidos,
     rankingTime,
     ultimaVenda,
@@ -2052,63 +2113,44 @@ module.exports = async (req, res) => {
                 </div>
               </article>
 
-              <div class="growth-v2-stack">
-                <article class="growth-v2-card" aria-label="Execução do dia">
-                  <div class="growth-v2-card-head">
-                    <div class="growth-v2-card-title">Execução do dia</div>
-                  </div>
-
-	                  <div class="growth-v2-exec-grid">
-	                    <div class="growth-v2-mini-card">
-	                      <div class="growth-v2-mini-label">REUNIÕES HOJE</div>
-	                      <div class="growth-v2-mini-value">11</div>
+	              <div class="growth-v2-stack">
+	                <article class="growth-v2-card" aria-label="Execução do dia">
+	                  <div class="growth-v2-card-head">
+	                    <div class="growth-v2-card-title">Execução do dia</div>
+	                  </div>
+	
+	                  <div class="growth-v2-last-sale">
+	                    <div class="growth-v2-mini-label">ÚLTIMA VENDA</div>
+	                    <div class="growth-v2-last-value" data-growth-last-time>—</div>
+	                    <div class="growth-v2-last-sub" data-growth-last-sub>—</div>
+	                  </div>
+	                </article>
+	
+	                <article class="growth-v2-card" aria-label="Ritmo necessário">
+	                  <div class="growth-v2-card-head">
+	                    <div class="growth-v2-card-title">Ritmo necessário</div>
+	                  </div>
+	
+	                  <div class="growth-v2-pace-grid">
+	                    <div class="growth-v2-mini-card" data-growth-pace-card="dias">
+	                      <div class="growth-v2-mini-label">DIAS ÚTEIS RESTANTES</div>
+	                      <div class="growth-v2-mini-value" data-growth-pace="dias">—</div>
 	                    </div>
-	                    <div class="growth-v2-mini-card">
-	                      <div class="growth-v2-mini-label">FORECAST DE HOJE</div>
-	                      <div class="growth-v2-mini-value">47</div>
+	                    <div class="growth-v2-mini-card" data-growth-pace-card="receita">
+	                      <div class="growth-v2-mini-label">RECEITA NECESSÁRIA/DIA</div>
+	                      <div class="growth-v2-mini-value" data-growth-pace="receitaDia">—</div>
+	                    </div>
+	                    <div class="growth-v2-mini-card" data-growth-pace-card="agendamentos">
+	                      <div class="growth-v2-mini-label">AGENDAMENTOS/DIA</div>
+	                      <div class="growth-v2-mini-value" data-growth-pace="agendamentosDia">—</div>
+	                    </div>
+	                    <div class="growth-v2-mini-card" data-growth-pace-card="prospeccoes">
+	                      <div class="growth-v2-mini-label">PROSPECÇÕES/DIA</div>
+	                      <div class="growth-v2-mini-value" data-growth-pace="prospeccoesDia">—</div>
 	                    </div>
 	                  </div>
-
-                  <div class="growth-v2-last-sale">
-                    <div class="growth-v2-mini-label">ÚLTIMA VENDA</div>
-                    <div class="growth-v2-last-value" data-growth-last-time>há 18 minutos</div>
-                    <div class="growth-v2-last-sub" data-growth-last-sub>Plano Diamond · R$ 2.400</div>
-                  </div>
-                </article>
-
-                <article class="growth-v2-card" aria-label="Leads pendentes">
-                  <div class="growth-v2-card-head">
-                    <div class="growth-v2-card-title">Leads pendentes</div>
-                    <div class="growth-v2-pill is-danger">12</div>
-                  </div>
-
-                  <div class="growth-v2-leads">
-                    <button class="growth-v2-lead-row is-danger" type="button">
-                      <div>
-                        <div class="growth-v2-lead-title">5 sem contato há +48h</div>
-                        <div class="growth-v2-lead-sub">Requer ação urgente</div>
-                      </div>
-                      <span class="growth-v2-chevron" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" fill="none">
-                          <path d="M9.5 7.5 14 12l-4.5 4.5"></path>
-                        </svg>
-                      </span>
-                    </button>
-
-                    <button class="growth-v2-lead-row is-warn" type="button">
-                      <div>
-                        <div class="growth-v2-lead-title">7 em negociação</div>
-                        <div class="growth-v2-lead-sub">Follow-up programado</div>
-                      </div>
-                      <span class="growth-v2-chevron" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" fill="none">
-                          <path d="M9.5 7.5 14 12l-4.5 4.5"></path>
-                        </svg>
-                      </span>
-                    </button>
-                  </div>
-                </article>
-              </div>
+	                </article>
+	              </div>
             </div>
           </section>
         </div>

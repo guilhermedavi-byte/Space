@@ -11378,12 +11378,31 @@ body[data-page="growth"] .platform-main {
   margin-bottom: 12px;
 }
 
+.growth-v2-pace-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
 .growth-v2-mini-card {
   text-align: center;
   padding: 14px 12px;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.03);
   border: 0.5px solid rgba(89, 144, 189, 0.08);
+}
+
+.growth-v2-mini-card.is-critical {
+  background: rgba(255, 78, 70, 0.04);
+  border-color: rgba(255, 78, 70, 0.18);
+}
+
+.growth-v2-mini-card.is-critical .growth-v2-mini-label {
+  color: rgba(255, 78, 70, 0.7);
+}
+
+.growth-v2-mini-card.is-critical .growth-v2-mini-value {
+  color: var(--growth-accent);
 }
 
 .growth-v2-mini-label {
@@ -11483,20 +11502,7 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   width: 0% !important;
 }
 
-.growth-v2[data-growth-view="dashboard"] .growth-v2-exec-grid .growth-v2-mini-card:nth-child(2) .growth-v2-mini-label {
-  font-size: 0;
-}
-
-.growth-v2[data-growth-view="dashboard"]
-  .growth-v2-exec-grid
-  .growth-v2-mini-card:nth-child(2)
-  .growth-v2-mini-label::after {
-  content: "CALLS HOJE";
-  font-size: 10px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: rgba(89, 144, 189, 0.45);
-}
+/* removed: exec mini-card label override (the "Execução do dia" grid no longer exists) */
 
 @media (max-width: 980px) {
   .growth-v2 {
