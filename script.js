@@ -84,6 +84,8 @@ const adminGrowthGoalOpen = document.querySelector("[data-admin-growth-goal-open
 const adminGoalsTable = document.querySelector("[data-admin-goals-table]");
 const adminGoalsEmpty = document.querySelector("[data-admin-goals-empty]");
 const adminGoalsError = document.querySelector("[data-admin-goals-error]");
+const adminSheetsMetricEls = Array.from(document.querySelectorAll("[data-admin-sheets-metric]"));
+const adminSheetsChurnMeta = document.querySelector('[data-admin-sheets-metric-meta="churnMes"]');
 const modalOverlay = document.querySelector("[data-modal-overlay]");
 const modalTitle = document.querySelector("[data-modal-title]");
 const modalBody = document.querySelector("[data-modal-body]");
@@ -947,6 +949,77 @@ const renderAdminDashboard = () => {
     const monthRaw = monthFormatter.format(now);
     const month = monthRaw.charAt(0).toUpperCase() + monthRaw.slice(1);
     adminDashboardMonth.textContent = `${month} ${now.getFullYear()}`;
+  }
+
+  renderAdminSheetsMetrics();
+};
+
+let adminSheetsMetricsState = {
+  fetchedAt: 0,
+  isLoading: false,
+  data: null,
+};
+
+const formatPercentPtBr1 = (value) => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "—";
+  return `${n.toLocaleString("pt-BR", { maximumFractionDigits: 1, minimumFractionDigits: 1 })}%`;
+};
+
+const formatMonthsPtBr1 = (value) => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "—";
+  return `${n.toLocaleString("pt-BR", { maximumFractionDigits: 1, minimumFractionDigits: 1 })} meses`;
+};
+
+const applyAdminSheetsMetricsToUI = (payload) => {
+  const data = payload && typeof payload === "object" ? payload : {};
+  const alunosAtivos = Number(data.alunosAtivos);
+  const alunosNovosMes = Number(data.alunosNovosMes);
+  const churnMes = Number(data.churnMes);
+  const churnPercentual = Number(data.churnPercentual);
+  const ltvMedio = Number(data.ltvMedio);
+  const tempMedioMeses = Number(data.tempMedioMeses);
+
+  adminSheetsMetricEls.forEach((el) => {
+    if (!(el instanceof HTMLElement)) return;
+    const key = String(el.getAttribute("data-admin-sheets-metric") || "").trim();
+    if (!key) return;
+    if (key === "alunosAtivos") el.textContent = Number.isFinite(alunosAtivos) ? String(alunosAtivos) : "—";
+    else if (key === "alunosNovosMes") el.textContent = Number.isFinite(alunosNovosMes) ? String(alunosNovosMes) : "—";
+    else if (key === "churnPercentual") el.textContent = formatPercentPtBr1(churnPercentual);
+    else if (key === "ltvMedio") el.textContent = currencyPtBrNoCents(ltvMedio);
+    else if (key === "tempMedioMeses") el.textContent = formatMonthsPtBr1(tempMedioMeses);
+  });
+
+  if (adminSheetsChurnMeta instanceof HTMLElement) {
+    adminSheetsChurnMeta.textContent = Number.isFinite(churnMes) ? `${churnMes} cancelamentos` : "—";
+  }
+};
+
+const renderAdminSheetsMetrics = async () => {
+  if (currentRole !== "admin") return;
+  if (!adminSheetsMetricEls.length) return;
+  if (adminSheetsMetricsState.isLoading) return;
+
+  const now = Date.now();
+  if (adminSheetsMetricsState.data && now - adminSheetsMetricsState.fetchedAt < 240_000) {
+    applyAdminSheetsMetricsToUI(adminSheetsMetricsState.data);
+    return;
+  }
+
+  adminSheetsMetricsState.isLoading = true;
+  try {
+    const res = await fetchWithAuth("/api/admin-sheets-metrics", { method: "GET" });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data || typeof data !== "object") return;
+    adminSheetsMetricsState.data = data;
+    adminSheetsMetricsState.fetchedAt = Date.now();
+    applyAdminSheetsMetricsToUI(data);
+  } catch (error) {
+    // Keep existing values on screen if the sheet fetch fails.
+  } finally {
+    adminSheetsMetricsState.isLoading = false;
   }
 };
 

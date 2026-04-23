@@ -138,6 +138,66 @@ const requestJsonRaw = async (url, { method = "GET", headers, body } = {}) => {
   return requestJson(url, { method: upper, headers: safeHeaders, body });
 };
 
+const ADMIN_SHEETS_SPREADSHEET_ID = "1BMG0XxVHOfrZHE7Zc1QsvgCFA8UOUhIAsKHwMsbMgeI";
+const ADMIN_SHEETS_SHEET_NAME = "BASE DE DADOS";
+const ADMIN_SHEETS_RANGE = `'${ADMIN_SHEETS_SHEET_NAME}'!A:Z`;
+
+const getSaoPauloYearMonth = () => {
+  try {
+    const parts = new Intl.DateTimeFormat("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(new Date());
+    const year = Number(parts.find((p) => p.type === "year")?.value || 0);
+    const month = Number(parts.find((p) => p.type === "month")?.value || 0); // 1-12
+    const day = Number(parts.find((p) => p.type === "day")?.value || 0);
+    if (!year || !month || !day) {
+      const d = new Date();
+      return { year: d.getFullYear(), monthIndex: d.getMonth() };
+    }
+    return { year, monthIndex: month - 1 };
+  } catch {
+    const d = new Date();
+    return { year: d.getFullYear(), monthIndex: d.getMonth() };
+  }
+};
+
+const parsePtBrDate = (raw) => {
+  const value = String(raw || "").trim();
+  if (!value) return null;
+  // Accept dd/mm/yyyy or dd-mm-yyyy (ignore time suffix).
+  const m = value.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+  if (!m) {
+    const d = new Date(value);
+    return d instanceof Date && !Number.isNaN(d.getTime()) ? d : null;
+  }
+  const day = Number(m[1]);
+  const month = Number(m[2]);
+  let year = Number(m[3]);
+  if (year < 100) year += 2000;
+  if (!day || !month || !year) return null;
+  // Use UTC noon to avoid timezone boundary issues when checking month.
+  const d = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+  return d instanceof Date && !Number.isNaN(d.getTime()) ? d : null;
+};
+
+const monthKeyAbrPtBr = ({ year, monthIndex }) => {
+  const months = ["jan.", "fev.", "mar.", "abr.", "mai.", "jun.", "jul.", "ago.", "set.", "out.", "nov.", "dez."];
+  const abbr = months[monthIndex] || "";
+  if (!abbr || !year) return "";
+  return `${abbr}/${year}`;
+};
+
+const normalizeChurnMonthKey = (value) => {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .replace(/\./g, "");
+};
+
 const firestoreListDocumentsWithAccessToken = async ({ collectionPath, accessToken, pageSize = 1000 } = {}) => {
   const path = String(collectionPath || "").replace(/^\/+/, "");
   const token = String(accessToken || "").trim();
@@ -1717,6 +1777,133 @@ const handleZapSignWebhook = async (req, res) => {
   }
 };
 
+const handleAdminSheetsMetricsApi = async (req, res) => {
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    res.setHeader("Allow", "GET, HEAD");
+    sendJson(res, 405, { error: "method_not_allowed" });
+    return;
+  }
+
+  const auth = await requireRoleAuthWithFirebaseToken(req, res, ["admin"]);
+  if (!auth) return;
+
+  const nowMs = Date.now();
+  const ttlMs = 5 * 60 * 1000;
+  if (globalThis.__adminSheetsMetricsCache && globalThis.__adminSheetsMetricsCache.expiresAt > nowMs) {
+    res.setHeader("Cache-Control", "public, s-maxage=300");
+    sendJson(res, 200, { ...globalThis.__adminSheetsMetricsCache.payload, cached: true });
+    return;
+  }
+
+  // Ensure we can mint a Google OAuth access token via service account.
+  const email = String(process.env.GOOGLE_CLIENT_EMAIL || process.env.FIREBASE_CLIENT_EMAIL || process.env.FIREBASE_SERVICE_ACCOUNT_EMAIL || "").trim();
+  const key = String(process.env.GOOGLE_PRIVATE_KEY || process.env.FIREBASE_PRIVATE_KEY || process.env.FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY || "").trim();
+  if (!email || !key) {
+    sendJson(res, 500, {
+      error: "missing_env",
+      missing: [...(!email ? ["GOOGLE_CLIENT_EMAIL"] : []), ...(!key ? ["GOOGLE_PRIVATE_KEY"] : [])],
+    });
+    return;
+  }
+
+  const { year, monthIndex } = getSaoPauloYearMonth();
+  const churnKey = monthKeyAbrPtBr({ year, monthIndex });
+  const churnKeyNorm = normalizeChurnMonthKey(churnKey);
+
+  let rows = [];
+  try {
+    const accessToken = await getGoogleAccessToken({ scope: "https://www.googleapis.com/auth/spreadsheets.readonly" });
+    const rangeEnc = encodeURIComponent(ADMIN_SHEETS_RANGE);
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${ADMIN_SHEETS_SPREADSHEET_ID}/values/${rangeEnc}?majorDimension=ROWS`;
+    const sheetRes = await requestJsonRaw(url, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!sheetRes.ok) {
+      // eslint-disable-next-line no-console
+      console.error("[api] admin-sheets-metrics sheets error", { status: sheetRes.status, data: sheetRes.data ?? null, text: sheetRes.text ?? null });
+      sendJson(res, sheetRes.status || 500, { error: "sheets_fetch_failed" });
+      return;
+    }
+    rows = Array.isArray(sheetRes.data?.values) ? sheetRes.data.values : [];
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error("[api] admin-sheets-metrics fetch failed", error);
+    sendJson(res, 500, { error: "sheets_fetch_failed" });
+    return;
+  }
+
+  // Columns: A Nome, B Data de entrada, C Data de saída, D Status, R Plano Contratado, S Ticket mensal, X LTV, Z Mês do churn
+  // Indexes: A=0, B=1, C=2, D=3, R=17, S=18, X=23, Z=25
+  const startIdx = rows.length && String(rows[0]?.[0] || "").trim().toLowerCase() === "nome" ? 1 : 0;
+
+  let alunosAtivos = 0;
+  let alunosNovosMes = 0;
+  let churnMes = 0;
+  let ltvSum = 0;
+  let ltvCount = 0;
+  let permanenciaSumMeses = 0;
+  let permanenciaCount = 0;
+
+  for (let i = startIdx; i < rows.length; i += 1) {
+    const row = Array.isArray(rows[i]) ? rows[i] : [];
+    const statusRaw = String(row[3] || "").trim();
+    const statusNorm = normalizeKey(statusRaw);
+    const entrada = parsePtBrDate(row[1]);
+    const saida = parsePtBrDate(row[2]);
+    const churnRaw = String(row[25] || "").trim();
+    const churnNorm = normalizeChurnMonthKey(churnRaw);
+
+    if (statusNorm === normalizeKey("Ativo")) alunosAtivos += 1;
+
+    if (entrada) {
+      const y = entrada.getUTCFullYear();
+      const m = entrada.getUTCMonth();
+      if (y === year && m === monthIndex) alunosNovosMes += 1;
+    }
+
+    if (churnNorm && churnKeyNorm && churnNorm === churnKeyNorm) churnMes += 1;
+
+    const ltv = parseNumber(row[23]);
+    if (Number.isFinite(ltv)) {
+      ltvSum += ltv;
+      ltvCount += 1;
+    }
+
+    if (statusNorm === normalizeKey("Cancelado") && entrada && saida) {
+      const diffMs = saida.getTime() - entrada.getTime();
+      if (diffMs > 0) {
+        const months = diffMs / (1000 * 60 * 60 * 24 * 30.4375);
+        if (Number.isFinite(months)) {
+          permanenciaSumMeses += months;
+          permanenciaCount += 1;
+        }
+      }
+    }
+  }
+
+  const churnPercentual = alunosAtivos > 0 ? (churnMes / alunosAtivos) * 100 : 0;
+  const ltvMedio = ltvCount > 0 ? ltvSum / ltvCount : 0;
+  const tempMedioMeses = permanenciaCount > 0 ? permanenciaSumMeses / permanenciaCount : 0;
+
+  const payload = {
+    alunosAtivos,
+    alunosNovosMes,
+    churnMes,
+    churnPercentual,
+    ltvMedio,
+    tempMedioMeses,
+  };
+
+  globalThis.__adminSheetsMetricsCache = {
+    expiresAt: nowMs + ttlMs,
+    payload,
+  };
+
+  res.setHeader("Cache-Control", "public, s-maxage=300");
+  sendJson(res, 200, { ...payload, cached: false });
+};
+
 const handleCrmTestApi = async (req, res) => {
   if (req.method !== "GET" && req.method !== "HEAD") {
     res.setHeader("Allow", "GET, HEAD");
@@ -1769,6 +1956,11 @@ module.exports = async (req, res) => {
 
   if (api === "crm-test") {
     await handleCrmTestApi(req, res);
+    return;
+  }
+
+  if (api === "admin-sheets-metrics") {
+    await handleAdminSheetsMetricsApi(req, res);
     return;
   }
 
