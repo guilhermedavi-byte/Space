@@ -793,6 +793,9 @@ const initGrowthDashboardMetrics = () => {
 
   applyCrmLoadingUi();
 
+  let swrRefreshTimer = null;
+  let swrRefreshAttempts = 0;
+
   const loadGoal = async () => {
     const metaEl = document.querySelector('[data-growth-kpi="meta"]');
     if (!(metaEl instanceof HTMLElement)) return;
@@ -827,6 +830,18 @@ const initGrowthDashboardMetrics = () => {
       if (!res.ok) throw new Error(data?.error || "request_failed");
       applyGrowthMetricsToDom(data);
       updateForecastMetaSub();
+
+      // If the API served a stale cached response, re-fetch once shortly after.
+      // This pairs with the backend SWR behavior so the UI updates without the user noticing.
+      if (data && data.stale && swrRefreshAttempts < 2) {
+        swrRefreshAttempts += 1;
+        if (swrRefreshTimer) window.clearTimeout(swrRefreshTimer);
+        swrRefreshTimer = window.setTimeout(() => {
+          load();
+        }, 1200);
+      } else if (data && !data.stale) {
+        swrRefreshAttempts = 0;
+      }
     } catch (error) {
       applyCrmErrorUi();
     }
