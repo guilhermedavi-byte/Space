@@ -771,7 +771,7 @@ const handleGrowthMetricsApi = async (req, res) => {
   const auth = requireInternalAuth(req, res);
   if (!auth) return;
 
-  // In-memory cache (best-effort) to reduce CRM load. TTL: 15 minutes.
+  // In-memory cache (best-effort) to reduce CRM load. TTL: 60 seconds.
   const nowMs = Date.now();
   if (globalThis.__growthMetricsCache && globalThis.__growthMetricsCache.expiresAt > nowMs) {
     try {
@@ -1087,7 +1087,7 @@ const handleGrowthMetricsApi = async (req, res) => {
     },
   };
 
-  globalThis.__growthMetricsCache = { payload, expiresAt: Date.now() + 15 * 60 * 1000 };
+  globalThis.__growthMetricsCache = { payload, expiresAt: Date.now() + 60 * 1000 };
   sendJson(res, 200, payload);
 };
 
