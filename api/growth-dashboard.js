@@ -1051,21 +1051,21 @@ const handleGrowthMetricsApi = async (req, res) => {
   const rankingMap = new Map();
 
   closedDealsMonth.forEach((b) => {
-    const planName = b?.products?.[0]?.product?.name;
     // TEMP DEBUG: entender como o DataCrazy está preenchendo produto/plano nos negócios fechados.
     try {
       // eslint-disable-next-line no-console
       console.log("[PLANO DEBUG]", {
-        id: b?.id ?? getBusinessId(b),
+        id: b?.id,
         products: b?.products,
-        planName,
+        planName: b?.products?.[0]?.product?.name,
         total: b?.total,
-        planoKey: mapPlano(planName),
+        planoKey: mapPlano(b?.products?.[0]?.product?.name),
       });
     } catch {
       // ignore debug failures
     }
 
+    const planName = b?.products?.[0]?.product?.name;
     const planoKey = mapPlano(planName);
     planosVendidos[planoKey] = (planosVendidos[planoKey] || 0) + 1;
 
