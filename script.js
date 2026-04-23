@@ -84,8 +84,6 @@ const adminGrowthGoalOpen = document.querySelector("[data-admin-growth-goal-open
 const adminGoalsTable = document.querySelector("[data-admin-goals-table]");
 const adminGoalsEmpty = document.querySelector("[data-admin-goals-empty]");
 const adminGoalsError = document.querySelector("[data-admin-goals-error]");
-const adminSheetsMetricEls = Array.from(document.querySelectorAll("[data-admin-sheets-metric]"));
-const adminSheetsChurnMeta = document.querySelector('[data-admin-sheets-metric-meta="churnMes"]');
 const modalOverlay = document.querySelector("[data-modal-overlay]");
 const modalTitle = document.querySelector("[data-modal-title]");
 const modalBody = document.querySelector("[data-modal-body]");
@@ -973,6 +971,10 @@ const formatMonthsPtBr1 = (value) => {
 };
 
 const applyAdminSheetsMetricsToUI = (payload) => {
+  // Capture selectors at apply-time (the admin dashboard DOM may be injected later).
+  const adminSheetsMetricEls = Array.from(document.querySelectorAll("[data-admin-sheets-metric]"));
+  const adminSheetsChurnMeta = document.querySelector('[data-admin-sheets-metric-meta="churnMes"]');
+
   const data = payload && typeof payload === "object" ? payload : {};
   const alunosAtivos = Number(data.alunosAtivos);
   const alunosNovosMes = Number(data.alunosNovosMes);
@@ -999,7 +1001,6 @@ const applyAdminSheetsMetricsToUI = (payload) => {
 
 const renderAdminSheetsMetrics = async () => {
   if (currentRole !== "admin") return;
-  if (!adminSheetsMetricEls.length) return;
   if (adminSheetsMetricsState.isLoading) return;
 
   const now = Date.now();
