@@ -964,7 +964,8 @@ const handleGrowthMetricsApi = async (req, res) => {
     const today = now.getUTCDate();
     const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
     let count = 0;
-    for (let d = today + 1; d <= lastDay; d++) {
+    // Inclui o dia de hoje no "restante" (se não for domingo), já que o time ainda pode executar no dia atual.
+    for (let d = today; d <= lastDay; d++) {
       const weekday = new Date(Date.UTC(year, month, d)).getUTCDay();
       if (weekday !== 0) count++; // exclui apenas domingo
     }
