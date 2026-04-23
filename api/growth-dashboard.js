@@ -835,14 +835,25 @@ const handleGrowthMetricsApi = async (req, res) => {
 
   const stageCounts = new Map();
   const stageTotals = new Map();
+  const stageCountsMonth = new Map();
+  const stageTotalsMonth = new Map();
 
   const closedDeals = [];
+  let totalPipelineMonth = 0;
 
   filtered.forEach((b) => {
     const stageName = normalizeKey(b?.stage?.name);
     const total = safeNumber(b?.total);
     stageCounts.set(stageName, (stageCounts.get(stageName) || 0) + 1);
     stageTotals.set(stageName, (stageTotals.get(stageName) || 0) + total);
+
+    const createdAt = b?.createdAt || b?.created_at || null;
+    const isMonth = createdAt ? getMonthKeySaoPaulo(createdAt) === nowMonthKey : false;
+    if (isMonth) {
+      totalPipelineMonth += 1;
+      stageCountsMonth.set(stageName, (stageCountsMonth.get(stageName) || 0) + 1);
+      stageTotalsMonth.set(stageName, (stageTotalsMonth.get(stageName) || 0) + total);
+    }
     if (stageName === "fechado") closedDeals.push(b);
   });
 
@@ -868,6 +879,17 @@ const handleGrowthMetricsApi = async (req, res) => {
     (stageCounts.get(normalizeKey("Hot Lead")) || 0) +
     (stageCounts.get(normalizeKey("Em fechamento")) || 0) +
     (stageCounts.get(normalizeKey("Fechado")) || 0);
+
+  const agendamentosMonth =
+    Array.from(agendamentoStages).reduce((sum, name) => sum + (stageCountsMonth.get(name) || 0), 0);
+  const fechadosMonth = stageCountsMonth.get(normalizeKey("Fechado")) || 0;
+  const noShowMonth = stageCountsMonth.get(normalizeKey("No-show")) || 0;
+
+  const baseConversaoMonth =
+    (stageCountsMonth.get(normalizeKey("Reunião feita (Follow-up)")) || 0) +
+    (stageCountsMonth.get(normalizeKey("Hot Lead")) || 0) +
+    (stageCountsMonth.get(normalizeKey("Em fechamento")) || 0) +
+    (stageCountsMonth.get(normalizeKey("Fechado")) || 0);
 
   const dateFieldCounts = new Map();
 
@@ -896,10 +918,10 @@ const handleGrowthMetricsApi = async (req, res) => {
   const totalVendas = closedDealsMonth.length;
   const ticketMedio = totalVendas > 0 ? realizado / totalVendas : 0;
 
-  const conversao = percent(fechados, baseConversao);
-  const taxaAgendamento = percent(agendamentos, totalPipeline);
-  const taxaFunil = percent(fechados, totalPipeline);
-  const noShowPercent = percent(noShow, agendamentos);
+  const conversao = percent(fechadosMonth, baseConversaoMonth);
+  const taxaAgendamento = percent(agendamentosMonth, totalPipelineMonth);
+  const taxaFunil = percent(fechadosMonth, totalPipelineMonth);
+  const noShowPercent = percent(noShowMonth, agendamentosMonth);
 
   // metaDoMes is fetched in parallel with the CRM call (see computeFreshPayload).
 
