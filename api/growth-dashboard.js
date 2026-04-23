@@ -1795,13 +1795,11 @@ const handleAdminSheetsMetricsApi = async (req, res) => {
     return;
   }
 
-  // Ensure we can mint a Google OAuth access token via service account.
-  const email = String(process.env.GOOGLE_CLIENT_EMAIL || process.env.FIREBASE_CLIENT_EMAIL || process.env.FIREBASE_SERVICE_ACCOUNT_EMAIL || "").trim();
-  const key = String(process.env.GOOGLE_PRIVATE_KEY || process.env.FIREBASE_PRIVATE_KEY || process.env.FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY || "").trim();
-  if (!email || !key) {
+  const apiKey = String(process.env.GOOGLE_SHEETS_API_KEY || "").trim();
+  if (!apiKey) {
     sendJson(res, 500, {
       error: "missing_env",
-      missing: [...(!email ? ["GOOGLE_CLIENT_EMAIL"] : []), ...(!key ? ["GOOGLE_PRIVATE_KEY"] : [])],
+      missing: ["GOOGLE_SHEETS_API_KEY"],
     });
     return;
   }
@@ -1812,13 +1810,11 @@ const handleAdminSheetsMetricsApi = async (req, res) => {
 
   let rows = [];
   try {
-    const accessToken = await getGoogleAccessToken({ scope: "https://www.googleapis.com/auth/spreadsheets.readonly" });
-    const rangeEnc = encodeURIComponent(ADMIN_SHEETS_RANGE);
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${ADMIN_SHEETS_SPREADSHEET_ID}/values/${rangeEnc}?majorDimension=ROWS`;
-    const sheetRes = await requestJsonRaw(url, {
-      method: "GET",
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
+    const safeSheetName = /\s/.test(ADMIN_SHEETS_SHEET_NAME) ? `'${ADMIN_SHEETS_SHEET_NAME}'` : ADMIN_SHEETS_SHEET_NAME;
+    const rangeA1 = `${safeSheetName}!A:Z`;
+    const rangeEnc = encodeURIComponent(rangeA1);
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${ADMIN_SHEETS_SPREADSHEET_ID}/values/${rangeEnc}?key=${encodeURIComponent(apiKey)}&majorDimension=ROWS`;
+    const sheetRes = await requestJsonRaw(url, { method: "GET" });
     if (!sheetRes.ok) {
       // eslint-disable-next-line no-console
       console.error("[api] admin-sheets-metrics sheets error", { status: sheetRes.status, data: sheetRes.data ?? null, text: sheetRes.text ?? null });
