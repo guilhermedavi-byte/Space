@@ -817,6 +817,24 @@ const formatCpf = (value) => {
   return out;
 };
 
+const isValidCPF = (cpf) => {
+  const cleaned = String(cpf || "").replace(/\D/g, "");
+  if (cleaned.length !== 11) return false;
+  if (/^(\d)\1+$/.test(cleaned)) return false; // 111.111.111-11 etc
+
+  let sum = 0;
+  for (let i = 0; i < 9; i++) sum += parseInt(cleaned[i], 10) * (10 - i);
+  let remainder = (sum * 10) % 11;
+  if (remainder === 10 || remainder === 11) remainder = 0;
+  if (remainder !== parseInt(cleaned[9], 10)) return false;
+
+  sum = 0;
+  for (let i = 0; i < 10; i++) sum += parseInt(cleaned[i], 10) * (11 - i);
+  remainder = (sum * 10) % 11;
+  if (remainder === 10 || remainder === 11) remainder = 0;
+  return remainder === parseInt(cleaned[10], 10);
+};
+
 const formatWhatsapp = (value) => {
   const digits = digitsOnly(value).slice(0, 11);
   if (!digits) return "";
@@ -1106,6 +1124,7 @@ const openCreateModal = () => {
   if (contrato instanceof HTMLSelectElement) contrato.value = "";
 
   setModalOpen(contractsEls.createOverlay, true);
+  applyCpfSendGate();
 
   const focus = getCreateField("nomeCompleto");
   if (focus instanceof HTMLInputElement) focus.focus();
@@ -1115,11 +1134,31 @@ const closeCreateModal = () => setModalOpen(contractsEls.createOverlay, false);
 const closeDetailsModal = () => setModalOpen(contractsEls.detailsOverlay, false);
 const closeConfirmModal = () => setModalOpen(contractsEls.confirmOverlay, false);
 
+let isCreateBusy = false;
+
+const clearCreateFieldError = (fieldKey) => {
+  const err = document.querySelector(`[data-contract-error="${fieldKey}"]`);
+  if (err instanceof HTMLElement) err.hidden = true;
+  const input = document.querySelector(`[data-contract-field="${fieldKey}"]`);
+  if (input instanceof HTMLElement) input.classList.remove("is-error");
+};
+
+const applyCpfSendGate = () => {
+  const cpfEl = getCreateField("cpf");
+  const digits = cpfEl instanceof HTMLInputElement ? digitsOnly(cpfEl.value) : "";
+  const invalidMath = digits.length === 11 && !isValidCPF(cpfEl instanceof HTMLInputElement ? cpfEl.value : digits);
+  if (contractsEls.createSend instanceof HTMLButtonElement) {
+    contractsEls.createSend.disabled = Boolean(isCreateBusy || invalidMath);
+  }
+};
+
 const setCreateButtonsDisabled = (disabled) => {
   const d = Boolean(disabled);
-  [contractsEls.createDraft, contractsEls.createSend, contractsEls.createCancel].forEach((el) => {
+  isCreateBusy = d;
+  [contractsEls.createDraft, contractsEls.createCancel].forEach((el) => {
     if (el instanceof HTMLButtonElement) el.disabled = d;
   });
+  applyCpfSendGate();
 };
 
 const createContract = async (sendNow) => {
@@ -1168,6 +1207,9 @@ const createContract = async (sendNow) => {
   }
   if (!cpf || cpf.length !== 11) {
     showCreateError("cpf", "CPF deve ter 11 dígitos.");
+    ok = false;
+  } else if (!isValidCPF(cpfEl instanceof HTMLInputElement ? cpfEl.value : cpf)) {
+    showCreateError("cpf", "CPF inválido");
     ok = false;
   }
   if (!endereco) {
@@ -1410,6 +1452,25 @@ const initContracts = () => {
   if (cpfInput instanceof HTMLInputElement) {
     cpfInput.addEventListener("input", () => {
       cpfInput.value = formatCpf(cpfInput.value);
+      const digits = digitsOnly(cpfInput.value);
+      if (digits.length !== 11 || isValidCPF(cpfInput.value)) clearCreateFieldError("cpf");
+      applyCpfSendGate();
+    });
+    cpfInput.addEventListener("blur", () => {
+      const digits = digitsOnly(cpfInput.value);
+      if (!digits) {
+        clearCreateFieldError("cpf");
+        applyCpfSendGate();
+        return;
+      }
+      if (digits.length === 11 && !isValidCPF(cpfInput.value)) {
+        showCreateError("cpf", "CPF inválido");
+      } else if (digits.length !== 11) {
+        showCreateError("cpf", "CPF deve ter 11 dígitos.");
+      } else {
+        clearCreateFieldError("cpf");
+      }
+      applyCpfSendGate();
     });
   }
 

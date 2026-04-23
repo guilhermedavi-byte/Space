@@ -2270,7 +2270,7 @@ module.exports = async (req, res) => {
             <label class="modal-field">
               <span>CPF</span>
               <input class="modal-input" type="text" inputmode="numeric" placeholder="000.000.000-00" data-contract-field="cpf" />
-              <div class="modal-inline-error" data-contract-error="cpf" hidden>CPF inválido.</div>
+              <div class="modal-inline-error" data-contract-error="cpf" hidden>CPF inválido</div>
             </label>
 
             <label class="modal-field">
