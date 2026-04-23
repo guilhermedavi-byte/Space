@@ -378,17 +378,15 @@ const getBusinessWonLostDate = (business) => {
   // If DataCrazy adds an explicit field (ex: `wonAt`), we can switch here without touching the rest of the metrics.
   const b = business && typeof business === "object" ? business : {};
   const candidates = [
-    "statusChangedAt",
-    "stageChangedAt",
     "wonAt",
     "wonDate",
     "gainedAt",
     "gainAt",
     "closedAt",
     "finishedAt",
+    "statusChangedAt",
+    "stageChangedAt",
     "lastMovedAt",
-    "updatedAt",
-    "createdAt",
   ];
 
   for (const field of candidates) {
@@ -886,7 +884,8 @@ const handleGrowthMetricsApi = async (req, res) => {
   const noShowPercent = percent(noShow, agendamentos);
 
   // Forecast (3 partes): fechado + pipeline (3 etapas) + projeção de novos leads.
-  const getSaoPauloDayParts = () => {
+  // Para a parte 3, contamos apenas dias úteis (seg-sex) restantes no mês na timezone de SP.
+  const getSaoPauloNow = () => {
     try {
       const parts = new Intl.DateTimeFormat("pt-BR", {
         timeZone: "America/Sao_Paulo",
@@ -897,21 +896,31 @@ const handleGrowthMetricsApi = async (req, res) => {
       const year = Number(parts.find((p) => p.type === "year")?.value || 0);
       const month = Number(parts.find((p) => p.type === "month")?.value || 0); // 1-12
       const day = Number(parts.find((p) => p.type === "day")?.value || 0);
-      const daysInMonth = year && month ? new Date(year, month, 0).getDate() : 30;
-      return { year, month, day, daysInMonth };
-    } catch (error) {
-      const d = new Date();
-      const year = d.getFullYear();
-      const month = d.getMonth() + 1;
-      const day = d.getDate();
-      const daysInMonth = new Date(year, month, 0).getDate();
-      return { year, month, day, daysInMonth };
+      if (!year || !month || !day) return new Date();
+      // Use UTC noon to avoid timezone boundary issues when computing weekdays.
+      return new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+    } catch {
+      return new Date();
     }
   };
 
-  const { day: diasPassados, daysInMonth } = getSaoPauloDayParts();
-  const diasTotaisDoMes = Math.max(28, Number(daysInMonth) || 30);
-  const diasRestantes = Math.max(0, diasTotaisDoMes - Math.max(1, Number(diasPassados) || 1));
+  const getWorkdaysRemaining = () => {
+    const now = getSaoPauloNow();
+    const year = now.getUTCFullYear();
+    const month = now.getUTCMonth(); // 0-11
+    const today = now.getUTCDate();
+    const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+    let count = 0;
+    for (let d = today + 1; d <= lastDay; d++) {
+      const weekday = new Date(Date.UTC(year, month, d)).getUTCDay(); // 0=Sun .. 6=Sat
+      if (weekday !== 0 && weekday !== 6) count++;
+    }
+    return count;
+  };
+
+  const spNow = getSaoPauloNow();
+  const diasPassados = spNow.getUTCDate();
+  const diasRestantes = getWorkdaysRemaining(); // ex: hoje dia 22 -> 6 dias úteis restantes
 
   const forecastBreakdown = calculateGrowthForecast3Parts({
     deals: filtered,
