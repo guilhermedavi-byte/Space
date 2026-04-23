@@ -1052,6 +1052,20 @@ const handleGrowthMetricsApi = async (req, res) => {
 
   closedDealsMonth.forEach((b) => {
     const planName = b?.products?.[0]?.product?.name;
+    // TEMP DEBUG: entender como o DataCrazy está preenchendo produto/plano nos negócios fechados.
+    try {
+      // eslint-disable-next-line no-console
+      console.log("[PLANO DEBUG]", {
+        id: b?.id ?? getBusinessId(b),
+        products: b?.products,
+        planName,
+        total: b?.total,
+        planoKey: mapPlano(planName),
+      });
+    } catch {
+      // ignore debug failures
+    }
+
     const planoKey = mapPlano(planName);
     planosVendidos[planoKey] = (planosVendidos[planoKey] || 0) + 1;
 
