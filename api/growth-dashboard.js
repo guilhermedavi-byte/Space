@@ -840,11 +840,6 @@ const handleGrowthMetricsApi = async (req, res) => {
 
   const crm = await fetchAllCrmBusinesses();
   const businesses = Array.isArray(crm?.businesses) ? crm.businesses : [];
-  // eslint-disable-next-line no-console
-  console.log("[CRM FETCH]", {
-    businessesCount: businesses.length,
-    error: crm?.ok ? null : crm?.error || crm?.text || "crm_failed",
-  });
   if (!crm || !crm.ok) {
     sendJson(res, crm?.status || 500, crm || { error: "crm_failed" });
     return;
@@ -1111,20 +1106,6 @@ const handleGrowthMetricsApi = async (req, res) => {
   const rankingMap = new Map();
 
   closedDealsMonth.forEach((b) => {
-    // TEMP DEBUG: entender como o DataCrazy está preenchendo produto/plano nos negócios fechados.
-    try {
-      // eslint-disable-next-line no-console
-      console.log("[PLANO DEBUG]", {
-        id: b?.id,
-        products: b?.products,
-        planName: b?.products?.[0]?.product?.name,
-        total: b?.total,
-        planoKey: mapPlano(b?.products?.[0]?.product?.name),
-      });
-    } catch {
-      // ignore debug failures
-    }
-
     const planName = b?.products?.[0]?.product?.name;
     const planoKey = mapPlano(planName);
     planosVendidos[planoKey] = (planosVendidos[planoKey] || 0) + 1;
@@ -1788,11 +1769,8 @@ const handleAdminSheetsMetricsApi = async (req, res) => {
   if (!auth) return;
 
   const nowMs = Date.now();
-  // TEMP DEBUG: disable in-memory cache so every request hits Google Sheets and emits logs.
-  // Revert to 5min cache after diagnosing churn mismatch.
-  const disableCache = true;
-  const ttlMs = 0;
-  if (!disableCache && globalThis.__adminSheetsMetricsCache && globalThis.__adminSheetsMetricsCache.expiresAt > nowMs) {
+  const ttlMs = 5 * 60 * 1000;
+  if (globalThis.__adminSheetsMetricsCache && globalThis.__adminSheetsMetricsCache.expiresAt > nowMs) {
     res.setHeader("Cache-Control", "public, s-maxage=300");
     sendJson(res, 200, { ...globalThis.__adminSheetsMetricsCache.payload, cached: true });
     return;
@@ -1861,12 +1839,7 @@ const handleAdminSheetsMetricsApi = async (req, res) => {
       if (y === year && m === monthIndex) alunosNovosMes += 1;
     }
 
-    if (churnNorm && churnKeyNorm && churnNorm === churnKeyNorm) {
-      churnMes += 1;
-      // TEMP DEBUG: listar quais linhas estão sendo contadas como churn do mês corrente (ex: abr./2026).
-      // eslint-disable-next-line no-console
-      console.log("[CHURN ABR]", { nome: row[0], churnRaw, churnNorm });
-    }
+    if (churnNorm && churnKeyNorm && churnNorm === churnKeyNorm) churnMes += 1;
 
     const ltv = parseNumber(row[23]);
     if (Number.isFinite(ltv)) {
@@ -1904,8 +1877,7 @@ const handleAdminSheetsMetricsApi = async (req, res) => {
     payload,
   };
 
-  // TEMP DEBUG: avoid edge caching while we rely on logs.
-  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Cache-Control", "public, s-maxage=300");
   sendJson(res, 200, { ...payload, cached: false });
 };
 
