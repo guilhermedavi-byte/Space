@@ -194,6 +194,8 @@ const normalizeChurnMonthKey = (value) => {
   return String(value || "")
     .trim()
     .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/\s+/g, "")
     .replace(/\./g, "");
 };
@@ -1814,54 +1816,83 @@ const handleAdminSheetsMetricsApi = async (req, res) => {
   // Indexes: A=0, B=1, C=2, D=3, R=17, S=18, X=23, Z=25
   const startIdx = rows.length && String(rows[0]?.[0] || "").trim().toLowerCase() === "nome" ? 1 : 0;
 
-  let alunosAtivos = 0;
-  let alunosNovosMes = 0;
-  let churnMes = 0;
-  let ltvSum = 0;
-  let ltvCount = 0;
-  let permanenciaSumMeses = 0;
-  let permanenciaCount = 0;
+  const dataRows = rows.slice(startIdx);
 
-  for (let i = startIdx; i < rows.length; i += 1) {
-    const row = Array.isArray(rows[i]) ? rows[i] : [];
-    const statusRaw = String(row[3] || "").trim();
-    const statusNorm = normalizeKey(statusRaw);
-    const entrada = parsePtBrDate(row[1]);
-    const saida = parsePtBrDate(row[2]);
-    const churnRaw = String(row[25] || "").trim();
+  const parseBRL = (val) => {
+    if (!val) return 0;
+    return parseFloat(String(val).replace(/R\$\s?/g, "").replace(/\./g, "").replace(",", ".")) || 0;
+  };
+
+  const alunosAtivos = dataRows.filter((row) => String(row?.[3] || "").trim() === "Ativo").length;
+
+  const alunosNovosMes = dataRows.filter((row) => {
+    const entrada = parsePtBrDate(row?.[1]);
+    if (!entrada) return false;
+    return entrada.getUTCFullYear() === year && entrada.getUTCMonth() === monthIndex;
+  }).length;
+
+  const churnMes = dataRows.filter((row) => {
+    const churnRaw = String(row?.[25] || "").trim();
     const churnNorm = normalizeChurnMonthKey(churnRaw);
-
-    if (statusNorm === normalizeKey("Ativo")) alunosAtivos += 1;
-
-    if (entrada) {
-      const y = entrada.getUTCFullYear();
-      const m = entrada.getUTCMonth();
-      if (y === year && m === monthIndex) alunosNovosMes += 1;
-    }
-
-    if (churnNorm && churnKeyNorm && churnNorm === churnKeyNorm) churnMes += 1;
-
-    const ltv = parseNumber(row[23]);
-    if (Number.isFinite(ltv)) {
-      ltvSum += ltv;
-      ltvCount += 1;
-    }
-
-    if (statusNorm === normalizeKey("Cancelado") && entrada && saida) {
-      const diffMs = saida.getTime() - entrada.getTime();
-      if (diffMs > 0) {
-        const months = diffMs / (1000 * 60 * 60 * 24 * 30.4375);
-        if (Number.isFinite(months)) {
-          permanenciaSumMeses += months;
-          permanenciaCount += 1;
-        }
-      }
-    }
-  }
+    return churnNorm && churnKeyNorm && churnNorm === churnKeyNorm;
+  }).length;
 
   const churnPercentual = alunosAtivos > 0 ? (churnMes / alunosAtivos) * 100 : 0;
-  const ltvMedio = ltvCount > 0 ? ltvSum / ltvCount : 0;
-  const tempMedioMeses = permanenciaCount > 0 ? permanenciaSumMeses / permanenciaCount : 0;
+
+  const ltvs = dataRows
+    .map((row) => parseBRL(row?.[23]))
+    .filter((v) => v > 0);
+  const ltvMedio = ltvs.length > 0 ? ltvs.reduce((a, b) => a + b, 0) / ltvs.length : 0;
+
+  const permanencias = dataRows
+    .filter((row) => {
+      const status = String(row?.[3] || "").trim();
+      const val = parseFloat(String(row?.[4] || "").replace(",", "."));
+      return status === "Cancelado" && !Number.isNaN(val) && val >= 0.9;
+    })
+    .map((row) => parseFloat(String(row?.[4] || "").replace(",", ".")));
+  const tempMedioMeses = permanencias.length > 0 ? permanencias.reduce((a, b) => a + b, 0) / permanencias.length : 0;
+
+  // CAC e LTV/CAC — aba "BASE DE DADOS - COMERCIAL"
+  const getMesAbreviadoAtual = () => {
+    const date = new Date(Date.UTC(year, monthIndex, 1, 12, 0, 0));
+    try {
+      const monthName = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", month: "long" })
+        .format(date)
+        .toLowerCase();
+      const yy = String(year).slice(-2);
+      return `${monthName}/${yy}`; // ex: "abril/26"
+    } catch {
+      const yy = String(year).slice(-2);
+      return `mes/${yy}`;
+    }
+  };
+
+  let cac = 0;
+  try {
+    const comercialSheetName = "BASE DE DADOS - COMERCIAL";
+    const safeCommercialName = /\s/.test(comercialSheetName) ? `'${comercialSheetName}'` : comercialSheetName;
+    const comercialRange = `${safeCommercialName}!A1:Z10`;
+    const comercialUrl = `https://sheets.googleapis.com/v4/spreadsheets/${ADMIN_SHEETS_SPREADSHEET_ID}/values/${encodeURIComponent(
+      comercialRange
+    )}?key=${encodeURIComponent(apiKey)}&majorDimension=ROWS`;
+    const comercialRes = await requestJsonRaw(comercialUrl, { method: "GET" });
+    const comercialRows = Array.isArray(comercialRes?.data?.values) ? comercialRes.data.values : [];
+
+    const headers = comercialRows[0] || [];
+    const mesAtual = getMesAbreviadoAtual();
+    const colIdx = headers.findIndex((h) => normalizeChurnMonthKey(h) === normalizeChurnMonthKey(mesAtual));
+
+    if (colIdx > 0) {
+      const investimento = parseBRL(comercialRows?.[3]?.[colIdx]); // linha 4 = índice 3
+      const vendas = parseFloat(String(comercialRows?.[1]?.[colIdx] || "").replace(",", ".")) || 0; // linha 2 = índice 1
+      cac = vendas > 0 ? Math.round(investimento / vendas) : 0;
+    }
+  } catch {
+    cac = 0;
+  }
+
+  const ltvCac = cac > 0 ? Number((ltvMedio / cac).toFixed(1)) : 0;
 
   const payload = {
     alunosAtivos,
@@ -1870,6 +1901,8 @@ const handleAdminSheetsMetricsApi = async (req, res) => {
     churnPercentual,
     ltvMedio,
     tempMedioMeses,
+    cac,
+    ltvCac,
   };
 
   globalThis.__adminSheetsMetricsCache = {

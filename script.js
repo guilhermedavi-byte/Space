@@ -970,6 +970,12 @@ const formatMonthsPtBr1 = (value) => {
   return `${n.toLocaleString("pt-BR", { maximumFractionDigits: 1, minimumFractionDigits: 1 })} meses`;
 };
 
+const formatTimesPtBr1 = (value) => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "—";
+  return `${n.toLocaleString("pt-BR", { maximumFractionDigits: 1, minimumFractionDigits: 1 })}x`;
+};
+
 const applyAdminSheetsMetricsToUI = (payload) => {
   // Capture selectors at apply-time (the admin dashboard DOM may be injected later).
   const adminSheetsMetricEls = Array.from(document.querySelectorAll("[data-admin-sheets-metric]"));
@@ -982,6 +988,8 @@ const applyAdminSheetsMetricsToUI = (payload) => {
   const churnPercentual = Number(data.churnPercentual);
   const ltvMedio = Number(data.ltvMedio);
   const tempMedioMeses = Number(data.tempMedioMeses);
+  const cac = Number(data.cac);
+  const ltvCac = Number(data.ltvCac);
 
   adminSheetsMetricEls.forEach((el) => {
     if (!(el instanceof HTMLElement)) return;
@@ -992,6 +1000,8 @@ const applyAdminSheetsMetricsToUI = (payload) => {
     else if (key === "churnPercentual") el.textContent = formatPercentPtBr1(churnPercentual);
     else if (key === "ltvMedio") el.textContent = currencyPtBrNoCents(ltvMedio);
     else if (key === "tempMedioMeses") el.textContent = formatMonthsPtBr1(tempMedioMeses);
+    else if (key === "cac") el.textContent = currencyPtBrNoCents(cac);
+    else if (key === "ltvCac") el.textContent = formatTimesPtBr1(ltvCac);
   });
 
   if (adminSheetsChurnMeta instanceof HTMLElement) {
