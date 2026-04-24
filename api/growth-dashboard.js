@@ -1788,8 +1788,11 @@ const handleAdminSheetsMetricsApi = async (req, res) => {
   if (!auth) return;
 
   const nowMs = Date.now();
-  const ttlMs = 5 * 60 * 1000;
-  if (globalThis.__adminSheetsMetricsCache && globalThis.__adminSheetsMetricsCache.expiresAt > nowMs) {
+  // TEMP DEBUG: disable in-memory cache so every request hits Google Sheets and emits logs.
+  // Revert to 5min cache after diagnosing churn mismatch.
+  const disableCache = true;
+  const ttlMs = 0;
+  if (!disableCache && globalThis.__adminSheetsMetricsCache && globalThis.__adminSheetsMetricsCache.expiresAt > nowMs) {
     res.setHeader("Cache-Control", "public, s-maxage=300");
     sendJson(res, 200, { ...globalThis.__adminSheetsMetricsCache.payload, cached: true });
     return;
@@ -1858,7 +1861,12 @@ const handleAdminSheetsMetricsApi = async (req, res) => {
       if (y === year && m === monthIndex) alunosNovosMes += 1;
     }
 
-    if (churnNorm && churnKeyNorm && churnNorm === churnKeyNorm) churnMes += 1;
+    if (churnNorm && churnKeyNorm && churnNorm === churnKeyNorm) {
+      churnMes += 1;
+      // TEMP DEBUG: listar quais linhas estão sendo contadas como churn do mês corrente (ex: abr./2026).
+      // eslint-disable-next-line no-console
+      console.log("[CHURN ABR]", { nome: row[0], churnRaw, churnNorm });
+    }
 
     const ltv = parseNumber(row[23]);
     if (Number.isFinite(ltv)) {
@@ -1896,7 +1904,8 @@ const handleAdminSheetsMetricsApi = async (req, res) => {
     payload,
   };
 
-  res.setHeader("Cache-Control", "public, s-maxage=300");
+  // TEMP DEBUG: avoid edge caching while we rely on logs.
+  res.setHeader("Cache-Control", "no-store");
   sendJson(res, 200, { ...payload, cached: false });
 };
 
