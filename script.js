@@ -691,6 +691,9 @@ const openModal = ({
   modalBody.innerHTML = bodyHtml || "";
   modalPrimary.textContent = primaryLabel;
   modalSecondary.textContent = secondaryLabel;
+  // Reset any disabled state from a previous modal operation (prevents "stuck" primary buttons).
+  modalPrimary.disabled = false;
+  modalSecondary.disabled = false;
   modalSecondary.hidden = hideSecondary;
   modalOverlay.hidden = false;
   body.classList.add("is-modal-open");
@@ -6493,40 +6496,41 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
 
   const title = role === "teacher" ? "Novo Professor" : role === "growth" ? "Novo usuário Growth" : "Novo Aluno";
 
-  const bodyHtml = `
-    <form class="auth-form admin-create-form" data-admin-create-form novalidate>
-      <label class="auth-field">
-        <span>Nome completo</span>
-        <input class="auth-input" type="text" autocomplete="name" data-ac-name />
-        <div class="auth-inline-error" data-ac-name-error hidden>Nome obrigatório</div>
-      </label>
-      <label class="auth-field">
-        <span>E-mail</span>
-        <input class="auth-input" type="email" autocomplete="email" data-ac-email />
-        <div class="auth-inline-error" data-ac-email-error hidden>E-mail inválido</div>
-      </label>
-      <label class="auth-field">
-        <span>Senha</span>
-        <div class="auth-password">
-          <input class="auth-input" type="password" autocomplete="new-password" data-ac-password />
-          <button class="auth-eye" type="button" data-ac-eye aria-label="Mostrar senha">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12Z"></path>
-              <path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z"></path>
-            </svg>
-          </button>
-        </div>
-        <div class="auth-inline-error" data-ac-password-error hidden>Senha obrigatória</div>
-      </label>
-      <label class="auth-field">
-        <span>Confirmar senha</span>
-        <input class="auth-input" type="password" autocomplete="new-password" data-ac-confirm />
-        <div class="auth-inline-error" data-ac-confirm-error hidden>As senhas precisam coincidir</div>
-      </label>
-      <div class="auth-form-error" data-ac-error hidden>Não foi possível criar agora.</div>
-      <div class="auth-form-success" data-ac-success hidden>Criado com sucesso.</div>
-    </form>
-  `;
+	  const bodyHtml = `
+	    <form class="auth-form admin-create-form" data-admin-create-form novalidate>
+	      <label class="auth-field">
+	        <span>Nome completo</span>
+	        <input class="auth-input" type="text" autocomplete="name" data-ac-name />
+	        <div class="auth-inline-error" data-ac-name-error hidden>Nome obrigatório</div>
+	      </label>
+	      <label class="auth-field">
+	        <span>E-mail</span>
+	        <input class="auth-input" type="email" autocomplete="email" data-ac-email />
+	        <div class="auth-inline-error" data-ac-email-error hidden>E-mail inválido</div>
+	      </label>
+	      <label class="auth-field">
+	        <span>Senha</span>
+	        <div class="auth-password">
+	          <input class="auth-input" type="password" autocomplete="new-password" data-ac-password />
+	          <button class="auth-eye" type="button" data-ac-eye aria-label="Mostrar senha">
+	            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+	              <path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12Z"></path>
+	              <path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z"></path>
+	            </svg>
+	          </button>
+	        </div>
+	        <div class="auth-inline-hint" data-ac-password-hint>Mínimo de 6 caracteres.</div>
+	        <div class="auth-inline-error" data-ac-password-error hidden>Senha obrigatória</div>
+	      </label>
+	      <label class="auth-field">
+	        <span>Confirmar senha</span>
+	        <input class="auth-input" type="password" autocomplete="new-password" data-ac-confirm />
+	        <div class="auth-inline-error" data-ac-confirm-error hidden>As senhas precisam coincidir</div>
+	      </label>
+	      <div class="auth-form-error" data-ac-error hidden>Não foi possível criar agora.</div>
+	      <div class="auth-form-success" data-ac-success hidden>Criado com sucesso.</div>
+	    </form>
+	  `;
 
   openModal({
     title,
@@ -6677,12 +6681,60 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
 
   const eye = modalBody?.querySelector("[data-ac-eye]");
   const passEl = modalBody?.querySelector("[data-ac-password]");
-  if (eye instanceof HTMLButtonElement && passEl instanceof HTMLInputElement) {
-    eye.addEventListener("click", () => {
-      passEl.type = passEl.type === "password" ? "text" : "password";
-    });
-  }
-};
+	  if (eye instanceof HTMLButtonElement && passEl instanceof HTMLInputElement) {
+	    eye.addEventListener("click", () => {
+	      passEl.type = passEl.type === "password" ? "text" : "password";
+	    });
+	  }
+
+	  // Live validation feedback (same rules as submit, but surfaced while typing).
+	  const form = modalBody?.querySelector("[data-admin-create-form]");
+	  if (form instanceof HTMLFormElement) {
+	    const validate = () => {
+	      const nameEl = form.querySelector("[data-ac-name]");
+	      const emailEl = form.querySelector("[data-ac-email]");
+	      const passEl = form.querySelector("[data-ac-password]");
+	      const confirmEl = form.querySelector("[data-ac-confirm]");
+	      const nameError = form.querySelector("[data-ac-name-error]");
+	      const emailError = form.querySelector("[data-ac-email-error]");
+	      const passError = form.querySelector("[data-ac-password-error]");
+	      const confirmError = form.querySelector("[data-ac-confirm-error]");
+
+	      const name = nameEl instanceof HTMLInputElement ? nameEl.value.trim() : "";
+	      const email = emailEl instanceof HTMLInputElement ? emailEl.value.trim().toLowerCase() : "";
+	      const password = passEl instanceof HTMLInputElement ? passEl.value : "";
+	      const confirm = confirmEl instanceof HTMLInputElement ? confirmEl.value : "";
+
+	      const nameOk = Boolean(name);
+	      const emailOk = !email ? true : isValidEmail(email);
+	      const passOk = !password ? true : password.length >= 6;
+	      const confirmOk = !confirm ? true : password === confirm;
+
+	      if (nameError instanceof HTMLElement) nameError.hidden = nameOk || !name;
+	      if (emailError instanceof HTMLElement) emailError.hidden = emailOk;
+	      if (passError instanceof HTMLElement) {
+	        passError.textContent = password ? "Senha mínimo 6 caracteres" : "Senha obrigatória";
+	        passError.hidden = passOk;
+	      }
+	      if (confirmError instanceof HTMLElement) confirmError.hidden = confirmOk;
+
+	      if (nameEl instanceof HTMLElement) nameEl.classList.toggle("is-error", Boolean(name) && !nameOk);
+	      if (emailEl instanceof HTMLElement) emailEl.classList.toggle("is-error", Boolean(email) && !emailOk);
+	      if (passEl instanceof HTMLElement) passEl.classList.toggle("is-error", Boolean(password) && !passOk);
+	      if (confirmEl instanceof HTMLElement) confirmEl.classList.toggle("is-error", Boolean(confirm) && !confirmOk);
+	    };
+
+	    form.addEventListener("input", validate);
+	    form.addEventListener(
+	      "blur",
+	      () => {
+	        validate();
+	      },
+	      true
+	    );
+	    validate();
+	  }
+	};
 
 adminNewUserButtons.forEach((btn) => {
   btn.addEventListener("click", () => {

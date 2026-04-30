@@ -7473,6 +7473,12 @@ body.is-modal-open {
   font-size: 12px;
 }
 
+.auth-inline-hint {
+  margin-top: 8px;
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 12px;
+}
+
 .auth-forgot {
   display: flex;
   justify-content: flex-end;
