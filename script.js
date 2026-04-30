@@ -6353,6 +6353,74 @@ const renderAdminUsersTable = (type) => {
 
 const closeAllAdminActionMenus = () => {
   document.querySelectorAll("[data-admin-actions].is-open").forEach((el) => el.classList.remove("is-open"));
+  closeAdminActionsPopover();
+};
+
+let adminActionsPopoverEl = null;
+
+const closeAdminActionsPopover = () => {
+  if (adminActionsPopoverEl instanceof HTMLElement) {
+    adminActionsPopoverEl.remove();
+  }
+  adminActionsPopoverEl = null;
+};
+
+const clampToViewport = (value, min, max) => Math.max(min, Math.min(max, value));
+
+const openAdminActionsPopover = ({ triggerEl, uid, name, email, isActive }) => {
+  if (!(triggerEl instanceof HTMLElement)) return;
+  closeAdminActionsPopover();
+
+  const safeUid = String(uid || "").trim();
+  const safeName = String(name || "").trim();
+  const safeEmail = String(email || "").trim();
+  const active = Boolean(isActive);
+
+  const toggleLabel = active ? "Desativar" : "Ativar";
+  const toggleClass = active ? "admin-action-item is-danger" : "admin-action-item";
+
+  const pop = document.createElement("div");
+  pop.className = "admin-actions-popover";
+  pop.setAttribute("role", "menu");
+  pop.setAttribute("data-admin-actions-popover", "true");
+  if (safeUid) pop.setAttribute("data-admin-actions-uid", safeUid);
+  pop.innerHTML = `
+    <button
+      class="${toggleClass}"
+      type="button"
+      data-admin-action-toggle
+      data-admin-action-uid="${escapeHtml(safeUid)}"
+      data-admin-action-name="${escapeHtml(safeName)}"
+      data-admin-action-email="${escapeHtml(safeEmail)}"
+      data-admin-action-active="${active ? "1" : "0"}"
+    >${toggleLabel}</button>
+    <button
+      class="admin-action-item"
+      type="button"
+      data-admin-action-reset
+      data-admin-action-uid="${escapeHtml(safeUid)}"
+      data-admin-action-name="${escapeHtml(safeName)}"
+      data-admin-action-email="${escapeHtml(safeEmail)}"
+      data-admin-action-active="${active ? "1" : "0"}"
+    >Redefinir senha</button>
+  `;
+
+  document.body.appendChild(pop);
+  adminActionsPopoverEl = pop;
+
+  // Position (fixed) and flip if needed.
+  const rect = triggerEl.getBoundingClientRect();
+  const popRect = pop.getBoundingClientRect();
+  const margin = 10;
+
+  const spaceBelow = window.innerHeight - rect.bottom;
+  const shouldFlipUp = spaceBelow < popRect.height + margin;
+
+  const top = shouldFlipUp ? rect.top - margin - popRect.height : rect.bottom + margin;
+  const left = rect.right - popRect.width;
+
+  pop.style.top = `${clampToViewport(top, margin, window.innerHeight - popRect.height - margin)}px`;
+  pop.style.left = `${clampToViewport(left, margin, window.innerWidth - popRect.width - margin)}px`;
 };
 
 if (adminUserForm instanceof HTMLFormElement) {
@@ -7168,12 +7236,14 @@ document.addEventListener("click", (event) => {
       const trigger = target.closest("[data-admin-actions-trigger]");
       if (trigger instanceof HTMLButtonElement) {
         event.preventDefault();
-        const container = trigger.closest("[data-admin-actions]");
-        if (container instanceof HTMLElement) {
-          const wasOpen = container.classList.contains("is-open");
-          closeAllAdminActionMenus();
-          container.classList.toggle("is-open", !wasOpen);
-        }
+        const row = trigger.closest("[data-admin-user-row]");
+        if (!(row instanceof HTMLElement)) return;
+        const uid = row.getAttribute("data-admin-user-row") || "";
+        const name = row.getAttribute("data-admin-user-name") || "Usuário";
+        const email = row.getAttribute("data-admin-user-email") || "";
+        const isActive = row.getAttribute("data-admin-user-active") === "1";
+        closeAllAdminActionMenus();
+        openAdminActionsPopover({ triggerEl: trigger, uid, name, email, isActive });
         return;
       }
 
@@ -7181,15 +7251,18 @@ document.addEventListener("click", (event) => {
       if (toggleAction instanceof HTMLButtonElement) {
         event.preventDefault();
         const row = toggleAction.closest("[data-admin-user-row]");
-        if (!(row instanceof HTMLElement)) return;
-        const uid = row.getAttribute("data-admin-user-row") || "";
-        const name = row.getAttribute("data-admin-user-name") || "Usuário";
-        const email = row.getAttribute("data-admin-user-email") || "";
-        const isActive = row.getAttribute("data-admin-user-active") === "1";
+        const uid = row instanceof HTMLElement ? row.getAttribute("data-admin-user-row") || "" : toggleAction.getAttribute("data-admin-action-uid") || "";
+        const name = row instanceof HTMLElement ? row.getAttribute("data-admin-user-name") || "Usuário" : toggleAction.getAttribute("data-admin-action-name") || "Usuário";
+        const email = row instanceof HTMLElement ? row.getAttribute("data-admin-user-email") || "" : toggleAction.getAttribute("data-admin-action-email") || "";
+        const isActive =
+          row instanceof HTMLElement
+            ? row.getAttribute("data-admin-user-active") === "1"
+            : toggleAction.getAttribute("data-admin-action-active") === "1";
         const activePanel = String(body.dataset.activePanel || "");
         const type = activePanel === "professores" ? "teacher" : activePanel === "growth" ? "growth" : "student";
 
         closeAllAdminActionMenus();
+        closeAdminActionsPopover();
 
         const applyToggle = async (nextActive) => {
           setAdminManageStatus(type, nextActive ? "Ativando…" : "Desativando…");
@@ -7255,12 +7328,12 @@ document.addEventListener("click", (event) => {
       if (resetAction instanceof HTMLButtonElement) {
         event.preventDefault();
         const row = resetAction.closest("[data-admin-user-row]");
-        if (!(row instanceof HTMLElement)) return;
-        const email = row.getAttribute("data-admin-user-email") || "";
+        const email = row instanceof HTMLElement ? row.getAttribute("data-admin-user-email") || "" : resetAction.getAttribute("data-admin-action-email") || "";
         const activePanel = String(body.dataset.activePanel || "");
         const type = activePanel === "professores" ? "teacher" : activePanel === "growth" ? "growth" : "student";
 
         closeAllAdminActionMenus();
+        closeAdminActionsPopover();
 
         openModal({
           title: "Redefinir senha",
@@ -7294,8 +7367,9 @@ document.addEventListener("click", (event) => {
       }
 
       // Click outside closes any open action menu.
-      if (!target.closest("[data-admin-actions]")) {
+      if (!target.closest("[data-admin-actions]") && !target.closest("[data-admin-actions-popover]")) {
         closeAllAdminActionMenus();
+        closeAdminActionsPopover();
       }
     }
 
