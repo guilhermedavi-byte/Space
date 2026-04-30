@@ -1859,7 +1859,8 @@ const handleAdminSheetsMetricsApi = async (req, res) => {
     try {
       const monthName = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", month: "long" })
         .format(date)
-        .toLowerCase();
+        .toLowerCase()
+        .replace(/\./g, "");
       const yy = String(year).slice(-2);
       return `${monthName}/${yy}`; // ex: "abril/26"
     } catch {
@@ -1882,6 +1883,14 @@ const handleAdminSheetsMetricsApi = async (req, res) => {
     const headers = comercialRows[0] || [];
     const mesAtual = getMesAbreviadoAtual();
     const colIdx = headers.findIndex((h) => normalizeChurnMonthKey(h) === normalizeChurnMonthKey(mesAtual));
+
+    // TEMP DEBUG: entender por que o match do mês pode falhar e zerar o CAC.
+    // eslint-disable-next-line no-console
+    console.log("[CAC DEBUG]", {
+      headers,
+      mesAtualGerado: mesAtual,
+      colIdxEncontrado: colIdx,
+    });
 
     if (colIdx > 0) {
       const investimento = parseBRL(comercialRows?.[3]?.[colIdx]); // linha 4 = índice 3

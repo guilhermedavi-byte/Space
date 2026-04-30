@@ -54,6 +54,8 @@ const liveStudentLessonsList = document.querySelector("[data-live-student-lesson
 const liveStudentEmpty = document.querySelector("[data-live-student-empty]");
 const adminRescheduleList = document.querySelector("[data-admin-reschedule-list]");
 const adminRescheduleEmpty = document.querySelector("[data-admin-reschedule-empty]");
+const adminAgendasList = document.querySelector("[data-admin-agendas-list]");
+const adminAgendasEmpty = document.querySelector("[data-admin-agendas-empty]");
 const adminUserForm = document.querySelector("[data-admin-user-form]");
 const adminUserName = document.querySelector("[data-admin-user-name]");
 const adminUserEmail = document.querySelector("[data-admin-user-email]");
@@ -3132,10 +3134,92 @@ const TEACHER_CAL_SLOT_MINUTES = 15;
 const TEACHER_CAL_MIN_DURATION_MINUTES = 15;
 const TEACHER_CAL_DEFAULT_DURATION_MINUTES = 30;
 
+const ADMIN_SELECTED_TEACHERS_STORAGE_KEY = "admin_selected_teachers";
+const ADMIN_TEACHER_AGENDA_PALETTE = [
+  "#5C9BD6", // azul
+  "#E8A838", // amarelo
+  "#4CAF82", // verde
+  "#E05C5C", // vermelho
+  "#9B6DD6", // roxo
+  "#E87D3E", // laranja
+  "#5CC4C4", // teal
+];
+
+const adminTeacherAgendasState = {
+  isLoading: false,
+  loadedAt: 0,
+  teachers: [], // { id, nome, initials, ativo }
+  selectedIds: null, // Set<string> (null => default/all)
+  colorById: new Map(), // Map<string, string>
+};
+
 const clampNumber = (value, min, max) => {
   const n = Number(value);
   if (!Number.isFinite(n)) return min;
   return Math.min(Math.max(n, min), max);
+};
+
+const toRgba = (hex, alpha) => {
+  const raw = String(hex || "").trim().replace("#", "");
+  const safeAlpha = clampNumber(alpha, 0, 1);
+  if (raw.length !== 6) return `rgba(255,255,255,${safeAlpha})`;
+  const r = parseInt(raw.slice(0, 2), 16);
+  const g = parseInt(raw.slice(2, 4), 16);
+  const b = parseInt(raw.slice(4, 6), 16);
+  if (![r, g, b].every((v) => Number.isFinite(v))) return `rgba(255,255,255,${safeAlpha})`;
+  return `rgba(${r},${g},${b},${safeAlpha})`;
+};
+
+const getAdminTeacherColor = (teacherId) => {
+  const uid = String(teacherId || "").trim();
+  if (!uid) return ADMIN_TEACHER_AGENDA_PALETTE[0];
+  const existing = adminTeacherAgendasState.colorById.get(uid);
+  if (existing) return existing;
+  // Deterministic-ish fallback: use a small hash to pick a palette index.
+  let hash = 0;
+  for (let i = 0; i < uid.length; i += 1) hash = (hash * 31 + uid.charCodeAt(i)) >>> 0;
+  const color = ADMIN_TEACHER_AGENDA_PALETTE[hash % ADMIN_TEACHER_AGENDA_PALETTE.length];
+  adminTeacherAgendasState.colorById.set(uid, color);
+  return color;
+};
+
+const loadAdminSelectedTeacherIds = (allTeacherIds) => {
+  const ids = Array.isArray(allTeacherIds) ? allTeacherIds.filter(Boolean) : [];
+  let parsed = null;
+  try {
+    parsed = JSON.parse(localStorage.getItem(ADMIN_SELECTED_TEACHERS_STORAGE_KEY) || "null");
+  } catch (e) {
+    parsed = null;
+  }
+  // If the key exists (even as an empty array), treat it as the source of truth for selection.
+  if (Array.isArray(parsed)) {
+    const selected = parsed.filter((id) => typeof id === "string");
+    const filtered = selected.filter((id) => ids.includes(id));
+    return new Set(filtered);
+  }
+  // Default: all selected.
+  return new Set(ids);
+};
+
+const persistAdminSelectedTeacherIds = (selectedSet) => {
+  if (!(selectedSet instanceof Set)) return;
+  try {
+    localStorage.setItem(ADMIN_SELECTED_TEACHERS_STORAGE_KEY, JSON.stringify(Array.from(selectedSet)));
+  } catch (e) {
+    // ignore
+  }
+};
+
+const getAdminSelectedTeacherIdsSet = () => {
+  if (currentRole !== "admin") return null;
+  if (adminTeacherAgendasState.selectedIds instanceof Set) return adminTeacherAgendasState.selectedIds;
+  const ids = Array.isArray(adminTeacherAgendasState.teachers)
+    ? adminTeacherAgendasState.teachers.filter((t) => t && typeof t === "object" && t.ativo !== false).map((t) => t.id).filter(Boolean)
+    : [];
+  if (!ids.length) return null;
+  const selected = loadAdminSelectedTeacherIds(ids);
+  adminTeacherAgendasState.selectedIds = selected;
+  return selected;
 };
 
 const getTeacherGridMeta = (gridEl) => {
@@ -3452,6 +3536,144 @@ const renderAdminRescheduleRequests = () => {
     .join("");
 };
 
+const normalizeAdminAgendaTeacher = ({ id, nome, ativo }) => {
+  const uid = String(id || "").trim();
+  const name = String(nome || "").trim();
+  if (!uid || !name) return null;
+  return { id: uid, nome: name, initials: getInitials(name), ativo: ativo !== false };
+};
+
+const fetchAdminAgendaTeachers = async () => {
+  const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init");
+  const user = await waitForFirebaseAuthReady(firebase, 5000);
+  if (!user) {
+    const e = new Error("firebase_not_authenticated");
+    e.code = "auth/no-current-user";
+    throw e;
+  }
+
+  const q = firebase.query(firebase.collection(firebase.primaryDb, "users"), firebase.where("tipo", "==", "teacher"));
+  const snap = await withTimeout(firebase.getDocs(q), 12_000, "firestore_getDocs_teachers_agendas");
+  const out = [];
+  snap.forEach((docSnap) => {
+    const data = docSnap.data ? docSnap.data() : null;
+    if (!data || typeof data !== "object") return;
+    out.push(
+      normalizeAdminAgendaTeacher({
+        id: docSnap.id,
+        nome: data.nome,
+        ativo: typeof data.ativo === "boolean" ? data.ativo : true,
+      })
+    );
+  });
+  return out.filter(Boolean).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+};
+
+const applyAdminTeacherAgendasToUI = () => {
+  if (!(adminAgendasList instanceof HTMLElement)) return;
+  const teachers = Array.isArray(adminTeacherAgendasState.teachers) ? adminTeacherAgendasState.teachers : [];
+  const activeTeachers = teachers.filter((t) => t.ativo !== false);
+
+  // Assign palette colors by index for the current snapshot (keeps colors stable as long as ordering is stable).
+  activeTeachers.forEach((teacher, idx) => {
+    if (!adminTeacherAgendasState.colorById.get(teacher.id)) {
+      adminTeacherAgendasState.colorById.set(
+        teacher.id,
+        ADMIN_TEACHER_AGENDA_PALETTE[idx % ADMIN_TEACHER_AGENDA_PALETTE.length]
+      );
+    }
+  });
+
+  const teacherIds = activeTeachers.map((t) => t.id);
+  if (!(adminTeacherAgendasState.selectedIds instanceof Set)) {
+    adminTeacherAgendasState.selectedIds = loadAdminSelectedTeacherIds(teacherIds);
+  }
+  const selected = adminTeacherAgendasState.selectedIds instanceof Set ? adminTeacherAgendasState.selectedIds : new Set();
+
+  if (adminAgendasEmpty instanceof HTMLElement) {
+    adminAgendasEmpty.hidden = activeTeachers.length > 0;
+  }
+
+  adminAgendasList.innerHTML = activeTeachers
+    .map((teacher) => {
+      const color = getAdminTeacherColor(teacher.id);
+      const isOn = selected.has(teacher.id);
+      return `
+        <li class="admin-agenda-item" data-admin-agenda-id="${escapeHtml(teacher.id)}">
+          <button
+            class="admin-agenda-toggle${isOn ? " is-on" : ""}"
+            type="button"
+            style="--agenda-color:${escapeHtml(color)}"
+            data-admin-agenda-toggle="${escapeHtml(teacher.id)}"
+            aria-label="${isOn ? "Ocultar" : "Mostrar"} agenda de ${escapeHtml(teacher.nome)}"
+            aria-pressed="${isOn ? "true" : "false"}"
+          ></button>
+          <div class="admin-agenda-avatar" aria-hidden="true">${escapeHtml(teacher.initials || "")}</div>
+          <div class="admin-agenda-name">${escapeHtml(teacher.nome)}</div>
+        </li>
+      `;
+    })
+    .join("");
+};
+
+const renderAdminTeacherAgendas = async ({ force = false } = {}) => {
+  if (currentRole !== "admin") return;
+  if (!(adminAgendasList instanceof HTMLElement)) return;
+  if (adminTeacherAgendasState.isLoading) return;
+
+  const now = Date.now();
+  if (!force && adminTeacherAgendasState.loadedAt && now - adminTeacherAgendasState.loadedAt < 60_000) {
+    applyAdminTeacherAgendasToUI();
+    return;
+  }
+
+  adminTeacherAgendasState.isLoading = true;
+  try {
+    const teachers = await fetchAdminAgendaTeachers();
+    adminTeacherAgendasState.teachers = teachers;
+    adminTeacherAgendasState.loadedAt = Date.now();
+
+    // Re-hydrate selected ids with the new teacher snapshot (keeping explicit "none" selection when stored).
+    const ids = teachers.filter((t) => t.ativo !== false).map((t) => t.id);
+    const selected = loadAdminSelectedTeacherIds(ids);
+    adminTeacherAgendasState.selectedIds = selected;
+    applyAdminTeacherAgendasToUI();
+    if (body.dataset.activePanel === "ao-vivo") {
+      renderTeacherCalendar();
+    }
+  } catch (error) {
+    console.error("[admin] agendas load failed:", error);
+    adminTeacherAgendasState.teachers = [];
+    adminTeacherAgendasState.selectedIds = new Set();
+    applyAdminTeacherAgendasToUI();
+  } finally {
+    adminTeacherAgendasState.isLoading = false;
+  }
+};
+
+const toggleAdminTeacherAgenda = (teacherId) => {
+  if (currentRole !== "admin") return;
+  const id = String(teacherId || "").trim();
+  if (!id) return;
+  const teachers = Array.isArray(adminTeacherAgendasState.teachers) ? adminTeacherAgendasState.teachers : [];
+  const activeIds = teachers.filter((t) => t.ativo !== false).map((t) => t.id);
+  if (!activeIds.length) return;
+
+  if (!(adminTeacherAgendasState.selectedIds instanceof Set)) {
+    adminTeacherAgendasState.selectedIds = loadAdminSelectedTeacherIds(activeIds);
+  }
+  const selected = adminTeacherAgendasState.selectedIds;
+
+  if (selected.has(id)) selected.delete(id);
+  else selected.add(id);
+
+  persistAdminSelectedTeacherIds(selected);
+  applyAdminTeacherAgendasToUI();
+  if (body.dataset.activePanel === "ao-vivo") {
+    renderTeacherCalendar();
+  }
+};
+
 const apiWorkHoursToLocalWorkHours = (apiWorkHours) => {
   const base = defaultWorkHours();
   Object.keys(liveSlotPresetsBase).forEach((dayKey) => {
@@ -3603,7 +3825,13 @@ const getManualEvents = () => {
 };
 
 const getTeacherEventsForRange = (rangeStart, rangeEnd) => {
-  const events = [...getLessonEvents(), ...getManualEvents()];
+  let events = [...getLessonEvents(), ...getManualEvents()];
+  if (currentRole === "admin") {
+    const selected = getAdminSelectedTeacherIdsSet();
+    if (selected instanceof Set) {
+      events = events.filter((event) => selected.has(String(event.professorId || "").trim()));
+    }
+  }
   return events
     .filter((event) => event.end.getTime() > rangeStart.getTime() && event.start.getTime() < rangeEnd.getTime())
     .sort((a, b) => a.start.getTime() - b.start.getTime());
@@ -3764,20 +3992,9 @@ const renderTeacherCalendarViewportDay = (date) => {
   dayStart.setHours(0, 0, 0, 0);
   const dayEnd = addDays(dayStart, 1);
   const events = getTeacherEventsForRange(dayStart, dayEnd);
-  const laidOut = layoutOverlappingEvents(events);
 
-  const weekdayLabel = new Intl.DateTimeFormat("pt-BR", { weekday: "short" }).format(date).replace(".", "").toUpperCase();
   const today = startOfDay(new Date());
   const isToday = sameDateKey(date, today);
-  const head = `
-    <div class="teacher-cal-head-cell"></div>
-    <div class="teacher-cal-head-cell">
-      <div class="teacher-cal-day-label">
-        <span>${weekdayLabel}</span>
-        <span class="teacher-cal-day-num${isToday ? " is-today" : ""}">${date.getDate()}</span>
-      </div>
-    </div>
-  `;
 
   const times = [];
   for (let h = startHour; h <= endHour; h += 1) {
@@ -3818,27 +4035,118 @@ const renderTeacherCalendarViewportDay = (date) => {
     }
   }
 
+  const renderEventButton = (event, accentColor) => {
+    const startMinutes = event.start.getHours() * 60 + event.start.getMinutes();
+    const endMinutes = event.end.getHours() * 60 + event.end.getMinutes();
+    const top = ((startMinutes - gridStartMin) / 60) * hourHeight;
+    const height = Math.max(18, ((endMinutes - startMinutes) / 60) * hourHeight);
+    const leftPct = (event.colIndex / event.colCount) * 100;
+    const widthPct = 100 / event.colCount;
+    const timeLabel = `${formatTimeHm(event.start)} – ${formatTimeHm(event.end)}`;
+
+    const color = String(accentColor || "").trim();
+    const tintBg = color ? toRgba(color, 0.22) : "";
+    const tintBorder = color ? toRgba(color, 0.6) : "";
+    const tintShadow = color ? `0 12px 26px ${toRgba(color, 0.18)}` : "";
+    const extraStyle = color
+      ? `background:${tintBg};border:1px solid ${tintBorder};box-shadow:${tintShadow};`
+      : "";
+
+    return `
+      <button
+        class="teacher-cal-event is-${event.type}"
+        style="top:${top}px;height:${height}px;left:calc(${leftPct}% + 8px);width:calc(${widthPct}% - 16px);${extraStyle}"
+        type="button"
+        data-teacher-cal-event-type="${event.type}"
+        data-teacher-cal-event-id="${escapeHtml(event.id)}"
+      >
+        <span class="teacher-cal-event-title">${escapeHtml(event.title)}</span>
+        <span class="teacher-cal-event-time">${escapeHtml(timeLabel)}</span>
+      </button>
+    `;
+  };
+
+  // Admin: allow splitting the day view into one column per selected teacher agenda.
+  if (currentRole === "admin") {
+    const selected = getAdminSelectedTeacherIdsSet();
+    const selectedIds = selected instanceof Set ? Array.from(selected) : [];
+    const activeTeachers = Array.isArray(adminTeacherAgendasState.teachers)
+      ? adminTeacherAgendasState.teachers.filter((t) => t && typeof t === "object" && t.ativo !== false)
+      : [];
+    const selectedTeachers = selectedIds.length
+      ? activeTeachers.filter((t) => selected.has(t.id))
+      : [];
+
+    if (selected instanceof Set && selected.size > 1) {
+      const columns =
+        selectedTeachers.length > 0
+          ? selectedTeachers
+          : selectedIds.map((id) => ({ id, nome: "Professor", initials: "", ativo: true }));
+
+      const headCells = columns
+        .map((teacher) => {
+          const color = getAdminTeacherColor(teacher.id);
+          return `
+            <div class="teacher-cal-head-cell teacher-cal-agenda-head">
+              <div class="teacher-cal-agenda-label">
+                <span class="teacher-cal-agenda-dot" style="background:${escapeHtml(color)}" aria-hidden="true"></span>
+                <span>${escapeHtml(teacher.nome || "Professor")}</span>
+              </div>
+            </div>
+          `;
+        })
+        .join("");
+
+      const colMarkup = columns
+        .map((teacher) => {
+          const teacherId = String(teacher.id || "").trim();
+          const color = getAdminTeacherColor(teacherId);
+          const colEvents = events.filter((evt) => String(evt.professorId || "").trim() === teacherId);
+          const laidOut = layoutOverlappingEvents(colEvents);
+          const eventsMarkup = laidOut.map((evt) => renderEventButton(evt, color)).join("");
+          return `
+            <div class="teacher-cal-grid teacher-cal-grid-split" data-teacher-cal-grid="${createDateKey(
+              date
+            )}" data-teacher-cal-start="${startHour}" data-teacher-cal-end="${endHour}" data-teacher-cal-teacher="${escapeHtml(
+            teacherId
+          )}">
+              ${rows.join("")}
+              ${offHours}
+              ${nowLine}
+              <div class="teacher-cal-events-layer">${eventsMarkup}</div>
+            </div>
+          `;
+        })
+        .join("");
+
+      teacherCalViewport.innerHTML = `
+        <div class="teacher-cal-day is-multi" style="grid-template-columns: 60px repeat(${columns.length}, minmax(0, 1fr));">
+          <div class="teacher-cal-head-cell"></div>
+          ${headCells}
+          <div class="teacher-cal-timecol">${times.join("")}</div>
+          ${colMarkup}
+        </div>
+      `;
+      return;
+    }
+  }
+
+  const laidOut = layoutOverlappingEvents(events);
+  const weekdayLabel = new Intl.DateTimeFormat("pt-BR", { weekday: "short" }).format(date).replace(".", "").toUpperCase();
+  const head = `
+    <div class="teacher-cal-head-cell"></div>
+    <div class="teacher-cal-head-cell">
+      <div class="teacher-cal-day-label">
+        <span>${weekdayLabel}</span>
+        <span class="teacher-cal-day-num${isToday ? " is-today" : ""}">${date.getDate()}</span>
+      </div>
+    </div>
+  `;
+
   const eventsMarkup = laidOut
     .map((event) => {
-      const startMinutes = event.start.getHours() * 60 + event.start.getMinutes();
-      const endMinutes = event.end.getHours() * 60 + event.end.getMinutes();
-      const top = ((startMinutes - gridStartMin) / 60) * hourHeight;
-      const height = Math.max(18, ((endMinutes - startMinutes) / 60) * hourHeight);
-      const leftPct = (event.colIndex / event.colCount) * 100;
-      const widthPct = 100 / event.colCount;
-      const timeLabel = `${formatTimeHm(event.start)} – ${formatTimeHm(event.end)}`;
-      return `
-        <button
-          class="teacher-cal-event is-${event.type}"
-          style="top:${top}px;height:${height}px;left:calc(${leftPct}% + 8px);width:calc(${widthPct}% - 16px);"
-          type="button"
-          data-teacher-cal-event-type="${event.type}"
-          data-teacher-cal-event-id="${escapeHtml(event.id)}"
-        >
-          <span class="teacher-cal-event-title">${escapeHtml(event.title)}</span>
-          <span class="teacher-cal-event-time">${escapeHtml(timeLabel)}</span>
-        </button>
-      `;
+      const accent = currentRole === "admin" ? getAdminTeacherColor(event.professorId) : "";
+      return renderEventButton(event, accent);
     })
     .join("");
 
@@ -6481,10 +6789,10 @@ const showPanel = (panelName) => {
   if (panelName === "ao-vivo") {
     window.scrollTo({ top: 0, behavior: "smooth" });
     if (currentRole === "teacher" || currentRole === "admin") {
-      renderTeacherCalendar();
       if (currentRole === "admin") {
-        renderAdminRescheduleRequests();
+        renderAdminTeacherAgendas();
       }
+      renderTeacherCalendar();
     } else {
       renderStudentLiveLessons();
     }
@@ -6794,6 +7102,14 @@ document.addEventListener("click", (event) => {
         event.preventDefault();
         const competencia = String(goalEdit.getAttribute("data-admin-goal-edit") || "").trim();
         openAdminGrowthGoalModal(competencia);
+        return;
+      }
+
+      const agendaToggle = target.closest("[data-admin-agenda-toggle]");
+      if (agendaToggle instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const id = String(agendaToggle.getAttribute("data-admin-agenda-toggle") || "").trim();
+        toggleAdminTeacherAgenda(id);
         return;
       }
 
