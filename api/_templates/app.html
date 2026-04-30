@@ -1405,16 +1405,20 @@
               </button>
             </div>
 
-            <div class="admin-manage-tools">
-              <input
-                class="admin-search"
-                type="search"
-                inputmode="search"
-                placeholder="Buscar por nome ou e-mail"
-                data-admin-search="teacher"
-              />
-              <div class="admin-manage-status" data-admin-manage-status="teacher" aria-live="polite"></div>
-            </div>
+	            <div class="admin-manage-tools">
+	              <input
+	                class="admin-search"
+	                type="search"
+	                inputmode="search"
+	                placeholder="Buscar por nome ou e-mail"
+	                data-admin-search="teacher"
+	              />
+	              <div class="admin-status-tabs" role="tablist" aria-label="Filtrar professores">
+	                <button class="admin-status-tab is-active" type="button" role="tab" aria-selected="true" data-admin-teacher-filter="active">Ativos</button>
+	                <button class="admin-status-tab" type="button" role="tab" aria-selected="false" data-admin-teacher-filter="inactive">Inativos</button>
+	              </div>
+	              <div class="admin-manage-status" data-admin-manage-status="teacher" aria-live="polite"></div>
+	            </div>
 
             <article class="surface-card admin-users-card" aria-label="Lista de professores">
               <div class="admin-users-table" data-admin-users-table="teacher"></div>

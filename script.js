@@ -5889,7 +5889,7 @@ const setAdminManageStatus = (type, text, tone = "") => {
 };
 
 let adminUsersState = {
-  teacher: { rows: [], query: "", loadedAt: 0, isLoading: false },
+  teacher: { rows: [], query: "", loadedAt: 0, isLoading: false, statusFilter: "active" }, // active | inactive
   student: { rows: [], query: "", loadedAt: 0, isLoading: false },
   growth: { rows: [], query: "", loadedAt: 0, isLoading: false },
 };
@@ -6292,6 +6292,23 @@ const loadUsersFromFirestore = async (type) => {
   }
 };
 
+const syncTeacherStatusFilterTabs = () => {
+  const filter = adminUsersState?.teacher?.statusFilter === "inactive" ? "inactive" : "active";
+  document.querySelectorAll("[data-admin-teacher-filter]").forEach((el) => {
+    if (!(el instanceof HTMLButtonElement)) return;
+    const value = String(el.getAttribute("data-admin-teacher-filter") || "").trim().toLowerCase();
+    const isActive = value === filter;
+    el.classList.toggle("is-active", isActive);
+    el.setAttribute("aria-selected", isActive ? "true" : "false");
+  });
+};
+
+const setTeacherStatusFilter = (nextFilter) => {
+  const filter = String(nextFilter || "").trim().toLowerCase() === "inactive" ? "inactive" : "active";
+  adminUsersState.teacher.statusFilter = filter;
+  renderAdminUsersTable("teacher");
+};
+
 const renderAdminUsersTable = (type) => {
   const safeType = type === "teacher" ? "teacher" : type === "growth" ? "growth" : "student";
   const state = adminUsersState[safeType];
@@ -6300,9 +6317,15 @@ const renderAdminUsersTable = (type) => {
   if (error instanceof HTMLElement) error.hidden = true;
 
   const q = String(state.query || "").trim().toLowerCase();
-  const filtered = q
+  let filtered = q
     ? state.rows.filter((row) => row.nome.toLowerCase().includes(q) || row.email.toLowerCase().includes(q))
     : state.rows;
+
+  if (safeType === "teacher") {
+    const filter = state.statusFilter === "inactive" ? "inactive" : "active";
+    filtered = filtered.filter((row) => (filter === "active" ? row.ativo : !row.ativo));
+    syncTeacherStatusFilterTabs();
+  }
 
   if (empty instanceof HTMLElement) empty.hidden = filtered.length > 0;
   table.innerHTML = `
@@ -7230,6 +7253,15 @@ document.addEventListener("click", (event) => {
         event.preventDefault();
         const id = String(agendaToggle.getAttribute("data-admin-agenda-toggle") || "").trim();
         toggleAdminTeacherAgenda(id);
+        return;
+      }
+
+      const teacherFilterBtn = target.closest("[data-admin-teacher-filter]");
+      if (teacherFilterBtn instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const next = String(teacherFilterBtn.getAttribute("data-admin-teacher-filter") || "").trim().toLowerCase();
+        closeAllAdminActionMenus();
+        setTeacherStatusFilter(next);
         return;
       }
 
