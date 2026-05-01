@@ -19,6 +19,7 @@ const {
   encodeFields,
   FIRESTORE_BASE,
   API_KEY,
+  PROJECT_ID,
   firestoreDeleteDocument,
   firestoreGetDocument,
   firestoreListDocuments,
@@ -326,8 +327,9 @@ const firestoreCommitWrites = async ({ idToken, writes } = {}) => {
 
 const toFirestoreDocName = (docPath) => {
   const path = String(docPath || "").replace(/^\/+/, "");
-  // Commit "name" is a Firestore resource name, not a URL. Avoid percent-encoding here.
-  return `${FIRESTORE_BASE}/${path}`;
+  // Commit "name" is a Firestore resource name, not a URL.
+  // Example: projects/<projectId>/databases/(default)/documents/aulas/<docId>
+  return `projects/${PROJECT_ID}/databases/(default)/documents/${path}`;
 };
 
 module.exports = async (req, res) => {
@@ -577,7 +579,7 @@ module.exports = async (req, res) => {
   let professorId = role === "teacher" ? requesterId : professorIdFromBody;
 
   if (isCreate && !professorId) {
-    sendJson(res, 400, { error: "professor_required" });
+    sendJson(res, 400, { error: "invalid_payload", missingFields: ["professorId"], receivedBody: body || null });
     return;
   }
 
@@ -589,6 +591,21 @@ module.exports = async (req, res) => {
 
   const isLesson = Boolean(alunoId);
   const createdBy = role === "admin" ? "admin" : "professor";
+
+  // If the client explicitly requested a lesson, require the linking ids.
+  const requestedEventType = String(body?.eventType || "").trim().toLowerCase();
+  const wantsLesson = requestedEventType === "lesson";
+  if (isCreate && wantsLesson) {
+    const missingFields = [];
+    if (!alunoId) missingFields.push("alunoId");
+    if (!professorId) missingFields.push("professorId");
+    if (missingFields.length) {
+      // eslint-disable-next-line no-console
+      console.error("[schedule-events] invalid payload", { missingFields, body });
+      sendJson(res, 400, { error: "invalid_payload", missingFields, receivedBody: body || null });
+      return;
+    }
+  }
 
   // Keep the legacy teacher behavior: manual events require a title.
   if (!isLesson && role === "teacher" && !title) {
@@ -735,7 +752,14 @@ module.exports = async (req, res) => {
             return;
           }
           if (commit.status === 400) {
-            sendJson(res, 400, { error: "invalid_payload" });
+            // eslint-disable-next-line no-console
+            console.error("[schedule-events] firestore rejected payload", { body, commitData: commit.data, commitText: commit.text });
+            sendJson(res, 400, {
+              error: "invalid_payload",
+              missingFields: [],
+              receivedBody: body || null,
+              firestore: commit.data || null,
+            });
             return;
           }
           sendJson(res, 500, { error: "internal_error" });

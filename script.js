@@ -5412,13 +5412,29 @@ const openTeacherEventFormModalFromDraft = () => {
       endMin,
     };
 
-	    // Helpful during rollout: confirms exactly what will be sent to the backend.
-	    // eslint-disable-next-line no-console
-	    console.log("Tentando salvar aula", payload);
+    if (currentRole === "admin" && payload.eventType === "lesson") {
+      const alunoId = String(adminStudentEl instanceof HTMLSelectElement ? adminStudentEl.value : createEventDraft.alunoId || "").trim();
+      const professorId = String(
+        adminTeacherEl instanceof HTMLSelectElement ? adminTeacherEl.value : createEventDraft.professorId || ""
+      ).trim();
 
-      // LOG TEMPORÁRIO: payload completo enviado ao backend.
-      // eslint-disable-next-line no-console
-      console.log("[PAYLOAD ENVIADO]", JSON.stringify(payload, null, 2));
+      payload.alunoId = alunoId;
+      payload.professorId = professorId;
+
+      // Recorrencia opcional: por padrão, aula única.
+      if (!createEventDraft.recorrente) payload.repeat = { enabled: false };
+
+      // Não fazer POST silencioso sem os vínculos obrigatórios.
+      if (!alunoId || !professorId) {
+        const errorEl = modalBody?.querySelector("[data-ce-error]");
+        if (errorEl instanceof HTMLElement) {
+          errorEl.hidden = false;
+          errorEl.textContent = !alunoId ? "Selecione um aluno." : "Selecione um professor.";
+        }
+        validateCreateEventDraft();
+        return false;
+      }
+    }
 
 		    if (mode === "create" && createEventDraft.recorrente) {
 		      payload.recorrente = true;
@@ -5442,12 +5458,18 @@ const openTeacherEventFormModalFromDraft = () => {
 		        payload.repeatMode = String(createEventDraft.repeatMode || "weekly");
 		      }
 		    }
-
-    if (currentRole === "admin") {
-      payload.professorId = String(createEventDraft.professorId || "").trim();
-      const alunoId = String(createEventDraft.alunoId || "").trim();
-      payload.alunoId = alunoId ? alunoId : null;
+    if (currentRole === "admin" && payload.eventType === "lesson" && payload.recorrente && payload.repeat && payload.repeat.enabled) {
+      // repeat já montado acima (weekly/monthly/custom). Apenas garantir o shape correto.
+      if (typeof payload.repeat.enabled !== "boolean") payload.repeat.enabled = true;
     }
+
+	  // Helpful during rollout: confirms exactly what will be sent to the backend.
+	  // eslint-disable-next-line no-console
+	  console.log("Tentando salvar aula", payload);
+
+    // LOG TEMPORÁRIO: payload completo enviado ao backend.
+    // eslint-disable-next-line no-console
+    console.log("[PAYLOAD ENVIADO]", JSON.stringify(payload, null, 2));
 
     const errorEl = modalBody?.querySelector("[data-ce-error]");
     if (errorEl instanceof HTMLElement) {
