@@ -6146,7 +6146,26 @@ const fetchWithAuth = async (input, init = {}) => {
   const headers = new Headers(opts.headers || {});
   const force = Boolean(opts.forceRefreshIdToken);
   const token = await getFirebaseIdTokenForApi(force);
-  if (token) headers.set("Authorization", `Bearer ${token}`);
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+    // LOG TEMPORÁRIO: identifica qual conta Firebase está sendo usada no browser.
+    try {
+      // Avoid flooding the console on initial page load.
+      if (!window.__fetchWithAuthUidLogged) {
+        window.__fetchWithAuthUidLogged = true;
+        const parts = String(token).split(".");
+        if (parts.length === 3) {
+          const payloadB64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+          const padded = payloadB64 + "=".repeat((4 - (payloadB64.length % 4)) % 4);
+          const payload = JSON.parse(atob(padded));
+          // eslint-disable-next-line no-console
+          console.log("[fetchWithAuth] uid no token:", payload.uid || payload.sub, "email:", payload.email);
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
   // Do not forward our custom option to `fetch`.
   if (Object.prototype.hasOwnProperty.call(opts, "forceRefreshIdToken")) delete opts.forceRefreshIdToken;
   return fetch(input, { ...opts, headers, credentials: opts.credentials || "include" });
