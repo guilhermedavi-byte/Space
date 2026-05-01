@@ -936,6 +936,23 @@ body[data-role="admin"] .live-credits-row {
   color: var(--text-main);
 }
 
+.sidebar-badge {
+  margin-left: auto;
+  min-width: 22px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(255, 78, 70, 0.16);
+  border: 1px solid rgba(255, 78, 70, 0.3);
+  color: #FF4E46;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 @media (hover: hover) and (pointer: fine) and (min-width: 1101px) {
   .platform-sidebar {
     width: var(--sidebar-collapsed);
@@ -5663,6 +5680,265 @@ body:not([data-role="admin"]) [data-admin-only] {
   letter-spacing: -0.01em;
   box-shadow: 0 12px 26px rgba(0, 0, 0, 0.35);
   pointer-events: none;
+}
+
+.teacher-log-shell {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 0 24px 40px;
+}
+
+.teacher-log-card {
+  padding: 18px;
+}
+
+.teacher-log-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.teacher-log-help {
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.teacher-log-status {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.teacher-log-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.teacher-log-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 14px;
+  border-radius: 14px;
+  border: 0.5px solid rgba(89, 144, 189, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+  transition: transform 150ms ease, background-color 150ms ease, border-color 150ms ease;
+}
+
+.teacher-log-item:hover,
+.teacher-log-item:focus-visible {
+  transform: translateY(-1px);
+  border-color: rgba(89, 144, 189, 0.18);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.teacher-log-item.is-future {
+  opacity: 0.45;
+  cursor: default;
+  pointer-events: none;
+}
+
+.teacher-log-item-left {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.teacher-log-item-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.teacher-log-item-top span:first-child {
+  color: rgba(255, 255, 255, 0.62);
+  font-weight: 700;
+}
+
+.teacher-log-item-sub {
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.teacher-log-pill {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.teacher-log-pill.is-open {
+  background: rgba(251, 191, 36, 0.12);
+  border-color: rgba(251, 191, 36, 0.22);
+  color: #FBBF24;
+}
+
+.teacher-log-pill.is-done {
+  background: rgba(93, 202, 165, 0.12);
+  border-color: rgba(93, 202, 165, 0.22);
+  color: #5DCAA5;
+}
+
+.teacher-log-pill.is-future {
+  background: rgba(89, 144, 189, 0.12);
+  border-color: rgba(89, 144, 189, 0.22);
+  color: #5990BD;
+}
+
+.teacher-log-empty,
+.teacher-log-error {
+  margin-top: 14px;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ped-log-statusbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 6px 0 14px;
+}
+
+.ped-log-status {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.ped-autosave {
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.ped-section {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.ped-section-title {
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(89, 144, 189, 0.55);
+  margin: 0 0 10px;
+}
+
+.ped-radio-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.ped-radio {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 0.5px solid rgba(89, 144, 189, 0.1);
+  background: rgba(255, 255, 255, 0.02);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.ped-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ped-chip {
+  border: 0.5px solid rgba(89, 144, 189, 0.14);
+  background: rgba(255, 255, 255, 0.02);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 11px;
+  font-weight: 800;
+  padding: 6px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: border-color 150ms ease, background-color 150ms ease, color 150ms ease;
+}
+
+.ped-chip.is-active {
+  border-color: rgba(93, 202, 165, 0.35);
+  background: rgba(93, 202, 165, 0.1);
+  color: #5DCAA5;
+}
+
+.ped-stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ped-star {
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  border: 0.5px solid rgba(89, 144, 189, 0.14);
+  background: rgba(255, 255, 255, 0.02);
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, transform 150ms ease;
+}
+
+.ped-star:hover {
+  transform: translateY(-1px);
+}
+
+.ped-star.is-active {
+  color: #FBBF24;
+  border-color: rgba(251, 191, 36, 0.35);
+  background: rgba(251, 191, 36, 0.08);
+}
+
+@media (max-width: 768px) {
+  .teacher-log-shell {
+    padding-inline: 16px;
+  }
+  .teacher-log-toolbar {
+    flex-direction: column;
+  }
+  .ped-radio-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .teacher-cal-now-line {
