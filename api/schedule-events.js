@@ -15,12 +15,16 @@ const {
 } = require("../_lib/scheduling-utils");
 const {
   decodeFields,
+  encodeFields,
+  FIRESTORE_BASE,
+  API_KEY,
   firestoreDeleteDocument,
   firestoreGetDocument,
   firestoreListDocuments,
   firestorePatchDocument,
   getBearerTokenFromRequest,
   getDocIdFromName,
+  requestJson,
 } = require("../_lib/firestore-rest");
 
 const DOW_TO_KEY = {
@@ -303,6 +307,26 @@ const decodeAulaCoreForDelete = (doc) => {
     grupoRecorrenciaId: grupoRecorrenciaId || null,
     criadoPor,
   };
+};
+
+const firestoreCommitWrites = async ({ idToken, writes } = {}) => {
+  const token = String(idToken || "").trim();
+  const arr = Array.isArray(writes) ? writes.filter(Boolean) : [];
+  if (!token) throw new Error("missing_token");
+  if (!arr.length) return { ok: true, status: 200, data: { writeResults: [] }, text: "" };
+
+  const url = `${FIRESTORE_BASE}:commit?key=${encodeURIComponent(API_KEY)}`;
+  return requestJson(url, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: { writes: arr },
+  });
+};
+
+const toFirestoreDocName = (docPath) => {
+  const path = String(docPath || "").replace(/^\/+/, "");
+  // Commit "name" is a Firestore resource name, not a URL. Avoid percent-encoding here.
+  return `${FIRESTORE_BASE}/${path}`;
 };
 
 module.exports = async (req, res) => {
@@ -620,13 +644,12 @@ module.exports = async (req, res) => {
         }
       }
 
-      const monthlyOccurrences = isMonthly ? buildMonthlyOccurrences({ dateKey, dayOfMonth: repeatObj?.dayOfMonth }) : [];
+      const monthlyKeys = isMonthly ? buildMonthlyOccurrences({ dateKey, dayOfMonth: repeatObj?.dayOfMonth }) : [];
 
       const occurrences = isWeeklyCustom
-        ? customOccurrences.map((row) => row.dateKey)
-        : isMonthly
-          ? monthlyOccurrences
-          : buildOccurrences({ dateKey, recorrente, repeatMode });
+        ? customOccurrences
+        : (isMonthly ? monthlyKeys : buildOccurrences({ dateKey, recorrente, repeatMode })).map((key) => ({ dateKey: key }));
+
       const createdIds = [];
       const repeatMeta = repeatEnabled
         ? repeatType === "weekly_custom"
@@ -638,26 +661,65 @@ module.exports = async (req, res) => {
               : null
         : null;
 
-      for (const key of occurrences) {
+      const writes = [];
+      for (const occ of occurrences) {
+        const key = String(occ?.dateKey || "").trim();
         if (!isValidDateKey(key)) continue;
         const id = buildId("aula");
         createdIds.push(id);
-        const docPath = `aulas/${encodeURIComponent(id)}`;
-        const custom = isWeeklyCustom ? customOccurrences.find((row) => row.dateKey === key) : null;
+        const docPath = `aulas/${id}`;
         const data = baseDoc({
           overrideDateKey: key,
-          overrideStartMin: custom ? custom.startMin : undefined,
-          overrideEndMin: custom ? custom.endMin : undefined,
+          overrideStartMin: isWeeklyCustom ? occ?.startMin : undefined,
+          overrideEndMin: isWeeklyCustom ? occ?.endMin : undefined,
           repeatMeta,
         });
+
         const mask = Object.keys(data);
-        const patch = await firestorePatchDocument({
-          docPath,
-          idToken,
-          data,
-          updateMaskPaths: mask,
+        const encoded = encodeFields(data);
+        writes.push({
+          update: { name: toFirestoreDocName(docPath), fields: encoded.fields },
+          updateMask: { fieldPaths: mask },
         });
-        if (!patch.ok) throw new Error("firestore_patch_failed");
+      }
+
+      // If we somehow filtered everything out, treat as invalid repeat to keep the UI consistent.
+      if (!writes.length) {
+        sendJson(res, 400, { error: repeatEnabled ? "invalid_repeat" : "invalid_date" });
+        return;
+      }
+
+      // Firestore commit limit is 500 writes. Our recurrence windows are far below this, but keep it safe.
+      const chunks = [];
+      for (let i = 0; i < writes.length; i += 450) {
+        chunks.push(writes.slice(i, i + 450));
+      }
+
+      for (const chunk of chunks) {
+        const commit = await firestoreCommitWrites({ idToken, writes: chunk });
+        if (!commit.ok) {
+          // eslint-disable-next-line no-console
+          console.error("[api] schedule events commit failed", {
+            status: commit.status,
+            data: commit.data,
+            text: commit.text,
+            writesCount: chunk.length,
+          });
+          if (commit.status === 401) {
+            sendJson(res, 401, { error: "invalid_credentials" });
+            return;
+          }
+          if (commit.status === 403) {
+            sendJson(res, 403, { error: "forbidden" });
+            return;
+          }
+          if (commit.status === 400) {
+            sendJson(res, 400, { error: "invalid_payload" });
+            return;
+          }
+          sendJson(res, 500, { error: "internal_error" });
+          return;
+        }
       }
 
       sendJson(res, 200, { ok: true, ids: createdIds, grupoRecorrenciaId: grupoRecorrenciaId || null });

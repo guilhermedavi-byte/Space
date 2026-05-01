@@ -5367,6 +5367,8 @@ const openTeacherEventFormModalFromDraft = () => {
       .then(async (res) => {
         const data = await res.json().catch(() => null);
         if (!res.ok) {
+          // eslint-disable-next-line no-console
+          console.error("Erro real ao salvar aula:", { status: res.status, data, payload });
           const msg =
             data?.error === "title_required"
               ? "Preencha o título para salvar."
@@ -5374,6 +5376,12 @@ const openTeacherEventFormModalFromDraft = () => {
                 ? "O horário de início deve ser anterior ao de fim."
                 : data?.error === "professor_required"
                   ? "Selecione um professor para salvar."
+                  : data?.error === "invalid_repeat"
+                    ? "Preencha a recorrência (tipo, dias e horários) para salvar."
+                    : data?.error === "forbidden"
+                      ? "Sem permissão para salvar este evento."
+                      : data?.error === "unauthorized" || data?.error === "invalid_credentials"
+                        ? "Sua sessão expirou. Recarregue a página e faça login novamente."
                   : "Não foi possível salvar agora.";
           if (errorEl instanceof HTMLElement) {
             errorEl.hidden = false;
@@ -5388,7 +5396,9 @@ const openTeacherEventFormModalFromDraft = () => {
         refreshTeacherEvents({ force: true });
         renderTeacherCalendar();
       })
-      .catch(() => {
+      .catch((error) => {
+        // eslint-disable-next-line no-console
+        console.error("Erro real ao salvar aula:", error);
         if (errorEl instanceof HTMLElement) {
           errorEl.hidden = false;
           errorEl.textContent = "Não foi possível salvar agora. Tente novamente.";
