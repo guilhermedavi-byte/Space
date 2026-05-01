@@ -71,6 +71,37 @@ const normalizeRepeatMode = (raw) => {
   return "weekly";
 };
 
+const WEEKDAY_TO_DOW = {
+  monday: 1,
+  tuesday: 2,
+  wednesday: 3,
+  thursday: 4,
+  friday: 5,
+  saturday: 6,
+  // pt-BR shorthands (for safety)
+  seg: 1,
+  ter: 2,
+  qua: 3,
+  qui: 4,
+  sex: 5,
+  sab: 6,
+};
+
+const normalizeWeekdayKey = (raw) => {
+  const key = String(raw || "").trim().toLowerCase();
+  return WEEKDAY_TO_DOW[key] != null ? key : "";
+};
+
+const nextDateKeyOnOrAfterDow = (dateKey, targetDow) => {
+  const baseKey = String(dateKey || "").trim();
+  if (!isValidDateKey(baseKey)) return null;
+  const baseDow = getDayOfWeekFromDateKey(baseKey);
+  if (baseDow == null) return null;
+  const safeTarget = clampInt(targetDow, 0, 6);
+  const delta = (safeTarget - baseDow + 7) % 7;
+  return addDaysToDateKey(baseKey, delta);
+};
+
 const buildOccurrences = ({ dateKey, recorrente, repeatMode }) => {
   if (!recorrente) return [dateKey];
   const mode = normalizeRepeatMode(repeatMode);
@@ -96,6 +127,39 @@ const buildOccurrences = ({ dateKey, recorrente, repeatMode }) => {
     out.push(key);
   }
   return out.length ? out : [dateKey];
+};
+
+const buildCustomWeeklyOccurrences = ({ dateKey, days }) => {
+  const baseKey = String(dateKey || "").trim();
+  if (!isValidDateKey(baseKey)) return [];
+  const arr = Array.isArray(days) ? days : [];
+
+  const out = [];
+  const seen = new Set();
+
+  for (const raw of arr) {
+    const weekdayKey = normalizeWeekdayKey(raw?.weekday);
+    const targetDow = WEEKDAY_TO_DOW[weekdayKey];
+    if (targetDow == null) continue;
+
+    const startMin = parseMinutes(raw?.startMin ?? raw?.startTime);
+    const endMin = parseMinutes(raw?.endMin ?? raw?.endTime);
+    if (!Number.isFinite(startMin) || !Number.isFinite(endMin) || endMin <= startMin) continue;
+
+    const firstKey = nextDateKeyOnOrAfterDow(baseKey, targetDow);
+    if (!firstKey) continue;
+
+    for (let w = 0; w < 12; w += 1) {
+      const key = addDaysToDateKey(firstKey, w * 7);
+      if (!key || !isValidDateKey(key)) continue;
+      const uniq = `${key}:${startMin}:${endMin}`;
+      if (seen.has(uniq)) continue;
+      seen.add(uniq);
+      out.push({ dateKey: key, startMin, endMin });
+    }
+  }
+
+  return out;
 };
 
 const decodeAulaDoc = (doc) => {
@@ -400,7 +464,15 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const recorrente = Boolean(body?.recorrente);
+  const repeatObj = body?.repeat && typeof body.repeat === "object" ? body.repeat : null;
+  const isWeeklyCustom =
+    isCreate &&
+    role === "admin" &&
+    Boolean(repeatObj?.enabled) &&
+    String(repeatObj?.type || "").trim().toLowerCase() === "weekly_custom" &&
+    Array.isArray(repeatObj?.days);
+
+  const recorrente = isWeeklyCustom ? true : Boolean(body?.recorrente);
   const repeatMode = normalizeRepeatMode(body?.repeatMode || body?.repeat || body?.recurrenceMode);
   const grupoRecorrenciaId = String(body?.grupoRecorrenciaId || "").trim() || (recorrente && isCreate ? buildId("grp") : "");
 
@@ -453,11 +525,14 @@ module.exports = async (req, res) => {
     alunoNome = "";
   }
 
-  const baseDoc = (overrideDateKey) => {
+  const baseDoc = ({ overrideDateKey, overrideStartMin, overrideEndMin, repeatMeta } = {}) => {
     const key = overrideDateKey || dateKey;
+    const occStartMin = Number.isFinite(Number(overrideStartMin)) ? clampInt(overrideStartMin, 0, 1440) : startMin;
+    const occEndMin = Number.isFinite(Number(overrideEndMin)) ? clampInt(overrideEndMin, 0, 1440) : endMin;
+
     const occurrenceDow = getDayOfWeekFromDateKey(key);
     const occurrenceDiaSemana = occurrenceDow == null ? "" : DOW_TO_KEY[occurrenceDow] || "";
-    const occStartMs = toUtcMsForDateKeyAndMinutes(key, startMin, { tzOffsetMinutes });
+    const occStartMs = toUtcMsForDateKeyAndMinutes(key, occStartMin, { tzOffsetMinutes });
     const data = occStartMs ? new Date(occStartMs) : new Date(startMs);
 
     return {
@@ -467,11 +542,11 @@ module.exports = async (req, res) => {
       professorNome: professorNome || null,
       data,
       diaSemana: occurrenceDiaSemana || diaSemana,
-      horaInicio: minutesToTime(startMin),
-      horaFim: minutesToTime(endMin),
+      horaInicio: minutesToTime(occStartMin),
+      horaFim: minutesToTime(occEndMin),
       dateKey: key,
-      startMin,
-      endMin,
+      startMin: occStartMin,
+      endMin: occEndMin,
       status: "agendada",
       recorrente: Boolean(recorrente),
       grupoRecorrenciaId: grupoRecorrenciaId || null,
@@ -482,20 +557,39 @@ module.exports = async (req, res) => {
       description: isLesson ? "" : description,
       guests: isLesson ? [] : guests,
       documents: isLesson ? [] : documents,
+      ...(repeatMeta && typeof repeatMeta === "object" ? repeatMeta : {}),
     };
   };
 
   try {
     if (isCreate) {
-      const occurrences = buildOccurrences({ dateKey, recorrente, repeatMode });
+      let customOccurrences = [];
+      if (isWeeklyCustom) {
+        customOccurrences = buildCustomWeeklyOccurrences({ dateKey, days: repeatObj?.days });
+        if (!customOccurrences.length) {
+          sendJson(res, 400, { error: "invalid_repeat" });
+          return;
+        }
+      }
+
+      const occurrences = isWeeklyCustom
+        ? customOccurrences.map((row) => row.dateKey)
+        : buildOccurrences({ dateKey, recorrente, repeatMode });
       const createdIds = [];
+      const repeatMeta = isWeeklyCustom ? { repeatType: "weekly_custom", repeatDays: repeatObj?.days || [] } : null;
 
       for (const key of occurrences) {
         if (!isValidDateKey(key)) continue;
         const id = buildId("aula");
         createdIds.push(id);
         const docPath = `aulas/${encodeURIComponent(id)}`;
-        const data = baseDoc(key);
+        const custom = isWeeklyCustom ? customOccurrences.find((row) => row.dateKey === key) : null;
+        const data = baseDoc({
+          overrideDateKey: key,
+          overrideStartMin: custom ? custom.startMin : undefined,
+          overrideEndMin: custom ? custom.endMin : undefined,
+          repeatMeta,
+        });
         const mask = Object.keys(data);
         const patch = await firestorePatchDocument({
           docPath,
