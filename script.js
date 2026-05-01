@@ -6521,7 +6521,8 @@ const renderTeacherPedagogico = async ({ silent = false } = {}) => {
     });
 
     const lessons = events
-      .filter((evt) => evt && typeof evt === "object" && evt.type === "lesson")
+      // O professor pode registrar logs também para eventos "manual" (muitos professores criam "Aula" como evento manual).
+      .filter((evt) => evt && typeof evt === "object" && (evt.type === "lesson" || evt.type === "manual"))
       .map((evt) => ({
         id: String(evt.id || ""),
         alunoId: typeof evt.alunoId === "string" ? evt.alunoId : "",
