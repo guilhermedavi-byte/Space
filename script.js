@@ -5104,6 +5104,37 @@ const syncGuestDropdown = () => {
 
 const validateCreateEventDraft = () => {
   if (!createEventDraft || !modalBody) return true;
+  // Keep the draft in sync with the modal DOM. Some controls (notably <select>)
+  // do not reliably fire `input` across browsers, which could leave the draft empty
+  // even when the UI shows selected values (blocking the Save button).
+  const syncDraftFromDom = () => {
+    const titleEl = modalBody.querySelector("[data-ce-title]");
+    const adminStudentEl = modalBody.querySelector("[data-ce-admin-student]");
+    const adminTeacherEl = modalBody.querySelector("[data-ce-admin-teacher]");
+    const dateEl = modalBody.querySelector("[data-ce-date]");
+    const startEl = modalBody.querySelector("[data-ce-start]");
+    const endEl = modalBody.querySelector("[data-ce-end]");
+    const repeatEnabledEl = modalBody.querySelector("[data-ce-repeat-enabled]");
+
+    if (titleEl instanceof HTMLInputElement) createEventDraft.title = titleEl.value;
+    if (adminStudentEl instanceof HTMLSelectElement) createEventDraft.alunoId = adminStudentEl.value;
+    if (adminTeacherEl instanceof HTMLSelectElement) createEventDraft.professorId = adminTeacherEl.value;
+    if (dateEl instanceof HTMLInputElement) createEventDraft.dateKey = dateEl.value;
+    if (startEl instanceof HTMLInputElement) createEventDraft.startTime = startEl.value;
+    if (endEl instanceof HTMLInputElement) createEventDraft.endTime = endEl.value;
+
+    if (repeatEnabledEl instanceof HTMLInputElement) {
+      const enabled = Boolean(repeatEnabledEl.checked);
+      createEventDraft.recorrente = enabled;
+      if (!createEventDraft.repeat || typeof createEventDraft.repeat !== "object") {
+        createEventDraft.repeat = createDefaultRepeatConfig();
+      }
+      createEventDraft.repeat.enabled = enabled;
+    }
+  };
+
+  syncDraftFromDom();
+
   let hasError = false;
   const errorEl = modalBody.querySelector("[data-ce-error]");
 
@@ -5127,8 +5158,9 @@ const validateCreateEventDraft = () => {
 
   const requiresLinks = currentRole === "admin" && createEventDraft.eventType === "lesson";
   if (requiresLinks) {
-    const alunoId = String(createEventDraft.alunoId || "").trim();
-    const professorId = String(createEventDraft.professorId || "").trim();
+    const alunoId = String(createEventDraft.alunoId || "").trim() || (adminStudentEl instanceof HTMLSelectElement ? adminStudentEl.value : "");
+    const professorId =
+      String(createEventDraft.professorId || "").trim() || (adminTeacherEl instanceof HTMLSelectElement ? adminTeacherEl.value : "");
     if (!alunoId) {
       if (adminStudentEl instanceof HTMLElement) adminStudentEl.classList.add("is-error");
       hasError = true;
@@ -5320,10 +5352,14 @@ const openTeacherEventFormModalFromDraft = () => {
       endMin,
     };
 
-	    if (mode === "create" && createEventDraft.recorrente) {
-	      payload.recorrente = true;
-	      if (currentRole === "admin") {
-	        const repeat = createEventDraft.repeat && typeof createEventDraft.repeat === "object" ? createEventDraft.repeat : null;
+    // Helpful during rollout: confirms exactly what will be sent to the backend.
+    // eslint-disable-next-line no-console
+    console.log("Tentando salvar aula", payload);
+
+		    if (mode === "create" && createEventDraft.recorrente) {
+		      payload.recorrente = true;
+		      if (currentRole === "admin") {
+		        const repeat = createEventDraft.repeat && typeof createEventDraft.repeat === "object" ? createEventDraft.repeat : null;
 	        const repeatType = String(repeat?.type || "").trim().toLowerCase();
 	        const daysMap = repeat?.days && typeof repeat.days === "object" ? repeat.days : {};
 	        if (repeatType === "weekly") {
@@ -5337,11 +5373,11 @@ const openTeacherEventFormModalFromDraft = () => {
 	            endTime: String(daysMap?.[d.key]?.endTime || "").trim(),
 	          }));
 	          payload.repeat = { enabled: true, type: "weekly_custom", days };
-	        }
-	      } else {
-	        payload.repeatMode = String(createEventDraft.repeatMode || "weekly");
-	      }
-	    }
+		        }
+		      } else {
+		        payload.repeatMode = String(createEventDraft.repeatMode || "weekly");
+		      }
+		    }
 
     if (currentRole === "admin") {
       payload.professorId = String(createEventDraft.professorId || "").trim();
@@ -8247,8 +8283,20 @@ document.addEventListener("input", (event) => {
 
 document.addEventListener("change", (event) => {
   const target = event.target;
+  if (!modalBody || modalOverlay?.hidden) return;
+
+  // Event form controls: keep the draft synced even if `input` doesn't fire (notably <select>).
+  if (createEventDraft && activeModalKind === "event-form" && !createEventDraft.readOnly) {
+    if (target instanceof HTMLSelectElement && (target.matches("[data-ce-admin-student]") || target.matches("[data-ce-admin-teacher]"))) {
+      if (target.matches("[data-ce-admin-student]")) createEventDraft.alunoId = target.value;
+      if (target.matches("[data-ce-admin-teacher]")) createEventDraft.professorId = target.value;
+      validateCreateEventDraft();
+      return;
+    }
+  }
+
   if (!(target instanceof HTMLInputElement)) return;
-  if (!workHoursDraft || !modalBody || modalOverlay?.hidden) return;
+  if (!workHoursDraft) return;
 
   if (target.matches("[data-wh-enabled]")) {
     const dayKey = target.getAttribute("data-wh-enabled") || "";
