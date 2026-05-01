@@ -5384,11 +5384,11 @@ const openTeacherEventFormModalFromDraft = () => {
     const startMin = start.getHours() * 60 + start.getMinutes();
     const endMin = end.getHours() * 60 + end.getMinutes();
 
-    const payload = {
-      id: createEventDraft.eventId || undefined,
-      title: String(createEventDraft.title || "").trim(),
-      description: String(createEventDraft.description || "").trim(),
-      guests: (createEventDraft.guests || []).map((g) => g.id),
+	    const payload = {
+	      id: createEventDraft.eventId || undefined,
+	      title: String(createEventDraft.title || "").trim(),
+	      description: String(createEventDraft.description || "").trim(),
+	      guests: (createEventDraft.guests || []).map((g) => g.id),
       documents: (createEventDraft.documents || []).map((doc) => ({
         id: doc.id,
         name: doc.name,
@@ -5398,13 +5398,17 @@ const openTeacherEventFormModalFromDraft = () => {
         dataUrl: doc.dataUrl || "",
       })),
       dateKey: createEventDraft.dateKey,
-      startMin,
-      endMin,
-    };
+	      startMin,
+	      endMin,
+	    };
 
-    // Helpful during rollout: confirms exactly what will be sent to the backend.
-    // eslint-disable-next-line no-console
-    console.log("Tentando salvar aula", payload);
+	    // Helpful during rollout: confirms exactly what will be sent to the backend.
+	    // eslint-disable-next-line no-console
+	    console.log("Tentando salvar aula", payload);
+
+      // LOG TEMPORÁRIO: payload completo enviado ao backend.
+      // eslint-disable-next-line no-console
+      console.log("[PAYLOAD ENVIADO]", JSON.stringify(payload, null, 2));
 
 		    if (mode === "create" && createEventDraft.recorrente) {
 		      payload.recorrente = true;
