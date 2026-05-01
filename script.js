@@ -4807,14 +4807,14 @@ const buildCreateEventBody = ({ readOnly = false } = {}) => {
     .join("");
 
   const disabledAttr = readOnly ? "disabled" : "";
-  const uploadDisabled = readOnly ? 'aria-disabled="true" tabindex="-1"' : 'role="button" tabindex="0"';
-  const uploadClass = readOnly ? "upload-zone is-disabled" : "upload-zone";
-  const repeatEnabled = Boolean(draft.recorrente);
-  const repeatMode = String(draft.repeatMode || "weekly");
-  const weeklyLabel = (() => {
-    const weekday = weekdayLongFromDateKey(String(draft.dateKey || ""));
-    return weekday ? `Semanal: cada ${weekday.toLowerCase()}` : "Semanal: toda semana";
-  })();
+	  const uploadDisabled = readOnly ? 'aria-disabled="true" tabindex="-1"' : 'role="button" tabindex="0"';
+	  const uploadClass = readOnly ? "upload-zone is-disabled" : "upload-zone";
+	  const repeatEnabled = Boolean(draft.recorrente);
+	  const repeatMode = repeatEnabled ? String(draft.repeatMode || "weekly") : "none";
+	  const weeklyLabel = (() => {
+	    const weekday = weekdayLongFromDateKey(String(draft.dateKey || ""));
+	    return weekday ? `Semanal: cada ${weekday.toLowerCase()}` : "Semanal: toda semana";
+	  })();
 
   const selectedTeacherId = String(draft.professorId || "").trim();
   const selectedStudentId = String(draft.alunoId || "").trim();
@@ -4876,22 +4876,16 @@ const buildCreateEventBody = ({ readOnly = false } = {}) => {
         </label>
       </div>
 
-      <div class="modal-row" style="grid-template-columns: minmax(0, 1fr);">
-        <label class="modal-field modal-field-inline">
-          <span>Se repete</span>
-          <input type="checkbox" data-ce-repeat ${repeatEnabled ? "checked" : ""} ${disabledAttr} />
-        </label>
-      </div>
-
-      <div class="modal-row" data-ce-repeat-options ${repeatEnabled ? "" : "hidden"} style="grid-template-columns: minmax(0, 1fr);">
-        <label class="modal-field">
-          <span>Frequência</span>
-          <select class="modal-input" data-ce-repeat-mode ${disabledAttr}>
-            <option value="weekly" ${repeatMode !== "daily" ? "selected" : ""}>${escapeHtml(weeklyLabel)}</option>
-            <option value="daily" ${repeatMode === "daily" ? "selected" : ""}>Todos os dias (segunda a sábado)</option>
-          </select>
-        </label>
-      </div>
+	      <div class="modal-row" style="grid-template-columns: minmax(0, 1fr);">
+	        <label class="modal-field">
+	          <span>Frequência</span>
+	          <select class="modal-input" data-ce-repeat-mode ${disabledAttr}>
+	            <option value="none" ${repeatMode === "none" ? "selected" : ""}>Não se repete</option>
+	            <option value="weekly" ${repeatMode === "weekly" ? "selected" : ""}>${escapeHtml(weeklyLabel)}</option>
+	            <option value="daily" ${repeatMode === "daily" ? "selected" : ""}>Todos os dias (segunda a sábado)</option>
+	          </select>
+	        </label>
+	      </div>
 
       <label class="modal-field">
         <span>Descrição</span>
@@ -8097,18 +8091,16 @@ document.addEventListener("change", (event) => {
   if (activeModalKind !== "event-form") return;
   if (createEventDraft.readOnly) return;
 
-  if (target instanceof HTMLInputElement && target.matches("[data-ce-repeat]")) {
-    createEventDraft.recorrente = Boolean(target.checked);
-    const options = modalBody.querySelector("[data-ce-repeat-options]");
-    if (options instanceof HTMLElement) {
-      options.hidden = !createEventDraft.recorrente;
-    }
-    validateCreateEventDraft();
-    return;
-  }
-
   if (target instanceof HTMLSelectElement && target.matches("[data-ce-repeat-mode]")) {
-    createEventDraft.repeatMode = target.value;
+    const value = String(target.value || "").trim().toLowerCase();
+    if (value === "none") {
+      createEventDraft.recorrente = false;
+      // Keep a stable default for the next time the user enables repetition.
+      createEventDraft.repeatMode = "weekly";
+    } else {
+      createEventDraft.recorrente = true;
+      createEventDraft.repeatMode = value === "daily" ? "daily" : "weekly";
+    }
     validateCreateEventDraft();
     return;
   }
