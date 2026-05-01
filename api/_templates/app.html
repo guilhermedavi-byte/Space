@@ -377,12 +377,12 @@
             </span>
             <span class="sidebar-text">Aulas gravadas</span>
           </button>
-          <button
-            class="sidebar-link"
-            type="button"
-            data-panel-target="ao-vivo"
-            title="Aulas ao vivo"
-          >
+	          <button
+	            class="sidebar-link"
+	            type="button"
+	            data-panel-target="ao-vivo"
+	            title="Aulas ao vivo"
+	          >
             <span class="sidebar-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none">
                 <rect x="3.5" y="5.5" width="17" height="15" rx="2"></rect>
@@ -392,14 +392,34 @@
                 <circle cx="12" cy="15.5" r="2.25"></circle>
               </svg>
             </span>
-            <span class="sidebar-text">Aulas ao vivo</span>
-          </button>
+	            <span class="sidebar-text">Aulas ao vivo</span>
+	          </button>
 	          <button
 	            class="sidebar-link"
 	            type="button"
-	            data-panel-target="materiais"
-	            title="Materiais"
+	            data-panel-target="pedagogico"
+	            data-teacher-only
+	            title="Controle Pedagógico"
 	          >
+	            <span class="sidebar-icon" aria-hidden="true">
+	              <svg viewBox="0 0 24 24" fill="none">
+	                <path d="M9 5.5h8"></path>
+	                <path d="M9 9h8"></path>
+	                <path d="M9 12.5h8"></path>
+	                <path d="M9 16h6"></path>
+	                <path d="M7 4.5h-.6A2.9 2.9 0 0 0 3.5 7.4v11.2A2.9 2.9 0 0 0 6.4 21.5h11.2a2.9 2.9 0 0 0 2.9-2.9V7.4a2.9 2.9 0 0 0-2.9-2.9H17"></path>
+	                <path d="M8.5 3.5h4a1 1 0 0 1 1 1v2h-6v-2a1 1 0 0 1 1-1Z"></path>
+	              </svg>
+	            </span>
+	            <span class="sidebar-text">Controle Pedagógico</span>
+	            <span class="sidebar-badge" data-pedagogico-pending hidden>0</span>
+	          </button>
+		          <button
+		            class="sidebar-link"
+		            type="button"
+		            data-panel-target="materiais"
+		            title="Materiais"
+		          >
             <span class="sidebar-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none">
                 <path d="M7 4.5h7l3 3v12H7a2 2 0 0 1-2-2v-11a2 2 0 0 1 2-2Z"></path>
@@ -1295,12 +1315,41 @@
             </div>
           </div>
 
-		        </section>
+			        </section>
 
-        <section class="platform-panel" data-panel="professores" data-hide-platform-header="true" hidden>
-          <div class="admin-manage-shell" data-admin-manage="teacher">
-            <div class="admin-manage-head">
-              <h2 class="admin-manage-title">Gerenciar Professores</h2>
+        <section class="platform-panel" data-panel="pedagogico" data-hide-platform-header="true" hidden aria-label="Controle Pedagógico">
+          <div class="pedagogico-container">
+            <header class="pedagogico-header">
+              <div>
+                <span class="eyebrow">Aulas</span>
+                <h2 class="panel-title-compact">Controle Pedagógico</h2>
+                <p class="pedagogico-subtitle">Registre o que aconteceu em cada aula após ela ocorrer.</p>
+              </div>
+              <div class="pedagogico-status" data-pedagogico-status aria-live="polite"></div>
+            </header>
+
+            <div class="pedagogico-list" data-pedagogico-list></div>
+            <div class="pedagogico-empty" data-pedagogico-empty hidden>Nenhuma aula encontrada.</div>
+            <div class="pedagogico-error" data-pedagogico-error hidden>Não foi possível carregar suas aulas.</div>
+          </div>
+
+          <div class="pedagogico-drawer" data-pedagogico-drawer hidden>
+            <div class="pedagogico-drawer-backdrop" data-pedagogico-drawer-close></div>
+            <div class="pedagogico-drawer-inner" role="dialog" aria-modal="true" aria-label="Registro pedagógico">
+              <div class="pedagogico-drawer-head">
+                <div class="pedagogico-drawer-title" data-pedagogico-drawer-title>Registro pedagógico</div>
+                <div class="pedagogico-drawer-autosave" data-pedagogico-autosave>—</div>
+                <button class="pedagogico-drawer-close" type="button" data-pedagogico-drawer-close aria-label="Fechar">✕</button>
+              </div>
+              <div class="pedagogico-drawer-body" data-pedagogico-form-container></div>
+            </div>
+          </div>
+        </section>
+
+	        <section class="platform-panel" data-panel="professores" data-hide-platform-header="true" hidden>
+	          <div class="admin-manage-shell" data-admin-manage="teacher">
+	            <div class="admin-manage-head">
+	              <h2 class="admin-manage-title">Gerenciar Professores</h2>
               <button class="button button-solid button-small" type="button" data-admin-new-user="teacher">
                 + Novo Professor
               </button>

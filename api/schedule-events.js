@@ -24,6 +24,7 @@ const {
   firestoreGetDocument,
   firestoreListDocuments,
   firestorePatchDocument,
+  firestoreRunQuery,
   getBearerTokenFromRequest,
   getDocIdFromName,
   requestJson,
@@ -332,6 +333,232 @@ const toFirestoreDocName = (docPath) => {
   return `projects/${PROJECT_ID}/databases/(default)/documents/${path}`;
 };
 
+const toLogIdFromEventId = (eventId) => {
+  const safe = String(eventId || "").trim();
+  if (!safe) return "";
+  const normalized = safe.replace(/[^\w-]/g, "_");
+  return `log_${normalized}`;
+};
+
+const decodeLessonLogDoc = (doc) => {
+  if (!doc || typeof doc !== "object") return null;
+  const id = getDocIdFromName(doc.name);
+  if (!id) return null;
+  const fields = decodeFields(doc);
+
+  const eventId = typeof fields.eventId === "string" ? fields.eventId : "";
+  const professorId = typeof fields.professorId === "string" ? fields.professorId : "";
+  const alunoId = typeof fields.alunoId === "string" ? fields.alunoId : "";
+  const dateKey = typeof fields.dateKey === "string" ? fields.dateKey : "";
+  const statusAula = typeof fields.statusAula === "string" ? fields.statusAula : "";
+
+  return {
+    id,
+    eventId,
+    professorId,
+    alunoId,
+    dateKey,
+    statusAula,
+    atualizadoEm: fields.atualizadoEm instanceof Date ? fields.atualizadoEm.toISOString() : null,
+    criadoEm: fields.criadoEm instanceof Date ? fields.criadoEm.toISOString() : null,
+    payload: fields,
+  };
+};
+
+const normalizeStatusAula = (raw) => {
+  const s = String(raw || "").trim().toLowerCase();
+  if (s === "realizada") return "realizada";
+  if (s === "falta" || s === "falta_do_aluno") return "falta";
+  if (s === "remarcada") return "remarcada";
+  if (s === "cancelada") return "cancelada";
+  return "";
+};
+
+const normalizeDifficulty = (raw) => {
+  const s = String(raw || "").trim().toLowerCase();
+  if (s === "muito_facil" || s === "muito fácil") return "muito_facil";
+  if (s === "adequado") return "adequado";
+  if (s === "desafiador") return "desafiador";
+  if (s === "muito_dificil" || s === "muito difícil") return "muito_dificil";
+  return "";
+};
+
+const normalizeEvolucao = (raw) => {
+  const s = String(raw || "").trim().toLowerCase();
+  if (s === "regressou") return "regressou";
+  if (s === "estavel" || s === "estável") return "estavel";
+  if (s === "evoluiu") return "evoluiu";
+  if (s === "evoluiu_muito" || s === "evoluiu muito") return "evoluiu_muito";
+  return "";
+};
+
+const normalizeCEFR = (raw) => {
+  const s = String(raw || "").trim().toUpperCase();
+  const allowed = new Set(["A1", "A2", "B1", "B2", "C1", "C2"]);
+  return allowed.has(s) ? s : "";
+};
+
+const normalizeTopics = (raw) => {
+  const arr = Array.isArray(raw) ? raw : [];
+  const allowed = new Set(["Gramática", "Vocabulário", "Pronúncia", "Conversação", "Escrita", "Compreensão"]);
+  const out = [];
+  arr.forEach((item) => {
+    const val = String(item || "").trim();
+    if (allowed.has(val) && !out.includes(val)) out.push(val);
+  });
+  return out;
+};
+
+const handleLessonLogsApi = async (req, res, { idToken, role, requesterId, url } = {}) => {
+  const effectiveRole = String(role || "");
+
+  if (req.method === "GET" || req.method === "HEAD") {
+    const eventId = String(url.searchParams.get("eventId") || "").trim();
+    const professorIdParam = String(url.searchParams.get("professorId") || "").trim();
+    const professorId = effectiveRole === "admin" && professorIdParam ? professorIdParam : requesterId;
+
+    if (eventId) {
+      const logId = toLogIdFromEventId(eventId);
+      const docPath = `lessonLogs/${encodeURIComponent(logId)}`;
+      const snap = await firestoreGetDocument({ docPath, idToken });
+      if (!snap.ok) {
+        sendJson(res, snap.status === 404 ? 200 : 500, { log: null });
+        return;
+      }
+      const decoded = decodeLessonLogDoc(snap.data);
+      sendJson(res, 200, { log: decoded });
+      return;
+    }
+
+    try {
+      const query = {
+        from: [{ collectionId: "lessonLogs" }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath: "professorId" },
+            op: "EQUAL",
+            value: { stringValue: professorId },
+          },
+        },
+      };
+
+      const result = await firestoreRunQuery({ idToken, structuredQuery: query });
+      if (!result.ok) throw new Error("firestore_query_failed");
+      const rows = Array.isArray(result.data) ? result.data : [];
+      const docs = rows.map((row) => row?.document).filter(Boolean);
+      const logs = docs.map((doc) => decodeLessonLogDoc(doc)).filter(Boolean);
+      sendJson(res, 200, { logs });
+      return;
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error("[api] lesson-logs list failed", error);
+      sendJson(res, 500, { error: "internal_error" });
+      return;
+    }
+  }
+
+  if (req.method !== "POST") {
+    res.setHeader("Allow", "GET, HEAD, POST");
+    sendJson(res, 405, { error: "method_not_allowed" });
+    return;
+  }
+
+  if (effectiveRole !== "teacher") {
+    sendJson(res, 403, { error: "forbidden" });
+    return;
+  }
+
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch (error) {
+    sendJson(res, 400, { error: "invalid_json" });
+    return;
+  }
+
+  const eventId = String(body?.eventId || "").trim();
+  if (!eventId) {
+    sendJson(res, 400, { error: "invalid_payload", missingFields: ["eventId"] });
+    return;
+  }
+
+  const statusAula = normalizeStatusAula(body?.statusAula);
+  if (!statusAula) {
+    sendJson(res, 400, { error: "invalid_payload", missingFields: ["statusAula"] });
+    return;
+  }
+
+  const now = new Date();
+  const logId = toLogIdFromEventId(eventId);
+  const docPath = `lessonLogs/${logId}`;
+
+  const data = {
+    eventId,
+    professorId: requesterId,
+    alunoId: String(body?.alunoId || "").trim() || null,
+    dateKey: isValidDateKey(String(body?.dateKey || "")) ? String(body.dateKey) : "",
+    criadoEm: body?.criadoEm ? new Date(String(body.criadoEm)) : now,
+    atualizadoEm: now,
+    statusAula,
+    novaDataAcordada: String(body?.novaDataAcordada || "").trim() || null,
+    oQueFoiTrabalhado: String(body?.oQueFoiTrabalhado || "").trim() || "",
+    nivelDificuldade: normalizeDifficulty(body?.nivelDificuldade) || "adequado",
+    topicosAbordados: normalizeTopics(body?.topicosAbordados),
+    engajamento: (() => {
+      const n = Number(body?.engajamento);
+      if (!Number.isFinite(n) || n <= 0) return null;
+      return clampInt(n, 1, 5);
+    })(),
+    notaAula: (() => {
+      const n = Number(body?.notaAula);
+      if (!Number.isFinite(n)) return null;
+      if (n < 0 || n > 10) return null;
+      return n;
+    })(),
+    pontosFortesAluno: String(body?.pontosFortesAluno || "").trim() || "",
+    pontosADesenvolver: String(body?.pontosADesenvolver || "").trim() || "",
+    feedbackParaAluno: String(body?.feedbackParaAluno || "").trim() || "",
+    temaProximaAula: String(body?.temaProximaAula || "").trim() || "",
+    tarefaDeCasa: String(body?.tarefaDeCasa || "").trim() || "",
+    observacoesInternas: String(body?.observacoesInternas || "").trim() || "",
+    nivelCEFR: normalizeCEFR(body?.nivelCEFR) || null,
+    evolucao: normalizeEvolucao(body?.evolucao) || null,
+  };
+
+  if (statusAula === "falta" || statusAula === "cancelada") {
+    data.oQueFoiTrabalhado = "";
+    data.topicosAbordados = [];
+    data.engajamento = null;
+    data.notaAula = null;
+    data.pontosFortesAluno = "";
+    data.pontosADesenvolver = "";
+    data.feedbackParaAluno = "";
+    data.temaProximaAula = "";
+    data.tarefaDeCasa = "";
+  }
+
+  if (statusAula !== "remarcada") {
+    data.novaDataAcordada = null;
+  }
+
+  const writes = [
+    {
+      update: { name: toFirestoreDocName(docPath), fields: encodeFields(data).fields },
+      updateMask: { fieldPaths: Object.keys(data) },
+    },
+  ];
+
+  const commit = await firestoreCommitWrites({ idToken, writes });
+  if (!commit.ok) {
+    // eslint-disable-next-line no-console
+    console.error("[api] lesson-logs commit failed", { status: commit.status, data: commit.data, text: commit.text });
+    sendJson(res, commit.status === 403 ? 403 : commit.status === 401 ? 401 : 500, { error: "internal_error" });
+    return;
+  }
+
+  sendJson(res, 200, { ok: true, id: logId });
+};
+
 module.exports = async (req, res) => {
   const idToken = getBearerTokenFromRequest(req);
   if (!idToken) {
@@ -385,6 +612,12 @@ module.exports = async (req, res) => {
 
   const host = String(req.headers.host || "localhost");
   const url = new URL(req.url || "/api/schedule-events", `https://${host}`);
+  const resource = String(url.searchParams.get("resource") || "").trim().toLowerCase();
+
+  if (resource === "lesson-logs") {
+    await handleLessonLogsApi(req, res, { idToken, role, requesterId, url });
+    return;
+  }
 
   if (req.method === "GET" || req.method === "HEAD") {
     const from = String(url.searchParams.get("from") || "").trim();

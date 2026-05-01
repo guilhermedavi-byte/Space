@@ -86,6 +86,15 @@ const adminGrowthGoalOpen = document.querySelector("[data-admin-growth-goal-open
 const adminGoalsTable = document.querySelector("[data-admin-goals-table]");
 const adminGoalsEmpty = document.querySelector("[data-admin-goals-empty]");
 const adminGoalsError = document.querySelector("[data-admin-goals-error]");
+const pedagogicoList = document.querySelector("[data-pedagogico-list]");
+const pedagogicoEmpty = document.querySelector("[data-pedagogico-empty]");
+const pedagogicoError = document.querySelector("[data-pedagogico-error]");
+const pedagogicoStatus = document.querySelector("[data-pedagogico-status]");
+const pedagogicoPendingBadge = document.querySelector("[data-pedagogico-pending]");
+const pedagogicoDrawer = document.querySelector("[data-pedagogico-drawer]");
+const pedagogicoDrawerTitle = document.querySelector("[data-pedagogico-drawer-title]");
+const pedagogicoDrawerAutosave = document.querySelector("[data-pedagogico-autosave]");
+const pedagogicoFormContainer = document.querySelector("[data-pedagogico-form-container]");
 const modalOverlay = document.querySelector("[data-modal-overlay]");
 const modalTitle = document.querySelector("[data-modal-title]");
 const modalBody = document.querySelector("[data-modal-body]");
@@ -507,6 +516,12 @@ const syncRoleUI = () => {
   document.querySelectorAll("[data-admin-only]").forEach((el) => {
     if (el instanceof HTMLElement) {
       el.hidden = currentRole !== "admin";
+    }
+  });
+
+  document.querySelectorAll("[data-teacher-only]").forEach((el) => {
+    if (el instanceof HTMLElement) {
+      el.hidden = currentRole !== "teacher";
     }
   });
 
@@ -5995,6 +6010,584 @@ const statusClassForRequest = (status) => {
   if (s === "recusado") return "badge-recusado";
   return "badge-pendente";
 };
+
+let pedagogicoState = {
+  isLoading: false,
+  lastLoadedAt: 0,
+  lessons: [],
+  logsByEventId: new Map(),
+  pendingCount: 0,
+};
+
+let pedagogicoActive = null; // { lesson, existing }
+let pedagogicoDirty = false;
+let pedagogicoAutosaveTimer = null;
+
+const formatPedagogicoDate = (dateKey) => {
+  const d = parseDateKey(dateKey);
+  if (!d) return "—";
+  return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" }).format(d);
+};
+
+const setPedagogicoPendingBadge = (count) => {
+  const n = Math.max(0, Number(count) || 0);
+  pedagogicoState.pendingCount = n;
+  if (!(pedagogicoPendingBadge instanceof HTMLElement)) return;
+  if (n <= 0) {
+    pedagogicoPendingBadge.hidden = true;
+    pedagogicoPendingBadge.textContent = "0";
+    return;
+  }
+  pedagogicoPendingBadge.hidden = false;
+  pedagogicoPendingBadge.textContent = String(n);
+};
+
+const setPedagogicoStatus = (text, tone = "") => {
+  if (!(pedagogicoStatus instanceof HTMLElement)) return;
+  pedagogicoStatus.textContent = String(text || "");
+  pedagogicoStatus.dataset.tone = String(tone || "");
+};
+
+const setPedagogicoAutosaveLabel = (text) => {
+  if (!(pedagogicoDrawerAutosave instanceof HTMLElement)) return;
+  pedagogicoDrawerAutosave.textContent = String(text || "");
+};
+
+const clearPedagogicoAutosaveTimer = () => {
+  if (pedagogicoAutosaveTimer) window.clearInterval(pedagogicoAutosaveTimer);
+  pedagogicoAutosaveTimer = null;
+};
+
+const closePedagogicoDrawer = () => {
+  if (pedagogicoDrawer instanceof HTMLElement) {
+    pedagogicoDrawer.classList.remove("is-open");
+    window.setTimeout(() => {
+      if (pedagogicoDrawer instanceof HTMLElement) pedagogicoDrawer.hidden = true;
+    }, 220);
+  }
+  if (pedagogicoFormContainer instanceof HTMLElement) pedagogicoFormContainer.innerHTML = "";
+  pedagogicoActive = null;
+  pedagogicoDirty = false;
+  clearPedagogicoAutosaveTimer();
+};
+
+const sanitizeLessonLogDraft = (raw = {}) => {
+  const src = raw && typeof raw === "object" ? raw : {};
+  const topicos = Array.isArray(src.topicosAbordados) ? src.topicosAbordados : [];
+  return {
+    statusAula: String(src.statusAula || "").trim().toLowerCase(),
+    novaDataAcordada: String(src.novaDataAcordada || "").trim(),
+    oQueFoiTrabalhado: String(src.oQueFoiTrabalhado || ""),
+    nivelDificuldade: String(src.nivelDificuldade || "adequado").trim().toLowerCase(),
+    topicosAbordados: topicos.map((t) => String(t || "").trim()).filter(Boolean),
+    engajamento: clampNumber(Number(src.engajamento) || 0, 0, 5),
+    notaAula: src.notaAula == null ? "" : String(src.notaAula),
+    pontosFortesAluno: String(src.pontosFortesAluno || ""),
+    pontosADesenvolver: String(src.pontosADesenvolver || ""),
+    feedbackParaAluno: String(src.feedbackParaAluno || ""),
+    temaProximaAula: String(src.temaProximaAula || ""),
+    tarefaDeCasa: String(src.tarefaDeCasa || ""),
+    observacoesInternas: String(src.observacoesInternas || ""),
+    nivelCEFR: String(src.nivelCEFR || "").trim().toUpperCase(),
+    evolucao: String(src.evolucao || "").trim().toLowerCase(),
+  };
+};
+
+const getPedagogicoTopics = () => ["Gramática", "Vocabulário", "Pronúncia", "Conversação", "Escrita", "Compreensão"];
+
+const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
+  if (!(pedagogicoFormContainer instanceof HTMLElement)) return;
+  const safeLesson = lesson && typeof lesson === "object" ? lesson : {};
+  const draft = sanitizeLessonLogDraft(existingLog?.payload || {});
+  const dateLabel = `${formatPedagogicoDate(safeLesson.dateKey)} · ${escapeHtml(formatHmFromMinutes(safeLesson.startMin))}–${escapeHtml(
+    formatHmFromMinutes(safeLesson.endMin)
+  )}`;
+  const studentName = escapeHtml(String(safeLesson.title || "Aluno"));
+  const subtitle = escapeHtml(String(safeLesson.description || "Aula"));
+
+  if (pedagogicoDrawerTitle instanceof HTMLElement) {
+    pedagogicoDrawerTitle.textContent = `${String(safeLesson.title || "Aluno")} · ${formatPedagogicoDate(safeLesson.dateKey)}`;
+  }
+
+  const topicChecks = getPedagogicoTopics()
+    .map((topic) => {
+      const checked = draft.topicosAbordados.includes(topic) ? "checked" : "";
+      return `<label class="pedagogico-chip"><input type="checkbox" value="${escapeHtml(topic)}" data-ped-topico ${checked} />${escapeHtml(
+        topic
+      )}</label>`;
+    })
+    .join("");
+
+  const starButtons = Array.from({ length: 5 }).map((_, idx) => {
+    const value = idx + 1;
+    const active = Number(draft.engajamento) >= value;
+    return `<button type="button" class="pedagogico-star ${active ? "is-active" : ""}" data-ped-star="${value}" aria-label="${value} estrelas">★</button>`;
+  });
+
+  pedagogicoFormContainer.innerHTML = `
+    <div class="pedagogico-form" data-ped-form>
+      <div class="pedagogico-meta">
+        <div class="pedagogico-meta-title">${studentName}</div>
+        <div class="pedagogico-meta-sub">${dateLabel} · ${subtitle}</div>
+      </div>
+
+      <div class="pedagogico-field">
+        <label class="pedagogico-label">STATUS DA AULA <span class="pedagogico-required">*</span></label>
+        <div class="pedagogico-radio-grid">
+          ${[
+            ["realizada", "Realizada"],
+            ["falta", "Falta do aluno"],
+            ["remarcada", "Remarcada"],
+            ["cancelada", "Cancelada"],
+          ]
+            .map(([val, label]) => {
+              const checked = draft.statusAula === val ? "checked" : "";
+              return `<label class="pedagogico-radio"><input type="radio" name="statusAula" value="${escapeHtml(val)}" data-ped-status ${checked} /><span>${escapeHtml(
+                label
+              )}</span></label>`;
+            })
+            .join("")}
+        </div>
+        <div class="pedagogico-help" data-ped-status-help hidden>Selecione o status da aula para concluir.</div>
+      </div>
+
+      <div class="pedagogico-field" data-ped-reschedule hidden>
+        <label class="pedagogico-label">NOVA DATA ACORDADA</label>
+        <input class="pedagogico-input" type="date" data-ped-field="novaDataAcordada" value="${escapeHtml(draft.novaDataAcordada)}" />
+      </div>
+
+      <div class="pedagogico-section" data-ped-content>
+        <div class="pedagogico-grid">
+          <label class="pedagogico-field">
+            <span class="pedagogico-label">O QUE FOI TRABALHADO HOJE</span>
+            <textarea class="pedagogico-textarea" data-ped-field="oQueFoiTrabalhado" placeholder="Descreva o que foi feito na aula...">${escapeHtml(
+              draft.oQueFoiTrabalhado
+            )}</textarea>
+          </label>
+
+          <label class="pedagogico-field">
+            <span class="pedagogico-label">NÍVEL DE DIFICULDADE</span>
+            <div class="pedagogico-radio-row">
+              ${[
+                ["muito_facil", "Muito fácil"],
+                ["adequado", "Adequado"],
+                ["desafiador", "Desafiador"],
+                ["muito_dificil", "Muito difícil"],
+              ]
+                .map(([val, label]) => {
+                  const checked = draft.nivelDificuldade === val ? "checked" : "";
+                  return `<label class="pedagogico-radio"><input type="radio" name="nivelDificuldade" value="${escapeHtml(
+                    val
+                  )}" data-ped-field-radio="nivelDificuldade" ${checked} /><span>${escapeHtml(label)}</span></label>`;
+                })
+                .join("")}
+            </div>
+          </label>
+        </div>
+
+        <div class="pedagogico-field">
+          <span class="pedagogico-label">TÓPICOS ABORDADOS</span>
+          <div class="pedagogico-chips">${topicChecks}</div>
+        </div>
+
+        <div class="pedagogico-grid pedagogico-grid-2">
+          <div class="pedagogico-field">
+            <span class="pedagogico-label">ENGAJAMENTO DO ALUNO</span>
+            <div class="pedagogico-stars" data-ped-stars>${starButtons.join("")}</div>
+          </div>
+
+          <label class="pedagogico-field">
+            <span class="pedagogico-label">NOTA DA AULA (0–10)</span>
+            <input class="pedagogico-input" type="number" min="0" max="10" step="0.1" data-ped-field="notaAula" value="${escapeHtml(draft.notaAula)}" />
+          </label>
+        </div>
+
+        <div class="pedagogico-grid">
+          <label class="pedagogico-field">
+            <span class="pedagogico-label">PONTOS FORTES OBSERVADOS</span>
+            <textarea class="pedagogico-textarea" data-ped-field="pontosFortesAluno" placeholder="Ex: boa pronúncia...">${escapeHtml(
+              draft.pontosFortesAluno
+            )}</textarea>
+          </label>
+          <label class="pedagogico-field">
+            <span class="pedagogico-label">PONTOS A DESENVOLVER</span>
+            <textarea class="pedagogico-textarea" data-ped-field="pontosADesenvolver" placeholder="Ex: uso de artigos...">${escapeHtml(
+              draft.pontosADesenvolver
+            )}</textarea>
+          </label>
+        </div>
+
+        <label class="pedagogico-field">
+          <span class="pedagogico-label">FEEDBACK PARA O ALUNO</span>
+          <textarea class="pedagogico-textarea" data-ped-field="feedbackParaAluno" placeholder="Mensagem para o aluno...">${escapeHtml(
+            draft.feedbackParaAluno
+          )}</textarea>
+        </label>
+
+        <div class="pedagogico-grid">
+          <label class="pedagogico-field">
+            <span class="pedagogico-label">TEMA DA PRÓXIMA AULA</span>
+            <input class="pedagogico-input" type="text" data-ped-field="temaProximaAula" value="${escapeHtml(draft.temaProximaAula)}" />
+          </label>
+          <label class="pedagogico-field">
+            <span class="pedagogico-label">TAREFA PARA CASA</span>
+            <textarea class="pedagogico-textarea" data-ped-field="tarefaDeCasa" placeholder="Tarefa sugerida...">${escapeHtml(
+              draft.tarefaDeCasa
+            )}</textarea>
+          </label>
+        </div>
+
+        <label class="pedagogico-field">
+          <span class="pedagogico-label">OBSERVAÇÕES INTERNAS</span>
+          <textarea class="pedagogico-textarea" data-ped-field="observacoesInternas" placeholder="Apenas para professor/admin...">${escapeHtml(
+            draft.observacoesInternas
+          )}</textarea>
+        </label>
+
+        <div class="pedagogico-grid pedagogico-grid-2">
+          <div class="pedagogico-field">
+            <span class="pedagogico-label">NÍVEL ATUAL DO ALUNO (CEFR)</span>
+            <div class="pedagogico-radio-row">
+              ${["A1", "A2", "B1", "B2", "C1", "C2"]
+                .map((lvl) => {
+                  const checked = draft.nivelCEFR === lvl ? "checked" : "";
+                  return `<label class="pedagogico-radio"><input type="radio" name="nivelCEFR" value="${lvl}" data-ped-field-radio="nivelCEFR" ${checked} /><span>${lvl}</span></label>`;
+                })
+                .join("")}
+            </div>
+          </div>
+          <div class="pedagogico-field">
+            <span class="pedagogico-label">EVOLUÇÃO DESDE A ÚLTIMA AVALIAÇÃO</span>
+            <div class="pedagogico-radio-row">
+              ${[
+                ["regressou", "Regressou"],
+                ["estavel", "Estável"],
+                ["evoluiu", "Evoluiu"],
+                ["evoluiu_muito", "Evoluiu muito"],
+              ]
+                .map(([val, label]) => {
+                  const checked = draft.evolucao === val ? "checked" : "";
+                  return `<label class="pedagogico-radio"><input type="radio" name="evolucao" value="${escapeHtml(
+                    val
+                  )}" data-ped-field-radio="evolucao" ${checked} /><span>${escapeHtml(label)}</span></label>`;
+                })
+                .join("")}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pedagogico-actions">
+        <button class="button button-solid" type="button" data-pedagogico-save>Salvar registro</button>
+        <button class="button button-outline" type="button" data-pedagogico-drawer-close>Fechar</button>
+      </div>
+    </div>
+  `;
+
+  const formRoot = pedagogicoFormContainer.querySelector("[data-ped-form]");
+  if (!(formRoot instanceof HTMLElement)) return;
+
+  const setDirty = () => {
+    pedagogicoDirty = true;
+    setPedagogicoAutosaveLabel("Alterações não salvas");
+  };
+
+  formRoot.querySelectorAll("input, textarea, select").forEach((el) => {
+    el.addEventListener("change", setDirty);
+    el.addEventListener("input", setDirty);
+  });
+
+  const applyVisibility = () => {
+    const statusEl = formRoot.querySelector('input[name="statusAula"]:checked');
+    const status = statusEl instanceof HTMLInputElement ? String(statusEl.value || "").toLowerCase() : "";
+
+    const content = formRoot.querySelector("[data-ped-content]");
+    if (content instanceof HTMLElement) {
+      content.hidden = status === "falta" || status === "cancelada";
+    }
+    const resched = formRoot.querySelector("[data-ped-reschedule]");
+    if (resched instanceof HTMLElement) {
+      resched.hidden = status !== "remarcada";
+    }
+
+    const help = formRoot.querySelector("[data-ped-status-help]");
+    if (help instanceof HTMLElement) {
+      help.hidden = Boolean(status);
+    }
+  };
+
+  formRoot.querySelectorAll("[data-ped-status]").forEach((el) => el.addEventListener("change", applyVisibility));
+  applyVisibility();
+
+  formRoot.querySelectorAll("[data-ped-star]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const value = clampInt(Number(btn.getAttribute("data-ped-star") || 0), 1, 5);
+      formRoot.querySelectorAll("[data-ped-star]").forEach((b, idx) => {
+        if (!(b instanceof HTMLElement)) return;
+        b.classList.toggle("is-active", idx + 1 <= value);
+      });
+      setDirty();
+    });
+  });
+
+  setPedagogicoAutosaveLabel(existingLog?.statusAula ? "Salvo" : "—");
+};
+
+const readPedagogicoDraftFromDom = () => {
+  const root = pedagogicoFormContainer instanceof HTMLElement ? pedagogicoFormContainer.querySelector("[data-ped-form]") : null;
+  if (!(root instanceof HTMLElement) || !pedagogicoActive?.lesson) return null;
+
+  const getRadio = (name) => {
+    const el = root.querySelector(`input[name="${name}"]:checked`);
+    return el instanceof HTMLInputElement ? String(el.value || "").trim() : "";
+  };
+
+  const statusAula = getRadio("statusAula").toLowerCase();
+  const nivelDificuldade = getRadio("nivelDificuldade").toLowerCase() || "adequado";
+  const nivelCEFR = getRadio("nivelCEFR").toUpperCase();
+  const evolucao = getRadio("evolucao").toLowerCase();
+
+  const topicos = Array.from(root.querySelectorAll("[data-ped-topico]"))
+    .filter((el) => el instanceof HTMLInputElement && el.checked)
+    .map((el) => String(el.value || "").trim())
+    .filter(Boolean);
+
+  const activeStars = Array.from(root.querySelectorAll("[data-ped-star]")).filter((btn) => btn instanceof HTMLElement && btn.classList.contains("is-active"))
+    .length;
+
+  const getField = (key) => {
+    const el = root.querySelector(`[data-ped-field="${key}"]`);
+    if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) return String(el.value || "");
+    return "";
+  };
+
+  const notaRaw = getField("notaAula").trim();
+  const nota = notaRaw ? Number(notaRaw) : null;
+  const notaAula = Number.isFinite(nota) ? clampNumber(nota, 0, 10) : null;
+
+  const draft = {
+    statusAula,
+    novaDataAcordada: getField("novaDataAcordada").trim(),
+    oQueFoiTrabalhado: getField("oQueFoiTrabalhado"),
+    nivelDificuldade,
+    topicosAbordados: topicos,
+    engajamento: clampInt(activeStars, 0, 5) || null,
+    notaAula,
+    pontosFortesAluno: getField("pontosFortesAluno"),
+    pontosADesenvolver: getField("pontosADesenvolver"),
+    feedbackParaAluno: getField("feedbackParaAluno"),
+    temaProximaAula: getField("temaProximaAula"),
+    tarefaDeCasa: getField("tarefaDeCasa"),
+    observacoesInternas: getField("observacoesInternas"),
+    nivelCEFR: nivelCEFR || null,
+    evolucao: evolucao || null,
+  };
+
+  if (draft.statusAula === "falta" || draft.statusAula === "cancelada") {
+    draft.oQueFoiTrabalhado = "";
+    draft.topicosAbordados = [];
+    draft.engajamento = null;
+    draft.notaAula = null;
+    draft.pontosFortesAluno = "";
+    draft.pontosADesenvolver = "";
+    draft.feedbackParaAluno = "";
+    draft.temaProximaAula = "";
+    draft.tarefaDeCasa = "";
+  }
+
+  if (draft.statusAula !== "remarcada") {
+    draft.novaDataAcordada = "";
+  }
+
+  return draft;
+};
+
+const savePedagogicoLog = async ({ autosave = false } = {}) => {
+  if (currentRole !== "teacher") return false;
+  if (!sessionUser?.id) return false;
+  if (!pedagogicoActive?.lesson) return false;
+
+  const lesson = pedagogicoActive.lesson;
+  const draft = readPedagogicoDraftFromDom();
+  if (!draft) return false;
+  if (!draft.statusAula) {
+    if (!autosave) setPedagogicoStatus("Selecione o status da aula para salvar.", "error");
+    return false;
+  }
+
+  const payload = {
+    eventId: lesson.id,
+    professorId: sessionUser.id,
+    alunoId: lesson.alunoId || "",
+    dateKey: lesson.dateKey,
+    ...draft,
+  };
+
+  if (!autosave) setPedagogicoStatus("Salvando…");
+  setPedagogicoAutosaveLabel("Salvando…");
+
+  try {
+    const res = await fetchWithAuth("/api/lesson-logs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error("lesson_log_save_failed");
+    const data = await res.json().catch(() => null);
+    const logId = typeof data?.id === "string" ? data.id : "";
+    pedagogicoDirty = false;
+    setPedagogicoAutosaveLabel("Salvo");
+    if (!autosave) setPedagogicoStatus("Registro salvo.", "success");
+    window.setTimeout(() => setPedagogicoStatus(""), 1200);
+
+    const stored = { id: logId, eventId: lesson.id, statusAula: draft.statusAula, payload: { ...payload } };
+    pedagogicoState.logsByEventId.set(lesson.id, stored);
+    renderTeacherPedagogico({ silent: true });
+    return true;
+  } catch (error) {
+    console.error("[pedagogico] save failed:", error);
+    setPedagogicoAutosaveLabel("Erro ao salvar");
+    if (!autosave) setPedagogicoStatus("Não foi possível salvar agora.", "error");
+    return false;
+  }
+};
+
+const openPedagogicoDrawer = ({ lesson } = {}) => {
+  if (!(pedagogicoDrawer instanceof HTMLElement)) return;
+  if (!lesson || typeof lesson !== "object") return;
+  const start = buildDateFromDateKeyAndMinutes(lesson.dateKey, lesson.startMin);
+  if (start && start.getTime() > Date.now()) return;
+
+  const existingLog = pedagogicoState.logsByEventId.get(lesson.id) || null;
+  pedagogicoActive = { lesson, existing: Boolean(existingLog) };
+  pedagogicoDirty = false;
+  setPedagogicoStatus("");
+  renderPedagogicoForm({ lesson, existingLog });
+
+  pedagogicoDrawer.hidden = false;
+  window.requestAnimationFrame(() => {
+    if (pedagogicoDrawer instanceof HTMLElement) pedagogicoDrawer.classList.add("is-open");
+  });
+  clearPedagogicoAutosaveTimer();
+  pedagogicoAutosaveTimer = window.setInterval(() => {
+    if (!pedagogicoDirty) return;
+    savePedagogicoLog({ autosave: true }).catch(() => {});
+  }, 30_000);
+};
+
+const renderTeacherPedagogico = async ({ silent = false } = {}) => {
+  if (currentRole !== "teacher") return;
+  if (!(pedagogicoList instanceof HTMLElement)) return;
+  if (pedagogicoState.isLoading) return;
+  const now = Date.now();
+  if (!silent && pedagogicoState.lastLoadedAt && now - pedagogicoState.lastLoadedAt < 12_000) {
+    renderTeacherPedagogicoList();
+    return;
+  }
+
+  pedagogicoState.isLoading = true;
+  if (!silent) setPedagogicoStatus("Carregando…");
+  if (pedagogicoError instanceof HTMLElement) pedagogicoError.hidden = true;
+  if (pedagogicoEmpty instanceof HTMLElement) pedagogicoEmpty.hidden = true;
+
+  try {
+    const [eventsRes, logsRes] = await Promise.all([fetchWithAuth("/api/schedule-events"), fetchWithAuth("/api/lesson-logs")]);
+    if (!eventsRes.ok) throw new Error("events_fetch_failed");
+    const eventsData = await eventsRes.json().catch(() => null);
+    const events = Array.isArray(eventsData?.events) ? eventsData.events : [];
+
+    let logs = [];
+    if (logsRes.ok) {
+      const logsData = await logsRes.json().catch(() => null);
+      logs = Array.isArray(logsData?.logs) ? logsData.logs : [];
+    }
+
+    const logsByEventId = new Map();
+    logs.forEach((log) => {
+      if (!log || typeof log !== "object") return;
+      const eventId = typeof log.eventId === "string" ? log.eventId : "";
+      if (!eventId) return;
+      logsByEventId.set(eventId, log);
+    });
+
+    const lessons = events
+      .filter((evt) => evt && typeof evt === "object" && evt.type === "lesson")
+      .map((evt) => ({
+        id: String(evt.id || ""),
+        alunoId: typeof evt.alunoId === "string" ? evt.alunoId : "",
+        professorId: typeof evt.professorId === "string" ? evt.professorId : "",
+        dateKey: String(evt.dateKey || ""),
+        startMin: Number(evt.startMin) || 0,
+        endMin: Number(evt.endMin) || 0,
+        title: String(evt.title || "Aluno"),
+        description: String(evt.description || "Aula"),
+      }))
+      .filter((evt) => evt.id && isValidDateKey(evt.dateKey) && evt.endMin > evt.startMin)
+      .sort((a, b) => (a.dateKey === b.dateKey ? a.startMin - b.startMin : a.dateKey.localeCompare(b.dateKey)));
+
+    pedagogicoState.lessons = lessons;
+    pedagogicoState.logsByEventId = logsByEventId;
+    pedagogicoState.lastLoadedAt = Date.now();
+
+    renderTeacherPedagogicoList();
+    if (!silent) setPedagogicoStatus("");
+  } catch (error) {
+    console.error("[pedagogico] load failed:", error);
+    if (pedagogicoError instanceof HTMLElement) pedagogicoError.hidden = false;
+    setPedagogicoStatus("Não foi possível carregar agora.", "error");
+  } finally {
+    pedagogicoState.isLoading = false;
+  }
+};
+
+const renderTeacherPedagogicoList = () => {
+  if (!(pedagogicoList instanceof HTMLElement)) return;
+  const lessons = Array.isArray(pedagogicoState.lessons) ? pedagogicoState.lessons : [];
+  const logsByEventId = pedagogicoState.logsByEventId instanceof Map ? pedagogicoState.logsByEventId : new Map();
+
+  const now = Date.now();
+  let pending = 0;
+
+  if (!lessons.length) {
+    pedagogicoList.innerHTML = "";
+    if (pedagogicoEmpty instanceof HTMLElement) pedagogicoEmpty.hidden = false;
+    setPedagogicoPendingBadge(0);
+    return;
+  }
+
+  const html = lessons
+    .map((lesson) => {
+      const start = buildDateFromDateKeyAndMinutes(lesson.dateKey, lesson.startMin);
+      const isFuture = start ? start.getTime() > now : false;
+      const log = logsByEventId.get(lesson.id) || null;
+      const status = log && typeof log.statusAula === "string" ? String(log.statusAula).trim().toLowerCase() : "";
+      const isDone = Boolean(status);
+      const isPending = !isFuture && !isDone;
+
+      if (isPending) pending += 1;
+
+      const badgeText = isFuture ? "AULA FUTURA" : isDone ? "CONCLUÍDA" : "EM ABERTO";
+      const badgeClass = isFuture ? "is-blue" : isDone ? "is-green" : "is-yellow";
+      const rowClass = isFuture ? "is-future" : isDone ? "is-done" : "is-pending";
+      const dateLabel = `${formatPedagogicoDate(lesson.dateKey)} · ${formatHmFromMinutes(lesson.startMin)}–${formatHmFromMinutes(lesson.endMin)}`;
+
+      return `
+        <article class="pedagogico-item ${rowClass}" data-pedagogico-item="${escapeHtml(lesson.id)}" ${isFuture ? 'aria-disabled="true"' : ""}>
+          <div class="pedagogico-item-main">
+            <div class="pedagogico-item-date">📅 ${escapeHtml(dateLabel)}</div>
+            <div class="pedagogico-item-student">${escapeHtml(lesson.title)}</div>
+            <div class="pedagogico-item-title">${escapeHtml(lesson.description || "Aula")}</div>
+          </div>
+          <span class="pedagogico-badge ${badgeClass}">${badgeText}</span>
+        </article>
+      `;
+    })
+    .join("");
+
+  pedagogicoList.innerHTML = html;
+  if (pedagogicoEmpty instanceof HTMLElement) pedagogicoEmpty.hidden = true;
+  setPedagogicoPendingBadge(pending);
+};
 const openStudentRescheduleModal = (lesson) => {
   if (!lesson) return;
   const weekday = weekdayLongFromDateKey(lesson.dateKey);
@@ -7464,6 +8057,11 @@ const hideAuthPages = () => {
 };
 
 const showPanel = (panelName) => {
+  if (currentRole === "teacher" && !pedagogicoState.lastLoadedAt) {
+    // Keep pending badge up to date even if the teacher doesn't open the panel.
+    renderTeacherPedagogico({ silent: true }).catch(() => {});
+  }
+
   sidebarLinks.forEach((link) => {
     const isActive = link.dataset.panelTarget === panelName;
     link.classList.toggle("is-active", isActive);
@@ -7525,6 +8123,14 @@ const showPanel = (panelName) => {
     return;
   }
 
+  if (panelName === "pedagogico") {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (currentRole === "teacher") {
+      renderTeacherPedagogico();
+    }
+    return;
+  }
+
   if (panelName === "dashboard") {
     if (currentRole === "teacher") {
       renderTeacherDashboard();
@@ -7555,6 +8161,7 @@ const panelPathForRole = (role, panel) => {
 
   if (normalized === "teacher") {
     if (p === "ao-vivo") return "/app/professor/agenda";
+    if (p === "pedagogico") return "/app/professor/pedagogico";
     if (p === "gravadas") return "/app/professor/gravadas";
     if (p === "materiais") return "/app/professor/materiais";
     return "/app/professor";
@@ -7587,6 +8194,7 @@ const parseAppRoute = (path) => {
 
   if (role === "teacher") {
     if (sub === "agenda") return { role, panel: "ao-vivo" };
+    if (sub === "pedagogico") return { role, panel: "pedagogico" };
     if (sub === "gravadas") return { role, panel: "gravadas" };
     if (sub === "materiais") return { role, panel: "materiais" };
     return { role, panel: "dashboard" };
@@ -7789,6 +8397,33 @@ document.addEventListener("click", (event) => {
   const target = event.target;
 
   if (target instanceof Element) {
+    const pedClose = target.closest("[data-pedagogico-drawer-close]");
+    if (pedClose instanceof HTMLElement) {
+      event.preventDefault();
+      closePedagogicoDrawer();
+      return;
+    }
+
+    const pedSave = target.closest("[data-pedagogico-save]");
+    if (pedSave instanceof HTMLButtonElement) {
+      event.preventDefault();
+      savePedagogicoLog({ autosave: false }).catch(() => {});
+      return;
+    }
+
+    const pedItem = target.closest("[data-pedagogico-item]");
+    if (pedItem instanceof HTMLElement) {
+      const eventId = String(pedItem.getAttribute("data-pedagogico-item") || "").trim();
+      if (eventId && currentRole === "teacher") {
+        const lesson = Array.isArray(pedagogicoState.lessons) ? pedagogicoState.lessons.find((l) => l.id === eventId) : null;
+        if (lesson) {
+          event.preventDefault();
+          openPedagogicoDrawer({ lesson });
+          return;
+        }
+      }
+    }
+
     // Admin manage tables: actions menu + operations.
     if (currentRole === "admin") {
       const goalOpen = target.closest("[data-admin-growth-goal-open]");
