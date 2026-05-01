@@ -5364,6 +5364,15 @@ const openTeacherEventFormModalFromDraft = () => {
     const adminTeacherEl = modalBody?.querySelector("[data-ce-admin-teacher]");
     const titleEl = modalBody?.querySelector("[data-ce-title]");
 
+    // LOG TEMPORÁRIO: confirma se os selects existem no DOM e quais valores estão selecionados.
+    // eslint-disable-next-line no-console
+    console.log("[DOM READ]", {
+      studentEl: adminStudentEl?.tagName,
+      studentValue: adminStudentEl?.value,
+      teacherEl: adminTeacherEl?.tagName,
+      teacherValue: adminTeacherEl?.value,
+    });
+
     if (adminStudentEl instanceof HTMLSelectElement && adminStudentEl.value) {
       createEventDraft.alunoId = adminStudentEl.value;
     }
@@ -5384,11 +5393,12 @@ const openTeacherEventFormModalFromDraft = () => {
     const startMin = start.getHours() * 60 + start.getMinutes();
     const endMin = end.getHours() * 60 + end.getMinutes();
 
-	    const payload = {
-	      id: createEventDraft.eventId || undefined,
-	      title: String(createEventDraft.title || "").trim(),
-	      description: String(createEventDraft.description || "").trim(),
-	      guests: (createEventDraft.guests || []).map((g) => g.id),
+    const payload = {
+      id: createEventDraft.eventId || undefined,
+      eventType: createEventDraft.eventType === "lesson" ? "lesson" : "manual",
+      title: String(createEventDraft.title || "").trim(),
+      description: String(createEventDraft.description || "").trim(),
+      guests: (createEventDraft.guests || []).map((g) => g.id),
       documents: (createEventDraft.documents || []).map((doc) => ({
         id: doc.id,
         name: doc.name,
@@ -5398,9 +5408,9 @@ const openTeacherEventFormModalFromDraft = () => {
         dataUrl: doc.dataUrl || "",
       })),
       dateKey: createEventDraft.dateKey,
-	      startMin,
-	      endMin,
-	    };
+      startMin,
+      endMin,
+    };
 
 	    // Helpful during rollout: confirms exactly what will be sent to the backend.
 	    // eslint-disable-next-line no-console
