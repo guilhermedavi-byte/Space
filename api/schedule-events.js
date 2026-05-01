@@ -353,6 +353,12 @@ module.exports = async (req, res) => {
   if (cookieSub && cookieSub !== decoded.uid) {
     // eslint-disable-next-line no-console
     console.warn("[api] schedule-events cookie/session mismatch; ignoring cookie session");
+    // eslint-disable-next-line no-console
+    console.warn("[api] schedule-events cookie/session mismatch", {
+      cookieUid: cookieSub,
+      firebaseUid: decoded.uid,
+      role: String(cookieSession?.role || ""),
+    });
   }
 
   let profile;
