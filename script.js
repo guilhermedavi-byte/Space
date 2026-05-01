@@ -8688,6 +8688,9 @@ document.addEventListener("click", (event) => {
         const lesson = Array.isArray(pedagogicoState.lessons) ? pedagogicoState.lessons.find((l) => l.id === eventId) : null;
         if (lesson) {
           event.preventDefault();
+          // DEBUG TEMPORÁRIO: confirmar que o clique chega e o drawer existe.
+          // eslint-disable-next-line no-console
+          console.log("[PEDAGOGICO CLICK]", { eventId, drawerEl: pedagogicoDrawer || null });
           openPedagogicoDrawer({ lesson });
           return;
         }
