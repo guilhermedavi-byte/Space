@@ -332,56 +332,48 @@ const toFirestoreDocName = (docPath) => {
 
 module.exports = async (req, res) => {
   const idToken = getBearerTokenFromRequest(req);
-  let session = getSessionFromRequest(req);
-
-  // Fallback auth: when the session cookie is missing (common for serverless + cross-site),
-  // accept Firebase ID token (sent by fetchWithAuth) and derive the role from Firestore user profile.
-  if (!session) {
-    if (!idToken) {
-      sendJson(res, 401, { error: "unauthorized" });
-      return;
-    }
-    try {
-      const decoded = await verifyFirebaseIdToken(idToken);
-      const profile = await fetchUserProfileByUid({ uid: decoded.uid, idToken });
-      if (!profile?.user?.role) {
-        sendJson(res, 401, { error: "unauthorized" });
-        return;
-      }
-      session = {
-        sub: decoded.uid,
-        role: profile.user.role,
-        name: profile.user.name,
-        email: profile.user.email,
-      };
-    } catch (error) {
-      sendJson(res, 401, { error: "invalid_credentials" });
-      return;
-    }
+  if (!idToken) {
+    sendJson(res, 401, { error: "unauthorized" });
+    return;
   }
 
-  const role = normalizeRole(session.role);
+  // Primary auth for this endpoint is the Firebase ID token sent by fetchWithAuth().
+  // Cookie sessions can be stale/mismatched, so we treat them as optional metadata only.
+  let decoded;
+  try {
+    decoded = await verifyFirebaseIdToken(idToken);
+  } catch (error) {
+    sendJson(res, 401, { error: "invalid_credentials" });
+    return;
+  }
+
+  // If there is a cookie session but it doesn't match the Firebase user, ignore it.
+  const cookieSession = getSessionFromRequest(req);
+  const cookieSub = String(cookieSession?.sub || "").trim();
+  if (cookieSub && cookieSub !== decoded.uid) {
+    // eslint-disable-next-line no-console
+    console.warn("[api] schedule-events cookie/session mismatch; ignoring cookie session");
+  }
+
+  let profile;
+  try {
+    profile = await fetchUserProfileByUid({ uid: decoded.uid, idToken });
+  } catch (error) {
+    sendJson(res, 500, { error: "internal_error" });
+    return;
+  }
+  if (!profile?.user?.role) {
+    sendJson(res, 401, { error: "unauthorized" });
+    return;
+  }
+
+  const role = normalizeRole(profile.user.role);
   if (role !== "admin" && role !== "teacher") {
     sendJson(res, 403, { error: "forbidden" });
     return;
   }
 
-  const requesterId = String(session.sub || "");
-  if (!requesterId || !idToken) {
-    sendJson(res, 401, { error: "unauthorized" });
-    return;
-  }
-
-  try {
-    const decoded = await verifyFirebaseIdToken(idToken);
-    if (decoded.uid !== requesterId) {
-      sendJson(res, 401, { error: "invalid_credentials" });
-      return;
-    }
-  } catch (error) {
-    sendJson(res, 401, { error: "invalid_credentials" });
-    return;
-  }
+  const requesterId = decoded.uid;
 
   const host = String(req.headers.host || "localhost");
   const url = new URL(req.url || "/api/schedule-events", `https://${host}`);
