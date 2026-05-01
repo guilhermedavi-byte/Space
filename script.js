@@ -6091,6 +6091,14 @@ const sanitizeLessonLogDraft = (raw = {}) => {
     nivelDificuldade: String(src.nivelDificuldade || "adequado").trim().toLowerCase(),
     topicosAbordados: topicos.map((t) => String(t || "").trim()).filter(Boolean),
     engajamento: clampNumber(Number(src.engajamento) || 0, 0, 5),
+    confiancaFalar: clampNumber(Number(src.confiancaFalar) || 0, 0, 5),
+    humorAluno: String(src.humorAluno || "").trim().toLowerCase(),
+    lembrouAulaAnterior: String(src.lembrouAulaAnterior || "").trim().toLowerCase(),
+    tarefaAnteriorFeita: String(src.tarefaAnteriorFeita || "").trim().toLowerCase(),
+    tipoAtividade: String(src.tipoAtividade || "").trim().toLowerCase(),
+    materialUsado: String(src.materialUsado || "").trim().toLowerCase(),
+    vocabularioNovo: String(src.vocabularioNovo || ""),
+    duracaoReal: String(src.duracaoReal || "").trim(),
     notaAula: src.notaAula == null ? "" : String(src.notaAula),
     pontosFortesAluno: String(src.pontosFortesAluno || ""),
     pontosADesenvolver: String(src.pontosADesenvolver || ""),
@@ -6105,6 +6113,82 @@ const sanitizeLessonLogDraft = (raw = {}) => {
 
 const getPedagogicoTopics = () => ["Gramática", "Vocabulário", "Pronúncia", "Conversação", "Escrita", "Compreensão"];
 
+const PED_CHIP = {
+  topics: [
+    ["gramatica", "Gramática"],
+    ["vocabulario", "Vocabulário"],
+    ["pronuncia", "Pronúncia"],
+    ["conversacao", "Conversação"],
+    ["escrita", "Escrita"],
+    ["compreensao", "Compreensão"],
+  ],
+  humor: [
+    ["animado", "😊 Animado"],
+    ["neutro", "😐 Neutro"],
+    ["cansado", "😴 Cansado"],
+    ["ansioso", "😰 Ansioso"],
+  ],
+  lembrou: [
+    ["sim", "Sim, completamente"],
+    ["parcialmente", "Parcialmente"],
+    ["nao", "Não lembrou"],
+  ],
+  tarefaAnterior: [
+    ["tudo", "Fez tudo"],
+    ["parcialmente", "Fez parcialmente"],
+    ["nao_fez", "Não fez"],
+    ["sem_tarefa", "Não havia tarefa"],
+  ],
+  tipoAtividade: [
+    ["conversacao", "Conversação livre"],
+    ["gramatica", "Gramática focada"],
+    ["vocabulario", "Vocabulário"],
+    ["pronuncia", "Pronúncia"],
+    ["revisao", "Revisão"],
+    ["avaliacao", "Avaliação"],
+  ],
+  materialUsado: [
+    ["livro", "Livro didático"],
+    ["proprio", "Material próprio"],
+    ["improviso", "Improviso"],
+    ["video", "Vídeo/Mídia"],
+  ],
+};
+
+const renderPedChips = ({ items, selected = "", multi = false, dataKey } = {}) => {
+  const list = Array.isArray(items) ? items : [];
+  const selArr = Array.isArray(selected) ? selected : [];
+  const sel = multi ? selArr : String(selected || "");
+  return `
+    <div class="pedagogico-chips" data-ped-chips="${escapeHtml(String(dataKey || ""))}">
+      ${list
+        .map(([key, label]) => {
+          const active = multi ? selArr.includes(label) : sel === key;
+          return `<button type="button" class="pedagogico-chip ${active ? "is-active" : ""}" data-chip="${escapeHtml(
+            String(key)
+          )}" data-chip-label="${escapeHtml(String(label))}">${escapeHtml(String(label))}</button>`;
+        })
+        .join("")}
+    </div>
+  `;
+};
+
+const renderStarRow = ({ value = 0, dataKey, ariaLabel } = {}) => {
+  const n = clampInt(Number(value) || 0, 0, 5);
+  const key = String(dataKey || "");
+  return `
+    <div class="pedagogico-stars-lg" data-ped-stars="${escapeHtml(key)}" aria-label="${escapeHtml(String(ariaLabel || ""))}">
+      ${Array.from({ length: 5 })
+        .map((_, idx) => {
+          const v = idx + 1;
+          const active = v <= n;
+          return `<button type="button" class="pedagogico-star-lg ${active ? "is-active" : ""}" data-star="${v}" aria-label="${v} estrelas">★</button>`;
+        })
+        .join("")}
+    </div>
+  `;
+};
+
 const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
   if (!(pedagogicoFormContainer instanceof HTMLElement)) return;
   const safeLesson = lesson && typeof lesson === "object" ? lesson : {};
@@ -6116,23 +6200,13 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
   const subtitle = escapeHtml(String(safeLesson.description || "Aula"));
 
   if (pedagogicoDrawerTitle instanceof HTMLElement) {
-    pedagogicoDrawerTitle.textContent = `${String(safeLesson.title || "Aluno")} · ${formatPedagogicoDate(safeLesson.dateKey)}`;
+    pedagogicoDrawerTitle.textContent = `Aula ${String(safeLesson.title || "Aluno")} · ${formatPedagogicoDate(
+      safeLesson.dateKey
+    )} · ${formatHmFromMinutes(safeLesson.startMin)}–${formatHmFromMinutes(safeLesson.endMin)}`;
   }
 
-  const topicChecks = getPedagogicoTopics()
-    .map((topic) => {
-      const checked = draft.topicosAbordados.includes(topic) ? "checked" : "";
-      return `<label class="pedagogico-chip"><input type="checkbox" value="${escapeHtml(topic)}" data-ped-topico ${checked} />${escapeHtml(
-        topic
-      )}</label>`;
-    })
-    .join("");
-
-  const starButtons = Array.from({ length: 5 }).map((_, idx) => {
-    const value = idx + 1;
-    const active = Number(draft.engajamento) >= value;
-    return `<button type="button" class="pedagogico-star ${active ? "is-active" : ""}" data-ped-star="${value}" aria-label="${value} estrelas">★</button>`;
-  });
+  const status = String(draft.statusAula || "").trim().toLowerCase();
+  const statusSet = Boolean(status);
 
   pedagogicoFormContainer.innerHTML = `
     <div class="pedagogico-form" data-ped-form>
@@ -6141,112 +6215,172 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
         <div class="pedagogico-meta-sub">${dateLabel} · ${subtitle}</div>
       </div>
 
-      <div class="pedagogico-field">
-        <label class="pedagogico-label">STATUS DA AULA <span class="pedagogico-required">*</span></label>
-        <div class="pedagogico-radio-grid">
-          ${[
-            ["realizada", "Realizada"],
-            ["falta", "Falta do aluno"],
-            ["remarcada", "Remarcada"],
-            ["cancelada", "Cancelada"],
-          ]
-            .map(([val, label]) => {
-              const checked = draft.statusAula === val ? "checked" : "";
-              return `<label class="pedagogico-radio"><input type="radio" name="statusAula" value="${escapeHtml(val)}" data-ped-status ${checked} /><span>${escapeHtml(
-                label
-              )}</span></label>`;
-            })
-            .join("")}
+      <div class="pedagogico-section">
+        <h3 class="pedagogico-section-title">📋 Presença</h3>
+        <div class="pedagogico-field">
+          <label class="pedagogico-label">STATUS DA AULA <span class="pedagogico-required">*</span></label>
+          <div class="pedagogico-status-row" data-ped-status-row>
+            ${[
+              ["realizada", "Realizada"],
+              ["falta", "Falta do aluno"],
+              ["remarcada", "Remarcada"],
+              ["cancelada", "Cancelada"],
+            ]
+              .map(([val, label]) => {
+                const active = status === val;
+                return `<button type="button" class="status-btn ${active ? `is-selected selected-${escapeHtml(val)}` : ""}" data-ped-status-btn="${escapeHtml(
+                  val
+                )}">${escapeHtml(label)}</button>`;
+              })
+              .join("")}
+          </div>
+          <div class="pedagogico-help" data-ped-status-help ${statusSet ? "hidden" : ""}>Selecione o status da aula para continuar.</div>
+          <input type="hidden" data-ped-hidden="statusAula" value="${escapeHtml(status)}" />
         </div>
-        <div class="pedagogico-help" data-ped-status-help hidden>Selecione o status da aula para concluir.</div>
+        <div class="pedagogico-field" data-ped-reschedule hidden>
+          <label class="pedagogico-label">NOVA DATA ACORDADA</label>
+          <input class="pedagogico-input" type="date" data-ped-field="novaDataAcordada" value="${escapeHtml(draft.novaDataAcordada)}" />
+        </div>
       </div>
 
-      <div class="pedagogico-field" data-ped-reschedule hidden>
-        <label class="pedagogico-label">NOVA DATA ACORDADA</label>
-        <input class="pedagogico-input" type="date" data-ped-field="novaDataAcordada" value="${escapeHtml(draft.novaDataAcordada)}" />
-      </div>
+      <div class="pedagogico-divider"></div>
 
-      <div class="pedagogico-section" data-ped-content>
-        <div class="pedagogico-grid">
-          <label class="pedagogico-field">
-            <span class="pedagogico-label">O QUE FOI TRABALHADO HOJE</span>
-            <textarea class="pedagogico-textarea" data-ped-field="oQueFoiTrabalhado" placeholder="Descreva o que foi feito na aula...">${escapeHtml(
-              draft.oQueFoiTrabalhado
-            )}</textarea>
-          </label>
+      <div class="pedagogico-section pedagogico-reveal" data-ped-block="conteudo" hidden>
+        <h3 class="pedagogico-section-title">📚 Conteúdo da aula</h3>
 
-          <label class="pedagogico-field">
-            <span class="pedagogico-label">NÍVEL DE DIFICULDADE</span>
-            <div class="pedagogico-radio-row">
-              ${[
-                ["muito_facil", "Muito fácil"],
-                ["adequado", "Adequado"],
-                ["desafiador", "Desafiador"],
-                ["muito_dificil", "Muito difícil"],
-              ]
-                .map(([val, label]) => {
-                  const checked = draft.nivelDificuldade === val ? "checked" : "";
-                  return `<label class="pedagogico-radio"><input type="radio" name="nivelDificuldade" value="${escapeHtml(
-                    val
-                  )}" data-ped-field-radio="nivelDificuldade" ${checked} /><span>${escapeHtml(label)}</span></label>`;
-                })
-                .join("")}
-            </div>
-          </label>
+        <label class="pedagogico-field">
+          <span class="pedagogico-label">O QUE FOI TRABALHADO HOJE</span>
+          <textarea class="pedagogico-textarea" data-ped-field="oQueFoiTrabalhado" placeholder="Descreva o que foi feito na aula...">${escapeHtml(
+            draft.oQueFoiTrabalhado
+          )}</textarea>
+        </label>
+
+        <div class="pedagogico-field">
+          <span class="pedagogico-label">NÍVEL DE DIFICULDADE</span>
+          <div class="pedagogico-radio-row">
+            ${[
+              ["muito_facil", "Muito fácil"],
+              ["adequado", "Adequado"],
+              ["desafiador", "Desafiador"],
+              ["muito_dificil", "Muito difícil"],
+            ]
+              .map(([val, label]) => {
+                const checked = String(draft.nivelDificuldade || "") === val ? "checked" : "";
+                return `<label class="pedagogico-radio"><input type="radio" name="nivelDificuldade" value="${escapeHtml(
+                  val
+                )}" data-ped-field-radio="nivelDificuldade" ${checked} /><span>${escapeHtml(label)}</span></label>`;
+              })
+              .join("")}
+          </div>
         </div>
 
         <div class="pedagogico-field">
           <span class="pedagogico-label">TÓPICOS ABORDADOS</span>
-          <div class="pedagogico-chips">${topicChecks}</div>
+          ${renderPedChips({ items: PED_CHIP.topics, selected: draft.topicosAbordados, multi: true, dataKey: "topicosAbordados" })}
         </div>
 
-        <div class="pedagogico-grid pedagogico-grid-2">
-          <div class="pedagogico-field">
-            <span class="pedagogico-label">ENGAJAMENTO DO ALUNO</span>
-            <div class="pedagogico-stars" data-ped-stars>${starButtons.join("")}</div>
-          </div>
-
-          <label class="pedagogico-field">
-            <span class="pedagogico-label">NOTA DA AULA (0–10)</span>
-            <input class="pedagogico-input" type="number" min="0" max="10" step="0.1" data-ped-field="notaAula" value="${escapeHtml(draft.notaAula)}" />
-          </label>
+        <div class="pedagogico-field">
+          <span class="pedagogico-label">TIPO DE ATIVIDADE PRINCIPAL</span>
+          ${renderPedChips({ items: PED_CHIP.tipoAtividade, selected: draft.tipoAtividade, multi: false, dataKey: "tipoAtividade" })}
         </div>
 
-        <div class="pedagogico-grid">
-          <label class="pedagogico-field">
-            <span class="pedagogico-label">PONTOS FORTES OBSERVADOS</span>
-            <textarea class="pedagogico-textarea" data-ped-field="pontosFortesAluno" placeholder="Ex: boa pronúncia...">${escapeHtml(
-              draft.pontosFortesAluno
-            )}</textarea>
-          </label>
-          <label class="pedagogico-field">
-            <span class="pedagogico-label">PONTOS A DESENVOLVER</span>
-            <textarea class="pedagogico-textarea" data-ped-field="pontosADesenvolver" placeholder="Ex: uso de artigos...">${escapeHtml(
-              draft.pontosADesenvolver
-            )}</textarea>
-          </label>
+        <div class="pedagogico-field">
+          <span class="pedagogico-label">MATERIAL USADO</span>
+          ${renderPedChips({ items: PED_CHIP.materialUsado, selected: draft.materialUsado, multi: false, dataKey: "materialUsado" })}
         </div>
 
+        <label class="pedagogico-field">
+          <span class="pedagogico-label">VOCABULÁRIO NOVO APRESENTADO</span>
+          <input class="pedagogico-input" type="text" data-ped-field="vocabularioNovo" value="${escapeHtml(draft.vocabularioNovo)}" placeholder="Palavras ou frases novas introduzidas na aula..." />
+        </label>
+      </div>
+
+      <div class="pedagogico-divider"></div>
+
+      <div class="pedagogico-section pedagogico-reveal" data-ped-block="avaliacao" hidden>
+        <h3 class="pedagogico-section-title">🧠 Avaliação do aluno</h3>
+
+        <div class="pedagogico-field">
+          <span class="pedagogico-label">ENGAJAMENTO DO ALUNO</span>
+          ${renderStarRow({ value: draft.engajamento, dataKey: "engajamento", ariaLabel: "Engajamento do aluno" })}
+        </div>
+
+        <div class="pedagogico-field">
+          <span class="pedagogico-label">CONFIANÇA AO FALAR</span>
+          ${renderStarRow({ value: draft.confiancaFalar, dataKey: "confiancaFalar", ariaLabel: "Confiança ao falar" })}
+        </div>
+
+        <label class="pedagogico-field">
+          <span class="pedagogico-label">NOTA DA AULA (0–10)</span>
+          <input class="pedagogico-input" type="number" min="0" max="10" step="0.1" data-ped-field="notaAula" value="${escapeHtml(draft.notaAula)}" />
+        </label>
+
+        <div class="pedagogico-field">
+          <span class="pedagogico-label">HUMOR DO ALUNO HOJE</span>
+          ${renderPedChips({ items: PED_CHIP.humor, selected: draft.humorAluno, multi: false, dataKey: "humorAluno" })}
+        </div>
+
+        <div class="pedagogico-field">
+          <span class="pedagogico-label">O ALUNO LEMBROU DA AULA ANTERIOR?</span>
+          ${renderPedChips({ items: PED_CHIP.lembrou, selected: draft.lembrouAulaAnterior, multi: false, dataKey: "lembrouAulaAnterior" })}
+        </div>
+
+        <div class="pedagogico-field">
+          <span class="pedagogico-label">TAREFA ANTERIOR FOI FEITA?</span>
+          ${renderPedChips({ items: PED_CHIP.tarefaAnterior, selected: draft.tarefaAnteriorFeita, multi: false, dataKey: "tarefaAnteriorFeita" })}
+        </div>
+
+        <label class="pedagogico-field">
+          <span class="pedagogico-label">PONTOS FORTES OBSERVADOS</span>
+          <textarea class="pedagogico-textarea" data-ped-field="pontosFortesAluno" placeholder="Ex: ótima pronúncia...">${escapeHtml(
+            draft.pontosFortesAluno
+          )}</textarea>
+        </label>
+        <label class="pedagogico-field">
+          <span class="pedagogico-label">PONTOS A DESENVOLVER</span>
+          <textarea class="pedagogico-textarea" data-ped-field="pontosADesenvolver" placeholder="Ex: uso de artigos...">${escapeHtml(
+            draft.pontosADesenvolver
+          )}</textarea>
+        </label>
         <label class="pedagogico-field">
           <span class="pedagogico-label">FEEDBACK PARA O ALUNO</span>
           <textarea class="pedagogico-textarea" data-ped-field="feedbackParaAluno" placeholder="Mensagem para o aluno...">${escapeHtml(
             draft.feedbackParaAluno
           )}</textarea>
         </label>
+      </div>
 
-        <div class="pedagogico-grid">
-          <label class="pedagogico-field">
-            <span class="pedagogico-label">TEMA DA PRÓXIMA AULA</span>
-            <input class="pedagogico-input" type="text" data-ped-field="temaProximaAula" value="${escapeHtml(draft.temaProximaAula)}" />
-          </label>
-          <label class="pedagogico-field">
-            <span class="pedagogico-label">TAREFA PARA CASA</span>
-            <textarea class="pedagogico-textarea" data-ped-field="tarefaDeCasa" placeholder="Tarefa sugerida...">${escapeHtml(
-              draft.tarefaDeCasa
-            )}</textarea>
-          </label>
+      <div class="pedagogico-divider"></div>
+
+      <div class="pedagogico-section pedagogico-reveal" data-ped-block="proximos" hidden>
+        <h3 class="pedagogico-section-title">🧭 Próximos passos</h3>
+        <label class="pedagogico-field">
+          <span class="pedagogico-label">TEMA DA PRÓXIMA AULA</span>
+          <input class="pedagogico-input" type="text" data-ped-field="temaProximaAula" value="${escapeHtml(draft.temaProximaAula)}" />
+        </label>
+        <label class="pedagogico-field">
+          <span class="pedagogico-label">TAREFA PARA CASA</span>
+          <textarea class="pedagogico-textarea" data-ped-field="tarefaDeCasa" placeholder="Tarefa sugerida...">${escapeHtml(
+            draft.tarefaDeCasa
+          )}</textarea>
+        </label>
+        <div class="pedagogico-field">
+          <span class="pedagogico-label">DURAÇÃO REAL DA AULA</span>
+          <select class="pedagogico-input" data-ped-field="duracaoReal">
+            <option value="" ${draft.duracaoReal ? "" : "selected"}>Selecione</option>
+            <option value="15" ${draft.duracaoReal === "15" ? "selected" : ""}>15 min</option>
+            <option value="30" ${draft.duracaoReal === "30" ? "selected" : ""}>30 min</option>
+            <option value="45" ${draft.duracaoReal === "45" ? "selected" : ""}>45 min</option>
+            <option value="60" ${draft.duracaoReal === "60" ? "selected" : ""}>60 min</option>
+            <option value="60+" ${draft.duracaoReal === "60+" ? "selected" : ""}>Mais de 60 min</option>
+          </select>
         </div>
+      </div>
 
+      <div class="pedagogico-divider"></div>
+
+      <div class="pedagogico-section pedagogico-reveal" data-ped-block="interno" hidden>
+        <h3 class="pedagogico-section-title">🔒 Observações internas</h3>
         <label class="pedagogico-field">
           <span class="pedagogico-label">OBSERVAÇÕES INTERNAS</span>
           <textarea class="pedagogico-textarea" data-ped-field="observacoesInternas" placeholder="Apenas para professor/admin...">${escapeHtml(
@@ -6254,40 +6388,39 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
           )}</textarea>
         </label>
 
-        <div class="pedagogico-grid pedagogico-grid-2">
-          <div class="pedagogico-field">
-            <span class="pedagogico-label">NÍVEL ATUAL DO ALUNO (CEFR)</span>
-            <div class="pedagogico-radio-row">
-              ${["A1", "A2", "B1", "B2", "C1", "C2"]
-                .map((lvl) => {
-                  const checked = draft.nivelCEFR === lvl ? "checked" : "";
-                  return `<label class="pedagogico-radio"><input type="radio" name="nivelCEFR" value="${lvl}" data-ped-field-radio="nivelCEFR" ${checked} /><span>${lvl}</span></label>`;
-                })
-                .join("")}
-            </div>
+        <div class="pedagogico-field">
+          <span class="pedagogico-label">NÍVEL ATUAL DO ALUNO (CEFR)</span>
+          <div class="pedagogico-radio-row">
+            ${["A1", "A2", "B1", "B2", "C1", "C2"]
+              .map((lvl) => {
+                const checked = String(draft.nivelCEFR || "") === lvl ? "checked" : "";
+                return `<label class="pedagogico-radio"><input type="radio" name="nivelCEFR" value="${lvl}" data-ped-field-radio="nivelCEFR" ${checked} /><span>${lvl}</span></label>`;
+              })
+              .join("")}
           </div>
-          <div class="pedagogico-field">
-            <span class="pedagogico-label">EVOLUÇÃO DESDE A ÚLTIMA AVALIAÇÃO</span>
-            <div class="pedagogico-radio-row">
-              ${[
-                ["regressou", "Regressou"],
-                ["estavel", "Estável"],
-                ["evoluiu", "Evoluiu"],
-                ["evoluiu_muito", "Evoluiu muito"],
-              ]
-                .map(([val, label]) => {
-                  const checked = draft.evolucao === val ? "checked" : "";
-                  return `<label class="pedagogico-radio"><input type="radio" name="evolucao" value="${escapeHtml(
-                    val
-                  )}" data-ped-field-radio="evolucao" ${checked} /><span>${escapeHtml(label)}</span></label>`;
-                })
-                .join("")}
-            </div>
+        </div>
+
+        <div class="pedagogico-field">
+          <span class="pedagogico-label">EVOLUÇÃO DESDE A ÚLTIMA AVALIAÇÃO</span>
+          <div class="pedagogico-radio-row">
+            ${[
+              ["regressou", "Regressou"],
+              ["estavel", "Estável"],
+              ["evoluiu", "Evoluiu"],
+              ["evoluiu_muito", "Evoluiu muito"],
+            ]
+              .map(([val, label]) => {
+                const checked = String(draft.evolucao || "") === val ? "checked" : "";
+                return `<label class="pedagogico-radio"><input type="radio" name="evolucao" value="${escapeHtml(
+                  val
+                )}" data-ped-field-radio="evolucao" ${checked} /><span>${escapeHtml(label)}</span></label>`;
+              })
+              .join("")}
           </div>
         </div>
       </div>
 
-      <div class="pedagogico-actions">
+      <div class="pedagogico-drawer-footer">
         <button class="button button-solid" type="button" data-pedagogico-save>Salvar registro</button>
         <button class="button button-outline" type="button" data-pedagogico-drawer-close>Fechar</button>
       </div>
@@ -6307,38 +6440,134 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
     el.addEventListener("input", setDirty);
   });
 
-  const applyVisibility = () => {
-    const statusEl = formRoot.querySelector('input[name="statusAula"]:checked');
-    const status = statusEl instanceof HTMLInputElement ? String(statusEl.value || "").toLowerCase() : "";
-
-    const content = formRoot.querySelector("[data-ped-content]");
-    if (content instanceof HTMLElement) {
-      content.hidden = status === "falta" || status === "cancelada";
+  const revealBlock = (blockEl, reveal) => {
+    if (!(blockEl instanceof HTMLElement)) return;
+    if (!reveal) {
+      blockEl.hidden = true;
+      blockEl.classList.remove("is-revealed");
+      return;
     }
-    const resched = formRoot.querySelector("[data-ped-reschedule]");
-    if (resched instanceof HTMLElement) {
-      resched.hidden = status !== "remarcada";
-    }
-
-    const help = formRoot.querySelector("[data-ped-status-help]");
-    if (help instanceof HTMLElement) {
-      help.hidden = Boolean(status);
-    }
+    if (!blockEl.hidden) return;
+    blockEl.hidden = false;
+    window.requestAnimationFrame(() => blockEl.classList.add("is-revealed"));
   };
 
-  formRoot.querySelectorAll("[data-ped-status]").forEach((el) => el.addEventListener("change", applyVisibility));
-  applyVisibility();
+  const applyVisibility = () => {
+    const hiddenStatus = formRoot.querySelector('[data-ped-hidden="statusAula"]');
+    const statusValue = hiddenStatus instanceof HTMLInputElement ? String(hiddenStatus.value || "").toLowerCase() : "";
+    const statusChosen = Boolean(statusValue);
 
-  formRoot.querySelectorAll("[data-ped-star]").forEach((btn) => {
+    const resched = formRoot.querySelector("[data-ped-reschedule]");
+    if (resched instanceof HTMLElement) resched.hidden = statusValue !== "remarcada";
+
+    const help = formRoot.querySelector("[data-ped-status-help]");
+    if (help instanceof HTMLElement) help.hidden = statusChosen;
+
+    const isSkipContent = statusValue === "falta" || statusValue === "cancelada";
+
+    const conteudo = formRoot.querySelector('[data-ped-block="conteudo"]');
+    const avaliacao = formRoot.querySelector('[data-ped-block="avaliacao"]');
+    const proximos = formRoot.querySelector('[data-ped-block="proximos"]');
+    const interno = formRoot.querySelector('[data-ped-block="interno"]');
+
+    // Progressive reveal: only after choosing a status.
+    if (!statusChosen) {
+      revealBlock(conteudo, false);
+      revealBlock(avaliacao, false);
+      revealBlock(proximos, false);
+      revealBlock(interno, false);
+      return;
+    }
+
+    if (isSkipContent) {
+      revealBlock(conteudo, false);
+      revealBlock(avaliacao, false);
+      revealBlock(proximos, true);
+      revealBlock(interno, true);
+      return;
+    }
+
+    revealBlock(conteudo, true);
+    revealBlock(avaliacao, true);
+    revealBlock(proximos, true);
+    revealBlock(interno, true);
+  };
+
+  // Status buttons
+  formRoot.querySelectorAll("[data-ped-status-btn]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      const value = clampInt(Number(btn.getAttribute("data-ped-star") || 0), 1, 5);
-      formRoot.querySelectorAll("[data-ped-star]").forEach((b, idx) => {
+      if (!(btn instanceof HTMLElement)) return;
+      const value = String(btn.getAttribute("data-ped-status-btn") || "").trim().toLowerCase();
+      const hidden = formRoot.querySelector('[data-ped-hidden="statusAula"]');
+      if (hidden instanceof HTMLInputElement) hidden.value = value;
+      formRoot.querySelectorAll("[data-ped-status-btn]").forEach((b) => {
         if (!(b instanceof HTMLElement)) return;
-        b.classList.toggle("is-active", idx + 1 <= value);
+        const v = String(b.getAttribute("data-ped-status-btn") || "").trim().toLowerCase();
+        b.classList.toggle("is-selected", v === value);
+        b.classList.toggle(`selected-${v}`, v === value);
       });
+      setDirty();
+      applyVisibility();
+    });
+  });
+
+  // Stars: progressive fill on click/hover
+  const wireStars = (wrap) => {
+    if (!(wrap instanceof HTMLElement)) return;
+    const setStars = (val) => {
+      const value = clampInt(Number(val) || 0, 0, 5);
+      wrap.querySelectorAll("[data-star]").forEach((btn, idx) => {
+        if (!(btn instanceof HTMLElement)) return;
+        btn.classList.toggle("is-active", idx + 1 <= value);
+      });
+      wrap.setAttribute("data-value", String(value));
+    };
+    wrap.querySelectorAll("[data-star]").forEach((btn) => {
+      btn.addEventListener("mouseenter", () => setStars(btn.getAttribute("data-star")));
+      btn.addEventListener("focus", () => setStars(btn.getAttribute("data-star")));
+      btn.addEventListener("click", () => {
+        setStars(btn.getAttribute("data-star"));
+        setDirty();
+      });
+    });
+    wrap.addEventListener("mouseleave", () => setStars(wrap.getAttribute("data-value") || "0"));
+  };
+
+  formRoot.querySelectorAll("[data-ped-stars]").forEach((wrap) => {
+    wireStars(wrap);
+    // Initialize with saved value.
+    const firstActive = Array.from(wrap.querySelectorAll(".is-active")).length;
+    wrap.setAttribute("data-value", String(firstActive));
+  });
+
+  // Chips
+  formRoot.querySelectorAll("[data-ped-chips]").forEach((wrap) => {
+    wrap.addEventListener("click", (ev) => {
+      const t = ev.target;
+      if (!(t instanceof Element)) return;
+      const btn = t.closest("[data-chip]");
+      if (!(btn instanceof HTMLButtonElement)) return;
+      const key = String(wrap.getAttribute("data-ped-chips") || "");
+      const chipKey = String(btn.getAttribute("data-chip") || "");
+      const chipLabel = String(btn.getAttribute("data-chip-label") || "");
+
+      if (key === "topicosAbordados") {
+        btn.classList.toggle("is-active");
+      } else {
+        // single-select groups
+        wrap.querySelectorAll("[data-chip]").forEach((b) => {
+          if (!(b instanceof HTMLElement)) return;
+          b.classList.toggle("is-active", b === btn);
+        });
+        // store selected key for readPedagogicoDraftFromDom
+        wrap.setAttribute("data-selected", chipKey);
+        wrap.setAttribute("data-selected-label", chipLabel);
+      }
       setDirty();
     });
   });
+
+  applyVisibility();
 
   setPedagogicoAutosaveLabel(existingLog?.statusAula ? "Salvo" : "—");
 };
@@ -6352,18 +6581,31 @@ const readPedagogicoDraftFromDom = () => {
     return el instanceof HTMLInputElement ? String(el.value || "").trim() : "";
   };
 
-  const statusAula = getRadio("statusAula").toLowerCase();
+  const hiddenStatus = root.querySelector('[data-ped-hidden="statusAula"]');
+  const statusAula = hiddenStatus instanceof HTMLInputElement ? String(hiddenStatus.value || "").trim().toLowerCase() : "";
   const nivelDificuldade = getRadio("nivelDificuldade").toLowerCase() || "adequado";
   const nivelCEFR = getRadio("nivelCEFR").toUpperCase();
   const evolucao = getRadio("evolucao").toLowerCase();
 
-  const topicos = Array.from(root.querySelectorAll("[data-ped-topico]"))
-    .filter((el) => el instanceof HTMLInputElement && el.checked)
-    .map((el) => String(el.value || "").trim())
+  const topicos = Array.from(root.querySelectorAll('[data-ped-chips="topicosAbordados"] [data-chip]'))
+    .filter((el) => el instanceof HTMLElement && el.classList.contains("is-active"))
+    .map((el) => String(el.getAttribute("data-chip-label") || "").trim())
     .filter(Boolean);
 
-  const activeStars = Array.from(root.querySelectorAll("[data-ped-star]")).filter((btn) => btn instanceof HTMLElement && btn.classList.contains("is-active"))
-    .length;
+  const readStars = (key) => {
+    const wrap = root.querySelector(`[data-ped-stars="${key}"]`);
+    if (!(wrap instanceof HTMLElement)) return 0;
+    return clampInt(Number(wrap.getAttribute("data-value") || 0), 0, 5);
+  };
+
+  const engajamento = readStars("engajamento");
+  const confiancaFalar = readStars("confiancaFalar");
+
+  const readSingleChip = (key) => {
+    const wrap = root.querySelector(`[data-ped-chips="${key}"]`);
+    if (!(wrap instanceof HTMLElement)) return "";
+    return String(wrap.getAttribute("data-selected") || "").trim();
+  };
 
   const getField = (key) => {
     const el = root.querySelector(`[data-ped-field="${key}"]`);
@@ -6381,8 +6623,16 @@ const readPedagogicoDraftFromDom = () => {
     oQueFoiTrabalhado: getField("oQueFoiTrabalhado"),
     nivelDificuldade,
     topicosAbordados: topicos,
-    engajamento: clampInt(activeStars, 0, 5) || null,
+    engajamento: engajamento || null,
+    confiancaFalar: confiancaFalar || null,
     notaAula,
+    humorAluno: readSingleChip("humorAluno") || "",
+    lembrouAulaAnterior: readSingleChip("lembrouAulaAnterior") || "",
+    tarefaAnteriorFeita: readSingleChip("tarefaAnteriorFeita") || "",
+    tipoAtividade: readSingleChip("tipoAtividade") || "",
+    materialUsado: readSingleChip("materialUsado") || "",
+    vocabularioNovo: getField("vocabularioNovo"),
+    duracaoReal: getField("duracaoReal").trim(),
     pontosFortesAluno: getField("pontosFortesAluno"),
     pontosADesenvolver: getField("pontosADesenvolver"),
     feedbackParaAluno: getField("feedbackParaAluno"),
@@ -6397,7 +6647,15 @@ const readPedagogicoDraftFromDom = () => {
     draft.oQueFoiTrabalhado = "";
     draft.topicosAbordados = [];
     draft.engajamento = null;
+    draft.confiancaFalar = null;
     draft.notaAula = null;
+    draft.humorAluno = "";
+    draft.lembrouAulaAnterior = "";
+    draft.tarefaAnteriorFeita = "";
+    draft.tipoAtividade = "";
+    draft.materialUsado = "";
+    draft.vocabularioNovo = "";
+    draft.duracaoReal = draft.duracaoReal || "";
     draft.pontosFortesAluno = "";
     draft.pontosADesenvolver = "";
     draft.feedbackParaAluno = "";
@@ -6506,15 +6764,6 @@ const renderTeacherPedagogico = async ({ silent = false } = {}) => {
     const eventsData = await eventsRes.json().catch(() => null);
     const events = Array.isArray(eventsData?.events) ? eventsData.events : [];
     const currentUserId = String(sessionUser?.id || "").trim();
-    const eventsDoProfessor = currentUserId ? events.filter((evt) => evt && typeof evt === "object" && String(evt.professorId || "") === currentUserId) : [];
-    // DEBUG TEMPORÁRIO: entender por que não aparecem aulas na lista.
-    // eslint-disable-next-line no-console
-    console.log("[PEDAGOGICO DEBUG]", {
-      currentUserId,
-      totalEventsBuscados: events.length,
-      eventsFiltradosPorProfessor: eventsDoProfessor.length,
-      primeiroEvento: events[0] || null,
-    });
 
     let logs = [];
     if (logsRes.ok) {

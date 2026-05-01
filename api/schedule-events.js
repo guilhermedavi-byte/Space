@@ -409,6 +409,17 @@ const normalizeTopics = (raw) => {
   return out;
 };
 
+const normalizeOneOf = (raw, allowed) => {
+  const s = String(raw || "").trim().toLowerCase();
+  return allowed.includes(s) ? s : "";
+};
+
+const normalizeDuracaoReal = (raw) => {
+  const s = String(raw || "").trim();
+  const allowed = new Set(["15", "30", "45", "60", "60+"]);
+  return allowed.has(s) ? s : "";
+};
+
 const handleLessonLogsApi = async (req, res, { idToken, role, requesterId, url } = {}) => {
   const effectiveRole = String(role || "");
 
@@ -509,12 +520,24 @@ const handleLessonLogsApi = async (req, res, { idToken, role, requesterId, url }
       if (!Number.isFinite(n) || n <= 0) return null;
       return clampInt(n, 1, 5);
     })(),
+    confiancaFalar: (() => {
+      const n = Number(body?.confiancaFalar);
+      if (!Number.isFinite(n) || n <= 0) return null;
+      return clampInt(n, 1, 5);
+    })(),
     notaAula: (() => {
       const n = Number(body?.notaAula);
       if (!Number.isFinite(n)) return null;
       if (n < 0 || n > 10) return null;
       return n;
     })(),
+    humorAluno: normalizeOneOf(body?.humorAluno, ["animado", "neutro", "cansado", "ansioso"]) || null,
+    lembrouAulaAnterior: normalizeOneOf(body?.lembrouAulaAnterior, ["sim", "parcialmente", "nao"]) || null,
+    tarefaAnteriorFeita: normalizeOneOf(body?.tarefaAnteriorFeita, ["tudo", "parcialmente", "nao_fez", "sem_tarefa"]) || null,
+    tipoAtividade: normalizeOneOf(body?.tipoAtividade, ["conversacao", "gramatica", "vocabulario", "pronuncia", "revisao", "avaliacao"]) || null,
+    materialUsado: normalizeOneOf(body?.materialUsado, ["livro", "proprio", "improviso", "video"]) || null,
+    vocabularioNovo: String(body?.vocabularioNovo || "").trim() || "",
+    duracaoReal: normalizeDuracaoReal(body?.duracaoReal) || null,
     pontosFortesAluno: String(body?.pontosFortesAluno || "").trim() || "",
     pontosADesenvolver: String(body?.pontosADesenvolver || "").trim() || "",
     feedbackParaAluno: String(body?.feedbackParaAluno || "").trim() || "",
@@ -529,7 +552,14 @@ const handleLessonLogsApi = async (req, res, { idToken, role, requesterId, url }
     data.oQueFoiTrabalhado = "";
     data.topicosAbordados = [];
     data.engajamento = null;
+    data.confiancaFalar = null;
     data.notaAula = null;
+    data.humorAluno = null;
+    data.lembrouAulaAnterior = null;
+    data.tarefaAnteriorFeita = null;
+    data.tipoAtividade = null;
+    data.materialUsado = null;
+    data.vocabularioNovo = "";
     data.pontosFortesAluno = "";
     data.pontosADesenvolver = "";
     data.feedbackParaAluno = "";

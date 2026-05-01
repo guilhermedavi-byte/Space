@@ -13033,6 +13033,133 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   user-select: none;
 }
 
+.pedagogico-chip.is-active {
+  background: rgba(89, 144, 189, 0.25);
+  border-color: rgba(89, 144, 189, 0.85);
+  color: #5990BD;
+}
+
+.pedagogico-divider {
+  height: 1px;
+  background: rgba(89, 144, 189, 0.08);
+  margin: 8px 0;
+}
+
+.pedagogico-section-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.9);
+  margin: 0 0 10px;
+}
+
+.pedagogico-status-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.status-btn {
+  border-radius: 12px;
+  padding: 12px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease, color 120ms ease, transform 120ms ease;
+}
+
+.status-btn:hover {
+  transform: translateY(-1px);
+}
+
+.status-btn.is-selected.selected-realizada {
+  border-color: #5DCAA5;
+  background: rgba(93, 202, 165, 0.15);
+  color: #5DCAA5;
+}
+
+.status-btn.is-selected.selected-falta {
+  border-color: #FF4E46;
+  background: rgba(255, 78, 70, 0.15);
+  color: #FF4E46;
+}
+
+.status-btn.is-selected.selected-remarcada {
+  border-color: #FBBF24;
+  background: rgba(251, 191, 36, 0.15);
+  color: #FBBF24;
+}
+
+.status-btn.is-selected.selected-cancelada {
+  border-color: #6b7280;
+  background: rgba(107, 114, 128, 0.15);
+  color: #cbd5e1;
+}
+
+.pedagogico-stars-lg {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.pedagogico-star-lg {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: #374151;
+  cursor: pointer;
+  font-size: 24px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 120ms ease, background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.pedagogico-star-lg:hover {
+  transform: translateY(-1px);
+}
+
+.pedagogico-star-lg.is-active {
+  color: #FBBF24;
+  border-color: rgba(251, 191, 36, 0.22);
+  background: rgba(251, 191, 36, 0.08);
+}
+
+.pedagogico-reveal {
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.pedagogico-reveal.is-revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.pedagogico-drawer-footer {
+  position: sticky;
+  bottom: 0;
+  background: #0f1d2d;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 16px;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin: 18px -18px -18px;
+}
+
+.pedagogico-drawer-footer .button {
+  flex: 0 0 auto;
+}
+
 .pedagogico-stars {
   display: inline-flex;
   gap: 6px;
