@@ -3315,6 +3315,18 @@ const clampNumber = (value, min, max) => {
   return Math.min(Math.max(n, min), max);
 };
 
+const clampInt = (value, min, max, fallback = min) => {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed)) return fallback;
+
+  const hasMin = typeof min === "number" && Number.isFinite(min);
+  const hasMax = typeof max === "number" && Number.isFinite(max);
+
+  if (hasMin && parsed < min) return min;
+  if (hasMax && parsed > max) return max;
+  return parsed;
+};
+
 const toRgba = (hex, alpha) => {
   const raw = String(hex || "").trim().replace("#", "");
   const safeAlpha = clampNumber(alpha, 0, 1);
