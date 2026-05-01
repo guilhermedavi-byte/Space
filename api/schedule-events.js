@@ -4,6 +4,7 @@ const { readJsonBody, sendJson } = require("../_lib/http");
 const { getSessionFromRequest } = require("../_lib/session");
 const { verifyFirebaseIdToken } = require("../_lib/firebase-id-token");
 const { DEFAULT_CONFIG } = require("../_lib/scheduling-firestore");
+const { fetchUserProfileByUid } = require("../_lib/firestore-user");
 const {
   addDaysToDateKey,
   clampInt,
@@ -330,10 +331,33 @@ const toFirestoreDocName = (docPath) => {
 };
 
 module.exports = async (req, res) => {
-  const session = getSessionFromRequest(req);
+  const idToken = getBearerTokenFromRequest(req);
+  let session = getSessionFromRequest(req);
+
+  // Fallback auth: when the session cookie is missing (common for serverless + cross-site),
+  // accept Firebase ID token (sent by fetchWithAuth) and derive the role from Firestore user profile.
   if (!session) {
-    sendJson(res, 401, { error: "unauthorized" });
-    return;
+    if (!idToken) {
+      sendJson(res, 401, { error: "unauthorized" });
+      return;
+    }
+    try {
+      const decoded = await verifyFirebaseIdToken(idToken);
+      const profile = await fetchUserProfileByUid({ uid: decoded.uid, idToken });
+      if (!profile?.user?.role) {
+        sendJson(res, 401, { error: "unauthorized" });
+        return;
+      }
+      session = {
+        sub: decoded.uid,
+        role: profile.user.role,
+        name: profile.user.name,
+        email: profile.user.email,
+      };
+    } catch (error) {
+      sendJson(res, 401, { error: "invalid_credentials" });
+      return;
+    }
   }
 
   const role = normalizeRole(session.role);
@@ -343,7 +367,6 @@ module.exports = async (req, res) => {
   }
 
   const requesterId = String(session.sub || "");
-  const idToken = getBearerTokenFromRequest(req);
   if (!requesterId || !idToken) {
     sendJson(res, 401, { error: "unauthorized" });
     return;
