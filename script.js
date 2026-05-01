@@ -6495,6 +6495,16 @@ const renderTeacherPedagogico = async ({ silent = false } = {}) => {
     if (!eventsRes.ok) throw new Error("events_fetch_failed");
     const eventsData = await eventsRes.json().catch(() => null);
     const events = Array.isArray(eventsData?.events) ? eventsData.events : [];
+    const currentUserId = String(sessionUser?.id || "").trim();
+    const eventsDoProfessor = currentUserId ? events.filter((evt) => evt && typeof evt === "object" && String(evt.professorId || "") === currentUserId) : [];
+    // DEBUG TEMPORÁRIO: entender por que não aparecem aulas na lista.
+    // eslint-disable-next-line no-console
+    console.log("[PEDAGOGICO DEBUG]", {
+      currentUserId,
+      totalEventsBuscados: events.length,
+      eventsFiltradosPorProfessor: eventsDoProfessor.length,
+      primeiroEvento: events[0] || null,
+    });
 
     let logs = [];
     if (logsRes.ok) {
