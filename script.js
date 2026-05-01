@@ -5299,9 +5299,8 @@ const validateCreateEventDraft = () => {
   }
 
   // TEMP DEBUG: helps identify which validation is blocking the Save button in Admin modal.
-  // Logs once per modal open to avoid spamming the console on every keypress.
-  if (currentRole === "admin" && !createEventDraft.__saveDebugLogged) {
-    createEventDraft.__saveDebugLogged = true;
+  // Requested: log every time validation runs (do not gate by a one-time flag).
+  if (currentRole === "admin") {
     const selectedAluno = String(createEventDraft.alunoId || "").trim();
     const selectedProfessor = String(createEventDraft.professorId || "").trim();
     const titulo = String(createEventDraft.title || "").trim();
@@ -5360,6 +5359,21 @@ const openTeacherEventFormModalFromDraft = () => {
   const showTrash = !readOnly && mode === "edit" && (currentRole === "admin" || eventType === "manual");
 
   const saveFromDraft = () => {
+    // Read from DOM right before saving, so the payload reflects what the user sees.
+    const adminStudentEl = modalBody?.querySelector("[data-ce-admin-student]");
+    const adminTeacherEl = modalBody?.querySelector("[data-ce-admin-teacher]");
+    const titleEl = modalBody?.querySelector("[data-ce-title]");
+
+    if (adminStudentEl instanceof HTMLSelectElement && adminStudentEl.value) {
+      createEventDraft.alunoId = adminStudentEl.value;
+    }
+    if (adminTeacherEl instanceof HTMLSelectElement && adminTeacherEl.value) {
+      createEventDraft.professorId = adminTeacherEl.value;
+    }
+    if (titleEl instanceof HTMLInputElement && titleEl.value) {
+      createEventDraft.title = titleEl.value;
+    }
+
     const ok = validateCreateEventDraft();
     if (!ok) return false;
     const date = parseDateKey(createEventDraft.dateKey);
