@@ -1,6 +1,5 @@
 {
   "rewrites": [
-    { "source": "/api/lesson-logs", "destination": "/api/schedule-events?resource=lesson-logs" },
     { "source": "/api/crm-test", "destination": "/api/growth-dashboard?api=crm-test" },
     { "source": "/api/growth-goals/current", "destination": "/api/growth-dashboard?api=growth-goals&mode=current" },
     { "source": "/api/growth-goals", "destination": "/api/growth-dashboard?api=growth-goals" },
