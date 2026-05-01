@@ -5482,13 +5482,13 @@ const openTeacherEventFormModalFromDraft = () => {
     return false;
   };
 
-  openModal({
-    title,
-    bodyHtml: buildCreateEventBody({ readOnly }),
-    primaryLabel,
-    secondaryLabel,
-    hideSecondary,
-    showTrash,
+	openModal({
+	  title,
+	  bodyHtml: buildCreateEventBody({ readOnly }),
+	  primaryLabel,
+	  secondaryLabel,
+	  hideSecondary,
+	  showTrash,
     onTrash: showTrash
       ? () => {
           const id = createEventDraft?.eventId || "";
@@ -5571,19 +5571,41 @@ const openTeacherEventFormModalFromDraft = () => {
       activeModalKind = "";
       createEventDraft = null;
     },
-  });
+	});
 
-  if (!readOnly) {
-    if (currentRole === "admin") {
-      loadUsersFromFirestore("teacher");
-      loadUsersFromFirestore("student");
-      syncAdminEventUserSelects();
-    }
-    validateCreateEventDraft();
-    syncGuestDropdown();
-  } else {
-    setModalPrimaryDisabled(false);
-  }
+	if (!readOnly) {
+	  if (currentRole === "admin") {
+	    loadUsersFromFirestore("teacher");
+	    loadUsersFromFirestore("student");
+	    syncAdminEventUserSelects();
+
+      // Keep admin selects wired to the draft so Save enables immediately after selection.
+      const adminStudentEl = modalBody?.querySelector("[data-ce-admin-student]");
+      const adminTeacherEl = modalBody?.querySelector("[data-ce-admin-teacher]");
+
+      if (adminStudentEl instanceof HTMLSelectElement) {
+        createEventDraft.alunoId = adminStudentEl.value;
+        adminStudentEl.addEventListener("change", () => {
+          if (!createEventDraft) return;
+          createEventDraft.alunoId = adminStudentEl.value;
+          validateCreateEventDraft();
+        });
+      }
+
+      if (adminTeacherEl instanceof HTMLSelectElement) {
+        createEventDraft.professorId = adminTeacherEl.value;
+        adminTeacherEl.addEventListener("change", () => {
+          if (!createEventDraft) return;
+          createEventDraft.professorId = adminTeacherEl.value;
+          validateCreateEventDraft();
+        });
+      }
+	  }
+	  validateCreateEventDraft();
+	  syncGuestDropdown();
+	} else {
+	  setModalPrimaryDisabled(false);
+	}
 };
 
 const openTeacherCreateEventModalAt = ({ dateKey, startTime, endTime } = {}) => {
