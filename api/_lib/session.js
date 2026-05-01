@@ -108,9 +108,17 @@ const buildClearCookie = ({ secure = false } = {}) => {
 const getSessionFromRequest = (req) => {
   const cookies = parseCookies(req);
   const token = cookies[COOKIE_NAME];
-  if (!token) return null;
+  if (!token) {
+    // eslint-disable-next-line no-console
+    console.warn("[session] no cookie found");
+    return null;
+  }
   const payload = verifyJwt(token);
-  if (!payload) return null;
+  if (!payload) {
+    // eslint-disable-next-line no-console
+    console.warn("[session] verifyJwt failed - token invalid or expired");
+    return null;
+  }
   return payload;
 };
 
