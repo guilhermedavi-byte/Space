@@ -4569,6 +4569,37 @@ body:not([data-role="admin"]) [data-admin-only] {
   margin: 6px 0 0;
 }
 
+.admin-dashboard-v2-empty {
+  color: rgba(255, 255, 255, 0.38);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.admin-dashboard-v2-empty--bar {
+  height: 28px;
+  margin-bottom: 16px;
+  border-radius: 10px;
+  border: 1px dashed rgba(89, 144, 189, 0.18);
+  background: rgba(255, 255, 255, 0.03);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.admin-dashboard-v2-empty--list {
+  padding: 12px 12px;
+  border-radius: 10px;
+  border: 1px dashed rgba(89, 144, 189, 0.14);
+  background: rgba(255, 255, 255, 0.02);
+  text-align: center;
+}
+
+.admin-dashboard-v2-empty--table {
+  padding: 10px 0 0;
+  text-align: center;
+}
+
 .admin-dashboard-v2-card-meta--positive {
   color: #5dcaa5;
 }
