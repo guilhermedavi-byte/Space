@@ -6400,9 +6400,11 @@ body.is-cal-dragging .teacher-cal-grid {
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   display: flex;
-  align-items: center;
+  /* Prevent tall dialogs from being cut off: top-align + scroll the overlay when needed. */
+  align-items: flex-start;
   justify-content: center;
-  padding: 24px;
+  padding: 24px 16px;
+  overflow-y: auto;
   animation: modal-fade-in 160ms ease both;
 }
 
@@ -6412,11 +6414,14 @@ body.is-cal-dragging .teacher-cal-grid {
 
 .modal-dialog {
   width: min(520px, 100%);
+  max-height: calc(100vh - 48px);
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: #151820;
   box-shadow: 0 28px 80px rgba(0, 0, 0, 0.6);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
   animation: modal-pop-in 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
@@ -6427,6 +6432,7 @@ body.is-cal-dragging .teacher-cal-grid {
   justify-content: space-between;
   gap: 14px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  flex: 0 0 auto;
 }
 
 .modal-title {
@@ -6477,6 +6483,9 @@ body.is-cal-dragging .teacher-cal-grid {
   font-size: 13px;
   font-weight: 600;
   line-height: 1.65;
+  flex: 1 1 auto;
+  min-height: 0; /* allow children to scroll within flex column */
+  overflow-y: auto;
 }
 
 .role-picker {
@@ -7151,6 +7160,9 @@ body.is-cal-dragging .teacher-cal-grid {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+  flex: 0 0 auto;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: #151820;
 }
 
 body.is-modal-open {
