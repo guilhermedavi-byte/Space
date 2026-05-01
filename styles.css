@@ -12786,7 +12786,7 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 
 .pedagogico-item.is-future {
   opacity: 0.45;
-  cursor: default;
+  cursor: not-allowed;
   pointer-events: none;
 }
 
