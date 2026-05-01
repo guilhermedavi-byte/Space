@@ -6135,8 +6135,11 @@ const closePedagogicoDrawer = () => {
 const sanitizeLessonLogDraft = (raw = {}) => {
   const src = raw && typeof raw === "object" ? raw : {};
   const topicos = Array.isArray(src.topicosAbordados) ? src.topicosAbordados : [];
+  const risco = Array.isArray(src.riscoEvasao) ? src.riscoEvasao : [];
   return {
     statusAula: String(src.statusAula || "").trim().toLowerCase(),
+    motivoNaoRealizada: String(src.motivoNaoRealizada || "").trim().toLowerCase(),
+    motivoNaoRealizadaOutro: String(src.motivoNaoRealizadaOutro || ""),
     novaDataAcordada: String(src.novaDataAcordada || "").trim(),
     oQueFoiTrabalhado: String(src.oQueFoiTrabalhado || ""),
     nivelDificuldade: String(src.nivelDificuldade || "adequado").trim().toLowerCase(),
@@ -6159,12 +6162,57 @@ const sanitizeLessonLogDraft = (raw = {}) => {
     observacoesInternas: String(src.observacoesInternas || ""),
     nivelCEFR: String(src.nivelCEFR || "").trim().toUpperCase(),
     evolucao: String(src.evolucao || "").trim().toLowerCase(),
+    riscoEvasao: risco.map((t) => String(t || "").trim()).filter(Boolean),
+    riscoEvasaoOutro: String(src.riscoEvasaoOutro || ""),
+    acaoCoordenacao: String(src.acaoCoordenacao || "").trim().toLowerCase(),
+    acaoCoordenacaoOutro: String(src.acaoCoordenacaoOutro || ""),
   };
 };
 
 const getPedagogicoTopics = () => ["Gramática", "Vocabulário", "Pronúncia", "Conversação", "Escrita", "Compreensão"];
 
 const PED_CHIP = {
+  motivoNaoRealizada: [
+    ["aluno_faltou_sem_avisar", "Aluno faltou sem avisar"],
+    ["aluno_avisou_em_cima_da_hora", "Aluno avisou em cima da hora"],
+    ["aluno_pediu_remarcacao_com_antecedencia", "Aluno pediu remarcação com antecedência"],
+    ["professor_precisou_remarcar", "Professor precisou remarcar"],
+    ["conflito_de_horario", "Conflito de horário"],
+    ["internet_aluno", "Problema de internet do aluno"],
+    ["internet_professor", "Problema de internet do professor"],
+    ["plataforma_link", "Problema na plataforma/link de acesso"],
+    ["dificuldade_acesso", "Aluno com dificuldade para acessar a aula"],
+    ["cancelada_adm", "Aula cancelada administrativamente"],
+    ["outro", "Outro"],
+  ],
+  riscoEvasao: [
+    ["faltando_frequencia", "Aluno está faltando com frequência"],
+    ["reagendando_muito", "Aluno está reagendando muitas aulas"],
+    ["baixa_motivacao", "Aluno demonstra baixa motivação"],
+    ["nao_percebe_evolucao", "Aluno não percebe evolução"],
+    ["dificuldade_acima", "Aluno está com dificuldade acima do esperado"],
+    ["nao_faz_tarefas", "Aluno não faz tarefas/estudos fora da aula"],
+    ["pouca_disponibilidade", "Aluno tem pouca disponibilidade para estudar"],
+    ["insatisfeito_experiencia", "Aluno demonstrou insatisfação com a experiência"],
+    ["insatisfeito_professor", "Aluno demonstrou insatisfação com o professor"],
+    ["problema_financeiro", "Aluno demonstrou problema financeiro"],
+    ["comentou_pausa_cancelamento", "Aluno comentou sobre pausa/cancelamento"],
+    ["nao_usa_recursos", "Aluno não está usando os recursos da escola"],
+    ["outro", "Outro"],
+  ],
+  acaoCoordenacao: [
+    ["nao_precisa", "Não precisa de ação"],
+    ["acompanhar", "Acompanhar evolução do aluno"],
+    ["falar_engajamento", "Falar com o aluno sobre engajamento"],
+    ["falar_faltas", "Falar com o aluno sobre faltas/remarcações"],
+    ["ajustar_dificuldade", "Ajustar nível de dificuldade"],
+    ["ajustar_plano", "Ajustar plano de estudo"],
+    ["trocar_ou_orientar_professor", "Trocar ou orientar professor"],
+    ["revisar_horario", "Revisar horário das aulas"],
+    ["acionar_financeiro_comercial", "Acionar financeiro/comercial"],
+    ["acionar_retencao", "Acionar retenção por risco de cancelamento"],
+    ["outro", "Outro"],
+  ],
   topics: [
     ["gramatica", "Gramática"],
     ["vocabulario", "Vocabulário"],
@@ -6291,6 +6339,17 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
         <div class="pedagogico-field" data-ped-reschedule hidden>
           <label class="pedagogico-label">NOVA DATA ACORDADA</label>
           <input class="pedagogico-input" type="date" data-ped-field="novaDataAcordada" value="${escapeHtml(draft.novaDataAcordada)}" />
+        </div>
+
+        <div class="pedagogico-field" data-ped-nao-realizada-motivo hidden>
+          <span class="pedagogico-label">MOTIVO (QUANDO A AULA NÃO FOR REALIZADA)</span>
+          ${renderPedChips({ items: PED_CHIP.motivoNaoRealizada, selected: draft.motivoNaoRealizada, multi: false, dataKey: "motivoNaoRealizada" })}
+          <label class="pedagogico-field" data-ped-outro-wrap="motivoNaoRealizadaOutro" hidden>
+            <span class="pedagogico-label">DESCREVA O MOTIVO <span class="pedagogico-required">*</span></span>
+            <textarea class="pedagogico-textarea" data-ped-field="motivoNaoRealizadaOutro" placeholder="Descreva o motivo...">${escapeHtml(
+              draft.motivoNaoRealizadaOutro
+            )}</textarea>
+          </label>
         </div>
       </div>
 
@@ -6440,6 +6499,28 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
         </label>
 
         <div class="pedagogico-field">
+          <span class="pedagogico-label">RISCO DE EVASÃO</span>
+          ${renderPedChips({ items: PED_CHIP.riscoEvasao, selected: draft.riscoEvasao, multi: true, dataKey: "riscoEvasao" })}
+          <label class="pedagogico-field" data-ped-outro-wrap="riscoEvasaoOutro" hidden>
+            <span class="pedagogico-label">DESCREVA O MOTIVO <span class="pedagogico-required">*</span></span>
+            <textarea class="pedagogico-textarea" data-ped-field="riscoEvasaoOutro" placeholder="Descreva o motivo...">${escapeHtml(
+              draft.riscoEvasaoOutro
+            )}</textarea>
+          </label>
+        </div>
+
+        <div class="pedagogico-field">
+          <span class="pedagogico-label">AÇÃO DA COORDENAÇÃO</span>
+          ${renderPedChips({ items: PED_CHIP.acaoCoordenacao, selected: draft.acaoCoordenacao, multi: false, dataKey: "acaoCoordenacao" })}
+          <label class="pedagogico-field" data-ped-outro-wrap="acaoCoordenacaoOutro" hidden>
+            <span class="pedagogico-label">DESCREVA O MOTIVO <span class="pedagogico-required">*</span></span>
+            <textarea class="pedagogico-textarea" data-ped-field="acaoCoordenacaoOutro" placeholder="Descreva o motivo...">${escapeHtml(
+              draft.acaoCoordenacaoOutro
+            )}</textarea>
+          </label>
+        </div>
+
+        <div class="pedagogico-field">
           <span class="pedagogico-label">NÍVEL ATUAL DO ALUNO (CEFR)</span>
           <div class="pedagogico-radio-row">
             ${["A1", "A2", "B1", "B2", "C1", "C2"]
@@ -6513,6 +6594,12 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
 
     const help = formRoot.querySelector("[data-ped-status-help]");
     if (help instanceof HTMLElement) help.hidden = statusChosen;
+
+    const motivoNaoRealizada = formRoot.querySelector("[data-ped-nao-realizada-motivo]");
+    if (motivoNaoRealizada instanceof HTMLElement) {
+      // Mostra sempre que a aula não for "realizada" (inclui falta, remarcada e cancelada).
+      motivoNaoRealizada.hidden = !statusChosen || statusValue === "realizada";
+    }
 
     const isSkipContent = statusValue === "falta" || statusValue === "cancelada";
 
@@ -6604,6 +6691,9 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
 
       if (key === "topicosAbordados") {
         btn.classList.toggle("is-active");
+      } else if (key === "riscoEvasao") {
+        // multi-select group
+        btn.classList.toggle("is-active");
       } else {
         // single-select groups
         wrap.querySelectorAll("[data-chip]").forEach((b) => {
@@ -6613,6 +6703,31 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
         // store selected key for readPedagogicoDraftFromDom
         wrap.setAttribute("data-selected", chipKey);
         wrap.setAttribute("data-selected-label", chipLabel);
+      }
+
+      // Reveal "Outro" textareas when needed.
+      const root = wrap.closest("[data-ped-form]");
+      if (root instanceof HTMLElement) {
+        const isOutroSelected = (() => {
+          if (key === "topicosAbordados") return false;
+          if (key === "riscoEvasao") {
+            return Boolean(
+              root.querySelector('[data-ped-chips="riscoEvasao"] [data-chip="outro"]')?.classList.contains("is-active")
+            );
+          }
+          return chipKey === "outro";
+        })();
+        const outroWrap =
+          key === "motivoNaoRealizada"
+            ? root.querySelector('[data-ped-outro-wrap="motivoNaoRealizadaOutro"]')
+            : key === "riscoEvasao"
+              ? root.querySelector('[data-ped-outro-wrap="riscoEvasaoOutro"]')
+              : key === "acaoCoordenacao"
+                ? root.querySelector('[data-ped-outro-wrap="acaoCoordenacaoOutro"]')
+                : null;
+        if (outroWrap instanceof HTMLElement) {
+          outroWrap.hidden = !isOutroSelected;
+        }
       }
       setDirty();
     });
@@ -6639,6 +6754,11 @@ const readPedagogicoDraftFromDom = () => {
   const evolucao = getRadio("evolucao").toLowerCase();
 
   const topicos = Array.from(root.querySelectorAll('[data-ped-chips="topicosAbordados"] [data-chip]'))
+    .filter((el) => el instanceof HTMLElement && el.classList.contains("is-active"))
+    .map((el) => String(el.getAttribute("data-chip-label") || "").trim())
+    .filter(Boolean);
+
+  const riscoEvasao = Array.from(root.querySelectorAll('[data-ped-chips="riscoEvasao"] [data-chip]'))
     .filter((el) => el instanceof HTMLElement && el.classList.contains("is-active"))
     .map((el) => String(el.getAttribute("data-chip-label") || "").trim())
     .filter(Boolean);
@@ -6670,6 +6790,8 @@ const readPedagogicoDraftFromDom = () => {
 
   const draft = {
     statusAula,
+    motivoNaoRealizada: readSingleChip("motivoNaoRealizada") || "",
+    motivoNaoRealizadaOutro: getField("motivoNaoRealizadaOutro"),
     novaDataAcordada: getField("novaDataAcordada").trim(),
     oQueFoiTrabalhado: getField("oQueFoiTrabalhado"),
     nivelDificuldade,
@@ -6692,6 +6814,10 @@ const readPedagogicoDraftFromDom = () => {
     observacoesInternas: getField("observacoesInternas"),
     nivelCEFR: nivelCEFR || null,
     evolucao: evolucao || null,
+    riscoEvasao,
+    riscoEvasaoOutro: getField("riscoEvasaoOutro"),
+    acaoCoordenacao: readSingleChip("acaoCoordenacao") || "",
+    acaoCoordenacaoOutro: getField("acaoCoordenacaoOutro"),
   };
 
   if (draft.statusAula === "falta" || draft.statusAula === "cancelada") {
@@ -6714,6 +6840,11 @@ const readPedagogicoDraftFromDom = () => {
     draft.tarefaDeCasa = "";
   }
 
+  if (draft.statusAula === "realizada") {
+    draft.motivoNaoRealizada = "";
+    draft.motivoNaoRealizadaOutro = "";
+  }
+
   if (draft.statusAula !== "remarcada") {
     draft.novaDataAcordada = "";
   }
@@ -6731,6 +6862,18 @@ const savePedagogicoLog = async ({ autosave = false } = {}) => {
   if (!draft) return false;
   if (!draft.statusAula) {
     if (!autosave) setPedagogicoStatus("Selecione o status da aula para salvar.", "error");
+    return false;
+  }
+
+  // Validação: se escolher "Outro" em algum bloco, exigir descrição.
+  const missingOther =
+    (draft.statusAula !== "realizada" &&
+      ((draft.motivoNaoRealizada === "outro" && !String(draft.motivoNaoRealizadaOutro || "").trim()) ||
+        (Array.isArray(draft.riscoEvasao) && draft.riscoEvasao.includes("Outro") && !String(draft.riscoEvasaoOutro || "").trim()) ||
+        (draft.acaoCoordenacao === "outro" && !String(draft.acaoCoordenacaoOutro || "").trim()))) ||
+    false;
+  if (missingOther) {
+    if (!autosave) setPedagogicoStatus('Preencha "Descreva o motivo" para continuar.', "error");
     return false;
   }
 
