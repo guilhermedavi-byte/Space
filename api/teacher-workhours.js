@@ -2,6 +2,7 @@ const { readJsonBody, sendJson } = require("../_lib/http");
 const { getSessionFromRequest } = require("../_lib/session");
 const { clampInt } = require("../_lib/scheduling-utils");
 const { verifyFirebaseIdToken } = require("../_lib/firebase-id-token");
+const { fetchUserProfileByUid } = require("../_lib/firestore-user");
 const {
   decodeFields,
   firestoreGetDocument,
@@ -155,23 +156,6 @@ const workHoursToFirestoreHorarios = (workHours) => {
 
 module.exports = async (req, res) => {
   try {
-    const session = getSessionFromRequest(req);
-    if (!session) {
-      sendJson(res, 401, { error: "unauthorized" });
-      return;
-    }
-
-    if (String(session.role || "") !== "teacher") {
-      sendJson(res, 403, { error: "forbidden" });
-      return;
-    }
-
-    const teacherId = String(session.sub || "");
-    if (!teacherId) {
-      sendJson(res, 401, { error: "unauthorized" });
-      return;
-    }
-
     const idToken = getBearerTokenFromRequest(req);
     if (!idToken) {
       sendJson(res, 401, { error: "missing_id_token" });
@@ -186,9 +170,47 @@ module.exports = async (req, res) => {
       return;
     }
 
-    if (decoded.uid !== teacherId) {
-      sendJson(res, 401, { error: "invalid_credentials" });
-      return;
+    // Role is derived from Firestore to avoid relying on cookie sessions (they can be stale/mismatched).
+    let profile = null;
+    try {
+      profile = await fetchUserProfileByUid({ uid: decoded.uid, idToken });
+    } catch (error) {
+      profile = null;
+    }
+    const role = String(profile?.user?.role || "").trim().toLowerCase();
+
+    // Teacher reads/edits their own work hours.
+    // Admin can read any teacher's work hours by providing `uid` in the query string (read-only).
+    const host = String(req.headers.host || "localhost");
+    const url = new URL(req.url || "/api/teacher-workhours", `https://${host}`);
+    const uidFromQuery = String(url.searchParams.get("uid") || "").trim();
+
+    const session = getSessionFromRequest(req);
+    const cookieRole = String(session?.role || "").trim().toLowerCase();
+    const cookieUid = String(session?.sub || "").trim();
+
+    let teacherId = decoded.uid;
+    const isAdmin = role === "admin" || cookieRole === "admin";
+    const isTeacher = role === "teacher" || cookieRole === "teacher";
+
+    if (req.method === "POST") {
+      if (!isTeacher) {
+        sendJson(res, 403, { error: "forbidden" });
+        return;
+      }
+      // Only allow teachers to mutate their own record.
+      if (cookieUid && cookieUid !== decoded.uid) {
+        // Cookie mismatch doesn't block other endpoints anymore, but POST here should be strict.
+        sendJson(res, 401, { error: "invalid_credentials" });
+        return;
+      }
+    } else {
+      // GET/HEAD
+      if (!isTeacher && !isAdmin) {
+        sendJson(res, 403, { error: "forbidden" });
+        return;
+      }
+      if (isAdmin && uidFromQuery) teacherId = uidFromQuery;
     }
 
     if (req.method === "GET" || req.method === "HEAD") {

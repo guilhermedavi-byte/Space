@@ -3192,6 +3192,58 @@ const adminTeacherAgendasState = {
   colorById: new Map(), // Map<string, string>
 };
 
+const adminTeacherWorkHoursState = {
+  isLoading: false,
+  loadedAt: 0,
+  byId: new Map(), // Map<string, LocalWorkHours>
+};
+
+const getAdminTeacherWorkHours = (teacherId) => {
+  const uid = String(teacherId || "").trim();
+  if (!uid) return null;
+  return adminTeacherWorkHoursState.byId.get(uid) || null;
+};
+
+const refreshAdminTeacherWorkHours = async ({ teacherIds, force = false } = {}) => {
+  if (currentRole !== "admin") return;
+  const ids = Array.isArray(teacherIds) ? teacherIds.map((id) => String(id || "").trim()).filter(Boolean) : [];
+  if (!ids.length) return;
+
+  const now = Date.now();
+  if (!force && adminTeacherWorkHoursState.loadedAt && now - adminTeacherWorkHoursState.loadedAt < 30_000) {
+    return;
+  }
+  if (adminTeacherWorkHoursState.isLoading) return;
+
+  adminTeacherWorkHoursState.isLoading = true;
+  try {
+    const results = await Promise.all(
+      ids.map(async (uid) => {
+        const res = await fetchWithAuth(`/api/teacher-workhours?uid=${encodeURIComponent(uid)}`, { method: "GET" });
+        if (!res.ok) return { uid, ok: false, workHours: null };
+        const data = await res.json().catch(() => null);
+        const apiWorkHours = data?.workHours && typeof data.workHours === "object" ? data.workHours : null;
+        return { uid, ok: true, workHours: apiWorkHoursToLocalWorkHours(apiWorkHours) };
+      })
+    );
+
+    results.forEach((row) => {
+      if (row.ok && row.workHours) {
+        adminTeacherWorkHoursState.byId.set(row.uid, row.workHours);
+      }
+    });
+    adminTeacherWorkHoursState.loadedAt = Date.now();
+
+    if (body.dataset.activePanel === "ao-vivo") {
+      renderTeacherCalendar();
+    }
+  } catch (error) {
+    // ignore (fallback is "no restriction")
+  } finally {
+    adminTeacherWorkHoursState.isLoading = false;
+  }
+};
+
 const clampNumber = (value, min, max) => {
   const n = Number(value);
   if (!Number.isFinite(n)) return min;
@@ -3311,6 +3363,39 @@ const ensureTeacherCalSelectionEl = (gridEl) => {
   el.innerHTML = `<span class="teacher-cal-selection-time"></span>`;
   gridEl.appendChild(el);
   return el;
+};
+
+let teacherCalWorkHoursTooltip = null;
+const ensureTeacherCalWorkHoursTooltip = () => {
+  if (teacherCalWorkHoursTooltip instanceof HTMLElement) return teacherCalWorkHoursTooltip;
+  const el = document.createElement("div");
+  el.className = "calendar-slot-tooltip";
+  el.textContent = "Fora do horário de trabalho";
+  el.hidden = true;
+  document.body.appendChild(el);
+  teacherCalWorkHoursTooltip = el;
+  return el;
+};
+
+const showTeacherCalWorkHoursTooltip = ({ x, y } = {}) => {
+  const tip = ensureTeacherCalWorkHoursTooltip();
+  const left = Number.isFinite(Number(x)) ? Number(x) : 0;
+  const top = Number.isFinite(Number(y)) ? Number(y) : 0;
+  tip.style.left = `${left}px`;
+  tip.style.top = `${top}px`;
+  tip.hidden = false;
+};
+
+const hideTeacherCalWorkHoursTooltip = () => {
+  if (!(teacherCalWorkHoursTooltip instanceof HTMLElement)) return;
+  teacherCalWorkHoursTooltip.hidden = true;
+};
+
+const getWorkWindowForMinute = (minutes, windows) => {
+  const m = Number(minutes);
+  const arr = Array.isArray(windows) ? windows : [];
+  if (!Number.isFinite(m) || !arr.length) return null;
+  return arr.find((w) => m >= w.start && m < w.end) || null;
 };
 
 const syncTeacherCalSelectionUI = () => {
@@ -3983,6 +4068,41 @@ const computeOffHoursSegments = ({ windows, gridStartMin, gridEndMin }) => {
   return segments.filter((seg) => seg.end > seg.start);
 };
 
+const isMinuteWithinWindows = (minutes, windows) => {
+  const m = Number(minutes);
+  const arr = Array.isArray(windows) ? windows : [];
+  if (!Number.isFinite(m) || !arr.length) return false;
+  return arr.some((w) => m >= w.start && m < w.end);
+};
+
+const getWorkWindowsForGrid = ({ gridEl, dateKey } = {}) => {
+  if (!(gridEl instanceof HTMLElement)) return null;
+  const key = String(dateKey || gridEl.getAttribute("data-teacher-cal-grid") || "").trim();
+  const date = parseDateKey(key);
+  if (!date) return null;
+
+  const dayIndex = String(date.getDay());
+
+  if (currentRole === "teacher") {
+    const work = teacherWorkHours[dayIndex] || { enabled: true, windows: [{ start: "00:00", end: "23:59" }] };
+    return normalizeWorkWindows(work);
+  }
+
+  if (currentRole === "admin") {
+    const teacherId = String(gridEl.getAttribute("data-teacher-cal-teacher") || "").trim();
+    const selected = getAdminSelectedTeacherIdsSet();
+    const singleSelected = selected instanceof Set && selected.size === 1 ? Array.from(selected)[0] : "";
+    const effectiveTeacherId = teacherId || singleSelected;
+    if (!effectiveTeacherId) return null;
+    const workHours = getAdminTeacherWorkHours(effectiveTeacherId);
+    if (!workHours) return null; // not loaded yet => no restriction
+    const work = workHours[dayIndex] || { enabled: true, windows: [{ start: "00:00", end: "23:59" }] };
+    return normalizeWorkWindows(work);
+  }
+
+  return null;
+};
+
 const renderTeacherMiniCalendar = () => {
   if (!teacherMiniGrid || !teacherMiniTitle) return;
 
@@ -4049,7 +4169,16 @@ const renderTeacherCalendarViewportDay = (date) => {
   const dayIndex = String(date.getDay());
   const gridStartMin = startHour * 60;
   const gridEndMin = (endHour + 1) * 60;
-  const work = teacherWorkHours[dayIndex] || { enabled: true, windows: [{ start: "00:00", end: "23:59" }] };
+  let baseWorkHours = teacherWorkHours;
+  let singleTeacherId = "";
+  if (currentRole === "admin") {
+    const selected = getAdminSelectedTeacherIdsSet();
+    singleTeacherId = selected instanceof Set && selected.size === 1 ? Array.from(selected)[0] : "";
+    const adminWork = singleTeacherId ? getAdminTeacherWorkHours(singleTeacherId) : null;
+    if (adminWork) baseWorkHours = adminWork;
+  }
+
+  const work = baseWorkHours[dayIndex] || { enabled: true, windows: [{ start: "00:00", end: "23:59" }] };
   const windows = normalizeWorkWindows(work);
   const segments = computeOffHoursSegments({ windows, gridStartMin, gridEndMin });
   const offHours = `
@@ -4058,7 +4187,7 @@ const renderTeacherCalendarViewportDay = (date) => {
         .map((seg) => {
           const top = ((seg.start - gridStartMin) / 60) * hourHeight;
           const height = ((seg.end - seg.start) / 60) * hourHeight;
-          return `<div class="teacher-cal-offhours-seg" style="top:${top}px;height:${height}px"></div>`;
+          return `<div class="teacher-cal-offhours-seg calendar-slot is-unavailable" style="top:${top}px;height:${height}px"></div>`;
         })
         .join("")}
     </div>
@@ -4143,6 +4272,26 @@ const renderTeacherCalendarViewportDay = (date) => {
           const colEvents = events.filter((evt) => String(evt.professorId || "").trim() === teacherId);
           const laidOut = layoutOverlappingEvents(colEvents);
           const eventsMarkup = laidOut.map((evt) => renderEventButton(evt, color)).join("");
+
+          const teacherWorkHoursForCol = getAdminTeacherWorkHours(teacherId);
+          const workForCol = teacherWorkHoursForCol
+            ? teacherWorkHoursForCol[dayIndex] || { enabled: true, windows: [{ start: "00:00", end: "23:59" }] }
+            : null;
+          const windowsForCol = workForCol ? normalizeWorkWindows(workForCol) : [];
+          const segsForCol = workForCol ? computeOffHoursSegments({ windows: windowsForCol, gridStartMin, gridEndMin }) : [];
+          const offHoursForCol = segsForCol.length
+            ? `
+              <div class="teacher-cal-offhours" aria-hidden="true">
+                ${segsForCol
+                  .map((seg) => {
+                    const top = ((seg.start - gridStartMin) / 60) * hourHeight;
+                    const height = ((seg.end - seg.start) / 60) * hourHeight;
+                    return `<div class="teacher-cal-offhours-seg calendar-slot is-unavailable" style="top:${top}px;height:${height}px"></div>`;
+                  })
+                  .join("")}
+              </div>
+            `
+            : `<div class="teacher-cal-offhours" aria-hidden="true"></div>`;
           return `
             <div class="teacher-cal-grid teacher-cal-grid-split" data-teacher-cal-grid="${createDateKey(
               date
@@ -4150,7 +4299,7 @@ const renderTeacherCalendarViewportDay = (date) => {
             teacherId
           )}">
               ${rows.join("")}
-              ${offHours}
+              ${offHoursForCol}
               ${nowLine}
               <div class="teacher-cal-events-layer">${eventsMarkup}</div>
             </div>
@@ -4193,7 +4342,9 @@ const renderTeacherCalendarViewportDay = (date) => {
     <div class="teacher-cal-day">
       ${head}
       <div class="teacher-cal-timecol">${times.join("")}</div>
-      <div class="teacher-cal-grid" data-teacher-cal-grid="${createDateKey(date)}" data-teacher-cal-start="${startHour}" data-teacher-cal-end="${endHour}">
+      <div class="teacher-cal-grid" data-teacher-cal-grid="${createDateKey(date)}" data-teacher-cal-start="${startHour}" data-teacher-cal-end="${endHour}" ${
+        currentRole === "admin" && singleTeacherId ? `data-teacher-cal-teacher="${escapeHtml(singleTeacherId)}"` : ""
+      }>
         ${rows.join("")}
         ${offHours}
         ${nowLine}
@@ -4252,7 +4403,15 @@ const renderTeacherCalendarViewportWeek = (focusDate) => {
       const dayIndex = String(date.getDay());
       const gridStartMin = startHour * 60;
       const gridEndMin = (endHour + 1) * 60;
-      const work = teacherWorkHours[dayIndex] || { enabled: true, windows: [{ start: "00:00", end: "23:59" }] };
+      let baseWorkHours = teacherWorkHours;
+      if (currentRole === "admin") {
+        const selected = getAdminSelectedTeacherIdsSet();
+        const singleSelected = selected instanceof Set && selected.size === 1 ? Array.from(selected)[0] : "";
+        const adminWork = singleSelected ? getAdminTeacherWorkHours(singleSelected) : null;
+        if (adminWork) baseWorkHours = adminWork;
+      }
+
+      const work = baseWorkHours[dayIndex] || { enabled: true, windows: [{ start: "00:00", end: "23:59" }] };
       const windows = normalizeWorkWindows(work);
       const segments = computeOffHoursSegments({ windows, gridStartMin, gridEndMin });
       const offHours = `
@@ -4261,7 +4420,7 @@ const renderTeacherCalendarViewportWeek = (focusDate) => {
             .map((seg) => {
               const top = ((seg.start - gridStartMin) / 60) * hourHeight;
               const height = ((seg.end - seg.start) / 60) * hourHeight;
-              return `<div class="teacher-cal-offhours-seg" style="top:${top}px;height:${height}px"></div>`;
+              return `<div class="teacher-cal-offhours-seg calendar-slot is-unavailable" style="top:${top}px;height:${height}px"></div>`;
             })
             .join("")}
         </div>
@@ -4303,7 +4462,15 @@ const renderTeacherCalendarViewportWeek = (focusDate) => {
 
       return `
         <div class="teacher-cal-week-col" data-teacher-cal-col="${createDateKey(date)}">
-          <div class="teacher-cal-grid" data-teacher-cal-grid="${createDateKey(date)}" data-teacher-cal-start="${startHour}" data-teacher-cal-end="${endHour}">
+          <div class="teacher-cal-grid" data-teacher-cal-grid="${createDateKey(date)}" data-teacher-cal-start="${startHour}" data-teacher-cal-end="${endHour}" ${
+            currentRole === "admin"
+              ? (() => {
+                  const selected = getAdminSelectedTeacherIdsSet();
+                  const singleSelected = selected instanceof Set && selected.size === 1 ? Array.from(selected)[0] : "";
+                  return singleSelected ? `data-teacher-cal-teacher=\"${escapeHtml(singleSelected)}\"` : "";
+                })()
+              : ""
+          }>
             ${rows.join("")}
             ${offHours}
             ${nowLine}
@@ -4390,6 +4557,11 @@ const renderTeacherCalendar = () => {
   // Any in-progress drag selection should be cleared when re-rendering the calendar view.
   clearTeacherCalendarSelection();
   refreshTeacherWorkHours();
+  if (currentRole === "admin") {
+    const selected = getAdminSelectedTeacherIdsSet();
+    const ids = selected instanceof Set ? Array.from(selected) : [];
+    if (ids.length) refreshAdminTeacherWorkHours({ teacherIds: ids });
+  }
   refreshTeacherEvents();
 
   const now = new Date();
@@ -8318,12 +8490,26 @@ document.addEventListener("mousedown", (event) => {
   clearTeacherCalendarSelection();
 
   const startMax = meta.selectableEndMin - TEACHER_CAL_MIN_DURATION_MINUTES;
-  const startMin = clampNumber(roundToNearestSlotMin(rawStart), meta.gridStartMin, startMax);
-  const endMin = clampNumber(
+  let startMin = clampNumber(roundToNearestSlotMin(rawStart), meta.gridStartMin, startMax);
+
+  const windows = getWorkWindowsForGrid({ gridEl, dateKey });
+  const window = windows ? getWorkWindowForMinute(startMin, windows) : null;
+  if (windows && !window) {
+    showTeacherCalWorkHoursTooltip({ x: event.clientX + 12, y: event.clientY + 12 });
+    gridEl.style.cursor = "not-allowed";
+    return;
+  }
+
+  let endMin = clampNumber(
     startMin + TEACHER_CAL_DEFAULT_DURATION_MINUTES,
     startMin + TEACHER_CAL_MIN_DURATION_MINUTES,
     meta.selectableEndMin
   );
+  if (window) {
+    // Keep the initial selection within the current work window.
+    endMin = Math.min(endMin, window.end);
+    if (endMin - startMin < TEACHER_CAL_MIN_DURATION_MINUTES) return;
+  }
 
   teacherCalSelection = { gridEl, dateKey, startMin, endMin, el: null };
   teacherCalDrag = { gridEl, dateKey, startMin, endMin };
@@ -8347,6 +8533,12 @@ window.addEventListener("mousemove", (event) => {
   let endMin = roundToNearestSlotMin(rawEnd);
   endMin = clampNumber(endMin, teacherCalDrag.startMin + TEACHER_CAL_MIN_DURATION_MINUTES, meta.selectableEndMin);
 
+  const windows = getWorkWindowsForGrid({ gridEl, dateKey: teacherCalDrag.dateKey });
+  const window = windows ? getWorkWindowForMinute(teacherCalDrag.startMin, windows) : null;
+  if (window) {
+    endMin = Math.min(endMin, window.end);
+  }
+
   if (endMin === teacherCalDrag.endMin) return;
   teacherCalDrag.endMin = endMin;
   if (teacherCalSelection) teacherCalSelection.endMin = endMin;
@@ -8358,6 +8550,8 @@ window.addEventListener("mouseup", () => {
   const drag = teacherCalDrag;
   teacherCalDrag = null;
   body.classList.remove("is-cal-dragging");
+  hideTeacherCalWorkHoursTooltip();
+  if (drag?.gridEl instanceof HTMLElement) drag.gridEl.style.cursor = "";
 
   const startTime = formatHmFromMinutes(drag.startMin);
   const endTime = formatHmFromMinutes(drag.endMin);
@@ -8368,6 +8562,43 @@ window.addEventListener("blur", () => {
   if (teacherCalDrag || teacherCalSelection) {
     clearTeacherCalendarSelection();
   }
+  hideTeacherCalWorkHoursTooltip();
+});
+
+document.addEventListener("mousemove", (event) => {
+  if (teacherCalDrag) return;
+  if (!isTeacherCalendarGridInteractive()) {
+    hideTeacherCalWorkHoursTooltip();
+    return;
+  }
+  if (!(event.target instanceof Element)) return;
+
+  const gridEl = event.target.closest(".teacher-cal-grid");
+  if (!(gridEl instanceof HTMLElement)) {
+    hideTeacherCalWorkHoursTooltip();
+    return;
+  }
+  if (teacherCalViewport && !teacherCalViewport.contains(gridEl)) {
+    hideTeacherCalWorkHoursTooltip();
+    return;
+  }
+
+  const dateKey = gridEl.getAttribute("data-teacher-cal-grid") || "";
+  const rawMin = calcTeacherSlotMinutesFromClientY(gridEl, event.clientY);
+  if (rawMin === null) {
+    hideTeacherCalWorkHoursTooltip();
+    return;
+  }
+  const minutes = roundToNearestSlotMin(rawMin);
+  const windows = getWorkWindowsForGrid({ gridEl, dateKey });
+  if (windows && windows.length && !isMinuteWithinWindows(minutes, windows)) {
+    showTeacherCalWorkHoursTooltip({ x: event.clientX + 12, y: event.clientY + 12 });
+    gridEl.style.cursor = "not-allowed";
+    return;
+  }
+
+  gridEl.style.cursor = "";
+  hideTeacherCalWorkHoursTooltip();
 });
 
 document.addEventListener("keydown", (event) => {
