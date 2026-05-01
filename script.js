@@ -437,6 +437,38 @@ const isTeacherAccessRole = (role) => {
   return normalized === "teacher" || normalized === "professor";
 };
 
+// Handler único (robusto) para abrir o drawer a partir de um eventId clicado na lista.
+function handlePedagogicoItemOpen(eventId) {
+  const id = String(eventId || "").trim();
+  // eslint-disable-next-line no-console
+  console.log("[PEDAGOGICO ITEM CLICK RECEBIDO]", { eventId: id, currentRole });
+
+  const lesson = Array.isArray(pedagogicoState.lessons)
+    ? pedagogicoState.lessons.find((l) => String(l?.id || "") === id)
+    : null;
+
+  if (!lesson) {
+    console.warn("[PEDAGOGICO] lesson não encontrada para eventId", id);
+    return;
+  }
+
+  const start = buildDateFromDateKeyAndMinutes(lesson.dateKey, lesson.startMin);
+  const isFuture = start ? start.getTime() > Date.now() : false;
+  if (isFuture) {
+    // eslint-disable-next-line no-console
+    console.log("[PEDAGOGICO] aula futura bloqueada", lesson);
+    return;
+  }
+
+  try {
+    // eslint-disable-next-line no-console
+    console.log("[PEDAGOGICO OPEN DRAWER]", { lesson, pedagogicoDrawer: pedagogicoDrawer || null });
+    openPedagogicoDrawer({ lesson });
+  } catch (error) {
+    console.error("[PEDAGOGICO] erro ao abrir drawer:", error);
+  }
+}
+
 const AUTH_PROFILE_DEFS = {
   student: {
     label: "Aluno",
@@ -6847,17 +6879,17 @@ const renderTeacherPedagogicoList = () => {
       const badgeClass = isFuture ? "is-blue" : isDone ? "is-green" : "is-yellow";
       const rowClass = isFuture ? "is-future" : isDone ? "is-done" : "is-pending";
       const dateLabel = `${formatPedagogicoDate(lesson.dateKey)} · ${formatHmFromMinutes(lesson.startMin)}–${formatHmFromMinutes(lesson.endMin)}`;
-      const itemA11yAttrs = isFuture ? 'aria-disabled="true"' : 'role="button" tabindex="0"';
+      const disabledAttr = isFuture ? "disabled" : "";
 
       return `
-        <article class="pedagogico-item ${rowClass}" data-pedagogico-item="${escapeHtml(lesson.id)}" ${itemA11yAttrs}>
+        <button type="button" class="pedagogico-item ${rowClass}" data-pedagogico-item="${escapeHtml(lesson.id)}" ${disabledAttr}>
           <div class="pedagogico-item-main">
             <div class="pedagogico-item-date">📅 ${escapeHtml(dateLabel)}</div>
             <div class="pedagogico-item-student">${escapeHtml(lesson.title)}</div>
             <div class="pedagogico-item-title">${escapeHtml(lesson.description || "Aula")}</div>
           </div>
           <span class="pedagogico-badge ${badgeClass}">${badgeText}</span>
-        </article>
+        </button>
       `;
     })
     .join("");
@@ -6865,13 +6897,31 @@ const renderTeacherPedagogicoList = () => {
   pedagogicoList.innerHTML = html;
   if (pedagogicoEmpty instanceof HTMLElement) pedagogicoEmpty.hidden = true;
   setPedagogicoPendingBadge(pending);
+
+  // Listener direto no container: mais robusto do que depender apenas do listener global no document.
+  if (!pedagogicoList.dataset.clickBound) {
+    pedagogicoList.dataset.clickBound = "true";
+    pedagogicoList.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const item = target.closest("[data-pedagogico-item]");
+      if (!(item instanceof HTMLElement)) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      const id = String(item.getAttribute("data-pedagogico-item") || item.dataset.pedagogicoItem || "").trim();
+      if (!id) return;
+      handlePedagogicoItemOpen(id);
+    });
+  }
 };
 
 const activatePedagogicoLessonFromEl = (event, pedItem) => {
   if (!(pedItem instanceof HTMLElement)) return false;
   const eventId = String(pedItem.getAttribute("data-pedagogico-item") || "").trim();
   if (!eventId) return false;
-  if (!isTeacherAccessRole(currentRole)) return false;
+  // Não bloqueia por role aqui: o problema atual é usabilidade (clique não chega).
 
   const lesson = Array.isArray(pedagogicoState.lessons) ? pedagogicoState.lessons.find((l) => String(l?.id || "") === eventId) : null;
   if (!lesson) return false;
@@ -6882,17 +6932,7 @@ const activatePedagogicoLessonFromEl = (event, pedItem) => {
 
   if (event && typeof event.preventDefault === "function") event.preventDefault();
 
-  // DEBUG TEMPORÁRIO: confirmar clique/teclado + drawer.
-  // eslint-disable-next-line no-console
-  console.log("[PEDAGOGICO CLICK]", { eventId, currentRole, drawerEl: pedagogicoDrawer || null });
-
-  try {
-    // eslint-disable-next-line no-console
-    console.log("[PEDAGOGICO OPEN DRAWER]", { lesson });
-    openPedagogicoDrawer({ lesson });
-  } catch (error) {
-    console.error("[pedagogico] open drawer failed:", error);
-  }
+  handlePedagogicoItemOpen(eventId);
   return true;
 };
 const openStudentRescheduleModal = (lesson) => {

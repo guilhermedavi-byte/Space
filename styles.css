@@ -12775,7 +12775,23 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   background: rgba(255, 255, 255, 0.03);
   border: 0.5px solid rgba(89, 144, 189, 0.08);
   cursor: pointer;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  appearance: none;
+  -webkit-appearance: none;
+  outline: none;
   transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+
+.pedagogico-item {
+  pointer-events: auto;
+}
+
+.pedagogico-item * {
+  /* Garante que o clique sempre "cai" no botão/card pai (evita target em span/div). */
+  pointer-events: none;
 }
 
 .pedagogico-item:hover {
@@ -12788,6 +12804,11 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   opacity: 0.45;
   cursor: not-allowed;
   pointer-events: none;
+}
+
+.pedagogico-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .pedagogico-item-date {
