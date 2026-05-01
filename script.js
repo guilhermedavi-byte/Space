@@ -640,12 +640,31 @@ const WEEKLY_CUSTOM_DAY_DEFS = [
   { key: "saturday", label: "Sábado" },
 ];
 
-const createDefaultWeeklyCustomRepeat = () => {
+const createDefaultRepeatConfig = () => {
   const days = {};
   WEEKLY_CUSTOM_DAY_DEFS.forEach((d) => {
     days[d.key] = { enabled: false, startTime: "", endTime: "" };
   });
-  return { enabled: false, type: "weekly_custom", days };
+  return { enabled: false, type: "", weekday: "", dayOfMonth: null, days };
+};
+
+const createDefaultWeeklyCustomRepeat = () => createDefaultRepeatConfig();
+
+const WEEKDAY_KEY_BY_UTC_DOW = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+
+const weekdayKeyFromDateKey = (dateKey) => {
+  const raw = String(dateKey || "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return "";
+  const [y, m, d] = raw.split("-").map((v) => Number(v));
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  return WEEKDAY_KEY_BY_UTC_DOW[dow] || "";
+};
+
+const dayOfMonthFromDateKey = (dateKey) => {
+  const raw = String(dateKey || "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return 0;
+  const d = Number(raw.slice(8, 10));
+  return Number.isFinite(d) ? d : 0;
 };
 let teacherCalSelection = null;
 let teacherCalDrag = null;
@@ -4829,11 +4848,20 @@ function syncAdminEventUserSelects() {
 		  const uploadClass = readOnly ? "upload-zone is-disabled" : "upload-zone";
 		  const repeatEnabled = Boolean(draft.recorrente);
 		  const repeatMode = repeatEnabled ? String(draft.repeatMode || "weekly") : "none";
-		  const customRepeat = draft.repeat && typeof draft.repeat === "object" ? draft.repeat : createDefaultWeeklyCustomRepeat();
+		  const customRepeat = draft.repeat && typeof draft.repeat === "object" ? draft.repeat : createDefaultRepeatConfig();
 		  const customDays = customRepeat.days && typeof customRepeat.days === "object" ? customRepeat.days : {};
+		  const repeatType = String(customRepeat.type || "").trim().toLowerCase();
 		  const weeklyLabel = (() => {
 		    const weekday = weekdayLongFromDateKey(String(draft.dateKey || ""));
 		    return weekday ? `Semanal: cada ${weekday.toLowerCase()}` : "Semanal: toda semana";
+		  })();
+		  const weeklyChoiceLabel = (() => {
+		    const weekday = weekdayLongFromDateKey(String(draft.dateKey || ""));
+		    return weekday ? `Semanalmente em ${weekday.toLowerCase()}` : "Semanalmente";
+		  })();
+		  const monthlyChoiceLabel = (() => {
+		    const day = dayOfMonthFromDateKey(String(draft.dateKey || ""));
+		    return day ? `Todo dia ${day} de cada mês` : "Todo dia deste mês";
 		  })();
 
   const selectedTeacherId = String(draft.professorId || "").trim();
@@ -4907,47 +4935,83 @@ function syncAdminEventUserSelects() {
 		            </div>
 		
 		            <div class="ce-repeat-config" data-ce-repeat-config ${repeatEnabled ? "" : "hidden"}>
-		              <div class="ce-repeat-hint">Repetir semanalmente em:</div>
-		              <div class="ce-repeat-days">
-		                ${WEEKLY_CUSTOM_DAY_DEFS.map((d) => {
-		                  const day = customDays && customDays[d.key] ? customDays[d.key] : { enabled: false, startTime: "", endTime: "" };
-		                  const enabled = Boolean(day.enabled);
-		                  const startVal = enabled && day.startTime ? day.startTime : draft.startTime || "08:00";
-		                  const endVal = enabled && day.endTime ? day.endTime : draft.endTime || "09:00";
-		                  return `
-		                    <div class="ce-repeat-day">
-		                      <label class="ce-repeat-day-check">
-		                        <input type="checkbox" data-ce-repeat-day="${escapeHtml(d.key)}" ${enabled ? "checked" : ""} ${disabledAttr} />
-		                        <span>${escapeHtml(d.label)}</span>
-		                      </label>
-		                      <div class="ce-repeat-day-times" data-ce-repeat-day-times="${escapeHtml(d.key)}" ${enabled ? "" : "hidden"}>
-		                        <label class="modal-field">
-		                          <span>Início</span>
-		                          <input class="modal-input" type="time" data-ce-repeat-start="${escapeHtml(d.key)}" value="${escapeHtml(startVal)}" ${disabledAttr} />
+		              <div class="ce-repeat-options" role="radiogroup" aria-label="Tipo de recorrência">
+		                <label class="ce-repeat-option">
+		                  <input type="radio" name="ce-repeat-type" value="weekly" data-ce-repeat-type ${
+                        repeatType === "weekly" ? "checked" : ""
+                      } ${disabledAttr} />
+		                  <span>${escapeHtml(weeklyChoiceLabel)}</span>
+		                </label>
+		                <label class="ce-repeat-option">
+		                  <input type="radio" name="ce-repeat-type" value="monthly" data-ce-repeat-type ${
+                        repeatType === "monthly" ? "checked" : ""
+                      } ${disabledAttr} />
+		                  <span>${escapeHtml(monthlyChoiceLabel)}</span>
+		                </label>
+		                <label class="ce-repeat-option">
+		                  <input type="radio" name="ce-repeat-type" value="weekly_custom" data-ce-repeat-type ${
+                        repeatType === "weekly_custom" ? "checked" : ""
+                      } ${disabledAttr} />
+		                  <span>Personalizar</span>
+		                </label>
+		              </div>
+
+		              <div class="ce-repeat-custom" data-ce-repeat-custom ${repeatType === "weekly_custom" ? "" : "hidden"}>
+		                <div class="ce-repeat-hint">Repetir semanalmente em:</div>
+		                <div class="ce-repeat-days">
+		                  ${WEEKLY_CUSTOM_DAY_DEFS.map((d) => {
+		                    const day = customDays && customDays[d.key] ? customDays[d.key] : { enabled: false, startTime: "", endTime: "" };
+		                    const enabled = Boolean(day.enabled);
+		                    const startVal = enabled && day.startTime ? day.startTime : "";
+		                    const endVal = enabled && day.endTime ? day.endTime : "";
+		                    return `
+		                      <div class="ce-repeat-day">
+		                        <label class="ce-repeat-day-check">
+		                          <input type="checkbox" data-ce-repeat-day="${escapeHtml(d.key)}" ${enabled ? "checked" : ""} ${disabledAttr} />
+		                          <span>${escapeHtml(d.label)}</span>
 		                        </label>
-		                        <label class="modal-field">
-		                          <span>Fim</span>
-		                          <input class="modal-input" type="time" data-ce-repeat-end="${escapeHtml(d.key)}" value="${escapeHtml(endVal)}" ${disabledAttr} />
-		                        </label>
+		                        <div class="ce-repeat-day-times" data-ce-repeat-day-times="${escapeHtml(d.key)}" ${enabled ? "" : "hidden"}>
+		                          <label class="modal-field">
+		                            <span>Início</span>
+		                            <input class="modal-input" type="time" data-ce-repeat-start="${escapeHtml(d.key)}" value="${escapeHtml(startVal)}" ${disabledAttr} />
+		                          </label>
+		                          <label class="modal-field">
+		                            <span>Fim</span>
+		                            <input class="modal-input" type="time" data-ce-repeat-end="${escapeHtml(d.key)}" value="${escapeHtml(endVal)}" ${disabledAttr} />
+		                          </label>
+		                        </div>
 		                      </div>
-		                    </div>
-		                  `;
-		                }).join("")}
+		                    `;
+		                  }).join("")}
+		                </div>
 		              </div>
 		            </div>
 		          `
-		          : `
-		            <div class="modal-row" style="grid-template-columns: minmax(0, 1fr);">
-		              <label class="modal-field">
-		                <span>Frequência</span>
-		                <select class="modal-input" data-ce-repeat-mode ${disabledAttr}>
-		                  <option value="none" ${repeatMode === "none" ? "selected" : ""}>Não se repete</option>
-		                  <option value="weekly" ${repeatMode === "weekly" ? "selected" : ""}>${escapeHtml(weeklyLabel)}</option>
-		                  <option value="daily" ${repeatMode === "daily" ? "selected" : ""}>Todos os dias (segunda a sábado)</option>
-		                </select>
-		              </label>
-		            </div>
-		          `
+		          : isAdmin
+		            ? `
+		                <div class="modal-row" style="grid-template-columns: minmax(0, 1fr);">
+		                  <div class="modal-field">
+		                    <span>Recorrência</span>
+		                    <div class="modal-help">${
+                          draft.recorrente
+                            ? "Evento recorrente (a edição da recorrência não está disponível)."
+                            : "Não se repete."
+                        }</div>
+		                  </div>
+		                </div>
+		              `
+		            : `
+		                <div class="modal-row" style="grid-template-columns: minmax(0, 1fr);">
+		                  <label class="modal-field">
+		                    <span>Frequência</span>
+		                    <select class="modal-input" data-ce-repeat-mode ${disabledAttr}>
+		                      <option value="none" ${repeatMode === "none" ? "selected" : ""}>Não se repete</option>
+		                      <option value="weekly" ${repeatMode === "weekly" ? "selected" : ""}>${escapeHtml(weeklyLabel)}</option>
+		                      <option value="daily" ${repeatMode === "daily" ? "selected" : ""}>Todos os dias (segunda a sábado)</option>
+		                    </select>
+		                  </label>
+		                </div>
+		              `
 		      }
 
       <label class="modal-field">
@@ -5109,6 +5173,7 @@ const validateCreateEventDraft = () => {
 	  if (String(createEventDraft.mode || "create") === "create" && createEventDraft.recorrente) {
 	    if (currentRole === "admin") {
 	      const repeat = createEventDraft.repeat && typeof createEventDraft.repeat === "object" ? createEventDraft.repeat : null;
+	      const repeatType = String(repeat?.type || "").trim().toLowerCase();
 	      const days = repeat?.days && typeof repeat.days === "object" ? repeat.days : {};
 	      const enabledKeys = WEEKLY_CUSTOM_DAY_DEFS.filter((d) => Boolean(days?.[d.key]?.enabled)).map((d) => d.key);
 
@@ -5122,7 +5187,15 @@ const validateCreateEventDraft = () => {
 	        });
 	      });
 
-	      if (!enabledKeys.length) {
+	      if (!repeatType) {
+	        hasError = true;
+	        if (errorEl instanceof HTMLElement) {
+	          errorEl.hidden = false;
+	          errorEl.textContent = "Selecione o tipo de recorrência para repetir o evento.";
+	        }
+	      } else if (repeatType !== "weekly_custom") {
+	        // weekly/monthly use the main date/time fields, nothing else is required here.
+	      } else if (!enabledKeys.length) {
 	        hasError = true;
 	        if (errorEl instanceof HTMLElement) {
 	          errorEl.hidden = false;
@@ -5251,13 +5324,20 @@ const openTeacherEventFormModalFromDraft = () => {
 	      payload.recorrente = true;
 	      if (currentRole === "admin") {
 	        const repeat = createEventDraft.repeat && typeof createEventDraft.repeat === "object" ? createEventDraft.repeat : null;
+	        const repeatType = String(repeat?.type || "").trim().toLowerCase();
 	        const daysMap = repeat?.days && typeof repeat.days === "object" ? repeat.days : {};
-	        const days = WEEKLY_CUSTOM_DAY_DEFS.filter((d) => Boolean(daysMap?.[d.key]?.enabled)).map((d) => ({
-	          weekday: d.key,
-	          startTime: String(daysMap?.[d.key]?.startTime || "").trim(),
-	          endTime: String(daysMap?.[d.key]?.endTime || "").trim(),
-	        }));
-	        payload.repeat = { enabled: true, type: "weekly_custom", days };
+	        if (repeatType === "weekly") {
+	          payload.repeat = { enabled: true, type: "weekly", weekday: weekdayKeyFromDateKey(createEventDraft.dateKey) };
+	        } else if (repeatType === "monthly") {
+	          payload.repeat = { enabled: true, type: "monthly", dayOfMonth: dayOfMonthFromDateKey(createEventDraft.dateKey) };
+	        } else if (repeatType === "weekly_custom") {
+	          const days = WEEKLY_CUSTOM_DAY_DEFS.filter((d) => Boolean(daysMap?.[d.key]?.enabled)).map((d) => ({
+	            weekday: d.key,
+	            startTime: String(daysMap?.[d.key]?.startTime || "").trim(),
+	            endTime: String(daysMap?.[d.key]?.endTime || "").trim(),
+	          }));
+	          payload.repeat = { enabled: true, type: "weekly_custom", days };
+	        }
 	      } else {
 	        payload.repeatMode = String(createEventDraft.repeatMode || "weekly");
 	      }
@@ -5443,7 +5523,7 @@ const openTeacherCreateEventModalAt = ({ dateKey, startTime, endTime } = {}) => 
 	    documents: [],
 	    recorrente: false,
 	    repeatMode: "weekly",
-	    repeat: createDefaultWeeklyCustomRepeat(),
+	    repeat: createDefaultRepeatConfig(),
 	    grupoRecorrenciaId: "",
 	    dateKey: createDateKey(date),
 	    startTime: clampTime(startTime, "09:00"),
@@ -5474,7 +5554,7 @@ const openTeacherCreateEventModal = () => {
 	    documents: [],
 	    recorrente: false,
 	    repeatMode: "weekly",
-	    repeat: createDefaultWeeklyCustomRepeat(),
+	    repeat: createDefaultRepeatConfig(),
 	    grupoRecorrenciaId: "",
 	    dateKey: createDateKey(focus),
 	    startTime: startDefault,
@@ -5511,7 +5591,7 @@ const openTeacherEventModal = ({ type, id }) => {
 	      professorId: target.professorId || "",
 	      recorrente: Boolean(target.recorrente),
 	      repeatMode: "weekly",
-	      repeat: createDefaultWeeklyCustomRepeat(),
+	      repeat: createDefaultRepeatConfig(),
 	      grupoRecorrenciaId: target.grupoRecorrenciaId || "",
 	    };
     openTeacherEventFormModalFromDraft();
@@ -5541,7 +5621,7 @@ const openTeacherEventModal = ({ type, id }) => {
 	    endTime: buildEventTimeHm(target.end),
 	    recorrente: Boolean(target.recorrente),
 	    repeatMode: "weekly",
-	    repeat: createDefaultWeeklyCustomRepeat(),
+	    repeat: createDefaultRepeatConfig(),
 	    grupoRecorrenciaId: target.grupoRecorrenciaId || "",
 	  };
 
@@ -8196,6 +8276,30 @@ document.addEventListener("input", (event) => {
         weeklyOpt.textContent = weekday ? `Semanal: cada ${weekday.toLowerCase()}` : "Semanal: toda semana";
       }
     }
+
+    // Admin repeat choice labels depend on the date.
+    if (currentRole === "admin") {
+      const weeklyRadio = modalBody.querySelector('input[data-ce-repeat-type][value="weekly"]');
+      const monthlyRadio = modalBody.querySelector('input[data-ce-repeat-type][value="monthly"]');
+      if (weeklyRadio instanceof HTMLInputElement && weeklyRadio.parentElement) {
+        const weekday = weekdayLongFromDateKey(String(target.value || ""));
+        const span = weeklyRadio.parentElement.querySelector("span");
+        if (span) span.textContent = weekday ? `Semanalmente em ${weekday.toLowerCase()}` : "Semanalmente";
+      }
+      if (monthlyRadio instanceof HTMLInputElement && monthlyRadio.parentElement) {
+        const day = dayOfMonthFromDateKey(String(target.value || ""));
+        const span = monthlyRadio.parentElement.querySelector("span");
+        if (span) span.textContent = day ? `Todo dia ${day} de cada mês` : "Todo dia deste mês";
+      }
+
+      // Keep derived values up to date.
+      if (!createEventDraft.repeat || typeof createEventDraft.repeat !== "object") {
+        createEventDraft.repeat = createDefaultRepeatConfig();
+      }
+      const type = String(createEventDraft.repeat.type || "").trim().toLowerCase();
+      if (type === "weekly") createEventDraft.repeat.weekday = weekdayKeyFromDateKey(createEventDraft.dateKey);
+      if (type === "monthly") createEventDraft.repeat.dayOfMonth = dayOfMonthFromDateKey(createEventDraft.dateKey);
+    }
     validateCreateEventDraft();
     return;
   }
@@ -8216,7 +8320,7 @@ document.addEventListener("input", (event) => {
     const dayKey = String(target.getAttribute("data-ce-repeat-start") || "").trim();
     if (dayKey) {
       if (!createEventDraft.repeat || typeof createEventDraft.repeat !== "object") {
-        createEventDraft.repeat = createDefaultWeeklyCustomRepeat();
+        createEventDraft.repeat = createDefaultRepeatConfig();
       }
       const days = createEventDraft.repeat.days && typeof createEventDraft.repeat.days === "object" ? createEventDraft.repeat.days : {};
       if (!days[dayKey]) days[dayKey] = { enabled: true, startTime: "", endTime: "" };
@@ -8231,7 +8335,7 @@ document.addEventListener("input", (event) => {
     const dayKey = String(target.getAttribute("data-ce-repeat-end") || "").trim();
     if (dayKey) {
       if (!createEventDraft.repeat || typeof createEventDraft.repeat !== "object") {
-        createEventDraft.repeat = createDefaultWeeklyCustomRepeat();
+        createEventDraft.repeat = createDefaultRepeatConfig();
       }
       const days = createEventDraft.repeat.days && typeof createEventDraft.repeat.days === "object" ? createEventDraft.repeat.days : {};
       if (!days[dayKey]) days[dayKey] = { enabled: true, startTime: "", endTime: "" };
@@ -8264,7 +8368,7 @@ document.addEventListener("change", (event) => {
     const enabled = Boolean(target.checked);
     createEventDraft.recorrente = enabled;
     if (!createEventDraft.repeat || typeof createEventDraft.repeat !== "object") {
-      createEventDraft.repeat = createDefaultWeeklyCustomRepeat();
+      createEventDraft.repeat = createDefaultRepeatConfig();
     }
     createEventDraft.repeat.enabled = enabled;
 
@@ -8272,9 +8376,47 @@ document.addEventListener("change", (event) => {
     if (cfg instanceof HTMLElement) cfg.hidden = !enabled;
 
     if (!enabled) {
-      // When turning off, keep the user's previous day config but ignore it on save.
+      // Clear the selection to keep the UI compact and predictable.
+      createEventDraft.repeat.type = "";
+      createEventDraft.repeat.weekday = "";
+      createEventDraft.repeat.dayOfMonth = null;
+      const days = createEventDraft.repeat.days && typeof createEventDraft.repeat.days === "object" ? createEventDraft.repeat.days : {};
+      WEEKLY_CUSTOM_DAY_DEFS.forEach((d) => {
+        if (!days[d.key]) days[d.key] = { enabled: false, startTime: "", endTime: "" };
+        days[d.key].enabled = false;
+        days[d.key].startTime = "";
+        days[d.key].endTime = "";
+        const times = modalBody.querySelector(`[data-ce-repeat-day-times="${CSS.escape(d.key)}"]`);
+        if (times instanceof HTMLElement) times.hidden = true;
+      });
+      createEventDraft.repeat.days = days;
+
+      const custom = modalBody.querySelector("[data-ce-repeat-custom]");
+      if (custom instanceof HTMLElement) custom.hidden = true;
+
       validateCreateEventDraft();
       return;
+    }
+
+    validateCreateEventDraft();
+    return;
+  }
+
+  if (target instanceof HTMLInputElement && target.matches("[data-ce-repeat-type]")) {
+    const value = String(target.value || "").trim().toLowerCase();
+    if (!createEventDraft.repeat || typeof createEventDraft.repeat !== "object") {
+      createEventDraft.repeat = createDefaultRepeatConfig();
+    }
+    createEventDraft.repeat.type = value === "monthly" ? "monthly" : value === "weekly_custom" ? "weekly_custom" : value === "weekly" ? "weekly" : "";
+    if (createEventDraft.repeat.type === "weekly") {
+      createEventDraft.repeat.weekday = weekdayKeyFromDateKey(createEventDraft.dateKey);
+    } else if (createEventDraft.repeat.type === "monthly") {
+      createEventDraft.repeat.dayOfMonth = dayOfMonthFromDateKey(createEventDraft.dateKey);
+    }
+
+    const custom = modalBody.querySelector("[data-ce-repeat-custom]");
+    if (custom instanceof HTMLElement) {
+      custom.hidden = createEventDraft.repeat.type !== "weekly_custom";
     }
 
     validateCreateEventDraft();
@@ -8285,19 +8427,25 @@ document.addEventListener("change", (event) => {
     const dayKey = String(target.getAttribute("data-ce-repeat-day") || "").trim();
     if (!dayKey) return;
     if (!createEventDraft.repeat || typeof createEventDraft.repeat !== "object") {
-      createEventDraft.repeat = createDefaultWeeklyCustomRepeat();
+      createEventDraft.repeat = createDefaultRepeatConfig();
     }
     const days = createEventDraft.repeat.days && typeof createEventDraft.repeat.days === "object" ? createEventDraft.repeat.days : {};
     if (!days[dayKey]) days[dayKey] = { enabled: false, startTime: "", endTime: "" };
     days[dayKey].enabled = Boolean(target.checked);
     if (days[dayKey].enabled) {
-      // Default times from the base event fields.
-      if (!days[dayKey].startTime) days[dayKey].startTime = String(createEventDraft.startTime || "08:00");
-      if (!days[dayKey].endTime) days[dayKey].endTime = String(createEventDraft.endTime || "09:00");
+      // Keep empty by default (the user can define per-day hours).
       const startEl = modalBody.querySelector(`[data-ce-repeat-start="${CSS.escape(dayKey)}"]`);
       const endEl = modalBody.querySelector(`[data-ce-repeat-end="${CSS.escape(dayKey)}"]`);
       if (startEl instanceof HTMLInputElement) startEl.value = days[dayKey].startTime;
       if (endEl instanceof HTMLInputElement) endEl.value = days[dayKey].endTime;
+    } else {
+      // Clear when disabling.
+      days[dayKey].startTime = "";
+      days[dayKey].endTime = "";
+      const startEl = modalBody.querySelector(`[data-ce-repeat-start="${CSS.escape(dayKey)}"]`);
+      const endEl = modalBody.querySelector(`[data-ce-repeat-end="${CSS.escape(dayKey)}"]`);
+      if (startEl instanceof HTMLInputElement) startEl.value = "";
+      if (endEl instanceof HTMLInputElement) endEl.value = "";
     }
     createEventDraft.repeat.days = days;
 

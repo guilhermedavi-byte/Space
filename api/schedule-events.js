@@ -162,6 +162,54 @@ const buildCustomWeeklyOccurrences = ({ dateKey, days }) => {
   return out;
 };
 
+const parseDateKeyParts = (dateKey) => {
+  const raw = String(dateKey || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+  const y = Number(raw.slice(0, 4));
+  const m = Number(raw.slice(5, 7));
+  const d = Number(raw.slice(8, 10));
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return null;
+  return { y, m, d };
+};
+
+const toDateKey = (y, m, d) => {
+  const yy = String(y).padStart(4, "0");
+  const mm = String(m).padStart(2, "0");
+  const dd = String(d).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
+};
+
+const lastDayOfMonthUtc = (y, m1) => {
+  // m1 is 1-12
+  return new Date(Date.UTC(y, m1, 0)).getUTCDate();
+};
+
+const buildMonthlyOccurrences = ({ dateKey, dayOfMonth }) => {
+  const parts = parseDateKeyParts(dateKey);
+  if (!parts) return [];
+  const dom = clampInt(Number(dayOfMonth) || parts.d, 1, 31);
+
+  const baseMs = Date.UTC(parts.y, parts.m - 1, parts.d);
+  const endMs = baseMs + 84 * 24 * 60 * 60 * 1000; // 12 weeks window (3 months-ish)
+
+  const out = [];
+  for (let mo = 0; mo < 12; mo += 1) {
+    const totalMonth = (parts.m - 1) + mo;
+    const y = parts.y + Math.floor(totalMonth / 12);
+    const m0 = totalMonth % 12; // 0-11
+    const m1 = m0 + 1;
+    const last = lastDayOfMonthUtc(y, m1);
+    const d = Math.min(dom, last);
+    const key = toDateKey(y, m1, d);
+    if (!isValidDateKey(key)) continue;
+    const ms = Date.UTC(y, m0, d);
+    if (ms < baseMs) continue;
+    if (ms > endMs) break;
+    out.push(key);
+  }
+  return out.length ? out : [dateKey];
+};
+
 const decodeAulaDoc = (doc) => {
   if (!doc || typeof doc !== "object") return null;
   const id = getDocIdFromName(doc.name);
@@ -465,15 +513,15 @@ module.exports = async (req, res) => {
   }
 
   const repeatObj = body?.repeat && typeof body.repeat === "object" ? body.repeat : null;
-  const isWeeklyCustom =
-    isCreate &&
-    role === "admin" &&
-    Boolean(repeatObj?.enabled) &&
-    String(repeatObj?.type || "").trim().toLowerCase() === "weekly_custom" &&
-    Array.isArray(repeatObj?.days);
+  const repeatEnabled = Boolean(repeatObj?.enabled);
+  const repeatType = String(repeatObj?.type || "").trim().toLowerCase();
 
-  const recorrente = isWeeklyCustom ? true : Boolean(body?.recorrente);
-  const repeatMode = normalizeRepeatMode(body?.repeatMode || body?.repeat || body?.recurrenceMode);
+  const isWeeklyCustom = isCreate && role === "admin" && repeatEnabled && repeatType === "weekly_custom" && Array.isArray(repeatObj?.days);
+  const isMonthly = isCreate && role === "admin" && repeatEnabled && repeatType === "monthly";
+  const isWeeklySimple = isCreate && role === "admin" && repeatEnabled && repeatType === "weekly";
+
+  const recorrente = (isWeeklyCustom || isMonthly || isWeeklySimple) ? true : Boolean(body?.recorrente);
+  const repeatMode = normalizeRepeatMode(body?.repeatMode || body?.recurrenceMode);
   const grupoRecorrenciaId = String(body?.grupoRecorrenciaId || "").trim() || (recorrente && isCreate ? buildId("grp") : "");
 
   const alunoIdProvided = Object.prototype.hasOwnProperty.call(body || {}, "alunoId") || Object.prototype.hasOwnProperty.call(body || {}, "studentId");
@@ -572,11 +620,23 @@ module.exports = async (req, res) => {
         }
       }
 
+      const monthlyOccurrences = isMonthly ? buildMonthlyOccurrences({ dateKey, dayOfMonth: repeatObj?.dayOfMonth }) : [];
+
       const occurrences = isWeeklyCustom
         ? customOccurrences.map((row) => row.dateKey)
-        : buildOccurrences({ dateKey, recorrente, repeatMode });
+        : isMonthly
+          ? monthlyOccurrences
+          : buildOccurrences({ dateKey, recorrente, repeatMode });
       const createdIds = [];
-      const repeatMeta = isWeeklyCustom ? { repeatType: "weekly_custom", repeatDays: repeatObj?.days || [] } : null;
+      const repeatMeta = repeatEnabled
+        ? repeatType === "weekly_custom"
+          ? { repeatType: "weekly_custom", repeatDays: repeatObj?.days || [] }
+          : repeatType === "monthly"
+            ? { repeatType: "monthly", repeatDayOfMonth: clampInt(repeatObj?.dayOfMonth || 1, 1, 31) }
+            : repeatType === "weekly"
+              ? { repeatType: "weekly", repeatWeekday: String(repeatObj?.weekday || "") || null }
+              : null
+        : null;
 
       for (const key of occurrences) {
         if (!isValidDateKey(key)) continue;
