@@ -5298,6 +5298,42 @@ const validateCreateEventDraft = () => {
     errorEl.textContent = errorEl.textContent || "Preencha os campos obrigatórios para salvar.";
   }
 
+  // TEMP DEBUG: helps identify which validation is blocking the Save button in Admin modal.
+  // Logs once per modal open to avoid spamming the console on every keypress.
+  if (currentRole === "admin" && !createEventDraft.__saveDebugLogged) {
+    createEventDraft.__saveDebugLogged = true;
+    const selectedAluno = String(createEventDraft.alunoId || "").trim();
+    const selectedProfessor = String(createEventDraft.professorId || "").trim();
+    const titulo = String(createEventDraft.title || "").trim();
+    const data = String(createEventDraft.dateKey || "").trim();
+    const inicio = String(createEventDraft.startTime || "").trim();
+    const fim = String(createEventDraft.endTime || "").trim();
+
+    const requiresLinks = currentRole === "admin" && createEventDraft.eventType === "lesson";
+    const repeatEnabled = Boolean(createEventDraft.recorrente);
+    const repeatType = String(createEventDraft?.repeat?.type || "").trim().toLowerCase();
+    const docsLoading = (createEventDraft.documents || []).some((doc) => doc && doc.loading);
+
+    const isSubmitting = Boolean(modalPrimary?.disabled) && !hasError;
+
+    // eslint-disable-next-line no-console
+    console.log("[SALVAR AULA DEBUG]", {
+      aluno: selectedAluno,
+      professor: selectedProfessor,
+      titulo,
+      data,
+      inicio,
+      fim,
+      isValid: !hasError,
+      isSubmitting,
+      // extra visibility (helps pinpoint which branch is failing)
+      requiresLinks,
+      repeatEnabled,
+      repeatType,
+      docsLoading,
+    });
+  }
+
   setModalPrimaryDisabled(hasError);
   return !hasError;
 };
