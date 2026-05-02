@@ -6243,11 +6243,7 @@ const PED_RISCO_EVASAO = [
 
 const sanitizeLessonLogDraft = (raw = {}) => {
   const src = raw && typeof raw === "object" ? raw : {};
-  const statusRaw = String(src.statusAula || "").trim().toLowerCase();
-  const statusAula =
-    statusRaw === "falta" || statusRaw === "falta_do_aluno" || statusRaw === "falta do aluno"
-      ? "falta_aluno"
-      : statusRaw;
+  const statusAula = normalizePedagogicoStatus(src.statusAula);
   return {
     statusAula, // realizada | falta_aluno | remarcada
     conteudoTrabalhado: String(src.conteudoTrabalhado || src.oQueFoiTrabalhado || "").trim(),
@@ -6298,6 +6294,19 @@ const computePedPrecisaIntervencao = (avisos) => {
   const arr = Array.isArray(avisos) ? avisos : [];
   const negative = new Set(["🔴 Risco de cancelamento", "🟡 Aluno desmotivado", "🟡 Frequência caindo", "🟡 Não está evoluindo"]);
   return arr.some((a) => negative.has(String(a || "").trim()));
+};
+
+const normalizePedagogicoStatus = (value) => {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  if (normalized === "realizada" || normalized === "realizado" || normalized === "aula_realizada") return "realizada";
+  if (normalized === "falta do aluno" || normalized === "falta_aluno" || normalized === "falta" || normalized === "no_show") return "falta_aluno";
+  if (normalized === "remarcada" || normalized === "remarcado" || normalized === "rescheduled") return "remarcada";
+  return "realizada";
 };
 
 const renderPedSelectOptions = (options, selected) => {
@@ -6379,7 +6388,7 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
     pedagogicoDrawerTitle.textContent = "Registro da aula";
   }
 
-  const status = String(draft.statusAula || "").trim().toLowerCase();
+  const status = normalizePedagogicoStatus(draft.statusAula);
 
   pedagogicoFormContainer.innerHTML = `
     <div class="ped-form" data-ped-form>
@@ -6542,7 +6551,11 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
 
   const applyStatusUi = () => {
     const statusEl = formRoot.querySelector("[data-ped-status]");
-    const s = statusEl instanceof HTMLSelectElement ? String(statusEl.value || "").trim().toLowerCase() : "";
+    const rawValue = statusEl instanceof HTMLSelectElement ? String(statusEl.value || "") : "";
+    const s = normalizePedagogicoStatus(rawValue);
+    // debug temporario
+    // eslint-disable-next-line no-console
+    console.log("[PED STATUS CHANGE]", { rawValue, normalizedStatus: s });
     // Defensive: if the status is one of our supported values, always ensure the matching block becomes visible.
     // This avoids regressions where the change event fires but the block never gets "is-shown".
     const dividerEl = formRoot.querySelector("[data-ped-divider]");
@@ -6555,6 +6568,11 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
       ["falta_aluno", formRoot.querySelector('[data-ped-block="falta_aluno"]')],
       ["remarcada", formRoot.querySelector('[data-ped-block="remarcada"]')],
     ];
+    // eslint-disable-next-line no-console
+    console.log("[PED FORM RENDER STATUS]", {
+      statusAula: s,
+      blocks: blocks.map(([k, el]) => ({ k, found: Boolean(el) })),
+    });
     blocks.forEach(([key, el]) => {
       if (!(el instanceof HTMLElement)) return;
       const show = s === key;
@@ -6565,6 +6583,7 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
       }
       // Always unhide and ensure 'is-shown' is present for the active block.
       el.hidden = false;
+      el.classList.add("is-shown");
       // fadeUp cascade
       const children = Array.from(el.querySelectorAll(".ped-field, .ped-grid2, .ped-infobox, .ped-multisel, .ped-multisel-wrap"));
       children.forEach((c, idx) => {
@@ -6811,11 +6830,7 @@ const readPedagogicoDraftFromDom = () => {
     return "";
   };
 
-  const statusAulaRaw = getField("statusAula").trim().toLowerCase();
-  const statusAula =
-    statusAulaRaw === "falta" || statusAulaRaw === "falta_do_aluno" || statusAulaRaw === "falta do aluno"
-      ? "falta_aluno"
-      : statusAulaRaw;
+  const statusAula = normalizePedagogicoStatus(getField("statusAula"));
   let avisosCoordenacao = [];
   try {
     avisosCoordenacao = normalizePedAvisos(JSON.parse(String(getField("avisosCoordenacao") || "[]")));

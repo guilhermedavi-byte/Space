@@ -12962,6 +12962,7 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
   display: flex;
   flex-direction: column;
+  overflow: hidden; /* evita "faixa" vazia fora do corpo rolavel */
 }
 
 .pedagogico-drawer.is-open .pedagogico-drawer-inner {
@@ -13003,13 +13004,15 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 }
 
 .pedagogico-drawer-body {
+  flex: 1 1 auto;
+  min-height: 0; /* necessário para scroll funcionar dentro de flex */
   padding: 0;
-  overflow: visible; /* permite dropdowns do drawer extrapolarem sem serem cortados */
+  overflow: hidden; /* o scroll fica no .ped-form */
 }
 
 /* Drawer (novo) */
 .ped-form {
-  padding: 18px 20px 28px;
+  padding: 18px 20px 12px;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -13017,7 +13020,9 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 
 /* Mantem scroll do drawer no container interno do formulario, sem cortar dropdowns */
 .ped-form {
-  max-height: calc(100vh - 72px);
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
