@@ -6071,6 +6071,7 @@ let pedagogicoState = {
 let pedagogicoActive = null; // { lesson, existing }
 let pedagogicoDirty = false;
 let pedagogicoAutosaveTimer = null;
+let pedagogicoCleanupFns = [];
 
 const formatPedagogicoDate = (dateKey) => {
   const d = parseDateKey(dateKey);
@@ -6108,6 +6109,14 @@ const clearPedagogicoAutosaveTimer = () => {
 };
 
 const closePedagogicoDrawer = () => {
+  pedagogicoCleanupFns.forEach((fn) => {
+    try {
+      if (typeof fn === "function") fn();
+    } catch {
+      // ignore
+    }
+  });
+  pedagogicoCleanupFns = [];
   if (pedagogicoDrawer instanceof HTMLElement) {
     pedagogicoDrawer.classList.remove("is-open");
     window.setTimeout(() => {
@@ -6120,61 +6129,65 @@ const closePedagogicoDrawer = () => {
   clearPedagogicoAutosaveTimer();
 };
 
-const sanitizeLessonLogDraft = (raw = {}) => {
-  const src = raw && typeof raw === "object" ? raw : {};
-  const engCandidate = String(src.engajamento || "").trim().toLowerCase();
-  const engFallback = String(src.engajamentoNivel || "").trim().toLowerCase();
-  const engajamento = ["alto", "medio", "baixo"].includes(engCandidate) ? engCandidate : engFallback;
-  return {
-    statusAula: String(src.statusAula || "").trim().toLowerCase(), // realizada | falta | remarcada | cancelada
-    motivoNaoRealizada: String(src.motivoNaoRealizada || "").trim().toLowerCase(),
-    motivoNaoRealizadaOutro: String(src.motivoNaoRealizadaOutro || ""),
-    // Novo formulário executivo: engajamento (alto | medio | baixo).
-    // Compatibilidade: logs antigos podem ter engajamentoNivel.
-    engajamento, // alto | medio | baixo
-    evolucao: String(src.evolucao || "").trim().toLowerCase(), // evoluiu | estavel | regrediu
-    experienciaAula: String(src.experienciaAula || "").trim().toLowerCase(), // boa | atencao | ruim
-    riscoEvasao: String(src.riscoEvasao || "").trim().toLowerCase(), // baixo | medio | alto
-    motivoRisco: String(src.motivoRisco || "").trim().toLowerCase(),
-    motivoRiscoOutro: String(src.motivoRiscoOutro || ""),
-    acaoCoordenacao: String(src.acaoCoordenacao || "").trim().toLowerCase(), // nenhuma | ...
-    resumoAula: String(src.resumoAula || ""),
-    observacaoOpcional: String(src.observacaoOpcional || ""),
-  };
+const AVISOS_COORDENACAO = [
+  { label: "🔴 Risco de cancelamento", color: "red" },
+  { label: "🟡 Aluno desmotivado", color: "yellow" },
+  { label: "🟡 Frequência caindo", color: "yellow" },
+  { label: "🟡 Não está evoluindo", color: "yellow" },
+  { label: "🟢 Muito satisfeito", color: "green" },
+  { label: "🟢 Quer mais aulas", color: "green" },
+  { label: "🟢 Potencial indicação", color: "green" },
+];
+
+const PED_MOTIVO_FALTA = [
+  ["esqueceu", "Esqueceu a aula"],
+  ["atrasou_trabalho", "Se atrasou no trabalho"],
+  ["compromisso_ultima_hora", "Compromisso de última hora"],
+  ["saude", "Problema de saúde"],
+  ["tecnico", "Problema técnico"],
+  ["viagem", "Viagem"],
+  ["familiar", "Problema familiar"],
+  ["reagendou_antecedencia", "Reagendou com antecedência"],
+  ["nao_informou", "Não informou o motivo"],
+];
+
+const PED_MOTIVO_REMARCACAO = [
+  ["pedido_aluno", "Pedido do aluno"],
+  ["pedido_professor", "Pedido do professor"],
+  ["imprevisto", "Imprevisto"],
+  ["nao_informou", "Não informou"],
+];
+
+const normalizeAvisosSelection = (value) => {
+  const arr = Array.isArray(value) ? value : [];
+  const allowed = new Set(AVISOS_COORDENACAO.map((a) => a.label));
+  const out = [];
+  arr.forEach((item) => {
+    const label = String(item || "").trim();
+    if (allowed.has(label) && !out.includes(label)) out.push(label);
+  });
+  return out;
 };
 
-const PED_MOTIVO_NAO_REALIZADA = [
-  ["aluno_faltou_sem_avisar", "Aluno faltou sem avisar"],
-  ["aluno_avisou_em_cima_da_hora", "Aluno avisou em cima da hora"],
-  ["aluno_pediu_remarcacao_com_antecedencia", "Aluno pediu remarcação com antecedência"],
-  ["professor_precisou_remarcar", "Professor precisou remarcar"],
-  ["conflito_de_horario", "Conflito de horário"],
-  ["internet_aluno", "Problema de internet do aluno"],
-  ["internet_professor", "Problema de internet do professor"],
-  ["plataforma_link", "Problema na plataforma/link de acesso"],
-  ["dificuldade_acesso", "Aluno com dificuldade para acessar a aula"],
-  ["cancelada_adm", "Aula cancelada administrativamente"],
-  ["outro", "Outro"],
-];
+const clampRating = (value) => clampInt(Number(value) || 0, 0, 5, 0);
 
-const PED_MOTIVO_RISCO = [
-  ["faltas_remarcacoes", "Faltas/remarcações"],
-  ["baixo_engajamento", "Baixo engajamento"],
-  ["nao_percebe_evolucao", "Não percebe evolução"],
-  ["dificuldade_alta", "Dificuldade alta"],
-  ["questao_financeira", "Questão financeira"],
-  ["insatisfacao", "Insatisfação"],
-  ["outro", "Outro"],
-];
-
-const PED_ACAO_COORDENACAO = [
-  ["nenhuma", "Nenhuma"],
-  ["acompanhar_aluno", "Acompanhar aluno"],
-  ["falar_com_aluno", "Falar com aluno"],
-  ["ajustar_nivel_plano", "Ajustar nível/plano"],
-  ["revisar_professor_horario", "Revisar professor/horário"],
-  ["acionar_retencao", "Acionar retenção"],
-];
+const sanitizeLessonLogDraft = (raw = {}) => {
+  const src = raw && typeof raw === "object" ? raw : {};
+  return {
+    statusAula: String(src.statusAula || "").trim().toLowerCase(), // realizada | falta | remarcada
+    oQueFoiTrabalhado: String(src.oQueFoiTrabalhado || "").trim(),
+    engajamento: clampRating(src.engajamento),
+    evolucao: clampRating(src.evolucao),
+    humorAluno: String(src.humorAluno || "").trim().toLowerCase(), // animado | neutro | cansado | ansioso
+    proximaAula: String(src.proximaAula || "").trim(),
+    avisos: normalizeAvisosSelection(src.avisos),
+    observacoesInternas: String(src.observacoesInternas || "").trim(),
+    motivoFalta: String(src.motivoFalta || "").trim().toLowerCase(),
+    motivoRemarcacao: String(src.motivoRemarcacao || "").trim().toLowerCase(),
+    novaDataRemarcacao: String(src.novaDataRemarcacao || "").trim(),
+    novoHorarioRemarcacao: String(src.novoHorarioRemarcacao || "").trim(),
+  };
+};
 
 const renderPedSelectOptions = (options, selected) => {
   const sel = String(selected || "");
@@ -6184,26 +6197,40 @@ const renderPedSelectOptions = (options, selected) => {
     .join("");
 };
 
-const renderPedSegment = ({ name, value, options, tone = "blue" } = {}) => {
-  const v = String(value || "").trim().toLowerCase();
-  const opts = Array.isArray(options) ? options : [];
+const renderStars = ({ name, value } = {}) => {
+  const v = clampRating(value);
   return `
-    <div class="pedagogico-seg" data-ped-seg="${escapeHtml(String(name || ""))}" data-tone="${escapeHtml(String(tone || "blue"))}">
-      <input type="hidden" data-ped-field="${escapeHtml(String(name || ""))}" value="${escapeHtml(v)}" />
-      ${opts
+    <div class="ped-stars" data-ped-stars="${escapeHtml(String(name || ""))}">
+      <input type="hidden" data-ped-field="${escapeHtml(String(name || ""))}" value="${escapeHtml(String(v))}" />
+      ${[1, 2, 3, 4, 5]
+        .map((n) => `<button type="button" class="ped-star ${n <= v ? "on" : ""}" data-ped-star="${n}" aria-label="${n} estrelas">★</button>`)
+        .join("")}
+    </div>
+  `;
+};
+
+const renderHumorChips = (value) => {
+  const v = String(value || "").trim().toLowerCase();
+  const chips = [
+    ["animado", "😊 Animado"],
+    ["neutro", "😐 Neutro"],
+    ["cansado", "😴 Cansado"],
+    ["ansioso", "😰 Ansioso"],
+  ];
+  return `
+    <div class="ped-chips" data-ped-chips="humorAluno">
+      <input type="hidden" data-ped-field="humorAluno" value="${escapeHtml(v)}" />
+      ${chips
         .map(([key, label]) => {
-          const k = String(key || "").trim().toLowerCase();
-          const active = v === k;
-          return `<button type="button" class="pedagogico-seg-btn ${active ? "is-active" : ""}" data-ped-seg-opt="${escapeHtml(
-            k
-          )}">${escapeHtml(String(label))}</button>`;
+          const on = v === key;
+          return `<button type="button" class="ped-chip ${on ? "on" : ""}" data-ped-chip="${escapeHtml(key)}">${escapeHtml(label)}</button>`;
         })
         .join("")}
     </div>
   `;
 };
 
-  const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
+const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
   if (!(pedagogicoFormContainer instanceof HTMLElement)) return;
   const safeLesson = lesson && typeof lesson === "object" ? lesson : {};
   const draft = sanitizeLessonLogDraft(existingLog?.payload || {});
@@ -6212,155 +6239,205 @@ const renderPedSegment = ({ name, value, options, tone = "blue" } = {}) => {
     pedagogicoDrawerTitle.textContent = "Registro da aula";
   }
 
+  const durationMin = clampInt(Number(safeLesson.endMin) - Number(safeLesson.startMin), 5, 240, 30);
   const status = String(draft.statusAula || "").trim().toLowerCase();
-  const statusSet = Boolean(status);
+
+  const pillToneForStatus = (s) => {
+    if (s === "realizada") return "green";
+    if (s === "falta") return "red";
+    if (s === "remarcada") return "yellow";
+    return "";
+  };
+
+  const computeProgress = (d) => {
+    const s = String(d?.statusAula || "").trim().toLowerCase();
+    if (!s) return 0;
+    if (s === "realizada") {
+      const req = [
+        String(d.oQueFoiTrabalhado || "").trim(),
+        d.engajamento > 0 ? "1" : "",
+        d.evolucao > 0 ? "1" : "",
+        String(d.humorAluno || "").trim(),
+        String(d.proximaAula || "").trim(),
+      ];
+      const filled = req.filter(Boolean).length;
+      return clampNumber((filled / req.length) * 100, 8, 100);
+    }
+    if (s === "falta") {
+      const req = [String(d.motivoFalta || "").trim()];
+      const filled = req.filter(Boolean).length;
+      return clampNumber((filled / req.length) * 100, 20, 100);
+    }
+    if (s === "remarcada") {
+      const req = [String(d.motivoRemarcacao || "").trim(), String(d.novaDataRemarcacao || "").trim(), String(d.novoHorarioRemarcacao || "").trim()];
+      const filled = req.filter(Boolean).length;
+      return clampNumber((filled / req.length) * 100, 12, 100);
+    }
+    return 0;
+  };
+
+  const progress = computeProgress(draft);
+  const statusPillTone = pillToneForStatus(status);
+
+  const renderAvisosDropdown = () => {
+    const selected = normalizeAvisosSelection(draft.avisos);
+    const selectedCount = selected.length;
+    const triggerText = selectedCount ? `${selectedCount} avisos selecionados` : "Nenhum aviso";
+    const badgeHidden = selectedCount ? "" : "hidden";
+    const pillsHtml = selected
+      .map((label) => {
+        const def = AVISOS_COORDENACAO.find((a) => a.label === label);
+        const tone = def?.color || "yellow";
+        return `<span class="ped-pill ped-pill-${escapeHtml(tone)}">${escapeHtml(label)}</span>`;
+      })
+      .join("");
+    const itemsHtml = AVISOS_COORDENACAO.map((a) => {
+      const on = selected.includes(a.label);
+      return `
+        <div class="ped-dd-item ${on ? `on-${escapeHtml(a.color)}` : ""}" data-ped-aviso-item="${escapeHtml(a.label)}">
+          <div class="ped-dd-check">${on ? "✓" : ""}</div>
+          <div class="ped-dd-label">${escapeHtml(a.label)}</div>
+        </div>
+      `;
+    }).join("");
+    return `
+      <div class="ped-field ped-multisel" data-ped-multisel>
+        <div class="ped-label">Avisos para a coordenação</div>
+        <input type="hidden" data-ped-field="avisos" value="${escapeHtml(JSON.stringify(selected))}" />
+        <div class="ped-multisel-wrap">
+          <button type="button" class="ped-multisel-trigger" data-ped-multisel-trigger>${escapeHtml(triggerText)}</button>
+          <span class="ped-multisel-badge" data-ped-multisel-badge ${badgeHidden}>${escapeHtml(String(selectedCount))}</span>
+          <div class="ped-multisel-dropdown" data-ped-multisel-dropdown hidden>
+            ${itemsHtml}
+          </div>
+        </div>
+        <div class="ped-pills" data-ped-multisel-pills>${pillsHtml}</div>
+      </div>
+    `;
+  };
 
   pedagogicoFormContainer.innerHTML = `
-    <div class="pedagogico-form is-compact" data-ped-form>
-      <div class="pedagogico-meta">
-        <div class="pedagogico-meta-title">${escapeHtml(studentNameRaw)}</div>
-        <div class="pedagogico-meta-sub">${escapeHtml(`${formatPedagogicoDate(safeLesson.dateKey)} • ${formatHmFromMinutes(
-          safeLesson.startMin
-        )}–${formatHmFromMinutes(safeLesson.endMin)}`)}</div>
-      </div>
-      <div class="pedagogico-section">
-        <h3 class="pedagogico-section-title">Status da aula</h3>
-        <div class="pedagogico-field">
-          <div class="pedagogico-status-row">
-            ${[
-              ["realizada", "Realizada"],
-              ["falta", "Falta do aluno"],
-              ["remarcada", "Remarcada"],
-              ["cancelada", "Cancelada"],
-            ]
-              .map(([val, label]) => {
-                const active = status === val;
-                return `<button type="button" class="status-btn ${active ? `is-selected selected-${escapeHtml(val)}` : ""}" data-ped-status-btn="${escapeHtml(
-                  val
-                )}">${escapeHtml(label)}</button>`;
-              })
-              .join("")}
-          </div>
-          <div class="pedagogico-help" data-ped-status-help ${statusSet ? "hidden" : ""}>Selecione o status para continuar.</div>
-          <input type="hidden" data-ped-hidden="statusAula" value="${escapeHtml(status)}" />
-        </div>
-
-        <div class="pedagogico-field" data-ped-nao-realizada hidden>
-          <label class="pedagogico-label">MOTIVO (AULA NÃO REALIZADA) <span class="pedagogico-required">*</span></label>
-          <select class="pedagogico-input" data-ped-field="motivoNaoRealizada">
-            <option value="" ${draft.motivoNaoRealizada ? "" : "selected"}>Selecione</option>
-            ${renderPedSelectOptions(PED_MOTIVO_NAO_REALIZADA, draft.motivoNaoRealizada)}
-          </select>
-          <label class="pedagogico-field" data-ped-outro-wrap="motivoNaoRealizadaOutro" hidden>
-            <span class="pedagogico-label">DESCREVA O MOTIVO <span class="pedagogico-required">*</span></span>
-            <input class="pedagogico-input" type="text" data-ped-field="motivoNaoRealizadaOutro" value="${escapeHtml(
-              draft.motivoNaoRealizadaOutro
-            )}" maxlength="120" placeholder="Descreva o motivo..." />
-          </label>
-          <label class="pedagogico-field">
-            <span class="pedagogico-label">OBSERVAÇÃO (OPCIONAL)</span>
-            <input class="pedagogico-input" type="text" data-ped-field="observacaoOpcional" value="${escapeHtml(
-              draft.observacaoOpcional
-            )}" maxlength="160" placeholder="Observação curta..." />
-          </label>
-        </div>
+    <div class="ped-form" data-ped-form data-ped-duration="${escapeHtml(String(durationMin))}">
+      <div class="ped-progress" aria-hidden="true">
+        <div class="ped-progress-bar" style="width:${escapeHtml(String(progress.toFixed(0)))}%"></div>
       </div>
 
-      <div class="pedagogico-divider"></div>
+      <div class="ped-head">
+        <div class="ped-head-name">${escapeHtml(studentNameRaw)}</div>
+        <div class="ped-head-sub">${escapeHtml(`${formatPedagogicoDate(safeLesson.dateKey)} · ${formatHmFromMinutes(safeLesson.startMin)}–${formatHmFromMinutes(
+          safeLesson.endMin
+        )}`)}</div>
+      </div>
 
-      <div class="pedagogico-section pedagogico-reveal" data-ped-block="executivo" hidden>
-        <h3 class="pedagogico-section-title">Check-in executivo</h3>
-
-        <div class="pedagogico-field" data-ped-realizada-only>
-          <span class="pedagogico-label">ENGAJAMENTO DO ALUNO <span class="pedagogico-required">*</span></span>
-          ${renderPedSegment({
-            name: "engajamento",
-            value: draft.engajamento,
-            options: [
-              ["alto", "Alto"],
-              ["medio", "Médio"],
-              ["baixo", "Baixo"],
-            ],
-            tone: "green",
-          })}
-        </div>
-
-        <div class="pedagogico-field" data-ped-realizada-only>
-          <span class="pedagogico-label">EVOLUÇÃO PERCEBIDA <span class="pedagogico-required">*</span></span>
-          ${renderPedSegment({
-            name: "evolucao",
-            value: draft.evolucao,
-            options: [
-              ["evoluiu", "Evoluiu"],
-              ["estavel", "Estável"],
-              ["regrediu", "Regrediu"],
-            ],
-            tone: "blue",
-          })}
-        </div>
-
-        <div class="pedagogico-field" data-ped-realizada-only>
-          <span class="pedagogico-label">EXPERIÊNCIA DA AULA <span class="pedagogico-required">*</span></span>
-          ${renderPedSegment({
-            name: "experienciaAula",
-            value: draft.experienciaAula,
-            options: [
-              ["boa", "Boa"],
-              ["atencao", "Atenção"],
-              ["ruim", "Ruim"],
-            ],
-            tone: "amber",
-          })}
-        </div>
-
-        <div class="pedagogico-field">
-          <span class="pedagogico-label">RISCO DE EVASÃO <span class="pedagogico-required">*</span></span>
-          ${renderPedSegment({
-            name: "riscoEvasao",
-            value: draft.riscoEvasao,
-            options: [
-              ["baixo", "Baixo"],
-              ["medio", "Médio"],
-              ["alto", "Alto"],
-            ],
-            tone: "coral",
-          })}
-
-          <div class="pedagogico-field" data-ped-risco-motivo hidden>
-            <label class="pedagogico-label">MOTIVO PRINCIPAL <span class="pedagogico-required">*</span></label>
-            <select class="pedagogico-input" data-ped-field="motivoRisco">
-              <option value="" ${draft.motivoRisco ? "" : "selected"}>Selecione</option>
-              ${renderPedSelectOptions(PED_MOTIVO_RISCO, draft.motivoRisco)}
-            </select>
-            <label class="pedagogico-field" data-ped-outro-wrap="motivoRiscoOutro" hidden>
-              <span class="pedagogico-label">DESCREVA O MOTIVO <span class="pedagogico-required">*</span></span>
-              <input class="pedagogico-input" type="text" data-ped-field="motivoRiscoOutro" value="${escapeHtml(
-                draft.motivoRiscoOutro
-              )}" maxlength="120" placeholder="Descreva o motivo..." />
-            </label>
-          </div>
-        </div>
-
-        <div class="pedagogico-field">
-          <span class="pedagogico-label">AÇÃO DA COORDENAÇÃO <span class="pedagogico-required">*</span></span>
-          <select class="pedagogico-input" data-ped-field="acaoCoordenacao">
-            <option value="" ${draft.acaoCoordenacao ? "" : "selected"}>Selecione</option>
-            ${renderPedSelectOptions(PED_ACAO_COORDENACAO, draft.acaoCoordenacao)}
+      <div class="ped-field">
+        <div class="ped-label">Como foi a aula?</div>
+        <div class="ped-sel-wrap">
+          <select class="ped-sel" data-ped-field="statusAula" data-ped-status>
+            <option value="" ${status ? "" : "selected"}>Selecione...</option>
+            <option value="realizada" ${status === "realizada" ? "selected" : ""}>Realizada</option>
+            <option value="falta" ${status === "falta" ? "selected" : ""}>Falta do aluno</option>
+            <option value="remarcada" ${status === "remarcada" ? "selected" : ""}>Remarcada</option>
           </select>
+          <span class="ped-arr">▼</span>
         </div>
+        <div class="ped-status-pill ${statusPillTone ? "" : "hidden"} ped-pill-${escapeHtml(statusPillTone)}" data-ped-pill>${escapeHtml(
+          status === "realizada" ? "Realizada" : status === "falta" ? "Falta do aluno" : status === "remarcada" ? "Remarcada" : ""
+        )}</div>
+      </div>
 
-        <label class="pedagogico-field" data-ped-realizada-only>
-          <span class="pedagogico-label">RESUMO RÁPIDO DA AULA <span class="pedagogico-required">*</span></span>
-          <textarea class="pedagogico-textarea" data-ped-field="resumoAula" maxlength="250" placeholder="Ex: Trabalhamos conversação sobre rotina. Aluno participou bem, mas precisa revisar passado.">${escapeHtml(
-            draft.resumoAula
+      <div class="ped-divider"></div>
+
+      <div class="ped-block ped-reveal" data-ped-block="realizada" hidden>
+        <div class="ped-field">
+          <div class="ped-label">O que foi trabalhado</div>
+          <textarea class="ped-ta" data-ped-field="oQueFoiTrabalhado" rows="3" placeholder="Escreva de forma objetiva...">${escapeHtml(
+            draft.oQueFoiTrabalhado
           )}</textarea>
-          <div class="pedagogico-help">Máximo 250 caracteres.</div>
-        </label>
+        </div>
+
+        <div class="ped-grid2">
+          <div class="ped-field">
+            <div class="ped-label">Engajamento</div>
+            ${renderStars({ name: "engajamento", value: draft.engajamento })}
+          </div>
+          <div class="ped-field">
+            <div class="ped-label">Evolução</div>
+            ${renderStars({ name: "evolucao", value: draft.evolucao })}
+          </div>
+        </div>
+
+        <div class="ped-field">
+          <div class="ped-label">Humor do aluno</div>
+          ${renderHumorChips(draft.humorAluno)}
+        </div>
+
+        <div class="ped-field">
+          <div class="ped-label">Próxima aula</div>
+          <input class="ped-in" type="text" data-ped-field="proximaAula" value="${escapeHtml(draft.proximaAula)}" placeholder="Tema ou foco da próxima aula..." />
+        </div>
+
+        ${renderAvisosDropdown()}
+
+        <div class="ped-field">
+          <div class="ped-label">Observações internas</div>
+          <textarea class="ped-ta" data-ped-field="observacoesInternas" rows="3" placeholder="Opcional...">${escapeHtml(draft.observacoesInternas)}</textarea>
+        </div>
       </div>
 
-      <div class="pedagogico-drawer-footer">
-        <button class="button button-solid" type="button" data-pedagogico-save>Salvar registro</button>
-        <button class="button button-outline" type="button" data-pedagogico-drawer-close>Fechar</button>
+      <div class="ped-block ped-reveal" data-ped-block="falta" hidden>
+        <div class="ped-field">
+          <div class="ped-label">Motivo</div>
+          <div class="ped-sel-wrap">
+            <select class="ped-sel" data-ped-field="motivoFalta">
+              <option value="" ${draft.motivoFalta ? "" : "selected"}>Selecione...</option>
+              ${renderPedSelectOptions(PED_MOTIVO_FALTA, draft.motivoFalta)}
+            </select>
+            <span class="ped-arr">▼</span>
+          </div>
+        </div>
+
+        ${renderAvisosDropdown()}
+
+        <div class="ped-field">
+          <div class="ped-label">Observações internas</div>
+          <textarea class="ped-ta" data-ped-field="observacoesInternas" rows="3" placeholder="Opcional...">${escapeHtml(draft.observacoesInternas)}</textarea>
+        </div>
+      </div>
+
+      <div class="ped-block ped-reveal" data-ped-block="remarcada" hidden>
+        <div class="ped-field">
+          <div class="ped-label">Motivo</div>
+          <div class="ped-sel-wrap">
+            <select class="ped-sel" data-ped-field="motivoRemarcacao">
+              <option value="" ${draft.motivoRemarcacao ? "" : "selected"}>Selecione...</option>
+              ${renderPedSelectOptions(PED_MOTIVO_REMARCACAO, draft.motivoRemarcacao)}
+            </select>
+            <span class="ped-arr">▼</span>
+          </div>
+        </div>
+
+        <div class="ped-grid2">
+          <div class="ped-field">
+            <div class="ped-label">Nova data</div>
+            <input class="ped-in" type="date" data-ped-field="novaDataRemarcacao" value="${escapeHtml(draft.novaDataRemarcacao)}" />
+          </div>
+          <div class="ped-field">
+            <div class="ped-label">Novo horário</div>
+            <input class="ped-in" type="time" data-ped-field="novoHorarioRemarcacao" value="${escapeHtml(draft.novoHorarioRemarcacao)}" />
+          </div>
+        </div>
+
+        <div class="ped-infobox">📅 Um novo evento será criado na agenda após salvar.</div>
+
+        <div class="ped-field">
+          <div class="ped-label">Observações internas</div>
+          <textarea class="ped-ta" data-ped-field="observacoesInternas" rows="3" placeholder="Opcional...">${escapeHtml(draft.observacoesInternas)}</textarea>
+        </div>
+      </div>
+
+      <div class="ped-footer">
+        <button class="ped-btn-save" type="button" data-pedagogico-save>Salvar registro</button>
+        <button class="ped-btn-close" type="button" data-pedagogico-drawer-close>Fechar</button>
       </div>
     </div>
   `;
@@ -6373,113 +6450,187 @@ const renderPedSegment = ({ name, value, options, tone = "blue" } = {}) => {
     setPedagogicoAutosaveLabel("Alterações não salvas");
   };
 
-  formRoot.querySelectorAll("input, textarea, select").forEach((el) => {
-    el.addEventListener("change", setDirty);
-    el.addEventListener("input", setDirty);
-  });
-
-  const revealBlock = (blockEl, reveal) => {
-    if (!(blockEl instanceof HTMLElement)) return;
-    if (!reveal) {
-      blockEl.hidden = true;
-      blockEl.classList.remove("is-revealed");
-      return;
+  const applyStatusUi = () => {
+    const statusEl = formRoot.querySelector("[data-ped-status]");
+    const s = statusEl instanceof HTMLSelectElement ? String(statusEl.value || "").trim().toLowerCase() : "";
+    const pill = formRoot.querySelector("[data-ped-pill]");
+    if (pill instanceof HTMLElement) {
+      const tone = pillToneForStatus(s);
+      pill.classList.toggle("hidden", !tone);
+      pill.classList.remove("ped-pill-red", "ped-pill-yellow", "ped-pill-green");
+      if (tone) pill.classList.add(`ped-pill-${tone}`);
+      pill.textContent = s === "realizada" ? "Realizada" : s === "falta" ? "Falta do aluno" : s === "remarcada" ? "Remarcada" : "";
     }
-    if (!blockEl.hidden) return;
-    blockEl.hidden = false;
-    window.requestAnimationFrame(() => blockEl.classList.add("is-revealed"));
-  };
 
-  const applyVisibility = () => {
-    const hiddenStatus = formRoot.querySelector('[data-ped-hidden="statusAula"]');
-    const statusValue = hiddenStatus instanceof HTMLInputElement ? String(hiddenStatus.value || "").toLowerCase() : "";
-    const statusChosen = Boolean(statusValue);
-    const isRealizada = statusValue === "realizada";
-
-    const help = formRoot.querySelector("[data-ped-status-help]");
-    if (help instanceof HTMLElement) help.hidden = statusChosen;
-
-    const execBlock = formRoot.querySelector('[data-ped-block="executivo"]');
-    revealBlock(execBlock, statusChosen);
-
-    const naoReal = formRoot.querySelector("[data-ped-nao-realizada]");
-    if (naoReal instanceof HTMLElement) naoReal.hidden = !statusChosen || isRealizada;
-
-    formRoot.querySelectorAll("[data-ped-realizada-only]").forEach((el) => {
+    const blocks = [
+      ["realizada", formRoot.querySelector('[data-ped-block="realizada"]')],
+      ["falta", formRoot.querySelector('[data-ped-block="falta"]')],
+      ["remarcada", formRoot.querySelector('[data-ped-block="remarcada"]')],
+    ];
+    blocks.forEach(([key, el]) => {
       if (!(el instanceof HTMLElement)) return;
-      el.hidden = !statusChosen || !isRealizada;
+      const show = s === key;
+      if (!show) {
+        el.hidden = true;
+        el.classList.remove("is-shown");
+        return;
+      }
+      if (!el.hidden) return;
+      el.hidden = false;
+      // fadeUp cascade
+      const children = Array.from(el.querySelectorAll(".ped-field, .ped-grid2, .ped-infobox, .ped-multisel"));
+      children.forEach((c, idx) => {
+        if (!(c instanceof HTMLElement)) return;
+        c.style.animationDelay = `${idx * 100}ms`;
+      });
+      window.requestAnimationFrame(() => el.classList.add("is-shown"));
     });
 
-    const riscoWrap = formRoot.querySelector('[data-ped-seg="riscoEvasao"]');
-    const riscoHidden = riscoWrap instanceof HTMLElement ? riscoWrap.querySelector('[data-ped-field="riscoEvasao"]') : null;
-    const riscoVal = riscoHidden instanceof HTMLInputElement ? String(riscoHidden.value || "").toLowerCase() : "";
-    const showMotivo = riscoVal === "medio" || riscoVal === "alto";
-    const riscoMotivo = formRoot.querySelector("[data-ped-risco-motivo]");
-    if (riscoMotivo instanceof HTMLElement) riscoMotivo.hidden = !statusChosen || !showMotivo;
-
-    const motivoSel = formRoot.querySelector('[data-ped-field="motivoNaoRealizada"]');
-    const motivoVal = motivoSel instanceof HTMLSelectElement ? String(motivoSel.value || "").toLowerCase() : "";
-    const outroNaoReal = formRoot.querySelector('[data-ped-outro-wrap="motivoNaoRealizadaOutro"]');
-    if (outroNaoReal instanceof HTMLElement) outroNaoReal.hidden = motivoVal !== "outro";
-
-    const riscoMotivoSel = formRoot.querySelector('[data-ped-field="motivoRisco"]');
-    const riscoMotivoVal = riscoMotivoSel instanceof HTMLSelectElement ? String(riscoMotivoSel.value || "").toLowerCase() : "";
-    const outroRisco = formRoot.querySelector('[data-ped-outro-wrap="motivoRiscoOutro"]');
-    if (outroRisco instanceof HTMLElement) outroRisco.hidden = riscoMotivoVal !== "outro";
+    // update progress
+    const current = readPedagogicoDraftFromDom();
+    const pct = computeProgress(current || {});
+    const bar = formRoot.querySelector(".ped-progress-bar");
+    if (bar instanceof HTMLElement) bar.style.width = `${pct.toFixed(0)}%`;
   };
 
-  // Status buttons
-  formRoot.querySelectorAll("[data-ped-status-btn]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      if (!(btn instanceof HTMLElement)) return;
-      const value = String(btn.getAttribute("data-ped-status-btn") || "").trim().toLowerCase();
-      const hidden = formRoot.querySelector('[data-ped-hidden="statusAula"]');
-      if (hidden instanceof HTMLInputElement) hidden.value = value;
-      formRoot.querySelectorAll("[data-ped-status-btn]").forEach((b) => {
-        if (!(b instanceof HTMLElement)) return;
-        const v = String(b.getAttribute("data-ped-status-btn") || "").trim().toLowerCase();
-        b.classList.toggle("is-selected", v === value);
-        b.classList.toggle(`selected-${v}`, v === value);
-      });
+  // Generic dirty listeners
+  formRoot.querySelectorAll("input, textarea, select").forEach((el) => {
+    el.addEventListener("change", () => {
       setDirty();
-      applyVisibility();
+      applyStatusUi();
+    });
+    el.addEventListener("input", () => {
+      setDirty();
+      applyStatusUi();
     });
   });
 
-  // Segmented controls
-  formRoot.querySelectorAll("[data-ped-seg]").forEach((wrap) => {
+  // Stars click
+  formRoot.querySelectorAll("[data-ped-stars]").forEach((wrap) => {
     wrap.addEventListener("click", (ev) => {
       const t = ev.target;
       if (!(t instanceof Element)) return;
-      const btn = t.closest("[data-ped-seg-opt]");
-      if (!(btn instanceof HTMLButtonElement)) return;
-      const key = String(wrap.getAttribute("data-ped-seg") || "");
-      const value = String(btn.getAttribute("data-ped-seg-opt") || "").trim().toLowerCase();
-      const hidden = wrap.querySelector(`[data-ped-field="${key}"]`);
-      if (hidden instanceof HTMLInputElement) hidden.value = value;
-      wrap.querySelectorAll("[data-ped-seg-opt]").forEach((b) => {
+      const btn = t.closest("[data-ped-star]");
+      if (!(btn instanceof HTMLElement)) return;
+      const n = clampRating(btn.getAttribute("data-ped-star"));
+      const name = String(wrap.getAttribute("data-ped-stars") || "");
+      const hidden = wrap.querySelector(`[data-ped-field=\"${name}\"]`);
+      if (hidden instanceof HTMLInputElement) hidden.value = String(n);
+      wrap.querySelectorAll("[data-ped-star]").forEach((b) => {
         if (!(b instanceof HTMLElement)) return;
-        b.classList.toggle("is-active", b === btn);
+        const k = clampRating(b.getAttribute("data-ped-star"));
+        b.classList.toggle("on", k <= n);
       });
       setDirty();
-      applyVisibility();
+      applyStatusUi();
     });
   });
 
-  // Select-driven conditionals
-  formRoot.querySelectorAll('select[data-ped-field="motivoNaoRealizada"], select[data-ped-field="motivoRisco"]').forEach((el) => {
-    el.addEventListener("change", () => {
+  // Chips click
+  formRoot.querySelectorAll("[data-ped-chips]").forEach((wrap) => {
+    wrap.addEventListener("click", (ev) => {
+      const t = ev.target;
+      if (!(t instanceof Element)) return;
+      const btn = t.closest("[data-ped-chip]");
+      if (!(btn instanceof HTMLElement)) return;
+      const key = String(btn.getAttribute("data-ped-chip") || "").trim().toLowerCase();
+      const name = String(wrap.getAttribute("data-ped-chips") || "");
+      const hidden = wrap.querySelector(`[data-ped-field=\"${name}\"]`);
+      if (hidden instanceof HTMLInputElement) hidden.value = key;
+      wrap.querySelectorAll("[data-ped-chip]").forEach((b) => {
+        if (!(b instanceof HTMLElement)) return;
+        b.classList.toggle("on", String(b.getAttribute("data-ped-chip") || "").trim().toLowerCase() === key);
+      });
       setDirty();
-      applyVisibility();
+      applyStatusUi();
     });
-  });
+	  });
 
-  applyVisibility();
+	  // Multi-select logic
+	  const bindMultiSelect = (root) => {
+	    if (!(root instanceof HTMLElement)) return;
+    const trigger = root.querySelector("[data-ped-multisel-trigger]");
+    const dropdown = root.querySelector("[data-ped-multisel-dropdown]");
+    const hidden = root.querySelector('[data-ped-field="avisos"]');
+    const badge = root.querySelector("[data-ped-multisel-badge]");
+    const pills = root.querySelector("[data-ped-multisel-pills]");
+    if (!(trigger instanceof HTMLButtonElement) || !(dropdown instanceof HTMLElement) || !(hidden instanceof HTMLInputElement)) return;
 
+    const setSelected = (arr) => {
+      const normalized = normalizeAvisosSelection(arr);
+      hidden.value = JSON.stringify(normalized);
+      const count = normalized.length;
+      trigger.textContent = count ? `${count} avisos selecionados` : "Nenhum aviso";
+      if (badge instanceof HTMLElement) {
+        badge.hidden = !count;
+        badge.textContent = String(count);
+      }
+      if (pills instanceof HTMLElement) {
+        pills.innerHTML = normalized
+          .map((label) => {
+            const def = AVISOS_COORDENACAO.find((a) => a.label === label);
+            const tone = def?.color || "yellow";
+            return `<span class=\"ped-pill ped-pill-${escapeHtml(tone)}\">${escapeHtml(label)}</span>`;
+          })
+          .join("");
+      }
+      dropdown.querySelectorAll("[data-ped-aviso-item]").forEach((item) => {
+        if (!(item instanceof HTMLElement)) return;
+        const label = String(item.getAttribute("data-ped-aviso-item") || "");
+        const def = AVISOS_COORDENACAO.find((a) => a.label === label);
+        const tone = def?.color || "yellow";
+        const on = normalized.includes(label);
+        item.classList.toggle(`on-${tone}`, on);
+        const check = item.querySelector(".ped-dd-check");
+        if (check instanceof HTMLElement) check.textContent = on ? "✓" : "";
+      });
+    };
+
+    const readSelected = () => {
+      try {
+        const parsed = JSON.parse(String(hidden.value || "[]"));
+        return normalizeAvisosSelection(parsed);
+      } catch {
+        return [];
+      }
+    };
+
+    trigger.addEventListener("click", () => {
+      dropdown.hidden = !dropdown.hidden;
+    });
+    dropdown.addEventListener("click", (ev) => {
+      const t = ev.target;
+      if (!(t instanceof Element)) return;
+      const item = t.closest("[data-ped-aviso-item]");
+      if (!(item instanceof HTMLElement)) return;
+      const label = String(item.getAttribute("data-ped-aviso-item") || "");
+      const current = readSelected();
+      const next = current.includes(label) ? current.filter((x) => x !== label) : [...current, label];
+      setSelected(next);
+      setDirty();
+      applyStatusUi();
+    });
+    // close on click outside
+	    const onDoc = (ev) => {
+	      const t = ev.target;
+	      if (!(t instanceof Element)) return;
+	      if (root.contains(t)) return;
+	      dropdown.hidden = true;
+	    };
+	    document.addEventListener("click", onDoc, { capture: true });
+	    pedagogicoCleanupFns.push(() => document.removeEventListener("click", onDoc, { capture: true }));
+
+	    setSelected(readSelected());
+	  };
+
+  // We may have more than one avisos block (realizada/falta). Bind them all.
+  formRoot.querySelectorAll("[data-ped-multisel]").forEach((r) => bindMultiSelect(r));
+
+  applyStatusUi();
   setPedagogicoAutosaveLabel(existingLog?.statusAula ? "Salvo" : "—");
 };
 
-  const readPedagogicoDraftFromDom = () => {
+const readPedagogicoDraftFromDom = () => {
   const root = pedagogicoFormContainer instanceof HTMLElement ? pedagogicoFormContainer.querySelector("[data-ped-form]") : null;
   if (!(root instanceof HTMLElement) || !pedagogicoActive?.lesson) return null;
 
@@ -6489,45 +6640,51 @@ const renderPedSegment = ({ name, value, options, tone = "blue" } = {}) => {
     return "";
   };
 
-  const hiddenStatus = root.querySelector('[data-ped-hidden="statusAula"]');
-  const statusAula = hiddenStatus instanceof HTMLInputElement ? String(hiddenStatus.value || "").trim().toLowerCase() : "";
+  const statusAula = getField("statusAula").trim().toLowerCase();
+  let avisos = [];
+  try {
+    const parsed = JSON.parse(String(getField("avisos") || "[]"));
+    avisos = normalizeAvisosSelection(parsed);
+  } catch {
+    avisos = [];
+  }
 
   const draft = {
     statusAula,
-    motivoNaoRealizada: getField("motivoNaoRealizada").trim().toLowerCase(),
-    motivoNaoRealizadaOutro: getField("motivoNaoRealizadaOutro").trim(),
-    engajamento: getField("engajamento").trim().toLowerCase(),
-    evolucao: getField("evolucao").trim().toLowerCase(),
-    experienciaAula: getField("experienciaAula").trim().toLowerCase(),
-    riscoEvasao: getField("riscoEvasao").trim().toLowerCase(),
-    motivoRisco: getField("motivoRisco").trim().toLowerCase(),
-    motivoRiscoOutro: getField("motivoRiscoOutro").trim(),
-    acaoCoordenacao: getField("acaoCoordenacao").trim().toLowerCase(),
-    resumoAula: getField("resumoAula").slice(0, 250),
-    observacaoOpcional: getField("observacaoOpcional").trim(),
+    oQueFoiTrabalhado: getField("oQueFoiTrabalhado").trim(),
+    engajamento: clampRating(getField("engajamento")),
+    evolucao: clampRating(getField("evolucao")),
+    humorAluno: getField("humorAluno").trim().toLowerCase(),
+    proximaAula: getField("proximaAula").trim(),
+    avisos,
+    observacoesInternas: getField("observacoesInternas").trim(),
+    motivoFalta: getField("motivoFalta").trim().toLowerCase(),
+    motivoRemarcacao: getField("motivoRemarcacao").trim().toLowerCase(),
+    novaDataRemarcacao: getField("novaDataRemarcacao").trim(),
+    novoHorarioRemarcacao: getField("novoHorarioRemarcacao").trim(),
   };
 
-  // Limpeza de campos fora do contexto (evita salvar lixo).
-  if (draft.statusAula === "realizada") {
-    draft.motivoNaoRealizada = "";
-    draft.motivoNaoRealizadaOutro = "";
-    draft.observacaoOpcional = "";
-  } else {
-    draft.engajamento = "";
-    draft.evolucao = "";
-    draft.experienciaAula = "";
-    draft.resumoAula = "";
+  // Limpeza por status (evita salvar lixo)
+  if (draft.statusAula !== "realizada") {
+    draft.oQueFoiTrabalhado = "";
+    draft.engajamento = 0;
+    draft.evolucao = 0;
+    draft.humorAluno = "";
+    draft.proximaAula = "";
   }
-
-  if (!(draft.riscoEvasao === "medio" || draft.riscoEvasao === "alto")) {
-    draft.motivoRisco = "";
-    draft.motivoRiscoOutro = "";
+  if (draft.statusAula !== "falta") {
+    draft.motivoFalta = "";
+  }
+  if (draft.statusAula !== "remarcada") {
+    draft.motivoRemarcacao = "";
+    draft.novaDataRemarcacao = "";
+    draft.novoHorarioRemarcacao = "";
   }
 
   return draft;
 };
 
-  const savePedagogicoLog = async ({ autosave = false } = {}) => {
+const savePedagogicoLog = async ({ autosave = false } = {}) => {
   if (currentRole !== "teacher") return false;
   if (!sessionUser?.id) return false;
   if (!pedagogicoActive?.lesson) return false;
@@ -6540,44 +6697,31 @@ const renderPedSegment = ({ name, value, options, tone = "blue" } = {}) => {
     return false;
   }
 
-  const isRealizada = draft.statusAula === "realizada";
-
   const has = (v) => Boolean(String(v || "").trim());
 
-  // Regras:
-  // - realizada: exigir engajamento, evolucao, experienciaAula, riscoEvasao, acaoCoordenacao, resumoAula
-  // - não realizada: exigir motivoNaoRealizada (+ outro), riscoEvasao, acaoCoordenacao
-  // - risco médio/alto: exigir motivoRisco (+ outro)
-  if (isRealizada) {
-    if (!has(draft.engajamento) || !has(draft.evolucao) || !has(draft.experienciaAula) || !has(draft.riscoEvasao) || !has(draft.acaoCoordenacao)) {
+  // Regras mínimas (não deixar salvar payload inconsistente)
+  if (draft.statusAula === "realizada") {
+    if (!has(draft.oQueFoiTrabalhado) || draft.engajamento <= 0 || draft.evolucao <= 0 || !has(draft.humorAluno)) {
       if (!autosave) setPedagogicoStatus("Preencha os campos obrigatórios para salvar.", "error");
       return false;
     }
-    if (!has(draft.resumoAula)) {
-      if (!autosave) setPedagogicoStatus("Preencha o resumo rápido da aula para salvar.", "error");
-      return false;
-    }
-  } else {
-    if (!has(draft.motivoNaoRealizada) || !has(draft.riscoEvasao) || !has(draft.acaoCoordenacao)) {
-      if (!autosave) setPedagogicoStatus("Preencha os campos obrigatórios para salvar.", "error");
-      return false;
-    }
-    if (draft.motivoNaoRealizada === "outro" && !has(draft.motivoNaoRealizadaOutro)) {
-      if (!autosave) setPedagogicoStatus('Descreva o motivo (opção "Outro").', "error");
+  }
+  if (draft.statusAula === "falta") {
+    if (!has(draft.motivoFalta)) {
+      if (!autosave) setPedagogicoStatus("Selecione o motivo da falta para salvar.", "error");
       return false;
     }
   }
-
-  if ((draft.riscoEvasao === "medio" || draft.riscoEvasao === "alto") && !has(draft.motivoRisco)) {
-    if (!autosave) setPedagogicoStatus("Selecione o motivo principal do risco de evasão.", "error");
-    return false;
+  if (draft.statusAula === "remarcada") {
+    if (!has(draft.motivoRemarcacao) || !has(draft.novaDataRemarcacao) || !has(draft.novoHorarioRemarcacao)) {
+      if (!autosave) setPedagogicoStatus("Preencha o motivo e a nova data/horário para salvar.", "error");
+      return false;
+    }
+    if (!isValidDateKey(draft.novaDataRemarcacao) || !/^\d{2}:\d{2}$/.test(draft.novoHorarioRemarcacao)) {
+      if (!autosave) setPedagogicoStatus("Nova data ou horário inválidos.", "error");
+      return false;
+    }
   }
-  if (draft.motivoRisco === "outro" && !has(draft.motivoRiscoOutro)) {
-    if (!autosave) setPedagogicoStatus('Descreva o motivo do risco (opção "Outro").', "error");
-    return false;
-  }
-
-  const precisaIntervencao = draft.riscoEvasao === "alto" || (draft.acaoCoordenacao && draft.acaoCoordenacao !== "nenhuma");
 
   const payload = {
     eventId: lesson.id,
@@ -6585,7 +6729,6 @@ const renderPedSegment = ({ name, value, options, tone = "blue" } = {}) => {
     alunoId: lesson.alunoId || "",
     dateKey: lesson.dateKey,
     ...draft,
-    precisaIntervencao,
   };
 
   if (!autosave) setPedagogicoStatus("Salvando…");
@@ -6608,6 +6751,37 @@ const renderPedSegment = ({ name, value, options, tone = "blue" } = {}) => {
     const stored = { id: logId, eventId: lesson.id, statusAula: draft.statusAula, payload: { ...payload } };
     pedagogicoState.logsByEventId.set(lesson.id, stored);
     renderTeacherPedagogico({ silent: true });
+
+    // Se remarcada, criar novo evento na agenda (apenas no save manual, não no autosave).
+    if (!autosave && draft.statusAula === "remarcada" && draft.novaDataRemarcacao && draft.novoHorarioRemarcacao) {
+      try {
+        const durationMin = clampInt(Number(lesson.endMin) - Number(lesson.startMin), 5, 240, 30);
+        const startMin = timeToMinutes(draft.novoHorarioRemarcacao);
+        const endMin = clampInt(startMin + durationMin, 1, 1440, startMin + 30);
+        const createPayload = {
+          eventType: "lesson",
+          alunoId: lesson.alunoId || "",
+          professorId: lesson.professorId || sessionUser.id,
+          dateKey: draft.novaDataRemarcacao,
+          startMin,
+          endMin,
+          title: "Aula",
+          description: "",
+          guests: [],
+          documents: [],
+          repeat: { enabled: false },
+        };
+        const resCreate = await fetchWithAuth("/api/schedule-events", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(createPayload),
+        });
+        if (!resCreate.ok) throw new Error("remarcacao_create_failed");
+      } catch (error) {
+        console.error("[pedagogico] remarcacao create event failed:", error);
+        setPedagogicoStatus("Registro salvo, mas não foi possível criar o novo evento.", "error");
+      }
+    }
     return true;
   } catch (error) {
     console.error("[pedagogico] save failed:", error);

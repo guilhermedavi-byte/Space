@@ -12896,7 +12896,7 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   position: relative;
   width: min(480px, 92vw);
   height: 100vh;
-  background: #0f1d2d;
+  background: #0d1a2a;
   border-left: 0.5px solid rgba(89, 144, 189, 0.12);
   box-shadow: -24px 0 54px rgba(0, 0, 0, 0.35);
   transform: translateX(100%);
@@ -12944,72 +12944,375 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 }
 
 .pedagogico-drawer-body {
-  padding: 18px;
+  padding: 0;
   overflow: auto;
 }
 
-.pedagogico-form {
+/* Drawer (novo) */
+.ped-form {
+  padding: 18px 20px 18px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 18px;
 }
 
-.pedagogico-form.is-compact {
-  gap: 12px;
+.ped-progress {
+  height: 2px;
+  width: 100%;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  overflow: hidden;
 }
 
-.pedagogico-meta-title {
+.ped-progress-bar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #5990BD, #5DCAA5);
+  transition: width 160ms ease;
+}
+
+.ped-head-name {
   font-size: 15px;
-  font-weight: 750;
+  font-weight: 650;
   color: rgba(255, 255, 255, 0.95);
 }
 
-.pedagogico-meta-sub {
+.ped-head-sub {
   margin-top: 6px;
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.4);
-  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.35);
 }
 
-.pedagogico-label {
-  display: block;
-  font-size: 10px;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  color: rgba(89, 144, 189, 0.55);
-  margin-bottom: 8px;
-}
-
-.pedagogico-required {
-  color: rgba(255, 78, 70, 0.9);
-}
-
-.pedagogico-help {
-  margin-top: 10px;
+.ped-label {
   font-size: 12px;
-  color: rgba(251, 191, 36, 0.85);
+  color: rgba(255, 255, 255, 0.35);
+  margin-bottom: 10px;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
-.pedagogico-input,
-.pedagogico-textarea {
+.ped-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.ped-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.ped-sel-wrap {
+  position: relative;
+}
+
+.ped-sel {
   width: 100%;
+  appearance: none;
+  -webkit-appearance: none;
   background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(89, 144, 189, 0.12);
+  border: 0.5px solid rgba(255, 255, 255, 0.1);
   border-radius: 10px;
-  padding: 12px 12px;
-  color: rgba(255, 255, 255, 0.92);
+  padding: 10px 36px 10px 12px;
+  color: rgba(255, 255, 255, 0.85);
   font-size: 13px;
   outline: none;
 }
 
-.pedagogico-textarea {
-  min-height: 78px;
-  resize: vertical;
+.ped-arr {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: rgba(255, 255, 255, 0.22);
+  font-size: 11px;
+  pointer-events: none;
 }
 
-.pedagogico-input:focus,
-.pedagogico-textarea:focus {
-  border-color: rgba(255, 78, 70, 0.45);
+.ped-in,
+.ped-ta {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.04);
+  border: 0.5px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  outline: none;
+}
+
+.ped-ta {
+  resize: vertical;
+  min-height: 86px;
+}
+
+.ped-sel:focus,
+.ped-in:focus,
+.ped-ta:focus {
+  border-color: rgba(89, 144, 189, 0.45);
+}
+
+.ped-status-pill {
+  margin-top: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  border: 0.5px solid rgba(255, 255, 255, 0.08);
+}
+
+.ped-status-pill.hidden {
+  display: none;
+}
+
+.ped-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  border: 0.5px solid rgba(255, 255, 255, 0.08);
+}
+
+.ped-pill-red {
+  background: rgba(255, 78, 70, 0.12);
+  border-color: rgba(255, 78, 70, 0.22);
+  color: #FF4E46;
+}
+
+.ped-pill-yellow {
+  background: rgba(251, 191, 36, 0.12);
+  border-color: rgba(251, 191, 36, 0.22);
+  color: #FBBF24;
+}
+
+.ped-pill-green {
+  background: rgba(93, 202, 165, 0.12);
+  border-color: rgba(93, 202, 165, 0.22);
+  color: #5DCAA5;
+}
+
+.ped-grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.ped-stars {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.ped-star {
+  border: 0;
+  background: transparent;
+  font-size: 20px;
+  color: rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+  transition: color 0.1s ease;
+  padding: 0;
+  line-height: 1;
+}
+
+.ped-star.on {
+  color: #FBBF24;
+}
+
+.ped-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.ped-chip {
+  padding: 5px 12px;
+  border-radius: 20px;
+  border: 0.5px solid rgba(255, 255, 255, 0.08);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ped-chip.on {
+  border-color: #5990BD;
+  background: rgba(89, 144, 189, 0.12);
+  color: #5990BD;
+}
+
+.ped-infobox {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 0.5px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 13px;
+}
+
+.ped-block {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.ped-reveal {
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.ped-reveal.is-shown {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.ped-reveal.is-shown .ped-field,
+.ped-reveal.is-shown .ped-grid2,
+.ped-reveal.is-shown .ped-infobox,
+.ped-reveal.is-shown .ped-multisel {
+  animation: pedFadeUp 220ms ease both;
+}
+
+@keyframes pedFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ped-footer {
+  position: sticky;
+  bottom: 0;
+  background: #0d1a2a;
+  border-top: 0.5px solid rgba(255, 255, 255, 0.05);
+  padding: 12px 20px;
+  display: flex;
+  gap: 8px;
+  margin: 4px -20px -18px;
+}
+
+.ped-btn-save {
+  flex: 1;
+  padding: 10px;
+  background: #FF4E46;
+  border: none;
+  border-radius: 10px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ped-btn-close {
+  padding: 10px 14px;
+  background: transparent;
+  border: 0.5px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.ped-multisel-wrap {
+  position: relative;
+}
+
+.ped-multisel-trigger {
+  width: 100%;
+  padding: 10px 36px 10px 12px;
+  border-radius: 10px;
+  border: 0.5px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.ped-multisel-badge {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(255, 78, 70, 0.95);
+  color: #fff;
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ped-multisel-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: #0f1d2d;
+  border: 0.5px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  z-index: 10;
+  overflow: hidden;
+}
+
+.ped-dd-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.55);
+  border-bottom: 0.5px solid rgba(255, 255, 255, 0.04);
+}
+
+.ped-dd-item:last-child {
+  border-bottom: 0;
+}
+
+.ped-dd-check {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1.5px solid rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  color: #fff;
+}
+
+.ped-dd-item.on-red .ped-dd-check {
+  background: #FF4E46;
+  border-color: #FF4E46;
+}
+
+.ped-dd-item.on-yellow .ped-dd-check {
+  background: #FBBF24;
+  border-color: #FBBF24;
+}
+
+.ped-dd-item.on-green .ped-dd-check {
+  background: #5DCAA5;
+  border-color: #5DCAA5;
+}
+
+.ped-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
 }
 
 .pedagogico-radio-grid {

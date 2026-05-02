@@ -503,6 +503,31 @@ const handleLessonLogsApi = async (req, res, { idToken, role, requesterId, url }
   const logId = toLogIdFromEventId(eventId);
   const docPath = `lessonLogs/${logId}`;
 
+  const allowedAvisos = new Set([
+    "🔴 Risco de cancelamento",
+    "🟡 Aluno desmotivado",
+    "🟡 Frequência caindo",
+    "🟡 Não está evoluindo",
+    "🟢 Muito satisfeito",
+    "🟢 Quer mais aulas",
+    "🟢 Potencial indicação",
+  ]);
+
+  const avisosRaw = Array.isArray(body?.avisos) ? body.avisos : [];
+  const avisos = [];
+  avisosRaw.forEach((item) => {
+    const label = String(item || "").trim();
+    if (!label) return;
+    if (!allowedAvisos.has(label)) return;
+    if (!avisos.includes(label)) avisos.push(label);
+  });
+
+  const toRating = (v) => {
+    const n = Number(v);
+    if (!Number.isFinite(n) || n <= 0) return 0;
+    return clampInt(n, 1, 5);
+  };
+
   const data = {
     eventId,
     professorId: requesterId,
@@ -510,125 +535,45 @@ const handleLessonLogsApi = async (req, res, { idToken, role, requesterId, url }
     dateKey: isValidDateKey(String(body?.dateKey || "")) ? String(body.dateKey) : "",
     criadoEm: body?.criadoEm ? new Date(String(body.criadoEm)) : now,
     atualizadoEm: now,
-	    statusAula,
-	    // Registro gerencial (v2)
-	    motivoNaoRealizada: normalizeOneOf(body?.motivoNaoRealizada, [
-      "aluno_faltou_sem_avisar",
-      "aluno_avisou_em_cima_da_hora",
-      "aluno_pediu_remarcacao_com_antecedencia",
-      "professor_precisou_remarcar",
-      "conflito_de_horario",
-      "internet_aluno",
-      "internet_professor",
-      "plataforma_link",
-      "dificuldade_acesso",
-      "cancelada_adm",
-      "outro",
-    ]) || null,
-    motivoNaoRealizadaOutro: String(body?.motivoNaoRealizadaOutro || "").trim() || "",
-	    // Novo formulário executivo: engajamento (alto|medio|baixo). Compat: aceitar engajamentoNivel antigo.
-	    engajamento: normalizeOneOf(body?.engajamento ?? body?.engajamentoNivel, ["alto", "medio", "baixo"]) || null,
-	    experienciaAula: normalizeOneOf(body?.experienciaAula, ["boa", "atencao", "ruim"]) || null,
-	    riscoEvasao: normalizeOneOf(body?.riscoEvasao, ["baixo", "medio", "alto"]) || null,
-    motivoRisco: normalizeOneOf(body?.motivoRisco, [
-      "faltas_remarcacoes",
-      "baixo_engajamento",
-      "nao_percebe_evolucao",
-      "dificuldade_alta",
-      "questao_financeira",
-      "insatisfacao",
-      "outro",
-    ]) || null,
-    motivoRiscoOutro: String(body?.motivoRiscoOutro || "").trim() || "",
-    acaoCoordenacao: normalizeOneOf(body?.acaoCoordenacao, [
-      "nenhuma",
-      "acompanhar_aluno",
-      "falar_com_aluno",
-      "ajustar_nivel_plano",
-      "revisar_professor_horario",
-      "acionar_retencao",
-    ]) || null,
-    resumoAula: String(body?.resumoAula || "").trim().slice(0, 250) || "",
-    observacaoOpcional: String(body?.observacaoOpcional || "").trim().slice(0, 160) || "",
-    precisaIntervencao: Boolean(body?.precisaIntervencao),
-    novaDataAcordada: String(body?.novaDataAcordada || "").trim() || null,
+    statusAula,
     oQueFoiTrabalhado: String(body?.oQueFoiTrabalhado || "").trim() || "",
-    nivelDificuldade: normalizeDifficulty(body?.nivelDificuldade) || "adequado",
-    topicosAbordados: normalizeTopics(body?.topicosAbordados),
-	    // Campo legado (form antigo com estrelas 1-5). Mantemos para compat, mas com outro nome
-	    // para não conflitar com o novo `engajamento` (alto|medio|baixo).
-	    engajamentoStars: (() => {
-	      const n = Number(body?.engajamento);
-	      if (!Number.isFinite(n) || n <= 0) return null;
-	      return clampInt(n, 1, 5);
-	    })(),
-    confiancaFalar: (() => {
-      const n = Number(body?.confiancaFalar);
-      if (!Number.isFinite(n) || n <= 0) return null;
-      return clampInt(n, 1, 5);
-    })(),
-    notaAula: (() => {
-      const n = Number(body?.notaAula);
-      if (!Number.isFinite(n)) return null;
-      if (n < 0 || n > 10) return null;
-      return n;
-    })(),
-    humorAluno: normalizeOneOf(body?.humorAluno, ["animado", "neutro", "cansado", "ansioso"]) || null,
-    lembrouAulaAnterior: normalizeOneOf(body?.lembrouAulaAnterior, ["sim", "parcialmente", "nao"]) || null,
-    tarefaAnteriorFeita: normalizeOneOf(body?.tarefaAnteriorFeita, ["tudo", "parcialmente", "nao_fez", "sem_tarefa"]) || null,
-    tipoAtividade: normalizeOneOf(body?.tipoAtividade, ["conversacao", "gramatica", "vocabulario", "pronuncia", "revisao", "avaliacao"]) || null,
-    materialUsado: normalizeOneOf(body?.materialUsado, ["livro", "proprio", "improviso", "video"]) || null,
-    vocabularioNovo: String(body?.vocabularioNovo || "").trim() || "",
-    duracaoReal: normalizeDuracaoReal(body?.duracaoReal) || null,
-    pontosFortesAluno: String(body?.pontosFortesAluno || "").trim() || "",
-    pontosADesenvolver: String(body?.pontosADesenvolver || "").trim() || "",
-    feedbackParaAluno: String(body?.feedbackParaAluno || "").trim() || "",
-    temaProximaAula: String(body?.temaProximaAula || "").trim() || "",
-    tarefaDeCasa: String(body?.tarefaDeCasa || "").trim() || "",
+    engajamento: toRating(body?.engajamento),
+    evolucao: toRating(body?.evolucao),
+    humorAluno: normalizeOneOf(body?.humorAluno, ["animado", "neutro", "cansado", "ansioso"]) || "",
+    proximaAula: String(body?.proximaAula || "").trim() || "",
+    avisos,
     observacoesInternas: String(body?.observacoesInternas || "").trim() || "",
-    nivelCEFR: normalizeCEFR(body?.nivelCEFR) || null,
-    evolucao: normalizeEvolucao(body?.evolucao) || null,
+    motivoFalta: normalizeOneOf(body?.motivoFalta, [
+      "esqueceu",
+      "atrasou_trabalho",
+      "compromisso_ultima_hora",
+      "saude",
+      "tecnico",
+      "viagem",
+      "familiar",
+      "reagendou_antecedencia",
+      "nao_informou",
+    ]) || "",
+    motivoRemarcacao: normalizeOneOf(body?.motivoRemarcacao, ["pedido_aluno", "pedido_professor", "imprevisto", "nao_informou"]) || "",
+    novaDataRemarcacao: isValidDateKey(String(body?.novaDataRemarcacao || "")) ? String(body.novaDataRemarcacao) : "",
+    novoHorarioRemarcacao: /^\d{2}:\d{2}$/.test(String(body?.novoHorarioRemarcacao || "")) ? String(body.novoHorarioRemarcacao) : "",
   };
 
-  if (statusAula === "falta" || statusAula === "cancelada") {
+  // Limpa campos fora do contexto.
+  if (statusAula !== "realizada") {
     data.oQueFoiTrabalhado = "";
-    data.topicosAbordados = [];
-	    data.engajamentoStars = null;
-    data.confiancaFalar = null;
-    data.notaAula = null;
-    data.humorAluno = null;
-    data.lembrouAulaAnterior = null;
-    data.tarefaAnteriorFeita = null;
-    data.tipoAtividade = null;
-    data.materialUsado = null;
-    data.vocabularioNovo = "";
-    data.pontosFortesAluno = "";
-    data.pontosADesenvolver = "";
-    data.feedbackParaAluno = "";
-    data.temaProximaAula = "";
-    data.tarefaDeCasa = "";
+    data.engajamento = 0;
+    data.evolucao = 0;
+    data.humorAluno = "";
+    data.proximaAula = "";
   }
-
-  // Quando a aula foi realizada, motivo de "não realizada" não se aplica.
-  if (statusAula === "realizada") {
-    data.motivoNaoRealizada = null;
-    data.motivoNaoRealizadaOutro = "";
-    data.observacaoOpcional = "";
-	  } else {
-	    // Quando não realizada, campos de aula realizada podem ficar vazios.
-	    data.resumoAula = "";
-	    data.engajamento = null;
-	    data.experienciaAula = null;
-	  }
-
-  // Se risco não for medio/alto, motivo principal não se aplica.
-  if (data.riscoEvasao !== "medio" && data.riscoEvasao !== "alto") {
-    data.motivoRisco = null;
-    data.motivoRiscoOutro = "";
+  if (statusAula !== "falta") {
+    data.motivoFalta = "";
   }
-
   if (statusAula !== "remarcada") {
-    data.novaDataAcordada = null;
+    data.motivoRemarcacao = "";
+    data.novaDataRemarcacao = "";
+    data.novoHorarioRemarcacao = "";
   }
 
   const writes = [
