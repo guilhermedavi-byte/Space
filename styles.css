@@ -12945,7 +12945,7 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 
 .pedagogico-drawer-body {
   padding: 0;
-  overflow: auto;
+  overflow: visible; /* permite dropdowns do drawer extrapolarem sem serem cortados */
 }
 
 /* Drawer (novo) */
@@ -12954,6 +12954,13 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   display: flex;
   flex-direction: column;
   gap: 18px;
+}
+
+/* Mantem scroll do drawer no container interno do formulario, sem cortar dropdowns */
+.ped-form {
+  max-height: calc(100vh - 72px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .ped-progress {
@@ -13254,7 +13261,10 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 }
 
 .ped-multisel-dropdown {
-  position: fixed; /* evita ser cortado pelo overflow do drawer */
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
   background: #0f1d2d;
   background-color: #0f1d2d;
   opacity: 1;
@@ -13263,7 +13273,7 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   border: 0.5px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-  z-index: 10;
+  z-index: 9999;
   overflow: hidden;
 }
 

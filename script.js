@@ -6595,52 +6595,10 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
       }
     };
 
-	    const positionDropdown = () => {
-	      const rect = trigger.getBoundingClientRect();
-	      // Debug temporário: confirma coordenadas calculadas para o dropdown fixed.
-	      // eslint-disable-next-line no-console
-	      console.log("[POSITION DEBUG]", {
-	        rectTop: rect.top,
-	        rectBottom: rect.bottom,
-	        rectLeft: rect.left,
-	        rectWidth: rect.width,
-	        windowHeight: window.innerHeight,
-	        calculatedTop: Math.round(rect.bottom + 6),
-	      });
-	      dropdown.style.position = "fixed";
-	      dropdown.style.left = `${Math.round(rect.left)}px`;
-	      dropdown.style.top = `${Math.round(rect.bottom + 6)}px`;
-	      dropdown.style.width = `${Math.round(rect.width)}px`;
-      dropdown.style.zIndex = "9999";
-      const maxH = Math.max(160, Math.min(340, window.innerHeight - (rect.bottom + 18)));
-      dropdown.style.maxHeight = `${Math.round(maxH)}px`;
-      dropdown.style.overflowY = "auto";
-    };
-
-	    trigger.addEventListener("click", () => {
-	      // Debug temporário: confirma se o DOM do dropdown existe e se está hidden.
-	      // eslint-disable-next-line no-console
-	      console.log("[AVISOS CLICK]", {
-	        triggerFound: !!document.querySelector('[data-ped-multisel-trigger]'),
-	        dropdownFound: !!document.querySelector('[data-ped-multisel-dropdown]'),
-	        dropdownHidden: document.querySelector('[data-ped-multisel-dropdown]')?.hidden,
-	      });
-	      const willOpen = dropdown.hidden;
-	      dropdown.hidden = !willOpen;
-	      if (willOpen) {
-	        window.requestAnimationFrame(() => positionDropdown());
-	      }
+	    trigger.addEventListener("click", (event) => {
+	      event.preventDefault();
+	      dropdown.hidden = !dropdown.hidden;
 	    });
-
-    const drawerBody = pedagogicoDrawer instanceof HTMLElement ? pedagogicoDrawer.querySelector(".pedagogico-drawer-body") : null;
-    const onScrollOrResize = () => {
-      if (dropdown.hidden) return;
-      positionDropdown();
-    };
-    window.addEventListener("resize", onScrollOrResize);
-    if (drawerBody instanceof HTMLElement) drawerBody.addEventListener("scroll", onScrollOrResize, { passive: true });
-    pedagogicoCleanupFns.push(() => window.removeEventListener("resize", onScrollOrResize));
-    if (drawerBody instanceof HTMLElement) pedagogicoCleanupFns.push(() => drawerBody.removeEventListener("scroll", onScrollOrResize));
     dropdown.addEventListener("click", (ev) => {
       const t = ev.target;
       if (!(t instanceof Element)) return;
