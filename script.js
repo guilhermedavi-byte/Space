@@ -6538,6 +6538,8 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
   const applyStatusUi = () => {
     const statusEl = formRoot.querySelector("[data-ped-status]");
     const s = statusEl instanceof HTMLSelectElement ? String(statusEl.value || "").trim().toLowerCase() : "";
+    // Defensive: if the status is one of our supported values, always ensure the matching block becomes visible.
+    // This avoids regressions where the change event fires but the block never gets "is-shown".
     const dividerEl = formRoot.querySelector("[data-ped-divider]");
     if (dividerEl instanceof HTMLElement) {
       dividerEl.hidden = !(s === "realizada" || s === "falta" || s === "remarcada");
@@ -6556,10 +6558,10 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
         el.classList.remove("is-shown");
         return;
       }
-      if (!el.hidden) return;
+      // Always unhide and ensure 'is-shown' is present for the active block.
       el.hidden = false;
       // fadeUp cascade
-      const children = Array.from(el.querySelectorAll(".ped-field, .ped-grid2, .ped-infobox, .ped-multisel"));
+      const children = Array.from(el.querySelectorAll(".ped-field, .ped-grid2, .ped-infobox, .ped-multisel, .ped-multisel-wrap"));
       children.forEach((c, idx) => {
         if (!(c instanceof HTMLElement)) return;
         c.style.animationDelay = `${idx * 100}ms`;
@@ -6762,6 +6764,18 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
     });
   };
 
+  const bindAvisosAutoClose = (rootEl) => {
+    if (!(rootEl instanceof HTMLElement)) return;
+    const onScroll = () => closePedAvisosPortal();
+    const onResize = () => closePedAvisosPortal();
+    rootEl.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onResize, { passive: true });
+    pedagogicoCleanupFns.push(() => {
+      rootEl.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onResize);
+    });
+  };
+
   // Generic dirty listeners
   formRoot.querySelectorAll("input, textarea, select").forEach((el) => {
     el.addEventListener("change", () => {
@@ -6777,6 +6791,7 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
   bindStars(formRoot);
   bindHumor(formRoot);
   bindAvisosTrigger(formRoot);
+  bindAvisosAutoClose(formRoot);
   applyStatusUi();
   setPedagogicoAutosaveLabel(existingLog?.statusAula ? "Salvo" : "—");
 };

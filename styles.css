@@ -13009,7 +13009,7 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 
 /* Drawer (novo) */
 .ped-form {
-  padding: 18px 20px 18px;
+  padding: 18px 20px 88px;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -13266,7 +13266,7 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   padding: 12px 20px;
   display: flex;
   gap: 8px;
-  margin: 4px -20px -18px;
+  margin: 4px -20px 0;
 }
 
 .ped-btn-save {
