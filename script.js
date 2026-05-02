@@ -6243,8 +6243,13 @@ const PED_RISCO_EVASAO = [
 
 const sanitizeLessonLogDraft = (raw = {}) => {
   const src = raw && typeof raw === "object" ? raw : {};
+  const statusRaw = String(src.statusAula || "").trim().toLowerCase();
+  const statusAula =
+    statusRaw === "falta" || statusRaw === "falta_do_aluno" || statusRaw === "falta do aluno"
+      ? "falta_aluno"
+      : statusRaw;
   return {
-    statusAula: String(src.statusAula || "").trim().toLowerCase(), // realizada | falta | remarcada
+    statusAula, // realizada | falta_aluno | remarcada
     conteudoTrabalhado: String(src.conteudoTrabalhado || src.oQueFoiTrabalhado || "").trim(),
     engajamentoNota: clampInt(Number(src.engajamentoNota ?? src.engajamento ?? 0), 0, 5, 0),
     evolucaoNota: clampInt(Number(src.evolucaoNota ?? src.evolucao ?? 0), 0, 5, 0),
@@ -6391,7 +6396,7 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
           <select class="ped-sel" data-ped-field="statusAula" data-ped-status>
             <option value="" ${status ? "" : "selected"}>Selecione...</option>
             <option value="realizada" ${status === "realizada" ? "selected" : ""}>Realizada</option>
-            <option value="falta" ${status === "falta" ? "selected" : ""}>Falta do aluno</option>
+            <option value="falta_aluno" ${status === "falta_aluno" ? "selected" : ""}>Falta do aluno</option>
             <option value="remarcada" ${status === "remarcada" ? "selected" : ""}>Remarcada</option>
           </select>
           <span class="ped-arr">▼</span>
@@ -6442,7 +6447,7 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
         </div>
       </div>
 
-      <div class="ped-block ped-reveal" data-ped-block="falta" hidden>
+      <div class="ped-block ped-reveal" data-ped-block="falta_aluno" hidden>
         <div class="ped-field">
           <div class="ped-label">Motivo da falta</div>
           <div class="ped-sel-wrap">
@@ -6542,12 +6547,12 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
     // This avoids regressions where the change event fires but the block never gets "is-shown".
     const dividerEl = formRoot.querySelector("[data-ped-divider]");
     if (dividerEl instanceof HTMLElement) {
-      dividerEl.hidden = !(s === "realizada" || s === "falta" || s === "remarcada");
+      dividerEl.hidden = !(s === "realizada" || s === "falta_aluno" || s === "remarcada");
     }
 
     const blocks = [
       ["realizada", formRoot.querySelector('[data-ped-block="realizada"]')],
-      ["falta", formRoot.querySelector('[data-ped-block="falta"]')],
+      ["falta_aluno", formRoot.querySelector('[data-ped-block="falta_aluno"]')],
       ["remarcada", formRoot.querySelector('[data-ped-block="remarcada"]')],
     ];
     blocks.forEach(([key, el]) => {
@@ -6806,7 +6811,11 @@ const readPedagogicoDraftFromDom = () => {
     return "";
   };
 
-  const statusAula = getField("statusAula").trim().toLowerCase();
+  const statusAulaRaw = getField("statusAula").trim().toLowerCase();
+  const statusAula =
+    statusAulaRaw === "falta" || statusAulaRaw === "falta_do_aluno" || statusAulaRaw === "falta do aluno"
+      ? "falta_aluno"
+      : statusAulaRaw;
   let avisosCoordenacao = [];
   try {
     avisosCoordenacao = normalizePedAvisos(JSON.parse(String(getField("avisosCoordenacao") || "[]")));
@@ -6833,7 +6842,7 @@ const readPedagogicoDraftFromDom = () => {
   };
 
   // Limpeza por status (evita salvar lixo)
-  if (draft.statusAula !== "falta") {
+  if (draft.statusAula !== "falta_aluno") {
     draft.motivoFalta = "";
     // ainda assim risco/obs sao comuns a falta e remarcada, mantem para remarcada
   }
@@ -6843,7 +6852,7 @@ const readPedagogicoDraftFromDom = () => {
     draft.horarioInicioRemarcacao = "";
     draft.horarioFimRemarcacao = "";
   }
-  if (draft.statusAula !== "falta" && draft.statusAula !== "remarcada") {
+  if (draft.statusAula !== "falta_aluno" && draft.statusAula !== "remarcada") {
     draft.riscoEvasao = "";
     draft.observacao = "";
   }
@@ -6898,7 +6907,7 @@ const savePedagogicoLog = async ({ autosave = false } = {}) => {
       return false;
     }
   }
-  if (draft.statusAula === "falta") {
+  if (draft.statusAula === "falta_aluno") {
     if (!has(draft.motivoFalta)) {
       if (!autosave) setPedagogicoStatus("Selecione o motivo da falta para salvar.", "error");
       return false;

@@ -368,7 +368,7 @@ const toLogIdFromEventId = (eventId) => {
 const normalizeStatusAula = (raw) => {
   const s = String(raw || "").trim().toLowerCase();
   if (s === "realizada") return "realizada";
-  if (s === "falta" || s === "falta_do_aluno") return "falta";
+  if (s === "falta_aluno" || s === "falta" || s === "falta_do_aluno" || s === "falta do aluno") return "falta_aluno";
   if (s === "remarcada") return "remarcada";
   if (s === "cancelada") return "cancelada";
   return "";
@@ -582,7 +582,7 @@ const handleLessonLogsApi = async (req, res, { idToken, role, requesterId, url }
   }
 
   // Limpa campos fora do contexto.
-  if (statusAula !== "falta") {
+  if (statusAula !== "falta_aluno") {
     data.motivoFalta = "";
   }
   if (statusAula !== "remarcada") {
@@ -591,7 +591,7 @@ const handleLessonLogsApi = async (req, res, { idToken, role, requesterId, url }
     data.horarioInicioRemarcacao = "";
     data.horarioFimRemarcacao = "";
   }
-  if (statusAula !== "falta" && statusAula !== "remarcada") {
+  if (statusAula !== "falta_aluno" && statusAula !== "remarcada") {
     data.riscoEvasao = "";
     data.observacao = "";
   }

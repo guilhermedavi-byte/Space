@@ -13009,7 +13009,7 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 
 /* Drawer (novo) */
 .ped-form {
-  padding: 18px 20px 88px;
+  padding: 18px 20px 28px;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -13263,14 +13263,18 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   bottom: 0;
   background: #0d1a2a;
   border-top: 0.5px solid rgba(255, 255, 255, 0.05);
-  padding: 12px 20px;
+  padding: 16px 20px;
   display: flex;
-  gap: 8px;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
   margin: 4px -20px 0;
+  z-index: 5;
 }
 
 .ped-btn-save {
-  flex: 1;
+  flex: 0 0 auto;
+  min-width: 240px;
   padding: 10px;
   background: #FF4E46;
   border: none;
@@ -13282,6 +13286,8 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 }
 
 .ped-btn-close {
+  flex: 0 0 auto;
+  min-width: 110px;
   padding: 10px 14px;
   background: transparent;
   border: 0.5px solid rgba(255, 255, 255, 0.08);
