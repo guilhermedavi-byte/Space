@@ -6595,12 +6595,22 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
       }
     };
 
-    const positionDropdown = () => {
-      const rect = trigger.getBoundingClientRect();
-      dropdown.style.position = "fixed";
-      dropdown.style.left = `${Math.round(rect.left)}px`;
-      dropdown.style.top = `${Math.round(rect.bottom + 6)}px`;
-      dropdown.style.width = `${Math.round(rect.width)}px`;
+	    const positionDropdown = () => {
+	      const rect = trigger.getBoundingClientRect();
+	      // Debug temporário: confirma coordenadas calculadas para o dropdown fixed.
+	      // eslint-disable-next-line no-console
+	      console.log("[POSITION DEBUG]", {
+	        rectTop: rect.top,
+	        rectBottom: rect.bottom,
+	        rectLeft: rect.left,
+	        rectWidth: rect.width,
+	        windowHeight: window.innerHeight,
+	        calculatedTop: Math.round(rect.bottom + 6),
+	      });
+	      dropdown.style.position = "fixed";
+	      dropdown.style.left = `${Math.round(rect.left)}px`;
+	      dropdown.style.top = `${Math.round(rect.bottom + 6)}px`;
+	      dropdown.style.width = `${Math.round(rect.width)}px`;
       dropdown.style.zIndex = "9999";
       const maxH = Math.max(160, Math.min(340, window.innerHeight - (rect.bottom + 18)));
       dropdown.style.maxHeight = `${Math.round(maxH)}px`;
