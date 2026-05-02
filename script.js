@@ -6391,7 +6391,8 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
   const status = normalizePedagogicoStatus(draft.statusAula);
 
   pedagogicoFormContainer.innerHTML = `
-    <div class="ped-form" data-ped-form>
+    <div class="ped-shell" data-ped-form>
+      <div class="ped-scroll" data-ped-scroll>
       <div class="ped-head">
         <div class="ped-head-name">Registro da aula</div>
         <div class="ped-head-sub">${escapeHtml(
@@ -6533,16 +6534,18 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
           )}</textarea>
         </div>
       </div>
+      </div>
 
-      <div class="ped-footer">
-        <button class="ped-btn-save" type="button" data-pedagogico-save>Salvar registro</button>
+      <div class="ped-footer" data-ped-footer>
         <button class="ped-btn-close" type="button" data-pedagogico-drawer-close>Fechar</button>
+        <button class="ped-btn-save" type="button" data-pedagogico-save>Salvar registro</button>
       </div>
     </div>
   `;
 
   const formRoot = pedagogicoFormContainer.querySelector("[data-ped-form]");
   if (!(formRoot instanceof HTMLElement)) return;
+  const scrollRoot = formRoot.querySelector("[data-ped-scroll]") || formRoot;
 
   const setDirty = () => {
     pedagogicoDirty = true;
@@ -6550,7 +6553,7 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
   };
 
   const applyStatusUi = () => {
-    const statusEl = formRoot.querySelector("[data-ped-status]");
+    const statusEl = scrollRoot.querySelector("[data-ped-status]");
     const rawValue = statusEl instanceof HTMLSelectElement ? String(statusEl.value || "") : "";
     const s = normalizePedagogicoStatus(rawValue);
     // debug temporario
@@ -6558,15 +6561,15 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
     console.log("[PED STATUS CHANGE]", { rawValue, normalizedStatus: s });
     // Defensive: if the status is one of our supported values, always ensure the matching block becomes visible.
     // This avoids regressions where the change event fires but the block never gets "is-shown".
-    const dividerEl = formRoot.querySelector("[data-ped-divider]");
+    const dividerEl = scrollRoot.querySelector("[data-ped-divider]");
     if (dividerEl instanceof HTMLElement) {
       dividerEl.hidden = !(s === "realizada" || s === "falta_aluno" || s === "remarcada");
     }
 
     const blocks = [
-      ["realizada", formRoot.querySelector('[data-ped-block="realizada"]')],
-      ["falta_aluno", formRoot.querySelector('[data-ped-block="falta_aluno"]')],
-      ["remarcada", formRoot.querySelector('[data-ped-block="remarcada"]')],
+      ["realizada", scrollRoot.querySelector('[data-ped-block="realizada"]')],
+      ["falta_aluno", scrollRoot.querySelector('[data-ped-block="falta_aluno"]')],
+      ["remarcada", scrollRoot.querySelector('[data-ped-block="remarcada"]')],
     ];
     // eslint-disable-next-line no-console
     console.log("[PED FORM RENDER STATUS]", {
@@ -6669,11 +6672,11 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
   };
 
   const openPedAvisosPortal = () => {
-    const trigger = formRoot.querySelector("[data-ped-avisos-trigger]");
+    const trigger = scrollRoot.querySelector("[data-ped-avisos-trigger]");
     if (!(trigger instanceof HTMLElement)) return;
     closePedAvisosPortal();
 
-    const hidden = formRoot.querySelector('[data-ped-field="avisosCoordenacao"]');
+    const hidden = scrollRoot.querySelector('[data-ped-field="avisosCoordenacao"]');
     if (!(hidden instanceof HTMLInputElement)) return;
     let selected = [];
     try {
@@ -6721,7 +6724,7 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
         badge.textContent = String(list.length);
         badge.hidden = list.length <= 0;
       }
-      const pillsWrap = formRoot.querySelector("[data-ped-avisos-pills]");
+      const pillsWrap = scrollRoot.querySelector("[data-ped-avisos-pills]");
       if (pillsWrap instanceof HTMLElement) {
         pillsWrap.innerHTML = list
           .map((v) => {
@@ -6801,7 +6804,7 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
   };
 
   // Generic dirty listeners
-  formRoot.querySelectorAll("input, textarea, select").forEach((el) => {
+  scrollRoot.querySelectorAll("input, textarea, select").forEach((el) => {
     el.addEventListener("change", () => {
       setDirty();
       applyStatusUi();
@@ -6812,10 +6815,20 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
     });
   });
 
-  bindStars(formRoot);
-  bindHumor(formRoot);
-  bindAvisosTrigger(formRoot);
-  bindAvisosAutoClose(formRoot);
+  // Explicit binding for status select (more robust than relying on generic listeners).
+  const statusSelect = scrollRoot.querySelector("[data-ped-status]");
+  if (statusSelect instanceof HTMLSelectElement) {
+    statusSelect.addEventListener("change", () => {
+      const normalized = normalizePedagogicoStatus(statusSelect.value);
+      if (statusSelect.value !== normalized) statusSelect.value = normalized;
+      applyStatusUi();
+    });
+  }
+
+  bindStars(scrollRoot);
+  bindHumor(scrollRoot);
+  bindAvisosTrigger(scrollRoot);
+  bindAvisosAutoClose(scrollRoot);
   applyStatusUi();
   setPedagogicoAutosaveLabel(existingLog?.statusAula ? "Salvo" : "—");
 };
@@ -6824,8 +6837,10 @@ const readPedagogicoDraftFromDom = () => {
   const root = pedagogicoFormContainer instanceof HTMLElement ? pedagogicoFormContainer.querySelector("[data-ped-form]") : null;
   if (!(root instanceof HTMLElement) || !pedagogicoActive?.lesson) return null;
 
+  const scope = (root.querySelector("[data-ped-scroll]") || root);
+
   const getField = (key) => {
-    const el = root.querySelector(`[data-ped-field="${key}"]`);
+    const el = scope.querySelector(`[data-ped-field="${key}"]`);
     if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) return String(el.value || "");
     return "";
   };
