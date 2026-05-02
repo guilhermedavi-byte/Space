@@ -13265,9 +13265,9 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   top: calc(100% + 6px);
   left: 0;
   right: 0;
-  background: #0f1d2d;
-  background-color: #0f1d2d;
-  opacity: 1;
+  background: #0f1d2d !important;
+  background-color: #0f1d2d !important;
+  opacity: 1 !important;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
   border: 0.5px solid rgba(255, 255, 255, 0.1);
