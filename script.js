@@ -6595,9 +6595,35 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
       }
     };
 
+    const positionDropdown = () => {
+      const rect = trigger.getBoundingClientRect();
+      dropdown.style.position = "fixed";
+      dropdown.style.left = `${Math.round(rect.left)}px`;
+      dropdown.style.top = `${Math.round(rect.bottom + 6)}px`;
+      dropdown.style.width = `${Math.round(rect.width)}px`;
+      dropdown.style.zIndex = "9999";
+      const maxH = Math.max(160, Math.min(340, window.innerHeight - (rect.bottom + 18)));
+      dropdown.style.maxHeight = `${Math.round(maxH)}px`;
+      dropdown.style.overflowY = "auto";
+    };
+
     trigger.addEventListener("click", () => {
-      dropdown.hidden = !dropdown.hidden;
+      const willOpen = dropdown.hidden;
+      dropdown.hidden = !willOpen;
+      if (willOpen) {
+        window.requestAnimationFrame(() => positionDropdown());
+      }
     });
+
+    const drawerBody = pedagogicoDrawer instanceof HTMLElement ? pedagogicoDrawer.querySelector(".pedagogico-drawer-body") : null;
+    const onScrollOrResize = () => {
+      if (dropdown.hidden) return;
+      positionDropdown();
+    };
+    window.addEventListener("resize", onScrollOrResize);
+    if (drawerBody instanceof HTMLElement) drawerBody.addEventListener("scroll", onScrollOrResize, { passive: true });
+    pedagogicoCleanupFns.push(() => window.removeEventListener("resize", onScrollOrResize));
+    if (drawerBody instanceof HTMLElement) pedagogicoCleanupFns.push(() => drawerBody.removeEventListener("scroll", onScrollOrResize));
     dropdown.addEventListener("click", (ev) => {
       const t = ev.target;
       if (!(t instanceof Element)) return;
@@ -6611,17 +6637,17 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
       applyStatusUi();
     });
     // close on click outside
-	    const onDoc = (ev) => {
-	      const t = ev.target;
-	      if (!(t instanceof Element)) return;
-	      if (root.contains(t)) return;
-	      dropdown.hidden = true;
-	    };
-	    document.addEventListener("click", onDoc, { capture: true });
-	    pedagogicoCleanupFns.push(() => document.removeEventListener("click", onDoc, { capture: true }));
+    const onDoc = (ev) => {
+      const t = ev.target;
+      if (!(t instanceof Element)) return;
+      if (root.contains(t)) return;
+      dropdown.hidden = true;
+    };
+    document.addEventListener("click", onDoc, { capture: true });
+    pedagogicoCleanupFns.push(() => document.removeEventListener("click", onDoc, { capture: true }));
 
-	    setSelected(readSelected());
-	  };
+    setSelected(readSelected());
+  };
 
   // We may have more than one avisos block (realizada/falta). Bind them all.
   formRoot.querySelectorAll("[data-ped-multisel]").forEach((r) => bindMultiSelect(r));
