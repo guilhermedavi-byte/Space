@@ -12954,6 +12954,10 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   gap: 14px;
 }
 
+.pedagogico-form.is-compact {
+  gap: 12px;
+}
+
 .pedagogico-meta-title {
   font-size: 15px;
   font-weight: 750;
@@ -12999,7 +13003,7 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 }
 
 .pedagogico-textarea {
-  min-height: 92px;
+  min-height: 78px;
   resize: vertical;
 }
 
@@ -13080,6 +13084,52 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+}
+
+.pedagogico-seg {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+}
+
+.pedagogico-seg-btn {
+  border-radius: 12px;
+  padding: 10px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+  transition: transform 120ms ease, background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.pedagogico-seg-btn:hover {
+  transform: translateY(-1px);
+}
+
+.pedagogico-seg[data-tone="green"] .pedagogico-seg-btn.is-active {
+  border-color: rgba(93, 202, 165, 0.55);
+  background: rgba(93, 202, 165, 0.14);
+  color: #5DCAA5;
+}
+
+.pedagogico-seg[data-tone="blue"] .pedagogico-seg-btn.is-active {
+  border-color: rgba(89, 144, 189, 0.6);
+  background: rgba(89, 144, 189, 0.14);
+  color: #5990BD;
+}
+
+.pedagogico-seg[data-tone="amber"] .pedagogico-seg-btn.is-active {
+  border-color: rgba(251, 191, 36, 0.55);
+  background: rgba(251, 191, 36, 0.12);
+  color: #FBBF24;
+}
+
+.pedagogico-seg[data-tone="coral"] .pedagogico-seg-btn.is-active {
+  border-color: rgba(255, 78, 70, 0.55);
+  background: rgba(255, 78, 70, 0.12);
+  color: #FF4E46;
 }
 
 .status-btn {

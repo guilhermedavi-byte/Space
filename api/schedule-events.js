@@ -510,16 +510,58 @@ const handleLessonLogsApi = async (req, res, { idToken, role, requesterId, url }
     dateKey: isValidDateKey(String(body?.dateKey || "")) ? String(body.dateKey) : "",
     criadoEm: body?.criadoEm ? new Date(String(body.criadoEm)) : now,
     atualizadoEm: now,
-    statusAula,
+	    statusAula,
+	    // Registro gerencial (v2)
+	    motivoNaoRealizada: normalizeOneOf(body?.motivoNaoRealizada, [
+      "aluno_faltou_sem_avisar",
+      "aluno_avisou_em_cima_da_hora",
+      "aluno_pediu_remarcacao_com_antecedencia",
+      "professor_precisou_remarcar",
+      "conflito_de_horario",
+      "internet_aluno",
+      "internet_professor",
+      "plataforma_link",
+      "dificuldade_acesso",
+      "cancelada_adm",
+      "outro",
+    ]) || null,
+    motivoNaoRealizadaOutro: String(body?.motivoNaoRealizadaOutro || "").trim() || "",
+	    // Novo formulário executivo: engajamento (alto|medio|baixo). Compat: aceitar engajamentoNivel antigo.
+	    engajamento: normalizeOneOf(body?.engajamento ?? body?.engajamentoNivel, ["alto", "medio", "baixo"]) || null,
+	    experienciaAula: normalizeOneOf(body?.experienciaAula, ["boa", "atencao", "ruim"]) || null,
+	    riscoEvasao: normalizeOneOf(body?.riscoEvasao, ["baixo", "medio", "alto"]) || null,
+    motivoRisco: normalizeOneOf(body?.motivoRisco, [
+      "faltas_remarcacoes",
+      "baixo_engajamento",
+      "nao_percebe_evolucao",
+      "dificuldade_alta",
+      "questao_financeira",
+      "insatisfacao",
+      "outro",
+    ]) || null,
+    motivoRiscoOutro: String(body?.motivoRiscoOutro || "").trim() || "",
+    acaoCoordenacao: normalizeOneOf(body?.acaoCoordenacao, [
+      "nenhuma",
+      "acompanhar_aluno",
+      "falar_com_aluno",
+      "ajustar_nivel_plano",
+      "revisar_professor_horario",
+      "acionar_retencao",
+    ]) || null,
+    resumoAula: String(body?.resumoAula || "").trim().slice(0, 250) || "",
+    observacaoOpcional: String(body?.observacaoOpcional || "").trim().slice(0, 160) || "",
+    precisaIntervencao: Boolean(body?.precisaIntervencao),
     novaDataAcordada: String(body?.novaDataAcordada || "").trim() || null,
     oQueFoiTrabalhado: String(body?.oQueFoiTrabalhado || "").trim() || "",
     nivelDificuldade: normalizeDifficulty(body?.nivelDificuldade) || "adequado",
     topicosAbordados: normalizeTopics(body?.topicosAbordados),
-    engajamento: (() => {
-      const n = Number(body?.engajamento);
-      if (!Number.isFinite(n) || n <= 0) return null;
-      return clampInt(n, 1, 5);
-    })(),
+	    // Campo legado (form antigo com estrelas 1-5). Mantemos para compat, mas com outro nome
+	    // para não conflitar com o novo `engajamento` (alto|medio|baixo).
+	    engajamentoStars: (() => {
+	      const n = Number(body?.engajamento);
+	      if (!Number.isFinite(n) || n <= 0) return null;
+	      return clampInt(n, 1, 5);
+	    })(),
     confiancaFalar: (() => {
       const n = Number(body?.confiancaFalar);
       if (!Number.isFinite(n) || n <= 0) return null;
@@ -551,7 +593,7 @@ const handleLessonLogsApi = async (req, res, { idToken, role, requesterId, url }
   if (statusAula === "falta" || statusAula === "cancelada") {
     data.oQueFoiTrabalhado = "";
     data.topicosAbordados = [];
-    data.engajamento = null;
+	    data.engajamentoStars = null;
     data.confiancaFalar = null;
     data.notaAula = null;
     data.humorAluno = null;
@@ -565,6 +607,24 @@ const handleLessonLogsApi = async (req, res, { idToken, role, requesterId, url }
     data.feedbackParaAluno = "";
     data.temaProximaAula = "";
     data.tarefaDeCasa = "";
+  }
+
+  // Quando a aula foi realizada, motivo de "não realizada" não se aplica.
+  if (statusAula === "realizada") {
+    data.motivoNaoRealizada = null;
+    data.motivoNaoRealizadaOutro = "";
+    data.observacaoOpcional = "";
+	  } else {
+	    // Quando não realizada, campos de aula realizada podem ficar vazios.
+	    data.resumoAula = "";
+	    data.engajamento = null;
+	    data.experienciaAula = null;
+	  }
+
+  // Se risco não for medio/alto, motivo principal não se aplica.
+  if (data.riscoEvasao !== "medio" && data.riscoEvasao !== "alto") {
+    data.motivoRisco = null;
+    data.motivoRiscoOutro = "";
   }
 
   if (statusAula !== "remarcada") {

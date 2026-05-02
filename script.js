@@ -440,29 +440,17 @@ const isTeacherAccessRole = (role) => {
 // Handler único (robusto) para abrir o drawer a partir de um eventId clicado na lista.
 function handlePedagogicoItemOpen(eventId) {
   const id = String(eventId || "").trim();
-  // eslint-disable-next-line no-console
-  console.log("[PEDAGOGICO ITEM CLICK RECEBIDO]", { eventId: id, currentRole });
-
   const lesson = Array.isArray(pedagogicoState.lessons)
     ? pedagogicoState.lessons.find((l) => String(l?.id || "") === id)
     : null;
 
-  if (!lesson) {
-    console.warn("[PEDAGOGICO] lesson não encontrada para eventId", id);
-    return;
-  }
+  if (!lesson) return;
 
   const start = buildDateFromDateKeyAndMinutes(lesson.dateKey, lesson.startMin);
   const isFuture = start ? start.getTime() > Date.now() : false;
-  if (isFuture) {
-    // eslint-disable-next-line no-console
-    console.log("[PEDAGOGICO] aula futura bloqueada", lesson);
-    return;
-  }
+  if (isFuture) return;
 
   try {
-    // eslint-disable-next-line no-console
-    console.log("[PEDAGOGICO OPEN DRAWER]", { lesson, pedagogicoDrawer: pedagogicoDrawer || null });
     openPedagogicoDrawer({ lesson });
   } catch (error) {
     console.error("[PEDAGOGICO] erro ao abrir drawer:", error);
@@ -6134,191 +6122,111 @@ const closePedagogicoDrawer = () => {
 
 const sanitizeLessonLogDraft = (raw = {}) => {
   const src = raw && typeof raw === "object" ? raw : {};
-  const topicos = Array.isArray(src.topicosAbordados) ? src.topicosAbordados : [];
-  const risco = Array.isArray(src.riscoEvasao) ? src.riscoEvasao : [];
+  const engCandidate = String(src.engajamento || "").trim().toLowerCase();
+  const engFallback = String(src.engajamentoNivel || "").trim().toLowerCase();
+  const engajamento = ["alto", "medio", "baixo"].includes(engCandidate) ? engCandidate : engFallback;
   return {
-    statusAula: String(src.statusAula || "").trim().toLowerCase(),
+    statusAula: String(src.statusAula || "").trim().toLowerCase(), // realizada | falta | remarcada | cancelada
     motivoNaoRealizada: String(src.motivoNaoRealizada || "").trim().toLowerCase(),
     motivoNaoRealizadaOutro: String(src.motivoNaoRealizadaOutro || ""),
-    novaDataAcordada: String(src.novaDataAcordada || "").trim(),
-    oQueFoiTrabalhado: String(src.oQueFoiTrabalhado || ""),
-    nivelDificuldade: String(src.nivelDificuldade || "adequado").trim().toLowerCase(),
-    topicosAbordados: topicos.map((t) => String(t || "").trim()).filter(Boolean),
-    engajamento: clampNumber(Number(src.engajamento) || 0, 0, 5),
-    confiancaFalar: clampNumber(Number(src.confiancaFalar) || 0, 0, 5),
-    humorAluno: String(src.humorAluno || "").trim().toLowerCase(),
-    lembrouAulaAnterior: String(src.lembrouAulaAnterior || "").trim().toLowerCase(),
-    tarefaAnteriorFeita: String(src.tarefaAnteriorFeita || "").trim().toLowerCase(),
-    tipoAtividade: String(src.tipoAtividade || "").trim().toLowerCase(),
-    materialUsado: String(src.materialUsado || "").trim().toLowerCase(),
-    vocabularioNovo: String(src.vocabularioNovo || ""),
-    duracaoReal: String(src.duracaoReal || "").trim(),
-    notaAula: src.notaAula == null ? "" : String(src.notaAula),
-    pontosFortesAluno: String(src.pontosFortesAluno || ""),
-    pontosADesenvolver: String(src.pontosADesenvolver || ""),
-    feedbackParaAluno: String(src.feedbackParaAluno || ""),
-    temaProximaAula: String(src.temaProximaAula || ""),
-    tarefaDeCasa: String(src.tarefaDeCasa || ""),
-    observacoesInternas: String(src.observacoesInternas || ""),
-    nivelCEFR: String(src.nivelCEFR || "").trim().toUpperCase(),
-    evolucao: String(src.evolucao || "").trim().toLowerCase(),
-    riscoEvasao: risco.map((t) => String(t || "").trim()).filter(Boolean),
-    riscoEvasaoOutro: String(src.riscoEvasaoOutro || ""),
-    acaoCoordenacao: String(src.acaoCoordenacao || "").trim().toLowerCase(),
-    acaoCoordenacaoOutro: String(src.acaoCoordenacaoOutro || ""),
+    // Novo formulário executivo: engajamento (alto | medio | baixo).
+    // Compatibilidade: logs antigos podem ter engajamentoNivel.
+    engajamento, // alto | medio | baixo
+    evolucao: String(src.evolucao || "").trim().toLowerCase(), // evoluiu | estavel | regrediu
+    experienciaAula: String(src.experienciaAula || "").trim().toLowerCase(), // boa | atencao | ruim
+    riscoEvasao: String(src.riscoEvasao || "").trim().toLowerCase(), // baixo | medio | alto
+    motivoRisco: String(src.motivoRisco || "").trim().toLowerCase(),
+    motivoRiscoOutro: String(src.motivoRiscoOutro || ""),
+    acaoCoordenacao: String(src.acaoCoordenacao || "").trim().toLowerCase(), // nenhuma | ...
+    resumoAula: String(src.resumoAula || ""),
+    observacaoOpcional: String(src.observacaoOpcional || ""),
   };
 };
 
-const getPedagogicoTopics = () => ["Gramática", "Vocabulário", "Pronúncia", "Conversação", "Escrita", "Compreensão"];
+const PED_MOTIVO_NAO_REALIZADA = [
+  ["aluno_faltou_sem_avisar", "Aluno faltou sem avisar"],
+  ["aluno_avisou_em_cima_da_hora", "Aluno avisou em cima da hora"],
+  ["aluno_pediu_remarcacao_com_antecedencia", "Aluno pediu remarcação com antecedência"],
+  ["professor_precisou_remarcar", "Professor precisou remarcar"],
+  ["conflito_de_horario", "Conflito de horário"],
+  ["internet_aluno", "Problema de internet do aluno"],
+  ["internet_professor", "Problema de internet do professor"],
+  ["plataforma_link", "Problema na plataforma/link de acesso"],
+  ["dificuldade_acesso", "Aluno com dificuldade para acessar a aula"],
+  ["cancelada_adm", "Aula cancelada administrativamente"],
+  ["outro", "Outro"],
+];
 
-const PED_CHIP = {
-  motivoNaoRealizada: [
-    ["aluno_faltou_sem_avisar", "Aluno faltou sem avisar"],
-    ["aluno_avisou_em_cima_da_hora", "Aluno avisou em cima da hora"],
-    ["aluno_pediu_remarcacao_com_antecedencia", "Aluno pediu remarcação com antecedência"],
-    ["professor_precisou_remarcar", "Professor precisou remarcar"],
-    ["conflito_de_horario", "Conflito de horário"],
-    ["internet_aluno", "Problema de internet do aluno"],
-    ["internet_professor", "Problema de internet do professor"],
-    ["plataforma_link", "Problema na plataforma/link de acesso"],
-    ["dificuldade_acesso", "Aluno com dificuldade para acessar a aula"],
-    ["cancelada_adm", "Aula cancelada administrativamente"],
-    ["outro", "Outro"],
-  ],
-  riscoEvasao: [
-    ["faltando_frequencia", "Aluno está faltando com frequência"],
-    ["reagendando_muito", "Aluno está reagendando muitas aulas"],
-    ["baixa_motivacao", "Aluno demonstra baixa motivação"],
-    ["nao_percebe_evolucao", "Aluno não percebe evolução"],
-    ["dificuldade_acima", "Aluno está com dificuldade acima do esperado"],
-    ["nao_faz_tarefas", "Aluno não faz tarefas/estudos fora da aula"],
-    ["pouca_disponibilidade", "Aluno tem pouca disponibilidade para estudar"],
-    ["insatisfeito_experiencia", "Aluno demonstrou insatisfação com a experiência"],
-    ["insatisfeito_professor", "Aluno demonstrou insatisfação com o professor"],
-    ["problema_financeiro", "Aluno demonstrou problema financeiro"],
-    ["comentou_pausa_cancelamento", "Aluno comentou sobre pausa/cancelamento"],
-    ["nao_usa_recursos", "Aluno não está usando os recursos da escola"],
-    ["outro", "Outro"],
-  ],
-  acaoCoordenacao: [
-    ["nao_precisa", "Não precisa de ação"],
-    ["acompanhar", "Acompanhar evolução do aluno"],
-    ["falar_engajamento", "Falar com o aluno sobre engajamento"],
-    ["falar_faltas", "Falar com o aluno sobre faltas/remarcações"],
-    ["ajustar_dificuldade", "Ajustar nível de dificuldade"],
-    ["ajustar_plano", "Ajustar plano de estudo"],
-    ["trocar_ou_orientar_professor", "Trocar ou orientar professor"],
-    ["revisar_horario", "Revisar horário das aulas"],
-    ["acionar_financeiro_comercial", "Acionar financeiro/comercial"],
-    ["acionar_retencao", "Acionar retenção por risco de cancelamento"],
-    ["outro", "Outro"],
-  ],
-  topics: [
-    ["gramatica", "Gramática"],
-    ["vocabulario", "Vocabulário"],
-    ["pronuncia", "Pronúncia"],
-    ["conversacao", "Conversação"],
-    ["escrita", "Escrita"],
-    ["compreensao", "Compreensão"],
-  ],
-  humor: [
-    ["animado", "😊 Animado"],
-    ["neutro", "😐 Neutro"],
-    ["cansado", "😴 Cansado"],
-    ["ansioso", "😰 Ansioso"],
-  ],
-  lembrou: [
-    ["sim", "Sim, completamente"],
-    ["parcialmente", "Parcialmente"],
-    ["nao", "Não lembrou"],
-  ],
-  tarefaAnterior: [
-    ["tudo", "Fez tudo"],
-    ["parcialmente", "Fez parcialmente"],
-    ["nao_fez", "Não fez"],
-    ["sem_tarefa", "Não havia tarefa"],
-  ],
-  tipoAtividade: [
-    ["conversacao", "Conversação livre"],
-    ["gramatica", "Gramática focada"],
-    ["vocabulario", "Vocabulário"],
-    ["pronuncia", "Pronúncia"],
-    ["revisao", "Revisão"],
-    ["avaliacao", "Avaliação"],
-  ],
-  materialUsado: [
-    ["livro", "Livro didático"],
-    ["proprio", "Material próprio"],
-    ["improviso", "Improviso"],
-    ["video", "Vídeo/Mídia"],
-  ],
+const PED_MOTIVO_RISCO = [
+  ["faltas_remarcacoes", "Faltas/remarcações"],
+  ["baixo_engajamento", "Baixo engajamento"],
+  ["nao_percebe_evolucao", "Não percebe evolução"],
+  ["dificuldade_alta", "Dificuldade alta"],
+  ["questao_financeira", "Questão financeira"],
+  ["insatisfacao", "Insatisfação"],
+  ["outro", "Outro"],
+];
+
+const PED_ACAO_COORDENACAO = [
+  ["nenhuma", "Nenhuma"],
+  ["acompanhar_aluno", "Acompanhar aluno"],
+  ["falar_com_aluno", "Falar com aluno"],
+  ["ajustar_nivel_plano", "Ajustar nível/plano"],
+  ["revisar_professor_horario", "Revisar professor/horário"],
+  ["acionar_retencao", "Acionar retenção"],
+];
+
+const renderPedSelectOptions = (options, selected) => {
+  const sel = String(selected || "");
+  const list = Array.isArray(options) ? options : [];
+  return list
+    .map(([val, label]) => `<option value="${escapeHtml(String(val))}" ${sel === String(val) ? "selected" : ""}>${escapeHtml(String(label))}</option>`)
+    .join("");
 };
 
-const renderPedChips = ({ items, selected = "", multi = false, dataKey } = {}) => {
-  const list = Array.isArray(items) ? items : [];
-  const selArr = Array.isArray(selected) ? selected : [];
-  const sel = multi ? selArr : String(selected || "");
+const renderPedSegment = ({ name, value, options, tone = "blue" } = {}) => {
+  const v = String(value || "").trim().toLowerCase();
+  const opts = Array.isArray(options) ? options : [];
   return `
-    <div class="pedagogico-chips" data-ped-chips="${escapeHtml(String(dataKey || ""))}">
-      ${list
+    <div class="pedagogico-seg" data-ped-seg="${escapeHtml(String(name || ""))}" data-tone="${escapeHtml(String(tone || "blue"))}">
+      <input type="hidden" data-ped-field="${escapeHtml(String(name || ""))}" value="${escapeHtml(v)}" />
+      ${opts
         .map(([key, label]) => {
-          const active = multi ? selArr.includes(label) : sel === key;
-          return `<button type="button" class="pedagogico-chip ${active ? "is-active" : ""}" data-chip="${escapeHtml(
-            String(key)
-          )}" data-chip-label="${escapeHtml(String(label))}">${escapeHtml(String(label))}</button>`;
+          const k = String(key || "").trim().toLowerCase();
+          const active = v === k;
+          return `<button type="button" class="pedagogico-seg-btn ${active ? "is-active" : ""}" data-ped-seg-opt="${escapeHtml(
+            k
+          )}">${escapeHtml(String(label))}</button>`;
         })
         .join("")}
     </div>
   `;
 };
 
-const renderStarRow = ({ value = 0, dataKey, ariaLabel } = {}) => {
-  const n = clampInt(Number(value) || 0, 0, 5);
-  const key = String(dataKey || "");
-  return `
-    <div class="pedagogico-stars-lg" data-ped-stars="${escapeHtml(key)}" aria-label="${escapeHtml(String(ariaLabel || ""))}">
-      ${Array.from({ length: 5 })
-        .map((_, idx) => {
-          const v = idx + 1;
-          const active = v <= n;
-          return `<button type="button" class="pedagogico-star-lg ${active ? "is-active" : ""}" data-star="${v}" aria-label="${v} estrelas">★</button>`;
-        })
-        .join("")}
-    </div>
-  `;
-};
-
-const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
+  const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
   if (!(pedagogicoFormContainer instanceof HTMLElement)) return;
   const safeLesson = lesson && typeof lesson === "object" ? lesson : {};
   const draft = sanitizeLessonLogDraft(existingLog?.payload || {});
-  const dateLabel = `${formatPedagogicoDate(safeLesson.dateKey)} · ${escapeHtml(formatHmFromMinutes(safeLesson.startMin))}–${escapeHtml(
-    formatHmFromMinutes(safeLesson.endMin)
-  )}`;
-  const studentName = escapeHtml(String(safeLesson.title || "Aluno"));
-  const subtitle = escapeHtml(String(safeLesson.description || "Aula"));
-
+  const studentNameRaw = String(safeLesson.title || "Aluno");
   if (pedagogicoDrawerTitle instanceof HTMLElement) {
-    pedagogicoDrawerTitle.textContent = `Aula ${String(safeLesson.title || "Aluno")} · ${formatPedagogicoDate(
-      safeLesson.dateKey
-    )} · ${formatHmFromMinutes(safeLesson.startMin)}–${formatHmFromMinutes(safeLesson.endMin)}`;
+    pedagogicoDrawerTitle.textContent = "Registro da aula";
   }
 
   const status = String(draft.statusAula || "").trim().toLowerCase();
   const statusSet = Boolean(status);
 
   pedagogicoFormContainer.innerHTML = `
-    <div class="pedagogico-form" data-ped-form>
+    <div class="pedagogico-form is-compact" data-ped-form>
       <div class="pedagogico-meta">
-        <div class="pedagogico-meta-title">${studentName}</div>
-        <div class="pedagogico-meta-sub">${dateLabel} · ${subtitle}</div>
+        <div class="pedagogico-meta-title">${escapeHtml(studentNameRaw)}</div>
+        <div class="pedagogico-meta-sub">${escapeHtml(`${formatPedagogicoDate(safeLesson.dateKey)} • ${formatHmFromMinutes(
+          safeLesson.startMin
+        )}–${formatHmFromMinutes(safeLesson.endMin)}`)}</div>
       </div>
-
       <div class="pedagogico-section">
-        <h3 class="pedagogico-section-title">📋 Presença</h3>
+        <h3 class="pedagogico-section-title">Status da aula</h3>
         <div class="pedagogico-field">
-          <label class="pedagogico-label">STATUS DA AULA <span class="pedagogico-required">*</span></label>
-          <div class="pedagogico-status-row" data-ped-status-row>
+          <div class="pedagogico-status-row">
             ${[
               ["realizada", "Realizada"],
               ["falta", "Falta do aluno"],
@@ -6333,223 +6241,121 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
               })
               .join("")}
           </div>
-          <div class="pedagogico-help" data-ped-status-help ${statusSet ? "hidden" : ""}>Selecione o status da aula para continuar.</div>
+          <div class="pedagogico-help" data-ped-status-help ${statusSet ? "hidden" : ""}>Selecione o status para continuar.</div>
           <input type="hidden" data-ped-hidden="statusAula" value="${escapeHtml(status)}" />
         </div>
-        <div class="pedagogico-field" data-ped-reschedule hidden>
-          <label class="pedagogico-label">NOVA DATA ACORDADA</label>
-          <input class="pedagogico-input" type="date" data-ped-field="novaDataAcordada" value="${escapeHtml(draft.novaDataAcordada)}" />
-        </div>
 
-        <div class="pedagogico-field" data-ped-nao-realizada-motivo hidden>
-          <span class="pedagogico-label">MOTIVO (QUANDO A AULA NÃO FOR REALIZADA)</span>
-          ${renderPedChips({ items: PED_CHIP.motivoNaoRealizada, selected: draft.motivoNaoRealizada, multi: false, dataKey: "motivoNaoRealizada" })}
+        <div class="pedagogico-field" data-ped-nao-realizada hidden>
+          <label class="pedagogico-label">MOTIVO (AULA NÃO REALIZADA) <span class="pedagogico-required">*</span></label>
+          <select class="pedagogico-input" data-ped-field="motivoNaoRealizada">
+            <option value="" ${draft.motivoNaoRealizada ? "" : "selected"}>Selecione</option>
+            ${renderPedSelectOptions(PED_MOTIVO_NAO_REALIZADA, draft.motivoNaoRealizada)}
+          </select>
           <label class="pedagogico-field" data-ped-outro-wrap="motivoNaoRealizadaOutro" hidden>
             <span class="pedagogico-label">DESCREVA O MOTIVO <span class="pedagogico-required">*</span></span>
-            <textarea class="pedagogico-textarea" data-ped-field="motivoNaoRealizadaOutro" placeholder="Descreva o motivo...">${escapeHtml(
+            <input class="pedagogico-input" type="text" data-ped-field="motivoNaoRealizadaOutro" value="${escapeHtml(
               draft.motivoNaoRealizadaOutro
-            )}</textarea>
+            )}" maxlength="120" placeholder="Descreva o motivo..." />
+          </label>
+          <label class="pedagogico-field">
+            <span class="pedagogico-label">OBSERVAÇÃO (OPCIONAL)</span>
+            <input class="pedagogico-input" type="text" data-ped-field="observacaoOpcional" value="${escapeHtml(
+              draft.observacaoOpcional
+            )}" maxlength="160" placeholder="Observação curta..." />
           </label>
         </div>
       </div>
 
       <div class="pedagogico-divider"></div>
 
-      <div class="pedagogico-section pedagogico-reveal" data-ped-block="conteudo" hidden>
-        <h3 class="pedagogico-section-title">📚 Conteúdo da aula</h3>
+      <div class="pedagogico-section pedagogico-reveal" data-ped-block="executivo" hidden>
+        <h3 class="pedagogico-section-title">Check-in executivo</h3>
 
-        <label class="pedagogico-field">
-          <span class="pedagogico-label">O QUE FOI TRABALHADO HOJE</span>
-          <textarea class="pedagogico-textarea" data-ped-field="oQueFoiTrabalhado" placeholder="Descreva o que foi feito na aula...">${escapeHtml(
-            draft.oQueFoiTrabalhado
-          )}</textarea>
-        </label>
+        <div class="pedagogico-field" data-ped-realizada-only>
+          <span class="pedagogico-label">ENGAJAMENTO DO ALUNO <span class="pedagogico-required">*</span></span>
+          ${renderPedSegment({
+            name: "engajamento",
+            value: draft.engajamento,
+            options: [
+              ["alto", "Alto"],
+              ["medio", "Médio"],
+              ["baixo", "Baixo"],
+            ],
+            tone: "green",
+          })}
+        </div>
+
+        <div class="pedagogico-field" data-ped-realizada-only>
+          <span class="pedagogico-label">EVOLUÇÃO PERCEBIDA <span class="pedagogico-required">*</span></span>
+          ${renderPedSegment({
+            name: "evolucao",
+            value: draft.evolucao,
+            options: [
+              ["evoluiu", "Evoluiu"],
+              ["estavel", "Estável"],
+              ["regrediu", "Regrediu"],
+            ],
+            tone: "blue",
+          })}
+        </div>
+
+        <div class="pedagogico-field" data-ped-realizada-only>
+          <span class="pedagogico-label">EXPERIÊNCIA DA AULA <span class="pedagogico-required">*</span></span>
+          ${renderPedSegment({
+            name: "experienciaAula",
+            value: draft.experienciaAula,
+            options: [
+              ["boa", "Boa"],
+              ["atencao", "Atenção"],
+              ["ruim", "Ruim"],
+            ],
+            tone: "amber",
+          })}
+        </div>
 
         <div class="pedagogico-field">
-          <span class="pedagogico-label">NÍVEL DE DIFICULDADE</span>
-          <div class="pedagogico-radio-row">
-            ${[
-              ["muito_facil", "Muito fácil"],
-              ["adequado", "Adequado"],
-              ["desafiador", "Desafiador"],
-              ["muito_dificil", "Muito difícil"],
-            ]
-              .map(([val, label]) => {
-                const checked = String(draft.nivelDificuldade || "") === val ? "checked" : "";
-                return `<label class="pedagogico-radio"><input type="radio" name="nivelDificuldade" value="${escapeHtml(
-                  val
-                )}" data-ped-field-radio="nivelDificuldade" ${checked} /><span>${escapeHtml(label)}</span></label>`;
-              })
-              .join("")}
+          <span class="pedagogico-label">RISCO DE EVASÃO <span class="pedagogico-required">*</span></span>
+          ${renderPedSegment({
+            name: "riscoEvasao",
+            value: draft.riscoEvasao,
+            options: [
+              ["baixo", "Baixo"],
+              ["medio", "Médio"],
+              ["alto", "Alto"],
+            ],
+            tone: "coral",
+          })}
+
+          <div class="pedagogico-field" data-ped-risco-motivo hidden>
+            <label class="pedagogico-label">MOTIVO PRINCIPAL <span class="pedagogico-required">*</span></label>
+            <select class="pedagogico-input" data-ped-field="motivoRisco">
+              <option value="" ${draft.motivoRisco ? "" : "selected"}>Selecione</option>
+              ${renderPedSelectOptions(PED_MOTIVO_RISCO, draft.motivoRisco)}
+            </select>
+            <label class="pedagogico-field" data-ped-outro-wrap="motivoRiscoOutro" hidden>
+              <span class="pedagogico-label">DESCREVA O MOTIVO <span class="pedagogico-required">*</span></span>
+              <input class="pedagogico-input" type="text" data-ped-field="motivoRiscoOutro" value="${escapeHtml(
+                draft.motivoRiscoOutro
+              )}" maxlength="120" placeholder="Descreva o motivo..." />
+            </label>
           </div>
         </div>
 
         <div class="pedagogico-field">
-          <span class="pedagogico-label">TÓPICOS ABORDADOS</span>
-          ${renderPedChips({ items: PED_CHIP.topics, selected: draft.topicosAbordados, multi: true, dataKey: "topicosAbordados" })}
-        </div>
-
-        <div class="pedagogico-field">
-          <span class="pedagogico-label">TIPO DE ATIVIDADE PRINCIPAL</span>
-          ${renderPedChips({ items: PED_CHIP.tipoAtividade, selected: draft.tipoAtividade, multi: false, dataKey: "tipoAtividade" })}
-        </div>
-
-        <div class="pedagogico-field">
-          <span class="pedagogico-label">MATERIAL USADO</span>
-          ${renderPedChips({ items: PED_CHIP.materialUsado, selected: draft.materialUsado, multi: false, dataKey: "materialUsado" })}
-        </div>
-
-        <label class="pedagogico-field">
-          <span class="pedagogico-label">VOCABULÁRIO NOVO APRESENTADO</span>
-          <input class="pedagogico-input" type="text" data-ped-field="vocabularioNovo" value="${escapeHtml(draft.vocabularioNovo)}" placeholder="Palavras ou frases novas introduzidas na aula..." />
-        </label>
-      </div>
-
-      <div class="pedagogico-divider"></div>
-
-      <div class="pedagogico-section pedagogico-reveal" data-ped-block="avaliacao" hidden>
-        <h3 class="pedagogico-section-title">🧠 Avaliação do aluno</h3>
-
-        <div class="pedagogico-field">
-          <span class="pedagogico-label">ENGAJAMENTO DO ALUNO</span>
-          ${renderStarRow({ value: draft.engajamento, dataKey: "engajamento", ariaLabel: "Engajamento do aluno" })}
-        </div>
-
-        <div class="pedagogico-field">
-          <span class="pedagogico-label">CONFIANÇA AO FALAR</span>
-          ${renderStarRow({ value: draft.confiancaFalar, dataKey: "confiancaFalar", ariaLabel: "Confiança ao falar" })}
-        </div>
-
-        <label class="pedagogico-field">
-          <span class="pedagogico-label">NOTA DA AULA (0–10)</span>
-          <input class="pedagogico-input" type="number" min="0" max="10" step="0.1" data-ped-field="notaAula" value="${escapeHtml(draft.notaAula)}" />
-        </label>
-
-        <div class="pedagogico-field">
-          <span class="pedagogico-label">HUMOR DO ALUNO HOJE</span>
-          ${renderPedChips({ items: PED_CHIP.humor, selected: draft.humorAluno, multi: false, dataKey: "humorAluno" })}
-        </div>
-
-        <div class="pedagogico-field">
-          <span class="pedagogico-label">O ALUNO LEMBROU DA AULA ANTERIOR?</span>
-          ${renderPedChips({ items: PED_CHIP.lembrou, selected: draft.lembrouAulaAnterior, multi: false, dataKey: "lembrouAulaAnterior" })}
-        </div>
-
-        <div class="pedagogico-field">
-          <span class="pedagogico-label">TAREFA ANTERIOR FOI FEITA?</span>
-          ${renderPedChips({ items: PED_CHIP.tarefaAnterior, selected: draft.tarefaAnteriorFeita, multi: false, dataKey: "tarefaAnteriorFeita" })}
-        </div>
-
-        <label class="pedagogico-field">
-          <span class="pedagogico-label">PONTOS FORTES OBSERVADOS</span>
-          <textarea class="pedagogico-textarea" data-ped-field="pontosFortesAluno" placeholder="Ex: ótima pronúncia...">${escapeHtml(
-            draft.pontosFortesAluno
-          )}</textarea>
-        </label>
-        <label class="pedagogico-field">
-          <span class="pedagogico-label">PONTOS A DESENVOLVER</span>
-          <textarea class="pedagogico-textarea" data-ped-field="pontosADesenvolver" placeholder="Ex: uso de artigos...">${escapeHtml(
-            draft.pontosADesenvolver
-          )}</textarea>
-        </label>
-        <label class="pedagogico-field">
-          <span class="pedagogico-label">FEEDBACK PARA O ALUNO</span>
-          <textarea class="pedagogico-textarea" data-ped-field="feedbackParaAluno" placeholder="Mensagem para o aluno...">${escapeHtml(
-            draft.feedbackParaAluno
-          )}</textarea>
-        </label>
-      </div>
-
-      <div class="pedagogico-divider"></div>
-
-      <div class="pedagogico-section pedagogico-reveal" data-ped-block="proximos" hidden>
-        <h3 class="pedagogico-section-title">🧭 Próximos passos</h3>
-        <label class="pedagogico-field">
-          <span class="pedagogico-label">TEMA DA PRÓXIMA AULA</span>
-          <input class="pedagogico-input" type="text" data-ped-field="temaProximaAula" value="${escapeHtml(draft.temaProximaAula)}" />
-        </label>
-        <label class="pedagogico-field">
-          <span class="pedagogico-label">TAREFA PARA CASA</span>
-          <textarea class="pedagogico-textarea" data-ped-field="tarefaDeCasa" placeholder="Tarefa sugerida...">${escapeHtml(
-            draft.tarefaDeCasa
-          )}</textarea>
-        </label>
-        <div class="pedagogico-field">
-          <span class="pedagogico-label">DURAÇÃO REAL DA AULA</span>
-          <select class="pedagogico-input" data-ped-field="duracaoReal">
-            <option value="" ${draft.duracaoReal ? "" : "selected"}>Selecione</option>
-            <option value="15" ${draft.duracaoReal === "15" ? "selected" : ""}>15 min</option>
-            <option value="30" ${draft.duracaoReal === "30" ? "selected" : ""}>30 min</option>
-            <option value="45" ${draft.duracaoReal === "45" ? "selected" : ""}>45 min</option>
-            <option value="60" ${draft.duracaoReal === "60" ? "selected" : ""}>60 min</option>
-            <option value="60+" ${draft.duracaoReal === "60+" ? "selected" : ""}>Mais de 60 min</option>
+          <span class="pedagogico-label">AÇÃO DA COORDENAÇÃO <span class="pedagogico-required">*</span></span>
+          <select class="pedagogico-input" data-ped-field="acaoCoordenacao">
+            <option value="" ${draft.acaoCoordenacao ? "" : "selected"}>Selecione</option>
+            ${renderPedSelectOptions(PED_ACAO_COORDENACAO, draft.acaoCoordenacao)}
           </select>
         </div>
-      </div>
 
-      <div class="pedagogico-divider"></div>
-
-      <div class="pedagogico-section pedagogico-reveal" data-ped-block="interno" hidden>
-        <h3 class="pedagogico-section-title">🔒 Observações internas</h3>
-        <label class="pedagogico-field">
-          <span class="pedagogico-label">OBSERVAÇÕES INTERNAS</span>
-          <textarea class="pedagogico-textarea" data-ped-field="observacoesInternas" placeholder="Apenas para professor/admin...">${escapeHtml(
-            draft.observacoesInternas
+        <label class="pedagogico-field" data-ped-realizada-only>
+          <span class="pedagogico-label">RESUMO RÁPIDO DA AULA <span class="pedagogico-required">*</span></span>
+          <textarea class="pedagogico-textarea" data-ped-field="resumoAula" maxlength="250" placeholder="Ex: Trabalhamos conversação sobre rotina. Aluno participou bem, mas precisa revisar passado.">${escapeHtml(
+            draft.resumoAula
           )}</textarea>
+          <div class="pedagogico-help">Máximo 250 caracteres.</div>
         </label>
-
-        <div class="pedagogico-field">
-          <span class="pedagogico-label">RISCO DE EVASÃO</span>
-          ${renderPedChips({ items: PED_CHIP.riscoEvasao, selected: draft.riscoEvasao, multi: true, dataKey: "riscoEvasao" })}
-          <label class="pedagogico-field" data-ped-outro-wrap="riscoEvasaoOutro" hidden>
-            <span class="pedagogico-label">DESCREVA O MOTIVO <span class="pedagogico-required">*</span></span>
-            <textarea class="pedagogico-textarea" data-ped-field="riscoEvasaoOutro" placeholder="Descreva o motivo...">${escapeHtml(
-              draft.riscoEvasaoOutro
-            )}</textarea>
-          </label>
-        </div>
-
-        <div class="pedagogico-field">
-          <span class="pedagogico-label">AÇÃO DA COORDENAÇÃO</span>
-          ${renderPedChips({ items: PED_CHIP.acaoCoordenacao, selected: draft.acaoCoordenacao, multi: false, dataKey: "acaoCoordenacao" })}
-          <label class="pedagogico-field" data-ped-outro-wrap="acaoCoordenacaoOutro" hidden>
-            <span class="pedagogico-label">DESCREVA O MOTIVO <span class="pedagogico-required">*</span></span>
-            <textarea class="pedagogico-textarea" data-ped-field="acaoCoordenacaoOutro" placeholder="Descreva o motivo...">${escapeHtml(
-              draft.acaoCoordenacaoOutro
-            )}</textarea>
-          </label>
-        </div>
-
-        <div class="pedagogico-field">
-          <span class="pedagogico-label">NÍVEL ATUAL DO ALUNO (CEFR)</span>
-          <div class="pedagogico-radio-row">
-            ${["A1", "A2", "B1", "B2", "C1", "C2"]
-              .map((lvl) => {
-                const checked = String(draft.nivelCEFR || "") === lvl ? "checked" : "";
-                return `<label class="pedagogico-radio"><input type="radio" name="nivelCEFR" value="${lvl}" data-ped-field-radio="nivelCEFR" ${checked} /><span>${lvl}</span></label>`;
-              })
-              .join("")}
-          </div>
-        </div>
-
-        <div class="pedagogico-field">
-          <span class="pedagogico-label">EVOLUÇÃO DESDE A ÚLTIMA AVALIAÇÃO</span>
-          <div class="pedagogico-radio-row">
-            ${[
-              ["regressou", "Regressou"],
-              ["estavel", "Estável"],
-              ["evoluiu", "Evoluiu"],
-              ["evoluiu_muito", "Evoluiu muito"],
-            ]
-              .map(([val, label]) => {
-                const checked = String(draft.evolucao || "") === val ? "checked" : "";
-                return `<label class="pedagogico-radio"><input type="radio" name="evolucao" value="${escapeHtml(
-                  val
-                )}" data-ped-field-radio="evolucao" ${checked} /><span>${escapeHtml(label)}</span></label>`;
-              })
-              .join("")}
-          </div>
-        </div>
       </div>
 
       <div class="pedagogico-drawer-footer">
@@ -6588,47 +6394,38 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
     const hiddenStatus = formRoot.querySelector('[data-ped-hidden="statusAula"]');
     const statusValue = hiddenStatus instanceof HTMLInputElement ? String(hiddenStatus.value || "").toLowerCase() : "";
     const statusChosen = Boolean(statusValue);
-
-    const resched = formRoot.querySelector("[data-ped-reschedule]");
-    if (resched instanceof HTMLElement) resched.hidden = statusValue !== "remarcada";
+    const isRealizada = statusValue === "realizada";
 
     const help = formRoot.querySelector("[data-ped-status-help]");
     if (help instanceof HTMLElement) help.hidden = statusChosen;
 
-    const motivoNaoRealizada = formRoot.querySelector("[data-ped-nao-realizada-motivo]");
-    if (motivoNaoRealizada instanceof HTMLElement) {
-      // Mostra sempre que a aula não for "realizada" (inclui falta, remarcada e cancelada).
-      motivoNaoRealizada.hidden = !statusChosen || statusValue === "realizada";
-    }
+    const execBlock = formRoot.querySelector('[data-ped-block="executivo"]');
+    revealBlock(execBlock, statusChosen);
 
-    const isSkipContent = statusValue === "falta" || statusValue === "cancelada";
+    const naoReal = formRoot.querySelector("[data-ped-nao-realizada]");
+    if (naoReal instanceof HTMLElement) naoReal.hidden = !statusChosen || isRealizada;
 
-    const conteudo = formRoot.querySelector('[data-ped-block="conteudo"]');
-    const avaliacao = formRoot.querySelector('[data-ped-block="avaliacao"]');
-    const proximos = formRoot.querySelector('[data-ped-block="proximos"]');
-    const interno = formRoot.querySelector('[data-ped-block="interno"]');
+    formRoot.querySelectorAll("[data-ped-realizada-only]").forEach((el) => {
+      if (!(el instanceof HTMLElement)) return;
+      el.hidden = !statusChosen || !isRealizada;
+    });
 
-    // Progressive reveal: only after choosing a status.
-    if (!statusChosen) {
-      revealBlock(conteudo, false);
-      revealBlock(avaliacao, false);
-      revealBlock(proximos, false);
-      revealBlock(interno, false);
-      return;
-    }
+    const riscoWrap = formRoot.querySelector('[data-ped-seg="riscoEvasao"]');
+    const riscoHidden = riscoWrap instanceof HTMLElement ? riscoWrap.querySelector('[data-ped-field="riscoEvasao"]') : null;
+    const riscoVal = riscoHidden instanceof HTMLInputElement ? String(riscoHidden.value || "").toLowerCase() : "";
+    const showMotivo = riscoVal === "medio" || riscoVal === "alto";
+    const riscoMotivo = formRoot.querySelector("[data-ped-risco-motivo]");
+    if (riscoMotivo instanceof HTMLElement) riscoMotivo.hidden = !statusChosen || !showMotivo;
 
-    if (isSkipContent) {
-      revealBlock(conteudo, false);
-      revealBlock(avaliacao, false);
-      revealBlock(proximos, true);
-      revealBlock(interno, true);
-      return;
-    }
+    const motivoSel = formRoot.querySelector('[data-ped-field="motivoNaoRealizada"]');
+    const motivoVal = motivoSel instanceof HTMLSelectElement ? String(motivoSel.value || "").toLowerCase() : "";
+    const outroNaoReal = formRoot.querySelector('[data-ped-outro-wrap="motivoNaoRealizadaOutro"]');
+    if (outroNaoReal instanceof HTMLElement) outroNaoReal.hidden = motivoVal !== "outro";
 
-    revealBlock(conteudo, true);
-    revealBlock(avaliacao, true);
-    revealBlock(proximos, true);
-    revealBlock(interno, true);
+    const riscoMotivoSel = formRoot.querySelector('[data-ped-field="motivoRisco"]');
+    const riscoMotivoVal = riscoMotivoSel instanceof HTMLSelectElement ? String(riscoMotivoSel.value || "").toLowerCase() : "";
+    const outroRisco = formRoot.querySelector('[data-ped-outro-wrap="motivoRiscoOutro"]');
+    if (outroRisco instanceof HTMLElement) outroRisco.hidden = riscoMotivoVal !== "outro";
   };
 
   // Status buttons
@@ -6649,87 +6446,31 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
     });
   });
 
-  // Stars: progressive fill on click/hover
-  const wireStars = (wrap) => {
-    if (!(wrap instanceof HTMLElement)) return;
-    const setStars = (val) => {
-      const value = clampInt(Number(val) || 0, 0, 5);
-      wrap.querySelectorAll("[data-star]").forEach((btn, idx) => {
-        if (!(btn instanceof HTMLElement)) return;
-        btn.classList.toggle("is-active", idx + 1 <= value);
-      });
-      wrap.setAttribute("data-value", String(value));
-    };
-    wrap.querySelectorAll("[data-star]").forEach((btn) => {
-      btn.addEventListener("mouseenter", () => setStars(btn.getAttribute("data-star")));
-      btn.addEventListener("focus", () => setStars(btn.getAttribute("data-star")));
-      btn.addEventListener("click", () => {
-        setStars(btn.getAttribute("data-star"));
-        setDirty();
-      });
-    });
-    wrap.addEventListener("mouseleave", () => setStars(wrap.getAttribute("data-value") || "0"));
-  };
-
-  formRoot.querySelectorAll("[data-ped-stars]").forEach((wrap) => {
-    wireStars(wrap);
-    // Initialize with saved value.
-    const firstActive = Array.from(wrap.querySelectorAll(".is-active")).length;
-    wrap.setAttribute("data-value", String(firstActive));
-  });
-
-  // Chips
-  formRoot.querySelectorAll("[data-ped-chips]").forEach((wrap) => {
+  // Segmented controls
+  formRoot.querySelectorAll("[data-ped-seg]").forEach((wrap) => {
     wrap.addEventListener("click", (ev) => {
       const t = ev.target;
       if (!(t instanceof Element)) return;
-      const btn = t.closest("[data-chip]");
+      const btn = t.closest("[data-ped-seg-opt]");
       if (!(btn instanceof HTMLButtonElement)) return;
-      const key = String(wrap.getAttribute("data-ped-chips") || "");
-      const chipKey = String(btn.getAttribute("data-chip") || "");
-      const chipLabel = String(btn.getAttribute("data-chip-label") || "");
-
-      if (key === "topicosAbordados") {
-        btn.classList.toggle("is-active");
-      } else if (key === "riscoEvasao") {
-        // multi-select group
-        btn.classList.toggle("is-active");
-      } else {
-        // single-select groups
-        wrap.querySelectorAll("[data-chip]").forEach((b) => {
-          if (!(b instanceof HTMLElement)) return;
-          b.classList.toggle("is-active", b === btn);
-        });
-        // store selected key for readPedagogicoDraftFromDom
-        wrap.setAttribute("data-selected", chipKey);
-        wrap.setAttribute("data-selected-label", chipLabel);
-      }
-
-      // Reveal "Outro" textareas when needed.
-      const root = wrap.closest("[data-ped-form]");
-      if (root instanceof HTMLElement) {
-        const isOutroSelected = (() => {
-          if (key === "topicosAbordados") return false;
-          if (key === "riscoEvasao") {
-            return Boolean(
-              root.querySelector('[data-ped-chips="riscoEvasao"] [data-chip="outro"]')?.classList.contains("is-active")
-            );
-          }
-          return chipKey === "outro";
-        })();
-        const outroWrap =
-          key === "motivoNaoRealizada"
-            ? root.querySelector('[data-ped-outro-wrap="motivoNaoRealizadaOutro"]')
-            : key === "riscoEvasao"
-              ? root.querySelector('[data-ped-outro-wrap="riscoEvasaoOutro"]')
-              : key === "acaoCoordenacao"
-                ? root.querySelector('[data-ped-outro-wrap="acaoCoordenacaoOutro"]')
-                : null;
-        if (outroWrap instanceof HTMLElement) {
-          outroWrap.hidden = !isOutroSelected;
-        }
-      }
+      const key = String(wrap.getAttribute("data-ped-seg") || "");
+      const value = String(btn.getAttribute("data-ped-seg-opt") || "").trim().toLowerCase();
+      const hidden = wrap.querySelector(`[data-ped-field="${key}"]`);
+      if (hidden instanceof HTMLInputElement) hidden.value = value;
+      wrap.querySelectorAll("[data-ped-seg-opt]").forEach((b) => {
+        if (!(b instanceof HTMLElement)) return;
+        b.classList.toggle("is-active", b === btn);
+      });
       setDirty();
+      applyVisibility();
+    });
+  });
+
+  // Select-driven conditionals
+  formRoot.querySelectorAll('select[data-ped-field="motivoNaoRealizada"], select[data-ped-field="motivoRisco"]').forEach((el) => {
+    el.addEventListener("change", () => {
+      setDirty();
+      applyVisibility();
     });
   });
 
@@ -6738,121 +6479,55 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
   setPedagogicoAutosaveLabel(existingLog?.statusAula ? "Salvo" : "—");
 };
 
-const readPedagogicoDraftFromDom = () => {
+  const readPedagogicoDraftFromDom = () => {
   const root = pedagogicoFormContainer instanceof HTMLElement ? pedagogicoFormContainer.querySelector("[data-ped-form]") : null;
   if (!(root instanceof HTMLElement) || !pedagogicoActive?.lesson) return null;
 
-  const getRadio = (name) => {
-    const el = root.querySelector(`input[name="${name}"]:checked`);
-    return el instanceof HTMLInputElement ? String(el.value || "").trim() : "";
+  const getField = (key) => {
+    const el = root.querySelector(`[data-ped-field="${key}"]`);
+    if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) return String(el.value || "");
+    return "";
   };
 
   const hiddenStatus = root.querySelector('[data-ped-hidden="statusAula"]');
   const statusAula = hiddenStatus instanceof HTMLInputElement ? String(hiddenStatus.value || "").trim().toLowerCase() : "";
-  const nivelDificuldade = getRadio("nivelDificuldade").toLowerCase() || "adequado";
-  const nivelCEFR = getRadio("nivelCEFR").toUpperCase();
-  const evolucao = getRadio("evolucao").toLowerCase();
-
-  const topicos = Array.from(root.querySelectorAll('[data-ped-chips="topicosAbordados"] [data-chip]'))
-    .filter((el) => el instanceof HTMLElement && el.classList.contains("is-active"))
-    .map((el) => String(el.getAttribute("data-chip-label") || "").trim())
-    .filter(Boolean);
-
-  const riscoEvasao = Array.from(root.querySelectorAll('[data-ped-chips="riscoEvasao"] [data-chip]'))
-    .filter((el) => el instanceof HTMLElement && el.classList.contains("is-active"))
-    .map((el) => String(el.getAttribute("data-chip-label") || "").trim())
-    .filter(Boolean);
-
-  const readStars = (key) => {
-    const wrap = root.querySelector(`[data-ped-stars="${key}"]`);
-    if (!(wrap instanceof HTMLElement)) return 0;
-    return clampInt(Number(wrap.getAttribute("data-value") || 0), 0, 5);
-  };
-
-  const engajamento = readStars("engajamento");
-  const confiancaFalar = readStars("confiancaFalar");
-
-  const readSingleChip = (key) => {
-    const wrap = root.querySelector(`[data-ped-chips="${key}"]`);
-    if (!(wrap instanceof HTMLElement)) return "";
-    return String(wrap.getAttribute("data-selected") || "").trim();
-  };
-
-  const getField = (key) => {
-    const el = root.querySelector(`[data-ped-field="${key}"]`);
-    if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) return String(el.value || "");
-    return "";
-  };
-
-  const notaRaw = getField("notaAula").trim();
-  const nota = notaRaw ? Number(notaRaw) : null;
-  const notaAula = Number.isFinite(nota) ? clampNumber(nota, 0, 10) : null;
 
   const draft = {
     statusAula,
-    motivoNaoRealizada: readSingleChip("motivoNaoRealizada") || "",
-    motivoNaoRealizadaOutro: getField("motivoNaoRealizadaOutro"),
-    novaDataAcordada: getField("novaDataAcordada").trim(),
-    oQueFoiTrabalhado: getField("oQueFoiTrabalhado"),
-    nivelDificuldade,
-    topicosAbordados: topicos,
-    engajamento: engajamento || null,
-    confiancaFalar: confiancaFalar || null,
-    notaAula,
-    humorAluno: readSingleChip("humorAluno") || "",
-    lembrouAulaAnterior: readSingleChip("lembrouAulaAnterior") || "",
-    tarefaAnteriorFeita: readSingleChip("tarefaAnteriorFeita") || "",
-    tipoAtividade: readSingleChip("tipoAtividade") || "",
-    materialUsado: readSingleChip("materialUsado") || "",
-    vocabularioNovo: getField("vocabularioNovo"),
-    duracaoReal: getField("duracaoReal").trim(),
-    pontosFortesAluno: getField("pontosFortesAluno"),
-    pontosADesenvolver: getField("pontosADesenvolver"),
-    feedbackParaAluno: getField("feedbackParaAluno"),
-    temaProximaAula: getField("temaProximaAula"),
-    tarefaDeCasa: getField("tarefaDeCasa"),
-    observacoesInternas: getField("observacoesInternas"),
-    nivelCEFR: nivelCEFR || null,
-    evolucao: evolucao || null,
-    riscoEvasao,
-    riscoEvasaoOutro: getField("riscoEvasaoOutro"),
-    acaoCoordenacao: readSingleChip("acaoCoordenacao") || "",
-    acaoCoordenacaoOutro: getField("acaoCoordenacaoOutro"),
+    motivoNaoRealizada: getField("motivoNaoRealizada").trim().toLowerCase(),
+    motivoNaoRealizadaOutro: getField("motivoNaoRealizadaOutro").trim(),
+    engajamento: getField("engajamento").trim().toLowerCase(),
+    evolucao: getField("evolucao").trim().toLowerCase(),
+    experienciaAula: getField("experienciaAula").trim().toLowerCase(),
+    riscoEvasao: getField("riscoEvasao").trim().toLowerCase(),
+    motivoRisco: getField("motivoRisco").trim().toLowerCase(),
+    motivoRiscoOutro: getField("motivoRiscoOutro").trim(),
+    acaoCoordenacao: getField("acaoCoordenacao").trim().toLowerCase(),
+    resumoAula: getField("resumoAula").slice(0, 250),
+    observacaoOpcional: getField("observacaoOpcional").trim(),
   };
 
-  if (draft.statusAula === "falta" || draft.statusAula === "cancelada") {
-    draft.oQueFoiTrabalhado = "";
-    draft.topicosAbordados = [];
-    draft.engajamento = null;
-    draft.confiancaFalar = null;
-    draft.notaAula = null;
-    draft.humorAluno = "";
-    draft.lembrouAulaAnterior = "";
-    draft.tarefaAnteriorFeita = "";
-    draft.tipoAtividade = "";
-    draft.materialUsado = "";
-    draft.vocabularioNovo = "";
-    draft.duracaoReal = draft.duracaoReal || "";
-    draft.pontosFortesAluno = "";
-    draft.pontosADesenvolver = "";
-    draft.feedbackParaAluno = "";
-    draft.temaProximaAula = "";
-    draft.tarefaDeCasa = "";
-  }
-
+  // Limpeza de campos fora do contexto (evita salvar lixo).
   if (draft.statusAula === "realizada") {
     draft.motivoNaoRealizada = "";
     draft.motivoNaoRealizadaOutro = "";
+    draft.observacaoOpcional = "";
+  } else {
+    draft.engajamento = "";
+    draft.evolucao = "";
+    draft.experienciaAula = "";
+    draft.resumoAula = "";
   }
 
-  if (draft.statusAula !== "remarcada") {
-    draft.novaDataAcordada = "";
+  if (!(draft.riscoEvasao === "medio" || draft.riscoEvasao === "alto")) {
+    draft.motivoRisco = "";
+    draft.motivoRiscoOutro = "";
   }
 
   return draft;
 };
 
-const savePedagogicoLog = async ({ autosave = false } = {}) => {
+  const savePedagogicoLog = async ({ autosave = false } = {}) => {
   if (currentRole !== "teacher") return false;
   if (!sessionUser?.id) return false;
   if (!pedagogicoActive?.lesson) return false;
@@ -6865,17 +6540,44 @@ const savePedagogicoLog = async ({ autosave = false } = {}) => {
     return false;
   }
 
-  // Validação: se escolher "Outro" em algum bloco, exigir descrição.
-  const missingOther =
-    (draft.statusAula !== "realizada" &&
-      ((draft.motivoNaoRealizada === "outro" && !String(draft.motivoNaoRealizadaOutro || "").trim()) ||
-        (Array.isArray(draft.riscoEvasao) && draft.riscoEvasao.includes("Outro") && !String(draft.riscoEvasaoOutro || "").trim()) ||
-        (draft.acaoCoordenacao === "outro" && !String(draft.acaoCoordenacaoOutro || "").trim()))) ||
-    false;
-  if (missingOther) {
-    if (!autosave) setPedagogicoStatus('Preencha "Descreva o motivo" para continuar.', "error");
+  const isRealizada = draft.statusAula === "realizada";
+
+  const has = (v) => Boolean(String(v || "").trim());
+
+  // Regras:
+  // - realizada: exigir engajamento, evolucao, experienciaAula, riscoEvasao, acaoCoordenacao, resumoAula
+  // - não realizada: exigir motivoNaoRealizada (+ outro), riscoEvasao, acaoCoordenacao
+  // - risco médio/alto: exigir motivoRisco (+ outro)
+  if (isRealizada) {
+    if (!has(draft.engajamento) || !has(draft.evolucao) || !has(draft.experienciaAula) || !has(draft.riscoEvasao) || !has(draft.acaoCoordenacao)) {
+      if (!autosave) setPedagogicoStatus("Preencha os campos obrigatórios para salvar.", "error");
+      return false;
+    }
+    if (!has(draft.resumoAula)) {
+      if (!autosave) setPedagogicoStatus("Preencha o resumo rápido da aula para salvar.", "error");
+      return false;
+    }
+  } else {
+    if (!has(draft.motivoNaoRealizada) || !has(draft.riscoEvasao) || !has(draft.acaoCoordenacao)) {
+      if (!autosave) setPedagogicoStatus("Preencha os campos obrigatórios para salvar.", "error");
+      return false;
+    }
+    if (draft.motivoNaoRealizada === "outro" && !has(draft.motivoNaoRealizadaOutro)) {
+      if (!autosave) setPedagogicoStatus('Descreva o motivo (opção "Outro").', "error");
+      return false;
+    }
+  }
+
+  if ((draft.riscoEvasao === "medio" || draft.riscoEvasao === "alto") && !has(draft.motivoRisco)) {
+    if (!autosave) setPedagogicoStatus("Selecione o motivo principal do risco de evasão.", "error");
     return false;
   }
+  if (draft.motivoRisco === "outro" && !has(draft.motivoRiscoOutro)) {
+    if (!autosave) setPedagogicoStatus('Descreva o motivo do risco (opção "Outro").', "error");
+    return false;
+  }
+
+  const precisaIntervencao = draft.riscoEvasao === "alto" || (draft.acaoCoordenacao && draft.acaoCoordenacao !== "nenhuma");
 
   const payload = {
     eventId: lesson.id,
@@ -6883,6 +6585,7 @@ const savePedagogicoLog = async ({ autosave = false } = {}) => {
     alunoId: lesson.alunoId || "",
     dateKey: lesson.dateKey,
     ...draft,
+    precisaIntervencao,
   };
 
   if (!autosave) setPedagogicoStatus("Salvando…");
@@ -7039,7 +6742,7 @@ const renderTeacherPedagogicoList = () => {
       return `
         <button type="button" class="pedagogico-item ${rowClass}" data-pedagogico-item="${escapeHtml(lesson.id)}" ${disabledAttr}>
           <div class="pedagogico-item-main">
-            <div class="pedagogico-item-date">📅 ${escapeHtml(dateLabel)}</div>
+            <div class="pedagogico-item-date">${escapeHtml(dateLabel)}</div>
             <div class="pedagogico-item-student">${escapeHtml(lesson.title)}</div>
             <div class="pedagogico-item-title">${escapeHtml(lesson.description || "Aula")}</div>
           </div>
@@ -7465,23 +7168,6 @@ const fetchWithAuth = async (input, init = {}) => {
   const token = await getFirebaseIdTokenForApi(force);
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);
-    // LOG TEMPORÁRIO: identifica qual conta Firebase está sendo usada no browser.
-    try {
-      // Avoid flooding the console on initial page load.
-      if (!window.__fetchWithAuthUidLogged) {
-        window.__fetchWithAuthUidLogged = true;
-        const parts = String(token).split(".");
-        if (parts.length === 3) {
-          const payloadB64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-          const padded = payloadB64 + "=".repeat((4 - (payloadB64.length % 4)) % 4);
-          const payload = JSON.parse(atob(padded));
-          // eslint-disable-next-line no-console
-          console.log("[fetchWithAuth] uid no token:", payload.uid || payload.sub, "email:", payload.email);
-        }
-      }
-    } catch {
-      // ignore
-    }
   }
   // Do not forward our custom option to `fetch`.
   if (Object.prototype.hasOwnProperty.call(opts, "forceRefreshIdToken")) delete opts.forceRefreshIdToken;
