@@ -503,31 +503,6 @@ const handleLessonLogsApi = async (req, res, { idToken, role, requesterId, url }
   const logId = toLogIdFromEventId(eventId);
   const docPath = `lessonLogs/${logId}`;
 
-  const allowedAvisos = new Set([
-    "🔴 Risco de cancelamento",
-    "🟡 Aluno desmotivado",
-    "🟡 Frequência caindo",
-    "🟡 Não está evoluindo",
-    "🟢 Muito satisfeito",
-    "🟢 Quer mais aulas",
-    "🟢 Potencial indicação",
-  ]);
-
-  const avisosRaw = Array.isArray(body?.avisos) ? body.avisos : [];
-  const avisos = [];
-  avisosRaw.forEach((item) => {
-    const label = String(item || "").trim();
-    if (!label) return;
-    if (!allowedAvisos.has(label)) return;
-    if (!avisos.includes(label)) avisos.push(label);
-  });
-
-  const toRating = (v) => {
-    const n = Number(v);
-    if (!Number.isFinite(n) || n <= 0) return 0;
-    return clampInt(n, 1, 5);
-  };
-
   const data = {
     eventId,
     professorId: requesterId,
@@ -536,44 +511,55 @@ const handleLessonLogsApi = async (req, res, { idToken, role, requesterId, url }
     criadoEm: body?.criadoEm ? new Date(String(body.criadoEm)) : now,
     atualizadoEm: now,
     statusAula,
-    oQueFoiTrabalhado: String(body?.oQueFoiTrabalhado || "").trim() || "",
-    engajamento: toRating(body?.engajamento),
-    evolucao: toRating(body?.evolucao),
-    humorAluno: normalizeOneOf(body?.humorAluno, ["animado", "neutro", "cansado", "ansioso"]) || "",
-    proximaAula: String(body?.proximaAula || "").trim() || "",
-    avisos,
-    observacoesInternas: String(body?.observacoesInternas || "").trim() || "",
+    // Campos do registro enxuto (Controle Pedagógico v2).
     motivoFalta: normalizeOneOf(body?.motivoFalta, [
-      "esqueceu",
       "atrasou_trabalho",
-      "compromisso_ultima_hora",
       "saude",
-      "tecnico",
+      "familia",
+      "esqueceu",
+      "internet_tecnologia",
       "viagem",
-      "familiar",
-      "reagendou_antecedencia",
-      "nao_informou",
+      "cansaco",
+      "nao_informado",
+      "outro",
     ]) || "",
-    motivoRemarcacao: normalizeOneOf(body?.motivoRemarcacao, ["pedido_aluno", "pedido_professor", "imprevisto", "nao_informou"]) || "",
+    motivoRemarcacao: normalizeOneOf(body?.motivoRemarcacao, [
+      "atrasou_trabalho",
+      "saude",
+      "familia",
+      "internet_tecnologia",
+      "viagem",
+      "aluno_pediu",
+      "professor_remarcou",
+      "escola_remarcou",
+      "nao_informado",
+      "outro",
+    ]) || "",
     novaDataRemarcacao: isValidDateKey(String(body?.novaDataRemarcacao || "")) ? String(body.novaDataRemarcacao) : "",
-    novoHorarioRemarcacao: /^\d{2}:\d{2}$/.test(String(body?.novoHorarioRemarcacao || "")) ? String(body.novoHorarioRemarcacao) : "",
+    // Novo: horários separados (inicio/fim). Mantém compatibilidade com "novoHorarioRemarcacao" se existir.
+    horarioInicioRemarcacao: /^\d{2}:\d{2}$/.test(String(body?.horarioInicioRemarcacao || body?.novoHorarioRemarcacao || ""))
+      ? String(body?.horarioInicioRemarcacao || body?.novoHorarioRemarcacao)
+      : "",
+    horarioFimRemarcacao: /^\d{2}:\d{2}$/.test(String(body?.horarioFimRemarcacao || ""))
+      ? String(body?.horarioFimRemarcacao)
+      : "",
+    riscoEvasao: normalizeOneOf(body?.riscoEvasao, ["baixo", "medio", "alto"]) || "",
+    observacao: String(body?.observacao || "").trim().slice(0, 250) || "",
   };
 
   // Limpa campos fora do contexto.
-  if (statusAula !== "realizada") {
-    data.oQueFoiTrabalhado = "";
-    data.engajamento = 0;
-    data.evolucao = 0;
-    data.humorAluno = "";
-    data.proximaAula = "";
-  }
   if (statusAula !== "falta") {
     data.motivoFalta = "";
   }
   if (statusAula !== "remarcada") {
     data.motivoRemarcacao = "";
     data.novaDataRemarcacao = "";
-    data.novoHorarioRemarcacao = "";
+    data.horarioInicioRemarcacao = "";
+    data.horarioFimRemarcacao = "";
+  }
+  if (statusAula !== "falta" && statusAula !== "remarcada") {
+    data.riscoEvasao = "";
+    data.observacao = "";
   }
 
   const writes = [
@@ -582,6 +568,41 @@ const handleLessonLogsApi = async (req, res, { idToken, role, requesterId, url }
       updateMask: { fieldPaths: Object.keys(data) },
     },
   ];
+
+  // Alerta para coordenação quando o professor remarca a aula.
+  if (statusAula === "remarcada" && data.motivoRemarcacao === "professor_remarcou") {
+    const alertId = `alert_${eventId}`;
+    const alertDocPath = `adminAlerts/${alertId}`;
+    let professorNome = "";
+    let alunoNome = "";
+    try {
+      professorNome = (await getUserNameById({ idToken, uid: requesterId })) || "";
+      if (data.alunoId) alunoNome = (await getUserNameById({ idToken, uid: data.alunoId })) || "";
+    } catch {
+      professorNome = "";
+      alunoNome = "";
+    }
+    const alertData = {
+      type: "remarcacao_professor",
+      createdAt: now,
+      updatedAt: now,
+      status: "open",
+      eventId,
+      professorId: requesterId,
+      professorNome: professorNome || null,
+      alunoId: data.alunoId || null,
+      alunoNome: alunoNome || null,
+      dateKey: data.dateKey || "",
+      novaDataRemarcacao: data.novaDataRemarcacao || "",
+      horarioInicioRemarcacao: data.horarioInicioRemarcacao || "",
+      horarioFimRemarcacao: data.horarioFimRemarcacao || "",
+      observacao: data.observacao || "",
+    };
+    writes.push({
+      update: { name: toFirestoreDocName(alertDocPath), fields: encodeFields(alertData).fields },
+      updateMask: { fieldPaths: Object.keys(alertData) },
+    });
+  }
 
   const commit = await firestoreCommitWrites({ idToken, writes });
   if (!commit.ok) {
@@ -592,6 +613,59 @@ const handleLessonLogsApi = async (req, res, { idToken, role, requesterId, url }
   }
 
   sendJson(res, 200, { ok: true, id: logId });
+};
+
+const decodeAdminAlertDoc = (doc) => {
+  if (!doc || typeof doc !== "object") return null;
+  const id = getDocIdFromName(doc.name);
+  if (!id) return null;
+  const fields = decodeFields(doc);
+  return {
+    id,
+    type: typeof fields.type === "string" ? fields.type : "",
+    status: typeof fields.status === "string" ? fields.status : "",
+    eventId: typeof fields.eventId === "string" ? fields.eventId : "",
+    professorId: typeof fields.professorId === "string" ? fields.professorId : "",
+    professorNome: typeof fields.professorNome === "string" ? fields.professorNome : "",
+    alunoId: typeof fields.alunoId === "string" ? fields.alunoId : "",
+    alunoNome: typeof fields.alunoNome === "string" ? fields.alunoNome : "",
+    dateKey: typeof fields.dateKey === "string" ? fields.dateKey : "",
+    novaDataRemarcacao: typeof fields.novaDataRemarcacao === "string" ? fields.novaDataRemarcacao : "",
+    horarioInicioRemarcacao: typeof fields.horarioInicioRemarcacao === "string" ? fields.horarioInicioRemarcacao : "",
+    horarioFimRemarcacao: typeof fields.horarioFimRemarcacao === "string" ? fields.horarioFimRemarcacao : "",
+    observacao: typeof fields.observacao === "string" ? fields.observacao : "",
+    createdAt: fields.createdAt instanceof Date ? fields.createdAt.toISOString() : null,
+    updatedAt: fields.updatedAt instanceof Date ? fields.updatedAt.toISOString() : null,
+  };
+};
+
+const handleAdminAlertsApi = async (req, res, { idToken, role } = {}) => {
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    res.setHeader("Allow", "GET, HEAD");
+    sendJson(res, 405, { error: "method_not_allowed" });
+    return;
+  }
+  if (String(role || "") !== "admin") {
+    sendJson(res, 403, { error: "forbidden" });
+    return;
+  }
+
+  try {
+    const resList = await firestoreListDocuments({ collectionPath: "adminAlerts", idToken, pageSize: 200 });
+    if (!resList.ok) throw new Error("firestore_list_failed");
+    const docs = Array.isArray(resList.documents)
+      ? resList.documents
+      : Array.isArray(resList.data?.documents)
+        ? resList.data.documents
+        : [];
+    const alerts = docs.map((doc) => decodeAdminAlertDoc(doc)).filter(Boolean);
+    alerts.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+    sendJson(res, 200, { alerts });
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error("[api] admin-alerts list failed", error);
+    sendJson(res, 500, { error: "internal_error" });
+  }
 };
 
 module.exports = async (req, res) => {
@@ -651,6 +725,10 @@ module.exports = async (req, res) => {
 
   if (resource === "lesson-logs") {
     await handleLessonLogsApi(req, res, { idToken, role, requesterId, url });
+    return;
+  }
+  if (resource === "admin-alerts") {
+    await handleAdminAlertsApi(req, res, { idToken, role, requesterId, url });
     return;
   }
 

@@ -28,5 +28,17 @@ service cloud.firestore {
         )
         && request.resource.data.professorId == request.auth.uid;
     }
+
+    // Admin alerts (ex: remarcação causada pelo professor)
+    match /adminAlerts/{docId} {
+      allow read: if request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.tipo == "admin";
+      allow write: if request.auth != null
+        && (
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.tipo == "teacher"
+          || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.tipo == "professor"
+        )
+        && request.resource.data.professorId == request.auth.uid;
+    }
   }
 }

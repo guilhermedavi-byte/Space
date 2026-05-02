@@ -4689,6 +4689,65 @@ body:not([data-role="admin"]) [data-admin-only] {
   margin: 0;
 }
 
+/* Admin alerts (remarcações por professor). */
+.admin-alerts-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.admin-alerts-title {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.admin-alerts-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(255, 78, 70, 0.14);
+  border: 1px solid rgba(255, 78, 70, 0.22);
+  color: #ff4e46;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.admin-alerts-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.admin-alerts-item {
+  border-radius: 12px;
+  border: 1px solid rgba(89, 144, 189, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 12px 14px;
+}
+
+.admin-alerts-item-title {
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 13px;
+  font-weight: 650;
+  margin-bottom: 6px;
+}
+
+.admin-alerts-item-sub {
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .admin-dashboard-v2-card-title--spaced {
   margin-bottom: 16px;
 }
@@ -12953,7 +13012,7 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   padding: 18px 20px 18px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 14px;
 }
 
 /* Mantem scroll do drawer no container interno do formulario, sem cortar dropdowns */
@@ -13049,7 +13108,7 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 
 .ped-ta {
   resize: vertical;
-  min-height: 86px;
+  min-height: 64px;
 }
 
 .ped-sel:focus,

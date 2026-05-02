@@ -31,6 +31,9 @@ const dashboardTeacher = document.querySelector("[data-dashboard-teacher]");
 const dashboardAdmin = document.querySelector("[data-dashboard-admin]");
 const adminDashboardGreeting = document.querySelector("[data-admin-dashboard-greeting]");
 const adminDashboardMonth = document.querySelector("[data-admin-dashboard-month]");
+const adminAlertsList = document.querySelector("[data-admin-alerts-list]");
+const adminAlertsEmpty = document.querySelector("[data-admin-alerts-empty]");
+const adminAlertsCount = document.querySelector("[data-admin-alerts-count]");
 const platformHeader = document.querySelector(".platform-header");
 const chartDropdowns = document.querySelectorAll("[data-chart-dropdown]");
 const chartTriggers = document.querySelectorAll("[data-chart-trigger]");
@@ -1044,12 +1047,88 @@ const renderAdminDashboard = () => {
   }
 
   renderAdminSheetsMetrics();
+  renderAdminAlerts();
 };
 
 let adminSheetsMetricsState = {
   fetchedAt: 0,
   isLoading: false,
   data: null,
+};
+
+let adminAlertsState = {
+  fetchedAt: 0,
+  isLoading: false,
+  data: null,
+};
+
+const renderAdminAlertsList = (alerts) => {
+  if (!(adminAlertsList instanceof HTMLElement)) return;
+  const rows = Array.isArray(alerts) ? alerts : [];
+  if (adminAlertsEmpty instanceof HTMLElement) adminAlertsEmpty.hidden = rows.length > 0;
+
+  if (adminAlertsCount instanceof HTMLElement) {
+    adminAlertsCount.hidden = rows.length <= 0;
+    adminAlertsCount.textContent = rows.length > 0 ? String(rows.length) : "0";
+  }
+
+  if (!rows.length) {
+    adminAlertsList.innerHTML = "";
+    return;
+  }
+
+  const safeRows = rows.slice(0, 8);
+  adminAlertsList.innerHTML = safeRows
+    .map((a) => {
+      const aluno = String(a?.alunoNome || a?.alunoId || "Aluno");
+      const prof = String(a?.professorNome || a?.professorId || "Professor");
+      const dateKey = String(a?.dateKey || "");
+      const when = isValidDateKey(dateKey) ? formatPedagogicoDate(dateKey) : "—";
+      const nextKey = String(a?.novaDataRemarcacao || "");
+      const nextWhen = isValidDateKey(nextKey) ? formatPedagogicoDate(nextKey) : "";
+      const nextHm =
+        a?.horarioInicioRemarcacao && a?.horarioFimRemarcacao
+          ? `${String(a.horarioInicioRemarcacao)}–${String(a.horarioFimRemarcacao)}`
+          : "";
+      const meta = nextWhen ? `→ ${nextWhen}${nextHm ? ` · ${nextHm}` : ""}` : "";
+      return `
+        <li class="admin-alerts-item">
+          <div class="admin-alerts-item-main">
+            <div class="admin-alerts-item-title">Professor remarcou aula</div>
+            <div class="admin-alerts-item-sub">${escapeHtml(`${aluno} · ${prof} · ${when}${meta ? ` ${meta}` : ""}`)}</div>
+          </div>
+        </li>
+      `;
+    })
+    .join("");
+};
+
+const renderAdminAlerts = async () => {
+  if (currentRole !== "admin") return;
+  if (!(adminAlertsList instanceof HTMLElement)) return;
+  if (adminAlertsState.isLoading) return;
+
+  const now = Date.now();
+  if (adminAlertsState.data && now - adminAlertsState.fetchedAt < 60_000) {
+    renderAdminAlertsList(adminAlertsState.data);
+    return;
+  }
+
+  adminAlertsState.isLoading = true;
+  try {
+    const res = await fetchWithAuth("/api/admin-alerts", { method: "GET" });
+    const data = await res.json().catch(() => null);
+    const alerts = Array.isArray(data?.alerts) ? data.alerts : [];
+    if (res.ok) {
+      adminAlertsState.data = alerts;
+      adminAlertsState.fetchedAt = Date.now();
+      renderAdminAlertsList(alerts);
+    }
+  } catch {
+    // keep existing UI
+  } finally {
+    adminAlertsState.isLoading = false;
+  }
 };
 
 const formatPercentPtBr1 = (value) => {
@@ -6072,8 +6151,6 @@ let pedagogicoActive = null; // { lesson, existing }
 let pedagogicoDirty = false;
 let pedagogicoAutosaveTimer = null;
 let pedagogicoCleanupFns = [];
-let pedagogicoAvisosPortal = null; // singleton dropdown rendered in document.body
-let pedagogicoAvisosPortalCleanup = null;
 
 const formatPedagogicoDate = (dateKey) => {
   const d = parseDateKey(dateKey);
@@ -6131,78 +6208,50 @@ const closePedagogicoDrawer = () => {
   clearPedagogicoAutosaveTimer();
 };
 
-const closePedagogicoAvisosPortal = () => {
-  if (typeof pedagogicoAvisosPortalCleanup === "function") {
-    try {
-      pedagogicoAvisosPortalCleanup();
-    } catch {
-      // ignore
-    }
-  }
-  pedagogicoAvisosPortalCleanup = null;
-  if (pedagogicoAvisosPortal instanceof HTMLElement) {
-    pedagogicoAvisosPortal.remove();
-  }
-  pedagogicoAvisosPortal = null;
-};
-
-const AVISOS_COORDENACAO = [
-  { label: "🔴 Risco de cancelamento", color: "red" },
-  { label: "🟡 Aluno desmotivado", color: "yellow" },
-  { label: "🟡 Frequência caindo", color: "yellow" },
-  { label: "🟡 Não está evoluindo", color: "yellow" },
-  { label: "🟢 Muito satisfeito", color: "green" },
-  { label: "🟢 Quer mais aulas", color: "green" },
-  { label: "🟢 Potencial indicação", color: "green" },
-];
+// (sem portal/multiselect no formulario atual)
 
 const PED_MOTIVO_FALTA = [
-  ["esqueceu", "Esqueceu a aula"],
   ["atrasou_trabalho", "Se atrasou no trabalho"],
-  ["compromisso_ultima_hora", "Compromisso de última hora"],
-  ["saude", "Problema de saúde"],
-  ["tecnico", "Problema técnico"],
+  ["saude", "Saúde"],
+  ["familia", "Família"],
+  ["esqueceu", "Esqueceu"],
+  ["internet_tecnologia", "Internet/tecnologia"],
   ["viagem", "Viagem"],
-  ["familiar", "Problema familiar"],
-  ["reagendou_antecedencia", "Reagendou com antecedência"],
-  ["nao_informou", "Não informou o motivo"],
+  ["cansaco", "Cansaço"],
+  ["nao_informado", "Não informado"],
+  ["outro", "Outro"],
 ];
 
 const PED_MOTIVO_REMARCACAO = [
-  ["pedido_aluno", "Pedido do aluno"],
-  ["pedido_professor", "Pedido do professor"],
-  ["imprevisto", "Imprevisto"],
-  ["nao_informou", "Não informou"],
+  ["atrasou_trabalho", "Se atrasou no trabalho"],
+  ["saude", "Saúde"],
+  ["familia", "Família"],
+  ["internet_tecnologia", "Internet/tecnologia"],
+  ["viagem", "Viagem"],
+  ["aluno_pediu", "Aluno pediu remarcação"],
+  ["professor_remarcou", "Professor remarcou"],
+  ["escola_remarcou", "Escola remarcou"],
+  ["nao_informado", "Não informado"],
+  ["outro", "Outro"],
 ];
 
-const normalizeAvisosSelection = (value) => {
-  const arr = Array.isArray(value) ? value : [];
-  const allowed = new Set(AVISOS_COORDENACAO.map((a) => a.label));
-  const out = [];
-  arr.forEach((item) => {
-    const label = String(item || "").trim();
-    if (allowed.has(label) && !out.includes(label)) out.push(label);
-  });
-  return out;
-};
-
-const clampRating = (value) => clampInt(Number(value) || 0, 0, 5, 0);
+const PED_RISCO_EVASAO = [
+  ["baixo", "Baixo"],
+  ["medio", "Médio"],
+  ["alto", "Alto"],
+];
 
 const sanitizeLessonLogDraft = (raw = {}) => {
   const src = raw && typeof raw === "object" ? raw : {};
   return {
     statusAula: String(src.statusAula || "").trim().toLowerCase(), // realizada | falta | remarcada
-    oQueFoiTrabalhado: String(src.oQueFoiTrabalhado || "").trim(),
-    engajamento: clampRating(src.engajamento),
-    evolucao: clampRating(src.evolucao),
-    humorAluno: String(src.humorAluno || "").trim().toLowerCase(), // animado | neutro | cansado | ansioso
-    proximaAula: String(src.proximaAula || "").trim(),
-    avisos: normalizeAvisosSelection(src.avisos),
-    observacoesInternas: String(src.observacoesInternas || "").trim(),
     motivoFalta: String(src.motivoFalta || "").trim().toLowerCase(),
     motivoRemarcacao: String(src.motivoRemarcacao || "").trim().toLowerCase(),
     novaDataRemarcacao: String(src.novaDataRemarcacao || "").trim(),
-    novoHorarioRemarcacao: String(src.novoHorarioRemarcacao || "").trim(),
+    horarioInicioRemarcacao: String(src.horarioInicioRemarcacao || src.novoHorarioInicio || "").trim(),
+    horarioFimRemarcacao: String(src.horarioFimRemarcacao || src.novoHorarioFim || "").trim(),
+    riscoEvasao: String(src.riscoEvasao || "").trim().toLowerCase(),
+    observacao: String(src.observacao || src.observacoesInternas || "").trim().slice(0, 250),
   };
 };
 
@@ -6214,78 +6263,7 @@ const renderPedSelectOptions = (options, selected) => {
     .join("");
 };
 
-const renderStars = ({ name, value } = {}) => {
-  const v = clampRating(value);
-  return `
-    <div class="ped-stars" data-ped-stars="${escapeHtml(String(name || ""))}">
-      <input type="hidden" data-ped-field="${escapeHtml(String(name || ""))}" value="${escapeHtml(String(v))}" />
-      ${[1, 2, 3, 4, 5]
-        .map((n) => `<button type="button" class="ped-star ${n <= v ? "on" : ""}" data-ped-star="${n}" aria-label="${n} estrelas">★</button>`)
-        .join("")}
-    </div>
-  `;
-};
-
-const renderHumorChips = (value) => {
-  const v = String(value || "").trim().toLowerCase();
-  const chips = [
-    ["animado", "😊 Animado"],
-    ["neutro", "😐 Neutro"],
-    ["cansado", "😴 Cansado"],
-    ["ansioso", "😰 Ansioso"],
-  ];
-  return `
-    <div class="ped-chips" data-ped-chips="humorAluno">
-      <input type="hidden" data-ped-field="humorAluno" value="${escapeHtml(v)}" />
-      ${chips
-        .map(([key, label]) => {
-          const on = v === key;
-          return `<button type="button" class="ped-chip ${on ? "on" : ""}" data-ped-chip="${escapeHtml(key)}">${escapeHtml(label)}</button>`;
-        })
-        .join("")}
-    </div>
-  `;
-};
-
-const ensurePedagogicoAvisosPortal = () => {
-  if (pedagogicoAvisosPortal instanceof HTMLElement) return pedagogicoAvisosPortal;
-  const root = document.createElement("div");
-  root.className = "ped-portal-dropdown";
-  root.hidden = true;
-  // Hard styles to avoid any ancestor compositing/opacity issues.
-  root.style.position = "fixed";
-  root.style.zIndex = "999999";
-  root.style.left = "0px";
-  root.style.top = "0px";
-  root.style.width = "320px";
-  root.style.maxHeight = "280px";
-  root.style.overflowY = "auto";
-  root.style.background = "#0f1d2d";
-  root.style.backgroundColor = "#0f1d2d";
-  root.style.opacity = "1";
-  root.style.backdropFilter = "none";
-  root.style.filter = "none";
-  root.style.mixBlendMode = "normal";
-  root.style.isolation = "isolate";
-  root.style.transform = "translateZ(0)";
-  root.style.boxShadow = "0 24px 80px rgba(0,0,0,.55)";
-  root.style.border = "1px solid rgba(255,255,255,.12)";
-  root.style.borderRadius = "16px";
-  root.style.pointerEvents = "auto";
-
-  const surface = document.createElement("div");
-  surface.className = "ped-portal-dropdown-surface";
-  surface.style.background = "#0f1d2d";
-  surface.style.opacity = "1";
-  surface.style.borderRadius = "inherit";
-  surface.style.overflow = "hidden";
-  surface.style.pointerEvents = "auto";
-  root.appendChild(surface);
-
-  document.body.appendChild(root);
-  pedagogicoAvisosPortal = root;
-  return root;
-};
+// (sem estrelas/chips/multiselect neste formulario)
 
 const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
   if (!(pedagogicoFormContainer instanceof HTMLElement)) return;
@@ -6296,86 +6274,19 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
     pedagogicoDrawerTitle.textContent = "Registro da aula";
   }
 
-  const durationMin = clampInt(Number(safeLesson.endMin) - Number(safeLesson.startMin), 5, 240, 30);
   const status = String(draft.statusAula || "").trim().toLowerCase();
 
-  const pillToneForStatus = (s) => {
-    if (s === "realizada") return "green";
-    if (s === "falta") return "red";
-    if (s === "remarcada") return "yellow";
-    return "";
-  };
-
-  const computeProgress = (d) => {
-    const s = String(d?.statusAula || "").trim().toLowerCase();
-    if (!s) return 0;
-    if (s === "realizada") {
-      const req = [
-        String(d.oQueFoiTrabalhado || "").trim(),
-        d.engajamento > 0 ? "1" : "",
-        d.evolucao > 0 ? "1" : "",
-        String(d.humorAluno || "").trim(),
-        String(d.proximaAula || "").trim(),
-      ];
-      const filled = req.filter(Boolean).length;
-      return clampNumber((filled / req.length) * 100, 8, 100);
-    }
-    if (s === "falta") {
-      const req = [String(d.motivoFalta || "").trim()];
-      const filled = req.filter(Boolean).length;
-      return clampNumber((filled / req.length) * 100, 20, 100);
-    }
-    if (s === "remarcada") {
-      const req = [String(d.motivoRemarcacao || "").trim(), String(d.novaDataRemarcacao || "").trim(), String(d.novoHorarioRemarcacao || "").trim()];
-      const filled = req.filter(Boolean).length;
-      return clampNumber((filled / req.length) * 100, 12, 100);
-    }
-    return 0;
-  };
-
-  const progress = computeProgress(draft);
-  const statusPillTone = pillToneForStatus(status);
-
-  const renderAvisosDropdown = () => {
-    const selected = normalizeAvisosSelection(draft.avisos);
-    const selectedCount = selected.length;
-    const triggerText = selectedCount ? `${selectedCount} avisos selecionados` : "Nenhum aviso";
-    const badgeHidden = selectedCount ? "" : "hidden";
-    const pillsHtml = selected
-      .map((label) => {
-        const def = AVISOS_COORDENACAO.find((a) => a.label === label);
-        const tone = def?.color || "yellow";
-        return `<span class="ped-pill ped-pill-${escapeHtml(tone)}">${escapeHtml(label)}</span>`;
-      })
-      .join("");
-    return `
-      <div class="ped-field ped-multisel" data-ped-multisel>
-        <div class="ped-label">Avisos para a coordenação</div>
-        <input type="hidden" data-ped-field="avisos" value="${escapeHtml(JSON.stringify(selected))}" />
-        <div class="ped-multisel-wrap">
-          <button type="button" class="ped-multisel-trigger" data-ped-multisel-trigger>${escapeHtml(triggerText)}</button>
-          <span class="ped-multisel-badge" data-ped-multisel-badge ${badgeHidden}>${escapeHtml(String(selectedCount))}</span>
-        </div>
-        <div class="ped-pills" data-ped-multisel-pills>${pillsHtml}</div>
-      </div>
-    `;
-  };
-
   pedagogicoFormContainer.innerHTML = `
-    <div class="ped-form" data-ped-form data-ped-duration="${escapeHtml(String(durationMin))}">
-      <div class="ped-progress" aria-hidden="true">
-        <div class="ped-progress-bar" style="width:${escapeHtml(String(progress.toFixed(0)))}%"></div>
-      </div>
-
+    <div class="ped-form" data-ped-form>
       <div class="ped-head">
-        <div class="ped-head-name">${escapeHtml(studentNameRaw)}</div>
-        <div class="ped-head-sub">${escapeHtml(`${formatPedagogicoDate(safeLesson.dateKey)} · ${formatHmFromMinutes(safeLesson.startMin)}–${formatHmFromMinutes(
-          safeLesson.endMin
-        )}`)}</div>
+        <div class="ped-head-name">Registro da aula</div>
+        <div class="ped-head-sub">${escapeHtml(
+          `${studentNameRaw} • ${formatPedagogicoDate(safeLesson.dateKey)} • ${formatHmFromMinutes(safeLesson.startMin)}–${formatHmFromMinutes(safeLesson.endMin)}`
+        )}</div>
       </div>
 
       <div class="ped-field">
-        <div class="ped-label">Como foi a aula?</div>
+        <div class="ped-label">Status da aula</div>
         <div class="ped-sel-wrap">
           <select class="ped-sel" data-ped-field="statusAula" data-ped-status>
             <option value="" ${status ? "" : "selected"}>Selecione...</option>
@@ -6385,53 +6296,13 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
           </select>
           <span class="ped-arr">▼</span>
         </div>
-        <div class="ped-status-pill ${statusPillTone ? "" : "hidden"} ped-pill-${escapeHtml(statusPillTone)}" data-ped-pill>${escapeHtml(
-          status === "realizada" ? "Realizada" : status === "falta" ? "Falta do aluno" : status === "remarcada" ? "Remarcada" : ""
-        )}</div>
       </div>
 
-      <div class="ped-divider"></div>
-
-      <div class="ped-block ped-reveal" data-ped-block="realizada" hidden>
-        <div class="ped-field">
-          <div class="ped-label">O que foi trabalhado</div>
-          <textarea class="ped-ta" data-ped-field="oQueFoiTrabalhado" rows="3" placeholder="Escreva de forma objetiva...">${escapeHtml(
-            draft.oQueFoiTrabalhado
-          )}</textarea>
-        </div>
-
-        <div class="ped-grid2">
-          <div class="ped-field">
-            <div class="ped-label">Engajamento</div>
-            ${renderStars({ name: "engajamento", value: draft.engajamento })}
-          </div>
-          <div class="ped-field">
-            <div class="ped-label">Evolução</div>
-            ${renderStars({ name: "evolucao", value: draft.evolucao })}
-          </div>
-        </div>
-
-        <div class="ped-field">
-          <div class="ped-label">Humor do aluno</div>
-          ${renderHumorChips(draft.humorAluno)}
-        </div>
-
-        <div class="ped-field">
-          <div class="ped-label">Próxima aula</div>
-          <input class="ped-in" type="text" data-ped-field="proximaAula" value="${escapeHtml(draft.proximaAula)}" placeholder="Tema ou foco da próxima aula..." />
-        </div>
-
-        ${renderAvisosDropdown()}
-
-        <div class="ped-field">
-          <div class="ped-label">Observações internas</div>
-          <textarea class="ped-ta" data-ped-field="observacoesInternas" rows="3" placeholder="Opcional...">${escapeHtml(draft.observacoesInternas)}</textarea>
-        </div>
-      </div>
+      <div class="ped-divider" data-ped-divider></div>
 
       <div class="ped-block ped-reveal" data-ped-block="falta" hidden>
         <div class="ped-field">
-          <div class="ped-label">Motivo</div>
+          <div class="ped-label">Motivo da falta</div>
           <div class="ped-sel-wrap">
             <select class="ped-sel" data-ped-field="motivoFalta">
               <option value="" ${draft.motivoFalta ? "" : "selected"}>Selecione...</option>
@@ -6441,17 +6312,28 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
           </div>
         </div>
 
-        ${renderAvisosDropdown()}
+        <div class="ped-field">
+          <div class="ped-label">Risco de evasão</div>
+          <div class="ped-sel-wrap">
+            <select class="ped-sel" data-ped-field="riscoEvasao">
+              <option value="" ${draft.riscoEvasao ? "" : "selected"}>Selecione...</option>
+              ${renderPedSelectOptions(PED_RISCO_EVASAO, draft.riscoEvasao)}
+            </select>
+            <span class="ped-arr">▼</span>
+          </div>
+        </div>
 
         <div class="ped-field">
-          <div class="ped-label">Observações internas</div>
-          <textarea class="ped-ta" data-ped-field="observacoesInternas" rows="3" placeholder="Opcional...">${escapeHtml(draft.observacoesInternas)}</textarea>
+          <div class="ped-label">Observação (opcional)</div>
+          <textarea class="ped-ta" data-ped-field="observacao" rows="2" maxlength="250" placeholder="Opcional...">${escapeHtml(
+            draft.observacao
+          )}</textarea>
         </div>
       </div>
 
       <div class="ped-block ped-reveal" data-ped-block="remarcada" hidden>
         <div class="ped-field">
-          <div class="ped-label">Motivo</div>
+          <div class="ped-label">Motivo da remarcação</div>
           <div class="ped-sel-wrap">
             <select class="ped-sel" data-ped-field="motivoRemarcacao">
               <option value="" ${draft.motivoRemarcacao ? "" : "selected"}>Selecione...</option>
@@ -6461,22 +6343,38 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
           </div>
         </div>
 
+        <div class="ped-field">
+          <div class="ped-label">Nova aula</div>
+          <input class="ped-in" type="date" data-ped-field="novaDataRemarcacao" value="${escapeHtml(draft.novaDataRemarcacao)}" />
+        </div>
+
         <div class="ped-grid2">
           <div class="ped-field">
-            <div class="ped-label">Nova data</div>
-            <input class="ped-in" type="date" data-ped-field="novaDataRemarcacao" value="${escapeHtml(draft.novaDataRemarcacao)}" />
+            <div class="ped-label">Horário de início</div>
+            <input class="ped-in" type="time" data-ped-field="horarioInicioRemarcacao" value="${escapeHtml(draft.horarioInicioRemarcacao)}" />
           </div>
           <div class="ped-field">
-            <div class="ped-label">Novo horário</div>
-            <input class="ped-in" type="time" data-ped-field="novoHorarioRemarcacao" value="${escapeHtml(draft.novoHorarioRemarcacao)}" />
+            <div class="ped-label">Horário de fim</div>
+            <input class="ped-in" type="time" data-ped-field="horarioFimRemarcacao" value="${escapeHtml(draft.horarioFimRemarcacao)}" />
           </div>
         </div>
 
-        <div class="ped-infobox">📅 Um novo evento será criado na agenda após salvar.</div>
+        <div class="ped-field">
+          <div class="ped-label">Risco de evasão</div>
+          <div class="ped-sel-wrap">
+            <select class="ped-sel" data-ped-field="riscoEvasao">
+              <option value="" ${draft.riscoEvasao ? "" : "selected"}>Selecione...</option>
+              ${renderPedSelectOptions(PED_RISCO_EVASAO, draft.riscoEvasao)}
+            </select>
+            <span class="ped-arr">▼</span>
+          </div>
+        </div>
 
         <div class="ped-field">
-          <div class="ped-label">Observações internas</div>
-          <textarea class="ped-ta" data-ped-field="observacoesInternas" rows="3" placeholder="Opcional...">${escapeHtml(draft.observacoesInternas)}</textarea>
+          <div class="ped-label">Observação (opcional)</div>
+          <textarea class="ped-ta" data-ped-field="observacao" rows="2" maxlength="250" placeholder="Opcional...">${escapeHtml(
+            draft.observacao
+          )}</textarea>
         </div>
       </div>
 
@@ -6498,17 +6396,12 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
   const applyStatusUi = () => {
     const statusEl = formRoot.querySelector("[data-ped-status]");
     const s = statusEl instanceof HTMLSelectElement ? String(statusEl.value || "").trim().toLowerCase() : "";
-    const pill = formRoot.querySelector("[data-ped-pill]");
-    if (pill instanceof HTMLElement) {
-      const tone = pillToneForStatus(s);
-      pill.classList.toggle("hidden", !tone);
-      pill.classList.remove("ped-pill-red", "ped-pill-yellow", "ped-pill-green");
-      if (tone) pill.classList.add(`ped-pill-${tone}`);
-      pill.textContent = s === "realizada" ? "Realizada" : s === "falta" ? "Falta do aluno" : s === "remarcada" ? "Remarcada" : "";
+    const dividerEl = formRoot.querySelector("[data-ped-divider]");
+    if (dividerEl instanceof HTMLElement) {
+      dividerEl.hidden = !(s === "falta" || s === "remarcada");
     }
 
     const blocks = [
-      ["realizada", formRoot.querySelector('[data-ped-block="realizada"]')],
       ["falta", formRoot.querySelector('[data-ped-block="falta"]')],
       ["remarcada", formRoot.querySelector('[data-ped-block="remarcada"]')],
     ];
@@ -6530,12 +6423,6 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
       });
       window.requestAnimationFrame(() => el.classList.add("is-shown"));
     });
-
-    // update progress
-    const current = readPedagogicoDraftFromDom();
-    const pct = computeProgress(current || {});
-    const bar = formRoot.querySelector(".ped-progress-bar");
-    if (bar instanceof HTMLElement) bar.style.width = `${pct.toFixed(0)}%`;
   };
 
   // Generic dirty listeners
@@ -6549,188 +6436,6 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
       applyStatusUi();
     });
   });
-
-  // Stars click
-  formRoot.querySelectorAll("[data-ped-stars]").forEach((wrap) => {
-    wrap.addEventListener("click", (ev) => {
-      const t = ev.target;
-      if (!(t instanceof Element)) return;
-      const btn = t.closest("[data-ped-star]");
-      if (!(btn instanceof HTMLElement)) return;
-      const n = clampRating(btn.getAttribute("data-ped-star"));
-      const name = String(wrap.getAttribute("data-ped-stars") || "");
-      const hidden = wrap.querySelector(`[data-ped-field=\"${name}\"]`);
-      if (hidden instanceof HTMLInputElement) hidden.value = String(n);
-      wrap.querySelectorAll("[data-ped-star]").forEach((b) => {
-        if (!(b instanceof HTMLElement)) return;
-        const k = clampRating(b.getAttribute("data-ped-star"));
-        b.classList.toggle("on", k <= n);
-      });
-      setDirty();
-      applyStatusUi();
-    });
-  });
-
-  // Chips click
-  formRoot.querySelectorAll("[data-ped-chips]").forEach((wrap) => {
-    wrap.addEventListener("click", (ev) => {
-      const t = ev.target;
-      if (!(t instanceof Element)) return;
-      const btn = t.closest("[data-ped-chip]");
-      if (!(btn instanceof HTMLElement)) return;
-      const key = String(btn.getAttribute("data-ped-chip") || "").trim().toLowerCase();
-      const name = String(wrap.getAttribute("data-ped-chips") || "");
-      const hidden = wrap.querySelector(`[data-ped-field=\"${name}\"]`);
-      if (hidden instanceof HTMLInputElement) hidden.value = key;
-      wrap.querySelectorAll("[data-ped-chip]").forEach((b) => {
-        if (!(b instanceof HTMLElement)) return;
-        b.classList.toggle("on", String(b.getAttribute("data-ped-chip") || "").trim().toLowerCase() === key);
-      });
-      setDirty();
-      applyStatusUi();
-    });
-	  });
-
-  // Multi-select logic (portal in document.body)
-  const bindMultiSelect = (root) => {
-    if (!(root instanceof HTMLElement)) return;
-    const trigger = root.querySelector("[data-ped-multisel-trigger]");
-    const hidden = root.querySelector('[data-ped-field="avisos"]');
-    const badge = root.querySelector("[data-ped-multisel-badge]");
-    const pills = root.querySelector("[data-ped-multisel-pills]");
-    if (!(trigger instanceof HTMLButtonElement) || !(hidden instanceof HTMLInputElement)) return;
-
-    const setSelected = (arr) => {
-      const normalized = normalizeAvisosSelection(arr);
-      hidden.value = JSON.stringify(normalized);
-      const count = normalized.length;
-      trigger.textContent = count ? `${count} avisos selecionados` : "Nenhum aviso";
-      if (badge instanceof HTMLElement) {
-        badge.hidden = !count;
-        badge.textContent = String(count);
-      }
-      if (pills instanceof HTMLElement) {
-        pills.innerHTML = normalized
-          .map((label) => {
-            const def = AVISOS_COORDENACAO.find((a) => a.label === label);
-            const tone = def?.color || "yellow";
-            return `<span class=\"ped-pill ped-pill-${escapeHtml(tone)}\">${escapeHtml(label)}</span>`;
-          })
-          .join("");
-      }
-    };
-
-    const readSelected = () => {
-      try {
-        const parsed = JSON.parse(String(hidden.value || "[]"));
-        return normalizeAvisosSelection(parsed);
-      } catch {
-        return [];
-      }
-    };
-
-    const openPortal = () => {
-      const portal = ensurePedagogicoAvisosPortal();
-      const surface = portal.querySelector(".ped-portal-dropdown-surface");
-      if (!(surface instanceof HTMLElement)) return;
-
-      const rect = trigger.getBoundingClientRect();
-      portal.style.left = `${Math.round(rect.left)}px`;
-      portal.style.top = `${Math.round(rect.bottom + 8)}px`;
-      portal.style.width = `${Math.round(rect.width)}px`;
-      portal.style.maxHeight = "280px";
-      portal.hidden = false;
-
-      const selected = readSelected();
-      surface.innerHTML = AVISOS_COORDENACAO.map((a) => {
-        const on = selected.includes(a.label);
-        const tone = a.color;
-        return `
-          <button type="button" class="ped-multisel-option ${on ? `is-on is-${escapeHtml(tone)}` : ""}" data-value="${escapeHtml(a.label)}">
-            <span class="ped-multisel-check">${on ? "✓" : ""}</span>
-            <span class="ped-multisel-label">${escapeHtml(a.label)}</span>
-          </button>
-        `;
-      }).join("");
-
-      // eslint-disable-next-line no-console
-      console.log("[PED MULTISELECT OPEN]", { rect, dropdown: portal });
-
-      // Option clicks
-      const onOptionClick = (ev) => {
-        const t = ev.target;
-        if (!(t instanceof Element)) return;
-        const opt = t.closest("[data-value]");
-        if (!(opt instanceof HTMLButtonElement)) return;
-        ev.preventDefault();
-        ev.stopPropagation();
-        const value = String(opt.getAttribute("data-value") || "");
-        // eslint-disable-next-line no-console
-        console.log("[PED MULTISELECT OPTION CLICK]", { value });
-        const current = readSelected();
-        const next = current.includes(value) ? current.filter((x) => x !== value) : [...current, value];
-        setSelected(next);
-        setDirty();
-        applyStatusUi();
-        // re-render to update checks
-        openPortal();
-      };
-      surface.addEventListener("click", onOptionClick);
-
-      // Close behaviors
-      const onPointerDown = (ev) => {
-        const t = ev.target;
-        if (!(t instanceof Element)) return;
-        if (portal.contains(t)) return;
-        if (trigger.contains(t)) return;
-        portal.hidden = true;
-        closePedagogicoAvisosPortal();
-      };
-      const onKeyDown = (ev) => {
-        if (ev.key !== "Escape") return;
-        portal.hidden = true;
-        closePedagogicoAvisosPortal();
-      };
-      const onScroll = () => {
-        // simpler/safer: close on scroll
-        portal.hidden = true;
-        closePedagogicoAvisosPortal();
-      };
-      document.addEventListener("pointerdown", onPointerDown, true);
-      document.addEventListener("keydown", onKeyDown, true);
-      const drawerBody = pedagogicoDrawer instanceof HTMLElement ? pedagogicoDrawer.querySelector(".pedagogico-drawer-body") : null;
-      if (drawerBody instanceof HTMLElement) drawerBody.addEventListener("scroll", onScroll, { passive: true });
-      window.addEventListener("resize", onScroll, { passive: true });
-
-      // Replace existing cleanup for portal
-      if (typeof pedagogicoAvisosPortalCleanup === "function") {
-        try {
-          pedagogicoAvisosPortalCleanup();
-        } catch {
-          // ignore
-        }
-      }
-      pedagogicoAvisosPortalCleanup = () => {
-        surface.removeEventListener("click", onOptionClick);
-        document.removeEventListener("pointerdown", onPointerDown, true);
-        document.removeEventListener("keydown", onKeyDown, true);
-        if (drawerBody instanceof HTMLElement) drawerBody.removeEventListener("scroll", onScroll);
-        window.removeEventListener("resize", onScroll);
-      };
-      pedagogicoCleanupFns.push(() => closePedagogicoAvisosPortal());
-    };
-
-    trigger.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      openPortal();
-    });
-
-    setSelected(readSelected());
-  };
-
-  // We may have more than one avisos block (realizada/falta). Bind them all.
-  formRoot.querySelectorAll("[data-ped-multisel]").forEach((r) => bindMultiSelect(r));
 
   applyStatusUi();
   setPedagogicoAutosaveLabel(existingLog?.statusAula ? "Salvo" : "—");
@@ -6746,45 +6451,31 @@ const readPedagogicoDraftFromDom = () => {
     return "";
   };
 
-  const statusAula = getField("statusAula").trim().toLowerCase();
-  let avisos = [];
-  try {
-    const parsed = JSON.parse(String(getField("avisos") || "[]"));
-    avisos = normalizeAvisosSelection(parsed);
-  } catch {
-    avisos = [];
-  }
-
   const draft = {
-    statusAula,
-    oQueFoiTrabalhado: getField("oQueFoiTrabalhado").trim(),
-    engajamento: clampRating(getField("engajamento")),
-    evolucao: clampRating(getField("evolucao")),
-    humorAluno: getField("humorAluno").trim().toLowerCase(),
-    proximaAula: getField("proximaAula").trim(),
-    avisos,
-    observacoesInternas: getField("observacoesInternas").trim(),
+    statusAula: getField("statusAula").trim().toLowerCase(), // realizada | falta | remarcada
     motivoFalta: getField("motivoFalta").trim().toLowerCase(),
     motivoRemarcacao: getField("motivoRemarcacao").trim().toLowerCase(),
     novaDataRemarcacao: getField("novaDataRemarcacao").trim(),
-    novoHorarioRemarcacao: getField("novoHorarioRemarcacao").trim(),
+    horarioInicioRemarcacao: getField("horarioInicioRemarcacao").trim(),
+    horarioFimRemarcacao: getField("horarioFimRemarcacao").trim(),
+    riscoEvasao: getField("riscoEvasao").trim().toLowerCase(),
+    observacao: getField("observacao").trim().slice(0, 250),
   };
 
   // Limpeza por status (evita salvar lixo)
-  if (draft.statusAula !== "realizada") {
-    draft.oQueFoiTrabalhado = "";
-    draft.engajamento = 0;
-    draft.evolucao = 0;
-    draft.humorAluno = "";
-    draft.proximaAula = "";
-  }
   if (draft.statusAula !== "falta") {
     draft.motivoFalta = "";
+    // ainda assim risco/obs sao comuns a falta e remarcada, mantem para remarcada
   }
   if (draft.statusAula !== "remarcada") {
     draft.motivoRemarcacao = "";
     draft.novaDataRemarcacao = "";
-    draft.novoHorarioRemarcacao = "";
+    draft.horarioInicioRemarcacao = "";
+    draft.horarioFimRemarcacao = "";
+  }
+  if (draft.statusAula !== "falta" && draft.statusAula !== "remarcada") {
+    draft.riscoEvasao = "";
+    draft.observacao = "";
   }
 
   return draft;
@@ -6806,25 +6497,37 @@ const savePedagogicoLog = async ({ autosave = false } = {}) => {
   const has = (v) => Boolean(String(v || "").trim());
 
   // Regras mínimas (não deixar salvar payload inconsistente)
-  if (draft.statusAula === "realizada") {
-    if (!has(draft.oQueFoiTrabalhado) || draft.engajamento <= 0 || draft.evolucao <= 0 || !has(draft.humorAluno)) {
-      if (!autosave) setPedagogicoStatus("Preencha os campos obrigatórios para salvar.", "error");
-      return false;
-    }
-  }
   if (draft.statusAula === "falta") {
     if (!has(draft.motivoFalta)) {
       if (!autosave) setPedagogicoStatus("Selecione o motivo da falta para salvar.", "error");
       return false;
     }
-  }
-  if (draft.statusAula === "remarcada") {
-    if (!has(draft.motivoRemarcacao) || !has(draft.novaDataRemarcacao) || !has(draft.novoHorarioRemarcacao)) {
-      if (!autosave) setPedagogicoStatus("Preencha o motivo e a nova data/horário para salvar.", "error");
+    if (!has(draft.riscoEvasao)) {
+      if (!autosave) setPedagogicoStatus("Selecione o risco de evasão para salvar.", "error");
       return false;
     }
-    if (!isValidDateKey(draft.novaDataRemarcacao) || !/^\d{2}:\d{2}$/.test(draft.novoHorarioRemarcacao)) {
+  }
+  if (draft.statusAula === "remarcada") {
+    if (!has(draft.motivoRemarcacao) || !has(draft.novaDataRemarcacao) || !has(draft.horarioInicioRemarcacao) || !has(draft.horarioFimRemarcacao)) {
+      if (!autosave) setPedagogicoStatus("Preencha o motivo, a nova data e os horários para salvar.", "error");
+      return false;
+    }
+    if (!has(draft.riscoEvasao)) {
+      if (!autosave) setPedagogicoStatus("Selecione o risco de evasão para salvar.", "error");
+      return false;
+    }
+    if (
+      !isValidDateKey(draft.novaDataRemarcacao) ||
+      !/^\d{2}:\d{2}$/.test(draft.horarioInicioRemarcacao) ||
+      !/^\d{2}:\d{2}$/.test(draft.horarioFimRemarcacao)
+    ) {
       if (!autosave) setPedagogicoStatus("Nova data ou horário inválidos.", "error");
+      return false;
+    }
+    const startMin = timeToMinutes(draft.horarioInicioRemarcacao);
+    const endMin = timeToMinutes(draft.horarioFimRemarcacao);
+    if (!Number.isFinite(startMin) || !Number.isFinite(endMin) || endMin <= startMin) {
+      if (!autosave) setPedagogicoStatus("Horário de fim deve ser maior que o de início.", "error");
       return false;
     }
   }
@@ -6859,11 +6562,16 @@ const savePedagogicoLog = async ({ autosave = false } = {}) => {
     renderTeacherPedagogico({ silent: true });
 
     // Se remarcada, criar novo evento na agenda (apenas no save manual, não no autosave).
-    if (!autosave && draft.statusAula === "remarcada" && draft.novaDataRemarcacao && draft.novoHorarioRemarcacao) {
+    if (
+      !autosave &&
+      draft.statusAula === "remarcada" &&
+      draft.novaDataRemarcacao &&
+      draft.horarioInicioRemarcacao &&
+      draft.horarioFimRemarcacao
+    ) {
       try {
-        const durationMin = clampInt(Number(lesson.endMin) - Number(lesson.startMin), 5, 240, 30);
-        const startMin = timeToMinutes(draft.novoHorarioRemarcacao);
-        const endMin = clampInt(startMin + durationMin, 1, 1440, startMin + 30);
+        const startMin = timeToMinutes(draft.horarioInicioRemarcacao);
+        const endMin = timeToMinutes(draft.horarioFimRemarcacao);
         const createPayload = {
           eventType: "lesson",
           alunoId: lesson.alunoId || "",
