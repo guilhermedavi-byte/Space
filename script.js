@@ -6393,12 +6393,9 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
   pedagogicoFormContainer.innerHTML = `
     <div class="ped-shell" data-ped-form>
       <div class="ped-scroll" data-ped-scroll>
-      <div class="ped-head">
-        <div class="ped-head-name">Registro da aula</div>
-        <div class="ped-head-sub">${escapeHtml(
-          `${studentNameRaw} • ${formatPedagogicoDate(safeLesson.dateKey)} • ${formatHmFromMinutes(safeLesson.startMin)}–${formatHmFromMinutes(safeLesson.endMin)}`
-        )}</div>
-      </div>
+      <div class="ped-lesson-summary">${escapeHtml(
+        `${studentNameRaw} • ${formatPedagogicoDate(safeLesson.dateKey)} • ${formatHmFromMinutes(safeLesson.startMin)}–${formatHmFromMinutes(safeLesson.endMin)}`
+      )}</div>
 
       <div class="ped-field">
         <div class="ped-label">Status da aula</div>
@@ -6556,9 +6553,10 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
     const statusEl = scrollRoot.querySelector("[data-ped-status]");
     const rawValue = statusEl instanceof HTMLSelectElement ? String(statusEl.value || "") : "";
     const s = normalizePedagogicoStatus(rawValue);
-    // debug temporario
-    // eslint-disable-next-line no-console
-    console.log("[PED STATUS CHANGE]", { rawValue, normalizedStatus: s });
+    if (window.__PED_DEBUG) {
+      // eslint-disable-next-line no-console
+      console.log("[PED STATUS CHANGE]", { rawValue, normalizedStatus: s });
+    }
     // Defensive: if the status is one of our supported values, always ensure the matching block becomes visible.
     // This avoids regressions where the change event fires but the block never gets "is-shown".
     const dividerEl = scrollRoot.querySelector("[data-ped-divider]");
@@ -6571,11 +6569,13 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
       ["falta_aluno", scrollRoot.querySelector('[data-ped-block="falta_aluno"]')],
       ["remarcada", scrollRoot.querySelector('[data-ped-block="remarcada"]')],
     ];
-    // eslint-disable-next-line no-console
-    console.log("[PED FORM RENDER STATUS]", {
-      statusAula: s,
-      blocks: blocks.map(([k, el]) => ({ k, found: Boolean(el) })),
-    });
+    if (window.__PED_DEBUG) {
+      // eslint-disable-next-line no-console
+      console.log("[PED DYNAMIC RENDER]", {
+        status: s,
+        blocks: blocks.map(([k, el]) => ({ k, found: Boolean(el) })),
+      });
+    }
     blocks.forEach(([key, el]) => {
       if (!(el instanceof HTMLElement)) return;
       const show = s === key;
@@ -6980,6 +6980,10 @@ const savePedagogicoLog = async ({ autosave = false } = {}) => {
     precisaIntervencao: draft.statusAula === "realizada" ? computePedPrecisaIntervencao(draft.avisosCoordenacao) : false,
     ...draft,
   };
+  if (window.__PED_DEBUG) {
+    // eslint-disable-next-line no-console
+    console.log("[PED SAVE PAYLOAD]", payload);
+  }
 
   if (!autosave) setPedagogicoStatus("Salvando…");
   setPedagogicoAutosaveLabel("Salvando…");

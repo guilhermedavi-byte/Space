@@ -13045,16 +13045,13 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   transition: width 160ms ease;
 }
 
-.ped-head-name {
-  font-size: 15px;
-  font-weight: 650;
-  color: rgba(255, 255, 255, 0.95);
-}
-
-.ped-head-sub {
-  margin-top: 6px;
+.ped-lesson-summary {
   font-size: 12px;
   color: rgba(255, 255, 255, 0.35);
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 0.5px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .ped-label {
