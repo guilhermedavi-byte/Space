@@ -13067,6 +13067,14 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   background: rgba(255, 255, 255, 0.05);
 }
 
+[data-ped-dynamic-fields] {
+  display: block;
+  visibility: visible;
+  opacity: 1;
+  height: auto;
+  min-height: 0;
+}
+
 .ped-field {
   display: flex;
   flex-direction: column;
@@ -13266,8 +13274,6 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 
 .ped-footer {
   flex: 0 0 auto;
-  position: sticky;
-  bottom: 0;
   background: #0d1a2a;
   border-top: 0.5px solid rgba(255, 255, 255, 0.05);
   padding: 16px 20px;
@@ -13276,7 +13282,6 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   align-items: center;
   gap: 12px;
   margin: 0;
-  z-index: 5;
 }
 
 .ped-btn-save {

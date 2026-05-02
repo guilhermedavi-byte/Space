@@ -6148,6 +6148,7 @@ let pedagogicoState = {
 };
 
 let pedagogicoActive = null; // { lesson, existing }
+let pedagogicoDraft = null; // estado do form no drawer (fonte de verdade)
 let pedagogicoDirty = false;
 let pedagogicoAutosaveTimer = null;
 let pedagogicoCleanupFns = [];
@@ -6180,6 +6181,11 @@ const setPedagogicoStatus = (text, tone = "") => {
 const setPedagogicoAutosaveLabel = (text) => {
   if (!(pedagogicoDrawerAutosave instanceof HTMLElement)) return;
   pedagogicoDrawerAutosave.textContent = String(text || "");
+};
+
+const markPedagogicoDirty = () => {
+  pedagogicoDirty = true;
+  setPedagogicoAutosaveLabel("Alterações não salvas");
 };
 
 const clearPedagogicoAutosaveTimer = () => {
@@ -6259,9 +6265,9 @@ const sanitizeLessonLogDraft = (raw = {}) => {
     observacoesInternas: String(src.observacoesInternas || "").trim(),
     motivoFalta: String(src.motivoFalta || "").trim().toLowerCase(),
     motivoRemarcacao: String(src.motivoRemarcacao || "").trim().toLowerCase(),
-    novaDataRemarcacao: String(src.novaDataRemarcacao || "").trim(),
-    horarioInicioRemarcacao: String(src.horarioInicioRemarcacao || src.novoHorarioInicio || "").trim(),
-    horarioFimRemarcacao: String(src.horarioFimRemarcacao || src.novoHorarioFim || "").trim(),
+    novaDataRemarcacao: String(src.novaDataRemarcacao || src.novaData || "").trim(),
+    horarioInicioRemarcacao: String(src.horarioInicioRemarcacao || src.novoHorarioInicio || src.novoInicio || "").trim(),
+    horarioFimRemarcacao: String(src.horarioFimRemarcacao || src.novoHorarioFim || src.novoFim || "").trim(),
     riscoEvasao: String(src.riscoEvasao || "").trim().toLowerCase(),
     observacao: String(src.observacao || src.observacoesInternas || "").trim().slice(0, 250),
   };
@@ -6309,12 +6315,177 @@ const normalizePedagogicoStatus = (value) => {
   return "realizada";
 };
 
+const PEDAGOGICO_STATUS = {
+  REALIZADA: "realizada",
+  FALTA_ALUNO: "falta_aluno",
+  REMARCADA: "remarcada",
+};
+
 const renderPedSelectOptions = (options, selected) => {
   const sel = String(selected || "");
   const list = Array.isArray(options) ? options : [];
   return list
     .map(([val, label]) => `<option value="${escapeHtml(String(val))}" ${sel === String(val) ? "selected" : ""}>${escapeHtml(String(label))}</option>`)
     .join("");
+};
+
+const renderRealizadaFieldsHtml = (draft = {}) => {
+  const d = draft && typeof draft === "object" ? draft : {};
+  return `
+    <div class="ped-field">
+      <div class="ped-label">O que foi trabalhado</div>
+      <textarea class="ped-ta ped-ta--conteudo" data-ped-field="conteudoTrabalhado" rows="3" placeholder="Descreva brevemente o conteúdo da aula...">${escapeHtml(
+        String(d.conteudoTrabalhado || "")
+      )}</textarea>
+    </div>
+
+    <div class="ped-grid2">
+      <div class="ped-field">
+        <div class="ped-label">Engajamento</div>
+        ${renderPedStars(d.engajamentoNota || 0, "engajamentoNota")}
+      </div>
+      <div class="ped-field">
+        <div class="ped-label">Evolução do aluno</div>
+        ${renderPedStars(d.evolucaoNota || 0, "evolucaoNota")}
+      </div>
+    </div>
+
+    <div class="ped-field">
+      <div class="ped-label">Humor do aluno</div>
+      ${renderPedHumorChips(d.humorAluno || "")}
+    </div>
+
+    <div class="ped-field">
+      <div class="ped-label">Próxima aula</div>
+      <input class="ped-in" type="text" data-ped-field="proximaAula" value="${escapeHtml(String(d.proximaAula || ""))}" placeholder="Tema para a próxima aula..." />
+    </div>
+
+    <div class="ped-field">
+      <div class="ped-label">Avisos para a coordenação</div>
+      ${renderPedAvisosTrigger(d.avisosCoordenacao || [])}
+    </div>
+
+    <div class="ped-field">
+      <div class="ped-label">Observações internas</div>
+      <textarea class="ped-ta ped-ta--obs" data-ped-field="observacoesInternas" rows="2" placeholder="Apenas visível para professor e admin...">${escapeHtml(
+        String(d.observacoesInternas || "")
+      )}</textarea>
+    </div>
+  `;
+};
+
+const renderFaltaAlunoFieldsHtml = (draft = {}) => {
+  const d = draft && typeof draft === "object" ? draft : {};
+  const motivo = String(d.motivoFalta || "");
+  const risco = String(d.riscoEvasao || "");
+  const obs = String(d.observacao || "");
+  return `
+    <div class="ped-form-group ped-field">
+      <div class="ped-label">Motivo da falta</div>
+      <div class="ped-sel-wrap">
+        <select class="ped-sel" data-ped-field="motivoFalta">
+          <option value="">Selecione</option>
+          ${renderPedSelectOptions(PED_MOTIVO_FALTA, motivo)}
+        </select>
+        <span class="ped-arr">▼</span>
+      </div>
+    </div>
+
+    <div class="ped-form-group ped-field">
+      <div class="ped-label">Risco de evasão</div>
+      <div class="ped-sel-wrap">
+        <select class="ped-sel" data-ped-field="riscoEvasao">
+          <option value="">Selecione</option>
+          ${renderPedSelectOptions(PED_RISCO_EVASAO, risco)}
+        </select>
+        <span class="ped-arr">▼</span>
+      </div>
+    </div>
+
+    <div class="ped-form-group ped-field">
+      <div class="ped-label">Observação opcional</div>
+      <textarea class="ped-ta" data-ped-field="observacao" rows="2" maxlength="250" placeholder="Ex: aluno não entrou na aula e não avisou...">${escapeHtml(
+        obs
+      )}</textarea>
+    </div>
+  `;
+};
+
+const renderRemarcadaFieldsHtml = (draft = {}) => {
+  const d = draft && typeof draft === "object" ? draft : {};
+  const motivo = String(d.motivoRemarcacao || "");
+  const risco = String(d.riscoEvasao || "");
+  const obs = String(d.observacao || "");
+  const dateKey = String(d.novaDataRemarcacao || d.novaData || "");
+  const ini = String(d.horarioInicioRemarcacao || d.novoInicio || "");
+  const fim = String(d.horarioFimRemarcacao || d.novoFim || "");
+
+  // Ajuste: incluir option "Aluno pediu remarcação" com value solicitado.
+  const options = [
+    ["atrasou_trabalho", "Se atrasou no trabalho"],
+    ["saude", "Saúde"],
+    ["familia", "Família"],
+    ["internet_tecnologia", "Internet/tecnologia"],
+    ["viagem", "Viagem"],
+    ["aluno_pediu_remarcacao", "Aluno pediu remarcação"],
+    ["professor_remarcou", "Professor remarcou"],
+    ["escola_remarcou", "Escola remarcou"],
+    ["nao_informado", "Não informado"],
+    ["outro", "Outro"],
+  ];
+
+  return `
+    <div class="ped-form-group ped-field">
+      <div class="ped-label">Motivo da remarcação</div>
+      <div class="ped-sel-wrap">
+        <select class="ped-sel" data-ped-field="motivoRemarcacao">
+          <option value="">Selecione</option>
+          ${renderPedSelectOptions(options, motivo)}
+        </select>
+        <span class="ped-arr">▼</span>
+      </div>
+    </div>
+
+    <div class="ped-form-grid-3 ped-grid2">
+      <div class="ped-form-group ped-field">
+        <div class="ped-label">Nova data</div>
+        <input class="ped-in" type="date" data-ped-field="novaData" value="${escapeHtml(dateKey)}" />
+      </div>
+      <div class="ped-form-group ped-field">
+        <div class="ped-label">Início</div>
+        <input class="ped-in" type="time" data-ped-field="novoInicio" value="${escapeHtml(ini)}" />
+      </div>
+      <div class="ped-form-group ped-field">
+        <div class="ped-label">Fim</div>
+        <input class="ped-in" type="time" data-ped-field="novoFim" value="${escapeHtml(fim)}" />
+      </div>
+    </div>
+
+    <div class="ped-form-group ped-field">
+      <div class="ped-label">Risco de evasão</div>
+      <div class="ped-sel-wrap">
+        <select class="ped-sel" data-ped-field="riscoEvasao">
+          <option value="">Selecione</option>
+          ${renderPedSelectOptions(PED_RISCO_EVASAO, risco)}
+        </select>
+        <span class="ped-arr">▼</span>
+      </div>
+    </div>
+
+    <div class="ped-form-group ped-field">
+      <div class="ped-label">Observação opcional</div>
+      <textarea class="ped-ta" data-ped-field="observacao" rows="2" maxlength="250" placeholder="Ex: aluno pediu para remarcar por causa do trabalho...">${escapeHtml(
+        obs
+      )}</textarea>
+    </div>
+  `;
+};
+
+const getPedagogicoDynamicFieldsHtml = (status, draft) => {
+  const normalizedStatus = normalizePedagogicoStatus(status);
+  if (normalizedStatus === PEDAGOGICO_STATUS.FALTA_ALUNO) return renderFaltaAlunoFieldsHtml(draft);
+  if (normalizedStatus === PEDAGOGICO_STATUS.REMARCADA) return renderRemarcadaFieldsHtml(draft);
+  return renderRealizadaFieldsHtml(draft);
 };
 
 const renderPedStars = (value = 0, fieldKey) => {
@@ -6382,13 +6553,14 @@ const renderPedAvisosTrigger = (selected = []) => {
 const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
   if (!(pedagogicoFormContainer instanceof HTMLElement)) return;
   const safeLesson = lesson && typeof lesson === "object" ? lesson : {};
-  const draft = sanitizeLessonLogDraft(existingLog?.payload || {});
+  const baseDraft = sanitizeLessonLogDraft(existingLog?.payload || {});
+  pedagogicoDraft = pedagogicoDraft && typeof pedagogicoDraft === "object" ? { ...baseDraft, ...pedagogicoDraft } : { ...baseDraft };
   const studentNameRaw = String(safeLesson.title || "Aluno");
   if (pedagogicoDrawerTitle instanceof HTMLElement) {
     pedagogicoDrawerTitle.textContent = "Registro da aula";
   }
 
-  const status = normalizePedagogicoStatus(draft.statusAula);
+  const status = normalizePedagogicoStatus(pedagogicoDraft.statusAula);
 
   pedagogicoFormContainer.innerHTML = `
     <div class="ped-shell" data-ped-form>
@@ -6400,8 +6572,7 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
       <div class="ped-field">
         <div class="ped-label">Status da aula</div>
         <div class="ped-sel-wrap">
-          <select class="ped-sel" data-ped-field="statusAula" data-ped-status>
-            <option value="" ${status ? "" : "selected"}>Selecione...</option>
+          <select class="ped-sel" data-ped-status>
             <option value="realizada" ${status === "realizada" ? "selected" : ""}>Realizada</option>
             <option value="falta_aluno" ${status === "falta_aluno" ? "selected" : ""}>Falta do aluno</option>
             <option value="remarcada" ${status === "remarcada" ? "selected" : ""}>Remarcada</option>
@@ -6410,126 +6581,10 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
         </div>
       </div>
 
-      <div class="ped-divider" data-ped-divider></div>
+      <div class="ped-divider"></div>
 
-      <div class="ped-block ped-reveal" data-ped-block="realizada" hidden>
-        <div class="ped-field">
-          <div class="ped-label">O que foi trabalhado</div>
-          <textarea class="ped-ta ped-ta--conteudo" data-ped-field="conteudoTrabalhado" rows="3" placeholder="Descreva brevemente o conteúdo da aula...">${escapeHtml(
-            draft.conteudoTrabalhado
-          )}</textarea>
-        </div>
-
-        <div class="ped-grid2 ped-grid2--stack">
-          <div class="ped-field">
-            <div class="ped-label">Engajamento</div>
-            ${renderPedStars(draft.engajamentoNota, "engajamentoNota")}
-          </div>
-          <div class="ped-field">
-            <div class="ped-label">Evolução do aluno</div>
-            ${renderPedStars(draft.evolucaoNota, "evolucaoNota")}
-          </div>
-        </div>
-
-        <div class="ped-field">
-          <div class="ped-label">Humor do aluno</div>
-          ${renderPedHumorChips(draft.humorAluno)}
-        </div>
-
-        <div class="ped-field">
-          <div class="ped-label">Próxima aula</div>
-          <input class="ped-in" type="text" data-ped-field="proximaAula" value="${escapeHtml(draft.proximaAula)}" placeholder="Tema para a próxima aula..." />
-        </div>
-
-        <div class="ped-field">
-          <div class="ped-label">Avisos para a coordenação</div>
-          ${renderPedAvisosTrigger(draft.avisosCoordenacao)}
-        </div>
-
-        <div class="ped-field">
-          <div class="ped-label">Observações internas</div>
-          <textarea class="ped-ta ped-ta--obs" data-ped-field="observacoesInternas" rows="2" placeholder="Apenas visível para professor e admin...">${escapeHtml(
-            draft.observacoesInternas
-          )}</textarea>
-        </div>
-      </div>
-
-      <div class="ped-block ped-reveal" data-ped-block="falta_aluno" hidden>
-        <div class="ped-field">
-          <div class="ped-label">Motivo da falta</div>
-          <div class="ped-sel-wrap">
-            <select class="ped-sel" data-ped-field="motivoFalta">
-              <option value="" ${draft.motivoFalta ? "" : "selected"}>Selecione...</option>
-              ${renderPedSelectOptions(PED_MOTIVO_FALTA, draft.motivoFalta)}
-            </select>
-            <span class="ped-arr">▼</span>
-          </div>
-        </div>
-
-        <div class="ped-field">
-          <div class="ped-label">Risco de evasão</div>
-          <div class="ped-sel-wrap">
-            <select class="ped-sel" data-ped-field="riscoEvasao">
-              <option value="" ${draft.riscoEvasao ? "" : "selected"}>Selecione...</option>
-              ${renderPedSelectOptions(PED_RISCO_EVASAO, draft.riscoEvasao)}
-            </select>
-            <span class="ped-arr">▼</span>
-          </div>
-        </div>
-
-        <div class="ped-field">
-          <div class="ped-label">Observação (opcional)</div>
-          <textarea class="ped-ta" data-ped-field="observacao" rows="2" maxlength="250" placeholder="Opcional...">${escapeHtml(
-            draft.observacao
-          )}</textarea>
-        </div>
-      </div>
-
-      <div class="ped-block ped-reveal" data-ped-block="remarcada" hidden>
-        <div class="ped-field">
-          <div class="ped-label">Motivo da remarcação</div>
-          <div class="ped-sel-wrap">
-            <select class="ped-sel" data-ped-field="motivoRemarcacao">
-              <option value="" ${draft.motivoRemarcacao ? "" : "selected"}>Selecione...</option>
-              ${renderPedSelectOptions(PED_MOTIVO_REMARCACAO, draft.motivoRemarcacao)}
-            </select>
-            <span class="ped-arr">▼</span>
-          </div>
-        </div>
-
-        <div class="ped-field">
-          <div class="ped-label">Nova aula</div>
-          <input class="ped-in" type="date" data-ped-field="novaDataRemarcacao" value="${escapeHtml(draft.novaDataRemarcacao)}" />
-        </div>
-
-        <div class="ped-grid2">
-          <div class="ped-field">
-            <div class="ped-label">Horário de início</div>
-            <input class="ped-in" type="time" data-ped-field="horarioInicioRemarcacao" value="${escapeHtml(draft.horarioInicioRemarcacao)}" />
-          </div>
-          <div class="ped-field">
-            <div class="ped-label">Horário de fim</div>
-            <input class="ped-in" type="time" data-ped-field="horarioFimRemarcacao" value="${escapeHtml(draft.horarioFimRemarcacao)}" />
-          </div>
-        </div>
-
-        <div class="ped-field">
-          <div class="ped-label">Risco de evasão</div>
-          <div class="ped-sel-wrap">
-            <select class="ped-sel" data-ped-field="riscoEvasao">
-              <option value="" ${draft.riscoEvasao ? "" : "selected"}>Selecione...</option>
-              ${renderPedSelectOptions(PED_RISCO_EVASAO, draft.riscoEvasao)}
-            </select>
-            <span class="ped-arr">▼</span>
-          </div>
-        </div>
-
-        <div class="ped-field">
-          <div class="ped-label">Observação (opcional)</div>
-          <textarea class="ped-ta" data-ped-field="observacao" rows="2" maxlength="250" placeholder="Opcional...">${escapeHtml(
-            draft.observacao
-          )}</textarea>
-        </div>
+      <div data-ped-dynamic-fields>
+        ${getPedagogicoDynamicFieldsHtml(status, pedagogicoDraft)}
       </div>
       </div>
 
@@ -6544,60 +6599,37 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
   if (!(formRoot instanceof HTMLElement)) return;
   const scrollRoot = formRoot.querySelector("[data-ped-scroll]") || formRoot;
 
-  const setDirty = () => {
-    pedagogicoDirty = true;
-    setPedagogicoAutosaveLabel("Alterações não salvas");
-  };
+  // Bind dynamic controls for the initial render.
+  const dynamic = scrollRoot.querySelector("[data-ped-dynamic-fields]");
+  if (dynamic instanceof HTMLElement) {
+    bindStars(dynamic);
+    bindHumor(dynamic);
+    bindAvisosTrigger(dynamic);
+  }
+  bindAvisosAutoClose(scrollRoot);
 
-  const applyStatusUi = () => {
-    const statusEl = scrollRoot.querySelector("[data-ped-status]");
-    const rawValue = statusEl instanceof HTMLSelectElement ? String(statusEl.value || "") : "";
-    const s = normalizePedagogicoStatus(rawValue);
-    if (window.__PED_DEBUG) {
-      // eslint-disable-next-line no-console
-      console.log("[PED STATUS CHANGE]", { rawValue, normalizedStatus: s });
-    }
-    // Defensive: if the status is one of our supported values, always ensure the matching block becomes visible.
-    // This avoids regressions where the change event fires but the block never gets "is-shown".
-    const dividerEl = scrollRoot.querySelector("[data-ped-divider]");
-    if (dividerEl instanceof HTMLElement) {
-      dividerEl.hidden = !(s === "realizada" || s === "falta_aluno" || s === "remarcada");
-    }
-
-    const blocks = [
-      ["realizada", scrollRoot.querySelector('[data-ped-block="realizada"]')],
-      ["falta_aluno", scrollRoot.querySelector('[data-ped-block="falta_aluno"]')],
-      ["remarcada", scrollRoot.querySelector('[data-ped-block="remarcada"]')],
-    ];
-    if (window.__PED_DEBUG) {
-      // eslint-disable-next-line no-console
-      console.log("[PED DYNAMIC RENDER]", {
-        status: s,
-        blocks: blocks.map(([k, el]) => ({ k, found: Boolean(el) })),
-      });
-    }
-    blocks.forEach(([key, el]) => {
-      if (!(el instanceof HTMLElement)) return;
-      const show = s === key;
-      if (!show) {
-        el.hidden = true;
-        el.classList.remove("is-shown");
-        return;
-      }
-      // Always unhide and ensure 'is-shown' is present for the active block.
-      el.hidden = false;
-      el.classList.add("is-shown");
-      // fadeUp cascade
-      const children = Array.from(el.querySelectorAll(".ped-field, .ped-grid2, .ped-infobox, .ped-multisel, .ped-multisel-wrap"));
-      children.forEach((c, idx) => {
-        if (!(c instanceof HTMLElement)) return;
-        c.style.animationDelay = `${idx * 100}ms`;
-      });
-      window.requestAnimationFrame(() => el.classList.add("is-shown"));
+  // Delegated "dirty" binding so it keeps working after re-renders of dynamic fields.
+  if (scrollRoot instanceof HTMLElement && !scrollRoot.dataset.pedDirtyBound) {
+    scrollRoot.dataset.pedDirtyBound = "true";
+    const onDirty = (ev) => {
+      const t = ev.target;
+      if (!(t instanceof Element)) return;
+      if (!t.matches("input, textarea, select")) return;
+      // Ignore status "change" here; we handle it separately and will call markPedagogicoDirty there.
+      markPedagogicoDirty();
+    };
+    scrollRoot.addEventListener("input", onDirty);
+    scrollRoot.addEventListener("change", onDirty);
+    pedagogicoCleanupFns.push(() => {
+      scrollRoot.removeEventListener("input", onDirty);
+      scrollRoot.removeEventListener("change", onDirty);
     });
-  };
+  }
 
-  const bindStars = (rootEl) => {
+  setPedagogicoAutosaveLabel(existingLog?.statusAula ? "Salvo" : "—");
+};
+
+const bindStars = (rootEl) => {
     if (!(rootEl instanceof HTMLElement)) return;
     rootEl.querySelectorAll("[data-ped-stars]").forEach((starsWrap) => {
       if (!(starsWrap instanceof HTMLElement)) return;
@@ -6621,12 +6653,12 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
         ev.preventDefault();
         ev.stopPropagation();
         setValue(btn.getAttribute("data-ped-star"));
-        setDirty();
+        markPedagogicoDirty();
       });
     });
-  };
+};
 
-  const bindHumor = (rootEl) => {
+const bindHumor = (rootEl) => {
     const wrap = rootEl instanceof HTMLElement ? rootEl.querySelector("[data-ped-humor]") : null;
     if (!(wrap instanceof HTMLElement)) return;
     const hidden = wrap.querySelector('[data-ped-field="humorAluno"]');
@@ -6645,36 +6677,41 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
         const v = String(btn.getAttribute("data-ped-chip") || "").trim().toLowerCase();
         btn.classList.toggle("on", v === val);
       });
-      setDirty();
+      markPedagogicoDirty();
     });
-  };
+};
 
-  const closePedAvisosPortal = () => {
+let pedAvisosTriggerEl = null;
+
+const closePedAvisosPortal = () => {
     pedagogicoCleanupFns = pedagogicoCleanupFns.filter((fn) => fn !== closePedAvisosPortal);
     const el = document.getElementById("ped-avisos-portal");
     if (el && el.parentNode) el.parentNode.removeChild(el);
+    pedAvisosTriggerEl = null;
     document.removeEventListener("keydown", onKeydown, true);
     document.removeEventListener("pointerdown", onPointerDown, true);
-  };
+};
 
-  const onKeydown = (ev) => {
+const onKeydown = (ev) => {
     if (ev.key === "Escape") closePedAvisosPortal();
-  };
+};
 
-  const onPointerDown = (ev) => {
+const onPointerDown = (ev) => {
     const portal = document.getElementById("ped-avisos-portal");
-    const trigger = formRoot.querySelector("[data-ped-avisos-trigger]");
+    const trigger = pedAvisosTriggerEl;
     const target = ev.target;
     if (!(target instanceof Node)) return;
     if (portal && portal.contains(target)) return;
     if (trigger && trigger.contains(target)) return;
     closePedAvisosPortal();
-  };
+};
 
-  const openPedAvisosPortal = () => {
+const openPedAvisosPortal = (scrollRoot) => {
+    const scope = scrollRoot instanceof HTMLElement ? scrollRoot : document;
     const trigger = scrollRoot.querySelector("[data-ped-avisos-trigger]");
     if (!(trigger instanceof HTMLElement)) return;
     closePedAvisosPortal();
+    pedAvisosTriggerEl = trigger;
 
     const hidden = scrollRoot.querySelector('[data-ped-field="avisosCoordenacao"]');
     if (!(hidden instanceof HTMLInputElement)) return;
@@ -6734,7 +6771,7 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
           })
           .join("");
       }
-      setDirty();
+      markPedagogicoDirty();
     };
 
     portal.addEventListener("click", (ev) => {
@@ -6779,19 +6816,20 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
     document.addEventListener("keydown", onKeydown, true);
     document.addEventListener("pointerdown", onPointerDown, true);
     pedagogicoCleanupFns.push(closePedAvisosPortal);
-  };
+};
 
-  const bindAvisosTrigger = (rootEl) => {
+const bindAvisosTrigger = (rootEl) => {
     const trigger = rootEl instanceof HTMLElement ? rootEl.querySelector("[data-ped-avisos-trigger]") : null;
     if (!(trigger instanceof HTMLElement)) return;
     trigger.addEventListener("click", (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
-      openPedAvisosPortal();
+      const scrollRoot = rootEl.closest("[data-ped-scroll]") || rootEl;
+      openPedAvisosPortal(scrollRoot);
     });
-  };
+};
 
-  const bindAvisosAutoClose = (rootEl) => {
+const bindAvisosAutoClose = (rootEl) => {
     if (!(rootEl instanceof HTMLElement)) return;
     const onScroll = () => closePedAvisosPortal();
     const onResize = () => closePedAvisosPortal();
@@ -6801,36 +6839,24 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
       rootEl.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onResize);
     });
-  };
+};
 
-  // Generic dirty listeners
-  scrollRoot.querySelectorAll("input, textarea, select").forEach((el) => {
-    el.addEventListener("change", () => {
-      setDirty();
-      applyStatusUi();
-    });
-    el.addEventListener("input", () => {
-      setDirty();
-      applyStatusUi();
-    });
-  });
+const rerenderPedagogicoDynamicFields = (nextStatus) => {
+  const root = pedagogicoFormContainer instanceof HTMLElement ? pedagogicoFormContainer.querySelector("[data-ped-form]") : null;
+  if (!(root instanceof HTMLElement)) return null;
+  const scrollRoot = root.querySelector("[data-ped-scroll]") || root;
+  const dynamic = scrollRoot.querySelector("[data-ped-dynamic-fields]");
+  if (!(dynamic instanceof HTMLElement)) return null;
 
-  // Explicit binding for status select (more robust than relying on generic listeners).
-  const statusSelect = scrollRoot.querySelector("[data-ped-status]");
-  if (statusSelect instanceof HTMLSelectElement) {
-    statusSelect.addEventListener("change", () => {
-      const normalized = normalizePedagogicoStatus(statusSelect.value);
-      if (statusSelect.value !== normalized) statusSelect.value = normalized;
-      applyStatusUi();
-    });
-  }
+  const normalized = normalizePedagogicoStatus(nextStatus);
+  dynamic.innerHTML = getPedagogicoDynamicFieldsHtml(normalized, pedagogicoDraft || {});
 
-  bindStars(scrollRoot);
-  bindHumor(scrollRoot);
-  bindAvisosTrigger(scrollRoot);
-  bindAvisosAutoClose(scrollRoot);
-  applyStatusUi();
-  setPedagogicoAutosaveLabel(existingLog?.statusAula ? "Salvo" : "—");
+  // Rebind interactive widgets inside the swapped markup.
+  bindStars(dynamic);
+  bindHumor(dynamic);
+  bindAvisosTrigger(dynamic);
+
+  return { scrollRoot, dynamic };
 };
 
 const readPedagogicoDraftFromDom = () => {
@@ -6845,7 +6871,12 @@ const readPedagogicoDraftFromDom = () => {
     return "";
   };
 
-  const statusAula = normalizePedagogicoStatus(getField("statusAula"));
+  const statusSelect = scope.querySelector("[data-ped-status]");
+  const statusRaw =
+    statusSelect instanceof HTMLSelectElement
+      ? statusSelect.value
+      : getField("statusAula");
+  const statusAula = normalizePedagogicoStatus(statusRaw);
   let avisosCoordenacao = [];
   try {
     avisosCoordenacao = normalizePedAvisos(JSON.parse(String(getField("avisosCoordenacao") || "[]")));
@@ -6864,37 +6895,12 @@ const readPedagogicoDraftFromDom = () => {
     observacoesInternas: getField("observacoesInternas").trim(),
     motivoFalta: getField("motivoFalta").trim().toLowerCase(),
     motivoRemarcacao: getField("motivoRemarcacao").trim().toLowerCase(),
-    novaDataRemarcacao: getField("novaDataRemarcacao").trim(),
-    horarioInicioRemarcacao: getField("horarioInicioRemarcacao").trim(),
-    horarioFimRemarcacao: getField("horarioFimRemarcacao").trim(),
+    novaDataRemarcacao: (getField("novaData").trim() || getField("novaDataRemarcacao").trim()),
+    horarioInicioRemarcacao: (getField("novoInicio").trim() || getField("horarioInicioRemarcacao").trim()),
+    horarioFimRemarcacao: (getField("novoFim").trim() || getField("horarioFimRemarcacao").trim()),
     riscoEvasao: getField("riscoEvasao").trim().toLowerCase(),
     observacao: getField("observacao").trim().slice(0, 250),
   };
-
-  // Limpeza por status (evita salvar lixo)
-  if (draft.statusAula !== "falta_aluno") {
-    draft.motivoFalta = "";
-    // ainda assim risco/obs sao comuns a falta e remarcada, mantem para remarcada
-  }
-  if (draft.statusAula !== "remarcada") {
-    draft.motivoRemarcacao = "";
-    draft.novaDataRemarcacao = "";
-    draft.horarioInicioRemarcacao = "";
-    draft.horarioFimRemarcacao = "";
-  }
-  if (draft.statusAula !== "falta_aluno" && draft.statusAula !== "remarcada") {
-    draft.riscoEvasao = "";
-    draft.observacao = "";
-  }
-  if (draft.statusAula !== "realizada") {
-    draft.conteudoTrabalhado = "";
-    draft.engajamentoNota = 0;
-    draft.evolucaoNota = 0;
-    draft.humorAluno = "";
-    draft.proximaAula = "";
-    draft.avisosCoordenacao = [];
-    draft.observacoesInternas = "";
-  }
 
   return draft;
 };
@@ -6905,7 +6911,8 @@ const savePedagogicoLog = async ({ autosave = false } = {}) => {
   if (!pedagogicoActive?.lesson) return false;
 
   const lesson = pedagogicoActive.lesson;
-  const draft = readPedagogicoDraftFromDom();
+  const draftRaw = readPedagogicoDraftFromDom();
+  const draft = sanitizeLessonLogDraft(draftRaw || {});
   if (!draft) return false;
   if (!draft.statusAula) {
     if (!autosave) setPedagogicoStatus("Selecione o status da aula para salvar.", "error");
@@ -9717,6 +9724,45 @@ document.addEventListener("click", (event) => {
   if (!(target instanceof Element) || !target.closest("[data-chart-dropdown]")) {
     closeAllDropdowns();
   }
+});
+
+// Pedagogico drawer: status switch re-renders the dynamic fields area (no hidden/pre-rendered blocks).
+document.addEventListener("change", (event) => {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  if (!(target instanceof HTMLSelectElement)) return;
+  if (!target.matches("[data-ped-status]")) return;
+
+  // Persist what the user already typed before swapping the dynamic region.
+  const current = readPedagogicoDraftFromDom();
+  if (current && typeof current === "object") {
+    pedagogicoDraft = pedagogicoDraft && typeof pedagogicoDraft === "object" ? { ...pedagogicoDraft, ...current } : { ...current };
+  }
+
+  const rawValue = target.value;
+  const nextStatus = normalizePedagogicoStatus(rawValue);
+  if (pedagogicoDraft && typeof pedagogicoDraft === "object") {
+    pedagogicoDraft.statusAula = nextStatus;
+  } else {
+    pedagogicoDraft = { statusAula: nextStatus };
+  }
+
+  // If the multi-select portal is open, close it before swapping DOM.
+  closePedAvisosPortal();
+  const res = rerenderPedagogicoDynamicFields(nextStatus);
+  const dynamicText = res?.dynamic instanceof HTMLElement ? res.dynamic.innerText : "";
+
+  // Debug signal for validation: after switching, the dynamic container must contain the expected labels.
+  // Keep this log while we stabilize the feature (it's only emitted on explicit status changes).
+  // eslint-disable-next-line no-console
+  console.log("[PED STATUS CHANGE CONFIRMADO]", {
+    selectedValue: rawValue,
+    nextStatus,
+    dynamicHtmlLength: res?.dynamic?.innerHTML?.length || 0,
+    dynamicText,
+  });
+
+  markPedagogicoDirty();
 });
 
 document.addEventListener("keydown", (event) => {
