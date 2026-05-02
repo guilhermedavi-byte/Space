@@ -6607,13 +6607,20 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
       dropdown.style.overflowY = "auto";
     };
 
-    trigger.addEventListener("click", () => {
-      const willOpen = dropdown.hidden;
-      dropdown.hidden = !willOpen;
-      if (willOpen) {
-        window.requestAnimationFrame(() => positionDropdown());
-      }
-    });
+	    trigger.addEventListener("click", () => {
+	      // Debug temporário: confirma se o DOM do dropdown existe e se está hidden.
+	      // eslint-disable-next-line no-console
+	      console.log("[AVISOS CLICK]", {
+	        triggerFound: !!document.querySelector('[data-ped-multisel-trigger]'),
+	        dropdownFound: !!document.querySelector('[data-ped-multisel-dropdown]'),
+	        dropdownHidden: document.querySelector('[data-ped-multisel-dropdown]')?.hidden,
+	      });
+	      const willOpen = dropdown.hidden;
+	      dropdown.hidden = !willOpen;
+	      if (willOpen) {
+	        window.requestAnimationFrame(() => positionDropdown());
+	      }
+	    });
 
     const drawerBody = pedagogicoDrawer instanceof HTMLElement ? pedagogicoDrawer.querySelector(".pedagogico-drawer-body") : null;
     const onScrollOrResize = () => {
