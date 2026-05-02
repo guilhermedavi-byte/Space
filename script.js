@@ -6072,6 +6072,8 @@ let pedagogicoActive = null; // { lesson, existing }
 let pedagogicoDirty = false;
 let pedagogicoAutosaveTimer = null;
 let pedagogicoCleanupFns = [];
+let pedagogicoAvisosPortal = null; // singleton dropdown rendered in document.body
+let pedagogicoAvisosPortalCleanup = null;
 
 const formatPedagogicoDate = (dateKey) => {
   const d = parseDateKey(dateKey);
@@ -6127,6 +6129,21 @@ const closePedagogicoDrawer = () => {
   pedagogicoActive = null;
   pedagogicoDirty = false;
   clearPedagogicoAutosaveTimer();
+};
+
+const closePedagogicoAvisosPortal = () => {
+  if (typeof pedagogicoAvisosPortalCleanup === "function") {
+    try {
+      pedagogicoAvisosPortalCleanup();
+    } catch {
+      // ignore
+    }
+  }
+  pedagogicoAvisosPortalCleanup = null;
+  if (pedagogicoAvisosPortal instanceof HTMLElement) {
+    pedagogicoAvisosPortal.remove();
+  }
+  pedagogicoAvisosPortal = null;
 };
 
 const AVISOS_COORDENACAO = [
@@ -6230,6 +6247,46 @@ const renderHumorChips = (value) => {
   `;
 };
 
+const ensurePedagogicoAvisosPortal = () => {
+  if (pedagogicoAvisosPortal instanceof HTMLElement) return pedagogicoAvisosPortal;
+  const root = document.createElement("div");
+  root.className = "ped-portal-dropdown";
+  root.hidden = true;
+  // Hard styles to avoid any ancestor compositing/opacity issues.
+  root.style.position = "fixed";
+  root.style.zIndex = "999999";
+  root.style.left = "0px";
+  root.style.top = "0px";
+  root.style.width = "320px";
+  root.style.maxHeight = "280px";
+  root.style.overflowY = "auto";
+  root.style.background = "#0f1d2d";
+  root.style.backgroundColor = "#0f1d2d";
+  root.style.opacity = "1";
+  root.style.backdropFilter = "none";
+  root.style.filter = "none";
+  root.style.mixBlendMode = "normal";
+  root.style.isolation = "isolate";
+  root.style.transform = "translateZ(0)";
+  root.style.boxShadow = "0 24px 80px rgba(0,0,0,.55)";
+  root.style.border = "1px solid rgba(255,255,255,.12)";
+  root.style.borderRadius = "16px";
+  root.style.pointerEvents = "auto";
+
+  const surface = document.createElement("div");
+  surface.className = "ped-portal-dropdown-surface";
+  surface.style.background = "#0f1d2d";
+  surface.style.opacity = "1";
+  surface.style.borderRadius = "inherit";
+  surface.style.overflow = "hidden";
+  surface.style.pointerEvents = "auto";
+  root.appendChild(surface);
+
+  document.body.appendChild(root);
+  pedagogicoAvisosPortal = root;
+  return root;
+};
+
 const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
   if (!(pedagogicoFormContainer instanceof HTMLElement)) return;
   const safeLesson = lesson && typeof lesson === "object" ? lesson : {};
@@ -6291,15 +6348,6 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
         return `<span class="ped-pill ped-pill-${escapeHtml(tone)}">${escapeHtml(label)}</span>`;
       })
       .join("");
-    const itemsHtml = AVISOS_COORDENACAO.map((a) => {
-      const on = selected.includes(a.label);
-      return `
-        <div class="ped-dd-item ${on ? `on-${escapeHtml(a.color)}` : ""}" data-ped-aviso-item="${escapeHtml(a.label)}">
-          <div class="ped-dd-check">${on ? "✓" : ""}</div>
-          <div class="ped-dd-label">${escapeHtml(a.label)}</div>
-        </div>
-      `;
-    }).join("");
     return `
       <div class="ped-field ped-multisel" data-ped-multisel>
         <div class="ped-label">Avisos para a coordenação</div>
@@ -6307,9 +6355,6 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
         <div class="ped-multisel-wrap">
           <button type="button" class="ped-multisel-trigger" data-ped-multisel-trigger>${escapeHtml(triggerText)}</button>
           <span class="ped-multisel-badge" data-ped-multisel-badge ${badgeHidden}>${escapeHtml(String(selectedCount))}</span>
-          <div class="ped-multisel-dropdown" data-ped-multisel-dropdown hidden>
-            ${itemsHtml}
-          </div>
         </div>
         <div class="ped-pills" data-ped-multisel-pills>${pillsHtml}</div>
       </div>
@@ -6546,15 +6591,14 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
     });
 	  });
 
-	  // Multi-select logic
-	  const bindMultiSelect = (root) => {
-	    if (!(root instanceof HTMLElement)) return;
+  // Multi-select logic (portal in document.body)
+  const bindMultiSelect = (root) => {
+    if (!(root instanceof HTMLElement)) return;
     const trigger = root.querySelector("[data-ped-multisel-trigger]");
-    const dropdown = root.querySelector("[data-ped-multisel-dropdown]");
     const hidden = root.querySelector('[data-ped-field="avisos"]');
     const badge = root.querySelector("[data-ped-multisel-badge]");
     const pills = root.querySelector("[data-ped-multisel-pills]");
-    if (!(trigger instanceof HTMLButtonElement) || !(dropdown instanceof HTMLElement) || !(hidden instanceof HTMLInputElement)) return;
+    if (!(trigger instanceof HTMLButtonElement) || !(hidden instanceof HTMLInputElement)) return;
 
     const setSelected = (arr) => {
       const normalized = normalizeAvisosSelection(arr);
@@ -6574,16 +6618,6 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
           })
           .join("");
       }
-      dropdown.querySelectorAll("[data-ped-aviso-item]").forEach((item) => {
-        if (!(item instanceof HTMLElement)) return;
-        const label = String(item.getAttribute("data-ped-aviso-item") || "");
-        const def = AVISOS_COORDENACAO.find((a) => a.label === label);
-        const tone = def?.color || "yellow";
-        const on = normalized.includes(label);
-        item.classList.toggle(`on-${tone}`, on);
-        const check = item.querySelector(".ped-dd-check");
-        if (check instanceof HTMLElement) check.textContent = on ? "✓" : "";
-      });
     };
 
     const readSelected = () => {
@@ -6595,31 +6629,102 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
       }
     };
 
-	    trigger.addEventListener("click", (event) => {
-	      event.preventDefault();
-	      dropdown.hidden = !dropdown.hidden;
-	    });
-    dropdown.addEventListener("click", (ev) => {
-      const t = ev.target;
-      if (!(t instanceof Element)) return;
-      const item = t.closest("[data-ped-aviso-item]");
-      if (!(item instanceof HTMLElement)) return;
-      const label = String(item.getAttribute("data-ped-aviso-item") || "");
-      const current = readSelected();
-      const next = current.includes(label) ? current.filter((x) => x !== label) : [...current, label];
-      setSelected(next);
-      setDirty();
-      applyStatusUi();
-    });
-    // close on click outside
-    const onDoc = (ev) => {
-      const t = ev.target;
-      if (!(t instanceof Element)) return;
-      if (root.contains(t)) return;
-      dropdown.hidden = true;
+    const openPortal = () => {
+      const portal = ensurePedagogicoAvisosPortal();
+      const surface = portal.querySelector(".ped-portal-dropdown-surface");
+      if (!(surface instanceof HTMLElement)) return;
+
+      const rect = trigger.getBoundingClientRect();
+      portal.style.left = `${Math.round(rect.left)}px`;
+      portal.style.top = `${Math.round(rect.bottom + 8)}px`;
+      portal.style.width = `${Math.round(rect.width)}px`;
+      portal.style.maxHeight = "280px";
+      portal.hidden = false;
+
+      const selected = readSelected();
+      surface.innerHTML = AVISOS_COORDENACAO.map((a) => {
+        const on = selected.includes(a.label);
+        const tone = a.color;
+        return `
+          <button type="button" class="ped-multisel-option ${on ? `is-on is-${escapeHtml(tone)}` : ""}" data-value="${escapeHtml(a.label)}">
+            <span class="ped-multisel-check">${on ? "✓" : ""}</span>
+            <span class="ped-multisel-label">${escapeHtml(a.label)}</span>
+          </button>
+        `;
+      }).join("");
+
+      // eslint-disable-next-line no-console
+      console.log("[PED MULTISELECT OPEN]", { rect, dropdown: portal });
+
+      // Option clicks
+      const onOptionClick = (ev) => {
+        const t = ev.target;
+        if (!(t instanceof Element)) return;
+        const opt = t.closest("[data-value]");
+        if (!(opt instanceof HTMLButtonElement)) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        const value = String(opt.getAttribute("data-value") || "");
+        // eslint-disable-next-line no-console
+        console.log("[PED MULTISELECT OPTION CLICK]", { value });
+        const current = readSelected();
+        const next = current.includes(value) ? current.filter((x) => x !== value) : [...current, value];
+        setSelected(next);
+        setDirty();
+        applyStatusUi();
+        // re-render to update checks
+        openPortal();
+      };
+      surface.addEventListener("click", onOptionClick);
+
+      // Close behaviors
+      const onPointerDown = (ev) => {
+        const t = ev.target;
+        if (!(t instanceof Element)) return;
+        if (portal.contains(t)) return;
+        if (trigger.contains(t)) return;
+        portal.hidden = true;
+        closePedagogicoAvisosPortal();
+      };
+      const onKeyDown = (ev) => {
+        if (ev.key !== "Escape") return;
+        portal.hidden = true;
+        closePedagogicoAvisosPortal();
+      };
+      const onScroll = () => {
+        // simpler/safer: close on scroll
+        portal.hidden = true;
+        closePedagogicoAvisosPortal();
+      };
+      document.addEventListener("pointerdown", onPointerDown, true);
+      document.addEventListener("keydown", onKeyDown, true);
+      const drawerBody = pedagogicoDrawer instanceof HTMLElement ? pedagogicoDrawer.querySelector(".pedagogico-drawer-body") : null;
+      if (drawerBody instanceof HTMLElement) drawerBody.addEventListener("scroll", onScroll, { passive: true });
+      window.addEventListener("resize", onScroll, { passive: true });
+
+      // Replace existing cleanup for portal
+      if (typeof pedagogicoAvisosPortalCleanup === "function") {
+        try {
+          pedagogicoAvisosPortalCleanup();
+        } catch {
+          // ignore
+        }
+      }
+      pedagogicoAvisosPortalCleanup = () => {
+        surface.removeEventListener("click", onOptionClick);
+        document.removeEventListener("pointerdown", onPointerDown, true);
+        document.removeEventListener("keydown", onKeyDown, true);
+        if (drawerBody instanceof HTMLElement) drawerBody.removeEventListener("scroll", onScroll);
+        window.removeEventListener("resize", onScroll);
+      };
+      pedagogicoCleanupFns.push(() => closePedagogicoAvisosPortal());
     };
-    document.addEventListener("click", onDoc, { capture: true });
-    pedagogicoCleanupFns.push(() => document.removeEventListener("click", onDoc, { capture: true }));
+
+    trigger.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openPortal();
+    });
 
     setSelected(readSelected());
   };
