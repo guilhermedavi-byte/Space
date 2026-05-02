@@ -13183,6 +13183,11 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   line-height: 1;
 }
 
+.ped-star:hover,
+.ped-star:focus-visible {
+  color: rgba(251, 191, 36, 0.9);
+}
+
 .ped-star.on {
   color: #FBBF24;
 }
@@ -13296,7 +13301,7 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   border-radius: 10px;
   border: 0.5px solid rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.04);
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(255, 255, 255, 0.85);
   font-size: 13px;
   cursor: pointer;
   text-align: left;
@@ -13322,10 +13327,42 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 /* Portal dropdown (rendered in document.body) */
 .ped-portal-dropdown {
   pointer-events: auto;
+  background: #0f1d2d;
+  background-color: #0f1d2d;
+  opacity: 1;
+  border: 0.5px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  max-height: 280px;
+  overflow-y: auto;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  filter: none;
+  mix-blend-mode: normal;
+  isolation: isolate;
+  transform: translateZ(0);
 }
 
 .ped-portal-dropdown-surface {
   pointer-events: auto;
+  background: #0f1d2d;
+  opacity: 1;
+  border-radius: inherit;
+  overflow: hidden;
+}
+
+.ped-ta--conteudo {
+  min-height: 72px;
+}
+
+.ped-ta--obs {
+  min-height: 56px;
+}
+
+@media (max-width: 520px) {
+  .ped-grid2 {
+    grid-template-columns: 1fr;
+  }
 }
 
 .ped-multisel-option {

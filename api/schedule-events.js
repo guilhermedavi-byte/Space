@@ -340,7 +340,7 @@ const toLogIdFromEventId = (eventId) => {
   return `log_${normalized}`;
 };
 
-const decodeLessonLogDoc = (doc) => {
+  const decodeLessonLogDoc = (doc) => {
   if (!doc || typeof doc !== "object") return null;
   const id = getDocIdFromName(doc.name);
   if (!id) return null;
@@ -511,6 +511,34 @@ const handleLessonLogsApi = async (req, res, { idToken, role, requesterId, url }
     criadoEm: body?.criadoEm ? new Date(String(body.criadoEm)) : now,
     atualizadoEm: now,
     statusAula,
+    // Realizada (form curto)
+    conteudoTrabalhado: String(body?.conteudoTrabalhado || "").trim() || "",
+    engajamentoNota: clampInt(Number(body?.engajamentoNota || 0), 0, 5, 0),
+    evolucaoNota: clampInt(Number(body?.evolucaoNota || 0), 0, 5, 0),
+    humorAluno: normalizeOneOf(body?.humorAluno, ["animado", "neutro", "cansado", "ansioso"]) || "",
+    proximaAula: String(body?.proximaAula || "").trim() || "",
+    avisosCoordenacao: (() => {
+      const allowed = new Set([
+        "🔴 Risco de cancelamento",
+        "🟡 Aluno desmotivado",
+        "🟡 Frequência caindo",
+        "🟡 Não está evoluindo",
+        "🟢 Muito satisfeito",
+        "🟢 Quer mais aulas",
+        "🟢 Potencial indicação",
+      ]);
+      const raw = Array.isArray(body?.avisosCoordenacao) ? body.avisosCoordenacao : Array.isArray(body?.avisos) ? body.avisos : [];
+      const out = [];
+      raw.forEach((item) => {
+        const v = String(item || "").trim();
+        if (!v) return;
+        if (!allowed.has(v)) return;
+        if (!out.includes(v)) out.push(v);
+      });
+      return out;
+    })(),
+    observacoesInternas: String(body?.observacoesInternas || "").trim() || "",
+    precisaIntervencao: Boolean(body?.precisaIntervencao),
     // Campos do registro enxuto (Controle Pedagógico v2).
     motivoFalta: normalizeOneOf(body?.motivoFalta, [
       "atrasou_trabalho",
@@ -547,6 +575,12 @@ const handleLessonLogsApi = async (req, res, { idToken, role, requesterId, url }
     observacao: String(body?.observacao || "").trim().slice(0, 250) || "",
   };
 
+  // Enforce intervention rule on the server as well (don't rely only on the client).
+  const negativeAvisos = new Set(["🔴 Risco de cancelamento", "🟡 Aluno desmotivado", "🟡 Frequência caindo", "🟡 Não está evoluindo"]);
+  if (Array.isArray(data.avisosCoordenacao) && data.avisosCoordenacao.some((v) => negativeAvisos.has(String(v || "").trim()))) {
+    data.precisaIntervencao = true;
+  }
+
   // Limpa campos fora do contexto.
   if (statusAula !== "falta") {
     data.motivoFalta = "";
@@ -560,6 +594,16 @@ const handleLessonLogsApi = async (req, res, { idToken, role, requesterId, url }
   if (statusAula !== "falta" && statusAula !== "remarcada") {
     data.riscoEvasao = "";
     data.observacao = "";
+  }
+  if (statusAula !== "realizada") {
+    data.conteudoTrabalhado = "";
+    data.engajamentoNota = 0;
+    data.evolucaoNota = 0;
+    data.humorAluno = "";
+    data.proximaAula = "";
+    data.avisosCoordenacao = [];
+    data.observacoesInternas = "";
+    data.precisaIntervencao = false;
   }
 
   const writes = [
