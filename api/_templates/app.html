@@ -1393,30 +1393,67 @@
 	        </section>
 
         <section class="platform-panel" data-panel="alunos" data-hide-platform-header="true" hidden>
-          <div class="admin-manage-shell" data-admin-manage="student">
-            <div class="admin-manage-head">
-              <h2 class="admin-manage-title">Gerenciar Alunos</h2>
-              <button class="button button-solid button-small" type="button" data-admin-new-user="student">
-                + Novo Aluno
-              </button>
-            </div>
+          <div class="admin-students-shell">
+            <header class="admin-students-head">
+              <div>
+                <h2 class="admin-students-title">Alunos</h2>
+                <p class="admin-students-subtitle">Acompanhe o histórico pedagógico dos alunos por professor.</p>
+              </div>
 
-            <div class="admin-manage-tools">
-              <input
-                class="admin-search"
-                type="search"
-                inputmode="search"
-                placeholder="Buscar por nome ou e-mail"
-                data-admin-search="student"
-              />
-              <div class="admin-manage-status" data-admin-manage-status="student" aria-live="polite"></div>
-            </div>
+              <div class="admin-students-filter">
+                <label class="admin-students-filter-label" for="admin-students-teacher-select">Professor</label>
+                <div class="admin-students-select-wrap">
+                  <select id="admin-students-teacher-select" class="admin-students-select" data-admin-students-teacher>
+                    <option value="">Selecione um professor…</option>
+                  </select>
+                  <span class="admin-students-select-arrow" aria-hidden="true">▼</span>
+                </div>
+              </div>
+            </header>
 
-            <article class="surface-card admin-users-card" aria-label="Lista de alunos">
-              <div class="admin-users-table" data-admin-users-table="student"></div>
-              <div class="admin-users-empty" data-admin-users-empty="student" hidden>Nenhum aluno encontrado.</div>
-              <div class="admin-users-error" data-admin-users-error="student" hidden>Não foi possível carregar os alunos.</div>
+            <div class="admin-students-status" data-admin-students-status aria-live="polite"></div>
+
+            <article class="surface-card admin-students-card" aria-label="Lista de alunos">
+              <div class="admin-students-list" data-admin-students-list></div>
+              <div class="admin-students-empty" data-admin-students-empty hidden>Selecione um professor para ver os alunos.</div>
+              <div class="admin-students-error" data-admin-students-error hidden>Não foi possível carregar os alunos.</div>
             </article>
+          </div>
+
+          <div class="admin-students-drawer" data-admin-student-history-drawer hidden>
+            <div class="admin-students-drawer-backdrop" data-admin-student-history-close></div>
+            <div class="admin-students-drawer-inner" role="dialog" aria-modal="true" aria-label="Histórico do aluno">
+              <div class="admin-students-drawer-head">
+                <div>
+                  <div class="admin-students-drawer-title" data-admin-student-history-title>Histórico do aluno</div>
+                  <div class="admin-students-drawer-sub" data-admin-student-history-sub>—</div>
+                </div>
+                <button class="admin-students-drawer-close" type="button" data-admin-student-history-close aria-label="Fechar">✕</button>
+              </div>
+
+              <div class="admin-students-drawer-body">
+                <div class="admin-students-history-filters" role="tablist" aria-label="Filtrar histórico do aluno">
+                  <button class="admin-students-history-filter is-active" type="button" role="tab" aria-selected="true" data-admin-student-history-filter="all">
+                    Todos
+                  </button>
+                  <button class="admin-students-history-filter" type="button" role="tab" aria-selected="false" data-admin-student-history-filter="realizada">
+                    Realizadas
+                  </button>
+                  <button class="admin-students-history-filter" type="button" role="tab" aria-selected="false" data-admin-student-history-filter="falta_aluno">
+                    Faltas
+                  </button>
+                  <button class="admin-students-history-filter" type="button" role="tab" aria-selected="false" data-admin-student-history-filter="remarcada">
+                    Remarcadas
+                  </button>
+                  <button class="admin-students-history-filter" type="button" role="tab" aria-selected="false" data-admin-student-history-filter="alerts">
+                    Alertas
+                  </button>
+                </div>
+
+                <div class="admin-students-history" data-admin-student-history-body></div>
+                <div class="admin-students-history-empty" data-admin-student-history-empty hidden>Nenhum registro pedagógico encontrado para este aluno.</div>
+              </div>
+            </div>
           </div>
         </section>
 

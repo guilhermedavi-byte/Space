@@ -98,6 +98,18 @@ const pedagogicoDrawer = document.querySelector("[data-pedagogico-drawer]");
 const pedagogicoDrawerTitle = document.querySelector("[data-pedagogico-drawer-title]");
 const pedagogicoDrawerAutosave = document.querySelector("[data-pedagogico-autosave]");
 const pedagogicoFormContainer = document.querySelector("[data-pedagogico-form-container]");
+
+// Admin > Alunos (histórico pedagógico por professor)
+const adminStudentsTeacherSelect = document.querySelector("[data-admin-students-teacher]");
+const adminStudentsList = document.querySelector("[data-admin-students-list]");
+const adminStudentsEmpty = document.querySelector("[data-admin-students-empty]");
+const adminStudentsError = document.querySelector("[data-admin-students-error]");
+const adminStudentsStatus = document.querySelector("[data-admin-students-status]");
+const adminStudentHistoryDrawer = document.querySelector("[data-admin-student-history-drawer]");
+const adminStudentHistoryTitle = document.querySelector("[data-admin-student-history-title]");
+const adminStudentHistorySub = document.querySelector("[data-admin-student-history-sub]");
+const adminStudentHistoryBody = document.querySelector("[data-admin-student-history-body]");
+const adminStudentHistoryEmpty = document.querySelector("[data-admin-student-history-empty]");
 const modalOverlay = document.querySelector("[data-modal-overlay]");
 const modalTitle = document.querySelector("[data-modal-title]");
 const modalBody = document.querySelector("[data-modal-body]");
@@ -7681,6 +7693,41 @@ let adminGrowthGoalsState = {
   loadedAt: 0,
 };
 
+let adminStudentsState = {
+  isLoading: false,
+  loadedAt: 0,
+  selectedTeacherId: "",
+  teachers: [], // [{id,nome,ativo,initials}]
+  studentsById: new Map(), // uid -> {id,nome,email,ativo,initials}
+  eventsLoadedAt: 0,
+  events: [], // from /api/schedule-events
+  logsByTeacherId: new Map(), // teacherId -> { loadedAt, logs }
+  summaries: [], // derived student rows for selected teacher
+  history: {
+    isOpen: false,
+    alunoId: "",
+    teacherId: "",
+    filter: "all", // all | realizada | falta_aluno | remarcada | alerts
+    items: [], // derived timeline items (log + event)
+    alunoMeta: null,
+    teacherMeta: null,
+  },
+};
+
+const setAdminStudentsStatus = (text, tone = "") => {
+  if (!(adminStudentsStatus instanceof HTMLElement)) return;
+  adminStudentsStatus.textContent = String(text || "");
+  adminStudentsStatus.dataset.tone = String(tone || "");
+};
+
+const normalizeRiskLabel = (value) => {
+  const s = String(value || "").trim().toLowerCase();
+  if (s === "baixo") return "Baixo";
+  if (s === "medio" || s === "médio") return "Médio";
+  if (s === "alto") return "Alto";
+  return "";
+};
+
 const getCompetenciaKeySaoPaulo = (date = new Date()) => {
   try {
     const parts = new Intl.DateTimeFormat("pt-BR", {
@@ -8153,6 +8200,562 @@ const renderAdminUsersTable = (type) => {
   `;
 };
 
+const fetchUserRowsFromFirestore = async (tipo) => {
+  const safeTipo = tipo === "teacher" ? "teacher" : tipo === "growth" ? "growth" : "student";
+  const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_students");
+  const user = await waitForFirebaseAuthReady(firebase, 5000);
+  if (!user) {
+    const e = new Error("firebase_not_authenticated");
+    e.code = "auth/no-current-user";
+    throw e;
+  }
+
+  const q = firebase.query(firebase.collection(firebase.primaryDb, "users"), firebase.where("tipo", "==", safeTipo));
+  const snap = await withTimeout(firebase.getDocs(q), 12_000, `firestore_getDocs_users_${safeTipo}`);
+  const rows = [];
+  snap.forEach((docSnap) => {
+    const data = docSnap.data ? docSnap.data() : null;
+    if (!data || typeof data !== "object") return;
+    rows.push(
+      normalizeUserRow({
+        id: docSnap.id,
+        nome: data.nome,
+        email: data.email,
+        tipo: data.tipo,
+        ativo: data.ativo,
+        criadoEm: data.criadoEm,
+      })
+    );
+  });
+  return rows.filter(Boolean).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+};
+
+const ensureAdminStudentsBaseData = async ({ force = false } = {}) => {
+  if (currentRole !== "admin") return;
+  const now = Date.now();
+  if (!force && adminStudentsState.loadedAt && now - adminStudentsState.loadedAt < 60_000) return;
+
+  adminStudentsState.isLoading = true;
+  setAdminStudentsStatus("Carregando…");
+  if (adminStudentsError instanceof HTMLElement) adminStudentsError.hidden = true;
+
+  try {
+    const [teachers, students, eventsRes] = await Promise.all([
+      fetchAdminAgendaTeachers(),
+      fetchUserRowsFromFirestore("student"),
+      fetchWithAuth("/api/schedule-events", { method: "GET" }),
+    ]);
+
+    adminStudentsState.teachers = Array.isArray(teachers) ? teachers : [];
+    const studentsById = new Map();
+    (Array.isArray(students) ? students : []).forEach((row) => {
+      if (!row?.id) return;
+      studentsById.set(row.id, row);
+    });
+    adminStudentsState.studentsById = studentsById;
+
+    if (!eventsRes.ok) throw new Error("admin_students_events_failed");
+    const eventsData = await eventsRes.json().catch(() => null);
+    adminStudentsState.events = Array.isArray(eventsData?.events) ? eventsData.events : [];
+    adminStudentsState.eventsLoadedAt = Date.now();
+
+    adminStudentsState.loadedAt = Date.now();
+    setAdminStudentsStatus("");
+    adminStudentsPopulateTeacherSelect();
+  } catch (error) {
+    console.error("[admin] students base load failed:", error);
+    if (adminStudentsError instanceof HTMLElement) adminStudentsError.hidden = false;
+    setAdminStudentsStatus("Não foi possível carregar agora.", "error");
+  } finally {
+    adminStudentsState.isLoading = false;
+  }
+};
+
+const adminStudentsPopulateTeacherSelect = () => {
+  if (!(adminStudentsTeacherSelect instanceof HTMLSelectElement)) return;
+  const teachers = Array.isArray(adminStudentsState.teachers) ? adminStudentsState.teachers : [];
+  const options = teachers
+    .filter((t) => t && typeof t === "object")
+    .sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"))
+    .map((t) => `<option value="${escapeHtml(String(t.id))}">${escapeHtml(String(t.nome || "Professor"))}</option>`)
+    .join("");
+
+  const current = String(adminStudentsState.selectedTeacherId || "");
+  adminStudentsTeacherSelect.innerHTML = `<option value="">Selecione um professor…</option>${options}`;
+  adminStudentsTeacherSelect.value = current;
+};
+
+const loadLessonLogsForTeacher = async (teacherId, { force = false } = {}) => {
+  const id = String(teacherId || "").trim();
+  if (!id) return [];
+  const cached = adminStudentsState.logsByTeacherId.get(id);
+  const now = Date.now();
+  if (!force && cached && cached.loadedAt && now - cached.loadedAt < 60_000 && Array.isArray(cached.logs)) {
+    return cached.logs;
+  }
+
+  const res = await fetchWithAuth(`/api/lesson-logs?professorId=${encodeURIComponent(id)}`, { method: "GET" });
+  if (!res.ok) throw new Error("lesson_logs_fetch_failed");
+  const data = await res.json().catch(() => null);
+  const logs = Array.isArray(data?.logs) ? data.logs : [];
+  adminStudentsState.logsByTeacherId.set(id, { loadedAt: Date.now(), logs });
+  return logs;
+};
+
+const deriveAdminStudentsSummaries = ({ teacherId, logs } = {}) => {
+  const tId = String(teacherId || "").trim();
+  const events = Array.isArray(adminStudentsState.events) ? adminStudentsState.events : [];
+  const logsArr = Array.isArray(logs) ? logs : [];
+  const studentsById = adminStudentsState.studentsById instanceof Map ? adminStudentsState.studentsById : new Map();
+
+  const eventsById = new Map();
+  events.forEach((evt) => {
+    if (!evt || typeof evt !== "object") return;
+    if (!evt.id) return;
+    eventsById.set(String(evt.id), evt);
+  });
+
+  const alunoIds = new Set();
+  events
+    .filter((evt) => evt && typeof evt === "object" && evt.type === "lesson" && String(evt.professorId || "") === tId)
+    .forEach((evt) => {
+      const a = String(evt.alunoId || "").trim();
+      if (a) alunoIds.add(a);
+    });
+  logsArr.forEach((log) => {
+    const a = String(log?.alunoId || "").trim();
+    const p = String(log?.professorId || "").trim();
+    if (a && (!tId || p === tId)) alunoIds.add(a);
+  });
+
+  const perAluno = new Map();
+  logsArr.forEach((log) => {
+    if (!log || typeof log !== "object") return;
+    if (tId && String(log.professorId || "") !== tId) return;
+    const alunoId = String(log.alunoId || "").trim();
+    if (!alunoId) return;
+    const bucket = perAluno.get(alunoId) || { total: 0, faltas: 0, remarcadas: 0, lastLog: null, lastRisk: "" };
+    bucket.total += 1;
+    const status = String(log.statusAula || "").trim().toLowerCase();
+    if (status === "falta_aluno") bucket.faltas += 1;
+    if (status === "remarcada") bucket.remarcadas += 1;
+
+    const updatedAt = String(log.atualizadoEm || log.criadoEm || "").trim();
+    const candidateMs = updatedAt ? Date.parse(updatedAt) : NaN;
+    const lastMs = bucket.lastLog?.atualizadoEm ? Date.parse(String(bucket.lastLog.atualizadoEm)) : NaN;
+    if (!bucket.lastLog || (Number.isFinite(candidateMs) && (!Number.isFinite(lastMs) || candidateMs > lastMs))) {
+      bucket.lastLog = log;
+    }
+
+    const risk = String(log?.payload?.riscoEvasao || log?.payload?.risco_evasao || "").trim().toLowerCase();
+    if (risk && (risk === "baixo" || risk === "medio" || risk === "médio" || risk === "alto")) {
+      bucket.lastRisk = risk;
+    }
+    perAluno.set(alunoId, bucket);
+  });
+
+  const teacherMeta = Array.isArray(adminStudentsState.teachers) ? adminStudentsState.teachers.find((t) => String(t.id) === tId) : null;
+
+  const summaries = Array.from(alunoIds)
+    .map((alunoId) => {
+      const meta = studentsById.get(alunoId) || null;
+      const bucket = perAluno.get(alunoId) || { total: 0, faltas: 0, remarcadas: 0, lastLog: null, lastRisk: "" };
+      const lastLog = bucket.lastLog;
+      let lastLabel = "—";
+      if (lastLog?.eventId) {
+        const evt = eventsById.get(String(lastLog.eventId)) || null;
+        if (evt && evt.dateKey) {
+          lastLabel = `${formatPedagogicoDate(evt.dateKey)} • ${formatHmFromMinutes(evt.startMin)}–${formatHmFromMinutes(evt.endMin)}`;
+        } else if (lastLog.dateKey) {
+          lastLabel = formatPedagogicoDate(lastLog.dateKey);
+        }
+      } else if (lastLog?.dateKey) {
+        lastLabel = formatPedagogicoDate(lastLog.dateKey);
+      }
+
+      const riskLabel = normalizeRiskLabel(bucket.lastRisk) || "Sem dados";
+      const statusLabel = meta ? (meta.ativo ? "Ativo" : "Inativo") : "—";
+
+      return {
+        alunoId,
+        nome: meta?.nome || "Aluno",
+        email: meta?.email || "",
+        ativo: typeof meta?.ativo === "boolean" ? meta.ativo : true,
+        statusLabel,
+        teacherId: tId,
+        teacherName: teacherMeta?.nome || "Professor",
+        lastLessonLabel: lastLabel,
+        totalLogs: bucket.total,
+        faltas: bucket.faltas,
+        remarcadas: bucket.remarcadas,
+        riskLabel,
+        hasAlert: Boolean(
+          (lastLog?.payload?.precisaIntervencao === true) ||
+            (String(lastLog?.payload?.motivoRemarcacao || "") === "professor_remarcou")
+        ),
+      };
+    })
+    .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+
+  return { summaries, logsByAluno: perAluno, eventsById, teacherMeta };
+};
+
+const renderAdminStudentsList = () => {
+  if (!(adminStudentsList instanceof HTMLElement)) return;
+  if (adminStudentsError instanceof HTMLElement) adminStudentsError.hidden = true;
+
+  const teacherId = String(adminStudentsState.selectedTeacherId || "").trim();
+  const summaries = Array.isArray(adminStudentsState.summaries) ? adminStudentsState.summaries : [];
+
+  if (!teacherId) {
+    adminStudentsList.innerHTML = "";
+    if (adminStudentsEmpty instanceof HTMLElement) {
+      adminStudentsEmpty.textContent = "Selecione um professor para ver os alunos.";
+      adminStudentsEmpty.hidden = false;
+    }
+    return;
+  }
+
+  if (adminStudentsEmpty instanceof HTMLElement) {
+    adminStudentsEmpty.hidden = summaries.length > 0;
+    if (summaries.length === 0) adminStudentsEmpty.textContent = "Nenhum aluno vinculado encontrado para este professor.";
+  }
+
+  adminStudentsList.innerHTML = summaries
+    .map((row) => {
+      const riskTone = row.riskLabel === "Alto" ? "red" : row.riskLabel === "Médio" ? "yellow" : row.riskLabel === "Baixo" ? "green" : "muted";
+      const riskCls = `admin-students-risk is-${riskTone}`;
+      const alertBadge = row.hasAlert ? `<span class="admin-students-alert">Alerta</span>` : "";
+      return `
+        <div class="admin-students-row" data-admin-student-row="${escapeHtml(row.alunoId)}" data-admin-student-teacher="${escapeHtml(row.teacherId)}">
+          <div class="admin-students-avatar" aria-hidden="true">${escapeHtml(getInitials(row.nome))}</div>
+          <div class="admin-students-main">
+            <div class="admin-students-name">
+              <span>${escapeHtml(row.nome)}</span>
+              ${alertBadge}
+            </div>
+            <div class="admin-students-meta">
+              <span class="admin-students-email">${escapeHtml(row.email || "—")}</span>
+              <span class="admin-students-dot" aria-hidden="true">•</span>
+              <span>${escapeHtml(row.statusLabel || "—")}</span>
+              <span class="admin-students-dot" aria-hidden="true">•</span>
+              <span>${escapeHtml(row.teacherName)}</span>
+            </div>
+            <div class="admin-students-kpis">
+              <span>Última aula registrada: <strong>${escapeHtml(row.lastLessonLabel)}</strong></span>
+              <span>Registros: <strong>${escapeHtml(String(row.totalLogs))}</strong></span>
+              <span class="${riskCls}">Risco: <strong>${escapeHtml(row.riskLabel)}</strong></span>
+            </div>
+          </div>
+          <button class="admin-students-actions-trigger" type="button" aria-label="Ações" data-admin-student-actions-trigger="${escapeHtml(
+            row.alunoId
+          )}" data-admin-student-actions-teacher="${escapeHtml(row.teacherId)}">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M6.5 12h.01"></path>
+              <path d="M12 12h.01"></path>
+              <path d="M17.5 12h.01"></path>
+            </svg>
+          </button>
+        </div>
+      `;
+    })
+    .join("");
+};
+
+const renderAdminStudentsPanel = async ({ force = false } = {}) => {
+  if (currentRole !== "admin") return;
+  if (!(adminStudentsTeacherSelect instanceof HTMLSelectElement)) return;
+  if (!(adminStudentsList instanceof HTMLElement)) return;
+  await ensureAdminStudentsBaseData({ force });
+  renderAdminStudentsList();
+};
+
+const selectAdminStudentsTeacher = async (teacherId, { force = false } = {}) => {
+  if (currentRole !== "admin") return;
+  const id = String(teacherId || "").trim();
+  adminStudentsState.selectedTeacherId = id;
+  if (adminStudentsTeacherSelect instanceof HTMLSelectElement) {
+    adminStudentsTeacherSelect.value = id;
+  }
+
+  if (!id) {
+    adminStudentsState.summaries = [];
+    renderAdminStudentsList();
+    return;
+  }
+
+  setAdminStudentsStatus("Carregando alunos…");
+  try {
+    await ensureAdminStudentsBaseData({ force });
+    const logs = await loadLessonLogsForTeacher(id, { force });
+    const derived = deriveAdminStudentsSummaries({ teacherId: id, logs });
+    adminStudentsState.summaries = derived.summaries;
+    setAdminStudentsStatus("");
+    renderAdminStudentsList();
+  } catch (error) {
+    console.error("[admin] select teacher failed:", error);
+    if (adminStudentsError instanceof HTMLElement) adminStudentsError.hidden = false;
+    setAdminStudentsStatus("Não foi possível carregar agora.", "error");
+  }
+};
+
+const formatAdminHistoryStamp = (iso) => {
+  const raw = String(iso || "").trim();
+  if (!raw) return "—";
+  const d = new Date(raw);
+  if (!(d instanceof Date) || Number.isNaN(d.getTime())) return "—";
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(d);
+};
+
+const computeLessonSummaryText = (log) => {
+  const payload = log && typeof log === "object" ? log.payload || {} : {};
+  const status = String(log?.statusAula || "").trim().toLowerCase();
+  if (status === "realizada") {
+    const content = String(payload.conteudoTrabalhado || payload.oQueFoiTrabalhado || "").trim();
+    return content ? `Conteúdo: ${content}` : "Sem resumo";
+  }
+  if (status === "falta_aluno") {
+    const motivo = String(payload.motivoFalta || "").trim();
+    const risco = normalizeRiskLabel(payload.riscoEvasao || "") || "";
+    return `Motivo: ${motivo || "—"}${risco ? ` · Risco: ${risco}` : ""}`;
+  }
+  if (status === "remarcada") {
+    const motivo = String(payload.motivoRemarcacao || "").trim();
+    const novaData = String(payload.novaDataRemarcacao || payload.novaData || "").trim();
+    const ini = String(payload.horarioInicioRemarcacao || payload.novoInicio || "").trim();
+    const fim = String(payload.horarioFimRemarcacao || payload.novoFim || "").trim();
+    const when = novaData && ini && fim ? `${formatPedagogicoDate(novaData)} • ${ini}–${fim}` : novaData ? formatPedagogicoDate(novaData) : "";
+    return `Motivo: ${motivo || "—"}${when ? ` · Nova aula: ${when}` : ""}`;
+  }
+  return "Sem resumo";
+};
+
+const buildAdminStudentHistoryItems = ({ alunoId, teacherId, logs, eventsById, teacherMeta } = {}) => {
+  const aId = String(alunoId || "").trim();
+  const tId = String(teacherId || "").trim();
+  const list = Array.isArray(logs) ? logs : [];
+  const out = [];
+  list.forEach((log) => {
+    if (!log || typeof log !== "object") return;
+    if (tId && String(log.professorId || "") !== tId) return;
+    if (aId && String(log.alunoId || "") !== aId) return;
+    const evt = eventsById instanceof Map ? eventsById.get(String(log.eventId || "")) : null;
+    const dateKey = String(evt?.dateKey || log.dateKey || "").trim();
+    const startMin = Number(evt?.startMin) || 0;
+    const endMin = Number(evt?.endMin) || 0;
+    const statusAula = String(log.statusAula || "").trim().toLowerCase();
+    const payload = log.payload && typeof log.payload === "object" ? log.payload : {};
+    const avisos = Array.isArray(payload.avisosCoordenacao) ? payload.avisosCoordenacao : [];
+    const needsAlert =
+      payload.precisaIntervencao === true ||
+      avisos.some((v) => String(v).startsWith("🔴") || String(v).startsWith("🟡")) ||
+      (statusAula === "remarcada" && String(payload.motivoRemarcacao || "") === "professor_remarcou");
+
+    out.push({
+      eventId: String(log.eventId || ""),
+      dateKey,
+      startMin,
+      endMin,
+      statusAula,
+      professorName: teacherMeta?.nome || "",
+      updatedAt: String(log.atualizadoEm || log.criadoEm || ""),
+      summaryText: computeLessonSummaryText(log),
+      riscoEvasao: normalizeRiskLabel(payload.riscoEvasao || "") || "",
+      avisos,
+      observacoes: String(payload.observacoesInternas || payload.observacao || "").trim(),
+      precisaIntervencao: needsAlert,
+      raw: log,
+    });
+  });
+
+  out.sort((a, b) => {
+    const ak = a.dateKey || "";
+    const bk = b.dateKey || "";
+    if (ak !== bk) return bk.localeCompare(ak);
+    if (a.startMin !== b.startMin) return b.startMin - a.startMin;
+    const ams = a.updatedAt ? Date.parse(a.updatedAt) : NaN;
+    const bms = b.updatedAt ? Date.parse(b.updatedAt) : NaN;
+    if (Number.isFinite(ams) && Number.isFinite(bms)) return bms - ams;
+    return 0;
+  });
+
+  return out;
+};
+
+const renderAdminStudentHistoryDrawer = () => {
+  if (!(adminStudentHistoryDrawer instanceof HTMLElement)) return;
+  if (!(adminStudentHistoryBody instanceof HTMLElement)) return;
+  const hist = adminStudentsState.history;
+  const items = Array.isArray(hist.items) ? hist.items : [];
+  const filter = String(hist.filter || "all");
+
+  const filtered = items.filter((it) => {
+    if (filter === "all") return true;
+    if (filter === "alerts") return Boolean(it.precisaIntervencao);
+    return it.statusAula === filter;
+  });
+
+  // Summary cards
+  const total = items.length;
+  const faltas = items.filter((i) => i.statusAula === "falta_aluno").length;
+  const remarcadas = items.filter((i) => i.statusAula === "remarcada").length;
+  const last = items[0] || null;
+  const lastStatus = last ? (last.statusAula === "realizada" ? "Realizada" : last.statusAula === "falta_aluno" ? "Falta do aluno" : "Remarcada") : "Sem dados";
+  const lastRisk = last?.riscoEvasao ? last.riscoEvasao : "Sem dados";
+  const lastUpdated = last?.updatedAt ? formatAdminHistoryStamp(last.updatedAt) : "Sem dados";
+
+  const realizada = items.filter((i) => i.statusAula === "realizada");
+  const avg = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0);
+  const engVals = realizada.map((i) => Number(i.raw?.payload?.engajamentoNota || 0)).filter((n) => Number.isFinite(n) && n > 0);
+  const evoVals = realizada.map((i) => Number(i.raw?.payload?.evolucaoNota || 0)).filter((n) => Number.isFinite(n) && n > 0);
+  const engMed = engVals.length ? avg(engVals).toFixed(1) : "";
+  const evoMed = evoVals.length ? avg(evoVals).toFixed(1) : "";
+
+  const alertCount = items.filter((i) => i.precisaIntervencao).length;
+
+  const headerHtml = `
+    <div class="admin-students-history-summary">
+      <div class="admin-students-summary-card"><span>Total registradas</span><strong>${escapeHtml(String(total || 0))}</strong></div>
+      <div class="admin-students-summary-card"><span>Faltas</span><strong>${escapeHtml(String(faltas || 0))}</strong></div>
+      <div class="admin-students-summary-card"><span>Remarcações</span><strong>${escapeHtml(String(remarcadas || 0))}</strong></div>
+      <div class="admin-students-summary-card"><span>Último status</span><strong>${escapeHtml(lastStatus)}</strong></div>
+      <div class="admin-students-summary-card"><span>Último risco</span><strong>${escapeHtml(lastRisk)}</strong></div>
+      <div class="admin-students-summary-card"><span>Última atualização</span><strong>${escapeHtml(lastUpdated)}</strong></div>
+    </div>
+
+    <div class="admin-students-history-indicators">
+      <div class="admin-students-indicator"><span>Engajamento médio</span><strong>${engMed ? escapeHtml(`${engMed}/5`) : "Sem dados"}</strong></div>
+      <div class="admin-students-indicator"><span>Evolução média</span><strong>${evoMed ? escapeHtml(`${evoMed}/5`) : "Sem dados"}</strong></div>
+      <div class="admin-students-indicator"><span>Alertas</span><strong>${alertCount ? escapeHtml(String(alertCount)) : "Sem dados"}</strong></div>
+    </div>
+  `;
+
+  const timelineHtml = filtered
+    .map((it) => {
+      const statusLabel = it.statusAula === "realizada" ? "Aula realizada" : it.statusAula === "falta_aluno" ? "Falta do aluno" : "Remarcada";
+      const stamp = it.dateKey
+        ? `${formatPedagogicoDate(it.dateKey)} • ${formatHmFromMinutes(it.startMin)}–${formatHmFromMinutes(it.endMin)}`
+        : "—";
+      const alertBadge = it.precisaIntervencao ? `<span class="admin-students-tl-alert">Alerta</span>` : "";
+      const avisos = Array.isArray(it.avisos) ? it.avisos : [];
+      const avisosHtml = avisos.length
+        ? `<div class="admin-students-tl-avisos">${avisos
+            .map((a) => {
+              const s = String(a || "");
+              const tone = s.startsWith("🔴") ? "red" : s.startsWith("🟢") ? "green" : "yellow";
+              return `<span class="admin-students-pill is-${tone}">${escapeHtml(s)}</span>`;
+            })
+            .join("")}</div>`
+        : "";
+      const obsHtml = it.observacoes ? `<div class="admin-students-tl-obs">${escapeHtml(it.observacoes)}</div>` : "";
+      const riskHtml = it.riscoEvasao ? `<div class="admin-students-tl-risk">Risco: <strong>${escapeHtml(it.riscoEvasao)}</strong></div>` : "";
+      return `
+        <article class="admin-students-tl-item">
+          <div class="admin-students-tl-head">
+            <div class="admin-students-tl-stamp">${escapeHtml(stamp)}</div>
+            ${alertBadge}
+          </div>
+          <div class="admin-students-tl-title">${escapeHtml(statusLabel)}</div>
+          ${it.professorName ? `<div class="admin-students-tl-by">Professor: ${escapeHtml(it.professorName)}</div>` : ""}
+          <div class="admin-students-tl-summary">${escapeHtml(it.summaryText)}</div>
+          ${riskHtml}
+          ${avisosHtml}
+          ${obsHtml}
+        </article>
+      `;
+    })
+    .join("");
+
+  adminStudentHistoryBody.innerHTML = `${headerHtml}<div class="admin-students-timeline">${timelineHtml}</div>`;
+  if (adminStudentHistoryEmpty instanceof HTMLElement) adminStudentHistoryEmpty.hidden = filtered.length > 0;
+};
+
+const openAdminStudentHistoryDrawer = async ({ alunoId, teacherId } = {}) => {
+  if (currentRole !== "admin") return;
+  if (!(adminStudentHistoryDrawer instanceof HTMLElement)) return;
+  const aId = String(alunoId || "").trim();
+  const tId = String(teacherId || "").trim();
+  if (!aId || !tId) return;
+
+  setAdminStudentsStatus("Carregando histórico…");
+  try {
+    await ensureAdminStudentsBaseData({ force: false });
+    const logs = await loadLessonLogsForTeacher(tId, { force: false });
+    const derived = deriveAdminStudentsSummaries({ teacherId: tId, logs });
+    const items = buildAdminStudentHistoryItems({
+      alunoId: aId,
+      teacherId: tId,
+      logs,
+      eventsById: derived.eventsById,
+      teacherMeta: derived.teacherMeta,
+    });
+
+    const alunoMeta = adminStudentsState.studentsById instanceof Map ? adminStudentsState.studentsById.get(aId) || null : null;
+    const teacherMeta = derived.teacherMeta || null;
+
+    adminStudentsState.history = {
+      isOpen: true,
+      alunoId: aId,
+      teacherId: tId,
+      filter: "all",
+      items,
+      alunoMeta,
+      teacherMeta,
+    };
+
+    if (adminStudentHistoryTitle instanceof HTMLElement) adminStudentHistoryTitle.textContent = "Histórico do aluno";
+    if (adminStudentHistorySub instanceof HTMLElement) {
+      const alunoName = alunoMeta?.nome || "Aluno";
+      const teacherName = teacherMeta?.nome || "Professor";
+      adminStudentHistorySub.textContent = `${alunoName} • ${teacherName}`;
+    }
+
+    // Reset filter tabs
+    document.querySelectorAll("[data-admin-student-history-filter]").forEach((btn) => {
+      if (!(btn instanceof HTMLButtonElement)) return;
+      const isActive = String(btn.getAttribute("data-admin-student-history-filter") || "") === "all";
+      btn.classList.toggle("is-active", isActive);
+      btn.setAttribute("aria-selected", isActive ? "true" : "false");
+    });
+
+    renderAdminStudentHistoryDrawer();
+
+    adminStudentHistoryDrawer.hidden = false;
+    window.requestAnimationFrame(() => {
+      if (adminStudentHistoryDrawer instanceof HTMLElement) adminStudentHistoryDrawer.classList.add("is-open");
+    });
+    setAdminStudentsStatus("");
+  } catch (error) {
+    console.error("[admin] open student history failed:", error);
+    setAdminStudentsStatus("Não foi possível carregar agora.", "error");
+  }
+};
+
+const closeAdminStudentHistoryDrawer = () => {
+  if (adminStudentHistoryDrawer instanceof HTMLElement) {
+    adminStudentHistoryDrawer.classList.remove("is-open");
+    window.setTimeout(() => {
+      if (adminStudentHistoryDrawer instanceof HTMLElement) adminStudentHistoryDrawer.hidden = true;
+    }, 220);
+  }
+  adminStudentsState.history = {
+    isOpen: false,
+    alunoId: "",
+    teacherId: "",
+    filter: "all",
+    items: [],
+    alunoMeta: null,
+    teacherMeta: null,
+  };
+};
+
+
 const closeAllAdminActionMenus = () => {
   document.querySelectorAll("[data-admin-actions].is-open").forEach((el) => el.classList.remove("is-open"));
   closeAdminActionsPopover();
@@ -8165,6 +8768,53 @@ const closeAdminActionsPopover = () => {
     adminActionsPopoverEl.remove();
   }
   adminActionsPopoverEl = null;
+};
+
+// Admin > Alunos (histórico pedagógico) - actions popover (separate from user toggle/reset).
+let adminStudentActionsPopoverEl = null;
+
+const closeAdminStudentActionsPopover = () => {
+  if (adminStudentActionsPopoverEl instanceof HTMLElement) {
+    adminStudentActionsPopoverEl.remove();
+  }
+  adminStudentActionsPopoverEl = null;
+};
+
+const openAdminStudentActionsPopover = ({ triggerEl, alunoId, teacherId } = {}) => {
+  if (!(triggerEl instanceof HTMLElement)) return;
+  closeAdminStudentActionsPopover();
+
+  const safeAlunoId = String(alunoId || "").trim();
+  const safeTeacherId = String(teacherId || "").trim();
+  if (!safeAlunoId || !safeTeacherId) return;
+
+  const pop = document.createElement("div");
+  pop.className = "admin-actions-popover";
+  pop.setAttribute("role", "menu");
+  pop.setAttribute("data-admin-student-actions-popover", "true");
+  pop.setAttribute("data-admin-student-actions-aluno", safeAlunoId);
+  pop.setAttribute("data-admin-student-actions-teacher", safeTeacherId);
+  pop.innerHTML = `
+    <button class="admin-action-item" type="button" data-admin-student-action="history" data-admin-student-aluno="${escapeHtml(
+      safeAlunoId
+    )}" data-admin-student-teacher="${escapeHtml(safeTeacherId)}">Ver histórico pedagógico</button>
+    <button class="admin-action-item is-disabled" type="button" disabled>Ver dados do aluno</button>
+    <button class="admin-action-item is-disabled" type="button" disabled>Ver aulas do aluno</button>
+  `;
+
+  document.body.appendChild(pop);
+  adminStudentActionsPopoverEl = pop;
+
+  // Position (fixed) and flip if needed.
+  const rect = triggerEl.getBoundingClientRect();
+  const popRect = pop.getBoundingClientRect();
+  const margin = 10;
+  const spaceBelow = window.innerHeight - rect.bottom;
+  const shouldFlipUp = spaceBelow < popRect.height + margin;
+  const top = shouldFlipUp ? rect.top - margin - popRect.height : rect.bottom + margin;
+  const left = rect.right - popRect.width;
+  pop.style.top = `${clampToViewport(top, margin, window.innerHeight - popRect.height - margin)}px`;
+  pop.style.left = `${clampToViewport(left, margin, window.innerWidth - popRect.width - margin)}px`;
 };
 
 const clampToViewport = (value, min, max) => Math.max(min, Math.min(max, value));
@@ -8622,6 +9272,13 @@ adminSearchInputs.forEach((input) => {
     renderAdminUsersTable(type);
   });
 });
+
+if (adminStudentsTeacherSelect instanceof HTMLSelectElement) {
+  adminStudentsTeacherSelect.addEventListener("change", () => {
+    const next = String(adminStudentsTeacherSelect.value || "").trim();
+    selectAdminStudentsTeacher(next, { force: false });
+  });
+}
 if (modalOverlay) {
   modalOverlay.addEventListener("click", (event) => {
     if (event.target === modalOverlay) {
@@ -8737,7 +9394,7 @@ const showPanel = (panelName) => {
   if (panelName === "alunos") {
     window.scrollTo({ top: 0, behavior: "smooth" });
     if (currentRole === "admin") {
-      loadUsersFromFirestore("student");
+      renderAdminStudentsPanel({ force: false });
     }
     return;
   }
@@ -8892,6 +9549,11 @@ const initAppShell = async () => {
 
   setRole(user.role);
   const parsed = parseAppRoute(normalizePathname(window.location.pathname));
+  // Prevent cross-role URL access (ex: /app/admin/* while logged as teacher).
+  if (parsed?.role && parsed.role !== currentRole) {
+    navigateApp(panelPathForRole(currentRole, "dashboard"));
+    return;
+  }
   showPanel(parsed?.panel || "dashboard");
 
   renderDashboardCharts();
@@ -9043,6 +9705,15 @@ document.addEventListener("click", (event) => {
   const target = event.target;
 
   if (target instanceof Element) {
+    // Admin > Alunos: close student actions popover when clicking elsewhere.
+    if (
+      adminStudentActionsPopoverEl instanceof HTMLElement &&
+      !target.closest("[data-admin-student-actions-popover]") &&
+      !target.closest("[data-admin-student-actions-trigger]")
+    ) {
+      closeAdminStudentActionsPopover();
+    }
+
     const pedClose = target.closest("[data-pedagogico-drawer-close]");
     if (pedClose instanceof HTMLElement) {
       event.preventDefault();
@@ -9061,6 +9732,50 @@ document.addEventListener("click", (event) => {
 
     // Admin manage tables: actions menu + operations.
     if (currentRole === "admin") {
+      const studentHistoryClose = target.closest("[data-admin-student-history-close]");
+      if (studentHistoryClose instanceof HTMLElement) {
+        event.preventDefault();
+        closeAdminStudentHistoryDrawer();
+        return;
+      }
+
+      const historyFilterBtn = target.closest("[data-admin-student-history-filter]");
+      if (historyFilterBtn instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const next = String(historyFilterBtn.getAttribute("data-admin-student-history-filter") || "all").trim();
+        adminStudentsState.history.filter = next || "all";
+        document.querySelectorAll("[data-admin-student-history-filter]").forEach((btn) => {
+          if (!(btn instanceof HTMLButtonElement)) return;
+          const isActive = String(btn.getAttribute("data-admin-student-history-filter") || "") === adminStudentsState.history.filter;
+          btn.classList.toggle("is-active", isActive);
+          btn.setAttribute("aria-selected", isActive ? "true" : "false");
+        });
+        renderAdminStudentHistoryDrawer();
+        return;
+      }
+
+      const studentActionsTrigger = target.closest("[data-admin-student-actions-trigger]");
+      if (studentActionsTrigger instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const alunoId = String(studentActionsTrigger.getAttribute("data-admin-student-actions-trigger") || "").trim();
+        const teacherId = String(studentActionsTrigger.getAttribute("data-admin-student-actions-teacher") || "").trim();
+        openAdminStudentActionsPopover({ triggerEl: studentActionsTrigger, alunoId, teacherId });
+        return;
+      }
+
+      const studentAction = target.closest("[data-admin-student-action]");
+      if (studentAction instanceof HTMLButtonElement) {
+        const action = String(studentAction.getAttribute("data-admin-student-action") || "").trim();
+        if (action === "history") {
+          event.preventDefault();
+          const alunoId = String(studentAction.getAttribute("data-admin-student-aluno") || "").trim();
+          const teacherId = String(studentAction.getAttribute("data-admin-student-teacher") || "").trim();
+          closeAdminStudentActionsPopover();
+          openAdminStudentHistoryDrawer({ alunoId, teacherId });
+          return;
+        }
+      }
+
       const goalOpen = target.closest("[data-admin-growth-goal-open]");
       if (goalOpen instanceof HTMLButtonElement) {
         event.preventDefault();

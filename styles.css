@@ -3928,6 +3928,506 @@ body:not([data-role="admin"]) [data-admin-only] {
   display: none !important;
 }
 
+.admin-students-shell {
+  width: 100%;
+  display: grid;
+  gap: 14px;
+}
+
+.admin-students-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.admin-students-title {
+  margin: 0;
+  font-family: "Inter", "Plus Jakarta Sans", "Avenir Next", sans-serif;
+  font-size: clamp(22px, 2.5vw, 28px);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1.12;
+  color: #ffffff;
+}
+
+.admin-students-subtitle {
+  margin: 6px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.admin-students-filter {
+  display: grid;
+  gap: 8px;
+  min-width: min(320px, 100%);
+}
+
+.admin-students-filter-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.admin-students-select-wrap {
+  position: relative;
+}
+
+.admin-students-select {
+  width: 100%;
+  height: 42px;
+  padding: 0 42px 0 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.92);
+  outline: none;
+  appearance: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+.admin-students-select:focus {
+  border-color: rgba(255, 86, 79, 0.5);
+  box-shadow: 0 0 0 4px rgba(255, 86, 79, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.admin-students-select-arrow {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  pointer-events: none;
+}
+
+.admin-students-status {
+  font-size: 13px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.58);
+  min-height: 18px;
+  text-align: right;
+}
+
+.admin-students-status[data-tone="error"] {
+  color: rgba(255, 118, 110, 0.96);
+}
+
+.admin-students-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.admin-students-list {
+  display: grid;
+}
+
+.admin-students-row {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) 40px;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 16px;
+}
+
+.admin-students-row + .admin-students-row {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.admin-students-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  background: rgba(89, 144, 189, 0.12);
+  border: 1px solid rgba(89, 144, 189, 0.22);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.admin-students-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.admin-students-alert {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  border: 1px solid rgba(255, 78, 70, 0.22);
+  background: rgba(255, 78, 70, 0.1);
+  color: rgba(255, 78, 70, 0.95);
+}
+
+.admin-students-meta {
+  margin-top: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.admin-students-email {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.admin-students-dot {
+  color: rgba(255, 255, 255, 0.28);
+}
+
+.admin-students-kpis {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 12px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.52);
+}
+
+.admin-students-kpis strong {
+  color: rgba(255, 255, 255, 0.88);
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-students-risk {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.admin-students-risk.is-red strong {
+  color: rgba(255, 78, 70, 0.95);
+}
+
+.admin-students-risk.is-yellow strong {
+  color: rgba(251, 191, 36, 0.92);
+}
+
+.admin-students-risk.is-green strong {
+  color: rgba(93, 202, 165, 0.92);
+}
+
+.admin-students-actions-trigger {
+  width: 38px;
+  height: 38px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+  color: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+}
+
+.admin-students-actions-trigger svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.admin-students-empty,
+.admin-students-error {
+  padding: 14px 16px;
+  font-size: 13px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.admin-students-error {
+  color: rgba(255, 118, 110, 0.96);
+}
+
+/* Admin > Alunos drawer (history) */
+.admin-students-drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  display: flex;
+  justify-content: flex-end;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 220ms ease;
+}
+
+.admin-students-drawer.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.admin-students-drawer-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.admin-students-drawer-inner {
+  position: relative;
+  width: min(560px, 94vw);
+  height: 100vh;
+  background: #0d1a2a;
+  border-left: 0.5px solid rgba(89, 144, 189, 0.12);
+  box-shadow: -24px 0 54px rgba(0, 0, 0, 0.35);
+  transform: translateX(100%);
+  transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.admin-students-drawer.is-open .admin-students-drawer-inner {
+  transform: translateX(0);
+}
+
+.admin-students-drawer-head {
+  padding: 18px 18px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 0.5px solid rgba(89, 144, 189, 0.08);
+}
+
+.admin-students-drawer-title {
+  font-weight: 800;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.admin-students-drawer-sub {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.admin-students-drawer-close {
+  border: 0;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.75);
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.admin-students-drawer-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 18px 20px 20px;
+  display: grid;
+  gap: 14px;
+}
+
+.admin-students-history-filters {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+  width: fit-content;
+}
+
+.admin-students-history-filter {
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.admin-students-history-filter.is-active {
+  background: rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.admin-students-history-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.admin-students-summary-card {
+  padding: 12px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  display: grid;
+  gap: 6px;
+}
+
+.admin-students-summary-card span {
+  font-size: 11px;
+  font-weight: 750;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.admin-students-summary-card strong {
+  font-size: 13px;
+  font-weight: 850;
+  color: rgba(255, 255, 255, 0.92);
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-students-history-indicators {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.admin-students-indicator {
+  padding: 12px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+  display: grid;
+  gap: 6px;
+}
+
+.admin-students-indicator span {
+  font-size: 11px;
+  font-weight: 750;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.admin-students-indicator strong {
+  font-size: 13px;
+  font-weight: 850;
+  color: rgba(255, 255, 255, 0.9);
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-students-timeline {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-students-tl-item {
+  padding: 14px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+  display: grid;
+  gap: 8px;
+}
+
+.admin-students-tl-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-students-tl-stamp {
+  font-size: 12px;
+  font-weight: 750;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.admin-students-tl-alert {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  border: 1px solid rgba(255, 78, 70, 0.22);
+  background: rgba(255, 78, 70, 0.1);
+  color: rgba(255, 78, 70, 0.95);
+}
+
+.admin-students-tl-title {
+  font-size: 13px;
+  font-weight: 850;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.admin-students-tl-by,
+.admin-students-tl-summary,
+.admin-students-tl-risk,
+.admin-students-tl-obs {
+  font-size: 12px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.admin-students-tl-avisos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-students-pill {
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 750;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.admin-students-pill.is-red {
+  background: rgba(255, 78, 70, 0.1);
+  border-color: rgba(255, 78, 70, 0.18);
+  color: rgba(255, 78, 70, 0.95);
+}
+
+.admin-students-pill.is-yellow {
+  background: rgba(251, 191, 36, 0.1);
+  border-color: rgba(251, 191, 36, 0.18);
+  color: rgba(251, 191, 36, 0.92);
+}
+
+.admin-students-pill.is-green {
+  background: rgba(93, 202, 165, 0.1);
+  border-color: rgba(93, 202, 165, 0.18);
+  color: rgba(93, 202, 165, 0.92);
+}
+
+.admin-students-history-empty {
+  font-size: 13px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.55);
+  padding: 10px 0;
+}
+
+@media (max-width: 640px) {
+  .admin-students-history-summary,
+  .admin-students-history-indicators {
+    grid-template-columns: 1fr;
+  }
+}
+
 .admin-manage-shell {
   width: 100%;
   display: grid;
