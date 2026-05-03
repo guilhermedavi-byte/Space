@@ -577,6 +577,49 @@ const syncRoleUI = () => {
     }
   });
 
+  // Defensive: ensure Admin sidebar contains the "Alunos" entry (some deploys may serve an older template).
+  if (currentRole === "admin") {
+    try {
+      const sidebarNav = document.querySelector(".sidebar-nav");
+      if (sidebarNav instanceof HTMLElement) {
+        const existing = sidebarNav.querySelector('[data-panel-target="alunos"]');
+        if (!(existing instanceof HTMLButtonElement)) {
+          const btn = document.createElement("button");
+          btn.className = "sidebar-link";
+          btn.type = "button";
+          btn.setAttribute("data-panel-target", "alunos");
+          btn.setAttribute("data-admin-only", "");
+          btn.title = "Alunos";
+          btn.innerHTML = `
+            <span class="sidebar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M3.5 19.5v-1.2a3.3 3.3 0 0 1 3.3-3.3h6.4a3.3 3.3 0 0 1 3.3 3.3v1.2"></path>
+                <circle cx="10" cy="8.2" r="3.2"></circle>
+                <path d="M18.5 9.5h3"></path>
+                <path d="M20 8v3"></path>
+              </svg>
+            </span>
+            <span class="sidebar-text">Alunos</span>
+          `;
+          // Insert after "Professores" when possible, otherwise append.
+          const after = sidebarNav.querySelector('[data-panel-target="professores"]');
+          if (after && after.parentNode === sidebarNav) {
+            after.insertAdjacentElement("afterend", btn);
+          } else {
+            sidebarNav.appendChild(btn);
+          }
+          // Bind navigation for this dynamically inserted link.
+          btn.addEventListener("click", () => {
+            const role = sessionUser?.role || currentRole;
+            navigateApp(panelPathForRole(role, "alunos"));
+          });
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   const teacherWorkHoursBtn = document.querySelector("[data-teacher-work-hours]");
   if (teacherWorkHoursBtn instanceof HTMLElement) {
     teacherWorkHoursBtn.hidden = currentRole === "admin";
@@ -9347,8 +9390,10 @@ const showPanel = (panelName) => {
     renderTeacherPedagogico({ silent: true }).catch(() => {});
   }
 
-  sidebarLinks.forEach((link) => {
-    const isActive = link.dataset.panelTarget === panelName;
+  // Query live to support dynamically inserted links.
+  document.querySelectorAll("[data-panel-target]").forEach((link) => {
+    if (!(link instanceof HTMLElement)) return;
+    const isActive = String(link.getAttribute("data-panel-target") || "") === panelName;
     link.classList.toggle("is-active", isActive);
     link.setAttribute("aria-pressed", String(isActive));
   });
