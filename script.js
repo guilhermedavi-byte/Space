@@ -130,6 +130,17 @@ const teacherNextClassValue = document.querySelector("[data-teacher-next-class]"
 const teacherNextCountdown = document.querySelector("[data-teacher-next-countdown]");
 const teacherNpsValue = document.querySelector("[data-teacher-nps]");
 const teacherNpsSub = document.querySelector("[data-teacher-nps-sub]");
+
+// Professor > Alunos
+const teacherStudentsList = document.querySelector("[data-teacher-students-list]");
+const teacherStudentsEmpty = document.querySelector("[data-teacher-students-empty]");
+const teacherStudentsError = document.querySelector("[data-teacher-students-error]");
+const teacherStudentsStatus = document.querySelector("[data-teacher-students-status]");
+const teacherStudentHistoryDrawer = document.querySelector("[data-teacher-student-history-drawer]");
+const teacherStudentHistoryTitle = document.querySelector("[data-teacher-student-history-title]");
+const teacherStudentHistorySub = document.querySelector("[data-teacher-student-history-sub]");
+const teacherStudentHistoryBody = document.querySelector("[data-teacher-student-history-body]");
+const teacherStudentHistoryEmpty = document.querySelector("[data-teacher-student-history-empty]");
 const teacherOccupancyPercent = document.querySelector("[data-teacher-occupancy-percent]");
 const teacherOccupancySub = document.querySelector("[data-teacher-occupancy-sub]");
 const teacherOccupancyRing = document.querySelector("[data-teacher-occupancy-ring]");
@@ -6238,6 +6249,27 @@ const setPedagogicoAutosaveLabel = (text) => {
   pedagogicoDrawerAutosave.textContent = String(text || "");
 };
 
+let teacherStudentsState = {
+  isLoading: false,
+  loadedAt: 0,
+  events: [],
+  eventsById: new Map(),
+  logs: [],
+  summaries: [],
+  history: {
+    isOpen: false,
+    alunoId: "",
+    filter: "all", // all | realizada | falta_aluno | remarcada | alerts
+    items: [],
+  },
+};
+
+const setTeacherStudentsStatus = (text, tone = "") => {
+  if (!(teacherStudentsStatus instanceof HTMLElement)) return;
+  teacherStudentsStatus.textContent = String(text || "");
+  teacherStudentsStatus.dataset.tone = String(tone || "");
+};
+
 const markPedagogicoDirty = () => {
   pedagogicoDirty = true;
   setPedagogicoAutosaveLabel("Alterações não salvas");
@@ -7268,6 +7300,423 @@ const renderTeacherPedagogicoList = () => {
       handlePedagogicoItemOpen(id);
     });
   }
+};
+
+let teacherStudentActionsPopoverEl = null;
+
+const closeTeacherStudentActionsPopover = () => {
+  if (teacherStudentActionsPopoverEl instanceof HTMLElement) {
+    teacherStudentActionsPopoverEl.remove();
+  }
+  teacherStudentActionsPopoverEl = null;
+};
+
+const openTeacherStudentActionsPopover = ({ triggerEl, alunoId } = {}) => {
+  if (!(triggerEl instanceof HTMLElement)) return;
+  closeTeacherStudentActionsPopover();
+  const safeAlunoId = String(alunoId || "").trim();
+  if (!safeAlunoId) return;
+
+  const pop = document.createElement("div");
+  pop.className = "admin-actions-popover";
+  pop.setAttribute("role", "menu");
+  pop.setAttribute("data-teacher-student-actions-popover", "true");
+  pop.innerHTML = `
+    <button class="admin-action-item" type="button" data-teacher-student-action="history" data-teacher-student-aluno="${escapeHtml(
+      safeAlunoId
+    )}">Ver histórico do aluno</button>
+  `;
+  document.body.appendChild(pop);
+  teacherStudentActionsPopoverEl = pop;
+
+  const rect = triggerEl.getBoundingClientRect();
+  const popRect = pop.getBoundingClientRect();
+  const margin = 10;
+  const spaceBelow = window.innerHeight - rect.bottom;
+  const shouldFlipUp = spaceBelow < popRect.height + margin;
+  const top = shouldFlipUp ? rect.top - margin - popRect.height : rect.bottom + margin;
+  const left = rect.right - popRect.width;
+  pop.style.top = `${clampToViewport(top, margin, window.innerHeight - popRect.height - margin)}px`;
+  pop.style.left = `${clampToViewport(left, margin, window.innerWidth - popRect.width - margin)}px`;
+};
+
+const buildTeacherStudentHistoryItems = ({ alunoId } = {}) => {
+  const aId = String(alunoId || "").trim();
+  const logs = Array.isArray(teacherStudentsState.logs) ? teacherStudentsState.logs : [];
+  const eventsById = teacherStudentsState.eventsById instanceof Map ? teacherStudentsState.eventsById : new Map();
+  const out = [];
+
+  logs.forEach((log) => {
+    if (!log || typeof log !== "object") return;
+    if (aId && String(log.alunoId || "") !== aId) return;
+    const evt = eventsById.get(String(log.eventId || "")) || null;
+    const payload = log.payload && typeof log.payload === "object" ? log.payload : {};
+    const statusAula = String(log.statusAula || "").trim().toLowerCase();
+    const dateKey = String(evt?.dateKey || log.dateKey || "").trim();
+    const startMin = Number(evt?.startMin) || 0;
+    const endMin = Number(evt?.endMin) || 0;
+    const avisos = Array.isArray(payload.avisosCoordenacao) ? payload.avisosCoordenacao : [];
+    const needsAlert =
+      payload.precisaIntervencao === true ||
+      avisos.some((v) => String(v).startsWith("🔴") || String(v).startsWith("🟡")) ||
+      (statusAula === "remarcada" && String(payload.motivoRemarcacao || "") === "professor_remarcou");
+
+    out.push({
+      eventId: String(log.eventId || ""),
+      statusAula,
+      dateKey,
+      startMin,
+      endMin,
+      updatedAt: String(log.atualizadoEm || log.criadoEm || ""),
+      payload,
+      precisaIntervencao: needsAlert,
+    });
+  });
+
+  out.sort((a, b) => {
+    if (a.dateKey !== b.dateKey) return String(b.dateKey).localeCompare(String(a.dateKey));
+    if (a.startMin !== b.startMin) return b.startMin - a.startMin;
+    const ams = a.updatedAt ? Date.parse(a.updatedAt) : NaN;
+    const bms = b.updatedAt ? Date.parse(b.updatedAt) : NaN;
+    if (Number.isFinite(ams) && Number.isFinite(bms)) return bms - ams;
+    return 0;
+  });
+
+  return out;
+};
+
+const renderTeacherStudentHistoryDrawer = () => {
+  if (!(teacherStudentHistoryBody instanceof HTMLElement)) return;
+  const hist = teacherStudentsState.history;
+  const items = Array.isArray(hist.items) ? hist.items : [];
+  const filter = String(hist.filter || "all");
+
+  const filtered = items.filter((it) => {
+    if (filter === "all") return true;
+    if (filter === "alerts") return Boolean(it.precisaIntervencao);
+    return it.statusAula === filter;
+  });
+
+  const total = items.length;
+  const realizadas = items.filter((i) => i.statusAula === "realizada").length;
+  const faltas = items.filter((i) => i.statusAula === "falta_aluno").length;
+  const remarcadas = items.filter((i) => i.statusAula === "remarcada").length;
+  const last = items[0] || null;
+  const lastRisk = normalizeRiskLabel(last?.payload?.riscoEvasao || "") || "Sem dados";
+  const lastUpdated = last?.updatedAt ? formatAdminHistoryStamp(last.updatedAt) : "Sem dados";
+
+  let lastContent = "";
+  let lastEng = "";
+  let lastEvo = "";
+  let lastHumor = "";
+  let lastNext = "";
+  let lastAvisos = [];
+  let lastObs = "";
+  if (last && last.statusAula === "realizada") {
+    lastContent = String(last.payload?.conteudoTrabalhado || "").trim();
+    const e1 = Number(last.payload?.engajamentoNota || 0);
+    const e2 = Number(last.payload?.evolucaoNota || 0);
+    lastEng = e1 ? `${e1}/5` : "";
+    lastEvo = e2 ? `${e2}/5` : "";
+    lastHumor = String(last.payload?.humorAluno || "").trim();
+    lastNext = String(last.payload?.proximaAula || "").trim();
+    lastAvisos = Array.isArray(last.payload?.avisosCoordenacao) ? last.payload.avisosCoordenacao : [];
+    lastObs = String(last.payload?.observacoesInternas || "").trim();
+  }
+
+  const summaryHtml = `
+    <div class="teacher-students-history-summary">
+      <div class="teacher-students-summary-card"><span>Total de registros</span><strong>${escapeHtml(String(total))}</strong></div>
+      <div class="teacher-students-summary-card"><span>Aulas realizadas</span><strong>${escapeHtml(String(realizadas))}</strong></div>
+      <div class="teacher-students-summary-card"><span>Faltas</span><strong>${escapeHtml(String(faltas))}</strong></div>
+      <div class="teacher-students-summary-card"><span>Remarcações</span><strong>${escapeHtml(String(remarcadas))}</strong></div>
+      <div class="teacher-students-summary-card"><span>Último risco</span><strong>${escapeHtml(lastRisk)}</strong></div>
+      <div class="teacher-students-summary-card"><span>Última atualização</span><strong>${escapeHtml(lastUpdated)}</strong></div>
+    </div>
+  `;
+
+  const infoHtml = `
+    <div class="teacher-students-history-info">
+      <div class="teacher-students-info-row"><span>Último conteúdo</span><strong>${escapeHtml(lastContent || "Sem dados")}</strong></div>
+      <div class="teacher-students-info-row"><span>Último engajamento</span><strong>${escapeHtml(lastEng || "Sem dados")}</strong></div>
+      <div class="teacher-students-info-row"><span>Última evolução</span><strong>${escapeHtml(lastEvo || "Sem dados")}</strong></div>
+      <div class="teacher-students-info-row"><span>Último humor</span><strong>${escapeHtml(lastHumor || "Sem dados")}</strong></div>
+      <div class="teacher-students-info-row"><span>Próxima aula</span><strong>${escapeHtml(lastNext || "Sem dados")}</strong></div>
+      <div class="teacher-students-info-row"><span>Avisos</span><strong>${escapeHtml(lastAvisos.length ? `${lastAvisos.length} aviso(s)` : "Sem dados")}</strong></div>
+      <div class="teacher-students-info-row"><span>Observações recentes</span><strong>${escapeHtml(lastObs || "Sem dados")}</strong></div>
+    </div>
+  `;
+
+  const timelineHtml = filtered
+    .map((it) => {
+      const stamp = it.dateKey ? `${formatPedagogicoDate(it.dateKey)} • ${formatHmFromMinutes(it.startMin)}–${formatHmFromMinutes(it.endMin)}` : "—";
+      const statusLabel = it.statusAula === "realizada" ? "Realizada" : it.statusAula === "falta_aluno" ? "Falta do aluno" : "Remarcada";
+      const alertBadge = it.precisaIntervencao ? `<span class="teacher-students-tl-alert">Alerta</span>` : "";
+      const p = it.payload || {};
+      let details = "";
+      if (it.statusAula === "realizada") {
+        const avisos = Array.isArray(p.avisosCoordenacao) ? p.avisosCoordenacao : [];
+        details = `
+          <div class="teacher-students-tl-details">Conteúdo: ${escapeHtml(String(p.conteudoTrabalhado || "").trim() || "—")}</div>
+          <div class="teacher-students-tl-details">Engajamento: <strong>${escapeHtml(String(p.engajamentoNota || 0))}/5</strong> · Evolução: <strong>${escapeHtml(
+          String(p.evolucaoNota || 0)
+        )}/5</strong></div>
+          <div class="teacher-students-tl-details">Humor: ${escapeHtml(String(p.humorAluno || "").trim() || "—")} · Próxima aula: ${escapeHtml(
+          String(p.proximaAula || "").trim() || "—"
+        )}</div>
+          ${avisos.length ? `<div class="teacher-students-tl-avisos">${avisos.map((a) => `<span class="admin-students-pill">${escapeHtml(String(a))}</span>`).join("")}</div>` : ""}
+          ${p.observacoesInternas ? `<div class="teacher-students-tl-obs">${escapeHtml(String(p.observacoesInternas))}</div>` : ""}
+        `;
+      } else if (it.statusAula === "falta_aluno") {
+        details = `
+          <div class="teacher-students-tl-details">Motivo: ${escapeHtml(String(p.motivoFalta || "").trim() || "—")}</div>
+          <div class="teacher-students-tl-details">Risco: <strong>${escapeHtml(normalizeRiskLabel(p.riscoEvasao || \"\") || \"Sem dados\")}</strong></div>
+          ${p.observacao ? `<div class="teacher-students-tl-obs">${escapeHtml(String(p.observacao))}</div>` : ""}
+        `;
+      } else {
+        const novaData = String(p.novaDataRemarcacao || p.novaData || "").trim();
+        const ini = String(p.horarioInicioRemarcacao || p.novoInicio || "").trim();
+        const fim = String(p.horarioFimRemarcacao || p.novoFim || "").trim();
+        const when = novaData && ini && fim ? `${formatPedagogicoDate(novaData)} • ${ini}–${fim}` : novaData ? formatPedagogicoDate(novaData) : "";
+        details = `
+          <div class="teacher-students-tl-details">Motivo: ${escapeHtml(String(p.motivoRemarcacao || "").trim() || "—")}</div>
+          ${when ? `<div class=\"teacher-students-tl-details\">Nova aula: <strong>${escapeHtml(when)}</strong></div>` : ""}
+          <div class="teacher-students-tl-details">Risco: <strong>${escapeHtml(normalizeRiskLabel(p.riscoEvasao || \"\") || \"Sem dados\")}</strong></div>
+          ${p.observacao ? `<div class="teacher-students-tl-obs">${escapeHtml(String(p.observacao))}</div>` : ""}
+        `;
+      }
+
+      return `
+        <article class="teacher-students-tl-item">
+          <div class="teacher-students-tl-head">
+            <div class="teacher-students-tl-stamp">${escapeHtml(stamp)}</div>
+            ${alertBadge}
+          </div>
+          <div class="teacher-students-tl-title">${escapeHtml(statusLabel)}</div>
+          <div class="teacher-students-tl-by">Professor: ${escapeHtml(sessionUser?.name || "Professor")}</div>
+          ${details}
+        </article>
+      `;
+    })
+    .join("");
+
+  teacherStudentHistoryBody.innerHTML = `${summaryHtml}${infoHtml}<div class="teacher-students-timeline">${timelineHtml}</div>`;
+  if (teacherStudentHistoryEmpty instanceof HTMLElement) teacherStudentHistoryEmpty.hidden = filtered.length > 0;
+};
+
+const openTeacherStudentHistoryDrawer = async ({ alunoId } = {}) => {
+  if (currentRole !== "teacher") return;
+  const aId = String(alunoId || "").trim();
+  if (!aId) return;
+  const items = buildTeacherStudentHistoryItems({ alunoId: aId });
+  teacherStudentsState.history = { isOpen: true, alunoId: aId, filter: "all", items };
+
+  if (teacherStudentHistoryTitle instanceof HTMLElement) teacherStudentHistoryTitle.textContent = "Histórico do aluno";
+  if (teacherStudentHistorySub instanceof HTMLElement) {
+    const name = teacherStudentsState.summaries.find((s) => s.alunoId === aId)?.nome || "Aluno";
+    teacherStudentHistorySub.textContent = name;
+  }
+
+  document.querySelectorAll("[data-teacher-student-history-filter]").forEach((btn) => {
+    if (!(btn instanceof HTMLButtonElement)) return;
+    const isActive = String(btn.getAttribute("data-teacher-student-history-filter") || "") === "all";
+    btn.classList.toggle("is-active", isActive);
+    btn.setAttribute("aria-selected", isActive ? "true" : "false");
+  });
+
+  renderTeacherStudentHistoryDrawer();
+
+  if (teacherStudentHistoryDrawer instanceof HTMLElement) {
+    teacherStudentHistoryDrawer.hidden = false;
+    window.requestAnimationFrame(() => {
+      if (teacherStudentHistoryDrawer instanceof HTMLElement) teacherStudentHistoryDrawer.classList.add("is-open");
+    });
+  }
+};
+
+const closeTeacherStudentHistoryDrawer = () => {
+  if (teacherStudentHistoryDrawer instanceof HTMLElement) {
+    teacherStudentHistoryDrawer.classList.remove("is-open");
+    window.setTimeout(() => {
+      if (teacherStudentHistoryDrawer instanceof HTMLElement) teacherStudentHistoryDrawer.hidden = true;
+    }, 220);
+  }
+  teacherStudentsState.history = { isOpen: false, alunoId: "", filter: "all", items: [] };
+};
+
+const renderTeacherStudentsPanel = async ({ force = false } = {}) => {
+  if (currentRole !== "teacher") return;
+  if (!(teacherStudentsList instanceof HTMLElement)) return;
+  if (teacherStudentsState.isLoading) return;
+
+  const now = Date.now();
+  if (!force && teacherStudentsState.loadedAt && now - teacherStudentsState.loadedAt < 20_000) {
+    renderTeacherStudentsList();
+    return;
+  }
+
+  teacherStudentsState.isLoading = true;
+  setTeacherStudentsStatus("Carregando…");
+  if (teacherStudentsError instanceof HTMLElement) teacherStudentsError.hidden = true;
+  if (teacherStudentsEmpty instanceof HTMLElement) teacherStudentsEmpty.hidden = true;
+
+  try {
+    const [eventsRes, logsRes] = await Promise.all([fetchWithAuth("/api/schedule-events", { method: "GET" }), fetchWithAuth("/api/lesson-logs", { method: "GET" })]);
+    if (!eventsRes.ok) throw new Error("teacher_students_events_failed");
+    const eventsData = await eventsRes.json().catch(() => null);
+    const events = Array.isArray(eventsData?.events) ? eventsData.events : [];
+    const eventsById = new Map();
+    events.forEach((e) => {
+      if (e && typeof e === "object" && e.id) eventsById.set(String(e.id), e);
+    });
+
+    const logsData = logsRes.ok ? await logsRes.json().catch(() => null) : null;
+    const logs = Array.isArray(logsData?.logs) ? logsData.logs : [];
+
+    teacherStudentsState.events = events;
+    teacherStudentsState.eventsById = eventsById;
+    teacherStudentsState.logs = logs;
+
+    const alunoIds = new Set();
+    events
+      .filter((evt) => evt && typeof evt === "object" && evt.type === "lesson" && evt.alunoId)
+      .forEach((evt) => alunoIds.add(String(evt.alunoId)));
+    logs.forEach((log) => {
+      const a = String(log?.alunoId || "").trim();
+      if (a) alunoIds.add(a);
+    });
+
+    const lastEventByAluno = new Map();
+    events.forEach((evt) => {
+      if (!evt || typeof evt !== "object") return;
+      if (evt.type !== "lesson") return;
+      const a = String(evt.alunoId || "").trim();
+      if (!a) return;
+      const prev = lastEventByAluno.get(a) || null;
+      if (!prev) {
+        lastEventByAluno.set(a, evt);
+        return;
+      }
+      const prevKey = String(prev.dateKey || "");
+      const nextKey = String(evt.dateKey || "");
+      if (nextKey && prevKey && nextKey !== prevKey) {
+        if (nextKey > prevKey) lastEventByAluno.set(a, evt);
+        return;
+      }
+      const prevStart = Number(prev.startMin) || 0;
+      const nextStart = Number(evt.startMin) || 0;
+      if (nextStart > prevStart) lastEventByAluno.set(a, evt);
+    });
+
+    const perAluno = new Map();
+    logs.forEach((log) => {
+      if (!log || typeof log !== "object") return;
+      const a = String(log.alunoId || "").trim();
+      if (!a) return;
+      const bucket = perAluno.get(a) || { total: 0, lastLog: null, lastRisk: "", lastStatus: "", hasAlert: false };
+      bucket.total += 1;
+      const status = String(log.statusAula || "").trim().toLowerCase();
+      bucket.lastStatus = status || bucket.lastStatus;
+      const updatedAt = String(log.atualizadoEm || log.criadoEm || "").trim();
+      const ms = updatedAt ? Date.parse(updatedAt) : NaN;
+      const lastMs = bucket.lastLog?.atualizadoEm ? Date.parse(String(bucket.lastLog.atualizadoEm)) : NaN;
+      if (!bucket.lastLog || (Number.isFinite(ms) && (!Number.isFinite(lastMs) || ms > lastMs))) {
+        bucket.lastLog = log;
+      }
+      const risk = String(log?.payload?.riscoEvasao || "").trim().toLowerCase();
+      if (risk) bucket.lastRisk = risk;
+      const avisos = Array.isArray(log?.payload?.avisosCoordenacao) ? log.payload.avisosCoordenacao : [];
+      const needsAlert =
+        log?.payload?.precisaIntervencao === true ||
+        avisos.some((v) => String(v).startsWith("🔴") || String(v).startsWith("🟡")) ||
+        (status === "remarcada" && String(log?.payload?.motivoRemarcacao || "") === "professor_remarcou");
+      if (needsAlert) bucket.hasAlert = true;
+      perAluno.set(a, bucket);
+    });
+
+    const summaries = Array.from(alunoIds)
+      .map((alunoId) => {
+        const bucket = perAluno.get(alunoId) || { total: 0, lastLog: null, lastRisk: "", lastStatus: "", hasAlert: false };
+        const lastLog = bucket.lastLog;
+        const evt = lastLog?.eventId ? eventsById.get(String(lastLog.eventId)) : null;
+        const lastEvent = lastEventByAluno.get(alunoId) || evt || null;
+        const lastLessonLabel =
+          lastEvent && lastEvent.dateKey
+            ? `${formatPedagogicoDate(lastEvent.dateKey)} • ${formatHmFromMinutes(lastEvent.startMin)}–${formatHmFromMinutes(lastEvent.endMin)}`
+            : "—";
+        const nome = lastEvent?.title ? String(lastEvent.title) : "Aluno";
+        const riskLabel = normalizeRiskLabel(bucket.lastRisk) || "Sem dados";
+        const statusLabel =
+          bucket.lastStatus === "realizada" ? "Realizada" : bucket.lastStatus === "falta_aluno" ? "Falta do aluno" : bucket.lastStatus === "remarcada" ? "Remarcada" : "Sem dados";
+        const hasAlert = Boolean(bucket.hasAlert);
+        return {
+          alunoId,
+          nome,
+          email: "",
+          lastLessonLabel,
+          totalLogs: bucket.total,
+          riskLabel,
+          statusLabel,
+          hasAlert,
+        };
+      })
+      .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+
+    teacherStudentsState.summaries = summaries;
+    teacherStudentsState.loadedAt = Date.now();
+    setTeacherStudentsStatus("");
+    renderTeacherStudentsList();
+  } catch (error) {
+    console.error("[teacher] students load failed:", error);
+    if (teacherStudentsError instanceof HTMLElement) teacherStudentsError.hidden = false;
+    setTeacherStudentsStatus("Não foi possível carregar agora.", "error");
+  } finally {
+    teacherStudentsState.isLoading = false;
+  }
+};
+
+const renderTeacherStudentsList = () => {
+  if (!(teacherStudentsList instanceof HTMLElement)) return;
+  const rows = Array.isArray(teacherStudentsState.summaries) ? teacherStudentsState.summaries : [];
+  if (teacherStudentsEmpty instanceof HTMLElement) teacherStudentsEmpty.hidden = rows.length > 0;
+  if (rows.length === 0) {
+    teacherStudentsList.innerHTML = "";
+    return;
+  }
+
+  teacherStudentsList.innerHTML = rows
+    .map((row) => {
+      const alertBadge = row.hasAlert ? `<span class="admin-students-alert">Alerta</span>` : "";
+      return `
+        <div class="teacher-students-row" data-teacher-student-row="${escapeHtml(row.alunoId)}">
+          <div class="admin-students-avatar" aria-hidden="true">${escapeHtml(getInitials(row.nome))}</div>
+          <div class="teacher-students-main">
+            <div class="admin-students-name"><span>${escapeHtml(row.nome)}</span>${alertBadge}</div>
+            <div class="admin-students-meta">
+              <span class="admin-students-email">${escapeHtml(row.email || "—")}</span>
+              <span class="admin-students-dot" aria-hidden="true">•</span>
+              <span>Última aula registrada: <strong>${escapeHtml(row.lastLessonLabel)}</strong></span>
+              <span class="admin-students-dot" aria-hidden="true">•</span>
+              <span>Registros: <strong>${escapeHtml(String(row.totalLogs))}</strong></span>
+            </div>
+            <div class="admin-students-kpis">
+              <span>Último status: <strong>${escapeHtml(row.statusLabel)}</strong></span>
+              <span>Risco: <strong>${escapeHtml(row.riskLabel)}</strong></span>
+            </div>
+          </div>
+          <button class="admin-students-actions-trigger" type="button" aria-label="Ações" data-teacher-student-actions-trigger="${escapeHtml(
+            row.alunoId
+          )}">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M6.5 12h.01"></path>
+              <path d="M12 12h.01"></path>
+              <path d="M17.5 12h.01"></path>
+            </svg>
+          </button>
+        </div>
+      `;
+    })
+    .join("");
 };
 
 const activatePedagogicoLessonFromEl = (event, pedItem) => {
@@ -9461,6 +9910,14 @@ const showPanel = (panelName) => {
     return;
   }
 
+  if (panelName === "teacher-alunos") {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (currentRole === "teacher") {
+      renderTeacherStudentsPanel({ force: false });
+    }
+    return;
+  }
+
   if (panelName === "dashboard") {
     if (currentRole === "teacher") {
       renderTeacherDashboard();
@@ -9492,6 +9949,7 @@ const panelPathForRole = (role, panel) => {
   if (normalized === "teacher") {
     if (p === "ao-vivo") return "/app/professor/agenda";
     if (p === "pedagogico") return "/app/professor/pedagogico";
+    if (p === "teacher-alunos") return "/app/professor/alunos";
     if (p === "gravadas") return "/app/professor/gravadas";
     if (p === "materiais") return "/app/professor/materiais";
     return "/app/professor";
@@ -9525,6 +9983,7 @@ const parseAppRoute = (path) => {
   if (role === "teacher") {
     if (sub === "agenda") return { role, panel: "ao-vivo" };
     if (sub === "pedagogico") return { role, panel: "pedagogico" };
+    if (sub === "alunos") return { role, panel: "teacher-alunos" };
     if (sub === "gravadas") return { role, panel: "gravadas" };
     if (sub === "materiais") return { role, panel: "materiais" };
     return { role, panel: "dashboard" };
@@ -9750,6 +10209,15 @@ document.addEventListener("click", (event) => {
   const target = event.target;
 
   if (target instanceof Element) {
+    // Professor > Alunos: close actions popover when clicking elsewhere.
+    if (
+      teacherStudentActionsPopoverEl instanceof HTMLElement &&
+      !target.closest("[data-teacher-student-actions-popover]") &&
+      !target.closest("[data-teacher-student-actions-trigger]")
+    ) {
+      closeTeacherStudentActionsPopover();
+    }
+
     // Admin > Alunos: close student actions popover when clicking elsewhere.
     if (
       adminStudentActionsPopoverEl instanceof HTMLElement &&
@@ -9757,6 +10225,51 @@ document.addEventListener("click", (event) => {
       !target.closest("[data-admin-student-actions-trigger]")
     ) {
       closeAdminStudentActionsPopover();
+    }
+
+    if (currentRole === "teacher") {
+      const teacherHistoryClose = target.closest("[data-teacher-student-history-close]");
+      if (teacherHistoryClose instanceof HTMLElement) {
+        event.preventDefault();
+        closeTeacherStudentHistoryDrawer();
+        return;
+      }
+
+      const teacherHistoryFilterBtn = target.closest("[data-teacher-student-history-filter]");
+      if (teacherHistoryFilterBtn instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const next = String(teacherHistoryFilterBtn.getAttribute("data-teacher-student-history-filter") || "all").trim();
+        teacherStudentsState.history.filter = next || "all";
+        document.querySelectorAll("[data-teacher-student-history-filter]").forEach((btn) => {
+          if (!(btn instanceof HTMLButtonElement)) return;
+          const isActive =
+            String(btn.getAttribute("data-teacher-student-history-filter") || "") === String(teacherStudentsState.history.filter || "all");
+          btn.classList.toggle("is-active", isActive);
+          btn.setAttribute("aria-selected", isActive ? "true" : "false");
+        });
+        renderTeacherStudentHistoryDrawer();
+        return;
+      }
+
+      const teacherActionsTrigger = target.closest("[data-teacher-student-actions-trigger]");
+      if (teacherActionsTrigger instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const alunoId = String(teacherActionsTrigger.getAttribute("data-teacher-student-actions-trigger") || "").trim();
+        openTeacherStudentActionsPopover({ triggerEl: teacherActionsTrigger, alunoId });
+        return;
+      }
+
+      const teacherAction = target.closest("[data-teacher-student-action]");
+      if (teacherAction instanceof HTMLButtonElement) {
+        const action = String(teacherAction.getAttribute("data-teacher-student-action") || "").trim();
+        if (action === "history") {
+          event.preventDefault();
+          const alunoId = String(teacherAction.getAttribute("data-teacher-student-aluno") || "").trim();
+          closeTeacherStudentActionsPopover();
+          openTeacherStudentHistoryDrawer({ alunoId }).catch(() => {});
+          return;
+        }
+      }
     }
 
     const pedClose = target.closest("[data-pedagogico-drawer-close]");

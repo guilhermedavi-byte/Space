@@ -394,13 +394,13 @@
             </span>
 	            <span class="sidebar-text">Aulas ao vivo</span>
 	          </button>
-	          <button
-	            class="sidebar-link"
-	            type="button"
-	            data-panel-target="pedagogico"
-	            data-teacher-only
-	            title="Controle Pedagógico"
-	          >
+		          <button
+		            class="sidebar-link"
+		            type="button"
+		            data-panel-target="pedagogico"
+		            data-teacher-only
+		            title="Controle Pedagógico"
+		          >
 	            <span class="sidebar-icon" aria-hidden="true">
 	              <svg viewBox="0 0 24 24" fill="none">
 	                <path d="M9 5.5h8"></path>
@@ -412,14 +412,31 @@
 	              </svg>
 	            </span>
 	            <span class="sidebar-text">Controle Pedagógico</span>
-	            <span class="sidebar-badge" data-pedagogico-pending hidden>0</span>
-	          </button>
-		          <button
-		            class="sidebar-link"
-		            type="button"
-		            data-panel-target="materiais"
-		            title="Materiais"
-		          >
+		            <span class="sidebar-badge" data-pedagogico-pending hidden>0</span>
+		          </button>
+              <button
+                class="sidebar-link"
+                type="button"
+                data-panel-target="teacher-alunos"
+                data-teacher-only
+                title="Alunos"
+              >
+                <span class="sidebar-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M3.5 19.5v-1.2a3.3 3.3 0 0 1 3.3-3.3h6.4a3.3 3.3 0 0 1 3.3 3.3v1.2"></path>
+                    <circle cx="10" cy="8.2" r="3.2"></circle>
+                    <path d="M18.5 9.5h3"></path>
+                    <path d="M20 8v3"></path>
+                  </svg>
+                </span>
+                <span class="sidebar-text">Alunos</span>
+              </button>
+			          <button
+			            class="sidebar-link"
+			            type="button"
+			            data-panel-target="materiais"
+			            title="Materiais"
+			          >
             <span class="sidebar-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none">
                 <path d="M7 4.5h7l3 3v12H7a2 2 0 0 1-2-2v-11a2 2 0 0 1 2-2Z"></path>
@@ -1356,6 +1373,59 @@
                 <button class="pedagogico-drawer-close" type="button" data-pedagogico-drawer-close aria-label="Fechar">✕</button>
               </div>
               <div class="pedagogico-drawer-body" data-pedagogico-form-container></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="platform-panel" data-panel="teacher-alunos" data-hide-platform-header="true" hidden aria-label="Alunos do Professor">
+          <div class="teacher-students-shell">
+            <header class="teacher-students-head">
+              <h2 class="teacher-students-title">Alunos</h2>
+              <p class="teacher-students-subtitle">Acompanhe seus alunos e o histórico pedagógico registrado nas aulas.</p>
+            </header>
+
+            <div class="teacher-students-status" data-teacher-students-status aria-live="polite"></div>
+
+            <article class="surface-card teacher-students-card" aria-label="Lista de alunos">
+              <div class="teacher-students-list" data-teacher-students-list></div>
+              <div class="teacher-students-empty" data-teacher-students-empty hidden>Nenhum aluno vinculado a você ainda.</div>
+              <div class="teacher-students-error" data-teacher-students-error hidden>Não foi possível carregar seus alunos.</div>
+            </article>
+          </div>
+
+          <div class="teacher-students-drawer" data-teacher-student-history-drawer hidden>
+            <div class="teacher-students-drawer-backdrop" data-teacher-student-history-close></div>
+            <div class="teacher-students-drawer-inner" role="dialog" aria-modal="true" aria-label="Histórico do aluno">
+              <div class="teacher-students-drawer-head">
+                <div>
+                  <div class="teacher-students-drawer-title" data-teacher-student-history-title>Histórico do aluno</div>
+                  <div class="teacher-students-drawer-sub" data-teacher-student-history-sub>—</div>
+                </div>
+                <button class="teacher-students-drawer-close" type="button" data-teacher-student-history-close aria-label="Fechar">✕</button>
+              </div>
+
+              <div class="teacher-students-drawer-body">
+                <div class="teacher-students-history-filters" role="tablist" aria-label="Filtrar histórico do aluno">
+                  <button class="teacher-students-history-filter is-active" type="button" role="tab" aria-selected="true" data-teacher-student-history-filter="all">
+                    Todos
+                  </button>
+                  <button class="teacher-students-history-filter" type="button" role="tab" aria-selected="false" data-teacher-student-history-filter="realizada">
+                    Realizadas
+                  </button>
+                  <button class="teacher-students-history-filter" type="button" role="tab" aria-selected="false" data-teacher-student-history-filter="falta_aluno">
+                    Faltas
+                  </button>
+                  <button class="teacher-students-history-filter" type="button" role="tab" aria-selected="false" data-teacher-student-history-filter="remarcada">
+                    Remarcadas
+                  </button>
+                  <button class="teacher-students-history-filter" type="button" role="tab" aria-selected="false" data-teacher-student-history-filter="alerts">
+                    Alertas
+                  </button>
+                </div>
+
+                <div class="teacher-students-history" data-teacher-student-history-body></div>
+                <div class="teacher-students-history-empty" data-teacher-student-history-empty hidden>Nenhum registro pedagógico encontrado para este aluno.</div>
+              </div>
             </div>
           </div>
         </section>
