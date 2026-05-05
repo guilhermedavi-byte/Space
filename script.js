@@ -7470,7 +7470,7 @@ const renderTeacherStudentHistoryDrawer = () => {
       } else if (it.statusAula === "falta_aluno") {
         details = `
           <div class="teacher-students-tl-details">Motivo: ${escapeHtml(String(p.motivoFalta || "").trim() || "—")}</div>
-          <div class="teacher-students-tl-details">Risco: <strong>${escapeHtml(normalizeRiskLabel(p.riscoEvasao || \"\") || \"Sem dados\")}</strong></div>
+          <div class="teacher-students-tl-details">Risco: <strong>${escapeHtml(normalizeRiskLabel(p.riscoEvasao || "") || "Sem dados")}</strong></div>
           ${p.observacao ? `<div class="teacher-students-tl-obs">${escapeHtml(String(p.observacao))}</div>` : ""}
         `;
       } else {
@@ -7481,7 +7481,7 @@ const renderTeacherStudentHistoryDrawer = () => {
         details = `
           <div class="teacher-students-tl-details">Motivo: ${escapeHtml(String(p.motivoRemarcacao || "").trim() || "—")}</div>
           ${when ? `<div class=\"teacher-students-tl-details\">Nova aula: <strong>${escapeHtml(when)}</strong></div>` : ""}
-          <div class="teacher-students-tl-details">Risco: <strong>${escapeHtml(normalizeRiskLabel(p.riscoEvasao || \"\") || \"Sem dados\")}</strong></div>
+          <div class="teacher-students-tl-details">Risco: <strong>${escapeHtml(normalizeRiskLabel(p.riscoEvasao || "") || "Sem dados")}</strong></div>
           ${p.observacao ? `<div class="teacher-students-tl-obs">${escapeHtml(String(p.observacao))}</div>` : ""}
         `;
       }
