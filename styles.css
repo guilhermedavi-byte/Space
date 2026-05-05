@@ -4145,14 +4145,25 @@ body:not([data-role="admin"]) [data-admin-only] {
 
 .admin-students-row {
   display: grid;
-  grid-template-columns: 52px minmax(0, 1fr) 40px;
+  grid-template-columns: 52px minmax(0, 1fr) 18px 40px;
   gap: 12px;
   align-items: center;
   padding: 14px 16px;
+  cursor: pointer;
+  transition: background-color 160ms ease;
 }
 
 .admin-students-row + .admin-students-row {
   border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.admin-students-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.admin-students-row:focus-visible {
+  outline: 2px solid rgba(89, 144, 189, 0.6);
+  outline-offset: -2px;
 }
 
 .admin-students-avatar {
@@ -4243,6 +4254,67 @@ body:not([data-role="admin"]) [data-admin-only] {
   color: rgba(93, 202, 165, 0.92);
 }
 
+.admin-students-emailline {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.admin-students-chips {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-students-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.01em;
+}
+
+.admin-students-chip.is-muted {
+  color: rgba(255, 255, 255, 0.45);
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+.admin-students-chip.is-country {
+  text-transform: none;
+}
+
+.admin-students-chip.is-green {
+  border-color: rgba(93, 202, 165, 0.18);
+  background: rgba(93, 202, 165, 0.1);
+  color: rgba(93, 202, 165, 0.92);
+}
+
+.admin-students-chip.is-gray {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.admin-students-right {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.admin-students-chevron {
+  font-size: 18px;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.35);
+}
+
 .admin-students-actions-trigger {
   width: 38px;
   height: 38px;
@@ -4313,6 +4385,10 @@ body:not([data-role="admin"]) [data-admin-only] {
   overflow: hidden;
 }
 
+.admin-student-sheet-drawer-inner {
+  width: min(1120px, 94vw);
+}
+
 .admin-students-drawer.is-open .admin-students-drawer-inner {
   transform: translateX(0);
 }
@@ -4357,6 +4433,299 @@ body:not([data-role="admin"]) [data-admin-only] {
   padding: 18px 20px 20px;
   display: grid;
   gap: 14px;
+}
+
+.admin-student-sheet-drawer-inner .admin-students-drawer-body {
+  padding: 0;
+  display: block;
+}
+
+/* Admin > Alunos: unified student sheet */
+.admin-student-sheet {
+  height: 100%;
+}
+
+.admin-student-sheet-grid {
+  min-height: 100%;
+  display: grid;
+  grid-template-columns: 360px minmax(0, 1fr);
+  gap: 16px;
+  padding: 18px 20px 20px;
+}
+
+.admin-student-sheet-left {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  padding-right: 10px;
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.admin-student-id {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.admin-student-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
+  background: rgba(89, 144, 189, 0.12);
+  border: 1px solid rgba(89, 144, 189, 0.22);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 14px;
+  font-weight: 850;
+  letter-spacing: 0.1em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.admin-student-name {
+  font-size: 15px;
+  font-weight: 850;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.admin-student-email {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.admin-student-tags {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-student-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.admin-student-tag.is-green {
+  border-color: rgba(93, 202, 165, 0.18);
+  background: rgba(93, 202, 165, 0.1);
+  color: rgba(93, 202, 165, 0.92);
+}
+
+.admin-student-tag.is-gray {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.admin-student-tag.is-country {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.admin-student-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.admin-student-metric {
+  padding: 12px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+  display: grid;
+  gap: 6px;
+}
+
+.admin-student-metric span {
+  font-size: 11px;
+  font-weight: 750;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.admin-student-metric strong {
+  font-size: 12px;
+  font-weight: 850;
+  color: rgba(255, 255, 255, 0.92);
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-student-personal {
+  padding: 12px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+  display: grid;
+  gap: 10px;
+}
+
+.admin-student-personal-title {
+  font-size: 11px;
+  font-weight: 850;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.admin-student-personal-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-student-personal-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.52);
+}
+
+.admin-student-personal-row strong {
+  font-weight: 850;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.admin-student-left-actions {
+  margin-top: auto;
+  display: flex;
+  gap: 10px;
+}
+
+.admin-student-sheet-right {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding-left: 6px;
+}
+
+.admin-student-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.admin-student-tab {
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+  font-weight: 850;
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.admin-student-tab.is-active {
+  background: rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.admin-student-tab-panels {
+  display: grid;
+  gap: 14px;
+}
+
+.admin-student-tab-panel {
+  display: none;
+}
+
+.admin-student-tab-panel.is-active {
+  display: block;
+}
+
+.admin-student-panel-card {
+  padding: 14px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+  display: grid;
+  gap: 10px;
+}
+
+.admin-student-panel-title {
+  font-size: 12px;
+  font-weight: 850;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.admin-student-panel-empty {
+  font-size: 13px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.admin-student-panel-note {
+  font-size: 12px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.admin-student-fin-grid {
+  margin-top: 6px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.admin-student-fin-card {
+  padding: 12px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  display: grid;
+  gap: 6px;
+}
+
+.admin-student-fin-card span {
+  font-size: 11px;
+  font-weight: 750;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.admin-student-fin-card strong {
+  font-size: 12px;
+  font-weight: 850;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.admin-student-fin-table-empty,
+.admin-student-fin-timeline-empty {
+  margin-top: 10px;
+  font-size: 13px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+@media (max-width: 980px) {
+  .admin-student-sheet-grid {
+    grid-template-columns: 1fr;
+  }
+  .admin-student-sheet-left {
+    border-right: 0;
+    padding-right: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    padding-bottom: 14px;
+  }
+  .admin-student-sheet-right {
+    padding-left: 0;
+  }
 }
 
 .admin-students-history-filters {

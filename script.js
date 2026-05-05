@@ -110,8 +110,8 @@ const adminStudentsStatus = document.querySelector("[data-admin-students-status]
 const adminStudentHistoryDrawer = document.querySelector("[data-admin-student-history-drawer]");
 const adminStudentHistoryTitle = document.querySelector("[data-admin-student-history-title]");
 const adminStudentHistorySub = document.querySelector("[data-admin-student-history-sub]");
-const adminStudentHistoryBody = document.querySelector("[data-admin-student-history-body]");
-const adminStudentHistoryEmpty = document.querySelector("[data-admin-student-history-empty]");
+// Drawer content was refactored to a unified "Ficha do aluno". The inner content is rendered dynamically.
+const adminStudentSheet = document.querySelector("[data-admin-student-sheet]");
 const modalOverlay = document.querySelector("[data-modal-overlay]");
 const modalTitle = document.querySelector("[data-modal-title]");
 const modalBody = document.querySelector("[data-modal-body]");
@@ -8210,15 +8210,16 @@ let adminStudentsState = {
     plan: "",
     country: "",
   },
-  history: {
-    isOpen: false,
-    alunoId: "",
-    filter: "all", // all | realizada | falta_aluno | remarcada | alerts
-    items: [], // derived timeline items (log + event)
-    alunoMeta: null,
-    teacherMeta: null,
-  },
-};
+	  history: {
+	    isOpen: false,
+	    alunoId: "",
+	    activeTab: "overview", // overview | history | lessons | financeiro | atividades | arquivos
+	    filter: "all", // all | realizada | falta_aluno | remarcada | alerts
+	    items: [], // derived timeline items (log + event)
+	    alunoMeta: null,
+	    teacherMeta: null,
+	  },
+	};
 
 const setAdminStudentsStatus = (text, tone = "") => {
   if (!(adminStudentsStatus instanceof HTMLElement)) return;
@@ -9071,37 +9072,32 @@ const renderAdminStudentsList = () => {
 
   adminStudentsList.innerHTML = summaries
     .map((row) => {
-      const riskTone = row.riskLabel === "Alto" ? "red" : row.riskLabel === "Médio" ? "yellow" : row.riskLabel === "Baixo" ? "green" : "muted";
-      const riskCls = `admin-students-risk is-${riskTone}`;
       const alertBadge = row.hasAlert ? `<span class="admin-students-alert">Alerta</span>` : "";
-      const planPart = row.plano ? `<span class="admin-students-dot" aria-hidden="true">•</span><span>${escapeHtml(row.plano)}</span>` : "";
-      const countryPart = row.pais ? `<span class="admin-students-dot" aria-hidden="true">•</span><span>${escapeHtml(row.pais)}</span>` : "";
-      const cancelPart = row.cancelKey ? ` · Cancel.: <strong>${escapeHtml(row.cancelLabel)}</strong>` : "";
+      const statusTone = row.statusLabel === "Ativo" ? "green" : row.statusLabel === "Inativo" ? "gray" : "muted";
+      const statusPill = row.statusLabel ? `<span class="admin-students-chip is-${statusTone}">${escapeHtml(row.statusLabel)}</span>` : "";
+      const teacherChip =
+        row.teacherName && row.teacherName !== "—" ? `<span class="admin-students-chip">${escapeHtml(row.teacherName)}</span>` : "";
+      const planChip = row.plano ? `<span class="admin-students-chip">${escapeHtml(row.plano)}</span>` : "";
+      const countryChip = row.pais ? `<span class="admin-students-chip is-country">${escapeHtml(row.pais)}</span>` : "";
+      const chips = [statusPill, teacherChip, planChip, countryChip].filter(Boolean).join("");
+
       return `
-        <div class="admin-students-row" data-admin-student-row="${escapeHtml(row.alunoId)}">
+        <div class="admin-students-row" role="button" tabindex="0" data-admin-student-open="${escapeHtml(row.alunoId)}">
           <div class="admin-students-avatar" aria-hidden="true">${escapeHtml(getInitials(row.nome))}</div>
           <div class="admin-students-main">
             <div class="admin-students-name">
               <span>${escapeHtml(row.nome)}</span>
               ${alertBadge}
             </div>
-            <div class="admin-students-meta">
-              <span class="admin-students-email">${escapeHtml(row.email || "—")}</span>
-              <span class="admin-students-dot" aria-hidden="true">•</span>
-              <span>${escapeHtml(row.statusLabel || "—")}</span>
-              <span class="admin-students-dot" aria-hidden="true">•</span>
-              <span>${escapeHtml(row.teacherName || "—")}</span>
-              ${planPart}
-              ${countryPart}
-            </div>
-            <div class="admin-students-kpis">
-              <span>Cadastro: <strong>${escapeHtml(row.criadoLabel || "—")}</strong>${cancelPart}</span>
-              <span>Última aula registrada: <strong>${escapeHtml(row.lastLessonLabel)}</strong></span>
-              <span>Registros: <strong>${escapeHtml(String(row.totalLogs))}</strong></span>
-              <span class="${riskCls}">Risco: <strong>${escapeHtml(row.riskLabel)}</strong></span>
-            </div>
+            <div class="admin-students-emailline">${escapeHtml(row.email || "—")}</div>
+            <div class="admin-students-chips">${chips || `<span class="admin-students-chip is-muted">Sem tags</span>`}</div>
           </div>
-          <button class="admin-students-actions-trigger" type="button" aria-label="Ações" data-admin-student-actions-trigger="${escapeHtml(row.alunoId)}">
+          <div class="admin-students-right" aria-hidden="true">
+            <span class="admin-students-chevron">›</span>
+          </div>
+          <button class="admin-students-actions-trigger" type="button" aria-label="Ações" data-admin-student-actions-trigger="${escapeHtml(
+            row.alunoId
+          )}">
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path d="M6.5 12h.01"></path>
               <path d="M12 12h.01"></path>
@@ -9112,6 +9108,205 @@ const renderAdminStudentsList = () => {
       `;
     })
     .join("");
+};
+
+const getAdminStudentNextLessonLabel = (alunoId) => {
+  const aId = String(alunoId || "").trim();
+  if (!aId) return "";
+  const events = Array.isArray(adminStudentsState.events) ? adminStudentsState.events : [];
+  const now = Date.now();
+  let best = null;
+  events.forEach((evt) => {
+    if (!evt || typeof evt !== "object") return;
+    if (evt.type !== "lesson") return;
+    if (String(evt.alunoId || "").trim() !== aId) return;
+    if (!evt.dateKey || !Number.isFinite(Number(evt.startMin)) || !Number.isFinite(Number(evt.endMin))) return;
+    const start = buildDateFromDateKeyAndMinutes(evt.dateKey, Number(evt.startMin));
+    if (!(start instanceof Date) || Number.isNaN(start.getTime())) return;
+    const ms = start.getTime();
+    if (ms <= now) return;
+    if (!best || ms < best.ms) best = { evt, ms };
+  });
+  if (!best) return "";
+  const e = best.evt;
+  return `${formatPedagogicoDate(e.dateKey)} • ${formatHmFromMinutes(e.startMin)}–${formatHmFromMinutes(e.endMin)}`;
+};
+
+const formatAdminStudentTenure = (criadoKey) => {
+  const key = String(criadoKey || "").trim();
+  if (!isValidDateKey(key)) return "—";
+  const created = parseDateKey(key);
+  if (!(created instanceof Date) || Number.isNaN(created.getTime())) return "—";
+  const days = Math.max(0, Math.floor((Date.now() - created.getTime()) / 86_400_000));
+  if (days >= 60) {
+    const months = Math.max(1, Math.round(days / 30));
+    return `${months} ${months === 1 ? "mês" : "meses"}`;
+  }
+  return `${days} ${days === 1 ? "dia" : "dias"}`;
+};
+
+const renderAdminStudentSheet = () => {
+  if (!(adminStudentHistoryDrawer instanceof HTMLElement)) return;
+  const sheetEl = document.querySelector("[data-admin-student-sheet]");
+  if (!(sheetEl instanceof HTMLElement)) return;
+
+  const hist = adminStudentsState.history;
+  const alunoMeta = hist.alunoMeta;
+  const alunoName = alunoMeta?.nome || "Aluno";
+  const alunoEmail = alunoMeta?.email || "";
+  const statusLabel = alunoMeta ? (alunoMeta.ativo ? "Ativo" : "Inativo") : "—";
+  const teacherName = hist.teacherMeta?.nome || "";
+  const plano = String(alunoMeta?.plano || "").trim();
+  const pais = String(alunoMeta?.pais || "").trim();
+  const createdKey = String(alunoMeta?.criadoKey || "");
+  const createdLabel = alunoMeta?.criadoEm ? formatAdminDate(alunoMeta.criadoEm) : "—";
+  const professorResp =
+    (alunoMeta && typeof alunoMeta.professorId === "string" ? alunoMeta.professorId : "") ||
+    (alunoMeta && typeof alunoMeta.teacherId === "string" ? alunoMeta.teacherId : "") ||
+    "";
+
+  const initials = getInitials(alunoName);
+  const nextLesson = getAdminStudentNextLessonLabel(hist.alunoId) || "Sem dados";
+  const tenure = alunoMeta ? formatAdminStudentTenure(createdKey) : "—";
+
+  const activeTab = String(hist.activeTab || "overview");
+
+  sheetEl.innerHTML = `
+    <div class="admin-student-sheet-grid">
+      <aside class="admin-student-sheet-left" aria-label="Identidade do aluno">
+        <div class="admin-student-id">
+          <div class="admin-student-avatar" aria-hidden="true">${escapeHtml(initials)}</div>
+          <div class="admin-student-id-main">
+            <div class="admin-student-name">${escapeHtml(alunoName)}</div>
+            <div class="admin-student-email">${escapeHtml(alunoEmail || "—")}</div>
+            <div class="admin-student-tags">
+              <span class="admin-student-tag is-${statusLabel === "Ativo" ? "green" : "gray"}">${escapeHtml(statusLabel)}</span>
+              ${plano ? `<span class="admin-student-tag">${escapeHtml(plano)}</span>` : ""}
+              ${pais ? `<span class="admin-student-tag is-country">${escapeHtml(pais)}</span>` : ""}
+              ${teacherName ? `<span class="admin-student-tag">${escapeHtml(teacherName)}</span>` : ""}
+            </div>
+          </div>
+        </div>
+
+        <div class="admin-student-metrics" aria-label="Métricas-chave">
+          <div class="admin-student-metric"><span>Ticket mensal</span><strong>—</strong></div>
+          <div class="admin-student-metric"><span>LTV</span><strong>—</strong></div>
+          <div class="admin-student-metric"><span>Tempo de casa</span><strong>${escapeHtml(tenure)}</strong></div>
+          <div class="admin-student-metric"><span>Próxima aula</span><strong>${escapeHtml(nextLesson)}</strong></div>
+        </div>
+
+        <div class="admin-student-personal" aria-label="Dados pessoais">
+          <div class="admin-student-personal-title">Dados pessoais</div>
+          <div class="admin-student-personal-grid">
+            <div class="admin-student-personal-row"><span>Professor responsável</span><strong>${escapeHtml(
+              teacherName || professorResp || "—"
+            )}</strong></div>
+            <div class="admin-student-personal-row"><span>Data de cadastro</span><strong>${escapeHtml(createdLabel)}</strong></div>
+          </div>
+        </div>
+
+        <div class="admin-student-left-actions" aria-label="Ações do aluno">
+          <button type="button" class="button button-outline button-small" disabled>Editar</button>
+          <button type="button" class="button button-solid button-small" disabled>Cancelar matrícula</button>
+        </div>
+      </aside>
+
+      <section class="admin-student-sheet-right" aria-label="Detalhes do aluno">
+        <div class="admin-student-tabs" role="tablist" aria-label="Seções do aluno">
+          <button type="button" class="admin-student-tab${activeTab === "overview" ? " is-active" : ""}" data-admin-student-tab="overview" role="tab" aria-selected="${activeTab === "overview" ? "true" : "false"}">Visão geral</button>
+          <button type="button" class="admin-student-tab${activeTab === "history" ? " is-active" : ""}" data-admin-student-tab="history" role="tab" aria-selected="${activeTab === "history" ? "true" : "false"}">Histórico pedagógico</button>
+          <button type="button" class="admin-student-tab${activeTab === "lessons" ? " is-active" : ""}" data-admin-student-tab="lessons" role="tab" aria-selected="${activeTab === "lessons" ? "true" : "false"}">Aulas</button>
+          <button type="button" class="admin-student-tab${activeTab === "financeiro" ? " is-active" : ""}" data-admin-student-tab="financeiro" role="tab" aria-selected="${activeTab === "financeiro" ? "true" : "false"}">Financeiro</button>
+          <button type="button" class="admin-student-tab${activeTab === "atividades" ? " is-active" : ""}" data-admin-student-tab="atividades" role="tab" aria-selected="${activeTab === "atividades" ? "true" : "false"}">Atividades</button>
+          <button type="button" class="admin-student-tab${activeTab === "arquivos" ? " is-active" : ""}" data-admin-student-tab="arquivos" role="tab" aria-selected="${activeTab === "arquivos" ? "true" : "false"}">Arquivos</button>
+        </div>
+
+        <div class="admin-student-tab-panels">
+          <div class="admin-student-tab-panel${activeTab === "overview" ? " is-active" : ""}" data-admin-student-tab-panel="overview" role="tabpanel">
+            <div class="admin-student-panel-card">
+              <div class="admin-student-panel-title">Resumo</div>
+              <div class="admin-student-panel-empty">Selecione a tab Histórico pedagógico para ver detalhes das aulas registradas.</div>
+            </div>
+          </div>
+
+          <div class="admin-student-tab-panel${activeTab === "history" ? " is-active" : ""}" data-admin-student-tab-panel="history" role="tabpanel">
+            <div class="admin-students-history-filters" role="tablist" aria-label="Filtrar histórico do aluno">
+              <button class="admin-students-history-filter is-active" type="button" role="tab" aria-selected="true" data-admin-student-history-filter="all">Todos</button>
+              <button class="admin-students-history-filter" type="button" role="tab" aria-selected="false" data-admin-student-history-filter="realizada">Realizadas</button>
+              <button class="admin-students-history-filter" type="button" role="tab" aria-selected="false" data-admin-student-history-filter="falta_aluno">Faltas</button>
+              <button class="admin-students-history-filter" type="button" role="tab" aria-selected="false" data-admin-student-history-filter="remarcada">Remarcadas</button>
+              <button class="admin-students-history-filter" type="button" role="tab" aria-selected="false" data-admin-student-history-filter="alerts">Alertas</button>
+            </div>
+
+            <div class="admin-students-history" data-admin-student-history-body></div>
+            <div class="admin-students-history-empty" data-admin-student-history-empty hidden>Nenhum registro pedagógico encontrado para este aluno.</div>
+          </div>
+
+          <div class="admin-student-tab-panel${activeTab === "lessons" ? " is-active" : ""}" data-admin-student-tab-panel="lessons" role="tabpanel">
+            <div class="admin-student-panel-card">
+              <div class="admin-student-panel-title">Aulas</div>
+              <div class="admin-student-panel-empty">Em breve: agenda e histórico completo de aulas.</div>
+            </div>
+          </div>
+
+          <div class="admin-student-tab-panel${activeTab === "financeiro" ? " is-active" : ""}" data-admin-student-tab-panel="financeiro" role="tabpanel">
+            <div class="admin-student-panel-card">
+              <div class="admin-student-panel-title">Financeiro</div>
+              <div class="admin-student-panel-note">Integração financeira em construção, em breve com Asaas.</div>
+              <div class="admin-student-fin-grid">
+                <div class="admin-student-fin-card"><span>Plano atual</span><strong>—</strong></div>
+                <div class="admin-student-fin-card"><span>Mensalidade</span><strong>—</strong></div>
+                <div class="admin-student-fin-card"><span>Próxima cobrança</span><strong>—</strong></div>
+                <div class="admin-student-fin-card"><span>Total inadimplente</span><strong>—</strong></div>
+              </div>
+              <div class="admin-student-fin-table-empty">Nenhuma cobrança disponível.</div>
+              <div class="admin-student-fin-timeline-empty">Nenhuma mudança de plano registrada.</div>
+            </div>
+          </div>
+
+          <div class="admin-student-tab-panel${activeTab === "atividades" ? " is-active" : ""}" data-admin-student-tab-panel="atividades" role="tabpanel">
+            <div class="admin-student-panel-card">
+              <div class="admin-student-panel-title">Atividades</div>
+              <div class="admin-student-panel-empty">Sem atividades registradas.</div>
+            </div>
+          </div>
+
+          <div class="admin-student-tab-panel${activeTab === "arquivos" ? " is-active" : ""}" data-admin-student-tab-panel="arquivos" role="tabpanel">
+            <div class="admin-student-panel-card">
+              <div class="admin-student-panel-title">Arquivos</div>
+              <div class="admin-student-panel-empty">Nenhum arquivo.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  `;
+
+  // Always hydrate the history tab content so it's ready when the admin switches tabs.
+  renderAdminStudentHistoryTab();
+};
+
+const syncAdminStudentSheetTabs = () => {
+  const sheetEl = document.querySelector("[data-admin-student-sheet]");
+  if (!(sheetEl instanceof HTMLElement)) return;
+  const active = String(adminStudentsState.history?.activeTab || "overview");
+
+  sheetEl.querySelectorAll("[data-admin-student-tab]").forEach((btn) => {
+    if (!(btn instanceof HTMLButtonElement)) return;
+    const isActive = String(btn.getAttribute("data-admin-student-tab") || "") === active;
+    btn.classList.toggle("is-active", isActive);
+    btn.setAttribute("aria-selected", isActive ? "true" : "false");
+  });
+
+  sheetEl.querySelectorAll("[data-admin-student-tab-panel]").forEach((panel) => {
+    if (!(panel instanceof HTMLElement)) return;
+    const isActive = String(panel.getAttribute("data-admin-student-tab-panel") || "") === active;
+    panel.classList.toggle("is-active", isActive);
+  });
+
+  if (active === "history") {
+    renderAdminStudentHistoryTab();
+  }
 };
 
 const renderAdminStudentsPanel = async ({ force = false } = {}) => {
@@ -9377,9 +9572,14 @@ const buildAdminStudentHistoryItems = ({ alunoId, teacherId, logs, eventsById, t
   return out;
 };
 
-const renderAdminStudentHistoryDrawer = () => {
+const renderAdminStudentHistoryTab = () => {
   if (!(adminStudentHistoryDrawer instanceof HTMLElement)) return;
-  if (!(adminStudentHistoryBody instanceof HTMLElement)) return;
+  const sheetEl = document.querySelector("[data-admin-student-sheet]");
+  if (!(sheetEl instanceof HTMLElement)) return;
+  const historyBody = sheetEl.querySelector("[data-admin-student-history-body]");
+  const historyEmpty = sheetEl.querySelector("[data-admin-student-history-empty]");
+  if (!(historyBody instanceof HTMLElement)) return;
+
   const hist = adminStudentsState.history;
   const items = Array.isArray(hist.items) ? hist.items : [];
   const filter = String(hist.filter || "all");
@@ -9461,8 +9661,8 @@ const renderAdminStudentHistoryDrawer = () => {
     })
     .join("");
 
-  adminStudentHistoryBody.innerHTML = `${headerHtml}<div class="admin-students-timeline">${timelineHtml}</div>`;
-  if (adminStudentHistoryEmpty instanceof HTMLElement) adminStudentHistoryEmpty.hidden = filtered.length > 0;
+  historyBody.innerHTML = `${headerHtml}<div class="admin-students-timeline">${timelineHtml}</div>`;
+  if (historyEmpty instanceof HTMLElement) historyEmpty.hidden = filtered.length > 0;
 };
 
 const openAdminStudentHistoryDrawer = async ({ alunoId, teacherId } = {}) => {
@@ -9472,7 +9672,7 @@ const openAdminStudentHistoryDrawer = async ({ alunoId, teacherId } = {}) => {
   const tId = String(teacherId || "").trim();
   if (!aId) return;
 
-  setAdminStudentsStatus("Carregando histórico…");
+  setAdminStudentsStatus("Carregando ficha…");
   try {
     await ensureAdminStudentsBaseData({ force: false });
     const allLogs = Array.isArray(adminStudentsState.logs) ? adminStudentsState.logs : [];
@@ -9487,33 +9687,32 @@ const openAdminStudentHistoryDrawer = async ({ alunoId, teacherId } = {}) => {
     });
 
     const alunoMeta = adminStudentsState.studentsById instanceof Map ? adminStudentsState.studentsById.get(aId) || null : null;
-    const teacherMeta = derived.teacherMeta || null;
+    const inferredTeacherId =
+      tId ||
+      String(alunoMeta?.professorId || "").trim() ||
+      String(items[0]?.professorId || "").trim() ||
+      "";
+    const teacherMeta =
+      inferredTeacherId && adminStudentsState.teachersById instanceof Map ? adminStudentsState.teachersById.get(inferredTeacherId) || null : null;
 
     adminStudentsState.history = {
       isOpen: true,
       alunoId: aId,
+      activeTab: "overview",
       filter: "all",
       items,
       alunoMeta,
       teacherMeta,
     };
 
-    if (adminStudentHistoryTitle instanceof HTMLElement) adminStudentHistoryTitle.textContent = "Histórico do aluno";
+    if (adminStudentHistoryTitle instanceof HTMLElement) adminStudentHistoryTitle.textContent = "Ficha do aluno";
     if (adminStudentHistorySub instanceof HTMLElement) {
       const alunoName = alunoMeta?.nome || "Aluno";
       const teacherName = teacherMeta?.nome || "";
       adminStudentHistorySub.textContent = teacherName ? `${alunoName} • ${teacherName}` : `${alunoName}`;
     }
 
-    // Reset filter tabs
-    document.querySelectorAll("[data-admin-student-history-filter]").forEach((btn) => {
-      if (!(btn instanceof HTMLButtonElement)) return;
-      const isActive = String(btn.getAttribute("data-admin-student-history-filter") || "") === "all";
-      btn.classList.toggle("is-active", isActive);
-      btn.setAttribute("aria-selected", isActive ? "true" : "false");
-    });
-
-    renderAdminStudentHistoryDrawer();
+    renderAdminStudentSheet();
 
     adminStudentHistoryDrawer.hidden = false;
     window.requestAnimationFrame(() => {
@@ -9536,6 +9735,7 @@ const closeAdminStudentHistoryDrawer = () => {
   adminStudentsState.history = {
     isOpen: false,
     alunoId: "",
+    activeTab: "overview",
     filter: "all",
     items: [],
     alunoMeta: null,
@@ -9581,11 +9781,9 @@ const openAdminStudentActionsPopover = ({ triggerEl, alunoId } = {}) => {
   pop.setAttribute("data-admin-student-actions-popover", "true");
   pop.setAttribute("data-admin-student-actions-aluno", safeAlunoId);
   pop.innerHTML = `
-    <button class="admin-action-item" type="button" data-admin-student-action="history" data-admin-student-aluno="${escapeHtml(
-      safeAlunoId
-    )}">Ver histórico pedagógico</button>
-    <button class="admin-action-item is-disabled" type="button" disabled>Ver dados do aluno</button>
-    <button class="admin-action-item is-disabled" type="button" disabled>Ver aulas do aluno</button>
+    <button class="admin-action-item is-disabled" type="button" disabled>Editar dados rápidos</button>
+    <button class="admin-action-item is-disabled" type="button" disabled>Arquivar / Cancelar matrícula</button>
+    <button class="admin-action-item is-disabled" type="button" disabled>Exportar dados do aluno</button>
   `;
 
   document.body.appendChild(pop);
@@ -9802,6 +10000,26 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
 
   const title = role === "teacher" ? "Novo Professor" : role === "growth" ? "Novo usuário Growth" : "Novo Aluno";
 
+  const extraStudentFields =
+    role === "student"
+      ? `
+        <label class="auth-field">
+          <span>Professor responsável (opcional)</span>
+          <select class="auth-input" data-ac-professor>
+            <option value="">Carregando professores…</option>
+          </select>
+        </label>
+        <label class="auth-field">
+          <span>Plano (opcional)</span>
+          <input class="auth-input" type="text" autocomplete="off" data-ac-plan placeholder="Ex: Gold" />
+        </label>
+        <label class="auth-field">
+          <span>País (opcional)</span>
+          <input class="auth-input" type="text" autocomplete="off" data-ac-country placeholder="Ex: Brasil" />
+        </label>
+      `
+      : "";
+
 	  const bodyHtml = `
 	    <form class="auth-form admin-create-form" data-admin-create-form novalidate>
 	      <label class="auth-field">
@@ -9814,6 +10032,7 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
 	        <input class="auth-input" type="email" autocomplete="email" data-ac-email />
 	        <div class="auth-inline-error" data-ac-email-error hidden>E-mail inválido</div>
 	      </label>
+        ${extraStudentFields}
 	      <label class="auth-field">
 	        <span>Senha</span>
 	        <div class="auth-password">
@@ -9862,12 +10081,15 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
       const name = nameEl instanceof HTMLInputElement ? nameEl.value.trim() : "";
       const email = emailEl instanceof HTMLInputElement ? emailEl.value.trim().toLowerCase() : "";
       const password = passEl instanceof HTMLInputElement ? passEl.value : "";
-      const confirm = confirmEl instanceof HTMLInputElement ? confirmEl.value : "";
+	      const confirm = confirmEl instanceof HTMLInputElement ? confirmEl.value : "";
+        const professorEl = role === "student" ? form.querySelector("[data-ac-professor]") : null;
+        const planEl = role === "student" ? form.querySelector("[data-ac-plan]") : null;
+        const countryEl = role === "student" ? form.querySelector("[data-ac-country]") : null;
 
-      const nameOk = Boolean(name);
-      const emailOk = isValidEmail(email);
-      const passOk = Boolean(password) && password.length >= 6;
-      const confirmOk = password === confirm && Boolean(confirm);
+	      const nameOk = Boolean(name);
+	      const emailOk = isValidEmail(email);
+	      const passOk = Boolean(password) && password.length >= 6;
+	      const confirmOk = password === confirm && Boolean(confirm);
 
       if (nameError instanceof HTMLElement) nameError.hidden = nameOk;
       if (emailError instanceof HTMLElement) emailError.hidden = emailOk;
@@ -9911,12 +10133,20 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
           const uid = String(credential?.user?.uid || "").trim();
           if (!uid) throw new Error("missing_uid");
 
-          const payload = { nome: name, email, tipo: role, ativo: true, criadoEm: firebase.serverTimestamp() };
-          try {
-            await withTimeout(
-              firebase.setDoc(firebase.doc(firebase.primaryDb, "users", uid), payload, { merge: true }),
-              12_000,
-              "firestore_setDoc_primary"
+	          const payload = { nome: name, email, tipo: role, ativo: true, criadoEm: firebase.serverTimestamp() };
+            if (role === "student") {
+              const professorId = professorEl instanceof HTMLSelectElement ? String(professorEl.value || "").trim() : "";
+              const plano = planEl instanceof HTMLInputElement ? String(planEl.value || "").trim() : "";
+              const pais = countryEl instanceof HTMLInputElement ? String(countryEl.value || "").trim() : "";
+              if (professorId) payload.professorId = professorId;
+              if (plano) payload.plano = plano;
+              if (pais) payload.pais = pais;
+            }
+	          try {
+	            await withTimeout(
+	              firebase.setDoc(firebase.doc(firebase.primaryDb, "users", uid), payload, { merge: true }),
+	              12_000,
+	              "firestore_setDoc_primary"
             );
           } catch (primaryErr) {
             console.error("[admin] create teacher/student (firestore primary) failed:", primaryErr);
@@ -9950,13 +10180,18 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
           setAdminManageStatus(role, "Criado com sucesso.", "success");
           window.setTimeout(() => setAdminManageStatus(role, ""), 1200);
           closeModal();
-          if (role === "teacher") loadUsersFromFirestore("teacher");
-          if (role === "student") loadUsersFromFirestore("student");
-          if (role === "growth") loadUsersFromFirestore("growth");
-        } catch (e) {
-          console.error("[admin] create teacher/student failed:", e);
-          const code = typeof e?.code === "string" ? e.code : "";
-          let msg = "Não foi possível criar agora.";
+	          if (role === "teacher") loadUsersFromFirestore("teacher");
+	          if (role === "student") {
+              loadUsersFromFirestore("student");
+              // Refresh Admin > Alunos list if it's open.
+              adminStudentsState.loadedAt = 0;
+              if (body.dataset.activePanel === "alunos") renderAdminStudentsPanel({ force: true });
+            }
+	          if (role === "growth") loadUsersFromFirestore("growth");
+	        } catch (e) {
+	          console.error("[admin] create teacher/student failed:", e);
+	          const code = typeof e?.code === "string" ? e.code : "";
+	          let msg = "Não foi possível criar agora.";
           if (code === "auth/email-already-in-use") msg = "Este e-mail já está cadastrado";
           if (code === "auth/weak-password") msg = "Senha muito fraca";
           if (code === "auth/invalid-email") msg = "E-mail inválido";
@@ -9983,15 +10218,38 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
     onSecondary: () => {
       activeModalKind = "";
     },
-  });
+	  });
 
   const eye = modalBody?.querySelector("[data-ac-eye]");
   const passEl = modalBody?.querySelector("[data-ac-password]");
-	  if (eye instanceof HTMLButtonElement && passEl instanceof HTMLInputElement) {
-	    eye.addEventListener("click", () => {
-	      passEl.type = passEl.type === "password" ? "text" : "password";
-	    });
-	  }
+		  if (eye instanceof HTMLButtonElement && passEl instanceof HTMLInputElement) {
+		    eye.addEventListener("click", () => {
+		      passEl.type = passEl.type === "password" ? "text" : "password";
+		    });
+		  }
+
+      // Populate teacher options for "Professor responsável".
+      if (role === "student") {
+        const select = modalBody?.querySelector("[data-ac-professor]");
+        if (select instanceof HTMLSelectElement) {
+          (async () => {
+            try {
+              const teachers = await fetchUserRowsFromFirestore("teacher");
+              const options = [`<option value="">Nenhum</option>`]
+                .concat(
+                  (Array.isArray(teachers) ? teachers : [])
+                    .slice()
+                    .sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"))
+                    .map((t) => `<option value="${escapeHtml(String(t.id))}">${escapeHtml(String(t.nome || "Professor"))}</option>`)
+                )
+                .join("");
+              select.innerHTML = options;
+            } catch (e) {
+              select.innerHTML = `<option value="">Não foi possível carregar</option>`;
+            }
+          })();
+        }
+      }
 
 	  // Live validation feedback (same rules as submit, but surfaced while typing).
 	  const form = modalBody?.querySelector("[data-admin-create-form]");
@@ -10648,6 +10906,17 @@ document.addEventListener("click", (event) => {
         return;
       }
 
+      const studentTab = target.closest("[data-admin-student-tab]");
+      if (studentTab instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const next = String(studentTab.getAttribute("data-admin-student-tab") || "").trim();
+        if (next) {
+          adminStudentsState.history.activeTab = next;
+          syncAdminStudentSheetTabs();
+        }
+        return;
+      }
+
       const historyFilterBtn = target.closest("[data-admin-student-history-filter]");
       if (historyFilterBtn instanceof HTMLButtonElement) {
         event.preventDefault();
@@ -10659,7 +10928,7 @@ document.addEventListener("click", (event) => {
           btn.classList.toggle("is-active", isActive);
           btn.setAttribute("aria-selected", isActive ? "true" : "false");
         });
-        renderAdminStudentHistoryDrawer();
+        renderAdminStudentHistoryTab();
         return;
       }
 
@@ -10673,11 +10942,17 @@ document.addEventListener("click", (event) => {
 
       const studentAction = target.closest("[data-admin-student-action]");
       if (studentAction instanceof HTMLButtonElement) {
-        const action = String(studentAction.getAttribute("data-admin-student-action") || "").trim();
-        if (action === "history") {
+        // Reserved for future admin actions (editar/arquivar/exportar).
+        event.preventDefault();
+        closeAdminStudentActionsPopover();
+        return;
+      }
+
+      const studentOpen = target.closest("[data-admin-student-open]");
+      if (studentOpen instanceof HTMLElement) {
+        const alunoId = String(studentOpen.getAttribute("data-admin-student-open") || "").trim();
+        if (alunoId) {
           event.preventDefault();
-          const alunoId = String(studentAction.getAttribute("data-admin-student-aluno") || "").trim();
-          closeAdminStudentActionsPopover();
           openAdminStudentHistoryDrawer({ alunoId });
           return;
         }
@@ -11398,6 +11673,19 @@ document.addEventListener("keydown", (event) => {
   // Espaço normalmente faz scroll; aqui vira "ativar item" quando focado.
   event.preventDefault();
   activatePedagogicoLessonFromEl(event, pedItem);
+});
+
+document.addEventListener("keydown", (event) => {
+  if (currentRole !== "admin") return;
+  if (!(event.target instanceof Element)) return;
+  const key = event.key;
+  if (key !== "Enter" && key !== " ") return;
+  const row = event.target.closest("[data-admin-student-open]");
+  if (!(row instanceof HTMLElement)) return;
+  const alunoId = String(row.getAttribute("data-admin-student-open") || "").trim();
+  if (!alunoId) return;
+  event.preventDefault();
+  openAdminStudentHistoryDrawer({ alunoId });
 });
 
 const isTeacherCalendarGridInteractive = () => {
