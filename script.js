@@ -100,7 +100,9 @@ const pedagogicoDrawerAutosave = document.querySelector("[data-pedagogico-autosa
 const pedagogicoFormContainer = document.querySelector("[data-pedagogico-form-container]");
 
 // Admin > Alunos (histórico pedagógico por professor)
-const adminStudentsTeacherSelect = document.querySelector("[data-admin-students-teacher]");
+const adminStudentsTeacherSelect = document.querySelector("[data-admin-students-teacher]"); // legacy (removed from template)
+const adminStudentsFiltersTrigger = document.querySelector("[data-admin-students-filters-trigger]");
+const adminStudentsFiltersBadge = document.querySelector("[data-admin-students-filters-badge]");
 const adminStudentsList = document.querySelector("[data-admin-students-list]");
 const adminStudentsEmpty = document.querySelector("[data-admin-students-empty]");
 const adminStudentsError = document.querySelector("[data-admin-students-error]");
@@ -8188,17 +8190,29 @@ let adminGrowthGoalsState = {
 let adminStudentsState = {
   isLoading: false,
   loadedAt: 0,
-  selectedTeacherId: "",
   teachers: [], // [{id,nome,ativo,initials}]
+  teachersById: new Map(),
   studentsById: new Map(), // uid -> {id,nome,email,ativo,initials}
+  students: [], // raw student rows
   eventsLoadedAt: 0,
   events: [], // from /api/schedule-events
-  logsByTeacherId: new Map(), // teacherId -> { loadedAt, logs }
-  summaries: [], // derived student rows for selected teacher
+  logsLoadedAt: 0,
+  logs: [], // all lessonLogs (admin can read)
+  summariesAll: [], // all derived student rows
+  summaries: [], // derived + filtered student rows
+  filters: {
+    status: "all", // all | active | inactive
+    createdFrom: "",
+    createdTo: "",
+    canceledFrom: "",
+    canceledTo: "",
+    teacherId: "",
+    plan: "",
+    country: "",
+  },
   history: {
     isOpen: false,
     alunoId: "",
-    teacherId: "",
     filter: "all", // all | realizada | falta_aluno | remarcada | alerts
     items: [], // derived timeline items (log + event)
     alunoMeta: null,
@@ -8218,6 +8232,53 @@ const normalizeRiskLabel = (value) => {
   if (s === "medio" || s === "médio") return "Médio";
   if (s === "alto") return "Alto";
   return "";
+};
+
+const toDateKeyFromAny = (value) => {
+  if (!value) return "";
+  try {
+    const date =
+      value instanceof Date
+        ? value
+        : typeof value?.toDate === "function"
+          ? value.toDate()
+          : typeof value === "number"
+            ? new Date(value)
+            : new Date(String(value));
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "";
+    const y = String(date.getFullYear()).padStart(4, "0");
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  } catch {
+    return "";
+  }
+};
+
+const countActiveAdminStudentsFilters = (filters) => {
+  const f = filters && typeof filters === "object" ? filters : {};
+  let n = 0;
+  if (String(f.status || "all") !== "all") n += 1;
+  if (String(f.createdFrom || "")) n += 1;
+  if (String(f.createdTo || "")) n += 1;
+  if (String(f.canceledFrom || "")) n += 1;
+  if (String(f.canceledTo || "")) n += 1;
+  if (String(f.teacherId || "")) n += 1;
+  if (String(f.plan || "")) n += 1;
+  if (String(f.country || "")) n += 1;
+  return n;
+};
+
+const syncAdminStudentsFiltersBadge = () => {
+  if (!(adminStudentsFiltersBadge instanceof HTMLElement)) return;
+  const n = countActiveAdminStudentsFilters(adminStudentsState.filters);
+  if (n <= 0) {
+    adminStudentsFiltersBadge.hidden = true;
+    adminStudentsFiltersBadge.textContent = "0";
+    return;
+  }
+  adminStudentsFiltersBadge.hidden = false;
+  adminStudentsFiltersBadge.textContent = String(n);
 };
 
 const getCompetenciaKeySaoPaulo = (date = new Date()) => {
@@ -8708,18 +8769,72 @@ const fetchUserRowsFromFirestore = async (tipo) => {
   snap.forEach((docSnap) => {
     const data = docSnap.data ? docSnap.data() : null;
     if (!data || typeof data !== "object") return;
-    rows.push(
-      normalizeUserRow({
-        id: docSnap.id,
-        nome: data.nome,
-        email: data.email,
-        tipo: data.tipo,
-        ativo: data.ativo,
-        criadoEm: data.criadoEm,
-      })
-    );
+    const base = normalizeUserRow({
+      id: docSnap.id,
+      nome: data.nome,
+      email: data.email,
+      tipo: data.tipo,
+      ativo: data.ativo,
+      criadoEm: data.criadoEm,
+    });
+    if (!base) return;
+    // Optional fields: keep them for Admin > Alunos filters (do not assume they exist).
+    const professorId = typeof data.professorId === "string" ? data.professorId.trim() : typeof data.teacherId === "string" ? data.teacherId.trim() : "";
+    const plano = typeof data.plano === "string" ? data.plano.trim() : typeof data.plan === "string" ? data.plan.trim() : typeof data.planoKey === "string" ? data.planoKey.trim() : "";
+    const pais = typeof data.pais === "string" ? data.pais.trim() : typeof data.country === "string" ? data.country.trim() : "";
+    const canceladoEm = data.canceladoEm || data.cancelamentoEm || data.dataCancelamento || null;
+    const criadoKey = toDateKeyFromAny(data.criadoEm);
+    const cancelKey = toDateKeyFromAny(canceladoEm);
+    rows.push({ ...base, professorId, plano, pais, canceladoEm, criadoKey, cancelKey });
   });
   return rows.filter(Boolean).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+};
+
+const fetchLessonLogsFromFirestore = async () => {
+  const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_lessonlogs");
+  const user = await waitForFirebaseAuthReady(firebase, 5000);
+  if (!user) {
+    const e = new Error("firebase_not_authenticated");
+    e.code = "auth/no-current-user";
+    throw e;
+  }
+
+  const q = firebase.query(firebase.collection(firebase.primaryDb, "lessonLogs"));
+  const snap = await withTimeout(firebase.getDocs(q), 12_000, "firestore_getDocs_lessonLogs_all");
+  const logs = [];
+  snap.forEach((docSnap) => {
+    const data = docSnap.data ? docSnap.data() : null;
+    if (!data || typeof data !== "object") return;
+    const eventId = typeof data.eventId === "string" ? data.eventId.trim() : "";
+    const professorId = typeof data.professorId === "string" ? data.professorId.trim() : "";
+    const alunoId = typeof data.alunoId === "string" ? data.alunoId.trim() : "";
+    const statusAula = typeof data.statusAula === "string" ? data.statusAula.trim().toLowerCase() : "";
+    if (!eventId) return;
+    logs.push({
+      id: docSnap.id,
+      eventId,
+      professorId,
+      alunoId,
+      dateKey: typeof data.dateKey === "string" ? data.dateKey.trim() : "",
+      statusAula,
+      criadoEm: data.criadoEm ? (typeof data.criadoEm?.toDate === "function" ? data.criadoEm.toDate().toISOString() : String(data.criadoEm)) : "",
+      atualizadoEm: data.atualizadoEm ? (typeof data.atualizadoEm?.toDate === "function" ? data.atualizadoEm.toDate().toISOString() : String(data.atualizadoEm)) : "",
+      payload: data,
+    });
+  });
+
+  // newest first to make "last" lookups cheap.
+  logs.sort((a, b) => {
+    const ak = String(a.dateKey || "");
+    const bk = String(b.dateKey || "");
+    if (ak !== bk) return bk.localeCompare(ak);
+    const ams = a.atualizadoEm ? Date.parse(a.atualizadoEm) : NaN;
+    const bms = b.atualizadoEm ? Date.parse(b.atualizadoEm) : NaN;
+    if (Number.isFinite(ams) && Number.isFinite(bms)) return bms - ams;
+    return 0;
+  });
+
+  return logs;
 };
 
 const ensureAdminStudentsBaseData = async ({ force = false } = {}) => {
@@ -8732,28 +8847,42 @@ const ensureAdminStudentsBaseData = async ({ force = false } = {}) => {
   if (adminStudentsError instanceof HTMLElement) adminStudentsError.hidden = true;
 
   try {
-    const [teachers, students, eventsRes] = await Promise.all([
+    const [teachers, students, eventsRes, logs] = await Promise.all([
       fetchAdminAgendaTeachers(),
       fetchUserRowsFromFirestore("student"),
       fetchWithAuth("/api/schedule-events", { method: "GET" }),
+      fetchLessonLogsFromFirestore(),
     ]);
 
     adminStudentsState.teachers = Array.isArray(teachers) ? teachers : [];
+    const teachersById = new Map();
+    adminStudentsState.teachers.forEach((t) => {
+      if (t && typeof t === "object" && t.id) teachersById.set(String(t.id), t);
+    });
+    adminStudentsState.teachersById = teachersById;
     const studentsById = new Map();
     (Array.isArray(students) ? students : []).forEach((row) => {
       if (!row?.id) return;
       studentsById.set(row.id, row);
     });
     adminStudentsState.studentsById = studentsById;
+    adminStudentsState.students = Array.isArray(students) ? students : [];
 
     if (!eventsRes.ok) throw new Error("admin_students_events_failed");
     const eventsData = await eventsRes.json().catch(() => null);
     adminStudentsState.events = Array.isArray(eventsData?.events) ? eventsData.events : [];
     adminStudentsState.eventsLoadedAt = Date.now();
 
+    adminStudentsState.logs = Array.isArray(logs) ? logs : [];
+    adminStudentsState.logsLoadedAt = Date.now();
+
     adminStudentsState.loadedAt = Date.now();
     setAdminStudentsStatus("");
-    adminStudentsPopulateTeacherSelect();
+    // Derived lists now default to "all students".
+    const derived = deriveAdminStudentsSummaries({ teacherId: "", logs: adminStudentsState.logs });
+    adminStudentsState.summariesAll = derived.summaries;
+    syncAdminStudentsFiltersBadge();
+    applyAdminStudentsFilters();
   } catch (error) {
     console.error("[admin] students base load failed:", error);
     if (adminStudentsError instanceof HTMLElement) adminStudentsError.hidden = false;
@@ -8763,35 +8892,14 @@ const ensureAdminStudentsBaseData = async ({ force = false } = {}) => {
   }
 };
 
-const adminStudentsPopulateTeacherSelect = () => {
-  if (!(adminStudentsTeacherSelect instanceof HTMLSelectElement)) return;
-  const teachers = Array.isArray(adminStudentsState.teachers) ? adminStudentsState.teachers : [];
-  const options = teachers
-    .filter((t) => t && typeof t === "object")
-    .sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"))
-    .map((t) => `<option value="${escapeHtml(String(t.id))}">${escapeHtml(String(t.nome || "Professor"))}</option>`)
-    .join("");
-
-  const current = String(adminStudentsState.selectedTeacherId || "");
-  adminStudentsTeacherSelect.innerHTML = `<option value="">Selecione um professor…</option>${options}`;
-  adminStudentsTeacherSelect.value = current;
-};
+const adminStudentsPopulateTeacherSelect = () => {}; // legacy no-op (teacher select removed)
 
 const loadLessonLogsForTeacher = async (teacherId, { force = false } = {}) => {
   const id = String(teacherId || "").trim();
   if (!id) return [];
-  const cached = adminStudentsState.logsByTeacherId.get(id);
-  const now = Date.now();
-  if (!force && cached && cached.loadedAt && now - cached.loadedAt < 60_000 && Array.isArray(cached.logs)) {
-    return cached.logs;
-  }
-
-  const res = await fetchWithAuth(`/api/lesson-logs?professorId=${encodeURIComponent(id)}`, { method: "GET" });
-  if (!res.ok) throw new Error("lesson_logs_fetch_failed");
-  const data = await res.json().catch(() => null);
-  const logs = Array.isArray(data?.logs) ? data.logs : [];
-  adminStudentsState.logsByTeacherId.set(id, { loadedAt: Date.now(), logs });
-  return logs;
+  await ensureAdminStudentsBaseData({ force });
+  const logs = Array.isArray(adminStudentsState.logs) ? adminStudentsState.logs : [];
+  return logs.filter((l) => String(l?.professorId || "").trim() === id);
 };
 
 const deriveAdminStudentsSummaries = ({ teacherId, logs } = {}) => {
@@ -8807,13 +8915,48 @@ const deriveAdminStudentsSummaries = ({ teacherId, logs } = {}) => {
     eventsById.set(String(evt.id), evt);
   });
 
+  const lastEventByAluno = new Map();
+  events.forEach((evt) => {
+    if (!evt || typeof evt !== "object") return;
+    if (evt.type !== "lesson") return;
+    const a = String(evt.alunoId || "").trim();
+    if (!a) return;
+    if (tId && String(evt.professorId || "") !== tId) return;
+    const prev = lastEventByAluno.get(a) || null;
+    if (!prev) {
+      lastEventByAluno.set(a, evt);
+      return;
+    }
+    const pk = String(prev.dateKey || "");
+    const nk = String(evt.dateKey || "");
+    if (nk && pk && nk !== pk) {
+      if (nk > pk) lastEventByAluno.set(a, evt);
+      return;
+    }
+    const ps = Number(prev.startMin) || 0;
+    const ns = Number(evt.startMin) || 0;
+    if (ns > ps) lastEventByAluno.set(a, evt);
+  });
+
   const alunoIds = new Set();
-  events
-    .filter((evt) => evt && typeof evt === "object" && evt.type === "lesson" && String(evt.professorId || "") === tId)
-    .forEach((evt) => {
-      const a = String(evt.alunoId || "").trim();
-      if (a) alunoIds.add(a);
+  if (!tId) {
+    // School-wide: start with all registered students.
+    studentsById.forEach((_v, k) => {
+      const id = String(k || "").trim();
+      if (id) alunoIds.add(id);
     });
+    // Also include any student ids present in events/logs even if the user doc is missing.
+    events
+      .filter((evt) => evt && typeof evt === "object" && evt.type === "lesson" && evt.alunoId)
+      .forEach((evt) => alunoIds.add(String(evt.alunoId)));
+  } else {
+    events
+      .filter((evt) => evt && typeof evt === "object" && evt.type === "lesson" && String(evt.professorId || "") === tId)
+      .forEach((evt) => {
+        const a = String(evt.alunoId || "").trim();
+        if (a) alunoIds.add(a);
+      });
+  }
   logsArr.forEach((log) => {
     const a = String(log?.alunoId || "").trim();
     const p = String(log?.professorId || "").trim();
@@ -8826,7 +8969,7 @@ const deriveAdminStudentsSummaries = ({ teacherId, logs } = {}) => {
     if (tId && String(log.professorId || "") !== tId) return;
     const alunoId = String(log.alunoId || "").trim();
     if (!alunoId) return;
-    const bucket = perAluno.get(alunoId) || { total: 0, faltas: 0, remarcadas: 0, lastLog: null, lastRisk: "" };
+    const bucket = perAluno.get(alunoId) || { total: 0, faltas: 0, remarcadas: 0, lastLog: null, lastRisk: "", hasAlert: false };
     bucket.total += 1;
     const status = String(log.statusAula || "").trim().toLowerCase();
     if (status === "falta_aluno") bucket.faltas += 1;
@@ -8843,15 +8986,22 @@ const deriveAdminStudentsSummaries = ({ teacherId, logs } = {}) => {
     if (risk && (risk === "baixo" || risk === "medio" || risk === "médio" || risk === "alto")) {
       bucket.lastRisk = risk;
     }
+
+    const avisos = Array.isArray(log?.payload?.avisosCoordenacao) ? log.payload.avisosCoordenacao : [];
+    const needsAlert =
+      log?.payload?.precisaIntervencao === true ||
+      avisos.some((v) => String(v).startsWith("🔴") || String(v).startsWith("🟡")) ||
+      (status === "remarcada" && String(log?.payload?.motivoRemarcacao || "") === "professor_remarcou");
+    if (needsAlert) bucket.hasAlert = true;
     perAluno.set(alunoId, bucket);
   });
 
-  const teacherMeta = Array.isArray(adminStudentsState.teachers) ? adminStudentsState.teachers.find((t) => String(t.id) === tId) : null;
+  const teacherMeta = tId ? (adminStudentsState.teachersById instanceof Map ? adminStudentsState.teachersById.get(tId) || null : null) : null;
 
   const summaries = Array.from(alunoIds)
     .map((alunoId) => {
       const meta = studentsById.get(alunoId) || null;
-      const bucket = perAluno.get(alunoId) || { total: 0, faltas: 0, remarcadas: 0, lastLog: null, lastRisk: "" };
+      const bucket = perAluno.get(alunoId) || { total: 0, faltas: 0, remarcadas: 0, lastLog: null, lastRisk: "", hasAlert: false };
       const lastLog = bucket.lastLog;
       let lastLabel = "—";
       if (lastLog?.eventId) {
@@ -8864,9 +9014,22 @@ const deriveAdminStudentsSummaries = ({ teacherId, logs } = {}) => {
       } else if (lastLog?.dateKey) {
         lastLabel = formatPedagogicoDate(lastLog.dateKey);
       }
+      const lastEvent = lastEventByAluno.get(alunoId) || null;
+      if (lastLabel === "—" && lastEvent && lastEvent.dateKey) {
+        lastLabel = `${formatPedagogicoDate(lastEvent.dateKey)} • ${formatHmFromMinutes(lastEvent.startMin)}–${formatHmFromMinutes(lastEvent.endMin)}`;
+      }
 
       const riskLabel = normalizeRiskLabel(bucket.lastRisk) || "Sem dados";
       const statusLabel = meta ? (meta.ativo ? "Ativo" : "Inativo") : "—";
+
+      const inferredTeacherId =
+        tId ||
+        String(meta?.professorId || "").trim() ||
+        String(lastEvent?.professorId || "").trim() ||
+        String(lastLog?.professorId || "").trim() ||
+        "";
+      const inferredTeacher =
+        inferredTeacherId && adminStudentsState.teachersById instanceof Map ? adminStudentsState.teachersById.get(inferredTeacherId) || null : null;
 
       return {
         alunoId,
@@ -8874,17 +9037,20 @@ const deriveAdminStudentsSummaries = ({ teacherId, logs } = {}) => {
         email: meta?.email || "",
         ativo: typeof meta?.ativo === "boolean" ? meta.ativo : true,
         statusLabel,
-        teacherId: tId,
-        teacherName: teacherMeta?.nome || "Professor",
+        teacherId: inferredTeacherId,
+        teacherName: inferredTeacher?.nome || teacherMeta?.nome || "—",
+        plano: String(meta?.plano || "").trim(),
+        pais: String(meta?.pais || "").trim(),
+        criadoKey: String(meta?.criadoKey || ""),
+        cancelKey: String(meta?.cancelKey || ""),
+        criadoLabel: meta?.criadoEm ? formatAdminDate(meta.criadoEm) : "—",
+        cancelLabel: meta?.canceladoEm ? formatAdminDate(meta.canceladoEm) : "—",
         lastLessonLabel: lastLabel,
         totalLogs: bucket.total,
         faltas: bucket.faltas,
         remarcadas: bucket.remarcadas,
         riskLabel,
-        hasAlert: Boolean(
-          (lastLog?.payload?.precisaIntervencao === true) ||
-            (String(lastLog?.payload?.motivoRemarcacao || "") === "professor_remarcou")
-        ),
+        hasAlert: Boolean(bucket.hasAlert),
       };
     })
     .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
@@ -8896,21 +9062,11 @@ const renderAdminStudentsList = () => {
   if (!(adminStudentsList instanceof HTMLElement)) return;
   if (adminStudentsError instanceof HTMLElement) adminStudentsError.hidden = true;
 
-  const teacherId = String(adminStudentsState.selectedTeacherId || "").trim();
   const summaries = Array.isArray(adminStudentsState.summaries) ? adminStudentsState.summaries : [];
-
-  if (!teacherId) {
-    adminStudentsList.innerHTML = "";
-    if (adminStudentsEmpty instanceof HTMLElement) {
-      adminStudentsEmpty.textContent = "Selecione um professor para ver os alunos.";
-      adminStudentsEmpty.hidden = false;
-    }
-    return;
-  }
 
   if (adminStudentsEmpty instanceof HTMLElement) {
     adminStudentsEmpty.hidden = summaries.length > 0;
-    if (summaries.length === 0) adminStudentsEmpty.textContent = "Nenhum aluno vinculado encontrado para este professor.";
+    if (summaries.length === 0) adminStudentsEmpty.textContent = "Nenhum aluno encontrado.";
   }
 
   adminStudentsList.innerHTML = summaries
@@ -8918,8 +9074,11 @@ const renderAdminStudentsList = () => {
       const riskTone = row.riskLabel === "Alto" ? "red" : row.riskLabel === "Médio" ? "yellow" : row.riskLabel === "Baixo" ? "green" : "muted";
       const riskCls = `admin-students-risk is-${riskTone}`;
       const alertBadge = row.hasAlert ? `<span class="admin-students-alert">Alerta</span>` : "";
+      const planPart = row.plano ? `<span class="admin-students-dot" aria-hidden="true">•</span><span>${escapeHtml(row.plano)}</span>` : "";
+      const countryPart = row.pais ? `<span class="admin-students-dot" aria-hidden="true">•</span><span>${escapeHtml(row.pais)}</span>` : "";
+      const cancelPart = row.cancelKey ? ` · Cancel.: <strong>${escapeHtml(row.cancelLabel)}</strong>` : "";
       return `
-        <div class="admin-students-row" data-admin-student-row="${escapeHtml(row.alunoId)}" data-admin-student-teacher="${escapeHtml(row.teacherId)}">
+        <div class="admin-students-row" data-admin-student-row="${escapeHtml(row.alunoId)}">
           <div class="admin-students-avatar" aria-hidden="true">${escapeHtml(getInitials(row.nome))}</div>
           <div class="admin-students-main">
             <div class="admin-students-name">
@@ -8931,17 +9090,18 @@ const renderAdminStudentsList = () => {
               <span class="admin-students-dot" aria-hidden="true">•</span>
               <span>${escapeHtml(row.statusLabel || "—")}</span>
               <span class="admin-students-dot" aria-hidden="true">•</span>
-              <span>${escapeHtml(row.teacherName)}</span>
+              <span>${escapeHtml(row.teacherName || "—")}</span>
+              ${planPart}
+              ${countryPart}
             </div>
             <div class="admin-students-kpis">
+              <span>Cadastro: <strong>${escapeHtml(row.criadoLabel || "—")}</strong>${cancelPart}</span>
               <span>Última aula registrada: <strong>${escapeHtml(row.lastLessonLabel)}</strong></span>
               <span>Registros: <strong>${escapeHtml(String(row.totalLogs))}</strong></span>
               <span class="${riskCls}">Risco: <strong>${escapeHtml(row.riskLabel)}</strong></span>
             </div>
           </div>
-          <button class="admin-students-actions-trigger" type="button" aria-label="Ações" data-admin-student-actions-trigger="${escapeHtml(
-            row.alunoId
-          )}" data-admin-student-actions-teacher="${escapeHtml(row.teacherId)}">
+          <button class="admin-students-actions-trigger" type="button" aria-label="Ações" data-admin-student-actions-trigger="${escapeHtml(row.alunoId)}">
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path d="M6.5 12h.01"></path>
               <path d="M12 12h.01"></path>
@@ -8956,40 +9116,174 @@ const renderAdminStudentsList = () => {
 
 const renderAdminStudentsPanel = async ({ force = false } = {}) => {
   if (currentRole !== "admin") return;
-  if (!(adminStudentsTeacherSelect instanceof HTMLSelectElement)) return;
   if (!(adminStudentsList instanceof HTMLElement)) return;
   await ensureAdminStudentsBaseData({ force });
   renderAdminStudentsList();
 };
 
-const selectAdminStudentsTeacher = async (teacherId, { force = false } = {}) => {
-  if (currentRole !== "admin") return;
-  const id = String(teacherId || "").trim();
-  adminStudentsState.selectedTeacherId = id;
-  if (adminStudentsTeacherSelect instanceof HTMLSelectElement) {
-    adminStudentsTeacherSelect.value = id;
-  }
+let adminStudentsFiltersPopoverEl = null;
 
-  if (!id) {
-    adminStudentsState.summaries = [];
-    renderAdminStudentsList();
-    return;
+const closeAdminStudentsFiltersPopover = () => {
+  if (adminStudentsFiltersPopoverEl instanceof HTMLElement) {
+    adminStudentsFiltersPopoverEl.remove();
   }
-
-  setAdminStudentsStatus("Carregando alunos…");
-  try {
-    await ensureAdminStudentsBaseData({ force });
-    const logs = await loadLessonLogsForTeacher(id, { force });
-    const derived = deriveAdminStudentsSummaries({ teacherId: id, logs });
-    adminStudentsState.summaries = derived.summaries;
-    setAdminStudentsStatus("");
-    renderAdminStudentsList();
-  } catch (error) {
-    console.error("[admin] select teacher failed:", error);
-    if (adminStudentsError instanceof HTMLElement) adminStudentsError.hidden = false;
-    setAdminStudentsStatus("Não foi possível carregar agora.", "error");
-  }
+  adminStudentsFiltersPopoverEl = null;
 };
+
+const applyAdminStudentsFilters = () => {
+  const all = Array.isArray(adminStudentsState.summariesAll) ? adminStudentsState.summariesAll : [];
+  const f = adminStudentsState.filters && typeof adminStudentsState.filters === "object" ? adminStudentsState.filters : {};
+
+  const status = String(f.status || "all");
+  const createdFrom = String(f.createdFrom || "").trim();
+  const createdTo = String(f.createdTo || "").trim();
+  const canceledFrom = String(f.canceledFrom || "").trim();
+  const canceledTo = String(f.canceledTo || "").trim();
+  const teacherId = String(f.teacherId || "").trim();
+  const plan = String(f.plan || "").trim().toLowerCase();
+  const country = String(f.country || "").trim().toLowerCase();
+
+  const filtered = all.filter((row) => {
+    if (!row || typeof row !== "object") return false;
+    if (status === "active" && !row.ativo) return false;
+    if (status === "inactive" && row.ativo) return false;
+    if (createdFrom && String(row.criadoKey || "") < createdFrom) return false;
+    if (createdTo && String(row.criadoKey || "") > createdTo) return false;
+    if (canceledFrom) {
+      const ck = String(row.cancelKey || "");
+      if (!ck) return false;
+      if (ck < canceledFrom) return false;
+    }
+    if (canceledTo) {
+      const ck = String(row.cancelKey || "");
+      if (!ck) return false;
+      if (ck > canceledTo) return false;
+    }
+    if (teacherId && String(row.teacherId || "") !== teacherId) return false;
+    if (plan && String(row.plano || "").trim().toLowerCase() !== plan) return false;
+    if (country && String(row.pais || "").trim().toLowerCase() !== country) return false;
+    return true;
+  });
+
+  adminStudentsState.summaries = filtered;
+  syncAdminStudentsFiltersBadge();
+  renderAdminStudentsList();
+};
+
+const openAdminStudentsFiltersPopover = ({ triggerEl } = {}) => {
+  if (!(triggerEl instanceof HTMLElement)) return;
+  closeAdminStudentsFiltersPopover();
+
+  const teachers = Array.isArray(adminStudentsState.teachers) ? adminStudentsState.teachers : [];
+  const teacherOptions = [
+    `<option value="">Qualquer professor</option>`,
+    ...teachers
+      .slice()
+      .sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"))
+      .map((t) => `<option value="${escapeHtml(String(t.id))}">${escapeHtml(String(t.nome || "Professor"))}</option>`),
+  ].join("");
+
+  const plans = new Set();
+  const countries = new Set();
+  (Array.isArray(adminStudentsState.summariesAll) ? adminStudentsState.summariesAll : []).forEach((r) => {
+    const p = String(r?.plano || "").trim();
+    const c = String(r?.pais || "").trim();
+    if (p) plans.add(p);
+    if (c) countries.add(c);
+  });
+  const planOptions = [`<option value="">Qualquer plano</option>`]
+    .concat(Array.from(plans).sort((a, b) => a.localeCompare(b, "pt-BR")).map((p) => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`))
+    .join("");
+  const countryOptions = [`<option value="">Qualquer país</option>`]
+    .concat(
+      Array.from(countries)
+        .sort((a, b) => a.localeCompare(b, "pt-BR"))
+        .map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`)
+    )
+    .join("");
+
+  const pop = document.createElement("div");
+  pop.className = "admin-students-filters-popover";
+  pop.setAttribute("data-admin-students-filters-popover", "true");
+  pop.innerHTML = `
+    <div class="admin-students-filters-row">
+      <label>Status</label>
+      <select data-admin-students-filter="status">
+        <option value="all">Todos</option>
+        <option value="active">Ativos</option>
+        <option value="inactive">Inativos</option>
+      </select>
+    </div>
+
+    <div class="admin-students-filters-row">
+      <label>Data de criação</label>
+      <div class="admin-students-filters-grid2">
+        <input type="date" data-admin-students-filter="createdFrom" />
+        <input type="date" data-admin-students-filter="createdTo" />
+      </div>
+    </div>
+
+    <div class="admin-students-filters-row">
+      <label>Data de cancelamento</label>
+      <div class="admin-students-filters-grid2">
+        <input type="date" data-admin-students-filter="canceledFrom" />
+        <input type="date" data-admin-students-filter="canceledTo" />
+      </div>
+    </div>
+
+    <div class="admin-students-filters-row">
+      <label>Professor</label>
+      <select data-admin-students-filter="teacherId">
+        ${teacherOptions}
+      </select>
+    </div>
+
+    <div class="admin-students-filters-row">
+      <label>Plano</label>
+      <select data-admin-students-filter="plan" ${plans.size ? "" : "disabled"}>
+        ${planOptions}
+      </select>
+    </div>
+
+    <div class="admin-students-filters-row">
+      <label>País</label>
+      <select data-admin-students-filter="country" ${countries.size ? "" : "disabled"}>
+        ${countryOptions}
+      </select>
+    </div>
+
+    <div class="admin-students-filters-actions">
+      <button type="button" class="admin-students-filters-clear" data-admin-students-filters-clear>Limpar filtros</button>
+      <button type="button" class="admin-students-filters-apply" data-admin-students-filters-apply>Aplicar</button>
+    </div>
+  `;
+
+  document.body.appendChild(pop);
+  adminStudentsFiltersPopoverEl = pop;
+
+  // hydrate values
+  const f = adminStudentsState.filters;
+  pop.querySelectorAll("[data-admin-students-filter]").forEach((el) => {
+    if (!(el instanceof HTMLInputElement) && !(el instanceof HTMLSelectElement)) return;
+    const key = String(el.getAttribute("data-admin-students-filter") || "");
+    if (!key) return;
+    const val = String(f?.[key] || "");
+    el.value = val;
+  });
+
+  // Position (fixed) and flip if needed.
+  const rect = triggerEl.getBoundingClientRect();
+  const popRect = pop.getBoundingClientRect();
+  const margin = 10;
+  const spaceBelow = window.innerHeight - rect.bottom;
+  const shouldFlipUp = spaceBelow < popRect.height + margin;
+  const top = shouldFlipUp ? rect.top - margin - popRect.height : rect.bottom + margin;
+  const left = rect.right - popRect.width;
+  pop.style.top = `${clampToViewport(top, margin, window.innerHeight - popRect.height - margin)}px`;
+  pop.style.left = `${clampToViewport(left, margin, window.innerWidth - popRect.width - margin)}px`;
+};
+
+const selectAdminStudentsTeacher = async () => {}; // legacy no-op (teacher filter removed)
 
 const formatAdminHistoryStamp = (iso) => {
   const raw = String(iso || "").trim();
@@ -9033,6 +9327,7 @@ const buildAdminStudentHistoryItems = ({ alunoId, teacherId, logs, eventsById, t
   const tId = String(teacherId || "").trim();
   const list = Array.isArray(logs) ? logs : [];
   const out = [];
+  const teachersById = adminStudentsState.teachersById instanceof Map ? adminStudentsState.teachersById : new Map();
   list.forEach((log) => {
     if (!log || typeof log !== "object") return;
     if (tId && String(log.professorId || "") !== tId) return;
@@ -9055,7 +9350,9 @@ const buildAdminStudentHistoryItems = ({ alunoId, teacherId, logs, eventsById, t
       startMin,
       endMin,
       statusAula,
-      professorName: teacherMeta?.nome || "",
+      professorName:
+        teacherMeta?.nome ||
+        (String(log.professorId || "").trim() && teachersById.get(String(log.professorId)) ? String(teachersById.get(String(log.professorId)).nome || "") : ""),
       updatedAt: String(log.atualizadoEm || log.criadoEm || ""),
       summaryText: computeLessonSummaryText(log),
       riscoEvasao: normalizeRiskLabel(payload.riscoEvasao || "") || "",
@@ -9173,12 +9470,13 @@ const openAdminStudentHistoryDrawer = async ({ alunoId, teacherId } = {}) => {
   if (!(adminStudentHistoryDrawer instanceof HTMLElement)) return;
   const aId = String(alunoId || "").trim();
   const tId = String(teacherId || "").trim();
-  if (!aId || !tId) return;
+  if (!aId) return;
 
   setAdminStudentsStatus("Carregando histórico…");
   try {
     await ensureAdminStudentsBaseData({ force: false });
-    const logs = await loadLessonLogsForTeacher(tId, { force: false });
+    const allLogs = Array.isArray(adminStudentsState.logs) ? adminStudentsState.logs : [];
+    const logs = tId ? allLogs.filter((l) => String(l?.professorId || "").trim() === tId) : allLogs;
     const derived = deriveAdminStudentsSummaries({ teacherId: tId, logs });
     const items = buildAdminStudentHistoryItems({
       alunoId: aId,
@@ -9194,7 +9492,6 @@ const openAdminStudentHistoryDrawer = async ({ alunoId, teacherId } = {}) => {
     adminStudentsState.history = {
       isOpen: true,
       alunoId: aId,
-      teacherId: tId,
       filter: "all",
       items,
       alunoMeta,
@@ -9204,8 +9501,8 @@ const openAdminStudentHistoryDrawer = async ({ alunoId, teacherId } = {}) => {
     if (adminStudentHistoryTitle instanceof HTMLElement) adminStudentHistoryTitle.textContent = "Histórico do aluno";
     if (adminStudentHistorySub instanceof HTMLElement) {
       const alunoName = alunoMeta?.nome || "Aluno";
-      const teacherName = teacherMeta?.nome || "Professor";
-      adminStudentHistorySub.textContent = `${alunoName} • ${teacherName}`;
+      const teacherName = teacherMeta?.nome || "";
+      adminStudentHistorySub.textContent = teacherName ? `${alunoName} • ${teacherName}` : `${alunoName}`;
     }
 
     // Reset filter tabs
@@ -9239,7 +9536,6 @@ const closeAdminStudentHistoryDrawer = () => {
   adminStudentsState.history = {
     isOpen: false,
     alunoId: "",
-    teacherId: "",
     filter: "all",
     items: [],
     alunoMeta: null,
@@ -9272,24 +9568,22 @@ const closeAdminStudentActionsPopover = () => {
   adminStudentActionsPopoverEl = null;
 };
 
-const openAdminStudentActionsPopover = ({ triggerEl, alunoId, teacherId } = {}) => {
+const openAdminStudentActionsPopover = ({ triggerEl, alunoId } = {}) => {
   if (!(triggerEl instanceof HTMLElement)) return;
   closeAdminStudentActionsPopover();
 
   const safeAlunoId = String(alunoId || "").trim();
-  const safeTeacherId = String(teacherId || "").trim();
-  if (!safeAlunoId || !safeTeacherId) return;
+  if (!safeAlunoId) return;
 
   const pop = document.createElement("div");
   pop.className = "admin-actions-popover";
   pop.setAttribute("role", "menu");
   pop.setAttribute("data-admin-student-actions-popover", "true");
   pop.setAttribute("data-admin-student-actions-aluno", safeAlunoId);
-  pop.setAttribute("data-admin-student-actions-teacher", safeTeacherId);
   pop.innerHTML = `
     <button class="admin-action-item" type="button" data-admin-student-action="history" data-admin-student-aluno="${escapeHtml(
       safeAlunoId
-    )}" data-admin-student-teacher="${escapeHtml(safeTeacherId)}">Ver histórico pedagógico</button>
+    )}">Ver histórico pedagógico</button>
     <button class="admin-action-item is-disabled" type="button" disabled>Ver dados do aluno</button>
     <button class="admin-action-item is-disabled" type="button" disabled>Ver aulas do aluno</button>
   `;
@@ -10209,6 +10503,15 @@ document.addEventListener("click", (event) => {
   const target = event.target;
 
   if (target instanceof Element) {
+    // Admin > Alunos: close filters popover when clicking elsewhere.
+    if (
+      adminStudentsFiltersPopoverEl instanceof HTMLElement &&
+      !target.closest("[data-admin-students-filters-popover]") &&
+      !target.closest("[data-admin-students-filters-trigger]")
+    ) {
+      closeAdminStudentsFiltersPopover();
+    }
+
     // Professor > Alunos: close actions popover when clicking elsewhere.
     if (
       teacherStudentActionsPopoverEl instanceof HTMLElement &&
@@ -10290,6 +10593,54 @@ document.addEventListener("click", (event) => {
 
     // Admin manage tables: actions menu + operations.
     if (currentRole === "admin") {
+      const adminStudentsFiltersTrigger = target.closest("[data-admin-students-filters-trigger]");
+      if (adminStudentsFiltersTrigger instanceof HTMLButtonElement) {
+        event.preventDefault();
+        if (adminStudentsFiltersPopoverEl instanceof HTMLElement) {
+          closeAdminStudentsFiltersPopover();
+        } else {
+          openAdminStudentsFiltersPopover({ triggerEl: adminStudentsFiltersTrigger });
+        }
+        return;
+      }
+
+      const adminStudentsFiltersClear = target.closest("[data-admin-students-filters-clear]");
+      if (adminStudentsFiltersClear instanceof HTMLButtonElement) {
+        event.preventDefault();
+        adminStudentsState.filters = {
+          status: "all",
+          createdFrom: "",
+          createdTo: "",
+          canceledFrom: "",
+          canceledTo: "",
+          teacherId: "",
+          plan: "",
+          country: "",
+        };
+        closeAdminStudentsFiltersPopover();
+        applyAdminStudentsFilters();
+        return;
+      }
+
+      const adminStudentsFiltersApply = target.closest("[data-admin-students-filters-apply]");
+      if (adminStudentsFiltersApply instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const pop = adminStudentsFiltersPopoverEl;
+        if (pop instanceof HTMLElement) {
+          const next = { ...adminStudentsState.filters };
+          pop.querySelectorAll("[data-admin-students-filter]").forEach((el) => {
+            if (!(el instanceof HTMLInputElement) && !(el instanceof HTMLSelectElement)) return;
+            const key = String(el.getAttribute("data-admin-students-filter") || "");
+            if (!key) return;
+            next[key] = String(el.value || "");
+          });
+          adminStudentsState.filters = next;
+        }
+        closeAdminStudentsFiltersPopover();
+        applyAdminStudentsFilters();
+        return;
+      }
+
       const studentHistoryClose = target.closest("[data-admin-student-history-close]");
       if (studentHistoryClose instanceof HTMLElement) {
         event.preventDefault();
@@ -10316,8 +10667,7 @@ document.addEventListener("click", (event) => {
       if (studentActionsTrigger instanceof HTMLButtonElement) {
         event.preventDefault();
         const alunoId = String(studentActionsTrigger.getAttribute("data-admin-student-actions-trigger") || "").trim();
-        const teacherId = String(studentActionsTrigger.getAttribute("data-admin-student-actions-teacher") || "").trim();
-        openAdminStudentActionsPopover({ triggerEl: studentActionsTrigger, alunoId, teacherId });
+        openAdminStudentActionsPopover({ triggerEl: studentActionsTrigger, alunoId });
         return;
       }
 
@@ -10327,9 +10677,8 @@ document.addEventListener("click", (event) => {
         if (action === "history") {
           event.preventDefault();
           const alunoId = String(studentAction.getAttribute("data-admin-student-aluno") || "").trim();
-          const teacherId = String(studentAction.getAttribute("data-admin-student-teacher") || "").trim();
           closeAdminStudentActionsPopover();
-          openAdminStudentHistoryDrawer({ alunoId, teacherId });
+          openAdminStudentHistoryDrawer({ alunoId });
           return;
         }
       }

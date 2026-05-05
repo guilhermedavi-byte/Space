@@ -1462,33 +1462,33 @@
 	          </div>
 	        </section>
 
-        <section class="platform-panel" data-panel="alunos" data-hide-platform-header="true" hidden>
-          <div class="admin-students-shell">
-            <header class="admin-students-head">
-              <div>
-                <h2 class="admin-students-title">Alunos</h2>
-                <p class="admin-students-subtitle">Acompanhe o histórico pedagógico dos alunos por professor.</p>
-              </div>
+	        <section class="platform-panel" data-panel="alunos" data-hide-platform-header="true" hidden>
+	          <div class="admin-students-shell">
+	            <header class="admin-students-head">
+	              <div>
+	                <h2 class="admin-students-title">Alunos</h2>
+	                <p class="admin-students-subtitle">Acompanhe o histórico pedagógico dos alunos da escola.</p>
+	              </div>
 
-              <div class="admin-students-filter">
-                <label class="admin-students-filter-label" for="admin-students-teacher-select">Professor</label>
-                <div class="admin-students-select-wrap">
-                  <select id="admin-students-teacher-select" class="admin-students-select" data-admin-students-teacher>
-                    <option value="">Selecione um professor…</option>
-                  </select>
-                  <span class="admin-students-select-arrow" aria-hidden="true">▼</span>
-                </div>
-              </div>
-            </header>
+	              <div class="admin-students-actions">
+	                <button class="button button-outline button-small" type="button" data-admin-students-filters-trigger>
+	                  Filtros
+	                  <span class="admin-students-filters-badge" data-admin-students-filters-badge hidden>0</span>
+	                </button>
+	                <button class="button button-solid button-small" type="button" data-admin-new-user="student">
+	                  + Criar novo aluno
+	                </button>
+	              </div>
+	            </header>
 
-            <div class="admin-students-status" data-admin-students-status aria-live="polite"></div>
+	            <div class="admin-students-status" data-admin-students-status aria-live="polite"></div>
 
-            <article class="surface-card admin-students-card" aria-label="Lista de alunos">
-              <div class="admin-students-list" data-admin-students-list></div>
-              <div class="admin-students-empty" data-admin-students-empty hidden>Selecione um professor para ver os alunos.</div>
-              <div class="admin-students-error" data-admin-students-error hidden>Não foi possível carregar os alunos.</div>
-            </article>
-          </div>
+	            <article class="surface-card admin-students-card" aria-label="Lista de alunos">
+	              <div class="admin-students-list" data-admin-students-list></div>
+	              <div class="admin-students-empty" data-admin-students-empty hidden>Nenhum aluno encontrado.</div>
+	              <div class="admin-students-error" data-admin-students-error hidden>Não foi possível carregar os alunos.</div>
+	            </article>
+	          </div>
 
           <div class="admin-students-drawer" data-admin-student-history-drawer hidden>
             <div class="admin-students-drawer-backdrop" data-admin-student-history-close></div>
