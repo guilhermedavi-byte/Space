@@ -9365,6 +9365,14 @@ body.is-modal-open {
   font-size: 12px;
 }
 
+.admin-create-textarea {
+  height: auto;
+  min-height: 92px;
+  padding: 12px 14px;
+  line-height: 1.4;
+  resize: vertical;
+}
+
 .auth-forgot {
   display: flex;
   justify-content: flex-end;
