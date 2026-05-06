@@ -8790,7 +8790,12 @@ const fetchUserRowsFromFirestore = async (tipo) => {
     const endereco = typeof data.endereco === "string" ? data.endereco : typeof data.address === "string" ? data.address : "";
     const estadoEua = typeof data.estadoEua === "string" ? data.estadoEua : typeof data.estadoEUA === "string" ? data.estadoEUA : typeof data.usState === "string" ? data.usState : "";
     const valorMensalidade = Number.isFinite(Number(data.valorMensalidade)) ? Number(data.valorMensalidade) : data.valorMensalidade ?? null;
-    const tempoContrato = typeof data.tempoContrato === "string" ? data.tempoContrato : "";
+	    const tempoContrato =
+	      typeof data.tempoContrato === "string"
+	        ? data.tempoContrato
+	        : Number.isFinite(Number(data.tempoContrato))
+	          ? String(Number(data.tempoContrato))
+	          : "";
     const faixaIdade = typeof data.faixaIdade === "string" ? data.faixaIdade : "";
     const genero = typeof data.genero === "string" ? data.genero : "";
     const trabalho = typeof data.trabalho === "string" ? data.trabalho : "";
@@ -9202,17 +9207,18 @@ const renderAdminStudentSheet = () => {
     "";
 
   const endereco = String(alunoMeta?.endereco || "").trim();
-  const estadoEua = String(alunoMeta?.estadoEua || "").trim();
-  const valorMensalidade = alunoMeta?.valorMensalidade;
-  const tempoContrato = String(alunoMeta?.tempoContrato || "").trim();
-  const faixaIdade = String(alunoMeta?.faixaIdade || "").trim();
-  const genero = String(alunoMeta?.genero || "").trim();
-  const trabalho = String(alunoMeta?.trabalho || "").trim();
+	  const estadoEua = String(alunoMeta?.estadoEua || "").trim();
+	  const valorMensalidade = alunoMeta?.valorMensalidade;
+	  const tempoContratoRaw = alunoMeta?.tempoContrato;
+	  const tempoContrato = Number.isFinite(Number(tempoContratoRaw)) ? String(Number(tempoContratoRaw)) : String(tempoContratoRaw || "").trim();
+	  const faixaIdade = String(alunoMeta?.faixaIdade || "").trim();
+	  const genero = String(alunoMeta?.genero || "").trim();
+	  const trabalho = String(alunoMeta?.trabalho || "").trim();
   const possuiFilhos = String(alunoMeta?.possuiFilhos || "").trim();
   const casado = String(alunoMeta?.casado || "").trim();
   const pretendeVoltarBrasil = String(alunoMeta?.pretendeVoltarBrasil || "").trim();
   const objetivoPrincipal = String(alunoMeta?.objetivoPrincipal || "").trim();
-  const nivelInglesAtual = String(alunoMeta?.nivelInglesAtual || "").trim();
+	  const nivelInglesAtual = String(alunoMeta?.nivelInglesAtual || "").trim();
 
   const initials = getInitials(alunoName);
   const nextLesson = getAdminStudentNextLessonLabel(hist.alunoId) || "Sem dados";
@@ -9236,7 +9242,39 @@ const renderAdminStudentSheet = () => {
     "Funcionário Construção",
     "Cuidador(a) de idosos",
   ];
-  const ageOptions = ["Menor de idade", "18-24", "25-29", "30-45", "46-59", "60+"];
+	  const ageOptions = ["Menor de idade", "18-24", "25-29", "30-45", "46-59", "60+"];
+	  const usStateOptions = [
+	    "Massachusetts",
+	    "New Jersey",
+	    "New York",
+	    "Florida",
+	    "Califórnia",
+	    "Texas",
+	    "Connecticut",
+	    "Rhode Island",
+	    "Pennsylvania",
+	    "Georgia",
+	    "Outro",
+	  ];
+
+	  const normalizeGeneroValue = (value) => {
+	    const v = String(value || "").trim().toLowerCase();
+	    if (v === "masculino" || v === "m") return "Masculino";
+	    if (v === "feminino" || v === "f") return "Feminino";
+	    return "";
+	  };
+
+	  const normalizeEnglishLevelValue = (value) => {
+	    const raw = String(value || "").trim();
+	    const low = raw.toLowerCase();
+	    // Back-compat: older values from previous versions.
+	    if (low === "iniciante") return "Pré A1";
+	    if (low === "basico" || low === "básico") return "A1";
+	    if (low === "intermediario" || low === "intermediário") return "B1";
+	    if (low === "avancado" || low === "avançado") return "B2";
+	    if (low === "fluente") return "C1";
+	    return raw;
+	  };
 
   const selectOptions = (opts, selected, emptyLabel = "Selecione…") =>
     [`<option value="">${escapeHtml(emptyLabel)}</option>`]
@@ -9263,15 +9301,18 @@ const renderAdminStudentSheet = () => {
       `<option value="nao_sabe" ${selected === "nao_sabe" ? "selected" : ""}>Não sabe</option>`,
     ].join("");
 
-  const englishOptions = (selected) =>
-    [
-      `<option value="">Selecione…</option>`,
-      `<option value="iniciante" ${selected === "iniciante" ? "selected" : ""}>Iniciante</option>`,
-      `<option value="basico" ${selected === "basico" ? "selected" : ""}>Básico</option>`,
-      `<option value="intermediario" ${selected === "intermediario" ? "selected" : ""}>Intermediário</option>`,
-      `<option value="avancado" ${selected === "avancado" ? "selected" : ""}>Avançado</option>`,
-      `<option value="fluente" ${selected === "fluente" ? "selected" : ""}>Fluente</option>`,
-    ].join("");
+	  const englishLevelOptionsList = ["Pré A1", "A1", "A1+", "A2", "A2+", "B1", "B1+", "B2", "B2+", "C1", "C2"];
+	  const englishOptions = (selectedRaw) => {
+	    const selected = normalizeEnglishLevelValue(selectedRaw);
+	    return [`<option value="">Selecione…</option>`]
+	      .concat(
+	        englishLevelOptionsList.map((v) => {
+	          const sel = String(selected || "") === String(v) ? "selected" : "";
+	          return `<option value="${escapeHtml(String(v))}" ${sel}>${escapeHtml(String(v))}</option>`;
+	        })
+	      )
+	      .join("");
+	  };
 
   sheetEl.innerHTML = `
     <div class="admin-student-sheet-grid">
@@ -9362,34 +9403,52 @@ const renderAdminStudentSheet = () => {
                           ${selectOptions(countryOptions, pais)}
                         </select>
                       </label>
-                      <label class="admin-student-field">
-                        <span>Estado dos EUA (opcional)</span>
-                        <input class="admin-student-input" type="text" data-admin-student-edit-field="estadoEua" value="${escapeHtml(estadoEua)}" />
-                      </label>
+	                      <label class="admin-student-field">
+	                        <span>Estado dos EUA (opcional)</span>
+	                        <select class="admin-student-input" data-admin-student-edit-field="estadoEua">
+	                          ${selectOptions(usStateOptions, estadoEua)}
+	                        </select>
+	                      </label>
                       <label class="admin-student-field">
                         <span>Valor de mensalidade</span>
                         <input class="admin-student-input" type="text" inputmode="decimal" data-admin-student-edit-field="valorMensalidade" value="${escapeHtml(
                           typeof valorMensalidade === "number" ? String(valorMensalidade) : String(valorMensalidade || "")
                         )}" />
                       </label>
-                      <label class="admin-student-field">
-                        <span>Tempo de contrato</span>
-                        <select class="admin-student-input" data-admin-student-edit-field="tempoContrato">
-                          ${selectOptions(["1_m", "3_m", "6_m", "12_m", "18_m", "24_m"], tempoContrato)}
-                        </select>
-                      </label>
+	                      ${(() => {
+	                        const contractVal = String(tempoContrato || "").trim();
+	                        const normalized = contractVal === "12" || contractVal === "6" ? contractVal : contractVal ? "custom" : "";
+	                        const customMonths = normalized === "custom" ? contractVal : "";
+	                        return `
+	                          <label class="admin-student-field">
+	                            <span>Tempo de contrato</span>
+	                            <select class="admin-student-input" data-admin-student-edit-field="tempoContrato">
+	                              <option value="">Selecione…</option>
+	                              <option value="12" ${normalized === "12" ? "selected" : ""}>12 meses</option>
+	                              <option value="6" ${normalized === "6" ? "selected" : ""}>6 meses</option>
+	                              <option value="custom" ${normalized === "custom" ? "selected" : ""}>Personalizar</option>
+	                            </select>
+	                          </label>
+	                          <label class="admin-student-field" data-admin-student-edit-contract-custom-wrap ${normalized === "custom" ? "" : "hidden"}>
+	                            <span>Tempo de contrato (meses)</span>
+	                            <input class="admin-student-input" type="number" inputmode="numeric" min="1" step="1" data-admin-student-edit-field="tempoContratoCustom" value="${escapeHtml(
+	                              customMonths
+	                            )}" />
+	                          </label>
+	                        `;
+	                      })()}
                       <label class="admin-student-field">
                         <span>Faixa de idade</span>
                         <select class="admin-student-input" data-admin-student-edit-field="faixaIdade">
                           ${selectOptions(ageOptions, faixaIdade)}
                         </select>
                       </label>
-                      <label class="admin-student-field">
-                        <span>Gênero</span>
-                        <select class="admin-student-input" data-admin-student-edit-field="genero">
-                          ${selectOptions(["feminino", "masculino", "nao_binario", "prefiro_nao_informar"], genero)}
-                        </select>
-                      </label>
+	                      <label class="admin-student-field">
+	                        <span>Gênero</span>
+	                        <select class="admin-student-input" data-admin-student-edit-field="genero">
+	                          ${selectOptions(["Masculino", "Feminino"], normalizeGeneroValue(genero))}
+	                        </select>
+	                      </label>
                       <label class="admin-student-field">
                         <span>Trabalho</span>
                         <select class="admin-student-input" data-admin-student-edit-field="trabalho">
@@ -10378,34 +10437,49 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
             <option value="Outro">Outro</option>
           </select>
           <div class="auth-inline-error" data-ac-country-error hidden>País obrigatório</div>
-        </label>
-        <label class="auth-field">
-          <span>Estado dos EUA (opcional)</span>
-          <input class="auth-input" type="text" autocomplete="address-level1" data-ac-us-state placeholder="Ex: Florida" />
-        </label>
-        <label class="auth-field">
-          <span>Valor de mensalidade</span>
-          <input class="auth-input" type="text" inputmode="decimal" autocomplete="off" data-ac-monthly placeholder="Ex: 299,00" />
-          <div class="auth-inline-hint">Aceita número ou formato monetário (ex.: 299,00).</div>
-          <div class="auth-inline-error" data-ac-monthly-error hidden>Informe um valor válido.</div>
-        </label>
-        <label class="auth-field">
-          <span>Tempo de contrato</span>
-          <select class="auth-input" data-ac-contract>
-            <option value="">Selecione…</option>
-            <option value="1_m">1 mês</option>
-            <option value="3_m">3 meses</option>
-            <option value="6_m">6 meses</option>
-            <option value="12_m">12 meses</option>
-            <option value="18_m">18 meses</option>
-            <option value="24_m">24 meses</option>
-          </select>
-          <div class="auth-inline-error" data-ac-contract-error hidden>Tempo de contrato obrigatório</div>
-        </label>
-        <label class="auth-field">
-          <span>Faixa de idade</span>
-          <select class="auth-input" data-ac-age-range>
-            <option value="">Selecione…</option>
+	        </label>
+	        <label class="auth-field">
+	          <span>Estado dos EUA (opcional)</span>
+	          <select class="auth-input" data-ac-us-state>
+	            <option value="">Selecione…</option>
+	            <option value="Massachusetts">Massachusetts</option>
+	            <option value="New Jersey">New Jersey</option>
+	            <option value="New York">New York</option>
+	            <option value="Florida">Florida</option>
+	            <option value="Califórnia">Califórnia</option>
+	            <option value="Texas">Texas</option>
+	            <option value="Connecticut">Connecticut</option>
+	            <option value="Rhode Island">Rhode Island</option>
+	            <option value="Pennsylvania">Pennsylvania</option>
+	            <option value="Georgia">Georgia</option>
+	            <option value="Outro">Outro</option>
+	          </select>
+	        </label>
+	        <label class="auth-field">
+	          <span>Valor de mensalidade</span>
+	          <input class="auth-input" type="text" inputmode="decimal" autocomplete="off" data-ac-monthly placeholder="Ex: 299,00" />
+	          <div class="auth-inline-hint">Aceita número ou formato monetário (ex.: 299,00).</div>
+	          <div class="auth-inline-error" data-ac-monthly-error hidden>Informe um valor válido.</div>
+	        </label>
+	        <label class="auth-field">
+	          <span>Tempo de contrato</span>
+	          <select class="auth-input" data-ac-contract>
+	            <option value="">Selecione…</option>
+	            <option value="12">12 meses</option>
+	            <option value="6">6 meses</option>
+	            <option value="custom">Personalizar</option>
+	          </select>
+	          <div class="auth-inline-error" data-ac-contract-error hidden>Tempo de contrato obrigatório</div>
+	        </label>
+	        <label class="auth-field" data-ac-contract-custom-wrap hidden>
+	          <span>Tempo de contrato (meses)</span>
+	          <input class="auth-input" type="number" inputmode="numeric" min="1" step="1" data-ac-contract-custom placeholder="Ex: 9" />
+	          <div class="auth-inline-error" data-ac-contract-custom-error hidden>Informe um número de meses.</div>
+	        </label>
+	        <label class="auth-field">
+	          <span>Faixa de idade</span>
+	          <select class="auth-input" data-ac-age-range>
+	            <option value="">Selecione…</option>
             <option value="Menor de idade">Menor de idade</option>
             <option value="18-24">18-24</option>
             <option value="25-29">25-29</option>
@@ -10414,18 +10488,16 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
             <option value="60+">60+</option>
           </select>
           <div class="auth-inline-error" data-ac-age-range-error hidden>Faixa de idade obrigatória</div>
-        </label>
-        <label class="auth-field">
-          <span>Gênero</span>
-          <select class="auth-input" data-ac-gender>
-            <option value="">Selecione…</option>
-            <option value="feminino">Feminino</option>
-            <option value="masculino">Masculino</option>
-            <option value="nao_binario">Não-binário</option>
-            <option value="prefiro_nao_informar">Prefiro não informar</option>
-          </select>
-          <div class="auth-inline-error" data-ac-gender-error hidden>Gênero obrigatório</div>
-        </label>
+	        </label>
+	        <label class="auth-field">
+	          <span>Gênero</span>
+	          <select class="auth-input" data-ac-gender>
+	            <option value="">Selecione…</option>
+	            <option value="Masculino">Masculino</option>
+	            <option value="Feminino">Feminino</option>
+	          </select>
+	          <div class="auth-inline-error" data-ac-gender-error hidden>Gênero obrigatório</div>
+	        </label>
         <label class="auth-field">
           <span>Trabalho</span>
           <select class="auth-input" data-ac-job>
@@ -10478,18 +10550,24 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
           <textarea class="auth-input admin-create-textarea" rows="3" data-ac-goal placeholder="Descreva o objetivo principal..."></textarea>
           <div class="auth-inline-error" data-ac-goal-error hidden>Objetivo obrigatório</div>
         </label>
-        <label class="auth-field">
-          <span>Nível de inglês atual</span>
-          <select class="auth-input" data-ac-english-level>
-            <option value="">Selecione…</option>
-            <option value="iniciante">Iniciante</option>
-            <option value="basico">Básico</option>
-            <option value="intermediario">Intermediário</option>
-            <option value="avancado">Avançado</option>
-            <option value="fluente">Fluente</option>
-          </select>
-          <div class="auth-inline-error" data-ac-english-level-error hidden>Nível obrigatório</div>
-        </label>
+	        <label class="auth-field">
+	          <span>Nível de inglês atual</span>
+	          <select class="auth-input" data-ac-english-level>
+	            <option value="">Selecione…</option>
+	            <option value="Pré A1">Pré A1</option>
+	            <option value="A1">A1</option>
+	            <option value="A1+">A1+</option>
+	            <option value="A2">A2</option>
+	            <option value="A2+">A2+</option>
+	            <option value="B1">B1</option>
+	            <option value="B1+">B1+</option>
+	            <option value="B2">B2</option>
+	            <option value="B2+">B2+</option>
+	            <option value="C1">C1</option>
+	            <option value="C2">C2</option>
+	          </select>
+	          <div class="auth-inline-error" data-ac-english-level-error hidden>Nível obrigatório</div>
+	        </label>
       `
       : "";
 
@@ -10558,10 +10636,12 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
       const addressEl = role === "student" ? form.querySelector("[data-ac-address]") : null;
       const planEl = role === "student" ? form.querySelector("[data-ac-plan]") : null;
       const countryEl = role === "student" ? form.querySelector("[data-ac-country]") : null;
-      const usStateEl = role === "student" ? form.querySelector("[data-ac-us-state]") : null;
-      const monthlyEl = role === "student" ? form.querySelector("[data-ac-monthly]") : null;
-      const contractEl = role === "student" ? form.querySelector("[data-ac-contract]") : null;
-      const ageEl = role === "student" ? form.querySelector("[data-ac-age-range]") : null;
+	      const usStateEl = role === "student" ? form.querySelector("[data-ac-us-state]") : null;
+	      const monthlyEl = role === "student" ? form.querySelector("[data-ac-monthly]") : null;
+	      const contractEl = role === "student" ? form.querySelector("[data-ac-contract]") : null;
+	      const contractCustomWrap = role === "student" ? form.querySelector("[data-ac-contract-custom-wrap]") : null;
+	      const contractCustomEl = role === "student" ? form.querySelector("[data-ac-contract-custom]") : null;
+	      const ageEl = role === "student" ? form.querySelector("[data-ac-age-range]") : null;
       const genderEl = role === "student" ? form.querySelector("[data-ac-gender]") : null;
       const jobEl = role === "student" ? form.querySelector("[data-ac-job]") : null;
       const kidsEl = role === "student" ? form.querySelector("[data-ac-has-kids]") : null;
@@ -10573,9 +10653,10 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
       const addressError = role === "student" ? form.querySelector("[data-ac-address-error]") : null;
       const planError = role === "student" ? form.querySelector("[data-ac-plan-error]") : null;
       const countryError = role === "student" ? form.querySelector("[data-ac-country-error]") : null;
-      const monthlyError = role === "student" ? form.querySelector("[data-ac-monthly-error]") : null;
-      const contractError = role === "student" ? form.querySelector("[data-ac-contract-error]") : null;
-      const ageError = role === "student" ? form.querySelector("[data-ac-age-range-error]") : null;
+	      const monthlyError = role === "student" ? form.querySelector("[data-ac-monthly-error]") : null;
+	      const contractError = role === "student" ? form.querySelector("[data-ac-contract-error]") : null;
+	      const contractCustomError = role === "student" ? form.querySelector("[data-ac-contract-custom-error]") : null;
+	      const ageError = role === "student" ? form.querySelector("[data-ac-age-range-error]") : null;
       const genderError = role === "student" ? form.querySelector("[data-ac-gender-error]") : null;
       const jobError = role === "student" ? form.querySelector("[data-ac-job-error]") : null;
       const kidsError = role === "student" ? form.querySelector("[data-ac-has-kids-error]") : null;
@@ -10612,10 +10693,13 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
         const plan = planEl instanceof HTMLSelectElement ? String(planEl.value || "").trim() : planEl instanceof HTMLInputElement ? planEl.value.trim() : "";
         const country =
           countryEl instanceof HTMLSelectElement ? String(countryEl.value || "").trim() : countryEl instanceof HTMLInputElement ? countryEl.value.trim() : "";
-        const monthlyRaw = monthlyEl instanceof HTMLInputElement ? monthlyEl.value.trim() : "";
-        monthlyValue = parseMoneyPtBrLoose(monthlyRaw);
-        const contract = contractEl instanceof HTMLSelectElement ? String(contractEl.value || "").trim() : "";
-        const ageRange = ageEl instanceof HTMLSelectElement ? String(ageEl.value || "").trim() : "";
+	        const monthlyRaw = monthlyEl instanceof HTMLInputElement ? monthlyEl.value.trim() : "";
+	        monthlyValue = parseMoneyPtBrLoose(monthlyRaw);
+	        const contract = contractEl instanceof HTMLSelectElement ? String(contractEl.value || "").trim() : "";
+	        const contractCustomRaw = contractCustomEl instanceof HTMLInputElement ? String(contractCustomEl.value || "").trim() : "";
+	        const contractCustomMonths = Number.parseInt(contractCustomRaw, 10);
+	        const contractMonths = contract === "12" ? 12 : contract === "6" ? 6 : contract === "custom" && Number.isFinite(contractCustomMonths) ? contractCustomMonths : 0;
+	        const ageRange = ageEl instanceof HTMLSelectElement ? String(ageEl.value || "").trim() : "";
         const gender = genderEl instanceof HTMLSelectElement ? String(genderEl.value || "").trim() : "";
         const job = jobEl instanceof HTMLSelectElement ? String(jobEl.value || "").trim() : jobEl instanceof HTMLInputElement ? jobEl.value.trim() : "";
         const hasKids = kidsEl instanceof HTMLSelectElement ? String(kidsEl.value || "").trim() : "";
@@ -10625,11 +10709,12 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
         const english = englishEl instanceof HTMLSelectElement ? String(englishEl.value || "").trim() : "";
 
         const addressOk = Boolean(address);
-        const planOk = Boolean(plan);
-        const countryOk = Boolean(country);
-        const monthlyOk = Number.isFinite(monthlyValue) && monthlyValue > 0;
-        const contractOk = Boolean(contract);
-        const ageOk = Boolean(ageRange);
+	        const planOk = Boolean(plan);
+	        const countryOk = Boolean(country);
+	        const monthlyOk = Number.isFinite(monthlyValue) && monthlyValue > 0;
+	        const contractOk = contractMonths > 0;
+	        const contractCustomOk = contract !== "custom" || contractMonths > 0;
+	        const ageOk = Boolean(ageRange);
         const genderOk = Boolean(gender);
         const jobOk = Boolean(job);
         const kidsOk = Boolean(hasKids);
@@ -10640,10 +10725,11 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
 
         if (addressError instanceof HTMLElement) addressError.hidden = addressOk;
         if (planError instanceof HTMLElement) planError.hidden = planOk;
-        if (countryError instanceof HTMLElement) countryError.hidden = countryOk;
-        if (monthlyError instanceof HTMLElement) monthlyError.hidden = monthlyOk;
-        if (contractError instanceof HTMLElement) contractError.hidden = contractOk;
-        if (ageError instanceof HTMLElement) ageError.hidden = ageOk;
+	        if (countryError instanceof HTMLElement) countryError.hidden = countryOk;
+	        if (monthlyError instanceof HTMLElement) monthlyError.hidden = monthlyOk;
+	        if (contractError instanceof HTMLElement) contractError.hidden = contractOk;
+	        if (contractCustomError instanceof HTMLElement) contractCustomError.hidden = contractCustomOk;
+	        if (ageError instanceof HTMLElement) ageError.hidden = ageOk;
         if (genderError instanceof HTMLElement) genderError.hidden = genderOk;
         if (jobError instanceof HTMLElement) jobError.hidden = jobOk;
         if (kidsError instanceof HTMLElement) kidsError.hidden = kidsOk;
@@ -10657,10 +10743,11 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
         };
         mark(addressEl, addressOk);
         mark(planEl, planOk);
-        mark(countryEl, countryOk);
-        mark(monthlyEl, monthlyOk);
-        mark(contractEl, contractOk);
-        mark(ageEl, ageOk);
+	        mark(countryEl, countryOk);
+	        mark(monthlyEl, monthlyOk);
+	        mark(contractEl, contractOk);
+	        mark(contractCustomEl, contractCustomOk);
+	        mark(ageEl, ageOk);
         mark(genderEl, genderOk);
         mark(jobEl, jobOk);
         mark(kidsEl, kidsOk);
@@ -10669,21 +10756,25 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
         mark(goalEl, goalOk);
         mark(englishEl, englishOk);
 
-        studentOk =
-          addressOk &&
-          planOk &&
-          countryOk &&
-          monthlyOk &&
-          contractOk &&
-          ageOk &&
-          genderOk &&
-          jobOk &&
-          kidsOk &&
-          marriedOk &&
-          returnOk &&
-          goalOk &&
-          englishOk;
-      }
+	        studentOk =
+	          addressOk &&
+	          planOk &&
+	          countryOk &&
+	          monthlyOk &&
+	          contractOk &&
+	          ageOk &&
+	          genderOk &&
+	          jobOk &&
+	          kidsOk &&
+	          marriedOk &&
+	          returnOk &&
+	          goalOk &&
+	          englishOk;
+
+	        if (contractCustomWrap instanceof HTMLElement) {
+	          contractCustomWrap.hidden = contract !== "custom";
+	        }
+	      }
 
       if (!nameOk || !emailOk || !passOk || !confirmOk || !studentOk) {
         if (errorEl instanceof HTMLElement) {
@@ -10728,11 +10819,19 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
                   : countryEl instanceof HTMLInputElement
                     ? String(countryEl.value || "").trim()
                     : "";
-              const estadoEua = usStateEl instanceof HTMLInputElement ? String(usStateEl.value || "").trim() : "";
-              const mensalidadeRaw = monthlyEl instanceof HTMLInputElement ? String(monthlyEl.value || "").trim() : "";
-              const valorMensalidade = parseMoneyPtBrLoose(mensalidadeRaw);
-              const tempoContrato = contractEl instanceof HTMLSelectElement ? String(contractEl.value || "").trim() : "";
-              const faixaIdade = ageEl instanceof HTMLSelectElement ? String(ageEl.value || "").trim() : "";
+	              const estadoEua =
+	                usStateEl instanceof HTMLSelectElement
+	                  ? String(usStateEl.value || "").trim()
+	                  : usStateEl instanceof HTMLInputElement
+	                    ? String(usStateEl.value || "").trim()
+	                    : "";
+	              const mensalidadeRaw = monthlyEl instanceof HTMLInputElement ? String(monthlyEl.value || "").trim() : "";
+	              const valorMensalidade = parseMoneyPtBrLoose(mensalidadeRaw);
+	              const contract = contractEl instanceof HTMLSelectElement ? String(contractEl.value || "").trim() : "";
+	              const contractCustomRaw = contractCustomEl instanceof HTMLInputElement ? String(contractCustomEl.value || "").trim() : "";
+	              const contractCustomMonths = Number.parseInt(contractCustomRaw, 10);
+	              const tempoContrato = contract === "12" ? 12 : contract === "6" ? 6 : contract === "custom" && Number.isFinite(contractCustomMonths) ? contractCustomMonths : 0;
+	              const faixaIdade = ageEl instanceof HTMLSelectElement ? String(ageEl.value || "").trim() : "";
               const genero = genderEl instanceof HTMLSelectElement ? String(genderEl.value || "").trim() : "";
               const trabalho =
                 jobEl instanceof HTMLSelectElement ? String(jobEl.value || "").trim() : jobEl instanceof HTMLInputElement ? String(jobEl.value || "").trim() : "";
@@ -10879,33 +10978,48 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
 	      if (passEl instanceof HTMLElement) passEl.classList.toggle("is-error", Boolean(password) && !passOk);
 		      if (confirmEl instanceof HTMLElement) confirmEl.classList.toggle("is-error", Boolean(confirm) && !confirmOk);
 
-          if (role === "student") {
-            const addressEl = form.querySelector("[data-ac-address]");
-            const planEl = form.querySelector("[data-ac-plan]");
-            const countryEl = form.querySelector("[data-ac-country]");
-            const monthlyEl = form.querySelector("[data-ac-monthly]");
-            const jobEl = form.querySelector("[data-ac-job]");
-            const goalEl = form.querySelector("[data-ac-goal]");
+	          if (role === "student") {
+	            const addressEl = form.querySelector("[data-ac-address]");
+	            const planEl = form.querySelector("[data-ac-plan]");
+	            const countryEl = form.querySelector("[data-ac-country]");
+	            const contractEl = form.querySelector("[data-ac-contract]");
+	            const contractCustomWrap = form.querySelector("[data-ac-contract-custom-wrap]");
+	            const contractCustomEl = form.querySelector("[data-ac-contract-custom]");
+	            const monthlyEl = form.querySelector("[data-ac-monthly]");
+	            const jobEl = form.querySelector("[data-ac-job]");
+	            const goalEl = form.querySelector("[data-ac-goal]");
 
-            const address = addressEl instanceof HTMLInputElement ? addressEl.value.trim() : "";
-            const plan = planEl instanceof HTMLInputElement ? planEl.value.trim() : "";
-            const country = countryEl instanceof HTMLInputElement ? countryEl.value.trim() : "";
-            const monthlyRaw = monthlyEl instanceof HTMLInputElement ? monthlyEl.value.trim() : "";
-            const monthlyOk = !monthlyRaw ? true : Number.isFinite(parseMoneyPtBrLoose(monthlyRaw)) && parseMoneyPtBrLoose(monthlyRaw) > 0;
-            const job = jobEl instanceof HTMLInputElement ? jobEl.value.trim() : "";
-            const goal = goalEl instanceof HTMLTextAreaElement ? goalEl.value.trim() : "";
+	            const address = addressEl instanceof HTMLInputElement ? addressEl.value.trim() : "";
+	            const plan =
+	              planEl instanceof HTMLSelectElement ? String(planEl.value || "").trim() : planEl instanceof HTMLInputElement ? planEl.value.trim() : "";
+	            const country =
+	              countryEl instanceof HTMLSelectElement ? String(countryEl.value || "").trim() : countryEl instanceof HTMLInputElement ? countryEl.value.trim() : "";
+	            const contract = contractEl instanceof HTMLSelectElement ? String(contractEl.value || "").trim() : "";
+	            const contractCustomRaw = contractCustomEl instanceof HTMLInputElement ? String(contractCustomEl.value || "").trim() : "";
+	            const contractCustomMonths = Number.parseInt(contractCustomRaw, 10);
+	            const contractMonths = contract === "12" ? 12 : contract === "6" ? 6 : contract === "custom" && Number.isFinite(contractCustomMonths) ? contractCustomMonths : 0;
+	            const monthlyRaw = monthlyEl instanceof HTMLInputElement ? monthlyEl.value.trim() : "";
+	            const monthlyOk = !monthlyRaw ? true : Number.isFinite(parseMoneyPtBrLoose(monthlyRaw)) && parseMoneyPtBrLoose(monthlyRaw) > 0;
+	            const job = jobEl instanceof HTMLInputElement ? jobEl.value.trim() : "";
+	            const goal = goalEl instanceof HTMLTextAreaElement ? goalEl.value.trim() : "";
 
-            if (addressEl instanceof HTMLElement) addressEl.classList.toggle("is-error", Boolean(addressEl instanceof HTMLInputElement && addressEl.value) && !Boolean(address));
-            if (planEl instanceof HTMLElement) planEl.classList.toggle("is-error", Boolean((planEl instanceof HTMLSelectElement || planEl instanceof HTMLInputElement) && planEl.value) && !Boolean(plan));
-            if (countryEl instanceof HTMLElement) countryEl.classList.toggle("is-error", Boolean((countryEl instanceof HTMLSelectElement || countryEl instanceof HTMLInputElement) && countryEl.value) && !Boolean(country));
-            if (monthlyEl instanceof HTMLElement) monthlyEl.classList.toggle("is-error", Boolean(monthlyRaw) && !monthlyOk);
-            if (jobEl instanceof HTMLElement) jobEl.classList.toggle("is-error", Boolean((jobEl instanceof HTMLSelectElement || jobEl instanceof HTMLInputElement) && jobEl.value) && !Boolean(job));
-            if (goalEl instanceof HTMLElement) goalEl.classList.toggle("is-error", Boolean(goalEl instanceof HTMLTextAreaElement && goalEl.value) && !Boolean(goal));
-          }
+	            if (addressEl instanceof HTMLElement) addressEl.classList.toggle("is-error", Boolean(addressEl instanceof HTMLInputElement && addressEl.value) && !Boolean(address));
+	            if (planEl instanceof HTMLElement) planEl.classList.toggle("is-error", Boolean((planEl instanceof HTMLSelectElement || planEl instanceof HTMLInputElement) && planEl.value) && !Boolean(plan));
+	            if (countryEl instanceof HTMLElement) countryEl.classList.toggle("is-error", Boolean((countryEl instanceof HTMLSelectElement || countryEl instanceof HTMLInputElement) && countryEl.value) && !Boolean(country));
+	            if (contractCustomWrap instanceof HTMLElement) contractCustomWrap.hidden = contract !== "custom";
+	            if (contractEl instanceof HTMLElement)
+	              contractEl.classList.toggle("is-error", Boolean(contractEl instanceof HTMLSelectElement && contractEl.value) && !(contractMonths > 0));
+	            if (contractCustomEl instanceof HTMLElement)
+	              contractCustomEl.classList.toggle("is-error", contract === "custom" && Boolean(contractCustomRaw) && !(contractMonths > 0));
+	            if (monthlyEl instanceof HTMLElement) monthlyEl.classList.toggle("is-error", Boolean(monthlyRaw) && !monthlyOk);
+	            if (jobEl instanceof HTMLElement) jobEl.classList.toggle("is-error", Boolean((jobEl instanceof HTMLSelectElement || jobEl instanceof HTMLInputElement) && jobEl.value) && !Boolean(job));
+	            if (goalEl instanceof HTMLElement) goalEl.classList.toggle("is-error", Boolean(goalEl instanceof HTMLTextAreaElement && goalEl.value) && !Boolean(goal));
+	          }
 		    };
 
-	    form.addEventListener("input", validate);
-	    form.addEventListener(
+		    form.addEventListener("input", validate);
+		    form.addEventListener("change", validate);
+		    form.addEventListener(
 	      "blur",
 	      () => {
 	        validate();
@@ -11596,12 +11710,22 @@ document.addEventListener("click", (event) => {
         const endereco = readText("endereco");
         const plano = readText("plano");
         const pais = readText("pais");
-        const estadoEua = readText("estadoEua");
-        const valorMensalidadeRaw = readText("valorMensalidade");
-        const valorMensalidade = parseMoneyPtBrLoose(valorMensalidadeRaw);
-        const tempoContrato = readText("tempoContrato");
-        const faixaIdade = readText("faixaIdade");
-        const genero = readText("genero");
+	        const estadoEua = readText("estadoEua");
+	        const valorMensalidadeRaw = readText("valorMensalidade");
+	        const valorMensalidade = parseMoneyPtBrLoose(valorMensalidadeRaw);
+	        const tempoContratoSel = readText("tempoContrato");
+	        const tempoContratoCustomRaw = readText("tempoContratoCustom");
+	        const tempoContratoCustom = Number.parseInt(String(tempoContratoCustomRaw || ""), 10);
+	        const tempoContrato =
+	          tempoContratoSel === "12"
+	            ? 12
+	            : tempoContratoSel === "6"
+	              ? 6
+	              : tempoContratoSel === "custom" && Number.isFinite(tempoContratoCustom) && tempoContratoCustom > 0
+	                ? tempoContratoCustom
+	                : 0;
+	        const faixaIdade = readText("faixaIdade");
+	        const genero = readText("genero");
         const trabalho = readText("trabalho");
         const possuiFilhos = readText("possuiFilhos");
         const casado = readText("casado");
@@ -11611,17 +11735,18 @@ document.addEventListener("click", (event) => {
 
         // Clear previous errors.
         setErr("");
-        [
-          "nome",
-          "email",
-          "endereco",
-          "plano",
-          "pais",
-          "valorMensalidade",
-          "tempoContrato",
-          "faixaIdade",
-          "genero",
-          "trabalho",
+	        [
+	          "nome",
+	          "email",
+	          "endereco",
+	          "plano",
+	          "pais",
+	          "valorMensalidade",
+	          "tempoContrato",
+	          "tempoContratoCustom",
+	          "faixaIdade",
+	          "genero",
+	          "trabalho",
           "possuiFilhos",
           "casado",
           "pretendeVoltarBrasil",
@@ -11632,16 +11757,17 @@ document.addEventListener("click", (event) => {
         const emailOk = isValidEmail(email);
         const monthlyOk = Number.isFinite(valorMensalidade) && valorMensalidade > 0;
 
-        const required = [
-          ["nome", Boolean(nome)],
-          ["email", emailOk],
-          ["endereco", Boolean(endereco)],
-          ["plano", Boolean(plano)],
-          ["pais", Boolean(pais)],
-          ["valorMensalidade", monthlyOk],
-          ["tempoContrato", Boolean(tempoContrato)],
-          ["faixaIdade", Boolean(faixaIdade)],
-          ["genero", Boolean(genero)],
+	        const contractOk = tempoContrato > 0;
+	        const required = [
+	          ["nome", Boolean(nome)],
+	          ["email", emailOk],
+	          ["endereco", Boolean(endereco)],
+	          ["plano", Boolean(plano)],
+	          ["pais", Boolean(pais)],
+	          ["valorMensalidade", monthlyOk],
+	          ["tempoContrato", contractOk],
+	          ["faixaIdade", Boolean(faixaIdade)],
+	          ["genero", Boolean(genero)],
           ["trabalho", Boolean(trabalho)],
           ["possuiFilhos", Boolean(possuiFilhos)],
           ["casado", Boolean(casado)],
@@ -11650,16 +11776,19 @@ document.addEventListener("click", (event) => {
           ["nivelInglesAtual", Boolean(nivelInglesAtual)],
         ];
 
-        const missing = required.filter(([, ok]) => !ok).map(([k]) => k);
-        if (!alunoId) {
-          setErr("Não foi possível identificar o aluno para salvar.");
-          return;
-        }
-        if (missing.length) {
-          missing.forEach((k) => markError(k, true));
-          setErr("Preencha os campos obrigatórios para salvar.");
-          return;
-        }
+	        const missing = required.filter(([, ok]) => !ok).map(([k]) => k);
+	        if (!alunoId) {
+	          setErr("Não foi possível identificar o aluno para salvar.");
+	          return;
+	        }
+	        if (missing.length) {
+	          missing.forEach((k) => markError(k, true));
+	          if (tempoContratoSel === "custom" && !contractOk) {
+	            markError("tempoContratoCustom", true);
+	          }
+	          setErr("Preencha os campos obrigatórios para salvar.");
+	          return;
+	        }
 
         // Async save (merge) to avoid losing unknown fields.
         studentEditSave.disabled = true;
@@ -12478,6 +12607,20 @@ document.addEventListener("change", (event) => {
   });
 
   markPedagogicoDirty();
+});
+
+// Admin > Alunos: student sheet edit form - toggle "Tempo de contrato (meses)" when Personalizar is selected.
+document.addEventListener("change", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLSelectElement)) return;
+  if (!target.matches('[data-admin-student-edit-field="tempoContrato"]')) return;
+
+  const form = target.closest("[data-admin-student-edit-form]");
+  if (!(form instanceof HTMLElement)) return;
+  const wrap = form.querySelector("[data-admin-student-edit-contract-custom-wrap]");
+  if (!(wrap instanceof HTMLElement)) return;
+  const isCustom = String(target.value || "") === "custom";
+  wrap.hidden = !isCustom;
 });
 
 document.addEventListener("keydown", (event) => {
