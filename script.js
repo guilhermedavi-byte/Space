@@ -7948,7 +7948,8 @@ const loadFirebaseAdminApi = () => {
     import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"),
     import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js"),
     import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"),
-  ]).then(([appMod, authMod, fsMod]) => {
+    import("https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js"),
+  ]).then(([appMod, authMod, fsMod, storageMod]) => {
     const getOrInitApp = (name) => {
       try {
         return name ? appMod.getApp(name) : appMod.getApp();
@@ -7964,12 +7965,14 @@ const loadFirebaseAdminApi = () => {
     const secondaryAuth = authMod.getAuth(secondaryApp);
     const primaryDb = fsMod.getFirestore(primaryApp);
     const secondaryDb = fsMod.getFirestore(secondaryApp);
+    const primaryStorage = storageMod.getStorage(primaryApp);
 
     return {
       primaryAuth,
       secondaryAuth,
       primaryDb,
       secondaryDb,
+      primaryStorage,
       createUserWithEmailAndPassword: authMod.createUserWithEmailAndPassword,
       sendPasswordResetEmail: authMod.sendPasswordResetEmail,
       onAuthStateChanged: authMod.onAuthStateChanged,
@@ -7985,6 +7988,10 @@ const loadFirebaseAdminApi = () => {
 	      deleteDoc: fsMod.deleteDoc,
 	      serverTimestamp: fsMod.serverTimestamp,
 	      where: fsMod.where,
+      ref: storageMod.ref,
+      uploadBytes: storageMod.uploadBytes,
+      getDownloadURL: storageMod.getDownloadURL,
+      deleteObject: storageMod.deleteObject,
 	    };
 	  });
 
@@ -8235,6 +8242,306 @@ const normalizeRiskLabel = (value) => {
   if (s === "medio" || s === "médio") return "Médio";
   if (s === "alto") return "Alto";
   return "";
+};
+
+// Admin > Alunos: student files (Storage + Firestore metadata)
+const ADMIN_STUDENT_FILE_EXTS = ["pdf", "doc", "docx", "png", "jpg", "jpeg"];
+const MAX_STUDENT_FILE_BYTES = 25 * 1024 * 1024; // 25MB hard cap to prevent accidental huge uploads.
+
+const normalizeFileExt = (name) => {
+  const n = String(name || "");
+  const idx = n.lastIndexOf(".");
+  if (idx < 0) return "";
+  return n.slice(idx + 1).trim().toLowerCase();
+};
+
+const sanitizeStorageFileName = (name) => {
+  const raw = String(name || "").trim();
+  if (!raw) return "arquivo";
+  // Keep extension, replace unsafe chars.
+  const parts = raw.split(".");
+  const ext = parts.length > 1 ? parts.pop() : "";
+  const base = parts.join(".") || "arquivo";
+  const safeBase = base
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9._ -]/g, "")
+    .trim()
+    .replace(/\s+/g, "_")
+    .slice(0, 80);
+  const safeExt = ext ? ext.replace(/[^a-zA-Z0-9]/g, "").slice(0, 10) : "";
+  return safeExt ? `${safeBase}.${safeExt}` : safeBase;
+};
+
+const isAllowedStudentFile = (file) => {
+  if (!(file instanceof File)) return { ok: false, reason: "Arquivo inválido." };
+  const ext = normalizeFileExt(file.name);
+  if (!ext || !ADMIN_STUDENT_FILE_EXTS.includes(ext)) return { ok: false, reason: "Tipo de arquivo não permitido." };
+  if (file.size > MAX_STUDENT_FILE_BYTES) return { ok: false, reason: "Arquivo muito grande." };
+  return { ok: true, ext };
+};
+
+const createStudentFileId = () => `sf_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+
+const formatIsoToAdminStamp = (iso) => {
+  if (!iso) return "—";
+  try {
+    const d = new Date(String(iso));
+    if (!(d instanceof Date) || Number.isNaN(d.getTime())) return "—";
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const yy = String(d.getFullYear());
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mi = String(d.getMinutes()).padStart(2, "0");
+    return `${dd}/${mm}/${yy} • ${hh}:${mi}`;
+  } catch {
+    return "—";
+  }
+};
+
+const readAdminStudentFilesFromFirestore = async ({ alunoId } = {}) => {
+  const id = String(alunoId || "").trim();
+  if (!id) return [];
+  const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_student_files");
+  const user = await waitForFirebaseAuthReady(firebase, 5000);
+  if (!user) {
+    const e = new Error("firebase_not_authenticated");
+    e.code = "auth/no-current-user";
+    throw e;
+  }
+
+  // Subcollection under users/{studentId}/files/{fileId}
+  const col = firebase.collection(firebase.primaryDb, "users", id, "files");
+  let snap;
+  try {
+    snap = await withTimeout(firebase.getDocs(firebase.query(col, firebase.orderBy("uploadedAt", "desc"))), 12_000, "firestore_student_files_list");
+  } catch (err) {
+    // fallback: if orderBy isn't available due to missing index/field, list without ordering.
+    snap = await withTimeout(firebase.getDocs(col), 12_000, "firestore_student_files_list_fallback");
+  }
+
+  const files = [];
+  snap.forEach((docSnap) => {
+    const data = docSnap.data ? docSnap.data() : null;
+    if (!data || typeof data !== "object") return;
+    const uploadedAtIso = data.uploadedAt ? (typeof data.uploadedAt?.toDate === "function" ? data.uploadedAt.toDate().toISOString() : String(data.uploadedAt)) : "";
+    files.push({
+      id: docSnap.id,
+      studentId: String(data.studentId || id),
+      fileName: String(data.fileName || ""),
+      fileType: String(data.fileType || ""),
+      fileSize: Number.isFinite(Number(data.fileSize)) ? Number(data.fileSize) : 0,
+      fileUrl: String(data.fileUrl || ""),
+      storagePath: String(data.storagePath || ""),
+      uploadedAt: uploadedAtIso,
+      uploadedBy: String(data.uploadedBy || ""),
+    });
+  });
+
+  // Ensure newest first if fallback was used.
+  files.sort((a, b) => String(b.uploadedAt || "").localeCompare(String(a.uploadedAt || "")));
+  return files;
+};
+
+const renderAdminStudentFilesTab = () => {
+  if (!(adminStudentHistoryDrawer instanceof HTMLElement)) return;
+  const sheetEl = document.querySelector("[data-admin-student-sheet]");
+  if (!(sheetEl instanceof HTMLElement)) return;
+
+  const panel = sheetEl.querySelector("[data-admin-student-files]") || sheetEl.querySelector('[data-admin-student-tab-panel="arquivos"]');
+  if (!(panel instanceof HTMLElement)) return;
+  const hist = adminStudentsState.history;
+  const alunoId = String(hist?.alunoId || "").trim();
+  const files = Array.isArray(hist?.files) ? hist.files : [];
+  const isLoading = Boolean(hist?.filesLoading);
+  const errorMsg = String(hist?.filesError || "");
+
+  const listHtml = isLoading
+    ? `<div class="admin-student-files-empty">Carregando arquivos…</div>`
+    : errorMsg
+      ? `<div class="admin-student-files-empty is-error">${escapeHtml(errorMsg)}</div>`
+      : files.length
+        ? `<div class="admin-student-files-list">
+            ${files
+              .map((f) => {
+                const ext = normalizeFileExt(f.fileName) || (f.fileType ? String(f.fileType).split("/").pop() : "");
+                const stamp = formatIsoToAdminStamp(f.uploadedAt);
+                const openDisabled = f.fileUrl ? "" : "disabled";
+                return `
+                  <div class="admin-student-file" data-admin-student-file="${escapeHtml(String(f.id))}">
+                    <div class="admin-student-file-main">
+                      <div class="admin-student-file-name">${escapeHtml(f.fileName || "Arquivo")}</div>
+                      <div class="admin-student-file-meta">
+                        <span>${escapeHtml((ext || "—").toUpperCase())}</span>
+                        <span class="admin-student-file-dot">•</span>
+                        <span>${escapeHtml(stamp)}</span>
+                        <span class="admin-student-file-dot">•</span>
+                        <span>${escapeHtml(formatBytes(f.fileSize || 0))}</span>
+                      </div>
+                    </div>
+                    <div class="admin-student-file-actions">
+                      <a class="admin-student-file-btn" href="${escapeHtml(f.fileUrl || "#")}" target="_blank" rel="noopener" ${openDisabled ? 'aria-disabled="true" tabindex="-1"' : ""}>Abrir</a>
+                      <a class="admin-student-file-btn" href="${escapeHtml(f.fileUrl || "#")}" download ${openDisabled ? 'aria-disabled="true" tabindex="-1"' : ""}>Baixar</a>
+                      <button class="admin-student-file-btn is-danger" type="button" data-admin-student-file-delete="${escapeHtml(String(f.id))}" data-admin-student-file-aluno="${escapeHtml(
+                  alunoId
+                )}">Excluir</button>
+                    </div>
+                  </div>
+                `;
+              })
+              .join("")}
+          </div>`
+        : `<div class="admin-student-files-empty">Nenhum arquivo.</div>`;
+
+  panel.innerHTML = `
+    <div class="admin-student-panel-card">
+      <div class="admin-student-panel-title">Arquivos</div>
+      <div class="admin-student-files-upload">
+        <div class="admin-student-upload-zone" data-admin-student-files-upload-zone role="button" tabindex="0">
+          <strong>Enviar arquivos</strong>
+          <span>PDF, DOC, DOCX, PNG, JPG, JPEG</span>
+        </div>
+        <input type="file" hidden multiple data-admin-student-files-input accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" />
+        <div class="admin-student-files-inline-error" data-admin-student-files-error hidden>—</div>
+      </div>
+      ${listHtml}
+    </div>
+  `;
+};
+
+const ensureAdminStudentFilesLoaded = async ({ force = false } = {}) => {
+  const hist = adminStudentsState.history;
+  const alunoId = String(hist?.alunoId || "").trim();
+  if (!alunoId) return;
+  if (!force && Array.isArray(hist?.files) && hist.filesLoadedAt && Date.now() - hist.filesLoadedAt < 30_000) return;
+
+  adminStudentsState.history.filesLoading = true;
+  adminStudentsState.history.filesError = "";
+  renderAdminStudentFilesTab();
+  try {
+    const files = await readAdminStudentFilesFromFirestore({ alunoId });
+    adminStudentsState.history.files = files;
+    adminStudentsState.history.filesLoadedAt = Date.now();
+  } catch (error) {
+    console.error("[admin] load student files failed:", error);
+    adminStudentsState.history.filesError = "Não foi possível carregar os arquivos.";
+  } finally {
+    adminStudentsState.history.filesLoading = false;
+    renderAdminStudentFilesTab();
+  }
+};
+
+const uploadAdminStudentFiles = async ({ alunoId, files } = {}) => {
+  const id = String(alunoId || "").trim();
+  const fileList = Array.isArray(files) ? files : [];
+  if (!id || !fileList.length) return;
+
+  const sheetEl = document.querySelector("[data-admin-student-sheet]");
+  const panel = sheetEl instanceof HTMLElement ? sheetEl.querySelector('[data-admin-student-tab-panel="arquivos"]') : null;
+  const inlineError = panel instanceof HTMLElement ? panel.querySelector("[data-admin-student-files-error]") : null;
+  const setInlineError = (msg) => {
+    if (!(inlineError instanceof HTMLElement)) return;
+    inlineError.textContent = String(msg || "");
+    inlineError.hidden = !msg;
+  };
+  setInlineError("");
+
+  const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_student_files_upload");
+  const user = await waitForFirebaseAuthReady(firebase, 5000);
+  if (!user) throw new Error("not-authenticated");
+
+  adminStudentsState.history.filesLoading = true;
+  renderAdminStudentFilesTab();
+
+  try {
+    for (const file of fileList) {
+      const check = isAllowedStudentFile(file);
+      if (!check.ok) {
+        setInlineError(check.reason || "Arquivo inválido.");
+        continue;
+      }
+
+      const fileId = createStudentFileId();
+      const safeName = sanitizeStorageFileName(file.name);
+      const storagePath = `student_files/${id}/${fileId}_${safeName}`;
+      const storageRef = firebase.ref(firebase.primaryStorage, storagePath);
+
+      await withTimeout(firebase.uploadBytes(storageRef, file), 30_000, "storage_upload_student_file");
+      const url = await withTimeout(firebase.getDownloadURL(storageRef), 12_000, "storage_get_url_student_file");
+
+      const metaDoc = firebase.doc(firebase.primaryDb, "users", id, "files", fileId);
+      const payload = {
+        studentId: id,
+        fileName: file.name,
+        fileUrl: url,
+        storagePath,
+        fileType: file.type || "",
+        fileSize: file.size || 0,
+        uploadedAt: firebase.serverTimestamp(),
+        uploadedBy: String(user.uid || ""),
+      };
+      await withTimeout(firebase.setDoc(metaDoc, payload, { merge: true }), 12_000, "firestore_student_file_meta");
+    }
+
+    await ensureAdminStudentFilesLoaded({ force: true });
+  } catch (error) {
+    console.error("[admin] upload student files failed:", error);
+    setInlineError("Não foi possível enviar agora.");
+  } finally {
+    adminStudentsState.history.filesLoading = false;
+    renderAdminStudentFilesTab();
+  }
+};
+
+const deleteAdminStudentFile = async ({ alunoId, fileId } = {}) => {
+  const id = String(alunoId || "").trim();
+  const fId = String(fileId || "").trim();
+  if (!id || !fId) return;
+
+  const hist = adminStudentsState.history;
+  const files = Array.isArray(hist?.files) ? hist.files : [];
+  const meta = files.find((f) => String(f?.id || "") === fId) || null;
+  const fileName = meta?.fileName || "este arquivo";
+  const storagePath = meta?.storagePath || "";
+
+  openModal({
+    title: "Excluir arquivo",
+    bodyHtml: `<div style="display:grid; gap:10px;">
+      <p style="margin:0; color: rgba(255,255,255,0.75); font-size: 13px; line-height: 1.45;">
+        Tem certeza que deseja excluir <strong>${escapeHtml(fileName)}</strong>?
+      </p>
+      <p style="margin:0; color: rgba(255,255,255,0.45); font-size: 12px; line-height: 1.45;">
+        O arquivo será removido do armazenamento e também do cadastro do aluno.
+      </p>
+    </div>`,
+    primaryLabel: "Excluir",
+    secondaryLabel: "Cancelar",
+    onPrimary: () => {
+      if (modalPrimary) modalPrimary.disabled = true;
+      if (modalSecondary) modalSecondary.disabled = true;
+      (async () => {
+        try {
+          const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_student_file_delete");
+          // Remove storage first (best effort), then metadata.
+          if (storagePath) {
+            try {
+              await withTimeout(firebase.deleteObject(firebase.ref(firebase.primaryStorage, storagePath)), 15_000, "storage_delete_student_file");
+            } catch (err) {
+              console.error("[admin] storage delete failed (continuing):", err);
+            }
+          }
+          await withTimeout(firebase.deleteDoc(firebase.doc(firebase.primaryDb, "users", id, "files", fId)), 12_000, "firestore_delete_student_file_meta");
+          closeModal();
+          await ensureAdminStudentFilesLoaded({ force: true });
+        } catch (error) {
+          console.error("[admin] delete student file failed:", error);
+          if (modalPrimary) modalPrimary.disabled = false;
+          if (modalSecondary) modalSecondary.disabled = false;
+        }
+      })();
+      return false;
+    },
+  });
 };
 
 const toDateKeyFromAny = (value) => {
@@ -9538,10 +9845,7 @@ const renderAdminStudentSheet = () => {
           </div>
 
           <div class="admin-student-tab-panel${activeTab === "arquivos" ? " is-active" : ""}" data-admin-student-tab-panel="arquivos" role="tabpanel">
-            <div class="admin-student-panel-card">
-              <div class="admin-student-panel-title">Arquivos</div>
-              <div class="admin-student-panel-empty">Nenhum arquivo.</div>
-            </div>
+            <div data-admin-student-files></div>
           </div>
         </div>
       </section>
@@ -9550,6 +9854,7 @@ const renderAdminStudentSheet = () => {
 
   // Always hydrate the history tab content so it's ready when the admin switches tabs.
   renderAdminStudentHistoryTab();
+  renderAdminStudentFilesTab();
 };
 
 const syncAdminStudentSheetTabs = () => {
@@ -9963,6 +10268,10 @@ const openAdminStudentHistoryDrawer = async ({ alunoId, teacherId } = {}) => {
       items,
       alunoMeta,
       teacherMeta,
+      files: [],
+      filesLoadedAt: 0,
+      filesLoading: false,
+      filesError: "",
     };
 
     if (adminStudentHistoryTitle instanceof HTMLElement) adminStudentHistoryTitle.textContent = "Ficha do aluno";
@@ -9973,6 +10282,8 @@ const openAdminStudentHistoryDrawer = async ({ alunoId, teacherId } = {}) => {
     }
 
     renderAdminStudentSheet();
+    // Preload files so the "Arquivos" tab is instant.
+    ensureAdminStudentFilesLoaded({ force: false }).catch(() => {});
 
     adminStudentHistoryDrawer.hidden = false;
     window.requestAnimationFrame(() => {
@@ -9992,17 +10303,21 @@ const closeAdminStudentHistoryDrawer = () => {
       if (adminStudentHistoryDrawer instanceof HTMLElement) adminStudentHistoryDrawer.hidden = true;
     }, 220);
   }
-	  adminStudentsState.history = {
-	    isOpen: false,
-	    alunoId: "",
-	    activeTab: "overview",
-	    editMode: false,
-	    filter: "all",
-	    items: [],
-	    alunoMeta: null,
-	    teacherMeta: null,
-	  };
-	};
+		  adminStudentsState.history = {
+		    isOpen: false,
+		    alunoId: "",
+		    activeTab: "overview",
+		    editMode: false,
+		    filter: "all",
+		    items: [],
+		    alunoMeta: null,
+		    teacherMeta: null,
+        files: [],
+        filesLoadedAt: 0,
+        filesLoading: false,
+        filesError: "",
+		  };
+		};
 
 
 const closeAllAdminActionMenus = () => {
@@ -11636,6 +11951,9 @@ document.addEventListener("click", (event) => {
         if (next) {
           adminStudentsState.history.activeTab = next;
           syncAdminStudentSheetTabs();
+          if (next === "arquivos") {
+            ensureAdminStudentFilesLoaded({ force: false }).catch(() => {});
+          }
         }
         return;
       }
@@ -11896,6 +12214,17 @@ document.addEventListener("click", (event) => {
           openAdminStudentHistoryDrawer({ alunoId });
           return;
         }
+      }
+
+      const fileDeleteBtn = target.closest("[data-admin-student-file-delete]");
+      if (fileDeleteBtn instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const alunoId = String(fileDeleteBtn.getAttribute("data-admin-student-file-aluno") || "").trim();
+        const fileId = String(fileDeleteBtn.getAttribute("data-admin-student-file-delete") || "").trim();
+        if (alunoId && fileId) {
+          deleteAdminStudentFile({ alunoId, fileId }).catch(() => {});
+        }
+        return;
       }
 
       const goalOpen = target.closest("[data-admin-growth-goal-open]");
@@ -12561,6 +12890,37 @@ document.addEventListener("click", (event) => {
   if (!(target instanceof Element) || !target.closest("[data-chart-dropdown]")) {
     closeAllDropdowns();
   }
+});
+
+// Admin > Alunos: student files upload (delegated, so it works after re-render).
+document.addEventListener("click", (event) => {
+  if (currentRole !== "admin") return;
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  const zone = target.closest("[data-admin-student-files-upload-zone]");
+  if (!(zone instanceof HTMLElement)) return;
+
+  const sheetEl = document.querySelector("[data-admin-student-sheet]");
+  if (!(sheetEl instanceof HTMLElement)) return;
+  const input = sheetEl.querySelector("[data-admin-student-files-input]");
+  if (!(input instanceof HTMLInputElement)) return;
+
+  event.preventDefault();
+  input.click();
+});
+
+document.addEventListener("change", (event) => {
+  if (currentRole !== "admin") return;
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement)) return;
+  if (!target.matches("[data-admin-student-files-input]")) return;
+
+  const alunoId = String(adminStudentsState.history?.alunoId || "").trim();
+  const files = Array.from(target.files || []);
+  target.value = "";
+  if (!alunoId || !files.length) return;
+
+  uploadAdminStudentFiles({ alunoId, files }).catch(() => {});
 });
 
 // Pedagogico drawer: status switch re-renders the dynamic fields area (no hidden/pre-rendered blocks).

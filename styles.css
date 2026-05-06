@@ -4733,6 +4733,140 @@ body:not([data-role="admin"]) [data-admin-only] {
   color: rgba(255, 255, 255, 0.55);
 }
 
+/* Admin > Alunos: Arquivos tab */
+.admin-student-files-upload {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-student-upload-zone {
+  border-radius: 16px;
+  border: 1px dashed rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.02);
+  padding: 14px 14px;
+  display: grid;
+  gap: 6px;
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+
+.admin-student-upload-zone:hover {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(89, 144, 189, 0.3);
+}
+
+.admin-student-upload-zone strong {
+  font-size: 13px;
+  font-weight: 850;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.admin-student-upload-zone span {
+  font-size: 12px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.admin-student-files-inline-error {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 78, 70, 0.22);
+  background: rgba(255, 78, 70, 0.08);
+  color: rgba(255, 78, 70, 0.9);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.admin-student-files-empty {
+  font-size: 13px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.55);
+  padding: 12px 2px 2px;
+}
+
+.admin-student-files-empty.is-error {
+  color: rgba(255, 118, 110, 0.96);
+}
+
+.admin-student-files-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.admin-student-file {
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+  padding: 12px 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.admin-student-file-name {
+  font-size: 13px;
+  font-weight: 850;
+  color: rgba(255, 255, 255, 0.92);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-student-file-meta {
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.52);
+}
+
+.admin-student-file-dot {
+  color: rgba(255, 255, 255, 0.22);
+}
+
+.admin-student-file-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.admin-student-file-btn {
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 12px;
+  font-weight: 850;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.admin-student-file-btn:hover,
+.admin-student-file-btn:focus-visible {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.admin-student-file-btn[aria-disabled="true"] {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.admin-student-file-btn.is-danger {
+  border-color: rgba(255, 78, 70, 0.25);
+  background: rgba(255, 78, 70, 0.08);
+  color: rgba(255, 78, 70, 0.92);
+}
+
 .admin-student-panel-note {
   font-size: 12px;
   font-weight: 650;
