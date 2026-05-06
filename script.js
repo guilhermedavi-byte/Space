@@ -9644,23 +9644,16 @@ const openAdminStudentsFiltersPopover = ({ triggerEl } = {}) => {
       .map((t) => `<option value="${escapeHtml(String(t.id))}">${escapeHtml(String(t.nome || "Professor"))}</option>`),
   ].join("");
 
-  const plans = new Set();
-  const countries = new Set();
-  (Array.isArray(adminStudentsState.summariesAll) ? adminStudentsState.summariesAll : []).forEach((r) => {
-    const p = String(r?.plano || "").trim();
-    const c = String(r?.pais || "").trim();
-    if (p) plans.add(p);
-    if (c) countries.add(c);
-  });
+  // Fixed filter options (do not depend on what is currently loaded in Firestore).
+  // This prevents the select from being disabled when there are no rows yet.
+  const planOptionsList = ["Turma", "Gold", "Diamond"];
+  const countryOptionsList = ["Brasil", "EUA", "Canadá", "Reino Unido", "Outro"];
+
   const planOptions = [`<option value="">Qualquer plano</option>`]
-    .concat(Array.from(plans).sort((a, b) => a.localeCompare(b, "pt-BR")).map((p) => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`))
+    .concat(planOptionsList.map((p) => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`))
     .join("");
   const countryOptions = [`<option value="">Qualquer país</option>`]
-    .concat(
-      Array.from(countries)
-        .sort((a, b) => a.localeCompare(b, "pt-BR"))
-        .map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`)
-    )
+    .concat(countryOptionsList.map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`))
     .join("");
 
   const pop = document.createElement("div");
@@ -9701,14 +9694,14 @@ const openAdminStudentsFiltersPopover = ({ triggerEl } = {}) => {
 
     <div class="admin-students-filters-row">
       <label>Plano</label>
-      <select data-admin-students-filter="plan" ${plans.size ? "" : "disabled"}>
+      <select data-admin-students-filter="plan">
         ${planOptions}
       </select>
     </div>
 
     <div class="admin-students-filters-row">
       <label>País</label>
-      <select data-admin-students-filter="country" ${countries.size ? "" : "disabled"}>
+      <select data-admin-students-filter="country">
         ${countryOptions}
       </select>
     </div>
