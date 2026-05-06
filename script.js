@@ -10010,12 +10010,24 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
         </label>
         <label class="auth-field">
           <span>Plano</span>
-          <input class="auth-input" type="text" autocomplete="off" data-ac-plan placeholder="Ex: Gold" />
+          <select class="auth-input" data-ac-plan>
+            <option value="">Selecione…</option>
+            <option value="Turma">Turma</option>
+            <option value="Gold">Gold</option>
+            <option value="Diamond">Diamond</option>
+          </select>
           <div class="auth-inline-error" data-ac-plan-error hidden>Plano obrigatório</div>
         </label>
         <label class="auth-field">
           <span>País</span>
-          <input class="auth-input" type="text" autocomplete="country-name" data-ac-country placeholder="Ex: Brasil" />
+          <select class="auth-input" data-ac-country>
+            <option value="">Selecione…</option>
+            <option value="Brasil">Brasil</option>
+            <option value="EUA">EUA</option>
+            <option value="Canadá">Canadá</option>
+            <option value="Reino Unido">Reino Unido</option>
+            <option value="Outro">Outro</option>
+          </select>
           <div class="auth-inline-error" data-ac-country-error hidden>País obrigatório</div>
         </label>
         <label class="auth-field">
@@ -10045,12 +10057,12 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
           <span>Faixa de idade</span>
           <select class="auth-input" data-ac-age-range>
             <option value="">Selecione…</option>
-            <option value="ate_17">Até 17</option>
-            <option value="18_24">18–24</option>
-            <option value="25_34">25–34</option>
-            <option value="35_44">35–44</option>
-            <option value="45_54">45–54</option>
-            <option value="55_plus">55+</option>
+            <option value="Menor de idade">Menor de idade</option>
+            <option value="18-24">18-24</option>
+            <option value="25-29">25-29</option>
+            <option value="30-45">30-45</option>
+            <option value="46-59">46-59</option>
+            <option value="60+">60+</option>
           </select>
           <div class="auth-inline-error" data-ac-age-range-error hidden>Faixa de idade obrigatória</div>
         </label>
@@ -10067,7 +10079,21 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
         </label>
         <label class="auth-field">
           <span>Trabalho</span>
-          <input class="auth-input" type="text" autocomplete="organization-title" data-ac-job />
+          <select class="auth-input" data-ac-job>
+            <option value="">Selecione…</option>
+            <option value="Empresário">Empresário</option>
+            <option value="Micro Empreendedor Limpeza">Micro Empreendedor Limpeza</option>
+            <option value="Micro Empreendedor Construção">Micro Empreendedor Construção</option>
+            <option value="Cuida do lar">Cuida do lar</option>
+            <option value="Motorista de APP">Motorista de APP</option>
+            <option value="Restaurante/Supermercado">Restaurante/Supermercado</option>
+            <option value="Empreendedor Estética">Empreendedor Estética</option>
+            <option value="Multinacional/Emprego renda alta">Multinacional/Emprego renda alta</option>
+            <option value="Estudante">Estudante</option>
+            <option value="Funcionário Limpeza">Funcionário Limpeza</option>
+            <option value="Funcionário Construção">Funcionário Construção</option>
+            <option value="Cuidador(a) de idosos">Cuidador(a) de idosos</option>
+          </select>
           <div class="auth-inline-error" data-ac-job-error hidden>Trabalho obrigatório</div>
         </label>
         <label class="auth-field">
@@ -10234,14 +10260,15 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
       let monthlyValue = NaN;
       if (role === "student") {
         const address = addressEl instanceof HTMLInputElement ? addressEl.value.trim() : "";
-        const plan = planEl instanceof HTMLInputElement ? planEl.value.trim() : "";
-        const country = countryEl instanceof HTMLInputElement ? countryEl.value.trim() : "";
+        const plan = planEl instanceof HTMLSelectElement ? String(planEl.value || "").trim() : planEl instanceof HTMLInputElement ? planEl.value.trim() : "";
+        const country =
+          countryEl instanceof HTMLSelectElement ? String(countryEl.value || "").trim() : countryEl instanceof HTMLInputElement ? countryEl.value.trim() : "";
         const monthlyRaw = monthlyEl instanceof HTMLInputElement ? monthlyEl.value.trim() : "";
         monthlyValue = parseMoneyPtBrLoose(monthlyRaw);
         const contract = contractEl instanceof HTMLSelectElement ? String(contractEl.value || "").trim() : "";
         const ageRange = ageEl instanceof HTMLSelectElement ? String(ageEl.value || "").trim() : "";
         const gender = genderEl instanceof HTMLSelectElement ? String(genderEl.value || "").trim() : "";
-        const job = jobEl instanceof HTMLInputElement ? jobEl.value.trim() : "";
+        const job = jobEl instanceof HTMLSelectElement ? String(jobEl.value || "").trim() : jobEl instanceof HTMLInputElement ? jobEl.value.trim() : "";
         const hasKids = kidsEl instanceof HTMLSelectElement ? String(kidsEl.value || "").trim() : "";
         const married = marriedEl instanceof HTMLSelectElement ? String(marriedEl.value || "").trim() : "";
         const returnBr = returnEl instanceof HTMLSelectElement ? String(returnEl.value || "").trim() : "";
@@ -10344,15 +10371,22 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
 	          const payload = { nome: name, email, tipo: role, ativo: true, criadoEm: firebase.serverTimestamp() };
             if (role === "student") {
               const endereco = addressEl instanceof HTMLInputElement ? String(addressEl.value || "").trim() : "";
-              const plano = planEl instanceof HTMLInputElement ? String(planEl.value || "").trim() : "";
-              const pais = countryEl instanceof HTMLInputElement ? String(countryEl.value || "").trim() : "";
+              const plano =
+                planEl instanceof HTMLSelectElement ? String(planEl.value || "").trim() : planEl instanceof HTMLInputElement ? String(planEl.value || "").trim() : "";
+              const pais =
+                countryEl instanceof HTMLSelectElement
+                  ? String(countryEl.value || "").trim()
+                  : countryEl instanceof HTMLInputElement
+                    ? String(countryEl.value || "").trim()
+                    : "";
               const estadoEua = usStateEl instanceof HTMLInputElement ? String(usStateEl.value || "").trim() : "";
               const mensalidadeRaw = monthlyEl instanceof HTMLInputElement ? String(monthlyEl.value || "").trim() : "";
               const valorMensalidade = parseMoneyPtBrLoose(mensalidadeRaw);
               const tempoContrato = contractEl instanceof HTMLSelectElement ? String(contractEl.value || "").trim() : "";
               const faixaIdade = ageEl instanceof HTMLSelectElement ? String(ageEl.value || "").trim() : "";
               const genero = genderEl instanceof HTMLSelectElement ? String(genderEl.value || "").trim() : "";
-              const trabalho = jobEl instanceof HTMLInputElement ? String(jobEl.value || "").trim() : "";
+              const trabalho =
+                jobEl instanceof HTMLSelectElement ? String(jobEl.value || "").trim() : jobEl instanceof HTMLInputElement ? String(jobEl.value || "").trim() : "";
               const possuiFilhos = kidsEl instanceof HTMLSelectElement ? String(kidsEl.value || "").trim() : "";
               const casado = marriedEl instanceof HTMLSelectElement ? String(marriedEl.value || "").trim() : "";
               const pretendeVoltarBrasil = returnEl instanceof HTMLSelectElement ? String(returnEl.value || "").trim() : "";
@@ -10513,10 +10547,10 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
             const goal = goalEl instanceof HTMLTextAreaElement ? goalEl.value.trim() : "";
 
             if (addressEl instanceof HTMLElement) addressEl.classList.toggle("is-error", Boolean(addressEl instanceof HTMLInputElement && addressEl.value) && !Boolean(address));
-            if (planEl instanceof HTMLElement) planEl.classList.toggle("is-error", Boolean(planEl instanceof HTMLInputElement && planEl.value) && !Boolean(plan));
-            if (countryEl instanceof HTMLElement) countryEl.classList.toggle("is-error", Boolean(countryEl instanceof HTMLInputElement && countryEl.value) && !Boolean(country));
+            if (planEl instanceof HTMLElement) planEl.classList.toggle("is-error", Boolean((planEl instanceof HTMLSelectElement || planEl instanceof HTMLInputElement) && planEl.value) && !Boolean(plan));
+            if (countryEl instanceof HTMLElement) countryEl.classList.toggle("is-error", Boolean((countryEl instanceof HTMLSelectElement || countryEl instanceof HTMLInputElement) && countryEl.value) && !Boolean(country));
             if (monthlyEl instanceof HTMLElement) monthlyEl.classList.toggle("is-error", Boolean(monthlyRaw) && !monthlyOk);
-            if (jobEl instanceof HTMLElement) jobEl.classList.toggle("is-error", Boolean(jobEl instanceof HTMLInputElement && jobEl.value) && !Boolean(job));
+            if (jobEl instanceof HTMLElement) jobEl.classList.toggle("is-error", Boolean((jobEl instanceof HTMLSelectElement || jobEl instanceof HTMLInputElement) && jobEl.value) && !Boolean(job));
             if (goalEl instanceof HTMLElement) goalEl.classList.toggle("is-error", Boolean(goalEl instanceof HTMLTextAreaElement && goalEl.value) && !Boolean(goal));
           }
 		    };
