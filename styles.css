@@ -15221,3 +15221,591 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
     grid-template-columns: 1fr;
   }
 }
+
+/* Admin > Controle Pedagógico (gestão) */
+.admin-ped-shell {
+  width: 100%;
+  display: grid;
+  gap: 14px;
+}
+
+.admin-ped-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.admin-ped-title {
+  margin: 0;
+  font-family: "Inter", "Plus Jakarta Sans", "Avenir Next", sans-serif;
+  font-size: clamp(22px, 2.5vw, 28px);
+  font-weight: 750;
+  letter-spacing: -0.04em;
+  line-height: 1.12;
+  color: #ffffff;
+}
+
+.admin-ped-subtitle {
+  margin: 6px 0 0;
+  font-size: 13px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.52);
+  max-width: 66ch;
+}
+
+.admin-ped-metrics {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.admin-ped-metric {
+  padding: 14px 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.admin-ped-metric-label {
+  font-size: 11px;
+  font-weight: 750;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.admin-ped-metric-value {
+  margin-top: 8px;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: rgba(255, 255, 255, 0.92);
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-ped-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-ped-tab {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.02);
+  color: rgba(255, 255, 255, 0.62);
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.admin-ped-tab.is-active {
+  background: rgba(89, 144, 189, 0.14);
+  border-color: rgba(89, 144, 189, 0.3);
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.admin-ped-status {
+  min-height: 18px;
+  font-size: 13px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.58);
+  text-align: right;
+}
+
+.admin-ped-status[data-tone="error"] {
+  color: rgba(255, 118, 110, 0.96);
+}
+
+.admin-ped-panel {
+  display: none;
+}
+
+.admin-ped-panel.is-active {
+  display: block;
+}
+
+.admin-ped-surface {
+  padding: 14px;
+  overflow: hidden;
+}
+
+.admin-ped-filters {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  margin-bottom: 14px;
+}
+
+.admin-ped-filter {
+  display: grid;
+  gap: 6px;
+}
+
+.admin-ped-filter span {
+  font-size: 11px;
+  font-weight: 750;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.admin-ped-select {
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.92);
+  outline: none;
+}
+
+.admin-ped-select:focus {
+  border-color: rgba(89, 144, 189, 0.5);
+  box-shadow: 0 0 0 4px rgba(89, 144, 189, 0.12);
+}
+
+.admin-ped-agenda {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-ped-teacher-block {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.admin-ped-teacher-head {
+  padding: 12px 14px;
+  font-size: 13px;
+  font-weight: 850;
+  color: rgba(255, 255, 255, 0.9);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.admin-ped-week {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0;
+}
+
+.admin-ped-day-col {
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  min-height: 132px;
+}
+
+.admin-ped-day-col:last-child {
+  border-right: 0;
+}
+
+.admin-ped-day-head {
+  padding: 10px 12px;
+  font-size: 11px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.5);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.admin-ped-day-items {
+  padding: 10px 10px 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.admin-ped-day-empty {
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.22);
+  padding: 10px 0;
+  text-align: center;
+}
+
+.admin-ped-slot {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(14, 18, 28, 0.6);
+  border-radius: 14px;
+  padding: 10px 10px;
+  color: rgba(255, 255, 255, 0.9);
+  text-align: left;
+  cursor: pointer;
+  display: grid;
+  gap: 6px;
+}
+
+.admin-ped-slot:hover,
+.admin-ped-slot:focus-visible {
+  border-color: rgba(89, 144, 189, 0.32);
+  background: rgba(89, 144, 189, 0.08);
+}
+
+.admin-ped-slot-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.admin-ped-slot-time {
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: -0.01em;
+  color: rgba(255, 255, 255, 0.86);
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-ped-slot-badge {
+  font-size: 10px;
+  font-weight: 850;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.admin-ped-slot-badge.is-active {
+  border-color: rgba(93, 202, 165, 0.25);
+  background: rgba(93, 202, 165, 0.12);
+  color: rgba(93, 202, 165, 0.95);
+}
+
+.admin-ped-slot-badge.is-paused {
+  border-color: rgba(251, 191, 36, 0.22);
+  background: rgba(251, 191, 36, 0.1);
+  color: rgba(251, 191, 36, 0.95);
+}
+
+.admin-ped-slot-badge.is-ended {
+  border-color: rgba(148, 163, 184, 0.2);
+  background: rgba(148, 163, 184, 0.08);
+  color: rgba(203, 213, 225, 0.8);
+}
+
+.admin-ped-slot-title {
+  font-size: 13px;
+  font-weight: 850;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.admin-ped-slot-meta {
+  font-size: 12px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.admin-ped-empty,
+.admin-ped-error {
+  font-size: 13px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.52);
+  padding: 10px 2px;
+}
+
+.admin-ped-error {
+  color: rgba(255, 118, 110, 0.96);
+}
+
+.admin-ped-class-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 12px;
+}
+
+.admin-ped-class-row + .admin-ped-class-row {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.admin-ped-class-title {
+  font-size: 14px;
+  font-weight: 850;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.admin-ped-class-sub {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.52);
+}
+
+.admin-ped-class-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-ped-pill {
+  font-size: 10px;
+  font-weight: 850;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.66);
+}
+
+.admin-ped-pill.is-active {
+  border-color: rgba(93, 202, 165, 0.25);
+  background: rgba(93, 202, 165, 0.12);
+  color: rgba(93, 202, 165, 0.95);
+}
+
+.admin-ped-pill.is-paused {
+  border-color: rgba(251, 191, 36, 0.22);
+  background: rgba(251, 191, 36, 0.1);
+  color: rgba(251, 191, 36, 0.95);
+}
+
+.admin-ped-pill.is-ended {
+  border-color: rgba(148, 163, 184, 0.2);
+  background: rgba(148, 163, 184, 0.08);
+  color: rgba(203, 213, 225, 0.8);
+}
+
+.admin-ped-pill.is-plan {
+  border-color: rgba(89, 144, 189, 0.24);
+  background: rgba(89, 144, 189, 0.12);
+  color: rgba(89, 144, 189, 0.95);
+}
+
+.admin-ped-class-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.admin-ped-action {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.78);
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.admin-ped-action:hover,
+.admin-ped-action:focus-visible {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.admin-ped-action.is-muted {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.admin-ped-action.is-danger {
+  border-color: rgba(255, 78, 70, 0.22);
+  background: rgba(255, 78, 70, 0.08);
+  color: rgba(255, 78, 70, 0.95);
+}
+
+.admin-ped-teacher-row {
+  padding: 14px 12px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.admin-ped-teacher-row + .admin-ped-teacher-row {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.admin-ped-teacher-name {
+  font-size: 14px;
+  font-weight: 850;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.admin-ped-teacher-stats {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.52);
+}
+
+.admin-ped-conflict-row {
+  padding: 14px 12px;
+  display: grid;
+  gap: 6px;
+}
+
+.admin-ped-conflict-row + .admin-ped-conflict-row {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.admin-ped-conflict-title {
+  font-size: 13px;
+  font-weight: 850;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.admin-ped-conflict-sub {
+  font-size: 12px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.52);
+}
+
+.admin-ped-conflict-meta {
+  margin-top: 6px;
+  display: inline-flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.admin-ped-placeholder {
+  padding: 22px 16px;
+  text-align: center;
+}
+
+.admin-ped-placeholder-title {
+  font-size: 14px;
+  font-weight: 850;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.admin-ped-placeholder-sub {
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* Create/edit class modal */
+.admin-ped-modal {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-ped-modal-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.admin-ped-modal-field {
+  display: grid;
+  gap: 6px;
+}
+
+.admin-ped-modal-field > span {
+  font-size: 11px;
+  font-weight: 750;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.admin-ped-modal-input,
+.admin-ped-modal-select,
+.admin-ped-modal-textarea {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.92);
+  outline: none;
+  padding: 0 12px;
+  height: 40px;
+}
+
+.admin-ped-modal-textarea {
+  padding: 10px 12px;
+  height: auto;
+  min-height: 70px;
+  resize: vertical;
+}
+
+.admin-ped-modal-input:focus,
+.admin-ped-modal-select:focus,
+.admin-ped-modal-textarea:focus {
+  border-color: rgba(89, 144, 189, 0.5);
+  box-shadow: 0 0 0 4px rgba(89, 144, 189, 0.12);
+}
+
+.admin-ped-days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-ped-day {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.admin-ped-day input {
+  accent-color: rgba(89, 144, 189, 0.92);
+}
+
+.admin-ped-students-picker {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 10px 10px;
+  background: rgba(255, 255, 255, 0.02);
+  max-height: 200px;
+  overflow: auto;
+  display: grid;
+  gap: 8px;
+}
+
+.admin-ped-student {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.admin-ped-modal-error {
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 78, 70, 0.18);
+  background: rgba(255, 78, 70, 0.08);
+  color: rgba(255, 78, 70, 0.95);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+@media (max-width: 960px) {
+  .admin-ped-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-ped-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-ped-week {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-ped-day-col {
+    border-right: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .admin-ped-modal-row {
+    grid-template-columns: 1fr;
+  }
+}

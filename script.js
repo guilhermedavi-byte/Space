@@ -112,6 +112,19 @@ const adminStudentHistoryTitle = document.querySelector("[data-admin-student-his
 const adminStudentHistorySub = document.querySelector("[data-admin-student-history-sub]");
 // Drawer content was refactored to a unified "Ficha do aluno". The inner content is rendered dynamically.
 const adminStudentSheet = document.querySelector("[data-admin-student-sheet]");
+
+// Admin > Controle Pedagógico (gestão)
+const adminPedRoot = document.querySelector("[data-admin-pedagogico]");
+const adminPedStatus = document.querySelector("[data-admin-ped-status]");
+const adminPedAgenda = document.querySelector("[data-admin-ped-agenda]");
+const adminPedEmpty = document.querySelector("[data-admin-ped-empty]");
+const adminPedError = document.querySelector("[data-admin-ped-error]");
+const adminPedClasses = document.querySelector("[data-admin-ped-classes]");
+const adminPedEmptyClasses = document.querySelector("[data-admin-ped-empty-classes]");
+const adminPedTeachers = document.querySelector("[data-admin-ped-teachers]");
+const adminPedConflicts = document.querySelector("[data-admin-ped-conflicts]");
+const adminPedEmptyConflicts = document.querySelector("[data-admin-ped-empty-conflicts]");
+
 const modalOverlay = document.querySelector("[data-modal-overlay]");
 const modalTitle = document.querySelector("[data-modal-title]");
 const modalBody = document.querySelector("[data-modal-body]");
@@ -625,6 +638,43 @@ const syncRoleUI = () => {
           btn.addEventListener("click", () => {
             const role = sessionUser?.role || currentRole;
             navigateApp(panelPathForRole(role, "alunos"));
+          });
+        }
+
+        // Also ensure Admin sidebar contains "Controle Pedagógico" entry.
+        const existingPed = sidebarNav.querySelector('[data-panel-target="admin-controle-pedagogico"]');
+        if (!(existingPed instanceof HTMLButtonElement)) {
+          const btn = document.createElement("button");
+          btn.className = "sidebar-link";
+          btn.type = "button";
+          btn.setAttribute("data-panel-target", "admin-controle-pedagogico");
+          btn.setAttribute("data-admin-only", "");
+          btn.title = "Controle Pedagógico";
+          btn.innerHTML = `
+            <span class="sidebar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M9 5.5h8"></path>
+                <path d="M9 9h8"></path>
+                <path d="M9 12.5h8"></path>
+                <path d="M9 16h6"></path>
+                <path d="M7 4.5h-.6A2.9 2.9 0 0 0 3.5 7.4v11.2A2.9 2.9 0 0 0 6.4 21.5h11.2a2.9 2.9 0 0 0 2.9-2.9V7.4a2.9 2.9 0 0 0-2.9-2.9H17"></path>
+                <path d="M8.5 3.5h4a1 1 0 0 1 1 1v2h-6v-2a1 1 0 0 1 1-1Z"></path>
+              </svg>
+            </span>
+            <span class="sidebar-text">Controle Pedagógico</span>
+          `;
+          // Insert after "Alunos" when possible, otherwise after "Professores", otherwise append.
+          const after =
+            sidebarNav.querySelector('[data-panel-target="alunos"]') ||
+            sidebarNav.querySelector('[data-panel-target="professores"]');
+          if (after && after.parentNode === sidebarNav) {
+            after.insertAdjacentElement("afterend", btn);
+          } else {
+            sidebarNav.appendChild(btn);
+          }
+          btn.addEventListener("click", () => {
+            const role = sessionUser?.role || currentRole;
+            navigateApp(panelPathForRole(role, "admin-controle-pedagogico"));
           });
         }
       }
@@ -9887,6 +9937,1055 @@ const renderAdminStudentsPanel = async ({ force = false } = {}) => {
   renderAdminStudentsList();
 };
 
+// Admin > Controle Pedagógico (gestão de aulas recorrentes/templates)
+let adminPedagogicoState = {
+  isLoading: false,
+  loadedAt: 0,
+  teachers: [],
+  teachersById: new Map(),
+  students: [],
+  studentsById: new Map(),
+  classes: [],
+  filters: {
+    teacherId: "",
+    dow: "",
+    type: "",
+    studentId: "",
+    status: "",
+    plan: "",
+  },
+  activeTab: "agenda", // agenda | aulas | turmas | professores | conflitos
+  conflicts: [],
+};
+
+const setAdminPedagogicoStatus = (text, tone = "") => {
+  if (!(adminPedStatus instanceof HTMLElement)) return;
+  adminPedStatus.textContent = String(text || "");
+  adminPedStatus.dataset.tone = String(tone || "");
+};
+
+const normalizeClassType = (value) => {
+  const raw = String(value || "").trim().toLowerCase();
+  if (raw === "group" || raw === "grupo" || raw === "em_grupo") return "group";
+  return "individual";
+};
+
+const normalizeClassStatus = (value) => {
+  const raw = String(value || "").trim().toLowerCase();
+  if (raw === "paused" || raw === "pausada" || raw === "pausado") return "paused";
+  if (raw === "ended" || raw === "encerrada" || raw === "encerrado" || raw === "inativa" || raw === "inativo") return "ended";
+  return "active";
+};
+
+const normalizePlanKeyLoose = (value) => {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw) return "";
+  if (raw.includes("diamond")) return "diamond";
+  if (raw.includes("gold")) return "gold";
+  if (raw.includes("turma")) return "turma";
+  return raw;
+};
+
+const normalizeDaysOfWeek = (value) => {
+  const out = [];
+  const arr = Array.isArray(value) ? value : [];
+  arr.forEach((item) => {
+    const n = Number(item);
+    if (Number.isFinite(n) && n >= 0 && n <= 6) {
+      if (!out.includes(n)) out.push(n);
+      return;
+    }
+    const raw = String(item || "").trim().toLowerCase();
+    const map = {
+      mon: 1,
+      monday: 1,
+      seg: 1,
+      tue: 2,
+      tuesday: 2,
+      ter: 2,
+      wed: 3,
+      wednesday: 3,
+      qua: 3,
+      thu: 4,
+      thursday: 4,
+      qui: 4,
+      fri: 5,
+      friday: 5,
+      sex: 5,
+      sat: 6,
+      saturday: 6,
+      sab: 6,
+      dom: 0,
+      sun: 0,
+      sunday: 0,
+    };
+    const dow = map[raw];
+    if (dow != null && !out.includes(dow)) out.push(dow);
+  });
+  out.sort((a, b) => a - b);
+  return out;
+};
+
+const normalizeMinutesValue = (value) => {
+  if (typeof value === "number" && Number.isFinite(value)) return clampInt(Math.round(value), 0, 24 * 60, 0);
+  const raw = String(value || "").trim();
+  if (!raw) return 0;
+  if (/^\d{2}:\d{2}$/.test(raw)) {
+    const mins = timeToMinutes(raw);
+    return Number.isFinite(mins) ? clampInt(mins, 0, 24 * 60, 0) : 0;
+  }
+  const n = Number(raw);
+  return Number.isFinite(n) ? clampInt(Math.round(n), 0, 24 * 60, 0) : 0;
+};
+
+const normalizeClassRow = ({ id, data }) => {
+  const docId = String(id || "").trim();
+  const src = data && typeof data === "object" ? data : {};
+  if (!docId) return null;
+
+  const type = normalizeClassType(src.type);
+  const status = normalizeClassStatus(src.status);
+  const title = String(src.title || "").trim();
+  const teacherId = String(src.teacherId || src.professorId || "").trim();
+  const teacherName = String(src.teacherName || src.professorNome || src.professorName || "").trim();
+  const groupName = String(src.groupName || "").trim();
+  const plan = normalizePlanKeyLoose(src.plan || src.plano || "");
+  const daysOfWeek = normalizeDaysOfWeek(src.daysOfWeek || src.weekDays || src.diasSemana || []);
+  const startMin = normalizeMinutesValue(src.startMin ?? src.startTime ?? src.horaInicio);
+  const endMin = normalizeMinutesValue(src.endMin ?? src.endTime ?? src.horaFim);
+  const startDate = String(src.startDate || src.startDateKey || src.dateKey || "").trim();
+  const endDate = String(src.endDate || src.endDateKey || "").trim();
+
+  const studentIdsRaw = Array.isArray(src.studentIds) ? src.studentIds : Array.isArray(src.alunoIds) ? src.alunoIds : [];
+  const studentIds = studentIdsRaw.map((v) => String(v || "").trim()).filter(Boolean);
+  const studentNamesRaw = Array.isArray(src.studentNames) ? src.studentNames : Array.isArray(src.alunoNomes) ? src.alunoNomes : [];
+  const studentNames = studentNamesRaw.map((v) => String(v || "").trim()).filter(Boolean);
+
+  const createdAtMs = parseFirestoreDateToMs(src.createdAt || src.criadoEm);
+  const updatedAtMs = parseFirestoreDateToMs(src.updatedAt || src.atualizadoEm);
+
+  return {
+    id: docId,
+    type,
+    status,
+    title,
+    teacherId,
+    teacherName,
+    groupName,
+    plan,
+    daysOfWeek,
+    startMin,
+    endMin,
+    startDate: isValidDateKey(startDate) ? startDate : "",
+    endDate: isValidDateKey(endDate) ? endDate : "",
+    studentIds,
+    studentNames,
+    notes: String(src.notes || src.observacoes || "").trim(),
+    createdAtMs,
+    updatedAtMs,
+    createdBy: String(src.createdBy || "").trim(),
+    updatedBy: String(src.updatedBy || "").trim(),
+  };
+};
+
+const fetchClassesFromFirestore = async () => {
+  const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_pedagogico");
+  const user = await waitForFirebaseAuthReady(firebase, 5000);
+  if (!user) {
+    const e = new Error("firebase_not_authenticated");
+    e.code = "auth/no-current-user";
+    throw e;
+  }
+
+  const col = firebase.collection(firebase.primaryDb, "classes");
+  const snap = await withTimeout(firebase.getDocs(col), 12_000, "firestore_admin_classes_list");
+  const rows = [];
+  snap.forEach((docSnap) => {
+    const data = docSnap.data ? docSnap.data() : null;
+    const row = normalizeClassRow({ id: docSnap.id, data });
+    if (row) rows.push(row);
+  });
+  rows.sort((a, b) => {
+    const ta = String(a.teacherName || "").localeCompare(String(b.teacherName || ""), "pt-BR");
+    if (ta) return ta;
+    const sa = (a.startMin || 0) - (b.startMin || 0);
+    if (sa) return sa;
+    return String(a.id).localeCompare(String(b.id));
+  });
+  return rows;
+};
+
+const daysLabelShort = (dow) => {
+  const n = Number(dow);
+  if (n === 1) return "Seg";
+  if (n === 2) return "Ter";
+  if (n === 3) return "Qua";
+  if (n === 4) return "Qui";
+  if (n === 5) return "Sex";
+  if (n === 6) return "Sáb";
+  if (n === 0) return "Dom";
+  return "—";
+};
+
+const classesOverlap = (a, b) => {
+  const aStart = Number(a?.startMin) || 0;
+  const aEnd = Number(a?.endMin) || 0;
+  const bStart = Number(b?.startMin) || 0;
+  const bEnd = Number(b?.endMin) || 0;
+  return aStart < bEnd && bStart < aEnd;
+};
+
+const classDateRangesOverlap = (a, b) => {
+  const aStart = String(a?.startDate || "");
+  const aEnd = String(a?.endDate || "");
+  const bStart = String(b?.startDate || "");
+  const bEnd = String(b?.endDate || "");
+  const aTo = aEnd && isValidDateKey(aEnd) ? aEnd : "9999-12-31";
+  const bTo = bEnd && isValidDateKey(bEnd) ? bEnd : "9999-12-31";
+  const aFrom = aStart && isValidDateKey(aStart) ? aStart : "0000-01-01";
+  const bFrom = bStart && isValidDateKey(bStart) ? bStart : "0000-01-01";
+  return aFrom <= bTo && bFrom <= aTo;
+};
+
+const computeAdminPedagogicoConflicts = (classes) => {
+  const arr = Array.isArray(classes) ? classes : [];
+  const active = arr.filter((c) => c && normalizeClassStatus(c.status) !== "ended");
+  const conflicts = [];
+  for (let i = 0; i < active.length; i += 1) {
+    const a = active[i];
+    for (let j = i + 1; j < active.length; j += 1) {
+      const b = active[j];
+      if (!a || !b) continue;
+      if (!classDateRangesOverlap(a, b)) continue;
+      const aDays = new Set(Array.isArray(a.daysOfWeek) ? a.daysOfWeek : []);
+      const bDays = new Set(Array.isArray(b.daysOfWeek) ? b.daysOfWeek : []);
+      const hasDay = [...aDays].some((d) => bDays.has(d));
+      if (!hasDay) continue;
+      if (!classesOverlap(a, b)) continue;
+
+      const isTeacherConflict = a.teacherId && b.teacherId && a.teacherId === b.teacherId;
+      const aStudents = new Set(Array.isArray(a.studentIds) ? a.studentIds : []);
+      const bStudents = new Set(Array.isArray(b.studentIds) ? b.studentIds : []);
+      const sharedStudents = [...aStudents].filter((id) => bStudents.has(id));
+      const isStudentConflict = sharedStudents.length > 0;
+
+      if (!isTeacherConflict && !isStudentConflict) continue;
+
+      const reason = isTeacherConflict
+        ? "Professor com duas aulas no mesmo horário"
+        : "Aluno com duas aulas no mesmo horário";
+
+      conflicts.push({
+        reason,
+        teacherId: a.teacherId || b.teacherId || "",
+        classA: a,
+        classB: b,
+        sharedStudents,
+      });
+    }
+  }
+  return conflicts;
+};
+
+const adminPedagogicoFilteredClasses = () => {
+  const all = Array.isArray(adminPedagogicoState.classes) ? adminPedagogicoState.classes : [];
+  const f = adminPedagogicoState.filters || {};
+  const teacherId = String(f.teacherId || "").trim();
+  const dow = String(f.dow || "").trim();
+  const type = String(f.type || "").trim().toLowerCase();
+  const studentId = String(f.studentId || "").trim();
+  const status = String(f.status || "").trim().toLowerCase();
+  const plan = String(f.plan || "").trim().toLowerCase();
+
+  return all.filter((c) => {
+    if (!c) return false;
+    if (teacherId && String(c.teacherId || "") !== teacherId) return false;
+    if (dow) {
+      const n = Number(dow);
+      const days = Array.isArray(c.daysOfWeek) ? c.daysOfWeek : [];
+      if (!Number.isFinite(n) || !days.includes(n)) return false;
+    }
+    if (type && String(c.type || "") !== type) return false;
+    if (studentId) {
+      const ids = Array.isArray(c.studentIds) ? c.studentIds : [];
+      if (!ids.includes(studentId)) return false;
+    }
+    if (status && String(c.status || "") !== status) return false;
+    if (plan && String(c.plan || "").toLowerCase() !== plan) return false;
+    return true;
+  });
+};
+
+const renderAdminPedagogicoMetrics = () => {
+  const classes = Array.isArray(adminPedagogicoState.classes) ? adminPedagogicoState.classes : [];
+  const active = classes.filter((c) => normalizeClassStatus(c?.status) === "active");
+  const individual = classes.filter((c) => normalizeClassType(c?.type) === "individual");
+  const group = classes.filter((c) => normalizeClassType(c?.type) === "group");
+  const teacherIds = new Set(active.map((c) => String(c.teacherId || "")).filter(Boolean));
+  const conflicts = Array.isArray(adminPedagogicoState.conflicts) ? adminPedagogicoState.conflicts : [];
+
+  const setMetric = (key, value) => {
+    const el = document.querySelector(`[data-admin-ped-metric="${CSS.escape(String(key))}"]`);
+    if (el instanceof HTMLElement) el.textContent = value;
+  };
+  setMetric("active", active.length ? String(active.length) : "0");
+  setMetric("individual", individual.length ? String(individual.length) : "0");
+  setMetric("group", group.length ? String(group.length) : "0");
+  setMetric("teachers", teacherIds.size ? String(teacherIds.size) : "0");
+  setMetric("conflicts", conflicts.length ? String(conflicts.length) : "0");
+};
+
+const renderAdminPedagogicoTabs = () => {
+  const activeTab = String(adminPedagogicoState.activeTab || "agenda");
+  document.querySelectorAll("[data-admin-ped-tab]").forEach((btn) => {
+    if (!(btn instanceof HTMLButtonElement)) return;
+    const tab = String(btn.getAttribute("data-admin-ped-tab") || "");
+    const isActive = tab === activeTab;
+    btn.classList.toggle("is-active", isActive);
+    btn.setAttribute("aria-selected", isActive ? "true" : "false");
+  });
+
+  document.querySelectorAll("[data-admin-ped-panel]").forEach((panel) => {
+    if (!(panel instanceof HTMLElement)) return;
+    const name = String(panel.getAttribute("data-admin-ped-panel") || "");
+    const isActive = name === activeTab;
+    panel.classList.toggle("is-active", isActive);
+    panel.hidden = !isActive;
+  });
+};
+
+const renderAdminPedagogicoAgenda = () => {
+  if (!(adminPedAgenda instanceof HTMLElement)) return;
+  const classes = adminPedagogicoFilteredClasses();
+  if (adminPedError instanceof HTMLElement) adminPedError.hidden = true;
+
+  if (!classes.length) {
+    adminPedAgenda.innerHTML = "";
+    if (adminPedEmpty instanceof HTMLElement) adminPedEmpty.hidden = false;
+    return;
+  }
+  if (adminPedEmpty instanceof HTMLElement) adminPedEmpty.hidden = true;
+
+  const teachersById = adminPedagogicoState.teachersById instanceof Map ? adminPedagogicoState.teachersById : new Map();
+  const byTeacher = new Map();
+  classes.forEach((c) => {
+    const tid = String(c.teacherId || "");
+    if (!byTeacher.has(tid)) byTeacher.set(tid, []);
+    byTeacher.get(tid).push(c);
+  });
+
+  const sortedTeacherIds = [...byTeacher.keys()].sort((a, b) => {
+    const an = String(teachersById.get(a)?.nome || teachersById.get(a)?.name || "");
+    const bn = String(teachersById.get(b)?.nome || teachersById.get(b)?.name || "");
+    return an.localeCompare(bn, "pt-BR");
+  });
+
+  const days = [1, 2, 3, 4, 5, 6];
+  adminPedAgenda.innerHTML = sortedTeacherIds
+    .map((teacherId) => {
+      const teacher = teachersById.get(teacherId) || {};
+      const teacherName = String(teacher.nome || teacher.name || "Professor").trim() || "Professor";
+      const items = byTeacher.get(teacherId) || [];
+
+      const dayBuckets = new Map(days.map((d) => [d, []]));
+      items.forEach((c) => {
+        (Array.isArray(c.daysOfWeek) ? c.daysOfWeek : []).forEach((d) => {
+          if (!dayBuckets.has(d)) return;
+          dayBuckets.get(d).push(c);
+        });
+      });
+      days.forEach((d) => {
+        dayBuckets.get(d).sort((a, b) => (a.startMin || 0) - (b.startMin || 0));
+      });
+
+      const dayCols = days
+        .map((d) => {
+          const list = dayBuckets.get(d) || [];
+          const listHtml = list
+            .map((c) => {
+              const time = `${formatHmFromMinutes(c.startMin)}–${formatHmFromMinutes(c.endMin)}`;
+              const status = normalizeClassStatus(c.status);
+              const statusLabel = status === "active" ? "Ativa" : status === "paused" ? "Pausada" : "Encerrada";
+              const badgeClass = status === "active" ? "is-active" : status === "paused" ? "is-paused" : "is-ended";
+              const typeLabel = c.type === "group" ? "Grupo" : "Individual";
+              const who =
+                c.type === "group"
+                  ? `${(Array.isArray(c.studentIds) ? c.studentIds.length : 0) || 0} alunos`
+                  : (c.studentNames && c.studentNames[0]) || (c.studentIds && c.studentIds[0]) || "Aluno";
+              const plan = c.plan ? String(c.plan).toUpperCase() : "";
+              return `
+                <button class="admin-ped-slot" type="button" data-admin-ped-class-open="${escapeHtml(c.id)}">
+                  <div class="admin-ped-slot-top">
+                    <span class="admin-ped-slot-time">${escapeHtml(time)}</span>
+                    <span class="admin-ped-slot-badge ${badgeClass}">${escapeHtml(statusLabel)}</span>
+                  </div>
+                  <div class="admin-ped-slot-title">${escapeHtml(c.title || typeLabel)}</div>
+                  <div class="admin-ped-slot-meta">${escapeHtml(who)}${plan ? ` · ${escapeHtml(plan)}` : ""}</div>
+                </button>
+              `;
+            })
+            .join("");
+
+          return `
+            <div class="admin-ped-day-col">
+              <div class="admin-ped-day-head">${escapeHtml(daysLabelShort(d))}</div>
+              <div class="admin-ped-day-items">${listHtml || `<div class="admin-ped-day-empty">—</div>`}</div>
+            </div>
+          `;
+        })
+        .join("");
+
+      return `
+        <article class="admin-ped-teacher-block">
+          <header class="admin-ped-teacher-head">${escapeHtml(teacherName)}</header>
+          <div class="admin-ped-week">${dayCols}</div>
+        </article>
+      `;
+    })
+    .join("");
+};
+
+const renderAdminPedagogicoClassesList = () => {
+  if (!(adminPedClasses instanceof HTMLElement)) return;
+  const classes = adminPedagogicoFilteredClasses();
+  if (adminPedEmptyClasses instanceof HTMLElement) adminPedEmptyClasses.hidden = classes.length > 0;
+  adminPedClasses.innerHTML = classes
+    .map((c) => {
+      const typeLabel = c.type === "group" ? "Grupo" : "Individual";
+      const status = normalizeClassStatus(c.status);
+      const statusLabel = status === "active" ? "Ativa" : status === "paused" ? "Pausada" : "Encerrada";
+      const badgeClass = status === "active" ? "is-active" : status === "paused" ? "is-paused" : "is-ended";
+      const whenDays = (Array.isArray(c.daysOfWeek) ? c.daysOfWeek : []).map(daysLabelShort).join(", ");
+      const time = `${formatHmFromMinutes(c.startMin)}–${formatHmFromMinutes(c.endMin)}`;
+      const who =
+        c.type === "group"
+          ? `${(Array.isArray(c.studentIds) ? c.studentIds.length : 0) || 0} alunos`
+          : (c.studentNames && c.studentNames[0]) || (c.studentIds && c.studentIds[0]) || "Aluno";
+      return `
+        <div class="admin-ped-class-row">
+          <div class="admin-ped-class-main">
+            <div class="admin-ped-class-title">${escapeHtml(c.title || typeLabel)}</div>
+            <div class="admin-ped-class-sub">${escapeHtml(whenDays)} · ${escapeHtml(time)} · ${escapeHtml(who)}</div>
+          </div>
+          <div class="admin-ped-class-meta">
+            <span class="admin-ped-pill ${badgeClass}">${escapeHtml(statusLabel)}</span>
+            ${c.plan ? `<span class="admin-ped-pill is-plan">${escapeHtml(String(c.plan).toUpperCase())}</span>` : ""}
+          </div>
+          <div class="admin-ped-class-actions">
+            <button class="admin-ped-action" type="button" data-admin-ped-class-edit="${escapeHtml(c.id)}">Editar</button>
+            <button class="admin-ped-action is-muted" type="button" data-admin-ped-class-toggle="${escapeHtml(c.id)}">${status === "active" ? "Desativar" : "Ativar"}</button>
+            <button class="admin-ped-action is-danger" type="button" data-admin-ped-class-delete="${escapeHtml(c.id)}">Excluir</button>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+};
+
+const renderAdminPedagogicoTeachersPanel = () => {
+  if (!(adminPedTeachers instanceof HTMLElement)) return;
+  const teachers = Array.isArray(adminPedagogicoState.teachers) ? adminPedagogicoState.teachers : [];
+  const classes = Array.isArray(adminPedagogicoState.classes) ? adminPedagogicoState.classes : [];
+  const byTeacher = new Map();
+  classes.forEach((c) => {
+    const tid = String(c.teacherId || "");
+    if (!tid) return;
+    if (!byTeacher.has(tid)) byTeacher.set(tid, []);
+    byTeacher.get(tid).push(c);
+  });
+
+  adminPedTeachers.innerHTML = teachers
+    .slice()
+    .sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"))
+    .map((t) => {
+      const list = byTeacher.get(String(t.id || "")) || [];
+      const total = list.length;
+      const indiv = list.filter((c) => c.type === "individual").length;
+      const group = list.filter((c) => c.type === "group").length;
+      const students = new Set();
+      list.forEach((c) => (Array.isArray(c.studentIds) ? c.studentIds : []).forEach((id) => students.add(id)));
+      return `
+        <div class="admin-ped-teacher-row">
+          <div class="admin-ped-teacher-name">${escapeHtml(String(t.nome || "Professor"))}</div>
+          <div class="admin-ped-teacher-stats">
+            <span>${escapeHtml(String(total))} aulas</span>
+            <span>${escapeHtml(String(indiv))} individuais</span>
+            <span>${escapeHtml(String(group))} grupos</span>
+            <span>${escapeHtml(String(students.size))} alunos</span>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+};
+
+const renderAdminPedagogicoConflicts = () => {
+  if (!(adminPedConflicts instanceof HTMLElement)) return;
+  const conflicts = Array.isArray(adminPedagogicoState.conflicts) ? adminPedagogicoState.conflicts : [];
+  if (adminPedEmptyConflicts instanceof HTMLElement) adminPedEmptyConflicts.hidden = conflicts.length > 0;
+  adminPedConflicts.innerHTML = conflicts
+    .map((c) => {
+      const a = c.classA || {};
+      const b = c.classB || {};
+      const day = (() => {
+        const setA = new Set(Array.isArray(a.daysOfWeek) ? a.daysOfWeek : []);
+        const setB = new Set(Array.isArray(b.daysOfWeek) ? b.daysOfWeek : []);
+        const shared = [...setA].find((d) => setB.has(d));
+        return shared != null ? daysLabelShort(shared) : "—";
+      })();
+      const time = `${formatHmFromMinutes(a.startMin)}–${formatHmFromMinutes(a.endMin)}`;
+      return `
+        <div class="admin-ped-conflict-row">
+          <div class="admin-ped-conflict-title">${escapeHtml(c.reason || "Conflito")}</div>
+          <div class="admin-ped-conflict-sub">${escapeHtml(day)} · ${escapeHtml(time)}</div>
+          <div class="admin-ped-conflict-meta">
+            <button class="admin-ped-action" type="button" data-admin-ped-class-edit="${escapeHtml(a.id || "")}">Ver aula A</button>
+            <button class="admin-ped-action" type="button" data-admin-ped-class-edit="${escapeHtml(b.id || "")}">Ver aula B</button>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+};
+
+const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
+  if (currentRole !== "admin") return;
+  if (!(adminPedRoot instanceof HTMLElement)) return;
+  if (adminPedagogicoState.isLoading) return;
+
+  const now = Date.now();
+  if (!force && adminPedagogicoState.loadedAt && now - adminPedagogicoState.loadedAt < 45_000) {
+    renderAdminPedagogicoMetrics();
+    renderAdminPedagogicoTabs();
+    renderAdminPedagogicoAgenda();
+    renderAdminPedagogicoClassesList();
+    renderAdminPedagogicoTeachersPanel();
+    renderAdminPedagogicoConflicts();
+    return;
+  }
+
+  adminPedagogicoState.isLoading = true;
+  setAdminPedagogicoStatus("Carregando…");
+  if (adminPedError instanceof HTMLElement) adminPedError.hidden = true;
+
+  try {
+    const [teachers, students, classes] = await Promise.all([
+      fetchUserRowsFromFirestore("teacher"),
+      fetchUserRowsFromFirestore("student"),
+      fetchClassesFromFirestore(),
+    ]);
+
+    adminPedagogicoState.teachers = teachers.filter((t) => t && typeof t === "object");
+    adminPedagogicoState.teachersById = new Map(adminPedagogicoState.teachers.map((t) => [String(t.id || ""), t]));
+    adminPedagogicoState.students = students.filter((s) => s && typeof s === "object");
+    adminPedagogicoState.studentsById = new Map(adminPedagogicoState.students.map((s) => [String(s.id || ""), s]));
+    adminPedagogicoState.classes = Array.isArray(classes) ? classes : [];
+    adminPedagogicoState.conflicts = computeAdminPedagogicoConflicts(adminPedagogicoState.classes);
+    adminPedagogicoState.loadedAt = Date.now();
+
+    const teacherSelect = adminPedRoot.querySelector('[data-admin-ped-filter="teacherId"]');
+    if (teacherSelect instanceof HTMLSelectElement) {
+      const selected = String(adminPedagogicoState.filters.teacherId || "");
+      teacherSelect.innerHTML =
+        `<option value="">Todos</option>` +
+        adminPedagogicoState.teachers
+          .slice()
+          .sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"))
+          .map((t) => `<option value="${escapeHtml(String(t.id))}">${escapeHtml(String(t.nome || "Professor"))}</option>`)
+          .join("");
+      teacherSelect.value = selected;
+    }
+
+    const studentSelect = adminPedRoot.querySelector('[data-admin-ped-filter="studentId"]');
+    if (studentSelect instanceof HTMLSelectElement) {
+      const selected = String(adminPedagogicoState.filters.studentId || "");
+      studentSelect.innerHTML =
+        `<option value="">Todos</option>` +
+        adminPedagogicoState.students
+          .slice()
+          .sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"))
+          .map((s) => `<option value="${escapeHtml(String(s.id))}">${escapeHtml(String(s.nome || "Aluno"))}</option>`)
+          .join("");
+      studentSelect.value = selected;
+    }
+
+    setAdminPedagogicoStatus("");
+    renderAdminPedagogicoMetrics();
+    renderAdminPedagogicoTabs();
+    renderAdminPedagogicoAgenda();
+    renderAdminPedagogicoClassesList();
+    renderAdminPedagogicoTeachersPanel();
+    renderAdminPedagogicoConflicts();
+  } catch (error) {
+    console.error("[admin] controle-pedagogico load failed:", error);
+    setAdminPedagogicoStatus("Não foi possível carregar agora.", "error");
+    if (adminPedError instanceof HTMLElement) adminPedError.hidden = false;
+  } finally {
+    adminPedagogicoState.isLoading = false;
+  }
+};
+
+const findAdminPedClassById = (id) => {
+  const safe = String(id || "").trim();
+  if (!safe) return null;
+  const arr = Array.isArray(adminPedagogicoState.classes) ? adminPedagogicoState.classes : [];
+  return arr.find((c) => String(c?.id || "") === safe) || null;
+};
+
+const buildAdminPedDaysCheckboxesHtml = (selectedDays) => {
+  const set = new Set(Array.isArray(selectedDays) ? selectedDays : []);
+  const defs = [
+    { d: 1, label: "Seg" },
+    { d: 2, label: "Ter" },
+    { d: 3, label: "Qua" },
+    { d: 4, label: "Qui" },
+    { d: 5, label: "Sex" },
+    { d: 6, label: "Sáb" },
+  ];
+  return defs
+    .map(
+      (it) => `
+      <label class="admin-ped-day">
+        <input type="checkbox" value="${it.d}" ${set.has(it.d) ? "checked" : ""} data-admin-ped-day />
+        <span>${escapeHtml(it.label)}</span>
+      </label>
+    `
+    )
+    .join("");
+};
+
+const openAdminPedClassModal = ({ mode = "create", classRow = null } = {}) => {
+  const isEdit = mode === "edit" && classRow && classRow.id;
+  const row = classRow && typeof classRow === "object" ? classRow : null;
+
+  const teachers = Array.isArray(adminPedagogicoState.teachers) ? adminPedagogicoState.teachers : [];
+  const students = Array.isArray(adminPedagogicoState.students) ? adminPedagogicoState.students : [];
+
+  const teacherOptions =
+    `<option value="">Selecione...</option>` +
+    teachers
+      .slice()
+      .sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"))
+      .map((t) => `<option value="${escapeHtml(String(t.id))}">${escapeHtml(String(t.nome || "Professor"))}</option>`)
+      .join("");
+
+  const planOptions = `
+    <option value="">Selecione...</option>
+    <option value="turma">Turma</option>
+    <option value="gold">Gold</option>
+    <option value="diamond">Diamond</option>
+  `;
+
+  const statusOptions = `
+    <option value="active">Ativa</option>
+    <option value="paused">Pausada</option>
+    <option value="ended">Encerrada</option>
+  `;
+
+  const typeValue = isEdit ? normalizeClassType(row.type) : "individual";
+  const statusValue = isEdit ? normalizeClassStatus(row.status) : "active";
+  const teacherValue = isEdit ? String(row.teacherId || "") : "";
+  const planValue = isEdit ? normalizePlanKeyLoose(row.plan) : "";
+  const titleValue = isEdit ? String(row.title || "") : "";
+  const groupNameValue = isEdit ? String(row.groupName || "") : "";
+  const startDate = isEdit ? String(row.startDate || "") : createDateKey(new Date());
+  const endDate = isEdit ? String(row.endDate || "") : "";
+  const startTime = isEdit ? formatHmFromMinutes(row.startMin || 0) : "14:00";
+  const endTime = isEdit ? formatHmFromMinutes(row.endMin || 0) : "14:30";
+  const selectedDays = isEdit ? normalizeDaysOfWeek(row.daysOfWeek) : [1];
+  const selectedStudents = isEdit ? new Set((Array.isArray(row.studentIds) ? row.studentIds : []).map(String)) : new Set();
+
+  const studentsHtml = students
+    .slice()
+    .sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"))
+    .map((s) => {
+      const id = String(s.id || "");
+      const checked = selectedStudents.has(id);
+      return `
+        <label class="admin-ped-student">
+          <input type="checkbox" value="${escapeHtml(id)}" ${checked ? "checked" : ""} data-admin-ped-student />
+          <span>${escapeHtml(String(s.nome || "Aluno"))}</span>
+        </label>
+      `;
+    })
+    .join("");
+
+  openModal({
+    title: isEdit ? "Editar aula" : "Criar aula",
+    bodyHtml: `
+      <div class="admin-ped-modal" data-admin-ped-class-form>
+        <div class="admin-ped-modal-row">
+          <label class="admin-ped-modal-field">
+            <span>Tipo de aula</span>
+            <select class="admin-ped-modal-select" data-admin-ped-field="type">
+              <option value="individual">Individual</option>
+              <option value="group">Grupo</option>
+            </select>
+          </label>
+          <label class="admin-ped-modal-field">
+            <span>Professor</span>
+            <select class="admin-ped-modal-select" data-admin-ped-field="teacherId">
+              ${teacherOptions}
+            </select>
+          </label>
+        </div>
+
+        <label class="admin-ped-modal-field">
+          <span>Título (opcional)</span>
+          <input class="admin-ped-modal-input" type="text" data-admin-ped-field="title" placeholder="Ex: Conversação" />
+        </label>
+
+        <label class="admin-ped-modal-field admin-ped-modal-group" data-admin-ped-group-name>
+          <span>Nome da turma (somente grupo)</span>
+          <input class="admin-ped-modal-input" type="text" data-admin-ped-field="groupName" placeholder="Ex: Turma 01" />
+        </label>
+
+        <div class="admin-ped-modal-row">
+          <label class="admin-ped-modal-field">
+            <span>Plano</span>
+            <select class="admin-ped-modal-select" data-admin-ped-field="plan">
+              ${planOptions}
+            </select>
+          </label>
+          <label class="admin-ped-modal-field">
+            <span>Status</span>
+            <select class="admin-ped-modal-select" data-admin-ped-field="status">
+              ${statusOptions}
+            </select>
+          </label>
+        </div>
+
+        <div class="admin-ped-modal-field">
+          <span>Dias da semana</span>
+          <div class="admin-ped-days" data-admin-ped-days>
+            ${buildAdminPedDaysCheckboxesHtml(selectedDays)}
+          </div>
+        </div>
+
+        <div class="admin-ped-modal-row">
+          <label class="admin-ped-modal-field">
+            <span>Início</span>
+            <input class="admin-ped-modal-input" type="time" data-admin-ped-field="startTime" />
+          </label>
+          <label class="admin-ped-modal-field">
+            <span>Fim</span>
+            <input class="admin-ped-modal-input" type="time" data-admin-ped-field="endTime" />
+          </label>
+        </div>
+
+        <div class="admin-ped-modal-row">
+          <label class="admin-ped-modal-field">
+            <span>Data de início</span>
+            <input class="admin-ped-modal-input" type="date" data-admin-ped-field="startDate" />
+          </label>
+          <label class="admin-ped-modal-field">
+            <span>Data de término (opcional)</span>
+            <input class="admin-ped-modal-input" type="date" data-admin-ped-field="endDate" />
+          </label>
+        </div>
+
+        <div class="admin-ped-modal-field">
+          <span>Alunos</span>
+          <div class="admin-ped-students-picker" data-admin-ped-students>
+            ${studentsHtml || `<div class="admin-ped-students-empty">Nenhum aluno encontrado.</div>`}
+          </div>
+        </div>
+
+        <label class="admin-ped-modal-field">
+          <span>Observações (opcional)</span>
+          <textarea class="admin-ped-modal-textarea" data-admin-ped-field="notes" placeholder="Observações..."></textarea>
+        </label>
+
+        <div class="admin-ped-modal-error" data-admin-ped-error hidden></div>
+      </div>
+    `,
+    primaryLabel: isEdit ? "Salvar" : "Criar aula",
+    secondaryLabel: "Cancelar",
+    hideSecondary: false,
+    showTrash: false,
+    onPrimary: () => {
+      const form = modalBody?.querySelector("[data-admin-ped-class-form]");
+      if (!(form instanceof HTMLElement)) return false;
+      const errEl = form.querySelector("[data-admin-ped-error]");
+
+      const setErr = (msg) => {
+        if (!(errEl instanceof HTMLElement)) return;
+        errEl.textContent = String(msg || "");
+        errEl.hidden = !msg;
+      };
+
+      setErr("");
+
+      const read = (key) => {
+        const el = form.querySelector(`[data-admin-ped-field="${CSS.escape(String(key))}"]`);
+        if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) return String(el.value || "").trim();
+        return "";
+      };
+
+      const type = normalizeClassType(read("type"));
+      const teacherId = read("teacherId");
+      const title = read("title");
+      const groupName = read("groupName");
+      const plan = normalizePlanKeyLoose(read("plan"));
+      const status = normalizeClassStatus(read("status"));
+      const startDate = read("startDate");
+      const endDate = read("endDate");
+      const startMin = normalizeMinutesValue(read("startTime"));
+      const endMin = normalizeMinutesValue(read("endTime"));
+      const notes = read("notes");
+
+      const days = [];
+      form.querySelectorAll("[data-admin-ped-day]").forEach((el) => {
+        if (!(el instanceof HTMLInputElement)) return;
+        if (!el.checked) return;
+        const n = Number(el.value);
+        if (Number.isFinite(n)) days.push(n);
+      });
+
+      const studentIds = [];
+      form.querySelectorAll("[data-admin-ped-student]").forEach((el) => {
+        if (!(el instanceof HTMLInputElement)) return;
+        if (!el.checked) return;
+        const id = String(el.value || "").trim();
+        if (id) studentIds.push(id);
+      });
+
+      if (!teacherId) {
+        setErr("Selecione um professor para salvar.");
+        return false;
+      }
+      if (!studentIds.length) {
+        setErr(type === "group" ? "Selecione pelo menos 1 aluno para a turma." : "Selecione um aluno para a aula.");
+        return false;
+      }
+      if (type === "individual" && studentIds.length !== 1) {
+        setErr("A aula individual deve ter exatamente 1 aluno.");
+        return false;
+      }
+      if (!days.length) {
+        setErr("Selecione pelo menos um dia da semana.");
+        return false;
+      }
+      if (!isValidDateKey(startDate)) {
+        setErr("Selecione uma data de início válida.");
+        return false;
+      }
+      if (endDate && !isValidDateKey(endDate)) {
+        setErr("Selecione uma data de término válida ou deixe em branco.");
+        return false;
+      }
+      if (endDate && startDate > endDate) {
+        setErr("A data de término deve ser posterior à data de início.");
+        return false;
+      }
+      if (!startMin || !endMin || endMin <= startMin) {
+        setErr("O horário final deve ser maior que o horário inicial.");
+        return false;
+      }
+
+      const teacherName = String(adminPedagogicoState.teachersById?.get(teacherId)?.nome || "").trim();
+      const studentNames = studentIds
+        .map((id) => String(adminPedagogicoState.studentsById?.get(id)?.nome || "").trim())
+        .filter(Boolean);
+
+      const nextRow = {
+        id: isEdit ? row.id : `class_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
+        type,
+        title,
+        teacherId,
+        teacherName,
+        groupName,
+        plan,
+        status,
+        daysOfWeek: normalizeDaysOfWeek(days),
+        startMin,
+        endMin,
+        startDate,
+        endDate,
+        studentIds,
+        studentNames,
+        notes,
+      };
+
+      const all = Array.isArray(adminPedagogicoState.classes) ? adminPedagogicoState.classes : [];
+      const candidates = isEdit ? all.filter((c) => String(c.id || "") !== String(row.id)) : all;
+      const tempList = candidates.concat([nextRow]);
+      const conflicts = computeAdminPedagogicoConflicts(tempList);
+      const hit = conflicts.find((c) => {
+        const a = c.classA || {};
+        const b = c.classB || {};
+        return String(a.id || "") === String(nextRow.id) || String(b.id || "") === String(nextRow.id);
+      });
+      if (hit) {
+        setErr(`Conflito detectado: ${hit.reason}. Ajuste dias/horários para continuar.`);
+        return false;
+      }
+
+      if (modalPrimary) modalPrimary.disabled = true;
+      if (modalSecondary) modalSecondary.disabled = true;
+      const prev = modalPrimary?.textContent || "";
+      if (modalPrimary) modalPrimary.textContent = isEdit ? "Salvando…" : "Criando…";
+
+      (async () => {
+        try {
+          const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_pedagogico_save");
+          const user = await waitForFirebaseAuthReady(firebase, 5000);
+          if (!user) throw new Error("not_authenticated");
+
+          const docRef = firebase.doc(firebase.primaryDb, "classes", nextRow.id);
+          const payload = {
+            id: nextRow.id,
+            type: nextRow.type,
+            title: nextRow.title || "",
+            teacherId: nextRow.teacherId,
+            teacherName: nextRow.teacherName || "",
+            studentIds: nextRow.studentIds,
+            studentNames: nextRow.studentNames,
+            groupName: nextRow.groupName || "",
+            plan: nextRow.plan || "",
+            daysOfWeek: nextRow.daysOfWeek,
+            startMin: nextRow.startMin,
+            endMin: nextRow.endMin,
+            startDate: nextRow.startDate,
+            endDate: nextRow.endDate || "",
+            status: nextRow.status,
+            notes: nextRow.notes || "",
+            updatedBy: String(user.uid || ""),
+            updatedAt: firebase.serverTimestamp(),
+            ...(isEdit ? null : { createdBy: String(user.uid || ""), createdAt: firebase.serverTimestamp() }),
+          };
+
+          await withTimeout(firebase.setDoc(docRef, payload, { merge: true }), 12_000, "firestore_admin_pedagogico_class_merge");
+          closeModal();
+          await renderAdminControlePedagogicoPanel({ force: true });
+        } catch (e) {
+          console.error("[admin] controle-pedagogico save failed:", e);
+          setErr("Não foi possível salvar agora.");
+        } finally {
+          if (modalPrimary) modalPrimary.disabled = false;
+          if (modalSecondary) modalSecondary.disabled = false;
+          if (modalPrimary) modalPrimary.textContent = prev || (isEdit ? "Salvar" : "Criar aula");
+        }
+      })();
+
+      return false;
+    },
+    onSecondary: () => true,
+  });
+
+  window.setTimeout(() => {
+    const form = modalBody?.querySelector("[data-admin-ped-class-form]");
+    if (!(form instanceof HTMLElement)) return;
+    const typeSel = form.querySelector('[data-admin-ped-field="type"]');
+    const teacherSel = form.querySelector('[data-admin-ped-field="teacherId"]');
+    const planSel = form.querySelector('[data-admin-ped-field="plan"]');
+    const statusSel = form.querySelector('[data-admin-ped-field="status"]');
+    const startDateEl = form.querySelector('[data-admin-ped-field="startDate"]');
+    const endDateEl = form.querySelector('[data-admin-ped-field="endDate"]');
+    const startTimeEl = form.querySelector('[data-admin-ped-field="startTime"]');
+    const endTimeEl = form.querySelector('[data-admin-ped-field="endTime"]');
+    const titleEl = form.querySelector('[data-admin-ped-field="title"]');
+    const groupNameEl = form.querySelector('[data-admin-ped-field="groupName"]');
+    const notesEl = form.querySelector('[data-admin-ped-field="notes"]');
+
+    if (typeSel instanceof HTMLSelectElement) typeSel.value = typeValue;
+    if (teacherSel instanceof HTMLSelectElement) teacherSel.value = teacherValue;
+    if (planSel instanceof HTMLSelectElement) planSel.value = planValue;
+    if (statusSel instanceof HTMLSelectElement) statusSel.value = statusValue;
+    if (startDateEl instanceof HTMLInputElement) startDateEl.value = startDate;
+    if (endDateEl instanceof HTMLInputElement) endDateEl.value = endDate;
+    if (startTimeEl instanceof HTMLInputElement) startTimeEl.value = startTime;
+    if (endTimeEl instanceof HTMLInputElement) endTimeEl.value = endTime;
+    if (titleEl instanceof HTMLInputElement) titleEl.value = titleValue;
+    if (groupNameEl instanceof HTMLInputElement) groupNameEl.value = groupNameValue;
+    if (notesEl instanceof HTMLTextAreaElement) notesEl.value = String(row?.notes || "");
+
+    const groupWrap = form.querySelector("[data-admin-ped-group-name]");
+    if (groupWrap instanceof HTMLElement) groupWrap.hidden = typeValue !== "group";
+
+    if (typeSel instanceof HTMLSelectElement) {
+      typeSel.addEventListener("change", () => {
+        const next = normalizeClassType(typeSel.value);
+        if (groupWrap instanceof HTMLElement) groupWrap.hidden = next !== "group";
+      });
+    }
+  }, 0);
+};
+
+const toggleAdminPedClassStatus = ({ classId } = {}) => {
+  const id = String(classId || "").trim();
+  if (!id) return;
+  const row = findAdminPedClassById(id);
+  if (!row) return;
+  const current = normalizeClassStatus(row.status);
+  const next = current === "active" ? "paused" : "active";
+
+  (async () => {
+    try {
+      const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_pedagogico_toggle");
+      const user = await waitForFirebaseAuthReady(firebase, 5000);
+      if (!user) throw new Error("not_authenticated");
+      const docRef = firebase.doc(firebase.primaryDb, "classes", id);
+      await withTimeout(
+        firebase.setDoc(
+          docRef,
+          { status: next, updatedBy: String(user.uid || ""), updatedAt: firebase.serverTimestamp() },
+          { merge: true }
+        ),
+        12_000,
+        "firestore_admin_pedagogico_class_toggle"
+      );
+      await renderAdminControlePedagogicoPanel({ force: true });
+    } catch (e) {
+      console.error("[admin] controle-pedagogico toggle failed:", e);
+      setAdminPedagogicoStatus("Não foi possível atualizar agora.", "error");
+    }
+  })();
+};
+
+const deleteAdminPedClass = ({ classId } = {}) => {
+  const id = String(classId || "").trim();
+  if (!id) return;
+  const row = findAdminPedClassById(id);
+  const label = row?.title ? row.title : row?.type === "group" ? "Aula em grupo" : "Aula individual";
+
+  openModal({
+    title: "Excluir aula",
+    bodyHtml: `Tem certeza que deseja excluir <strong>${escapeHtml(label || "esta aula")}</strong>? Esta ação não pode ser desfeita.`,
+    primaryLabel: "Excluir",
+    secondaryLabel: "Cancelar",
+    hideSecondary: false,
+    showTrash: false,
+    onPrimary: () => {
+      if (modalPrimary) modalPrimary.disabled = true;
+      if (modalSecondary) modalSecondary.disabled = true;
+      const prev = modalPrimary?.textContent || "";
+      if (modalPrimary) modalPrimary.textContent = "Excluindo…";
+
+      (async () => {
+        try {
+          const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_pedagogico_delete");
+          const user = await waitForFirebaseAuthReady(firebase, 5000);
+          if (!user) throw new Error("not_authenticated");
+          const docRef = firebase.doc(firebase.primaryDb, "classes", id);
+          await withTimeout(firebase.deleteDoc(docRef), 12_000, "firestore_admin_pedagogico_class_delete");
+          closeModal();
+          await renderAdminControlePedagogicoPanel({ force: true });
+        } catch (e) {
+          console.error("[admin] controle-pedagogico delete failed:", e);
+          if (modalBody instanceof HTMLElement) modalBody.innerHTML = "Não foi possível excluir agora.";
+        } finally {
+          if (modalPrimary) modalPrimary.disabled = false;
+          if (modalSecondary) modalSecondary.disabled = false;
+          if (modalPrimary) modalPrimary.textContent = prev || "Excluir";
+        }
+      })();
+
+      return false;
+    },
+  });
+};
+
 let adminStudentsFiltersPopoverEl = null;
 
 const closeAdminStudentsFiltersPopover = () => {
@@ -11492,6 +12591,14 @@ const showPanel = (panelName) => {
     return;
   }
 
+  if (panelName === "admin-controle-pedagogico") {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (currentRole === "admin") {
+      renderAdminControlePedagogicoPanel({ force: false }).catch(() => {});
+    }
+    return;
+  }
+
   if (panelName === "pedagogico") {
     window.scrollTo({ top: 0, behavior: "smooth" });
     if (currentRole === "teacher") {
@@ -11548,6 +12655,7 @@ const panelPathForRole = (role, panel) => {
   if (normalized === "admin") {
     if (p === "professores") return "/app/admin/professores";
     if (p === "alunos") return "/app/admin/alunos";
+    if (p === "admin-controle-pedagogico") return "/app/admin/controle-pedagogico";
     if (p === "growth") return "/app/admin/growth";
     if (p === "gravadas") return "/app/admin/gravadas";
     if (p === "ao-vivo") return "/app/admin/ao-vivo";
@@ -11582,6 +12690,7 @@ const parseAppRoute = (path) => {
   if (role === "admin") {
     if (sub === "professores") return { role, panel: "professores" };
     if (sub === "alunos") return { role, panel: "alunos" };
+    if (sub === "controle-pedagogico") return { role, panel: "admin-controle-pedagogico" };
     if (sub === "growth") return { role, panel: "growth" };
     if (sub === "ao-vivo") return { role, panel: "ao-vivo" };
     if (sub === "gravadas") return { role, panel: "gravadas" };
@@ -11889,6 +12998,65 @@ document.addEventListener("click", (event) => {
 
     // Admin manage tables: actions menu + operations.
     if (currentRole === "admin") {
+      const adminPedNewClass = target.closest("[data-admin-ped-new-class]");
+      if (adminPedNewClass instanceof HTMLButtonElement) {
+        event.preventDefault();
+        // Ensure data is available (teachers/students/classes) before opening the modal.
+        renderAdminControlePedagogicoPanel({ force: false })
+          .then(() => {
+            openAdminPedClassModal({ mode: "create" });
+          })
+          .catch(() => {
+            openAdminPedClassModal({ mode: "create" });
+          });
+        return;
+      }
+
+      const adminPedTab = target.closest("[data-admin-ped-tab]");
+      if (adminPedTab instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const tab = String(adminPedTab.getAttribute("data-admin-ped-tab") || "").trim();
+        if (tab) {
+          adminPedagogicoState.activeTab = tab;
+          renderAdminPedagogicoTabs();
+        }
+        return;
+      }
+
+      const adminPedClassOpen = target.closest("[data-admin-ped-class-open]");
+      if (adminPedClassOpen instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const classId = String(adminPedClassOpen.getAttribute("data-admin-ped-class-open") || "").trim();
+        const row = findAdminPedClassById(classId);
+        if (row) openAdminPedClassModal({ mode: "edit", classRow: row });
+        return;
+      }
+
+      const adminPedClassEdit = target.closest("[data-admin-ped-class-edit]");
+      if (adminPedClassEdit instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const classId = String(adminPedClassEdit.getAttribute("data-admin-ped-class-edit") || "").trim();
+        const row = findAdminPedClassById(classId);
+        if (row) openAdminPedClassModal({ mode: "edit", classRow: row });
+        return;
+      }
+
+      const adminPedClassToggle = target.closest("[data-admin-ped-class-toggle]");
+      if (adminPedClassToggle instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const classId = String(adminPedClassToggle.getAttribute("data-admin-ped-class-toggle") || "").trim();
+        toggleAdminPedClassStatus({ classId });
+        return;
+      }
+
+      const adminPedClassDelete = target.closest("[data-admin-ped-class-delete]");
+      if (adminPedClassDelete instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const classId = String(adminPedClassDelete.getAttribute("data-admin-ped-class-delete") || "").trim();
+        deleteAdminPedClass({ classId });
+        return;
+      }
+
       const adminStudentsFiltersTrigger = target.closest("[data-admin-students-filters-trigger]");
       if (adminStudentsFiltersTrigger instanceof HTMLButtonElement) {
         event.preventDefault();
@@ -12921,6 +14089,24 @@ document.addEventListener("change", (event) => {
   if (!alunoId || !files.length) return;
 
   uploadAdminStudentFiles({ alunoId, files }).catch(() => {});
+});
+
+// Admin > Controle Pedagógico: filters update the agenda/list views.
+document.addEventListener("change", (event) => {
+  if (currentRole !== "admin") return;
+  const target = event.target;
+  if (!(target instanceof HTMLSelectElement)) return;
+  if (!target.matches("[data-admin-ped-filter]")) return;
+
+  const key = String(target.getAttribute("data-admin-ped-filter") || "").trim();
+  if (!key) return;
+  adminPedagogicoState.filters = adminPedagogicoState.filters && typeof adminPedagogicoState.filters === "object" ? { ...adminPedagogicoState.filters } : {};
+  adminPedagogicoState.filters[key] = String(target.value || "");
+
+  renderAdminPedagogicoAgenda();
+  renderAdminPedagogicoClassesList();
+  renderAdminPedagogicoTeachersPanel();
+  renderAdminPedagogicoConflicts();
 });
 
 // Pedagogico drawer: status switch re-renders the dynamic fields area (no hidden/pre-rendered blocks).

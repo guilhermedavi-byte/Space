@@ -351,6 +351,25 @@
           <button
             class="sidebar-link"
             type="button"
+            data-panel-target="admin-controle-pedagogico"
+            data-admin-only
+            title="Controle Pedagógico"
+          >
+            <span class="sidebar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M9 5.5h8"></path>
+                <path d="M9 9h8"></path>
+                <path d="M9 12.5h8"></path>
+                <path d="M9 16h6"></path>
+                <path d="M7 4.5h-.6A2.9 2.9 0 0 0 3.5 7.4v11.2A2.9 2.9 0 0 0 6.4 21.5h11.2a2.9 2.9 0 0 0 2.9-2.9V7.4a2.9 2.9 0 0 0-2.9-2.9H17"></path>
+                <path d="M8.5 3.5h4a1 1 0 0 1 1 1v2h-6v-2a1 1 0 0 1 1-1Z"></path>
+              </svg>
+            </span>
+            <span class="sidebar-text">Controle Pedagógico</span>
+          </button>
+          <button
+            class="sidebar-link"
+            type="button"
             data-panel-target="growth"
             data-admin-only
             title="Growth"
@@ -1507,6 +1526,139 @@
 	            </div>
 	          </div>
 	        </section>
+
+          <section class="platform-panel" data-panel="admin-controle-pedagogico" data-hide-platform-header="true" hidden aria-label="Controle Pedagógico (Admin)">
+            <div class="admin-ped-shell" data-admin-pedagogico>
+              <header class="admin-ped-head">
+                <div>
+                  <h2 class="admin-ped-title">Controle Pedagógico</h2>
+                  <p class="admin-ped-subtitle">Organize aulas, professores, alunos, turmas e horários da escola.</p>
+                </div>
+                <button class="button button-solid button-small" type="button" data-admin-ped-new-class>
+                  + Criar aula
+                </button>
+              </header>
+
+              <section class="admin-ped-metrics" aria-label="Resumo">
+                <article class="surface-card admin-ped-metric">
+                  <div class="admin-ped-metric-label">Aulas ativas</div>
+                  <div class="admin-ped-metric-value" data-admin-ped-metric="active">—</div>
+                </article>
+                <article class="surface-card admin-ped-metric">
+                  <div class="admin-ped-metric-label">Individuais</div>
+                  <div class="admin-ped-metric-value" data-admin-ped-metric="individual">—</div>
+                </article>
+                <article class="surface-card admin-ped-metric">
+                  <div class="admin-ped-metric-label">Em grupo</div>
+                  <div class="admin-ped-metric-value" data-admin-ped-metric="group">—</div>
+                </article>
+                <article class="surface-card admin-ped-metric">
+                  <div class="admin-ped-metric-label">Professores com aulas</div>
+                  <div class="admin-ped-metric-value" data-admin-ped-metric="teachers">—</div>
+                </article>
+                <article class="surface-card admin-ped-metric">
+                  <div class="admin-ped-metric-label">Conflitos</div>
+                  <div class="admin-ped-metric-value" data-admin-ped-metric="conflicts">—</div>
+                </article>
+              </section>
+
+              <div class="admin-ped-tabs" role="tablist" aria-label="Seções">
+                <button class="admin-ped-tab is-active" type="button" role="tab" aria-selected="true" data-admin-ped-tab="agenda">Agenda</button>
+                <button class="admin-ped-tab" type="button" role="tab" aria-selected="false" data-admin-ped-tab="aulas">Aulas</button>
+                <button class="admin-ped-tab" type="button" role="tab" aria-selected="false" data-admin-ped-tab="turmas">Turmas</button>
+                <button class="admin-ped-tab" type="button" role="tab" aria-selected="false" data-admin-ped-tab="professores">Professores</button>
+                <button class="admin-ped-tab" type="button" role="tab" aria-selected="false" data-admin-ped-tab="conflitos">Conflitos</button>
+              </div>
+
+              <div class="admin-ped-status" data-admin-ped-status aria-live="polite"></div>
+
+              <section class="admin-ped-panel is-active" data-admin-ped-panel="agenda" aria-label="Agenda">
+                <div class="surface-card admin-ped-surface">
+                  <div class="admin-ped-filters" aria-label="Filtros da agenda">
+                    <label class="admin-ped-filter">
+                      <span>Professor</span>
+                      <select class="admin-ped-select" data-admin-ped-filter="teacherId"></select>
+                    </label>
+                    <label class="admin-ped-filter">
+                      <span>Dia</span>
+                      <select class="admin-ped-select" data-admin-ped-filter="dow">
+                        <option value="">Todos</option>
+                        <option value="1">Seg</option>
+                        <option value="2">Ter</option>
+                        <option value="3">Qua</option>
+                        <option value="4">Qui</option>
+                        <option value="5">Sex</option>
+                        <option value="6">Sáb</option>
+                      </select>
+                    </label>
+                    <label class="admin-ped-filter">
+                      <span>Tipo</span>
+                      <select class="admin-ped-select" data-admin-ped-filter="type">
+                        <option value="">Todos</option>
+                        <option value="individual">Individual</option>
+                        <option value="group">Grupo</option>
+                      </select>
+                    </label>
+                    <label class="admin-ped-filter">
+                      <span>Aluno</span>
+                      <select class="admin-ped-select" data-admin-ped-filter="studentId"></select>
+                    </label>
+                    <label class="admin-ped-filter">
+                      <span>Status</span>
+                      <select class="admin-ped-select" data-admin-ped-filter="status">
+                        <option value="">Todos</option>
+                        <option value="active">Ativa</option>
+                        <option value="paused">Pausada</option>
+                        <option value="ended">Encerrada</option>
+                      </select>
+                    </label>
+                    <label class="admin-ped-filter">
+                      <span>Plano</span>
+                      <select class="admin-ped-select" data-admin-ped-filter="plan">
+                        <option value="">Todos</option>
+                        <option value="turma">Turma</option>
+                        <option value="gold">Gold</option>
+                        <option value="diamond">Diamond</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <div class="admin-ped-agenda" data-admin-ped-agenda></div>
+                  <div class="admin-ped-empty" data-admin-ped-empty hidden>Nenhuma aula cadastrada ainda.</div>
+                  <div class="admin-ped-error" data-admin-ped-error hidden>Não foi possível carregar agora.</div>
+                </div>
+              </section>
+
+              <section class="admin-ped-panel" data-admin-ped-panel="aulas" hidden aria-label="Aulas">
+                <article class="surface-card admin-ped-surface" aria-label="Lista de aulas">
+                  <div class="admin-ped-classes" data-admin-ped-classes></div>
+                  <div class="admin-ped-empty" data-admin-ped-empty-classes hidden>Nenhuma aula cadastrada ainda.</div>
+                </article>
+              </section>
+
+              <section class="admin-ped-panel" data-admin-ped-panel="turmas" hidden aria-label="Turmas">
+                <article class="surface-card admin-ped-surface">
+                  <div class="admin-ped-placeholder">
+                    <div class="admin-ped-placeholder-title">Turmas</div>
+                    <div class="admin-ped-placeholder-sub">Em breve: gerenciamento avançado de aulas em grupo.</div>
+                  </div>
+                </article>
+              </section>
+
+              <section class="admin-ped-panel" data-admin-ped-panel="professores" hidden aria-label="Professores">
+                <article class="surface-card admin-ped-surface">
+                  <div class="admin-ped-teachers" data-admin-ped-teachers></div>
+                </article>
+              </section>
+
+              <section class="admin-ped-panel" data-admin-ped-panel="conflitos" hidden aria-label="Conflitos">
+                <article class="surface-card admin-ped-surface">
+                  <div class="admin-ped-conflicts" data-admin-ped-conflicts></div>
+                  <div class="admin-ped-empty" data-admin-ped-empty-conflicts hidden>Nenhum conflito detectado.</div>
+                </article>
+              </section>
+            </div>
+          </section>
 
         <section class="platform-panel" data-panel="growth" data-hide-platform-header="true" hidden>
           <div class="admin-manage-shell" data-admin-manage="growth">
