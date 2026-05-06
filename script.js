@@ -7979,13 +7979,14 @@ const loadFirebaseAdminApi = () => {
       getDoc: fsMod.getDoc,
       getDocs: fsMod.getDocs,
       limit: fsMod.limit,
-      orderBy: fsMod.orderBy,
-      query: fsMod.query,
-      setDoc: fsMod.setDoc,
-      serverTimestamp: fsMod.serverTimestamp,
-      where: fsMod.where,
-    };
-  });
+	      orderBy: fsMod.orderBy,
+	      query: fsMod.query,
+	      setDoc: fsMod.setDoc,
+	      deleteDoc: fsMod.deleteDoc,
+	      serverTimestamp: fsMod.serverTimestamp,
+	      where: fsMod.where,
+	    };
+	  });
 
   return firebaseAdminApiPromise;
 };
@@ -8214,6 +8215,7 @@ let adminStudentsState = {
 	    isOpen: false,
 	    alunoId: "",
 	    activeTab: "overview", // overview | history | lessons | financeiro | atividades | arquivos
+	    editMode: false,
 	    filter: "all", // all | realizada | falta_aluno | remarcada | alerts
 	    items: [], // derived timeline items (log + event)
 	    alunoMeta: null,
@@ -8784,9 +8786,42 @@ const fetchUserRowsFromFirestore = async (tipo) => {
     const plano = typeof data.plano === "string" ? data.plano.trim() : typeof data.plan === "string" ? data.plan.trim() : typeof data.planoKey === "string" ? data.planoKey.trim() : "";
     const pais = typeof data.pais === "string" ? data.pais.trim() : typeof data.country === "string" ? data.country.trim() : "";
     const canceladoEm = data.canceladoEm || data.cancelamentoEm || data.dataCancelamento || null;
+    // Student extended profile fields (admin edit modal/sheet). These may not exist for older users.
+    const endereco = typeof data.endereco === "string" ? data.endereco : typeof data.address === "string" ? data.address : "";
+    const estadoEua = typeof data.estadoEua === "string" ? data.estadoEua : typeof data.estadoEUA === "string" ? data.estadoEUA : typeof data.usState === "string" ? data.usState : "";
+    const valorMensalidade = Number.isFinite(Number(data.valorMensalidade)) ? Number(data.valorMensalidade) : data.valorMensalidade ?? null;
+    const tempoContrato = typeof data.tempoContrato === "string" ? data.tempoContrato : "";
+    const faixaIdade = typeof data.faixaIdade === "string" ? data.faixaIdade : "";
+    const genero = typeof data.genero === "string" ? data.genero : "";
+    const trabalho = typeof data.trabalho === "string" ? data.trabalho : "";
+    const possuiFilhos = typeof data.possuiFilhos === "string" ? data.possuiFilhos : typeof data.possuiFilhos === "boolean" ? (data.possuiFilhos ? "sim" : "nao") : "";
+    const casado = typeof data.casado === "string" ? data.casado : typeof data.casado === "boolean" ? (data.casado ? "sim" : "nao") : "";
+    const pretendeVoltarBrasil = typeof data.pretendeVoltarBrasil === "string" ? data.pretendeVoltarBrasil : "";
+    const objetivoPrincipal = typeof data.objetivoPrincipal === "string" ? data.objetivoPrincipal : "";
+    const nivelInglesAtual = typeof data.nivelInglesAtual === "string" ? data.nivelInglesAtual : "";
     const criadoKey = toDateKeyFromAny(data.criadoEm);
     const cancelKey = toDateKeyFromAny(canceladoEm);
-    rows.push({ ...base, professorId, plano, pais, canceladoEm, criadoKey, cancelKey });
+    rows.push({
+      ...base,
+      professorId,
+      plano,
+      pais,
+      canceladoEm,
+      criadoKey,
+      cancelKey,
+      endereco,
+      estadoEua,
+      valorMensalidade,
+      tempoContrato,
+      faixaIdade,
+      genero,
+      trabalho,
+      possuiFilhos,
+      casado,
+      pretendeVoltarBrasil,
+      objetivoPrincipal,
+      nivelInglesAtual,
+    });
   });
   return rows.filter(Boolean).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 };
@@ -9151,6 +9186,7 @@ const renderAdminStudentSheet = () => {
   if (!(sheetEl instanceof HTMLElement)) return;
 
   const hist = adminStudentsState.history;
+  const editMode = Boolean(hist.editMode);
   const alunoMeta = hist.alunoMeta;
   const alunoName = alunoMeta?.nome || "Aluno";
   const alunoEmail = alunoMeta?.email || "";
@@ -9165,11 +9201,77 @@ const renderAdminStudentSheet = () => {
     (alunoMeta && typeof alunoMeta.teacherId === "string" ? alunoMeta.teacherId : "") ||
     "";
 
+  const endereco = String(alunoMeta?.endereco || "").trim();
+  const estadoEua = String(alunoMeta?.estadoEua || "").trim();
+  const valorMensalidade = alunoMeta?.valorMensalidade;
+  const tempoContrato = String(alunoMeta?.tempoContrato || "").trim();
+  const faixaIdade = String(alunoMeta?.faixaIdade || "").trim();
+  const genero = String(alunoMeta?.genero || "").trim();
+  const trabalho = String(alunoMeta?.trabalho || "").trim();
+  const possuiFilhos = String(alunoMeta?.possuiFilhos || "").trim();
+  const casado = String(alunoMeta?.casado || "").trim();
+  const pretendeVoltarBrasil = String(alunoMeta?.pretendeVoltarBrasil || "").trim();
+  const objetivoPrincipal = String(alunoMeta?.objetivoPrincipal || "").trim();
+  const nivelInglesAtual = String(alunoMeta?.nivelInglesAtual || "").trim();
+
   const initials = getInitials(alunoName);
   const nextLesson = getAdminStudentNextLessonLabel(hist.alunoId) || "Sem dados";
   const tenure = alunoMeta ? formatAdminStudentTenure(createdKey) : "—";
 
   const activeTab = String(hist.activeTab || "overview");
+
+  const planOptions = ["Turma", "Gold", "Diamond"];
+  const countryOptions = ["Brasil", "EUA", "Canadá", "Reino Unido", "Outro"];
+  const jobOptions = [
+    "Empresário",
+    "Micro Empreendedor Limpeza",
+    "Micro Empreendedor Construção",
+    "Cuida do lar",
+    "Motorista de APP",
+    "Restaurante/Supermercado",
+    "Empreendedor Estética",
+    "Multinacional/Emprego renda alta",
+    "Estudante",
+    "Funcionário Limpeza",
+    "Funcionário Construção",
+    "Cuidador(a) de idosos",
+  ];
+  const ageOptions = ["Menor de idade", "18-24", "25-29", "30-45", "46-59", "60+"];
+
+  const selectOptions = (opts, selected, emptyLabel = "Selecione…") =>
+    [`<option value="">${escapeHtml(emptyLabel)}</option>`]
+      .concat(
+        opts.map((v) => {
+          const sel = String(selected || "") === String(v) ? "selected" : "";
+          return `<option value="${escapeHtml(String(v))}" ${sel}>${escapeHtml(String(v))}</option>`;
+        })
+      )
+      .join("");
+
+  const yesNoOptions = (selected) =>
+    [
+      `<option value="">Selecione…</option>`,
+      `<option value="sim" ${selected === "sim" ? "selected" : ""}>Sim</option>`,
+      `<option value="nao" ${selected === "nao" ? "selected" : ""}>Não</option>`,
+    ].join("");
+
+  const returnOptions = (selected) =>
+    [
+      `<option value="">Selecione…</option>`,
+      `<option value="sim" ${selected === "sim" ? "selected" : ""}>Sim</option>`,
+      `<option value="nao" ${selected === "nao" ? "selected" : ""}>Não</option>`,
+      `<option value="nao_sabe" ${selected === "nao_sabe" ? "selected" : ""}>Não sabe</option>`,
+    ].join("");
+
+  const englishOptions = (selected) =>
+    [
+      `<option value="">Selecione…</option>`,
+      `<option value="iniciante" ${selected === "iniciante" ? "selected" : ""}>Iniciante</option>`,
+      `<option value="basico" ${selected === "basico" ? "selected" : ""}>Básico</option>`,
+      `<option value="intermediario" ${selected === "intermediario" ? "selected" : ""}>Intermediário</option>`,
+      `<option value="avancado" ${selected === "avancado" ? "selected" : ""}>Avançado</option>`,
+      `<option value="fluente" ${selected === "fluente" ? "selected" : ""}>Fluente</option>`,
+    ].join("");
 
   sheetEl.innerHTML = `
     <div class="admin-student-sheet-grid">
@@ -9198,16 +9300,23 @@ const renderAdminStudentSheet = () => {
         <div class="admin-student-personal" aria-label="Dados pessoais">
           <div class="admin-student-personal-title">Dados pessoais</div>
           <div class="admin-student-personal-grid">
-            <div class="admin-student-personal-row"><span>Professor responsável</span><strong>${escapeHtml(
-              teacherName || professorResp || "—"
-            )}</strong></div>
+            <div class="admin-student-personal-row"><span>Professor responsável</span><strong>${escapeHtml(teacherName || professorResp || "—")}</strong></div>
             <div class="admin-student-personal-row"><span>Data de cadastro</span><strong>${escapeHtml(createdLabel)}</strong></div>
           </div>
         </div>
 
         <div class="admin-student-left-actions" aria-label="Ações do aluno">
-          <button type="button" class="button button-outline button-small" disabled>Editar</button>
-          <button type="button" class="button button-solid button-small" disabled>Cancelar matrícula</button>
+          ${
+            editMode
+              ? `
+                <button type="button" class="button button-outline button-small" data-admin-student-edit-cancel>Cancelar</button>
+                <button type="button" class="button button-solid button-small" data-admin-student-edit-save>Salvar</button>
+              `
+              : `
+                <button type="button" class="button button-outline button-small" disabled>Editar</button>
+                <button type="button" class="button button-solid button-small" disabled>Cancelar matrícula</button>
+              `
+          }
         </div>
       </aside>
 
@@ -9224,8 +9333,106 @@ const renderAdminStudentSheet = () => {
         <div class="admin-student-tab-panels">
           <div class="admin-student-tab-panel${activeTab === "overview" ? " is-active" : ""}" data-admin-student-tab-panel="overview" role="tabpanel">
             <div class="admin-student-panel-card">
-              <div class="admin-student-panel-title">Resumo</div>
-              <div class="admin-student-panel-empty">Selecione a tab Histórico pedagógico para ver detalhes das aulas registradas.</div>
+              <div class="admin-student-panel-title">${editMode ? "Editar aluno" : "Resumo"}</div>
+              ${
+                editMode
+                  ? `
+                    <div class="admin-student-form" data-admin-student-edit-form>
+                      <label class="admin-student-field">
+                        <span>Nome completo</span>
+                        <input class="admin-student-input" type="text" data-admin-student-edit-field="nome" value="${escapeHtml(alunoName)}" />
+                      </label>
+                      <label class="admin-student-field">
+                        <span>E-mail</span>
+                        <input class="admin-student-input" type="email" data-admin-student-edit-field="email" value="${escapeHtml(alunoEmail)}" />
+                      </label>
+                      <label class="admin-student-field">
+                        <span>Endereço</span>
+                        <input class="admin-student-input" type="text" data-admin-student-edit-field="endereco" value="${escapeHtml(endereco)}" />
+                      </label>
+                      <label class="admin-student-field">
+                        <span>Plano</span>
+                        <select class="admin-student-input" data-admin-student-edit-field="plano">
+                          ${selectOptions(planOptions, plano)}
+                        </select>
+                      </label>
+                      <label class="admin-student-field">
+                        <span>País</span>
+                        <select class="admin-student-input" data-admin-student-edit-field="pais">
+                          ${selectOptions(countryOptions, pais)}
+                        </select>
+                      </label>
+                      <label class="admin-student-field">
+                        <span>Estado dos EUA (opcional)</span>
+                        <input class="admin-student-input" type="text" data-admin-student-edit-field="estadoEua" value="${escapeHtml(estadoEua)}" />
+                      </label>
+                      <label class="admin-student-field">
+                        <span>Valor de mensalidade</span>
+                        <input class="admin-student-input" type="text" inputmode="decimal" data-admin-student-edit-field="valorMensalidade" value="${escapeHtml(
+                          typeof valorMensalidade === "number" ? String(valorMensalidade) : String(valorMensalidade || "")
+                        )}" />
+                      </label>
+                      <label class="admin-student-field">
+                        <span>Tempo de contrato</span>
+                        <select class="admin-student-input" data-admin-student-edit-field="tempoContrato">
+                          ${selectOptions(["1_m", "3_m", "6_m", "12_m", "18_m", "24_m"], tempoContrato)}
+                        </select>
+                      </label>
+                      <label class="admin-student-field">
+                        <span>Faixa de idade</span>
+                        <select class="admin-student-input" data-admin-student-edit-field="faixaIdade">
+                          ${selectOptions(ageOptions, faixaIdade)}
+                        </select>
+                      </label>
+                      <label class="admin-student-field">
+                        <span>Gênero</span>
+                        <select class="admin-student-input" data-admin-student-edit-field="genero">
+                          ${selectOptions(["feminino", "masculino", "nao_binario", "prefiro_nao_informar"], genero)}
+                        </select>
+                      </label>
+                      <label class="admin-student-field">
+                        <span>Trabalho</span>
+                        <select class="admin-student-input" data-admin-student-edit-field="trabalho">
+                          ${selectOptions(jobOptions, trabalho)}
+                        </select>
+                      </label>
+                      <label class="admin-student-field">
+                        <span>Possui filhos</span>
+                        <select class="admin-student-input" data-admin-student-edit-field="possuiFilhos">
+                          ${yesNoOptions(possuiFilhos)}
+                        </select>
+                      </label>
+                      <label class="admin-student-field">
+                        <span>Casado</span>
+                        <select class="admin-student-input" data-admin-student-edit-field="casado">
+                          ${yesNoOptions(casado)}
+                        </select>
+                      </label>
+                      <label class="admin-student-field">
+                        <span>Pretende voltar ao Brasil</span>
+                        <select class="admin-student-input" data-admin-student-edit-field="pretendeVoltarBrasil">
+                          ${returnOptions(pretendeVoltarBrasil)}
+                        </select>
+                      </label>
+                      <label class="admin-student-field admin-student-field-wide">
+                        <span>Objetivo principal</span>
+                        <textarea class="admin-student-input admin-student-textarea" rows="3" data-admin-student-edit-field="objetivoPrincipal">${escapeHtml(
+                          objetivoPrincipal
+                        )}</textarea>
+                      </label>
+                      <label class="admin-student-field">
+                        <span>Nível de inglês atual</span>
+                        <select class="admin-student-input" data-admin-student-edit-field="nivelInglesAtual">
+                          ${englishOptions(nivelInglesAtual)}
+                        </select>
+                      </label>
+                      <div class="admin-student-edit-error" data-admin-student-edit-error hidden>—</div>
+                    </div>
+                  `
+                  : `
+                    <div class="admin-student-panel-empty">Selecione a tab Histórico pedagógico para ver detalhes das aulas registradas.</div>
+                  `
+              }
             </div>
           </div>
 
@@ -9699,6 +9906,7 @@ const openAdminStudentHistoryDrawer = async ({ alunoId, teacherId } = {}) => {
       isOpen: true,
       alunoId: aId,
       activeTab: "overview",
+      editMode: false,
       filter: "all",
       items,
       alunoMeta,
@@ -9732,16 +9940,17 @@ const closeAdminStudentHistoryDrawer = () => {
       if (adminStudentHistoryDrawer instanceof HTMLElement) adminStudentHistoryDrawer.hidden = true;
     }, 220);
   }
-  adminStudentsState.history = {
-    isOpen: false,
-    alunoId: "",
-    activeTab: "overview",
-    filter: "all",
-    items: [],
-    alunoMeta: null,
-    teacherMeta: null,
-  };
-};
+	  adminStudentsState.history = {
+	    isOpen: false,
+	    alunoId: "",
+	    activeTab: "overview",
+	    editMode: false,
+	    filter: "all",
+	    items: [],
+	    alunoMeta: null,
+	    teacherMeta: null,
+	  };
+	};
 
 
 const closeAllAdminActionMenus = () => {
@@ -9768,6 +9977,136 @@ const closeAdminStudentActionsPopover = () => {
   adminStudentActionsPopoverEl = null;
 };
 
+const getAdminStudentMetaById = (alunoId) => {
+  const id = String(alunoId || "").trim();
+  if (!id) return null;
+  const map = adminStudentsState.studentsById instanceof Map ? adminStudentsState.studentsById : new Map();
+  return map.get(id) || null;
+};
+
+const openAdminStudentDeactivateModal = ({ alunoId } = {}) => {
+  const id = String(alunoId || "").trim();
+  if (!id) return;
+  const meta = getAdminStudentMetaById(id);
+  const name = meta?.nome || "este aluno";
+
+  openModal({
+    title: "Desativar aluno",
+    bodyHtml: `
+      <div style="display:grid; gap:10px;">
+        <p style="margin:0; color: rgba(255,255,255,0.75); font-size: 13px; line-height: 1.45;">
+          Tem certeza que deseja desativar <strong>${escapeHtml(name)}</strong>?
+        </p>
+        <p style="margin:0; color: rgba(255,255,255,0.45); font-size: 12px; line-height: 1.45;">
+          O aluno continuará salvo no sistema, mas ficará como inativo.
+        </p>
+      </div>
+    `,
+    primaryLabel: "Confirmar desativação",
+    secondaryLabel: "Cancelar",
+    onPrimary: () => {
+      // keep modal open until async completes
+      if (modalPrimary) modalPrimary.disabled = true;
+      if (modalSecondary) modalSecondary.disabled = true;
+      setAdminStudentsStatus("Desativando…");
+      (async () => {
+        try {
+          const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_student_deactivate");
+          await withTimeout(
+            firebase.setDoc(
+              firebase.doc(firebase.primaryDb, "users", id),
+              { ativo: false, canceladoEm: firebase.serverTimestamp(), atualizadoEm: firebase.serverTimestamp() },
+              { merge: true }
+            ),
+            12_000,
+            "firestore_deactivate_student"
+          );
+
+          adminStudentsState.loadedAt = 0;
+          await renderAdminStudentsPanel({ force: true });
+          setAdminStudentsStatus("");
+          closeModal();
+        } catch (error) {
+          console.error("[admin] deactivate student failed:", error);
+          setAdminStudentsStatus("Não foi possível desativar agora.", "error");
+          if (modalPrimary) modalPrimary.disabled = false;
+          if (modalSecondary) modalSecondary.disabled = false;
+        }
+      })();
+      return false;
+    },
+  });
+};
+
+const openAdminStudentDeleteModal = ({ alunoId } = {}) => {
+  const id = String(alunoId || "").trim();
+  if (!id) return;
+  const meta = getAdminStudentMetaById(id);
+  const name = meta?.nome || "este aluno";
+
+  openModal({
+    title: "Excluir aluno",
+    bodyHtml: `
+      <div style="display:grid; gap:12px;">
+        <p style="margin:0; color: rgba(255,255,255,0.75); font-size: 13px; line-height: 1.45;">
+          Esta é uma ação sensível. Para excluir <strong>${escapeHtml(name)}</strong> definitivamente, digite <strong>excluir</strong>.
+        </p>
+        <label style="display:grid; gap:6px;">
+          <span style="font-size: 12px; font-weight: 700; color: rgba(255,255,255,0.45);">Confirmação</span>
+          <input data-admin-student-delete-word type="text" autocomplete="off" spellcheck="false"
+            style="width:100%; height:44px; padding:0 12px; border-radius:12px; border:1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.03); color: rgba(255,255,255,0.9); font-size: 13px; outline:none;" />
+        </label>
+        <div style="font-size:12px; color: rgba(255,255,255,0.45); line-height: 1.45;">
+          Atenção: esta ação remove o cadastro do aluno no banco de dados. Use com cuidado.
+        </div>
+      </div>
+    `,
+    primaryLabel: "Excluir definitivamente",
+    secondaryLabel: "Cancelar",
+    onPrimary: () => {
+      // keep modal open until async completes
+      if (modalPrimary) modalPrimary.disabled = true;
+      if (modalSecondary) modalSecondary.disabled = true;
+      setAdminStudentsStatus("Excluindo…");
+      (async () => {
+        try {
+          const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_student_delete");
+          await withTimeout(firebase.deleteDoc(firebase.doc(firebase.primaryDb, "users", id)), 12_000, "firestore_delete_student");
+
+          // If this sheet is open, close it to avoid referencing a deleted doc.
+          if (adminStudentsState.history?.isOpen && String(adminStudentsState.history?.alunoId || "") === id) {
+            closeAdminStudentHistoryDrawer();
+          }
+
+          adminStudentsState.loadedAt = 0;
+          await renderAdminStudentsPanel({ force: true });
+          setAdminStudentsStatus("");
+          closeModal();
+        } catch (error) {
+          console.error("[admin] delete student failed:", error);
+          setAdminStudentsStatus("Não foi possível excluir agora.", "error");
+          if (modalPrimary) modalPrimary.disabled = false;
+          if (modalSecondary) modalSecondary.disabled = false;
+        }
+      })();
+      return false;
+    },
+  });
+
+  // Gate primary button by requiring the exact word "excluir".
+  const input = modalBody ? modalBody.querySelector("[data-admin-student-delete-word]") : null;
+  if (modalPrimary) modalPrimary.disabled = true;
+  if (input instanceof HTMLInputElement) {
+    input.focus();
+    const sync = () => {
+      const ok = String(input.value || "").trim().toLowerCase() === "excluir";
+      if (modalPrimary) modalPrimary.disabled = !ok;
+    };
+    input.addEventListener("input", sync);
+    sync();
+  }
+};
+
 const openAdminStudentActionsPopover = ({ triggerEl, alunoId } = {}) => {
   if (!(triggerEl instanceof HTMLElement)) return;
   closeAdminStudentActionsPopover();
@@ -9781,9 +10120,19 @@ const openAdminStudentActionsPopover = ({ triggerEl, alunoId } = {}) => {
   pop.setAttribute("data-admin-student-actions-popover", "true");
   pop.setAttribute("data-admin-student-actions-aluno", safeAlunoId);
   pop.innerHTML = `
-    <button class="admin-action-item is-disabled" type="button" disabled>Editar dados rápidos</button>
-    <button class="admin-action-item is-disabled" type="button" disabled>Arquivar / Cancelar matrícula</button>
-    <button class="admin-action-item is-disabled" type="button" disabled>Exportar dados do aluno</button>
+    <button class="admin-action-item" type="button" data-admin-student-action="edit" data-admin-student-aluno="${escapeHtml(safeAlunoId)}">
+      Editar
+    </button>
+    <button class="admin-action-item is-danger" type="button" data-admin-student-action="deactivate" data-admin-student-aluno="${escapeHtml(
+      safeAlunoId
+    )}">
+      Desativar
+    </button>
+    <button class="admin-action-item is-danger" type="button" data-admin-student-action="delete" data-admin-student-aluno="${escapeHtml(
+      safeAlunoId
+    )}">
+      Excluir
+    </button>
   `;
 
   document.body.appendChild(pop);
@@ -11199,6 +11548,176 @@ document.addEventListener("click", (event) => {
         return;
       }
 
+      const studentEditCancel = target.closest("[data-admin-student-edit-cancel]");
+      if (studentEditCancel instanceof HTMLButtonElement) {
+        event.preventDefault();
+        adminStudentsState.history.editMode = false;
+        renderAdminStudentSheet();
+        syncAdminStudentSheetTabs();
+        return;
+      }
+
+      const studentEditSave = target.closest("[data-admin-student-edit-save]");
+      if (studentEditSave instanceof HTMLButtonElement) {
+        event.preventDefault();
+
+        const hist = adminStudentsState.history;
+        const alunoId = String(hist?.alunoId || "").trim();
+        const sheetEl = document.querySelector("[data-admin-student-sheet]");
+        const formEl = sheetEl instanceof HTMLElement ? sheetEl.querySelector("[data-admin-student-edit-form]") : null;
+        const errorEl = sheetEl instanceof HTMLElement ? sheetEl.querySelector("[data-admin-student-edit-error]") : null;
+
+        const setErr = (msg) => {
+          if (errorEl instanceof HTMLElement) {
+            errorEl.textContent = String(msg || "");
+            errorEl.hidden = !msg;
+          }
+        };
+
+        const getField = (key) => {
+          if (!(formEl instanceof HTMLElement)) return null;
+          return formEl.querySelector(`[data-admin-student-edit-field="${CSS.escape(String(key))}"]`);
+        };
+
+        const readText = (key) => {
+          const el = getField(key);
+          if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) return String(el.value || "").trim();
+          if (el instanceof HTMLSelectElement) return String(el.value || "").trim();
+          return "";
+        };
+
+        const markError = (key, isError) => {
+          const el = getField(key);
+          if (el instanceof HTMLElement) el.classList.toggle("is-error", Boolean(isError));
+        };
+
+        const nome = readText("nome");
+        const email = readText("email").toLowerCase();
+        const endereco = readText("endereco");
+        const plano = readText("plano");
+        const pais = readText("pais");
+        const estadoEua = readText("estadoEua");
+        const valorMensalidadeRaw = readText("valorMensalidade");
+        const valorMensalidade = parseMoneyPtBrLoose(valorMensalidadeRaw);
+        const tempoContrato = readText("tempoContrato");
+        const faixaIdade = readText("faixaIdade");
+        const genero = readText("genero");
+        const trabalho = readText("trabalho");
+        const possuiFilhos = readText("possuiFilhos");
+        const casado = readText("casado");
+        const pretendeVoltarBrasil = readText("pretendeVoltarBrasil");
+        const objetivoPrincipal = readText("objetivoPrincipal");
+        const nivelInglesAtual = readText("nivelInglesAtual");
+
+        // Clear previous errors.
+        setErr("");
+        [
+          "nome",
+          "email",
+          "endereco",
+          "plano",
+          "pais",
+          "valorMensalidade",
+          "tempoContrato",
+          "faixaIdade",
+          "genero",
+          "trabalho",
+          "possuiFilhos",
+          "casado",
+          "pretendeVoltarBrasil",
+          "objetivoPrincipal",
+          "nivelInglesAtual",
+        ].forEach((k) => markError(k, false));
+
+        const emailOk = isValidEmail(email);
+        const monthlyOk = Number.isFinite(valorMensalidade) && valorMensalidade > 0;
+
+        const required = [
+          ["nome", Boolean(nome)],
+          ["email", emailOk],
+          ["endereco", Boolean(endereco)],
+          ["plano", Boolean(plano)],
+          ["pais", Boolean(pais)],
+          ["valorMensalidade", monthlyOk],
+          ["tempoContrato", Boolean(tempoContrato)],
+          ["faixaIdade", Boolean(faixaIdade)],
+          ["genero", Boolean(genero)],
+          ["trabalho", Boolean(trabalho)],
+          ["possuiFilhos", Boolean(possuiFilhos)],
+          ["casado", Boolean(casado)],
+          ["pretendeVoltarBrasil", Boolean(pretendeVoltarBrasil)],
+          ["objetivoPrincipal", Boolean(objetivoPrincipal)],
+          ["nivelInglesAtual", Boolean(nivelInglesAtual)],
+        ];
+
+        const missing = required.filter(([, ok]) => !ok).map(([k]) => k);
+        if (!alunoId) {
+          setErr("Não foi possível identificar o aluno para salvar.");
+          return;
+        }
+        if (missing.length) {
+          missing.forEach((k) => markError(k, true));
+          setErr("Preencha os campos obrigatórios para salvar.");
+          return;
+        }
+
+        // Async save (merge) to avoid losing unknown fields.
+        studentEditSave.disabled = true;
+        const cancelBtn = sheetEl instanceof HTMLElement ? sheetEl.querySelector("[data-admin-student-edit-cancel]") : null;
+        if (cancelBtn instanceof HTMLButtonElement) cancelBtn.disabled = true;
+        const prevLabel = studentEditSave.textContent;
+        studentEditSave.textContent = "Salvando…";
+
+        (async () => {
+          try {
+            const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_student_edit_save");
+            const patch = {
+              nome,
+              email,
+              endereco,
+              plano,
+              pais,
+              estadoEua,
+              valorMensalidade,
+              tempoContrato,
+              faixaIdade,
+              genero,
+              trabalho,
+              possuiFilhos,
+              casado,
+              pretendeVoltarBrasil,
+              objetivoPrincipal,
+              nivelInglesAtual,
+              atualizadoEm: firebase.serverTimestamp(),
+            };
+
+            await withTimeout(firebase.setDoc(firebase.doc(firebase.primaryDb, "users", alunoId), patch, { merge: true }), 12_000, "firestore_student_edit_merge");
+
+            adminStudentsState.loadedAt = 0;
+            await ensureAdminStudentsBaseData({ force: true });
+
+            const refreshedMeta = getAdminStudentMetaById(alunoId);
+            if (refreshedMeta) {
+              adminStudentsState.history.alunoMeta = refreshedMeta;
+            }
+            adminStudentsState.history.editMode = false;
+            renderAdminStudentSheet();
+            syncAdminStudentSheetTabs();
+            setAdminStudentsStatus("");
+          } catch (error) {
+            console.error("[admin] student edit save failed:", error);
+            setErr("Não foi possível salvar agora.");
+            setAdminStudentsStatus("Não foi possível salvar agora.", "error");
+          } finally {
+            studentEditSave.disabled = false;
+            studentEditSave.textContent = prevLabel || "Salvar";
+            if (cancelBtn instanceof HTMLButtonElement) cancelBtn.disabled = false;
+          }
+        })();
+
+        return;
+      }
+
       const studentActionsTrigger = target.closest("[data-admin-student-actions-trigger]");
       if (studentActionsTrigger instanceof HTMLButtonElement) {
         event.preventDefault();
@@ -11209,9 +11728,41 @@ document.addEventListener("click", (event) => {
 
       const studentAction = target.closest("[data-admin-student-action]");
       if (studentAction instanceof HTMLButtonElement) {
-        // Reserved for future admin actions (editar/arquivar/exportar).
         event.preventDefault();
+        const action = String(studentAction.getAttribute("data-admin-student-action") || "").trim();
+        const alunoId = String(studentAction.getAttribute("data-admin-student-aluno") || "").trim();
         closeAdminStudentActionsPopover();
+
+        if (!alunoId) return;
+
+        if (action === "edit") {
+          const isSame = Boolean(adminStudentsState.history?.isOpen) && String(adminStudentsState.history?.alunoId || "") === alunoId;
+          const activate = () => {
+            adminStudentsState.history.editMode = true;
+            adminStudentsState.history.activeTab = "overview";
+            renderAdminStudentSheet();
+            syncAdminStudentSheetTabs();
+          };
+          if (isSame) {
+            activate();
+          } else {
+            openAdminStudentHistoryDrawer({ alunoId })
+              .then(() => activate())
+              .catch(() => {});
+          }
+          return;
+        }
+
+        if (action === "deactivate") {
+          openAdminStudentDeactivateModal({ alunoId });
+          return;
+        }
+
+        if (action === "delete") {
+          openAdminStudentDeleteModal({ alunoId });
+          return;
+        }
+
         return;
       }
 

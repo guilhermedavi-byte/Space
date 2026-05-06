@@ -4665,6 +4665,68 @@ body:not([data-role="admin"]) [data-admin-only] {
   color: rgba(255, 255, 255, 0.9);
 }
 
+.admin-student-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.admin-student-field {
+  display: grid;
+  gap: 6px;
+}
+
+.admin-student-field span {
+  font-size: 11px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.admin-student-field-wide {
+  grid-column: 1 / -1;
+}
+
+.admin-student-input {
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 13px;
+  font-weight: 700;
+  outline: none;
+}
+
+.admin-student-input:focus {
+  border-color: rgba(89, 144, 189, 0.45);
+  box-shadow: 0 0 0 3px rgba(89, 144, 189, 0.12);
+}
+
+.admin-student-input.is-error {
+  border-color: rgba(255, 78, 70, 0.55);
+  box-shadow: 0 0 0 3px rgba(255, 78, 70, 0.12);
+}
+
+.admin-student-textarea {
+  height: auto;
+  padding: 10px 12px;
+  min-height: 84px;
+  resize: vertical;
+}
+
+.admin-student-edit-error {
+  grid-column: 1 / -1;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 78, 70, 0.22);
+  background: rgba(255, 78, 70, 0.08);
+  color: rgba(255, 78, 70, 0.9);
+  font-size: 12px;
+  font-weight: 750;
+}
+
 .admin-student-panel-empty {
   font-size: 13px;
   font-weight: 650;
