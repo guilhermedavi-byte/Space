@@ -4528,6 +4528,18 @@ body:not([data-role="admin"]) [data-admin-only] {
   color: rgba(255, 255, 255, 0.72);
 }
 
+.admin-student-tag.is-plan {
+  border-color: rgba(137, 85, 255, 0.28);
+  background: rgba(137, 85, 255, 0.12);
+  color: rgba(196, 172, 255, 0.95);
+}
+
+.admin-student-tag.is-plan-empty {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.02);
+  color: rgba(255, 255, 255, 0.62);
+}
+
 .admin-student-tag.is-country {
   color: rgba(255, 255, 255, 0.75);
 }

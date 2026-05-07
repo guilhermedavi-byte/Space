@@ -9554,7 +9554,9 @@ const renderAdminStudentSheet = () => {
   const alunoEmail = alunoMeta?.email || "";
   const statusLabel = alunoMeta ? (alunoMeta.ativo ? "Ativo" : "Inativo") : "—";
   const teacherName = hist.teacherMeta?.nome || "";
-  const plano = String(alunoMeta?.plano || "").trim();
+  const planoRaw = String(alunoMeta?.plano || "").trim();
+  const hasPlano = Boolean(planoRaw);
+  const planoLabel = hasPlano ? planoRaw : "Sem plano";
   const pais = String(alunoMeta?.pais || "").trim();
   const createdKey = String(alunoMeta?.criadoKey || "");
   const createdLabel = alunoMeta?.criadoEm ? formatAdminDate(alunoMeta.criadoEm) : "—";
@@ -9681,7 +9683,7 @@ const renderAdminStudentSheet = () => {
             <div class="admin-student-email">${escapeHtml(alunoEmail || "—")}</div>
             <div class="admin-student-tags">
               <span class="admin-student-tag is-${statusLabel === "Ativo" ? "green" : "gray"}">${escapeHtml(statusLabel)}</span>
-              ${plano ? `<span class="admin-student-tag">${escapeHtml(plano)}</span>` : ""}
+              <span class="admin-student-tag ${hasPlano ? "is-plan" : "is-plan-empty"}">${escapeHtml(planoLabel)}</span>
               ${pais ? `<span class="admin-student-tag is-country">${escapeHtml(pais)}</span>` : ""}
               ${teacherName ? `<span class="admin-student-tag">${escapeHtml(teacherName)}</span>` : ""}
             </div>
@@ -9691,6 +9693,7 @@ const renderAdminStudentSheet = () => {
         <div class="admin-student-metrics" aria-label="Métricas-chave">
           <div class="admin-student-metric"><span>Ticket mensal</span><strong>—</strong></div>
           <div class="admin-student-metric"><span>LTV</span><strong>—</strong></div>
+          <div class="admin-student-metric"><span>Plano</span><strong>${escapeHtml(planoLabel)}</strong></div>
           <div class="admin-student-metric"><span>Tempo de casa</span><strong>${escapeHtml(tenure)}</strong></div>
           <div class="admin-student-metric"><span>Próxima aula</span><strong>${escapeHtml(nextLesson)}</strong></div>
         </div>
@@ -9751,7 +9754,7 @@ const renderAdminStudentSheet = () => {
                       <label class="admin-student-field">
                         <span>Plano</span>
                         <select class="admin-student-input" data-admin-student-edit-field="plano">
-                          ${selectOptions(planOptions, plano)}
+                          ${selectOptions(planOptions, planoRaw, "Sem plano")}
                         </select>
                       </label>
                       <label class="admin-student-field">
@@ -13241,7 +13244,6 @@ document.addEventListener("click", (event) => {
 	          ["nome", Boolean(nome)],
 	          ["email", emailOk],
 	          ["endereco", Boolean(endereco)],
-	          ["plano", Boolean(plano)],
 	          ["pais", Boolean(pais)],
 	          ["valorMensalidade", monthlyOk],
 	          ["tempoContrato", contractOk],
