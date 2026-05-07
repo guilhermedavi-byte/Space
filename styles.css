@@ -33,6 +33,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 html {
   scroll-behavior: smooth;
 }
@@ -642,7 +646,6 @@ main {
   text-align: right;
 }
 
-/* `hidden` must always win over component display rules (author styles override UA `[hidden]`). */
 .header-plan[hidden],
 .header-role[hidden] {
   display: none !important;
