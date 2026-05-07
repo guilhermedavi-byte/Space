@@ -3976,6 +3976,33 @@ body:not([data-role="admin"]) [data-admin-only] {
   justify-content: flex-end;
 }
 
+.admin-students-search {
+  display: inline-flex;
+  align-items: center;
+}
+
+.admin-students-search-input {
+  width: min(280px, 56vw);
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 12px;
+  font-weight: 750;
+  outline: none;
+}
+
+.admin-students-search-input:focus {
+  border-color: rgba(89, 144, 189, 0.45);
+  box-shadow: 0 0 0 3px rgba(89, 144, 189, 0.12);
+}
+
+.admin-students-search-input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
 .admin-students-filters-badge {
   margin-left: 8px;
   height: 18px;

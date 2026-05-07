@@ -103,6 +103,7 @@ const pedagogicoFormContainer = document.querySelector("[data-pedagogico-form-co
 const adminStudentsTeacherSelect = document.querySelector("[data-admin-students-teacher]"); // legacy (removed from template)
 const adminStudentsFiltersTrigger = document.querySelector("[data-admin-students-filters-trigger]");
 const adminStudentsFiltersBadge = document.querySelector("[data-admin-students-filters-badge]");
+const adminStudentsSearchInput = document.querySelector("[data-admin-students-search]");
 const adminStudentsList = document.querySelector("[data-admin-students-list]");
 const adminStudentsEmpty = document.querySelector("[data-admin-students-empty]");
 const adminStudentsError = document.querySelector("[data-admin-students-error]");
@@ -8258,6 +8259,7 @@ let adminStudentsState = {
   logs: [], // all lessonLogs (admin can read)
   summariesAll: [], // all derived student rows
   summaries: [], // derived + filtered student rows
+  searchQuery: "",
   filters: {
     status: "all", // all | active | inactive
     createdFrom: "",
@@ -8292,6 +8294,16 @@ const normalizeRiskLabel = (value) => {
   if (s === "medio" || s === "médio") return "Médio";
   if (s === "alto") return "Alto";
   return "";
+};
+
+const normalizeSearchText = (value) => {
+  const s = String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+  return s;
 };
 
 // Admin > Alunos: student files (Storage + Firestore metadata)
@@ -9439,6 +9451,8 @@ const deriveAdminStudentsSummaries = ({ teacherId, logs } = {}) => {
         teacherName: inferredTeacher?.nome || teacherMeta?.nome || "—",
         plano: String(meta?.plano || "").trim(),
         pais: String(meta?.pais || "").trim(),
+        estadoEua: String(meta?.estadoEua || "").trim(),
+        trabalho: String(meta?.trabalho || "").trim(),
         criadoKey: String(meta?.criadoKey || ""),
         cancelKey: String(meta?.cancelKey || ""),
         criadoLabel: meta?.criadoEm ? formatAdminDate(meta.criadoEm) : "—",
@@ -9936,6 +9950,9 @@ const syncAdminStudentSheetTabs = () => {
 const renderAdminStudentsPanel = async ({ force = false } = {}) => {
   if (currentRole !== "admin") return;
   if (!(adminStudentsList instanceof HTMLElement)) return;
+  if (adminStudentsSearchInput instanceof HTMLInputElement) {
+    adminStudentsSearchInput.value = String(adminStudentsState.searchQuery || "");
+  }
   await ensureAdminStudentsBaseData({ force });
   renderAdminStudentsList();
 };
@@ -11001,6 +11018,7 @@ const closeAdminStudentsFiltersPopover = () => {
 const applyAdminStudentsFilters = () => {
   const all = Array.isArray(adminStudentsState.summariesAll) ? adminStudentsState.summariesAll : [];
   const f = adminStudentsState.filters && typeof adminStudentsState.filters === "object" ? adminStudentsState.filters : {};
+  const q = normalizeSearchText(adminStudentsState.searchQuery || "");
 
   const status = String(f.status || "all");
   const createdFrom = String(f.createdFrom || "").trim();
@@ -11011,7 +11029,7 @@ const applyAdminStudentsFilters = () => {
   const plan = String(f.plan || "").trim().toLowerCase();
   const country = String(f.country || "").trim().toLowerCase();
 
-  const filtered = all.filter((row) => {
+  let filtered = all.filter((row) => {
     if (!row || typeof row !== "object") return false;
     if (status === "active" && !row.ativo) return false;
     if (status === "inactive" && row.ativo) return false;
@@ -11032,6 +11050,26 @@ const applyAdminStudentsFilters = () => {
     if (country && String(row.pais || "").trim().toLowerCase() !== country) return false;
     return true;
   });
+
+  if (q) {
+    filtered = filtered.filter((row) => {
+      const planLabel = String(row.plano || "").trim() || "Sem plano";
+      const haystack = normalizeSearchText(
+        [
+          row.nome,
+          row.email,
+          row.pais,
+          row.estadoEua,
+          planLabel,
+          row.trabalho,
+          row.statusLabel,
+        ]
+          .filter(Boolean)
+          .join(" ")
+      );
+      return haystack.includes(q);
+    });
+  }
 
   adminStudentsState.summaries = filtered;
   syncAdminStudentsFiltersBadge();
@@ -12842,6 +12880,13 @@ sidebarLinks.forEach((link) => {
     navigateApp(panelPathForRole(role, panel));
   });
 });
+
+if (adminStudentsSearchInput instanceof HTMLInputElement) {
+  adminStudentsSearchInput.addEventListener("input", () => {
+    adminStudentsState.searchQuery = String(adminStudentsSearchInput.value || "");
+    applyAdminStudentsFilters();
+  });
+}
 
 chartTriggers.forEach((trigger) => {
   trigger.addEventListener("click", (event) => {
