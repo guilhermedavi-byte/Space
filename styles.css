@@ -12954,6 +12954,20 @@ body[data-role="teacher"][data-active-panel="dashboard"] .platform-header {
   border: 0.5px solid rgba(89, 144, 189, 0.08);
 }
 
+.teacher-v4-notice-btn {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  appearance: none;
+  font: inherit;
+  color: inherit;
+}
+
+.teacher-v4-notice-btn:hover,
+.teacher-v4-notice-btn:focus-visible {
+  background: rgba(255, 255, 255, 0.04);
+}
+
 .teacher-v4-notice.is-important {
   background: rgba(255, 78, 70, 0.03);
   border-color: rgba(255, 78, 70, 0.12);
@@ -15279,6 +15293,14 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   flex-wrap: wrap;
 }
 
+.admin-ped-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .admin-ped-title {
   margin: 0;
   font-family: "Inter", "Plus Jakarta Sans", "Avenir Next", sans-serif;
@@ -15300,7 +15322,7 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 .admin-ped-metrics {
   display: grid;
   gap: 10px;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
 }
 
 .admin-ped-metric {
@@ -15374,6 +15396,144 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 .admin-ped-surface {
   padding: 14px;
   overflow: hidden;
+}
+
+.admin-ped-panelhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.admin-ped-panelhead-title {
+  font-size: 13px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.admin-ped-overview {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-ped-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.admin-ped-overview-card {
+  padding: 14px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+  display: grid;
+  gap: 10px;
+}
+
+.admin-ped-overview-title {
+  font-size: 12px;
+  font-weight: 850;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.admin-ped-overview-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.admin-ped-overview-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.admin-ped-overview-item strong {
+  font-weight: 850;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.admin-ped-list {
+  display: grid;
+}
+
+.admin-ped-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 12px;
+}
+
+.admin-ped-row + .admin-ped-row {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.admin-ped-row-title {
+  font-size: 14px;
+  font-weight: 850;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.admin-ped-row-sub {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.52);
+}
+
+.admin-ped-row-meta {
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-ped-row-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-ped-reports-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.admin-ped-report {
+  padding: 14px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+  display: grid;
+  gap: 10px;
+}
+
+.admin-ped-report-title {
+  font-size: 13px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.admin-ped-report-sub {
+  font-size: 12px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.55);
 }
 
 .admin-ped-filters {
@@ -15848,6 +16008,14 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   }
 
   .admin-ped-modal-row {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-ped-overview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-ped-reports-grid {
     grid-template-columns: 1fr;
   }
 }

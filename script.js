@@ -117,12 +117,27 @@ const adminStudentSheet = document.querySelector("[data-admin-student-sheet]");
 // Admin > Controle Pedagógico (gestão)
 const adminPedRoot = document.querySelector("[data-admin-pedagogico]");
 const adminPedStatus = document.querySelector("[data-admin-ped-status]");
+const adminPedOverview = document.querySelector("[data-admin-ped-overview]");
+const adminPedEmptyOverview = document.querySelector("[data-admin-ped-empty-overview]");
 const adminPedAgenda = document.querySelector("[data-admin-ped-agenda]");
 const adminPedEmpty = document.querySelector("[data-admin-ped-empty]");
 const adminPedError = document.querySelector("[data-admin-ped-error]");
 const adminPedClasses = document.querySelector("[data-admin-ped-classes]");
 const adminPedEmptyClasses = document.querySelector("[data-admin-ped-empty-classes]");
+const adminPedGroups = document.querySelector("[data-admin-ped-groups]");
+const adminPedEmptyGroups = document.querySelector("[data-admin-ped-empty-groups]");
+const adminPedStudents = document.querySelector("[data-admin-ped-students]");
+const adminPedEmptyStudents = document.querySelector("[data-admin-ped-empty-students]");
 const adminPedTeachers = document.querySelector("[data-admin-ped-teachers]");
+const adminPedPlans = document.querySelector("[data-admin-ped-plans]");
+const adminPedEmptyPlans = document.querySelector("[data-admin-ped-empty-plans]");
+const adminPedSurveys = document.querySelector("[data-admin-ped-surveys]");
+const adminPedEmptySurveys = document.querySelector("[data-admin-ped-empty-surveys]");
+const adminPedAlerts = document.querySelector("[data-admin-ped-alerts]");
+const adminPedEmptyAlerts = document.querySelector("[data-admin-ped-empty-alerts]");
+const adminPedFeedbacks = document.querySelector("[data-admin-ped-feedbacks]");
+const adminPedEmptyFeedbacks = document.querySelector("[data-admin-ped-empty-feedbacks]");
+const adminPedReports = document.querySelector("[data-admin-ped-reports]");
 const adminPedConflicts = document.querySelector("[data-admin-ped-conflicts]");
 const adminPedEmptyConflicts = document.querySelector("[data-admin-ped-empty-conflicts]");
 
@@ -255,6 +270,8 @@ const teacherV4OccupancyPill = document.querySelector("[data-teacher-v4-occupanc
 const teacherV4OccupancyBar = document.querySelector("[data-teacher-v4-occupancy-bar]");
 const teacherV4NoticesList = document.querySelector("[data-teacher-v4-notices]");
 const teacherV4NoticesEmpty = document.querySelector("[data-teacher-v4-notices-empty]");
+const teacherV4FeedbacksList = document.querySelector("[data-teacher-v4-feedbacks]");
+const teacherV4FeedbacksEmpty = document.querySelector("[data-teacher-v4-feedbacks-empty]");
 
 const learningLevelNames = ["Pré A1", "A1", "A1+", "A2", "A2+", "B1", "B1+", "B2", "B2+", "C1", "C2"];
 const learningJourneyPoints = [
@@ -341,6 +358,7 @@ let teacherV4DashboardState = {
   aulas: [],
   avaliacoes: [],
   avisos: [],
+  feedbacks: [],
   reagendamentos: [],
   workHours: null,
   nextLessonId: "",
@@ -2699,6 +2717,7 @@ const renderTeacherDashboard = () => {
   if (teacherV4Timeline instanceof HTMLElement) teacherV4Timeline.innerHTML = "";
   if (teacherV4WeekGrid instanceof HTMLElement) teacherV4WeekGrid.innerHTML = "";
   if (teacherV4NoticesList instanceof HTMLElement) teacherV4NoticesList.innerHTML = "";
+  if (teacherV4FeedbacksList instanceof HTMLElement) teacherV4FeedbacksList.innerHTML = "";
 
   const todayKey = createDateKey(now);
   const weekDays = getWeekDaysMonToSat(now);
@@ -2716,6 +2735,7 @@ const renderTeacherDashboard = () => {
     const aulas = Array.isArray(teacherV4DashboardState.aulas) ? teacherV4DashboardState.aulas : [];
     const avaliacoes = Array.isArray(teacherV4DashboardState.avaliacoes) ? teacherV4DashboardState.avaliacoes : [];
     const avisos = Array.isArray(teacherV4DashboardState.avisos) ? teacherV4DashboardState.avisos : [];
+    const feedbacks = Array.isArray(teacherV4DashboardState.feedbacks) ? teacherV4DashboardState.feedbacks : [];
     const reag = Array.isArray(teacherV4DashboardState.reagendamentos) ? teacherV4DashboardState.reagendamentos : [];
     const workHours = teacherV4DashboardState.workHours;
 
@@ -3113,6 +3133,33 @@ const renderTeacherDashboard = () => {
         })
         .join("");
     }
+
+    // Feedbacks.
+    if (teacherV4FeedbacksList instanceof HTMLElement && teacherV4FeedbacksEmpty instanceof HTMLElement) {
+      const items = feedbacks.slice().sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0)).slice(0, 5);
+      teacherV4FeedbacksEmpty.hidden = items.length > 0;
+      teacherV4FeedbacksList.innerHTML = items
+        .map((f) => {
+          const when = formatShortDateFromMs(f.createdAtMs);
+          const score = Number.isFinite(Number(f.generalScore)) ? String(f.generalScore) : "—";
+          const tag = f.readByTeacher ? "" : `<span class="teacher-v4-notice-tag">Novo</span>`;
+          return `
+            <button class="teacher-v4-notice teacher-v4-notice-btn ${f.readByTeacher ? "" : "is-important"}" type="button" data-teacher-v4-feedback-view="${escapeHtml(
+              String(f.id || "")
+            )}">
+              <div class="teacher-v4-notice-head">
+                <div style="display:flex; align-items:center; gap:6px; min-width:0;">
+                  <p class="teacher-v4-notice-title">Feedback pedagógico</p>
+                  ${tag}
+                </div>
+                <span class="teacher-v4-notice-meta">${escapeHtml(`${when} · ${score}`)}</span>
+              </div>
+              <p class="teacher-v4-notice-text">${escapeHtml(String(f.strengths || "").trim() || "Toque para ver detalhes.")}</p>
+            </button>
+          `;
+        })
+        .join("");
+    }
   };
 
   if (!shouldReload && teacherV4DashboardState.teacherId) {
@@ -3310,6 +3357,25 @@ const renderTeacherDashboard = () => {
         avisos = [];
       }
 
+      // Feedbacks pedagógicos (optional).
+      let feedbacks = [];
+      try {
+        const snap = await withTimeout(
+          firebase.getDocs(firebase.query(firebase.collection(firebase.primaryDb, "pedagogicalFeedbacks"), firebase.where("teacherId", "==", teacherId))),
+          12_000,
+          "teacher_v4_feedbacks"
+        );
+        const rows = [];
+        snap.forEach((docSnap) => {
+          const data = docSnap.data ? docSnap.data() : null;
+          const row = normalizePedFeedbackRow({ id: docSnap.id, data });
+          if (row) rows.push(row);
+        });
+        feedbacks = rows.sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0));
+      } catch (error) {
+        feedbacks = [];
+      }
+
       // Reagendamentos pendentes para o professor (optional).
       let reagendamentos = [];
       try {
@@ -3349,6 +3415,7 @@ const renderTeacherDashboard = () => {
       teacherV4DashboardState.aulas = aulas;
       teacherV4DashboardState.avaliacoes = avaliacoes;
       teacherV4DashboardState.avisos = avisos;
+      teacherV4DashboardState.feedbacks = feedbacks;
       teacherV4DashboardState.reagendamentos = reagendamentos;
       teacherV4DashboardState.workHours = workHours;
       teacherV4DashboardState.loadedAt = Date.now();
@@ -9966,6 +10033,15 @@ let adminPedagogicoState = {
   students: [],
   studentsById: new Map(),
   classes: [],
+  groups: [],
+  groupsById: new Map(),
+  plans: [],
+  plansById: new Map(),
+  surveys: [],
+  teacherAlerts: [],
+  pedagogicalFeedbacks: [],
+  lessonLogs: [],
+  groupsByClassId: new Map(),
   filters: {
     teacherId: "",
     dow: "",
@@ -9974,7 +10050,7 @@ let adminPedagogicoState = {
     status: "",
     plan: "",
   },
-  activeTab: "agenda", // agenda | aulas | turmas | professores | conflitos
+  activeTab: "overview", // overview | agenda | aulas | turmas | alunos | professores | planos | pesquisas | avisos | feedbacks | relatorios | conflitos
   conflicts: [],
 };
 
@@ -10068,8 +10144,11 @@ const normalizeClassRow = ({ id, data }) => {
   const title = String(src.title || "").trim();
   const teacherId = String(src.teacherId || src.professorId || "").trim();
   const teacherName = String(src.teacherName || src.professorNome || src.professorName || "").trim();
+  const groupId = String(src.groupId || "").trim();
   const groupName = String(src.groupName || "").trim();
-  const plan = normalizePlanKeyLoose(src.plan || src.plano || "");
+  const planId = String(src.planId || "").trim();
+  const planName = String(src.planName || "").trim();
+  const plan = normalizePlanKeyLoose(src.plan || src.plano || planName || "");
   const daysOfWeek = normalizeDaysOfWeek(src.daysOfWeek || src.weekDays || src.diasSemana || []);
   const startMin = normalizeMinutesValue(src.startMin ?? src.startTime ?? src.horaInicio);
   const endMin = normalizeMinutesValue(src.endMin ?? src.endTime ?? src.horaFim);
@@ -10091,7 +10170,10 @@ const normalizeClassRow = ({ id, data }) => {
     title,
     teacherId,
     teacherName,
+    groupId,
     groupName,
+    planId,
+    planName,
     plan,
     daysOfWeek,
     startMin,
@@ -10132,6 +10214,265 @@ const fetchClassesFromFirestore = async () => {
     if (sa) return sa;
     return String(a.id).localeCompare(String(b.id));
   });
+  return rows;
+};
+
+const normalizePlanStatus = (value) => {
+  const raw = String(value || "").trim().toLowerCase();
+  if (raw === "inactive" || raw === "inativo" || raw === "desativado") return "inactive";
+  return "active";
+};
+
+const normalizePlanType = (value) => {
+  const raw = String(value || "").trim().toLowerCase();
+  if (raw === "group" || raw === "grupo") return "group";
+  if (raw === "hybrid" || raw === "hibrido" || raw === "híbrido") return "hybrid";
+  return "individual";
+};
+
+const normalizePlanRow = ({ id, data }) => {
+  const docId = String(id || "").trim();
+  const src = data && typeof data === "object" ? data : {};
+  if (!docId) return null;
+  const name = String(src.name || src.nome || "").trim();
+  const monthlyPrice = Number.isFinite(Number(src.monthlyPrice)) ? Number(src.monthlyPrice) : src.monthlyPrice ?? null;
+  const weeklyClasses = Number.isFinite(Number(src.weeklyClasses)) ? Number(src.weeklyClasses) : src.weeklyClasses ?? null;
+  const type = normalizePlanType(src.type);
+  const description = String(src.description || src.descricao || "").trim();
+  const status = normalizePlanStatus(src.status);
+  const createdAtMs = parseFirestoreDateToMs(src.createdAt || src.criadoEm);
+  const updatedAtMs = parseFirestoreDateToMs(src.updatedAt || src.atualizadoEm);
+  return {
+    id: docId,
+    name: name || "Plano",
+    monthlyPrice,
+    weeklyClasses,
+    type,
+    description,
+    status,
+    createdAtMs,
+    updatedAtMs,
+  };
+};
+
+const fetchPlansFromFirestore = async () => {
+  const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_plans");
+  const user = await waitForFirebaseAuthReady(firebase, 5000);
+  if (!user) {
+    const e = new Error("firebase_not_authenticated");
+    e.code = "auth/no-current-user";
+    throw e;
+  }
+  const col = firebase.collection(firebase.primaryDb, "plans");
+  const snap = await withTimeout(firebase.getDocs(col), 12_000, "firestore_admin_plans_list");
+  const rows = [];
+  snap.forEach((docSnap) => {
+    const row = normalizePlanRow({ id: docSnap.id, data: docSnap.data ? docSnap.data() : null });
+    if (row) rows.push(row);
+  });
+  rows.sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "pt-BR"));
+  return rows;
+};
+
+const normalizeGroupRow = ({ id, data }) => {
+  const docId = String(id || "").trim();
+  const src = data && typeof data === "object" ? data : {};
+  if (!docId) return null;
+  const name = String(src.name || src.nome || src.groupName || "").trim();
+  const teacherId = String(src.teacherId || src.professorId || "").trim();
+  const teacherName = String(src.teacherName || src.professorNome || src.professorName || "").trim();
+  const planId = String(src.planId || "").trim();
+  const planName = String(src.planName || src.plan || src.plano || "").trim();
+  const classId = String(src.classId || "").trim();
+  const status = normalizeClassStatus(src.status);
+  const daysOfWeek = normalizeDaysOfWeek(src.daysOfWeek || src.weekDays || src.diasSemana || []);
+  const startMin = normalizeMinutesValue(src.startMin ?? src.startTime ?? src.horaInicio);
+  const endMin = normalizeMinutesValue(src.endMin ?? src.endTime ?? src.horaFim);
+  const studentIdsRaw = Array.isArray(src.studentIds) ? src.studentIds : Array.isArray(src.alunoIds) ? src.alunoIds : [];
+  const studentIds = studentIdsRaw.map((v) => String(v || "").trim()).filter(Boolean);
+  const studentNamesRaw = Array.isArray(src.studentNames) ? src.studentNames : Array.isArray(src.alunoNomes) ? src.alunoNomes : [];
+  const studentNames = studentNamesRaw.map((v) => String(v || "").trim()).filter(Boolean);
+  const createdAtMs = parseFirestoreDateToMs(src.createdAt || src.criadoEm);
+  const updatedAtMs = parseFirestoreDateToMs(src.updatedAt || src.atualizadoEm);
+  return {
+    id: docId,
+    name: name || "Turma",
+    teacherId,
+    teacherName,
+    planId,
+    planName,
+    classId,
+    daysOfWeek,
+    startMin,
+    endMin,
+    status,
+    studentIds,
+    studentNames,
+    notes: String(src.notes || src.observacoes || "").trim(),
+    createdAtMs,
+    updatedAtMs,
+  };
+};
+
+const fetchGroupsFromFirestore = async () => {
+  const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_groups");
+  const user = await waitForFirebaseAuthReady(firebase, 5000);
+  if (!user) {
+    const e = new Error("firebase_not_authenticated");
+    e.code = "auth/no-current-user";
+    throw e;
+  }
+  const col = firebase.collection(firebase.primaryDb, "groups");
+  const snap = await withTimeout(firebase.getDocs(col), 12_000, "firestore_admin_groups_list");
+  const rows = [];
+  snap.forEach((docSnap) => {
+    const row = normalizeGroupRow({ id: docSnap.id, data: docSnap.data ? docSnap.data() : null });
+    if (row) rows.push(row);
+  });
+  rows.sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "pt-BR"));
+  return rows;
+};
+
+const normalizeTeacherAlertStatus = (value) => {
+  const raw = String(value || "").trim().toLowerCase();
+  if (raw === "resolved" || raw === "resolvido") return "resolved";
+  if (raw === "analysis" || raw === "em_analise" || raw === "em análise" || raw === "em analise") return "analysis";
+  return "open";
+};
+
+const normalizeTeacherAlertPriority = (value) => {
+  const raw = String(value || "").trim().toLowerCase();
+  if (raw === "high" || raw === "alta") return "high";
+  if (raw === "medium" || raw === "media" || raw === "média") return "medium";
+  return "low";
+};
+
+const normalizeTeacherAlertRow = ({ id, data }) => {
+  const docId = String(id || "").trim();
+  const src = data && typeof data === "object" ? data : {};
+  if (!docId) return null;
+  const createdAtMs = parseFirestoreDateToMs(src.createdAt || src.criadoEm);
+  const resolvedAtMs = parseFirestoreDateToMs(src.resolvedAt || src.resolvedAts);
+  return {
+    id: docId,
+    teacherId: String(src.teacherId || "").trim(),
+    teacherName: String(src.teacherName || "").trim(),
+    studentId: String(src.studentId || "").trim(),
+    studentName: String(src.studentName || "").trim(),
+    category: String(src.category || "").trim(),
+    priority: normalizeTeacherAlertPriority(src.priority),
+    description: String(src.description || "").trim(),
+    status: normalizeTeacherAlertStatus(src.status),
+    coordinatorNotes: String(src.coordinatorNotes || "").trim(),
+    createdAtMs,
+    resolvedAtMs,
+  };
+};
+
+const fetchTeacherAlertsFromFirestore = async () => {
+  const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_teacher_alerts");
+  const user = await waitForFirebaseAuthReady(firebase, 5000);
+  if (!user) {
+    const e = new Error("firebase_not_authenticated");
+    e.code = "auth/no-current-user";
+    throw e;
+  }
+  const col = firebase.collection(firebase.primaryDb, "teacherAlerts");
+  const snap = await withTimeout(firebase.getDocs(col), 12_000, "firestore_admin_teacher_alerts_list");
+  const rows = [];
+  snap.forEach((docSnap) => {
+    const row = normalizeTeacherAlertRow({ id: docSnap.id, data: docSnap.data ? docSnap.data() : null });
+    if (row) rows.push(row);
+  });
+  rows.sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0));
+  return rows;
+};
+
+const normalizeSurveyRow = ({ id, data }) => {
+  const docId = String(id || "").trim();
+  const src = data && typeof data === "object" ? data : {};
+  if (!docId) return null;
+  const nps = Number.isFinite(Number(src.nps)) ? Number(src.nps) : null;
+  const csat = Number.isFinite(Number(src.csat)) ? Number(src.csat) : null;
+  const createdAtMs = parseFirestoreDateToMs(src.createdAt || src.criadoEm);
+  return {
+    id: docId,
+    studentId: String(src.studentId || "").trim(),
+    studentName: String(src.studentName || "").trim(),
+    teacherId: String(src.teacherId || "").trim(),
+    teacherName: String(src.teacherName || "").trim(),
+    classId: String(src.classId || "").trim(),
+    groupId: String(src.groupId || "").trim(),
+    nps,
+    csat,
+    comment: String(src.comment || "").trim(),
+    createdAtMs,
+  };
+};
+
+const fetchSurveysFromFirestore = async () => {
+  const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_surveys");
+  const user = await waitForFirebaseAuthReady(firebase, 5000);
+  if (!user) {
+    const e = new Error("firebase_not_authenticated");
+    e.code = "auth/no-current-user";
+    throw e;
+  }
+  const col = firebase.collection(firebase.primaryDb, "surveys");
+  const snap = await withTimeout(firebase.getDocs(col), 12_000, "firestore_admin_surveys_list");
+  const rows = [];
+  snap.forEach((docSnap) => {
+    const row = normalizeSurveyRow({ id: docSnap.id, data: docSnap.data ? docSnap.data() : null });
+    if (row) rows.push(row);
+  });
+  rows.sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0));
+  return rows;
+};
+
+const normalizePedFeedbackRow = ({ id, data }) => {
+  const docId = String(id || "").trim();
+  const src = data && typeof data === "object" ? data : {};
+  if (!docId) return null;
+  const createdAtMs = parseFirestoreDateToMs(src.createdAt || src.criadoEm);
+  const readAtMs = parseFirestoreDateToMs(src.readAt);
+  return {
+    id: docId,
+    teacherId: String(src.teacherId || "").trim(),
+    teacherName: String(src.teacherName || "").trim(),
+    classId: String(src.classId || "").trim(),
+    studentId: String(src.studentId || "").trim(),
+    groupId: String(src.groupId || "").trim(),
+    observationDate: String(src.observationDate || "").trim(),
+    classType: normalizeClassType(src.classType || src.type),
+    generalScore: Number.isFinite(Number(src.generalScore)) ? Number(src.generalScore) : null,
+    strengths: String(src.strengths || "").trim(),
+    improvements: String(src.improvements || "").trim(),
+    actionPlan: String(src.actionPlan || "").trim(),
+    freeNotes: String(src.freeNotes || "").trim(),
+    createdBy: String(src.createdBy || "").trim(),
+    createdAtMs,
+    readByTeacher: src.readByTeacher === true,
+    readAtMs,
+    payload: src,
+  };
+};
+
+const fetchPedagogicalFeedbacksFromFirestore = async () => {
+  const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_feedbacks");
+  const user = await waitForFirebaseAuthReady(firebase, 5000);
+  if (!user) {
+    const e = new Error("firebase_not_authenticated");
+    e.code = "auth/no-current-user";
+    throw e;
+  }
+  const col = firebase.collection(firebase.primaryDb, "pedagogicalFeedbacks");
+  const snap = await withTimeout(firebase.getDocs(col), 12_000, "firestore_admin_feedbacks_list");
+  const rows = [];
+  snap.forEach((docSnap) => {
+    const row = normalizePedFeedbackRow({ id: docSnap.id, data: docSnap.data ? docSnap.data() : null });
+    if (row) rows.push(row);
+  });
+  rows.sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0));
   return rows;
 };
 
@@ -10239,24 +10580,58 @@ const adminPedagogicoFilteredClasses = () => {
 const renderAdminPedagogicoMetrics = () => {
   const classes = Array.isArray(adminPedagogicoState.classes) ? adminPedagogicoState.classes : [];
   const active = classes.filter((c) => normalizeClassStatus(c?.status) === "active");
-  const individual = classes.filter((c) => normalizeClassType(c?.type) === "individual");
-  const group = classes.filter((c) => normalizeClassType(c?.type) === "group");
-  const teacherIds = new Set(active.map((c) => String(c.teacherId || "")).filter(Boolean));
+  const individual = active.filter((c) => normalizeClassType(c?.type) === "individual");
+  const group = active.filter((c) => normalizeClassType(c?.type) === "group");
   const conflicts = Array.isArray(adminPedagogicoState.conflicts) ? adminPedagogicoState.conflicts : [];
+  const teachers = Array.isArray(adminPedagogicoState.teachers) ? adminPedagogicoState.teachers : [];
+  const students = Array.isArray(adminPedagogicoState.students) ? adminPedagogicoState.students : [];
+  const groups = Array.isArray(adminPedagogicoState.groups) ? adminPedagogicoState.groups : [];
+  const surveys = Array.isArray(adminPedagogicoState.surveys) ? adminPedagogicoState.surveys : [];
+  const teacherAlerts = Array.isArray(adminPedagogicoState.teacherAlerts) ? adminPedagogicoState.teacherAlerts : [];
+  const feedbacks = Array.isArray(adminPedagogicoState.pedagogicalFeedbacks) ? adminPedagogicoState.pedagogicalFeedbacks : [];
+  const lessonLogs = Array.isArray(adminPedagogicoState.lessonLogs) ? adminPedagogicoState.lessonLogs : [];
 
   const setMetric = (key, value) => {
     const el = document.querySelector(`[data-admin-ped-metric="${CSS.escape(String(key))}"]`);
     if (el instanceof HTMLElement) el.textContent = value;
   };
-  setMetric("active", active.length ? String(active.length) : "0");
-  setMetric("individual", individual.length ? String(individual.length) : "0");
-  setMetric("group", group.length ? String(group.length) : "0");
-  setMetric("teachers", teacherIds.size ? String(teacherIds.size) : "0");
-  setMetric("conflicts", conflicts.length ? String(conflicts.length) : "0");
+  const studentsActive = students.filter((s) => s && typeof s === "object" && s.ativo).length;
+  const teachersActive = teachers.filter((t) => t && typeof t === "object" && t.ativo).length;
+  const groupsActive = groups.filter((g) => normalizeClassStatus(g?.status) === "active").length;
+
+  const npsRows = surveys.map((s) => (Number.isFinite(s?.nps) ? Number(s.nps) : NaN)).filter((n) => Number.isFinite(n));
+  const csatRows = surveys.map((s) => (Number.isFinite(s?.csat) ? Number(s.csat) : NaN)).filter((n) => Number.isFinite(n));
+  const npsAvg = npsRows.length ? npsRows.reduce((a, b) => a + b, 0) / npsRows.length : NaN;
+  const csatAvg = csatRows.length ? csatRows.reduce((a, b) => a + b, 0) / csatRows.length : NaN;
+
+  const alertsOpen = teacherAlerts.filter((a) => String(a?.status || "") !== "resolved").length;
+  const feedbackPending = feedbacks.filter((f) => !(f && typeof f === "object" && f.readByTeacher === true)).length;
+
+  const studentsRiskSet = new Set();
+  lessonLogs.forEach((log) => {
+    const risk = String(log?.payload?.riscoEvasao || log?.payload?.risco_evasao || "").trim().toLowerCase();
+    if (risk === "alto" || risk === "high") {
+      const alunoId = String(log?.alunoId || "").trim();
+      if (alunoId) studentsRiskSet.add(alunoId);
+    }
+  });
+
+  setMetric("active", String(active.length));
+  setMetric("individual", String(individual.length));
+  setMetric("group", String(group.length));
+  setMetric("studentsActive", students.length ? String(studentsActive) : "Sem dados");
+  setMetric("teachersActive", teachers.length ? String(teachersActive) : "Sem dados");
+  setMetric("groupsActive", groups.length ? String(groupsActive) : "Sem dados");
+  setMetric("npsAvg", Number.isFinite(npsAvg) ? npsAvg.toFixed(1) : "Sem dados");
+  setMetric("csatAvg", Number.isFinite(csatAvg) ? csatAvg.toFixed(1) : "Sem dados");
+  setMetric("studentsRisk", lessonLogs.length ? String(studentsRiskSet.size) : "Sem dados");
+  setMetric("conflicts", String(conflicts.length));
+  setMetric("feedbackPending", feedbacks.length ? String(feedbackPending) : "Sem dados");
+  setMetric("teacherAlerts", teacherAlerts.length ? String(alertsOpen) : "Sem dados");
 };
 
 const renderAdminPedagogicoTabs = () => {
-  const activeTab = String(adminPedagogicoState.activeTab || "agenda");
+  const activeTab = String(adminPedagogicoState.activeTab || "overview");
   document.querySelectorAll("[data-admin-ped-tab]").forEach((btn) => {
     if (!(btn instanceof HTMLButtonElement)) return;
     const tab = String(btn.getAttribute("data-admin-ped-tab") || "");
@@ -10272,6 +10647,476 @@ const renderAdminPedagogicoTabs = () => {
     panel.classList.toggle("is-active", isActive);
     panel.hidden = !isActive;
   });
+};
+
+const formatShortDateFromMs = (ms) => {
+  const n = Number(ms);
+  if (!Number.isFinite(n) || n <= 0) return "—";
+  const d = new Date(n);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("pt-BR");
+};
+
+const renderAdminPedagogicoOverview = () => {
+  if (!(adminPedOverview instanceof HTMLElement)) return;
+
+  const classes = Array.isArray(adminPedagogicoState.classes) ? adminPedagogicoState.classes : [];
+  const teachersById = adminPedagogicoState.teachersById instanceof Map ? adminPedagogicoState.teachersById : new Map();
+  const studentsById = adminPedagogicoState.studentsById instanceof Map ? adminPedagogicoState.studentsById : new Map();
+  const alerts = Array.isArray(adminPedagogicoState.teacherAlerts) ? adminPedagogicoState.teacherAlerts : [];
+  const feedbacks = Array.isArray(adminPedagogicoState.pedagogicalFeedbacks) ? adminPedagogicoState.pedagogicalFeedbacks : [];
+
+  const activeClasses = classes.filter((c) => normalizeClassStatus(c?.status) === "active");
+  const noTeacher = activeClasses.filter((c) => !String(c.teacherId || "").trim());
+  const noStudent = activeClasses.filter((c) => normalizeClassType(c?.type) === "individual" && (!Array.isArray(c.studentIds) || !c.studentIds.length));
+  const noGroup = activeClasses.filter((c) => normalizeClassType(c?.type) === "group" && !String(c.groupName || "").trim());
+
+  const linkedStudents = new Set();
+  activeClasses.forEach((c) => {
+    (Array.isArray(c.studentIds) ? c.studentIds : []).forEach((id) => {
+      const s = String(id || "").trim();
+      if (s) linkedStudents.add(s);
+    });
+  });
+  const studentsNoClass = [];
+  studentsById.forEach((meta, id) => {
+    const isActive = meta && typeof meta === "object" ? meta.ativo !== false : true;
+    if (!isActive) return;
+    if (!linkedStudents.has(String(id))) studentsNoClass.push(meta);
+  });
+  studentsNoClass.sort((a, b) => String(a?.nome || "").localeCompare(String(b?.nome || ""), "pt-BR"));
+
+  const byTeacherCount = new Map();
+  activeClasses.forEach((c) => {
+    const tid = String(c.teacherId || "").trim();
+    if (!tid) return;
+    byTeacherCount.set(tid, (byTeacherCount.get(tid) || 0) + 1);
+  });
+  const topTeachers = [...byTeacherCount.entries()]
+    .map(([id, count]) => ({ id, count, name: String(teachersById.get(id)?.nome || "Professor") }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "pt-BR"))
+    .slice(0, 5);
+
+  const recentAlerts = alerts.slice().sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0)).slice(0, 5);
+  const recentFeedbacks = feedbacks.slice().sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0)).slice(0, 5);
+
+  const listLine = (label, value) => `<li class="admin-ped-overview-item"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></li>`;
+
+  adminPedOverview.innerHTML = `
+    <div class="admin-ped-overview-grid">
+      <div class="admin-ped-overview-card">
+        <div class="admin-ped-overview-title">Alertas críticos</div>
+        <ul class="admin-ped-overview-list">
+          ${listLine("Aulas sem professor", String(noTeacher.length))}
+          ${listLine("Aulas sem aluno", String(noStudent.length))}
+          ${listLine("Aulas em grupo sem turma", String(noGroup.length))}
+          ${listLine("Alunos sem aula vinculada", String(studentsNoClass.length))}
+        </ul>
+      </div>
+
+      <div class="admin-ped-overview-card">
+        <div class="admin-ped-overview-title">Professores com mais aulas</div>
+        <ul class="admin-ped-overview-list">
+          ${
+            topTeachers.length
+              ? topTeachers
+                  .map((t) => `<li class="admin-ped-overview-item"><span>${escapeHtml(t.name)}</span><strong>${escapeHtml(String(t.count))}</strong></li>`)
+                  .join("")
+              : `<li class="admin-ped-overview-item"><span>Sem dados</span><strong>—</strong></li>`
+          }
+        </ul>
+      </div>
+    </div>
+
+    <div class="admin-ped-overview-grid">
+      <div class="admin-ped-overview-card">
+        <div class="admin-ped-overview-title">Avisos recentes dos professores</div>
+        <ul class="admin-ped-overview-list">
+          ${
+            recentAlerts.length
+              ? recentAlerts
+                  .map((a) => {
+                    const when = formatShortDateFromMs(a.createdAtMs);
+                    const who = a.studentName ? `${a.studentName}` : a.studentId ? a.studentId : "Aluno";
+                    const prof = a.teacherName ? a.teacherName : a.teacherId ? a.teacherId : "Professor";
+                    const title = `${prof} · ${who}`;
+                    return `<li class="admin-ped-overview-item"><span>${escapeHtml(title)}</span><strong>${escapeHtml(when)}</strong></li>`;
+                  })
+                  .join("")
+              : `<li class="admin-ped-overview-item"><span>Sem avisos</span><strong>—</strong></li>`
+          }
+        </ul>
+      </div>
+
+      <div class="admin-ped-overview-card">
+        <div class="admin-ped-overview-title">Feedbacks pedagógicos recentes</div>
+        <ul class="admin-ped-overview-list">
+          ${
+            recentFeedbacks.length
+              ? recentFeedbacks
+                  .map((f) => {
+                    const when = formatShortDateFromMs(f.createdAtMs);
+                    const prof = f.teacherName ? f.teacherName : f.teacherId ? f.teacherId : "Professor";
+                    const score = Number.isFinite(Number(f.generalScore)) ? String(f.generalScore) : "—";
+                    return `<li class="admin-ped-overview-item"><span>${escapeHtml(prof)}</span><strong>${escapeHtml(`${when} · ${score}`)}</strong></li>`;
+                  })
+                  .join("")
+              : `<li class="admin-ped-overview-item"><span>Sem feedbacks</span><strong>—</strong></li>`
+          }
+        </ul>
+      </div>
+    </div>
+  `;
+
+  if (adminPedEmptyOverview instanceof HTMLElement) {
+    const hasAny = classes.length || alerts.length || feedbacks.length;
+    adminPedEmptyOverview.hidden = Boolean(hasAny);
+  }
+};
+
+const pedStatusPillHtml = (status) => {
+  const s = String(status || "").trim().toLowerCase();
+  const cls = s === "active" ? "is-active" : s === "paused" ? "is-paused" : s === "ended" ? "is-ended" : "";
+  const label = s === "active" ? "Ativa" : s === "paused" ? "Pausada" : s === "ended" ? "Encerrada" : "—";
+  return `<span class="admin-ped-pill ${cls}">${escapeHtml(label)}</span>`;
+};
+
+const renderAdminPedagogicoGroups = () => {
+  if (!(adminPedGroups instanceof HTMLElement)) return;
+  const groups = Array.isArray(adminPedagogicoState.groups) ? adminPedagogicoState.groups : [];
+  if (adminPedEmptyGroups instanceof HTMLElement) adminPedEmptyGroups.hidden = groups.length > 0;
+  adminPedGroups.innerHTML = `
+    <div class="admin-ped-list">
+      ${groups
+        .map((g) => {
+          const when = g.updatedAtMs ? `Atualizado em ${formatShortDateFromMs(g.updatedAtMs)}` : g.createdAtMs ? `Criado em ${formatShortDateFromMs(g.createdAtMs)}` : "";
+          const days = (Array.isArray(g.daysOfWeek) ? g.daysOfWeek : []).map(daysLabelShort).join(", ") || "—";
+          const time =
+            Number.isFinite(Number(g.startMin)) && Number.isFinite(Number(g.endMin)) && g.endMin > g.startMin
+              ? `${formatHmFromMinutes(g.startMin)}–${formatHmFromMinutes(g.endMin)}`
+              : "—";
+          const plan = g.planName ? String(g.planName) : g.planId ? g.planId : "—";
+          const teacher = g.teacherName ? g.teacherName : g.teacherId ? g.teacherId : "—";
+          const count = Array.isArray(g.studentIds) ? g.studentIds.length : 0;
+          return `
+            <div class="admin-ped-row">
+              <div>
+                <div class="admin-ped-row-title">${escapeHtml(g.name || "Turma")}</div>
+                <div class="admin-ped-row-sub">${escapeHtml(`${teacher} · ${days} · ${time}`)}</div>
+                <div class="admin-ped-row-meta">
+                  ${pedStatusPillHtml(g.status)}
+                  ${plan ? `<span class="admin-ped-pill is-plan">${escapeHtml(String(plan))}</span>` : ""}
+                  <span class="admin-ped-pill">${escapeHtml(`${count} aluno${count === 1 ? "" : "s"}`)}</span>
+                  ${when ? `<span class="admin-ped-pill">${escapeHtml(when)}</span>` : ""}
+                </div>
+              </div>
+              <div class="admin-ped-row-actions">
+                <button class="admin-ped-action" type="button" data-admin-ped-group-edit="${escapeHtml(g.id)}">Editar</button>
+                <button class="admin-ped-action is-muted" type="button" data-admin-ped-group-toggle="${escapeHtml(g.id)}">${
+            normalizeClassStatus(g.status) === "active" ? "Pausar" : "Ativar"
+          }</button>
+                <button class="admin-ped-action is-danger" type="button" data-admin-ped-group-delete="${escapeHtml(g.id)}">Excluir</button>
+              </div>
+            </div>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+};
+
+const planTypeLabel = (type) => {
+  const t = String(type || "").trim().toLowerCase();
+  if (t === "group") return "Grupo";
+  if (t === "hybrid") return "Híbrido";
+  return "Individual";
+};
+
+const renderAdminPedagogicoPlansPanel = () => {
+  if (!(adminPedPlans instanceof HTMLElement)) return;
+  const plans = Array.isArray(adminPedagogicoState.plans) ? adminPedagogicoState.plans : [];
+  if (adminPedEmptyPlans instanceof HTMLElement) adminPedEmptyPlans.hidden = plans.length > 0;
+
+  const statusPill = (status) => {
+    const s = String(status || "").trim().toLowerCase() === "inactive" ? "inactive" : "active";
+    const cls = s === "active" ? "is-active" : "is-ended";
+    const label = s === "active" ? "Ativo" : "Inativo";
+    return `<span class="admin-ped-pill ${cls}">${escapeHtml(label)}</span>`;
+  };
+
+  adminPedPlans.innerHTML = `
+    <div class="admin-ped-list">
+      ${plans
+        .map((p) => {
+          const price = Number.isFinite(Number(p.monthlyPrice)) ? `R$ ${Number(p.monthlyPrice).toFixed(2)}` : "—";
+          const weekly = Number.isFinite(Number(p.weeklyClasses)) ? `${Number(p.weeklyClasses)} aula(s)/sem` : "—";
+          return `
+            <div class="admin-ped-row">
+              <div>
+                <div class="admin-ped-row-title">${escapeHtml(p.name || "Plano")}</div>
+                <div class="admin-ped-row-sub">${escapeHtml(`${planTypeLabel(p.type)} · ${weekly} · ${price}`)}</div>
+                <div class="admin-ped-row-meta">
+                  ${statusPill(p.status)}
+                </div>
+              </div>
+              <div class="admin-ped-row-actions">
+                <button class="admin-ped-action" type="button" data-admin-ped-plan-edit="${escapeHtml(p.id)}">Editar</button>
+                <button class="admin-ped-action is-muted" type="button" data-admin-ped-plan-toggle="${escapeHtml(p.id)}">${
+            String(p.status || "").toLowerCase() === "inactive" ? "Ativar" : "Desativar"
+          }</button>
+                <button class="admin-ped-action is-danger" type="button" data-admin-ped-plan-delete="${escapeHtml(p.id)}">Excluir</button>
+              </div>
+            </div>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+};
+
+const renderAdminPedagogicoStudentsPanel = () => {
+  if (!(adminPedStudents instanceof HTMLElement)) return;
+  const students = Array.isArray(adminPedagogicoState.students) ? adminPedagogicoState.students : [];
+  const teachersById = adminPedagogicoState.teachersById instanceof Map ? adminPedagogicoState.teachersById : new Map();
+  const groupsById = adminPedagogicoState.groupsById instanceof Map ? adminPedagogicoState.groupsById : new Map();
+
+  const lessonLogs = Array.isArray(adminPedagogicoState.lessonLogs) ? adminPedagogicoState.lessonLogs : [];
+  const riskByStudent = new Map();
+  lessonLogs.forEach((log) => {
+    const alunoId = String(log?.alunoId || "").trim();
+    if (!alunoId) return;
+    const updatedAt = String(log?.atualizadoEm || log?.criadoEm || "").trim();
+    const ms = updatedAt ? Date.parse(updatedAt) : NaN;
+    const prev = riskByStudent.get(alunoId) || null;
+    if (prev && Number.isFinite(prev.ms) && Number.isFinite(ms) && ms < prev.ms) return;
+    const raw = String(log?.payload?.riscoEvasao || log?.payload?.risco_evasao || "").trim().toLowerCase();
+    const risk = raw === "alto" || raw === "high" ? "Alto" : raw === "medio" || raw === "médio" ? "Médio" : raw === "baixo" ? "Baixo" : "";
+    riskByStudent.set(alunoId, { ms: Number.isFinite(ms) ? ms : 0, risk });
+  });
+
+  const rows = students
+    .slice()
+    .sort((a, b) => String(a?.nome || "").localeCompare(String(b?.nome || ""), "pt-BR"))
+    .map((s) => {
+      const teacherId = String(s?.professorId || s?.teacherId || "").trim();
+      const teacherName = teacherId ? String(teachersById.get(teacherId)?.nome || "").trim() : "";
+      const groupId = String(s?.groupId || "").trim();
+      const groupName = groupId ? String(groupsById.get(groupId)?.name || "").trim() : String(s?.groupName || "").trim();
+      const plan = String(s?.plano || "").trim() || "Sem plano";
+      const statusLabel = s && typeof s === "object" ? (s.ativo ? "Ativo" : "Inativo") : "—";
+      const risk = (riskByStudent.get(String(s.id || "")) || {}).risk || "—";
+      return {
+        id: String(s.id || ""),
+        nome: String(s.nome || "Aluno"),
+        email: String(s.email || ""),
+        statusLabel,
+        teacherId,
+        teacherName,
+        groupId,
+        groupName,
+        plan,
+        risk,
+      };
+    });
+
+  if (adminPedEmptyStudents instanceof HTMLElement) adminPedEmptyStudents.hidden = rows.length > 0;
+
+  adminPedStudents.innerHTML = `
+    <div class="admin-ped-list">
+      ${rows
+        .map((r) => {
+          const statusCls = r.statusLabel === "Ativo" ? "is-active" : "is-ended";
+          return `
+            <div class="admin-ped-row">
+              <div>
+                <div class="admin-ped-row-title">${escapeHtml(r.nome)}</div>
+                <div class="admin-ped-row-sub">${escapeHtml(r.email || "—")}</div>
+                <div class="admin-ped-row-meta">
+                  <span class="admin-ped-pill ${statusCls}">${escapeHtml(r.statusLabel)}</span>
+                  <span class="admin-ped-pill is-plan">${escapeHtml(r.plan)}</span>
+                  ${r.teacherName ? `<span class="admin-ped-pill">${escapeHtml(r.teacherName)}</span>` : `<span class="admin-ped-pill">Sem professor</span>`}
+                  ${r.groupName ? `<span class="admin-ped-pill">${escapeHtml(r.groupName)}</span>` : `<span class="admin-ped-pill">Sem turma</span>`}
+                  <span class="admin-ped-pill">${escapeHtml(`Risco: ${r.risk}`)}</span>
+                </div>
+              </div>
+              <div class="admin-ped-row-actions">
+                <button class="admin-ped-action" type="button" data-admin-ped-student-open="${escapeHtml(r.id)}">Ficha</button>
+                <button class="admin-ped-action" type="button" data-admin-ped-student-link="${escapeHtml(r.id)}">Vincular</button>
+                <button class="admin-ped-action is-muted" type="button" data-admin-ped-student-new-class="${escapeHtml(
+                  r.id
+                )}">Criar aula</button>
+              </div>
+            </div>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+};
+
+const renderAdminPedagogicoSurveysPanel = () => {
+  if (!(adminPedSurveys instanceof HTMLElement)) return;
+  const surveys = Array.isArray(adminPedagogicoState.surveys) ? adminPedagogicoState.surveys : [];
+  const nps = surveys.map((s) => (Number.isFinite(s?.nps) ? Number(s.nps) : NaN)).filter((n) => Number.isFinite(n));
+  const csat = surveys.map((s) => (Number.isFinite(s?.csat) ? Number(s.csat) : NaN)).filter((n) => Number.isFinite(n));
+  const npsAvg = nps.length ? nps.reduce((a, b) => a + b, 0) / nps.length : NaN;
+  const csatAvg = csat.length ? csat.reduce((a, b) => a + b, 0) / csat.length : NaN;
+  if (adminPedEmptySurveys instanceof HTMLElement) adminPedEmptySurveys.hidden = surveys.length > 0;
+
+  const recent = surveys.slice(0, 50);
+  adminPedSurveys.innerHTML = `
+    <div class="admin-ped-overview-grid">
+      <div class="admin-ped-overview-card">
+        <div class="admin-ped-overview-title">Médias</div>
+        <ul class="admin-ped-overview-list">
+          <li class="admin-ped-overview-item"><span>NPS médio</span><strong>${escapeHtml(Number.isFinite(npsAvg) ? npsAvg.toFixed(1) : "Sem dados")}</strong></li>
+          <li class="admin-ped-overview-item"><span>CSAT médio</span><strong>${escapeHtml(Number.isFinite(csatAvg) ? csatAvg.toFixed(1) : "Sem dados")}</strong></li>
+        </ul>
+      </div>
+      <div class="admin-ped-overview-card">
+        <div class="admin-ped-overview-title">Últimas respostas</div>
+        <ul class="admin-ped-overview-list">
+          ${
+            recent.length
+              ? recent
+                  .slice(0, 6)
+                  .map((s) => {
+                    const who = s.studentName || s.studentId || "Aluno";
+                    const when = formatShortDateFromMs(s.createdAtMs);
+                    const label = `${who} · NPS ${Number.isFinite(s.nps) ? s.nps : "—"} · CSAT ${Number.isFinite(s.csat) ? s.csat : "—"}`;
+                    return `<li class="admin-ped-overview-item"><span>${escapeHtml(label)}</span><strong>${escapeHtml(when)}</strong></li>`;
+                  })
+                  .join("")
+              : `<li class="admin-ped-overview-item"><span>Sem respostas</span><strong>—</strong></li>`
+          }
+        </ul>
+      </div>
+    </div>
+  `;
+};
+
+const renderAdminPedagogicoAlertsPanel = () => {
+  if (!(adminPedAlerts instanceof HTMLElement)) return;
+  const alerts = Array.isArray(adminPedagogicoState.teacherAlerts) ? adminPedagogicoState.teacherAlerts : [];
+  if (adminPedEmptyAlerts instanceof HTMLElement) adminPedEmptyAlerts.hidden = alerts.length > 0;
+
+  const priorityPill = (p) => {
+    const v = String(p || "").toLowerCase();
+    const label = v === "high" ? "Alta" : v === "medium" ? "Média" : "Baixa";
+    const cls = v === "high" ? "is-paused" : v === "medium" ? "is-plan" : "";
+    return `<span class="admin-ped-pill ${cls}">${escapeHtml(label)}</span>`;
+  };
+
+  const statusPill = (s) => {
+    const v = String(s || "").toLowerCase();
+    const label = v === "resolved" ? "Resolvido" : v === "analysis" ? "Em análise" : "Aberto";
+    const cls = v === "resolved" ? "is-ended" : v === "analysis" ? "is-plan" : "is-active";
+    return `<span class="admin-ped-pill ${cls}">${escapeHtml(label)}</span>`;
+  };
+
+  adminPedAlerts.innerHTML = `
+    <div class="admin-ped-list">
+      ${alerts
+        .map((a) => {
+          const title = `${a.studentName || "Aluno"} · ${a.teacherName || "Professor"}`;
+          const when = formatShortDateFromMs(a.createdAtMs);
+          const sub = `${a.category || "Aviso"} · ${when}`;
+          return `
+            <div class="admin-ped-row">
+              <div>
+                <div class="admin-ped-row-title">${escapeHtml(title)}</div>
+                <div class="admin-ped-row-sub">${escapeHtml(sub)}</div>
+                <div class="admin-ped-row-meta">
+                  ${statusPill(a.status)}
+                  ${priorityPill(a.priority)}
+                </div>
+              </div>
+              <div class="admin-ped-row-actions">
+                <button class="admin-ped-action" type="button" data-admin-ped-alert-view="${escapeHtml(a.id)}">Ver</button>
+                ${
+                  String(a.status || "") !== "resolved"
+                    ? `<button class="admin-ped-action is-muted" type="button" data-admin-ped-alert-resolve="${escapeHtml(
+                        a.id
+                      )}">Resolver</button>`
+                    : ""
+                }
+              </div>
+            </div>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+};
+
+const renderAdminPedagogicoFeedbacksPanel = () => {
+  if (!(adminPedFeedbacks instanceof HTMLElement)) return;
+  const items = Array.isArray(adminPedagogicoState.pedagogicalFeedbacks) ? adminPedagogicoState.pedagogicalFeedbacks : [];
+  if (adminPedEmptyFeedbacks instanceof HTMLElement) adminPedEmptyFeedbacks.hidden = items.length > 0;
+
+  adminPedFeedbacks.innerHTML = `
+    <div class="admin-ped-list">
+      ${items
+        .map((f) => {
+          const when = formatShortDateFromMs(f.createdAtMs);
+          const score = Number.isFinite(Number(f.generalScore)) ? String(f.generalScore) : "—";
+          const status = f.readByTeacher ? `<span class="admin-ped-pill is-ended">Lido</span>` : `<span class="admin-ped-pill is-active">Novo</span>`;
+          const title = f.teacherName || "Professor";
+          const sub = `${when} · Nota ${score}`;
+          return `
+            <div class="admin-ped-row">
+              <div>
+                <div class="admin-ped-row-title">${escapeHtml(title)}</div>
+                <div class="admin-ped-row-sub">${escapeHtml(sub)}</div>
+                <div class="admin-ped-row-meta">${status}</div>
+              </div>
+              <div class="admin-ped-row-actions">
+                <button class="admin-ped-action" type="button" data-admin-ped-feedback-view="${escapeHtml(f.id)}">Ver</button>
+              </div>
+            </div>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+};
+
+const renderAdminPedagogicoReportsPanel = () => {
+  if (!(adminPedReports instanceof HTMLElement)) return;
+  adminPedReports.innerHTML = `
+    <div class="admin-ped-reports-grid">
+      <div class="admin-ped-report">
+        <div class="admin-ped-report-title">Relatório de alunos ativos</div>
+        <div class="admin-ped-report-sub">Exporta CSV com alunos ativos, plano, professor e turma.</div>
+        <button class="admin-ped-action" type="button" data-admin-ped-report="students_active">Exportar CSV</button>
+      </div>
+      <div class="admin-ped-report">
+        <div class="admin-ped-report-title">Relatório de aulas</div>
+        <div class="admin-ped-report-sub">Exporta CSV com aulas cadastradas (tipo, professor, alunos/turma, dias, horário, plano, status).</div>
+        <button class="admin-ped-action" type="button" data-admin-ped-report="classes">Exportar CSV</button>
+      </div>
+      <div class="admin-ped-report">
+        <div class="admin-ped-report-title">Relatório de turmas</div>
+        <div class="admin-ped-report-sub">Exporta CSV com turmas, professor, plano e quantidade de alunos.</div>
+        <button class="admin-ped-action" type="button" data-admin-ped-report="groups">Exportar CSV</button>
+      </div>
+      <div class="admin-ped-report">
+        <div class="admin-ped-report-title">Relatório de feedbacks</div>
+        <div class="admin-ped-report-sub">Exporta CSV com feedbacks enviados e status (novo/lido).</div>
+        <button class="admin-ped-action" type="button" data-admin-ped-report="feedbacks">Exportar CSV</button>
+      </div>
+      <div class="admin-ped-report">
+        <div class="admin-ped-report-title">Relatório de avisos</div>
+        <div class="admin-ped-report-sub">Exporta CSV com avisos dos professores e status.</div>
+        <button class="admin-ped-action" type="button" data-admin-ped-report="alerts">Exportar CSV</button>
+      </div>
+      <div class="admin-ped-report">
+        <div class="admin-ped-report-title">Relatório de pesquisas</div>
+        <div class="admin-ped-report-sub">Exporta CSV com NPS/CSAT e comentários.</div>
+        <button class="admin-ped-action" type="button" data-admin-ped-report="surveys">Exportar CSV</button>
+      </div>
+    </div>
+  `;
 };
 
 const renderAdminPedagogicoAgenda = () => {
@@ -10477,9 +11322,17 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
   if (!force && adminPedagogicoState.loadedAt && now - adminPedagogicoState.loadedAt < 45_000) {
     renderAdminPedagogicoMetrics();
     renderAdminPedagogicoTabs();
+    renderAdminPedagogicoOverview();
     renderAdminPedagogicoAgenda();
     renderAdminPedagogicoClassesList();
+    renderAdminPedagogicoGroups();
+    renderAdminPedagogicoStudentsPanel();
     renderAdminPedagogicoTeachersPanel();
+    renderAdminPedagogicoPlansPanel();
+    renderAdminPedagogicoSurveysPanel();
+    renderAdminPedagogicoAlertsPanel();
+    renderAdminPedagogicoFeedbacksPanel();
+    renderAdminPedagogicoReportsPanel();
     renderAdminPedagogicoConflicts();
     return;
   }
@@ -10489,10 +11342,16 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
   if (adminPedError instanceof HTMLElement) adminPedError.hidden = true;
 
   try {
-    const [teachers, students, classes] = await Promise.all([
+    const [teachers, students, classes, groups, plans, surveys, teacherAlerts, pedagogicalFeedbacks, lessonLogs] = await Promise.all([
       fetchUserRowsFromFirestore("teacher"),
       fetchUserRowsFromFirestore("student"),
       fetchClassesFromFirestore(),
+      fetchGroupsFromFirestore().catch(() => []),
+      fetchPlansFromFirestore().catch(() => []),
+      fetchSurveysFromFirestore().catch(() => []),
+      fetchTeacherAlertsFromFirestore().catch(() => []),
+      fetchPedagogicalFeedbacksFromFirestore().catch(() => []),
+      fetchLessonLogsFromFirestore().catch(() => []),
     ]);
 
     adminPedagogicoState.teachers = teachers.filter((t) => t && typeof t === "object");
@@ -10500,6 +11359,17 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
     adminPedagogicoState.students = students.filter((s) => s && typeof s === "object");
     adminPedagogicoState.studentsById = new Map(adminPedagogicoState.students.map((s) => [String(s.id || ""), s]));
     adminPedagogicoState.classes = Array.isArray(classes) ? classes : [];
+    adminPedagogicoState.groups = Array.isArray(groups) ? groups : [];
+    adminPedagogicoState.groupsById = new Map(adminPedagogicoState.groups.map((g) => [String(g.id || ""), g]));
+    adminPedagogicoState.groupsByClassId = new Map(
+      adminPedagogicoState.groups.filter((g) => g && g.classId).map((g) => [String(g.classId || ""), g])
+    );
+    adminPedagogicoState.plans = Array.isArray(plans) ? plans : [];
+    adminPedagogicoState.plansById = new Map(adminPedagogicoState.plans.map((p) => [String(p.id || ""), p]));
+    adminPedagogicoState.surveys = Array.isArray(surveys) ? surveys : [];
+    adminPedagogicoState.teacherAlerts = Array.isArray(teacherAlerts) ? teacherAlerts : [];
+    adminPedagogicoState.pedagogicalFeedbacks = Array.isArray(pedagogicalFeedbacks) ? pedagogicalFeedbacks : [];
+    adminPedagogicoState.lessonLogs = Array.isArray(lessonLogs) ? lessonLogs : [];
     adminPedagogicoState.conflicts = computeAdminPedagogicoConflicts(adminPedagogicoState.classes);
     adminPedagogicoState.loadedAt = Date.now();
 
@@ -10529,12 +11399,35 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
       studentSelect.value = selected;
     }
 
+    const planSelect = adminPedRoot.querySelector('[data-admin-ped-filter="plan"]');
+    if (planSelect instanceof HTMLSelectElement) {
+      const selected = String(adminPedagogicoState.filters.plan || "");
+      const plans = Array.isArray(adminPedagogicoState.plans) ? adminPedagogicoState.plans : [];
+      const keys = plans
+        .filter((p) => p && typeof p === "object" && String(p.status || "").toLowerCase() !== "inactive")
+        .map((p) => normalizePlanKeyLoose(p.name))
+        .filter(Boolean);
+      const unique = [...new Set(keys.length ? keys : ["turma", "gold", "diamond"])]
+        .slice()
+        .sort((a, b) => String(a).localeCompare(String(b), "pt-BR"));
+      planSelect.innerHTML = `<option value="">Todos</option>` + unique.map((k) => `<option value="${escapeHtml(k)}">${escapeHtml(k.toUpperCase())}</option>`).join("");
+      planSelect.value = selected;
+    }
+
     setAdminPedagogicoStatus("");
     renderAdminPedagogicoMetrics();
     renderAdminPedagogicoTabs();
+    renderAdminPedagogicoOverview();
     renderAdminPedagogicoAgenda();
     renderAdminPedagogicoClassesList();
+    renderAdminPedagogicoGroups();
+    renderAdminPedagogicoStudentsPanel();
     renderAdminPedagogicoTeachersPanel();
+    renderAdminPedagogicoPlansPanel();
+    renderAdminPedagogicoSurveysPanel();
+    renderAdminPedagogicoAlertsPanel();
+    renderAdminPedagogicoFeedbacksPanel();
+    renderAdminPedagogicoReportsPanel();
     renderAdminPedagogicoConflicts();
   } catch (error) {
     console.error("[admin] controle-pedagogico load failed:", error);
@@ -10574,9 +11467,10 @@ const buildAdminPedDaysCheckboxesHtml = (selectedDays) => {
     .join("");
 };
 
-const openAdminPedClassModal = ({ mode = "create", classRow = null } = {}) => {
+const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = null } = {}) => {
   const isEdit = mode === "edit" && classRow && classRow.id;
   const row = classRow && typeof classRow === "object" ? classRow : null;
+  const seed = prefill && typeof prefill === "object" ? prefill : null;
 
   const teachers = Array.isArray(adminPedagogicoState.teachers) ? adminPedagogicoState.teachers : [];
   const students = Array.isArray(adminPedagogicoState.students) ? adminPedagogicoState.students : [];
@@ -10589,12 +11483,19 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null } = {}) => {
       .map((t) => `<option value="${escapeHtml(String(t.id))}">${escapeHtml(String(t.nome || "Professor"))}</option>`)
       .join("");
 
-  const planOptions = `
-    <option value="">Selecione...</option>
-    <option value="turma">Turma</option>
-    <option value="gold">Gold</option>
-    <option value="diamond">Diamond</option>
-  `;
+  const plans = Array.isArray(adminPedagogicoState.plans) ? adminPedagogicoState.plans : [];
+  const planKeys = plans
+    .filter((p) => p && typeof p === "object" && String(p.status || "").toLowerCase() !== "inactive")
+    .map((p) => normalizePlanKeyLoose(p.name))
+    .filter(Boolean);
+  const uniquePlanKeys = [...new Set(planKeys.length ? planKeys : ["turma", "gold", "diamond"])];
+  const planOptions =
+    `<option value="">Selecione...</option>` +
+    uniquePlanKeys
+      .slice()
+      .sort((a, b) => String(a).localeCompare(String(b), "pt-BR"))
+      .map((k) => `<option value="${escapeHtml(String(k))}">${escapeHtml(String(k).toUpperCase())}</option>`)
+      .join("");
 
   const statusOptions = `
     <option value="active">Ativa</option>
@@ -10602,18 +11503,20 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null } = {}) => {
     <option value="ended">Encerrada</option>
   `;
 
-  const typeValue = isEdit ? normalizeClassType(row.type) : "individual";
-  const statusValue = isEdit ? normalizeClassStatus(row.status) : "active";
-  const teacherValue = isEdit ? String(row.teacherId || "") : "";
-  const planValue = isEdit ? normalizePlanKeyLoose(row.plan) : "";
+  const typeValue = isEdit ? normalizeClassType(row.type) : normalizeClassType(seed?.type) || "individual";
+  const statusValue = isEdit ? normalizeClassStatus(row.status) : normalizeClassStatus(seed?.status) || "active";
+  const teacherValue = isEdit ? String(row.teacherId || "") : String(seed?.teacherId || "");
+  const planValue = isEdit ? normalizePlanKeyLoose(row.plan) : normalizePlanKeyLoose(seed?.plan || "");
   const titleValue = isEdit ? String(row.title || "") : "";
   const groupNameValue = isEdit ? String(row.groupName || "") : "";
   const startDate = isEdit ? String(row.startDate || "") : createDateKey(new Date());
   const endDate = isEdit ? String(row.endDate || "") : "";
-  const startTime = isEdit ? formatHmFromMinutes(row.startMin || 0) : "14:00";
-  const endTime = isEdit ? formatHmFromMinutes(row.endMin || 0) : "14:30";
-  const selectedDays = isEdit ? normalizeDaysOfWeek(row.daysOfWeek) : [1];
-  const selectedStudents = isEdit ? new Set((Array.isArray(row.studentIds) ? row.studentIds : []).map(String)) : new Set();
+  const startTime = isEdit ? formatHmFromMinutes(row.startMin || 0) : clampTime(seed?.startTime, "14:00");
+  const endTime = isEdit ? formatHmFromMinutes(row.endMin || 0) : clampTime(seed?.endTime, "14:30");
+  const selectedDays = isEdit ? normalizeDaysOfWeek(row.daysOfWeek) : normalizeDaysOfWeek(seed?.daysOfWeek || [1]);
+  const selectedStudents = isEdit
+    ? new Set((Array.isArray(row.studentIds) ? row.studentIds : []).map(String))
+    : new Set((Array.isArray(seed?.studentIds) ? seed.studentIds : []).map(String));
 
   const studentsHtml = students
     .slice()
@@ -10930,6 +11833,1219 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null } = {}) => {
       });
     }
   }, 0);
+};
+
+const openAdminPedPlanModal = ({ mode = "create", planRow = null } = {}) => {
+  const isEdit = mode === "edit" && planRow && planRow.id;
+  const row = planRow && typeof planRow === "object" ? planRow : null;
+
+  openModal({
+    title: isEdit ? "Editar plano" : "Criar plano",
+    primaryLabel: isEdit ? "Salvar" : "Criar plano",
+    secondaryLabel: "Cancelar",
+    hideSecondary: false,
+    showTrash: false,
+    bodyHtml: `
+      <div class="admin-ped-modal" data-admin-ped-plan-form>
+        <div class="admin-ped-modal-row">
+          <label class="admin-ped-modal-field">
+            <span>Nome do plano</span>
+            <input class="admin-ped-modal-input" type="text" data-admin-ped-plan-field="name" placeholder="Ex: Gold" />
+          </label>
+          <label class="admin-ped-modal-field">
+            <span>Status</span>
+            <select class="admin-ped-modal-select" data-admin-ped-plan-field="status">
+              <option value="active">Ativo</option>
+              <option value="inactive">Inativo</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="admin-ped-modal-row">
+          <label class="admin-ped-modal-field">
+            <span>Preço mensal (R$)</span>
+            <input class="admin-ped-modal-input" type="number" inputmode="decimal" min="0" step="0.01" data-admin-ped-plan-field="monthlyPrice" placeholder="Ex: 497.00" />
+          </label>
+          <label class="admin-ped-modal-field">
+            <span>Aulas semanais</span>
+            <input class="admin-ped-modal-input" type="number" inputmode="numeric" min="0" step="1" data-admin-ped-plan-field="weeklyClasses" placeholder="Ex: 1" />
+          </label>
+        </div>
+
+        <div class="admin-ped-modal-row">
+          <label class="admin-ped-modal-field">
+            <span>Tipo</span>
+            <select class="admin-ped-modal-select" data-admin-ped-plan-field="type">
+              <option value="individual">Individual</option>
+              <option value="group">Grupo</option>
+              <option value="hybrid">Híbrido</option>
+            </select>
+          </label>
+          <label class="admin-ped-modal-field">
+            <span>Descrição</span>
+            <input class="admin-ped-modal-input" type="text" data-admin-ped-plan-field="description" placeholder="Ex: 1 aula/semana + material" />
+          </label>
+        </div>
+
+        <div class="admin-ped-modal-error" data-admin-ped-plan-error hidden>—</div>
+      </div>
+    `,
+    onPrimary: () => {
+      const form = modalBody?.querySelector("[data-admin-ped-plan-form]");
+      if (!(form instanceof HTMLElement)) return false;
+      const errEl = form.querySelector("[data-admin-ped-plan-error]");
+      const setErr = (msg) => {
+        if (errEl instanceof HTMLElement) {
+          errEl.textContent = String(msg || "");
+          errEl.hidden = !msg;
+        }
+      };
+
+      const read = (key) => {
+        const el = form.querySelector(`[data-admin-ped-plan-field="${CSS.escape(String(key))}"]`);
+        if (el instanceof HTMLInputElement || el instanceof HTMLSelectElement) return String(el.value || "").trim();
+        return "";
+      };
+
+      const name = read("name");
+      const status = normalizePlanStatus(read("status"));
+      const type = normalizePlanType(read("type"));
+      const monthlyPriceRaw = read("monthlyPrice");
+      const weeklyRaw = read("weeklyClasses");
+      const description = read("description");
+
+      const monthlyPrice = monthlyPriceRaw ? Number(monthlyPriceRaw) : null;
+      const weeklyClasses = weeklyRaw ? Number.parseInt(weeklyRaw, 10) : null;
+
+      setErr("");
+      if (!name) {
+        setErr("Informe o nome do plano.");
+        return false;
+      }
+      if (monthlyPriceRaw && !Number.isFinite(monthlyPrice)) {
+        setErr("Preço mensal inválido.");
+        return false;
+      }
+      if (weeklyRaw && !Number.isFinite(weeklyClasses)) {
+        setErr("Quantidade de aulas semanais inválida.");
+        return false;
+      }
+
+      if (modalPrimary) modalPrimary.disabled = true;
+      if (modalSecondary) modalSecondary.disabled = true;
+      const prev = modalPrimary?.textContent || "";
+      if (modalPrimary) modalPrimary.textContent = isEdit ? "Salvando…" : "Criando…";
+
+      (async () => {
+        try {
+          const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_plan_save");
+          const user = await waitForFirebaseAuthReady(firebase, 5000);
+          if (!user) throw new Error("not_authenticated");
+
+          const id = isEdit ? String(row.id) : `plan_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+          const docRef = firebase.doc(firebase.primaryDb, "plans", id);
+          const payload = {
+            id,
+            name,
+            monthlyPrice: Number.isFinite(monthlyPrice) ? monthlyPrice : null,
+            weeklyClasses: Number.isFinite(weeklyClasses) ? weeklyClasses : null,
+            type,
+            description,
+            status,
+            updatedAt: firebase.serverTimestamp(),
+            updatedBy: String(user.uid || ""),
+            ...(isEdit ? null : { createdAt: firebase.serverTimestamp(), createdBy: String(user.uid || "") }),
+          };
+          await withTimeout(firebase.setDoc(docRef, payload, { merge: true }), 12_000, "firestore_admin_plan_merge");
+          closeModal();
+          await renderAdminControlePedagogicoPanel({ force: true });
+        } catch (e) {
+          console.error("[admin] plan save failed:", e);
+          setErr("Não foi possível salvar agora.");
+        } finally {
+          if (modalPrimary) modalPrimary.disabled = false;
+          if (modalSecondary) modalSecondary.disabled = false;
+          if (modalPrimary) modalPrimary.textContent = prev || (isEdit ? "Salvar" : "Criar plano");
+        }
+      })();
+
+      return false;
+    },
+    onSecondary: () => true,
+  });
+
+  window.setTimeout(() => {
+    const form = modalBody?.querySelector("[data-admin-ped-plan-form]");
+    if (!(form instanceof HTMLElement)) return;
+    const setVal = (key, value) => {
+      const el = form.querySelector(`[data-admin-ped-plan-field="${CSS.escape(String(key))}"]`);
+      if (el instanceof HTMLInputElement || el instanceof HTMLSelectElement) el.value = String(value ?? "");
+    };
+    setVal("name", row?.name || "");
+    setVal("status", normalizePlanStatus(row?.status || "active"));
+    setVal("type", normalizePlanType(row?.type || "individual"));
+    setVal("monthlyPrice", Number.isFinite(Number(row?.monthlyPrice)) ? String(row.monthlyPrice) : "");
+    setVal("weeklyClasses", Number.isFinite(Number(row?.weeklyClasses)) ? String(row.weeklyClasses) : "");
+    setVal("description", row?.description || "");
+  }, 0);
+};
+
+const toggleAdminPedPlanStatus = ({ planId } = {}) => {
+  const id = String(planId || "").trim();
+  if (!id) return;
+  const row = (Array.isArray(adminPedagogicoState.plans) ? adminPedagogicoState.plans : []).find((p) => String(p?.id || "") === id) || null;
+  if (!row) return;
+  const next = normalizePlanStatus(row.status) === "active" ? "inactive" : "active";
+
+  (async () => {
+    try {
+      const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_plan_toggle");
+      const user = await waitForFirebaseAuthReady(firebase, 5000);
+      if (!user) throw new Error("not_authenticated");
+      const docRef = firebase.doc(firebase.primaryDb, "plans", id);
+      await withTimeout(
+        firebase.setDoc(docRef, { status: next, updatedAt: firebase.serverTimestamp(), updatedBy: String(user.uid || "") }, { merge: true }),
+        12_000,
+        "firestore_admin_plan_toggle"
+      );
+      await renderAdminControlePedagogicoPanel({ force: true });
+    } catch (e) {
+      console.error("[admin] plan toggle failed:", e);
+      setAdminPedagogicoStatus("Não foi possível atualizar agora.", "error");
+    }
+  })();
+};
+
+const deleteAdminPedPlan = ({ planId } = {}) => {
+  const id = String(planId || "").trim();
+  if (!id) return;
+  const row = (Array.isArray(adminPedagogicoState.plans) ? adminPedagogicoState.plans : []).find((p) => String(p?.id || "") === id) || null;
+  const name = String(row?.name || "plano").trim() || "plano";
+
+  const activeStudents = (Array.isArray(adminPedagogicoState.students) ? adminPedagogicoState.students : []).filter((s) => {
+    if (!s || typeof s !== "object") return false;
+    if (!s.ativo) return false;
+    return normalizeSearchText(String(s.plano || "")) === normalizeSearchText(name);
+  });
+
+  const needsStrongConfirm = activeStudents.length > 0;
+  const confirmHtml = needsStrongConfirm
+    ? `
+      <p>Existem <strong>${activeStudents.length}</strong> aluno(s) ativo(s) vinculados a este plano. Para excluir, digite <strong>${escapeHtml(
+        name
+      )}</strong> abaixo.</p>
+      <label class="admin-ped-modal-field">
+        <span>Confirmação</span>
+        <input class="admin-ped-modal-input" type="text" data-admin-ped-plan-confirm placeholder="Digite o nome do plano" />
+      </label>
+    `
+    : `<p>Tem certeza que deseja excluir <strong>${escapeHtml(name)}</strong>? Esta ação não pode ser desfeita.</p>`;
+
+  openModal({
+    title: "Excluir plano",
+    primaryLabel: "Excluir",
+    secondaryLabel: "Cancelar",
+    bodyHtml: `<div class="admin-ped-modal">${confirmHtml}<div class="admin-ped-modal-error" data-admin-ped-plan-delete-error hidden>—</div></div>`,
+    onPrimary: () => {
+      const wrap = modalBody?.querySelector(".admin-ped-modal");
+      const errEl = wrap?.querySelector("[data-admin-ped-plan-delete-error]");
+      const setErr = (msg) => {
+        if (errEl instanceof HTMLElement) {
+          errEl.textContent = String(msg || "");
+          errEl.hidden = !msg;
+        }
+      };
+      setErr("");
+      if (needsStrongConfirm) {
+        const input = wrap?.querySelector("[data-admin-ped-plan-confirm]");
+        const typed = input instanceof HTMLInputElement ? String(input.value || "").trim() : "";
+        if (normalizeSearchText(typed) !== normalizeSearchText(name)) {
+          setErr("Confirmação inválida.");
+          return false;
+        }
+      }
+
+      if (modalPrimary) modalPrimary.disabled = true;
+      if (modalSecondary) modalSecondary.disabled = true;
+      const prev = modalPrimary?.textContent || "";
+      if (modalPrimary) modalPrimary.textContent = "Excluindo…";
+
+      (async () => {
+        try {
+          const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_plan_delete");
+          const user = await waitForFirebaseAuthReady(firebase, 5000);
+          if (!user) throw new Error("not_authenticated");
+          const docRef = firebase.doc(firebase.primaryDb, "plans", id);
+          await withTimeout(firebase.deleteDoc(docRef), 12_000, "firestore_admin_plan_delete");
+          closeModal();
+          await renderAdminControlePedagogicoPanel({ force: true });
+        } catch (e) {
+          console.error("[admin] plan delete failed:", e);
+          setErr("Não foi possível excluir agora.");
+        } finally {
+          if (modalPrimary) modalPrimary.disabled = false;
+          if (modalSecondary) modalSecondary.disabled = false;
+          if (modalPrimary) modalPrimary.textContent = prev || "Excluir";
+        }
+      })();
+
+      return false;
+    },
+    onSecondary: () => true,
+  });
+};
+
+const openAdminPedGroupModal = ({ mode = "create", groupRow = null } = {}) => {
+  const isEdit = mode === "edit" && groupRow && groupRow.id;
+  const row = groupRow && typeof groupRow === "object" ? groupRow : null;
+  const teachers = Array.isArray(adminPedagogicoState.teachers) ? adminPedagogicoState.teachers : [];
+  const students = Array.isArray(adminPedagogicoState.students) ? adminPedagogicoState.students : [];
+  const plans = Array.isArray(adminPedagogicoState.plans) ? adminPedagogicoState.plans : [];
+
+  const teacherOptions =
+    `<option value="">Selecione...</option>` +
+    teachers
+      .slice()
+      .sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"))
+      .map((t) => `<option value="${escapeHtml(String(t.id))}">${escapeHtml(String(t.nome || "Professor"))}</option>`)
+      .join("");
+
+  const planOptions =
+    `<option value="">Sem plano</option>` +
+    plans
+      .slice()
+      .filter((p) => String(p?.status || "").toLowerCase() !== "inactive")
+      .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "pt-BR"))
+      .map((p) => `<option value="${escapeHtml(String(p.id))}">${escapeHtml(String(p.name || "Plano"))}</option>`)
+      .join("");
+
+  const selectedStudents = new Set((Array.isArray(row?.studentIds) ? row.studentIds : []).map(String));
+  const studentsHtml = students
+    .slice()
+    .sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"))
+    .map((s) => {
+      const id = String(s.id || "");
+      const checked = selectedStudents.has(id);
+      return `
+        <label class="admin-ped-student">
+          <input type="checkbox" value="${escapeHtml(id)}" ${checked ? "checked" : ""} data-admin-ped-group-student />
+          <span>${escapeHtml(String(s.nome || "Aluno"))}</span>
+        </label>
+      `;
+    })
+    .join("");
+
+  openModal({
+    title: isEdit ? "Editar turma" : "Criar turma",
+    primaryLabel: isEdit ? "Salvar" : "Criar turma",
+    secondaryLabel: "Cancelar",
+    bodyHtml: `
+      <div class="admin-ped-modal" data-admin-ped-group-form>
+        <div class="admin-ped-modal-row">
+          <label class="admin-ped-modal-field">
+            <span>Nome da turma</span>
+            <input class="admin-ped-modal-input" type="text" data-admin-ped-group-field="name" placeholder="Ex: Turma 01" />
+          </label>
+          <label class="admin-ped-modal-field">
+            <span>Status</span>
+            <select class="admin-ped-modal-select" data-admin-ped-group-field="status">
+              <option value="active">Ativa</option>
+              <option value="paused">Pausada</option>
+              <option value="ended">Encerrada</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="admin-ped-modal-row">
+          <label class="admin-ped-modal-field">
+            <span>Professor</span>
+            <select class="admin-ped-modal-select" data-admin-ped-group-field="teacherId">
+              ${teacherOptions}
+            </select>
+          </label>
+          <label class="admin-ped-modal-field">
+            <span>Plano</span>
+            <select class="admin-ped-modal-select" data-admin-ped-group-field="planId">
+              ${planOptions}
+            </select>
+          </label>
+        </div>
+
+        <div class="admin-ped-modal-field">
+          <span>Dias da semana</span>
+          <div class="admin-ped-days" data-admin-ped-group-days>
+            ${buildAdminPedDaysCheckboxesHtml(normalizeDaysOfWeek(row?.daysOfWeek || [1]))}
+          </div>
+        </div>
+
+        <div class="admin-ped-modal-row">
+          <label class="admin-ped-modal-field">
+            <span>Início</span>
+            <input class="admin-ped-modal-input" type="time" data-admin-ped-group-field="startTime" />
+          </label>
+          <label class="admin-ped-modal-field">
+            <span>Fim</span>
+            <input class="admin-ped-modal-input" type="time" data-admin-ped-group-field="endTime" />
+          </label>
+        </div>
+
+        <div class="admin-ped-modal-field">
+          <span>Alunos</span>
+          <div class="admin-ped-students-picker">
+            ${studentsHtml || `<div class="admin-ped-modal-error">Sem alunos cadastrados.</div>`}
+          </div>
+        </div>
+
+        <div class="admin-ped-modal-error" data-admin-ped-group-error hidden>—</div>
+      </div>
+    `,
+    onPrimary: () => {
+      const form = modalBody?.querySelector("[data-admin-ped-group-form]");
+      if (!(form instanceof HTMLElement)) return false;
+      const errEl = form.querySelector("[data-admin-ped-group-error]");
+      const setErr = (msg) => {
+        if (errEl instanceof HTMLElement) {
+          errEl.textContent = String(msg || "");
+          errEl.hidden = !msg;
+        }
+      };
+      const read = (key) => {
+        const el = form.querySelector(`[data-admin-ped-group-field="${CSS.escape(String(key))}"]`);
+        if (el instanceof HTMLInputElement || el instanceof HTMLSelectElement) return String(el.value || "").trim();
+        return "";
+      };
+
+      const name = read("name");
+      const status = normalizeClassStatus(read("status"));
+      const teacherId = read("teacherId");
+      const planId = read("planId");
+      const startTime = read("startTime");
+      const endTime = read("endTime");
+      const startMin = timeToMinutes(startTime);
+      const endMin = timeToMinutes(endTime);
+      const days = [];
+      form.querySelectorAll("[data-admin-ped-day]").forEach((el) => {
+        if (!(el instanceof HTMLInputElement)) return;
+        if (!el.checked) return;
+        const n = Number(el.value);
+        if (Number.isFinite(n)) days.push(n);
+      });
+      const studentIds = [];
+      form.querySelectorAll("[data-admin-ped-group-student]").forEach((el) => {
+        if (!(el instanceof HTMLInputElement)) return;
+        if (el.checked) studentIds.push(String(el.value || "").trim());
+      });
+
+      setErr("");
+      if (!name) {
+        setErr("Informe o nome da turma.");
+        return false;
+      }
+      if (!teacherId) {
+        setErr("Selecione um professor.");
+        return false;
+      }
+      if (!days.length) {
+        setErr("Selecione pelo menos um dia da semana.");
+        return false;
+      }
+      if (!startMin || !endMin || endMin <= startMin) {
+        setErr("O horário final deve ser maior que o horário inicial.");
+        return false;
+      }
+      if (!studentIds.length) {
+        setErr("Selecione ao menos 1 aluno.");
+        return false;
+      }
+
+      const teacherName = String(adminPedagogicoState.teachersById?.get(teacherId)?.nome || "").trim();
+      const studentNames = studentIds
+        .map((id) => String(adminPedagogicoState.studentsById?.get(id)?.nome || "").trim())
+        .filter(Boolean);
+
+      const planRow = planId ? (adminPedagogicoState.plansById instanceof Map ? adminPedagogicoState.plansById.get(planId) || null : null) : null;
+      const planName = planRow ? String(planRow.name || "").trim() : "";
+      const planKey = normalizePlanKeyLoose(planName);
+
+      const groupId = isEdit ? String(row.id) : `group_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+      const classId = isEdit ? String(row.classId || `class_${groupId}`) : `class_${groupId}`;
+
+      const tempGroupAsClass = {
+        id: classId,
+        type: "group",
+        status,
+        teacherId,
+        studentIds,
+        daysOfWeek: normalizeDaysOfWeek(days),
+        startMin,
+        endMin,
+      };
+      const candidates = (Array.isArray(adminPedagogicoState.classes) ? adminPedagogicoState.classes : []).filter((c) => String(c.id || "") !== classId);
+      const conflicts = computeAdminPedagogicoConflicts(candidates.concat([tempGroupAsClass]));
+      if (conflicts.length) {
+        setErr(`Conflito detectado: ${conflicts[0].reason}. Ajuste dias/horários para continuar.`);
+        return false;
+      }
+
+      if (modalPrimary) modalPrimary.disabled = true;
+      if (modalSecondary) modalSecondary.disabled = true;
+      const prev = modalPrimary?.textContent || "";
+      if (modalPrimary) modalPrimary.textContent = isEdit ? "Salvando…" : "Criando…";
+
+      (async () => {
+        try {
+          const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_group_save");
+          const user = await waitForFirebaseAuthReady(firebase, 5000);
+          if (!user) throw new Error("not_authenticated");
+
+          const groupRef = firebase.doc(firebase.primaryDb, "groups", groupId);
+          const classRef = firebase.doc(firebase.primaryDb, "classes", classId);
+
+          const groupPayload = {
+            id: groupId,
+            classId,
+            name,
+            teacherId,
+            teacherName: teacherName || "",
+            studentIds,
+            studentNames,
+            planId: planId || "",
+            planName: planName || "",
+            daysOfWeek: normalizeDaysOfWeek(days),
+            startMin,
+            endMin,
+            status,
+            updatedAt: firebase.serverTimestamp(),
+            updatedBy: String(user.uid || ""),
+            ...(isEdit ? null : { createdAt: firebase.serverTimestamp(), createdBy: String(user.uid || "") }),
+          };
+
+          const classPayload = {
+            id: classId,
+            type: "group",
+            title: name,
+            teacherId,
+            teacherName: teacherName || "",
+            groupId,
+            groupName: name,
+            planId: planId || "",
+            planName: planName || "",
+            plan: planKey || "",
+            studentIds,
+            studentNames,
+            daysOfWeek: normalizeDaysOfWeek(days),
+            startMin,
+            endMin,
+            startDate: createDateKey(new Date()),
+            endDate: "",
+            status,
+            notes: "",
+            updatedAt: firebase.serverTimestamp(),
+            updatedBy: String(user.uid || ""),
+            ...(isEdit ? null : { createdAt: firebase.serverTimestamp(), createdBy: String(user.uid || "") }),
+          };
+
+          await withTimeout(firebase.setDoc(groupRef, groupPayload, { merge: true }), 12_000, "firestore_admin_group_merge");
+          await withTimeout(firebase.setDoc(classRef, classPayload, { merge: true }), 12_000, "firestore_admin_group_class_merge");
+
+          closeModal();
+          await renderAdminControlePedagogicoPanel({ force: true });
+        } catch (e) {
+          console.error("[admin] group save failed:", e);
+          setErr("Não foi possível salvar agora.");
+        } finally {
+          if (modalPrimary) modalPrimary.disabled = false;
+          if (modalSecondary) modalSecondary.disabled = false;
+          if (modalPrimary) modalPrimary.textContent = prev || (isEdit ? "Salvar" : "Criar turma");
+        }
+      })();
+
+      return false;
+    },
+    onSecondary: () => true,
+  });
+
+  window.setTimeout(() => {
+    const form = modalBody?.querySelector("[data-admin-ped-group-form]");
+    if (!(form instanceof HTMLElement)) return;
+    const setVal = (key, value) => {
+      const el = form.querySelector(`[data-admin-ped-group-field="${CSS.escape(String(key))}"]`);
+      if (el instanceof HTMLInputElement || el instanceof HTMLSelectElement) el.value = String(value ?? "");
+    };
+    setVal("name", row?.name || "");
+    setVal("status", normalizeClassStatus(row?.status || "active"));
+    setVal("teacherId", row?.teacherId || "");
+    setVal("planId", row?.planId || "");
+    setVal("startTime", row ? formatHmFromMinutes(row.startMin || 0) : "14:00");
+    setVal("endTime", row ? formatHmFromMinutes(row.endMin || 0) : "14:30");
+  }, 0);
+};
+
+const toggleAdminPedGroupStatus = ({ groupId } = {}) => {
+  const id = String(groupId || "").trim();
+  if (!id) return;
+  const row = (Array.isArray(adminPedagogicoState.groups) ? adminPedagogicoState.groups : []).find((g) => String(g?.id || "") === id) || null;
+  if (!row) return;
+  const current = normalizeClassStatus(row.status);
+  const next = current === "active" ? "paused" : "active";
+  const classId = String(row.classId || "");
+
+  (async () => {
+    try {
+      const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_group_toggle");
+      const user = await waitForFirebaseAuthReady(firebase, 5000);
+      if (!user) throw new Error("not_authenticated");
+      await withTimeout(
+        firebase.setDoc(firebase.doc(firebase.primaryDb, "groups", id), { status: next, updatedAt: firebase.serverTimestamp() }, { merge: true }),
+        12_000,
+        "firestore_admin_group_toggle"
+      );
+      if (classId) {
+        await withTimeout(
+          firebase.setDoc(firebase.doc(firebase.primaryDb, "classes", classId), { status: next, updatedAt: firebase.serverTimestamp() }, { merge: true }),
+          12_000,
+          "firestore_admin_group_class_toggle"
+        );
+      }
+      await renderAdminControlePedagogicoPanel({ force: true });
+    } catch (e) {
+      console.error("[admin] group toggle failed:", e);
+      setAdminPedagogicoStatus("Não foi possível atualizar agora.", "error");
+    }
+  })();
+};
+
+const deleteAdminPedGroup = ({ groupId } = {}) => {
+  const id = String(groupId || "").trim();
+  if (!id) return;
+  const row = (Array.isArray(adminPedagogicoState.groups) ? adminPedagogicoState.groups : []).find((g) => String(g?.id || "") === id) || null;
+  const label = row?.name ? row.name : "turma";
+  const classId = String(row?.classId || "");
+
+  openModal({
+    title: "Excluir turma",
+    primaryLabel: "Excluir",
+    secondaryLabel: "Cancelar",
+    bodyHtml: `Tem certeza que deseja excluir <strong>${escapeHtml(label)}</strong>? Esta ação não pode ser desfeita.`,
+    onPrimary: () => {
+      if (modalPrimary) modalPrimary.disabled = true;
+      if (modalSecondary) modalSecondary.disabled = true;
+      const prev = modalPrimary?.textContent || "";
+      if (modalPrimary) modalPrimary.textContent = "Excluindo…";
+
+      (async () => {
+        try {
+          const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_group_delete");
+          const user = await waitForFirebaseAuthReady(firebase, 5000);
+          if (!user) throw new Error("not_authenticated");
+          await withTimeout(firebase.deleteDoc(firebase.doc(firebase.primaryDb, "groups", id)), 12_000, "firestore_admin_group_delete");
+          if (classId) {
+            await withTimeout(firebase.deleteDoc(firebase.doc(firebase.primaryDb, "classes", classId)), 12_000, "firestore_admin_group_class_delete");
+          }
+          closeModal();
+          await renderAdminControlePedagogicoPanel({ force: true });
+        } catch (e) {
+          console.error("[admin] group delete failed:", e);
+          if (modalBody instanceof HTMLElement) modalBody.innerHTML = "Não foi possível excluir agora.";
+        } finally {
+          if (modalPrimary) modalPrimary.disabled = false;
+          if (modalSecondary) modalSecondary.disabled = false;
+          if (modalPrimary) modalPrimary.textContent = prev || "Excluir";
+        }
+      })();
+      return false;
+    },
+    onSecondary: () => true,
+  });
+};
+
+const openAdminPedStudentLinkModal = ({ studentId } = {}) => {
+  const alunoId = String(studentId || "").trim();
+  if (!alunoId) return;
+  const student = adminPedagogicoState.studentsById instanceof Map ? adminPedagogicoState.studentsById.get(alunoId) || null : null;
+  const teachers = Array.isArray(adminPedagogicoState.teachers) ? adminPedagogicoState.teachers : [];
+  const groups = Array.isArray(adminPedagogicoState.groups) ? adminPedagogicoState.groups : [];
+
+  const teacherOptions =
+    `<option value="">Sem professor</option>` +
+    teachers
+      .slice()
+      .sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"))
+      .map((t) => `<option value="${escapeHtml(String(t.id))}">${escapeHtml(String(t.nome || "Professor"))}</option>`)
+      .join("");
+
+  const groupOptions =
+    `<option value="">Sem turma</option>` +
+    groups
+      .slice()
+      .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "pt-BR"))
+      .map((g) => `<option value="${escapeHtml(String(g.id))}">${escapeHtml(String(g.name || "Turma"))}</option>`)
+      .join("");
+
+  const currentTeacher = String(student?.professorId || student?.teacherId || "").trim();
+  const currentGroup = String(student?.groupId || "").trim();
+
+  openModal({
+    title: "Vincular aluno",
+    primaryLabel: "Salvar",
+    secondaryLabel: "Cancelar",
+    bodyHtml: `
+      <div class="admin-ped-modal" data-admin-ped-link-form>
+        <div class="admin-ped-modal-row">
+          <label class="admin-ped-modal-field">
+            <span>Professor responsável</span>
+            <select class="admin-ped-modal-select" data-admin-ped-link-field="teacherId">${teacherOptions}</select>
+          </label>
+          <label class="admin-ped-modal-field">
+            <span>Turma</span>
+            <select class="admin-ped-modal-select" data-admin-ped-link-field="groupId">${groupOptions}</select>
+          </label>
+        </div>
+        <div class="admin-ped-modal-error" data-admin-ped-link-error hidden>—</div>
+      </div>
+    `,
+    onPrimary: () => {
+      const form = modalBody?.querySelector("[data-admin-ped-link-form]");
+      const errEl = form?.querySelector("[data-admin-ped-link-error]");
+      const setErr = (msg) => {
+        if (errEl instanceof HTMLElement) {
+          errEl.textContent = String(msg || "");
+          errEl.hidden = !msg;
+        }
+      };
+      setErr("");
+      const read = (key) => {
+        const el = form?.querySelector(`[data-admin-ped-link-field="${CSS.escape(String(key))}"]`);
+        if (el instanceof HTMLSelectElement) return String(el.value || "").trim();
+        return "";
+      };
+      const teacherId = read("teacherId");
+      const groupId = read("groupId");
+      const group = groupId && adminPedagogicoState.groupsById instanceof Map ? adminPedagogicoState.groupsById.get(groupId) || null : null;
+      const patch = {
+        professorId: teacherId || "",
+        teacherId: teacherId || "",
+        groupId: groupId || "",
+        groupName: group ? String(group.name || "").trim() : "",
+        atualizadoEm: undefined,
+      };
+
+      if (modalPrimary) modalPrimary.disabled = true;
+      if (modalSecondary) modalSecondary.disabled = true;
+      const prev = modalPrimary?.textContent || "";
+      if (modalPrimary) modalPrimary.textContent = "Salvando…";
+
+      (async () => {
+        try {
+          const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_student_link");
+          const user = await waitForFirebaseAuthReady(firebase, 5000);
+          if (!user) throw new Error("not_authenticated");
+          await withTimeout(
+            firebase.setDoc(firebase.doc(firebase.primaryDb, "users", alunoId), { ...patch, atualizadoEm: firebase.serverTimestamp() }, { merge: true }),
+            12_000,
+            "firestore_admin_student_link_merge"
+          );
+          closeModal();
+          await renderAdminControlePedagogicoPanel({ force: true });
+        } catch (e) {
+          console.error("[admin] student link failed:", e);
+          setErr("Não foi possível salvar agora.");
+        } finally {
+          if (modalPrimary) modalPrimary.disabled = false;
+          if (modalSecondary) modalSecondary.disabled = false;
+          if (modalPrimary) modalPrimary.textContent = prev || "Salvar";
+        }
+      })();
+      return false;
+    },
+    onSecondary: () => true,
+  });
+
+  window.setTimeout(() => {
+    const form = modalBody?.querySelector("[data-admin-ped-link-form]");
+    if (!(form instanceof HTMLElement)) return;
+    const t = form.querySelector('[data-admin-ped-link-field="teacherId"]');
+    const g = form.querySelector('[data-admin-ped-link-field="groupId"]');
+    if (t instanceof HTMLSelectElement) t.value = currentTeacher;
+    if (g instanceof HTMLSelectElement) g.value = currentGroup;
+  }, 0);
+};
+
+const openAdminPedFeedbackModal = ({ mode = "create", feedbackRow = null } = {}) => {
+  const isEdit = false;
+  const teachers = Array.isArray(adminPedagogicoState.teachers) ? adminPedagogicoState.teachers : [];
+  const teacherOptions =
+    `<option value="">Selecione...</option>` +
+    teachers
+      .slice()
+      .sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"))
+      .map((t) => `<option value="${escapeHtml(String(t.id))}">${escapeHtml(String(t.nome || "Professor"))}</option>`)
+      .join("");
+
+  const scoreField = (key, label) => `
+    <label class="admin-ped-modal-field">
+      <span>${escapeHtml(label)} (0–10)</span>
+      <input class="admin-ped-modal-input" type="number" inputmode="numeric" min="0" max="10" step="1" data-admin-ped-feedback-field="${escapeHtml(
+        key
+      )}" />
+    </label>
+  `;
+
+  openModal({
+    title: "Enviar feedback pedagógico",
+    primaryLabel: "Enviar",
+    secondaryLabel: "Cancelar",
+    bodyHtml: `
+      <div class="admin-ped-modal" data-admin-ped-feedback-form>
+        <div class="admin-ped-modal-row">
+          <label class="admin-ped-modal-field">
+            <span>Professor avaliado</span>
+            <select class="admin-ped-modal-select" data-admin-ped-feedback-field="teacherId">${teacherOptions}</select>
+          </label>
+          <label class="admin-ped-modal-field">
+            <span>Data da observação</span>
+            <input class="admin-ped-modal-input" type="date" data-admin-ped-feedback-field="observationDate" />
+          </label>
+        </div>
+
+        <div class="admin-ped-modal-row">
+          <label class="admin-ped-modal-field">
+            <span>Tipo de aula</span>
+            <select class="admin-ped-modal-select" data-admin-ped-feedback-field="classType">
+              <option value="individual">Individual</option>
+              <option value="group">Grupo</option>
+            </select>
+          </label>
+          ${scoreField("generalScore", "Nota geral")}
+        </div>
+
+        <div class="admin-ped-modal-row">
+          ${scoreField("clarityScore", "Clareza")}
+          ${scoreField("didacticsScore", "Didática")}
+        </div>
+        <div class="admin-ped-modal-row">
+          ${scoreField("correctionScore", "Correção do aluno")}
+          ${scoreField("timeManagementScore", "Gestão do tempo")}
+        </div>
+        <div class="admin-ped-modal-row">
+          ${scoreField("personalizationScore", "Personalização")}
+          ${scoreField("energyScore", "Energia e condução")}
+        </div>
+        <div class="admin-ped-modal-row">
+          ${scoreField("materialUsageScore", "Uso do material")}
+          ${scoreField("engagementScore", "Engajamento")}
+        </div>
+
+        <label class="admin-ped-modal-field">
+          <span>Pontos fortes</span>
+          <textarea class="admin-ped-modal-textarea" rows="2" data-admin-ped-feedback-field="strengths" placeholder="O que funcionou bem?"></textarea>
+        </label>
+        <label class="admin-ped-modal-field">
+          <span>Pontos de melhoria</span>
+          <textarea class="admin-ped-modal-textarea" rows="2" data-admin-ped-feedback-field="improvements" placeholder="O que melhorar?"></textarea>
+        </label>
+        <label class="admin-ped-modal-field">
+          <span>Plano de ação recomendado</span>
+          <textarea class="admin-ped-modal-textarea" rows="2" data-admin-ped-feedback-field="actionPlan" placeholder="Próximos passos claros"></textarea>
+        </label>
+        <label class="admin-ped-modal-field">
+          <span>Observação livre</span>
+          <textarea class="admin-ped-modal-textarea" rows="2" data-admin-ped-feedback-field="freeNotes" placeholder="Opcional"></textarea>
+        </label>
+
+        <div class="admin-ped-modal-error" data-admin-ped-feedback-error hidden>—</div>
+      </div>
+    `,
+    onPrimary: () => {
+      const form = modalBody?.querySelector("[data-admin-ped-feedback-form]");
+      if (!(form instanceof HTMLElement)) return false;
+      const errEl = form.querySelector("[data-admin-ped-feedback-error]");
+      const setErr = (msg) => {
+        if (errEl instanceof HTMLElement) {
+          errEl.textContent = String(msg || "");
+          errEl.hidden = !msg;
+        }
+      };
+      const read = (key) => {
+        const el = form.querySelector(`[data-admin-ped-feedback-field="${CSS.escape(String(key))}"]`);
+        if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) return String(el.value || "").trim();
+        return "";
+      };
+      const teacherId = read("teacherId");
+      const observationDate = read("observationDate");
+      const classType = normalizeClassType(read("classType"));
+      const generalScore = Number(read("generalScore"));
+
+      const numeric = (k) => {
+        const raw = read(k);
+        if (!raw) return null;
+        const n = Number(raw);
+        return Number.isFinite(n) ? clampInt(n, 0, 10, null) : null;
+      };
+
+      setErr("");
+      if (!teacherId) {
+        setErr("Selecione um professor.");
+        return false;
+      }
+      if (!observationDate) {
+        setErr("Selecione a data da observação.");
+        return false;
+      }
+      if (!Number.isFinite(generalScore) || generalScore < 0 || generalScore > 10) {
+        setErr("Informe a nota geral (0 a 10).");
+        return false;
+      }
+
+      if (modalPrimary) modalPrimary.disabled = true;
+      if (modalSecondary) modalSecondary.disabled = true;
+      const prev = modalPrimary?.textContent || "";
+      if (modalPrimary) modalPrimary.textContent = "Enviando…";
+
+      (async () => {
+        try {
+          const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_feedback_send");
+          const user = await waitForFirebaseAuthReady(firebase, 5000);
+          if (!user) throw new Error("not_authenticated");
+          const teacherName = String(adminPedagogicoState.teachersById?.get(teacherId)?.nome || "").trim();
+          const id = `fb_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+          const docRef = firebase.doc(firebase.primaryDb, "pedagogicalFeedbacks", id);
+          const payload = {
+            id,
+            teacherId,
+            teacherName,
+            observationDate,
+            classType,
+            generalScore: clampInt(generalScore, 0, 10, 0),
+            clarityScore: numeric("clarityScore"),
+            didacticsScore: numeric("didacticsScore"),
+            correctionScore: numeric("correctionScore"),
+            timeManagementScore: numeric("timeManagementScore"),
+            personalizationScore: numeric("personalizationScore"),
+            energyScore: numeric("energyScore"),
+            materialUsageScore: numeric("materialUsageScore"),
+            engagementScore: numeric("engagementScore"),
+            strengths: read("strengths"),
+            improvements: read("improvements"),
+            actionPlan: read("actionPlan"),
+            freeNotes: read("freeNotes"),
+            createdBy: String(user.uid || ""),
+            createdAt: firebase.serverTimestamp(),
+            readByTeacher: false,
+            readAt: null,
+          };
+          await withTimeout(firebase.setDoc(docRef, payload, { merge: true }), 12_000, "firestore_admin_feedback_merge");
+          closeModal();
+          await renderAdminControlePedagogicoPanel({ force: true });
+        } catch (e) {
+          console.error("[admin] feedback send failed:", e);
+          setErr("Não foi possível enviar agora.");
+        } finally {
+          if (modalPrimary) modalPrimary.disabled = false;
+          if (modalSecondary) modalSecondary.disabled = false;
+          if (modalPrimary) modalPrimary.textContent = prev || "Enviar";
+        }
+      })();
+      return false;
+    },
+    onSecondary: () => true,
+  });
+
+  window.setTimeout(() => {
+    const form = modalBody?.querySelector("[data-admin-ped-feedback-form]");
+    if (!(form instanceof HTMLElement)) return;
+    const dateEl = form.querySelector('[data-admin-ped-feedback-field="observationDate"]');
+    if (dateEl instanceof HTMLInputElement) dateEl.value = createDateKey(new Date());
+  }, 0);
+};
+
+const openAdminPedFeedbackViewModal = ({ feedbackId } = {}) => {
+  const id = String(feedbackId || "").trim();
+  if (!id) return;
+  const row =
+    (Array.isArray(adminPedagogicoState.pedagogicalFeedbacks) ? adminPedagogicoState.pedagogicalFeedbacks : []).find((f) => String(f?.id || "") === id) ||
+    null;
+  if (!row) return;
+  const p = row.payload && typeof row.payload === "object" ? row.payload : {};
+  const lines = [
+    ["Professor", row.teacherName || row.teacherId || "—"],
+    ["Data", row.observationDate || "—"],
+    ["Tipo", row.classType === "group" ? "Grupo" : "Individual"],
+    ["Nota geral", Number.isFinite(Number(row.generalScore)) ? String(row.generalScore) : "—"],
+    ["Pontos fortes", String(row.strengths || "").trim() || "—"],
+    ["Pontos de melhoria", String(row.improvements || "").trim() || "—"],
+    ["Plano de ação", String(row.actionPlan || "").trim() || "—"],
+    ["Observação livre", String(row.freeNotes || "").trim() || "—"],
+  ];
+  const scoreFields = [
+    ["Clareza", p.clarityScore],
+    ["Didática", p.didacticsScore],
+    ["Correção", p.correctionScore],
+    ["Gestão do tempo", p.timeManagementScore],
+    ["Personalização", p.personalizationScore],
+    ["Energia", p.energyScore],
+    ["Uso do material", p.materialUsageScore],
+    ["Engajamento", p.engagementScore],
+  ];
+  const scoreHtml = scoreFields
+    .map(([label, val]) => `<li class="admin-ped-overview-item"><span>${escapeHtml(label)}</span><strong>${escapeHtml(Number.isFinite(Number(val)) ? String(val) : "—")}</strong></li>`)
+    .join("");
+  const mainHtml = lines
+    .map(([label, val]) => `<li class="admin-ped-overview-item"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(val || "—"))}</strong></li>`)
+    .join("");
+
+  openModal({
+    title: "Feedback pedagógico",
+    primaryLabel: "Fechar",
+    secondaryLabel: "Fechar",
+    hideSecondary: true,
+    bodyHtml: `
+      <div class="admin-ped-overview">
+        <div class="admin-ped-overview-card">
+          <div class="admin-ped-overview-title">Resumo</div>
+          <ul class="admin-ped-overview-list">${mainHtml}</ul>
+        </div>
+        <div class="admin-ped-overview-card">
+          <div class="admin-ped-overview-title">Notas detalhadas</div>
+          <ul class="admin-ped-overview-list">${scoreHtml}</ul>
+        </div>
+      </div>
+    `,
+    onPrimary: () => true,
+  });
+};
+
+const openTeacherPedFeedbackModal = ({ feedbackId } = {}) => {
+  const id = String(feedbackId || "").trim();
+  if (!id) return;
+  const row = (Array.isArray(teacherV4DashboardState.feedbacks) ? teacherV4DashboardState.feedbacks : []).find((f) => String(f?.id || "") === id) || null;
+  if (!row) return;
+
+  const p = row.payload && typeof row.payload === "object" ? row.payload : {};
+  const scoreFields = [
+    ["Clareza", p.clarityScore],
+    ["Didática", p.didacticsScore],
+    ["Correção", p.correctionScore],
+    ["Gestão do tempo", p.timeManagementScore],
+    ["Personalização", p.personalizationScore],
+    ["Energia", p.energyScore],
+    ["Uso do material", p.materialUsageScore],
+    ["Engajamento", p.engagementScore],
+  ];
+  const scoreHtml = scoreFields
+    .map(
+      ([label, val]) =>
+        `<li class="admin-ped-overview-item"><span>${escapeHtml(label)}</span><strong>${escapeHtml(Number.isFinite(Number(val)) ? String(val) : "—")}</strong></li>`
+    )
+    .join("");
+
+  const summaryHtml = [
+    ["Data", row.observationDate || "—"],
+    ["Tipo", row.classType === "group" ? "Grupo" : "Individual"],
+    ["Nota geral", Number.isFinite(Number(row.generalScore)) ? String(row.generalScore) : "—"],
+  ]
+    .map(([label, val]) => `<li class="admin-ped-overview-item"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(val || "—"))}</strong></li>`)
+    .join("");
+
+  const markRead = async () => {
+    const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_teacher_feedback_read");
+    const user = await waitForFirebaseAuthReady(firebase, 5000);
+    if (!user) throw new Error("not_authenticated");
+    await withTimeout(
+      firebase.setDoc(
+        firebase.doc(firebase.primaryDb, "pedagogicalFeedbacks", id),
+        { readByTeacher: true, readAt: firebase.serverTimestamp(), updatedAt: firebase.serverTimestamp() },
+        { merge: true }
+      ),
+      12_000,
+      "firestore_teacher_feedback_read_merge"
+    );
+  };
+
+  openModal({
+    title: "Feedback pedagógico",
+    primaryLabel: row.readByTeacher ? "Fechar" : "Marcar como lido",
+    secondaryLabel: "Fechar",
+    hideSecondary: row.readByTeacher,
+    bodyHtml: `
+      <div class="admin-ped-overview">
+        <div class="admin-ped-overview-card">
+          <div class="admin-ped-overview-title">Resumo</div>
+          <ul class="admin-ped-overview-list">${summaryHtml}</ul>
+        </div>
+        <div class="admin-ped-overview-card">
+          <div class="admin-ped-overview-title">Pontos fortes</div>
+          <div class="admin-student-panel-note">${escapeHtml(String(row.strengths || "").trim() || "—")}</div>
+        </div>
+        <div class="admin-ped-overview-card">
+          <div class="admin-ped-overview-title">Pontos de melhoria</div>
+          <div class="admin-student-panel-note">${escapeHtml(String(row.improvements || "").trim() || "—")}</div>
+        </div>
+        <div class="admin-ped-overview-card">
+          <div class="admin-ped-overview-title">Plano de ação</div>
+          <div class="admin-student-panel-note">${escapeHtml(String(row.actionPlan || "").trim() || "—")}</div>
+        </div>
+        <div class="admin-ped-overview-card">
+          <div class="admin-ped-overview-title">Observação livre</div>
+          <div class="admin-student-panel-note">${escapeHtml(String(row.freeNotes || "").trim() || "—")}</div>
+        </div>
+        <div class="admin-ped-overview-card">
+          <div class="admin-ped-overview-title">Notas detalhadas</div>
+          <ul class="admin-ped-overview-list">${scoreHtml}</ul>
+        </div>
+      </div>
+    `,
+    onPrimary: () => {
+      if (row.readByTeacher) return true;
+      if (modalPrimary) modalPrimary.disabled = true;
+      const prev = modalPrimary?.textContent || "";
+      if (modalPrimary) modalPrimary.textContent = "Salvando…";
+      (async () => {
+        try {
+          await markRead();
+          closeModal();
+          teacherV4DashboardState.loadedAt = 0;
+          renderTeacherDashboard();
+        } catch (e) {
+          console.error("[teacher] feedback mark read failed:", e);
+          if (modalPrimary) modalPrimary.textContent = prev || "Marcar como lido";
+          if (modalPrimary) modalPrimary.disabled = false;
+        }
+      })();
+      return false;
+    },
+    onSecondary: () => true,
+  });
+};
+
+const openAdminPedAlertViewModal = ({ alertId } = {}) => {
+  const id = String(alertId || "").trim();
+  if (!id) return;
+  const row = (Array.isArray(adminPedagogicoState.teacherAlerts) ? adminPedagogicoState.teacherAlerts : []).find((a) => String(a?.id || "") === id) || null;
+  if (!row) return;
+  const when = formatShortDateFromMs(row.createdAtMs);
+  openModal({
+    title: "Aviso do professor",
+    primaryLabel: "Fechar",
+    secondaryLabel: "Fechar",
+    hideSecondary: true,
+    bodyHtml: `
+      <div class="admin-ped-overview">
+        <div class="admin-ped-overview-card">
+          <div class="admin-ped-overview-title">${escapeHtml(row.category || "Aviso")}</div>
+          <ul class="admin-ped-overview-list">
+            <li class="admin-ped-overview-item"><span>Professor</span><strong>${escapeHtml(row.teacherName || row.teacherId || "—")}</strong></li>
+            <li class="admin-ped-overview-item"><span>Aluno</span><strong>${escapeHtml(row.studentName || row.studentId || "—")}</strong></li>
+            <li class="admin-ped-overview-item"><span>Prioridade</span><strong>${escapeHtml(row.priority === "high" ? "Alta" : row.priority === "medium" ? "Média" : "Baixa")}</strong></li>
+            <li class="admin-ped-overview-item"><span>Status</span><strong>${escapeHtml(row.status === "resolved" ? "Resolvido" : row.status === "analysis" ? "Em análise" : "Aberto")}</strong></li>
+            <li class="admin-ped-overview-item"><span>Data</span><strong>${escapeHtml(when)}</strong></li>
+          </ul>
+        </div>
+        <div class="admin-ped-overview-card">
+          <div class="admin-ped-overview-title">Descrição</div>
+          <div class="admin-student-panel-note">${escapeHtml(row.description || "—")}</div>
+        </div>
+      </div>
+    `,
+    onPrimary: () => true,
+  });
+};
+
+const resolveAdminPedAlert = ({ alertId } = {}) => {
+  const id = String(alertId || "").trim();
+  if (!id) return;
+  const row = (Array.isArray(adminPedagogicoState.teacherAlerts) ? adminPedagogicoState.teacherAlerts : []).find((a) => String(a?.id || "") === id) || null;
+  if (!row) return;
+  openModal({
+    title: "Resolver aviso",
+    primaryLabel: "Marcar como resolvido",
+    secondaryLabel: "Cancelar",
+    bodyHtml: `
+      <div class="admin-ped-modal" data-admin-ped-alert-resolve-form>
+        <label class="admin-ped-modal-field">
+          <span>Observação interna (opcional)</span>
+          <textarea class="admin-ped-modal-textarea" rows="3" data-admin-ped-alert-field="notes" placeholder="Ex: combinado com o professor..."></textarea>
+        </label>
+        <div class="admin-ped-modal-error" data-admin-ped-alert-error hidden>—</div>
+      </div>
+    `,
+    onPrimary: () => {
+      const form = modalBody?.querySelector("[data-admin-ped-alert-resolve-form]");
+      const errEl = form?.querySelector("[data-admin-ped-alert-error]");
+      const setErr = (msg) => {
+        if (errEl instanceof HTMLElement) {
+          errEl.textContent = String(msg || "");
+          errEl.hidden = !msg;
+        }
+      };
+      const notesEl = form?.querySelector('[data-admin-ped-alert-field="notes"]');
+      const notes = notesEl instanceof HTMLTextAreaElement ? String(notesEl.value || "").trim() : "";
+
+      if (modalPrimary) modalPrimary.disabled = true;
+      if (modalSecondary) modalSecondary.disabled = true;
+      const prev = modalPrimary?.textContent || "";
+      if (modalPrimary) modalPrimary.textContent = "Salvando…";
+
+      (async () => {
+        try {
+          const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_alert_resolve");
+          const user = await waitForFirebaseAuthReady(firebase, 5000);
+          if (!user) throw new Error("not_authenticated");
+          await withTimeout(
+            firebase.setDoc(
+              firebase.doc(firebase.primaryDb, "teacherAlerts", id),
+              {
+                status: "resolved",
+                coordinatorNotes: notes,
+                resolvedAt: firebase.serverTimestamp(),
+                updatedAt: firebase.serverTimestamp(),
+                updatedBy: String(user.uid || ""),
+              },
+              { merge: true }
+            ),
+            12_000,
+            "firestore_admin_alert_resolve_merge"
+          );
+          closeModal();
+          await renderAdminControlePedagogicoPanel({ force: true });
+        } catch (e) {
+          console.error("[admin] alert resolve failed:", e);
+          setErr("Não foi possível salvar agora.");
+        } finally {
+          if (modalPrimary) modalPrimary.disabled = false;
+          if (modalSecondary) modalSecondary.disabled = false;
+          if (modalPrimary) modalPrimary.textContent = prev || "Marcar como resolvido";
+        }
+      })();
+
+      return false;
+    },
+    onSecondary: () => true,
+  });
+};
+
+const adminPedDownloadCsv = ({ filename, rows }) => {
+  const safeRows = Array.isArray(rows) ? rows : [];
+  if (!safeRows.length) return;
+  const headers = Object.keys(safeRows[0] || {});
+  const esc = (v) => {
+    const s = String(v ?? "");
+    const needs = /[\",\\n\\r;]/.test(s);
+    const base = s.replace(/\"/g, '""');
+    return needs ? `"${base}"` : base;
+  };
+  const lines = [headers.map(esc).join(";")].concat(
+    safeRows.map((row) => headers.map((h) => esc(row && typeof row === "object" ? row[h] : "")).join(";"))
+  );
+  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename || "relatorio.csv";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 };
 
 const toggleAdminPedClassStatus = ({ classId } = {}) => {
@@ -13028,6 +15144,16 @@ document.addEventListener("click", (event) => {
       }
     }
 
+    const teacherFeedbackView = target.closest("[data-teacher-v4-feedback-view]");
+    if (teacherFeedbackView instanceof HTMLButtonElement) {
+      if (currentRole === "teacher") {
+        event.preventDefault();
+        const feedbackId = String(teacherFeedbackView.getAttribute("data-teacher-v4-feedback-view") || "").trim();
+        openTeacherPedFeedbackModal({ feedbackId });
+        return;
+      }
+    }
+
     const pedClose = target.closest("[data-pedagogico-drawer-close]");
     if (pedClose instanceof HTMLElement) {
       event.preventDefault();
@@ -13060,6 +15186,42 @@ document.addEventListener("click", (event) => {
         return;
       }
 
+      const adminPedNewGroup = target.closest("[data-admin-ped-new-group]");
+      if (adminPedNewGroup instanceof HTMLButtonElement) {
+        event.preventDefault();
+        renderAdminControlePedagogicoPanel({ force: false })
+          .then(() => openAdminPedGroupModal({ mode: "create" }))
+          .catch(() => openAdminPedGroupModal({ mode: "create" }));
+        return;
+      }
+
+      const adminPedNewPlan = target.closest("[data-admin-ped-new-plan]");
+      if (adminPedNewPlan instanceof HTMLButtonElement) {
+        event.preventDefault();
+        renderAdminControlePedagogicoPanel({ force: false })
+          .then(() => openAdminPedPlanModal({ mode: "create" }))
+          .catch(() => openAdminPedPlanModal({ mode: "create" }));
+        return;
+      }
+
+      const adminPedNewFeedback = target.closest("[data-admin-ped-new-feedback]");
+      if (adminPedNewFeedback instanceof HTMLButtonElement) {
+        event.preventDefault();
+        renderAdminControlePedagogicoPanel({ force: false })
+          .then(() => openAdminPedFeedbackModal({ mode: "create" }))
+          .catch(() => openAdminPedFeedbackModal({ mode: "create" }));
+        return;
+      }
+
+      const adminPedGenerateReport = target.closest("[data-admin-ped-generate-report]");
+      if (adminPedGenerateReport instanceof HTMLButtonElement) {
+        event.preventDefault();
+        adminPedagogicoState.activeTab = "relatorios";
+        renderAdminPedagogicoTabs();
+        renderAdminPedagogicoReportsPanel();
+        return;
+      }
+
       const adminPedTab = target.closest("[data-admin-ped-tab]");
       if (adminPedTab instanceof HTMLButtonElement) {
         event.preventDefault();
@@ -13067,6 +15229,210 @@ document.addEventListener("click", (event) => {
         if (tab) {
           adminPedagogicoState.activeTab = tab;
           renderAdminPedagogicoTabs();
+        }
+        return;
+      }
+
+      const adminPedGroupEdit = target.closest("[data-admin-ped-group-edit]");
+      if (adminPedGroupEdit instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const groupId = String(adminPedGroupEdit.getAttribute("data-admin-ped-group-edit") || "").trim();
+        const row =
+          (Array.isArray(adminPedagogicoState.groups) ? adminPedagogicoState.groups : []).find((g) => String(g?.id || "") === groupId) || null;
+        if (row) openAdminPedGroupModal({ mode: "edit", groupRow: row });
+        return;
+      }
+
+      const adminPedGroupToggle = target.closest("[data-admin-ped-group-toggle]");
+      if (adminPedGroupToggle instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const groupId = String(adminPedGroupToggle.getAttribute("data-admin-ped-group-toggle") || "").trim();
+        toggleAdminPedGroupStatus({ groupId });
+        return;
+      }
+
+      const adminPedGroupDelete = target.closest("[data-admin-ped-group-delete]");
+      if (adminPedGroupDelete instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const groupId = String(adminPedGroupDelete.getAttribute("data-admin-ped-group-delete") || "").trim();
+        deleteAdminPedGroup({ groupId });
+        return;
+      }
+
+      const adminPedPlanEdit = target.closest("[data-admin-ped-plan-edit]");
+      if (adminPedPlanEdit instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const planId = String(adminPedPlanEdit.getAttribute("data-admin-ped-plan-edit") || "").trim();
+        const row =
+          (Array.isArray(adminPedagogicoState.plans) ? adminPedagogicoState.plans : []).find((p) => String(p?.id || "") === planId) || null;
+        if (row) openAdminPedPlanModal({ mode: "edit", planRow: row });
+        return;
+      }
+
+      const adminPedPlanToggle = target.closest("[data-admin-ped-plan-toggle]");
+      if (adminPedPlanToggle instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const planId = String(adminPedPlanToggle.getAttribute("data-admin-ped-plan-toggle") || "").trim();
+        toggleAdminPedPlanStatus({ planId });
+        return;
+      }
+
+      const adminPedPlanDelete = target.closest("[data-admin-ped-plan-delete]");
+      if (adminPedPlanDelete instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const planId = String(adminPedPlanDelete.getAttribute("data-admin-ped-plan-delete") || "").trim();
+        deleteAdminPedPlan({ planId });
+        return;
+      }
+
+      const adminPedAlertView = target.closest("[data-admin-ped-alert-view]");
+      if (adminPedAlertView instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const alertId = String(adminPedAlertView.getAttribute("data-admin-ped-alert-view") || "").trim();
+        openAdminPedAlertViewModal({ alertId });
+        return;
+      }
+
+      const adminPedAlertResolve = target.closest("[data-admin-ped-alert-resolve]");
+      if (adminPedAlertResolve instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const alertId = String(adminPedAlertResolve.getAttribute("data-admin-ped-alert-resolve") || "").trim();
+        resolveAdminPedAlert({ alertId });
+        return;
+      }
+
+      const adminPedFeedbackView = target.closest("[data-admin-ped-feedback-view]");
+      if (adminPedFeedbackView instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const feedbackId = String(adminPedFeedbackView.getAttribute("data-admin-ped-feedback-view") || "").trim();
+        openAdminPedFeedbackViewModal({ feedbackId });
+        return;
+      }
+
+      const adminPedStudentOpen = target.closest("[data-admin-ped-student-open]");
+      if (adminPedStudentOpen instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const alunoId = String(adminPedStudentOpen.getAttribute("data-admin-ped-student-open") || "").trim();
+        openAdminStudentHistoryDrawer({ alunoId }).catch(() => {});
+        return;
+      }
+
+      const adminPedStudentLink = target.closest("[data-admin-ped-student-link]");
+      if (adminPedStudentLink instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const alunoId = String(adminPedStudentLink.getAttribute("data-admin-ped-student-link") || "").trim();
+        openAdminPedStudentLinkModal({ studentId: alunoId });
+        return;
+      }
+
+      const adminPedStudentNewClass = target.closest("[data-admin-ped-student-new-class]");
+      if (adminPedStudentNewClass instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const alunoId = String(adminPedStudentNewClass.getAttribute("data-admin-ped-student-new-class") || "").trim();
+        const meta = adminPedagogicoState.studentsById instanceof Map ? adminPedagogicoState.studentsById.get(alunoId) || null : null;
+        const teacherId = String(meta?.professorId || meta?.teacherId || "").trim();
+        const plan = String(meta?.plano || "").trim();
+        openAdminPedClassModal({
+          mode: "create",
+          prefill: { type: "individual", teacherId, plan, studentIds: alunoId ? [alunoId] : [] },
+        });
+        return;
+      }
+
+      const adminPedReportBtn = target.closest("[data-admin-ped-report]");
+      if (adminPedReportBtn instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const kind = String(adminPedReportBtn.getAttribute("data-admin-ped-report") || "").trim();
+        if (!kind) return;
+        const filenameBase = `relatorio_${kind}_${createDateKey(new Date())}.csv`;
+        if (kind === "students_active") {
+          const teachersById = adminPedagogicoState.teachersById instanceof Map ? adminPedagogicoState.teachersById : new Map();
+          const groupsById = adminPedagogicoState.groupsById instanceof Map ? adminPedagogicoState.groupsById : new Map();
+          const rows = (Array.isArray(adminPedagogicoState.students) ? adminPedagogicoState.students : [])
+            .filter((s) => s && typeof s === "object" && s.ativo)
+            .map((s) => {
+              const teacherId = String(s.professorId || s.teacherId || "").trim();
+              const groupId = String(s.groupId || "").trim();
+              return {
+                alunoId: String(s.id || ""),
+                nome: String(s.nome || ""),
+                email: String(s.email || ""),
+                plano: String(s.plano || ""),
+                professor: teacherId ? String(teachersById.get(teacherId)?.nome || "") : "",
+                turma: groupId ? String(groupsById.get(groupId)?.name || "") : String(s.groupName || ""),
+                pais: String(s.pais || ""),
+                estadoEua: String(s.estadoEua || ""),
+              };
+            });
+          adminPedDownloadCsv({ filename: filenameBase, rows });
+          return;
+        }
+        if (kind === "classes") {
+          const rows = (Array.isArray(adminPedagogicoState.classes) ? adminPedagogicoState.classes : []).map((c) => ({
+            id: String(c.id || ""),
+            tipo: c.type === "group" ? "Grupo" : "Individual",
+            professor: String(c.teacherName || ""),
+            turma: String(c.groupName || ""),
+            alunos: Array.isArray(c.studentNames) && c.studentNames.length ? c.studentNames.join(", ") : "",
+            dias: Array.isArray(c.daysOfWeek) ? c.daysOfWeek.map(daysLabelShort).join(", ") : "",
+            horario: `${formatHmFromMinutes(c.startMin || 0)}-${formatHmFromMinutes(c.endMin || 0)}`,
+            plano: String(c.planName || c.plan || ""),
+            status: String(c.status || ""),
+          }));
+          adminPedDownloadCsv({ filename: filenameBase, rows });
+          return;
+        }
+        if (kind === "groups") {
+          const rows = (Array.isArray(adminPedagogicoState.groups) ? adminPedagogicoState.groups : []).map((g) => ({
+            id: String(g.id || ""),
+            nome: String(g.name || ""),
+            professor: String(g.teacherName || ""),
+            plano: String(g.planName || ""),
+            alunos: Array.isArray(g.studentNames) ? String(g.studentNames.length) : "0",
+            dias: Array.isArray(g.daysOfWeek) ? g.daysOfWeek.map(daysLabelShort).join(", ") : "",
+            horario: `${formatHmFromMinutes(g.startMin || 0)}-${formatHmFromMinutes(g.endMin || 0)}`,
+            status: String(g.status || ""),
+          }));
+          adminPedDownloadCsv({ filename: filenameBase, rows });
+          return;
+        }
+        if (kind === "feedbacks") {
+          const rows = (Array.isArray(adminPedagogicoState.pedagogicalFeedbacks) ? adminPedagogicoState.pedagogicalFeedbacks : []).map((f) => ({
+            id: String(f.id || ""),
+            professor: String(f.teacherName || ""),
+            data: String(f.observationDate || ""),
+            tipo: f.classType === "group" ? "Grupo" : "Individual",
+            notaGeral: Number.isFinite(Number(f.generalScore)) ? String(f.generalScore) : "",
+            status: f.readByTeacher ? "Lido" : "Novo",
+          }));
+          adminPedDownloadCsv({ filename: filenameBase, rows });
+          return;
+        }
+        if (kind === "alerts") {
+          const rows = (Array.isArray(adminPedagogicoState.teacherAlerts) ? adminPedagogicoState.teacherAlerts : []).map((a) => ({
+            id: String(a.id || ""),
+            professor: String(a.teacherName || ""),
+            aluno: String(a.studentName || ""),
+            categoria: String(a.category || ""),
+            prioridade: String(a.priority || ""),
+            status: String(a.status || ""),
+            data: formatShortDateFromMs(a.createdAtMs),
+          }));
+          adminPedDownloadCsv({ filename: filenameBase, rows });
+          return;
+        }
+        if (kind === "surveys") {
+          const rows = (Array.isArray(adminPedagogicoState.surveys) ? adminPedagogicoState.surveys : []).map((s) => ({
+            id: String(s.id || ""),
+            aluno: String(s.studentName || ""),
+            professor: String(s.teacherName || ""),
+            nps: Number.isFinite(Number(s.nps)) ? String(s.nps) : "",
+            csat: Number.isFinite(Number(s.csat)) ? String(s.csat) : "",
+            comentario: String(s.comment || ""),
+            data: formatShortDateFromMs(s.createdAtMs),
+          }));
+          adminPedDownloadCsv({ filename: filenameBase, rows });
+          return;
         }
         return;
       }
