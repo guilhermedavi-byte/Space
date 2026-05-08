@@ -40,5 +40,68 @@ service cloud.firestore {
         )
         && request.resource.data.professorId == request.auth.uid;
     }
+
+    // Onboarding (professores) - conteúdos e quizzes
+    match /onboardingContents/{docId} {
+      allow read: if request.auth != null
+        && (
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.tipo == "admin"
+          || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.tipo == "teacher"
+          || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.tipo == "professor"
+        );
+      allow write: if request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.tipo == "admin";
+    }
+
+    match /onboardingQuizzes/{docId} {
+      allow read: if request.auth != null
+        && (
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.tipo == "admin"
+          || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.tipo == "teacher"
+          || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.tipo == "professor"
+        );
+      allow write: if request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.tipo == "admin";
+    }
+
+    // Onboarding (professores) - progresso e respostas
+    match /teacherOnboardingProgress/{docId} {
+      allow read: if request.auth != null
+        && (
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.tipo == "admin"
+          || resource.data.teacherId == request.auth.uid
+        );
+      allow create, update: if request.auth != null
+        && (
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.tipo == "admin"
+          || (
+            (
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.tipo == "teacher"
+              || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.tipo == "professor"
+            )
+            && request.resource.data.teacherId == request.auth.uid
+          )
+        );
+      allow delete: if request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.tipo == "admin";
+    }
+
+    match /teacherQuizSubmissions/{docId} {
+      allow read: if request.auth != null
+        && (
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.tipo == "admin"
+          || resource.data.teacherId == request.auth.uid
+        );
+      // Teacher can only create a new submission doc once (no edits).
+      allow create: if request.auth != null
+        && (
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.tipo == "teacher"
+          || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.tipo == "professor"
+        )
+        && request.resource.data.teacherId == request.auth.uid
+        && !exists(/databases/$(database)/documents/teacherQuizSubmissions/$(docId));
+      allow update, delete: if request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.tipo == "admin";
+    }
   }
 }

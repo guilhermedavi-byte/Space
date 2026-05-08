@@ -5160,6 +5160,322 @@ body:not([data-role="admin"]) [data-admin-only] {
   gap: 14px;
 }
 
+.teacher-onboarding-shell {
+  width: 100%;
+  display: grid;
+  gap: 14px;
+}
+
+.teacher-onboarding-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.teacher-onboarding-title {
+  margin: 0;
+  font-family: "Inter", "Plus Jakarta Sans", "Avenir Next", sans-serif;
+  font-size: clamp(22px, 2.5vw, 28px);
+  font-weight: 750;
+  letter-spacing: -0.04em;
+  line-height: 1.12;
+  color: #ffffff;
+}
+
+.teacher-onboarding-subtitle {
+  margin: 6px 0 0;
+  font-size: 13px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.52);
+  max-width: 70ch;
+}
+
+.teacher-onboarding-progress {
+  display: grid;
+  gap: 8px;
+  min-width: min(280px, 100%);
+}
+
+.teacher-onboarding-progress-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 750;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.teacher-onboarding-progress-top strong {
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.92);
+  font-variant-numeric: tabular-nums;
+}
+
+.teacher-onboarding-progress-bar {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.teacher-onboarding-progress-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(89, 144, 189, 0.9), rgba(137, 85, 255, 0.85));
+}
+
+.teacher-onboarding-status {
+  min-height: 18px;
+  font-size: 13px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.58);
+  text-align: right;
+}
+
+.teacher-onboarding-status[data-tone="error"] {
+  color: rgba(255, 118, 110, 0.96);
+}
+
+.teacher-onboarding-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) 360px;
+  gap: 14px;
+  align-items: start;
+}
+
+.teacher-onboarding-main {
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.teacher-onboarding-main-head {
+  display: grid;
+  gap: 4px;
+}
+
+.teacher-onboarding-current-kicker {
+  font-size: 11px;
+  font-weight: 850;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.teacher-onboarding-current-title {
+  font-size: 16px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.teacher-onboarding-current-sub {
+  font-size: 12px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.teacher-onboarding-view {
+  padding: 12px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+  min-height: 280px;
+}
+
+.teacher-onboarding-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.teacher-onboarding-list {
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.teacher-onboarding-list-title {
+  font-size: 13px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.teacher-onboarding-list-sub {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.teacher-onboarding-items {
+  display: grid;
+  gap: 10px;
+}
+
+.teacher-onboarding-item {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 16px;
+  padding: 12px 12px;
+  display: grid;
+  gap: 8px;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease;
+}
+
+.teacher-onboarding-item:hover,
+.teacher-onboarding-item:focus-visible {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(89, 144, 189, 0.22);
+}
+
+.teacher-onboarding-item.is-active {
+  border-color: rgba(89, 144, 189, 0.25);
+  background: rgba(89, 144, 189, 0.08);
+}
+
+.teacher-onboarding-item-title {
+  font-size: 13px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.teacher-onboarding-item-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.teacher-onboarding-pill {
+  font-size: 10px;
+  font-weight: 850;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.66);
+}
+
+.teacher-onboarding-pill.is-done {
+  border-color: rgba(93, 202, 165, 0.25);
+  background: rgba(93, 202, 165, 0.12);
+  color: rgba(93, 202, 165, 0.95);
+}
+
+.teacher-onboarding-pill.is-progress {
+  border-color: rgba(89, 144, 189, 0.24);
+  background: rgba(89, 144, 189, 0.12);
+  color: rgba(89, 144, 189, 0.95);
+}
+
+.teacher-onboarding-pill.is-todo {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.teacher-onboarding-empty {
+  padding: 12px 2px 2px;
+  display: grid;
+  gap: 6px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.teacher-onboarding-empty-title {
+  font-size: 13px;
+  font-weight: 850;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.teacher-onboarding-empty-sub {
+  font-size: 12px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.teacher-onboarding-video {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.teacher-onboarding-doc {
+  display: grid;
+  gap: 10px;
+}
+
+.teacher-onboarding-doc a {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.teacher-onboarding-quiz {
+  display: grid;
+  gap: 12px;
+}
+
+.teacher-onboarding-quiz-q {
+  padding: 12px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+  display: grid;
+  gap: 10px;
+}
+
+.teacher-onboarding-quiz-q-title {
+  font-size: 12px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.teacher-onboarding-quiz-opt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.teacher-onboarding-quiz-short {
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 13px;
+  font-weight: 700;
+  outline: none;
+}
+
+.teacher-onboarding-quiz-short:focus {
+  border-color: rgba(89, 144, 189, 0.45);
+  box-shadow: 0 0 0 3px rgba(89, 144, 189, 0.12);
+}
+
+@media (max-width: 960px) {
+  .teacher-onboarding-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .teacher-students-head {
   display: grid;
   gap: 6px;
@@ -15413,6 +15729,355 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   font-size: 13px;
   font-weight: 900;
   color: rgba(255, 255, 255, 0.92);
+}
+
+.admin-onboarding-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.admin-onboarding-sectiontitle {
+  font-size: 12px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 10px;
+}
+
+.admin-onboarding-editor,
+.admin-onboarding-perf {
+  padding: 12px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.admin-onboarding-contents {
+  display: grid;
+}
+
+.admin-onboarding-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 12px;
+}
+
+.admin-onboarding-content + .admin-onboarding-content {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.admin-onboarding-content-title {
+  font-size: 13px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.admin-onboarding-content-sub {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.52);
+}
+
+.admin-onboarding-content-meta {
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-onboarding-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-onboarding-perf-table {
+  display: grid;
+}
+
+.admin-onboarding-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 140px 140px auto;
+  gap: 10px;
+  align-items: center;
+  padding: 12px 10px;
+  border-radius: 14px;
+}
+
+.admin-onboarding-row.is-head {
+  padding: 10px 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 11px;
+  font-weight: 850;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.admin-onboarding-row + .admin-onboarding-row {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.admin-onboarding-cell-title {
+  font-size: 12px;
+  font-weight: 850;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.admin-onboarding-cell-sub {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.52);
+}
+
+.admin-onboarding-modal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  align-items: end;
+}
+
+.admin-onboarding-modal-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.admin-onboarding-modal-check input {
+  width: 16px;
+  height: 16px;
+  accent-color: rgba(91, 91, 255, 0.9);
+}
+
+.admin-onboarding-modal-sectiontitle {
+  margin: 14px 0 10px;
+  font-size: 12px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.admin-onboarding-quizbuilder {
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+  display: grid;
+  gap: 10px;
+}
+
+.admin-onboarding-quizbuilder-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.admin-onboarding-quizbuilder-title {
+  font-size: 12px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.admin-onboarding-quizbuilder-qs {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-onboarding-q {
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.18);
+  display: grid;
+  gap: 10px;
+}
+
+.admin-onboarding-q-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.admin-onboarding-q-num {
+  font-size: 12px;
+  font-weight: 950;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.admin-onboarding-q-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 140px auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.admin-onboarding-q-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.admin-onboarding-q-check input {
+  width: 16px;
+  height: 16px;
+  accent-color: rgba(91, 91, 255, 0.9);
+}
+
+.admin-onboarding-q-options {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-onboarding-q-options-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.admin-onboarding-q-options-title {
+  font-size: 11px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.62);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.admin-onboarding-q-options-list {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-onboarding-q-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.admin-onboarding-detail {
+  display: grid;
+  gap: 14px;
+}
+
+.admin-onboarding-detail-sectiontitle {
+  margin-bottom: 10px;
+  font-size: 12px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.admin-onboarding-detail-row + .admin-onboarding-detail-row {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.admin-onboarding-detail-title {
+  font-size: 13px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.admin-onboarding-detail-meta {
+  margin-top: 8px;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-onboarding-detail-quiz {
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+  padding: 10px 12px;
+}
+
+.admin-onboarding-detail-quiz summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.admin-onboarding-detail-quiz-body {
+  margin-top: 10px;
+  display: grid;
+  gap: 10px;
+}
+
+.admin-onboarding-detail-answer {
+  padding: 10px 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.admin-onboarding-detail-answer-q {
+  font-size: 12px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.admin-onboarding-detail-answer-meta {
+  margin-top: 8px;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-onboarding-detail-answer-sub {
+  margin-top: 8px;
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+@media (max-width: 960px) {
+  .admin-onboarding-grid {
+    grid-template-columns: 1fr;
+  }
+  .admin-onboarding-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+  .admin-onboarding-modal-grid {
+    grid-template-columns: 1fr;
+  }
+  .admin-onboarding-q-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .admin-ped-overview {

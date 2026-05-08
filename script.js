@@ -138,6 +138,10 @@ const adminPedEmptyAlerts = document.querySelector("[data-admin-ped-empty-alerts
 const adminPedFeedbacks = document.querySelector("[data-admin-ped-feedbacks]");
 const adminPedEmptyFeedbacks = document.querySelector("[data-admin-ped-empty-feedbacks]");
 const adminPedReports = document.querySelector("[data-admin-ped-reports]");
+const adminOnboardingContentsEl = document.querySelector("[data-admin-onboarding-contents]");
+const adminOnboardingEmptyEl = document.querySelector("[data-admin-onboarding-empty]");
+const adminOnboardingPerfEl = document.querySelector("[data-admin-onboarding-perf]");
+const adminOnboardingPerfEmptyEl = document.querySelector("[data-admin-onboarding-perf-empty]");
 const adminPedConflicts = document.querySelector("[data-admin-ped-conflicts]");
 const adminPedEmptyConflicts = document.querySelector("[data-admin-ped-empty-conflicts]");
 
@@ -273,6 +277,18 @@ const teacherV4NoticesEmpty = document.querySelector("[data-teacher-v4-notices-e
 const teacherV4FeedbacksList = document.querySelector("[data-teacher-v4-feedbacks]");
 const teacherV4FeedbacksEmpty = document.querySelector("[data-teacher-v4-feedbacks-empty]");
 
+// Teacher > Onboarding
+const teacherOnboardingRoot = document.querySelector("[data-teacher-onboarding]");
+const teacherOnboardingStatus = document.querySelector("[data-teacher-onboarding-status]");
+const teacherOnboardingProgressLabel = document.querySelector("[data-teacher-onboarding-progress-label]");
+const teacherOnboardingProgressFill = document.querySelector("[data-teacher-onboarding-progress-fill]");
+const teacherOnboardingCurrentKicker = document.querySelector("[data-teacher-onboarding-current-kicker]");
+const teacherOnboardingCurrentTitle = document.querySelector("[data-teacher-onboarding-current-title]");
+const teacherOnboardingCurrentSub = document.querySelector("[data-teacher-onboarding-current-sub]");
+const teacherOnboardingView = document.querySelector("[data-teacher-onboarding-view]");
+const teacherOnboardingItems = document.querySelector("[data-teacher-onboarding-items]");
+const teacherOnboardingEmpty = document.querySelector("[data-teacher-onboarding-empty]");
+
 const learningLevelNames = ["Pré A1", "A1", "A1+", "A2", "A2+", "B1", "B1+", "B2", "B2+", "C1", "C2"];
 const learningJourneyPoints = [
   { x: 42, y: 194 },
@@ -374,6 +390,19 @@ const TEACHER_WORK_HOURS_STORAGE_KEY = "space-platform-teacher-work-hours-v1";
 const STAFF_USERS_STORAGE_KEY = "space-platform-staff-users-v1";
 const CREDIT_CYCLE_BUSINESS_DAYS = 6;
 const LESSON_DURATION_MINUTES = 30;
+
+let teacherOnboardingState = {
+  isLoading: false,
+  loadedAt: 0,
+  teacherId: "",
+  contents: [],
+  contentsById: new Map(),
+  quizzesByContentId: new Map(),
+  progressByContentId: new Map(),
+  submissionsByQuizId: new Map(),
+  currentContentId: "",
+  draftAnswersByQuizId: new Map(),
+};
 
 const PLAN_DEFS = {
   gold: { label: "Gold", creditsPerCycle: 3, creditType: "VIP", badgeClass: "is-gold", badgeDot: "ambar" },
@@ -822,6 +851,7 @@ let modalSecondaryHandler = null;
 let modalTrashHandler = null;
 let activeModalKind = "";
 let createEventDraft = null;
+let adminOnboardingDraft = null;
 
 const WEEKLY_CUSTOM_DAY_DEFS = [
   { key: "monday", label: "Segunda-feira" },
@@ -900,6 +930,7 @@ const closeModal = () => {
 
   activeModalKind = "";
   createEventDraft = null;
+  adminOnboardingDraft = null;
   clearTeacherCalendarSelection();
 };
 
@@ -3426,6 +3457,477 @@ const renderTeacherDashboard = () => {
       renderFromCache();
     }
   })();
+};
+
+const setTeacherOnboardingStatus = (text, tone = "") => {
+  if (!(teacherOnboardingStatus instanceof HTMLElement)) return;
+  teacherOnboardingStatus.textContent = String(text || "");
+  teacherOnboardingStatus.dataset.tone = String(tone || "");
+};
+
+const teacherOnboardingContentStatusLabel = (status) => {
+  const s = normalizeTeacherOnboardingProgressStatus(status);
+  if (s === "completed") return "Concluído";
+  if (s === "in_progress") return "Em andamento";
+  return "Não iniciado";
+};
+
+const teacherOnboardingContentStatusClass = (status) => {
+  const s = normalizeTeacherOnboardingProgressStatus(status);
+  if (s === "completed") return "is-done";
+  if (s === "in_progress") return "is-progress";
+  return "is-todo";
+};
+
+const getTeacherOnboardingProgressForContent = (contentId) => {
+  const id = String(contentId || "").trim();
+  if (!id) return null;
+  return teacherOnboardingState.progressByContentId instanceof Map ? teacherOnboardingState.progressByContentId.get(id) || null : null;
+};
+
+const computeTeacherOnboardingPct = () => {
+  const contents = Array.isArray(teacherOnboardingState.contents) ? teacherOnboardingState.contents : [];
+  if (!contents.length) return 0;
+  const required = contents.filter((c) => c.required);
+  const base = required.length ? required : contents;
+  const done = base.filter((c) => normalizeTeacherOnboardingProgressStatus(getTeacherOnboardingProgressForContent(c.id)?.status) === "completed").length;
+  return Math.round((done / Math.max(1, base.length)) * 100);
+};
+
+const teacherOnboardingFindDefaultContentId = () => {
+  const contents = Array.isArray(teacherOnboardingState.contents) ? teacherOnboardingState.contents : [];
+  if (!contents.length) return "";
+  // Prefer last "in_progress" by updatedAt, otherwise first not completed required, otherwise first.
+  const progress = teacherOnboardingState.progressByContentId instanceof Map ? teacherOnboardingState.progressByContentId : new Map();
+  let bestInProgress = null;
+  contents.forEach((c) => {
+    const p = progress.get(c.id) || null;
+    if (!p) return;
+    if (normalizeTeacherOnboardingProgressStatus(p.status) !== "in_progress") return;
+    const ms = p.updatedAtMs || p.lastAccessAtMs || 0;
+    if (!bestInProgress || ms > bestInProgress.ms) bestInProgress = { id: c.id, ms };
+  });
+  if (bestInProgress?.id) return bestInProgress.id;
+  const required = contents.filter((c) => c.required);
+  const target = (required.length ? required : contents).find(
+    (c) => normalizeTeacherOnboardingProgressStatus(progress.get(c.id)?.status) !== "completed"
+  );
+  return target?.id || contents[0].id;
+};
+
+const renderTeacherOnboardingItemsList = () => {
+  if (!(teacherOnboardingItems instanceof HTMLElement)) return;
+  const contents = Array.isArray(teacherOnboardingState.contents) ? teacherOnboardingState.contents : [];
+  const activeId = String(teacherOnboardingState.currentContentId || "");
+  teacherOnboardingItems.innerHTML = contents
+    .map((c, idx) => {
+      const prog = getTeacherOnboardingProgressForContent(c.id);
+      const status = teacherOnboardingContentStatusLabel(prog?.status);
+      const statusClass = teacherOnboardingContentStatusClass(prog?.status);
+      const typeLabel = c.type === "quiz" ? "Quiz" : c.type === "document" ? "Documento" : "Vídeo";
+      const req = c.required ? "Obrigatório" : "Opcional";
+      return `
+        <button class="teacher-onboarding-item ${String(c.id) === activeId ? "is-active" : ""}" type="button" data-teacher-onboarding-item="${escapeHtml(
+          c.id
+        )}">
+          <div class="teacher-onboarding-item-title">${escapeHtml(`${idx + 1}. ${c.title || "Conteúdo"}`)}</div>
+          <div class="teacher-onboarding-item-meta">
+            <span class="teacher-onboarding-pill ${statusClass}">${escapeHtml(status)}</span>
+            <span class="teacher-onboarding-pill">${escapeHtml(typeLabel)}</span>
+            <span class="teacher-onboarding-pill">${escapeHtml(req)}</span>
+          </div>
+        </button>
+      `;
+    })
+    .join("");
+};
+
+const renderTeacherOnboardingCurrent = () => {
+  if (!(teacherOnboardingView instanceof HTMLElement)) return;
+  const contents = Array.isArray(teacherOnboardingState.contents) ? teacherOnboardingState.contents : [];
+  const id = String(teacherOnboardingState.currentContentId || "").trim();
+  const idx = contents.findIndex((c) => String(c.id) === id);
+  const row = idx >= 0 ? contents[idx] : null;
+
+  if (!row) {
+    teacherOnboardingView.innerHTML = "";
+    if (teacherOnboardingCurrentKicker instanceof HTMLElement) teacherOnboardingCurrentKicker.textContent = "—";
+    if (teacherOnboardingCurrentTitle instanceof HTMLElement) teacherOnboardingCurrentTitle.textContent = "—";
+    if (teacherOnboardingCurrentSub instanceof HTMLElement) teacherOnboardingCurrentSub.textContent = "—";
+    return;
+  }
+
+  const prog = getTeacherOnboardingProgressForContent(row.id);
+  const status = teacherOnboardingContentStatusLabel(prog?.status);
+  const typeLabel = row.type === "quiz" ? "Quiz" : row.type === "document" ? "Documento" : "Vídeo";
+  const kicker = `${typeLabel} · ${status}${row.required ? " · Obrigatório" : ""}`;
+
+  if (teacherOnboardingCurrentKicker instanceof HTMLElement) teacherOnboardingCurrentKicker.textContent = kicker;
+  if (teacherOnboardingCurrentTitle instanceof HTMLElement) teacherOnboardingCurrentTitle.textContent = row.title || "Conteúdo";
+  if (teacherOnboardingCurrentSub instanceof HTMLElement) teacherOnboardingCurrentSub.textContent = row.description || "—";
+
+  if (row.type === "video") {
+    if (row.videoUrl) {
+      teacherOnboardingView.innerHTML = `
+        <video class="teacher-onboarding-video" controls preload="metadata" src="${escapeHtml(row.videoUrl)}"></video>
+        ${row.estimatedDuration ? `<div class="admin-student-panel-note">Duração estimada: ${escapeHtml(row.estimatedDuration)}</div>` : ""}
+      `;
+      return;
+    }
+    teacherOnboardingView.innerHTML = `<div class="admin-student-panel-note">Vídeo indisponível.</div>`;
+    return;
+  }
+
+  if (row.type === "document") {
+    if (row.documentUrl) {
+      const name = row.fileName || "Abrir documento";
+      teacherOnboardingView.innerHTML = `
+        <div class="teacher-onboarding-doc">
+          <a href="${escapeHtml(row.documentUrl)}" target="_blank" rel="noopener">
+            <span>📄</span>
+            <span>${escapeHtml(name)}</span>
+          </a>
+          <div class="admin-student-panel-note">${escapeHtml(row.description || "Documento do onboarding.")}</div>
+        </div>
+      `;
+      return;
+    }
+    teacherOnboardingView.innerHTML = `<div class="admin-student-panel-note">Documento indisponível.</div>`;
+    return;
+  }
+
+  // Quiz.
+  const quiz = teacherOnboardingState.quizzesByContentId instanceof Map ? teacherOnboardingState.quizzesByContentId.get(row.id) || null : null;
+  const submitted =
+    quiz && teacherOnboardingState.submissionsByQuizId instanceof Map ? teacherOnboardingState.submissionsByQuizId.get(quiz.id) || null : null;
+
+  if (!quiz) {
+    teacherOnboardingView.innerHTML = `<div class="admin-student-panel-note">Quiz ainda não configurado.</div>`;
+    return;
+  }
+
+  const draft = teacherOnboardingState.draftAnswersByQuizId instanceof Map ? teacherOnboardingState.draftAnswersByQuizId.get(quiz.id) || {} : {};
+  const disabled = submitted ? "disabled" : "";
+
+  const qHtml = quiz.questions
+    .map((q, qIdx) => {
+      const key = String(q.id);
+      const value = draft[key] ?? "";
+      const required = q.required !== false;
+      const reqTag = required ? `<span class="teacher-onboarding-pill is-progress">Obrigatório</span>` : `<span class="teacher-onboarding-pill is-todo">Opcional</span>`;
+
+      const title = `${qIdx + 1}. ${q.questionText || "Pergunta"}`;
+
+      if (q.type === "short_answer") {
+        return `
+          <div class="teacher-onboarding-quiz-q">
+            <div class="teacher-onboarding-quiz-q-title">${escapeHtml(title)}</div>
+            <div>${reqTag}</div>
+            <input class="teacher-onboarding-quiz-short" type="text" ${disabled} data-teacher-onboarding-quiz="${escapeHtml(
+              quiz.id
+            )}" data-teacher-onboarding-q="${escapeHtml(key)}" value="${escapeHtml(String(value))}" placeholder="Sua resposta" />
+          </div>
+        `;
+      }
+
+      const options =
+        q.type === "true_false" ? ["Verdadeiro", "Falso"] : Array.isArray(q.options) && q.options.length ? q.options : [];
+      const inputType = "radio";
+      const name = `quiz_${quiz.id}_${q.id}`;
+      return `
+        <div class="teacher-onboarding-quiz-q">
+          <div class="teacher-onboarding-quiz-q-title">${escapeHtml(title)}</div>
+          <div>${reqTag}</div>
+          <div class="teacher-onboarding-quiz">
+            ${options
+              .map((opt) => {
+                const checked = String(value) === String(opt);
+                return `
+                  <label class="teacher-onboarding-quiz-opt">
+                    <input type="${inputType}" name="${escapeHtml(name)}" ${checked ? "checked" : ""} ${disabled}
+                      data-teacher-onboarding-quiz="${escapeHtml(quiz.id)}"
+                      data-teacher-onboarding-q="${escapeHtml(key)}"
+                      value="${escapeHtml(String(opt))}"
+                    />
+                    <span>${escapeHtml(String(opt))}</span>
+                  </label>
+                `;
+              })
+              .join("")}
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+
+  const resultHtml =
+    submitted && quiz.showResultToTeacher
+      ? `<div class="admin-student-edit-error" style="margin-top:12px;">Pontuação: ${escapeHtml(
+          `${submitted.score}/${submitted.maxScore}`
+        )}</div>`
+      : submitted
+        ? `<div class="admin-student-metric" style="margin-top:12px;"><span>Status</span><strong>Respostas enviadas com sucesso.</strong></div>`
+        : "";
+
+  teacherOnboardingView.innerHTML = `
+    <div class="teacher-onboarding-quiz">
+      <div class="admin-student-panel-note">${escapeHtml(quiz.description || "")}</div>
+      ${qHtml}
+      <div class="teacher-onboarding-actions" style="justify-content: flex-end;">
+        <button class="button button-solid button-small" type="button" data-teacher-onboarding-quiz-submit="${escapeHtml(quiz.id)}" ${disabled}>
+          Enviar respostas
+        </button>
+      </div>
+      ${resultHtml}
+    </div>
+  `;
+};
+
+const renderTeacherOnboardingProgress = () => {
+  const pct = computeTeacherOnboardingPct();
+  if (teacherOnboardingProgressLabel instanceof HTMLElement) teacherOnboardingProgressLabel.textContent = `${pct}%`;
+  if (teacherOnboardingProgressFill instanceof HTMLElement) teacherOnboardingProgressFill.style.width = `${pct}%`;
+};
+
+const teacherOnboardingSetCurrent = async ({ contentId, markInProgress = true } = {}) => {
+  const id = String(contentId || "").trim();
+  if (!id) return;
+  teacherOnboardingState.currentContentId = id;
+  renderTeacherOnboardingItemsList();
+  renderTeacherOnboardingProgress();
+  renderTeacherOnboardingCurrent();
+
+  if (!markInProgress) return;
+  try {
+    await upsertTeacherOnboardingProgress({ contentId: id, nextStatus: "in_progress" });
+  } catch {
+    // ignore
+  }
+};
+
+const upsertTeacherOnboardingProgress = async ({ contentId, nextStatus } = {}) => {
+  const teacherId = String(teacherOnboardingState.teacherId || sessionUser?.id || "").trim();
+  if (!teacherId) return;
+  const contentIdSafe = String(contentId || "").trim();
+  if (!contentIdSafe) return;
+  const status = normalizeTeacherOnboardingProgressStatus(nextStatus);
+
+  const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_teacher_onboarding_progress_write");
+  const user = await waitForFirebaseAuthReady(firebase, 5000);
+  if (!user) throw new Error("not_authenticated");
+
+  const teacherName = sessionUser && sessionUser.role === "teacher" ? sessionUser.name : "";
+  const docId = `${teacherId}_${contentIdSafe}`;
+  const ref = firebase.doc(firebase.primaryDb, "teacherOnboardingProgress", docId);
+  const existing = getTeacherOnboardingProgressForContent(contentIdSafe);
+  const patch = {
+    id: docId,
+    teacherId,
+    teacherName,
+    contentId: contentIdSafe,
+    status,
+    updatedAt: firebase.serverTimestamp(),
+    lastAccessAt: firebase.serverTimestamp(),
+    ...(existing?.startedAtMs ? null : { startedAt: firebase.serverTimestamp() }),
+    ...(status === "completed" ? { completedAt: firebase.serverTimestamp() } : null),
+  };
+  await withTimeout(firebase.setDoc(ref, patch, { merge: true }), 12_000, "firestore_teacher_onboarding_progress_merge");
+
+  // Update local cache optimistically.
+  const next = {
+    id: docId,
+    teacherId,
+    teacherName,
+    contentId: contentIdSafe,
+    status,
+    startedAtMs: existing?.startedAtMs || Date.now(),
+    completedAtMs: status === "completed" ? Date.now() : existing?.completedAtMs || 0,
+    updatedAtMs: Date.now(),
+    lastAccessAtMs: Date.now(),
+  };
+  if (teacherOnboardingState.progressByContentId instanceof Map) {
+    teacherOnboardingState.progressByContentId.set(contentIdSafe, next);
+  }
+};
+
+const submitTeacherOnboardingQuiz = async ({ quizId } = {}) => {
+  const qid = String(quizId || "").trim();
+  if (!qid) return;
+
+  const quiz = teacherOnboardingState.quizzesByContentId instanceof Map ? [...teacherOnboardingState.quizzesByContentId.values()].find((q) => q.id === qid) : null;
+  if (!quiz) return;
+
+  const existing =
+    teacherOnboardingState.submissionsByQuizId instanceof Map ? teacherOnboardingState.submissionsByQuizId.get(qid) || null : null;
+  if (existing) return;
+
+  const draft = teacherOnboardingState.draftAnswersByQuizId instanceof Map ? teacherOnboardingState.draftAnswersByQuizId.get(qid) || {} : {};
+  const missing = quiz.questions.filter((q) => q.required !== false).filter((q) => {
+    const v = draft[String(q.id)];
+    return !String(v || "").trim();
+  });
+  if (missing.length) {
+    setTeacherOnboardingStatus("Responda todas as perguntas obrigatórias para enviar.", "error");
+    return;
+  }
+
+  // Score: auto-grade when correctAnswer is provided. Short answers: match normalized.
+  let score = 0;
+  let maxScore = 0;
+  const answers = quiz.questions.map((q) => {
+    const teacherAnswer = draft[String(q.id)] ?? "";
+    const maxPoints = Number.isFinite(Number(q.points)) ? Number(q.points) : 0;
+    maxScore += maxPoints;
+    let isCorrect = null;
+    let pointsEarned = 0;
+    if (q.correctAnswer != null && String(q.correctAnswer).trim() !== "") {
+      const correct = String(q.correctAnswer);
+      if (q.type === "short_answer") {
+        isCorrect = normalizeSearchText(teacherAnswer) === normalizeSearchText(correct);
+      } else {
+        isCorrect = String(teacherAnswer) === String(correct);
+      }
+      pointsEarned = isCorrect ? maxPoints : 0;
+      score += pointsEarned;
+    }
+    return {
+      questionId: String(q.id),
+      questionText: String(q.questionText || ""),
+      teacherAnswer,
+      correctAnswer: q.correctAnswer ?? "",
+      isCorrect,
+      pointsEarned,
+      maxPoints,
+    };
+  });
+
+  const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_teacher_quiz_submit");
+  const user = await waitForFirebaseAuthReady(firebase, 5000);
+  if (!user) throw new Error("not_authenticated");
+  const teacherId = String(user.uid || "");
+  const teacherName = sessionUser && sessionUser.role === "teacher" ? sessionUser.name : "";
+  const contentId = String(quiz.contentId || "");
+  const subId = `${teacherId}_${qid}_${Date.now().toString(36)}`;
+  const ref = firebase.doc(firebase.primaryDb, "teacherQuizSubmissions", subId);
+  const payload = {
+    id: subId,
+    teacherId,
+    teacherName,
+    quizId: qid,
+    contentId,
+    answers,
+    score,
+    maxScore,
+    submittedAt: firebase.serverTimestamp(),
+    status: "submitted",
+  };
+  await withTimeout(firebase.setDoc(ref, payload, { merge: true }), 12_000, "firestore_teacher_quiz_submission_merge");
+
+  if (teacherOnboardingState.submissionsByQuizId instanceof Map) {
+    teacherOnboardingState.submissionsByQuizId.set(qid, {
+      id: subId,
+      teacherId,
+      teacherName,
+      quizId: qid,
+      contentId,
+      answers,
+      score,
+      maxScore,
+      submittedAtMs: Date.now(),
+      status: "submitted",
+    });
+  }
+
+  await upsertTeacherOnboardingProgress({ contentId, nextStatus: "completed" });
+  setTeacherOnboardingStatus(quiz.showResultToTeacher ? `Quiz enviado. Pontuação: ${score}/${maxScore}` : "Respostas enviadas com sucesso.");
+  renderTeacherOnboardingItemsList();
+  renderTeacherOnboardingProgress();
+  renderTeacherOnboardingCurrent();
+};
+
+const renderTeacherOnboardingPanel = async ({ force = false } = {}) => {
+  if (currentRole !== "teacher") return;
+  if (!(teacherOnboardingRoot instanceof HTMLElement)) return;
+
+  const now = Date.now();
+  if (!force && teacherOnboardingState.loadedAt && now - teacherOnboardingState.loadedAt < 45_000) {
+    renderTeacherOnboardingProgress();
+    renderTeacherOnboardingItemsList();
+    renderTeacherOnboardingCurrent();
+    return;
+  }
+
+  if (teacherOnboardingState.isLoading) return;
+  teacherOnboardingState.isLoading = true;
+  setTeacherOnboardingStatus("Carregando…");
+
+  try {
+    const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_teacher_onboarding_panel");
+    const user = await waitForFirebaseAuthReady(firebase, 5000);
+    if (!user) throw new Error("not_authenticated");
+    const teacherId = String(user.uid || "");
+    teacherOnboardingState.teacherId = teacherId;
+
+    const [contents, quizzes, progressRows, submissions] = await Promise.all([
+      fetchOnboardingContentsFromFirestore({ includeInactive: false }).catch(() => []),
+      fetchOnboardingQuizzesFromFirestore().catch(() => []),
+      fetchTeacherOnboardingProgressFromFirestore({ teacherId }).catch(() => []),
+      fetchTeacherQuizSubmissionsFromFirestore({ teacherId }).catch(() => []),
+    ]);
+
+    const activeContents = (Array.isArray(contents) ? contents : []).filter((c) => c && typeof c === "object");
+    const contentsById = new Map(activeContents.map((c) => [String(c.id), c]));
+    const quizzesByContentId = new Map();
+    (Array.isArray(quizzes) ? quizzes : []).forEach((q) => {
+      if (!q || typeof q !== "object") return;
+      const cid = String(q.contentId || "").trim();
+      if (cid) quizzesByContentId.set(cid, q);
+    });
+
+    const progressByContentId = new Map();
+    (Array.isArray(progressRows) ? progressRows : []).forEach((p) => {
+      progressByContentId.set(String(p.contentId), p);
+    });
+    const submissionsByQuizId = new Map();
+    (Array.isArray(submissions) ? submissions : []).forEach((s) => {
+      const qid = String(s.quizId || "").trim();
+      if (qid && !submissionsByQuizId.has(qid)) submissionsByQuizId.set(qid, s);
+    });
+
+    teacherOnboardingState.contents = activeContents;
+    teacherOnboardingState.contentsById = contentsById;
+    teacherOnboardingState.quizzesByContentId = quizzesByContentId;
+    teacherOnboardingState.progressByContentId = progressByContentId;
+    teacherOnboardingState.submissionsByQuizId = submissionsByQuizId;
+    teacherOnboardingState.loadedAt = Date.now();
+
+    const empty = activeContents.length === 0;
+    if (teacherOnboardingEmpty instanceof HTMLElement) teacherOnboardingEmpty.hidden = !empty;
+    if (teacherOnboardingItems instanceof HTMLElement) teacherOnboardingItems.hidden = empty;
+
+    const current = teacherOnboardingState.currentContentId && contentsById.has(teacherOnboardingState.currentContentId)
+      ? teacherOnboardingState.currentContentId
+      : teacherOnboardingFindDefaultContentId();
+    teacherOnboardingState.currentContentId = current;
+
+    setTeacherOnboardingStatus("");
+    renderTeacherOnboardingProgress();
+    renderTeacherOnboardingItemsList();
+    renderTeacherOnboardingCurrent();
+
+    if (current) {
+      // Mark as in progress on first open, unless already completed.
+      const st = normalizeTeacherOnboardingProgressStatus(progressByContentId.get(current)?.status);
+      if (st !== "completed") {
+        upsertTeacherOnboardingProgress({ contentId: current, nextStatus: "in_progress" }).catch(() => {});
+      }
+    }
+  } catch (e) {
+    console.error("[teacher] onboarding load failed:", e);
+    setTeacherOnboardingStatus("Não foi possível carregar agora.", "error");
+  } finally {
+    teacherOnboardingState.isLoading = false;
+  }
 };
 
 const formatTimeZoneOffset = (date) => {
@@ -8373,6 +8875,33 @@ const normalizeSearchText = (value) => {
   return s;
 };
 
+const normalizeOnboardingContentType = (value) => {
+  const raw = String(value || "").trim().toLowerCase();
+  if (raw === "document" || raw === "doc" || raw === "arquivo") return "document";
+  if (raw === "quiz") return "quiz";
+  return "video";
+};
+
+const normalizeOnboardingStatus = (value) => {
+  const raw = String(value || "").trim().toLowerCase();
+  if (raw === "inactive" || raw === "inativo" || raw === "desativado") return "inactive";
+  return "active";
+};
+
+const normalizeTeacherOnboardingProgressStatus = (value) => {
+  const raw = String(value || "").trim().toLowerCase();
+  if (raw === "completed" || raw === "concluido" || raw === "concluído") return "completed";
+  if (raw === "in_progress" || raw === "andamento" || raw === "em andamento") return "in_progress";
+  return "not_started";
+};
+
+const normalizeQuizQuestionType = (value) => {
+  const raw = String(value || "").trim().toLowerCase();
+  if (raw === "true_false" || raw === "verdadeiro_falso" || raw === "truefalse") return "true_false";
+  if (raw === "short_answer" || raw === "resposta_curta" || raw === "short") return "short_answer";
+  return "multiple_choice";
+};
+
 // Admin > Alunos: student files (Storage + Firestore metadata)
 const ADMIN_STUDENT_FILE_EXTS = ["pdf", "doc", "docx", "png", "jpg", "jpeg"];
 const MAX_STUDENT_FILE_BYTES = 25 * 1024 * 1024; // 25MB hard cap to prevent accidental huge uploads.
@@ -8411,6 +8940,59 @@ const isAllowedStudentFile = (file) => {
 };
 
 const createStudentFileId = () => `sf_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+
+// Admin > Controle Pedagógico > Onboarding: uploads (Storage + Firestore metadata on onboardingContents)
+const ADMIN_ONBOARDING_VIDEO_EXTS = ["mp4", "mov", "webm"];
+const ADMIN_ONBOARDING_DOC_EXTS = ["pdf", "doc", "docx", "png", "jpg", "jpeg"];
+const MAX_ONBOARDING_VIDEO_BYTES = 250 * 1024 * 1024; // 250MB
+const MAX_ONBOARDING_DOC_BYTES = 25 * 1024 * 1024; // 25MB (same as student files)
+
+const isAllowedOnboardingVideoFile = (file) => {
+  if (!(file instanceof File)) return { ok: false, reason: "Arquivo inválido." };
+  const ext = normalizeFileExt(file.name);
+  if (!ext || !ADMIN_ONBOARDING_VIDEO_EXTS.includes(ext)) return { ok: false, reason: "Tipo de vídeo não permitido." };
+  if (file.size > MAX_ONBOARDING_VIDEO_BYTES) return { ok: false, reason: "Vídeo muito grande." };
+  return { ok: true, ext };
+};
+
+const isAllowedOnboardingDocumentFile = (file) => {
+  if (!(file instanceof File)) return { ok: false, reason: "Arquivo inválido." };
+  const ext = normalizeFileExt(file.name);
+  if (!ext || !ADMIN_ONBOARDING_DOC_EXTS.includes(ext)) return { ok: false, reason: "Tipo de documento não permitido." };
+  if (file.size > MAX_ONBOARDING_DOC_BYTES) return { ok: false, reason: "Arquivo muito grande." };
+  return { ok: true, ext };
+};
+
+const createOnboardingFileId = () => `obf_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+
+const uploadOnboardingAssetToStorage = async ({ contentId, file, kind } = {}) => {
+  const cid = String(contentId || "").trim();
+  if (!cid) throw new Error("missing_content_id");
+  if (!(file instanceof File)) throw new Error("invalid_file");
+  const k = String(kind || "").trim().toLowerCase() || "file"; // video|document
+
+  const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_onboarding_upload");
+  const user = await waitForFirebaseAuthReady(firebase, 5000);
+  if (!user) throw new Error("not-authenticated");
+
+  const fileId = createOnboardingFileId();
+  const safeName = sanitizeStorageFileName(file.name);
+  const storagePath = `onboarding/${cid}/${k}/${fileId}_${safeName}`;
+  const storageRef = firebase.ref(firebase.primaryStorage, storagePath);
+
+  await withTimeout(firebase.uploadBytes(storageRef, file), 45_000, "storage_upload_onboarding_asset");
+  const url = await withTimeout(firebase.getDownloadURL(storageRef), 12_000, "storage_get_url_onboarding_asset");
+
+  return {
+    fileName: file.name,
+    fileUrl: url,
+    storagePath,
+    fileType: file.type || "",
+    fileSize: file.size || 0,
+    uploadedBy: String(user.uid || ""),
+    uploadedAt: firebase.serverTimestamp(),
+  };
+};
 
 const formatIsoToAdminStamp = (iso) => {
   if (!iso) return "—";
@@ -10042,6 +10624,11 @@ let adminPedagogicoState = {
   pedagogicalFeedbacks: [],
   lessonLogs: [],
   groupsByClassId: new Map(),
+  onboardingContents: [],
+  onboardingContentsAll: [],
+  onboardingQuizzes: [],
+  teacherOnboardingProgressAll: [],
+  teacherQuizSubmissionsAll: [],
   filters: {
     teacherId: "",
     dow: "",
@@ -10385,6 +10972,235 @@ const fetchTeacherAlertsFromFirestore = async () => {
     if (row) rows.push(row);
   });
   rows.sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0));
+  return rows;
+};
+
+const normalizeOnboardingContentRow = ({ id, data }) => {
+  const docId = String(id || "").trim();
+  const src = data && typeof data === "object" ? data : {};
+  if (!docId) return null;
+  const type = normalizeOnboardingContentType(src.type);
+  const status = normalizeOnboardingStatus(src.status);
+  const order = Number.isFinite(Number(src.order)) ? Number(src.order) : 0;
+  const required = src.required !== false;
+  return {
+    id: docId,
+    title: String(src.title || "").trim() || "Conteúdo",
+    description: String(src.description || "").trim(),
+    type,
+    order,
+    required,
+    status,
+    videoUrl: String(src.videoUrl || "").trim(),
+    documentUrl: String(src.documentUrl || "").trim(),
+    storagePath: String(src.storagePath || "").trim(),
+    fileName: String(src.fileName || "").trim(),
+    fileType: String(src.fileType || "").trim(),
+    fileSize: Number.isFinite(Number(src.fileSize)) ? Number(src.fileSize) : 0,
+    estimatedDuration: String(src.estimatedDuration || "").trim(),
+    quizId: String(src.quizId || "").trim(),
+    createdAtMs: parseFirestoreDateToMs(src.createdAt),
+    updatedAtMs: parseFirestoreDateToMs(src.updatedAt),
+    createdBy: String(src.createdBy || "").trim(),
+    updatedBy: String(src.updatedBy || "").trim(),
+  };
+};
+
+const fetchOnboardingContentsFromFirestore = async ({ includeInactive = false } = {}) => {
+  const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_onboarding_contents");
+  const user = await waitForFirebaseAuthReady(firebase, 5000);
+  if (!user) {
+    const e = new Error("firebase_not_authenticated");
+    e.code = "auth/no-current-user";
+    throw e;
+  }
+
+  const baseCol = firebase.collection(firebase.primaryDb, "onboardingContents");
+  const q = includeInactive
+    ? firebase.query(baseCol, firebase.orderBy("order", "asc"))
+    : firebase.query(baseCol, firebase.where("status", "==", "active"), firebase.orderBy("order", "asc"));
+  const snap = await withTimeout(firebase.getDocs(q), 12_000, "firestore_onboarding_contents_list");
+  const rows = [];
+  snap.forEach((docSnap) => {
+    const row = normalizeOnboardingContentRow({ id: docSnap.id, data: docSnap.data ? docSnap.data() : null });
+    if (row) rows.push(row);
+  });
+  rows.sort((a, b) => (a.order || 0) - (b.order || 0));
+  return rows;
+};
+
+const normalizeOnboardingQuizRow = ({ id, data }) => {
+  const docId = String(id || "").trim();
+  const src = data && typeof data === "object" ? data : {};
+  if (!docId) return null;
+  const questionsRaw = Array.isArray(src.questions) ? src.questions : [];
+  const questions = questionsRaw
+    .map((q) => {
+      if (!q || typeof q !== "object") return null;
+      const qid = String(q.id || "").trim() || `q_${Math.random().toString(36).slice(2, 8)}`;
+      const type = normalizeQuizQuestionType(q.type);
+      const required = q.required !== false;
+      const points = Number.isFinite(Number(q.points)) ? Number(q.points) : 0;
+      const options = Array.isArray(q.options) ? q.options.map((o) => String(o || "")) : [];
+      const correctAnswer = q.correctAnswer ?? "";
+      return {
+        id: qid,
+        questionText: String(q.questionText || q.text || "").trim(),
+        type,
+        options,
+        correctAnswer,
+        points,
+        required,
+      };
+    })
+    .filter(Boolean);
+
+  return {
+    id: docId,
+    contentId: String(src.contentId || "").trim(),
+    title: String(src.title || "").trim() || "Quiz",
+    description: String(src.description || "").trim(),
+    showResultToTeacher: src.showResultToTeacher !== false,
+    questions,
+    createdAtMs: parseFirestoreDateToMs(src.createdAt),
+    updatedAtMs: parseFirestoreDateToMs(src.updatedAt),
+  };
+};
+
+const fetchOnboardingQuizzesFromFirestore = async () => {
+  const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_onboarding_quizzes");
+  const user = await waitForFirebaseAuthReady(firebase, 5000);
+  if (!user) {
+    const e = new Error("firebase_not_authenticated");
+    e.code = "auth/no-current-user";
+    throw e;
+  }
+  const col = firebase.collection(firebase.primaryDb, "onboardingQuizzes");
+  const snap = await withTimeout(firebase.getDocs(col), 12_000, "firestore_onboarding_quizzes_list");
+  const rows = [];
+  snap.forEach((docSnap) => {
+    const row = normalizeOnboardingQuizRow({ id: docSnap.id, data: docSnap.data ? docSnap.data() : null });
+    if (row) rows.push(row);
+  });
+  rows.sort((a, b) => String(a.title || "").localeCompare(String(b.title || ""), "pt-BR"));
+  return rows;
+};
+
+const normalizeTeacherOnboardingProgressRow = ({ id, data }) => {
+  const docId = String(id || "").trim();
+  const src = data && typeof data === "object" ? data : {};
+  if (!docId) return null;
+  const teacherId = String(src.teacherId || "").trim();
+  const contentId = String(src.contentId || "").trim();
+  if (!teacherId || !contentId) return null;
+  return {
+    id: docId,
+    teacherId,
+    teacherName: String(src.teacherName || "").trim(),
+    contentId,
+    status: normalizeTeacherOnboardingProgressStatus(src.status),
+    startedAtMs: parseFirestoreDateToMs(src.startedAt),
+    completedAtMs: parseFirestoreDateToMs(src.completedAt),
+    updatedAtMs: parseFirestoreDateToMs(src.updatedAt),
+    lastAccessAtMs: parseFirestoreDateToMs(src.lastAccessAt),
+  };
+};
+
+const fetchTeacherOnboardingProgressFromFirestore = async ({ teacherId }) => {
+  const id = String(teacherId || "").trim();
+  if (!id) return [];
+  const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_teacher_onboarding_progress");
+  const user = await waitForFirebaseAuthReady(firebase, 5000);
+  if (!user) {
+    const e = new Error("firebase_not_authenticated");
+    e.code = "auth/no-current-user";
+    throw e;
+  }
+  const q = firebase.query(firebase.collection(firebase.primaryDb, "teacherOnboardingProgress"), firebase.where("teacherId", "==", id));
+  const snap = await withTimeout(firebase.getDocs(q), 12_000, "firestore_teacher_onboarding_progress_list");
+  const rows = [];
+  snap.forEach((docSnap) => {
+    const row = normalizeTeacherOnboardingProgressRow({ id: docSnap.id, data: docSnap.data ? docSnap.data() : null });
+    if (row) rows.push(row);
+  });
+  return rows;
+};
+
+const normalizeTeacherQuizSubmissionRow = ({ id, data }) => {
+  const docId = String(id || "").trim();
+  const src = data && typeof data === "object" ? data : {};
+  if (!docId) return null;
+  const teacherId = String(src.teacherId || "").trim();
+  const quizId = String(src.quizId || "").trim();
+  if (!teacherId || !quizId) return null;
+  return {
+    id: docId,
+    teacherId,
+    teacherName: String(src.teacherName || "").trim(),
+    quizId,
+    contentId: String(src.contentId || "").trim(),
+    answers: Array.isArray(src.answers) ? src.answers : [],
+    score: Number.isFinite(Number(src.score)) ? Number(src.score) : 0,
+    maxScore: Number.isFinite(Number(src.maxScore)) ? Number(src.maxScore) : 0,
+    submittedAtMs: parseFirestoreDateToMs(src.submittedAt),
+    status: String(src.status || "").trim(),
+  };
+};
+
+const fetchTeacherQuizSubmissionsFromFirestore = async ({ teacherId }) => {
+  const id = String(teacherId || "").trim();
+  if (!id) return [];
+  const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_teacher_quiz_submissions");
+  const user = await waitForFirebaseAuthReady(firebase, 5000);
+  if (!user) {
+    const e = new Error("firebase_not_authenticated");
+    e.code = "auth/no-current-user";
+    throw e;
+  }
+  const q = firebase.query(firebase.collection(firebase.primaryDb, "teacherQuizSubmissions"), firebase.where("teacherId", "==", id));
+  const snap = await withTimeout(firebase.getDocs(q), 12_000, "firestore_teacher_quiz_submissions_list");
+  const rows = [];
+  snap.forEach((docSnap) => {
+    const row = normalizeTeacherQuizSubmissionRow({ id: docSnap.id, data: docSnap.data ? docSnap.data() : null });
+    if (row) rows.push(row);
+  });
+  rows.sort((a, b) => (b.submittedAtMs || 0) - (a.submittedAtMs || 0));
+  return rows;
+};
+
+const fetchAllTeacherOnboardingProgressFromFirestore = async () => {
+  const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_onboarding_progress_all");
+  const user = await waitForFirebaseAuthReady(firebase, 5000);
+  if (!user) {
+    const e = new Error("firebase_not_authenticated");
+    e.code = "auth/no-current-user";
+    throw e;
+  }
+  const col = firebase.collection(firebase.primaryDb, "teacherOnboardingProgress");
+  const snap = await withTimeout(firebase.getDocs(col), 12_000, "firestore_admin_teacher_onboarding_progress_all");
+  const rows = [];
+  snap.forEach((docSnap) => {
+    const row = normalizeTeacherOnboardingProgressRow({ id: docSnap.id, data: docSnap.data ? docSnap.data() : null });
+    if (row) rows.push(row);
+  });
+  return rows;
+};
+
+const fetchAllTeacherQuizSubmissionsFromFirestore = async () => {
+  const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_teacher_quiz_submissions_all");
+  const user = await waitForFirebaseAuthReady(firebase, 5000);
+  if (!user) {
+    const e = new Error("firebase_not_authenticated");
+    e.code = "auth/no-current-user";
+    throw e;
+  }
+  const col = firebase.collection(firebase.primaryDb, "teacherQuizSubmissions");
+  const snap = await withTimeout(firebase.getDocs(col), 12_000, "firestore_admin_teacher_quiz_submissions_all");
+  const rows = [];
+  snap.forEach((docSnap) => {
+    const row = normalizeTeacherQuizSubmissionRow({ id: docSnap.id, data: docSnap.data ? docSnap.data() : null });
+    if (row) rows.push(row);
+  });
   return rows;
 };
 
@@ -11119,6 +11935,1026 @@ const renderAdminPedagogicoReportsPanel = () => {
   `;
 };
 
+const renderAdminPedagogicoOnboardingPanel = () => {
+  if (!(adminOnboardingContentsEl instanceof HTMLElement)) return;
+  const contents = Array.isArray(adminPedagogicoState.onboardingContents) ? adminPedagogicoState.onboardingContents : [];
+  const quizzes = Array.isArray(adminPedagogicoState.onboardingQuizzes) ? adminPedagogicoState.onboardingQuizzes : [];
+  const quizzesByContentId = new Map(quizzes.map((q) => [String(q.contentId || ""), q]));
+
+  if (adminOnboardingEmptyEl instanceof HTMLElement) adminOnboardingEmptyEl.hidden = contents.length > 0;
+
+  adminOnboardingContentsEl.innerHTML = contents
+    .map((c, idx) => {
+      const typeLabel = c.type === "quiz" ? "Quiz" : c.type === "document" ? "Documento" : "Vídeo";
+      const statusLabel = c.status === "inactive" ? "Inativo" : "Ativo";
+      const statusCls = c.status === "inactive" ? "is-ended" : "is-active";
+      const reqLabel = c.required ? "Obrigatório" : "Opcional";
+      const quiz = quizzesByContentId.get(String(c.id)) || (c.quizId ? quizzes.find((q) => String(q.id) === String(c.quizId)) : null);
+      const quizMeta = c.type === "quiz" ? (quiz ? `${quiz.questions?.length || 0} pergunta(s)` : "Quiz não configurado") : "";
+      return `
+        <div class="admin-onboarding-content">
+          <div>
+            <div class="admin-onboarding-content-title">${escapeHtml(`${idx + 1}. ${c.title || "Conteúdo"}`)}</div>
+            <div class="admin-onboarding-content-sub">${escapeHtml(c.description || "")}</div>
+            <div class="admin-onboarding-content-meta">
+              <span class="admin-ped-pill ${statusCls}">${escapeHtml(statusLabel)}</span>
+              <span class="admin-ped-pill">${escapeHtml(typeLabel)}</span>
+              <span class="admin-ped-pill is-plan">${escapeHtml(reqLabel)}</span>
+              ${quizMeta ? `<span class="admin-ped-pill">${escapeHtml(quizMeta)}</span>` : ""}
+            </div>
+          </div>
+          <div class="admin-onboarding-actions">
+            <button class="admin-ped-action" type="button" data-admin-onboarding-edit="${escapeHtml(c.id)}">Editar</button>
+            <button class="admin-ped-action is-muted" type="button" data-admin-onboarding-toggle="${escapeHtml(c.id)}">${
+        c.status === "inactive" ? "Ativar" : "Desativar"
+      }</button>
+            <button class="admin-ped-action is-muted" type="button" data-admin-onboarding-move="up" data-admin-onboarding-id="${escapeHtml(
+              c.id
+            )}" ${idx === 0 ? "disabled" : ""}>↑</button>
+            <button class="admin-ped-action is-muted" type="button" data-admin-onboarding-move="down" data-admin-onboarding-id="${escapeHtml(
+              c.id
+            )}" ${idx === contents.length - 1 ? "disabled" : ""}>↓</button>
+            <button class="admin-ped-action is-danger" type="button" data-admin-onboarding-delete="${escapeHtml(c.id)}">Excluir</button>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+
+  renderAdminOnboardingPerformance();
+};
+
+const adminOnboardingGetContentRow = (contentId) => {
+  const id = String(contentId || "").trim();
+  if (!id) return null;
+  return (Array.isArray(adminPedagogicoState.onboardingContentsAll) ? adminPedagogicoState.onboardingContentsAll : []).find((c) => String(c?.id || "") === id) || null;
+};
+
+const adminOnboardingGetQuizRowForContent = (contentId) => {
+  const cid = String(contentId || "").trim();
+  if (!cid) return null;
+  return (Array.isArray(adminPedagogicoState.onboardingQuizzes) ? adminPedagogicoState.onboardingQuizzes : []).find((q) => String(q?.contentId || "") === cid) || null;
+};
+
+const adminOnboardingNextOrder = () => {
+  const all = Array.isArray(adminPedagogicoState.onboardingContentsAll) ? adminPedagogicoState.onboardingContentsAll : [];
+  const maxOrder = all.reduce((acc, c) => Math.max(acc, Number.isFinite(Number(c?.order)) ? Number(c.order) : 0), 0);
+  return maxOrder + 1;
+};
+
+const adminOnboardingModalSyncTypeSections = () => {
+  if (activeModalKind !== "admin-onboarding-content") return;
+  if (!(modalBody instanceof HTMLElement)) return;
+  const typeEl = modalBody.querySelector("[data-admin-onboarding-type]");
+  const type = typeEl instanceof HTMLSelectElement ? normalizeOnboardingContentType(typeEl.value) : "video";
+  modalBody.querySelectorAll("[data-admin-onboarding-type-section]").forEach((el) => {
+    if (!(el instanceof HTMLElement)) return;
+    el.hidden = String(el.getAttribute("data-admin-onboarding-type-section") || "").trim() !== type;
+  });
+
+  // Refresh quiz question numbering + per-type UI.
+  if (type === "quiz") {
+    const list = modalBody.querySelector("[data-admin-onboarding-quiz-questions]");
+    if (list instanceof HTMLElement) {
+      const rows = [...list.querySelectorAll("[data-admin-onboarding-q]")];
+      rows.forEach((row, idx) => {
+        if (!(row instanceof HTMLElement)) return;
+        const num = row.querySelector("[data-admin-onboarding-q-num]");
+        if (num instanceof HTMLElement) num.textContent = `Pergunta ${idx + 1}`;
+        adminOnboardingModalSyncQuestionUI(row);
+      });
+    }
+  }
+};
+
+const adminOnboardingModalCreateQuestionRowHtml = ({ q } = {}) => {
+  const row = q && typeof q === "object" ? q : {};
+  const qid = String(row.id || "").trim() || `q_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+  const type = normalizeQuizQuestionType(row.type);
+  const required = row.required !== false;
+  const points = Number.isFinite(Number(row.points)) ? Number(row.points) : 0;
+  const options = Array.isArray(row.options) ? row.options.map((o) => String(o || "")) : [];
+  const correct = row.correctAnswer ?? "";
+
+  const optsHtml =
+    type === "multiple_choice"
+      ? `
+        <div class="admin-onboarding-q-options" data-admin-onboarding-q-options>
+          <div class="admin-onboarding-q-options-head">
+            <div class="admin-onboarding-q-options-title">Alternativas</div>
+            <button class="admin-ped-action is-muted" type="button" data-admin-onboarding-q-option-add>+ Alternativa</button>
+          </div>
+          <div class="admin-onboarding-q-options-list">
+            ${(options.length ? options : ["", ""]).map((opt) => {
+              return `
+                <div class="admin-onboarding-q-option">
+                  <input class="modal-input" type="text" value="${escapeHtml(String(opt))}" placeholder="Alternativa" data-admin-onboarding-q-option />
+                  <button class="admin-ped-action is-danger" type="button" data-admin-onboarding-q-option-remove aria-label="Remover alternativa">✕</button>
+                </div>
+              `;
+            }).join("")}
+          </div>
+        </div>
+      `
+      : `<div class="admin-onboarding-q-options" data-admin-onboarding-q-options hidden></div>`;
+
+  return `
+    <div class="admin-onboarding-q" data-admin-onboarding-q data-admin-onboarding-qid="${escapeHtml(qid)}">
+      <div class="admin-onboarding-q-head">
+        <div class="admin-onboarding-q-num" data-admin-onboarding-q-num>Pergunta</div>
+        <button class="admin-ped-action is-danger" type="button" data-admin-onboarding-q-remove>Remover</button>
+      </div>
+      <label class="modal-field">
+        <span>Pergunta</span>
+        <input class="modal-input" type="text" value="${escapeHtml(String(row.questionText || ""))}" placeholder="Digite a pergunta..." data-admin-onboarding-q-text />
+      </label>
+      <div class="admin-onboarding-q-grid">
+        <label class="modal-field">
+          <span>Tipo</span>
+          <select class="modal-input" data-admin-onboarding-q-type>
+            <option value="multiple_choice" ${type === "multiple_choice" ? "selected" : ""}>Múltipla escolha</option>
+            <option value="true_false" ${type === "true_false" ? "selected" : ""}>Verdadeiro/Falso</option>
+            <option value="short_answer" ${type === "short_answer" ? "selected" : ""}>Resposta curta</option>
+          </select>
+        </label>
+        <label class="modal-field">
+          <span>Pontos</span>
+          <input class="modal-input" type="number" min="0" step="1" value="${escapeHtml(String(points))}" data-admin-onboarding-q-points />
+        </label>
+        <label class="admin-onboarding-q-check">
+          <input type="checkbox" ${required ? "checked" : ""} data-admin-onboarding-q-required />
+          <span>Obrigatória</span>
+        </label>
+      </div>
+      ${optsHtml}
+      <div class="admin-onboarding-q-correct" data-admin-onboarding-q-correct>
+        <label class="modal-field" data-admin-onboarding-q-correct-short hidden>
+          <span>Resposta correta (opcional)</span>
+          <input class="modal-input" type="text" value="${escapeHtml(String(correct))}" placeholder="Resposta correta" data-admin-onboarding-q-correct-input />
+        </label>
+        <label class="modal-field" data-admin-onboarding-q-correct-tf hidden>
+          <span>Resposta correta (opcional)</span>
+          <select class="modal-input" data-admin-onboarding-q-correct-tf-select>
+            <option value="">—</option>
+            <option value="Verdadeiro" ${String(correct) === "Verdadeiro" ? "selected" : ""}>Verdadeiro</option>
+            <option value="Falso" ${String(correct) === "Falso" ? "selected" : ""}>Falso</option>
+          </select>
+        </label>
+        <label class="modal-field" data-admin-onboarding-q-correct-mc hidden>
+          <span>Resposta correta (opcional)</span>
+          <input class="modal-input" type="text" value="${escapeHtml(String(correct))}" placeholder="Deve bater com uma alternativa" data-admin-onboarding-q-correct-mc-input />
+        </label>
+      </div>
+    </div>
+  `;
+};
+
+const adminOnboardingModalSyncQuestionUI = (qEl) => {
+  if (!(qEl instanceof HTMLElement)) return;
+  const typeEl = qEl.querySelector("[data-admin-onboarding-q-type]");
+  const type = typeEl instanceof HTMLSelectElement ? normalizeQuizQuestionType(typeEl.value) : "multiple_choice";
+  const optionsWrap = qEl.querySelector("[data-admin-onboarding-q-options]");
+  if (optionsWrap instanceof HTMLElement) {
+    optionsWrap.hidden = type !== "multiple_choice";
+  }
+  const correctShort = qEl.querySelector("[data-admin-onboarding-q-correct-short]");
+  const correctTf = qEl.querySelector("[data-admin-onboarding-q-correct-tf]");
+  const correctMc = qEl.querySelector("[data-admin-onboarding-q-correct-mc]");
+  if (correctShort instanceof HTMLElement) correctShort.hidden = type !== "short_answer";
+  if (correctTf instanceof HTMLElement) correctTf.hidden = type !== "true_false";
+  if (correctMc instanceof HTMLElement) correctMc.hidden = type !== "multiple_choice";
+};
+
+const adminOnboardingModalCollectQuiz = ({ contentId }) => {
+  if (!(modalBody instanceof HTMLElement)) return null;
+  const cid = String(contentId || "").trim();
+  if (!cid) return null;
+
+  const titleEl = modalBody.querySelector("[data-admin-onboarding-quiz-title]");
+  const descEl = modalBody.querySelector("[data-admin-onboarding-quiz-desc]");
+  const showEl = modalBody.querySelector("[data-admin-onboarding-quiz-show]");
+  const questionsWrap = modalBody.querySelector("[data-admin-onboarding-quiz-questions]");
+
+  const title = titleEl instanceof HTMLInputElement ? titleEl.value.trim() : "";
+  const description = descEl instanceof HTMLTextAreaElement ? descEl.value.trim() : "";
+  const showResultToTeacher = showEl instanceof HTMLInputElement ? showEl.checked : true;
+  const rows = questionsWrap instanceof HTMLElement ? [...questionsWrap.querySelectorAll("[data-admin-onboarding-q]")] : [];
+
+  const questions = rows
+    .map((row) => {
+      if (!(row instanceof HTMLElement)) return null;
+      const qid = String(row.getAttribute("data-admin-onboarding-qid") || "").trim() || `q_${Math.random().toString(36).slice(2, 8)}`;
+      const textEl = row.querySelector("[data-admin-onboarding-q-text]");
+      const typeEl = row.querySelector("[data-admin-onboarding-q-type]");
+      const pointsEl = row.querySelector("[data-admin-onboarding-q-points]");
+      const reqEl = row.querySelector("[data-admin-onboarding-q-required]");
+
+      const questionText = textEl instanceof HTMLInputElement ? textEl.value.trim() : "";
+      const type = typeEl instanceof HTMLSelectElement ? normalizeQuizQuestionType(typeEl.value) : "multiple_choice";
+      const points = pointsEl instanceof HTMLInputElement ? Number(pointsEl.value) : 0;
+      const required = reqEl instanceof HTMLInputElement ? reqEl.checked : true;
+
+      const options =
+        type === "multiple_choice"
+          ? [...row.querySelectorAll("[data-admin-onboarding-q-option]")]
+              .map((el) => (el instanceof HTMLInputElement ? el.value.trim() : ""))
+              .filter((v) => v)
+          : type === "true_false"
+            ? ["Verdadeiro", "Falso"]
+            : [];
+
+      const correct = (() => {
+        if (type === "true_false") {
+          const sel = row.querySelector("[data-admin-onboarding-q-correct-tf-select]");
+          return sel instanceof HTMLSelectElement ? sel.value : "";
+        }
+        if (type === "multiple_choice") {
+          const input = row.querySelector("[data-admin-onboarding-q-correct-mc-input]");
+          return input instanceof HTMLInputElement ? input.value.trim() : "";
+        }
+        const input = row.querySelector("[data-admin-onboarding-q-correct-input]");
+        return input instanceof HTMLInputElement ? input.value.trim() : "";
+      })();
+
+      if (!questionText) return null;
+      return {
+        id: qid,
+        questionText,
+        type,
+        options,
+        correctAnswer: correct,
+        points: Number.isFinite(points) ? Math.max(0, Math.round(points)) : 0,
+        required,
+      };
+    })
+    .filter(Boolean);
+
+  if (!title.trim()) return { error: "Informe o título do quiz.", quiz: null };
+  if (!questions.length) return { error: "Adicione pelo menos 1 pergunta (com texto) para salvar o quiz.", quiz: null };
+
+  return {
+    error: "",
+    quiz: {
+      id: cid,
+      contentId: cid,
+      title: title.trim(),
+      description,
+      showResultToTeacher,
+      questions,
+    },
+  };
+};
+
+const openAdminOnboardingContentModal = ({ mode, contentId } = {}) => {
+  if (currentRole !== "admin") return;
+  const m = mode === "edit" ? "edit" : "create";
+  const row = m === "edit" ? adminOnboardingGetContentRow(contentId) : null;
+  const baseType = row ? normalizeOnboardingContentType(row.type) : "video";
+  const baseOrder = row ? (Number.isFinite(Number(row.order)) ? Number(row.order) : 0) : adminOnboardingNextOrder();
+  const quizRow = row && baseType === "quiz" ? adminOnboardingGetQuizRowForContent(row.id) : null;
+
+  adminOnboardingDraft = {
+    mode: m,
+    contentId: row?.id ? String(row.id) : "",
+  };
+
+  activeModalKind = "admin-onboarding-content";
+
+  openModal({
+    title: m === "edit" ? "Editar conteúdo de onboarding" : "Adicionar conteúdo de onboarding",
+    bodyHtml: `
+      <div class="modal-form admin-onboarding-modal">
+        <label class="modal-field">
+          <span>Título</span>
+          <input class="modal-input" type="text" value="${escapeHtml(String(row?.title || ""))}" placeholder="Ex: Metodologia Space" data-admin-onboarding-title />
+        </label>
+        <label class="modal-field">
+          <span>Descrição</span>
+          <textarea class="modal-textarea" rows="3" placeholder="Descreva o objetivo deste conteúdo..." data-admin-onboarding-desc>${escapeHtml(
+            String(row?.description || "")
+          )}</textarea>
+        </label>
+
+        <div class="admin-onboarding-modal-grid">
+          <label class="modal-field">
+            <span>Tipo</span>
+            <select class="modal-input" data-admin-onboarding-type ${m === "edit" ? "" : ""}>
+              <option value="video" ${baseType === "video" ? "selected" : ""}>Vídeo</option>
+              <option value="document" ${baseType === "document" ? "selected" : ""}>Documento</option>
+              <option value="quiz" ${baseType === "quiz" ? "selected" : ""}>Quiz</option>
+            </select>
+          </label>
+          <label class="modal-field">
+            <span>Ordem na trilha</span>
+            <input class="modal-input" type="number" min="1" step="1" value="${escapeHtml(String(baseOrder || 1))}" data-admin-onboarding-order />
+          </label>
+          <label class="modal-field">
+            <span>Status</span>
+            <select class="modal-input" data-admin-onboarding-status>
+              <option value="active" ${row?.status !== "inactive" ? "selected" : ""}>Ativo</option>
+              <option value="inactive" ${row?.status === "inactive" ? "selected" : ""}>Inativo</option>
+            </select>
+          </label>
+          <label class="admin-onboarding-modal-check">
+            <input type="checkbox" ${row ? (row.required ? "checked" : "") : "checked"} data-admin-onboarding-required />
+            <span>Obrigatório</span>
+          </label>
+        </div>
+
+        <section data-admin-onboarding-type-section="video">
+          <div class="admin-onboarding-modal-sectiontitle">Vídeo</div>
+          <div class="admin-onboarding-modal-grid">
+            <label class="modal-field">
+              <span>Upload (MP4, MOV, WEBM)</span>
+              <input class="modal-input" type="file" accept=".mp4,.mov,.webm" data-admin-onboarding-video-file />
+            </label>
+            <label class="modal-field">
+              <span>Ou link externo</span>
+              <input class="modal-input" type="url" value="${escapeHtml(String(row?.videoUrl || ""))}" placeholder="https://..." data-admin-onboarding-video-url />
+            </label>
+          </div>
+          <label class="modal-field">
+            <span>Duração estimada</span>
+            <input class="modal-input" type="text" value="${escapeHtml(String(row?.estimatedDuration || ""))}" placeholder="Ex: 12 min" data-admin-onboarding-duration />
+          </label>
+          ${row?.videoUrl ? `<div class="admin-student-panel-note">Vídeo atual configurado.</div>` : ""}
+        </section>
+
+        <section data-admin-onboarding-type-section="document" hidden>
+          <div class="admin-onboarding-modal-sectiontitle">Documento</div>
+          <label class="modal-field">
+            <span>Upload (PDF, DOC, DOCX, PNG, JPG, JPEG)</span>
+            <input class="modal-input" type="file" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" data-admin-onboarding-doc-file />
+          </label>
+          ${row?.documentUrl ? `<div class="admin-student-panel-note">Documento atual: <a href="${escapeHtml(
+            String(row.documentUrl)
+          )}" target="_blank" rel="noopener">${escapeHtml(String(row.fileName || "Abrir"))}</a></div>` : ""}
+        </section>
+
+        <section data-admin-onboarding-type-section="quiz" hidden>
+          <div class="admin-onboarding-modal-sectiontitle">Quiz</div>
+          <label class="modal-field">
+            <span>Título do quiz</span>
+            <input class="modal-input" type="text" value="${escapeHtml(String(quizRow?.title || row?.title || "Quiz"))}" data-admin-onboarding-quiz-title />
+          </label>
+          <label class="modal-field">
+            <span>Descrição do quiz</span>
+            <textarea class="modal-textarea" rows="2" data-admin-onboarding-quiz-desc placeholder="Instruções para o professor...">${escapeHtml(
+              String(quizRow?.description || row?.description || "")
+            )}</textarea>
+          </label>
+          <label class="admin-onboarding-modal-check">
+            <input type="checkbox" ${quizRow?.showResultToTeacher !== false ? "checked" : ""} data-admin-onboarding-quiz-show />
+            <span>Mostrar resultado ao professor</span>
+          </label>
+
+          <div class="admin-onboarding-quizbuilder">
+            <div class="admin-onboarding-quizbuilder-head">
+              <div class="admin-onboarding-quizbuilder-title">Perguntas</div>
+              <button class="admin-ped-action" type="button" data-admin-onboarding-quiz-add-q>+ Adicionar pergunta</button>
+            </div>
+            <div class="admin-onboarding-quizbuilder-qs" data-admin-onboarding-quiz-questions>
+              ${(quizRow?.questions?.length ? quizRow.questions : [{ id: "", questionText: "", type: "multiple_choice", options: ["", ""], points: 1, required: true }])
+                .map((q) => adminOnboardingModalCreateQuestionRowHtml({ q }))
+                .join("")}
+            </div>
+            <div class="admin-student-panel-note">Dica: em múltipla escolha, a “resposta correta” deve bater com uma alternativa.</div>
+          </div>
+        </section>
+
+        <div class="modal-inline-error" data-admin-onboarding-error hidden>—</div>
+      </div>
+    `,
+    primaryLabel: "Salvar",
+    secondaryLabel: "Cancelar",
+    hideSecondary: false,
+    showTrash: false,
+    onPrimary: () => {
+      const errorEl = modalBody?.querySelector("[data-admin-onboarding-error]");
+      const setError = (msg) => {
+        if (!(errorEl instanceof HTMLElement)) return;
+        errorEl.textContent = String(msg || "");
+        errorEl.hidden = !msg;
+      };
+      setError("");
+
+      if (modalPrimary) modalPrimary.disabled = true;
+      if (modalSecondary) modalSecondary.disabled = true;
+
+      (async () => {
+        try {
+          await saveAdminOnboardingContentFromModal({ existingContentId: row?.id || "" });
+          closeModal();
+          adminPedagogicoState.activeTab = "onboarding";
+          await renderAdminControlePedagogicoPanel({ force: true });
+          renderAdminPedagogicoTabs();
+        } catch (err) {
+          console.error("[admin] onboarding content save failed:", err);
+          setError("Não foi possível salvar agora.");
+          if (modalPrimary) modalPrimary.disabled = false;
+          if (modalSecondary) modalSecondary.disabled = false;
+        }
+      })();
+
+      return false;
+    },
+    onSecondary: () => {
+      closeModal();
+      return false;
+    },
+  });
+
+  adminOnboardingModalSyncTypeSections();
+};
+
+const saveAdminOnboardingContentFromModal = async ({ existingContentId } = {}) => {
+  if (currentRole !== "admin") throw new Error("not_admin");
+  if (!(modalBody instanceof HTMLElement)) throw new Error("no_modal");
+
+  const mode = adminOnboardingDraft?.mode === "edit" ? "edit" : "create";
+  const titleEl = modalBody.querySelector("[data-admin-onboarding-title]");
+  const descEl = modalBody.querySelector("[data-admin-onboarding-desc]");
+  const typeEl = modalBody.querySelector("[data-admin-onboarding-type]");
+  const orderEl = modalBody.querySelector("[data-admin-onboarding-order]");
+  const requiredEl = modalBody.querySelector("[data-admin-onboarding-required]");
+  const statusEl = modalBody.querySelector("[data-admin-onboarding-status]");
+  const videoFileEl = modalBody.querySelector("[data-admin-onboarding-video-file]");
+  const videoUrlEl = modalBody.querySelector("[data-admin-onboarding-video-url]");
+  const durationEl = modalBody.querySelector("[data-admin-onboarding-duration]");
+  const docFileEl = modalBody.querySelector("[data-admin-onboarding-doc-file]");
+
+  const title = titleEl instanceof HTMLInputElement ? titleEl.value.trim() : "";
+  const description = descEl instanceof HTMLTextAreaElement ? descEl.value.trim() : "";
+  const type = typeEl instanceof HTMLSelectElement ? normalizeOnboardingContentType(typeEl.value) : "video";
+  const orderRaw = orderEl instanceof HTMLInputElement ? Number(orderEl.value) : adminOnboardingNextOrder();
+  const order = Number.isFinite(orderRaw) ? Math.max(1, Math.round(orderRaw)) : adminOnboardingNextOrder();
+  const required = requiredEl instanceof HTMLInputElement ? requiredEl.checked : true;
+  const status = statusEl instanceof HTMLSelectElement ? normalizeOnboardingStatus(statusEl.value) : "active";
+
+  if (!title) throw new Error("missing_title");
+
+  const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_onboarding_save");
+  const user = await waitForFirebaseAuthReady(firebase, 5000);
+  if (!user) throw new Error("not-authenticated");
+
+  const existingRow = mode === "edit" ? adminOnboardingGetContentRow(existingContentId) : null;
+
+  const contentRef =
+    mode === "edit" && existingRow?.id
+      ? firebase.doc(firebase.primaryDb, "onboardingContents", String(existingRow.id))
+      : firebase.doc(firebase.collection(firebase.primaryDb, "onboardingContents"));
+  const contentId = String(contentRef.id || "");
+
+  // Optional file uploads.
+  let patchMedia = {};
+
+  if (type === "video") {
+    const file = videoFileEl instanceof HTMLInputElement ? (videoFileEl.files && videoFileEl.files[0] ? videoFileEl.files[0] : null) : null;
+    const url = videoUrlEl instanceof HTMLInputElement ? videoUrlEl.value.trim() : "";
+    const estimatedDuration = durationEl instanceof HTMLInputElement ? durationEl.value.trim() : "";
+
+    if (file) {
+      const check = isAllowedOnboardingVideoFile(file);
+      if (!check.ok) throw new Error(check.reason || "invalid_video");
+      // Replace existing stored file if any.
+      if (existingRow?.storagePath) {
+        try {
+          await withTimeout(firebase.deleteObject(firebase.ref(firebase.primaryStorage, existingRow.storagePath)), 15_000, "storage_delete_old_onboarding_asset");
+        } catch (err) {
+          console.error("[admin] onboarding: failed to delete old video (continuing):", err);
+        }
+      }
+      const meta = await uploadOnboardingAssetToStorage({ contentId, file, kind: "video" });
+      patchMedia = {
+        videoUrl: meta.fileUrl,
+        documentUrl: "",
+        storagePath: meta.storagePath,
+        fileName: meta.fileName,
+        fileType: meta.fileType,
+        fileSize: meta.fileSize,
+        estimatedDuration,
+        uploadedAt: meta.uploadedAt,
+        uploadedBy: meta.uploadedBy,
+      };
+    } else if (url) {
+      patchMedia = {
+        videoUrl: url,
+        estimatedDuration,
+      };
+    } else if (existingRow?.videoUrl) {
+      patchMedia = { estimatedDuration };
+    } else {
+      patchMedia = { videoUrl: "", estimatedDuration };
+    }
+  }
+
+  if (type === "document") {
+    const file = docFileEl instanceof HTMLInputElement ? (docFileEl.files && docFileEl.files[0] ? docFileEl.files[0] : null) : null;
+    if (file) {
+      const check = isAllowedOnboardingDocumentFile(file);
+      if (!check.ok) throw new Error(check.reason || "invalid_document");
+      if (existingRow?.storagePath) {
+        try {
+          await withTimeout(firebase.deleteObject(firebase.ref(firebase.primaryStorage, existingRow.storagePath)), 15_000, "storage_delete_old_onboarding_doc");
+        } catch (err) {
+          console.error("[admin] onboarding: failed to delete old doc (continuing):", err);
+        }
+      }
+      const meta = await uploadOnboardingAssetToStorage({ contentId, file, kind: "document" });
+      patchMedia = {
+        documentUrl: meta.fileUrl,
+        videoUrl: "",
+        storagePath: meta.storagePath,
+        fileName: meta.fileName,
+        fileType: meta.fileType,
+        fileSize: meta.fileSize,
+        uploadedAt: meta.uploadedAt,
+        uploadedBy: meta.uploadedBy,
+      };
+    } else if (existingRow?.documentUrl) {
+      patchMedia = {};
+    } else {
+      patchMedia = { documentUrl: "" };
+    }
+  }
+
+  if (type === "quiz") {
+    // Clear media fields for quiz.
+    patchMedia = { videoUrl: "", documentUrl: "" };
+  }
+
+  const basePayload = {
+    title,
+    description,
+    type,
+    order,
+    required,
+    status,
+    ...patchMedia,
+    quizId: type === "quiz" ? contentId : "",
+    updatedAt: firebase.serverTimestamp(),
+    updatedBy: String(user.uid || ""),
+  };
+
+  if (mode === "create") {
+    basePayload.createdAt = firebase.serverTimestamp();
+    basePayload.createdBy = String(user.uid || "");
+  }
+
+  await withTimeout(firebase.setDoc(contentRef, basePayload, { merge: true }), 12_000, "firestore_onboarding_content_merge");
+
+  if (type === "quiz") {
+    const collected = adminOnboardingModalCollectQuiz({ contentId });
+    if (collected?.error) throw new Error(collected.error);
+    const quiz = collected?.quiz;
+    if (!quiz) throw new Error("invalid_quiz");
+    const quizRef = firebase.doc(firebase.primaryDb, "onboardingQuizzes", contentId);
+    const quizPayload = {
+      contentId,
+      title: quiz.title,
+      description: quiz.description,
+      showResultToTeacher: quiz.showResultToTeacher,
+      questions: quiz.questions,
+      updatedAt: firebase.serverTimestamp(),
+      ...(mode === "create" ? { createdAt: firebase.serverTimestamp() } : null),
+    };
+    await withTimeout(firebase.setDoc(quizRef, quizPayload, { merge: true }), 12_000, "firestore_onboarding_quiz_merge");
+  }
+};
+
+const toggleAdminOnboardingContentStatus = async ({ contentId } = {}) => {
+  const id = String(contentId || "").trim();
+  if (!id) return;
+  const row = adminOnboardingGetContentRow(id);
+  if (!row) return;
+
+  const nextStatus = row.status === "inactive" ? "active" : "inactive";
+  try {
+    const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_onboarding_toggle");
+    const user = await waitForFirebaseAuthReady(firebase, 5000);
+    if (!user) throw new Error("not-authenticated");
+    await withTimeout(
+      firebase.setDoc(
+        firebase.doc(firebase.primaryDb, "onboardingContents", id),
+        { status: nextStatus, updatedAt: firebase.serverTimestamp(), updatedBy: String(user.uid || "") },
+        { merge: true },
+      ),
+      12_000,
+      "firestore_onboarding_toggle_merge"
+    );
+    adminPedagogicoState.activeTab = "onboarding";
+    await renderAdminControlePedagogicoPanel({ force: true });
+    renderAdminPedagogicoTabs();
+  } catch (e) {
+    console.error("[admin] onboarding toggle failed:", e);
+  }
+};
+
+const swapAdminOnboardingContentOrder = async ({ fromId, direction } = {}) => {
+  const id = String(fromId || "").trim();
+  const dir = String(direction || "").trim().toLowerCase();
+  if (!id || (dir !== "up" && dir !== "down")) return;
+
+  const contents = Array.isArray(adminPedagogicoState.onboardingContents) ? adminPedagogicoState.onboardingContents : [];
+  const idx = contents.findIndex((c) => String(c?.id || "") === id);
+  const swapIdx = dir === "up" ? idx - 1 : idx + 1;
+  if (idx < 0 || swapIdx < 0 || swapIdx >= contents.length) return;
+  const a = contents[idx];
+  const b = contents[swapIdx];
+  if (!a?.id || !b?.id) return;
+
+  try {
+    const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_onboarding_reorder");
+    const user = await waitForFirebaseAuthReady(firebase, 5000);
+    if (!user) throw new Error("not-authenticated");
+
+    const aOrder = Number.isFinite(Number(a.order)) ? Number(a.order) : idx + 1;
+    const bOrder = Number.isFinite(Number(b.order)) ? Number(b.order) : swapIdx + 1;
+    await Promise.all([
+      withTimeout(
+        firebase.setDoc(firebase.doc(firebase.primaryDb, "onboardingContents", String(a.id)), { order: bOrder, updatedAt: firebase.serverTimestamp(), updatedBy: String(user.uid || "") }, { merge: true }),
+        12_000,
+        "firestore_onboarding_order_a"
+      ),
+      withTimeout(
+        firebase.setDoc(firebase.doc(firebase.primaryDb, "onboardingContents", String(b.id)), { order: aOrder, updatedAt: firebase.serverTimestamp(), updatedBy: String(user.uid || "") }, { merge: true }),
+        12_000,
+        "firestore_onboarding_order_b"
+      ),
+    ]);
+
+    adminPedagogicoState.activeTab = "onboarding";
+    await renderAdminControlePedagogicoPanel({ force: true });
+    renderAdminPedagogicoTabs();
+  } catch (e) {
+    console.error("[admin] onboarding reorder failed:", e);
+  }
+};
+
+const deleteAdminOnboardingContent = async ({ contentId } = {}) => {
+  const id = String(contentId || "").trim();
+  if (!id) return;
+  const row = adminOnboardingGetContentRow(id);
+  if (!row) return;
+
+  const progressAll = Array.isArray(adminPedagogicoState.teacherOnboardingProgressAll) ? adminPedagogicoState.teacherOnboardingProgressAll : [];
+  const hasProgress = progressAll.some((p) => String(p?.contentId || "") === id);
+
+  openModal({
+    title: "Excluir conteúdo",
+    bodyHtml: `
+      <div style="display:grid; gap:10px;">
+        <p style="margin:0; color: rgba(255,255,255,0.75); font-size: 13px; line-height: 1.45;">
+          Tem certeza que deseja excluir <strong>${escapeHtml(row.title || "este conteúdo")}</strong>?
+        </p>
+        ${
+          hasProgress
+            ? `<p style="margin:0; color: rgba(255,174,86,0.95); font-size: 12px; line-height: 1.45;">
+                Atenção: já existe progresso de professores para este conteúdo. Isso pode afetar relatórios e histórico.
+              </p>
+              <label class="modal-field">
+                <span>Digite EXCLUIR para confirmar</span>
+                <input class="modal-input" type="text" placeholder="EXCLUIR" data-admin-onboarding-delete-confirm />
+              </label>`
+            : `<p style="margin:0; color: rgba(255,255,255,0.45); font-size: 12px; line-height: 1.45;">
+                Esta ação remove o conteúdo da trilha. Arquivos enviados serão removidos do storage quando possível.
+              </p>`
+        }
+        <div class="modal-inline-error" data-admin-onboarding-delete-error hidden>—</div>
+      </div>
+    `,
+    primaryLabel: "Excluir",
+    secondaryLabel: "Cancelar",
+    onPrimary: () => {
+      const errEl = modalBody?.querySelector("[data-admin-onboarding-delete-error]");
+      const confirmEl = modalBody?.querySelector("[data-admin-onboarding-delete-confirm]");
+      const setErr = (msg) => {
+        if (!(errEl instanceof HTMLElement)) return;
+        errEl.textContent = String(msg || "");
+        errEl.hidden = !msg;
+      };
+      setErr("");
+      if (hasProgress) {
+        const value = confirmEl instanceof HTMLInputElement ? confirmEl.value.trim().toUpperCase() : "";
+        if (value !== "EXCLUIR") {
+          setErr("Confirmação incorreta.");
+          return false;
+        }
+      }
+
+      if (modalPrimary) modalPrimary.disabled = true;
+      if (modalSecondary) modalSecondary.disabled = true;
+
+      (async () => {
+        try {
+          const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_onboarding_delete");
+          const user = await waitForFirebaseAuthReady(firebase, 5000);
+          if (!user) throw new Error("not-authenticated");
+
+          if (row.storagePath) {
+            try {
+              await withTimeout(firebase.deleteObject(firebase.ref(firebase.primaryStorage, row.storagePath)), 15_000, "storage_delete_onboarding_asset");
+            } catch (e) {
+              console.error("[admin] onboarding: failed to delete storage asset (continuing):", e);
+            }
+          }
+          // Delete quiz doc (submissions/progress remain for history).
+          try {
+            await withTimeout(firebase.deleteDoc(firebase.doc(firebase.primaryDb, "onboardingQuizzes", id)), 12_000, "firestore_onboarding_quiz_delete");
+          } catch (e) {
+            // ok
+          }
+          await withTimeout(firebase.deleteDoc(firebase.doc(firebase.primaryDb, "onboardingContents", id)), 12_000, "firestore_onboarding_content_delete");
+          closeModal();
+          adminPedagogicoState.activeTab = "onboarding";
+          await renderAdminControlePedagogicoPanel({ force: true });
+          renderAdminPedagogicoTabs();
+        } catch (e) {
+          console.error("[admin] onboarding delete failed:", e);
+          if (modalPrimary) modalPrimary.disabled = false;
+          if (modalSecondary) modalSecondary.disabled = false;
+        }
+      })();
+      return false;
+    },
+  });
+};
+
+const openAdminOnboardingTeacherDetailsModal = ({ teacherId } = {}) => {
+  const tid = String(teacherId || "").trim();
+  if (!tid) return;
+  const teachersById = adminPedagogicoState.teachersById instanceof Map ? adminPedagogicoState.teachersById : new Map();
+  const teacherName = String(teachersById.get(tid)?.nome || "Professor");
+
+  const contents = Array.isArray(adminPedagogicoState.onboardingContentsAll) ? adminPedagogicoState.onboardingContentsAll.slice().sort((a, b) => (a.order || 0) - (b.order || 0)) : [];
+  const progress = (Array.isArray(adminPedagogicoState.teacherOnboardingProgressAll) ? adminPedagogicoState.teacherOnboardingProgressAll : []).filter((p) => String(p?.teacherId || "") === tid);
+  const progressByContent = new Map(progress.map((p) => [String(p.contentId), p]));
+  const subs = (Array.isArray(adminPedagogicoState.teacherQuizSubmissionsAll) ? adminPedagogicoState.teacherQuizSubmissionsAll : []).filter((s) => String(s?.teacherId || "") === tid);
+
+  const statusFor = (contentId) => {
+    const st = normalizeTeacherOnboardingProgressStatus(progressByContent.get(String(contentId))?.status);
+    if (st === "completed") return { label: "Concluído", cls: "is-active" };
+    if (st === "in_progress") return { label: "Em andamento", cls: "is-paused" };
+    return { label: "Não iniciado", cls: "is-ended" };
+  };
+
+  const contentRowsHtml = contents
+    .map((c, idx) => {
+      const p = progressByContent.get(String(c.id)) || null;
+      const st = statusFor(c.id);
+      const started = p?.startedAtMs ? formatShortDateFromMs(p.startedAtMs) : "—";
+      const done = p?.completedAtMs ? formatShortDateFromMs(p.completedAtMs) : "—";
+      const typeLabel = c.type === "quiz" ? "Quiz" : c.type === "document" ? "Documento" : "Vídeo";
+      return `
+        <div class="admin-onboarding-detail-row">
+          <div class="admin-onboarding-detail-title">${escapeHtml(`${idx + 1}. ${c.title || "Conteúdo"}`)}</div>
+          <div class="admin-onboarding-detail-meta">
+            <span class="admin-ped-pill ${st.cls}">${escapeHtml(st.label)}</span>
+            <span class="admin-ped-pill">${escapeHtml(typeLabel)}</span>
+            ${c.required ? `<span class="admin-ped-pill is-plan">Obrigatório</span>` : `<span class="admin-ped-pill">Opcional</span>`}
+            <span class="admin-ped-pill">Início: ${escapeHtml(started)}</span>
+            <span class="admin-ped-pill">Conclusão: ${escapeHtml(done)}</span>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+
+  const subsHtml =
+    subs.length === 0
+      ? `<div class="admin-student-panel-note">Nenhum quiz respondido ainda.</div>`
+      : subs
+          .slice()
+          .sort((a, b) => (b.submittedAtMs || 0) - (a.submittedAtMs || 0))
+          .map((s) => {
+            const when = s.submittedAtMs ? formatShortDateFromMs(s.submittedAtMs) : "—";
+            const head = `Quiz ${escapeHtml(String(s.quizId || ""))} · ${escapeHtml(when)} · ${escapeHtml(`${s.score}/${s.maxScore}`)}`;
+            const answers = Array.isArray(s.answers) ? s.answers : [];
+            return `
+              <details class="admin-onboarding-detail-quiz">
+                <summary>${head}</summary>
+                <div class="admin-onboarding-detail-quiz-body">
+                  ${answers
+                    .map((a) => {
+                      const ok = a.isCorrect == null ? "—" : a.isCorrect ? "Correta" : "Incorreta";
+                      const badge = a.isCorrect == null ? "is-paused" : a.isCorrect ? "is-active" : "is-ended";
+                      return `
+                        <div class="admin-onboarding-detail-answer">
+                          <div class="admin-onboarding-detail-answer-q">${escapeHtml(String(a.questionText || ""))}</div>
+                          <div class="admin-onboarding-detail-answer-meta">
+                            <span class="admin-ped-pill ${badge}">${escapeHtml(ok)}</span>
+                            <span class="admin-ped-pill">Pontuação: ${escapeHtml(`${a.pointsEarned ?? 0}/${a.maxPoints ?? 0}`)}</span>
+                          </div>
+                          <div class="admin-onboarding-detail-answer-sub">
+                            <div><strong>Professor:</strong> ${escapeHtml(String(a.teacherAnswer ?? ""))}</div>
+                            <div><strong>Correta:</strong> ${escapeHtml(String(a.correctAnswer ?? ""))}</div>
+                          </div>
+                        </div>
+                      `;
+                    })
+                    .join("")}
+                </div>
+              </details>
+            `;
+          })
+          .join("");
+
+  openModal({
+    title: `Onboarding · ${teacherName}`,
+    bodyHtml: `
+      <div class="admin-onboarding-detail">
+        <div class="admin-onboarding-detail-section">
+          <div class="admin-onboarding-detail-sectiontitle">Progresso por conteúdo</div>
+          ${contentRowsHtml || `<div class="admin-student-panel-note">Sem trilha cadastrada.</div>`}
+        </div>
+        <div class="admin-onboarding-detail-section">
+          <div class="admin-onboarding-detail-sectiontitle">Respostas de quizzes</div>
+          ${subsHtml}
+        </div>
+      </div>
+    `,
+    primaryLabel: "Fechar",
+    secondaryLabel: "—",
+    hideSecondary: true,
+    onPrimary: () => {
+      closeModal();
+      return false;
+    },
+  });
+};
+
+const resetAdminOnboardingTeacher = ({ teacherId } = {}) => {
+  const tid = String(teacherId || "").trim();
+  if (!tid) return;
+  const teachersById = adminPedagogicoState.teachersById instanceof Map ? adminPedagogicoState.teachersById : new Map();
+  const teacherName = String(teachersById.get(tid)?.nome || "Professor");
+
+  openModal({
+    title: "Resetar onboarding",
+    bodyHtml: `
+      <div style="display:grid; gap:10px;">
+        <p style="margin:0; color: rgba(255,255,255,0.75); font-size: 13px; line-height: 1.45;">
+          Resetar progresso e respostas de quiz de <strong>${escapeHtml(teacherName)}</strong>?
+        </p>
+        <p style="margin:0; color: rgba(255,174,86,0.95); font-size: 12px; line-height: 1.45;">
+          Atenção: o professor poderá refazer a trilha. Esta ação remove os registros atuais de progresso e submissões.
+        </p>
+        <label class="modal-field">
+          <span>Digite RESETAR para confirmar</span>
+          <input class="modal-input" type="text" placeholder="RESETAR" data-admin-onboarding-reset-confirm />
+        </label>
+        <div class="modal-inline-error" data-admin-onboarding-reset-error hidden>—</div>
+      </div>
+    `,
+    primaryLabel: "Resetar",
+    secondaryLabel: "Cancelar",
+    onPrimary: () => {
+      const confirmEl = modalBody?.querySelector("[data-admin-onboarding-reset-confirm]");
+      const errEl = modalBody?.querySelector("[data-admin-onboarding-reset-error]");
+      const setErr = (msg) => {
+        if (!(errEl instanceof HTMLElement)) return;
+        errEl.textContent = String(msg || "");
+        errEl.hidden = !msg;
+      };
+      setErr("");
+      const value = confirmEl instanceof HTMLInputElement ? confirmEl.value.trim().toUpperCase() : "";
+      if (value !== "RESETAR") {
+        setErr("Confirmação incorreta.");
+        return false;
+      }
+
+      if (modalPrimary) modalPrimary.disabled = true;
+      if (modalSecondary) modalSecondary.disabled = true;
+
+      (async () => {
+        try {
+          const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_onboarding_reset");
+          const user = await waitForFirebaseAuthReady(firebase, 5000);
+          if (!user) throw new Error("not-authenticated");
+
+          const progressQ = firebase.query(firebase.collection(firebase.primaryDb, "teacherOnboardingProgress"), firebase.where("teacherId", "==", tid));
+          const subQ = firebase.query(firebase.collection(firebase.primaryDb, "teacherQuizSubmissions"), firebase.where("teacherId", "==", tid));
+          const [pSnap, sSnap] = await Promise.all([
+            withTimeout(firebase.getDocs(progressQ), 12_000, "firestore_onboarding_progress_list_for_reset"),
+            withTimeout(firebase.getDocs(subQ), 12_000, "firestore_onboarding_submissions_list_for_reset"),
+          ]);
+
+          const deletions = [];
+          pSnap.forEach((d) => deletions.push(withTimeout(firebase.deleteDoc(d.ref), 12_000, "firestore_onboarding_progress_delete")));
+          sSnap.forEach((d) => deletions.push(withTimeout(firebase.deleteDoc(d.ref), 12_000, "firestore_onboarding_submission_delete")));
+          await Promise.allSettled(deletions);
+
+          closeModal();
+          adminPedagogicoState.activeTab = "onboarding";
+          await renderAdminControlePedagogicoPanel({ force: true });
+          renderAdminPedagogicoTabs();
+        } catch (e) {
+          console.error("[admin] onboarding reset failed:", e);
+          if (modalPrimary) modalPrimary.disabled = false;
+          if (modalSecondary) modalSecondary.disabled = false;
+        }
+      })();
+
+      return false;
+    },
+  });
+};
+
+const computeTeacherOnboardingStatus = ({ teacherId, requiredContents, progressByTeacher }) => {
+  const rows = progressByTeacher.get(String(teacherId)) || [];
+  const map = new Map(rows.map((r) => [String(r.contentId), r]));
+  const base = requiredContents.length ? requiredContents : [];
+  if (!base.length) return { status: "Sem trilha", pct: 0, done: 0, total: 0 };
+  const done = base.filter((c) => normalizeTeacherOnboardingProgressStatus(map.get(c.id)?.status) === "completed").length;
+  const inProgress = base.some((c) => normalizeTeacherOnboardingProgressStatus(map.get(c.id)?.status) === "in_progress");
+  const pct = Math.round((done / Math.max(1, base.length)) * 100);
+  const status = done === 0 && !inProgress ? "Não iniciado" : done >= base.length ? "Concluído" : "Em andamento";
+  return { status, pct, done, total: base.length };
+};
+
+const renderAdminOnboardingPerformance = () => {
+  if (!(adminOnboardingPerfEl instanceof HTMLElement)) return;
+  const teachers = Array.isArray(adminPedagogicoState.teachers) ? adminPedagogicoState.teachers : [];
+  const contents = Array.isArray(adminPedagogicoState.onboardingContents) ? adminPedagogicoState.onboardingContents : [];
+  const requiredContents = contents.filter((c) => c.required && c.status !== "inactive");
+
+  const progressRows = Array.isArray(adminPedagogicoState.teacherOnboardingProgressAll) ? adminPedagogicoState.teacherOnboardingProgressAll : [];
+  const subs = Array.isArray(adminPedagogicoState.teacherQuizSubmissionsAll) ? adminPedagogicoState.teacherQuizSubmissionsAll : [];
+
+  const progressByTeacher = new Map();
+  progressRows.forEach((r) => {
+    const tid = String(r.teacherId || "").trim();
+    if (!tid) return;
+    if (!progressByTeacher.has(tid)) progressByTeacher.set(tid, []);
+    progressByTeacher.get(tid).push(r);
+  });
+
+  const subsByTeacher = new Map();
+  subs.forEach((s) => {
+    const tid = String(s.teacherId || "").trim();
+    if (!tid) return;
+    if (!subsByTeacher.has(tid)) subsByTeacher.set(tid, []);
+    subsByTeacher.get(tid).push(s);
+  });
+
+  const rows = teachers
+    .slice()
+    .sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"))
+    .map((t) => {
+      const tid = String(t.id || "");
+      const prog = computeTeacherOnboardingStatus({ teacherId: tid, requiredContents, progressByTeacher });
+      const tSubs = subsByTeacher.get(tid) || [];
+      const quizzesRespondidos = tSubs.length;
+      const scores = tSubs.filter((s) => Number.isFinite(Number(s.score)) && Number.isFinite(Number(s.maxScore)) && Number(s.maxScore) > 0);
+      const avg = scores.length ? (scores.reduce((acc, s) => acc + Number(s.score) / Number(s.maxScore), 0) / scores.length) * 100 : NaN;
+      const lastAccess = (progressByTeacher.get(tid) || []).reduce((best, r) => Math.max(best, r.lastAccessAtMs || r.updatedAtMs || 0), 0);
+      return {
+        id: tid,
+        name: String(t.nome || "Professor"),
+        status: prog.status,
+        pct: prog.pct,
+        done: prog.done,
+        total: prog.total,
+        quizzesRespondidos,
+        avgScorePct: Number.isFinite(avg) ? Math.round(avg) : null,
+        lastAccess,
+      };
+    });
+
+  if (adminOnboardingPerfEmptyEl instanceof HTMLElement) {
+    adminOnboardingPerfEmptyEl.hidden = rows.length > 0;
+  }
+
+  adminOnboardingPerfEl.innerHTML = `
+    <div class="admin-onboarding-row is-head">
+      <div>Professor</div>
+      <div>Progresso</div>
+      <div>Quizzes</div>
+      <div>Ações</div>
+    </div>
+    ${rows
+      .map((r) => {
+        const sub = `${r.done}/${r.total} concluídos${r.avgScorePct != null ? ` · Média ${r.avgScorePct}%` : ""}`;
+        const last = r.lastAccess ? `Último acesso: ${formatShortDateFromMs(r.lastAccess)}` : "Sem acesso";
+        return `
+          <div class="admin-onboarding-row">
+            <div>
+              <div class="admin-onboarding-cell-title">${escapeHtml(r.name)}</div>
+              <div class="admin-onboarding-cell-sub">${escapeHtml(`${r.status} · ${last}`)}</div>
+            </div>
+            <div class="admin-onboarding-cell-title">${escapeHtml(`${r.pct}%`)}</div>
+            <div class="admin-onboarding-cell-title">${escapeHtml(String(r.quizzesRespondidos))}</div>
+            <div class="admin-onboarding-actions">
+              <button class="admin-ped-action" type="button" data-admin-onboarding-perf-view="${escapeHtml(r.id)}">Ver detalhes</button>
+              <button class="admin-ped-action is-danger" type="button" data-admin-onboarding-perf-reset="${escapeHtml(r.id)}">Resetar</button>
+            </div>
+          </div>
+        `;
+      })
+      .join("")}
+  `;
+};
+
 const renderAdminPedagogicoAgenda = () => {
   if (!(adminPedAgenda instanceof HTMLElement)) return;
   const classes = adminPedagogicoFilteredClasses();
@@ -11333,6 +13169,7 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
     renderAdminPedagogicoAlertsPanel();
     renderAdminPedagogicoFeedbacksPanel();
     renderAdminPedagogicoReportsPanel();
+    renderAdminPedagogicoOnboardingPanel();
     renderAdminPedagogicoConflicts();
     return;
   }
@@ -11342,7 +13179,8 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
   if (adminPedError instanceof HTMLElement) adminPedError.hidden = true;
 
   try {
-    const [teachers, students, classes, groups, plans, surveys, teacherAlerts, pedagogicalFeedbacks, lessonLogs] = await Promise.all([
+    const [teachers, students, classes, groups, plans, surveys, teacherAlerts, pedagogicalFeedbacks, lessonLogs, onboardingContentsAll, onboardingQuizzes, onboardingProgressAll, teacherQuizSubmissionsAll] =
+      await Promise.all([
       fetchUserRowsFromFirestore("teacher"),
       fetchUserRowsFromFirestore("student"),
       fetchClassesFromFirestore(),
@@ -11352,6 +13190,10 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
       fetchTeacherAlertsFromFirestore().catch(() => []),
       fetchPedagogicalFeedbacksFromFirestore().catch(() => []),
       fetchLessonLogsFromFirestore().catch(() => []),
+      fetchOnboardingContentsFromFirestore({ includeInactive: true }).catch(() => []),
+      fetchOnboardingQuizzesFromFirestore().catch(() => []),
+      fetchAllTeacherOnboardingProgressFromFirestore().catch(() => []),
+      fetchAllTeacherQuizSubmissionsFromFirestore().catch(() => []),
     ]);
 
     adminPedagogicoState.teachers = teachers.filter((t) => t && typeof t === "object");
@@ -11370,6 +13212,11 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
     adminPedagogicoState.teacherAlerts = Array.isArray(teacherAlerts) ? teacherAlerts : [];
     adminPedagogicoState.pedagogicalFeedbacks = Array.isArray(pedagogicalFeedbacks) ? pedagogicalFeedbacks : [];
     adminPedagogicoState.lessonLogs = Array.isArray(lessonLogs) ? lessonLogs : [];
+    adminPedagogicoState.onboardingContentsAll = Array.isArray(onboardingContentsAll) ? onboardingContentsAll : [];
+    adminPedagogicoState.onboardingContents = adminPedagogicoState.onboardingContentsAll.slice().sort((a, b) => (a.order || 0) - (b.order || 0));
+    adminPedagogicoState.onboardingQuizzes = Array.isArray(onboardingQuizzes) ? onboardingQuizzes : [];
+    adminPedagogicoState.teacherOnboardingProgressAll = Array.isArray(onboardingProgressAll) ? onboardingProgressAll : [];
+    adminPedagogicoState.teacherQuizSubmissionsAll = Array.isArray(teacherQuizSubmissionsAll) ? teacherQuizSubmissionsAll : [];
     adminPedagogicoState.conflicts = computeAdminPedagogicoConflicts(adminPedagogicoState.classes);
     adminPedagogicoState.loadedAt = Date.now();
 
@@ -11428,6 +13275,7 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
     renderAdminPedagogicoAlertsPanel();
     renderAdminPedagogicoFeedbacksPanel();
     renderAdminPedagogicoReportsPanel();
+    renderAdminPedagogicoOnboardingPanel();
     renderAdminPedagogicoConflicts();
   } catch (error) {
     console.error("[admin] controle-pedagogico load failed:", error);
@@ -14772,6 +16620,14 @@ const showPanel = (panelName) => {
     return;
   }
 
+  if (panelName === "teacher-onboarding") {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (currentRole === "teacher") {
+      renderTeacherOnboardingPanel({ force: false }).catch(() => {});
+    }
+    return;
+  }
+
   if (panelName === "dashboard") {
     if (currentRole === "teacher") {
       renderTeacherDashboard();
@@ -14804,6 +16660,7 @@ const panelPathForRole = (role, panel) => {
     if (p === "ao-vivo") return "/app/professor/agenda";
     if (p === "pedagogico") return "/app/professor/pedagogico";
     if (p === "teacher-alunos") return "/app/professor/alunos";
+    if (p === "teacher-onboarding") return "/app/professor/onboarding";
     if (p === "gravadas") return "/app/professor/gravadas";
     if (p === "materiais") return "/app/professor/materiais";
     return "/app/professor";
@@ -14839,6 +16696,7 @@ const parseAppRoute = (path) => {
     if (sub === "agenda") return { role, panel: "ao-vivo" };
     if (sub === "pedagogico") return { role, panel: "pedagogico" };
     if (sub === "alunos") return { role, panel: "teacher-alunos" };
+    if (sub === "onboarding") return { role, panel: "teacher-onboarding" };
     if (sub === "gravadas") return { role, panel: "gravadas" };
     if (sub === "materiais") return { role, panel: "materiais" };
     return { role, panel: "dashboard" };
@@ -15100,6 +16958,77 @@ document.addEventListener("click", (event) => {
     }
 
     if (currentRole === "teacher") {
+      const onboardingItem = target.closest("[data-teacher-onboarding-item]");
+      if (onboardingItem instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const contentId = String(onboardingItem.getAttribute("data-teacher-onboarding-item") || "").trim();
+        if (contentId) {
+          teacherOnboardingSetCurrent({ contentId }).catch(() => {});
+        }
+        return;
+      }
+
+      const onboardingPrev = target.closest("[data-teacher-onboarding-prev]");
+      if (onboardingPrev instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const contents = Array.isArray(teacherOnboardingState.contents) ? teacherOnboardingState.contents : [];
+        const currentId = String(teacherOnboardingState.currentContentId || "");
+        const idx = contents.findIndex((c) => String(c.id) === currentId);
+        const prev = idx > 0 ? contents[idx - 1] : null;
+        if (prev?.id) teacherOnboardingSetCurrent({ contentId: prev.id }).catch(() => {});
+        return;
+      }
+
+      const onboardingNext = target.closest("[data-teacher-onboarding-next]");
+      if (onboardingNext instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const contents = Array.isArray(teacherOnboardingState.contents) ? teacherOnboardingState.contents : [];
+        const currentId = String(teacherOnboardingState.currentContentId || "");
+        const idx = contents.findIndex((c) => String(c.id) === currentId);
+        const next = idx >= 0 && idx < contents.length - 1 ? contents[idx + 1] : null;
+        if (next?.id) teacherOnboardingSetCurrent({ contentId: next.id }).catch(() => {});
+        return;
+      }
+
+      const onboardingComplete = target.closest("[data-teacher-onboarding-complete]");
+      if (onboardingComplete instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const contents = Array.isArray(teacherOnboardingState.contents) ? teacherOnboardingState.contents : [];
+        const currentId = String(teacherOnboardingState.currentContentId || "");
+        const row = contents.find((c) => String(c.id) === currentId) || null;
+        if (!row) return;
+        if (row.type === "quiz") {
+          const quiz = teacherOnboardingState.quizzesByContentId instanceof Map ? teacherOnboardingState.quizzesByContentId.get(row.id) || null : null;
+          const submitted =
+            quiz && teacherOnboardingState.submissionsByQuizId instanceof Map ? teacherOnboardingState.submissionsByQuizId.get(quiz.id) || null : null;
+          if (!submitted) {
+            setTeacherOnboardingStatus("Envie as respostas do quiz para concluir este conteúdo.", "error");
+            return;
+          }
+        }
+        upsertTeacherOnboardingProgress({ contentId: row.id, nextStatus: "completed" })
+          .then(() => {
+            setTeacherOnboardingStatus("Conteúdo marcado como concluído.");
+            renderTeacherOnboardingItemsList();
+            renderTeacherOnboardingProgress();
+            renderTeacherOnboardingCurrent();
+          })
+          .catch(() => {
+            setTeacherOnboardingStatus("Não foi possível salvar agora.", "error");
+          });
+        return;
+      }
+
+      const quizSubmit = target.closest("[data-teacher-onboarding-quiz-submit]");
+      if (quizSubmit instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const quizId = String(quizSubmit.getAttribute("data-teacher-onboarding-quiz-submit") || "").trim();
+        submitTeacherOnboardingQuiz({ quizId }).catch(() => {
+          setTeacherOnboardingStatus("Não foi possível enviar agora.", "error");
+        });
+        return;
+      }
+
       const teacherHistoryClose = target.closest("[data-teacher-student-history-close]");
       if (teacherHistoryClose instanceof HTMLElement) {
         event.preventDefault();
@@ -15172,6 +17101,139 @@ document.addEventListener("click", (event) => {
 
     // Admin manage tables: actions menu + operations.
     if (currentRole === "admin") {
+      // Admin > Controle Pedagógico > Onboarding (tab)
+      const adminOnboardingAdd = target.closest("[data-admin-onboarding-add]");
+      if (adminOnboardingAdd instanceof HTMLButtonElement) {
+        event.preventDefault();
+        renderAdminControlePedagogicoPanel({ force: false })
+          .then(() => openAdminOnboardingContentModal({ mode: "create" }))
+          .catch(() => openAdminOnboardingContentModal({ mode: "create" }));
+        return;
+      }
+
+      const adminOnboardingEdit = target.closest("[data-admin-onboarding-edit]");
+      if (adminOnboardingEdit instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const contentId = String(adminOnboardingEdit.getAttribute("data-admin-onboarding-edit") || "").trim();
+        if (contentId) openAdminOnboardingContentModal({ mode: "edit", contentId });
+        return;
+      }
+
+      const adminOnboardingToggle = target.closest("[data-admin-onboarding-toggle]");
+      if (adminOnboardingToggle instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const contentId = String(adminOnboardingToggle.getAttribute("data-admin-onboarding-toggle") || "").trim();
+        toggleAdminOnboardingContentStatus({ contentId }).catch(() => {});
+        return;
+      }
+
+      const adminOnboardingMove = target.closest("[data-admin-onboarding-move]");
+      if (adminOnboardingMove instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const direction = String(adminOnboardingMove.getAttribute("data-admin-onboarding-move") || "").trim();
+        const fromId = String(adminOnboardingMove.getAttribute("data-admin-onboarding-id") || "").trim();
+        swapAdminOnboardingContentOrder({ fromId, direction }).catch(() => {});
+        return;
+      }
+
+      const adminOnboardingDelete = target.closest("[data-admin-onboarding-delete]");
+      if (adminOnboardingDelete instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const contentId = String(adminOnboardingDelete.getAttribute("data-admin-onboarding-delete") || "").trim();
+        deleteAdminOnboardingContent({ contentId }).catch(() => {});
+        return;
+      }
+
+      const adminOnboardingPerfView = target.closest("[data-admin-onboarding-perf-view]");
+      if (adminOnboardingPerfView instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const teacherId = String(adminOnboardingPerfView.getAttribute("data-admin-onboarding-perf-view") || "").trim();
+        if (teacherId) openAdminOnboardingTeacherDetailsModal({ teacherId });
+        return;
+      }
+
+      const adminOnboardingPerfReset = target.closest("[data-admin-onboarding-perf-reset]");
+      if (adminOnboardingPerfReset instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const teacherId = String(adminOnboardingPerfReset.getAttribute("data-admin-onboarding-perf-reset") || "").trim();
+        resetAdminOnboardingTeacher({ teacherId });
+        return;
+      }
+
+      // Admin onboarding modal (quiz builder) interactions.
+      if (activeModalKind === "admin-onboarding-content" && modalBody instanceof HTMLElement && target instanceof Element && target.closest(".admin-onboarding-modal")) {
+        const typeEl = modalBody.querySelector("[data-admin-onboarding-type]");
+        const type = typeEl instanceof HTMLSelectElement ? normalizeOnboardingContentType(typeEl.value) : "video";
+
+        const typeChanged = target.closest("[data-admin-onboarding-type]");
+        if (typeChanged instanceof HTMLSelectElement) {
+          event.preventDefault();
+          adminOnboardingModalSyncTypeSections();
+          return;
+        }
+
+        if (type === "quiz") {
+          const addQ = target.closest("[data-admin-onboarding-quiz-add-q]");
+          if (addQ instanceof HTMLButtonElement) {
+            event.preventDefault();
+            const list = modalBody.querySelector("[data-admin-onboarding-quiz-questions]");
+            if (list instanceof HTMLElement) {
+              list.insertAdjacentHTML("beforeend", adminOnboardingModalCreateQuestionRowHtml({ q: { id: "", questionText: "", type: "multiple_choice", options: ["", ""], points: 1, required: true } }));
+              adminOnboardingModalSyncTypeSections();
+            }
+            return;
+          }
+
+          const removeQ = target.closest("[data-admin-onboarding-q-remove]");
+          if (removeQ instanceof HTMLButtonElement) {
+            event.preventDefault();
+            const row = removeQ.closest("[data-admin-onboarding-q]");
+            if (row instanceof HTMLElement) {
+              row.remove();
+              adminOnboardingModalSyncTypeSections();
+            }
+            return;
+          }
+
+          const addOpt = target.closest("[data-admin-onboarding-q-option-add]");
+          if (addOpt instanceof HTMLButtonElement) {
+            event.preventDefault();
+            const qRow = addOpt.closest("[data-admin-onboarding-q]");
+            const list = qRow instanceof HTMLElement ? qRow.querySelector(".admin-onboarding-q-options-list") : null;
+            if (list instanceof HTMLElement) {
+              list.insertAdjacentHTML(
+                "beforeend",
+                `<div class="admin-onboarding-q-option">
+                  <input class="modal-input" type="text" value="" placeholder="Alternativa" data-admin-onboarding-q-option />
+                  <button class="admin-ped-action is-danger" type="button" data-admin-onboarding-q-option-remove aria-label="Remover alternativa">✕</button>
+                </div>`
+              );
+              adminOnboardingModalSyncTypeSections();
+            }
+            return;
+          }
+
+          const removeOpt = target.closest("[data-admin-onboarding-q-option-remove]");
+          if (removeOpt instanceof HTMLButtonElement) {
+            event.preventDefault();
+            const optRow = removeOpt.closest(".admin-onboarding-q-option");
+            if (optRow instanceof HTMLElement) {
+              optRow.remove();
+              adminOnboardingModalSyncTypeSections();
+            }
+            return;
+          }
+
+          const qType = target.closest("[data-admin-onboarding-q-type]");
+          if (qType instanceof HTMLSelectElement) {
+            event.preventDefault();
+            const qRow = qType.closest("[data-admin-onboarding-q]");
+            adminOnboardingModalSyncQuestionUI(qRow);
+            return;
+          }
+        }
+      }
+
       const adminPedNewClass = target.closest("[data-admin-ped-new-class]");
       if (adminPedNewClass instanceof HTMLButtonElement) {
         event.preventDefault();
@@ -16520,6 +18582,61 @@ document.addEventListener("change", (event) => {
   renderAdminPedagogicoClassesList();
   renderAdminPedagogicoTeachersPanel();
   renderAdminPedagogicoConflicts();
+});
+
+// Admin > Controle Pedagógico > Onboarding: modal dynamic sections (type + question type).
+document.addEventListener("change", (event) => {
+  if (currentRole !== "admin") return;
+  if (activeModalKind !== "admin-onboarding-content") return;
+  if (!(modalBody instanceof HTMLElement)) return;
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+
+  if (target.matches("[data-admin-onboarding-type]")) {
+    adminOnboardingModalSyncTypeSections();
+    return;
+  }
+
+  if (target.matches("[data-admin-onboarding-q-type]")) {
+    const qRow = target.closest("[data-admin-onboarding-q]");
+    adminOnboardingModalSyncQuestionUI(qRow);
+    adminOnboardingModalSyncTypeSections();
+    return;
+  }
+});
+
+// Teacher > Onboarding: capture quiz answers (short answers + radios).
+document.addEventListener("input", (event) => {
+  if (currentRole !== "teacher") return;
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+
+  const quizId = target.getAttribute("data-teacher-onboarding-quiz");
+  const qId = target.getAttribute("data-teacher-onboarding-q");
+  if (!quizId || !qId) return;
+
+  if (!(teacherOnboardingState.draftAnswersByQuizId instanceof Map)) return;
+  const draft = teacherOnboardingState.draftAnswersByQuizId.get(String(quizId)) || {};
+  if (target instanceof HTMLInputElement && target.type !== "radio") {
+    draft[String(qId)] = String(target.value || "");
+    teacherOnboardingState.draftAnswersByQuizId.set(String(quizId), draft);
+  }
+});
+
+document.addEventListener("change", (event) => {
+  if (currentRole !== "teacher") return;
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement)) return;
+  const quizId = target.getAttribute("data-teacher-onboarding-quiz");
+  const qId = target.getAttribute("data-teacher-onboarding-q");
+  if (!quizId || !qId) return;
+  if (!(teacherOnboardingState.draftAnswersByQuizId instanceof Map)) return;
+
+  const draft = teacherOnboardingState.draftAnswersByQuizId.get(String(quizId)) || {};
+  if (target.type === "radio" && target.checked) {
+    draft[String(qId)] = String(target.value || "");
+    teacherOnboardingState.draftAnswersByQuizId.set(String(quizId), draft);
+  }
 });
 
 // Pedagogico drawer: status switch re-renders the dynamic fields area (no hidden/pre-rendered blocks).

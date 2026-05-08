@@ -450,6 +450,22 @@
                 </span>
                 <span class="sidebar-text">Alunos</span>
               </button>
+              <button
+                class="sidebar-link"
+                type="button"
+                data-panel-target="teacher-onboarding"
+                data-teacher-only
+                title="Onboarding"
+              >
+                <span class="sidebar-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M12 2.8 3.5 6.6 12 10.4l8.5-3.8L12 2.8Z"></path>
+                    <path d="M3.5 11.2 12 15l8.5-3.8"></path>
+                    <path d="M3.5 15.8 12 19.6l8.5-3.8"></path>
+                  </svg>
+                </span>
+                <span class="sidebar-text">Onboarding</span>
+              </button>
 			          <button
 			            class="sidebar-link"
 			            type="button"
@@ -1467,6 +1483,61 @@
           </div>
         </section>
 
+        <section class="platform-panel" data-panel="teacher-onboarding" data-hide-platform-header="true" hidden aria-label="Onboarding do Professor">
+          <div class="teacher-onboarding-shell" data-teacher-onboarding>
+            <header class="teacher-onboarding-head">
+              <div>
+                <h2 class="teacher-onboarding-title">Onboarding</h2>
+                <p class="teacher-onboarding-subtitle">Siga a trilha de formação inicial da Space e complete todos os conteúdos obrigatórios.</p>
+              </div>
+
+              <div class="teacher-onboarding-progress">
+                <div class="teacher-onboarding-progress-top">
+                  <span>Progresso</span>
+                  <strong data-teacher-onboarding-progress-label>0%</strong>
+                </div>
+                <div class="teacher-onboarding-progress-bar" aria-hidden="true">
+                  <div class="teacher-onboarding-progress-fill" data-teacher-onboarding-progress-fill style="width: 0%"></div>
+                </div>
+              </div>
+            </header>
+
+            <div class="teacher-onboarding-status" data-teacher-onboarding-status aria-live="polite"></div>
+
+            <div class="teacher-onboarding-grid">
+              <section class="surface-card teacher-onboarding-main" aria-label="Conteúdo atual">
+                <div class="teacher-onboarding-main-head">
+                  <div class="teacher-onboarding-current-kicker" data-teacher-onboarding-current-kicker>—</div>
+                  <div class="teacher-onboarding-current-title" data-teacher-onboarding-current-title>—</div>
+                  <div class="teacher-onboarding-current-sub" data-teacher-onboarding-current-sub>—</div>
+                </div>
+
+                <div class="teacher-onboarding-view" data-teacher-onboarding-view></div>
+
+                <div class="teacher-onboarding-actions" aria-label="Navegação do onboarding">
+                  <button class="button button-outline button-small" type="button" data-teacher-onboarding-prev>Anterior</button>
+                  <button class="button button-outline button-small" type="button" data-teacher-onboarding-next>Próximo</button>
+                  <button class="button button-solid button-small" type="button" data-teacher-onboarding-complete>Marcar como concluído</button>
+                </div>
+              </section>
+
+              <aside class="surface-card teacher-onboarding-list" aria-label="Conteúdos da trilha">
+                <div class="teacher-onboarding-list-head">
+                  <div>
+                    <div class="teacher-onboarding-list-title">Trilha</div>
+                    <div class="teacher-onboarding-list-sub">Conteúdos em ordem</div>
+                  </div>
+                </div>
+                <div class="teacher-onboarding-items" data-teacher-onboarding-items></div>
+                <div class="teacher-onboarding-empty" data-teacher-onboarding-empty hidden>
+                  <div class="teacher-onboarding-empty-title">Onboarding ainda não cadastrado</div>
+                  <div class="teacher-onboarding-empty-sub">A coordenação pedagógica vai publicar a trilha em breve.</div>
+                </div>
+              </aside>
+            </div>
+          </div>
+        </section>
+
 	        <section class="platform-panel" data-panel="professores" data-hide-platform-header="true" hidden>
 	          <div class="admin-manage-shell" data-admin-manage="teacher">
 	            <div class="admin-manage-head">
@@ -1634,6 +1705,7 @@
                 <button class="admin-ped-tab" type="button" role="tab" aria-selected="false" data-admin-ped-tab="avisos">Avisos</button>
                 <button class="admin-ped-tab" type="button" role="tab" aria-selected="false" data-admin-ped-tab="feedbacks">Feedbacks</button>
                 <button class="admin-ped-tab" type="button" role="tab" aria-selected="false" data-admin-ped-tab="relatorios">Relatórios</button>
+                <button class="admin-ped-tab" type="button" role="tab" aria-selected="false" data-admin-ped-tab="onboarding">Onboarding</button>
                 <button class="admin-ped-tab" type="button" role="tab" aria-selected="false" data-admin-ped-tab="conflitos">Conflitos</button>
               </div>
 
@@ -1779,6 +1851,29 @@
                     <div class="admin-ped-panelhead-title">Relatórios</div>
                   </div>
                   <div class="admin-ped-reports" data-admin-ped-reports></div>
+                </article>
+              </section>
+
+              <section class="admin-ped-panel" data-admin-ped-panel="onboarding" hidden aria-label="Onboarding">
+                <article class="surface-card admin-ped-surface" aria-label="Onboarding de Professores">
+                  <div class="admin-ped-panelhead">
+                    <div class="admin-ped-panelhead-title">Onboarding</div>
+                    <button class="admin-ped-action" type="button" data-admin-onboarding-add>Adicionar conteúdo</button>
+                  </div>
+
+                  <div class="admin-onboarding-grid">
+                    <section class="admin-onboarding-editor" aria-label="Editor da trilha">
+                      <div class="admin-onboarding-sectiontitle">Editor da trilha</div>
+                      <div class="admin-onboarding-contents" data-admin-onboarding-contents></div>
+                      <div class="admin-ped-empty" data-admin-onboarding-empty hidden>Nenhum conteúdo cadastrado ainda.</div>
+                    </section>
+
+                    <section class="admin-onboarding-perf" aria-label="Desempenho dos professores">
+                      <div class="admin-onboarding-sectiontitle">Desempenho dos professores</div>
+                      <div class="admin-onboarding-perf-table" data-admin-onboarding-perf></div>
+                      <div class="admin-ped-empty" data-admin-onboarding-perf-empty hidden>Sem dados de desempenho ainda.</div>
+                    </section>
+                  </div>
                 </article>
               </section>
 
