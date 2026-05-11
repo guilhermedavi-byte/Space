@@ -1632,82 +1632,111 @@
               <header class="admin-ped-head">
                 <div>
                   <h2 class="admin-ped-title">Controle Pedagógico</h2>
-                  <p class="admin-ped-subtitle">Central de operação pedagógica: aulas, professores, alunos, turmas, planos, satisfação e relatórios.</p>
+                  <p class="admin-ped-subtitle">Central de operação pedagógica da Space: aulas, alunos, professores, turmas, qualidade e relatórios.</p>
                 </div>
                 <div class="admin-ped-actions" aria-label="Ações principais">
-                  <button class="button button-solid button-small" type="button" data-admin-ped-new-class>+ Criar aula</button>
-                  <button class="button button-outline button-small" type="button" data-admin-ped-new-group>+ Criar turma</button>
-                  <button class="button button-outline button-small" type="button" data-admin-ped-new-plan>+ Criar plano</button>
-                  <button class="button button-outline button-small" type="button" data-admin-ped-generate-report>Gerar relatório</button>
+                  <div class="admin-ped-actionmenu" data-admin-ped-actionmenu>
+                    <button class="button button-solid button-small" type="button" data-admin-ped-new-action aria-haspopup="menu" aria-expanded="false">
+                      + Nova ação
+                    </button>
+                    <div class="admin-ped-actionmenu-popover" data-admin-ped-new-action-menu role="menu" hidden>
+                      <button class="admin-ped-actionmenu-item" type="button" role="menuitem" data-admin-ped-new-action-item="class_individual">Criar aula individual</button>
+                      <button class="admin-ped-actionmenu-item" type="button" role="menuitem" data-admin-ped-new-action-item="class_group">Criar aula em grupo</button>
+                      <button class="admin-ped-actionmenu-item" type="button" role="menuitem" data-admin-ped-new-action-item="group">Criar turma</button>
+                      <button class="admin-ped-actionmenu-item" type="button" role="menuitem" data-admin-ped-new-action-item="link">Vincular aluno a professor</button>
+                      <button class="admin-ped-actionmenu-item" type="button" role="menuitem" data-admin-ped-new-action-item="plan">Criar plano</button>
+                      <button class="admin-ped-actionmenu-item" type="button" role="menuitem" data-admin-ped-new-action-item="feedback">Enviar feedback para professor</button>
+                      <button class="admin-ped-actionmenu-item" type="button" role="menuitem" data-admin-ped-new-action-item="report">Gerar relatório</button>
+                    </div>
+                  </div>
                 </div>
               </header>
 
-              <section class="admin-ped-metrics" aria-label="Resumo">
-                <article class="surface-card admin-ped-metric">
-                  <div class="admin-ped-metric-label">Aulas ativas</div>
-                  <div class="admin-ped-metric-value" data-admin-ped-metric="active">—</div>
-                </article>
-                <article class="surface-card admin-ped-metric">
-                  <div class="admin-ped-metric-label">Individuais</div>
-                  <div class="admin-ped-metric-value" data-admin-ped-metric="individual">—</div>
-                </article>
-                <article class="surface-card admin-ped-metric">
-                  <div class="admin-ped-metric-label">Em grupo</div>
-                  <div class="admin-ped-metric-value" data-admin-ped-metric="group">—</div>
-                </article>
-                <article class="surface-card admin-ped-metric">
-                  <div class="admin-ped-metric-label">Alunos ativos</div>
-                  <div class="admin-ped-metric-value" data-admin-ped-metric="studentsActive">—</div>
-                </article>
-                <article class="surface-card admin-ped-metric">
-                  <div class="admin-ped-metric-label">Professores ativos</div>
-                  <div class="admin-ped-metric-value" data-admin-ped-metric="teachersActive">—</div>
-                </article>
-                <article class="surface-card admin-ped-metric">
-                  <div class="admin-ped-metric-label">Turmas ativas</div>
-                  <div class="admin-ped-metric-value" data-admin-ped-metric="groupsActive">—</div>
-                </article>
-                <article class="surface-card admin-ped-metric">
-                  <div class="admin-ped-metric-label">NPS médio</div>
-                  <div class="admin-ped-metric-value" data-admin-ped-metric="npsAvg">—</div>
-                </article>
-                <article class="surface-card admin-ped-metric">
-                  <div class="admin-ped-metric-label">CSAT médio</div>
-                  <div class="admin-ped-metric-value" data-admin-ped-metric="csatAvg">—</div>
-                </article>
-                <article class="surface-card admin-ped-metric">
-                  <div class="admin-ped-metric-label">Alunos em risco</div>
-                  <div class="admin-ped-metric-value" data-admin-ped-metric="studentsRisk">—</div>
-                </article>
-                <article class="surface-card admin-ped-metric">
-                  <div class="admin-ped-metric-label">Conflitos de agenda</div>
-                  <div class="admin-ped-metric-value" data-admin-ped-metric="conflicts">—</div>
-                </article>
-                <article class="surface-card admin-ped-metric">
-                  <div class="admin-ped-metric-label">Feedbacks pendentes</div>
-                  <div class="admin-ped-metric-value" data-admin-ped-metric="feedbackPending">—</div>
-                </article>
-                <article class="surface-card admin-ped-metric">
-                  <div class="admin-ped-metric-label">Avisos dos professores</div>
-                  <div class="admin-ped-metric-value" data-admin-ped-metric="teacherAlerts">—</div>
-                </article>
+              <section class="admin-ped-kpis" aria-label="Operação (resumo)">
+                <div class="admin-ped-kpis-hero" aria-label="Cards principais">
+                  <article class="surface-card admin-ped-kpi is-hero" data-admin-ped-kpi="classesToday">
+                    <div class="admin-ped-kpi-top">
+                      <div class="admin-ped-kpi-label">Aulas hoje</div>
+                      <span class="admin-ped-kpi-badge" data-admin-ped-kpi-badge="classesToday" hidden>—</span>
+                    </div>
+                    <div class="admin-ped-kpi-value" data-admin-ped-kpi-value="classesToday">—</div>
+                    <div class="admin-ped-kpi-sub" data-admin-ped-kpi-sub="classesToday">—</div>
+                    <button class="admin-ped-kpi-action" type="button" data-admin-ped-kpi-action="classesToday">Ver agenda</button>
+                  </article>
+                  <article class="surface-card admin-ped-kpi is-hero" data-admin-ped-kpi="critical">
+                    <div class="admin-ped-kpi-top">
+                      <div class="admin-ped-kpi-label">Pendências críticas</div>
+                      <span class="admin-ped-kpi-badge is-danger" data-admin-ped-kpi-badge="critical" hidden>Crítico</span>
+                    </div>
+                    <div class="admin-ped-kpi-value" data-admin-ped-kpi-value="critical">—</div>
+                    <div class="admin-ped-kpi-sub" data-admin-ped-kpi-sub="critical">—</div>
+                    <button class="admin-ped-kpi-action" type="button" data-admin-ped-kpi-action="critical">Resolver</button>
+                  </article>
+                  <article class="surface-card admin-ped-kpi is-hero" data-admin-ped-kpi="risk">
+                    <div class="admin-ped-kpi-top">
+                      <div class="admin-ped-kpi-label">Alunos em risco</div>
+                      <span class="admin-ped-kpi-badge is-warn" data-admin-ped-kpi-badge="risk" hidden>Atenção</span>
+                    </div>
+                    <div class="admin-ped-kpi-value" data-admin-ped-kpi-value="risk">—</div>
+                    <div class="admin-ped-kpi-sub" data-admin-ped-kpi-sub="risk">—</div>
+                    <button class="admin-ped-kpi-action" type="button" data-admin-ped-kpi-action="risk">Ver alunos</button>
+                  </article>
+                  <article class="surface-card admin-ped-kpi is-hero" data-admin-ped-kpi="feedbackPending">
+                    <div class="admin-ped-kpi-top">
+                      <div class="admin-ped-kpi-label">Feedbacks pendentes</div>
+                      <span class="admin-ped-kpi-badge is-warn" data-admin-ped-kpi-badge="feedbackPending" hidden>Atenção</span>
+                    </div>
+                    <div class="admin-ped-kpi-value" data-admin-ped-kpi-value="feedbackPending">—</div>
+                    <div class="admin-ped-kpi-sub" data-admin-ped-kpi-sub="feedbackPending">—</div>
+                    <button class="admin-ped-kpi-action" type="button" data-admin-ped-kpi-action="feedbackPending">Enviar feedback</button>
+                  </article>
+                </div>
+
+                <div class="admin-ped-kpis-mini" aria-label="Cards secundários">
+                  <article class="surface-card admin-ped-kpi is-mini" data-admin-ped-kpi="teachersActive">
+                    <div class="admin-ped-kpi-label">Professores ativos</div>
+                    <div class="admin-ped-kpi-value is-mini" data-admin-ped-kpi-value="teachersActive">—</div>
+                    <div class="admin-ped-kpi-sub" data-admin-ped-kpi-sub="teachersActive">—</div>
+                  </article>
+                  <article class="surface-card admin-ped-kpi is-mini" data-admin-ped-kpi="groupsActive">
+                    <div class="admin-ped-kpi-label">Turmas ativas</div>
+                    <div class="admin-ped-kpi-value is-mini" data-admin-ped-kpi-value="groupsActive">—</div>
+                    <div class="admin-ped-kpi-sub" data-admin-ped-kpi-sub="groupsActive">—</div>
+                  </article>
+                  <article class="surface-card admin-ped-kpi is-mini" data-admin-ped-kpi="npsAvg">
+                    <div class="admin-ped-kpi-label">NPS médio</div>
+                    <div class="admin-ped-kpi-value is-mini" data-admin-ped-kpi-value="npsAvg">—</div>
+                    <div class="admin-ped-kpi-sub" data-admin-ped-kpi-sub="npsAvg">—</div>
+                  </article>
+                  <article class="surface-card admin-ped-kpi is-mini" data-admin-ped-kpi="csatAvg">
+                    <div class="admin-ped-kpi-label">CSAT médio</div>
+                    <div class="admin-ped-kpi-value is-mini" data-admin-ped-kpi-value="csatAvg">—</div>
+                    <div class="admin-ped-kpi-sub" data-admin-ped-kpi-sub="csatAvg">—</div>
+                  </article>
+                  <article class="surface-card admin-ped-kpi is-mini" data-admin-ped-kpi="conflicts">
+                    <div class="admin-ped-kpi-label">Conflitos</div>
+                    <div class="admin-ped-kpi-value is-mini" data-admin-ped-kpi-value="conflicts">—</div>
+                    <div class="admin-ped-kpi-sub" data-admin-ped-kpi-sub="conflicts">—</div>
+                  </article>
+                  <article class="surface-card admin-ped-kpi is-mini" data-admin-ped-kpi="studentsNoClass">
+                    <div class="admin-ped-kpi-label">Alunos sem aula</div>
+                    <div class="admin-ped-kpi-value is-mini" data-admin-ped-kpi-value="studentsNoClass">—</div>
+                    <div class="admin-ped-kpi-sub" data-admin-ped-kpi-sub="studentsNoClass">—</div>
+                  </article>
+                </div>
               </section>
 
-              <div class="admin-ped-tabs" role="tablist" aria-label="Seções">
-                <button class="admin-ped-tab is-active" type="button" role="tab" aria-selected="true" data-admin-ped-tab="overview">Visão Geral</button>
-                <button class="admin-ped-tab" type="button" role="tab" aria-selected="false" data-admin-ped-tab="agenda">Agenda</button>
-                <button class="admin-ped-tab" type="button" role="tab" aria-selected="false" data-admin-ped-tab="aulas">Aulas</button>
-                <button class="admin-ped-tab" type="button" role="tab" aria-selected="false" data-admin-ped-tab="turmas">Turmas</button>
-                <button class="admin-ped-tab" type="button" role="tab" aria-selected="false" data-admin-ped-tab="alunos">Alunos</button>
-                <button class="admin-ped-tab" type="button" role="tab" aria-selected="false" data-admin-ped-tab="professores">Professores</button>
-                <button class="admin-ped-tab" type="button" role="tab" aria-selected="false" data-admin-ped-tab="planos">Planos</button>
-                <button class="admin-ped-tab" type="button" role="tab" aria-selected="false" data-admin-ped-tab="pesquisas">Pesquisas</button>
-                <button class="admin-ped-tab" type="button" role="tab" aria-selected="false" data-admin-ped-tab="avisos">Avisos</button>
-                <button class="admin-ped-tab" type="button" role="tab" aria-selected="false" data-admin-ped-tab="feedbacks">Feedbacks</button>
-                <button class="admin-ped-tab" type="button" role="tab" aria-selected="false" data-admin-ped-tab="relatorios">Relatórios</button>
-                <button class="admin-ped-tab" type="button" role="tab" aria-selected="false" data-admin-ped-tab="onboarding">Onboarding</button>
-                <button class="admin-ped-tab" type="button" role="tab" aria-selected="false" data-admin-ped-tab="conflitos">Conflitos</button>
-              </div>
+              <nav class="admin-ped-nav" aria-label="Navegação principal">
+                <div class="admin-ped-groups" role="tablist" aria-label="Grupos">
+                  <button class="admin-ped-group is-active" type="button" role="tab" aria-selected="true" data-admin-ped-group="operacao">Operação</button>
+                  <button class="admin-ped-group" type="button" role="tab" aria-selected="false" data-admin-ped-group="alunosTurmas">Alunos & Turmas</button>
+                  <button class="admin-ped-group" type="button" role="tab" aria-selected="false" data-admin-ped-group="professores">Professores</button>
+                  <button class="admin-ped-group" type="button" role="tab" aria-selected="false" data-admin-ped-group="qualidade">Qualidade</button>
+                  <button class="admin-ped-group" type="button" role="tab" aria-selected="false" data-admin-ped-group="gestao">Gestão</button>
+                </div>
+
+                <div class="admin-ped-subtabs" role="tablist" aria-label="Seções" data-admin-ped-subtabs></div>
+              </nav>
 
               <div class="admin-ped-status" data-admin-ped-status aria-live="polite"></div>
 
@@ -1881,6 +1910,42 @@
                 <article class="surface-card admin-ped-surface">
                   <div class="admin-ped-conflicts" data-admin-ped-conflicts></div>
                   <div class="admin-ped-empty" data-admin-ped-empty-conflicts hidden>Nenhum conflito detectado.</div>
+                </article>
+              </section>
+
+              <section class="admin-ped-panel" data-admin-ped-panel="vinculos" hidden aria-label="Vínculos">
+                <article class="surface-card admin-ped-surface">
+                  <div class="admin-ped-panelhead">
+                    <div class="admin-ped-panelhead-title">Vínculos</div>
+                    <button class="admin-ped-action" type="button" data-admin-ped-quick-link>Vincular aluno</button>
+                  </div>
+                  <div class="admin-ped-links" data-admin-ped-links></div>
+                  <div class="admin-ped-empty" data-admin-ped-empty-links hidden>Nenhuma pendência de vínculo agora.</div>
+                </article>
+              </section>
+
+              <section class="admin-ped-panel" data-admin-ped-panel="npscsat" hidden aria-label="NPS/CSAT">
+                <article class="surface-card admin-ped-surface">
+                  <div class="admin-ped-panelhead">
+                    <div class="admin-ped-panelhead-title">NPS/CSAT</div>
+                    <button class="admin-ped-action" type="button" data-admin-ped-open-surveys>Ver pesquisas</button>
+                  </div>
+                  <div class="admin-ped-quality" data-admin-ped-quality></div>
+                  <div class="admin-ped-empty" data-admin-ped-empty-quality hidden>Nenhuma pesquisa respondida ainda.</div>
+                </article>
+              </section>
+
+              <section class="admin-ped-panel" data-admin-ped-panel="configuracoes" hidden aria-label="Configurações">
+                <article class="surface-card admin-ped-surface">
+                  <div class="admin-ped-panelhead">
+                    <div class="admin-ped-panelhead-title">Configurações</div>
+                  </div>
+                  <div class="admin-ped-settings">
+                    <div class="admin-ped-empty-inline">
+                      <div class="admin-ped-empty-title">Configurações em breve</div>
+                      <div class="admin-ped-empty-sub">Aqui vamos centralizar ajustes operacionais (ex: pesquisa, padrões, templates e regras).</div>
+                    </div>
+                  </div>
                 </article>
               </section>
             </div>
