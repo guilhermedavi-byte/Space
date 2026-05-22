@@ -1052,11 +1052,15 @@ const renderContracts = () => {
 
     const actionSend =
       String(c.status || "").trim().toLowerCase() === "rascunho"
-        ? `<button class="admin-action-item" type="button" data-contract-action="send" data-contract-id="${c.id}">Enviar para assinatura</button>`
+        ? `<button class="admin-action-item" type="button" data-contract-action="send" data-contract-id="${c.id}">Enviar</button>`
         : "";
     const actionResend =
       String(c.status || "").trim().toLowerCase() === "enviado"
         ? `<button class="admin-action-item" type="button" data-contract-action="send" data-contract-id="${c.id}">Reenviar</button>`
+        : "";
+    const actionEdit =
+      String(c.status || "").trim().toLowerCase() === "rascunho"
+        ? `<button class="admin-action-item" type="button" data-contract-action="edit" data-contract-id="${c.id}">Editar</button>`
         : "";
 
     row.innerHTML = `
@@ -1080,6 +1084,7 @@ const renderContracts = () => {
         </button>
         <div class="admin-actions-menu" role="menu">
           <button class="admin-action-item" type="button" data-contract-action="details" data-contract-id="${c.id}">Ver detalhes</button>
+          ${actionEdit}
           ${actionSend}
           ${actionResend}
           <button class="admin-action-item is-danger" type="button" data-contract-action="delete" data-contract-id="${c.id}">Excluir</button>
@@ -1162,6 +1167,7 @@ const getCreateField = (key) => document.querySelector(`[data-contract-field="${
 
 const openCreateModal = () => {
   clearCreateErrors();
+  editingContractId = "";
   const dateField = getCreateField("data");
   if (dateField instanceof HTMLInputElement) {
     const now = new Date();
@@ -1187,11 +1193,52 @@ const openCreateModal = () => {
   if (focus instanceof HTMLInputElement) focus.focus();
 };
 
+const openEditModal = (contract) => {
+  const c = contract && typeof contract === "object" ? contract : null;
+  if (!c || !c.id) return;
+  clearCreateErrors();
+  editingContractId = String(c.id || "");
+
+  const setField = (key, value) => {
+    const el = getCreateField(key);
+    if (el instanceof HTMLInputElement) el.value = String(value ?? "");
+    if (el instanceof HTMLSelectElement) el.value = String(value ?? "");
+  };
+
+  setField("nomeCompleto", c.nomeCompleto || "");
+  setField("email", c.email || "");
+  setField("whatsapp", c.whatsapp || "");
+  setField("cpf", formatCpf(c.cpf || ""));
+  setField("endereco", c.endereco || "");
+  setField("contrato", c.contrato || "");
+  setField("valorOriginal", Number.isFinite(Number(c.valorOriginal)) ? String(c.valorOriginal) : "");
+  setField("valorDesconto", Number.isFinite(Number(c.valorDesconto)) ? String(c.valorDesconto) : "");
+
+  const country = getCreateCountry();
+  if (country instanceof HTMLSelectElement) country.value = String(c.telefoneCountry || "55");
+
+  const dateField = getCreateField("data");
+  if (dateField instanceof HTMLInputElement) {
+    const raw = String(c.data || "");
+    const match = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (match) {
+      dateField.value = `${match[3]}-${match[2]}-${match[1]}`;
+    }
+  }
+
+  setModalOpen(contractsEls.createOverlay, true);
+  applyCpfSendGate();
+
+  const focus = getCreateField("nomeCompleto");
+  if (focus instanceof HTMLInputElement) focus.focus();
+};
+
 const closeCreateModal = () => setModalOpen(contractsEls.createOverlay, false);
 const closeDetailsModal = () => setModalOpen(contractsEls.detailsOverlay, false);
 const closeConfirmModal = () => setModalOpen(contractsEls.confirmOverlay, false);
 
 let isCreateBusy = false;
+let editingContractId = "";
 
 const clearCreateFieldError = (fieldKey) => {
   const err = document.querySelector(`[data-contract-error="${fieldKey}"]`);
@@ -1246,43 +1293,61 @@ const createContract = async (sendNow) => {
   const data = dateEl instanceof HTMLInputElement ? dateEl.value : "";
 
   let ok = true;
-  if (!nomeCompleto) {
-    showCreateError("nomeCompleto", "Informe o nome completo.");
-    ok = false;
-  }
-  if (!email || !isValidEmail(email)) {
-    showCreateError("email", email ? "E-mail inválido." : "Informe o e-mail.");
-    ok = false;
-  }
-  if (!whatsapp || whatsapp.length < 6) {
-    showCreateError("whatsapp", "Informe um WhatsApp válido.");
-    ok = false;
-  }
-  if (!contrato || !["diamond", "gold", "turma"].includes(contrato)) {
-    showCreateError("contrato", "Selecione um contrato.");
-    ok = false;
-  }
-  if (!cpf || cpf.length !== 11) {
-    showCreateError("cpf", "CPF deve ter 11 dígitos.");
-    ok = false;
-  } else if (!isValidCPF(cpfEl instanceof HTMLInputElement ? cpfEl.value : cpf)) {
-    showCreateError("cpf", "CPF inválido");
-    ok = false;
-  }
-  if (!endereco) {
-    showCreateError("endereco", "Informe o endereço.");
-    ok = false;
-  }
-  if (!Number.isFinite(valorOriginal) || valorOriginal <= 0) {
-    showCreateError("valorOriginal", "Informe o valor original.");
-    ok = false;
-  }
-  if (!Number.isFinite(valorDesconto) || valorDesconto <= 0) {
-    showCreateError("valorDesconto", "Informe o valor com desconto.");
-    ok = false;
-  } else if (valorDesconto > valorOriginal) {
-    showCreateError("valorDesconto", "O desconto não pode ser maior que o valor original.");
-    ok = false;
+  if (sendNow) {
+    if (!nomeCompleto) {
+      showCreateError("nomeCompleto", "Informe o nome completo.");
+      ok = false;
+    }
+    if (!email || !isValidEmail(email)) {
+      showCreateError("email", email ? "E-mail inválido." : "Informe o e-mail.");
+      ok = false;
+    }
+    if (!whatsapp || whatsapp.length < 6) {
+      showCreateError("whatsapp", "Informe um WhatsApp válido.");
+      ok = false;
+    }
+    if (!contrato || !["diamond", "gold", "turma"].includes(contrato)) {
+      showCreateError("contrato", "Selecione um contrato.");
+      ok = false;
+    }
+    if (!cpf || cpf.length !== 11) {
+      showCreateError("cpf", "CPF deve ter 11 dígitos.");
+      ok = false;
+    } else if (!isValidCPF(cpfEl instanceof HTMLInputElement ? cpfEl.value : cpf)) {
+      showCreateError("cpf", "CPF inválido");
+      ok = false;
+    }
+    if (!endereco) {
+      showCreateError("endereco", "Informe o endereço.");
+      ok = false;
+    }
+    if (!Number.isFinite(valorOriginal) || valorOriginal <= 0) {
+      showCreateError("valorOriginal", "Informe o valor original.");
+      ok = false;
+    }
+    if (!Number.isFinite(valorDesconto) || valorDesconto <= 0) {
+      showCreateError("valorDesconto", "Informe o valor com desconto.");
+      ok = false;
+    } else if (valorDesconto > valorOriginal) {
+      showCreateError("valorDesconto", "O desconto não pode ser maior que o valor original.");
+      ok = false;
+    }
+  } else {
+    // Draft: allow incomplete required fields. Validate only hard inconsistencies when both values exist.
+    if (Number.isFinite(valorOriginal) && Number.isFinite(valorDesconto) && valorOriginal > 0 && valorDesconto > valorOriginal) {
+      showCreateError("valorDesconto", "O desconto não pode ser maior que o valor original.");
+      ok = false;
+    }
+    // If CPF is complete, enforce CPF math to avoid saving an invalid CPF as "ready".
+    if (cpf && cpf.length === 11 && !isValidCPF(cpfEl instanceof HTMLInputElement ? cpfEl.value : cpf)) {
+      showCreateError("cpf", "CPF inválido");
+      ok = false;
+    }
+    // If email is present, validate format (but do not require).
+    if (email && !isValidEmail(email)) {
+      showCreateError("email", "E-mail inválido.");
+      ok = false;
+    }
   }
 
   if (!ok) return;
@@ -1294,7 +1359,8 @@ const createContract = async (sendNow) => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        action: "create",
+        action: editingContractId ? "update" : "create",
+        id: editingContractId || undefined,
         nomeCompleto,
         email,
         whatsapp,
@@ -1452,14 +1518,35 @@ const sendContractToZapSign = async (contractId) => {
   const id = String(contractId || "").trim();
   if (!id) return;
   try {
-    await fetchWithAuth("/api/growth-contratos", {
+    const res = await fetchWithAuth("/api/growth-contratos", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "send", id }),
     });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      const msg =
+        data?.error === "invalid_request"
+          ? "Complete os campos obrigatórios antes de enviar."
+          : data?.error === "invalid_cpf"
+            ? "CPF inválido."
+            : data?.error === "invalid_email"
+              ? "E-mail inválido."
+              : data?.error === "invalid_whatsapp"
+                ? "WhatsApp inválido."
+                : data?.error === "invalid_contrato"
+                  ? "Selecione um contrato."
+                  : data?.error === "invalid_discount"
+                    ? "O desconto não pode ser maior que o valor original."
+                    : data?.error === "zapsign_failed"
+                      ? "Erro ao enviar para assinatura. Tente novamente."
+                      : "Não foi possível enviar agora. Tente novamente.";
+      window.alert(msg);
+      return;
+    }
     await loadContracts();
   } catch (error) {
-    // ignore for now
+    window.alert("Não foi possível enviar agora. Tente novamente.");
   }
 };
 
@@ -1592,6 +1679,12 @@ const initContracts = () => {
 
       if (action === "delete") {
         openConfirmDelete(id);
+        return;
+      }
+
+      if (action === "edit") {
+        const c = contractsState.byId.get(id);
+        if (c) openEditModal(c);
         return;
       }
 

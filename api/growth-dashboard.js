@@ -1473,6 +1473,20 @@ const handleGrowthContractsApi = async (req, res, url) => {
       return;
     }
 
+    // Validate required fields before calling ZapSign (prevents opaque 500s for drafts).
+    if (
+      !contrato.nomeCompleto ||
+      !contrato.email ||
+      !contrato.whatsapp ||
+      !contrato.cpf ||
+      !contrato.endereco ||
+      !Number.isFinite(Number(contrato.valorOriginal)) ||
+      !contrato.contrato
+    ) {
+      sendJson(res, 400, { error: "invalid_request" });
+      return;
+    }
+
 	    try {
     const z = await callZapSignCreateDoc({
       nomeCompleto: contrato.nomeCompleto,
@@ -1489,6 +1503,7 @@ const handleGrowthContractsApi = async (req, res, url) => {
 
       const patchData = {
         status: "enviado",
+        isDraft: false,
         enviadoEm: new Date(),
         zapsignToken: z.token,
         zapsignSignUrl: z.signUrl,
@@ -1517,6 +1532,149 @@ const handleGrowthContractsApi = async (req, res, url) => {
     return;
   }
 
+  if (action === "update" || action === "edit" || action === "atualizar") {
+    const id = String(body?.id || "").trim();
+    if (!id) {
+      sendJson(res, 400, { error: "invalid_request" });
+      return;
+    }
+
+    // Update fields (supports draft or "update + sendNow").
+    const nomeCompleto = String(body?.nomeCompleto || "").trim();
+    const email = String(body?.email || "").trim().toLowerCase();
+    const telefoneCountry = digitsOnly(body?.telefoneCountry || "55").slice(0, 4) || "55";
+    const whatsappDigits = digitsOnly(body?.whatsapp);
+    const contrato = String(body?.contrato || "").trim().toLowerCase();
+    const cpfDigits = digitsOnly(body?.cpf);
+    const endereco = String(body?.endereco || "").trim();
+    const valorOriginal = parseNumber(body?.valorOriginal);
+    const valorDescontoRaw = body?.valorDesconto;
+    const valorDesconto = valorDescontoRaw == null || String(valorDescontoRaw).trim() === "" ? valorOriginal : parseNumber(valorDescontoRaw);
+    const dataRaw = body?.data;
+    const dataDate = dataRaw ? new Date(String(dataRaw)) : new Date();
+    const dataPt = dateToPtBr(dataDate);
+    const sendNow = Boolean(body?.sendNow || body?.enviarAgora);
+
+    if (sendNow) {
+      if (!nomeCompleto || !email || !whatsappDigits || !cpfDigits || !endereco || !Number.isFinite(valorOriginal) || !contrato) {
+        sendJson(res, 400, { error: "invalid_request" });
+        return;
+      }
+      if (!["diamond", "gold", "turma"].includes(contrato)) {
+        sendJson(res, 400, { error: "invalid_contrato" });
+        return;
+      }
+      if (!isValidEmail(email)) {
+        sendJson(res, 400, { error: "invalid_email" });
+        return;
+      }
+      if (whatsappDigits.length < 6 || whatsappDigits.length > 15) {
+        sendJson(res, 400, { error: "invalid_whatsapp" });
+        return;
+      }
+      if (cpfDigits.length !== 11) {
+        sendJson(res, 400, { error: "invalid_cpf" });
+        return;
+      }
+      if (!Number.isFinite(valorDesconto)) {
+        sendJson(res, 400, { error: "invalid_request" });
+        return;
+      }
+      if (valorDesconto > valorOriginal) {
+        sendJson(res, 400, { error: "invalid_discount" });
+        return;
+      }
+    } else {
+      if (Number.isFinite(valorOriginal) && Number.isFinite(valorDesconto) && valorDesconto > valorOriginal) {
+        sendJson(res, 400, { error: "invalid_discount" });
+        return;
+      }
+    }
+
+    const safeValorOriginal = Number.isFinite(valorOriginal) ? valorOriginal : null;
+    const safeValorDesconto = Number.isFinite(valorDesconto) ? valorDesconto : null;
+
+    const patchData = {
+      nomeCompleto,
+      email,
+      whatsapp: whatsappDigits,
+      telefoneCountry,
+      contrato,
+      cpf: cpfDigits,
+      endereco,
+      valorOriginal: safeValorOriginal,
+      valorDesconto: safeValorDesconto,
+      data: dataPt,
+      status: sendNow ? "enviado" : "rascunho",
+      isDraft: !sendNow,
+    };
+
+    try {
+      const patch = await firestorePatchDocument({
+        docPath: `contratos/${encodeURIComponent(id)}`,
+        idToken,
+        data: patchData,
+        updateMaskPaths: Object.keys(patchData),
+      });
+      if (!patch.ok) throw new Error("firestore_patch_failed");
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error("[api] growth contratos update failed", error);
+      sendJson(res, 500, { error: "internal_error" });
+      return;
+    }
+
+    if (!sendNow) {
+      sendJson(res, 200, { ok: true, id });
+      return;
+    }
+
+    try {
+      const z = await callZapSignCreateDoc({
+        nomeCompleto,
+        email,
+        telefone: whatsappDigits,
+        telefoneCountry,
+        contrato,
+        cpf: cpfDigits,
+        endereco,
+        valorOriginal,
+        valorDesconto,
+        dataPt,
+      });
+
+      const zPatch = {
+        status: "enviado",
+        isDraft: false,
+        enviadoEm: new Date(),
+        zapsignToken: z.token,
+        zapsignSignUrl: z.signUrl,
+      };
+
+      const patch = await firestorePatchDocument({
+        docPath: `contratos/${encodeURIComponent(id)}`,
+        idToken,
+        data: zPatch,
+        updateMaskPaths: Object.keys(zPatch),
+      });
+      if (!patch.ok) throw new Error("firestore_patch_failed");
+
+      sendJson(res, 200, { ok: true, id });
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error("[api] growth contratos update+send failed", error);
+      sendJson(res, 500, {
+        error: "zapsign_failed",
+        id,
+        zapsignStatus: Number(error?.status) || null,
+        zapsignPayload: error?.payload || null,
+        zapsignCode: typeof error?.code === "string" ? error.code : null,
+        zapsignMissingEnv: typeof error?.envName === "string" && error.envName ? error.envName : null,
+      });
+    }
+    return;
+  }
+
   // Create
   const nomeCompleto = String(body?.nomeCompleto || "").trim();
   const email = String(body?.email || "").trim().toLowerCase();
@@ -1534,36 +1692,48 @@ const handleGrowthContractsApi = async (req, res, url) => {
 
   const sendNow = Boolean(body?.sendNow || body?.enviarAgora);
 
-  if (!nomeCompleto || !email || !whatsappDigits || !cpfDigits || !endereco || !Number.isFinite(valorOriginal) || !contrato) {
-    sendJson(res, 400, { error: "invalid_request" });
-    return;
-  }
-  if (!["diamond", "gold", "turma"].includes(contrato)) {
-    sendJson(res, 400, { error: "invalid_contrato" });
-    return;
-  }
-  if (!isValidEmail(email)) {
-    sendJson(res, 400, { error: "invalid_email" });
-    return;
-  }
-  if (whatsappDigits.length < 6 || whatsappDigits.length > 15) {
-    sendJson(res, 400, { error: "invalid_whatsapp" });
-    return;
-  }
-  if (cpfDigits.length !== 11) {
-    sendJson(res, 400, { error: "invalid_cpf" });
-    return;
-  }
-  if (!Number.isFinite(valorDesconto)) {
-    sendJson(res, 400, { error: "invalid_request" });
-    return;
-  }
-  if (valorDesconto > valorOriginal) {
-    sendJson(res, 400, { error: "invalid_discount" });
-    return;
+  // Draft vs Send: only enforce full required validation when sending now.
+  if (sendNow) {
+    if (!nomeCompleto || !email || !whatsappDigits || !cpfDigits || !endereco || !Number.isFinite(valorOriginal) || !contrato) {
+      sendJson(res, 400, { error: "invalid_request" });
+      return;
+    }
+    if (!["diamond", "gold", "turma"].includes(contrato)) {
+      sendJson(res, 400, { error: "invalid_contrato" });
+      return;
+    }
+    if (!isValidEmail(email)) {
+      sendJson(res, 400, { error: "invalid_email" });
+      return;
+    }
+    if (whatsappDigits.length < 6 || whatsappDigits.length > 15) {
+      sendJson(res, 400, { error: "invalid_whatsapp" });
+      return;
+    }
+    if (cpfDigits.length !== 11) {
+      sendJson(res, 400, { error: "invalid_cpf" });
+      return;
+    }
+    if (!Number.isFinite(valorDesconto)) {
+      sendJson(res, 400, { error: "invalid_request" });
+      return;
+    }
+    if (valorDesconto > valorOriginal) {
+      sendJson(res, 400, { error: "invalid_discount" });
+      return;
+    }
+  } else {
+    // Draft: allow missing required fields; validate only hard inconsistencies when both are set.
+    if (Number.isFinite(valorOriginal) && Number.isFinite(valorDesconto) && valorDesconto > valorOriginal) {
+      sendJson(res, 400, { error: "invalid_discount" });
+      return;
+    }
   }
 
   const id = buildId("contr");
+  const safeValorOriginal = Number.isFinite(valorOriginal) ? valorOriginal : null;
+  const safeValorDesconto = Number.isFinite(valorDesconto) ? valorDesconto : null;
+
   const baseData = {
     nomeCompleto,
     email,
@@ -1572,10 +1742,11 @@ const handleGrowthContractsApi = async (req, res, url) => {
     contrato,
     cpf: cpfDigits,
     endereco,
-    valorOriginal,
-    valorDesconto,
+    valorOriginal: safeValorOriginal,
+    valorDesconto: safeValorDesconto,
     data: dataPt,
     status: "rascunho",
+    isDraft: !sendNow,
     criadoPor: requesterId,
     criadoEm: new Date(),
     enviadoEm: null,
@@ -1621,6 +1792,7 @@ const handleGrowthContractsApi = async (req, res, url) => {
 
     const patchData = {
       status: "enviado",
+      isDraft: false,
       enviadoEm: new Date(),
       zapsignToken: z.token,
       zapsignSignUrl: z.signUrl,
@@ -2601,7 +2773,7 @@ module.exports = async (req, res) => {
         <div class="modal-actions">
           <button class="growth-contract-btn is-outline" type="button" data-contract-create-cancel>Cancelar</button>
           <button class="growth-contract-btn is-blue" type="button" data-contract-create-draft>Salvar como rascunho</button>
-          <button class="growth-contract-btn is-coral" type="button" data-contract-create-send>Salvar e enviar para assinatura</button>
+          <button class="growth-contract-btn is-coral" type="button" data-contract-create-send>Enviar</button>
         </div>
       </div>
     </div>
