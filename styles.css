@@ -5529,25 +5529,44 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
 }
 
 .finance-location-map {
+  position: relative;
   display: flex;
   min-height: 160px;
   flex-wrap: wrap;
   align-content: center;
   gap: 8px;
   padding: 14px;
+  overflow: hidden;
   border-radius: 14px;
   background:
-    radial-gradient(circle at 18% 34%, rgba(255, 86, 79, 0.68) 0 4px, transparent 5px),
-    radial-gradient(circle at 42% 58%, rgba(89, 144, 189, 0.78) 0 4px, transparent 5px),
-    radial-gradient(circle at 72% 28%, rgba(255, 86, 79, 0.48) 0 3px, transparent 4px),
-    radial-gradient(circle at 78% 70%, rgba(89, 144, 189, 0.46) 0 3px, transparent 4px),
+    radial-gradient(circle at 18% 38%, rgba(255, 86, 79, 0.78) 0 5px, transparent 6px),
+    radial-gradient(circle at 38% 58%, rgba(89, 144, 189, 0.82) 0 4px, transparent 5px),
+    radial-gradient(circle at 70% 36%, rgba(255, 86, 79, 0.62) 0 4px, transparent 5px),
+    radial-gradient(circle at 82% 68%, rgba(89, 144, 189, 0.58) 0 4px, transparent 5px),
     linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
     rgba(0, 0, 0, 0.12);
-  background-size: 24px 24px;
+  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, repeat, repeat, no-repeat;
+  background-size: auto, auto, auto, auto, 24px 24px, 24px 24px, auto;
+}
+
+.finance-location-map::before {
+  position: absolute;
+  inset: 18px 16px;
+  content: "";
+  border-radius: 48% 52% 42% 58%;
+  background:
+    radial-gradient(ellipse at 22% 40%, rgba(255, 255, 255, 0.08) 0 12%, transparent 13%),
+    radial-gradient(ellipse at 44% 48%, rgba(255, 255, 255, 0.065) 0 16%, transparent 17%),
+    radial-gradient(ellipse at 70% 38%, rgba(255, 255, 255, 0.07) 0 18%, transparent 19%),
+    radial-gradient(ellipse at 76% 70%, rgba(255, 255, 255, 0.055) 0 12%, transparent 13%);
+  opacity: 0.85;
+  pointer-events: none;
 }
 
 .finance-location-map span {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   gap: 7px;
