@@ -942,6 +942,20 @@ let teacherWorkHoursApiState = {
   lastLoadedAt: 0,
 };
 
+let financeChatPollingTimer = null;
+
+function clearFinanceChatPolling() {
+  if (financeChatPollingTimer) {
+    window.clearInterval(financeChatPollingTimer);
+    financeChatPollingTimer = null;
+  }
+  try {
+    if (financeChatState) financeChatState.timer = null;
+  } catch {
+    // Finance state is declared later in this bundled script.
+  }
+}
+
 const clearTeacherCalendarSelection = () => {
   if (teacherCalSelection?.el instanceof HTMLElement) {
     teacherCalSelection.el.remove();
@@ -9689,13 +9703,6 @@ const confirmManualFinancePayment = async ({ row, global = false } = {}) => {
   }
 };
 
-const clearFinanceChatPolling = () => {
-  if (financeChatState.timer) {
-    window.clearInterval(financeChatState.timer);
-    financeChatState.timer = null;
-  }
-};
-
 const formatChatwootTime = (value) => {
   if (!value) return "—";
   const n = Number(value);
@@ -9849,9 +9856,10 @@ const openFinanceChatwootModal = async ({ conversationId, source = "", rowId = "
     onPrimary: () => true,
   });
   await loadFinanceChatMessages();
-  financeChatState.timer = window.setInterval(() => {
+  financeChatPollingTimer = window.setInterval(() => {
     if (activeModalKind === "finance-chat") loadFinanceChatMessages({ silent: true }).catch(() => {});
   }, 15000);
+  financeChatState.timer = financeChatPollingTimer;
   activeModalKind = "finance-chat";
 };
 
