@@ -5148,6 +5148,8 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
 }
 
 .finance-chat-list {
+  display: grid;
+  gap: 10px;
   max-height: none;
   min-height: 260px;
   padding: 6px 8px 6px 0;
@@ -5185,20 +5187,21 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
 .finance-chat-workspace {
   display: grid;
   grid-template-columns: minmax(260px, 0.82fr) minmax(420px, 1.6fr) minmax(230px, 0.72fr);
-  height: min(62vh, 640px);
-  min-height: 520px;
+  height: clamp(460px, 54vh, 560px);
+  min-height: 460px;
   overflow: hidden;
   border-radius: 18px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background:
-    radial-gradient(circle at top left, rgba(165, 255, 76, 0.09), transparent 28%),
+    radial-gradient(circle at top left, rgba(255, 86, 79, 0.1), transparent 30%),
+    radial-gradient(circle at top right, rgba(89, 144, 189, 0.1), transparent 34%),
     linear-gradient(135deg, rgba(16, 22, 31, 0.96), rgba(9, 13, 21, 0.98));
 }
 
 .finance-chat-threads,
 .finance-chat-profile {
   min-width: 0;
-  padding: 16px;
+  padding: 14px;
   background: rgba(255, 255, 255, 0.025);
 }
 
@@ -5256,8 +5259,8 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
 
 .finance-chat-thread:hover,
 .finance-chat-thread.is-active {
-  border-color: rgba(165, 255, 76, 0.24);
-  background: rgba(165, 255, 76, 0.075);
+  border-color: rgba(255, 86, 79, 0.28);
+  background: rgba(255, 86, 79, 0.08);
 }
 
 .finance-chat-avatar {
@@ -5267,7 +5270,7 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
   width: 34px;
   height: 34px;
   border-radius: 11px;
-  background: linear-gradient(135deg, rgba(33, 150, 243, 0.42), rgba(82, 190, 128, 0.34));
+  background: linear-gradient(135deg, rgba(255, 86, 79, 0.52), rgba(89, 144, 189, 0.38));
   color: rgba(255, 255, 255, 0.95);
   font-size: 12px;
   font-weight: 900;
@@ -5320,6 +5323,7 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
   grid-template-rows: auto minmax(0, 1fr) auto;
   max-height: 100%;
   min-width: 0;
+  overflow: hidden;
   background: rgba(0, 0, 0, 0.18);
 }
 
@@ -5328,7 +5332,7 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  padding: 16px 18px;
+  padding: 14px 16px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 
@@ -5363,7 +5367,9 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
 .finance-chat-list.is-inline {
   min-height: 0;
   max-height: none;
-  padding: 18px;
+  overflow-y: auto;
+  align-content: start;
+  padding: 14px 18px;
   background:
     linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.014) 1px, transparent 1px);
@@ -5371,8 +5377,27 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
 }
 
 .finance-chat-compose.is-inline {
-  padding: 14px 18px 16px;
+  padding: 10px 18px 12px;
   background: rgba(255, 255, 255, 0.025);
+}
+
+.finance-chat-compose.is-inline .finance-chat-input {
+  min-height: 56px;
+  max-height: 72px;
+}
+
+.finance-chat-list.is-inline .admin-student-chatwoot-message {
+  padding: 9px 11px;
+  border-radius: 12px;
+}
+
+.finance-chat-list.is-inline .admin-student-chatwoot-meta {
+  margin-bottom: 4px;
+}
+
+.finance-chat-list.is-inline .admin-student-chatwoot-content {
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .finance-chat-truncated {
@@ -5397,7 +5422,8 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background:
-    radial-gradient(circle at top right, rgba(165, 255, 76, 0.08), transparent 34%),
+    radial-gradient(circle at top right, rgba(255, 86, 79, 0.08), transparent 34%),
+    radial-gradient(circle at bottom left, rgba(89, 144, 189, 0.08), transparent 36%),
     rgba(255, 255, 255, 0.035);
 }
 
@@ -5416,7 +5442,7 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
 .finance-dashboard-panel-head span {
   display: block;
   margin-bottom: 4px;
-  color: rgba(165, 255, 76, 0.72);
+  color: rgba(255, 114, 108, 0.82);
   font-size: 10px;
   font-weight: 900;
   letter-spacing: 0.12em;
@@ -5461,8 +5487,8 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
   display: block;
   min-height: 8px;
   border-radius: 8px 8px 4px 4px;
-  background: linear-gradient(180deg, #a5ff4c, rgba(82, 190, 128, 0.56));
-  box-shadow: 0 0 22px rgba(165, 255, 76, 0.18);
+  background: linear-gradient(180deg, #ff625d, rgba(89, 144, 189, 0.62));
+  box-shadow: 0 0 22px rgba(255, 86, 79, 0.17);
 }
 
 .finance-bar-item small {
@@ -5511,6 +5537,10 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
   padding: 14px;
   border-radius: 14px;
   background:
+    radial-gradient(circle at 18% 34%, rgba(255, 86, 79, 0.68) 0 4px, transparent 5px),
+    radial-gradient(circle at 42% 58%, rgba(89, 144, 189, 0.78) 0 4px, transparent 5px),
+    radial-gradient(circle at 72% 28%, rgba(255, 86, 79, 0.48) 0 3px, transparent 4px),
+    radial-gradient(circle at 78% 70%, rgba(89, 144, 189, 0.46) 0 3px, transparent 4px),
     linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
     rgba(0, 0, 0, 0.12);
@@ -5524,15 +5554,15 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
   min-height: 28px;
   padding: 0 10px;
   border-radius: 999px;
-  border: 1px solid rgba(165, 255, 76, 0.2);
-  background: rgba(165, 255, 76, 0.08);
+  border: 1px solid rgba(255, 86, 79, 0.28);
+  background: rgba(255, 86, 79, 0.09);
   color: rgba(255, 255, 255, 0.78);
   font-size: 11px;
   font-weight: 850;
 }
 
 .finance-location-map b {
-  color: #a5ff4c;
+  color: #ff7670;
 }
 
 .finance-location-map em {
@@ -5573,7 +5603,7 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #a5ff4c, #52be80);
+  background: linear-gradient(90deg, #ff625d, #5990bd);
 }
 
 .finance-chat-empty-state {
@@ -5601,7 +5631,7 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
 }
 
 .finance-chat-profile-list div {
-  padding: 10px;
+  padding: 9px;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.035);
 }
@@ -5711,7 +5741,8 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background:
-    radial-gradient(circle at top right, rgba(165, 255, 76, 0.08), transparent 38%),
+    radial-gradient(circle at top right, rgba(255, 86, 79, 0.08), transparent 38%),
+    radial-gradient(circle at bottom left, rgba(89, 144, 189, 0.08), transparent 40%),
     rgba(255, 255, 255, 0.045);
 }
 
@@ -5738,6 +5769,7 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
 .finance-table {
   display: grid;
   overflow-x: auto;
+  scrollbar-gutter: stable;
 }
 
 .finance-row {
@@ -5752,9 +5784,18 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
   font-size: 12px;
 }
 
+.finance-row > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .finance-row-alunos {
-  grid-template-columns: minmax(190px, 1.4fr) 120px minmax(170px, 1.2fr) 90px 150px 150px 150px 130px;
-  width: 1260px;
+  grid-template-columns: minmax(220px, 1.35fr) 145px minmax(260px, 1.3fr) 120px minmax(170px, 0.95fr) minmax(180px, 0.95fr) minmax(190px, 1.05fr) 145px;
+  width: 1560px;
+}
+
+.finance-row-alunos > span {
+  align-self: center;
 }
 
 .finance-row-cobrancas {
@@ -5787,6 +5828,9 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
 }
 
 .finance-student {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
   color: rgba(255, 255, 255, 0.9);
   font-weight: 850;
 }
@@ -5809,9 +5853,13 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
 }
 
 .finance-ready {
-  margin-left: 6px;
+  margin-left: 0;
   border: 1px solid rgba(82, 190, 128, 0.28);
   color: rgba(126, 222, 166, 0.95);
+}
+
+.finance-row-alunos .admin-student-fin-actions {
+  align-items: flex-start;
 }
 
 .finance-empty {

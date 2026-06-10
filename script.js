@@ -9945,7 +9945,7 @@ const renderFinanceMessageBubbles = ({ messages, row, loading, error } = {}) => 
   if (loading) return `<div class="finance-chat-empty-state">Carregando conversa...</div>`;
   if (error) return `<div class="finance-chat-empty-state is-error">Não foi possível carregar a conversa do Chatwoot.</div>`;
   if (!Array.isArray(messages) || !messages.length) return `<div class="finance-chat-empty-state">Nenhuma mensagem encontrada.</div>`;
-  const visibleMessages = messages.slice(-6);
+  const visibleMessages = messages.slice(-5);
   const hiddenCount = Math.max(0, messages.length - visibleMessages.length);
   return `${hiddenCount ? `<div class="finance-chat-truncated">Mostrando as últimas ${escapeHtml(String(visibleMessages.length))} mensagens de ${escapeHtml(String(messages.length))}.</div>` : ""}${visibleMessages
     .map((m) => {
