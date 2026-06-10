@@ -28,6 +28,7 @@ const normalizeRole = (value) => {
   if (raw === "teacher" || raw === "professor") return "teacher";
   if (raw === "admin" || raw === "administrador") return "admin";
   if (raw === "growth") return "growth";
+  if (raw === "finance" || raw === "financeiro") return "FINANCE";
   return "";
 };
 

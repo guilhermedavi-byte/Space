@@ -385,6 +385,23 @@
           <button
             class="sidebar-link"
             type="button"
+            data-panel-target="financeiro"
+            data-finance-only
+            title="Financeiro"
+          >
+            <span class="sidebar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <rect x="3.5" y="5" width="17" height="14" rx="2"></rect>
+                <path d="M3.5 10h17"></path>
+                <path d="M7 15h3"></path>
+                <path d="M15.5 14.5h1.5"></path>
+              </svg>
+            </span>
+            <span class="sidebar-text">Financeiro</span>
+          </button>
+          <button
+            class="sidebar-link"
+            type="button"
             data-panel-target="gravadas"
             title="Aulas gravadas"
           >
@@ -1626,6 +1643,31 @@
 	            </div>
 	          </div>
 	        </section>
+
+          <section class="platform-panel" data-panel="financeiro" data-hide-platform-header="true" hidden aria-label="Financeiro">
+            <div class="finance-shell">
+              <header class="finance-head">
+                <div>
+                  <h2 class="finance-title">Financeiro</h2>
+                  <p class="finance-subtitle">Cobranças, pagamentos manuais, Asaas e Chatwoot em um só lugar.</p>
+                </div>
+
+                <div class="finance-actions">
+                  <button class="button button-outline button-small" type="button" data-finance-refresh>Atualizar</button>
+                  <button class="button button-solid button-small" type="button" data-finance-new-global>Nova cobrança</button>
+                </div>
+              </header>
+
+              <div class="finance-status" data-finance-status aria-live="polite"></div>
+
+              <div class="finance-summary-grid" data-finance-summary></div>
+
+              <article class="surface-card finance-card" aria-label="Lista de cobranças">
+                <div class="finance-table" data-finance-table></div>
+                <div class="finance-empty" data-finance-empty hidden>Nenhuma cobrança encontrada.</div>
+              </article>
+            </div>
+          </section>
 
           <section class="platform-panel" data-panel="admin-controle-pedagogico" data-hide-platform-header="true" hidden aria-label="Controle Pedagógico (Admin)">
             <div class="admin-ped-shell" data-admin-pedagogico>
