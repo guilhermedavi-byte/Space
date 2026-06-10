@@ -43,7 +43,26 @@ const loadTemplate = () => {
   return fs.readFileSync(templatePath, "utf8");
 };
 
-const buildAppHtml = ({ sessionJson, roleSlug, templateHtml }) => {
+const initialPanelFromPath = (pathParam) => {
+  const segments = String(pathParam || "").split("/").filter(Boolean);
+  const slug = segments[0] || "";
+  const sub = segments[1] || "";
+  if (slug === "financeiro") return "financeiro";
+  if (slug === "admin" && sub === "financeiro") return "financeiro";
+  return "dashboard";
+};
+
+const applyInitialPanel = (html, panelName) => {
+  const target = String(panelName || "dashboard").trim() || "dashboard";
+  if (target === "dashboard") return html;
+
+  let out = String(html || "");
+  out = out.replace(/<section class="platform-panel is-visible" data-panel="dashboard">/, '<section class="platform-panel" data-panel="dashboard" hidden>');
+  out = out.replace(new RegExp(`(<section class="platform-panel)(" data-panel="${target}"[^>]*?)\\shidden([^>]*>)`), `$1 is-visible$2$3`);
+  return out;
+};
+
+const buildAppHtml = ({ sessionJson, roleSlug, templateHtml, initialPanel }) => {
   const raw = String(templateHtml || "");
   const platformStart = raw.indexOf('<div class="platform-shell"');
   const modalStart = raw.indexOf('<div class="modal-overlay"');
@@ -57,10 +76,11 @@ const buildAppHtml = ({ sessionJson, roleSlug, templateHtml }) => {
   const modalHtml = raw.slice(modalStart, scriptStart);
 
   // Ensure the platform shell is visible (this template comes from the old SPA which used `hidden`).
-  const platformVisible = platformHtml.replace(
+  const platformVisibleRaw = platformHtml.replace(
     /<div class="platform-shell"([^>]*)\shidden>/,
     '<div class="platform-shell"$1>'
   );
+  const platformVisible = applyInitialPanel(platformVisibleRaw, initialPanel);
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -72,7 +92,7 @@ const buildAppHtml = ({ sessionJson, roleSlug, templateHtml }) => {
     <base href="/" />
     <link rel="stylesheet" href="styles.css" />
   </head>
-  <body data-view="interno" data-page="app" data-app-role="${String(roleSlug || "")}">
+  <body data-view="interno" data-page="app" data-app-role="${String(roleSlug || "")}" data-initial-panel="${String(initialPanel || "dashboard")}">
     <div class="page-glow page-glow-left" aria-hidden="true"></div>
     <div class="page-glow page-glow-right" aria-hidden="true"></div>
     <script>
@@ -121,8 +141,10 @@ module.exports = async (req, res) => {
     return;
   }
 
-  // Role mismatch -> redirect to the correct dashboard.
-  if (requestedRole !== String(user.role || "")) {
+  const isAdminFinanceRoute = requestedRole === "FINANCE" && String(user.role || "") === "admin";
+
+  // Role mismatch -> redirect to the correct dashboard. Admin is allowed to open the finance route.
+  if (requestedRole !== String(user.role || "") && !isAdminFinanceRoute) {
     sendRedirect(res, userBasePath);
     return;
   }
@@ -131,7 +153,7 @@ module.exports = async (req, res) => {
   try {
     const template = loadTemplate();
     const roleSlug = ROLE_TO_SLUG[String(user.role || "")] || ROLE_TO_SLUG.student;
-    html = buildAppHtml({ sessionJson: safeJsonForHtml(user), roleSlug, templateHtml: template });
+    html = buildAppHtml({ sessionJson: safeJsonForHtml(user), roleSlug, templateHtml: template, initialPanel: initialPanelFromPath(pathParam) });
   } catch (error) {
     res.statusCode = 500;
     res.setHeader("Content-Type", "text/plain; charset=utf-8");

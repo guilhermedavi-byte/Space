@@ -1648,8 +1648,8 @@
             <div class="finance-shell">
               <header class="finance-head">
                 <div>
-                  <h2 class="finance-title">Financeiro</h2>
-                  <p class="finance-subtitle">Cobranças, pagamentos manuais, Asaas e Chatwoot em um só lugar.</p>
+                  <h2 class="finance-title">Financeiro Space</h2>
+                  <p class="finance-subtitle">Cobranças, pagamentos, Asaas e Chatwoot em um só lugar.</p>
                 </div>
 
                 <div class="finance-actions">
@@ -1664,17 +1664,21 @@
               <div class="finance-summary-grid" data-finance-summary></div>
 
               <div class="finance-tabs" role="tablist" aria-label="Financeiro">
-                <button class="finance-tab is-active" type="button" role="tab" aria-selected="true" data-finance-tab="alunos">Alunos financeiros</button>
+                <button class="finance-tab is-active" type="button" role="tab" aria-selected="true" data-finance-tab="overview">Visão geral</button>
+                <button class="finance-tab" type="button" role="tab" aria-selected="false" data-finance-tab="alunos">Alunos</button>
                 <button class="finance-tab" type="button" role="tab" aria-selected="false" data-finance-tab="cobrancas">Cobranças</button>
                 <button class="finance-tab" type="button" role="tab" aria-selected="false" data-finance-tab="pagamentos">Pagamentos recebidos</button>
                 <button class="finance-tab" type="button" role="tab" aria-selected="false" data-finance-tab="eventos">Eventos de cobrança</button>
+                <button class="finance-tab" type="button" role="tab" aria-selected="false" data-finance-tab="chatwoot">Chatwoot</button>
               </div>
 
               <article class="surface-card finance-card" aria-label="Lista de cobranças">
-                <div class="finance-table" data-finance-table="alunos"></div>
+                <div class="finance-table" data-finance-table="overview"></div>
+                <div class="finance-table" data-finance-table="alunos" hidden></div>
                 <div class="finance-table" data-finance-table="cobrancas" hidden></div>
                 <div class="finance-table" data-finance-table="pagamentos" hidden></div>
                 <div class="finance-table" data-finance-table="eventos" hidden></div>
+                <div class="finance-table" data-finance-table="chatwoot" hidden></div>
                 <div class="finance-empty" data-finance-empty hidden>Nenhum registro encontrado.</div>
               </article>
             </div>

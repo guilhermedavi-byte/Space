@@ -669,6 +669,16 @@ const syncRoleUI = () => {
     }
   });
 
+  if (currentRole === "FINANCE") {
+    document.querySelectorAll("[data-panel-target]").forEach((el) => {
+      if (!(el instanceof HTMLElement)) return;
+      const target = String(el.getAttribute("data-panel-target") || "");
+      el.hidden = !["dashboard", "financeiro"].includes(target);
+    });
+    const dashboardLink = document.querySelector('[data-panel-target="dashboard"] .sidebar-text');
+    if (dashboardLink instanceof HTMLElement) dashboardLink.textContent = "Dashboard";
+  }
+
   document.querySelectorAll("[data-teacher-only]").forEach((el) => {
     if (el instanceof HTMLElement) {
       el.hidden = currentRole !== "teacher";
@@ -8941,7 +8951,7 @@ const financeState = {
   loading: false,
   error: "",
   loadedAt: 0,
-  activeTab: "alunos",
+  activeTab: "overview",
 };
 const financeChatState = {
   conversationId: "",
@@ -9006,6 +9016,13 @@ const financeAutomationReady = (row) => {
 const financeChatwootUrl = (conversationId) => {
   const id = normalizeFinanceConversationId(conversationId);
   return id ? `https://chatwoot.spaceschoolbr.com/app/accounts/1/conversations/${encodeURIComponent(id)}` : "";
+};
+
+const financeDateKey = (value) => {
+  if (!value) return "";
+  const date = value instanceof Date ? value : new Date(String(value));
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "";
+  return createDateKey(date);
 };
 
 const setFinanceStatus = (message, tone = "") => {
@@ -9079,10 +9096,12 @@ const financeReadyBadgeForAluno = (row) => {
 
 const renderFinancePanel = () => {
   const tables = {
+    overview: document.querySelector('[data-finance-table="overview"]'),
     alunos: document.querySelector('[data-finance-table="alunos"]'),
     cobrancas: document.querySelector('[data-finance-table="cobrancas"]'),
     pagamentos: document.querySelector('[data-finance-table="pagamentos"]'),
     eventos: document.querySelector('[data-finance-table="eventos"]'),
+    chatwoot: document.querySelector('[data-finance-table="chatwoot"]'),
   };
   const empty = document.querySelector("[data-finance-empty]");
   const summary = document.querySelector("[data-finance-summary]");
@@ -9097,6 +9116,8 @@ const renderFinancePanel = () => {
   const paidRows = cobrancas.filter((row) => String(row?.status || "").toLowerCase() === "pago" || row?.pago_em);
   const readyRows = activeAlunos.filter(financeAutomationReady);
   const withoutChatwoot = activeAlunos.filter((row) => !normalizeFinanceConversationId(row?.id_conversa_chatwoot));
+  const todayKey = createDateKey(new Date());
+  const paidToday = pagamentos.filter((row) => financeDateKey(row?.created_at || row?.data_pagamento) === todayKey);
   const overdueTotal = cobrancas
     .filter((row) => String(row?.status || "").toLowerCase() === "vencido" && !row?.pago_em)
     .reduce((sum, row) => sum + (Number(row?.valor || 0) || 0), 0);
@@ -9109,6 +9130,7 @@ const renderFinancePanel = () => {
       <div class="finance-summary-card"><span>Total vencido</span><strong>${escapeHtml(formatFinanceMoney(overdueTotal))}</strong></div>
       <div class="finance-summary-card"><span>Prontas para n8n</span><strong>${escapeHtml(String(readyRows.length))}</strong></div>
       <div class="finance-summary-card"><span>Ativos sem Chatwoot</span><strong>${escapeHtml(String(withoutChatwoot.length))}</strong></div>
+      <div class="finance-summary-card"><span>Pagamentos hoje</span><strong>${escapeHtml(String(paidToday.length))}</strong></div>
     `;
   }
 
@@ -9142,10 +9164,18 @@ const renderFinancePanel = () => {
   }
 
   const currentRows =
-    financeState.activeTab === "alunos" ? alunos : financeState.activeTab === "cobrancas" ? cobrancas : financeState.activeTab === "pagamentos" ? pagamentos : eventos;
+    financeState.activeTab === "overview" || financeState.activeTab === "alunos"
+      ? alunos
+      : financeState.activeTab === "cobrancas"
+        ? cobrancas
+        : financeState.activeTab === "pagamentos"
+          ? pagamentos
+          : financeState.activeTab === "chatwoot"
+            ? [...alunos, ...cobrancas].filter((row) => normalizeFinanceConversationId(row?.id_conversa_chatwoot))
+            : eventos;
   if (empty instanceof HTMLElement) empty.hidden = currentRows.length > 0;
 
-  tables.alunos.innerHTML = alunos.length
+  const alunosTableHtml = alunos.length
     ? `
       <div class="finance-row finance-head-row finance-row-alunos">
         <span>Aluno</span><span>Telefone</span><span>E-mail</span><span>Status</span><span>Asaas cliente</span><span>Assinatura</span><span>Chatwoot</span><span>Atualizado</span>
@@ -9179,6 +9209,8 @@ const renderFinancePanel = () => {
         .join("")}
     `
     : "";
+  tables.overview.innerHTML = alunosTableHtml;
+  tables.alunos.innerHTML = alunosTableHtml;
 
   tables.cobrancas.innerHTML = cobrancas.length
     ? `
@@ -9271,6 +9303,36 @@ const renderFinancePanel = () => {
             </div>
           `
         )
+        .join("")}
+    `
+    : "";
+
+  const chatRows = [...alunos, ...cobrancas].filter((row) => normalizeFinanceConversationId(row?.id_conversa_chatwoot));
+  tables.chatwoot.innerHTML = chatRows.length
+    ? `
+      <div class="finance-row finance-head-row finance-row-chatwoot">
+        <span>Aluno</span><span>Telefone</span><span>E-mail</span><span>Status</span><span>Conversa</span><span>Ações</span>
+      </div>
+      ${chatRows
+        .map((row) => {
+          const conv = normalizeFinanceConversationId(row?.id_conversa_chatwoot);
+          const source = financeState.alunos.some((item) => String(item?.id || "") === String(row?.id || "")) ? "aluno" : "cobranca";
+          return `
+            <div class="finance-row finance-row-chatwoot">
+              <span class="finance-student">${escapeHtml(row?.aluno_nome || "—")}</span>
+              <span>${escapeHtml(row?.telefone || "—")}</span>
+              <span>${escapeHtml(row?.email || "—")}</span>
+              <span>${financeBadgeHtml(row?.status || "—", financeStatusTone(row?.status))}</span>
+              <span><span class="finance-ready">Chatwoot vinculado</span> #${escapeHtml(conv)}</span>
+              <span class="admin-student-fin-actions">
+                <button type="button" class="admin-student-file-btn" data-finance-chat-view="${escapeHtml(conv)}" data-finance-chat-source="${escapeHtml(source)}" data-finance-chat-row="${escapeHtml(
+                  String(row?.id || "")
+                )}">Ver conversa</button>
+                <a class="admin-student-file-btn" href="${escapeHtml(financeChatwootUrl(conv))}" target="_blank" rel="noopener">Abrir no Chatwoot</a>
+              </span>
+            </div>
+          `;
+        })
         .join("")}
     `
     : "";
@@ -17996,6 +18058,59 @@ const hideAuthPages = () => {
   if (authLoginShell) authLoginShell.hidden = true;
 };
 
+const syncFinanceSidebar = (panelName) => {
+  const nav = document.querySelector(".sidebar-nav");
+  if (!(nav instanceof HTMLElement)) return;
+  const financeContext = panelName === "financeiro" || currentRole === "FINANCE";
+
+  nav.querySelectorAll("[data-finance-sidebar-item]").forEach((el) => el.remove());
+
+  if (!financeContext) {
+    if (body.dataset.financeSidebar === "1") {
+      body.dataset.financeSidebar = "0";
+      syncRoleUI();
+    }
+    return;
+  }
+
+  body.dataset.financeSidebar = "1";
+  nav.querySelectorAll("[data-panel-target]").forEach((el) => {
+    if (!(el instanceof HTMLElement)) return;
+    const target = String(el.getAttribute("data-panel-target") || "");
+    el.hidden = target !== "financeiro";
+  });
+
+  const financeLink = nav.querySelector('[data-panel-target="financeiro"]');
+  const items = [
+    ["overview", "Dashboard"],
+    ["alunos", "Alunos financeiros"],
+    ["cobrancas", "Cobranças"],
+    ["pagamentos", "Pagamentos"],
+    ["eventos", "Eventos"],
+    ["chatwoot", "Chatwoot"],
+  ];
+
+  items.reverse().forEach(([tab, label]) => {
+    const btn = document.createElement("button");
+    btn.className = `sidebar-link${financeState.activeTab === tab ? " is-active" : ""}`;
+    btn.type = "button";
+    btn.setAttribute("data-finance-tab", tab);
+    btn.setAttribute("data-finance-sidebar-item", "");
+    btn.title = label;
+    btn.innerHTML = `
+      <span class="sidebar-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M4.5 6.5h15"></path><path d="M4.5 12h15"></path><path d="M4.5 17.5h15"></path></svg>
+      </span>
+      <span class="sidebar-text">${escapeHtml(label)}</span>
+    `;
+    if (financeLink instanceof HTMLElement) {
+      financeLink.insertAdjacentElement("afterend", btn);
+    } else {
+      nav.insertBefore(btn, nav.firstChild);
+    }
+  });
+};
+
 const showPanel = (panelName) => {
   if (currentRole === "teacher" && !pedagogicoState.lastLoadedAt) {
     // Keep pending badge up to date even if the teacher doesn't open the panel.
@@ -18022,6 +18137,7 @@ const showPanel = (panelName) => {
     (panelName === "dashboard" && (currentRole === "teacher" || currentRole === "student")) ||
     ((currentRole === "admin" || currentRole === "FINANCE") && panelName !== "dashboard");
   body.dataset.activePanel = panelName;
+  syncFinanceSidebar(panelName);
 
   if (platformHeader) {
     platformHeader.hidden = shouldHidePlatformHeader;
@@ -18176,8 +18292,22 @@ const parseAppRoute = (path) => {
   const roleSlug = segments[1] || "";
   const sub = segments[2] || "";
   const role =
-    roleSlug === "aluno" ? "student" : roleSlug === "professor" ? "teacher" : roleSlug === "admin" ? "admin" : roleSlug === "financeiro" ? "FINANCE" : "";
+    roleSlug === "aluno"
+      ? "student"
+      : roleSlug === "professor"
+        ? "teacher"
+        : roleSlug === "admin"
+          ? "admin"
+          : roleSlug === "financeiro"
+            ? currentRole === "admin"
+              ? "admin"
+              : "FINANCE"
+            : "";
   if (!role) return null;
+
+  if (roleSlug === "financeiro") {
+    return { role, panel: "financeiro" };
+  }
 
   if (role === "teacher") {
     if (sub === "agenda") return { role, panel: "ao-vivo" };
@@ -19351,9 +19481,10 @@ document.addEventListener("click", (event) => {
       if (financeTab instanceof HTMLButtonElement) {
         event.preventDefault();
         const tab = String(financeTab.getAttribute("data-finance-tab") || "").trim();
-        if (["alunos", "cobrancas", "pagamentos", "eventos"].includes(tab)) {
+        if (["overview", "alunos", "cobrancas", "pagamentos", "eventos", "chatwoot"].includes(tab)) {
           financeState.activeTab = tab;
           renderFinancePanel();
+          syncFinanceSidebar("financeiro");
         }
         return;
       }

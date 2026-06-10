@@ -5235,7 +5235,7 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
 
 .finance-summary-grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 14px;
 }
@@ -5327,6 +5327,11 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
 .finance-row-eventos {
   grid-template-columns: minmax(190px, 1.4fr) 130px 120px 105px 112px minmax(220px, 1.5fr) 130px;
   width: 1120px;
+}
+
+.finance-row-chatwoot {
+  grid-template-columns: minmax(190px, 1.4fr) 120px minmax(170px, 1.2fr) 100px 170px minmax(240px, 1.4fr);
+  width: 1040px;
 }
 
 .finance-head-row {
