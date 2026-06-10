@@ -8775,6 +8775,7 @@ const fetchWithAuth = async (input, init = {}) => {
 const normalizeUserCreationRole = (value) => {
   const role = normalizeRole(value);
   if (role === "student" || role === "teacher") return role;
+  if (role === "FINANCE") return "financeiro";
   return "";
 };
 
@@ -10095,6 +10096,7 @@ const normalizeFirestoreRole = (value) => {
   if (raw === "student" || raw === "aluno") return "student";
   if (raw === "admin" || raw === "administrador") return "admin";
   if (raw === "growth") return "growth";
+  if (raw === "finance" || raw === "financeiro") return "FINANCE";
   return "";
 };
 
@@ -16897,10 +16899,11 @@ if (adminUserForm instanceof HTMLFormElement) {
 
 const openAdminCreateUserModal = ({ presetRole } = {}) => {
   if (currentRole !== "admin") return;
-  const role = presetRole === "teacher" ? "teacher" : presetRole === "growth" ? "growth" : "student";
+  const role =
+    presetRole === "teacher" ? "teacher" : presetRole === "growth" ? "growth" : presetRole === "financeiro" || presetRole === "finance" || presetRole === "FINANCE" ? "financeiro" : "student";
   activeModalKind = "admin-create-user";
 
-  const title = role === "teacher" ? "Novo Professor" : role === "growth" ? "Novo usuário Growth" : "Novo Aluno";
+  const title = role === "teacher" ? "Novo Professor" : role === "growth" ? "Novo usuário Growth" : role === "financeiro" ? "Novo usuário Financeiro" : "Novo Aluno";
 
   const extraStudentFields =
     role === "student"
@@ -17385,8 +17388,13 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
           adminUsersState.growth.loadedAt = 0;
 
           if (successEl instanceof HTMLElement) successEl.hidden = false;
-          setAdminManageStatus(role, "Criado com sucesso.", "success");
-          window.setTimeout(() => setAdminManageStatus(role, ""), 1200);
+          if (role === "financeiro") {
+            setFinanceStatus("Usuário financeiro criado com sucesso.", "success");
+            window.setTimeout(() => setFinanceStatus(""), 1400);
+          } else {
+            setAdminManageStatus(role, "Criado com sucesso.", "success");
+            window.setTimeout(() => setAdminManageStatus(role, ""), 1200);
+          }
           closeModal();
 	          if (role === "teacher") loadUsersFromFirestore("teacher");
 	          if (role === "student") {
@@ -17527,7 +17535,7 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
 adminNewUserButtons.forEach((btn) => {
   btn.addEventListener("click", () => {
     const raw = String(btn.getAttribute("data-admin-new-user") || "").trim().toLowerCase();
-    const presetRole = raw === "teacher" ? "teacher" : raw === "growth" ? "growth" : "student";
+    const presetRole = raw === "teacher" ? "teacher" : raw === "growth" ? "growth" : raw === "financeiro" || raw === "finance" ? "financeiro" : "student";
     openAdminCreateUserModal({ presetRole });
   });
 });
