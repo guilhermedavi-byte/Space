@@ -8927,14 +8927,20 @@ const normalizeQuizQuestionType = (value) => {
   return "multiple_choice";
 };
 
-// Admin/Financeiro > Alunos: cobranças (Supabase + Chatwoot via backend)
+// Admin/Financeiro: painel financeiro real (Supabase + Chatwoot links)
 const FINANCE_PAYMENT_METHODS = ["ASAAS", "CPF_GUILHERME", "XP", "PIX_MANUAL", "OUTRO"];
 const FINANCE_MANUAL_METHODS = ["CPF_GUILHERME", "XP", "PIX_MANUAL", "OUTRO"];
 const financeState = {
-  rows: [],
+  alunos: [],
+  cobrancas: [],
+  logs: [],
+  eventos: [],
+  pagamentos: [],
+  errors: {},
   loading: false,
   error: "",
   loadedAt: 0,
+  activeTab: "alunos",
 };
 
 const normalizeFinanceConversationId = (value) => {
@@ -8973,18 +8979,22 @@ const financeStatusLabel = (status) => {
 const financeStatusTone = (status) => {
   const raw = String(status || "").trim().toLowerCase();
   if (raw === "pago") return "green";
+  if (raw === "ativo") return "green";
   if (raw === "vencido") return "red";
   if (raw === "cancelado") return "gray";
+  if (raw === "inativo") return "gray";
   return "yellow";
 };
 
 const financeAutomationReady = (row) => {
   const status = String(row?.status || "").trim().toLowerCase();
-  const paidAt = String(row?.pago_em || "").trim();
-  const method = String(row?.forma_pagamento || "").trim().toUpperCase();
   const conv = normalizeFinanceConversationId(row?.id_conversa_chatwoot);
-  const invoice = String(row?.link_fatura || "").trim();
-  return (status === "pendente" || status === "vencido") && !paidAt && conv && method === "ASAAS" && invoice;
+  return status === "ativo" && Boolean(conv);
+};
+
+const financeChatwootUrl = (conversationId) => {
+  const id = normalizeFinanceConversationId(conversationId);
+  return id ? `https://chatwoot.spaceschoolbr.com/app/accounts/1/conversations/${encodeURIComponent(id)}` : "";
 };
 
 const setFinanceStatus = (message, tone = "") => {
@@ -9003,96 +9013,183 @@ const ensureFinanceLoaded = async ({ force = false } = {}) => {
   renderFinancePanel();
 
   try {
-    const res = await fetchWithAuth("/api/financeiro-cobrancas", { method: "GET" });
+    const res = await fetchWithAuth("/api/financeiro-dashboard", { method: "GET" });
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(data?.error || "finance_load_failed");
-    financeState.rows = Array.isArray(data?.rows) ? data.rows : [];
+    financeState.alunos = Array.isArray(data?.alunos) ? data.alunos : [];
+    financeState.cobrancas = Array.isArray(data?.cobrancas) ? data.cobrancas : [];
+    financeState.logs = Array.isArray(data?.logs) ? data.logs : [];
+    financeState.eventos = Array.isArray(data?.eventos) ? data.eventos : [];
+    financeState.pagamentos = Array.isArray(data?.pagamentos) ? data.pagamentos : [];
+    financeState.errors = data?.errors && typeof data.errors === "object" ? data.errors : {};
     financeState.loadedAt = Date.now();
   } catch (error) {
     console.error("[finance] load panel failed:", error);
-    financeState.error = "Não foi possível carregar as cobranças.";
+    financeState.error = "Não foi possível carregar o painel financeiro.";
   } finally {
     financeState.loading = false;
     renderFinancePanel();
   }
 };
 
+const financeErrorLabel = (key) => {
+  if (key === "alunos") return "n8n_alunos_financeiro_space";
+  if (key === "cobrancas") return "n8n_cobrancas_financeiras_space";
+  if (key === "logs") return "n8n_logs_cobranca_space";
+  if (key === "eventos") return "n8n_eventos_cobranca_space";
+  if (key === "pagamentos") return "n8n_pagamentos_asaas_space";
+  return key;
+};
+
+const renderFinanceTabs = () => {
+  document.querySelectorAll("[data-finance-tab]").forEach((btn) => {
+    if (!(btn instanceof HTMLButtonElement)) return;
+    const tab = String(btn.getAttribute("data-finance-tab") || "");
+    const active = tab === financeState.activeTab;
+    btn.classList.toggle("is-active", active);
+    btn.setAttribute("aria-selected", active ? "true" : "false");
+  });
+  document.querySelectorAll("[data-finance-table]").forEach((table) => {
+    if (!(table instanceof HTMLElement)) return;
+    table.hidden = String(table.getAttribute("data-finance-table") || "") !== financeState.activeTab;
+  });
+};
+
+const financeBadgeHtml = (label, tone = "yellow") =>
+  `<span class="admin-student-fin-status is-${escapeHtml(tone)}">${escapeHtml(label)}</span>`;
+
+const financeReadyBadgeForAluno = (row) => {
+  const status = String(row?.status || "").trim().toLowerCase();
+  const conv = normalizeFinanceConversationId(row?.id_conversa_chatwoot);
+  if (status !== "ativo") return financeBadgeHtml("Inativo", "gray");
+  if (!conv) return `<span class="finance-missing">Sem Chatwoot</span>`;
+  return `<span class="finance-ready">Pronto para cobrança</span>`;
+};
+
 const renderFinancePanel = () => {
-  const table = document.querySelector("[data-finance-table]");
+  const tables = {
+    alunos: document.querySelector('[data-finance-table="alunos"]'),
+    cobrancas: document.querySelector('[data-finance-table="cobrancas"]'),
+    pagamentos: document.querySelector('[data-finance-table="pagamentos"]'),
+    eventos: document.querySelector('[data-finance-table="eventos"]'),
+  };
   const empty = document.querySelector("[data-finance-empty]");
   const summary = document.querySelector("[data-finance-summary]");
-  if (!(table instanceof HTMLElement)) return;
+  if (!(tables.alunos instanceof HTMLElement)) return;
 
-  const rows = Array.isArray(financeState.rows) ? financeState.rows : [];
-  const activeRows = rows.filter((row) => String(row?.status || "").toLowerCase() !== "cancelado");
-  const pendingRows = rows.filter((row) => ["pendente", "vencido"].includes(String(row?.status || "").toLowerCase()) && !row?.pago_em);
-  const paidRows = rows.filter((row) => String(row?.status || "").toLowerCase() === "pago" || row?.pago_em);
-  const readyRows = rows.filter(financeAutomationReady);
-  const overdueTotal = rows
+  const alunos = Array.isArray(financeState.alunos) ? financeState.alunos : [];
+  const cobrancas = Array.isArray(financeState.cobrancas) ? financeState.cobrancas : [];
+  const pagamentos = Array.isArray(financeState.pagamentos) ? financeState.pagamentos : [];
+  const eventos = Array.isArray(financeState.eventos) ? financeState.eventos : [];
+  const activeAlunos = alunos.filter((row) => String(row?.status || "").toLowerCase() === "ativo");
+  const pendingRows = cobrancas.filter((row) => ["pendente", "vencido"].includes(String(row?.status || "").toLowerCase()) && !row?.pago_em);
+  const paidRows = cobrancas.filter((row) => String(row?.status || "").toLowerCase() === "pago" || row?.pago_em);
+  const readyRows = activeAlunos.filter(financeAutomationReady);
+  const withoutChatwoot = activeAlunos.filter((row) => !normalizeFinanceConversationId(row?.id_conversa_chatwoot));
+  const overdueTotal = cobrancas
     .filter((row) => String(row?.status || "").toLowerCase() === "vencido" && !row?.pago_em)
-    .reduce((sum, row) => sum + (Number(row?.valor || row?.valor_cobranca || 0) || 0), 0);
+    .reduce((sum, row) => sum + (Number(row?.valor || 0) || 0), 0);
 
   if (summary instanceof HTMLElement) {
     summary.innerHTML = `
-      <div class="finance-summary-card"><span>Ativas</span><strong>${escapeHtml(String(activeRows.length))}</strong></div>
+      <div class="finance-summary-card"><span>Alunos ativos</span><strong>${escapeHtml(String(activeAlunos.length))}</strong></div>
       <div class="finance-summary-card"><span>Pendentes/vencidas</span><strong>${escapeHtml(String(pendingRows.length))}</strong></div>
       <div class="finance-summary-card"><span>Pagas</span><strong>${escapeHtml(String(paidRows.length))}</strong></div>
       <div class="finance-summary-card"><span>Total vencido</span><strong>${escapeHtml(formatFinanceMoney(overdueTotal))}</strong></div>
       <div class="finance-summary-card"><span>Prontas para n8n</span><strong>${escapeHtml(String(readyRows.length))}</strong></div>
+      <div class="finance-summary-card"><span>Ativos sem Chatwoot</span><strong>${escapeHtml(String(withoutChatwoot.length))}</strong></div>
     `;
   }
 
   if (financeState.loading) {
-    setFinanceStatus("Carregando cobranças...");
-    table.innerHTML = "";
+    setFinanceStatus("Carregando dados financeiros...");
+    Object.values(tables).forEach((table) => {
+      if (table instanceof HTMLElement) table.innerHTML = "";
+    });
     if (empty instanceof HTMLElement) empty.hidden = true;
+    renderFinanceTabs();
     return;
   }
 
   if (financeState.error) {
     setFinanceStatus(financeState.error, "error");
-    table.innerHTML = "";
+    Object.values(tables).forEach((table) => {
+      if (table instanceof HTMLElement) table.innerHTML = "";
+    });
     if (empty instanceof HTMLElement) empty.hidden = true;
+    renderFinanceTabs();
     return;
   }
 
-  setFinanceStatus(rows.length ? `${rows.length} cobrança(s) encontradas.` : "");
-  if (empty instanceof HTMLElement) empty.hidden = rows.length > 0;
+  const errorEntries = Object.entries(financeState.errors || {});
+  if (errorEntries.length) {
+    const failed = errorEntries.map(([key]) => financeErrorLabel(key)).join(", ");
+    setFinanceStatus(`Algumas tabelas falharam ao carregar: ${failed}.`, "error");
+    console.error("[finance] tabelas com falha", financeState.errors);
+  } else {
+    setFinanceStatus(`${alunos.length} aluno(s), ${cobrancas.length} cobrança(s), ${pagamentos.length} pagamento(s), ${eventos.length} evento(s).`);
+  }
 
-  table.innerHTML = rows.length
+  const currentRows =
+    financeState.activeTab === "alunos" ? alunos : financeState.activeTab === "cobrancas" ? cobrancas : financeState.activeTab === "pagamentos" ? pagamentos : eventos;
+  if (empty instanceof HTMLElement) empty.hidden = currentRows.length > 0;
+
+  tables.alunos.innerHTML = alunos.length
     ? `
-      <div class="finance-row finance-head-row">
-        <span>Aluno</span><span>Status</span><span>Valor</span><span>Vencimento</span><span>Forma</span><span>Chatwoot</span><span>Ações</span>
+      <div class="finance-row finance-head-row finance-row-alunos">
+        <span>Aluno</span><span>Telefone</span><span>E-mail</span><span>Status</span><span>Asaas cliente</span><span>Assinatura</span><span>Chatwoot</span><span>Atualizado</span>
       </div>
-      ${rows
+      ${alunos
+        .map((row) => {
+          const conv = normalizeFinanceConversationId(row?.id_conversa_chatwoot);
+          const chatUrl = row?.chatwoot_url || financeChatwootUrl(conv);
+          return `
+            <div class="finance-row finance-row-alunos">
+              <span class="finance-student">${escapeHtml(row?.aluno_nome || "—")} ${financeReadyBadgeForAluno(row)}</span>
+              <span>${escapeHtml(row?.telefone || "—")}</span>
+              <span>${escapeHtml(row?.email || "—")}</span>
+              <span>${financeBadgeHtml(row?.status || "—", financeStatusTone(row?.status))}</span>
+              <span>${escapeHtml(row?.asaas_customer_id || "—")}</span>
+              <span>${escapeHtml(row?.asaas_subscription_id || "—")}</span>
+              <span>${conv ? `<a class="admin-student-file-btn" href="${escapeHtml(chatUrl)}" target="_blank" rel="noopener">Abrir no Chatwoot</a>` : "—"}</span>
+              <span>${escapeHtml(formatIsoToAdminStamp(row?.updated_at || row?.created_at))}</span>
+            </div>
+          `;
+        })
+        .join("")}
+    `
+    : "";
+
+  tables.cobrancas.innerHTML = cobrancas.length
+    ? `
+      <div class="finance-row finance-head-row finance-row-cobrancas">
+        <span>Aluno</span><span>Valor</span><span>Vencimento</span><span>Status</span><span>Forma</span><span>Fatura</span><span>Chatwoot</span><span>Pago em</span><span>Ações</span>
+      </div>
+      ${cobrancas
         .map((row) => {
           const id = String(row?.id || "");
           const status = financeStatusLabel(row?.status);
-          const tone = financeStatusTone(row?.status);
-          const value = formatFinanceMoney(row?.valor ?? row?.valor_cobranca);
-          const due = formatFinanceDate(row?.vencimento || row?.data_vencimento || row?.due_date);
+          const value = formatFinanceMoney(row?.valor);
+          const due = formatFinanceDate(row?.vencimento);
           const method = String(row?.forma_pagamento || "—").trim() || "—";
           const conv = normalizeFinanceConversationId(row?.id_conversa_chatwoot);
-          const chatUrl = row?.chatwoot_url || (conv ? `https://chatwoot.spaceschoolbr.com/app/accounts/1/inbox/7/conversations/${encodeURIComponent(conv)}` : "");
-          const ready = financeAutomationReady(row);
-          const student = String(row?.aluno_nome || row?.nome_aluno || row?.aluno_email || row?.aluno_id || "—");
+          const chatUrl = row?.chatwoot_url || financeChatwootUrl(conv);
+          const invoice = String(row?.link_fatura || "").trim();
+          const isPaid = String(row?.status || "").toLowerCase() === "pago" || row?.pago_em;
           return `
-            <div class="finance-row" data-finance-row="${escapeHtml(id)}">
-              <span class="finance-student">${escapeHtml(student)}</span>
-              <span><span class="admin-student-fin-status is-${escapeHtml(tone)}">${escapeHtml(status)}</span></span>
+            <div class="finance-row finance-row-cobrancas" data-finance-row="${escapeHtml(id)}">
+              <span class="finance-student">${escapeHtml(row?.aluno_nome || row?.email || "—")}</span>
               <span>${escapeHtml(value)}</span>
               <span>${escapeHtml(due)}</span>
+              <span>${financeBadgeHtml(status, financeStatusTone(row?.status))}</span>
               <span>${escapeHtml(method)}</span>
-              <span>${conv ? escapeHtml(conv) : '<span class="finance-missing">Sem conversa</span>'}${ready ? '<span class="finance-ready">n8n</span>' : ""}</span>
+              <span>${invoice ? `<a class="admin-student-file-btn" href="${escapeHtml(invoice)}" target="_blank" rel="noopener">Abrir fatura</a>` : "—"}</span>
+              <span>${conv ? `<a class="admin-student-file-btn" href="${escapeHtml(chatUrl)}" target="_blank" rel="noopener">Abrir Chatwoot</a>` : "—"}</span>
+              <span>${escapeHtml(formatIsoToAdminStamp(row?.pago_em))}</span>
               <span class="admin-student-fin-actions">
                 <button type="button" class="admin-student-file-btn" data-finance-global-edit="${escapeHtml(id)}">Editar</button>
-                <button type="button" class="admin-student-file-btn" data-finance-chat-view="${escapeHtml(conv)}" ${conv ? "" : "disabled"}>Ver conversa</button>
-                <a class="admin-student-file-btn" href="${escapeHtml(chatUrl || "#")}" target="_blank" rel="noopener" ${chatUrl ? "" : 'aria-disabled="true" tabindex="-1"'}>Abrir no Chatwoot</a>
-                <button type="button" class="admin-student-file-btn" data-finance-global-confirm="${escapeHtml(id)}" ${
-                  FINANCE_MANUAL_METHODS.includes(String(row?.forma_pagamento || "").toUpperCase()) && String(row?.status || "").toLowerCase() !== "pago"
-                    ? ""
-                    : "disabled"
-                }>Confirmar</button>
+                <button type="button" class="admin-student-file-btn" data-finance-copy-link="${escapeHtml(invoice)}" ${invoice ? "" : "disabled"}>Copiar link</button>
+                <button type="button" class="admin-student-file-btn" data-finance-global-confirm="${escapeHtml(id)}" ${isPaid ? "disabled" : ""}>Marcar pago</button>
               </span>
             </div>
           `;
@@ -9100,6 +9197,56 @@ const renderFinancePanel = () => {
         .join("")}
     `
     : "";
+
+  tables.pagamentos.innerHTML = pagamentos.length
+    ? `
+      <div class="finance-row finance-head-row finance-row-pagamentos">
+        <span>Aluno</span><span>Valor</span><span>Vencimento</span><span>Pagamento</span><span>Status Asaas</span><span>Evento</span><span>ID pagamento</span><span>Cliente</span><span>Assinatura</span>
+      </div>
+      ${pagamentos
+        .map(
+          (row) => `
+            <div class="finance-row finance-row-pagamentos">
+              <span class="finance-student">${escapeHtml(row?.aluno_nome || "—")}</span>
+              <span>${escapeHtml(formatFinanceMoney(row?.valor))}</span>
+              <span>${escapeHtml(formatFinanceDate(row?.vencimento))}</span>
+              <span>${escapeHtml(formatIsoToAdminStamp(row?.data_pagamento))}</span>
+              <span>${financeBadgeHtml(row?.status_asaas || "—", financeStatusTone(row?.status_asaas))}</span>
+              <span>${escapeHtml(row?.evento_asaas || "—")}</span>
+              <span>${escapeHtml(row?.id_pagamento_asaas || "—")}</span>
+              <span>${escapeHtml(row?.id_cliente_asaas || "—")}</span>
+              <span>${escapeHtml(row?.id_assinatura_asaas || "—")}</span>
+            </div>
+          `
+        )
+        .join("")}
+    `
+    : "";
+
+  tables.eventos.innerHTML = eventos.length
+    ? `
+      <div class="finance-row finance-head-row finance-row-eventos">
+        <span>Aluno</span><span>Status evento</span><span>Tipo aviso</span><span>Valor</span><span>Vencimento</span><span>Motivo</span><span>Criado em</span>
+      </div>
+      ${eventos
+        .map(
+          (row) => `
+            <div class="finance-row finance-row-eventos">
+              <span class="finance-student">${escapeHtml(row?.aluno_nome || "—")}</span>
+              <span>${financeBadgeHtml(row?.status_evento || "—", financeStatusTone(row?.status_evento))}</span>
+              <span>${escapeHtml(row?.tipo_aviso || "—")}</span>
+              <span>${escapeHtml(formatFinanceMoney(row?.valor))}</span>
+              <span>${escapeHtml(formatFinanceDate(row?.vencimento))}</span>
+              <span>${escapeHtml(row?.motivo || "—")}</span>
+              <span>${escapeHtml(formatIsoToAdminStamp(row?.created_at))}</span>
+            </div>
+          `
+        )
+        .join("")}
+    `
+    : "";
+
+  renderFinanceTabs();
 };
 
 const ensureAdminStudentFinanceLoaded = async ({ force = false } = {}) => {
@@ -9165,7 +9312,7 @@ const renderAdminStudentFinanceTab = () => {
                 const due = formatFinanceDate(row?.vencimento || row?.data_vencimento || row?.due_date);
                 const method = String(row?.forma_pagamento || "—").trim() || "—";
                 const conv = normalizeFinanceConversationId(row?.id_conversa_chatwoot);
-                const chatUrl = row?.chatwoot_url || (conv ? `https://chatwoot.spaceschoolbr.com/app/accounts/1/inbox/7/conversations/${encodeURIComponent(conv)}` : "");
+                const chatUrl = row?.chatwoot_url || financeChatwootUrl(conv);
                 return `
                   <div class="admin-student-fin-row" data-finance-row="${escapeHtml(id)}">
                     <span><span class="admin-student-fin-status is-${escapeHtml(tone)}">${escapeHtml(status)}</span></span>
@@ -9216,6 +9363,81 @@ const readFinanceField = (key) => {
   return "";
 };
 
+const openFinanceStudentModal = ({ row } = {}) => {
+  const current = row && typeof row === "object" ? row : {};
+  const isEdit = Boolean(current.id);
+  openModal({
+    title: isEdit ? "Editar aluno financeiro" : "Adicionar usuário",
+    primaryLabel: "Salvar",
+    secondaryLabel: "Cancelar",
+    bodyHtml: `
+      <div class="admin-student-fin-form">
+        <label class="modal-field"><span>Nome do aluno</span><input class="modal-input" data-finance-field="aluno_nome" value="${escapeHtml(current.aluno_nome || "")}" /></label>
+        <label class="modal-field"><span>Telefone</span><input class="modal-input" data-finance-field="telefone" value="${escapeHtml(current.telefone || "")}" /></label>
+        <label class="modal-field"><span>E-mail</span><input class="modal-input" type="email" data-finance-field="email" value="${escapeHtml(current.email || "")}" /></label>
+        <label class="modal-field"><span>Status</span><select class="modal-input" data-finance-field="status">
+          <option value="ativo" ${String(current.status || "ativo").toLowerCase() === "ativo" ? "selected" : ""}>Ativo</option>
+          <option value="inativo" ${String(current.status || "").toLowerCase() === "inativo" ? "selected" : ""}>Inativo</option>
+        </select></label>
+        <label class="modal-field"><span>Asaas customer ID</span><input class="modal-input" data-finance-field="asaas_customer_id" value="${escapeHtml(current.asaas_customer_id || "")}" /></label>
+        <label class="modal-field"><span>Asaas subscription ID</span><input class="modal-input" data-finance-field="asaas_subscription_id" value="${escapeHtml(current.asaas_subscription_id || "")}" /></label>
+        <label class="modal-field admin-student-field-wide"><span>ID conversa Chatwoot</span><input class="modal-input" data-finance-field="id_conversa_chatwoot" value="${escapeHtml(
+          current.id_conversa_chatwoot || ""
+        )}" placeholder="219" /></label>
+        <div class="admin-student-files-inline-error" data-finance-error hidden>—</div>
+      </div>
+    `,
+    onPrimary: () => {
+      const errEl = modalBody?.querySelector("[data-finance-error]");
+      const setErr = (msg) => {
+        if (!(errEl instanceof HTMLElement)) return;
+        errEl.textContent = String(msg || "");
+        errEl.hidden = !msg;
+      };
+      const payload = {
+        action: "save_aluno",
+        id: current.id || "",
+        aluno_nome: readFinanceField("aluno_nome"),
+        telefone: readFinanceField("telefone"),
+        email: readFinanceField("email"),
+        asaas_customer_id: readFinanceField("asaas_customer_id"),
+        asaas_subscription_id: readFinanceField("asaas_subscription_id"),
+        id_conversa_chatwoot: readFinanceField("id_conversa_chatwoot"),
+        status: readFinanceField("status"),
+      };
+      if (!payload.aluno_nome) {
+        setErr("Informe o nome do aluno.");
+        return false;
+      }
+      if (modalPrimary) modalPrimary.disabled = true;
+      if (modalSecondary) modalSecondary.disabled = true;
+      const prev = modalPrimary?.textContent || "";
+      if (modalPrimary) modalPrimary.textContent = "Salvando...";
+      (async () => {
+        try {
+          const res = await fetchWithAuth("/api/financeiro-dashboard", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json().catch(() => null);
+          if (!res.ok) throw new Error(data?.error || "save_failed");
+          closeModal();
+          await ensureFinanceLoaded({ force: true });
+        } catch (error) {
+          console.error("[finance] save student failed:", error);
+          setErr("Não foi possível salvar o aluno financeiro.");
+        } finally {
+          if (modalPrimary) modalPrimary.disabled = false;
+          if (modalSecondary) modalSecondary.disabled = false;
+          if (modalPrimary) modalPrimary.textContent = prev || "Salvar";
+        }
+      })();
+      return false;
+    },
+  });
+};
+
 const openFinanceChargeModal = ({ row, global = false } = {}) => {
   const hist = adminStudentsState.history || {};
   const alunoMeta = hist.alunoMeta || {};
@@ -9237,8 +9459,9 @@ const openFinanceChargeModal = ({ row, global = false } = {}) => {
           current.aluno_nome || current.nome_aluno || (!global ? alunoMeta.nome || "" : "")
         )}" ${global ? "" : "readonly"} /></label>
         <label class="modal-field"><span>E-mail do aluno</span><input class="modal-input" data-finance-field="aluno_email" value="${escapeHtml(
-          current.aluno_email || (!global ? alunoMeta.email || "" : "")
+          current.email || current.aluno_email || (!global ? alunoMeta.email || "" : "")
         )}" /></label>
+        <label class="modal-field"><span>Telefone</span><input class="modal-input" data-finance-field="telefone" value="${escapeHtml(current.telefone || "")}" /></label>
         <label class="modal-field"><span>Valor</span><input class="modal-input" type="number" step="0.01" min="0" data-finance-field="valor" value="${escapeHtml(
           current.valor ?? current.valor_cobranca ?? ""
         )}" /></label>
@@ -9280,10 +9503,13 @@ const openFinanceChargeModal = ({ row, global = false } = {}) => {
       };
       setErr("");
       const payload = {
+        action: "save_cobranca",
         id: current.id || "",
         aluno_id: readFinanceField("aluno_id") || hist.alunoId,
         aluno_nome: readFinanceField("aluno_nome") || alunoMeta.nome || "",
+        email: readFinanceField("aluno_email") || alunoMeta.email || "",
         aluno_email: readFinanceField("aluno_email") || alunoMeta.email || "",
+        telefone: readFinanceField("telefone"),
         valor: readFinanceField("valor"),
         vencimento: readFinanceField("vencimento"),
         status: readFinanceField("status"),
@@ -9300,7 +9526,7 @@ const openFinanceChargeModal = ({ row, global = false } = {}) => {
       if (modalPrimary) modalPrimary.textContent = "Salvando…";
       (async () => {
         try {
-          const res = await fetchWithAuth("/api/financeiro-cobrancas", {
+          const res = await fetchWithAuth(global ? "/api/financeiro-dashboard" : "/api/financeiro-cobrancas", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
@@ -9330,12 +9556,11 @@ const openFinanceChargeModal = ({ row, global = false } = {}) => {
 const confirmManualFinancePayment = async ({ row, global = false } = {}) => {
   if (!row?.id) return;
   const forma = String(row.forma_pagamento || "").toUpperCase();
-  if (!FINANCE_MANUAL_METHODS.includes(forma)) return;
   try {
-    const res = await fetchWithAuth("/api/financeiro-cobrancas", {
+    const res = await fetchWithAuth(global ? "/api/financeiro-dashboard" : "/api/financeiro-cobrancas", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...row, confirmar_pagamento: true }),
+      body: JSON.stringify(global ? { action: "confirm_cobranca", id: row.id, forma_confirmacao: forma || "OUTRO" } : { ...row, confirmar_pagamento: true }),
     });
     if (!res.ok) throw new Error("confirm_failed");
     if (global) {
@@ -18945,6 +19170,24 @@ document.addEventListener("click", (event) => {
         return;
       }
 
+      const financeTab = target.closest("[data-finance-tab]");
+      if (financeTab instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const tab = String(financeTab.getAttribute("data-finance-tab") || "").trim();
+        if (["alunos", "cobrancas", "pagamentos", "eventos"].includes(tab)) {
+          financeState.activeTab = tab;
+          renderFinancePanel();
+        }
+        return;
+      }
+
+      const financeNewStudent = target.closest("[data-finance-new-student]");
+      if (financeNewStudent instanceof HTMLButtonElement) {
+        event.preventDefault();
+        openFinanceStudentModal();
+        return;
+      }
+
       const financeNewGlobal = target.closest("[data-finance-new-global]");
       if (financeNewGlobal instanceof HTMLButtonElement) {
         event.preventDefault();
@@ -18956,7 +19199,7 @@ document.addEventListener("click", (event) => {
       if (financeGlobalEdit instanceof HTMLButtonElement) {
         event.preventDefault();
         const id = String(financeGlobalEdit.getAttribute("data-finance-global-edit") || "").trim();
-        const row = financeState.rows.find((item) => String(item?.id || "") === id) || null;
+        const row = financeState.cobrancas.find((item) => String(item?.id || "") === id) || null;
         openFinanceChargeModal({ row, global: true });
         return;
       }
@@ -18965,8 +19208,22 @@ document.addEventListener("click", (event) => {
       if (financeGlobalConfirm instanceof HTMLButtonElement) {
         event.preventDefault();
         const id = String(financeGlobalConfirm.getAttribute("data-finance-global-confirm") || "").trim();
-        const row = financeState.rows.find((item) => String(item?.id || "") === id) || null;
+        const row = financeState.cobrancas.find((item) => String(item?.id || "") === id) || null;
+        if (!row) return;
+        const ok = window.confirm("Marcar esta cobrança como paga manualmente?");
+        if (!ok) return;
         confirmManualFinancePayment({ row, global: true });
+        return;
+      }
+
+      const financeCopyLink = target.closest("[data-finance-copy-link]");
+      if (financeCopyLink instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const link = String(financeCopyLink.getAttribute("data-finance-copy-link") || "").trim();
+        if (!link) return;
+        navigator.clipboard?.writeText(link).catch(() => {});
+        setFinanceStatus("Link de pagamento copiado.", "success");
+        window.setTimeout(() => setFinanceStatus(""), 1200);
         return;
       }
 

@@ -1653,7 +1653,7 @@
                 </div>
 
                 <div class="finance-actions">
-                  <button class="button button-outline button-small" type="button" data-admin-new-user="financeiro" data-admin-only>Adicionar usuário</button>
+                  <button class="button button-outline button-small" type="button" data-finance-new-student>Adicionar usuário</button>
                   <button class="button button-outline button-small" type="button" data-finance-refresh>Atualizar</button>
                   <button class="button button-solid button-small" type="button" data-finance-new-global>Nova cobrança</button>
                 </div>
@@ -1663,9 +1663,19 @@
 
               <div class="finance-summary-grid" data-finance-summary></div>
 
+              <div class="finance-tabs" role="tablist" aria-label="Financeiro">
+                <button class="finance-tab is-active" type="button" role="tab" aria-selected="true" data-finance-tab="alunos">Alunos financeiros</button>
+                <button class="finance-tab" type="button" role="tab" aria-selected="false" data-finance-tab="cobrancas">Cobranças</button>
+                <button class="finance-tab" type="button" role="tab" aria-selected="false" data-finance-tab="pagamentos">Pagamentos recebidos</button>
+                <button class="finance-tab" type="button" role="tab" aria-selected="false" data-finance-tab="eventos">Eventos de cobrança</button>
+              </div>
+
               <article class="surface-card finance-card" aria-label="Lista de cobranças">
-                <div class="finance-table" data-finance-table></div>
-                <div class="finance-empty" data-finance-empty hidden>Nenhuma cobrança encontrada.</div>
+                <div class="finance-table" data-finance-table="alunos"></div>
+                <div class="finance-table" data-finance-table="cobrancas" hidden></div>
+                <div class="finance-table" data-finance-table="pagamentos" hidden></div>
+                <div class="finance-table" data-finance-table="eventos" hidden></div>
+                <div class="finance-empty" data-finance-empty hidden>Nenhum registro encontrado.</div>
               </article>
             </div>
           </section>

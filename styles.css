@@ -5139,11 +5139,40 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
   color: rgba(255, 118, 110, 0.95);
 }
 
+.finance-status[data-tone="success"] {
+  color: rgba(126, 222, 166, 0.95);
+}
+
 .finance-summary-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 14px;
+}
+
+.finance-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.finance-tab {
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 12px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.finance-tab.is-active {
+  border-color: rgba(89, 144, 189, 0.34);
+  background: rgba(89, 144, 189, 0.14);
+  color: rgba(255, 255, 255, 0.92);
 }
 
 .finance-summary-card {
@@ -5175,6 +5204,7 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
 
 .finance-table {
   display: grid;
+  overflow-x: auto;
 }
 
 .finance-row {
@@ -5187,6 +5217,26 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
   border-top: 1px solid rgba(255, 255, 255, 0.07);
   color: rgba(255, 255, 255, 0.72);
   font-size: 12px;
+}
+
+.finance-row-alunos {
+  grid-template-columns: minmax(190px, 1.4fr) 120px minmax(170px, 1.2fr) 90px 150px 150px 150px 130px;
+  width: 1260px;
+}
+
+.finance-row-cobrancas {
+  grid-template-columns: minmax(180px, 1.3fr) 105px 112px 96px 124px 112px 132px 130px minmax(280px, 1.7fr);
+  width: 1340px;
+}
+
+.finance-row-pagamentos {
+  grid-template-columns: minmax(180px, 1.3fr) 105px 112px 130px 120px 130px 160px 160px 160px;
+  width: 1360px;
+}
+
+.finance-row-eventos {
+  grid-template-columns: minmax(190px, 1.4fr) 130px 120px 105px 112px minmax(220px, 1.5fr) 130px;
+  width: 1120px;
 }
 
 .finance-head-row {
@@ -5246,7 +5296,7 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .finance-table {
+.finance-table {
     overflow-x: auto;
   }
 

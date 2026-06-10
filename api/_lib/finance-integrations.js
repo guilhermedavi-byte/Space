@@ -1,4 +1,11 @@
-const FINANCE_TABLE = "n8n_cobrancas_financeiras_space";
+const FINANCE_TABLES = {
+  alunos: "n8n_alunos_financeiro_space",
+  cobrancas: "n8n_cobrancas_financeiras_space",
+  logs: "n8n_logs_cobranca_space",
+  eventos: "n8n_eventos_cobranca_space",
+  pagamentos: "n8n_pagamentos_asaas_space",
+};
+const FINANCE_TABLE = FINANCE_TABLES.cobrancas;
 const CHATWOOT_BASE_URL_DEFAULT = "https://chatwoot.spaceschoolbr.com";
 const CHATWOOT_ACCOUNT_ID_DEFAULT = "1";
 const CHATWOOT_INBOX_ID_DEFAULT = "7";
@@ -35,7 +42,7 @@ const buildChatwootConversationUrl = (conversationId) => {
   const cfg = getChatwootConfig();
   const id = normalizeChatwootConversationId(conversationId);
   if (!id) return "";
-  return `${cfg.baseUrl}/app/accounts/${encodeURIComponent(cfg.accountId)}/inbox/${encodeURIComponent(cfg.inboxId)}/conversations/${encodeURIComponent(id)}`;
+  return `${cfg.baseUrl}/app/accounts/${encodeURIComponent(cfg.accountId)}/conversations/${encodeURIComponent(id)}`;
 };
 
 const getAsaasConfig = () => ({
@@ -45,6 +52,7 @@ const getAsaasConfig = () => ({
 
 module.exports = {
   FINANCE_TABLE,
+  FINANCE_TABLES,
   canAccessFinance,
   isFinanceRole,
   normalizeChatwootConversationId,
