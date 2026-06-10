@@ -1,4 +1,4 @@
-const { sendJson } = require("../_lib/http");
+const { readJsonBody, sendJson } = require("../_lib/http");
 const { getSessionFromRequest } = require("../../_lib/session");
 const {
   canAccessFinance,
@@ -24,11 +24,21 @@ const normalizeMessage = (message) => ({
   sender_name:
     String(message?.sender?.name || message?.sender?.available_name || message?.sender?.email || message?.sender_type || "").trim() || "Sistema",
   created_at: message?.created_at || null,
+  attachments: Array.isArray(message?.attachments)
+    ? message.attachments
+        .map((att) => ({
+          id: att?.id || att?.file_type || att?.data_url || "",
+          file_type: String(att?.file_type || "").trim(),
+          file_name: String(att?.file_name || att?.fallback_title || att?.id || "Anexo").trim(),
+          data_url: String(att?.data_url || att?.download_url || att?.thumb_url || "").trim(),
+        }))
+        .filter((att) => att.data_url)
+    : [],
 });
 
 module.exports = async (req, res) => {
-  if (req.method !== "GET") {
-    res.setHeader("Allow", "GET");
+  if (req.method !== "GET" && req.method !== "POST") {
+    res.setHeader("Allow", "GET, POST");
     return sendJson(res, 405, { error: "method_not_allowed" });
   }
 
@@ -44,8 +54,47 @@ module.exports = async (req, res) => {
   const cfg = getChatwootConfig();
   if (!cfg.token) return sendJson(res, 500, { error: "chatwoot_not_configured" });
 
+  const apiUrl = `${cfg.baseUrl}/api/v1/accounts/${encodeURIComponent(cfg.accountId)}/conversations/${encodeURIComponent(conversationId)}/messages`;
+
   try {
-    const apiUrl = `${cfg.baseUrl}/api/v1/accounts/${encodeURIComponent(cfg.accountId)}/conversations/${encodeURIComponent(conversationId)}/messages`;
+    if (req.method === "POST") {
+      let body;
+      try {
+        body = await readJsonBody(req);
+      } catch {
+        return sendJson(res, 400, { error: "invalid_json" });
+      }
+
+      const content = String(body?.content || "").trim();
+      if (!content) return sendJson(res, 400, { error: "missing_content" });
+
+      const payload = {
+        content,
+        message_type: "outgoing",
+      };
+      if (body?.private === true) payload.private = true;
+
+      const chatRes = await fetch(apiUrl, {
+        method: "POST",
+        headers: {
+          api_access_token: cfg.token,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+      const data = await chatRes.json().catch(() => null);
+      if (!chatRes.ok) {
+        console.error("[api] chatwoot send failed", { status: chatRes.status, data });
+        return sendJson(res, 502, { error: "chatwoot_send_failed" });
+      }
+
+      return sendJson(res, 200, {
+        ok: true,
+        message: normalizeMessage(data?.payload || data || {}),
+      });
+    }
+
     const chatRes = await fetch(apiUrl, {
       headers: {
         api_access_token: cfg.token,

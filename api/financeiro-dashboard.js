@@ -165,6 +165,48 @@ const handlePost = async (req, res, session) => {
     return sendJson(res, 200, { ok: true });
   }
 
+  if (action === "link_conversation") {
+    const conversationId = normalizeChatwootConversationId(body?.id_conversa_chatwoot);
+    if (!conversationId) return sendJson(res, 400, { error: "missing_conversation_id" });
+
+    const alunoId = String(body?.aluno_id || body?.id || "").trim();
+    const cobrancaId = String(body?.cobranca_id || "").trim();
+    const email = String(body?.email || "").trim().toLowerCase();
+    const alunoNome = String(body?.aluno_nome || "").trim();
+    const patch = { id_conversa_chatwoot: conversationId, updated_at: nowIso };
+
+    let alunoUpdated = 0;
+    let cobrancasUpdated = 0;
+
+    if (alunoId) {
+      const result = await supabaseFetch(`/${FINANCE_TABLES.alunos}?id=eq.${encodeURIComponent(alunoId)}`, { method: "PATCH", body: patch });
+      alunoUpdated = Array.isArray(result.data) ? result.data.length : 0;
+    } else if (email) {
+      const result = await supabaseFetch(`/${FINANCE_TABLES.alunos}?email=eq.${encodeURIComponent(email)}`, { method: "PATCH", body: patch });
+      alunoUpdated = Array.isArray(result.data) ? result.data.length : 0;
+    } else if (alunoNome) {
+      const result = await supabaseFetch(`/${FINANCE_TABLES.alunos}?aluno_nome=eq.${encodeURIComponent(alunoNome)}`, { method: "PATCH", body: patch });
+      alunoUpdated = Array.isArray(result.data) ? result.data.length : 0;
+    }
+
+    if (cobrancaId) {
+      const result = await supabaseFetch(`/${FINANCE_TABLES.cobrancas}?id=eq.${encodeURIComponent(cobrancaId)}`, { method: "PATCH", body: patch });
+      cobrancasUpdated += Array.isArray(result.data) ? result.data.length : 0;
+    }
+    if (email) {
+      const result = await supabaseFetch(`/${FINANCE_TABLES.cobrancas}?email=eq.${encodeURIComponent(email)}&id_conversa_chatwoot=is.null`, { method: "PATCH", body: patch });
+      cobrancasUpdated += Array.isArray(result.data) ? result.data.length : 0;
+    } else if (alunoNome) {
+      const result = await supabaseFetch(`/${FINANCE_TABLES.cobrancas}?aluno_nome=eq.${encodeURIComponent(alunoNome)}&id_conversa_chatwoot=is.null`, {
+        method: "PATCH",
+        body: patch,
+      });
+      cobrancasUpdated += Array.isArray(result.data) ? result.data.length : 0;
+    }
+
+    return sendJson(res, 200, { ok: true, alunoUpdated, cobrancasUpdated });
+  }
+
   return sendJson(res, 400, { error: "invalid_action" });
 };
 

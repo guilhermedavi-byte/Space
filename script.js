@@ -943,6 +943,7 @@ const clearTeacherCalendarSelection = () => {
 
 const closeModal = () => {
   if (!modalOverlay) return;
+  clearFinanceChatPolling();
   modalOverlay.hidden = true;
   body.classList.remove("is-modal-open");
   modalPrimaryHandler = null;
@@ -8942,6 +8943,16 @@ const financeState = {
   loadedAt: 0,
   activeTab: "alunos",
 };
+const financeChatState = {
+  conversationId: "",
+  row: null,
+  source: "",
+  isLoading: false,
+  isSending: false,
+  error: "",
+  messages: [],
+  timer: null,
+};
 
 const normalizeFinanceConversationId = (value) => {
   const raw = String(value || "").trim();
@@ -9144,14 +9155,23 @@ const renderFinancePanel = () => {
           const conv = normalizeFinanceConversationId(row?.id_conversa_chatwoot);
           const chatUrl = row?.chatwoot_url || financeChatwootUrl(conv);
           return `
-            <div class="finance-row finance-row-alunos">
+            <div class="finance-row finance-row-alunos" data-finance-student-row="${escapeHtml(String(row?.id || ""))}">
               <span class="finance-student">${escapeHtml(row?.aluno_nome || "—")} ${financeReadyBadgeForAluno(row)}</span>
               <span>${escapeHtml(row?.telefone || "—")}</span>
               <span>${escapeHtml(row?.email || "—")}</span>
               <span>${financeBadgeHtml(row?.status || "—", financeStatusTone(row?.status))}</span>
               <span>${escapeHtml(row?.asaas_customer_id || "—")}</span>
               <span>${escapeHtml(row?.asaas_subscription_id || "—")}</span>
-              <span>${conv ? `<a class="admin-student-file-btn" href="${escapeHtml(chatUrl)}" target="_blank" rel="noopener">Abrir no Chatwoot</a>` : "—"}</span>
+              <span class="admin-student-fin-actions">
+                ${conv ? '<span class="finance-ready">Chatwoot vinculado</span>' : '<span class="finance-missing">Sem Chatwoot</span>'}
+                ${
+                  conv
+                    ? `<button type="button" class="admin-student-file-btn" data-finance-chat-view="${escapeHtml(conv)}" data-finance-chat-source="aluno" data-finance-chat-row="${escapeHtml(
+                        String(row?.id || "")
+                      )}">Ver conversa</button><a class="admin-student-file-btn" href="${escapeHtml(chatUrl)}" target="_blank" rel="noopener">Abrir</a>`
+                    : `<button type="button" class="admin-student-file-btn" data-finance-link-chat="aluno" data-finance-link-row="${escapeHtml(String(row?.id || ""))}">Vincular conversa</button>`
+                }
+              </span>
               <span>${escapeHtml(formatIsoToAdminStamp(row?.updated_at || row?.created_at))}</span>
             </div>
           `;
@@ -9184,7 +9204,16 @@ const renderFinancePanel = () => {
               <span>${financeBadgeHtml(status, financeStatusTone(row?.status))}</span>
               <span>${escapeHtml(method)}</span>
               <span>${invoice ? `<a class="admin-student-file-btn" href="${escapeHtml(invoice)}" target="_blank" rel="noopener">Abrir fatura</a>` : "—"}</span>
-              <span>${conv ? `<a class="admin-student-file-btn" href="${escapeHtml(chatUrl)}" target="_blank" rel="noopener">Abrir Chatwoot</a>` : "—"}</span>
+              <span class="admin-student-fin-actions">
+                ${conv ? '<span class="finance-ready">Chatwoot vinculado</span>' : '<span class="finance-missing">Sem Chatwoot</span>'}
+                ${
+                  conv
+                    ? `<button type="button" class="admin-student-file-btn" data-finance-chat-view="${escapeHtml(conv)}" data-finance-chat-source="cobranca" data-finance-chat-row="${escapeHtml(
+                        id
+                      )}">Ver conversa</button><a class="admin-student-file-btn" href="${escapeHtml(chatUrl)}" target="_blank" rel="noopener">Abrir</a>`
+                    : `<button type="button" class="admin-student-file-btn" data-finance-link-chat="cobranca" data-finance-link-row="${escapeHtml(id)}">Vincular conversa</button>`
+                }
+              </span>
               <span>${escapeHtml(formatIsoToAdminStamp(row?.pago_em))}</span>
               <span class="admin-student-fin-actions">
                 <button type="button" class="admin-student-file-btn" data-finance-global-edit="${escapeHtml(id)}">Editar</button>
@@ -9580,45 +9609,170 @@ const confirmManualFinancePayment = async ({ row, global = false } = {}) => {
   }
 };
 
-const openFinanceChatwootModal = async ({ conversationId } = {}) => {
+const clearFinanceChatPolling = () => {
+  if (financeChatState.timer) {
+    window.clearInterval(financeChatState.timer);
+    financeChatState.timer = null;
+  }
+};
+
+const formatChatwootTime = (value) => {
+  if (!value) return "—";
+  const n = Number(value);
+  const date = Number.isFinite(n) && String(value).length <= 10 ? new Date(n * 1000) : new Date(String(value));
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+};
+
+const getFinanceChatRow = ({ source, rowId, conversationId } = {}) => {
+  const src = String(source || "").trim();
+  const id = String(rowId || "").trim();
+  const conv = normalizeFinanceConversationId(conversationId);
+  const list = src === "aluno" ? financeState.alunos : src === "cobranca" ? financeState.cobrancas : [...financeState.alunos, ...financeState.cobrancas];
+  return (
+    (id ? list.find((row) => String(row?.id || "") === id) : null) ||
+    (conv ? list.find((row) => normalizeFinanceConversationId(row?.id_conversa_chatwoot) === conv) : null) ||
+    null
+  );
+};
+
+const renderFinanceChatModal = () => {
+  if (!(modalBody instanceof HTMLElement)) return;
+  const row = financeChatState.row || {};
+  const conv = normalizeFinanceConversationId(financeChatState.conversationId);
+  const chatUrl = financeChatwootUrl(conv);
+  const messages = Array.isArray(financeChatState.messages) ? financeChatState.messages : [];
+
+  const messagesHtml = financeChatState.isLoading
+    ? `<div class="admin-student-chatwoot-loading">Carregando conversa...</div>`
+    : financeChatState.error
+      ? `<div class="admin-student-chatwoot-loading is-error">Não foi possível carregar a conversa do Chatwoot.</div>`
+      : messages.length
+        ? messages
+            .map((m) => {
+              const type = String(m.message_type || "").toLowerCase();
+              const incoming = type === "incoming";
+              const isPrivate = Boolean(m.private);
+              const attachments = Array.isArray(m.attachments) ? m.attachments : [];
+              return `
+                <article class="admin-student-chatwoot-message ${incoming ? "is-incoming" : "is-outgoing"} ${isPrivate ? "is-private" : ""}">
+                  <div class="admin-student-chatwoot-meta">
+                    <strong>${escapeHtml(isPrivate ? "Nota interna" : incoming ? row?.aluno_nome || "Lead" : m.sender_name || "Equipe")}</strong>
+                    <span>${escapeHtml(formatChatwootTime(m.created_at))}</span>
+                  </div>
+                  <div class="admin-student-chatwoot-content">${escapeHtml(m.content || "—")}</div>
+                  ${
+                    attachments.length
+                      ? `<div class="finance-chat-attachments">${attachments
+                          .map(
+                            (att) =>
+                              `<a href="${escapeHtml(att.data_url)}" target="_blank" rel="noopener">${escapeHtml(att.file_name || att.file_type || "Anexo")}</a>`
+                          )
+                          .join("")}</div>`
+                      : ""
+                  }
+                </article>
+              `;
+            })
+            .join("")
+        : `<div class="admin-student-chatwoot-loading">Nenhuma mensagem encontrada.</div>`;
+
+  modalBody.innerHTML = `
+    <div class="finance-chat-shell">
+      <header class="finance-chat-head">
+        <div>
+          <strong>${escapeHtml(row?.aluno_nome || row?.email || "Conversa financeira")}</strong>
+          <span>${escapeHtml(row?.telefone || "Sem telefone")} • ${escapeHtml(row?.email || "Sem e-mail")}</span>
+        </div>
+        <div class="finance-chat-head-actions">
+          <span class="admin-student-fin-status is-${escapeHtml(financeStatusTone(row?.status))}">${escapeHtml(row?.status || "—")}</span>
+          <span class="finance-chat-id">#${escapeHtml(conv)}</span>
+          <a class="admin-student-file-btn" href="${escapeHtml(chatUrl)}" target="_blank" rel="noopener">Abrir no Chatwoot</a>
+          <button type="button" class="admin-student-file-btn" data-finance-chat-refresh>Atualizar conversa</button>
+        </div>
+      </header>
+      <div class="admin-student-chatwoot-list finance-chat-list">${messagesHtml}</div>
+      <footer class="finance-chat-compose">
+        <textarea class="modal-input finance-chat-input" rows="3" placeholder="Digite uma mensagem..." data-finance-chat-input ${financeChatState.isSending ? "disabled" : ""}></textarea>
+        <div class="finance-chat-compose-actions">
+          <button type="button" class="button button-solid button-small" data-finance-chat-send ${financeChatState.isSending ? "disabled" : ""}>Enviar mensagem</button>
+          <button type="button" class="button button-outline button-small" data-finance-chat-note ${financeChatState.isSending ? "disabled" : ""}>Adicionar nota interna</button>
+        </div>
+      </footer>
+    </div>
+  `;
+};
+
+const loadFinanceChatMessages = async ({ silent = false } = {}) => {
+  const conv = normalizeFinanceConversationId(financeChatState.conversationId);
+  if (!conv) return;
+  financeChatState.error = "";
+  if (!silent) {
+    financeChatState.isLoading = true;
+    renderFinanceChatModal();
+  }
+  try {
+    const res = await fetchWithAuth(`/api/chatwoot/conversation?id=${encodeURIComponent(conv)}`, { method: "GET" });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error || "chatwoot_failed");
+    financeChatState.messages = Array.isArray(data?.messages) ? data.messages : [];
+  } catch (error) {
+    console.error("[finance] chatwoot view failed:", error);
+    financeChatState.error = "chatwoot_failed";
+  } finally {
+    financeChatState.isLoading = false;
+    renderFinanceChatModal();
+  }
+};
+
+const sendFinanceChatMessage = async ({ privateNote = false } = {}) => {
+  const input = modalBody?.querySelector("[data-finance-chat-input]");
+  const content = input instanceof HTMLTextAreaElement ? input.value.trim() : "";
+  const conv = normalizeFinanceConversationId(financeChatState.conversationId);
+  if (!content || !conv) return;
+  financeChatState.isSending = true;
+  renderFinanceChatModal();
+  try {
+    const res = await fetchWithAuth(`/api/chatwoot/conversation?id=${encodeURIComponent(conv)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content, private: Boolean(privateNote) }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error || "chatwoot_send_failed");
+    await loadFinanceChatMessages({ silent: true });
+  } catch (error) {
+    console.error("[finance] chatwoot send failed:", error);
+    financeChatState.error = "chatwoot_send_failed";
+    renderFinanceChatModal();
+  } finally {
+    financeChatState.isSending = false;
+    renderFinanceChatModal();
+  }
+};
+
+const openFinanceChatwootModal = async ({ conversationId, source = "", rowId = "" } = {}) => {
   const id = normalizeFinanceConversationId(conversationId);
   if (!id) return;
+  clearFinanceChatPolling();
+  financeChatState.conversationId = id;
+  financeChatState.source = source;
+  financeChatState.row = getFinanceChatRow({ source, rowId, conversationId: id });
+  financeChatState.messages = [];
+  financeChatState.error = "";
+  financeChatState.isLoading = true;
   openModal({
     title: `Conversa #${id}`,
     primaryLabel: "Fechar",
     hideSecondary: true,
-    bodyHtml: `<div class="admin-student-chatwoot-loading">Carregando conversa…</div>`,
+    bodyHtml: `<div class="admin-student-chatwoot-loading">Carregando conversa...</div>`,
     onPrimary: () => true,
   });
-
-  try {
-    const res = await fetchWithAuth(`/api/chatwoot/conversation?id=${encodeURIComponent(id)}`, { method: "GET" });
-    const data = await res.json().catch(() => null);
-    if (!res.ok) throw new Error(data?.error || "chatwoot_failed");
-    const messages = Array.isArray(data?.messages) ? data.messages : [];
-    modalBody.innerHTML = messages.length
-      ? `<div class="admin-student-chatwoot-list">
-          ${messages
-            .map((m) => {
-              const type = String(m.message_type || "").toLowerCase();
-              const incoming = type === "incoming";
-              return `
-                <article class="admin-student-chatwoot-message ${incoming ? "is-incoming" : "is-outgoing"}">
-                  <div class="admin-student-chatwoot-meta">
-                    <strong>${escapeHtml(incoming ? "Lead" : m.sender_name || "Equipe/n8n")}</strong>
-                    <span>${escapeHtml(type || "mensagem")} • ${escapeHtml(formatIsoToAdminStamp(m.created_at))}</span>
-                  </div>
-                  <div class="admin-student-chatwoot-content">${escapeHtml(m.content || "—")}</div>
-                </article>
-              `;
-            })
-            .join("")}
-        </div>`
-      : `<div class="admin-student-chatwoot-loading">Nenhuma mensagem encontrada.</div>`;
-  } catch (error) {
-    console.error("[finance] chatwoot view failed:", error);
-    if (modalBody) modalBody.innerHTML = `<div class="admin-student-chatwoot-loading is-error">Não foi possível carregar a conversa.</div>`;
-  }
+  await loadFinanceChatMessages();
+  financeChatState.timer = window.setInterval(() => {
+    if (activeModalKind === "finance-chat") loadFinanceChatMessages({ silent: true }).catch(() => {});
+  }, 15000);
+  activeModalKind = "finance-chat";
 };
 
 // Admin > Alunos: student files (Storage + Firestore metadata)
@@ -19159,7 +19313,30 @@ document.addEventListener("click", (event) => {
       if (financeChatView instanceof HTMLButtonElement) {
         event.preventDefault();
         const conversationId = String(financeChatView.getAttribute("data-finance-chat-view") || "").trim();
-        openFinanceChatwootModal({ conversationId });
+        const source = String(financeChatView.getAttribute("data-finance-chat-source") || "").trim();
+        const rowId = String(financeChatView.getAttribute("data-finance-chat-row") || "").trim();
+        openFinanceChatwootModal({ conversationId, source, rowId });
+        return;
+      }
+
+      const financeChatRefresh = target.closest("[data-finance-chat-refresh]");
+      if (financeChatRefresh instanceof HTMLButtonElement) {
+        event.preventDefault();
+        loadFinanceChatMessages({ silent: false }).catch(() => {});
+        return;
+      }
+
+      const financeChatSend = target.closest("[data-finance-chat-send]");
+      if (financeChatSend instanceof HTMLButtonElement) {
+        event.preventDefault();
+        sendFinanceChatMessage({ privateNote: false }).catch(() => {});
+        return;
+      }
+
+      const financeChatNote = target.closest("[data-finance-chat-note]");
+      if (financeChatNote instanceof HTMLButtonElement) {
+        event.preventDefault();
+        sendFinanceChatMessage({ privateNote: true }).catch(() => {});
         return;
       }
 
@@ -19224,6 +19401,46 @@ document.addEventListener("click", (event) => {
         navigator.clipboard?.writeText(link).catch(() => {});
         setFinanceStatus("Link de pagamento copiado.", "success");
         window.setTimeout(() => setFinanceStatus(""), 1200);
+        return;
+      }
+
+      const financeLinkChat = target.closest("[data-finance-link-chat]");
+      if (financeLinkChat instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const source = String(financeLinkChat.getAttribute("data-finance-link-chat") || "").trim();
+        const rowId = String(financeLinkChat.getAttribute("data-finance-link-row") || "").trim();
+        const row =
+          source === "aluno"
+            ? financeState.alunos.find((item) => String(item?.id || "") === rowId)
+            : financeState.cobrancas.find((item) => String(item?.id || "") === rowId);
+        if (!row) return;
+        const raw = window.prompt("Informe o ID da conversa do Chatwoot:");
+        const conversationId = normalizeFinanceConversationId(raw);
+        if (!conversationId) return;
+        (async () => {
+          try {
+            const res = await fetchWithAuth("/api/financeiro-dashboard", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                action: "link_conversation",
+                id_conversa_chatwoot: conversationId,
+                aluno_id: source === "aluno" ? row.id : "",
+                cobranca_id: source === "cobranca" ? row.id : "",
+                aluno_nome: row.aluno_nome || "",
+                email: row.email || "",
+              }),
+            });
+            const data = await res.json().catch(() => null);
+            if (!res.ok) throw new Error(data?.error || "link_failed");
+            await ensureFinanceLoaded({ force: true });
+            setFinanceStatus("Conversa vinculada com sucesso.", "success");
+            window.setTimeout(() => setFinanceStatus(""), 1200);
+          } catch (error) {
+            console.error("[finance] link chatwoot failed:", error);
+            setFinanceStatus("Não foi possível vincular a conversa.", "error");
+          }
+        })();
         return;
       }
 

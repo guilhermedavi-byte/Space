@@ -5072,6 +5072,12 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
   background: rgba(89, 144, 189, 0.08);
 }
 
+.admin-student-chatwoot-message.is-private {
+  justify-self: center;
+  border-color: rgba(242, 201, 76, 0.24);
+  background: rgba(242, 201, 76, 0.08);
+}
+
 .admin-student-chatwoot-meta {
   display: flex;
   justify-content: space-between;
@@ -5090,6 +5096,90 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
   font-size: 13px;
   line-height: 1.45;
   color: rgba(255, 255, 255, 0.78);
+}
+
+.finance-chat-shell {
+  display: grid;
+  grid-template-rows: auto minmax(260px, 56vh) auto;
+  gap: 12px;
+}
+
+.finance-chat-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.finance-chat-head strong,
+.finance-chat-head span {
+  display: block;
+}
+
+.finance-chat-head strong {
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 15px;
+}
+
+.finance-chat-head span {
+  margin-top: 4px;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 12px;
+}
+
+.finance-chat-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.finance-chat-id {
+  min-height: 26px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.7) !important;
+  font-size: 11px !important;
+  font-weight: 850;
+}
+
+.finance-chat-list {
+  max-height: none;
+  min-height: 260px;
+  padding: 6px 8px 6px 0;
+}
+
+.finance-chat-compose {
+  display: grid;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.finance-chat-input {
+  resize: vertical;
+  min-height: 84px;
+}
+
+.finance-chat-compose-actions,
+.finance-chat-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.finance-chat-attachments {
+  margin-top: 8px;
+}
+
+.finance-chat-attachments a {
+  color: rgba(126, 222, 166, 0.95);
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .finance-shell {
