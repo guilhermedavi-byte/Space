@@ -9083,6 +9083,24 @@ const financeErrorLabel = (key) => {
   return key;
 };
 
+const financeErrorReason = (value) => {
+  const err = value && typeof value === "object" ? value : { code: String(value || ""), message: String(value || "") };
+  const code = String(err.code || "").trim();
+  const message = String(err.message || "").trim();
+  const status = Number(err.status || 0) || 0;
+  const raw = `${code} ${message} ${err.details || ""} ${err.hint || ""}`.toLowerCase();
+  if (code === "supabase_not_configured") return "Supabase não configurado no ambiente da Vercel.";
+  if (status === 401 || status === 403 || raw.includes("permission denied") || raw.includes("rls")) {
+    return "sem permissão no Supabase; use SUPABASE_SERVICE_ROLE_KEY no backend ou ajuste as políticas.";
+  }
+  if (status === 404 || raw.includes("could not find") || raw.includes("does not exist") || raw.includes("schema cache")) {
+    return "tabela/coluna não encontrada no Supabase ou schema cache desatualizado.";
+  }
+  if (message) return message;
+  if (code) return code;
+  return "falha desconhecida.";
+};
+
 const renderFinanceTabs = () => {
   document.querySelectorAll("[data-finance-tab]").forEach((btn) => {
     if (!(btn instanceof HTMLButtonElement)) return;
@@ -9176,8 +9194,8 @@ const renderFinancePanel = () => {
 
   const errorEntries = Object.entries(financeState.errors || {});
   if (errorEntries.length) {
-    const failed = errorEntries.map(([key]) => financeErrorLabel(key)).join(", ");
-    setFinanceStatus(`Algumas tabelas falharam ao carregar: ${failed}.`, "error");
+    const failed = errorEntries.map(([key, value]) => `${financeErrorLabel(key)} (${financeErrorReason(value)})`).join("; ");
+    setFinanceStatus(`Algumas tabelas falharam ao carregar: ${failed}`, "error");
     console.error("[finance] tabelas com falha", financeState.errors);
   } else {
     setFinanceStatus(`${alunos.length} aluno(s), ${cobrancas.length} cobrança(s), ${pagamentos.length} pagamento(s), ${eventos.length} evento(s).`);

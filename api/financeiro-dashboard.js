@@ -65,7 +65,17 @@ const loadTable = async ({ key, path }) => {
     return { key, rows: rows.map(withChatwootUrl), error: "" };
   } catch (error) {
     console.error(`[api] financeiro dashboard table failed: ${key}`, error);
-    return { key, rows: [], error: error?.code || error?.message || "load_failed" };
+    return {
+      key,
+      rows: [],
+      error: {
+        code: error?.code || "load_failed",
+        message: error?.message || "Falha ao carregar tabela.",
+        status: error?.status || 0,
+        details: error?.details || "",
+        hint: error?.hint || "",
+      },
+    };
   }
 };
 

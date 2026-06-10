@@ -37,6 +37,14 @@ const supabaseFetch = async (path, { method = "GET", headers = {}, body } = {}) 
     const error = new Error("supabase_request_failed");
     error.status = res.status;
     error.data = data;
+    if (data && typeof data === "object") {
+      error.code = data.code || data.error || "supabase_request_failed";
+      error.message = data.message || data.msg || error.message;
+      error.details = data.details || "";
+      error.hint = data.hint || "";
+    } else if (typeof data === "string" && data) {
+      error.message = data;
+    }
     throw error;
   }
 
