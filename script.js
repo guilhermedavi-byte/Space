@@ -18566,6 +18566,182 @@ document.addEventListener(
   true,
 );
 
+document.addEventListener(
+  "click",
+  (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+
+    const sidebarPanel = target.closest("[data-panel-target]");
+    if (sidebarPanel instanceof HTMLButtonElement) {
+      event.preventDefault();
+      event.stopPropagation();
+      const panel = sidebarPanel.dataset.panelTarget || "dashboard";
+      const role = sessionUser?.role || currentRole;
+      navigateApp(panelPathForRole(role, panel));
+      return;
+    }
+
+    if (!isFinanceAccessRole(currentRole)) return;
+
+    const financeNew = target.closest("[data-finance-new]");
+    if (financeNew instanceof HTMLButtonElement) {
+      event.preventDefault();
+      event.stopPropagation();
+      openFinanceChargeModal();
+      return;
+    }
+
+    const financeChatView = target.closest("[data-finance-chat-view]");
+    if (financeChatView instanceof HTMLButtonElement) {
+      event.preventDefault();
+      event.stopPropagation();
+      const conversationId = String(financeChatView.getAttribute("data-finance-chat-view") || "").trim();
+      const source = String(financeChatView.getAttribute("data-finance-chat-source") || "").trim();
+      const rowId = String(financeChatView.getAttribute("data-finance-chat-row") || "").trim();
+      openFinanceChatwootModal({ conversationId, source, rowId });
+      return;
+    }
+
+    const financeChatRefresh = target.closest("[data-finance-chat-refresh]");
+    if (financeChatRefresh instanceof HTMLButtonElement) {
+      event.preventDefault();
+      event.stopPropagation();
+      loadFinanceChatMessages({ silent: false }).catch(() => {});
+      return;
+    }
+
+    const financeChatSend = target.closest("[data-finance-chat-send]");
+    if (financeChatSend instanceof HTMLButtonElement) {
+      event.preventDefault();
+      event.stopPropagation();
+      sendFinanceChatMessage({ privateNote: false }).catch(() => {});
+      return;
+    }
+
+    const financeChatNote = target.closest("[data-finance-chat-note]");
+    if (financeChatNote instanceof HTMLButtonElement) {
+      event.preventDefault();
+      event.stopPropagation();
+      sendFinanceChatMessage({ privateNote: true }).catch(() => {});
+      return;
+    }
+
+    const financeRefresh = target.closest("[data-finance-refresh]");
+    if (financeRefresh instanceof HTMLButtonElement) {
+      event.preventDefault();
+      event.stopPropagation();
+      ensureFinanceLoaded({ force: true }).catch(() => {});
+      return;
+    }
+
+    const financeTab = target.closest("[data-finance-tab]");
+    if (financeTab instanceof HTMLButtonElement) {
+      event.preventDefault();
+      event.stopPropagation();
+      const tab = String(financeTab.getAttribute("data-finance-tab") || "").trim();
+      if (["overview", "alunos", "cobrancas", "pagamentos", "eventos", "chatwoot"].includes(tab)) {
+        financeState.activeTab = tab;
+        renderFinancePanel();
+        syncFinanceSidebar("financeiro");
+      }
+      return;
+    }
+
+    const financeNewStudent = target.closest("[data-finance-new-student]");
+    if (financeNewStudent instanceof HTMLButtonElement) {
+      event.preventDefault();
+      event.stopPropagation();
+      openFinanceStudentModal();
+      return;
+    }
+
+    const financeNewGlobal = target.closest("[data-finance-new-global]");
+    if (financeNewGlobal instanceof HTMLButtonElement) {
+      event.preventDefault();
+      event.stopPropagation();
+      openFinanceChargeModal({ global: true });
+      return;
+    }
+
+    const financeGlobalEdit = target.closest("[data-finance-global-edit]");
+    if (financeGlobalEdit instanceof HTMLButtonElement) {
+      event.preventDefault();
+      event.stopPropagation();
+      const id = String(financeGlobalEdit.getAttribute("data-finance-global-edit") || "").trim();
+      const row = financeState.cobrancas.find((item) => String(item?.id || "") === id) || null;
+      openFinanceChargeModal({ row, global: true });
+      return;
+    }
+
+    const financeGlobalConfirm = target.closest("[data-finance-global-confirm]");
+    if (financeGlobalConfirm instanceof HTMLButtonElement) {
+      event.preventDefault();
+      event.stopPropagation();
+      const id = String(financeGlobalConfirm.getAttribute("data-finance-global-confirm") || "").trim();
+      const row = financeState.cobrancas.find((item) => String(item?.id || "") === id) || null;
+      if (!row) return;
+      const ok = window.confirm("Marcar esta cobrança como paga manualmente?");
+      if (!ok) return;
+      confirmManualFinancePayment({ row, global: true });
+      return;
+    }
+
+    const financeCopyLink = target.closest("[data-finance-copy-link]");
+    if (financeCopyLink instanceof HTMLButtonElement) {
+      event.preventDefault();
+      event.stopPropagation();
+      const link = String(financeCopyLink.getAttribute("data-finance-copy-link") || "").trim();
+      if (!link) return;
+      navigator.clipboard?.writeText(link).catch(() => {});
+      setFinanceStatus("Link de pagamento copiado.", "success");
+      window.setTimeout(() => setFinanceStatus(""), 1200);
+      return;
+    }
+
+    const financeLinkChat = target.closest("[data-finance-link-chat]");
+    if (financeLinkChat instanceof HTMLButtonElement) {
+      event.preventDefault();
+      event.stopPropagation();
+      const source = String(financeLinkChat.getAttribute("data-finance-link-chat") || "").trim();
+      const rowId = String(financeLinkChat.getAttribute("data-finance-link-row") || "").trim();
+      const row =
+        source === "aluno"
+          ? financeState.alunos.find((item) => String(item?.id || "") === rowId)
+          : financeState.cobrancas.find((item) => String(item?.id || "") === rowId);
+      if (!row) return;
+      const raw = window.prompt("Informe o ID da conversa do Chatwoot:");
+      const conversationId = normalizeFinanceConversationId(raw);
+      if (!conversationId) return;
+      (async () => {
+        try {
+          const res = await fetchWithAuth("/api/financeiro-dashboard", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "link_conversation",
+              id_conversa_chatwoot: conversationId,
+              aluno_id: source === "aluno" ? row.id : "",
+              cobranca_id: source === "cobranca" ? row.id : "",
+              aluno_nome: row.aluno_nome || "",
+              email: row.email || "",
+            }),
+          });
+          const data = await res.json().catch(() => null);
+          if (!res.ok) throw new Error(data?.error || "link_failed");
+          await ensureFinanceLoaded({ force: true });
+          setFinanceStatus("Conversa vinculada com sucesso.", "success");
+          window.setTimeout(() => setFinanceStatus(""), 1200);
+        } catch (error) {
+          console.error("[finance] link chatwoot failed:", error);
+          setFinanceStatus("Não foi possível vincular a conversa.", "error");
+        }
+      })();
+    }
+  },
+  true,
+);
+
 document.addEventListener("click", (event) => {
   const target = event.target;
 
@@ -21313,6 +21489,32 @@ document.addEventListener("drop", (event) => {
 });
 
 window.addEventListener("resize", syncSidebarMode);
+
+const recoverInitialAppPanel = () => {
+  if (body.dataset.page !== "app") return;
+  const initialPanel = String(body.dataset.initialPanel || "").trim();
+  const activePanel = String(body.dataset.activePanel || "").trim();
+  const panel = activePanel || initialPanel || "dashboard";
+
+  if (!activePanel && panel) {
+    try {
+      showPanel(panel);
+    } catch (error) {
+      console.error("[app] initial panel recovery failed:", error);
+    }
+  }
+
+  if (panel === "financeiro" && isFinanceAccessRole(currentRole)) {
+    syncFinanceSidebar("financeiro");
+    renderFinancePanel();
+    ensureFinanceLoaded({ force: false }).catch((error) => {
+      console.error("[finance] recovery load failed:", error);
+    });
+  }
+};
+
+queueMicrotask(recoverInitialAppPanel);
+window.addEventListener("load", recoverInitialAppPanel);
 
 setInterval(updateGreeting, 60000);
 updateGreeting();
