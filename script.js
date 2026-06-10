@@ -9196,6 +9196,133 @@ const financeReadyBadgeForAluno = (row) => {
   return `<span class="finance-ready">Pronto para cobrança</span>`;
 };
 
+const financeMonthKey = (value) => {
+  const date = value ? new Date(String(value)) : null;
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "";
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+};
+
+const financeMonthLabel = (key) => {
+  const [year, month] = String(key || "").split("-").map((part) => Number(part));
+  if (!year || !month) return "—";
+  return new Date(year, month - 1, 1).toLocaleDateString("pt-BR", { month: "short" }).replace(".", "");
+};
+
+const renderFinanceDashboardHtml = ({ alunos, cobrancas, pagamentos, eventos, activeAlunos, pendingRows, paidRows, readyRows, withoutChatwoot, overdueTotal }) => {
+  const paidValue = pagamentos.reduce((sum, row) => sum + (Number(row?.valor || 0) || 0), 0);
+  const pendingValue = pendingRows.reduce((sum, row) => sum + (Number(row?.valor || 0) || 0), 0);
+  const todayKey = createDateKey(new Date());
+  const todayEvents = eventos.filter((row) => financeDateKey(row?.created_at) === todayKey);
+  const monthKeys = [];
+  const now = new Date();
+  for (let i = 5; i >= 0; i -= 1) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    monthKeys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  }
+  const revenueByMonth = Object.fromEntries(monthKeys.map((key) => [key, 0]));
+  pagamentos.forEach((row) => {
+    const key = financeMonthKey(row?.data_pagamento || row?.created_at || row?.vencimento);
+    if (key in revenueByMonth) revenueByMonth[key] += Number(row?.valor || 0) || 0;
+  });
+  const maxRevenue = Math.max(1, ...Object.values(revenueByMonth));
+  const statusCounts = cobrancas.reduce((acc, row) => {
+    const status = String(row?.status || "sem status").toLowerCase();
+    acc[status] = (acc[status] || 0) + 1;
+    return acc;
+  }, {});
+  const locations = alunos.reduce((acc, row) => {
+    const location = financeLocationForRow(row);
+    acc[location] = (acc[location] || 0) + 1;
+    return acc;
+  }, {});
+  const topLocations = Object.entries(locations).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+  return `
+    <section class="finance-dashboard-grid">
+      <article class="finance-dashboard-panel finance-dashboard-panel-wide">
+        <div class="finance-dashboard-panel-head">
+          <div>
+            <span>Performance</span>
+            <strong>Evolução do faturamento</strong>
+          </div>
+          <b>${escapeHtml(formatFinanceMoney(paidValue))}</b>
+        </div>
+        <div class="finance-bar-chart" aria-label="Evolução do faturamento">
+          ${monthKeys
+            .map((key) => {
+              const value = revenueByMonth[key] || 0;
+              const height = Math.max(8, Math.round((value / maxRevenue) * 100));
+              return `
+                <div class="finance-bar-item">
+                  <span>${escapeHtml(formatFinanceMoney(value))}</span>
+                  <i style="height:${escapeHtml(String(height))}%"></i>
+                  <small>${escapeHtml(financeMonthLabel(key))}</small>
+                </div>
+              `;
+            })
+            .join("")}
+        </div>
+      </article>
+
+      <article class="finance-dashboard-panel">
+        <div class="finance-dashboard-panel-head">
+          <div><span>Carteira</span><strong>Operação atual</strong></div>
+        </div>
+        <div class="finance-dashboard-stack">
+          <div><span>Alunos ativos</span><strong>${escapeHtml(String(activeAlunos.length))}</strong></div>
+          <div><span>Aptos para cobrança</span><strong>${escapeHtml(String(readyRows.length))}</strong></div>
+          <div><span>Sem conversa</span><strong>${escapeHtml(String(withoutChatwoot.length))}</strong></div>
+        </div>
+      </article>
+
+      <article class="finance-dashboard-panel">
+        <div class="finance-dashboard-panel-head">
+          <div><span>Risco</span><strong>Cobranças abertas</strong></div>
+        </div>
+        <div class="finance-dashboard-stack">
+          <div><span>Pendentes/vencidas</span><strong>${escapeHtml(String(pendingRows.length))}</strong></div>
+          <div><span>Valor em aberto</span><strong>${escapeHtml(formatFinanceMoney(pendingValue))}</strong></div>
+          <div><span>Total vencido</span><strong>${escapeHtml(formatFinanceMoney(overdueTotal))}</strong></div>
+        </div>
+      </article>
+
+      <article class="finance-dashboard-panel finance-dashboard-panel-map">
+        <div class="finance-dashboard-panel-head">
+          <div><span>Localização</span><strong>Alunos por região</strong></div>
+        </div>
+        <div class="finance-location-map">
+          ${topLocations.length ? topLocations.map(([label, count]) => `<span>${escapeHtml(label)} <b>${escapeHtml(String(count))}</b></span>`).join("") : `<em>Sem localização disponível</em>`}
+        </div>
+      </article>
+
+      <article class="finance-dashboard-panel finance-dashboard-panel-wide">
+        <div class="finance-dashboard-panel-head">
+          <div><span>Status</span><strong>Distribuição das cobranças</strong></div>
+          <b>${escapeHtml(String(cobrancas.length))} total</b>
+        </div>
+        <div class="finance-status-bars">
+          ${Object.entries(statusCounts)
+            .map(([status, count]) => {
+              const width = Math.max(8, Math.round((count / Math.max(1, cobrancas.length)) * 100));
+              return `<div><span>${escapeHtml(status)}</span><i><b style="width:${escapeHtml(String(width))}%"></b></i><strong>${escapeHtml(String(count))}</strong></div>`;
+            })
+            .join("") || `<div><span>Sem cobranças</span><i><b style="width:0%"></b></i><strong>0</strong></div>`}
+        </div>
+      </article>
+
+      <article class="finance-dashboard-panel">
+        <div class="finance-dashboard-panel-head">
+          <div><span>Automações</span><strong>Eventos hoje</strong></div>
+        </div>
+        <div class="finance-dashboard-big-number">
+          <strong>${escapeHtml(String(todayEvents.length))}</strong>
+          <span>${escapeHtml(String(eventos.length))} evento(s) no histórico carregado</span>
+        </div>
+      </article>
+    </section>
+  `;
+};
+
 const renderFinancePanel = () => {
   const tables = {
     overview: document.querySelector('[data-finance-table="overview"]'),
@@ -9236,8 +9363,8 @@ const renderFinancePanel = () => {
       <div class="finance-summary-card"><span>Pendentes/vencidas</span><strong>${escapeHtml(String(pendingRows.length))}</strong></div>
       <div class="finance-summary-card"><span>Pagas</span><strong>${escapeHtml(String(paidRows.length))}</strong></div>
       <div class="finance-summary-card"><span>Total vencido</span><strong>${escapeHtml(formatFinanceMoney(overdueTotal))}</strong></div>
-      <div class="finance-summary-card"><span>Prontas para n8n</span><strong>${escapeHtml(String(readyRows.length))}</strong></div>
-      <div class="finance-summary-card"><span>Ativos sem Chatwoot</span><strong>${escapeHtml(String(withoutChatwoot.length))}</strong></div>
+      <div class="finance-summary-card"><span>Aptos para cobrança automática</span><strong>${escapeHtml(String(readyRows.length))}</strong></div>
+      <div class="finance-summary-card"><span>Sem conversa vinculada</span><strong>${escapeHtml(String(withoutChatwoot.length))}</strong></div>
       <div class="finance-summary-card"><span>Pagamentos hoje</span><strong>${escapeHtml(String(paidToday.length))}</strong></div>
     `;
   }
@@ -9317,7 +9444,10 @@ const renderFinancePanel = () => {
         .join("")}
     `
     : "";
-  setTableHtml("overview", alunosTableHtml);
+  setTableHtml(
+    "overview",
+    renderFinanceDashboardHtml({ alunos, cobrancas, pagamentos, eventos, activeAlunos, pendingRows, paidRows, readyRows, withoutChatwoot, overdueTotal })
+  );
   setTableHtml("alunos", alunosTableHtml);
 
   setTableHtml(
@@ -9815,7 +9945,9 @@ const renderFinanceMessageBubbles = ({ messages, row, loading, error } = {}) => 
   if (loading) return `<div class="finance-chat-empty-state">Carregando conversa...</div>`;
   if (error) return `<div class="finance-chat-empty-state is-error">Não foi possível carregar a conversa do Chatwoot.</div>`;
   if (!Array.isArray(messages) || !messages.length) return `<div class="finance-chat-empty-state">Nenhuma mensagem encontrada.</div>`;
-  return messages
+  const visibleMessages = messages.slice(-6);
+  const hiddenCount = Math.max(0, messages.length - visibleMessages.length);
+  return `${hiddenCount ? `<div class="finance-chat-truncated">Mostrando as últimas ${escapeHtml(String(visibleMessages.length))} mensagens de ${escapeHtml(String(messages.length))}.</div>` : ""}${visibleMessages
     .map((m) => {
       const type = String(m.message_type || "").toLowerCase();
       const incoming = type === "incoming";
@@ -9838,7 +9970,7 @@ const renderFinanceMessageBubbles = ({ messages, row, loading, error } = {}) => 
         </article>
       `;
     })
-    .join("");
+    .join("")}`;
 };
 
 const renderFinanceChatWorkspace = (items) => {
@@ -18381,7 +18513,7 @@ const syncFinanceSidebar = (panelName) => {
     ["cobrancas", "Cobranças"],
     ["pagamentos", "Pagamentos"],
     ["eventos", "Eventos"],
-    ["chatwoot", "Chatwoot"],
+    ["chatwoot", "Conversas"],
   ];
 
   items.reverse().forEach(([tab, label]) => {
