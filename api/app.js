@@ -54,15 +54,35 @@ const initialPanelFromPath = (pathParam) => {
 
 const applyInitialPanel = (html, panelName) => {
   const target = String(panelName || "dashboard").trim() || "dashboard";
-  if (target === "dashboard") return html;
-
   let out = String(html || "");
-  out = out.replace(/<section class="platform-panel is-visible" data-panel="dashboard">/, '<section class="platform-panel" data-panel="dashboard" hidden>');
-  out = out.replace(new RegExp(`(<section class="platform-panel)(" data-panel="${target}"[^>]*?)\\shidden([^>]*>)`), `$1 is-visible$2$3`);
+  if (target !== "dashboard") {
+    out = out.replace(/<section class="platform-panel is-visible" data-panel="dashboard">/, '<section class="platform-panel" data-panel="dashboard" hidden>');
+    out = out.replace(new RegExp(`(<section class="platform-panel)(" data-panel="${target}"[^>]*?)\\shidden([^>]*>)`), `$1 is-visible$2$3`);
+  }
+  if (target === "financeiro") {
+    out = out.replace(/<header class="platform-header">/, '<header class="platform-header" hidden>');
+  }
   return out;
 };
 
-const buildAppHtml = ({ sessionJson, roleSlug, templateHtml, initialPanel }) => {
+const applyInitialRole = (html, role) => {
+  const normalized = String(role || "").trim();
+  let out = String(html || "");
+
+  if (normalized !== "student") {
+    out = out.replace(/<div class="student-v5" data-dashboard-student>/, '<div class="student-v5" data-dashboard-student hidden>');
+    out = out.replace(/<header class="platform-header">/, '<header class="platform-header" hidden>');
+  }
+  if (normalized === "admin" || normalized === "FINANCE") {
+    out = out.replace(/<div class="admin-dashboard-v2" data-dashboard-admin hidden>/, '<div class="admin-dashboard-v2" data-dashboard-admin>');
+  }
+  if (normalized === "teacher") {
+    out = out.replace(/<div class="teacher-v4" data-dashboard-teacher hidden>/, '<div class="teacher-v4" data-dashboard-teacher>');
+  }
+  return out;
+};
+
+const buildAppHtml = ({ sessionJson, role, roleSlug, templateHtml, initialPanel }) => {
   const raw = String(templateHtml || "");
   const platformStart = raw.indexOf('<div class="platform-shell"');
   const modalStart = raw.indexOf('<div class="modal-overlay"');
@@ -80,7 +100,8 @@ const buildAppHtml = ({ sessionJson, roleSlug, templateHtml, initialPanel }) => 
     /<div class="platform-shell"([^>]*)\shidden>/,
     '<div class="platform-shell"$1>'
   );
-  const platformVisible = applyInitialPanel(platformVisibleRaw, initialPanel);
+  const platformRoleReady = applyInitialRole(platformVisibleRaw, role);
+  const platformVisible = applyInitialPanel(platformRoleReady, initialPanel);
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -153,7 +174,7 @@ module.exports = async (req, res) => {
   try {
     const template = loadTemplate();
     const roleSlug = ROLE_TO_SLUG[String(user.role || "")] || ROLE_TO_SLUG.student;
-    html = buildAppHtml({ sessionJson: safeJsonForHtml(user), roleSlug, templateHtml: template, initialPanel: initialPanelFromPath(pathParam) });
+    html = buildAppHtml({ sessionJson: safeJsonForHtml(user), role: user.role, roleSlug, templateHtml: template, initialPanel: initialPanelFromPath(pathParam) });
   } catch (error) {
     res.statusCode = 500;
     res.setHeader("Content-Type", "text/plain; charset=utf-8");

@@ -9106,6 +9106,12 @@ const renderFinancePanel = () => {
   const empty = document.querySelector("[data-finance-empty]");
   const summary = document.querySelector("[data-finance-summary]");
   if (!(tables.alunos instanceof HTMLElement)) return;
+  const setTableHtml = (key, html) => {
+    const table = tables[key];
+    if (table instanceof HTMLElement) {
+      table.innerHTML = html;
+    }
+  };
 
   const alunos = Array.isArray(financeState.alunos) ? financeState.alunos : [];
   const cobrancas = Array.isArray(financeState.cobrancas) ? financeState.cobrancas : [];
@@ -9209,11 +9215,13 @@ const renderFinancePanel = () => {
         .join("")}
     `
     : "";
-  tables.overview.innerHTML = alunosTableHtml;
-  tables.alunos.innerHTML = alunosTableHtml;
+  setTableHtml("overview", alunosTableHtml);
+  setTableHtml("alunos", alunosTableHtml);
 
-  tables.cobrancas.innerHTML = cobrancas.length
-    ? `
+  setTableHtml(
+    "cobrancas",
+    cobrancas.length
+      ? `
       <div class="finance-row finance-head-row finance-row-cobrancas">
         <span>Aluno</span><span>Valor</span><span>Vencimento</span><span>Status</span><span>Forma</span><span>Fatura</span><span>Chatwoot</span><span>Pago em</span><span>Ações</span>
       </div>
@@ -9257,10 +9265,13 @@ const renderFinancePanel = () => {
         })
         .join("")}
     `
-    : "";
+      : ""
+  );
 
-  tables.pagamentos.innerHTML = pagamentos.length
-    ? `
+  setTableHtml(
+    "pagamentos",
+    pagamentos.length
+      ? `
       <div class="finance-row finance-head-row finance-row-pagamentos">
         <span>Aluno</span><span>Valor</span><span>Vencimento</span><span>Pagamento</span><span>Status Asaas</span><span>Evento</span><span>ID pagamento</span><span>Cliente</span><span>Assinatura</span>
       </div>
@@ -9282,10 +9293,13 @@ const renderFinancePanel = () => {
         )
         .join("")}
     `
-    : "";
+      : ""
+  );
 
-  tables.eventos.innerHTML = eventos.length
-    ? `
+  setTableHtml(
+    "eventos",
+    eventos.length
+      ? `
       <div class="finance-row finance-head-row finance-row-eventos">
         <span>Aluno</span><span>Status evento</span><span>Tipo aviso</span><span>Valor</span><span>Vencimento</span><span>Motivo</span><span>Criado em</span>
       </div>
@@ -9305,11 +9319,14 @@ const renderFinancePanel = () => {
         )
         .join("")}
     `
-    : "";
+      : ""
+  );
 
   const chatRows = [...alunos, ...cobrancas].filter((row) => normalizeFinanceConversationId(row?.id_conversa_chatwoot));
-  tables.chatwoot.innerHTML = chatRows.length
-    ? `
+  setTableHtml(
+    "chatwoot",
+    chatRows.length
+      ? `
       <div class="finance-row finance-head-row finance-row-chatwoot">
         <span>Aluno</span><span>Telefone</span><span>E-mail</span><span>Status</span><span>Conversa</span><span>Ações</span>
       </div>
@@ -9335,7 +9352,8 @@ const renderFinancePanel = () => {
         })
         .join("")}
     `
-    : "";
+      : ""
+  );
 
   renderFinanceTabs();
 };
