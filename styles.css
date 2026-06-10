@@ -5182,8 +5182,243 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
   font-weight: 800;
 }
 
+.finance-chat-workspace {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.82fr) minmax(420px, 1.6fr) minmax(230px, 0.72fr);
+  min-height: min(66vh, 720px);
+  overflow: hidden;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    radial-gradient(circle at top left, rgba(165, 255, 76, 0.09), transparent 28%),
+    linear-gradient(135deg, rgba(16, 22, 31, 0.96), rgba(9, 13, 21, 0.98));
+}
+
+.finance-chat-threads,
+.finance-chat-profile {
+  min-width: 0;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.finance-chat-threads {
+  border-right: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.finance-chat-profile {
+  border-left: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.finance-chat-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.finance-chat-section-head strong {
+  color: rgba(255, 255, 255, 0.93);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.finance-chat-section-head span {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.finance-chat-thread-list {
+  display: grid;
+  gap: 8px;
+  max-height: 610px;
+  overflow: auto;
+  padding-right: 3px;
+}
+
+.finance-chat-thread {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  min-height: 62px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(255, 255, 255, 0.72);
+  text-align: left;
+  cursor: pointer;
+}
+
+.finance-chat-thread:hover,
+.finance-chat-thread.is-active {
+  border-color: rgba(165, 255, 76, 0.24);
+  background: rgba(165, 255, 76, 0.075);
+}
+
+.finance-chat-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  background: linear-gradient(135deg, rgba(33, 150, 243, 0.42), rgba(82, 190, 128, 0.34));
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.finance-chat-avatar.is-large {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+}
+
+.finance-chat-thread-main {
+  min-width: 0;
+}
+
+.finance-chat-thread-main strong,
+.finance-chat-thread-main small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.finance-chat-thread-main strong {
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.finance-chat-thread-main small {
+  margin-top: 4px;
+  color: rgba(255, 255, 255, 0.52);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.finance-chat-thread-status {
+  justify-self: end;
+  min-height: 22px;
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.56);
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.finance-chat-panel {
+  display: grid;
+  grid-template-rows: auto minmax(320px, 1fr) auto;
+  min-width: 0;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.finance-chat-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.finance-chat-title-block {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.finance-chat-title-block strong,
+.finance-chat-title-block span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.finance-chat-title-block strong {
+  color: rgba(255, 255, 255, 0.94);
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.finance-chat-title-block span {
+  margin-top: 4px;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.finance-chat-list.is-inline {
+  padding: 18px;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.014) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+.finance-chat-compose.is-inline {
+  padding: 14px 18px 16px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.finance-chat-empty-state {
+  align-self: center;
+  justify-self: center;
+  max-width: 320px;
+  padding: 18px;
+  border-radius: 14px;
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 13px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.finance-chat-empty-state.is-error {
+  border-color: rgba(255, 78, 70, 0.28);
+  color: rgba(255, 118, 110, 0.95);
+}
+
+.finance-chat-profile-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.finance-chat-profile-list div {
+  padding: 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.finance-chat-profile-list dt {
+  margin: 0 0 5px;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 10px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.finance-chat-profile-list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .finance-shell {
-  width: min(1180px, calc(100vw - 42px));
+  width: min(1280px, calc(100vw - 42px));
   margin: 0 auto;
   padding: 32px 0 46px;
 }
@@ -5268,9 +5503,11 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
 .finance-summary-card {
   min-height: 74px;
   padding: 14px;
-  border-radius: 8px;
+  border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.045);
+  background:
+    radial-gradient(circle at top right, rgba(165, 255, 76, 0.08), transparent 38%),
+    rgba(255, 255, 255, 0.045);
 }
 
 .finance-summary-card span {
@@ -5290,6 +5527,7 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
 
 .finance-card {
   overflow: hidden;
+  border-radius: 18px;
 }
 
 .finance-table {
@@ -5397,6 +5635,31 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
 
   .finance-row {
     width: 980px;
+  }
+
+  .finance-chat-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .finance-chat-threads,
+  .finance-chat-profile {
+    border: 0;
+  }
+
+  .finance-chat-threads {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  }
+
+  .finance-chat-profile {
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+  }
+
+  .finance-chat-thread-list {
+    max-height: 230px;
+  }
+
+  .finance-chat-panel-head {
+    display: grid;
   }
 
   .admin-student-sheet-grid {

@@ -8977,6 +8977,15 @@ const financeChatState = {
   messages: [],
   timer: null,
 };
+const financeInlineChatState = {
+  conversationId: "",
+  row: null,
+  source: "",
+  isLoading: false,
+  isSending: false,
+  error: "",
+  messages: [],
+};
 
 const normalizeFinanceConversationId = (value) => {
   const raw = String(value || "").trim();
@@ -8984,6 +8993,67 @@ const normalizeFinanceConversationId = (value) => {
   const match = raw.match(/\/conversations\/(\d+)(?:\D|$)/i);
   if (match) return match[1];
   return raw.replace(/\D+/g, "");
+};
+
+const financeStudentInitials = (value) => {
+  const parts = String(value || "Aluno")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  return (parts[0]?.[0] || "A") + (parts.length > 1 ? parts[parts.length - 1][0] || "" : "");
+};
+
+const financeLocationFromPhone = (value) => {
+  const digits = String(value || "").replace(/\D+/g, "");
+  const br = digits.startsWith("55") ? digits.slice(2) : digits.length >= 10 ? digits : "";
+  const ddd = br.slice(0, 2);
+  const dddMap = {
+    11: "São Paulo, SP",
+    12: "Vale do Paraíba, SP",
+    13: "Baixada Santista, SP",
+    14: "Bauru/Marília, SP",
+    15: "Sorocaba, SP",
+    16: "Ribeirão Preto, SP",
+    17: "São José do Rio Preto, SP",
+    18: "Presidente Prudente, SP",
+    19: "Campinas, SP",
+    21: "Rio de Janeiro, RJ",
+    22: "Norte Fluminense, RJ",
+    24: "Sul Fluminense, RJ",
+    27: "Vitória, ES",
+    31: "Belo Horizonte, MG",
+    41: "Curitiba, PR",
+    47: "Joinville, SC",
+    48: "Florianópolis, SC",
+    51: "Porto Alegre, RS",
+    61: "Brasília, DF",
+    71: "Salvador, BA",
+    81: "Recife, PE",
+    85: "Fortaleza, CE",
+    91: "Belém, PA",
+  };
+  if (digits.startsWith("55")) return dddMap[ddd] || "Brasil";
+  if (digits.startsWith("1")) return "EUA/Canadá";
+  if (digits.startsWith("351")) return "Portugal";
+  if (digits.startsWith("44")) return "Reino Unido";
+  if (digits.startsWith("34")) return "Espanha";
+  return "Não informado";
+};
+
+const financeLocationForRow = (row) => {
+  const direct =
+    row?.localizacao ||
+    row?.localização ||
+    row?.cidade ||
+    row?.city ||
+    row?.estado ||
+    row?.state ||
+    row?.pais ||
+    row?.país ||
+    row?.country ||
+    "";
+  if (String(direct || "").trim()) return String(direct).trim();
+  return financeLocationFromPhone(row?.telefone);
 };
 
 const formatFinanceMoney = (value) => {
@@ -9355,35 +9425,35 @@ const renderFinancePanel = () => {
   );
 
   const chatRows = [...alunos, ...cobrancas].filter((row) => normalizeFinanceConversationId(row?.id_conversa_chatwoot));
+  const uniqueChatRows = Array.from(
+    chatRows
+      .reduce((map, row) => {
+        const conv = normalizeFinanceConversationId(row?.id_conversa_chatwoot);
+        if (!conv || map.has(conv)) return map;
+        const source = financeState.alunos.some((item) => String(item?.id || "") === String(row?.id || "")) ? "aluno" : "cobranca";
+        map.set(conv, { row, conv, source });
+        return map;
+      }, new Map())
+      .values()
+  );
+  if (financeState.activeTab === "chatwoot" && uniqueChatRows.length) {
+    const currentConv = normalizeFinanceConversationId(financeInlineChatState.conversationId);
+    const currentExists = currentConv && uniqueChatRows.some((item) => item.conv === currentConv);
+    if (!currentExists) {
+      const first = uniqueChatRows[0];
+      financeInlineChatState.conversationId = first.conv;
+      financeInlineChatState.source = first.source;
+      financeInlineChatState.row = first.row;
+      financeInlineChatState.messages = [];
+      financeInlineChatState.error = "";
+      financeInlineChatState.isLoading = true;
+      queueMicrotask(() => loadFinanceInlineChatMessages({ silent: false }).catch(() => {}));
+    }
+  }
   setTableHtml(
     "chatwoot",
-    chatRows.length
-      ? `
-      <div class="finance-row finance-head-row finance-row-chatwoot">
-        <span>Aluno</span><span>Telefone</span><span>E-mail</span><span>Status</span><span>Conversa</span><span>Ações</span>
-      </div>
-      ${chatRows
-        .map((row) => {
-          const conv = normalizeFinanceConversationId(row?.id_conversa_chatwoot);
-          const source = financeState.alunos.some((item) => String(item?.id || "") === String(row?.id || "")) ? "aluno" : "cobranca";
-          return `
-            <div class="finance-row finance-row-chatwoot">
-              <span class="finance-student">${escapeHtml(row?.aluno_nome || "—")}</span>
-              <span>${escapeHtml(row?.telefone || "—")}</span>
-              <span>${escapeHtml(row?.email || "—")}</span>
-              <span>${financeBadgeHtml(row?.status || "—", financeStatusTone(row?.status))}</span>
-              <span><span class="finance-ready">Chatwoot vinculado</span> #${escapeHtml(conv)}</span>
-              <span class="admin-student-fin-actions">
-                <button type="button" class="admin-student-file-btn" data-finance-chat-view="${escapeHtml(conv)}" data-finance-chat-source="${escapeHtml(source)}" data-finance-chat-row="${escapeHtml(
-                  String(row?.id || "")
-                )}">Ver conversa</button>
-                <a class="admin-student-file-btn" href="${escapeHtml(financeChatwootUrl(conv))}" target="_blank" rel="noopener">Abrir no Chatwoot</a>
-              </span>
-            </div>
-          `;
-        })
-        .join("")}
-    `
+    uniqueChatRows.length
+      ? renderFinanceChatWorkspace(uniqueChatRows)
       : ""
   );
 
@@ -9739,6 +9809,186 @@ const getFinanceChatRow = ({ source, rowId, conversationId } = {}) => {
     (conv ? list.find((row) => normalizeFinanceConversationId(row?.id_conversa_chatwoot) === conv) : null) ||
     null
   );
+};
+
+const renderFinanceMessageBubbles = ({ messages, row, loading, error } = {}) => {
+  if (loading) return `<div class="finance-chat-empty-state">Carregando conversa...</div>`;
+  if (error) return `<div class="finance-chat-empty-state is-error">Não foi possível carregar a conversa do Chatwoot.</div>`;
+  if (!Array.isArray(messages) || !messages.length) return `<div class="finance-chat-empty-state">Nenhuma mensagem encontrada.</div>`;
+  return messages
+    .map((m) => {
+      const type = String(m.message_type || "").toLowerCase();
+      const incoming = type === "incoming";
+      const isPrivate = Boolean(m.private);
+      const attachments = Array.isArray(m.attachments) ? m.attachments : [];
+      return `
+        <article class="admin-student-chatwoot-message ${incoming ? "is-incoming" : "is-outgoing"} ${isPrivate ? "is-private" : ""}">
+          <div class="admin-student-chatwoot-meta">
+            <strong>${escapeHtml(isPrivate ? "Nota interna" : incoming ? row?.aluno_nome || "Lead" : m.sender_name || "Equipe")}</strong>
+            <span>${escapeHtml(formatChatwootTime(m.created_at))}</span>
+          </div>
+          <div class="admin-student-chatwoot-content">${escapeHtml(m.content || "—")}</div>
+          ${
+            attachments.length
+              ? `<div class="finance-chat-attachments">${attachments
+                  .map((att) => `<a href="${escapeHtml(att.data_url)}" target="_blank" rel="noopener">${escapeHtml(att.file_name || att.file_type || "Anexo")}</a>`)
+                  .join("")}</div>`
+              : ""
+          }
+        </article>
+      `;
+    })
+    .join("");
+};
+
+const renderFinanceChatWorkspace = (items) => {
+  const activeConv = normalizeFinanceConversationId(financeInlineChatState.conversationId);
+  const activeItem = (activeConv ? items.find((item) => item.conv === activeConv) : null) || items[0] || null;
+  const row = financeInlineChatState.row || activeItem?.row || {};
+  const conv = activeConv || activeItem?.conv || "";
+  const chatUrl = financeChatwootUrl(conv);
+  const messagesHtml =
+    activeConv && financeInlineChatState.row
+      ? renderFinanceMessageBubbles({
+          messages: financeInlineChatState.messages,
+          row,
+          loading: financeInlineChatState.isLoading,
+          error: financeInlineChatState.error,
+        })
+      : `<div class="finance-chat-empty-state">Selecione uma conversa para visualizar o histórico.</div>`;
+
+  return `
+    <section class="finance-chat-workspace">
+      <aside class="finance-chat-threads" aria-label="Conversas Chatwoot">
+        <div class="finance-chat-section-head">
+          <strong>Conversas</strong>
+          <span>${escapeHtml(String(items.length))} vinculada(s)</span>
+        </div>
+        <div class="finance-chat-thread-list">
+          ${items
+            .map(({ row: itemRow, conv: itemConv, source }) => {
+              const isActive = itemConv === conv;
+              return `
+                <button type="button" class="finance-chat-thread ${isActive ? "is-active" : ""}" data-finance-inline-chat-open="${escapeHtml(itemConv)}" data-finance-chat-source="${escapeHtml(
+                  source
+                )}" data-finance-chat-row="${escapeHtml(String(itemRow?.id || ""))}">
+                  <span class="finance-chat-avatar">${escapeHtml(financeStudentInitials(itemRow?.aluno_nome || itemRow?.email || "Aluno").toUpperCase())}</span>
+                  <span class="finance-chat-thread-main">
+                    <strong>${escapeHtml(itemRow?.aluno_nome || itemRow?.email || "Conversa financeira")}</strong>
+                    <small>${escapeHtml(itemRow?.telefone || itemRow?.email || "Sem contato")} · #${escapeHtml(itemConv)}</small>
+                  </span>
+                  <span class="finance-chat-thread-status">${escapeHtml(itemRow?.status || "—")}</span>
+                </button>
+              `;
+            })
+            .join("")}
+        </div>
+      </aside>
+
+      <main class="finance-chat-panel">
+        <header class="finance-chat-panel-head">
+          <div class="finance-chat-title-block">
+            <span class="finance-chat-avatar is-large">${escapeHtml(financeStudentInitials(row?.aluno_nome || row?.email || "Aluno").toUpperCase())}</span>
+            <div>
+              <strong>${escapeHtml(row?.aluno_nome || row?.email || "Selecione uma conversa")}</strong>
+              <span>${escapeHtml(row?.telefone || "Sem telefone")} · ${escapeHtml(financeLocationForRow(row))}</span>
+            </div>
+          </div>
+          <div class="finance-chat-head-actions">
+            ${conv ? `<span class="finance-chat-id">#${escapeHtml(conv)}</span>` : ""}
+            ${conv ? `<a class="admin-student-file-btn" href="${escapeHtml(chatUrl)}" target="_blank" rel="noopener">Abrir no Chatwoot</a>` : ""}
+            ${conv ? `<button type="button" class="admin-student-file-btn" data-finance-inline-chat-refresh>Atualizar</button>` : ""}
+          </div>
+        </header>
+        <div class="admin-student-chatwoot-list finance-chat-list is-inline">${messagesHtml}</div>
+        <footer class="finance-chat-compose is-inline">
+          <textarea class="modal-input finance-chat-input" rows="3" placeholder="Digite uma mensagem..." data-finance-inline-chat-input ${
+            !activeConv || financeInlineChatState.isSending ? "disabled" : ""
+          }></textarea>
+          <div class="finance-chat-compose-actions">
+            <button type="button" class="button button-solid button-small" data-finance-inline-chat-send ${!activeConv || financeInlineChatState.isSending ? "disabled" : ""}>Enviar mensagem</button>
+            <button type="button" class="button button-outline button-small" data-finance-inline-chat-note ${!activeConv || financeInlineChatState.isSending ? "disabled" : ""}>Adicionar nota interna</button>
+          </div>
+        </footer>
+      </main>
+
+      <aside class="finance-chat-profile" aria-label="Dados do aluno">
+        <div class="finance-chat-section-head">
+          <strong>Aluno</strong>
+          ${row?.status ? financeBadgeHtml(row.status, financeStatusTone(row.status)) : ""}
+        </div>
+        <dl class="finance-chat-profile-list">
+          <div><dt>Telefone</dt><dd>${escapeHtml(row?.telefone || "—")}</dd></div>
+          <div><dt>E-mail</dt><dd>${escapeHtml(row?.email || "—")}</dd></div>
+          <div><dt>Localização</dt><dd>${escapeHtml(financeLocationForRow(row))}</dd></div>
+          <div><dt>Forma</dt><dd>${escapeHtml(row?.forma_pagamento || "—")}</dd></div>
+          <div><dt>Vencimento</dt><dd>${escapeHtml(formatFinanceDate(row?.vencimento))}</dd></div>
+          <div><dt>Asaas</dt><dd>${escapeHtml(row?.asaas_customer_id || row?.id_cobranca_externa || "—")}</dd></div>
+        </dl>
+      </aside>
+    </section>
+  `;
+};
+
+const openFinanceInlineChat = ({ conversationId, source = "", rowId = "" } = {}) => {
+  const id = normalizeFinanceConversationId(conversationId);
+  if (!id) return;
+  financeInlineChatState.conversationId = id;
+  financeInlineChatState.source = source;
+  financeInlineChatState.row = getFinanceChatRow({ source, rowId, conversationId: id });
+  financeInlineChatState.messages = [];
+  financeInlineChatState.error = "";
+  financeInlineChatState.isLoading = true;
+  renderFinancePanel();
+  loadFinanceInlineChatMessages({ silent: false }).catch(() => {});
+};
+
+const loadFinanceInlineChatMessages = async ({ silent = false } = {}) => {
+  const conv = normalizeFinanceConversationId(financeInlineChatState.conversationId);
+  if (!conv) return;
+  financeInlineChatState.error = "";
+  if (!silent) {
+    financeInlineChatState.isLoading = true;
+    renderFinancePanel();
+  }
+  try {
+    const res = await fetchWithAuth(`/api/chatwoot/conversation?id=${encodeURIComponent(conv)}`, { method: "GET" });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error || "chatwoot_failed");
+    financeInlineChatState.messages = Array.isArray(data?.messages) ? data.messages : [];
+  } catch (error) {
+    console.error("[finance] inline chatwoot view failed:", error);
+    financeInlineChatState.error = "chatwoot_failed";
+  } finally {
+    financeInlineChatState.isLoading = false;
+    renderFinancePanel();
+  }
+};
+
+const sendFinanceInlineChatMessage = async ({ privateNote = false } = {}) => {
+  const input = document.querySelector("[data-finance-inline-chat-input]");
+  const content = input instanceof HTMLTextAreaElement ? input.value.trim() : "";
+  const conv = normalizeFinanceConversationId(financeInlineChatState.conversationId);
+  if (!content || !conv) return;
+  financeInlineChatState.isSending = true;
+  renderFinancePanel();
+  try {
+    const res = await fetchWithAuth(`/api/chatwoot/conversation?id=${encodeURIComponent(conv)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content, private: Boolean(privateNote) }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error || "chatwoot_send_failed");
+    await loadFinanceInlineChatMessages({ silent: true });
+  } catch (error) {
+    console.error("[finance] inline chatwoot send failed:", error);
+    financeInlineChatState.error = "chatwoot_send_failed";
+    renderFinancePanel();
+  } finally {
+    financeInlineChatState.isSending = false;
+    renderFinancePanel();
+  }
 };
 
 const renderFinanceChatModal = () => {
@@ -18609,6 +18859,41 @@ document.addEventListener(
     }
 
     if (!isFinanceAccessRole(currentRole)) return;
+
+    const financeInlineChatOpen = target.closest("[data-finance-inline-chat-open]");
+    if (financeInlineChatOpen instanceof HTMLButtonElement) {
+      event.preventDefault();
+      event.stopPropagation();
+      const conversationId = String(financeInlineChatOpen.getAttribute("data-finance-inline-chat-open") || "").trim();
+      const source = String(financeInlineChatOpen.getAttribute("data-finance-chat-source") || "").trim();
+      const rowId = String(financeInlineChatOpen.getAttribute("data-finance-chat-row") || "").trim();
+      openFinanceInlineChat({ conversationId, source, rowId });
+      return;
+    }
+
+    const financeInlineChatRefresh = target.closest("[data-finance-inline-chat-refresh]");
+    if (financeInlineChatRefresh instanceof HTMLButtonElement) {
+      event.preventDefault();
+      event.stopPropagation();
+      loadFinanceInlineChatMessages({ silent: false }).catch(() => {});
+      return;
+    }
+
+    const financeInlineChatSend = target.closest("[data-finance-inline-chat-send]");
+    if (financeInlineChatSend instanceof HTMLButtonElement) {
+      event.preventDefault();
+      event.stopPropagation();
+      sendFinanceInlineChatMessage({ privateNote: false }).catch(() => {});
+      return;
+    }
+
+    const financeInlineChatNote = target.closest("[data-finance-inline-chat-note]");
+    if (financeInlineChatNote instanceof HTMLButtonElement) {
+      event.preventDefault();
+      event.stopPropagation();
+      sendFinanceInlineChatMessage({ privateNote: true }).catch(() => {});
+      return;
+    }
 
     const financeNew = target.closest("[data-finance-new]");
     if (financeNew instanceof HTMLButtonElement) {
