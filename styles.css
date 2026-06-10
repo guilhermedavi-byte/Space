@@ -5528,6 +5528,88 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
   font-weight: 950;
 }
 
+.finance-priority-list,
+.finance-ops-list {
+  display: grid;
+  gap: 10px;
+}
+
+.finance-priority-item,
+.finance-priority-empty,
+.finance-ops-list div {
+  padding: 12px;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.finance-priority-item {
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr) minmax(180px, 0.9fr);
+  align-items: center;
+  gap: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.finance-priority-item span {
+  min-height: 24px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 10px;
+  font-weight: 900;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.finance-priority-item strong,
+.finance-priority-item small,
+.finance-priority-empty {
+  min-width: 0;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.finance-priority-item small {
+  color: rgba(255, 255, 255, 0.54);
+}
+
+.finance-priority-item.is-red {
+  border-color: rgba(255, 86, 79, 0.2);
+  background: rgba(255, 86, 79, 0.06);
+}
+
+.finance-priority-item.is-yellow {
+  border-color: rgba(242, 201, 76, 0.18);
+  background: rgba(242, 201, 76, 0.055);
+}
+
+.finance-priority-item.is-blue {
+  border-color: rgba(89, 144, 189, 0.22);
+  background: rgba(89, 144, 189, 0.065);
+}
+
+.finance-ops-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.finance-ops-list span {
+  display: block;
+  color: rgba(255, 255, 255, 0.52);
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.finance-ops-list strong {
+  display: block;
+  margin-top: 6px;
+  color: rgba(255, 255, 255, 0.93);
+  font-size: 22px;
+  font-weight: 950;
+}
+
 .finance-location-map {
   position: relative;
   display: flex;
@@ -5649,6 +5731,44 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
   margin: 0;
 }
 
+.finance-chat-money-card {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 86, 79, 0.16);
+  background:
+    radial-gradient(circle at top right, rgba(255, 86, 79, 0.1), transparent 44%),
+    rgba(255, 255, 255, 0.045);
+}
+
+.finance-chat-money-card span,
+.finance-chat-money-card small {
+  color: rgba(255, 255, 255, 0.52);
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.finance-chat-money-card strong {
+  color: rgba(255, 255, 255, 0.94);
+  font-size: 22px;
+  font-weight: 950;
+}
+
+.finance-chat-money-card small {
+  font-size: 11px;
+  line-height: 1.35;
+  text-transform: none;
+}
+
+.finance-chat-money-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .finance-chat-profile-list div {
   padding: 9px;
   border-radius: 12px;
@@ -5736,6 +5856,33 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
   margin: 0 0 12px;
 }
 
+.finance-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px;
+  min-width: 100%;
+  padding: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.finance-filter-bar label {
+  display: grid;
+  gap: 5px;
+  min-width: min(260px, 100%);
+}
+
+.finance-filter-bar label:first-child {
+  flex: 1 1 300px;
+}
+
+.finance-filter-bar span {
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
 .finance-tab {
   min-height: 36px;
   padding: 0 12px;
@@ -5809,8 +5956,8 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
 }
 
 .finance-row-alunos {
-  grid-template-columns: minmax(220px, 1.35fr) 145px minmax(260px, 1.3fr) 120px minmax(170px, 0.95fr) minmax(180px, 0.95fr) minmax(190px, 1.05fr) 145px;
-  width: 1560px;
+  grid-template-columns: minmax(220px, 1.35fr) 145px minmax(260px, 1.3fr) 120px minmax(170px, 0.95fr) minmax(180px, 0.95fr) minmax(170px, 0.9fr) minmax(190px, 1.05fr) 145px;
+  width: 1740px;
 }
 
 .finance-row-alunos > span {
@@ -5818,8 +5965,8 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
 }
 
 .finance-row-cobrancas {
-  grid-template-columns: minmax(180px, 1.3fr) 105px 112px 96px 124px 112px 132px 130px minmax(280px, 1.7fr);
-  width: 1340px;
+  grid-template-columns: minmax(180px, 1.3fr) 105px 112px 86px 96px 124px 112px 132px 130px minmax(280px, 1.7fr);
+  width: 1440px;
 }
 
 .finance-row-pagamentos {

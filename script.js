@@ -8966,6 +8966,11 @@ const financeState = {
   error: "",
   loadedAt: 0,
   activeTab: "overview",
+  filters: {
+    alunos: "todos",
+    cobrancas: "todos",
+    search: "",
+  },
 };
 const financeChatState = {
   conversationId: "",
@@ -8986,6 +8991,7 @@ const financeInlineChatState = {
   error: "",
   messages: [],
 };
+let financeFilterTimer = null;
 
 const normalizeFinanceConversationId = (value) => {
   const raw = String(value || "").trim();
@@ -9109,6 +9115,102 @@ const financeDateKey = (value) => {
   return createDateKey(date);
 };
 
+const financeDaysUntil = (value) => {
+  if (!value) return null;
+  const date = new Date(String(value));
+  if (Number.isNaN(date.getTime())) return null;
+  const today = new Date();
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  const due = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  return Math.round((due - start) / 86400000);
+};
+
+const financeMatchesSearch = (row, search = "") => {
+  const q = String(search || "").trim().toLowerCase();
+  if (!q) return true;
+  return [
+    row?.aluno_nome,
+    row?.telefone,
+    row?.email,
+    row?.status,
+    row?.forma_pagamento,
+    row?.asaas_customer_id,
+    row?.asaas_subscription_id,
+    row?.id_conversa_chatwoot,
+    row?.id_cobranca_externa,
+  ]
+    .filter(Boolean)
+    .some((value) => String(value).toLowerCase().includes(q));
+};
+
+const financeOpenCharge = (charges = [], row = {}) => {
+  const email = String(row?.email || "").trim().toLowerCase();
+  const phone = String(row?.telefone || "").replace(/\D+/g, "");
+  const name = String(row?.aluno_nome || "").trim().toLowerCase();
+  return charges
+    .filter((charge) => {
+      const status = String(charge?.status || "").toLowerCase();
+      if (status === "pago" || charge?.pago_em) return false;
+      const cEmail = String(charge?.email || "").trim().toLowerCase();
+      const cPhone = String(charge?.telefone || "").replace(/\D+/g, "");
+      const cName = String(charge?.aluno_nome || "").trim().toLowerCase();
+      return (email && cEmail === email) || (phone && cPhone === phone) || (name && cName === name);
+    })
+    .sort((a, b) => String(a?.vencimento || "").localeCompare(String(b?.vencimento || "")))[0];
+};
+
+const financeStudentOperationalStatus = (row, charges = []) => {
+  const status = String(row?.status || "").trim().toLowerCase();
+  const conv = normalizeFinanceConversationId(row?.id_conversa_chatwoot);
+  const hasAsaas = Boolean(String(row?.asaas_customer_id || row?.asaas_subscription_id || "").trim());
+  const phone = Boolean(String(row?.telefone || "").replace(/\D+/g, ""));
+  const open = financeOpenCharge(charges, row);
+  const hasInvoice = Boolean(String(open?.link_fatura || open?.link_boleto || "").trim());
+  const issues = [];
+  if (status !== "ativo") issues.push("inativo");
+  if (!conv) issues.push("sem Chatwoot");
+  if (!hasAsaas) issues.push("sem Asaas");
+  if (!phone) issues.push("sem telefone");
+  if (open && !hasInvoice) issues.push("sem link");
+  return {
+    ready: issues.length === 0,
+    issues,
+    openCharge: open,
+    hasAsaas,
+    hasChatwoot: Boolean(conv),
+    hasPhone: phone,
+    hasInvoice,
+  };
+};
+
+const financePriorityItems = ({ alunos = [], cobrancas = [] } = {}) => {
+  const items = [];
+  cobrancas.forEach((row) => {
+    const status = String(row?.status || "").toLowerCase();
+    const paid = status === "pago" || row?.pago_em;
+    const dueIn = financeDaysUntil(row?.vencimento);
+    const conv = normalizeFinanceConversationId(row?.id_conversa_chatwoot);
+    const invoice = String(row?.link_fatura || row?.link_boleto || "").trim();
+    if (paid) return;
+    if (status === "vencido" || (Number.isFinite(dueIn) && dueIn < 0)) {
+      items.push({ tone: "red", title: row?.aluno_nome || "Cobrança vencida", detail: `${formatFinanceMoney(row?.valor)} vencida em ${formatFinanceDate(row?.vencimento)}`, row, kind: "cobranca" });
+    } else if (Number.isFinite(dueIn) && dueIn <= 7) {
+      items.push({ tone: "yellow", title: row?.aluno_nome || "Vence em breve", detail: `${formatFinanceMoney(row?.valor)} vence em ${dueIn} dia(s)`, row, kind: "cobranca" });
+    }
+    if (!conv) items.push({ tone: "blue", title: row?.aluno_nome || "Cobrança sem conversa", detail: "Vincular Chatwoot antes da automação", row, kind: "cobranca" });
+    if (String(row?.forma_pagamento || "").toUpperCase() === "ASAAS" && !invoice) {
+      items.push({ tone: "blue", title: row?.aluno_nome || "Cobrança sem link", detail: "Adicionar link Asaas/fatura", row, kind: "cobranca" });
+    }
+  });
+  alunos.forEach((row) => {
+    const ops = financeStudentOperationalStatus(row, cobrancas);
+    if (String(row?.status || "").toLowerCase() === "ativo" && ops.issues.length) {
+      items.push({ tone: ops.issues.includes("sem Chatwoot") ? "blue" : "yellow", title: row?.aluno_nome || "Aluno ativo incompleto", detail: ops.issues.join(", "), row, kind: "aluno" });
+    }
+  });
+  return items.slice(0, 8);
+};
+
 const setFinanceStatus = (message, tone = "") => {
   const el = document.querySelector("[data-finance-status]");
   if (!(el instanceof HTMLElement)) return;
@@ -9211,6 +9313,20 @@ const financeMonthLabel = (key) => {
 const renderFinanceDashboardHtml = ({ alunos, cobrancas, pagamentos, eventos, activeAlunos, pendingRows, paidRows, readyRows, withoutChatwoot, overdueTotal }) => {
   const paidValue = pagamentos.reduce((sum, row) => sum + (Number(row?.valor || 0) || 0), 0);
   const pendingValue = pendingRows.reduce((sum, row) => sum + (Number(row?.valor || 0) || 0), 0);
+  const nextSevenRows = cobrancas.filter((row) => {
+    const status = String(row?.status || "").toLowerCase();
+    const dueIn = financeDaysUntil(row?.vencimento);
+    return status !== "pago" && !row?.pago_em && Number.isFinite(dueIn) && dueIn >= 0 && dueIn <= 7;
+  });
+  const nextSevenValue = nextSevenRows.reduce((sum, row) => sum + (Number(row?.valor || 0) || 0), 0);
+  const overdueRows = cobrancas.filter((row) => String(row?.status || "").toLowerCase() === "vencido" && !row?.pago_em);
+  const delinquencyRate = cobrancas.length ? Math.round((overdueRows.length / cobrancas.length) * 100) : 0;
+  const priorityItems = financePriorityItems({ alunos, cobrancas });
+  const opsRows = activeAlunos.map((row) => ({ row, ops: financeStudentOperationalStatus(row, cobrancas) }));
+  const readyOps = opsRows.filter((item) => item.ops.ready).length;
+  const missingAsaas = opsRows.filter((item) => !item.ops.hasAsaas).length;
+  const missingPhone = opsRows.filter((item) => !item.ops.hasPhone).length;
+  const missingInvoice = opsRows.filter((item) => item.ops.openCharge && !item.ops.hasInvoice).length;
   const todayKey = createDateKey(new Date());
   const todayEvents = eventos.filter((row) => financeDateKey(row?.created_at) === todayKey);
   const monthKeys = [];
@@ -9283,6 +9399,17 @@ const renderFinanceDashboardHtml = ({ alunos, cobrancas, pagamentos, eventos, ac
           <div><span>Pendentes/vencidas</span><strong>${escapeHtml(String(pendingRows.length))}</strong></div>
           <div><span>Valor em aberto</span><strong>${escapeHtml(formatFinanceMoney(pendingValue))}</strong></div>
           <div><span>Total vencido</span><strong>${escapeHtml(formatFinanceMoney(overdueTotal))}</strong></div>
+          <div><span>Inadimplência</span><strong>${escapeHtml(String(delinquencyRate))}%</strong></div>
+        </div>
+      </article>
+
+      <article class="finance-dashboard-panel">
+        <div class="finance-dashboard-panel-head">
+          <div><span>Previsão</span><strong>Próximos 7 dias</strong></div>
+        </div>
+        <div class="finance-dashboard-big-number">
+          <strong>${escapeHtml(formatFinanceMoney(nextSevenValue))}</strong>
+          <span>${escapeHtml(String(nextSevenRows.length))} cobrança(s) próximas do vencimento</span>
         </div>
       </article>
 
@@ -9317,6 +9444,42 @@ const renderFinanceDashboardHtml = ({ alunos, cobrancas, pagamentos, eventos, ac
         <div class="finance-dashboard-big-number">
           <strong>${escapeHtml(String(todayEvents.length))}</strong>
           <span>${escapeHtml(String(eventos.length))} evento(s) no histórico carregado</span>
+        </div>
+      </article>
+
+      <article class="finance-dashboard-panel finance-dashboard-panel-wide">
+        <div class="finance-dashboard-panel-head">
+          <div><span>Fila de cobrança</span><strong>Prioridade de hoje</strong></div>
+          <b>${escapeHtml(String(priorityItems.length))} item(s)</b>
+        </div>
+        <div class="finance-priority-list">
+          ${
+            priorityItems.length
+              ? priorityItems
+                  .map(
+                    (item) => `
+                      <div class="finance-priority-item is-${escapeHtml(item.tone)}">
+                        <span>${escapeHtml(item.kind === "aluno" ? "Aluno" : "Cobrança")}</span>
+                        <strong>${escapeHtml(item.title)}</strong>
+                        <small>${escapeHtml(item.detail)}</small>
+                      </div>
+                    `
+                  )
+                  .join("")
+              : `<div class="finance-priority-empty">Nenhuma urgência encontrada agora.</div>`
+          }
+        </div>
+      </article>
+
+      <article class="finance-dashboard-panel">
+        <div class="finance-dashboard-panel-head">
+          <div><span>Checklist</span><strong>Status operacional</strong></div>
+        </div>
+        <div class="finance-ops-list">
+          <div><span>Prontos</span><strong>${escapeHtml(String(readyOps))}</strong></div>
+          <div><span>Sem Asaas</span><strong>${escapeHtml(String(missingAsaas))}</strong></div>
+          <div><span>Sem telefone</span><strong>${escapeHtml(String(missingPhone))}</strong></div>
+          <div><span>Cobrança sem link</span><strong>${escapeHtml(String(missingInvoice))}</strong></div>
         </div>
       </article>
     </section>
@@ -9398,11 +9561,75 @@ const renderFinancePanel = () => {
     setFinanceStatus(`${alunos.length} aluno(s), ${cobrancas.length} cobrança(s), ${pagamentos.length} pagamento(s), ${eventos.length} evento(s).`);
   }
 
+  const search = String(financeState.filters.search || "");
+  const alunoFilter = String(financeState.filters.alunos || "todos");
+  const cobrancaFilter = String(financeState.filters.cobrancas || "todos");
+  const filteredAlunos = alunos
+    .filter((row) => financeMatchesSearch(row, search))
+    .filter((row) => {
+      const status = String(row?.status || "").toLowerCase();
+      const conv = normalizeFinanceConversationId(row?.id_conversa_chatwoot);
+      const ops = financeStudentOperationalStatus(row, cobrancas);
+      if (alunoFilter === "ativos") return status === "ativo";
+      if (alunoFilter === "sem_chatwoot") return status === "ativo" && !conv;
+      if (alunoFilter === "sem_asaas") return status === "ativo" && !ops.hasAsaas;
+      if (alunoFilter === "prontos") return status === "ativo" && ops.ready;
+      if (alunoFilter === "inativos") return status !== "ativo";
+      return true;
+    });
+  const filteredCobrancas = cobrancas
+    .filter((row) => financeMatchesSearch(row, search))
+    .filter((row) => {
+      const status = String(row?.status || "").toLowerCase();
+      const dueIn = financeDaysUntil(row?.vencimento);
+      const conv = normalizeFinanceConversationId(row?.id_conversa_chatwoot);
+      const invoice = String(row?.link_fatura || row?.link_boleto || "").trim();
+      const paid = status === "pago" || row?.pago_em;
+      if (cobrancaFilter === "abertas") return !paid;
+      if (cobrancaFilter === "vencidas") return !paid && (status === "vencido" || (Number.isFinite(dueIn) && dueIn < 0));
+      if (cobrancaFilter === "proximas") return !paid && Number.isFinite(dueIn) && dueIn >= 0 && dueIn <= 7;
+      if (cobrancaFilter === "sem_chatwoot") return !conv;
+      if (cobrancaFilter === "sem_link") return String(row?.forma_pagamento || "").toUpperCase() === "ASAAS" && !invoice;
+      if (cobrancaFilter === "pagas") return paid;
+      return true;
+    });
+  const renderFinanceFilters = (type) => `
+    <div class="finance-filter-bar">
+      <label>
+        <span>Buscar</span>
+        <input class="modal-input" value="${escapeHtml(search)}" placeholder="Nome, telefone, e-mail..." data-finance-filter-search />
+      </label>
+      ${
+        type === "alunos"
+          ? `<label><span>Filtro</span><select class="modal-input" data-finance-filter-alunos>
+              <option value="todos" ${alunoFilter === "todos" ? "selected" : ""}>Todos</option>
+              <option value="ativos" ${alunoFilter === "ativos" ? "selected" : ""}>Ativos</option>
+              <option value="prontos" ${alunoFilter === "prontos" ? "selected" : ""}>Prontos para cobrança</option>
+              <option value="sem_chatwoot" ${alunoFilter === "sem_chatwoot" ? "selected" : ""}>Sem Chatwoot</option>
+              <option value="sem_asaas" ${alunoFilter === "sem_asaas" ? "selected" : ""}>Sem Asaas</option>
+              <option value="inativos" ${alunoFilter === "inativos" ? "selected" : ""}>Inativos</option>
+            </select></label>`
+          : `<label><span>Filtro</span><select class="modal-input" data-finance-filter-cobrancas>
+              <option value="todos" ${cobrancaFilter === "todos" ? "selected" : ""}>Todas</option>
+              <option value="abertas" ${cobrancaFilter === "abertas" ? "selected" : ""}>Abertas</option>
+              <option value="vencidas" ${cobrancaFilter === "vencidas" ? "selected" : ""}>Vencidas</option>
+              <option value="proximas" ${cobrancaFilter === "proximas" ? "selected" : ""}>Próximos 7 dias</option>
+              <option value="sem_chatwoot" ${cobrancaFilter === "sem_chatwoot" ? "selected" : ""}>Sem Chatwoot</option>
+              <option value="sem_link" ${cobrancaFilter === "sem_link" ? "selected" : ""}>Asaas sem link</option>
+              <option value="pagas" ${cobrancaFilter === "pagas" ? "selected" : ""}>Pagas</option>
+            </select></label>`
+      }
+      <button type="button" class="admin-student-file-btn" data-finance-filter-clear>Limpar</button>
+    </div>
+  `;
+
   const currentRows =
-    financeState.activeTab === "overview" || financeState.activeTab === "alunos"
+    financeState.activeTab === "overview"
       ? alunos
+      : financeState.activeTab === "alunos"
+      ? filteredAlunos
       : financeState.activeTab === "cobrancas"
-        ? cobrancas
+        ? filteredCobrancas
         : financeState.activeTab === "pagamentos"
           ? pagamentos
           : financeState.activeTab === "chatwoot"
@@ -9410,15 +9637,17 @@ const renderFinancePanel = () => {
             : eventos;
   if (empty instanceof HTMLElement) empty.hidden = currentRows.length > 0;
 
-  const alunosTableHtml = alunos.length
+  const alunosTableHtml = filteredAlunos.length
     ? `
+      ${renderFinanceFilters("alunos")}
       <div class="finance-row finance-head-row finance-row-alunos">
-        <span>Aluno</span><span>Telefone</span><span>E-mail</span><span>Status</span><span>Asaas cliente</span><span>Assinatura</span><span>Chatwoot</span><span>Atualizado</span>
+        <span>Aluno</span><span>Telefone</span><span>E-mail</span><span>Status</span><span>Asaas cliente</span><span>Assinatura</span><span>Operação</span><span>Chatwoot</span><span>Atualizado</span>
       </div>
-      ${alunos
+      ${filteredAlunos
         .map((row) => {
           const conv = normalizeFinanceConversationId(row?.id_conversa_chatwoot);
           const chatUrl = row?.chatwoot_url || financeChatwootUrl(conv);
+          const ops = financeStudentOperationalStatus(row, cobrancas);
           return `
             <div class="finance-row finance-row-alunos" data-finance-student-row="${escapeHtml(String(row?.id || ""))}">
               <span class="finance-student">${escapeHtml(row?.aluno_nome || "—")} ${financeReadyBadgeForAluno(row)}</span>
@@ -9427,6 +9656,7 @@ const renderFinancePanel = () => {
               <span>${financeBadgeHtml(row?.status || "—", financeStatusTone(row?.status))}</span>
               <span>${escapeHtml(row?.asaas_customer_id || "—")}</span>
               <span>${escapeHtml(row?.asaas_subscription_id || "—")}</span>
+              <span>${ops.ready ? `<span class="finance-ready">OK</span>` : `<span class="finance-missing">${escapeHtml(ops.issues.join(", "))}</span>`}</span>
               <span class="admin-student-fin-actions">
                 ${conv ? '<span class="finance-ready">Chatwoot vinculado</span>' : '<span class="finance-missing">Sem Chatwoot</span>'}
                 ${
@@ -9443,6 +9673,8 @@ const renderFinancePanel = () => {
         })
         .join("")}
     `
+    : alunos.length
+      ? `${renderFinanceFilters("alunos")}<div class="finance-empty">Nenhum aluno encontrado com os filtros atuais.</div>`
     : "";
   setTableHtml(
     "overview",
@@ -9452,17 +9684,20 @@ const renderFinancePanel = () => {
 
   setTableHtml(
     "cobrancas",
-    cobrancas.length
+    filteredCobrancas.length
       ? `
+      ${renderFinanceFilters("cobrancas")}
       <div class="finance-row finance-head-row finance-row-cobrancas">
-        <span>Aluno</span><span>Valor</span><span>Vencimento</span><span>Status</span><span>Forma</span><span>Fatura</span><span>Chatwoot</span><span>Pago em</span><span>Ações</span>
+        <span>Aluno</span><span>Valor</span><span>Vencimento</span><span>Prazo</span><span>Status</span><span>Forma</span><span>Fatura</span><span>Chatwoot</span><span>Pago em</span><span>Ações</span>
       </div>
-      ${cobrancas
+      ${filteredCobrancas
         .map((row) => {
           const id = String(row?.id || "");
           const status = financeStatusLabel(row?.status);
           const value = formatFinanceMoney(row?.valor);
           const due = formatFinanceDate(row?.vencimento);
+          const dueIn = financeDaysUntil(row?.vencimento);
+          const dueLabel = Number.isFinite(dueIn) ? (dueIn < 0 ? `${Math.abs(dueIn)}d atrasada` : dueIn === 0 ? "vence hoje" : `${dueIn}d`) : "—";
           const method = String(row?.forma_pagamento || "—").trim() || "—";
           const conv = normalizeFinanceConversationId(row?.id_conversa_chatwoot);
           const chatUrl = row?.chatwoot_url || financeChatwootUrl(conv);
@@ -9473,6 +9708,7 @@ const renderFinancePanel = () => {
               <span class="finance-student">${escapeHtml(row?.aluno_nome || row?.email || "—")}</span>
               <span>${escapeHtml(value)}</span>
               <span>${escapeHtml(due)}</span>
+              <span>${escapeHtml(dueLabel)}</span>
               <span>${financeBadgeHtml(status, financeStatusTone(row?.status))}</span>
               <span>${escapeHtml(method)}</span>
               <span>${invoice ? `<a class="admin-student-file-btn" href="${escapeHtml(invoice)}" target="_blank" rel="noopener">Abrir fatura</a>` : "—"}</span>
@@ -9497,6 +9733,8 @@ const renderFinancePanel = () => {
         })
         .join("")}
     `
+      : cobrancas.length
+        ? `${renderFinanceFilters("cobrancas")}<div class="finance-empty">Nenhuma cobrança encontrada com os filtros atuais.</div>`
       : ""
   );
 
@@ -9941,6 +10179,36 @@ const getFinanceChatRow = ({ source, rowId, conversationId } = {}) => {
   );
 };
 
+const financeChatFinancialSummary = (row = {}) => {
+  const related = financeState.cobrancas
+    .filter((charge) => {
+      const conv = normalizeFinanceConversationId(row?.id_conversa_chatwoot);
+      const chargeConv = normalizeFinanceConversationId(charge?.id_conversa_chatwoot);
+      const email = String(row?.email || "").trim().toLowerCase();
+      const phone = String(row?.telefone || "").replace(/\D+/g, "");
+      const name = String(row?.aluno_nome || "").trim().toLowerCase();
+      return (
+        (conv && chargeConv === conv) ||
+        (email && String(charge?.email || "").trim().toLowerCase() === email) ||
+        (phone && String(charge?.telefone || "").replace(/\D+/g, "") === phone) ||
+        (name && String(charge?.aluno_nome || "").trim().toLowerCase() === name)
+      );
+    })
+    .sort((a, b) => String(b?.updated_at || b?.created_at || b?.vencimento || "").localeCompare(String(a?.updated_at || a?.created_at || a?.vencimento || "")));
+  const open = related.find((charge) => String(charge?.status || "").toLowerCase() !== "pago" && !charge?.pago_em) || null;
+  const latest = open || related[0] || null;
+  const invoice = String(latest?.link_fatura || latest?.link_boleto || "").trim();
+  return {
+    related,
+    latest,
+    open,
+    invoice,
+    openTotal: related
+      .filter((charge) => String(charge?.status || "").toLowerCase() !== "pago" && !charge?.pago_em)
+      .reduce((sum, charge) => sum + (Number(charge?.valor || 0) || 0), 0),
+  };
+};
+
 const renderFinanceMessageBubbles = ({ messages, row, loading, error } = {}) => {
   if (loading) return `<div class="finance-chat-empty-state">Carregando conversa...</div>`;
   if (error) return `<div class="finance-chat-empty-state is-error">Não foi possível carregar a conversa do Chatwoot.</div>`;
@@ -9979,6 +10247,8 @@ const renderFinanceChatWorkspace = (items) => {
   const row = financeInlineChatState.row || activeItem?.row || {};
   const conv = activeConv || activeItem?.conv || "";
   const chatUrl = financeChatwootUrl(conv);
+  const financial = financeChatFinancialSummary(row);
+  const latestCharge = financial.latest || {};
   const messagesHtml =
     activeConv && financeInlineChatState.row
       ? renderFinanceMessageBubbles({
@@ -10049,13 +10319,31 @@ const renderFinanceChatWorkspace = (items) => {
           <strong>Aluno</strong>
           ${row?.status ? financeBadgeHtml(row.status, financeStatusTone(row.status)) : ""}
         </div>
+        <div class="finance-chat-money-card">
+          <span>Resumo financeiro</span>
+          <strong>${escapeHtml(formatFinanceMoney(financial.openTotal))}</strong>
+          <small>${financial.open ? `Em aberto · ${formatFinanceDate(financial.open.vencimento)}` : financial.latest ? `Última cobrança · ${formatFinanceDate(financial.latest.vencimento)}` : "Sem cobrança relacionada"}</small>
+          <div class="finance-chat-money-actions">
+            <button type="button" class="admin-student-file-btn" data-finance-quick-message="Olá, ${escapeHtml(row?.aluno_nome || "")}! Passando para lembrar da sua cobrança da Space. Qualquer dúvida, estou por aqui.">Lembrete padrão</button>
+            ${
+              financial.invoice
+                ? `<a class="admin-student-file-btn" href="${escapeHtml(financial.invoice)}" target="_blank" rel="noopener">Abrir fatura</a><button type="button" class="admin-student-file-btn" data-finance-copy-link="${escapeHtml(financial.invoice)}">Copiar link</button><button type="button" class="admin-student-file-btn" data-finance-quick-message="Olá! Segue o link da sua fatura Space: ${escapeHtml(financial.invoice)}">Mensagem com link</button>`
+                : `<span class="finance-missing">Sem link</span>`
+            }
+            ${
+              latestCharge?.id && String(latestCharge?.status || "").toLowerCase() !== "pago" && !latestCharge?.pago_em
+                ? `<button type="button" class="admin-student-file-btn" data-finance-global-confirm="${escapeHtml(String(latestCharge.id))}">Marcar pago</button>`
+                : ""
+            }
+          </div>
+        </div>
         <dl class="finance-chat-profile-list">
           <div><dt>Telefone</dt><dd>${escapeHtml(row?.telefone || "—")}</dd></div>
           <div><dt>E-mail</dt><dd>${escapeHtml(row?.email || "—")}</dd></div>
           <div><dt>Localização</dt><dd>${escapeHtml(financeLocationForRow(row))}</dd></div>
-          <div><dt>Forma</dt><dd>${escapeHtml(row?.forma_pagamento || "—")}</dd></div>
-          <div><dt>Vencimento</dt><dd>${escapeHtml(formatFinanceDate(row?.vencimento))}</dd></div>
-          <div><dt>Asaas</dt><dd>${escapeHtml(row?.asaas_customer_id || row?.id_cobranca_externa || "—")}</dd></div>
+          <div><dt>Status cobrança</dt><dd>${escapeHtml(latestCharge?.status || row?.status || "—")}</dd></div>
+          <div><dt>Vencimento</dt><dd>${escapeHtml(formatFinanceDate(latestCharge?.vencimento || row?.vencimento))}</dd></div>
+          <div><dt>Asaas</dt><dd>${escapeHtml(row?.asaas_customer_id || latestCharge?.id_cobranca_externa || "—")}</dd></div>
         </dl>
       </aside>
     </section>
@@ -18847,6 +19135,43 @@ const navigateApp = (path, { replace = false } = {}) => {
   showPanel(parsed.panel);
 };
 
+document.addEventListener("click", (event) => {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  const clear = target.closest("[data-finance-filter-clear]");
+  if (clear instanceof HTMLButtonElement) {
+    event.preventDefault();
+    financeState.filters.search = "";
+    financeState.filters.alunos = "todos";
+    financeState.filters.cobrancas = "todos";
+    renderFinancePanel();
+  }
+});
+
+document.addEventListener("input", (event) => {
+  const target = event.target;
+  if (target instanceof HTMLInputElement && target.matches("[data-finance-filter-search]")) {
+    financeState.filters.search = target.value || "";
+    if (financeFilterTimer) window.clearTimeout(financeFilterTimer);
+    financeFilterTimer = window.setTimeout(() => {
+      financeFilterTimer = null;
+      renderFinancePanel();
+    }, 220);
+  }
+});
+
+document.addEventListener("change", (event) => {
+  const target = event.target;
+  if (target instanceof HTMLSelectElement && target.matches("[data-finance-filter-alunos]")) {
+    financeState.filters.alunos = target.value || "todos";
+    renderFinancePanel();
+  }
+  if (target instanceof HTMLSelectElement && target.matches("[data-finance-filter-cobrancas]")) {
+    financeState.filters.cobrancas = target.value || "todos";
+    renderFinancePanel();
+  }
+});
+
 window.addEventListener("popstate", () => {
   const parsed = parseAppRoute(normalizePathname(window.location.pathname));
   if (parsed) {
@@ -19139,6 +19464,18 @@ document.addEventListener(
       navigator.clipboard?.writeText(link).catch(() => {});
       setFinanceStatus("Link de pagamento copiado.", "success");
       window.setTimeout(() => setFinanceStatus(""), 1200);
+      return;
+    }
+
+    const financeQuickMessage = target.closest("[data-finance-quick-message]");
+    if (financeQuickMessage instanceof HTMLButtonElement) {
+      event.preventDefault();
+      event.stopPropagation();
+      const input = document.querySelector("[data-finance-inline-chat-input]");
+      if (input instanceof HTMLTextAreaElement) {
+        input.value = String(financeQuickMessage.getAttribute("data-finance-quick-message") || "").trim();
+        input.focus();
+      }
       return;
     }
 
