@@ -15348,6 +15348,330 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 }
 
 /* Growth - Contratos */
+.sales-copilot-shell {
+  width: min(1320px, calc(100vw - 42px));
+  margin: 0 auto;
+  padding: 28px 0 46px;
+}
+
+.sales-copilot-top,
+.sales-copilot-crud-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 16px;
+}
+
+.sales-copilot-kicker,
+.sales-copilot-crud-head span {
+  color: rgba(255, 114, 108, 0.82);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.sales-copilot-title {
+  margin: 4px 0 0;
+  color: rgba(255, 255, 255, 0.94);
+  font-size: 30px;
+  line-height: 1.05;
+}
+
+.sales-copilot-subtitle {
+  margin: 8px 0 0;
+  max-width: 640px;
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.sales-copilot-status {
+  min-height: 34px;
+  padding: 9px 13px;
+  border-radius: 999px;
+  border: 1px solid rgba(89, 144, 189, 0.28);
+  background: rgba(89, 144, 189, 0.12);
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.sales-copilot-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.sales-copilot-tab {
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 12px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.sales-copilot-tab.is-active {
+  border-color: rgba(255, 86, 79, 0.34);
+  background: rgba(255, 86, 79, 0.13);
+  color: rgba(255, 255, 255, 0.94);
+}
+
+.sales-copilot-view {
+  min-height: 520px;
+}
+
+.sales-copilot-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.8fr) minmax(520px, 1.35fr);
+  gap: 12px;
+}
+
+.sales-copilot-card,
+.sales-copilot-view:not([data-growth-copilot-view="copilot-vendas"]) {
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    radial-gradient(circle at top right, rgba(255, 86, 79, 0.08), transparent 36%),
+    radial-gradient(circle at bottom left, rgba(89, 144, 189, 0.08), transparent 38%),
+    rgba(13, 18, 27, 0.82);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.22);
+}
+
+.sales-copilot-card {
+  padding: 16px;
+}
+
+.sales-copilot-context {
+  align-self: start;
+}
+
+.sales-copilot-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.sales-copilot-card-head strong,
+.sales-copilot-crud-head strong {
+  color: rgba(255, 255, 255, 0.94);
+  font-size: 14px;
+  font-weight: 950;
+}
+
+.sales-copilot-card-head span {
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.sales-copilot-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.sales-copilot-form label,
+.sales-copilot-filter label {
+  display: grid;
+  gap: 5px;
+}
+
+.sales-copilot-form span {
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.sales-copilot-wide {
+  grid-column: 1 / -1;
+}
+
+.sales-copilot-main {
+  display: grid;
+  gap: 12px;
+}
+
+.sales-copilot-actions,
+.sales-copilot-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sales-copilot-stage {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.sales-copilot-stage span,
+.sales-copilot-consent {
+  color: rgba(255, 255, 255, 0.52);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.sales-copilot-stage strong {
+  color: rgba(255, 255, 255, 0.94);
+  font-size: 18px;
+  font-weight: 950;
+  text-transform: capitalize;
+}
+
+.sales-copilot-consent {
+  margin: 10px 0 0;
+  line-height: 1.4;
+}
+
+.sales-copilot-suggestions {
+  display: grid;
+  gap: 10px;
+}
+
+.sales-copilot-suggestion {
+  padding: 13px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.sales-copilot-suggestion.is-alta {
+  border-color: rgba(255, 86, 79, 0.24);
+  background: rgba(255, 86, 79, 0.07);
+}
+
+.sales-copilot-suggestion.is-média,
+.sales-copilot-suggestion.is-media {
+  border-color: rgba(242, 201, 76, 0.18);
+  background: rgba(242, 201, 76, 0.055);
+}
+
+.sales-copilot-suggestion-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.sales-copilot-suggestion-top span,
+.sales-copilot-suggestion-top b {
+  color: rgba(255, 255, 255, 0.56);
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.sales-copilot-suggestion strong {
+  color: rgba(255, 255, 255, 0.94);
+  font-size: 14px;
+  font-weight: 950;
+}
+
+.sales-copilot-suggestion p {
+  margin: 8px 0 12px;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.sales-copilot-transcript,
+.sales-copilot-summary {
+  display: grid;
+  gap: 8px;
+  max-height: 180px;
+  overflow: auto;
+  padding: 12px;
+  border-radius: 14px;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.014) 1px, transparent 1px),
+    rgba(0, 0, 0, 0.14);
+  background-size: 24px 24px;
+}
+
+.sales-copilot-transcript p,
+.sales-copilot-summary p,
+.sales-copilot-muted,
+.sales-copilot-empty {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.sales-copilot-manual {
+  margin: 10px 0;
+  min-height: 90px;
+}
+
+.sales-copilot-view:not([data-growth-copilot-view="copilot-vendas"]) {
+  padding: 18px;
+}
+
+.sales-copilot-crud-list {
+  display: grid;
+  gap: 10px;
+}
+
+.sales-copilot-crud-item {
+  display: grid;
+  gap: 8px;
+  padding: 13px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.sales-copilot-crud-item span,
+.sales-copilot-crud-item small {
+  color: rgba(255, 114, 108, 0.78);
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.sales-copilot-crud-item strong {
+  color: rgba(255, 255, 255, 0.94);
+  font-size: 14px;
+}
+
+.sales-copilot-crud-item p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.64);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+@media (max-width: 980px) {
+  .sales-copilot-top,
+  .sales-copilot-crud-head {
+    display: grid;
+  }
+
+  .sales-copilot-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .sales-copilot-form {
+    grid-template-columns: 1fr;
+  }
+}
 
 .growth-contracts-new {
   border: 0;

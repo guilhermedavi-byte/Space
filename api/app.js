@@ -8,6 +8,7 @@ const ROLE_TO_SLUG = {
   teacher: "professor",
   admin: "admin",
   FINANCE: "financeiro",
+  growth: "growth",
 };
 
 const slugToRole = (slug) => {
@@ -16,11 +17,12 @@ const slugToRole = (slug) => {
   if (raw === "professor") return "teacher";
   if (raw === "admin") return "admin";
   if (raw === "financeiro") return "FINANCE";
+  if (raw === "growth") return "growth";
   return "";
 };
 
 const roleToBasePath = (role) => {
-  if (String(role || "").trim().toLowerCase() === "growth") return "/growth/dashboard";
+  if (String(role || "").trim().toLowerCase() === "growth") return "/app/growth/copilot-vendas";
   if (String(role || "").trim() === "FINANCE" || String(role || "").trim().toLowerCase() === "finance") return "/app/financeiro";
   const slug = ROLE_TO_SLUG[String(role || "")] || ROLE_TO_SLUG.student;
   return `/app/${slug}`;
@@ -49,6 +51,7 @@ const initialPanelFromPath = (pathParam) => {
   const sub = segments[1] || "";
   if (slug === "financeiro") return "financeiro";
   if (slug === "admin" && sub === "financeiro") return "financeiro";
+  if (slug === "growth" || (slug === "admin" && sub === "growth")) return "growth";
   return "dashboard";
 };
 
