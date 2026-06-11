@@ -104,6 +104,17 @@
     onFinal: appendTranscript,
     onStatus: setStatus,
     onError: (error) => {
+      const code = String(error?.message || error || "");
+      if (code === "no-speech") {
+        setStatus("Ouvindo");
+        return;
+      }
+      if (code === "network") {
+        state.lastError = "Microfone instável. Use o campo manual se precisar.";
+        render();
+        setStatus("Pausado");
+        return;
+      }
       console.warn("[Space Copilot] audio error", error);
       setStatus("Erro");
     },
@@ -132,14 +143,14 @@
       setStatus("Ouvindo");
     } catch (error) {
       console.warn("[Space Copilot] suggest failed", error);
-      const isAuth = error?.status === 401 || String(error?.message || "").includes("unauthorized");
-      state.lastError = isAuth ? "Token ausente ou expirado." : `Erro: ${error?.message || "falha na API"}.`;
+      const isAuth = error?.status === 401 || error?.status === 403 || /unauthorized|forbidden/.test(String(error?.message || ""));
+      state.lastError = isAuth ? "Token ausente, expirado ou sem permissão Growth." : `Erro: ${error?.message || "falha na API"}.`;
       state.cards = [
         {
           type: "alerta",
           title: isAuth ? "Extensão sem token válido" : "Falha ao gerar sugestão",
           content: isAuth
-            ? "Abra o Growth logado, espere 2 segundos e recarregue esta reunião. Se precisar, cole o token pelo popup da extensão."
+            ? "Abra o Growth logado pelo acesso Growth ou Admin, espere 2 segundos, abra o popup da extensão e confirme Token salvo. Depois recarregue esta reunião."
             : "A API respondeu com erro. Abra o popup da extensão ou tente novamente em alguns segundos.",
           priority: "alta",
         },

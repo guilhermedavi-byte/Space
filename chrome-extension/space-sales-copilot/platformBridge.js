@@ -3,6 +3,7 @@
 
   const saveToken = async () => {
     try {
+      if (!/\/(app\/growth|app\/admin\/growth|growth)\b/.test(window.location.pathname)) return;
       const res = await fetch(`${API_BASE}/api/growth/copilot-vendas/realtime-token`, {
         method: "POST",
         credentials: "include",
@@ -10,7 +11,10 @@
         body: JSON.stringify({ source: "chrome_extension_platform_bridge" }),
       });
       const data = await res.json().catch(() => null);
-      if (!res.ok || !data?.token) return;
+      if (!res.ok || !data?.token) {
+        console.warn("[Space Copilot] token bridge rejected", data?.error || res.status);
+        return;
+      }
       await chrome.storage.sync.set({
         spaceApiBaseUrl: data.apiBaseUrl || API_BASE,
         spaceCopilotToken: data.token,

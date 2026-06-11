@@ -262,7 +262,7 @@ const normalizeRole = (role) => String(role || "").trim().toLowerCase();
 
 const requireGrowthAccess = (session) => {
   const role = normalizeRole(session?.role);
-  if (role !== "admin" && role !== "growth") {
+  if (!["admin", "growth", "comercial", "closer", "sales"].includes(role)) {
     const error = new Error("forbidden");
     error.status = 403;
     throw error;

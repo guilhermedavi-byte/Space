@@ -26,7 +26,7 @@
       recognition.continuous = true;
       recognition.interimResults = true;
       recognition.onstart = () => onStatus && onStatus("Ouvindo");
-      recognition.onerror = (event) => onError && onError(event?.error || new Error("speech_error"));
+      recognition.onerror = (event) => onError && onError(new Error(event?.error || "speech_error"));
       recognition.onend = () => onStatus && onStatus("Pausado");
       recognition.onresult = (event) => {
         const finalText = Array.from(event.results || [])
