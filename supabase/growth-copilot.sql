@@ -49,7 +49,7 @@ create table if not exists public.growth_winning_phrases (
   context text,
   stage text,
   source text,
-  closer text,
+  closer_name text,
   usage_count integer default 0,
   positive_feedback_count integer default 0,
   positive_count integer default 0,
@@ -59,7 +59,7 @@ create table if not exists public.growth_winning_phrases (
 );
 
 alter table public.growth_winning_phrases add column if not exists source text;
-alter table public.growth_winning_phrases add column if not exists closer text;
+alter table public.growth_winning_phrases add column if not exists closer_name text;
 alter table public.growth_winning_phrases add column if not exists positive_feedback_count integer default 0;
 alter table public.growth_winning_phrases add column if not exists positive_count integer default 0;
 alter table public.growth_winning_phrases add column if not exists active boolean default true;
@@ -97,7 +97,7 @@ create table if not exists public.growth_copilot_sessions (
   lead_context jsonb default '{}'::jsonb,
   transcript text,
   summary jsonb default '{}'::jsonb,
-  closer text,
+  closer_name text,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
@@ -105,7 +105,7 @@ create table if not exists public.growth_copilot_sessions (
 create table if not exists public.growth_copilot_suggestions (
   id uuid primary key default gen_random_uuid(),
   lead_name text,
-  closer text,
+  closer_name text,
   stage text,
   cards jsonb default '[]'::jsonb,
   transcript_tail text,
@@ -119,7 +119,7 @@ create table if not exists public.growth_copilot_feedback (
   feedback text not null,
   used_in_call boolean default false,
   saved_to_playbook boolean default false,
-  closer text,
+  closer_name text,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );

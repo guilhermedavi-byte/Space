@@ -11699,7 +11699,7 @@ const openSalesCopilotPhraseModal = (row = {}) => {
     `,
     onPrimary: () => {
       const read = (key) => modalBody?.querySelector(`[data-sc-field="${CSS.escape(key)}"]`)?.value || "";
-      saveSalesCopilotResource("phrases", { ...row, phrase: read("phrase"), context: read("context"), stage: read("stage"), closer: sessionUser?.name || "", usage_count: row.usage_count || 0, positive_count: row.positive_count || 0 })
+      saveSalesCopilotResource("phrases", { ...row, phrase: read("phrase"), context: read("context"), stage: read("stage"), closer_name: sessionUser?.name || "", usage_count: row.usage_count || 0, positive_count: row.positive_count || 0 })
         .then(closeModal)
         .catch((error) => console.error("[growth copilot] save phrase failed", error));
       return false;
@@ -19814,7 +19814,7 @@ document.addEventListener("click", (event) => {
     const kind = String(feedback.getAttribute("data-copilot-feedback-kind") || "");
     const card = salesCopilotState.cards[index];
     if (card) {
-      saveSalesCopilotResource("feedback", { suggestion: card, feedback: kind, closer: sessionUser?.name || "" }).catch((error) =>
+      saveSalesCopilotResource("feedback", { suggestion: card, feedback: kind, closer_name: sessionUser?.name || "" }).catch((error) =>
         console.error("[growth copilot] feedback failed", error)
       );
     }
@@ -19831,7 +19831,7 @@ document.addEventListener("click", (event) => {
         phrase: card.content,
         context: card.title || card.type || "Sugestão do Copilot",
         stage: salesCopilotState.stage,
-        closer: sessionUser?.name || "",
+        closer_name: sessionUser?.name || "",
         usage_count: 1,
         positive_count: 1,
       }).catch((error) => console.error("[growth copilot] save phrase failed", error));

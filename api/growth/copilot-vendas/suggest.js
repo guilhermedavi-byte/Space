@@ -25,7 +25,7 @@ module.exports = async (req, res) => {
     const result = await suggestWithAi({ ...(body || {}), transcript });
     saveResource("suggestions", {
       lead_name: body?.leadContext?.leadName || body?.leadContext?.nome || "",
-      closer: body?.leadContext?.closer || session?.name || session?.email || "",
+      closer_name: body?.leadContext?.closer || session?.name || session?.email || "",
       stage: result?.stage || "",
       cards: result?.cards || [],
       transcript_tail: transcript.slice(-3000),

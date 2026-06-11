@@ -368,6 +368,7 @@ const saveResource = async (resource, payload = {}) => {
   const body = { ...payload, updated_at: new Date().toISOString() };
   if (!id) body.created_at = body.created_at || new Date().toISOString();
   delete body.id;
+  delete body.closer;
   const { data } = await supabaseFetch(path, { method, body: id ? body : [body] });
   return safeArray(data)[0] || null;
 };

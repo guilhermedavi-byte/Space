@@ -27,7 +27,7 @@ module.exports = async (req, res) => {
       lead_context: body?.leadContext || {},
       transcript,
       summary: result,
-      closer: body?.leadContext?.closer || session?.name || session?.email || "",
+      closer_name: body?.leadContext?.closer || session?.name || session?.email || "",
     }).catch((error) => console.warn("[api] copilot session persistence skipped", error.message));
     sendJson(res, 200, result);
   } catch (error) {
