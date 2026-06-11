@@ -11263,12 +11263,23 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
 
 const salesCopilotState = {
   activeTab: "copilot-vendas",
+  sessionId: `sc_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+  startedAt: "",
   status: "Parado",
   transcript: "",
   snippets: [],
   stage: "abertura",
+  leadTemperature: "frio",
+  temperatureReason: "Aguardando sinais da conversa.",
+  detectedSignals: [],
+  sessionState: {},
+  playbookMode: "free",
   cards: [],
   summary: null,
+  analytics: null,
+  training: null,
+  lastSuggestAt: 0,
+  lastTranscriptLength: 0,
   scripts: [],
   objections: [],
   phrases: [],
@@ -11295,6 +11306,18 @@ const setSalesCopilotStatus = (status) => {
   if (el instanceof HTMLElement) el.textContent = status;
 };
 
+const normalizeCopilotCardKey = (card = {}) => `${card.type || ""}:${card.title || ""}:${String(card.content || "").slice(0, 80)}`;
+
+const shouldRequestCopilotCycle = (text) => {
+  const now = Date.now();
+  const clean = String(text || "").trim();
+  if (!clean) return false;
+  const chunkGrew = clean.length - Number(salesCopilotState.lastTranscriptLength || 0);
+  const elapsed = now - Number(salesCopilotState.lastSuggestAt || 0);
+  const hasUrgentSignal = /preço|preco|valor|caro|sem tempo|vou pensar|já tentei|ja tentei|medo|vergonha|trabalho|entrevista|moro fora|não consigo falar|nao consigo falar/i.test(clean.slice(-700));
+  return (chunkGrew >= 80 && elapsed >= 20000) || (hasUrgentSignal && elapsed >= 8000);
+};
+
 const getSalesCopilotContext = () => {
   const context = {};
   document.querySelectorAll("[data-copilot-context]").forEach((el) => {
@@ -11319,6 +11342,33 @@ const renderSalesCopilotTabs = () => {
     view.hidden = !active;
     view.classList.toggle("is-active", active);
   });
+};
+
+const renderSalesCopilotSession = () => {
+  const temp = document.querySelector("[data-copilot-temperature]");
+  const tempReason = document.querySelector("[data-copilot-temperature-reason]");
+  const signals = document.querySelector("[data-copilot-signals]");
+  const summary = document.querySelector("[data-copilot-live-summary]");
+  if (temp instanceof HTMLElement) temp.textContent = salesCopilotState.leadTemperature || "frio";
+  if (tempReason instanceof HTMLElement) tempReason.textContent = salesCopilotState.temperatureReason || "Aguardando sinais da conversa.";
+  if (signals instanceof HTMLElement) {
+    signals.textContent = salesCopilotState.detectedSignals.length ? salesCopilotState.detectedSignals.join(", ") : "Sem sinais ainda";
+  }
+  document.querySelectorAll("[data-copilot-mode]").forEach((btn) => {
+    if (!(btn instanceof HTMLButtonElement)) return;
+    btn.classList.toggle("is-active", String(btn.getAttribute("data-copilot-mode") || "") === salesCopilotState.playbookMode);
+  });
+  if (summary instanceof HTMLElement) {
+    const state = salesCopilotState.sessionState || {};
+    const objections = Array.isArray(state.objections) && state.objections.length ? state.objections.join(", ") : "—";
+    summary.innerHTML = `
+      <div><span>Dor</span><strong>${escapeHtml(state.pain || "—")}</strong></div>
+      <div><span>Objetivo</span><strong>${escapeHtml(state.goal || "—")}</strong></div>
+      <div><span>Urgência</span><strong>${escapeHtml(state.urgency || "—")}</strong></div>
+      <div><span>Objeções</span><strong>${escapeHtml(objections)}</strong></div>
+      <div><span>Próximo passo</span><strong>${escapeHtml(state.nextStep || "—")}</strong></div>
+    `;
+  }
 };
 
 const renderSalesCopilotTranscript = () => {
@@ -11364,6 +11414,61 @@ const renderSalesCopilotCards = () => {
         })
         .join("")
     : `<div class="sales-copilot-empty">Inicie a escuta ou cole um trecho para receber sugestões.</div>`;
+};
+
+const renderSalesCopilotAnalytics = () => {
+  const el = document.querySelector("[data-copilot-analytics]");
+  if (!(el instanceof HTMLElement)) return;
+  const data = salesCopilotState.analytics;
+  if (!data) {
+    el.innerHTML = `<div class="sales-copilot-empty">Clique em Atualizar para carregar os dados.</div>`;
+    return;
+  }
+  const items = [
+    ["Sessões realizadas", data.sessions],
+    ["Sugestões geradas", data.suggestions],
+    ["Copiadas", data.copied],
+    ["Úteis", data.useful],
+    ["Ruins", data.bad],
+    ["Frases salvas", data.savedPhrases],
+  ];
+  el.innerHTML = items
+    .map(([label, value]) => `<article class="sales-copilot-metric"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value || 0))}</strong></article>`)
+    .join("");
+};
+
+const renderSalesCopilotTraining = () => {
+  const el = document.querySelector("[data-copilot-training-list]");
+  if (!(el instanceof HTMLElement)) return;
+  const data = salesCopilotState.training;
+  if (!data) {
+    el.innerHTML = `<div class="sales-copilot-empty">Clique em Atualizar para carregar itens de treinamento.</div>`;
+    return;
+  }
+  const feedback = Array.isArray(data.feedback) ? data.feedback.slice(0, 20) : [];
+  const insights = Array.isArray(data.insights) ? data.insights.slice(0, 20) : [];
+  const rows = [
+    ...feedback.map((row) => ({ kind: "feedback", title: row.feedback || row.feedback_type || "Feedback", content: row.comment || row.content || JSON.stringify(row.suggestion || {}).slice(0, 180), stage: row.stage || "" })),
+    ...insights.map((row) => ({ kind: "insight", title: row.insight_type || "Insight", content: row.content || "", stage: row.stage || "" })),
+  ];
+  el.innerHTML = rows.length
+    ? rows
+        .map(
+          (row, index) => `
+            <article class="sales-copilot-crud-item">
+              <span>${escapeHtml(row.kind)} ${escapeHtml(row.stage || "")}</span>
+              <strong>${escapeHtml(row.title || "Item")}</strong>
+              <p>${escapeHtml(row.content || "—")}</p>
+              <div class="sales-copilot-card-actions">
+                <button class="admin-student-file-btn" type="button" data-copilot-training-approve-phrase="${index}">Aprovar frase</button>
+                <button class="admin-student-file-btn" type="button" data-copilot-training-objection="${index}">Virar objeção</button>
+                <button class="admin-student-file-btn" type="button" data-copilot-training-script="${index}">Virar script</button>
+              </div>
+            </article>
+          `
+        )
+        .join("")
+    : `<div class="sales-copilot-empty">Nenhum item de treinamento encontrado ainda.</div>`;
 };
 
 const renderSalesCopilotCrud = () => {
@@ -11450,9 +11555,12 @@ const renderSalesCopilotCrud = () => {
 
 const renderSalesCopilot = () => {
   renderSalesCopilotTabs();
+  renderSalesCopilotSession();
   renderSalesCopilotTranscript();
   renderSalesCopilotCards();
   renderSalesCopilotCrud();
+  renderSalesCopilotAnalytics();
+  renderSalesCopilotTraining();
   setSalesCopilotStatus(salesCopilotState.status || "Parado");
 };
 
@@ -11483,8 +11591,9 @@ const appendSalesCopilotTranscript = (text) => {
     if (salesCopilotSuggestTimer) window.clearTimeout(salesCopilotSuggestTimer);
     salesCopilotSuggestTimer = window.setTimeout(() => {
       salesCopilotSuggestTimer = null;
-      requestSalesCopilotSuggestion().catch(() => {});
-    }, 6500);
+      const transcript = getSalesCopilotTranscriptForRequest();
+      if (shouldRequestCopilotCycle(transcript)) requestSalesCopilotSuggestion({ automatic: true }).catch(() => {});
+    }, 12000);
   }
 };
 
@@ -11508,6 +11617,7 @@ const startSalesCopilotListening = () => {
   recognition.continuous = true;
   recognition.interimResults = true;
   recognition.onstart = () => {
+    if (!salesCopilotState.startedAt) salesCopilotState.startedAt = new Date().toISOString();
     salesCopilotState.listening = true;
     setSalesCopilotStatus("Ouvindo");
   };
@@ -11551,7 +11661,7 @@ const getSalesCopilotTranscriptForRequest = () => {
   return [salesCopilotState.transcript, manualText].filter(Boolean).join("\n").trim();
 };
 
-const requestSalesCopilotSuggestion = async () => {
+const requestSalesCopilotSuggestion = async ({ automatic = false } = {}) => {
   const transcript = getSalesCopilotTranscriptForRequest();
   if (!transcript) {
     setSalesCopilotStatus("Erro");
@@ -11567,8 +11677,13 @@ const requestSalesCopilotSuggestion = async () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        sessionId: salesCopilotState.sessionId,
         leadContext: getSalesCopilotContext(),
         transcript,
+        fullTranscript: transcript,
+        transcriptChunk: salesCopilotState.snippets.slice(-1)[0] || "",
+        sessionState: salesCopilotState.sessionState,
+        playbookMode: salesCopilotState.playbookMode,
         playbookBlocks: salesCopilotState.scripts,
         objections: salesCopilotState.objections,
         winnerPhrases: salesCopilotState.phrases,
@@ -11579,7 +11694,16 @@ const requestSalesCopilotSuggestion = async () => {
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(data?.error || "suggest_failed");
     salesCopilotState.stage = data?.stage || "diagnóstico";
-    salesCopilotState.cards = Array.isArray(data?.cards) ? data.cards : [];
+    salesCopilotState.leadTemperature = data?.leadTemperature || salesCopilotState.leadTemperature || "morno";
+    salesCopilotState.temperatureReason = data?.temperatureReason || salesCopilotState.temperatureReason || "";
+    salesCopilotState.detectedSignals = Array.isArray(data?.detectedSignals) ? data.detectedSignals : salesCopilotState.detectedSignals;
+    salesCopilotState.sessionState = data?.updatedState && typeof data.updatedState === "object" ? data.updatedState : salesCopilotState.sessionState;
+    const incomingCards = Array.isArray(data?.cards) ? data.cards : [];
+    const currentKeys = new Set(salesCopilotState.cards.map(normalizeCopilotCardKey));
+    const uniqueIncoming = incomingCards.filter((card) => !currentKeys.has(normalizeCopilotCardKey(card)));
+    salesCopilotState.cards = automatic ? [...uniqueIncoming, ...salesCopilotState.cards].slice(0, 6) : uniqueIncoming.length ? uniqueIncoming : incomingCards;
+    salesCopilotState.lastSuggestAt = Date.now();
+    salesCopilotState.lastTranscriptLength = transcript.length;
     setSalesCopilotStatus(salesCopilotState.listening ? "Ouvindo" : "Parado");
   } catch (error) {
     console.error("[growth copilot] suggest failed:", error);
@@ -11599,11 +11723,12 @@ const requestSalesCopilotSummary = async () => {
     const res = await fetchWithAuth("/api/growth/copilot-vendas/summary", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ leadContext: getSalesCopilotContext(), transcript }),
+      body: JSON.stringify({ sessionId: salesCopilotState.sessionId, leadContext: getSalesCopilotContext(), transcript, fullTranscript: transcript, sessionState: salesCopilotState.sessionState }),
     });
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(data?.error || "summary_failed");
     salesCopilotState.summary = data;
+    salesCopilotState.sessionState = { ...salesCopilotState.sessionState, ...data };
     const box = document.querySelector("[data-copilot-summary-box]");
     const out = document.querySelector("[data-copilot-summary-output]");
     if (box instanceof HTMLElement) box.hidden = false;
@@ -11614,6 +11739,7 @@ const requestSalesCopilotSummary = async () => {
         <p><strong>Urgência:</strong> ${escapeHtml(data.urgency || "—")}</p>
         <p><strong>Orçamento:</strong> ${escapeHtml(data.budget || "—")}</p>
         <p><strong>Próximo passo:</strong> ${escapeHtml(data.nextStep || "—")}</p>
+        <p><strong>Follow-up:</strong> ${escapeHtml(data.followUpMessage || "—")}</p>
         <p><strong>Notas CRM:</strong> ${escapeHtml(data.crmNotes || "—")}</p>
       `;
     }
@@ -11622,6 +11748,96 @@ const requestSalesCopilotSummary = async () => {
     console.error("[growth copilot] summary failed:", error);
     setSalesCopilotStatus("Erro");
   }
+};
+
+const openSalesCopilotFinalModal = async () => {
+  pauseSalesCopilotListening();
+  await requestSalesCopilotSummary();
+  const data = salesCopilotState.summary || {};
+  openModal({
+    title: "Encerramento da call",
+    primaryLabel: "Salvar sessão",
+    secondaryLabel: "Cancelar",
+    bodyHtml: `
+      <div class="admin-student-fin-form" data-copilot-final-form>
+        <label class="modal-field admin-student-field-wide"><span>Resumo</span><textarea class="modal-input" rows="4" data-final-field="summary">${escapeHtml(data.summary || "")}</textarea></label>
+        <label class="modal-field"><span>Dor</span><input class="modal-input" data-final-field="pain" value="${escapeHtml(data.pain || salesCopilotState.sessionState.pain || "")}" /></label>
+        <label class="modal-field"><span>Objetivo</span><input class="modal-input" data-final-field="goal" value="${escapeHtml(data.goal || salesCopilotState.sessionState.goal || "")}" /></label>
+        <label class="modal-field"><span>Urgência</span><input class="modal-input" data-final-field="urgency" value="${escapeHtml(data.urgency || salesCopilotState.sessionState.urgency || "")}" /></label>
+        <label class="modal-field"><span>Orçamento</span><input class="modal-input" data-final-field="budget" value="${escapeHtml(data.budget || salesCopilotState.sessionState.budget || "")}" /></label>
+        <label class="modal-field"><span>Temperatura</span><input class="modal-input" data-final-field="leadTemperature" value="${escapeHtml(data.leadTemperature || salesCopilotState.leadTemperature || "")}" /></label>
+        <label class="modal-field"><span>Plano recomendado</span><input class="modal-input" data-final-field="recommendedPlan" value="${escapeHtml(data.recommendedPlan || salesCopilotState.sessionState.recommendedPlan || "")}" /></label>
+        <label class="modal-field"><span>Próximo passo</span><input class="modal-input" data-final-field="nextStep" value="${escapeHtml(data.nextStep || "")}" /></label>
+        <label class="modal-field admin-student-field-wide"><span>Follow-up sugerido</span><textarea class="modal-input" rows="3" data-final-field="followUpMessage">${escapeHtml(data.followUpMessage || "")}</textarea></label>
+        <label class="modal-field admin-student-field-wide"><span>Notas CRM</span><textarea class="modal-input" rows="4" data-final-field="crmNotes">${escapeHtml(data.crmNotes || "")}</textarea></label>
+        <div class="sales-copilot-actions sales-copilot-wide">
+          <button class="admin-student-file-btn" type="button" data-copilot-copy-followup>Copiar follow-up</button>
+          <button class="admin-student-file-btn" type="button" data-copilot-save-crm>Salvar no CRM</button>
+          <button class="admin-student-file-btn" type="button" data-copilot-copy-crm-notes>Copiar resumo manual</button>
+        </div>
+      </div>
+    `,
+    onPrimary: () => {
+      const read = (key) => modalBody?.querySelector(`[data-final-field="${CSS.escape(key)}"]`)?.value || "";
+      salesCopilotState.summary = {
+        ...salesCopilotState.summary,
+        summary: read("summary"),
+        pain: read("pain"),
+        goal: read("goal"),
+        urgency: read("urgency"),
+        budget: read("budget"),
+        leadTemperature: read("leadTemperature"),
+        recommendedPlan: read("recommendedPlan"),
+        nextStep: read("nextStep"),
+        followUpMessage: read("followUpMessage"),
+        crmNotes: read("crmNotes"),
+      };
+      setSalesCopilotStatus("Sessão salva");
+    },
+  });
+};
+
+const saveSalesCopilotInsight = () => {
+  openModal({
+    title: "Salvar insight da call",
+    primaryLabel: "Salvar insight",
+    secondaryLabel: "Cancelar",
+    bodyHtml: `
+      <div class="admin-student-fin-form">
+        <label class="modal-field"><span>Tipo</span><select class="modal-input" data-insight-field="insight_type"><option value="frase_lead">Frase boa do lead</option><option value="objecao_nova">Objeção nova</option><option value="argumento_funcionou">Argumento que funcionou</option><option value="pergunta_boa">Pergunta boa</option><option value="trecho_revisar">Trecho para revisar</option></select></label>
+        <label class="modal-field admin-student-field-wide"><span>Conteúdo</span><textarea class="modal-input" rows="5" data-insight-field="content">${escapeHtml(getSalesCopilotTranscriptForRequest().slice(-500))}</textarea></label>
+      </div>
+    `,
+    onPrimary: () => {
+      const type = modalBody?.querySelector('[data-insight-field="insight_type"]')?.value || "trecho_revisar";
+      const content = modalBody?.querySelector('[data-insight-field="content"]')?.value || "";
+      saveSalesCopilotResource("insights", {
+        session_id: salesCopilotState.sessionId,
+        lead_name: getSalesCopilotContext().leadName || "",
+        closer_name: sessionUser?.name || "",
+        insight_type: type,
+        content,
+        stage: salesCopilotState.stage,
+      }).then(() => setSalesCopilotStatus("Insight salvo")).catch((error) => console.error("[growth copilot] save insight failed", error));
+      return false;
+    },
+  });
+};
+
+const loadSalesCopilotAnalytics = async () => {
+  const res = await fetchWithAuth("/api/growth/copilot-vendas/analytics", { method: "GET" });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(data?.error || "analytics_failed");
+  salesCopilotState.analytics = data;
+  renderSalesCopilotAnalytics();
+};
+
+const loadSalesCopilotTraining = async () => {
+  const res = await fetchWithAuth("/api/growth/copilot-vendas/training", { method: "GET" });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(data?.error || "training_failed");
+  salesCopilotState.training = data;
+  renderSalesCopilotTraining();
 };
 
 const saveSalesCopilotResource = async (resource, payload) => {
@@ -19443,6 +19659,8 @@ const showPanel = (panelName) => {
     window.scrollTo({ top: 0, behavior: "smooth" });
     renderSalesCopilot();
     loadSalesCopilotData().catch((error) => console.error("[growth copilot] initial load failed:", error));
+    if (salesCopilotState.activeTab === "analytics") loadSalesCopilotAnalytics().catch((error) => console.error("[growth copilot] analytics failed", error));
+    if (salesCopilotState.activeTab === "training") loadSalesCopilotTraining().catch((error) => console.error("[growth copilot] training failed", error));
     if (currentRole === "admin") {
       loadUsersFromFirestore("growth");
       loadAdminGrowthGoals();
@@ -19526,7 +19744,7 @@ const panelPathForRole = (role, panel) => {
   }
 
   if (normalized === "admin") {
-    if (["copilot-vendas", "scripts-vendas", "objecoes", "planos", "personas", "frases-vencedoras"].includes(p)) return `/app/admin/growth/${p}`;
+    if (["copilot-vendas", "scripts-vendas", "objecoes", "planos", "personas", "frases-vencedoras", "analytics", "training"].includes(p)) return `/app/admin/growth/${p}`;
     if (p === "professores") return "/app/admin/professores";
     if (p === "alunos") return "/app/admin/alunos";
     if (p === "admin-controle-pedagogico") return "/app/admin/controle-pedagogico";
@@ -19539,7 +19757,7 @@ const panelPathForRole = (role, panel) => {
   }
 
   if (normalized === "growth") {
-    if (["scripts-vendas", "objecoes", "planos", "personas", "frases-vencedoras"].includes(p)) return `/app/growth/${p}`;
+    if (["scripts-vendas", "objecoes", "planos", "personas", "frases-vencedoras", "analytics", "training"].includes(p)) return `/app/growth/${p}`;
     return "/app/growth/copilot-vendas";
   }
 
@@ -19594,7 +19812,7 @@ const parseAppRoute = (path) => {
     if (sub === "alunos") return { role, panel: "alunos" };
     if (sub === "controle-pedagogico") return { role, panel: "admin-controle-pedagogico" };
     if (sub === "financeiro") return { role, panel: "financeiro" };
-    if (sub === "growth") return { role, panel: "growth", growthTab: ["copilot-vendas", "scripts-vendas", "objecoes", "planos", "personas", "frases-vencedoras"].includes(detail) ? detail : "copilot-vendas" };
+    if (sub === "growth") return { role, panel: "growth", growthTab: ["copilot-vendas", "scripts-vendas", "objecoes", "planos", "personas", "frases-vencedoras", "analytics", "training"].includes(detail) ? detail : "copilot-vendas" };
     if (sub === "ao-vivo") return { role, panel: "ao-vivo" };
     if (sub === "gravadas") return { role, panel: "gravadas" };
     if (sub === "materiais") return { role, panel: "materiais" };
@@ -19602,7 +19820,7 @@ const parseAppRoute = (path) => {
   }
 
   if (role === "growth") {
-    if (["scripts-vendas", "objecoes", "planos", "personas", "frases-vencedoras"].includes(sub)) return { role, panel: "growth", growthTab: sub };
+    if (["scripts-vendas", "objecoes", "planos", "personas", "frases-vencedoras", "analytics", "training"].includes(sub)) return { role, panel: "growth", growthTab: sub };
     return { role, panel: "growth", growthTab: "copilot-vendas" };
   }
 
@@ -19745,9 +19963,19 @@ document.addEventListener("click", (event) => {
     const next = String(tab.getAttribute("data-growth-copilot-tab") || "copilot-vendas");
     salesCopilotState.activeTab = next;
     renderSalesCopilot();
-    if (["copilot-vendas", "scripts-vendas", "objecoes", "planos", "personas", "frases-vencedoras"].includes(next)) {
+    if (["copilot-vendas", "scripts-vendas", "objecoes", "planos", "personas", "frases-vencedoras", "analytics", "training"].includes(next)) {
       navigateApp(panelPathForRole(currentRole, next), { replace: false });
     }
+    if (next === "analytics") loadSalesCopilotAnalytics().catch((error) => console.error("[growth copilot] analytics failed", error));
+    if (next === "training") loadSalesCopilotTraining().catch((error) => console.error("[growth copilot] training failed", error));
+    return;
+  }
+
+  const mode = target.closest("[data-copilot-mode]");
+  if (mode instanceof HTMLButtonElement) {
+    event.preventDefault();
+    salesCopilotState.playbookMode = String(mode.getAttribute("data-copilot-mode") || "free") === "strict" ? "strict" : "free";
+    renderSalesCopilotSession();
     return;
   }
 
@@ -19763,8 +19991,7 @@ document.addEventListener("click", (event) => {
   }
   if (target.closest("[data-copilot-end]")) {
     event.preventDefault();
-    pauseSalesCopilotListening();
-    requestSalesCopilotSummary().catch(() => {});
+    openSalesCopilotFinalModal().catch((error) => console.error("[growth copilot] final modal failed", error));
     return;
   }
   if (target.closest("[data-copilot-suggest]") || target.closest("[data-copilot-manual-suggest]")) {
@@ -19780,6 +20007,59 @@ document.addEventListener("click", (event) => {
   if (target.closest("[data-copilot-extension-token]")) {
     event.preventDefault();
     createSalesCopilotExtensionToken();
+    return;
+  }
+  if (target.closest("[data-copilot-save-insight]")) {
+    event.preventDefault();
+    saveSalesCopilotInsight();
+    return;
+  }
+  if (target.closest("[data-copilot-refresh-analytics]")) {
+    event.preventDefault();
+    loadSalesCopilotAnalytics().catch((error) => console.error("[growth copilot] analytics failed", error));
+    return;
+  }
+  if (target.closest("[data-copilot-refresh-training]")) {
+    event.preventDefault();
+    loadSalesCopilotTraining().catch((error) => console.error("[growth copilot] training failed", error));
+    return;
+  }
+  if (target.closest("[data-copilot-copy-followup]")) {
+    event.preventDefault();
+    const value = modalBody?.querySelector('[data-final-field="followUpMessage"]')?.value || salesCopilotState.summary?.followUpMessage || "";
+    navigator.clipboard?.writeText(value).catch(() => {});
+    setSalesCopilotStatus("Follow-up copiado");
+    return;
+  }
+  if (target.closest("[data-copilot-copy-crm-notes]")) {
+    event.preventDefault();
+    const value = modalBody?.querySelector('[data-final-field="crmNotes"]')?.value || salesCopilotState.summary?.crmNotes || "";
+    navigator.clipboard?.writeText(value).catch(() => {});
+    setSalesCopilotStatus("Resumo copiado");
+    return;
+  }
+  if (target.closest("[data-copilot-save-crm]")) {
+    event.preventDefault();
+    const read = (key) => modalBody?.querySelector(`[data-final-field="${CSS.escape(key)}"]`)?.value || "";
+    fetchWithAuth("/api/growth/copilot-vendas/save-to-crm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: salesCopilotState.sessionId,
+        leadPhone: getSalesCopilotContext().phone || "",
+        summary: read("summary"),
+        crmNotes: read("crmNotes"),
+        nextStep: read("nextStep"),
+        leadTemperature: read("leadTemperature"),
+        objections: salesCopilotState.sessionState.objections || [],
+      }),
+    })
+      .then((res) => res.json().catch(() => null).then((data) => ({ res, data })))
+      .then(({ res, data }) => {
+        if (!res.ok) throw new Error(data?.error || "crm_failed");
+        setSalesCopilotStatus(data?.message || "CRM em fallback");
+      })
+      .catch((error) => console.error("[growth copilot] crm save failed", error));
     return;
   }
   if (target.closest("[data-copilot-clear]")) {
@@ -19814,7 +20094,7 @@ document.addEventListener("click", (event) => {
     const kind = String(feedback.getAttribute("data-copilot-feedback-kind") || "");
     const card = salesCopilotState.cards[index];
     if (card) {
-      saveSalesCopilotResource("feedback", { suggestion: card, feedback: kind, closer_name: sessionUser?.name || "" }).catch((error) =>
+      saveSalesCopilotResource("feedback", { session_id: salesCopilotState.sessionId, suggestion: card, feedback: kind, feedback_type: kind, comment: "", closer_name: sessionUser?.name || "" }).catch((error) =>
         console.error("[growth copilot] feedback failed", error)
       );
     }
@@ -19886,6 +20166,26 @@ document.addEventListener("click", (event) => {
   if (editPersona instanceof HTMLButtonElement) {
     const id = String(editPersona.getAttribute("data-copilot-edit-persona") || "");
     openSalesCopilotPersonaModal(salesCopilotState.personas.find((row) => String(row.id) === id) || {});
+    return;
+  }
+  const approvePhrase = target.closest("[data-copilot-training-approve-phrase]");
+  const toObjection = target.closest("[data-copilot-training-objection]");
+  const toScript = target.closest("[data-copilot-training-script]");
+  if (approvePhrase || toObjection || toScript) {
+    event.preventDefault();
+    const sourceRows = [
+      ...((salesCopilotState.training?.feedback || []).slice(0, 20).map((row) => ({ ...row, content: row.comment || row.content || JSON.stringify(row.suggestion || {}) }))),
+      ...((salesCopilotState.training?.insights || []).slice(0, 20)),
+    ];
+    const index = Number((approvePhrase || toObjection || toScript).getAttribute(approvePhrase ? "data-copilot-training-approve-phrase" : toObjection ? "data-copilot-training-objection" : "data-copilot-training-script"));
+    const action = approvePhrase ? "approve_phrase" : toObjection ? "insight_to_objection" : "insight_to_script";
+    fetchWithAuth("/api/growth/copilot-vendas/training", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, source: sourceRows[index] || {} }),
+    })
+      .then(() => loadSalesCopilotTraining())
+      .catch((error) => console.error("[growth copilot] training action failed", error));
   }
 });
 

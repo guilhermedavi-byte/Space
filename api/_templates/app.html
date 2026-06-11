@@ -2026,6 +2026,8 @@
               <button class="sales-copilot-tab" type="button" data-growth-copilot-tab="planos">Planos</button>
               <button class="sales-copilot-tab" type="button" data-growth-copilot-tab="personas">Personas</button>
               <button class="sales-copilot-tab" type="button" data-growth-copilot-tab="frases-vencedoras">Frases vencedoras</button>
+              <button class="sales-copilot-tab" type="button" data-growth-copilot-tab="analytics">Analytics</button>
+              <button class="sales-copilot-tab" type="button" data-growth-copilot-tab="training">Treinamento</button>
               <button class="sales-copilot-tab" type="button" data-growth-copilot-tab="equipe" data-admin-only>Equipe Growth</button>
             </nav>
 
@@ -2060,10 +2062,20 @@
                       <button class="button button-outline button-small" type="button" data-copilot-suggest>Gerar sugestão agora</button>
                       <button class="button button-outline button-small" type="button" data-copilot-summary>Gerar resumo da call</button>
                       <button class="button button-outline button-small" type="button" data-copilot-extension-token>Conectar extensão</button>
+                      <button class="button button-outline button-small" type="button" data-copilot-save-insight>Salvar insight da call</button>
+                    </div>
+                    <div class="sales-copilot-mode">
+                      <button class="sales-copilot-mode-btn is-active" type="button" data-copilot-mode="free">Playbook livre</button>
+                      <button class="sales-copilot-mode-btn" type="button" data-copilot-mode="strict">Playbook strict</button>
                     </div>
                     <div class="sales-copilot-stage">
                       <span>Etapa atual</span>
                       <strong data-copilot-stage>abertura</strong>
+                    </div>
+                    <div class="sales-copilot-temperature">
+                      <span>Temperatura</span>
+                      <strong data-copilot-temperature>Frio</strong>
+                      <small data-copilot-temperature-reason>Aguardando sinais da conversa.</small>
                     </div>
                     <p class="sales-copilot-consent">Use apenas em calls autorizadas e com ciência dos participantes quando necessário.</p>
                   </section>
@@ -2075,6 +2087,20 @@
                     </div>
                     <div class="sales-copilot-suggestions" data-copilot-suggestions>
                       <div class="sales-copilot-empty">Inicie a escuta ou cole um trecho para receber sugestões.</div>
+                    </div>
+                  </section>
+
+                  <section class="sales-copilot-card">
+                    <div class="sales-copilot-card-head">
+                      <strong>Resumo parcial ao vivo</strong>
+                      <span data-copilot-signals>Sem sinais ainda</span>
+                    </div>
+                    <div class="sales-copilot-live-summary" data-copilot-live-summary>
+                      <div><span>Dor</span><strong>—</strong></div>
+                      <div><span>Objetivo</span><strong>—</strong></div>
+                      <div><span>Urgência</span><strong>—</strong></div>
+                      <div><span>Objeções</span><strong>—</strong></div>
+                      <div><span>Próximo passo</span><strong>—</strong></div>
                     </div>
                   </section>
 
@@ -2141,6 +2167,22 @@
                 <button class="button button-solid button-small" type="button" data-copilot-new-phrase>Nova frase</button>
               </div>
               <div class="sales-copilot-crud-list" data-copilot-phrases-list></div>
+            </section>
+
+            <section class="sales-copilot-view" data-growth-copilot-view="analytics" hidden>
+              <div class="sales-copilot-crud-head">
+                <div><strong>Analytics do Copilot</strong><span>Métricas reais de uso, feedback e temperatura</span></div>
+                <button class="button button-outline button-small" type="button" data-copilot-refresh-analytics>Atualizar</button>
+              </div>
+              <div class="sales-copilot-analytics-grid" data-copilot-analytics></div>
+            </section>
+
+            <section class="sales-copilot-view" data-growth-copilot-view="training" hidden>
+              <div class="sales-copilot-crud-head">
+                <div><strong>Treinamento da IA</strong><span>Aprovar frases, revisar ruins e transformar insights em playbook</span></div>
+                <button class="button button-outline button-small" type="button" data-copilot-refresh-training>Atualizar</button>
+              </div>
+              <div class="sales-copilot-crud-list" data-copilot-training-list></div>
             </section>
 
             <section class="sales-copilot-view" data-growth-copilot-view="equipe" hidden>

@@ -90,6 +90,121 @@ create table if not exists public.growth_sales_personas (
   updated_at timestamptz default now()
 );
 
+create table if not exists public.growth_copilot_sessions (
+  id uuid primary key default gen_random_uuid(),
+  session_id text,
+  lead_name text,
+  lead_phone text,
+  closer_name text,
+  source text,
+  started_at timestamptz,
+  ended_at timestamptz,
+  duration_seconds integer,
+  final_stage text,
+  lead_temperature text,
+  summary text,
+  pain text,
+  goal text,
+  urgency text,
+  budget text,
+  recommended_plan text,
+  next_step text,
+  crm_notes text,
+  saved_to_crm boolean default false,
+  lead_context jsonb default '{}'::jsonb,
+  transcript text,
+  summary_payload jsonb default '{}'::jsonb,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+alter table public.growth_copilot_sessions add column if not exists session_id text;
+alter table public.growth_copilot_sessions add column if not exists lead_name text;
+alter table public.growth_copilot_sessions add column if not exists lead_phone text;
+alter table public.growth_copilot_sessions add column if not exists closer_name text;
+alter table public.growth_copilot_sessions add column if not exists source text;
+alter table public.growth_copilot_sessions add column if not exists started_at timestamptz;
+alter table public.growth_copilot_sessions add column if not exists ended_at timestamptz;
+alter table public.growth_copilot_sessions add column if not exists duration_seconds integer;
+alter table public.growth_copilot_sessions add column if not exists final_stage text;
+alter table public.growth_copilot_sessions add column if not exists lead_temperature text;
+alter table public.growth_copilot_sessions add column if not exists summary text;
+alter table public.growth_copilot_sessions add column if not exists pain text;
+alter table public.growth_copilot_sessions add column if not exists goal text;
+alter table public.growth_copilot_sessions add column if not exists urgency text;
+alter table public.growth_copilot_sessions add column if not exists budget text;
+alter table public.growth_copilot_sessions add column if not exists recommended_plan text;
+alter table public.growth_copilot_sessions add column if not exists next_step text;
+alter table public.growth_copilot_sessions add column if not exists crm_notes text;
+alter table public.growth_copilot_sessions add column if not exists saved_to_crm boolean default false;
+alter table public.growth_copilot_sessions add column if not exists lead_context jsonb default '{}'::jsonb;
+alter table public.growth_copilot_sessions add column if not exists transcript text;
+alter table public.growth_copilot_sessions add column if not exists summary_payload jsonb default '{}'::jsonb;
+alter table public.growth_copilot_sessions add column if not exists created_at timestamptz default now();
+alter table public.growth_copilot_sessions add column if not exists updated_at timestamptz default now();
+
+create table if not exists public.growth_copilot_suggestions (
+  id uuid primary key default gen_random_uuid(),
+  session_id text,
+  lead_name text,
+  closer_name text,
+  type text,
+  title text,
+  content text,
+  priority text,
+  stage text,
+  cards jsonb default '[]'::jsonb,
+  transcript_tail text,
+  was_copied boolean default false,
+  was_marked_useful boolean default false,
+  was_marked_bad boolean default false,
+  saved_to_playbook boolean default false,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table if not exists public.growth_copilot_feedback (
+  id uuid primary key default gen_random_uuid(),
+  session_id text,
+  suggestion_id text,
+  suggestion jsonb default '{}'::jsonb,
+  feedback text,
+  feedback_type text,
+  comment text,
+  closer_name text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table if not exists public.growth_copilot_call_insights (
+  id uuid primary key default gen_random_uuid(),
+  session_id text,
+  closer_name text,
+  lead_name text,
+  insight_type text,
+  content text,
+  stage text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table if not exists public.growth_copilot_crm_saves (
+  id uuid primary key default gen_random_uuid(),
+  session_id text,
+  lead_id text,
+  deal_id text,
+  lead_phone text,
+  summary text,
+  crm_notes text,
+  next_step text,
+  lead_temperature text,
+  objections jsonb default '[]'::jsonb,
+  closer_name text,
+  status text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
 -- Limpa apenas os seeds oficiais, sem mexer no que voce criar depois.
 delete from public.growth_sales_plans where name in ('Turma', 'Gold', 'Diamond');
 delete from public.growth_sales_personas where name in ('Universitário / Jovem Profissional', 'Profissional de Carreira', 'Executivo / Empreendedor', 'Pais de adolescentes', 'Brasileiro no Exterior');

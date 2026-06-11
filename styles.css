@@ -15519,23 +15519,105 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   background: rgba(255, 255, 255, 0.045);
 }
 
+.sales-copilot-mode {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.sales-copilot-mode-btn {
+  min-height: 32px;
+  padding: 0 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.045);
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 11px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.sales-copilot-mode-btn.is-active {
+  border-color: rgba(255, 86, 79, 0.42);
+  background: rgba(255, 86, 79, 0.16);
+  color: rgba(255, 255, 255, 0.94);
+}
+
 .sales-copilot-stage span,
+.sales-copilot-temperature span,
 .sales-copilot-consent {
   color: rgba(255, 255, 255, 0.52);
   font-size: 11px;
   font-weight: 850;
 }
 
-.sales-copilot-stage strong {
+.sales-copilot-stage strong,
+.sales-copilot-temperature strong {
   color: rgba(255, 255, 255, 0.94);
   font-size: 18px;
   font-weight: 950;
   text-transform: capitalize;
 }
 
+.sales-copilot-temperature {
+  display: grid;
+  gap: 5px;
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(89, 144, 189, 0.16);
+  background: rgba(89, 144, 189, 0.08);
+}
+
+.sales-copilot-temperature small {
+  color: rgba(255, 255, 255, 0.56);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
 .sales-copilot-consent {
   margin: 10px 0 0;
   line-height: 1.4;
+}
+
+.sales-copilot-live-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.sales-copilot-live-summary div,
+.sales-copilot-metric {
+  display: grid;
+  gap: 6px;
+  min-height: 76px;
+  padding: 11px;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.sales-copilot-live-summary span,
+.sales-copilot-metric span {
+  color: rgba(255, 255, 255, 0.46);
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.sales-copilot-live-summary strong,
+.sales-copilot-metric strong {
+  min-width: 0;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.sales-copilot-analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
 }
 
 .sales-copilot-suggestions {
@@ -15673,6 +15755,10 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   }
 
   .sales-copilot-form {
+    grid-template-columns: 1fr;
+  }
+
+  .sales-copilot-live-summary {
     grid-template-columns: 1fr;
   }
 }
