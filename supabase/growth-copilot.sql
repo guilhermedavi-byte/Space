@@ -29,7 +29,6 @@ alter table public.growth_sales_scripts add column if not exists created_at time
 alter table public.growth_sales_scripts add column if not exists updated_at timestamptz default now();
 
 update public.growth_sales_scripts set title = coalesce(title, name), stage = coalesce(stage, type), name = coalesce(name, title), type = coalesce(type, stage), avoid = coalesce(avoid, what_to_avoid), what_to_avoid = coalesce(what_to_avoid, avoid);
-create unique index if not exists growth_sales_scripts_title_stage_key on public.growth_sales_scripts (title, stage);
 
 create table if not exists public.growth_sales_objections (
   id uuid primary key default gen_random_uuid(),
@@ -43,7 +42,6 @@ create table if not exists public.growth_sales_objections (
   updated_at timestamptz default now()
 );
 
-create unique index if not exists growth_sales_objections_objection_key on public.growth_sales_objections (objection);
 
 create table if not exists public.growth_winning_phrases (
   id uuid primary key default gen_random_uuid(),
@@ -65,7 +63,6 @@ alter table public.growth_winning_phrases add column if not exists closer text;
 alter table public.growth_winning_phrases add column if not exists positive_feedback_count integer default 0;
 alter table public.growth_winning_phrases add column if not exists positive_count integer default 0;
 alter table public.growth_winning_phrases add column if not exists active boolean default true;
-create unique index if not exists growth_winning_phrases_phrase_key on public.growth_winning_phrases (phrase);
 
 create table if not exists public.growth_sales_plans (
   id uuid primary key default gen_random_uuid(),
@@ -80,7 +77,6 @@ create table if not exists public.growth_sales_plans (
   updated_at timestamptz default now()
 );
 
-create unique index if not exists growth_sales_plans_name_key on public.growth_sales_plans (name);
 
 create table if not exists public.growth_sales_personas (
   id uuid primary key default gen_random_uuid(),
@@ -95,7 +91,6 @@ create table if not exists public.growth_sales_personas (
   updated_at timestamptz default now()
 );
 
-create unique index if not exists growth_sales_personas_name_key on public.growth_sales_personas (name);
 
 create table if not exists public.growth_copilot_sessions (
   id uuid primary key default gen_random_uuid(),
@@ -129,19 +124,66 @@ create table if not exists public.growth_copilot_feedback (
   updated_at timestamptz default now()
 );
 
+delete from public.growth_sales_plans
+where name in ('Turma', 'Gold', 'Diamond');
+
+delete from public.growth_sales_personas
+where name in (
+  'Universitário / Jovem Profissional',
+  'Profissional de Carreira',
+  'Executivo / Empreendedor',
+  'Pais de adolescentes',
+  'Brasileiro no Exterior'
+);
+
+delete from public.growth_sales_scripts
+where title in (
+  'Primeiro contato / abertura da call',
+  'Qualificação do objetivo',
+  'Apresentação personalizada do plano',
+  'Posicionamento contra método tradicional',
+  'Tecnologia e acompanhamento',
+  'Fechamento consultivo',
+  'Urgência e condição especial',
+  'Onboarding após fechamento'
+)
+or name in (
+  'Primeiro contato / abertura da call',
+  'Qualificação do objetivo',
+  'Apresentação personalizada do plano',
+  'Posicionamento contra método tradicional',
+  'Tecnologia e acompanhamento',
+  'Fechamento consultivo',
+  'Urgência e condição especial',
+  'Onboarding após fechamento'
+);
+
+delete from public.growth_sales_objections
+where objection in (
+  'Está caro.',
+  'Não tenho tempo.',
+  'Já tentei antes e não funcionou.',
+  'Prefiro esperar mais um pouco.',
+  'Tenho insegurança / medo de não conseguir.'
+);
+
+delete from public.growth_winning_phrases
+where phrase in (
+  'Você não precisa se adaptar à turma. O curso se adapta a você.',
+  'Aqui, você fala desde o primeiro dia.',
+  'Relatórios de IA mostram sua evolução semanal de forma concreta.',
+  'Suporte 24h: você nunca está sozinho.',
+  'Acesso vitalício às conversações: fluência não se esquece.',
+  'Aqui você paga por resultado, não por anos preso em uma turma sem evolução.',
+  'Flexibilidade e reposição ilimitada garantem que sua agenda não seja problema.',
+  'Nosso app e relatórios semanais mostram sua evolução com clareza.'
+);
+
 insert into public.growth_sales_plans (name, description, price, ideal_for, benefits, recommended_when, active, updated_at)
 values
   ('Turma', '4 aulas em grupo por semana, suporte 24h e relatório semanal de desempenho.', 'R$ 490/mês', 'Quem busca bom custo-benefício para iniciar a jornada.', 'Aulas em grupo, suporte 24h e relatório semanal de desempenho.', 'Preço é prioridade, aluno quer entrada mais acessível ou ainda não precisa de acompanhamento máximo.', true, now()),
   ('Gold', '3 mentorias individuais por semana, 1 aula de conversação em grupo por semana, acesso vitalício ao grupo de conversação, acesso ilimitado ao app e suporte 24h.', 'R$ 1.190/mês', 'Profissionais que precisam de resultados rápidos para carreira.', 'Mentorias individuais, conversação em grupo, app ilimitado, suporte 24h e acesso vitalício às conversações.', 'Aluno busca evolução rápida, tem objetivo profissional, precisa de acompanhamento individual e quer equilíbrio entre resultado e investimento.', true, now()),
-  ('Diamond', '5 mentorias individuais por semana, 1 aula de conversação em grupo por semana vitalícia, acesso ilimitado ao app, suporte 24h, flexibilidade total de horários e reposição ilimitada.', 'R$ 1.490/mês', 'Executivos e empreendedores que exigem máxima performance e flexibilidade.', 'Alta frequência individual, flexibilidade total, reposição ilimitada, app ilimitado e suporte 24h.', 'Aluno tem urgência, agenda instável, alto valor percebido, precisa de flexibilidade máxima ou quer performance acelerada.', true, now())
-on conflict (name) do update set
-  description = excluded.description,
-  price = excluded.price,
-  ideal_for = excluded.ideal_for,
-  benefits = excluded.benefits,
-  recommended_when = excluded.recommended_when,
-  active = excluded.active,
-  updated_at = now();
+  ('Diamond', '5 mentorias individuais por semana, 1 aula de conversação em grupo por semana vitalícia, acesso ilimitado ao app, suporte 24h, flexibilidade total de horários e reposição ilimitada.', 'R$ 1.490/mês', 'Executivos e empreendedores que exigem máxima performance e flexibilidade.', 'Alta frequência individual, flexibilidade total, reposição ilimitada, app ilimitado e suporte 24h.', 'Aluno tem urgência, agenda instável, alto valor percebido, precisa de flexibilidade máxima ou quer performance acelerada.', true, now());
 
 insert into public.growth_sales_personas (name, age_range, profile, goals, pains, recommended_plan, active, updated_at)
 values
@@ -149,15 +191,7 @@ values
   ('Profissional de Carreira', '28-40 anos', 'Profissional que precisa do inglês para crescer na carreira.', 'Promoção, entrevistas e reuniões internacionais.', 'Falta de tempo e urgência em aprender.', 'Gold', true, now()),
   ('Executivo / Empreendedor', '35-55 anos', 'Pessoa com agenda instável e alto valor de tempo.', 'Negócios globais, viagens de trabalho e performance.', 'Não pode perder tempo e exige flexibilidade total.', 'Diamond', true, now()),
   ('Pais de adolescentes', '35-50 anos', 'Responsáveis buscando inglês para o futuro dos filhos.', 'Garantir fluência futura dos filhos.', 'Desconfiança com métodos tradicionais.', 'Turma', true, now()),
-  ('Brasileiro no Exterior', '', 'Brasileiro(a) que reside em país de língua inglesa e precisa do idioma para rotina, trabalho, estudos ou integração.', 'Fluência, confiança, independência, oportunidades profissionais e integração cultural.', 'Dificuldade de comunicação no dia a dia, insegurança profissional, isolamento social, frustração com métodos tradicionais e dificuldade por fuso/rotina.', 'Gold ou Diamond', true, now())
-on conflict (name) do update set
-  age_range = excluded.age_range,
-  profile = excluded.profile,
-  goals = excluded.goals,
-  pains = excluded.pains,
-  recommended_plan = excluded.recommended_plan,
-  active = excluded.active,
-  updated_at = now();
+  ('Brasileiro no Exterior', '', 'Brasileiro(a) que reside em país de língua inglesa e precisa do idioma para rotina, trabalho, estudos ou integração.', 'Fluência, confiança, independência, oportunidades profissionais e integração cultural.', 'Dificuldade de comunicação no dia a dia, insegurança profissional, isolamento social, frustração com métodos tradicionais e dificuldade por fuso/rotina.', 'Gold ou Diamond', true, now());
 
 insert into public.growth_sales_scripts (title, stage, name, type, content, examples, when_to_use, what_to_avoid, avoid, order_index, active, updated_at)
 values
@@ -168,18 +202,7 @@ values
   ('Tecnologia e acompanhamento', 'valor', 'Tecnologia e acompanhamento', 'valor', 'A Space une aula ao vivo, prática real, aplicativo exclusivo, relatórios semanais com IA e suporte próximo. Isso permite que você acompanhe sua evolução de forma clara e tenha direção durante todo o processo.', 'Conectar tecnologia com benefício real: clareza, direção e acompanhamento.', 'Quando o lead precisa entender diferenciais ou justificar valor.', 'Ficar técnico demais. Conectar tecnologia com benefício real.', 'Ficar técnico demais. Conectar tecnologia com benefício real.', 5, true, now()),
   ('Fechamento consultivo', 'fechamento', 'Fechamento consultivo', 'fechamento', 'Pelo que conversamos, [Nome], o plano [Nome do Plano] é o que melhor vai te atender. Para te ajudar a dar esse passo importante, consigo uma condição especial para você se matricular hoje. Vamos começar a sua jornada rumo à fluência?', 'Fechar depois de diagnóstico, valor construído e objeções tratadas.', 'Após apresentação, valor construído e objeções tratadas.', 'Fechar sem diagnóstico ou sem plano recomendado.', 'Fechar sem diagnóstico ou sem plano recomendado.', 6, true, now()),
   ('Urgência e condição especial', 'fechamento', 'Urgência e condição especial', 'fechamento', 'Quanto mais você adia, mais tempo continua limitado pelo inglês nas situações que você mesmo me contou. Se faz sentido para você, o melhor momento para começar é agora, aproveitando essa condição.', 'Use quando existe dor clara e indecisão.', 'Quando há dor clara e indecisão.', 'Pressão agressiva ou manipulação.', 'Pressão agressiva ou manipulação.', 7, true, now()),
-  ('Onboarding após fechamento', 'pos_venda', 'Onboarding após fechamento', 'pos_venda', 'Perfeito, [Nome]. Agora vamos seguir com sua matrícula, acesso à plataforma, onboarding e próximos passos para você começar sua jornada da forma mais organizada possível.', 'Dar clareza sobre próximos passos.', 'Após fechamento.', 'Deixar aluno sem clareza sobre próximos passos.', 'Deixar aluno sem clareza sobre próximos passos.', 8, true, now())
-on conflict (title, stage) do update set
-  name = excluded.name,
-  type = excluded.type,
-  content = excluded.content,
-  examples = excluded.examples,
-  when_to_use = excluded.when_to_use,
-  what_to_avoid = excluded.what_to_avoid,
-  avoid = excluded.avoid,
-  order_index = excluded.order_index,
-  active = excluded.active,
-  updated_at = now();
+  ('Onboarding após fechamento', 'pos_venda', 'Onboarding após fechamento', 'pos_venda', 'Perfeito, [Nome]. Agora vamos seguir com sua matrícula, acesso à plataforma, onboarding e próximos passos para você começar sua jornada da forma mais organizada possível.', 'Dar clareza sobre próximos passos.', 'Após fechamento.', 'Deixar aluno sem clareza sobre próximos passos.', 'Deixar aluno sem clareza sobre próximos passos.', 8, true, now());
 
 insert into public.growth_sales_objections (objection, category, recommended_response, deepening_question, closing_phrase, active, updated_at)
 values
@@ -187,14 +210,7 @@ values
   ('Não tenho tempo.', 'tempo', 'Essa é a realidade da maioria dos nossos alunos, e é por isso que a metodologia da Space é tão flexível. Com reposição de aulas, acompanhamento e acesso ao aplicativo, você consegue estudar dentro da sua rotina.', 'Hoje o problema é falta total de tempo ou falta de uma estrutura que se encaixe na sua agenda?', 'O plano certo justamente precisa ser montado ao redor da sua rotina, não o contrário.', true, now()),
   ('Já tentei antes e não funcionou.', 'frustracao', 'Isso acontece muito. Mas normalmente o problema não é sua capacidade, e sim o método. Você provavelmente seguiu um modelo único, engessado. Na Space, o plano é 100% feito para você, com foco em prática real, acompanhamento e evolução clara.', 'O que mais te travou nas outras experiências: falta de conversação, falta de acompanhamento ou sentir que não saía do lugar?', 'Então o ponto não é tentar mais do mesmo. É testar um modelo diferente.', true, now()),
   ('Prefiro esperar mais um pouco.', 'indecisao', 'Entendo. Só que cada mês que passa é mais um mês em que o inglês continua limitando sua rotina, carreira ou confiança. Se isso já está te incomodando agora, talvez esperar só prolongue o problema.', 'O que exatamente você sente que precisa acontecer para esse se tornar o momento certo?', 'Se a dor já existe, o melhor caminho é começar com uma estrutura que te ajude a evoluir agora.', true, now()),
-  ('Tenho insegurança / medo de não conseguir.', 'inseguranca', 'Isso é muito comum. Por isso o acompanhamento individual ajuda tanto. Você não fica sozinho tentando se virar. O professor e a estrutura da Space acompanham sua evolução, ajustam o ritmo e te ajudam a destravar aos poucos.', 'Sua insegurança é mais com falar em voz alta, errar ou achar que não vai conseguir manter constância?', 'Justamente por isso faz sentido começar com acompanhamento, não sozinho.', true, now())
-on conflict (objection) do update set
-  category = excluded.category,
-  recommended_response = excluded.recommended_response,
-  deepening_question = excluded.deepening_question,
-  closing_phrase = excluded.closing_phrase,
-  active = excluded.active,
-  updated_at = now();
+  ('Tenho insegurança / medo de não conseguir.', 'inseguranca', 'Isso é muito comum. Por isso o acompanhamento individual ajuda tanto. Você não fica sozinho tentando se virar. O professor e a estrutura da Space acompanham sua evolução, ajustam o ritmo e te ajudam a destravar aos poucos.', 'Sua insegurança é mais com falar em voz alta, errar ou achar que não vai conseguir manter constância?', 'Justamente por isso faz sentido começar com acompanhamento, não sozinho.', true, now());
 
 insert into public.growth_winning_phrases (phrase, context, stage, source, usage_count, positive_feedback_count, positive_count, active, updated_at)
 values
@@ -205,10 +221,4 @@ values
   ('Acesso vitalício às conversações: fluência não se esquece.', 'Diferencial e retenção.', 'valor', 'playbook_oficial_space', 0, 0, 0, true, now()),
   ('Aqui você paga por resultado, não por anos preso em uma turma sem evolução.', 'Objeção de preço.', 'objecao', 'playbook_oficial_space', 0, 0, 0, true, now()),
   ('Flexibilidade e reposição ilimitada garantem que sua agenda não seja problema.', 'Objeção de tempo.', 'objecao', 'playbook_oficial_space', 0, 0, 0, true, now()),
-  ('Nosso app e relatórios semanais mostram sua evolução com clareza.', 'Objeção de insegurança.', 'objecao', 'playbook_oficial_space', 0, 0, 0, true, now())
-on conflict (phrase) do update set
-  context = excluded.context,
-  stage = excluded.stage,
-  source = excluded.source,
-  active = excluded.active,
-  updated_at = now();
+  ('Nosso app e relatórios semanais mostram sua evolução com clareza.', 'Objeção de insegurança.', 'objecao', 'playbook_oficial_space', 0, 0, 0, true, now());
