@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Space Sales Copilot Extension",
   "description": "Copilot comercial da Space para Google Meet.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "permissions": ["activeTab", "scripting", "storage"],
   "optional_permissions": ["tabCapture"],
   "host_permissions": [
@@ -13,6 +13,11 @@
     "service_worker": "background.js"
   },
   "content_scripts": [
+    {
+      "matches": ["https://space-three-sand.vercel.app/app/growth/*"],
+      "js": ["platformBridge.js"],
+      "run_at": "document_idle"
+    },
     {
       "matches": ["https://meet.google.com/*"],
       "js": ["apiClient.js", "audioCapture.js", "content.js"],

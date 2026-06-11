@@ -24,7 +24,12 @@
       body,
     });
     const data = await res.json().catch(() => null);
-    if (!res.ok) throw new Error(data?.error || "space_api_failed");
+    if (!res.ok) {
+      const error = new Error(data?.error || `space_api_failed_${res.status}`);
+      error.status = res.status;
+      error.payload = data;
+      throw error;
+    }
     return data;
   };
 

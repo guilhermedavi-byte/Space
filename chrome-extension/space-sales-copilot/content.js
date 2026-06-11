@@ -12,6 +12,9 @@
     minimized: false,
     timer: 0,
     leadContext: {},
+    sessionState: {},
+    leadTemperature: "frio",
+    lastError: "",
   };
 
   const el = document.createElement("section");
@@ -29,6 +32,7 @@
     </header>
     <div class="ssc-body">
       <div class="ssc-stage"><span>Etapa</span><b data-ssc-stage>abertura</b></div>
+      <div class="ssc-auth" data-ssc-auth>Conecte abrindo o Growth logado antes da call.</div>
       <div class="ssc-actions">
         <button type="button" data-ssc-start>Iniciar</button>
         <button type="button" data-ssc-pause>Pausar</button>
@@ -75,6 +79,11 @@
             .join("")
         : `<div class="ssc-empty">Aguardando conversa.</div>`;
     }
+    const auth = $("[data-ssc-auth]");
+    if (auth) {
+      const suffix = state.lastError ? ` ${state.lastError}` : "";
+      auth.textContent = state.leadTemperature ? `Temperatura: ${state.leadTemperature}.${suffix}` : `Conecte abrindo o Growth logado antes da call.${suffix}`;
+    }
     el.classList.toggle("is-minimized", state.minimized);
   };
 
@@ -116,11 +125,25 @@
     try {
       const data = await window.SpaceCopilotApi.suggest({ leadContext: state.leadContext, fullTranscript, transcriptChunk: state.snippets.slice(-1)[0] || "" });
       state.stage = data.stage || state.stage;
+      state.sessionState = data.updatedState || state.sessionState || {};
+      state.leadTemperature = data.leadTemperature || state.leadTemperature || "morno";
       state.cards = Array.isArray(data.cards) ? data.cards : [];
+      state.lastError = "";
       setStatus("Ouvindo");
     } catch (error) {
       console.warn("[Space Copilot] suggest failed", error);
-      state.cards = [{ type: "alerta", title: "Falha ao gerar sugestão", content: "Confira se você está logado na plataforma Growth e tente novamente.", priority: "alta" }];
+      const isAuth = error?.status === 401 || String(error?.message || "").includes("unauthorized");
+      state.lastError = isAuth ? "Token ausente ou expirado." : `Erro: ${error?.message || "falha na API"}.`;
+      state.cards = [
+        {
+          type: "alerta",
+          title: isAuth ? "Extensão sem token válido" : "Falha ao gerar sugestão",
+          content: isAuth
+            ? "Abra o Growth logado, espere 2 segundos e recarregue esta reunião. Se precisar, cole o token pelo popup da extensão."
+            : "A API respondeu com erro. Abra o popup da extensão ou tente novamente em alguns segundos.",
+          priority: "alta",
+        },
+      ];
       setStatus("Erro");
     }
     render();

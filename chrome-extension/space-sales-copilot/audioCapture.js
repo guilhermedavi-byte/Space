@@ -11,6 +11,8 @@
     }
 
     let recognition = null;
+    let lastFinal = "";
+    let lastFinalAt = 0;
     const start = () => {
       if (recognition) {
         try {
@@ -28,11 +30,18 @@
       recognition.onend = () => onStatus && onStatus("Pausado");
       recognition.onresult = (event) => {
         const finalText = Array.from(event.results || [])
+          .slice(event.resultIndex || 0)
           .filter((result) => result.isFinal)
           .map((result) => result[0]?.transcript || "")
           .join(" ")
+          .replace(/\s+/g, " ")
           .trim();
-        if (finalText && onFinal) onFinal(finalText);
+        const now = Date.now();
+        if (finalText && finalText !== lastFinal && !(lastFinal && finalText.includes(lastFinal) && now - lastFinalAt < 4000) && onFinal) {
+          lastFinal = finalText;
+          lastFinalAt = now;
+          onFinal(finalText);
+        }
       };
       recognition.start();
     };

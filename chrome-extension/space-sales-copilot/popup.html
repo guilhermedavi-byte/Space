@@ -53,6 +53,14 @@
         cursor: pointer;
       }
       .row { display: flex; gap: 8px; flex-wrap: wrap; }
+      .status {
+        margin: 10px 0 0;
+        padding: 9px 10px;
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.07);
+        color: rgba(255, 255, 255, 0.72);
+        font-size: 12px;
+      }
       p { color: rgba(255,255,255,.62); line-height: 1.4; }
     </style>
   </head>
@@ -69,8 +77,10 @@
     </label>
     <div class="row">
       <button type="button" data-save>Salvar</button>
+      <button type="button" data-clear>Limpar token</button>
       <a href="https://space-three-sand.vercel.app/app/growth/copilot-vendas" target="_blank">Abrir Growth</a>
     </div>
+    <div class="status" data-status>Verificando...</div>
     <script src="popup.js"></script>
   </body>
 </html>
