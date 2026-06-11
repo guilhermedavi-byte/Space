@@ -1,11 +1,9 @@
-const { getSessionFromRequest } = require("../../_lib/session");
 const { readJsonBody, sendJson } = require("../../_lib/http");
-const { listResource, requireGrowthAccess, saveResource } = require("../../_lib/growth-copilot");
+const { listResource, requireGrowthAccessFromRequest, saveResource } = require("../../_lib/growth-copilot");
 
 module.exports = async (req, res) => {
   try {
-    const session = getSessionFromRequest(req);
-    requireGrowthAccess(session);
+    requireGrowthAccessFromRequest(req);
 
     if (req.method === "GET") {
       const host = String(req.headers.host || "localhost");

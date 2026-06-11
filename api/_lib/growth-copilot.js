@@ -1,9 +1,13 @@
+const crypto = require("crypto");
+const { getSessionFromRequest } = require("./session");
 const { supabaseFetch } = require("./supabase-rest");
 
 const COPILOT_TABLES = {
   scripts: "growth_sales_scripts",
   objections: "growth_sales_objections",
   phrases: "growth_winning_phrases",
+  plans: "growth_sales_plans",
+  personas: "growth_sales_personas",
   sessions: "growth_copilot_sessions",
   suggestions: "growth_copilot_suggestions",
   feedback: "growth_copilot_feedback",
@@ -12,85 +16,104 @@ const COPILOT_TABLES = {
 const DEFAULT_SCRIPT_BLOCKS = [
   {
     id: "seed_abertura",
-    name: "Abertura com energia e controle",
+    name: "Primeiro contato / abertura da call",
     type: "abertura",
     content:
-      "Olá, [Nome]! Aqui é o [Closer], da Space Idiomas. Recebi seu contato e queria entender rapidamente seu momento com o inglês.",
-    examples: "Hoje ajudamos brasileiros que moram fora e precisam destravar a conversação de forma prática.",
+      "Olá, [Nome do Lead]! Vi que você se interessou em destravar o seu inglês com a Space. Me conta, qual o seu maior desafio com o idioma aí no exterior? É mais para o trabalho, para o dia a dia ou para os estudos? Assim, já consigo te mostrar o caminho mais rápido para você alcançar a sua meta.",
+    examples: "Use para abrir a call com diagnóstico, sem despejar oferta.",
     when_to_use: "Primeiro contato ou início da call.",
-    avoid: "Não despejar informações nem parecer vendedor tradicional.",
+    avoid: "Falar de preço cedo, despejar informações ou apresentar plano antes de entender o objetivo.",
     active: true,
     order_index: 1,
   },
   {
     id: "seed_diagnostico",
-    name: "Identificação imediata",
-    type: "diagnóstico",
-    content:
-      "O que mais ouvimos é: eu entendo um pouco, mas travo para falar; tenho vergonha; estudo, mas não consigo conversar. Isso acontece com você também?",
-    examples: "Em quais situações isso aparece mais: trabalho, rotina, confiança ou comunicação do dia a dia?",
-    when_to_use: "Depois da abertura, antes de apresentar a solução.",
-    avoid: "Não apresentar plano antes de entender a dor.",
+    name: "Qualificação do objetivo",
+    type: "diagnostico",
+    content: "Qual seu objetivo principal com o inglês? Em quanto tempo você gostaria de atingir esse resultado? Você prefere uma experiência em grupo ou acompanhamento individual?",
+    examples: "Entender objetivo, prazo, preferência, rotina e urgência antes de recomendar.",
+    when_to_use: "Antes da apresentação do plano.",
+    avoid: "Recomendar plano sem entender objetivo, urgência e preferência.",
     active: true,
     order_index: 2,
   },
   {
-    id: "seed_dor",
-    name: "Dor, impacto e consequência",
-    type: "dor",
-    content:
-      "O que mais te incomoda hoje no inglês? E isso te limita mais no trabalho, na rotina, na confiança ou na comunicação?",
-    examples: "O que fez você decidir buscar ajuda justamente agora?",
-    when_to_use: "Quando o lead dá sinais de trava, vergonha ou urgência.",
-    avoid: "Não minimizar a dor do lead.",
+    id: "seed_apresentacao",
+    name: "Apresentação personalizada do plano",
+    type: "apresentacao",
+    content: "Com base no que você me disse, [Nome], acredito que o plano [Nome do Plano] é o ideal para você. Com ele, você terá [principais benefícios do plano], o que vai te ajudar a [solução para a dor do lead].",
+    examples: "Conecte o plano recomendado à dor e ao objetivo do lead.",
+    when_to_use: "Depois de identificar perfil, dor, objetivo e disponibilidade.",
+    avoid: "Apresentar todos os planos de forma genérica sem recomendação clara.",
     active: true,
     order_index: 3,
   },
   {
-    id: "seed_futuro",
-    name: "Micro sonho",
-    type: "urgência",
-    content: "Se você realmente destravasse seu inglês nos próximos meses, o que mudaria na sua vida?",
-    examples: "O que isso poderia destravar para você profissionalmente ou na sua vida fora?",
-    when_to_use: "Após o lead admitir dor ou limitação.",
-    avoid: "Não prometer fluência garantida.",
+    id: "seed_metodo_tradicional",
+    name: "Posicionamento contra método tradicional",
+    type: "valor",
+    content: "Diferente dos métodos tradicionais, aqui você não precisa se adaptar a uma turma engessada. O plano se adapta a você, ao seu objetivo, à sua rotina e ao ritmo que você precisa evoluir.",
+    examples: "Use quando o lead mostrar frustração com outros cursos.",
+    when_to_use: "Quando o lead mostrar frustração com outros cursos ou medo de não evoluir.",
+    avoid: "Criticar concorrente de forma direta ou prometer resultado impossível.",
     active: true,
     order_index: 4,
   },
   {
-    id: "seed_posicionamento",
-    name: "Posicionamento Space",
-    type: "apresentação",
-    content:
-      "Provavelmente o que faltou até hoje não foi capacidade. Foi metodologia, prática real e acompanhamento certo. A Space trabalha com aulas ao vivo, mentorias individuais, método conversacional, prática com IA e flexibilidade de horários.",
-    examples: "Nosso objetivo é fazer o aluno usar inglês na vida real o mais rápido possível.",
-    when_to_use: "Depois de diagnóstico suficiente.",
-    avoid: "Não vender curso genérico nem listar recursos sem conectar à dor.",
+    id: "seed_tecnologia",
+    name: "Tecnologia e acompanhamento",
+    type: "valor",
+    content: "A Space une aula ao vivo, prática real, aplicativo exclusivo, relatórios semanais com IA e suporte próximo. Isso permite que você acompanhe sua evolução de forma clara e tenha direção durante todo o processo.",
+    examples: "Conectar tecnologia com benefício real: clareza, direção e acompanhamento.",
+    when_to_use: "Quando o lead precisa entender diferenciais ou justificar valor.",
+    avoid: "Ficar técnico demais.",
     active: true,
     order_index: 5,
   },
   {
     id: "seed_fechamento",
-    name: "Fechamento assumido",
+    name: "Fechamento consultivo",
     type: "fechamento",
-    content: "Tenho disponibilidade hoje no período da noite ou amanhã pela manhã. Qual funciona melhor para você?",
-    examples: "Para a reunião funcionar bem, preciso que você esteja com atenção total à apresentação. Tudo bem?",
-    when_to_use: "Quando há dor, objetivo e abertura para próximo passo.",
-    avoid: "Evitar 'você quer agendar?' como pergunta aberta.",
+    content: "Pelo que conversamos, [Nome], o plano [Nome do Plano] é o que melhor vai te atender. Para te ajudar a dar esse passo importante, consigo uma condição especial para você se matricular hoje. Vamos começar a sua jornada rumo à fluência?",
+    examples: "Fechar depois de diagnóstico, valor construído e objeções tratadas.",
+    when_to_use: "Após apresentação, valor construído e objeções tratadas.",
+    avoid: "Fechar sem diagnóstico ou sem plano recomendado.",
     active: true,
     order_index: 6,
+  },
+  {
+    id: "seed_urgencia",
+    name: "Urgência e condição especial",
+    type: "fechamento",
+    content: "Quanto mais você adia, mais tempo continua limitado pelo inglês nas situações que você mesmo me contou. Se faz sentido para você, o melhor momento para começar é agora, aproveitando essa condição.",
+    examples: "Use quando existe dor clara e indecisão.",
+    when_to_use: "Quando há dor clara e indecisão.",
+    avoid: "Pressão agressiva ou manipulação.",
+    active: true,
+    order_index: 7,
+  },
+  {
+    id: "seed_pos_venda",
+    name: "Onboarding após fechamento",
+    type: "pos_venda",
+    content: "Perfeito, [Nome]. Agora vamos seguir com sua matrícula, acesso à plataforma, onboarding e próximos passos para você começar sua jornada da forma mais organizada possível.",
+    examples: "Dar clareza sobre próximos passos.",
+    when_to_use: "Após fechamento.",
+    avoid: "Deixar aluno sem clareza sobre próximos passos.",
+    active: true,
+    order_index: 8,
   },
 ];
 
 const DEFAULT_OBJECTIONS = [
   {
     id: "seed_preco",
-    objection: "Quanto custa?",
-    category: "preço",
+    objection: "Está caro.",
+    category: "preco",
     recommended_response:
-      "Ótima pergunta. Como nossos programas são personalizados, o investimento depende do objetivo, frequência, nível atual e velocidade de evolução desejada. Por isso fazemos primeiro uma avaliação rápida.",
-    deepening_question: "Qual resultado você quer alcançar e em quanto tempo isso precisa acontecer?",
-    closing_phrase: "Na reunião conseguimos indicar o melhor caminho para o seu momento.",
+      "Eu entendo sua preocupação com o investimento, [Nome]. Mas pensa no quanto você já perdeu ou pode perder por não ter um inglês fluente. Nossos alunos costumam dizer que o investimento se paga com as novas oportunidades que surgem. Além disso, aqui você tem um método personalizado, acompanhamento próximo e uma estrutura feita para gerar evolução real.",
+    deepening_question: "Hoje sua preocupação é o valor em si ou o medo de investir e não ter resultado como em experiências anteriores?",
+    closing_phrase: "Se o inglês hoje impacta sua carreira, rotina ou oportunidades, faz sentido tratar isso como investimento, não como gasto.",
     active: true,
   },
   {
@@ -98,28 +121,39 @@ const DEFAULT_OBJECTIONS = [
     objection: "Estou sem tempo",
     category: "tempo",
     recommended_response:
-      "Perfeito. Inclusive atendemos muitas pessoas com rotina corrida. Por isso as aulas são individuais e flexíveis.",
-    deepening_question: "Hoje sua maior dificuldade é agenda, energia ou constância?",
-    closing_phrase: "A avaliação serve justamente para encontrar um formato que caiba na sua rotina.",
-    active: true,
-  },
-  {
-    id: "seed_pensar",
-    objection: "Vou pensar",
-    category: "preciso pensar",
-    recommended_response: "Claro. Mas me responde com sinceridade: o que você sente que ainda precisa entender para decidir?",
-    deepening_question: "É mais sobre método, investimento, tempo ou medo de não conseguir manter?",
-    closing_phrase: "Vamos esclarecer isso agora para você decidir com segurança.",
+      "Essa é a realidade da maioria dos nossos alunos, e é por isso que a metodologia da Space é tão flexível. Com reposição de aulas, acompanhamento e acesso ao aplicativo, você consegue estudar dentro da sua rotina.",
+    deepening_question: "Hoje o problema é falta total de tempo ou falta de uma estrutura que se encaixe na sua agenda?",
+    closing_phrase: "O plano certo justamente precisa ser montado ao redor da sua rotina, não o contrário.",
     active: true,
   },
   {
     id: "seed_tentei",
-    objection: "Já tentei outros cursos",
-    category: "já tentei antes",
+    objection: "Já tentei antes e não funcionou.",
+    category: "frustracao",
     recommended_response:
-      "Isso é muito comum por aqui. A maioria dos nossos alunos chegou frustrada com cursos tradicionais. O diferencial da Space é prática real e acompanhamento próximo.",
-    deepening_question: "O que faltou nos cursos anteriores para você realmente destravar?",
-    closing_phrase: "Se o problema foi falta de conversação e acompanhamento, faz sentido avaliarmos um caminho diferente.",
+      "Isso acontece muito. Mas normalmente o problema não é sua capacidade, e sim o método. Você provavelmente seguiu um modelo único, engessado. Na Space, o plano é 100% feito para você, com foco em prática real, acompanhamento e evolução clara.",
+    deepening_question: "O que mais te travou nas outras experiências: falta de conversação, falta de acompanhamento ou sentir que não saía do lugar?",
+    closing_phrase: "Então o ponto não é tentar mais do mesmo. É testar um modelo diferente.",
+    active: true,
+  },
+  {
+    id: "seed_esperar",
+    objection: "Prefiro esperar mais um pouco.",
+    category: "indecisao",
+    recommended_response:
+      "Entendo. Só que cada mês que passa é mais um mês em que o inglês continua limitando sua rotina, carreira ou confiança. Se isso já está te incomodando agora, talvez esperar só prolongue o problema.",
+    deepening_question: "O que exatamente você sente que precisa acontecer para esse se tornar o momento certo?",
+    closing_phrase: "Se a dor já existe, o melhor caminho é começar com uma estrutura que te ajude a evoluir agora.",
+    active: true,
+  },
+  {
+    id: "seed_inseguranca",
+    objection: "Tenho insegurança / medo de não conseguir.",
+    category: "inseguranca",
+    recommended_response:
+      "Isso é muito comum. Por isso o acompanhamento individual ajuda tanto. Você não fica sozinho tentando se virar. O professor e a estrutura da Space acompanham sua evolução, ajustam o ritmo e te ajudam a destravar aos poucos.",
+    deepening_question: "Sua insegurança é mais com falar em voz alta, errar ou achar que não vai conseguir manter constância?",
+    closing_phrase: "Justamente por isso faz sentido começar com acompanhamento, não sozinho.",
     active: true,
   },
 ];
@@ -136,6 +170,92 @@ const DEFAULT_PHRASES = [
   },
 ];
 
+const DEFAULT_PLANS = [
+  {
+    id: "seed_turma",
+    name: "Turma",
+    description: "4 aulas em grupo por semana, suporte 24h e relatório semanal de desempenho.",
+    price: "R$ 490/mês",
+    ideal_for: "Quem busca bom custo-benefício para iniciar a jornada.",
+    benefits: "Aulas em grupo, suporte 24h e relatório semanal de desempenho.",
+    recommended_when: "Preço é prioridade, aluno quer entrada mais acessível ou ainda não precisa de acompanhamento máximo.",
+    active: true,
+  },
+  {
+    id: "seed_gold",
+    name: "Gold",
+    description: "3 mentorias individuais por semana, 1 aula de conversação em grupo por semana, acesso vitalício ao grupo de conversação, acesso ilimitado ao app e suporte 24h.",
+    price: "R$ 1.190/mês",
+    ideal_for: "Profissionais que precisam de resultados rápidos para carreira.",
+    benefits: "Mentorias individuais, conversação em grupo, app ilimitado, suporte 24h e acesso vitalício às conversações.",
+    recommended_when: "Aluno busca evolução rápida, tem objetivo profissional, precisa de acompanhamento individual e quer equilíbrio entre resultado e investimento.",
+    active: true,
+  },
+  {
+    id: "seed_diamond",
+    name: "Diamond",
+    description: "5 mentorias individuais por semana, 1 aula de conversação em grupo por semana vitalícia, acesso ilimitado ao app, suporte 24h, flexibilidade total de horários e reposição ilimitada.",
+    price: "R$ 1.490/mês",
+    ideal_for: "Executivos e empreendedores que exigem máxima performance e flexibilidade.",
+    benefits: "Alta frequência individual, flexibilidade total, reposição ilimitada, app ilimitado e suporte 24h.",
+    recommended_when: "Aluno tem urgência, agenda instável, alto valor percebido, precisa de flexibilidade máxima ou quer performance acelerada.",
+    active: true,
+  },
+];
+
+const DEFAULT_PERSONAS = [
+  {
+    id: "seed_universitario",
+    name: "Universitário / Jovem Profissional",
+    age_range: "18-28 anos",
+    profile: "Jovem buscando intercâmbio, estágio, viagens ou empregabilidade.",
+    goals: "Intercâmbio, estágio, viagens e empregabilidade.",
+    pains: "Cursos lentos, falta de conversação real e preço.",
+    recommended_plan: "Turma ou Gold",
+    active: true,
+  },
+  {
+    id: "seed_profissional",
+    name: "Profissional de Carreira",
+    age_range: "28-40 anos",
+    profile: "Profissional que precisa do inglês para crescer na carreira.",
+    goals: "Promoção, entrevistas e reuniões internacionais.",
+    pains: "Falta de tempo e urgência em aprender.",
+    recommended_plan: "Gold",
+    active: true,
+  },
+  {
+    id: "seed_executivo",
+    name: "Executivo / Empreendedor",
+    age_range: "35-55 anos",
+    profile: "Pessoa com agenda instável e alto valor de tempo.",
+    goals: "Negócios globais, viagens de trabalho e performance.",
+    pains: "Não pode perder tempo e exige flexibilidade total.",
+    recommended_plan: "Diamond",
+    active: true,
+  },
+  {
+    id: "seed_pais",
+    name: "Pais de adolescentes",
+    age_range: "35-50 anos",
+    profile: "Responsáveis buscando inglês para o futuro dos filhos.",
+    goals: "Garantir fluência futura dos filhos.",
+    pains: "Desconfiança com métodos tradicionais.",
+    recommended_plan: "Turma",
+    active: true,
+  },
+  {
+    id: "seed_exterior",
+    name: "Brasileiro no Exterior",
+    age_range: "",
+    profile: "Brasileiro(a) que reside em país de língua inglesa e precisa do idioma para rotina, trabalho, estudos ou integração.",
+    goals: "Fluência, confiança, independência, oportunidades profissionais e integração cultural.",
+    pains: "Dificuldade de comunicação no dia a dia, insegurança profissional, isolamento social, frustração com métodos tradicionais e dificuldade por fuso/rotina.",
+    recommended_plan: "Gold ou Diamond",
+    active: true,
+  },
+];
+
 const normalizeRole = (role) => String(role || "").trim().toLowerCase();
 
 const requireGrowthAccess = (session) => {
@@ -147,7 +267,70 @@ const requireGrowthAccess = (session) => {
   }
 };
 
+const verifyCopilotToken = (token) => {
+  const raw = String(token || "").trim();
+  const [body, sig] = raw.split(".");
+  if (!body || !sig) return null;
+  const secret = String(process.env.SPACE_AUTH_SECRET || "space_dev_secret_change_me_please");
+  const expected = crypto.createHmac("sha256", secret).update(body).digest("base64url");
+  if (Buffer.byteLength(sig) !== Buffer.byteLength(expected)) return null;
+  if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
+  const payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
+  const now = Math.floor(Date.now() / 1000);
+  if (payload.scope !== "growth_sales_copilot" || Number(payload.exp || 0) < now) return null;
+  requireGrowthAccess(payload);
+  return payload;
+};
+
+const requireGrowthAccessFromRequest = (req) => {
+  const session = getSessionFromRequest(req);
+  if (session) {
+    requireGrowthAccess(session);
+    return session;
+  }
+  const token = req?.headers?.["x-copilot-token"];
+  const payload = verifyCopilotToken(Array.isArray(token) ? token[0] : token);
+  if (!payload) {
+    const error = new Error("unauthorized");
+    error.status = 401;
+    throw error;
+  }
+  return payload;
+};
+
 const safeArray = (value) => (Array.isArray(value) ? value : []);
+
+const recommendPlan = ({ transcript = "", leadContext = {} } = {}) => {
+  const text = `${Object.values(leadContext || {}).join(" ")} ${transcript}`.toLowerCase();
+  if (/executiv|empreendedor|ceo|diretor|urgent|urgência|urgencia|imediat|agenda instável|agenda instavel|flexibilidade máxima|flexibilidade maxima|reposição ilimitada|reposicao ilimitada/.test(text)) {
+    return {
+      name: "Diamond",
+      reason: "perfil com urgência, agenda instável ou necessidade de flexibilidade máxima",
+    };
+  }
+  if (/preço|preco|barat|custo|valor|orçamento baixo|orcamento baixo|mais acessível|mais acessivel/.test(text)) {
+    return {
+      name: "Turma",
+      reason: "preço aparece como prioridade ou o lead precisa de uma entrada mais acessível",
+    };
+  }
+  if (/carreira|promoção|promocao|entrevista|reunião internacional|reuniao internacional|trabalho|profissional|rápid|rapid|insegur|medo|acompanhamento/.test(text)) {
+    return {
+      name: "Gold",
+      reason: "objetivo profissional, evolução rápida ou necessidade de acompanhamento próximo",
+    };
+  }
+  if (/filh|adolescente|pais/.test(text)) {
+    return {
+      name: "Turma",
+      reason: "pais de adolescentes costumam entrar melhor pelo plano Turma, com possibilidade de upsell",
+    };
+  }
+  return {
+    name: "Gold",
+    reason: "melhor equilíbrio padrão entre acompanhamento individual, resultado e investimento",
+  };
+};
 
 const listResource = async (resource) => {
   const key = String(resource || "").trim();
@@ -165,6 +348,8 @@ const listResource = async (resource) => {
     if (key === "scripts") return { rows: DEFAULT_SCRIPT_BLOCKS, fallback: true, error: error.message };
     if (key === "objections") return { rows: DEFAULT_OBJECTIONS, fallback: true, error: error.message };
     if (key === "phrases") return { rows: DEFAULT_PHRASES, fallback: true, error: error.message };
+    if (key === "plans") return { rows: DEFAULT_PLANS, fallback: true, error: error.message };
+    if (key === "personas") return { rows: DEFAULT_PERSONAS, fallback: true, error: error.message };
     return { rows: [], fallback: true, error: error.message };
   }
 };
@@ -172,7 +357,7 @@ const listResource = async (resource) => {
 const saveResource = async (resource, payload = {}) => {
   const key = String(resource || "").trim();
   const table = COPILOT_TABLES[key];
-  if (!["scripts", "objections", "phrases", "feedback", "suggestions", "sessions"].includes(key) || !table) {
+  if (!["scripts", "objections", "phrases", "plans", "personas", "feedback", "suggestions", "sessions"].includes(key) || !table) {
     const error = new Error("invalid_resource");
     error.status = 400;
     throw error;
@@ -189,9 +374,16 @@ const saveResource = async (resource, payload = {}) => {
 
 const buildCopilotSystemPrompt = () => `
 Você é o copiloto de venda consultiva da Space Idiomas para closers.
+Este é um Copilot para CLOSER/VENDEDOR, não SDR.
 Fale sempre PARA O CLOSER, nunca diretamente com o lead.
 Gere sugestões curtas, naturais, práticas e prontas para o closer falar.
-Siga o playbook oficial da Space e as objeções cadastradas.
+Siga o playbook oficial da Space, os planos oficiais e as objeções cadastradas.
+Sempre parta do diagnóstico antes de sugerir fechamento.
+Recomende Turma, Gold ou Diamond com base no perfil.
+Se preço for prioridade, tenda a Turma.
+Se objetivo for carreira ou evolução rápida, tenda a Gold.
+Se urgência, executivo, empreendedor ou flexibilidade máxima aparecerem, tenda a Diamond.
+Se insegurança for grande, priorize Gold ou Diamond por acompanhamento mais próximo.
 Não invente dados, não prometa fluência garantida e não force fechamento sem diagnóstico.
 Priorize dor, urgência, orçamento, consequência e próximo passo.
 Se detectar objeção, use a resposta cadastrada mais próxima.
@@ -270,10 +462,17 @@ const heuristicSuggest = ({ transcript = "", objections = [] } = {}) => {
           priority: "média",
         },
       ];
+  const plan = recommendPlan({ transcript });
+  cards.push({
+    type: "recomendacao_plano",
+    title: `Plano provável: ${plan.name}`,
+    content: `Se o diagnóstico confirmar, direcione para o ${plan.name}: ${plan.reason}. Não apresente como definitivo antes de validar objetivo, rotina e orçamento.`,
+    priority: "média",
+  });
   return { stage, cards };
 };
 
-const suggestWithAi = async ({ leadContext = {}, transcript = "", playbookBlocks = [], objections = [], winnerPhrases = [] } = {}) => {
+const suggestWithAi = async ({ leadContext = {}, transcript = "", playbookBlocks = [], objections = [], winnerPhrases = [], plans = [], personas = [] } = {}) => {
   const fallback = heuristicSuggest({ transcript, objections: safeArray(objections).length ? objections : DEFAULT_OBJECTIONS });
   return callOpenAiJson({
     fallback,
@@ -292,6 +491,8 @@ const suggestWithAi = async ({ leadContext = {}, transcript = "", playbookBlocks
           playbookBlocks: safeArray(playbookBlocks).slice(0, 30),
           objections: safeArray(objections).slice(0, 30),
           winnerPhrases: safeArray(winnerPhrases).slice(0, 20),
+          plans: (safeArray(plans).length ? safeArray(plans) : DEFAULT_PLANS).slice(0, 10),
+          personas: (safeArray(personas).length ? safeArray(personas) : DEFAULT_PERSONAS).slice(0, 10),
         }),
       },
     ],
@@ -340,7 +541,11 @@ module.exports = {
   DEFAULT_SCRIPT_BLOCKS,
   DEFAULT_OBJECTIONS,
   DEFAULT_PHRASES,
+  DEFAULT_PLANS,
+  DEFAULT_PERSONAS,
   requireGrowthAccess,
+  requireGrowthAccessFromRequest,
+  recommendPlan,
   listResource,
   saveResource,
   suggestWithAi,

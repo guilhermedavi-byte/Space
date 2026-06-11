@@ -11272,6 +11272,8 @@ const salesCopilotState = {
   scripts: [],
   objections: [],
   phrases: [],
+  plans: [],
+  personas: [],
   loading: false,
   recognition: null,
   listening: false,
@@ -11283,6 +11285,8 @@ const salesCopilotResources = [
   ["scripts", "scripts"],
   ["objections", "objections"],
   ["phrases", "phrases"],
+  ["plans", "plans"],
+  ["personas", "personas"],
 ];
 
 const setSalesCopilotStatus = (status) => {
@@ -11403,6 +11407,40 @@ const renderSalesCopilotCrud = () => {
             <strong>${escapeHtml(row.context || "Frase vencedora")}</strong>
             <p>${escapeHtml(row.phrase || "")}</p>
             <small>${escapeHtml(String(row.positive_count || 0))} avaliações positivas</small>
+          </article>
+        `
+      )
+      .join("");
+  }
+  const plans = document.querySelector("[data-copilot-plans-list]");
+  if (plans instanceof HTMLElement) {
+    plans.innerHTML = salesCopilotState.plans
+      .map(
+        (row) => `
+          <article class="sales-copilot-crud-item">
+            <span>${escapeHtml(row.price || "plano")}</span>
+            <strong>${escapeHtml(row.name || "Plano")}</strong>
+            <p>${escapeHtml(row.description || "")}</p>
+            <small><b>Ideal:</b> ${escapeHtml(row.ideal_for || "—")}</small>
+            <small><b>Quando recomendar:</b> ${escapeHtml(row.recommended_when || "—")}</small>
+            <button class="admin-student-file-btn" type="button" data-copilot-edit-plan="${escapeHtml(String(row.id || ""))}">Editar</button>
+          </article>
+        `
+      )
+      .join("");
+  }
+  const personas = document.querySelector("[data-copilot-personas-list]");
+  if (personas instanceof HTMLElement) {
+    personas.innerHTML = salesCopilotState.personas
+      .map(
+        (row) => `
+          <article class="sales-copilot-crud-item">
+            <span>${escapeHtml(row.age_range || "persona")}</span>
+            <strong>${escapeHtml(row.name || "Persona")}</strong>
+            <p>${escapeHtml(row.profile || "")}</p>
+            <small><b>Dores:</b> ${escapeHtml(row.pains || "—")}</small>
+            <small><b>Plano:</b> ${escapeHtml(row.recommended_plan || "—")}</small>
+            <button class="admin-student-file-btn" type="button" data-copilot-edit-persona="${escapeHtml(String(row.id || ""))}">Editar</button>
           </article>
         `
       )
@@ -11534,6 +11572,8 @@ const requestSalesCopilotSuggestion = async () => {
         playbookBlocks: salesCopilotState.scripts,
         objections: salesCopilotState.objections,
         winnerPhrases: salesCopilotState.phrases,
+        plans: salesCopilotState.plans,
+        personas: salesCopilotState.personas,
       }),
     });
     const data = await res.json().catch(() => null);
@@ -11665,6 +11705,74 @@ const openSalesCopilotPhraseModal = (row = {}) => {
       return false;
     },
   });
+};
+
+const openSalesCopilotPlanModal = (row = {}) => {
+  openModal({
+    title: row.id ? "Editar plano" : "Novo plano",
+    primaryLabel: "Salvar",
+    secondaryLabel: "Cancelar",
+    bodyHtml: `
+      <div class="admin-student-fin-form">
+        <label class="modal-field"><span>Nome</span><input class="modal-input" data-sc-field="name" value="${escapeHtml(row.name || "")}" /></label>
+        <label class="modal-field"><span>Preço</span><input class="modal-input" data-sc-field="price" value="${escapeHtml(row.price || "")}" /></label>
+        <label class="modal-field admin-student-field-wide"><span>Descrição</span><textarea class="modal-input" rows="4" data-sc-field="description">${escapeHtml(row.description || "")}</textarea></label>
+        <label class="modal-field admin-student-field-wide"><span>Ideal para</span><textarea class="modal-input" rows="3" data-sc-field="ideal_for">${escapeHtml(row.ideal_for || "")}</textarea></label>
+        <label class="modal-field admin-student-field-wide"><span>Benefícios</span><textarea class="modal-input" rows="3" data-sc-field="benefits">${escapeHtml(row.benefits || "")}</textarea></label>
+        <label class="modal-field admin-student-field-wide"><span>Quando recomendar</span><textarea class="modal-input" rows="3" data-sc-field="recommended_when">${escapeHtml(row.recommended_when || "")}</textarea></label>
+      </div>
+    `,
+    onPrimary: () => {
+      const read = (key) => modalBody?.querySelector(`[data-sc-field="${CSS.escape(key)}"]`)?.value || "";
+      saveSalesCopilotResource("plans", { ...row, name: read("name"), price: read("price"), description: read("description"), ideal_for: read("ideal_for"), benefits: read("benefits"), recommended_when: read("recommended_when"), active: true })
+        .then(closeModal)
+        .catch((error) => console.error("[growth copilot] save plan failed", error));
+      return false;
+    },
+  });
+};
+
+const openSalesCopilotPersonaModal = (row = {}) => {
+  openModal({
+    title: row.id ? "Editar persona" : "Nova persona",
+    primaryLabel: "Salvar",
+    secondaryLabel: "Cancelar",
+    bodyHtml: `
+      <div class="admin-student-fin-form">
+        <label class="modal-field"><span>Nome</span><input class="modal-input" data-sc-field="name" value="${escapeHtml(row.name || "")}" /></label>
+        <label class="modal-field"><span>Idade</span><input class="modal-input" data-sc-field="age_range" value="${escapeHtml(row.age_range || "")}" /></label>
+        <label class="modal-field admin-student-field-wide"><span>Perfil</span><textarea class="modal-input" rows="3" data-sc-field="profile">${escapeHtml(row.profile || "")}</textarea></label>
+        <label class="modal-field admin-student-field-wide"><span>Objetivos</span><textarea class="modal-input" rows="3" data-sc-field="goals">${escapeHtml(row.goals || "")}</textarea></label>
+        <label class="modal-field admin-student-field-wide"><span>Dores</span><textarea class="modal-input" rows="3" data-sc-field="pains">${escapeHtml(row.pains || "")}</textarea></label>
+        <label class="modal-field admin-student-field-wide"><span>Plano recomendado</span><input class="modal-input" data-sc-field="recommended_plan" value="${escapeHtml(row.recommended_plan || "")}" /></label>
+      </div>
+    `,
+    onPrimary: () => {
+      const read = (key) => modalBody?.querySelector(`[data-sc-field="${CSS.escape(key)}"]`)?.value || "";
+      saveSalesCopilotResource("personas", { ...row, name: read("name"), age_range: read("age_range"), profile: read("profile"), goals: read("goals"), pains: read("pains"), recommended_plan: read("recommended_plan"), active: true })
+        .then(closeModal)
+        .catch((error) => console.error("[growth copilot] save persona failed", error));
+      return false;
+    },
+  });
+};
+
+const createSalesCopilotExtensionToken = async () => {
+  try {
+    const res = await fetchWithAuth("/api/growth/copilot-vendas/realtime-token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error || "token_failed");
+    const token = String(data?.token || "");
+    if (token) await navigator.clipboard?.writeText(token);
+    setSalesCopilotStatus(token ? "Token da extensão copiado" : "Token gerado");
+  } catch (error) {
+    console.error("[growth copilot] extension token failed", error);
+    setSalesCopilotStatus("Erro ao conectar extensão");
+  }
 };
 
 const getAdminUsersUiRefs = (type) => {
@@ -19398,7 +19506,7 @@ const roleBasePath = (role) => {
   const normalized = normalizeRole(role);
   if (normalized === "teacher") return "/app/professor";
   if (normalized === "admin") return "/app/admin";
-  if (normalized === "growth") return "/app/growth/copilot-vendas";
+  if (normalized === "growth") return "/growth/dashboard";
   if (normalized === "FINANCE") return "/app/financeiro";
   return "/app/aluno";
 };
@@ -19418,7 +19526,7 @@ const panelPathForRole = (role, panel) => {
   }
 
   if (normalized === "admin") {
-    if (["copilot-vendas", "scripts-vendas", "objecoes", "frases-vencedoras"].includes(p)) return `/app/admin/growth/${p}`;
+    if (["copilot-vendas", "scripts-vendas", "objecoes", "planos", "personas", "frases-vencedoras"].includes(p)) return `/app/admin/growth/${p}`;
     if (p === "professores") return "/app/admin/professores";
     if (p === "alunos") return "/app/admin/alunos";
     if (p === "admin-controle-pedagogico") return "/app/admin/controle-pedagogico";
@@ -19431,7 +19539,7 @@ const panelPathForRole = (role, panel) => {
   }
 
   if (normalized === "growth") {
-    if (["scripts-vendas", "objecoes", "frases-vencedoras"].includes(p)) return `/app/growth/${p}`;
+    if (["scripts-vendas", "objecoes", "planos", "personas", "frases-vencedoras"].includes(p)) return `/app/growth/${p}`;
     return "/app/growth/copilot-vendas";
   }
 
@@ -19486,7 +19594,7 @@ const parseAppRoute = (path) => {
     if (sub === "alunos") return { role, panel: "alunos" };
     if (sub === "controle-pedagogico") return { role, panel: "admin-controle-pedagogico" };
     if (sub === "financeiro") return { role, panel: "financeiro" };
-    if (sub === "growth") return { role, panel: "growth", growthTab: ["copilot-vendas", "scripts-vendas", "objecoes", "frases-vencedoras"].includes(detail) ? detail : "copilot-vendas" };
+    if (sub === "growth") return { role, panel: "growth", growthTab: ["copilot-vendas", "scripts-vendas", "objecoes", "planos", "personas", "frases-vencedoras"].includes(detail) ? detail : "copilot-vendas" };
     if (sub === "ao-vivo") return { role, panel: "ao-vivo" };
     if (sub === "gravadas") return { role, panel: "gravadas" };
     if (sub === "materiais") return { role, panel: "materiais" };
@@ -19494,7 +19602,7 @@ const parseAppRoute = (path) => {
   }
 
   if (role === "growth") {
-    if (["scripts-vendas", "objecoes", "frases-vencedoras"].includes(sub)) return { role, panel: "growth", growthTab: sub };
+    if (["scripts-vendas", "objecoes", "planos", "personas", "frases-vencedoras"].includes(sub)) return { role, panel: "growth", growthTab: sub };
     return { role, panel: "growth", growthTab: "copilot-vendas" };
   }
 
@@ -19637,7 +19745,7 @@ document.addEventListener("click", (event) => {
     const next = String(tab.getAttribute("data-growth-copilot-tab") || "copilot-vendas");
     salesCopilotState.activeTab = next;
     renderSalesCopilot();
-    if (["copilot-vendas", "scripts-vendas", "objecoes", "frases-vencedoras"].includes(next)) {
+    if (["copilot-vendas", "scripts-vendas", "objecoes", "planos", "personas", "frases-vencedoras"].includes(next)) {
       navigateApp(panelPathForRole(currentRole, next), { replace: false });
     }
     return;
@@ -19667,6 +19775,11 @@ document.addEventListener("click", (event) => {
   if (target.closest("[data-copilot-summary]")) {
     event.preventDefault();
     requestSalesCopilotSummary().catch(() => {});
+    return;
+  }
+  if (target.closest("[data-copilot-extension-token]")) {
+    event.preventDefault();
+    createSalesCopilotExtensionToken();
     return;
   }
   if (target.closest("[data-copilot-clear]")) {
@@ -19741,6 +19854,16 @@ document.addEventListener("click", (event) => {
     openSalesCopilotPhraseModal();
     return;
   }
+  if (target.closest("[data-copilot-new-plan]")) {
+    event.preventDefault();
+    openSalesCopilotPlanModal();
+    return;
+  }
+  if (target.closest("[data-copilot-new-persona]")) {
+    event.preventDefault();
+    openSalesCopilotPersonaModal();
+    return;
+  }
   const editScript = target.closest("[data-copilot-edit-script]");
   if (editScript instanceof HTMLButtonElement) {
     const id = String(editScript.getAttribute("data-copilot-edit-script") || "");
@@ -19751,6 +19874,18 @@ document.addEventListener("click", (event) => {
   if (editObjection instanceof HTMLButtonElement) {
     const id = String(editObjection.getAttribute("data-copilot-edit-objection") || "");
     openSalesCopilotObjectionModal(salesCopilotState.objections.find((row) => String(row.id) === id) || {});
+    return;
+  }
+  const editPlan = target.closest("[data-copilot-edit-plan]");
+  if (editPlan instanceof HTMLButtonElement) {
+    const id = String(editPlan.getAttribute("data-copilot-edit-plan") || "");
+    openSalesCopilotPlanModal(salesCopilotState.plans.find((row) => String(row.id) === id) || {});
+    return;
+  }
+  const editPersona = target.closest("[data-copilot-edit-persona]");
+  if (editPersona instanceof HTMLButtonElement) {
+    const id = String(editPersona.getAttribute("data-copilot-edit-persona") || "");
+    openSalesCopilotPersonaModal(salesCopilotState.personas.find((row) => String(row.id) === id) || {});
   }
 });
 

@@ -2631,6 +2631,18 @@ module.exports = async (req, res) => {
             <span class="sidebar-text">Contratos</span>
           </a>
 
+          <a class="sidebar-link" href="/app/growth/copilot-vendas" title="Copilot de vendas">
+            <span class="sidebar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M5 7.5h14"></path>
+                <path d="M7 12h8"></path>
+                <path d="M9 16.5h6"></path>
+                <path d="M4.5 5.5A2.5 2.5 0 0 1 7 3h10a2.5 2.5 0 0 1 2.5 2.5v11A2.5 2.5 0 0 1 17 19H9l-4.5 2v-15.5Z"></path>
+              </svg>
+            </span>
+            <span class="sidebar-text">Copilot de vendas</span>
+          </a>
+
           <button class="sidebar-link" type="button" data-growth-logout title="Sair">
             <span class="sidebar-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none">

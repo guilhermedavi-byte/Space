@@ -9,7 +9,9 @@ Extensão Chrome Manifest V3 para testar o Copilot da Space em cima do Google Me
 3. Clique em `Carregar sem compactação`.
 4. Selecione a pasta `chrome-extension/space-sales-copilot`.
 5. Entre no Growth em `https://space-three-sand.vercel.app/app/growth/copilot-vendas`.
-6. Abra uma reunião em `https://meet.google.com`.
+6. Clique em `Conectar extensão` no Copilot da plataforma. O token será copiado.
+7. Abra o popup da extensão, cole o token em `Token da extensão` e clique em `Salvar`.
+8. Abra uma reunião em `https://meet.google.com`.
 
 ## MVP atual
 
@@ -22,9 +24,10 @@ Extensão Chrome Manifest V3 para testar o Copilot da Space em cima do Google Me
   - `/api/growth/copilot-vendas/summary`
 - Não contém chave da OpenAI.
 - Não grava áudio.
+- Se o painel mostrar `Erro`, gere um novo token em `Conectar extensão`, cole no popup e tente novamente.
 
 ## Próximos passos
 
-- Melhorar autenticação extension -> plataforma com token efêmero.
+- Automatizar o envio do token para a extensão sem copiar e colar.
 - Ativar `chrome.tabCapture` em uma etapa posterior para capturar áudio da aba do Meet.
 - Adicionar botão "Salvar no CRM" depois da confirmação do closer.

@@ -15630,6 +15630,10 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   gap: 10px;
 }
 
+.sales-copilot-grid-list {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
 .sales-copilot-crud-item {
   display: grid;
   gap: 8px;

@@ -22,7 +22,7 @@ const slugToRole = (slug) => {
 };
 
 const roleToBasePath = (role) => {
-  if (String(role || "").trim().toLowerCase() === "growth") return "/app/growth/copilot-vendas";
+  if (String(role || "").trim().toLowerCase() === "growth") return "/growth/dashboard";
   if (String(role || "").trim() === "FINANCE" || String(role || "").trim().toLowerCase() === "finance") return "/app/financeiro";
   const slug = ROLE_TO_SLUG[String(role || "")] || ROLE_TO_SLUG.student;
   return `/app/${slug}`;

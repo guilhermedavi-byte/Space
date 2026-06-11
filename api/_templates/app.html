@@ -2023,6 +2023,8 @@
               <button class="sales-copilot-tab is-active" type="button" data-growth-copilot-tab="copilot-vendas">Copilot</button>
               <button class="sales-copilot-tab" type="button" data-growth-copilot-tab="scripts-vendas">Scripts</button>
               <button class="sales-copilot-tab" type="button" data-growth-copilot-tab="objecoes">Objeções</button>
+              <button class="sales-copilot-tab" type="button" data-growth-copilot-tab="planos">Planos</button>
+              <button class="sales-copilot-tab" type="button" data-growth-copilot-tab="personas">Personas</button>
               <button class="sales-copilot-tab" type="button" data-growth-copilot-tab="frases-vencedoras">Frases vencedoras</button>
               <button class="sales-copilot-tab" type="button" data-growth-copilot-tab="equipe" data-admin-only>Equipe Growth</button>
             </nav>
@@ -2057,6 +2059,7 @@
                       <button class="button button-outline button-small" type="button" data-copilot-end>Encerrar call</button>
                       <button class="button button-outline button-small" type="button" data-copilot-suggest>Gerar sugestão agora</button>
                       <button class="button button-outline button-small" type="button" data-copilot-summary>Gerar resumo da call</button>
+                      <button class="button button-outline button-small" type="button" data-copilot-extension-token>Conectar extensão</button>
                     </div>
                     <div class="sales-copilot-stage">
                       <span>Etapa atual</span>
@@ -2114,6 +2117,22 @@
                 <button class="button button-solid button-small" type="button" data-copilot-new-objection>Nova objeção</button>
               </div>
               <div class="sales-copilot-crud-list" data-copilot-objections-list></div>
+            </section>
+
+            <section class="sales-copilot-view" data-growth-copilot-view="planos" hidden>
+              <div class="sales-copilot-crud-head">
+                <div><strong>Planos oficiais</strong><span>Turma, Gold e Diamond usados na recomendação</span></div>
+                <button class="button button-solid button-small" type="button" data-copilot-new-plan>Novo plano</button>
+              </div>
+              <div class="sales-copilot-crud-list sales-copilot-grid-list" data-copilot-plans-list></div>
+            </section>
+
+            <section class="sales-copilot-view" data-growth-copilot-view="personas" hidden>
+              <div class="sales-copilot-crud-head">
+                <div><strong>Personas oficiais</strong><span>Perfis usados para orientar diagnóstico e recomendação</span></div>
+                <button class="button button-solid button-small" type="button" data-copilot-new-persona>Nova persona</button>
+              </div>
+              <div class="sales-copilot-crud-list sales-copilot-grid-list" data-copilot-personas-list></div>
             </section>
 
             <section class="sales-copilot-view" data-growth-copilot-view="frases-vencedoras" hidden>

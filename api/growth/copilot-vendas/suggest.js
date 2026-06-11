@@ -1,6 +1,5 @@
-const { getSessionFromRequest } = require("../../_lib/session");
 const { readJsonBody, sendJson } = require("../../_lib/http");
-const { requireGrowthAccess, saveResource, suggestWithAi } = require("../../_lib/growth-copilot");
+const { requireGrowthAccessFromRequest, saveResource, suggestWithAi } = require("../../_lib/growth-copilot");
 
 module.exports = async (req, res) => {
   try {
@@ -15,8 +14,7 @@ module.exports = async (req, res) => {
     }
     res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "*");
     res.setHeader("Access-Control-Allow-Credentials", "true");
-    const session = getSessionFromRequest(req);
-    requireGrowthAccess(session);
+    const session = requireGrowthAccessFromRequest(req);
     if (req.method !== "POST") {
       res.setHeader("Allow", "POST");
       sendJson(res, 405, { error: "method_not_allowed" });
