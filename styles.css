@@ -15349,9 +15349,9 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 
 /* Growth - Contratos */
 .sales-copilot-shell {
-  width: min(1320px, calc(100vw - 42px));
+  width: min(1240px, calc(100vw - 42px));
   margin: 0 auto;
-  padding: 28px 0 46px;
+  padding: 22px 0 42px;
 }
 
 .sales-copilot-top,
@@ -15375,7 +15375,7 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 .sales-copilot-title {
   margin: 4px 0 0;
   color: rgba(255, 255, 255, 0.94);
-  font-size: 30px;
+  font-size: 28px;
   line-height: 1.05;
 }
 
@@ -15403,6 +15403,11 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 12px;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  padding: 8px 0;
+  backdrop-filter: blur(12px);
 }
 
 .sales-copilot-tab {
@@ -15429,8 +15434,8 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 
 .sales-copilot-layout {
   display: grid;
-  grid-template-columns: minmax(280px, 0.8fr) minmax(520px, 1.35fr);
-  gap: 12px;
+  grid-template-columns: minmax(260px, 340px) minmax(560px, 1fr);
+  gap: 14px;
 }
 
 .sales-copilot-card,
@@ -15445,7 +15450,7 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 }
 
 .sales-copilot-card {
-  padding: 16px;
+  padding: 14px;
 }
 
 .sales-copilot-context {
@@ -15475,8 +15480,8 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 
 .sales-copilot-form {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: 1fr;
+  gap: 8px;
 }
 
 .sales-copilot-form label,
@@ -15498,7 +15503,7 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 
 .sales-copilot-main {
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 .sales-copilot-actions,
@@ -15583,7 +15588,7 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 
 .sales-copilot-live-summary {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -15591,7 +15596,7 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 .sales-copilot-metric {
   display: grid;
   gap: 6px;
-  min-height: 76px;
+  min-height: 64px;
   padding: 11px;
   border-radius: 13px;
   background: rgba(255, 255, 255, 0.045);
@@ -15622,6 +15627,7 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 
 .sales-copilot-suggestions {
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   gap: 10px;
 }
 

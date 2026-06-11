@@ -1,12 +1,16 @@
 (async function () {
   const input = document.querySelector("[data-api-base]");
   const token = document.querySelector("[data-copilot-token]");
+  const source = document.querySelector("[data-transcription-source]");
+  const ownName = document.querySelector("[data-own-speaker-name]");
   const save = document.querySelector("[data-save]");
   const clear = document.querySelector("[data-clear]");
   const status = document.querySelector("[data-status]");
-  const data = await chrome.storage.sync.get(["spaceApiBaseUrl", "spaceCopilotToken", "spaceCopilotTokenExpiresAt"]);
+  const data = await chrome.storage.sync.get(["spaceApiBaseUrl", "spaceCopilotToken", "spaceCopilotTokenExpiresAt", "spaceTranscriptionSource", "spaceOwnSpeakerName"]);
   input.value = data.spaceApiBaseUrl || "https://space-three-sand.vercel.app";
   token.value = data.spaceCopilotToken || "";
+  source.value = data.spaceTranscriptionSource || "captions";
+  ownName.value = data.spaceOwnSpeakerName || "";
   const renderStatus = () => {
     const exp = Number(data.spaceCopilotTokenExpiresAt || 0);
     const hasToken = Boolean(token.value.trim());
@@ -22,6 +26,8 @@
     const patch = {
       spaceApiBaseUrl: input.value.replace(/\/+$/, ""),
       spaceCopilotToken: token.value.trim(),
+      spaceTranscriptionSource: source.value || "captions",
+      spaceOwnSpeakerName: ownName.value.trim(),
     };
     await chrome.storage.sync.set({
       ...patch,

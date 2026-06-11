@@ -2,11 +2,13 @@
   const DEFAULT_API_BASE = "https://space-three-sand.vercel.app";
 
   const getConfig = async () => {
-    const data = await chrome.storage.sync.get(["spaceApiBaseUrl", "spaceCopilotToken", "spaceCopilotSessionId"]);
+    const data = await chrome.storage.sync.get(["spaceApiBaseUrl", "spaceCopilotToken", "spaceCopilotSessionId", "spaceTranscriptionSource", "spaceOwnSpeakerName"]);
     return {
       apiBaseUrl: String(data.spaceApiBaseUrl || DEFAULT_API_BASE).replace(/\/+$/, ""),
       token: String(data.spaceCopilotToken || ""),
       sessionId: String(data.spaceCopilotSessionId || ""),
+      transcriptionSource: String(data.spaceTranscriptionSource || "captions"),
+      ownSpeakerName: String(data.spaceOwnSpeakerName || ""),
     };
   };
 

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Space Sales Copilot Extension",
   "description": "Copilot comercial da Space para Google Meet.",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "permissions": ["activeTab", "scripting", "storage"],
   "optional_permissions": ["tabCapture"],
   "host_permissions": [

@@ -15,6 +15,11 @@
     sessionState: {},
     leadTemperature: "frio",
     lastError: "",
+    source: "captions",
+    ownSpeakerName: "",
+    captionsObserver: null,
+    lastCaption: "",
+    lastCaptionAt: 0,
   };
 
   const el = document.createElement("section");
@@ -32,6 +37,7 @@
     </header>
     <div class="ssc-body">
       <div class="ssc-stage"><span>Etapa</span><b data-ssc-stage>abertura</b></div>
+      <div class="ssc-source" data-ssc-source>Fonte: legendas do Meet</div>
       <div class="ssc-auth" data-ssc-auth>Conecte abrindo o Growth logado antes da call.</div>
       <div class="ssc-actions">
         <button type="button" data-ssc-start>Iniciar</button>
@@ -84,6 +90,8 @@
       const suffix = state.lastError ? ` ${state.lastError}` : "";
       auth.textContent = state.leadTemperature ? `Temperatura: ${state.leadTemperature}.${suffix}` : `Conecte abrindo o Growth logado antes da call.${suffix}`;
     }
+    const source = $("[data-ssc-source]");
+    if (source) source.textContent = state.source === "microphone" ? "Fonte: microfone do navegador" : "Fonte: legendas do Meet";
     el.classList.toggle("is-minimized", state.minimized);
   };
 
@@ -93,11 +101,13 @@
   const appendTranscript = (text) => {
     const clean = String(text || "").trim();
     if (!clean) return;
+    const last = state.snippets[state.snippets.length - 1] || "";
+    if (last === clean || (last && clean.includes(last) && clean.length < last.length + 18)) return;
     state.snippets.push(clean);
     state.transcript = `${state.transcript}\n${clean}`.trim();
     render();
     window.clearTimeout(state.timer);
-    state.timer = window.setTimeout(generateSuggestion, 6500);
+    state.timer = window.setTimeout(generateSuggestion, 2200);
   };
 
   const transcriber = window.SpaceCopilotAudio.createMicTranscriber({
@@ -119,6 +129,53 @@
       setStatus("Erro");
     },
   });
+
+  const isLikelyCaption = (text) => {
+    const clean = String(text || "").replace(/\s+/g, " ").trim();
+    if (clean.length < 5 || clean.length > 240) return false;
+    if (/^(iniciar|pausar|encerrar|gerar|participantes|chat|ativar|desativar|microfone|câmera|camera|apresentar|legendas)$/i.test(clean)) return false;
+    if (/space sales copilot|temperatura:|fonte:|falha ao gerar/i.test(clean)) return false;
+    return /[a-záàâãéêíóôõúç]{3,}/i.test(clean);
+  };
+
+  const stripSpeaker = (text) => {
+    const clean = String(text || "").replace(/\s+/g, " ").trim();
+    const own = state.ownSpeakerName.trim().toLowerCase();
+    if (own && clean.toLowerCase().startsWith(own.toLowerCase())) return "";
+    if (own && clean.toLowerCase().includes(`${own.toLowerCase()}:`)) return "";
+    return clean.replace(/^[A-ZÁÀÂÃÉÊÍÓÔÕÚÇ][\wÀ-ÿ\s]{1,36}:\s*/, "").trim();
+  };
+
+  const scanCaptions = () => {
+    const candidates = Array.from(document.querySelectorAll('[aria-live], [role="log"], [data-message-text], div[jsname], span[jsname]'));
+    const texts = candidates
+      .map((node) => stripSpeaker(node.innerText || node.textContent || ""))
+      .filter(isLikelyCaption);
+    const text = texts[texts.length - 1] || "";
+    const now = Date.now();
+    if (!text || text === state.lastCaption || (state.lastCaption && text.includes(state.lastCaption) && now - state.lastCaptionAt < 5000)) return;
+    state.lastCaption = text;
+    state.lastCaptionAt = now;
+    appendTranscript(text);
+  };
+
+  const startCaptions = () => {
+    if (state.captionsObserver) state.captionsObserver.disconnect();
+    state.captionsObserver = new MutationObserver(() => {
+      window.clearTimeout(state.captionTimer);
+      state.captionTimer = window.setTimeout(scanCaptions, 250);
+    });
+    state.captionsObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
+    setStatus("Lendo legendas");
+    state.lastError = "Ative as legendas do Meet para separar melhor as falas.";
+    render();
+  };
+
+  const stopCaptions = () => {
+    if (state.captionsObserver) state.captionsObserver.disconnect();
+    state.captionsObserver = null;
+    setStatus("Pausado");
+  };
 
   const getTranscript = () => {
     const manual = $("[data-ssc-manual]");
@@ -180,10 +237,17 @@
   el.addEventListener("click", (event) => {
     const target = event.target;
     if (!(target instanceof Element)) return;
-    if (target.closest("[data-ssc-start]")) transcriber.start();
-    if (target.closest("[data-ssc-pause]")) transcriber.stop();
+    if (target.closest("[data-ssc-start]")) {
+      if (state.source === "microphone") transcriber.start();
+      else startCaptions();
+    }
+    if (target.closest("[data-ssc-pause]")) {
+      transcriber.stop();
+      stopCaptions();
+    }
     if (target.closest("[data-ssc-end]")) {
       transcriber.stop();
+      stopCaptions();
       generateSummary();
     }
     if (target.closest("[data-ssc-suggest]")) generateSuggestion();
@@ -215,5 +279,10 @@
     dragging = null;
   });
 
+  window.SpaceCopilotApi.getConfig().then((cfg) => {
+    state.source = cfg.transcriptionSource === "microphone" ? "microphone" : "captions";
+    state.ownSpeakerName = cfg.ownSpeakerName || "";
+    render();
+  });
   render();
 })();

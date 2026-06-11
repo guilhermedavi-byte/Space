@@ -29,6 +29,14 @@
         color: #fff;
         padding: 0 10px;
       }
+      select {
+        min-height: 36px;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        background: rgba(255, 255, 255, 0.07);
+        color: #fff;
+        padding: 0 10px;
+      }
       textarea {
         min-height: 72px;
         border-radius: 10px;
@@ -74,6 +82,17 @@
     <label>
       Token da extensão
       <textarea data-copilot-token placeholder="Cole aqui o token copiado no Growth"></textarea>
+    </label>
+    <label>
+      Fonte da transcrição
+      <select data-transcription-source>
+        <option value="captions">Legendas do Meet (recomendado)</option>
+        <option value="microphone">Microfone do navegador</option>
+      </select>
+    </label>
+    <label>
+      Seu nome no Meet
+      <input data-own-speaker-name placeholder="Ex: Guilherme Davi" />
     </label>
     <div class="row">
       <button type="button" data-save>Salvar</button>
