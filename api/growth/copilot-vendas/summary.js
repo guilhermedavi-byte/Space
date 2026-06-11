@@ -4,6 +4,17 @@ const { requireGrowthAccess, saveResource, summaryWithAi } = require("../../_lib
 
 module.exports = async (req, res) => {
   try {
+    if (req.method === "OPTIONS") {
+      res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "*");
+      res.setHeader("Access-Control-Allow-Credentials", "true");
+      res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Copilot-Token");
+      res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+      res.statusCode = 204;
+      res.end("");
+      return;
+    }
+    res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "*");
+    res.setHeader("Access-Control-Allow-Credentials", "true");
     const session = getSessionFromRequest(req);
     requireGrowthAccess(session);
     if (req.method !== "POST") {
@@ -12,10 +23,11 @@ module.exports = async (req, res) => {
       return;
     }
     const body = await readJsonBody(req);
-    const result = await summaryWithAi(body || {});
+    const transcript = String(body?.transcript || body?.fullTranscript || body?.transcriptChunk || "").trim();
+    const result = await summaryWithAi({ ...(body || {}), transcript });
     saveResource("sessions", {
       lead_context: body?.leadContext || {},
-      transcript: String(body?.transcript || ""),
+      transcript,
       summary: result,
       closer: body?.leadContext?.closer || session?.name || session?.email || "",
     }).catch((error) => console.warn("[api] copilot session persistence skipped", error.message));

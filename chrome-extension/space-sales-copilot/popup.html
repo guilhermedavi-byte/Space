@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Space Sales Copilot</title>
+    <style>
+      body {
+        width: 320px;
+        margin: 0;
+        padding: 14px;
+        background: #0c1018;
+        color: #fff;
+        font-family: Inter, system-ui, sans-serif;
+      }
+      label {
+        display: grid;
+        gap: 6px;
+        margin: 0 0 10px;
+        color: rgba(255, 255, 255, 0.62);
+        font-size: 11px;
+        font-weight: 800;
+        text-transform: uppercase;
+      }
+      input {
+        min-height: 36px;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        background: rgba(255, 255, 255, 0.07);
+        color: #fff;
+        padding: 0 10px;
+      }
+      button, a {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 36px;
+        padding: 0 12px;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        background: #ff5b55;
+        color: #fff;
+        font-weight: 850;
+        text-decoration: none;
+        cursor: pointer;
+      }
+      .row { display: flex; gap: 8px; flex-wrap: wrap; }
+      p { color: rgba(255,255,255,.62); line-height: 1.4; }
+    </style>
+  </head>
+  <body>
+    <h3>Space Sales Copilot</h3>
+    <p>Entre na plataforma Growth antes de usar a extensão no Google Meet.</p>
+    <label>
+      URL da plataforma
+      <input data-api-base />
+    </label>
+    <div class="row">
+      <button type="button" data-save>Salvar</button>
+      <a href="https://space-three-sand.vercel.app/app/growth/copilot-vendas" target="_blank">Abrir Growth</a>
+    </div>
+    <script src="popup.js"></script>
+  </body>
+</html>
