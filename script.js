@@ -2919,7 +2919,7 @@ const renderTeacherDashboard = () => {
       }
       if (teacherV4EnterLive instanceof HTMLElement) {
         teacherV4EnterLive.hidden = false;
-        teacherV4EnterLive.href = `/aula/${encodeURIComponent(nextToday.id)}`;
+        teacherV4EnterLive.href = nextToday.liveUrl || `/aula/${encodeURIComponent(nextToday.id)}`;
       }
 
       if (teacherV4StudentAvatar instanceof HTMLElement) {
@@ -3382,6 +3382,25 @@ const renderTeacherDashboard = () => {
           alunoObjetivo: "",
         });
       });
+
+      try {
+        const liveRes = await withTimeout(fetchWithAuth("/api/live-lessons?limit=200"), 10_000, "teacher_v4_live_lessons");
+        if (liveRes.ok) {
+          const liveData = await liveRes.json().catch(() => null);
+          const liveAulas = (Array.isArray(liveData?.lessons) ? liveData.lessons : [])
+            .map(normalizeLiveLessonForTeacherDashboard)
+            .filter(Boolean);
+          if (liveAulas.length) {
+            const byId = new Map(aulas.map((evt) => [String(evt.id || ""), evt]).filter(([id]) => id));
+            liveAulas.forEach((evt) => {
+              byId.set(String(evt.id || ""), evt);
+            });
+            aulas.splice(0, aulas.length, ...Array.from(byId.values()).sort((a, b) => (a.startMs || 0) - (b.startMs || 0)));
+          }
+        }
+      } catch (error) {
+        // Keep the existing Firestore agenda if the Supabase classroom API is unavailable.
+      }
 
       // Determine next lesson for today and fetch student profile/goal for it (single doc read).
       const lessonsToday = aulas.filter((evt) => evt.type === "lesson" && evt.dateKey === todayKey && !isCancelledStatus(evt.status));
@@ -6944,6 +6963,49 @@ const normalizeLiveLessonForUi = (lesson) => {
     status,
     liveUrl: `/aula/${encodeURIComponent(id)}`,
     request: reqId ? { id: reqId, status: reqStatus || "pendente" } : null,
+  };
+};
+
+const normalizeLiveLessonForTeacherDashboard = (lesson) => {
+  const ui = normalizeLiveLessonForUi(lesson);
+  if (!ui) return null;
+  const start = dateTimeFromKeyMinutes(ui.dateKey, ui.startMin);
+  const end = dateTimeFromKeyMinutes(ui.dateKey, ui.endMin);
+  if (!start || !end) return null;
+  const title = ui.aluno || "Aluno";
+  const nivelAluno = String(lesson.nivel_declarado || lesson.nivel || "").trim();
+  const objetivo = String(lesson.objetivo_aluno || "").trim();
+  return {
+    id: ui.id,
+    professorId: ui.professorId,
+    professorNome: ui.professor || null,
+    alunoId: ui.alunoId || null,
+    alunoNome: ui.aluno || null,
+    dateKey: ui.dateKey,
+    startMin: ui.startMin,
+    endMin: ui.endMin,
+    startMs: start.getTime(),
+    endMs: end.getTime(),
+    status: ui.status,
+    type: "lesson",
+    title,
+    recorrente: false,
+    grupoRecorrenciaId: null,
+    tema: String(lesson.titulo || "").trim(),
+    topicos: objetivo ? [objetivo] : [],
+    material: "",
+    observacoes: String(lesson.observacoes || lesson.briefing_pedagogico || "").trim(),
+    pontosAtencao: [],
+    nivelAluno,
+    idadeAluno: null,
+    timelineMeta: [nivelAluno, objetivo].filter(Boolean).join(" · "),
+    weekdayLabel: (() => {
+      const wd = weekdayLongFromDateKey(ui.dateKey);
+      return wd ? wd.replace(/^\w/, (c) => c.toUpperCase()) : "";
+    })(),
+    alunoPerfil: String(lesson.briefing_pedagogico || "").trim(),
+    alunoObjetivo: objetivo,
+    liveUrl: ui.liveUrl,
   };
 };
 
