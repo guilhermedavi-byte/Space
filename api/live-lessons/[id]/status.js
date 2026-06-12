@@ -1,6 +1,6 @@
 const { readJsonBody, sendJson } = require("../../_lib/http");
 const { getSessionFromRequest } = require("../../_lib/session");
-const { fetchLessonById, canEditLesson, patchLesson } = require("../../_lib/live-lessons");
+const { fetchLessonById, canEditLesson, patchLesson, normalizeRole } = require("../../_lib/live-lessons");
 
 const labelForStatus = (status) => {
   const s = String(status || "").toLowerCase();
@@ -31,6 +31,10 @@ module.exports = async (req, res) => {
   const session = getSessionFromRequest(req);
   if (!session) {
     sendJson(res, 401, { error: "unauthorized" });
+    return;
+  }
+  if (normalizeRole(session.role) !== "teacher") {
+    sendJson(res, 403, { error: "teacher_only" });
     return;
   }
 

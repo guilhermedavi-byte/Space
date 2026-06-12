@@ -32,13 +32,16 @@ class JitsiVideoProvider extends VideoProvider {
     const baseUrl = String(process.env.JITSI_BASE_URL || "https://meet.jit.si").replace(/\/+$/, "");
     const roomId = String(lesson.video_room_id || lesson.id || "").trim();
     const roomUrl = String(lesson.video_room_url || (roomId ? `${baseUrl}/${encodeURIComponent(roomId)}` : "")).trim();
+    const joinUrl = roomUrl
+      ? `${roomUrl.split("#")[0]}#config.prejoinPageEnabled=false&config.disableDeepLinking=true&config.startWithAudioMuted=false&config.startWithVideoMuted=false`
+      : "";
     return {
       provider: this.name,
       roomId,
       roomUrl,
-      joinUrl: roomUrl,
+      joinUrl,
       joinToken: "",
-      embedKind: roomUrl ? "iframe" : "placeholder",
+      embedKind: joinUrl ? "iframe" : "placeholder",
       message: roomUrl ? "" : "Sala de video pronta para integracao com provider.",
       role,
     };

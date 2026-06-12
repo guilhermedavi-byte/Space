@@ -48,12 +48,13 @@ const statusLabel = (status) => {
 
 const buildHtml = ({ user, lesson, joinData, canEdit }) => {
   const role = normalizeRole(user.role);
-  const isTeacherOrAdmin = role === "teacher" || role === "admin";
+  const isTeacher = role === "teacher";
   const title = lesson.titulo || `Aula ${lesson.aluno_nome || ""}`.trim() || "Sala de aula";
   const fallback = String(lesson.google_meet_link_fallback || "").trim();
   const hasRealRoom = joinData.embedKind === "iframe" && joinData.joinUrl;
   const isCancelled = lesson.status_aula === "cancelada";
   const isEnded = ["realizada", "falta", "remarcada"].includes(lesson.status_aula);
+  const canTeach = Boolean(isTeacher && canEdit);
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -74,25 +75,25 @@ const buildHtml = ({ user, lesson, joinData, canEdit }) => {
       .live-class-btn{border:1px solid rgba(255,255,255,.16);border-radius:999px;background:rgba(255,255,255,.08);color:#fff;padding:12px 16px;font-weight:900;text-decoration:none;cursor:pointer}
       .live-class-btn.primary{border-color:#ff5b52;background:#ff5b52;box-shadow:0 16px 34px rgba(255,91,82,.25)}
       .live-class-btn:disabled{opacity:.48;cursor:not-allowed}
-      .live-class-grid{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:18px;max-width:1440px;margin:0 auto}
-      .live-class-video-card,.live-class-side-card,.live-class-register{border:1px solid rgba(255,255,255,.12);border-radius:22px;background:linear-gradient(145deg,rgba(24,31,44,.9),rgba(8,12,21,.94));box-shadow:0 24px 70px rgba(0,0,0,.32);overflow:hidden}
-      .live-class-video-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 20px;border-bottom:1px solid rgba(255,255,255,.1)}
+      .live-class-grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px;max-width:1440px;margin:0 auto}
+      .live-class-video-card,.live-class-side-card,.live-class-register{border:1px solid rgba(255,255,255,.12);border-radius:22px;background:linear-gradient(145deg,rgba(24,31,44,.88),rgba(8,12,21,.96));box-shadow:0 24px 70px rgba(0,0,0,.32);overflow:hidden}
+      .live-class-video-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 18px;border-bottom:1px solid rgba(255,255,255,.1);background:rgba(7,11,19,.36)}
       .live-class-person{display:flex;align-items:center;gap:12px;min-width:0}
       .live-class-avatar{width:42px;height:42px;border-radius:14px;display:grid;place-items:center;background:linear-gradient(135deg,#ff5b52,#2f6bb8);font-weight:950}
       .live-class-person strong{display:block;font-size:18px}
       .live-class-person span{display:block;color:#b8bfcc;font-size:13px}
       .live-class-status{border:1px solid rgba(255,255,255,.14);border-radius:999px;padding:8px 12px;background:rgba(255,255,255,.08);font-weight:900}
-      .live-class-stage{height:min(68vh,720px);min-height:520px;background:#03060d;display:grid;place-items:center;position:relative}
+      .live-class-stage{height:min(70vh,760px);min-height:560px;background:linear-gradient(135deg,#050914,#0b101c);display:grid;place-items:center;position:relative}
       .live-class-frame{position:absolute;inset:0;width:100%;height:100%;border:0;background:#000}
       .live-class-placeholder{max-width:560px;text-align:center;padding:34px}
       .live-class-placeholder-icon{width:86px;height:86px;margin:0 auto 18px;border-radius:28px;display:grid;place-items:center;background:rgba(255,91,82,.14);border:1px solid rgba(255,91,82,.26);font-size:34px;font-weight:950}
       .live-class-placeholder h2{margin:0 0 10px;font-size:26px}
       .live-class-placeholder p{margin:0;color:#bdc5d1;line-height:1.55}
       .live-class-side{display:grid;gap:14px;align-content:start}
-      .live-class-side-card{padding:18px}
+      .live-class-side-card{padding:18px;background:linear-gradient(150deg,rgba(30,38,53,.9),rgba(9,14,24,.96))}
       .live-class-side-title{margin:0 0 12px;font-size:15px;font-weight:950}
       .live-class-info{display:grid;gap:10px}
-      .live-class-info-row{border-radius:14px;background:rgba(255,255,255,.06);padding:12px}
+      .live-class-info-row{border-radius:14px;background:rgba(255,255,255,.06);padding:12px;border:1px solid rgba(255,255,255,.04)}
       .live-class-info-row span{display:block;color:#8f98aa;font-size:11px;font-weight:900;text-transform:uppercase}
       .live-class-info-row strong{display:block;margin-top:4px;color:#fff;word-break:break-word}
       .live-class-register{grid-column:1/-1;padding:20px}
@@ -123,8 +124,8 @@ const buildHtml = ({ user, lesson, joinData, canEdit }) => {
               ? `<a class="live-class-btn" href="${escapeHtml(fallback)}" target="_blank" rel="noopener">Meet fallback</a>`
               : ""
           }
-          ${canEdit && !isCancelled && !isEnded ? `<button class="live-class-btn primary" type="button" data-live-status="ao_vivo">Iniciar aula</button>` : ""}
-          ${canEdit && !isCancelled && !isEnded ? `<button class="live-class-btn" type="button" data-live-status="pendente_registro">Finalizar aula</button>` : ""}
+          ${canTeach && !isCancelled && !isEnded ? `<button class="live-class-btn primary" type="button" data-live-status="ao_vivo">Iniciar aula</button>` : ""}
+          ${canTeach && !isCancelled && !isEnded ? `<button class="live-class-btn" type="button" data-live-status="pendente_registro">Finalizar aula</button>` : ""}
         </div>
       </header>
 
@@ -135,7 +136,7 @@ const buildHtml = ({ user, lesson, joinData, canEdit }) => {
               <div class="live-class-avatar">${escapeHtml((lesson.aluno_nome || "A").slice(0, 2).toUpperCase())}</div>
               <div>
                 <strong>${escapeHtml(lesson.aluno_nome || "Aluno")}</strong>
-                <span>${escapeHtml(lesson.professor_nome || "Professor")} · ${escapeHtml(joinData.provider || "mock")}</span>
+                <span>Aula com ${escapeHtml(lesson.professor_nome || "Professor")}</span>
               </div>
             </div>
             <span class="live-class-status" data-live-status-label>${escapeHtml(statusLabel(lesson.status_aula))}</span>
@@ -160,12 +161,11 @@ const buildHtml = ({ user, lesson, joinData, canEdit }) => {
               <div class="live-class-info-row"><span>Status</span><strong data-live-status-side>${escapeHtml(statusLabel(lesson.status_aula))}</strong></div>
               <div class="live-class-info-row"><span>Horario</span><strong>${escapeHtml(formatDateTime(lesson.inicio, lesson.timezone))}</strong></div>
               <div class="live-class-info-row"><span>Plano</span><strong>${escapeHtml(lesson.plano || "Sem plano informado")}</strong></div>
-              <div class="live-class-info-row"><span>Provider</span><strong>${escapeHtml(joinData.provider || "mock")}</strong></div>
-              <div class="live-class-info-row"><span>Sala</span><strong>${escapeHtml(joinData.roomId || "Sala ainda nao criada")}</strong></div>
+              <div class="live-class-info-row"><span>Codigo da sala</span><strong>${escapeHtml(joinData.roomId || "Sala ainda nao criada")}</strong></div>
             </div>
           </article>
           ${
-            isTeacherOrAdmin
+            isTeacher
               ? `<article class="live-class-side-card">
                   <p class="live-class-side-title">Briefing pedagogico</p>
                   <div class="live-class-info">
@@ -184,7 +184,7 @@ const buildHtml = ({ user, lesson, joinData, canEdit }) => {
         </aside>
 
         ${
-          canEdit
+          canTeach
             ? `<section class="live-class-register">
                 <p class="live-class-side-title">Registrar aula</p>
                 <form class="live-class-form" data-live-register-form>
