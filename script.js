@@ -243,6 +243,7 @@ const teacherV4NextGrid = document.querySelector("[data-teacher-v4-next-grid]");
 const teacherV4NextEmpty = document.querySelector("[data-teacher-v4-next-empty]");
 const teacherV4NextMinutes = document.querySelector("[data-teacher-v4-next-minutes]");
 const teacherV4NextTime = document.querySelector("[data-teacher-v4-next-time]");
+const teacherV4EnterLive = document.querySelector("[data-teacher-v4-enter-live]");
 const teacherV4StudentAvatar = document.querySelector("[data-teacher-v4-student-avatar]");
 const teacherV4StudentName = document.querySelector("[data-teacher-v4-student-name]");
 const teacherV4StudentMeta = document.querySelector("[data-teacher-v4-student-meta]");
@@ -1778,17 +1779,22 @@ const renderStudentDashboard = () => {
           })();
 
           const action = (() => {
-            if (idx === 0) return badge;
+            const liveHref = escapeHtml(lesson.liveUrl || `/aula/${encodeURIComponent(lesson.id)}`);
+            if (idx === 0) {
+              return `
+                ${badge}
+                <a class="student-v5-lesson-enter" href="${liveHref}">Entrar na aula</a>
+              `;
+            }
             const req = lesson.request;
             const disabled = req && String(req.status || "").toLowerCase() === "pendente";
             const statusPill = req ? `<span class="${statusClassForRequest(req.status)}">${escapeHtml(statusLabelForRequest(req.status))}</span>` : "";
             return `
-              <div class="student-v5-lesson-actions">
-                ${statusPill}
-                <button class="student-v5-lesson-link" type="button" data-live-reschedule="${escapeHtml(lesson.id)}" ${disabled ? "disabled" : ""}>
-                  Reagendar
-                </button>
-              </div>
+              ${statusPill}
+              <a class="student-v5-lesson-enter" href="${liveHref}">Entrar</a>
+              <button class="student-v5-lesson-link" type="button" data-live-reschedule="${escapeHtml(lesson.id)}" ${disabled ? "disabled" : ""}>
+                Reagendar
+              </button>
             `;
           })();
 
@@ -1804,7 +1810,7 @@ const renderStudentDashboard = () => {
                   <span class="student-v5-lesson-prof">${escapeHtml(prof)}</span>
                 </div>
               </div>
-              ${idx === 0 ? `<div class="student-v5-lesson-actions">${badge}</div>` : action}
+              <div class="student-v5-lesson-actions">${action}</div>
             </li>
           `;
         })
@@ -2893,6 +2899,7 @@ const renderTeacherDashboard = () => {
     if (!nextToday) {
       if (teacherV4NextMinutes instanceof HTMLElement) teacherV4NextMinutes.textContent = "—";
       if (teacherV4NextTime instanceof HTMLElement) teacherV4NextTime.textContent = "—";
+      if (teacherV4EnterLive instanceof HTMLElement) teacherV4EnterLive.hidden = true;
       if (teacherV4StudentName instanceof HTMLElement) teacherV4StudentName.textContent = "—";
       if (teacherV4StudentMeta instanceof HTMLElement) teacherV4StudentMeta.textContent = "—";
       setPlaceholderText(teacherV4StudentProfile, "Nenhuma informação cadastrada");
@@ -2909,6 +2916,10 @@ const renderTeacherDashboard = () => {
       if (teacherV4NextMinutes instanceof HTMLElement) teacherV4NextMinutes.textContent = String(minutesUntil);
       if (teacherV4NextTime instanceof HTMLElement) {
         teacherV4NextTime.textContent = `${formatHmFromMinutes(nextToday.startMin)} — ${formatHmFromMinutes(nextToday.endMin)}`;
+      }
+      if (teacherV4EnterLive instanceof HTMLElement) {
+        teacherV4EnterLive.hidden = false;
+        teacherV4EnterLive.href = `/aula/${encodeURIComponent(nextToday.id)}`;
       }
 
       if (teacherV4StudentAvatar instanceof HTMLElement) {
@@ -6889,6 +6900,53 @@ const formatBrDateFromDateKey = (dateKey) => {
   return `${d}/${m}/${y}`;
 };
 
+const dateKeyFromIso = (value) => {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return "";
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+};
+
+const minutesFromIso = (value) => {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return NaN;
+  return date.getHours() * 60 + date.getMinutes();
+};
+
+const normalizeLiveLessonForUi = (lesson) => {
+  if (!lesson || typeof lesson !== "object") return null;
+  const id = typeof lesson.id === "string" ? lesson.id : "";
+  const dateKey = typeof lesson.dateKey === "string" ? lesson.dateKey : dateKeyFromIso(lesson.inicio);
+  const startMinRaw = Number.isFinite(Number(lesson.startMin)) ? Number(lesson.startMin) : minutesFromIso(lesson.inicio);
+  const endMinRaw = Number.isFinite(Number(lesson.endMin)) ? Number(lesson.endMin) : minutesFromIso(lesson.fim);
+  const startMin = Number(startMinRaw);
+  const endMin = Number(endMinRaw);
+  if (!id || !dateKey || !Number.isFinite(startMin)) return null;
+  const safeEndMin = Number.isFinite(endMin) && endMin > startMin ? endMin : startMin + 50;
+  const professor = String(lesson.professor_nome || lesson.professor || lesson.professorNome || "").trim();
+  const aluno = String(lesson.aluno_nome || lesson.aluno || lesson.alunoNome || "").trim();
+  const status = String(lesson.status_aula || lesson.status || "agendada").trim().toLowerCase();
+  const req = lesson.reagendamento && typeof lesson.reagendamento === "object" ? lesson.reagendamento : null;
+  const reqId = req && typeof req.id === "string" ? req.id : "";
+  const reqStatus = req && typeof req.status === "string" ? req.status : "";
+  return {
+    id,
+    dateKey,
+    startMin,
+    endMin: safeEndMin,
+    time: formatHmFromMinutes(startMin),
+    professorId: String(lesson.professor_id || lesson.professorId || ""),
+    alunoId: String(lesson.aluno_id || lesson.alunoId || ""),
+    professor,
+    aluno,
+    status,
+    liveUrl: `/aula/${encodeURIComponent(id)}`,
+    request: reqId ? { id: reqId, status: reqStatus || "pendente" } : null,
+  };
+};
+
 const statusLabelForRequest = (status) => {
   const s = String(status || "").trim().toLowerCase();
   if (s === "aprovado") return "Aprovado";
@@ -8528,36 +8586,27 @@ const renderStudentLiveLessons = async ({ force = false } = {}) => {
   if (shouldFetch && !studentLessonsState.isLoading) {
     studentLessonsState.isLoading = true;
     try {
-      const res = await fetchWithAuth("/api/schedule-lessons");
-      if (!res.ok) throw new Error("lessons_fetch_failed");
-      const data = await res.json().catch(() => null);
-      const raw = Array.isArray(data?.lessons) ? data.lessons : [];
+      let raw = [];
+      let loadedFromLiveClassroom = false;
+      try {
+        const liveRes = await fetchWithAuth("/api/live-lessons?limit=200");
+        if (liveRes.ok) {
+          const liveData = await liveRes.json().catch(() => null);
+          raw = Array.isArray(liveData?.lessons) ? liveData.lessons : [];
+          loadedFromLiveClassroom = raw.length > 0;
+        }
+      } catch (error) {
+        loadedFromLiveClassroom = false;
+      }
 
-      studentLessonsState.lessons = raw
-        .map((lesson) => {
-          if (!lesson || typeof lesson !== "object") return null;
-          const id = typeof lesson.id === "string" ? lesson.id : "";
-          const dateKey = typeof lesson.dateKey === "string" ? lesson.dateKey : "";
-          const startMin = Number(lesson.startMin);
-          const endMin = Number(lesson.endMin);
-          if (!id || !dateKey || !Number.isFinite(startMin) || !Number.isFinite(endMin)) return null;
-          const professorId = typeof lesson.professorId === "string" ? lesson.professorId : "";
-          const professor = typeof lesson.professor_nome === "string" ? lesson.professor_nome : "";
-          const req = lesson.reagendamento && typeof lesson.reagendamento === "object" ? lesson.reagendamento : null;
-          const reqStatus = req && typeof req.status === "string" ? req.status : "";
-          const reqId = req && typeof req.id === "string" ? req.id : "";
-          return {
-            id,
-            dateKey,
-            startMin,
-            endMin,
-            time: formatHmFromMinutes(startMin),
-            professorId,
-            professor,
-            request: reqId ? { id: reqId, status: reqStatus || "pendente" } : null,
-          };
-        })
-        .filter(Boolean);
+      if (!loadedFromLiveClassroom) {
+        const res = await fetchWithAuth("/api/schedule-lessons");
+        if (!res.ok) throw new Error("lessons_fetch_failed");
+        const data = await res.json().catch(() => null);
+        raw = Array.isArray(data?.lessons) ? data.lessons : [];
+      }
+
+      studentLessonsState.lessons = raw.map(normalizeLiveLessonForUi).filter(Boolean);
 
       studentLessonsState.lastLoadedAt = Date.now();
     } catch (error) {
@@ -8599,6 +8648,7 @@ const renderStudentLiveLessons = async ({ force = false } = {}) => {
             <button class="live-fixed-action" type="button" data-live-reschedule="${escapeHtml(lesson.id)}" ${disabled}>
               Solicitar reagendamento
             </button>
+            <a class="live-fixed-enter" href="${escapeHtml(lesson.liveUrl || `/aula/${encodeURIComponent(lesson.id)}`)}">Entrar na aula</a>
           </div>
         </li>
       `;
@@ -14034,6 +14084,65 @@ const formatShortDateFromMs = (ms) => {
   return d.toLocaleDateString("pt-BR");
 };
 
+const renderAdminLiveClassroomSnapshot = async () => {
+  const root = document.querySelector("[data-admin-live-classroom-snapshot]");
+  if (!(root instanceof HTMLElement)) return;
+  root.innerHTML = `<div class="admin-ped-empty-inline"><div class="admin-ped-empty-title">Carregando salas ao vivo...</div><div class="admin-ped-empty-sub">Buscando aulas no Supabase.</div></div>`;
+  try {
+    const res = await fetchWithAuth("/api/live-lessons?scope=dashboard&limit=200");
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error || "live_lessons_failed");
+    const summary = data?.summary && typeof data.summary === "object" ? data.summary : {};
+    const lessons = Array.isArray(data?.lessons) ? data.lessons : [];
+    const cards = [
+      ["Aulas ao vivo agora", summary.liveNow],
+      ["Proximas aulas de hoje", summary.upcomingToday],
+      ["Aguardando inicio", summary.waitingStart],
+      ["Sem sala de video", summary.noVideoRoom],
+      ["Sem registro", summary.noRegister],
+      ["Canceladas", summary.cancelled],
+      ["Professores em aula", summary.teachersInClass],
+      ["Alunos em aula", summary.studentsInClass],
+    ];
+    const upcoming = lessons
+      .slice()
+      .sort((a, b) => Date.parse(a.inicio || "") - Date.parse(b.inicio || ""))
+      .slice(0, 4);
+    root.innerHTML = `
+      <div class="admin-ped-live-grid">
+        ${cards
+          .map(
+            ([label, value]) => `
+              <div class="admin-ped-qualitymini-metric">
+                <span>${escapeHtml(label)}</span>
+                <strong>${escapeHtml(String(Number(value) || 0))}</strong>
+              </div>
+            `
+          )
+          .join("")}
+      </div>
+      <div class="admin-ped-mini-list">
+        ${
+          upcoming.length
+            ? upcoming
+                .map((lesson) => {
+                  const start = lesson.inicio ? formatShortDate(new Date(lesson.inicio)) : "Sem horario";
+                  const who = `${lesson.aluno_nome || "Aluno"} · ${lesson.professor_nome || "Professor"}`;
+                  return `<a class="admin-ped-mini-row" href="/aula/${encodeURIComponent(lesson.id)}"><div class="admin-ped-mini-title">${escapeHtml(
+                    who
+                  )}</div><div class="admin-ped-mini-sub">${escapeHtml(start)}</div></a>`;
+                })
+                .join("")
+            : `<div class="admin-ped-empty-inline"><div class="admin-ped-empty-title">Nenhuma aula ao vivo encontrada.</div><div class="admin-ped-empty-sub">Quando o n8n popular a tabela, elas aparecem aqui.</div></div>`
+        }
+      </div>
+    `;
+  } catch (error) {
+    console.error("[admin-ped] live classroom snapshot failed", error);
+    root.innerHTML = `<div class="admin-ped-empty-inline"><div class="admin-ped-empty-title">Nao foi possivel carregar aulas ao vivo.</div><div class="admin-ped-empty-sub">Confira Supabase e tabela n8n_aulas_pedagogicas_space.</div></div>`;
+  }
+};
+
 const renderAdminPedagogicoOverview = () => {
   if (!(adminPedOverview instanceof HTMLElement)) return;
 
@@ -14216,6 +14325,17 @@ const renderAdminPedagogicoOverview = () => {
         <article class="surface-card admin-ped-op-card">
           <div class="admin-ped-op-cardhead">
             <div>
+              <div class="admin-ped-op-cardtitle">Salas ao vivo</div>
+              <div class="admin-ped-op-cardsub">Operacao das aulas embarcadas na plataforma.</div>
+            </div>
+            <button class="admin-ped-action is-muted" type="button" data-admin-ped-nav="aulas">Ver aulas</button>
+          </div>
+          <div data-admin-live-classroom-snapshot></div>
+        </article>
+
+        <article class="surface-card admin-ped-op-card">
+          <div class="admin-ped-op-cardhead">
+            <div>
               <div class="admin-ped-op-cardtitle">Agenda de hoje</div>
               <div class="admin-ped-op-cardsub">Próximas aulas do dia.</div>
             </div>
@@ -14316,6 +14436,7 @@ const renderAdminPedagogicoOverview = () => {
     const hasAny = classes.length || alerts.length || feedbacks.length || surveys.length;
     adminPedEmptyOverview.hidden = Boolean(hasAny);
   }
+  renderAdminLiveClassroomSnapshot();
 };
 
 const pedStatusPillHtml = (status) => {

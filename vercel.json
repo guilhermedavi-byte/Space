@@ -13,6 +13,7 @@
     { "source": "/financeiro", "destination": "/api/financeiro" },
     { "source": "/growth/dashboard", "destination": "/api/growth-dashboard" },
     { "source": "/growth/contratos", "destination": "/api/growth-dashboard?page=contracts" },
+    { "source": "/aula/:id", "destination": "/api/aula?id=:id" },
     { "source": "/app", "destination": "/api/app" },
     { "source": "/app/(.*)", "destination": "/api/app?path=$1" }
   ]

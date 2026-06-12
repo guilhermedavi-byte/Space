@@ -13611,6 +13611,53 @@ body[data-role="teacher"][data-active-panel="dashboard"] .platform-header {
   white-space: nowrap;
 }
 
+.teacher-v4-next-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.teacher-v4-live-link,
+.student-v5-lesson-enter,
+.live-fixed-enter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 78, 70, 0.36);
+  background: rgba(255, 78, 70, 0.14);
+  color: #fff;
+  text-decoration: none;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.teacher-v4-live-link {
+  min-height: 30px;
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+.student-v5-lesson-enter,
+.live-fixed-enter {
+  min-height: 28px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.admin-ped-live-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.admin-ped-live-grid .admin-ped-qualitymini-metric {
+  min-height: 78px;
+}
+
 .teacher-v4-next-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
