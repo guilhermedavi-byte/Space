@@ -29,9 +29,10 @@ class JitsiVideoProvider extends VideoProvider {
   }
 
   async getJoinData({ lesson, role }) {
-    const baseUrl = String(process.env.JITSI_BASE_URL || "https://meet.jit.si").replace(/\/+$/, "");
+    const configuredBaseUrl = String(process.env.JITSI_BASE_URL || "").replace(/\/+$/, "");
+    const baseUrl = configuredBaseUrl || "https://meet.jit.si";
     const roomId = String(lesson.video_room_id || lesson.id || "").trim();
-    const roomUrl = String(lesson.video_room_url || (roomId ? `${baseUrl}/${encodeURIComponent(roomId)}` : "")).trim();
+    const roomUrl = String(configuredBaseUrl && roomId ? `${baseUrl}/${encodeURIComponent(roomId)}` : lesson.video_room_url || (roomId ? `${baseUrl}/${encodeURIComponent(roomId)}` : "")).trim();
     const joinUrl = roomUrl
       ? `${roomUrl.split("#")[0]}#config.prejoinPageEnabled=false&config.disableDeepLinking=true&config.startWithAudioMuted=false&config.startWithVideoMuted=false`
       : "";
