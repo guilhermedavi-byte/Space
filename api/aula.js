@@ -68,41 +68,48 @@ const buildHtml = ({ user, lesson, joinData, canEdit }) => {
     <link rel="stylesheet" href="/styles.css" />
     <style>
       body.live-class-body{min-height:100vh;margin:0;background:#070b13;color:#f8fafc;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-      .live-class-shell{min-height:100vh;padding:32px 40px;background:radial-gradient(circle at 12% 8%,rgba(255,91,82,.22),transparent 34%),radial-gradient(circle at 92% 3%,rgba(53,94,174,.24),transparent 38%),#070b13}
-      .live-class-top{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;margin:0 auto 20px;max-width:1440px}
+      .live-class-shell{min-height:100vh;padding:26px 34px;background:radial-gradient(circle at 12% 8%,rgba(255,91,82,.2),transparent 34%),radial-gradient(circle at 92% 3%,rgba(53,94,174,.24),transparent 38%),#070b13}
+      .live-class-top{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;margin:0 auto 16px;max-width:1680px}
       .live-class-eyebrow{margin:0 0 8px;color:#ff6a61;font-size:12px;font-weight:900;letter-spacing:.16em;text-transform:uppercase}
-      .live-class-title{margin:0;font-size:34px;line-height:1;font-weight:950}
+      .live-class-title{margin:0;font-size:32px;line-height:1;font-weight:950}
       .live-class-sub{margin:8px 0 0;color:#b8bfcc}
       .live-class-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}
-      .live-class-btn{border:1px solid rgba(255,255,255,.16);border-radius:999px;background:rgba(255,255,255,.08);color:#fff;padding:12px 16px;font-weight:900;text-decoration:none;cursor:pointer}
+      .live-class-btn{border:1px solid rgba(255,255,255,.16);border-radius:999px;background:rgba(255,255,255,.08);color:#fff;padding:11px 15px;font-weight:900;text-decoration:none;cursor:pointer}
       .live-class-btn.primary{border-color:#ff5b52;background:#ff5b52;box-shadow:0 16px 34px rgba(255,91,82,.25)}
       .live-class-btn:disabled{opacity:.48;cursor:not-allowed}
-      .live-class-grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px;max-width:1440px;margin:0 auto}
-      .live-class-video-card,.live-class-side-card,.live-class-register{border:1px solid rgba(255,255,255,.12);border-radius:22px;background:linear-gradient(145deg,rgba(24,31,44,.88),rgba(8,12,21,.96));box-shadow:0 24px 70px rgba(0,0,0,.32);overflow:hidden}
-      .live-class-video-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 18px;border-bottom:1px solid rgba(255,255,255,.1);background:rgba(7,11,19,.36)}
+      .live-class-grid{display:grid;grid-template-columns:minmax(860px,1fr) 340px;gap:18px;max-width:1680px;margin:0 auto;align-items:start}
+      .live-class-video-card,.live-class-side-card,.live-class-register{border:1px solid rgba(255,255,255,.12);border-radius:18px;background:linear-gradient(145deg,rgba(24,31,44,.88),rgba(8,12,21,.96));box-shadow:0 24px 70px rgba(0,0,0,.3);overflow:hidden}
+      .live-class-video-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.1);background:rgba(7,11,19,.36)}
       .live-class-person{display:flex;align-items:center;gap:12px;min-width:0}
       .live-class-avatar{width:42px;height:42px;border-radius:14px;display:grid;place-items:center;background:linear-gradient(135deg,#ff5b52,#2f6bb8);font-weight:950}
       .live-class-person strong{display:block;font-size:18px}
       .live-class-person span{display:block;color:#b8bfcc;font-size:13px}
-      .live-class-status{border:1px solid rgba(255,255,255,.14);border-radius:999px;padding:8px 12px;background:rgba(255,255,255,.08);font-weight:900}
-      .live-class-stage{height:min(70vh,760px);min-height:560px;background:linear-gradient(135deg,#050914,#0b101c);display:grid;place-items:center;position:relative}
+      .live-class-status{border:1px solid rgba(255,255,255,.14);border-radius:999px;padding:7px 11px;background:rgba(255,255,255,.08);font-weight:900}
+      .live-class-stage{height:min(76vh,860px);min-height:660px;background:linear-gradient(135deg,#050914,#0b101c);display:grid;place-items:center;position:relative}
       .live-class-frame{position:absolute;inset:0;width:100%;height:100%;border:0;background:#000}
       .live-class-placeholder{max-width:560px;text-align:center;padding:34px}
       .live-class-placeholder-icon{width:86px;height:86px;margin:0 auto 18px;border-radius:28px;display:grid;place-items:center;background:rgba(255,91,82,.14);border:1px solid rgba(255,91,82,.26);font-size:34px;font-weight:950}
       .live-class-placeholder h2{margin:0 0 10px;font-size:26px}
       .live-class-placeholder p{margin:0;color:#bdc5d1;line-height:1.55}
-      .live-class-side{display:grid;gap:14px;align-content:start}
-      .live-class-side-card{padding:18px;background:linear-gradient(150deg,rgba(30,38,53,.9),rgba(9,14,24,.96))}
+      .live-class-side{display:grid;gap:12px;align-content:start;max-height:calc(100vh - 132px);overflow:auto;padding-right:2px}
+      .live-class-side-card{padding:16px;background:linear-gradient(150deg,rgba(30,38,53,.88),rgba(9,14,24,.96))}
       .live-class-side-title{margin:0 0 12px;font-size:15px;font-weight:950}
-      .live-class-info{display:grid;gap:10px}
-      .live-class-info-row{border-radius:14px;background:rgba(255,255,255,.06);padding:12px;border:1px solid rgba(255,255,255,.04)}
+      details.live-class-side-card{padding:0}
+      details.live-class-side-card summary{list-style:none;cursor:pointer;padding:15px 16px;font-size:15px;font-weight:950}
+      details.live-class-side-card summary::-webkit-details-marker{display:none}
+      details.live-class-side-card summary::after{content:"+";float:right;color:#ff6a61}
+      details.live-class-side-card[open] summary::after{content:"-"}
+      .live-class-details-body{padding:0 16px 16px}
+      .live-class-info{display:grid;gap:8px}
+      .live-class-info-row{border-radius:12px;background:rgba(255,255,255,.06);padding:10px 11px;border:1px solid rgba(255,255,255,.04)}
       .live-class-info-row span{display:block;color:#8f98aa;font-size:11px;font-weight:900;text-transform:uppercase}
       .live-class-info-row strong{display:block;margin-top:4px;color:#fff;word-break:break-word}
       .live-class-recording{display:grid;gap:10px}
       .live-class-recording-actions{display:flex;gap:8px;flex-wrap:wrap}
       .live-class-recording-status{min-height:18px;color:#aeb7c6;font-size:12px;font-weight:800;line-height:1.4}
-      .live-class-transcript{width:100%;min-height:96px;border:1px solid rgba(255,255,255,.14);border-radius:14px;background:rgba(255,255,255,.07);color:#fff;padding:12px;font:inherit;resize:vertical}
+      .live-class-transcript{width:100%;min-height:88px;border:1px solid rgba(255,255,255,.14);border-radius:14px;background:rgba(255,255,255,.07);color:#fff;padding:12px;font:inherit;resize:vertical}
       .live-class-register{grid-column:1/-1;padding:20px}
+      .live-class-register[hidden]{display:none}
       .live-class-form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
       .live-class-field{display:grid;gap:6px}
       .live-class-field.wide{grid-column:1/-1}
@@ -111,7 +118,8 @@ const buildHtml = ({ user, lesson, joinData, canEdit }) => {
       .live-class-field textarea{min-height:86px;resize:vertical}
       .live-class-register-actions{margin-top:12px;display:flex;gap:10px;justify-content:flex-end}
       .live-class-note{color:#aeb7c6;line-height:1.5}
-      @media(max-width:980px){.live-class-shell{padding:20px 14px}.live-class-top{display:grid}.live-class-grid{grid-template-columns:1fr}.live-class-stage{min-height:420px;height:58vh}.live-class-form{grid-template-columns:1fr}.live-class-title{font-size:28px}}
+      @media(max-width:1280px){.live-class-grid{grid-template-columns:1fr}.live-class-side{max-height:none;overflow:visible}}
+      @media(max-width:980px){.live-class-shell{padding:20px 14px}.live-class-top{display:grid}.live-class-stage{min-height:420px;height:58vh}.live-class-form{grid-template-columns:1fr}.live-class-title{font-size:28px}}
     </style>
   </head>
   <body class="live-class-body">
@@ -132,6 +140,7 @@ const buildHtml = ({ user, lesson, joinData, canEdit }) => {
           }
           ${canTeach && !isCancelled && !isEnded ? `<button class="live-class-btn primary" type="button" data-live-status="ao_vivo">Iniciar aula</button>` : ""}
           ${canTeach && !isCancelled && !isEnded ? `<button class="live-class-btn" type="button" data-live-status="pendente_registro">Finalizar aula</button>` : ""}
+          ${canTeach ? `<button class="live-class-btn" type="button" data-live-toggle-register>Registrar aula</button>` : ""}
         </div>
       </header>
 
@@ -174,39 +183,39 @@ const buildHtml = ({ user, lesson, joinData, canEdit }) => {
           </article>
           ${
             isTeacher || isAdmin
-              ? `<article class="live-class-side-card">
-                  <p class="live-class-side-title">Briefing pedagogico</p>
-                  <div class="live-class-info">
-                    <div class="live-class-info-row"><span>Objetivo</span><strong>${escapeHtml(lesson.objetivo_aluno || "Sem dados")}</strong></div>
-                    <div class="live-class-info-row"><span>Nivel declarado</span><strong>${escapeHtml(lesson.nivel_declarado || "Sem dados")}</strong></div>
-                    <div class="live-class-info-row"><span>Briefing</span><strong>${escapeHtml(lesson.briefing_pedagogico || "Sem briefing cadastrado")}</strong></div>
-                    <div class="live-class-info-row"><span>Observacoes</span><strong>${escapeHtml(lesson.observacoes || "Sem observacoes")}</strong></div>
-                  </div>
-                </article>
-                <article class="live-class-side-card">
-                  <p class="live-class-side-title">Gravação e transcrição</p>
-                  <div class="live-class-recording">
-                    <p class="live-class-note">Salva por aluno em pasta separada. O arquivo da aula depende do gravador Jitsi/Jibri ativo na VPS.</p>
-                    <div class="live-class-recording-actions">
-                      <button class="live-class-btn primary" type="button" data-live-recording="start">Gravar aula</button>
-                      <button class="live-class-btn" type="button" data-live-recording="stop">Parar gravação</button>
+              ? `<details class="live-class-side-card" open>
+                  <summary>Briefing pedagogico</summary>
+                  <div class="live-class-details-body">
+                    <div class="live-class-info">
+                      <div class="live-class-info-row"><span>Objetivo</span><strong>${escapeHtml(lesson.objetivo_aluno || "Sem dados")}</strong></div>
+                      <div class="live-class-info-row"><span>Nivel declarado</span><strong>${escapeHtml(lesson.nivel_declarado || "Sem dados")}</strong></div>
+                      <div class="live-class-info-row"><span>Briefing</span><strong>${escapeHtml(lesson.briefing_pedagogico || "Sem briefing cadastrado")}</strong></div>
+                      <div class="live-class-info-row"><span>Observacoes</span><strong>${escapeHtml(lesson.observacoes || "Sem observacoes")}</strong></div>
                     </div>
-                    <div class="live-class-recording-status" data-live-recording-status>Gravação ainda não iniciada.</div>
-                    <textarea class="live-class-transcript" data-live-transcript placeholder="Cole ou revise a transcrição da aula aqui..."></textarea>
-                    <button class="live-class-btn" type="button" data-live-recording="save_transcript">Salvar transcrição</button>
                   </div>
-                </article>
-                <article class="live-class-side-card">
-                  <p class="live-class-side-title">Flexge</p>
-                  <p class="live-class-note">Espaco reservado para nivel, trilha atual, ultima atividade, tempo estudado na semana, recomendacao e dificuldades detectadas.</p>
-                </article>`
+                </details>
+                <details class="live-class-side-card">
+                  <summary>Gravação e transcrição</summary>
+                  <div class="live-class-details-body">
+                    <div class="live-class-recording">
+                      <p class="live-class-note">Salva por aluno em pasta separada. O arquivo da aula depende do gravador Jitsi/Jibri ativo na VPS.</p>
+                      <div class="live-class-recording-actions">
+                        <button class="live-class-btn primary" type="button" data-live-recording="start">Gravar aula</button>
+                        <button class="live-class-btn" type="button" data-live-recording="stop">Parar gravação</button>
+                      </div>
+                      <div class="live-class-recording-status" data-live-recording-status>Gravação ainda não iniciada.</div>
+                      <textarea class="live-class-transcript" data-live-transcript placeholder="Cole ou revise a transcrição da aula aqui..."></textarea>
+                      <button class="live-class-btn" type="button" data-live-recording="save_transcript">Salvar transcrição</button>
+                    </div>
+                  </div>
+                </details>`
               : ""
           }
         </aside>
 
         ${
           canTeach
-            ? `<section class="live-class-register">
+            ? `<section class="live-class-register" data-live-register-panel hidden>
                 <p class="live-class-side-title">Registrar aula</p>
                 <form class="live-class-form" data-live-register-form>
                   <div class="live-class-field">
@@ -316,6 +325,16 @@ const buildHtml = ({ user, lesson, joinData, canEdit }) => {
       document.querySelectorAll("[data-live-recording]").forEach((btn) => {
         btn.addEventListener("click", () => runRecordingAction(btn.dataset.liveRecording || ""));
       });
+      const registerPanel = document.querySelector("[data-live-register-panel]");
+      const registerToggle = document.querySelector("[data-live-toggle-register]");
+      if (registerPanel && registerToggle) {
+        registerToggle.addEventListener("click", () => {
+          const shouldHide = !registerPanel.hidden;
+          registerPanel.hidden = shouldHide;
+          registerToggle.textContent = shouldHide ? "Registrar aula" : "Ocultar registro";
+          if (!shouldHide) registerPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+      }
       const setStatusText = (label) => {
         document.querySelectorAll("[data-live-status-label],[data-live-status-side]").forEach((el) => { el.textContent = label; });
       };

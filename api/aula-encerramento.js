@@ -20,6 +20,7 @@ const normalizeName = (value) =>
 const isStudentViewer = (session, lesson) => {
   const role = normalizeRole(session.role);
   if (role === "student") return true;
+  if (role === "admin") return false;
   if (role === "teacher") return false;
   const sessionId = String(session.sub || "").trim();
   const lessonStudentId = String(lesson.aluno_id || "").trim();
