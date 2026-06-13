@@ -22,7 +22,17 @@ const normalizeName = (value) =>
     .trim()
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+const compactName = (value) => normalizeName(value).replace(/\s+/g, "");
+
+const nameTokens = (value) =>
+  normalizeName(value)
+    .split(/\s+/)
+    .map((part) => part.trim())
+    .filter((part) => part.length >= 3);
 
 const idsMatch = (a, b) => {
   const left = String(a || "").trim();
@@ -33,8 +43,20 @@ const idsMatch = (a, b) => {
 const namesMatch = (a, b) => {
   const left = normalizeName(a);
   const right = normalizeName(b);
-  return Boolean(left && right && left === right);
+  if (!left || !right) return false;
+  if (left === right) return true;
+  const leftCompact = compactName(left);
+  const rightCompact = compactName(right);
+  if (leftCompact && rightCompact && (leftCompact.includes(rightCompact) || rightCompact.includes(leftCompact))) return true;
+  const leftTokens = new Set(nameTokens(left));
+  const rightTokens = nameTokens(right);
+  return Boolean(rightTokens.length && rightTokens.every((token) => leftTokens.has(token)));
 };
+
+const personMatches = (session, id, name) =>
+  idsMatch(session?.sub, id) ||
+  namesMatch(session?.name, name) ||
+  namesMatch(session?.email, name);
 
 const getLessonStartMs = (lesson) => {
   const ms = Date.parse(String(lesson?.inicio || ""));
@@ -88,10 +110,10 @@ const canAccessLesson = (session, lesson) => {
   const role = normalizeRole(session?.role);
   if (isAdminRole(role)) return true;
   if (isTeacherRole(role)) {
-    return idsMatch(session?.sub, lesson.professor_id) || namesMatch(session?.name, lesson.professor_nome);
+    return personMatches(session, lesson.professor_id, lesson.professor_nome);
   }
   if (isStudentRole(role)) {
-    return idsMatch(session?.sub, lesson.aluno_id) || namesMatch(session?.name, lesson.aluno_nome);
+    return personMatches(session, lesson.aluno_id, lesson.aluno_nome);
   }
   return false;
 };
@@ -100,7 +122,7 @@ const canEditLesson = (session, lesson) => {
   const role = normalizeRole(session?.role);
   if (isAdminRole(role)) return true;
   if (isTeacherRole(role)) {
-    return idsMatch(session?.sub, lesson.professor_id) || namesMatch(session?.name, lesson.professor_nome);
+    return personMatches(session, lesson.professor_id, lesson.professor_nome);
   }
   return false;
 };
