@@ -10,6 +10,26 @@ const getRouteId = (req) => {
   return match ? decodeURIComponent(match[1]) : "";
 };
 
+const normalizeName = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+const canSendStudentFeedback = (session, lesson) => {
+  const role = normalizeRole(session.role);
+  if (role === "student") return true;
+  if (role === "teacher") return false;
+  const sessionId = String(session.sub || "").trim();
+  const lessonStudentId = String(lesson.aluno_id || "").trim();
+  if (sessionId && lessonStudentId && sessionId === lessonStudentId) return true;
+  const sessionName = normalizeName(session.name);
+  const studentName = normalizeName(lesson.aluno_nome);
+  if (sessionName && studentName && sessionName === studentName) return true;
+  return role === "admin";
+};
+
 module.exports = async (req, res) => {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
@@ -20,12 +40,6 @@ module.exports = async (req, res) => {
   const session = getSessionFromRequest(req);
   if (!session) {
     sendJson(res, 401, { error: "unauthorized" });
-    return;
-  }
-
-  const role = normalizeRole(session.role);
-  if (role !== "student") {
-    sendJson(res, 403, { error: "student_only" });
     return;
   }
 
@@ -46,6 +60,10 @@ module.exports = async (req, res) => {
     }
     if (!canAccessLesson(session, lesson)) {
       sendJson(res, 403, { error: "forbidden" });
+      return;
+    }
+    if (!canSendStudentFeedback(session, lesson)) {
+      sendJson(res, 403, { error: "student_feedback_only" });
       return;
     }
 

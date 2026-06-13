@@ -10,6 +10,26 @@ const escapeHtml = (value) =>
 
 const safeJsonForHtml = (value) => JSON.stringify(value ?? {}).replace(/</g, "\\u003c");
 
+const normalizeName = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+const isStudentViewer = (session, lesson) => {
+  const role = normalizeRole(session.role);
+  if (role === "student") return true;
+  if (role === "teacher") return false;
+  const sessionId = String(session.sub || "").trim();
+  const lessonStudentId = String(lesson.aluno_id || "").trim();
+  if (sessionId && lessonStudentId && sessionId === lessonStudentId) return true;
+  const sessionName = normalizeName(session.name);
+  const studentName = normalizeName(lesson.aluno_nome);
+  if (sessionName && studentName && sessionName === studentName) return true;
+  return role === "admin";
+};
+
 const sendRedirect = (res, location) => {
   res.statusCode = 302;
   res.setHeader("Location", location);
@@ -18,8 +38,7 @@ const sendRedirect = (res, location) => {
 };
 
 const buildHtml = ({ lesson, session }) => {
-  const role = normalizeRole(session.role);
-  const isStudent = role === "student";
+  const isStudent = isStudentViewer(session, lesson);
   const teacherName = lesson.professor_nome || "seu professor";
   return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -33,9 +52,8 @@ const buildHtml = ({ lesson, session }) => {
       body{min-height:100vh;margin:0;background:radial-gradient(circle at 16% 12%,rgba(255,91,82,.24),transparent 30%),radial-gradient(circle at 88% 6%,rgba(47,107,184,.28),transparent 36%),#070b13;color:#fff;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
       .end-shell{min-height:100vh;display:grid;place-items:center;padding:28px}
       .end-card{width:min(760px,100%);border:1px solid rgba(255,255,255,.14);border-radius:24px;background:linear-gradient(145deg,rgba(25,32,46,.92),rgba(8,12,21,.98));box-shadow:0 26px 80px rgba(0,0,0,.38);padding:30px}
-      .end-logo{display:flex;align-items:center;gap:12px;margin-bottom:26px}
-      .end-mark{width:42px;height:42px;border-radius:14px;background:linear-gradient(135deg,#ff5b52,#2f6bb8)}
-      .end-brand{font-size:22px;font-weight:950}
+      .end-logo{display:flex;align-items:center;margin-bottom:26px}
+      .end-logo img{display:block;width:158px;max-width:52vw;height:auto;object-fit:contain}
       .end-kicker{margin:0 0 8px;color:#ff6a61;font-size:12px;font-weight:950;letter-spacing:.16em;text-transform:uppercase}
       h1{margin:0;font-size:36px;line-height:1.04}
       .end-sub{margin:12px 0 24px;color:#b9c1cf;line-height:1.55}
@@ -55,7 +73,7 @@ const buildHtml = ({ lesson, session }) => {
   <body>
     <main class="end-shell">
       <section class="end-card">
-        <div class="end-logo"><div class="end-mark"></div><div class="end-brand">Space</div></div>
+        <div class="end-logo"><img src="/assets/space-logo.png" alt="Space" /></div>
         <p class="end-kicker">AULA ENCERRADA</p>
         <h1>Obrigado pela aula.</h1>
         <p class="end-sub">${escapeHtml(lesson.aluno_nome || session.name || "Aluno")}, sua opinião ajuda a Space a melhorar cada aula.</p>
