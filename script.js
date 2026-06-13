@@ -381,6 +381,7 @@ let teacherV4DashboardState = {
   avaliacoes: [],
   avisos: [],
   feedbacks: [],
+  liveLessonFeedbacks: [],
   reagendamentos: [],
   workHours: null,
   nextLessonId: "",
@@ -3459,6 +3460,28 @@ const renderTeacherDashboard = () => {
         avaliacoes = [];
       }
 
+      let liveLessonFeedbacks = [];
+      try {
+        const liveFeedbackData = await fetchLiveLessonFeedbacks();
+        liveLessonFeedbacks = Array.isArray(liveFeedbackData.feedbacks) ? liveFeedbackData.feedbacks : [];
+        const liveAsEvaluations = liveLessonFeedbacks
+          .map((row) => {
+            const score = Number(row?.notaProfessor);
+            if (!Number.isFinite(score)) return null;
+            return {
+              id: String(row.id || ""),
+              aulaId: String(row.aulaId || ""),
+              score10: clampNumber(score, 0, 10),
+              createdAtMs: Number(row.createdAtMs) || 0,
+              source: "live_classroom",
+            };
+          })
+          .filter(Boolean);
+        if (liveAsEvaluations.length) avaliacoes = avaliacoes.concat(liveAsEvaluations);
+      } catch (error) {
+        liveLessonFeedbacks = [];
+      }
+
       // Avisos (optional).
       let avisos = [];
       try {
@@ -3553,6 +3576,7 @@ const renderTeacherDashboard = () => {
       teacherV4DashboardState.avaliacoes = avaliacoes;
       teacherV4DashboardState.avisos = avisos;
       teacherV4DashboardState.feedbacks = feedbacks;
+      teacherV4DashboardState.liveLessonFeedbacks = liveLessonFeedbacks;
       teacherV4DashboardState.reagendamentos = reagendamentos;
       teacherV4DashboardState.workHours = workHours;
       teacherV4DashboardState.loadedAt = Date.now();
@@ -13193,6 +13217,7 @@ let adminPedagogicoState = {
   surveys: [],
   teacherAlerts: [],
   pedagogicalFeedbacks: [],
+  liveLessonFeedbacks: [],
   lessonLogs: [],
   groupsByClassId: new Map(),
   onboardingContents: [],
@@ -13864,6 +13889,21 @@ const fetchPedagogicalFeedbacksFromFirestore = async () => {
   return rows;
 };
 
+const fetchLiveLessonFeedbacks = async () => {
+  try {
+    const res = await fetchWithAuth("/api/live-lessons/feedbacks?limit=500");
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error || "live_lesson_feedbacks_failed");
+    return {
+      summary: data?.summary && typeof data.summary === "object" ? data.summary : {},
+      feedbacks: Array.isArray(data?.feedbacks) ? data.feedbacks : [],
+    };
+  } catch (error) {
+    console.error("[live-lessons] feedbacks load failed:", error);
+    return { summary: {}, feedbacks: [] };
+  }
+};
+
 const daysLabelShort = (dow) => {
   const n = Number(dow);
   if (n === 1) return "Seg";
@@ -13975,6 +14015,7 @@ const renderAdminPedagogicoMetrics = () => {
   const surveys = Array.isArray(adminPedagogicoState.surveys) ? adminPedagogicoState.surveys : [];
   const teacherAlerts = Array.isArray(adminPedagogicoState.teacherAlerts) ? adminPedagogicoState.teacherAlerts : [];
   const feedbacks = Array.isArray(adminPedagogicoState.pedagogicalFeedbacks) ? adminPedagogicoState.pedagogicalFeedbacks : [];
+  const liveFeedbacks = Array.isArray(adminPedagogicoState.liveLessonFeedbacks) ? adminPedagogicoState.liveLessonFeedbacks : [];
   const lessonLogs = Array.isArray(adminPedagogicoState.lessonLogs) ? adminPedagogicoState.lessonLogs : [];
 
   const setKpi = (key, { value = "—", sub = "", badge = "", badgeTone = "" } = {}) => {
@@ -14003,6 +14044,7 @@ const renderAdminPedagogicoMetrics = () => {
 
   const alertsOpen = teacherAlerts.filter((a) => String(a?.status || "") !== "resolved").length;
   const feedbackPending = feedbacks.filter((f) => !(f && typeof f === "object" && f.readByTeacher === true)).length;
+  const lowLiveRatings = liveFeedbacks.filter((f) => Number(f?.notaProfessor) <= 6).length;
 
   const studentsRiskSet = new Set();
   lessonLogs.forEach((log) => {
@@ -14056,10 +14098,14 @@ const renderAdminPedagogicoMetrics = () => {
   });
 
   setKpi("feedbackPending", {
-    value: String(feedbackPending),
-    sub: feedbackPending ? "Professores aguardando devolutiva." : "Nenhum feedback pendente.",
-    badge: feedbackPending ? "Atenção" : "",
-    badgeTone: feedbackPending ? "warn" : "",
+    value: String(feedbackPending + lowLiveRatings),
+    sub: lowLiveRatings
+      ? `${lowLiveRatings} avaliação baixa de aula ao vivo · ${feedbackPending} feedbacks pedagógicos pendentes.`
+      : feedbackPending
+        ? "Professores aguardando devolutiva."
+        : "Nenhum feedback pendente.",
+    badge: feedbackPending || lowLiveRatings ? "Atenção" : "",
+    badgeTone: feedbackPending || lowLiveRatings ? "warn" : "",
   });
 
   setKpi("teachersActive", {
@@ -15041,10 +15087,59 @@ const renderAdminPedagogicoAlertsPanel = () => {
 const renderAdminPedagogicoFeedbacksPanel = () => {
   if (!(adminPedFeedbacks instanceof HTMLElement)) return;
   const items = Array.isArray(adminPedagogicoState.pedagogicalFeedbacks) ? adminPedagogicoState.pedagogicalFeedbacks : [];
-  if (adminPedEmptyFeedbacks instanceof HTMLElement) adminPedEmptyFeedbacks.hidden = items.length > 0;
+  const liveItems = Array.isArray(adminPedagogicoState.liveLessonFeedbacks) ? adminPedagogicoState.liveLessonFeedbacks : [];
+  if (adminPedEmptyFeedbacks instanceof HTMLElement) adminPedEmptyFeedbacks.hidden = items.length + liveItems.length > 0;
+
+  const liveAverage = (() => {
+    const scores = liveItems.map((f) => Number(f?.notaProfessor)).filter((n) => Number.isFinite(n));
+    if (!scores.length) return "—";
+    const avg = scores.reduce((acc, n) => acc + n, 0) / scores.length;
+    return avg.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  })();
+  const lowLive = liveItems.filter((f) => Number(f?.notaProfessor) <= 6).length;
 
   adminPedFeedbacks.innerHTML = `
     <div class="admin-ped-list">
+      ${
+        liveItems.length
+          ? `
+            <div class="admin-ped-row">
+              <div>
+                <div class="admin-ped-row-title">Avaliações de aulas ao vivo</div>
+                <div class="admin-ped-row-sub">Média geral ${escapeHtml(liveAverage)} · ${escapeHtml(String(liveItems.length))} resposta(s)</div>
+                <div class="admin-ped-row-meta">
+                  <span class="admin-ped-pill is-plan">Tipo Uber: professor vê só média</span>
+                  ${lowLive ? `<span class="admin-ped-pill is-paused">${escapeHtml(String(lowLive))} baixa(s)</span>` : `<span class="admin-ped-pill is-active">Sem alerta</span>`}
+                </div>
+              </div>
+            </div>
+            ${liveItems
+              .slice()
+              .sort((a, b) => (Number(b.createdAtMs) || 0) - (Number(a.createdAtMs) || 0))
+              .map((f) => {
+                const when = formatShortDateFromMs(f.createdAtMs);
+                const score = Number.isFinite(Number(f.notaProfessor)) ? String(f.notaProfessor) : "—";
+                const low = Number(f.notaProfessor) <= 6;
+                const title = `${f.alunoNome || "Aluno"} avaliou ${f.professorNome || "Professor"}`;
+                const msg = String(f.mensagem || "").trim() || "Sem mensagem.";
+                return `
+                  <div class="admin-ped-row">
+                    <div>
+                      <div class="admin-ped-row-title">${escapeHtml(title)}</div>
+                      <div class="admin-ped-row-sub">${escapeHtml(`${when} · Nota ${score}`)}</div>
+                      <div class="admin-ped-row-meta">
+                        <span class="admin-ped-pill ${low ? "is-paused" : "is-active"}">${escapeHtml(low ? "Atenção" : "OK")}</span>
+                        <span class="admin-ped-pill">Aula #${escapeHtml(String(f.aulaId || "—"))}</span>
+                      </div>
+                      <div class="admin-ped-row-sub" style="margin-top:8px;">${escapeHtml(msg)}</div>
+                    </div>
+                  </div>
+                `;
+              })
+              .join("")}
+          `
+          : ""
+      }
       ${items
         .map((f) => {
           const when = formatShortDateFromMs(f.createdAtMs);
@@ -16354,7 +16449,22 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
   if (adminPedError instanceof HTMLElement) adminPedError.hidden = true;
 
   try {
-    const [teachers, students, classes, groups, plans, surveys, teacherAlerts, pedagogicalFeedbacks, lessonLogs, onboardingContentsAll, onboardingQuizzes, onboardingProgressAll, teacherQuizSubmissionsAll] =
+    const [
+      teachers,
+      students,
+      classes,
+      groups,
+      plans,
+      surveys,
+      teacherAlerts,
+      pedagogicalFeedbacks,
+      liveLessonFeedbacksData,
+      lessonLogs,
+      onboardingContentsAll,
+      onboardingQuizzes,
+      onboardingProgressAll,
+      teacherQuizSubmissionsAll,
+    ] =
       await Promise.all([
       fetchUserRowsFromFirestore("teacher"),
       fetchUserRowsFromFirestore("student"),
@@ -16364,6 +16474,7 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
       fetchSurveysFromFirestore().catch(() => []),
       fetchTeacherAlertsFromFirestore().catch(() => []),
       fetchPedagogicalFeedbacksFromFirestore().catch(() => []),
+      fetchLiveLessonFeedbacks().catch(() => ({ summary: {}, feedbacks: [] })),
       fetchLessonLogsFromFirestore().catch(() => []),
       fetchOnboardingContentsFromFirestore({ includeInactive: true }).catch(() => []),
       fetchOnboardingQuizzesFromFirestore().catch(() => []),
@@ -16386,6 +16497,7 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
     adminPedagogicoState.surveys = Array.isArray(surveys) ? surveys : [];
     adminPedagogicoState.teacherAlerts = Array.isArray(teacherAlerts) ? teacherAlerts : [];
     adminPedagogicoState.pedagogicalFeedbacks = Array.isArray(pedagogicalFeedbacks) ? pedagogicalFeedbacks : [];
+    adminPedagogicoState.liveLessonFeedbacks = Array.isArray(liveLessonFeedbacksData?.feedbacks) ? liveLessonFeedbacksData.feedbacks : [];
     adminPedagogicoState.lessonLogs = Array.isArray(lessonLogs) ? lessonLogs : [];
     adminPedagogicoState.onboardingContentsAll = Array.isArray(onboardingContentsAll) ? onboardingContentsAll : [];
     adminPedagogicoState.onboardingContents = adminPedagogicoState.onboardingContentsAll.slice().sort((a, b) => (a.order || 0) - (b.order || 0));
@@ -21499,14 +21611,29 @@ document.addEventListener("click", (event) => {
           return;
         }
         if (kind === "feedbacks") {
-          const rows = (Array.isArray(adminPedagogicoState.pedagogicalFeedbacks) ? adminPedagogicoState.pedagogicalFeedbacks : []).map((f) => ({
+          const liveRows = (Array.isArray(adminPedagogicoState.liveLessonFeedbacks) ? adminPedagogicoState.liveLessonFeedbacks : []).map((f) => ({
             id: String(f.id || ""),
+            origem: "Aula ao vivo",
+            aluno: String(f.alunoNome || ""),
+            professor: String(f.professorNome || ""),
+            data: f.createdAtMs ? formatShortDateFromMs(f.createdAtMs) : "",
+            tipo: "Aluno avaliou professor",
+            notaGeral: Number.isFinite(Number(f.notaProfessor)) ? String(f.notaProfessor) : "",
+            mensagem: String(f.mensagem || ""),
+            status: Number(f.notaProfessor) <= 6 ? "Atenção" : "OK",
+          }));
+          const pedagogicalRows = (Array.isArray(adminPedagogicoState.pedagogicalFeedbacks) ? adminPedagogicoState.pedagogicalFeedbacks : []).map((f) => ({
+            id: String(f.id || ""),
+            origem: "Feedback pedagógico",
+            aluno: String(f.studentId || ""),
             professor: String(f.teacherName || ""),
             data: String(f.observationDate || ""),
             tipo: f.classType === "group" ? "Grupo" : "Individual",
             notaGeral: Number.isFinite(Number(f.generalScore)) ? String(f.generalScore) : "",
+            mensagem: String(f.freeNotes || ""),
             status: f.readByTeacher ? "Lido" : "Novo",
           }));
+          const rows = liveRows.concat(pedagogicalRows);
           adminPedDownloadCsv({ filename: filenameBase, rows });
           return;
         }
