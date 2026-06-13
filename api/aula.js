@@ -51,7 +51,8 @@ const buildHtml = ({ user, lesson, joinData, canEdit }) => {
   const isTeacher = role === "teacher";
   const title = lesson.titulo || `Aula ${lesson.aluno_nome || ""}`.trim() || "Sala de aula";
   const fallback = String(lesson.google_meet_link_fallback || "").trim();
-  const hasRealRoom = joinData.embedKind === "iframe" && joinData.joinUrl;
+  const hasRealRoom = ["iframe", "jitsi-external-api"].includes(joinData.embedKind) && joinData.joinUrl;
+  const usesJitsiApi = joinData.embedKind === "jitsi-external-api" && joinData.externalApiUrl && joinData.domain && joinData.roomId;
   const isCancelled = lesson.status_aula === "cancelada";
   const isEnded = ["realizada", "falta", "remarcada"].includes(lesson.status_aula);
   const canTeach = Boolean(isTeacher && canEdit);
@@ -147,7 +148,9 @@ const buildHtml = ({ user, lesson, joinData, canEdit }) => {
                 ? `<div class="live-class-placeholder"><div class="live-class-placeholder-icon">!</div><h2>Aula cancelada</h2><p>Esta sala nao pode ser acessada porque a aula foi cancelada.</p></div>`
                 : isEnded
                   ? `<div class="live-class-placeholder"><div class="live-class-placeholder-icon">OK</div><h2>Aula encerrada</h2><p>A videochamada desta aula ja foi encerrada.</p></div>`
-                  : hasRealRoom
+                  : usesJitsiApi
+                    ? `<div class="live-class-frame" data-jitsi-stage></div>`
+                    : hasRealRoom
                     ? `<iframe class="live-class-frame" src="${escapeHtml(joinData.joinUrl)}" allow="camera; microphone; fullscreen; display-capture"></iframe>`
                     : `<div class="live-class-placeholder"><div class="live-class-placeholder-icon">▶</div><h2>Sala dentro da plataforma</h2><p>${escapeHtml(joinData.message || "Sala de video pronta para integracao com provider.")}</p></div>`
             }
@@ -218,8 +221,44 @@ const buildHtml = ({ user, lesson, joinData, canEdit }) => {
         }
       </section>
     </main>
+    ${usesJitsiApi ? `<script src="${escapeHtml(joinData.externalApiUrl)}"></script>` : ""}
     <script>
       const state = window.__SPACE_LIVE_CLASS__ || {};
+      const redirectToLessonEnd = () => {
+        const id = state && state.lesson && state.lesson.id ? encodeURIComponent(state.lesson.id) : "";
+        if (!id) return;
+        window.location.href = "/aula/" + id + "/encerramento";
+      };
+      const bootJitsi = () => {
+        const holder = document.querySelector("[data-jitsi-stage]");
+        const join = state && state.joinData ? state.joinData : {};
+        if (!holder || !join.domain || !join.roomId || typeof window.JitsiMeetExternalAPI !== "function") return;
+        const api = new window.JitsiMeetExternalAPI(join.domain, {
+          roomName: join.roomId,
+          parentNode: holder,
+          width: "100%",
+          height: "100%",
+          userInfo: {
+            displayName: state.user && state.user.name ? state.user.name : ""
+          },
+          configOverwrite: {
+            prejoinPageEnabled: false,
+            disableDeepLinking: true,
+            startWithAudioMuted: false,
+            startWithVideoMuted: false,
+            enableClosePage: false,
+            enableWelcomePage: false
+          },
+          interfaceConfigOverwrite: {
+            SHOW_JITSI_WATERMARK: false,
+            SHOW_WATERMARK_FOR_GUESTS: false,
+            MOBILE_APP_PROMO: false
+          }
+        });
+        api.addListener("videoConferenceLeft", redirectToLessonEnd);
+        api.addListener("readyToClose", redirectToLessonEnd);
+      };
+      bootJitsi();
       const setStatusText = (label) => {
         document.querySelectorAll("[data-live-status-label],[data-live-status-side]").forEach((el) => { el.textContent = label; });
       };

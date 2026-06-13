@@ -41,8 +41,10 @@ class JitsiVideoProvider extends VideoProvider {
       roomId,
       roomUrl,
       joinUrl,
+      domain: roomUrl ? new URL(roomUrl).host : "",
+      externalApiUrl: roomUrl ? `${new URL(roomUrl).origin}/external_api.js` : "",
       joinToken: "",
-      embedKind: joinUrl ? "iframe" : "placeholder",
+      embedKind: joinUrl ? "jitsi-external-api" : "placeholder",
       message: roomUrl ? "" : "Sala de video pronta para integracao com provider.",
       role,
     };
