@@ -97,6 +97,10 @@ const buildHtml = ({ user, lesson, joinData, canEdit }) => {
       .live-class-info-row{border-radius:14px;background:rgba(255,255,255,.06);padding:12px;border:1px solid rgba(255,255,255,.04)}
       .live-class-info-row span{display:block;color:#8f98aa;font-size:11px;font-weight:900;text-transform:uppercase}
       .live-class-info-row strong{display:block;margin-top:4px;color:#fff;word-break:break-word}
+      .live-class-recording{display:grid;gap:10px}
+      .live-class-recording-actions{display:flex;gap:8px;flex-wrap:wrap}
+      .live-class-recording-status{min-height:18px;color:#aeb7c6;font-size:12px;font-weight:800;line-height:1.4}
+      .live-class-transcript{width:100%;min-height:96px;border:1px solid rgba(255,255,255,.14);border-radius:14px;background:rgba(255,255,255,.07);color:#fff;padding:12px;font:inherit;resize:vertical}
       .live-class-register{grid-column:1/-1;padding:20px}
       .live-class-form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
       .live-class-field{display:grid;gap:6px}
@@ -179,6 +183,19 @@ const buildHtml = ({ user, lesson, joinData, canEdit }) => {
                   </div>
                 </article>
                 <article class="live-class-side-card">
+                  <p class="live-class-side-title">Gravação e transcrição</p>
+                  <div class="live-class-recording">
+                    <p class="live-class-note">Salva por aluno em pasta separada. O arquivo da aula depende do gravador Jitsi/Jibri ativo na VPS.</p>
+                    <div class="live-class-recording-actions">
+                      <button class="live-class-btn primary" type="button" data-live-recording="start">Gravar aula</button>
+                      <button class="live-class-btn" type="button" data-live-recording="stop">Parar gravação</button>
+                    </div>
+                    <div class="live-class-recording-status" data-live-recording-status>Gravação ainda não iniciada.</div>
+                    <textarea class="live-class-transcript" data-live-transcript placeholder="Cole ou revise a transcrição da aula aqui..."></textarea>
+                    <button class="live-class-btn" type="button" data-live-recording="save_transcript">Salvar transcrição</button>
+                  </div>
+                </article>
+                <article class="live-class-side-card">
                   <p class="live-class-side-title">Flexge</p>
                   <p class="live-class-note">Espaco reservado para nivel, trilha atual, ultima atividade, tempo estudado na semana, recomendacao e dificuldades detectadas.</p>
                 </article>`
@@ -255,10 +272,49 @@ const buildHtml = ({ user, lesson, joinData, canEdit }) => {
             MOBILE_APP_PROMO: false
           }
         });
+        window.__SPACE_JITSI_API__ = api;
         api.addListener("videoConferenceLeft", redirectToLessonEnd);
         api.addListener("readyToClose", redirectToLessonEnd);
       };
       bootJitsi();
+      const recordingStatus = document.querySelector("[data-live-recording-status]");
+      const transcriptEl = document.querySelector("[data-live-transcript]");
+      const setRecordingStatus = (text) => {
+        if (recordingStatus) recordingStatus.textContent = text || "";
+      };
+      const runRecordingAction = async (action) => {
+        const buttons = document.querySelectorAll("[data-live-recording]");
+        buttons.forEach((btn) => { btn.disabled = true; });
+        try {
+          if (action === "start" && window.__SPACE_JITSI_API__) {
+            window.__SPACE_JITSI_API__.executeCommand("startRecording", { mode: "file", shouldShare: false });
+          }
+          if (action === "stop" && window.__SPACE_JITSI_API__) {
+            window.__SPACE_JITSI_API__.executeCommand("stopRecording", "file");
+          }
+          const body = { action };
+          if (action === "save_transcript") {
+            body.transcricao_texto = transcriptEl ? transcriptEl.value : "";
+          }
+          const res = await fetch("/api/live-lessons/" + encodeURIComponent(state.lesson.id) + "/recording", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body)
+          });
+          const data = await res.json().catch(() => null);
+          if (!res.ok) throw new Error(data && data.error || "recording_failed");
+          if (action === "start") setRecordingStatus("Gravação solicitada. Pasta do aluno: " + ((data.recording && data.recording.pasta_drive_nome) || "aluno"));
+          else if (action === "stop") setRecordingStatus("Gravação parada. O arquivo será processado pelo gravador configurado.");
+          else setRecordingStatus("Transcrição salva na aula.");
+        } catch (error) {
+          setRecordingStatus("Não foi possível executar agora. Confira se o Jibri/gravador está configurado.");
+        } finally {
+          buttons.forEach((btn) => { btn.disabled = false; });
+        }
+      };
+      document.querySelectorAll("[data-live-recording]").forEach((btn) => {
+        btn.addEventListener("click", () => runRecordingAction(btn.dataset.liveRecording || ""));
+      });
       const setStatusText = (label) => {
         document.querySelectorAll("[data-live-status-label],[data-live-status-side]").forEach((el) => { el.textContent = label; });
       };
