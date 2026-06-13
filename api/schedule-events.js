@@ -5,6 +5,7 @@ const { getSessionFromRequest } = require("../_lib/session");
 const { verifyFirebaseIdToken } = require("../_lib/firebase-id-token");
 const { DEFAULT_CONFIG } = require("../_lib/scheduling-firestore");
 const { fetchUserProfileByUid } = require("../_lib/firestore-user");
+const { supabaseFetch } = require("../_lib/supabase-rest");
 const {
   addDaysToDateKey,
   clampInt,
@@ -51,6 +52,113 @@ const normalizeRole = (role) => {
 const buildId = (prefix) => {
   const rand = crypto.randomBytes(6).toString("hex");
   return `${prefix}_${Date.now()}_${rand}`;
+};
+
+const slugifyRoomPart = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 72);
+
+const buildLiveRoomId = ({ eventId, alunoNome, professorNome, dateKey, startMin }) => {
+  const parts = [
+    "space-aula",
+    slugifyRoomPart(alunoNome) || "aluno",
+    slugifyRoomPart(professorNome) || "professor",
+    String(dateKey || "").replace(/-/g, ""),
+    String(startMin || 0),
+    String(eventId || "").slice(-6),
+  ].filter(Boolean);
+  return parts.join("-");
+};
+
+const createLiveLessonMirror = async ({ eventId, data, startMs, endMs } = {}) => {
+  if (!data || !data.alunoId) return null;
+  const roomId = buildLiveRoomId({
+    eventId,
+    alunoNome: data.alunoNome,
+    professorNome: data.professorNome,
+    dateKey: data.dateKey,
+    startMin: data.startMin,
+  });
+  const baseUrl = String(process.env.JITSI_BASE_URL || "https://meet.jit.si").replace(/\/+$/, "");
+  const now = new Date().toISOString();
+  const payload = {
+    aluno_id: data.alunoId || null,
+    aluno_nome: data.alunoNome || null,
+    professor_id: data.professorId || null,
+    professor_nome: data.professorNome || null,
+    titulo: data.alunoNome ? `Aula ao vivo - ${data.alunoNome}` : "Aula ao vivo Space",
+    status_aula: "agendada",
+    inicio: new Date(startMs).toISOString(),
+    fim: new Date(endMs).toISOString(),
+    timezone: "America/Sao_Paulo",
+    video_provider: "jitsi",
+    video_room_id: roomId,
+    video_room_url: `${baseUrl}/${encodeURIComponent(roomId)}`,
+    video_status: "ready",
+    origem: "plataforma",
+    plano: null,
+    created_at: now,
+    updated_at: now,
+  };
+
+  if (data.dateKey) payload.data_aula = data.dateKey;
+  if (data.observacoes) {
+    payload.observacoes = data.observacoes;
+    payload.briefing_pedagogico = data.observacoes;
+  }
+
+  const insertPayload = async (body) => {
+    const { data: inserted } = await supabaseFetch("/n8n_aulas_pedagogicas_space", {
+      method: "POST",
+      body,
+    });
+    const row = Array.isArray(inserted) ? inserted[0] : inserted;
+    return row && row.id != null ? String(row.id) : null;
+  };
+
+  try {
+    return await insertPayload(payload);
+  } catch (error) {
+    if (error?.code === "PGRST204" || /Could not find|column/i.test(String(error?.message || ""))) {
+      const fallbackPayload = {
+        aluno_id: payload.aluno_id,
+        aluno_nome: payload.aluno_nome,
+        professor_id: payload.professor_id,
+        professor_nome: payload.professor_nome,
+        status_aula: payload.status_aula,
+        inicio: payload.inicio,
+        fim: payload.fim,
+        timezone: payload.timezone,
+        video_provider: payload.video_provider,
+        video_room_id: payload.video_room_id,
+        video_room_url: payload.video_room_url,
+        video_status: payload.video_status,
+        origem: payload.origem,
+        data_aula: payload.data_aula,
+        created_at: payload.created_at,
+        updated_at: payload.updated_at,
+      };
+      try {
+        return await insertPayload(fallbackPayload);
+      } catch (fallbackError) {
+        error = fallbackError;
+      }
+    }
+    // The old agenda must keep working even if a legacy Supabase schema rejects a mirror field.
+    console.error("[schedule-events] live lesson mirror failed", {
+      message: error?.message,
+      code: error?.code,
+      details: error?.details,
+      hint: error?.hint,
+    });
+    return null;
+  }
 };
 
 const getUserNameById = async ({ idToken, uid }) => {
@@ -244,6 +352,7 @@ const decodeAulaDoc = (doc) => {
   const description = typeof fields.description === "string" ? fields.description : "";
   const guests = Array.isArray(fields.guests) ? fields.guests.filter((g) => typeof g === "string") : [];
   const documents = Array.isArray(fields.documents) ? fields.documents.filter((d) => d && typeof d === "object") : [];
+  const liveLessonId = fields.liveLessonId == null ? null : String(fields.liveLessonId || "").trim() || null;
 
   return {
     id,
@@ -262,6 +371,7 @@ const decodeAulaDoc = (doc) => {
     description,
     guests,
     documents,
+    liveLessonId,
   };
 };
 
@@ -1102,6 +1212,15 @@ module.exports = async (req, res) => {
           overrideEndMin: isWeeklyCustom ? occ?.endMin : undefined,
           repeatMeta,
         });
+
+        if (data.alunoId) {
+          const occStartMs = toUtcMsForDateKeyAndMinutes(data.dateKey, data.startMin, { tzOffsetMinutes });
+          const occEndMs = toUtcMsForDateKeyAndMinutes(data.dateKey, data.endMin, { tzOffsetMinutes });
+          if (occStartMs && occEndMs) {
+            const liveLessonId = await createLiveLessonMirror({ eventId: id, data, startMs: occStartMs, endMs: occEndMs });
+            if (liveLessonId) data.liveLessonId = liveLessonId;
+          }
+        }
 
         const mask = Object.keys(data);
         const encoded = encodeFields(data);

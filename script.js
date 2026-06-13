@@ -4509,9 +4509,60 @@ const refreshTeacherEvents = async ({ force = false } = {}) => {
           grupoRecorrenciaId: typeof evt.grupoRecorrenciaId === "string" ? evt.grupoRecorrenciaId : null,
           alunoId: typeof evt.alunoId === "string" ? evt.alunoId : null,
           professorId: typeof evt.professorId === "string" ? evt.professorId : "",
+          liveLessonId: evt.liveLessonId == null ? "" : String(evt.liveLessonId || ""),
+          liveUrl: evt.liveLessonId != null && String(evt.liveLessonId || "").trim()
+            ? `/aula/${encodeURIComponent(String(evt.liveLessonId || "").trim())}`
+            : "",
         };
       })
       .filter(Boolean);
+
+    try {
+      const liveRes = await fetchWithAuth("/api/live-lessons?scope=dashboard&limit=200");
+      if (liveRes.ok) {
+        const liveData = await liveRes.json().catch(() => null);
+        const liveEvents = (Array.isArray(liveData?.lessons) ? liveData.lessons : [])
+          .map(normalizeLiveLessonForTeacherDashboard)
+          .filter(Boolean)
+          .map((evt) => ({
+            id: `live:${evt.id}`,
+            type: "lesson",
+            dateKey: evt.dateKey,
+            startMin: evt.startMin,
+            endMin: evt.endMin,
+            title: evt.title || evt.alunoNome || "Aula",
+            description: "",
+            guests: [],
+            documents: [],
+            recorrente: false,
+            grupoRecorrenciaId: null,
+            alunoId: evt.alunoId || null,
+            professorId: evt.professorId || "",
+            liveLessonId: evt.id,
+            liveUrl: evt.liveUrl || `/aula/${encodeURIComponent(evt.id)}`,
+          }));
+        if (liveEvents.length) {
+          const byKey = new Map();
+          teacherEventsState.events.forEach((evt) => {
+            const key = `${evt.alunoId || ""}:${evt.professorId || ""}:${evt.dateKey}:${evt.startMin}`;
+            byKey.set(key, evt);
+          });
+          liveEvents.forEach((evt) => {
+            const key = `${evt.alunoId || ""}:${evt.professorId || ""}:${evt.dateKey}:${evt.startMin}`;
+            if (byKey.has(key)) {
+              const existing = byKey.get(key);
+              existing.liveLessonId = evt.liveLessonId;
+              existing.liveUrl = evt.liveUrl;
+            } else {
+              byKey.set(key, evt);
+            }
+          });
+          teacherEventsState.events = Array.from(byKey.values());
+        }
+      }
+    } catch (error) {
+      // Calendar can still render the legacy agenda if the live classroom API is unavailable.
+    }
     teacherEventsState.rangeKey = rangeKey;
     teacherEventsState.lastLoadedAt = Date.now();
 
@@ -4849,6 +4900,8 @@ const getLessonEvents = () => {
           grupoRecorrenciaId: evt.grupoRecorrenciaId || null,
           alunoId: evt.alunoId || null,
           professorId: evt.professorId || "",
+          liveLessonId: evt.liveLessonId || "",
+          liveUrl: evt.liveUrl || "",
         };
       })
       .filter(Boolean);
@@ -4878,6 +4931,8 @@ const getManualEvents = () => {
           grupoRecorrenciaId: evt.grupoRecorrenciaId || null,
           alunoId: evt.alunoId || null,
           professorId: evt.professorId || "",
+          liveLessonId: evt.liveLessonId || "",
+          liveUrl: evt.liveUrl || "",
         };
       })
       .filter(Boolean);
@@ -5165,6 +5220,7 @@ const renderTeacherCalendarViewportDay = (date) => {
         type="button"
         data-teacher-cal-event-type="${event.type}"
         data-teacher-cal-event-id="${escapeHtml(event.id)}"
+        data-teacher-cal-live-url="${escapeHtml(event.liveUrl || "")}"
       >
         <span class="teacher-cal-event-title">${escapeHtml(event.title)}</span>
         <span class="teacher-cal-event-time">${escapeHtml(timeLabel)}</span>
@@ -5390,6 +5446,7 @@ const renderTeacherCalendarViewportWeek = (focusDate) => {
               type="button"
               data-teacher-cal-event-type="${event.type}"
               data-teacher-cal-event-id="${escapeHtml(event.id)}"
+              data-teacher-cal-live-url="${escapeHtml(event.liveUrl || "")}"
             >
               <span class="teacher-cal-event-title">${escapeHtml(event.title)}</span>
               <span class="teacher-cal-event-time">${escapeHtml(timeLabel)}</span>
@@ -5460,6 +5517,7 @@ const renderTeacherCalendarViewportMonth = (focusDate) => {
             type="button"
             data-teacher-cal-event-type="${event.type}"
             data-teacher-cal-event-id="${escapeHtml(event.id)}"
+            data-teacher-cal-live-url="${escapeHtml(event.liveUrl || "")}"
           >
             ${escapeHtml(time)}
           </button>
@@ -22291,6 +22349,11 @@ document.addEventListener("click", (event) => {
     ) {
       const type = calEvent.getAttribute("data-teacher-cal-event-type") || "";
       const id = calEvent.getAttribute("data-teacher-cal-event-id") || "";
+      const liveUrl = String(calEvent.getAttribute("data-teacher-cal-live-url") || "").trim();
+      if (type === "lesson" && liveUrl) {
+        window.location.href = liveUrl;
+        return;
+      }
       if (type === "lesson" || type === "manual") {
         openTeacherEventModal({ type, id });
         return;
