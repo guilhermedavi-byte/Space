@@ -28,8 +28,9 @@ module.exports = async (req, res) => {
     sendJson(res, 401, { error: "unauthorized" });
     return;
   }
-  if (normalizeRole(session.role) !== "teacher") {
-    sendJson(res, 403, { error: "teacher_only" });
+  const role = normalizeRole(session.role);
+  if (role !== "teacher" && role !== "admin") {
+    sendJson(res, 403, { error: "teacher_or_admin_only" });
     return;
   }
 

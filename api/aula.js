@@ -49,13 +49,14 @@ const statusLabel = (status) => {
 const buildHtml = ({ user, lesson, joinData, canEdit }) => {
   const role = normalizeRole(user.role);
   const isTeacher = role === "teacher";
+  const isAdmin = role === "admin";
   const title = lesson.titulo || `Aula ${lesson.aluno_nome || ""}`.trim() || "Sala de aula";
   const fallback = String(lesson.google_meet_link_fallback || "").trim();
   const hasRealRoom = ["iframe", "jitsi-external-api"].includes(joinData.embedKind) && joinData.joinUrl;
   const usesJitsiApi = joinData.embedKind === "jitsi-external-api" && joinData.externalApiUrl && joinData.domain && joinData.roomId;
   const isCancelled = lesson.status_aula === "cancelada";
   const isEnded = ["realizada", "falta", "remarcada"].includes(lesson.status_aula);
-  const canTeach = Boolean(isTeacher && canEdit);
+  const canTeach = Boolean((isTeacher || isAdmin) && canEdit);
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -172,7 +173,7 @@ const buildHtml = ({ user, lesson, joinData, canEdit }) => {
             </div>
           </article>
           ${
-            isTeacher
+            isTeacher || isAdmin
               ? `<article class="live-class-side-card">
                   <p class="live-class-side-title">Briefing pedagogico</p>
                   <div class="live-class-info">
