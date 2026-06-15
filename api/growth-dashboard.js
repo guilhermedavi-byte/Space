@@ -2,6 +2,7 @@ const { getSessionFromRequest } = require("../_lib/session");
 const { readJsonBody, sendJson } = require("../_lib/http");
 const { getGoogleAccessToken } = require("../_lib/google-service-account");
 const { calculateGrowthForecast3Parts, getDealValue: getDealValueForecast, normalizeKey: normalizeKeyForecast } = require("../_lib/forecast-service");
+const { triggerContractSignedOnboarding } = require("./_lib/pedagogico-n8n");
 const {
   decodeFields,
   encodeFields,
@@ -1888,18 +1889,18 @@ const handleZapSignWebhook = async (req, res) => {
     return;
   }
 
-  const match = docs
+  const matchRow = docs
     .map((doc) => {
       if (!doc || typeof doc !== "object") return null;
       const id = getDocIdFromName(doc.name);
       if (!id) return null;
       const fields = decodeFields(doc);
       const stored = typeof fields.zapsignToken === "string" ? fields.zapsignToken : "";
-      return stored === token ? id : null;
+      return stored === token ? { id, fields } : null;
     })
     .filter(Boolean)[0];
 
-  if (!match) {
+  if (!matchRow) {
     sendJson(res, 200, { ok: true, ignored: true });
     return;
   }
@@ -1912,7 +1913,7 @@ const handleZapSignWebhook = async (req, res) => {
 
   try {
     const patch = await firestorePatchDocumentWithAccessToken({
-      docPath: `contratos/${encodeURIComponent(match)}`,
+      docPath: `contratos/${encodeURIComponent(matchRow.id)}`,
       accessToken,
       data: patchData,
       updateMaskPaths: Object.keys(patchData),
@@ -1924,6 +1925,27 @@ const handleZapSignWebhook = async (req, res) => {
       }
       throw new Error("firestore_patch_failed");
     }
+    const contrato = matchRow.fields || {};
+    triggerContractSignedOnboarding(
+      {
+        event: "contract_signed",
+        source: "zapsign",
+        student_id: contrato.alunoId || contrato.studentId || contrato.email || contrato.whatsapp || matchRow.id,
+        contract_id: matchRow.id,
+        aluno_nome: contrato.nomeCompleto || contrato.nome || "",
+        telefone: contrato.whatsapp || contrato.telefone || "",
+        email: contrato.email || "",
+        plano: contrato.contrato || contrato.plano || "",
+        valor: contrato.valorOriginal || contrato.valor || "",
+        status_contrato: "assinado",
+        assinou_em: patchData.assinadoEm.toISOString(),
+        pagamento_status: contrato.pagamentoStatus || contrato.statusFinanceiro || "",
+        metadata: { zapsign: body, contrato },
+      },
+      { source: "zapsign" }
+    ).catch((error) => {
+      console.error("[api] zapsign pedagogico onboarding failed", error);
+    });
     sendJson(res, 200, { ok: true });
   } catch (error) {
     // eslint-disable-next-line no-console

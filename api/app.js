@@ -125,6 +125,7 @@ const buildAppHtml = ({ sessionJson, role, roleSlug, templateHtml, initialPanel 
     ${platformVisible}
     ${modalHtml}
     <script src="script.js"></script>
+    <script src="pedagogico-n8n-ui.js"></script>
   </body>
 </html>`;
 };

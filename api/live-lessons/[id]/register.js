@@ -1,6 +1,7 @@
 const { readJsonBody, sendJson } = require("../../_lib/http");
 const { getSessionFromRequest } = require("../../_lib/session");
 const { fetchLessonById, canEditLesson, createLessonRegister, normalizeRole } = require("../../_lib/live-lessons");
+const { triggerLessonWorkflow } = require("../../_lib/pedagogico-n8n");
 
 const labelForStatus = (status) => {
   const s = String(status || "").toLowerCase();
@@ -14,6 +15,17 @@ const getRouteId = (req) => {
   if (fromQuery) return fromQuery;
   const match = String(req.url || "").match(/\/live-lessons\/([^/?#]+)\/register/);
   return match ? decodeURIComponent(match[1]) : "";
+};
+
+const n8nConfigForStatus = (status) => {
+  const s = String(status || "").toLowerCase();
+  if (s === "falta") {
+    return { workflow: "pedagogico_registro_falta", envName: "N8N_PEDAGOGICO_REGISTRO_FALTA_URL" };
+  }
+  if (s === "remarcada") {
+    return { workflow: "pedagogico_remarcacao", envName: "N8N_PEDAGOGICO_REMARCACAO_URL" };
+  }
+  return { workflow: "pedagogico_registro_aula", envName: "N8N_PEDAGOGICO_REGISTRO_AULA_URL" };
 };
 
 module.exports = async (req, res) => {
@@ -53,7 +65,32 @@ module.exports = async (req, res) => {
       return;
     }
     const result = await createLessonRegister({ lesson, session, payload: { ...payload, status } });
-    sendJson(res, 200, { ...result, label: labelForStatus(status) });
+    const cfg = n8nConfigForStatus(status);
+    const n8nPayload = {
+      aula_id: lesson.id,
+      onboarding_id: payload?.onboarding_id || lesson.onboarding_id || "",
+      conteudo_trabalhado: payload?.conteudo_trabalhado || "",
+      desempenho_aluno: payload?.desempenho_aluno || payload?.desempenho || "",
+      humor_aluno: payload?.humor_aluno || payload?.humor || "",
+      estrelas: Number(payload?.estrelas || payload?.nota || 0) || null,
+      observacoes: payload?.observacoes || "",
+      homework: payload?.homework || payload?.tarefa || "",
+      proxima_recomendacao: payload?.proxima_recomendacao || payload?.proximo_foco || "",
+      motivo_falta: payload?.motivo_falta || "",
+      responsavel_falta: payload?.responsavel_falta || "",
+      reposicao_necessaria: Boolean(payload?.reposicao_necessaria),
+      nova_data_aula: payload?.nova_data_aula || payload?.nova_data || "",
+      tipo: status === "remarcada" ? payload?.tipo || "remarcacao" : undefined,
+      motivo_remarcacao: payload?.motivo_remarcacao || payload?.motivo_falta || "",
+    };
+    const n8n = await triggerLessonWorkflow({
+      ...cfg,
+      lesson,
+      onboardingId: n8nPayload.onboarding_id,
+      payload: n8nPayload,
+      eventKey: `pedagogico:${cfg.workflow}:${lesson.id}:${result?.register?.id || status}`,
+    }).catch((error) => ({ ok: false, error: error?.message || "n8n_failed" }));
+    sendJson(res, 200, { ...result, n8n, label: labelForStatus(status) });
   } catch (error) {
     console.error("[api] live lesson register failed", error);
     sendJson(res, 500, { error: "register_failed" });
