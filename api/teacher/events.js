@@ -268,8 +268,8 @@ module.exports = async (req, res) => {
         const dateKey = String(body?.dateKey || existingFields.dateKey || "").trim();
         const startMin = clampInt(body?.startMin ?? existingFields.startMin, 0, 1440);
         const endMin = clampInt(body?.endMin ?? existingFields.endMin, 0, 1440);
-        const title = String(body?.title ?? existingFields.title || "").trim();
-        const description = String(body?.description ?? existingFields.description || "");
+        const title = String(body?.title ?? existingFields.title ?? "").trim();
+        const description = String(body?.description ?? existingFields.description ?? "");
         const guests = body?.guests ? normalizeGuestIds(body.guests) : normalizeGuestIds(existingFields.guests);
         const documents = body?.documents ? normalizeDocuments(body.documents) : normalizeDocuments(existingFields.documents);
 

@@ -18869,3 +18869,21 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
     grid-template-columns: 1fr;
   }
 }
+/* Operação pedagógica n8n */
+.pedagogico-list{display:grid;gap:18px}
+.pedagogico-section{display:grid;gap:10px}
+.pedagogico-section-title{margin:0;color:#f4f7fb;font-size:14px;font-weight:900}
+.pedagogico-section-empty{padding:14px;border:1px dashed rgba(255,255,255,.14);border-radius:14px;color:#98a4b7;font-size:13px}
+.pedagogico-item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:center;width:100%;padding:16px;border:1px solid rgba(255,255,255,.1);border-radius:16px;background:rgba(255,255,255,.035)}
+.pedagogico-item-actions{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:wrap}
+.pedagogico-action-link{display:inline-flex;align-items:center;border:1px solid rgba(255,255,255,.14);border-radius:999px;background:rgba(255,255,255,.06);color:#fff;padding:7px 10px;font:inherit;font-size:11px;font-weight:850;text-decoration:none;cursor:pointer}
+.pedagogico-action-link:hover{border-color:rgba(255,91,82,.65);background:rgba(255,91,82,.12)}
+.admin-ped-ops-summary{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:16px}
+.admin-ped-ops-summary-card{display:grid;gap:7px;padding:13px;border:1px solid rgba(255,255,255,.1);border-radius:14px;background:rgba(255,255,255,.035)}
+.admin-ped-ops-summary-card span{color:#98a4b7;font-size:11px;font-weight:750}
+.admin-ped-ops-summary-card strong{color:#fff;font-size:20px}
+.admin-student-pedagogical-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.admin-student-pedagogical-grid .admin-student-personal-row{padding:11px;border:1px solid rgba(255,255,255,.09);border-radius:12px;background:rgba(255,255,255,.025)}
+.admin-student-briefing{margin-top:12px;line-height:1.55;color:#c7cfda}
+@media(max-width:1100px){.admin-ped-ops-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:720px){.pedagogico-item{grid-template-columns:1fr}.pedagogico-item-actions{justify-content:flex-start}.admin-ped-ops-summary,.admin-student-pedagogical-grid{grid-template-columns:1fr}}

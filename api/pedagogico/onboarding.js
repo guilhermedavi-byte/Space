@@ -40,7 +40,11 @@ module.exports = async (req, res) => {
     }
     try {
       const result = await triggerContractSignedOnboarding(body, { source: "platform" });
-      sendJson(res, 200, { ok: true, ...result });
+      sendJson(res, 200, {
+        ok: true,
+        ...result,
+        warning: result?.n8n?.configured === false ? "Webhook de onboarding não configurado" : undefined,
+      });
     } catch (error) {
       console.error("[pedagogico] onboarding trigger failed", error);
       sendJson(res, 500, { error: error?.code || "onboarding_trigger_failed" });

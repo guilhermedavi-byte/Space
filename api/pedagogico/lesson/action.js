@@ -6,15 +6,15 @@ const { triggerLessonWorkflow } = require("../../_lib/pedagogico-n8n");
 const actionConfig = {
   registro_aula: {
     workflow: "pedagogico_registro_aula",
-    envName: "N8N_PEDAGOGICO_REGISTRO_AULA_URL",
+    envName: ["N8N_PEDAGOGICO_REGISTRO_AULA_WEBHOOK_URL", "N8N_PEDAGOGICO_REGISTRO_AULA_URL"],
   },
   falta: {
     workflow: "pedagogico_registro_falta",
-    envName: "N8N_PEDAGOGICO_REGISTRO_FALTA_URL",
+    envName: ["N8N_PEDAGOGICO_REGISTRO_FALTA_WEBHOOK_URL", "N8N_PEDAGOGICO_REGISTRO_FALTA_URL"],
   },
   remarcacao: {
     workflow: "pedagogico_remarcacao",
-    envName: "N8N_PEDAGOGICO_REMARCACAO_URL",
+    envName: ["N8N_PEDAGOGICO_REMARCACAO_AULA_WEBHOOK_URL", "N8N_PEDAGOGICO_REMARCACAO_URL"],
   },
 };
 
@@ -69,7 +69,11 @@ module.exports = async (req, res) => {
       payload,
       eventKey: `pedagogico:${action}:${aulaId}:${JSON.stringify(payload)}`,
     });
-    sendJson(res, 200, { ok: true, n8n: result });
+    sendJson(res, 200, {
+      ok: true,
+      n8n: result,
+      warning: result?.configured === false ? "Webhook pedagógico não configurado" : undefined,
+    });
   } catch (error) {
     console.error("[pedagogico] lesson action failed", error);
     sendJson(res, 500, { error: "lesson_action_failed" });

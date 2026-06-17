@@ -21,13 +21,22 @@ const getRouteId = (req) => {
 const n8nConfigForStatus = (status) => {
   const s = String(status || "").toLowerCase();
   if (s === "falta") {
-    return { workflow: "pedagogico_registro_falta", envName: "N8N_PEDAGOGICO_REGISTRO_FALTA_URL" };
+    return {
+      workflow: "pedagogico_registro_falta",
+      envName: ["N8N_PEDAGOGICO_REGISTRO_FALTA_WEBHOOK_URL", "N8N_PEDAGOGICO_REGISTRO_FALTA_URL"],
+    };
   }
   if (s === "remarcada") {
-    return { workflow: "pedagogico_remarcacao", envName: "N8N_PEDAGOGICO_REMARCACAO_URL" };
+    return {
+      workflow: "pedagogico_remarcacao",
+      envName: ["N8N_PEDAGOGICO_REMARCACAO_AULA_WEBHOOK_URL", "N8N_PEDAGOGICO_REMARCACAO_URL"],
+    };
   }
   if (s === "cancelada") return null;
-  return { workflow: "pedagogico_registro_aula", envName: "N8N_PEDAGOGICO_REGISTRO_AULA_URL" };
+  return {
+    workflow: "pedagogico_registro_aula",
+    envName: ["N8N_PEDAGOGICO_REGISTRO_AULA_WEBHOOK_URL", "N8N_PEDAGOGICO_REGISTRO_AULA_URL"],
+  };
 };
 
 module.exports = async (req, res) => {

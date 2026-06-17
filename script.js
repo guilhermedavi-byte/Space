@@ -7061,8 +7061,10 @@ const normalizeLiveLessonForTeacherDashboard = (lesson) => {
     id: ui.id,
     professorId: ui.professorId,
     professorNome: ui.professor || null,
+    professorEmail: String(lesson.professor_email || "").trim(),
     alunoId: ui.alunoId || null,
     alunoNome: ui.aluno || null,
+    onboardingId: String(lesson.onboarding_id || ""),
     dateKey: ui.dateKey,
     startMin: ui.startMin,
     endMin: ui.endMin,
@@ -7087,7 +7089,15 @@ const normalizeLiveLessonForTeacherDashboard = (lesson) => {
     })(),
     alunoPerfil: String(lesson.briefing_pedagogico || "").trim(),
     alunoObjetivo: objetivo,
-    liveUrl: ui.liveUrl,
+    liveUrl:
+      String(
+        lesson.link_aula ||
+          lesson.video_join_url_professor ||
+          lesson.video_room_url ||
+          lesson.google_meet_link_fallback ||
+          ui.liveUrl ||
+          ""
+      ),
   };
 };
 
@@ -7249,6 +7259,7 @@ const sanitizeLessonLogDraft = (raw = {}) => {
     evolucaoNota: clampInt(Number(src.evolucaoNota ?? src.evolucao ?? 0), 0, 5, 0),
     confiancaNota: clampInt(Number(src.confiancaNota ?? src.confianca ?? 0), 0, 5, 0),
     humorAluno: String(src.humorAluno || "").trim().toLowerCase(),
+    homework: String(src.homework || "").trim(),
     proximaAula: String(src.proximaAula || "").trim(),
     avisosCoordenacao: Array.isArray(src.avisosCoordenacao)
       ? src.avisosCoordenacao.map((v) => String(v || "").trim()).filter(Boolean)
@@ -7257,7 +7268,10 @@ const sanitizeLessonLogDraft = (raw = {}) => {
         : [],
     observacoesInternas: String(src.observacoesInternas || "").trim(),
     motivoFalta: String(src.motivoFalta || "").trim().toLowerCase(),
+    responsavelFalta: String(src.responsavelFalta || "aluno").trim().toLowerCase(),
+    reposicaoNecessaria: String(src.reposicaoNecessaria || "sim").trim().toLowerCase(),
     motivoRemarcacao: String(src.motivoRemarcacao || "").trim().toLowerCase(),
+    tipoMovimento: String(src.tipoMovimento || "remarcacao").trim().toLowerCase(),
     novaDataRemarcacao: String(src.novaDataRemarcacao || src.novaData || "").trim(),
     horarioInicioRemarcacao: String(src.horarioInicioRemarcacao || src.novoHorarioInicio || src.novoInicio || "").trim(),
     horarioFimRemarcacao: String(src.horarioFimRemarcacao || src.novoHorarioFim || src.novoFim || "").trim(),
@@ -7383,6 +7397,11 @@ const renderRealizadaFieldsHtml = (draft = {}) => {
     </div>
 
     <div class="ped-field">
+      <div class="ped-label">Homework</div>
+      <input class="ped-in" type="text" data-ped-field="homework" value="${escapeHtml(String(d.homework || ""))}" placeholder="Atividade para o aluno..." />
+    </div>
+
+    <div class="ped-field">
       <div class="ped-label">Próxima aula</div>
       <input class="ped-in" type="text" data-ped-field="proximaAula" value="${escapeHtml(String(d.proximaAula || ""))}" placeholder="Tema para a próxima aula..." />
     </div>
@@ -7413,6 +7432,40 @@ const renderFaltaAlunoFieldsHtml = (draft = {}) => {
         <select class="ped-sel" data-ped-field="motivoFalta">
           <option value="">Selecione</option>
           ${renderPedSelectOptions(PED_MOTIVO_FALTA, motivo)}
+        </select>
+        <span class="ped-arr">▼</span>
+      </div>
+    </div>
+
+    <div class="ped-form-group ped-field">
+      <div class="ped-label">Responsável pela falta</div>
+      <div class="ped-sel-wrap">
+        <select class="ped-sel" data-ped-field="responsavelFalta">
+          ${renderPedSelectOptions(
+            [
+              ["aluno", "Aluno"],
+              ["professor", "Professor"],
+              ["escola", "Escola"],
+              ["outro", "Outro"],
+            ],
+            String(d.responsavelFalta || "aluno")
+          )}
+        </select>
+        <span class="ped-arr">▼</span>
+      </div>
+    </div>
+
+    <div class="ped-form-group ped-field">
+      <div class="ped-label">Reposição necessária</div>
+      <div class="ped-sel-wrap">
+        <select class="ped-sel" data-ped-field="reposicaoNecessaria">
+          ${renderPedSelectOptions(
+            [
+              ["sim", "Sim"],
+              ["nao", "Não"],
+            ],
+            String(d.reposicaoNecessaria || "sim")
+          )}
         </select>
         <span class="ped-arr">▼</span>
       </div>
@@ -7462,6 +7515,22 @@ const renderRemarcadaFieldsHtml = (draft = {}) => {
   ];
 
   return `
+    <div class="ped-form-group ped-field">
+      <div class="ped-label">Tipo de movimento</div>
+      <div class="ped-sel-wrap">
+        <select class="ped-sel" data-ped-field="tipoMovimento">
+          ${renderPedSelectOptions(
+            [
+              ["remarcacao", "Remarcação"],
+              ["reposicao", "Reposição"],
+            ],
+            String(d.tipoMovimento || "remarcacao")
+          )}
+        </select>
+        <span class="ped-arr">▼</span>
+      </div>
+    </div>
+
     <div class="ped-form-group ped-field">
       <div class="ped-label">Motivo da remarcação</div>
       <div class="ped-sel-wrap">
@@ -7934,11 +8003,15 @@ const readPedagogicoDraftFromDom = () => {
     evolucaoNota: clampInt(Number(getField("evolucaoNota") || 0), 0, 5, 0),
     confiancaNota: clampInt(Number(getField("confiancaNota") || 0), 0, 5, 0),
     humorAluno: getField("humorAluno").trim().toLowerCase(),
+    homework: getField("homework").trim(),
     proximaAula: getField("proximaAula").trim(),
     avisosCoordenacao,
     observacoesInternas: getField("observacoesInternas").trim(),
     motivoFalta: getField("motivoFalta").trim().toLowerCase(),
+    responsavelFalta: getField("responsavelFalta").trim().toLowerCase(),
+    reposicaoNecessaria: getField("reposicaoNecessaria").trim().toLowerCase(),
     motivoRemarcacao: getField("motivoRemarcacao").trim().toLowerCase(),
+    tipoMovimento: getField("tipoMovimento").trim().toLowerCase(),
     novaDataRemarcacao: (getField("novaData").trim() || getField("novaDataRemarcacao").trim()),
     horarioInicioRemarcacao: (getField("novoInicio").trim() || getField("horarioInicioRemarcacao").trim()),
     horarioFimRemarcacao: (getField("novoFim").trim() || getField("horarioFimRemarcacao").trim()),
@@ -8042,41 +8115,51 @@ const savePedagogicoLog = async ({ autosave = false } = {}) => {
   try {
     const liveLessonId = String(lesson.supabaseLessonId || (lesson.source === "supabase" ? lesson.id : "") || "");
     const isSupabaseLesson = Boolean(liveLessonId);
-    const supabaseStatus =
-      draft.statusAula === "falta_aluno"
-        ? "falta"
-        : draft.statusAula === "remarcada"
-          ? "remarcada"
-          : draft.statusAula === "cancelada"
-            ? "cancelada"
-            : "realizada";
     const requestUrl = isSupabaseLesson
-      ? `/api/live-lessons/${encodeURIComponent(liveLessonId)}/register`
+      ? draft.statusAula === "falta_aluno"
+        ? "/api/pedagogico/registro-falta"
+        : draft.statusAula === "remarcada"
+          ? "/api/pedagogico/remarcacao-aula"
+          : draft.statusAula === "cancelada"
+            ? `/api/live-lessons/${encodeURIComponent(liveLessonId)}/register`
+          : "/api/pedagogico/registro-aula"
       : "/api/lesson-logs";
     const requestPayload = isSupabaseLesson
-      ? {
-          status: supabaseStatus,
-          conteudo_trabalhado: draft.conteudoTrabalhado,
-          gramatica_trabalhada: draft.gramaticaTrabalhada,
-          vocabulario_trabalhado: draft.vocabularioTrabalhado,
-          pronuncia_conversacao: draft.pronunciaConversacao,
-          atividade_realizada: draft.atividadeRealizada,
-          materiais_usados: draft.materiaisUsados,
-          desempenho_aluno: draft.evolucaoNota ? `${draft.evolucaoNota}/5` : "",
-          humor_aluno: draft.humorAluno,
-          humor: draft.humorAluno,
-          estrelas: draft.engajamentoNota || null,
-          engajamento: draft.engajamentoNota ? `${draft.engajamentoNota}/5` : "",
-          confianca: draft.confiancaNota ? `${draft.confiancaNota}/5` : "",
-          observacoes: draft.observacoesInternas || draft.observacao,
-          proxima_recomendacao: draft.proximaAula,
-          proximo_foco: draft.proximaAula,
-          motivo_falta: draft.motivoFalta,
-          motivo_remarcacao: draft.motivoRemarcacao,
-          nova_data: draft.novaDataRemarcacao || null,
-          nova_data_aula: draft.novaDataRemarcacao || null,
-          tipo: draft.statusAula === "remarcada" ? "remarcacao" : "",
-        }
+      ? draft.statusAula === "falta_aluno"
+        ? {
+            aula_id: liveLessonId,
+            onboarding_id: lesson.onboardingId || "",
+            motivo_falta: draft.motivoFalta,
+            responsavel_falta: draft.responsavelFalta || "aluno",
+            observacoes: draft.observacao,
+            reposicao_necessaria: draft.reposicaoNecessaria !== "nao",
+          }
+        : draft.statusAula === "remarcada"
+          ? {
+              aula_id: liveLessonId,
+              onboarding_id: lesson.onboardingId || "",
+              nova_data_aula: `${draft.novaDataRemarcacao}T${draft.horarioInicioRemarcacao}:00-03:00`,
+              motivo_remarcacao: draft.motivoRemarcacao,
+              tipo_movimento: draft.tipoMovimento || "remarcacao",
+              observacoes: draft.observacao,
+            }
+          : draft.statusAula === "cancelada"
+            ? {
+                status: "cancelada",
+                onboarding_id: lesson.onboardingId || "",
+                observacoes: draft.observacao,
+              }
+          : {
+              aula_id: liveLessonId,
+              onboarding_id: lesson.onboardingId || "",
+              conteudo_aula: draft.conteudoTrabalhado,
+              observacoes: draft.observacoesInternas || draft.observacao,
+              desempenho_aluno: draft.evolucaoNota ? `${draft.evolucaoNota}/5` : "",
+              humor_aluno: draft.humorAluno,
+              estrelas: draft.engajamentoNota || null,
+              homework: draft.homework,
+              proxima_aula_recomendada: draft.proximaAula,
+            }
       : payload;
     const res = await fetchWithAuth(requestUrl, {
       method: "POST",
@@ -8093,8 +8176,10 @@ const savePedagogicoLog = async ({ autosave = false } = {}) => {
           : "";
     pedagogicoDirty = false;
     setPedagogicoAutosaveLabel("Salvo");
-    if (!autosave) setPedagogicoStatus("Registro salvo.", "success");
-    window.setTimeout(() => setPedagogicoStatus(""), 1200);
+    if (!autosave) {
+      setPedagogicoStatus(data?.warning ? `Registro salvo. ${data.warning}.` : "Registro salvo.", data?.warning ? "warn" : "success");
+    }
+    window.setTimeout(() => setPedagogicoStatus(""), data?.warning ? 5000 : 1200);
 
     const stored = { id: logId, eventId: lesson.id, statusAula: draft.statusAula, payload: { ...payload } };
     pedagogicoState.logsByEventId.set(lesson.id, stored);
@@ -8103,6 +8188,7 @@ const savePedagogicoLog = async ({ autosave = false } = {}) => {
     // Se remarcada, criar novo evento na agenda (apenas no save manual, não no autosave).
     if (
       !autosave &&
+      !isSupabaseLesson &&
       draft.statusAula === "remarcada" &&
       draft.novaDataRemarcacao &&
       draft.horarioInicioRemarcacao &&
@@ -8186,7 +8272,7 @@ const renderTeacherPedagogico = async ({ silent = false } = {}) => {
     const [eventsResult, logsResult, liveResult] = await Promise.allSettled([
       fetchWithAuth("/api/schedule-events"),
       fetchWithAuth("/api/lesson-logs"),
-      fetchWithAuth("/api/live-lessons?scope=dashboard&include_records=1&limit=200"),
+      fetchWithAuth("/api/live-lessons?scope=pedagogico&include_records=1&limit=500"),
     ]);
 
     const eventsRes = eventsResult.status === "fulfilled" ? eventsResult.value : null;
@@ -8244,10 +8330,14 @@ const renderTeacherPedagogico = async ({ silent = false } = {}) => {
           evolucaoNota: Number.parseInt(String(record.desempenho_aluno || ""), 10) || 0,
           confiancaNota: Number.parseInt(String(record.confianca || ""), 10) || 0,
           humorAluno: record.humor_aluno || record.humor || "",
+          homework: record.homework || "",
           proximaAula: record.proxima_recomendacao || record.proximo_foco || "",
           observacoesInternas: record.observacoes || "",
           motivoFalta: record.motivo_falta || "",
+          responsavelFalta: record.responsavel_falta || "aluno",
+          reposicaoNecessaria: record.reposicao_necessaria === false ? "nao" : "sim",
           motivoRemarcacao: record.motivo_remarcacao || "",
+          tipoMovimento: record.tipo_movimento || record.tipo_remarcacao || "remarcacao",
           novaDataRemarcacao: record.nova_data_aula || record.nova_data || "",
         },
       });
@@ -8283,6 +8373,8 @@ const renderTeacherPedagogico = async ({ silent = false } = {}) => {
         description: String(evt.tema || "Aula ao vivo"),
         source: "supabase",
         liveUrl: evt.liveUrl || `/aula/${encodeURIComponent(evt.id)}`,
+        status: evt.status || "agendada",
+        onboardingId: evt.onboardingId || "",
       }))
       .filter((evt) => evt.id && isValidDateKey(evt.dateKey) && evt.endMin > evt.startMin);
 
@@ -8316,7 +8408,12 @@ const renderTeacherPedagogico = async ({ silent = false } = {}) => {
     pedagogicoState.lastLoadedAt = Date.now();
 
     renderTeacherPedagogicoList();
-    if (!silent) setPedagogicoStatus("");
+    if (!silent) {
+      setPedagogicoStatus(
+        liveData?.degraded ? "A lista carregou em modo seguro; alguns dados podem estar indisponíveis." : "",
+        liveData?.degraded ? "warn" : ""
+      );
+    }
   } catch (error) {
     console.error("[pedagogico] load failed:", error);
     if (pedagogicoError instanceof HTMLElement) pedagogicoError.hidden = false;
@@ -8341,8 +8438,7 @@ const renderTeacherPedagogicoList = () => {
     return;
   }
 
-  const html = lessons
-    .map((lesson) => {
+  const renderLesson = (lesson) => {
       const start = buildDateFromDateKeyAndMinutes(lesson.dateKey, lesson.startMin);
       const isFuture = start ? start.getTime() > now : false;
       const log = logsByEventId.get(lesson.id) || null;
@@ -8356,20 +8452,60 @@ const renderTeacherPedagogicoList = () => {
       const badgeClass = isFuture ? "is-blue" : isDone ? "is-green" : "is-yellow";
       const rowClass = isFuture ? "is-future" : isDone ? "is-done" : "is-pending";
       const dateLabel = `${formatPedagogicoDate(lesson.dateKey)} · ${formatHmFromMinutes(lesson.startMin)}–${formatHmFromMinutes(lesson.endMin)}`;
-      const disabledAttr = isFuture ? "disabled" : "";
-
       return `
-        <button type="button" class="pedagogico-item ${rowClass}" data-pedagogico-item="${escapeHtml(lesson.id)}" ${disabledAttr}>
+        <article class="pedagogico-item ${rowClass}" data-pedagogico-card="${escapeHtml(lesson.id)}">
           <div class="pedagogico-item-main">
             <div class="pedagogico-item-date">${escapeHtml(dateLabel)}</div>
             <div class="pedagogico-item-student">${escapeHtml(lesson.title)}</div>
-            <div class="pedagogico-item-title">${escapeHtml(lesson.description || "Aula")}</div>
+            <div class="pedagogico-item-title">${escapeHtml(lesson.description || "Aula")} · ${escapeHtml(String(lesson.status || badgeText))}</div>
           </div>
-          <span class="pedagogico-badge ${badgeClass}">${badgeText}</span>
-        </button>
+          <div class="pedagogico-item-actions">
+            <span class="pedagogico-badge ${badgeClass}">${badgeText}</span>
+            ${
+              lesson.liveUrl
+                ? `<a class="pedagogico-action-link" href="${escapeHtml(lesson.liveUrl)}" target="_blank" rel="noopener">Abrir aula</a>`
+                : ""
+            }
+            ${
+              !isFuture
+                ? `
+                  <button type="button" class="pedagogico-action-link" data-pedagogico-action="realizada" data-pedagogico-item="${escapeHtml(lesson.id)}">Registrar aula</button>
+                  <button type="button" class="pedagogico-action-link" data-pedagogico-action="falta_aluno" data-pedagogico-item="${escapeHtml(lesson.id)}">Falta</button>
+                  <button type="button" class="pedagogico-action-link" data-pedagogico-action="remarcada" data-pedagogico-item="${escapeHtml(lesson.id)}">Remarcar</button>
+                `
+                : ""
+            }
+          </div>
+        </article>
       `;
+  };
+
+  const todayKey = dateKeyFromIso(new Date().toISOString());
+  const today = lessons.filter((lesson) => lesson.dateKey === todayKey);
+  const upcoming = lessons.filter((lesson) => lesson.dateKey > todayKey);
+  const pendingLessons = lessons.filter((lesson) => {
+    const start = buildDateFromDateKeyAndMinutes(lesson.dateKey, lesson.startMin);
+    return start && start.getTime() <= now && !logsByEventId.has(lesson.id);
+  });
+  const history = lessons
+    .filter((lesson) => {
+      const start = buildDateFromDateKeyAndMinutes(lesson.dateKey, lesson.startMin);
+      return start && start.getTime() < now && logsByEventId.has(lesson.id);
     })
-    .join("");
+    .slice(-20)
+    .reverse();
+  const section = (title, rows, emptyText) => `
+    <section class="pedagogico-section">
+      <h3 class="pedagogico-section-title">${escapeHtml(title)}</h3>
+      ${rows.length ? rows.map(renderLesson).join("") : `<div class="pedagogico-section-empty">${escapeHtml(emptyText)}</div>`}
+    </section>
+  `;
+  const html = [
+    section("Aulas de hoje", today, "Nenhuma aula hoje."),
+    section("Próximas aulas", upcoming, "Nenhuma próxima aula agendada."),
+    section("Pendentes de registro", pendingLessons, "Tudo registrado por aqui."),
+    section("Histórico recente", history, "Nenhum registro recente."),
+  ].join("");
 
   pedagogicoList.innerHTML = html;
   if (pedagogicoEmpty instanceof HTMLElement) pedagogicoEmpty.hidden = true;
@@ -8389,7 +8525,17 @@ const renderTeacherPedagogicoList = () => {
 
       const id = String(item.getAttribute("data-pedagogico-item") || item.dataset.pedagogicoItem || "").trim();
       if (!id) return;
+      const action = String(item.getAttribute("data-pedagogico-action") || "").trim();
       handlePedagogicoItemOpen(id);
+      if (action) {
+        window.setTimeout(() => {
+          const select = pedagogicoFormContainer?.querySelector("[data-ped-status]");
+          if (select instanceof HTMLSelectElement) {
+            select.value = action;
+            select.dispatchEvent(new Event("change", { bubbles: true }));
+          }
+        }, 0);
+      }
     });
   }
 };
@@ -13004,6 +13150,7 @@ const renderAdminStudentSheet = () => {
   if (!(sheetEl instanceof HTMLElement)) return;
 
   const hist = adminStudentsState.history;
+  const pedagogicalCard = hist.pedagogicalCard && typeof hist.pedagogicalCard === "object" ? hist.pedagogicalCard : {};
   const editMode = Boolean(hist.editMode);
   const alunoMeta = hist.alunoMeta;
   const alunoName = alunoMeta?.nome || "Aluno";
@@ -13305,7 +13452,49 @@ const renderAdminStudentSheet = () => {
                     </div>
                   `
                   : `
-                    <div class="admin-student-panel-empty">Selecione a tab Histórico pedagógico para ver detalhes das aulas registradas.</div>
+                    <div class="admin-student-pedagogical-grid">
+                      ${[
+                        ["Nome", pedagogicalCard.aluno_nome || alunoName],
+                        ["Telefone", pedagogicalCard.telefone],
+                        ["E-mail", pedagogicalCard.email || alunoEmail],
+                        ["Plano", pedagogicalCard.plano || planoLabel],
+                        ["Valor", pedagogicalCard.valor],
+                        ["Closer", pedagogicalCard.closer],
+                        ["Status onboarding", pedagogicalCard.status_onboarding],
+                        ["Etapa atual", pedagogicalCard.etapa_atual],
+                        ["Status financeiro", pedagogicalCard.status_financeiro || pedagogicalCard.pagamento_status],
+                        ["Professor", pedagogicalCard.professor_nome || teacherName],
+                        ["Primeira aula", pedagogicalCard.primeira_aula_em ? formatAdminDate(pedagogicalCard.primeira_aula_em) : ""],
+                        ["Grupo VIP", pedagogicalCard.grupo_vip_nome || pedagogicalCard.grupo_vip_id],
+                        ["Objetivo de inglês", pedagogicalCard.objetivo_ingles],
+                        ["Nível declarado", pedagogicalCard.nivel_declarado],
+                        ["País / Estado", [pedagogicalCard.pais, pedagogicalCard.estado].filter(Boolean).join(" · ")],
+                        ["Disponibilidade", pedagogicalCard.disponibilidade_aluno],
+                        ["Risco", [pedagogicalCard.risco_nivel, pedagogicalCard.risco_score].filter((v) => v != null && v !== "").join(" · ")],
+                        ["Flexge", pedagogicalCard.flexge_status || (pedagogicalCard.flexge_user_id ? "Criado" : "Não criado")],
+                        ["Matrícula Flexge", pedagogicalCard.flexge_enrollment_status],
+                        ["Meta semanal", pedagogicalCard.flexge_weekly_goal_minutes != null ? `${pedagogicalCard.flexge_weekly_goal_minutes} min` : ""],
+                        ["Estudo semanal", pedagogicalCard.flexge_weekly_study_minutes != null ? `${pedagogicalCard.flexge_weekly_study_minutes} min` : ""],
+                        ["Estudo total", pedagogicalCard.flexge_total_study_minutes != null ? `${pedagogicalCard.flexge_total_study_minutes} min` : ""],
+                        ["Progresso Flexge", pedagogicalCard.flexge_progress_percentage != null ? `${pedagogicalCard.flexge_progress_percentage}%` : ""],
+                        ["Último acesso Flexge", pedagogicalCard.flexge_last_access_at ? formatAdminDate(pedagogicalCard.flexge_last_access_at) : ""],
+                        ["Média Flexge", pedagogicalCard.flexge_average_score],
+                        ["Nível Flexge", pedagogicalCard.flexge_current_level],
+                      ]
+                        .map(
+                          ([label, value]) => `
+                            <div class="admin-student-personal-row">
+                              <span>${escapeHtml(String(label))}</span>
+                              <strong>${escapeHtml(value == null || value === "" ? "Sem dados" : String(value))}</strong>
+                            </div>
+                          `
+                        )
+                        .join("")}
+                    </div>
+                    <div class="admin-student-panel-card admin-student-briefing">
+                      <div class="admin-student-panel-title">Briefing pedagógico</div>
+                      <div>${escapeHtml(String(pedagogicalCard.briefing_pedagogico || "Sem dados"))}</div>
+                    </div>
                   `
               }
             </div>
@@ -13417,6 +13606,7 @@ let adminPedagogicoState = {
   onboardingQuizzes: [],
   teacherOnboardingProgressAll: [],
   teacherQuizSubmissionsAll: [],
+  pedagogicalOps: { metrics: {}, onboarding: [], alerts: [], pendingLessons: [], riskStudents: [], flexge: [] },
   filters: {
     teacherId: "",
     dow: "",
@@ -14253,6 +14443,8 @@ const renderAdminPedagogicoMetrics = () => {
   const feedbacks = Array.isArray(adminPedagogicoState.pedagogicalFeedbacks) ? adminPedagogicoState.pedagogicalFeedbacks : [];
   const liveFeedbacks = Array.isArray(adminPedagogicoState.liveLessonFeedbacks) ? adminPedagogicoState.liveLessonFeedbacks : [];
   const lessonLogs = Array.isArray(adminPedagogicoState.lessonLogs) ? adminPedagogicoState.lessonLogs : [];
+  const ops = adminPedagogicoState.pedagogicalOps && typeof adminPedagogicoState.pedagogicalOps === "object" ? adminPedagogicoState.pedagogicalOps : {};
+  const opsMetrics = ops.metrics && typeof ops.metrics === "object" ? ops.metrics : {};
 
   const setKpi = (key, { value = "—", sub = "", badge = "", badgeTone = "" } = {}) => {
     const vEl = document.querySelector(`[data-admin-ped-kpi-value="${CSS.escape(String(key))}"]`);
@@ -14315,22 +14507,38 @@ const renderAdminPedagogicoMetrics = () => {
   const criticalCount = conflicts.length + noTeacher + studentsNoClass;
 
   setKpi("classesToday", {
-    value: String(today.length),
-    sub: today.length ? `${todayInd.length} individuais · ${todayGrp.length} em grupo` : "Nenhuma aula recorrente hoje.",
+    value: String(Number(opsMetrics.aulas_hoje ?? today.length) || 0),
+    sub: Number(opsMetrics.aulas_pendentes_registro || 0)
+      ? `${opsMetrics.aulas_pendentes_registro} aula(s) pendente(s) de registro.`
+      : today.length
+        ? `${todayInd.length} individuais · ${todayGrp.length} em grupo`
+        : "Nenhuma aula hoje.",
   });
 
   setKpi("critical", {
-    value: String(criticalCount),
-    sub: criticalCount ? `Conflitos: ${conflicts.length} · Sem professor: ${noTeacher} · Alunos sem aula: ${studentsNoClass}` : "Nenhuma pendência crítica agora.",
-    badge: criticalCount ? "Crítico" : "",
-    badgeTone: criticalCount ? "danger" : "",
+    value: String(
+      Number(opsMetrics.alunos_sem_professor || 0) +
+        Number(opsMetrics.alunos_sem_primeira_aula || 0) +
+        Number(opsMetrics.ocorrencias_abertas || 0)
+    ),
+    sub: `Sem professor: ${Number(opsMetrics.alunos_sem_professor || 0)} · Sem primeira aula: ${Number(
+      opsMetrics.alunos_sem_primeira_aula || 0
+    )} · Ocorrências: ${Number(opsMetrics.ocorrencias_abertas || 0)}`,
+    badge:
+      Number(opsMetrics.alunos_sem_professor || 0) +
+        Number(opsMetrics.alunos_sem_primeira_aula || 0) +
+        Number(opsMetrics.ocorrencias_abertas || 0) >
+      0
+        ? "Crítico"
+        : "",
+    badgeTone: "danger",
   });
 
   setKpi("risk", {
-    value: lessonLogs.length ? String(studentsRiskSet.size) : "Sem dados",
-    sub: lessonLogs.length ? "Baixa presença, baixo NPS/CSAT ou avisos recentes." : "Sem registros suficientes para calcular risco.",
-    badge: lessonLogs.length && studentsRiskSet.size ? "Atenção" : "",
-    badgeTone: lessonLogs.length && studentsRiskSet.size ? "warn" : "",
+    value: String(Number(opsMetrics.alunos_em_risco ?? studentsRiskSet.size) || 0),
+    sub: "Risco consolidado do onboarding e das ocorrências pedagógicas.",
+    badge: Number(opsMetrics.alunos_em_risco ?? studentsRiskSet.size) ? "Atenção" : "",
+    badgeTone: Number(opsMetrics.alunos_em_risco ?? studentsRiskSet.size) ? "warn" : "",
   });
 
   setKpi("feedbackPending", {
@@ -14353,12 +14561,22 @@ const renderAdminPedagogicoMetrics = () => {
     sub: `${groupsActive}/${groups.length || 0} ativas`,
   });
   setKpi("npsAvg", {
-    value: surveys.length && Number.isFinite(npsAvg) ? npsAvg.toFixed(1) : "Sem dados",
-    sub: surveys.length ? "Baseado em pesquisas respondidas." : "Nenhuma resposta ainda.",
+    value:
+      opsMetrics.nps != null && Number.isFinite(Number(opsMetrics.nps))
+        ? Number(opsMetrics.nps).toFixed(1)
+        : surveys.length && Number.isFinite(npsAvg)
+          ? npsAvg.toFixed(1)
+          : "Sem dados",
+    sub: "Baseado nas respostas disponíveis.",
   });
   setKpi("csatAvg", {
-    value: surveys.length && Number.isFinite(csatAvg) ? csatAvg.toFixed(1) : "Sem dados",
-    sub: surveys.length ? "Baseado em pesquisas respondidas." : "Nenhuma resposta ainda.",
+    value:
+      opsMetrics.csat != null && Number.isFinite(Number(opsMetrics.csat))
+        ? Number(opsMetrics.csat).toFixed(1)
+        : surveys.length && Number.isFinite(csatAvg)
+          ? csatAvg.toFixed(1)
+          : "Sem dados",
+    sub: `Flexge: ${Number(opsMetrics.flexge_criados || 0)}/${Number(opsMetrics.flexge_total || 0)} alunos provisionados.`,
   });
   setKpi("conflicts", {
     value: String(conflicts.length),
@@ -14556,6 +14774,8 @@ const renderAdminPedagogicoOverview = () => {
   const surveys = Array.isArray(adminPedagogicoState.surveys) ? adminPedagogicoState.surveys : [];
   const lessonLogs = Array.isArray(adminPedagogicoState.lessonLogs) ? adminPedagogicoState.lessonLogs : [];
   const conflicts = Array.isArray(adminPedagogicoState.conflicts) ? adminPedagogicoState.conflicts : [];
+  const ops = adminPedagogicoState.pedagogicalOps && typeof adminPedagogicoState.pedagogicalOps === "object" ? adminPedagogicoState.pedagogicalOps : {};
+  const opsMetrics = ops.metrics && typeof ops.metrics === "object" ? ops.metrics : {};
 
   const activeClasses = classes.filter((c) => normalizeClassStatus(c?.status) === "active");
   const noTeacher = activeClasses.filter((c) => !String(c.teacherId || "").trim());
@@ -14687,7 +14907,39 @@ const renderAdminPedagogicoOverview = () => {
   const recentAlerts = alerts.slice().sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0)).slice(0, 5);
   const recentFeedbacks = feedbacks.slice().sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0)).slice(0, 5);
 
+  const metricValue = (key) => {
+    const value = opsMetrics[key];
+    return value == null || value === "" ? "Sem dados" : String(value);
+  };
+  const scoreValue = (key) => {
+    const value = opsMetrics[key];
+    return value == null || value === "" || !Number.isFinite(Number(value)) ? "Sem dados" : Number(value).toFixed(1);
+  };
+
   adminPedOverview.innerHTML = `
+    <div class="admin-ped-ops-summary">
+      ${[
+        ["Onboardings em andamento", metricValue("onboarding_em_andamento")],
+        ["Alunos sem professor", metricValue("alunos_sem_professor")],
+        ["Sem primeira aula", metricValue("alunos_sem_primeira_aula")],
+        ["Aulas hoje", metricValue("aulas_hoje")],
+        ["Pendentes de registro", metricValue("aulas_pendentes_registro")],
+        ["Ocorrências abertas", metricValue("ocorrencias_abertas")],
+        ["Alunos em risco", metricValue("alunos_em_risco")],
+        ["NPS", scoreValue("nps")],
+        ["CSAT", scoreValue("csat")],
+        ["Flexge", `${metricValue("flexge_criados")} / ${metricValue("flexge_total")}`],
+      ]
+        .map(
+          ([label, value]) => `
+            <article class="admin-ped-ops-summary-card">
+              <span>${escapeHtml(label)}</span>
+              <strong>${escapeHtml(value)}</strong>
+            </article>
+          `
+        )
+        .join("")}
+    </div>
     <div class="admin-ped-op">
       <section class="admin-ped-op-block">
         <div class="admin-ped-op-head">
@@ -16653,6 +16905,38 @@ const renderAdminPedagogicoConflicts = () => {
     .join("");
 };
 
+const runAdminPedagogicoRenderers = () => {
+  const renderers = [
+    renderAdminPedagogicoMetrics,
+    renderAdminPedagogicoTabs,
+    renderAdminPedagogicoOverview,
+    renderAdminPedagogicoAgenda,
+    renderAdminPedagogicoClassesList,
+    renderAdminPedagogicoGroups,
+    renderAdminPedagogicoStudentsPanel,
+    renderAdminPedagogicoTeachersPanel,
+    renderAdminPedagogicoPlansPanel,
+    renderAdminPedagogicoSurveysPanel,
+    renderAdminPedagogicoNpsCsatPanel,
+    renderAdminPedagogicoAlertsPanel,
+    renderAdminPedagogicoFeedbacksPanel,
+    renderAdminPedagogicoReportsPanel,
+    renderAdminPedagogicoOnboardingPanel,
+    renderAdminPedagogicoConflicts,
+    renderAdminPedagogicoLinksPanel,
+  ];
+  let failed = 0;
+  renderers.forEach((render) => {
+    try {
+      render();
+    } catch (error) {
+      failed += 1;
+      console.error("[admin-ped] partial render failed", render?.name || "unknown", error);
+    }
+  });
+  return failed;
+};
+
 const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
   if (currentRole !== "admin") return;
   if (!(adminPedRoot instanceof HTMLElement)) return;
@@ -16660,23 +16944,8 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
 
   const now = Date.now();
   if (!force && adminPedagogicoState.loadedAt && now - adminPedagogicoState.loadedAt < 45_000) {
-    renderAdminPedagogicoMetrics();
-    renderAdminPedagogicoTabs();
-    renderAdminPedagogicoOverview();
-    renderAdminPedagogicoAgenda();
-    renderAdminPedagogicoClassesList();
-    renderAdminPedagogicoGroups();
-    renderAdminPedagogicoStudentsPanel();
-    renderAdminPedagogicoTeachersPanel();
-    renderAdminPedagogicoPlansPanel();
-    renderAdminPedagogicoSurveysPanel();
-    renderAdminPedagogicoNpsCsatPanel();
-    renderAdminPedagogicoAlertsPanel();
-    renderAdminPedagogicoFeedbacksPanel();
-    renderAdminPedagogicoReportsPanel();
-    renderAdminPedagogicoOnboardingPanel();
-    renderAdminPedagogicoConflicts();
-    renderAdminPedagogicoLinksPanel();
+    const failed = runAdminPedagogicoRenderers();
+    setAdminPedagogicoStatus(failed ? "Alguns blocos não puderam ser exibidos agora." : "", failed ? "warn" : "");
     return;
   }
 
@@ -16701,6 +16970,7 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
       onboardingProgressAll,
       teacherQuizSubmissionsAll,
       liveLessons,
+      pedagogicalOps,
     ] =
       await Promise.all([
       fetchUserRowsFromFirestore("teacher").catch((error) => {
@@ -16730,6 +17000,9 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
         console.error("[admin-ped] Supabase lessons load failed", error);
         return [];
       }),
+      fetchWithAuth("/api/pedagogico/dashboard")
+        .then(async (res) => (res.ok ? res.json() : { metrics: {} }))
+        .catch(() => ({ metrics: {} })),
     ]);
 
     const liveClasses = normalizeLiveLessonsAsAdminClasses(liveLessons);
@@ -16783,6 +17056,10 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
     adminPedagogicoState.onboardingQuizzes = Array.isArray(onboardingQuizzes) ? onboardingQuizzes : [];
     adminPedagogicoState.teacherOnboardingProgressAll = Array.isArray(onboardingProgressAll) ? onboardingProgressAll : [];
     adminPedagogicoState.teacherQuizSubmissionsAll = Array.isArray(teacherQuizSubmissionsAll) ? teacherQuizSubmissionsAll : [];
+    adminPedagogicoState.pedagogicalOps =
+      pedagogicalOps && typeof pedagogicalOps === "object"
+        ? pedagogicalOps
+        : { metrics: {}, onboarding: [], alerts: [], pendingLessons: [], riskStudents: [], flexge: [] };
     adminPedagogicoState.conflicts = computeAdminPedagogicoConflicts(adminPedagogicoState.classes);
     adminPedagogicoState.loadedAt = Date.now();
 
@@ -16827,24 +17104,12 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
       planSelect.value = selected;
     }
 
-    setAdminPedagogicoStatus("");
-    renderAdminPedagogicoMetrics();
-    renderAdminPedagogicoTabs();
-    renderAdminPedagogicoOverview();
-    renderAdminPedagogicoAgenda();
-    renderAdminPedagogicoClassesList();
-    renderAdminPedagogicoGroups();
-    renderAdminPedagogicoStudentsPanel();
-    renderAdminPedagogicoTeachersPanel();
-    renderAdminPedagogicoPlansPanel();
-    renderAdminPedagogicoSurveysPanel();
-    renderAdminPedagogicoNpsCsatPanel();
-    renderAdminPedagogicoAlertsPanel();
-    renderAdminPedagogicoFeedbacksPanel();
-    renderAdminPedagogicoReportsPanel();
-    renderAdminPedagogicoOnboardingPanel();
-    renderAdminPedagogicoConflicts();
-    renderAdminPedagogicoLinksPanel();
+    const failed = runAdminPedagogicoRenderers();
+    const degraded = Boolean(adminPedagogicoState.pedagogicalOps?.degraded);
+    setAdminPedagogicoStatus(
+      failed || degraded ? "Painel carregado com alguns dados temporariamente indisponíveis." : "",
+      failed || degraded ? "warn" : ""
+    );
   } catch (error) {
     console.error("[admin] controle-pedagogico load failed:", error);
     setAdminPedagogicoStatus("Não foi possível carregar agora.", "error");
@@ -18981,6 +19246,13 @@ const openAdminStudentHistoryDrawer = async ({ alunoId, teacherId } = {}) => {
       "";
     const teacherMeta =
       inferredTeacherId && adminStudentsState.teachersById instanceof Map ? adminStudentsState.teachersById.get(inferredTeacherId) || null : null;
+    const pedagogicalResponse = await fetchWithAuth(
+      `/api/pedagogico/student?aluno_id=${encodeURIComponent(aId)}&aluno_nome=${encodeURIComponent(String(alunoMeta?.nome || ""))}`
+    )
+      .then(async (res) => (res.ok ? res.json() : null))
+      .catch(() => null);
+    const pedagogicalCard =
+      pedagogicalResponse?.ficha && typeof pedagogicalResponse.ficha === "object" ? pedagogicalResponse.ficha : {};
 
     adminStudentsState.history = {
       isOpen: true,
@@ -18991,6 +19263,7 @@ const openAdminStudentHistoryDrawer = async ({ alunoId, teacherId } = {}) => {
       items,
       alunoMeta,
       teacherMeta,
+      pedagogicalCard,
       files: [],
       filesLoadedAt: 0,
       filesLoading: false,

@@ -66,6 +66,22 @@
 
   const state = { onboarding: [], alerts: [], loading: false };
 
+  const flexgeBadges = (row) => {
+    if (!row?.flexge_user_id) return [{ label: "Flexge não criado", tone: "warn" }];
+    const badges = [{ label: "Flexge criado", tone: "good" }];
+    const enrollment = String(row.flexge_enrollment_status || "").toLowerCase();
+    if (row.flexge_course_id || row.flexge_group_id || ["active", "ativo", "vinculado"].includes(enrollment)) {
+      badges.push({ label: "Flexge vinculado", tone: "good" });
+    }
+    const weekly = Number(row.flexge_weekly_study_minutes || 0);
+    const goal = Number(row.flexge_weekly_goal_minutes || 0);
+    if (goal > 0 && weekly < goal) badges.push({ label: weekly <= 0 ? "Baixo uso" : "Meta semanal abaixo", tone: "warn" });
+    const lastAccess = row.flexge_last_access_at ? Date.parse(row.flexge_last_access_at) : 0;
+    if (lastAccess && Date.now() - lastAccess > 7 * 86400000) badges.push({ label: "Sem acesso recente", tone: "warn" });
+    if (weekly > 0 && (!goal || weekly >= goal)) badges.push({ label: "Bom uso", tone: "good" });
+    return badges;
+  };
+
   const renderOnboarding = () => {
     const el = document.querySelector("[data-ped-n8n-onboarding]");
     if (!(el instanceof HTMLElement)) return;
@@ -87,7 +103,9 @@
               </div>
               <span class="ped-n8n-pill ${status.includes("erro") ? "warn" : "good"}">${escapeHtml(status)}</span>
               <span class="ped-n8n-pill">Etapa: ${escapeHtml(row.etapa_atual || "-")}</span>
-              <span class="ped-n8n-pill">Flexge: ${escapeHtml(row.flexge_status || "-")}</span>
+              ${flexgeBadges(row)
+                .map((badge) => `<span class="ped-n8n-pill ${escapeHtml(badge.tone)}">${escapeHtml(badge.label)}</span>`)
+                .join("")}
             </div>
             <div class="ped-n8n-actions">
               <button class="ped-n8n-btn primary" type="button" data-ped-n8n-first-lesson="${escapeHtml(id)}">Definir professor</button>
@@ -151,7 +169,7 @@
   };
 
   const mount = () => {
-    const container = document.querySelector(".pedagogico-container");
+    const container = document.querySelector("[data-admin-pedagogico]");
     if (!(container instanceof HTMLElement) || document.querySelector("[data-ped-n8n-root]")) return;
     ensureStyle();
     const root = document.createElement("section");
@@ -195,14 +213,24 @@
       const onboardingId = firstLesson.getAttribute("data-ped-n8n-first-lesson") || "";
       const professor_nome = window.prompt("Nome do professor:");
       if (!professor_nome) return;
-      const data_aula = window.prompt("Data/hora da primeira aula em ISO. Ex: 2026-06-20T19:00:00-03:00");
-      if (!data_aula) return;
+      const data_primeira_aula = window.prompt("Data/hora da primeira aula em ISO. Ex: 2026-06-20T19:00:00-03:00");
+      if (!data_primeira_aula) return;
       const professor_id = window.prompt("ID do professor (opcional):") || professor_nome;
+      const professor_email = window.prompt("E-mail do professor (recomendado):") || "";
       const professor_telefone = window.prompt("Telefone do professor (opcional):") || "";
       const observacoes = window.prompt("Observações (opcional):") || "";
-      await api("/api/pedagogico/onboarding/first-lesson", {
+      await api("/api/pedagogico/professor-primeira-aula", {
         method: "POST",
-        body: JSON.stringify({ onboarding_id: onboardingId, professor_id, professor_nome, professor_telefone, data_aula, duracao_minutos: 60, observacoes }),
+        body: JSON.stringify({
+          onboarding_id: onboardingId,
+          professor_id,
+          professor_nome,
+          professor_email,
+          professor_telefone,
+          data_primeira_aula,
+          duracao_minutos: 60,
+          observacoes,
+        }),
       });
       await load();
       return;

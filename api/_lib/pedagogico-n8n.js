@@ -1,7 +1,8 @@
 const { supabaseFetch } = require("./supabase-rest");
+const { fetchOnboardingRows } = require("./pedagogico-service");
 
-const INTEGRATION_LOGS_TABLE = "n8n_logs_integracao_pedagogico_space";
-const ONBOARDING_TABLE = "n8n_onboarding_pedagogico_space";
+const INTEGRATION_LOGS_TABLE = "n8n_logs_pedagogico_space";
+const ONBOARDING_TABLE = "n8n_onboarding_alunos_space";
 const ALERTS_TABLE = "n8n_ocorrencias_pedagogicas_space";
 const LESSONS_TABLE = "n8n_aulas_pedagogicas_space";
 
@@ -11,7 +12,14 @@ const nowIso = () => new Date().toISOString();
 
 const normalizeStatus = (value) => String(value || "").trim().toLowerCase();
 
-const getEnvUrl = (name) => String(process.env[name] || "").trim();
+const getEnvUrl = (name) => {
+  const names = Array.isArray(name) ? name : [name];
+  for (const item of names) {
+    const value = String(process.env[item] || "").trim();
+    if (value) return value;
+  }
+  return "";
+};
 
 const buildSecretHeaders = () => {
   const secret = String(process.env.N8N_WEBHOOK_SECRET || "").trim();
@@ -76,7 +84,17 @@ const callN8nWorkflow = async ({ workflow, envName, origem = "platform", alunoId
     return { skipped: true, duplicate: true, log: existing };
   }
 
-  const log = existing || (await createIntegrationLog({ workflow, origem, alunoId, onboardingId, idempotencyKey: key, payload }));
+  const log =
+    existing ||
+    (await createIntegrationLog({ workflow, origem, alunoId, onboardingId, idempotencyKey: key, payload }).catch(() => ({
+      workflow,
+      origem,
+      aluno_id: alunoId || null,
+      onboarding_id: onboardingId || null,
+      idempotency_key: key,
+      payload_enviado: payload || {},
+      status: "pendente",
+    })));
   const url = getEnvUrl(envName);
   if (!url) {
     const updated = await patchIntegrationLog(log.id, {
@@ -84,7 +102,13 @@ const callN8nWorkflow = async ({ workflow, envName, origem = "platform", alunoId
       erro: `missing_env:${envName}`,
       resposta_recebida: { error: "webhook_not_configured", envName },
     }).catch(() => log);
-    return { ok: false, configured: false, log: updated, error: "webhook_not_configured" };
+    return {
+      ok: false,
+      configured: false,
+      log: updated,
+      error: "webhook_not_configured",
+      message: "Webhook não configurado",
+    };
   }
 
   await patchIntegrationLog(log.id, { status: "enviado" }).catch(() => null);
@@ -133,11 +157,21 @@ const upsertOnboardingFromContract = async (payload, { source = "platform" } = {
     email: payload?.email || null,
     plano: payload?.plano || payload?.contrato || null,
     valor: payload?.valor == null ? null : Number(payload.valor) || null,
+    closer: payload?.closer || payload?.vendedor || null,
     status_contrato: "assinado",
+    status_financeiro: payload?.status_financeiro || payload?.pagamento_status || null,
     pagamento_status: payload?.pagamento_status || payload?.status_financeiro || null,
     status_onboarding: "disparo_pendente",
     etapa_atual: payload?.etapa_atual || "contrato_assinado",
-    origem: source,
+    objetivo_ingles: payload?.objetivo_ingles || null,
+    nivel_declarado: payload?.nivel_declarado || null,
+    pais: payload?.pais || null,
+    estado: payload?.estado || null,
+    disponibilidade_aluno: payload?.disponibilidade_aluno || null,
+    asaas_customer_id: payload?.asaas_customer_id || null,
+    asaas_subscription_id: payload?.asaas_subscription_id || null,
+    id_conversa_chatwoot: payload?.id_conversa_chatwoot || null,
+    origem_onboarding: payload?.origem_onboarding || source,
     metadata: payload?.metadata || payload || {},
     assinou_em: payload?.assinou_em || payload?.assinadoEm || nowIso(),
     updated_at: nowIso(),
@@ -185,12 +219,23 @@ const triggerContractSignedOnboarding = async (input, { source = "platform" } = 
     status_contrato: "assinado",
     assinou_em: onboarding?.assinou_em || input?.assinou_em || nowIso(),
     pagamento_status: onboarding?.pagamento_status || input?.pagamento_status || "",
+    status_financeiro: onboarding?.status_financeiro || input?.status_financeiro || "",
+    closer: onboarding?.closer || input?.closer || input?.vendedor || "",
+    objetivo_ingles: onboarding?.objetivo_ingles || input?.objetivo_ingles || "",
+    nivel_declarado: onboarding?.nivel_declarado || input?.nivel_declarado || "",
+    pais: onboarding?.pais || input?.pais || "",
+    estado: onboarding?.estado || input?.estado || "",
+    disponibilidade_aluno: onboarding?.disponibilidade_aluno || input?.disponibilidade_aluno || "",
+    asaas_customer_id: onboarding?.asaas_customer_id || input?.asaas_customer_id || "",
+    asaas_subscription_id: onboarding?.asaas_subscription_id || input?.asaas_subscription_id || "",
+    id_conversa_chatwoot: onboarding?.id_conversa_chatwoot || input?.id_conversa_chatwoot || "",
+    origem_onboarding: onboarding?.origem_onboarding || input?.origem_onboarding || source,
     metadata: input?.metadata || input || {},
   };
   const key = `pedagogico:onboarding:contract_signed:${payload.contract_id || payload.student_id}`;
   const result = await callN8nWorkflow({
     workflow: "pedagogico_onboarding",
-    envName: "N8N_PEDAGOGICO_ONBOARDING_URL",
+    envName: ["N8N_PEDAGOGICO_ONBOARDING_WEBHOOK_URL", "N8N_PEDAGOGICO_ONBOARDING_URL"],
     origem: source,
     alunoId: payload.student_id,
     onboardingId: onboarding?.id || "",
@@ -203,8 +248,7 @@ const triggerContractSignedOnboarding = async (input, { source = "platform" } = 
 
 const listOnboarding = async ({ limit = 200 } = {}) => {
   const max = Math.max(1, Math.min(Number(limit) || 200, 1000));
-  const { data } = await supabaseFetch(`/${ONBOARDING_TABLE}?select=*&order=updated_at.desc.nullslast&limit=${max}`);
-  return Array.isArray(data) ? data : [];
+  return fetchOnboardingRows(`select=*&order=updated_at.desc.nullslast&limit=${max}`);
 };
 
 const updateOnboardingFirstLesson = async ({ onboardingId, payload }) => {
@@ -217,8 +261,11 @@ const updateOnboardingFirstLesson = async ({ onboardingId, payload }) => {
   const patch = {
     professor_id: payload.professor_id || null,
     professor_nome: payload.professor_nome || null,
+    professor_email: payload.professor_email || null,
     professor_telefone: payload.professor_telefone || null,
-    primeira_aula_em: payload.data_aula || null,
+    primeira_aula_em: payload.data_primeira_aula || payload.data_aula || null,
+    horario_fixo_texto: payload.horario_fixo_texto || null,
+    coordenacao_nome: payload.coordenacao_nome || null,
     duracao_minutos: Number(payload.duracao_minutos) || 60,
     observacoes_primeira_aula: payload.observacoes || null,
     status_onboarding: "primeira_aula_definida",
@@ -230,14 +277,29 @@ const updateOnboardingFirstLesson = async ({ onboardingId, payload }) => {
     body: patch,
   });
   const onboarding = Array.isArray(data) ? data[0] : data;
+  const workflowPayload = {
+    onboarding_id: id,
+    aluno_nome: onboarding?.aluno_nome || payload.aluno_nome || "",
+    telefone: onboarding?.telefone || payload.telefone || "",
+    email: onboarding?.email || payload.email || "",
+    professor_id: payload.professor_id || "",
+    professor_nome: payload.professor_nome || "",
+    professor_email: payload.professor_email || "",
+    professor_telefone: payload.professor_telefone || "",
+    data_primeira_aula: payload.data_primeira_aula || payload.data_aula || "",
+    horario_fixo_texto: payload.horario_fixo_texto || "",
+    closer: onboarding?.closer || payload.closer || payload.vendedor || "",
+    coordenacao_nome: payload.coordenacao_nome || "",
+    observacoes: payload.observacoes || "",
+  };
   const result = await callN8nWorkflow({
     workflow: "pedagogico_professor_primeira_aula",
-    envName: "N8N_PEDAGOGICO_PROFESSOR_PRIMEIRA_AULA_URL",
+    envName: ["N8N_PEDAGOGICO_PROFESSOR_PRIMEIRA_AULA_WEBHOOK_URL", "N8N_PEDAGOGICO_PROFESSOR_PRIMEIRA_AULA_URL"],
     origem: "platform",
     alunoId: onboarding?.aluno_id || "",
     onboardingId: id,
-    idempotencyKey: `pedagogico:first_lesson:${id}:${payload.data_aula || ""}:${payload.professor_id || payload.professor_nome || ""}`,
-    payload: { onboarding_id: id, ...payload },
+    idempotencyKey: `pedagogico:first_lesson:${id}:${payload.data_primeira_aula || payload.data_aula || ""}:${payload.professor_id || payload.professor_nome || ""}`,
+    payload: workflowPayload,
   });
   return { onboarding, n8n: result };
 };

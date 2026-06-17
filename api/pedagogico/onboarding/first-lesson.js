@@ -25,14 +25,18 @@ module.exports = async (req, res) => {
     sendJson(res, 400, { error: "invalid_json" });
     return;
   }
-  if (!body.onboarding_id || !body.professor_nome || !body.data_aula) {
+  if (!body.onboarding_id || !body.professor_nome || !(body.data_primeira_aula || body.data_aula)) {
     sendJson(res, 400, { error: "missing_required_fields" });
     return;
   }
 
   try {
     const result = await updateOnboardingFirstLesson({ onboardingId: body.onboarding_id, payload: body });
-    sendJson(res, 200, { ok: true, ...result });
+    sendJson(res, 200, {
+      ok: true,
+      ...result,
+      warning: result?.n8n?.configured === false ? "Webhook de professor + primeira aula não configurado" : undefined,
+    });
   } catch (error) {
     console.error("[pedagogico] first lesson failed", error);
     sendJson(res, 500, { error: error?.code || "first_lesson_failed" });

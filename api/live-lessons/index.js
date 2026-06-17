@@ -47,6 +47,21 @@ module.exports = async (req, res) => {
     });
   } catch (error) {
     console.error("[api] live lessons list failed", error);
-    sendJson(res, 500, { error: "live_lessons_failed", message: "Nao foi possivel carregar as aulas ao vivo." });
+    sendJson(res, 200, {
+      lessons: [],
+      records: [],
+      summary: {
+        liveNow: 0,
+        upcomingToday: 0,
+        waitingStart: 0,
+        noVideoRoom: 0,
+        noRegister: 0,
+        cancelled: 0,
+        teachersInClass: 0,
+        studentsInClass: 0,
+      },
+      degraded: true,
+      warning: "As aulas pedagógicas estão temporariamente indisponíveis.",
+    });
   }
 };
