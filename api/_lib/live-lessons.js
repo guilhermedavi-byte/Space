@@ -155,6 +155,21 @@ const listLiveLessons = async ({ session, limit = 50, scope = "upcoming" } = {})
     });
 };
 
+const listLessonRegisters = async ({ session, lessonIds = [], limit = 500 } = {}) => {
+  const ids = new Set((Array.isArray(lessonIds) ? lessonIds : []).map((id) => String(id || "")).filter(Boolean));
+  if (!ids.size) return [];
+  const max = Math.max(1, Math.min(Number(limit) || 500, 1000));
+  const { data } = await supabaseFetch(`/${REGISTERS_TABLE}?select=*&order=created_at.desc.nullslast&limit=${max}`);
+  const role = normalizeRole(session?.role);
+  return (Array.isArray(data) ? data : []).filter((row) => {
+    if (!ids.has(String(row?.aula_id || ""))) return false;
+    if (role === "admin") return true;
+    if (role === "teacher") return personMatches(session, row?.professor_id, row?.professor_nome);
+    if (role === "student") return personMatches(session, row?.aluno_id, row?.aluno_nome);
+    return false;
+  });
+};
+
 const patchLesson = async (id, patch) => {
   const payload = {
     ...patch,
@@ -180,9 +195,15 @@ const createLessonRegister = async ({ lesson, session, payload }) => {
     professor_nome: lesson.professor_nome || null,
     status,
     conteudo_trabalhado: String(payload?.conteudo_trabalhado || "").trim() || null,
+    gramatica_trabalhada: String(payload?.gramatica_trabalhada || "").trim() || null,
+    vocabulario_trabalhado: String(payload?.vocabulario_trabalhado || "").trim() || null,
+    pronuncia_conversacao: String(payload?.pronuncia_conversacao || "").trim() || null,
+    atividade_realizada: String(payload?.atividade_realizada || "").trim() || null,
+    materiais_usados: String(payload?.materiais_usados || "").trim() || null,
     desempenho_aluno: String(payload?.desempenho_aluno || payload?.desempenho || "").trim() || null,
     observacoes: String(payload?.observacoes || "").trim() || null,
     engajamento: String(payload?.engajamento || "").trim() || null,
+    confianca: String(payload?.confianca || "").trim() || null,
     humor: String(payload?.humor || "").trim() || null,
     humor_aluno: String(payload?.humor_aluno || payload?.humor || "").trim() || null,
     estrelas: Number.isFinite(Number(payload?.estrelas || payload?.nota)) ? Number(payload?.estrelas || payload?.nota) : null,
@@ -207,7 +228,10 @@ const createLessonRegister = async ({ lesson, session, payload }) => {
     body: register,
   });
   const saved = Array.isArray(data) ? data[0] : data;
-  const lessonPatch = { status_aula: status === "remarcada" ? "remarcada" : status === "falta" ? "falta" : "realizada" };
+  const lessonPatch = {
+    status_aula:
+      status === "remarcada" ? "remarcada" : status === "falta" ? "falta" : status === "cancelada" ? "cancelada" : "realizada",
+  };
   if (status === "remarcada" && payload?.nova_data) lessonPatch.inicio = payload.nova_data;
   const updatedLesson = await patchLesson(lesson.id, lessonPatch);
   return { register: saved || register, lesson: updatedLesson };
@@ -256,6 +280,7 @@ module.exports = {
   canEditLesson,
   fetchLessonById,
   listLiveLessons,
+  listLessonRegisters,
   patchLesson,
   createLessonRegister,
   summarizeLiveLessons,

@@ -7,6 +7,7 @@ const labelForStatus = (status) => {
   const s = String(status || "").toLowerCase();
   if (s === "falta") return "Falta";
   if (s === "remarcada") return "Remarcada";
+  if (s === "cancelada") return "Cancelada";
   return "Realizada";
 };
 
@@ -25,6 +26,7 @@ const n8nConfigForStatus = (status) => {
   if (s === "remarcada") {
     return { workflow: "pedagogico_remarcacao", envName: "N8N_PEDAGOGICO_REMARCACAO_URL" };
   }
+  if (s === "cancelada") return null;
   return { workflow: "pedagogico_registro_aula", envName: "N8N_PEDAGOGICO_REGISTRO_AULA_URL" };
 };
 
@@ -49,7 +51,7 @@ module.exports = async (req, res) => {
   const id = getRouteId(req);
   const payload = await readJsonBody(req).catch(() => null);
   const status = String(payload?.status || "realizada").trim().toLowerCase();
-  if (!id || !["realizada", "falta", "remarcada"].includes(status)) {
+  if (!id || !["realizada", "falta", "remarcada", "cancelada"].includes(status)) {
     sendJson(res, 400, { error: "invalid_payload" });
     return;
   }
@@ -83,13 +85,15 @@ module.exports = async (req, res) => {
       tipo: status === "remarcada" ? payload?.tipo || "remarcacao" : undefined,
       motivo_remarcacao: payload?.motivo_remarcacao || payload?.motivo_falta || "",
     };
-    const n8n = await triggerLessonWorkflow({
-      ...cfg,
-      lesson,
-      onboardingId: n8nPayload.onboarding_id,
-      payload: n8nPayload,
-      eventKey: `pedagogico:${cfg.workflow}:${lesson.id}:${result?.register?.id || status}`,
-    }).catch((error) => ({ ok: false, error: error?.message || "n8n_failed" }));
+    const n8n = cfg
+      ? await triggerLessonWorkflow({
+          ...cfg,
+          lesson,
+          onboardingId: n8nPayload.onboarding_id,
+          payload: n8nPayload,
+          eventKey: `pedagogico:${cfg.workflow}:${lesson.id}:${result?.register?.id || status}`,
+        }).catch((error) => ({ ok: false, error: error?.message || "n8n_failed" }))
+      : { skipped: true, reason: "no_workflow_for_cancelled_lesson" };
     sendJson(res, 200, { ...result, n8n, label: labelForStatus(status) });
   } catch (error) {
     console.error("[api] live lesson register failed", error);

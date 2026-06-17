@@ -7240,8 +7240,14 @@ const sanitizeLessonLogDraft = (raw = {}) => {
   return {
     statusAula, // realizada | falta_aluno | remarcada
     conteudoTrabalhado: String(src.conteudoTrabalhado || src.oQueFoiTrabalhado || "").trim(),
+    gramaticaTrabalhada: String(src.gramaticaTrabalhada || "").trim(),
+    vocabularioTrabalhado: String(src.vocabularioTrabalhado || "").trim(),
+    pronunciaConversacao: String(src.pronunciaConversacao || "").trim(),
+    atividadeRealizada: String(src.atividadeRealizada || "").trim(),
+    materiaisUsados: String(src.materiaisUsados || "").trim(),
     engajamentoNota: clampInt(Number(src.engajamentoNota ?? src.engajamento ?? 0), 0, 5, 0),
     evolucaoNota: clampInt(Number(src.evolucaoNota ?? src.evolucao ?? 0), 0, 5, 0),
+    confiancaNota: clampInt(Number(src.confiancaNota ?? src.confianca ?? 0), 0, 5, 0),
     humorAluno: String(src.humorAluno || "").trim().toLowerCase(),
     proximaAula: String(src.proximaAula || "").trim(),
     avisosCoordenacao: Array.isArray(src.avisosCoordenacao)
@@ -7299,6 +7305,7 @@ const normalizePedagogicoStatus = (value) => {
   if (normalized === "realizada" || normalized === "realizado" || normalized === "aula_realizada") return "realizada";
   if (normalized === "falta do aluno" || normalized === "falta_aluno" || normalized === "falta" || normalized === "no_show") return "falta_aluno";
   if (normalized === "remarcada" || normalized === "remarcado" || normalized === "rescheduled") return "remarcada";
+  if (normalized === "cancelada" || normalized === "cancelado" || normalized === "cancelled") return "cancelada";
   return "realizada";
 };
 
@@ -7306,6 +7313,7 @@ const PEDAGOGICO_STATUS = {
   REALIZADA: "realizada",
   FALTA_ALUNO: "falta_aluno",
   REMARCADA: "remarcada",
+  CANCELADA: "cancelada",
 };
 
 const renderPedSelectOptions = (options, selected) => {
@@ -7335,6 +7343,38 @@ const renderRealizadaFieldsHtml = (draft = {}) => {
         <div class="ped-label">Evolução do aluno</div>
         ${renderPedStars(d.evolucaoNota || 0, "evolucaoNota")}
       </div>
+    </div>
+
+    <div class="ped-grid2">
+      <div class="ped-field">
+        <div class="ped-label">Gramática trabalhada</div>
+        <input class="ped-in" type="text" data-ped-field="gramaticaTrabalhada" value="${escapeHtml(String(d.gramaticaTrabalhada || ""))}" />
+      </div>
+      <div class="ped-field">
+        <div class="ped-label">Vocabulário trabalhado</div>
+        <input class="ped-in" type="text" data-ped-field="vocabularioTrabalhado" value="${escapeHtml(String(d.vocabularioTrabalhado || ""))}" />
+      </div>
+    </div>
+
+    <div class="ped-grid2">
+      <div class="ped-field">
+        <div class="ped-label">Pronúncia / conversação</div>
+        <input class="ped-in" type="text" data-ped-field="pronunciaConversacao" value="${escapeHtml(String(d.pronunciaConversacao || ""))}" />
+      </div>
+      <div class="ped-field">
+        <div class="ped-label">Atividade realizada</div>
+        <input class="ped-in" type="text" data-ped-field="atividadeRealizada" value="${escapeHtml(String(d.atividadeRealizada || ""))}" />
+      </div>
+    </div>
+
+    <div class="ped-field">
+      <div class="ped-label">Materiais usados</div>
+      <input class="ped-in" type="text" data-ped-field="materiaisUsados" value="${escapeHtml(String(d.materiaisUsados || ""))}" />
+    </div>
+
+    <div class="ped-field">
+      <div class="ped-label">Confiança do aluno</div>
+      ${renderPedStars(d.confiancaNota || 0, "confiancaNota")}
     </div>
 
     <div class="ped-field">
@@ -7468,10 +7508,20 @@ const renderRemarcadaFieldsHtml = (draft = {}) => {
   `;
 };
 
+const renderCanceladaFieldsHtml = (draft = {}) => `
+  <div class="ped-form-group ped-field">
+    <div class="ped-label">Motivo / observação do cancelamento</div>
+    <textarea class="ped-ta" data-ped-field="observacao" rows="3" maxlength="250" placeholder="Explique brevemente o cancelamento...">${escapeHtml(
+      String(draft?.observacao || draft?.observacoesInternas || "")
+    )}</textarea>
+  </div>
+`;
+
 const getPedagogicoDynamicFieldsHtml = (status, draft) => {
   const normalizedStatus = normalizePedagogicoStatus(status);
   if (normalizedStatus === PEDAGOGICO_STATUS.FALTA_ALUNO) return renderFaltaAlunoFieldsHtml(draft);
   if (normalizedStatus === PEDAGOGICO_STATUS.REMARCADA) return renderRemarcadaFieldsHtml(draft);
+  if (normalizedStatus === PEDAGOGICO_STATUS.CANCELADA) return renderCanceladaFieldsHtml(draft);
   return renderRealizadaFieldsHtml(draft);
 };
 
@@ -7563,6 +7613,7 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
             <option value="realizada" ${status === "realizada" ? "selected" : ""}>Realizada</option>
             <option value="falta_aluno" ${status === "falta_aluno" ? "selected" : ""}>Falta do aluno</option>
             <option value="remarcada" ${status === "remarcada" ? "selected" : ""}>Remarcada</option>
+            <option value="cancelada" ${status === "cancelada" ? "selected" : ""}>Cancelada</option>
           </select>
           <span class="ped-arr">▼</span>
         </div>
@@ -7874,8 +7925,14 @@ const readPedagogicoDraftFromDom = () => {
   const draft = {
     statusAula, // realizada | falta | remarcada
     conteudoTrabalhado: getField("conteudoTrabalhado").trim(),
+    gramaticaTrabalhada: getField("gramaticaTrabalhada").trim(),
+    vocabularioTrabalhado: getField("vocabularioTrabalhado").trim(),
+    pronunciaConversacao: getField("pronunciaConversacao").trim(),
+    atividadeRealizada: getField("atividadeRealizada").trim(),
+    materiaisUsados: getField("materiaisUsados").trim(),
     engajamentoNota: clampInt(Number(getField("engajamentoNota") || 0), 0, 5, 0),
     evolucaoNota: clampInt(Number(getField("evolucaoNota") || 0), 0, 5, 0),
+    confiancaNota: clampInt(Number(getField("confiancaNota") || 0), 0, 5, 0),
     humorAluno: getField("humorAluno").trim().toLowerCase(),
     proximaAula: getField("proximaAula").trim(),
     avisosCoordenacao,
@@ -7983,14 +8040,57 @@ const savePedagogicoLog = async ({ autosave = false } = {}) => {
   setPedagogicoAutosaveLabel("Salvando…");
 
   try {
-    const res = await fetchWithAuth("/api/lesson-logs", {
+    const liveLessonId = String(lesson.supabaseLessonId || (lesson.source === "supabase" ? lesson.id : "") || "");
+    const isSupabaseLesson = Boolean(liveLessonId);
+    const supabaseStatus =
+      draft.statusAula === "falta_aluno"
+        ? "falta"
+        : draft.statusAula === "remarcada"
+          ? "remarcada"
+          : draft.statusAula === "cancelada"
+            ? "cancelada"
+            : "realizada";
+    const requestUrl = isSupabaseLesson
+      ? `/api/live-lessons/${encodeURIComponent(liveLessonId)}/register`
+      : "/api/lesson-logs";
+    const requestPayload = isSupabaseLesson
+      ? {
+          status: supabaseStatus,
+          conteudo_trabalhado: draft.conteudoTrabalhado,
+          gramatica_trabalhada: draft.gramaticaTrabalhada,
+          vocabulario_trabalhado: draft.vocabularioTrabalhado,
+          pronuncia_conversacao: draft.pronunciaConversacao,
+          atividade_realizada: draft.atividadeRealizada,
+          materiais_usados: draft.materiaisUsados,
+          desempenho_aluno: draft.evolucaoNota ? `${draft.evolucaoNota}/5` : "",
+          humor_aluno: draft.humorAluno,
+          humor: draft.humorAluno,
+          estrelas: draft.engajamentoNota || null,
+          engajamento: draft.engajamentoNota ? `${draft.engajamentoNota}/5` : "",
+          confianca: draft.confiancaNota ? `${draft.confiancaNota}/5` : "",
+          observacoes: draft.observacoesInternas || draft.observacao,
+          proxima_recomendacao: draft.proximaAula,
+          proximo_foco: draft.proximaAula,
+          motivo_falta: draft.motivoFalta,
+          motivo_remarcacao: draft.motivoRemarcacao,
+          nova_data: draft.novaDataRemarcacao || null,
+          nova_data_aula: draft.novaDataRemarcacao || null,
+          tipo: draft.statusAula === "remarcada" ? "remarcacao" : "",
+        }
+      : payload;
+    const res = await fetchWithAuth(requestUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(requestPayload),
     });
     if (!res.ok) throw new Error("lesson_log_save_failed");
     const data = await res.json().catch(() => null);
-    const logId = typeof data?.id === "string" ? data.id : "";
+    const logId =
+      typeof data?.id === "string"
+        ? data.id
+        : data?.register?.id != null
+          ? String(data.register.id)
+          : "";
     pedagogicoDirty = false;
     setPedagogicoAutosaveLabel("Salvo");
     if (!autosave) setPedagogicoStatus("Registro salvo.", "success");
@@ -8083,14 +8183,27 @@ const renderTeacherPedagogico = async ({ silent = false } = {}) => {
   if (pedagogicoEmpty instanceof HTMLElement) pedagogicoEmpty.hidden = true;
 
   try {
-    const [eventsRes, logsRes] = await Promise.all([fetchWithAuth("/api/schedule-events"), fetchWithAuth("/api/lesson-logs")]);
-    if (!eventsRes.ok) throw new Error("events_fetch_failed");
-    const eventsData = await eventsRes.json().catch(() => null);
+    const [eventsResult, logsResult, liveResult] = await Promise.allSettled([
+      fetchWithAuth("/api/schedule-events"),
+      fetchWithAuth("/api/lesson-logs"),
+      fetchWithAuth("/api/live-lessons?scope=dashboard&include_records=1&limit=200"),
+    ]);
+
+    const eventsRes = eventsResult.status === "fulfilled" ? eventsResult.value : null;
+    const logsRes = logsResult.status === "fulfilled" ? logsResult.value : null;
+    const liveRes = liveResult.status === "fulfilled" ? liveResult.value : null;
+    const eventsData = eventsRes?.ok ? await eventsRes.json().catch(() => null) : null;
+    const liveData = liveRes?.ok ? await liveRes.json().catch(() => null) : null;
     const events = Array.isArray(eventsData?.events) ? eventsData.events : [];
-    const currentUserId = String(sessionUser?.id || "").trim();
+    const liveLessons = Array.isArray(liveData?.lessons) ? liveData.lessons : [];
+    const liveRecords = Array.isArray(liveData?.records) ? liveData.records : [];
+
+    if (!eventsRes?.ok && !liveRes?.ok) {
+      throw new Error(`lessons_fetch_failed:${eventsRes?.status || "network"}:${liveRes?.status || "network"}`);
+    }
 
     let logs = [];
-    if (logsRes.ok) {
+    if (logsRes?.ok) {
       const logsData = await logsRes.json().catch(() => null);
       logs = Array.isArray(logsData?.logs) ? logsData.logs : [];
     }
@@ -8102,8 +8215,45 @@ const renderTeacherPedagogico = async ({ silent = false } = {}) => {
       if (!eventId) return;
       logsByEventId.set(eventId, log);
     });
+    liveRecords.forEach((record) => {
+      if (!record || typeof record !== "object") return;
+      const eventId = String(record.aula_id || "");
+      if (!eventId || logsByEventId.has(eventId)) return;
+      const statusRaw = String(record.status || "").toLowerCase();
+      const statusAula =
+        statusRaw === "falta"
+          ? "falta_aluno"
+          : statusRaw === "remarcada"
+            ? "remarcada"
+            : statusRaw === "cancelada"
+              ? "cancelada"
+              : "realizada";
+      logsByEventId.set(eventId, {
+        id: String(record.id || ""),
+        eventId,
+        statusAula,
+        payload: {
+          statusAula,
+          conteudoTrabalhado: record.conteudo_trabalhado || "",
+          gramaticaTrabalhada: record.gramatica_trabalhada || "",
+          vocabularioTrabalhado: record.vocabulario_trabalhado || "",
+          pronunciaConversacao: record.pronuncia_conversacao || "",
+          atividadeRealizada: record.atividade_realizada || "",
+          materiaisUsados: record.materiais_usados || "",
+          engajamentoNota: Number.parseInt(String(record.engajamento || ""), 10) || 0,
+          evolucaoNota: Number.parseInt(String(record.desempenho_aluno || ""), 10) || 0,
+          confiancaNota: Number.parseInt(String(record.confianca || ""), 10) || 0,
+          humorAluno: record.humor_aluno || record.humor || "",
+          proximaAula: record.proxima_recomendacao || record.proximo_foco || "",
+          observacoesInternas: record.observacoes || "",
+          motivoFalta: record.motivo_falta || "",
+          motivoRemarcacao: record.motivo_remarcacao || "",
+          novaDataRemarcacao: record.nova_data_aula || record.nova_data || "",
+        },
+      });
+    });
 
-    const lessons = events
+    const firestoreLessons = events
       // O professor pode registrar logs também para eventos "manual" (muitos professores criam "Aula" como evento manual).
       .filter((evt) => evt && typeof evt === "object" && (evt.type === "lesson" || evt.type === "manual"))
       .map((evt) => ({
@@ -8115,9 +8265,51 @@ const renderTeacherPedagogico = async ({ silent = false } = {}) => {
         endMin: Number(evt.endMin) || 0,
         title: String(evt.title || "Aluno"),
         description: String(evt.description || "Aula"),
+        source: "firestore",
       }))
-      .filter((evt) => evt.id && isValidDateKey(evt.dateKey) && evt.endMin > evt.startMin)
-      .sort((a, b) => (a.dateKey === b.dateKey ? a.startMin - b.startMin : a.dateKey.localeCompare(b.dateKey)));
+      .filter((evt) => evt.id && isValidDateKey(evt.dateKey) && evt.endMin > evt.startMin);
+
+    const supabaseLessons = liveLessons
+      .map(normalizeLiveLessonForTeacherDashboard)
+      .filter(Boolean)
+      .map((evt) => ({
+        id: String(evt.id || ""),
+        alunoId: String(evt.alunoId || ""),
+        professorId: String(evt.professorId || ""),
+        dateKey: String(evt.dateKey || ""),
+        startMin: Number(evt.startMin) || 0,
+        endMin: Number(evt.endMin) || 0,
+        title: String(evt.alunoNome || evt.title || "Aluno"),
+        description: String(evt.tema || "Aula ao vivo"),
+        source: "supabase",
+        liveUrl: evt.liveUrl || `/aula/${encodeURIComponent(evt.id)}`,
+      }))
+      .filter((evt) => evt.id && isValidDateKey(evt.dateKey) && evt.endMin > evt.startMin);
+
+    const merged = new Map();
+    firestoreLessons.forEach((lesson) => {
+      const key = `${lesson.alunoId}:${lesson.professorId}:${lesson.dateKey}:${lesson.startMin}`;
+      merged.set(key, lesson);
+    });
+    supabaseLessons.forEach((lesson) => {
+      const key = `${lesson.alunoId}:${lesson.professorId}:${lesson.dateKey}:${lesson.startMin}`;
+      const existing = merged.get(key);
+      if (existing) {
+        existing.liveLessonId = lesson.id;
+        existing.liveUrl = lesson.liveUrl;
+        existing.supabaseLessonId = lesson.id;
+      } else {
+        merged.set(key, lesson);
+      }
+    });
+    const lessons = Array.from(merged.values()).sort((a, b) =>
+      a.dateKey === b.dateKey ? a.startMin - b.startMin : a.dateKey.localeCompare(b.dateKey)
+    );
+    lessons.forEach((lesson) => {
+      const liveId = String(lesson.supabaseLessonId || "");
+      if (!liveId || logsByEventId.has(lesson.id) || !logsByEventId.has(liveId)) return;
+      logsByEventId.set(lesson.id, logsByEventId.get(liveId));
+    });
 
     pedagogicoState.lessons = lessons;
     pedagogicoState.logsByEventId = logsByEventId;
@@ -13401,6 +13593,50 @@ const fetchClassesFromFirestore = async () => {
   return rows;
 };
 
+const fetchLiveLessonsForAdminPedagogico = async () => {
+  const res = await fetchWithAuth("/api/live-lessons?scope=dashboard&limit=500");
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(data?.error || "live_lessons_failed");
+  return Array.isArray(data?.lessons) ? data.lessons : [];
+};
+
+const normalizeLiveLessonsAsAdminClasses = (lessons) => {
+  return (Array.isArray(lessons) ? lessons : [])
+    .map((lesson) => {
+      const ui = normalizeLiveLessonForUi(lesson);
+      if (!ui) return null;
+      const date = parseDateKey(ui.dateKey);
+      const statusRaw = String(ui.status || "").toLowerCase();
+      const ended = ["realizada", "falta", "cancelada"].includes(statusRaw);
+      return {
+        id: `live:${ui.id}`,
+        liveLessonId: ui.id,
+        type: "individual",
+        status: ended ? "ended" : "active",
+        title: String(lesson.titulo || ui.aluno || "Aula"),
+        teacherId: ui.professorId,
+        teacherName: ui.professor,
+        groupId: "",
+        groupName: "",
+        planId: "",
+        planName: String(lesson.plano || ""),
+        plan: normalizePlanKeyLoose(lesson.plano || ""),
+        daysOfWeek: date ? [date.getDay()] : [],
+        startMin: ui.startMin,
+        endMin: ui.endMin,
+        startDate: ui.dateKey,
+        endDate: ui.dateKey,
+        studentIds: ui.alunoId ? [ui.alunoId] : [],
+        studentNames: ui.aluno ? [ui.aluno] : [],
+        notes: String(lesson.observacoes || lesson.briefing_pedagogico || ""),
+        createdAtMs: Date.parse(lesson.created_at || "") || 0,
+        updatedAtMs: Date.parse(lesson.updated_at || "") || 0,
+        source: "supabase",
+      };
+    })
+    .filter(Boolean);
+};
+
 const normalizePlanStatus = (value) => {
   const raw = String(value || "").trim().toLowerCase();
   if (raw === "inactive" || raw === "inativo" || raw === "desativado") return "inactive";
@@ -16464,11 +16700,21 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
       onboardingQuizzes,
       onboardingProgressAll,
       teacherQuizSubmissionsAll,
+      liveLessons,
     ] =
       await Promise.all([
-      fetchUserRowsFromFirestore("teacher"),
-      fetchUserRowsFromFirestore("student"),
-      fetchClassesFromFirestore(),
+      fetchUserRowsFromFirestore("teacher").catch((error) => {
+        console.error("[admin-ped] teachers load failed", error);
+        return [];
+      }),
+      fetchUserRowsFromFirestore("student").catch((error) => {
+        console.error("[admin-ped] students load failed", error);
+        return [];
+      }),
+      fetchClassesFromFirestore().catch((error) => {
+        console.error("[admin-ped] classes load failed", error);
+        return [];
+      }),
       fetchGroupsFromFirestore().catch(() => []),
       fetchPlansFromFirestore().catch(() => []),
       fetchSurveysFromFirestore().catch(() => []),
@@ -16480,13 +16726,46 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
       fetchOnboardingQuizzesFromFirestore().catch(() => []),
       fetchAllTeacherOnboardingProgressFromFirestore().catch(() => []),
       fetchAllTeacherQuizSubmissionsFromFirestore().catch(() => []),
+      fetchLiveLessonsForAdminPedagogico().catch((error) => {
+        console.error("[admin-ped] Supabase lessons load failed", error);
+        return [];
+      }),
     ]);
 
-    adminPedagogicoState.teachers = teachers.filter((t) => t && typeof t === "object");
+    const liveClasses = normalizeLiveLessonsAsAdminClasses(liveLessons);
+    const liveTeachers = liveClasses
+      .filter((row) => row.teacherId || row.teacherName)
+      .map((row) => ({
+        id: row.teacherId || `name:${row.teacherName}`,
+        nome: row.teacherName || "Professor",
+        ativo: true,
+        source: "supabase",
+      }));
+    const liveStudents = liveClasses.flatMap((row) =>
+      row.studentIds.map((id, index) => ({
+        id: id || `name:${row.studentNames[index] || ""}`,
+        nome: row.studentNames[index] || "Aluno",
+        ativo: true,
+        professorId: row.teacherId || "",
+        source: "supabase",
+      }))
+    );
+    const mergePeople = (primary, fallback) => {
+      const byId = new Map();
+      [...(Array.isArray(primary) ? primary : []), ...(Array.isArray(fallback) ? fallback : [])].forEach((row) => {
+        if (!row || typeof row !== "object") return;
+        const id = String(row.id || "").trim();
+        if (!id) return;
+        if (!byId.has(id)) byId.set(id, row);
+      });
+      return Array.from(byId.values());
+    };
+
+    adminPedagogicoState.teachers = mergePeople(teachers, liveTeachers);
     adminPedagogicoState.teachersById = new Map(adminPedagogicoState.teachers.map((t) => [String(t.id || ""), t]));
-    adminPedagogicoState.students = students.filter((s) => s && typeof s === "object");
+    adminPedagogicoState.students = mergePeople(students, liveStudents);
     adminPedagogicoState.studentsById = new Map(adminPedagogicoState.students.map((s) => [String(s.id || ""), s]));
-    adminPedagogicoState.classes = Array.isArray(classes) ? classes : [];
+    adminPedagogicoState.classes = Array.isArray(classes) && classes.length ? classes : liveClasses;
     adminPedagogicoState.groups = Array.isArray(groups) ? groups : [];
     adminPedagogicoState.groupsById = new Map(adminPedagogicoState.groups.map((g) => [String(g.id || ""), g]));
     adminPedagogicoState.groupsByClassId = new Map(

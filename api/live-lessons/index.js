@@ -1,6 +1,6 @@
 const { sendJson } = require("../_lib/http");
 const { getSessionFromRequest } = require("../_lib/session");
-const { listLiveLessons, summarizeLiveLessons, normalizeRole, isAdminRole } = require("../_lib/live-lessons");
+const { listLiveLessons, listLessonRegisters, summarizeLiveLessons, normalizeRole, isAdminRole } = require("../_lib/live-lessons");
 
 module.exports = async (req, res) => {
   if (req.method !== "GET" && req.method !== "HEAD") {
@@ -28,8 +28,21 @@ module.exports = async (req, res) => {
 
   try {
     const lessons = await listLiveLessons({ session, limit, scope });
+    const includeRecords = ["1", "true", "yes"].includes(String(url.searchParams.get("include_records") || "").toLowerCase());
+    let records = [];
+    let recordsWarning = "";
+    if (includeRecords) {
+      try {
+        records = await listLessonRegisters({ session, lessonIds: lessons.map((lesson) => lesson.id), limit: 1000 });
+      } catch (error) {
+        recordsWarning = error?.code || "lesson_records_unavailable";
+        console.error("[api] live lesson records list failed", error);
+      }
+    }
     sendJson(res, 200, {
       lessons,
+      records,
+      recordsWarning: recordsWarning || undefined,
       summary: summarizeLiveLessons(lessons),
     });
   } catch (error) {
