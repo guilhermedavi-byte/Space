@@ -15222,7 +15222,8 @@ const renderAdminPedagogicoStudentsPanel = () => {
       const groupId = String(s?.groupId || "").trim();
       const groupName = groupId ? String(groupsById.get(groupId)?.name || "").trim() : String(s?.groupName || "").trim();
       const plan = String(s?.plano || "").trim() || "Sem plano";
-      const statusLabel = s && typeof s === "object" ? (s.ativo ? "Ativo" : "Inativo") : "—";
+      const accessActive = s?.ativo_acesso !== false && String(s?.status_acesso || "ativo") !== "inativo";
+      const statusLabel = accessActive ? "Ativo" : "Inativo";
       const risk = (riskByStudent.get(String(s.id || "")) || {}).risk || "—";
       return {
         id: String(s.id || ""),
@@ -15235,6 +15236,9 @@ const renderAdminPedagogicoStudentsPanel = () => {
         groupName,
         plan,
         risk,
+        alunoChave: String(s.aluno_chave || ""),
+        source: String(s.source || ""),
+        accessActive,
       };
     });
 
@@ -15252,6 +15256,7 @@ const renderAdminPedagogicoStudentsPanel = () => {
                 <div class="admin-ped-row-sub">${escapeHtml(r.email || "—")}</div>
                 <div class="admin-ped-row-meta">
                   <span class="admin-ped-pill ${statusCls}">${escapeHtml(r.statusLabel)}</span>
+                  ${r.source.includes("financeiro") ? `<span class="admin-ped-pill">Financeiro sincronizado</span>` : ""}
                   <span class="admin-ped-pill is-plan">${escapeHtml(r.plan)}</span>
                   ${r.teacherName ? `<span class="admin-ped-pill">${escapeHtml(r.teacherName)}</span>` : `<span class="admin-ped-pill">Sem professor</span>`}
                   ${r.groupName ? `<span class="admin-ped-pill">${escapeHtml(r.groupName)}</span>` : `<span class="admin-ped-pill">Sem turma</span>`}
@@ -15264,6 +15269,15 @@ const renderAdminPedagogicoStudentsPanel = () => {
                 <button class="admin-ped-action is-muted" type="button" data-admin-ped-student-new-class="${escapeHtml(
                   r.id
                 )}">Criar aula</button>
+                ${
+                  r.alunoChave
+                    ? `<button class="admin-ped-action ${r.accessActive ? "is-danger" : ""}" type="button"
+                         data-admin-ped-student-access-status="${escapeHtml(r.alunoChave)}"
+                         data-admin-ped-student-next-status="${r.accessActive ? "inativo" : "ativo"}">
+                         ${r.accessActive ? "Deixar inativo só para mim" : "Ativar no meu acesso"}
+                       </button>`
+                    : ""
+                }
               </div>
             </div>
           `;
@@ -17023,20 +17037,41 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
         source: "supabase",
       }))
     );
+    const opsStudents = (Array.isArray(pedagogicalOps?.students) ? pedagogicalOps.students : []).map((row) => ({
+      ...row,
+      id: String(row.id || row.aluno_id || row.aluno_chave || ""),
+      nome: String(row.nome || row.aluno_nome || "Aluno"),
+      email: String(row.email || ""),
+      ativo: row.ativo_acesso !== false,
+      ativo_acesso: row.ativo_acesso !== false,
+      status_acesso: row.status_acesso || "ativo",
+      professorId: row.professor_id || "",
+      plano: row.plano || "",
+      source: row.source || "supabase",
+    }));
+    const personMergeKey = (row) => {
+      const email = String(row?.email || "").trim().toLowerCase();
+      if (email) return `email:${email}`;
+      const phone = String(row?.telefone || "").replace(/\D+/g, "");
+      if (phone) return `phone:${phone}`;
+      const name = String(row?.nome || row?.aluno_nome || "").trim().toLowerCase();
+      return name ? `name:${name}` : `id:${String(row?.id || "")}`;
+    };
     const mergePeople = (primary, fallback) => {
       const byId = new Map();
       [...(Array.isArray(primary) ? primary : []), ...(Array.isArray(fallback) ? fallback : [])].forEach((row) => {
         if (!row || typeof row !== "object") return;
-        const id = String(row.id || "").trim();
-        if (!id) return;
-        if (!byId.has(id)) byId.set(id, row);
+        const key = personMergeKey(row);
+        if (!key || key === "id:") return;
+        const previous = byId.get(key);
+        byId.set(key, previous ? { ...row, ...previous, aluno_chave: row.aluno_chave || previous.aluno_chave } : row);
       });
       return Array.from(byId.values());
     };
 
     adminPedagogicoState.teachers = mergePeople(teachers, liveTeachers);
     adminPedagogicoState.teachersById = new Map(adminPedagogicoState.teachers.map((t) => [String(t.id || ""), t]));
-    adminPedagogicoState.students = mergePeople(students, liveStudents);
+    adminPedagogicoState.students = mergePeople(students, [...opsStudents, ...liveStudents]);
     adminPedagogicoState.studentsById = new Map(adminPedagogicoState.students.map((s) => [String(s.id || ""), s]));
     adminPedagogicoState.classes = Array.isArray(classes) && classes.length ? classes : liveClasses;
     adminPedagogicoState.groups = Array.isArray(groups) ? groups : [];
@@ -22088,6 +22123,44 @@ document.addEventListener("click", (event) => {
         event.preventDefault();
         const alunoId = String(adminPedStudentOpen.getAttribute("data-admin-ped-student-open") || "").trim();
         openAdminStudentHistoryDrawer({ alunoId }).catch(() => {});
+        return;
+      }
+
+      const adminPedStudentAccessStatus = target.closest("[data-admin-ped-student-access-status]");
+      if (adminPedStudentAccessStatus instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const alunoChave = String(adminPedStudentAccessStatus.getAttribute("data-admin-ped-student-access-status") || "").trim();
+        const nextStatus = String(adminPedStudentAccessStatus.getAttribute("data-admin-ped-student-next-status") || "").trim();
+        if (!alunoChave || !["ativo", "inativo"].includes(nextStatus)) return;
+        adminPedStudentAccessStatus.disabled = true;
+        setAdminPedagogicoStatus(nextStatus === "inativo" ? "Marcando como inativo no seu acesso…" : "Ativando no seu acesso…");
+        fetchWithAuth("/api/pedagogico/dashboard", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "set_student_status", aluno_chave: alunoChave, status: nextStatus }),
+        })
+          .then(async (res) => {
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data?.error || "student_status_failed");
+            adminPedagogicoState.loadedAt = 0;
+            await renderAdminControlePedagogicoPanel({ force: true });
+            setAdminPedagogicoStatus(
+              nextStatus === "inativo"
+                ? "Aluno inativo apenas no seu acesso. O acesso de outros administradores não foi alterado."
+                : "Aluno reativado no seu acesso.",
+              "success"
+            );
+          })
+          .catch((error) => {
+            console.error("[admin-ped] student access status failed", error);
+            adminPedStudentAccessStatus.disabled = false;
+            setAdminPedagogicoStatus(
+              error?.message === "PGRST205" || error?.message === "42P01"
+                ? "A tabela de preferências por acesso ainda precisa ser criada no Supabase."
+                : "Não foi possível alterar o status no seu acesso agora.",
+              "error"
+            );
+          });
         return;
       }
 

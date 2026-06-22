@@ -10,6 +10,8 @@ const TABLES = {
   flexge: "n8n_flexge_evolucao_alunos_space",
   teachers: "n8n_professores_space",
   reports: "n8n_relatorios_pedagogicos_space",
+  financeStudents: "n8n_alunos_financeiro_space",
+  adminStudentPreferences: "n8n_preferencias_alunos_pedagogico_space",
 };
 
 const safeEncode = (value) => encodeURIComponent(String(value || ""));
@@ -96,14 +98,68 @@ const dateKey = (value) => {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(date);
 };
 
-const loadAdminDashboard = async () => {
+const normalizeIdentity = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+const onlyDigits = (value) => String(value || "").replace(/\D+/g, "");
+
+const studentIdentityKey = (row) => {
+  const email = normalizeIdentity(row?.email || row?.aluno_email);
+  if (email) return `email:${email}`;
+  const phone = onlyDigits(row?.telefone);
+  if (phone) return `phone:${phone}`;
+  const id = String(row?.aluno_id || row?.id || "").trim();
+  if (id) return `id:${id}`;
+  return `name:${normalizeIdentity(row?.aluno_nome || row?.nome)}`;
+};
+
+const mergePedagogicalStudents = ({ onboarding, financeStudents, preferences }) => {
+  const preferenceMap = new Map(
+    preferences.map((row) => [String(row?.aluno_chave || ""), String(row?.status || "ativo").toLowerCase()])
+  );
+  const merged = new Map();
+  const add = (row, source) => {
+    if (!row || typeof row !== "object") return;
+    const key = studentIdentityKey(row);
+    if (!key || key === "name:") return;
+    const previous = merged.get(key) || {};
+    const combined = source === "pedagogico" ? { ...previous, ...row } : { ...row, ...previous };
+    const sourceStatus = String(combined.status || combined.status_onboarding || "ativo").toLowerCase();
+    const preferredStatus = preferenceMap.get(key);
+    merged.set(key, {
+      ...combined,
+      id: String(combined.aluno_id || combined.id || key),
+      aluno_id: String(combined.aluno_id || combined.id || key),
+      aluno_nome: combined.aluno_nome || combined.nome || "Aluno",
+      nome: combined.aluno_nome || combined.nome || "Aluno",
+      email: combined.email || combined.aluno_email || "",
+      telefone: combined.telefone || "",
+      plano: combined.plano || "",
+      status_financeiro: previous.status_financeiro || previous.status || row.status_financeiro || row.status || "",
+      aluno_chave: key,
+      source: previous.source ? `${previous.source},${source}` : source,
+      status_acesso: preferredStatus || (["inativo", "cancelado"].includes(sourceStatus) ? "inativo" : "ativo"),
+      ativo_acesso: (preferredStatus || (["inativo", "cancelado"].includes(sourceStatus) ? "inativo" : "ativo")) === "ativo",
+    });
+  };
+  financeStudents.forEach((row) => add(row, "financeiro"));
+  onboarding.forEach((row) => add(row, "pedagogico"));
+  return Array.from(merged.values());
+};
+
+const loadAdminDashboard = async ({ session } = {}) => {
   let degraded = false;
   const safe = (promise) =>
     promise.catch(() => {
       degraded = true;
       return [];
     });
-  const [onboarding, lessons, registers, alerts, satisfaction, flexge, teachers, reports] = await Promise.all([
+  const adminId = String(session?.sub || session?.email || "").trim();
+  const [onboarding, lessons, registers, alerts, satisfaction, flexge, teachers, reports, financeStudents, preferences] = await Promise.all([
     safe(fetchOnboardingRows("select=*&order=updated_at.desc.nullslast&limit=1000")),
     safe(listAllLessons({ limit: 1000 })),
     safe(listRegisters({ limit: 1000 })),
@@ -112,7 +168,17 @@ const loadAdminDashboard = async () => {
     safe(fetchRows(`/${TABLES.flexge}?select=*&order=flexge_last_sync_at.desc.nullslast&limit=1000`, { optional: true })),
     safe(fetchRows(`/${TABLES.teachers}?select=*&order=nome.asc.nullslast&limit=1000`, { optional: true })),
     safe(fetchRows(`/${TABLES.reports}?select=*&order=created_at.desc.nullslast&limit=200`, { optional: true })),
+    safe(fetchRows(`/${TABLES.financeStudents}?select=*&order=updated_at.desc.nullslast&limit=1000`, { optional: true })),
+    adminId
+      ? safe(
+          fetchRows(
+            `/${TABLES.adminStudentPreferences}?select=*&admin_id=eq.${safeEncode(adminId)}&limit=2000`,
+            { optional: true }
+          )
+        )
+      : [],
   ]);
+  const students = mergePedagogicalStudents({ onboarding, financeStudents, preferences });
 
   const today = dateKey(new Date());
   const registeredIds = new Set(registers.map((row) => String(row?.aula_id || "")).filter(Boolean));
@@ -145,7 +211,11 @@ const loadAdminDashboard = async () => {
       csat: average(csatScores.length ? csatScores : scores),
       flexge_criados: onboarding.filter((row) => row?.flexge_user_id || ["criado", "vinculado", "ativo"].includes(String(row?.flexge_status || "").toLowerCase())).length,
       flexge_total: onboarding.length,
+      alunos_sincronizados_financeiro: financeStudents.length,
     },
+    students,
+    financeStudents,
+    studentPreferences: preferences,
     onboarding,
     lessons,
     registers,
@@ -172,7 +242,7 @@ const loadStudentCard = async ({ alunoId, alunoNome }) => {
       degraded = true;
       return [];
     });
-  const [onboarding, lessons, registers, alerts, satisfaction, flexge, reports] = await Promise.all([
+  const [onboarding, lessons, registers, alerts, satisfaction, flexge, reports, financeStudents] = await Promise.all([
     safe(fetchOnboardingRows(`select=*&${filter}&order=updated_at.desc.nullslast&limit=10`)),
     safe(fetchRows(`/${TABLES.lessons}?select=*&${filter}&order=inicio.desc.nullslast&limit=100`, { optional: true })),
     safe(fetchRows(`/${TABLES.registers}?select=*&${filter}&order=created_at.desc.nullslast&limit=100`, { optional: true })),
@@ -180,8 +250,10 @@ const loadStudentCard = async ({ alunoId, alunoNome }) => {
     safe(fetchRows(`/${TABLES.satisfaction}?select=*&${filter}&order=created_at.desc.nullslast&limit=100`, { optional: true })),
     safe(fetchRows(`/${TABLES.flexge}?select=*&${filter}&order=flexge_last_sync_at.desc.nullslast&limit=10`, { optional: true })),
     safe(fetchRows(`/${TABLES.reports}?select=*&${filter}&order=created_at.desc.nullslast&limit=100`, { optional: true })),
+    safe(fetchRows(`/${TABLES.financeStudents}?select=*&${filter}&order=updated_at.desc.nullslast&limit=10`, { optional: true })),
   ]);
-  const base = onboarding[0] || {};
+  const finance = financeStudents[0] || {};
+  const base = { ...finance, ...(onboarding[0] || {}) };
   const evolution = flexge[0] || {};
   return {
     degraded,
@@ -191,6 +263,7 @@ const loadStudentCard = async ({ alunoId, alunoNome }) => {
     aluno_id: alunoId || base.aluno_id || evolution.aluno_id || "",
     aluno_nome: alunoNome || base.aluno_nome || "",
     onboarding: onboarding[0] || null,
+    financeiro: financeStudents[0] || null,
     aulas: lessons,
     registros: registers,
     faltas: registers.filter((row) => String(row?.status || "").toLowerCase() === "falta"),
@@ -211,5 +284,7 @@ module.exports = {
   listRegisters,
   loadAdminDashboard,
   loadStudentCard,
+  studentIdentityKey,
+  mergePedagogicalStudents,
   isMissingRelation,
 };
