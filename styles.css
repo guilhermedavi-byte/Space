@@ -11277,8 +11277,11 @@ body[data-page="landing"] .page-glow {
 }
 
 .lp-brand-mark {
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 30px;
+  object-fit: cover;
+  object-position: 58% center;
+  flex: 0 0 auto;
 }
 
 .lp-brand-text {
