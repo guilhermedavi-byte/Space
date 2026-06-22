@@ -114,6 +114,9 @@ const buildAppHtml = ({ sessionJson, role, roleSlug, templateHtml, initialPanel 
     <title>Space | Plataforma</title>
     <meta name="robots" content="noindex, nofollow" />
     <base href="/" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png" />
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body data-view="interno" data-page="app" data-app-role="${String(roleSlug || "")}" data-initial-panel="${String(initialPanel || "dashboard")}">

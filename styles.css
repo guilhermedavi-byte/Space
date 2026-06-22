@@ -10886,10 +10886,14 @@ body.is-modal-open {
 }
 
 .auth-login-logo-img {
-  height: 34px;
-  width: auto;
+  display: block;
+  width: clamp(150px, 15vw, 205px);
+  height: auto;
+  max-height: 58px;
+  object-fit: contain;
+  object-position: left center;
   filter: brightness(0) invert(1);
-  opacity: 0.95;
+  opacity: 1;
 }
 
 .auth-login-copy {

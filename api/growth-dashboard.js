@@ -2592,6 +2592,9 @@ module.exports = async (req, res) => {
     <title>${pageTitle}</title>
     <meta name="robots" content="noindex, nofollow" />
     <base href="/" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png" />
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body data-view="interno" data-page="growth" data-sidebar-expanded="false">

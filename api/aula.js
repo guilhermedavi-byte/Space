@@ -65,6 +65,9 @@ const buildHtml = ({ user, lesson, joinData, canEdit }) => {
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Space | ${escapeHtml(title)}</title>
     <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png" />
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
     <link rel="stylesheet" href="/styles.css" />
     <style>
       body.live-class-body{min-height:100vh;margin:0;background:#070b13;color:#f8fafc;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}

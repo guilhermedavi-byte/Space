@@ -21104,6 +21104,14 @@ window.addEventListener("popstate", () => {
 
 if (closePlatformButton) {
   closePlatformButton.addEventListener("click", async () => {
+    const logoutDestination = (() => {
+      const role = normalizeRole(sessionUser?.role || currentRole);
+      if (role === "FINANCE") return "/login/financeiro";
+      if (role === "teacher") return "/login/professor";
+      if (role === "admin") return "/login/admin";
+      if (role === "growth") return "/login/growth";
+      return "/login/aluno";
+    })();
     closeModal();
 
     // Always clear local state first so protected UI doesn't linger if navigation is delayed.
@@ -21126,7 +21134,7 @@ if (closePlatformButton) {
       // ignore
     }
 
-    window.location.replace("/");
+    window.location.replace(logoutDestination);
   });
 }
 

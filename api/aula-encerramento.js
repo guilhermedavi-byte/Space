@@ -48,6 +48,9 @@ const buildHtml = ({ lesson, session }) => {
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Space | Aula encerrada</title>
     <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png" />
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
     <style>
       *{box-sizing:border-box}
       body{min-height:100vh;margin:0;background:radial-gradient(circle at 16% 12%,rgba(255,91,82,.24),transparent 30%),radial-gradient(circle at 88% 6%,rgba(47,107,184,.28),transparent 36%),#070b13;color:#fff;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
