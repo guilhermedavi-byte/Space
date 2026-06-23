@@ -12879,8 +12879,10 @@ const ensureAdminStudentsBaseData = async ({ force = false } = {}) => {
     adminStudentsState.studentsById = studentsById;
     adminStudentsState.students = Array.isArray(students) ? students : [];
 
-    if (!eventsRes.ok) throw new Error("admin_students_events_failed");
-    const eventsData = await eventsRes.json().catch(() => null);
+    const eventsData = eventsRes.ok ? await eventsRes.json().catch(() => null) : null;
+    if (!eventsRes.ok) {
+      console.warn("[admin] agenda temporariamente indisponível; exibindo alunos sem histórico de eventos.");
+    }
     adminStudentsState.events = Array.isArray(eventsData?.events) ? eventsData.events : [];
     adminStudentsState.eventsLoadedAt = Date.now();
 
