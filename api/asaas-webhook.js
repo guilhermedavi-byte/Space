@@ -1,6 +1,7 @@
 const { readJsonBody, sendJson } = require("./_lib/http");
 const { supabaseFetch } = require("./_lib/supabase-rest");
 const { FINANCE_TABLE } = require("./_lib/finance-integrations");
+const { validateWebhookSecret } = require("./_lib/security");
 
 const PAID_EVENTS = new Set(["PAYMENT_RECEIVED", "PAYMENT_CONFIRMED"]);
 const OVERDUE_EVENTS = new Set(["PAYMENT_OVERDUE"]);
@@ -58,6 +59,12 @@ module.exports = async (req, res) => {
     res.setHeader("Allow", "POST");
     return sendJson(res, 405, { error: "method_not_allowed" });
   }
+
+  const auth = validateWebhookSecret(
+    req,
+    process.env.ASAAS_WEBHOOK_TOKEN || process.env.ASAAS_WEBHOOK_SECRET || process.env.N8N_WEBHOOK_SECRET
+  );
+  if (!auth.ok) return sendJson(res, auth.status, { error: auth.error });
 
   let body;
   try {

@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#11100f">
+  <meta name="description" content="Painel de uso do Claude Code em tempo real.">
+  <title>Claude Usage</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="../assets/favicon-192.png">
+  <link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="shell">
+    <section class="device" aria-label="Painel Claude Usage">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">✳</span>
+          <div>
+            <strong>AI Usage</strong>
+            <span>usage monitor</span>
+          </div>
+        </div>
+        <div class="header-actions">
+          <div class="provider-switch" aria-label="Provedor monitorado">
+            <button class="provider-button active" type="button" data-provider="claude">Claude</button>
+            <button class="provider-button" type="button" data-provider="openai">OpenAI</button>
+          </div>
+          <span id="updatedAt" class="updated">modo demo</span>
+          <button id="refreshButton" class="icon-button" type="button" aria-label="Atualizar dados" title="Atualizar">↻</button>
+          <button id="settingsButton" class="icon-button" type="button" aria-label="Abrir ajustes" title="Ajustes">⚙</button>
+        </div>
+      </header>
+
+      <button id="refreshTrack" class="refresh-track" type="button" aria-label="Atualizar agora">
+        <span id="refreshProgress"></span>
+      </button>
+
+      <div id="screens" class="screens">
+        <section class="screen active" data-title="Resumo">
+          <div class="screen-heading">
+            <div>
+              <p class="eyebrow">Agora</p>
+              <h1>Seu uso, sem surpresas.</h1>
+            </div>
+            <span id="overallStatus" class="status-chip good">Permitido</span>
+          </div>
+
+          <div class="usage-grid">
+            <article class="usage-card">
+              <div class="card-top"><span>Janela curta</span><strong>5 horas</strong></div>
+              <div class="percentage"><strong id="usage5Value">41</strong><span>%</span></div>
+              <div class="bar"><span id="usage5Bar" style="width:41%"></span></div>
+              <p id="usage5Reset">reinicia em 1h 40min</p>
+            </article>
+            <article class="usage-card">
+              <div class="card-top"><span>Janela longa</span><strong>7 dias</strong></div>
+              <div class="percentage"><strong id="usage7Value">16</strong><span>%</span></div>
+              <div class="bar green"><span id="usage7Bar" style="width:16%"></span></div>
+              <p id="usage7Reset">reinicia em 5d 3h</p>
+            </article>
+          </div>
+
+          <div class="models-row" id="modelsRow" aria-label="Status dos modelos"></div>
+          <div class="insight"><span>✦</span><p id="overviewInsight">Você tem bastante espaço nas duas janelas. Bom momento para tarefas maiores.</p></div>
+        </section>
+
+        <section class="screen" data-title="Resets">
+          <div class="screen-heading compact"><div><p class="eyebrow">Próximos ciclos</p><h2>Quando o limite volta?</h2></div></div>
+          <div class="reset-stack">
+            <article class="reset-card coral">
+              <div><span>5 horas</span><strong id="reset5Big">1h 40min</strong><p id="reset5At">hoje, 18:20</p></div>
+              <span id="reset5Chip" class="mini-chip">41% usado</span>
+            </article>
+            <article class="reset-card mint">
+              <div><span>7 dias</span><strong id="reset7Big">5d 3h</strong><p id="reset7At">sábado, 16:40</p></div>
+              <span id="reset7Chip" class="mini-chip">16% usado</span>
+            </article>
+          </div>
+        </section>
+
+        <section class="screen" data-title="Modelos">
+          <div class="screen-heading compact"><div><p class="eyebrow">Disponibilidade</p><h2>Família Claude</h2></div></div>
+          <div id="modelGrid" class="model-grid"></div>
+          <div id="incidentBanner" class="incident ok"><span>✓</span><div><strong>Todos os modelos operando</strong><p>Nenhum incidente ativo no momento.</p></div></div>
+        </section>
+
+        <section class="screen" data-title="Tendência">
+          <div class="screen-heading compact"><div><p class="eyebrow">Últimas leituras</p><h2>Ritmo de consumo</h2></div><span class="legend"><i></i> 5h <i></i> 7d</span></div>
+          <article class="chart-card">
+            <div class="chart-y"><span>100%</span><span>50%</span><span>0%</span></div>
+            <svg id="trendChart" viewBox="0 0 420 190" role="img" aria-label="Gráfico de tendência de uso">
+              <defs>
+                <linearGradient id="fillCoral" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e88467" stop-opacity=".28"/><stop offset="1" stop-color="#e88467" stop-opacity="0"/></linearGradient>
+              </defs>
+              <g class="grid-lines"><line x1="0" y1="10" x2="420" y2="10"/><line x1="0" y1="95" x2="420" y2="95"/><line x1="0" y1="180" x2="420" y2="180"/></g>
+              <path id="trendArea" class="trend-area" d=""></path>
+              <polyline id="trend5" class="line five" points=""></polyline>
+              <polyline id="trend7" class="line seven" points=""></polyline>
+            </svg>
+            <div class="chart-x"><span>-6h</span><span>-4h</span><span>-2h</span><span>agora</span></div>
+          </article>
+          <div class="burn-card"><span>↗</span><div><strong id="burnTitle">Uso estável agora</strong><p id="burnText">Neste ritmo, você não deve atingir o limite de 5 horas.</p></div></div>
+        </section>
+
+        <section class="screen" data-title="Horários">
+          <div class="screen-heading compact"><div><p class="eyebrow">Mapa diário</p><h2>Seus horários mais intensos</h2></div></div>
+          <article class="heatmap-card">
+            <div id="heatmap" class="heatmap" aria-label="Uso por hora do dia"></div>
+            <div class="heat-labels"><span>0h</span><span>6h</span><span>12h</span><span>18h</span><span>23h</span></div>
+          </article>
+          <p id="heatInsight" class="heat-insight">Seu pico costuma acontecer entre <strong>14h e 17h</strong>.</p>
+        </section>
+
+        <section class="screen" data-title="Detalhes">
+          <div class="details-center">
+            <p class="eyebrow">Limite que deve bloquear primeiro</p>
+            <strong id="representativeClaim">5 HORAS</strong>
+            <span id="detailsSub">59% ainda disponível nesta janela</span>
+            <div class="details-rule"></div>
+            <p id="overageStatus">Uso extra indisponível</p>
+          </div>
+        </section>
+      </div>
+
+      <section id="openaiDashboard" class="openai-dashboard" hidden>
+        <div class="screen-heading">
+          <div>
+            <p class="eyebrow openai-accent">API OpenAI</p>
+            <h1>Tokens e custos do mês.</h1>
+          </div>
+          <span id="openaiStatus" class="status-chip good">Demonstração</span>
+        </div>
+        <div class="openai-metrics">
+          <article class="metric-card featured">
+            <span>Tokens totais</span>
+            <strong id="openaiTotalTokens">2,48 mi</strong>
+            <p id="openaiTokenPeriod">nos últimos 30 dias</p>
+          </article>
+          <article class="metric-card">
+            <span>Entrada</span>
+            <strong id="openaiInputTokens">1,82 mi</strong>
+            <p>inclui tokens em cache</p>
+          </article>
+          <article class="metric-card">
+            <span>Saída</span>
+            <strong id="openaiOutputTokens">660 mil</strong>
+            <p>respostas dos modelos</p>
+          </article>
+          <article class="metric-card">
+            <span>Custo</span>
+            <strong id="openaiCost">US$ 18,42</strong>
+            <p>custo acumulado no período</p>
+          </article>
+        </div>
+        <div class="openai-lower">
+          <article class="openai-chart-card">
+            <div class="card-title"><div><span>Consumo diário</span><strong id="openaiRequests">1.284 requisições</strong></div><div class="token-legend"><i></i> entrada <i></i> saída</div></div>
+            <div id="openaiChart" class="openai-bars" aria-label="Tokens consumidos por dia"></div>
+            <div class="openai-chart-labels"><span>30 dias atrás</span><span>hoje</span></div>
+          </article>
+          <article class="models-card">
+            <div class="card-title"><div><span>Por modelo</span><strong>Mais utilizados</strong></div></div>
+            <div id="openaiModels" class="openai-models"></div>
+          </article>
+        </div>
+        <div class="chatgpt-note"><span>i</span><p><strong>ChatGPT e API são separados.</strong> A OpenAI não expõe por API o contador pessoal de mensagens do ChatGPT Plus/Pro. Este painel monitora o uso faturado na plataforma API.</p></div>
+      </section>
+
+      <footer id="footerNav" class="footer-nav">
+        <button id="previousScreen" type="button" aria-label="Tela anterior">←</button>
+        <div id="dots" class="dots" aria-label="Navegação entre telas"></div>
+        <button id="nextScreen" type="button" aria-label="Próxima tela">→</button>
+      </footer>
+    </section>
+  </main>
+
+  <dialog id="settingsDialog" class="settings-dialog">
+    <form method="dialog" class="settings-panel">
+      <div class="modal-heading"><div><p class="eyebrow">Preferências</p><h2>Ajustes</h2></div><button class="close-button" value="close" aria-label="Fechar">×</button></div>
+      <label class="field"><span>Token OAuth do Claude Code</span><input id="tokenInput" type="password" autocomplete="off" placeholder="sk-ant-oat01-..."><small>Fica somente nesta sessão do navegador. Nunca é gravado no servidor.</small></label>
+      <label class="field"><span>Chave administrativa da OpenAI</span><input id="openaiKeyInput" type="password" autocomplete="off" placeholder="sk-admin-..."><small>Necessária para consultar Usage e Costs da organização. Uma chave comum de projeto não tem acesso.</small></label>
+      <label class="field"><span>Atualização automática</span><select id="intervalSelect"><option value="30">30 segundos</option><option value="60" selected>1 minuto</option><option value="120">2 minutos</option><option value="300">5 minutos</option></select></label>
+      <label class="field"><span>Fuso horário</span><select id="timezoneSelect"><option value="America/Sao_Paulo">Brasília (GMT−3)</option><option value="America/New_York">Nova York</option><option value="Europe/Lisbon">Lisboa</option><option value="UTC">UTC</option></select></label>
+      <div id="connectionMessage" class="connection-message">Você está vendo dados de demonstração.</div>
+      <div class="modal-actions"><button id="demoButton" class="secondary-button" type="button">Usar demonstração</button><button id="connectOpenAIButton" class="secondary-button" type="button">Conectar OpenAI</button><button id="connectButton" class="primary-button" type="button">Conectar Claude</button></div>
+      <p class="security-note">Para gerar o token, use <code>claude setup-token</code> no terminal. O app envia uma consulta mínima e descarta o conteúdo da resposta.</p>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="./app.js"></script>
+</body>
+</html>

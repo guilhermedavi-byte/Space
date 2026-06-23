@@ -40,6 +40,36 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Cadastros e operação pedagógica administrados dentro da plataforma.
+    match /classes/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /groups/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /plans/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /surveys/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /pedagogicalFeedbacks/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /teacherAlerts/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    // Leads são gravados pela API autenticada com conta de serviço.
+    match /leads/{docId} {
+      allow read, write: if isAdmin();
+    }
+
     // NOTE:
     // This repo does not deploy Firebase rules automatically.
     // Copy/paste the match below into your existing Firestore Rules in the Firebase Console,

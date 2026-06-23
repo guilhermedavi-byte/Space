@@ -117,46 +117,6 @@ const isValidEmail = (raw) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(raw || ""
 
 const digitsOnly = (raw) => String(raw || "").replace(/\D/g, "");
 
-let firebaseLeadApiPromise = null;
-
-const loadFirebaseLeadApi = () => {
-  if (firebaseLeadApiPromise) return firebaseLeadApiPromise;
-
-  const FIREBASE_CONFIG = {
-    apiKey: "AIzaSyD0qyhYh6MWRPMRDN_SYqdDEeogS3thQPE",
-    authDomain: "plataforma-space.firebaseapp.com",
-    projectId: "plataforma-space",
-    storageBucket: "plataforma-space.firebasestorage.app",
-    messagingSenderId: "984031970274",
-    appId: "1:984031970274:web:fff5da2fe5e318b04aefbb",
-    measurementId: "G-X28MKDJPKE",
-  };
-
-  firebaseLeadApiPromise = Promise.all([
-    import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"),
-    import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"),
-  ]).then(([appMod, fsMod]) => {
-    const getOrInitApp = () => {
-      try {
-        return appMod.getApp();
-      } catch (error) {
-        return appMod.initializeApp(FIREBASE_CONFIG);
-      }
-    };
-    const app = getOrInitApp();
-    const db = fsMod.getFirestore(app);
-
-    return {
-      db,
-      addDoc: fsMod.addDoc,
-      collection: fsMod.collection,
-      serverTimestamp: fsMod.serverTimestamp,
-    };
-  });
-
-  return firebaseLeadApiPromise;
-};
-
 const setLeadLoading = (form, isLoading) => {
   if (!(form instanceof HTMLFormElement)) return;
   const submit = form.querySelector("[data-lead-submit]");
@@ -227,13 +187,16 @@ if (leadForm instanceof HTMLFormElement) {
 
     setLeadLoading(leadForm, true);
     try {
-      const api = await loadFirebaseLeadApi();
-      await api.addDoc(api.collection(api.db, "leads"), {
+      const response = await fetch("/api/leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
         nome: name,
         email,
         whatsapp: `+55${whatsappDigits}`,
-        criadoEm: api.serverTimestamp(),
+        }),
       });
+      if (!response.ok) throw new Error("lead_submit_failed");
 
       if (successEl instanceof HTMLElement) successEl.hidden = false;
       if (nameEl instanceof HTMLInputElement) nameEl.value = "";

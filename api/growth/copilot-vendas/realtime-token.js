@@ -2,9 +2,11 @@ const crypto = require("crypto");
 const { getSessionFromRequest } = require("../../_lib/session");
 const { sendJson } = require("../../_lib/http");
 const { requireGrowthAccess } = require("../../_lib/growth-copilot");
+const { applyCors } = require("../../_lib/security");
 
 const signToken = (payload) => {
-  const secret = String(process.env.SPACE_AUTH_SECRET || "space_dev_secret_change_me_please");
+  const secret = String(process.env.SPACE_AUTH_SECRET || "");
+  if (secret.length < 16) throw new Error("space_auth_secret_not_configured");
   const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
   const sig = crypto.createHmac("sha256", secret).update(body).digest("base64url");
   return `${body}.${sig}`;
@@ -13,16 +15,12 @@ const signToken = (payload) => {
 module.exports = async (req, res) => {
   try {
     if (req.method === "OPTIONS") {
-      res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "*");
-      res.setHeader("Access-Control-Allow-Credentials", "true");
-      res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Copilot-Token");
-      res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+      applyCors(req, res);
       res.statusCode = 204;
       res.end("");
       return;
     }
-    res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "*");
-    res.setHeader("Access-Control-Allow-Credentials", "true");
+    applyCors(req, res);
 
     const session = getSessionFromRequest(req);
     requireGrowthAccess(session);

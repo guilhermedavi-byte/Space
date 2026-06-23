@@ -265,7 +265,7 @@
 	            <div class="auth-form-error" data-login-error hidden>E-mail ou senha incorretos</div>
 
 	            <div class="auth-support">
-	              Problemas para acessar? <a href="#" data-login-support>Entre em contato com o suporte</a>
+	              Problemas para acessar? <a href="mailto:suporte@spaceschoolbr.com" data-login-support>Entre em contato com o suporte</a>
 	            </div>
 	          </form>
 	        </div>
@@ -316,6 +316,23 @@
               </svg>
             </span>
             <span class="sidebar-text">Dashboard</span>
+          </button>
+          <button
+            class="sidebar-link"
+            type="button"
+            data-panel-target="space-office"
+            data-admin-only
+            title="Space Office"
+          >
+            <span class="sidebar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M4 9.5 12 5l8 4.5-8 4.5-8-4.5Z"></path>
+                <path d="M4 14.5 12 19l8-4.5"></path>
+                <path d="M8 12v4.5"></path>
+                <path d="M16 12v4.5"></path>
+              </svg>
+            </span>
+            <span class="sidebar-text">Space Office</span>
           </button>
           <button
             class="sidebar-link"
@@ -1226,6 +1243,10 @@
           </div>
         </section>
 
+        <section class="platform-panel" data-panel="space-office" data-hide-platform-header="true" hidden aria-label="Space Office">
+          <div data-space-office-root></div>
+        </section>
+
         <section class="platform-panel" data-panel="gravadas" data-hide-platform-header="true" hidden>
           <div class="panel-heading">
             <div>
@@ -1239,34 +1260,9 @@
             </div>
           </div>
 
-          <div class="class-grid">
-            <article class="class-card">
-              <img src="assets/space-feed.png" alt="Preview de aula gravada" />
-              <div class="class-card-copy">
-                <span class="card-kicker">Career English</span>
-                <h3>Listening for meetings</h3>
-                <p>12 min</p>
-              </div>
-            </article>
-
-            <article class="class-card">
-              <img src="assets/space-pattern.png" alt="Padronagem da marca Space" />
-              <div class="class-card-copy">
-                <span class="card-kicker">Speaking</span>
-                <h3>Small talk that feels natural</h3>
-                <p>18 min</p>
-              </div>
-            </article>
-
-            <article class="class-card">
-              <img src="assets/space-feed.png" alt="Preview de aula gravada" />
-              <div class="class-card-copy">
-                <span class="card-kicker">Travel English</span>
-                <h3>Airport conversations</h3>
-                <p>10 min</p>
-              </div>
-            </article>
-          </div>
+          <article class="surface-card">
+            <p class="admin-dashboard-v2-empty">Nenhuma aula gravada foi publicada para este perfil ainda.</p>
+          </article>
         </section>
 
 		        <section class="platform-panel" data-panel="ao-vivo" data-hide-platform-header="true" hidden>
@@ -2244,25 +2240,9 @@
             </div>
           </div>
 
-          <div class="materials-grid">
-            <article class="material-card">
-              <span class="card-kicker">Workbook</span>
-              <h3>Meeting phrases pack</h3>
-              <p>Expressões essenciais.</p>
-            </article>
-
-            <article class="material-card">
-              <span class="card-kicker">Checklist</span>
-              <h3>Weekly study planner</h3>
-              <p>Planejamento rápido.</p>
-            </article>
-
-            <article class="material-card">
-              <span class="card-kicker">Revision</span>
-              <h3>Pronunciation drills</h3>
-              <p>Exercícios curtos.</p>
-            </article>
-          </div>
+          <article class="surface-card">
+            <p class="admin-dashboard-v2-empty">Nenhum material foi publicado para este perfil ainda.</p>
+          </article>
         </section>
       </main>
     </div>

@@ -12715,22 +12715,35 @@ const renderAdminUsersTable = (type) => {
 
 const fetchUserRowsFromFirestore = async (tipo) => {
   const safeTipo = tipo === "teacher" ? "teacher" : tipo === "growth" ? "growth" : "student";
-  const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_students");
-  const user = await waitForFirebaseAuthReady(firebase, 5000);
-  if (!user) {
-    const e = new Error("firebase_not_authenticated");
-    e.code = "auth/no-current-user";
-    throw e;
+  let sourceRows = null;
+  if (currentRole === "admin") {
+    const response = await fetchWithAuth(`/api/admin-data?collection=users&type=${encodeURIComponent(safeTipo)}`);
+    if (response.ok) {
+      const payload = await response.json().catch(() => null);
+      sourceRows = Array.isArray(payload?.rows) ? payload.rows : [];
+    }
   }
 
-  const q = firebase.query(firebase.collection(firebase.primaryDb, "users"), firebase.where("tipo", "==", safeTipo));
-  const snap = await withTimeout(firebase.getDocs(q), 12_000, `firestore_getDocs_users_${safeTipo}`);
+  if (!sourceRows) {
+    const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_students");
+    const user = await waitForFirebaseAuthReady(firebase, 5000);
+    if (!user) {
+      const e = new Error("firebase_not_authenticated");
+      e.code = "auth/no-current-user";
+      throw e;
+    }
+    const q = firebase.query(firebase.collection(firebase.primaryDb, "users"), firebase.where("tipo", "==", safeTipo));
+    const snap = await withTimeout(firebase.getDocs(q), 12_000, `firestore_getDocs_users_${safeTipo}`);
+    sourceRows = [];
+    snap.forEach((docSnap) => sourceRows.push({ id: docSnap.id, ...(docSnap.data ? docSnap.data() : {}) }));
+  }
+
   const rows = [];
-  snap.forEach((docSnap) => {
-    const data = docSnap.data ? docSnap.data() : null;
+  sourceRows.forEach((sourceRow) => {
+    const data = sourceRow;
     if (!data || typeof data !== "object") return;
     const base = normalizeUserRow({
-      id: docSnap.id,
+      id: sourceRow.id,
       nome: data.nome,
       email: data.email,
       tipo: data.tipo,
@@ -13757,20 +13770,32 @@ const normalizeClassRow = ({ id, data }) => {
 };
 
 const fetchClassesFromFirestore = async () => {
-  const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_pedagogico");
-  const user = await waitForFirebaseAuthReady(firebase, 5000);
-  if (!user) {
-    const e = new Error("firebase_not_authenticated");
-    e.code = "auth/no-current-user";
-    throw e;
+  let sourceRows = null;
+  if (currentRole === "admin") {
+    const response = await fetchWithAuth("/api/admin-data?collection=classes");
+    if (response.ok) {
+      const payload = await response.json().catch(() => null);
+      sourceRows = Array.isArray(payload?.rows) ? payload.rows : [];
+    }
   }
 
-  const col = firebase.collection(firebase.primaryDb, "classes");
-  const snap = await withTimeout(firebase.getDocs(col), 12_000, "firestore_admin_classes_list");
+  if (!sourceRows) {
+    const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_pedagogico");
+    const user = await waitForFirebaseAuthReady(firebase, 5000);
+    if (!user) {
+      const e = new Error("firebase_not_authenticated");
+      e.code = "auth/no-current-user";
+      throw e;
+    }
+    const col = firebase.collection(firebase.primaryDb, "classes");
+    const snap = await withTimeout(firebase.getDocs(col), 12_000, "firestore_admin_classes_list");
+    sourceRows = [];
+    snap.forEach((docSnap) => sourceRows.push({ id: docSnap.id, ...(docSnap.data ? docSnap.data() : {}) }));
+  }
+
   const rows = [];
-  snap.forEach((docSnap) => {
-    const data = docSnap.data ? docSnap.data() : null;
-    const row = normalizeClassRow({ id: docSnap.id, data });
+  sourceRows.forEach((data) => {
+    const row = normalizeClassRow({ id: data.id, data });
     if (row) rows.push(row);
   });
   rows.sort((a, b) => {
@@ -20611,6 +20636,12 @@ const showPanel = (panelName) => {
     return;
   }
 
+  if (panelName === "space-office") {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.dispatchEvent(new CustomEvent("space-office:open"));
+    return;
+  }
+
   if (panelName === "admin-controle-pedagogico") {
     window.scrollTo({ top: 0, behavior: "smooth" });
     if (currentRole === "admin") {
@@ -20688,6 +20719,7 @@ const panelPathForRole = (role, panel) => {
     if (p === "professores") return "/app/admin/professores";
     if (p === "alunos") return "/app/admin/alunos";
     if (p === "admin-controle-pedagogico") return "/app/admin/controle-pedagogico";
+    if (p === "space-office") return "/app/admin/space-office";
     if (p === "financeiro") return "/app/admin/financeiro";
     if (p === "growth") return "/app/admin/growth";
     if (p === "gravadas") return "/app/admin/gravadas";
@@ -20751,6 +20783,7 @@ const parseAppRoute = (path) => {
     if (sub === "professores") return { role, panel: "professores" };
     if (sub === "alunos") return { role, panel: "alunos" };
     if (sub === "controle-pedagogico") return { role, panel: "admin-controle-pedagogico" };
+    if (sub === "space-office") return { role, panel: "space-office" };
     if (sub === "financeiro") return { role, panel: "financeiro" };
     if (sub === "growth") return { role, panel: "growth", growthTab: ["copilot-vendas", "scripts-vendas", "objecoes", "planos", "personas", "frases-vencedoras", "analytics", "training"].includes(detail) ? detail : "copilot-vendas" };
     if (sub === "ao-vivo") return { role, panel: "ao-vivo" };
@@ -21139,8 +21172,12 @@ window.addEventListener("popstate", () => {
 
 if (closePlatformButton) {
   closePlatformButton.addEventListener("click", async () => {
+    const role = normalizeRole(sessionUser?.role || currentRole);
+    if (role === "admin" && body.dataset.activePanel === "financeiro") {
+      navigateApp("/app/admin");
+      return;
+    }
     const logoutDestination = (() => {
-      const role = normalizeRole(sessionUser?.role || currentRole);
       if (role === "FINANCE") return "/login/financeiro";
       if (role === "teacher") return "/login/professor";
       if (role === "admin") return "/login/admin";

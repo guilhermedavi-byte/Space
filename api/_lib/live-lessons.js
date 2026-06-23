@@ -267,8 +267,7 @@ const createLessonRegister = async ({ lesson, session, payload }) => {
   return { register: saved || register, lesson: updatedLesson };
 };
 
-const summarizeLiveLessons = (lessons) => {
-  const now = Date.now();
+const summarizeLiveLessons = (lessons, now = Date.now()) => {
   const todayKey = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
   const statusOf = (lesson) => String(lesson.status_aula || "").toLowerCase();
   const isToday = (lesson) => {
@@ -276,7 +275,20 @@ const summarizeLiveLessons = (lessons) => {
     if (!d || Number.isNaN(d.getTime())) return false;
     return new Intl.DateTimeFormat("en-CA", { timeZone: lesson.timezone || "America/Sao_Paulo" }).format(d) === todayKey;
   };
-  const liveNow = lessons.filter((lesson) => statusOf(lesson) === "ao_vivo" || (lesson.startMs <= now && lesson.endMs >= now));
+  const terminalStatuses = new Set(["realizada", "falta", "cancelada", "remarcada"]);
+  const liveNow = lessons.filter((lesson) => {
+    const status = statusOf(lesson);
+    if (terminalStatuses.has(status)) return false;
+    const start = Number(lesson.startMs) || Date.parse(String(lesson.inicio || ""));
+    const end = Number(lesson.endMs) || Date.parse(String(lesson.fim || ""));
+    if (!Number.isFinite(start) || !Number.isFinite(end)) return false;
+    return start <= now && end >= now;
+  });
+  const staleLive = lessons.filter((lesson) => {
+    if (statusOf(lesson) !== "ao_vivo") return false;
+    const end = Number(lesson.endMs) || Date.parse(String(lesson.fim || ""));
+    return Number.isFinite(end) && end < now;
+  });
   return {
     liveNow: liveNow.length,
     upcomingToday: lessons.filter((lesson) => isToday(lesson) && lesson.startMs > now).length,
@@ -286,6 +298,7 @@ const summarizeLiveLessons = (lessons) => {
     cancelled: lessons.filter((lesson) => statusOf(lesson) === "cancelada").length,
     teachersInClass: new Set(liveNow.map((lesson) => lesson.professor_id || lesson.professor_nome).filter(Boolean)).size,
     studentsInClass: new Set(liveNow.map((lesson) => lesson.aluno_id || lesson.aluno_nome).filter(Boolean)).size,
+    staleLive: staleLive.length,
   };
 };
 

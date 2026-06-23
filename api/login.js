@@ -4,6 +4,26 @@ const { createSessionForUser, buildSessionCookie, isSecureRequest } = require(".
 const { verifyFirebaseIdToken } = require("../_lib/firebase-id-token");
 const { fetchUserProfileByUid } = require("../_lib/firestore-user");
 
+const attempts = new Map();
+const RATE_WINDOW_MS = 15 * 60 * 1000;
+const RATE_LIMIT = 8;
+
+const getRateKey = (req, email) => {
+  const forwarded = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim();
+  return `${forwarded || req.socket?.remoteAddress || "unknown"}:${String(email || "").toLowerCase()}`;
+};
+
+const isRateLimited = (key) => {
+  const now = Date.now();
+  const current = attempts.get(key);
+  if (!current || current.resetAt <= now) {
+    attempts.set(key, { count: 1, resetAt: now + RATE_WINDOW_MS });
+    return false;
+  }
+  current.count += 1;
+  return current.count > RATE_LIMIT;
+};
+
 module.exports = async (req, res) => {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
@@ -21,6 +41,12 @@ module.exports = async (req, res) => {
   const idToken = String(body?.idToken || "").trim();
   const email = String(body?.email || "").trim().toLowerCase();
   const password = String(body?.password || "");
+  const rateKey = getRateKey(req, email);
+
+  if (isRateLimited(rateKey)) {
+    res.setHeader("Retry-After", "900");
+    return sendJson(res, 429, { error: "too_many_attempts" });
+  }
 
   if (!role) {
     return sendJson(res, 401, { error: "invalid_credentials" });
@@ -52,8 +78,7 @@ module.exports = async (req, res) => {
       user = null;
     }
 
-    // Fallback to the local seed list while the Firestore user base is being migrated.
-    if (!user) {
+    if (!user && process.env.ALLOW_LEGACY_LOGIN === "true") {
       user = findUserByEmailAndRole(users, { email: decoded.email, role });
     }
 
@@ -61,7 +86,9 @@ module.exports = async (req, res) => {
       return sendJson(res, 401, { error: "invalid_credentials" });
     }
   } else {
-    // Legacy fallback (non-Firebase): allow the old session flow to keep working during migration.
+    if (process.env.ALLOW_LEGACY_LOGIN !== "true") {
+      return sendJson(res, 401, { error: "invalid_credentials" });
+    }
     if (!email || !password) {
       return sendJson(res, 401, { error: "invalid_credentials" });
     }
@@ -80,6 +107,7 @@ module.exports = async (req, res) => {
   }
 
   const session = createSessionForUser(user);
+  attempts.delete(rateKey);
   const cookie = buildSessionCookie(session.token, { maxAgeSeconds: session.maxAgeSeconds, secure: isSecureRequest(req) });
   res.setHeader("Set-Cookie", cookie);
 

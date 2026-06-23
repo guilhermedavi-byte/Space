@@ -17,6 +17,7 @@ const {
   API_KEY,
 } = require("../_lib/firestore-rest");
 const crypto = require("crypto");
+const { validateWebhookSecret } = require("./_lib/security");
 
 const sendRedirect = (res, location) => {
   res.statusCode = 302;
@@ -1826,6 +1827,15 @@ const handleZapSignWebhook = async (req, res) => {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
     sendJson(res, 405, { error: "method_not_allowed" });
+    return;
+  }
+
+  const auth = validateWebhookSecret(
+    req,
+    process.env.ZAPSIGN_WEBHOOK_SECRET || process.env.N8N_WEBHOOK_SECRET
+  );
+  if (!auth.ok) {
+    sendJson(res, auth.status, { error: auth.error });
     return;
   }
 

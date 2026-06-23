@@ -1,19 +1,16 @@
 const { readJsonBody, sendJson } = require("../../_lib/http");
 const { requireGrowthAccessFromRequest, saveResource, summaryWithAi } = require("../../_lib/growth-copilot");
+const { applyCors } = require("../../_lib/security");
 
 module.exports = async (req, res) => {
   try {
     if (req.method === "OPTIONS") {
-      res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "*");
-      res.setHeader("Access-Control-Allow-Credentials", "true");
-      res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Copilot-Token");
-      res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+      applyCors(req, res);
       res.statusCode = 204;
       res.end("");
       return;
     }
-    res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "*");
-    res.setHeader("Access-Control-Allow-Credentials", "true");
+    applyCors(req, res);
     const session = requireGrowthAccessFromRequest(req);
     if (req.method !== "POST") {
       res.setHeader("Allow", "POST");

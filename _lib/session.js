@@ -22,7 +22,9 @@ const decodeBase64urlJson = (b64url) => {
 const getSecret = () => {
   const env = process.env.SPACE_AUTH_SECRET;
   if (env && env.length >= 16) return env;
-  // Dev fallback (do not use in production).
+  if (process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production") {
+    throw new Error("space_auth_secret_not_configured");
+  }
   return "space_dev_secret_change_me_please";
 };
 
@@ -52,7 +54,12 @@ const verifyJwt = (token) => {
   if (!header || header.alg !== "HS256") return null;
 
   const data = `${headerPart}.${payloadPart}`;
-  const expected = base64url(crypto.createHmac("sha256", getSecret()).update(data).digest());
+  let expected;
+  try {
+    expected = base64url(crypto.createHmac("sha256", getSecret()).update(data).digest());
+  } catch {
+    return null;
+  }
   try {
     const expectedBuf = Buffer.from(expected, "utf8");
     const sigBuf = Buffer.from(sigPart, "utf8");
@@ -116,7 +123,7 @@ const getSessionFromRequest = (req) => {
 
 const createSessionForUser = (user) => {
   const now = Math.floor(Date.now() / 1000);
-  const maxAgeSeconds = 7 * 24 * 60 * 60;
+  const maxAgeSeconds = 12 * 60 * 60;
   const payload = {
     sub: user.id,
     role: user.role,

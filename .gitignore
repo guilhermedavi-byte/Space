@@ -1,2 +1,4 @@
 .codex/logs/
 .DS_Store
+.vercel
+.env*

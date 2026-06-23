@@ -376,9 +376,7 @@ document.addEventListener("click", (event) => {
   }
 
   const support = target.closest("[data-login-support]");
-  if (support instanceof HTMLAnchorElement) {
-    event.preventDefault();
-  }
+  if (support instanceof HTMLAnchorElement && support.getAttribute("href") === "#") event.preventDefault();
 });
 
 initAuthPages();

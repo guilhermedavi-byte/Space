@@ -1,5 +1,6 @@
 const { readJsonBody, sendJson } = require("../_lib/http");
 const { triggerContractSignedOnboarding } = require("../_lib/pedagogico-n8n");
+const { validateWebhookSecret } = require("../_lib/security");
 
 const pick = (...values) => values.map((v) => String(v || "").trim()).find(Boolean) || "";
 
@@ -7,6 +8,15 @@ module.exports = async (req, res) => {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
     sendJson(res, 405, { error: "method_not_allowed" });
+    return;
+  }
+
+  const auth = validateWebhookSecret(
+    req,
+    process.env.ZAPSIGN_WEBHOOK_SECRET || process.env.N8N_WEBHOOK_SECRET
+  );
+  if (!auth.ok) {
+    sendJson(res, auth.status, { error: auth.error });
     return;
   }
 

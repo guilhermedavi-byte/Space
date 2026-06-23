@@ -50,6 +50,7 @@ const initialPanelFromPath = (pathParam) => {
   const slug = segments[0] || "";
   const sub = segments[1] || "";
   if (slug === "financeiro") return "financeiro";
+  if (slug === "admin" && sub === "space-office") return "space-office";
   if (slug === "admin" && sub === "financeiro") return "financeiro";
   if (slug === "growth" || (slug === "admin" && sub === "growth")) return "growth";
   return "dashboard";
@@ -129,6 +130,7 @@ const buildAppHtml = ({ sessionJson, role, roleSlug, templateHtml, initialPanel 
     ${modalHtml}
     <script src="script.js"></script>
     <script src="pedagogico-n8n-ui.js"></script>
+    <script src="space-office.js"></script>
   </body>
 </html>`;
 };
