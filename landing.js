@@ -117,6 +117,26 @@ const isValidEmail = (raw) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(raw || ""
 
 const digitsOnly = (raw) => String(raw || "").replace(/\D/g, "");
 
+const submitLeadDirectlyToFirestore = async (lead) => {
+  const endpoint =
+    "https://firestore.googleapis.com/v1/projects/plataforma-space/databases/(default)/documents/leads" +
+    "?key=AIzaSyD0qyhYh6MWRPMRDN_SYqdDEeogS3thQPE";
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      fields: {
+        nome: { stringValue: lead.nome },
+        email: { stringValue: lead.email },
+        whatsapp: { stringValue: lead.whatsapp },
+        origem: { stringValue: "landing_page" },
+        criadoEm: { timestampValue: new Date().toISOString() },
+      },
+    }),
+  });
+  if (!response.ok) throw new Error("lead_firestore_fallback_failed");
+};
+
 const setLeadLoading = (form, isLoading) => {
   if (!(form instanceof HTMLFormElement)) return;
   const submit = form.querySelector("[data-lead-submit]");
@@ -196,7 +216,15 @@ if (leadForm instanceof HTMLFormElement) {
         whatsapp: `+55${whatsappDigits}`,
         }),
       });
-      if (!response.ok) throw new Error("lead_submit_failed");
+      if (response.status === 503) {
+        await submitLeadDirectlyToFirestore({
+          nome: name,
+          email,
+          whatsapp: `+55${whatsappDigits}`,
+        });
+      } else if (!response.ok) {
+        throw new Error("lead_submit_failed");
+      }
 
       if (successEl instanceof HTMLElement) successEl.hidden = false;
       if (nameEl instanceof HTMLInputElement) nameEl.value = "";

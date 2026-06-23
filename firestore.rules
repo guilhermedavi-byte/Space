@@ -100,7 +100,22 @@ service cloud.firestore {
 
     // Leads são gravados pela API autenticada com conta de serviço.
     match /leads/{docId} {
-      allow read, write: if isAdmin();
+      allow read, update, delete: if isAdmin();
+      allow create: if isAdmin()
+        || (
+          request.auth == null
+          && request.resource.data.keys().hasOnly(["nome", "email", "whatsapp", "origem", "criadoEm"])
+          && request.resource.data.nome is string
+          && request.resource.data.nome.size() > 1
+          && request.resource.data.nome.size() <= 120
+          && request.resource.data.email is string
+          && request.resource.data.email.size() <= 160
+          && request.resource.data.whatsapp is string
+          && request.resource.data.whatsapp.size() >= 10
+          && request.resource.data.whatsapp.size() <= 20
+          && request.resource.data.origem == "landing_page"
+          && request.resource.data.criadoEm is timestamp
+        );
     }
 
     // NOTE:
