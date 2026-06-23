@@ -223,7 +223,7 @@ const firestoreListDocuments = async ({ collectionPath, idToken, pageSize = 1000
   const path = String(collectionPath || "").replace(/^\/+/, "");
   if (!path || !token) throw new Error("missing_params");
 
-  const safeSize = Math.max(1, Math.min(Number(pageSize) || 1000, 2000));
+  const safeSize = Math.max(1, Math.min(Number(pageSize) || 1000, 1000));
 
   const all = [];
   let pageToken = "";

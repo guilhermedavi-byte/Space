@@ -22,7 +22,7 @@ const listCollectionAsAdmin = async (collectionPath, { pageSize = 1000 } = {}) =
 
   for (let page = 0; page < 20; page += 1) {
     const params = new URLSearchParams();
-    params.set("pageSize", String(Math.max(1, Math.min(Number(pageSize) || 1000, 2000))));
+    params.set("pageSize", String(Math.max(1, Math.min(Number(pageSize) || 1000, 1000))));
     if (pageToken) params.set("pageToken", pageToken);
     const response = await requestJson(`${FIRESTORE_BASE}/${encodeURI(path)}?${params.toString()}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
