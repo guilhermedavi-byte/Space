@@ -674,7 +674,7 @@ const syncRoleUI = () => {
 
   document.querySelectorAll("[data-admin-only]").forEach((el) => {
     if (el instanceof HTMLElement) {
-      el.hidden = currentRole !== "admin";
+      el.hidden = currentRole !== "admin" || el.hasAttribute("data-launch-hidden");
     }
   });
 
@@ -20549,6 +20549,78 @@ const syncFinanceSidebar = (panelName) => {
   });
 };
 
+let platformLaunchStatusLoadedAt = 0;
+
+const PLATFORM_STATUS_LABELS = {
+  auth: ["Autenticação", "Sessões seguras da plataforma"],
+  publicUrl: ["Domínio público", "URL oficial configurada"],
+  supabase: ["Supabase", "Base operacional e financeira"],
+  asaas: ["Asaas", "Cobranças e pagamentos"],
+  chatwoot: ["Chatwoot", "Atendimento e conversas"],
+  openai: ["OpenAI", "Recursos de IA"],
+  n8n: ["n8n", "Automações pedagógicas"],
+  webhookProtection: ["Webhooks protegidos", "Validação por segredo"],
+  firebaseServiceAccount: ["Firebase service account", "Opcional para rotinas administrativas futuras"],
+};
+
+const renderPlatformLaunchStatus = async ({ force = false } = {}) => {
+  const grid = document.querySelector("[data-platform-status-grid]");
+  const banner = document.querySelector("[data-platform-status-banner]");
+  const title = document.querySelector("[data-platform-status-title]");
+  const subtitle = document.querySelector("[data-platform-status-subtitle]");
+  if (!(grid instanceof HTMLElement)) return;
+
+  const now = Date.now();
+  if (!force && platformLaunchStatusLoadedAt && now - platformLaunchStatusLoadedAt < 45_000) return;
+
+  if (title instanceof HTMLElement) title.textContent = "Verificando…";
+  if (subtitle instanceof HTMLElement) subtitle.textContent = "Consultando integrações principais.";
+  if (banner instanceof HTMLElement) banner.dataset.status = "loading";
+  grid.innerHTML = `<article class="launch-status-card"><span class="launch-status-skeleton">Carregando status…</span></article>`;
+
+  try {
+    const res = await fetchWithAuth("/api/health", { method: "GET" });
+    const data = await res.json().catch(() => null);
+    const checks = data?.checks && typeof data.checks === "object" ? data.checks : {};
+    const entries = Object.entries(PLATFORM_STATUS_LABELS);
+    const missingRequired = entries.filter(([key]) => key !== "firebaseServiceAccount" && checks[key] !== true);
+    const ready = String(data?.status || "") === "ready" && missingRequired.length === 0;
+
+    if (banner instanceof HTMLElement) banner.dataset.status = ready ? "ready" : "warn";
+    if (title instanceof HTMLElement) title.textContent = ready ? "Pronta para lançamento interno" : "Atenção: há ajustes pendentes";
+    if (subtitle instanceof HTMLElement) {
+      subtitle.textContent = ready
+        ? "As integrações essenciais estão configuradas. Firebase service account é opcional neste momento."
+        : "Revise os itens marcados como pendentes antes de ampliar a divulgação.";
+    }
+
+    grid.innerHTML = entries
+      .map(([key, [label, description]]) => {
+        const ok = checks[key] === true;
+        const optional = key === "firebaseServiceAccount";
+        const tone = ok ? "ok" : optional ? "optional" : "pending";
+        const status = ok ? "OK" : optional ? "Opcional" : "Pendente";
+        return `
+          <article class="launch-status-card" data-status="${tone}">
+            <div class="launch-status-card-head">
+              <span class="launch-status-indicator" aria-hidden="true"></span>
+              <strong>${escapeHtml(label)}</strong>
+              <em>${escapeHtml(status)}</em>
+            </div>
+            <p>${escapeHtml(description)}</p>
+          </article>
+        `;
+      })
+      .join("");
+    platformLaunchStatusLoadedAt = Date.now();
+  } catch (error) {
+    if (banner instanceof HTMLElement) banner.dataset.status = "pending";
+    if (title instanceof HTMLElement) title.textContent = "Não foi possível verificar agora";
+    if (subtitle instanceof HTMLElement) subtitle.textContent = "Tente atualizar novamente em alguns segundos.";
+    grid.innerHTML = `<article class="launch-status-card" data-status="pending"><strong>Status indisponível</strong><p>O diagnóstico não respondeu agora.</p></article>`;
+  }
+};
+
 const showPanel = (panelName) => {
   if (currentRole === "teacher" && !pedagogicoState.lastLoadedAt) {
     // Keep pending badge up to date even if the teacher doesn't open the panel.
@@ -20644,6 +20716,17 @@ const showPanel = (panelName) => {
     return;
   }
 
+  if (panelName === "status-plataforma") {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    renderPlatformLaunchStatus({ force: false });
+    return;
+  }
+
+  if (panelName === "guia-colaboradores") {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    return;
+  }
+
   if (panelName === "admin-controle-pedagogico") {
     window.scrollTo({ top: 0, behavior: "smooth" });
     if (currentRole === "admin") {
@@ -20722,6 +20805,8 @@ const panelPathForRole = (role, panel) => {
     if (p === "alunos") return "/app/admin/alunos";
     if (p === "admin-controle-pedagogico") return "/app/admin/controle-pedagogico";
     if (p === "space-office") return "/app/admin/space-office";
+    if (p === "status-plataforma") return "/app/admin/status";
+    if (p === "guia-colaboradores") return "/app/admin/guia";
     if (p === "financeiro") return "/app/admin/financeiro";
     if (p === "growth") return "/app/admin/growth";
     if (p === "gravadas") return "/app/admin/gravadas";
@@ -20786,6 +20871,8 @@ const parseAppRoute = (path) => {
     if (sub === "alunos") return { role, panel: "alunos" };
     if (sub === "controle-pedagogico") return { role, panel: "admin-controle-pedagogico" };
     if (sub === "space-office") return { role, panel: "space-office" };
+    if (sub === "status") return { role, panel: "status-plataforma" };
+    if (sub === "guia") return { role, panel: "guia-colaboradores" };
     if (sub === "financeiro") return { role, panel: "financeiro" };
     if (sub === "growth") return { role, panel: "growth", growthTab: ["copilot-vendas", "scripts-vendas", "objecoes", "planos", "personas", "frases-vencedoras", "analytics", "training"].includes(detail) ? detail : "copilot-vendas" };
     if (sub === "ao-vivo") return { role, panel: "ao-vivo" };
@@ -21169,6 +21256,41 @@ window.addEventListener("popstate", () => {
   if (parsed) {
     if (parsed.growthTab) salesCopilotState.activeTab = parsed.growthTab;
     showPanel(parsed.panel);
+  }
+});
+
+document.addEventListener("click", (event) => {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+
+  const refreshStatus = target.closest("[data-platform-status-refresh]");
+  if (refreshStatus instanceof HTMLButtonElement) {
+    event.preventDefault();
+    platformLaunchStatusLoadedAt = 0;
+    renderPlatformLaunchStatus({ force: true });
+    return;
+  }
+
+  const copyMessage = target.closest("[data-copy-collaborator-message]");
+  if (copyMessage instanceof HTMLButtonElement) {
+    event.preventDefault();
+    const message = document.querySelector("[data-collaborator-message]");
+    const feedback = document.querySelector("[data-copy-collaborator-feedback]");
+    const text = message instanceof HTMLElement ? message.textContent.trim() : "";
+    if (!text) return;
+    const done = () => {
+      if (feedback instanceof HTMLElement) {
+        feedback.hidden = false;
+        window.setTimeout(() => {
+          feedback.hidden = true;
+        }, 1800);
+      }
+    };
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(() => {});
+    } else {
+      done();
+    }
   }
 });
 

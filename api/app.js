@@ -51,6 +51,8 @@ const initialPanelFromPath = (pathParam) => {
   const sub = segments[1] || "";
   if (slug === "financeiro") return "financeiro";
   if (slug === "admin" && sub === "space-office") return "space-office";
+  if (slug === "admin" && sub === "status") return "status-plataforma";
+  if (slug === "admin" && sub === "guia") return "guia-colaboradores";
   if (slug === "admin" && sub === "financeiro") return "financeiro";
   if (slug === "growth" || (slug === "admin" && sub === "growth")) return "growth";
   return "dashboard";

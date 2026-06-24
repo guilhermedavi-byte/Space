@@ -18893,3 +18893,30 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 .admin-student-briefing{margin-top:12px;line-height:1.55;color:#c7cfda}
 @media(max-width:1100px){.admin-ped-ops-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:720px){.pedagogico-item{grid-template-columns:1fr}.pedagogico-item-actions{justify-content:flex-start}.admin-ped-ops-summary,.admin-student-pedagogical-grid{grid-template-columns:1fr}}
+
+/* Lançamento interno */
+.launch-page{width:min(1120px,100%);margin:0 auto;padding:clamp(22px,4vw,42px)}
+.launch-page-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:22px}
+.launch-page-head h2{margin:6px 0 8px;color:#fff;font-size:clamp(28px,4vw,44px);letter-spacing:-.05em}
+.launch-page-head p{max-width:620px;margin:0;color:rgba(226,232,240,.72);line-height:1.55}
+.launch-status-banner,.launch-note-card,.launch-status-card,.launch-guide-card{border:1px solid rgba(148,163,184,.18);background:rgba(15,23,42,.72);box-shadow:0 24px 80px rgba(0,0,0,.22)}
+.launch-status-banner{display:flex;align-items:center;gap:14px;padding:18px;border-radius:22px;margin-bottom:18px}
+.launch-status-dot{width:14px;height:14px;border-radius:999px;background:#f59e0b;box-shadow:0 0 0 8px rgba(245,158,11,.14);flex:0 0 auto}
+.launch-status-banner[data-status=ready] .launch-status-dot{background:#22c55e;box-shadow:0 0 0 8px rgba(34,197,94,.14)}
+.launch-status-banner[data-status=pending] .launch-status-dot{background:#ef4444;box-shadow:0 0 0 8px rgba(239,68,68,.14)}
+.launch-status-banner strong{color:#fff;display:block;font-size:16px}
+.launch-status-banner p{margin:4px 0 0;color:rgba(226,232,240,.68);font-size:13px}
+.launch-status-grid,.launch-guide-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+.launch-status-card,.launch-guide-card,.launch-note-card{border-radius:20px;padding:18px}
+.launch-status-card-head{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px}
+.launch-status-indicator{width:10px;height:10px;border-radius:999px;background:#ef4444}
+.launch-status-card[data-status=ok] .launch-status-indicator{background:#22c55e}
+.launch-status-card[data-status=optional] .launch-status-indicator{background:#60a5fa}
+.launch-status-card strong,.launch-guide-card h3,.launch-note-card h3{color:#fff}
+.launch-status-card em{font-style:normal;font-size:11px;color:rgba(226,232,240,.72);border:1px solid rgba(148,163,184,.2);border-radius:999px;padding:4px 8px}
+.launch-status-card p,.launch-guide-card p,.launch-note-card p,.launch-note-card li{color:rgba(226,232,240,.7);line-height:1.55}
+.launch-guide-card span{display:inline-flex;width:34px;height:34px;align-items:center;justify-content:center;border-radius:12px;color:#fff;background:rgba(255,74,68,.18);border:1px solid rgba(255,74,68,.28);font-weight:800;font-size:12px}
+.launch-note-card{margin-top:18px}
+.launch-note-card ul{margin:10px 0 0;padding-left:20px}
+.launch-copy-feedback{display:inline-flex;margin-left:10px;color:#86efac;font-size:13px}
+@media(max-width:760px){.launch-page-head{flex-direction:column}}
