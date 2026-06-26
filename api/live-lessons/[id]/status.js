@@ -58,10 +58,26 @@ module.exports = async (req, res) => {
       sendJson(res, 403, { error: "forbidden" });
       return;
     }
-    const updated = await patchLesson(id, { status_aula: status });
+    const patch = { status_aula: status };
+    if (status === "ao_vivo") {
+      patch.recording_enabled = true;
+      patch.video_status = "live";
+    }
+    if (status === "pendente_registro") {
+      patch.video_status = "finished";
+    }
+    if (status === "cancelada") {
+      patch.deleted_at = new Date().toISOString();
+      patch.video_status = "cancelled";
+    }
+    const updated = await patchLesson(id, patch);
     sendJson(res, 200, { lesson: updated, label: labelForStatus(status) });
   } catch (error) {
     console.error("[api] live lesson status failed", error);
-    sendJson(res, 500, { error: "status_failed" });
+    sendJson(res, 500, {
+      error: "status_failed",
+      message: error?.message || "Não foi possível atualizar a aula agora.",
+      code: error?.code || "",
+    });
   }
 };

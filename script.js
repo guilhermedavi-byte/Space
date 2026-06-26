@@ -13650,7 +13650,20 @@ const normalizeClassType = (value) => {
 const normalizeClassStatus = (value) => {
   const raw = String(value || "").trim().toLowerCase();
   if (raw === "paused" || raw === "pausada" || raw === "pausado") return "paused";
-  if (raw === "ended" || raw === "encerrada" || raw === "encerrado" || raw === "inativa" || raw === "inativo") return "ended";
+  if (
+    raw === "ended" ||
+    raw === "encerrada" ||
+    raw === "encerrado" ||
+    raw === "inactive" ||
+    raw === "inativa" ||
+    raw === "inativo" ||
+    raw === "cancelado" ||
+    raw === "cancelada" ||
+    raw === "cancelled" ||
+    raw === "canceled" ||
+    raw === "deleted"
+  )
+    return "ended";
   return "active";
 };
 
@@ -13721,7 +13734,7 @@ const normalizeClassRow = ({ id, data }) => {
   if (!docId) return null;
 
   const type = normalizeClassType(src.type);
-  const status = normalizeClassStatus(src.status);
+  const status = src.deletedAt || src.deleted_at || src.cancelledAt || src.canceladoEm ? "ended" : normalizeClassStatus(src.status || src.statusAula);
   const title = String(src.title || "").trim();
   const teacherId = String(src.teacherId || src.professorId || "").trim();
   const teacherName = String(src.teacherName || src.professorNome || src.professorName || "").trim();
@@ -14452,7 +14465,7 @@ const adminPedagogicoFilteredClasses = () => {
       const ids = Array.isArray(c.studentIds) ? c.studentIds : [];
       if (!ids.includes(studentId)) return false;
     }
-    if (status && String(c.status || "") !== status) return false;
+    if (status && normalizeClassStatus(c.status) !== normalizeClassStatus(status)) return false;
     if (plan && String(c.plan || "").toLowerCase() !== plan) return false;
     return true;
   });
@@ -18880,9 +18893,9 @@ const deleteAdminPedClass = ({ classId } = {}) => {
   const label = row?.title ? row.title : row?.type === "group" ? "Aula em grupo" : "Aula individual";
 
   openModal({
-    title: "Excluir aula",
-    bodyHtml: `Tem certeza que deseja excluir <strong>${escapeHtml(label || "esta aula")}</strong>? Esta ação não pode ser desfeita.`,
-    primaryLabel: "Excluir",
+    title: "Inativar aula",
+    bodyHtml: `Tem certeza que deseja inativar <strong>${escapeHtml(label || "esta aula")}</strong>? Ela sai da operação ativa, mas o histórico fica preservado.`,
+    primaryLabel: "Inativar",
     secondaryLabel: "Cancelar",
     hideSecondary: false,
     showTrash: false,
@@ -18890,7 +18903,7 @@ const deleteAdminPedClass = ({ classId } = {}) => {
       if (modalPrimary) modalPrimary.disabled = true;
       if (modalSecondary) modalSecondary.disabled = true;
       const prev = modalPrimary?.textContent || "";
-      if (modalPrimary) modalPrimary.textContent = "Excluindo…";
+      if (modalPrimary) modalPrimary.textContent = "Inativando…";
 
       (async () => {
         try {
@@ -18898,16 +18911,30 @@ const deleteAdminPedClass = ({ classId } = {}) => {
           const user = await waitForFirebaseAuthReady(firebase, 5000);
           if (!user) throw new Error("not_authenticated");
           const docRef = firebase.doc(firebase.primaryDb, "classes", id);
-          await withTimeout(firebase.deleteDoc(docRef), 12_000, "firestore_admin_pedagogico_class_delete");
+          await withTimeout(
+            firebase.setDoc(
+              docRef,
+              {
+                status: "inactive",
+                active: false,
+                deletedAt: firebase.serverTimestamp(),
+                updatedAt: firebase.serverTimestamp(),
+                updatedBy: String(user.uid || ""),
+              },
+              { merge: true }
+            ),
+            12_000,
+            "firestore_admin_pedagogico_class_soft_delete"
+          );
           closeModal();
           await renderAdminControlePedagogicoPanel({ force: true });
         } catch (e) {
           console.error("[admin] controle-pedagogico delete failed:", e);
-          if (modalBody instanceof HTMLElement) modalBody.innerHTML = "Não foi possível excluir agora.";
+          if (modalBody instanceof HTMLElement) modalBody.innerHTML = "Não foi possível inativar agora.";
         } finally {
           if (modalPrimary) modalPrimary.disabled = false;
           if (modalSecondary) modalSecondary.disabled = false;
-          if (modalPrimary) modalPrimary.textContent = prev || "Excluir";
+          if (modalPrimary) modalPrimary.textContent = prev || "Inativar";
         }
       })();
 

@@ -979,10 +979,28 @@ module.exports = async (req, res) => {
         }
       }
 
+      const cancelAula = async (targetId) => {
+        const data = {
+          status: "cancelado",
+          statusAula: "cancelada",
+          deletedAt: new Date(),
+          cancelledAt: new Date(),
+          canceladoEm: new Date(),
+          atualizadoEm: new Date(),
+        };
+        const patch = await firestorePatchDocument({
+          docPath: `aulas/${encodeURIComponent(targetId)}`,
+          idToken,
+          data,
+          updateMaskPaths: Object.keys(data),
+        });
+        return patch.ok;
+      };
+
       if (mode !== "future" || !evt.grupoRecorrenciaId) {
-        const del = await firestoreDeleteDocument({ docPath, idToken });
-        if (!del.ok) throw new Error("firestore_delete_failed");
-        sendJson(res, 200, { ok: true, deleted: 1 });
+        const ok = await cancelAula(evt.id);
+        if (!ok) throw new Error("firestore_cancel_failed");
+        sendJson(res, 200, { ok: true, deleted: 1, cancelled: 1 });
         return;
       }
 
@@ -1009,11 +1027,11 @@ module.exports = async (req, res) => {
 
       let deleted = 0;
       for (const row of toDelete) {
-        const del = await firestoreDeleteDocument({ docPath: `aulas/${encodeURIComponent(row.id)}`, idToken });
-        if (del.ok) deleted += 1;
+        const ok = await cancelAula(row.id);
+        if (ok) deleted += 1;
       }
 
-      sendJson(res, 200, { ok: true, deleted });
+      sendJson(res, 200, { ok: true, deleted, cancelled: deleted });
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error("[api] schedule events delete failed", error);

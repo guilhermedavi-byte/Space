@@ -18,6 +18,57 @@ const isStudentRole = (role) => normalizeRole(role) === "student";
 
 const safeEncode = (value) => encodeURIComponent(String(value || ""));
 
+const extractMissingColumns = (error) => {
+  const source = [
+    error?.message,
+    error?.details,
+    error?.hint,
+    error?.data?.message,
+    error?.data?.details,
+    error?.data?.hint,
+  ]
+    .map((part) => String(part || ""))
+    .filter(Boolean)
+    .join("\n");
+  const columns = new Set();
+  let match;
+  const patterns = [
+    /'([^']+)'\s+column/gi,
+    /column\s+"([^"]+)"/gi,
+    /column\s+([a-zA-Z0-9_]+)\s+of relation/gi,
+  ];
+  patterns.forEach((pattern) => {
+    while ((match = pattern.exec(source))) {
+      if (match[1]) columns.add(match[1]);
+    }
+  });
+  return [...columns];
+};
+
+const omitKeys = (obj, keys) => {
+  const blocked = new Set(Array.isArray(keys) ? keys : []);
+  return Object.fromEntries(Object.entries(obj || {}).filter(([key]) => !blocked.has(key)));
+};
+
+const supabaseWriteWithColumnFallback = async (path, options, { requiredKeys = [] } = {}) => {
+  const required = new Set(requiredKeys);
+  let body = options?.body && typeof options.body === "object" ? options.body : {};
+  let lastError = null;
+
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    try {
+      return await supabaseFetch(path, { ...options, body });
+    } catch (error) {
+      lastError = error;
+      const missing = extractMissingColumns(error).filter((key) => key && !required.has(key) && Object.prototype.hasOwnProperty.call(body, key));
+      if (!missing.length) throw error;
+      body = omitKeys(body, missing);
+    }
+  }
+
+  throw lastError || new Error("supabase_write_failed");
+};
+
 const normalizeName = (value) =>
   String(value || "")
     .trim()
@@ -97,6 +148,11 @@ const normalizeLesson = (row) => {
     video_provider: row.video_provider || "",
     video_room_id: row.video_room_id || "",
     video_room_url: row.video_room_url || "",
+    assignment_id: row.assignment_id == null ? "" : String(row.assignment_id),
+    meeting_room_slug: row.meeting_room_slug || row.video_room_id || "",
+    meeting_url: row.meeting_url || row.video_room_url || row.video_join_url_professor || row.link_aula || "",
+    deleted_at: row.deleted_at || null,
+    recording_enabled: Boolean(row.recording_enabled),
     video_join_url_aluno: row.video_join_url_aluno || "",
     video_join_url_professor: row.video_join_url_professor || "",
     link_aula:
@@ -197,12 +253,21 @@ const patchLesson = async (id, patch) => {
     ...patch,
     updated_at: new Date().toISOString(),
   };
-  const { data } = await supabaseFetch(`/${LESSONS_TABLE}?id=eq.${safeEncode(id)}`, {
+  const { data } = await supabaseWriteWithColumnFallback(`/${LESSONS_TABLE}?id=eq.${safeEncode(id)}`, {
     method: "PATCH",
     body: payload,
-  });
+  }, { requiredKeys: ["status_aula"] });
   const row = Array.isArray(data) ? data[0] : null;
   return normalizeLesson(row);
+};
+
+const findLessonRegisterByLessonId = async (lessonId) => {
+  const id = String(lessonId || "").trim();
+  if (!id) return null;
+  const { data } = await supabaseFetch(
+    `/${REGISTERS_TABLE}?select=*&aula_id=eq.${safeEncode(id)}&order=updated_at.desc.nullslast&limit=1`
+  );
+  return Array.isArray(data) ? data[0] || null : null;
 };
 
 const createLessonRegister = async ({ lesson, session, payload }) => {
@@ -251,10 +316,16 @@ const createLessonRegister = async ({ lesson, session, payload }) => {
     updated_at: now,
   };
 
-  const { data } = await supabaseFetch(`/${REGISTERS_TABLE}`, {
-    method: "POST",
-    body: register,
-  });
+  const existing = await findLessonRegisterByLessonId(lesson.id).catch(() => null);
+  const writePath = existing?.id
+    ? `/${REGISTERS_TABLE}?id=eq.${safeEncode(existing.id)}`
+    : `/${REGISTERS_TABLE}`;
+  const writeMethod = existing?.id ? "PATCH" : "POST";
+  const writeBody = existing?.id ? { ...register, created_at: existing.created_at || register.created_at } : register;
+  const { data } = await supabaseWriteWithColumnFallback(writePath, {
+    method: writeMethod,
+    body: writeBody,
+  }, { requiredKeys: ["aula_id", "status"] });
   const saved = Array.isArray(data) ? data[0] : data;
   const lessonPatch = {
     status_aula:

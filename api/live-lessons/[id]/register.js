@@ -106,6 +106,10 @@ module.exports = async (req, res) => {
     sendJson(res, 200, { ...result, n8n, label: labelForStatus(status) });
   } catch (error) {
     console.error("[api] live lesson register failed", error);
-    sendJson(res, 500, { error: "register_failed" });
+    sendJson(res, 500, {
+      error: "register_failed",
+      message: error?.message || "Não foi possível salvar o registro agora.",
+      code: error?.code || "",
+    });
   }
 };

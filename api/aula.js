@@ -143,6 +143,7 @@ const buildHtml = ({ user, lesson, joinData, canEdit }) => {
           }
           ${canTeach && !isCancelled && !isEnded ? `<button class="live-class-btn primary" type="button" data-live-status="ao_vivo">Iniciar aula</button>` : ""}
           ${canTeach && !isCancelled && !isEnded ? `<button class="live-class-btn" type="button" data-live-status="pendente_registro">Finalizar aula</button>` : ""}
+          ${canTeach ? `<button class="live-class-btn" type="button" data-copy-class-link>Copiar link fixo</button>` : ""}
           ${canTeach ? `<button class="live-class-btn" type="button" data-live-toggle-register>Registrar aula</button>` : ""}
         </div>
       </header>
@@ -341,6 +342,19 @@ const buildHtml = ({ user, lesson, joinData, canEdit }) => {
       const setStatusText = (label) => {
         document.querySelectorAll("[data-live-status-label],[data-live-status-side]").forEach((el) => { el.textContent = label; });
       };
+      const copyLinkButton = document.querySelector("[data-copy-class-link]");
+      if (copyLinkButton) {
+        copyLinkButton.addEventListener("click", async () => {
+          const fixedUrl = window.location.origin + "/aula/" + encodeURIComponent(state.lesson.id);
+          try {
+            await navigator.clipboard.writeText(fixedUrl);
+            copyLinkButton.textContent = "Link copiado";
+            setTimeout(() => { copyLinkButton.textContent = "Copiar link fixo"; }, 1800);
+          } catch (error) {
+            window.prompt("Copie o link da aula:", fixedUrl);
+          }
+        });
+      }
       document.querySelectorAll("[data-live-status]").forEach((btn) => {
         btn.addEventListener("click", async () => {
           btn.disabled = true;
@@ -351,10 +365,15 @@ const buildHtml = ({ user, lesson, joinData, canEdit }) => {
               body: JSON.stringify({ status_aula: btn.dataset.liveStatus })
             });
             const data = await res.json().catch(() => null);
-            if (!res.ok) throw new Error(data && data.error || "status_failed");
+            if (!res.ok) throw new Error(data && (data.message || data.error) || "status_failed");
             setStatusText(data && data.label ? data.label : "Atualizado");
+            if (btn.dataset.liveStatus === "pendente_registro" && registerPanel) {
+              registerPanel.hidden = false;
+              if (registerToggle) registerToggle.textContent = "Ocultar registro";
+              registerPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+            }
           } catch (error) {
-            alert("Nao foi possivel atualizar a aula agora.");
+            alert(error && error.message ? error.message : "Nao foi possivel atualizar a aula agora.");
           } finally {
             btn.disabled = false;
           }
@@ -374,11 +393,11 @@ const buildHtml = ({ user, lesson, joinData, canEdit }) => {
               body: JSON.stringify(payload)
             });
             const data = await res.json().catch(() => null);
-            if (!res.ok) throw new Error(data && data.error || "register_failed");
+            if (!res.ok) throw new Error(data && (data.message || data.error) || "register_failed");
             setStatusText(data && data.label ? data.label : "Realizada");
             alert("Registro salvo.");
           } catch (error) {
-            alert("Nao foi possivel salvar o registro agora.");
+            alert(error && error.message ? error.message : "Nao foi possivel salvar o registro agora.");
           } finally {
             if (submit) submit.disabled = false;
           }
