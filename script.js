@@ -9076,47 +9076,101 @@ const openStudentRescheduleModal = (lesson) => {
   });
 };
 
-const renderStudentLiveLessons = async ({ force = false } = {}) => {
-  if (!(liveStudentLessonsList instanceof HTMLElement)) return;
-  if (currentRole !== "student") return;
+const uniqueStudentLessons = (lessons) => {
+  const seen = new Set();
+  return (Array.isArray(lessons) ? lessons : [])
+    .map(normalizeLiveLessonForUi)
+    .filter(Boolean)
+    .filter((lesson) => {
+      const key = `${lesson.liveUrl || ""}|${lesson.alunoId || ""}|${lesson.professorId || ""}|${lesson.dateKey}|${lesson.startMin}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => {
+      const leftDate = parseDateKey(a.dateKey);
+      const rightDate = parseDateKey(b.dateKey);
+      const leftMs = leftDate ? leftDate.getTime() + a.startMin * 60000 : 0;
+      const rightMs = rightDate ? rightDate.getTime() + b.startMin * 60000 : 0;
+      return leftMs - rightMs;
+    });
+};
 
+const loadStudentLessonsData = async ({ force = false } = {}) => {
   const now = Date.now();
   const shouldFetch = Boolean(force) || !studentLessonsState.lastLoadedAt || now - studentLessonsState.lastLoadedAt >= 15_000;
+  if (!shouldFetch || studentLessonsState.isLoading) return Array.isArray(studentLessonsState.lessons) ? studentLessonsState.lessons : [];
 
-  if (shouldFetch && !studentLessonsState.isLoading) {
-    studentLessonsState.isLoading = true;
+  studentLessonsState.isLoading = true;
+  try {
+    const collected = [];
+
     try {
-      let raw = [];
-      let loadedFromLiveClassroom = false;
-      try {
-        const liveRes = await fetchWithAuth("/api/live-lessons?limit=200");
-        if (liveRes.ok) {
-          const liveData = await liveRes.json().catch(() => null);
-          raw = Array.isArray(liveData?.lessons) ? liveData.lessons : [];
-          loadedFromLiveClassroom = raw.length > 0;
-        }
-      } catch (error) {
-        loadedFromLiveClassroom = false;
+      const liveRes = await fetchWithAuth("/api/live-lessons?limit=200");
+      if (liveRes.ok) {
+        const liveData = await liveRes.json().catch(() => null);
+        if (Array.isArray(liveData?.lessons)) collected.push(...liveData.lessons);
       }
-
-      if (!loadedFromLiveClassroom) {
-        const res = await fetchWithAuth("/api/schedule-lessons");
-        if (!res.ok) throw new Error("lessons_fetch_failed");
-        const data = await res.json().catch(() => null);
-        raw = Array.isArray(data?.lessons) ? data.lessons : [];
-      }
-
-      studentLessonsState.lessons = raw.map(normalizeLiveLessonForUi).filter(Boolean);
-
-      studentLessonsState.lastLoadedAt = Date.now();
     } catch (error) {
-      // keep last snapshot
-    } finally {
-      studentLessonsState.isLoading = false;
+      // fallback below
     }
+
+    try {
+      const res = await fetchWithAuth("/api/schedule-lessons");
+      if (res.ok) {
+        const data = await res.json().catch(() => null);
+        if (Array.isArray(data?.lessons)) collected.push(...data.lessons);
+      }
+    } catch (error) {
+      // fallback below
+    }
+
+    try {
+      const start = new Date();
+      const end = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+      const from = createDateKey(start);
+      const to = createDateKey(end);
+      const res = await fetchWithAuth(`/api/schedule-events?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+      if (res.ok) {
+        const data = await res.json().catch(() => null);
+        const events = Array.isArray(data?.events) ? data.events : [];
+        collected.push(
+          ...events
+            .filter((evt) => evt && evt.type === "lesson")
+            .map((evt) => ({
+              id: String(evt.liveLessonId || evt.id || ""),
+              dateKey: evt.dateKey,
+              startMin: evt.startMin,
+              endMin: evt.endMin,
+              status: evt.status || "agendada",
+              professorId: evt.professorId || "",
+              alunoId: evt.alunoId || "",
+              professor_nome: evt.professorNome || evt.title || "",
+              aluno_nome: evt.alunoNome || "",
+              liveLessonId: evt.liveLessonId || "",
+              liveUrl: evt.liveUrl || (evt.liveLessonId ? `/aula/${encodeURIComponent(evt.liveLessonId)}` : ""),
+            }))
+        );
+      }
+    } catch (error) {
+      // keep any lesson loaded above
+    }
+
+    studentLessonsState.lessons = uniqueStudentLessons(collected);
+    studentLessonsState.lastLoadedAt = Date.now();
+  } finally {
+    studentLessonsState.isLoading = false;
   }
 
-  const lessons = Array.isArray(studentLessonsState.lessons) ? studentLessonsState.lessons : [];
+  return Array.isArray(studentLessonsState.lessons) ? studentLessonsState.lessons : [];
+};
+
+const renderStudentLiveLessons = async ({ force = false } = {}) => {
+  if (currentRole !== "student") return;
+  const lessons = await loadStudentLessonsData({ force });
+
+  if (!(liveStudentLessonsList instanceof HTMLElement)) return;
+
   if (liveStudentEmpty instanceof HTMLElement) {
     liveStudentEmpty.hidden = lessons.length > 0;
   }

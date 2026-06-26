@@ -49,6 +49,46 @@ const normalizeRole = (role) => {
   return "";
 };
 
+const normalizeText = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+const normalizeCompact = (value) => normalizeText(value).replace(/[^a-z0-9]+/g, "");
+
+const nameTokens = (value) => normalizeText(value).split(/[^a-z0-9]+/).filter((token) => token.length >= 2);
+
+const namesMatch = (a, b) => {
+  const left = normalizeText(a);
+  const right = normalizeText(b);
+  if (!left || !right) return false;
+  if (left === right) return true;
+  const leftCompact = normalizeCompact(left);
+  const rightCompact = normalizeCompact(right);
+  if (leftCompact && rightCompact && (leftCompact.includes(rightCompact) || rightCompact.includes(leftCompact))) return true;
+  const leftTokens = new Set(nameTokens(left));
+  const rightTokens = nameTokens(right);
+  const rightSet = new Set(rightTokens);
+  return Boolean(
+    (rightTokens.length && rightTokens.every((token) => leftTokens.has(token))) ||
+      (leftTokens.size && [...leftTokens].every((token) => rightSet.has(token)))
+  );
+};
+
+const emailsMatch = (a, b) => {
+  const left = String(a || "").trim().toLowerCase();
+  const right = String(b || "").trim().toLowerCase();
+  return Boolean(left && right && left === right);
+};
+
+const phonesMatch = (a, b) => {
+  const left = String(a || "").replace(/\D+/g, "");
+  const right = String(b || "").replace(/\D+/g, "");
+  return Boolean(left && right && left === right);
+};
+
 const buildId = (prefix) => {
   const rand = crypto.randomBytes(6).toString("hex");
   return `${prefix}_${Date.now()}_${rand}`;
@@ -346,6 +386,8 @@ const decodeAulaDoc = (doc) => {
 
   const professorNome = typeof fields.professorNome === "string" ? fields.professorNome.trim() : "";
   const alunoNome = typeof fields.alunoNome === "string" ? fields.alunoNome.trim() : "";
+  const alunoEmail = typeof fields.alunoEmail === "string" ? fields.alunoEmail.trim().toLowerCase() : "";
+  const alunoTelefone = typeof fields.alunoTelefone === "string" ? fields.alunoTelefone.trim() : "";
 
   const recorrente = typeof fields.recorrente === "boolean" ? fields.recorrente : false;
   const grupoRecorrenciaId = typeof fields.grupoRecorrenciaId === "string" ? fields.grupoRecorrenciaId : "";
@@ -367,6 +409,8 @@ const decodeAulaDoc = (doc) => {
     type: alunoId ? "lesson" : "manual",
     professorNome: professorNome || null,
     alunoNome: alunoNome || null,
+    alunoEmail: alunoEmail || null,
+    alunoTelefone: alunoTelefone || null,
     recorrente,
     grupoRecorrenciaId: grupoRecorrenciaId || null,
     title,
@@ -911,6 +955,15 @@ module.exports = async (req, res) => {
         .filter(Boolean)
         .filter((evt) => {
           if (role === "teacher" && evt.professorId !== requesterId) return false;
+          if (
+            role === "student" &&
+            evt.alunoId !== requesterId &&
+            !emailsMatch(evt.alunoEmail, session.email) &&
+            !phonesMatch(evt.alunoTelefone, session.phone) &&
+            !namesMatch(evt.alunoNome, session.name)
+          ) {
+            return false;
+          }
           if (from && evt.dateKey < from) return false;
           if (to && evt.dateKey > to) return false;
           return true;
@@ -935,7 +988,13 @@ module.exports = async (req, res) => {
             recorrente: evt.recorrente,
             grupoRecorrenciaId: evt.grupoRecorrenciaId,
             alunoId: evt.alunoId,
+            alunoNome: evt.alunoNome,
+            alunoEmail: evt.alunoEmail,
+            alunoTelefone: evt.alunoTelefone,
             professorId: evt.professorId,
+            professorNome: evt.professorNome,
+            liveLessonId: evt.liveLessonId,
+            liveUrl: evt.liveLessonId ? `/aula/${encodeURIComponent(evt.liveLessonId)}` : "",
           };
         });
 
