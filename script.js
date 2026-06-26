@@ -8799,21 +8799,28 @@ const renderTeacherStudentsPanel = async ({ force = false } = {}) => {
   if (teacherStudentsEmpty instanceof HTMLElement) teacherStudentsEmpty.hidden = true;
 
   try {
-    const [eventsRes, logsRes] = await Promise.all([fetchWithAuth("/api/schedule-events", { method: "GET" }), fetchWithAuth("/api/lesson-logs", { method: "GET" })]);
-    if (!eventsRes.ok) throw new Error("teacher_students_events_failed");
-    const eventsData = await eventsRes.json().catch(() => null);
-    const events = Array.isArray(eventsData?.events) ? eventsData.events : [];
+    const res = await fetchWithAuth("/api/pedagogico/teacher-students", { method: "GET" });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error || "teacher_students_failed");
+    const summariesFromApi = Array.isArray(data?.summaries) ? data.summaries : [];
+    const events = Array.isArray(data?.events) ? data.events : [];
     const eventsById = new Map();
     events.forEach((e) => {
       if (e && typeof e === "object" && e.id) eventsById.set(String(e.id), e);
     });
-
-    const logsData = logsRes.ok ? await logsRes.json().catch(() => null) : null;
-    const logs = Array.isArray(logsData?.logs) ? logsData.logs : [];
+    const logs = Array.isArray(data?.logs) ? data.logs : [];
 
     teacherStudentsState.events = events;
     teacherStudentsState.eventsById = eventsById;
     teacherStudentsState.logs = logs;
+
+    if (summariesFromApi.length) {
+      teacherStudentsState.summaries = summariesFromApi;
+      teacherStudentsState.loadedAt = Date.now();
+      setTeacherStudentsStatus(data?.warning || "");
+      renderTeacherStudentsList();
+      return;
+    }
 
     const alunoIds = new Set();
     events
@@ -12848,6 +12855,52 @@ const fetchLessonLogsFromFirestore = async () => {
   return logs;
 };
 
+const normalizeSupabaseStudentForAdmin = (row = {}) => {
+  if (!row || typeof row !== "object") return null;
+  const id = String(row.id || row.aluno_id || row.aluno_chave || row.email || row.telefone || row.aluno_nome || row.nome || "").trim();
+  const nome = String(row.nome || row.aluno_nome || "Aluno").trim();
+  if (!id || !nome) return null;
+  const email = String(row.email || row.aluno_email || "").trim().toLowerCase();
+  const ativo = row.ativo_acesso !== false && !["inativo", "cancelado", "cancelada", "inactive"].includes(String(row.status_acesso || row.status || "").toLowerCase());
+  return {
+    id,
+    nome,
+    email,
+    tipo: "student",
+    ativo,
+    criadoEm: row.created_at || row.createdAt || null,
+    initials: getInitials(nome),
+    professorId: String(row.professor_id || row.teacherId || "").trim(),
+    plano: String(row.plano || row.plan || "").trim(),
+    pais: String(row.pais || row.country || "").trim(),
+    canceladoEm: row.canceladoEm || row.cancelamentoEm || row.dataCancelamento || null,
+    criadoKey: toDateKeyFromAny(row.created_at || row.createdAt),
+    cancelKey: toDateKeyFromAny(row.canceladoEm || row.cancelamentoEm || row.dataCancelamento),
+    telefone: String(row.telefone || "").trim(),
+    alunoChave: String(row.aluno_chave || "").trim(),
+    source: row.source || "supabase",
+  };
+};
+
+const mergeAdminStudentRows = (...groups) => {
+  const keyOf = (row) => {
+    const email = String(row?.email || "").trim().toLowerCase();
+    if (email) return `email:${email}`;
+    const phone = String(row?.telefone || "").replace(/\D+/g, "");
+    if (phone) return `phone:${phone}`;
+    return `id:${String(row?.id || "").trim()}`;
+  };
+  const byKey = new Map();
+  groups.flat().forEach((row) => {
+    if (!row || typeof row !== "object") return;
+    const key = keyOf(row);
+    if (!key || key === "id:") return;
+    const prev = byKey.get(key);
+    byKey.set(key, prev ? { ...row, ...prev, professorId: prev.professorId || row.professorId, plano: prev.plano || row.plano } : row);
+  });
+  return Array.from(byKey.values()).sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"));
+};
+
 const ensureAdminStudentsBaseData = async ({ force = false } = {}) => {
   if (!isFinanceAccessRole(currentRole)) return;
   const now = Date.now();
@@ -12858,12 +12911,19 @@ const ensureAdminStudentsBaseData = async ({ force = false } = {}) => {
   if (adminStudentsError instanceof HTMLElement) adminStudentsError.hidden = true;
 
   try {
-    const [teachers, students, eventsRes, logs] = await Promise.all([
+    const [teachers, firebaseStudents, eventsRes, logs, pedagogicalOps] = await Promise.all([
       fetchAdminAgendaTeachers(),
       fetchUserRowsFromFirestore("student"),
       fetchWithAuth("/api/schedule-events", { method: "GET" }),
       fetchLessonLogsFromFirestore(),
+      fetchWithAuth("/api/pedagogico/dashboard")
+        .then((res) => (res.ok ? res.json() : { students: [] }))
+        .catch(() => ({ students: [] })),
     ]);
+    const supabaseStudents = (Array.isArray(pedagogicalOps?.students) ? pedagogicalOps.students : [])
+      .map(normalizeSupabaseStudentForAdmin)
+      .filter(Boolean);
+    const students = mergeAdminStudentRows(firebaseStudents, supabaseStudents);
 
     adminStudentsState.teachers = Array.isArray(teachers) ? teachers : [];
     const teachersById = new Map();
@@ -13865,6 +13925,19 @@ const normalizeLiveLessonsAsAdminClasses = (lessons) => {
       };
     })
     .filter(Boolean);
+};
+
+const mergeAdminPedagogicoClasses = (classes, liveClasses) => {
+  const out = [];
+  const seen = new Set();
+  [...(Array.isArray(classes) ? classes : []), ...(Array.isArray(liveClasses) ? liveClasses : [])].forEach((row) => {
+    if (!row || typeof row !== "object") return;
+    const key = String(row.id || row.liveLessonId || "").trim();
+    if (key && seen.has(key)) return;
+    if (key) seen.add(key);
+    out.push(row);
+  });
+  return out;
 };
 
 const normalizePlanStatus = (value) => {
@@ -17113,7 +17186,7 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
     adminPedagogicoState.teachersById = new Map(adminPedagogicoState.teachers.map((t) => [String(t.id || ""), t]));
     adminPedagogicoState.students = mergePeople(students, [...opsStudents, ...liveStudents]);
     adminPedagogicoState.studentsById = new Map(adminPedagogicoState.students.map((s) => [String(s.id || ""), s]));
-    adminPedagogicoState.classes = Array.isArray(classes) && classes.length ? classes : liveClasses;
+    adminPedagogicoState.classes = mergeAdminPedagogicoClasses(classes, liveClasses);
     adminPedagogicoState.groups = Array.isArray(groups) ? groups : [];
     adminPedagogicoState.groupsById = new Map(adminPedagogicoState.groups.map((g) => [String(g.id || ""), g]));
     adminPedagogicoState.groupsByClassId = new Map(

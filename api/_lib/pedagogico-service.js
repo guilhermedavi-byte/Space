@@ -105,6 +105,40 @@ const normalizeIdentity = (value) =>
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
 
+const normalizeName = (value) =>
+  normalizeIdentity(value)
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+const compactName = (value) => normalizeName(value).replace(/\s+/g, "");
+
+const namesMatch = (a, b) => {
+  const left = normalizeName(a);
+  const right = normalizeName(b);
+  if (!left || !right) return false;
+  if (left === right) return true;
+  const lc = compactName(left);
+  const rc = compactName(right);
+  return Boolean(lc && rc && (lc.includes(rc) || rc.includes(lc)));
+};
+
+const emailsMatch = (a, b) => {
+  const left = normalizeIdentity(a);
+  const right = normalizeIdentity(b);
+  return Boolean(left && right && left === right);
+};
+
+const idsMatch = (a, b) => {
+  const left = String(a || "").trim();
+  const right = String(b || "").trim();
+  return Boolean(left && right && left === right);
+};
+
+const teacherMatchesSession = (row, session) =>
+  idsMatch(session?.sub, row?.professor_id || row?.teacher_id || row?.professorId) ||
+  emailsMatch(session?.email, row?.professor_email || row?.teacher_email || row?.professorEmail) ||
+  namesMatch(session?.name, row?.professor_nome || row?.teacher_name || row?.professorName);
+
 const onlyDigits = (value) => String(value || "").replace(/\D+/g, "");
 
 const studentIdentityKey = (row) => {
@@ -229,6 +263,154 @@ const loadAdminDashboard = async ({ session } = {}) => {
   };
 };
 
+const lessonToTeacherEvent = (lesson) => {
+  if (!lesson || typeof lesson !== "object") return null;
+  const id = String(lesson.id || "").trim();
+  if (!id) return null;
+  const start = lesson.inicio ? new Date(lesson.inicio) : null;
+  const end = lesson.fim ? new Date(lesson.fim) : null;
+  const startMin = start && !Number.isNaN(start.getTime()) ? start.getHours() * 60 + start.getMinutes() : 0;
+  const endMin = end && !Number.isNaN(end.getTime()) ? end.getHours() * 60 + end.getMinutes() : startMin + 30;
+  return {
+    id,
+    type: "lesson",
+    title: lesson.aluno_nome || "Aluno",
+    alunoId: String(lesson.aluno_id || lesson.aluno_nome || "").trim(),
+    alunoNome: lesson.aluno_nome || "",
+    professorId: String(lesson.professor_id || "").trim(),
+    professorNome: lesson.professor_nome || "",
+    dateKey: dateKey(lesson.inicio),
+    startMin,
+    endMin,
+    status: String(lesson.status_aula || "agendada").toLowerCase(),
+    liveLessonId: id,
+    liveUrl: `/aula/${encodeURIComponent(id)}`,
+    payload: lesson,
+  };
+};
+
+const registerToTeacherLog = (row) => {
+  if (!row || typeof row !== "object") return null;
+  const id = String(row.id || row.aula_id || "").trim();
+  if (!id) return null;
+  return {
+    id,
+    eventId: String(row.aula_id || "").trim(),
+    professorId: String(row.professor_id || "").trim(),
+    alunoId: String(row.aluno_id || row.aluno_nome || "").trim(),
+    statusAula: String(row.status || row.status_aula || "").trim().toLowerCase(),
+    criadoEm: row.created_at || null,
+    atualizadoEm: row.updated_at || row.created_at || null,
+    payload: {
+      ...row,
+      conteudoTrabalhado: row.conteudo_trabalhado || row.conteudo_aula || "",
+      engajamentoNota: row.engajamento || "",
+      humorAluno: row.humor || row.humor_aluno || "",
+      observacoesInternas: row.observacoes || "",
+      riscoEvasao: row.risco_evasao || "",
+      avisosCoordenacao: [],
+    },
+  };
+};
+
+const loadTeacherStudents = async ({ session } = {}) => {
+  const safe = (promise) => promise.catch(() => []);
+  const [onboarding, financeStudents, lessons, registers] = await Promise.all([
+    safe(fetchOnboardingRows("select=*&order=updated_at.desc.nullslast&limit=1000")),
+    safe(fetchRows(`/${TABLES.financeStudents}?select=*&order=updated_at.desc.nullslast&limit=1000`, { optional: true })),
+    safe(listTeacherLessons({ session, limit: 1000, includeHistoryDays: 3650 })),
+    safe(listRegisters({ limit: 1000 })),
+  ]);
+
+  const assignedKeys = new Set();
+  onboarding.filter((row) => teacherMatchesSession(row, session)).forEach((row) => assignedKeys.add(studentIdentityKey(row)));
+  lessons.forEach((row) => {
+    const key = studentIdentityKey(row);
+    if (key && key !== "name:") assignedKeys.add(key);
+  });
+  registers.filter((row) => teacherMatchesSession(row, session)).forEach((row) => {
+    const key = studentIdentityKey(row);
+    if (key && key !== "name:") assignedKeys.add(key);
+  });
+
+  const lessonStudentRows = lessons.map((row) => ({
+    id: row.aluno_id || row.aluno_nome || "",
+    aluno_id: row.aluno_id || row.aluno_nome || "",
+    aluno_nome: row.aluno_nome || "Aluno",
+    professor_id: row.professor_id || "",
+    professor_nome: row.professor_nome || "",
+    plano: row.plano || "",
+    status: "ativo",
+  }));
+  const registerStudentRows = registers
+    .filter((row) => teacherMatchesSession(row, session))
+    .map((row) => ({
+      id: row.aluno_id || row.aluno_nome || "",
+      aluno_id: row.aluno_id || row.aluno_nome || "",
+      aluno_nome: row.aluno_nome || "Aluno",
+      professor_id: row.professor_id || "",
+      professor_nome: row.professor_nome || "",
+      status: "ativo",
+    }));
+
+  const students = mergePedagogicalStudents({
+    onboarding: [...onboarding, ...lessonStudentRows, ...registerStudentRows],
+    financeStudents,
+    preferences: [],
+  }).filter((row) => assignedKeys.has(row.aluno_chave || studentIdentityKey(row)));
+
+  const events = lessons.map(lessonToTeacherEvent).filter(Boolean);
+  const logs = registers.filter((row) => teacherMatchesSession(row, session)).map(registerToTeacherLog).filter(Boolean);
+  const eventsById = new Map(events.map((event) => [String(event.id), event]));
+  const logsByAluno = new Map();
+  logs.forEach((log) => {
+    const alunoId = String(log.alunoId || "").trim();
+    if (!alunoId) return;
+    const bucket = logsByAluno.get(alunoId) || [];
+    bucket.push(log);
+    logsByAluno.set(alunoId, bucket);
+  });
+
+  const summaries = students
+    .map((student) => {
+      const alunoId = String(student.aluno_id || student.id || student.aluno_nome || "").trim();
+      const studentLogs = logsByAluno.get(alunoId) || logs.filter((log) => namesMatch(log?.payload?.aluno_nome, student.aluno_nome));
+      const studentEvents = events.filter((event) => idsMatch(event.alunoId, alunoId) || namesMatch(event.alunoNome || event.title, student.aluno_nome));
+      const lastEvent = studentEvents
+        .slice()
+        .sort((a, b) => String(b.dateKey || "").localeCompare(String(a.dateKey || "")) || (Number(b.startMin) || 0) - (Number(a.startMin) || 0))[0];
+      const lastLog = studentLogs
+        .slice()
+        .sort((a, b) => Date.parse(b.atualizadoEm || b.criadoEm || "") - Date.parse(a.atualizadoEm || a.criadoEm || ""))[0];
+      const lastLessonLabel = lastEvent?.dateKey
+        ? `${lastEvent.dateKey.split("-").reverse().join("/")} • ${String(Math.floor((lastEvent.startMin || 0) / 60)).padStart(2, "0")}:${String((lastEvent.startMin || 0) % 60).padStart(2, "0")}`
+        : "—";
+      return {
+        alunoId,
+        nome: student.aluno_nome || student.nome || "Aluno",
+        email: student.email || "",
+        telefone: student.telefone || "",
+        plano: student.plano || "",
+        accessStatus: student.ativo_acesso === false ? "Inativo" : "Ativo",
+        lastLessonLabel,
+        totalLogs: studentLogs.length,
+        riskLabel: student.risco_nivel || (Number(student.risco_score || student.score_risco || 0) >= 70 ? "Alto" : "Sem dados"),
+        statusLabel:
+          lastLog?.statusAula === "realizada"
+            ? "Realizada"
+            : lastLog?.statusAula === "falta"
+              ? "Falta"
+              : lastLog?.statusAula === "remarcada"
+                ? "Remarcada"
+                : "Sem dados",
+        hasAlert: Number(student.risco_score || student.score_risco || 0) >= 70,
+      };
+    })
+    .sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"));
+
+  return { students, summaries, events, logs };
+};
+
 const studentFilter = ({ alunoId, alunoNome }) => {
   if (alunoNome) return `aluno_nome=ilike.*${safeEncode(alunoNome)}*`;
   return `aluno_id=eq.${safeEncode(alunoId)}`;
@@ -284,6 +466,7 @@ module.exports = {
   listRegisters,
   loadAdminDashboard,
   loadStudentCard,
+  loadTeacherStudents,
   studentIdentityKey,
   mergePedagogicalStudents,
   isMissingRelation,
