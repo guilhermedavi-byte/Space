@@ -1,6 +1,7 @@
 const { getSessionFromRequest } = require("./_lib/session");
 const { getVideoProvider } = require("./_lib/video-provider");
 const { fetchLessonById, canAccessLesson, canEditLesson, normalizeRole } = require("./_lib/live-lessons");
+const { sendNotFoundPage } = require("./_lib/not-found-page");
 
 const escapeHtml = (value) =>
   String(value ?? "")
@@ -426,8 +427,7 @@ module.exports = async (req, res) => {
   const url = new URL(req.url || "/api/aula", `https://${host}`);
   const id = String(url.searchParams.get("id") || "").trim();
   if (!id) {
-    res.statusCode = 404;
-    res.end("Aula nao encontrada.");
+    sendNotFoundPage(res);
     return;
   }
 
@@ -443,9 +443,7 @@ module.exports = async (req, res) => {
   }
 
   if (!lesson) {
-    res.statusCode = 404;
-    res.setHeader("Content-Type", "text/plain; charset=utf-8");
-    res.end("Aula nao encontrada.");
+    sendNotFoundPage(res);
     return;
   }
 

@@ -1,5 +1,6 @@
 const { getSessionFromRequest } = require("./_lib/session");
 const { fetchLessonById, canAccessLesson, normalizeRole } = require("./_lib/live-lessons");
+const { sendNotFoundPage } = require("./_lib/not-found-page");
 
 const escapeHtml = (value) =>
   String(value ?? "")
@@ -162,16 +163,14 @@ module.exports = async (req, res) => {
   const url = new URL(req.url || "/api/aula-encerramento", `https://${host}`);
   const id = String(url.searchParams.get("id") || "").trim();
   if (!id) {
-    res.statusCode = 404;
-    res.end("Aula nao encontrada.");
+    sendNotFoundPage(res);
     return;
   }
 
   try {
     const lesson = await fetchLessonById(id);
     if (!lesson) {
-      res.statusCode = 404;
-      res.end("Aula nao encontrada.");
+      sendNotFoundPage(res);
       return;
     }
     if (!canAccessLesson(session, lesson)) {
