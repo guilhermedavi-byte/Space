@@ -446,6 +446,10 @@ module.exports = async (req, res) => {
   // Resolve names to persist denormalized data (keeps the UI fast and avoids joins).
   let professorNome = "";
   let alunoNome = "";
+  const professorNomeBody = String(body?.professorNome || body?.professor_nome || "").trim();
+  const alunoNomeBody = String(body?.alunoNome || body?.aluno_nome || "").trim();
+  const alunoEmail = String(body?.alunoEmail || body?.aluno_email || "").trim().toLowerCase();
+  const alunoTelefone = String(body?.alunoTelefone || body?.aluno_telefone || body?.telefone || "").trim();
   try {
     if (professorId) {
       professorNome = (await getUserNameById({ idToken, uid: professorId })) || "";
@@ -455,6 +459,8 @@ module.exports = async (req, res) => {
     professorNome = "";
     alunoNome = "";
   }
+  professorNome = professorNome || professorNomeBody;
+  alunoNome = alunoNome || alunoNomeBody;
 
   const baseDoc = (overrideDateKey) => {
     const key = overrideDateKey || dateKey;
@@ -467,6 +473,8 @@ module.exports = async (req, res) => {
       alunoId: alunoId || null,
       professorId,
       alunoNome: alunoNome || null,
+      alunoEmail: alunoEmail || null,
+      alunoTelefone: alunoTelefone || null,
       professorNome: professorNome || null,
       data,
       diaSemana: occurrenceDiaSemana || diaSemana,

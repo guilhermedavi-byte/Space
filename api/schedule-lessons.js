@@ -11,6 +11,46 @@ const {
   getDocIdFromName,
 } = require("../_lib/firestore-rest");
 
+const normalizeText = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+const normalizeCompact = (value) => normalizeText(value).replace(/[^a-z0-9]+/g, "");
+
+const nameTokens = (value) => normalizeText(value).split(/[^a-z0-9]+/).filter((token) => token.length >= 2);
+
+const namesMatch = (a, b) => {
+  const left = normalizeText(a);
+  const right = normalizeText(b);
+  if (!left || !right) return false;
+  if (left === right) return true;
+  const leftCompact = normalizeCompact(left);
+  const rightCompact = normalizeCompact(right);
+  if (leftCompact && rightCompact && (leftCompact.includes(rightCompact) || rightCompact.includes(leftCompact))) return true;
+  const leftTokens = new Set(nameTokens(left));
+  const rightTokens = nameTokens(right);
+  const rightSet = new Set(rightTokens);
+  return Boolean(
+    (rightTokens.length && rightTokens.every((token) => leftTokens.has(token))) ||
+      (leftTokens.size && [...leftTokens].every((token) => rightSet.has(token)))
+  );
+};
+
+const emailsMatch = (a, b) => {
+  const left = String(a || "").trim().toLowerCase();
+  const right = String(b || "").trim().toLowerCase();
+  return Boolean(left && right && left === right);
+};
+
+const phonesMatch = (a, b) => {
+  const left = String(a || "").replace(/\D+/g, "");
+  const right = String(b || "").replace(/\D+/g, "");
+  return Boolean(left && right && left === right);
+};
+
 module.exports = async (req, res) => {
   if (req.method !== "GET" && req.method !== "HEAD") {
     res.setHeader("Allow", "GET, HEAD");
@@ -78,6 +118,8 @@ module.exports = async (req, res) => {
         const status = String(fields.status || "").trim().toLowerCase() || "agendada";
         const professorNome = typeof fields.professorNome === "string" ? fields.professorNome.trim() : "";
         const alunoNome = typeof fields.alunoNome === "string" ? fields.alunoNome.trim() : "";
+        const alunoEmail = typeof fields.alunoEmail === "string" ? fields.alunoEmail.trim().toLowerCase() : "";
+        const alunoTelefone = typeof fields.alunoTelefone === "string" ? fields.alunoTelefone.trim() : "";
         const liveLessonId = typeof fields.liveLessonId === "string" ? fields.liveLessonId.trim() : "";
         const grupoRecorrenciaId = typeof fields.grupoRecorrenciaId === "string" ? fields.grupoRecorrenciaId : "";
         const recorrente = typeof fields.recorrente === "boolean" ? fields.recorrente : false;
@@ -92,6 +134,8 @@ module.exports = async (req, res) => {
           status,
           professorNome: professorNome || null,
           alunoNome: alunoNome || null,
+          alunoEmail: alunoEmail || null,
+          alunoTelefone: alunoTelefone || null,
           liveLessonId: liveLessonId || null,
           grupoRecorrenciaId: grupoRecorrenciaId || null,
           recorrente,
@@ -107,7 +151,14 @@ module.exports = async (req, res) => {
 
   const filtered = rawAulas
     .filter((evt) => {
-      if (normalizedRole === "student") return evt.alunoId === userId;
+      if (normalizedRole === "student") {
+        return (
+          evt.alunoId === userId ||
+          emailsMatch(evt.alunoEmail, session.email) ||
+          phonesMatch(evt.alunoTelefone, session.phone) ||
+          namesMatch(evt.alunoNome, session.name)
+        );
+      }
       return evt.professorId === userId;
     })
     .filter((evt) => evt.status !== "cancelada" && evt.status !== "cancelado")
@@ -195,6 +246,8 @@ module.exports = async (req, res) => {
       alunoId: evt.alunoId,
       professor_nome: professorNome || null,
       aluno_nome: alunoNome || null,
+      aluno_email: evt.alunoEmail || null,
+      aluno_telefone: evt.alunoTelefone || null,
       liveLessonId: evt.liveLessonId || null,
       liveUrl: evt.liveLessonId ? `/aula/${encodeURIComponent(evt.liveLessonId)}` : "",
       recorrente: Boolean(evt.recorrente),

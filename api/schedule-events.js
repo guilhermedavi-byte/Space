@@ -90,6 +90,8 @@ const createLiveLessonMirror = async ({ eventId, data, startMs, endMs } = {}) =>
   const payload = {
     aluno_id: data.alunoId || null,
     aluno_nome: data.alunoNome || null,
+    aluno_email: data.alunoEmail || null,
+    aluno_telefone: data.alunoTelefone || null,
     professor_id: data.professorId || null,
     professor_nome: data.professorNome || null,
     titulo: data.alunoNome ? `Aula ao vivo - ${data.alunoNome}` : "Aula ao vivo Space",
@@ -1146,6 +1148,10 @@ module.exports = async (req, res) => {
   // Resolve names to persist denormalized data (keeps the UI fast and avoids joins).
   let professorNome = "";
   let alunoNome = "";
+  const professorNomeBody = String(body?.professorNome || body?.professor_nome || "").trim();
+  const alunoNomeBody = String(body?.alunoNome || body?.aluno_nome || "").trim();
+  const alunoEmail = String(body?.alunoEmail || body?.aluno_email || "").trim().toLowerCase();
+  const alunoTelefone = String(body?.alunoTelefone || body?.aluno_telefone || body?.telefone || "").trim();
   try {
     if (professorId) {
       professorNome = (await getUserNameById({ idToken, uid: professorId })) || "";
@@ -1155,6 +1161,8 @@ module.exports = async (req, res) => {
     professorNome = "";
     alunoNome = "";
   }
+  professorNome = professorNome || professorNomeBody;
+  alunoNome = alunoNome || alunoNomeBody;
 
   const baseDoc = ({ overrideDateKey, overrideStartMin, overrideEndMin, repeatMeta } = {}) => {
     const key = overrideDateKey || dateKey;
@@ -1170,6 +1178,8 @@ module.exports = async (req, res) => {
       alunoId: alunoId || null,
       professorId,
       alunoNome: alunoNome || null,
+      alunoEmail: alunoEmail || null,
+      alunoTelefone: alunoTelefone || null,
       professorNome: professorNome || null,
       data,
       diaSemana: occurrenceDiaSemana || diaSemana,

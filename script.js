@@ -6609,9 +6609,16 @@ const openTeacherEventFormModalFromDraft = () => {
       const professorId = String(
         adminTeacherEl instanceof HTMLSelectElement ? adminTeacherEl.value : createEventDraft.professorId || ""
       ).trim();
+      const alunoMeta = (adminUsersState?.student?.rows || []).find((row) => row && String(row.id || "") === alunoId) || null;
+      const professorMeta = (adminUsersState?.teacher?.rows || []).find((row) => row && String(row.id || "") === professorId) || null;
 
       payload.alunoId = alunoId;
       payload.professorId = professorId;
+      payload.alunoNome = alunoMeta?.nome || "";
+      payload.alunoEmail = alunoMeta?.email || "";
+      payload.alunoTelefone = alunoMeta?.telefone || "";
+      payload.professorNome = professorMeta?.nome || "";
+      payload.professorEmail = professorMeta?.email || "";
 
       // Recorrencia opcional: por padrão, aula única.
       if (!createEventDraft.recorrente) payload.repeat = { enabled: false };
