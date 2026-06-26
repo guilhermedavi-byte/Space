@@ -410,6 +410,9 @@ module.exports = async (req, res) => {
 
   const professorIdFromBody = String(body?.professorId || body?.teacherId || "").trim();
   let professorId = role === "teacher" ? requesterId : professorIdFromBody;
+  if (isCreate && role === "admin" && !professorId) {
+    professorId = requesterId;
+  }
 
   if (isCreate && !professorId) {
     sendJson(res, 400, { error: "professor_required" });

@@ -102,7 +102,11 @@ const namesMatch = (a, b) => {
   if (leftCompact && rightCompact && (leftCompact.includes(rightCompact) || rightCompact.includes(leftCompact))) return true;
   const leftTokens = new Set(nameTokens(left));
   const rightTokens = nameTokens(right);
-  return Boolean(rightTokens.length && rightTokens.every((token) => leftTokens.has(token)));
+  const rightSet = new Set(rightTokens);
+  return Boolean(
+    (rightTokens.length && rightTokens.every((token) => leftTokens.has(token))) ||
+      (leftTokens.size && [...leftTokens].every((token) => rightSet.has(token)))
+  );
 };
 
 const emailsMatch = (a, b) => {
@@ -137,6 +141,8 @@ const normalizeLesson = (row) => {
     onboarding_id: row.onboarding_id == null ? "" : String(row.onboarding_id),
     aluno_id: row.aluno_id == null ? "" : String(row.aluno_id),
     aluno_nome: row.aluno_nome == null ? "" : String(row.aluno_nome),
+    aluno_email: row.aluno_email || row.email || "",
+    aluno_telefone: row.aluno_telefone || row.telefone || "",
     professor_id: row.professor_id == null ? "" : String(row.professor_id),
     professor_nome: row.professor_nome == null ? "" : String(row.professor_nome),
     professor_email: row.professor_email == null ? "" : String(row.professor_email),
@@ -185,7 +191,10 @@ const canAccessLesson = (session, lesson) => {
     return personMatches(session, lesson.professor_id, lesson.professor_nome, lesson.professor_email);
   }
   if (isStudentRole(role)) {
-    return personMatches(session, lesson.aluno_id, lesson.aluno_nome);
+    return (
+      personMatches(session, lesson.aluno_id, lesson.aluno_nome, lesson.aluno_email) ||
+      idsMatch(String(session?.phone || "").replace(/\D+/g, ""), String(lesson.aluno_telefone || "").replace(/\D+/g, ""))
+    );
   }
   return false;
 };
@@ -209,16 +218,19 @@ const fetchLessonById = async (id) => {
 const listLiveLessons = async ({ session, limit = 50, scope = "upcoming" } = {}) => {
   const role = normalizeRole(session?.role);
   const max = Math.max(1, Math.min(Number(limit) || 50, 1000));
+  const now = Date.now();
+  const oneDayAgo = now - 24 * 60 * 60 * 1000;
+  const historyStart = now - 45 * 24 * 60 * 60 * 1000;
   let data;
   if (role === "teacher") {
     data = await listTeacherLessons({ session, limit: max, includeHistoryDays: scope === "pedagogico" || scope === "dashboard" ? 45 : 2 });
   } else {
-    const result = await supabaseFetch(`/${LESSONS_TABLE}?select=*&order=inicio.asc.nullslast&limit=${max}`);
+    const windowStart = scope === "dashboard" || scope === "pedagogico" ? historyStart : oneDayAgo;
+    const result = await supabaseFetch(
+      `/${LESSONS_TABLE}?select=*&fim=gte.${safeEncode(new Date(windowStart).toISOString())}&order=inicio.asc.nullslast&limit=${max}`
+    );
     data = result.data;
   }
-  const now = Date.now();
-  const oneDayAgo = now - 24 * 60 * 60 * 1000;
-  const historyStart = now - 45 * 24 * 60 * 60 * 1000;
   return (Array.isArray(data) ? data : [])
     .map(normalizeLesson)
     .filter(Boolean)

@@ -6688,8 +6688,12 @@ const openTeacherEventFormModalFromDraft = () => {
               ? "Preencha o título para salvar."
               : data?.error === "invalid_time"
                 ? "O horário de início deve ser anterior ao de fim."
-                : data?.error === "professor_required"
-                  ? "Selecione um professor para salvar."
+                  : data?.error === "professor_required"
+                    ? "Selecione um professor para salvar."
+                  : data?.error === "invalid_payload" && Array.isArray(data?.missingFields) && data.missingFields.includes("professorId")
+                    ? "Selecione um professor para salvar."
+                  : data?.error === "invalid_payload" && Array.isArray(data?.missingFields) && data.missingFields.includes("alunoId")
+                    ? "Selecione um aluno para criar a aula."
                   : data?.error === "invalid_repeat"
                     ? "Preencha a recorrência (tipo, dias e horários) para salvar."
                     : data?.error === "forbidden"
@@ -7043,7 +7047,7 @@ const normalizeLiveLessonForUi = (lesson) => {
     professor,
     aluno,
     status,
-    liveUrl: `/aula/${encodeURIComponent(id)}`,
+    liveUrl: String(lesson.liveUrl || lesson.link_aula || lesson.video_join_url_aluno || lesson.video_room_url || "").trim() || `/aula/${encodeURIComponent(id)}`,
     request: reqId ? { id: reqId, status: reqStatus || "pendente" } : null,
   };
 };

@@ -78,6 +78,7 @@ module.exports = async (req, res) => {
         const status = String(fields.status || "").trim().toLowerCase() || "agendada";
         const professorNome = typeof fields.professorNome === "string" ? fields.professorNome.trim() : "";
         const alunoNome = typeof fields.alunoNome === "string" ? fields.alunoNome.trim() : "";
+        const liveLessonId = typeof fields.liveLessonId === "string" ? fields.liveLessonId.trim() : "";
         const grupoRecorrenciaId = typeof fields.grupoRecorrenciaId === "string" ? fields.grupoRecorrenciaId : "";
         const recorrente = typeof fields.recorrente === "boolean" ? fields.recorrente : false;
 
@@ -91,6 +92,7 @@ module.exports = async (req, res) => {
           status,
           professorNome: professorNome || null,
           alunoNome: alunoNome || null,
+          liveLessonId: liveLessonId || null,
           grupoRecorrenciaId: grupoRecorrenciaId || null,
           recorrente,
         };
@@ -193,6 +195,8 @@ module.exports = async (req, res) => {
       alunoId: evt.alunoId,
       professor_nome: professorNome || null,
       aluno_nome: alunoNome || null,
+      liveLessonId: evt.liveLessonId || null,
+      liveUrl: evt.liveLessonId ? `/aula/${encodeURIComponent(evt.liveLessonId)}` : "",
       recorrente: Boolean(evt.recorrente),
       grupoRecorrenciaId: evt.grupoRecorrenciaId || null,
       reagendamento: reqInfo

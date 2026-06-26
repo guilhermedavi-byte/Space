@@ -1095,6 +1095,11 @@ module.exports = async (req, res) => {
 
   const professorIdFromBody = String(body?.professorId || body?.teacherId || "").trim();
   let professorId = role === "teacher" ? requesterId : professorIdFromBody;
+  const requestedEventType = String(body?.eventType || "").trim().toLowerCase();
+  const wantsLesson = requestedEventType === "lesson";
+  if (isCreate && role === "admin" && !professorId && !wantsLesson) {
+    professorId = requesterId;
+  }
 
   if (isCreate && !professorId) {
     sendJson(res, 400, { error: "invalid_payload", missingFields: ["professorId"], receivedBody: body || null });
@@ -1111,8 +1116,6 @@ module.exports = async (req, res) => {
   const createdBy = role === "admin" ? "admin" : "professor";
 
   // If the client explicitly requested a lesson, require the linking ids.
-  const requestedEventType = String(body?.eventType || "").trim().toLowerCase();
-  const wantsLesson = requestedEventType === "lesson";
   if (isCreate && wantsLesson) {
     const missingFields = [];
     if (!alunoId) missingFields.push("alunoId");
