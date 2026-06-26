@@ -3,6 +3,7 @@ const crypto = require("crypto");
 const { readJsonBody, sendJson } = require("../_lib/http");
 const { getSessionFromRequest } = require("../_lib/session");
 const { verifyFirebaseIdToken } = require("../_lib/firebase-id-token");
+const { listCollectionAsAdmin } = require("./_lib/firestore-admin");
 const { DEFAULT_CONFIG } = require("../_lib/scheduling-firestore");
 const { fetchUserProfileByUid } = require("../_lib/firestore-user");
 const { supabaseFetch } = require("../_lib/supabase-rest");
@@ -369,9 +370,9 @@ const buildMonthlyOccurrences = ({ dateKey, dayOfMonth }) => {
 
 const decodeAulaDoc = (doc) => {
   if (!doc || typeof doc !== "object") return null;
-  const id = getDocIdFromName(doc.name);
+  const id = doc.id ? String(doc.id) : getDocIdFromName(doc.name);
   if (!id) return null;
-  const fields = decodeFields(doc);
+  const fields = doc.fields ? decodeFields(doc) : doc;
 
   const professorId = typeof fields.professorId === "string" ? fields.professorId : "";
   const alunoId = fields.alunoId == null ? null : typeof fields.alunoId === "string" ? fields.alunoId : null;
@@ -870,54 +871,61 @@ const handleAdminAlertsApi = async (req, res, { idToken, role } = {}) => {
 
 module.exports = async (req, res) => {
   const idToken = getBearerTokenFromRequest(req);
-  if (!idToken) {
-    sendJson(res, 401, { error: "unauthorized" });
-    return;
-  }
+  const cookieSession = getSessionFromRequest(req);
+  const method = String(req.method || "GET").toUpperCase();
+  const isReadOnlyList = method === "GET" || method === "HEAD";
 
   // Primary auth for this endpoint is the Firebase ID token sent by fetchWithAuth().
   // Cookie sessions can be stale/mismatched, so we treat them as optional metadata only.
   let decoded;
-  try {
-    decoded = await verifyFirebaseIdToken(idToken);
-  } catch (error) {
-    sendJson(res, 401, { error: "invalid_credentials" });
-    return;
-  }
-
-  // If there is a cookie session but it doesn't match the Firebase user, ignore it.
-  const cookieSession = getSessionFromRequest(req);
-  const cookieSub = String(cookieSession?.sub || "").trim();
-  if (cookieSub && cookieSub !== decoded.uid) {
-    // eslint-disable-next-line no-console
-    console.warn("[api] schedule-events cookie/session mismatch; ignoring cookie session");
-    // eslint-disable-next-line no-console
-    console.warn("[api] schedule-events cookie/session mismatch", {
-      cookieUid: cookieSub,
-      firebaseUid: decoded.uid,
-      role: String(cookieSession?.role || ""),
-    });
-  }
-
+  let role = "";
+  let requesterId = "";
   let profile;
-  try {
-    profile = await fetchUserProfileByUid({ uid: decoded.uid, idToken });
-  } catch (error) {
-    sendJson(res, 500, { error: "internal_error" });
-    return;
-  }
-  if (!profile?.user?.role) {
+  if (idToken) {
+    try {
+      decoded = await verifyFirebaseIdToken(idToken);
+    } catch (error) {
+      sendJson(res, 401, { error: "invalid_credentials" });
+      return;
+    }
+
+    // If there is a cookie session but it doesn't match the Firebase user, ignore it.
+    const cookieSub = String(cookieSession?.sub || "").trim();
+    if (cookieSub && cookieSub !== decoded.uid) {
+      // eslint-disable-next-line no-console
+      console.warn("[api] schedule-events cookie/session mismatch; ignoring cookie session");
+      // eslint-disable-next-line no-console
+      console.warn("[api] schedule-events cookie/session mismatch", {
+        cookieUid: cookieSub,
+        firebaseUid: decoded.uid,
+        role: String(cookieSession?.role || ""),
+      });
+    }
+
+    try {
+      profile = await fetchUserProfileByUid({ uid: decoded.uid, idToken });
+    } catch (error) {
+      sendJson(res, 500, { error: "internal_error" });
+      return;
+    }
+    if (!profile?.user?.role) {
+      sendJson(res, 401, { error: "unauthorized" });
+      return;
+    }
+    role = normalizeRole(profile.user.role);
+    requesterId = decoded.uid;
+  } else if (isReadOnlyList && cookieSession) {
+    role = normalizeRole(cookieSession.role);
+    requesterId = String(cookieSession.sub || "").trim();
+  } else {
     sendJson(res, 401, { error: "unauthorized" });
     return;
   }
 
-  const role = normalizeRole(profile.user.role);
-  if (role !== "admin" && role !== "teacher") {
+  if (role !== "admin" && role !== "teacher" && role !== "student") {
     sendJson(res, 403, { error: "forbidden" });
     return;
   }
-
-  const requesterId = decoded.uid;
 
   const host = String(req.headers.host || "localhost");
   const url = new URL(req.url || "/api/schedule-events", `https://${host}`);
@@ -942,13 +950,18 @@ module.exports = async (req, res) => {
     }
 
     try {
-      const resList = await firestoreListDocuments({ collectionPath: "aulas", idToken, pageSize: 2000 });
-      if (!resList.ok) throw new Error("firestore_list_failed");
-      const docs = Array.isArray(resList.documents)
-        ? resList.documents
-        : Array.isArray(resList.data?.documents)
-          ? resList.data.documents
-          : [];
+      let docs = [];
+      if (idToken) {
+        const resList = await firestoreListDocuments({ collectionPath: "aulas", idToken, pageSize: 2000 });
+        if (!resList.ok) throw new Error("firestore_list_failed");
+        docs = Array.isArray(resList.documents)
+          ? resList.documents
+          : Array.isArray(resList.data?.documents)
+            ? resList.data.documents
+            : [];
+      } else {
+        docs = await listCollectionAsAdmin("aulas", { pageSize: 2000 });
+      }
 
       const events = docs
         .map((doc) => decodeAulaDoc(doc))
@@ -1004,6 +1017,11 @@ module.exports = async (req, res) => {
       console.error("[api] schedule events list failed", error);
       sendJson(res, 500, { error: "internal_error" });
     }
+    return;
+  }
+
+  if (role === "student") {
+    sendJson(res, 403, { error: "forbidden" });
     return;
   }
 

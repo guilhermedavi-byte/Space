@@ -1,6 +1,7 @@
 const { sendJson } = require("../_lib/http");
 const { getSessionFromRequest } = require("../_lib/session");
 const { verifyFirebaseIdToken } = require("../_lib/firebase-id-token");
+const { listCollectionAsAdmin } = require("./_lib/firestore-admin");
 const { DEFAULT_CONFIG } = require("../_lib/scheduling-firestore");
 const { clampInt, isValidDateKey, timeToMinutes, toUtcMsForDateKeyAndMinutes } = require("../_lib/scheduling-utils");
 const {
@@ -73,20 +74,22 @@ module.exports = async (req, res) => {
 
   const userId = String(session.sub || "");
   const idToken = getBearerTokenFromRequest(req);
-  if (!userId || !idToken) {
+  if (!userId) {
     sendJson(res, 401, { error: "unauthorized" });
     return;
   }
 
-  try {
-    const decoded = await verifyFirebaseIdToken(idToken);
-    if (decoded.uid !== userId) {
+  if (idToken) {
+    try {
+      const decoded = await verifyFirebaseIdToken(idToken);
+      if (decoded.uid !== userId) {
+        sendJson(res, 401, { error: "invalid_credentials" });
+        return;
+      }
+    } catch (error) {
       sendJson(res, 401, { error: "invalid_credentials" });
       return;
     }
-  } catch (error) {
-    sendJson(res, 401, { error: "invalid_credentials" });
-    return;
   }
 
   const tzOffsetMinutes = DEFAULT_CONFIG.tzOffsetMinutes;
@@ -94,15 +97,20 @@ module.exports = async (req, res) => {
 
   let rawAulas = [];
   try {
-    const resList = await firestoreListDocuments({ collectionPath: "aulas", idToken, pageSize: 2000 });
-    if (!resList.ok) throw new Error("firestore_list_failed");
-    const docs = Array.isArray(resList.documents) ? resList.documents : Array.isArray(resList.data?.documents) ? resList.data.documents : [];
+    let docs = [];
+    if (idToken) {
+      const resList = await firestoreListDocuments({ collectionPath: "aulas", idToken, pageSize: 2000 });
+      if (!resList.ok) throw new Error("firestore_list_failed");
+      docs = Array.isArray(resList.documents) ? resList.documents : Array.isArray(resList.data?.documents) ? resList.data.documents : [];
+    } else {
+      docs = await listCollectionAsAdmin("aulas", { pageSize: 2000 });
+    }
     rawAulas = docs
       .map((doc) => {
         if (!doc || typeof doc !== "object") return null;
-        const id = getDocIdFromName(doc.name);
+        const id = doc.id ? String(doc.id) : getDocIdFromName(doc.name);
         if (!id) return null;
-        const fields = decodeFields(doc);
+        const fields = doc.fields ? decodeFields(doc) : doc;
 
         const professorId = typeof fields.professorId === "string" ? fields.professorId : "";
         const alunoId = fields.alunoId == null ? null : typeof fields.alunoId === "string" ? fields.alunoId : null;
@@ -175,19 +183,27 @@ module.exports = async (req, res) => {
   const rescheduleByAula = new Map();
   if (normalizedRole === "student") {
     try {
-      const resReq = await firestoreListDocuments({ collectionPath: "reagendamentos", idToken, pageSize: 2000 });
-      if (resReq.ok) {
-        const docs = Array.isArray(resReq.documents)
-          ? resReq.documents
-          : Array.isArray(resReq.data?.documents)
-            ? resReq.data.documents
-            : [];
+      let docs = [];
+      if (idToken) {
+        const resReq = await firestoreListDocuments({ collectionPath: "reagendamentos", idToken, pageSize: 2000 });
+        if (!resReq.ok) docs = [];
+        else {
+          docs = Array.isArray(resReq.documents)
+            ? resReq.documents
+            : Array.isArray(resReq.data?.documents)
+              ? resReq.data.documents
+              : [];
+        }
+      } else {
+        docs = await listCollectionAsAdmin("reagendamentos", { pageSize: 2000 }).catch(() => []);
+      }
+      if (docs.length) {
         docs
           .map((doc) => {
             if (!doc || typeof doc !== "object") return null;
-            const id = getDocIdFromName(doc.name);
+            const id = doc.id ? String(doc.id) : getDocIdFromName(doc.name);
             if (!id) return null;
-            const fields = decodeFields(doc);
+            const fields = doc.fields ? decodeFields(doc) : doc;
             const alunoId = typeof fields.alunoId === "string" ? fields.alunoId : "";
             const aulaId = typeof fields.aulaId === "string" ? fields.aulaId : "";
             const status = String(fields.status || "").trim().toLowerCase() || "pendente";
@@ -214,6 +230,7 @@ module.exports = async (req, res) => {
     const safeId = String(uid || "").trim();
     if (!safeId) return null;
     if (nameCache.has(safeId)) return nameCache.get(safeId);
+    if (!idToken) return null;
     try {
       const snap = await firestoreGetDocument({ docPath: `users/${encodeURIComponent(safeId)}`, idToken });
       if (!snap.ok) {
