@@ -9116,7 +9116,7 @@ const loadStudentLessonsData = async ({ force = false } = {}) => {
     }
 
     try {
-      const res = await fetchWithAuth("/api/schedule-lessons");
+      const res = await fetchWithAuth("/api/schedule-lessons", { forceRefreshIdToken: true });
       if (res.ok) {
         const data = await res.json().catch(() => null);
         if (Array.isArray(data?.lessons)) collected.push(...data.lessons);
@@ -9130,7 +9130,9 @@ const loadStudentLessonsData = async ({ force = false } = {}) => {
       const end = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
       const from = createDateKey(start);
       const to = createDateKey(end);
-      const res = await fetchWithAuth(`/api/schedule-events?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+      const res = await fetchWithAuth(`/api/schedule-events?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, {
+        forceRefreshIdToken: true,
+      });
       if (res.ok) {
         const data = await res.json().catch(() => null);
         const events = Array.isArray(data?.events) ? data.events : [];
