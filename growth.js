@@ -937,6 +937,33 @@ const currencyPtBr = (value) => {
   }
 };
 
+const buildContractWhatsAppUrl = (contract) => {
+  if (!contract || typeof contract !== "object") return "";
+  const country = digitsOnly(contract.telefoneCountry || "55") || "55";
+  const phone = digitsOnly(contract.whatsapp || "");
+  if (!phone) return "";
+  const fullPhone = phone.startsWith(country) ? phone : `${country}${phone}`;
+  const name = String(contract.nomeCompleto || "").trim() || "tudo bem";
+  const plan = String(contract.contrato || "").trim();
+  const value = currencyPtBr(contract.valorDesconto || contract.valorOriginal);
+  const signUrl = String(contract.zapsignSignUrl || "").trim();
+  const message = signUrl
+    ? `Olá, ${name}! Segue o link para assinatura do seu contrato Space${plan ? ` (${plan})` : ""}${value && value !== "—" ? ` no valor de ${value}` : ""}: ${signUrl}`
+    : `Olá, ${name}! Seu contrato Space${plan ? ` (${plan})` : ""}${value && value !== "—" ? ` no valor de ${value}` : ""} foi registrado. Nossa equipe está finalizando o link de assinatura e te envia por aqui em breve.`;
+  return `https://wa.me/${encodeURIComponent(fullPhone)}?text=${encodeURIComponent(message)}`;
+};
+
+const openContractWhatsApp = (contractId) => {
+  const id = String(contractId || "").trim();
+  const contract = contractsState.byId.get(id);
+  const url = buildContractWhatsAppUrl(contract);
+  if (!url) {
+    window.alert("Esse contrato não tem WhatsApp válido.");
+    return;
+  }
+  window.open(url, "_blank", "noopener,noreferrer");
+};
+
 const datePtBr = (iso) => {
   if (!iso) return "—";
   try {
@@ -1086,6 +1113,7 @@ const renderContracts = () => {
         </button>
         <div class="admin-actions-menu" role="menu">
           <button class="admin-action-item" type="button" data-contract-action="details" data-contract-id="${c.id}">Ver detalhes</button>
+          <button class="admin-action-item" type="button" data-contract-action="whatsapp" data-contract-id="${c.id}">WhatsApp</button>
           ${actionEdit}
           ${actionSend}
           ${actionResend}
@@ -1415,6 +1443,8 @@ const createContract = async (sendNow) => {
     }
     closeCreateModal();
     await loadContracts();
+    const createdId = String(dataRes?.id || editingContractId || "").trim();
+    if (sendNow && createdId) openContractWhatsApp(createdId);
   } catch (error) {
     if (contractsEls.createFeedback instanceof HTMLElement) {
       contractsEls.createFeedback.textContent = "Não foi possível salvar agora. Tente novamente.";
@@ -1438,6 +1468,24 @@ const openDetailsModal = (contract) => {
   if (signed) history.push(`Assinado em ${signed}`);
 
   const links = [];
+  const whatsappUrl = buildContractWhatsAppUrl(contract);
+  if (whatsappUrl) {
+    links.push(`
+      <div class="modal-doc-row">
+        <span class="upload-file-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M7 8h10"></path>
+            <path d="M7 12h7"></path>
+            <path d="M21 12a8 8 0 0 1-11.4 7.2L4 21l1.8-5.2A8 8 0 1 1 21 12Z"></path>
+          </svg>
+        </span>
+        <div>
+          <a href="${whatsappUrl}" target="_blank" rel="noreferrer">Enviar pelo WhatsApp</a>
+          <span>${contract?.zapsignSignUrl ? "Mensagem com link da assinatura" : "Mensagem de pendência da assinatura"}</span>
+        </div>
+      </div>
+    `);
+  }
   if (contract?.zapsignSignUrl) {
     links.push(`
       <div class="modal-doc-row">
@@ -1515,6 +1563,7 @@ const deleteContract = async (contractId) => {
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(data?.error || "delete_failed");
     await loadContracts();
+    openContractWhatsApp(id);
   } catch (error) {
     // ignore for now
   }
@@ -1696,6 +1745,11 @@ const initContracts = () => {
 
       if (action === "send") {
         sendContractToZapSign(id);
+        return;
+      }
+
+      if (action === "whatsapp") {
+        openContractWhatsApp(id);
         return;
       }
     }
