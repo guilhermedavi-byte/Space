@@ -1414,9 +1414,6 @@ const createContract = async (sendNow) => {
       window.alert("Contrato salvo, mas a assinatura ficou pendente por configuração da ZapSign. Você pode tentar reenviar depois.");
     }
     closeCreateModal();
-    if (data?.pendingSignature) {
-      window.alert("Contrato salvo, mas a assinatura ficou pendente por configuração da ZapSign. Você pode tentar reenviar depois.");
-    }
     await loadContracts();
   } catch (error) {
     if (contractsEls.createFeedback instanceof HTMLElement) {
