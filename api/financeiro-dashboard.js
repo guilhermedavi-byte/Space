@@ -79,9 +79,34 @@ const loadTable = async ({ key, path }) => {
   }
 };
 
+const loadTableWithFallback = async ({ key, paths }) => {
+  const candidates = Array.isArray(paths) ? paths.filter(Boolean) : [paths].filter(Boolean);
+  let last = null;
+  for (const path of candidates) {
+    const result = await loadTable({ key, path });
+    if (!result.error) return result;
+    last = result;
+    const raw = `${result.error.code || ""} ${result.error.message || ""} ${result.error.details || ""} ${result.error.hint || ""}`.toLowerCase();
+    const canTryNext =
+      String(result.error.code || "") === "42703" ||
+      raw.includes("column") ||
+      raw.includes("schema cache") ||
+      raw.includes("could not find");
+    if (!canTryNext) return result;
+  }
+  return last || { key, rows: [], error: "" };
+};
+
 const handleGet = async (res) => {
   const results = await Promise.all([
-    loadTable({ key: "alunos", path: `/${FINANCE_TABLES.alunos}?order=updated_at.desc.nullslast&limit=500` }),
+    loadTableWithFallback({
+      key: "alunos",
+      paths: [
+        `/${FINANCE_TABLES.alunos}?order=updated_at.desc.nullslast&limit=500`,
+        `/${FINANCE_TABLES.alunos}?order=created_at.desc.nullslast&limit=500`,
+        `/${FINANCE_TABLES.alunos}?limit=500`,
+      ],
+    }),
     loadTable({ key: "cobrancas", path: `/${FINANCE_TABLES.cobrancas}?order=vencimento.asc.nullslast&limit=500` }),
     loadTable({ key: "logs", path: `/${FINANCE_TABLES.logs}?order=enviado_em.desc.nullslast&limit=200` }),
     loadTable({ key: "eventos", path: `/${FINANCE_TABLES.eventos}?order=created_at.desc.nullslast&limit=200` }),

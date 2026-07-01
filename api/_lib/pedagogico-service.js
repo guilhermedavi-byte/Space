@@ -30,6 +30,28 @@ const fetchRows = async (path, { optional = false } = {}) => {
   }
 };
 
+const fetchRowsWithFallback = async (paths, { optional = false } = {}) => {
+  const candidates = Array.isArray(paths) ? paths.filter(Boolean) : [paths].filter(Boolean);
+  let lastError = null;
+  for (const path of candidates) {
+    try {
+      return await fetchRows(path, { optional });
+    } catch (error) {
+      lastError = error;
+      const raw = `${error?.code || ""} ${error?.message || ""} ${error?.details || ""} ${error?.hint || ""}`.toLowerCase();
+      const canTryNext =
+        String(error?.code || "") === "42703" ||
+        raw.includes("column") ||
+        raw.includes("schema cache") ||
+        raw.includes("could not find");
+      if (!canTryNext) throw error;
+    }
+  }
+  if (optional && lastError && isMissingRelation(lastError)) return [];
+  if (lastError) throw lastError;
+  return [];
+};
+
 const fetchOnboardingRows = async (query = "select=*&limit=500") => {
   try {
     return await fetchRows(`/${TABLES.onboarding}?${query}`);
@@ -142,13 +164,13 @@ const teacherMatchesSession = (row, session) =>
 const onlyDigits = (value) => String(value || "").replace(/\D+/g, "");
 
 const studentIdentityKey = (row) => {
-  const email = normalizeIdentity(row?.email || row?.aluno_email);
+  const email = normalizeIdentity(row?.email || row?.aluno_email || row?.student_email);
   if (email) return `email:${email}`;
-  const phone = onlyDigits(row?.telefone);
+  const phone = onlyDigits(row?.telefone || row?.whatsapp || row?.phone);
   if (phone) return `phone:${phone}`;
-  const id = String(row?.aluno_id || row?.id || "").trim();
+  const id = String(row?.aluno_id || row?.student_id || row?.id || "").trim();
   if (id) return `id:${id}`;
-  return `name:${normalizeIdentity(row?.aluno_nome || row?.nome)}`;
+  return `name:${normalizeIdentity(row?.aluno_nome || row?.nome || row?.name || row?.student_name)}`;
 };
 
 const mergePedagogicalStudents = ({ onboarding, financeStudents, preferences }) => {
@@ -162,17 +184,22 @@ const mergePedagogicalStudents = ({ onboarding, financeStudents, preferences }) 
     if (!key || key === "name:") return;
     const previous = merged.get(key) || {};
     const combined = source === "pedagogico" ? { ...previous, ...row } : { ...row, ...previous };
-    const sourceStatus = String(combined.status || combined.status_onboarding || "ativo").toLowerCase();
+    const sourceStatus = String(combined.status || combined.status_financeiro || combined.status_onboarding || "ativo").toLowerCase();
     const preferredStatus = preferenceMap.get(key);
+    const alunoId = String(combined.aluno_id || combined.student_id || combined.id || key).trim();
+    const alunoNome = combined.aluno_nome || combined.nome || combined.name || combined.student_name || "Aluno";
     merged.set(key, {
       ...combined,
-      id: String(combined.aluno_id || combined.id || key),
-      aluno_id: String(combined.aluno_id || combined.id || key),
-      aluno_nome: combined.aluno_nome || combined.nome || "Aluno",
-      nome: combined.aluno_nome || combined.nome || "Aluno",
-      email: combined.email || combined.aluno_email || "",
-      telefone: combined.telefone || "",
-      plano: combined.plano || "",
+      id: alunoId,
+      aluno_id: alunoId,
+      aluno_nome: alunoNome,
+      nome: alunoNome,
+      email: combined.email || combined.aluno_email || combined.student_email || "",
+      telefone: combined.telefone || combined.whatsapp || combined.phone || "",
+      plano: combined.plano || combined.plan || combined.contrato || "",
+      professor_id: combined.professor_id || combined.teacher_id || combined.professorId || "",
+      professor_nome: combined.professor_nome || combined.teacher_name || combined.professorName || "",
+      professor_email: combined.professor_email || combined.teacher_email || combined.professorEmail || "",
       status_financeiro: previous.status_financeiro || previous.status || row.status_financeiro || row.status || "",
       aluno_chave: key,
       source: previous.source ? `${previous.source},${source}` : source,
@@ -183,6 +210,18 @@ const mergePedagogicalStudents = ({ onboarding, financeStudents, preferences }) 
   financeStudents.forEach((row) => add(row, "financeiro"));
   onboarding.forEach((row) => add(row, "pedagogico"));
   return Array.from(merged.values());
+};
+
+const fetchFinanceStudents = ({ limit = 1000 } = {}) => {
+  const max = Math.max(1, Math.min(Number(limit) || 1000, 2000));
+  return fetchRowsWithFallback(
+    [
+      `/${TABLES.financeStudents}?select=*&order=updated_at.desc.nullslast&limit=${max}`,
+      `/${TABLES.financeStudents}?select=*&order=created_at.desc.nullslast&limit=${max}`,
+      `/${TABLES.financeStudents}?select=*&limit=${max}`,
+    ],
+    { optional: true }
+  );
 };
 
 const loadAdminDashboard = async ({ session } = {}) => {
@@ -202,7 +241,7 @@ const loadAdminDashboard = async ({ session } = {}) => {
     safe(fetchRows(`/${TABLES.flexge}?select=*&order=flexge_last_sync_at.desc.nullslast&limit=1000`, { optional: true })),
     safe(fetchRows(`/${TABLES.teachers}?select=*&order=nome.asc.nullslast&limit=1000`, { optional: true })),
     safe(fetchRows(`/${TABLES.reports}?select=*&order=created_at.desc.nullslast&limit=200`, { optional: true })),
-    safe(fetchRows(`/${TABLES.financeStudents}?select=*&order=updated_at.desc.nullslast&limit=1000`, { optional: true })),
+    safe(fetchFinanceStudents({ limit: 1000 })),
     adminId
       ? safe(
           fetchRows(
@@ -317,13 +356,14 @@ const loadTeacherStudents = async ({ session } = {}) => {
   const safe = (promise) => promise.catch(() => []);
   const [onboarding, financeStudents, lessons, registers] = await Promise.all([
     safe(fetchOnboardingRows("select=*&order=updated_at.desc.nullslast&limit=1000")),
-    safe(fetchRows(`/${TABLES.financeStudents}?select=*&order=updated_at.desc.nullslast&limit=1000`, { optional: true })),
+    safe(fetchFinanceStudents({ limit: 1000 })),
     safe(listTeacherLessons({ session, limit: 1000, includeHistoryDays: 3650 })),
     safe(listRegisters({ limit: 1000 })),
   ]);
 
   const assignedKeys = new Set();
   onboarding.filter((row) => teacherMatchesSession(row, session)).forEach((row) => assignedKeys.add(studentIdentityKey(row)));
+  financeStudents.filter((row) => teacherMatchesSession(row, session)).forEach((row) => assignedKeys.add(studentIdentityKey(row)));
   lessons.forEach((row) => {
     const key = studentIdentityKey(row);
     if (key && key !== "name:") assignedKeys.add(key);
@@ -432,7 +472,16 @@ const loadStudentCard = async ({ alunoId, alunoNome }) => {
     safe(fetchRows(`/${TABLES.satisfaction}?select=*&${filter}&order=created_at.desc.nullslast&limit=100`, { optional: true })),
     safe(fetchRows(`/${TABLES.flexge}?select=*&${filter}&order=flexge_last_sync_at.desc.nullslast&limit=10`, { optional: true })),
     safe(fetchRows(`/${TABLES.reports}?select=*&${filter}&order=created_at.desc.nullslast&limit=100`, { optional: true })),
-    safe(fetchRows(`/${TABLES.financeStudents}?select=*&${filter}&order=updated_at.desc.nullslast&limit=10`, { optional: true })),
+    safe(
+      fetchRowsWithFallback(
+        [
+          `/${TABLES.financeStudents}?select=*&${filter}&order=updated_at.desc.nullslast&limit=10`,
+          `/${TABLES.financeStudents}?select=*&${filter}&order=created_at.desc.nullslast&limit=10`,
+          `/${TABLES.financeStudents}?select=*&${filter}&limit=10`,
+        ],
+        { optional: true }
+      )
+    ),
   ]);
   const finance = financeStudents[0] || {};
   const base = { ...finance, ...(onboarding[0] || {}) };
@@ -469,5 +518,6 @@ module.exports = {
   loadTeacherStudents,
   studentIdentityKey,
   mergePedagogicalStudents,
+  fetchFinanceStudents,
   isMissingRelation,
 };
