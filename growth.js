@@ -970,6 +970,7 @@ const statusMeta = (status) => {
   const key = String(status || "").trim().toLowerCase();
   if (key === "assinado") return { label: "Assinado", cls: "is-signed" };
   if (key === "enviado") return { label: "Enviado", cls: "is-sent" };
+  if (key === "pendente_assinatura") return { label: "Pendente assinatura", cls: "is-draft" };
   return { label: "Rascunho", cls: "is-draft" };
 };
 
@@ -1050,16 +1051,17 @@ const renderContracts = () => {
     const valorDesconto = currencyPtBr(disc);
     const showDiscount = Number.isFinite(orig) && Number.isFinite(disc) && disc < orig;
 
+    const statusKey = String(c.status || "").trim().toLowerCase();
     const actionSend =
-      String(c.status || "").trim().toLowerCase() === "rascunho"
+      statusKey === "rascunho" || statusKey === "pendente_assinatura"
         ? `<button class="admin-action-item" type="button" data-contract-action="send" data-contract-id="${c.id}">Enviar</button>`
         : "";
     const actionResend =
-      String(c.status || "").trim().toLowerCase() === "enviado"
+      statusKey === "enviado"
         ? `<button class="admin-action-item" type="button" data-contract-action="send" data-contract-id="${c.id}">Reenviar</button>`
         : "";
     const actionEdit =
-      String(c.status || "").trim().toLowerCase() === "rascunho"
+      statusKey === "rascunho" || statusKey === "pendente_assinatura"
         ? `<button class="admin-action-item" type="button" data-contract-action="edit" data-contract-id="${c.id}">Editar</button>`
         : "";
 
@@ -1408,7 +1410,13 @@ const createContract = async (sendNow) => {
       return;
     }
 
+    if (dataRes?.pendingSignature) {
+      window.alert("Contrato salvo, mas a assinatura ficou pendente por configuração da ZapSign. Você pode tentar reenviar depois.");
+    }
     closeCreateModal();
+    if (data?.pendingSignature) {
+      window.alert("Contrato salvo, mas a assinatura ficou pendente por configuração da ZapSign. Você pode tentar reenviar depois.");
+    }
     await loadContracts();
   } catch (error) {
     if (contractsEls.createFeedback instanceof HTMLElement) {
@@ -1481,6 +1489,7 @@ const openDetailsModal = (contract) => {
     <div class="modal-list-row"><strong>Valor com desconto</strong><span>${currencyPtBr(contract?.valorDesconto)}</span></div>
     <div class="modal-list-row"><strong>Data</strong><span>${contract?.data || "—"}</span></div>
     <div class="modal-list-row"><strong>Status</strong><span class="growth-contract-badge ${status.cls}">${status.label}</span></div>
+    ${contract?.zapsignErro ? `<div class="modal-list-row"><strong>Pendência ZapSign</strong><span>${contract.zapsignErro}</span></div>` : ""}
     ${links.length ? `<div class="modal-event-section"><h4>Links</h4>${links.join("")}</div>` : ""}
     ${history.length ? `<div class="modal-event-section"><h4>Histórico</h4><div class="growth-contract-history">${history
       .map((h) => `<div class="growth-contract-history-item">${h}</div>`)

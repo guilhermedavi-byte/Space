@@ -134,6 +134,29 @@ const getZapSignTemplateToken = (contrato) => {
   return { ok: true, token, envName };
 };
 
+const zapSignErrorMessage = (error) => {
+  const payload = error?.payload;
+  const detail =
+    payload && typeof payload === "object"
+      ? String(payload.detail || payload.message || payload.error || "").trim()
+      : typeof payload === "string"
+        ? payload.trim()
+        : "";
+  if (detail) return detail;
+  if (error?.code === "missing_env") return "Token da ZapSign não configurado.";
+  if (error?.code === "missing_template_token") return "Modelo de contrato da ZapSign não configurado.";
+  return "Não foi possível enviar para assinatura agora.";
+};
+
+const buildZapSignPendingPatch = (error) => ({
+  status: "pendente_assinatura",
+  isDraft: false,
+  zapsignErro: zapSignErrorMessage(error),
+  zapsignErroStatus: Number(error?.status) || null,
+  zapsignErroCode: typeof error?.code === "string" ? error.code : null,
+  zapsignErroEm: new Date(),
+});
+
 const requestJsonRaw = async (url, { method = "GET", headers, body } = {}) => {
   const safeHeaders = headers && typeof headers === "object" ? headers : {};
   const upper = String(method || "GET").toUpperCase();
@@ -1242,6 +1265,7 @@ const decodeContratoDoc = (doc) => {
 
   const zapsignToken = typeof fields.zapsignToken === "string" ? fields.zapsignToken : "";
   const zapsignSignUrl = typeof fields.zapsignSignUrl === "string" ? fields.zapsignSignUrl : "";
+  const zapsignErro = typeof fields.zapsignErro === "string" ? fields.zapsignErro : "";
   const documentoAssinado = typeof fields.documentoAssinado === "string" ? fields.documentoAssinado : "";
 
   const valorOriginal = Number.isFinite(Number(fields.valorOriginal)) ? Number(fields.valorOriginal) : null;
@@ -1267,6 +1291,7 @@ const decodeContratoDoc = (doc) => {
     assinadoEm: assinadoEm ? assinadoEm.toISOString() : null,
     zapsignToken: zapsignToken || null,
     zapsignSignUrl: zapsignSignUrl || null,
+    zapsignErro: zapsignErro || null,
     documentoAssinado: documentoAssinado || null,
   };
 };
@@ -1523,8 +1548,23 @@ const handleGrowthContractsApi = async (req, res, url) => {
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error("[api] growth contratos send failed", error);
-      sendJson(res, 500, {
-        error: "zapsign_failed",
+      const pendingPatch = buildZapSignPendingPatch(error);
+      try {
+        await firestorePatchDocument({
+          docPath: `contratos/${encodeURIComponent(id)}`,
+          idToken,
+          data: pendingPatch,
+          updateMaskPaths: Object.keys(pendingPatch),
+        });
+      } catch (patchError) {
+        console.error("[api] growth contratos send pending patch failed", patchError);
+      }
+      sendJson(res, 200, {
+        ok: true,
+        id,
+        pendingSignature: true,
+        warning: "zapsign_failed",
+        message: pendingPatch.zapsignErro,
         zapsignStatus: Number(error?.status) || null,
         zapsignPayload: error?.payload || null,
         zapsignCode: typeof error?.code === "string" ? error.code : null,
@@ -1665,9 +1705,23 @@ const handleGrowthContractsApi = async (req, res, url) => {
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error("[api] growth contratos update+send failed", error);
-      sendJson(res, 500, {
-        error: "zapsign_failed",
+      const pendingPatch = buildZapSignPendingPatch(error);
+      try {
+        await firestorePatchDocument({
+          docPath: `contratos/${encodeURIComponent(id)}`,
+          idToken,
+          data: pendingPatch,
+          updateMaskPaths: Object.keys(pendingPatch),
+        });
+      } catch (patchError) {
+        console.error("[api] growth contratos update pending patch failed", patchError);
+      }
+      sendJson(res, 200, {
+        ok: true,
         id,
+        pendingSignature: true,
+        warning: "zapsign_failed",
+        message: pendingPatch.zapsignErro,
         zapsignStatus: Number(error?.status) || null,
         zapsignPayload: error?.payload || null,
         zapsignCode: typeof error?.code === "string" ? error.code : null,
@@ -1812,9 +1866,23 @@ const handleGrowthContractsApi = async (req, res, url) => {
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error("[api] growth contratos create+send failed", error);
-    sendJson(res, 500, {
-      error: "zapsign_failed",
+    const pendingPatch = buildZapSignPendingPatch(error);
+    try {
+      await firestorePatchDocument({
+        docPath: `contratos/${encodeURIComponent(id)}`,
+        idToken,
+        data: pendingPatch,
+        updateMaskPaths: Object.keys(pendingPatch),
+      });
+    } catch (patchError) {
+      console.error("[api] growth contratos create pending patch failed", patchError);
+    }
+    sendJson(res, 200, {
+      ok: true,
       id,
+      pendingSignature: true,
+      warning: "zapsign_failed",
+      message: pendingPatch.zapsignErro,
       zapsignStatus: Number(error?.status) || null,
       zapsignPayload: error?.payload || null,
       zapsignCode: typeof error?.code === "string" ? error.code : null,
