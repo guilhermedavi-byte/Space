@@ -13803,6 +13803,37 @@ const normalizePlanKeyLoose = (value) => {
   return raw;
 };
 
+const slugifyClassRoomPart = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 64);
+
+const buildAdminPedClassLiveUrl = (classRow) => {
+  const c = classRow && typeof classRow === "object" ? classRow : {};
+  const firstStudent = (Array.isArray(c.studentNames) && c.studentNames[0]) || (Array.isArray(c.studentIds) && c.studentIds[0]) || "";
+  const title = c.title || c.groupName || (c.type === "group" ? "turma" : firstStudent) || "aula";
+  const teacher = c.teacherName || c.teacherId || "professor";
+  const days = (Array.isArray(c.daysOfWeek) ? c.daysOfWeek : []).map(daysLabelShort).join("-");
+  const time = Number.isFinite(Number(c.startMin)) ? formatHmFromMinutes(c.startMin).replace(/:/g, "") : "";
+  const parts = [
+    "space",
+    "aula",
+    slugifyClassRoomPart(title),
+    slugifyClassRoomPart(firstStudent),
+    slugifyClassRoomPart(teacher),
+    slugifyClassRoomPart(days),
+    slugifyClassRoomPart(time),
+    slugifyClassRoomPart(c.id),
+  ].filter(Boolean);
+  const roomId = parts.join("-").slice(0, 180) || `space-aula-${Date.now()}`;
+  return `https://meet.jit.si/${encodeURIComponent(roomId)}#config.prejoinPageEnabled=false&config.disableDeepLinking=true&config.startWithAudioMuted=false&config.startWithVideoMuted=false`;
+};
+
 const normalizeDaysOfWeek = (value) => {
   const out = [];
   const arr = Array.isArray(value) ? value : [];
@@ -17008,6 +17039,7 @@ const renderAdminPedagogicoClassesList = () => {
       const badgeClass = status === "active" ? "is-active" : status === "paused" ? "is-paused" : "is-ended";
       const whenDays = (Array.isArray(c.daysOfWeek) ? c.daysOfWeek : []).map(daysLabelShort).join(", ");
       const time = `${formatHmFromMinutes(c.startMin)}–${formatHmFromMinutes(c.endMin)}`;
+      const liveUrl = buildAdminPedClassLiveUrl(c);
       const who =
         c.type === "group"
           ? `${(Array.isArray(c.studentIds) ? c.studentIds.length : 0) || 0} alunos`
@@ -17023,6 +17055,8 @@ const renderAdminPedagogicoClassesList = () => {
             ${c.plan ? `<span class="admin-ped-pill is-plan">${escapeHtml(String(c.plan).toUpperCase())}</span>` : ""}
           </div>
           <div class="admin-ped-class-actions">
+            <a class="admin-ped-action is-muted" href="${escapeHtml(liveUrl)}" target="_blank" rel="noopener">Entrar</a>
+            <button class="admin-ped-action is-muted" type="button" data-admin-ped-class-copy-live="${escapeHtml(liveUrl)}">Copiar link</button>
             <button class="admin-ped-action" type="button" data-admin-ped-class-edit="${escapeHtml(c.id)}">Editar</button>
             <button class="admin-ped-action is-muted" type="button" data-admin-ped-class-toggle="${escapeHtml(c.id)}">${status === "active" ? "Desativar" : "Ativar"}</button>
             <button class="admin-ped-action is-danger" type="button" data-admin-ped-class-delete="${escapeHtml(c.id)}">Excluir</button>
@@ -22633,6 +22667,21 @@ document.addEventListener("click", (event) => {
         const classId = String(adminPedClassOpen.getAttribute("data-admin-ped-class-open") || "").trim();
         const row = findAdminPedClassById(classId);
         if (row) openAdminPedClassModal({ mode: "edit", classRow: row });
+        return;
+      }
+
+      const adminPedClassCopyLive = target.closest("[data-admin-ped-class-copy-live]");
+      if (adminPedClassCopyLive instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const url = String(adminPedClassCopyLive.getAttribute("data-admin-ped-class-copy-live") || "").trim();
+        if (url) {
+          navigator.clipboard?.writeText(url).catch(() => {});
+          const prev = adminPedClassCopyLive.textContent;
+          adminPedClassCopyLive.textContent = "Copiado";
+          window.setTimeout(() => {
+            adminPedClassCopyLive.textContent = prev || "Copiar link";
+          }, 1400);
+        }
         return;
       }
 
