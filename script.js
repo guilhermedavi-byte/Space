@@ -13831,7 +13831,9 @@ const buildAdminPedClassLiveUrl = (classRow) => {
     slugifyClassRoomPart(c.id),
   ].filter(Boolean);
   const roomId = parts.join("-").slice(0, 180) || `space-aula-${Date.now()}`;
-  return `https://meet.jit.si/${encodeURIComponent(roomId)}#config.prejoinPageEnabled=false&config.disableDeepLinking=true&config.startWithAudioMuted=false&config.startWithVideoMuted=false`;
+  const origin = typeof window !== "undefined" && window.location && window.location.origin ? window.location.origin : "";
+  const displayTitle = `Space Aula ${title}`;
+  return `${origin}/sala/${encodeURIComponent(roomId)}?title=${encodeURIComponent(displayTitle)}`;
 };
 
 const normalizeDaysOfWeek = (value) => {
