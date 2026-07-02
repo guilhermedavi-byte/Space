@@ -52,6 +52,143 @@ const phonesMatch = (a, b) => {
   return Boolean(left && right && left === right);
 };
 
+const slugifyRoomPart = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 64);
+
+const dateKeyFromDate = (date) => {
+  const d = date instanceof Date ? date : new Date(date);
+  if (!(d instanceof Date) || Number.isNaN(d.getTime())) return "";
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
+
+const normalizeDaysOfWeek = (value) => {
+  const source = Array.isArray(value) ? value : [];
+  const out = [];
+  source.forEach((item) => {
+    const n = Number(item);
+    if (Number.isFinite(n) && n >= 0 && n <= 6 && !out.includes(n)) out.push(n);
+  });
+  return out;
+};
+
+const normalizeClassStatus = (value) => {
+  const raw = String(value || "").trim().toLowerCase();
+  if (["ended", "encerrada", "encerrado", "inativa", "inativo", "inactive", "cancelada", "cancelado", "deleted"].includes(raw)) return "ended";
+  if (["paused", "pausada", "pausado"].includes(raw)) return "paused";
+  return "active";
+};
+
+const normalizeClassMinutes = (value) => {
+  if (typeof value === "number" && Number.isFinite(value)) return clampInt(Math.round(value), 0, 1440);
+  const parsed = timeToMinutes(value);
+  if (Number.isFinite(parsed)) return clampInt(parsed, 0, 1440);
+  const n = Number(value);
+  return Number.isFinite(n) ? clampInt(Math.round(n), 0, 1440) : 0;
+};
+
+const normalizeClassRow = (row) => {
+  const src = row && typeof row === "object" ? row : {};
+  const id = String(src.id || "").trim();
+  if (!id) return null;
+  const studentIdsRaw = Array.isArray(src.studentIds) ? src.studentIds : Array.isArray(src.alunoIds) ? src.alunoIds : [];
+  const studentNamesRaw = Array.isArray(src.studentNames) ? src.studentNames : Array.isArray(src.alunoNomes) ? src.alunoNomes : [];
+  const studentEmailsRaw = Array.isArray(src.studentEmails) ? src.studentEmails : Array.isArray(src.alunoEmails) ? src.alunoEmails : [];
+  const studentPhonesRaw = Array.isArray(src.studentPhones) ? src.studentPhones : Array.isArray(src.alunoTelefones) ? src.alunoTelefones : [];
+  return {
+    id,
+    title: String(src.title || src.groupName || src.nome || src.name || "Aula").trim(),
+    status: normalizeClassStatus(src.status || src.statusAula),
+    teacherId: String(src.teacherId || src.professorId || "").trim(),
+    teacherName: String(src.teacherName || src.professorNome || src.professorName || "").trim(),
+    daysOfWeek: normalizeDaysOfWeek(src.daysOfWeek || src.weekDays || src.diasSemana || []),
+    startMin: normalizeClassMinutes(src.startMin ?? src.startTime ?? src.horaInicio),
+    endMin: normalizeClassMinutes(src.endMin ?? src.endTime ?? src.horaFim),
+    startDate: String(src.startDate || src.startDateKey || "").trim(),
+    endDate: String(src.endDate || src.endDateKey || "").trim(),
+    studentIds: studentIdsRaw.map((v) => String(v || "").trim()).filter(Boolean),
+    studentNames: studentNamesRaw.map((v) => String(v || "").trim()).filter(Boolean),
+    studentEmails: studentEmailsRaw.map((v) => String(v || "").trim()).filter(Boolean),
+    studentPhones: studentPhonesRaw.map((v) => String(v || "").trim()).filter(Boolean),
+  };
+};
+
+const classMatchesStudent = (row, session, userId) => {
+  if (!row) return false;
+  if (row.studentIds.some((id) => String(id || "").trim() === userId)) return true;
+  if (row.studentEmails.some((email) => emailsMatch(email, session.email))) return true;
+  if (row.studentPhones.some((phone) => phonesMatch(phone, session.phone))) return true;
+  return row.studentNames.some((name) => namesMatch(name, session.name) || namesMatch(name, session.email));
+};
+
+const buildClassRoomUrl = (row, dateKey) => {
+  const parts = ["space", "aula", row.title, row.teacherName || row.teacherId, dateKey, row.id].map(slugifyRoomPart).filter(Boolean);
+  const room = parts.join("-").slice(0, 180) || `space-aula-${row.id}`;
+  const title = `Space Aula ${row.title || "ao vivo"}`;
+  return `/sala/${encodeURIComponent(room)}?title=${encodeURIComponent(title)}`;
+};
+
+const expandStudentClasses = async ({ session, userId, now, tzOffsetMinutes }) => {
+  let rows = [];
+  try {
+    rows = await listCollectionAsAdmin("classes", { pageSize: 2000 });
+  } catch (error) {
+    return [];
+  }
+  const today = new Date(now);
+  const todayKey = dateKeyFromDate(today);
+  const out = [];
+  rows
+    .map(normalizeClassRow)
+    .filter(Boolean)
+    .filter((row) => row.status === "active")
+    .filter((row) => row.daysOfWeek.length && row.endMin > row.startMin)
+    .filter((row) => classMatchesStudent(row, session, userId))
+    .forEach((row) => {
+      for (let offset = 0; offset <= 90; offset += 1) {
+        const date = new Date(today);
+        date.setDate(today.getDate() + offset);
+        const dateKey = dateKeyFromDate(date);
+        if (!dateKey || !row.daysOfWeek.includes(date.getDay())) continue;
+        if (row.startDate && isValidDateKey(row.startDate) && dateKey < row.startDate) continue;
+        if (row.endDate && isValidDateKey(row.endDate) && dateKey > row.endDate) continue;
+        const endMs = toUtcMsForDateKeyAndMinutes(dateKey, row.endMin, { tzOffsetMinutes });
+        if (!endMs || endMs <= now) continue;
+        const alunoNome =
+          row.studentNames.find((name) => namesMatch(name, session.name) || namesMatch(name, session.email)) ||
+          String(session.name || "Aluno");
+        out.push({
+          id: `class:${row.id}:${dateKey}`,
+          dateKey,
+          startMin: row.startMin,
+          endMin: row.endMin,
+          status: "agendada",
+          professorId: row.teacherId,
+          alunoId: userId,
+          professor_nome: row.teacherName || null,
+          aluno_nome: alunoNome || null,
+          aluno_email: String(session.email || "") || null,
+          liveLessonId: "",
+          liveUrl: buildClassRoomUrl(row, dateKey),
+          recorrente: true,
+          grupoRecorrenciaId: row.id,
+          source: "class",
+        });
+        break;
+      }
+    });
+  return out;
+};
+
 module.exports = async (req, res) => {
   if (req.method !== "GET" && req.method !== "HEAD") {
     res.setHeader("Allow", "GET, HEAD");
@@ -278,5 +415,20 @@ module.exports = async (req, res) => {
     });
   }
 
-  sendJson(res, 200, { lessons });
+  const classLessons = normalizedRole === "student" ? await expandStudentClasses({ session, userId, now, tzOffsetMinutes }) : [];
+  const seen = new Set();
+  const merged = [...lessons, ...classLessons]
+    .filter((lesson) => {
+      const key = `${lesson.liveUrl || ""}|${lesson.professorId || ""}|${lesson.dateKey || ""}|${lesson.startMin || 0}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => {
+      const ams = toUtcMsForDateKeyAndMinutes(a.dateKey, a.startMin, { tzOffsetMinutes }) || 0;
+      const bms = toUtcMsForDateKeyAndMinutes(b.dateKey, b.startMin, { tzOffsetMinutes }) || 0;
+      return ams - bms;
+    });
+
+  sendJson(res, 200, { lessons: merged });
 };
