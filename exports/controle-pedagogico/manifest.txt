@@ -1,0 +1,4 @@
+app.html <= api/_templates/app.html:1805-2105
+script.js <= script.js:13727-17380 + 21886-23940
+styles.css <= styles.css:17212-18896
+pedagogico-service.js <= api/_lib/pedagogico-service.js:227-508

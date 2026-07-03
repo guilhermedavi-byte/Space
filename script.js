@@ -14687,15 +14687,6 @@ const renderAdminPedagogicoMetrics = () => {
   const feedbackPending = feedbacks.filter((f) => !(f && typeof f === "object" && f.readByTeacher === true)).length;
   const lowLiveRatings = liveFeedbacks.filter((f) => Number(f?.notaProfessor) <= 6).length;
 
-  const studentsRiskSet = new Set();
-  lessonLogs.forEach((log) => {
-    const risk = String(log?.payload?.riscoEvasao || log?.payload?.risco_evasao || "").trim().toLowerCase();
-    if (risk === "alto" || risk === "high") {
-      const alunoId = String(log?.alunoId || "").trim();
-      if (alunoId) studentsRiskSet.add(alunoId);
-    }
-  });
-
   const todayDow = (() => {
     const d = new Date();
     const js = d.getDay();
@@ -14717,7 +14708,6 @@ const renderAdminPedagogicoMetrics = () => {
   });
 
   const noTeacher = active.filter((c) => !String(c.teacherId || "").trim()).length;
-  const criticalCount = conflicts.length + noTeacher + studentsNoClass;
 
   setKpi("classesToday", {
     value: String(Number(opsMetrics.aulas_hoje ?? today.length) || 0),
@@ -14747,11 +14737,13 @@ const renderAdminPedagogicoMetrics = () => {
     badgeTone: "danger",
   });
 
+  const riskValue = opsMetrics.alunos_em_risco;
+  const hasRiskData = riskValue != null && Number.isFinite(Number(riskValue));
   setKpi("risk", {
-    value: String(Number(opsMetrics.alunos_em_risco ?? studentsRiskSet.size) || 0),
-    sub: "Risco consolidado do onboarding e das ocorrências pedagógicas.",
-    badge: Number(opsMetrics.alunos_em_risco ?? studentsRiskSet.size) ? "Atenção" : "",
-    badgeTone: Number(opsMetrics.alunos_em_risco ?? studentsRiskSet.size) ? "warn" : "",
+    value: hasRiskData ? String(Number(riskValue)) : "Sem dados",
+    sub: "Alunos em risco (Supabase/onboarding).",
+    badge: hasRiskData && Number(riskValue) > 0 ? "Atenção" : "",
+    badgeTone: hasRiskData && Number(riskValue) > 0 ? "warn" : "",
   });
 
   setKpi("feedbackPending", {
@@ -15027,15 +15019,6 @@ const renderAdminPedagogicoOverview = () => {
   const alertsOpen = alerts.filter((a) => String(a?.status || "") !== "resolved").length;
   const feedbackPending = feedbacks.filter((f) => !(f && typeof f === "object" && f.readByTeacher === true)).length;
 
-  const studentsRiskSet = new Set();
-  lessonLogs.forEach((log) => {
-    const risk = String(log?.payload?.riscoEvasao || log?.payload?.risco_evasao || "").trim().toLowerCase();
-    if (risk === "alto" || risk === "high") {
-      const alunoId = String(log?.alunoId || "").trim();
-      if (alunoId) studentsRiskSet.add(alunoId);
-    }
-  });
-
   const teachers = Array.isArray(adminPedagogicoState.teachers) ? adminPedagogicoState.teachers : [];
   const activeTeachers = teachers.filter((t) => t && typeof t === "object" && t.ativo);
   const feedbackByTeacher = new Map();
@@ -15063,20 +15046,103 @@ const renderAdminPedagogicoOverview = () => {
   });
 
   const workItems = [
-    { title: "Conflitos de agenda", priority: "Crítico", count: conflicts.length, actionTab: "conflitos", actionLabel: conflicts.length ? "Resolver" : "OK" },
-    { title: "Aulas sem professor", priority: "Crítico", count: noTeacher.length, actionTab: "aulas", actionLabel: noTeacher.length ? "Ver aulas" : "OK" },
-    { title: "Alunos ativos sem aula vinculada", priority: "Crítico", count: studentsNoClass.length, actionTab: "vinculos", actionLabel: studentsNoClass.length ? "Vincular alunos" : "OK" },
-    { title: "Alunos em risco", priority: "Atenção", count: studentsRiskSet.size, actionTab: "alunos", actionLabel: studentsRiskSet.size ? "Ver alunos" : "OK" },
-    { title: "Avisos dos professores (abertos)", priority: "Atenção", count: alertsOpen, actionTab: "avisos", actionLabel: alertsOpen ? "Ver avisos" : "OK" },
-    { title: "Feedbacks pendentes (não lidos)", priority: "Atenção", count: feedbackPending, actionTab: "feedbacks", actionLabel: "Ver feedbacks" },
-    { title: "Professores sem feedback recente", priority: "Normal", count: teachersNoRecentFeedback.length, actionTab: "feedbacks", actionLabel: teachersNoRecentFeedback.length ? "Enviar feedback" : "OK" },
-    { title: "Alunos sem pesquisa respondida", priority: "Normal", count: studentsNoSurvey.length, actionTab: "pesquisas", actionLabel: "Ver pesquisas" },
+    // TIER 1 — sinais de retenção, sempre visível, fonte: Supabase/opsMetrics
+    {
+      title: "Alunos em risco",
+      tier: 1,
+      priority: "Crítico",
+      count: Number(opsMetrics.alunos_em_risco || 0),
+      actionTab: "alunos",
+      actionLabel: "Ver alunos",
+    },
+    {
+      title: "Alunos sem professor no cadastro",
+      tier: 1,
+      priority: "Crítico",
+      count: Number(opsMetrics.alunos_sem_professor || 0),
+      actionTab: "vinculos",
+      actionLabel: "Vincular",
+    },
+    {
+      title: "Sem primeira aula agendada",
+      tier: 1,
+      priority: "Crítico",
+      count: Number(opsMetrics.alunos_sem_primeira_aula || 0),
+      actionTab: "onboarding",
+      actionLabel: "Ver onboarding",
+    },
+    {
+      title: "Ocorrências pedagógicas abertas",
+      tier: 1,
+      priority: "Atenção",
+      count: Number(opsMetrics.ocorrencias_abertas || 0),
+      actionTab: "avisos",
+      actionLabel: "Ver ocorrências",
+    },
+
+    // TIER 2 — operacional, drill-down apenas, fonte: Firestore (state já carregado)
+    {
+      title: "Conflitos de agenda",
+      tier: 2,
+      priority: "Crítico",
+      count: conflicts.length,
+      actionTab: "conflitos",
+      actionLabel: conflicts.length ? "Resolver" : "OK",
+    },
+    {
+      title: "Aulas sem professor na agenda",
+      tier: 2,
+      priority: "Atenção",
+      count: noTeacher.length,
+      actionTab: "aulas",
+      actionLabel: noTeacher.length ? "Ver aulas" : "OK",
+    },
+    {
+      title: "Alunos ativos sem aula vinculada",
+      tier: 2,
+      priority: "Atenção",
+      count: studentsNoClass.length,
+      actionTab: "vinculos",
+      actionLabel: studentsNoClass.length ? "Vincular alunos" : "OK",
+    },
+    {
+      title: "Avisos do professor (não lidos)",
+      tier: 2,
+      priority: "Normal",
+      count: alertsOpen,
+      actionTab: "avisos",
+      actionLabel: alertsOpen ? "Ver avisos" : "OK",
+    },
+    {
+      title: "Feedbacks pedagógicos pendentes",
+      tier: 2,
+      priority: "Normal",
+      count: feedbackPending,
+      actionTab: "feedbacks",
+      actionLabel: "Ver feedbacks",
+    },
+    {
+      title: "Professores sem feedback recente",
+      tier: 2,
+      priority: "Normal",
+      count: teachersNoRecentFeedback.length,
+      actionTab: "feedbacks",
+      actionLabel: teachersNoRecentFeedback.length ? "Enviar feedback" : "OK",
+    },
+    {
+      title: "Alunos sem pesquisa respondida",
+      tier: 2,
+      priority: "Normal",
+      count: studentsNoSurvey.length,
+      actionTab: "pesquisas",
+      actionLabel: "Ver pesquisas",
+    },
   ];
 
   const priorityPill = (priority) => {
     const p = String(priority || "");
-    if (p === "Crítico") return `<span class="admin-ped-pill is-ended">Crítico</span>`;
-    if (p === "Atenção") return `<span class="admin-ped-pill is-paused">Atenção</span>`;
+    if (p === "Crítico") return `<span class="admin-ped-pill is-danger">Crítico</span>`;
+    if (p === "Atenção") return `<span class="admin-ped-pill is-warn">Atenção</span>`;
     return `<span class="admin-ped-pill">Normal</span>`;
   };
 
@@ -15119,6 +15185,8 @@ const renderAdminPedagogicoOverview = () => {
 
   const recentAlerts = alerts.slice().sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0)).slice(0, 5);
   const recentFeedbacks = feedbacks.slice().sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0)).slice(0, 5);
+  const tier1Items = workItems.filter((item) => item.tier === 1);
+  const tier2Items = workItems.filter((item) => item.tier === 2);
 
   const metricValue = (key) => {
     const value = opsMetrics[key];
@@ -15162,7 +15230,7 @@ const renderAdminPedagogicoOverview = () => {
           </div>
         </div>
         <div class="admin-ped-workqueue">
-          ${workItems
+          ${tier1Items
             .map((item) => {
               const isOk = item.count === 0;
               const toneCls = item.priority === "Crítico" ? "is-danger" : item.priority === "Atenção" ? "is-warn" : "";
@@ -15186,6 +15254,35 @@ const renderAdminPedagogicoOverview = () => {
             })
             .join("")}
         </div>
+        <details>
+          <summary class="admin-ped-op-title" style="margin-top: 14px; cursor: pointer;">Ver itens operacionais (${tier2Items.length})</summary>
+          <div class="admin-ped-op-sub">Itens de drill-down calculados a partir dos dados já carregados no Firestore.</div>
+          <div class="admin-ped-workqueue" style="margin-top: 12px;">
+            ${tier2Items
+              .map((item) => {
+                const isOk = item.count === 0;
+                const toneCls = item.priority === "Crítico" ? "is-danger" : item.priority === "Atenção" ? "is-warn" : "";
+                const btnDisabled = isOk ? "disabled" : "";
+                return `
+                <div class="admin-ped-workitem ${isOk ? "is-ok" : ""}">
+                  <div>
+                    <div class="admin-ped-workitem-title">${escapeHtml(item.title)}</div>
+                    <div class="admin-ped-workitem-meta">
+                      ${priorityPill(item.priority)}
+                      <span class="admin-ped-pill ${toneCls}">${escapeHtml(String(item.count))}</span>
+                    </div>
+                  </div>
+                  <div class="admin-ped-workitem-actions">
+                    <button class="admin-ped-action ${toneCls}" type="button" data-admin-ped-nav="${escapeHtml(String(item.actionTab || ""))}" ${btnDisabled}>${escapeHtml(
+                  item.actionLabel
+                )}</button>
+                  </div>
+                </div>
+              `;
+              })
+              .join("")}
+          </div>
+        </details>
       </section>
 
       <section class="admin-ped-op-grid">
