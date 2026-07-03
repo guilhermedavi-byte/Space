@@ -14768,6 +14768,23 @@ const renderAdminPedagogicoMetrics = () => {
   });
 
   const noTeacher = active.filter((c) => !String(c.teacherId || "").trim()).length;
+  const criticalTotal =
+    Number(opsMetrics.alunos_sem_professor || 0) + Number(opsMetrics.alunos_sem_primeira_aula || 0) + Number(opsMetrics.ocorrencias_abertas || 0);
+  const hasCritical = criticalTotal > 0;
+  const statusBarEl = document.querySelector("[data-admin-ped-v2-status-bar]");
+  const statusTitleEl = document.querySelector("[data-admin-ped-v2-status-title]");
+  const statusSubEl = document.querySelector("[data-admin-ped-v2-status-sub]");
+  if (statusBarEl instanceof HTMLElement) statusBarEl.dataset.tone = hasCritical ? "danger" : "neutral";
+  if (statusTitleEl instanceof HTMLElement) {
+    statusTitleEl.textContent = hasCritical ? `${criticalTotal} itens exigem atenção` : "Tudo em dia — nenhuma pendência crítica.";
+  }
+  if (statusSubEl instanceof HTMLElement) {
+    statusSubEl.textContent = hasCritical
+      ? `Sem professor: ${Number(opsMetrics.alunos_sem_professor || 0)} · Sem primeira aula: ${Number(
+          opsMetrics.alunos_sem_primeira_aula || 0
+        )} · Ocorrências: ${Number(opsMetrics.ocorrencias_abertas || 0)}`
+      : "Sem alertas críticos agora.";
+  }
 
   setKpi("classesToday", {
     value: String(Number(opsMetrics.aulas_hoje ?? today.length) || 0),
@@ -14779,22 +14796,12 @@ const renderAdminPedagogicoMetrics = () => {
   });
 
   setKpi("critical", {
-    value: String(
-      Number(opsMetrics.alunos_sem_professor || 0) +
-        Number(opsMetrics.alunos_sem_primeira_aula || 0) +
-        Number(opsMetrics.ocorrencias_abertas || 0)
-    ),
+    value: String(criticalTotal),
     sub: `Sem professor: ${Number(opsMetrics.alunos_sem_professor || 0)} · Sem primeira aula: ${Number(
       opsMetrics.alunos_sem_primeira_aula || 0
     )} · Ocorrências: ${Number(opsMetrics.ocorrencias_abertas || 0)}`,
-    badge:
-      Number(opsMetrics.alunos_sem_professor || 0) +
-        Number(opsMetrics.alunos_sem_primeira_aula || 0) +
-        Number(opsMetrics.ocorrencias_abertas || 0) >
-      0
-        ? "Crítico"
-        : "",
-    badgeTone: "danger",
+    badge: hasCritical ? "Crítico" : "",
+    badgeTone: hasCritical ? "danger" : "",
   });
 
   const riskValue = opsMetrics.alunos_em_risco;
@@ -14908,6 +14915,25 @@ const adminPedFindGroupForTab = (tabKey) => {
   return group ? String(group.key) : "operacao";
 };
 
+const ADMIN_PED_TAB_SUMMARIES = {
+  overview: "Pendências e próximos passos",
+  agenda: "Aulas do dia e filtros rápidos",
+  aulas: "Lista operacional de aulas",
+  conflitos: "Conflitos detectados",
+  alunos: "Visão dos alunos ativos",
+  turmas: "Turmas e organização",
+  vinculos: "Vínculos e pendências",
+  professores: "Gestão de professores",
+  feedbacks: "Devolutivas para o time",
+  onboarding: "Trilha e progresso de onboarding",
+  pesquisas: "Pesquisas e respostas",
+  npscsat: "Qualidade e satisfação",
+  avisos: "Avisos recebidos",
+  planos: "Planos e precificação",
+  relatorios: "Relatórios e exportações",
+  configuracoes: "Ajustes operacionais",
+};
+
 const adminPedEnsureNavState = () => {
   const groupKeys = new Set(ADMIN_PED_NAV_GROUPS.map((g) => String(g.key)));
   const desiredTab = String(adminPedagogicoState.activeTab || "overview").trim() || "overview";
@@ -14945,9 +14971,13 @@ const renderAdminPedagogicoTabs = () => {
     adminPedSubtabs.innerHTML = (group?.tabs || [])
       .map((t) => {
         const isActive = String(t.key) === activeTab;
+        const summary = ADMIN_PED_TAB_SUMMARIES[String(t.key)] || "Abrir seção";
         return `<button class="admin-ped-subtab ${isActive ? "is-active" : ""}" type="button" role="tab" aria-selected="${isActive ? "true" : "false"}" data-admin-ped-tab="${escapeHtml(
           String(t.key)
-        )}">${escapeHtml(String(t.label || t.key))}</button>`;
+        )}">
+          <span class="admin-ped-subtab-title">${escapeHtml(String(t.label || t.key))}</span>
+          <span class="admin-ped-subtab-sub">${escapeHtml(summary)}</span>
+        </button>`;
       })
       .join("");
   }
@@ -22613,6 +22643,16 @@ document.addEventListener("click", (event) => {
         else if (tab === "avisos") renderAdminPedagogicoAlertsPanel();
         else if (tab === "planos") renderAdminPedagogicoPlansPanel();
         else if (tab === "relatorios") renderAdminPedagogicoReportsPanel();
+        return;
+      }
+
+      const adminPedScrollPending = target.closest("[data-admin-ped-v2-scroll-pending]");
+      if (adminPedScrollPending instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const pendingSection = document.querySelector("#admin-ped-pending");
+        if (pendingSection instanceof HTMLElement) {
+          pendingSection.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
         return;
       }
 
