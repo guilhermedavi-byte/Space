@@ -17781,6 +17781,34 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   flex-wrap: wrap;
 }
 
+.admin-ped-table-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.admin-ped-table-search {
+  min-width: min(100%, 340px);
+  flex: 1 1 340px;
+}
+
+.admin-ped-pagination {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-ped-pagination-label {
+  color: #98a4b7;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 @media (max-width: 960px) {
   .admin-ped-kpis-hero {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -18892,7 +18920,7 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 .admin-student-pedagogical-grid .admin-student-personal-row{padding:11px;border:1px solid rgba(255,255,255,.09);border-radius:12px;background:rgba(255,255,255,.025)}
 .admin-student-briefing{margin-top:12px;line-height:1.55;color:#c7cfda}
 @media(max-width:1100px){.admin-ped-ops-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:720px){.pedagogico-item{grid-template-columns:1fr}.pedagogico-item-actions{justify-content:flex-start}.admin-ped-ops-summary,.admin-student-pedagogical-grid{grid-template-columns:1fr}}
+@media(max-width:720px){.pedagogico-item{grid-template-columns:1fr}.pedagogico-item-actions{justify-content:flex-start}.admin-ped-ops-summary,.admin-student-pedagogical-grid{grid-template-columns:1fr}.admin-ped-table-toolbar{align-items:stretch}.admin-ped-table-search{min-width:0;width:100%;flex:1 1 100%}.admin-ped-pagination{width:100%;justify-content:space-between}}
 
 /* Lançamento interno */
 .launch-page{width:min(1120px,100%);margin:0 auto;padding:clamp(22px,4vw,42px)}

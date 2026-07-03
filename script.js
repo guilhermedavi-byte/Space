@@ -13749,6 +13749,8 @@ let adminPedagogicoState = {
   teacherOnboardingProgressAll: [],
   teacherQuizSubmissionsAll: [],
   pedagogicalOps: { metrics: {}, onboarding: [], alerts: [], pendingLessons: [], riskStudents: [], flexge: [] },
+  studentsTable: { query: "", page: 1, pageSize: 25 },
+  linksTable: { activeList: "noClass", query: "", page: 1, pageSize: 25 },
   filters: {
     teacherId: "",
     dow: "",
@@ -13761,6 +13763,7 @@ let adminPedagogicoState = {
   activeTab: "overview", // subtabs: overview | agenda | aulas | conflitos | alunos | turmas | vinculos | professores | feedbacks | onboarding | pesquisas | npscsat | avisos | planos | relatorios | configuracoes
   conflicts: [],
 };
+let adminPedTableSearchDebounce = null;
 
 const setAdminPedagogicoStatus = (text, tone = "") => {
   if (!(adminPedStatus instanceof HTMLElement)) return;
@@ -14553,6 +14556,63 @@ const daysLabelShort = (dow) => {
   if (n === 6) return "Sáb";
   if (n === 0) return "Dom";
   return "—";
+};
+
+const adminPedPaginate = (rows, page, pageSize) => {
+  const total = Array.isArray(rows) ? rows.length : 0;
+  const safePageSize = Math.max(1, Number(pageSize) || 1);
+  const totalPages = Math.max(1, Math.ceil(total / safePageSize));
+  const safePage = Math.min(Math.max(1, Number(page) || 1), totalPages);
+  const start = (safePage - 1) * safePageSize;
+  const pageRows = (Array.isArray(rows) ? rows : []).slice(start, start + safePageSize);
+  return { pageRows, total, totalPages, safePage };
+};
+
+const adminPedMatchesQuery = (row, query) => {
+  const needle = String(query || "").trim().toLowerCase();
+  if (!needle) return true;
+  const haystack = [
+    row?.nome,
+    row?.email,
+    row?.teacherName,
+    row?.groupName,
+    row?.plan,
+    row?.statusLabel,
+    row?.risk,
+    row?.source,
+  ]
+    .map((value) => String(value || "").toLowerCase())
+    .join(" ");
+  return haystack.includes(needle);
+};
+
+const adminPedTableToolbarHtml = ({ query, total, page, totalPages, searchKey, placeholder }) => `
+  <div class="admin-ped-table-toolbar">
+    <input
+      class="admin-ped-select admin-ped-table-search"
+      type="text"
+      placeholder="${escapeHtml(placeholder || "Buscar por nome ou e-mail...")}"
+      value="${escapeHtml(String(query || ""))}"
+      data-admin-ped-table-search="${escapeHtml(String(searchKey || ""))}"
+    />
+    <div class="admin-ped-pagination">
+      <button class="admin-ped-action is-muted" type="button" data-admin-ped-table-prev="${escapeHtml(String(searchKey || ""))}" ${Number(page) <= 1 ? "disabled" : ""}>‹</button>
+      <span class="admin-ped-pagination-label">${escapeHtml(`${Number(page) || 1}/${Number(totalPages) || 1} · ${Number(total) || 0} aluno${Number(total) === 1 ? "" : "s"}`)}</span>
+      <button class="admin-ped-action is-muted" type="button" data-admin-ped-table-next="${escapeHtml(String(searchKey || ""))}" ${Number(page) >= Number(totalPages) ? "disabled" : ""}>›</button>
+    </div>
+  </div>
+`;
+
+const adminPedFocusTableSearch = (searchKey) => {
+  const input = document.querySelector(`[data-admin-ped-table-search="${CSS.escape(String(searchKey || ""))}"]`);
+  if (!(input instanceof HTMLInputElement)) return;
+  input.focus();
+  const valueLength = input.value.length;
+  try {
+    input.setSelectionRange(valueLength, valueLength);
+  } catch (_) {
+    // Some input types/browsers don't support selection ranges; focus is enough.
+  }
 };
 
 const classesOverlap = (a, b) => {
@@ -15508,6 +15568,11 @@ const renderAdminPedagogicoStudentsPanel = () => {
   const students = Array.isArray(adminPedagogicoState.students) ? adminPedagogicoState.students : [];
   const teachersById = adminPedagogicoState.teachersById instanceof Map ? adminPedagogicoState.teachersById : new Map();
   const groupsById = adminPedagogicoState.groupsById instanceof Map ? adminPedagogicoState.groupsById : new Map();
+  const tableState =
+    adminPedagogicoState.studentsTable && typeof adminPedagogicoState.studentsTable === "object"
+      ? adminPedagogicoState.studentsTable
+      : { query: "", page: 1, pageSize: 25 };
+  const query = String(tableState.query || "");
 
   const lessonLogs = Array.isArray(adminPedagogicoState.lessonLogs) ? adminPedagogicoState.lessonLogs : [];
   const riskByStudent = new Map();
@@ -15552,11 +15617,25 @@ const renderAdminPedagogicoStudentsPanel = () => {
       };
     });
 
+  const filteredRows = rows.filter((row) => adminPedMatchesQuery(row, query));
+  const pagination = adminPedPaginate(filteredRows, tableState.page, tableState.pageSize);
+  adminPedagogicoState.studentsTable = {
+    ...tableState,
+    page: pagination.safePage,
+  };
+
   if (adminPedEmptyStudents instanceof HTMLElement) adminPedEmptyStudents.hidden = rows.length > 0;
 
-  adminPedStudents.innerHTML = `
-    <div class="admin-ped-list">
-      ${rows
+  const toolbarHtml = adminPedTableToolbarHtml({
+    query,
+    total: pagination.total,
+    page: pagination.safePage,
+    totalPages: pagination.totalPages,
+    searchKey: "students",
+    placeholder: "Buscar aluno, e-mail, professor, turma ou plano...",
+  });
+  const rowsHtml = pagination.pageRows.length
+    ? pagination.pageRows
         .map((r) => {
           const statusCls = r.statusLabel === "Ativo" ? "is-active" : "is-ended";
           return `
@@ -15576,9 +15655,7 @@ const renderAdminPedagogicoStudentsPanel = () => {
               <div class="admin-ped-row-actions">
                 <button class="admin-ped-action" type="button" data-admin-ped-student-open="${escapeHtml(r.id)}">Ficha</button>
                 <button class="admin-ped-action" type="button" data-admin-ped-student-link="${escapeHtml(r.id)}">Vincular</button>
-                <button class="admin-ped-action is-muted" type="button" data-admin-ped-student-new-class="${escapeHtml(
-                  r.id
-                )}">Criar aula</button>
+                <button class="admin-ped-action is-muted" type="button" data-admin-ped-student-new-class="${escapeHtml(r.id)}">Criar aula</button>
                 ${
                   r.alunoChave
                     ? `<button class="admin-ped-action ${r.accessActive ? "is-danger" : ""}" type="button"
@@ -15592,9 +15669,16 @@ const renderAdminPedagogicoStudentsPanel = () => {
             </div>
           `;
         })
-        .join("")}
+        .join("")
+    : `<div class="admin-ped-empty-inline"><div class="admin-ped-empty-title">Nenhum aluno encontrado.</div><div class="admin-ped-empty-sub">Tente outro termo de busca ou limpe o filtro.</div></div>`;
+
+  adminPedStudents.innerHTML = `
+    ${toolbarHtml}
+    <div class="admin-ped-list">
+      ${rowsHtml}
     </div>
   `;
+  if (query) window.requestAnimationFrame(() => adminPedFocusTableSearch("students"));
 };
 
 const renderAdminPedagogicoLinksPanel = () => {
@@ -15605,75 +15689,105 @@ const renderAdminPedagogicoLinksPanel = () => {
   const groupsById = adminPedagogicoState.groupsById instanceof Map ? adminPedagogicoState.groupsById : new Map();
   const classes = Array.isArray(adminPedagogicoState.classes) ? adminPedagogicoState.classes : [];
   const activeClasses = classes.filter((c) => normalizeClassStatus(c?.status) === "active");
+  const tableState =
+    adminPedagogicoState.linksTable && typeof adminPedagogicoState.linksTable === "object"
+      ? adminPedagogicoState.linksTable
+      : { activeList: "noClass", query: "", page: 1, pageSize: 25 };
+  const query = String(tableState.query || "");
+  const activeList = String(tableState.activeList || "noClass");
 
   const linkedStudents = new Set();
   activeClasses.forEach((c) => (Array.isArray(c.studentIds) ? c.studentIds : []).forEach((id) => (id ? linkedStudents.add(String(id)) : null)));
 
-  const noTeacher = activeStudents.filter((s) => !String(s.professorId || s.teacherId || "").trim());
-  const noGroup = activeStudents.filter((s) => !String(s.groupId || "").trim());
-  const noClass = activeStudents.filter((s) => !linkedStudents.has(String(s.id || "")));
-
-  const cap = (list) => list.slice(0, 8);
-  const rowHtml = (s, extraAction) => {
+  const buildRow = (s, kind) => {
     const sid = String(s.id || "");
     const teacherId = String(s.professorId || s.teacherId || "").trim();
     const groupId = String(s.groupId || "").trim();
     const teacher = teacherId ? String(teachersById.get(teacherId)?.nome || "").trim() : "";
     const group = groupId ? String(groupsById.get(groupId)?.name || "").trim() : String(s.groupName || "").trim();
     const plan = String(s.plano || "").trim() || "Sem plano";
-    return `
-      <div class="admin-ped-link-row">
-        <div>
-          <div class="admin-ped-link-title">${escapeHtml(String(s.nome || "Aluno"))}</div>
-          <div class="admin-ped-link-sub">${escapeHtml(String(s.email || ""))}</div>
-          <div class="admin-ped-link-meta">
-            <span class="admin-ped-pill is-plan">${escapeHtml(plan)}</span>
-            ${teacher ? `<span class="admin-ped-pill">${escapeHtml(teacher)}</span>` : `<span class="admin-ped-pill">Sem professor</span>`}
-            ${group ? `<span class="admin-ped-pill">${escapeHtml(group)}</span>` : `<span class="admin-ped-pill">Sem turma</span>`}
-          </div>
-        </div>
-        <div class="admin-ped-link-actions">
-          <button class="admin-ped-action" type="button" data-admin-ped-student-link="${escapeHtml(sid)}">Vincular</button>
-          ${extraAction || ""}
-        </div>
-      </div>
-    `;
+    return {
+      id: sid,
+      nome: String(s.nome || "Aluno"),
+      email: String(s.email || ""),
+      plan,
+      teacher,
+      group,
+      createClass: kind === "noClass",
+    };
   };
 
-  const block = (title, desc, list, extra) => {
-    const rows = cap(list)
-      .map((s) => rowHtml(s, extra ? extra(s) : ""))
-      .join("");
-    return `
-      <section class="admin-ped-link-block">
-        <div class="admin-ped-link-blockhead">
-          <div>
-            <div class="admin-ped-link-blocktitle">${escapeHtml(title)}</div>
-            <div class="admin-ped-link-blocksub">${escapeHtml(desc)}</div>
-          </div>
-          <div class="admin-ped-link-badge">${escapeHtml(String(list.length))}</div>
-        </div>
-        <div class="admin-ped-link-list">
-          ${rows || `<div class="admin-ped-empty-inline"><div class="admin-ped-empty-title">Tudo certo</div><div class="admin-ped-empty-sub">Nenhuma pendência agora.</div></div>`}
-        </div>
-      </section>
-    `;
+  const lists = {
+    noTeacher: activeStudents.filter((s) => !String(s.professorId || s.teacherId || "").trim()).map((s) => buildRow(s, "noTeacher")),
+    noClass: activeStudents.filter((s) => !linkedStudents.has(String(s.id || ""))).map((s) => buildRow(s, "noClass")),
+    noGroup: activeStudents.filter((s) => !String(s.groupId || "").trim()).map((s) => buildRow(s, "noGroup")),
+  };
+  const safeActiveList = lists[activeList] ? activeList : "noClass";
+  const activeRows = (lists[safeActiveList] || []).filter((row) => adminPedMatchesQuery(row, query));
+  const pagination = adminPedPaginate(activeRows, tableState.page, tableState.pageSize);
+  adminPedagogicoState.linksTable = {
+    ...tableState,
+    activeList: safeActiveList,
+    page: pagination.safePage,
   };
 
-  if (adminPedEmptyLinks instanceof HTMLElement) adminPedEmptyLinks.hidden = !(noTeacher.length === 0 && noClass.length === 0 && noGroup.length === 0);
+  if (adminPedEmptyLinks instanceof HTMLElement) adminPedEmptyLinks.hidden = !(lists.noTeacher.length === 0 && lists.noClass.length === 0 && lists.noGroup.length === 0);
+
+  const toolbarHtml = adminPedTableToolbarHtml({
+    query,
+    total: pagination.total,
+    page: pagination.safePage,
+    totalPages: pagination.totalPages,
+    searchKey: "links",
+    placeholder: "Buscar aluno, e-mail, professor, turma ou plano...",
+  });
+  const rowsHtml = pagination.pageRows.length
+    ? pagination.pageRows
+        .map((s) => {
+          return `
+            <div class="admin-ped-link-row">
+              <div>
+                <div class="admin-ped-link-title">${escapeHtml(String(s.nome || "Aluno"))}</div>
+                <div class="admin-ped-link-sub">${escapeHtml(String(s.email || ""))}</div>
+                <div class="admin-ped-link-meta">
+                  <span class="admin-ped-pill is-plan">${escapeHtml(String(s.plan || "Sem plano"))}</span>
+                  ${s.teacher ? `<span class="admin-ped-pill">${escapeHtml(String(s.teacher))}</span>` : `<span class="admin-ped-pill">Sem professor</span>`}
+                  ${s.group ? `<span class="admin-ped-pill">${escapeHtml(String(s.group))}</span>` : `<span class="admin-ped-pill">Sem turma</span>`}
+                </div>
+              </div>
+              <div class="admin-ped-link-actions">
+                <button class="admin-ped-action" type="button" data-admin-ped-student-link="${escapeHtml(String(s.id || ""))}">Vincular</button>
+                ${s.createClass ? `<button class="admin-ped-action is-muted" type="button" data-admin-ped-student-new-class="${escapeHtml(String(s.id || ""))}">Criar aula</button>` : ""}
+              </div>
+            </div>
+          `;
+        })
+        .join("")
+    : `<div class="admin-ped-empty-inline"><div class="admin-ped-empty-title">Nenhum resultado para esta lista.</div><div class="admin-ped-empty-sub">Teste outra busca ou troque a aba acima.</div></div>`;
 
   adminPedLinks.innerHTML = `
     <div class="admin-ped-links-grid">
-      ${block("Alunos sem professor", "Conecte alunos ativos a um professor responsável.", noTeacher)}
-      ${block(
-        "Alunos sem aula",
-        "Alunos ativos sem aula vinculada na agenda recorrente.",
-        noClass,
-        (s) => `<button class="admin-ped-action is-muted" type="button" data-admin-ped-student-new-class="${escapeHtml(String(s.id || ""))}">Criar aula</button>`
-      )}
-      ${block("Alunos sem turma", "Quando fizer sentido, organize alunos em turmas.", noGroup)}
+      <section class="admin-ped-link-block">
+        <div class="admin-ped-link-blockhead">
+          <div>
+            <div class="admin-ped-link-blocktitle">Alunos com pendências</div>
+            <div class="admin-ped-link-blocksub">Escolha a lista, filtre e navegue pelos registros sem perder o contexto.</div>
+          </div>
+          <div class="admin-ped-link-badge">${escapeHtml(String(activeRows.length))}</div>
+        </div>
+        <div class="admin-ped-subtabs" style="margin-bottom: 12px;">
+          <button class="admin-ped-subtab ${safeActiveList === "noTeacher" ? "is-active" : ""}" type="button" data-admin-ped-links-tab="noTeacher">Sem professor (${lists.noTeacher.length})</button>
+          <button class="admin-ped-subtab ${safeActiveList === "noClass" ? "is-active" : ""}" type="button" data-admin-ped-links-tab="noClass">Sem aula (${lists.noClass.length})</button>
+          <button class="admin-ped-subtab ${safeActiveList === "noGroup" ? "is-active" : ""}" type="button" data-admin-ped-links-tab="noGroup">Sem turma (${lists.noGroup.length})</button>
+        </div>
+        ${toolbarHtml}
+        <div class="admin-ped-link-list">
+          ${rowsHtml}
+        </div>
+      </section>
     </div>
   `;
+  if (query) window.requestAnimationFrame(() => adminPedFocusTableSearch("links"));
 };
 
 const renderAdminPedagogicoSurveysPanel = () => {
@@ -22406,6 +22520,52 @@ document.addEventListener("click", (event) => {
         return;
       }
 
+      const adminPedLinksTab = target.closest("[data-admin-ped-links-tab]");
+      if (adminPedLinksTab instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const listKey = String(adminPedLinksTab.getAttribute("data-admin-ped-links-tab") || "").trim();
+        if (listKey) {
+          adminPedagogicoState.linksTable = adminPedagogicoState.linksTable && typeof adminPedagogicoState.linksTable === "object" ? { ...adminPedagogicoState.linksTable } : {};
+          adminPedagogicoState.linksTable.activeList = listKey;
+          adminPedagogicoState.linksTable.query = "";
+          adminPedagogicoState.linksTable.page = 1;
+          renderAdminPedagogicoLinksPanel();
+        }
+        return;
+      }
+
+      const adminPedTablePrev = target.closest("[data-admin-ped-table-prev]");
+      if (adminPedTablePrev instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const tableKey = String(adminPedTablePrev.getAttribute("data-admin-ped-table-prev") || "").trim();
+        if (tableKey === "students") {
+          adminPedagogicoState.studentsTable = adminPedagogicoState.studentsTable && typeof adminPedagogicoState.studentsTable === "object" ? { ...adminPedagogicoState.studentsTable } : {};
+          adminPedagogicoState.studentsTable.page = Math.max(1, Number(adminPedagogicoState.studentsTable.page) || 1) - 1;
+          renderAdminPedagogicoStudentsPanel();
+        } else if (tableKey === "links") {
+          adminPedagogicoState.linksTable = adminPedagogicoState.linksTable && typeof adminPedagogicoState.linksTable === "object" ? { ...adminPedagogicoState.linksTable } : {};
+          adminPedagogicoState.linksTable.page = Math.max(1, Number(adminPedagogicoState.linksTable.page) || 1) - 1;
+          renderAdminPedagogicoLinksPanel();
+        }
+        return;
+      }
+
+      const adminPedTableNext = target.closest("[data-admin-ped-table-next]");
+      if (adminPedTableNext instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const tableKey = String(adminPedTableNext.getAttribute("data-admin-ped-table-next") || "").trim();
+        if (tableKey === "students") {
+          adminPedagogicoState.studentsTable = adminPedagogicoState.studentsTable && typeof adminPedagogicoState.studentsTable === "object" ? { ...adminPedagogicoState.studentsTable } : {};
+          adminPedagogicoState.studentsTable.page = (Number(adminPedagogicoState.studentsTable.page) || 1) + 1;
+          renderAdminPedagogicoStudentsPanel();
+        } else if (tableKey === "links") {
+          adminPedagogicoState.linksTable = adminPedagogicoState.linksTable && typeof adminPedagogicoState.linksTable === "object" ? { ...adminPedagogicoState.linksTable } : {};
+          adminPedagogicoState.linksTable.page = (Number(adminPedagogicoState.linksTable.page) || 1) + 1;
+          renderAdminPedagogicoLinksPanel();
+        }
+        return;
+      }
+
       const adminPedTab = target.closest("[data-admin-ped-tab]");
       if (adminPedTab instanceof HTMLButtonElement) {
         event.preventDefault();
@@ -24329,6 +24489,26 @@ document.addEventListener("keydown", (event) => {
 document.addEventListener("input", (event) => {
   const target = event.target;
   if (!(target instanceof HTMLInputElement)) return;
+  const tableSearchKey = String(target.getAttribute("data-admin-ped-table-search") || "").trim();
+    if (tableSearchKey) {
+      if (adminPedTableSearchDebounce) clearTimeout(adminPedTableSearchDebounce);
+      adminPedTableSearchDebounce = window.setTimeout(() => {
+        if (tableSearchKey === "students") {
+          adminPedagogicoState.studentsTable = adminPedagogicoState.studentsTable && typeof adminPedagogicoState.studentsTable === "object" ? { ...adminPedagogicoState.studentsTable } : {};
+          adminPedagogicoState.studentsTable.query = target.value;
+          adminPedagogicoState.studentsTable.page = 1;
+          renderAdminPedagogicoStudentsPanel();
+          adminPedTableSearchDebounce = null;
+        } else if (tableSearchKey === "links") {
+          adminPedagogicoState.linksTable = adminPedagogicoState.linksTable && typeof adminPedagogicoState.linksTable === "object" ? { ...adminPedagogicoState.linksTable } : {};
+          adminPedagogicoState.linksTable.query = target.value;
+          adminPedagogicoState.linksTable.page = 1;
+          renderAdminPedagogicoLinksPanel();
+          adminPedTableSearchDebounce = null;
+        }
+      }, 140);
+      return;
+    }
   if (!workHoursDraft || !modalBody || modalOverlay?.hidden) return;
 
   if (target.matches("[data-wh-start], [data-wh-end]")) {
