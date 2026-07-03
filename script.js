@@ -13749,8 +13749,8 @@ let adminPedagogicoState = {
   teacherOnboardingProgressAll: [],
   teacherQuizSubmissionsAll: [],
   pedagogicalOps: { metrics: {}, onboarding: [], alerts: [], pendingLessons: [], riskStudents: [], flexge: [] },
-  studentsTable: { query: "", page: 1, pageSize: 25 },
-  linksTable: { activeList: "noClass", query: "", page: 1, pageSize: 25 },
+  studentsTable: { query: "", page: 1, pageSize: 25, lastRenderFromSearch: false },
+  linksTable: { activeList: "noClass", query: "", page: 1, pageSize: 25, lastRenderFromSearch: false },
   filters: {
     teacherId: "",
     dow: "",
@@ -15571,7 +15571,7 @@ const renderAdminPedagogicoStudentsPanel = () => {
   const tableState =
     adminPedagogicoState.studentsTable && typeof adminPedagogicoState.studentsTable === "object"
       ? adminPedagogicoState.studentsTable
-      : { query: "", page: 1, pageSize: 25 };
+      : { query: "", page: 1, pageSize: 25, lastRenderFromSearch: false };
   const query = String(tableState.query || "");
 
   const lessonLogs = Array.isArray(adminPedagogicoState.lessonLogs) ? adminPedagogicoState.lessonLogs : [];
@@ -15678,7 +15678,10 @@ const renderAdminPedagogicoStudentsPanel = () => {
       ${rowsHtml}
     </div>
   `;
-  if (query) window.requestAnimationFrame(() => adminPedFocusTableSearch("students"));
+  if (adminPedagogicoState.studentsTable.lastRenderFromSearch) {
+    adminPedagogicoState.studentsTable.lastRenderFromSearch = false;
+    window.requestAnimationFrame(() => adminPedFocusTableSearch("students"));
+  }
 };
 
 const renderAdminPedagogicoLinksPanel = () => {
@@ -15692,7 +15695,7 @@ const renderAdminPedagogicoLinksPanel = () => {
   const tableState =
     adminPedagogicoState.linksTable && typeof adminPedagogicoState.linksTable === "object"
       ? adminPedagogicoState.linksTable
-      : { activeList: "noClass", query: "", page: 1, pageSize: 25 };
+      : { activeList: "noClass", query: "", page: 1, pageSize: 25, lastRenderFromSearch: false };
   const query = String(tableState.query || "");
   const activeList = String(tableState.activeList || "noClass");
 
@@ -15703,16 +15706,16 @@ const renderAdminPedagogicoLinksPanel = () => {
     const sid = String(s.id || "");
     const teacherId = String(s.professorId || s.teacherId || "").trim();
     const groupId = String(s.groupId || "").trim();
-    const teacher = teacherId ? String(teachersById.get(teacherId)?.nome || "").trim() : "";
-    const group = groupId ? String(groupsById.get(groupId)?.name || "").trim() : String(s.groupName || "").trim();
+    const teacherName = teacherId ? String(teachersById.get(teacherId)?.nome || "").trim() : "";
+    const groupName = groupId ? String(groupsById.get(groupId)?.name || "").trim() : String(s.groupName || "").trim();
     const plan = String(s.plano || "").trim() || "Sem plano";
     return {
       id: sid,
       nome: String(s.nome || "Aluno"),
       email: String(s.email || ""),
       plan,
-      teacher,
-      group,
+      teacherName,
+      groupName,
       createClass: kind === "noClass",
     };
   };
@@ -15751,8 +15754,8 @@ const renderAdminPedagogicoLinksPanel = () => {
                 <div class="admin-ped-link-sub">${escapeHtml(String(s.email || ""))}</div>
                 <div class="admin-ped-link-meta">
                   <span class="admin-ped-pill is-plan">${escapeHtml(String(s.plan || "Sem plano"))}</span>
-                  ${s.teacher ? `<span class="admin-ped-pill">${escapeHtml(String(s.teacher))}</span>` : `<span class="admin-ped-pill">Sem professor</span>`}
-                  ${s.group ? `<span class="admin-ped-pill">${escapeHtml(String(s.group))}</span>` : `<span class="admin-ped-pill">Sem turma</span>`}
+                  ${s.teacherName ? `<span class="admin-ped-pill">${escapeHtml(String(s.teacherName))}</span>` : `<span class="admin-ped-pill">Sem professor</span>`}
+                  ${s.groupName ? `<span class="admin-ped-pill">${escapeHtml(String(s.groupName))}</span>` : `<span class="admin-ped-pill">Sem turma</span>`}
                 </div>
               </div>
               <div class="admin-ped-link-actions">
@@ -15787,7 +15790,10 @@ const renderAdminPedagogicoLinksPanel = () => {
       </section>
     </div>
   `;
-  if (query) window.requestAnimationFrame(() => adminPedFocusTableSearch("links"));
+  if (adminPedagogicoState.linksTable.lastRenderFromSearch) {
+    adminPedagogicoState.linksTable.lastRenderFromSearch = false;
+    window.requestAnimationFrame(() => adminPedFocusTableSearch("links"));
+  }
 };
 
 const renderAdminPedagogicoSurveysPanel = () => {
@@ -24490,25 +24496,27 @@ document.addEventListener("input", (event) => {
   const target = event.target;
   if (!(target instanceof HTMLInputElement)) return;
   const tableSearchKey = String(target.getAttribute("data-admin-ped-table-search") || "").trim();
-    if (tableSearchKey) {
-      if (adminPedTableSearchDebounce) clearTimeout(adminPedTableSearchDebounce);
-      adminPedTableSearchDebounce = window.setTimeout(() => {
-        if (tableSearchKey === "students") {
-          adminPedagogicoState.studentsTable = adminPedagogicoState.studentsTable && typeof adminPedagogicoState.studentsTable === "object" ? { ...adminPedagogicoState.studentsTable } : {};
-          adminPedagogicoState.studentsTable.query = target.value;
-          adminPedagogicoState.studentsTable.page = 1;
-          renderAdminPedagogicoStudentsPanel();
-          adminPedTableSearchDebounce = null;
-        } else if (tableSearchKey === "links") {
-          adminPedagogicoState.linksTable = adminPedagogicoState.linksTable && typeof adminPedagogicoState.linksTable === "object" ? { ...adminPedagogicoState.linksTable } : {};
-          adminPedagogicoState.linksTable.query = target.value;
-          adminPedagogicoState.linksTable.page = 1;
-          renderAdminPedagogicoLinksPanel();
-          adminPedTableSearchDebounce = null;
-        }
-      }, 140);
-      return;
-    }
+  if (tableSearchKey) {
+    if (adminPedTableSearchDebounce) clearTimeout(adminPedTableSearchDebounce);
+    adminPedTableSearchDebounce = window.setTimeout(() => {
+      if (tableSearchKey === "students") {
+        adminPedagogicoState.studentsTable = adminPedagogicoState.studentsTable && typeof adminPedagogicoState.studentsTable === "object" ? { ...adminPedagogicoState.studentsTable } : {};
+        adminPedagogicoState.studentsTable.query = target.value;
+        adminPedagogicoState.studentsTable.page = 1;
+        adminPedagogicoState.studentsTable.lastRenderFromSearch = true;
+        renderAdminPedagogicoStudentsPanel();
+        adminPedTableSearchDebounce = null;
+      } else if (tableSearchKey === "links") {
+        adminPedagogicoState.linksTable = adminPedagogicoState.linksTable && typeof adminPedagogicoState.linksTable === "object" ? { ...adminPedagogicoState.linksTable } : {};
+        adminPedagogicoState.linksTable.query = target.value;
+        adminPedagogicoState.linksTable.page = 1;
+        adminPedagogicoState.linksTable.lastRenderFromSearch = true;
+        renderAdminPedagogicoLinksPanel();
+        adminPedTableSearchDebounce = null;
+      }
+    }, 140);
+    return;
+  }
   if (!workHoursDraft || !modalBody || modalOverlay?.hidden) return;
 
   if (target.matches("[data-wh-start], [data-wh-end]")) {
