@@ -169,8 +169,8 @@
   };
 
   const mount = () => {
-    const container = document.querySelector("[data-admin-pedagogico]");
-    if (!(container instanceof HTMLElement) || document.querySelector("[data-ped-n8n-root]")) return;
+    const host = document.querySelector("[data-ped-n8n-host]");
+    if (!(host instanceof HTMLElement) || document.querySelector("[data-ped-n8n-root]")) return;
     ensureStyle();
     const root = document.createElement("section");
     root.className = "ped-n8n";
@@ -196,7 +196,7 @@
           <div data-ped-n8n-alerts></div>
         </article>
       </div>`;
-    container.appendChild(root);
+    host.appendChild(root);
     load().catch(() => render());
   };
 

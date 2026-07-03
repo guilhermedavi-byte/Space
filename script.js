@@ -14972,11 +14972,10 @@ const renderAdminPedagogicoTabs = () => {
       .map((t) => {
         const isActive = String(t.key) === activeTab;
         const summary = ADMIN_PED_TAB_SUMMARIES[String(t.key)] || "Abrir seção";
-        return `<button class="admin-ped-subtab ${isActive ? "is-active" : ""}" type="button" role="tab" aria-selected="${isActive ? "true" : "false"}" data-admin-ped-tab="${escapeHtml(
-          String(t.key)
-        )}">
-          <span class="admin-ped-subtab-title">${escapeHtml(String(t.label || t.key))}</span>
-          <span class="admin-ped-subtab-sub">${escapeHtml(summary)}</span>
+        return `<button class="admin-ped-subtab ${isActive ? "is-active" : ""}" type="button" role="tab" aria-selected="${isActive ? "true" : "false"}" title="${escapeHtml(
+          summary
+        )}" data-admin-ped-tab="${escapeHtml(String(t.key))}">
+          ${escapeHtml(String(t.label || t.key))}
         </button>`;
       })
       .join("");
@@ -22649,9 +22648,18 @@ document.addEventListener("click", (event) => {
       const adminPedScrollPending = target.closest("[data-admin-ped-v2-scroll-pending]");
       if (adminPedScrollPending instanceof HTMLButtonElement) {
         event.preventDefault();
-        const pendingSection = document.querySelector("#admin-ped-pending");
-        if (pendingSection instanceof HTMLElement) {
-          pendingSection.scrollIntoView({ behavior: "smooth", block: "start" });
+        const drawer = document.querySelector("[data-admin-ped-v2-metrics-drawer]");
+        if (drawer instanceof HTMLElement) {
+          const nextHidden = !drawer.hidden;
+          drawer.hidden = nextHidden;
+          document.querySelectorAll("[data-admin-ped-v2-scroll-pending]").forEach((btn) => {
+            if (!(btn instanceof HTMLButtonElement)) return;
+            btn.textContent = nextHidden ? "Ver" : "Fechar";
+            btn.setAttribute("aria-expanded", nextHidden ? "false" : "true");
+          });
+          if (!nextHidden) {
+            drawer.scrollIntoView({ behavior: "smooth", block: "start" });
+          }
         }
         return;
       }

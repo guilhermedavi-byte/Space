@@ -1835,53 +1835,81 @@
                     <span data-admin-ped-v2-status-sub>Sem alertas críticos agora.</span>
                   </div>
                 </div>
-                <button class="button button-small admin-ped-v2-statusbar-action" type="button" data-admin-ped-v2-scroll-pending>Ver</button>
-                <div class="admin-ped-v2-kpi-sink" hidden aria-hidden="true">
-                  <div class="admin-ped-v2-kpi-sink-item">
+                <button
+                  class="button button-small admin-ped-v2-statusbar-action"
+                  type="button"
+                  data-admin-ped-v2-scroll-pending
+                  aria-expanded="false"
+                  aria-controls="admin-ped-v2-metrics-drawer"
+                >
+                  Ver
+                </button>
+              </section>
+
+              <section class="admin-ped-v2-metrics-drawer" id="admin-ped-v2-metrics-drawer" data-admin-ped-v2-metrics-drawer hidden aria-label="Métricas críticas">
+                <div class="admin-ped-v2-metrics-drawer-head">
+                  <div>
+                    <div class="admin-ped-v2-metrics-drawer-title">Métricas de operação</div>
+                    <div class="admin-ped-v2-metrics-drawer-sub">Lista compacta com os números que pedem ação agora.</div>
+                  </div>
+                  <button class="button button-small admin-ped-v2-metrics-close" type="button" data-admin-ped-v2-scroll-pending aria-expanded="false" aria-controls="admin-ped-v2-metrics-drawer">Fechar</button>
+                </div>
+                <div class="admin-ped-v2-metrics-list">
+                  <div class="admin-ped-v2-metrics-item">
+                    <span class="admin-ped-v2-metrics-label">Aulas hoje</span>
                     <span class="admin-ped-kpi-value" data-admin-ped-kpi-value="classesToday">—</span>
                     <span class="admin-ped-kpi-sub" data-admin-ped-kpi-sub="classesToday">—</span>
                     <span class="admin-ped-kpi-badge" data-admin-ped-kpi-badge="classesToday" hidden>—</span>
                     <button class="admin-ped-kpi-action" type="button" data-admin-ped-kpi-action="classesToday">Ver agenda</button>
                   </div>
-                  <div class="admin-ped-v2-kpi-sink-item">
+                  <div class="admin-ped-v2-metrics-item is-danger">
+                    <span class="admin-ped-v2-metrics-label">Pendências críticas</span>
                     <span class="admin-ped-kpi-value" data-admin-ped-kpi-value="critical">—</span>
                     <span class="admin-ped-kpi-sub" data-admin-ped-kpi-sub="critical">—</span>
                     <span class="admin-ped-kpi-badge is-danger" data-admin-ped-kpi-badge="critical" hidden>Crítico</span>
                     <button class="admin-ped-kpi-action" type="button" data-admin-ped-kpi-action="critical">Resolver</button>
                   </div>
-                  <div class="admin-ped-v2-kpi-sink-item">
+                  <div class="admin-ped-v2-metrics-item is-warn">
+                    <span class="admin-ped-v2-metrics-label">Alunos em risco</span>
                     <span class="admin-ped-kpi-value" data-admin-ped-kpi-value="risk">—</span>
                     <span class="admin-ped-kpi-sub" data-admin-ped-kpi-sub="risk">—</span>
                     <span class="admin-ped-kpi-badge is-warn" data-admin-ped-kpi-badge="risk" hidden>Atenção</span>
                     <button class="admin-ped-kpi-action" type="button" data-admin-ped-kpi-action="risk">Ver alunos</button>
                   </div>
-                  <div class="admin-ped-v2-kpi-sink-item">
+                  <div class="admin-ped-v2-metrics-item is-warn">
+                    <span class="admin-ped-v2-metrics-label">Feedbacks pendentes</span>
                     <span class="admin-ped-kpi-value" data-admin-ped-kpi-value="feedbackPending">—</span>
                     <span class="admin-ped-kpi-sub" data-admin-ped-kpi-sub="feedbackPending">—</span>
                     <span class="admin-ped-kpi-badge is-warn" data-admin-ped-kpi-badge="feedbackPending" hidden>Atenção</span>
                     <button class="admin-ped-kpi-action" type="button" data-admin-ped-kpi-action="feedbackPending">Enviar feedback</button>
                   </div>
-                  <div class="admin-ped-v2-kpi-sink-item">
+                  <div class="admin-ped-v2-metrics-item">
+                    <span class="admin-ped-v2-metrics-label">Professores ativos</span>
                     <span class="admin-ped-kpi-value" data-admin-ped-kpi-value="teachersActive">—</span>
                     <span class="admin-ped-kpi-sub" data-admin-ped-kpi-sub="teachersActive">—</span>
                   </div>
-                  <div class="admin-ped-v2-kpi-sink-item">
+                  <div class="admin-ped-v2-metrics-item">
+                    <span class="admin-ped-v2-metrics-label">Turmas ativas</span>
                     <span class="admin-ped-kpi-value" data-admin-ped-kpi-value="groupsActive">—</span>
                     <span class="admin-ped-kpi-sub" data-admin-ped-kpi-sub="groupsActive">—</span>
                   </div>
-                  <div class="admin-ped-v2-kpi-sink-item">
+                  <div class="admin-ped-v2-metrics-item">
+                    <span class="admin-ped-v2-metrics-label">NPS médio</span>
                     <span class="admin-ped-kpi-value" data-admin-ped-kpi-value="npsAvg">—</span>
                     <span class="admin-ped-kpi-sub" data-admin-ped-kpi-sub="npsAvg">—</span>
                   </div>
-                  <div class="admin-ped-v2-kpi-sink-item">
+                  <div class="admin-ped-v2-metrics-item">
+                    <span class="admin-ped-v2-metrics-label">CSAT médio</span>
                     <span class="admin-ped-kpi-value" data-admin-ped-kpi-value="csatAvg">—</span>
                     <span class="admin-ped-kpi-sub" data-admin-ped-kpi-sub="csatAvg">—</span>
                   </div>
-                  <div class="admin-ped-v2-kpi-sink-item">
+                  <div class="admin-ped-v2-metrics-item">
+                    <span class="admin-ped-v2-metrics-label">Conflitos</span>
                     <span class="admin-ped-kpi-value" data-admin-ped-kpi-value="conflicts">—</span>
                     <span class="admin-ped-kpi-sub" data-admin-ped-kpi-sub="conflicts">—</span>
                   </div>
-                  <div class="admin-ped-v2-kpi-sink-item">
+                  <div class="admin-ped-v2-metrics-item">
+                    <span class="admin-ped-v2-metrics-label">Alunos sem aula</span>
                     <span class="admin-ped-kpi-value" data-admin-ped-kpi-value="studentsNoClass">—</span>
                     <span class="admin-ped-kpi-sub" data-admin-ped-kpi-sub="studentsNoClass">—</span>
                   </div>
@@ -2067,6 +2095,7 @@
                       <div class="admin-ped-empty" data-admin-onboarding-perf-empty hidden>Sem dados de desempenho ainda.</div>
                     </section>
                   </div>
+                  <div data-ped-n8n-host></div>
                 </article>
               </section>
 

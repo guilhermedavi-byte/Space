@@ -17277,6 +17277,7 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   display: grid;
   gap: 4px;
   min-width: 0;
+  user-select: none;
 }
 
 .admin-ped-v2-statusbar-copy strong {
@@ -17284,6 +17285,8 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   font-size: 13px;
   font-weight: 900;
   line-height: 1.2;
+  background: transparent;
+  box-shadow: none;
 }
 
 .admin-ped-v2-statusbar-copy span {
@@ -17291,6 +17294,8 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   font-size: 12px;
   font-weight: 650;
   line-height: 1.35;
+  background: transparent;
+  box-shadow: none;
 }
 
 .admin-ped-v2-statusbar[data-tone="danger"] .admin-ped-v2-statusbar-copy strong {
@@ -17303,6 +17308,105 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 
 .admin-ped-v2-kpi-sink {
   display: none;
+}
+
+.admin-ped-v2-metrics-drawer {
+  display: grid;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.028);
+}
+
+.admin-ped-v2-metrics-drawer-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-ped-v2-metrics-drawer-title {
+  font-size: 13px;
+  font-weight: 950;
+  color: rgba(255, 255, 255, 0.94);
+  line-height: 1.2;
+}
+
+.admin-ped-v2-metrics-drawer-sub {
+  margin-top: 4px;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.admin-ped-v2-metrics-close {
+  flex: 0 0 auto;
+}
+
+.admin-ped-v2-metrics-list {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-ped-v2-metrics-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.022);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.admin-ped-v2-metrics-item.is-danger {
+  background: rgba(232, 69, 60, 0.06);
+  border-color: rgba(232, 69, 60, 0.16);
+}
+
+.admin-ped-v2-metrics-item.is-warn {
+  background: rgba(232, 168, 56, 0.05);
+  border-color: rgba(232, 168, 56, 0.14);
+}
+
+.admin-ped-v2-metrics-label {
+  font-size: 12px;
+  font-weight: 850;
+  color: rgba(255, 255, 255, 0.72);
+  letter-spacing: 0.01em;
+}
+
+.admin-ped-v2-metrics-item .admin-ped-kpi-value {
+  margin-top: 0;
+  justify-self: end;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.admin-ped-v2-metrics-item .admin-ped-kpi-sub {
+  grid-column: 1 / -1;
+  margin-top: 0;
+  min-height: 0;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.admin-ped-v2-metrics-item .admin-ped-kpi-badge {
+  grid-column: 2;
+  justify-self: end;
+}
+
+.admin-ped-v2-metrics-item .admin-ped-kpi-action {
+  grid-column: 2;
+  justify-self: end;
+  width: auto;
+  min-width: 110px;
+  margin-top: 0;
+  height: 30px;
+  padding: 0 10px;
 }
 
 .admin-ped-v2-nav {
@@ -17356,41 +17460,30 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 
 .admin-ped-v2-accordions {
   width: 100%;
-  display: grid;
+  display: flex;
+  align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .admin-ped-v2-accordions .admin-ped-subtab {
-  width: 100%;
-  height: auto;
-  min-height: 56px;
-  padding: 12px 14px;
-  border-radius: 16px;
-  display: grid;
-  gap: 4px;
-  text-align: left;
-  background: rgba(255, 255, 255, 0.025);
-}
-
-.admin-ped-v2-accordions .admin-ped-subtab-title {
-  display: block;
-  color: inherit;
-  font-size: 13px;
-  font-weight: 900;
-  line-height: 1.1;
-}
-
-.admin-ped-v2-accordions .admin-ped-subtab-sub {
-  display: block;
-  color: rgba(255, 255, 255, 0.55);
-  font-size: 11px;
-  font-weight: 650;
-  line-height: 1.25;
+  width: auto;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .admin-ped-v2-accordions .admin-ped-subtab.is-active {
-  background: rgba(89, 144, 189, 0.12);
-  border-color: rgba(89, 144, 189, 0.24);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: rgba(255, 255, 255, 0.94);
 }
 
 .admin-ped-actionmenu {
