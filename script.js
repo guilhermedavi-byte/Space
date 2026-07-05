@@ -22,6 +22,7 @@ const openLivePanelButtons = document.querySelectorAll("[data-open-live-panel]")
 const sidebarToggleButton = document.querySelector("[data-sidebar-toggle]");
 const sidebarLinks = document.querySelectorAll("[data-panel-target]");
 const panels = document.querySelectorAll("[data-panel]");
+const PEDAGOGICO_SIDEBAR_PANEL_TARGETS = new Set(["admin-controle-pedagogico", "ao-vivo"]);
 const greetingElement = document.querySelector("[data-greeting]");
 const roleEyebrow = document.querySelector("[data-role-eyebrow]");
 const roleSidebarSubtitle = document.querySelector("[data-role-sidebar-subtitle]");
@@ -119,7 +120,6 @@ const adminPedRoot = document.querySelector("[data-admin-pedagogico]");
 const adminPedStatus = document.querySelector("[data-admin-ped-status]");
 const adminPedOverview = document.querySelector("[data-admin-ped-overview]");
 const adminPedEmptyOverview = document.querySelector("[data-admin-ped-empty-overview]");
-const adminPedAgenda = document.querySelector("[data-admin-ped-agenda]");
 const adminPedEmpty = document.querySelector("[data-admin-ped-empty]");
 const adminPedError = document.querySelector("[data-admin-ped-error]");
 const adminPedClasses = document.querySelector("[data-admin-ped-classes]");
@@ -752,41 +752,60 @@ const syncRoleUI = () => {
           });
         }
 
-        // Also ensure Admin sidebar contains "Controle Pedagógico" entry.
-        const existingPed = sidebarNav.querySelector('[data-panel-target="admin-controle-pedagogico"]');
-        if (!(existingPed instanceof HTMLButtonElement)) {
-          const btn = document.createElement("button");
-          btn.className = "sidebar-link";
-          btn.type = "button";
-          btn.setAttribute("data-panel-target", "admin-controle-pedagogico");
-          btn.setAttribute("data-admin-only", "");
-          btn.title = "Controle Pedagógico";
-          btn.innerHTML = `
-            <span class="sidebar-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none">
-                <path d="M9 5.5h8"></path>
-                <path d="M9 9h8"></path>
-                <path d="M9 12.5h8"></path>
-                <path d="M9 16h6"></path>
-                <path d="M7 4.5h-.6A2.9 2.9 0 0 0 3.5 7.4v11.2A2.9 2.9 0 0 0 6.4 21.5h11.2a2.9 2.9 0 0 0 2.9-2.9V7.4a2.9 2.9 0 0 0-2.9-2.9H17"></path>
-                <path d="M8.5 3.5h4a1 1 0 0 1 1 1v2h-6v-2a1 1 0 0 1 1-1Z"></path>
-              </svg>
-            </span>
-            <span class="sidebar-text">Controle Pedagógico</span>
+        // Also ensure Admin sidebar contains the Pedagógico accordion.
+        const existingPedAccordion = sidebarNav.querySelector("[data-sidebar-accordion='pedagogico']");
+        if (!(existingPedAccordion instanceof HTMLElement)) {
+          const accordion = document.createElement("div");
+          accordion.className = "sidebar-accordion";
+          accordion.setAttribute("data-sidebar-accordion", "pedagogico");
+          accordion.setAttribute("data-admin-only", "");
+          accordion.innerHTML = `
+            <button
+              class="sidebar-link sidebar-accordion-toggle"
+              type="button"
+              data-sidebar-accordion-toggle="pedagogico"
+              aria-expanded="false"
+              aria-controls="sidebar-pedagogico-items"
+              title="Pedagógico"
+            >
+              <span class="sidebar-link-main">
+                <span class="sidebar-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M9 5.5h8"></path>
+                    <path d="M9 9h8"></path>
+                    <path d="M9 12.5h8"></path>
+                    <path d="M9 16h6"></path>
+                    <path d="M7 4.5h-.6A2.9 2.9 0 0 0 3.5 7.4v11.2A2.9 2.9 0 0 0 6.4 21.5h11.2a2.9 2.9 0 0 0 2.9-2.9V7.4a2.9 2.9 0 0 0-2.9-2.9H17"></path>
+                    <path d="M8.5 3.5h4a1 1 0 0 1 1 1v2h-6v-2a1 1 0 0 1 1-1Z"></path>
+                  </svg>
+                </span>
+                <span class="sidebar-text">Pedagógico</span>
+              </span>
+              <span class="sidebar-accordion-chevron" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="m8 10 4 4 4-4"></path>
+                </svg>
+              </span>
+            </button>
+            <div class="sidebar-accordion-body" id="sidebar-pedagogico-items" data-sidebar-accordion-body="pedagogico" hidden>
+              <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-controle-pedagogico" title="Visão Geral"><span class="sidebar-text">Visão Geral</span></button>
+              <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="ao-vivo" title="Agenda"><span class="sidebar-text">Agenda</span></button>
+              <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-controle-pedagogico-aulas" data-sidebar-placeholder="true" title="Aulas"><span class="sidebar-text">Aulas</span></button>
+              <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-controle-pedagogico-pessoas" data-sidebar-placeholder="true" title="Pessoas"><span class="sidebar-text">Pessoas</span></button>
+              <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-controle-pedagogico-qualidade" data-sidebar-placeholder="true" title="Qualidade"><span class="sidebar-text">Qualidade</span></button>
+              <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-controle-pedagogico-onboarding" data-sidebar-placeholder="true" title="Onboarding"><span class="sidebar-text">Onboarding</span></button>
+              <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-controle-pedagogico-relatorios" data-sidebar-placeholder="true" title="Relatórios"><span class="sidebar-text">Relatórios</span></button>
+            </div>
           `;
           // Insert after "Alunos" when possible, otherwise after "Professores", otherwise append.
           const after =
             sidebarNav.querySelector('[data-panel-target="alunos"]') ||
             sidebarNav.querySelector('[data-panel-target="professores"]');
           if (after && after.parentNode === sidebarNav) {
-            after.insertAdjacentElement("afterend", btn);
+            after.insertAdjacentElement("afterend", accordion);
           } else {
-            sidebarNav.appendChild(btn);
+            sidebarNav.appendChild(accordion);
           }
-          btn.addEventListener("click", () => {
-            const role = sessionUser?.role || currentRole;
-            navigateApp(panelPathForRole(role, "admin-controle-pedagogico"));
-          });
         }
       }
     } catch {
@@ -14866,7 +14885,6 @@ const ADMIN_PED_NAV_GROUPS = [
     label: "Operação",
     tabs: [
       { key: "overview", label: "Visão Geral" },
-      { key: "agenda", label: "Agenda" },
       { key: "aulas", label: "Aulas" },
       { key: "conflitos", label: "Conflitos" },
     ],
@@ -14917,7 +14935,6 @@ const adminPedFindGroupForTab = (tabKey) => {
 
 const ADMIN_PED_TAB_SUMMARIES = {
   overview: "Pendências e próximos passos",
-  agenda: "Aulas do dia e filtros rápidos",
   aulas: "Lista operacional de aulas",
   conflitos: "Conflitos detectados",
   alunos: "Visão dos alunos ativos",
@@ -15392,7 +15409,7 @@ const renderAdminPedagogicoOverview = () => {
               <div class="admin-ped-op-cardtitle">Agenda de hoje</div>
               <div class="admin-ped-op-cardsub">Próximas aulas do dia.</div>
             </div>
-            <button class="admin-ped-action is-muted" type="button" data-admin-ped-nav="agenda">Ver agenda</button>
+            <button class="admin-ped-action is-muted" type="button" data-panel-target="ao-vivo">Ver agenda</button>
           </div>
           <div class="admin-ped-agendaquick">
             ${
@@ -17184,97 +17201,6 @@ const renderAdminOnboardingPerformance = () => {
   `;
 };
 
-const renderAdminPedagogicoAgenda = () => {
-  if (!(adminPedAgenda instanceof HTMLElement)) return;
-  const classes = adminPedagogicoFilteredClasses();
-  if (adminPedError instanceof HTMLElement) adminPedError.hidden = true;
-
-  if (!classes.length) {
-    adminPedAgenda.innerHTML = "";
-    if (adminPedEmpty instanceof HTMLElement) adminPedEmpty.hidden = false;
-    return;
-  }
-  if (adminPedEmpty instanceof HTMLElement) adminPedEmpty.hidden = true;
-
-  const teachersById = adminPedagogicoState.teachersById instanceof Map ? adminPedagogicoState.teachersById : new Map();
-  const byTeacher = new Map();
-  classes.forEach((c) => {
-    const tid = String(c.teacherId || "");
-    if (!byTeacher.has(tid)) byTeacher.set(tid, []);
-    byTeacher.get(tid).push(c);
-  });
-
-  const sortedTeacherIds = [...byTeacher.keys()].sort((a, b) => {
-    const an = String(teachersById.get(a)?.nome || teachersById.get(a)?.name || "");
-    const bn = String(teachersById.get(b)?.nome || teachersById.get(b)?.name || "");
-    return an.localeCompare(bn, "pt-BR");
-  });
-
-  const days = [1, 2, 3, 4, 5, 6];
-  adminPedAgenda.innerHTML = sortedTeacherIds
-    .map((teacherId) => {
-      const teacher = teachersById.get(teacherId) || {};
-      const teacherName = String(teacher.nome || teacher.name || "Professor").trim() || "Professor";
-      const items = byTeacher.get(teacherId) || [];
-
-      const dayBuckets = new Map(days.map((d) => [d, []]));
-      items.forEach((c) => {
-        (Array.isArray(c.daysOfWeek) ? c.daysOfWeek : []).forEach((d) => {
-          if (!dayBuckets.has(d)) return;
-          dayBuckets.get(d).push(c);
-        });
-      });
-      days.forEach((d) => {
-        dayBuckets.get(d).sort((a, b) => (a.startMin || 0) - (b.startMin || 0));
-      });
-
-      const dayCols = days
-        .map((d) => {
-          const list = dayBuckets.get(d) || [];
-          const listHtml = list
-            .map((c) => {
-              const time = `${formatHmFromMinutes(c.startMin)}–${formatHmFromMinutes(c.endMin)}`;
-              const status = normalizeClassStatus(c.status);
-              const statusLabel = status === "active" ? "Ativa" : status === "paused" ? "Pausada" : "Encerrada";
-              const badgeClass = status === "active" ? "is-active" : status === "paused" ? "is-paused" : "is-ended";
-              const typeLabel = c.type === "group" ? "Grupo" : "Individual";
-              const who =
-                c.type === "group"
-                  ? `${(Array.isArray(c.studentIds) ? c.studentIds.length : 0) || 0} alunos`
-                  : (c.studentNames && c.studentNames[0]) || (c.studentIds && c.studentIds[0]) || "Aluno";
-              const plan = c.plan ? String(c.plan).toUpperCase() : "";
-              return `
-                <button class="admin-ped-slot" type="button" data-admin-ped-class-open="${escapeHtml(c.id)}">
-                  <div class="admin-ped-slot-top">
-                    <span class="admin-ped-slot-time">${escapeHtml(time)}</span>
-                    <span class="admin-ped-slot-badge ${badgeClass}">${escapeHtml(statusLabel)}</span>
-                  </div>
-                  <div class="admin-ped-slot-title">${escapeHtml(c.title || typeLabel)}</div>
-                  <div class="admin-ped-slot-meta">${escapeHtml(who)}${plan ? ` · ${escapeHtml(plan)}` : ""}</div>
-                </button>
-              `;
-            })
-            .join("");
-
-          return `
-            <div class="admin-ped-day-col">
-              <div class="admin-ped-day-head">${escapeHtml(daysLabelShort(d))}</div>
-              <div class="admin-ped-day-items">${listHtml || `<div class="admin-ped-day-empty">—</div>`}</div>
-            </div>
-          `;
-        })
-        .join("");
-
-      return `
-        <article class="admin-ped-teacher-block">
-          <header class="admin-ped-teacher-head">${escapeHtml(teacherName)}</header>
-          <div class="admin-ped-week">${dayCols}</div>
-        </article>
-      `;
-    })
-    .join("");
-};
-
 const renderAdminPedagogicoClassesList = () => {
   if (!(adminPedClasses instanceof HTMLElement)) return;
   const classes = adminPedagogicoFilteredClasses();
@@ -17386,7 +17312,6 @@ const runAdminPedagogicoRenderers = () => {
     renderAdminPedagogicoMetrics,
     renderAdminPedagogicoTabs,
     renderAdminPedagogicoOverview,
-    renderAdminPedagogicoAgenda,
     renderAdminPedagogicoClassesList,
     renderAdminPedagogicoGroups,
     renderAdminPedagogicoStudentsPanel,
@@ -21070,6 +20995,19 @@ const renderPlatformLaunchStatus = async ({ force = false } = {}) => {
   }
 };
 
+const syncPedagogicoSidebarAccordion = (panelName) => {
+  const accordion = document.querySelector("[data-sidebar-accordion='pedagogico']");
+  const toggle = document.querySelector("[data-sidebar-accordion-toggle='pedagogico']");
+  const body = document.querySelector("[data-sidebar-accordion-body='pedagogico']");
+  if (!(accordion instanceof HTMLElement) || !(toggle instanceof HTMLButtonElement) || !(body instanceof HTMLElement)) return;
+
+  const shouldOpen = PEDAGOGICO_SIDEBAR_PANEL_TARGETS.has(String(panelName || ""));
+  accordion.classList.toggle("is-open", shouldOpen);
+  toggle.classList.toggle("is-active", shouldOpen);
+  toggle.setAttribute("aria-expanded", shouldOpen ? "true" : "false");
+  body.hidden = !shouldOpen;
+};
+
 const showPanel = (panelName) => {
   if (currentRole === "teacher" && !pedagogicoState.lastLoadedAt) {
     // Keep pending badge up to date even if the teacher doesn't open the panel.
@@ -21089,6 +21027,7 @@ const showPanel = (panelName) => {
     panel.classList.toggle("is-visible", isVisible);
     panel.hidden = !isVisible;
   });
+  syncPedagogicoSidebarAccordion(panelName);
 
   const activePanel = document.querySelector(`[data-panel="${panelName}"]`);
   const shouldHidePlatformHeader =
@@ -21253,6 +21192,7 @@ const panelPathForRole = (role, panel) => {
     if (p === "professores") return "/app/admin/professores";
     if (p === "alunos") return "/app/admin/alunos";
     if (p === "admin-controle-pedagogico") return "/app/admin/controle-pedagogico";
+    if (["admin-controle-pedagogico-aulas", "admin-controle-pedagogico-pessoas", "admin-controle-pedagogico-qualidade", "admin-controle-pedagogico-onboarding", "admin-controle-pedagogico-relatorios"].includes(p)) return "/app/admin/controle-pedagogico";
     if (p === "space-office") return "/app/admin/space-office";
     if (p === "status-plataforma") return "/app/admin/status";
     if (p === "guia-colaboradores") return "/app/admin/guia";
@@ -21888,6 +21828,20 @@ document.addEventListener(
       const panel = sidebarPanel.dataset.panelTarget || "dashboard";
       const role = sessionUser?.role || currentRole;
       navigateApp(panelPathForRole(role, panel));
+      return;
+    }
+
+    const sidebarAccordionToggle = target.closest("[data-sidebar-accordion-toggle='pedagogico']");
+    if (sidebarAccordionToggle instanceof HTMLButtonElement) {
+      event.preventDefault();
+      event.stopPropagation();
+      const accordion = sidebarAccordionToggle.closest("[data-sidebar-accordion='pedagogico']");
+      const body = accordion?.querySelector("[data-sidebar-accordion-body='pedagogico']");
+      const nextOpen = !(body instanceof HTMLElement) || body.hidden;
+      if (accordion instanceof HTMLElement) accordion.classList.toggle("is-open", nextOpen);
+      sidebarAccordionToggle.classList.toggle("is-active", nextOpen);
+      sidebarAccordionToggle.setAttribute("aria-expanded", nextOpen ? "true" : "false");
+      if (body instanceof HTMLElement) body.hidden = !nextOpen;
       return;
     }
 
@@ -22538,7 +22492,6 @@ document.addEventListener("click", (event) => {
           renderAdminPedagogicoTabs();
           // Render the initial panel for the group (best effort).
           renderAdminPedagogicoOverview();
-          renderAdminPedagogicoAgenda();
           renderAdminPedagogicoClassesList();
           renderAdminPedagogicoGroups();
           renderAdminPedagogicoStudentsPanel();
@@ -22623,12 +22576,15 @@ document.addEventListener("click", (event) => {
             .catch(() => openAdminPedClassModal({ mode: "create" }));
           return;
         }
+        if (tab === "agenda") {
+          navigateApp(panelPathForRole(sessionUser?.role || currentRole, "ao-vivo"));
+          return;
+        }
         adminPedagogicoState.activeTab = tab;
         adminPedagogicoState.activeGroup = adminPedFindGroupForTab(tab);
         renderAdminPedagogicoTabs();
         // Render target panel (best effort).
         if (tab === "overview") renderAdminPedagogicoOverview();
-        else if (tab === "agenda") renderAdminPedagogicoAgenda();
         else if (tab === "aulas") renderAdminPedagogicoClassesList();
         else if (tab === "conflitos") renderAdminPedagogicoConflicts();
         else if (tab === "alunos") renderAdminPedagogicoStudentsPanel();
@@ -22669,10 +22625,7 @@ document.addEventListener("click", (event) => {
         event.preventDefault();
         const k = String(adminPedKpiAction.getAttribute("data-admin-ped-kpi-action") || "").trim();
         if (k === "classesToday") {
-          adminPedagogicoState.activeGroup = "operacao";
-          adminPedagogicoState.activeTab = "agenda";
-          renderAdminPedagogicoTabs();
-          renderAdminPedagogicoAgenda();
+          navigateApp(panelPathForRole(sessionUser?.role || currentRole, "ao-vivo"));
           return;
         }
         if (k === "critical") {
@@ -24239,7 +24192,6 @@ document.addEventListener("change", (event) => {
   adminPedagogicoState.filters = adminPedagogicoState.filters && typeof adminPedagogicoState.filters === "object" ? { ...adminPedagogicoState.filters } : {};
   adminPedagogicoState.filters[key] = String(target.value || "");
 
-  renderAdminPedagogicoAgenda();
   renderAdminPedagogicoClassesList();
   renderAdminPedagogicoTeachersPanel();
   renderAdminPedagogicoConflicts();

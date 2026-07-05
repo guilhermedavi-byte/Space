@@ -370,25 +370,58 @@
             </span>
             <span class="sidebar-text">Alunos</span>
           </button>
-          <button
-            class="sidebar-link"
-            type="button"
-            data-panel-target="admin-controle-pedagogico"
-            data-admin-only
-            title="Controle Pedagógico"
-          >
-            <span class="sidebar-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none">
-                <path d="M9 5.5h8"></path>
-                <path d="M9 9h8"></path>
-                <path d="M9 12.5h8"></path>
-                <path d="M9 16h6"></path>
-                <path d="M7 4.5h-.6A2.9 2.9 0 0 0 3.5 7.4v11.2A2.9 2.9 0 0 0 6.4 21.5h11.2a2.9 2.9 0 0 0 2.9-2.9V7.4a2.9 2.9 0 0 0-2.9-2.9H17"></path>
-                <path d="M8.5 3.5h4a1 1 0 0 1 1 1v2h-6v-2a1 1 0 0 1 1-1Z"></path>
-              </svg>
-            </span>
-            <span class="sidebar-text">Controle Pedagógico</span>
-          </button>
+          <div class="sidebar-accordion" data-sidebar-accordion="pedagogico" data-admin-only>
+            <button
+              class="sidebar-link sidebar-accordion-toggle"
+              type="button"
+              data-sidebar-accordion-toggle="pedagogico"
+              aria-expanded="false"
+              aria-controls="sidebar-pedagogico-items"
+              title="Pedagógico"
+            >
+              <span class="sidebar-link-main">
+                <span class="sidebar-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M9 5.5h8"></path>
+                    <path d="M9 9h8"></path>
+                    <path d="M9 12.5h8"></path>
+                    <path d="M9 16h6"></path>
+                    <path d="M7 4.5h-.6A2.9 2.9 0 0 0 3.5 7.4v11.2A2.9 2.9 0 0 0 6.4 21.5h11.2a2.9 2.9 0 0 0 2.9-2.9V7.4a2.9 2.9 0 0 0-2.9-2.9H17"></path>
+                    <path d="M8.5 3.5h4a1 1 0 0 1 1 1v2h-6v-2a1 1 0 0 1 1-1Z"></path>
+                  </svg>
+                </span>
+                <span class="sidebar-text">Pedagógico</span>
+              </span>
+              <span class="sidebar-accordion-chevron" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="m8 10 4 4 4-4"></path>
+                </svg>
+              </span>
+            </button>
+            <div class="sidebar-accordion-body" id="sidebar-pedagogico-items" data-sidebar-accordion-body="pedagogico" hidden>
+              <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-controle-pedagogico" title="Visão Geral">
+                <span class="sidebar-text">Visão Geral</span>
+              </button>
+              <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="ao-vivo" title="Agenda">
+                <span class="sidebar-text">Agenda</span>
+              </button>
+              <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-controle-pedagogico-aulas" data-sidebar-placeholder="true" title="Aulas">
+                <span class="sidebar-text">Aulas</span>
+              </button>
+              <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-controle-pedagogico-pessoas" data-sidebar-placeholder="true" title="Pessoas">
+                <span class="sidebar-text">Pessoas</span>
+              </button>
+              <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-controle-pedagogico-qualidade" data-sidebar-placeholder="true" title="Qualidade">
+                <span class="sidebar-text">Qualidade</span>
+              </button>
+              <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-controle-pedagogico-onboarding" data-sidebar-placeholder="true" title="Onboarding">
+                <span class="sidebar-text">Onboarding</span>
+              </button>
+              <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-controle-pedagogico-relatorios" data-sidebar-placeholder="true" title="Relatórios">
+                <span class="sidebar-text">Relatórios</span>
+              </button>
+            </div>
+          </div>
           <button
             class="sidebar-link"
             type="button"
@@ -469,23 +502,6 @@
             </span>
             <span class="sidebar-text">Aulas gravadas</span>
           </button>
-	          <button
-	            class="sidebar-link"
-	            type="button"
-	            data-panel-target="ao-vivo"
-	            title="Aulas ao vivo"
-	          >
-            <span class="sidebar-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none">
-                <rect x="3.5" y="5.5" width="17" height="15" rx="2"></rect>
-                <path d="M7 3.5V7"></path>
-                <path d="M17 3.5V7"></path>
-                <path d="M3.5 10.5H20.5"></path>
-                <circle cx="12" cy="15.5" r="2.25"></circle>
-              </svg>
-            </span>
-	            <span class="sidebar-text">Aulas ao vivo</span>
-	          </button>
 		          <button
 		            class="sidebar-link"
 		            type="button"
@@ -1936,63 +1952,6 @@
                 <div class="surface-card admin-ped-surface">
                   <div class="admin-ped-overview" data-admin-ped-overview></div>
                   <div class="admin-ped-empty" data-admin-ped-empty-overview hidden>Sem dados para exibir.</div>
-                </div>
-              </section>
-
-              <section class="admin-ped-panel" data-admin-ped-panel="agenda" hidden aria-label="Agenda">
-                <div class="surface-card admin-ped-surface">
-                  <div class="admin-ped-filters" aria-label="Filtros da agenda">
-                    <label class="admin-ped-filter">
-                      <span>Professor</span>
-                      <select class="admin-ped-select" data-admin-ped-filter="teacherId"></select>
-                    </label>
-                    <label class="admin-ped-filter">
-                      <span>Dia</span>
-                      <select class="admin-ped-select" data-admin-ped-filter="dow">
-                        <option value="">Todos</option>
-                        <option value="1">Seg</option>
-                        <option value="2">Ter</option>
-                        <option value="3">Qua</option>
-                        <option value="4">Qui</option>
-                        <option value="5">Sex</option>
-                        <option value="6">Sáb</option>
-                      </select>
-                    </label>
-                    <label class="admin-ped-filter">
-                      <span>Tipo</span>
-                      <select class="admin-ped-select" data-admin-ped-filter="type">
-                        <option value="">Todos</option>
-                        <option value="individual">Individual</option>
-                        <option value="group">Grupo</option>
-                      </select>
-                    </label>
-                    <label class="admin-ped-filter">
-                      <span>Aluno</span>
-                      <select class="admin-ped-select" data-admin-ped-filter="studentId"></select>
-                    </label>
-                    <label class="admin-ped-filter">
-                      <span>Status</span>
-                      <select class="admin-ped-select" data-admin-ped-filter="status">
-                        <option value="">Todos</option>
-                        <option value="active">Ativa</option>
-                        <option value="paused">Pausada</option>
-                        <option value="ended">Encerrada</option>
-                      </select>
-                    </label>
-                    <label class="admin-ped-filter">
-                      <span>Plano</span>
-                      <select class="admin-ped-select" data-admin-ped-filter="plan">
-                        <option value="">Todos</option>
-                        <option value="turma">Turma</option>
-                        <option value="gold">Gold</option>
-                        <option value="diamond">Diamond</option>
-                      </select>
-                    </label>
-                  </div>
-
-                  <div class="admin-ped-agenda" data-admin-ped-agenda></div>
-                  <div class="admin-ped-empty" data-admin-ped-empty hidden>Nenhuma aula cadastrada ainda.</div>
-                  <div class="admin-ped-error" data-admin-ped-error hidden>Não foi possível carregar agora.</div>
                 </div>
               </section>
 

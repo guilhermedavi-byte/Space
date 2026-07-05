@@ -904,6 +904,14 @@ body[data-role="admin"] .live-credits-row {
     gap 320ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+.sidebar-link-main {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .sidebar-icon {
   width: 20px;
   height: 20px;
@@ -937,6 +945,87 @@ body[data-role="admin"] .live-credits-row {
   border-color: rgba(255, 86, 79, 0.28);
   background: rgba(255, 86, 79, 0.1);
   color: var(--text-main);
+}
+
+.sidebar-accordion {
+  display: grid;
+  gap: 8px;
+}
+
+.sidebar-accordion-toggle {
+  gap: 0;
+  justify-content: space-between;
+}
+
+.sidebar-accordion-toggle.is-active {
+  border-color: rgba(255, 86, 79, 0.28);
+  background: rgba(255, 86, 79, 0.1);
+  color: var(--text-main);
+}
+
+.sidebar-accordion-chevron {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: currentColor;
+  transition: transform 180ms ease;
+}
+
+.sidebar-accordion-chevron svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sidebar-accordion.is-open .sidebar-accordion-chevron,
+.sidebar-accordion-toggle[aria-expanded="true"] .sidebar-accordion-chevron {
+  transform: rotate(180deg);
+}
+
+.sidebar-accordion-body {
+  display: grid;
+  gap: 6px;
+  padding-left: 14px;
+  margin-left: 14px;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.sidebar-link-sub {
+  min-height: 38px;
+  padding-left: 14px;
+  padding-right: 12px;
+  gap: 0;
+  background: rgba(255, 255, 255, 0.02);
+  color: rgba(255, 255, 255, 0.74);
+  font-size: 0.88rem;
+}
+
+.sidebar-link-sub[data-sidebar-placeholder="true"] {
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.sidebar-link-sub[data-sidebar-placeholder="true"]:hover,
+.sidebar-link-sub[data-sidebar-placeholder="true"]:focus-visible {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.sidebar-link-sub .sidebar-text {
+  max-width: none;
+}
+
+.sidebar-link-sub.is-active,
+.sidebar-link-sub:hover,
+.sidebar-link-sub:focus-visible {
+  background: rgba(255, 86, 79, 0.08);
 }
 
 .sidebar-badge {
