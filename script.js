@@ -133,6 +133,7 @@ const adminStudentSheet = document.querySelector("[data-admin-student-sheet]");
 
 // Admin > Controle Pedagógico (gestão)
 const adminPedRoot = document.querySelector("[data-admin-pedagogico]");
+const adminPedTitle = document.querySelector(".admin-ped-title");
 const adminPedStatus = document.querySelector("[data-admin-ped-status]");
 const adminPedOverview = document.querySelector("[data-admin-ped-overview]");
 const adminPedEmptyOverview = document.querySelector("[data-admin-ped-empty-overview]");
@@ -15092,6 +15093,8 @@ const renderAdminLiveClassroomSnapshot = async () => {
 
 const renderAdminPedagogicoOverview = () => {
   if (!(adminPedOverview instanceof HTMLElement)) return;
+  cleanupAdminPedagogicoLegacyNav();
+  if (adminPedTitle instanceof HTMLElement) adminPedTitle.textContent = "Pedagógico";
 
   const classes = Array.isArray(adminPedagogicoState.classes) ? adminPedagogicoState.classes : [];
   const teachersById = adminPedagogicoState.teachersById instanceof Map ? adminPedagogicoState.teachersById : new Map();
@@ -21044,6 +21047,13 @@ const syncPedagogicoSidebarActiveState = (panelName) => {
     const isActive = target === activeTarget;
     link.classList.toggle("is-active", isActive);
     link.setAttribute("aria-pressed", String(isActive));
+  });
+};
+
+const cleanupAdminPedagogicoLegacyNav = () => {
+  if (!(adminPedRoot instanceof HTMLElement)) return;
+  adminPedRoot.querySelectorAll(".admin-ped-nav.admin-ped-v2-nav, .admin-ped-v2-accordion-rail").forEach((node) => {
+    if (node instanceof HTMLElement) node.remove();
   });
 };
 

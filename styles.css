@@ -17399,6 +17399,11 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   display: none;
 }
 
+.admin-ped-v2-nav,
+.admin-ped-v2-accordion-rail {
+  display: none !important;
+}
+
 .admin-ped-v2-metrics-drawer {
   display: grid;
   gap: 12px;
