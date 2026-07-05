@@ -23,6 +23,22 @@ const sidebarToggleButton = document.querySelector("[data-sidebar-toggle]");
 const sidebarLinks = document.querySelectorAll("[data-panel-target]");
 const panels = document.querySelectorAll("[data-panel]");
 const PEDAGOGICO_SIDEBAR_PANEL_TARGETS = new Set(["admin-controle-pedagogico", "ao-vivo"]);
+const PEDAGOGICO_SIDEBAR_SECTION_MAP = {
+  "admin-controle-pedagogico": { group: "operacao", tab: "overview" },
+  "admin-controle-pedagogico-aulas": { group: "operacao", tab: "aulas" },
+  "admin-controle-pedagogico-pessoas": { group: "professores", tab: "professores" },
+  "admin-controle-pedagogico-qualidade": { group: "qualidade", tab: "npscsat" },
+  "admin-controle-pedagogico-onboarding": { group: "professores", tab: "onboarding" },
+  "admin-controle-pedagogico-relatorios": { group: "gestao", tab: "relatorios" },
+};
+const PEDAGOGICO_SIDEBAR_ACTIVE_TARGET_BY_TAB = {
+  overview: "admin-controle-pedagogico",
+  aulas: "admin-controle-pedagogico-aulas",
+  professores: "admin-controle-pedagogico-pessoas",
+  npscsat: "admin-controle-pedagogico-qualidade",
+  onboarding: "admin-controle-pedagogico-onboarding",
+  relatorios: "admin-controle-pedagogico-relatorios",
+};
 const greetingElement = document.querySelector("[data-greeting]");
 const roleEyebrow = document.querySelector("[data-role-eyebrow]");
 const roleSidebarSubtitle = document.querySelector("[data-role-sidebar-subtitle]");
@@ -21008,6 +21024,29 @@ const syncPedagogicoSidebarAccordion = (panelName) => {
   body.hidden = !shouldOpen;
 };
 
+const activatePedagogicoSidebarSection = (panelTarget) => {
+  const section = PEDAGOGICO_SIDEBAR_SECTION_MAP[String(panelTarget || "")];
+  if (!section) return false;
+  if (section.group) adminPedagogicoState.activeGroup = section.group;
+  if (section.tab) adminPedagogicoState.activeTab = section.tab;
+  return true;
+};
+
+const syncPedagogicoSidebarActiveState = (panelName) => {
+  const activeTarget =
+    panelName === "admin-controle-pedagogico"
+      ? PEDAGOGICO_SIDEBAR_ACTIVE_TARGET_BY_TAB[String(adminPedagogicoState.activeTab || "overview")] || "admin-controle-pedagogico"
+      : panelName;
+
+  document.querySelectorAll("[data-sidebar-accordion-body='pedagogico'] [data-panel-target]").forEach((link) => {
+    if (!(link instanceof HTMLElement)) return;
+    const target = String(link.getAttribute("data-panel-target") || "");
+    const isActive = target === activeTarget;
+    link.classList.toggle("is-active", isActive);
+    link.setAttribute("aria-pressed", String(isActive));
+  });
+};
+
 const showPanel = (panelName) => {
   if (currentRole === "teacher" && !pedagogicoState.lastLoadedAt) {
     // Keep pending badge up to date even if the teacher doesn't open the panel.
@@ -21028,6 +21067,7 @@ const showPanel = (panelName) => {
     panel.hidden = !isVisible;
   });
   syncPedagogicoSidebarAccordion(panelName);
+  syncPedagogicoSidebarActiveState(panelName);
 
   const activePanel = document.querySelector(`[data-panel="${panelName}"]`);
   const shouldHidePlatformHeader =
@@ -21818,8 +21858,23 @@ document.addEventListener(
 document.addEventListener(
   "click",
   (event) => {
-    const target = event.target;
-    if (!(target instanceof Element)) return;
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+
+  const pedagogicoSidebarItem = target.closest("[data-sidebar-accordion-body='pedagogico'] [data-panel-target]");
+  if (pedagogicoSidebarItem instanceof HTMLButtonElement) {
+    event.preventDefault();
+    event.stopPropagation();
+    const panelTarget = String(pedagogicoSidebarItem.getAttribute("data-panel-target") || "").trim();
+    if (panelTarget === "ao-vivo") {
+      navigateApp(panelPathForRole(sessionUser?.role || currentRole, "ao-vivo"));
+      return;
+    }
+    if (activatePedagogicoSidebarSection(panelTarget)) {
+      navigateApp(panelPathForRole(sessionUser?.role || currentRole, "admin-controle-pedagogico"));
+      return;
+    }
+  }
 
     const sidebarPanel = target.closest("[data-panel-target]");
     if (sidebarPanel instanceof HTMLButtonElement) {
