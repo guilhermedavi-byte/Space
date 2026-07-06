@@ -121,6 +121,7 @@ const adminStudentsTeacherSelect = document.querySelector("[data-admin-students-
 const adminStudentsFiltersTrigger = document.querySelector("[data-admin-students-filters-trigger]");
 const adminStudentsFiltersBadge = document.querySelector("[data-admin-students-filters-badge]");
 const adminStudentsSearchInput = document.querySelector("[data-admin-students-search]");
+const adminStudentsCount = document.querySelector("[data-admin-students-count]");
 const adminStudentsList = document.querySelector("[data-admin-students-list]");
 const adminStudentsEmpty = document.querySelector("[data-admin-students-empty]");
 const adminStudentsError = document.querySelector("[data-admin-students-error]");
@@ -11701,6 +11702,13 @@ const countActiveAdminStudentsFilters = (filters) => {
   return n;
 };
 
+const formatAdminStudentsCountLabel = (filteredTotal, allTotal) => {
+  const current = Number(filteredTotal) || 0;
+  const total = Number(allTotal) || 0;
+  if (total > 0 && current !== total) return `${current} de ${total} alunos`;
+  return `${current} aluno${current === 1 ? "" : "s"}`;
+};
+
 const syncAdminStudentsFiltersBadge = () => {
   if (!(adminStudentsFiltersBadge instanceof HTMLElement)) return;
   const n = countActiveAdminStudentsFilters(adminStudentsState.filters);
@@ -13343,6 +13351,10 @@ const renderAdminStudentsList = () => {
   if (adminStudentsError instanceof HTMLElement) adminStudentsError.hidden = true;
 
   const summaries = Array.isArray(adminStudentsState.summaries) ? adminStudentsState.summaries : [];
+  const allSummaries = Array.isArray(adminStudentsState.summariesAll) ? adminStudentsState.summariesAll : [];
+  if (adminStudentsCount instanceof HTMLElement) {
+    adminStudentsCount.textContent = formatAdminStudentsCountLabel(summaries.length, allSummaries.length);
+  }
 
   if (adminStudentsEmpty instanceof HTMLElement) {
     adminStudentsEmpty.hidden = summaries.length > 0;
@@ -14726,7 +14738,7 @@ const adminPedMatchesQuery = (row, query) => {
   return haystack.includes(needle);
 };
 
-const adminPedTableToolbarHtml = ({ query, total, page, totalPages, searchKey, placeholder }) => `
+const adminPedTableToolbarHtml = ({ query, total, totalAll, page, totalPages, searchKey, placeholder }) => `
   <div class="admin-ped-table-toolbar">
     <input
       class="admin-ped-select admin-ped-table-search"
@@ -14737,7 +14749,9 @@ const adminPedTableToolbarHtml = ({ query, total, page, totalPages, searchKey, p
     />
     <div class="admin-ped-pagination">
       <button class="admin-ped-action is-muted" type="button" data-admin-ped-table-prev="${escapeHtml(String(searchKey || ""))}" ${Number(page) <= 1 ? "disabled" : ""}>‹</button>
-      <span class="admin-ped-pagination-label">${escapeHtml(`${Number(page) || 1}/${Number(totalPages) || 1} · ${Number(total) || 0} aluno${Number(total) === 1 ? "" : "s"}`)}</span>
+      <span class="admin-ped-pagination-label">${escapeHtml(
+        `${Number(page) || 1}/${Number(totalPages) || 1} · ${Number(total) || 0}${Number(totalAll) > 0 && Number(total) !== Number(totalAll) ? ` de ${Number(totalAll)}` : ""} aluno${Number(total) === 1 ? "" : "s"}`
+      )}</span>
       <button class="admin-ped-action is-muted" type="button" data-admin-ped-table-next="${escapeHtml(String(searchKey || ""))}" ${Number(page) >= Number(totalPages) ? "disabled" : ""}>›</button>
     </div>
   </div>
@@ -15798,6 +15812,7 @@ const renderAdminPedagogicoStudentsPanel = () => {
   const toolbarHtml = adminPedTableToolbarHtml({
     query,
     total: pagination.total,
+    totalAll: rows.length,
     page: pagination.safePage,
     totalPages: pagination.totalPages,
     searchKey: "students",
@@ -15908,6 +15923,7 @@ const renderAdminPedagogicoLinksPanel = () => {
   const toolbarHtml = adminPedTableToolbarHtml({
     query,
     total: pagination.total,
+    totalAll: lists[safeActiveList].length,
     page: pagination.safePage,
     totalPages: pagination.totalPages,
     searchKey: "links",
@@ -23566,13 +23582,14 @@ document.addEventListener("click", (event) => {
         };
 
         const nome = readText("nome");
-        const email = readText("email").toLowerCase();
+        const emailRaw = readText("email");
+        const email = emailRaw.toLowerCase();
         const endereco = readText("endereco");
         const plano = readText("plano");
         const pais = readText("pais");
 	        const estadoEua = readText("estadoEua");
 	        const valorMensalidadeRaw = readText("valorMensalidade");
-	        const valorMensalidade = parseMoneyPtBrLoose(valorMensalidadeRaw);
+	        const valorMensalidade = valorMensalidadeRaw ? parseMoneyPtBrLoose(valorMensalidadeRaw) : null;
 	        const tempoContratoSel = readText("tempoContrato");
 	        const tempoContratoCustomRaw = readText("tempoContratoCustom");
 	        const tempoContratoCustom = Number.parseInt(String(tempoContratoCustomRaw || ""), 10);
@@ -23581,9 +23598,9 @@ document.addEventListener("click", (event) => {
 	            ? 12
 	            : tempoContratoSel === "6"
 	              ? 6
-	              : tempoContratoSel === "custom" && Number.isFinite(tempoContratoCustom) && tempoContratoCustom > 0
+	                : tempoContratoSel === "custom" && Number.isFinite(tempoContratoCustom) && tempoContratoCustom > 0
 	                ? tempoContratoCustom
-	                : 0;
+	                : null;
 	        const faixaIdade = readText("faixaIdade");
 	        const genero = readText("genero");
         const trabalho = readText("trabalho");
@@ -23614,40 +23631,39 @@ document.addEventListener("click", (event) => {
           "nivelInglesAtual",
         ].forEach((k) => markError(k, false));
 
-        const emailOk = isValidEmail(email);
-        const monthlyOk = Number.isFinite(valorMensalidade) && valorMensalidade > 0;
-
-	        const contractOk = tempoContrato > 0;
-	        const required = [
-	          ["nome", Boolean(nome)],
-	          ["email", emailOk],
-	          ["endereco", Boolean(endereco)],
-	          ["pais", Boolean(pais)],
-	          ["valorMensalidade", monthlyOk],
-	          ["tempoContrato", contractOk],
-	          ["faixaIdade", Boolean(faixaIdade)],
-	          ["genero", Boolean(genero)],
-          ["trabalho", Boolean(trabalho)],
-          ["possuiFilhos", Boolean(possuiFilhos)],
-          ["casado", Boolean(casado)],
-          ["pretendeVoltarBrasil", Boolean(pretendeVoltarBrasil)],
-          ["objetivoPrincipal", Boolean(objetivoPrincipal)],
-          ["nivelInglesAtual", Boolean(nivelInglesAtual)],
-        ];
-
-	        const missing = required.filter(([, ok]) => !ok).map(([k]) => k);
+        const emailOk = !emailRaw || isValidEmail(email);
+        const monthlyOk = !valorMensalidadeRaw || (Number.isFinite(valorMensalidade) && valorMensalidade > 0);
+        const contractCustomOk =
+	          tempoContratoSel !== "custom" || !tempoContratoCustomRaw || (Number.isFinite(tempoContratoCustom) && tempoContratoCustom > 0);
+        const contractOk = !tempoContratoSel || tempoContratoSel === "12" || tempoContratoSel === "6" || contractCustomOk;
+        const invalidFields = [];
+        if (!nome) invalidFields.push("nome");
+        if (!emailOk) invalidFields.push("email");
+        if (!monthlyOk) invalidFields.push("valorMensalidade");
+        if (!contractOk) invalidFields.push("tempoContrato");
+        if (tempoContratoSel === "custom" && tempoContratoCustomRaw && !Number.isFinite(tempoContratoCustom)) invalidFields.push("tempoContratoCustom");
 	        if (!alunoId) {
 	          setErr("Não foi possível identificar o aluno para salvar.");
 	          return;
 	        }
-	        if (missing.length) {
-	          missing.forEach((k) => markError(k, true));
-	          if (tempoContratoSel === "custom" && !contractOk) {
-	            markError("tempoContratoCustom", true);
-	          }
-	          setErr("Preencha os campos obrigatórios para salvar.");
-	          return;
-	        }
+        if (invalidFields.length) {
+          invalidFields.forEach((k) => markError(k, true));
+          if (tempoContratoSel === "custom" && tempoContratoCustomRaw && !Number.isFinite(tempoContratoCustom)) {
+            markError("tempoContratoCustom", true);
+          }
+          if (!nome) {
+            setErr("Informe o nome do aluno.");
+          } else if (emailRaw && !emailOk) {
+            setErr("Informe um e-mail válido.");
+          } else if (valorMensalidadeRaw && !monthlyOk) {
+            setErr("Informe um valor de mensalidade válido.");
+          } else if (!contractOk) {
+            setErr("Informe um tempo de contrato válido.");
+          } else {
+            setErr("Revise os campos destacados.");
+          }
+          return;
+        }
 
         // Async save (merge) to avoid losing unknown fields.
         studentEditSave.disabled = true;
@@ -23661,7 +23677,7 @@ document.addEventListener("click", (event) => {
             const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_student_edit_save");
             const patch = {
               nome,
-              email,
+              email: emailRaw ? email : "",
               endereco,
               plano,
               pais,

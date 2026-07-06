@@ -4093,6 +4093,26 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
   color: rgba(255, 255, 255, 0.4);
 }
 
+.admin-students-count {
+  height: 36px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.84);
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+.admin-students-count.is-muted {
+  color: rgba(255, 255, 255, 0.62);
+}
+
 .admin-students-filters-badge {
   margin-left: 8px;
   height: 18px;
@@ -4108,6 +4128,13 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
   align-items: center;
   justify-content: center;
   font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 720px) {
+  .admin-students-count {
+    width: 100%;
+    justify-content: center;
+  }
 }
 
 /* Admin > Alunos filters popover */
