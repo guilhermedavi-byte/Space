@@ -26,16 +26,16 @@ const PEDAGOGICO_SIDEBAR_PANEL_TARGETS = new Set(["admin-controle-pedagogico", "
 const PEDAGOGICO_SIDEBAR_SECTION_MAP = {
   "admin-controle-pedagogico": { group: "operacao", tab: "overview" },
   "admin-controle-pedagogico-aulas": { group: "operacao", tab: "aulas" },
-  "admin-controle-pedagogico-pessoas": { group: "professores", tab: "professores" },
-  "admin-controle-pedagogico-qualidade": { group: "qualidade", tab: "npscsat" },
+  "admin-controle-pedagogico-pessoas": { group: "alunosTurmas", tab: "pessoas" },
+  "admin-controle-pedagogico-qualidade": { group: "qualidade", tab: "qualidade" },
   "admin-controle-pedagogico-onboarding": { group: "professores", tab: "onboarding" },
   "admin-controle-pedagogico-relatorios": { group: "gestao", tab: "relatorios" },
 };
 const PEDAGOGICO_SIDEBAR_ACTIVE_TARGET_BY_TAB = {
   overview: "admin-controle-pedagogico",
   aulas: "admin-controle-pedagogico-aulas",
-  professores: "admin-controle-pedagogico-pessoas",
-  npscsat: "admin-controle-pedagogico-qualidade",
+  pessoas: "admin-controle-pedagogico-pessoas",
+  qualidade: "admin-controle-pedagogico-qualidade",
   onboarding: "admin-controle-pedagogico-onboarding",
   relatorios: "admin-controle-pedagogico-relatorios",
 };
@@ -146,6 +146,7 @@ const adminPedEmptyGroups = document.querySelector("[data-admin-ped-empty-groups
 const adminPedStudents = document.querySelector("[data-admin-ped-students]");
 const adminPedEmptyStudents = document.querySelector("[data-admin-ped-empty-students]");
 const adminPedTeachers = document.querySelector("[data-admin-ped-teachers]");
+const adminPedPeopleRoot = document.querySelector('[data-admin-ped-panel="pessoas"]');
 const adminPedPlans = document.querySelector("[data-admin-ped-plans]");
 const adminPedEmptyPlans = document.querySelector("[data-admin-ped-empty-plans]");
 const adminPedSurveys = document.querySelector("[data-admin-ped-surveys]");
@@ -155,6 +156,8 @@ const adminPedEmptyAlerts = document.querySelector("[data-admin-ped-empty-alerts
 const adminPedFeedbacks = document.querySelector("[data-admin-ped-feedbacks]");
 const adminPedEmptyFeedbacks = document.querySelector("[data-admin-ped-empty-feedbacks]");
 const adminPedReports = document.querySelector("[data-admin-ped-reports]");
+const adminPedQualityRoot = document.querySelector('[data-admin-ped-panel="qualidade"]');
+const adminPedQualityOverview = document.querySelector("[data-admin-ped-quality-overview]");
 const adminOnboardingContentsEl = document.querySelector("[data-admin-onboarding-contents]");
 const adminOnboardingEmptyEl = document.querySelector("[data-admin-onboarding-empty]");
 const adminOnboardingPerfEl = document.querySelector("[data-admin-onboarding-perf]");
@@ -13797,6 +13800,8 @@ let adminPedagogicoState = {
   },
   activeGroup: "operacao", // operacao | alunosTurmas | professores | qualidade | gestao
   activeTab: "overview", // subtabs: overview | agenda | aulas | conflitos | alunos | turmas | vinculos | professores | feedbacks | onboarding | pesquisas | npscsat | avisos | planos | relatorios | configuracoes
+  peopleTab: "students",
+  qualityTab: "overview",
   conflicts: [],
 };
 let adminPedTableSearchDebounce = null;
@@ -14913,6 +14918,7 @@ const ADMIN_PED_NAV_GROUPS = [
       { key: "alunos", label: "Alunos" },
       { key: "turmas", label: "Turmas" },
       { key: "vinculos", label: "Vínculos" },
+      { key: "pessoas", label: "Pessoas" },
     ],
   },
   {
@@ -14920,7 +14926,6 @@ const ADMIN_PED_NAV_GROUPS = [
     label: "Professores",
     tabs: [
       { key: "professores", label: "Professores" },
-      { key: "feedbacks", label: "Feedbacks" },
       { key: "onboarding", label: "Onboarding" },
     ],
   },
@@ -14928,9 +14933,11 @@ const ADMIN_PED_NAV_GROUPS = [
     key: "qualidade",
     label: "Qualidade",
     tabs: [
+      { key: "qualidade", label: "Overview" },
       { key: "pesquisas", label: "Pesquisas" },
       { key: "npscsat", label: "NPS/CSAT" },
       { key: "avisos", label: "Avisos" },
+      { key: "feedbacks", label: "Feedbacks" },
     ],
   },
   {
@@ -14954,10 +14961,12 @@ const ADMIN_PED_TAB_SUMMARIES = {
   overview: "Pendências e próximos passos",
   aulas: "Lista operacional de aulas",
   conflitos: "Conflitos detectados",
+  pessoas: "Alunos e professores",
   alunos: "Visão dos alunos ativos",
   turmas: "Turmas e organização",
   vinculos: "Vínculos e pendências",
   professores: "Gestão de professores",
+  qualidade: "Resumo de qualidade",
   feedbacks: "Devolutivas para o time",
   onboarding: "Trilha e progresso de onboarding",
   pesquisas: "Pesquisas e respostas",
@@ -17297,6 +17306,87 @@ const renderAdminPedagogicoTeachersPanel = () => {
     .join("");
 };
 
+const renderAdminPedagogicoPeoplePanel = () => {
+  if (!(adminPedPeopleRoot instanceof HTMLElement)) return;
+  const activeTab = String(adminPedagogicoState.peopleTab || "students");
+
+  adminPedPeopleRoot.querySelectorAll("[data-admin-ped-people-tab]").forEach((btn) => {
+    if (!(btn instanceof HTMLButtonElement)) return;
+    const next = String(btn.getAttribute("data-admin-ped-people-tab") || "");
+    const isActive = next === activeTab;
+    btn.classList.toggle("is-active", isActive);
+    btn.setAttribute("aria-selected", isActive ? "true" : "false");
+  });
+
+  adminPedPeopleRoot.querySelectorAll("[data-admin-ped-people-view]").forEach((view) => {
+    if (!(view instanceof HTMLElement)) return;
+    const next = String(view.getAttribute("data-admin-ped-people-view") || "");
+    view.hidden = next !== activeTab;
+  });
+
+  if (activeTab === "teachers") {
+    renderAdminPedagogicoTeachersPanel();
+  } else {
+    renderAdminPedagogicoStudentsPanel();
+  }
+};
+
+const renderAdminPedagogicoQualityOverview = () => {
+  if (!(adminPedQualityOverview instanceof HTMLElement)) return;
+  const surveys = Array.isArray(adminPedagogicoState.surveys) ? adminPedagogicoState.surveys : [];
+  const alerts = Array.isArray(adminPedagogicoState.teacherAlerts) ? adminPedagogicoState.teacherAlerts : [];
+  const feedbacks = Array.isArray(adminPedagogicoState.pedagogicalFeedbacks) ? adminPedagogicoState.pedagogicalFeedbacks : [];
+  const nps = surveys.map((s) => (Number.isFinite(s?.nps) ? Number(s.nps) : NaN)).filter((n) => Number.isFinite(n));
+  const csat = surveys.map((s) => (Number.isFinite(s?.csat) ? Number(s.csat) : NaN)).filter((n) => Number.isFinite(n));
+  const npsAvg = nps.length ? nps.reduce((a, b) => a + b, 0) / nps.length : NaN;
+  const csatAvg = csat.length ? csat.reduce((a, b) => a + b, 0) / csat.length : NaN;
+  const alertsOpen = alerts.filter((a) => String(a?.status || "") !== "resolved").length;
+  const feedbackPending = feedbacks.filter((f) => !(f && typeof f === "object" && f.readByTeacher === true)).length;
+
+  const card = (label, value, sub, actionTab) => `
+    <article class="admin-ped-quality-overview-card">
+      <div class="admin-ped-quality-overview-title">${escapeHtml(label)}</div>
+      <div class="admin-ped-quality-overview-value">${escapeHtml(String(value))}</div>
+      <div class="admin-ped-quality-overview-sub">${escapeHtml(sub)}</div>
+      ${actionTab ? `<div class="admin-ped-quality-overview-actions"><button class="admin-ped-action is-muted" type="button" data-admin-ped-quality-tab="${escapeHtml(actionTab)}">Abrir</button></div>` : ""}
+    </article>
+  `;
+
+  adminPedQualityOverview.innerHTML = `
+    <div class="admin-ped-quality-overview-grid">
+      ${card("NPS médio", Number.isFinite(npsAvg) ? npsAvg.toFixed(1) : "Sem dados", "Média calculada a partir das respostas recebidas.", "npscsat")}
+      ${card("CSAT médio", Number.isFinite(csatAvg) ? csatAvg.toFixed(1) : "Sem dados", "Média consolidada das pesquisas respondidas.", "npscsat")}
+      ${card("Avisos abertos", String(alertsOpen), "Sinais ainda não resolvidos pela operação.", "avisos")}
+      ${card("Feedbacks pendentes", String(feedbackPending), "Devolutivas que ainda pedem acompanhamento.", "feedbacks")}
+    </div>
+  `;
+};
+
+const renderAdminPedagogicoQualityPanel = () => {
+  if (!(adminPedQualityRoot instanceof HTMLElement)) return;
+  const activeTab = String(adminPedagogicoState.qualityTab || "overview");
+
+  adminPedQualityRoot.querySelectorAll("[data-admin-ped-quality-tab]").forEach((btn) => {
+    if (!(btn instanceof HTMLButtonElement)) return;
+    const next = String(btn.getAttribute("data-admin-ped-quality-tab") || "");
+    const isActive = next === activeTab;
+    btn.classList.toggle("is-active", isActive);
+    btn.setAttribute("aria-selected", isActive ? "true" : "false");
+  });
+
+  adminPedQualityRoot.querySelectorAll("[data-admin-ped-quality-view]").forEach((view) => {
+    if (!(view instanceof HTMLElement)) return;
+    const next = String(view.getAttribute("data-admin-ped-quality-view") || "");
+    view.hidden = next !== activeTab;
+  });
+
+  renderAdminPedagogicoQualityOverview();
+  renderAdminPedagogicoSurveysPanel();
+  renderAdminPedagogicoNpsCsatPanel();
+  renderAdminPedagogicoAlertsPanel();
+  renderAdminPedagogicoFeedbacksPanel();
+};
+
 const renderAdminPedagogicoConflicts = () => {
   if (!(adminPedConflicts instanceof HTMLElement)) return;
   const conflicts = Array.isArray(adminPedagogicoState.conflicts) ? adminPedagogicoState.conflicts : [];
@@ -17335,6 +17425,8 @@ const runAdminPedagogicoRenderers = () => {
     renderAdminPedagogicoGroups,
     renderAdminPedagogicoStudentsPanel,
     renderAdminPedagogicoTeachersPanel,
+    renderAdminPedagogicoPeoplePanel,
+    renderAdminPedagogicoQualityPanel,
     renderAdminPedagogicoPlansPanel,
     renderAdminPedagogicoSurveysPanel,
     renderAdminPedagogicoNpsCsatPanel,
@@ -22631,6 +22723,29 @@ document.addEventListener("click", (event) => {
         return;
       }
 
+      const adminPedPeopleTab = target.closest("[data-admin-ped-people-tab]");
+      if (adminPedPeopleTab instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const tab = String(adminPedPeopleTab.getAttribute("data-admin-ped-people-tab") || "").trim();
+        if (tab === "students" || tab === "teachers") {
+          adminPedagogicoState.peopleTab = tab;
+          renderAdminPedagogicoPeoplePanel();
+        }
+        return;
+      }
+
+      const adminPedQualityTab = target.closest("[data-admin-ped-quality-tab]");
+      if (adminPedQualityTab instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const tab = String(adminPedQualityTab.getAttribute("data-admin-ped-quality-tab") || "").trim();
+        const allowed = new Set(["overview", "pesquisas", "npscsat", "avisos", "feedbacks"]);
+        if (allowed.has(tab)) {
+          adminPedagogicoState.qualityTab = tab;
+          renderAdminPedagogicoQualityPanel();
+        }
+        return;
+      }
+
       const adminPedNav = target.closest("[data-admin-ped-nav]");
       if (adminPedNav instanceof HTMLButtonElement) {
         event.preventDefault();
@@ -22645,6 +22760,30 @@ document.addEventListener("click", (event) => {
           navigateApp(panelPathForRole(sessionUser?.role || currentRole, "ao-vivo"));
           return;
         }
+        if (tab === "alunos") {
+          adminPedagogicoState.activeTab = "pessoas";
+          adminPedagogicoState.peopleTab = "students";
+          adminPedagogicoState.activeGroup = adminPedFindGroupForTab("pessoas");
+          renderAdminPedagogicoTabs();
+          renderAdminPedagogicoPeoplePanel();
+          return;
+        }
+        if (tab === "professores") {
+          adminPedagogicoState.activeTab = "pessoas";
+          adminPedagogicoState.peopleTab = "teachers";
+          adminPedagogicoState.activeGroup = adminPedFindGroupForTab("pessoas");
+          renderAdminPedagogicoTabs();
+          renderAdminPedagogicoPeoplePanel();
+          return;
+        }
+        if (tab === "feedbacks" || tab === "pesquisas" || tab === "npscsat" || tab === "avisos") {
+          adminPedagogicoState.activeTab = "qualidade";
+          adminPedagogicoState.qualityTab = tab;
+          adminPedagogicoState.activeGroup = adminPedFindGroupForTab("qualidade");
+          renderAdminPedagogicoTabs();
+          renderAdminPedagogicoQualityPanel();
+          return;
+        }
         adminPedagogicoState.activeTab = tab;
         adminPedagogicoState.activeGroup = adminPedFindGroupForTab(tab);
         renderAdminPedagogicoTabs();
@@ -22652,15 +22791,9 @@ document.addEventListener("click", (event) => {
         if (tab === "overview") renderAdminPedagogicoOverview();
         else if (tab === "aulas") renderAdminPedagogicoClassesList();
         else if (tab === "conflitos") renderAdminPedagogicoConflicts();
-        else if (tab === "alunos") renderAdminPedagogicoStudentsPanel();
-        else if (tab === "turmas") renderAdminPedagogicoGroups();
-        else if (tab === "vinculos") renderAdminPedagogicoLinksPanel();
-        else if (tab === "professores") renderAdminPedagogicoTeachersPanel();
-        else if (tab === "feedbacks") renderAdminPedagogicoFeedbacksPanel();
+        else if (tab === "pessoas") renderAdminPedagogicoPeoplePanel();
+        else if (tab === "qualidade") renderAdminPedagogicoQualityPanel();
         else if (tab === "onboarding") renderAdminPedagogicoOnboardingPanel();
-        else if (tab === "pesquisas") renderAdminPedagogicoSurveysPanel();
-        else if (tab === "npscsat") renderAdminPedagogicoNpsCsatPanel();
-        else if (tab === "avisos") renderAdminPedagogicoAlertsPanel();
         else if (tab === "planos") renderAdminPedagogicoPlansPanel();
         else if (tab === "relatorios") renderAdminPedagogicoReportsPanel();
         return;
@@ -22702,16 +22835,18 @@ document.addEventListener("click", (event) => {
         }
         if (k === "risk") {
           adminPedagogicoState.activeGroup = "alunosTurmas";
-          adminPedagogicoState.activeTab = "alunos";
+          adminPedagogicoState.activeTab = "pessoas";
+          adminPedagogicoState.peopleTab = "students";
           renderAdminPedagogicoTabs();
-          renderAdminPedagogicoStudentsPanel();
+          renderAdminPedagogicoPeoplePanel();
           return;
         }
         if (k === "feedbackPending") {
-          adminPedagogicoState.activeGroup = "professores";
-          adminPedagogicoState.activeTab = "feedbacks";
+          adminPedagogicoState.activeGroup = "qualidade";
+          adminPedagogicoState.activeTab = "qualidade";
+          adminPedagogicoState.qualityTab = "feedbacks";
           renderAdminPedagogicoTabs();
-          renderAdminPedagogicoFeedbacksPanel();
+          renderAdminPedagogicoQualityPanel();
           openAdminPedFeedbackModal({ mode: "create" });
           return;
         }
@@ -22729,9 +22864,10 @@ document.addEventListener("click", (event) => {
       if (adminPedOpenSurveys instanceof HTMLButtonElement) {
         event.preventDefault();
         adminPedagogicoState.activeGroup = "qualidade";
-        adminPedagogicoState.activeTab = "pesquisas";
+        adminPedagogicoState.activeTab = "qualidade";
+        adminPedagogicoState.qualityTab = "pesquisas";
         renderAdminPedagogicoTabs();
-        renderAdminPedagogicoSurveysPanel();
+        renderAdminPedagogicoQualityPanel();
         return;
       }
 

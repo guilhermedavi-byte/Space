@@ -1941,6 +1941,72 @@
                 </div>
               </section>
 
+              <section class="admin-ped-panel" data-admin-ped-panel="pessoas" hidden aria-label="Pessoas">
+                <article class="surface-card admin-ped-surface">
+                  <div class="admin-ped-panelhead">
+                    <div>
+                      <div class="admin-ped-panelhead-title">Pessoas</div>
+                      <div class="admin-ped-panelhead-sub">Alunos e professores em uma visão única.</div>
+                    </div>
+                    <div class="admin-ped-segmented" data-admin-ped-people-toggle role="tablist" aria-label="Pessoas">
+                      <button class="admin-ped-segment is-active" type="button" role="tab" aria-selected="true" data-admin-ped-people-tab="students">Alunos</button>
+                      <button class="admin-ped-segment" type="button" role="tab" aria-selected="false" data-admin-ped-people-tab="teachers">Professores</button>
+                    </div>
+                  </div>
+
+                  <div class="admin-ped-people-view" data-admin-ped-people-view="students">
+                    <div class="admin-ped-students" data-admin-ped-students></div>
+                    <div class="admin-ped-empty" data-admin-ped-empty-students hidden>Nenhum aluno encontrado.</div>
+                  </div>
+
+                  <div class="admin-ped-people-view" data-admin-ped-people-view="teachers" hidden>
+                    <div class="admin-ped-teachers" data-admin-ped-teachers></div>
+                  </div>
+                </article>
+              </section>
+
+              <section class="admin-ped-panel" data-admin-ped-panel="qualidade" hidden aria-label="Qualidade">
+                <article class="surface-card admin-ped-surface">
+                  <div class="admin-ped-panelhead">
+                    <div>
+                      <div class="admin-ped-panelhead-title">Qualidade</div>
+                      <div class="admin-ped-panelhead-sub">NPS/CSAT, pesquisas, avisos e feedbacks.</div>
+                    </div>
+                    <div class="admin-ped-segmented" data-admin-ped-quality-tabs role="tablist" aria-label="Qualidade">
+                      <button class="admin-ped-segment is-active" type="button" role="tab" aria-selected="true" data-admin-ped-quality-tab="overview">Overview</button>
+                      <button class="admin-ped-segment" type="button" role="tab" aria-selected="false" data-admin-ped-quality-tab="pesquisas">Pesquisas</button>
+                      <button class="admin-ped-segment" type="button" role="tab" aria-selected="false" data-admin-ped-quality-tab="npscsat">NPS/CSAT</button>
+                      <button class="admin-ped-segment" type="button" role="tab" aria-selected="false" data-admin-ped-quality-tab="avisos">Avisos</button>
+                      <button class="admin-ped-segment" type="button" role="tab" aria-selected="false" data-admin-ped-quality-tab="feedbacks">Feedbacks</button>
+                    </div>
+                  </div>
+
+                  <div class="admin-ped-quality-view" data-admin-ped-quality-view="overview">
+                    <div class="admin-ped-quality-overview" data-admin-ped-quality-overview></div>
+                  </div>
+
+                  <div class="admin-ped-quality-view" data-admin-ped-quality-view="pesquisas" hidden>
+                    <div class="admin-ped-surveys" data-admin-ped-surveys></div>
+                    <div class="admin-ped-empty" data-admin-ped-empty-surveys hidden>Sem respostas de pesquisa ainda.</div>
+                  </div>
+
+                  <div class="admin-ped-quality-view" data-admin-ped-quality-view="npscsat" hidden>
+                    <div class="admin-ped-quality" data-admin-ped-quality></div>
+                    <div class="admin-ped-empty" data-admin-ped-empty-quality hidden>Nenhuma pesquisa respondida ainda.</div>
+                  </div>
+
+                  <div class="admin-ped-quality-view" data-admin-ped-quality-view="avisos" hidden>
+                    <div class="admin-ped-alerts" data-admin-ped-alerts></div>
+                    <div class="admin-ped-empty" data-admin-ped-empty-alerts hidden>Nenhum aviso recebido.</div>
+                  </div>
+
+                  <div class="admin-ped-quality-view" data-admin-ped-quality-view="feedbacks" hidden>
+                    <div class="admin-ped-feedbacks" data-admin-ped-feedbacks></div>
+                    <div class="admin-ped-empty" data-admin-ped-empty-feedbacks hidden>Nenhum feedback enviado ainda.</div>
+                  </div>
+                </article>
+              </section>
+
               <section class="admin-ped-panel" data-admin-ped-panel="aulas" hidden aria-label="Aulas">
                 <article class="surface-card admin-ped-surface" aria-label="Lista de aulas">
                   <div class="admin-ped-classes" data-admin-ped-classes></div>

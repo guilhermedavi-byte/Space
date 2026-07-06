@@ -17404,6 +17404,92 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   display: none !important;
 }
 
+.admin-ped-panelhead-sub {
+  margin-top: 4px;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.admin-ped-segmented {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  flex-wrap: wrap;
+}
+
+.admin-ped-segment {
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 11px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.64);
+  font-size: 12px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.admin-ped-segment.is-active {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.96);
+}
+
+.admin-ped-people-view,
+.admin-ped-quality-view {
+  margin-top: 14px;
+}
+
+.admin-ped-quality-overview {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-ped-quality-overview-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.admin-ped-quality-overview-card {
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.admin-ped-quality-overview-title {
+  font-size: 13px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.admin-ped-quality-overview-value {
+  margin-top: 6px;
+  font-size: 28px;
+  font-weight: 950;
+  line-height: 1;
+  color: #fff;
+}
+
+.admin-ped-quality-overview-sub {
+  margin-top: 6px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.56);
+  line-height: 1.35;
+}
+
+.admin-ped-quality-overview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .admin-ped-v2-metrics-drawer {
   display: grid;
   gap: 12px;
