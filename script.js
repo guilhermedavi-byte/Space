@@ -12763,36 +12763,8 @@ const loadUsersFromFirestore = async (type) => {
   if (error instanceof HTMLElement) error.hidden = true;
 
   try {
-    const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init");
-    const user = await waitForFirebaseAuthReady(firebase, 5000);
-    if (!user) {
-      const e = new Error("firebase_not_authenticated");
-      e.code = "auth/no-current-user";
-      throw e;
-    }
-
-    const q = firebase.query(
-      firebase.collection(firebase.primaryDb, "users"),
-      firebase.where("tipo", "==", safeType)
-    );
-    const snap = await withTimeout(firebase.getDocs(q), 12_000, "firestore_getDocs");
-    const rows = [];
-    snap.forEach((docSnap) => {
-      const data = docSnap.data ? docSnap.data() : null;
-      if (!data || typeof data !== "object") return;
-      rows.push(
-        normalizeUserRow({
-          id: docSnap.id,
-          nome: data.nome,
-          email: data.email,
-          tipo: data.tipo,
-          ativo: data.ativo,
-          criadoEm: data.criadoEm,
-        })
-      );
-    });
-
-    state.rows = rows.filter(Boolean).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+    const rows = await withTimeout(fetchUserRowsFromFirestore(safeType), 15_000, `admin_users_${safeType}`);
+    state.rows = Array.isArray(rows) ? rows.filter(Boolean).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")) : [];
     state.loadedAt = Date.now();
     setAdminManageStatus(safeType, "");
     renderAdminUsersTable(safeType);
