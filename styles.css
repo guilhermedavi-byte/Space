@@ -19358,6 +19358,93 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   font-weight: 750;
 }
 
+.admin-ped-user-picker {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-ped-user-picker-selected {
+  font-size: 12px;
+  font-weight: 750;
+  color: rgba(255, 255, 255, 0.64);
+}
+
+.admin-ped-user-picker-hidden {
+  display: none !important;
+}
+
+.admin-ped-user-picker-results {
+  display: grid;
+  gap: 6px;
+  max-height: 240px;
+  overflow: auto;
+  padding: 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.admin-ped-user-picker-option {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.92);
+  padding: 10px 12px;
+  display: grid;
+  gap: 4px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 150ms ease, background-color 150ms ease, transform 150ms ease;
+}
+
+.admin-ped-user-picker-option:hover,
+.admin-ped-user-picker-option:focus-visible {
+  border-color: rgba(89, 144, 189, 0.48);
+  background: rgba(89, 144, 189, 0.12);
+  transform: translateY(-1px);
+}
+
+.admin-ped-user-picker-option strong {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.admin-ped-user-picker-option span {
+  font-size: 11px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.54);
+}
+
+.admin-ped-user-picker-message {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.admin-ped-user-picker-message.is-error {
+  border: 1px solid rgba(255, 78, 70, 0.16);
+  background: rgba(255, 78, 70, 0.07);
+}
+
+.admin-ped-user-picker-message-title {
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.admin-ped-user-picker-message-sub {
+  font-size: 11px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.54);
+}
+
 @media (max-width: 960px) {
   .admin-ped-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));

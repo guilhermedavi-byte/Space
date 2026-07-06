@@ -5989,91 +5989,177 @@ const formatLongEventDate = (date) => {
   return `${capitalizedWeekday}, ${date.getDate()} de ${month} de ${date.getFullYear()}`;
 };
 
+let adminEventUserPickerSearchDebounce = null;
+
+const getAdminEventUserPickerMeta = (type) => {
+  const safeType = type === "teacher" ? "teacher" : "student";
+  const state = adminUsersState?.[safeType] || {};
+  const rows = (Array.isArray(state.rows) ? state.rows : [])
+    .filter((row) => row && typeof row === "object")
+    .slice()
+    .sort((a, b) => {
+      const activeDelta = Number(Boolean(b.ativo)) - Number(Boolean(a.ativo));
+      if (activeDelta) return activeDelta;
+      return String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR");
+    });
+  const error = String(state.error || "").trim();
+  const loading = Boolean(state.isLoading) && !error;
+  const idField = safeType === "teacher" ? "professorId" : "alunoId";
+  const searchField = safeType === "teacher" ? "teacherSearch" : "studentSearch";
+  const selectedId = String(createEventDraft?.[idField] || "").trim();
+  const query = String(createEventDraft?.[searchField] || "").trim();
+  const selectedRow = rows.find((row) => String(row.id || "") === selectedId) || null;
+  return { safeType, rows, error, loading, idField, searchField, selectedId, selectedRow, query };
+};
+
+const getAdminEventUserPickerSelectedText = (meta) => {
+  if (meta.error) return "Não foi possível carregar a lista";
+  if (meta.loading) return "Carregando lista...";
+  if (meta.selectedRow) {
+    return meta.selectedRow.ativo === false ? `${meta.selectedRow.nome} (inativo)` : meta.selectedRow.nome;
+  }
+  return "Nenhum selecionado";
+};
+
+const renderAdminEventUserPickerSelectOptions = (meta) => {
+  if (meta.error) return `<option value="">Não foi possível carregar a lista</option>`;
+  if (meta.loading) return `<option value="">Carregando...</option>`;
+  const rows = meta.selectedRow && !meta.rows.some((row) => String(row.id || "") === meta.selectedId) ? [meta.selectedRow, ...meta.rows] : meta.rows;
+  return `<option value="">Selecione um ${meta.safeType === "teacher" ? "professor" : "aluno"}</option>${rows
+    .map((row) => {
+      const id = String(row.id || "").trim();
+      const label = row.ativo === false ? `${String(row.nome || "").trim()} (inativo)` : String(row.nome || "").trim();
+      const isSelected = meta.selectedId && id === meta.selectedId;
+      return `<option value="${escapeHtml(id)}" ${isSelected ? "selected" : ""}>${escapeHtml(label)}</option>`;
+    })
+    .join("")}`;
+};
+
+const normalizeAdminEventUserQuery = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+const renderAdminEventUserPickerResults = (meta) => {
+  if (meta.error) {
+    return `
+      <div class="admin-ped-user-picker-message is-error">
+        <div class="admin-ped-user-picker-message-title">Não foi possível carregar a lista</div>
+        <div class="admin-ped-user-picker-message-sub">Tente novamente para recarregar os ${meta.safeType === "teacher" ? "professores" : "alunos"}.</div>
+        <button class="admin-ped-action is-muted" type="button" data-ce-admin-retry-users>Tentar novamente</button>
+      </div>
+    `;
+  }
+  if (meta.loading) {
+    return `
+      <div class="admin-ped-user-picker-message">
+        <div class="admin-ped-user-picker-message-title">Carregando lista...</div>
+        <div class="admin-ped-user-picker-message-sub">Aguarde só um instante enquanto buscamos os dados.</div>
+      </div>
+    `;
+  }
+
+  const query = normalizeAdminEventUserQuery(meta.query);
+  const filteredRows = query
+    ? meta.rows.filter((row) => {
+        const haystack = normalizeAdminEventUserQuery(`${row.nome || ""} ${row.email || ""}`);
+        return haystack.includes(query);
+      })
+    : meta.rows;
+
+  if (!filteredRows.length) {
+    return `
+      <div class="admin-ped-user-picker-message">
+        <div class="admin-ped-user-picker-message-title">Nenhum resultado</div>
+        <div class="admin-ped-user-picker-message-sub">Tente outro termo ou limpe a busca.</div>
+      </div>
+    `;
+  }
+
+  return filteredRows
+    .slice(0, 120)
+    .map((row) => {
+      const id = String(row.id || "").trim();
+      const name = String(row.nome || "").trim();
+      const email = String(row.email || "").trim();
+      const label = row.ativo === false ? `${name} (inativo)` : name;
+      const sub = email ? email : row.ativo === false ? "Inativo" : "";
+      return `
+        <button class="admin-ped-user-picker-option" type="button" data-ce-admin-user-pick data-ce-admin-user-pick-type="${meta.safeType}" data-ce-admin-user-pick-id="${escapeHtml(id)}">
+          <strong>${escapeHtml(label)}</strong>
+          ${sub ? `<span>${escapeHtml(sub)}</span>` : ""}
+        </button>
+      `;
+    })
+    .join("");
+};
+
 function syncAdminEventUserSelects() {
   if (currentRole !== "admin") return;
   if (!createEventDraft || !modalBody || modalOverlay?.hidden) return;
   if (activeModalKind !== "event-form") return;
 
-  const studentSelect = modalBody.querySelector("[data-ce-admin-student]");
-  const teacherSelect = modalBody.querySelector("[data-ce-admin-teacher]");
-  if (!(studentSelect instanceof HTMLSelectElement) || !(teacherSelect instanceof HTMLSelectElement)) return;
+  const syncPicker = (type) => {
+    const meta = getAdminEventUserPickerMeta(type);
+    const selectEl = modalBody.querySelector(`[data-ce-admin-${meta.safeType}]`);
+    const searchEl = modalBody.querySelector(`[data-ce-admin-${meta.safeType}-search]`);
+    const selectedEl = modalBody.querySelector(`[data-ce-admin-${meta.safeType}-selected]`);
+    const resultsEl = modalBody.querySelector(`[data-ce-admin-${meta.safeType}-results]`);
+
+    if (selectEl instanceof HTMLSelectElement) {
+      const nextOptions = renderAdminEventUserPickerSelectOptions(meta);
+      if (selectEl.innerHTML !== nextOptions) selectEl.innerHTML = nextOptions;
+      selectEl.disabled = meta.loading || Boolean(meta.error);
+      if (meta.selectedId) selectEl.value = meta.selectedId;
+    }
+
+    if (searchEl instanceof HTMLInputElement) {
+      searchEl.disabled = meta.loading || Boolean(meta.error);
+      if (searchEl.value !== meta.query) searchEl.value = meta.query;
+    }
+
+    if (selectedEl instanceof HTMLElement) {
+      selectedEl.textContent = getAdminEventUserPickerSelectedText(meta);
+    }
+
+    if (resultsEl instanceof HTMLElement) {
+      resultsEl.innerHTML = renderAdminEventUserPickerResults(meta);
+    }
+  };
+
+  syncPicker("student");
+  syncPicker("teacher");
 
   const teacherState = adminUsersState?.teacher || {};
   const studentState = adminUsersState?.student || {};
-  const teacherRows = teacherState.rows ? teacherState.rows : [];
-  const studentRows = studentState.rows ? studentState.rows : [];
   const teacherError = String(teacherState.error || "").trim();
   const studentError = String(studentState.error || "").trim();
-
-  const teachersSorted = (Array.isArray(teacherRows) ? teacherRows : [])
-    .filter((r) => r && r.ativo)
-    .slice()
-    .sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"));
-
-  const studentsSorted = (Array.isArray(studentRows) ? studentRows : [])
-    .filter((r) => r && r.ativo)
-    .slice()
-    .sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"));
-
-  const selectedTeacherId = String(createEventDraft.professorId || "").trim();
-  const selectedStudentId = String(createEventDraft.alunoId || "").trim();
-
-  teacherSelect.innerHTML = teacherError
-    ? `<option value="">Não foi possível carregar professores</option>`
-    : teachersSorted.length
-      ? `<option value="">Selecione um professor</option>${teachersSorted
-          .map((row) => {
-            const isSelected = selectedTeacherId && row.id === selectedTeacherId;
-            return `<option value="${escapeHtml(row.id)}" ${isSelected ? "selected" : ""}>${escapeHtml(row.nome)}</option>`;
-          })
-          .join("")}`
-      : `<option value="">Carregando professores…</option>`;
-
-  studentSelect.innerHTML = studentError
-    ? `<option value="">Não foi possível carregar alunos</option>`
-    : studentsSorted.length
-      ? `<option value="">Selecione um aluno</option>${studentsSorted
-          .map((row) => {
-            const isSelected = selectedStudentId && row.id === selectedStudentId;
-            return `<option value="${escapeHtml(row.id)}" ${isSelected ? "selected" : ""}>${escapeHtml(row.nome)}</option>`;
-          })
-          .join("")}`
-      : `<option value="">Carregando alunos…</option>`;
-
-  teacherSelect.disabled = Boolean(teacherError) || Boolean(teacherState.isLoading);
-  studentSelect.disabled = Boolean(studentError) || Boolean(studentState.isLoading);
-
   const statusEl = modalBody.querySelector("[data-ce-admin-users-status]");
   if (statusEl instanceof HTMLElement) {
     const errorMessages = [teacherError, studentError].filter(Boolean);
-    statusEl.hidden = !teacherState.isLoading && !studentState.isLoading && !errorMessages.length;
+    const isLoading = Boolean(teacherState.isLoading) || Boolean(studentState.isLoading);
+    statusEl.hidden = !isLoading && !errorMessages.length;
     statusEl.textContent = errorMessages.length
       ? `Não foi possível carregar a lista. ${errorMessages.join(" · ")}`
-      : teacherState.isLoading || studentState.isLoading
+      : isLoading
         ? "Carregando alunos e professores..."
         : "";
   }
+
+  validateCreateEventDraft();
 }
 
-	const buildCreateEventBody = ({ readOnly = false } = {}) => {
-	  const draft = createEventDraft || {};
+const buildCreateEventBody = ({ readOnly = false } = {}) => {
+  const draft = createEventDraft || {};
   const guests = Array.isArray(draft.guests) ? draft.guests : [];
   const docs = Array.isArray(draft.documents) ? draft.documents : [];
-	  const isAdmin = currentRole === "admin";
-	  const isCreateMode = String(draft.mode || "create") === "create";
-	  const showAdminLinks = isAdmin && !readOnly;
-  const teacherState = adminUsersState?.teacher || {};
-  const studentState = adminUsersState?.student || {};
-  const teacherRows = showAdminLinks && teacherState.rows ? teacherState.rows : [];
-  const studentRows = showAdminLinks && studentState.rows ? studentState.rows : [];
-  const activeTeachers = Array.isArray(teacherRows) ? teacherRows.filter((r) => r && r.ativo) : [];
-  const activeStudents = Array.isArray(studentRows) ? studentRows.filter((r) => r && r.ativo) : [];
-  const teachersSorted = activeTeachers.slice().sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"));
-  const studentsSorted = activeStudents.slice().sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"));
-  const teacherError = String(teacherState.error || "").trim();
-  const studentError = String(studentState.error || "").trim();
-  const teacherLoading = Boolean(teacherState.isLoading) && !teacherError;
-  const studentLoading = Boolean(studentState.isLoading) && !studentError;
+  const isAdmin = currentRole === "admin";
+  const isCreateMode = String(draft.mode || "create") === "create";
+  const showAdminLinks = isAdmin && !readOnly;
+  const teacherMeta = getAdminEventUserPickerMeta("teacher");
+  const studentMeta = getAdminEventUserPickerMeta("student");
 
   const chips = guests
     .map((guest) => {
@@ -6103,70 +6189,55 @@ function syncAdminEventUserSelects() {
     .join("");
 
   const disabledAttr = readOnly ? "disabled" : "";
-		  const uploadDisabled = readOnly ? 'aria-disabled="true" tabindex="-1"' : 'role="button" tabindex="0"';
-		  const uploadClass = readOnly ? "upload-zone is-disabled" : "upload-zone";
-		  const repeatEnabled = Boolean(draft.recorrente);
-		  const repeatMode = repeatEnabled ? String(draft.repeatMode || "weekly") : "none";
-		  const customRepeat = draft.repeat && typeof draft.repeat === "object" ? draft.repeat : createDefaultRepeatConfig();
-		  const customDays = customRepeat.days && typeof customRepeat.days === "object" ? customRepeat.days : {};
-		  const repeatType = String(customRepeat.type || "").trim().toLowerCase();
-		  const weeklyLabel = (() => {
-		    const weekday = weekdayLongFromDateKey(String(draft.dateKey || ""));
-		    return weekday ? `Semanal: cada ${weekday.toLowerCase()}` : "Semanal: toda semana";
-		  })();
-		  const weeklyChoiceLabel = (() => {
-		    const weekday = weekdayLongFromDateKey(String(draft.dateKey || ""));
-		    return weekday ? `Semanalmente em ${weekday.toLowerCase()}` : "Semanalmente";
-		  })();
-		  const monthlyChoiceLabel = (() => {
-		    const day = dayOfMonthFromDateKey(String(draft.dateKey || ""));
-		    return day ? `Todo dia ${day} de cada mês` : "Todo dia deste mês";
-		  })();
-
-  const selectedTeacherId = String(draft.professorId || "").trim();
-  const selectedStudentId = String(draft.alunoId || "").trim();
-
-  const teacherOptions = teacherError
-    ? `<option value="">Não foi possível carregar professores</option>`
-    : teachersSorted.length
-      ? `<option value="">Selecione um professor</option>${teachersSorted
-          .map((row) => {
-            const isSelected = selectedTeacherId && row.id === selectedTeacherId;
-            return `<option value="${escapeHtml(row.id)}" ${isSelected ? "selected" : ""}>${escapeHtml(row.nome)}</option>`;
-          })
-          .join("")}`
-      : `<option value="">Carregando professores…</option>`;
-
-  const studentOptions = studentError
-    ? `<option value="">Não foi possível carregar alunos</option>`
-    : studentsSorted.length
-      ? `<option value="">Selecione um aluno</option>${studentsSorted
-          .map((row) => {
-            const isSelected = selectedStudentId && row.id === selectedStudentId;
-            return `<option value="${escapeHtml(row.id)}" ${isSelected ? "selected" : ""}>${escapeHtml(row.nome)}</option>`;
-          })
-          .join("")}`
-      : `<option value="">Carregando alunos…</option>`;
+  const uploadDisabled = readOnly ? 'aria-disabled="true" tabindex="-1"' : 'role="button" tabindex="0"';
+  const uploadClass = readOnly ? "upload-zone is-disabled" : "upload-zone";
+  const repeatEnabled = Boolean(draft.recorrente);
+  const repeatMode = repeatEnabled ? String(draft.repeatMode || "weekly") : "none";
+  const customRepeat = draft.repeat && typeof draft.repeat === "object" ? draft.repeat : createDefaultRepeatConfig();
+  const customDays = customRepeat.days && typeof customRepeat.days === "object" ? customRepeat.days : {};
+  const repeatType = String(customRepeat.type || "").trim().toLowerCase();
+  const weeklyLabel = (() => {
+    const weekday = weekdayLongFromDateKey(String(draft.dateKey || ""));
+    return weekday ? `Semanal: cada ${weekday.toLowerCase()}` : "Semanal: toda semana";
+  })();
+  const weeklyChoiceLabel = (() => {
+    const weekday = weekdayLongFromDateKey(String(draft.dateKey || ""));
+    return weekday ? `Semanalmente em ${weekday.toLowerCase()}` : "Semanalmente";
+  })();
+  const monthlyChoiceLabel = (() => {
+    const day = dayOfMonthFromDateKey(String(draft.dateKey || ""));
+    return day ? `Todo dia ${day} de cada mês` : "Todo dia deste mês";
+  })();
 
   return `
     <div class="modal-form">
       ${
         showAdminLinks
           ? `
-            <div class="modal-row" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);">
+            <div class="modal-row" style="grid-template-columns: minmax(0, 1fr);">
               <label class="modal-field">
                 <span>Aluno</span>
-                <select class="modal-input" data-ce-admin-student ${disabledAttr}>${studentOptions}</select>
+                <div class="admin-ped-user-picker">
+                  <div class="admin-ped-user-picker-selected" data-ce-admin-student-selected>${escapeHtml(getAdminEventUserPickerSelectedText(studentMeta))}</div>
+                  <input class="modal-input admin-ped-user-picker-search" type="text" data-ce-admin-student-search placeholder="${escapeHtml(getAdminEventUserPickerPlaceholder("student"))}" value="${escapeHtml(String(draft.studentSearch || ""))}" ${disabledAttr} />
+                  <select class="modal-input admin-ped-user-picker-hidden" data-ce-admin-student ${disabledAttr} hidden>${renderAdminEventUserPickerSelectOptions(studentMeta)}</select>
+                  <div class="admin-ped-user-picker-results" data-ce-admin-student-results>${renderAdminEventUserPickerResults(studentMeta)}</div>
+                </div>
               </label>
               <label class="modal-field">
                 <span>Professor</span>
-                <select class="modal-input" data-ce-admin-teacher ${disabledAttr}>${teacherOptions}</select>
+                <div class="admin-ped-user-picker">
+                  <div class="admin-ped-user-picker-selected" data-ce-admin-teacher-selected>${escapeHtml(getAdminEventUserPickerSelectedText(teacherMeta))}</div>
+                  <input class="modal-input admin-ped-user-picker-search" type="text" data-ce-admin-teacher-search placeholder="${escapeHtml(getAdminEventUserPickerPlaceholder("teacher"))}" value="${escapeHtml(String(draft.teacherSearch || ""))}" ${disabledAttr} />
+                  <select class="modal-input admin-ped-user-picker-hidden" data-ce-admin-teacher ${disabledAttr} hidden>${renderAdminEventUserPickerSelectOptions(teacherMeta)}</select>
+                  <div class="admin-ped-user-picker-results" data-ce-admin-teacher-results>${renderAdminEventUserPickerResults(teacherMeta)}</div>
+                </div>
               </label>
             </div>
-            <div class="admin-ped-empty-inline" data-ce-admin-users-status ${teacherLoading || studentLoading ? "" : "hidden"}>
-              <div class="admin-ped-empty-title">${teacherError || studentError ? "Não foi possível carregar a lista" : "Carregando lista de alunos e professores..."}</div>
-              <div class="admin-ped-empty-sub">${teacherError || studentError ? "Tente novamente para recarregar os selects." : "Aguarde só um instante enquanto buscamos os dados."}</div>
-              ${teacherError || studentError ? `<button class="admin-ped-action is-muted" type="button" data-ce-admin-retry-users>Tentar novamente</button>` : ""}
+            <div class="admin-ped-empty-inline" data-ce-admin-users-status ${teacherMeta.loading || studentMeta.loading ? "" : "hidden"}>
+              <div class="admin-ped-empty-title">${teacherMeta.error || studentMeta.error ? "Não foi possível carregar a lista" : "Carregando lista de alunos e professores..."}</div>
+              <div class="admin-ped-empty-sub">${teacherMeta.error || studentMeta.error ? "Tente novamente para recarregar os selects." : "Aguarde só um instante enquanto buscamos os dados."}</div>
+              ${teacherMeta.error || studentMeta.error ? `<button class="admin-ped-action is-muted" type="button" data-ce-admin-retry-users>Tentar novamente</button>` : ""}
             </div>
           `
           : ""
@@ -6566,41 +6637,6 @@ const validateCreateEventDraft = () => {
     errorEl.textContent = errorEl.textContent || "Preencha os campos obrigatórios para salvar.";
   }
 
-  // TEMP DEBUG: helps identify which validation is blocking the Save button in Admin modal.
-  // Requested: log every time validation runs (do not gate by a one-time flag).
-  if (currentRole === "admin") {
-    const selectedAluno = String(createEventDraft.alunoId || "").trim();
-    const selectedProfessor = String(createEventDraft.professorId || "").trim();
-    const titulo = String(createEventDraft.title || "").trim();
-    const data = String(createEventDraft.dateKey || "").trim();
-    const inicio = String(createEventDraft.startTime || "").trim();
-    const fim = String(createEventDraft.endTime || "").trim();
-
-    const requiresLinks = currentRole === "admin" && createEventDraft.eventType === "lesson";
-    const repeatEnabled = Boolean(createEventDraft.recorrente);
-    const repeatType = String(createEventDraft?.repeat?.type || "").trim().toLowerCase();
-    const docsLoading = (createEventDraft.documents || []).some((doc) => doc && doc.loading);
-
-    const isSubmitting = Boolean(modalPrimary?.disabled) && !hasError;
-
-    // eslint-disable-next-line no-console
-    console.log("[SALVAR AULA DEBUG]", {
-      aluno: selectedAluno,
-      professor: selectedProfessor,
-      titulo,
-      data,
-      inicio,
-      fim,
-      isValid: !hasError,
-      isSubmitting,
-      // extra visibility (helps pinpoint which branch is failing)
-      requiresLinks,
-      repeatEnabled,
-      repeatType,
-      docsLoading,
-    });
-  }
-
   setModalPrimaryDisabled(hasError);
   return !hasError;
 };
@@ -6631,15 +6667,6 @@ const openTeacherEventFormModalFromDraft = () => {
     const adminStudentEl = modalBody?.querySelector("[data-ce-admin-student]");
     const adminTeacherEl = modalBody?.querySelector("[data-ce-admin-teacher]");
     const titleEl = modalBody?.querySelector("[data-ce-title]");
-
-    // LOG TEMPORÁRIO: confirma se os selects existem no DOM e quais valores estão selecionados.
-    // eslint-disable-next-line no-console
-    console.log("[DOM READ]", {
-      studentEl: adminStudentEl?.tagName,
-      studentValue: adminStudentEl?.value,
-      teacherEl: adminTeacherEl?.tagName,
-      teacherValue: adminTeacherEl?.value,
-    });
 
     if (adminStudentEl instanceof HTMLSelectElement && adminStudentEl.value) {
       createEventDraft.alunoId = adminStudentEl.value;
@@ -6737,14 +6764,6 @@ const openTeacherEventFormModalFromDraft = () => {
       // repeat já montado acima (weekly/monthly/custom). Apenas garantir o shape correto.
       if (typeof payload.repeat.enabled !== "boolean") payload.repeat.enabled = true;
     }
-
-	  // Helpful during rollout: confirms exactly what will be sent to the backend.
-	  // eslint-disable-next-line no-console
-	  console.log("Tentando salvar aula", payload);
-
-    // LOG TEMPORÁRIO: payload completo enviado ao backend.
-    // eslint-disable-next-line no-console
-    console.log("[PAYLOAD ENVIADO]", JSON.stringify(payload, null, 2));
 
     const errorEl = modalBody?.querySelector("[data-ce-error]");
     if (errorEl instanceof HTMLElement) {
@@ -6947,17 +6966,19 @@ const openTeacherCreateEventModalAt = ({ dateKey, startTime, endTime } = {}) => 
   if (!date) return;
   const eventType = currentRole === "admin" ? "lesson" : "manual";
 
-	  createEventDraft = {
-	    mode: "create",
-	    readOnly: false,
-	    eventType,
-	    eventId: "",
-    alunoId: "",
-    professorId: "",
-    title: "",
-    description: "",
-    guests: [],
-    guestQuery: "",
+		  createEventDraft = {
+		    mode: "create",
+		    readOnly: false,
+		    eventType,
+		    eventId: "",
+	    alunoId: "",
+	    professorId: "",
+	    studentSearch: "",
+	    teacherSearch: "",
+	    title: "",
+	    description: "",
+	    guests: [],
+	    guestQuery: "",
 	    documents: [],
 	    recorrente: false,
 	    repeatMode: "weekly",
@@ -6985,6 +7006,8 @@ const openTeacherCreateEventModal = () => {
     eventId: "",
     alunoId: "",
     professorId: "",
+    studentSearch: "",
+    teacherSearch: "",
     title: "",
     description: "",
     guests: [],
@@ -7012,10 +7035,10 @@ const openTeacherEventModal = ({ type, id }) => {
 
   if (type === "lesson") {
     const isAdmin = currentRole === "admin";
-	    createEventDraft = {
-	      mode: isAdmin ? "edit" : "view",
-	      readOnly: !isAdmin,
-	      eventType: "lesson",
+    createEventDraft = {
+      mode: isAdmin ? "edit" : "view",
+      readOnly: !isAdmin,
+      eventType: "lesson",
       eventId: target.id,
       title: target.title || "Aula ao vivo",
       description: "",
@@ -7026,12 +7049,14 @@ const openTeacherEventModal = ({ type, id }) => {
       startTime: buildEventTimeHm(target.start),
       endTime: buildEventTimeHm(target.end),
       alunoId: target.alunoId || "",
-	      professorId: target.professorId || "",
-	      recorrente: Boolean(target.recorrente),
-	      repeatMode: "weekly",
-	      repeat: createDefaultRepeatConfig(),
-	      grupoRecorrenciaId: target.grupoRecorrenciaId || "",
-	    };
+      professorId: target.professorId || "",
+      studentSearch: "",
+      teacherSearch: "",
+      recorrente: Boolean(target.recorrente),
+      repeatMode: "weekly",
+      repeat: createDefaultRepeatConfig(),
+      grupoRecorrenciaId: target.grupoRecorrenciaId || "",
+    };
     openTeacherEventFormModalFromDraft();
     return;
   }
@@ -7042,13 +7067,15 @@ const openTeacherEventModal = ({ type, id }) => {
     .filter(Boolean)
     .map((user) => ({ id: user.id, name: user.name, role: user.role }));
 
-	  createEventDraft = {
-	    mode: "edit",
-	    readOnly: false,
-	    eventType: "manual",
+  createEventDraft = {
+    mode: "edit",
+    readOnly: false,
+    eventType: "manual",
     eventId: target.id,
     alunoId: "",
     professorId: target.professorId || "",
+    studentSearch: "",
+    teacherSearch: "",
     title: target.title || "",
     description: target.description || "",
     guests,
@@ -23903,6 +23930,30 @@ document.addEventListener("click", (event) => {
       modalOverlay &&
       !modalOverlay.hidden
     ) {
+      const adminUserPick = target.closest("[data-ce-admin-user-pick]");
+      if (adminUserPick instanceof HTMLButtonElement) {
+        const pickerType = String(adminUserPick.getAttribute("data-ce-admin-user-pick-type") || "").trim() === "teacher" ? "teacher" : "student";
+        const pickerId = String(adminUserPick.getAttribute("data-ce-admin-user-pick-id") || "").trim();
+        const meta = getAdminEventUserPickerMeta(pickerType);
+        const row = meta.rows.find((item) => String(item.id || "") === pickerId) || null;
+        if (!row || !pickerId) return;
+        if (pickerType === "teacher") {
+          createEventDraft.professorId = pickerId;
+          createEventDraft.teacherSearch = "";
+        } else {
+          createEventDraft.alunoId = pickerId;
+          createEventDraft.studentSearch = "";
+        }
+        const searchEl = modalBody?.querySelector(`[data-ce-admin-${pickerType}-search]`);
+        if (searchEl instanceof HTMLInputElement) searchEl.value = "";
+        const selectEl = modalBody?.querySelector(`[data-ce-admin-${pickerType}]`);
+        if (selectEl instanceof HTMLSelectElement) selectEl.value = pickerId;
+        syncAdminEventUserSelects();
+        validateCreateEventDraft();
+        if (searchEl instanceof HTMLInputElement) searchEl.focus();
+        return;
+      }
+
       const pick = target.closest("[data-ce-guest-pick]");
       if (pick instanceof HTMLButtonElement) {
         const id = pick.getAttribute("data-ce-guest-pick") || "";
@@ -24825,6 +24876,26 @@ document.addEventListener("input", (event) => {
   if (activeModalKind !== "event-form") return;
   if (createEventDraft.readOnly) return;
 
+  if (target instanceof HTMLInputElement && target.matches("[data-ce-admin-student-search]")) {
+    createEventDraft.studentSearch = target.value;
+    if (adminEventUserPickerSearchDebounce) clearTimeout(adminEventUserPickerSearchDebounce);
+    adminEventUserPickerSearchDebounce = window.setTimeout(() => {
+      syncAdminEventUserSelects();
+      adminEventUserPickerSearchDebounce = null;
+    }, 120);
+    return;
+  }
+
+  if (target instanceof HTMLInputElement && target.matches("[data-ce-admin-teacher-search]")) {
+    createEventDraft.teacherSearch = target.value;
+    if (adminEventUserPickerSearchDebounce) clearTimeout(adminEventUserPickerSearchDebounce);
+    adminEventUserPickerSearchDebounce = window.setTimeout(() => {
+      syncAdminEventUserSelects();
+      adminEventUserPickerSearchDebounce = null;
+    }, 120);
+    return;
+  }
+
   if (target instanceof HTMLInputElement && target.matches("[data-ce-title]")) {
     createEventDraft.title = target.value;
     validateCreateEventDraft();
@@ -25144,6 +25215,10 @@ document.addEventListener("focusin", (event) => {
   if (createEventDraft.readOnly) return;
   if (target.matches("[data-ce-guest-search]")) {
     syncGuestDropdown();
+    return;
+  }
+  if (target.matches("[data-ce-admin-student-search]") || target.matches("[data-ce-admin-teacher-search]")) {
+    syncAdminEventUserSelects();
   }
 });
 

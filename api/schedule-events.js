@@ -61,6 +61,53 @@ const normalizeCompact = (value) => normalizeText(value).replace(/[^a-z0-9]+/g, 
 
 const nameTokens = (value) => normalizeText(value).split(/[^a-z0-9]+/).filter((token) => token.length >= 2);
 
+const summarizeScheduleEventBody = (body) => {
+  const repeat = body?.repeat && typeof body.repeat === "object" ? body.repeat : null;
+  const days = repeat?.days && typeof repeat.days === "object" ? repeat.days : null;
+  return {
+    id: String(body?.id || "").trim(),
+    eventType: String(body?.eventType || "").trim(),
+    title: String(body?.title || "").trim(),
+    description: String(body?.description || "").trim(),
+    alunoId: body?.alunoId ?? body?.studentId ?? null,
+    professorId: body?.professorId ?? body?.teacherId ?? null,
+    dateKey: String(body?.dateKey || "").trim(),
+    startMin: body?.startMin ?? body?.horaInicio ?? body?.startTime ?? null,
+    endMin: body?.endMin ?? body?.horaFim ?? body?.endTime ?? null,
+    recorrente: Boolean(body?.recorrente),
+    repeatMode: String(body?.repeatMode || body?.recurrenceMode || "").trim(),
+    repeat: repeat
+      ? {
+          enabled: Boolean(repeat.enabled),
+          type: String(repeat.type || "").trim(),
+          weekday: String(repeat.weekday || "").trim(),
+          dayOfMonth: repeat.dayOfMonth ?? null,
+          daysCount: days ? Object.keys(days).length : 0,
+        }
+      : null,
+    grupoRecorrenciaId: String(body?.grupoRecorrenciaId || "").trim(),
+    guestsCount: Array.isArray(body?.guests) ? body.guests.length : 0,
+    documentsCount: Array.isArray(body?.documents) ? body.documents.length : 0,
+  };
+};
+
+const logScheduleEventsError = ({ point, error, body, extra = {} }) => {
+  // eslint-disable-next-line no-console
+  console.error("[schedule-events] create/update failure", {
+    point,
+    payload: summarizeScheduleEventBody(body),
+    error: {
+      message: error?.message,
+      stack: error?.stack,
+      code: error?.code,
+      status: error?.status,
+      details: error?.details,
+      hint: error?.hint,
+    },
+    ...extra,
+  });
+};
+
 const namesMatch = (a, b) => {
   const left = normalizeText(a);
   const right = normalizeText(b);
@@ -905,6 +952,12 @@ module.exports = async (req, res) => {
     try {
       profile = await fetchUserProfileByUid({ uid: decoded.uid, idToken });
     } catch (error) {
+      logScheduleEventsError({
+        point: "falhou no lookup de perfil autenticado",
+        error,
+        body,
+        extra: { uid: decoded.uid },
+      });
       sendJson(res, 500, { error: "internal_error" });
       return;
     }
@@ -1379,6 +1432,17 @@ module.exports = async (req, res) => {
             });
             return;
           }
+          logScheduleEventsError({
+            point: "falhou no commit Firestore",
+            error: new Error(`firestore_commit_failed_${commit.status || "unknown"}`),
+            body,
+            extra: {
+              status: commit.status,
+              commitData: commit.data,
+              commitText: commit.text,
+              writesCount: chunk.length,
+            },
+          });
           sendJson(res, 500, { error: "internal_error" });
           return;
         }
@@ -1464,7 +1528,17 @@ module.exports = async (req, res) => {
     sendJson(res, 200, { ok: true });
   } catch (error) {
     // eslint-disable-next-line no-console
-    console.error("[api] schedule events mutate failed", error);
+    logScheduleEventsError({
+      point: "fallback final do endpoint",
+      error,
+      body,
+      extra: {
+        method: req.method,
+        isCreate,
+        role,
+        requesterId,
+      },
+    });
     sendJson(res, 500, { error: "internal_error" });
   }
 };
