@@ -5998,8 +5998,12 @@ function syncAdminEventUserSelects() {
   const teacherSelect = modalBody.querySelector("[data-ce-admin-teacher]");
   if (!(studentSelect instanceof HTMLSelectElement) || !(teacherSelect instanceof HTMLSelectElement)) return;
 
-  const teacherRows = adminUsersState?.teacher?.rows ? adminUsersState.teacher.rows : [];
-  const studentRows = adminUsersState?.student?.rows ? adminUsersState.student.rows : [];
+  const teacherState = adminUsersState?.teacher || {};
+  const studentState = adminUsersState?.student || {};
+  const teacherRows = teacherState.rows ? teacherState.rows : [];
+  const studentRows = studentState.rows ? studentState.rows : [];
+  const teacherError = String(teacherState.error || "").trim();
+  const studentError = String(studentState.error || "").trim();
 
   const teachersSorted = (Array.isArray(teacherRows) ? teacherRows : [])
     .filter((r) => r && r.ativo)
@@ -6014,23 +6018,41 @@ function syncAdminEventUserSelects() {
   const selectedTeacherId = String(createEventDraft.professorId || "").trim();
   const selectedStudentId = String(createEventDraft.alunoId || "").trim();
 
-  teacherSelect.innerHTML = teachersSorted.length
-    ? `<option value="">Selecione um professor</option>${teachersSorted
-        .map((row) => {
-          const isSelected = selectedTeacherId && row.id === selectedTeacherId;
-          return `<option value="${escapeHtml(row.id)}" ${isSelected ? "selected" : ""}>${escapeHtml(row.nome)}</option>`;
-        })
-        .join("")}`
-    : `<option value="">Carregando professores…</option>`;
+  teacherSelect.innerHTML = teacherError
+    ? `<option value="">Não foi possível carregar professores</option>`
+    : teachersSorted.length
+      ? `<option value="">Selecione um professor</option>${teachersSorted
+          .map((row) => {
+            const isSelected = selectedTeacherId && row.id === selectedTeacherId;
+            return `<option value="${escapeHtml(row.id)}" ${isSelected ? "selected" : ""}>${escapeHtml(row.nome)}</option>`;
+          })
+          .join("")}`
+      : `<option value="">Carregando professores…</option>`;
 
-  studentSelect.innerHTML = studentsSorted.length
-    ? `<option value="">Selecione um aluno</option>${studentsSorted
-        .map((row) => {
-          const isSelected = selectedStudentId && row.id === selectedStudentId;
-          return `<option value="${escapeHtml(row.id)}" ${isSelected ? "selected" : ""}>${escapeHtml(row.nome)}</option>`;
-        })
-        .join("")}`
-    : `<option value="">Carregando alunos…</option>`;
+  studentSelect.innerHTML = studentError
+    ? `<option value="">Não foi possível carregar alunos</option>`
+    : studentsSorted.length
+      ? `<option value="">Selecione um aluno</option>${studentsSorted
+          .map((row) => {
+            const isSelected = selectedStudentId && row.id === selectedStudentId;
+            return `<option value="${escapeHtml(row.id)}" ${isSelected ? "selected" : ""}>${escapeHtml(row.nome)}</option>`;
+          })
+          .join("")}`
+      : `<option value="">Carregando alunos…</option>`;
+
+  teacherSelect.disabled = Boolean(teacherError) || Boolean(teacherState.isLoading);
+  studentSelect.disabled = Boolean(studentError) || Boolean(studentState.isLoading);
+
+  const statusEl = modalBody.querySelector("[data-ce-admin-users-status]");
+  if (statusEl instanceof HTMLElement) {
+    const errorMessages = [teacherError, studentError].filter(Boolean);
+    statusEl.hidden = !teacherState.isLoading && !studentState.isLoading && !errorMessages.length;
+    statusEl.textContent = errorMessages.length
+      ? `Não foi possível carregar a lista. ${errorMessages.join(" · ")}`
+      : teacherState.isLoading || studentState.isLoading
+        ? "Carregando alunos e professores..."
+        : "";
+  }
 }
 
 	const buildCreateEventBody = ({ readOnly = false } = {}) => {
@@ -6040,12 +6062,18 @@ function syncAdminEventUserSelects() {
 	  const isAdmin = currentRole === "admin";
 	  const isCreateMode = String(draft.mode || "create") === "create";
 	  const showAdminLinks = isAdmin && !readOnly;
-  const teacherRows = showAdminLinks && adminUsersState?.teacher?.rows ? adminUsersState.teacher.rows : [];
-  const studentRows = showAdminLinks && adminUsersState?.student?.rows ? adminUsersState.student.rows : [];
+  const teacherState = adminUsersState?.teacher || {};
+  const studentState = adminUsersState?.student || {};
+  const teacherRows = showAdminLinks && teacherState.rows ? teacherState.rows : [];
+  const studentRows = showAdminLinks && studentState.rows ? studentState.rows : [];
   const activeTeachers = Array.isArray(teacherRows) ? teacherRows.filter((r) => r && r.ativo) : [];
   const activeStudents = Array.isArray(studentRows) ? studentRows.filter((r) => r && r.ativo) : [];
   const teachersSorted = activeTeachers.slice().sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"));
   const studentsSorted = activeStudents.slice().sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"));
+  const teacherError = String(teacherState.error || "").trim();
+  const studentError = String(studentState.error || "").trim();
+  const teacherLoading = Boolean(teacherState.isLoading) && !teacherError;
+  const studentLoading = Boolean(studentState.isLoading) && !studentError;
 
   const chips = guests
     .map((guest) => {
@@ -6098,23 +6126,27 @@ function syncAdminEventUserSelects() {
   const selectedTeacherId = String(draft.professorId || "").trim();
   const selectedStudentId = String(draft.alunoId || "").trim();
 
-  const teacherOptions = teachersSorted.length
-    ? `<option value="">Selecione um professor</option>${teachersSorted
-        .map((row) => {
-          const isSelected = selectedTeacherId && row.id === selectedTeacherId;
-          return `<option value="${escapeHtml(row.id)}" ${isSelected ? "selected" : ""}>${escapeHtml(row.nome)}</option>`;
-        })
-        .join("")}`
-    : `<option value="">Carregando professores…</option>`;
+  const teacherOptions = teacherError
+    ? `<option value="">Não foi possível carregar professores</option>`
+    : teachersSorted.length
+      ? `<option value="">Selecione um professor</option>${teachersSorted
+          .map((row) => {
+            const isSelected = selectedTeacherId && row.id === selectedTeacherId;
+            return `<option value="${escapeHtml(row.id)}" ${isSelected ? "selected" : ""}>${escapeHtml(row.nome)}</option>`;
+          })
+          .join("")}`
+      : `<option value="">Carregando professores…</option>`;
 
-  const studentOptions = studentsSorted.length
-    ? `<option value="">Selecione um aluno</option>${studentsSorted
-        .map((row) => {
-          const isSelected = selectedStudentId && row.id === selectedStudentId;
-          return `<option value="${escapeHtml(row.id)}" ${isSelected ? "selected" : ""}>${escapeHtml(row.nome)}</option>`;
-        })
-        .join("")}`
-    : `<option value="">Carregando alunos…</option>`;
+  const studentOptions = studentError
+    ? `<option value="">Não foi possível carregar alunos</option>`
+    : studentsSorted.length
+      ? `<option value="">Selecione um aluno</option>${studentsSorted
+          .map((row) => {
+            const isSelected = selectedStudentId && row.id === selectedStudentId;
+            return `<option value="${escapeHtml(row.id)}" ${isSelected ? "selected" : ""}>${escapeHtml(row.nome)}</option>`;
+          })
+          .join("")}`
+      : `<option value="">Carregando alunos…</option>`;
 
   return `
     <div class="modal-form">
@@ -6130,6 +6162,11 @@ function syncAdminEventUserSelects() {
                 <span>Professor</span>
                 <select class="modal-input" data-ce-admin-teacher ${disabledAttr}>${teacherOptions}</select>
               </label>
+            </div>
+            <div class="admin-ped-empty-inline" data-ce-admin-users-status ${teacherLoading || studentLoading ? "" : "hidden"}>
+              <div class="admin-ped-empty-title">${teacherError || studentError ? "Não foi possível carregar a lista" : "Carregando lista de alunos e professores..."}</div>
+              <div class="admin-ped-empty-sub">${teacherError || studentError ? "Tente novamente para recarregar os selects." : "Aguarde só um instante enquanto buscamos os dados."}</div>
+              ${teacherError || studentError ? `<button class="admin-ped-action is-muted" type="button" data-ce-admin-retry-users>Tentar novamente</button>` : ""}
             </div>
           `
           : ""
@@ -6727,26 +6764,31 @@ const openTeacherEventFormModalFromDraft = () => {
       .then(async (res) => {
         const data = await res.json().catch(() => null);
         if (!res.ok) {
-          // eslint-disable-next-line no-console
-          console.error("Erro real ao salvar aula:", { status: res.status, data, payload });
+          const missingFields = Array.isArray(data?.missingFields) ? data.missingFields.map((field) => String(field || "").trim()).filter(Boolean) : [];
           const msg =
             data?.error === "title_required"
               ? "Preencha o título para salvar."
               : data?.error === "invalid_time"
-                ? "O horário de início deve ser anterior ao de fim."
-                  : data?.error === "professor_required"
-                    ? "Selecione um professor para salvar."
-                  : data?.error === "invalid_payload" && Array.isArray(data?.missingFields) && data.missingFields.includes("professorId")
-                    ? "Selecione um professor para salvar."
-                  : data?.error === "invalid_payload" && Array.isArray(data?.missingFields) && data.missingFields.includes("alunoId")
+                ? "O horário final precisa ser maior que o inicial."
+                : data?.error === "professor_required" || missingFields.includes("professorId")
+                  ? "Selecione um professor para salvar."
+                  : data?.error === "invalid_payload" && missingFields.includes("alunoId")
                     ? "Selecione um aluno para criar a aula."
-                  : data?.error === "invalid_repeat"
-                    ? "Preencha a recorrência (tipo, dias e horários) para salvar."
-                    : data?.error === "forbidden"
-                      ? "Sem permissão para salvar este evento."
-                      : data?.error === "unauthorized" || data?.error === "invalid_credentials"
-                        ? "Sua sessão expirou. Recarregue a página e faça login novamente."
-                  : "Não foi possível salvar agora.";
+                    : data?.error === "invalid_repeat"
+                      ? "Revise a recorrência: tipo, dias e horários."
+                      : data?.error === "forbidden"
+                        ? "Você não tem permissão para salvar este evento."
+                        : data?.error === "unauthorized" || data?.error === "invalid_credentials"
+                          ? "Sua sessão expirou. Recarregue a página e faça login novamente."
+                          : res.status === 429
+                            ? "Muitas tentativas. Aguarde alguns segundos e tente de novo."
+                            : res.status >= 500
+                              ? "O servidor não conseguiu salvar agora. Tente novamente."
+                              : data?.error
+                                ? `Falha ao salvar (${data.error}).`
+                                : "Não foi possível salvar agora.";
+          // eslint-disable-next-line no-console
+          console.error("[teacher] create event save failed", { status: res.status, data, payload, message: msg });
           if (errorEl instanceof HTMLElement) {
             errorEl.hidden = false;
             errorEl.textContent = msg;
@@ -6762,10 +6804,10 @@ const openTeacherEventFormModalFromDraft = () => {
       })
       .catch((error) => {
         // eslint-disable-next-line no-console
-        console.error("Erro real ao salvar aula:", error);
+        console.error("[teacher] create event save failed", error, payload);
         if (errorEl instanceof HTMLElement) {
           errorEl.hidden = false;
-          errorEl.textContent = "Não foi possível salvar agora. Tente novamente.";
+          errorEl.textContent = error?.name === "AbortError" ? "O salvamento demorou demais. Tente novamente." : "Não foi possível salvar agora. Tente novamente.";
         }
         if (modalPrimary) modalPrimary.disabled = false;
         if (modalSecondary) modalSecondary.disabled = false;
@@ -9524,9 +9566,9 @@ const setAdminManageStatus = (type, text, tone = "") => {
 };
 
 let adminUsersState = {
-  teacher: { rows: [], query: "", loadedAt: 0, isLoading: false, statusFilter: "active" }, // active | inactive
-  student: { rows: [], query: "", loadedAt: 0, isLoading: false },
-  growth: { rows: [], query: "", loadedAt: 0, isLoading: false },
+  teacher: { rows: [], query: "", loadedAt: 0, isLoading: false, error: "", statusFilter: "active" }, // active | inactive
+  student: { rows: [], query: "", loadedAt: 0, isLoading: false, error: "" },
+  growth: { rows: [], query: "", loadedAt: 0, isLoading: false, error: "" },
 };
 
 let adminGrowthGoalsState = {
@@ -12685,6 +12727,7 @@ const loadUsersFromFirestore = async (type) => {
   if (state.isLoading) return;
 
   state.isLoading = true;
+  state.error = "";
   setAdminManageStatus(safeType, "Carregando…");
 
   const { table, empty, error } = getAdminUsersUiRefs(safeType);
@@ -12731,6 +12774,7 @@ const loadUsersFromFirestore = async (type) => {
   } catch (err) {
     // Surface the root cause for debugging (rules, connectivity, etc.).
     console.error("[admin] loadUsersFromFirestore failed:", safeType, err);
+    state.error = typeof err?.message === "string" && err.message ? err.message : "Não foi possível carregar a lista, tente novamente.";
     if (table instanceof HTMLElement) table.innerHTML = "";
     if (empty instanceof HTMLElement) empty.hidden = true;
     if (error instanceof HTMLElement) error.hidden = false;
@@ -12741,6 +12785,10 @@ const loadUsersFromFirestore = async (type) => {
     setAdminManageStatus(safeType, message, "error");
   } finally {
     state.isLoading = false;
+    if (currentRole === "admin" && activeModalKind === "event-form") {
+      syncAdminEventUserSelects();
+      validateCreateEventDraft();
+    }
   }
 };
 
@@ -23927,6 +23975,13 @@ document.addEventListener("click", (event) => {
             .join("");
         }
         validateCreateEventDraft();
+        return;
+      }
+
+      const retryUsers = target.closest("[data-ce-admin-retry-users]");
+      if (retryUsers instanceof HTMLButtonElement) {
+        loadUsersFromFirestore("teacher");
+        loadUsersFromFirestore("student");
         return;
       }
 
