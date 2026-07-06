@@ -6021,6 +6021,8 @@ const getAdminEventUserPickerSelectedText = (meta) => {
   return "Nenhum selecionado";
 };
 
+const getAdminEventUserPickerPlaceholder = (type) => (type === "teacher" ? "Buscar professor..." : "Buscar aluno...");
+
 const renderAdminEventUserPickerSelectOptions = (meta) => {
   if (meta.error) return `<option value="">Não foi possível carregar a lista</option>`;
   if (meta.loading) return `<option value="">Carregando...</option>`;
