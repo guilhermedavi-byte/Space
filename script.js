@@ -15335,12 +15335,8 @@ const renderAdminPedagogicoOverview = () => {
     <div class="admin-ped-ops-summary">
       ${[
         ["Onboardings em andamento", metricValue("onboarding_em_andamento")],
-        ["Alunos sem professor", metricValue("alunos_sem_professor")],
-        ["Sem primeira aula", metricValue("alunos_sem_primeira_aula")],
         ["Aulas hoje", metricValue("aulas_hoje")],
         ["Pendentes de registro", metricValue("aulas_pendentes_registro")],
-        ["Ocorrências abertas", metricValue("ocorrencias_abertas")],
-        ["Alunos em risco", metricValue("alunos_em_risco")],
         ["NPS", scoreValue("nps")],
         ["CSAT", scoreValue("csat")],
         ["Flexge", `${metricValue("flexge_criados")} / ${metricValue("flexge_total")}`],

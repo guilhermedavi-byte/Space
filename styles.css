@@ -17376,6 +17376,7 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   line-height: 1.2;
   background: transparent;
   box-shadow: none;
+  -webkit-text-fill-color: currentColor;
 }
 
 .admin-ped-v2-statusbar-copy span {
@@ -17385,6 +17386,13 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   line-height: 1.35;
   background: transparent;
   box-shadow: none;
+  -webkit-text-fill-color: currentColor;
+}
+
+.admin-ped-v2-statusbar-copy strong::selection,
+.admin-ped-v2-statusbar-copy span::selection {
+  background: transparent;
+  color: inherit;
 }
 
 .admin-ped-v2-statusbar[data-tone="danger"] .admin-ped-v2-statusbar-copy strong {
@@ -17421,11 +17429,12 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.08);
   flex-wrap: wrap;
+  max-width: 100%;
 }
 
 .admin-ped-segment {
-  min-height: 34px;
-  padding: 0 12px;
+  min-height: 32px;
+  padding: 0 11px;
   border-radius: 11px;
   border: 1px solid transparent;
   background: transparent;
@@ -17453,7 +17462,7 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 .admin-ped-quality-overview-grid {
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .admin-ped-quality-overview-card {
@@ -18121,23 +18130,41 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 
 .admin-ped-empty-inline {
   display: grid;
-  gap: 8px;
-  padding: 12px;
-  border-radius: 16px;
-  border: 1px dashed rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.01);
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.015);
 }
 
 .admin-ped-empty-title {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 900;
-  color: rgba(255, 255, 255, 0.92);
+  letter-spacing: 0.01em;
+  color: rgba(255, 255, 255, 0.88);
 }
 
 .admin-ped-empty-sub {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 650;
   color: rgba(255, 255, 255, 0.55);
+  line-height: 1.35;
+}
+
+.admin-ped-empty-inline .admin-ped-action,
+.admin-ped-empty .admin-ped-action {
+  height: 30px;
+  padding: 0 10px;
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.admin-ped-empty-inline .admin-ped-action:hover,
+.admin-ped-empty-inline .admin-ped-action:focus-visible,
+.admin-ped-empty .admin-ped-action:hover,
+.admin-ped-empty .admin-ped-action:focus-visible {
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .admin-ped-links-grid {
@@ -19027,10 +19054,11 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 
 .admin-ped-empty,
 .admin-ped-error {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 650;
   color: rgba(255, 255, 255, 0.52);
-  padding: 10px 2px;
+  padding: 8px 2px;
+  line-height: 1.4;
 }
 
 .admin-ped-error {
@@ -19377,7 +19405,7 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 .admin-student-pedagogical-grid .admin-student-personal-row{padding:11px;border:1px solid rgba(255,255,255,.09);border-radius:12px;background:rgba(255,255,255,.025)}
 .admin-student-briefing{margin-top:12px;line-height:1.55;color:#c7cfda}
 @media(max-width:1100px){.admin-ped-ops-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:720px){.pedagogico-item{grid-template-columns:1fr}.pedagogico-item-actions{justify-content:flex-start}.admin-ped-ops-summary,.admin-student-pedagogical-grid{grid-template-columns:1fr}.admin-ped-table-toolbar{align-items:stretch}.admin-ped-table-search{min-width:0;width:100%;flex:1 1 100%}.admin-ped-pagination{width:100%;justify-content:space-between}.admin-ped-v2-statusbar{align-items:flex-start;flex-direction:column}.admin-ped-v2-statusbar-action{width:100%}.admin-ped-v2-groups{gap:8px}.admin-ped-v2-groups .admin-ped-group{flex:1 1 calc(50% - 8px)}.admin-ped-v2-accordions .admin-ped-subtab{min-height:unset}}
+@media(max-width:720px){.pedagogico-item{grid-template-columns:1fr}.pedagogico-item-actions{justify-content:flex-start}.admin-ped-ops-summary,.admin-student-pedagogical-grid{grid-template-columns:1fr}.admin-ped-table-toolbar{align-items:stretch}.admin-ped-table-search{min-width:0;width:100%;flex:1 1 100%}.admin-ped-pagination{width:100%;justify-content:space-between}.admin-ped-v2-statusbar{align-items:flex-start;flex-direction:column}.admin-ped-v2-statusbar-action{width:100%}.admin-ped-v2-groups{gap:8px}.admin-ped-v2-groups .admin-ped-group{flex:1 1 calc(50% - 8px)}.admin-ped-v2-accordions .admin-ped-subtab{min-height:unset}.admin-ped-segmented{width:100%}.admin-ped-segment{flex:1 1 calc(50% - 6px)}}
 
 
 /* Lançamento interno */
