@@ -4720,29 +4720,44 @@ const normalizeAdminAgendaTeacher = ({ id, nome, ativo }) => {
 };
 
 const fetchAdminAgendaTeachers = async () => {
-  const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init");
-  const user = await waitForFirebaseAuthReady(firebase, 5000);
-  if (!user) {
-    const e = new Error("firebase_not_authenticated");
-    e.code = "auth/no-current-user";
-    throw e;
-  }
+  try {
+    const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init");
+    const user = await waitForFirebaseAuthReady(firebase, 5000);
+    if (!user) {
+      const e = new Error("firebase_not_authenticated");
+      e.code = "auth/no-current-user";
+      throw e;
+    }
 
-  const q = firebase.query(firebase.collection(firebase.primaryDb, "users"), firebase.where("tipo", "==", "teacher"));
-  const snap = await withTimeout(firebase.getDocs(q), 12_000, "firestore_getDocs_teachers_agendas");
-  const out = [];
-  snap.forEach((docSnap) => {
-    const data = docSnap.data ? docSnap.data() : null;
-    if (!data || typeof data !== "object") return;
-    out.push(
-      normalizeAdminAgendaTeacher({
-        id: docSnap.id,
-        nome: data.nome,
-        ativo: typeof data.ativo === "boolean" ? data.ativo : true,
-      })
-    );
-  });
-  return out.filter(Boolean).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+    const q = firebase.query(firebase.collection(firebase.primaryDb, "users"), firebase.where("tipo", "==", "teacher"));
+    const snap = await withTimeout(firebase.getDocs(q), 12_000, "firestore_getDocs_teachers_agendas");
+    const out = [];
+    snap.forEach((docSnap) => {
+      const data = docSnap.data ? docSnap.data() : null;
+      if (!data || typeof data !== "object") return;
+      out.push(
+        normalizeAdminAgendaTeacher({
+          id: docSnap.id,
+          nome: data.nome,
+          ativo: typeof data.ativo === "boolean" ? data.ativo : true,
+        })
+      );
+    });
+    return out.filter(Boolean).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  } catch (error) {
+    console.warn("[admin] fetchAdminAgendaTeachers falling back to admin-data:", error?.message || error);
+    const rows = await fetchUserRowsFromFirestore("teacher");
+    return (Array.isArray(rows) ? rows : [])
+      .map((row) =>
+        normalizeAdminAgendaTeacher({
+          id: row.id,
+          nome: row.nome,
+          ativo: row.ativo,
+        })
+      )
+      .filter(Boolean)
+      .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  }
 };
 
 const applyAdminTeacherAgendasToUI = () => {
@@ -5993,8 +6008,9 @@ let adminEventUserPickerSearchDebounce = null;
 
 const getAdminEventUserPickerMeta = (type) => {
   const safeType = type === "teacher" ? "teacher" : "student";
-  const state = adminUsersState?.[safeType] || {};
-  const rows = (Array.isArray(state.rows) ? state.rows : [])
+  const state = adminStudentsState || {};
+  const sourceRows = safeType === "teacher" ? state.teachers : state.students;
+  const rows = (Array.isArray(sourceRows) ? sourceRows : [])
     .filter((row) => row && typeof row === "object")
     .slice()
     .sort((a, b) => {
@@ -6002,7 +6018,7 @@ const getAdminEventUserPickerMeta = (type) => {
       if (activeDelta) return activeDelta;
       return String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR");
     });
-  const error = String(state.error || "").trim();
+  const error = String(state.loadError || "").trim();
   const loading = Boolean(state.isLoading) && !error;
   const idField = safeType === "teacher" ? "professorId" : "alunoId";
   const searchField = safeType === "teacher" ? "teacherSearch" : "studentSearch";
@@ -6014,7 +6030,7 @@ const getAdminEventUserPickerMeta = (type) => {
 
 const getAdminEventUserPickerSelectedText = (meta) => {
   if (meta.error) return "Não foi possível carregar a lista";
-  if (meta.loading) return "Carregando lista...";
+  if (meta.loading) return meta.safeType === "teacher" ? "Carregando professores..." : "Carregando alunos...";
   if (meta.selectedRow) {
     return meta.selectedRow.ativo === false ? `${meta.selectedRow.nome} (inativo)` : meta.selectedRow.nome;
   }
@@ -6057,7 +6073,7 @@ const renderAdminEventUserPickerResults = (meta) => {
   if (meta.loading) {
     return `
       <div class="admin-ped-user-picker-message">
-        <div class="admin-ped-user-picker-message-title">Carregando lista...</div>
+        <div class="admin-ped-user-picker-message-title">${meta.safeType === "teacher" ? "Carregando professores..." : "Carregando alunos..."}</div>
         <div class="admin-ped-user-picker-message-sub">Aguarde só um instante enquanto buscamos os dados.</div>
       </div>
     `;
@@ -6134,17 +6150,14 @@ function syncAdminEventUserSelects() {
   syncPicker("student");
   syncPicker("teacher");
 
-  const teacherState = adminUsersState?.teacher || {};
-  const studentState = adminUsersState?.student || {};
-  const teacherError = String(teacherState.error || "").trim();
-  const studentError = String(studentState.error || "").trim();
+  const studentsState = adminStudentsState || {};
+  const loadError = String(studentsState.loadError || "").trim();
   const statusEl = modalBody.querySelector("[data-ce-admin-users-status]");
   if (statusEl instanceof HTMLElement) {
-    const errorMessages = [teacherError, studentError].filter(Boolean);
-    const isLoading = Boolean(teacherState.isLoading) || Boolean(studentState.isLoading);
-    statusEl.hidden = !isLoading && !errorMessages.length;
-    statusEl.textContent = errorMessages.length
-      ? `Não foi possível carregar a lista. ${errorMessages.join(" · ")}`
+    const isLoading = Boolean(studentsState.isLoading);
+    statusEl.hidden = !isLoading && !loadError;
+    statusEl.textContent = loadError
+      ? `Não foi possível carregar a lista. ${loadError}`
       : isLoading
         ? "Carregando alunos e professores..."
         : "";
@@ -6714,8 +6727,10 @@ const openTeacherEventFormModalFromDraft = () => {
       const professorId = String(
         adminTeacherEl instanceof HTMLSelectElement ? adminTeacherEl.value : createEventDraft.professorId || ""
       ).trim();
-      const alunoMeta = (adminUsersState?.student?.rows || []).find((row) => row && String(row.id || "") === alunoId) || null;
-      const professorMeta = (adminUsersState?.teacher?.rows || []).find((row) => row && String(row.id || "") === professorId) || null;
+      const alunoMeta = (adminStudentsState?.studentsById instanceof Map ? adminStudentsState.studentsById.get(alunoId) || null : null) ||
+        (Array.isArray(adminStudentsState?.students) ? adminStudentsState.students.find((row) => row && String(row.id || "") === alunoId) || null : null);
+      const professorMeta = (adminStudentsState?.teachersById instanceof Map ? adminStudentsState.teachersById.get(professorId) || null : null) ||
+        (Array.isArray(adminStudentsState?.teachers) ? adminStudentsState.teachers.find((row) => row && String(row.id || "") === professorId) || null : null);
 
       payload.alunoId = alunoId;
       payload.professorId = professorId;
@@ -6837,6 +6852,10 @@ const openTeacherEventFormModalFromDraft = () => {
     return false;
   };
 
+  if (!readOnly && currentRole === "admin") {
+    void ensureAdminStudentsBaseData({ force: false });
+  }
+
 	openModal({
 	  title,
 	  bodyHtml: buildCreateEventBody({ readOnly }),
@@ -6930,8 +6949,7 @@ const openTeacherEventFormModalFromDraft = () => {
 
 	if (!readOnly) {
 	  if (currentRole === "admin") {
-	    loadUsersFromFirestore("teacher");
-	    loadUsersFromFirestore("student");
+	    void ensureAdminStudentsBaseData({ force: true });
 	    syncAdminEventUserSelects();
 
       // Keep admin selects wired to the draft so Save enables immediately after selection.
@@ -9611,6 +9629,7 @@ let adminGrowthGoalsState = {
 let adminStudentsState = {
   isLoading: false,
   loadedAt: 0,
+  loadError: "",
   teachers: [], // [{id,nome,ativo,initials}]
   teachersById: new Map(),
   studentsById: new Map(), // uid -> {id,nome,email,ativo,initials}
@@ -12964,50 +12983,75 @@ const fetchUserRowsFromFirestore = async (tipo) => {
 };
 
 const fetchLessonLogsFromFirestore = async () => {
-  const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_lessonlogs");
-  const user = await waitForFirebaseAuthReady(firebase, 5000);
-  if (!user) {
-    const e = new Error("firebase_not_authenticated");
-    e.code = "auth/no-current-user";
-    throw e;
-  }
+  try {
+    const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_lessonlogs");
+    const user = await waitForFirebaseAuthReady(firebase, 5000);
+    if (!user) {
+      const e = new Error("firebase_not_authenticated");
+      e.code = "auth/no-current-user";
+      throw e;
+    }
 
-  const q = firebase.query(firebase.collection(firebase.primaryDb, "lessonLogs"));
-  const snap = await withTimeout(firebase.getDocs(q), 12_000, "firestore_getDocs_lessonLogs_all");
-  const logs = [];
-  snap.forEach((docSnap) => {
-    const data = docSnap.data ? docSnap.data() : null;
-    if (!data || typeof data !== "object") return;
-    const eventId = typeof data.eventId === "string" ? data.eventId.trim() : "";
-    const professorId = typeof data.professorId === "string" ? data.professorId.trim() : "";
-    const alunoId = typeof data.alunoId === "string" ? data.alunoId.trim() : "";
-    const statusAula = typeof data.statusAula === "string" ? data.statusAula.trim().toLowerCase() : "";
-    if (!eventId) return;
-    logs.push({
-      id: docSnap.id,
-      eventId,
-      professorId,
-      alunoId,
-      dateKey: typeof data.dateKey === "string" ? data.dateKey.trim() : "",
-      statusAula,
-      criadoEm: data.criadoEm ? (typeof data.criadoEm?.toDate === "function" ? data.criadoEm.toDate().toISOString() : String(data.criadoEm)) : "",
-      atualizadoEm: data.atualizadoEm ? (typeof data.atualizadoEm?.toDate === "function" ? data.atualizadoEm.toDate().toISOString() : String(data.atualizadoEm)) : "",
-      payload: data,
+    const q = firebase.query(firebase.collection(firebase.primaryDb, "lessonLogs"));
+    const snap = await withTimeout(firebase.getDocs(q), 12_000, "firestore_getDocs_lessonLogs_all");
+    const logs = [];
+    snap.forEach((docSnap) => {
+      const data = docSnap.data ? docSnap.data() : null;
+      if (!data || typeof data !== "object") return;
+      const eventId = typeof data.eventId === "string" ? data.eventId.trim() : "";
+      const professorId = typeof data.professorId === "string" ? data.professorId.trim() : "";
+      const alunoId = typeof data.alunoId === "string" ? data.alunoId.trim() : "";
+      const statusAula = typeof data.statusAula === "string" ? data.statusAula.trim().toLowerCase() : "";
+      if (!eventId) return;
+      logs.push({
+        id: docSnap.id,
+        eventId,
+        professorId,
+        alunoId,
+        dateKey: typeof data.dateKey === "string" ? data.dateKey.trim() : "",
+        statusAula,
+        criadoEm: data.criadoEm ? (typeof data.criadoEm?.toDate === "function" ? data.criadoEm.toDate().toISOString() : String(data.criadoEm)) : "",
+        atualizadoEm: data.atualizadoEm ? (typeof data.atualizadoEm?.toDate === "function" ? data.atualizadoEm.toDate().toISOString() : String(data.atualizadoEm)) : "",
+        payload: data,
+      });
     });
-  });
 
-  // newest first to make "last" lookups cheap.
-  logs.sort((a, b) => {
-    const ak = String(a.dateKey || "");
-    const bk = String(b.dateKey || "");
-    if (ak !== bk) return bk.localeCompare(ak);
-    const ams = a.atualizadoEm ? Date.parse(a.atualizadoEm) : NaN;
-    const bms = b.atualizadoEm ? Date.parse(b.atualizadoEm) : NaN;
-    if (Number.isFinite(ams) && Number.isFinite(bms)) return bms - ams;
-    return 0;
-  });
+    // newest first to make "last" lookups cheap.
+    logs.sort((a, b) => {
+      const ak = String(a.dateKey || "");
+      const bk = String(b.dateKey || "");
+      if (ak !== bk) return bk.localeCompare(ak);
+      const ams = a.atualizadoEm ? Date.parse(a.atualizadoEm) : NaN;
+      const bms = b.atualizadoEm ? Date.parse(b.atualizadoEm) : NaN;
+      if (Number.isFinite(ams) && Number.isFinite(bms)) return bms - ams;
+      return 0;
+    });
 
-  return logs;
+    return logs;
+  } catch (error) {
+    console.warn("[admin] fetchLessonLogsFromFirestore falling back to admin-data:", error?.message || error);
+    const response = await fetchWithAuth("/api/admin-data?collection=lessonLogs", { method: "GET" });
+    if (!response.ok) return [];
+    const payload = await response.json().catch(() => null);
+    const rows = Array.isArray(payload?.rows) ? payload.rows : [];
+    return rows
+      .map((row) => {
+        const eventId = typeof row.eventId === "string" ? row.eventId.trim() : "";
+        if (!eventId) return null;
+        return {
+          id: String(row.id || "").trim(),
+          eventId,
+          professorId: typeof row.professorId === "string" ? row.professorId.trim() : "",
+          alunoId: typeof row.alunoId === "string" ? row.alunoId.trim() : "",
+          dateKey: typeof row.dateKey === "string" ? row.dateKey.trim() : "",
+          statusAula: typeof row.statusAula === "string" ? row.statusAula.trim().toLowerCase() : "",
+          criadoEm: row.criadoEm || row.createdAt || "",
+          atualizadoEm: row.atualizadoEm || row.updatedAt || "",
+          payload: row,
+        };
+      })
+      .filter(Boolean);
+  }
 };
 
 const normalizeSupabaseStudentForAdmin = (row = {}) => {
@@ -13062,6 +13106,7 @@ const ensureAdminStudentsBaseData = async ({ force = false } = {}) => {
   if (!force && adminStudentsState.loadedAt && now - adminStudentsState.loadedAt < 60_000) return;
 
   adminStudentsState.isLoading = true;
+  adminStudentsState.loadError = "";
   setAdminStudentsStatus("Carregando…");
   if (adminStudentsError instanceof HTMLElement) adminStudentsError.hidden = true;
 
@@ -13113,10 +13158,15 @@ const ensureAdminStudentsBaseData = async ({ force = false } = {}) => {
     applyAdminStudentsFilters();
   } catch (error) {
     console.error("[admin] students base load failed:", error);
+    adminStudentsState.loadError = typeof error?.message === "string" && error.message ? error.message : "Não foi possível carregar agora.";
     if (adminStudentsError instanceof HTMLElement) adminStudentsError.hidden = false;
     setAdminStudentsStatus("Não foi possível carregar agora.", "error");
   } finally {
     adminStudentsState.isLoading = false;
+    if (currentRole === "admin" && activeModalKind === "event-form") {
+      syncAdminEventUserSelects();
+      validateCreateEventDraft();
+    }
   }
 };
 
@@ -24005,8 +24055,7 @@ document.addEventListener("click", (event) => {
 
       const retryUsers = target.closest("[data-ce-admin-retry-users]");
       if (retryUsers instanceof HTMLButtonElement) {
-        loadUsersFromFirestore("teacher");
-        loadUsersFromFirestore("student");
+        void ensureAdminStudentsBaseData({ force: true });
         return;
       }
 
