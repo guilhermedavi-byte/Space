@@ -735,44 +735,11 @@ const syncRoleUI = () => {
     }
   });
 
-  // Defensive: ensure Admin sidebar contains the "Alunos" entry (some deploys may serve an older template).
+  // Defensive: ensure Admin sidebar contains the Pedagógico accordion (some deploys may serve an older template).
   if (currentRole === "admin") {
     try {
       const sidebarNav = document.querySelector(".sidebar-nav");
       if (sidebarNav instanceof HTMLElement) {
-        const existing = sidebarNav.querySelector('[data-panel-target="alunos"]');
-        if (!(existing instanceof HTMLButtonElement)) {
-          const btn = document.createElement("button");
-          btn.className = "sidebar-link";
-          btn.type = "button";
-          btn.setAttribute("data-panel-target", "alunos");
-          btn.setAttribute("data-admin-only", "");
-          btn.title = "Alunos";
-          btn.innerHTML = `
-            <span class="sidebar-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none">
-                <path d="M3.5 19.5v-1.2a3.3 3.3 0 0 1 3.3-3.3h6.4a3.3 3.3 0 0 1 3.3 3.3v1.2"></path>
-                <circle cx="10" cy="8.2" r="3.2"></circle>
-                <path d="M18.5 9.5h3"></path>
-                <path d="M20 8v3"></path>
-              </svg>
-            </span>
-            <span class="sidebar-text">Alunos</span>
-          `;
-          // Insert after "Professores" when possible, otherwise append.
-          const after = sidebarNav.querySelector('[data-panel-target="professores"]');
-          if (after && after.parentNode === sidebarNav) {
-            after.insertAdjacentElement("afterend", btn);
-          } else {
-            sidebarNav.appendChild(btn);
-          }
-          // Bind navigation for this dynamically inserted link.
-          btn.addEventListener("click", () => {
-            const role = sessionUser?.role || currentRole;
-            navigateApp(panelPathForRole(role, "alunos"));
-          });
-        }
-
         // Also ensure Admin sidebar contains the Pedagógico accordion.
         const existingPedAccordion = sidebarNav.querySelector("[data-sidebar-accordion='pedagogico']");
         if (!(existingPedAccordion instanceof HTMLElement)) {
@@ -15113,6 +15080,7 @@ const renderAdminPedagogicoTabs = () => {
   adminPedEnsureNavState();
   const activeGroup = String(adminPedagogicoState.activeGroup || "operacao");
   const activeTab = String(adminPedagogicoState.activeTab || "overview");
+  syncAdminPedagogicoHeaderActionMenu();
 
   document.querySelectorAll("[data-admin-ped-group]").forEach((btn) => {
     if (!(btn instanceof HTMLButtonElement)) return;
@@ -17403,13 +17371,31 @@ const renderAdminPedagogicoTeachersPanel = () => {
       const students = new Set();
       list.forEach((c) => (Array.isArray(c.studentIds) ? c.studentIds : []).forEach((id) => students.add(id)));
       return `
-        <div class="admin-ped-teacher-row">
-          <div class="admin-ped-teacher-name">${escapeHtml(String(t.nome || "Professor"))}</div>
-          <div class="admin-ped-teacher-stats">
-            <span>${escapeHtml(String(total))} aulas</span>
-            <span>${escapeHtml(String(indiv))} individuais</span>
-            <span>${escapeHtml(String(group))} grupos</span>
-            <span>${escapeHtml(String(students.size))} alunos</span>
+        <div
+          class="admin-ped-teacher-row"
+          data-admin-user-row="${escapeHtml(String(t.id || ""))}"
+          data-admin-user-name="${escapeHtml(String(t.nome || "Professor"))}"
+          data-admin-user-email="${escapeHtml(String(t.email || ""))}"
+          data-admin-user-active="${t.ativo ? "1" : "0"}"
+          data-admin-user-type="teacher"
+        >
+          <div class="admin-ped-teacher-main">
+            <div class="admin-ped-teacher-name">${escapeHtml(String(t.nome || "Professor"))}</div>
+            <div class="admin-ped-teacher-stats">
+              <span>${escapeHtml(String(total))} aulas</span>
+              <span>${escapeHtml(String(indiv))} individuais</span>
+              <span>${escapeHtml(String(group))} grupos</span>
+              <span>${escapeHtml(String(students.size))} alunos</span>
+            </div>
+          </div>
+          <div class="admin-row-actions admin-ped-teacher-actions" data-admin-actions>
+            <button class="admin-actions-trigger" type="button" aria-label="Ações" data-admin-actions-trigger>
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M6.5 12h.01"></path>
+                <path d="M12 12h.01"></path>
+                <path d="M17.5 12h.01"></path>
+              </svg>
+            </button>
           </div>
         </div>
       `;
@@ -17417,9 +17403,42 @@ const renderAdminPedagogicoTeachersPanel = () => {
     .join("");
 };
 
+const syncAdminPedagogicoHeaderActionMenu = () => {
+  const button = document.querySelector("[data-admin-ped-new-action]");
+  const menu = document.querySelector("[data-admin-ped-new-action-menu]");
+  if (!(button instanceof HTMLButtonElement) || !(menu instanceof HTMLElement)) return;
+
+  const inPeople = String(adminPedagogicoState.activeTab || "") === "pessoas";
+  const peopleTab = String(adminPedagogicoState.peopleTab || "students");
+  const showStudentBulkActions = peopleTab !== "teachers";
+
+  if (!inPeople) {
+    button.textContent = "+ Nova ação";
+    menu.innerHTML = `
+      <button class="admin-ped-actionmenu-item" type="button" role="menuitem" data-admin-ped-new-action-item="class_individual">Criar aula individual</button>
+      <button class="admin-ped-actionmenu-item" type="button" role="menuitem" data-admin-ped-new-action-item="class_group">Criar aula em grupo</button>
+      <button class="admin-ped-actionmenu-item" type="button" role="menuitem" data-admin-ped-new-action-item="group">Criar turma</button>
+      <button class="admin-ped-actionmenu-item" type="button" role="menuitem" data-admin-ped-new-action-item="link">Vincular aluno a professor</button>
+      <button class="admin-ped-actionmenu-item" type="button" role="menuitem" data-admin-ped-new-action-item="plan">Criar plano</button>
+      <button class="admin-ped-actionmenu-item" type="button" role="menuitem" data-admin-ped-new-action-item="feedback">Enviar feedback para professor</button>
+      <button class="admin-ped-actionmenu-item" type="button" role="menuitem" data-admin-ped-new-action-item="report">Gerar relatório</button>
+    `;
+    return;
+  }
+
+  button.textContent = "+ Adicionar Usuário";
+  menu.innerHTML = `
+    <button class="admin-ped-actionmenu-item" type="button" role="menuitem" data-admin-ped-new-action-item="ped_teacher_create">Criar Professor</button>
+    <button class="admin-ped-actionmenu-item" type="button" role="menuitem" data-admin-ped-new-action-item="ped_student_create">Criar Aluno</button>
+    ${showStudentBulkActions ? `<button class="admin-ped-actionmenu-item" type="button" role="menuitem" data-admin-ped-new-action-item="ped_student_import">Importar lista</button>` : ""}
+    ${showStudentBulkActions ? `<button class="admin-ped-actionmenu-item" type="button" role="menuitem" data-admin-ped-new-action-item="ped_student_export">Exportar lista</button>` : ""}
+  `;
+};
+
 const renderAdminPedagogicoPeoplePanel = () => {
   if (!(adminPedPeopleRoot instanceof HTMLElement)) return;
   const activeTab = String(adminPedagogicoState.peopleTab || "students");
+  syncAdminPedagogicoHeaderActionMenu();
 
   adminPedPeopleRoot.querySelectorAll("[data-admin-ped-people-tab]").forEach((btn) => {
     if (!(btn instanceof HTMLButtonElement)) return;
@@ -20182,7 +20201,7 @@ const openAdminStudentActionsPopover = ({ triggerEl, alunoId } = {}) => {
 
 const clampToViewport = (value, min, max) => Math.max(min, Math.min(max, value));
 
-const openAdminActionsPopover = ({ triggerEl, uid, name, email, isActive }) => {
+const openAdminActionsPopover = ({ triggerEl, uid, name, email, isActive, userType }) => {
   if (!(triggerEl instanceof HTMLElement)) return;
   closeAdminActionsPopover();
 
@@ -20190,8 +20209,9 @@ const openAdminActionsPopover = ({ triggerEl, uid, name, email, isActive }) => {
   const safeName = String(name || "").trim();
   const safeEmail = String(email || "").trim();
   const active = Boolean(isActive);
+  const safeType = userType === "teacher" || userType === "growth" ? userType : "student";
 
-  const toggleLabel = active ? "Desativar" : "Ativar";
+  const toggleLabel = active ? "Desativar" : "Reativar";
   const toggleClass = active ? "admin-action-item is-danger" : "admin-action-item";
 
   const pop = document.createElement("div");
@@ -20201,12 +20221,23 @@ const openAdminActionsPopover = ({ triggerEl, uid, name, email, isActive }) => {
   if (safeUid) pop.setAttribute("data-admin-actions-uid", safeUid);
   pop.innerHTML = `
     <button
+      class="admin-action-item"
+      type="button"
+      data-admin-action-edit
+      data-admin-action-uid="${escapeHtml(safeUid)}"
+      data-admin-action-name="${escapeHtml(safeName)}"
+      data-admin-action-email="${escapeHtml(safeEmail)}"
+      data-admin-action-type="${escapeHtml(safeType)}"
+      data-admin-action-active="${active ? "1" : "0"}"
+    >Editar</button>
+    <button
       class="${toggleClass}"
       type="button"
       data-admin-action-toggle
       data-admin-action-uid="${escapeHtml(safeUid)}"
       data-admin-action-name="${escapeHtml(safeName)}"
       data-admin-action-email="${escapeHtml(safeEmail)}"
+      data-admin-action-type="${escapeHtml(safeType)}"
       data-admin-action-active="${active ? "1" : "0"}"
     >${toggleLabel}</button>
     <button
@@ -20216,6 +20247,7 @@ const openAdminActionsPopover = ({ triggerEl, uid, name, email, isActive }) => {
       data-admin-action-uid="${escapeHtml(safeUid)}"
       data-admin-action-name="${escapeHtml(safeName)}"
       data-admin-action-email="${escapeHtml(safeEmail)}"
+      data-admin-action-type="${escapeHtml(safeType)}"
       data-admin-action-active="${active ? "1" : "0"}"
     >Redefinir senha</button>
   `;
@@ -20236,6 +20268,348 @@ const openAdminActionsPopover = ({ triggerEl, uid, name, email, isActive }) => {
 
   pop.style.top = `${clampToViewport(top, margin, window.innerHeight - popRect.height - margin)}px`;
   pop.style.left = `${clampToViewport(left, margin, window.innerWidth - popRect.width - margin)}px`;
+};
+
+const getAdminUserTypeFromRow = (rowEl) => {
+  const explicit = String(rowEl?.getAttribute("data-admin-user-type") || "").trim().toLowerCase();
+  if (explicit === "teacher" || explicit === "student" || explicit === "growth") return explicit;
+  const activePanel = String(body.dataset.activePanel || "");
+  if (activePanel === "professores") return "teacher";
+  if (activePanel === "growth") return "growth";
+  return "student";
+};
+
+const updateAdminUserNameRecord = async ({ uid, role, name } = {}) => {
+  const safeUid = String(uid || "").trim();
+  const safeRole = role === "teacher" ? "teacher" : role === "growth" ? "growth" : "student";
+  const safeName = String(name || "").trim();
+  if (!safeUid || !safeName) {
+    const err = new Error("invalid_admin_user_edit");
+    err.code = "invalid_admin_user_edit";
+    throw err;
+  }
+
+  const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_user_edit");
+  const user = await waitForFirebaseAuthReady(firebase, 5000);
+  if (!user) {
+    const err = new Error("firebase_not_authenticated");
+    err.code = "auth/no-current-user";
+    throw err;
+  }
+
+  const payload = {
+    nome: safeName,
+    tipo: safeRole,
+    updatedAt: firebase.serverTimestamp(),
+  };
+
+  try {
+    await withTimeout(
+      firebase.setDoc(firebase.doc(firebase.primaryDb, "users", safeUid), payload, { merge: true }),
+      12_000,
+      "firestore_update_user_primary"
+    );
+  } catch (primaryErr) {
+    console.error("[admin] update user (firestore primary) failed:", primaryErr);
+    await withTimeout(
+      firebase.setDoc(firebase.doc(firebase.secondaryDb, "users", safeUid), payload, { merge: true }),
+      12_000,
+      "firestore_update_user_secondary"
+    );
+  }
+
+  await withTimeout(
+    fetchWithAuth("/api/admin-users", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ uid: safeUid, role: safeRole, name: safeName }),
+    }).catch(() => {}),
+    8000,
+    "admin_users_update_sync"
+  );
+
+  adminUsersState[safeRole].loadedAt = 0;
+  if (safeRole === "teacher") loadUsersFromFirestore("teacher");
+  if (safeRole === "student") loadUsersFromFirestore("student");
+  if (safeRole === "growth") loadUsersFromFirestore("growth");
+  if (currentRole === "admin" && String(body.dataset.activePanel || "") === "admin-controle-pedagogico") {
+    adminPedagogicoState.loadedAt = 0;
+    await renderAdminControlePedagogicoPanel({ force: true });
+  }
+};
+
+const openAdminUserEditModal = ({ uid, role, name, email } = {}) => {
+  const safeUid = String(uid || "").trim();
+  const safeRole = role === "teacher" ? "teacher" : role === "growth" ? "growth" : "student";
+  const safeName = String(name || "").trim();
+  const safeEmail = String(email || "").trim();
+  if (!safeUid) return;
+
+  openModal({
+    title: safeRole === "teacher" ? "Editar professor" : safeRole === "student" ? "Editar aluno" : "Editar usuário",
+    bodyHtml: `
+      <div style="display:grid; gap:12px;">
+        <label class="modal-field">
+          <span>Nome</span>
+          <input class="modal-input" type="text" value="${escapeHtml(safeName)}" data-admin-user-edit-name />
+        </label>
+        <label class="modal-field">
+          <span>E-mail</span>
+          <input class="modal-input" type="email" value="${escapeHtml(safeEmail)}" disabled />
+        </label>
+        <div class="modal-inline-error" data-admin-user-edit-error hidden>—</div>
+      </div>
+    `,
+    primaryLabel: "Salvar",
+    secondaryLabel: "Cancelar",
+    hideSecondary: false,
+    showTrash: false,
+    onPrimary: () => {
+      const input = modalBody?.querySelector("[data-admin-user-edit-name]");
+      const err = modalBody?.querySelector("[data-admin-user-edit-error]");
+      const nextName = input instanceof HTMLInputElement ? input.value.trim() : "";
+      if (!(err instanceof HTMLElement)) return false;
+      err.hidden = true;
+      err.textContent = "";
+      if (!nextName) {
+        err.textContent = "Informe um nome.";
+        err.hidden = false;
+        return false;
+      }
+      if (modalPrimary) modalPrimary.disabled = true;
+      if (modalSecondary) modalSecondary.disabled = true;
+      (async () => {
+        try {
+          await updateAdminUserNameRecord({ uid: safeUid, role: safeRole, name: nextName });
+          closeModal();
+        } catch (error) {
+          console.error("[admin] update user failed:", error);
+          err.textContent = "Não foi possível salvar agora. Tente novamente.";
+          err.hidden = false;
+          if (modalPrimary) modalPrimary.disabled = false;
+          if (modalSecondary) modalSecondary.disabled = false;
+        }
+      })();
+      return false;
+    },
+  });
+};
+
+const splitAdminPedCsvLine = (line, delimiter) => {
+  const out = [];
+  let current = "";
+  let inQuotes = false;
+  const sep = delimiter === "\t" ? "\t" : delimiter === ";" ? ";" : ",";
+  for (let i = 0; i < String(line || "").length; i += 1) {
+    const ch = line[i];
+    if (ch === "\"") {
+      if (inQuotes && line[i + 1] === "\"") {
+        current += "\"";
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+    if (!inQuotes && ch === sep) {
+      out.push(current.trim());
+      current = "";
+      continue;
+    }
+    current += ch;
+  }
+  out.push(current.trim());
+  return out;
+};
+
+const parseAdminPedCsvRows = (text) => {
+  const lines = String(text || "")
+    .replace(/\r/g, "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (!lines.length) return [];
+  const delimiter = lines[0].includes(";") ? ";" : lines[0].includes("\t") ? "\t" : ",";
+  const headers = splitAdminPedCsvLine(lines[0], delimiter).map((header) => normalizeSearchText(header));
+  return lines.slice(1).map((line) => {
+    const values = splitAdminPedCsvLine(line, delimiter);
+    const row = {};
+    headers.forEach((header, index) => {
+      row[header] = values[index] || "";
+    });
+    return row;
+  });
+};
+
+const createAdminUserRecord = async ({ role, name, email, password } = {}) => {
+  const safeRole = role === "teacher" ? "teacher" : role === "growth" ? "growth" : "student";
+  const safeName = String(name || "").trim();
+  const safeEmail = String(email || "").trim().toLowerCase();
+  const safePassword = String(password || "").trim();
+  if (!safeName || !isValidEmail(safeEmail) || safePassword.length < 6) {
+    const err = new Error("invalid_admin_user_create");
+    err.code = "invalid_admin_user_create";
+    throw err;
+  }
+
+  const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_user_import");
+  const user = await waitForFirebaseAuthReady(firebase, 5000);
+  if (!user) {
+    const err = new Error("firebase_not_authenticated");
+    err.code = "auth/no-current-user";
+    throw err;
+  }
+
+  let secondaryAuth = null;
+  try {
+    secondaryAuth = firebase.secondaryAuth;
+    const credential = await withTimeout(
+      firebase.createUserWithEmailAndPassword(firebase.secondaryAuth, safeEmail, safePassword),
+      12_000,
+      "auth_create_user_import"
+    );
+    const uid = String(credential?.user?.uid || "").trim();
+    if (!uid) throw new Error("missing_uid");
+
+    const payload = {
+      nome: safeName,
+      email: safeEmail,
+      tipo: safeRole,
+      ativo: true,
+      criadoEm: firebase.serverTimestamp(),
+    };
+
+    try {
+      await withTimeout(
+        firebase.setDoc(firebase.doc(firebase.primaryDb, "users", uid), payload, { merge: true }),
+        12_000,
+        "firestore_create_user_primary_import"
+      );
+    } catch (primaryErr) {
+      console.error("[admin] create user import (firestore primary) failed:", primaryErr);
+      await withTimeout(
+        firebase.setDoc(firebase.doc(firebase.secondaryDb, "users", uid), payload, { merge: true }),
+        12_000,
+        "firestore_create_user_secondary_import"
+      );
+    }
+
+    await withTimeout(
+      fetchWithAuth("/api/admin-users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ uid, role: safeRole, name: safeName }),
+      }).catch(() => {}),
+      8000,
+      "admin_users_import_sync"
+    );
+
+    return { uid };
+  } finally {
+    try {
+      if (secondaryAuth) {
+        await withTimeout(firebase.signOut(secondaryAuth), 6000, "auth_secondary_signout_import");
+      }
+    } catch {
+      // ignore
+    }
+  }
+};
+
+const openAdminPedagogicoImportStudentsModal = () => {
+  openModal({
+    title: "Importar alunos",
+    bodyHtml: `
+      <div style="display:grid; gap:12px;">
+        <p style="margin:0; color: rgba(255,255,255,0.72); font-size: 13px; line-height: 1.45;">
+          Envie um arquivo CSV com pelo menos as colunas <strong>nome</strong> e <strong>email</strong>. Se a coluna <strong>password</strong> não vier, uma senha temporária será gerada.
+        </p>
+        <label class="modal-field">
+          <span>Arquivo CSV</span>
+          <input class="modal-input" type="file" accept=".csv,text/csv" data-admin-ped-import-file />
+        </label>
+        <div class="modal-inline-error" data-admin-ped-import-error hidden>—</div>
+        <div class="modal-inline-success" data-admin-ped-import-success hidden>—</div>
+      </div>
+    `,
+    primaryLabel: "Importar",
+    secondaryLabel: "Cancelar",
+    hideSecondary: false,
+    showTrash: false,
+    onPrimary: () => {
+      const fileEl = modalBody?.querySelector("[data-admin-ped-import-file]");
+      const errorEl = modalBody?.querySelector("[data-admin-ped-import-error]");
+      const successEl = modalBody?.querySelector("[data-admin-ped-import-success]");
+      const file = fileEl instanceof HTMLInputElement && fileEl.files && fileEl.files.length ? fileEl.files[0] : null;
+      if (!(errorEl instanceof HTMLElement) || !(successEl instanceof HTMLElement)) return false;
+      errorEl.hidden = true;
+      successEl.hidden = true;
+      errorEl.textContent = "";
+      successEl.textContent = "";
+
+      if (!file) {
+        errorEl.textContent = "Selecione um CSV para importar.";
+        errorEl.hidden = false;
+        return false;
+      }
+
+      if (modalPrimary) modalPrimary.disabled = true;
+      if (modalSecondary) modalSecondary.disabled = true;
+
+      (async () => {
+        try {
+          const raw = await file.text();
+          const rows = parseAdminPedCsvRows(raw);
+          const items = rows
+            .map((row) => ({
+              name: String(row.nome || row.name || "").trim(),
+              email: String(row.email || "").trim().toLowerCase(),
+              password: String(row.password || row.senha || "").trim(),
+            }))
+            .filter((row) => row.name && isValidEmail(row.email));
+
+          if (!items.length) {
+            throw new Error("CSV sem linhas válidas.");
+          }
+
+          let created = 0;
+          for (const item of items) {
+            const password = item.password || `Sp${Math.random().toString(36).slice(2, 8)}!9`;
+            await createAdminUserRecord({
+              role: "student",
+              name: item.name,
+              email: item.email,
+              password,
+            });
+            created += 1;
+          }
+
+          adminPedagogicoState.loadedAt = 0;
+          adminUsersState.student.loadedAt = 0;
+          if (body.dataset.activePanel === "admin-controle-pedagogico") {
+            await renderAdminControlePedagogicoPanel({ force: true });
+            renderAdminPedagogicoPeoplePanel();
+          }
+          if (body.dataset.activePanel === "alunos") {
+            loadUsersFromFirestore("student");
+          }
+
+          successEl.textContent = `${created} aluno(s) importado(s) com sucesso.`;
+          successEl.hidden = false;
+          window.setTimeout(() => closeModal(), 900);
+        } catch (error) {
+          console.error("[admin] import students failed:", error);
+          errorEl.textContent = "Não foi possível importar agora. Verifique o arquivo e tente novamente.";
+          errorEl.hidden = false;
+        } finally {
+          if (modalPrimary) modalPrimary.disabled = false;
+          if (modalSecondary) modalSecondary.disabled = false;
+        }
+      })();
+
+      return false;
+    },
+  });
 };
 
 if (adminUserForm instanceof HTMLFormElement) {
@@ -21274,6 +21648,11 @@ const showPanel = (panelName) => {
     link.setAttribute("aria-pressed", String(isActive));
   });
 
+  if (currentRole === "admin" && (panelName === "professores" || panelName === "alunos")) {
+    navigateApp(panelPathForRole(currentRole, "admin-controle-pedagogico"), { replace: true });
+    return;
+  }
+
   panels.forEach((panel) => {
     const isVisible = panel.dataset.panel === panelName;
     panel.classList.toggle("is-visible", isVisible);
@@ -21309,16 +21688,14 @@ const showPanel = (panelName) => {
 
   if (panelName === "professores") {
     window.scrollTo({ top: 0, behavior: "smooth" });
-    if (currentRole === "admin") {
-      loadUsersFromFirestore("teacher");
-    }
+    if (currentRole === "admin") navigateApp(panelPathForRole(currentRole, "admin-controle-pedagogico"), { replace: true });
     return;
   }
 
   if (panelName === "alunos") {
     window.scrollTo({ top: 0, behavior: "smooth" });
     if (currentRole === "admin") {
-      renderAdminStudentsPanel({ force: false });
+      navigateApp(panelPathForRole(currentRole, "admin-controle-pedagogico"), { replace: true });
     } else if (currentRole === "FINANCE") {
       navigateApp(panelPathForRole(currentRole, "financeiro"), { replace: true });
     }
@@ -21442,8 +21819,7 @@ const panelPathForRole = (role, panel) => {
 
   if (normalized === "admin") {
     if (["copilot-vendas", "scripts-vendas", "objecoes", "planos", "personas", "frases-vencedoras", "analytics", "training"].includes(p)) return `/app/admin/growth/${p}`;
-    if (p === "professores") return "/app/admin/professores";
-    if (p === "alunos") return "/app/admin/alunos";
+    if (p === "professores" || p === "alunos") return "/app/admin/controle-pedagogico";
     if (p === "admin-controle-pedagogico") return "/app/admin/controle-pedagogico";
     if (["admin-controle-pedagogico-aulas", "admin-controle-pedagogico-pessoas", "admin-controle-pedagogico-qualidade", "admin-controle-pedagogico-onboarding", "admin-controle-pedagogico-relatorios"].includes(p)) return "/app/admin/controle-pedagogico";
     if (p === "space-office") return "/app/admin/space-office";
@@ -21509,8 +21885,8 @@ const parseAppRoute = (path) => {
   }
 
   if (role === "admin") {
-    if (sub === "professores") return { role, panel: "professores" };
-    if (sub === "alunos") return { role, panel: "alunos" };
+    if (sub === "professores") return { role, panel: "admin-controle-pedagogico", redirectTo: "/app/admin/controle-pedagogico", pedagogicoGroup: "alunosTurmas", pedagogicoTab: "pessoas", pedagogicoPeopleTab: "teachers" };
+    if (sub === "alunos") return { role, panel: "admin-controle-pedagogico", redirectTo: "/app/admin/controle-pedagogico", pedagogicoGroup: "alunosTurmas", pedagogicoTab: "pessoas", pedagogicoPeopleTab: "students" };
     if (sub === "controle-pedagogico") return { role, panel: "admin-controle-pedagogico" };
     if (sub === "space-office") return { role, panel: "space-office" };
     if (sub === "status") return { role, panel: "status-plataforma" };
@@ -21591,6 +21967,13 @@ const initAppShell = async () => {
     navigateApp(panelPathForRole(currentRole, "dashboard"));
     return;
   }
+  if (parsed?.redirectTo) {
+    navigateApp(parsed.redirectTo, { replace: true });
+    return;
+  }
+  if (parsed?.pedagogicoGroup) adminPedagogicoState.activeGroup = parsed.pedagogicoGroup;
+  if (parsed?.pedagogicoTab) adminPedagogicoState.activeTab = parsed.pedagogicoTab;
+  if (parsed?.pedagogicoPeopleTab) adminPedagogicoState.peopleTab = parsed.pedagogicoPeopleTab;
   if (parsed?.growthTab) salesCopilotState.activeTab = parsed.growthTab;
   showPanel(parsed?.panel || "dashboard");
 
@@ -21616,6 +21999,13 @@ const navigateApp = (path, { replace = false } = {}) => {
     return;
   }
 
+  if (parsed?.redirectTo) {
+    navigateApp(parsed.redirectTo, { replace: true });
+    return;
+  }
+  if (parsed?.pedagogicoGroup) adminPedagogicoState.activeGroup = parsed.pedagogicoGroup;
+  if (parsed?.pedagogicoTab) adminPedagogicoState.activeTab = parsed.pedagogicoTab;
+  if (parsed?.pedagogicoPeopleTab) adminPedagogicoState.peopleTab = parsed.pedagogicoPeopleTab;
   if (parsed.growthTab) salesCopilotState.activeTab = parsed.growthTab;
   showPanel(parsed.panel);
 };
@@ -22530,6 +22920,34 @@ document.addEventListener("click", (event) => {
 
         renderAdminControlePedagogicoPanel({ force: false })
           .then(() => {
+            if (kind === "ped_teacher_create") {
+              openAdminCreateUserModal({ presetRole: "teacher" });
+              return;
+            }
+            if (kind === "ped_student_create") {
+              openAdminCreateUserModal({ presetRole: "student" });
+              return;
+            }
+            if (kind === "ped_student_import") {
+              openAdminPedagogicoImportStudentsModal();
+              return;
+            }
+            if (kind === "ped_student_export") {
+              const teachersById = adminPedagogicoState.teachersById instanceof Map ? adminPedagogicoState.teachersById : new Map();
+              const rows = (Array.isArray(adminPedagogicoState.students) ? adminPedagogicoState.students : []).map((s) => {
+                const teacherId = String(s.professorId || s.teacherId || "").trim();
+                return {
+                  alunoId: String(s.id || ""),
+                  nome: String(s.nome || ""),
+                  email: String(s.email || ""),
+                  professor: teacherId ? String(teachersById.get(teacherId)?.nome || "") : "",
+                  plano: String(s.plano || ""),
+                  ativo: s.ativo ? "sim" : "nao",
+                };
+              });
+              adminPedDownloadCsv({ filename: `alunos_pedagogico_${createDateKey(new Date())}.csv`, rows });
+              return;
+            }
             if (kind === "class_individual") {
               openAdminPedClassModal({ mode: "create", prefill: { type: "individual" } });
               return;
@@ -23832,8 +24250,9 @@ document.addEventListener("click", (event) => {
         const name = row.getAttribute("data-admin-user-name") || "Usuário";
         const email = row.getAttribute("data-admin-user-email") || "";
         const isActive = row.getAttribute("data-admin-user-active") === "1";
+        const userType = getAdminUserTypeFromRow(row);
         closeAllAdminActionMenus();
-        openAdminActionsPopover({ triggerEl: trigger, uid, name, email, isActive });
+        openAdminActionsPopover({ triggerEl: trigger, uid, name, email, isActive, userType });
         return;
       }
 
@@ -23848,8 +24267,7 @@ document.addEventListener("click", (event) => {
           row instanceof HTMLElement
             ? row.getAttribute("data-admin-user-active") === "1"
             : toggleAction.getAttribute("data-admin-action-active") === "1";
-        const activePanel = String(body.dataset.activePanel || "");
-        const type = activePanel === "professores" ? "teacher" : activePanel === "growth" ? "growth" : "student";
+        const type = row instanceof HTMLElement ? getAdminUserTypeFromRow(row) : String(toggleAction.getAttribute("data-admin-action-type") || "").trim() || "student";
 
         closeAllAdminActionMenus();
         closeAdminActionsPopover();
@@ -23919,8 +24337,7 @@ document.addEventListener("click", (event) => {
         event.preventDefault();
         const row = resetAction.closest("[data-admin-user-row]");
         const email = row instanceof HTMLElement ? row.getAttribute("data-admin-user-email") || "" : resetAction.getAttribute("data-admin-action-email") || "";
-        const activePanel = String(body.dataset.activePanel || "");
-        const type = activePanel === "professores" ? "teacher" : activePanel === "growth" ? "growth" : "student";
+        const type = row instanceof HTMLElement ? getAdminUserTypeFromRow(row) : String(resetAction.getAttribute("data-admin-action-type") || "").trim() || "student";
 
         closeAllAdminActionMenus();
         closeAdminActionsPopover();
@@ -23953,6 +24370,21 @@ document.addEventListener("click", (event) => {
             return false;
           },
         });
+        return;
+      }
+
+      const editAction = target.closest("[data-admin-action-edit]");
+      if (editAction instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const row = editAction.closest("[data-admin-user-row]");
+        const uid = row instanceof HTMLElement ? row.getAttribute("data-admin-user-row") || "" : editAction.getAttribute("data-admin-action-uid") || "";
+        const name = row instanceof HTMLElement ? row.getAttribute("data-admin-user-name") || "Usuário" : editAction.getAttribute("data-admin-action-name") || "Usuário";
+        const email = row instanceof HTMLElement ? row.getAttribute("data-admin-user-email") || "" : editAction.getAttribute("data-admin-action-email") || "";
+        const type = row instanceof HTMLElement ? getAdminUserTypeFromRow(row) : String(editAction.getAttribute("data-admin-action-type") || "").trim() || "student";
+
+        closeAllAdminActionMenus();
+        closeAdminActionsPopover();
+        openAdminUserEditModal({ uid, role: type, name, email });
         return;
       }
 

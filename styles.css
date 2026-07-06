@@ -19211,7 +19211,7 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 .admin-ped-teacher-row {
   padding: 14px 12px;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 14px;
 }
@@ -19224,6 +19224,16 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   font-size: 14px;
   font-weight: 850;
   color: rgba(255, 255, 255, 0.92);
+}
+
+.admin-ped-teacher-main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.admin-ped-teacher-actions {
+  flex: 0 0 auto;
 }
 
 .admin-ped-teacher-stats {
