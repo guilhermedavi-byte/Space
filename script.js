@@ -19900,7 +19900,6 @@ const renderAdminStudentHistoryTab = () => {
 };
 
 const openAdminStudentHistoryDrawer = async ({ alunoId, teacherId } = {}) => {
-  if (!isFinanceAccessRole(currentRole)) return;
   if (!(adminStudentHistoryDrawer instanceof HTMLElement)) return;
   const aId = String(alunoId || "").trim();
   const tId = String(teacherId || "").trim();
