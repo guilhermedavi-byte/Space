@@ -92,20 +92,38 @@ const summarizeScheduleEventBody = (body) => {
 };
 
 const logScheduleEventsError = ({ point, error, body, extra = {} }) => {
-  // eslint-disable-next-line no-console
-  console.error("[schedule-events] create/update failure", {
-    point,
-    payload: summarizeScheduleEventBody(body),
-    error: {
-      message: error?.message,
-      stack: error?.stack,
-      code: error?.code,
-      status: error?.status,
-      details: error?.details,
-      hint: error?.hint,
-    },
-    ...extra,
-  });
+  try {
+    // eslint-disable-next-line no-console
+    console.error("[schedule-events] create/update failure", {
+      point,
+      payload: summarizeScheduleEventBody(body),
+      error: {
+        message: error?.message,
+        stack: error?.stack,
+        code: error?.code,
+        status: error?.status,
+        details: error?.details,
+        hint: error?.hint,
+      },
+      ...extra,
+    });
+  } catch (loggingError) {
+    // eslint-disable-next-line no-console
+    console.error("[schedule-events] failed while logging create/update failure", {
+      point,
+      originalError: {
+        message: error?.message,
+        stack: error?.stack,
+        code: error?.code,
+        status: error?.status,
+      },
+      loggingError: {
+        message: loggingError?.message,
+        stack: loggingError?.stack,
+      },
+      ...extra,
+    });
+  }
 };
 
 const namesMatch = (a, b) => {
@@ -921,6 +939,16 @@ module.exports = async (req, res) => {
   const cookieSession = getSessionFromRequest(req);
   const method = String(req.method || "GET").toUpperCase();
   const isReadOnlyList = method === "GET" || method === "HEAD";
+  let body = null;
+
+  if (!isReadOnlyList && method !== "DELETE") {
+    try {
+      body = await readJsonBody(req);
+    } catch (error) {
+      sendJson(res, 400, { error: "invalid_json" });
+      return;
+    }
+  }
 
   // Primary auth for this endpoint is the Firebase ID token sent by fetchWithAuth().
   // Cookie sessions can be stale/mismatched, so we treat them as optional metadata only.
@@ -1175,14 +1203,6 @@ module.exports = async (req, res) => {
   if (req.method !== "POST" && req.method !== "PUT") {
     res.setHeader("Allow", "GET, HEAD, POST, PUT, DELETE");
     sendJson(res, 405, { error: "method_not_allowed" });
-    return;
-  }
-
-  let body;
-  try {
-    body = await readJsonBody(req);
-  } catch (error) {
-    sendJson(res, 400, { error: "invalid_json" });
     return;
   }
 
