@@ -294,6 +294,11 @@ const normalizeRepeatMode = (raw) => {
   return "weekly";
 };
 
+const isHiddenAulaStatus = (value) => {
+  const raw = String(value || "").trim().toLowerCase();
+  return raw === "cancelada" || raw === "cancelado" || raw === "cancelled" || raw === "canceled" || raw === "deleted";
+};
+
 const WEEKDAY_TO_DOW = {
   monday: 1,
   tuesday: 2,
@@ -1047,6 +1052,7 @@ module.exports = async (req, res) => {
       const events = docs
         .map((doc) => decodeAulaDoc(doc))
         .filter(Boolean)
+        .filter((evt) => !isHiddenAulaStatus(evt.status))
         .filter((evt) => {
           if (role === "teacher" && evt.professorId !== requesterId) return false;
           if (
@@ -1140,21 +1146,11 @@ module.exports = async (req, res) => {
       }
 
       const cancelAula = async (targetId) => {
-        const data = {
-          status: "cancelado",
-          statusAula: "cancelada",
-          deletedAt: new Date(),
-          cancelledAt: new Date(),
-          canceladoEm: new Date(),
-          atualizadoEm: new Date(),
-        };
-        const patch = await firestorePatchDocument({
+        const del = await firestoreDeleteDocument({
           docPath: `aulas/${encodeURIComponent(targetId)}`,
           idToken,
-          data,
-          updateMaskPaths: Object.keys(data),
         });
-        return patch.ok;
+        return del.ok;
       };
 
       if (mode !== "future" || !evt.grupoRecorrenciaId) {
