@@ -10576,7 +10576,7 @@ const ensureAdminStudentFinanceLoaded = async ({ force = false } = {}) => {
     adminStudentsState.history.financeLoadedAt = Date.now();
   } catch (error) {
     console.error("[finance] load charges failed:", error);
-    adminStudentsState.history.financeError = "Não foi possível carregar as cobranças.";
+    adminStudentsState.history.financeError = "Não foi possível carregar dados financeiros agora.";
   } finally {
     adminStudentsState.history.financeLoading = false;
     renderAdminStudentFinanceTab();
@@ -19974,13 +19974,15 @@ const openAdminStudentHistoryDrawer = async ({ alunoId, teacherId } = {}) => {
     }
 
     renderAdminStudentSheet();
-    ensureAdminStudentFinanceLoaded({ force: false }).catch(() => {});
-    // Preload files so the "Arquivos" tab is instant.
-    ensureAdminStudentFilesLoaded({ force: false }).catch(() => {});
 
     adminStudentHistoryDrawer.hidden = false;
     window.requestAnimationFrame(() => {
       if (adminStudentHistoryDrawer instanceof HTMLElement) adminStudentHistoryDrawer.classList.add("is-open");
+      void ensureAdminStudentFinanceLoaded({ force: false }).catch((error) => {
+        console.error("[finance] student finance preload failed", error);
+      });
+      // Preload files so the "Arquivos" tab is instant.
+      void ensureAdminStudentFilesLoaded({ force: false }).catch(() => {});
     });
     setAdminStudentsStatus("");
   } catch (error) {
