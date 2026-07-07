@@ -13086,7 +13086,7 @@ const ensureAdminStudentsBaseData = async ({ force = false } = {}) => {
   if (adminStudentsError instanceof HTMLElement) adminStudentsError.hidden = true;
 
   try {
-    const [teachers, firebaseStudents, eventsRes, logs, pedagogicalOps] = await Promise.all([
+    const [teachersRes, firebaseStudentsRes, eventsRes, logsRes, pedagogicalOpsRes] = await Promise.allSettled([
       fetchAdminAgendaTeachers(),
       fetchUserRowsFromFirestore("student"),
       fetchWithAuth("/api/schedule-events", { method: "GET" }),
@@ -13095,6 +13095,17 @@ const ensureAdminStudentsBaseData = async ({ force = false } = {}) => {
         .then((res) => (res.ok ? res.json() : { students: [] }))
         .catch(() => ({ students: [] })),
     ]);
+    const teachers = teachersRes.status === "fulfilled" ? teachersRes.value : [];
+    const firebaseStudents = firebaseStudentsRes.status === "fulfilled" ? firebaseStudentsRes.value : [];
+    const eventsResValue = eventsRes.status === "fulfilled" ? eventsRes.value : null;
+    const logs = logsRes.status === "fulfilled" ? logsRes.value : [];
+    const pedagogicalOps = pedagogicalOpsRes.status === "fulfilled" ? pedagogicalOpsRes.value : { students: [] };
+
+    if (teachersRes.status === "rejected") console.warn("[admin] teachers base load fell back to empty:", teachersRes.reason);
+    if (firebaseStudentsRes.status === "rejected") console.warn("[admin] students base load fell back to empty:", firebaseStudentsRes.reason);
+    if (eventsRes.status === "rejected") console.warn("[admin] schedule events base load fell back to empty:", eventsRes.reason);
+    if (logsRes.status === "rejected") console.warn("[admin] lesson logs base load fell back to empty:", logsRes.reason);
+
     const supabaseStudents = (Array.isArray(pedagogicalOps?.students) ? pedagogicalOps.students : [])
       .map(normalizeSupabaseStudentForAdmin)
       .filter(Boolean);
@@ -13114,8 +13125,8 @@ const ensureAdminStudentsBaseData = async ({ force = false } = {}) => {
     adminStudentsState.studentsById = studentsById;
     adminStudentsState.students = Array.isArray(students) ? students : [];
 
-    const eventsData = eventsRes.ok ? await eventsRes.json().catch(() => null) : null;
-    if (!eventsRes.ok) {
+    const eventsData = eventsResValue && eventsResValue.ok ? await eventsResValue.json().catch(() => null) : null;
+    if (!eventsResValue || !eventsResValue.ok) {
       console.warn("[admin] agenda temporariamente indisponível; exibindo alunos sem histórico de eventos.");
     }
     adminStudentsState.events = Array.isArray(eventsData?.events) ? eventsData.events : [];
