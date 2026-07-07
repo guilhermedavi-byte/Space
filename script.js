@@ -779,7 +779,7 @@ const syncRoleUI = () => {
               <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-controle-pedagogico" title="Visão Geral"><span class="sidebar-text">Visão Geral</span></button>
               <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="ao-vivo" title="Agenda"><span class="sidebar-text">Agenda</span></button>
               <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-controle-pedagogico-aulas" data-sidebar-placeholder="true" title="Aulas"><span class="sidebar-text">Aulas</span></button>
-              <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-controle-pedagogico-pessoas" data-sidebar-placeholder="true" title="Pessoas"><span class="sidebar-text">Pessoas</span></button>
+              <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-controle-pedagogico-pessoas" data-sidebar-placeholder="true" title="Usuários"><span class="sidebar-text">Usuários</span></button>
               <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-controle-pedagogico-qualidade" data-sidebar-placeholder="true" title="Qualidade"><span class="sidebar-text">Qualidade</span></button>
               <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-controle-pedagogico-onboarding" data-sidebar-placeholder="true" title="Onboarding"><span class="sidebar-text">Onboarding</span></button>
               <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-controle-pedagogico-relatorios" data-sidebar-placeholder="true" title="Relatórios"><span class="sidebar-text">Relatórios</span></button>
@@ -14998,7 +14998,7 @@ const ADMIN_PED_NAV_GROUPS = [
       { key: "alunos", label: "Alunos" },
       { key: "turmas", label: "Turmas" },
       { key: "vinculos", label: "Vínculos" },
-      { key: "pessoas", label: "Pessoas" },
+      { key: "pessoas", label: "Usuários" },
     ],
   },
   {
@@ -15041,7 +15041,7 @@ const ADMIN_PED_TAB_SUMMARIES = {
   overview: "Pendências e próximos passos",
   aulas: "Lista operacional de aulas",
   conflitos: "Conflitos detectados",
-  pessoas: "Alunos e professores",
+  pessoas: "Usuários",
   alunos: "Visão dos alunos ativos",
   turmas: "Turmas e organização",
   vinculos: "Vínculos e pendências",
@@ -15103,6 +15103,11 @@ const renderAdminPedagogicoTabs = () => {
         </button>`;
       })
       .join("");
+  }
+
+  const statusBarEl = document.querySelector("[data-admin-ped-v2-status-bar]");
+  if (statusBarEl instanceof HTMLElement) {
+    statusBarEl.hidden = activeTab === "pessoas";
   }
 
   document.querySelectorAll("[data-admin-ped-panel]").forEach((panel) => {
