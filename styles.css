@@ -4590,14 +4590,17 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
 /* Admin > Alunos: unified student sheet */
 .admin-student-sheet {
   height: 100%;
+  width: 100%;
 }
 
 .admin-student-sheet-grid {
+  width: 100%;
   min-height: 100%;
   display: grid;
-  grid-template-columns: 360px minmax(0, 1fr);
+  grid-template-columns: minmax(300px, 330px) minmax(0, 1fr);
   gap: 16px;
   padding: 18px 20px 20px;
+  align-items: start;
 }
 
 .admin-student-sheet-left {
@@ -4606,6 +4609,11 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
   gap: 14px;
   padding-right: 10px;
   border-right: 1px solid rgba(255, 255, 255, 0.06);
+  position: sticky;
+  top: 0;
+  max-height: calc(100vh - 164px);
+  overflow: auto;
+  scrollbar-gutter: stable;
 }
 
 .admin-student-id {
@@ -4667,6 +4675,24 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
   border-color: rgba(93, 202, 165, 0.18);
   background: rgba(93, 202, 165, 0.1);
   color: rgba(93, 202, 165, 0.92);
+}
+
+.admin-student-tag.is-active {
+  border-color: rgba(93, 202, 165, 0.18);
+  background: rgba(93, 202, 165, 0.1);
+  color: rgba(93, 202, 165, 0.92);
+}
+
+.admin-student-tag.is-danger {
+  border-color: rgba(255, 78, 70, 0.2);
+  background: rgba(255, 78, 70, 0.1);
+  color: rgba(255, 118, 110, 0.96);
+}
+
+.admin-student-tag.is-warn {
+  border-color: rgba(255, 193, 7, 0.22);
+  background: rgba(255, 193, 7, 0.1);
+  color: rgba(255, 214, 102, 0.96);
 }
 
 .admin-student-tag.is-gray {
@@ -4766,6 +4792,141 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
   align-content: start;
   gap: 12px;
   padding-left: 6px;
+}
+
+.admin-student-simple-notes {
+  padding: 12px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+  display: grid;
+  gap: 10px;
+}
+
+.admin-student-notes-textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.admin-student-simple-notes-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-student-simple-notes-status,
+.admin-student-simple-block-loading,
+.admin-student-simple-block-error {
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.56);
+}
+
+.admin-student-simple-notes-status.is-empty {
+  color: rgba(255, 255, 255, 0.34);
+}
+
+.admin-student-simple-notes-status[data-tone="error"],
+.admin-student-simple-block-error {
+  color: rgba(255, 118, 110, 0.96);
+}
+
+.admin-student-simple-notes-status[data-tone="success"] {
+  color: rgba(93, 202, 165, 0.94);
+}
+
+.admin-student-simple-notes-status[data-tone="loading"],
+.admin-student-simple-block-loading {
+  color: rgba(255, 255, 255, 0.64);
+}
+
+.admin-student-quick-data .admin-student-personal-grid {
+  gap: 8px;
+}
+
+.admin-student-simple-history {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-student-simple-empty {
+  padding: 14px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.02);
+  color: rgba(255, 255, 255, 0.52);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.admin-student-simple-empty.is-error {
+  border-color: rgba(255, 78, 70, 0.18);
+  background: rgba(255, 78, 70, 0.06);
+  color: rgba(255, 118, 110, 0.96);
+}
+
+.admin-student-simple-history-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.admin-student-simple-history-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.admin-student-simple-history-pill.is-green,
+.admin-student-simple-history-pill.is-active {
+  border: 1px solid rgba(93, 202, 165, 0.18);
+  background: rgba(93, 202, 165, 0.1);
+  color: rgba(93, 202, 165, 0.94);
+}
+
+.admin-student-simple-history-pill.is-red,
+.admin-student-simple-history-pill.is-danger {
+  border: 1px solid rgba(255, 78, 70, 0.2);
+  background: rgba(255, 78, 70, 0.1);
+  color: rgba(255, 118, 110, 0.96);
+}
+
+.admin-student-simple-history-pill.is-yellow,
+.admin-student-simple-history-pill.is-warn {
+  border: 1px solid rgba(255, 193, 7, 0.2);
+  background: rgba(255, 193, 7, 0.1);
+  color: rgba(255, 214, 102, 0.96);
+}
+
+.admin-student-simple-history-comment {
+  font-size: 12px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.56);
+}
+
+.admin-student-simple-alert {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(255, 78, 70, 0.1);
+  border: 1px solid rgba(255, 78, 70, 0.2);
+  color: rgba(255, 118, 110, 0.96);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.admin-student-edit-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 2px;
 }
 
 .admin-student-tabs {
@@ -6213,6 +6374,9 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
     grid-template-columns: 1fr;
   }
   .admin-student-sheet-left {
+    position: static;
+    max-height: none;
+    overflow: visible;
     border-right: 0;
     padding-right: 0;
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);

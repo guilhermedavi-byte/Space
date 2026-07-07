@@ -9619,17 +9619,24 @@ let adminStudentsState = {
     plan: "",
     country: "",
   },
-	  history: {
-	    isOpen: false,
-	    alunoId: "",
-	    activeTab: "overview", // overview | history | lessons | financeiro | atividades | arquivos
-	    editMode: false,
-	    filter: "all", // all | realizada | falta_aluno | remarcada | alerts
-	    items: [], // derived timeline items (log + event)
-	    alunoMeta: null,
-	    teacherMeta: null,
-	  },
-	};
+  history: {
+    isOpen: false,
+    alunoId: "",
+    activeTab: "history", // history | edit
+    editMode: false,
+    items: [], // derived timeline items (log + event)
+    alunoMeta: null,
+    teacherMeta: null,
+    baseLoading: false,
+    baseError: "",
+    historyLoading: false,
+    historyError: "",
+    notes: "",
+    notesLoadedAt: 0,
+    notesSaving: false,
+    notesError: "",
+  },
+};
 
 const setAdminStudentsStatus = (text, tone = "") => {
   if (!(adminStudentsStatus instanceof HTMLElement)) return;
@@ -12930,6 +12937,12 @@ const fetchUserRowsFromFirestore = async (tipo) => {
     const pretendeVoltarBrasil = typeof data.pretendeVoltarBrasil === "string" ? data.pretendeVoltarBrasil : "";
     const objetivoPrincipal = typeof data.objetivoPrincipal === "string" ? data.objetivoPrincipal : "";
     const nivelInglesAtual = typeof data.nivelInglesAtual === "string" ? data.nivelInglesAtual : "";
+    const observacoesPedagogicas =
+      typeof data.observacoesPedagogicas === "string"
+        ? data.observacoesPedagogicas.trim()
+        : typeof data.notes === "string"
+          ? data.notes.trim()
+          : "";
     const criadoKey = toDateKeyFromAny(data.criadoEm);
     const cancelKey = toDateKeyFromAny(canceladoEm);
     rows.push({
@@ -12952,6 +12965,7 @@ const fetchUserRowsFromFirestore = async (tipo) => {
       pretendeVoltarBrasil,
       objetivoPrincipal,
       nivelInglesAtual,
+      observacoesPedagogicas,
     });
   });
   return rows.filter(Boolean).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
@@ -13414,49 +13428,109 @@ const formatAdminStudentTenure = (criadoKey) => {
   return `${days} ${days === 1 ? "dia" : "dias"}`;
 };
 
-const renderAdminStudentSheet = () => {
-  if (!(adminStudentHistoryDrawer instanceof HTMLElement)) return;
-  const sheetEl = document.querySelector("[data-admin-student-sheet]");
-  if (!(sheetEl instanceof HTMLElement)) return;
+const getAdminStudentNotesValue = (alunoMeta) =>
+  String(alunoMeta?.observacoesPedagogicas || alunoMeta?.notes || alunoMeta?.briefing_pedagogico || "").trim();
 
-  const hist = adminStudentsState.history;
-  const pedagogicalCard = hist.pedagogicalCard && typeof hist.pedagogicalCard === "object" ? hist.pedagogicalCard : {};
-  const editMode = Boolean(hist.editMode);
-  const alunoMeta = hist.alunoMeta;
-  const alunoName = alunoMeta?.nome || "Aluno";
-  const alunoEmail = alunoMeta?.email || "";
-  const statusLabel = alunoMeta ? (alunoMeta.ativo ? "Ativo" : "Inativo") : "—";
-  const teacherName = hist.teacherMeta?.nome || "";
-  const planoRaw = String(alunoMeta?.plano || "").trim();
-  const hasPlano = Boolean(planoRaw);
-  const planoLabel = hasPlano ? planoRaw : "Sem plano";
-  const pais = String(alunoMeta?.pais || "").trim();
-  const createdKey = String(alunoMeta?.criadoKey || "");
-  const createdLabel = alunoMeta?.criadoEm ? formatAdminDate(alunoMeta.criadoEm) : "—";
-  const professorResp =
-    (alunoMeta && typeof alunoMeta.professorId === "string" ? alunoMeta.professorId : "") ||
-    (alunoMeta && typeof alunoMeta.teacherId === "string" ? alunoMeta.teacherId : "") ||
-    "";
+const getAdminStudentRiskLabel = (hist) => {
+  const items = Array.isArray(hist?.items) ? hist.items : [];
+  for (const item of items) {
+    const risk = normalizeRiskLabel(item?.riscoEvasao || "");
+    if (risk) return risk;
+  }
+  return "—";
+};
 
+const renderAdminStudentSimpleHistoryHtml = ({ hist, teacherMeta } = {}) => {
+  const loading = Boolean(hist?.historyLoading);
+  const error = String(hist?.historyError || "").trim();
+  const items = Array.isArray(hist?.items) ? hist.items : [];
+
+  if (loading) {
+    return `<div class="admin-student-simple-empty">Carregando histórico pedagógico…</div>`;
+  }
+  if (error) {
+    return `<div class="admin-student-simple-empty is-error">${escapeHtml(error)}</div>`;
+  }
+  if (!items.length) {
+    return `<div class="admin-student-simple-empty">Nenhuma aula registrada ainda.</div>`;
+  }
+
+  const timelineHtml = items
+    .map((item) => {
+      const statusLabel =
+        item.statusAula === "realizada"
+          ? "Aula realizada"
+          : item.statusAula === "falta_aluno"
+            ? "Falta do aluno"
+            : "Remarcada";
+      const tone = item.statusAula === "realizada" ? "green" : item.statusAula === "falta_aluno" ? "red" : "yellow";
+      const stamp = item.dateKey
+        ? `${formatPedagogicoDate(item.dateKey)} • ${formatHmFromMinutes(item.startMin)}–${formatHmFromMinutes(item.endMin)}`
+        : "—";
+      const professorName = item.professorName || teacherMeta?.nome || "";
+      const summary = String(item.summaryText || "").trim();
+      const comment = String(item.observacoes || "").trim();
+      const alertBadge = item.precisaIntervencao ? `<span class="admin-student-simple-alert">Alerta</span>` : "";
+      return `
+        <article class="admin-students-tl-item">
+          <div class="admin-students-tl-head">
+            <div class="admin-students-tl-stamp">${escapeHtml(stamp)}</div>
+            ${alertBadge}
+          </div>
+          <div class="admin-students-tl-title">${escapeHtml(statusLabel)}</div>
+          ${professorName ? `<div class="admin-students-tl-by">Professor: ${escapeHtml(professorName)}</div>` : ""}
+          <div class="admin-students-tl-summary">${escapeHtml(summary || "—")}</div>
+          <div class="admin-student-simple-history-meta">
+            <span class="admin-student-simple-history-pill is-${tone}">${escapeHtml(statusLabel)}</span>
+            <span class="admin-student-simple-history-comment">${escapeHtml(comment || "Sem comentário")}</span>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+
+  return `<div class="admin-students-timeline admin-student-simple-history">${timelineHtml}</div>`;
+};
+
+const saveAdminStudentPedagogicalNotes = async ({ alunoId, notes } = {}) => {
+  const id = String(alunoId || "").trim();
+  if (!id) return false;
+  const safeNotes = String(notes || "").trim();
+  const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_student_notes_save");
+  await withTimeout(
+    firebase.setDoc(
+      firebase.doc(firebase.primaryDb, "users", id),
+      {
+        observacoesPedagogicas: safeNotes,
+        notes: safeNotes,
+        atualizadoEm: firebase.serverTimestamp(),
+      },
+      { merge: true }
+    ),
+    12_000,
+    "firestore_student_notes_merge"
+  );
+  return true;
+};
+
+const renderAdminStudentEditFormHtml = (alunoMeta = {}) => {
+  const alunoName = String(alunoMeta?.nome || "Aluno").trim();
+  const alunoEmail = String(alunoMeta?.email || "").trim();
   const endereco = String(alunoMeta?.endereco || "").trim();
-	  const estadoEua = String(alunoMeta?.estadoEua || "").trim();
-	  const valorMensalidade = alunoMeta?.valorMensalidade;
-	  const tempoContratoRaw = alunoMeta?.tempoContrato;
-	  const tempoContrato = Number.isFinite(Number(tempoContratoRaw)) ? String(Number(tempoContratoRaw)) : String(tempoContratoRaw || "").trim();
-	  const faixaIdade = String(alunoMeta?.faixaIdade || "").trim();
-	  const genero = String(alunoMeta?.genero || "").trim();
-	  const trabalho = String(alunoMeta?.trabalho || "").trim();
+  const planoRaw = String(alunoMeta?.plano || "").trim();
+  const pais = String(alunoMeta?.pais || "").trim();
+  const estadoEua = String(alunoMeta?.estadoEua || "").trim();
+  const valorMensalidade = alunoMeta?.valorMensalidade;
+  const tempoContratoRaw = alunoMeta?.tempoContrato;
+  const tempoContrato = Number.isFinite(Number(tempoContratoRaw)) ? String(Number(tempoContratoRaw)) : String(tempoContratoRaw || "").trim();
+  const faixaIdade = String(alunoMeta?.faixaIdade || "").trim();
+  const genero = String(alunoMeta?.genero || "").trim();
+  const trabalho = String(alunoMeta?.trabalho || "").trim();
   const possuiFilhos = String(alunoMeta?.possuiFilhos || "").trim();
   const casado = String(alunoMeta?.casado || "").trim();
   const pretendeVoltarBrasil = String(alunoMeta?.pretendeVoltarBrasil || "").trim();
   const objetivoPrincipal = String(alunoMeta?.objetivoPrincipal || "").trim();
-	  const nivelInglesAtual = String(alunoMeta?.nivelInglesAtual || "").trim();
-
-  const initials = getInitials(alunoName);
-  const nextLesson = getAdminStudentNextLessonLabel(hist.alunoId) || "Sem dados";
-  const tenure = alunoMeta ? formatAdminStudentTenure(createdKey) : "—";
-
-  const activeTab = String(hist.activeTab || "overview");
+  const nivelInglesAtual = String(alunoMeta?.nivelInglesAtual || "").trim();
 
   const planOptions = ["Turma", "Gold", "Diamond"];
   const countryOptions = ["Brasil", "EUA", "Canadá", "Reino Unido", "Outro"];
@@ -13474,40 +13548,37 @@ const renderAdminStudentSheet = () => {
     "Funcionário Construção",
     "Cuidador(a) de idosos",
   ];
-	  const ageOptions = ["Menor de idade", "18-24", "25-29", "30-45", "46-59", "60+"];
-	  const usStateOptions = [
-	    "Massachusetts",
-	    "New Jersey",
-	    "New York",
-	    "Florida",
-	    "Califórnia",
-	    "Texas",
-	    "Connecticut",
-	    "Rhode Island",
-	    "Pennsylvania",
-	    "Georgia",
-	    "Outro",
-	  ];
-
-	  const normalizeGeneroValue = (value) => {
-	    const v = String(value || "").trim().toLowerCase();
-	    if (v === "masculino" || v === "m") return "Masculino";
-	    if (v === "feminino" || v === "f") return "Feminino";
-	    return "";
-	  };
-
-	  const normalizeEnglishLevelValue = (value) => {
-	    const raw = String(value || "").trim();
-	    const low = raw.toLowerCase();
-	    // Back-compat: older values from previous versions.
-	    if (low === "iniciante") return "Pré A1";
-	    if (low === "basico" || low === "básico") return "A1";
-	    if (low === "intermediario" || low === "intermediário") return "B1";
-	    if (low === "avancado" || low === "avançado") return "B2";
-	    if (low === "fluente") return "C1";
-	    return raw;
-	  };
-
+  const ageOptions = ["Menor de idade", "18-24", "25-29", "30-45", "46-59", "60+"];
+  const usStateOptions = [
+    "Massachusetts",
+    "New Jersey",
+    "New York",
+    "Florida",
+    "Califórnia",
+    "Texas",
+    "Connecticut",
+    "Rhode Island",
+    "Pennsylvania",
+    "Georgia",
+    "Outro",
+  ];
+  const englishLevelOptionsList = ["Pré A1", "A1", "A1+", "A2", "A2+", "B1", "B1+", "B2", "B2+", "C1", "C2"];
+  const normalizeGeneroValue = (value) => {
+    const v = String(value || "").trim().toLowerCase();
+    if (v === "masculino" || v === "m") return "Masculino";
+    if (v === "feminino" || v === "f") return "Feminino";
+    return "";
+  };
+  const normalizeEnglishLevelValue = (value) => {
+    const raw = String(value || "").trim();
+    const low = raw.toLowerCase();
+    if (low === "iniciante") return "Pré A1";
+    if (low === "basico" || low === "básico") return "A1";
+    if (low === "intermediario" || low === "intermediário") return "B1";
+    if (low === "avancado" || low === "avançado") return "B2";
+    if (low === "fluente") return "C1";
+    return raw;
+  };
   const selectOptions = (opts, selected, emptyLabel = "Selecione…") =>
     [`<option value="">${escapeHtml(emptyLabel)}</option>`]
       .concat(
@@ -13517,14 +13588,12 @@ const renderAdminStudentSheet = () => {
         })
       )
       .join("");
-
   const yesNoOptions = (selected) =>
     [
       `<option value="">Selecione…</option>`,
       `<option value="sim" ${selected === "sim" ? "selected" : ""}>Sim</option>`,
       `<option value="nao" ${selected === "nao" ? "selected" : ""}>Não</option>`,
     ].join("");
-
   const returnOptions = (selected) =>
     [
       `<option value="">Selecione…</option>`,
@@ -13532,293 +13601,243 @@ const renderAdminStudentSheet = () => {
       `<option value="nao" ${selected === "nao" ? "selected" : ""}>Não</option>`,
       `<option value="nao_sabe" ${selected === "nao_sabe" ? "selected" : ""}>Não sabe</option>`,
     ].join("");
+  const englishOptions = (selectedRaw) => {
+    const selected = normalizeEnglishLevelValue(selectedRaw);
+    return [`<option value="">Selecione…</option>`]
+      .concat(
+        englishLevelOptionsList.map((v) => {
+          const sel = String(selected || "") === String(v) ? "selected" : "";
+          return `<option value="${escapeHtml(String(v))}" ${sel}>${escapeHtml(String(v))}</option>`;
+        })
+      )
+      .join("");
+  };
+  const contractVal = String(tempoContrato || "").trim();
+  const normalized = contractVal === "12" || contractVal === "6" ? contractVal : contractVal ? "custom" : "";
+  const customMonths = normalized === "custom" ? contractVal : "";
 
-	  const englishLevelOptionsList = ["Pré A1", "A1", "A1+", "A2", "A2+", "B1", "B1+", "B2", "B2+", "C1", "C2"];
-	  const englishOptions = (selectedRaw) => {
-	    const selected = normalizeEnglishLevelValue(selectedRaw);
-	    return [`<option value="">Selecione…</option>`]
-	      .concat(
-	        englishLevelOptionsList.map((v) => {
-	          const sel = String(selected || "") === String(v) ? "selected" : "";
-	          return `<option value="${escapeHtml(String(v))}" ${sel}>${escapeHtml(String(v))}</option>`;
-	        })
-	      )
-	      .join("");
-	  };
+  return `
+    <form class="admin-student-form" data-admin-student-edit-form>
+      <label class="admin-student-field">
+        <span>Nome completo</span>
+        <input class="admin-student-input" type="text" data-admin-student-edit-field="nome" value="${escapeHtml(alunoName)}" />
+      </label>
+      <label class="admin-student-field">
+        <span>E-mail</span>
+        <input class="admin-student-input" type="email" data-admin-student-edit-field="email" value="${escapeHtml(alunoEmail)}" />
+      </label>
+      <label class="admin-student-field">
+        <span>Endereço</span>
+        <input class="admin-student-input" type="text" data-admin-student-edit-field="endereco" value="${escapeHtml(endereco)}" />
+      </label>
+      <label class="admin-student-field">
+        <span>Plano</span>
+        <select class="admin-student-input" data-admin-student-edit-field="plano">
+          ${selectOptions(planOptions, planoRaw, "Sem plano")}
+        </select>
+      </label>
+      <label class="admin-student-field">
+        <span>País</span>
+        <select class="admin-student-input" data-admin-student-edit-field="pais">
+          ${selectOptions(countryOptions, pais)}
+        </select>
+      </label>
+      <label class="admin-student-field">
+        <span>Estado dos EUA (opcional)</span>
+        <select class="admin-student-input" data-admin-student-edit-field="estadoEua">
+          ${selectOptions(usStateOptions, estadoEua)}
+        </select>
+      </label>
+      <label class="admin-student-field">
+        <span>Valor de mensalidade</span>
+        <input class="admin-student-input" type="text" inputmode="decimal" data-admin-student-edit-field="valorMensalidade" value="${escapeHtml(
+          typeof valorMensalidade === "number" ? String(valorMensalidade) : String(valorMensalidade || "")
+        )}" />
+      </label>
+      <label class="admin-student-field">
+        <span>Tempo de contrato</span>
+        <select class="admin-student-input" data-admin-student-edit-field="tempoContrato">
+          <option value="">Selecione…</option>
+          <option value="12" ${normalized === "12" ? "selected" : ""}>12 meses</option>
+          <option value="6" ${normalized === "6" ? "selected" : ""}>6 meses</option>
+          <option value="custom" ${normalized === "custom" ? "selected" : ""}>Personalizar</option>
+        </select>
+      </label>
+      <label class="admin-student-field" data-admin-student-edit-contract-custom-wrap ${normalized === "custom" ? "" : "hidden"}>
+        <span>Tempo de contrato (meses)</span>
+        <input class="admin-student-input" type="number" inputmode="numeric" min="1" step="1" data-admin-student-edit-field="tempoContratoCustom" value="${escapeHtml(
+          customMonths
+        )}" />
+      </label>
+      <label class="admin-student-field">
+        <span>Faixa de idade</span>
+        <select class="admin-student-input" data-admin-student-edit-field="faixaIdade">
+          ${selectOptions(ageOptions, faixaIdade)}
+        </select>
+      </label>
+      <label class="admin-student-field">
+        <span>Gênero</span>
+        <select class="admin-student-input" data-admin-student-edit-field="genero">
+          ${selectOptions(["Masculino", "Feminino"], normalizeGeneroValue(genero))}
+        </select>
+      </label>
+      <label class="admin-student-field">
+        <span>Trabalho</span>
+        <select class="admin-student-input" data-admin-student-edit-field="trabalho">
+          ${selectOptions(jobOptions, trabalho)}
+        </select>
+      </label>
+      <label class="admin-student-field">
+        <span>Possui filhos</span>
+        <select class="admin-student-input" data-admin-student-edit-field="possuiFilhos">
+          ${yesNoOptions(possuiFilhos)}
+        </select>
+      </label>
+      <label class="admin-student-field">
+        <span>Casado</span>
+        <select class="admin-student-input" data-admin-student-edit-field="casado">
+          ${yesNoOptions(casado)}
+        </select>
+      </label>
+      <label class="admin-student-field">
+        <span>Pretende voltar ao Brasil</span>
+        <select class="admin-student-input" data-admin-student-edit-field="pretendeVoltarBrasil">
+          ${returnOptions(pretendeVoltarBrasil)}
+        </select>
+      </label>
+      <label class="admin-student-field admin-student-field-wide">
+        <span>Objetivo principal</span>
+        <textarea class="admin-student-input admin-student-textarea" rows="3" data-admin-student-edit-field="objetivoPrincipal">${escapeHtml(
+          objetivoPrincipal
+        )}</textarea>
+      </label>
+      <label class="admin-student-field">
+        <span>Nível de inglês atual</span>
+        <select class="admin-student-input" data-admin-student-edit-field="nivelInglesAtual">
+          ${englishOptions(nivelInglesAtual)}
+        </select>
+      </label>
+      <div class="admin-student-edit-error" data-admin-student-edit-error hidden>—</div>
+      <div class="admin-student-edit-actions">
+        <button type="button" class="button button-outline button-small" data-admin-student-edit-cancel>Cancelar</button>
+        <button type="button" class="button button-solid button-small" data-admin-student-edit-save>Salvar</button>
+      </div>
+    </form>
+  `;
+};
+
+const renderAdminStudentSheet = () => {
+  if (!(adminStudentHistoryDrawer instanceof HTMLElement)) return;
+  const sheetEl = document.querySelector("[data-admin-student-sheet]");
+  if (!(sheetEl instanceof HTMLElement)) return;
+
+  const hist = adminStudentsState.history;
+  const alunoMeta = hist.alunoMeta;
+  const alunoName = alunoMeta?.nome || "Aluno";
+  const alunoEmail = alunoMeta?.email || "";
+  const statusLabel = alunoMeta ? (alunoMeta.ativo ? "Ativo" : "Inativo") : "—";
+  const statusTone = alunoMeta ? (alunoMeta.ativo ? "is-active" : "is-danger") : "is-gray";
+  const teacherName = hist.teacherMeta?.nome || alunoMeta?.professorNome || alunoMeta?.teacherNome || "";
+  const planoRaw = String(alunoMeta?.plano || "").trim();
+  const hasPlano = Boolean(planoRaw);
+  const planoLabel = hasPlano ? planoRaw : "Sem plano";
+  const planoTone = hasPlano ? "is-plan" : "is-gray";
+  const riskLabel = getAdminStudentRiskLabel(hist);
+  const riskTone = riskLabel === "Alto" ? "is-danger" : riskLabel === "Médio" ? "is-warn" : riskLabel === "Baixo" ? "is-active" : "is-gray";
+  const pais = String(alunoMeta?.pais || alunoMeta?.country || "").trim();
+  const turmaName =
+    String(alunoMeta?.groupName || alunoMeta?.turma || alunoMeta?.turmaNome || alunoMeta?.className || alunoMeta?.class_name || alunoMeta?.grupoVipNome || "").trim();
+  const createdKey = String(alunoMeta?.criadoKey || "");
+  const createdLabel = alunoMeta?.criadoEm ? formatAdminDate(alunoMeta.criadoEm) : "—";
+  const initials = getInitials(alunoName);
+  const notesValue = String(hist.notes || getAdminStudentNotesValue(alunoMeta) || "");
+  const notesTone = hist.notesSaving ? "loading" : hist.notesError ? "error" : hist.notesLoadedAt ? "success" : "";
+  const notesStatus = hist.notesSaving ? "Salvando notas…" : hist.notesError ? String(hist.notesError) : hist.notesLoadedAt ? "Notas carregadas." : "";
+  const activeTab = hist.activeTab === "edit" ? "edit" : "history";
+  const baseError = String(hist.baseError || "").trim();
+  const professorLabel = teacherName || "Sem professor";
+  const turmaLabel = turmaName || "Sem turma";
+  const historyHtml = renderAdminStudentSimpleHistoryHtml({ hist, teacherMeta: hist.teacherMeta });
+  const editFormHtml = renderAdminStudentEditFormHtml(alunoMeta || {});
 
   sheetEl.innerHTML = `
-    <div class="admin-student-sheet-grid">
-      <aside class="admin-student-sheet-left" aria-label="Identidade do aluno">
+    <div class="admin-student-sheet-grid admin-student-simple-grid">
+      <aside class="admin-student-sheet-left admin-student-simple-left" aria-label="Identidade do aluno">
         <div class="admin-student-id">
           <div class="admin-student-avatar" aria-hidden="true">${escapeHtml(initials)}</div>
           <div class="admin-student-id-main">
             <div class="admin-student-name">${escapeHtml(alunoName)}</div>
             <div class="admin-student-email">${escapeHtml(alunoEmail || "—")}</div>
             <div class="admin-student-tags">
-              <span class="admin-student-tag is-${statusLabel === "Ativo" ? "green" : "gray"}">${escapeHtml(statusLabel)}</span>
-              <span class="admin-student-tag ${hasPlano ? "is-plan" : "is-plan-empty"}">${escapeHtml(planoLabel)}</span>
-              ${pais ? `<span class="admin-student-tag is-country">${escapeHtml(pais)}</span>` : ""}
-              ${teacherName ? `<span class="admin-student-tag">${escapeHtml(teacherName)}</span>` : ""}
+              <span class="admin-student-tag ${statusTone}">${escapeHtml(statusLabel)}</span>
+              <span class="admin-student-tag ${planoTone}">${escapeHtml(planoLabel)}</span>
+              <span class="admin-student-tag ${riskTone}">${escapeHtml(`Risco: ${riskLabel || "—"}`)}</span>
             </div>
           </div>
         </div>
 
-        <div class="admin-student-metrics" aria-label="Métricas-chave">
-          <div class="admin-student-metric"><span>Ticket mensal</span><strong>—</strong></div>
-          <div class="admin-student-metric"><span>LTV</span><strong>—</strong></div>
-          <div class="admin-student-metric"><span>Plano</span><strong>${escapeHtml(planoLabel)}</strong></div>
-          <div class="admin-student-metric"><span>Tempo de casa</span><strong>${escapeHtml(tenure)}</strong></div>
-          <div class="admin-student-metric"><span>Próxima aula</span><strong>${escapeHtml(nextLesson)}</strong></div>
-        </div>
-
-        <div class="admin-student-personal" aria-label="Dados pessoais">
-          <div class="admin-student-personal-title">Dados pessoais</div>
-          <div class="admin-student-personal-grid">
-            <div class="admin-student-personal-row"><span>Professor responsável</span><strong>${escapeHtml(teacherName || professorResp || "—")}</strong></div>
-            <div class="admin-student-personal-row"><span>Data de cadastro</span><strong>${escapeHtml(createdLabel)}</strong></div>
+        <div class="admin-student-simple-notes">
+          <div class="admin-student-panel-title">Observações pedagógicas</div>
+          <textarea
+            class="admin-student-input admin-student-textarea admin-student-notes-textarea"
+            rows="6"
+            data-admin-student-notes-field
+            placeholder="Escreva notas, contexto e alinhamentos pedagógicos..."
+          >${escapeHtml(notesValue)}</textarea>
+          <div class="admin-student-simple-notes-actions">
+            <button type="button" class="button button-solid button-small" data-admin-student-notes-save ${hist.notesSaving ? "disabled" : ""}>
+              ${hist.notesSaving ? "Salvando…" : "Salvar notas"}
+            </button>
+            <div class="admin-student-simple-notes-status${notesStatus ? "" : " is-empty"}" data-admin-student-notes-status data-tone="${escapeHtml(notesTone)}">
+              ${escapeHtml(notesStatus || "—")}
+            </div>
           </div>
         </div>
 
-        <div class="admin-student-left-actions" aria-label="Ações do aluno">
-          ${
-            editMode
-              ? `
-                <button type="button" class="button button-outline button-small" data-admin-student-edit-cancel>Cancelar</button>
-                <button type="button" class="button button-solid button-small" data-admin-student-edit-save>Salvar</button>
-              `
-              : `
-                <button type="button" class="button button-outline button-small" disabled>Editar</button>
-                <button type="button" class="button button-solid button-small" disabled>Cancelar matrícula</button>
-              `
-          }
+        <div class="admin-student-personal admin-student-quick-data" aria-label="Dados rápidos">
+          <div class="admin-student-personal-title">Dados rápidos</div>
+          <div class="admin-student-personal-grid">
+            <div class="admin-student-personal-row"><span>E-mail</span><strong>${escapeHtml(alunoEmail || "—")}</strong></div>
+            <div class="admin-student-personal-row"><span>Professor vinculado</span><strong>${escapeHtml(professorLabel)}</strong></div>
+            <div class="admin-student-personal-row"><span>Turma</span><strong>${escapeHtml(turmaLabel)}</strong></div>
+            <div class="admin-student-personal-row"><span>Data de cadastro</span><strong>${escapeHtml(createdLabel)}</strong></div>
+            ${baseError ? `<div class="admin-student-simple-block-error">${escapeHtml(baseError)}</div>` : ""}
+            ${hist.baseLoading ? `<div class="admin-student-simple-block-loading">Carregando dados básicos…</div>` : ""}
+          </div>
         </div>
       </aside>
 
-      <section class="admin-student-sheet-right" aria-label="Detalhes do aluno">
+      <section class="admin-student-sheet-right admin-student-simple-right" aria-label="Detalhes do aluno">
         <div class="admin-student-tabs" role="tablist" aria-label="Seções do aluno">
-          <button type="button" class="admin-student-tab${activeTab === "overview" ? " is-active" : ""}" data-admin-student-tab="overview" role="tab" aria-selected="${activeTab === "overview" ? "true" : "false"}">Visão geral</button>
-          <button type="button" class="admin-student-tab${activeTab === "history" ? " is-active" : ""}" data-admin-student-tab="history" role="tab" aria-selected="${activeTab === "history" ? "true" : "false"}">Histórico pedagógico</button>
-          <button type="button" class="admin-student-tab${activeTab === "lessons" ? " is-active" : ""}" data-admin-student-tab="lessons" role="tab" aria-selected="${activeTab === "lessons" ? "true" : "false"}">Aulas</button>
-          <button type="button" class="admin-student-tab${activeTab === "financeiro" ? " is-active" : ""}" data-admin-student-tab="financeiro" role="tab" aria-selected="${activeTab === "financeiro" ? "true" : "false"}">Financeiro</button>
-          <button type="button" class="admin-student-tab${activeTab === "atividades" ? " is-active" : ""}" data-admin-student-tab="atividades" role="tab" aria-selected="${activeTab === "atividades" ? "true" : "false"}">Atividades</button>
-          <button type="button" class="admin-student-tab${activeTab === "arquivos" ? " is-active" : ""}" data-admin-student-tab="arquivos" role="tab" aria-selected="${activeTab === "arquivos" ? "true" : "false"}">Arquivos</button>
+          <button type="button" class="admin-student-tab${activeTab === "history" ? " is-active" : ""}" data-admin-student-tab="history" role="tab" aria-selected="${activeTab === "history" ? "true" : "false"}">Histórico Pedagógico</button>
+          <button type="button" class="admin-student-tab${activeTab === "edit" ? " is-active" : ""}" data-admin-student-tab="edit" role="tab" aria-selected="${activeTab === "edit" ? "true" : "false"}">Editar</button>
         </div>
 
         <div class="admin-student-tab-panels">
-          <div class="admin-student-tab-panel${activeTab === "overview" ? " is-active" : ""}" data-admin-student-tab-panel="overview" role="tabpanel">
-            <div class="admin-student-panel-card">
-              <div class="admin-student-panel-title">${editMode ? "Editar aluno" : "Resumo"}</div>
-              ${
-                editMode
-                  ? `
-                    <div class="admin-student-form" data-admin-student-edit-form>
-                      <label class="admin-student-field">
-                        <span>Nome completo</span>
-                        <input class="admin-student-input" type="text" data-admin-student-edit-field="nome" value="${escapeHtml(alunoName)}" />
-                      </label>
-                      <label class="admin-student-field">
-                        <span>E-mail</span>
-                        <input class="admin-student-input" type="email" data-admin-student-edit-field="email" value="${escapeHtml(alunoEmail)}" />
-                      </label>
-                      <label class="admin-student-field">
-                        <span>Endereço</span>
-                        <input class="admin-student-input" type="text" data-admin-student-edit-field="endereco" value="${escapeHtml(endereco)}" />
-                      </label>
-                      <label class="admin-student-field">
-                        <span>Plano</span>
-                        <select class="admin-student-input" data-admin-student-edit-field="plano">
-                          ${selectOptions(planOptions, planoRaw, "Sem plano")}
-                        </select>
-                      </label>
-                      <label class="admin-student-field">
-                        <span>País</span>
-                        <select class="admin-student-input" data-admin-student-edit-field="pais">
-                          ${selectOptions(countryOptions, pais)}
-                        </select>
-                      </label>
-	                      <label class="admin-student-field">
-	                        <span>Estado dos EUA (opcional)</span>
-	                        <select class="admin-student-input" data-admin-student-edit-field="estadoEua">
-	                          ${selectOptions(usStateOptions, estadoEua)}
-	                        </select>
-	                      </label>
-                      <label class="admin-student-field">
-                        <span>Valor de mensalidade</span>
-                        <input class="admin-student-input" type="text" inputmode="decimal" data-admin-student-edit-field="valorMensalidade" value="${escapeHtml(
-                          typeof valorMensalidade === "number" ? String(valorMensalidade) : String(valorMensalidade || "")
-                        )}" />
-                      </label>
-	                      ${(() => {
-	                        const contractVal = String(tempoContrato || "").trim();
-	                        const normalized = contractVal === "12" || contractVal === "6" ? contractVal : contractVal ? "custom" : "";
-	                        const customMonths = normalized === "custom" ? contractVal : "";
-	                        return `
-	                          <label class="admin-student-field">
-	                            <span>Tempo de contrato</span>
-	                            <select class="admin-student-input" data-admin-student-edit-field="tempoContrato">
-	                              <option value="">Selecione…</option>
-	                              <option value="12" ${normalized === "12" ? "selected" : ""}>12 meses</option>
-	                              <option value="6" ${normalized === "6" ? "selected" : ""}>6 meses</option>
-	                              <option value="custom" ${normalized === "custom" ? "selected" : ""}>Personalizar</option>
-	                            </select>
-	                          </label>
-	                          <label class="admin-student-field" data-admin-student-edit-contract-custom-wrap ${normalized === "custom" ? "" : "hidden"}>
-	                            <span>Tempo de contrato (meses)</span>
-	                            <input class="admin-student-input" type="number" inputmode="numeric" min="1" step="1" data-admin-student-edit-field="tempoContratoCustom" value="${escapeHtml(
-	                              customMonths
-	                            )}" />
-	                          </label>
-	                        `;
-	                      })()}
-                      <label class="admin-student-field">
-                        <span>Faixa de idade</span>
-                        <select class="admin-student-input" data-admin-student-edit-field="faixaIdade">
-                          ${selectOptions(ageOptions, faixaIdade)}
-                        </select>
-                      </label>
-	                      <label class="admin-student-field">
-	                        <span>Gênero</span>
-	                        <select class="admin-student-input" data-admin-student-edit-field="genero">
-	                          ${selectOptions(["Masculino", "Feminino"], normalizeGeneroValue(genero))}
-	                        </select>
-	                      </label>
-                      <label class="admin-student-field">
-                        <span>Trabalho</span>
-                        <select class="admin-student-input" data-admin-student-edit-field="trabalho">
-                          ${selectOptions(jobOptions, trabalho)}
-                        </select>
-                      </label>
-                      <label class="admin-student-field">
-                        <span>Possui filhos</span>
-                        <select class="admin-student-input" data-admin-student-edit-field="possuiFilhos">
-                          ${yesNoOptions(possuiFilhos)}
-                        </select>
-                      </label>
-                      <label class="admin-student-field">
-                        <span>Casado</span>
-                        <select class="admin-student-input" data-admin-student-edit-field="casado">
-                          ${yesNoOptions(casado)}
-                        </select>
-                      </label>
-                      <label class="admin-student-field">
-                        <span>Pretende voltar ao Brasil</span>
-                        <select class="admin-student-input" data-admin-student-edit-field="pretendeVoltarBrasil">
-                          ${returnOptions(pretendeVoltarBrasil)}
-                        </select>
-                      </label>
-                      <label class="admin-student-field admin-student-field-wide">
-                        <span>Objetivo principal</span>
-                        <textarea class="admin-student-input admin-student-textarea" rows="3" data-admin-student-edit-field="objetivoPrincipal">${escapeHtml(
-                          objetivoPrincipal
-                        )}</textarea>
-                      </label>
-                      <label class="admin-student-field">
-                        <span>Nível de inglês atual</span>
-                        <select class="admin-student-input" data-admin-student-edit-field="nivelInglesAtual">
-                          ${englishOptions(nivelInglesAtual)}
-                        </select>
-                      </label>
-                      <div class="admin-student-edit-error" data-admin-student-edit-error hidden>—</div>
-                    </div>
-                  `
-                  : `
-                    <div class="admin-student-pedagogical-grid">
-                      ${[
-                        ["Nome", pedagogicalCard.aluno_nome || alunoName],
-                        ["Telefone", pedagogicalCard.telefone],
-                        ["E-mail", pedagogicalCard.email || alunoEmail],
-                        ["Plano", pedagogicalCard.plano || planoLabel],
-                        ["Valor", pedagogicalCard.valor],
-                        ["Closer", pedagogicalCard.closer],
-                        ["Status onboarding", pedagogicalCard.status_onboarding],
-                        ["Etapa atual", pedagogicalCard.etapa_atual],
-                        ["Status financeiro", pedagogicalCard.status_financeiro || pedagogicalCard.pagamento_status],
-                        ["Professor", pedagogicalCard.professor_nome || teacherName],
-                        ["Primeira aula", pedagogicalCard.primeira_aula_em ? formatAdminDate(pedagogicalCard.primeira_aula_em) : ""],
-                        ["Grupo VIP", pedagogicalCard.grupo_vip_nome || pedagogicalCard.grupo_vip_id],
-                        ["Objetivo de inglês", pedagogicalCard.objetivo_ingles],
-                        ["Nível declarado", pedagogicalCard.nivel_declarado],
-                        ["País / Estado", [pedagogicalCard.pais, pedagogicalCard.estado].filter(Boolean).join(" · ")],
-                        ["Disponibilidade", pedagogicalCard.disponibilidade_aluno],
-                        ["Risco", [pedagogicalCard.risco_nivel, pedagogicalCard.risco_score].filter((v) => v != null && v !== "").join(" · ")],
-                        ["Flexge", pedagogicalCard.flexge_status || (pedagogicalCard.flexge_user_id ? "Criado" : "Não criado")],
-                        ["Matrícula Flexge", pedagogicalCard.flexge_enrollment_status],
-                        ["Meta semanal", pedagogicalCard.flexge_weekly_goal_minutes != null ? `${pedagogicalCard.flexge_weekly_goal_minutes} min` : ""],
-                        ["Estudo semanal", pedagogicalCard.flexge_weekly_study_minutes != null ? `${pedagogicalCard.flexge_weekly_study_minutes} min` : ""],
-                        ["Estudo total", pedagogicalCard.flexge_total_study_minutes != null ? `${pedagogicalCard.flexge_total_study_minutes} min` : ""],
-                        ["Progresso Flexge", pedagogicalCard.flexge_progress_percentage != null ? `${pedagogicalCard.flexge_progress_percentage}%` : ""],
-                        ["Último acesso Flexge", pedagogicalCard.flexge_last_access_at ? formatAdminDate(pedagogicalCard.flexge_last_access_at) : ""],
-                        ["Média Flexge", pedagogicalCard.flexge_average_score],
-                        ["Nível Flexge", pedagogicalCard.flexge_current_level],
-                      ]
-                        .map(
-                          ([label, value]) => `
-                            <div class="admin-student-personal-row">
-                              <span>${escapeHtml(String(label))}</span>
-                              <strong>${escapeHtml(value == null || value === "" ? "Sem dados" : String(value))}</strong>
-                            </div>
-                          `
-                        )
-                        .join("")}
-                    </div>
-                    <div class="admin-student-panel-card admin-student-briefing">
-                      <div class="admin-student-panel-title">Briefing pedagógico</div>
-                      <div>${escapeHtml(String(pedagogicalCard.briefing_pedagogico || "Sem dados"))}</div>
-                    </div>
-                  `
-              }
-            </div>
-          </div>
-
           <div class="admin-student-tab-panel${activeTab === "history" ? " is-active" : ""}" data-admin-student-tab-panel="history" role="tabpanel">
-            <div class="admin-students-history-filters" role="tablist" aria-label="Filtrar histórico do aluno">
-              <button class="admin-students-history-filter is-active" type="button" role="tab" aria-selected="true" data-admin-student-history-filter="all">Todos</button>
-              <button class="admin-students-history-filter" type="button" role="tab" aria-selected="false" data-admin-student-history-filter="realizada">Realizadas</button>
-              <button class="admin-students-history-filter" type="button" role="tab" aria-selected="false" data-admin-student-history-filter="falta_aluno">Faltas</button>
-              <button class="admin-students-history-filter" type="button" role="tab" aria-selected="false" data-admin-student-history-filter="remarcada">Remarcadas</button>
-              <button class="admin-students-history-filter" type="button" role="tab" aria-selected="false" data-admin-student-history-filter="alerts">Alertas</button>
-            </div>
-
-            <div class="admin-students-history" data-admin-student-history-body></div>
-            <div class="admin-students-history-empty" data-admin-student-history-empty hidden>Nenhum registro pedagógico encontrado para este aluno.</div>
-          </div>
-
-          <div class="admin-student-tab-panel${activeTab === "lessons" ? " is-active" : ""}" data-admin-student-tab-panel="lessons" role="tabpanel">
             <div class="admin-student-panel-card">
-              <div class="admin-student-panel-title">Aulas</div>
-              <div class="admin-student-panel-empty">Em breve: agenda e histórico completo de aulas.</div>
+              <div data-admin-student-history-slot>${historyHtml}</div>
             </div>
           </div>
 
-          <div class="admin-student-tab-panel${activeTab === "financeiro" ? " is-active" : ""}" data-admin-student-tab-panel="financeiro" role="tabpanel">
-            <div data-admin-student-finance></div>
-          </div>
-
-          <div class="admin-student-tab-panel${activeTab === "atividades" ? " is-active" : ""}" data-admin-student-tab-panel="atividades" role="tabpanel">
+          <div class="admin-student-tab-panel${activeTab === "edit" ? " is-active" : ""}" data-admin-student-tab-panel="edit" role="tabpanel">
             <div class="admin-student-panel-card">
-              <div class="admin-student-panel-title">Atividades</div>
-              <div class="admin-student-panel-empty">Sem atividades registradas.</div>
+              <div class="admin-student-panel-title">Editar aluno</div>
+              ${editFormHtml}
             </div>
-          </div>
-
-          <div class="admin-student-tab-panel${activeTab === "arquivos" ? " is-active" : ""}" data-admin-student-tab-panel="arquivos" role="tabpanel">
-            <div data-admin-student-files></div>
           </div>
         </div>
       </section>
     </div>
   `;
 
-  // Always hydrate the history tab content so it's ready when the admin switches tabs.
   renderAdminStudentHistoryTab();
-  renderAdminStudentFinanceTab();
-  renderAdminStudentFilesTab();
 };
 
 const syncAdminStudentSheetTabs = () => {
   const sheetEl = document.querySelector("[data-admin-student-sheet]");
   if (!(sheetEl instanceof HTMLElement)) return;
-  const active = String(adminStudentsState.history?.activeTab || "overview");
+  const active = String(adminStudentsState.history?.activeTab || "history");
 
   sheetEl.querySelectorAll("[data-admin-student-tab]").forEach((btn) => {
     if (!(btn instanceof HTMLButtonElement)) return;
@@ -13835,10 +13854,6 @@ const syncAdminStudentSheetTabs = () => {
 
   if (active === "history") {
     renderAdminStudentHistoryTab();
-  }
-  if (active === "financeiro") {
-    renderAdminStudentFinanceTab();
-    ensureAdminStudentFinanceLoaded({ force: false }).catch(() => {});
   }
 };
 
@@ -19821,175 +19836,101 @@ const renderAdminStudentHistoryTab = () => {
   if (!(adminStudentHistoryDrawer instanceof HTMLElement)) return;
   const sheetEl = document.querySelector("[data-admin-student-sheet]");
   if (!(sheetEl instanceof HTMLElement)) return;
-  const historyBody = sheetEl.querySelector("[data-admin-student-history-body]");
-  const historyEmpty = sheetEl.querySelector("[data-admin-student-history-empty]");
-  if (!(historyBody instanceof HTMLElement)) return;
-
-  const hist = adminStudentsState.history;
-  const items = Array.isArray(hist.items) ? hist.items : [];
-  const filter = String(hist.filter || "all");
-
-  const filtered = items.filter((it) => {
-    if (filter === "all") return true;
-    if (filter === "alerts") return Boolean(it.precisaIntervencao);
-    return it.statusAula === filter;
-  });
-
-  // Summary cards
-  const total = items.length;
-  const faltas = items.filter((i) => i.statusAula === "falta_aluno").length;
-  const remarcadas = items.filter((i) => i.statusAula === "remarcada").length;
-  const last = items[0] || null;
-  const lastStatus = last ? (last.statusAula === "realizada" ? "Realizada" : last.statusAula === "falta_aluno" ? "Falta do aluno" : "Remarcada") : "Sem dados";
-  const lastRisk = last?.riscoEvasao ? last.riscoEvasao : "Sem dados";
-  const lastUpdated = last?.updatedAt ? formatAdminHistoryStamp(last.updatedAt) : "Sem dados";
-
-  const realizada = items.filter((i) => i.statusAula === "realizada");
-  const avg = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0);
-  const engVals = realizada.map((i) => Number(i.raw?.payload?.engajamentoNota || 0)).filter((n) => Number.isFinite(n) && n > 0);
-  const evoVals = realizada.map((i) => Number(i.raw?.payload?.evolucaoNota || 0)).filter((n) => Number.isFinite(n) && n > 0);
-  const engMed = engVals.length ? avg(engVals).toFixed(1) : "";
-  const evoMed = evoVals.length ? avg(evoVals).toFixed(1) : "";
-
-  const alertCount = items.filter((i) => i.precisaIntervencao).length;
-
-  const headerHtml = `
-    <div class="admin-students-history-summary">
-      <div class="admin-students-summary-card"><span>Total registradas</span><strong>${escapeHtml(String(total || 0))}</strong></div>
-      <div class="admin-students-summary-card"><span>Faltas</span><strong>${escapeHtml(String(faltas || 0))}</strong></div>
-      <div class="admin-students-summary-card"><span>Remarcações</span><strong>${escapeHtml(String(remarcadas || 0))}</strong></div>
-      <div class="admin-students-summary-card"><span>Último status</span><strong>${escapeHtml(lastStatus)}</strong></div>
-      <div class="admin-students-summary-card"><span>Último risco</span><strong>${escapeHtml(lastRisk)}</strong></div>
-      <div class="admin-students-summary-card"><span>Última atualização</span><strong>${escapeHtml(lastUpdated)}</strong></div>
-    </div>
-
-    <div class="admin-students-history-indicators">
-      <div class="admin-students-indicator"><span>Engajamento médio</span><strong>${engMed ? escapeHtml(`${engMed}/5`) : "Sem dados"}</strong></div>
-      <div class="admin-students-indicator"><span>Evolução média</span><strong>${evoMed ? escapeHtml(`${evoMed}/5`) : "Sem dados"}</strong></div>
-      <div class="admin-students-indicator"><span>Alertas</span><strong>${alertCount ? escapeHtml(String(alertCount)) : "Sem dados"}</strong></div>
-    </div>
-  `;
-
-  const timelineHtml = filtered
-    .map((it) => {
-      const statusLabel = it.statusAula === "realizada" ? "Aula realizada" : it.statusAula === "falta_aluno" ? "Falta do aluno" : "Remarcada";
-      const stamp = it.dateKey
-        ? `${formatPedagogicoDate(it.dateKey)} • ${formatHmFromMinutes(it.startMin)}–${formatHmFromMinutes(it.endMin)}`
-        : "—";
-      const alertBadge = it.precisaIntervencao ? `<span class="admin-students-tl-alert">Alerta</span>` : "";
-      const avisos = Array.isArray(it.avisos) ? it.avisos : [];
-      const avisosHtml = avisos.length
-        ? `<div class="admin-students-tl-avisos">${avisos
-            .map((a) => {
-              const s = String(a || "");
-              const tone = s.startsWith("🔴") ? "red" : s.startsWith("🟢") ? "green" : "yellow";
-              return `<span class="admin-students-pill is-${tone}">${escapeHtml(s)}</span>`;
-            })
-            .join("")}</div>`
-        : "";
-      const obsHtml = it.observacoes ? `<div class="admin-students-tl-obs">${escapeHtml(it.observacoes)}</div>` : "";
-      const riskHtml = it.riscoEvasao ? `<div class="admin-students-tl-risk">Risco: <strong>${escapeHtml(it.riscoEvasao)}</strong></div>` : "";
-      return `
-        <article class="admin-students-tl-item">
-          <div class="admin-students-tl-head">
-            <div class="admin-students-tl-stamp">${escapeHtml(stamp)}</div>
-            ${alertBadge}
-          </div>
-          <div class="admin-students-tl-title">${escapeHtml(statusLabel)}</div>
-          ${it.professorName ? `<div class="admin-students-tl-by">Professor: ${escapeHtml(it.professorName)}</div>` : ""}
-          <div class="admin-students-tl-summary">${escapeHtml(it.summaryText)}</div>
-          ${riskHtml}
-          ${avisosHtml}
-          ${obsHtml}
-        </article>
-      `;
-    })
-    .join("");
-
-  historyBody.innerHTML = `${headerHtml}<div class="admin-students-timeline">${timelineHtml}</div>`;
-  if (historyEmpty instanceof HTMLElement) historyEmpty.hidden = filtered.length > 0;
+  const slot = sheetEl.querySelector("[data-admin-student-history-slot]");
+  if (!(slot instanceof HTMLElement)) return;
+  slot.innerHTML = renderAdminStudentSimpleHistoryHtml({ hist: adminStudentsState.history, teacherMeta: adminStudentsState.history.teacherMeta });
 };
 
-const openAdminStudentHistoryDrawer = async ({ alunoId, teacherId } = {}) => {
+const openStudentSimpleCard = async ({ alunoId, teacherId } = {}) => {
   if (!(adminStudentHistoryDrawer instanceof HTMLElement)) return;
   const aId = String(alunoId || "").trim();
   const tId = String(teacherId || "").trim();
   if (!aId) return;
 
+  adminStudentsState.history = {
+    isOpen: true,
+    alunoId: aId,
+    activeTab: "history",
+    editMode: false,
+    items: [],
+    alunoMeta: null,
+    teacherMeta: null,
+    baseLoading: true,
+    baseError: "",
+    historyLoading: true,
+    historyError: "",
+    notes: "",
+    notesLoadedAt: 0,
+    notesSaving: false,
+    notesError: "",
+  };
+
+  if (adminStudentHistoryTitle instanceof HTMLElement) adminStudentHistoryTitle.textContent = "Ficha do aluno";
+  if (adminStudentHistorySub instanceof HTMLElement) adminStudentHistorySub.textContent = "Carregando…";
+
+  adminStudentHistoryDrawer.hidden = false;
+  window.requestAnimationFrame(() => {
+    if (adminStudentHistoryDrawer instanceof HTMLElement) adminStudentHistoryDrawer.classList.add("is-open");
+  });
+  renderAdminStudentSheet();
   setAdminStudentsStatus("Carregando ficha…");
+
   try {
     await ensureAdminStudentsBaseData({ force: false });
-    const allLogs = Array.isArray(adminStudentsState.logs) ? adminStudentsState.logs : [];
-    const logs = tId ? allLogs.filter((l) => String(l?.professorId || "").trim() === tId) : allLogs;
-    const derived = deriveAdminStudentsSummaries({ teacherId: tId, logs });
+  } catch (error) {
+    console.error("[admin] base load failed while opening student card:", error);
+    adminStudentsState.history.baseError =
+      typeof error?.message === "string" && error.message ? error.message : "Não foi possível carregar os dados básicos.";
+  }
+
+  const alunoMeta = adminStudentsState.studentsById instanceof Map ? adminStudentsState.studentsById.get(aId) || null : null;
+  const inferredTeacherId =
+    tId ||
+    String(alunoMeta?.professorId || alunoMeta?.teacherId || "").trim() ||
+    "";
+  const teacherMeta =
+    inferredTeacherId && adminStudentsState.teachersById instanceof Map ? adminStudentsState.teachersById.get(inferredTeacherId) || null : null;
+
+  adminStudentsState.history.alunoMeta = alunoMeta;
+  adminStudentsState.history.teacherMeta = teacherMeta;
+  adminStudentsState.history.notes = getAdminStudentNotesValue(alunoMeta);
+  adminStudentsState.history.notesLoadedAt = Date.now();
+  adminStudentsState.history.baseLoading = false;
+
+  if (adminStudentHistorySub instanceof HTMLElement) {
+    const alunoName = alunoMeta?.nome || "Aluno";
+    const teacherName = teacherMeta?.nome || "";
+    adminStudentHistorySub.textContent = teacherName ? `${alunoName} • ${teacherName}` : `${alunoName}`;
+  }
+
+  renderAdminStudentSheet();
+
+  try {
+    const allLogs = await fetchLessonLogsFromFirestore();
+    const logs = inferredTeacherId ? allLogs.filter((l) => String(l?.professorId || "").trim() === inferredTeacherId) : allLogs;
+    const derived = deriveAdminStudentsSummaries({ teacherId: inferredTeacherId, logs });
     const items = buildAdminStudentHistoryItems({
       alunoId: aId,
-      teacherId: tId,
+      teacherId: inferredTeacherId,
       logs,
       eventsById: derived.eventsById,
       teacherMeta: derived.teacherMeta,
     });
-
-    const alunoMeta = adminStudentsState.studentsById instanceof Map ? adminStudentsState.studentsById.get(aId) || null : null;
-    const inferredTeacherId =
-      tId ||
-      String(alunoMeta?.professorId || "").trim() ||
-      String(items[0]?.professorId || "").trim() ||
-      "";
-    const teacherMeta =
-      inferredTeacherId && adminStudentsState.teachersById instanceof Map ? adminStudentsState.teachersById.get(inferredTeacherId) || null : null;
-    const pedagogicalResponse = await fetchWithAuth(
-      `/api/pedagogico/student?aluno_id=${encodeURIComponent(aId)}&aluno_nome=${encodeURIComponent(String(alunoMeta?.nome || ""))}`
-    )
-      .then(async (res) => (res.ok ? res.json() : null))
-      .catch(() => null);
-    const pedagogicalCard =
-      pedagogicalResponse?.ficha && typeof pedagogicalResponse.ficha === "object" ? pedagogicalResponse.ficha : {};
-
-    adminStudentsState.history = {
-      isOpen: true,
-      alunoId: aId,
-      activeTab: "overview",
-      editMode: false,
-      filter: "all",
-      items,
-      alunoMeta,
-      teacherMeta,
-      pedagogicalCard,
-      files: [],
-      filesLoadedAt: 0,
-      filesLoading: false,
-      filesError: "",
-      financeRows: [],
-      financeLoadedAt: 0,
-      financeLoading: false,
-      financeError: "",
-    };
-
-    if (adminStudentHistoryTitle instanceof HTMLElement) adminStudentHistoryTitle.textContent = "Ficha do aluno";
-    if (adminStudentHistorySub instanceof HTMLElement) {
-      const alunoName = alunoMeta?.nome || "Aluno";
-      const teacherName = teacherMeta?.nome || "";
-      adminStudentHistorySub.textContent = teacherName ? `${alunoName} • ${teacherName}` : `${alunoName}`;
-    }
-
-    renderAdminStudentSheet();
-
-    adminStudentHistoryDrawer.hidden = false;
-    window.requestAnimationFrame(() => {
-      if (adminStudentHistoryDrawer instanceof HTMLElement) adminStudentHistoryDrawer.classList.add("is-open");
-      void ensureAdminStudentFinanceLoaded({ force: false }).catch((error) => {
-        console.error("[finance] student finance preload failed", error);
-      });
-      // Preload files so the "Arquivos" tab is instant.
-      void ensureAdminStudentFilesLoaded({ force: false }).catch(() => {});
-    });
-    setAdminStudentsStatus("");
+    adminStudentsState.history.items = items;
+    adminStudentsState.history.historyError = "";
   } catch (error) {
-    console.error("[admin] open student history failed:", error);
-    setAdminStudentsStatus("Não foi possível carregar agora.", "error");
+    console.error("[admin] student history load failed:", error);
+    adminStudentsState.history.items = [];
+    adminStudentsState.history.historyError =
+      typeof error?.message === "string" && error.message ? error.message : "Não foi possível carregar o histórico pedagógico.";
+  } finally {
+    adminStudentsState.history.historyLoading = false;
+    renderAdminStudentSheet();
+    setAdminStudentsStatus("");
   }
 };
+
+const openAdminStudentHistoryDrawer = openStudentSimpleCard;
 
 const closeAdminStudentHistoryDrawer = () => {
   if (adminStudentHistoryDrawer instanceof HTMLElement) {
@@ -19998,25 +19939,24 @@ const closeAdminStudentHistoryDrawer = () => {
       if (adminStudentHistoryDrawer instanceof HTMLElement) adminStudentHistoryDrawer.hidden = true;
     }, 220);
   }
-		  adminStudentsState.history = {
-		    isOpen: false,
-		    alunoId: "",
-		    activeTab: "overview",
-		    editMode: false,
-		    filter: "all",
-		    items: [],
-		    alunoMeta: null,
-		    teacherMeta: null,
-        files: [],
-        filesLoadedAt: 0,
-        filesLoading: false,
-        filesError: "",
-        financeRows: [],
-        financeLoadedAt: 0,
-        financeLoading: false,
-        financeError: "",
-		  };
-		};
+  adminStudentsState.history = {
+    isOpen: false,
+    alunoId: "",
+    activeTab: "history",
+    editMode: false,
+    items: [],
+    alunoMeta: null,
+    teacherMeta: null,
+    baseLoading: false,
+    baseError: "",
+    historyLoading: false,
+    historyError: "",
+    notes: "",
+    notesLoadedAt: 0,
+    notesSaving: false,
+    notesError: "",
+  };
+};
 
 
 const closeAllAdminActionMenus = () => {
@@ -23778,19 +23718,66 @@ document.addEventListener("click", (event) => {
         return;
       }
 
+      const studentNotesSave = target.closest("[data-admin-student-notes-save]");
+      if (studentNotesSave instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const hist = adminStudentsState.history;
+        const alunoId = String(hist?.alunoId || "").trim();
+        const sheetEl = document.querySelector("[data-admin-student-sheet]");
+        const notesField = sheetEl instanceof HTMLElement ? sheetEl.querySelector("[data-admin-student-notes-field]") : null;
+        const statusEl = sheetEl instanceof HTMLElement ? sheetEl.querySelector("[data-admin-student-notes-status]") : null;
+        const notes = notesField instanceof HTMLTextAreaElement ? String(notesField.value || "") : "";
+
+        const setNotesStatus = (message, tone = "") => {
+          if (statusEl instanceof HTMLElement) {
+            statusEl.textContent = String(message || "—");
+            statusEl.dataset.tone = String(tone || "");
+          }
+        };
+
+        if (!alunoId) {
+          setNotesStatus("Não foi possível identificar o aluno.", "error");
+          return;
+        }
+
+        studentNotesSave.disabled = true;
+        hist.notesSaving = true;
+        hist.notesError = "";
+        setNotesStatus("Salvando notas…", "loading");
+
+        (async () => {
+          try {
+            await saveAdminStudentPedagogicalNotes({ alunoId, notes });
+            hist.notes = String(notes || "").trim();
+            hist.notesLoadedAt = Date.now();
+            hist.notesError = "";
+            setNotesStatus("Notas salvas.", "success");
+          } catch (error) {
+            console.error("[admin] student notes save failed:", error);
+            hist.notesError = "Não foi possível salvar as notas agora.";
+            setNotesStatus(hist.notesError, "error");
+          } finally {
+            hist.notesSaving = false;
+            window.setTimeout(() => {
+              if (statusEl instanceof HTMLElement && statusEl.textContent === "Notas salvas.") {
+                setNotesStatus("Notas salvas.", "success");
+              }
+            }, 400);
+            studentNotesSave.disabled = false;
+          }
+        })();
+
+        return;
+      }
+
       const studentTab = target.closest("[data-admin-student-tab]");
       if (studentTab instanceof HTMLButtonElement) {
         event.preventDefault();
         const next = String(studentTab.getAttribute("data-admin-student-tab") || "").trim();
         if (next) {
           adminStudentsState.history.activeTab = next;
+          adminStudentsState.history.editMode = next === "edit";
           syncAdminStudentSheetTabs();
-          if (next === "arquivos") {
-            ensureAdminStudentFilesLoaded({ force: false }).catch(() => {});
-          }
-          if (next === "financeiro") {
-            ensureAdminStudentFinanceLoaded({ force: false }).catch(() => {});
-          }
         }
         return;
       }
@@ -23977,6 +23964,7 @@ document.addEventListener("click", (event) => {
       if (studentEditCancel instanceof HTMLButtonElement) {
         event.preventDefault();
         adminStudentsState.history.editMode = false;
+        adminStudentsState.history.activeTab = "history";
         renderAdminStudentSheet();
         syncAdminStudentSheetTabs();
         return;
@@ -24140,6 +24128,7 @@ document.addEventListener("click", (event) => {
               adminStudentsState.history.alunoMeta = refreshedMeta;
             }
             adminStudentsState.history.editMode = false;
+            adminStudentsState.history.activeTab = "history";
             renderAdminStudentSheet();
             syncAdminStudentSheetTabs();
             setAdminStudentsStatus("");
@@ -24178,7 +24167,7 @@ document.addEventListener("click", (event) => {
           const isSame = Boolean(adminStudentsState.history?.isOpen) && String(adminStudentsState.history?.alunoId || "") === alunoId;
           const activate = () => {
             adminStudentsState.history.editMode = true;
-            adminStudentsState.history.activeTab = "overview";
+            adminStudentsState.history.activeTab = "edit";
             renderAdminStudentSheet();
             syncAdminStudentSheetTabs();
           };
