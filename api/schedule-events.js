@@ -6,7 +6,7 @@ const { verifyFirebaseIdToken } = require("../_lib/firebase-id-token");
 const { listCollectionAsAdmin } = require("./_lib/firestore-admin");
 const { DEFAULT_CONFIG } = require("../_lib/scheduling-firestore");
 const { fetchUserProfileByUid } = require("../_lib/firestore-user");
-const { supabaseFetch } = require("../_lib/supabase-rest");
+const { supabaseFetch } = require("./_lib/supabase-rest");
 const {
   addDaysToDateKey,
   clampInt,
