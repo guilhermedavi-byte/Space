@@ -405,23 +405,53 @@
             </span>
             <span class="sidebar-text">Growth</span>
           </button>
-          <button
-            class="sidebar-link"
-            type="button"
-            data-panel-target="financeiro"
-            data-finance-only
-            title="Financeiro"
-          >
-            <span class="sidebar-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none">
-                <rect x="3.5" y="5" width="17" height="14" rx="2"></rect>
-                <path d="M3.5 10h17"></path>
-                <path d="M7 15h3"></path>
-                <path d="M15.5 14.5h1.5"></path>
-              </svg>
-            </span>
-            <span class="sidebar-text">Financeiro</span>
-          </button>
+          <div class="sidebar-accordion" data-sidebar-accordion="financeiro" data-finance-only>
+            <button
+              class="sidebar-link sidebar-accordion-toggle"
+              type="button"
+              data-sidebar-accordion-toggle="financeiro"
+              aria-expanded="false"
+              aria-controls="sidebar-financeiro-items"
+              title="Financeiro"
+            >
+              <span class="sidebar-link-main">
+                <span class="sidebar-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <rect x="3.5" y="5" width="17" height="14" rx="2"></rect>
+                    <path d="M3.5 10h17"></path>
+                    <path d="M7 15h3"></path>
+                    <path d="M15.5 14.5h1.5"></path>
+                  </svg>
+                </span>
+                <span class="sidebar-text">Financeiro</span>
+              </span>
+              <span class="sidebar-accordion-chevron" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="m8 10 4 4 4-4"></path>
+                </svg>
+              </span>
+            </button>
+            <div class="sidebar-accordion-body" id="sidebar-financeiro-items" data-sidebar-accordion-body="financeiro" hidden>
+              <button class="sidebar-link sidebar-link-sub" type="button" data-finance-tab="overview" title="Dashboard">
+                <span class="sidebar-text">Dashboard</span>
+              </button>
+              <button class="sidebar-link sidebar-link-sub" type="button" data-finance-tab="alunos" data-sidebar-placeholder="true" title="Alunos financeiros">
+                <span class="sidebar-text">Alunos financeiros</span>
+              </button>
+              <button class="sidebar-link sidebar-link-sub" type="button" data-finance-tab="cobrancas" data-sidebar-placeholder="true" title="Cobranças">
+                <span class="sidebar-text">Cobranças</span>
+              </button>
+              <button class="sidebar-link sidebar-link-sub" type="button" data-finance-tab="pagamentos" data-sidebar-placeholder="true" title="Pagamentos">
+                <span class="sidebar-text">Pagamentos</span>
+              </button>
+              <button class="sidebar-link sidebar-link-sub" type="button" data-finance-tab="eventos" data-sidebar-placeholder="true" title="Eventos">
+                <span class="sidebar-text">Eventos</span>
+              </button>
+              <button class="sidebar-link sidebar-link-sub" type="button" data-finance-tab="chatwoot" data-sidebar-placeholder="true" title="Conversas">
+                <span class="sidebar-text">Conversas</span>
+              </button>
+            </div>
+          </div>
           <button
             class="sidebar-link"
             type="button"

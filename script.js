@@ -21423,57 +21423,39 @@ const hideAuthPages = () => {
   if (authLoginShell) authLoginShell.hidden = true;
 };
 
+const syncSidebarAccordionState = (accordionName, shouldOpen) => {
+  const accordion = document.querySelector(`[data-sidebar-accordion="${CSS.escape(String(accordionName || ""))}"]`);
+  const toggle = document.querySelector(`[data-sidebar-accordion-toggle="${CSS.escape(String(accordionName || ""))}"]`);
+  const bodyEl = document.querySelector(`[data-sidebar-accordion-body="${CSS.escape(String(accordionName || ""))}"]`);
+  if (!(accordion instanceof HTMLElement) || !(toggle instanceof HTMLButtonElement) || !(bodyEl instanceof HTMLElement)) return false;
+
+  accordion.classList.toggle("is-open", Boolean(shouldOpen));
+  toggle.classList.toggle("is-active", Boolean(shouldOpen));
+  toggle.setAttribute("aria-expanded", shouldOpen ? "true" : "false");
+  bodyEl.hidden = !shouldOpen;
+  return true;
+};
+
+const syncFinanceSidebarActiveState = () => {
+  const activeTab = String(financeState.activeTab || "overview");
+  document.querySelectorAll("[data-sidebar-accordion-body='financeiro'] [data-finance-tab]").forEach((link) => {
+    if (!(link instanceof HTMLElement)) return;
+    const tab = String(link.getAttribute("data-finance-tab") || "").trim();
+    const isActive = tab === activeTab;
+    link.classList.toggle("is-active", isActive);
+    link.setAttribute("aria-pressed", String(isActive));
+  });
+};
+
 const syncFinanceSidebar = (panelName) => {
-  const nav = document.querySelector(".sidebar-nav");
-  if (!(nav instanceof HTMLElement)) return;
   const financeContext = panelName === "financeiro" || currentRole === "FINANCE";
-
-  nav.querySelectorAll("[data-finance-sidebar-item]").forEach((el) => el.remove());
-
-  if (!financeContext) {
-    if (body.dataset.financeSidebar === "1") {
-      body.dataset.financeSidebar = "0";
-      syncRoleUI();
-    }
-    return;
+  syncSidebarAccordionState("financeiro", financeContext);
+  if (financeContext) {
+    body.dataset.financeSidebar = "1";
+    syncFinanceSidebarActiveState();
+  } else {
+    body.dataset.financeSidebar = "0";
   }
-
-  body.dataset.financeSidebar = "1";
-  nav.querySelectorAll("[data-panel-target]").forEach((el) => {
-    if (!(el instanceof HTMLElement)) return;
-    const target = String(el.getAttribute("data-panel-target") || "");
-    el.hidden = target !== "financeiro";
-  });
-
-  const financeLink = nav.querySelector('[data-panel-target="financeiro"]');
-  const items = [
-    ["overview", "Dashboard"],
-    ["alunos", "Alunos financeiros"],
-    ["cobrancas", "Cobranças"],
-    ["pagamentos", "Pagamentos"],
-    ["eventos", "Eventos"],
-    ["chatwoot", "Conversas"],
-  ];
-
-  items.reverse().forEach(([tab, label]) => {
-    const btn = document.createElement("button");
-    btn.className = `sidebar-link${financeState.activeTab === tab ? " is-active" : ""}`;
-    btn.type = "button";
-    btn.setAttribute("data-finance-tab", tab);
-    btn.setAttribute("data-finance-sidebar-item", "");
-    btn.title = label;
-    btn.innerHTML = `
-      <span class="sidebar-icon" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none"><path d="M4.5 6.5h15"></path><path d="M4.5 12h15"></path><path d="M4.5 17.5h15"></path></svg>
-      </span>
-      <span class="sidebar-text">${escapeHtml(label)}</span>
-    `;
-    if (financeLink instanceof HTMLElement) {
-      financeLink.insertAdjacentElement("afterend", btn);
-    } else {
-      nav.insertBefore(btn, nav.firstChild);
-    }
-  });
 };
 
 let platformLaunchStatusLoadedAt = 0;
@@ -21549,16 +21531,8 @@ const renderPlatformLaunchStatus = async ({ force = false } = {}) => {
 };
 
 const syncPedagogicoSidebarAccordion = (panelName) => {
-  const accordion = document.querySelector("[data-sidebar-accordion='pedagogico']");
-  const toggle = document.querySelector("[data-sidebar-accordion-toggle='pedagogico']");
-  const body = document.querySelector("[data-sidebar-accordion-body='pedagogico']");
-  if (!(accordion instanceof HTMLElement) || !(toggle instanceof HTMLButtonElement) || !(body instanceof HTMLElement)) return;
-
   const shouldOpen = PEDAGOGICO_SIDEBAR_PANEL_TARGETS.has(String(panelName || ""));
-  accordion.classList.toggle("is-open", shouldOpen);
-  toggle.classList.toggle("is-active", shouldOpen);
-  toggle.setAttribute("aria-expanded", shouldOpen ? "true" : "false");
-  body.hidden = !shouldOpen;
+  syncSidebarAccordionState("pedagogico", shouldOpen);
 };
 
 const activatePedagogicoSidebarSection = (panelTarget) => {
@@ -22446,17 +22420,25 @@ document.addEventListener(
       return;
     }
 
-    const sidebarAccordionToggle = target.closest("[data-sidebar-accordion-toggle='pedagogico']");
+    const sidebarAccordionToggle = target.closest("[data-sidebar-accordion-toggle]");
     if (sidebarAccordionToggle instanceof HTMLButtonElement) {
       event.preventDefault();
       event.stopPropagation();
-      const accordion = sidebarAccordionToggle.closest("[data-sidebar-accordion='pedagogico']");
-      const body = accordion?.querySelector("[data-sidebar-accordion-body='pedagogico']");
+      const accordionName = String(sidebarAccordionToggle.getAttribute("data-sidebar-accordion-toggle") || "").trim();
+      const accordion = sidebarAccordionToggle.closest(`[data-sidebar-accordion="${CSS.escape(accordionName)}"]`);
+      const body = accordion?.querySelector(`[data-sidebar-accordion-body="${CSS.escape(accordionName)}"]`);
       const nextOpen = !(body instanceof HTMLElement) || body.hidden;
-      if (accordion instanceof HTMLElement) accordion.classList.toggle("is-open", nextOpen);
-      sidebarAccordionToggle.classList.toggle("is-active", nextOpen);
-      sidebarAccordionToggle.setAttribute("aria-expanded", nextOpen ? "true" : "false");
-      if (body instanceof HTMLElement) body.hidden = !nextOpen;
+
+      if (accordionName === "pedagogico") {
+        syncSidebarAccordionState("financeiro", false);
+      } else if (accordionName === "financeiro") {
+        syncSidebarAccordionState("pedagogico", false);
+      }
+
+      syncSidebarAccordionState(accordionName, nextOpen);
+      if (accordionName === "financeiro") {
+        syncFinanceSidebarActiveState();
+      }
       return;
     }
 
