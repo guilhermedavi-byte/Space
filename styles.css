@@ -7,6 +7,13 @@
   --bg-soft: rgba(255, 255, 255, 0.04);
   --surface: rgba(255, 255, 255, 0.05);
   --surface-strong: rgba(255, 255, 255, 0.08);
+  --app-bg-gradient: linear-gradient(160deg, #0b1620 0%, #132436 34%, #1a2841 58%, #132436 78%, #0b1620 100%);
+  --surface-bg: #111b28;
+  --surface-bg-alt: #152233;
+  --surface-bg-strong: #132436;
+  --surface-bg-hover: #18293d;
+  --surface-bg-success: #153228;
+  --surface-bg-accent: #2a1d1b;
   --line: rgba(255, 255, 255, 0.09);
   --line-strong: rgba(255, 255, 255, 0.14);
   --text-main: #f4efe7;
@@ -3026,6 +3033,209 @@ body[data-view="auth"] .auth-shell:not([hidden]) {
 
 body[data-view="auth"] .auth-shell-login:not([hidden]) {
   display: grid;
+}
+
+body[data-view="interno"] {
+  background: var(--app-bg-gradient);
+}
+
+body[data-view="interno"] .surface-card,
+body[data-view="interno"] .panel-hero-card,
+body[data-view="interno"] .overview-card,
+body[data-view="interno"] .method-card,
+body[data-view="interno"] .teacher-profile,
+body[data-view="interno"] .material-card,
+body[data-view="interno"] .admin-dashboard-v2-surface,
+body[data-view="interno"] .admin-dashboard-v2-card,
+body[data-view="interno"] .admin-ped-surface,
+body[data-view="interno"] .admin-ped-kpi,
+body[data-view="interno"] .admin-ped-op-card,
+body[data-view="interno"] .admin-ped-qualitymini-metric,
+body[data-view="interno"] .admin-ped-link-row,
+body[data-view="interno"] .admin-ped-agendaquick-item,
+body[data-view="interno"] .teacher-calendar-shell,
+body[data-view="interno"] .teacher-calendar-left,
+body[data-view="interno"] .teacher-cal-viewport,
+body[data-view="interno"] .teacher-cal-head-cell,
+body[data-view="interno"] .teacher-cal-timecol,
+body[data-view="interno"] .teacher-log-card,
+body[data-view="interno"] .teacher-log-item,
+body[data-view="interno"] .teacher-students-card,
+body[data-view="interno"] .teacher-onboarding-main,
+body[data-view="interno"] .teacher-onboarding-list,
+body[data-view="interno"] .finance-card,
+body[data-view="interno"] .admin-users-card,
+body[data-view="interno"] .admin-students-card,
+body[data-view="interno"] .admin-goals-card,
+body[data-view="interno"] .admin-requests-card,
+body[data-view="interno"] .admin-agendas-card,
+body[data-view="interno"] .admin-onboarding-editor,
+body[data-view="interno"] .admin-onboarding-perf,
+body[data-view="interno"] .pedagogico-drawer-inner,
+body[data-view="interno"] .teacher-students-drawer-inner,
+body[data-view="interno"] .admin-actions-menu,
+body[data-view="interno"] .admin-actions-popover {
+  background: var(--surface-bg);
+}
+
+body[data-view="interno"] .surface-card,
+body[data-view="interno"] .panel-hero-card,
+body[data-view="interno"] .overview-card,
+body[data-view="interno"] .method-card,
+body[data-view="interno"] .teacher-profile,
+body[data-view="interno"] .material-card,
+body[data-view="interno"] .admin-dashboard-v2-surface,
+body[data-view="interno"] .admin-dashboard-v2-card,
+body[data-view="interno"] .admin-ped-surface,
+body[data-view="interno"] .admin-ped-kpi,
+body[data-view="interno"] .admin-ped-op-card,
+body[data-view="interno"] .admin-ped-qualitymini-metric,
+body[data-view="interno"] .admin-ped-link-row,
+body[data-view="interno"] .admin-ped-agendaquick-item,
+body[data-view="interno"] .teacher-calendar-shell,
+body[data-view="interno"] .teacher-calendar-left,
+body[data-view="interno"] .teacher-cal-viewport,
+body[data-view="interno"] .teacher-cal-head-cell,
+body[data-view="interno"] .teacher-cal-timecol,
+body[data-view="interno"] .teacher-log-card,
+body[data-view="interno"] .teacher-log-item,
+body[data-view="interno"] .teacher-students-card,
+body[data-view="interno"] .teacher-onboarding-main,
+body[data-view="interno"] .teacher-onboarding-list,
+body[data-view="interno"] .finance-card,
+body[data-view="interno"] .admin-users-card,
+body[data-view="interno"] .admin-students-card,
+body[data-view="interno"] .admin-goals-card,
+body[data-view="interno"] .admin-requests-card,
+body[data-view="interno"] .admin-agendas-card,
+body[data-view="interno"] .admin-onboarding-editor,
+body[data-view="interno"] .admin-onboarding-perf,
+body[data-view="interno"] .pedagogico-drawer-inner,
+body[data-view="interno"] .teacher-students-drawer-inner,
+body[data-view="interno"] .admin-actions-menu,
+body[data-view="interno"] .admin-actions-popover {
+  background-image: none;
+}
+
+body[data-view="interno"] .surface-card,
+body[data-view="interno"] .panel-hero-card,
+body[data-view="interno"] .overview-card,
+body[data-view="interno"] .method-card,
+body[data-view="interno"] .teacher-profile,
+body[data-view="interno"] .material-card,
+body[data-view="interno"] .admin-ped-surface,
+body[data-view="interno"] .admin-ped-kpi,
+body[data-view="interno"] .admin-ped-op-card,
+body[data-view="interno"] .admin-ped-qualitymini-metric,
+body[data-view="interno"] .admin-ped-link-row,
+body[data-view="interno"] .admin-ped-agendaquick-item,
+body[data-view="interno"] .teacher-calendar-left,
+body[data-view="interno"] .teacher-cal-viewport,
+body[data-view="interno"] .teacher-cal-head-cell,
+body[data-view="interno"] .teacher-cal-timecol,
+body[data-view="interno"] .teacher-log-card,
+body[data-view="interno"] .teacher-log-item,
+body[data-view="interno"] .teacher-students-card,
+body[data-view="interno"] .teacher-onboarding-main,
+body[data-view="interno"] .teacher-onboarding-list,
+body[data-view="interno"] .finance-card,
+body[data-view="interno"] .admin-users-card,
+body[data-view="interno"] .admin-students-card,
+body[data-view="interno"] .admin-goals-card,
+body[data-view="interno"] .admin-requests-card,
+body[data-view="interno"] .admin-agendas-card,
+body[data-view="interno"] .admin-onboarding-editor,
+body[data-view="interno"] .admin-onboarding-perf,
+body[data-view="interno"] .pedagogico-drawer-inner,
+body[data-view="interno"] .teacher-students-drawer-inner,
+body[data-view="interno"] .admin-actions-menu,
+body[data-view="interno"] .admin-actions-popover {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+body[data-view="interno"] .admin-dashboard-v2-surface {
+  background: var(--surface-bg-strong);
+  border-color: rgba(89, 144, 189, 0.16);
+}
+
+body[data-view="interno"] .admin-dashboard-v2-card {
+  background: var(--surface-bg);
+  border-color: rgba(89, 144, 189, 0.1);
+}
+
+body[data-view="interno"] .admin-dashboard-v2-card:hover {
+  background: var(--surface-bg-hover);
+}
+
+body[data-view="interno"] .admin-dashboard-v2-card--success {
+  background: var(--surface-bg-success);
+  border-color: rgba(93, 202, 165, 0.18);
+}
+
+body[data-view="interno"] .admin-dashboard-v2-card--success:hover {
+  background: #17362c;
+}
+
+body[data-view="interno"] .admin-dashboard-v2-card--accent {
+  background: var(--surface-bg-accent);
+  border-color: rgba(255, 78, 70, 0.18);
+}
+
+body[data-view="interno"] .admin-dashboard-v2-card--accent:hover {
+  background: #31201e;
+}
+
+body[data-view="interno"] .admin-ped-kpi.is-hero {
+  background: var(--surface-bg-alt);
+  border-color: rgba(89, 144, 189, 0.18);
+}
+
+body[data-view="interno"] .teacher-calendar-shell {
+  background: var(--surface-bg-strong);
+}
+
+body[data-view="interno"] .teacher-cal-viewport {
+  background: var(--surface-bg-strong);
+}
+
+body[data-view="interno"] .teacher-calendar-left,
+body[data-view="interno"] .teacher-cal-head-cell,
+body[data-view="interno"] .teacher-cal-timecol {
+  background: var(--surface-bg);
+}
+
+body[data-view="interno"] .teacher-cal-offhours-seg,
+body[data-view="interno"] .teacher-cal-offhours-top,
+body[data-view="interno"] .teacher-cal-offhours-bottom {
+  background: var(--surface-bg-alt);
+}
+
+body[data-view="interno"] .admin-ped-agendaquick-item,
+body[data-view="interno"] .admin-ped-qualitymini-metric,
+body[data-view="interno"] .admin-ped-link-row,
+body[data-view="interno"] .admin-ped-ops-summary-card,
+body[data-view="interno"] .admin-ped-v2-metrics-item,
+body[data-view="interno"] .teacher-log-item {
+  background: var(--surface-bg-alt);
+}
+
+body[data-view="interno"] .admin-ped-agendaquick-item:hover,
+body[data-view="interno"] .admin-ped-qualitymini-metric:hover,
+body[data-view="interno"] .admin-ped-link-row:hover,
+body[data-view="interno"] .admin-ped-ops-summary-card:hover,
+body[data-view="interno"] .admin-ped-v2-metrics-item:hover,
+body[data-view="interno"] .teacher-log-item:hover {
+  background: var(--surface-bg-hover);
+}
+
+body[data-view="interno"] .admin-ped-metric,
+body[data-view="interno"] .pedagogico-item,
+body[data-view="interno"] .admin-student-pedagogical-grid .admin-student-personal-row,
+body[data-view="interno"] .admin-onboarding-row.is-head,
+body[data-view="interno"] .admin-onboarding-modal-check,
+body[data-view="interno"] .admin-onboarding-quizbuilder,
+body[data-view="interno"] .admin-ped-v2-metrics-item {
+  background: var(--surface-bg);
 }
 
 @keyframes rise-in {
