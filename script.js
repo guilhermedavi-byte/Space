@@ -145,10 +145,7 @@ const ADMIN_STUDENT_HISTORY_DRAWER_TEMPLATE = `
 `;
 
 const getAdminStudentHistoryDrawer = () => {
-  let drawer = document.body.querySelector("[data-admin-student-history-drawer]");
-  if (drawer instanceof HTMLElement) return drawer;
-
-  drawer = document.querySelector("[data-admin-student-history-drawer]");
+  let drawer = document.querySelector("[data-admin-student-history-drawer]");
   if (drawer instanceof HTMLElement) {
     if (drawer.parentElement !== document.body) document.body.appendChild(drawer);
     return drawer;
