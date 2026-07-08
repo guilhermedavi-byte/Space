@@ -1,5 +1,5 @@
 const { sendJson } = require("../_lib/http");
-const { resolveAdminRequestAuth } = require("../_lib/admin-request-auth");
+const { resolveAdminRequestAuth } = require("./_lib/admin-request-auth");
 const { listCollectionAsAdmin } = require("./_lib/firestore-admin");
 
 const ALLOWED_COLLECTIONS = new Set([
