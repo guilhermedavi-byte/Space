@@ -1,7 +1,6 @@
 const { readJsonBody, sendJson } = require("../_lib/http");
-const { getSessionFromRequest } = require("../_lib/session");
-const { normalizeRole } = require("../_lib/live-lessons");
 const { supabaseFetch } = require("../_lib/supabase-rest");
+const { resolveAdminRequestAuth } = require("../_lib/admin-request-auth");
 const { TABLES, loadAdminDashboard } = require("../_lib/pedagogico-service");
 
 module.exports = async (req, res) => {
@@ -9,9 +8,9 @@ module.exports = async (req, res) => {
     res.setHeader("Allow", "GET, HEAD, POST, PATCH");
     return sendJson(res, 405, { error: "method_not_allowed" });
   }
-  const session = getSessionFromRequest(req);
-  if (!session) return sendJson(res, 401, { error: "unauthorized" });
-  if (normalizeRole(session.role) !== "admin") return sendJson(res, 403, { error: "admin_only" });
+  const auth = await resolveAdminRequestAuth(req, { logPrefix: "[api] pedagogico dashboard auth" });
+  if (!auth.ok) return sendJson(res, auth.status, auth.body);
+  if (auth.session?.role !== "admin") return sendJson(res, 403, { error: "admin_only" });
 
   try {
     if (req.method === "POST" || req.method === "PATCH") {
@@ -22,7 +21,7 @@ module.exports = async (req, res) => {
       if (action !== "set_student_status" || !alunoChave || !["ativo", "inativo"].includes(status)) {
         return sendJson(res, 400, { error: "invalid_payload" });
       }
-      const adminId = String(session.sub || session.email || "").trim();
+      const adminId = String(auth.session.sub || auth.session.email || "").trim();
       const now = new Date().toISOString();
       const { data } = await supabaseFetch(
         `/${TABLES.adminStudentPreferences}?on_conflict=admin_id,aluno_chave`,
@@ -31,7 +30,7 @@ module.exports = async (req, res) => {
           headers: { Prefer: "resolution=merge-duplicates,return=representation" },
           body: {
             admin_id: adminId,
-            admin_email: String(session.email || ""),
+            admin_email: String(auth.session.email || ""),
             aluno_chave: alunoChave,
             status,
             updated_at: now,
@@ -41,7 +40,7 @@ module.exports = async (req, res) => {
       return sendJson(res, 200, { ok: true, preference: Array.isArray(data) ? data[0] || null : data });
     }
 
-    const dashboard = await loadAdminDashboard({ session });
+    const dashboard = await loadAdminDashboard({ session: auth.session });
     return sendJson(res, 200, { ok: true, ...dashboard });
   } catch (error) {
     console.error("[pedagogico] dashboard failed", error);

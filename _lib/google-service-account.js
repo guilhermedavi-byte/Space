@@ -41,7 +41,7 @@ const loadServiceAccount = () => {
     try {
       const parsed = JSON.parse(String(jsonRaw));
       const email = String(parsed.client_email || "").trim();
-      const key = String(parsed.private_key || "").trim();
+      const key = String(parsed.private_key || "").trim().replace(/\\n/g, "\n");
       if (email && key) return { clientEmail: email, privateKey: key };
     } catch (error) {
       // ignore
@@ -166,4 +166,3 @@ const getGoogleAccessToken = async ({ scope }) => {
 };
 
 module.exports = { getGoogleAccessToken };
-

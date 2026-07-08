@@ -1,5 +1,5 @@
 const { sendJson } = require("../_lib/http");
-const { getSessionFromRequest } = require("../_lib/session");
+const { resolveAdminRequestAuth } = require("../_lib/admin-request-auth");
 const { listCollectionAsAdmin } = require("./_lib/firestore-admin");
 
 const ALLOWED_COLLECTIONS = new Set([
@@ -23,9 +23,9 @@ module.exports = async (req, res) => {
     return sendJson(res, 405, { error: "method_not_allowed" });
   }
 
-  const session = getSessionFromRequest(req);
-  if (!session) return sendJson(res, 401, { error: "unauthenticated" });
-  if (String(session.role || "").toLowerCase() !== "admin") {
+  const auth = await resolveAdminRequestAuth(req, { logPrefix: "[api] admin-data auth" });
+  if (!auth.ok) return sendJson(res, auth.status, auth.body);
+  if (String(auth.session?.role || "").toLowerCase() !== "admin") {
     return sendJson(res, 403, { error: "forbidden" });
   }
 
