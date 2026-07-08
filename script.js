@@ -126,11 +126,53 @@ const adminStudentsList = document.querySelector("[data-admin-students-list]");
 const adminStudentsEmpty = document.querySelector("[data-admin-students-empty]");
 const adminStudentsError = document.querySelector("[data-admin-students-error]");
 const adminStudentsStatus = document.querySelector("[data-admin-students-status]");
-const adminStudentHistoryDrawer = document.querySelector("[data-admin-student-history-drawer]");
-const adminStudentHistoryTitle = document.querySelector("[data-admin-student-history-title]");
-const adminStudentHistorySub = document.querySelector("[data-admin-student-history-sub]");
-// Drawer content was refactored to a unified "Ficha do aluno". The inner content is rendered dynamically.
-const adminStudentSheet = document.querySelector("[data-admin-student-sheet]");
+const ADMIN_STUDENT_HISTORY_DRAWER_TEMPLATE = `
+  <div class="admin-students-drawer" data-admin-student-history-drawer hidden>
+    <div class="admin-students-drawer-backdrop" data-admin-student-history-close></div>
+    <div class="admin-students-drawer-inner admin-student-sheet-drawer-inner" role="dialog" aria-modal="true" aria-label="Ficha do aluno">
+      <div class="admin-students-drawer-head">
+        <div>
+          <div class="admin-students-drawer-title" data-admin-student-history-title>Ficha do aluno</div>
+          <div class="admin-students-drawer-sub" data-admin-student-history-sub>—</div>
+        </div>
+        <button class="admin-students-drawer-close" type="button" data-admin-student-history-close aria-label="Fechar">✕</button>
+      </div>
+      <div class="admin-students-drawer-body">
+        <div class="admin-student-sheet" data-admin-student-sheet></div>
+      </div>
+    </div>
+  </div>
+`;
+
+const getAdminStudentHistoryDrawer = () => {
+  let drawer = document.querySelector("[data-admin-student-history-drawer]");
+  if (drawer instanceof HTMLElement) return drawer;
+  const wrapper = document.createElement("div");
+  wrapper.innerHTML = ADMIN_STUDENT_HISTORY_DRAWER_TEMPLATE.trim();
+  drawer = wrapper.firstElementChild;
+  if (!(drawer instanceof HTMLElement)) return null;
+  document.body.appendChild(drawer);
+  return drawer;
+};
+
+const getAdminStudentHistoryTitle = () => {
+  const drawer = getAdminStudentHistoryDrawer();
+  return drawer instanceof HTMLElement ? drawer.querySelector("[data-admin-student-history-title]") : null;
+};
+
+const getAdminStudentHistorySub = () => {
+  const drawer = getAdminStudentHistoryDrawer();
+  return drawer instanceof HTMLElement ? drawer.querySelector("[data-admin-student-history-sub]") : null;
+};
+
+const getAdminStudentSheet = () => {
+  const drawer = getAdminStudentHistoryDrawer();
+  return drawer instanceof HTMLElement ? drawer.querySelector("[data-admin-student-sheet]") : null;
+};
+
+const warnMissingAdminStudentHistoryDrawer = (context) => {
+  console.warn("[admin] student history drawer unavailable", context);
+};
 
 // Admin > Controle Pedagógico (gestão)
 const adminPedRoot = document.querySelector("[data-admin-pedagogico]");
@@ -10591,8 +10633,11 @@ const ensureAdminStudentFinanceLoaded = async ({ force = false } = {}) => {
 };
 
 const renderAdminStudentFinanceTab = () => {
-  const sheetEl = document.querySelector("[data-admin-student-sheet]");
-  if (!(sheetEl instanceof HTMLElement)) return;
+  const sheetEl = getAdminStudentSheet();
+  if (!(sheetEl instanceof HTMLElement)) {
+    console.warn("[admin] student sheet unavailable", "renderAdminStudentFinanceTab");
+    return;
+  }
   const panel = sheetEl.querySelector("[data-admin-student-finance]");
   if (!(panel instanceof HTMLElement)) return;
 
@@ -11441,9 +11486,16 @@ const readAdminStudentFilesFromFirestore = async ({ alunoId } = {}) => {
 };
 
 const renderAdminStudentFilesTab = () => {
-  if (!(adminStudentHistoryDrawer instanceof HTMLElement)) return;
-  const sheetEl = document.querySelector("[data-admin-student-sheet]");
-  if (!(sheetEl instanceof HTMLElement)) return;
+  const drawerEl = getAdminStudentHistoryDrawer();
+  if (!(drawerEl instanceof HTMLElement)) {
+    warnMissingAdminStudentHistoryDrawer("renderAdminStudentFilesTab");
+    return;
+  }
+  const sheetEl = getAdminStudentSheet();
+  if (!(sheetEl instanceof HTMLElement)) {
+    console.warn("[admin] student sheet unavailable", "renderAdminStudentFilesTab");
+    return;
+  }
 
   const panel = sheetEl.querySelector("[data-admin-student-files]") || sheetEl.querySelector('[data-admin-student-tab-panel="arquivos"]');
   if (!(panel instanceof HTMLElement)) return;
@@ -11533,8 +11585,12 @@ const uploadAdminStudentFiles = async ({ alunoId, files } = {}) => {
   const fileList = Array.isArray(files) ? files : [];
   if (!id || !fileList.length) return;
 
-  const sheetEl = document.querySelector("[data-admin-student-sheet]");
-  const panel = sheetEl instanceof HTMLElement ? sheetEl.querySelector('[data-admin-student-tab-panel="arquivos"]') : null;
+  const sheetEl = getAdminStudentSheet();
+  if (!(sheetEl instanceof HTMLElement)) {
+    console.warn("[admin] student sheet unavailable", "uploadAdminStudentFiles");
+    return;
+  }
+  const panel = sheetEl.querySelector('[data-admin-student-tab-panel="arquivos"]');
   const inlineError = panel instanceof HTMLElement ? panel.querySelector("[data-admin-student-files-error]") : null;
   const setInlineError = (msg) => {
     if (!(inlineError instanceof HTMLElement)) return;
@@ -13727,9 +13783,16 @@ const renderAdminStudentEditFormHtml = (alunoMeta = {}) => {
 };
 
 const renderAdminStudentSheet = () => {
-  if (!(adminStudentHistoryDrawer instanceof HTMLElement)) return;
-  const sheetEl = document.querySelector("[data-admin-student-sheet]");
-  if (!(sheetEl instanceof HTMLElement)) return;
+  const drawerEl = getAdminStudentHistoryDrawer();
+  if (!(drawerEl instanceof HTMLElement)) {
+    warnMissingAdminStudentHistoryDrawer("renderAdminStudentSheet");
+    return;
+  }
+  const sheetEl = getAdminStudentSheet();
+  if (!(sheetEl instanceof HTMLElement)) {
+    console.warn("[admin] student sheet unavailable", "renderAdminStudentSheet");
+    return;
+  }
 
   const hist = adminStudentsState.history;
   const alunoMeta = hist.alunoMeta;
@@ -13835,8 +13898,11 @@ const renderAdminStudentSheet = () => {
 };
 
 const syncAdminStudentSheetTabs = () => {
-  const sheetEl = document.querySelector("[data-admin-student-sheet]");
-  if (!(sheetEl instanceof HTMLElement)) return;
+  const sheetEl = getAdminStudentSheet();
+  if (!(sheetEl instanceof HTMLElement)) {
+    console.warn("[admin] student sheet unavailable", "syncAdminStudentSheetTabs");
+    return;
+  }
   const active = String(adminStudentsState.history?.activeTab || "history");
 
   sheetEl.querySelectorAll("[data-admin-student-tab]").forEach((btn) => {
@@ -19833,16 +19899,27 @@ const buildAdminStudentHistoryItems = ({ alunoId, teacherId, logs, eventsById, t
 };
 
 const renderAdminStudentHistoryTab = () => {
-  if (!(adminStudentHistoryDrawer instanceof HTMLElement)) return;
-  const sheetEl = document.querySelector("[data-admin-student-sheet]");
-  if (!(sheetEl instanceof HTMLElement)) return;
+  const drawerEl = getAdminStudentHistoryDrawer();
+  if (!(drawerEl instanceof HTMLElement)) {
+    warnMissingAdminStudentHistoryDrawer("renderAdminStudentHistoryTab");
+    return;
+  }
+  const sheetEl = getAdminStudentSheet();
+  if (!(sheetEl instanceof HTMLElement)) {
+    console.warn("[admin] student sheet unavailable", "renderAdminStudentHistoryTab");
+    return;
+  }
   const slot = sheetEl.querySelector("[data-admin-student-history-slot]");
   if (!(slot instanceof HTMLElement)) return;
   slot.innerHTML = renderAdminStudentSimpleHistoryHtml({ hist: adminStudentsState.history, teacherMeta: adminStudentsState.history.teacherMeta });
 };
 
 const openStudentSimpleCard = async ({ alunoId, teacherId } = {}) => {
-  if (!(adminStudentHistoryDrawer instanceof HTMLElement)) return;
+  const drawerEl = getAdminStudentHistoryDrawer();
+  if (!(drawerEl instanceof HTMLElement)) {
+    warnMissingAdminStudentHistoryDrawer("openStudentSimpleCard");
+    return;
+  }
   const aId = String(alunoId || "").trim();
   const tId = String(teacherId || "").trim();
   if (!aId) return;
@@ -19865,12 +19942,15 @@ const openStudentSimpleCard = async ({ alunoId, teacherId } = {}) => {
     notesError: "",
   };
 
-  if (adminStudentHistoryTitle instanceof HTMLElement) adminStudentHistoryTitle.textContent = "Ficha do aluno";
-  if (adminStudentHistorySub instanceof HTMLElement) adminStudentHistorySub.textContent = "Carregando…";
+  const historyTitleEl = getAdminStudentHistoryTitle();
+  const historySubEl = getAdminStudentHistorySub();
+  if (historyTitleEl instanceof HTMLElement) historyTitleEl.textContent = "Ficha do aluno";
+  if (historySubEl instanceof HTMLElement) historySubEl.textContent = "Carregando…";
 
-  adminStudentHistoryDrawer.hidden = false;
+  drawerEl.hidden = false;
   window.requestAnimationFrame(() => {
-    if (adminStudentHistoryDrawer instanceof HTMLElement) adminStudentHistoryDrawer.classList.add("is-open");
+    const nextDrawer = getAdminStudentHistoryDrawer();
+    if (nextDrawer instanceof HTMLElement) nextDrawer.classList.add("is-open");
   });
   renderAdminStudentSheet();
   setAdminStudentsStatus("Carregando ficha…");
@@ -19897,10 +19977,11 @@ const openStudentSimpleCard = async ({ alunoId, teacherId } = {}) => {
   adminStudentsState.history.notesLoadedAt = Date.now();
   adminStudentsState.history.baseLoading = false;
 
-  if (adminStudentHistorySub instanceof HTMLElement) {
+  const nextHistorySubEl = getAdminStudentHistorySub();
+  if (nextHistorySubEl instanceof HTMLElement) {
     const alunoName = alunoMeta?.nome || "Aluno";
     const teacherName = teacherMeta?.nome || "";
-    adminStudentHistorySub.textContent = teacherName ? `${alunoName} • ${teacherName}` : `${alunoName}`;
+    nextHistorySubEl.textContent = teacherName ? `${alunoName} • ${teacherName}` : `${alunoName}`;
   }
 
   renderAdminStudentSheet();
@@ -19933,11 +20014,15 @@ const openStudentSimpleCard = async ({ alunoId, teacherId } = {}) => {
 const openAdminStudentHistoryDrawer = openStudentSimpleCard;
 
 const closeAdminStudentHistoryDrawer = () => {
-  if (adminStudentHistoryDrawer instanceof HTMLElement) {
-    adminStudentHistoryDrawer.classList.remove("is-open");
+  const drawerEl = getAdminStudentHistoryDrawer();
+  if (drawerEl instanceof HTMLElement) {
+    drawerEl.classList.remove("is-open");
     window.setTimeout(() => {
-      if (adminStudentHistoryDrawer instanceof HTMLElement) adminStudentHistoryDrawer.hidden = true;
+      const nextDrawer = getAdminStudentHistoryDrawer();
+      if (nextDrawer instanceof HTMLElement) nextDrawer.hidden = true;
     }, 220);
+  } else {
+    warnMissingAdminStudentHistoryDrawer("closeAdminStudentHistoryDrawer");
   }
   adminStudentsState.history = {
     isOpen: false,
@@ -23419,7 +23504,7 @@ document.addEventListener("click", (event) => {
       if (adminPedStudentOpen instanceof HTMLButtonElement) {
         event.preventDefault();
         const alunoId = String(adminPedStudentOpen.getAttribute("data-admin-ped-student-open") || "").trim();
-        openAdminStudentHistoryDrawer({ alunoId }).catch(() => {});
+        openAdminStudentHistoryDrawer({ alunoId }).catch((e) => console.error("[admin] ficha open failed", e));
         return;
       }
 
@@ -23705,9 +23790,13 @@ document.addEventListener("click", (event) => {
         event.preventDefault();
         const hist = adminStudentsState.history;
         const alunoId = String(hist?.alunoId || "").trim();
-        const sheetEl = document.querySelector("[data-admin-student-sheet]");
-        const notesField = sheetEl instanceof HTMLElement ? sheetEl.querySelector("[data-admin-student-notes-field]") : null;
-        const statusEl = sheetEl instanceof HTMLElement ? sheetEl.querySelector("[data-admin-student-notes-status]") : null;
+        const sheetEl = getAdminStudentSheet();
+        if (!(sheetEl instanceof HTMLElement)) {
+          console.warn("[admin] student sheet unavailable", "studentNotesSave");
+          return;
+        }
+        const notesField = sheetEl.querySelector("[data-admin-student-notes-field]");
+        const statusEl = sheetEl.querySelector("[data-admin-student-notes-status]");
         const notes = notesField instanceof HTMLTextAreaElement ? String(notesField.value || "") : "";
 
         const setNotesStatus = (message, tone = "") => {
@@ -23958,9 +24047,13 @@ document.addEventListener("click", (event) => {
 
         const hist = adminStudentsState.history;
         const alunoId = String(hist?.alunoId || "").trim();
-        const sheetEl = document.querySelector("[data-admin-student-sheet]");
-        const formEl = sheetEl instanceof HTMLElement ? sheetEl.querySelector("[data-admin-student-edit-form]") : null;
-        const errorEl = sheetEl instanceof HTMLElement ? sheetEl.querySelector("[data-admin-student-edit-error]") : null;
+        const sheetEl = getAdminStudentSheet();
+        if (!(sheetEl instanceof HTMLElement)) {
+          console.warn("[admin] student sheet unavailable", "studentEditSave");
+          return;
+        }
+        const formEl = sheetEl.querySelector("[data-admin-student-edit-form]");
+        const errorEl = sheetEl.querySelector("[data-admin-student-edit-error]");
 
         const setErr = (msg) => {
           if (errorEl instanceof HTMLElement) {
@@ -24919,8 +25012,11 @@ document.addEventListener("click", (event) => {
   const zone = target.closest("[data-admin-student-files-upload-zone]");
   if (!(zone instanceof HTMLElement)) return;
 
-  const sheetEl = document.querySelector("[data-admin-student-sheet]");
-  if (!(sheetEl instanceof HTMLElement)) return;
+  const sheetEl = getAdminStudentSheet();
+  if (!(sheetEl instanceof HTMLElement)) {
+    console.warn("[admin] student sheet unavailable", "studentFilesUploadZone");
+    return;
+  }
   const input = sheetEl.querySelector("[data-admin-student-files-input]");
   if (!(input instanceof HTMLInputElement)) return;
 
