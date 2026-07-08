@@ -3191,11 +3191,11 @@ body[data-view="interno"] .admin-ped-kpi.is-hero {
 }
 
 body[data-view="interno"] .teacher-calendar-shell {
-  background: var(--surface-bg-strong);
+  background: var(--app-bg-gradient);
 }
 
 body[data-view="interno"] .teacher-cal-viewport {
-  background: var(--surface-bg-strong);
+  background: var(--app-bg-gradient);
 }
 
 body[data-view="interno"] .teacher-calendar-left,
