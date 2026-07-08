@@ -23146,8 +23146,9 @@ document.addEventListener(
       event.stopPropagation();
       const accordionName = String(sidebarAccordionToggle.getAttribute("data-sidebar-accordion-toggle") || "").trim();
       const accordion = sidebarAccordionToggle.closest(`[data-sidebar-accordion="${CSS.escape(accordionName)}"]`);
-      const body = accordion?.querySelector(`[data-sidebar-accordion-body="${CSS.escape(accordionName)}"]`);
-      const nextOpen = !(body instanceof HTMLElement) || body.hidden;
+      const accordionBody = accordion?.querySelector(`[data-sidebar-accordion-body="${CSS.escape(accordionName)}"]`);
+      const isSidebarCollapsed = document.body.dataset.sidebarExpanded === "false";
+      const nextOpen = isSidebarCollapsed || !(accordionBody instanceof HTMLElement) || accordionBody.hidden;
 
       if (accordionName === "pedagogico") {
         syncSidebarAccordionState("financeiro", false);
@@ -23155,6 +23156,9 @@ document.addEventListener(
         syncSidebarAccordionState("pedagogico", false);
       }
 
+      if (isSidebarCollapsed) {
+        setSidebarExpanded(true);
+      }
       syncSidebarAccordionState(accordionName, nextOpen);
       if (accordionName === "financeiro") {
         syncFinanceSidebarActiveState();

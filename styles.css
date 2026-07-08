@@ -3858,6 +3858,10 @@ body[data-active-panel="ao-vivo"] .platform-main {
     gap: 0;
   }
 
+  body[data-sidebar-expanded="false"] .platform-sidebar .sidebar-accordion-body {
+    display: none !important;
+  }
+
   body[data-sidebar-expanded="true"] .platform-sidebar .sidebar-brand {
     gap: 14px;
     padding-inline: 0;
