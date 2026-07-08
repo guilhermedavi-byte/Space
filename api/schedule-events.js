@@ -1139,10 +1139,6 @@ module.exports = async (req, res) => {
           sendJson(res, 403, { error: "forbidden" });
           return;
         }
-        if (evt.criadoPor !== "professor") {
-          sendJson(res, 403, { error: "forbidden" });
-          return;
-        }
       }
 
       const cancelAula = async (targetId) => {
@@ -1175,7 +1171,7 @@ module.exports = async (req, res) => {
         .filter((row) => (row.startMs || 0) >= (evt.startMs || 0));
 
       if (role === "teacher") {
-        if (toDelete.some((row) => row.professorId !== requesterId || row.criadoPor !== "professor")) {
+        if (toDelete.some((row) => row.professorId !== requesterId)) {
           sendJson(res, 403, { error: "forbidden" });
           return;
         }
@@ -1483,15 +1479,6 @@ module.exports = async (req, res) => {
 
     if (role === "teacher") {
       if (existingProfessorId !== requesterId) {
-        sendJson(res, 403, { error: "forbidden" });
-        return;
-      }
-      if (existingCriadoPor !== "professor") {
-        sendJson(res, 403, { error: "forbidden" });
-        return;
-      }
-      if (existingAlunoId != null) {
-        // Keep lessons read-only for teachers (admin controls the schedule).
         sendJson(res, 403, { error: "forbidden" });
         return;
       }

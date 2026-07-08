@@ -6184,8 +6184,11 @@ const buildCreateEventBody = ({ readOnly = false } = {}) => {
   const guests = Array.isArray(draft.guests) ? draft.guests : [];
   const docs = Array.isArray(draft.documents) ? draft.documents : [];
   const isAdmin = currentRole === "admin";
+  const isTeacher = currentRole === "teacher";
   const isCreateMode = String(draft.mode || "create") === "create";
-  const showAdminLinks = isAdmin && !readOnly;
+  const eventType = String(draft.eventType || "manual").trim().toLowerCase() === "lesson" ? "lesson" : "manual";
+  const showAdminLinks = isAdmin && !readOnly && eventType === "lesson";
+  const showTeacherLinks = isTeacher && !readOnly && eventType === "lesson";
   const teacherMeta = getAdminEventUserPickerMeta("teacher");
   const studentMeta = getAdminEventUserPickerMeta("student");
 
@@ -6266,6 +6269,33 @@ const buildCreateEventBody = ({ readOnly = false } = {}) => {
               <div class="admin-ped-empty-title">${teacherMeta.error || studentMeta.error ? "Não foi possível carregar a lista" : "Carregando lista de alunos e professores..."}</div>
               <div class="admin-ped-empty-sub">${teacherMeta.error || studentMeta.error ? "Tente novamente para recarregar os selects." : "Aguarde só um instante enquanto buscamos os dados."}</div>
               ${teacherMeta.error || studentMeta.error ? `<button class="admin-ped-action is-muted" type="button" data-ce-admin-retry-users>Tentar novamente</button>` : ""}
+            </div>
+          `
+          : ""
+      }
+
+      ${
+        showTeacherLinks
+          ? `
+            <div class="modal-row" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);">
+              <label class="modal-field">
+                <span>Aluno</span>
+                <div class="admin-ped-user-picker">
+                  <div class="admin-ped-user-picker-selected" data-ce-admin-student-selected>${escapeHtml(getAdminEventUserPickerSelectedText(studentMeta))}</div>
+                  <input class="modal-input admin-ped-user-picker-search" type="text" data-ce-admin-student-search placeholder="${escapeHtml(getAdminEventUserPickerPlaceholder("student"))}" value="${escapeHtml(String(draft.studentSearch || ""))}" ${disabledAttr} />
+                  <select class="modal-input admin-ped-user-picker-hidden" data-ce-admin-student ${disabledAttr} hidden>${renderAdminEventUserPickerSelectOptions(studentMeta)}</select>
+                  <div class="admin-ped-user-picker-results" data-ce-admin-student-results>${renderAdminEventUserPickerResults(studentMeta)}</div>
+                </div>
+              </label>
+              <label class="modal-field">
+                <span>Professor</span>
+                <input class="modal-input" type="text" value="${escapeHtml(sessionUser?.name || "Professor")}" disabled />
+              </label>
+            </div>
+            <div class="admin-ped-empty-inline" data-ce-admin-users-status ${studentMeta.loading ? "" : "hidden"}>
+              <div class="admin-ped-empty-title">${studentMeta.error ? "Não foi possível carregar a lista" : "Carregando lista de alunos..."}</div>
+              <div class="admin-ped-empty-sub">${studentMeta.error ? "Tente novamente para recarregar o select." : "Aguarde só um instante enquanto buscamos os dados."}</div>
+              ${studentMeta.error ? `<button class="admin-ped-action is-muted" type="button" data-ce-admin-retry-users>Tentar novamente</button>` : ""}
             </div>
           `
           : ""
@@ -6523,8 +6553,9 @@ const validateCreateEventDraft = () => {
     hasError = true;
   }
 
-  const requiresLinks = currentRole === "admin" && createEventDraft.eventType === "lesson";
-  if (requiresLinks) {
+  const requiresAdminLinks = currentRole === "admin" && createEventDraft.eventType === "lesson";
+  const requiresTeacherLinks = currentRole === "teacher" && createEventDraft.eventType === "lesson";
+  if (requiresAdminLinks) {
     const alunoId = String(createEventDraft.alunoId || "").trim() || (adminStudentEl instanceof HTMLSelectElement ? adminStudentEl.value : "");
     const professorId =
       String(createEventDraft.professorId || "").trim() || (adminTeacherEl instanceof HTMLSelectElement ? adminTeacherEl.value : "");
@@ -6534,6 +6565,17 @@ const validateCreateEventDraft = () => {
     }
     if (!professorId) {
       if (adminTeacherEl instanceof HTMLElement) adminTeacherEl.classList.add("is-error");
+      hasError = true;
+    }
+  }
+  if (requiresTeacherLinks) {
+    const alunoId = String(createEventDraft.alunoId || "").trim() || (adminStudentEl instanceof HTMLSelectElement ? adminStudentEl.value : "");
+    const professorId = String(createEventDraft.professorId || sessionUser?.id || "").trim();
+    if (!alunoId) {
+      if (adminStudentEl instanceof HTMLElement) adminStudentEl.classList.add("is-error");
+      hasError = true;
+    }
+    if (!professorId) {
       hasError = true;
     }
   }
@@ -6688,7 +6730,7 @@ const openTeacherEventFormModalFromDraft = () => {
   const primaryLabel = readOnly ? "Fechar" : "Salvar";
   const secondaryLabel = readOnly ? "" : "Voltar";
   const hideSecondary = readOnly;
-  const showTrash = !readOnly && mode === "edit" && (currentRole === "admin" || eventType === "manual");
+  const showTrash = !readOnly && mode === "edit";
 
   const saveFromDraft = () => {
     // Read from DOM right before saving, so the payload reflects what the user sees.
@@ -6735,15 +6777,24 @@ const openTeacherEventFormModalFromDraft = () => {
       endMin,
     };
 
-    if (currentRole === "admin" && payload.eventType === "lesson") {
+    if (payload.eventType === "lesson") {
       const alunoId = String(adminStudentEl instanceof HTMLSelectElement ? adminStudentEl.value : createEventDraft.alunoId || "").trim();
-      const professorId = String(
-        adminTeacherEl instanceof HTMLSelectElement ? adminTeacherEl.value : createEventDraft.professorId || ""
-      ).trim();
-      const alunoMeta = (adminStudentsState?.studentsById instanceof Map ? adminStudentsState.studentsById.get(alunoId) || null : null) ||
-        (Array.isArray(adminStudentsState?.students) ? adminStudentsState.students.find((row) => row && String(row.id || "") === alunoId) || null : null);
-      const professorMeta = (adminStudentsState?.teachersById instanceof Map ? adminStudentsState.teachersById.get(professorId) || null : null) ||
-        (Array.isArray(adminStudentsState?.teachers) ? adminStudentsState.teachers.find((row) => row && String(row.id || "") === professorId) || null : null);
+      const professorId =
+        currentRole === "teacher"
+          ? String(createEventDraft.professorId || sessionUser?.id || "").trim()
+          : String(adminTeacherEl instanceof HTMLSelectElement ? adminTeacherEl.value : createEventDraft.professorId || "").trim();
+      const alunoMeta =
+        (adminStudentsState?.studentsById instanceof Map ? adminStudentsState.studentsById.get(alunoId) || null : null) ||
+        (Array.isArray(adminStudentsState?.students)
+          ? adminStudentsState.students.find((row) => row && String(row.id || "") === alunoId) || null
+          : null);
+      const professorMeta =
+        currentRole === "teacher"
+          ? { nome: sessionUser?.name || "", email: sessionUser?.email || "" }
+          : (adminStudentsState?.teachersById instanceof Map ? adminStudentsState.teachersById.get(professorId) || null : null) ||
+            (Array.isArray(adminStudentsState?.teachers)
+              ? adminStudentsState.teachers.find((row) => row && String(row.id || "") === professorId) || null
+              : null);
 
       payload.alunoId = alunoId;
       payload.professorId = professorId;
@@ -6761,7 +6812,7 @@ const openTeacherEventFormModalFromDraft = () => {
         const errorEl = modalBody?.querySelector("[data-ce-error]");
         if (errorEl instanceof HTMLElement) {
           errorEl.hidden = false;
-          errorEl.textContent = !alunoId ? "Selecione um aluno." : "Selecione um professor.";
+          errorEl.textContent = !alunoId ? "Selecione um aluno." : "Professor indisponível.";
         }
         validateCreateEventDraft();
         return false;
@@ -6997,7 +7048,7 @@ const openTeacherEventFormModalFromDraft = () => {
 const openTeacherCreateEventModalAt = ({ dateKey, startTime, endTime } = {}) => {
   const date = parseDateKey(dateKey);
   if (!date) return;
-  const eventType = currentRole === "admin" ? "lesson" : "manual";
+  const eventType = "lesson";
 
 		  createEventDraft = {
 		    mode: "create",
@@ -7005,7 +7056,7 @@ const openTeacherCreateEventModalAt = ({ dateKey, startTime, endTime } = {}) => 
 		    eventType,
 		    eventId: "",
 	    alunoId: "",
-	    professorId: "",
+	    professorId: currentRole === "teacher" ? String(sessionUser?.id || "").trim() : "",
 	    studentSearch: "",
 	    teacherSearch: "",
 	    title: "",
@@ -7030,7 +7081,7 @@ const openTeacherCreateEventModal = () => {
   const startHour = Math.min(Math.max(new Date().getHours(), 6), 20);
   const startDefault = `${String(startHour).padStart(2, "0")}:00`;
   const endDefault = `${String(Math.min(startHour + 1, 23)).padStart(2, "0")}:00`;
-  const eventType = currentRole === "admin" ? "lesson" : "manual";
+  const eventType = "lesson";
 
   createEventDraft = {
     mode: "create",
@@ -7038,7 +7089,7 @@ const openTeacherCreateEventModal = () => {
     eventType,
     eventId: "",
     alunoId: "",
-    professorId: "",
+    professorId: currentRole === "teacher" ? String(sessionUser?.id || "").trim() : "",
     studentSearch: "",
     teacherSearch: "",
     title: "",
@@ -7069,8 +7120,8 @@ const openTeacherEventModal = ({ type, id }) => {
   if (type === "lesson") {
     const isAdmin = currentRole === "admin";
     createEventDraft = {
-      mode: isAdmin ? "edit" : "view",
-      readOnly: !isAdmin,
+      mode: "edit",
+      readOnly: false,
       eventType: "lesson",
       eventId: target.id,
       title: target.title || "Aula ao vivo",
@@ -7082,7 +7133,7 @@ const openTeacherEventModal = ({ type, id }) => {
       startTime: buildEventTimeHm(target.start),
       endTime: buildEventTimeHm(target.end),
       alunoId: target.alunoId || "",
-      professorId: target.professorId || "",
+      professorId: target.professorId || String(sessionUser?.id || "").trim(),
       studentSearch: "",
       teacherSearch: "",
       recorrente: Boolean(target.recorrente),
@@ -25322,7 +25373,7 @@ document.addEventListener("click", (event) => {
       const type = calEvent.getAttribute("data-teacher-cal-event-type") || "";
       const id = calEvent.getAttribute("data-teacher-cal-event-id") || "";
       const liveUrl = String(calEvent.getAttribute("data-teacher-cal-live-url") || "").trim();
-      if (type === "lesson" && liveUrl) {
+      if (type === "lesson" && liveUrl && currentRole === "admin") {
         window.location.href = liveUrl;
         return;
       }
