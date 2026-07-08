@@ -4638,6 +4638,45 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
   justify-content: center;
 }
 
+.admin-student-id-photo {
+  align-items: start;
+}
+
+.admin-student-avatar-wrap {
+  position: relative;
+  width: 56px;
+  height: 56px;
+}
+
+.admin-student-avatar-photo {
+  padding: 0;
+  overflow: hidden;
+}
+
+.admin-student-avatar-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.admin-student-avatar-edit {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: rgba(15, 18, 32, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.24);
+}
+
 .admin-student-name {
   font-size: 15px;
   font-weight: 850;
@@ -4760,6 +4799,82 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
   color: rgba(255, 255, 255, 0.55);
 }
 
+.admin-student-inline-list {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-student-inline-field {
+  display: grid;
+  gap: 6px;
+  padding: 10px 10px 11px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.admin-student-inline-field.is-editing {
+  border-color: rgba(89, 144, 189, 0.28);
+  background: rgba(89, 144, 189, 0.08);
+}
+
+.admin-student-inline-label {
+  font-size: 11px;
+  font-weight: 750;
+  color: rgba(255, 255, 255, 0.52);
+}
+
+.admin-student-inline-display {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.94);
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.admin-student-inline-display:disabled {
+  cursor: default;
+}
+
+.admin-student-inline-editor {
+  display: grid;
+}
+
+.admin-student-inline-control {
+  width: 100%;
+}
+
+.admin-student-inline-help {
+  font-size: 11px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.admin-student-inline-status,
+.admin-student-inline-photo-status {
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.52);
+}
+
+.admin-student-inline-status.is-error,
+.admin-student-inline-photo-status.is-error {
+  color: rgba(255, 118, 110, 0.96);
+}
+
+.admin-student-inline-status[data-tone="success"] {
+  color: rgba(93, 202, 165, 0.94);
+}
+
+.admin-student-inline-status[data-tone="loading"],
+.admin-student-inline-photo-status.is-loading {
+  color: rgba(255, 255, 255, 0.64);
+}
+
 .admin-student-personal-grid {
   display: grid;
   gap: 10px;
@@ -4848,6 +4963,59 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
   gap: 12px;
 }
 
+.admin-student-history-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-student-history-subtitle {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.48);
+}
+
+.admin-student-comment-composer {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(89, 144, 189, 0.16);
+  background: rgba(89, 144, 189, 0.08);
+}
+
+.admin-student-comment-composer-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.admin-student-comment-textarea {
+  min-height: 92px;
+  resize: vertical;
+}
+
+.admin-student-comment-status {
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.52);
+}
+
+.admin-student-comment-status.is-empty {
+  color: rgba(255, 255, 255, 0.34);
+}
+
+.admin-student-comment-status[data-tone="error"] {
+  color: rgba(255, 118, 110, 0.96);
+}
+
+.admin-student-timeline-card {
+  padding: 16px;
+}
+
 .admin-student-simple-empty {
   padding: 14px 14px;
   border-radius: 14px;
@@ -4862,6 +5030,10 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
   border-color: rgba(255, 78, 70, 0.18);
   background: rgba(255, 78, 70, 0.06);
   color: rgba(255, 118, 110, 0.96);
+}
+
+.admin-student-simple-empty-center {
+  text-align: center;
 }
 
 .admin-student-simple-history-meta {
@@ -6474,10 +6646,67 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
 
 .admin-students-timeline {
   display: grid;
-  gap: 12px;
+  gap: 16px;
+  position: relative;
+  padding-left: 18px;
+}
+
+.admin-students-timeline::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: 2px;
+  bottom: 2px;
+  width: 2px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .admin-students-tl-item {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.admin-students-tl-marker {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+.admin-students-tl-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 900;
+  color: rgba(15, 18, 32, 0.92);
+  position: relative;
+  z-index: 1;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+}
+
+.admin-students-tl-dot.is-green {
+  background: rgba(93, 202, 165, 1);
+}
+
+.admin-students-tl-dot.is-red {
+  background: rgba(255, 118, 110, 1);
+}
+
+.admin-students-tl-dot.is-yellow {
+  background: rgba(255, 214, 102, 1);
+}
+
+.admin-students-tl-dot.is-blue {
+  background: rgba(89, 144, 189, 1);
+}
+
+.admin-students-tl-card {
   padding: 14px 14px;
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.08);
