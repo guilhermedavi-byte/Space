@@ -1,7 +1,7 @@
 const { readJsonBody, sendJson } = require("../_lib/http");
 const { getSessionFromRequest } = require("../_lib/session");
 const { verifyFirebaseIdToken } = require("../_lib/firebase-id-token");
-const { getBearerTokenFromRequest } = require("../_lib/firestore-rest");
+const { getBearerTokenFromRequest, firestorePatchDocument } = require("./_lib/firestore-rest");
 
 const normalizeRole = (value) => {
   const raw = String(value || "").trim().toLowerCase();
@@ -42,8 +42,33 @@ module.exports = async (req, res) => {
     return;
   }
 
-  if (req.method !== "POST") {
-    res.setHeader("Allow", "POST");
+  if (req.method === "POST") {
+    let body;
+    try {
+      body = await readJsonBody(req);
+    } catch (error) {
+      sendJson(res, 400, { error: "invalid_json" });
+      return;
+    }
+
+    const uid = String(body?.uid || "").trim();
+    const name = String(body?.name || "").trim();
+    const role = normalizeRole(body?.role);
+
+    if (!uid || !name || !role) {
+      sendJson(res, 400, { error: "invalid_request" });
+      return;
+    }
+
+    // This endpoint previously synced a local JSON scheduling store. Scheduling is now Firestore-backed,
+    // and the source of truth for user state is the `users/{uid}` document written from the admin UI.
+    // Keep this endpoint as a safe no-op for backward compatibility with older front-end calls.
+    sendJson(res, 200, { ok: true });
+    return;
+  }
+
+  if (req.method !== "PATCH") {
+    res.setHeader("Allow", "POST, PATCH");
     sendJson(res, 405, { error: "method_not_allowed" });
     return;
   }
@@ -57,16 +82,35 @@ module.exports = async (req, res) => {
   }
 
   const uid = String(body?.uid || "").trim();
-  const name = String(body?.name || "").trim();
-  const role = normalizeRole(body?.role);
-
-  if (!uid || !name || !role) {
+  const patch = body?.patch && typeof body.patch === "object" ? body.patch : null;
+  if (!uid || !patch) {
     sendJson(res, 400, { error: "invalid_request" });
     return;
   }
 
-  // This endpoint previously synced a local JSON scheduling store. Scheduling is now Firestore-backed,
-  // and the source of truth for user state is the `users/{uid}` document written from the admin UI.
-  // Keep this endpoint as a safe no-op for backward compatibility with older front-end calls.
-  sendJson(res, 200, { ok: true });
+  const cleanPatch = {};
+  Object.entries(patch).forEach(([key, value]) => {
+    if (!key) return;
+    if (value === undefined) return;
+    cleanPatch[key] = value;
+  });
+  cleanPatch.atualizadoEm = new Date().toISOString();
+  cleanPatch.updatedAt = cleanPatch.atualizadoEm;
+
+  try {
+    const result = await firestorePatchDocument({
+      docPath: `users/${uid}`,
+      idToken,
+      data: cleanPatch,
+      updateMaskPaths: Object.keys(cleanPatch),
+    });
+    if (!result.ok) {
+      sendJson(res, result.status || 500, { error: "firestore_patch_failed" });
+      return;
+    }
+    sendJson(res, 200, { ok: true });
+  } catch (error) {
+    console.error("[api] admin-users patch failed", error);
+    sendJson(res, 500, { error: "admin_users_patch_failed" });
+  }
 };

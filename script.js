@@ -9684,6 +9684,9 @@ let adminStudentsState = {
     notesLoadedAt: 0,
     notesSaving: false,
     notesError: "",
+    editingField: "",
+    inlineSavingField: "",
+    inlineSaveTimer: 0,
     photoSaving: false,
     photoError: "",
   },
@@ -13582,6 +13585,7 @@ const getAdminStudentClassOptions = (selectedValue = "") => {
 
 const adminStudentInlineValueMap = {
   email: (alunoMeta) => String(alunoMeta?.email || "").trim(),
+  telefone: (alunoMeta) => String(alunoMeta?.telefone || "").trim(),
   professorId: (alunoMeta) => String(alunoMeta?.professorId || alunoMeta?.teacherId || "").trim(),
   turma: (alunoMeta) => String(alunoMeta?.groupId || alunoMeta?.groupName || alunoMeta?.turma || alunoMeta?.turmaNome || alunoMeta?.className || "").trim(),
   english_level_start: (alunoMeta) => normalizeAdminStudentEnglishStartValue(alunoMeta?.english_level_start || alunoMeta?.englishLevelStart || ""),
@@ -13595,6 +13599,7 @@ const getAdminStudentInlineValue = (alunoMeta, field) => {
 
 const getAdminStudentDisplayValue = (field, alunoMeta) => {
   if (field === "email") return String(alunoMeta?.email || "").trim() || "—";
+  if (field === "telefone") return String(alunoMeta?.telefone || "").trim() || "—";
   if (field === "professorId") return String(alunoMeta?.professorNome || alunoMeta?.teacherNome || alunoMeta?.teacherName || "").trim() || "Sem professor";
   if (field === "turma") return String(alunoMeta?.groupName || alunoMeta?.turmaNome || alunoMeta?.className || alunoMeta?.turma || "").trim() || "Sem turma";
   if (field === "english_level_start") return normalizeAdminStudentEnglishStartValue(alunoMeta?.english_level_start || alunoMeta?.englishLevelStart || "") || "—";
@@ -13628,16 +13633,34 @@ const setAdminStudentInlineDisplay = (sheetEl, field, value) => {
 const setAdminStudentInlineEditing = (sheetEl, field, isEditing) => {
   const cell = getAdminStudentInlineCell(sheetEl, field);
   if (!(cell instanceof HTMLElement)) return;
+  const hist = adminStudentsState.history;
+  const key = String(field || "").trim();
+  if (isEditing && hist.editingField && hist.editingField !== key) {
+    const prevCell = getAdminStudentInlineCell(sheetEl, hist.editingField);
+    if (prevCell instanceof HTMLElement) {
+      prevCell.classList.remove("is-editing");
+      const prevEditor = prevCell.querySelector("[data-admin-student-inline-editor-wrap]");
+      const prevDisplay = prevCell.querySelector("[data-admin-student-inline-display]");
+      if (prevEditor instanceof HTMLElement) prevEditor.hidden = true;
+      if (prevDisplay instanceof HTMLElement) prevDisplay.hidden = false;
+    }
+  }
   cell.classList.toggle("is-editing", Boolean(isEditing));
   const editor = cell.querySelector("[data-admin-student-inline-editor-wrap]");
   const display = cell.querySelector("[data-admin-student-inline-display]");
   if (editor instanceof HTMLElement) editor.hidden = !isEditing;
   if (display instanceof HTMLElement) display.hidden = Boolean(isEditing);
+  if (isEditing) {
+    hist.editingField = key;
+  } else if (hist.editingField === key) {
+    hist.editingField = "";
+  }
 };
 
 const focusAdminStudentInlineField = (field) => {
   const sheetEl = getAdminStudentSheet();
   if (!(sheetEl instanceof HTMLElement)) return;
+  if (adminStudentsState.history.inlineSavingField) return;
   const cell = getAdminStudentInlineCell(sheetEl, field);
   if (!(cell instanceof HTMLElement)) return;
   setAdminStudentInlineEditing(sheetEl, field, true);
@@ -13650,6 +13673,24 @@ const focusAdminStudentInlineField = (field) => {
       editor.focus();
     }
   });
+};
+
+const cancelAdminStudentInlineEditing = ({ sheetEl, field } = {}) => {
+  const hist = adminStudentsState.history;
+  if (hist.inlineSaveTimer) {
+    window.clearTimeout(hist.inlineSaveTimer);
+    hist.inlineSaveTimer = 0;
+  }
+  hist.inlineSavingField = "";
+  const cell = getAdminStudentInlineCell(sheetEl, field);
+  if (!(cell instanceof HTMLElement)) return;
+  setAdminStudentInlineEditing(sheetEl, field, false);
+  setAdminStudentInlineStatus(sheetEl, field, "", "");
+  const control = cell.querySelector("[data-admin-student-inline-control]");
+  const currentValue = String(cell.dataset.currentValue || "");
+  if (control instanceof HTMLInputElement || control instanceof HTMLSelectElement || control instanceof HTMLTextAreaElement) {
+    control.value = currentValue;
+  }
 };
 
 const buildAdminStudentInlineFieldHtml = ({
@@ -13671,7 +13712,7 @@ const buildAdminStudentInlineFieldHtml = ({
       ? `<select class="admin-student-input admin-student-inline-control" data-admin-student-inline-control data-admin-student-inline-editor="${escapeHtml(field)}" ${editorAttrs}>${optionsHtml}</select>`
       : kind === "textarea"
         ? `<textarea class="admin-student-input admin-student-inline-control admin-student-inline-textarea" rows="3" data-admin-student-inline-control data-admin-student-inline-editor="${escapeHtml(field)}" ${editorAttrs}>${escapeHtml(safeValue)}</textarea>`
-        : `<input class="admin-student-input admin-student-inline-control" type="${kind === "email" ? "email" : kind === "date" ? "date" : "text"}" value="${escapeHtml(safeValue)}" data-admin-student-inline-control data-admin-student-inline-editor="${escapeHtml(field)}" ${editorAttrs} />`;
+        : `<input class="admin-student-input admin-student-inline-control" type="${kind === "email" ? "email" : kind === "date" ? "date" : kind === "tel" ? "tel" : "text"}" value="${escapeHtml(safeValue)}" data-admin-student-inline-control data-admin-student-inline-editor="${escapeHtml(field)}" ${editorAttrs} />`;
 
   return `
     <div class="admin-student-inline-field" data-admin-student-inline-field="${escapeHtml(field)}" data-current-value="${escapeHtml(safeValue)}">
@@ -13707,38 +13748,24 @@ const updateAdminStudentCachedRow = (alunoId, patch = {}) => {
 const saveAdminStudentInlinePatch = async ({ alunoId, patch = {} } = {}) => {
   const id = String(alunoId || "").trim();
   if (!id) throw new Error("missing_student_id");
-  const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_student_inline_save");
-  const user = await waitForFirebaseAuthReady(firebase, 5000);
-  if (!user) {
-    const err = new Error("firebase_not_authenticated");
-    err.code = "auth/no-current-user";
-    throw err;
+  const cleanPatch = Object.fromEntries(Object.entries(patch || {}).filter(([, value]) => value !== undefined));
+  const response = await withTimeout(
+    fetchWithAuth("/api/admin-users", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        uid: id,
+        patch: cleanPatch,
+      }),
+    }),
+    12_000,
+    "admin_student_inline_patch"
+  );
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(data?.error || "admin_student_inline_patch_failed");
   }
-  const payload = { ...patch, atualizadoEm: firebase.serverTimestamp(), updatedAt: firebase.serverTimestamp() };
-  try {
-    await withTimeout(firebase.setDoc(firebase.doc(firebase.primaryDb, "users", id), payload, { merge: true }), 12_000, "firestore_student_inline_merge");
-  } catch (primaryErr) {
-    console.error("[admin] student inline patch (firestore primary) failed:", primaryErr);
-    await withTimeout(firebase.setDoc(firebase.doc(firebase.secondaryDb, "users", id), payload, { merge: true }), 12_000, "firestore_student_inline_merge_secondary");
-  }
-  try {
-    await withTimeout(
-      fetchWithAuth("/api/admin-users", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          uid: id,
-          role: "student",
-          name: String(patch.nome || patch.email || patch.professorNome || patch.groupName || patch.groupId || "Aluno").trim(),
-        }),
-      }).catch(() => {}),
-      8000,
-      "admin_student_inline_sync"
-    );
-  } catch {
-    // ignore sync errors
-  }
-  updateAdminStudentCachedRow(id, patch);
+  updateAdminStudentCachedRow(id, cleanPatch);
   return true;
 };
 
@@ -13750,6 +13777,14 @@ const resolveAdminStudentInlinePatch = ({ field, value, alunoMeta } = {}) => {
     return {
       patch: {
         email: nextValue.toLowerCase(),
+      },
+      displayValue: nextValue || "—",
+    };
+  }
+  if (key === "telefone") {
+    return {
+      patch: {
+        telefone: nextValue,
       },
       displayValue: nextValue || "—",
     };
@@ -13821,20 +13856,32 @@ const saveAdminStudentInlineField = async ({ field, sheetEl } = {}) => {
   if (!(cell instanceof HTMLElement)) return;
   const control = cell.querySelector("[data-admin-student-inline-control]");
   const statusEl = cell.querySelector("[data-admin-student-inline-status]");
+  if (hist.inlineSavingField) return;
   const currentValue = String(cell.dataset.currentValue || "").trim();
   const nextValue = control instanceof HTMLInputElement || control instanceof HTMLSelectElement || control instanceof HTMLTextAreaElement ? String(control.value || "").trim() : "";
   if (String(nextValue || "").trim() === String(currentValue || "").trim()) {
-    setAdminStudentInlineEditing(sheetEl, field, false);
-    setAdminStudentInlineStatus(sheetEl, field, "", "");
+    cancelAdminStudentInlineEditing({ sheetEl, field });
     return;
   }
   const resolved = resolveAdminStudentInlinePatch({ field, value: nextValue, alunoMeta: hist.alunoMeta });
   if (!resolved) {
-    setAdminStudentInlineEditing(sheetEl, field, false);
+    cancelAdminStudentInlineEditing({ sheetEl, field });
     return;
   }
 
-  const saveLabel = field === "email" ? "Salvando e-mail…" : field === "professorId" ? "Salvando professor…" : field === "turma" ? "Salvando turma…" : field === "english_level_start" ? "Salvando nível…" : "Salvando…";
+  const saveLabel =
+    field === "email"
+      ? "Salvando e-mail…"
+      : field === "telefone"
+        ? "Salvando telefone…"
+        : field === "professorId"
+          ? "Salvando professor…"
+          : field === "turma"
+            ? "Salvando turma…"
+            : field === "english_level_start"
+              ? "Salvando nível…"
+              : "Salvando…";
+  hist.inlineSavingField = field;
   setAdminStudentInlineStatus(sheetEl, field, saveLabel, "loading");
   if (control instanceof HTMLInputElement || control instanceof HTMLSelectElement || control instanceof HTMLTextAreaElement) control.disabled = true;
 
@@ -13842,28 +13889,28 @@ const saveAdminStudentInlineField = async ({ field, sheetEl } = {}) => {
     await saveAdminStudentInlinePatch({ alunoId, patch: resolved.patch });
     updateAdminStudentCachedRow(alunoId, resolved.patch);
     setAdminStudentInlineDisplay(sheetEl, field, resolved.displayValue);
-    setAdminStudentInlineStatus(sheetEl, field, "Salvo", "success");
-    setAdminStudentInlineEditing(sheetEl, field, false);
-    window.setTimeout(() => {
-      const nextCell = getAdminStudentInlineCell(getAdminStudentSheet(), field);
-      const nextStatus = nextCell instanceof HTMLElement ? nextCell.querySelector("[data-admin-student-inline-status]") : null;
-      if (nextStatus instanceof HTMLElement && nextStatus.textContent === "Salvo") {
-        nextStatus.textContent = "";
-        nextStatus.hidden = true;
-      }
+    setAdminStudentInlineStatus(sheetEl, field, "Salvo ✓", "success");
+    if (hist.inlineSaveTimer) window.clearTimeout(hist.inlineSaveTimer);
+    hist.inlineSaveTimer = window.setTimeout(() => {
+      if (hist.inlineSavingField !== field) return;
+      hist.inlineSavingField = "";
+      hist.editingField = "";
+      hist.inlineSaveTimer = 0;
+      renderAdminStudentSheet();
     }, 2000);
   } catch (error) {
     console.error("[admin] student inline save failed:", error);
     const message = "Não foi possível salvar agora.";
     setAdminStudentInlineStatus(sheetEl, field, message, "error");
     setAdminStudentsStatus(message, "error");
+    hist.inlineSavingField = "";
     if (control instanceof HTMLInputElement || control instanceof HTMLSelectElement || control instanceof HTMLTextAreaElement) {
       control.disabled = false;
       control.focus?.();
     }
   } finally {
     if (control instanceof HTMLInputElement || control instanceof HTMLSelectElement || control instanceof HTMLTextAreaElement) {
-      control.disabled = false;
+      control.disabled = hist.inlineSavingField === field;
     }
   }
 };
@@ -14323,6 +14370,7 @@ const renderAdminStudentSheet = () => {
   const commentComposerError = String(hist.commentComposerError || "");
   const commentComposerSaving = Boolean(hist.commentComposerSaving);
   const photoStatus = hist.photoSaving ? "Enviando foto…" : hist.photoError ? String(hist.photoError) : "";
+  if (hist.editingField || hist.inlineSavingField) return;
 
   sheetEl.innerHTML = `
     <div class="admin-student-sheet-grid admin-student-simple-grid">
@@ -14350,6 +14398,25 @@ const renderAdminStudentSheet = () => {
           </div>
         </div>
 
+        <div class="admin-student-simple-notes">
+          <div class="admin-student-panel-title">Observações pedagógicas</div>
+          <textarea
+            class="admin-student-input admin-student-textarea admin-student-notes-textarea"
+            rows="6"
+            data-admin-student-notes-field
+          >${escapeHtml(notesValue)}</textarea>
+          <div class="admin-student-simple-notes-actions">
+            <button type="button" class="button button-solid button-small" data-admin-student-notes-save ${hist.notesSaving ? "disabled" : ""}>
+              ${hist.notesSaving ? "Salvando…" : "Salvar notas"}
+            </button>
+            <div class="admin-student-simple-notes-status${notesStatus ? "" : " is-empty"}" data-admin-student-notes-status data-tone="${escapeHtml(notesTone)}">
+              ${escapeHtml(notesStatus || "—")}
+            </div>
+          </div>
+        </div>
+        ${baseError ? `<div class="admin-student-simple-block-error">${escapeHtml(baseError)}</div>` : ""}
+        ${hist.baseLoading ? `<div class="admin-student-simple-block-loading">Carregando dados básicos…</div>` : ""}
+
         <div class="admin-student-personal admin-student-quick-data" aria-label="Dados do aluno">
           <div class="admin-student-personal-title">Dados do aluno</div>
           <div class="admin-student-inline-list">
@@ -14358,7 +14425,14 @@ const renderAdminStudentSheet = () => {
               label: "E-mail",
               value: alunoEmail,
               kind: "email",
-              placeholder: "Sem e-mail",
+              placeholder: "—",
+            })}
+            ${buildAdminStudentInlineFieldHtml({
+              field: "telefone",
+              label: "Telefone",
+              value: getAdminStudentInlineValue(alunoMeta, "telefone"),
+              kind: "tel",
+              placeholder: "—",
             })}
             ${buildAdminStudentInlineFieldHtml({
               field: "professorId",
@@ -14402,26 +14476,6 @@ const renderAdminStudentSheet = () => {
           </div>
           ${photoStatus ? `<div class="admin-student-inline-photo-status${hist.photoSaving ? " is-loading" : " is-error"}">${escapeHtml(photoStatus)}</div>` : ""}
         </div>
-
-        <div class="admin-student-simple-notes">
-          <div class="admin-student-panel-title">Observações pedagógicas</div>
-          <textarea
-            class="admin-student-input admin-student-textarea admin-student-notes-textarea"
-            rows="6"
-            data-admin-student-notes-field
-            placeholder="Escreva notas, contexto e alinhamentos pedagógicos..."
-          >${escapeHtml(notesValue)}</textarea>
-          <div class="admin-student-simple-notes-actions">
-            <button type="button" class="button button-solid button-small" data-admin-student-notes-save ${hist.notesSaving ? "disabled" : ""}>
-              ${hist.notesSaving ? "Salvando…" : "Salvar notas"}
-            </button>
-            <div class="admin-student-simple-notes-status${notesStatus ? "" : " is-empty"}" data-admin-student-notes-status data-tone="${escapeHtml(notesTone)}">
-              ${escapeHtml(notesStatus || "—")}
-            </div>
-          </div>
-        </div>
-        ${baseError ? `<div class="admin-student-simple-block-error">${escapeHtml(baseError)}</div>` : ""}
-        ${hist.baseLoading ? `<div class="admin-student-simple-block-loading">Carregando dados básicos…</div>` : ""}
       </aside>
 
       <section class="admin-student-sheet-right admin-student-simple-right" aria-label="Detalhes do aluno">
@@ -14437,7 +14491,7 @@ const renderAdminStudentSheet = () => {
           </div>
         </div>
         <div class="admin-student-comment-composer${commentComposerOpen ? " is-open" : ""}" data-admin-student-comment-composer ${commentComposerOpen ? "" : "hidden"}>
-          <textarea class="admin-student-comment-textarea" rows="3" data-admin-student-comment-text placeholder="Escreva um comentário pedagógico...">${escapeHtml(
+          <textarea class="admin-student-input admin-student-comment-textarea" rows="3" data-admin-student-comment-text placeholder="Escreva um comentário...">${escapeHtml(
             commentComposerText
           )}</textarea>
           <div class="admin-student-comment-composer-footer">
@@ -20478,6 +20532,9 @@ const openStudentSimpleCard = async ({ alunoId, teacherId } = {}) => {
     warnMissingAdminStudentHistoryDrawer("openStudentSimpleCard");
     return;
   }
+  if (adminStudentsState.history?.inlineSaveTimer) {
+    window.clearTimeout(adminStudentsState.history.inlineSaveTimer);
+  }
   const aId = String(alunoId || "").trim();
   const tId = String(teacherId || "").trim();
   if (!aId) return;
@@ -20502,6 +20559,9 @@ const openStudentSimpleCard = async ({ alunoId, teacherId } = {}) => {
     notesLoadedAt: 0,
     notesSaving: false,
     notesError: "",
+    editingField: "",
+    inlineSavingField: "",
+    inlineSaveTimer: 0,
     photoSaving: false,
     photoError: "",
   };
@@ -20579,6 +20639,9 @@ const openStudentSimpleCard = async ({ alunoId, teacherId } = {}) => {
 const openAdminStudentHistoryDrawer = openStudentSimpleCard;
 
 const closeAdminStudentHistoryDrawer = () => {
+  if (adminStudentsState.history?.inlineSaveTimer) {
+    window.clearTimeout(adminStudentsState.history.inlineSaveTimer);
+  }
   const drawerEl = getAdminStudentHistoryDrawer();
   if (drawerEl instanceof HTMLElement) {
     drawerEl.classList.remove("is-open");
@@ -20605,6 +20668,9 @@ const closeAdminStudentHistoryDrawer = () => {
     notesLoadedAt: 0,
     notesSaving: false,
     notesError: "",
+    editingField: "",
+    inlineSavingField: "",
+    inlineSaveTimer: 0,
   };
 };
 
@@ -23044,6 +23110,10 @@ document.addEventListener(
   (event) => {
   const target = event.target;
   if (!(target instanceof Element)) return;
+  const adminStudentInlineInteractive = target.closest("[data-admin-student-history-drawer] input, [data-admin-student-history-drawer] select, [data-admin-student-history-drawer] textarea");
+  if (adminStudentInlineInteractive instanceof HTMLInputElement || adminStudentInlineInteractive instanceof HTMLSelectElement || adminStudentInlineInteractive instanceof HTMLTextAreaElement) {
+    return;
+  }
 
   const pedagogicoSidebarItem = target.closest("[data-sidebar-accordion-body='pedagogico'] [data-panel-target]");
   if (pedagogicoSidebarItem instanceof HTMLButtonElement) {
@@ -24478,14 +24548,6 @@ document.addEventListener("click", (event) => {
 
       const studentInlineControl = target.closest("[data-admin-student-inline-control]");
       if (studentInlineControl instanceof HTMLInputElement || studentInlineControl instanceof HTMLSelectElement || studentInlineControl instanceof HTMLTextAreaElement) {
-        const cell = studentInlineControl.closest("[data-admin-student-inline-field]");
-        const field = String(cell?.getAttribute("data-admin-student-inline-field") || "").trim();
-        if (field === "criadoEm") return;
-        const isSelect = studentInlineControl instanceof HTMLSelectElement;
-        if (isSelect) {
-          const sheetEl = getAdminStudentSheet();
-          saveAdminStudentInlineField({ field, sheetEl }).catch((error) => console.error("[admin] inline select save failed:", error));
-        }
         return;
       }
 
@@ -26606,7 +26668,7 @@ document.addEventListener(
   "focusout",
   (event) => {
     const target = event.target;
-    if (!(target instanceof HTMLInputElement)) return;
+    if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement)) return;
     const fieldEl = target.closest("[data-admin-student-inline-field]");
     const field = String(fieldEl?.getAttribute("data-admin-student-inline-field") || "").trim();
     if (!field || field === "criadoEm") return;
@@ -26621,7 +26683,7 @@ document.addEventListener(
 
 document.addEventListener("keydown", (event) => {
   const target = event.target;
-  if (!(target instanceof HTMLInputElement)) return;
+  if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement)) return;
   const fieldEl = target.closest("[data-admin-student-inline-field]");
   const field = String(fieldEl?.getAttribute("data-admin-student-inline-field") || "").trim();
   if (!field || field === "criadoEm") return;
@@ -26631,11 +26693,10 @@ document.addEventListener("keydown", (event) => {
     if (!(sheetEl instanceof HTMLElement)) return;
     saveAdminStudentInlineField({ field, sheetEl }).catch((error) => console.error("[admin] inline enter save failed:", error));
   } else if (event.key === "Escape") {
+    event.preventDefault();
+    event.stopPropagation();
     const sheetEl = getAdminStudentSheet();
     if (!(sheetEl instanceof HTMLElement)) return;
-    setAdminStudentInlineEditing(sheetEl, field, false);
-    setAdminStudentInlineStatus(sheetEl, field, "", "");
-    const currentValue = String(fieldEl?.dataset.currentValue || "");
-    if (target instanceof HTMLInputElement) target.value = currentValue;
+    cancelAdminStudentInlineEditing({ sheetEl, field });
   }
 });

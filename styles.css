@@ -4994,8 +4994,13 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
 }
 
 .admin-student-comment-textarea {
+  height: auto;
   min-height: 92px;
   resize: vertical;
+}
+
+.admin-student-comment-textarea::placeholder {
+  color: rgba(255, 255, 255, 0.38);
 }
 
 .admin-student-comment-status {
@@ -5194,6 +5199,10 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
 .admin-student-input:focus {
   border-color: rgba(89, 144, 189, 0.45);
   box-shadow: 0 0 0 3px rgba(89, 144, 189, 0.12);
+}
+
+.admin-student-input::placeholder {
+  color: rgba(255, 255, 255, 0.36);
 }
 
 .admin-student-input.is-error {
