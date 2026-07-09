@@ -16005,6 +16005,38 @@ const ADMIN_PED_TAB_SUMMARIES = {
   configuracoes: "Ajustes operacionais",
 };
 
+const ADMIN_PED_PAGE_TITLES = {
+  overview: "Visão Geral",
+  agenda: "Agenda",
+  aulas: "Aulas",
+  pessoas: "Usuários",
+  qualidade: "Qualidade",
+  onboarding: "Onboarding",
+  relatorios: "Relatórios",
+};
+
+const syncAdminPedagogicoPageTitle = (panelName = body.dataset.activePanel || "") => {
+  const panel = String(panelName || "").trim();
+  let title = "";
+
+  if (panel === "ao-vivo") {
+    title = ADMIN_PED_PAGE_TITLES.agenda;
+  } else if (panel === "admin-controle-pedagogico") {
+    const activeTab = String(adminPedagogicoState.activeTab || "overview").trim();
+    title = ADMIN_PED_PAGE_TITLES[activeTab] || "";
+  }
+
+  if (adminPedTitle instanceof HTMLElement && adminPedTitle.textContent !== title) {
+    adminPedTitle.textContent = title;
+  }
+
+  const livePageTitle = document.querySelector("[data-live-page-title]");
+  if (livePageTitle instanceof HTMLElement) {
+    const liveTitle = panel === "ao-vivo" ? ADMIN_PED_PAGE_TITLES.agenda : "Aulas ao vivo";
+    if (livePageTitle.textContent !== liveTitle) livePageTitle.textContent = liveTitle;
+  }
+};
+
 const adminPedEnsureNavState = () => {
   const groupKeys = new Set(ADMIN_PED_NAV_GROUPS.map((g) => String(g.key)));
   const desiredTab = String(adminPedagogicoState.activeTab || "overview").trim() || "overview";
@@ -16029,6 +16061,7 @@ const renderAdminPedagogicoTabs = () => {
   const activeGroup = String(adminPedagogicoState.activeGroup || "operacao");
   const activeTab = String(adminPedagogicoState.activeTab || "overview");
   syncAdminPedagogicoHeaderActionMenu();
+  syncAdminPedagogicoPageTitle();
 
   document.querySelectorAll("[data-admin-ped-group]").forEach((btn) => {
     if (!(btn instanceof HTMLButtonElement)) return;
@@ -16137,7 +16170,6 @@ const renderAdminLiveClassroomSnapshot = async () => {
 const renderAdminPedagogicoOverview = () => {
   if (!(adminPedOverview instanceof HTMLElement)) return;
   cleanupAdminPedagogicoLegacyNav();
-  if (adminPedTitle instanceof HTMLElement) adminPedTitle.textContent = "Usuários";
 
   const classes = Array.isArray(adminPedagogicoState.classes) ? adminPedagogicoState.classes : [];
   const teachersById = adminPedagogicoState.teachersById instanceof Map ? adminPedagogicoState.teachersById : new Map();
@@ -22815,6 +22847,7 @@ const showPanel = (panelName) => {
   });
   syncPedagogicoSidebarAccordion(panelName);
   syncPedagogicoSidebarActiveState(panelName);
+  syncAdminPedagogicoPageTitle(panelName);
 
   const activePanel = document.querySelector(`[data-panel="${panelName}"]`);
   const shouldHidePlatformHeader =
