@@ -14633,10 +14633,11 @@ let adminPedagogicoState = {
 };
 let adminPedTableSearchDebounce = null;
 
-const setAdminPedagogicoStatus = (text, tone = "") => {
+const setAdminPedagogicoStatus = (text, tone = "", detail = "") => {
   if (!(adminPedStatus instanceof HTMLElement)) return;
   adminPedStatus.textContent = String(text || "");
   adminPedStatus.dataset.tone = String(tone || "");
+  adminPedStatus.title = String(detail || "");
 };
 
 const normalizeClassType = (value) => {
@@ -16136,7 +16137,7 @@ const renderAdminLiveClassroomSnapshot = async () => {
 const renderAdminPedagogicoOverview = () => {
   if (!(adminPedOverview instanceof HTMLElement)) return;
   cleanupAdminPedagogicoLegacyNav();
-  if (adminPedTitle instanceof HTMLElement) adminPedTitle.textContent = "Pedagógico";
+  if (adminPedTitle instanceof HTMLElement) adminPedTitle.textContent = "Usuários";
 
   const classes = Array.isArray(adminPedagogicoState.classes) ? adminPedagogicoState.classes : [];
   const teachersById = adminPedagogicoState.teachersById instanceof Map ? adminPedagogicoState.teachersById : new Map();
@@ -16744,22 +16745,17 @@ const renderAdminPedagogicoStudentsPanel = () => {
   const rowsHtml = pagination.pageRows.length
     ? pagination.pageRows
         .map((r) => {
-          const statusCls = r.statusLabel === "Ativo" ? "is-active" : "is-ended";
           return `
             <div class="admin-ped-row">
               <div>
                 <div class="admin-ped-row-title">${escapeHtml(r.nome)}</div>
                 <div class="admin-ped-row-sub">${escapeHtml(r.email || "—")}</div>
                 <div class="admin-ped-row-meta">
-                  <span class="admin-ped-pill ${statusCls}">${escapeHtml(r.statusLabel)}</span>
-                  ${r.source.includes("financeiro") ? `<span class="admin-ped-pill">Financeiro sincronizado</span>` : ""}
                   <span class="admin-ped-pill is-plan">${escapeHtml(r.plan)}</span>
                   ${r.teacherName ? `<span class="admin-ped-pill">${escapeHtml(r.teacherName)}</span>` : `<span class="admin-ped-pill">Sem professor</span>`}
-                  ${r.groupName ? `<span class="admin-ped-pill">${escapeHtml(r.groupName)}</span>` : `<span class="admin-ped-pill">Sem turma</span>`}
-                  <span class="admin-ped-pill">${escapeHtml(`Risco: ${r.risk}`)}</span>
                 </div>
               </div>
-                <div class="admin-ped-row-actions">
+              <div class="admin-ped-row-actions">
                 <button class="admin-ped-action" type="button" data-admin-ped-student-open="${escapeHtml(r.id)}">Ficha</button>
                 <button class="admin-ped-action is-muted" type="button" data-admin-ped-student-new-class="${escapeHtml(r.id)}">${escapeHtml(r.classLabel)}</button>
                 ${
@@ -18522,15 +18518,17 @@ const runAdminPedagogicoRenderers = () => {
     renderAdminPedagogicoLinksPanel,
   ];
   let failed = 0;
+  const failedNames = [];
   renderers.forEach((render) => {
     try {
       render();
     } catch (error) {
       failed += 1;
+      failedNames.push(render?.name || "unknown");
       console.error("[admin-ped] partial render failed", render?.name || "unknown", error);
     }
   });
-  return failed;
+  return { failed, failedNames };
 };
 
 const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
@@ -18540,8 +18538,10 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
 
   const now = Date.now();
   if (!force && adminPedagogicoState.loadedAt && now - adminPedagogicoState.loadedAt < 45_000) {
-    const failed = runAdminPedagogicoRenderers();
-    setAdminPedagogicoStatus(failed ? "Alguns blocos não puderam ser exibidos agora." : "", failed ? "warn" : "");
+    const { failed, failedNames } = runAdminPedagogicoRenderers();
+    const detail = failedNames.length ? `Renderers com falha: ${failedNames.join(", ")}` : "";
+    if (failedNames.length) console.warn("[admin-ped] renderers failed", failedNames);
+    setAdminPedagogicoStatus(failed ? "Alguns blocos não puderam ser exibidos agora." : "", failed ? "warn" : "", detail);
     return;
   }
 
@@ -18550,6 +18550,11 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
   if (adminPedError instanceof HTMLElement) adminPedError.hidden = true;
 
   try {
+    const loadFallback = (label, promise, fallback) =>
+      promise.catch((error) => {
+        console.error(`[admin-ped] ${label} load failed`, error);
+        return fallback;
+      });
     const [
       teachers,
       students,
@@ -18567,38 +18572,28 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
       teacherQuizSubmissionsAll,
       liveLessons,
       pedagogicalOps,
-    ] =
-      await Promise.all([
-      fetchUserRowsFromFirestore("teacher").catch((error) => {
-        console.error("[admin-ped] teachers load failed", error);
-        return [];
-      }),
-      fetchUserRowsFromFirestore("student").catch((error) => {
-        console.error("[admin-ped] students load failed", error);
-        return [];
-      }),
-      fetchClassesFromFirestore().catch((error) => {
-        console.error("[admin-ped] classes load failed", error);
-        return [];
-      }),
-      fetchGroupsFromFirestore().catch(() => []),
-      fetchPlansFromFirestore().catch(() => []),
-      fetchSurveysFromFirestore().catch(() => []),
-      fetchTeacherAlertsFromFirestore().catch(() => []),
-      fetchPedagogicalFeedbacksFromFirestore().catch(() => []),
-      fetchLiveLessonFeedbacks().catch(() => ({ summary: {}, feedbacks: [] })),
-      fetchLessonLogsFromFirestore().catch(() => []),
-      fetchOnboardingContentsFromFirestore({ includeInactive: true }).catch(() => []),
-      fetchOnboardingQuizzesFromFirestore().catch(() => []),
-      fetchAllTeacherOnboardingProgressFromFirestore().catch(() => []),
-      fetchAllTeacherQuizSubmissionsFromFirestore().catch(() => []),
-      fetchLiveLessonsForAdminPedagogico().catch((error) => {
-        console.error("[admin-ped] Supabase lessons load failed", error);
-        return [];
-      }),
+    ] = await Promise.all([
+      loadFallback("teachers", fetchUserRowsFromFirestore("teacher"), []),
+      loadFallback("students", fetchUserRowsFromFirestore("student"), []),
+      loadFallback("classes", fetchClassesFromFirestore(), []),
+      loadFallback("groups", fetchGroupsFromFirestore(), []),
+      loadFallback("plans", fetchPlansFromFirestore(), []),
+      loadFallback("surveys", fetchSurveysFromFirestore(), []),
+      loadFallback("teacherAlerts", fetchTeacherAlertsFromFirestore(), []),
+      loadFallback("pedagogicalFeedbacks", fetchPedagogicalFeedbacksFromFirestore(), []),
+      loadFallback("liveLessonFeedbacks", fetchLiveLessonFeedbacks(), { summary: {}, feedbacks: [] }),
+      loadFallback("lessonLogs", fetchLessonLogsFromFirestore(), []),
+      loadFallback("onboardingContents", fetchOnboardingContentsFromFirestore({ includeInactive: true }), []),
+      loadFallback("onboardingQuizzes", fetchOnboardingQuizzesFromFirestore(), []),
+      loadFallback("onboardingProgress", fetchAllTeacherOnboardingProgressFromFirestore(), []),
+      loadFallback("teacherQuizSubmissions", fetchAllTeacherQuizSubmissionsFromFirestore(), []),
+      loadFallback("liveLessons", fetchLiveLessonsForAdminPedagogico(), []),
       fetchWithAuth("/api/pedagogico/dashboard")
         .then(async (res) => (res.ok ? res.json() : { metrics: {} }))
-        .catch(() => ({ metrics: {} })),
+        .catch((error) => {
+          console.error("[admin-ped] pedagogical dashboard load failed", error);
+          return { metrics: {} };
+        }),
     ]);
 
     const liveClasses = normalizeLiveLessonsAsAdminClasses(liveLessons);
@@ -18721,11 +18716,22 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
       planSelect.value = selected;
     }
 
-    const failed = runAdminPedagogicoRenderers();
+    const { failed, failedNames } = runAdminPedagogicoRenderers();
     const degraded = Boolean(adminPedagogicoState.pedagogicalOps?.degraded);
+    const degradedReason = String(adminPedagogicoState.pedagogicalOps?.degradedReason || "").trim();
+    const detail = [
+      failedNames.length ? `Renderers com falha: ${failedNames.join(", ")}` : "",
+      degradedReason ? `Backend: ${degradedReason}` : degraded ? "Backend: algum sub-bloco pedagógico falhou" : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    if (failedNames.length || degraded) {
+      console.warn("[admin-ped] panel degraded", { failedRenderers: failedNames, degradedReason });
+    }
     setAdminPedagogicoStatus(
       failed || degraded ? "Painel carregado com alguns dados temporariamente indisponíveis." : "",
-      failed || degraded ? "warn" : ""
+      failed || degraded ? "warn" : "",
+      detail
     );
   } catch (error) {
     console.error("[admin] controle-pedagogico load failed:", error);

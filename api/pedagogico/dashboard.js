@@ -53,6 +53,7 @@ module.exports = async (req, res) => {
     return sendJson(res, 200, {
       ok: true,
       degraded: true,
+      degradedReason: "api_route_error",
       warning: "Dados pedagógicos temporariamente indisponíveis.",
       metrics: {},
       students: [],
