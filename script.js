@@ -9706,7 +9706,7 @@ let adminStudentsState = {
   summaries: [], // derived + filtered student rows
   searchQuery: "",
   filters: {
-    status: "all", // all | active | inactive
+    status: "active", // all | active | inactive
     createdFrom: "",
     createdTo: "",
     canceledFrom: "",
@@ -11784,14 +11784,13 @@ const toDateKeyFromAny = (value) => {
 const countActiveAdminStudentsFilters = (filters) => {
   const f = filters && typeof filters === "object" ? filters : {};
   let n = 0;
-  if (String(f.status || "all") !== "all") n += 1;
+  if (String(f.status || "active") !== "active") n += 1;
   if (String(f.createdFrom || "")) n += 1;
   if (String(f.createdTo || "")) n += 1;
   if (String(f.canceledFrom || "")) n += 1;
   if (String(f.canceledTo || "")) n += 1;
   if (String(f.teacherId || "")) n += 1;
   if (String(f.plan || "")) n += 1;
-  if (String(f.country || "")) n += 1;
   return n;
 };
 
@@ -13038,6 +13037,7 @@ const fetchUserRowsFromFirestore = async (tipo) => {
     const plano = typeof data.plano === "string" ? data.plano.trim() : typeof data.plan === "string" ? data.plan.trim() : typeof data.planoKey === "string" ? data.planoKey.trim() : "";
     const pais = typeof data.pais === "string" ? data.pais.trim() : typeof data.country === "string" ? data.country.trim() : "";
     const canceladoEm = data.canceladoEm || data.cancelamentoEm || data.dataCancelamento || null;
+    const desativadoEm = data.desativadoEm || canceladoEm || null;
     // Student extended profile fields (admin edit modal/sheet). These may not exist for older users.
     const endereco = typeof data.endereco === "string" ? data.endereco : typeof data.address === "string" ? data.address : "";
     const estadoEua = typeof data.estadoEua === "string" ? data.estadoEua : typeof data.estadoEUA === "string" ? data.estadoEUA : typeof data.usState === "string" ? data.usState : "";
@@ -13066,14 +13066,17 @@ const fetchUserRowsFromFirestore = async (tipo) => {
           : "";
     const criadoKey = toDateKeyFromAny(data.criadoEm);
     const cancelKey = toDateKeyFromAny(canceladoEm);
+    const desativadoKey = toDateKeyFromAny(desativadoEm);
     rows.push({
       ...base,
       professorId,
       plano,
       pais,
       canceladoEm,
+      desativadoEm,
       criadoKey,
       cancelKey,
+      desativadoKey,
       endereco,
       estadoEua,
       valorMensalidade,
@@ -13186,8 +13189,10 @@ const normalizeSupabaseStudentForAdmin = (row = {}) => {
     plano: String(row.plano || row.plan || "").trim(),
     pais: String(row.pais || row.country || "").trim(),
     canceladoEm: row.canceladoEm || row.cancelamentoEm || row.dataCancelamento || null,
+    desativadoEm: row.desativadoEm || row.canceladoEm || row.cancelamentoEm || row.dataCancelamento || null,
     criadoKey: toDateKeyFromAny(row.created_at || row.createdAt),
     cancelKey: toDateKeyFromAny(row.canceladoEm || row.cancelamentoEm || row.dataCancelamento),
+    desativadoKey: toDateKeyFromAny(row.desativadoEm || row.canceladoEm || row.cancelamentoEm || row.dataCancelamento),
     telefone: String(row.telefone || "").trim(),
     alunoChave: String(row.aluno_chave || "").trim(),
     english_level_start: String(row.english_level_start || row.englishLevelStart || "").trim(),
@@ -13449,8 +13454,10 @@ const deriveAdminStudentsSummaries = ({ teacherId, logs } = {}) => {
         trabalho: String(meta?.trabalho || "").trim(),
         criadoKey: String(meta?.criadoKey || ""),
         cancelKey: String(meta?.cancelKey || ""),
+        desativadoKey: String(meta?.desativadoKey || meta?.cancelKey || ""),
         criadoLabel: meta?.criadoEm ? formatAdminDate(meta.criadoEm) : "—",
         cancelLabel: meta?.canceladoEm ? formatAdminDate(meta.canceladoEm) : "—",
+        desativadoLabel: meta?.desativadoEm ? formatAdminDate(meta.desativadoEm) : "—",
         lastLessonLabel: lastLabel,
         totalLogs: bucket.total,
         faltas: bucket.faltas,
@@ -16693,8 +16700,8 @@ const renderAdminPedagogicoStudentsPanel = () => {
       const groupId = String(s?.groupId || "").trim();
       const groupName = groupId ? String(groupsById.get(groupId)?.name || "").trim() : String(s?.groupName || "").trim();
       const plan = String(s?.plano || "").trim() || "Sem plano";
-      const accessActive = s?.ativo_acesso !== false && String(s?.status_acesso || "ativo") !== "inativo";
-      const statusLabel = accessActive ? "Ativo" : "Inativo";
+      const isActive = s?.ativo !== false;
+      const statusLabel = isActive ? "Ativo" : "Inativo";
       const risk = (riskByStudent.get(String(s.id || "")) || {}).risk || "—";
       const activeClass = getAdminPedStudentActiveClass(String(s.id || ""));
       return {
@@ -16710,7 +16717,7 @@ const renderAdminPedagogicoStudentsPanel = () => {
         risk,
         alunoChave: String(s.aluno_chave || ""),
         source: String(s.source || ""),
-        accessActive,
+        isActive,
         classLabel: activeClass ? "Editar aula" : "Criar aula",
         classId: activeClass ? String(activeClass.id || "") : "",
       };
@@ -16752,16 +16759,15 @@ const renderAdminPedagogicoStudentsPanel = () => {
                   <span class="admin-ped-pill">${escapeHtml(`Risco: ${r.risk}`)}</span>
                 </div>
               </div>
-              <div class="admin-ped-row-actions">
+                <div class="admin-ped-row-actions">
                 <button class="admin-ped-action" type="button" data-admin-ped-student-open="${escapeHtml(r.id)}">Ficha</button>
-                <button class="admin-ped-action" type="button" data-admin-ped-student-link="${escapeHtml(r.id)}">Vincular</button>
                 <button class="admin-ped-action is-muted" type="button" data-admin-ped-student-new-class="${escapeHtml(r.id)}">${escapeHtml(r.classLabel)}</button>
                 ${
-                  r.alunoChave
-                    ? `<button class="admin-ped-action ${r.accessActive ? "is-danger" : ""}" type="button"
-                         data-admin-ped-student-access-status="${escapeHtml(r.alunoChave)}"
-                         data-admin-ped-student-next-status="${r.accessActive ? "inativo" : "ativo"}">
-                         ${r.accessActive ? "Deixar inativo só para mim" : "Ativar no meu acesso"}
+                  r.id
+                    ? `<button class="admin-ped-action ${r.isActive ? "is-danger" : ""}" type="button"
+                         data-admin-ped-student-toggle="${escapeHtml(r.id)}"
+                         data-admin-ped-student-next-status="${r.isActive ? "inactive" : "active"}">
+                         ${r.isActive ? "Desativar" : "Reativar"}
                        </button>`
                     : ""
                 }
@@ -16862,7 +16868,6 @@ const renderAdminPedagogicoLinksPanel = () => {
                 </div>
               </div>
               <div class="admin-ped-link-actions">
-                <button class="admin-ped-action" type="button" data-admin-ped-student-link="${escapeHtml(String(s.id || ""))}">Vincular</button>
                 ${s.createClass ? `<button class="admin-ped-action is-muted" type="button" data-admin-ped-student-new-class="${escapeHtml(String(s.id || ""))}">${escapeHtml(String(s.classLabel || "Criar aula"))}</button>` : ""}
               </div>
             </div>
@@ -19110,6 +19115,7 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
       if (modalSecondary) modalSecondary.disabled = true;
       const prev = modalPrimary?.textContent || "";
       if (modalPrimary) modalPrimary.textContent = isEdit ? "Salvando…" : "Criando…";
+      let createdEventIdForRollback = "";
 
       (async () => {
         try {
@@ -19165,7 +19171,32 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
 
           const linkedEventIds = Array.isArray(apiData?.ids) ? apiData.ids.map((id) => String(id || "").trim()).filter(Boolean) : [];
           const linkedEventGroupId = String(apiData?.grupoRecorrenciaId || linkedGroupId || classId).trim() || classId;
+          createdEventIdForRollback = linkedEventIds[0] || "";
           const docRef = firebase.doc(firebase.primaryDb, "classes", classId);
+          for (const studentId of studentIds) {
+            if (!studentId) continue;
+            await withTimeout(
+              firebase.setDoc(
+                firebase.doc(firebase.primaryDb, "users", studentId),
+                {
+                  professorId: teacherId,
+                  teacherId: teacherId,
+                  professorNome: teacherName,
+                  teacherNome: teacherName,
+                  atualizadoEm: firebase.serverTimestamp(),
+                },
+                { merge: true }
+              ),
+              12_000,
+              "firestore_admin_pedagogico_student_link"
+            );
+            updateAdminStudentCachedRow(studentId, {
+              professorId: teacherId,
+              teacherId: teacherId,
+              professorNome: teacherName,
+              teacherNome: teacherName,
+            });
+          }
           const payload = {
             ...nextRow,
             linkedEventGroupId,
@@ -19179,6 +19210,15 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
           closeModal();
           await renderAdminControlePedagogicoPanel({ force: true });
         } catch (e) {
+          if (createdEventIdForRollback) {
+            try {
+              await fetchWithAuth(`/api/schedule-events?id=${encodeURIComponent(createdEventIdForRollback)}&mode=future`, {
+                method: "DELETE",
+              });
+            } catch (rollbackError) {
+              console.warn("[admin] controle-pedagogico rollback failed:", rollbackError);
+            }
+          }
           console.error("[admin] controle-pedagogico save failed:", e);
           setErr("Não foi possível salvar agora.");
         } finally {
@@ -20634,14 +20674,13 @@ const applyAdminStudentsFilters = () => {
   const f = adminStudentsState.filters && typeof adminStudentsState.filters === "object" ? adminStudentsState.filters : {};
   const q = normalizeSearchText(adminStudentsState.searchQuery || "");
 
-  const status = String(f.status || "all");
+  const status = String(f.status || "active");
   const createdFrom = String(f.createdFrom || "").trim();
   const createdTo = String(f.createdTo || "").trim();
   const canceledFrom = String(f.canceledFrom || "").trim();
   const canceledTo = String(f.canceledTo || "").trim();
   const teacherId = String(f.teacherId || "").trim();
   const plan = String(f.plan || "").trim().toLowerCase();
-  const country = String(f.country || "").trim().toLowerCase();
 
   let filtered = all.filter((row) => {
     if (!row || typeof row !== "object") return false;
@@ -20650,18 +20689,17 @@ const applyAdminStudentsFilters = () => {
     if (createdFrom && String(row.criadoKey || "") < createdFrom) return false;
     if (createdTo && String(row.criadoKey || "") > createdTo) return false;
     if (canceledFrom) {
-      const ck = String(row.cancelKey || "");
+      const ck = String(row.desativadoKey || row.cancelKey || "");
       if (!ck) return false;
       if (ck < canceledFrom) return false;
     }
     if (canceledTo) {
-      const ck = String(row.cancelKey || "");
+      const ck = String(row.desativadoKey || row.cancelKey || "");
       if (!ck) return false;
       if (ck > canceledTo) return false;
     }
     if (teacherId && String(row.teacherId || "") !== teacherId) return false;
     if (plan && String(row.plano || "").trim().toLowerCase() !== plan) return false;
-    if (country && String(row.pais || "").trim().toLowerCase() !== country) return false;
     return true;
   });
 
@@ -20706,13 +20744,8 @@ const openAdminStudentsFiltersPopover = ({ triggerEl } = {}) => {
   // Fixed filter options (do not depend on what is currently loaded in Firestore).
   // This prevents the select from being disabled when there are no rows yet.
   const planOptionsList = ["Turma", "Gold", "Diamond"];
-  const countryOptionsList = ["Brasil", "EUA", "Canadá", "Reino Unido", "Outro"];
-
   const planOptions = [`<option value="">Qualquer plano</option>`]
     .concat(planOptionsList.map((p) => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`))
-    .join("");
-  const countryOptions = [`<option value="">Qualquer país</option>`]
-    .concat(countryOptionsList.map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`))
     .join("");
 
   const pop = document.createElement("div");
@@ -20722,9 +20755,9 @@ const openAdminStudentsFiltersPopover = ({ triggerEl } = {}) => {
     <div class="admin-students-filters-row">
       <label>Status</label>
       <select data-admin-students-filter="status">
-        <option value="all">Todos</option>
-        <option value="active">Ativos</option>
-        <option value="inactive">Inativos</option>
+        <option value="all">Ativos e inativos</option>
+        <option value="active">Apenas ativos (padrão)</option>
+        <option value="inactive">Apenas inativos</option>
       </select>
     </div>
 
@@ -20737,7 +20770,7 @@ const openAdminStudentsFiltersPopover = ({ triggerEl } = {}) => {
     </div>
 
     <div class="admin-students-filters-row">
-      <label>Data de cancelamento</label>
+      <label>Data de desativação</label>
       <div class="admin-students-filters-grid2">
         <input type="date" data-admin-students-filter="canceledFrom" />
         <input type="date" data-admin-students-filter="canceledTo" />
@@ -20755,13 +20788,6 @@ const openAdminStudentsFiltersPopover = ({ triggerEl } = {}) => {
       <label>Plano</label>
       <select data-admin-students-filter="plan">
         ${planOptions}
-      </select>
-    </div>
-
-    <div class="admin-students-filters-row">
-      <label>País</label>
-      <select data-admin-students-filter="country">
-        ${countryOptions}
       </select>
     </div>
 
@@ -21099,51 +21125,134 @@ const getAdminStudentMetaById = (alunoId) => {
   return map.get(id) || null;
 };
 
-const openAdminStudentDeactivateModal = ({ alunoId } = {}) => {
+const getAdminStudentRecurringGroupIds = (alunoId) => {
+  const id = String(alunoId || "").trim();
+  if (!id) return [];
+  const groupIds = new Set();
+  const classes = Array.isArray(adminPedagogicoState.classes) ? adminPedagogicoState.classes : [];
+  classes.forEach((classRow) => {
+    if (!classRow || typeof classRow !== "object") return;
+    const studentIds = Array.isArray(classRow.studentIds) ? classRow.studentIds.map((studentId) => String(studentId || "").trim()).filter(Boolean) : [];
+    if (!studentIds.includes(id)) return;
+    const linkedGroupId = String(classRow.linkedEventGroupId || classRow.grupoRecorrenciaId || "").trim();
+    if (linkedGroupId) groupIds.add(linkedGroupId);
+    const linkedEventIds = Array.isArray(classRow.linkedEventIds) ? classRow.linkedEventIds : [];
+    linkedEventIds.forEach((eventId) => {
+      const evt = Array.isArray(adminStudentsState.events) ? adminStudentsState.events.find((row) => String(row?.id || "") === String(eventId || "")) : null;
+      const evtGroupId = String(evt?.grupoRecorrenciaId || "").trim();
+      if (evtGroupId) groupIds.add(evtGroupId);
+    });
+  });
+
+  const events = Array.isArray(adminStudentsState.events) ? adminStudentsState.events : [];
+  events.forEach((evt) => {
+    if (!evt || typeof evt !== "object") return;
+    if (String(evt.alunoId || "").trim() !== id) return;
+    const groupId = String(evt.grupoRecorrenciaId || "").trim();
+    if (groupId) groupIds.add(groupId);
+  });
+
+  return [...groupIds];
+};
+
+const findAdminStudentRecurringEventId = (alunoId, groupId) => {
+  const id = String(alunoId || "").trim();
+  const gid = String(groupId || "").trim();
+  if (!id || !gid) return "";
+  const classes = Array.isArray(adminPedagogicoState.classes) ? adminPedagogicoState.classes : [];
+  for (const classRow of classes) {
+    if (!classRow || typeof classRow !== "object") continue;
+    const studentIds = Array.isArray(classRow.studentIds) ? classRow.studentIds.map((studentId) => String(studentId || "").trim()).filter(Boolean) : [];
+    if (!studentIds.includes(id)) continue;
+    const linkedGroupId = String(classRow.linkedEventGroupId || classRow.grupoRecorrenciaId || "").trim();
+    if (linkedGroupId !== gid) continue;
+    const linkedEventIds = Array.isArray(classRow.linkedEventIds) ? classRow.linkedEventIds.map((eventId) => String(eventId || "").trim()).filter(Boolean) : [];
+    if (linkedEventIds.length) return linkedEventIds[0];
+  }
+  const events = Array.isArray(adminStudentsState.events) ? adminStudentsState.events : [];
+  const match = events.find((evt) => String(evt.alunoId || "").trim() === id && String(evt.grupoRecorrenciaId || "").trim() === gid);
+  return match ? String(match.id || "").trim() : "";
+};
+
+const patchAdminStudentStatus = async ({ alunoId, ativo } = {}) => {
+  const id = String(alunoId || "").trim();
+  if (!id) return;
+  const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_student_status");
+  const user = await waitForFirebaseAuthReady(firebase, 5000);
+  if (!user) throw new Error("not_authenticated");
+  const patch = {
+    ativo: Boolean(ativo),
+    atualizadoEm: firebase.serverTimestamp(),
+  };
+  if (ativo) {
+    patch.canceladoEm = null;
+    patch.desativadoEm = null;
+  } else {
+    const now = firebase.serverTimestamp();
+    patch.canceladoEm = now;
+    patch.desativadoEm = now;
+    patch.professorId = null;
+    patch.teacherId = null;
+  }
+  await withTimeout(firebase.setDoc(firebase.doc(firebase.primaryDb, "users", id), patch, { merge: true }), 12_000, "firestore_student_status_patch");
+  updateAdminStudentCachedRow(id, patch);
+};
+
+const openAdminStudentDeactivateModal = ({ alunoId, nextActive = false } = {}) => {
   const id = String(alunoId || "").trim();
   if (!id) return;
   const meta = getAdminStudentMetaById(id);
   const name = meta?.nome || "este aluno";
+  const isReactivating = Boolean(nextActive);
 
   openModal({
-    title: "Desativar aluno",
+    title: isReactivating ? "Reativar aluno" : "Desativar aluno",
     bodyHtml: `
       <div style="display:grid; gap:10px;">
         <p style="margin:0; color: rgba(255,255,255,0.75); font-size: 13px; line-height: 1.45;">
-          Tem certeza que deseja desativar <strong>${escapeHtml(name)}</strong>?
+          ${
+            isReactivating
+              ? `Tem certeza que deseja reativar <strong>${escapeHtml(name)}</strong>?`
+              : `Ao desativar <strong>${escapeHtml(name)}</strong>, as aulas serão desmarcadas da agenda e o aluno será desvinculado do professor.`
+          }
         </p>
         <p style="margin:0; color: rgba(255,255,255,0.45); font-size: 12px; line-height: 1.45;">
-          O aluno continuará salvo no sistema, mas ficará como inativo.
+          ${isReactivating ? "O aluno voltará a aparecer nas listas ativas, mas as aulas não serão recriadas automaticamente." : "O aluno continuará salvo no sistema, mas ficará como inativo."}
         </p>
       </div>
     `,
-    primaryLabel: "Confirmar desativação",
+    primaryLabel: isReactivating ? "Confirmar reativação" : "Confirmar desativação",
     secondaryLabel: "Cancelar",
     onPrimary: () => {
       // keep modal open until async completes
       if (modalPrimary) modalPrimary.disabled = true;
       if (modalSecondary) modalSecondary.disabled = true;
-      setAdminStudentsStatus("Desativando…");
+      setAdminStudentsStatus(isReactivating ? "Reativando…" : "Desativando…");
       (async () => {
         try {
-          const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_student_deactivate");
-          await withTimeout(
-            firebase.setDoc(
-              firebase.doc(firebase.primaryDb, "users", id),
-              { ativo: false, canceladoEm: firebase.serverTimestamp(), atualizadoEm: firebase.serverTimestamp() },
-              { merge: true }
-            ),
-            12_000,
-            "firestore_deactivate_student"
-          );
+          if (!isReactivating) {
+            const groupIds = getAdminStudentRecurringGroupIds(id);
+            for (const groupId of groupIds) {
+              const eventId = findAdminStudentRecurringEventId(id, groupId);
+              if (!eventId) continue;
+              const res = await fetchWithAuth(`/api/schedule-events?id=${encodeURIComponent(eventId)}&mode=future`, {
+                method: "DELETE",
+              });
+              const data = await res.json().catch(() => null);
+              if (!res.ok) throw new Error(data?.error || "schedule_cancel_failed");
+            }
+          }
+          await patchAdminStudentStatus({ alunoId: id, ativo: isReactivating });
 
           adminStudentsState.loadedAt = 0;
+          adminPedagogicoState.loadedAt = 0;
           await renderAdminStudentsPanel({ force: true });
+          await renderAdminControlePedagogicoPanel({ force: true });
           setAdminStudentsStatus("");
           closeModal();
         } catch (error) {
           console.error("[admin] deactivate student failed:", error);
-          setAdminStudentsStatus("Não foi possível desativar agora.", "error");
+          setAdminStudentsStatus(isReactivating ? "Não foi possível reativar agora." : "Não foi possível desativar agora.", "error");
           if (modalPrimary) modalPrimary.disabled = false;
           if (modalSecondary) modalSecondary.disabled = false;
         }
@@ -23770,6 +23879,15 @@ document.addEventListener("click", (event) => {
   const target = event.target;
 
   if (target instanceof Element) {
+    const adminStudentSheet = getAdminStudentSheet();
+    if (
+      adminStudentSheet instanceof HTMLElement &&
+      adminStudentSheet.contains(target) &&
+      (target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement)
+    ) {
+      return;
+    }
+
     // Admin > Alunos: close filters popover when clicking elsewhere.
     if (
       adminStudentsFiltersPopoverEl instanceof HTMLElement &&
@@ -24540,41 +24658,13 @@ document.addEventListener("click", (event) => {
         return;
       }
 
-      const adminPedStudentAccessStatus = target.closest("[data-admin-ped-student-access-status]");
-      if (adminPedStudentAccessStatus instanceof HTMLButtonElement) {
+      const adminPedStudentToggle = target.closest("[data-admin-ped-student-toggle]");
+      if (adminPedStudentToggle instanceof HTMLButtonElement) {
         event.preventDefault();
-        const alunoChave = String(adminPedStudentAccessStatus.getAttribute("data-admin-ped-student-access-status") || "").trim();
-        const nextStatus = String(adminPedStudentAccessStatus.getAttribute("data-admin-ped-student-next-status") || "").trim();
-        if (!alunoChave || !["ativo", "inativo"].includes(nextStatus)) return;
-        adminPedStudentAccessStatus.disabled = true;
-        setAdminPedagogicoStatus(nextStatus === "inativo" ? "Marcando como inativo no seu acesso…" : "Ativando no seu acesso…");
-        fetchWithAuth("/api/pedagogico/dashboard", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "set_student_status", aluno_chave: alunoChave, status: nextStatus }),
-        })
-          .then(async (res) => {
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(data?.error || "student_status_failed");
-            adminPedagogicoState.loadedAt = 0;
-            await renderAdminControlePedagogicoPanel({ force: true });
-            setAdminPedagogicoStatus(
-              nextStatus === "inativo"
-                ? "Aluno inativo apenas no seu acesso. O acesso de outros administradores não foi alterado."
-                : "Aluno reativado no seu acesso.",
-              "success"
-            );
-          })
-          .catch((error) => {
-            console.error("[admin-ped] student access status failed", error);
-            adminPedStudentAccessStatus.disabled = false;
-            setAdminPedagogicoStatus(
-              error?.message === "PGRST205" || error?.message === "42P01"
-                ? "A tabela de preferências por acesso ainda precisa ser criada no Supabase."
-                : "Não foi possível alterar o status no seu acesso agora.",
-              "error"
-            );
-          });
+        const alunoId = String(adminPedStudentToggle.getAttribute("data-admin-ped-student-toggle") || "").trim();
+        const nextStatus = String(adminPedStudentToggle.getAttribute("data-admin-ped-student-next-status") || "").trim();
+        if (!alunoId || !["active", "inactive"].includes(nextStatus)) return;
+        openAdminStudentDeactivateModal({ alunoId, nextActive: nextStatus === "active" });
         return;
       }
 
@@ -24782,7 +24872,7 @@ document.addEventListener("click", (event) => {
       if (adminStudentsFiltersClear instanceof HTMLButtonElement) {
         event.preventDefault();
         adminStudentsState.filters = {
-          status: "all",
+          status: "active",
           createdFrom: "",
           createdTo: "",
           canceledFrom: "",

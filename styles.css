@@ -5211,10 +5211,25 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
   height: auto;
   min-height: 92px;
   resize: vertical;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 13px;
+  font-weight: 700;
+  outline: none;
+  box-shadow: none;
+  appearance: none;
 }
 
 .admin-student-comment-textarea::placeholder {
   color: rgba(255, 255, 255, 0.38);
+}
+
+.admin-student-comment-textarea:focus {
+  border-color: rgba(89, 144, 189, 0.45);
+  box-shadow: 0 0 0 3px rgba(89, 144, 189, 0.12);
 }
 
 .admin-student-comment-status {
