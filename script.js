@@ -14616,6 +14616,13 @@ let adminPedagogicoState = {
   teacherQuizSubmissionsAll: [],
   pedagogicalOps: { metrics: {}, onboarding: [], alerts: [], pendingLessons: [], riskStudents: [], flexge: [] },
   studentsTable: { query: "", page: 1, pageSize: 25, lastRenderFromSearch: false },
+  studentFilters: {
+    status: "active",
+    teacherId: "",
+    plan: "",
+    createdSort: "",
+    deactivatedSort: "",
+  },
   linksTable: { activeList: "noClass", query: "", page: 1, pageSize: 25, lastRenderFromSearch: false },
   filters: {
     teacherId: "",
@@ -15663,6 +15670,159 @@ const adminPedListToolbarHtml = ({ query, total, searchKey, placeholder, labelSi
   </div>
 `;
 
+const adminPedStudentsToolbarHtml = ({ query, total, filterCount = 0, filterLabel = "", searchKey, placeholder }) => `
+  <div class="admin-ped-table-toolbar admin-ped-table-toolbar--students">
+    <div class="admin-ped-table-toolbar-main">
+      <input
+        class="admin-ped-select admin-ped-table-search"
+        type="text"
+        placeholder="${escapeHtml(placeholder || "Buscar por nome ou e-mail...")}"
+        value="${escapeHtml(String(query || ""))}"
+        data-admin-ped-table-search="${escapeHtml(String(searchKey || ""))}"
+      />
+      <button class="admin-ped-filter-trigger${Number(filterCount) > 0 ? " is-active" : ""}" type="button" data-admin-ped-students-filters-trigger>
+        <span class="admin-ped-filter-trigger-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M4.5 6.5h15l-5.7 6.6v4.4l-3.6 1.8v-6.2L4.5 6.5Z"></path>
+          </svg>
+        </span>
+        <span>Filtro</span>
+        <span class="admin-ped-filter-trigger-badge"${Number(filterCount) > 0 ? "" : " hidden"}>${escapeHtml(String(filterCount || 0))}</span>
+      </button>
+    </div>
+    <div class="admin-ped-pagination">
+      <span class="admin-ped-pagination-label">${escapeHtml(filterLabel || `${Number(total) || 0} aluno${Number(total) === 1 ? "" : "s"}`)}</span>
+    </div>
+  </div>
+`;
+
+const ADMIN_PED_STUDENT_FILTER_DEFAULTS = {
+  status: "active",
+  teacherId: "",
+  plan: "",
+  createdSort: "",
+  deactivatedSort: "",
+};
+
+const countActiveAdminPedStudentFilters = (filters) => {
+  const f = filters && typeof filters === "object" ? filters : {};
+  let count = 0;
+  if (String(f.status || ADMIN_PED_STUDENT_FILTER_DEFAULTS.status) !== ADMIN_PED_STUDENT_FILTER_DEFAULTS.status) count += 1;
+  if (String(f.teacherId || "")) count += 1;
+  if (String(f.plan || "")) count += 1;
+  if (String(f.createdSort || "")) count += 1;
+  if (String(f.deactivatedSort || "") && String(f.status || ADMIN_PED_STUDENT_FILTER_DEFAULTS.status) !== ADMIN_PED_STUDENT_FILTER_DEFAULTS.status) count += 1;
+  return count;
+};
+
+let adminPedStudentsFiltersPopoverEl = null;
+
+const closeAdminPedStudentsFiltersPopover = () => {
+  if (adminPedStudentsFiltersPopoverEl instanceof HTMLElement) {
+    adminPedStudentsFiltersPopoverEl.remove();
+  }
+  adminPedStudentsFiltersPopoverEl = null;
+};
+
+const syncAdminPedStudentsFiltersPopoverUi = (pop) => {
+  if (!(pop instanceof HTMLElement)) return;
+  const statusEl = pop.querySelector('[data-admin-ped-students-filter="status"]');
+  const deactivatedSortEl = pop.querySelector('[data-admin-ped-students-filter="deactivatedSort"]');
+  if (!(statusEl instanceof HTMLSelectElement) || !(deactivatedSortEl instanceof HTMLSelectElement)) return;
+  const status = String(statusEl.value || "active");
+  const enabled = status !== "active";
+  deactivatedSortEl.disabled = !enabled;
+  deactivatedSortEl.closest(".admin-ped-students-filters-row")?.classList.toggle("is-disabled", !enabled);
+};
+
+const openAdminPedStudentsFiltersPopover = ({ triggerEl } = {}) => {
+  if (!(triggerEl instanceof HTMLElement)) return;
+  closeAdminPedStudentsFiltersPopover();
+
+  const teachers = Array.isArray(adminPedagogicoState.teachers) ? adminPedagogicoState.teachers : [];
+  const students = Array.isArray(adminPedagogicoState.students) ? adminPedagogicoState.students : [];
+  const teacherOptions = [
+    `<option value="">Todos</option>`,
+    ...teachers
+      .slice()
+      .sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"))
+      .map((t) => `<option value="${escapeHtml(String(t.id || ""))}">${escapeHtml(String(t.nome || "Professor"))}</option>`),
+  ].join("");
+  const planValues = [
+    ...new Set(
+      students
+        .map((s) => String(s?.plano || s?.plan || "").trim())
+        .filter(Boolean)
+    ),
+  ].sort((a, b) => String(a).localeCompare(String(b), "pt-BR"));
+  const planOptions = [`<option value="">Todos</option>`, ...planValues.map((plan) => `<option value="${escapeHtml(plan)}">${escapeHtml(plan)}</option>`)].join("");
+
+  const pop = document.createElement("div");
+  pop.className = "admin-ped-students-filters-popover";
+  pop.setAttribute("data-admin-ped-students-filters-popover", "true");
+  pop.innerHTML = `
+    <div class="admin-ped-students-filters-row">
+      <label>Status</label>
+      <select data-admin-ped-students-filter="status">
+        <option value="active">Apenas ativos</option>
+        <option value="all">Ativos e inativos</option>
+        <option value="inactive">Apenas inativos</option>
+      </select>
+    </div>
+    <div class="admin-ped-students-filters-row">
+      <label>Professor</label>
+      <select data-admin-ped-students-filter="teacherId">${teacherOptions}</select>
+    </div>
+    <div class="admin-ped-students-filters-row">
+      <label>Plano</label>
+      <select data-admin-ped-students-filter="plan">${planOptions}</select>
+    </div>
+    <div class="admin-ped-students-filters-row">
+      <label>Data de criação</label>
+      <select data-admin-ped-students-filter="createdSort">
+        <option value="">Padrão</option>
+        <option value="recent">Mais recentes</option>
+        <option value="oldest">Mais antigos</option>
+      </select>
+    </div>
+    <div class="admin-ped-students-filters-row">
+      <label>Data de desativação</label>
+      <select data-admin-ped-students-filter="deactivatedSort">
+        <option value="">Padrão</option>
+        <option value="recent">Mais recentes</option>
+        <option value="oldest">Mais antigos</option>
+      </select>
+    </div>
+    <div class="admin-ped-students-filters-actions">
+      <button type="button" class="admin-ped-students-filters-clear" data-admin-ped-students-filters-clear>Limpar filtros</button>
+      <button type="button" class="admin-ped-students-filters-apply" data-admin-ped-students-filters-apply>Aplicar</button>
+    </div>
+  `;
+
+  document.body.appendChild(pop);
+  adminPedStudentsFiltersPopoverEl = pop;
+
+  const current = adminPedagogicoState.studentFilters && typeof adminPedagogicoState.studentFilters === "object" ? adminPedagogicoState.studentFilters : ADMIN_PED_STUDENT_FILTER_DEFAULTS;
+  pop.querySelectorAll("[data-admin-ped-students-filter]").forEach((el) => {
+    if (!(el instanceof HTMLSelectElement)) return;
+    const key = String(el.getAttribute("data-admin-ped-students-filter") || "").trim();
+    if (!key) return;
+    el.value = String(current?.[key] || "");
+  });
+
+  syncAdminPedStudentsFiltersPopoverUi(pop);
+
+  const rect = triggerEl.getBoundingClientRect();
+  const popRect = pop.getBoundingClientRect();
+  const margin = 10;
+  const spaceBelow = window.innerHeight - rect.bottom;
+  const shouldFlipUp = spaceBelow < popRect.height + margin;
+  const top = shouldFlipUp ? rect.top - margin - popRect.height : rect.bottom + margin;
+  const left = Math.min(Math.max(rect.right - popRect.width, margin), Math.max(margin, window.innerWidth - popRect.width - margin));
+  pop.style.top = `${clampToViewport(top, margin, window.innerHeight - popRect.height - margin)}px`;
+  pop.style.left = `${left}px`;
+};
+
 const adminPedFocusTableSearch = (searchKey) => {
   const input = document.querySelector(`[data-admin-ped-table-search="${CSS.escape(String(searchKey || ""))}"]`);
   if (!(input instanceof HTMLInputElement)) return;
@@ -16639,7 +16799,7 @@ const renderAdminPedagogicoGroups = () => {
           const teacher = g.teacherName ? g.teacherName : g.teacherId ? g.teacherId : "—";
           const count = Array.isArray(g.studentIds) ? g.studentIds.length : 0;
           return `
-            <div class="admin-ped-row admin-ped-row--student">
+            <div class="admin-ped-row">
               <div>
                 <div class="admin-ped-row-title">${escapeHtml(g.name || "Turma")}</div>
                 <div class="admin-ped-row-sub">${escapeHtml(`${teacher} · ${days} · ${time}`)}</div>
@@ -16719,6 +16879,10 @@ const renderAdminPedagogicoStudentsPanel = () => {
   const students = Array.isArray(adminPedagogicoState.students) ? adminPedagogicoState.students : [];
   const teachersById = adminPedagogicoState.teachersById instanceof Map ? adminPedagogicoState.teachersById : new Map();
   const groupsById = adminPedagogicoState.groupsById instanceof Map ? adminPedagogicoState.groupsById : new Map();
+  const studentFilters =
+    adminPedagogicoState.studentFilters && typeof adminPedagogicoState.studentFilters === "object"
+      ? { ...ADMIN_PED_STUDENT_FILTER_DEFAULTS, ...adminPedagogicoState.studentFilters }
+      : { ...ADMIN_PED_STUDENT_FILTER_DEFAULTS };
   const tableState =
     adminPedagogicoState.studentsTable && typeof adminPedagogicoState.studentsTable === "object"
       ? adminPedagogicoState.studentsTable
@@ -16750,6 +16914,8 @@ const renderAdminPedagogicoStudentsPanel = () => {
       const plan = String(s?.plano || "").trim() || "Sem plano";
       const isActive = s?.ativo !== false;
       const statusLabel = isActive ? "Ativo" : "Inativo";
+      const createdAt = s?.criadoEm || s?.created_at || s?.createdAt || null;
+      const deactivatedAt = s?.desativadoEm || s?.canceladoEm || s?.cancelamentoEm || s?.dataCancelamento || null;
       const risk = (riskByStudent.get(String(s.id || "")) || {}).risk || "—";
       const activeClass = getAdminPedStudentActiveClass(String(s.id || ""));
       return {
@@ -16763,6 +16929,8 @@ const renderAdminPedagogicoStudentsPanel = () => {
         groupName,
         plan,
         risk,
+        createdMs: parseFirestoreDateToMs(createdAt),
+        deactivatedMs: parseFirestoreDateToMs(deactivatedAt),
         alunoChave: String(s.aluno_chave || ""),
         source: String(s.source || ""),
         isActive,
@@ -16771,7 +16939,30 @@ const renderAdminPedagogicoStudentsPanel = () => {
       };
     });
 
-  const filteredRows = rows.filter((row) => adminPedMatchesQuery(row, query));
+  const filteredRows = rows.filter((row) => {
+    const status = String(studentFilters.status || "active");
+    if (status === "active" && !row.isActive) return false;
+    if (status === "inactive" && row.isActive) return false;
+    if (String(studentFilters.teacherId || "") && row.teacherId !== String(studentFilters.teacherId || "")) return false;
+    if (String(studentFilters.plan || "") && normalizeSearchText(row.plan) !== normalizeSearchText(studentFilters.plan)) return false;
+    return true;
+  });
+  const searchedRows = filteredRows.filter((row) => adminPedMatchesQuery(row, query));
+  const sortMode = String(studentFilters.createdSort || "") || (String(studentFilters.status || "active") !== "active" ? String(studentFilters.deactivatedSort || "") : "");
+  const sortField = String(studentFilters.createdSort || "") ? "createdMs" : "deactivatedMs";
+  const rowsToRender = searchedRows.slice().sort((a, b) => {
+    if (!sortMode) return String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR");
+    const ad = Number(a?.[sortField] || 0);
+    const bd = Number(b?.[sortField] || 0);
+    const aHas = ad > 0;
+    const bHas = bd > 0;
+    if (aHas && !bHas) return -1;
+    if (!aHas && bHas) return 1;
+    if (aHas && bHas && ad !== bd) {
+      return sortMode === "oldest" ? ad - bd : bd - ad;
+    }
+    return String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR");
+  });
   adminPedagogicoState.studentsTable = {
     ...tableState,
     page: 1,
@@ -16779,17 +16970,19 @@ const renderAdminPedagogicoStudentsPanel = () => {
 
   if (adminPedEmptyStudents instanceof HTMLElement) adminPedEmptyStudents.hidden = rows.length > 0;
 
-  const toolbarHtml = adminPedListToolbarHtml({
+  const toolbarHtml = adminPedStudentsToolbarHtml({
     query,
-    total: filteredRows.length,
+    total: rowsToRender.length,
+    filterCount: countActiveAdminPedStudentFilters(studentFilters),
+    filterLabel: `${rowsToRender.length} aluno${rowsToRender.length === 1 ? "" : "s"}`,
     searchKey: "students",
     placeholder: "Buscar aluno, e-mail, professor, turma ou plano...",
   });
-  const rowsHtml = filteredRows.length
-    ? filteredRows
+  const rowsHtml = rowsToRender.length
+    ? rowsToRender
         .map((r) => {
           return `
-            <div class="admin-ped-row">
+            <div class="admin-ped-row admin-ped-row--student">
               <div>
                 <div class="admin-ped-row-title">${escapeHtml(r.nome)}</div>
                 <div class="admin-ped-row-meta">
@@ -23946,6 +24139,14 @@ document.addEventListener("click", (event) => {
       closeAdminStudentsFiltersPopover();
     }
 
+    if (
+      adminPedStudentsFiltersPopoverEl instanceof HTMLElement &&
+      !target.closest("[data-admin-ped-students-filters-popover]") &&
+      !target.closest("[data-admin-ped-students-filters-trigger]")
+    ) {
+      closeAdminPedStudentsFiltersPopover();
+    }
+
     // Professor > Alunos: close actions popover when clicking elsewhere.
     if (
       teacherStudentActionsPopoverEl instanceof HTMLElement &&
@@ -24428,6 +24629,46 @@ document.addEventListener("click", (event) => {
           adminPedagogicoState.linksTable.page = 1;
           renderAdminPedagogicoLinksPanel();
         }
+        return;
+      }
+
+      const adminPedStudentsFiltersTrigger = target.closest("[data-admin-ped-students-filters-trigger]");
+      if (adminPedStudentsFiltersTrigger instanceof HTMLButtonElement) {
+        event.preventDefault();
+        if (adminPedStudentsFiltersPopoverEl instanceof HTMLElement) {
+          closeAdminPedStudentsFiltersPopover();
+        } else {
+          openAdminPedStudentsFiltersPopover({ triggerEl: adminPedStudentsFiltersTrigger });
+        }
+        return;
+      }
+
+      const adminPedStudentsFiltersClear = target.closest("[data-admin-ped-students-filters-clear]");
+      if (adminPedStudentsFiltersClear instanceof HTMLButtonElement) {
+        event.preventDefault();
+        adminPedagogicoState.studentFilters = { ...ADMIN_PED_STUDENT_FILTER_DEFAULTS };
+        closeAdminPedStudentsFiltersPopover();
+        renderAdminPedagogicoStudentsPanel();
+        return;
+      }
+
+      const adminPedStudentsFiltersApply = target.closest("[data-admin-ped-students-filters-apply]");
+      if (adminPedStudentsFiltersApply instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const pop = adminPedStudentsFiltersPopoverEl;
+        if (pop instanceof HTMLElement) {
+          const next = { ...ADMIN_PED_STUDENT_FILTER_DEFAULTS };
+          pop.querySelectorAll("[data-admin-ped-students-filter]").forEach((el) => {
+            if (!(el instanceof HTMLSelectElement)) return;
+            const key = String(el.getAttribute("data-admin-ped-students-filter") || "").trim();
+            if (!key) return;
+            next[key] = String(el.value || "");
+          });
+          if (String(next.status || "active") === "active") next.deactivatedSort = "";
+          adminPedagogicoState.studentFilters = next;
+        }
+        closeAdminPedStudentsFiltersPopover();
+        renderAdminPedagogicoStudentsPanel();
         return;
       }
 
@@ -26304,6 +26545,16 @@ document.addEventListener("change", (event) => {
   renderAdminPedagogicoClassesList();
   renderAdminPedagogicoTeachersPanel();
   renderAdminPedagogicoConflicts();
+});
+
+document.addEventListener("change", (event) => {
+  if (currentRole !== "admin") return;
+  const target = event.target;
+  if (!(target instanceof HTMLSelectElement)) return;
+  if (!target.matches("[data-admin-ped-students-filter]")) return;
+
+  const pop = adminPedStudentsFiltersPopoverEl;
+  if (pop instanceof HTMLElement) syncAdminPedStudentsFiltersPopoverUi(pop);
 });
 
 // Admin > Controle Pedagógico > Onboarding: modal dynamic sections (type + question type).
