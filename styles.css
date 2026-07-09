@@ -19484,6 +19484,11 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   padding: 14px 12px;
 }
 
+.admin-ped-row--student {
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
 .admin-ped-row + .admin-ped-row {
   border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
@@ -19507,6 +19512,10 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.admin-ped-row--student .admin-ped-row-meta {
+  margin-top: 6px;
 }
 
 .admin-ped-row-actions {

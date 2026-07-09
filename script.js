@@ -15648,6 +15648,21 @@ const adminPedTableToolbarHtml = ({ query, total, totalAll, page, totalPages, se
   </div>
 `;
 
+const adminPedListToolbarHtml = ({ query, total, searchKey, placeholder, labelSingular = "aluno", labelPlural = "alunos" }) => `
+  <div class="admin-ped-table-toolbar">
+    <input
+      class="admin-ped-select admin-ped-table-search"
+      type="text"
+      placeholder="${escapeHtml(placeholder || "Buscar por nome ou e-mail...")}"
+      value="${escapeHtml(String(query || ""))}"
+      data-admin-ped-table-search="${escapeHtml(String(searchKey || ""))}"
+    />
+    <div class="admin-ped-pagination">
+      <span class="admin-ped-pagination-label">${escapeHtml(`${Number(total) || 0} ${Number(total) === 1 ? labelSingular : labelPlural}`)}</span>
+    </div>
+  </div>
+`;
+
 const adminPedFocusTableSearch = (searchKey) => {
   const input = document.querySelector(`[data-admin-ped-table-search="${CSS.escape(String(searchKey || ""))}"]`);
   if (!(input instanceof HTMLInputElement)) return;
@@ -16624,7 +16639,7 @@ const renderAdminPedagogicoGroups = () => {
           const teacher = g.teacherName ? g.teacherName : g.teacherId ? g.teacherId : "—";
           const count = Array.isArray(g.studentIds) ? g.studentIds.length : 0;
           return `
-            <div class="admin-ped-row">
+            <div class="admin-ped-row admin-ped-row--student">
               <div>
                 <div class="admin-ped-row-title">${escapeHtml(g.name || "Turma")}</div>
                 <div class="admin-ped-row-sub">${escapeHtml(`${teacher} · ${days} · ${time}`)}</div>
@@ -16757,31 +16772,26 @@ const renderAdminPedagogicoStudentsPanel = () => {
     });
 
   const filteredRows = rows.filter((row) => adminPedMatchesQuery(row, query));
-  const pagination = adminPedPaginate(filteredRows, tableState.page, tableState.pageSize);
   adminPedagogicoState.studentsTable = {
     ...tableState,
-    page: pagination.safePage,
+    page: 1,
   };
 
   if (adminPedEmptyStudents instanceof HTMLElement) adminPedEmptyStudents.hidden = rows.length > 0;
 
-  const toolbarHtml = adminPedTableToolbarHtml({
+  const toolbarHtml = adminPedListToolbarHtml({
     query,
-    total: pagination.total,
-    totalAll: rows.length,
-    page: pagination.safePage,
-    totalPages: pagination.totalPages,
+    total: filteredRows.length,
     searchKey: "students",
     placeholder: "Buscar aluno, e-mail, professor, turma ou plano...",
   });
-  const rowsHtml = pagination.pageRows.length
-    ? pagination.pageRows
+  const rowsHtml = filteredRows.length
+    ? filteredRows
         .map((r) => {
           return `
             <div class="admin-ped-row">
               <div>
                 <div class="admin-ped-row-title">${escapeHtml(r.nome)}</div>
-                <div class="admin-ped-row-sub">${escapeHtml(r.email || "—")}</div>
                 <div class="admin-ped-row-meta">
                   <span class="admin-ped-pill is-plan">${escapeHtml(r.plan)}</span>
                   ${r.teacherName ? `<span class="admin-ped-pill">${escapeHtml(r.teacherName)}</span>` : `<span class="admin-ped-pill">Sem professor</span>`}
