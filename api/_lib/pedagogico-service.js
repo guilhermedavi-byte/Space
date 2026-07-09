@@ -224,6 +224,37 @@ const fetchFinanceStudents = ({ limit = 1000 } = {}) => {
   );
 };
 
+const sortTeacherRows = (rows) =>
+  (Array.isArray(rows) ? rows : [])
+    .slice()
+    .sort((a, b) => {
+      const left = String(a?.nome || a?.name || a?.professor_nome || a?.teacher_name || "").trim();
+      const right = String(b?.nome || b?.name || b?.professor_nome || b?.teacher_name || "").trim();
+      return left.localeCompare(right, "pt-BR");
+    });
+
+const fetchTeachersRows = async ({ limit = 1000 } = {}) => {
+  const max = Math.max(1, Math.min(Number(limit) || 1000, 1000));
+  const paths = [
+    `/${TABLES.teachers}?select=*&order=nome.asc.nullslast&limit=${max}`,
+    `/${TABLES.teachers}?select=*&order=updated_at.desc.nullslast&limit=${max}`,
+    `/${TABLES.teachers}?select=*&limit=${max}`,
+  ];
+  try {
+    const rows = await fetchRowsWithFallback(paths, { optional: true });
+    return sortTeacherRows(rows);
+  } catch (error) {
+    console.error("[pedagogico] teachers source fetch failed", {
+      paths,
+      code: error?.code || "",
+      message: error?.message || "",
+      details: error?.details || "",
+      hint: error?.hint || "",
+    });
+    throw error;
+  }
+};
+
 const loadAdminDashboard = async ({ session } = {}) => {
   let degraded = false;
   let degradedReason = "";
@@ -231,7 +262,14 @@ const loadAdminDashboard = async ({ session } = {}) => {
     promise.catch((error) => {
       degraded = true;
       if (!degradedReason) degradedReason = label;
-      console.error("[pedagogico] dashboard source failed", { label, error: error?.message || error?.code || error });
+      console.error("[pedagogico] dashboard source failed", {
+        label,
+        code: error?.code || "",
+        message: error?.message || "",
+        details: error?.details || "",
+        hint: error?.hint || "",
+        stack: error?.stack || "",
+      });
       return [];
     });
   const adminId = String(session?.sub || session?.email || "").trim();
@@ -242,7 +280,7 @@ const loadAdminDashboard = async ({ session } = {}) => {
     safe("alerts", fetchRows(`/${TABLES.alerts}?select=*&order=created_at.desc.nullslast&limit=1000`, { optional: true })),
     safe("satisfaction", fetchRows(`/${TABLES.satisfaction}?select=*&order=created_at.desc.nullslast&limit=1000`, { optional: true })),
     safe("flexge", fetchRows(`/${TABLES.flexge}?select=*&order=flexge_last_sync_at.desc.nullslast&limit=1000`, { optional: true })),
-    safe("teachers", fetchRows(`/${TABLES.teachers}?select=*&order=nome.asc.nullslast&limit=1000`, { optional: true })),
+    safe("teachers", fetchTeachersRows({ limit: 1000 })),
     safe("reports", fetchRows(`/${TABLES.reports}?select=*&order=created_at.desc.nullslast&limit=200`, { optional: true })),
     safe("financeStudents", fetchFinanceStudents({ limit: 1000 })),
     adminId
