@@ -14752,6 +14752,169 @@ const normalizeMinutesValue = (value) => {
   return Number.isFinite(n) ? clampInt(Math.round(n), 0, 24 * 60, 0) : 0;
 };
 
+const ADMIN_PED_WEEKLY_DAY_DEFS = [
+  { weekday: 0, label: "Dom" },
+  { weekday: 1, label: "Seg" },
+  { weekday: 2, label: "Ter" },
+  { weekday: 3, label: "Qua" },
+  { weekday: 4, label: "Qui" },
+  { weekday: 5, label: "Sex" },
+  { weekday: 6, label: "Sáb" },
+];
+
+const normalizeAdminPedWeeklyScheduleDays = (value) => {
+  const defaults = new Map(
+    ADMIN_PED_WEEKLY_DAY_DEFS.map((def) => [def.weekday, { weekday: def.weekday, enabled: false, startTime: "", endTime: "" }])
+  );
+  const weekdayFromRaw = (raw) => {
+    const direct = Number(raw);
+    if (Number.isFinite(direct) && direct >= 0 && direct <= 6) return direct;
+    const key = String(raw || "").trim().toLowerCase();
+    const map = {
+      dom: 0,
+      sun: 0,
+      sunday: 0,
+      seg: 1,
+      mon: 1,
+      monday: 1,
+      ter: 2,
+      tue: 2,
+      tuesday: 2,
+      qua: 3,
+      wed: 3,
+      wednesday: 3,
+      qui: 4,
+      thu: 4,
+      thursday: 4,
+      sex: 5,
+      fri: 5,
+      friday: 5,
+      sab: 6,
+      sat: 6,
+      saturday: 6,
+    };
+    return map[key] != null ? map[key] : null;
+  };
+  const applyItem = (item) => {
+    if (!item || typeof item !== "object") return;
+    const weekday = weekdayFromRaw(item.weekday ?? item.dow ?? item.day ?? item.diaSemana ?? item.value);
+    if (!Number.isFinite(weekday) || weekday < 0 || weekday > 6) return;
+    const current = defaults.get(weekday) || { weekday, enabled: false, startTime: "", endTime: "" };
+    const startTime = String(item.startTime || item.start || item.horaInicio || item.startTimeValue || "").trim();
+    const endTime = String(item.endTime || item.end || item.horaFim || item.endTimeValue || "").trim();
+    const enabled = item.enabled === false ? false : Boolean(item.enabled ?? (startTime || endTime));
+    defaults.set(weekday, {
+      weekday,
+      enabled,
+      startTime: startTime || current.startTime || "",
+      endTime: endTime || current.endTime || "",
+    });
+  };
+
+  if (Array.isArray(value)) {
+    value.forEach((item) => {
+      if (item && typeof item === "object") {
+        applyItem(item);
+        return;
+      }
+      const weekday = Number(item);
+      if (Number.isFinite(weekday) && weekday >= 0 && weekday <= 6) {
+        const current = defaults.get(weekday);
+        if (current) current.enabled = true;
+      }
+    });
+  } else if (value && typeof value === "object") {
+    Object.entries(value).forEach(([key, item]) => {
+      const weekday = Number(key);
+      if (Number.isFinite(weekday) && weekday >= 0 && weekday <= 6) {
+        if (item && typeof item === "object") {
+          applyItem({ weekday, ...item });
+        } else {
+          const current = defaults.get(weekday);
+          if (current) current.enabled = Boolean(item);
+        }
+      }
+    });
+  }
+
+  return ADMIN_PED_WEEKLY_DAY_DEFS.map((def) => defaults.get(def.weekday) || { weekday: def.weekday, enabled: false, startTime: "", endTime: "" });
+};
+
+const compactAdminPedName = (value, parts = 2) => {
+  const tokens = String(value || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (!tokens.length) return "";
+  return tokens.slice(0, Math.max(1, parts)).join(" ");
+};
+
+const buildAdminPedLessonTitle = ({ studentName = "", teacherName = "" } = {}) => {
+  const studentShort = compactAdminPedName(studentName, 2) || "Aluno";
+  const teacherShort = compactAdminPedName(teacherName, 1) || "—";
+  return `Aluno ${studentShort} + Prof. ${teacherShort}`;
+};
+
+const buildAdminPedWeeklyScheduleHtml = (scheduleDays) => {
+  const rows = normalizeAdminPedWeeklyScheduleDays(scheduleDays);
+  return rows
+    .map((day) => {
+      const dayDef = ADMIN_PED_WEEKLY_DAY_DEFS.find((def) => def.weekday === day.weekday) || ADMIN_PED_WEEKLY_DAY_DEFS[0];
+      const enabled = Boolean(day.enabled);
+      const startValue = enabled ? String(day.startTime || "").trim() : "";
+      const endValue = enabled ? String(day.endTime || "").trim() : "";
+      return `
+        <div class="admin-ped-schedule-row ${enabled ? "is-active" : "is-disabled"}" data-admin-ped-schedule-row="${escapeHtml(String(day.weekday))}">
+          <label class="admin-ped-schedule-day">
+            <input type="checkbox" data-admin-ped-schedule-enabled="${escapeHtml(String(day.weekday))}" ${enabled ? "checked" : ""} />
+            <span>${escapeHtml(dayDef.label)}</span>
+          </label>
+          <div class="admin-ped-schedule-times" data-admin-ped-schedule-times="${escapeHtml(String(day.weekday))}" ${enabled ? "" : "hidden"}>
+            <label class="admin-ped-modal-field">
+              <span>Início</span>
+              <input class="admin-ped-modal-input" type="time" data-admin-ped-schedule-start="${escapeHtml(String(day.weekday))}" value="${escapeHtml(startValue)}" />
+            </label>
+            <label class="admin-ped-modal-field">
+              <span>Fim</span>
+              <input class="admin-ped-modal-input" type="time" data-admin-ped-schedule-end="${escapeHtml(String(day.weekday))}" value="${escapeHtml(endValue)}" />
+            </label>
+            <button class="admin-ped-schedule-copy" type="button" data-admin-ped-schedule-copy="${escapeHtml(String(day.weekday))}" aria-label="Copiar horário para os outros dias ativos">📋</button>
+          </div>
+          <div class="admin-ped-schedule-unavailable" data-admin-ped-schedule-unavailable="${escapeHtml(String(day.weekday))}" ${enabled ? "hidden" : ""}>Indisponível</div>
+        </div>
+      `;
+    })
+    .join("");
+};
+
+const formatAdminPedScheduleSummary = (row) => {
+  const scheduleDays = normalizeAdminPedWeeklyScheduleDays(row?.scheduleDays || row?.repeatDays || row?.weeklySchedule || row?.schedule || []);
+  const activeDays = scheduleDays.filter((day) => day && day.enabled && String(day.startTime || "").trim() && String(day.endTime || "").trim());
+  if (activeDays.length) {
+    return activeDays
+      .map((day) => `${daysLabelShort(day.weekday)} ${String(day.startTime).slice(0, 5)}–${String(day.endTime).slice(0, 5)}`)
+      .join(" · ");
+  }
+  const days = normalizeDaysOfWeek(row?.daysOfWeek || row?.weekDays || row?.diasSemana || []);
+  const time =
+    Number.isFinite(Number(row?.startMin)) && Number.isFinite(Number(row?.endMin)) && Number(row?.endMin) > Number(row?.startMin)
+      ? `${formatHmFromMinutes(row.startMin)}–${formatHmFromMinutes(row.endMin)}`
+      : "—";
+  return `${days.map(daysLabelShort).join(", ") || "—"} · ${time}`;
+};
+
+const getAdminPedStudentActiveClass = (studentId) => {
+  const safe = String(studentId || "").trim();
+  if (!safe) return null;
+  const rows = Array.isArray(adminPedagogicoState.classes) ? adminPedagogicoState.classes : [];
+  const matching = rows.filter((row) => {
+    const ids = Array.isArray(row.studentIds) ? row.studentIds : [];
+    return ids.map((id) => String(id || "").trim()).includes(safe);
+  });
+  matching.sort((a, b) => (Number(b.updatedAtMs || 0) || Number(b.createdAtMs || 0)) - (Number(a.updatedAtMs || 0) || Number(a.createdAtMs || 0)));
+  return matching[0] || null;
+};
+
 const normalizeClassRow = ({ id, data }) => {
   const docId = String(id || "").trim();
   const src = data && typeof data === "object" ? data : {};
@@ -14767,9 +14930,15 @@ const normalizeClassRow = ({ id, data }) => {
   const planId = String(src.planId || "").trim();
   const planName = String(src.planName || "").trim();
   const plan = normalizePlanKeyLoose(src.plan || src.plano || planName || "");
-  const daysOfWeek = normalizeDaysOfWeek(src.daysOfWeek || src.weekDays || src.diasSemana || []);
-  const startMin = normalizeMinutesValue(src.startMin ?? src.startTime ?? src.horaInicio);
-  const endMin = normalizeMinutesValue(src.endMin ?? src.endTime ?? src.horaFim);
+  const scheduleDays = normalizeAdminPedWeeklyScheduleDays(src.scheduleDays || src.repeatDays || src.weeklySchedule || src.schedule || []);
+  const daysOfWeek = normalizeDaysOfWeek(
+    scheduleDays.some((day) => day && day.enabled)
+      ? scheduleDays.filter((day) => day && day.enabled).map((day) => day.weekday)
+      : src.daysOfWeek || src.weekDays || src.diasSemana || []
+  );
+  const firstActiveDay = scheduleDays.find((day) => day && day.enabled && /^\d{2}:\d{2}$/.test(String(day.startTime || "")) && /^\d{2}:\d{2}$/.test(String(day.endTime || ""))) || null;
+  const startMin = firstActiveDay ? normalizeMinutesValue(firstActiveDay.startTime) : normalizeMinutesValue(src.startMin ?? src.startTime ?? src.horaInicio);
+  const endMin = firstActiveDay ? normalizeMinutesValue(firstActiveDay.endTime) : normalizeMinutesValue(src.endMin ?? src.endTime ?? src.horaFim);
   const startDate = String(src.startDate || src.startDateKey || src.dateKey || "").trim();
   const endDate = String(src.endDate || src.endDateKey || "").trim();
 
@@ -14777,6 +14946,8 @@ const normalizeClassRow = ({ id, data }) => {
   const studentIds = studentIdsRaw.map((v) => String(v || "").trim()).filter(Boolean);
   const studentNamesRaw = Array.isArray(src.studentNames) ? src.studentNames : Array.isArray(src.alunoNomes) ? src.alunoNomes : [];
   const studentNames = studentNamesRaw.map((v) => String(v || "").trim()).filter(Boolean);
+  const linkedEventIds = Array.isArray(src.linkedEventIds) ? src.linkedEventIds.map((v) => String(v || "").trim()).filter(Boolean) : [];
+  const linkedEventGroupId = String(src.linkedEventGroupId || src.grupoRecorrenciaId || "").trim();
 
   const createdAtMs = parseFirestoreDateToMs(src.createdAt || src.criadoEm);
   const updatedAtMs = parseFirestoreDateToMs(src.updatedAt || src.atualizadoEm);
@@ -14794,12 +14965,15 @@ const normalizeClassRow = ({ id, data }) => {
     planName,
     plan,
     daysOfWeek,
+    scheduleDays,
     startMin,
     endMin,
     startDate: isValidDateKey(startDate) ? startDate : "",
     endDate: isValidDateKey(endDate) ? endDate : "",
     studentIds,
     studentNames,
+    linkedEventIds,
+    linkedEventGroupId,
     notes: String(src.notes || src.observacoes || "").trim(),
     createdAtMs,
     updatedAtMs,
@@ -15478,12 +15652,36 @@ const adminPedFocusTableSearch = (searchKey) => {
   }
 };
 
+const getAdminPedClassWindowsByDow = (row) => {
+  const windows = new Map();
+  const scheduleDays = normalizeAdminPedWeeklyScheduleDays(row?.scheduleDays || row?.repeatDays || row?.weeklySchedule || row?.schedule || []);
+  scheduleDays.forEach((day) => {
+    if (!day || !day.enabled) return;
+    const startMin = normalizeMinutesValue(day.startTime);
+    const endMin = normalizeMinutesValue(day.endTime);
+    if (!Number.isFinite(startMin) || !Number.isFinite(endMin) || endMin <= startMin) return;
+    windows.set(day.weekday, { startMin, endMin });
+  });
+  if (!windows.size) {
+    const days = normalizeDaysOfWeek(row?.daysOfWeek || row?.weekDays || row?.diasSemana || []);
+    const startMin = normalizeMinutesValue(row?.startMin ?? row?.startTime ?? row?.horaInicio);
+    const endMin = normalizeMinutesValue(row?.endMin ?? row?.endTime ?? row?.horaFim);
+    if (Number.isFinite(startMin) && Number.isFinite(endMin) && endMin > startMin) {
+      days.forEach((day) => windows.set(day, { startMin, endMin }));
+    }
+  }
+  return windows;
+};
+
 const classesOverlap = (a, b) => {
-  const aStart = Number(a?.startMin) || 0;
-  const aEnd = Number(a?.endMin) || 0;
-  const bStart = Number(b?.startMin) || 0;
-  const bEnd = Number(b?.endMin) || 0;
-  return aStart < bEnd && bStart < aEnd;
+  const windowsA = getAdminPedClassWindowsByDow(a);
+  const windowsB = getAdminPedClassWindowsByDow(b);
+  for (const [weekday, windowA] of windowsA.entries()) {
+    const windowB = windowsB.get(weekday);
+    if (!windowB) continue;
+    if (windowA.startMin < windowB.endMin && windowB.startMin < windowA.endMin) return true;
+  }
+  return false;
 };
 
 const classDateRangesOverlap = (a, b) => {
@@ -15508,8 +15706,8 @@ const computeAdminPedagogicoConflicts = (classes) => {
       const b = active[j];
       if (!a || !b) continue;
       if (!classDateRangesOverlap(a, b)) continue;
-      const aDays = new Set(Array.isArray(a.daysOfWeek) ? a.daysOfWeek : []);
-      const bDays = new Set(Array.isArray(b.daysOfWeek) ? b.daysOfWeek : []);
+      const aDays = new Set([...getAdminPedClassWindowsByDow(a).keys()]);
+      const bDays = new Set([...getAdminPedClassWindowsByDow(b).keys()]);
       const hasDay = [...aDays].some((d) => bDays.has(d));
       if (!hasDay) continue;
       if (!classesOverlap(a, b)) continue;
@@ -16498,6 +16696,7 @@ const renderAdminPedagogicoStudentsPanel = () => {
       const accessActive = s?.ativo_acesso !== false && String(s?.status_acesso || "ativo") !== "inativo";
       const statusLabel = accessActive ? "Ativo" : "Inativo";
       const risk = (riskByStudent.get(String(s.id || "")) || {}).risk || "—";
+      const activeClass = getAdminPedStudentActiveClass(String(s.id || ""));
       return {
         id: String(s.id || ""),
         nome: String(s.nome || "Aluno"),
@@ -16512,6 +16711,8 @@ const renderAdminPedagogicoStudentsPanel = () => {
         alunoChave: String(s.aluno_chave || ""),
         source: String(s.source || ""),
         accessActive,
+        classLabel: activeClass ? "Editar aula" : "Criar aula",
+        classId: activeClass ? String(activeClass.id || "") : "",
       };
     });
 
@@ -16554,7 +16755,7 @@ const renderAdminPedagogicoStudentsPanel = () => {
               <div class="admin-ped-row-actions">
                 <button class="admin-ped-action" type="button" data-admin-ped-student-open="${escapeHtml(r.id)}">Ficha</button>
                 <button class="admin-ped-action" type="button" data-admin-ped-student-link="${escapeHtml(r.id)}">Vincular</button>
-                <button class="admin-ped-action is-muted" type="button" data-admin-ped-student-new-class="${escapeHtml(r.id)}">Criar aula</button>
+                <button class="admin-ped-action is-muted" type="button" data-admin-ped-student-new-class="${escapeHtml(r.id)}">${escapeHtml(r.classLabel)}</button>
                 ${
                   r.alunoChave
                     ? `<button class="admin-ped-action ${r.accessActive ? "is-danger" : ""}" type="button"
@@ -16608,6 +16809,7 @@ const renderAdminPedagogicoLinksPanel = () => {
     const teacherName = teacherId ? String(teachersById.get(teacherId)?.nome || "").trim() : "";
     const groupName = groupId ? String(groupsById.get(groupId)?.name || "").trim() : String(s.groupName || "").trim();
     const plan = String(s.plano || "").trim() || "Sem plano";
+    const activeClass = getAdminPedStudentActiveClass(sid);
     return {
       id: sid,
       nome: String(s.nome || "Aluno"),
@@ -16616,6 +16818,7 @@ const renderAdminPedagogicoLinksPanel = () => {
       teacherName,
       groupName,
       createClass: kind === "noClass",
+      classLabel: activeClass ? "Editar aula" : "Criar aula",
     };
   };
 
@@ -16660,7 +16863,7 @@ const renderAdminPedagogicoLinksPanel = () => {
               </div>
               <div class="admin-ped-link-actions">
                 <button class="admin-ped-action" type="button" data-admin-ped-student-link="${escapeHtml(String(s.id || ""))}">Vincular</button>
-                ${s.createClass ? `<button class="admin-ped-action is-muted" type="button" data-admin-ped-student-new-class="${escapeHtml(String(s.id || ""))}">Criar aula</button>` : ""}
+                ${s.createClass ? `<button class="admin-ped-action is-muted" type="button" data-admin-ped-student-new-class="${escapeHtml(String(s.id || ""))}">${escapeHtml(String(s.classLabel || "Criar aula"))}</button>` : ""}
               </div>
             </div>
           `;
@@ -18065,8 +18268,7 @@ const renderAdminPedagogicoClassesList = () => {
       const status = normalizeClassStatus(c.status);
       const statusLabel = status === "active" ? "Ativa" : status === "paused" ? "Pausada" : "Encerrada";
       const badgeClass = status === "active" ? "is-active" : status === "paused" ? "is-paused" : "is-ended";
-      const whenDays = (Array.isArray(c.daysOfWeek) ? c.daysOfWeek : []).map(daysLabelShort).join(", ");
-      const time = `${formatHmFromMinutes(c.startMin)}–${formatHmFromMinutes(c.endMin)}`;
+      const scheduleSummary = formatAdminPedScheduleSummary(c);
       const liveUrl = buildAdminPedClassLiveUrl(c);
       const who =
         c.type === "group"
@@ -18076,7 +18278,7 @@ const renderAdminPedagogicoClassesList = () => {
         <div class="admin-ped-class-row">
           <div class="admin-ped-class-main">
             <div class="admin-ped-class-title">${escapeHtml(c.title || typeLabel)}</div>
-            <div class="admin-ped-class-sub">${escapeHtml(whenDays)} · ${escapeHtml(time)} · ${escapeHtml(who)}</div>
+            <div class="admin-ped-class-sub">${escapeHtml(scheduleSummary)} · ${escapeHtml(who)}</div>
           </div>
           <div class="admin-ped-class-meta">
             <span class="admin-ped-pill ${badgeClass}">${escapeHtml(statusLabel)}</span>
@@ -18565,6 +18767,7 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
 
   const teachers = Array.isArray(adminPedagogicoState.teachers) ? adminPedagogicoState.teachers : [];
   const students = Array.isArray(adminPedagogicoState.students) ? adminPedagogicoState.students : [];
+  const plans = Array.isArray(adminPedagogicoState.plans) ? adminPedagogicoState.plans : [];
 
   const teacherOptions =
     `<option value="">Selecione...</option>` +
@@ -18574,7 +18777,6 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
       .map((t) => `<option value="${escapeHtml(String(t.id))}">${escapeHtml(String(t.nome || "Professor"))}</option>`)
       .join("");
 
-  const plans = Array.isArray(adminPedagogicoState.plans) ? adminPedagogicoState.plans : [];
   const planKeys = plans
     .filter((p) => p && typeof p === "object" && String(p.status || "").toLowerCase() !== "inactive")
     .map((p) => normalizePlanKeyLoose(p.name))
@@ -18594,27 +18796,76 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
     <option value="ended">Encerrada</option>
   `;
 
+  const classId = isEdit ? String(row.id) : `class_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
   const typeValue = isEdit ? normalizeClassType(row.type) : normalizeClassType(seed?.type) || "individual";
   const statusValue = isEdit ? normalizeClassStatus(row.status) : normalizeClassStatus(seed?.status) || "active";
   const teacherValue = isEdit ? String(row.teacherId || "") : String(seed?.teacherId || "");
   const planValue = isEdit ? normalizePlanKeyLoose(row.plan) : normalizePlanKeyLoose(seed?.plan || "");
-  const titleValue = isEdit ? String(row.title || "") : "";
-  const groupNameValue = isEdit ? String(row.groupName || "") : "";
-  const startDate = isEdit ? String(row.startDate || "") : createDateKey(new Date());
-  const endDate = isEdit ? String(row.endDate || "") : "";
-  const startTime = isEdit ? formatHmFromMinutes(row.startMin || 0) : clampTime(seed?.startTime, "14:00");
-  const endTime = isEdit ? formatHmFromMinutes(row.endMin || 0) : clampTime(seed?.endTime, "14:30");
-  const selectedDays = isEdit ? normalizeDaysOfWeek(row.daysOfWeek) : normalizeDaysOfWeek(seed?.daysOfWeek || [1]);
-  const selectedStudents = isEdit
-    ? new Set((Array.isArray(row.studentIds) ? row.studentIds : []).map(String))
-    : new Set((Array.isArray(seed?.studentIds) ? seed.studentIds : []).map(String));
+  const groupNameValue = isEdit ? String(row.groupName || "") : String(seed?.groupName || "");
+  const startDateValue = isEdit ? String(row.startDate || "") : String(seed?.startDate || createDateKey(new Date()));
+  const endDateValue = isEdit ? String(row.endDate || "") : String(seed?.endDate || "");
+  const teacherNameValue = String(adminPedagogicoState.teachersById?.get(teacherValue)?.nome || "").trim();
+  const lockedStudentIds = (() => {
+    const fromRow = isEdit ? (Array.isArray(row.studentIds) ? row.studentIds : []) : [];
+    const fromSeed = Array.isArray(seed?.studentIds) ? seed.studentIds : seed?.studentId ? [seed.studentId] : [];
+    const out = (fromRow.length ? fromRow : fromSeed).map((id) => String(id || "").trim()).filter(Boolean);
+    return [...new Set(out)];
+  })();
+  const lockedStudentId = lockedStudentIds.length === 1 ? lockedStudentIds[0] : "";
+  const lockedStudentMeta = lockedStudentId ? (adminPedagogicoState.studentsById instanceof Map ? adminPedagogicoState.studentsById.get(lockedStudentId) || null : null) : null;
+  const studentIdsValue = lockedStudentIds.length ? lockedStudentIds : isEdit ? (Array.isArray(row.studentIds) ? row.studentIds : []) : (Array.isArray(seed?.studentIds) ? seed.studentIds : []);
+  const studentNamesValue = studentIdsValue
+    .map((id) => String(adminPedagogicoState.studentsById?.get(String(id))?.nome || "").trim())
+    .filter(Boolean);
+  const existingEventIds = isEdit
+    ? Array.isArray(row.linkedEventIds)
+      ? row.linkedEventIds.map((id) => String(id || "").trim()).filter(Boolean)
+      : []
+    : [];
+  const linkedGroupId = isEdit
+    ? String(row.linkedEventGroupId || row.grupoRecorrenciaId || "").trim()
+    : String(seed?.linkedEventGroupId || seed?.grupoRecorrenciaId || classId).trim() || classId;
+
+  const initialSchedule = (() => {
+    const source = isEdit ? row?.scheduleDays : seed?.scheduleDays;
+    const normalized = normalizeAdminPedWeeklyScheduleDays(source || []);
+    const hasAny = normalized.some((day) => day.enabled);
+    if (hasAny) return normalized;
+    const legacyDays = normalizeDaysOfWeek(isEdit ? row?.daysOfWeek : seed?.daysOfWeek || []);
+    if (legacyDays.length) {
+      const legacyStart = isEdit ? formatHmFromMinutes(row.startMin || 0) : clampTime(seed?.startTime || "14:00", "14:00");
+      const legacyEnd = isEdit ? formatHmFromMinutes(row.endMin || 0) : clampTime(seed?.endTime || "14:30", "14:30");
+      return normalizeAdminPedWeeklyScheduleDays(
+        legacyDays.map((weekday) => ({
+          weekday,
+          enabled: true,
+          startTime: legacyStart,
+          endTime: legacyEnd,
+        }))
+      );
+    }
+    const fallbackStart = clampTime(seed?.startTime || "14:00", "14:00");
+    const fallbackEnd = clampTime(seed?.endTime || "14:30", "14:30");
+    return normalizeAdminPedWeeklyScheduleDays([
+      { weekday: 1, enabled: true, startTime: fallbackStart, endTime: fallbackEnd },
+    ]);
+  })();
+  const activeScheduleDays = initialSchedule.filter((day) => day && day.enabled);
+  const initialStartTime = activeScheduleDays[0]?.startTime || clampTime(seed?.startTime || "14:00", "14:00");
+  const initialEndTime = activeScheduleDays[0]?.endTime || clampTime(seed?.endTime || "14:30", "14:30");
+  const notesValue = isEdit ? String(row.notes || "") : String(seed?.notes || "");
+  const titleValue = buildAdminPedLessonTitle({
+    studentName: lockedStudentMeta?.nome || studentNamesValue[0] || String(seed?.studentName || ""),
+    teacherName: teacherNameValue || String(seed?.teacherName || ""),
+  });
+  const typeLocked = lockedStudentId && typeValue === "individual";
 
   const studentsHtml = students
     .slice()
     .sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"))
     .map((s) => {
       const id = String(s.id || "");
-      const checked = selectedStudents.has(id);
+      const checked = studentIdsValue.includes(id);
       return `
         <label class="admin-ped-student">
           <input type="checkbox" value="${escapeHtml(id)}" ${checked ? "checked" : ""} data-admin-ped-student />
@@ -18624,14 +18875,30 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
     })
     .join("");
 
+  const studentFixedHtml = lockedStudentId
+    ? `
+      <div class="admin-ped-modal-fixed-student">
+        <span>Aluno</span>
+        <strong>${escapeHtml(String(lockedStudentMeta?.nome || studentNamesValue[0] || "Aluno"))}</strong>
+      </div>
+    `
+    : `
+      <div class="admin-ped-modal-field">
+        <span>Alunos</span>
+        <div class="admin-ped-students-picker" data-admin-ped-students>
+          ${studentsHtml || `<div class="admin-ped-students-empty">Nenhum aluno encontrado.</div>`}
+        </div>
+      </div>
+    `;
+
   openModal({
     title: isEdit ? "Editar aula" : "Criar aula",
     bodyHtml: `
-      <div class="admin-ped-modal" data-admin-ped-class-form>
+      <div class="admin-ped-modal" data-admin-ped-class-form data-admin-ped-class-id="${escapeHtml(classId)}">
         <div class="admin-ped-modal-row">
           <label class="admin-ped-modal-field">
             <span>Tipo de aula</span>
-            <select class="admin-ped-modal-select" data-admin-ped-field="type">
+            <select class="admin-ped-modal-select" data-admin-ped-field="type" ${typeLocked ? "disabled" : ""}>
               <option value="individual">Individual</option>
               <option value="group">Grupo</option>
             </select>
@@ -18644,15 +18911,12 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
           </label>
         </div>
 
-        <label class="admin-ped-modal-field">
-          <span>Título (opcional)</span>
-          <input class="admin-ped-modal-input" type="text" data-admin-ped-field="title" placeholder="Ex: Conversação" />
-        </label>
-
         <label class="admin-ped-modal-field admin-ped-modal-group" data-admin-ped-group-name>
           <span>Nome da turma (somente grupo)</span>
           <input class="admin-ped-modal-input" type="text" data-admin-ped-field="groupName" placeholder="Ex: Turma 01" />
         </label>
+
+        ${studentFixedHtml}
 
         <div class="admin-ped-modal-row">
           <label class="admin-ped-modal-field">
@@ -18669,23 +18933,12 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
           </label>
         </div>
 
-        <div class="admin-ped-modal-field">
-          <span>Dias da semana</span>
-          <div class="admin-ped-days" data-admin-ped-days>
-            ${buildAdminPedDaysCheckboxesHtml(selectedDays)}
+        <label class="admin-ped-modal-field">
+          <span>Horários por dia</span>
+          <div class="admin-ped-schedule" data-admin-ped-schedule>
+            ${buildAdminPedWeeklyScheduleHtml(initialSchedule)}
           </div>
-        </div>
-
-        <div class="admin-ped-modal-row">
-          <label class="admin-ped-modal-field">
-            <span>Início</span>
-            <input class="admin-ped-modal-input" type="time" data-admin-ped-field="startTime" />
-          </label>
-          <label class="admin-ped-modal-field">
-            <span>Fim</span>
-            <input class="admin-ped-modal-input" type="time" data-admin-ped-field="endTime" />
-          </label>
-        </div>
+        </label>
 
         <div class="admin-ped-modal-row">
           <label class="admin-ped-modal-field">
@@ -18698,16 +18951,9 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
           </label>
         </div>
 
-        <div class="admin-ped-modal-field">
-          <span>Alunos</span>
-          <div class="admin-ped-students-picker" data-admin-ped-students>
-            ${studentsHtml || `<div class="admin-ped-students-empty">Nenhum aluno encontrado.</div>`}
-          </div>
-        </div>
-
         <label class="admin-ped-modal-field">
           <span>Observações (opcional)</span>
-          <textarea class="admin-ped-modal-textarea" data-admin-ped-field="notes" placeholder="Observações..."></textarea>
+          <textarea class="admin-ped-modal-textarea" data-admin-ped-field="notes"></textarea>
         </label>
 
         <div class="admin-ped-modal-error" data-admin-ped-error hidden></div>
@@ -18721,14 +18967,11 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
       const form = modalBody?.querySelector("[data-admin-ped-class-form]");
       if (!(form instanceof HTMLElement)) return false;
       const errEl = form.querySelector("[data-admin-ped-error]");
-
       const setErr = (msg) => {
         if (!(errEl instanceof HTMLElement)) return;
         errEl.textContent = String(msg || "");
         errEl.hidden = !msg;
       };
-
-      setErr("");
 
       const read = (key) => {
         const el = form.querySelector(`[data-admin-ped-field="${CSS.escape(String(key))}"]`);
@@ -18736,36 +18979,50 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
         return "";
       };
 
-      const type = normalizeClassType(read("type"));
+      const type = normalizeClassType(read("type") || typeValue);
       const teacherId = read("teacherId");
-      const title = read("title");
       const groupName = read("groupName");
       const plan = normalizePlanKeyLoose(read("plan"));
       const status = normalizeClassStatus(read("status"));
       const startDate = read("startDate");
       const endDate = read("endDate");
-      const startMin = normalizeMinutesValue(read("startTime"));
-      const endMin = normalizeMinutesValue(read("endTime"));
       const notes = read("notes");
 
-      const days = [];
-      form.querySelectorAll("[data-admin-ped-day]").forEach((el) => {
-        if (!(el instanceof HTMLInputElement)) return;
-        if (!el.checked) return;
-        const n = Number(el.value);
-        if (Number.isFinite(n)) days.push(n);
+      const rawStudents = [];
+      if (lockedStudentId) {
+        rawStudents.push(lockedStudentId);
+      } else {
+        form.querySelectorAll("[data-admin-ped-student]").forEach((el) => {
+          if (!(el instanceof HTMLInputElement) || !el.checked) return;
+          const id = String(el.value || "").trim();
+          if (id) rawStudents.push(id);
+        });
+      }
+      const studentIds = [...new Set(rawStudents)];
+
+      const scheduleDays = [];
+      form.querySelectorAll("[data-admin-ped-schedule-row]").forEach((rowEl) => {
+        if (!(rowEl instanceof HTMLElement)) return;
+        const weekday = Number(rowEl.getAttribute("data-admin-ped-schedule-row"));
+        if (!Number.isFinite(weekday) || weekday < 0 || weekday > 6) return;
+        const enabledEl = rowEl.querySelector(`[data-admin-ped-schedule-enabled="${CSS.escape(String(weekday))}"]`);
+        const startEl = rowEl.querySelector(`[data-admin-ped-schedule-start="${CSS.escape(String(weekday))}"]`);
+        const endEl = rowEl.querySelector(`[data-admin-ped-schedule-end="${CSS.escape(String(weekday))}"]`);
+        const enabled = enabledEl instanceof HTMLInputElement ? Boolean(enabledEl.checked) : false;
+        const startTime = startEl instanceof HTMLInputElement ? String(startEl.value || "").trim() : "";
+        const endTime = endEl instanceof HTMLInputElement ? String(endEl.value || "").trim() : "";
+        scheduleDays.push({ weekday, enabled, startTime, endTime });
       });
 
-      const studentIds = [];
-      form.querySelectorAll("[data-admin-ped-student]").forEach((el) => {
-        if (!(el instanceof HTMLInputElement)) return;
-        if (!el.checked) return;
-        const id = String(el.value || "").trim();
-        if (id) studentIds.push(id);
-      });
+      const activeSchedule = scheduleDays.filter((day) => day.enabled);
+      const firstSchedule = activeSchedule[0] || null;
 
       if (!teacherId) {
         setErr("Selecione um professor para salvar.");
+        return false;
+      }
+      if (type === "group" && !groupName) {
+        setErr("Informe o nome da turma.");
         return false;
       }
       if (!studentIds.length) {
@@ -18776,7 +19033,7 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
         setErr("A aula individual deve ter exatamente 1 aluno.");
         return false;
       }
-      if (!days.length) {
+      if (!activeSchedule.length) {
         setErr("Selecione pelo menos um dia da semana.");
         return false;
       }
@@ -18792,37 +19049,51 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
         setErr("A data de término deve ser posterior à data de início.");
         return false;
       }
-      if (!startMin || !endMin || endMin <= startMin) {
-        setErr("O horário final deve ser maior que o horário inicial.");
-        return false;
+
+      for (const day of activeSchedule) {
+        if (!/^\d{2}:\d{2}$/.test(String(day.startTime || "")) || !/^\d{2}:\d{2}$/.test(String(day.endTime || ""))) {
+          setErr("Preencha o início e o fim de cada dia ativo.");
+          return false;
+        }
+        if (timeToMinutes(day.endTime) <= timeToMinutes(day.startTime)) {
+          setErr("O horário final deve ser maior que o horário inicial.");
+          return false;
+        }
       }
 
       const teacherName = String(adminPedagogicoState.teachersById?.get(teacherId)?.nome || "").trim();
       const studentNames = studentIds
         .map((id) => String(adminPedagogicoState.studentsById?.get(id)?.nome || "").trim())
         .filter(Boolean);
+      const title = buildAdminPedLessonTitle({ studentName: studentNames[0] || lockedStudentMeta?.nome || "", teacherName });
+      const daysOfWeek = activeSchedule.map((day) => day.weekday).filter((day) => Number.isFinite(day));
+      const classStartMin = firstSchedule ? timeToMinutes(firstSchedule.startTime) : 0;
+      const classEndMin = firstSchedule ? timeToMinutes(firstSchedule.endTime) : 0;
 
       const nextRow = {
-        id: isEdit ? row.id : `class_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
+        id: classId,
         type,
         title,
         teacherId,
         teacherName,
-        groupName,
+        groupName: type === "group" ? groupName : "",
         plan,
         status,
-        daysOfWeek: normalizeDaysOfWeek(days),
-        startMin,
-        endMin,
+        daysOfWeek,
+        scheduleDays: normalizeAdminPedWeeklyScheduleDays(scheduleDays),
+        startMin: classStartMin,
+        endMin: classEndMin,
         startDate,
         endDate,
         studentIds,
         studentNames,
         notes,
+        linkedEventGroupId: linkedGroupId,
+        linkedEventIds: existingEventIds,
       };
 
       const all = Array.isArray(adminPedagogicoState.classes) ? adminPedagogicoState.classes : [];
-      const candidates = isEdit ? all.filter((c) => String(c.id || "") !== String(row.id)) : all;
+      const candidates = isEdit ? all.filter((c) => String(c.id || "") !== String(classId)) : all;
       const tempList = candidates.concat([nextRow]);
       const conflicts = computeAdminPedagogicoConflicts(tempList);
       const hit = conflicts.find((c) => {
@@ -18846,29 +19117,64 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
           const user = await waitForFirebaseAuthReady(firebase, 5000);
           if (!user) throw new Error("not_authenticated");
 
-          const docRef = firebase.doc(firebase.primaryDb, "classes", nextRow.id);
+          if (isEdit && existingEventIds.length) {
+            await fetchWithAuth(
+              `/api/schedule-events?id=${encodeURIComponent(existingEventIds[0])}&mode=future`,
+              { method: "DELETE" }
+            ).then(async (res) => {
+              if (!res.ok) throw new Error("recurrence_delete_failed");
+            });
+          }
+
+          const scheduleDaysPayload = activeSchedule
+            .map((day) => ({
+              weekday:
+                ADMIN_PED_WEEKLY_DAY_DEFS.find((def) => def.weekday === day.weekday)?.label?.toLowerCase() || String(day.weekday),
+              startTime: String(day.startTime || "").trim(),
+              endTime: String(day.endTime || "").trim(),
+            }))
+            .filter((day) => day.weekday);
+
+          const schedulePayload = {
+            id: classId,
+            eventType: "lesson",
+            alunoId: studentIds[0] || "",
+            professorId: teacherId,
+            alunoNome: studentNames[0] || lockedStudentMeta?.nome || "",
+            alunoEmail: String(adminPedagogicoState.studentsById?.get(studentIds[0] || "")?.email || "").trim(),
+            alunoTelefone: String(adminPedagogicoState.studentsById?.get(studentIds[0] || "")?.telefone || "").trim(),
+            professorNome: teacherName,
+            dateKey: startDate,
+            startMin: classStartMin,
+            endMin: classEndMin,
+            recorrente: true,
+            grupoRecorrenciaId: linkedGroupId,
+            repeat: { enabled: true, type: "weekly_custom", days: scheduleDaysPayload },
+          };
+          if (endDate) schedulePayload.endDate = endDate;
+
+          const apiRes = await fetchWithAuth("/api/schedule-events", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(schedulePayload),
+          });
+          const apiData = await apiRes.json().catch(() => null);
+          if (!apiRes.ok) {
+            throw new Error(apiData?.error || "schedule_save_failed");
+          }
+
+          const linkedEventIds = Array.isArray(apiData?.ids) ? apiData.ids.map((id) => String(id || "").trim()).filter(Boolean) : [];
+          const linkedEventGroupId = String(apiData?.grupoRecorrenciaId || linkedGroupId || classId).trim() || classId;
+          const docRef = firebase.doc(firebase.primaryDb, "classes", classId);
           const payload = {
-            id: nextRow.id,
-            type: nextRow.type,
-            title: nextRow.title || "",
-            teacherId: nextRow.teacherId,
-            teacherName: nextRow.teacherName || "",
-            studentIds: nextRow.studentIds,
-            studentNames: nextRow.studentNames,
-            groupName: nextRow.groupName || "",
-            plan: nextRow.plan || "",
-            daysOfWeek: nextRow.daysOfWeek,
-            startMin: nextRow.startMin,
-            endMin: nextRow.endMin,
-            startDate: nextRow.startDate,
-            endDate: nextRow.endDate || "",
-            status: nextRow.status,
-            notes: nextRow.notes || "",
+            ...nextRow,
+            linkedEventGroupId,
+            linkedEventIds,
+            source: "student_line",
             updatedBy: String(user.uid || ""),
             updatedAt: firebase.serverTimestamp(),
             ...(isEdit ? null : { createdBy: String(user.uid || ""), createdAt: firebase.serverTimestamp() }),
           };
-
           await withTimeout(firebase.setDoc(docRef, payload, { merge: true }), 12_000, "firestore_admin_pedagogico_class_merge");
           closeModal();
           await renderAdminControlePedagogicoPanel({ force: true });
@@ -18890,37 +19196,73 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
   window.setTimeout(() => {
     const form = modalBody?.querySelector("[data-admin-ped-class-form]");
     if (!(form instanceof HTMLElement)) return;
+    const setVal = (key, value) => {
+      const el = form.querySelector(`[data-admin-ped-field="${CSS.escape(String(key))}"]`);
+      if (el instanceof HTMLInputElement || el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement) el.value = String(value ?? "");
+    };
+    setVal("type", typeValue);
+    setVal("teacherId", teacherValue);
+    setVal("plan", planValue);
+    setVal("status", statusValue);
+    setVal("groupName", groupNameValue);
+    setVal("startDate", startDateValue);
+    setVal("endDate", endDateValue);
+    setVal("notes", notesValue);
     const typeSel = form.querySelector('[data-admin-ped-field="type"]');
-    const teacherSel = form.querySelector('[data-admin-ped-field="teacherId"]');
-    const planSel = form.querySelector('[data-admin-ped-field="plan"]');
-    const statusSel = form.querySelector('[data-admin-ped-field="status"]');
-    const startDateEl = form.querySelector('[data-admin-ped-field="startDate"]');
-    const endDateEl = form.querySelector('[data-admin-ped-field="endDate"]');
-    const startTimeEl = form.querySelector('[data-admin-ped-field="startTime"]');
-    const endTimeEl = form.querySelector('[data-admin-ped-field="endTime"]');
-    const titleEl = form.querySelector('[data-admin-ped-field="title"]');
-    const groupNameEl = form.querySelector('[data-admin-ped-field="groupName"]');
-    const notesEl = form.querySelector('[data-admin-ped-field="notes"]');
-
-    if (typeSel instanceof HTMLSelectElement) typeSel.value = typeValue;
-    if (teacherSel instanceof HTMLSelectElement) teacherSel.value = teacherValue;
-    if (planSel instanceof HTMLSelectElement) planSel.value = planValue;
-    if (statusSel instanceof HTMLSelectElement) statusSel.value = statusValue;
-    if (startDateEl instanceof HTMLInputElement) startDateEl.value = startDate;
-    if (endDateEl instanceof HTMLInputElement) endDateEl.value = endDate;
-    if (startTimeEl instanceof HTMLInputElement) startTimeEl.value = startTime;
-    if (endTimeEl instanceof HTMLInputElement) endTimeEl.value = endTime;
-    if (titleEl instanceof HTMLInputElement) titleEl.value = titleValue;
-    if (groupNameEl instanceof HTMLInputElement) groupNameEl.value = groupNameValue;
-    if (notesEl instanceof HTMLTextAreaElement) notesEl.value = String(row?.notes || "");
-
     const groupWrap = form.querySelector("[data-admin-ped-group-name]");
+    const studentsPicker = form.querySelector("[data-admin-ped-students]");
+    if (typeSel instanceof HTMLSelectElement && typeLocked) typeSel.disabled = true;
+    if (studentsPicker instanceof HTMLElement && lockedStudentId) studentsPicker.hidden = true;
     if (groupWrap instanceof HTMLElement) groupWrap.hidden = typeValue !== "group";
 
-    if (typeSel instanceof HTMLSelectElement) {
+    const syncDay = (weekday) => {
+      const rowEl = form.querySelector(`[data-admin-ped-schedule-row="${CSS.escape(String(weekday))}"]`);
+      if (!(rowEl instanceof HTMLElement)) return;
+      const enabledEl = rowEl.querySelector(`[data-admin-ped-schedule-enabled="${CSS.escape(String(weekday))}"]`);
+      const timesEl = rowEl.querySelector(`[data-admin-ped-schedule-times="${CSS.escape(String(weekday))}"]`);
+      const unavailableEl = rowEl.querySelector(`[data-admin-ped-schedule-unavailable="${CSS.escape(String(weekday))}"]`);
+      const isEnabled = enabledEl instanceof HTMLInputElement ? enabledEl.checked : false;
+      if (timesEl instanceof HTMLElement) timesEl.hidden = !isEnabled;
+      if (unavailableEl instanceof HTMLElement) unavailableEl.hidden = isEnabled;
+      rowEl.classList.toggle("is-active", isEnabled);
+      rowEl.classList.toggle("is-disabled", !isEnabled);
+    };
+
+    form.querySelectorAll("[data-admin-ped-schedule-row]").forEach((rowEl) => {
+      if (!(rowEl instanceof HTMLElement)) return;
+      const weekday = Number(rowEl.getAttribute("data-admin-ped-schedule-row"));
+      if (!Number.isFinite(weekday)) return;
+      syncDay(weekday);
+      const enabledEl = rowEl.querySelector(`[data-admin-ped-schedule-enabled="${CSS.escape(String(weekday))}"]`);
+      if (enabledEl instanceof HTMLInputElement) {
+        enabledEl.addEventListener("change", () => syncDay(weekday));
+      }
+      const copyBtn = rowEl.querySelector(`[data-admin-ped-schedule-copy="${CSS.escape(String(weekday))}"]`);
+      if (copyBtn instanceof HTMLButtonElement) {
+        copyBtn.addEventListener("click", () => {
+          const startEl = rowEl.querySelector(`[data-admin-ped-schedule-start="${CSS.escape(String(weekday))}"]`);
+          const endEl = rowEl.querySelector(`[data-admin-ped-schedule-end="${CSS.escape(String(weekday))}"]`);
+          const startValue = startEl instanceof HTMLInputElement ? String(startEl.value || "").trim() : "";
+          const endValue = endEl instanceof HTMLInputElement ? String(endEl.value || "").trim() : "";
+          if (!startValue || !endValue) return;
+          form.querySelectorAll("[data-admin-ped-schedule-row]").forEach((targetRow) => {
+            if (!(targetRow instanceof HTMLElement)) return;
+            const targetWeekday = Number(targetRow.getAttribute("data-admin-ped-schedule-row"));
+            if (!Number.isFinite(targetWeekday) || targetWeekday === weekday) return;
+            const targetEnabled = targetRow.querySelector(`[data-admin-ped-schedule-enabled="${CSS.escape(String(targetWeekday))}"]`);
+            if (!(targetEnabled instanceof HTMLInputElement) || !targetEnabled.checked) return;
+            const targetStart = targetRow.querySelector(`[data-admin-ped-schedule-start="${CSS.escape(String(targetWeekday))}"]`);
+            const targetEnd = targetRow.querySelector(`[data-admin-ped-schedule-end="${CSS.escape(String(targetWeekday))}"]`);
+            if (targetStart instanceof HTMLInputElement) targetStart.value = startValue;
+            if (targetEnd instanceof HTMLInputElement) targetEnd.value = endValue;
+          });
+        });
+      }
+    });
+
+    if (typeSel instanceof HTMLSelectElement && groupWrap instanceof HTMLElement) {
       typeSel.addEventListener("change", () => {
-        const next = normalizeClassType(typeSel.value);
-        if (groupWrap instanceof HTMLElement) groupWrap.hidden = next !== "group";
+        groupWrap.hidden = normalizeClassType(typeSel.value) !== "group";
       });
     }
   }, 0);
@@ -24249,12 +24591,17 @@ document.addEventListener("click", (event) => {
         event.preventDefault();
         const alunoId = String(adminPedStudentNewClass.getAttribute("data-admin-ped-student-new-class") || "").trim();
         const meta = adminPedagogicoState.studentsById instanceof Map ? adminPedagogicoState.studentsById.get(alunoId) || null : null;
+        const existingClass = getAdminPedStudentActiveClass(alunoId);
         const teacherId = String(meta?.professorId || meta?.teacherId || "").trim();
         const plan = String(meta?.plano || "").trim();
-        openAdminPedClassModal({
-          mode: "create",
-          prefill: { type: "individual", teacherId, plan, studentIds: alunoId ? [alunoId] : [] },
-        });
+        if (existingClass) {
+          openAdminPedClassModal({ mode: "edit", classRow: existingClass });
+        } else {
+          openAdminPedClassModal({
+            mode: "create",
+            prefill: { type: "individual", teacherId, plan, studentIds: alunoId ? [alunoId] : [] },
+          });
+        }
         return;
       }
 

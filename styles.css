@@ -19964,6 +19964,104 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   gap: 8px;
 }
 
+.admin-ped-modal-fixed-student {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.admin-ped-modal-fixed-student > span {
+  font-size: 11px;
+  font-weight: 750;
+  color: rgba(255, 255, 255, 0.45);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.admin-ped-modal-fixed-student > strong {
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.admin-ped-schedule {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-ped-schedule-row {
+  display: grid;
+  grid-template-columns: minmax(130px, 170px) minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.admin-ped-schedule-row.is-active {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.admin-ped-schedule-day {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+}
+
+.admin-ped-schedule-day input {
+  width: 16px;
+  height: 16px;
+  accent-color: #FF4E46;
+}
+
+.admin-ped-schedule-times {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(120px, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.admin-ped-schedule-unavailable {
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 13px;
+  font-weight: 700;
+  justify-self: end;
+}
+
+.admin-ped-schedule-copy {
+  width: 38px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.78);
+  cursor: pointer;
+  transition: border-color 150ms ease, background-color 150ms ease, transform 150ms ease, color 150ms ease;
+}
+
+.admin-ped-schedule-copy:hover,
+.admin-ped-schedule-copy:focus-visible {
+  border-color: rgba(255, 78, 70, 0.36);
+  background: rgba(255, 78, 70, 0.1);
+  color: rgba(255, 255, 255, 0.96);
+  transform: translateY(-1px);
+}
+
+.admin-ped-schedule-copy:focus-visible {
+  outline: 0;
+}
+
 .admin-ped-day {
   display: inline-flex;
   align-items: center;
