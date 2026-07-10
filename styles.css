@@ -17286,9 +17286,115 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   color: rgba(255, 78, 70, 0.95);
 }
 
+.pedagogico-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.pedagogico-filters {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.pedagogico-filter-chip {
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.pedagogico-filter-chip:hover,
+.pedagogico-filter-chip:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.96);
+}
+
+.pedagogico-filter-chip.is-active {
+  color: var(--accent);
+  border-color: rgba(255, 78, 70, 0.28);
+  background: rgba(255, 78, 70, 0.1);
+}
+
+.pedagogico-count {
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.52);
+}
+
 .pedagogico-list {
   display: flex;
   flex-direction: column;
+  gap: 18px;
+}
+
+.pedagogico-day-group {
+  display: grid;
+  gap: 10px;
+}
+
+.pedagogico-day-header {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  padding: 10px 2px 10px;
+  background: linear-gradient(180deg, rgba(7, 15, 26, 0.98), rgba(7, 15, 26, 0.92));
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  scroll-margin-top: 18px;
+}
+
+.pedagogico-day-header.is-today {
+  color: var(--accent);
+}
+
+.pedagogico-day-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pedagogico-day-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.96);
+}
+
+.pedagogico-day-header.is-today .pedagogico-day-title {
+  color: var(--accent);
+}
+
+.pedagogico-day-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 78, 70, 0.12);
+  border: 1px solid rgba(255, 78, 70, 0.2);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.pedagogico-day-subtitle {
+  margin-top: 4px;
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 12px;
+}
+
+.pedagogico-day-items {
+  display: grid;
   gap: 10px;
 }
 
@@ -17299,8 +17405,8 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   gap: 14px;
   padding: 16px 18px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 0.5px solid rgba(89, 144, 189, 0.08);
+  background: rgba(13, 24, 40, 0.96);
+  border: 1px solid rgba(89, 144, 189, 0.1);
   cursor: pointer;
   width: 100%;
   text-align: left;
@@ -17323,14 +17429,28 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 
 .pedagogico-item:hover {
   transform: translateY(-1px);
-  border-color: rgba(255, 78, 70, 0.16);
-  background: rgba(255, 255, 255, 0.035);
+  border-color: rgba(255, 78, 70, 0.2);
+  background: rgba(16, 28, 47, 0.98);
 }
 
 .pedagogico-item.is-future {
-  opacity: 0.45;
-  cursor: not-allowed;
-  pointer-events: none;
+  opacity: 0.82;
+}
+
+.pedagogico-item.is-done {
+  opacity: 0.66;
+  border-color: rgba(93, 202, 165, 0.14);
+}
+
+.pedagogico-item.is-pending {
+  border-color: rgba(251, 191, 36, 0.3);
+  background: linear-gradient(180deg, rgba(251, 191, 36, 0.08), rgba(13, 24, 40, 0.96));
+  box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.08) inset;
+}
+
+.pedagogico-item.is-today {
+  border-color: rgba(255, 78, 70, 0.28);
+  box-shadow: 0 0 0 1px rgba(255, 78, 70, 0.08) inset;
 }
 
 .pedagogico-item:disabled {
@@ -17338,22 +17458,47 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   cursor: not-allowed;
 }
 
-.pedagogico-item-date {
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 12px;
+.pedagogico-item-time {
+  width: 112px;
+  flex: 0 0 112px;
+}
+
+.pedagogico-item-hour {
+  color: rgba(255, 255, 255, 0.94);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.pedagogico-item-type {
+  margin-top: 6px;
+  color: rgba(255, 255, 255, 0.36);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .pedagogico-item-student {
-  margin-top: 8px;
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 750;
   color: rgba(255, 255, 255, 0.95);
 }
 
 .pedagogico-item-title {
   margin-top: 4px;
-  color: rgba(255, 255, 255, 0.35);
+  color: rgba(255, 255, 255, 0.42);
   font-size: 12px;
+}
+
+.pedagogico-item-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pedagogico-item-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 0 0 auto;
 }
 
 .pedagogico-badge {
@@ -17366,6 +17511,7 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+.pedagogico-badge.is-amber,
 .pedagogico-badge.is-yellow {
   background: rgba(251, 191, 36, 0.15);
   color: #FBBF24;
@@ -17384,6 +17530,24 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   border-color: rgba(89, 144, 189, 0.22);
 }
 
+.pedagogico-badge.is-red {
+  background: rgba(255, 78, 70, 0.14);
+  color: #FF4E46;
+  border-color: rgba(255, 78, 70, 0.22);
+}
+
+.pedagogico-badge.is-coral {
+  background: rgba(255, 78, 70, 0.14);
+  color: var(--accent);
+  border-color: rgba(255, 78, 70, 0.22);
+}
+
+.pedagogico-badge.is-slate {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.72);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
 .pedagogico-empty,
 .pedagogico-error {
   margin-top: 14px;
@@ -17393,6 +17557,28 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 
 .pedagogico-error {
   color: rgba(255, 78, 70, 0.85);
+}
+
+@media (max-width: 760px) {
+  .pedagogico-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .pedagogico-item {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .pedagogico-item-time {
+    width: auto;
+    flex-basis: auto;
+  }
+
+  .pedagogico-item-meta {
+    width: 100%;
+    justify-content: flex-start;
+  }
 }
 
 .pedagogico-drawer {

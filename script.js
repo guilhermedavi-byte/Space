@@ -7392,7 +7392,7 @@ let pedagogicoState = {
   lessons: [],
   logsByEventId: new Map(),
   pendingCount: 0,
-  filter: "pending",
+  filter: "all",
   shouldAutoScroll: false,
 };
 
@@ -8633,6 +8633,7 @@ const renderTeacherPedagogico = async ({ silent = false } = {}) => {
   }
 
   pedagogicoState.isLoading = true;
+  if (!silent) pedagogicoState.shouldAutoScroll = pedagogicoState.filter === "all";
   if (!silent) setPedagogicoStatus("Carregando…");
   if (pedagogicoError instanceof HTMLElement) pedagogicoError.hidden = true;
   if (pedagogicoEmpty instanceof HTMLElement) pedagogicoEmpty.hidden = true;
@@ -8798,87 +8799,116 @@ const renderTeacherPedagogicoList = () => {
   const logsByEventId = pedagogicoState.logsByEventId instanceof Map ? pedagogicoState.logsByEventId : new Map();
 
   const now = Date.now();
-  let pending = 0;
+  const todayKey = dateKeyFromIso(new Date().toISOString());
+  const items = lessons
+    .map((lesson) => buildPedagogicoLessonViewModel(lesson, logsByEventId, now, todayKey))
+    .sort((a, b) =>
+      a.lesson.dateKey === b.lesson.dateKey
+        ? a.lesson.startMin - b.lesson.startMin
+        : a.lesson.dateKey.localeCompare(b.lesson.dateKey)
+    );
+  const pendingCount = items.filter((item) => item.temporalState === "pending").length;
+
+  syncPedagogicoFilterUi();
+  setPedagogicoPendingBadge(pendingCount);
 
   if (!lessons.length) {
     pedagogicoList.innerHTML = "";
     if (pedagogicoEmpty instanceof HTMLElement) pedagogicoEmpty.hidden = false;
+    if (pedagogicoEmpty instanceof HTMLElement) {
+      pedagogicoEmpty.textContent = "Nenhuma aula encontrada.";
+    }
     setPedagogicoPendingBadge(0);
+    setPedagogicoCountLabel("0 aulas");
+    return;
+  }
+  const filteredItems =
+    pedagogicoState.filter === "pending"
+      ? items.filter((item) => item.temporalState === "pending")
+      : items;
+
+  setPedagogicoCountLabel(
+    pedagogicoState.filter === "pending"
+      ? `${filteredItems.length} pendente${filteredItems.length === 1 ? "" : "s"}`
+      : `${filteredItems.length} aula${filteredItems.length === 1 ? "" : "s"}`
+  );
+
+  if (!filteredItems.length) {
+    pedagogicoList.innerHTML = "";
+    if (pedagogicoEmpty instanceof HTMLElement) {
+      pedagogicoEmpty.hidden = false;
+      pedagogicoEmpty.textContent =
+        pedagogicoState.filter === "pending"
+          ? "Nenhum registro pendente. Tudo em dia por aqui."
+          : "Nenhuma aula encontrada.";
+    }
     return;
   }
 
-  const renderLesson = (lesson) => {
-      const start = buildDateFromDateKeyAndMinutes(lesson.dateKey, lesson.startMin);
-      const isFuture = start ? start.getTime() > now : false;
-      const log = logsByEventId.get(lesson.id) || null;
-      const status = log && typeof log.statusAula === "string" ? String(log.statusAula).trim().toLowerCase() : "";
-      const isDone = Boolean(status);
-      const isPending = !isFuture && !isDone;
+  const anchorDateKey = findPedagogicoScrollAnchorDateKey(items, todayKey);
+  const grouped = filteredItems.reduce((map, item) => {
+    const key = item.lesson.dateKey;
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(item);
+    return map;
+  }, new Map());
 
-      if (isPending) pending += 1;
-
-      const badgeText = isFuture ? "AULA FUTURA" : isDone ? "CONCLUÍDA" : "EM ABERTO";
-      const badgeClass = isFuture ? "is-blue" : isDone ? "is-green" : "is-yellow";
-      const rowClass = isFuture ? "is-future" : isDone ? "is-done" : "is-pending";
-      const dateLabel = `${formatPedagogicoDate(lesson.dateKey)} · ${formatHmFromMinutes(lesson.startMin)}–${formatHmFromMinutes(lesson.endMin)}`;
-      return `
-        <article class="pedagogico-item ${rowClass}" data-pedagogico-card="${escapeHtml(lesson.id)}">
-          <div class="pedagogico-item-main">
-            <div class="pedagogico-item-date">${escapeHtml(dateLabel)}</div>
-            <div class="pedagogico-item-student">${escapeHtml(lesson.title)}</div>
-            <div class="pedagogico-item-title">${escapeHtml(lesson.description || "Aula")} · ${escapeHtml(String(lesson.status || badgeText))}</div>
-          </div>
-          <div class="pedagogico-item-actions">
-            <span class="pedagogico-badge ${badgeClass}">${badgeText}</span>
-            ${
-              lesson.liveUrl
-                ? `<a class="pedagogico-action-link" href="${escapeHtml(lesson.liveUrl)}" target="_blank" rel="noopener">Abrir aula</a>`
-                : ""
-            }
-            ${
-              !isFuture
-                ? `
-                  <button type="button" class="pedagogico-action-link" data-pedagogico-action="realizada" data-pedagogico-item="${escapeHtml(lesson.id)}">Registrar aula</button>
-                  <button type="button" class="pedagogico-action-link" data-pedagogico-action="falta_aluno" data-pedagogico-item="${escapeHtml(lesson.id)}">Falta</button>
-                  <button type="button" class="pedagogico-action-link" data-pedagogico-action="remarcada" data-pedagogico-item="${escapeHtml(lesson.id)}">Remarcar</button>
-                `
-                : ""
-            }
-          </div>
-        </article>
-      `;
+  const renderLessonCard = (item) => {
+    const { lesson, temporalState, statusMeta, isToday, isFuture } = item;
+    const timeLabel = `${formatHmFromMinutes(lesson.startMin)}–${formatHmFromMinutes(lesson.endMin)}`;
+    const statusClass =
+      temporalState === "pending"
+        ? "is-pending"
+        : temporalState === "done"
+          ? "is-done"
+          : temporalState === "today"
+            ? "is-today"
+            : "is-future";
+    const titleLabel = lesson.description || "Aula";
+    return `
+      <article class="pedagogico-item ${statusClass}" data-pedagogico-item="${escapeHtml(lesson.id)}" aria-label="${escapeHtml(lesson.title)}">
+        <div class="pedagogico-item-time">
+          <div class="pedagogico-item-hour">${escapeHtml(timeLabel)}</div>
+          <div class="pedagogico-item-type">${escapeHtml(titleLabel)}</div>
+        </div>
+        <div class="pedagogico-item-main">
+          <div class="pedagogico-item-student">${escapeHtml(lesson.title)}</div>
+          <div class="pedagogico-item-title">${escapeHtml(isToday ? "Hoje" : formatPedagogicoDate(lesson.dateKey))} · ${escapeHtml(
+            isFuture ? "Sem ação necessária agora." : temporalState === "pending" ? "Registro da aula pendente." : "Registro concluído."
+          )}</div>
+        </div>
+        <div class="pedagogico-item-meta">
+          <span class="pedagogico-badge is-${escapeHtml(statusMeta.tone)}">${escapeHtml(statusMeta.icon)} ${escapeHtml(statusMeta.label)}</span>
+        </div>
+      </article>
+    `;
   };
 
-  const todayKey = dateKeyFromIso(new Date().toISOString());
-  const today = lessons.filter((lesson) => lesson.dateKey === todayKey);
-  const upcoming = lessons.filter((lesson) => lesson.dateKey > todayKey);
-  const pendingLessons = lessons.filter((lesson) => {
-    const start = buildDateFromDateKeyAndMinutes(lesson.dateKey, lesson.startMin);
-    return start && start.getTime() <= now && !logsByEventId.has(lesson.id);
-  });
-  const history = lessons
-    .filter((lesson) => {
-      const start = buildDateFromDateKeyAndMinutes(lesson.dateKey, lesson.startMin);
-      return start && start.getTime() < now && logsByEventId.has(lesson.id);
+  const html = Array.from(grouped.entries())
+    .map(([dateKey, dayItems]) => {
+      const isTodayGroup = dateKey === todayKey;
+      const heading = isTodayGroup ? "Hoje" : formatPedagogicoGroupHeading(dateKey);
+      const subheading = isTodayGroup ? formatPedagogicoGroupHeading(dateKey) : `${dayItems.length} aula${dayItems.length === 1 ? "" : "s"}`;
+      return `
+        <section class="pedagogico-day-group" aria-label="${escapeHtml(heading)}">
+          <header class="pedagogico-day-header ${isTodayGroup ? "is-today" : ""}" data-pedagogico-anchor="${dateKey === anchorDateKey ? "true" : "false"}">
+            <div class="pedagogico-day-title-row">
+              <h3 class="pedagogico-day-title">${escapeHtml(heading)}</h3>
+              ${isTodayGroup ? `<span class="pedagogico-day-pill">• Hoje</span>` : ""}
+            </div>
+            <div class="pedagogico-day-subtitle">${escapeHtml(subheading)}</div>
+          </header>
+          <div class="pedagogico-day-items">
+            ${dayItems.map(renderLessonCard).join("")}
+          </div>
+        </section>
+      `;
     })
-    .slice(-20)
-    .reverse();
-  const section = (title, rows, emptyText) => `
-    <section class="pedagogico-section">
-      <h3 class="pedagogico-section-title">${escapeHtml(title)}</h3>
-      ${rows.length ? rows.map(renderLesson).join("") : `<div class="pedagogico-section-empty">${escapeHtml(emptyText)}</div>`}
-    </section>
-  `;
-  const html = [
-    section("Aulas de hoje", today, "Nenhuma aula hoje."),
-    section("Próximas aulas", upcoming, "Nenhuma próxima aula agendada."),
-    section("Pendentes de registro", pendingLessons, "Tudo registrado por aqui."),
-    section("Histórico recente", history, "Nenhum registro recente."),
-  ].join("");
+    .join("");
 
   pedagogicoList.innerHTML = html;
   if (pedagogicoEmpty instanceof HTMLElement) pedagogicoEmpty.hidden = true;
-  setPedagogicoPendingBadge(pending);
+  scrollPedagogicoToAnchor();
 
   // Listener direto no container: mais robusto do que depender apenas do listener global no document.
   if (!pedagogicoList.dataset.clickBound) {
@@ -8894,17 +8924,7 @@ const renderTeacherPedagogicoList = () => {
 
       const id = String(item.getAttribute("data-pedagogico-item") || item.dataset.pedagogicoItem || "").trim();
       if (!id) return;
-      const action = String(item.getAttribute("data-pedagogico-action") || "").trim();
       handlePedagogicoItemOpen(id);
-      if (action) {
-        window.setTimeout(() => {
-          const select = pedagogicoFormContainer?.querySelector("[data-ped-status]");
-          if (select instanceof HTMLSelectElement) {
-            select.value = action;
-            select.dispatchEvent(new Event("change", { bubbles: true }));
-          }
-        }, 0);
-      }
     });
   }
 };
@@ -24872,6 +24892,17 @@ openLivePanelButtons.forEach((button) => {
   button.addEventListener("click", () => {
     const role = sessionUser?.role || currentRole;
     navigateApp(panelPathForRole(role, "ao-vivo"));
+  });
+});
+
+pedagogicoFilterButtons.forEach((button) => {
+  if (!(button instanceof HTMLButtonElement)) return;
+  button.addEventListener("click", () => {
+    const nextFilter = String(button.getAttribute("data-pedagogico-filter") || "").trim();
+    if (!nextFilter || pedagogicoState.filter === nextFilter) return;
+    pedagogicoState.filter = nextFilter === "all" ? "all" : "pending";
+    pedagogicoState.shouldAutoScroll = pedagogicoState.filter === "all";
+    renderTeacherPedagogicoList();
   });
 });
 
