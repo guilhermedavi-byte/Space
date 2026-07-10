@@ -486,6 +486,21 @@
           <button
             class="sidebar-link"
             type="button"
+            data-panel-target="configuracoes-admin"
+            data-admin-only
+            title="Configurações"
+          >
+            <span class="sidebar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"></path>
+                <path d="M19.4 13.5a1.6 1.6 0 0 0 .32 1.76l.06.06a2 2 0 1 1-2.82 2.82l-.06-.06a1.6 1.6 0 0 0-1.76-.32 1.6 1.6 0 0 0-.98 1.46V19.5a2 2 0 1 1-4 0v-.09a1.6 1.6 0 0 0-.98-1.46 1.6 1.6 0 0 0-1.76.32l-.06.06a2 2 0 1 1-2.82-2.82l.06-.06a1.6 1.6 0 0 0 .32-1.76 1.6 1.6 0 0 0-1.46-.98H4.5a2 2 0 1 1 0-4h.09a1.6 1.6 0 0 0 1.46-.98 1.6 1.6 0 0 0-.32-1.76l-.06-.06a2 2 0 1 1 2.82-2.82l.06.06a1.6 1.6 0 0 0 1.76.32h.01a1.6 1.6 0 0 0 .97-1.46V4.5a2 2 0 1 1 4 0v.09a1.6 1.6 0 0 0 .98 1.46 1.6 1.6 0 0 0 1.76-.32l.06-.06a2 2 0 1 1 2.82 2.82l-.06.06a1.6 1.6 0 0 0-.32 1.76v.01a1.6 1.6 0 0 0 1.46.97h.09a2 2 0 1 1 0 4h-.09a1.6 1.6 0 0 0-1.46.98Z"></path>
+              </svg>
+            </span>
+            <span class="sidebar-text">Configurações</span>
+          </button>
+          <button
+            class="sidebar-link"
+            type="button"
             data-panel-target="gravadas"
             title="Aulas gravadas"
             hidden
@@ -1391,6 +1406,29 @@
               <button class="button button-outline button-small" type="button" data-copy-collaborator-message>Copiar mensagem</button>
               <span class="launch-copy-feedback" data-copy-collaborator-feedback hidden>Copiado!</span>
             </article>
+          </div>
+        </section>
+
+        <section class="platform-panel" data-panel="configuracoes-admin" data-hide-platform-header="true" hidden aria-label="Configurações">
+          <div class="admin-settings-shell" data-admin-settings>
+            <aside class="surface-card admin-settings-sidebar" aria-label="Navegação de configurações">
+              <div class="admin-settings-sidebar-head">
+                <div class="admin-settings-sidebar-title">Configurações</div>
+                <div class="admin-settings-sidebar-sub">Administração da conta e preferências.</div>
+              </div>
+              <nav class="admin-settings-nav" data-admin-settings-nav>
+                <button class="admin-settings-nav-item is-active" type="button" data-admin-settings-section="meu-perfil">Meu perfil</button>
+                <button class="admin-settings-nav-item" type="button" data-admin-settings-section="tags">Tags</button>
+                <button class="admin-settings-nav-item" type="button" data-admin-settings-section="planos">Planos</button>
+                <button class="admin-settings-nav-item" type="button" data-admin-settings-section="motivos-cancelamento">Motivos de cancelamento</button>
+                <button class="admin-settings-nav-item" type="button" data-admin-settings-section="listas">Listas</button>
+                <button class="admin-settings-nav-item" type="button" data-admin-settings-section="campos-adicionais">Campos adicionais</button>
+                <button class="admin-settings-nav-item" type="button" data-admin-settings-section="integracoes">Integrações</button>
+                <button class="admin-settings-nav-item" type="button" data-admin-settings-section="conexoes">Conexões</button>
+                <button class="admin-settings-nav-item" type="button" data-admin-settings-section="lixeira">Lixeira</button>
+              </nav>
+            </aside>
+            <section class="admin-settings-content" data-admin-settings-content aria-label="Conteúdo das configurações"></section>
           </div>
         </section>
 

@@ -144,19 +144,44 @@ const ADMIN_STUDENT_HISTORY_DRAWER_TEMPLATE = `
   </div>
 `;
 
-const getAdminStudentHistoryDrawer = () => {
-  let drawer = document.querySelector("[data-admin-student-history-drawer]");
+const ADMIN_TEACHER_HISTORY_DRAWER_TEMPLATE = `
+  <div class="admin-students-drawer" data-admin-teacher-history-drawer hidden>
+    <div class="admin-students-drawer-backdrop" data-admin-teacher-history-close></div>
+    <div class="admin-students-drawer-inner admin-student-sheet-drawer-inner" role="dialog" aria-modal="true" aria-label="Ficha do professor">
+      <div class="admin-students-drawer-head">
+        <div>
+          <div class="admin-students-drawer-title" data-admin-teacher-history-title>Ficha do professor</div>
+          <div class="admin-students-drawer-sub" data-admin-teacher-history-sub>—</div>
+        </div>
+        <button class="admin-students-drawer-close" type="button" data-admin-teacher-history-close aria-label="Fechar">✕</button>
+      </div>
+      <div class="admin-students-drawer-body">
+        <div class="admin-student-sheet" data-admin-teacher-sheet></div>
+      </div>
+    </div>
+  </div>
+`;
+
+const getOrCreateAdminDrawer = ({ selector, template } = {}) => {
+  if (!selector || !template) return null;
+  let drawer = document.querySelector(selector);
   if (drawer instanceof HTMLElement) {
     if (drawer.parentElement !== document.body) document.body.appendChild(drawer);
     return drawer;
   }
   const wrapper = document.createElement("div");
-  wrapper.innerHTML = ADMIN_STUDENT_HISTORY_DRAWER_TEMPLATE.trim();
+  wrapper.innerHTML = String(template).trim();
   drawer = wrapper.firstElementChild;
   if (!(drawer instanceof HTMLElement)) return null;
   document.body.appendChild(drawer);
   return drawer;
 };
+
+const getAdminStudentHistoryDrawer = () =>
+  getOrCreateAdminDrawer({
+    selector: "[data-admin-student-history-drawer]",
+    template: ADMIN_STUDENT_HISTORY_DRAWER_TEMPLATE,
+  });
 
 const getAdminStudentHistoryTitle = () => {
   const drawer = getAdminStudentHistoryDrawer();
@@ -175,6 +200,31 @@ const getAdminStudentSheet = () => {
 
 const warnMissingAdminStudentHistoryDrawer = (context) => {
   console.warn("[admin] student history drawer unavailable", context);
+};
+
+const getAdminTeacherHistoryDrawer = () =>
+  getOrCreateAdminDrawer({
+    selector: "[data-admin-teacher-history-drawer]",
+    template: ADMIN_TEACHER_HISTORY_DRAWER_TEMPLATE,
+  });
+
+const getAdminTeacherHistoryTitle = () => {
+  const drawer = getAdminTeacherHistoryDrawer();
+  return drawer instanceof HTMLElement ? drawer.querySelector("[data-admin-teacher-history-title]") : null;
+};
+
+const getAdminTeacherHistorySub = () => {
+  const drawer = getAdminTeacherHistoryDrawer();
+  return drawer instanceof HTMLElement ? drawer.querySelector("[data-admin-teacher-history-sub]") : null;
+};
+
+const getAdminTeacherSheet = () => {
+  const drawer = getAdminTeacherHistoryDrawer();
+  return drawer instanceof HTMLElement ? drawer.querySelector("[data-admin-teacher-sheet]") : null;
+};
+
+const warnMissingAdminTeacherHistoryDrawer = (context) => {
+  console.warn("[admin] teacher history drawer unavailable", context);
 };
 
 // Admin > Controle Pedagógico (gestão)
@@ -9743,6 +9793,48 @@ let adminStudentsState = {
   },
 };
 
+let adminTeachersState = {
+  history: {
+    isOpen: false,
+    teacherId: "",
+    teacherMeta: null,
+    linkedStudents: [],
+    metrics: { total: 0, individual: 0, group: 0, students: 0 },
+    baseLoading: false,
+    baseError: "",
+    editingField: "",
+    inlineSavingField: "",
+    inlineSaveTimer: 0,
+    photoSaving: false,
+    photoError: "",
+  },
+};
+
+const ADMIN_SETTINGS_SECTIONS = [
+  { key: "meu-perfil", label: "Meu perfil" },
+  { key: "tags", label: "Tags" },
+  { key: "planos", label: "Planos" },
+  { key: "motivos-cancelamento", label: "Motivos de cancelamento" },
+  { key: "listas", label: "Listas" },
+  { key: "campos-adicionais", label: "Campos adicionais" },
+  { key: "integracoes", label: "Integrações" },
+  { key: "conexoes", label: "Conexões" },
+  { key: "lixeira", label: "Lixeira" },
+];
+
+let adminSettingsState = {
+  activeSection: "meu-perfil",
+  profileLoadedAt: 0,
+  profileLoading: false,
+  profileError: "",
+  profileMeta: null,
+  editingField: "",
+  inlineSavingField: "",
+  inlineSaveTimer: 0,
+  photoSaving: false,
+  photoError: "",
+};
+
 const setAdminStudentsStatus = (text, tone = "") => {
   if (!(adminStudentsStatus instanceof HTMLElement)) return;
   adminStudentsStatus.textContent = String(text || "");
@@ -13058,6 +13150,22 @@ const fetchUserRowsFromFirestore = async (tipo) => {
     const nivelInglesAtual = typeof data.nivelInglesAtual === "string" ? data.nivelInglesAtual : "";
     const englishLevelStart = typeof data.english_level_start === "string" ? data.english_level_start : typeof data.englishLevelStart === "string" ? data.englishLevelStart : "";
     const photoURL = typeof data.photoURL === "string" ? data.photoURL.trim() : typeof data.photoUrl === "string" ? data.photoUrl.trim() : "";
+    const telefone =
+      typeof data.telefone === "string"
+        ? data.telefone.trim()
+        : typeof data.phone === "string"
+          ? data.phone.trim()
+          : typeof data.telefoneWhatsapp === "string"
+            ? data.telefoneWhatsapp.trim()
+            : "";
+    const especialidade =
+      typeof data.especialidade === "string"
+        ? data.especialidade.trim()
+        : typeof data.specialty === "string"
+          ? data.specialty.trim()
+          : typeof data.nivelLeciona === "string"
+            ? data.nivelLeciona.trim()
+            : "";
     const observacoesPedagogicas =
       typeof data.observacoesPedagogicas === "string"
         ? data.observacoesPedagogicas.trim()
@@ -13092,6 +13200,9 @@ const fetchUserRowsFromFirestore = async (tipo) => {
       english_level_start: englishLevelStart,
       englishLevelStart,
       photoURL,
+      telefone,
+      especialidade,
+      specialty: especialidade,
       observacoesPedagogicas,
     });
   });
@@ -13785,6 +13896,267 @@ const buildAdminStudentInlineFieldHtml = ({
       <div class="admin-student-inline-status" data-admin-student-inline-status hidden></div>
     </div>
   `;
+};
+
+const getAdminTeacherInlineValue = (teacherMeta, field) => {
+  const key = String(field || "").trim();
+  if (!teacherMeta || !key) return "";
+  if (key === "email") return String(teacherMeta?.email || "").trim();
+  if (key === "telefone") return String(teacherMeta?.telefone || teacherMeta?.phone || "").trim();
+  if (key === "especialidade") return String(teacherMeta?.especialidade || teacherMeta?.specialty || teacherMeta?.nivelLeciona || "").trim();
+  if (key === "criadoEm") return formatAdminDate(teacherMeta?.criadoEm);
+  return "";
+};
+
+const getAdminTeacherInlineCell = (sheetEl, field) => {
+  if (!(sheetEl instanceof HTMLElement)) return null;
+  return sheetEl.querySelector(`[data-admin-teacher-inline-field="${CSS.escape(String(field))}"]`);
+};
+
+const setAdminTeacherInlineStatus = (sheetEl, field, message, tone = "") => {
+  const cell = getAdminTeacherInlineCell(sheetEl, field);
+  const statusEl = cell instanceof HTMLElement ? cell.querySelector("[data-admin-teacher-inline-status]") : null;
+  if (statusEl instanceof HTMLElement) {
+    statusEl.textContent = String(message || "");
+    statusEl.dataset.tone = String(tone || "");
+    statusEl.hidden = !String(message || "").trim();
+  }
+};
+
+const setAdminTeacherInlineDisplay = (sheetEl, field, value) => {
+  const cell = getAdminTeacherInlineCell(sheetEl, field);
+  if (!(cell instanceof HTMLElement)) return;
+  const displayEl = cell.querySelector("[data-admin-teacher-inline-display]");
+  if (displayEl instanceof HTMLElement) displayEl.textContent = String(value || "—");
+  cell.dataset.currentValue = String(value || "");
+};
+
+const setAdminTeacherInlineEditing = (sheetEl, field, isEditing) => {
+  const cell = getAdminTeacherInlineCell(sheetEl, field);
+  if (!(cell instanceof HTMLElement)) return;
+  const hist = adminTeachersState.history;
+  const key = String(field || "").trim();
+  if (isEditing && hist.editingField && hist.editingField !== key) {
+    const prevCell = getAdminTeacherInlineCell(sheetEl, hist.editingField);
+    if (prevCell instanceof HTMLElement) {
+      prevCell.classList.remove("is-editing");
+      const prevEditor = prevCell.querySelector("[data-admin-teacher-inline-editor-wrap]");
+      const prevDisplay = prevCell.querySelector("[data-admin-teacher-inline-display]");
+      if (prevEditor instanceof HTMLElement) prevEditor.hidden = true;
+      if (prevDisplay instanceof HTMLElement) prevDisplay.hidden = false;
+    }
+  }
+  cell.classList.toggle("is-editing", Boolean(isEditing));
+  const editor = cell.querySelector("[data-admin-teacher-inline-editor-wrap]");
+  const display = cell.querySelector("[data-admin-teacher-inline-display]");
+  if (editor instanceof HTMLElement) editor.hidden = !isEditing;
+  if (display instanceof HTMLElement) display.hidden = Boolean(isEditing);
+  if (isEditing) {
+    hist.editingField = key;
+  } else if (hist.editingField === key) {
+    hist.editingField = "";
+  }
+};
+
+const focusAdminTeacherInlineField = (field) => {
+  const sheetEl = getAdminTeacherSheet();
+  if (!(sheetEl instanceof HTMLElement)) return;
+  if (adminTeachersState.history.inlineSavingField) return;
+  const cell = getAdminTeacherInlineCell(sheetEl, field);
+  if (!(cell instanceof HTMLElement)) return;
+  setAdminTeacherInlineEditing(sheetEl, field, true);
+  const editor = cell.querySelector("[data-admin-teacher-inline-control]");
+  window.requestAnimationFrame(() => {
+    if (editor instanceof HTMLInputElement || editor instanceof HTMLTextAreaElement) {
+      editor.focus();
+      editor.select?.();
+    } else if (editor instanceof HTMLSelectElement) {
+      editor.focus();
+    }
+  });
+};
+
+const cancelAdminTeacherInlineEditing = ({ sheetEl, field } = {}) => {
+  const hist = adminTeachersState.history;
+  if (hist.inlineSaveTimer) {
+    window.clearTimeout(hist.inlineSaveTimer);
+    hist.inlineSaveTimer = 0;
+  }
+  hist.inlineSavingField = "";
+  const cell = getAdminTeacherInlineCell(sheetEl, field);
+  if (!(cell instanceof HTMLElement)) return;
+  setAdminTeacherInlineEditing(sheetEl, field, false);
+  setAdminTeacherInlineStatus(sheetEl, field, "", "");
+  const control = cell.querySelector("[data-admin-teacher-inline-control]");
+  const currentValue = String(cell.dataset.currentValue || "");
+  if (control instanceof HTMLInputElement || control instanceof HTMLSelectElement || control instanceof HTMLTextAreaElement) {
+    control.value = currentValue;
+  }
+};
+
+const buildAdminTeacherInlineFieldHtml = ({
+  field,
+  label,
+  value,
+  displayValue = "",
+  kind = "text",
+  optionsHtml = "",
+  placeholder = "",
+  readonly = false,
+  help = "",
+} = {}) => {
+  const safeValue = String(value || "").trim();
+  const safeDisplayValue = String(displayValue || "").trim() || safeValue || placeholder || "—";
+  const editorAttrs = readonly ? 'disabled aria-disabled="true"' : "";
+  const editorMarkup =
+    kind === "select"
+      ? `<select class="admin-student-input admin-student-inline-control" data-admin-teacher-inline-control data-admin-teacher-inline-editor="${escapeHtml(field)}" ${editorAttrs}>${optionsHtml}</select>`
+      : kind === "textarea"
+        ? `<textarea class="admin-student-input admin-student-inline-control admin-student-inline-textarea" rows="3" data-admin-teacher-inline-control data-admin-teacher-inline-editor="${escapeHtml(field)}" ${editorAttrs}>${escapeHtml(safeValue)}</textarea>`
+        : `<input class="admin-student-input admin-student-inline-control" type="${kind === "email" ? "email" : kind === "date" ? "date" : kind === "tel" ? "tel" : "text"}" value="${escapeHtml(safeValue)}" data-admin-teacher-inline-control data-admin-teacher-inline-editor="${escapeHtml(field)}" ${editorAttrs} />`;
+
+  return `
+    <div class="admin-student-inline-field" data-admin-teacher-inline-field="${escapeHtml(field)}" data-current-value="${escapeHtml(safeValue)}">
+      <div class="admin-student-inline-label">${escapeHtml(label)}</div>
+      <button type="button" class="admin-student-inline-display" data-admin-teacher-inline-trigger="${escapeHtml(field)}" ${readonly ? "disabled" : ""}>
+        <span data-admin-teacher-inline-display>${escapeHtml(safeDisplayValue)}</span>
+      </button>
+      <div class="admin-student-inline-editor" data-admin-teacher-inline-editor-wrap hidden>
+        ${editorMarkup}
+      </div>
+      ${help ? `<div class="admin-student-inline-help">${escapeHtml(help)}</div>` : ""}
+      <div class="admin-student-inline-status" data-admin-teacher-inline-status hidden></div>
+    </div>
+  `;
+};
+
+const updateAdminTeacherCachedRow = (teacherId, patch = {}) => {
+  const id = String(teacherId || "").trim();
+  if (!id) return null;
+  if (adminTeachersState.history?.teacherMeta && String(adminTeachersState.history.teacherMeta.id || "") === id) {
+    adminTeachersState.history.teacherMeta = { ...adminTeachersState.history.teacherMeta, ...patch };
+  }
+  if (adminPedagogicoState.teachersById instanceof Map) {
+    const prev = adminPedagogicoState.teachersById.get(id);
+    if (prev) adminPedagogicoState.teachersById.set(id, { ...prev, ...patch });
+  }
+  if (Array.isArray(adminPedagogicoState.teachers)) {
+    adminPedagogicoState.teachers = adminPedagogicoState.teachers.map((row) => (String(row?.id || "") === id ? { ...row, ...patch } : row));
+  }
+  if (Array.isArray(adminUsersState.teacher?.rows)) {
+    adminUsersState.teacher.rows = adminUsersState.teacher.rows.map((row) => (String(row?.id || "") === id ? { ...row, ...patch } : row));
+  }
+  return adminPedagogicoState.teachersById instanceof Map ? adminPedagogicoState.teachersById.get(id) || null : null;
+};
+
+const saveAdminTeacherInlinePatch = async ({ teacherId, patch = {} } = {}) => {
+  const id = String(teacherId || "").trim();
+  if (!id) throw new Error("missing_teacher_id");
+  const cleanPatch = Object.fromEntries(Object.entries(patch || {}).filter(([, value]) => value !== undefined));
+  const response = await withTimeout(
+    fetchWithAuth("/api/admin-users", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        uid: id,
+        patch: cleanPatch,
+      }),
+    }),
+    12_000,
+    "admin_teacher_inline_patch"
+  );
+  const data = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(data?.error || "admin_teacher_inline_patch_failed");
+  updateAdminTeacherCachedRow(id, cleanPatch);
+  return true;
+};
+
+const resolveAdminTeacherInlinePatch = ({ field, value } = {}) => {
+  const key = String(field || "").trim();
+  const nextValue = String(value || "").trim();
+  if (!key) return null;
+  if (key === "email") {
+    return {
+      patch: { email: nextValue.toLowerCase() },
+      displayValue: nextValue || "—",
+    };
+  }
+  if (key === "telefone") {
+    return {
+      patch: { telefone: nextValue },
+      displayValue: nextValue || "—",
+    };
+  }
+  if (key === "especialidade") {
+    return {
+      patch: { especialidade: nextValue, specialty: nextValue },
+      displayValue: nextValue || "—",
+    };
+  }
+  if (key === "criadoEm") {
+    if (!nextValue) return null;
+    const date = new Date(`${nextValue}T12:00:00`);
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
+    const iso = date.toISOString();
+    return {
+      patch: { criadoEm: iso },
+      displayValue: formatAdminDate(iso),
+    };
+  }
+  return null;
+};
+
+const saveAdminTeacherInlineField = async ({ field, sheetEl } = {}) => {
+  const hist = adminTeachersState.history;
+  const teacherId = String(hist?.teacherId || "").trim();
+  if (!teacherId) return;
+  const cell = getAdminTeacherInlineCell(sheetEl, field);
+  if (!(cell instanceof HTMLElement)) return;
+  const control = cell.querySelector("[data-admin-teacher-inline-control]");
+  if (hist.inlineSavingField) return;
+  const currentValue = String(cell.dataset.currentValue || "").trim();
+  const nextValue = control instanceof HTMLInputElement || control instanceof HTMLSelectElement || control instanceof HTMLTextAreaElement ? String(control.value || "").trim() : "";
+  if (nextValue === currentValue) {
+    cancelAdminTeacherInlineEditing({ sheetEl, field });
+    return;
+  }
+  const resolved = resolveAdminTeacherInlinePatch({ field, value: nextValue });
+  if (!resolved) {
+    cancelAdminTeacherInlineEditing({ sheetEl, field });
+    return;
+  }
+  const saveLabel =
+    field === "email" ? "Salvando e-mail…" : field === "telefone" ? "Salvando telefone…" : field === "especialidade" ? "Salvando especialidade…" : "Salvando…";
+  hist.inlineSavingField = field;
+  setAdminTeacherInlineStatus(sheetEl, field, saveLabel, "loading");
+  if (control instanceof HTMLInputElement || control instanceof HTMLSelectElement || control instanceof HTMLTextAreaElement) control.disabled = true;
+  try {
+    await saveAdminTeacherInlinePatch({ teacherId, patch: resolved.patch });
+    updateAdminTeacherCachedRow(teacherId, resolved.patch);
+    setAdminTeacherInlineDisplay(sheetEl, field, resolved.displayValue);
+    setAdminTeacherInlineStatus(sheetEl, field, "Salvo ✓", "success");
+    if (hist.inlineSaveTimer) window.clearTimeout(hist.inlineSaveTimer);
+    hist.inlineSaveTimer = window.setTimeout(() => {
+      if (hist.inlineSavingField !== field) return;
+      hist.inlineSavingField = "";
+      hist.editingField = "";
+      hist.inlineSaveTimer = 0;
+      renderAdminTeacherSheet();
+      renderAdminPedagogicoTeachersPanel();
+    }, 2000);
+  } catch (error) {
+    console.error("[admin] teacher inline save failed:", error);
+    setAdminTeacherInlineStatus(sheetEl, field, "Não foi possível salvar agora.", "error");
+    hist.inlineSavingField = "";
+    if (control instanceof HTMLInputElement || control instanceof HTMLSelectElement || control instanceof HTMLTextAreaElement) {
+      control.disabled = false;
+      control.focus?.();
+    }
+  } finally {
+    if (control instanceof HTMLInputElement || control instanceof HTMLSelectElement || control instanceof HTMLTextAreaElement) {
+      control.disabled = hist.inlineSavingField === field;
+    }
+  }
 };
 
 const updateAdminStudentCachedRow = (alunoId, patch = {}) => {
@@ -18536,41 +18908,35 @@ const renderAdminPedagogicoClassesList = () => {
 const renderAdminPedagogicoTeachersPanel = () => {
   if (!(adminPedTeachers instanceof HTMLElement)) return;
   const teachers = Array.isArray(adminPedagogicoState.teachers) ? adminPedagogicoState.teachers : [];
-  const classes = Array.isArray(adminPedagogicoState.classes) ? adminPedagogicoState.classes : [];
-  const byTeacher = new Map();
-  classes.forEach((c) => {
-    const tid = String(c.teacherId || "");
-    if (!tid) return;
-    if (!byTeacher.has(tid)) byTeacher.set(tid, []);
-    byTeacher.get(tid).push(c);
-  });
 
   adminPedTeachers.innerHTML = teachers
     .slice()
     .sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"))
     .map((t) => {
-      const list = byTeacher.get(String(t.id || "")) || [];
-      const total = list.length;
-      const indiv = list.filter((c) => c.type === "individual").length;
-      const group = list.filter((c) => c.type === "group").length;
-      const students = new Set();
-      list.forEach((c) => (Array.isArray(c.studentIds) ? c.studentIds : []).forEach((id) => students.add(id)));
+      const teacherName = String(t.nome || "Professor");
+      const photoURL = String(t.photoURL || t.photoUrl || "").trim();
       return `
         <div
           class="admin-ped-teacher-row"
           data-admin-user-row="${escapeHtml(String(t.id || ""))}"
-          data-admin-user-name="${escapeHtml(String(t.nome || "Professor"))}"
+          data-admin-user-name="${escapeHtml(teacherName)}"
           data-admin-user-email="${escapeHtml(String(t.email || ""))}"
           data-admin-user-active="${t.ativo ? "1" : "0"}"
           data-admin-user-type="teacher"
+          data-admin-teacher-open="${escapeHtml(String(t.id || ""))}"
+          tabindex="0"
+          role="button"
         >
           <div class="admin-ped-teacher-main">
-            <div class="admin-ped-teacher-name">${escapeHtml(String(t.nome || "Professor"))}</div>
-            <div class="admin-ped-teacher-stats">
-              <span>${escapeHtml(String(total))} aulas</span>
-              <span>${escapeHtml(String(indiv))} individuais</span>
-              <span>${escapeHtml(String(group))} grupos</span>
-              <span>${escapeHtml(String(students.size))} alunos</span>
+            <div class="admin-ped-teacher-avatar" aria-hidden="true">
+              ${
+                photoURL
+                  ? `<img class="admin-ped-teacher-avatar-image" src="${escapeHtml(photoURL)}" alt="" />`
+                  : `<span>${escapeHtml(String(t.initials || getInitials(teacherName) || "P"))}</span>`
+              }
+            </div>
+            <div class="admin-ped-teacher-copy">
+              <div class="admin-ped-teacher-name">${escapeHtml(teacherName)}</div>
             </div>
           </div>
           <div class="admin-row-actions admin-ped-teacher-actions" data-admin-actions>
@@ -21334,6 +21700,599 @@ const closeAdminStudentHistoryDrawer = () => {
   };
 };
 
+const getAdminTeacherMetaById = (teacherId) => {
+  const id = String(teacherId || "").trim();
+  if (!id) return null;
+  if (adminPedagogicoState.teachersById instanceof Map && adminPedagogicoState.teachersById.has(id)) {
+    return adminPedagogicoState.teachersById.get(id) || null;
+  }
+  const list = Array.isArray(adminUsersState.teacher?.rows) ? adminUsersState.teacher.rows : [];
+  return list.find((row) => String(row?.id || "") === id) || null;
+};
+
+const deriveAdminTeacherSheetData = (teacherId) => {
+  const id = String(teacherId || "").trim();
+  const teacherMeta = getAdminTeacherMetaById(id);
+  const classes = Array.isArray(adminPedagogicoState.classes) ? adminPedagogicoState.classes : [];
+  const teacherClasses = classes.filter((row) => String(row?.teacherId || "").trim() === id);
+  const studentIds = new Set();
+  teacherClasses.forEach((row) => {
+    const ids = Array.isArray(row?.studentIds) ? row.studentIds : [];
+    ids.forEach((studentId) => {
+      const safeId = String(studentId || "").trim();
+      if (safeId) studentIds.add(safeId);
+    });
+  });
+  const studentsById = adminPedagogicoState.studentsById instanceof Map ? adminPedagogicoState.studentsById : new Map();
+  studentsById.forEach((student, studentId) => {
+    const linkedTeacherId = String(student?.professorId || student?.teacherId || "").trim();
+    if (linkedTeacherId === id) studentIds.add(String(studentId || "").trim());
+  });
+  const linkedStudents = [...studentIds]
+    .map((studentId) => studentsById.get(studentId) || null)
+    .filter(Boolean)
+    .sort((a, b) => String(a?.nome || "").localeCompare(String(b?.nome || ""), "pt-BR"));
+  const individual = teacherClasses.filter((row) => row?.type === "individual").length;
+  const group = teacherClasses.filter((row) => row?.type === "group").length;
+  return {
+    teacherMeta,
+    linkedStudents,
+    metrics: {
+      total: teacherClasses.length,
+      individual,
+      group,
+      students: linkedStudents.length,
+    },
+  };
+};
+
+const renderAdminTeacherSheet = () => {
+  const drawerEl = getAdminTeacherHistoryDrawer();
+  if (!(drawerEl instanceof HTMLElement)) {
+    warnMissingAdminTeacherHistoryDrawer("renderAdminTeacherSheet");
+    return;
+  }
+  const sheetEl = getAdminTeacherSheet();
+  if (!(sheetEl instanceof HTMLElement)) {
+    console.warn("[admin] teacher sheet unavailable", "renderAdminTeacherSheet");
+    return;
+  }
+  const hist = adminTeachersState.history;
+  const teacherMeta = hist.teacherMeta;
+  const teacherName = String(teacherMeta?.nome || "Professor").trim() || "Professor";
+  const teacherEmail = String(teacherMeta?.email || "").trim();
+  const teacherPhone = String(teacherMeta?.telefone || teacherMeta?.phone || "").trim();
+  const teacherStatusLabel = teacherMeta ? (teacherMeta.ativo ? "Ativo" : "Inativo") : "—";
+  const teacherStatusTone = teacherMeta ? (teacherMeta.ativo ? "is-active" : "is-danger") : "is-gray";
+  const createdLabel = teacherMeta?.criadoEm ? formatAdminDate(teacherMeta.criadoEm) : "—";
+  const createdInputValue = toAdminStudentDateInputValue(teacherMeta?.criadoEm);
+  const specialtyValue = String(teacherMeta?.especialidade || teacherMeta?.specialty || teacherMeta?.nivelLeciona || "").trim();
+  const initials = getInitials(teacherName);
+  const avatarPhotoURL = String(teacherMeta?.photoURL || teacherMeta?.photoUrl || "").trim();
+  const photoStatus = hist.photoSaving ? "Enviando foto…" : hist.photoError ? String(hist.photoError) : "";
+  const baseError = String(hist.baseError || "").trim();
+  if (hist.editingField || hist.inlineSavingField) return;
+
+  const metricsCards = [
+    { label: "Aulas", value: hist.metrics.total },
+    { label: "Individuais", value: hist.metrics.individual },
+    { label: "Grupos", value: hist.metrics.group },
+    { label: "Alunos vinculados", value: hist.metrics.students },
+  ]
+    .map(
+      (item) => `
+        <article class="admin-student-panel-card admin-teacher-metric-card">
+          <span>${escapeHtml(item.label)}</span>
+          <strong>${escapeHtml(String(item.value))}</strong>
+        </article>
+      `
+    )
+    .join("");
+
+  const linkedStudentsHtml = hist.linkedStudents.length
+    ? hist.linkedStudents
+        .map((student) => {
+          const studentId = String(student?.id || "").trim();
+          const studentName = String(student?.nome || "Aluno").trim() || "Aluno";
+          return `
+            <div class="admin-teacher-linked-student" data-admin-teacher-linked-student="${escapeHtml(studentId)}">
+              <div class="admin-teacher-linked-student-copy">${escapeHtml(studentName)}</div>
+              <button type="button" class="admin-teacher-linked-student-link" data-admin-teacher-open-student="${escapeHtml(studentId)}">Ver ficha</button>
+            </div>
+          `;
+        })
+        .join("")
+    : `<div class="admin-student-simple-empty admin-teacher-linked-empty">Nenhum aluno vinculado a este professor.</div>`;
+
+  sheetEl.innerHTML = `
+    <div class="admin-student-sheet-grid admin-student-simple-grid">
+      <aside class="admin-student-sheet-left admin-student-simple-left" aria-label="Identidade do professor">
+        <div class="admin-student-id admin-student-id-photo">
+          <div class="admin-student-avatar-wrap">
+            <button type="button" class="admin-student-avatar admin-student-avatar-photo" data-admin-teacher-avatar-trigger aria-label="Alterar foto do professor" ${hist.photoSaving ? "disabled" : ""}>
+              ${
+                avatarPhotoURL
+                  ? `<img class="admin-student-avatar-image" src="${escapeHtml(avatarPhotoURL)}" alt="" />`
+                  : `<span class="admin-student-avatar-initials">${escapeHtml(initials)}</span>`
+              }
+            </button>
+            <span class="admin-student-avatar-edit" aria-hidden="true">${hist.photoSaving ? "…" : "✎"}</span>
+            <input type="file" hidden accept="image/*" data-admin-teacher-avatar-file />
+          </div>
+          <div class="admin-student-id-main">
+            <div class="admin-student-name">${escapeHtml(teacherName)}</div>
+            <div class="admin-student-email">${escapeHtml(teacherEmail || "—")}</div>
+            <div class="admin-student-email">${escapeHtml(teacherPhone || "—")}</div>
+            <div class="admin-student-tags">
+              <span class="admin-student-tag ${teacherStatusTone}">${escapeHtml(teacherStatusLabel)}</span>
+            </div>
+          </div>
+        </div>
+        ${baseError ? `<div class="admin-student-simple-block-error">${escapeHtml(baseError)}</div>` : ""}
+        ${hist.baseLoading ? `<div class="admin-student-simple-block-loading">Carregando dados do professor…</div>` : ""}
+        <div class="admin-student-personal admin-student-quick-data" aria-label="Dados do professor">
+          <div class="admin-student-personal-title">Dados do professor</div>
+          <div class="admin-student-inline-list">
+            ${buildAdminTeacherInlineFieldHtml({ field: "email", label: "E-mail", value: teacherEmail, kind: "email", placeholder: "—" })}
+            ${buildAdminTeacherInlineFieldHtml({ field: "telefone", label: "Telefone", value: teacherPhone, kind: "tel", placeholder: "—" })}
+            ${buildAdminTeacherInlineFieldHtml({
+              field: "especialidade",
+              label: "Especialidade / nível que leciona",
+              value: specialtyValue,
+              kind: "text",
+              placeholder: "—",
+            })}
+            ${buildAdminTeacherInlineFieldHtml({
+              field: "criadoEm",
+              label: "Data de cadastro",
+              value: createdInputValue,
+              displayValue: createdLabel,
+              kind: "date",
+              placeholder: "—",
+            })}
+          </div>
+          ${photoStatus ? `<div class="admin-student-inline-photo-status${hist.photoSaving ? " is-loading" : " is-error"}">${escapeHtml(photoStatus)}</div>` : ""}
+        </div>
+      </aside>
+      <section class="admin-student-sheet-right admin-student-simple-right" aria-label="Resumo do professor">
+        <div class="admin-student-history-header">
+          <div>
+            <div class="admin-student-panel-title">Resumo do professor</div>
+            <div class="admin-student-history-subtitle">Métricas atuais e alunos vinculados.</div>
+          </div>
+        </div>
+        <div class="admin-teacher-metrics-grid">${metricsCards}</div>
+        <div class="admin-student-panel-card admin-teacher-linked-card">
+          <div class="admin-student-panel-title">Alunos vinculados</div>
+          <div class="admin-teacher-linked-list">${linkedStudentsHtml}</div>
+        </div>
+      </section>
+    </div>
+  `;
+};
+
+const openAdminTeacherHistoryDrawer = async ({ teacherId } = {}) => {
+  const drawerEl = getAdminTeacherHistoryDrawer();
+  if (!(drawerEl instanceof HTMLElement)) {
+    warnMissingAdminTeacherHistoryDrawer("openAdminTeacherHistoryDrawer");
+    return;
+  }
+  if (adminTeachersState.history.inlineSaveTimer) window.clearTimeout(adminTeachersState.history.inlineSaveTimer);
+  const id = String(teacherId || "").trim();
+  if (!id) return;
+  adminTeachersState.history = {
+    isOpen: true,
+    teacherId: id,
+    teacherMeta: null,
+    linkedStudents: [],
+    metrics: { total: 0, individual: 0, group: 0, students: 0 },
+    baseLoading: true,
+    baseError: "",
+    editingField: "",
+    inlineSavingField: "",
+    inlineSaveTimer: 0,
+    photoSaving: false,
+    photoError: "",
+  };
+  const titleEl = getAdminTeacherHistoryTitle();
+  const subEl = getAdminTeacherHistorySub();
+  if (titleEl instanceof HTMLElement) titleEl.textContent = "Ficha do professor";
+  if (subEl instanceof HTMLElement) subEl.textContent = "Carregando…";
+  drawerEl.hidden = false;
+  window.requestAnimationFrame(() => {
+    const nextDrawer = getAdminTeacherHistoryDrawer();
+    if (nextDrawer instanceof HTMLElement) nextDrawer.classList.add("is-open");
+  });
+  renderAdminTeacherSheet();
+  try {
+    if (!adminPedagogicoState.loadedAt) {
+      await renderAdminControlePedagogicoPanel({ force: false });
+    }
+    const derived = deriveAdminTeacherSheetData(id);
+    adminTeachersState.history.teacherMeta = derived.teacherMeta;
+    adminTeachersState.history.linkedStudents = derived.linkedStudents;
+    adminTeachersState.history.metrics = derived.metrics;
+    adminTeachersState.history.baseLoading = false;
+    if (!derived.teacherMeta) {
+      adminTeachersState.history.baseError = "Não foi possível localizar os dados básicos deste professor.";
+    }
+    const nextSubEl = getAdminTeacherHistorySub();
+    if (nextSubEl instanceof HTMLElement) {
+      const teacherName = String(derived.teacherMeta?.nome || "Professor").trim() || "Professor";
+      nextSubEl.textContent = `${teacherName} • ${derived.metrics.students} aluno(s)`;
+    }
+  } catch (error) {
+    console.error("[admin] teacher sheet load failed:", error);
+    adminTeachersState.history.baseLoading = false;
+    adminTeachersState.history.baseError =
+      typeof error?.message === "string" && error.message ? error.message : "Não foi possível carregar a ficha do professor.";
+  } finally {
+    renderAdminTeacherSheet();
+  }
+};
+
+const closeAdminTeacherHistoryDrawer = () => {
+  if (adminTeachersState.history.inlineSaveTimer) window.clearTimeout(adminTeachersState.history.inlineSaveTimer);
+  const drawerEl = getAdminTeacherHistoryDrawer();
+  if (drawerEl instanceof HTMLElement) {
+    drawerEl.classList.remove("is-open");
+    window.setTimeout(() => {
+      const nextDrawer = getAdminTeacherHistoryDrawer();
+      if (nextDrawer instanceof HTMLElement) nextDrawer.hidden = true;
+    }, 220);
+  } else {
+    warnMissingAdminTeacherHistoryDrawer("closeAdminTeacherHistoryDrawer");
+  }
+  adminTeachersState.history = {
+    isOpen: false,
+    teacherId: "",
+    teacherMeta: null,
+    linkedStudents: [],
+    metrics: { total: 0, individual: 0, group: 0, students: 0 },
+    baseLoading: false,
+    baseError: "",
+    editingField: "",
+    inlineSavingField: "",
+    inlineSaveTimer: 0,
+    photoSaving: false,
+    photoError: "",
+  };
+};
+
+const getAdminSettingsRoot = () => document.querySelector("[data-admin-settings]");
+const getAdminSettingsNav = () => document.querySelector("[data-admin-settings-nav]");
+const getAdminSettingsContent = () => document.querySelector("[data-admin-settings-content]");
+
+const getAdminSettingsProfileCell = (field) => {
+  const contentEl = getAdminSettingsContent();
+  if (!(contentEl instanceof HTMLElement)) return null;
+  return contentEl.querySelector(`[data-admin-settings-inline-field="${CSS.escape(String(field || ""))}"]`);
+};
+
+const setAdminSettingsInlineStatus = (field, message, tone = "") => {
+  const cell = getAdminSettingsProfileCell(field);
+  const statusEl = cell instanceof HTMLElement ? cell.querySelector("[data-admin-settings-inline-status]") : null;
+  if (statusEl instanceof HTMLElement) {
+    statusEl.textContent = String(message || "");
+    statusEl.dataset.tone = String(tone || "");
+    statusEl.hidden = !String(message || "").trim();
+  }
+};
+
+const setAdminSettingsInlineDisplay = (field, value) => {
+  const cell = getAdminSettingsProfileCell(field);
+  if (!(cell instanceof HTMLElement)) return;
+  const displayEl = cell.querySelector("[data-admin-settings-inline-display]");
+  if (displayEl instanceof HTMLElement) displayEl.textContent = String(value || "—");
+  cell.dataset.currentValue = String(value || "");
+};
+
+const setAdminSettingsInlineEditing = (field, isEditing) => {
+  const cell = getAdminSettingsProfileCell(field);
+  if (!(cell instanceof HTMLElement)) return;
+  const key = String(field || "").trim();
+  if (isEditing && adminSettingsState.editingField && adminSettingsState.editingField !== key) {
+    const prevCell = getAdminSettingsProfileCell(adminSettingsState.editingField);
+    if (prevCell instanceof HTMLElement) {
+      prevCell.classList.remove("is-editing");
+      const prevEditor = prevCell.querySelector("[data-admin-settings-inline-editor-wrap]");
+      const prevDisplay = prevCell.querySelector("[data-admin-settings-inline-display]");
+      if (prevEditor instanceof HTMLElement) prevEditor.hidden = true;
+      if (prevDisplay instanceof HTMLElement) prevDisplay.hidden = false;
+    }
+  }
+  cell.classList.toggle("is-editing", Boolean(isEditing));
+  const editor = cell.querySelector("[data-admin-settings-inline-editor-wrap]");
+  const display = cell.querySelector("[data-admin-settings-inline-display]");
+  if (editor instanceof HTMLElement) editor.hidden = !isEditing;
+  if (display instanceof HTMLElement) display.hidden = Boolean(isEditing);
+  if (isEditing) adminSettingsState.editingField = key;
+  else if (adminSettingsState.editingField === key) adminSettingsState.editingField = "";
+};
+
+const cancelAdminSettingsInlineEditing = (field) => {
+  if (adminSettingsState.inlineSaveTimer) {
+    window.clearTimeout(adminSettingsState.inlineSaveTimer);
+    adminSettingsState.inlineSaveTimer = 0;
+  }
+  adminSettingsState.inlineSavingField = "";
+  const cell = getAdminSettingsProfileCell(field);
+  if (!(cell instanceof HTMLElement)) return;
+  const control = cell.querySelector("[data-admin-settings-inline-control]");
+  const currentValue = String(cell.dataset.currentValue || "");
+  setAdminSettingsInlineEditing(field, false);
+  setAdminSettingsInlineStatus(field, "", "");
+  if (control instanceof HTMLInputElement || control instanceof HTMLSelectElement || control instanceof HTMLTextAreaElement) {
+    control.value = currentValue;
+  }
+};
+
+const focusAdminSettingsInlineField = (field) => {
+  if (adminSettingsState.inlineSavingField) return;
+  const cell = getAdminSettingsProfileCell(field);
+  if (!(cell instanceof HTMLElement)) return;
+  setAdminSettingsInlineEditing(field, true);
+  const editor = cell.querySelector("[data-admin-settings-inline-control]");
+  window.requestAnimationFrame(() => {
+    if (editor instanceof HTMLInputElement || editor instanceof HTMLTextAreaElement) {
+      editor.focus();
+      editor.select?.();
+    } else if (editor instanceof HTMLSelectElement) {
+      editor.focus();
+    }
+  });
+};
+
+const buildAdminSettingsInlineFieldHtml = ({
+  field,
+  label,
+  value,
+  displayValue = "",
+  kind = "text",
+  placeholder = "",
+  readonly = false,
+  prefix = "",
+  help = "",
+} = {}) => {
+  const safeValue = String(value || "").trim();
+  const safeDisplayValue = String(displayValue || "").trim() || safeValue || placeholder || "—";
+  const editorAttrs = readonly ? 'disabled aria-disabled="true"' : "";
+  const controlHtml = `<input class="admin-student-input admin-student-inline-control" type="${kind === "email" ? "email" : kind === "tel" ? "tel" : "text"}" value="${escapeHtml(safeValue)}" data-admin-settings-inline-control data-admin-settings-inline-editor="${escapeHtml(field)}" ${editorAttrs} />`;
+  return `
+    <div class="admin-student-inline-field" data-admin-settings-inline-field="${escapeHtml(field)}" data-current-value="${escapeHtml(safeValue)}">
+      <div class="admin-student-inline-label">${escapeHtml(label)}</div>
+      <button type="button" class="admin-student-inline-display" data-admin-settings-inline-trigger="${escapeHtml(field)}" ${readonly ? "disabled" : ""}>
+        <span data-admin-settings-inline-display>${escapeHtml(prefix ? `${prefix} ${safeDisplayValue}`.trim() : safeDisplayValue)}</span>
+      </button>
+      <div class="admin-student-inline-editor admin-settings-inline-editor" data-admin-settings-inline-editor-wrap hidden>
+        ${prefix ? `<span class="admin-settings-inline-prefix">${escapeHtml(prefix)}</span>` : ""}
+        ${controlHtml}
+      </div>
+      ${help ? `<div class="admin-student-inline-help">${escapeHtml(help)}</div>` : ""}
+      <div class="admin-student-inline-status" data-admin-settings-inline-status hidden></div>
+    </div>
+  `;
+};
+
+const saveAdminSettingsProfilePatch = async (patch = {}) => {
+  const uid = String(sessionUser?.id || "").trim();
+  if (!uid) throw new Error("missing_session_user");
+  const response = await withTimeout(
+    fetchWithAuth("/api/admin-users", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ uid, patch }),
+    }),
+    12_000,
+    "admin_settings_profile_patch"
+  );
+  const data = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(data?.error || "admin_settings_profile_patch_failed");
+  adminSettingsState.profileMeta = { ...(adminSettingsState.profileMeta || {}), ...patch };
+  if (sessionUser) {
+    if (typeof patch.nome === "string" && patch.nome.trim()) sessionUser.name = patch.nome.trim();
+    if (typeof patch.email === "string" && patch.email.trim()) sessionUser.email = patch.email.trim();
+  }
+};
+
+const resolveAdminSettingsProfilePatch = ({ field, value } = {}) => {
+  const key = String(field || "").trim();
+  const nextValue = String(value || "").trim();
+  if (key === "nome") return { patch: { nome: nextValue }, displayValue: nextValue || "—" };
+  if (key === "telefone") return { patch: { telefone: nextValue }, displayValue: nextValue ? `+55 ${nextValue}` : "—" };
+  return null;
+};
+
+const saveAdminSettingsInlineField = async (field) => {
+  const cell = getAdminSettingsProfileCell(field);
+  if (!(cell instanceof HTMLElement)) return;
+  const control = cell.querySelector("[data-admin-settings-inline-control]");
+  if (adminSettingsState.inlineSavingField) return;
+  const currentValue = String(cell.dataset.currentValue || "").trim();
+  const nextValue = control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement || control instanceof HTMLSelectElement ? String(control.value || "").trim() : "";
+  if (nextValue === currentValue) {
+    cancelAdminSettingsInlineEditing(field);
+    return;
+  }
+  const resolved = resolveAdminSettingsProfilePatch({ field, value: nextValue });
+  if (!resolved) {
+    cancelAdminSettingsInlineEditing(field);
+    return;
+  }
+  adminSettingsState.inlineSavingField = field;
+  setAdminSettingsInlineStatus(field, "Salvando…", "loading");
+  if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement || control instanceof HTMLSelectElement) control.disabled = true;
+  try {
+    await saveAdminSettingsProfilePatch(resolved.patch);
+    setAdminSettingsInlineDisplay(field, resolved.displayValue);
+    setAdminSettingsInlineStatus(field, "Salvo ✓", "success");
+    if (field === "nome" && greetingElement instanceof HTMLElement) {
+      greetingElement.dataset.userName = resolved.displayValue;
+      updateGreeting();
+    }
+    if (adminSettingsState.inlineSaveTimer) window.clearTimeout(adminSettingsState.inlineSaveTimer);
+    adminSettingsState.inlineSaveTimer = window.setTimeout(() => {
+      if (adminSettingsState.inlineSavingField !== field) return;
+      adminSettingsState.inlineSavingField = "";
+      adminSettingsState.editingField = "";
+      adminSettingsState.inlineSaveTimer = 0;
+      renderAdminSettingsPanel();
+    }, 2000);
+  } catch (error) {
+    console.error("[admin] settings inline save failed:", error);
+    adminSettingsState.inlineSavingField = "";
+    setAdminSettingsInlineStatus(field, "Não foi possível salvar agora.", "error");
+    if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement || control instanceof HTMLSelectElement) {
+      control.disabled = false;
+      control.focus?.();
+    }
+  } finally {
+    if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement || control instanceof HTMLSelectElement) {
+      control.disabled = adminSettingsState.inlineSavingField === field;
+    }
+  }
+};
+
+const loadAdminSettingsProfile = async ({ force = false } = {}) => {
+  if (adminSettingsState.profileLoading) return;
+  const uid = String(sessionUser?.id || "").trim();
+  if (!uid) return;
+  const now = Date.now();
+  if (!force && adminSettingsState.profileLoadedAt && now - adminSettingsState.profileLoadedAt < 45_000 && adminSettingsState.profileMeta) return;
+  adminSettingsState.profileLoading = true;
+  adminSettingsState.profileError = "";
+  try {
+    const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_settings_profile");
+    const user = await waitForFirebaseAuthReady(firebase, 5000);
+    if (!user) {
+      const err = new Error("firebase_not_authenticated");
+      err.code = "auth/no-current-user";
+      throw err;
+    }
+    const snap = await withTimeout(firebase.getDoc(firebase.doc(firebase.primaryDb, "users", uid)), 10_000, "firestore_get_admin_profile");
+    const data = snap && typeof snap.data === "function" ? snap.data() : null;
+    adminSettingsState.profileMeta = {
+      id: uid,
+      nome: String(data?.nome || sessionUser?.name || "").trim(),
+      email: String(data?.email || sessionUser?.email || "").trim(),
+      telefone: String(data?.telefone || data?.phone || "").trim(),
+      photoURL: String(data?.photoURL || data?.photoUrl || "").trim(),
+      criadoEm: data?.criadoEm || null,
+    };
+    adminSettingsState.profileLoadedAt = Date.now();
+  } catch (error) {
+    console.error("[admin] settings profile load failed:", error);
+    adminSettingsState.profileError = typeof error?.message === "string" && error.message ? error.message : "Não foi possível carregar o perfil.";
+    adminSettingsState.profileMeta = {
+      id: uid,
+      nome: String(sessionUser?.name || "").trim(),
+      email: String(sessionUser?.email || "").trim(),
+      telefone: "",
+      photoURL: "",
+      criadoEm: null,
+    };
+  } finally {
+    adminSettingsState.profileLoading = false;
+  }
+};
+
+const renderAdminSettingsPlaceholder = (section) => {
+  const meta = ADMIN_SETTINGS_SECTIONS.find((item) => item.key === section) || ADMIN_SETTINGS_SECTIONS[0];
+  return `
+    <div class="surface-card admin-settings-placeholder">
+      <div class="admin-settings-placeholder-kicker">Configurações</div>
+      <div class="admin-settings-placeholder-title">${escapeHtml(meta.label)}</div>
+      <div class="admin-settings-placeholder-sub">Estrutura pronta para esta área. Conteúdo completo em breve.</div>
+    </div>
+  `;
+};
+
+const renderAdminSettingsProfile = () => {
+  const meta = adminSettingsState.profileMeta || {};
+  const name = String(meta?.nome || sessionUser?.name || "Administrador").trim() || "Administrador";
+  const email = String(meta?.email || sessionUser?.email || "").trim();
+  const phone = String(meta?.telefone || "").trim();
+  const photoURL = String(meta?.photoURL || "").trim();
+  const createdLabel = meta?.criadoEm ? formatAdminDate(meta.criadoEm) : "—";
+  const initials = getInitials(name);
+  const error = String(adminSettingsState.profileError || "").trim();
+  const photoStatus = adminSettingsState.photoSaving ? "Enviando foto…" : adminSettingsState.photoError ? String(adminSettingsState.photoError) : "";
+  return `
+    <div class="admin-settings-page">
+      <div class="surface-card admin-settings-hero">
+        <div class="admin-settings-hero-main">
+          <div class="admin-student-avatar-wrap">
+            <button type="button" class="admin-student-avatar admin-student-avatar-photo" data-admin-settings-avatar-trigger aria-label="Alterar imagem de perfil" ${adminSettingsState.photoSaving ? "disabled" : ""}>
+              ${photoURL ? `<img class="admin-student-avatar-image" src="${escapeHtml(photoURL)}" alt="" />` : `<span class="admin-student-avatar-initials">${escapeHtml(initials)}</span>`}
+            </button>
+            <span class="admin-student-avatar-edit" aria-hidden="true">${adminSettingsState.photoSaving ? "…" : "✎"}</span>
+            <input type="file" hidden accept="image/*" data-admin-settings-avatar-file />
+          </div>
+          <div class="admin-settings-hero-copy">
+            <div class="admin-settings-hero-name">${escapeHtml(name)}</div>
+            <div class="admin-settings-hero-email">${escapeHtml(email || "—")}</div>
+            <div class="admin-settings-hero-date">Conta criada em ${escapeHtml(createdLabel)}</div>
+          </div>
+        </div>
+        <button class="button button-outline button-small" type="button" data-close-platform>Sair</button>
+      </div>
+      ${error ? `<div class="admin-student-simple-block-error">${escapeHtml(error)}</div>` : ""}
+      <div class="admin-settings-grid">
+        <section class="surface-card admin-settings-card">
+          <div class="admin-student-panel-title">Informações</div>
+          <div class="admin-student-inline-list">
+            ${buildAdminSettingsInlineFieldHtml({ field: "nome", label: "Nome", value: name, placeholder: "—" })}
+            ${buildAdminSettingsInlineFieldHtml({ field: "telefone", label: "Telefone", value: phone, placeholder: "—", prefix: "+55", kind: "tel" })}
+            ${buildAdminSettingsInlineFieldHtml({ field: "email", label: "E-mail", value: email, placeholder: "—", kind: "email", readonly: true, help: "O e-mail de login permanece somente leitura nesta etapa." })}
+          </div>
+          <div class="admin-settings-actions">
+            <button class="button button-outline button-small" type="button" data-admin-settings-change-password>Alterar senha</button>
+          </div>
+        </section>
+        <section class="surface-card admin-settings-card">
+          <div class="admin-student-panel-title">Imagem de perfil</div>
+          <div class="admin-settings-photo-card">
+            <div class="admin-settings-photo-copy">Use a mesma imagem exibida no topo. Clique no avatar para enviar uma nova foto.</div>
+            ${photoStatus ? `<div class="admin-student-inline-photo-status${adminSettingsState.photoSaving ? " is-loading" : " is-error"}">${escapeHtml(photoStatus)}</div>` : ""}
+          </div>
+        </section>
+      </div>
+    </div>
+  `;
+};
+
+const syncAdminSettingsNav = () => {
+  document.querySelectorAll("[data-admin-settings-section]").forEach((button) => {
+    if (!(button instanceof HTMLButtonElement)) return;
+    const section = String(button.getAttribute("data-admin-settings-section") || "").trim();
+    const isActive = section === adminSettingsState.activeSection;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-pressed", String(isActive));
+  });
+};
+
+const renderAdminSettingsPanel = () => {
+  const root = getAdminSettingsRoot();
+  const contentEl = getAdminSettingsContent();
+  if (!(root instanceof HTMLElement) || !(contentEl instanceof HTMLElement)) return;
+  syncAdminSettingsNav();
+  if (adminSettingsState.activeSection === "meu-perfil") {
+    contentEl.innerHTML = renderAdminSettingsProfile();
+    return;
+  }
+  contentEl.innerHTML = renderAdminSettingsPlaceholder(adminSettingsState.activeSection);
+};
+
+const openAdminSettingsSection = (section, { updateRoute = true } = {}) => {
+  const next = ADMIN_SETTINGS_SECTIONS.some((item) => item.key === section) ? section : "meu-perfil";
+  adminSettingsState.activeSection = next;
+  if (updateRoute) {
+    navigateApp(`/app/admin/configuracoes/${next}`);
+    return;
+  }
+  renderAdminSettingsPanel();
+};
+
 
 const closeAllAdminActionMenus = () => {
   document.querySelectorAll("[data-admin-actions].is-open").forEach((el) => el.classList.remove("is-open"));
@@ -23119,6 +24078,21 @@ const showPanel = (panelName) => {
     return;
   }
 
+  if (panelName === "configuracoes-admin") {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (currentRole !== "admin") {
+      navigateApp(roleBasePath(currentRole), { replace: true });
+      return;
+    }
+    loadAdminSettingsProfile({ force: false })
+      .catch((error) => console.error("[admin] settings profile init failed:", error))
+      .finally(() => {
+        renderAdminSettingsPanel();
+      });
+    renderAdminSettingsPanel();
+    return;
+  }
+
   if (panelName === "space-office") {
     window.scrollTo({ top: 0, behavior: "smooth" });
     window.dispatchEvent(new CustomEvent("space-office:open"));
@@ -23216,6 +24190,7 @@ const panelPathForRole = (role, panel) => {
     if (p === "space-office") return "/app/admin/space-office";
     if (p === "status-plataforma") return "/app/admin/status";
     if (p === "guia-colaboradores") return "/app/admin/guia";
+    if (p === "configuracoes-admin") return "/app/admin/configuracoes";
     if (p === "financeiro") return "/app/admin/financeiro";
     if (p === "growth") return "/app/admin/growth";
     if (p === "gravadas") return "/app/admin/gravadas";
@@ -23282,6 +24257,10 @@ const parseAppRoute = (path) => {
     if (sub === "space-office") return { role, panel: "space-office" };
     if (sub === "status") return { role, panel: "status-plataforma" };
     if (sub === "guia") return { role, panel: "guia-colaboradores" };
+    if (sub === "configuracoes") {
+      const section = ADMIN_SETTINGS_SECTIONS.some((item) => item.key === detail) ? detail : "meu-perfil";
+      return { role, panel: "configuracoes-admin", settingsSection: section };
+    }
     if (sub === "financeiro") return { role, panel: "financeiro" };
     if (sub === "growth") return { role, panel: "growth", growthTab: ["copilot-vendas", "scripts-vendas", "objecoes", "planos", "personas", "frases-vencedoras", "analytics", "training"].includes(detail) ? detail : "copilot-vendas" };
     if (sub === "ao-vivo") return { role, panel: "ao-vivo" };
@@ -23366,6 +24345,7 @@ const initAppShell = async () => {
   if (parsed?.pedagogicoTab) adminPedagogicoState.activeTab = parsed.pedagogicoTab;
   if (parsed?.pedagogicoPeopleTab) adminPedagogicoState.peopleTab = parsed.pedagogicoPeopleTab;
   if (parsed?.growthTab) salesCopilotState.activeTab = parsed.growthTab;
+  if (parsed?.settingsSection) adminSettingsState.activeSection = parsed.settingsSection;
   showPanel(parsed?.panel || "dashboard");
 
   renderDashboardCharts();
@@ -23398,6 +24378,7 @@ const navigateApp = (path, { replace = false } = {}) => {
   if (parsed?.pedagogicoTab) adminPedagogicoState.activeTab = parsed.pedagogicoTab;
   if (parsed?.pedagogicoPeopleTab) adminPedagogicoState.peopleTab = parsed.pedagogicoPeopleTab;
   if (parsed.growthTab) salesCopilotState.activeTab = parsed.growthTab;
+  if (parsed?.settingsSection) adminSettingsState.activeSection = parsed.settingsSection;
   showPanel(parsed.panel);
 };
 
@@ -23856,6 +24837,14 @@ document.addEventListener(
   if (!(target instanceof Element)) return;
   const adminStudentInlineInteractive = target.closest("[data-admin-student-history-drawer] input, [data-admin-student-history-drawer] select, [data-admin-student-history-drawer] textarea");
   if (adminStudentInlineInteractive instanceof HTMLInputElement || adminStudentInlineInteractive instanceof HTMLSelectElement || adminStudentInlineInteractive instanceof HTMLTextAreaElement) {
+    return;
+  }
+  const adminTeacherInlineInteractive = target.closest("[data-admin-teacher-history-drawer] input, [data-admin-teacher-history-drawer] select, [data-admin-teacher-history-drawer] textarea");
+  if (adminTeacherInlineInteractive instanceof HTMLInputElement || adminTeacherInlineInteractive instanceof HTMLSelectElement || adminTeacherInlineInteractive instanceof HTMLTextAreaElement) {
+    return;
+  }
+  const adminSettingsInlineInteractive = target.closest("[data-admin-settings-content] input, [data-admin-settings-content] select, [data-admin-settings-content] textarea");
+  if (adminSettingsInlineInteractive instanceof HTMLInputElement || adminSettingsInlineInteractive instanceof HTMLSelectElement || adminSettingsInlineInteractive instanceof HTMLTextAreaElement) {
     return;
   }
 
@@ -25217,12 +26206,100 @@ document.addEventListener("click", (event) => {
         return;
       }
 
+      const teacherHistoryClose = target.closest("[data-admin-teacher-history-close]");
+      if (teacherHistoryClose instanceof HTMLElement) {
+        event.preventDefault();
+        closeAdminTeacherHistoryDrawer();
+        return;
+      }
+
       const studentAvatarTrigger = target.closest("[data-admin-student-avatar-trigger]");
       if (studentAvatarTrigger instanceof HTMLButtonElement) {
         event.preventDefault();
         const sheetEl = getAdminStudentSheet();
         const input = sheetEl instanceof HTMLElement ? sheetEl.querySelector("[data-admin-student-avatar-file]") : null;
         if (input instanceof HTMLInputElement) input.click();
+        return;
+      }
+
+      const teacherAvatarTrigger = target.closest("[data-admin-teacher-avatar-trigger]");
+      if (teacherAvatarTrigger instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const sheetEl = getAdminTeacherSheet();
+        const input = sheetEl instanceof HTMLElement ? sheetEl.querySelector("[data-admin-teacher-avatar-file]") : null;
+        if (input instanceof HTMLInputElement) input.click();
+        return;
+      }
+
+      const teacherOpenStudent = target.closest("[data-admin-teacher-open-student]");
+      if (teacherOpenStudent instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const alunoId = String(teacherOpenStudent.getAttribute("data-admin-teacher-open-student") || "").trim();
+        const teacherId = String(adminTeachersState.history.teacherId || "").trim();
+        if (!alunoId) return;
+        closeAdminTeacherHistoryDrawer();
+        openStudentSimpleCard({ alunoId, teacherId }).catch((error) => console.error("[admin] open student from teacher sheet failed:", error));
+        return;
+      }
+
+      const settingsSection = target.closest("[data-admin-settings-section]");
+      if (settingsSection instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const section = String(settingsSection.getAttribute("data-admin-settings-section") || "").trim();
+        if (section) openAdminSettingsSection(section);
+        return;
+      }
+
+      const settingsInlineTrigger = target.closest("[data-admin-settings-inline-trigger]");
+      if (settingsInlineTrigger instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const field = String(settingsInlineTrigger.getAttribute("data-admin-settings-inline-trigger") || "").trim();
+        if (field) focusAdminSettingsInlineField(field);
+        return;
+      }
+
+      const settingsInlineControl = target.closest("[data-admin-settings-inline-control]");
+      if (settingsInlineControl instanceof HTMLInputElement || settingsInlineControl instanceof HTMLSelectElement || settingsInlineControl instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      const settingsAvatarTrigger = target.closest("[data-admin-settings-avatar-trigger]");
+      if (settingsAvatarTrigger instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const input = document.querySelector("[data-admin-settings-avatar-file]");
+        if (input instanceof HTMLInputElement) input.click();
+        return;
+      }
+
+      const settingsChangePassword = target.closest("[data-admin-settings-change-password]");
+      if (settingsChangePassword instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const email = String(adminSettingsState.profileMeta?.email || sessionUser?.email || "").trim();
+        if (!email) return;
+        openModal({
+          title: "Alterar senha",
+          bodyHtml: `Enviar link de redefinição de senha para <strong>${escapeHtml(email)}</strong>?`,
+          primaryLabel: "Enviar link",
+          secondaryLabel: "Cancelar",
+          hideSecondary: false,
+          showTrash: false,
+          onPrimary: () => {
+            (async () => {
+              try {
+                if (modalPrimary) modalPrimary.disabled = true;
+                if (modalSecondary) modalSecondary.disabled = true;
+                const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_settings_reset");
+                await withTimeout(firebase.sendPasswordResetEmail(firebase.primaryAuth, email), 12_000, "auth_reset_admin_settings");
+                closeModal();
+              } catch (error) {
+                console.error("[admin] settings password reset failed:", error);
+                if (modalPrimary) modalPrimary.disabled = false;
+                if (modalSecondary) modalSecondary.disabled = false;
+              }
+            })();
+            return false;
+          },
+        });
         return;
       }
 
@@ -25343,8 +26420,20 @@ document.addEventListener("click", (event) => {
         return;
       }
 
+      const teacherInlineTrigger = target.closest("[data-admin-teacher-inline-trigger]");
+      if (teacherInlineTrigger instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const field = String(teacherInlineTrigger.getAttribute("data-admin-teacher-inline-trigger") || "").trim();
+        if (field) focusAdminTeacherInlineField(field);
+        return;
+      }
+
       const studentInlineControl = target.closest("[data-admin-student-inline-control]");
       if (studentInlineControl instanceof HTMLInputElement || studentInlineControl instanceof HTMLSelectElement || studentInlineControl instanceof HTMLTextAreaElement) {
+        return;
+      }
+      const teacherInlineControl = target.closest("[data-admin-teacher-inline-control]");
+      if (teacherInlineControl instanceof HTMLInputElement || teacherInlineControl instanceof HTMLSelectElement || teacherInlineControl instanceof HTMLTextAreaElement) {
         return;
       }
 
@@ -25988,6 +27077,17 @@ document.addEventListener("click", (event) => {
         closeAllAdminActionMenus();
         closeAdminActionsPopover();
         openAdminUserEditModal({ uid, role: type, name, email });
+        return;
+      }
+
+      const teacherRow = target.closest("[data-admin-teacher-open]");
+      if (teacherRow instanceof HTMLElement && !target.closest("[data-admin-actions]")) {
+        event.preventDefault();
+        const teacherId = String(teacherRow.getAttribute("data-admin-teacher-open") || "").trim();
+        if (teacherId) {
+          closeAllAdminActionMenus();
+          openAdminTeacherHistoryDrawer({ teacherId }).catch((error) => console.error("[admin] open teacher sheet failed:", error));
+        }
         return;
       }
 
@@ -27473,6 +28573,71 @@ document.addEventListener(
       })();
       return;
     }
+    if (target instanceof HTMLInputElement && target.matches("[data-admin-teacher-avatar-file]")) {
+      const file = target.files && target.files[0] ? target.files[0] : null;
+      const sheetEl = getAdminTeacherSheet();
+      const hist = adminTeachersState.history;
+      const teacherId = String(hist?.teacherId || "").trim();
+      if (!(sheetEl instanceof HTMLElement) || !teacherId || !file) return;
+      adminTeachersState.history.photoSaving = true;
+      adminTeachersState.history.photoError = "";
+      renderAdminTeacherSheet();
+      (async () => {
+        try {
+          const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_teacher_avatar_upload");
+          const safeName = String(file.name || "photo").replace(/[^a-zA-Z0-9._-]+/g, "_");
+          const storagePath = `teacher_photos/${teacherId}/${Date.now()}_${safeName}`;
+          const storageRef = firebase.ref(firebase.primaryStorage, storagePath);
+          await withTimeout(firebase.uploadBytes(storageRef, file), 45_000, "storage_upload_teacher_avatar");
+          const url = await withTimeout(firebase.getDownloadURL(storageRef), 12_000, "storage_get_url_teacher_avatar");
+          await saveAdminTeacherInlinePatch({ teacherId, patch: { photoURL: url, photoStoragePath: storagePath } });
+          updateAdminTeacherCachedRow(teacherId, { photoURL: url, photoStoragePath: storagePath });
+          adminTeachersState.history.photoSaving = false;
+          adminTeachersState.history.photoError = "";
+          renderAdminTeacherSheet();
+          renderAdminPedagogicoTeachersPanel();
+        } catch (error) {
+          console.error("[admin] teacher avatar upload failed:", error);
+          adminTeachersState.history.photoSaving = false;
+          adminTeachersState.history.photoError = "Não foi possível enviar a foto agora.";
+          renderAdminTeacherSheet();
+        } finally {
+          if (target instanceof HTMLInputElement) target.value = "";
+        }
+      })();
+      return;
+    }
+    if (target instanceof HTMLInputElement && target.matches("[data-admin-settings-avatar-file]")) {
+      const file = target.files && target.files[0] ? target.files[0] : null;
+      const uid = String(sessionUser?.id || "").trim();
+      if (!uid || !file) return;
+      adminSettingsState.photoSaving = true;
+      adminSettingsState.photoError = "";
+      renderAdminSettingsPanel();
+      (async () => {
+        try {
+          const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_settings_avatar_upload");
+          const safeName = String(file.name || "photo").replace(/[^a-zA-Z0-9._-]+/g, "_");
+          const storagePath = `admin_profiles/${uid}/${Date.now()}_${safeName}`;
+          const storageRef = firebase.ref(firebase.primaryStorage, storagePath);
+          await withTimeout(firebase.uploadBytes(storageRef, file), 45_000, "storage_upload_admin_settings_avatar");
+          const url = await withTimeout(firebase.getDownloadURL(storageRef), 12_000, "storage_get_url_admin_settings_avatar");
+          await saveAdminSettingsProfilePatch({ photoURL: url, photoStoragePath: storagePath });
+          adminSettingsState.profileMeta = { ...(adminSettingsState.profileMeta || {}), photoURL: url, photoStoragePath: storagePath };
+          adminSettingsState.photoSaving = false;
+          adminSettingsState.photoError = "";
+          renderAdminSettingsPanel();
+        } catch (error) {
+          console.error("[admin] settings avatar upload failed:", error);
+          adminSettingsState.photoSaving = false;
+          adminSettingsState.photoError = "Não foi possível enviar a foto agora.";
+          renderAdminSettingsPanel();
+        } finally {
+          target.value = "";
+        }
+      })();
+      return;
+    }
     if (!(target instanceof HTMLSelectElement)) return;
     const fieldEl = target.closest("[data-admin-student-inline-field]");
     const field = String(fieldEl?.getAttribute("data-admin-student-inline-field") || "").trim();
@@ -27482,6 +28647,50 @@ document.addEventListener(
     if (!(sheetEl instanceof HTMLElement)) return;
     if (!sheetEl.contains(target)) return;
     saveAdminStudentInlineField({ field, sheetEl }).catch((error) => console.error("[admin] inline change save failed:", error));
+    return;
+  },
+  true
+);
+
+document.addEventListener(
+  "change",
+  (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLSelectElement)) return;
+    const fieldEl = target.closest("[data-admin-settings-inline-field]");
+    const field = String(fieldEl?.getAttribute("data-admin-settings-inline-field") || "").trim();
+    if (!field) return;
+    saveAdminSettingsInlineField(field).catch((error) => console.error("[admin] settings inline change save failed:", error));
+  },
+  true
+);
+
+document.addEventListener(
+  "change",
+  (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLSelectElement)) return;
+    const fieldEl = target.closest("[data-admin-teacher-inline-field]");
+    const field = String(fieldEl?.getAttribute("data-admin-teacher-inline-field") || "").trim();
+    if (!field) return;
+    if (!fieldEl) return;
+    const sheetEl = getAdminTeacherSheet();
+    if (!(sheetEl instanceof HTMLElement)) return;
+    if (!sheetEl.contains(target)) return;
+    saveAdminTeacherInlineField({ field, sheetEl }).catch((error) => console.error("[admin] teacher inline change save failed:", error));
+  },
+  true
+);
+
+document.addEventListener(
+  "focusout",
+  (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement)) return;
+    const fieldEl = target.closest("[data-admin-settings-inline-field]");
+    const field = String(fieldEl?.getAttribute("data-admin-settings-inline-field") || "").trim();
+    if (!field) return;
+    saveAdminSettingsInlineField(field).catch((error) => console.error("[admin] settings inline blur save failed:", error));
   },
   true
 );
@@ -27499,6 +28708,24 @@ document.addEventListener(
     if (!(sheetEl instanceof HTMLElement)) return;
     if (!sheetEl.contains(target)) return;
     saveAdminStudentInlineField({ field, sheetEl }).catch((error) => console.error("[admin] inline blur save failed:", error));
+    return;
+  },
+  true
+);
+
+document.addEventListener(
+  "focusout",
+  (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement)) return;
+    const fieldEl = target.closest("[data-admin-teacher-inline-field]");
+    const field = String(fieldEl?.getAttribute("data-admin-teacher-inline-field") || "").trim();
+    if (!field) return;
+    if (!fieldEl) return;
+    const sheetEl = getAdminTeacherSheet();
+    if (!(sheetEl instanceof HTMLElement)) return;
+    if (!sheetEl.contains(target)) return;
+    saveAdminTeacherInlineField({ field, sheetEl }).catch((error) => console.error("[admin] teacher inline blur save failed:", error));
   },
   true
 );
@@ -27520,5 +28747,55 @@ document.addEventListener("keydown", (event) => {
     const sheetEl = getAdminStudentSheet();
     if (!(sheetEl instanceof HTMLElement)) return;
     cancelAdminStudentInlineEditing({ sheetEl, field });
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement)) return;
+  const fieldEl = target.closest("[data-admin-settings-inline-field]");
+  const field = String(fieldEl?.getAttribute("data-admin-settings-inline-field") || "").trim();
+  if (!field) return;
+  if (event.key === "Enter") {
+    event.preventDefault();
+    saveAdminSettingsInlineField(field).catch((error) => console.error("[admin] settings inline enter save failed:", error));
+  } else if (event.key === "Escape") {
+    event.preventDefault();
+    event.stopPropagation();
+    cancelAdminSettingsInlineEditing(field);
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+  if (!target.matches("[data-admin-teacher-open]")) return;
+  if (event.key !== "Enter" && event.key !== " ") return;
+  if (target.closest("[data-admin-actions]")) return;
+  event.preventDefault();
+  const teacherId = String(target.getAttribute("data-admin-teacher-open") || "").trim();
+  if (!teacherId) return;
+  openAdminTeacherHistoryDrawer({ teacherId }).catch((error) => console.error("[admin] open teacher sheet failed:", error));
+});
+
+document.addEventListener("keydown", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement)) return;
+  const fieldEl = target.closest("[data-admin-teacher-inline-field]");
+  const field = String(fieldEl?.getAttribute("data-admin-teacher-inline-field") || "").trim();
+  if (!field) return;
+  if (event.key === "Enter") {
+    event.preventDefault();
+    const sheetEl = getAdminTeacherSheet();
+    if (!(sheetEl instanceof HTMLElement)) return;
+    saveAdminTeacherInlineField({ field, sheetEl }).catch((error) => console.error("[admin] teacher inline enter save failed:", error));
+  } else if (event.key === "Escape") {
+    event.preventDefault();
+    event.stopPropagation();
+    const sheetEl = getAdminTeacherSheet();
+    if (!(sheetEl instanceof HTMLElement)) return;
+    cancelAdminTeacherInlineEditing({ sheetEl, field });
+  } else if ((event.key === " " || event.key === "Enter") && target instanceof HTMLElement && target.matches("[data-admin-teacher-open]")) {
+    event.preventDefault();
   }
 });
