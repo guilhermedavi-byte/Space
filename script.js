@@ -111,6 +111,8 @@ const pedagogicoList = document.querySelector("[data-pedagogico-list]");
 const pedagogicoEmpty = document.querySelector("[data-pedagogico-empty]");
 const pedagogicoError = document.querySelector("[data-pedagogico-error]");
 const pedagogicoStatus = document.querySelector("[data-pedagogico-status]");
+const pedagogicoCount = document.querySelector("[data-pedagogico-count]");
+const pedagogicoFilterButtons = document.querySelectorAll("[data-pedagogico-filter]");
 const pedagogicoPendingBadge = document.querySelector("[data-pedagogico-pending]");
 const pedagogicoDrawer = document.querySelector("[data-pedagogico-drawer]");
 const pedagogicoDrawerTitle = document.querySelector("[data-pedagogico-drawer-title]");
@@ -7390,6 +7392,8 @@ let pedagogicoState = {
   lessons: [],
   logsByEventId: new Map(),
   pendingCount: 0,
+  filter: "pending",
+  shouldAutoScroll: false,
 };
 
 let pedagogicoActive = null; // { lesson, existing }
@@ -7402,6 +7406,22 @@ const formatPedagogicoDate = (dateKey) => {
   const d = parseDateKey(dateKey);
   if (!d) return "—";
   return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" }).format(d);
+};
+
+const formatPedagogicoGroupHeading = (dateKey) => {
+  const date = parseDateKey(dateKey);
+  if (!date) return "—";
+  const weekday = new Intl.DateTimeFormat("pt-BR", { weekday: "long" }).format(date);
+  const formatted = new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "long" }).format(date);
+  const weekdayLabel = weekday.charAt(0).toUpperCase() + weekday.slice(1);
+  return `${weekdayLabel}, ${formatted}`;
+};
+
+const shiftDateKey = (dateKey, deltaDays) => {
+  const date = parseDateKey(dateKey);
+  if (!date) return "";
+  date.setDate(date.getDate() + (Number(deltaDays) || 0));
+  return dateKeyFromIso(date.toISOString());
 };
 
 const setPedagogicoPendingBadge = (count) => {
@@ -7421,6 +7441,86 @@ const setPedagogicoStatus = (text, tone = "") => {
   if (!(pedagogicoStatus instanceof HTMLElement)) return;
   pedagogicoStatus.textContent = String(text || "");
   pedagogicoStatus.dataset.tone = String(tone || "");
+};
+
+const setPedagogicoCountLabel = (text) => {
+  if (!(pedagogicoCount instanceof HTMLElement)) return;
+  pedagogicoCount.textContent = String(text || "");
+};
+
+const syncPedagogicoFilterUi = () => {
+  pedagogicoFilterButtons.forEach((button) => {
+    if (!(button instanceof HTMLButtonElement)) return;
+    const isActive = String(button.getAttribute("data-pedagogico-filter") || "") === pedagogicoState.filter;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-pressed", String(isActive));
+  });
+};
+
+const statusMetaForPedagogicoLog = (log) => {
+  const status = log && typeof log.statusAula === "string" ? String(log.statusAula).trim().toLowerCase() : "";
+  if (status === "realizada") return { label: "Presença registrada", tone: "green", icon: "✓" };
+  if (status === "falta_aluno") return { label: "Falta registrada", tone: "red", icon: "•" };
+  if (status === "remarcada") return { label: "Remarcada", tone: "yellow", icon: "↺" };
+  return { label: "Registro concluído", tone: "green", icon: "✓" };
+};
+
+const buildPedagogicoLessonViewModel = (lesson, logsByEventId, now, todayKey) => {
+  const start = buildDateFromDateKeyAndMinutes(lesson.dateKey, lesson.startMin);
+  const startTime = start ? start.getTime() : 0;
+  const log = logsByEventId.get(lesson.id) || null;
+  const isDone = Boolean(log && typeof log.statusAula === "string" && String(log.statusAula).trim());
+  const isToday = lesson.dateKey === todayKey;
+  const isPast = Boolean(start && startTime < now);
+  const isFuture = Boolean(start && startTime > now);
+  let temporalState = "future";
+  if (isPast && !isDone) temporalState = "pending";
+  else if (isPast && isDone) temporalState = "done";
+  else if (isToday) temporalState = "today";
+
+  const statusMeta =
+    temporalState === "pending"
+      ? { label: "Pendente", tone: "amber", icon: "!" }
+      : isDone
+        ? statusMetaForPedagogicoLog(log)
+        : { label: isToday ? "Hoje" : "Agendada", tone: isToday ? "coral" : "slate", icon: "•" };
+
+  return {
+    lesson,
+    log,
+    start,
+    isDone,
+    isToday,
+    isPast,
+    isFuture,
+    temporalState,
+    statusMeta,
+  };
+};
+
+const findPedagogicoScrollAnchorDateKey = (items, todayKey) => {
+  if (!Array.isArray(items) || !items.length) return "";
+  const twoDaysAgo = shiftDateKey(todayKey, -2);
+  const recentPending = items.find((item) => item.temporalState === "pending" && item.lesson.dateKey >= twoDaysAgo && item.lesson.dateKey <= todayKey);
+  if (recentPending) return recentPending.lesson.dateKey;
+  const recentContext = items.find((item) => item.lesson.dateKey >= shiftDateKey(todayKey, -1) && item.lesson.dateKey <= todayKey);
+  if (recentContext) return recentContext.lesson.dateKey;
+  const todayItem = items.find((item) => item.lesson.dateKey === todayKey);
+  if (todayItem) return todayItem.lesson.dateKey;
+  const nextItem = items.find((item) => item.lesson.dateKey > todayKey);
+  if (nextItem) return nextItem.lesson.dateKey;
+  return items[0]?.lesson?.dateKey || "";
+};
+
+const scrollPedagogicoToAnchor = () => {
+  if (!pedagogicoState.shouldAutoScroll) return;
+  pedagogicoState.shouldAutoScroll = false;
+  if (pedagogicoState.filter !== "all") return;
+  window.requestAnimationFrame(() => {
+    const anchor = document.querySelector("[data-pedagogico-anchor='true']");
+    if (!(anchor instanceof HTMLElement)) return;
+    anchor.scrollIntoView({ block: "start", behavior: "auto" });
+  });
 };
 
 const setPedagogicoAutosaveLabel = (text) => {
