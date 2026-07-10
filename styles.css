@@ -778,6 +778,7 @@ body[data-role="admin"] .live-credits-row {
 .platform-sidebar {
   width: 100%;
   min-height: 100vh;
+  align-self: start;
   padding: 24px 18px;
   border-radius: 0 28px 28px 0;
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -1060,7 +1061,7 @@ body[data-sidebar-expanded="false"] .sidebar-accordion-body {
   .platform-sidebar {
     width: var(--sidebar-collapsed);
     padding: 20px 14px;
-    min-height: 100vh;
+    height: 100vh;
     overflow-y: auto;
     overscroll-behavior: contain;
     scrollbar-gutter: stable;
