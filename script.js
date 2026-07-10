@@ -15148,6 +15148,115 @@ let adminPedagogicoState = {
   conflicts: [],
 };
 let adminPedTableSearchDebounce = null;
+let adminPedOverviewV2State = {
+  period: "30d",
+  chartJsPromise: null,
+  charts: {
+    presence: null,
+    risk: null,
+  },
+  renderToken: 0,
+};
+
+const PEDOV2_MOCK = {
+  // ETAPA 2: substituir por dados reais — mesma estrutura do protótipo (kpis, séries 7d/30d/90d, fatores, funil, alunos em risco, professores, heatmap, pendências).
+  meta: {
+    eyebrow: "Pedagógico",
+    title: "Visão Geral",
+    dateLabel: "10 de julho",
+    note: "Protótipo · dados fictícios",
+  },
+  briefing: {
+    tag: "Resumo do dia · IA",
+    lead: "2 alunos entraram em risco crítico",
+    body: "— faltas seguidas e sem próxima aula. Sugestão: reagendar os",
+    highlight: "5 sem aula futura",
+  },
+  kpis: [
+    { key: "ativos", label: "Alunos ativos", dotColor: "#a0bcff", value: 116, delta: "+4", deltaClass: "up-good", sparkKey: "ativos", color: "#a0bcff" },
+    { key: "risco", label: "Alunos em risco", dotColor: "#ff564f", value: 9, delta: "+2", deltaClass: "up-bad", sparkKey: "risco", color: "#ff564f", emphasis: true },
+    { key: "presenca", label: "Presença", dotColor: "#3fd6a4", value: 87, unit: "%", delta: "−3pp", deltaClass: "down-bad", sparkKey: "presenca", color: "#3fd6a4" },
+    { key: "aulas", label: "Aulas na semana", dotColor: "rgba(255,255,255,0.4)", value: 42, delta: "4 faltas", deltaClass: "up-bad", sparkKey: "aulas", color: "#d9deea" },
+    { key: "nps", label: "NPS dos alunos", dotColor: "#f5b64b", value: 62, delta: "+5", deltaClass: "up-good", sparkKey: "nps", color: "#f5b64b" },
+  ],
+  periods: {
+    "7d": {
+      labels: ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"],
+      realizadas: [7, 8, 6, 9, 8, 5, 0],
+      faltas: [1, 0, 2, 0, 1, 0, 0],
+      remarcadas: [0, 1, 0, 1, 0, 0, 0],
+    },
+    "30d": {
+      labels: ["S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9", "S10", "S11", "S12"],
+      realizadas: [30, 34, 31, 36, 38, 35, 33, 37, 40, 38, 36, 36],
+      faltas: [3, 2, 4, 3, 2, 5, 4, 3, 2, 4, 6, 4],
+      remarcadas: [2, 3, 2, 1, 3, 2, 3, 2, 3, 2, 3, 2],
+    },
+    "90d": {
+      labels: ["fev", "mar", "abr", "mai", "jun", "jul"],
+      realizadas: [118, 132, 140, 151, 148, 152],
+      faltas: [12, 10, 14, 11, 16, 18],
+      remarcadas: [8, 9, 7, 10, 9, 11],
+    },
+  },
+  sparks: {
+    ativos: [98, 101, 104, 103, 107, 109, 112, 112, 114, 116],
+    risco: [5, 4, 6, 5, 7, 6, 7, 7, 8, 9],
+    presenca: [92, 91, 90, 91, 89, 90, 88, 88, 88, 87],
+    aulas: [36, 40, 38, 41, 39, 44, 42, 40, 43, 42],
+    nps: [51, 53, 55, 54, 57, 58, 58, 60, 61, 62],
+  },
+  riskDonut: {
+    labels: ["Saudáveis", "Em atenção", "Críticos"],
+    data: [107, 6, 3],
+    centerValue: "92%",
+    centerLabel: "base saudável",
+  },
+  riskFactors: [
+    { label: "Sem próxima aula agendada", count: 5, pct: 100 },
+    { label: "2+ faltas seguidas", count: 4, pct: 80 },
+    { label: "Engajamento em queda", count: 3, pct: 60 },
+    { label: "Onboarding travado", count: 2, pct: 40 },
+  ],
+  funnel: [
+    { label: "Matrículas", value: 12, pct: 100 },
+    { label: "1ª aula agendada", value: 10, pct: 83 },
+    { label: "1ª aula realizada", value: 8, pct: 67 },
+    { label: "4ª aula (ativado)", value: 6, pct: 50 },
+  ],
+  studentsAtRisk: [
+    { nome: "Mariana Duarte", prof: "Prof. Rafael", score: 86, nivel: "critico", motivos: ["3 faltas seguidas", "sem próxima aula"], ultima: "há 18 dias", proxima: "—", alertaProxima: true },
+    { nome: "Carlos Mendes", prof: "Prof. Amanda", score: 78, nivel: "critico", motivos: ["engajamento 4,2 → 2,8", "2 remarcações"], ultima: "há 9 dias", proxima: "—", alertaProxima: true },
+    { nome: "Beatriz Rocha", prof: "sem professor", score: 71, nivel: "critico", motivos: ["onboarding travado", "sem 1ª aula"], ultima: "nunca", proxima: "—", alertaProxima: true },
+    { nome: "Felipe Araújo", prof: "Prof. Rafael", score: 58, nivel: "atencao", motivos: ["1 falta", "homework pendente 3x"], ultima: "há 4 dias", proxima: "seg · 19h" },
+    { nome: "Juliana Freitas", prof: "Prof. Diego", score: 52, nivel: "atencao", motivos: ["engajamento em queda"], ultima: "há 2 dias", proxima: "qui · 20h30" },
+  ],
+  teachers: [
+    { nome: "Rafael Lima", alunos: 32, aulas: 118, registro: 96, engaj: 4.6, trend: "+0,2", dir: "pos" },
+    { nome: "Amanda Souza", alunos: 28, aulas: 104, registro: 88, engaj: 4.3, trend: "−0,1", dir: "neg" },
+    { nome: "Diego Martins", alunos: 24, aulas: 92, registro: 74, engaj: 4.1, trend: "0,0", dir: "flat" },
+    { nome: "Paula Reis", alunos: 21, aulas: 80, registro: 91, engaj: 4.7, trend: "+0,3", dir: "pos" },
+  ],
+  heatmap: {
+    dias: ["seg", "ter", "qua", "qui", "sex", "sáb"],
+    faixas: ["7–9h", "9–11h", "11–13h", "13–15h", "15–17h", "17–19h", "19–21h"],
+    ocup: [
+      [2, 3, 2, 3, 2, 1],
+      [4, 5, 4, 5, 4, 2],
+      [3, 3, 4, 3, 3, 1],
+      [2, 2, 3, 2, 2, 0],
+      [4, 4, 5, 4, 3, 1],
+      [6, 7, 6, 7, 6, 2],
+      [8, 9, 8, 9, 7, 1],
+    ],
+  },
+  opsStrip: [
+    { label: "Alunos sem professor", count: 3, tone: "crit" },
+    { label: "Sem primeira aula", count: 3, tone: "crit" },
+    { label: "Registros pendentes", count: 2, tone: "warn" },
+    { label: "Ocorrências abertas", count: 0, tone: "zero" },
+  ],
+};
 
 const setAdminPedagogicoStatus = (text, tone = "", detail = "") => {
   if (!(adminPedStatus instanceof HTMLElement)) return;
@@ -19234,11 +19343,464 @@ const renderAdminPedagogicoConflicts = () => {
     .join("");
 };
 
+const loadChartJs = () => {
+  if (window.Chart) return Promise.resolve(window.Chart);
+  if (adminPedOverviewV2State.chartJsPromise) return adminPedOverviewV2State.chartJsPromise;
+  adminPedOverviewV2State.chartJsPromise = new Promise((resolve, reject) => {
+    const existing = document.querySelector('script[data-chartjs-loader="pedov2"]');
+    if (existing instanceof HTMLScriptElement) {
+      existing.addEventListener("load", () => resolve(window.Chart), { once: true });
+      existing.addEventListener("error", () => reject(new Error("chartjs_load_failed")), { once: true });
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js";
+    script.async = true;
+    script.dataset.chartjsLoader = "pedov2";
+    script.addEventListener("load", () => resolve(window.Chart), { once: true });
+    script.addEventListener("error", () => reject(new Error("chartjs_load_failed")), { once: true });
+    document.head.appendChild(script);
+  });
+  return adminPedOverviewV2State.chartJsPromise;
+};
+
+const destroyPedov2Charts = () => {
+  Object.values(adminPedOverviewV2State.charts).forEach((chart) => {
+    if (chart && typeof chart.destroy === "function") chart.destroy();
+  });
+  adminPedOverviewV2State.charts.presence = null;
+  adminPedOverviewV2State.charts.risk = null;
+};
+
+const getPedov2ReduceMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+const getPedov2Initials = (name) =>
+  String(name || "")
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+
+const renderPedov2SparklineSvg = (key, color) => {
+  const data = Array.isArray(PEDOV2_MOCK.sparks[key]) ? PEDOV2_MOCK.sparks[key] : [];
+  if (!data.length) return "";
+  const width = 200;
+  const height = 34;
+  const pad = 3;
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const x = (index) => pad + (index / Math.max(1, data.length - 1)) * (width - pad * 2);
+  const y = (value) => height - pad - ((value - min) / Math.max(1, max - min || 1)) * (height - pad * 2);
+  const points = data.map((value, index) => `${x(index).toFixed(1)},${y(value).toFixed(1)}`);
+  const line = `M${points.join(" L")}`;
+  const area = `${line} L${x(data.length - 1)},${height} L${x(0)},${height} Z`;
+  const gradientId = `pedov2-grad-${key}`;
+  return `
+    <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-hidden="true">
+      <defs>
+        <linearGradient id="${gradientId}" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="${color}" stop-opacity="0.28"></stop>
+          <stop offset="1" stop-color="${color}" stop-opacity="0"></stop>
+        </linearGradient>
+      </defs>
+      <path d="${area}" fill="url(#${gradientId})"></path>
+      <path d="${line}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+      <circle cx="${x(data.length - 1)}" cy="${y(data[data.length - 1])}" r="2.6" fill="${color}"></circle>
+    </svg>
+  `;
+};
+
+const getPedov2HeatColor = (value) => {
+  if (value === 0) return "rgba(255,255,255,0.045)";
+  if (value <= 2) return "rgba(160,188,255,0.16)";
+  if (value <= 4) return "rgba(160,188,255,0.38)";
+  if (value <= 6) return "rgba(255,134,127,0.5)";
+  return "rgba(255,86,79,0.85)";
+};
+
+const animatePedov2Counts = (root) => {
+  const reduceMotion = getPedov2ReduceMotion();
+  root.querySelectorAll("[data-pedov2-count]").forEach((node) => {
+    if (!(node instanceof HTMLElement)) return;
+    const target = Number(node.getAttribute("data-pedov2-count") || 0);
+    if (!Number.isFinite(target)) return;
+    if (reduceMotion) {
+      node.textContent = String(target);
+      return;
+    }
+    const startedAt = performance.now();
+    const duration = 900;
+    const tick = (time) => {
+      const progress = Math.min(1, (time - startedAt) / duration);
+      node.textContent = String(Math.round(target * (1 - Math.pow(1 - progress, 3))));
+      if (progress < 1) window.requestAnimationFrame(tick);
+    };
+    node.textContent = "0";
+    window.requestAnimationFrame(tick);
+  });
+};
+
+const renderPedov2Heatmap = () => {
+  const { dias, faixas, ocup } = PEDOV2_MOCK.heatmap;
+  return `<div></div>${dias
+    .map((dia) => `<div class="pedov2-heat-label">${escapeHtml(dia)}</div>`)
+    .join("")}${faixas
+    .map(
+      (faixa, rowIndex) =>
+        `<div class="pedov2-heat-label">${escapeHtml(faixa)}</div>${dias
+          .map((dia, colIndex) => {
+            const value = Number(ocup?.[rowIndex]?.[colIndex] || 0);
+            return `<div class="pedov2-heat-cell" style="background:${getPedov2HeatColor(value)}" data-tip="${escapeHtml(
+              `${dia} ${faixa} · ${value} aula${value === 1 ? "" : "s"}`
+            )}"></div>`;
+          })
+          .join("")}`
+    )
+    .join("")}`;
+};
+
+const renderPedov2RiskFactors = () =>
+  PEDOV2_MOCK.riskFactors
+    .map(
+      (factor) => `
+        <div class="pedov2-risk-factor">
+          <span class="pedov2-rf-label">${escapeHtml(factor.label)}</span>
+          <span class="pedov2-rf-count">${escapeHtml(String(factor.count))}</span>
+          <div class="pedov2-rf-bar"><i style="width:${escapeHtml(String(factor.pct))}%"></i></div>
+        </div>
+      `
+    )
+    .join("");
+
+const renderPedov2Funnel = () =>
+  PEDOV2_MOCK.funnel
+    .map(
+      (step) => `
+        <div class="pedov2-funil-step">
+          <div class="pedov2-funil-meta">
+            <span class="pedov2-fs-label">${escapeHtml(step.label)}</span>
+            <span class="pedov2-fs-value">${escapeHtml(String(step.value))} <span>${escapeHtml(`· ${step.pct}%`)}</span></span>
+          </div>
+          <div class="pedov2-funil-bar"><i data-pedov2-funil-width="${escapeHtml(String(step.pct))}"></i></div>
+        </div>
+      `
+    )
+    .join("");
+
+const renderPedov2RiskRows = () =>
+  PEDOV2_MOCK.studentsAtRisk
+    .map(
+      (student) => `
+        <tr>
+          <td>
+            <div class="pedov2-aluno-cell">
+              <span class="pedov2-avatar">${escapeHtml(getPedov2Initials(student.nome))}</span>
+              <div>
+                <div class="pedov2-aluno-nome">${escapeHtml(student.nome)}</div>
+                <div class="pedov2-aluno-prof">${escapeHtml(student.prof)}</div>
+              </div>
+            </div>
+          </td>
+          <td><span class="pedov2-score-pill ${escapeHtml(student.nivel)}"><i></i>${escapeHtml(String(student.score))}</span></td>
+          <td><div class="pedov2-motivo-chips">${student.motivos.map((motivo) => `<span class="pedov2-motivo">${escapeHtml(motivo)}</span>`).join("")}</div></td>
+          <td class="pedov2-cell-muted">${escapeHtml(student.ultima)}</td>
+          <td class="pedov2-cell-muted ${student.alertaProxima ? "pedov2-cell-alert" : ""}">${escapeHtml(student.proxima)}</td>
+          <td style="text-align:right"><button class="pedov2-btn-ghost ${student.nivel === "critico" ? "coral" : ""}" type="button">${student.alertaProxima ? "Reagendar" : "Ver ficha"}</button></td>
+        </tr>
+      `
+    )
+    .join("");
+
+const renderPedov2TeacherRows = () => {
+  const getBarBackground = (value, warnAt) =>
+    value >= warnAt
+      ? "linear-gradient(90deg, rgba(160,188,255,0.9), rgba(160,188,255,0.5))"
+      : "linear-gradient(90deg, #ff857f, #ff564f)";
+  return PEDOV2_MOCK.teachers
+    .map(
+      (teacher) => `
+        <div class="pedov2-prof-row">
+          <span class="pedov2-prof-name"><span class="pedov2-avatar pedov2-avatar-soft">${escapeHtml(getPedov2Initials(teacher.nome))}</span>${escapeHtml(teacher.nome)}</span>
+          <span class="pedov2-cell-num">${escapeHtml(String(teacher.alunos))}</span>
+          <span class="pedov2-cell-num">${escapeHtml(String(teacher.aulas))}</span>
+          <span class="pedov2-mini-bar-wrap">
+            <span class="pedov2-mini-bar-label">${escapeHtml(`${teacher.registro}% · ${teacher.engaj.toFixed(1).replace(".", ",")}`)}</span>
+            <span class="pedov2-mini-bar"><i style="width:${escapeHtml(String(teacher.registro))}%; background:${getBarBackground(teacher.registro, 85)}"></i></span>
+            <span class="pedov2-mini-bar"><i style="width:${escapeHtml(String((teacher.engaj / 5) * 100))}%; background:${getBarBackground(teacher.engaj, 4.3)}"></i></span>
+          </span>
+          <span class="pedov2-trend ${escapeHtml(teacher.dir)}">${escapeHtml(teacher.trend)}</span>
+        </div>
+      `
+    )
+    .join("");
+};
+
+const renderPedov2OpsStrip = () =>
+  PEDOV2_MOCK.opsStrip
+    .map(
+      (item) => `
+        <div class="pedov2-ops-item">
+          <div class="pedov2-ops-copy">${escapeHtml(item.label)}</div>
+          <span class="pedov2-ops-count ${escapeHtml(item.tone)}">${escapeHtml(String(item.count))}</span>
+        </div>
+      `
+    )
+    .join("");
+
+const bindPedov2Interactions = () => {
+  if (!(adminPedOverview instanceof HTMLElement) || adminPedOverview.dataset.pedov2Bound === "true") return;
+  adminPedOverview.dataset.pedov2Bound = "true";
+  adminPedOverview.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const periodButton = target.closest("[data-pedov2-period]");
+    if (periodButton instanceof HTMLButtonElement) {
+      const next = String(periodButton.getAttribute("data-pedov2-period") || "").trim();
+      if (!next || next === adminPedOverviewV2State.period) return;
+      adminPedOverviewV2State.period = next;
+      renderAdminPedOverviewV2();
+      return;
+    }
+    const newActionButton = target.closest("[data-pedov2-new-action]");
+    if (newActionButton instanceof HTMLButtonElement) {
+      const original = document.querySelector("[data-admin-ped-new-action]");
+      if (original instanceof HTMLButtonElement) original.click();
+    }
+  });
+};
+
+const hydratePedov2Charts = async (root, token) => {
+  const ChartJs = await loadChartJs();
+  if (!(root instanceof HTMLElement) || token !== adminPedOverviewV2State.renderToken || !root.isConnected) return;
+  const reduceMotion = getPedov2ReduceMotion();
+  const period = PEDOV2_MOCK.periods[adminPedOverviewV2State.period] || PEDOV2_MOCK.periods["30d"];
+  const presenceCanvas = root.querySelector("[data-pedov2-chart-presence]");
+  const riskCanvas = root.querySelector("[data-pedov2-chart-risk]");
+  if (!(presenceCanvas instanceof HTMLCanvasElement) || !(riskCanvas instanceof HTMLCanvasElement)) return;
+  const presenceCtx = presenceCanvas.getContext("2d");
+  const riskCtx = riskCanvas.getContext("2d");
+  if (!presenceCtx || !riskCtx) return;
+
+  const calmGradient = presenceCtx.createLinearGradient(0, 0, 0, 270);
+  calmGradient.addColorStop(0, "rgba(160,188,255,0.32)");
+  calmGradient.addColorStop(1, "rgba(160,188,255,0)");
+  const coralGradient = presenceCtx.createLinearGradient(0, 0, 0, 270);
+  coralGradient.addColorStop(0, "rgba(255,86,79,0.3)");
+  coralGradient.addColorStop(1, "rgba(255,86,79,0)");
+
+  adminPedOverviewV2State.charts.presence = new ChartJs(presenceCtx, {
+    type: "line",
+    data: {
+      labels: period.labels,
+      datasets: [
+        { label: "Realizadas", data: period.realizadas, borderColor: "#a0bcff", backgroundColor: calmGradient, fill: true, tension: 0.42, borderWidth: 2.4, pointRadius: 0, pointHoverRadius: 5, pointHoverBackgroundColor: "#a0bcff", pointHoverBorderColor: "#070910", pointHoverBorderWidth: 2 },
+        { label: "Faltas", data: period.faltas, borderColor: "#ff564f", backgroundColor: coralGradient, fill: true, tension: 0.42, borderWidth: 2.4, pointRadius: 0, pointHoverRadius: 5, pointHoverBackgroundColor: "#ff564f", pointHoverBorderColor: "#070910", pointHoverBorderWidth: 2 },
+        { label: "Remarcadas", data: period.remarcadas, borderColor: "rgba(255,255,255,0.4)", borderDash: [5, 5], fill: false, tension: 0.42, borderWidth: 1.8, pointRadius: 0, pointHoverRadius: 4 },
+      ],
+    },
+    options: {
+      maintainAspectRatio: false,
+      animation: reduceMotion ? false : { duration: 800, easing: "easeOutQuart" },
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: "#13161f",
+          borderColor: "rgba(255,255,255,0.14)",
+          borderWidth: 1,
+          titleColor: "#f4efe7",
+          bodyColor: "#d9deea",
+          padding: 11,
+          cornerRadius: 10,
+          displayColors: true,
+          boxWidth: 8,
+          boxHeight: 8,
+          boxPadding: 4,
+          titleFont: { family: "Plus Jakarta Sans, sans-serif", weight: "700" },
+          bodyFont: { family: "Plus Jakarta Sans, sans-serif" },
+        },
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: "#8f97ab", font: { family: "Plus Jakarta Sans, sans-serif", size: 11 } }, border: { display: false } },
+        y: { beginAtZero: true, grid: { color: "rgba(255,255,255,0.05)" }, border: { display: false }, ticks: { color: "#8f97ab", font: { family: "Plus Jakarta Sans, sans-serif", size: 11 }, maxTicksLimit: 5 } },
+      },
+    },
+  });
+
+  adminPedOverviewV2State.charts.risk = new ChartJs(riskCtx, {
+    type: "doughnut",
+    data: {
+      labels: PEDOV2_MOCK.riskDonut.labels,
+      datasets: [{ data: PEDOV2_MOCK.riskDonut.data, backgroundColor: ["rgba(160,188,255,0.28)", "#f5b64b", "#ff564f"], hoverBackgroundColor: ["rgba(160,188,255,0.45)", "#ffca6e", "#ff736c"], borderWidth: 0, borderRadius: 10, spacing: 3 }],
+    },
+    options: {
+      maintainAspectRatio: false,
+      cutout: "76%",
+      animation: reduceMotion ? false : { animateRotate: true, duration: 900 },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: "#13161f",
+          borderColor: "rgba(255,255,255,0.14)",
+          borderWidth: 1,
+          titleColor: "#f4efe7",
+          bodyColor: "#d9deea",
+          padding: 11,
+          cornerRadius: 10,
+          displayColors: true,
+          boxWidth: 8,
+          boxHeight: 8,
+          boxPadding: 4,
+          titleFont: { family: "Plus Jakarta Sans, sans-serif", weight: "700" },
+          bodyFont: { family: "Plus Jakarta Sans, sans-serif" },
+        },
+      },
+    },
+  });
+};
+
+const hydratePedov2Overview = (root, token) => {
+  if (!(root instanceof HTMLElement) || token !== adminPedOverviewV2State.renderToken) return;
+  root.querySelectorAll("[data-pedov2-spark]").forEach((spark) => {
+    if (!(spark instanceof HTMLElement)) return;
+    const key = String(spark.getAttribute("data-pedov2-spark") || "").trim();
+    const color = String(spark.getAttribute("data-pedov2-color") || "#a0bcff");
+    spark.innerHTML = renderPedov2SparklineSvg(key, color);
+  });
+  root.querySelectorAll("[data-pedov2-funil-width]").forEach((bar) => {
+    if (!(bar instanceof HTMLElement)) return;
+    const width = String(bar.getAttribute("data-pedov2-funil-width") || "0").trim();
+    bar.style.width = getPedov2ReduceMotion() ? `${width}%` : "0";
+    window.requestAnimationFrame(() => {
+      bar.style.width = `${width}%`;
+    });
+  });
+  animatePedov2Counts(root);
+  hydratePedov2Charts(root, token).catch((error) => {
+    console.error("[admin-ped] pedov2 charts failed", error);
+  });
+};
+
+const renderAdminPedOverviewV2 = () => {
+  if (!(adminPedOverview instanceof HTMLElement)) return;
+  cleanupAdminPedagogicoLegacyNav();
+  destroyPedov2Charts();
+  bindPedov2Interactions();
+
+  const period = adminPedOverviewV2State.period in PEDOV2_MOCK.periods ? adminPedOverviewV2State.period : "30d";
+  adminPedOverviewV2State.period = period;
+
+  adminPedOverview.innerHTML = `
+    <div class="pedov2">
+      <header class="pedov2-page-head">
+        <div>
+          <p class="pedov2-eyebrow">${escapeHtml(PEDOV2_MOCK.meta.eyebrow)}</p>
+          <h1 class="pedov2-title">${escapeHtml(PEDOV2_MOCK.meta.title)}</h1>
+          <p class="pedov2-page-sub">${escapeHtml(PEDOV2_MOCK.meta.dateLabel)}</p>
+        </div>
+        <div class="pedov2-head-actions">
+          <div class="pedov2-segmented" role="tablist" aria-label="Período">
+            ${["7d", "30d", "90d"].map((item) => `<button type="button" data-pedov2-period="${item}" class="${item === period ? "is-active" : ""}" aria-pressed="${item === period ? "true" : "false"}">${item}</button>`).join("")}
+          </div>
+          <button class="pedov2-btn-primary" type="button" data-pedov2-new-action>+ Nova ação</button>
+        </div>
+      </header>
+
+      <section class="pedov2-ai-brief" aria-label="Resumo inteligente do dia">
+        <div class="pedov2-ai-orb" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"></path><circle cx="12" cy="12" r="3.2" fill="#fff" stroke="none"></circle></svg>
+        </div>
+        <div class="pedov2-ai-copy">
+          <div class="pedov2-ai-tag">${escapeHtml(PEDOV2_MOCK.briefing.tag)}</div>
+          <p><strong>${escapeHtml(PEDOV2_MOCK.briefing.lead)}</strong> ${escapeHtml(PEDOV2_MOCK.briefing.body)} <strong>${escapeHtml(PEDOV2_MOCK.briefing.highlight)}</strong>.</p>
+        </div>
+        <button class="pedov2-ai-action" type="button">Agir →</button>
+      </section>
+
+      <section class="pedov2-kpi-row" aria-label="Indicadores principais">
+        ${PEDOV2_MOCK.kpis.map((kpi) => `
+          <article class="pedov2-card pedov2-kpi-card ${kpi.emphasis ? "is-emphasis" : ""}">
+            <div class="pedov2-kpi-label"><span class="pedov2-kpi-dot" style="background:${escapeHtml(kpi.dotColor)}${kpi.key === "risco" ? "; box-shadow:0 0 8px #ff564f" : ""}"></span>${escapeHtml(kpi.label)}${kpi.key === "presenca" ? ` <span data-pedov2-period-label>${escapeHtml(period)}</span>` : ""}</div>
+            <div class="pedov2-kpi-value-row">
+              <span class="pedov2-kpi-value ${kpi.key === "risco" ? "is-risk" : ""}"><span data-pedov2-count="${escapeHtml(String(kpi.value))}">0</span>${kpi.unit ? `<span class="pedov2-kpi-unit">${escapeHtml(kpi.unit)}</span>` : ""}</span>
+              <span class="pedov2-delta ${escapeHtml(kpi.deltaClass)}">${escapeHtml(kpi.delta)}</span>
+            </div>
+            <div class="pedov2-kpi-spark" data-pedov2-spark="${escapeHtml(kpi.sparkKey)}" data-pedov2-color="${escapeHtml(kpi.color)}"></div>
+          </article>
+        `).join("")}
+      </section>
+
+      <section class="pedov2-bento">
+        <article class="pedov2-card pedov2-chart-presenca">
+          <div class="pedov2-card-head">
+            <h2 class="pedov2-card-title">Presença, faltas e remarcações</h2>
+            <div class="pedov2-legend">
+              <span><i style="background:#a0bcff"></i>Realizadas</span>
+              <span><i style="background:#ff564f"></i>Faltas</span>
+              <span><i style="background:rgba(255,255,255,0.35)"></i>Remarcadas</span>
+            </div>
+          </div>
+          <div class="pedov2-chart-box"><canvas data-pedov2-chart-presence></canvas></div>
+        </article>
+
+        <article class="pedov2-card pedov2-chart-risco">
+          <div class="pedov2-card-head"><h2 class="pedov2-card-title">Radar de churn</h2></div>
+          <div class="pedov2-donut-wrap">
+            <canvas data-pedov2-chart-risk></canvas>
+            <div class="pedov2-donut-center"><div><div class="pedov2-donut-big">${escapeHtml(PEDOV2_MOCK.riskDonut.centerValue)}</div><div class="pedov2-donut-small">${escapeHtml(PEDOV2_MOCK.riskDonut.centerLabel)}</div></div></div>
+          </div>
+          <div class="pedov2-risk-factors">${renderPedov2RiskFactors()}</div>
+        </article>
+      </section>
+
+      <section class="pedov2-bento pedov2-section-gap">
+        <article class="pedov2-card pedov2-funil-card">
+          <div class="pedov2-card-head"><h2 class="pedov2-card-title">Ativação de novos alunos</h2></div>
+          <div class="pedov2-funil">${renderPedov2Funnel()}</div>
+        </article>
+
+        <article class="pedov2-card pedov2-radar-card">
+          <div class="pedov2-card-head"><h2 class="pedov2-card-title">Alunos em risco</h2><a class="pedov2-card-link" href="#">Ver todos →</a></div>
+          <div class="pedov2-table-wrap">
+            <table class="pedov2-risk-table">
+              <thead><tr><th>Aluno</th><th>Risco</th><th>Por quê</th><th>Última aula</th><th>Próxima</th><th></th></tr></thead>
+              <tbody>${renderPedov2RiskRows()}</tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section class="pedov2-bento pedov2-section-gap">
+        <article class="pedov2-card pedov2-prof-card">
+          <div class="pedov2-card-head"><h2 class="pedov2-card-title">Qualidade por professor</h2></div>
+          <div class="pedov2-prof-row pedov2-head-row"><span>Professor</span><span>Alunos</span><span>Aulas/mês</span><span>Registro · Engajamento</span><span style="text-align:right">30d</span></div>
+          <div>${renderPedov2TeacherRows()}</div>
+        </article>
+
+        <article class="pedov2-card pedov2-heat-card">
+          <div class="pedov2-card-head"><h2 class="pedov2-card-title">Ocupação da agenda</h2></div>
+          <div class="pedov2-heatmap">${renderPedov2Heatmap()}</div>
+          <div class="pedov2-heat-legend"><span>livre</span><div class="pedov2-heat-scale"><i style="background:rgba(255,255,255,0.05)"></i><i style="background:rgba(160,188,255,0.18)"></i><i style="background:rgba(160,188,255,0.4)"></i><i style="background:rgba(255,134,127,0.55)"></i><i style="background:rgba(255,86,79,0.85)"></i></div><span>lotado</span></div>
+        </article>
+      </section>
+
+      <section class="pedov2-ops-strip" aria-label="Pendências operacionais">${renderPedov2OpsStrip()}</section>
+      <footer class="pedov2-note">${escapeHtml(PEDOV2_MOCK.meta.note)}</footer>
+    </div>
+  `;
+
+  if (adminPedEmptyOverview instanceof HTMLElement) adminPedEmptyOverview.hidden = true;
+  const renderToken = ++adminPedOverviewV2State.renderToken;
+  hydratePedov2Overview(adminPedOverview, renderToken);
+};
+
 const runAdminPedagogicoRenderers = () => {
   const renderers = [
     renderAdminPedagogicoMetrics,
     renderAdminPedagogicoTabs,
-    renderAdminPedagogicoOverview,
+    renderAdminPedOverviewV2,
     renderAdminPedagogicoClassesList,
     renderAdminPedagogicoGroups,
     renderAdminPedagogicoStudentsPanel,
