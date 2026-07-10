@@ -1060,7 +1060,7 @@ body[data-sidebar-expanded="false"] .sidebar-accordion-body {
   .platform-sidebar {
     width: var(--sidebar-collapsed);
     padding: 20px 14px;
-    height: 100vh;
+    min-height: 100vh;
     overflow-y: auto;
     overscroll-behavior: contain;
     scrollbar-gutter: stable;
