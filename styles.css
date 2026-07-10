@@ -808,11 +808,12 @@ body[data-role="admin"] .live-credits-row {
 .sidebar-topbar {
   display: flex;
   justify-content: flex-end;
+  padding-right: 6px;
 }
 
 .sidebar-toggle {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   padding: 0;
   border: 0;
   border-radius: 50%;
@@ -3576,6 +3577,10 @@ body[data-active-panel="ao-vivo"] .platform-main {
   padding: 24px var(--platform-inline-padding) 34px 18px !important;
   gap: 0 !important;
   overflow-y: auto;
+}
+
+body[data-active-panel="configuracoes-admin"] .platform-main {
+  padding-left: 0 !important;
 }
 
 .platform-header {
@@ -7652,7 +7657,7 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
 .admin-settings-shell {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);
-  gap: 18px;
+  gap: 0;
   align-items: start;
 }
 
@@ -7664,6 +7669,16 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
   padding: 20px;
   position: sticky;
   top: 24px;
+  overflow: visible;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.admin-settings-sidebar-toggle {
+  position: absolute;
+  top: 18px;
+  right: -18px;
+  z-index: 3;
 }
 
 .admin-settings-sidebar-head {
@@ -7718,6 +7733,28 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
 
 .admin-settings-content {
   min-width: 0;
+  padding-left: 18px;
+}
+
+body[data-settings-sidebar-expanded="false"] .admin-settings-shell {
+  grid-template-columns: 0 minmax(0, 1fr);
+}
+
+body[data-settings-sidebar-expanded="false"] .admin-settings-sidebar {
+  min-height: 0;
+  width: 0;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+body[data-settings-sidebar-expanded="false"] .admin-settings-sidebar > :not(.admin-settings-sidebar-toggle) {
+  display: none;
+}
+
+body[data-settings-sidebar-expanded="false"] .admin-settings-sidebar-toggle-icon {
+  transform: rotate(180deg);
 }
 
 .admin-settings-page {

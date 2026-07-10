@@ -20,6 +20,7 @@ const authLoginEye = document.querySelector("[data-login-eye]");
 const authLoginSub = document.querySelector("[data-login-sub]");
 const openLivePanelButtons = document.querySelectorAll("[data-open-live-panel]");
 const sidebarToggleButton = document.querySelector("[data-sidebar-toggle]");
+const adminSettingsSidebarToggleButton = document.querySelector("[data-admin-settings-sidebar-toggle]");
 const sidebarLinks = document.querySelectorAll("[data-panel-target]");
 const panels = document.querySelectorAll("[data-panel]");
 const PEDAGOGICO_SIDEBAR_PANEL_TARGETS = new Set(["admin-controle-pedagogico", "ao-vivo"]);
@@ -1347,6 +1348,21 @@ const setSidebarExpanded = (isExpanded) => {
 
 const syncSidebarMode = () => {
   setSidebarExpanded(sidebarExpanded);
+};
+
+const setAdminSettingsSidebarExpanded = (isExpanded) => {
+  adminSettingsState.sidebarExpanded = Boolean(isExpanded);
+  body.dataset.settingsSidebarExpanded = String(adminSettingsState.sidebarExpanded);
+
+  if (adminSettingsSidebarToggleButton) {
+    adminSettingsSidebarToggleButton.setAttribute("aria-expanded", String(adminSettingsState.sidebarExpanded));
+    adminSettingsSidebarToggleButton.setAttribute(
+      "aria-label",
+      adminSettingsState.sidebarExpanded
+        ? "Fechar barra lateral de configurações"
+        : "Abrir barra lateral de configurações"
+    );
+  }
 };
 
 const updateGreeting = () => {
@@ -9824,6 +9840,7 @@ const ADMIN_SETTINGS_SECTIONS = [
 
 let adminSettingsState = {
   activeSection: "meu-perfil",
+  sidebarExpanded: true,
   profileLoadedAt: 0,
   profileLoading: false,
   profileError: "",
@@ -24329,6 +24346,7 @@ const initAppShell = async () => {
   setActiveChartOption("study", chartState.study);
   setActiveChartOption("teacher-classes", chartState["teacher-classes"]);
   setSidebarExpanded(false);
+  setAdminSettingsSidebarExpanded(true);
 
   setRole(user.role);
   const parsed = parseAppRoute(normalizePathname(window.location.pathname));
@@ -24741,6 +24759,12 @@ if (closePlatformButton) {
 if (sidebarToggleButton) {
   sidebarToggleButton.addEventListener("click", () => {
     setSidebarExpanded(!sidebarExpanded);
+  });
+}
+
+if (adminSettingsSidebarToggleButton) {
+  adminSettingsSidebarToggleButton.addEventListener("click", () => {
+    setAdminSettingsSidebarExpanded(!adminSettingsState.sidebarExpanded);
   });
 }
 

@@ -486,21 +486,6 @@
           <button
             class="sidebar-link"
             type="button"
-            data-panel-target="configuracoes-admin"
-            data-admin-only
-            title="Configurações"
-          >
-            <span class="sidebar-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none">
-                <path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"></path>
-                <path d="M19.4 13.5a1.6 1.6 0 0 0 .32 1.76l.06.06a2 2 0 1 1-2.82 2.82l-.06-.06a1.6 1.6 0 0 0-1.76-.32 1.6 1.6 0 0 0-.98 1.46V19.5a2 2 0 1 1-4 0v-.09a1.6 1.6 0 0 0-.98-1.46 1.6 1.6 0 0 0-1.76.32l-.06.06a2 2 0 1 1-2.82-2.82l.06-.06a1.6 1.6 0 0 0 .32-1.76 1.6 1.6 0 0 0-1.46-.98H4.5a2 2 0 1 1 0-4h.09a1.6 1.6 0 0 0 1.46-.98 1.6 1.6 0 0 0-.32-1.76l-.06-.06a2 2 0 1 1 2.82-2.82l.06.06a1.6 1.6 0 0 0 1.76.32h.01a1.6 1.6 0 0 0 .97-1.46V4.5a2 2 0 1 1 4 0v.09a1.6 1.6 0 0 0 .98 1.46 1.6 1.6 0 0 0 1.76-.32l.06-.06a2 2 0 1 1 2.82 2.82l-.06.06a1.6 1.6 0 0 0-.32 1.76v.01a1.6 1.6 0 0 0 1.46.97h.09a2 2 0 1 1 0 4h-.09a1.6 1.6 0 0 0-1.46.98Z"></path>
-              </svg>
-            </span>
-            <span class="sidebar-text">Configurações</span>
-          </button>
-          <button
-            class="sidebar-link"
-            type="button"
             data-panel-target="gravadas"
             title="Aulas gravadas"
             hidden
@@ -602,6 +587,21 @@
             </span>
 	            <span class="sidebar-text">Materiais</span>
 	          </button>
+          <button
+            class="sidebar-link"
+            type="button"
+            data-panel-target="configuracoes-admin"
+            data-admin-only
+            title="Configurações"
+          >
+            <span class="sidebar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"></path>
+                <path d="M19.4 13.5a1.6 1.6 0 0 0 .32 1.76l.06.06a2 2 0 1 1-2.82 2.82l-.06-.06a1.6 1.6 0 0 0-1.76-.32 1.6 1.6 0 0 0-.98 1.46V19.5a2 2 0 1 1-4 0v-.09a1.6 1.6 0 0 0-.98-1.46 1.6 1.6 0 0 0-1.76.32l-.06.06a2 2 0 1 1-2.82-2.82l.06-.06a1.6 1.6 0 0 0 .32-1.76 1.6 1.6 0 0 0-1.46-.98H4.5a2 2 0 1 1 0-4h.09a1.6 1.6 0 0 0 1.46-.98 1.6 1.6 0 0 0-.32-1.76l-.06-.06a2 2 0 1 1 2.82-2.82l.06.06a1.6 1.6 0 0 0 1.76.32h.01a1.6 1.6 0 0 0 .97-1.46V4.5a2 2 0 1 1 4 0v.09a1.6 1.6 0 0 0 .98 1.46 1.6 1.6 0 0 0 1.76-.32l.06-.06a2 2 0 1 1 2.82 2.82l-.06.06a1.6 1.6 0 0 0-.32 1.76v.01a1.6 1.6 0 0 0 1.46.97h.09a2 2 0 1 1 0 4h-.09a1.6 1.6 0 0 0-1.46.98Z"></path>
+              </svg>
+            </span>
+            <span class="sidebar-text">Configurações</span>
+          </button>
 	          <button class="sidebar-link" type="button" data-close-platform title="Sair">
 	            <span class="sidebar-icon" aria-hidden="true">
 	              <svg viewBox="0 0 24 24" fill="none">
@@ -1412,6 +1412,19 @@
         <section class="platform-panel" data-panel="configuracoes-admin" data-hide-platform-header="true" hidden aria-label="Configurações">
           <div class="admin-settings-shell" data-admin-settings>
             <aside class="surface-card admin-settings-sidebar" aria-label="Navegação de configurações">
+              <button
+                class="sidebar-toggle admin-settings-sidebar-toggle"
+                type="button"
+                data-admin-settings-sidebar-toggle
+                aria-expanded="true"
+                aria-label="Fechar barra lateral de configurações"
+              >
+                <span class="sidebar-toggle-icon admin-settings-sidebar-toggle-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="m14.5 5.5-6 6 6 6"></path>
+                  </svg>
+                </span>
+              </button>
               <div class="admin-settings-sidebar-head">
                 <div class="admin-settings-sidebar-title">Configurações</div>
                 <div class="admin-settings-sidebar-sub">Administração da conta e preferências.</div>
