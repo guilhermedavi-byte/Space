@@ -1004,6 +1004,10 @@ body[data-role="admin"] .live-credits-row {
   border-left: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+body[data-sidebar-expanded="false"] .sidebar-accordion-body {
+  display: none !important;
+}
+
 .sidebar-link-sub {
   min-height: 38px;
   padding-left: 14px;
@@ -1060,6 +1064,10 @@ body[data-role="admin"] .live-credits-row {
     overflow-y: auto;
     overscroll-behavior: contain;
     scrollbar-gutter: stable;
+  }
+
+  body[data-sidebar-expanded="false"] .sidebar-accordion-body {
+    display: none !important;
   }
 
   body[data-sidebar-expanded="true"] .platform-sidebar {
