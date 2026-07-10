@@ -1120,7 +1120,7 @@ body[data-sidebar-expanded="false"] .sidebar-accordion-body {
   padding: 24px var(--platform-inline-padding) 0 18px !important;
   gap: 0 !important;
   animation: rise-in 700ms ease both;
-  height: 100vh;
+  min-height: 100vh;
 }
 
 .platform-header {
