@@ -23999,14 +23999,29 @@ document.addEventListener(
     }
 
     const financeTab = target.closest("[data-finance-tab]");
-    if (financeTab instanceof HTMLButtonElement) {
+    if (financeTab && !(financeTab instanceof HTMLElement)) {
+      console.warn("[finance] Ignorando clique em [data-finance-tab] porque o elemento encontrado nao e um HTMLElement.", financeTab);
+      return;
+    }
+    if (financeTab instanceof HTMLElement) {
       event.preventDefault();
       event.stopPropagation();
       const tab = String(financeTab.getAttribute("data-finance-tab") || "").trim();
       if (["overview", "alunos", "cobrancas", "pagamentos", "eventos", "chatwoot"].includes(tab)) {
         financeState.activeTab = tab;
-        renderFinancePanel();
-        syncFinanceSidebar("financeiro");
+        const financeRole = sessionUser?.role || currentRole;
+        const isFinanceSidebarItem = financeTab.closest("[data-sidebar-accordion-body='financeiro']") instanceof HTMLElement;
+        if (isFinanceSidebarItem && isFinanceAccessRole(financeRole)) {
+          if (body.dataset.activePanel !== "financeiro") {
+            navigateApp(panelPathForRole(financeRole, "financeiro"));
+          } else {
+            renderFinancePanel();
+            syncFinanceSidebar("financeiro");
+          }
+        } else {
+          renderFinancePanel();
+          syncFinanceSidebar("financeiro");
+        }
       }
       return;
     }
@@ -25411,13 +25426,28 @@ document.addEventListener("click", (event) => {
       }
 
       const financeTab = target.closest("[data-finance-tab]");
-      if (financeTab instanceof HTMLButtonElement) {
+      if (financeTab && !(financeTab instanceof HTMLElement)) {
+        console.warn("[finance] Ignorando clique em [data-finance-tab] porque o elemento encontrado nao e um HTMLElement.", financeTab);
+        return;
+      }
+      if (financeTab instanceof HTMLElement) {
         event.preventDefault();
         const tab = String(financeTab.getAttribute("data-finance-tab") || "").trim();
         if (["overview", "alunos", "cobrancas", "pagamentos", "eventos", "chatwoot"].includes(tab)) {
           financeState.activeTab = tab;
-          renderFinancePanel();
-          syncFinanceSidebar("financeiro");
+          const financeRole = sessionUser?.role || currentRole;
+          const isFinanceSidebarItem = financeTab.closest("[data-sidebar-accordion-body='financeiro']") instanceof HTMLElement;
+          if (isFinanceSidebarItem && isFinanceAccessRole(financeRole)) {
+            if (body.dataset.activePanel !== "financeiro") {
+              navigateApp(panelPathForRole(financeRole, "financeiro"));
+            } else {
+              renderFinancePanel();
+              syncFinanceSidebar("financeiro");
+            }
+          } else {
+            renderFinancePanel();
+            syncFinanceSidebar("financeiro");
+          }
         }
         return;
       }
