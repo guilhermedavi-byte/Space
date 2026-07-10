@@ -788,6 +788,7 @@ body[data-role="admin"] .live-credits-row {
     rgba(8, 12, 22, 0.9);
   box-shadow: var(--shadow-lg);
   display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
   align-content: start;
   gap: 18px;
   animation: rise-in 620ms ease both;
@@ -888,8 +889,16 @@ body[data-role="admin"] .live-credits-row {
 }
 
 .sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  gap: 10px;
+}
+
+.sidebar-nav-footer {
   display: grid;
   gap: 10px;
+  margin-top: auto;
 }
 
 .sidebar-link {
