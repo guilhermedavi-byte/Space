@@ -8795,6 +8795,8 @@ const renderTeacherPedagogico = async ({ silent = false } = {}) => {
 
 const renderTeacherPedagogicoList = () => {
   if (!(pedagogicoList instanceof HTMLElement)) return;
+  pedagogicoList.classList.remove("pedagogico-list");
+  pedagogicoList.classList.add("pedteacher-list");
   const lessons = Array.isArray(pedagogicoState.lessons) ? pedagogicoState.lessons : [];
   const logsByEventId = pedagogicoState.logsByEventId instanceof Map ? pedagogicoState.logsByEventId : new Map();
 
@@ -8862,23 +8864,37 @@ const renderTeacherPedagogicoList = () => {
         : temporalState === "done"
           ? "is-done"
           : temporalState === "today"
-            ? "is-today"
+          ? "is-today"
             : "is-future";
-    const titleLabel = lesson.description || "Aula";
+    const titleLabel = String(lesson.title || "").trim();
+    const descriptionLabel = String(lesson.description || "").trim();
+    const showDescriptionTag = Boolean(
+      descriptionLabel &&
+      titleLabel &&
+      descriptionLabel.toLowerCase() !== titleLabel.toLowerCase()
+    );
+    const captionLabel =
+      isFuture
+        ? temporalState === "today"
+          ? "Aula de hoje."
+          : "Sem ação necessária agora."
+        : temporalState === "pending"
+          ? "Registro da aula pendente."
+          : "Registro concluído.";
+    const ctaLabel = temporalState === "pending" ? "Registrar →" : temporalState === "done" ? "Ver registro →" : "Aguardando →";
     return `
-      <article class="pedagogico-item ${statusClass}" data-pedagogico-item="${escapeHtml(lesson.id)}" aria-label="${escapeHtml(lesson.title)}">
-        <div class="pedagogico-item-time">
-          <div class="pedagogico-item-hour">${escapeHtml(timeLabel)}</div>
-          <div class="pedagogico-item-type">${escapeHtml(titleLabel)}</div>
+      <article class="pedteacher-item ${statusClass}" data-pedagogico-item="${escapeHtml(lesson.id)}" aria-label="${escapeHtml(lesson.title)}">
+        <div class="pedteacher-time">
+          <div class="pedteacher-hour">${escapeHtml(timeLabel)}</div>
+          ${showDescriptionTag ? `<div class="pedteacher-type">${escapeHtml(descriptionLabel)}</div>` : ""}
         </div>
-        <div class="pedagogico-item-main">
-          <div class="pedagogico-item-student">${escapeHtml(lesson.title)}</div>
-          <div class="pedagogico-item-title">${escapeHtml(isToday ? "Hoje" : formatPedagogicoDate(lesson.dateKey))} · ${escapeHtml(
-            isFuture ? "Sem ação necessária agora." : temporalState === "pending" ? "Registro da aula pendente." : "Registro concluído."
-          )}</div>
+        <div class="pedteacher-main">
+          <div class="pedteacher-student">${escapeHtml(lesson.title)}</div>
+          <div class="pedteacher-caption">${escapeHtml(captionLabel)}</div>
         </div>
-        <div class="pedagogico-item-meta">
-          <span class="pedagogico-badge is-${escapeHtml(statusMeta.tone)}">${escapeHtml(statusMeta.icon)} ${escapeHtml(statusMeta.label)}</span>
+        <div class="pedteacher-meta">
+          <span class="pedteacher-badge is-${escapeHtml(statusMeta.tone)}">${escapeHtml(statusMeta.icon)} ${escapeHtml(statusMeta.label)}</span>
+          <span class="pedteacher-cta is-${escapeHtml(temporalState)}" aria-hidden="true">${escapeHtml(ctaLabel)}</span>
         </div>
       </article>
     `;
@@ -8890,15 +8906,15 @@ const renderTeacherPedagogicoList = () => {
       const heading = isTodayGroup ? "Hoje" : formatPedagogicoGroupHeading(dateKey);
       const subheading = isTodayGroup ? formatPedagogicoGroupHeading(dateKey) : `${dayItems.length} aula${dayItems.length === 1 ? "" : "s"}`;
       return `
-        <section class="pedagogico-day-group" aria-label="${escapeHtml(heading)}">
-          <header class="pedagogico-day-header ${isTodayGroup ? "is-today" : ""}" data-pedagogico-anchor="${dateKey === anchorDateKey ? "true" : "false"}">
-            <div class="pedagogico-day-title-row">
-              <h3 class="pedagogico-day-title">${escapeHtml(heading)}</h3>
-              ${isTodayGroup ? `<span class="pedagogico-day-pill">• Hoje</span>` : ""}
+        <section class="pedteacher-day-group" aria-label="${escapeHtml(heading)}">
+          <header class="pedteacher-day-header ${isTodayGroup ? "is-today" : ""}" data-pedagogico-anchor="${dateKey === anchorDateKey ? "true" : "false"}">
+            <div class="pedteacher-day-title-row">
+              <h3 class="pedteacher-day-title">${escapeHtml(heading)}</h3>
+              ${isTodayGroup ? `<span class="pedteacher-day-pill">• Hoje</span>` : ""}
             </div>
-            <div class="pedagogico-day-subtitle">${escapeHtml(subheading)}</div>
+            <div class="pedteacher-day-subtitle">${escapeHtml(subheading)}</div>
           </header>
-          <div class="pedagogico-day-items">
+          <div class="pedteacher-day-items">
             ${dayItems.map(renderLessonCard).join("")}
           </div>
         </section>
