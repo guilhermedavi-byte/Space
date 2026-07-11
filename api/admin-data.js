@@ -17,6 +17,16 @@ const ALLOWED_COLLECTIONS = new Set([
   "teacherQuizSubmissions",
 ]);
 
+const normalizeUserRoleFilter = (value) => {
+  const raw = String(value || "").trim().toLowerCase();
+  if (raw === "teacher" || raw === "professor") return "teacher";
+  if (raw === "student" || raw === "aluno") return "student";
+  if (raw === "admin" || raw === "administrador") return "admin";
+  if (raw === "growth") return "growth";
+  if (raw === "finance" || raw === "financeiro") return "finance";
+  return "";
+};
+
 module.exports = async (req, res) => {
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET");
@@ -40,7 +50,8 @@ module.exports = async (req, res) => {
     let rows = await listCollectionAsAdmin(collection);
     const type = String(url.searchParams.get("type") || "").trim().toLowerCase();
     if (collection === "users" && type) {
-      rows = rows.filter((row) => String(row?.tipo || row?.role || "").trim().toLowerCase() === type);
+      const normalizedType = normalizeUserRoleFilter(type);
+      rows = rows.filter((row) => normalizeUserRoleFilter(row?.tipo || row?.role || "") === normalizedType);
     }
     return sendJson(res, 200, { rows });
   } catch (error) {

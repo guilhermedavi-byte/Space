@@ -21796,6 +21796,8 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 .pedretain{padding-inline:0}
 .pedretain-head{margin-bottom:18px}
 .pedretain-kpis{margin-top:0;margin-bottom:18px}
+.pedretain-partial{display:grid;gap:8px;margin-bottom:18px}
+.pedretain-partial-item{padding:12px 14px;border-radius:14px;border:1px solid rgba(245,182,75,.18);background:rgba(245,182,75,.08);color:#f4c86d;font-size:.8rem;font-weight:600}
 .pedretain-section{display:grid;gap:12px;margin-top:18px}
 .pedretain-section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .pedretain-section-title{margin:0;font-size:1rem;font-weight:800;color:var(--text-main)}
@@ -21816,6 +21818,7 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 .pedretain-days{font-size:.8rem;font-weight:800;color:var(--text-main);white-space:nowrap}
 .pedretain-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
 .pedretain-empty{padding:20px 18px;border:1px dashed rgba(255,255,255,.08);border-radius:18px;background:rgba(255,255,255,.02)}
+.pedretain-retry{margin-top:14px}
 
 @media (max-width: 900px){
   .pedretain-row{grid-template-columns:1fr}

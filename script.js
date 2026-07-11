@@ -14255,6 +14255,14 @@ const renderAdminUsersTable = (type) => {
 
 const fetchUserRowsFromFirestore = async (tipo) => {
   const safeTipo = tipo === "teacher" ? "teacher" : tipo === "growth" ? "growth" : "student";
+  const roleAliases =
+    safeTipo === "student"
+      ? ["student", "aluno"]
+      : safeTipo === "teacher"
+        ? ["teacher", "professor"]
+        : safeTipo === "FINANCE"
+          ? ["finance", "financeiro"]
+          : [safeTipo];
   let sourceRows = null;
   if (currentRole === "admin") {
     const response = await fetchWithAuth(`/api/admin-data?collection=users&type=${encodeURIComponent(safeTipo)}`);
@@ -14272,10 +14280,20 @@ const fetchUserRowsFromFirestore = async (tipo) => {
       e.code = "auth/no-current-user";
       throw e;
     }
-    const q = firebase.query(firebase.collection(firebase.primaryDb, "users"), firebase.where("tipo", "==", safeTipo));
-    const snap = await withTimeout(firebase.getDocs(q), 12_000, `firestore_getDocs_users_${safeTipo}`);
-    sourceRows = [];
-    snap.forEach((docSnap) => sourceRows.push({ id: docSnap.id, ...(docSnap.data ? docSnap.data() : {}) }));
+    const usersCollection = firebase.collection(firebase.primaryDb, "users");
+    const snapshots = await Promise.all(
+      roleAliases.map((alias) => {
+        const q = firebase.query(usersCollection, firebase.where("tipo", "==", alias));
+        return withTimeout(firebase.getDocs(q), 12_000, `firestore_getDocs_users_${safeTipo}_${alias}`);
+      })
+    );
+    const byId = new Map();
+    snapshots.forEach((snap) => {
+      snap.forEach((docSnap) => {
+        byId.set(docSnap.id, { id: docSnap.id, ...(docSnap.data ? docSnap.data() : {}) });
+      });
+    });
+    sourceRows = Array.from(byId.values());
   }
 
   const rows = [];
@@ -14821,7 +14839,14 @@ const buildRetentionQueues = ({
   (Array.isArray(students) ? students : []).forEach((student) => {
     if (!student || typeof student !== "object") return;
     const normalizedCurrent = normalizeStudentCancellationRecord(student.cancelamento);
-    const activeCancellation = isStudentCancellationActive(normalizedCurrent) ? normalizedCurrent : null;
+    const lifecycleState = getStudentLifecycleState(student);
+    const activeCancellation =
+      normalizedCurrent &&
+      !normalizedCurrent.desfecho &&
+      String(normalizedCurrent.origem || "").trim() !== "abandono_confirmado" &&
+      (lifecycleState === STUDENT_LIFECYCLE_STATE.NOTICE || lifecycleState === STUDENT_LIFECYCLE_STATE.SUSPENDED)
+        ? normalizedCurrent
+        : null;
     const studentName = getRetentionStudentDisplayName(student);
     const activeSensors = activeCancellation
       ? (() => {
@@ -17087,9 +17112,11 @@ let adminPedagogicoState = {
     pageSize: 25,
   },
   retention: {
+    status: "idle",
     loading: false,
     loadedAt: 0,
     error: "",
+    partialErrors: {},
     badgeCount: 0,
     queues: null,
   },
@@ -19396,9 +19423,11 @@ const renderAdminPedRetentionEfetivados = (rows) => {
 const renderAdminPedagogicoRetentionPanel = () => {
   if (!(adminPedRetention instanceof HTMLElement)) return;
   const retentionState = adminPedagogicoState.retention && typeof adminPedagogicoState.retention === "object" ? adminPedagogicoState.retention : {};
+  const status = String(retentionState.status || "idle").trim();
   const queues = retentionState.queues && typeof retentionState.queues === "object" ? retentionState.queues : null;
+  const partialErrors = retentionState.partialErrors && typeof retentionState.partialErrors === "object" ? retentionState.partialErrors : {};
 
-  if (retentionState.loading && !queues) {
+  if ((status === "idle" || status === "loading") && !queues) {
     adminPedRetention.innerHTML = `
       <div class="pedov2 pedretain">
         <header class="pedov2-page-head pedretain-head">
@@ -19414,7 +19443,7 @@ const renderAdminPedagogicoRetentionPanel = () => {
     return;
   }
 
-  if (retentionState.error && !queues) {
+  if (status === "error" && !queues) {
     adminPedRetention.innerHTML = `
       <div class="pedov2 pedretain">
         <header class="pedov2-page-head pedretain-head">
@@ -19424,9 +19453,11 @@ const renderAdminPedagogicoRetentionPanel = () => {
             <p class="pedov2-page-sub">Inbox de decisão para cancelamentos, abandono e risco de churn.</p>
           </div>
         </header>
-        <div class="admin-ped-empty-inline"><div class="admin-ped-empty-title">Não foi possível montar a central agora.</div><div class="admin-ped-empty-sub">${escapeHtml(
-          String(retentionState.error || "Tente novamente em alguns instantes.")
-        )}</div></div>
+        <div class="admin-ped-empty-inline">
+          <div class="admin-ped-empty-title">Não foi possível carregar os dados de retenção.</div>
+          <div class="admin-ped-empty-sub">${escapeHtml(String(retentionState.error || "Tente novamente em alguns instantes."))}</div>
+          <div class="pedretain-retry"><button class="admin-ped-action" type="button" data-admin-ped-retention-retry>Tentar novamente</button></div>
+        </div>
       </div>
     `;
     return;
@@ -19451,6 +19482,15 @@ const renderAdminPedagogicoRetentionPanel = () => {
         ${buildRetentionMiniCard({ label: "Precisam de decisão", value: decisoes.length, tone: "coral" })}
         ${buildRetentionMiniCard({ label: "Efetivados 90d", value: efetivados.length, tone: "green" })}
       </section>
+
+      ${
+        Object.keys(partialErrors).length
+          ? `<section class="pedretain-partial" aria-label="Degradação parcial">
+              ${partialErrors.finance ? `<div class="pedretain-partial-item">Financeiro indisponível — o semáforo de pagamento pode aparecer incompleto.</div>` : ""}
+              ${partialErrors.attendance ? `<div class="pedretain-partial-item">Frequência indisponível — o semáforo de presença pode aparecer incompleto.</div>` : ""}
+            </section>`
+          : ""
+      }
 
       <section class="pedretain-section">
         <div class="pedretain-section-head">
@@ -19487,28 +19527,55 @@ const refreshAdminPedagogicoRetentionState = async ({ force = false } = {}) => {
     return current.queues;
   }
 
+  const hasEssentialPedagogicoData =
+    adminPedagogicoState.loadedAt &&
+    Array.isArray(adminPedagogicoState.students) &&
+    Array.isArray(adminPedagogicoState.lessonLogs) &&
+    Array.isArray(adminPedagogicoState.scheduleEvents);
+  if (!hasEssentialPedagogicoData) {
+    adminPedagogicoState.retention = {
+      ...current,
+      status: "loading",
+      loading: true,
+      error: "",
+      partialErrors: {},
+    };
+    if (String(adminPedagogicoState.activeTab || "") === "retencao") renderAdminPedagogicoRetentionPanel();
+    return null;
+  }
+
   adminPedagogicoState.retention = {
     ...current,
+    status: "loading",
     loading: true,
     error: "",
+    partialErrors: {},
   };
   if (String(adminPedagogicoState.activeTab || "") === "retencao") renderAdminPedagogicoRetentionPanel();
 
   try {
-    await ensureFinanceLoaded({ force: false });
+    let financeError = "";
+    await ensureFinanceLoaded({ force: false }).catch((error) => {
+      financeError = String(error?.message || error || "finance_unavailable");
+      console.warn("[Retention] financeiro indisponível; seguindo sem esse sensor", error);
+    });
     const queues = buildRetentionQueues({
       students: adminPedagogicoState.students,
       lessonLogs: adminPedagogicoState.lessonLogs,
       scheduleEvents: adminPedagogicoState.scheduleEvents,
       classes: adminPedagogicoState.classes,
-      financeStudents: financeState.alunos,
-      charges: financeState.cobrancas,
+      financeStudents: financeError ? [] : financeState.alunos,
+      charges: financeError ? [] : financeState.cobrancas,
       referenceDate: new Date(),
     });
     adminPedagogicoState.retention = {
+      status: "success",
       loading: false,
       loadedAt: Date.now(),
       error: "",
+      partialErrors: {
+        finance: financeError,
+      },
       badgeCount: Array.isArray(queues?.decisoes) ? queues.decisoes.length : 0,
       queues,
     };
@@ -19516,12 +19583,14 @@ const refreshAdminPedagogicoRetentionState = async ({ force = false } = {}) => {
     renderAdminPedagogicoRetentionPanel();
     return queues;
   } catch (error) {
-    console.error("[admin-ped] retention refresh failed", error);
+    console.error("[Retention] Falha ao carregar central:", error);
     adminPedagogicoState.retention = {
       ...current,
+      status: "error",
       loading: false,
       loadedAt: 0,
       error: "Não foi possível carregar os dados de retenção agora.",
+      partialErrors: {},
       badgeCount: 0,
       queues: null,
     };
@@ -30700,6 +30769,13 @@ document.addEventListener("click", (event) => {
           openAdminStudentMarkAbandonmentModal({ alunoId });
           return;
         }
+        return;
+      }
+
+      const adminPedRetentionRetry = target.closest("[data-admin-ped-retention-retry]");
+      if (adminPedRetentionRetry instanceof HTMLButtonElement) {
+        event.preventDefault();
+        refreshAdminPedagogicoRetentionState({ force: true }).catch(() => {});
         return;
       }
 
