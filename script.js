@@ -18382,6 +18382,8 @@ const ADMIN_PED_LESSON_RECORD_FILTER_DEFAULTS = {
   pageSize: 25,
 };
 
+let adminPedLessonRecordsFiltersPopoverEl = null;
+
 const ADMIN_PED_LESSON_RECORD_PERIOD_PRESETS = [
   { key: "today", label: "Hoje" },
   { key: "yesterday", label: "Ontem" },
@@ -18397,9 +18399,102 @@ const getAdminPedLessonRecordFilters = () => {
   return { ...ADMIN_PED_LESSON_RECORD_FILTER_DEFAULTS, ...current };
 };
 
+const countActiveAdminPedLessonRecordFilters = (filters) => {
+  const current = filters && typeof filters === "object" ? filters : {};
+  let count = 0;
+  if (String(current.periodPreset || ADMIN_PED_LESSON_RECORD_FILTER_DEFAULTS.periodPreset) !== ADMIN_PED_LESSON_RECORD_FILTER_DEFAULTS.periodPreset) count += 1;
+  if (String(current.status || ADMIN_PED_LESSON_RECORD_FILTER_DEFAULTS.status) !== ADMIN_PED_LESSON_RECORD_FILTER_DEFAULTS.status) count += 1;
+  if (String(current.teacherQuery || "").trim()) count += 1;
+  if (String(current.studentQuery || "").trim()) count += 1;
+  return count;
+};
+
 const setAdminPedLessonRecordFilters = (patch = {}) => {
   const current = getAdminPedLessonRecordFilters();
   adminPedagogicoState.lessonRecords = { ...current, ...patch };
+};
+
+const closeAdminPedLessonRecordsFiltersPopover = () => {
+  if (adminPedLessonRecordsFiltersPopoverEl instanceof HTMLElement) adminPedLessonRecordsFiltersPopoverEl.remove();
+  adminPedLessonRecordsFiltersPopoverEl = null;
+};
+
+const syncAdminPedLessonRecordsFiltersPopoverUi = (pop) => {
+  if (!(pop instanceof HTMLElement)) return;
+  const periodEl = pop.querySelector('[data-admin-ped-lesson-record-pop-filter="periodPreset"]');
+  const customWrap = pop.querySelector("[data-admin-ped-lesson-record-pop-custom]");
+  if (!(periodEl instanceof HTMLSelectElement) || !(customWrap instanceof HTMLElement)) return;
+  customWrap.hidden = String(periodEl.value || "") !== "custom";
+};
+
+const openAdminPedLessonRecordsFiltersPopover = ({ triggerEl } = {}) => {
+  if (!(triggerEl instanceof HTMLElement)) return;
+  closeAdminPedLessonRecordsFiltersPopover();
+
+  const current = getAdminPedLessonRecordFilters();
+  const pop = document.createElement("div");
+  pop.className = "admin-ped-students-filters-popover pedrecords-filters-popover";
+  pop.setAttribute("data-admin-ped-lesson-records-filters-popover", "true");
+  pop.innerHTML = `
+    <div class="admin-ped-students-filters-row">
+      <label>Período</label>
+      <select data-admin-ped-lesson-record-pop-filter="periodPreset">
+        ${ADMIN_PED_LESSON_RECORD_PERIOD_PRESETS.map(
+          (preset) => `<option value="${escapeHtml(preset.key)}">${escapeHtml(preset.label)}</option>`
+        ).join("")}
+      </select>
+    </div>
+    <div class="admin-ped-students-filters-row" data-admin-ped-lesson-record-pop-custom hidden>
+      <label>Intervalo personalizado</label>
+      <div class="admin-students-filters-grid2">
+        <input type="date" data-admin-ped-lesson-record-pop-filter="customFrom" />
+        <input type="date" data-admin-ped-lesson-record-pop-filter="customTo" />
+      </div>
+    </div>
+    <div class="admin-ped-students-filters-row">
+      <label>Status do registro</label>
+      <select data-admin-ped-lesson-record-pop-filter="status">
+        <option value="all">Todos</option>
+        <option value="presenca">Presença</option>
+        <option value="falta">Falta</option>
+        <option value="sem_registro">Sem registro</option>
+      </select>
+    </div>
+    <div class="admin-ped-students-filters-row">
+      <label>Professor</label>
+      <input type="search" placeholder="Buscar professor..." data-admin-ped-lesson-record-pop-filter="teacherQuery" />
+    </div>
+    <div class="admin-ped-students-filters-row">
+      <label>Aluno</label>
+      <input type="search" placeholder="Buscar aluno..." data-admin-ped-lesson-record-pop-filter="studentQuery" />
+    </div>
+    <div class="admin-ped-students-filters-actions">
+      <button type="button" class="admin-ped-students-filters-clear" data-admin-ped-lesson-record-filters-clear>Limpar filtros</button>
+      <button type="button" class="admin-ped-students-filters-apply" data-admin-ped-lesson-record-filters-apply>Aplicar</button>
+    </div>
+  `;
+
+  document.body.appendChild(pop);
+  adminPedLessonRecordsFiltersPopoverEl = pop;
+
+  pop.querySelectorAll("[data-admin-ped-lesson-record-pop-filter]").forEach((el) => {
+    const key = String(el.getAttribute("data-admin-ped-lesson-record-pop-filter") || "").trim();
+    if (!key) return;
+    if (el instanceof HTMLSelectElement || el instanceof HTMLInputElement) {
+      el.value = String(current?.[key] || "");
+    }
+  });
+  syncAdminPedLessonRecordsFiltersPopoverUi(pop);
+
+  const rect = triggerEl.getBoundingClientRect();
+  const popRect = pop.getBoundingClientRect();
+  const margin = 10;
+  const spaceBelow = window.innerHeight - rect.bottom;
+  const shouldFlipUp = spaceBelow < popRect.height + margin;
+  const top = shouldFlipUp ? rect.top - margin - popRect.height : rect.bottom + margin;
+  const left = Math.min(Math.max(rect.right - popRect.width, margin), Math.max(margin, window.innerWidth - popRect.width - margin));
+  pop.style.top = `${clampToViewport(top, margin, window.innerHeight - popRect.height - margin)}px`;
+  pop.style.left = `${left}px`;
 };
 
 const fetchAdminPedScheduleEvents = async () => {
@@ -18673,13 +18768,19 @@ const buildAdminPedLessonRecordDataset = () => {
 
 const renderAdminPedLessonRecordActiveFilters = ({ filters, range }) => {
   const chips = [];
+  if (String(filters.periodPreset || ADMIN_PED_LESSON_RECORD_FILTER_DEFAULTS.periodPreset) !== ADMIN_PED_LESSON_RECORD_FILTER_DEFAULTS.periodPreset) {
+    const periodLabel =
+      String(filters.periodPreset || "") === "custom"
+        ? `${range.fromKey} → ${range.toKey}`
+        : ADMIN_PED_LESSON_RECORD_PERIOD_PRESETS.find((preset) => preset.key === String(filters.periodPreset || ""))?.label || "Período";
+    chips.push({ key: "periodPreset", label: periodLabel });
+  }
   if (String(filters.status || "all") !== "all") {
     const labels = { presenca: "Presença", falta: "Falta", sem_registro: "Sem registro" };
     chips.push({ key: "status", label: labels[String(filters.status)] || "Status" });
   }
-  if (String(filters.teacherQuery || "").trim()) chips.push({ key: "teacherQuery", label: `Professor: ${String(filters.teacherQuery).trim()}` });
-  if (String(filters.studentQuery || "").trim()) chips.push({ key: "studentQuery", label: `Aluno: ${String(filters.studentQuery).trim()}` });
-  if (String(filters.periodPreset || "this_month") === "custom") chips.push({ key: "customRange", label: `Período: ${range.fromKey} → ${range.toKey}` });
+  if (String(filters.teacherQuery || "").trim()) chips.push({ key: "teacherQuery", label: `Prof. ${String(filters.teacherQuery).trim()}` });
+  if (String(filters.studentQuery || "").trim()) chips.push({ key: "studentQuery", label: `${String(filters.studentQuery).trim()}` });
   if (!chips.length) return "";
   return `
     <div class="pedrecords-active-filters">
@@ -21010,16 +21111,7 @@ const renderAdminPedagogicoClassesList = () => {
   const sparkFalta = buildAdminPedLessonRecordSparkline(summary.series.map((item) => item.falta), "#ff6a60");
   const sparkMissing = buildAdminPedLessonRecordSparkline(summary.series.map((item) => item.semRegistro), "#f5b64b");
 
-  const teacherSuggestions = (Array.isArray(adminPedagogicoState.teachers) ? adminPedagogicoState.teachers : [])
-    .slice()
-    .sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"))
-    .map((teacher) => `<option value="${escapeHtml(String(teacher.nome || "").trim())}"></option>`)
-    .join("");
-  const studentSuggestions = (Array.isArray(adminPedagogicoState.students) ? adminPedagogicoState.students : [])
-    .slice()
-    .sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"))
-    .map((student) => `<option value="${escapeHtml(String(student.nome || "").trim())}"></option>`)
-    .join("");
+  const filterCount = countActiveAdminPedLessonRecordFilters(filters);
 
   adminPedClasses.innerHTML = `
     <div class="pedov2 pedrecords">
@@ -21062,60 +21154,23 @@ const renderAdminPedagogicoClassesList = () => {
 
       <section class="pedrecords-toolbar-wrap">
         <div class="pedrecords-toolbar">
-          <div class="pedrecords-segmented" role="tablist" aria-label="Período">
-            ${ADMIN_PED_LESSON_RECORD_PERIOD_PRESETS.map(
-              (preset) => `<button type="button" class="${preset.key === filters.periodPreset ? "is-active" : ""}" aria-pressed="${
-                preset.key === filters.periodPreset ? "true" : "false"
-              }" data-admin-ped-lesson-record-period="${escapeHtml(preset.key)}">${escapeHtml(preset.label)}</button>`
-            ).join("")}
-          </div>
-          <div class="pedrecords-status" role="tablist" aria-label="Status do registro">
-            ${[
-              ["all", "Todos"],
-              ["presenca", "Presença"],
-              ["falta", "Falta"],
-              ["sem_registro", "Sem registro"],
-            ]
-              .map(
-                ([value, label]) =>
-                  `<button type="button" class="${value === filters.status ? "is-active" : ""}" aria-pressed="${
-                    value === filters.status ? "true" : "false"
-                  }" data-admin-ped-lesson-record-status="${escapeHtml(value)}">${escapeHtml(label)}</button>`
-              )
-              .join("")}
-          </div>
-          <div class="pedrecords-searches">
-            <label class="pedrecords-search">
-              <span>Professor</span>
-              <input class="admin-ped-select" type="search" list="pedrecords-teachers-list" value="${escapeHtml(
-                String(filters.teacherQuery || "")
-              )}" placeholder="Buscar professor..." data-admin-ped-lesson-record-teacher-search />
-            </label>
-            <label class="pedrecords-search">
-              <span>Aluno</span>
-              <input class="admin-ped-select" type="search" list="pedrecords-students-list" value="${escapeHtml(
-                String(filters.studentQuery || "")
-              )}" placeholder="Buscar aluno..." data-admin-ped-lesson-record-student-search />
-            </label>
-          </div>
-          <div class="pedrecords-custom-range ${String(filters.periodPreset || "") === "custom" ? "is-visible" : ""}">
-            <label class="pedrecords-search">
-              <span>De</span>
-              <input class="admin-ped-select" type="date" value="${escapeHtml(String(filters.customFrom || range.fromKey || ""))}" data-admin-ped-lesson-record-custom-from />
-            </label>
-            <label class="pedrecords-search">
-              <span>Até</span>
-              <input class="admin-ped-select" type="date" value="${escapeHtml(String(filters.customTo || range.toKey || ""))}" data-admin-ped-lesson-record-custom-to />
-            </label>
+          <div class="pedrecords-toolbar-head">
+            <div class="pedrecords-meta">
+              <span class="pedrecords-count">${escapeHtml(`${total} registro${total === 1 ? "" : "s"}`)}</span>
+              <span class="pedrecords-period">${escapeHtml(`${range.fromKey} → ${range.toKey}`)}</span>
+            </div>
+            <button class="admin-ped-filter-trigger ${filterCount > 0 ? "is-active" : ""}" type="button" data-admin-ped-lesson-record-filters-trigger>
+              <span class="admin-ped-filter-trigger-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M4.5 6.5h15l-5.7 6.6v4.4l-3.6 1.8v-6.2L4.5 6.5Z"></path>
+                </svg>
+              </span>
+              <span>Filtro</span>
+              <span class="admin-ped-filter-trigger-badge"${filterCount > 0 ? "" : " hidden"}>${escapeHtml(String(filterCount))}</span>
+            </button>
           </div>
         </div>
-        <datalist id="pedrecords-teachers-list">${teacherSuggestions}</datalist>
-        <datalist id="pedrecords-students-list">${studentSuggestions}</datalist>
         ${renderAdminPedLessonRecordActiveFilters({ filters, range })}
-        <div class="pedrecords-meta">
-          <span class="pedrecords-count">${escapeHtml(`${total} registro${total === 1 ? "" : "s"}`)}</span>
-          <span class="pedrecords-period">${escapeHtml(`${range.fromKey} → ${range.toKey}`)}</span>
-        </div>
       </section>
 
       <section class="pedov2-card pedrecords-table-card">
@@ -29107,6 +29162,14 @@ document.addEventListener("click", (event) => {
       closeAdminPedStudentsFiltersPopover();
     }
 
+    if (
+      adminPedLessonRecordsFiltersPopoverEl instanceof HTMLElement &&
+      !target.closest("[data-admin-ped-lesson-records-filters-popover]") &&
+      !target.closest("[data-admin-ped-lesson-record-filters-trigger]")
+    ) {
+      closeAdminPedLessonRecordsFiltersPopover();
+    }
+
     // Professor > Alunos: close actions popover when clicking elsewhere.
     if (
       teacherStudentActionsPopoverEl instanceof HTMLElement &&
@@ -29640,6 +29703,48 @@ document.addEventListener("click", (event) => {
         return;
       }
 
+      const lessonRecordFiltersTrigger = target.closest("[data-admin-ped-lesson-record-filters-trigger]");
+      if (lessonRecordFiltersTrigger instanceof HTMLButtonElement) {
+        event.preventDefault();
+        if (adminPedLessonRecordsFiltersPopoverEl instanceof HTMLElement) {
+          closeAdminPedLessonRecordsFiltersPopover();
+        } else {
+          openAdminPedLessonRecordsFiltersPopover({ triggerEl: lessonRecordFiltersTrigger });
+        }
+        return;
+      }
+
+      const lessonRecordFiltersClear = target.closest("[data-admin-ped-lesson-record-filters-clear]");
+      if (lessonRecordFiltersClear instanceof HTMLButtonElement) {
+        event.preventDefault();
+        adminPedagogicoState.lessonRecords = { ...ADMIN_PED_LESSON_RECORD_FILTER_DEFAULTS };
+        closeAdminPedLessonRecordsFiltersPopover();
+        renderAdminPedagogicoClassesList();
+        return;
+      }
+
+      const lessonRecordFiltersApply = target.closest("[data-admin-ped-lesson-record-filters-apply]");
+      if (lessonRecordFiltersApply instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const pop = adminPedLessonRecordsFiltersPopoverEl;
+        if (pop instanceof HTMLElement) {
+          const next = { ...ADMIN_PED_LESSON_RECORD_FILTER_DEFAULTS };
+          pop.querySelectorAll("[data-admin-ped-lesson-record-pop-filter]").forEach((el) => {
+            const key = String(el.getAttribute("data-admin-ped-lesson-record-pop-filter") || "").trim();
+            if (!key) return;
+            if (el instanceof HTMLSelectElement || el instanceof HTMLInputElement) next[key] = String(el.value || "");
+          });
+          if (String(next.periodPreset || "") !== "custom") {
+            next.customFrom = "";
+            next.customTo = "";
+          }
+          adminPedagogicoState.lessonRecords = next;
+        }
+        closeAdminPedLessonRecordsFiltersPopover();
+        renderAdminPedagogicoClassesList();
+        return;
+      }
+
       const lessonRecordPrev = target.closest("[data-admin-ped-lesson-record-page-prev]");
       if (lessonRecordPrev instanceof HTMLButtonElement) {
         event.preventDefault();
@@ -29687,10 +29792,10 @@ document.addEventListener("click", (event) => {
       if (lessonRecordFilterRemove instanceof HTMLButtonElement) {
         event.preventDefault();
         const key = String(lessonRecordFilterRemove.getAttribute("data-admin-ped-lesson-record-filter-remove") || "").trim();
-        if (key === "status") setAdminPedLessonRecordFilters({ status: "all", page: 1 });
+        if (key === "periodPreset") setAdminPedLessonRecordFilters({ periodPreset: "this_month", customFrom: "", customTo: "", page: 1 });
+        else if (key === "status") setAdminPedLessonRecordFilters({ status: "all", page: 1 });
         else if (key === "teacherQuery") setAdminPedLessonRecordFilters({ teacherQuery: "", page: 1 });
         else if (key === "studentQuery") setAdminPedLessonRecordFilters({ studentQuery: "", page: 1 });
-        else if (key === "customRange") setAdminPedLessonRecordFilters({ periodPreset: "this_month", customFrom: "", customTo: "", page: 1 });
         renderAdminPedagogicoClassesList();
         return;
       }
@@ -31738,32 +31843,16 @@ document.addEventListener("input", (event) => {
   if (currentRole !== "admin") return;
   const target = event.target;
   if (!(target instanceof HTMLInputElement)) return;
-  if (!target.matches("[data-admin-ped-lesson-record-teacher-search], [data-admin-ped-lesson-record-student-search]")) return;
-  if (adminPedTableSearchDebounce) clearTimeout(adminPedTableSearchDebounce);
-  adminPedTableSearchDebounce = window.setTimeout(() => {
-    if (target.matches("[data-admin-ped-lesson-record-teacher-search]")) {
-      setAdminPedLessonRecordFilters({ teacherQuery: target.value, page: 1 });
-    } else {
-      setAdminPedLessonRecordFilters({ studentQuery: target.value, page: 1 });
-    }
-    renderAdminPedagogicoClassesList();
-    adminPedTableSearchDebounce = null;
-  }, 140);
+  if (!target.matches("[data-admin-ped-lesson-record-pop-filter]")) return;
 });
 
 document.addEventListener("change", (event) => {
   if (currentRole !== "admin") return;
   const target = event.target;
-  if (!(target instanceof HTMLInputElement)) return;
-  if (target.matches("[data-admin-ped-lesson-record-custom-from]")) {
-    setAdminPedLessonRecordFilters({ periodPreset: "custom", customFrom: target.value, page: 1 });
-    renderAdminPedagogicoClassesList();
-    return;
-  }
-  if (target.matches("[data-admin-ped-lesson-record-custom-to]")) {
-    setAdminPedLessonRecordFilters({ periodPreset: "custom", customTo: target.value, page: 1 });
-    renderAdminPedagogicoClassesList();
-  }
+  if (!(target instanceof Element)) return;
+  if (!target.matches("[data-admin-ped-lesson-record-pop-filter]")) return;
+  const pop = adminPedLessonRecordsFiltersPopoverEl;
+  if (pop instanceof HTMLElement) syncAdminPedLessonRecordsFiltersPopoverUi(pop);
 });
 
 document.addEventListener("change", (event) => {
