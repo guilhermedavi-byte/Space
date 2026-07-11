@@ -809,16 +809,16 @@ body[data-role="admin"] .live-credits-row {
 .sidebar-topbar {
   display: flex;
   justify-content: flex-end;
-  padding-right: 16px;
+  padding-right: 24px;
 }
 
 .sidebar-toggle {
   width: 36px;
   height: 36px;
   padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.04);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: rgba(244, 239, 231, 0.68);
   display: inline-flex;
   align-items: center;
@@ -826,15 +826,14 @@ body[data-role="admin"] .live-credits-row {
   cursor: pointer;
   transition:
     color 180ms ease,
-    background-color 180ms ease,
-    border-color 180ms ease;
+    opacity 180ms ease;
 }
 
 .sidebar-toggle:hover,
 .sidebar-toggle:focus-visible {
   color: rgba(255, 255, 255, 0.92);
-  background: rgba(255, 255, 255, 0.09);
-  border-color: rgba(255, 255, 255, 0.18);
+  background: transparent;
+  border-color: transparent;
 }
 
 .sidebar-toggle-icon {
@@ -921,6 +920,7 @@ body[data-role="admin"] .live-credits-row {
     color 180ms ease,
     padding 320ms cubic-bezier(0.22, 1, 0.36, 1),
     gap 320ms cubic-bezier(0.22, 1, 0.36, 1);
+  overflow: visible;
 }
 
 .sidebar-link-main {
@@ -952,6 +952,7 @@ body[data-role="admin"] .live-credits-row {
 .sidebar-text {
   white-space: nowrap;
   max-width: 160px;
+  min-width: 0;
   transition:
     opacity 160ms ease,
     transform 280ms cubic-bezier(0.22, 1, 0.36, 1),
@@ -1064,7 +1065,7 @@ body[data-sidebar-expanded="false"] .sidebar-accordion-body {
 
 .sidebar-badge {
   margin-left: auto;
-  min-width: 22px;
+  min-width: 28px;
   height: 18px;
   padding: 0 6px;
   border-radius: 999px;
@@ -1077,6 +1078,7 @@ body[data-sidebar-expanded="false"] .sidebar-accordion-body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 auto;
 }
 
 @media (hover: hover) and (pointer: fine) and (min-width: 1101px) {
@@ -1125,7 +1127,7 @@ body[data-sidebar-expanded="false"] .sidebar-accordion-body {
 
   body[data-sidebar-expanded="true"] .platform-sidebar .sidebar-brand-copy,
   body[data-sidebar-expanded="true"] .platform-sidebar .sidebar-text {
-    max-width: 180px;
+    max-width: 148px;
     opacity: 1;
     transform: translateX(0);
     pointer-events: auto;
