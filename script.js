@@ -28,6 +28,7 @@ const PEDAGOGICO_SIDEBAR_SECTION_MAP = {
   "admin-controle-pedagogico": { group: "operacao", tab: "overview" },
   "admin-controle-pedagogico-aulas": { group: "operacao", tab: "aulas" },
   "admin-controle-pedagogico-pessoas": { group: "alunosTurmas", tab: "pessoas" },
+  "admin-controle-pedagogico-retencao": { group: "operacao", tab: "retencao" },
   "admin-controle-pedagogico-qualidade": { group: "qualidade", tab: "qualidade" },
   "admin-controle-pedagogico-onboarding": { group: "professores", tab: "onboarding" },
   "admin-controle-pedagogico-relatorios": { group: "gestao", tab: "relatorios" },
@@ -36,6 +37,7 @@ const PEDAGOGICO_SIDEBAR_ACTIVE_TARGET_BY_TAB = {
   overview: "admin-controle-pedagogico",
   aulas: "admin-controle-pedagogico-aulas",
   pessoas: "admin-controle-pedagogico-pessoas",
+  retencao: "admin-controle-pedagogico-retencao",
   qualidade: "admin-controle-pedagogico-qualidade",
   onboarding: "admin-controle-pedagogico-onboarding",
   relatorios: "admin-controle-pedagogico-relatorios",
@@ -304,6 +306,7 @@ const adminPedStudents = document.querySelector("[data-admin-ped-students]");
 const adminPedEmptyStudents = document.querySelector("[data-admin-ped-empty-students]");
 const adminPedTeachers = document.querySelector("[data-admin-ped-teachers]");
 const adminPedPeopleRoot = document.querySelector('[data-admin-ped-panel="pessoas"]');
+const adminPedRetention = document.querySelector("[data-admin-ped-retention]");
 const adminPedPlans = document.querySelector("[data-admin-ped-plans]");
 const adminPedEmptyPlans = document.querySelector("[data-admin-ped-empty-plans]");
 const adminPedSurveys = document.querySelector("[data-admin-ped-surveys]");
@@ -956,6 +959,7 @@ const syncRoleUI = () => {
               <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="ao-vivo" title="Agenda"><span class="sidebar-text">Agenda</span></button>
               <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-controle-pedagogico-aulas" data-sidebar-placeholder="true" title="Registros de Aulas"><span class="sidebar-text">Registros de Aulas</span></button>
               <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-controle-pedagogico-pessoas" data-sidebar-placeholder="true" title="Usuários"><span class="sidebar-text">Usuários</span></button>
+              <button class="sidebar-link sidebar-link-sub sidebar-link-with-badge" type="button" data-panel-target="admin-controle-pedagogico-retencao" data-sidebar-placeholder="true" title="Retenção"><span class="sidebar-link-main"><span class="sidebar-text">Retenção</span></span><span class="sidebar-badge" data-admin-ped-retention-badge hidden>0</span></button>
               <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-controle-pedagogico-qualidade" data-sidebar-placeholder="true" title="Qualidade"><span class="sidebar-text">Qualidade</span></button>
               <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-controle-pedagogico-onboarding" data-sidebar-placeholder="true" title="Onboarding"><span class="sidebar-text">Onboarding</span></button>
               <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-controle-pedagogico-relatorios" data-sidebar-placeholder="true" title="Relatórios"><span class="sidebar-text">Relatórios</span></button>
@@ -14729,6 +14733,233 @@ const getStudentLifecycleState = (aluno) => {
   return STUDENT_LIFECYCLE_STATE.ACTIVE;
 };
 
+const RETENTION_CRITICAL_ATTENDANCE_STATES = new Set(["ausente_critico", "nunca_apareceu"]);
+const RETENTION_CRITICAL_PAYMENT_STATES = new Set(["vencida_critica"]);
+
+const getRetentionOriginLabel = (record) =>
+  String(record?.origem || "").trim() === "abandono_confirmado" ? "Abandono" : "Pedido";
+
+const getRetentionSensorLabel = (sensor, fallback) => {
+  const state = String(sensor?.estado || "").trim();
+  if (state === "vencida_critica") return "Pagamento crítico";
+  if (state === "vencida") return "Pagamento vencido";
+  if (state === "em_dia") return "Pagamento em dia";
+  if (state === "sem_cobranca") return "Sem cobrança";
+  if (state === "sem_vinculo") return "Sem vínculo financeiro";
+  if (state === "ausente_critico") return "Frequência crítica";
+  if (state === "ausente") return "Frequência em atenção";
+  if (state === "frequentando") return "Frequência em dia";
+  if (state === "nunca_apareceu") return "Nunca apareceu";
+  if (state === "sem_aulas") return "Sem aulas";
+  return String(fallback || "Sem dados");
+};
+
+const getRetentionSensorPriority = (sensor) => {
+  const state = String(sensor?.estado || "").trim();
+  if (state === "vencida_critica" || state === "ausente_critico" || state === "nunca_apareceu") return 3;
+  if (state === "vencida" || state === "ausente") return 2;
+  if (state === "em_dia" || state === "frequentando") return 1;
+  return 0;
+};
+
+const formatRetentionDaysRemaining = (record, referenceDate = new Date()) => {
+  const endDate = toLifecycleDate(record?.dataFimAviso);
+  if (!(endDate instanceof Date) || Number.isNaN(endDate.getTime())) return "";
+  const diff = Math.round((startOfDay(endDate).getTime() - startOfDay(referenceDate).getTime()) / 86400000);
+  if (diff < 0) return `${Math.abs(diff)}d em atraso`;
+  if (diff === 0) return "vence hoje";
+  if (diff === 1) return "1 dia restante";
+  return `${diff} dias restantes`;
+};
+
+const buildRetentionTimelineLabel = (record, referenceDate = new Date()) => {
+  const startDate = toLifecycleDate(record?.dataPedido);
+  const endDate = toLifecycleDate(record?.dataFimAviso);
+  if (!(startDate instanceof Date) || Number.isNaN(startDate.getTime()) || !(endDate instanceof Date) || Number.isNaN(endDate.getTime())) return "Sem janela definida";
+  const totalDays = Math.max(1, Math.round((startOfDay(endDate).getTime() - startOfDay(startDate).getTime()) / 86400000) + 1);
+  const elapsedDays = Math.max(1, Math.min(totalDays, Math.round((startOfDay(referenceDate).getTime() - startOfDay(startDate).getTime()) / 86400000) + 1));
+  return `Dia ${elapsedDays} de ${totalDays}`;
+};
+
+const getRetentionStudentDisplayName = (student) => {
+  const name = compactAdminPedName(student?.nome || student?.aluno_nome || "Aluno", 2);
+  return name || "Aluno";
+};
+
+const buildRetentionDecisionEvidence = ({ paymentSensor, attendanceSensor }) =>
+  [String(paymentSensor?.detalhe || "").trim(), String(attendanceSensor?.detalhe || "").trim()].filter(Boolean).join(" · ");
+
+const getRetentionEffectiveRecords = (student) => {
+  const records = [];
+  const current = normalizeStudentCancellationRecord(student?.cancelamento);
+  if (current) records.push(current);
+  (Array.isArray(student?.cancelamentosAnteriores) ? student.cancelamentosAnteriores : []).forEach((item) => {
+    const normalized = normalizeStudentCancellationRecord(item);
+    if (normalized) records.push(normalized);
+  });
+  return records;
+};
+
+const buildRetentionQueues = ({
+  students = [],
+  lessonLogs = [],
+  scheduleEvents = [],
+  classes = [],
+  financeStudents = [],
+  charges = [],
+  referenceDate = new Date(),
+} = {}) => {
+  const today = startOfDay(referenceDate);
+  const todayKey = createDateKey(today);
+  const last60Start = addDays(today, -59);
+  const last60FromKey = createDateKey(last60Start);
+  const last90Start = addDays(today, -89).getTime();
+  const avisos = [];
+  const decisoes = [];
+  const efetivados = [];
+
+  (Array.isArray(students) ? students : []).forEach((student) => {
+    if (!student || typeof student !== "object") return;
+    const normalizedCurrent = normalizeStudentCancellationRecord(student.cancelamento);
+    const activeCancellation = isStudentCancellationActive(normalizedCurrent) ? normalizedCurrent : null;
+    const studentName = getRetentionStudentDisplayName(student);
+    const activeSensors = activeCancellation
+      ? (() => {
+          const range = getStudentCancellationWindowRange(activeCancellation, referenceDate);
+          if (!range) return { payment: null, attendance: null };
+          return {
+            payment: deriveSensorPagamento(student, range.fromKey, range.toKey, {
+              charges,
+              financeStudents,
+            }),
+            attendance: deriveSensorFrequencia(student, range.fromKey, range.toKey, {
+              logs: lessonLogs,
+              events: scheduleEvents,
+              classes,
+            }),
+          };
+        })()
+      : { payment: null, attendance: null };
+
+    if (activeCancellation) {
+      const daysRemaining = formatRetentionDaysRemaining(activeCancellation, referenceDate);
+      const avisoRow = {
+        type: "aviso",
+        alunoId: String(student.id || "").trim(),
+        alunoNome: studentName,
+        origem: getRetentionOriginLabel(activeCancellation),
+        timeline: buildRetentionTimelineLabel(activeCancellation, referenceDate),
+        daysRemaining,
+        paymentSensor: activeSensors.payment,
+        attendanceSensor: activeSensors.attendance,
+        paymentTone: getLifecycleSensorTone(activeSensors.payment?.estado),
+        attendanceTone: getLifecycleSensorTone(activeSensors.attendance?.estado),
+        aulasSuspensas: activeCancellation.aulasSuspensas === true,
+        score:
+          getRetentionSensorPriority(activeSensors.payment) * 10 +
+          getRetentionSensorPriority(activeSensors.attendance) * 10 +
+          (activeCancellation.aulasSuspensas ? 2 : 0),
+      };
+      avisos.push(avisoRow);
+
+      if (isValidDateKey(activeCancellation?.dataFimAviso) && String(activeCancellation.dataFimAviso).slice(0, 10) < todayKey) {
+        decisoes.push({
+          kind: "aviso_vencido",
+          alunoId: avisoRow.alunoId,
+          alunoNome: avisoRow.alunoNome,
+          origem: avisoRow.origem,
+          evidence: daysRemaining || "Aviso vencido",
+          actionLabel: "Efetivar",
+          secondaryActionLabel: "Abrir ficha",
+          activeCancellation,
+          paymentSensor: activeSensors.payment,
+          attendanceSensor: activeSensors.attendance,
+        });
+      } else if (
+        RETENTION_CRITICAL_PAYMENT_STATES.has(String(activeSensors.payment?.estado || "")) &&
+        RETENTION_CRITICAL_ATTENDANCE_STATES.has(String(activeSensors.attendance?.estado || "")) &&
+        activeCancellation.aulasSuspensas !== true
+      ) {
+        decisoes.push({
+          kind: "aparenta_abandono_no_aviso",
+          alunoId: avisoRow.alunoId,
+          alunoNome: avisoRow.alunoNome,
+          origem: avisoRow.origem,
+          evidence: buildRetentionDecisionEvidence({ paymentSensor: activeSensors.payment, attendanceSensor: activeSensors.attendance }),
+          actionLabel: "Suspender aulas",
+          secondaryActionLabel: "Abrir ficha",
+          activeCancellation,
+          paymentSensor: activeSensors.payment,
+          attendanceSensor: activeSensors.attendance,
+        });
+      }
+    } else if (student.ativo !== false) {
+      const payment60 = deriveSensorPagamento(student, last60FromKey, todayKey, {
+        charges,
+        financeStudents,
+      });
+      const attendance60 = deriveSensorFrequencia(student, last60FromKey, todayKey, {
+        logs: lessonLogs,
+        events: scheduleEvents,
+        classes,
+      });
+      if (
+        RETENTION_CRITICAL_PAYMENT_STATES.has(String(payment60?.estado || "")) &&
+        RETENTION_CRITICAL_ATTENDANCE_STATES.has(String(attendance60?.estado || ""))
+      ) {
+        decisoes.push({
+          kind: "candidato_abandono_silencioso",
+          alunoId: String(student.id || "").trim(),
+          alunoNome: studentName,
+          origem: "Sem aviso",
+          evidence: buildRetentionDecisionEvidence({ paymentSensor: payment60, attendanceSensor: attendance60 }),
+          actionLabel: "Confirmar abandono",
+          secondaryActionLabel: "Abrir ficha",
+          activeCancellation: null,
+          paymentSensor: payment60,
+          attendanceSensor: attendance60,
+        });
+      }
+    }
+
+    getRetentionEffectiveRecords(student).forEach((record) => {
+      const efetivacaoMs = parseFirestoreDateToMs(record?.dataEfetivacao);
+      if (!Number.isFinite(efetivacaoMs) || efetivacaoMs < last90Start) return;
+      if (!record?.desfecho) return;
+      efetivados.push({
+        alunoId: String(student.id || "").trim(),
+        alunoNome: studentName,
+        origem: getRetentionOriginLabel(record),
+        desfecho: String(record.desfecho || "").trim() || "Efetivado",
+        dataEfetivacao: efetivacaoMs,
+      });
+    });
+  });
+
+  avisos.sort((a, b) => {
+    if ((b.score || 0) !== (a.score || 0)) return (b.score || 0) - (a.score || 0);
+    const ad = Math.abs(Number((a.daysRemaining.match(/\d+/) || [999])[0]) || 999);
+    const bd = Math.abs(Number((b.daysRemaining.match(/\d+/) || [999])[0]) || 999);
+    return ad - bd;
+  });
+
+  const decisionPriority = {
+    aviso_vencido: 0,
+    aparenta_abandono_no_aviso: 1,
+    candidato_abandono_silencioso: 2,
+  };
+  decisoes.sort((a, b) => {
+    const pa = decisionPriority[String(a.kind || "")] ?? 99;
+    const pb = decisionPriority[String(b.kind || "")] ?? 99;
+    if (pa !== pb) return pa - pb;
+    return String(a.alunoNome || "").localeCompare(String(b.alunoNome || ""), "pt-BR");
+  });
+
+  efetivados.sort((a, b) => Number(b.dataEfetivacao || 0) - Number(a.dataEfetivacao || 0));
+
+  return { avisos, decisoes, efetivados };
+};
+
 const getStudentLifecycleBadgeMeta = (aluno) => {
   const state = getStudentLifecycleState(aluno);
   const cancelamento = normalizeStudentCancellationRecord(aluno?.cancelamento);
@@ -16855,6 +17086,13 @@ let adminPedagogicoState = {
     page: 1,
     pageSize: 25,
   },
+  retention: {
+    loading: false,
+    loadedAt: 0,
+    error: "",
+    badgeCount: 0,
+    queues: null,
+  },
   filters: {
     teacherId: "",
     dow: "",
@@ -18524,6 +18762,7 @@ const ADMIN_PED_NAV_GROUPS = [
     tabs: [
       { key: "overview", label: "Visão Geral" },
       { key: "aulas", label: "Registros de Aulas" },
+      { key: "retencao", label: "Retenção" },
       { key: "conflitos", label: "Conflitos" },
     ],
   },
@@ -18576,6 +18815,7 @@ const adminPedFindGroupForTab = (tabKey) => {
 const ADMIN_PED_TAB_SUMMARIES = {
   overview: "Pendências e próximos passos",
   aulas: "Presença, faltas e aulas sem registro",
+  retencao: "Central de retenção e decisões pendentes",
   conflitos: "Conflitos detectados",
   pessoas: "Usuários",
   alunos: "Visão dos alunos ativos",
@@ -18598,6 +18838,7 @@ const ADMIN_PED_PAGE_TITLES = {
   agenda: "Agenda",
   aulas: "Registros de Aulas",
   pessoas: "Usuários",
+  retencao: "Retenção",
   qualidade: "Qualidade",
   onboarding: "Onboarding",
   relatorios: "Relatórios",
