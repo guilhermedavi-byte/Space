@@ -19269,6 +19269,268 @@ const renderAdminPedLessonRecordActiveFilters = ({ filters, range }) => {
   `;
 };
 
+const syncAdminPedRetentionBadge = (count = 0) => {
+  const safe = Math.max(0, Number(count) || 0);
+  document.querySelectorAll("[data-admin-ped-retention-badge]").forEach((badge) => {
+    if (!(badge instanceof HTMLElement)) return;
+    badge.hidden = safe <= 0;
+    badge.textContent = String(safe);
+  });
+};
+
+const formatRetentionDecisionTitle = (kind) => {
+  if (kind === "aviso_vencido") return "Aviso vencido";
+  if (kind === "aparenta_abandono_no_aviso") return "Aparenta abandono no aviso";
+  if (kind === "candidato_abandono_silencioso") return "Candidato a abandono silencioso";
+  return "Decisão pendente";
+};
+
+const buildRetentionMiniCard = ({ label, value, tone = "" } = {}) => `
+  <article class="pedov2-card pedov2-kpi-card ${tone === "coral" ? "is-emphasis" : ""}">
+    <div class="pedov2-kpi-label"><span class="pedov2-kpi-dot" style="background:${tone === "coral" ? "#ff6a60" : tone === "green" ? "#3fd6a4" : "#a0bcff"}"></span>${escapeHtml(
+      String(label || "")
+    )}</div>
+    <div class="pedov2-kpi-value-row"><span class="pedov2-kpi-value ${tone === "coral" ? "is-risk" : ""}">${escapeHtml(String(value || 0))}</span></div>
+  </article>
+`;
+
+const renderAdminPedRetentionSectionEmpty = (title, sub) => `
+  <div class="admin-ped-empty-inline pedretain-empty">
+    <div class="admin-ped-empty-title">${escapeHtml(title)}</div>
+    <div class="admin-ped-empty-sub">${escapeHtml(sub)}</div>
+  </div>
+`;
+
+const renderAdminPedRetentionAvisos = (rows) => {
+  if (!Array.isArray(rows) || !rows.length) {
+    return renderAdminPedRetentionSectionEmpty("Nenhum aluno em aviso prévio.", "Quando houver cancelamentos ativos, eles aparecem aqui.");
+  }
+  return `
+    <div class="pedretain-list">
+      ${rows
+        .map(
+          (row) => `
+            <article class="pedretain-row" tabindex="0" role="button" data-admin-ped-retention-row="${escapeHtml(String(row.alunoId || ""))}">
+              <div class="pedretain-main">
+                <div class="pedretain-title-row">
+                  <strong class="pedretain-name">${escapeHtml(row.alunoNome || "Aluno")}</strong>
+                  <span class="pedretain-inline-meta">${escapeHtml(row.origem || "Pedido")} · ${escapeHtml(row.timeline || "—")}</span>
+                </div>
+                <div class="pedretain-subline">
+                  <span class="pedteacher-badge is-${escapeHtml(row.paymentTone || "slate")}">${escapeHtml(getRetentionSensorLabel(row.paymentSensor, "Pagamento"))}</span>
+                  <span class="pedteacher-badge is-${escapeHtml(row.attendanceTone || "slate")}">${escapeHtml(getRetentionSensorLabel(row.attendanceSensor, "Frequência"))}</span>
+                  ${row.aulasSuspensas ? `<span class="pedteacher-badge is-slate">Aulas suspensas</span>` : ""}
+                </div>
+              </div>
+              <div class="pedretain-side">
+                <span class="pedretain-days">${escapeHtml(row.daysRemaining || "Sem prazo")}</span>
+              </div>
+            </article>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+};
+
+const renderAdminPedRetentionDecisoes = (rows) => {
+  if (!Array.isArray(rows) || !rows.length) {
+    return renderAdminPedRetentionSectionEmpty("Nenhuma decisão pendente.", "A fila fica vazia quando não há sinais críticos para revisar.");
+  }
+  return `
+    <div class="pedretain-list">
+      ${rows
+        .map(
+          (row) => `
+            <article class="pedretain-row is-decision" tabindex="0" role="button" data-admin-ped-retention-row="${escapeHtml(String(row.alunoId || ""))}">
+              <div class="pedretain-main">
+                <div class="pedretain-title-row">
+                  <strong class="pedretain-name">${escapeHtml(row.alunoNome || "Aluno")}</strong>
+                  <span class="pedretain-inline-meta is-coral">${escapeHtml(formatRetentionDecisionTitle(row.kind))}</span>
+                </div>
+                <div class="pedretain-evidence">${escapeHtml(row.evidence || "Sem evidência consolidada.")}</div>
+              </div>
+              <div class="pedretain-actions">
+                <button class="admin-ped-action" type="button" data-admin-ped-retention-action="${escapeHtml(String(row.kind || ""))}" data-admin-ped-retention-student="${escapeHtml(
+            String(row.alunoId || "")
+          )}">${escapeHtml(row.actionLabel || "Abrir")}</button>
+                <button class="admin-ped-action is-muted" type="button" data-admin-ped-retention-action="open_sheet" data-admin-ped-retention-student="${escapeHtml(
+            String(row.alunoId || "")
+          )}">${escapeHtml(row.secondaryActionLabel || "Abrir ficha")}</button>
+              </div>
+            </article>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+};
+
+const renderAdminPedRetentionEfetivados = (rows) => {
+  if (!Array.isArray(rows) || !rows.length) {
+    return renderAdminPedRetentionSectionEmpty("Nenhum cancelamento efetivado no período.", "A seção já está pronta para a próxima etapa do fluxo.");
+  }
+  return `
+    <div class="pedretain-list">
+      ${rows
+        .map(
+          (row) => `
+            <article class="pedretain-row" tabindex="0" role="button" data-admin-ped-retention-row="${escapeHtml(String(row.alunoId || ""))}">
+              <div class="pedretain-main">
+                <div class="pedretain-title-row">
+                  <strong class="pedretain-name">${escapeHtml(row.alunoNome || "Aluno")}</strong>
+                  <span class="pedretain-inline-meta">${escapeHtml(row.origem || "—")} · ${escapeHtml(row.desfecho || "Efetivado")}</span>
+                </div>
+              </div>
+              <div class="pedretain-side">
+                <span class="pedretain-days">${escapeHtml(formatShortDateFromMs(row.dataEfetivacao))}</span>
+              </div>
+            </article>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+};
+
+const renderAdminPedagogicoRetentionPanel = () => {
+  if (!(adminPedRetention instanceof HTMLElement)) return;
+  const retentionState = adminPedagogicoState.retention && typeof adminPedagogicoState.retention === "object" ? adminPedagogicoState.retention : {};
+  const queues = retentionState.queues && typeof retentionState.queues === "object" ? retentionState.queues : null;
+
+  if (retentionState.loading && !queues) {
+    adminPedRetention.innerHTML = `
+      <div class="pedov2 pedretain">
+        <header class="pedov2-page-head pedretain-head">
+          <div>
+            <p class="pedov2-eyebrow">Pedagógico</p>
+            <h1 class="pedov2-title">Retenção</h1>
+            <p class="pedov2-page-sub">Inbox de decisão para cancelamentos, abandono e risco de churn.</p>
+          </div>
+        </header>
+        <div class="admin-ped-empty-inline"><div class="admin-ped-empty-title">Carregando central de retenção...</div><div class="admin-ped-empty-sub">Consolidando financeiro, frequência e cancelamentos.</div></div>
+      </div>
+    `;
+    return;
+  }
+
+  if (retentionState.error && !queues) {
+    adminPedRetention.innerHTML = `
+      <div class="pedov2 pedretain">
+        <header class="pedov2-page-head pedretain-head">
+          <div>
+            <p class="pedov2-eyebrow">Pedagógico</p>
+            <h1 class="pedov2-title">Retenção</h1>
+            <p class="pedov2-page-sub">Inbox de decisão para cancelamentos, abandono e risco de churn.</p>
+          </div>
+        </header>
+        <div class="admin-ped-empty-inline"><div class="admin-ped-empty-title">Não foi possível montar a central agora.</div><div class="admin-ped-empty-sub">${escapeHtml(
+          String(retentionState.error || "Tente novamente em alguns instantes.")
+        )}</div></div>
+      </div>
+    `;
+    return;
+  }
+
+  const avisos = Array.isArray(queues?.avisos) ? queues.avisos : [];
+  const decisoes = Array.isArray(queues?.decisoes) ? queues.decisoes : [];
+  const efetivados = Array.isArray(queues?.efetivados) ? queues.efetivados : [];
+
+  adminPedRetention.innerHTML = `
+    <div class="pedov2 pedretain">
+      <header class="pedov2-page-head pedretain-head">
+        <div>
+          <p class="pedov2-eyebrow">Pedagógico</p>
+          <h1 class="pedov2-title">Retenção</h1>
+          <p class="pedov2-page-sub">Fila operacional para agir rápido em aviso prévio, abandono e efetivação.</p>
+        </div>
+      </header>
+
+      <section class="pedov2-kpi-row pedretain-kpis" aria-label="Resumo de retenção">
+        ${buildRetentionMiniCard({ label: "Em aviso prévio", value: avisos.length })}
+        ${buildRetentionMiniCard({ label: "Precisam de decisão", value: decisoes.length, tone: "coral" })}
+        ${buildRetentionMiniCard({ label: "Efetivados 90d", value: efetivados.length, tone: "green" })}
+      </section>
+
+      <section class="pedretain-section">
+        <div class="pedretain-section-head">
+          <h2 class="pedretain-section-title">Avisos em andamento</h2>
+          <span class="pedretain-section-count">${escapeHtml(String(avisos.length))}</span>
+        </div>
+        ${renderAdminPedRetentionAvisos(avisos)}
+      </section>
+
+      <section class="pedretain-section">
+        <div class="pedretain-section-head">
+          <h2 class="pedretain-section-title">Precisa de decisão</h2>
+          <span class="pedretain-section-count is-coral">${escapeHtml(String(decisoes.length))}</span>
+        </div>
+        ${renderAdminPedRetentionDecisoes(decisoes)}
+      </section>
+
+      <section class="pedretain-section">
+        <div class="pedretain-section-head">
+          <h2 class="pedretain-section-title">Efetivados no período</h2>
+          <span class="pedretain-section-count">${escapeHtml(String(efetivados.length))}</span>
+        </div>
+        ${renderAdminPedRetentionEfetivados(efetivados)}
+      </section>
+    </div>
+  `;
+};
+
+const refreshAdminPedagogicoRetentionState = async ({ force = false } = {}) => {
+  const current = adminPedagogicoState.retention && typeof adminPedagogicoState.retention === "object" ? adminPedagogicoState.retention : {};
+  if (current.loading) return current.queues || null;
+  if (!force && current.loadedAt && Date.now() - current.loadedAt < 30_000 && current.queues) {
+    syncAdminPedRetentionBadge(current.badgeCount || 0);
+    return current.queues;
+  }
+
+  adminPedagogicoState.retention = {
+    ...current,
+    loading: true,
+    error: "",
+  };
+  if (String(adminPedagogicoState.activeTab || "") === "retencao") renderAdminPedagogicoRetentionPanel();
+
+  try {
+    await ensureFinanceLoaded({ force: false });
+    const queues = buildRetentionQueues({
+      students: adminPedagogicoState.students,
+      lessonLogs: adminPedagogicoState.lessonLogs,
+      scheduleEvents: adminPedagogicoState.scheduleEvents,
+      classes: adminPedagogicoState.classes,
+      financeStudents: financeState.alunos,
+      charges: financeState.cobrancas,
+      referenceDate: new Date(),
+    });
+    adminPedagogicoState.retention = {
+      loading: false,
+      loadedAt: Date.now(),
+      error: "",
+      badgeCount: Array.isArray(queues?.decisoes) ? queues.decisoes.length : 0,
+      queues,
+    };
+    syncAdminPedRetentionBadge(adminPedagogicoState.retention.badgeCount || 0);
+    renderAdminPedagogicoRetentionPanel();
+    return queues;
+  } catch (error) {
+    console.error("[admin-ped] retention refresh failed", error);
+    adminPedagogicoState.retention = {
+      ...current,
+      loading: false,
+      loadedAt: 0,
+      error: "Não foi possível carregar os dados de retenção agora.",
+      badgeCount: 0,
+      queues: null,
+    };
+    syncAdminPedRetentionBadge(0);
+    renderAdminPedagogicoRetentionPanel();
+    return null;
+  }
+};
+
 const syncAdminPedagogicoPageTitle = (panelName = body.dataset.activePanel || "") => {
   const panel = String(panelName || "").trim();
   let title = "";
@@ -23181,6 +23443,7 @@ const runAdminPedagogicoRenderers = () => {
     renderAdminPedagogicoTabs,
     renderAdminPedOverviewV2,
     renderAdminPedagogicoClassesList,
+    renderAdminPedagogicoRetentionPanel,
     renderAdminPedagogicoGroups,
     renderAdminPedagogicoStudentsPanel,
     renderAdminPedagogicoTeachersPanel,
@@ -23218,6 +23481,7 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
   const now = Date.now();
   if (!force && adminPedagogicoState.loadedAt && now - adminPedagogicoState.loadedAt < 45_000) {
     const { failed, failedNames } = runAdminPedagogicoRenderers();
+    refreshAdminPedagogicoRetentionState({ force: false }).catch((error) => console.warn("[admin-ped] retention refresh skipped", error));
     const detail = failedNames.length ? `Renderers com falha: ${failedNames.join(", ")}` : "";
     if (failedNames.length) console.warn("[admin-ped] renderers failed", failedNames);
     setAdminPedagogicoStatus(failed ? "Alguns blocos não puderam ser exibidos agora." : "", failed ? "warn" : "", detail);
@@ -23399,6 +23663,7 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
     }
 
     const { failed, failedNames } = runAdminPedagogicoRenderers();
+    refreshAdminPedagogicoRetentionState({ force: true }).catch((error) => console.warn("[admin-ped] retention refresh skipped", error));
     const degraded = Boolean(adminPedagogicoState.pedagogicalOps?.degraded);
     const degradedReason = String(adminPedagogicoState.pedagogicalOps?.degradedReason || "").trim();
     const detail = [
@@ -26510,6 +26775,7 @@ const findAdminStudentRecurringEventId = (alunoId, groupId) => {
 const rerenderAdminStudentLifecycleViews = () => {
   if (adminStudentsState.history?.isOpen) renderAdminStudentSheet();
   if (typeof renderAdminPedagogicoStudentsPanel === "function") renderAdminPedagogicoStudentsPanel();
+  if (typeof refreshAdminPedagogicoRetentionState === "function") refreshAdminPedagogicoRetentionState({ force: true }).catch(() => {});
   if (typeof renderAdminStudentsList === "function") renderAdminStudentsList();
 };
 
@@ -28696,7 +28962,7 @@ const panelPathForRole = (role, panel) => {
     if (["copilot-vendas", "scripts-vendas", "objecoes", "planos", "personas", "frases-vencedoras", "analytics", "training"].includes(p)) return `/app/admin/growth/${p}`;
     if (p === "professores" || p === "alunos") return "/app/admin/controle-pedagogico";
     if (p === "admin-controle-pedagogico") return "/app/admin/controle-pedagogico";
-    if (["admin-controle-pedagogico-aulas", "admin-controle-pedagogico-pessoas", "admin-controle-pedagogico-qualidade", "admin-controle-pedagogico-onboarding", "admin-controle-pedagogico-relatorios"].includes(p)) return "/app/admin/controle-pedagogico";
+    if (["admin-controle-pedagogico-aulas", "admin-controle-pedagogico-pessoas", "admin-controle-pedagogico-retencao", "admin-controle-pedagogico-qualidade", "admin-controle-pedagogico-onboarding", "admin-controle-pedagogico-relatorios"].includes(p)) return "/app/admin/controle-pedagogico";
     if (p === "space-office") return "/app/admin/space-office";
     if (p === "status-plataforma") return "/app/admin/status";
     if (p === "guia-colaboradores") return "/app/admin/guia";
@@ -30406,6 +30672,46 @@ document.addEventListener("click", (event) => {
         return;
       }
 
+      const adminPedRetentionAction = target.closest("[data-admin-ped-retention-action]");
+      if (adminPedRetentionAction instanceof HTMLButtonElement) {
+        event.preventDefault();
+        event.stopPropagation();
+        const action = String(adminPedRetentionAction.getAttribute("data-admin-ped-retention-action") || "").trim();
+        const alunoId = String(adminPedRetentionAction.getAttribute("data-admin-ped-retention-student") || "").trim();
+        if (!alunoId) return;
+        if (action === "open_sheet") {
+          openStudentSimpleCard({ alunoId }).catch((error) => console.error("[admin] retention open student failed", error));
+          return;
+        }
+        if (action === "aviso_vencido") {
+          openModal({
+            title: "Efetivação disponível na próxima atualização",
+            primaryLabel: "Fechar",
+            secondaryLabel: "Cancelar",
+            bodyHtml: "A efetivação do cancelamento entra na etapa 3. Por enquanto, a central só aponta quem já está pronto para essa ação.",
+          });
+          return;
+        }
+        if (action === "aparenta_abandono_no_aviso") {
+          openAdminStudentSuspendLessonsModal({ alunoId, suspend: true });
+          return;
+        }
+        if (action === "candidato_abandono_silencioso") {
+          openAdminStudentMarkAbandonmentModal({ alunoId });
+          return;
+        }
+        return;
+      }
+
+      const adminPedRetentionRow = target.closest("[data-admin-ped-retention-row]");
+      if (adminPedRetentionRow instanceof HTMLElement) {
+        event.preventDefault();
+        const alunoId = String(adminPedRetentionRow.getAttribute("data-admin-ped-retention-row") || "").trim();
+        if (!alunoId) return;
+        openStudentSimpleCard({ alunoId }).catch((error) => console.error("[admin] retention row open failed", error));
+        return;
+      }
+
       const adminPedQualityTab = target.closest("[data-admin-ped-quality-tab]");
       if (adminPedQualityTab instanceof HTMLButtonElement) {
         event.preventDefault();
@@ -30462,6 +30768,10 @@ document.addEventListener("click", (event) => {
         // Render target panel (best effort).
         if (tab === "overview") renderAdminPedagogicoOverview();
         else if (tab === "aulas") renderAdminPedagogicoClassesList();
+        else if (tab === "retencao") {
+          renderAdminPedagogicoRetentionPanel();
+          refreshAdminPedagogicoRetentionState({ force: false }).catch(() => {});
+        }
         else if (tab === "conflitos") renderAdminPedagogicoConflicts();
         else if (tab === "pessoas") renderAdminPedagogicoPeoplePanel();
         else if (tab === "qualidade") renderAdminPedagogicoQualityPanel();
@@ -32558,6 +32868,12 @@ document.addEventListener("keydown", (event) => {
   if (lessonRecordRow instanceof HTMLElement) {
     event.preventDefault();
     lessonRecordRow.click();
+    return;
+  }
+  const retentionRow = event.target.closest("[data-admin-ped-retention-row]");
+  if (retentionRow instanceof HTMLElement) {
+    event.preventDefault();
+    retentionRow.click();
     return;
   }
   const adminPedRow = event.target.closest("[data-admin-ped-student-open]");

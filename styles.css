@@ -1102,6 +1102,10 @@ body[data-sidebar-expanded="false"] .sidebar-accordion-body {
   overflow: hidden;
 }
 
+.sidebar-link-sub.sidebar-link-with-badge .sidebar-link-main {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .sidebar-link-with-badge .sidebar-text {
   display: block;
   min-width: 0;
@@ -21786,4 +21790,35 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   .pedrecords-meta{align-items:flex-start}
   .pedrecords-table th,
   .pedrecords-table td{padding:13px 14px}
+}
+
+/* === Pedagogico Retencao === */
+.pedretain{padding-inline:0}
+.pedretain-head{margin-bottom:18px}
+.pedretain-kpis{margin-top:0;margin-bottom:18px}
+.pedretain-section{display:grid;gap:12px;margin-top:18px}
+.pedretain-section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.pedretain-section-title{margin:0;font-size:1rem;font-weight:800;color:var(--text-main)}
+.pedretain-section-count{display:inline-flex;align-items:center;justify-content:center;min-width:32px;height:24px;padding:0 10px;border-radius:999px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.04);color:var(--text-soft);font-size:.76rem;font-weight:800}
+.pedretain-section-count.is-coral{background:rgba(255,86,79,.12);border-color:rgba(255,86,79,.24);color:#ff9c94}
+.pedretain-list{display:grid;gap:10px}
+.pedretain-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:16px;padding:16px 18px;border-radius:18px;border:1px solid rgba(255,255,255,.06);background:rgba(12,18,30,.72);cursor:pointer;transition:background .16s ease,border-color .16s ease,transform .16s ease}
+.pedretain-row:hover,.pedretain-row:focus-visible{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.12);transform:translateY(-1px);outline:none}
+.pedretain-row.is-decision{border-color:rgba(255,86,79,.14)}
+.pedretain-main{min-width:0;display:grid;gap:8px}
+.pedretain-title-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.pedretain-name{font-size:.95rem;color:var(--text-main)}
+.pedretain-inline-meta{font-size:.76rem;color:var(--text-muted);font-weight:700}
+.pedretain-inline-meta.is-coral{color:#ff9c94}
+.pedretain-subline{display:flex;gap:8px;flex-wrap:wrap}
+.pedretain-evidence{font-size:.84rem;color:var(--text-soft);line-height:1.45}
+.pedretain-side{display:flex;align-items:center;justify-content:flex-end}
+.pedretain-days{font-size:.8rem;font-weight:800;color:var(--text-main);white-space:nowrap}
+.pedretain-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.pedretain-empty{padding:20px 18px;border:1px dashed rgba(255,255,255,.08);border-radius:18px;background:rgba(255,255,255,.02)}
+
+@media (max-width: 900px){
+  .pedretain-row{grid-template-columns:1fr}
+  .pedretain-side,
+  .pedretain-actions{justify-content:flex-start}
 }
