@@ -296,7 +296,6 @@ const teacherStudentsEmpty = document.querySelector("[data-teacher-students-empt
 const teacherStudentsError = document.querySelector("[data-teacher-students-error]");
 const teacherStudentsStatus = document.querySelector("[data-teacher-students-status]");
 const teacherStudentsSearchInput = document.querySelector("[data-teacher-students-search]");
-const teacherStudentsStatusFilterEl = document.querySelector("[data-teacher-students-status-filter]");
 const teacherStudentHistoryDrawer = document.querySelector("[data-teacher-student-history-drawer]");
 const teacherStudentHistoryTitle = document.querySelector("[data-teacher-student-history-title]");
 const teacherStudentHistorySub = document.querySelector("[data-teacher-student-history-sub]");
@@ -7553,7 +7552,7 @@ let teacherStudentsState = {
     items: [],
   },
 };
-let teacherStudentsFilters = { query: "", status: "active" };
+let teacherStudentsFilters = { query: "" };
 let teacherStudentsSearchDebounce = null;
 
 const setTeacherStudentsStatus = (text, tone = "") => {
@@ -7571,13 +7570,6 @@ const bindTeacherStudentsFilters = () => {
         teacherStudentsFilters.query = String(teacherStudentsSearchInput.value || "");
         renderTeacherStudentsList();
       }, 200);
-    });
-  }
-  if (teacherStudentsStatusFilterEl instanceof HTMLSelectElement && teacherStudentsStatusFilterEl.dataset.bound !== "true") {
-    teacherStudentsStatusFilterEl.dataset.bound = "true";
-    teacherStudentsStatusFilterEl.addEventListener("change", () => {
-      teacherStudentsFilters.status = String(teacherStudentsStatusFilterEl.value || "active");
-      renderTeacherStudentsList();
     });
   }
 };
@@ -9355,11 +9347,8 @@ const renderTeacherStudentsList = () => {
   if (!(teacherStudentsList instanceof HTMLElement)) return;
   bindTeacherStudentsFilters();
   const allRows = Array.isArray(teacherStudentsState.summaries) ? teacherStudentsState.summaries : [];
-  const statusFilter = String(teacherStudentsFilters.status || "active");
   const query = normalizeSearchText(teacherStudentsFilters.query || "");
   const rows = allRows.filter((row) => {
-    if (statusFilter === "active" && String(row?.accessStatus || "") !== "Ativo") return false;
-    if (statusFilter === "inactive" && String(row?.accessStatus || "") !== "Inativo") return false;
     if (!query) return true;
     const nameMatch = normalizeSearchText(row?.nome || "").includes(query);
     const emailMatch = normalizeSearchText(row?.email || "").includes(query);
