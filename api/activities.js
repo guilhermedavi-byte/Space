@@ -106,6 +106,20 @@ const listVisibleUsers = (session, rows) => {
     .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 };
 
+const listActivityDirectoryUsers = (rows) =>
+  (Array.isArray(rows) ? rows : [])
+    .map((row) => ({
+      id: safeText(row.id),
+      nome: safeText(row.nome),
+      email: safeText(row.email).toLowerCase(),
+      role: normalizeUserRole(row.tipo || row.role),
+      ativo: row.ativo !== false,
+      photoURL: safeText(row.photoURL),
+      telefone: safeText(row.telefone),
+    }))
+    .filter((row) => row.id && row.nome && row.ativo)
+    .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+
 const getAccessToken = async () => {
   const result = await getGoogleAccessToken({ scope: DATASTORE_SCOPE });
   return safeText(result?.accessToken);
@@ -179,6 +193,7 @@ module.exports = async (req, res) => {
       return sendJson(res, 200, {
         activities,
         users: listVisibleUsers(session, userRows),
+        directoryUsers: listActivityDirectoryUsers(userRows),
         permissions: {
           role,
           canViewAll: role === "admin",

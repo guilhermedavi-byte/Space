@@ -7440,6 +7440,7 @@ let activitiesState = {
   lastLoadedAt: 0,
   items: [],
   users: [],
+  directoryUsers: [],
   searchQuery: "",
   view: "list",
   calendarView: "month",
@@ -9504,7 +9505,9 @@ const getActivityTypeOptions = () =>
 const getActivityResponsibleUser = (activity) => {
   const id = String(activity?.responsavelId || "").trim();
   if (!id) return null;
-  return Array.isArray(activitiesState.users) ? activitiesState.users.find((user) => String(user.id || "") === id) || null : null;
+  const assignedUsers = Array.isArray(activitiesState.users) ? activitiesState.users : [];
+  const directoryUsers = Array.isArray(activitiesState.directoryUsers) ? activitiesState.directoryUsers : [];
+  return assignedUsers.find((user) => String(user.id || "") === id) || directoryUsers.find((user) => String(user.id || "") === id) || null;
 };
 
 const getActivityResponsibleName = (activity) => getActivityResponsibleUser(activity)?.nome || "Sem responsável";
@@ -9613,7 +9616,7 @@ const openActivitiesFiltersPopover = ({ triggerEl } = {}) => {
   if (!(triggerEl instanceof HTMLElement)) return;
   closeActivitiesFiltersPopover();
   const filters = activitiesState.filters || {};
-  const users = Array.isArray(activitiesState.users) ? activitiesState.users : [];
+  const directoryUsers = Array.isArray(activitiesState.directoryUsers) ? activitiesState.directoryUsers : [];
   const pop = document.createElement("div");
   pop.className = "admin-students-filters-popover activities-filters-popover ativv2-filters-popover";
   pop.setAttribute("data-activities-filters-popover", "true");
@@ -9633,7 +9636,14 @@ const openActivitiesFiltersPopover = ({ triggerEl } = {}) => {
     </div>
   `;
   pop.innerHTML = `
-    ${renderChecks("responsaveis", "Responsável", users.map((user) => ({ value: user.id, label: user.nome })))}
+    <div class="activities-filters-group">
+      <div class="activities-filters-group-title">Responsável</div>
+      <div class="ativv2-user-combobox">
+        <input class="admin-ped-select ativv2-user-search-input" type="search" placeholder="Buscar usuário..." data-activities-user-search autocomplete="off" />
+        <div class="ativv2-user-selected" data-activities-selected-users></div>
+        <div class="ativv2-user-options" data-activities-user-options></div>
+      </div>
+    </div>
     ${renderChecks("statuses", "Status", ACTIVITY_STATUS_OPTIONS)}
     ${renderChecks("priorities", "Prioridade", ACTIVITY_PRIORITY_OPTIONS)}
     ${renderChecks("types", "Tipo", getActivityTypeOptions())}
@@ -9655,6 +9665,80 @@ const openActivitiesFiltersPopover = ({ triggerEl } = {}) => {
   activitiesState.filterPopoverEl = pop;
   const dueSelect = pop.querySelector('[data-activities-filter-select="duePreset"]');
   if (dueSelect instanceof HTMLSelectElement) dueSelect.value = String(filters.duePreset || "");
+  const userSearchInput = pop.querySelector("[data-activities-user-search]");
+  const selectedUsersEl = pop.querySelector("[data-activities-selected-users]");
+  const userOptionsEl = pop.querySelector("[data-activities-user-options]");
+  let searchTimer = 0;
+  const renderResponsiblePicker = (query = "") => {
+    if (!(selectedUsersEl instanceof HTMLElement) || !(userOptionsEl instanceof HTMLElement)) return;
+    const selectedIds = Array.isArray(activitiesState.filters?.responsaveis) ? activitiesState.filters.responsaveis : [];
+    const normalizedQuery = normalizeSearchText(query);
+    const selectedUsers = selectedIds
+      .map((id) => directoryUsers.find((user) => String(user.id || "") === String(id || "")) || null)
+      .filter(Boolean);
+    selectedUsersEl.innerHTML = selectedUsers.length
+      ? selectedUsers
+          .map(
+            (user) => `<button class="ativv2-user-chip" type="button" data-activities-remove-user="${escapeHtml(user.id)}"><span>${escapeHtml(user.nome)}</span><strong aria-hidden="true">×</strong></button>`
+          )
+          .join("")
+      : `<div class="ativv2-user-selected-empty">Nenhum responsável selecionado</div>`;
+    const filteredUsers = directoryUsers
+      .filter((user) => !selectedIds.includes(String(user.id || "")))
+      .filter((user) => {
+        if (!normalizedQuery) return true;
+        const haystack = normalizeSearchText([user.nome, user.email, user.telefone, user.role].filter(Boolean).join(" "));
+        return haystack.includes(normalizedQuery);
+      })
+      .slice(0, 24);
+    userOptionsEl.innerHTML = filteredUsers.length
+      ? filteredUsers
+          .map(
+            (user) => `
+              <button class="ativv2-user-option" type="button" data-activities-add-user="${escapeHtml(user.id)}">
+                <span class="ativv2-user-option-main">
+                  <span class="activities-avatar ativv2-avatar">${escapeHtml(getInitials(user.nome))}</span>
+                  <span class="ativv2-user-option-copy">
+                    <span class="ativv2-user-option-name">${escapeHtml(user.nome)}</span>
+                    <span class="ativv2-user-option-meta">${escapeHtml(user.email || user.role || "Usuário ativo")}</span>
+                  </span>
+                </span>
+              </button>
+            `
+          )
+          .join("")
+      : `<div class="ativv2-user-options-empty">Nenhum usuário encontrado</div>`;
+  };
+  renderResponsiblePicker("");
+  if (userSearchInput instanceof HTMLInputElement) {
+    userSearchInput.addEventListener("input", () => {
+      window.clearTimeout(searchTimer);
+      searchTimer = window.setTimeout(() => {
+        renderResponsiblePicker(String(userSearchInput.value || ""));
+      }, 250);
+    });
+  }
+  pop.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const addButton = target.closest("[data-activities-add-user]");
+    if (addButton instanceof HTMLElement) {
+      const userId = String(addButton.getAttribute("data-activities-add-user") || "").trim();
+      if (!userId) return;
+      const current = Array.isArray(activitiesState.filters?.responsaveis) ? activitiesState.filters.responsaveis : [];
+      activitiesState.filters.responsaveis = Array.from(new Set([...current, userId]));
+      renderActivitiesPanel();
+      renderResponsiblePicker(userSearchInput instanceof HTMLInputElement ? userSearchInput.value : "");
+      return;
+    }
+    const removeButton = target.closest("[data-activities-remove-user]");
+    if (removeButton instanceof HTMLElement) {
+      const userId = String(removeButton.getAttribute("data-activities-remove-user") || "").trim();
+      activitiesState.filters.responsaveis = (Array.isArray(activitiesState.filters?.responsaveis) ? activitiesState.filters.responsaveis : []).filter((value) => value !== userId);
+      renderActivitiesPanel();
+      renderResponsiblePicker(userSearchInput instanceof HTMLInputElement ? userSearchInput.value : "");
+    }
+  });
   const rect = triggerEl.getBoundingClientRect();
   const popRect = pop.getBoundingClientRect();
   const margin = 10;
@@ -10000,6 +10084,7 @@ const loadActivities = async ({ force = false, silent = false } = {}) => {
     const data = await res.json().catch(() => ({}));
     activitiesState.items = Array.isArray(data?.activities) ? data.activities : [];
     activitiesState.users = Array.isArray(data?.users) ? data.users : [];
+    activitiesState.directoryUsers = Array.isArray(data?.directoryUsers) ? data.directoryUsers : Array.isArray(data?.users) ? data.users : [];
     activitiesState.lastLoadedAt = Date.now();
     renderActivitiesPanel();
     if (!silent) setActivitiesStatus("");
