@@ -124,6 +124,8 @@ const activitiesStatus = document.querySelector("[data-activities-status]");
 const activitiesSearchInput = document.querySelector("[data-activities-search]");
 const activitiesFiltersTrigger = document.querySelector("[data-activities-filters-trigger]");
 const activitiesFiltersBadge = document.querySelector("[data-activities-filters-badge]");
+const activitiesFiltersSep = document.querySelector("[data-activities-filters-sep]");
+const activitiesCount = document.querySelector("[data-activities-count]");
 const activitiesCreateButton = document.querySelector("[data-activities-create]");
 const activitiesViewButtons = document.querySelectorAll("[data-activities-view]");
 const activitiesDrawer = document.querySelector("[data-activities-drawer]");
@@ -9521,6 +9523,44 @@ const getActivityPriorityMeta = (priority) => {
   return { className: "is-yellow", label: safe };
 };
 
+const formatActivitiesCountLabel = (count) => `${count} atividade${count === 1 ? "" : "s"}`;
+
+const formatActivityShortDate = (date) =>
+  new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "short" })
+    .format(date)
+    .replace(/\./g, "")
+    .replace(/^(\d{1,2})\s+de\s+/i, "$1 ");
+
+const getActivityDueMeta = (activity) => {
+  const dateKey = String(activity?.prazo || "").trim();
+  if (!dateKey) return { label: "Sem prazo", helper: "", tone: "muted", sortKey: "9999-12-31" };
+  const dueDate = parseDateKey(dateKey);
+  if (!(dueDate instanceof Date) || Number.isNaN(dueDate.getTime())) return { label: "Sem prazo", helper: "", tone: "muted", sortKey: "9999-12-31" };
+  const today = startOfDay(new Date());
+  const tomorrow = addDays(today, 1);
+  const status = normalizeActivityStatus(activity?.status);
+  if (sameDateKey(dueDate, today)) return { label: "Hoje", helper: "", tone: "warn", sortKey: dateKey };
+  if (sameDateKey(dueDate, tomorrow)) return { label: "Amanhã", helper: "", tone: "warn", sortKey: dateKey };
+  if (dueDate < today && status !== "Feito") return { label: formatActivityShortDate(dueDate), helper: "vencida", tone: "danger", sortKey: dateKey };
+  return { label: formatActivityShortDate(dueDate), helper: "", tone: "muted", sortKey: dateKey };
+};
+
+const renderActivityResponsibleHtml = (activity) => {
+  const responsible = getActivityResponsibleUser(activity);
+  if (!responsible) return `<span class="ativv2-empty-inline">Sem responsável</span>`;
+  return `<span class="activities-person ativv2-person"><span class="activities-avatar ativv2-avatar">${escapeHtml(getInitials(responsible.nome))}</span><span class="ativv2-person-name">${escapeHtml(responsible.nome)}</span></span>`;
+};
+
+const renderActivityPriorityHtml = (activity) => {
+  const priorityMeta = getActivityPriorityMeta(activity?.prioridade);
+  return `<span class="ativv2-priority ativv2-priority--${escapeHtml(priorityMeta.className)}"><i aria-hidden="true"></i><span>${escapeHtml(priorityMeta.label)}</span></span>`;
+};
+
+const renderActivityCalendarPill = (activity) => {
+  const priorityMeta = getActivityPriorityMeta(activity?.prioridade);
+  return `<button class="teacher-cal-month-pill ativv2-calendar-pill ativv2-calendar-pill--${escapeHtml(priorityMeta.className)}" type="button" data-activity-open="${escapeHtml(activity.id)}" title="${escapeHtml(activity.titulo || "Atividade")}">${escapeHtml(activity.titulo || "Atividade")}</button>`;
+};
+
 const setActivitiesStatus = (text, tone = "") => {
   if (!(activitiesStatus instanceof HTMLElement)) return;
   activitiesStatus.textContent = String(text || "");
@@ -9538,6 +9578,7 @@ const syncActivitiesFiltersBadge = () => {
     (filters.duePreset ? 1 : 0);
   activitiesFiltersBadge.hidden = count <= 0;
   activitiesFiltersBadge.textContent = String(count);
+  if (activitiesFiltersSep instanceof HTMLElement) activitiesFiltersSep.hidden = count <= 0;
 };
 
 const getFilteredActivities = () => {
@@ -9574,7 +9615,7 @@ const openActivitiesFiltersPopover = ({ triggerEl } = {}) => {
   const filters = activitiesState.filters || {};
   const users = Array.isArray(activitiesState.users) ? activitiesState.users : [];
   const pop = document.createElement("div");
-  pop.className = "admin-students-filters-popover activities-filters-popover";
+  pop.className = "admin-students-filters-popover activities-filters-popover ativv2-filters-popover";
   pop.setAttribute("data-activities-filters-popover", "true");
   const renderChecks = (key, title, values) => `
     <div class="activities-filters-group">
@@ -9618,7 +9659,7 @@ const openActivitiesFiltersPopover = ({ triggerEl } = {}) => {
   const popRect = pop.getBoundingClientRect();
   const margin = 10;
   const top = rect.bottom + margin;
-  const left = rect.right - popRect.width;
+  const left = rect.left;
   pop.style.top = `${clampToViewport(top, margin, window.innerHeight - popRect.height - margin)}px`;
   pop.style.left = `${clampToViewport(left, margin, window.innerWidth - popRect.width - margin)}px`;
 };
@@ -9775,24 +9816,29 @@ const openActivitiesDrawer = ({ activity = null } = {}) => {
 const renderActivitiesListView = (items) => {
   if (!(activitiesContent instanceof HTMLElement)) return;
   activitiesContent.innerHTML = `
-    <div class="activities-table">
-      <div class="activities-table-head">
-        <div>Tarefa</div><div>Status</div><div>Responsável</div><div>Prazo</div><div>Prioridade</div><div>Tipo</div><div>Descrição</div>
+    <div class="activities-table ativv2-table">
+      <div class="activities-table-head ativv2-table-head">
+        <div>Tarefa</div><div>Status</div><div>Responsável</div><div>Prazo</div><div>Prioridade</div>
       </div>
-      <div class="activities-table-body">
+      <div class="activities-table-body ativv2-table-body">
         ${items.map((item) => {
           const statusMeta = getActivityStatusMeta(item.status);
-          const priorityMeta = getActivityPriorityMeta(item.prioridade);
-          const responsible = getActivityResponsibleUser(item);
+          const dueMeta = getActivityDueMeta(item);
+          const type = String(item?.tipo || "").trim();
+          const description = String(item?.descricao || "").trim();
           return `
-            <button class="activities-table-row" type="button" data-activity-open="${escapeHtml(item.id)}">
-              <div class="activities-title-cell">${escapeHtml(item.titulo || "Atividade")}</div>
+            <button class="activities-table-row ativv2-table-row" type="button" data-activity-open="${escapeHtml(item.id)}">
+              <div class="activities-title-cell ativv2-title-cell">
+                <div class="ativv2-title-line">
+                  <span class="ativv2-title-text">${escapeHtml(item.titulo || "Atividade")}</span>
+                  ${type ? `<span class="ativv2-type-pill">${escapeHtml(type)}</span>` : ""}
+                </div>
+                ${description ? `<div class="ativv2-description">${escapeHtml(description)}</div>` : ""}
+              </div>
               <div><span class="pedteacher-badge ${statusMeta.className}">${escapeHtml(statusMeta.label)}</span></div>
-              <div>${responsible ? `<span class="activities-person"><span class="activities-avatar">${escapeHtml(getInitials(responsible.nome))}</span><span>${escapeHtml(responsible.nome)}</span></span>` : "Sem responsável"}</div>
-              <div>${escapeHtml(formatActivityDate(item.prazo))}</div>
-              <div><span class="pedteacher-badge ${priorityMeta.className}">${escapeHtml(priorityMeta.label)}</span></div>
-              <div>${item.tipo ? `<span class="pedteacher-badge is-slate">${escapeHtml(item.tipo)}</span>` : "—"}</div>
-              <div class="activities-description-cell">${escapeHtml(item.descricao || "—")}</div>
+              <div>${renderActivityResponsibleHtml(item)}</div>
+              <div class="ativv2-due ativv2-due--${escapeHtml(dueMeta.tone)}"><span>${escapeHtml(dueMeta.label)}</span>${dueMeta.helper ? `<small>${escapeHtml(dueMeta.helper)}</small>` : ""}</div>
+              <div>${renderActivityPriorityHtml(item)}</div>
             </button>
           `;
         }).join("")}
@@ -9810,25 +9856,24 @@ const renderActivitiesBoardView = (items) => {
     buckets.set(normalizeActivityStatus(item.status), bucket);
   });
   activitiesContent.innerHTML = `
-    <div class="activities-board">
+    <div class="activities-board ativv2-board">
       ${ACTIVITY_STATUS_OPTIONS.map((status) => `
-        <section class="activities-board-column" data-activity-drop-status="${escapeHtml(status)}">
-          <header class="activities-board-head"><h3>${escapeHtml(status)}</h3><span>${escapeHtml(String((buckets.get(status) || []).length))}</span></header>
-          <div class="activities-board-list">
+        <section class="activities-board-column ativv2-board-column" data-activity-drop-status="${escapeHtml(status)}">
+          <header class="activities-board-head ativv2-board-head"><h3>${escapeHtml(status)}</h3><span>${escapeHtml(String((buckets.get(status) || []).length))}</span></header>
+          <div class="activities-board-list ativv2-board-list">
             ${(buckets.get(status) || []).map((item) => {
-              const priorityMeta = getActivityPriorityMeta(item.prioridade);
-              const responsible = getActivityResponsibleUser(item);
+              const dueMeta = getActivityDueMeta(item);
               return `
-                <article class="activities-board-card" draggable="true" data-activity-card="${escapeHtml(item.id)}" data-activity-open="${escapeHtml(item.id)}">
-                  <div class="activities-board-card-title">${escapeHtml(item.titulo || "Atividade")}</div>
-                  <div class="activities-board-card-meta">
-                    <span class="pedteacher-badge ${priorityMeta.className}">${escapeHtml(priorityMeta.label)}</span>
-                    ${item.prazo ? `<span class="activities-card-date">${escapeHtml(formatActivityDate(item.prazo))}</span>` : ""}
+                <article class="activities-board-card ativv2-board-card" draggable="true" data-activity-card="${escapeHtml(item.id)}" data-activity-open="${escapeHtml(item.id)}">
+                  <div class="activities-board-card-title ativv2-board-card-title">${escapeHtml(item.titulo || "Atividade")}</div>
+                  <div class="activities-board-card-meta ativv2-board-card-meta">
+                    ${renderActivityPriorityHtml(item)}
+                    <span class="activities-card-date ativv2-card-date ativv2-due--${escapeHtml(dueMeta.tone)}">${escapeHtml(dueMeta.label)}</span>
                   </div>
-                  ${responsible ? `<div class="activities-person"><span class="activities-avatar">${escapeHtml(getInitials(responsible.nome))}</span><span>${escapeHtml(responsible.nome)}</span></div>` : ""}
+                  <div>${renderActivityResponsibleHtml(item)}</div>
                 </article>
               `;
-            }).join("")}
+            }).join("") || `<div class="ativv2-board-empty">Nenhuma atividade</div>`}
           </div>
         </section>
       `).join("")}
@@ -9855,8 +9900,10 @@ const renderActivitiesCalendarMonth = (items) => {
           return `
             <div class="teacher-cal-month-cell">
               <div class="teacher-cal-month-date${isToday ? " is-today" : ""}${isOutside ? " is-outside" : ""}">${date.getDate()}</div>
-              ${dayItems.slice(0, 3).map((item) => `<button class="teacher-cal-month-pill" type="button" data-activity-open="${escapeHtml(item.id)}">${escapeHtml(item.titulo)}</button>`).join("")}
-              ${dayItems.length > 3 ? `<div class="activities-calendar-more">+ ${escapeHtml(String(dayItems.length - 3))} mais</div>` : ""}
+              <div class="ativv2-calendar-stack">
+                ${dayItems.slice(0, 3).map((item) => renderActivityCalendarPill(item)).join("")}
+                ${dayItems.length > 3 ? `<div class="activities-calendar-more ativv2-calendar-more">+ ${escapeHtml(String(dayItems.length - 3))} mais</div>` : ""}
+              </div>
             </div>
           `;
         }).join("")}
@@ -9883,7 +9930,7 @@ const renderActivitiesCalendarWeek = (items) => {
         ${days.map((date) => {
           const dateKey = createDateKey(date);
           const dayItems = items.filter((item) => String(item.prazo || "") === dateKey);
-          return `<div class="teacher-cal-week-col activities-week-col"><div class="activities-week-list">${dayItems.length ? dayItems.map((item) => `<button class="teacher-cal-month-pill" type="button" data-activity-open="${escapeHtml(item.id)}">${escapeHtml(item.titulo)}</button>`).join("") : `<div class="activities-week-empty">Sem atividades</div>`}</div></div>`;
+          return `<div class="teacher-cal-week-col activities-week-col"><div class="activities-week-list ativv2-week-list">${dayItems.length ? dayItems.map((item) => renderActivityCalendarPill(item)).join("") : `<div class="activities-week-empty ativv2-week-empty">Sem atividades</div>`}</div></div>`;
         }).join("")}
       </div>
     </div>
@@ -9927,8 +9974,10 @@ const renderActivitiesPanel = () => {
     button.setAttribute("aria-selected", String(isActive));
   });
   const items = getFilteredActivities();
+  if (activitiesCount instanceof HTMLElement) activitiesCount.textContent = formatActivitiesCountLabel(items.length);
   if (!items.length) {
-    activitiesContent.innerHTML = `<div class="admin-dashboard-v2-empty activities-empty">Nenhuma atividade encontrada para os filtros atuais.</div>`;
+    const hasBaseItems = Array.isArray(activitiesState.items) && activitiesState.items.length > 0;
+    activitiesContent.innerHTML = `<div class="admin-dashboard-v2-empty activities-empty ativv2-empty">${hasBaseItems ? "Nenhuma atividade encontrada para os filtros atuais." : "Nenhuma atividade encontrada."}</div>`;
     return;
   }
   if (activitiesState.view === "board") return renderActivitiesBoardView(items);
@@ -10089,6 +10138,7 @@ const bindActivitiesUi = () => {
     }
   });
   document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && activitiesState.filterPopoverEl) closeActivitiesFiltersPopover();
     if (event.key === "Escape" && activitiesState.drawer.isOpen) closeActivitiesDrawer();
   });
 };

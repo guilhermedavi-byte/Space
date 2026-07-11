@@ -1486,43 +1486,73 @@
 
         <section class="platform-panel" data-panel="activities" data-hide-platform-header="true" hidden aria-label="Atividades">
           <div class="activities-shell" data-activities-root>
-            <div class="schedule-page-header activities-page-header">
-              <div>
-                <h2 class="schedule-page-title">Atividades</h2>
+            <div class="ativv2-page-head">
+              <div class="ativv2-page-copy">
+                <h2 class="ativv2-page-title">Atividades</h2>
               </div>
-              <button class="teacher-calendar-button teacher-calendar-button-primary" type="button" data-activities-create>
-                <span class="teacher-calendar-button-icon" aria-hidden="true">
+              <button class="ativv2-create-btn" type="button" data-activities-create>
+                <span class="ativv2-create-btn-icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none">
                     <path d="M12 5v14"></path>
                     <path d="M5 12h14"></path>
                   </svg>
                 </span>
-                <span>+ Nova atividade</span>
+                <span>Nova atividade</span>
               </button>
             </div>
 
-            <article class="surface-card activities-card" aria-label="Gerenciador de atividades">
-              <div class="admin-ped-table-toolbar activities-toolbar">
-                <div class="admin-ped-table-toolbar-main activities-toolbar-main">
+            <article class="surface-card activities-card ativv2-card" aria-label="Gerenciador de atividades">
+              <div class="ativv2-toolbar">
+                <div class="ativv2-search">
+                  <span class="ativv2-search-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none">
+                      <circle cx="11" cy="11" r="6.5"></circle>
+                      <path d="m16 16 4 4"></path>
+                    </svg>
+                  </span>
                   <input
-                    class="admin-ped-select admin-ped-table-search activities-search"
+                    class="admin-ped-select admin-ped-table-search activities-search ativv2-search-input"
                     type="text"
-                    placeholder="Buscar atividade por título ou descrição..."
+                    placeholder="Buscar atividade..."
                     data-activities-search
                   />
-                  <button class="button button-outline button-small" type="button" data-activities-filters-trigger>
-                    <span>Filtro</span>
-                    <span class="admin-students-filters-badge" data-activities-filters-badge hidden>0</span>
-                  </button>
                 </div>
-                <div class="activities-view-toggle" role="tablist" aria-label="Modo de visualização">
-                  <button class="activities-view-btn is-active" type="button" data-activities-view="list" role="tab" aria-selected="true">Lista</button>
-                  <button class="activities-view-btn" type="button" data-activities-view="board" role="tab" aria-selected="false">Quadro</button>
-                  <button class="activities-view-btn" type="button" data-activities-view="calendar" role="tab" aria-selected="false">Calendário</button>
+                <button class="ativv2-filter-btn" type="button" data-activities-filters-trigger>
+                  <span>Filtro</span>
+                  <span class="ativv2-filter-sep" data-activities-filters-sep hidden>·</span>
+                  <span class="ativv2-filter-count" data-activities-filters-badge hidden>0</span>
+                </button>
+                <div class="ativv2-count" data-activities-count aria-live="polite">0 atividades</div>
+                <div class="ativv2-view-toggle" role="tablist" aria-label="Modo de visualização">
+                  <button class="ativv2-view-btn is-active" type="button" data-activities-view="list" role="tab" aria-selected="true" aria-label="Lista" title="Lista">
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M8 7h11"></path>
+                      <path d="M8 12h11"></path>
+                      <path d="M8 17h11"></path>
+                      <circle cx="4.5" cy="7" r="1"></circle>
+                      <circle cx="4.5" cy="12" r="1"></circle>
+                      <circle cx="4.5" cy="17" r="1"></circle>
+                    </svg>
+                  </button>
+                  <button class="ativv2-view-btn" type="button" data-activities-view="board" role="tab" aria-selected="false" aria-label="Quadro" title="Quadro">
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <rect x="4" y="5" width="5" height="14" rx="1.5"></rect>
+                      <rect x="10.5" y="5" width="5" height="9" rx="1.5"></rect>
+                      <rect x="17" y="5" width="3" height="12" rx="1.5"></rect>
+                    </svg>
+                  </button>
+                  <button class="ativv2-view-btn" type="button" data-activities-view="calendar" role="tab" aria-selected="false" aria-label="Calendário" title="Calendário">
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <rect x="4" y="6" width="16" height="14" rx="2"></rect>
+                      <path d="M8 4v4"></path>
+                      <path d="M16 4v4"></path>
+                      <path d="M4 10h16"></path>
+                    </svg>
+                  </button>
                 </div>
               </div>
 
-              <div class="activities-status" data-activities-status aria-live="polite"></div>
+              <div class="activities-status ativv2-status" data-activities-status aria-live="polite"></div>
               <div class="activities-content" data-activities-content></div>
             </article>
           </div>
