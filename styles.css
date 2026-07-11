@@ -4748,15 +4748,23 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
 }
 
 /* Admin > Alunos drawer (history) */
+html.admin-student-drawer-open,
+body.admin-student-drawer-open {
+  overflow: hidden;
+}
+
 .admin-students-drawer {
   position: fixed;
   inset: 0;
+  height: 100vh;
+  height: 100dvh;
   z-index: 1300;
   display: flex;
   justify-content: flex-end;
   opacity: 0;
   pointer-events: none;
   transition: opacity 220ms ease;
+  overflow: hidden;
 }
 
 .admin-students-drawer.is-open {
@@ -4765,7 +4773,7 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
 }
 
 .admin-students-drawer-backdrop {
-  position: absolute;
+  position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(6px);
@@ -4776,6 +4784,8 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
   position: relative;
   width: min(560px, 94vw);
   height: 100vh;
+  height: 100dvh;
+  max-height: 100dvh;
   background: #0d1a2a;
   border-left: 0.5px solid rgba(89, 144, 189, 0.12);
   box-shadow: -24px 0 54px rgba(0, 0, 0, 0.35);
@@ -4831,6 +4841,8 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   padding: 18px 20px 20px;
   display: grid;
   gap: 14px;

@@ -210,6 +210,34 @@ const getAdminStudentHistorySub = () => {
   return drawer instanceof HTMLElement ? drawer.querySelector("[data-admin-student-history-sub]") : null;
 };
 
+let adminStudentDrawerScrollLockY = 0;
+
+const lockAdminStudentDrawerBackgroundScroll = () => {
+  if (document.body.classList.contains("admin-student-drawer-open")) return;
+  adminStudentDrawerScrollLockY = Math.max(window.scrollY || 0, window.pageYOffset || 0, 0);
+  document.body.style.position = "fixed";
+  document.body.style.top = `-${adminStudentDrawerScrollLockY}px`;
+  document.body.style.left = "0";
+  document.body.style.right = "0";
+  document.body.style.width = "100%";
+  document.body.classList.add("admin-student-drawer-open");
+  document.documentElement.classList.add("admin-student-drawer-open");
+};
+
+const unlockAdminStudentDrawerBackgroundScroll = () => {
+  const hadLock = document.body.classList.contains("admin-student-drawer-open");
+  const restoreY = adminStudentDrawerScrollLockY;
+  document.body.classList.remove("admin-student-drawer-open");
+  document.documentElement.classList.remove("admin-student-drawer-open");
+  document.body.style.position = "";
+  document.body.style.top = "";
+  document.body.style.left = "";
+  document.body.style.right = "";
+  document.body.style.width = "";
+  adminStudentDrawerScrollLockY = 0;
+  if (hadLock) window.scrollTo(0, restoreY);
+};
+
 const getAdminStudentSheet = () => {
   const drawer = getAdminStudentHistoryDrawer();
   return drawer instanceof HTMLElement ? drawer.querySelector("[data-admin-student-sheet]") : null;
@@ -24271,6 +24299,7 @@ const openStudentSimpleCard = async ({ alunoId, teacherId } = {}) => {
   if (historyTitleEl instanceof HTMLElement) historyTitleEl.textContent = "Ficha do aluno";
   if (historySubEl instanceof HTMLElement) historySubEl.textContent = "Carregando…";
 
+  lockAdminStudentDrawerBackgroundScroll();
   drawerEl.hidden = false;
   window.requestAnimationFrame(() => {
     const nextDrawer = getAdminStudentHistoryDrawer();
@@ -24352,6 +24381,7 @@ const closeAdminStudentHistoryDrawer = () => {
   } else {
     warnMissingAdminStudentHistoryDrawer("closeAdminStudentHistoryDrawer");
   }
+  unlockAdminStudentDrawerBackgroundScroll();
   adminStudentsState.history = {
     isOpen: false,
     alunoId: "",
