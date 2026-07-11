@@ -14465,6 +14465,11 @@ const STUDENT_CANCELLATION_REASON_OPTIONS = [
   "Outro",
 ];
 
+const RETENTION_THRESHOLDS = {
+  pagamentoVencidaCriticaDias: 7,
+  frequenciaAusenteCriticaDias: 14,
+};
+
 const isStudentCancellationActive = (cancelamento) =>
   Boolean(cancelamento && typeof cancelamento === "object" && !cancelamento.desfecho);
 
@@ -14498,23 +14503,221 @@ const createStudentCancellationHistoryEntry = (acao, detalhe = "") => ({
   detalhe: String(detalhe || "").trim(),
 });
 
-const buildStudentCancellationCycles = (tipo) => {
-  if (String(tipo || "").trim() === "arrependimento_7d") {
-    return [{ mes: 1, pagou: null, frequentou: null }];
+const normalizeStudentCancellationRecord = (value) => {
+  if (!value || typeof value !== "object") return null;
+  const raw = clonePlainData(value);
+  const origemRaw = String(raw.origem || raw.tipo || "").trim().toLowerCase();
+  const origem =
+    origemRaw === "abandono_confirmado" || origemRaw === "abandono"
+      ? "abandono_confirmado"
+      : "pedido";
+  const dataPedido = raw.dataPedido || raw.data_pedido || raw.createdAt || null;
+  const dataFimAviso = raw.dataFimAviso || raw.dataFimPrevista || raw.data_fim_aviso || null;
+  const eventos = Array.isArray(raw.eventos)
+    ? raw.eventos
+    : Array.isArray(raw.historico)
+      ? raw.historico
+      : [];
+  return {
+    dataPedido,
+    origem,
+    motivo: String(raw.motivo || "").trim(),
+    motivoDetalhe: String(raw.motivoDetalhe || raw.detalhe || "").trim(),
+    dataFimAviso,
+    aulasSuspensas: raw.aulasSuspensas === true,
+    dataSuspensao: raw.dataSuspensao || null,
+    desfecho: raw.desfecho ?? null,
+    dataEfetivacao: raw.dataEfetivacao || null,
+    eventos: eventos.map((event) => ({
+      data: event?.data || event?.createdAt || new Date().toISOString(),
+      acao: String(event?.acao || "").trim(),
+      detalhe: String(event?.detalhe || "").trim(),
+    })),
+  };
+};
+
+const buildStudentCancellationRecord = ({
+  dataPedido,
+  origem = "pedido",
+  motivo = "",
+  motivoDetalhe = "",
+  dataFimAviso = null,
+  aulasSuspensas = false,
+  dataSuspensao = null,
+  desfecho = null,
+  dataEfetivacao = null,
+  eventos = [],
+} = {}) => ({
+  dataPedido: toLifecycleIso(dataPedido),
+  origem: origem === "abandono_confirmado" ? "abandono_confirmado" : "pedido",
+  motivo: String(motivo || "").trim(),
+  motivoDetalhe: String(motivoDetalhe || "").trim(),
+  dataFimAviso: dataFimAviso ? toLifecycleIso(dataFimAviso) : null,
+  aulasSuspensas: Boolean(aulasSuspensas),
+  dataSuspensao: dataSuspensao ? toLifecycleIso(dataSuspensao) : null,
+  desfecho: desfecho ?? null,
+  dataEfetivacao: dataEfetivacao ? toLifecycleIso(dataEfetivacao) : null,
+  eventos: Array.isArray(eventos) ? eventos.map((event) => createStudentCancellationHistoryEntry(event?.acao || "", event?.detalhe || "")) : [],
+});
+
+const getStudentCancellationWindowRange = (cancelamento, referenceDate = new Date()) => {
+  const normalized = normalizeStudentCancellationRecord(cancelamento);
+  const startDate = toLifecycleDate(normalized?.dataPedido);
+  const endDate = toLifecycleDate(normalized?.dataFimAviso);
+  if (!(startDate instanceof Date) || Number.isNaN(startDate.getTime())) return null;
+  const today = endOfDay(referenceDate);
+  const effectiveEnd = endDate instanceof Date && !Number.isNaN(endDate.getTime()) ? (endDate < today ? endDate : today) : today;
+  if (effectiveEnd < startDate) return null;
+  return {
+    startDate,
+    endDate: effectiveEnd,
+    fromKey: createDateKey(startDate),
+    toKey: createDateKey(effectiveEnd),
+  };
+};
+
+const resolveStudentFinanceBinding = ({ aluno, financeStudents = [], charges = [] } = {}) => {
+  const studentId = String(aluno?.id || aluno?.alunoId || "").trim();
+  const email = String(aluno?.email || "").trim().toLowerCase();
+  const phone = String(aluno?.telefone || "").replace(/\D+/g, "");
+  const financeRows = Array.isArray(financeStudents) ? financeStudents : [];
+  const chargeRows = Array.isArray(charges) ? charges : [];
+
+  const byAlunoId = chargeRows.filter((row) => String(row?.aluno_id || "").trim() === studentId);
+  if (studentId && byAlunoId.length) {
+    return { status: "linked", strategy: "aluno_id", charges: byAlunoId, financeRow: null };
   }
-  if (String(tipo || "").trim() === "abandono") {
-    return [];
+
+  const emailMatches = email
+    ? chargeRows.filter((row) => {
+        const chargeEmail = String(row?.email || row?.aluno_email || "").trim().toLowerCase();
+        return chargeEmail && chargeEmail === email;
+      })
+    : [];
+  if (email && emailMatches.length) {
+    return { status: "linked", strategy: "email", charges: emailMatches, financeRow: null };
   }
-  return [
-    { mes: 1, pagou: null, frequentou: null },
-    { mes: 2, pagou: null, frequentou: null },
-  ];
+
+  const phoneMatches = phone
+    ? chargeRows.filter((row) => String(row?.telefone || "").replace(/\D+/g, "") === phone)
+    : [];
+  if (phone && phoneMatches.length) {
+    return { status: "linked", strategy: "telefone", charges: phoneMatches, financeRow: null };
+  }
+
+  const financeByEmail = email
+    ? financeRows.filter((row) => String(row?.email || "").trim().toLowerCase() === email)
+    : [];
+  if (financeByEmail.length === 1) {
+    const financeRow = financeByEmail[0];
+    const relatedCharges = chargeRows.filter((row) => String(row?.email || row?.aluno_email || "").trim().toLowerCase() === email);
+    return { status: relatedCharges.length ? "linked" : "student_only", strategy: "finance_email", charges: relatedCharges, financeRow };
+  }
+
+  const financeByPhone = phone
+    ? financeRows.filter((row) => String(row?.telefone || "").replace(/\D+/g, "") === phone)
+    : [];
+  if (financeByPhone.length === 1) {
+    const financeRow = financeByPhone[0];
+    const relatedCharges = chargeRows.filter((row) => String(row?.telefone || "").replace(/\D+/g, "") === phone);
+    return { status: relatedCharges.length ? "linked" : "student_only", strategy: "finance_telefone", charges: relatedCharges, financeRow };
+  }
+
+  return { status: "sem_vinculo", strategy: "", charges: [], financeRow: null };
+};
+
+const deriveSensorPagamento = (aluno, dataInicio, dataFim, { charges = [], financeStudents = [] } = {}) => {
+  const binding = resolveStudentFinanceBinding({ aluno, financeStudents, charges });
+  if (binding.status === "sem_vinculo") {
+    return { estado: "sem_vinculo", detalhe: "Não foi possível vincular este aluno ao financeiro." };
+  }
+  const fromKey = typeof dataInicio === "string" ? dataInicio : createDateKey(dataInicio);
+  const toKey = typeof dataFim === "string" ? dataFim : createDateKey(dataFim);
+  const scopedCharges = (binding.charges || []).filter((row) => {
+    const due = String(row?.vencimento || row?.data_vencimento || row?.due_date || "").trim();
+    return isValidDateKey(due) && due >= fromKey && due <= toKey;
+  });
+  if (!scopedCharges.length) {
+    return { estado: "sem_cobranca", detalhe: "Nenhuma cobrança no período analisado." };
+  }
+  const openCharges = scopedCharges.filter((row) => {
+    const status = String(row?.status || "").trim().toLowerCase();
+    return status !== "pago" && !row?.pago_em && status !== "cancelado";
+  });
+  const overdue = openCharges
+    .map((row) => {
+      const due = String(row?.vencimento || row?.data_vencimento || row?.due_date || "").trim();
+      const days = financeDaysUntil(due);
+      return { row, days };
+    })
+    .filter((item) => Number.isFinite(item.days) && item.days < 0)
+    .sort((a, b) => a.days - b.days);
+  if (!overdue.length) {
+    return { estado: "em_dia", detalhe: "Nenhuma cobrança vencida em aberto no período." };
+  }
+  const mostOverdueDays = Math.abs(Number(overdue[0].days) || 0);
+  if (mostOverdueDays >= RETENTION_THRESHOLDS.pagamentoVencidaCriticaDias) {
+    return { estado: "vencida_critica", detalhe: `Cobrança vencida há ${mostOverdueDays} dia(s).` };
+  }
+  return { estado: "vencida", detalhe: `Cobrança vencida há ${mostOverdueDays} dia(s).` };
+};
+
+const deriveSensorFrequencia = (aluno, dataInicio, dataFim, { logs = [], events = [], classes = [] } = {}) => {
+  const alunoId = String(aluno?.id || aluno?.alunoId || "").trim();
+  const fromKey = typeof dataInicio === "string" ? dataInicio : createDateKey(dataInicio);
+  const toKey = typeof dataFim === "string" ? dataFim : createDateKey(dataFim);
+  const periodEvents = (Array.isArray(events) ? events : []).filter((event) => {
+    if (!event || typeof event !== "object") return false;
+    if (String(event?.type || "").trim() !== "lesson") return false;
+    if (String(event?.alunoId || "").trim() !== alunoId) return false;
+    const dateKey = String(event?.dateKey || "").trim();
+    return isValidDateKey(dateKey) && dateKey >= fromKey && dateKey <= toKey;
+  });
+  if (!periodEvents.length) {
+    const linkedClasses = (Array.isArray(classes) ? classes : []).filter((classRow) =>
+      Array.isArray(classRow?.studentIds) ? classRow.studentIds.map((id) => String(id || "").trim()).includes(alunoId) : false
+    );
+    if (!linkedClasses.length) return { estado: "sem_aulas", detalhe: "Aluno sem aulas vinculadas no período." };
+    return { estado: "sem_aulas", detalhe: "Nenhuma ocorrência de aula encontrada no período." };
+  }
+
+  const logsInPeriod = (Array.isArray(logs) ? logs : []).filter((log) => {
+    if (!log || typeof log !== "object") return false;
+    if (String(log?.alunoId || "").trim() !== alunoId) return false;
+    const dateKey = String(log?.dateKey || "").trim();
+    return isValidDateKey(dateKey) && dateKey >= fromKey && dateKey <= toKey;
+  });
+  const presenceLogs = logsInPeriod
+    .filter((log) => normalizePedagogicoStatus(log?.statusAula) === PEDAGOGICO_STATUS.REALIZADA)
+    .sort((a, b) => String(b?.dateKey || "").localeCompare(String(a?.dateKey || "")));
+  if (!presenceLogs.length) {
+    return { estado: "nunca_apareceu", detalhe: "Nenhuma presença registrada neste período." };
+  }
+  const lastPresenceDate = parseDateKey(String(presenceLogs[0].dateKey || "").trim());
+  if (!(lastPresenceDate instanceof Date) || Number.isNaN(lastPresenceDate.getTime())) {
+    return { estado: "nunca_apareceu", detalhe: "Nenhuma presença válida registrada no período." };
+  }
+  const daysSincePresence = Math.max(0, Math.round((startOfDay(new Date()).getTime() - startOfDay(lastPresenceDate).getTime()) / 86400000));
+  if (daysSincePresence < 7) {
+    return { estado: "frequentando", detalhe: `Última presença há ${daysSincePresence} dia(s).` };
+  }
+  if (daysSincePresence >= RETENTION_THRESHOLDS.frequenciaAusenteCriticaDias) {
+    return { estado: "ausente_critico", detalhe: `Sem presença há ${daysSincePresence} dia(s).` };
+  }
+  return { estado: "ausente", detalhe: `Sem presença há ${daysSincePresence} dia(s).` };
+};
+
+const getLifecycleSensorTone = (estado) => {
+  if (["em_dia", "frequentando"].includes(String(estado || ""))) return "green";
+  if (["vencida", "ausente"].includes(String(estado || ""))) return "amber";
+  if (["vencida_critica", "ausente_critico", "nunca_apareceu"].includes(String(estado || ""))) return "red";
+  return "gray";
 };
 
 const getStudentLifecycleState = (aluno) => {
   const meta = aluno && typeof aluno === "object" ? aluno : {};
   if (meta.ativo === false) return STUDENT_LIFECYCLE_STATE.INACTIVE;
-  const cancelamento = meta.cancelamento && typeof meta.cancelamento === "object" ? meta.cancelamento : null;
+  const cancelamento = normalizeStudentCancellationRecord(meta.cancelamento);
   if (cancelamento?.aulasSuspensas) return STUDENT_LIFECYCLE_STATE.SUSPENDED;
   if (isStudentCancellationActive(cancelamento)) return STUDENT_LIFECYCLE_STATE.NOTICE;
   return STUDENT_LIFECYCLE_STATE.ACTIVE;
@@ -14522,9 +14725,9 @@ const getStudentLifecycleState = (aluno) => {
 
 const getStudentLifecycleBadgeMeta = (aluno) => {
   const state = getStudentLifecycleState(aluno);
-  const cancelamento = aluno?.cancelamento && typeof aluno.cancelamento === "object" ? aluno.cancelamento : null;
+  const cancelamento = normalizeStudentCancellationRecord(aluno?.cancelamento);
   if (state === STUDENT_LIFECYCLE_STATE.NOTICE) {
-    if (String(cancelamento?.tipo || "") === "abandono") {
+    if (String(cancelamento?.origem || "") === "abandono_confirmado") {
       return { state, label: "Abandono", tone: "warn" };
     }
     return { state, label: "Aviso prévio", tone: "warn" };
@@ -14540,7 +14743,7 @@ const getStudentLifecycleBadgeMeta = (aluno) => {
 
 const getAdminStudentLatestLifecycleRecord = (aluno) => {
   const previous = Array.isArray(aluno?.cancelamentosAnteriores) ? aluno.cancelamentosAnteriores : [];
-  const current = aluno?.cancelamento && typeof aluno.cancelamento === "object" ? aluno.cancelamento : null;
+  const current = normalizeStudentCancellationRecord(aluno?.cancelamento);
   if (current) return current;
   return previous.length ? previous[previous.length - 1] : null;
 };
@@ -14573,15 +14776,14 @@ const getAdminStudentFirstLessonDate = (alunoId) => {
 };
 
 const describeStudentCancellationType = (cancelamento) => {
-  const type = String(cancelamento?.tipo || "").trim();
-  if (type === "arrependimento_7d") return "Arrependimento";
-  if (type === "abandono") return "Abandono";
+  const origem = String(cancelamento?.origem || "").trim();
+  if (origem === "abandono_confirmado") return "Abandono";
   return "Aviso prévio";
 };
 
 const buildStudentLifecycleSummary = (aluno) => {
   const state = getStudentLifecycleState(aluno);
-  const cancelamento = aluno?.cancelamento && typeof aluno.cancelamento === "object" ? aluno.cancelamento : null;
+  const cancelamento = normalizeStudentCancellationRecord(aluno?.cancelamento);
   const latest = getAdminStudentLatestLifecycleRecord(aluno);
   if (state === STUDENT_LIFECYCLE_STATE.INACTIVE) {
     return {
@@ -14598,20 +14800,12 @@ const buildStudentLifecycleSummary = (aluno) => {
   if (!cancelamento) {
     return { state, title: "Aluno ativo", subtitle: "Sem cancelamento ou abandono registrados." };
   }
-  const endLabel = cancelamento?.dataFimPrevista ? formatAdminDate(cancelamento.dataFimPrevista) : "a definir";
-  if (String(cancelamento.tipo || "") === "abandono") {
+  const endLabel = cancelamento?.dataFimAviso ? formatAdminDate(cancelamento.dataFimAviso) : "a definir";
+  if (String(cancelamento.origem || "") === "abandono_confirmado") {
     return {
       state,
       title: cancelamento.aulasSuspensas ? "Abandono registrado com aulas suspensas" : "Abandono registrado",
       subtitle: "Efetivação pendente.",
-      endLabel,
-    };
-  }
-  if (String(cancelamento.tipo || "") === "arrependimento_7d") {
-    return {
-      state,
-      title: `Arrependimento — aulas até ${endLabel}`,
-      subtitle: cancelamento?.dataPedido ? `Pedido em ${formatAdminDate(cancelamento.dataPedido)}` : "",
       endLabel,
     };
   }
@@ -25216,6 +25410,15 @@ const openStudentSimpleCard = async ({ alunoId, teacherId } = {}) => {
     inlineSaveTimer: 0,
     photoSaving: false,
     photoError: "",
+    lifecycleMenuOpen: false,
+    lifecycleSensors: {
+      loading: false,
+      payment: null,
+      attendance: null,
+      paymentError: "",
+      attendanceError: "",
+      loadedAt: 0,
+    },
   };
 
   const historyTitleEl = getAdminStudentHistoryTitle();
@@ -25263,6 +25466,9 @@ const openStudentSimpleCard = async ({ alunoId, teacherId } = {}) => {
     }
 
     renderAdminStudentSheet();
+    loadAdminStudentLifecycleSensors({ alunoId: aId, force: true }).catch((error) => {
+      console.error("[admin] lifecycle sensors load failed:", error);
+    });
 
     try {
       const [allLogs, comments] = await Promise.all([fetchLessonLogsFromFirestore(), fetchAdminStudentCommentsFromFirestore()]);
@@ -25532,6 +25738,15 @@ const openAdminTeacherHistoryDrawer = async ({ teacherId } = {}) => {
     inlineSaveTimer: 0,
     photoSaving: false,
     photoError: "",
+    lifecycleMenuOpen: false,
+    lifecycleSensors: {
+      loading: false,
+      payment: null,
+      attendance: null,
+      paymentError: "",
+      attendanceError: "",
+      loadedAt: 0,
+    },
   };
   const titleEl = getAdminTeacherHistoryTitle();
   const subEl = getAdminTeacherHistorySub();
@@ -26033,6 +26248,66 @@ const saveAdminStudentLifecyclePatch = async ({ alunoId, patch = {} } = {}) => {
 const archiveStudentCancellationRecord = ({ alunoMeta, record } = {}) => {
   const previous = Array.isArray(alunoMeta?.cancelamentosAnteriores) ? alunoMeta.cancelamentosAnteriores : [];
   return previous.concat([clonePlainData(record)].filter(Boolean));
+};
+
+const loadAdminStudentLifecycleSensors = async ({ alunoId, force = false } = {}) => {
+  const history = adminStudentsState.history;
+  if (!history?.isOpen) return;
+  const id = String(alunoId || history.alunoId || "").trim();
+  if (!id) return;
+  const aluno = getAdminStudentMetaById(id);
+  const cancelamento = normalizeStudentCancellationRecord(aluno?.cancelamento);
+  const range = getStudentCancellationWindowRange(cancelamento);
+  if (!range) {
+    adminStudentsState.history.lifecycleSensors = {
+      loading: false,
+      payment: null,
+      attendance: null,
+      paymentError: "",
+      attendanceError: "",
+    };
+    renderAdminStudentSheet();
+    return;
+  }
+
+  if (!force && history.lifecycleSensors?.loadedAt && Date.now() - history.lifecycleSensors.loadedAt < 30_000) return;
+  adminStudentsState.history.lifecycleSensors = {
+    ...(history.lifecycleSensors && typeof history.lifecycleSensors === "object" ? history.lifecycleSensors : {}),
+    loading: true,
+    paymentError: "",
+    attendanceError: "",
+  };
+  renderAdminStudentSheet();
+
+  const paymentTask = (async () => {
+    await ensureFinanceLoaded({ force: false });
+    return deriveSensorPagamento(aluno, range.fromKey, range.toKey, {
+      charges: financeState.cobrancas,
+      financeStudents: financeState.alunos,
+    });
+  })();
+
+  const attendanceTask = Promise.resolve(
+    deriveSensorFrequencia(aluno, range.fromKey, range.toKey, {
+      logs: adminStudentsState.logs,
+      events: adminStudentsState.events,
+      classes: adminPedagogicoState.classes,
+    })
+  );
+
+  const [paymentRes, attendanceRes] = await Promise.allSettled([paymentTask, attendanceTask]);
+  if (!adminStudentsState.history?.isOpen || String(adminStudentsState.history?.alunoId || "") !== id) return;
+  adminStudentsState.history.lifecycleSensors = {
+    loading: false,
+    loadedAt: Date.now(),
+    payment: paymentRes.status === "fulfilled" ? paymentRes.value : { estado: "erro", detalhe: "—" },
+    attendance: attendanceRes.status === "fulfilled" ? attendanceRes.value : { estado: "erro", detalhe: "—" },
+    paymentError: paymentRes.status === "rejected" ? String(paymentRes.reason?.message || paymentRes.reason || "payment_sensor_failed") : "",
+    attendanceError: attendanceRes.status === "rejected" ? String(attendanceRes.reason?.message || attendanceRes.reason || "attendance_sensor_failed") : "",
+  };
+  if (paymentRes.status === "rejected") console.error("[admin] lifecycle payment sensor failed:", paymentRes.reason);
+  if (attendanceRes.status === "rejected") console.error("[admin] lifecycle attendance sensor failed:", attendanceRes.reason);
+  renderAdminStudentSheet();
 };
 
 const patchAdminStudentStatus = async ({ alunoId, ativo } = {}) => {
