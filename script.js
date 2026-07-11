@@ -7592,6 +7592,14 @@ const clearPedagogicoAutosaveTimer = () => {
   pedagogicoAutosaveTimer = null;
 };
 
+const ensurePedagogicoDrawerInBody = () => {
+  if (!(pedagogicoDrawer instanceof HTMLElement)) return null;
+  if (pedagogicoDrawer.parentElement !== document.body) {
+    document.body.appendChild(pedagogicoDrawer);
+  }
+  return pedagogicoDrawer;
+};
+
 const closePedagogicoDrawer = () => {
   pedagogicoCleanupFns.forEach((fn) => {
     try {
@@ -7607,6 +7615,7 @@ const closePedagogicoDrawer = () => {
       if (pedagogicoDrawer instanceof HTMLElement) pedagogicoDrawer.hidden = true;
     }, 220);
   }
+  body.classList.remove("is-modal-open");
   if (pedagogicoFormContainer instanceof HTMLElement) pedagogicoFormContainer.innerHTML = "";
   pedagogicoActive = null;
   pedagogicoDirty = false;
@@ -8633,7 +8642,8 @@ const savePedagogicoLog = async ({ autosave = false } = {}) => {
 };
 
 const openPedagogicoDrawer = ({ lesson } = {}) => {
-  if (!(pedagogicoDrawer instanceof HTMLElement)) return;
+  const drawerEl = ensurePedagogicoDrawerInBody();
+  if (!(drawerEl instanceof HTMLElement)) return;
   if (!lesson || typeof lesson !== "object") return;
   const start = buildDateFromDateKeyAndMinutes(lesson.dateKey, lesson.startMin);
   if (start && start.getTime() > Date.now()) return;
@@ -8644,9 +8654,10 @@ const openPedagogicoDrawer = ({ lesson } = {}) => {
   setPedagogicoStatus("");
   renderPedagogicoForm({ lesson, existingLog });
 
-  pedagogicoDrawer.hidden = false;
+  body.classList.add("is-modal-open");
+  drawerEl.hidden = false;
   window.requestAnimationFrame(() => {
-    if (pedagogicoDrawer instanceof HTMLElement) pedagogicoDrawer.classList.add("is-open");
+    drawerEl.classList.add("is-open");
   });
   clearPedagogicoAutosaveTimer();
   pedagogicoAutosaveTimer = window.setInterval(() => {

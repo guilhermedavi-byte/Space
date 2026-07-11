@@ -17368,16 +17368,20 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 }
 
 .pedagogico-drawer-backdrop {
-  position: absolute;
+  position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  background: rgba(7, 11, 18, 0.74);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .pedagogico-drawer-inner {
-  position: relative;
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
   width: min(480px, 92vw);
+  max-width: 100%;
   height: 100vh;
   background: #0d1a2a;
   border-left: 0.5px solid rgba(89, 144, 189, 0.12);
@@ -17446,6 +17450,7 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  overscroll-behavior: contain;
   padding: 18px 20px 12px;
   display: flex;
   flex-direction: column;
