@@ -1,4 +1,5 @@
 const { supabaseFetch } = require("./supabase-rest");
+const { listCollectionAsAdmin } = require("./firestore-admin");
 
 const TABLES = {
   onboarding: "n8n_onboarding_alunos_space",
@@ -160,6 +161,53 @@ const teacherMatchesSession = (row, session) =>
   idsMatch(session?.sub, row?.professor_id || row?.teacher_id || row?.professorId) ||
   emailsMatch(session?.email, row?.professor_email || row?.teacher_email || row?.professorEmail) ||
   namesMatch(session?.name, row?.professor_nome || row?.teacher_name || row?.professorName);
+
+const resolveTeacherFirestoreLink = async ({ session, usersCache } = {}) => {
+  const teacherIds = new Set();
+  const sessionId = String(session?.sub || "").trim();
+  const sessionEmail = normalizeIdentity(session?.email);
+  if (sessionId) teacherIds.add(sessionId);
+  (Array.isArray(usersCache) ? usersCache : []).forEach((row) => {
+    if (!row || typeof row !== "object") return;
+    const tipo = normalizeIdentity(row?.tipo);
+    if (!["teacher", "professor"].includes(tipo)) return;
+    const email = normalizeIdentity(row?.email);
+    if (!sessionEmail || email !== sessionEmail) return;
+    const id = String(row?.id || "").trim();
+    if (id) teacherIds.add(id);
+  });
+  return { teacherIds };
+};
+
+const loadFirestoreStudentsForTeacher = async ({ session } = {}) => {
+  try {
+    const users = await listCollectionAsAdmin("users", { pageSize: 1500 });
+    const { teacherIds } = await resolveTeacherFirestoreLink({ session, usersCache: users });
+    return (Array.isArray(users) ? users : [])
+      .filter((row) => {
+        const tipo = normalizeIdentity(row?.tipo);
+        const professorId = String(row?.professorId || "").trim();
+        return ["student", "aluno"].includes(tipo) && professorId && teacherIds.has(professorId);
+      })
+      .map((row) => {
+        const id = String(row?.id || "").trim();
+        return {
+          id,
+          aluno_id: id,
+          aluno_nome: row?.nome || "Aluno",
+          professor_id: String(row?.professorId || "").trim(),
+          professor_nome: String(row?.professorNome || "").trim(),
+          plano: String(row?.plano || "").trim(),
+          email: String(row?.email || "").trim(),
+          telefone: String(row?.telefone || "").trim(),
+          status: row?.ativo === false ? "inativo" : "ativo",
+        };
+      });
+  } catch (error) {
+    console.warn("[pedagogico] firestore students unavailable", error);
+    return [];
+  }
+};
 
 const onlyDigits = (value) => String(value || "").replace(/\D+/g, "");
 
@@ -397,11 +445,12 @@ const registerToTeacherLog = (row) => {
 
 const loadTeacherStudents = async ({ session } = {}) => {
   const safe = (promise) => promise.catch(() => []);
-  const [onboarding, financeStudents, lessons, registers] = await Promise.all([
+  const [onboarding, financeStudents, lessons, registers, firestoreStudentRows] = await Promise.all([
     safe(fetchOnboardingRows("select=*&order=updated_at.desc.nullslast&limit=1000")),
     safe(fetchFinanceStudents({ limit: 1000 })),
     safe(listTeacherLessons({ session, limit: 1000, includeHistoryDays: 3650 })),
     safe(listRegisters({ limit: 1000 })),
+    safe(loadFirestoreStudentsForTeacher({ session })),
   ]);
 
   const assignedKeys = new Set();
@@ -412,6 +461,10 @@ const loadTeacherStudents = async ({ session } = {}) => {
     if (key && key !== "name:") assignedKeys.add(key);
   });
   registers.filter((row) => teacherMatchesSession(row, session)).forEach((row) => {
+    const key = studentIdentityKey(row);
+    if (key && key !== "name:") assignedKeys.add(key);
+  });
+  firestoreStudentRows.forEach((row) => {
     const key = studentIdentityKey(row);
     if (key && key !== "name:") assignedKeys.add(key);
   });
@@ -437,7 +490,7 @@ const loadTeacherStudents = async ({ session } = {}) => {
     }));
 
   const students = mergePedagogicalStudents({
-    onboarding: [...onboarding, ...lessonStudentRows, ...registerStudentRows],
+    onboarding: [...onboarding, ...lessonStudentRows, ...registerStudentRows, ...firestoreStudentRows],
     financeStudents,
     preferences: [],
   }).filter((row) => assignedKeys.has(row.aluno_chave || studentIdentityKey(row)));
