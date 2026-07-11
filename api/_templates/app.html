@@ -1667,6 +1667,21 @@
             <div class="teacher-students-status" data-teacher-students-status aria-live="polite"></div>
 
             <article class="surface-card teacher-students-card" aria-label="Lista de alunos">
+              <div class="admin-ped-table-toolbar admin-ped-table-toolbar--students">
+                <div class="admin-ped-table-toolbar-main">
+                  <input
+                    class="admin-ped-select admin-ped-table-search"
+                    type="text"
+                    placeholder="Buscar aluno ou e-mail..."
+                    data-teacher-students-search
+                  />
+                  <select class="admin-ped-select" style="max-width:180px" data-teacher-students-status-filter>
+                    <option value="active" selected>Ativos</option>
+                    <option value="inactive">Inativos</option>
+                    <option value="all">Todos</option>
+                  </select>
+                </div>
+              </div>
               <div class="teacher-students-list" data-teacher-students-list></div>
               <div class="teacher-students-empty" data-teacher-students-empty hidden>Nenhum aluno vinculado a você ainda.</div>
               <div class="teacher-students-error" data-teacher-students-error hidden>Não foi possível carregar seus alunos.</div>

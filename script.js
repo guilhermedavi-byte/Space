@@ -295,6 +295,8 @@ const teacherStudentsList = document.querySelector("[data-teacher-students-list]
 const teacherStudentsEmpty = document.querySelector("[data-teacher-students-empty]");
 const teacherStudentsError = document.querySelector("[data-teacher-students-error]");
 const teacherStudentsStatus = document.querySelector("[data-teacher-students-status]");
+const teacherStudentsSearchInput = document.querySelector("[data-teacher-students-search]");
+const teacherStudentsStatusFilterEl = document.querySelector("[data-teacher-students-status-filter]");
 const teacherStudentHistoryDrawer = document.querySelector("[data-teacher-student-history-drawer]");
 const teacherStudentHistoryTitle = document.querySelector("[data-teacher-student-history-title]");
 const teacherStudentHistorySub = document.querySelector("[data-teacher-student-history-sub]");
@@ -7542,11 +7544,33 @@ let teacherStudentsState = {
     items: [],
   },
 };
+let teacherStudentsFilters = { query: "", status: "active" };
+let teacherStudentsSearchDebounce = null;
 
 const setTeacherStudentsStatus = (text, tone = "") => {
   if (!(teacherStudentsStatus instanceof HTMLElement)) return;
   teacherStudentsStatus.textContent = String(text || "");
   teacherStudentsStatus.dataset.tone = String(tone || "");
+};
+
+const bindTeacherStudentsFilters = () => {
+  if (teacherStudentsSearchInput instanceof HTMLInputElement && teacherStudentsSearchInput.dataset.bound !== "true") {
+    teacherStudentsSearchInput.dataset.bound = "true";
+    teacherStudentsSearchInput.addEventListener("input", () => {
+      if (teacherStudentsSearchDebounce) window.clearTimeout(teacherStudentsSearchDebounce);
+      teacherStudentsSearchDebounce = window.setTimeout(() => {
+        teacherStudentsFilters.query = String(teacherStudentsSearchInput.value || "");
+        renderTeacherStudentsList();
+      }, 200);
+    });
+  }
+  if (teacherStudentsStatusFilterEl instanceof HTMLSelectElement && teacherStudentsStatusFilterEl.dataset.bound !== "true") {
+    teacherStudentsStatusFilterEl.dataset.bound = "true";
+    teacherStudentsStatusFilterEl.addEventListener("change", () => {
+      teacherStudentsFilters.status = String(teacherStudentsStatusFilterEl.value || "active");
+      renderTeacherStudentsList();
+    });
+  }
 };
 
 const markPedagogicoDirty = () => {
@@ -9327,46 +9351,56 @@ const renderTeacherStudentsPanel = async ({ force = false } = {}) => {
 
 const renderTeacherStudentsList = () => {
   if (!(teacherStudentsList instanceof HTMLElement)) return;
-  const rows = Array.isArray(teacherStudentsState.summaries) ? teacherStudentsState.summaries : [];
-  if (teacherStudentsEmpty instanceof HTMLElement) teacherStudentsEmpty.hidden = rows.length > 0;
+  bindTeacherStudentsFilters();
+  const allRows = Array.isArray(teacherStudentsState.summaries) ? teacherStudentsState.summaries : [];
+  const statusFilter = String(teacherStudentsFilters.status || "active");
+  const query = normalizeSearchText(teacherStudentsFilters.query || "");
+  const rows = allRows.filter((row) => {
+    if (statusFilter === "active" && String(row?.accessStatus || "") !== "Ativo") return false;
+    if (statusFilter === "inactive" && String(row?.accessStatus || "") !== "Inativo") return false;
+    if (!query) return true;
+    const nameMatch = normalizeSearchText(row?.nome || "").includes(query);
+    const emailMatch = normalizeSearchText(row?.email || "").includes(query);
+    return nameMatch || emailMatch;
+  });
+
+  if (allRows.length === 0) {
+    if (teacherStudentsEmpty instanceof HTMLElement) {
+      teacherStudentsEmpty.hidden = false;
+      teacherStudentsEmpty.textContent = "Nenhum aluno vinculado a você ainda.";
+    }
+    teacherStudentsList.innerHTML = "";
+    return;
+  }
+  if (teacherStudentsEmpty instanceof HTMLElement) {
+    teacherStudentsEmpty.hidden = rows.length > 0;
+    if (rows.length === 0) teacherStudentsEmpty.textContent = "Nenhum aluno encontrado para esse filtro.";
+  }
   if (rows.length === 0) {
     teacherStudentsList.innerHTML = "";
     return;
   }
 
-  teacherStudentsList.innerHTML = rows
-    .map((row) => {
-      const alertBadge = row.hasAlert ? `<span class="admin-students-alert">Alerta</span>` : "";
-      return `
-        <div class="teacher-students-row" data-teacher-student-row="${escapeHtml(row.alunoId)}">
-          <div class="admin-students-avatar" aria-hidden="true">${escapeHtml(getInitials(row.nome))}</div>
-          <div class="teacher-students-main">
-            <div class="admin-students-name"><span>${escapeHtml(row.nome)}</span>${alertBadge}</div>
-            <div class="admin-students-meta">
-              <span class="admin-students-email">${escapeHtml(row.email || "—")}</span>
-              <span class="admin-students-dot" aria-hidden="true">•</span>
-              <span>Última aula registrada: <strong>${escapeHtml(row.lastLessonLabel)}</strong></span>
-              <span class="admin-students-dot" aria-hidden="true">•</span>
-              <span>Registros: <strong>${escapeHtml(String(row.totalLogs))}</strong></span>
+  teacherStudentsList.innerHTML = `
+    <div class="admin-ped-list">
+      ${rows
+        .map((row) => `
+          <div class="admin-ped-row admin-ped-row--student">
+            <div>
+              <div class="admin-ped-row-title">${escapeHtml(row.nome)}</div>
+              <div class="admin-ped-row-meta">
+                ${row.plano ? `<span class="admin-ped-pill is-plan">${escapeHtml(row.plano)}</span>` : ""}
+                ${row.hasAlert ? `<span class="admin-ped-pill is-warn">${escapeHtml(row.riskLabel || "Risco alto")}</span>` : ""}
+              </div>
             </div>
-            <div class="admin-students-kpis">
-              <span>Último status: <strong>${escapeHtml(row.statusLabel)}</strong></span>
-              <span>Risco: <strong>${escapeHtml(row.riskLabel)}</strong></span>
+            <div class="admin-ped-row-actions">
+              <button class="admin-ped-action" type="button" data-teacher-student-open="${escapeHtml(row.alunoId)}">Ficha</button>
             </div>
           </div>
-          <button class="admin-students-actions-trigger" type="button" aria-label="Ações" data-teacher-student-actions-trigger="${escapeHtml(
-            row.alunoId
-          )}">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M6.5 12h.01"></path>
-              <path d="M12 12h.01"></path>
-              <path d="M17.5 12h.01"></path>
-            </svg>
-          </button>
-        </div>
-      `;
-    })
-    .join("");
+        `)
+        .join("")}
+    </div>
+  `;
 };
 
 const activatePedagogicoLessonFromEl = (event, pedItem) => {
@@ -26837,6 +26871,14 @@ document.addEventListener("click", (event) => {
         event.preventDefault();
         const alunoId = String(teacherActionsTrigger.getAttribute("data-teacher-student-actions-trigger") || "").trim();
         openTeacherStudentActionsPopover({ triggerEl: teacherActionsTrigger, alunoId });
+        return;
+      }
+
+      const teacherStudentOpen = target.closest("[data-teacher-student-open]");
+      if (teacherStudentOpen instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const alunoId = String(teacherStudentOpen.getAttribute("data-teacher-student-open") || "").trim();
+        openTeacherStudentHistoryDrawer({ alunoId }).catch(() => {});
         return;
       }
 
