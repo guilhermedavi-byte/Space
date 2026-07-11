@@ -7793,7 +7793,7 @@ const PEDAGOGICO_STATUS = {
 
 const PEDAGOGICO_STATUS_OPTIONS = [
   { value: PEDAGOGICO_STATUS.REALIZADA, label: "Realizada", tone: "green" },
-  { value: PEDAGOGICO_STATUS.FALTA_ALUNO, label: "Falta do aluno", tone: "coral" },
+  { value: PEDAGOGICO_STATUS.FALTA_ALUNO, label: "Falta", tone: "coral" },
   { value: PEDAGOGICO_STATUS.REMARCADA, label: "Remarcada", tone: "amber" },
   { value: PEDAGOGICO_STATUS.CANCELADA, label: "Cancelada", tone: "muted" },
 ];
@@ -7840,6 +7840,13 @@ const renderPedagogicoStatusControl = (selectedStatus) => {
   `;
 };
 
+const renderPedRatingRow = (label, starsHtml) => `
+  <div class="regv2-rating-row">
+    <div class="regv2-rating-label">${escapeHtml(label)}</div>
+    <div class="regv2-rating-control">${starsHtml}</div>
+  </div>
+`;
+
 const renderPedSelectOptions = (options, selected) => {
   const sel = String(selected || "");
   const list = Array.isArray(options) ? options : [];
@@ -7862,28 +7869,28 @@ const renderRealizadaFieldsHtml = (draft = {}) => {
 
       <div class="ped-grid2 regv2-grid2">
         <div class="ped-field regv2-field">
-          <div class="ped-label regv2-label">Gramática trabalhada</div>
+          <div class="ped-label regv2-label">Gramática</div>
           <input class="ped-in regv2-input" type="text" data-ped-field="gramaticaTrabalhada" value="${escapeHtml(String(d.gramaticaTrabalhada || ""))}" />
         </div>
         <div class="ped-field regv2-field">
-          <div class="ped-label regv2-label">Vocabulário trabalhado</div>
+          <div class="ped-label regv2-label">Vocabulário</div>
           <input class="ped-in regv2-input" type="text" data-ped-field="vocabularioTrabalhado" value="${escapeHtml(String(d.vocabularioTrabalhado || ""))}" />
         </div>
       </div>
 
       <div class="ped-grid2 regv2-grid2">
         <div class="ped-field regv2-field">
-          <div class="ped-label regv2-label">Pronúncia / conversação</div>
+          <div class="ped-label regv2-label">Pronúncia</div>
           <input class="ped-in regv2-input" type="text" data-ped-field="pronunciaConversacao" value="${escapeHtml(String(d.pronunciaConversacao || ""))}" />
         </div>
         <div class="ped-field regv2-field">
-          <div class="ped-label regv2-label">Atividade realizada</div>
+          <div class="ped-label regv2-label">Atividade</div>
           <input class="ped-in regv2-input" type="text" data-ped-field="atividadeRealizada" value="${escapeHtml(String(d.atividadeRealizada || ""))}" />
         </div>
       </div>
 
       <div class="ped-field regv2-field">
-        <div class="ped-label regv2-label">Materiais usados</div>
+        <div class="ped-label regv2-label">Materiais</div>
         <input class="ped-in regv2-input" type="text" data-ped-field="materiaisUsados" value="${escapeHtml(String(d.materiaisUsados || ""))}" />
       </div>
     `
@@ -7891,26 +7898,14 @@ const renderRealizadaFieldsHtml = (draft = {}) => {
   const avaliacaoSection = renderPedagogicoSection(
     "Avaliação do aluno",
     `
-      <div class="ped-grid2 regv2-grid2">
-        <div class="ped-field regv2-field">
-          <div class="ped-label regv2-label">Engajamento</div>
-          ${renderPedStars(d.engajamentoNota || 0, "engajamentoNota", "Engajamento")}
-        </div>
-        <div class="ped-field regv2-field">
-          <div class="ped-label regv2-label">Evolução do aluno</div>
-          ${renderPedStars(d.evolucaoNota || 0, "evolucaoNota", "Evolução do aluno")}
-        </div>
+      <div class="regv2-ratings">
+        ${renderPedRatingRow("Engajamento", renderPedStars(d.engajamentoNota || 0, "engajamentoNota", "Engajamento"))}
+        ${renderPedRatingRow("Evolução", renderPedStars(d.evolucaoNota || 0, "evolucaoNota", "Evolução"))}
+        ${renderPedRatingRow("Confiança", renderPedStars(d.confiancaNota || 0, "confiancaNota", "Confiança"))}
       </div>
-
-      <div class="ped-grid2 regv2-grid2">
-        <div class="ped-field regv2-field">
-          <div class="ped-label regv2-label">Confiança do aluno</div>
-          ${renderPedStars(d.confiancaNota || 0, "confiancaNota", "Confiança do aluno")}
-        </div>
-        <div class="ped-field regv2-field">
-          <div class="ped-label regv2-label">Humor do aluno</div>
-          ${renderPedHumorChips(d.humorAluno || "")}
-        </div>
+      <div class="ped-field regv2-field regv2-humor-field">
+        <div class="ped-label regv2-label">Humor</div>
+        ${renderPedHumorChips(d.humorAluno || "")}
       </div>
     `
   );
@@ -7932,7 +7927,7 @@ const renderRealizadaFieldsHtml = (draft = {}) => {
     "Coordenação",
     `
       <div class="ped-field regv2-field">
-        <div class="ped-label regv2-label">Avisos para a coordenação</div>
+        <div class="ped-label regv2-label">Avisos</div>
         ${renderPedAvisosTrigger(d.avisosCoordenacao || [])}
       </div>
 
@@ -8160,7 +8155,7 @@ const renderPedStars = (value = 0, fieldKey, label = "") => {
   return `
     <div class="ped-stars regv2-stars" data-ped-stars="${escapeHtml(safeKey)}" data-ped-stars-label="${escapeHtml(safeLabel)}">
       <input type="hidden" data-ped-field="${escapeHtml(safeKey)}" value="${escapeHtml(String(n))}" />
-      <span class="regv2-stars-value" data-ped-stars-value>${n > 0 ? `${escapeHtml(safeLabel)} · ${n}/5` : escapeHtml(safeLabel)}</span>
+      <span class="regv2-stars-value" data-ped-stars-value>${n > 0 ? `${n}/5` : ""}</span>
       ${stars}
     </div>
   `;
@@ -8301,7 +8296,7 @@ const bindStars = (rootEl) => {
           btn.classList.toggle("on", v > 0 && v <= clamped);
         });
         if (valueEl instanceof HTMLElement) {
-          valueEl.textContent = clamped > 0 ? `${label} · ${clamped}/5` : label;
+          valueEl.textContent = clamped > 0 ? `${clamped}/5` : "";
         }
       };
       const setValue = (n) => {
