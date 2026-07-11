@@ -15156,87 +15156,81 @@ let adminPedOverviewV2State = {
     risk: null,
   },
   renderToken: 0,
+  loadedAt: 0,
+  loadPromise: null,
+  cacheTtlMs: 60_000,
+  rawData: null,
+  viewModel: null,
 };
 
 const PEDOV2_MOCK = {
-  // ETAPA 2: substituir por dados reais — mesma estrutura do protótipo (kpis, séries 7d/30d/90d, fatores, funil, alunos em risco, professores, heatmap, pendências).
+  // Modelo-base/fallback neutro. A overview real é preenchida client-side a partir das fontes do admin.
   meta: {
     eyebrow: "Pedagógico",
     title: "Visão Geral",
-    dateLabel: "10 de julho",
-    note: "Protótipo · dados fictícios",
+    dateLabel: "",
+    note: "Carregando dados…",
   },
   briefing: {
     tag: "Resumo do dia · IA",
-    lead: "2 alunos entraram em risco crítico",
-    body: "— faltas seguidas e sem próxima aula. Sugestão: reagendar os",
-    highlight: "5 sem aula futura",
+    lead: "Carregando indicadores do painel.",
+    body: "",
+    highlight: "",
   },
   kpis: [
-    { key: "ativos", label: "Alunos ativos", dotColor: "#a0bcff", value: 116, delta: "+4", deltaClass: "up-good", sparkKey: "ativos", color: "#a0bcff" },
-    { key: "risco", label: "Alunos em risco", dotColor: "#ff564f", value: 9, delta: "+2", deltaClass: "up-bad", sparkKey: "risco", color: "#ff564f", emphasis: true },
-    { key: "presenca", label: "Presença", dotColor: "#3fd6a4", value: 87, unit: "%", delta: "−3pp", deltaClass: "down-bad", sparkKey: "presenca", color: "#3fd6a4" },
-    { key: "aulas", label: "Aulas na semana", dotColor: "rgba(255,255,255,0.4)", value: 42, delta: "4 faltas", deltaClass: "up-bad", sparkKey: "aulas", color: "#d9deea" },
-    { key: "nps", label: "NPS dos alunos", dotColor: "#f5b64b", value: 62, delta: "+5", deltaClass: "up-good", sparkKey: "nps", color: "#f5b64b" },
+    { key: "ativos", label: "Alunos ativos", dotColor: "#a0bcff", value: "—", delta: "", deltaClass: "", sparkKey: "ativos", color: "#a0bcff" },
+    { key: "risco", label: "Alunos em risco", dotColor: "#ff564f", value: "—", delta: "", deltaClass: "", sparkKey: "risco", color: "#ff564f", emphasis: true },
+    { key: "presenca", label: "Presença", dotColor: "#3fd6a4", value: "—", unit: "%", delta: "", deltaClass: "", sparkKey: "presenca", color: "#3fd6a4" },
+    { key: "aulas", label: "Aulas na semana", dotColor: "rgba(255,255,255,0.4)", value: "—", delta: "", deltaClass: "", sparkKey: "aulas", color: "#d9deea" },
+    { key: "nps", label: "NPS dos alunos", dotColor: "#f5b64b", value: "—", delta: "", deltaClass: "", sparkKey: "nps", color: "#f5b64b" },
   ],
   periods: {
     "7d": {
-      labels: ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"],
-      realizadas: [7, 8, 6, 9, 8, 5, 0],
-      faltas: [1, 0, 2, 0, 1, 0, 0],
-      remarcadas: [0, 1, 0, 1, 0, 0, 0],
+      labels: [],
+      realizadas: [],
+      faltas: [],
+      remarcadas: [],
     },
     "30d": {
-      labels: ["S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9", "S10", "S11", "S12"],
-      realizadas: [30, 34, 31, 36, 38, 35, 33, 37, 40, 38, 36, 36],
-      faltas: [3, 2, 4, 3, 2, 5, 4, 3, 2, 4, 6, 4],
-      remarcadas: [2, 3, 2, 1, 3, 2, 3, 2, 3, 2, 3, 2],
+      labels: [],
+      realizadas: [],
+      faltas: [],
+      remarcadas: [],
     },
     "90d": {
-      labels: ["fev", "mar", "abr", "mai", "jun", "jul"],
-      realizadas: [118, 132, 140, 151, 148, 152],
-      faltas: [12, 10, 14, 11, 16, 18],
-      remarcadas: [8, 9, 7, 10, 9, 11],
+      labels: [],
+      realizadas: [],
+      faltas: [],
+      remarcadas: [],
     },
   },
   sparks: {
-    ativos: [98, 101, 104, 103, 107, 109, 112, 112, 114, 116],
-    risco: [5, 4, 6, 5, 7, 6, 7, 7, 8, 9],
-    presenca: [92, 91, 90, 91, 89, 90, 88, 88, 88, 87],
-    aulas: [36, 40, 38, 41, 39, 44, 42, 40, 43, 42],
-    nps: [51, 53, 55, 54, 57, 58, 58, 60, 61, 62],
+    ativos: [],
+    risco: [],
+    presenca: [],
+    aulas: [],
+    nps: [],
   },
   riskDonut: {
     labels: ["Saudáveis", "Em atenção", "Críticos"],
-    data: [107, 6, 3],
-    centerValue: "92%",
+    data: [0, 0, 0],
+    centerValue: "—",
     centerLabel: "base saudável",
   },
   riskFactors: [
-    { label: "Sem próxima aula agendada", count: 5, pct: 100 },
-    { label: "2+ faltas seguidas", count: 4, pct: 80 },
-    { label: "Engajamento em queda", count: 3, pct: 60 },
-    { label: "Onboarding travado", count: 2, pct: 40 },
+    { label: "Sem próxima aula agendada", count: "—", pct: 0 },
+    { label: "2+ faltas nos últimos 30d", count: "—", pct: 0 },
+    { label: "Engajamento em queda", count: "—", pct: 0 },
+    { label: "Onboarding travado", count: "—", pct: 0 },
   ],
   funnel: [
-    { label: "Matrículas", value: 12, pct: 100 },
-    { label: "1ª aula agendada", value: 10, pct: 83 },
-    { label: "1ª aula realizada", value: 8, pct: 67 },
-    { label: "4ª aula (ativado)", value: 6, pct: 50 },
+    { label: "Matrículas", value: "—", pct: 0 },
+    { label: "1ª aula agendada", value: "—", pct: 0 },
+    { label: "1ª aula realizada", value: "—", pct: 0 },
+    { label: "4ª aula (ativado)", value: "—", pct: 0 },
   ],
-  studentsAtRisk: [
-    { nome: "Mariana Duarte", prof: "Prof. Rafael", score: 86, nivel: "critico", motivos: ["3 faltas seguidas", "sem próxima aula"], ultima: "há 18 dias", proxima: "—", alertaProxima: true },
-    { nome: "Carlos Mendes", prof: "Prof. Amanda", score: 78, nivel: "critico", motivos: ["engajamento 4,2 → 2,8", "2 remarcações"], ultima: "há 9 dias", proxima: "—", alertaProxima: true },
-    { nome: "Beatriz Rocha", prof: "sem professor", score: 71, nivel: "critico", motivos: ["onboarding travado", "sem 1ª aula"], ultima: "nunca", proxima: "—", alertaProxima: true },
-    { nome: "Felipe Araújo", prof: "Prof. Rafael", score: 58, nivel: "atencao", motivos: ["1 falta", "homework pendente 3x"], ultima: "há 4 dias", proxima: "seg · 19h" },
-    { nome: "Juliana Freitas", prof: "Prof. Diego", score: 52, nivel: "atencao", motivos: ["engajamento em queda"], ultima: "há 2 dias", proxima: "qui · 20h30" },
-  ],
-  teachers: [
-    { nome: "Rafael Lima", alunos: 32, aulas: 118, registro: 96, engaj: 4.6, trend: "+0,2", dir: "pos" },
-    { nome: "Amanda Souza", alunos: 28, aulas: 104, registro: 88, engaj: 4.3, trend: "−0,1", dir: "neg" },
-    { nome: "Diego Martins", alunos: 24, aulas: 92, registro: 74, engaj: 4.1, trend: "0,0", dir: "flat" },
-    { nome: "Paula Reis", alunos: 21, aulas: 80, registro: 91, engaj: 4.7, trend: "+0,3", dir: "pos" },
-  ],
+  studentsAtRisk: [],
+  teachers: [],
   heatmap: {
     dias: ["seg", "ter", "qua", "qui", "sex", "sáb"],
     faixas: ["7–9h", "9–11h", "11–13h", "13–15h", "15–17h", "17–19h", "19–21h"],
@@ -15251,10 +15245,10 @@ const PEDOV2_MOCK = {
     ],
   },
   opsStrip: [
-    { label: "Alunos sem professor", count: 3, tone: "crit" },
-    { label: "Sem primeira aula", count: 3, tone: "crit" },
-    { label: "Registros pendentes", count: 2, tone: "warn" },
-    { label: "Ocorrências abertas", count: 0, tone: "zero" },
+    { label: "Alunos sem professor", count: "—", tone: "crit" },
+    { label: "Sem primeira aula", count: "—", tone: "crit" },
+    { label: "Registros pendentes", count: "—", tone: "warn" },
+    { label: "Ocorrências abertas", count: "—", tone: "zero" },
   ],
 };
 
@@ -19343,6 +19337,810 @@ const renderAdminPedagogicoConflicts = () => {
     .join("");
 };
 
+const PEDOV2_HEATMAP_DAYS = ["seg", "ter", "qua", "qui", "sex", "sáb"];
+const PEDOV2_HEATMAP_SLOTS = [
+  { label: "7–9h", startMin: 7 * 60, endMin: 9 * 60 },
+  { label: "9–11h", startMin: 9 * 60, endMin: 11 * 60 },
+  { label: "11–13h", startMin: 11 * 60, endMin: 13 * 60 },
+  { label: "13–15h", startMin: 13 * 60, endMin: 15 * 60 },
+  { label: "15–17h", startMin: 15 * 60, endMin: 17 * 60 },
+  { label: "17–19h", startMin: 17 * 60, endMin: 19 * 60 },
+  { label: "19–21h", startMin: 19 * 60, endMin: 21 * 60 },
+];
+
+const getPedov2ViewModel = () => adminPedOverviewV2State.viewModel || PEDOV2_MOCK;
+
+const getPedov2DateLabel = (date = new Date()) => {
+  try {
+    const fmt = new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "long" });
+    const raw = fmt.format(date);
+    return raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : "";
+  } catch (error) {
+    return "";
+  }
+};
+
+const endOfDay = (date) => {
+  const normalized = new Date(date);
+  normalized.setHours(23, 59, 59, 999);
+  return normalized;
+};
+
+const getPedov2MonthLabel = (date) => {
+  try {
+    return new Intl.DateTimeFormat("pt-BR", { month: "short" }).format(date).replace(".", "");
+  } catch (error) {
+    return "";
+  }
+};
+
+const getPedov2WeekdayShort = (date) => {
+  try {
+    return new Intl.DateTimeFormat("pt-BR", { weekday: "short" }).format(date).replace(".", "");
+  } catch (error) {
+    return "";
+  }
+};
+
+const formatPedov2Delta = (value, { suffix = "", pp = false } = {}) => {
+  if (!Number.isFinite(value) || Math.abs(value) < 0.05) return pp ? "0pp" : "0";
+  const sign = value > 0 ? "+" : "−";
+  const abs = Math.abs(value);
+  const rounded = abs >= 10 ? Math.round(abs) : Number(abs.toFixed(1));
+  return `${sign}${String(rounded).replace(".", ",")}${pp ? "pp" : suffix}`;
+};
+
+const getPedov2DeltaClass = (value, { invert = false } = {}) => {
+  if (!Number.isFinite(value) || Math.abs(value) < 0.05) return "";
+  const positive = invert ? value < 0 : value > 0;
+  return positive ? "up-good" : "up-bad";
+};
+
+const normalizePedov2ScheduleEvents = (events) =>
+  (Array.isArray(events) ? events : [])
+    .map((event) => {
+      if (!event || typeof event !== "object") return null;
+      const id = String(event.id || "").trim();
+      const alunoId = String(event.alunoId || event.studentId || "").trim();
+      const professorId = String(event.professorId || event.teacherId || "").trim();
+      const dateKey = String(event.dateKey || "").trim();
+      const startMin = Number(event.startMin);
+      const endMin = Number(event.endMin);
+      if (!id || !alunoId || !professorId || !isValidDateKey(dateKey) || !Number.isFinite(startMin) || !Number.isFinite(endMin) || endMin <= startMin) return null;
+      const startDate = buildDateFromDateKeyAndMinutes(dateKey, startMin);
+      const endDate = buildDateFromDateKeyAndMinutes(dateKey, endMin);
+      if (!(startDate instanceof Date) || Number.isNaN(startDate.getTime()) || !(endDate instanceof Date) || Number.isNaN(endDate.getTime())) return null;
+      return {
+        id,
+        alunoId,
+        professorId,
+        dateKey,
+        startMin,
+        endMin,
+        title: String(event.title || "").trim(),
+        type: String(event.type || "lesson").trim().toLowerCase(),
+        startMs: startDate.getTime(),
+        endMs: endDate.getTime(),
+      };
+    })
+    .filter((event) => event && event.type === "lesson")
+    .sort((a, b) => (a.startMs || 0) - (b.startMs || 0));
+
+const normalizePedov2LiveLessons = (lessons) =>
+  (Array.isArray(lessons) ? lessons : [])
+    .map((lesson) => {
+      const ui = normalizeLiveLessonForUi(lesson);
+      if (!ui) return null;
+      return {
+        id: String(ui.id || "").trim(),
+        alunoId: String(ui.alunoId || "").trim(),
+        professorId: String(ui.professorId || "").trim(),
+        dateKey: String(ui.dateKey || "").trim(),
+        startMin: Number(ui.startMin) || 0,
+        endMin: Number(ui.endMin) || 0,
+        status: String(ui.status || "").trim().toLowerCase(),
+      };
+    })
+    .filter(Boolean);
+
+const normalizePedov2Records = (records) => {
+  const byLessonId = new Map();
+  (Array.isArray(records) ? records : []).forEach((record) => {
+    if (!record || typeof record !== "object") return;
+    const lessonId = String(record.aula_id || "").trim();
+    if (!lessonId) return;
+    const ts = parseFirestoreDateToMs(record.updated_at || record.updatedAt || record.created_at || record.createdAt);
+    const prev = byLessonId.get(lessonId);
+    if (prev && (prev.updatedMs || 0) > ts) return;
+    byLessonId.set(lessonId, {
+      id: String(record.id || "").trim(),
+      aulaId: lessonId,
+      status: String(record.status || "").trim().toLowerCase(),
+      engajamento: Number.parseFloat(String(record.engajamento || "").replace(",", ".")) || 0,
+      desempenho: Number.parseFloat(String(record.desempenho_aluno || "").replace(",", ".")) || 0,
+      confianca: Number.parseFloat(String(record.confianca || "").replace(",", ".")) || 0,
+      updatedMs: ts,
+    });
+  });
+  return byLessonId;
+};
+
+const getPedov2EventCompositeKey = ({ alunoId, professorId, dateKey, startMin }) =>
+  [String(alunoId || "").trim(), String(professorId || "").trim(), String(dateKey || "").trim(), String(Number(startMin) || 0)].join("|");
+
+const buildPedov2EventRecordIndex = ({ events, liveLessons, recordsByLessonId }) => {
+  const liveByComposite = new Map();
+  (Array.isArray(liveLessons) ? liveLessons : []).forEach((lesson) => {
+    const key = getPedov2EventCompositeKey(lesson);
+    if (key && !liveByComposite.has(key)) liveByComposite.set(key, lesson);
+  });
+  const recordByEventId = new Map();
+  (Array.isArray(events) ? events : []).forEach((event) => {
+    const exact = recordsByLessonId.get(String(event.id || ""));
+    if (exact) {
+      recordByEventId.set(String(event.id), exact);
+      return;
+    }
+    const live = liveByComposite.get(getPedov2EventCompositeKey(event));
+    if (!live) return;
+    const mapped = recordsByLessonId.get(String(live.id || ""));
+    if (mapped) recordByEventId.set(String(event.id), mapped);
+  });
+  return recordByEventId;
+};
+
+const getPedov2PastStatus = (record) => {
+  const raw = String(record?.status || "").trim().toLowerCase();
+  if (raw === "falta") return "falta";
+  if (raw === "remarcada") return "remarcada";
+  if (raw === "cancelada") return "cancelada";
+  if (raw === "realizada") return "realizada";
+  return "pendente";
+};
+
+const getPedov2StudentCreatedMs = (student) => parseFirestoreDateToMs(student?.criadoEm || student?.createdAt || student?.created_at);
+
+const getPedov2StudentDeactivatedMs = (student) =>
+  parseFirestoreDateToMs(student?.desativadoEm || student?.canceladoEm || student?.updatedAt || student?.updated_at);
+
+const isPedov2StudentActiveAt = (student, referenceMs) => {
+  if (!student || typeof student !== "object") return false;
+  const createdMs = getPedov2StudentCreatedMs(student);
+  const deactivatedMs = getPedov2StudentDeactivatedMs(student);
+  if (createdMs && createdMs > referenceMs) return false;
+  if (student.ativo === false && deactivatedMs && deactivatedMs <= referenceMs) return false;
+  if (student.ativo === false && !deactivatedMs) return false;
+  return true;
+};
+
+const getPedov2RangeStart = (periodKey, referenceDate = new Date()) => {
+  const end = startOfDay(referenceDate);
+  if (periodKey === "7d") return addDays(end, -6);
+  if (periodKey === "90d") return addDays(end, -89);
+  return addDays(end, -29);
+};
+
+const buildPedov2StatusSummary = ({ events, recordByEventId, periodKey, referenceDate = new Date() }) => {
+  const startDate = getPedov2RangeStart(periodKey, referenceDate);
+  const startMs = startDate.getTime();
+  const endMs = referenceDate.getTime();
+  let realizadas = 0;
+  let faltas = 0;
+  let remarcadas = 0;
+  (Array.isArray(events) ? events : []).forEach((event) => {
+    if (!event || event.endMs > endMs || event.startMs < startMs) return;
+    const status = getPedov2PastStatus(recordByEventId.get(String(event.id || "")));
+    if (status === "realizada") realizadas += 1;
+    if (status === "falta") faltas += 1;
+    if (status === "remarcada") remarcadas += 1;
+  });
+  return { realizadas, faltas, remarcadas };
+};
+
+const buildPedov2SeriesForPeriod = ({ events, recordByEventId, periodKey, referenceDate = new Date() }) => {
+  const startDate = getPedov2RangeStart(periodKey, referenceDate);
+  const endDate = startOfDay(referenceDate);
+  const buckets = [];
+  if (periodKey === "7d") {
+    for (let offset = 0; offset < 7; offset += 1) {
+      const date = addDays(startDate, offset);
+      buckets.push({
+        label: getPedov2WeekdayShort(date).slice(0, 3),
+        match: (event) => event.dateKey === createDateKey(date),
+        realizadas: 0,
+        faltas: 0,
+        remarcadas: 0,
+      });
+    }
+  } else if (periodKey === "30d") {
+    const byWeek = new Map();
+    for (let cursor = new Date(startDate); cursor.getTime() <= endDate.getTime(); cursor = addDays(cursor, 1)) {
+      const dow = cursor.getDay();
+      const mondayOffset = dow === 0 ? -6 : 1 - dow;
+      const weekStart = startOfDay(addDays(cursor, mondayOffset));
+      const key = createDateKey(weekStart);
+      if (!byWeek.has(key)) byWeek.set(key, { startMs: weekStart.getTime(), endMs: addDays(weekStart, 7).getTime(), label: `S${byWeek.size + 1}`, realizadas: 0, faltas: 0, remarcadas: 0 });
+    }
+    byWeek.forEach((bucket) => buckets.push({
+      label: bucket.label,
+      match: (event) => event.startMs >= bucket.startMs && event.startMs < bucket.endMs,
+      realizadas: 0,
+      faltas: 0,
+      remarcadas: 0,
+    }));
+  } else {
+    const byMonth = new Map();
+    const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+    const lastMonth = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+    while (cursor.getTime() <= lastMonth.getTime()) {
+      const key = `${cursor.getFullYear()}-${cursor.getMonth() + 1}`;
+      const monthStart = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+      const monthEnd = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
+      byMonth.set(key, { startMs: monthStart.getTime(), endMs: monthEnd.getTime(), label: getPedov2MonthLabel(cursor), realizadas: 0, faltas: 0, remarcadas: 0 });
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+    byMonth.forEach((bucket) => buckets.push({
+      label: bucket.label,
+      match: (event) => event.startMs >= bucket.startMs && event.startMs < bucket.endMs,
+      realizadas: 0,
+      faltas: 0,
+      remarcadas: 0,
+    }));
+  }
+  (Array.isArray(events) ? events : []).forEach((event) => {
+    if (!event || event.endMs > referenceDate.getTime() || event.startMs < startDate.getTime()) return;
+    const status = getPedov2PastStatus(recordByEventId.get(String(event.id || "")));
+    if (!["realizada", "falta", "remarcada"].includes(status)) return;
+    const bucket = buckets.find((item) => item.match(event));
+    if (!bucket) return;
+    if (status === "realizada") bucket.realizadas += 1;
+    if (status === "falta") bucket.faltas += 1;
+    if (status === "remarcada") bucket.remarcadas += 1;
+  });
+  return {
+    labels: buckets.map((bucket) => bucket.label),
+    realizadas: buckets.map((bucket) => bucket.realizadas),
+    faltas: buckets.map((bucket) => bucket.faltas),
+    remarcadas: buckets.map((bucket) => bucket.remarcadas),
+  };
+};
+
+const formatPedov2FutureEvent = (event) => {
+  if (!event) return "—";
+  const date = parseDateKey(event.dateKey);
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "—";
+  return `${getPedov2WeekdayShort(date).slice(0, 3)} · ${formatHmFromMinutes(event.startMin || 0)}`;
+};
+
+const formatPedov2LastEvent = (event) => {
+  if (!event) return "nunca";
+  return formatPedagogicoDate(String(event.dateKey || "")) || "nunca";
+};
+
+const computePedov2RiskSnapshot = ({ students, teachersById, events, recordByEventId, referenceDate = new Date() }) => {
+  const referenceMs = referenceDate.getTime();
+  const last30StartMs = addDays(startOfDay(referenceDate), -29).getTime();
+  const riskRows = [];
+  const factorCounts = {
+    noFuture: 0,
+    faltas30d: 0,
+    engajamento: 0,
+    onboarding: 0,
+    remarcacoes30d: 0,
+  };
+
+  const eventsByStudent = new Map();
+  (Array.isArray(events) ? events : []).forEach((event) => {
+    const alunoId = String(event?.alunoId || "").trim();
+    if (!alunoId) return;
+    const arr = eventsByStudent.get(alunoId) || [];
+    arr.push(event);
+    eventsByStudent.set(alunoId, arr);
+  });
+
+  (Array.isArray(students) ? students : []).forEach((student) => {
+    if (!isPedov2StudentActiveAt(student, referenceMs)) return;
+    const alunoId = String(student?.id || "").trim();
+    if (!alunoId) return;
+    const studentEvents = (eventsByStudent.get(alunoId) || []).slice().sort((a, b) => (a.startMs || 0) - (b.startMs || 0));
+    const pastEvents = studentEvents.filter((event) => event.endMs <= referenceMs);
+    const futureEvents = studentEvents.filter((event) => event.startMs > referenceMs);
+    const futureEvent = futureEvents[0] || null;
+    const lastEvent = pastEvents.length ? pastEvents[pastEvents.length - 1] : null;
+    const past30 = pastEvents.filter((event) => event.startMs >= last30StartMs);
+    const absences30 = past30.filter((event) => getPedov2PastStatus(recordByEventId.get(String(event.id || ""))) === "falta").length;
+    const remarc30 = past30.filter((event) => getPedov2PastStatus(recordByEventId.get(String(event.id || ""))) === "remarcada").length;
+    const realizedRecords = pastEvents
+      .map((event) => ({ event, record: recordByEventId.get(String(event.id || "")) || null }))
+      .filter((item) => getPedov2PastStatus(item.record) === "realizada");
+    const engagementValues = realizedRecords
+      .map((item) => ({ dateMs: item.event.startMs, value: Number(item.record?.engajamento || 0) }))
+      .filter((item) => Number.isFinite(item.value) && item.value > 0)
+      .sort((a, b) => b.dateMs - a.dateMs);
+    const latest3 = engagementValues.slice(0, 3).map((item) => item.value);
+    const previous3 = engagementValues.slice(3, 6).map((item) => item.value);
+    const avgLatest3 = latest3.length ? latest3.reduce((sum, value) => sum + value, 0) / latest3.length : NaN;
+    const avgPrevious3 = previous3.length ? previous3.reduce((sum, value) => sum + value, 0) / previous3.length : NaN;
+    const engagementDrop = Number.isFinite(avgLatest3) && Number.isFinite(avgPrevious3) ? avgPrevious3 - avgLatest3 : NaN;
+    const createdMs = getPedov2StudentCreatedMs(student);
+    const onboardingLocked = Boolean(createdMs && createdMs <= addDays(referenceDate, -7).getTime() && realizedRecords.length === 0);
+
+    const reasons = [];
+    let score = 0;
+    if (!futureEvent) {
+      score += 40;
+      factorCounts.noFuture += 1;
+      reasons.push("sem aula futura");
+    }
+    if (absences30 >= 2) {
+      score += 30;
+      factorCounts.faltas30d += 1;
+      reasons.push("2+ faltas 30d");
+    } else if (absences30 === 1) {
+      score += 10;
+      factorCounts.faltas30d += 1;
+      reasons.push("1 falta 30d");
+    }
+    if ((latest3.length >= 3 && avgLatest3 < 3) || (latest3.length >= 3 && previous3.length >= 3 && engagementDrop >= 1)) {
+      score += 20;
+      factorCounts.engajamento += 1;
+      reasons.push(Number.isFinite(engagementDrop) && engagementDrop >= 1 ? "engajamento em queda" : "engajamento < 3,0");
+    }
+    if (onboardingLocked) {
+      score += 35;
+      factorCounts.onboarding += 1;
+      reasons.push("onboarding travado");
+    }
+    if (remarc30 >= 2) {
+      score += 15;
+      factorCounts.remarcacoes30d += 1;
+      reasons.push("2+ remarcações");
+    }
+    score = Math.min(100, score);
+    const nivel = score >= 70 ? "critico" : score >= 45 ? "atencao" : "saudavel";
+    riskRows.push({
+      alunoId,
+      nome: String(student?.nome || "Aluno").trim() || "Aluno",
+      prof: String(teachersById.get(String(student?.professorId || student?.teacherId || ""))?.nome || "sem professor"),
+      score,
+      nivel,
+      motivos: reasons,
+      ultima: formatPedov2LastEvent(lastEvent),
+      proxima: formatPedov2FutureEvent(futureEvent),
+      alertaProxima: !futureEvent,
+    });
+  });
+
+  riskRows.sort((a, b) => {
+    if ((b.score || 0) !== (a.score || 0)) return (b.score || 0) - (a.score || 0);
+    return String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR");
+  });
+
+  const byLevel = riskRows.reduce(
+    (acc, row) => {
+      if (row.nivel === "critico") acc.criticos += 1;
+      else if (row.nivel === "atencao") acc.atencao += 1;
+      else acc.saudaveis += 1;
+      return acc;
+    },
+    { saudaveis: 0, atencao: 0, criticos: 0 }
+  );
+
+  return { rows: riskRows, factorCounts, byLevel };
+};
+
+const computePedov2ActiveSpark = (students, referenceDate = new Date()) => {
+  const out = [];
+  for (let offset = 9; offset >= 0; offset -= 1) {
+    const ref = endOfDay(addDays(referenceDate, -offset));
+    let count = 0;
+    (Array.isArray(students) ? students : []).forEach((student) => {
+      if (isPedov2StudentActiveAt(student, ref.getTime())) count += 1;
+    });
+    out.push(count);
+  }
+  return out;
+};
+
+const computePedov2PresenceSpark = ({ events, recordByEventId, referenceDate = new Date() }) => {
+  const out = [];
+  for (let offset = 9; offset >= 0; offset -= 1) {
+    const ref = endOfDay(addDays(referenceDate, -offset));
+    const summary = buildPedov2StatusSummary({ events, recordByEventId, periodKey: "7d", referenceDate: ref });
+    const denominator = summary.realizadas + summary.faltas;
+    out.push(denominator > 0 ? Math.round((summary.realizadas / denominator) * 100) : 0);
+  }
+  return out;
+};
+
+const computePedov2LessonsSpark = ({ events, referenceDate = new Date() }) => {
+  const out = [];
+  for (let offset = 9; offset >= 0; offset -= 1) {
+    const day = createDateKey(addDays(referenceDate, -offset));
+    out.push((Array.isArray(events) ? events : []).filter((event) => String(event?.dateKey || "") === day).length);
+  }
+  return out;
+};
+
+const computePedov2RiskSpark = ({ students, teachersById, events, recordByEventId, referenceDate = new Date() }) => {
+  const out = [];
+  for (let offset = 9; offset >= 0; offset -= 1) {
+    const ref = endOfDay(addDays(referenceDate, -offset));
+    const snapshot = computePedov2RiskSnapshot({ students, teachersById, events, recordByEventId, referenceDate: ref });
+    out.push((snapshot.byLevel.atencao || 0) + (snapshot.byLevel.criticos || 0));
+  }
+  return out;
+};
+
+const computePedov2TeacherRows = ({ teachers, students, events, recordByEventId, referenceDate = new Date() }) => {
+  const startMonth = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), 1).getTime();
+  const endMonth = new Date(referenceDate.getFullYear(), referenceDate.getMonth() + 1, 1).getTime();
+  const last30StartMs = addDays(startOfDay(referenceDate), -29).getTime();
+  const prev30StartMs = addDays(startOfDay(referenceDate), -59).getTime();
+  const prev30EndMs = addDays(startOfDay(referenceDate), -30).getTime();
+  const activeStudents = (Array.isArray(students) ? students : []).filter((student) => isPedov2StudentActiveAt(student, referenceDate.getTime()));
+  const linkedByTeacher = new Map();
+  activeStudents.forEach((student) => {
+    const teacherId = String(student?.professorId || student?.teacherId || "").trim();
+    if (!teacherId) return;
+    linkedByTeacher.set(teacherId, (linkedByTeacher.get(teacherId) || 0) + 1);
+  });
+  return (Array.isArray(teachers) ? teachers : [])
+    .map((teacher) => {
+      const teacherId = String(teacher?.id || "").trim();
+      if (!teacherId) return null;
+      const teacherEvents = (Array.isArray(events) ? events : []).filter((event) => String(event?.professorId || "") === teacherId);
+      const monthEvents = teacherEvents.filter((event) => event.startMs >= startMonth && event.startMs < endMonth);
+      const pastMonthEvents = monthEvents.filter((event) => event.endMs <= referenceDate.getTime());
+      const withRecord = pastMonthEvents.filter((event) => getPedov2PastStatus(recordByEventId.get(String(event.id || ""))) !== "pendente").length;
+      const registerPct = pastMonthEvents.length ? Math.round((withRecord / pastMonthEvents.length) * 100) : 0;
+      const currentEngagementValues = teacherEvents
+        .filter((event) => event.endMs <= referenceDate.getTime() && event.startMs >= last30StartMs)
+        .map((event) => Number(recordByEventId.get(String(event.id || ""))?.engajamento || 0))
+        .filter((value) => Number.isFinite(value) && value > 0);
+      const prevEngagementValues = teacherEvents
+        .filter((event) => event.endMs <= prev30EndMs && event.startMs >= prev30StartMs)
+        .map((event) => Number(recordByEventId.get(String(event.id || ""))?.engajamento || 0))
+        .filter((value) => Number.isFinite(value) && value > 0);
+      const avgCurrent = currentEngagementValues.length ? currentEngagementValues.reduce((sum, value) => sum + value, 0) / currentEngagementValues.length : 0;
+      const avgPrevious = prevEngagementValues.length ? prevEngagementValues.reduce((sum, value) => sum + value, 0) / prevEngagementValues.length : 0;
+      const trend = avgCurrent - avgPrevious;
+      const dir = Math.abs(trend) <= 0.1 ? "flat" : trend > 0 ? "pos" : "neg";
+      return {
+        nome: String(teacher?.nome || "Professor").trim() || "Professor",
+        alunos: linkedByTeacher.get(teacherId) || 0,
+        aulas: monthEvents.length,
+        registro: registerPct,
+        engaj: Number(avgCurrent.toFixed(1)),
+        trend: formatPedov2Delta(trend),
+        dir,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"));
+};
+
+const computePedov2Heatmap = ({ events, referenceDate = new Date() }) => {
+  const days = getWeekDaysMonToSat(referenceDate);
+  const dayKeys = days.map((day) => createDateKey(day));
+  const dayIndexByKey = new Map(dayKeys.map((key, index) => [key, index]));
+  const ocup = PEDOV2_HEATMAP_SLOTS.map(() => Array.from({ length: PEDOV2_HEATMAP_DAYS.length }, () => 0));
+  (Array.isArray(events) ? events : []).forEach((event) => {
+    const colIndex = dayIndexByKey.get(String(event?.dateKey || ""));
+    if (!Number.isFinite(colIndex)) return;
+    PEDOV2_HEATMAP_SLOTS.forEach((slot, rowIndex) => {
+      if (event.startMin < slot.endMin && event.endMin > slot.startMin) ocup[rowIndex][colIndex] += 1;
+    });
+  });
+  return { dias: PEDOV2_HEATMAP_DAYS.slice(), faixas: PEDOV2_HEATMAP_SLOTS.map((slot) => slot.label), ocup };
+};
+
+const computePedov2OpsStrip = ({ students, events, recordByEventId, pedagogicalOps, referenceDate = new Date() }) => {
+  const activeStudents = (Array.isArray(students) ? students : []).filter((student) => isPedov2StudentActiveAt(student, referenceDate.getTime()));
+  const studentsWithEvents = new Set((Array.isArray(events) ? events : []).map((event) => String(event?.alunoId || "")).filter(Boolean));
+  const noTeacher = activeStudents.filter((student) => !String(student?.professorId || student?.teacherId || "").trim()).length;
+  const noFirstLesson = activeStudents.filter((student) => !studentsWithEvents.has(String(student?.id || ""))).length;
+  const pendingRecords = (Array.isArray(events) ? events : []).filter((event) => event.endMs <= referenceDate.getTime() && !recordByEventId.has(String(event.id || ""))).length;
+  const openOccurrences = Number(pedagogicalOps?.metrics?.ocorrencias_abertas || pedagogicalOps?.summary?.ocorrencias_abertas || 0);
+  return [
+    { label: "Alunos sem professor", count: noTeacher, tone: noTeacher ? "crit" : "zero" },
+    { label: "Sem primeira aula", count: noFirstLesson, tone: noFirstLesson ? "crit" : "zero" },
+    { label: "Registros pendentes", count: pendingRecords, tone: pendingRecords ? "warn" : "zero" },
+    { label: "Ocorrências abertas", count: openOccurrences, tone: openOccurrences ? "warn" : "zero" },
+  ];
+};
+
+const computePedov2Briefing = ({ currentRisk, previousRisk, factorCounts }) => {
+  const currentCriticalIds = new Set((Array.isArray(currentRisk?.rows) ? currentRisk.rows : []).filter((row) => row?.nivel === "critico").map((row) => String(row.alunoId || "")));
+  const previousCriticalIds = new Set((Array.isArray(previousRisk?.rows) ? previousRisk.rows : []).filter((row) => row?.nivel === "critico").map((row) => String(row.alunoId || "")));
+  let enteredCritical = 0;
+  currentCriticalIds.forEach((id) => {
+    if (id && !previousCriticalIds.has(id)) enteredCritical += 1;
+  });
+  if (!currentCriticalIds.size) {
+    return {
+      tag: "Resumo do dia · IA",
+      lead: "Base estável — nenhum alerta crítico.",
+      body: "",
+      highlight: "",
+    };
+  }
+  const factorEntries = [
+    { key: "noFuture", count: Number(factorCounts?.noFuture || 0), action: (count) => `reagendar os ${count} sem aula futura` },
+    { key: "faltas30d", count: Number(factorCounts?.faltas30d || 0), action: (count) => `agir sobre ${count} com faltas recentes` },
+    { key: "engajamento", count: Number(factorCounts?.engajamento || 0), action: (count) => `revisar ${count} com queda de engajamento` },
+    { key: "onboarding", count: Number(factorCounts?.onboarding || 0), action: (count) => `agendar a 1ª aula de ${count} matrículas travadas` },
+    { key: "remarcacoes30d", count: Number(factorCounts?.remarcacoes30d || 0), action: (count) => `confirmar ${count} com remarcações recorrentes` },
+  ].sort((a, b) => b.count - a.count);
+  const topFactor = factorEntries[0] || null;
+  return {
+    tag: "Resumo do dia · IA",
+    lead: `${enteredCritical} aluno${enteredCritical === 1 ? "" : "s"} entrou${enteredCritical === 1 ? "" : "ram"} em risco crítico nos últimos 7 dias`,
+    body: topFactor && topFactor.count ? "Sugestão:" : "",
+    highlight: topFactor && topFactor.count ? topFactor.action(topFactor.count) : "",
+  };
+};
+
+const computePedov2Funnel = ({ onboardingRows, students, events, recordByEventId, referenceDate = new Date() }) => {
+  const startMs = addDays(startOfDay(referenceDate), -29).getTime();
+  const normalizedOnboarding = (Array.isArray(onboardingRows) ? onboardingRows : []).filter((row) => row && typeof row === "object");
+  if (normalizedOnboarding.length) {
+    const recent = normalizedOnboarding.filter((row) => parseFirestoreDateToMs(row.assinou_em || row.created_at || row.createdAt || row.updated_at) >= startMs);
+    const total = recent.length;
+    const firstScheduled = recent.filter((row) => Boolean(String(row.primeira_aula_em || "").trim())).length;
+    const firstDone = recent.filter((row) => {
+      const status = String(row.status_onboarding || "").trim().toLowerCase();
+      return firstScheduled && ["primeira_aula_realizada", "concluido", "concluído", "finalizado"].includes(status);
+    }).length;
+    const activated = recent.filter((row) => Number(row.aulas_realizadas || row.total_aulas_realizadas || 0) >= 4).length;
+    const pct = (value) => (total > 0 ? Math.round((value / total) * 100) : 0);
+    return [
+      { label: "Matrículas", value: total, pct: pct(total) || (total ? 100 : 0) },
+      { label: "1ª aula agendada", value: firstScheduled, pct: pct(firstScheduled) },
+      { label: "1ª aula realizada", value: firstDone, pct: pct(firstDone) },
+      { label: "4ª aula (ativado)", value: activated, pct: pct(activated) },
+    ];
+  }
+  const recentStudents = (Array.isArray(students) ? students : []).filter((student) => getPedov2StudentCreatedMs(student) >= startMs);
+  const total = recentStudents.length;
+  const eventsByStudent = new Map();
+  const realizedCountByStudent = new Map();
+  (Array.isArray(events) ? events : []).forEach((event) => {
+    const alunoId = String(event?.alunoId || "").trim();
+    if (!alunoId) return;
+    const arr = eventsByStudent.get(alunoId) || [];
+    arr.push(event);
+    eventsByStudent.set(alunoId, arr);
+    if (getPedov2PastStatus(recordByEventId.get(String(event.id || ""))) === "realizada") {
+      realizedCountByStudent.set(alunoId, (realizedCountByStudent.get(alunoId) || 0) + 1);
+    }
+  });
+  const firstScheduled = recentStudents.filter((student) => (eventsByStudent.get(String(student?.id || "")) || []).length > 0).length;
+  const firstDone = recentStudents.filter((student) => (realizedCountByStudent.get(String(student?.id || "")) || 0) >= 1).length;
+  const activated = recentStudents.filter((student) => (realizedCountByStudent.get(String(student?.id || "")) || 0) >= 4).length;
+  const pct = (value) => (total > 0 ? Math.round((value / total) * 100) : 0);
+  return [
+    { label: "Matrículas", value: total, pct: pct(total) || (total ? 100 : 0) },
+    { label: "1ª aula agendada", value: firstScheduled, pct: pct(firstScheduled) },
+    { label: "1ª aula realizada", value: firstDone, pct: pct(firstDone) },
+    { label: "4ª aula (ativado)", value: activated, pct: pct(activated) },
+  ];
+};
+
+const computePedov2ViewModel = ({ events, liveLessons, records, onboardingRows, students, teachers, pedagogicalOps, sourceStatus } = {}) => {
+  const referenceDate = new Date();
+  const model = JSON.parse(JSON.stringify(PEDOV2_MOCK));
+  model.meta.dateLabel = getPedov2DateLabel(referenceDate);
+  model.meta.note = "Dados reais · atualização local";
+  const normalizedEvents = normalizePedov2ScheduleEvents(events);
+  const normalizedLessons = normalizePedov2LiveLessons(liveLessons);
+  const recordsByLessonId = normalizePedov2Records(records);
+  const recordByEventId = buildPedov2EventRecordIndex({ events: normalizedEvents, liveLessons: normalizedLessons, recordsByLessonId });
+  const teachersById = new Map((Array.isArray(teachers) ? teachers : []).map((teacher) => [String(teacher?.id || ""), teacher]));
+  const currentWeekKeys = new Set(getWeekDaysMonToSat(referenceDate).map((date) => createDateKey(date)));
+  const weekLessons = normalizedEvents.filter((event) => currentWeekKeys.has(String(event.dateKey || "")));
+  const activeStudents = (Array.isArray(students) ? students : []).filter((student) => isPedov2StudentActiveAt(student, referenceDate.getTime()));
+  const created30d = activeStudents.filter((student) => getPedov2StudentCreatedMs(student) >= addDays(startOfDay(referenceDate), -29).getTime()).length;
+  const hasEventsSource = sourceStatus?.events !== "degraded" || normalizedEvents.length > 0;
+  const hasLiveSource = sourceStatus?.liveLessons !== "degraded" || normalizedLessons.length > 0 || recordsByLessonId.size > 0;
+  const weekAbsences = hasLiveSource ? weekLessons.filter((event) => getPedov2PastStatus(recordByEventId.get(String(event.id || ""))) === "falta").length : 0;
+  const currentRisk = hasEventsSource && hasLiveSource ? computePedov2RiskSnapshot({ students, teachersById, events: normalizedEvents, recordByEventId, referenceDate }) : { rows: [], factorCounts: {}, byLevel: { saudaveis: 0, atencao: 0, criticos: 0 } };
+  const previousRisk =
+    hasEventsSource && hasLiveSource
+      ? computePedov2RiskSnapshot({ students, teachersById, events: normalizedEvents, recordByEventId, referenceDate: endOfDay(addDays(referenceDate, -7)) })
+      : { rows: [], factorCounts: {}, byLevel: { saudaveis: 0, atencao: 0, criticos: 0 } };
+  const summaryCurrent = hasEventsSource && hasLiveSource ? buildPedov2StatusSummary({ events: normalizedEvents, recordByEventId, periodKey: adminPedOverviewV2State.period, referenceDate }) : { realizadas: 0, faltas: 0, remarcadas: 0 };
+  const summaryPrevious =
+    hasEventsSource && hasLiveSource
+      ? buildPedov2StatusSummary({
+          events: normalizedEvents,
+          recordByEventId,
+          periodKey: adminPedOverviewV2State.period,
+          referenceDate: endOfDay(addDays(referenceDate, adminPedOverviewV2State.period === "7d" ? -7 : adminPedOverviewV2State.period === "90d" ? -90 : -30)),
+        })
+      : { realizadas: 0, faltas: 0, remarcadas: 0 };
+  const presenceCurrent = hasEventsSource && hasLiveSource && summaryCurrent.realizadas + summaryCurrent.faltas > 0 ? (summaryCurrent.realizadas / (summaryCurrent.realizadas + summaryCurrent.faltas)) * 100 : NaN;
+  const presencePrevious = hasEventsSource && hasLiveSource && summaryPrevious.realizadas + summaryPrevious.faltas > 0 ? (summaryPrevious.realizadas / (summaryPrevious.realizadas + summaryPrevious.faltas)) * 100 : NaN;
+  const atRiskCount = hasEventsSource && hasLiveSource ? (currentRisk.byLevel.atencao || 0) + (currentRisk.byLevel.criticos || 0) : NaN;
+
+  model.meta.note = sourceStatus?.liveLessons === "degraded" ? "Dados reais · registros de aula limitados ao histórico disponível (~45d)." : "Dados reais · atualizado há pouco.";
+  model.briefing = hasEventsSource && hasLiveSource ? computePedov2Briefing({ currentRisk, previousRisk, factorCounts: currentRisk.factorCounts }) : {
+    tag: "Resumo do dia · IA",
+    lead: "Alguns dados do overview estão temporariamente indisponíveis.",
+    body: "",
+    highlight: "",
+  };
+  model.kpis = [
+    {
+      key: "ativos",
+      label: "Alunos ativos",
+      dotColor: "#a0bcff",
+      value: activeStudents.length,
+      delta: created30d ? `+${created30d} no mês` : "",
+      deltaClass: created30d ? "up-good" : "",
+      sparkKey: "ativos",
+      color: "#a0bcff",
+    },
+    {
+      key: "risco",
+      label: "Alunos em risco",
+      dotColor: "#ff564f",
+      value: Number.isFinite(atRiskCount) ? atRiskCount : "—",
+      delta: hasEventsSource && hasLiveSource && currentRisk.byLevel.criticos ? `+${currentRisk.byLevel.criticos} críticos` : "",
+      deltaClass: hasEventsSource && hasLiveSource && currentRisk.byLevel.criticos ? "up-bad" : "",
+      sparkKey: "risco",
+      color: "#ff564f",
+      emphasis: true,
+    },
+    {
+      key: "presenca",
+      label: "Presença",
+      dotColor: "#3fd6a4",
+      value: Number.isFinite(presenceCurrent) ? Math.round(presenceCurrent) : "—",
+      unit: "%",
+      delta: Number.isFinite(presenceCurrent) && Number.isFinite(presencePrevious) ? formatPedov2Delta(presenceCurrent - presencePrevious, { pp: true }) : "",
+      deltaClass: Number.isFinite(presenceCurrent) && Number.isFinite(presencePrevious) ? getPedov2DeltaClass(presenceCurrent - presencePrevious) : "",
+      sparkKey: "presenca",
+      color: "#3fd6a4",
+    },
+    {
+      key: "aulas",
+      label: "Aulas na semana",
+      dotColor: "rgba(255,255,255,0.4)",
+      value: hasEventsSource ? weekLessons.length : "—",
+      delta: hasEventsSource && hasLiveSource ? `${weekAbsences} falta${weekAbsences === 1 ? "" : "s"}` : "",
+      deltaClass: hasEventsSource && hasLiveSource && weekAbsences ? "up-bad" : "",
+      sparkKey: "aulas",
+      color: "#d9deea",
+    },
+    {
+      key: "nps",
+      label: "NPS dos alunos",
+      dotColor: "#f5b64b",
+      value: "—",
+      delta: "",
+      deltaClass: "",
+      sparkKey: "nps",
+      color: "#f5b64b",
+    },
+  ];
+  model.periods = {
+    "7d": hasEventsSource && hasLiveSource ? buildPedov2SeriesForPeriod({ events: normalizedEvents, recordByEventId, periodKey: "7d", referenceDate }) : { labels: [], realizadas: [], faltas: [], remarcadas: [] },
+    "30d": hasEventsSource && hasLiveSource ? buildPedov2SeriesForPeriod({ events: normalizedEvents, recordByEventId, periodKey: "30d", referenceDate }) : { labels: [], realizadas: [], faltas: [], remarcadas: [] },
+    "90d": hasEventsSource && hasLiveSource ? buildPedov2SeriesForPeriod({ events: normalizedEvents, recordByEventId, periodKey: "90d", referenceDate }) : { labels: [], realizadas: [], faltas: [], remarcadas: [] },
+  };
+  model.sparks = {
+    ativos: computePedov2ActiveSpark(students, referenceDate),
+    risco: hasEventsSource && hasLiveSource ? computePedov2RiskSpark({ students, teachersById, events: normalizedEvents, recordByEventId, referenceDate }) : [],
+    presenca: hasEventsSource && hasLiveSource ? computePedov2PresenceSpark({ events: normalizedEvents, recordByEventId, referenceDate }) : [],
+    aulas: hasEventsSource ? computePedov2LessonsSpark({ events: normalizedEvents, referenceDate }) : [],
+    nps: [],
+  };
+  model.riskDonut = {
+    labels: ["Saudáveis", "Em atenção", "Críticos"],
+    data: hasEventsSource && hasLiveSource ? [currentRisk.byLevel.saudaveis || 0, currentRisk.byLevel.atencao || 0, currentRisk.byLevel.criticos || 0] : [0, 0, 0],
+    centerValue: hasEventsSource && hasLiveSource && activeStudents.length ? `${Math.round(((currentRisk.byLevel.saudaveis || 0) / activeStudents.length) * 100)}%` : "—",
+    centerLabel: "base saudável",
+  };
+  const factorValues = hasEventsSource && hasLiveSource ? [
+    { label: "Sem próxima aula agendada", count: Number(currentRisk.factorCounts.noFuture || 0) },
+    { label: "2+ faltas nos últimos 30d", count: Number(currentRisk.factorCounts.faltas30d || 0) },
+    { label: "Engajamento em queda", count: Number(currentRisk.factorCounts.engajamento || 0) },
+    { label: "Onboarding travado", count: Number(currentRisk.factorCounts.onboarding || 0) },
+    { label: "2+ remarcações nos últimos 30d", count: Number(currentRisk.factorCounts.remarcacoes30d || 0) },
+  ] : [
+    { label: "Sem próxima aula agendada", count: 0 },
+    { label: "2+ faltas nos últimos 30d", count: 0 },
+    { label: "Engajamento em queda", count: 0 },
+    { label: "Onboarding travado", count: 0 },
+    { label: "2+ remarcações nos últimos 30d", count: 0 },
+  ];
+  const maxFactor = Math.max(1, ...factorValues.map((item) => item.count));
+  model.riskFactors = factorValues.map((item) => ({ ...item, count: hasEventsSource && hasLiveSource ? item.count : "—", pct: hasEventsSource && hasLiveSource ? Math.round((item.count / maxFactor) * 100) : 0 }));
+  model.funnel = computePedov2Funnel({ onboardingRows, students, events: normalizedEvents, recordByEventId, referenceDate });
+  model.studentsAtRisk = hasEventsSource && hasLiveSource ? currentRisk.rows.slice(0, 5) : [];
+  model.teachers = hasEventsSource && hasLiveSource ? computePedov2TeacherRows({ teachers, students, events: normalizedEvents, recordByEventId, referenceDate }) : [];
+  model.heatmap = hasEventsSource ? computePedov2Heatmap({ events: normalizedEvents, referenceDate }) : model.heatmap;
+  model.opsStrip = computePedov2OpsStrip({ students, events: normalizedEvents, recordByEventId, pedagogicalOps, referenceDate }).map((item, index) => {
+    if (hasEventsSource) return item;
+    if (index === 0 || index === 3) return item;
+    return { ...item, count: "—", tone: item.tone };
+  });
+  return model;
+};
+
+const loadAdminPedOverviewV2Data = async ({ force = false } = {}) => {
+  const now = Date.now();
+  if (!force && adminPedOverviewV2State.rawData && adminPedOverviewV2State.loadedAt && now - adminPedOverviewV2State.loadedAt < adminPedOverviewV2State.cacheTtlMs) {
+    return adminPedOverviewV2State.rawData;
+  }
+  if (adminPedOverviewV2State.loadPromise) return adminPedOverviewV2State.loadPromise;
+  adminPedOverviewV2State.loadPromise = (async () => {
+    const [eventsRes, liveRes, onboardingRes] = await Promise.allSettled([
+      fetchWithAuth("/api/schedule-events", { method: "GET" }),
+      fetchWithAuth("/api/live-lessons?scope=pedagogico&include_records=1&limit=500", { method: "GET" }),
+      fetchWithAuth("/api/pedagogico/onboarding", { method: "GET" }),
+    ]);
+    const sourceStatus = {
+      events: "ok",
+      liveLessons: "ok",
+      onboarding: "ok",
+      students: Array.isArray(adminPedagogicoState.students) && adminPedagogicoState.students.length ? "ok" : "degraded",
+      teachers: Array.isArray(adminPedagogicoState.teachers) && adminPedagogicoState.teachers.length ? "ok" : "degraded",
+    };
+    let events = [];
+    let liveLessons = [];
+    let records = [];
+    let onboardingRows = [];
+
+    if (eventsRes.status === "fulfilled" && eventsRes.value?.ok) {
+      const payload = await eventsRes.value.json().catch(() => null);
+      events = Array.isArray(payload?.events) ? payload.events : [];
+    } else {
+      sourceStatus.events = "degraded";
+      console.warn("[pedov2] schedule-events unavailable", eventsRes.status === "rejected" ? eventsRes.reason : eventsRes.value?.status);
+    }
+    if (liveRes.status === "fulfilled" && liveRes.value?.ok) {
+      const payload = await liveRes.value.json().catch(() => null);
+      liveLessons = Array.isArray(payload?.lessons) ? payload.lessons : [];
+      records = Array.isArray(payload?.records) ? payload.records : [];
+      if (payload?.recordsWarning) sourceStatus.liveLessons = "degraded";
+    } else {
+      sourceStatus.liveLessons = "degraded";
+      console.warn("[pedov2] live-lessons unavailable", liveRes.status === "rejected" ? liveRes.reason : liveRes.value?.status);
+    }
+    if (onboardingRes.status === "fulfilled" && onboardingRes.value?.ok) {
+      const payload = await onboardingRes.value.json().catch(() => null);
+      onboardingRows = Array.isArray(payload?.onboarding) ? payload.onboarding : [];
+    } else {
+      sourceStatus.onboarding = "degraded";
+      console.warn("[pedov2] onboarding unavailable", onboardingRes.status === "rejected" ? onboardingRes.reason : onboardingRes.value?.status);
+    }
+
+    adminPedOverviewV2State.rawData = {
+      events,
+      liveLessons,
+      records,
+      onboardingRows,
+      students: Array.isArray(adminPedagogicoState.students) ? adminPedagogicoState.students : [],
+      teachers: Array.isArray(adminPedagogicoState.teachers) ? adminPedagogicoState.teachers : [],
+      pedagogicalOps: adminPedagogicoState.pedagogicalOps && typeof adminPedagogicoState.pedagogicalOps === "object" ? adminPedagogicoState.pedagogicalOps : {},
+      sourceStatus,
+    };
+    adminPedOverviewV2State.viewModel = computePedov2ViewModel(adminPedOverviewV2State.rawData);
+    adminPedOverviewV2State.loadedAt = Date.now();
+    return adminPedOverviewV2State.rawData;
+  })()
+    .catch((error) => {
+      console.warn("[pedov2] overview load failed", error);
+      return adminPedOverviewV2State.rawData || null;
+    })
+    .finally(() => {
+      adminPedOverviewV2State.loadPromise = null;
+    });
+  return adminPedOverviewV2State.loadPromise;
+};
+
 const loadChartJs = () => {
   if (window.Chart) return Promise.resolve(window.Chart);
   if (adminPedOverviewV2State.chartJsPromise) return adminPedOverviewV2State.chartJsPromise;
@@ -19384,7 +20182,8 @@ const getPedov2Initials = (name) =>
     .toUpperCase();
 
 const renderPedov2SparklineSvg = (key, color) => {
-  const data = Array.isArray(PEDOV2_MOCK.sparks[key]) ? PEDOV2_MOCK.sparks[key] : [];
+  const model = getPedov2ViewModel();
+  const data = Array.isArray(model?.sparks?.[key]) ? model.sparks[key] : [];
   if (!data.length) return "";
   const width = 200;
   const height = 34;
@@ -19443,7 +20242,8 @@ const animatePedov2Counts = (root) => {
 };
 
 const renderPedov2Heatmap = () => {
-  const { dias, faixas, ocup } = PEDOV2_MOCK.heatmap;
+  const model = getPedov2ViewModel();
+  const { dias, faixas, ocup } = model.heatmap || PEDOV2_MOCK.heatmap;
   return `<div></div>${dias
     .map((dia) => `<div class="pedov2-heat-label">${escapeHtml(dia)}</div>`)
     .join("")}${faixas
@@ -19462,7 +20262,7 @@ const renderPedov2Heatmap = () => {
 };
 
 const renderPedov2RiskFactors = () =>
-  PEDOV2_MOCK.riskFactors
+  getPedov2ViewModel().riskFactors
     .map(
       (factor) => `
         <div class="pedov2-risk-factor">
@@ -19475,7 +20275,7 @@ const renderPedov2RiskFactors = () =>
     .join("");
 
 const renderPedov2Funnel = () =>
-  PEDOV2_MOCK.funnel
+  getPedov2ViewModel().funnel
     .map(
       (step) => `
         <div class="pedov2-funil-step">
@@ -19490,7 +20290,9 @@ const renderPedov2Funnel = () =>
     .join("");
 
 const renderPedov2RiskRows = () =>
-  PEDOV2_MOCK.studentsAtRisk
+  (getPedov2ViewModel().studentsAtRisk.length
+    ? getPedov2ViewModel().studentsAtRisk
+    : [{ nome: "Dados indisponíveis", prof: "", score: "—", nivel: "atencao", motivos: ["—"], ultima: "—", proxima: "—", alertaProxima: false }])
     .map(
       (student) => `
         <tr>
@@ -19518,7 +20320,10 @@ const renderPedov2TeacherRows = () => {
     value >= warnAt
       ? "linear-gradient(90deg, rgba(160,188,255,0.9), rgba(160,188,255,0.5))"
       : "linear-gradient(90deg, #ff857f, #ff564f)";
-  return PEDOV2_MOCK.teachers
+  const teachers = getPedov2ViewModel().teachers.length
+    ? getPedov2ViewModel().teachers
+    : [{ nome: "Dados indisponíveis", alunos: "—", aulas: "—", registro: 0, engaj: 0, trend: "—", dir: "flat" }];
+  return teachers
     .map(
       (teacher) => `
         <div class="pedov2-prof-row">
@@ -19526,9 +20331,9 @@ const renderPedov2TeacherRows = () => {
           <span class="pedov2-cell-num">${escapeHtml(String(teacher.alunos))}</span>
           <span class="pedov2-cell-num">${escapeHtml(String(teacher.aulas))}</span>
           <span class="pedov2-mini-bar-wrap">
-            <span class="pedov2-mini-bar-label">${escapeHtml(`${teacher.registro}% · ${teacher.engaj.toFixed(1).replace(".", ",")}`)}</span>
+            <span class="pedov2-mini-bar-label">${escapeHtml(`${teacher.registro}% · ${Number(teacher.engaj || 0).toFixed(1).replace(".", ",")}`)}</span>
             <span class="pedov2-mini-bar"><i style="width:${escapeHtml(String(teacher.registro))}%; background:${getBarBackground(teacher.registro, 85)}"></i></span>
-            <span class="pedov2-mini-bar"><i style="width:${escapeHtml(String((teacher.engaj / 5) * 100))}%; background:${getBarBackground(teacher.engaj, 4.3)}"></i></span>
+            <span class="pedov2-mini-bar"><i style="width:${escapeHtml(String((Number(teacher.engaj || 0) / 5) * 100))}%; background:${getBarBackground(Number(teacher.engaj || 0), 4.3)}"></i></span>
           </span>
           <span class="pedov2-trend ${escapeHtml(teacher.dir)}">${escapeHtml(teacher.trend)}</span>
         </div>
@@ -19538,7 +20343,7 @@ const renderPedov2TeacherRows = () => {
 };
 
 const renderPedov2OpsStrip = () =>
-  PEDOV2_MOCK.opsStrip
+  getPedov2ViewModel().opsStrip
     .map(
       (item) => `
         <div class="pedov2-ops-item">
@@ -19575,7 +20380,8 @@ const hydratePedov2Charts = async (root, token) => {
   const ChartJs = await loadChartJs();
   if (!(root instanceof HTMLElement) || token !== adminPedOverviewV2State.renderToken || !root.isConnected) return;
   const reduceMotion = getPedov2ReduceMotion();
-  const period = PEDOV2_MOCK.periods[adminPedOverviewV2State.period] || PEDOV2_MOCK.periods["30d"];
+  const model = getPedov2ViewModel();
+  const period = model.periods[adminPedOverviewV2State.period] || model.periods["30d"] || PEDOV2_MOCK.periods["30d"];
   const presenceCanvas = root.querySelector("[data-pedov2-chart-presence]");
   const riskCanvas = root.querySelector("[data-pedov2-chart-risk]");
   if (!(presenceCanvas instanceof HTMLCanvasElement) || !(riskCanvas instanceof HTMLCanvasElement)) return;
@@ -19632,8 +20438,8 @@ const hydratePedov2Charts = async (root, token) => {
   adminPedOverviewV2State.charts.risk = new ChartJs(riskCtx, {
     type: "doughnut",
     data: {
-      labels: PEDOV2_MOCK.riskDonut.labels,
-      datasets: [{ data: PEDOV2_MOCK.riskDonut.data, backgroundColor: ["rgba(160,188,255,0.28)", "#f5b64b", "#ff564f"], hoverBackgroundColor: ["rgba(160,188,255,0.45)", "#ffca6e", "#ff736c"], borderWidth: 0, borderRadius: 10, spacing: 3 }],
+      labels: model.riskDonut.labels,
+      datasets: [{ data: model.riskDonut.data, backgroundColor: ["rgba(160,188,255,0.28)", "#f5b64b", "#ff564f"], hoverBackgroundColor: ["rgba(160,188,255,0.45)", "#ffca6e", "#ff736c"], borderWidth: 0, borderRadius: 10, spacing: 3 }],
     },
     options: {
       maintainAspectRatio: false,
@@ -19679,7 +20485,7 @@ const hydratePedov2Overview = (root, token) => {
   });
   animatePedov2Counts(root);
   hydratePedov2Charts(root, token).catch((error) => {
-    console.error("[admin-ped] pedov2 charts failed", error);
+    console.warn("[pedov2] charts failed", error);
   });
 };
 
@@ -19689,16 +20495,26 @@ const renderAdminPedOverviewV2 = () => {
   destroyPedov2Charts();
   bindPedov2Interactions();
 
-  const period = adminPedOverviewV2State.period in PEDOV2_MOCK.periods ? adminPedOverviewV2State.period : "30d";
+  if (adminPedOverviewV2State.rawData) {
+    adminPedOverviewV2State.rawData = {
+      ...adminPedOverviewV2State.rawData,
+      students: Array.isArray(adminPedagogicoState.students) ? adminPedagogicoState.students : [],
+      teachers: Array.isArray(adminPedagogicoState.teachers) ? adminPedagogicoState.teachers : [],
+      pedagogicalOps: adminPedagogicoState.pedagogicalOps && typeof adminPedagogicoState.pedagogicalOps === "object" ? adminPedagogicoState.pedagogicalOps : {},
+    };
+    adminPedOverviewV2State.viewModel = computePedov2ViewModel(adminPedOverviewV2State.rawData);
+  }
+  const model = getPedov2ViewModel();
+  const period = adminPedOverviewV2State.period in model.periods ? adminPedOverviewV2State.period : "30d";
   adminPedOverviewV2State.period = period;
 
   adminPedOverview.innerHTML = `
     <div class="pedov2">
       <header class="pedov2-page-head">
         <div>
-          <p class="pedov2-eyebrow">${escapeHtml(PEDOV2_MOCK.meta.eyebrow)}</p>
-          <h1 class="pedov2-title">${escapeHtml(PEDOV2_MOCK.meta.title)}</h1>
-          <p class="pedov2-page-sub">${escapeHtml(PEDOV2_MOCK.meta.dateLabel)}</p>
+          <p class="pedov2-eyebrow">${escapeHtml(model.meta.eyebrow)}</p>
+          <h1 class="pedov2-title">${escapeHtml(model.meta.title)}</h1>
+          <p class="pedov2-page-sub">${escapeHtml(model.meta.dateLabel)}</p>
         </div>
         <div class="pedov2-head-actions">
           <div class="pedov2-segmented" role="tablist" aria-label="Período">
@@ -19713,19 +20529,19 @@ const renderAdminPedOverviewV2 = () => {
           <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"></path><circle cx="12" cy="12" r="3.2" fill="#fff" stroke="none"></circle></svg>
         </div>
         <div class="pedov2-ai-copy">
-          <div class="pedov2-ai-tag">${escapeHtml(PEDOV2_MOCK.briefing.tag)}</div>
-          <p><strong>${escapeHtml(PEDOV2_MOCK.briefing.lead)}</strong> ${escapeHtml(PEDOV2_MOCK.briefing.body)} <strong>${escapeHtml(PEDOV2_MOCK.briefing.highlight)}</strong>.</p>
+          <div class="pedov2-ai-tag">${escapeHtml(model.briefing.tag)}</div>
+          <p><strong>${escapeHtml(model.briefing.lead)}</strong>${model.briefing.body ? ` ${escapeHtml(model.briefing.body)}` : ""}${model.briefing.highlight ? ` <strong>${escapeHtml(model.briefing.highlight)}</strong>.` : ""}</p>
         </div>
         <button class="pedov2-ai-action" type="button">Agir →</button>
       </section>
 
       <section class="pedov2-kpi-row" aria-label="Indicadores principais">
-        ${PEDOV2_MOCK.kpis.map((kpi) => `
+        ${model.kpis.map((kpi) => `
           <article class="pedov2-card pedov2-kpi-card ${kpi.emphasis ? "is-emphasis" : ""}">
             <div class="pedov2-kpi-label"><span class="pedov2-kpi-dot" style="background:${escapeHtml(kpi.dotColor)}${kpi.key === "risco" ? "; box-shadow:0 0 8px #ff564f" : ""}"></span>${escapeHtml(kpi.label)}${kpi.key === "presenca" ? ` <span data-pedov2-period-label>${escapeHtml(period)}</span>` : ""}</div>
             <div class="pedov2-kpi-value-row">
-              <span class="pedov2-kpi-value ${kpi.key === "risco" ? "is-risk" : ""}"><span data-pedov2-count="${escapeHtml(String(kpi.value))}">0</span>${kpi.unit ? `<span class="pedov2-kpi-unit">${escapeHtml(kpi.unit)}</span>` : ""}</span>
-              <span class="pedov2-delta ${escapeHtml(kpi.deltaClass)}">${escapeHtml(kpi.delta)}</span>
+              <span class="pedov2-kpi-value ${kpi.key === "risco" ? "is-risk" : ""}">${Number.isFinite(Number(kpi.value)) ? `<span data-pedov2-count="${escapeHtml(String(kpi.value))}">0</span>` : escapeHtml(String(kpi.value || "—"))}${Number.isFinite(Number(kpi.value)) && kpi.unit ? `<span class="pedov2-kpi-unit">${escapeHtml(kpi.unit)}</span>` : ""}</span>
+              ${kpi.delta ? `<span class="pedov2-delta ${escapeHtml(kpi.deltaClass)}">${escapeHtml(kpi.delta)}</span>` : `<span class="pedov2-delta" aria-hidden="true"></span>`}
             </div>
             <div class="pedov2-kpi-spark" data-pedov2-spark="${escapeHtml(kpi.sparkKey)}" data-pedov2-color="${escapeHtml(kpi.color)}"></div>
           </article>
@@ -19749,7 +20565,7 @@ const renderAdminPedOverviewV2 = () => {
           <div class="pedov2-card-head"><h2 class="pedov2-card-title">Radar de churn</h2></div>
           <div class="pedov2-donut-wrap">
             <canvas data-pedov2-chart-risk></canvas>
-            <div class="pedov2-donut-center"><div><div class="pedov2-donut-big">${escapeHtml(PEDOV2_MOCK.riskDonut.centerValue)}</div><div class="pedov2-donut-small">${escapeHtml(PEDOV2_MOCK.riskDonut.centerLabel)}</div></div></div>
+            <div class="pedov2-donut-center"><div><div class="pedov2-donut-big">${escapeHtml(model.riskDonut.centerValue)}</div><div class="pedov2-donut-small">${escapeHtml(model.riskDonut.centerLabel)}</div></div></div>
           </div>
           <div class="pedov2-risk-factors">${renderPedov2RiskFactors()}</div>
         </article>
@@ -19787,13 +20603,20 @@ const renderAdminPedOverviewV2 = () => {
       </section>
 
       <section class="pedov2-ops-strip" aria-label="Pendências operacionais">${renderPedov2OpsStrip()}</section>
-      <footer class="pedov2-note">${escapeHtml(PEDOV2_MOCK.meta.note)}</footer>
+      <footer class="pedov2-note">${escapeHtml(model.meta.note)}</footer>
     </div>
   `;
 
   if (adminPedEmptyOverview instanceof HTMLElement) adminPedEmptyOverview.hidden = true;
   const renderToken = ++adminPedOverviewV2State.renderToken;
   hydratePedov2Overview(adminPedOverview, renderToken);
+  if (!adminPedOverviewV2State.rawData || Date.now() - adminPedOverviewV2State.loadedAt >= adminPedOverviewV2State.cacheTtlMs) {
+    loadAdminPedOverviewV2Data()
+      .then(() => {
+        if (adminPedagogicoState.activeTab === "overview") renderAdminPedOverviewV2();
+      })
+      .catch(() => {});
+  }
 };
 
 const runAdminPedagogicoRenderers = () => {
