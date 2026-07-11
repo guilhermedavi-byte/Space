@@ -21596,3 +21596,54 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   .ped-footer{flex-direction:column-reverse;align-items:stretch}
   .ped-btn-save,.ped-btn-close{width:100%;min-width:0}
 }
+
+/* === Pedagogico Lesson Records === */
+.pedrecords{padding-inline:0}
+.pedrecords-head{margin-bottom:18px}
+.pedrecords-kpis{margin-top:0}
+.pedrecords-toolbar-wrap{position:sticky;top:12px;z-index:2;display:grid;gap:12px;margin-bottom:14px}
+.pedrecords-toolbar{display:grid;gap:12px;padding:16px 18px;border-radius:var(--radius-lg);background:rgba(11,18,30,.88);border:1px solid var(--line);backdrop-filter:blur(10px)}
+.pedrecords-segmented,.pedrecords-status{display:flex;gap:8px;flex-wrap:wrap}
+.pedrecords-segmented button,.pedrecords-status button{appearance:none;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text-muted);font:inherit;font-size:.78rem;font-weight:700;padding:9px 14px;border-radius:999px;cursor:pointer;transition:background .16s ease,border-color .16s ease,color .16s ease}
+.pedrecords-segmented button:hover,.pedrecords-segmented button:focus-visible,.pedrecords-status button:hover,.pedrecords-status button:focus-visible{background:rgba(255,255,255,.08);border-color:var(--line-strong);color:var(--text-main)}
+.pedrecords-segmented button.is-active,.pedrecords-status button.is-active{background:rgba(255,86,79,.12);border-color:rgba(255,86,79,.28);color:#ffd4d1}
+.pedrecords-searches,.pedrecords-custom-range{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.pedrecords-custom-range{display:none}
+.pedrecords-custom-range.is-visible{display:grid}
+.pedrecords-search{display:grid;gap:6px;min-width:0}
+.pedrecords-search span{font-size:.72rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--text-muted)}
+.pedrecords-active-filters{display:flex;flex-wrap:wrap;gap:8px}
+.pedrecords-filter-chip,.pedrecords-clear-filters{appearance:none;border:1px solid var(--line);background:rgba(255,255,255,.05);color:var(--text-soft);font:inherit;font-size:.76rem;font-weight:700;padding:7px 11px;border-radius:999px;cursor:pointer;transition:background .16s ease,border-color .16s ease,color .16s ease}
+.pedrecords-filter-chip:hover,.pedrecords-filter-chip:focus-visible,.pedrecords-clear-filters:hover,.pedrecords-clear-filters:focus-visible{background:rgba(255,255,255,.08);border-color:var(--line-strong);color:var(--text-main)}
+.pedrecords-clear-filters{color:#ffb0aa;border-color:rgba(255,86,79,.24)}
+.pedrecords-meta{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.pedrecords-count{font-size:.88rem;font-weight:700;color:var(--text-main)}
+.pedrecords-period{font-size:.76rem;color:var(--text-muted);font-variant-numeric:tabular-nums}
+.pedrecords-table-card{padding:0;overflow:hidden}
+.pedrecords-table-wrap{overflow:auto}
+.pedrecords-table{width:100%;border-collapse:collapse}
+.pedrecords-table th{text-align:left;font-size:.67rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted);padding:16px 18px;border-bottom:1px solid var(--line);white-space:nowrap}
+.pedrecords-table td{padding:15px 18px;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:middle}
+.pedrecords-row{cursor:pointer;transition:background .16s ease}
+.pedrecords-row:hover,.pedrecords-row:focus-visible{background:rgba(255,255,255,.035)}
+.pedrecords-row:focus-visible{outline:2px solid rgba(255,86,79,.26);outline-offset:-2px}
+.pedrecords-status-badge{display:inline-flex;align-items:center;justify-content:center;min-width:112px;padding:7px 12px;border-radius:999px;font-size:.75rem;font-weight:800;letter-spacing:.01em;border:1px solid transparent;white-space:nowrap}
+.pedrecords-status-badge.is-green{background:rgba(63,214,164,.12);color:#3fd6a4;border-color:rgba(63,214,164,.24)}
+.pedrecords-status-badge.is-coral{background:rgba(255,86,79,.12);color:#ff8b85;border-color:rgba(255,86,79,.24)}
+.pedrecords-status-badge.is-amber{background:rgba(245,182,75,.12);color:#f5b64b;border-color:rgba(245,182,75,.22)}
+.pedrecords-status-badge.is-muted{background:rgba(255,255,255,.06);color:#d8dde8;border-color:rgba(255,255,255,.08)}
+.pedrecords-status-badge.is-slate{background:rgba(160,188,255,.1);color:#b8c9ff;border-color:rgba(160,188,255,.18)}
+.pedrecords-pagination{padding:14px 18px}
+
+@media (max-width: 960px){
+  .pedrecords-searches,
+  .pedrecords-custom-range{grid-template-columns:1fr}
+}
+
+@media (max-width: 760px){
+  .pedrecords-toolbar-wrap{top:8px}
+  .pedrecords-toolbar{padding:14px}
+  .pedrecords-meta{align-items:flex-start}
+  .pedrecords-table th,
+  .pedrecords-table td{padding:13px 14px}
+}

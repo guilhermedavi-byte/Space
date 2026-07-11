@@ -954,7 +954,7 @@ const syncRoleUI = () => {
             <div class="sidebar-accordion-body" id="sidebar-pedagogico-items" data-sidebar-accordion-body="pedagogico" hidden>
               <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-controle-pedagogico" title="Visão Geral"><span class="sidebar-text">Visão Geral</span></button>
               <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="ao-vivo" title="Agenda"><span class="sidebar-text">Agenda</span></button>
-              <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-controle-pedagogico-aulas" data-sidebar-placeholder="true" title="Aulas"><span class="sidebar-text">Aulas</span></button>
+              <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-controle-pedagogico-aulas" data-sidebar-placeholder="true" title="Registros de Aulas"><span class="sidebar-text">Registros de Aulas</span></button>
               <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-controle-pedagogico-pessoas" data-sidebar-placeholder="true" title="Usuários"><span class="sidebar-text">Usuários</span></button>
               <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-controle-pedagogico-qualidade" data-sidebar-placeholder="true" title="Qualidade"><span class="sidebar-text">Qualidade</span></button>
               <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-controle-pedagogico-onboarding" data-sidebar-placeholder="true" title="Onboarding"><span class="sidebar-text">Onboarding</span></button>
@@ -16596,6 +16596,7 @@ let adminPedagogicoState = {
   pedagogicalFeedbacks: [],
   liveLessonFeedbacks: [],
   lessonLogs: [],
+  scheduleEvents: [],
   groupsByClassId: new Map(),
   onboardingContents: [],
   onboardingContentsAll: [],
@@ -16612,6 +16613,16 @@ let adminPedagogicoState = {
     deactivatedSort: "",
   },
   linksTable: { activeList: "noClass", query: "", page: 1, pageSize: 25, lastRenderFromSearch: false },
+  lessonRecords: {
+    periodPreset: "this_month",
+    customFrom: "",
+    customTo: "",
+    status: "all",
+    teacherQuery: "",
+    studentQuery: "",
+    page: 1,
+    pageSize: 25,
+  },
   filters: {
     teacherId: "",
     dow: "",
@@ -18280,7 +18291,7 @@ const ADMIN_PED_NAV_GROUPS = [
     label: "Operação",
     tabs: [
       { key: "overview", label: "Visão Geral" },
-      { key: "aulas", label: "Aulas" },
+      { key: "aulas", label: "Registros de Aulas" },
       { key: "conflitos", label: "Conflitos" },
     ],
   },
@@ -18332,7 +18343,7 @@ const adminPedFindGroupForTab = (tabKey) => {
 
 const ADMIN_PED_TAB_SUMMARIES = {
   overview: "Pendências e próximos passos",
-  aulas: "Lista operacional de aulas",
+  aulas: "Presença, faltas e aulas sem registro",
   conflitos: "Conflitos detectados",
   pessoas: "Usuários",
   alunos: "Visão dos alunos ativos",
@@ -18353,11 +18364,335 @@ const ADMIN_PED_TAB_SUMMARIES = {
 const ADMIN_PED_PAGE_TITLES = {
   overview: "Visão Geral",
   agenda: "Agenda",
-  aulas: "Aulas",
+  aulas: "Registros de Aulas",
   pessoas: "Usuários",
   qualidade: "Qualidade",
   onboarding: "Onboarding",
   relatorios: "Relatórios",
+};
+
+const ADMIN_PED_LESSON_RECORD_FILTER_DEFAULTS = {
+  periodPreset: "this_month",
+  customFrom: "",
+  customTo: "",
+  status: "all",
+  teacherQuery: "",
+  studentQuery: "",
+  page: 1,
+  pageSize: 25,
+};
+
+const ADMIN_PED_LESSON_RECORD_PERIOD_PRESETS = [
+  { key: "today", label: "Hoje" },
+  { key: "yesterday", label: "Ontem" },
+  { key: "this_week", label: "Esta semana" },
+  { key: "last_week", label: "Semana passada" },
+  { key: "this_month", label: "Este mês" },
+  { key: "last_month", label: "Mês passado" },
+  { key: "custom", label: "Personalizado" },
+];
+
+const getAdminPedLessonRecordFilters = () => {
+  const current = adminPedagogicoState.lessonRecords && typeof adminPedagogicoState.lessonRecords === "object" ? adminPedagogicoState.lessonRecords : {};
+  return { ...ADMIN_PED_LESSON_RECORD_FILTER_DEFAULTS, ...current };
+};
+
+const setAdminPedLessonRecordFilters = (patch = {}) => {
+  const current = getAdminPedLessonRecordFilters();
+  adminPedagogicoState.lessonRecords = { ...current, ...patch };
+};
+
+const fetchAdminPedScheduleEvents = async () => {
+  const response = await fetchWithAuth("/api/schedule-events", { method: "GET" });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(payload?.error || "schedule_events_failed");
+  return Array.isArray(payload?.events) ? payload.events : [];
+};
+
+const getAdminPedLessonRecordPeriodRange = (preset, customFrom, customTo, referenceDate = new Date()) => {
+  const today = startOfDay(referenceDate);
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+  const weekOffset = (today.getDay() + 6) % 7;
+  const weekStart = addDays(today, -weekOffset);
+  const weekEnd = addDays(weekStart, 6);
+  const lastWeekStart = addDays(weekStart, -7);
+  const lastWeekEnd = addDays(weekEnd, -7);
+  const lastMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+  const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
+
+  const presetKey = String(preset || "this_month").trim();
+  if (presetKey === "today") return { fromKey: createDateKey(today), toKey: createDateKey(today), label: "Hoje" };
+  if (presetKey === "yesterday") {
+    const yesterday = addDays(today, -1);
+    return { fromKey: createDateKey(yesterday), toKey: createDateKey(yesterday), label: "Ontem" };
+  }
+  if (presetKey === "this_week") return { fromKey: createDateKey(weekStart), toKey: createDateKey(weekEnd), label: "Esta semana" };
+  if (presetKey === "last_week") return { fromKey: createDateKey(lastWeekStart), toKey: createDateKey(lastWeekEnd), label: "Semana passada" };
+  if (presetKey === "last_month") return { fromKey: createDateKey(lastMonthStart), toKey: createDateKey(lastMonthEnd), label: "Mês passado" };
+  if (presetKey === "custom") {
+    const fromKey = isValidDateKey(customFrom) ? customFrom : createDateKey(monthStart);
+    const toKey = isValidDateKey(customTo) ? customTo : fromKey;
+    const orderedFrom = fromKey <= toKey ? fromKey : toKey;
+    const orderedTo = fromKey <= toKey ? toKey : fromKey;
+    return { fromKey: orderedFrom, toKey: orderedTo, label: "Personalizado" };
+  }
+  return { fromKey: createDateKey(monthStart), toKey: createDateKey(monthEnd), label: "Este mês" };
+};
+
+const getAdminPedLessonRecordFilterMatch = (query, teacherOrStudent) => {
+  const needle = normalizeSearchText(query);
+  if (!needle) return true;
+  const haystack = [
+    teacherOrStudent?.nome,
+    teacherOrStudent?.email,
+    teacherOrStudent?.telefone,
+    teacherOrStudent?.plan,
+    teacherOrStudent?.teacherName,
+  ]
+    .map((value) => normalizeSearchText(value))
+    .join(" ");
+  return haystack.includes(needle);
+};
+
+const buildAdminPedLessonLogsByEventId = (logs) => {
+  const byEventId = new Map();
+  (Array.isArray(logs) ? logs : []).forEach((log) => {
+    const eventId = String(log?.eventId || "").trim();
+    if (!eventId) return;
+    const nextMs = Date.parse(String(log?.atualizadoEm || log?.criadoEm || "")) || 0;
+    const prev = byEventId.get(eventId);
+    const prevMs = prev ? Date.parse(String(prev?.atualizadoEm || prev?.criadoEm || "")) || 0 : 0;
+    if (prev && prevMs > nextMs) return;
+    byEventId.set(eventId, log);
+  });
+  return byEventId;
+};
+
+const buildAdminPedLessonRecordSparkline = (values, color) => {
+  const points = Array.isArray(values) ? values.map((value) => Math.max(0, Number(value) || 0)) : [];
+  if (!points.length) return "";
+  const max = Math.max(...points, 1);
+  const width = 180;
+  const height = 34;
+  const step = points.length <= 1 ? width : width / (points.length - 1);
+  const line = points
+    .map((value, index) => {
+      const x = Number((index * step).toFixed(2));
+      const y = Number((height - (value / max) * (height - 4) - 2).toFixed(2));
+      return `${x},${y}`;
+    })
+    .join(" ");
+  return `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-hidden="true"><polyline fill="none" stroke="${escapeHtml(
+    color || "#a0bcff"
+  )}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" points="${escapeHtml(line)}"></polyline></svg>`;
+};
+
+const buildAdminPedLessonRecordRowsFromClasses = ({ classes, fromKey, toKey, studentsById, teachersById }) => {
+  const rows = [];
+  (Array.isArray(classes) ? classes : []).forEach((classRow) => {
+    if (!classRow || typeof classRow !== "object") return;
+    const teacherId = String(classRow.teacherId || "").trim();
+    const teacherName = String(classRow.teacherName || teachersById.get(teacherId)?.nome || "Professor").trim();
+    const studentIds = Array.isArray(classRow.studentIds) ? classRow.studentIds.map((id) => String(id || "").trim()).filter(Boolean) : [];
+    const studentNames = studentIds.map((id, index) => String(studentsById.get(id)?.nome || classRow.studentNames?.[index] || "Aluno").trim());
+    const scheduleDays = normalizeAdminPedWeeklyScheduleDays(classRow.scheduleDays || []);
+    const activeDays = scheduleDays.filter((day) => day && day.enabled && /^\d{2}:\d{2}$/.test(String(day.startTime || "")) && /^\d{2}:\d{2}$/.test(String(day.endTime || "")));
+    if (!activeDays.length) return;
+    const rangeStart = parseDateKey(fromKey);
+    const rangeEnd = parseDateKey(toKey);
+    if (!(rangeStart instanceof Date) || !(rangeEnd instanceof Date)) return;
+    const classStart = isValidDateKey(classRow.startDate) ? parseDateKey(classRow.startDate) : rangeStart;
+    const classEnd = isValidDateKey(classRow.endDate) ? parseDateKey(classRow.endDate) : rangeEnd;
+    const startDate = classStart && classStart > rangeStart ? classStart : rangeStart;
+    const endDate = classEnd && classEnd < rangeEnd ? classEnd : rangeEnd;
+    if (!(startDate instanceof Date) || !(endDate instanceof Date) || startDate > endDate) return;
+    for (let cursor = new Date(startDate); cursor <= endDate; cursor = addDays(cursor, 1)) {
+      const weekday = cursor.getDay();
+      const schedule = activeDays.find((day) => Number(day.weekday) === weekday);
+      if (!schedule) continue;
+      const startMin = normalizeMinutesValue(schedule.startTime);
+      const endMin = normalizeMinutesValue(schedule.endTime);
+      if (!Number.isFinite(startMin) || !Number.isFinite(endMin) || endMin <= startMin) continue;
+      const dateKey = createDateKey(cursor);
+      rows.push({
+        id: `${String(classRow.id || "class")}::${dateKey}::${startMin}`,
+        alunoId: studentIds[0] || "",
+        alunoNome: studentNames.filter(Boolean).join(", ") || "Aluno",
+        professorId: teacherId,
+        professorNome: teacherName || "Professor",
+        dateKey,
+        startMin,
+        endMin,
+        title: String(classRow.title || "").trim(),
+        source: "classes",
+      });
+    }
+  });
+  return rows;
+};
+
+const buildAdminPedLessonRecordSeries = (rows, fromKey, toKey) => {
+  const fromDate = parseDateKey(fromKey);
+  const toDate = parseDateKey(toKey);
+  if (!(fromDate instanceof Date) || !(toDate instanceof Date)) return [];
+  const daySpan = Math.max(1, Math.round((startOfDay(toDate).getTime() - startOfDay(fromDate).getTime()) / 86400000) + 1);
+  if (daySpan <= 7) {
+    const keys = [];
+    for (let cursor = new Date(fromDate); cursor <= toDate; cursor = addDays(cursor, 1)) keys.push(createDateKey(cursor));
+    return keys.map((dateKey) => {
+      const subset = rows.filter((row) => row.dateKey === dateKey);
+      return {
+        label: dateKey,
+        total: subset.length,
+        presenca: subset.filter((row) => row.statusKey === "presenca").length,
+        falta: subset.filter((row) => row.statusKey === "falta").length,
+        semRegistro: subset.filter((row) => row.statusKey === "sem_registro").length,
+      };
+    });
+  }
+  const bucketByKey = new Map();
+  rows.forEach((row) => {
+    const date = parseDateKey(row.dateKey);
+    if (!(date instanceof Date)) return;
+    const bucketDate = daySpan <= 31 ? addDays(startOfDay(date), -((date.getDay() + 6) % 7)) : new Date(date.getFullYear(), date.getMonth(), 1);
+    const bucketKey = createDateKey(bucketDate);
+    const prev = bucketByKey.get(bucketKey) || { label: bucketKey, total: 0, presenca: 0, falta: 0, semRegistro: 0 };
+    prev.total += 1;
+    if (row.statusKey === "presenca") prev.presenca += 1;
+    if (row.statusKey === "falta") prev.falta += 1;
+    if (row.statusKey === "sem_registro") prev.semRegistro += 1;
+    bucketByKey.set(bucketKey, prev);
+  });
+  return [...bucketByKey.values()].sort((a, b) => String(a.label || "").localeCompare(String(b.label || "")));
+};
+
+const buildAdminPedLessonRecordDataset = () => {
+  const filters = getAdminPedLessonRecordFilters();
+  const range = getAdminPedLessonRecordPeriodRange(filters.periodPreset, filters.customFrom, filters.customTo);
+  const studentsById = adminPedagogicoState.studentsById instanceof Map ? adminPedagogicoState.studentsById : new Map();
+  const teachersById = adminPedagogicoState.teachersById instanceof Map ? adminPedagogicoState.teachersById : new Map();
+  const normalizedEvents = normalizePedov2ScheduleEvents(adminPedagogicoState.scheduleEvents || []);
+  const fallbackClassRows =
+    normalizedEvents.length > 0
+      ? []
+      : buildAdminPedLessonRecordRowsFromClasses({
+          classes: adminPedagogicoState.classes,
+          fromKey: range.fromKey,
+          toKey: range.toKey,
+          studentsById,
+          teachersById,
+        });
+  const baseRows = (normalizedEvents.length ? normalizedEvents : fallbackClassRows)
+    .filter((event) => String(event.dateKey || "").trim() >= range.fromKey && String(event.dateKey || "").trim() <= range.toKey)
+    .map((event) => {
+      const alunoId = String(event.alunoId || "").trim();
+      const professorId = String(event.professorId || "").trim();
+      const student = alunoId ? studentsById.get(alunoId) : null;
+      const teacher = professorId ? teachersById.get(professorId) : null;
+      return {
+        id: String(event.id || "").trim(),
+        alunoId,
+        alunoNome: String(student?.nome || event.alunoNome || event.studentName || event.title || "Aluno").trim(),
+        professorId,
+        professorNome: String(teacher?.nome || event.professorNome || event.teacherName || "Professor").trim(),
+        dateKey: String(event.dateKey || "").trim(),
+        startMin: Number(event.startMin) || 0,
+        endMin: Number(event.endMin) || 0,
+        startMs: Number(event.startMs) || buildDateFromDateKeyAndMinutes(event.dateKey, event.startMin)?.getTime() || 0,
+        endMs: Number(event.endMs) || buildDateFromDateKeyAndMinutes(event.dateKey, event.endMin)?.getTime() || 0,
+        source: String(event.source || (normalizedEvents.length ? "schedule-events" : "classes")),
+      };
+    });
+
+  const logsByEventId = buildAdminPedLessonLogsByEventId(adminPedagogicoState.lessonLogs || []);
+  const nowMs = Date.now();
+  const rows = baseRows.map((row) => {
+    const log = logsByEventId.get(String(row.id || "")) || null;
+    const normalizedStatus = log ? normalizePedagogicoStatus(log.statusAula) : "";
+    let statusKey = "agendada";
+    let statusLabel = "Agendada";
+    let tone = "slate";
+    if (normalizedStatus === PEDAGOGICO_STATUS.REALIZADA) {
+      statusKey = "presenca";
+      statusLabel = "Presença";
+      tone = "green";
+    } else if (normalizedStatus === PEDAGOGICO_STATUS.FALTA_ALUNO) {
+      statusKey = "falta";
+      statusLabel = "Falta";
+      tone = "coral";
+    } else if (normalizedStatus === PEDAGOGICO_STATUS.REMARCADA) {
+      statusKey = "remarcada";
+      statusLabel = "Remarcada";
+      tone = "amber";
+    } else if (row.endMs < nowMs) {
+      statusKey = "sem_registro";
+      statusLabel = "Sem registro";
+      tone = "muted";
+    }
+    return { ...row, log, statusKey, statusLabel, tone };
+  });
+
+  const teacherQuery = String(filters.teacherQuery || "").trim();
+  const studentQuery = String(filters.studentQuery || "").trim();
+  const filteredRows = rows.filter((row) => {
+    if (filters.status === "presenca" && row.statusKey !== "presenca") return false;
+    if (filters.status === "falta" && row.statusKey !== "falta") return false;
+    if (filters.status === "sem_registro" && row.statusKey !== "sem_registro") return false;
+    if (teacherQuery && !getAdminPedLessonRecordFilterMatch(teacherQuery, { nome: row.professorNome, email: teachersById.get(row.professorId)?.email })) return false;
+    if (studentQuery && !getAdminPedLessonRecordFilterMatch(studentQuery, { nome: row.alunoNome, email: studentsById.get(row.alunoId)?.email })) return false;
+    return true;
+  });
+
+  const sortedRows = filteredRows.slice().sort((a, b) => {
+    const priority = (row) => {
+      if (row.statusKey === "sem_registro") return 0;
+      if (row.statusKey === "falta") return 1;
+      if (row.statusKey === "presenca") return 2;
+      if (row.statusKey === "remarcada") return 3;
+      return 4;
+    };
+    const pa = priority(a);
+    const pb = priority(b);
+    if (pa !== pb) return pa - pb;
+    if (pa === 0) return (a.startMs || 0) - (b.startMs || 0);
+    return (b.startMs || 0) - (a.startMs || 0);
+  });
+
+  const summarySource = buildAdminPedLessonRecordSeries(filteredRows, range.fromKey, range.toKey);
+  const summary = {
+    total: filteredRows.length,
+    presenca: filteredRows.filter((row) => row.statusKey === "presenca").length,
+    falta: filteredRows.filter((row) => row.statusKey === "falta").length,
+    semRegistro: filteredRows.filter((row) => row.statusKey === "sem_registro").length,
+    series: summarySource,
+  };
+
+  return { filters, range, rows: sortedRows, summary };
+};
+
+const renderAdminPedLessonRecordActiveFilters = ({ filters, range }) => {
+  const chips = [];
+  if (String(filters.status || "all") !== "all") {
+    const labels = { presenca: "Presença", falta: "Falta", sem_registro: "Sem registro" };
+    chips.push({ key: "status", label: labels[String(filters.status)] || "Status" });
+  }
+  if (String(filters.teacherQuery || "").trim()) chips.push({ key: "teacherQuery", label: `Professor: ${String(filters.teacherQuery).trim()}` });
+  if (String(filters.studentQuery || "").trim()) chips.push({ key: "studentQuery", label: `Aluno: ${String(filters.studentQuery).trim()}` });
+  if (String(filters.periodPreset || "this_month") === "custom") chips.push({ key: "customRange", label: `Período: ${range.fromKey} → ${range.toKey}` });
+  if (!chips.length) return "";
+  return `
+    <div class="pedrecords-active-filters">
+      ${chips
+        .map(
+          (chip) => `<button class="pedrecords-filter-chip" type="button" data-admin-ped-lesson-record-filter-remove="${escapeHtml(String(chip.key || ""))}">${escapeHtml(
+            chip.label
+          )} <span aria-hidden="true">×</span></button>`
+        )
+        .join("")}
+      ${chips.length > 1 ? `<button class="pedrecords-clear-filters" type="button" data-admin-ped-lesson-record-clear-filters>Limpar filtros</button>` : ""}
+    </div>
+  `;
 };
 
 const syncAdminPedagogicoPageTitle = (panelName = body.dataset.activePanel || "") => {
@@ -20660,41 +20995,174 @@ const renderAdminOnboardingPerformance = () => {
 
 const renderAdminPedagogicoClassesList = () => {
   if (!(adminPedClasses instanceof HTMLElement)) return;
-  const classes = adminPedagogicoFilteredClasses();
-  if (adminPedEmptyClasses instanceof HTMLElement) adminPedEmptyClasses.hidden = classes.length > 0;
-  adminPedClasses.innerHTML = classes
-    .map((c) => {
-      const typeLabel = c.type === "group" ? "Grupo" : "Individual";
-      const status = normalizeClassStatus(c.status);
-      const statusLabel = status === "active" ? "Ativa" : status === "paused" ? "Pausada" : "Encerrada";
-      const badgeClass = status === "active" ? "is-active" : status === "paused" ? "is-paused" : "is-ended";
-      const scheduleSummary = formatAdminPedScheduleSummary(c);
-      const liveUrl = buildAdminPedClassLiveUrl(c);
-      const who =
-        c.type === "group"
-          ? `${(Array.isArray(c.studentIds) ? c.studentIds.length : 0) || 0} alunos`
-          : (c.studentNames && c.studentNames[0]) || (c.studentIds && c.studentIds[0]) || "Aluno";
-      return `
-        <div class="admin-ped-class-row">
-          <div class="admin-ped-class-main">
-            <div class="admin-ped-class-title">${escapeHtml(c.title || typeLabel)}</div>
-            <div class="admin-ped-class-sub">${escapeHtml(scheduleSummary)} · ${escapeHtml(who)}</div>
+  const { filters, range, rows, summary } = buildAdminPedLessonRecordDataset();
+  const pageState = getAdminPedLessonRecordFilters();
+  const { pageRows, total, totalPages, safePage } = adminPedPaginate(rows, pageState.page, pageState.pageSize);
+  setAdminPedLessonRecordFilters({ page: safePage });
+  if (adminPedEmptyClasses instanceof HTMLElement) adminPedEmptyClasses.hidden = true;
+
+  const totalWithLog = summary.presenca + summary.falta;
+  const presencePct = totalWithLog > 0 ? Math.round((summary.presenca / totalWithLog) * 100) : 0;
+  const absencesPct = totalWithLog > 0 ? Math.round((summary.falta / totalWithLog) * 100) : 0;
+  const missingPct = summary.total > 0 ? Math.round((summary.semRegistro / summary.total) * 100) : 0;
+  const sparkTotal = buildAdminPedLessonRecordSparkline(summary.series.map((item) => item.total), "#a0bcff");
+  const sparkPresenca = buildAdminPedLessonRecordSparkline(summary.series.map((item) => item.presenca), "#3fd6a4");
+  const sparkFalta = buildAdminPedLessonRecordSparkline(summary.series.map((item) => item.falta), "#ff6a60");
+  const sparkMissing = buildAdminPedLessonRecordSparkline(summary.series.map((item) => item.semRegistro), "#f5b64b");
+
+  const teacherSuggestions = (Array.isArray(adminPedagogicoState.teachers) ? adminPedagogicoState.teachers : [])
+    .slice()
+    .sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"))
+    .map((teacher) => `<option value="${escapeHtml(String(teacher.nome || "").trim())}"></option>`)
+    .join("");
+  const studentSuggestions = (Array.isArray(adminPedagogicoState.students) ? adminPedagogicoState.students : [])
+    .slice()
+    .sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"))
+    .map((student) => `<option value="${escapeHtml(String(student.nome || "").trim())}"></option>`)
+    .join("");
+
+  adminPedClasses.innerHTML = `
+    <div class="pedov2 pedrecords">
+      <header class="pedov2-page-head pedrecords-head">
+        <div>
+          <p class="pedov2-eyebrow">Controle pedagógico</p>
+          <h1 class="pedov2-title">Registros de Aulas</h1>
+          <p class="pedov2-page-sub">Presença, faltas e pendências de lançamento por período.</p>
+        </div>
+      </header>
+
+      <section class="pedov2-kpi-row pedrecords-kpis" aria-label="Resumo de registros">
+        <article class="pedov2-card pedov2-kpi-card">
+          <div class="pedov2-kpi-label"><span class="pedov2-kpi-dot" style="background:#a0bcff"></span>Aulas no período</div>
+          <div class="pedov2-kpi-value-row"><span class="pedov2-kpi-value">${escapeHtml(String(summary.total || 0))}</span></div>
+          <div class="pedov2-kpi-spark">${sparkTotal}</div>
+        </article>
+        <article class="pedov2-card pedov2-kpi-card">
+          <div class="pedov2-kpi-label"><span class="pedov2-kpi-dot" style="background:#3fd6a4"></span>Presença</div>
+          <div class="pedov2-kpi-value-row"><span class="pedov2-kpi-value">${escapeHtml(String(summary.presenca || 0))}</span><span class="pedov2-delta up-good">${escapeHtml(
+            `${presencePct}%`
+          )}</span></div>
+          <div class="pedov2-kpi-spark">${sparkPresenca}</div>
+        </article>
+        <article class="pedov2-card pedov2-kpi-card">
+          <div class="pedov2-kpi-label"><span class="pedov2-kpi-dot" style="background:#ff6a60"></span>Faltas</div>
+          <div class="pedov2-kpi-value-row"><span class="pedov2-kpi-value">${escapeHtml(String(summary.falta || 0))}</span><span class="pedov2-delta up-bad">${escapeHtml(
+            `${absencesPct}%`
+          )}</span></div>
+          <div class="pedov2-kpi-spark">${sparkFalta}</div>
+        </article>
+        <article class="pedov2-card pedov2-kpi-card is-emphasis">
+          <div class="pedov2-kpi-label"><span class="pedov2-kpi-dot" style="background:#f5b64b; box-shadow:0 0 8px rgba(245,182,75,.45)"></span>Sem registro</div>
+          <div class="pedov2-kpi-value-row"><span class="pedov2-kpi-value is-risk">${escapeHtml(String(summary.semRegistro || 0))}</span><span class="pedov2-delta up-bad">${escapeHtml(
+            `${missingPct}%`
+          )}</span></div>
+          <div class="pedov2-kpi-spark">${sparkMissing}</div>
+        </article>
+      </section>
+
+      <section class="pedrecords-toolbar-wrap">
+        <div class="pedrecords-toolbar">
+          <div class="pedrecords-segmented" role="tablist" aria-label="Período">
+            ${ADMIN_PED_LESSON_RECORD_PERIOD_PRESETS.map(
+              (preset) => `<button type="button" class="${preset.key === filters.periodPreset ? "is-active" : ""}" aria-pressed="${
+                preset.key === filters.periodPreset ? "true" : "false"
+              }" data-admin-ped-lesson-record-period="${escapeHtml(preset.key)}">${escapeHtml(preset.label)}</button>`
+            ).join("")}
           </div>
-          <div class="admin-ped-class-meta">
-            <span class="admin-ped-pill ${badgeClass}">${escapeHtml(statusLabel)}</span>
-            ${c.plan ? `<span class="admin-ped-pill is-plan">${escapeHtml(String(c.plan).toUpperCase())}</span>` : ""}
+          <div class="pedrecords-status" role="tablist" aria-label="Status do registro">
+            ${[
+              ["all", "Todos"],
+              ["presenca", "Presença"],
+              ["falta", "Falta"],
+              ["sem_registro", "Sem registro"],
+            ]
+              .map(
+                ([value, label]) =>
+                  `<button type="button" class="${value === filters.status ? "is-active" : ""}" aria-pressed="${
+                    value === filters.status ? "true" : "false"
+                  }" data-admin-ped-lesson-record-status="${escapeHtml(value)}">${escapeHtml(label)}</button>`
+              )
+              .join("")}
           </div>
-          <div class="admin-ped-class-actions">
-            <a class="admin-ped-action is-muted" href="${escapeHtml(liveUrl)}" target="_blank" rel="noopener">Entrar</a>
-            <button class="admin-ped-action is-muted" type="button" data-admin-ped-class-copy-live="${escapeHtml(liveUrl)}">Copiar link</button>
-            <button class="admin-ped-action" type="button" data-admin-ped-class-edit="${escapeHtml(c.id)}">Editar</button>
-            <button class="admin-ped-action is-muted" type="button" data-admin-ped-class-toggle="${escapeHtml(c.id)}">${status === "active" ? "Desativar" : "Ativar"}</button>
-            <button class="admin-ped-action is-danger" type="button" data-admin-ped-class-delete="${escapeHtml(c.id)}">Excluir</button>
+          <div class="pedrecords-searches">
+            <label class="pedrecords-search">
+              <span>Professor</span>
+              <input class="admin-ped-select" type="search" list="pedrecords-teachers-list" value="${escapeHtml(
+                String(filters.teacherQuery || "")
+              )}" placeholder="Buscar professor..." data-admin-ped-lesson-record-teacher-search />
+            </label>
+            <label class="pedrecords-search">
+              <span>Aluno</span>
+              <input class="admin-ped-select" type="search" list="pedrecords-students-list" value="${escapeHtml(
+                String(filters.studentQuery || "")
+              )}" placeholder="Buscar aluno..." data-admin-ped-lesson-record-student-search />
+            </label>
+          </div>
+          <div class="pedrecords-custom-range ${String(filters.periodPreset || "") === "custom" ? "is-visible" : ""}">
+            <label class="pedrecords-search">
+              <span>De</span>
+              <input class="admin-ped-select" type="date" value="${escapeHtml(String(filters.customFrom || range.fromKey || ""))}" data-admin-ped-lesson-record-custom-from />
+            </label>
+            <label class="pedrecords-search">
+              <span>Até</span>
+              <input class="admin-ped-select" type="date" value="${escapeHtml(String(filters.customTo || range.toKey || ""))}" data-admin-ped-lesson-record-custom-to />
+            </label>
           </div>
         </div>
-      `;
-    })
-    .join("");
+        <datalist id="pedrecords-teachers-list">${teacherSuggestions}</datalist>
+        <datalist id="pedrecords-students-list">${studentSuggestions}</datalist>
+        ${renderAdminPedLessonRecordActiveFilters({ filters, range })}
+        <div class="pedrecords-meta">
+          <span class="pedrecords-count">${escapeHtml(`${total} registro${total === 1 ? "" : "s"}`)}</span>
+          <span class="pedrecords-period">${escapeHtml(`${range.fromKey} → ${range.toKey}`)}</span>
+        </div>
+      </section>
+
+      <section class="pedov2-card pedrecords-table-card">
+        <div class="pedrecords-table-wrap">
+          <table class="pedrecords-table">
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Horário</th>
+                <th>Aluno</th>
+                <th>Professor</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${
+                pageRows.length
+                  ? pageRows
+                      .map(
+                        (row) => `
+                          <tr class="pedrecords-row" tabindex="0" role="button" data-admin-ped-lesson-record-row="${escapeHtml(String(row.id || ""))}">
+                            <td>${escapeHtml(formatPedagogicoDate(row.dateKey))}</td>
+                            <td>${escapeHtml(`${formatHmFromMinutes(row.startMin)}–${formatHmFromMinutes(row.endMin)}`)}</td>
+                            <td>${escapeHtml(row.alunoNome || "Aluno")}</td>
+                            <td>${escapeHtml(row.professorNome || "Professor")}</td>
+                            <td><span class="pedrecords-status-badge is-${escapeHtml(row.tone || "slate")}">${escapeHtml(row.statusLabel || "Agendada")}</span></td>
+                          </tr>
+                        `
+                      )
+                      .join("")
+                  : `<tr><td colspan="5"><div class="admin-ped-empty-inline"><div class="admin-ped-empty-title">Nenhum registro encontrado.</div><div class="admin-ped-empty-sub">Ajuste os filtros para ampliar o período ou o escopo.</div></div></td></tr>`
+              }
+            </tbody>
+          </table>
+        </div>
+        ${
+          totalPages > 1
+            ? `<div class="admin-ped-pagination pedrecords-pagination">
+                <button class="admin-ped-action is-muted" type="button" data-admin-ped-lesson-record-page-prev ${safePage <= 1 ? "disabled" : ""}>‹</button>
+                <span class="admin-ped-pagination-label">${escapeHtml(`${safePage}/${totalPages} · ${total} registro${total === 1 ? "" : "s"}`)}</span>
+                <button class="admin-ped-action is-muted" type="button" data-admin-ped-lesson-record-page-next ${safePage >= totalPages ? "disabled" : ""}>›</button>
+              </div>`
+            : ""
+        }
+      </section>
+    </div>
+  `;
 };
 
 const renderAdminPedagogicoTeachersPanel = () => {
@@ -20750,6 +21218,14 @@ const syncAdminPedagogicoHeaderActionMenu = () => {
   const button = document.querySelector("[data-admin-ped-new-action]");
   const menu = document.querySelector("[data-admin-ped-new-action-menu]");
   if (!(button instanceof HTMLButtonElement) || !(menu instanceof HTMLElement)) return;
+  const activeTab = String(adminPedagogicoState.activeTab || "");
+  if (activeTab === "aulas") {
+    button.hidden = true;
+    menu.hidden = true;
+    button.setAttribute("aria-expanded", "false");
+    return;
+  }
+  button.hidden = false;
 
   const inPeople = String(adminPedagogicoState.activeTab || "") === "pessoas";
   const peopleTab = String(adminPedagogicoState.peopleTab || "students");
@@ -22246,6 +22722,7 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
       onboardingProgressAll,
       teacherQuizSubmissionsAll,
       liveLessons,
+      scheduleEvents,
       pedagogicalOps,
     ] = await Promise.all([
       loadFallback("teachers", fetchUserRowsFromFirestore("teacher"), []),
@@ -22263,6 +22740,7 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
       loadFallback("onboardingProgress", fetchAllTeacherOnboardingProgressFromFirestore(), []),
       loadFallback("teacherQuizSubmissions", fetchAllTeacherQuizSubmissionsFromFirestore(), []),
       loadFallback("liveLessons", fetchLiveLessonsForAdminPedagogico(), []),
+      loadFallback("scheduleEvents", fetchAdminPedScheduleEvents(), []),
       fetchWithAuth("/api/pedagogico/dashboard")
         .then(async (res) => (res.ok ? res.json() : { metrics: {} }))
         .catch((error) => {
@@ -22338,6 +22816,7 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
     adminPedagogicoState.pedagogicalFeedbacks = Array.isArray(pedagogicalFeedbacks) ? pedagogicalFeedbacks : [];
     adminPedagogicoState.liveLessonFeedbacks = Array.isArray(liveLessonFeedbacksData?.feedbacks) ? liveLessonFeedbacksData.feedbacks : [];
     adminPedagogicoState.lessonLogs = Array.isArray(lessonLogs) ? lessonLogs : [];
+    adminPedagogicoState.scheduleEvents = Array.isArray(scheduleEvents) ? scheduleEvents : [];
     adminPedagogicoState.onboardingContentsAll = Array.isArray(onboardingContentsAll) ? onboardingContentsAll : [];
     adminPedagogicoState.onboardingContents = adminPedagogicoState.onboardingContentsAll.slice().sort((a, b) => (a.order || 0) - (b.order || 0));
     adminPedagogicoState.onboardingQuizzes = Array.isArray(onboardingQuizzes) ? onboardingQuizzes : [];
@@ -29161,6 +29640,82 @@ document.addEventListener("click", (event) => {
         return;
       }
 
+      const lessonRecordPrev = target.closest("[data-admin-ped-lesson-record-page-prev]");
+      if (lessonRecordPrev instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const filters = getAdminPedLessonRecordFilters();
+        setAdminPedLessonRecordFilters({ page: Math.max(1, Number(filters.page) || 1) - 1 });
+        renderAdminPedagogicoClassesList();
+        return;
+      }
+
+      const lessonRecordNext = target.closest("[data-admin-ped-lesson-record-page-next]");
+      if (lessonRecordNext instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const filters = getAdminPedLessonRecordFilters();
+        setAdminPedLessonRecordFilters({ page: (Number(filters.page) || 1) + 1 });
+        renderAdminPedagogicoClassesList();
+        return;
+      }
+
+      const lessonRecordPeriod = target.closest("[data-admin-ped-lesson-record-period]");
+      if (lessonRecordPeriod instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const periodPreset = String(lessonRecordPeriod.getAttribute("data-admin-ped-lesson-record-period") || "").trim();
+        if (periodPreset) {
+          const patch = { periodPreset, page: 1 };
+          if (periodPreset !== "custom") {
+            patch.customFrom = "";
+            patch.customTo = "";
+          }
+          setAdminPedLessonRecordFilters(patch);
+          renderAdminPedagogicoClassesList();
+        }
+        return;
+      }
+
+      const lessonRecordStatus = target.closest("[data-admin-ped-lesson-record-status]");
+      if (lessonRecordStatus instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const status = String(lessonRecordStatus.getAttribute("data-admin-ped-lesson-record-status") || "").trim() || "all";
+        setAdminPedLessonRecordFilters({ status, page: 1 });
+        renderAdminPedagogicoClassesList();
+        return;
+      }
+
+      const lessonRecordFilterRemove = target.closest("[data-admin-ped-lesson-record-filter-remove]");
+      if (lessonRecordFilterRemove instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const key = String(lessonRecordFilterRemove.getAttribute("data-admin-ped-lesson-record-filter-remove") || "").trim();
+        if (key === "status") setAdminPedLessonRecordFilters({ status: "all", page: 1 });
+        else if (key === "teacherQuery") setAdminPedLessonRecordFilters({ teacherQuery: "", page: 1 });
+        else if (key === "studentQuery") setAdminPedLessonRecordFilters({ studentQuery: "", page: 1 });
+        else if (key === "customRange") setAdminPedLessonRecordFilters({ periodPreset: "this_month", customFrom: "", customTo: "", page: 1 });
+        renderAdminPedagogicoClassesList();
+        return;
+      }
+
+      const lessonRecordClear = target.closest("[data-admin-ped-lesson-record-clear-filters]");
+      if (lessonRecordClear instanceof HTMLButtonElement) {
+        event.preventDefault();
+        adminPedagogicoState.lessonRecords = { ...ADMIN_PED_LESSON_RECORD_FILTER_DEFAULTS };
+        renderAdminPedagogicoClassesList();
+        return;
+      }
+
+      const lessonRecordRow = target.closest("[data-admin-ped-lesson-record-row]");
+      if (lessonRecordRow instanceof HTMLElement) {
+        event.preventDefault();
+        const rowId = String(lessonRecordRow.getAttribute("data-admin-ped-lesson-record-row") || "").trim();
+        const dataset = buildAdminPedLessonRecordDataset();
+        const record = dataset.rows.find((row) => String(row.id || "") === rowId) || null;
+        if (record) {
+          // TODO etapa 2: abrir drawer de detalhe do registro
+          console.log("[admin-ped][lesson-record]", record);
+        }
+        return;
+      }
+
       const adminPedTablePrev = target.closest("[data-admin-ped-table-prev]");
       if (adminPedTablePrev instanceof HTMLButtonElement) {
         event.preventDefault();
@@ -31179,6 +31734,38 @@ document.addEventListener("change", (event) => {
 });
 
 // Admin > Controle Pedagógico: filters update the agenda/list views.
+document.addEventListener("input", (event) => {
+  if (currentRole !== "admin") return;
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement)) return;
+  if (!target.matches("[data-admin-ped-lesson-record-teacher-search], [data-admin-ped-lesson-record-student-search]")) return;
+  if (adminPedTableSearchDebounce) clearTimeout(adminPedTableSearchDebounce);
+  adminPedTableSearchDebounce = window.setTimeout(() => {
+    if (target.matches("[data-admin-ped-lesson-record-teacher-search]")) {
+      setAdminPedLessonRecordFilters({ teacherQuery: target.value, page: 1 });
+    } else {
+      setAdminPedLessonRecordFilters({ studentQuery: target.value, page: 1 });
+    }
+    renderAdminPedagogicoClassesList();
+    adminPedTableSearchDebounce = null;
+  }, 140);
+});
+
+document.addEventListener("change", (event) => {
+  if (currentRole !== "admin") return;
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement)) return;
+  if (target.matches("[data-admin-ped-lesson-record-custom-from]")) {
+    setAdminPedLessonRecordFilters({ periodPreset: "custom", customFrom: target.value, page: 1 });
+    renderAdminPedagogicoClassesList();
+    return;
+  }
+  if (target.matches("[data-admin-ped-lesson-record-custom-to]")) {
+    setAdminPedLessonRecordFilters({ periodPreset: "custom", customTo: target.value, page: 1 });
+    renderAdminPedagogicoClassesList();
+  }
+});
+
 document.addEventListener("change", (event) => {
   if (currentRole !== "admin") return;
   const target = event.target;
@@ -31347,6 +31934,12 @@ document.addEventListener("keydown", (event) => {
   if (!(event.target instanceof Element)) return;
   const key = event.key;
   if (key !== "Enter" && key !== " ") return;
+  const lessonRecordRow = event.target.closest("[data-admin-ped-lesson-record-row]");
+  if (lessonRecordRow instanceof HTMLElement) {
+    event.preventDefault();
+    lessonRecordRow.click();
+    return;
+  }
   const adminPedRow = event.target.closest("[data-admin-ped-student-open]");
   if (adminPedRow instanceof HTMLElement) {
     const alunoId = String(adminPedRow.getAttribute("data-admin-ped-student-open") || "").trim();
