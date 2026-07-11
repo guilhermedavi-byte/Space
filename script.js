@@ -7419,6 +7419,15 @@ const formatPedagogicoGroupHeading = (dateKey) => {
   return `${weekdayLabel}, ${formatted}`;
 };
 
+const formatPedagogicoCompactGroupHeading = (dateKey) => {
+  const date = parseDateKey(dateKey);
+  if (!date) return "—";
+  const weekday = new Intl.DateTimeFormat("pt-BR", { weekday: "short" }).format(date).replace(/\./g, "");
+  const formatted = new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "short" }).format(date).replace(/\./g, "");
+  const weekdayLabel = weekday ? weekday.charAt(0).toUpperCase() + weekday.slice(1) : "";
+  return `${weekdayLabel}, ${formatted}`;
+};
+
 const shiftDateKey = (dateKey, deltaDays) => {
   const date = parseDateKey(dateKey);
   if (!date) return "";
@@ -7482,7 +7491,7 @@ const buildPedagogicoLessonViewModel = (lesson, logsByEventId, now, todayKey) =>
 
   const statusMeta =
     temporalState === "pending"
-      ? { label: "Pendente", tone: "amber", icon: "!" }
+      ? { label: "Registrar →", tone: "amber", icon: "" }
       : isDone
         ? statusMetaForPedagogicoLog(log)
         : { label: isToday ? "Hoje" : "Agendada", tone: isToday ? "coral" : "slate", icon: "•" };
@@ -8880,7 +8889,7 @@ const renderTeacherPedagogicoList = () => {
   }, new Map());
 
   const renderLessonCard = (item) => {
-    const { lesson, temporalState, statusMeta, isToday, isFuture } = item;
+    const { lesson, temporalState, statusMeta } = item;
     const timeLabel = `${formatHmFromMinutes(lesson.startMin)}–${formatHmFromMinutes(lesson.endMin)}`;
     const statusClass =
       temporalState === "pending"
@@ -8888,37 +8897,19 @@ const renderTeacherPedagogicoList = () => {
         : temporalState === "done"
           ? "is-done"
           : temporalState === "today"
-          ? "is-today"
+            ? "is-today"
             : "is-future";
-    const titleLabel = String(lesson.title || "").trim();
-    const descriptionLabel = String(lesson.description || "").trim();
-    const showDescriptionTag = Boolean(
-      descriptionLabel &&
-      titleLabel &&
-      descriptionLabel.toLowerCase() !== titleLabel.toLowerCase()
-    );
-    const captionLabel =
-      isFuture
-        ? temporalState === "today"
-          ? "Aula de hoje."
-          : "Sem ação necessária agora."
-        : temporalState === "pending"
-          ? "Registro da aula pendente."
-          : "Registro concluído.";
-    const ctaLabel = temporalState === "pending" ? "Registrar →" : temporalState === "done" ? "Ver registro →" : "Aguardando →";
+    const badgeLabel = `${statusMeta.icon ? `${statusMeta.icon} ` : ""}${statusMeta.label}`;
     return `
       <article class="pedteacher-item ${statusClass}" data-pedagogico-item="${escapeHtml(lesson.id)}" aria-label="${escapeHtml(lesson.title)}">
         <div class="pedteacher-time">
           <div class="pedteacher-hour">${escapeHtml(timeLabel)}</div>
-          ${showDescriptionTag ? `<div class="pedteacher-type">${escapeHtml(descriptionLabel)}</div>` : ""}
         </div>
         <div class="pedteacher-main">
           <div class="pedteacher-student">${escapeHtml(lesson.title)}</div>
-          <div class="pedteacher-caption">${escapeHtml(captionLabel)}</div>
         </div>
         <div class="pedteacher-meta">
-          <span class="pedteacher-badge is-${escapeHtml(statusMeta.tone)}">${escapeHtml(statusMeta.icon)} ${escapeHtml(statusMeta.label)}</span>
-          <span class="pedteacher-cta is-${escapeHtml(temporalState)}" aria-hidden="true">${escapeHtml(ctaLabel)}</span>
+          <span class="pedteacher-badge is-${escapeHtml(statusMeta.tone)}">${escapeHtml(badgeLabel)}</span>
         </div>
       </article>
     `;
@@ -8927,16 +8918,16 @@ const renderTeacherPedagogicoList = () => {
   const html = Array.from(grouped.entries())
     .map(([dateKey, dayItems]) => {
       const isTodayGroup = dateKey === todayKey;
-      const heading = isTodayGroup ? "Hoje" : formatPedagogicoGroupHeading(dateKey);
-      const subheading = isTodayGroup ? formatPedagogicoGroupHeading(dateKey) : `${dayItems.length} aula${dayItems.length === 1 ? "" : "s"}`;
+      const heading = formatPedagogicoCompactGroupHeading(dateKey);
+      const countLabel = dayItems.length > 1 ? `· ${dayItems.length} aulas` : "";
       return `
         <section class="pedteacher-day-group" aria-label="${escapeHtml(heading)}">
           <header class="pedteacher-day-header ${isTodayGroup ? "is-today" : ""}" data-pedagogico-anchor="${dateKey === anchorDateKey ? "true" : "false"}">
             <div class="pedteacher-day-title-row">
               <h3 class="pedteacher-day-title">${escapeHtml(heading)}</h3>
+              ${countLabel ? `<span class="pedteacher-day-subtitle">${escapeHtml(countLabel)}</span>` : ""}
               ${isTodayGroup ? `<span class="pedteacher-day-pill">• Hoje</span>` : ""}
             </div>
-            <div class="pedteacher-day-subtitle">${escapeHtml(subheading)}</div>
           </header>
           <div class="pedteacher-day-items">
             ${dayItems.map(renderLessonCard).join("")}
