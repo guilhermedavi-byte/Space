@@ -19984,6 +19984,22 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   padding-bottom: 12px;
 }
 
+.admin-ped-row--student-open {
+  cursor: pointer;
+  transition: background-color 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.admin-ped-row--student-open:hover {
+  background: rgba(255, 255, 255, 0.028);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
+}
+
+.admin-ped-row--student-open:focus-visible {
+  outline: 2px solid rgba(89, 144, 189, 0.6);
+  outline-offset: -2px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
 .admin-ped-row + .admin-ped-row {
   border-top: 1px solid rgba(255, 255, 255, 0.06);
 }

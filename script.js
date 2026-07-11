@@ -18754,7 +18754,6 @@ const renderAdminPedagogicoStudentsPanel = () => {
       const createdAt = s?.criadoEm || s?.created_at || s?.createdAt || null;
       const deactivatedAt = s?.desativadoEm || s?.canceladoEm || s?.cancelamentoEm || s?.dataCancelamento || null;
       const risk = (riskByStudent.get(String(s.id || "")) || {}).risk || "—";
-      const activeClass = getAdminPedStudentActiveClass(String(s.id || ""));
       return {
         id: String(s.id || ""),
         nome: String(s.nome || "Aluno"),
@@ -18771,8 +18770,6 @@ const renderAdminPedagogicoStudentsPanel = () => {
         alunoChave: String(s.aluno_chave || ""),
         source: String(s.source || ""),
         isActive,
-        classLabel: activeClass ? "Editar aula" : "Criar aula",
-        classId: activeClass ? String(activeClass.id || "") : "",
       };
     });
 
@@ -18819,26 +18816,19 @@ const renderAdminPedagogicoStudentsPanel = () => {
     ? rowsToRender
         .map((r) => {
           return `
-            <div class="admin-ped-row admin-ped-row--student">
+            <div
+              class="admin-ped-row admin-ped-row--student admin-ped-row--student-open"
+              role="button"
+              tabindex="0"
+              data-admin-ped-student-open="${escapeHtml(r.id)}"
+              aria-label="Abrir ficha de ${escapeHtml(r.nome)}"
+            >
               <div>
                 <div class="admin-ped-row-title">${escapeHtml(r.nome)}</div>
                 <div class="admin-ped-row-meta">
                   <span class="admin-ped-pill is-plan">${escapeHtml(r.plan)}</span>
                   ${r.teacherName ? `<span class="admin-ped-pill">${escapeHtml(r.teacherName)}</span>` : `<span class="admin-ped-pill">Sem professor</span>`}
                 </div>
-              </div>
-              <div class="admin-ped-row-actions">
-                <button class="admin-ped-action" type="button" data-admin-ped-student-open="${escapeHtml(r.id)}">Ficha</button>
-                <button class="admin-ped-action is-muted" type="button" data-admin-ped-student-new-class="${escapeHtml(r.id)}">${escapeHtml(r.classLabel)}</button>
-                ${
-                  r.id
-                    ? `<button class="admin-ped-action ${r.isActive ? "is-danger" : ""}" type="button"
-                         data-admin-ped-student-toggle="${escapeHtml(r.id)}"
-                         data-admin-ped-student-next-status="${r.isActive ? "inactive" : "active"}">
-                         ${r.isActive ? "Desativar" : "Reativar"}
-                       </button>`
-                    : ""
-                }
               </div>
             </div>
           `;
@@ -28756,20 +28746,10 @@ document.addEventListener("click", (event) => {
       }
 
       const adminPedStudentOpen = target.closest("[data-admin-ped-student-open]");
-      if (adminPedStudentOpen instanceof HTMLButtonElement) {
+      if (adminPedStudentOpen instanceof HTMLElement) {
         event.preventDefault();
         const alunoId = String(adminPedStudentOpen.getAttribute("data-admin-ped-student-open") || "").trim();
         openAdminStudentHistoryDrawer({ alunoId }).catch((e) => console.error("[admin] ficha open failed", e));
-        return;
-      }
-
-      const adminPedStudentToggle = target.closest("[data-admin-ped-student-toggle]");
-      if (adminPedStudentToggle instanceof HTMLButtonElement) {
-        event.preventDefault();
-        const alunoId = String(adminPedStudentToggle.getAttribute("data-admin-ped-student-toggle") || "").trim();
-        const nextStatus = String(adminPedStudentToggle.getAttribute("data-admin-ped-student-next-status") || "").trim();
-        if (!alunoId || !["active", "inactive"].includes(nextStatus)) return;
-        openAdminStudentDeactivateModal({ alunoId, nextActive: nextStatus === "active" });
         return;
       }
 
@@ -30650,6 +30630,14 @@ document.addEventListener("keydown", (event) => {
   if (!(event.target instanceof Element)) return;
   const key = event.key;
   if (key !== "Enter" && key !== " ") return;
+  const adminPedRow = event.target.closest("[data-admin-ped-student-open]");
+  if (adminPedRow instanceof HTMLElement) {
+    const alunoId = String(adminPedRow.getAttribute("data-admin-ped-student-open") || "").trim();
+    if (!alunoId) return;
+    event.preventDefault();
+    openAdminStudentHistoryDrawer({ alunoId }).catch((error) => console.error("[admin] ficha open failed", error));
+    return;
+  }
   const row = event.target.closest("[data-admin-student-open]");
   if (!(row instanceof HTMLElement)) return;
   const alunoId = String(row.getAttribute("data-admin-student-open") || "").trim();
