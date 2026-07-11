@@ -10880,6 +10880,7 @@ let adminStudentsState = {
     notesLoadedAt: 0,
     notesSaving: false,
     notesError: "",
+    liveClassMenuId: "",
     editingField: "",
     inlineSavingField: "",
     inlineSaveTimer: 0,
@@ -15896,7 +15897,65 @@ const renderAdminStudentSheet = () => {
   const commentComposerError = String(hist.commentComposerError || "");
   const commentComposerSaving = Boolean(hist.commentComposerSaving);
   const photoStatus = hist.photoSaving ? "Enviando foto…" : hist.photoError ? String(hist.photoError) : "";
+  const liveClasses = getAdminStudentLinkedClasses(alunoMeta?.id || hist.alunoId);
+  const liveClassMenuId = String(hist.liveClassMenuId || "").trim();
   if (hist.editingField || hist.inlineSavingField) return;
+
+  const liveClassesHtml = liveClasses.length
+    ? liveClasses
+        .map((classRow) => {
+          const status = normalizeClassStatus(classRow?.status);
+          const statusLabel = status === "active" ? "Ativa" : status === "paused" ? "Pausada" : "Encerrada";
+          const badgeClass = status === "active" ? "is-active" : status === "paused" ? "is-paused" : "is-ended";
+          const scheduleSummary = formatAdminPedScheduleSummary(classRow);
+          const liveUrl = buildAdminPedClassLiveUrl(classRow);
+          const teacher = String(classRow?.teacherName || "Sem professor").trim() || "Sem professor";
+          const plan = String(classRow?.planName || classRow?.plan || "").trim();
+          const classId = String(classRow?.id || "").trim();
+          const isMenuOpen = liveClassMenuId === classId;
+          return `
+            <div class="admin-student-live-class-row">
+              <div class="admin-student-live-class-main">
+                <div class="admin-student-live-class-title">${escapeHtml(String(classRow?.title || (classRow?.type === "group" ? "Aula em grupo" : "Aula ao vivo") || "Aula ao vivo"))}</div>
+                <div class="admin-student-live-class-sub">${escapeHtml(scheduleSummary)}</div>
+                <div class="admin-student-live-class-teacher">Professor: ${escapeHtml(teacher)}</div>
+              </div>
+              <div class="admin-student-live-class-side">
+                <div class="admin-student-live-class-pills">
+                  <span class="admin-ped-pill ${badgeClass}">${escapeHtml(statusLabel)}</span>
+                  ${plan ? `<span class="admin-ped-pill is-plan">${escapeHtml(String(plan).toUpperCase())}</span>` : ""}
+                </div>
+                <div class="admin-student-live-class-actions">
+                  <a class="admin-ped-action" href="${escapeHtml(liveUrl)}" target="_blank" rel="noopener">Entrar</a>
+                  <button class="admin-ped-action is-muted" type="button" data-admin-ped-class-copy-live="${escapeHtml(liveUrl)}">Copiar link</button>
+                  <div class="admin-student-live-class-menu-wrap" data-admin-student-live-class-menu-wrap="${escapeHtml(classId)}">
+                    <button
+                      class="admin-student-live-class-menu-trigger"
+                      type="button"
+                      data-admin-student-live-class-menu-trigger="${escapeHtml(classId)}"
+                      aria-haspopup="menu"
+                      aria-expanded="${isMenuOpen ? "true" : "false"}"
+                      aria-label="Mais ações da aula"
+                    >…</button>
+                    <div class="admin-student-live-class-menu" role="menu" ${isMenuOpen ? "" : "hidden"}>
+                      <button class="admin-ped-actionmenu-item" type="button" role="menuitem" data-admin-ped-class-edit="${escapeHtml(classId)}">Editar horário</button>
+                      <button class="admin-ped-actionmenu-item" type="button" role="menuitem" data-admin-ped-class-toggle="${escapeHtml(classId)}">${status === "active" ? "Desativar" : "Ativar"}</button>
+                      <button class="admin-ped-actionmenu-item is-danger" type="button" role="menuitem" data-admin-ped-class-delete="${escapeHtml(classId)}">Excluir</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+        })
+        .join("")
+    : `
+      <div class="admin-student-live-class-empty">
+        <div class="admin-student-live-class-empty-title">Nenhuma aula cadastrada</div>
+        <div class="admin-student-live-class-empty-sub">Crie a aula ao vivo deste aluno usando o mesmo fluxo atual do módulo Aulas.</div>
+        <button class="button button-solid button-small" type="button" data-admin-ped-student-new-class="${escapeHtml(String(alunoMeta?.id || hist.alunoId || ""))}">Criar aula</button>
+      </div>
+    `;
 
   sheetEl.innerHTML = `
     <div class="admin-student-sheet-grid admin-student-simple-grid">
@@ -16005,6 +16064,17 @@ const renderAdminStudentSheet = () => {
       </aside>
 
       <section class="admin-student-sheet-right admin-student-simple-right" aria-label="Detalhes do aluno">
+        <div class="admin-student-panel-card admin-student-live-class-card">
+          <div class="admin-student-live-class-header">
+            <div>
+              <div class="admin-student-panel-title">Aula ao vivo</div>
+              <div class="admin-student-history-subtitle">Gestão da sala, horário recorrente e link de videochamada.</div>
+            </div>
+          </div>
+          <div class="admin-student-live-class-list">
+            ${liveClassesHtml}
+          </div>
+        </div>
         <div class="admin-student-history-header">
           <div>
             <div class="admin-student-panel-title">Histórico Pedagógico</div>
@@ -16487,6 +16557,48 @@ const formatAdminPedScheduleSummary = (row) => {
       ? `${formatHmFromMinutes(row.startMin)}–${formatHmFromMinutes(row.endMin)}`
       : "—";
   return `${days.map(daysLabelShort).join(", ") || "—"} · ${time}`;
+};
+
+const getAdminStudentLinkedClasses = (studentId) => {
+  const safe = String(studentId || "").trim();
+  if (!safe) return [];
+  const rows = Array.isArray(adminPedagogicoState.classes) ? adminPedagogicoState.classes : [];
+  return rows
+    .filter((row) => {
+      const ids = Array.isArray(row?.studentIds) ? row.studentIds : [];
+      return ids.map((id) => String(id || "").trim()).includes(safe);
+    })
+    .slice()
+    .sort((a, b) => {
+      const statusDiff =
+        (normalizeClassStatus(a?.status) === "active" ? 0 : 1) - (normalizeClassStatus(b?.status) === "active" ? 0 : 1);
+      if (statusDiff) return statusDiff;
+      return (Number(b?.updatedAtMs || 0) || Number(b?.createdAtMs || 0)) - (Number(a?.updatedAtMs || 0) || Number(a?.createdAtMs || 0));
+    });
+};
+
+const getAdminStudentLiveClassDiagnostics = () => {
+  const classes = Array.isArray(adminPedagogicoState.classes) ? adminPedagogicoState.classes : [];
+  const studentsById = adminPedagogicoState.studentsById instanceof Map ? adminPedagogicoState.studentsById : new Map();
+  const countsByStudentId = new Map();
+  let orphanRows = 0;
+  classes.forEach((row) => {
+    const studentIds = Array.isArray(row?.studentIds) ? row.studentIds.map((id) => String(id || "").trim()).filter(Boolean) : [];
+    if (!studentIds.length) {
+      orphanRows += 1;
+      return;
+    }
+    let rowHasRealStudent = false;
+    studentIds.forEach((studentId) => {
+      if (studentsById.has(studentId)) {
+        rowHasRealStudent = true;
+        countsByStudentId.set(studentId, Number(countsByStudentId.get(studentId) || 0) + 1);
+      }
+    });
+    if (!rowHasRealStudent) orphanRows += 1;
+  });
+  const studentsWithMultipleRooms = [...countsByStudentId.entries()].filter(([, count]) => count > 1).length;
+  return { studentsWithMultipleRooms, orphanRows };
 };
 
 const getAdminPedStudentActiveClass = (studentId) => {
@@ -21831,6 +21943,11 @@ const findAdminPedClassById = (id) => {
   return arr.find((c) => String(c?.id || "") === safe) || null;
 };
 
+const rerenderAdminStudentSheetIfOpen = () => {
+  if (!adminStudentsState.history?.isOpen) return;
+  renderAdminStudentSheet();
+};
+
 const buildAdminPedDaysCheckboxesHtml = (selectedDays) => {
   const set = new Set(Array.isArray(selectedDays) ? selectedDays : []);
   const defs = [
@@ -22297,6 +22414,7 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
           await withTimeout(firebase.setDoc(docRef, payload, { merge: true }), 12_000, "firestore_admin_pedagogico_class_merge");
           closeModal();
           await renderAdminControlePedagogicoPanel({ force: true });
+          rerenderAdminStudentSheetIfOpen();
         } catch (e) {
           if (createdEventIdForRollback) {
             try {
@@ -23684,6 +23802,7 @@ const toggleAdminPedClassStatus = ({ classId } = {}) => {
         "firestore_admin_pedagogico_class_toggle"
       );
       await renderAdminControlePedagogicoPanel({ force: true });
+      rerenderAdminStudentSheetIfOpen();
     } catch (e) {
       console.error("[admin] controle-pedagogico toggle failed:", e);
       setAdminPedagogicoStatus("Não foi possível atualizar agora.", "error");
@@ -23733,6 +23852,7 @@ const deleteAdminPedClass = ({ classId } = {}) => {
           );
           closeModal();
           await renderAdminControlePedagogicoPanel({ force: true });
+          rerenderAdminStudentSheetIfOpen();
         } catch (e) {
           console.error("[admin] controle-pedagogico delete failed:", e);
           if (modalBody instanceof HTMLElement) modalBody.innerHTML = "Não foi possível inativar agora.";
@@ -24066,6 +24186,7 @@ const openStudentSimpleCard = async ({ alunoId, teacherId } = {}) => {
     notesLoadedAt: 0,
     notesSaving: false,
     notesError: "",
+    liveClassMenuId: "",
     editingField: "",
     inlineSavingField: "",
     inlineSaveTimer: 0,
@@ -24175,6 +24296,7 @@ const closeAdminStudentHistoryDrawer = () => {
     notesLoadedAt: 0,
     notesSaving: false,
     notesError: "",
+    liveClassMenuId: "",
     editingField: "",
     inlineSavingField: "",
     inlineSaveTimer: 0,
@@ -27666,6 +27788,17 @@ document.addEventListener("click", (event) => {
       closeAdminPedStudentsFiltersPopover();
     }
 
+    if (
+      adminStudentsState.history?.liveClassMenuId &&
+      !target.closest("[data-admin-student-live-class-menu-wrap]") &&
+      !target.closest("[data-admin-student-live-class-menu-trigger]")
+    ) {
+      adminStudentsState.history.liveClassMenuId = "";
+      if (adminStudentsState.history?.isOpen && !adminStudentsState.history.editingField && !adminStudentsState.history.inlineSavingField) {
+        renderAdminStudentSheet();
+      }
+    }
+
     // Professor > Alunos: close actions popover when clicking elsewhere.
     if (
       teacherStudentActionsPopoverEl instanceof HTMLElement &&
@@ -28831,6 +28964,15 @@ document.addEventListener("click", (event) => {
         event.preventDefault();
         adminStudentsState.history.commentComposerOpen = !adminStudentsState.history.commentComposerOpen;
         adminStudentsState.history.commentComposerError = "";
+        renderAdminStudentSheet();
+        return;
+      }
+
+      const studentLiveClassMenuTrigger = target.closest("[data-admin-student-live-class-menu-trigger]");
+      if (studentLiveClassMenuTrigger instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const classId = String(studentLiveClassMenuTrigger.getAttribute("data-admin-student-live-class-menu-trigger") || "").trim();
+        adminStudentsState.history.liveClassMenuId = adminStudentsState.history.liveClassMenuId === classId ? "" : classId;
         renderAdminStudentSheet();
         return;
       }
