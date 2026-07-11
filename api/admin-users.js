@@ -12,6 +12,26 @@ const normalizeRole = (value) => {
   return "";
 };
 
+const isPlainPatchObject = (value) => {
+  if (!value || typeof value !== "object") return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+};
+
+const sanitizePatchValue = (value) => {
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizePatchValue(item)).filter((item) => item !== undefined);
+  }
+  if (!isPlainPatchObject(value)) {
+    return value === undefined ? undefined : value;
+  }
+  return Object.fromEntries(
+    Object.entries(value)
+      .map(([key, entryValue]) => [key, sanitizePatchValue(entryValue)])
+      .filter(([, entryValue]) => entryValue !== undefined)
+  );
+};
+
 module.exports = async (req, res) => {
   const session = getSessionFromRequest(req);
   if (!session) {
@@ -88,12 +108,11 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const cleanPatch = {};
-  Object.entries(patch).forEach(([key, value]) => {
-    if (!key) return;
-    if (value === undefined) return;
-    cleanPatch[key] = value;
-  });
+  const cleanPatch = sanitizePatchValue(patch);
+  if (!cleanPatch || typeof cleanPatch !== "object" || !Object.keys(cleanPatch).length) {
+    sendJson(res, 400, { error: "empty_patch" });
+    return;
+  }
   cleanPatch.atualizadoEm = new Date().toISOString();
   cleanPatch.updatedAt = cleanPatch.atualizadoEm;
 

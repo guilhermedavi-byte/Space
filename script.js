@@ -14148,6 +14148,37 @@ const sanitizeFirestorePatch = (value) => {
   );
 };
 
+const USER_PATCH_PROTECTED_FIELDS = new Set(["cancelamento", "cancelamentosAnteriores", "historicoPedagogico", "comentarios"]);
+
+const warnIfSuspiciousUserPatch = (patch, { context = "users_patch", allowProtectedFields = [] } = {}) => {
+  const host = typeof window !== "undefined" ? String(window.location.hostname || "").trim().toLowerCase() : "";
+  const isDevHost = host === "localhost" || host === "127.0.0.1" || host.endsWith(".local");
+  if (!isDevHost || !patch || typeof patch !== "object") return;
+  const allowed = new Set((Array.isArray(allowProtectedFields) ? allowProtectedFields : []).map((item) => String(item || "").trim()));
+  const suspicious = Object.keys(patch).filter((key) => USER_PATCH_PROTECTED_FIELDS.has(key) && !allowed.has(key));
+  if (!suspicious.length) return;
+  console.warn(`[users patch] ${context} enviou campos protegidos: ${suspicious.join(", ")}`, patch);
+};
+
+const patchFirestoreUserDocument = async ({ userId, patch = {}, context = "users_patch", allowProtectedFields = [] } = {}) => {
+  const id = String(userId || "").trim();
+  if (!id) throw new Error("missing_user_id");
+  const cleanPatch = sanitizeFirestorePatch(patch || {});
+  if (!cleanPatch || typeof cleanPatch !== "object" || !Object.keys(cleanPatch).length) {
+    throw new Error("empty_user_patch");
+  }
+  warnIfSuspiciousUserPatch(cleanPatch, { context, allowProtectedFields });
+  const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, `firebase_init_${context}`);
+  const user = await waitForFirebaseAuthReady(firebase, 5000);
+  if (!user) throw new Error("not_authenticated");
+  await withTimeout(
+    firebase.setDoc(firebase.doc(firebase.primaryDb, "users", id), cleanPatch, { merge: true }),
+    12_000,
+    `firestore_${context}`
+  );
+  return { firebase, cleanPatch };
+};
+
 const normalizeAdminFirestoreUserRow = (sourceRow = {}) => {
   if (!sourceRow || typeof sourceRow !== "object") return null;
   const base = normalizeUserRow({
@@ -16324,19 +16355,15 @@ const saveAdminStudentPedagogicalNotes = async ({ alunoId, notes } = {}) => {
   if (!id) return false;
   const safeNotes = String(notes || "").trim();
   const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_student_notes_save");
-  await withTimeout(
-    firebase.setDoc(
-      firebase.doc(firebase.primaryDb, "users", id),
-      {
-        observacoesPedagogicas: safeNotes,
-        notes: safeNotes,
-        atualizadoEm: firebase.serverTimestamp(),
-      },
-      { merge: true }
-    ),
-    12_000,
-    "firestore_student_notes_merge"
-  );
+  await patchFirestoreUserDocument({
+    userId: id,
+    context: "admin_student_notes_merge",
+    patch: {
+      observacoesPedagogicas: safeNotes,
+      notes: safeNotes,
+      atualizadoEm: firebase.serverTimestamp(),
+    },
+  });
   return true;
 };
 
@@ -24211,21 +24238,17 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
           const docRef = firebase.doc(firebase.primaryDb, "classes", classId);
           for (const studentId of studentIds) {
             if (!studentId) continue;
-            await withTimeout(
-              firebase.setDoc(
-                firebase.doc(firebase.primaryDb, "users", studentId),
-                {
-                  professorId: teacherId,
-                  teacherId: teacherId,
-                  professorNome: teacherName,
-                  teacherNome: teacherName,
-                  atualizadoEm: firebase.serverTimestamp(),
-                },
-                { merge: true }
-              ),
-              12_000,
-              "firestore_admin_pedagogico_student_link"
-            );
+            await patchFirestoreUserDocument({
+              userId: studentId,
+              context: "admin_pedagogico_student_link",
+              patch: {
+                professorId: teacherId,
+                teacherId: teacherId,
+                professorNome: teacherName,
+                teacherNome: teacherName,
+                atualizadoEm: firebase.serverTimestamp(),
+              },
+            });
             updateAdminStudentCachedRow(studentId, {
               professorId: teacherId,
               teacherId: teacherId,
@@ -25056,13 +25079,11 @@ const openAdminPedStudentLinkModal = ({ studentId } = {}) => {
       (async () => {
         try {
           const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_student_link");
-          const user = await waitForFirebaseAuthReady(firebase, 5000);
-          if (!user) throw new Error("not_authenticated");
-          await withTimeout(
-            firebase.setDoc(firebase.doc(firebase.primaryDb, "users", alunoId), { ...patch, atualizadoEm: firebase.serverTimestamp() }, { merge: true }),
-            12_000,
-            "firestore_admin_student_link_merge"
-          );
+          await patchFirestoreUserDocument({
+            userId: alunoId,
+            context: "admin_student_link_merge",
+            patch: { ...patch, atualizadoEm: firebase.serverTimestamp() },
+          });
           closeModal();
           await renderAdminControlePedagogicoPanel({ force: true });
         } catch (e) {
@@ -26859,13 +26880,15 @@ const saveAdminStudentLifecyclePatch = async ({ alunoId, patch = {} } = {}) => {
   const id = String(alunoId || "").trim();
   if (!id) throw new Error("missing_student_id");
   const cleanPatch = sanitizeFirestorePatch(patch || {});
-  const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_student_lifecycle");
-  const user = await waitForFirebaseAuthReady(firebase, 5000);
-  if (!user) throw new Error("not_authenticated");
   console.info("[Cancellation] studentId:", id);
   console.info("[Cancellation] collection:", "users");
   console.info("[Cancellation] payload:", cleanPatch);
-  await withTimeout(firebase.setDoc(firebase.doc(firebase.primaryDb, "users", id), cleanPatch, { merge: true }), 12_000, "firestore_student_lifecycle_patch");
+  await patchFirestoreUserDocument({
+    userId: id,
+    context: "student_lifecycle_patch",
+    patch: cleanPatch,
+    allowProtectedFields: ["cancelamento", "cancelamentosAnteriores"],
+  });
   const persistedRow = await loadAdminStudentRowFromFirestoreById(id);
   if (!persistedRow) {
     throw new Error("student_reload_after_lifecycle_patch_failed");
@@ -26952,8 +26975,6 @@ const patchAdminStudentStatus = async ({ alunoId, ativo } = {}) => {
   const id = String(alunoId || "").trim();
   if (!id) return;
   const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_student_status");
-  const user = await waitForFirebaseAuthReady(firebase, 5000);
-  if (!user) throw new Error("not_authenticated");
   const patch = {
     ativo: Boolean(ativo),
     atualizadoEm: firebase.serverTimestamp(),
@@ -26968,7 +26989,11 @@ const patchAdminStudentStatus = async ({ alunoId, ativo } = {}) => {
     patch.professorId = null;
     patch.teacherId = null;
   }
-  await withTimeout(firebase.setDoc(firebase.doc(firebase.primaryDb, "users", id), patch, { merge: true }), 12_000, "firestore_student_status_patch");
+  await patchFirestoreUserDocument({
+    userId: id,
+    context: "student_status_patch",
+    patch,
+  });
   updateAdminStudentCachedRow(id, patch);
 };
 
@@ -27530,11 +27555,11 @@ const updateAdminUserNameRecord = async ({ uid, role, name } = {}) => {
   };
 
   try {
-    await withTimeout(
-      firebase.setDoc(firebase.doc(firebase.primaryDb, "users", safeUid), payload, { merge: true }),
-      12_000,
-      "firestore_update_user_primary"
-    );
+    await patchFirestoreUserDocument({
+      userId: safeUid,
+      context: "update_user_primary",
+      patch: payload,
+    });
   } catch (primaryErr) {
     console.error("[admin] update user (firestore primary) failed:", primaryErr);
     await withTimeout(
@@ -31917,7 +31942,11 @@ document.addEventListener("click", (event) => {
               atualizadoEm: firebase.serverTimestamp(),
             };
 
-            await withTimeout(firebase.setDoc(firebase.doc(firebase.primaryDb, "users", alunoId), patch, { merge: true }), 12_000, "firestore_student_edit_merge");
+            await patchFirestoreUserDocument({
+              userId: alunoId,
+              context: "student_edit_merge",
+              patch,
+            });
 
             adminStudentsState.loadedAt = 0;
             await ensureAdminStudentsBaseData({ force: true });
@@ -32080,12 +32109,11 @@ document.addEventListener("click", (event) => {
         const applyToggle = async (nextActive) => {
           setAdminManageStatus(type, nextActive ? "Ativando…" : "Desativando…");
           try {
-            const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init");
-	            await withTimeout(
-	              firebase.setDoc(firebase.doc(firebase.primaryDb, "users", uid), { ativo: nextActive }, { merge: true }),
-	              12_000,
-	              "firestore_toggle_active"
-	            );
+            await patchFirestoreUserDocument({
+              userId: uid,
+              context: "toggle_active",
+              patch: { ativo: nextActive },
+            });
 
 	            // Keep the scheduling store in sync so admin ranking/slot assignment respects active teachers.
 		            await withTimeout(
