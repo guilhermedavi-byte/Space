@@ -16334,13 +16334,12 @@ const slugifyClassRoomPart = (value) =>
 
 const buildAdminPedShortRoomSlug = (classId) => {
   const raw = String(classId || "").trim();
-  if (!raw) return `aula-${Math.random().toString(36).slice(2, 10)}`;
+  if (!raw) return Math.random().toString(36).slice(2, 10);
   const compact = raw
     .replace(/^class[_-]?/i, "")
-    .replace(/[^a-z0-9]+/gi, "-")
-    .replace(/^-+|-+$/g, "")
+    .replace(/[^a-z0-9]+/gi, "")
     .toLowerCase();
-  return compact || `aula-${Math.random().toString(36).slice(2, 10)}`;
+  return compact || Math.random().toString(36).slice(2, 10);
 };
 
 const buildAdminPedClassLiveUrl = (classRow) => {
@@ -16363,8 +16362,7 @@ const buildAdminPedClassLiveUrl = (classRow) => {
   ].filter(Boolean);
   const roomId = shortRoomSlug || legacyParts.join("-").slice(0, 180) || `space-aula-${Date.now()}`;
   const origin = typeof window !== "undefined" && window.location && window.location.origin ? window.location.origin : "";
-  const displayTitle = `Space Aula ${title}`;
-  return `${origin}/sala/${encodeURIComponent(roomId)}?title=${encodeURIComponent(displayTitle)}`;
+  return `${origin}/sala/${encodeURIComponent(roomId)}`;
 };
 
 const normalizeDaysOfWeek = (value) => {

@@ -131,10 +131,12 @@ const classMatchesStudent = (row, session, userId) => {
 };
 
 const buildClassRoomUrl = (row, dateKey) => {
-  const parts = ["space", "aula", row.title, row.teacherName || row.teacherId, dateKey, row.id].map(slugifyRoomPart).filter(Boolean);
-  const room = parts.join("-").slice(0, 180) || `space-aula-${row.id}`;
-  const title = `Space Aula ${row.title || "ao vivo"}`;
-  return `/sala/${encodeURIComponent(room)}?title=${encodeURIComponent(title)}`;
+  const room = String(row.id || "")
+    .trim()
+    .replace(/^class[_-]?/i, "")
+    .replace(/[^a-z0-9]+/gi, "")
+    .toLowerCase() || `aula${Date.now().toString(36)}`;
+  return `/sala/${encodeURIComponent(room)}`;
 };
 
 const expandStudentClasses = async ({ session, userId, now, tzOffsetMinutes }) => {
