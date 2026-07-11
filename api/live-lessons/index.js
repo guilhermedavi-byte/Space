@@ -2,6 +2,14 @@ const { sendJson } = require("../_lib/http");
 const { getSessionFromRequest } = require("../_lib/session");
 const { listLiveLessons, listLessonRegisters, summarizeLiveLessons, normalizeRole, isAdminRole } = require("../_lib/live-lessons");
 
+const buildDegradedWarning = (error) => {
+  const reason = String(error?.code || error?.message || "").trim().toLowerCase();
+  if (reason === "supabase_not_configured") {
+    return "As aulas ao vivo do Supabase não carregaram; exibindo apenas eventos e registros disponíveis.";
+  }
+  return "As aulas pedagógicas estão temporariamente indisponíveis.";
+};
+
 module.exports = async (req, res) => {
   if (req.method !== "GET" && req.method !== "HEAD") {
     res.setHeader("Allow", "GET, HEAD");
@@ -61,7 +69,8 @@ module.exports = async (req, res) => {
         studentsInClass: 0,
       },
       degraded: true,
-      warning: "As aulas pedagógicas estão temporariamente indisponíveis.",
+      degradedReason: String(error?.code || error?.message || "live_lessons_unavailable"),
+      warning: buildDegradedWarning(error),
     });
   }
 };

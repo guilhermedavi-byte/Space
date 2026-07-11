@@ -8816,7 +8816,7 @@ const renderTeacherPedagogico = async ({ silent = false } = {}) => {
     renderTeacherPedagogicoList();
     if (!silent) {
       setPedagogicoStatus(
-        liveData?.degraded ? "A lista carregou em modo seguro; alguns dados podem estar indisponíveis." : "",
+        liveData?.degraded ? String(liveData?.warning || "A lista carregou em modo seguro; alguns dados podem estar indisponíveis.") : "",
         liveData?.degraded ? "warn" : ""
       );
     }
