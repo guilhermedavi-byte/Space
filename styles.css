@@ -4838,11 +4838,148 @@ body.admin-student-drawer-open {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  align-items: center;
 }
 
 .admin-student-lifecycle-danger {
   border-color: rgba(255, 78, 70, 0.28);
   color: rgba(255, 112, 104, 0.96);
+}
+
+.admin-student-lifecycle-menu-wrap {
+  position: relative;
+}
+
+.admin-student-lifecycle-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  min-width: 180px;
+  padding: 8px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(14,18,28,.98);
+  box-shadow: 0 18px 40px rgba(0,0,0,.32);
+  display: grid;
+  gap: 4px;
+  z-index: 4;
+}
+
+.admin-student-lifecycle-menu-item {
+  appearance: none;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: rgba(255,255,255,.82);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 10px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.admin-student-lifecycle-menu-item:hover,
+.admin-student-lifecycle-menu-item:focus-visible {
+  background: rgba(255,255,255,.06);
+}
+
+.admin-student-lifecycle-timeline {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(255,255,255,.025);
+  border: 1px solid rgba(255,255,255,.06);
+}
+
+.admin-student-lifecycle-timeline-copy {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255,255,255,.6);
+}
+
+.admin-student-lifecycle-timeline-bar {
+  position: relative;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.06);
+  overflow: hidden;
+}
+
+.admin-student-lifecycle-timeline-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(255,188,96,.5), rgba(255,188,96,.9));
+}
+
+.admin-student-lifecycle-timeline-today {
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  border: 2px solid rgba(10,18,30,.96);
+  background: #ffb860;
+  box-shadow: 0 0 0 3px rgba(255,184,96,.14);
+}
+
+.admin-student-lifecycle-timeline-sub {
+  font-size: 11px;
+  color: rgba(255,255,255,.56);
+}
+
+.admin-student-lifecycle-sensors {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-student-lifecycle-sensor {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255,255,255,.025);
+  border: 1px solid rgba(255,255,255,.06);
+}
+
+.admin-student-lifecycle-sensor-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-top: 5px;
+  flex: 0 0 auto;
+}
+
+.admin-student-lifecycle-sensor-dot.is-green { background: #3fd6a4; box-shadow: 0 0 8px rgba(63,214,164,.28); }
+.admin-student-lifecycle-sensor-dot.is-amber { background: #f5b64b; box-shadow: 0 0 8px rgba(245,182,75,.28); }
+.admin-student-lifecycle-sensor-dot.is-red { background: #ff6a60; box-shadow: 0 0 8px rgba(255,106,96,.28); }
+.admin-student-lifecycle-sensor-dot.is-gray { background: rgba(255,255,255,.35); }
+
+.admin-student-lifecycle-sensor-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.admin-student-lifecycle-sensor-copy strong {
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(255,255,255,.9);
+}
+
+.admin-student-lifecycle-sensor-copy span {
+  font-size: 12px;
+  line-height: 1.45;
+  color: rgba(255,255,255,.6);
 }
 
 .admin-student-lifecycle-cycles {
@@ -4955,6 +5092,11 @@ body.admin-student-drawer-open {
 @media (max-width: 820px) {
   .admin-student-lifecycle-cycle-row {
     grid-template-columns: 1fr;
+  }
+  .admin-student-lifecycle-head,
+  .admin-student-lifecycle-timeline-copy {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 
