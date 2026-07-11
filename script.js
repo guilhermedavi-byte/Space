@@ -152,7 +152,10 @@ const ADMIN_STUDENT_HISTORY_DRAWER_TEMPLATE = `
           <div class="admin-students-drawer-title" data-admin-student-history-title>Ficha do aluno</div>
           <div class="admin-students-drawer-sub" data-admin-student-history-sub>—</div>
         </div>
-        <button class="admin-students-drawer-close" type="button" data-admin-student-history-close aria-label="Fechar">✕</button>
+        <div class="admin-students-drawer-head-actions">
+          <button class="admin-students-drawer-deactivate" type="button" data-admin-student-deactivate aria-label="Desativar aluno">Desativar aluno</button>
+          <button class="admin-students-drawer-close" type="button" data-admin-student-history-close aria-label="Fechar">✕</button>
+        </div>
       </div>
       <div class="admin-students-drawer-body">
         <div class="admin-student-sheet" data-admin-student-sheet></div>
@@ -208,6 +211,11 @@ const getAdminStudentHistoryTitle = () => {
 const getAdminStudentHistorySub = () => {
   const drawer = getAdminStudentHistoryDrawer();
   return drawer instanceof HTMLElement ? drawer.querySelector("[data-admin-student-history-sub]") : null;
+};
+
+const getAdminStudentDeactivateTrigger = () => {
+  const drawer = getAdminStudentHistoryDrawer();
+  return drawer instanceof HTMLElement ? drawer.querySelector("[data-admin-student-deactivate]") : null;
 };
 
 let adminStudentDrawerScrollLockY = 0;
@@ -14740,25 +14748,29 @@ const renderAdminStudentsList = () => {
               <span>${escapeHtml(row.nome)}</span>
               ${alertBadge}
             </div>
-            <div class="admin-students-emailline">${escapeHtml(row.email || "—")}</div>
             <div class="admin-students-chips">${chips || `<span class="admin-students-chip is-muted">Sem tags</span>`}</div>
           </div>
-          <div class="admin-students-right" aria-hidden="true">
-            <span class="admin-students-chevron">›</span>
-          </div>
-          <button class="admin-students-actions-trigger" type="button" aria-label="Ações" data-admin-student-actions-trigger="${escapeHtml(
-            row.alunoId
-          )}">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M6.5 12h.01"></path>
-              <path d="M12 12h.01"></path>
-              <path d="M17.5 12h.01"></path>
-            </svg>
-          </button>
         </div>
       `;
     })
     .join("");
+};
+
+const openAdminStudentClassEditor = ({ alunoId } = {}) => {
+  const id = String(alunoId || "").trim();
+  if (!id) return;
+  const meta = adminPedagogicoState.studentsById instanceof Map ? adminPedagogicoState.studentsById.get(id) || null : null;
+  const existingClass = getAdminPedStudentActiveClass(id);
+  const teacherId = String(meta?.professorId || meta?.teacherId || "").trim();
+  const plan = String(meta?.plano || "").trim();
+  if (existingClass) {
+    openAdminPedClassModal({ mode: "edit", classRow: existingClass });
+  } else {
+    openAdminPedClassModal({
+      mode: "create",
+      prefill: { type: "individual", teacherId, plan, studentIds: id ? [id] : [] },
+    });
+  }
 };
 
 const getAdminStudentNextLessonLabel = (alunoId) => {
@@ -15925,7 +15937,15 @@ const renderAdminStudentSheet = () => {
   const commentComposerSaving = Boolean(hist.commentComposerSaving);
   const photoStatus = hist.photoSaving ? "Enviando foto…" : hist.photoError ? String(hist.photoError) : "";
   const liveClasses = getAdminStudentLinkedClasses(alunoMeta?.id || hist.alunoId);
+  const deactivateBtn = getAdminStudentDeactivateTrigger();
+  const alunoIsActive = Boolean(alunoMeta?.ativo !== false);
   if (hist.editingField || hist.inlineSavingField) return;
+
+  if (deactivateBtn instanceof HTMLButtonElement) {
+    deactivateBtn.hidden = !String(hist.alunoId || "").trim();
+    deactivateBtn.textContent = alunoIsActive ? "Desativar aluno" : "Reativar aluno";
+    deactivateBtn.setAttribute("aria-label", alunoIsActive ? "Desativar aluno" : "Reativar aluno");
+  }
 
   const liveClassBlocks = liveClasses.map((classRow) => {
     const status = normalizeClassStatus(classRow?.status);
@@ -16072,7 +16092,21 @@ const renderAdminStudentSheet = () => {
         ${hist.baseLoading ? `<div class="admin-student-simple-block-loading">Carregando dados básicos…</div>` : ""}
 
         <div class="admin-student-panel-card admin-student-live-class-card">
-          <div class="admin-student-panel-title">Aulas cadastradas</div>
+          <div class="admin-student-live-class-card-head">
+            <div class="admin-student-panel-title">Aulas cadastradas</div>
+            <button
+              class="admin-student-live-class-edit"
+              type="button"
+              data-admin-student-edit-class="${escapeHtml(String(alunoMeta?.id || hist.alunoId || ""))}"
+              aria-label="Editar aulas cadastradas"
+              title="Editar aulas"
+            >
+              <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M10.9 2.1a1.5 1.5 0 0 1 2.1 2.1l-6.8 6.8-2.7.6.6-2.7 6.8-6.8Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"></path>
+                <path d="M9.8 3.2 12.8 6.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
+              </svg>
+            </button>
+          </div>
           <div class="admin-student-live-class-list">
             ${liveClassesHtml}
           </div>
@@ -28720,18 +28754,7 @@ document.addEventListener("click", (event) => {
       if (adminPedStudentNewClass instanceof HTMLButtonElement) {
         event.preventDefault();
         const alunoId = String(adminPedStudentNewClass.getAttribute("data-admin-ped-student-new-class") || "").trim();
-        const meta = adminPedagogicoState.studentsById instanceof Map ? adminPedagogicoState.studentsById.get(alunoId) || null : null;
-        const existingClass = getAdminPedStudentActiveClass(alunoId);
-        const teacherId = String(meta?.professorId || meta?.teacherId || "").trim();
-        const plan = String(meta?.plano || "").trim();
-        if (existingClass) {
-          openAdminPedClassModal({ mode: "edit", classRow: existingClass });
-        } else {
-          openAdminPedClassModal({
-            mode: "create",
-            prefill: { type: "individual", teacherId, plan, studentIds: alunoId ? [alunoId] : [] },
-          });
-        }
+        openAdminStudentClassEditor({ alunoId });
         return;
       }
 
@@ -29055,6 +29078,27 @@ document.addEventListener("click", (event) => {
         adminStudentsState.history.commentComposerOpen = !adminStudentsState.history.commentComposerOpen;
         adminStudentsState.history.commentComposerError = "";
         renderAdminStudentSheet();
+        return;
+      }
+
+      const studentDeactivateTrigger = target.closest("[data-admin-student-deactivate]");
+      if (studentDeactivateTrigger instanceof HTMLButtonElement) {
+        event.preventDefault();
+        event.stopPropagation();
+        const alunoId = String(adminStudentsState.history?.alunoId || "").trim();
+        if (!alunoId) return;
+        const isActive = Boolean(adminStudentsState.history?.alunoMeta?.ativo !== false);
+        openAdminStudentDeactivateModal({ alunoId, nextActive: !isActive });
+        return;
+      }
+
+      const studentEditClassTrigger = target.closest("[data-admin-student-edit-class]");
+      if (studentEditClassTrigger instanceof HTMLButtonElement) {
+        event.preventDefault();
+        event.stopPropagation();
+        const alunoId = String(studentEditClassTrigger.getAttribute("data-admin-student-edit-class") || adminStudentsState.history?.alunoId || "").trim();
+        if (!alunoId) return;
+        openAdminStudentClassEditor({ alunoId });
         return;
       }
 

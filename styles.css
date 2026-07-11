@@ -4546,12 +4546,12 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
 
 .admin-students-row {
   display: grid;
-  grid-template-columns: 52px minmax(0, 1fr) 18px 40px;
+  grid-template-columns: 52px minmax(0, 1fr);
   gap: 12px;
   align-items: center;
   padding: 14px 16px;
   cursor: pointer;
-  transition: background-color 160ms ease;
+  transition: background-color 160ms ease, box-shadow 160ms ease;
 }
 
 .admin-students-row + .admin-students-row {
@@ -4560,6 +4560,7 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
 
 .admin-students-row:hover {
   background: rgba(255, 255, 255, 0.03);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
 .admin-students-row:focus-visible {
@@ -4655,15 +4656,8 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
   color: rgba(93, 202, 165, 0.92);
 }
 
-.admin-students-emailline {
-  margin-top: 4px;
-  font-size: 12px;
-  font-weight: 650;
-  color: rgba(255, 255, 255, 0.58);
-}
-
 .admin-students-chips {
-  margin-top: 8px;
+  margin-top: 6px;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -4704,35 +4698,27 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
   color: rgba(255, 255, 255, 0.7);
 }
 
-.admin-students-right {
-  display: flex;
+.admin-students-drawer-head-actions {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
+  gap: 10px;
 }
 
-.admin-students-chevron {
-  font-size: 18px;
-  line-height: 1;
-  color: rgba(255, 255, 255, 0.35);
-}
-
-.admin-students-actions-trigger {
-  width: 38px;
-  height: 38px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.02);
-  color: rgba(255, 255, 255, 0.75);
+.admin-students-drawer-deactivate {
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 78, 70, 0.24);
+  background: rgba(255, 78, 70, 0.08);
+  color: rgba(255, 118, 110, 0.96);
+  font-size: 12px;
+  font-weight: 800;
   cursor: pointer;
 }
 
-.admin-students-actions-trigger svg {
-  width: 18px;
-  height: 18px;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+.admin-students-drawer-deactivate:hover,
+.admin-students-drawer-deactivate:focus-visible {
+  background: rgba(255, 78, 70, 0.14);
 }
 
 .admin-students-empty,
@@ -5440,6 +5426,38 @@ body.admin-student-drawer-open {
 .admin-student-live-class-card {
   gap: 14px;
   padding: 16px;
+}
+
+.admin-student-live-class-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.admin-student-live-class-edit {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.72);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.admin-student-live-class-edit svg {
+  width: 15px;
+  height: 15px;
+}
+
+.admin-student-live-class-edit:hover,
+.admin-student-live-class-edit:focus-visible {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.88);
 }
 
 .admin-student-live-class-list {
