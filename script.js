@@ -4904,7 +4904,7 @@ const applyAdminTeacherAgendasToUI = () => {
       const color = getAdminTeacherColor(teacher.id);
       const isOn = selected.has(teacher.id);
       return `
-        <li class="admin-agenda-item" data-admin-agenda-id="${escapeHtml(teacher.id)}">
+        <li class="admin-agenda-item" data-admin-agenda-id="${escapeHtml(teacher.id)}" data-admin-agenda-toggle="${escapeHtml(teacher.id)}">
           <button
             class="admin-agenda-toggle${isOn ? " is-on" : ""}"
             type="button"
@@ -29582,7 +29582,7 @@ document.addEventListener("click", (event) => {
       }
 
       const agendaToggle = target.closest("[data-admin-agenda-toggle]");
-      if (agendaToggle instanceof HTMLButtonElement) {
+      if (agendaToggle instanceof HTMLElement) {
         event.preventDefault();
         const id = String(agendaToggle.getAttribute("data-admin-agenda-toggle") || "").trim();
         toggleAdminTeacherAgenda(id);
