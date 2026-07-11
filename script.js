@@ -10880,7 +10880,6 @@ let adminStudentsState = {
     notesLoadedAt: 0,
     notesSaving: false,
     notesError: "",
-    liveClassMenuId: "",
     editingField: "",
     inlineSavingField: "",
     inlineSaveTimer: 0,
@@ -15898,14 +15897,12 @@ const renderAdminStudentSheet = () => {
   const commentComposerSaving = Boolean(hist.commentComposerSaving);
   const photoStatus = hist.photoSaving ? "Enviando foto…" : hist.photoError ? String(hist.photoError) : "";
   const liveClasses = getAdminStudentLinkedClasses(alunoMeta?.id || hist.alunoId);
-  const liveClassMenuId = String(hist.liveClassMenuId || "").trim();
   if (hist.editingField || hist.inlineSavingField) return;
 
   const liveClassBlocks = liveClasses.map((classRow) => {
     const status = normalizeClassStatus(classRow?.status);
     const liveUrl = buildAdminPedClassLiveUrl(classRow);
     const classId = String(classRow?.id || "").trim();
-    const isMenuOpen = liveClassMenuId === classId;
     const activeScheduleDays = normalizeAdminPedWeeklyScheduleDays(classRow?.scheduleDays || []).filter(
       (day) => day && day.enabled && String(day.startTime || "").trim() && String(day.endTime || "").trim()
     );
@@ -15934,74 +15931,60 @@ const renderAdminStudentSheet = () => {
       hasLiveUrl: Boolean(liveUrl),
     };
   });
-  const totalScheduleCount = liveClassBlocks.reduce((sum, block) => sum + (Array.isArray(block.scheduleItems) ? block.scheduleItems.length : 0), 0);
-  const liveClassCountLabel = `${totalScheduleCount} horário${totalScheduleCount === 1 ? "" : "s"}`;
-
   const liveClassesHtml = liveClasses.length
     ? liveClassBlocks
         .map((block) => {
           return `
             <div class="admin-student-live-class-row">
-              <div class="admin-student-live-class-col admin-student-live-class-col-schedule">
-                <div class="admin-student-live-class-section-title">Horários semanais${escapeHtml(block.statusSuffix)}</div>
-                <div class="admin-student-live-class-schedule">
-                  ${
-                    block.scheduleItems.length
-                      ? block.scheduleItems
-                          .map(
-                            (item) => `
-                              <div class="admin-student-live-class-line">
-                                <span class="admin-student-live-class-day">${escapeHtml(item.dayLabel)}</span>
-                                <span class="admin-student-live-class-time">${escapeHtml(item.timeLabel)}</span>
-                              </div>
-                            `
-                          )
-                          .join("")
-                      : `<div class="admin-student-live-class-line is-empty"><span class="admin-student-live-class-day">Nenhum horário cadastrado</span><span class="admin-student-live-class-time">—</span></div>`
-                  }
-                </div>
+              <div class="admin-student-live-class-schedule">
+                ${
+                  block.scheduleItems.length
+                    ? block.scheduleItems
+                        .map(
+                          (item, index) => `
+                            <div class="admin-student-live-class-line">
+                              <span class="admin-student-live-class-day">${escapeHtml(item.dayLabel)}${index === 0 ? escapeHtml(block.statusSuffix) : ""}</span>
+                              <span class="admin-student-live-class-time">${escapeHtml(item.timeLabel)}</span>
+                            </div>
+                          `
+                        )
+                        .join("")
+                    : `<div class="admin-student-live-class-line is-empty"><span class="admin-student-live-class-day">Nenhum horário cadastrado</span><span class="admin-student-live-class-time">—</span></div>`
+                }
               </div>
-              <div class="admin-student-live-class-col admin-student-live-class-col-virtual">
+              <div class="admin-student-live-class-virtual">
                 <div class="admin-student-live-class-section-title">Sala virtual</div>
                 ${
                   block.hasLiveUrl
                     ? `
-                      <div class="admin-student-live-class-room-name">Sala de aula do aluno</div>
-                      <a class="admin-student-live-class-link" href="${escapeHtml(block.liveUrl)}" target="_blank" rel="noopener" title="${escapeHtml(block.liveUrl)}">${escapeHtml(
-                        block.hostLabel
-                      )}</a>
+                      <div class="admin-student-live-class-link-row">
+                        <a class="admin-student-live-class-link" href="${escapeHtml(block.liveUrl)}" target="_blank" rel="noopener" title="${escapeHtml(block.liveUrl)}">${escapeHtml(
+                          block.hostLabel
+                        )}</a>
+                        <button
+                          class="admin-student-live-class-copy"
+                          type="button"
+                          data-admin-ped-class-copy-live="${escapeHtml(block.liveUrl)}"
+                          aria-label="Copiar link da aula"
+                          title="Copiar link"
+                        >
+                          <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                            <rect x="5" y="3" width="8" height="10" rx="2" stroke="currentColor" stroke-width="1.5"></rect>
+                            <path d="M3.5 10.5h-1A1.5 1.5 0 0 1 1 9V3.5A1.5 1.5 0 0 1 2.5 2h5A1.5 1.5 0 0 1 9 3.5v1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
+                          </svg>
+                        </button>
+                      </div>
                     `
                     : `
-                      <div class="admin-student-live-class-room-name">Sala virtual não configurada</div>
-                      <div class="admin-student-live-class-link is-disabled">—</div>
+                      <div class="admin-student-live-class-link is-disabled">Sala virtual não configurada</div>
                     `
                 }
                 <div class="admin-student-live-class-actions">
                   ${
                     block.hasLiveUrl
                       ? `<a class="admin-ped-action admin-student-live-class-enter" href="${escapeHtml(block.liveUrl)}" target="_blank" rel="noopener">Entrar na aula</a>`
-                      : `<button class="admin-ped-action admin-student-live-class-enter" type="button" disabled aria-disabled="true">Entrar na aula</button>`
+                      : ``
                   }
-                  ${
-                    block.hasLiveUrl
-                      ? `<button class="admin-ped-action is-muted" type="button" data-admin-ped-class-copy-live="${escapeHtml(block.liveUrl)}">Copiar link</button>`
-                      : `<button class="admin-ped-action is-muted" type="button" disabled aria-disabled="true">Copiar link</button>`
-                  }
-                  <div class="admin-student-live-class-menu-wrap" data-admin-student-live-class-menu-wrap="${escapeHtml(block.classId)}">
-                    <button
-                      class="admin-student-live-class-menu-trigger"
-                      type="button"
-                      data-admin-student-live-class-menu-trigger="${escapeHtml(block.classId)}"
-                      aria-haspopup="menu"
-                      aria-expanded="${block.isMenuOpen ? "true" : "false"}"
-                      aria-label="Mais ações da aula"
-                    >…</button>
-                    <div class="admin-student-live-class-menu" role="menu" ${block.isMenuOpen ? "" : "hidden"}>
-                      <button class="admin-ped-actionmenu-item" type="button" role="menuitem" data-admin-ped-class-edit="${escapeHtml(block.classId)}">Editar horário</button>
-                      <button class="admin-ped-actionmenu-item" type="button" role="menuitem" data-admin-ped-class-toggle="${escapeHtml(block.classId)}">${block.status === "active" ? "Desativar" : "Ativar"}</button>
-                      <button class="admin-ped-actionmenu-item is-danger" type="button" role="menuitem" data-admin-ped-class-delete="${escapeHtml(block.classId)}">Excluir</button>
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>
@@ -16011,7 +15994,6 @@ const renderAdminStudentSheet = () => {
     : `
       <div class="admin-student-live-class-empty">
         <div class="admin-student-live-class-empty-title">Nenhuma aula cadastrada</div>
-        <div class="admin-student-live-class-empty-sub">Crie a aula ao vivo deste aluno usando o mesmo fluxo atual do módulo Aulas.</div>
         <button class="button button-solid button-small" type="button" data-admin-ped-student-new-class="${escapeHtml(String(alunoMeta?.id || hist.alunoId || ""))}">Criar aula</button>
       </div>
     `;
@@ -16060,6 +16042,13 @@ const renderAdminStudentSheet = () => {
         </div>
         ${baseError ? `<div class="admin-student-simple-block-error">${escapeHtml(baseError)}</div>` : ""}
         ${hist.baseLoading ? `<div class="admin-student-simple-block-loading">Carregando dados básicos…</div>` : ""}
+
+        <div class="admin-student-panel-card admin-student-live-class-card">
+          <div class="admin-student-panel-title">Aulas cadastradas</div>
+          <div class="admin-student-live-class-list">
+            ${liveClassesHtml}
+          </div>
+        </div>
 
         <div class="admin-student-personal admin-student-quick-data" aria-label="Dados do aluno">
           <div class="admin-student-personal-title">Dados do aluno</div>
@@ -16123,18 +16112,6 @@ const renderAdminStudentSheet = () => {
       </aside>
 
       <section class="admin-student-sheet-right admin-student-simple-right" aria-label="Detalhes do aluno">
-        <div class="admin-student-panel-card admin-student-live-class-card">
-          <div class="admin-student-live-class-header">
-            <div>
-              <div class="admin-student-panel-title">Aulas cadastradas</div>
-              <div class="admin-student-live-class-subtitle">Horários recorrentes do aluno</div>
-            </div>
-            <div class="admin-student-live-class-count">${escapeHtml(liveClassCountLabel)}</div>
-          </div>
-          <div class="admin-student-live-class-list">
-            ${liveClassesHtml}
-          </div>
-        </div>
         <div class="admin-student-history-header">
           <div>
             <div class="admin-student-panel-title">Histórico Pedagógico</div>
@@ -24282,7 +24259,6 @@ const openStudentSimpleCard = async ({ alunoId, teacherId } = {}) => {
     notesLoadedAt: 0,
     notesSaving: false,
     notesError: "",
-    liveClassMenuId: "",
     editingField: "",
     inlineSavingField: "",
     inlineSaveTimer: 0,
@@ -24392,7 +24368,6 @@ const closeAdminStudentHistoryDrawer = () => {
     notesLoadedAt: 0,
     notesSaving: false,
     notesError: "",
-    liveClassMenuId: "",
     editingField: "",
     inlineSavingField: "",
     inlineSaveTimer: 0,
@@ -27884,17 +27859,6 @@ document.addEventListener("click", (event) => {
       closeAdminPedStudentsFiltersPopover();
     }
 
-    if (
-      adminStudentsState.history?.liveClassMenuId &&
-      !target.closest("[data-admin-student-live-class-menu-wrap]") &&
-      !target.closest("[data-admin-student-live-class-menu-trigger]")
-    ) {
-      adminStudentsState.history.liveClassMenuId = "";
-      if (adminStudentsState.history?.isOpen && !adminStudentsState.history.editingField && !adminStudentsState.history.inlineSavingField) {
-        renderAdminStudentSheet();
-      }
-    }
-
     // Professor > Alunos: close actions popover when clicking elsewhere.
     if (
       teacherStudentActionsPopoverEl instanceof HTMLElement &&
@@ -29060,15 +29024,6 @@ document.addEventListener("click", (event) => {
         event.preventDefault();
         adminStudentsState.history.commentComposerOpen = !adminStudentsState.history.commentComposerOpen;
         adminStudentsState.history.commentComposerError = "";
-        renderAdminStudentSheet();
-        return;
-      }
-
-      const studentLiveClassMenuTrigger = target.closest("[data-admin-student-live-class-menu-trigger]");
-      if (studentLiveClassMenuTrigger instanceof HTMLButtonElement) {
-        event.preventDefault();
-        const classId = String(studentLiveClassMenuTrigger.getAttribute("data-admin-student-live-class-menu-trigger") || "").trim();
-        adminStudentsState.history.liveClassMenuId = adminStudentsState.history.liveClassMenuId === classId ? "" : classId;
         renderAdminStudentSheet();
         return;
       }
