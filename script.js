@@ -7791,6 +7791,55 @@ const PEDAGOGICO_STATUS = {
   CANCELADA: "cancelada",
 };
 
+const PEDAGOGICO_STATUS_OPTIONS = [
+  { value: PEDAGOGICO_STATUS.REALIZADA, label: "Realizada", tone: "green" },
+  { value: PEDAGOGICO_STATUS.FALTA_ALUNO, label: "Falta do aluno", tone: "coral" },
+  { value: PEDAGOGICO_STATUS.REMARCADA, label: "Remarcada", tone: "amber" },
+  { value: PEDAGOGICO_STATUS.CANCELADA, label: "Cancelada", tone: "muted" },
+];
+
+const renderPedagogicoSection = (title, content) => {
+  const safeContent = String(content || "").trim();
+  if (!safeContent) return "";
+  return `
+    <section class="regv2-section">
+      <div class="regv2-section-eyebrow">${escapeHtml(title)}</div>
+      <div class="regv2-section-body">
+        ${safeContent}
+      </div>
+    </section>
+  `;
+};
+
+const renderPedagogicoStatusControl = (selectedStatus) => {
+  const safeStatus = normalizePedagogicoStatus(selectedStatus);
+  return `
+    <div class="regv2-status-shell">
+      <div class="regv2-field-head">
+        <div class="regv2-label">Status da aula</div>
+      </div>
+      <div class="regv2-status-pills" role="radiogroup" aria-label="Status da aula">
+        ${PEDAGOGICO_STATUS_OPTIONS.map((option) => {
+          const isSelected = option.value === safeStatus;
+          return `
+            <button
+              type="button"
+              class="regv2-status-pill regv2-status-pill--${escapeHtml(option.tone)}${isSelected ? " is-selected" : ""}"
+              data-ped-status-pill="${escapeHtml(option.value)}"
+              aria-pressed="${isSelected ? "true" : "false"}"
+            >
+              ${escapeHtml(option.label)}
+            </button>
+          `;
+        }).join("")}
+      </div>
+      <select class="ped-sel regv2-status-select" data-ped-status tabindex="-1" aria-hidden="true">
+        ${PEDAGOGICO_STATUS_OPTIONS.map((option) => `<option value="${escapeHtml(option.value)}" ${option.value === safeStatus ? "selected" : ""}>${escapeHtml(option.label)}</option>`).join("")}
+      </select>
+    </div>
+  `;
+};
+
 const renderPedSelectOptions = (options, selected) => {
   const sel = String(selected || "");
   const list = Array.isArray(options) ? options : [];
@@ -7801,83 +7850,105 @@ const renderPedSelectOptions = (options, selected) => {
 
 const renderRealizadaFieldsHtml = (draft = {}) => {
   const d = draft && typeof draft === "object" ? draft : {};
+  const conteudoSection = renderPedagogicoSection(
+    "Conteúdo da aula",
+    `
+      <div class="ped-field regv2-field">
+        <div class="ped-label regv2-label">O que foi trabalhado</div>
+        <textarea class="ped-ta ped-ta--conteudo regv2-textarea" data-ped-field="conteudoTrabalhado" rows="3" placeholder="Descreva brevemente o conteúdo da aula...">${escapeHtml(
+          String(d.conteudoTrabalhado || "")
+        )}</textarea>
+      </div>
+
+      <div class="ped-grid2 regv2-grid2">
+        <div class="ped-field regv2-field">
+          <div class="ped-label regv2-label">Gramática trabalhada</div>
+          <input class="ped-in regv2-input" type="text" data-ped-field="gramaticaTrabalhada" value="${escapeHtml(String(d.gramaticaTrabalhada || ""))}" />
+        </div>
+        <div class="ped-field regv2-field">
+          <div class="ped-label regv2-label">Vocabulário trabalhado</div>
+          <input class="ped-in regv2-input" type="text" data-ped-field="vocabularioTrabalhado" value="${escapeHtml(String(d.vocabularioTrabalhado || ""))}" />
+        </div>
+      </div>
+
+      <div class="ped-grid2 regv2-grid2">
+        <div class="ped-field regv2-field">
+          <div class="ped-label regv2-label">Pronúncia / conversação</div>
+          <input class="ped-in regv2-input" type="text" data-ped-field="pronunciaConversacao" value="${escapeHtml(String(d.pronunciaConversacao || ""))}" />
+        </div>
+        <div class="ped-field regv2-field">
+          <div class="ped-label regv2-label">Atividade realizada</div>
+          <input class="ped-in regv2-input" type="text" data-ped-field="atividadeRealizada" value="${escapeHtml(String(d.atividadeRealizada || ""))}" />
+        </div>
+      </div>
+
+      <div class="ped-field regv2-field">
+        <div class="ped-label regv2-label">Materiais usados</div>
+        <input class="ped-in regv2-input" type="text" data-ped-field="materiaisUsados" value="${escapeHtml(String(d.materiaisUsados || ""))}" />
+      </div>
+    `
+  );
+  const avaliacaoSection = renderPedagogicoSection(
+    "Avaliação do aluno",
+    `
+      <div class="ped-grid2 regv2-grid2">
+        <div class="ped-field regv2-field">
+          <div class="ped-label regv2-label">Engajamento</div>
+          ${renderPedStars(d.engajamentoNota || 0, "engajamentoNota", "Engajamento")}
+        </div>
+        <div class="ped-field regv2-field">
+          <div class="ped-label regv2-label">Evolução do aluno</div>
+          ${renderPedStars(d.evolucaoNota || 0, "evolucaoNota", "Evolução do aluno")}
+        </div>
+      </div>
+
+      <div class="ped-grid2 regv2-grid2">
+        <div class="ped-field regv2-field">
+          <div class="ped-label regv2-label">Confiança do aluno</div>
+          ${renderPedStars(d.confiancaNota || 0, "confiancaNota", "Confiança do aluno")}
+        </div>
+        <div class="ped-field regv2-field">
+          <div class="ped-label regv2-label">Humor do aluno</div>
+          ${renderPedHumorChips(d.humorAluno || "")}
+        </div>
+      </div>
+    `
+  );
+  const proximosPassosSection = renderPedagogicoSection(
+    "Próximos passos",
+    `
+      <div class="ped-field regv2-field">
+        <div class="ped-label regv2-label">Homework</div>
+        <input class="ped-in regv2-input" type="text" data-ped-field="homework" value="${escapeHtml(String(d.homework || ""))}" placeholder="Atividade para o aluno..." />
+      </div>
+
+      <div class="ped-field regv2-field">
+        <div class="ped-label regv2-label">Próxima aula</div>
+        <input class="ped-in regv2-input" type="text" data-ped-field="proximaAula" value="${escapeHtml(String(d.proximaAula || ""))}" placeholder="Tema para a próxima aula..." />
+      </div>
+    `
+  );
+  const coordenacaoSection = renderPedagogicoSection(
+    "Coordenação",
+    `
+      <div class="ped-field regv2-field">
+        <div class="ped-label regv2-label">Avisos para a coordenação</div>
+        ${renderPedAvisosTrigger(d.avisosCoordenacao || [])}
+      </div>
+
+      <div class="ped-field regv2-field">
+        <div class="ped-label regv2-label">Observações internas</div>
+        <textarea class="ped-ta ped-ta--obs regv2-textarea" data-ped-field="observacoesInternas" rows="2" placeholder="Apenas visível para professor e admin...">${escapeHtml(
+          String(d.observacoesInternas || "")
+        )}</textarea>
+      </div>
+    `
+  );
   return `
-    <div class="ped-field">
-      <div class="ped-label">O que foi trabalhado</div>
-      <textarea class="ped-ta ped-ta--conteudo" data-ped-field="conteudoTrabalhado" rows="3" placeholder="Descreva brevemente o conteúdo da aula...">${escapeHtml(
-        String(d.conteudoTrabalhado || "")
-      )}</textarea>
-    </div>
-
-    <div class="ped-grid2">
-      <div class="ped-field">
-        <div class="ped-label">Engajamento</div>
-        ${renderPedStars(d.engajamentoNota || 0, "engajamentoNota")}
-      </div>
-      <div class="ped-field">
-        <div class="ped-label">Evolução do aluno</div>
-        ${renderPedStars(d.evolucaoNota || 0, "evolucaoNota")}
-      </div>
-    </div>
-
-    <div class="ped-grid2">
-      <div class="ped-field">
-        <div class="ped-label">Gramática trabalhada</div>
-        <input class="ped-in" type="text" data-ped-field="gramaticaTrabalhada" value="${escapeHtml(String(d.gramaticaTrabalhada || ""))}" />
-      </div>
-      <div class="ped-field">
-        <div class="ped-label">Vocabulário trabalhado</div>
-        <input class="ped-in" type="text" data-ped-field="vocabularioTrabalhado" value="${escapeHtml(String(d.vocabularioTrabalhado || ""))}" />
-      </div>
-    </div>
-
-    <div class="ped-grid2">
-      <div class="ped-field">
-        <div class="ped-label">Pronúncia / conversação</div>
-        <input class="ped-in" type="text" data-ped-field="pronunciaConversacao" value="${escapeHtml(String(d.pronunciaConversacao || ""))}" />
-      </div>
-      <div class="ped-field">
-        <div class="ped-label">Atividade realizada</div>
-        <input class="ped-in" type="text" data-ped-field="atividadeRealizada" value="${escapeHtml(String(d.atividadeRealizada || ""))}" />
-      </div>
-    </div>
-
-    <div class="ped-field">
-      <div class="ped-label">Materiais usados</div>
-      <input class="ped-in" type="text" data-ped-field="materiaisUsados" value="${escapeHtml(String(d.materiaisUsados || ""))}" />
-    </div>
-
-    <div class="ped-field">
-      <div class="ped-label">Confiança do aluno</div>
-      ${renderPedStars(d.confiancaNota || 0, "confiancaNota")}
-    </div>
-
-    <div class="ped-field">
-      <div class="ped-label">Humor do aluno</div>
-      ${renderPedHumorChips(d.humorAluno || "")}
-    </div>
-
-    <div class="ped-field">
-      <div class="ped-label">Homework</div>
-      <input class="ped-in" type="text" data-ped-field="homework" value="${escapeHtml(String(d.homework || ""))}" placeholder="Atividade para o aluno..." />
-    </div>
-
-    <div class="ped-field">
-      <div class="ped-label">Próxima aula</div>
-      <input class="ped-in" type="text" data-ped-field="proximaAula" value="${escapeHtml(String(d.proximaAula || ""))}" placeholder="Tema para a próxima aula..." />
-    </div>
-
-    <div class="ped-field">
-      <div class="ped-label">Avisos para a coordenação</div>
-      ${renderPedAvisosTrigger(d.avisosCoordenacao || [])}
-    </div>
-
-    <div class="ped-field">
-      <div class="ped-label">Observações internas</div>
-      <textarea class="ped-ta ped-ta--obs" data-ped-field="observacoesInternas" rows="2" placeholder="Apenas visível para professor e admin...">${escapeHtml(
-        String(d.observacoesInternas || "")
-      )}</textarea>
-    </div>
+    ${conteudoSection}
+    ${avaliacaoSection}
+    ${proximosPassosSection}
+    ${coordenacaoSection}
   `;
 };
 
@@ -7887,68 +7958,74 @@ const renderFaltaAlunoFieldsHtml = (draft = {}) => {
   const risco = String(d.riscoEvasao || "");
   const obs = String(d.observacao || "");
   return `
-    <div class="ped-form-group ped-field">
-      <div class="ped-label">Motivo da falta</div>
-      <div class="ped-sel-wrap">
-        <select class="ped-sel" data-ped-field="motivoFalta">
-          <option value="">Selecione</option>
-          ${renderPedSelectOptions(PED_MOTIVO_FALTA, motivo)}
-        </select>
-        <span class="ped-arr">▼</span>
-      </div>
-    </div>
+    ${renderPedagogicoSection(
+      "Coordenação",
+      `
+        <div class="ped-field regv2-field">
+          <div class="ped-label regv2-label">Motivo da falta</div>
+          <div class="ped-sel-wrap">
+            <select class="ped-sel regv2-select" data-ped-field="motivoFalta">
+              <option value="">Selecione</option>
+              ${renderPedSelectOptions(PED_MOTIVO_FALTA, motivo)}
+            </select>
+            <span class="ped-arr">▼</span>
+          </div>
+        </div>
 
-    <div class="ped-form-group ped-field">
-      <div class="ped-label">Responsável pela falta</div>
-      <div class="ped-sel-wrap">
-        <select class="ped-sel" data-ped-field="responsavelFalta">
-          ${renderPedSelectOptions(
-            [
-              ["aluno", "Aluno"],
-              ["professor", "Professor"],
-              ["escola", "Escola"],
-              ["outro", "Outro"],
-            ],
-            String(d.responsavelFalta || "aluno")
-          )}
-        </select>
-        <span class="ped-arr">▼</span>
-      </div>
-    </div>
+        <div class="ped-grid2 regv2-grid2">
+          <div class="ped-field regv2-field">
+            <div class="ped-label regv2-label">Responsável pela falta</div>
+            <div class="ped-sel-wrap">
+              <select class="ped-sel regv2-select" data-ped-field="responsavelFalta">
+                ${renderPedSelectOptions(
+                  [
+                    ["aluno", "Aluno"],
+                    ["professor", "Professor"],
+                    ["escola", "Escola"],
+                    ["outro", "Outro"],
+                  ],
+                  String(d.responsavelFalta || "aluno")
+                )}
+              </select>
+              <span class="ped-arr">▼</span>
+            </div>
+          </div>
+          <div class="ped-field regv2-field">
+            <div class="ped-label regv2-label">Reposição necessária</div>
+            <div class="ped-sel-wrap">
+              <select class="ped-sel regv2-select" data-ped-field="reposicaoNecessaria">
+                ${renderPedSelectOptions(
+                  [
+                    ["sim", "Sim"],
+                    ["nao", "Não"],
+                  ],
+                  String(d.reposicaoNecessaria || "sim")
+                )}
+              </select>
+              <span class="ped-arr">▼</span>
+            </div>
+          </div>
+        </div>
 
-    <div class="ped-form-group ped-field">
-      <div class="ped-label">Reposição necessária</div>
-      <div class="ped-sel-wrap">
-        <select class="ped-sel" data-ped-field="reposicaoNecessaria">
-          ${renderPedSelectOptions(
-            [
-              ["sim", "Sim"],
-              ["nao", "Não"],
-            ],
-            String(d.reposicaoNecessaria || "sim")
-          )}
-        </select>
-        <span class="ped-arr">▼</span>
-      </div>
-    </div>
+        <div class="ped-field regv2-field">
+          <div class="ped-label regv2-label">Risco de evasão</div>
+          <div class="ped-sel-wrap">
+            <select class="ped-sel regv2-select" data-ped-field="riscoEvasao">
+              <option value="">Selecione</option>
+              ${renderPedSelectOptions(PED_RISCO_EVASAO, risco)}
+            </select>
+            <span class="ped-arr">▼</span>
+          </div>
+        </div>
 
-    <div class="ped-form-group ped-field">
-      <div class="ped-label">Risco de evasão</div>
-      <div class="ped-sel-wrap">
-        <select class="ped-sel" data-ped-field="riscoEvasao">
-          <option value="">Selecione</option>
-          ${renderPedSelectOptions(PED_RISCO_EVASAO, risco)}
-        </select>
-        <span class="ped-arr">▼</span>
-      </div>
-    </div>
-
-    <div class="ped-form-group ped-field">
-      <div class="ped-label">Observação opcional</div>
-      <textarea class="ped-ta" data-ped-field="observacao" rows="2" maxlength="250" placeholder="Ex: aluno não entrou na aula e não avisou...">${escapeHtml(
-        obs
-      )}</textarea>
-    </div>
+        <div class="ped-field regv2-field">
+          <div class="ped-label regv2-label">Observação opcional</div>
+          <textarea class="ped-ta regv2-textarea" data-ped-field="observacao" rows="2" maxlength="250" placeholder="Ex: aluno não entrou na aula e não avisou...">${escapeHtml(
+            obs
+          )}</textarea>
+        </div>
+      `
+    )}
   `;
 };
 
@@ -7976,75 +8053,90 @@ const renderRemarcadaFieldsHtml = (draft = {}) => {
   ];
 
   return `
-    <div class="ped-form-group ped-field">
-      <div class="ped-label">Tipo de movimento</div>
-      <div class="ped-sel-wrap">
-        <select class="ped-sel" data-ped-field="tipoMovimento">
-          ${renderPedSelectOptions(
-            [
-              ["remarcacao", "Remarcação"],
-              ["reposicao", "Reposição"],
-            ],
-            String(d.tipoMovimento || "remarcacao")
-          )}
-        </select>
-        <span class="ped-arr">▼</span>
-      </div>
-    </div>
+    ${renderPedagogicoSection(
+      "Próximos passos",
+      `
+        <div class="ped-field regv2-field">
+          <div class="ped-label regv2-label">Tipo de movimento</div>
+          <div class="ped-sel-wrap">
+            <select class="ped-sel regv2-select" data-ped-field="tipoMovimento">
+              ${renderPedSelectOptions(
+                [
+                  ["remarcacao", "Remarcação"],
+                  ["reposicao", "Reposição"],
+                ],
+                String(d.tipoMovimento || "remarcacao")
+              )}
+            </select>
+            <span class="ped-arr">▼</span>
+          </div>
+        </div>
 
-    <div class="ped-form-group ped-field">
-      <div class="ped-label">Motivo da remarcação</div>
-      <div class="ped-sel-wrap">
-        <select class="ped-sel" data-ped-field="motivoRemarcacao">
-          <option value="">Selecione</option>
-          ${renderPedSelectOptions(options, motivo)}
-        </select>
-        <span class="ped-arr">▼</span>
-      </div>
-    </div>
+        <div class="ped-field regv2-field">
+          <div class="ped-label regv2-label">Motivo da remarcação</div>
+          <div class="ped-sel-wrap">
+            <select class="ped-sel regv2-select" data-ped-field="motivoRemarcacao">
+              <option value="">Selecione</option>
+              ${renderPedSelectOptions(options, motivo)}
+            </select>
+            <span class="ped-arr">▼</span>
+          </div>
+        </div>
 
-    <div class="ped-form-grid-3 ped-grid2">
-      <div class="ped-form-group ped-field">
-        <div class="ped-label">Nova data</div>
-        <input class="ped-in" type="date" data-ped-field="novaData" value="${escapeHtml(dateKey)}" />
-      </div>
-      <div class="ped-form-group ped-field">
-        <div class="ped-label">Início</div>
-        <input class="ped-in" type="time" data-ped-field="novoInicio" value="${escapeHtml(ini)}" />
-      </div>
-      <div class="ped-form-group ped-field">
-        <div class="ped-label">Fim</div>
-        <input class="ped-in" type="time" data-ped-field="novoFim" value="${escapeHtml(fim)}" />
-      </div>
-    </div>
+        <div class="ped-grid2 regv2-grid3">
+          <div class="ped-field regv2-field">
+            <div class="ped-label regv2-label">Nova data</div>
+            <input class="ped-in regv2-input" type="date" data-ped-field="novaData" value="${escapeHtml(dateKey)}" />
+          </div>
+          <div class="ped-field regv2-field">
+            <div class="ped-label regv2-label">Início</div>
+            <input class="ped-in regv2-input" type="time" data-ped-field="novoInicio" value="${escapeHtml(ini)}" />
+          </div>
+          <div class="ped-field regv2-field">
+            <div class="ped-label regv2-label">Fim</div>
+            <input class="ped-in regv2-input" type="time" data-ped-field="novoFim" value="${escapeHtml(fim)}" />
+          </div>
+        </div>
+      `
+    )}
 
-    <div class="ped-form-group ped-field">
-      <div class="ped-label">Risco de evasão</div>
-      <div class="ped-sel-wrap">
-        <select class="ped-sel" data-ped-field="riscoEvasao">
-          <option value="">Selecione</option>
-          ${renderPedSelectOptions(PED_RISCO_EVASAO, risco)}
-        </select>
-        <span class="ped-arr">▼</span>
-      </div>
-    </div>
+    ${renderPedagogicoSection(
+      "Coordenação",
+      `
+        <div class="ped-field regv2-field">
+          <div class="ped-label regv2-label">Risco de evasão</div>
+          <div class="ped-sel-wrap">
+            <select class="ped-sel regv2-select" data-ped-field="riscoEvasao">
+              <option value="">Selecione</option>
+              ${renderPedSelectOptions(PED_RISCO_EVASAO, risco)}
+            </select>
+            <span class="ped-arr">▼</span>
+          </div>
+        </div>
 
-    <div class="ped-form-group ped-field">
-      <div class="ped-label">Observação opcional</div>
-      <textarea class="ped-ta" data-ped-field="observacao" rows="2" maxlength="250" placeholder="Ex: aluno pediu para remarcar por causa do trabalho...">${escapeHtml(
-        obs
-      )}</textarea>
-    </div>
+        <div class="ped-field regv2-field">
+          <div class="ped-label regv2-label">Observação opcional</div>
+          <textarea class="ped-ta regv2-textarea" data-ped-field="observacao" rows="2" maxlength="250" placeholder="Ex: aluno pediu para remarcar por causa do trabalho...">${escapeHtml(
+            obs
+          )}</textarea>
+        </div>
+      `
+    )}
   `;
 };
 
 const renderCanceladaFieldsHtml = (draft = {}) => `
-  <div class="ped-form-group ped-field">
-    <div class="ped-label">Motivo / observação do cancelamento</div>
-    <textarea class="ped-ta" data-ped-field="observacao" rows="3" maxlength="250" placeholder="Explique brevemente o cancelamento...">${escapeHtml(
-      String(draft?.observacao || draft?.observacoesInternas || "")
-    )}</textarea>
-  </div>
+  ${renderPedagogicoSection(
+    "Coordenação",
+    `
+      <div class="ped-field regv2-field">
+        <div class="ped-label regv2-label">Motivo / observação do cancelamento</div>
+        <textarea class="ped-ta regv2-textarea" data-ped-field="observacao" rows="3" maxlength="250" placeholder="Explique brevemente o cancelamento...">${escapeHtml(
+          String(draft?.observacao || draft?.observacoesInternas || "")
+        )}</textarea>
+      </div>
+    `
+  )}
 `;
 
 const getPedagogicoDynamicFieldsHtml = (status, draft) => {
@@ -8055,18 +8147,20 @@ const getPedagogicoDynamicFieldsHtml = (status, draft) => {
   return renderRealizadaFieldsHtml(draft);
 };
 
-const renderPedStars = (value = 0, fieldKey) => {
+const renderPedStars = (value = 0, fieldKey, label = "") => {
   const n = clampInt(Number(value || 0), 0, 5, 0);
   const safeKey = String(fieldKey || "");
+  const safeLabel = String(label || "");
   const stars = [1, 2, 3, 4, 5]
     .map((idx) => {
       const on = idx <= n ? "on" : "";
-      return `<button type="button" class="ped-star ${on}" data-ped-star="${idx}" aria-label="${idx} estrelas">★</button>`;
+      return `<button type="button" class="ped-star regv2-star ${on}" data-ped-star="${idx}" aria-label="${idx} estrelas">★</button>`;
     })
     .join("");
   return `
-    <div class="ped-stars" data-ped-stars="${escapeHtml(safeKey)}">
+    <div class="ped-stars regv2-stars" data-ped-stars="${escapeHtml(safeKey)}" data-ped-stars-label="${escapeHtml(safeLabel)}">
       <input type="hidden" data-ped-field="${escapeHtml(safeKey)}" value="${escapeHtml(String(n))}" />
+      <span class="regv2-stars-value" data-ped-stars-value>${n > 0 ? `${escapeHtml(safeLabel)} · ${n}/5` : escapeHtml(safeLabel)}</span>
       ${stars}
     </div>
   `;
@@ -8132,24 +8226,17 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
   pedagogicoFormContainer.innerHTML = `
     <div class="ped-shell" data-ped-form>
       <div class="ped-scroll" data-ped-scroll>
-      <div class="ped-lesson-summary">${escapeHtml(
-        `${studentNameRaw} • ${formatPedagogicoDate(safeLesson.dateKey)} • ${formatHmFromMinutes(safeLesson.startMin)}–${formatHmFromMinutes(safeLesson.endMin)}`
-      )}</div>
-
-      <div class="ped-field">
-        <div class="ped-label">Status da aula</div>
-        <div class="ped-sel-wrap">
-          <select class="ped-sel" data-ped-status>
-            <option value="realizada" ${status === "realizada" ? "selected" : ""}>Realizada</option>
-            <option value="falta_aluno" ${status === "falta_aluno" ? "selected" : ""}>Falta do aluno</option>
-            <option value="remarcada" ${status === "remarcada" ? "selected" : ""}>Remarcada</option>
-            <option value="cancelada" ${status === "cancelada" ? "selected" : ""}>Cancelada</option>
-          </select>
-          <span class="ped-arr">▼</span>
+      <section class="regv2-lesson-card">
+        <div class="regv2-lesson-avatar">${escapeHtml(getInitials(studentNameRaw))}</div>
+        <div class="regv2-lesson-copy">
+          <div class="regv2-lesson-name">${escapeHtml(studentNameRaw)}</div>
+          <div class="regv2-lesson-meta">${escapeHtml(
+            `${formatPedagogicoDate(safeLesson.dateKey)} • ${formatHmFromMinutes(safeLesson.startMin)}–${formatHmFromMinutes(safeLesson.endMin)}`
+          )}</div>
         </div>
-      </div>
+      </section>
 
-      <div class="ped-divider"></div>
+      ${renderPedagogicoStatusControl(status)}
 
       <div data-ped-dynamic-fields>
         ${getPedagogicoDynamicFieldsHtml(status, pedagogicoDraft)}
@@ -8202,17 +8289,37 @@ const bindStars = (rootEl) => {
     rootEl.querySelectorAll("[data-ped-stars]").forEach((starsWrap) => {
       if (!(starsWrap instanceof HTMLElement)) return;
       const key = String(starsWrap.getAttribute("data-ped-stars") || "");
+      const label = String(starsWrap.getAttribute("data-ped-stars-label") || "").trim();
+      const valueEl = starsWrap.querySelector("[data-ped-stars-value]");
       const hidden = starsWrap.querySelector(`[data-ped-field="${CSS.escape(key)}"]`);
       if (!(hidden instanceof HTMLInputElement)) return;
-      const setValue = (n) => {
-        const clamped = clampInt(Number(n || 0), 0, 5, 0);
-        hidden.value = String(clamped);
+      const paint = (activeValue) => {
+        const clamped = clampInt(Number(activeValue || 0), 0, 5, 0);
         starsWrap.querySelectorAll("[data-ped-star]").forEach((btn) => {
           if (!(btn instanceof HTMLElement)) return;
           const v = clampInt(Number(btn.getAttribute("data-ped-star") || 0), 0, 5, 0);
           btn.classList.toggle("on", v > 0 && v <= clamped);
         });
+        if (valueEl instanceof HTMLElement) {
+          valueEl.textContent = clamped > 0 ? `${label} · ${clamped}/5` : label;
+        }
       };
+      const setValue = (n) => {
+        const clamped = clampInt(Number(n || 0), 0, 5, 0);
+        hidden.value = String(clamped);
+        paint(clamped);
+      };
+      paint(hidden.value);
+      starsWrap.addEventListener("pointerover", (ev) => {
+        const target = ev.target;
+        if (!(target instanceof Element)) return;
+        const btn = target.closest("[data-ped-star]");
+        if (!(btn instanceof HTMLElement)) return;
+        paint(btn.getAttribute("data-ped-star"));
+      });
+      starsWrap.addEventListener("pointerleave", () => {
+        paint(hidden.value);
+      });
       starsWrap.addEventListener("click", (ev) => {
         const target = ev.target;
         if (!(target instanceof Element)) return;
@@ -8381,9 +8488,9 @@ const openPedAvisosPortal = (scrollRoot) => {
     const top = useBelow ? rect.bottom + 8 : Math.max(margin, rect.top - 8 - effectiveMax);
     portal.style.top = `${Math.round(top)}px`;
 
-    document.addEventListener("keydown", onKeydown, true);
-    document.addEventListener("pointerdown", onPointerDown, true);
-    pedagogicoCleanupFns.push(closePedAvisosPortal);
+  document.addEventListener("keydown", onKeydown, true);
+  document.addEventListener("pointerdown", onPointerDown, true);
+  pedagogicoCleanupFns.push(closePedAvisosPortal);
 };
 
 const bindAvisosTrigger = (rootEl) => {
@@ -30200,6 +30307,22 @@ document.addEventListener("change", (event) => {
   });
 
   markPedagogicoDirty();
+});
+
+document.addEventListener("click", (event) => {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  const statusPill = target.closest("[data-ped-status-pill]");
+  if (!(statusPill instanceof HTMLButtonElement)) return;
+  const nextValue = String(statusPill.getAttribute("data-ped-status-pill") || "").trim();
+  if (!nextValue) return;
+  const formRoot = pedagogicoFormContainer instanceof HTMLElement ? pedagogicoFormContainer.querySelector("[data-ped-form]") : null;
+  if (!(formRoot instanceof HTMLElement)) return;
+  const select = formRoot.querySelector("[data-ped-status]");
+  if (!(select instanceof HTMLSelectElement)) return;
+  if (select.value === nextValue) return;
+  select.value = nextValue;
+  select.dispatchEvent(new Event("change", { bubbles: true }));
 });
 
 // Admin > Alunos: student sheet edit form - toggle "Tempo de contrato (meses)" when Personalizar is selected.
