@@ -14181,16 +14181,12 @@ const patchFirestoreUserDocument = async ({ userId, patch = {}, context = "users
 
 const normalizeAdminFirestoreUserRow = (sourceRow = {}) => {
   if (!sourceRow || typeof sourceRow !== "object") return null;
-  const base = normalizeUserRow({
-    id: sourceRow.id || sourceRow.uid || sourceRow.userId || sourceRow.studentId || sourceRow.alunoId,
-    nome: sourceRow.nome || sourceRow.name,
-    email: sourceRow.email,
-    tipo: sourceRow.tipo || sourceRow.role || sourceRow.type,
-    ativo: sourceRow.ativo,
-    criadoEm: sourceRow.criadoEm || sourceRow.createdAt || sourceRow.created_at || sourceRow.cadastroEm || null,
-  });
-  if (!base) return null;
   const raw = clonePlainData(sourceRow);
+  const uid = String(sourceRow.id || sourceRow.uid || sourceRow.userId || sourceRow.studentId || sourceRow.alunoId || "").trim();
+  const nome = String(sourceRow.nome || sourceRow.name || "Aluno").trim();
+  const email = String(sourceRow.email || "").trim().toLowerCase();
+  const tipo = normalizeFirestoreRole(sourceRow.tipo || sourceRow.role || sourceRow.type) || "student";
+  if (!uid || !nome) return null;
   const createdAt = raw?.criadoEm || raw?.createdAt || raw?.created_at || raw?.cadastroEm || null;
   const canceladoEm = raw?.canceladoEm || raw?.cancelamentoEm || raw?.dataCancelamento || null;
   const desativadoEm = raw?.desativadoEm || canceladoEm || null;
@@ -14202,9 +14198,13 @@ const normalizeAdminFirestoreUserRow = (sourceRow = {}) => {
   const telefone = String(raw?.telefone || raw?.phone || raw?.telefoneWhatsapp || "").trim();
   return {
     ...raw,
-    ...base,
+    id: uid,
+    nome,
+    email,
+    tipo,
+    ativo: normalizeFirestoreActive(sourceRow.ativo),
     criadoEm: createdAt,
-    initials: getInitials(base.nome),
+    initials: getInitials(nome),
     professorId,
     teacherId: String(raw?.teacherId || professorId).trim(),
     professorNome,
@@ -14427,13 +14427,20 @@ const loadAdminStudentRowFromFirestoreById = async (alunoId) => {
   const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_student_readback");
   const user = await waitForFirebaseAuthReady(firebase, 5000);
   if (!user) throw new Error("not_authenticated");
+  console.info("[Cancellation] C: relendo users/%s em primaryDb", id);
   const snap = await withTimeout(firebase.getDoc(firebase.doc(firebase.primaryDb, "users", id)), 12_000, "firestore_admin_student_readback");
   if (!snap?.exists?.()) {
     const error = new Error("student_document_not_found");
     error.code = "not-found";
     throw error;
   }
-  return normalizeAdminFirestoreUserRow({ id: snap.id, ...(snap.data ? snap.data() : {}) });
+  const row = normalizeAdminFirestoreUserRow({ id: snap.id, ...(snap.data ? snap.data() : {}) });
+  if (!row) {
+    const error = new Error("student_document_readback_normalization_failed");
+    error.code = "normalization_failed";
+    throw error;
+  }
+  return row;
 };
 
 const fetchLessonLogsFromFirestore = async () => {
@@ -26880,30 +26887,66 @@ const saveAdminStudentLifecyclePatch = async ({ alunoId, patch = {} } = {}) => {
   const id = String(alunoId || "").trim();
   if (!id) throw new Error("missing_student_id");
   const cleanPatch = sanitizeFirestorePatch(patch || {});
-  console.info("[Cancellation] studentId:", id);
-  console.info("[Cancellation] collection:", "users");
-  console.info("[Cancellation] payload:", cleanPatch);
-  await patchFirestoreUserDocument({
-    userId: id,
-    context: "student_lifecycle_patch",
-    patch: cleanPatch,
-    allowProtectedFields: ["cancelamento", "cancelamentosAnteriores"],
-  });
-  const persistedRow = await loadAdminStudentRowFromFirestoreById(id);
-  if (!persistedRow) {
-    throw new Error("student_reload_after_lifecycle_patch_failed");
-  }
-  if (Object.prototype.hasOwnProperty.call(cleanPatch, "cancelamento")) {
-    const expectedCancellation = cleanPatch.cancelamento;
-    if (expectedCancellation && typeof expectedCancellation === "object" && !persistedRow.cancelamento) {
-      throw new Error("cancelamento_not_persisted");
+  try {
+    console.info("[Cancellation] A: payload construído", {
+      studentId: id,
+      studentDocId: id,
+      collection: "users",
+      database: "primaryDb",
+      payload: cleanPatch,
+    });
+    await patchFirestoreUserDocument({
+      userId: id,
+      context: "student_lifecycle_patch",
+      patch: cleanPatch,
+      allowProtectedFields: ["cancelamento", "cancelamentosAnteriores"],
+    });
+    console.info("[Cancellation] B: gravação concluída em users/%s", id);
+    const persistedRow = await loadAdminStudentRowFromFirestoreById(id);
+    if (!persistedRow) {
+      throw new Error("student_reload_after_lifecycle_patch_failed");
     }
-    if (expectedCancellation == null && persistedRow.cancelamento != null) {
-      throw new Error("cancelamento_not_cleared");
+    console.info("[Cancellation] C: documento relido", {
+      studentId: id,
+      cancelamento: persistedRow.cancelamento || null,
+      tipo: persistedRow.tipo || "",
+    });
+    if (Object.prototype.hasOwnProperty.call(cleanPatch, "cancelamento")) {
+      const expectedCancellation = cleanPatch.cancelamento;
+      const persistedCancellation = normalizeStudentCancellationRecord(persistedRow.cancelamento);
+      if (expectedCancellation && typeof expectedCancellation === "object" && !persistedCancellation) {
+        throw new Error("cancelamento_not_persisted");
+      }
+      if (expectedCancellation == null && persistedCancellation != null) {
+        throw new Error("cancelamento_not_cleared");
+      }
+      if (persistedCancellation) {
+        const persistedOrigin = String(persistedCancellation.origem || "").trim();
+        const hasPedidoDate = Boolean(persistedCancellation.dataPedido);
+        const hasEndDate = Boolean(persistedCancellation.dataFimAviso || persistedCancellation.dataFimPrevista);
+        if (persistedOrigin !== "pedido" || !hasPedidoDate || !hasEndDate) {
+          throw new Error("cancelamento_persisted_invalid_shape");
+        }
+      }
     }
+    console.info("[Cancellation] D: persistência validada");
+    updateAdminStudentCachedRow(id, persistedRow);
+    console.info("[Cancellation] E: cache e interface prontos");
+    return persistedRow;
+  } catch (error) {
+    console.error("[Cancellation] Falha ao registrar cancelamento", {
+      error,
+      code: error?.code,
+      message: error?.message,
+      stack: error?.stack,
+      studentId: id,
+      studentDocId: id,
+      collection: "users",
+      database: "primaryDb",
+      cancellationPayload: cleanPatch?.cancelamento || null,
+    });
+    throw error;
   }
-  updateAdminStudentCachedRow(id, persistedRow);
-  return persistedRow;
 };
 
 const archiveStudentCancellationRecord = ({ alunoMeta, record } = {}) => {
@@ -27093,8 +27136,18 @@ const openAdminStudentRegisterCancellationModal = ({ alunoId } = {}) => {
           rerenderAdminStudentLifecycleViews();
           closeModal();
         } catch (error) {
-          console.error("[admin] register student cancellation failed:", error);
-          setErr("Não foi possível registrar o cancelamento agora.");
+          console.error("[Cancellation] submit failed", {
+            error,
+            code: error?.code,
+            message: error?.message,
+            stack: error?.stack,
+            studentId: id,
+            studentDocId: id,
+            cancellationPayload: cancelamento,
+          });
+          const host = typeof window !== "undefined" ? String(window.location.hostname || "").trim().toLowerCase() : "";
+          const isDevHost = host === "localhost" || host === "127.0.0.1" || host.endsWith(".local");
+          setErr(isDevHost ? `Não foi possível registrar o cancelamento.\nDetalhe: ${error?.code || error?.message || "unknown_error"}` : "Não foi possível registrar o cancelamento agora.");
           if (modalPrimary) modalPrimary.disabled = false;
           if (modalSecondary) modalSecondary.disabled = false;
         }
