@@ -4698,29 +4698,6 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
   color: rgba(255, 255, 255, 0.7);
 }
 
-.admin-students-drawer-head-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.admin-students-drawer-deactivate {
-  min-height: 34px;
-  padding: 0 12px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 78, 70, 0.24);
-  background: rgba(255, 78, 70, 0.08);
-  color: rgba(255, 118, 110, 0.96);
-  font-size: 12px;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.admin-students-drawer-deactivate:hover,
-.admin-students-drawer-deactivate:focus-visible {
-  background: rgba(255, 78, 70, 0.14);
-}
-
 .admin-students-empty,
 .admin-students-error {
   padding: 14px 16px;
@@ -4784,6 +4761,201 @@ body.admin-student-drawer-open {
 
 .admin-student-sheet-drawer-inner {
   width: min(1120px, 94vw);
+}
+
+.admin-student-lifecycle-card {
+  display: grid;
+  gap: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.admin-student-lifecycle-card.is-notice {
+  border-color: rgba(255, 188, 96, 0.34);
+  box-shadow: inset 3px 0 0 rgba(255, 188, 96, 0.72);
+}
+
+.admin-student-lifecycle-card.is-suspended {
+  border-color: rgba(118, 150, 184, 0.28);
+  box-shadow: inset 3px 0 0 rgba(118, 150, 184, 0.62);
+}
+
+.admin-student-lifecycle-card.is-inactive {
+  border-color: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.admin-student-lifecycle-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-student-lifecycle-title {
+  margin-top: 3px;
+  font-size: 14px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.94);
+}
+
+.admin-student-lifecycle-subtitle,
+.admin-student-lifecycle-meta {
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.admin-student-lifecycle-badge {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.admin-student-lifecycle-badge.is-warn {
+  color: rgba(255, 188, 96, 0.96);
+  background: rgba(255, 188, 96, 0.14);
+  border-color: rgba(255, 188, 96, 0.24);
+}
+
+.admin-student-lifecycle-badge.is-muted {
+  color: rgba(190, 210, 235, 0.9);
+  background: rgba(118, 150, 184, 0.12);
+  border-color: rgba(118, 150, 184, 0.2);
+}
+
+.admin-student-lifecycle-badge.is-gray {
+  color: rgba(255, 255, 255, 0.76);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.admin-student-lifecycle-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-student-lifecycle-danger {
+  border-color: rgba(255, 78, 70, 0.28);
+  color: rgba(255, 112, 104, 0.96);
+}
+
+.admin-student-lifecycle-cycles {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-student-lifecycle-cycle-row {
+  display: grid;
+  grid-template-columns: 70px minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.admin-student-lifecycle-cycle-month {
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.admin-student-lifecycle-cycle-field {
+  display: grid;
+  gap: 6px;
+}
+
+.admin-student-lifecycle-cycle-field > span {
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.48);
+}
+
+.admin-student-lifecycle-cycle-buttons {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.admin-student-lifecycle-cycle-button {
+  min-width: 34px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.admin-student-lifecycle-cycle-button.is-active {
+  color: rgba(255, 255, 255, 0.96);
+  background: rgba(255, 188, 96, 0.14);
+  border-color: rgba(255, 188, 96, 0.28);
+}
+
+.admin-student-lifecycle-modal {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-student-lifecycle-modal-field {
+  display: grid;
+  gap: 6px;
+}
+
+.admin-student-lifecycle-modal-field > span {
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.56);
+}
+
+.admin-student-lifecycle-modal-field input,
+.admin-student-lifecycle-modal-field select,
+.admin-student-lifecycle-modal-field textarea,
+.admin-student-lifecycle-modal-summary {
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.92);
+  font: inherit;
+}
+
+.admin-student-lifecycle-modal-summary,
+.admin-student-lifecycle-modal-hint {
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.admin-student-lifecycle-modal-hint {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.admin-student-lifecycle-modal-error {
+  font-size: 12px;
+  color: rgba(255, 112, 104, 0.96);
+}
+
+@media (max-width: 820px) {
+  .admin-student-lifecycle-cycle-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 .admin-students-drawer.is-open .admin-students-drawer-inner {
@@ -10983,7 +11155,7 @@ body.is-cal-dragging .teacher-cal-grid {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  z-index: 1400;
   background: rgba(13, 15, 18, 0.72);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);

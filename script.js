@@ -152,10 +152,7 @@ const ADMIN_STUDENT_HISTORY_DRAWER_TEMPLATE = `
           <div class="admin-students-drawer-title" data-admin-student-history-title>Ficha do aluno</div>
           <div class="admin-students-drawer-sub" data-admin-student-history-sub>—</div>
         </div>
-        <div class="admin-students-drawer-head-actions">
-          <button class="admin-students-drawer-deactivate" type="button" data-admin-student-deactivate aria-label="Desativar aluno">Desativar aluno</button>
-          <button class="admin-students-drawer-close" type="button" data-admin-student-history-close aria-label="Fechar">✕</button>
-        </div>
+        <button class="admin-students-drawer-close" type="button" data-admin-student-history-close aria-label="Fechar">✕</button>
       </div>
       <div class="admin-students-drawer-body">
         <div class="admin-student-sheet" data-admin-student-sheet></div>
@@ -211,11 +208,6 @@ const getAdminStudentHistoryTitle = () => {
 const getAdminStudentHistorySub = () => {
   const drawer = getAdminStudentHistoryDrawer();
   return drawer instanceof HTMLElement ? drawer.querySelector("[data-admin-student-history-sub]") : null;
-};
-
-const getAdminStudentDeactivateTrigger = () => {
-  const drawer = getAdminStudentHistoryDrawer();
-  return drawer instanceof HTMLElement ? drawer.querySelector("[data-admin-student-deactivate]") : null;
 };
 
 let adminStudentDrawerScrollLockY = 0;
@@ -342,6 +334,7 @@ const modalPrimary = document.querySelector("[data-modal-primary]");
 const modalSecondary = document.querySelector("[data-modal-secondary]");
 const modalClose = document.querySelector("[data-modal-close]");
 const modalTrash = document.querySelector("[data-modal-trash]");
+const modalDialog = modalOverlay instanceof HTMLElement ? modalOverlay.querySelector(".modal-dialog") : null;
 
 const teacherMiniTitle = document.querySelector("[data-teacher-mini-title]");
 const teacherMiniGrid = document.querySelector("[data-teacher-mini-grid]");
@@ -1103,6 +1096,7 @@ let modalPrimaryHandler = null;
 let modalSecondaryHandler = null;
 let modalTrashHandler = null;
 let activeModalKind = "";
+let modalReturnFocusEl = null;
 let createEventDraft = null;
 let adminOnboardingDraft = null;
 
@@ -1200,6 +1194,15 @@ const closeModal = () => {
   createEventDraft = null;
   adminOnboardingDraft = null;
   clearTeacherCalendarSelection();
+  const returnFocusEl = modalReturnFocusEl;
+  modalReturnFocusEl = null;
+  if (returnFocusEl instanceof HTMLElement && document.contains(returnFocusEl)) {
+    window.setTimeout(() => {
+      try {
+        returnFocusEl.focus();
+      } catch {}
+    }, 0);
+  }
 };
 
 const openModal = ({
@@ -1212,8 +1215,10 @@ const openModal = ({
   onPrimary,
   onSecondary,
   onTrash,
+  returnFocusEl = null,
 } = {}) => {
   if (!modalOverlay || !modalTitle || !modalBody || !modalPrimary || !modalSecondary) return;
+  if (modalOverlay.parentElement !== document.body) document.body.appendChild(modalOverlay);
 
   modalTitle.textContent = title || "";
   modalBody.innerHTML = bodyHtml || "";
@@ -1225,6 +1230,7 @@ const openModal = ({
   modalSecondary.hidden = hideSecondary;
   modalOverlay.hidden = false;
   body.classList.add("is-modal-open");
+  modalReturnFocusEl = returnFocusEl instanceof HTMLElement ? returnFocusEl : null;
 
   modalPrimaryHandler = typeof onPrimary === "function" ? onPrimary : null;
   modalSecondaryHandler = typeof onSecondary === "function" ? onSecondary : null;
@@ -14092,6 +14098,15 @@ const normalizeFirestoreActive = (value) => {
   return true;
 };
 
+const clonePlainData = (value) => {
+  if (value == null) return value;
+  try {
+    return JSON.parse(JSON.stringify(value));
+  } catch {
+    return value;
+  }
+};
+
 const normalizeUserRow = ({ id, nome, email, tipo, ativo, criadoEm }) => {
   const uid = String(id || "").trim();
   const name = String(nome || "").trim();
@@ -14320,6 +14335,8 @@ const fetchUserRowsFromFirestore = async (tipo) => {
         : typeof data.notes === "string"
           ? data.notes.trim()
           : "";
+    const cancelamento = data.cancelamento && typeof data.cancelamento === "object" ? clonePlainData(data.cancelamento) : null;
+    const cancelamentosAnteriores = Array.isArray(data.cancelamentosAnteriores) ? clonePlainData(data.cancelamentosAnteriores) : [];
     const criadoKey = toDateKeyFromAny(data.criadoEm);
     const cancelKey = toDateKeyFromAny(canceladoEm);
     const desativadoKey = toDateKeyFromAny(desativadoEm);
@@ -14352,6 +14369,8 @@ const fetchUserRowsFromFirestore = async (tipo) => {
       especialidade,
       specialty: especialidade,
       observacoesPedagogicas,
+      cancelamento,
+      cancelamentosAnteriores,
     });
   });
   return rows.filter(Boolean).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
@@ -14427,6 +14446,181 @@ const fetchLessonLogsFromFirestore = async () => {
       })
       .filter(Boolean);
   }
+};
+
+const STUDENT_LIFECYCLE_STATE = {
+  ACTIVE: "ativo",
+  NOTICE: "em_aviso",
+  SUSPENDED: "suspenso",
+  INACTIVE: "inativo",
+};
+
+const STUDENT_CANCELLATION_REASON_OPTIONS = [
+  "Preço",
+  "Falta de tempo",
+  "Insatisfação com professor",
+  "Insatisfação com método",
+  "Mudança de vida (viagem, trabalho...)",
+  "Conseguiu objetivo",
+  "Outro",
+];
+
+const isStudentCancellationActive = (cancelamento) =>
+  Boolean(cancelamento && typeof cancelamento === "object" && !cancelamento.desfecho);
+
+const toLifecycleMs = (value) => parseFirestoreDateToMs(value);
+
+const toLifecycleDate = (value) => {
+  const ms = toLifecycleMs(value);
+  return Number.isFinite(ms) && ms > 0 ? new Date(ms) : null;
+};
+
+const addMonthsPreservingDay = (date, months) => {
+  const base = date instanceof Date ? new Date(date.getTime()) : new Date();
+  const originalDay = base.getDate();
+  const copy = new Date(base.getTime());
+  copy.setDate(1);
+  copy.setMonth(copy.getMonth() + Number(months || 0));
+  const lastDay = new Date(copy.getFullYear(), copy.getMonth() + 1, 0).getDate();
+  copy.setDate(Math.min(originalDay, lastDay));
+  return copy;
+};
+
+const toLifecycleIso = (value) => {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString();
+  const ms = toLifecycleMs(value);
+  return Number.isFinite(ms) && ms > 0 ? new Date(ms).toISOString() : "";
+};
+
+const createStudentCancellationHistoryEntry = (acao, detalhe = "") => ({
+  data: new Date().toISOString(),
+  acao: String(acao || "").trim(),
+  detalhe: String(detalhe || "").trim(),
+});
+
+const buildStudentCancellationCycles = (tipo) => {
+  if (String(tipo || "").trim() === "arrependimento_7d") {
+    return [{ mes: 1, pagou: null, frequentou: null }];
+  }
+  if (String(tipo || "").trim() === "abandono") {
+    return [];
+  }
+  return [
+    { mes: 1, pagou: null, frequentou: null },
+    { mes: 2, pagou: null, frequentou: null },
+  ];
+};
+
+const getStudentLifecycleState = (aluno) => {
+  const meta = aluno && typeof aluno === "object" ? aluno : {};
+  if (meta.ativo === false) return STUDENT_LIFECYCLE_STATE.INACTIVE;
+  const cancelamento = meta.cancelamento && typeof meta.cancelamento === "object" ? meta.cancelamento : null;
+  if (cancelamento?.aulasSuspensas) return STUDENT_LIFECYCLE_STATE.SUSPENDED;
+  if (isStudentCancellationActive(cancelamento)) return STUDENT_LIFECYCLE_STATE.NOTICE;
+  return STUDENT_LIFECYCLE_STATE.ACTIVE;
+};
+
+const getStudentLifecycleBadgeMeta = (aluno) => {
+  const state = getStudentLifecycleState(aluno);
+  const cancelamento = aluno?.cancelamento && typeof aluno.cancelamento === "object" ? aluno.cancelamento : null;
+  if (state === STUDENT_LIFECYCLE_STATE.NOTICE) {
+    if (String(cancelamento?.tipo || "") === "abandono") {
+      return { state, label: "Abandono", tone: "warn" };
+    }
+    return { state, label: "Aviso prévio", tone: "warn" };
+  }
+  if (state === STUDENT_LIFECYCLE_STATE.SUSPENDED) {
+    return { state, label: "Suspenso", tone: "muted" };
+  }
+  if (state === STUDENT_LIFECYCLE_STATE.INACTIVE) {
+    return { state, label: "Inativo", tone: "gray" };
+  }
+  return { state, label: "", tone: "" };
+};
+
+const getAdminStudentLatestLifecycleRecord = (aluno) => {
+  const previous = Array.isArray(aluno?.cancelamentosAnteriores) ? aluno.cancelamentosAnteriores : [];
+  const current = aluno?.cancelamento && typeof aluno.cancelamento === "object" ? aluno.cancelamento : null;
+  if (current) return current;
+  return previous.length ? previous[previous.length - 1] : null;
+};
+
+const getAdminStudentFirstLessonDate = (alunoId) => {
+  const id = String(alunoId || "").trim();
+  if (!id) return null;
+  let firstDate = null;
+  const ingestDate = (candidate) => {
+    if (!(candidate instanceof Date) || Number.isNaN(candidate.getTime())) return;
+    if (!firstDate || candidate.getTime() < firstDate.getTime()) firstDate = candidate;
+  };
+
+  const events = Array.isArray(adminStudentsState.events) ? adminStudentsState.events : [];
+  events.forEach((evt) => {
+    if (!evt || typeof evt !== "object") return;
+    if (evt.type !== "lesson") return;
+    if (String(evt.alunoId || "").trim() !== id) return;
+    const date = parseDateKey(String(evt.dateKey || "").trim());
+    ingestDate(date);
+  });
+
+  const linkedClasses = getAdminStudentLinkedClasses(id);
+  linkedClasses.forEach((classRow) => {
+    const date = parseDateKey(String(classRow?.startDate || "").trim());
+    ingestDate(date);
+  });
+
+  return firstDate;
+};
+
+const describeStudentCancellationType = (cancelamento) => {
+  const type = String(cancelamento?.tipo || "").trim();
+  if (type === "arrependimento_7d") return "Arrependimento";
+  if (type === "abandono") return "Abandono";
+  return "Aviso prévio";
+};
+
+const buildStudentLifecycleSummary = (aluno) => {
+  const state = getStudentLifecycleState(aluno);
+  const cancelamento = aluno?.cancelamento && typeof aluno.cancelamento === "object" ? aluno.cancelamento : null;
+  const latest = getAdminStudentLatestLifecycleRecord(aluno);
+  if (state === STUDENT_LIFECYCLE_STATE.INACTIVE) {
+    return {
+      state,
+      title: "Aluno inativo",
+      subtitle:
+        latest?.desfecho || latest?.dataEfetivacao
+          ? `${latest?.desfecho ? `Desfecho: ${latest.desfecho}` : ""}${latest?.desfecho && latest?.dataEfetivacao ? " · " : ""}${
+              latest?.dataEfetivacao ? `Efetivado em ${formatAdminDate(latest.dataEfetivacao)}` : ""
+            }`.trim()
+          : "Sem ciclo de cancelamento ativo.",
+    };
+  }
+  if (!cancelamento) {
+    return { state, title: "Aluno ativo", subtitle: "Sem cancelamento ou abandono registrados." };
+  }
+  const endLabel = cancelamento?.dataFimPrevista ? formatAdminDate(cancelamento.dataFimPrevista) : "a definir";
+  if (String(cancelamento.tipo || "") === "abandono") {
+    return {
+      state,
+      title: cancelamento.aulasSuspensas ? "Abandono registrado com aulas suspensas" : "Abandono registrado",
+      subtitle: "Efetivação pendente.",
+      endLabel,
+    };
+  }
+  if (String(cancelamento.tipo || "") === "arrependimento_7d") {
+    return {
+      state,
+      title: `Arrependimento — aulas até ${endLabel}`,
+      subtitle: cancelamento?.dataPedido ? `Pedido em ${formatAdminDate(cancelamento.dataPedido)}` : "",
+      endLabel,
+    };
+  }
+  return {
+    state,
+    title: `Em aviso prévio até ${endLabel}`,
+    subtitle: cancelamento?.dataPedido ? `Pedido em ${formatAdminDate(cancelamento.dataPedido)}` : "",
+    endLabel,
+  };
 };
 
 const normalizeSupabaseStudentForAdmin = (row = {}) => {
@@ -14772,7 +14966,7 @@ const renderAdminStudentsList = () => {
     .join("");
 };
 
-const openAdminStudentClassEditor = ({ alunoId } = {}) => {
+const openAdminStudentClassEditor = ({ alunoId, returnFocusEl = null } = {}) => {
   const id = String(alunoId || "").trim();
   if (!id) return;
   const meta = adminPedagogicoState.studentsById instanceof Map ? adminPedagogicoState.studentsById.get(id) || null : null;
@@ -14780,11 +14974,12 @@ const openAdminStudentClassEditor = ({ alunoId } = {}) => {
   const teacherId = String(meta?.professorId || meta?.teacherId || "").trim();
   const plan = String(meta?.plano || "").trim();
   if (existingClass) {
-    openAdminPedClassModal({ mode: "edit", classRow: existingClass });
+    openAdminPedClassModal({ mode: "edit", classRow: existingClass, returnFocusEl });
   } else {
     openAdminPedClassModal({
       mode: "create",
       prefill: { type: "individual", teacherId, plan, studentIds: id ? [id] : [] },
+      returnFocusEl,
     });
   }
 };
@@ -15323,6 +15518,16 @@ const updateAdminStudentCachedRow = (alunoId, patch = {}) => {
   }
   if (Array.isArray(adminStudentsState.students)) {
     adminStudentsState.students = adminStudentsState.students.map((row) => (String(row?.id || "") === id ? { ...row, ...patch } : row));
+  }
+  if (adminPedagogicoState.studentsById instanceof Map) {
+    const prev = adminPedagogicoState.studentsById.get(id);
+    if (prev) adminPedagogicoState.studentsById.set(id, { ...prev, ...patch });
+  }
+  if (Array.isArray(adminPedagogicoState.students)) {
+    adminPedagogicoState.students = adminPedagogicoState.students.map((row) => (String(row?.id || "") === id ? { ...row, ...patch } : row));
+  }
+  if (Array.isArray(adminUsersState.student?.rows)) {
+    adminUsersState.student.rows = adminUsersState.student.rows.map((row) => (String(row?.id || "") === id ? { ...row, ...patch } : row));
   }
   return getAdminStudentMetaById(id);
 };
@@ -15910,6 +16115,137 @@ const renderAdminStudentEditFormHtml = (alunoMeta = {}) => {
   `;
 };
 
+const renderAdminStudentLifecycleCycleControl = ({ cycleIndex, field, value } = {}) => {
+  const options = [
+    { value: "unknown", label: "—" },
+    { value: "yes", label: "Sim" },
+    { value: "no", label: "Não" },
+  ];
+  const current = value === true ? "yes" : value === false ? "no" : "unknown";
+  return `
+    <div class="admin-student-lifecycle-cycle-buttons" role="group" aria-label="${escapeHtml(field)}">
+      ${options
+        .map((option) => {
+          const isActive = option.value === current;
+          return `
+            <button
+              type="button"
+              class="admin-student-lifecycle-cycle-button${isActive ? " is-active" : ""}"
+              data-admin-student-cancel-cycle="${escapeHtml(String(cycleIndex))}"
+              data-admin-student-cancel-cycle-field="${escapeHtml(field)}"
+              data-admin-student-cancel-cycle-value="${escapeHtml(option.value)}"
+            >
+              ${escapeHtml(option.label)}
+            </button>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+};
+
+const renderAdminStudentLifecycleCard = (alunoMeta) => {
+  const meta = alunoMeta && typeof alunoMeta === "object" ? alunoMeta : null;
+  const state = getStudentLifecycleState(meta);
+  const cancelamento = meta?.cancelamento && typeof meta.cancelamento === "object" ? meta.cancelamento : null;
+  const summary = buildStudentLifecycleSummary(meta);
+  const activeRecord = cancelamento && isStudentCancellationActive(cancelamento) ? cancelamento : null;
+  const reason = String(activeRecord?.motivo || "").trim();
+  const reasonDetail = String(activeRecord?.motivoDetalhe || "").trim();
+  const cycleRows = Array.isArray(activeRecord?.ciclos) ? activeRecord.ciclos : [];
+  const suspensionLabel = activeRecord?.dataSuspensao ? formatAdminDate(activeRecord.dataSuspensao) : "";
+
+  if (state === STUDENT_LIFECYCLE_STATE.ACTIVE) {
+    return `
+      <div class="admin-student-panel-card admin-student-lifecycle-card">
+        <div class="admin-student-lifecycle-head">
+          <div>
+            <div class="admin-student-panel-title">Ciclo de vida</div>
+            <div class="admin-student-lifecycle-subtitle">Aluno operacional, sem cancelamento em andamento.</div>
+          </div>
+        </div>
+        <div class="admin-student-lifecycle-actions">
+          <button type="button" class="button button-outline button-small" data-admin-student-lifecycle-action="register_cancel">Registrar cancelamento</button>
+          <button type="button" class="button button-outline button-small admin-student-lifecycle-danger" data-admin-student-lifecycle-action="mark_abandonment">Marcar abandono</button>
+        </div>
+      </div>
+    `;
+  }
+
+  if (state === STUDENT_LIFECYCLE_STATE.INACTIVE) {
+    return `
+      <div class="admin-student-panel-card admin-student-lifecycle-card is-inactive">
+        <div class="admin-student-lifecycle-head">
+          <div>
+            <div class="admin-student-panel-title">Ciclo de vida</div>
+            <div class="admin-student-lifecycle-title">${escapeHtml(summary.title)}</div>
+            <div class="admin-student-lifecycle-subtitle">${escapeHtml(summary.subtitle || "Sem ações disponíveis nesta etapa.")}</div>
+          </div>
+          <span class="admin-student-lifecycle-badge is-gray">Inativo</span>
+        </div>
+      </div>
+    `;
+  }
+
+  const stateBadge =
+    state === STUDENT_LIFECYCLE_STATE.SUSPENDED
+      ? `<span class="admin-student-lifecycle-badge is-muted">Aulas suspensas${suspensionLabel ? ` desde ${escapeHtml(suspensionLabel)}` : ""}</span>`
+      : String(activeRecord?.tipo || "") === "abandono"
+        ? `<span class="admin-student-lifecycle-badge is-warn">Abandono registrado</span>`
+        : `<span class="admin-student-lifecycle-badge is-warn">${escapeHtml(describeStudentCancellationType(activeRecord))}</span>`;
+
+  return `
+    <div class="admin-student-panel-card admin-student-lifecycle-card ${state === STUDENT_LIFECYCLE_STATE.SUSPENDED ? "is-suspended" : "is-notice"}">
+      <div class="admin-student-lifecycle-head">
+        <div>
+          <div class="admin-student-panel-title">Ciclo de vida</div>
+          <div class="admin-student-lifecycle-title">${escapeHtml(summary.title)}</div>
+          <div class="admin-student-lifecycle-subtitle">${escapeHtml(summary.subtitle || "")}</div>
+        </div>
+        ${stateBadge}
+      </div>
+      ${
+        reason || reasonDetail
+          ? `<div class="admin-student-lifecycle-meta">Motivo: ${escapeHtml(reason || "—")}${reasonDetail ? ` · ${escapeHtml(reasonDetail)}` : ""}</div>`
+          : ""
+      }
+      ${
+        cycleRows.length
+          ? `
+            <div class="admin-student-lifecycle-cycles">
+              ${cycleRows
+                .map((cycle, index) => {
+                  return `
+                    <div class="admin-student-lifecycle-cycle-row">
+                      <div class="admin-student-lifecycle-cycle-month">Mês ${escapeHtml(String(cycle?.mes || index + 1))}</div>
+                      <div class="admin-student-lifecycle-cycle-field">
+                        <span>Pagou</span>
+                        ${renderAdminStudentLifecycleCycleControl({ cycleIndex: index, field: "pagou", value: cycle?.pagou ?? null })}
+                      </div>
+                      <div class="admin-student-lifecycle-cycle-field">
+                        <span>Frequentou</span>
+                        ${renderAdminStudentLifecycleCycleControl({ cycleIndex: index, field: "frequentou", value: cycle?.frequentou ?? null })}
+                      </div>
+                    </div>
+                  `;
+                })
+                .join("")}
+            </div>
+          `
+          : ""
+      }
+      <div class="admin-student-lifecycle-actions">
+        ${
+          state === STUDENT_LIFECYCLE_STATE.SUSPENDED
+            ? `<button type="button" class="button button-solid button-small" data-admin-student-lifecycle-action="resume">Retomar aulas</button>`
+            : `<button type="button" class="button button-outline button-small" data-admin-student-lifecycle-action="suspend">Suspender aulas</button>`
+        }
+        <button type="button" class="button button-outline button-small" data-admin-student-lifecycle-action="revert">Reverter cancelamento</button>
+      </div>
+    </div>
+  `;
+};
+
 const renderAdminStudentSheet = () => {
   const drawerEl = getAdminStudentHistoryDrawer();
   if (!(drawerEl instanceof HTMLElement)) {
@@ -15955,15 +16291,8 @@ const renderAdminStudentSheet = () => {
   const commentComposerSaving = Boolean(hist.commentComposerSaving);
   const photoStatus = hist.photoSaving ? "Enviando foto…" : hist.photoError ? String(hist.photoError) : "";
   const liveClasses = getAdminStudentLinkedClasses(alunoMeta?.id || hist.alunoId);
-  const deactivateBtn = getAdminStudentDeactivateTrigger();
-  const alunoIsActive = Boolean(alunoMeta?.ativo !== false);
+  const lifecycleCardHtml = renderAdminStudentLifecycleCard(alunoMeta);
   if (hist.editingField || hist.inlineSavingField) return;
-
-  if (deactivateBtn instanceof HTMLButtonElement) {
-    deactivateBtn.hidden = !String(hist.alunoId || "").trim();
-    deactivateBtn.textContent = alunoIsActive ? "Desativar aluno" : "Reativar aluno";
-    deactivateBtn.setAttribute("aria-label", alunoIsActive ? "Desativar aluno" : "Reativar aluno");
-  }
 
   const liveClassBlocks = liveClasses.map((classRow) => {
     const status = normalizeClassStatus(classRow?.status);
@@ -16088,6 +16417,8 @@ const renderAdminStudentSheet = () => {
             </div>
           </div>
         </div>
+
+        ${lifecycleCardHtml}
 
         <div class="admin-student-simple-notes">
           <div class="admin-student-panel-title">Observações pedagógicas</div>
@@ -17567,7 +17898,7 @@ const syncAdminPedStudentsFiltersPopoverUi = (pop) => {
   const deactivatedSortEl = pop.querySelector('[data-admin-ped-students-filter="deactivatedSort"]');
   if (!(statusEl instanceof HTMLSelectElement) || !(deactivatedSortEl instanceof HTMLSelectElement)) return;
   const status = String(statusEl.value || "active");
-  const enabled = status !== "active";
+  const enabled = status === "inactive" || status === "all";
   deactivatedSortEl.disabled = !enabled;
   deactivatedSortEl.closest(".admin-ped-students-filters-row")?.classList.toggle("is-disabled", !enabled);
 };
@@ -17601,9 +17932,11 @@ const openAdminPedStudentsFiltersPopover = ({ triggerEl } = {}) => {
     <div class="admin-ped-students-filters-row">
       <label>Status</label>
       <select data-admin-ped-students-filter="status">
-        <option value="active">Apenas ativos</option>
-        <option value="all">Ativos e inativos</option>
-        <option value="inactive">Apenas inativos</option>
+        <option value="active">Ativos (inclui aviso e suspensos)</option>
+        <option value="notice">Em aviso</option>
+        <option value="suspended">Suspensos</option>
+        <option value="inactive">Inativos</option>
+        <option value="all">Todos</option>
       </select>
     </div>
     <div class="admin-ped-students-filters-row">
@@ -18749,8 +19082,8 @@ const renderAdminPedagogicoStudentsPanel = () => {
       const groupId = String(s?.groupId || "").trim();
       const groupName = groupId ? String(groupsById.get(groupId)?.name || "").trim() : String(s?.groupName || "").trim();
       const plan = String(s?.plano || "").trim() || "Sem plano";
-      const isActive = s?.ativo !== false;
-      const statusLabel = isActive ? "Ativo" : "Inativo";
+      const lifecycle = getStudentLifecycleBadgeMeta(s);
+      const lifecycleState = lifecycle.state;
       const createdAt = s?.criadoEm || s?.created_at || s?.createdAt || null;
       const deactivatedAt = s?.desativadoEm || s?.canceladoEm || s?.cancelamentoEm || s?.dataCancelamento || null;
       const risk = (riskByStudent.get(String(s.id || "")) || {}).risk || "—";
@@ -18758,25 +19091,28 @@ const renderAdminPedagogicoStudentsPanel = () => {
         id: String(s.id || ""),
         nome: String(s.nome || "Aluno"),
         email: String(s.email || ""),
-        statusLabel,
         teacherId,
         teacherName,
         groupId,
         groupName,
         plan,
         risk,
+        lifecycleState,
+        lifecycleLabel: lifecycle.label,
+        lifecycleTone: lifecycle.tone,
         createdMs: parseFirestoreDateToMs(createdAt),
         deactivatedMs: parseFirestoreDateToMs(deactivatedAt),
         alunoChave: String(s.aluno_chave || ""),
         source: String(s.source || ""),
-        isActive,
       };
     });
 
   const filteredRows = rows.filter((row) => {
     const status = String(studentFilters.status || "active");
-    if (status === "active" && !row.isActive) return false;
-    if (status === "inactive" && row.isActive) return false;
+    if (status === "active" && row.lifecycleState === STUDENT_LIFECYCLE_STATE.INACTIVE) return false;
+    if (status === "notice" && row.lifecycleState !== STUDENT_LIFECYCLE_STATE.NOTICE) return false;
+    if (status === "suspended" && row.lifecycleState !== STUDENT_LIFECYCLE_STATE.SUSPENDED) return false;
+    if (status === "inactive" && row.lifecycleState !== STUDENT_LIFECYCLE_STATE.INACTIVE) return false;
     if (String(studentFilters.teacherId || "") && row.teacherId !== String(studentFilters.teacherId || "")) return false;
     if (String(studentFilters.plan || "") && normalizeSearchText(row.plan) !== normalizeSearchText(studentFilters.plan)) return false;
     return true;
@@ -18828,6 +19164,7 @@ const renderAdminPedagogicoStudentsPanel = () => {
                 <div class="admin-ped-row-meta">
                   <span class="admin-ped-pill is-plan">${escapeHtml(r.plan)}</span>
                   ${r.teacherName ? `<span class="admin-ped-pill">${escapeHtml(r.teacherName)}</span>` : `<span class="admin-ped-pill">Sem professor</span>`}
+                  ${r.lifecycleLabel ? `<span class="admin-ped-pill is-${escapeHtml(r.lifecycleTone || "muted")}">${escapeHtml(r.lifecycleLabel)}</span>` : ""}
                 </div>
               </div>
             </div>
@@ -22114,7 +22451,7 @@ const buildAdminPedDaysCheckboxesHtml = (selectedDays) => {
     .join("");
 };
 
-const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = null } = {}) => {
+const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = null, returnFocusEl = null } = {}) => {
   const isEdit = mode === "edit" && classRow && classRow.id;
   const row = classRow && typeof classRow === "object" ? classRow : null;
   const seed = prefill && typeof prefill === "object" ? prefill : null;
@@ -22317,6 +22654,7 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
     secondaryLabel: "Cancelar",
     hideSecondary: false,
     showTrash: false,
+    returnFocusEl,
     onPrimary: () => {
       const form = modalBody?.querySelector("[data-admin-ped-class-form]");
       if (!(form instanceof HTMLElement)) return false;
@@ -22605,6 +22943,14 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
     if (typeSel instanceof HTMLSelectElement && typeLocked) typeSel.disabled = true;
     if (studentsPicker instanceof HTMLElement && lockedStudentId) studentsPicker.hidden = true;
     if (groupWrap instanceof HTMLElement) groupWrap.hidden = typeValue !== "group";
+    const firstFocusable = form.querySelector(
+      'select:not([disabled]), input:not([type="hidden"]):not([disabled]), textarea:not([disabled]), button:not([disabled])'
+    );
+    if (firstFocusable instanceof HTMLElement) {
+      try {
+        firstFocusable.focus();
+      } catch {}
+    }
 
     const syncDay = (weekday) => {
       const rowEl = form.querySelector(`[data-admin-ped-schedule-row="${CSS.escape(String(weekday))}"]`);
@@ -25133,6 +25479,28 @@ const findAdminStudentRecurringEventId = (alunoId, groupId) => {
   return match ? String(match.id || "").trim() : "";
 };
 
+const rerenderAdminStudentLifecycleViews = () => {
+  if (adminStudentsState.history?.isOpen) renderAdminStudentSheet();
+  if (typeof renderAdminPedagogicoStudentsPanel === "function") renderAdminPedagogicoStudentsPanel();
+  if (typeof renderAdminStudentsList === "function") renderAdminStudentsList();
+};
+
+const saveAdminStudentLifecyclePatch = async ({ alunoId, patch = {} } = {}) => {
+  const id = String(alunoId || "").trim();
+  if (!id) throw new Error("missing_student_id");
+  const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_student_lifecycle");
+  const user = await waitForFirebaseAuthReady(firebase, 5000);
+  if (!user) throw new Error("not_authenticated");
+  await withTimeout(firebase.setDoc(firebase.doc(firebase.primaryDb, "users", id), patch, { merge: true }), 12_000, "firestore_student_lifecycle_patch");
+  updateAdminStudentCachedRow(id, patch);
+  return true;
+};
+
+const archiveStudentCancellationRecord = ({ alunoMeta, record } = {}) => {
+  const previous = Array.isArray(alunoMeta?.cancelamentosAnteriores) ? alunoMeta.cancelamentosAnteriores : [];
+  return previous.concat([clonePlainData(record)].filter(Boolean));
+};
+
 const patchAdminStudentStatus = async ({ alunoId, ativo } = {}) => {
   const id = String(alunoId || "").trim();
   if (!id) return;
@@ -25155,6 +25523,316 @@ const patchAdminStudentStatus = async ({ alunoId, ativo } = {}) => {
   }
   await withTimeout(firebase.setDoc(firebase.doc(firebase.primaryDb, "users", id), patch, { merge: true }), 12_000, "firestore_student_status_patch");
   updateAdminStudentCachedRow(id, patch);
+};
+
+const saveAdminStudentCancellationCycleField = async ({ alunoId, cycleIndex, field, rawValue } = {}) => {
+  const meta = getAdminStudentMetaById(alunoId);
+  const cancelamento = meta?.cancelamento && typeof meta.cancelamento === "object" ? clonePlainData(meta.cancelamento) : null;
+  if (!cancelamento || !Array.isArray(cancelamento.ciclos)) return;
+  const index = Number(cycleIndex);
+  if (!Number.isInteger(index) || index < 0 || index >= cancelamento.ciclos.length) return;
+  if (!["pagou", "frequentou"].includes(String(field || ""))) return;
+  const nextValue = rawValue === "yes" ? true : rawValue === "no" ? false : null;
+  cancelamento.ciclos[index] = {
+    ...(cancelamento.ciclos[index] || { mes: index + 1 }),
+    [field]: nextValue,
+  };
+  const actionLabel = field === "pagou" ? "Pagamento atualizado" : "Frequência atualizada";
+  const printable = nextValue === true ? "sim" : nextValue === false ? "não" : "—";
+  cancelamento.historico = (Array.isArray(cancelamento.historico) ? cancelamento.historico : []).concat([
+    createStudentCancellationHistoryEntry(actionLabel, `Mês ${index + 1}: ${field} = ${printable}`),
+  ]);
+  await saveAdminStudentLifecyclePatch({ alunoId, patch: { cancelamento } });
+  rerenderAdminStudentLifecycleViews();
+};
+
+const openAdminStudentRegisterCancellationModal = ({ alunoId } = {}) => {
+  const id = String(alunoId || "").trim();
+  if (!id) return;
+  const aluno = getAdminStudentMetaById(id);
+  const firstLessonDate = getAdminStudentFirstLessonDate(id);
+  const firstLessonValue = firstLessonDate ? createDateKey(firstLessonDate) : "";
+
+  openModal({
+    title: "Registrar cancelamento",
+    primaryLabel: "Confirmar cancelamento",
+    secondaryLabel: "Cancelar",
+    returnFocusEl: getAdminStudentSheet()?.querySelector('[data-admin-student-lifecycle-action="register_cancel"]') || null,
+    bodyHtml: `
+      <div class="admin-student-lifecycle-modal">
+        <label class="admin-student-lifecycle-modal-field">
+          <span>Data do pedido</span>
+          <input type="date" data-admin-student-cancel-date value="${escapeHtml(createDateKey(new Date()))}" />
+        </label>
+        ${
+          firstLessonValue
+            ? `<div class="admin-student-lifecycle-modal-hint">Primeira aula encontrada: <strong>${escapeHtml(formatAdminDate(firstLessonValue))}</strong></div>`
+            : `
+              <label class="admin-student-lifecycle-modal-field">
+                <span>Data da primeira aula (opcional)</span>
+                <input type="date" data-admin-student-first-lesson-date value="" />
+              </label>
+            `
+        }
+        <label class="admin-student-lifecycle-modal-field">
+          <span>Motivo</span>
+          <select data-admin-student-cancel-reason>
+            <option value="">Selecione…</option>
+            ${STUDENT_CANCELLATION_REASON_OPTIONS.map((reason) => `<option value="${escapeHtml(reason)}">${escapeHtml(reason)}</option>`).join("")}
+          </select>
+        </label>
+        <label class="admin-student-lifecycle-modal-field">
+          <span>Detalhe opcional</span>
+          <textarea rows="3" data-admin-student-cancel-detail placeholder="Contexto adicional"></textarea>
+        </label>
+        <div class="admin-student-lifecycle-modal-summary" data-admin-student-cancel-summary>
+          Aviso prévio até —. As aulas continuam normalmente até lá.
+        </div>
+        <div class="admin-student-lifecycle-modal-error" data-admin-student-cancel-error hidden></div>
+      </div>
+    `,
+    onPrimary: () => {
+      const dateEl = modalBody?.querySelector("[data-admin-student-cancel-date]");
+      const reasonEl = modalBody?.querySelector("[data-admin-student-cancel-reason]");
+      const detailEl = modalBody?.querySelector("[data-admin-student-cancel-detail]");
+      const firstLessonEl = modalBody?.querySelector("[data-admin-student-first-lesson-date]");
+      const errorEl = modalBody?.querySelector("[data-admin-student-cancel-error]");
+      const pedidoKey = dateEl instanceof HTMLInputElement ? String(dateEl.value || "").trim() : "";
+      const reason = reasonEl instanceof HTMLSelectElement ? String(reasonEl.value || "").trim() : "";
+      const detail = detailEl instanceof HTMLTextAreaElement ? String(detailEl.value || "").trim() : "";
+      const firstLessonKey = firstLessonValue || (firstLessonEl instanceof HTMLInputElement ? String(firstLessonEl.value || "").trim() : "");
+      const setErr = (message) => {
+        if (!(errorEl instanceof HTMLElement)) return;
+        errorEl.textContent = String(message || "");
+        errorEl.hidden = !message;
+      };
+      if (!isValidDateKey(pedidoKey)) {
+        setErr("Selecione uma data de pedido válida.");
+        return false;
+      }
+      if (!reason) {
+        setErr("Selecione um motivo para continuar.");
+        return false;
+      }
+
+      const pedidoDate = parseDateKey(pedidoKey);
+      const firstDate = isValidDateKey(firstLessonKey) ? parseDateKey(firstLessonKey) : null;
+      const diffMs = pedidoDate && firstDate ? pedidoDate.getTime() - firstDate.getTime() : Number.NaN;
+      const isWithin7d = pedidoDate && firstDate && diffMs >= 0 && diffMs <= 7 * 86_400_000;
+      const tipo = isWithin7d ? "arrependimento_7d" : "aviso_previo";
+      const dataFimPrevistaDate = isWithin7d && firstDate ? addMonthsPreservingDay(firstDate, 1) : addMonthsPreservingDay(pedidoDate, 2);
+      const dataFimPrevista = toLifecycleIso(dataFimPrevistaDate);
+      const cancelamento = {
+        dataPedido: toLifecycleIso(pedidoDate),
+        tipo,
+        motivo: reason,
+        motivoDetalhe: detail,
+        dataFimPrevista,
+        aulasSuspensas: false,
+        dataSuspensao: null,
+        ciclos: buildStudentCancellationCycles(tipo),
+        desfecho: null,
+        dataEfetivacao: null,
+        historico: [
+          createStudentCancellationHistoryEntry(
+            "Pedido registrado",
+            `${tipo === "arrependimento_7d" ? "Arrependimento 7d" : "Aviso prévio"} até ${formatAdminDate(dataFimPrevista)}`
+          ),
+        ],
+      };
+
+      if (modalPrimary) modalPrimary.disabled = true;
+      if (modalSecondary) modalSecondary.disabled = true;
+      (async () => {
+        try {
+          await saveAdminStudentLifecyclePatch({ alunoId: id, patch: { cancelamento } });
+          rerenderAdminStudentLifecycleViews();
+          closeModal();
+        } catch (error) {
+          console.error("[admin] register student cancellation failed:", error);
+          setErr("Não foi possível registrar o cancelamento agora.");
+          if (modalPrimary) modalPrimary.disabled = false;
+          if (modalSecondary) modalSecondary.disabled = false;
+        }
+      })();
+      return false;
+    },
+  });
+
+  window.setTimeout(() => {
+    const dateEl = modalBody?.querySelector("[data-admin-student-cancel-date]");
+    const firstLessonEl = modalBody?.querySelector("[data-admin-student-first-lesson-date]");
+    const summaryEl = modalBody?.querySelector("[data-admin-student-cancel-summary]");
+    const syncSummary = () => {
+      if (!(summaryEl instanceof HTMLElement) || !(dateEl instanceof HTMLInputElement)) return;
+      const pedidoDate = parseDateKey(String(dateEl.value || "").trim());
+      const firstDate = firstLessonValue
+        ? parseDateKey(firstLessonValue)
+        : firstLessonEl instanceof HTMLInputElement && isValidDateKey(firstLessonEl.value)
+          ? parseDateKey(firstLessonEl.value)
+          : null;
+      if (!(pedidoDate instanceof Date) || Number.isNaN(pedidoDate.getTime())) {
+        summaryEl.textContent = "Aviso prévio até —. As aulas continuam normalmente até lá.";
+        return;
+      }
+      const diffMs = firstDate instanceof Date ? pedidoDate.getTime() - firstDate.getTime() : Number.NaN;
+      const isWithin7d = firstDate instanceof Date && diffMs >= 0 && diffMs <= 7 * 86_400_000;
+      const endDate = isWithin7d && firstDate ? addMonthsPreservingDay(firstDate, 1) : addMonthsPreservingDay(pedidoDate, 2);
+      summaryEl.textContent = isWithin7d
+        ? `Cancelamento em até 7 dias da primeira aula: sem aviso prévio, aulas até ${formatAdminDate(endDate)}.`
+        : `Aviso prévio até ${formatAdminDate(endDate)}. As aulas continuam normalmente até lá.`;
+    };
+    dateEl?.addEventListener("input", syncSummary);
+    firstLessonEl?.addEventListener("input", syncSummary);
+    syncSummary();
+  }, 0);
+};
+
+const openAdminStudentMarkAbandonmentModal = ({ alunoId } = {}) => {
+  const id = String(alunoId || "").trim();
+  if (!id) return;
+  const aluno = getAdminStudentMetaById(id);
+  openModal({
+    title: "Marcar abandono",
+    primaryLabel: "Registrar abandono",
+    secondaryLabel: "Cancelar",
+    returnFocusEl: getAdminStudentSheet()?.querySelector('[data-admin-student-lifecycle-action="mark_abandonment"]') || null,
+    bodyHtml: `
+      <div class="admin-student-lifecycle-modal">
+        <label class="admin-student-lifecycle-modal-field">
+          <span>Data do registro</span>
+          <input type="date" data-admin-student-abandon-date value="${escapeHtml(createDateKey(new Date()))}" />
+        </label>
+        <label class="admin-student-lifecycle-modal-field">
+          <span>Motivo (opcional)</span>
+          <textarea rows="3" data-admin-student-abandon-detail placeholder="Contexto do abandono"></textarea>
+        </label>
+        <div class="admin-student-lifecycle-modal-summary">O aluno será marcado como abandono. A desativação das aulas será concluída na efetivação.</div>
+        <div class="admin-student-lifecycle-modal-error" data-admin-student-abandon-error hidden></div>
+      </div>
+    `,
+    onPrimary: () => {
+      const dateEl = modalBody?.querySelector("[data-admin-student-abandon-date]");
+      const detailEl = modalBody?.querySelector("[data-admin-student-abandon-detail]");
+      const errorEl = modalBody?.querySelector("[data-admin-student-abandon-error]");
+      const dateKey = dateEl instanceof HTMLInputElement ? String(dateEl.value || "").trim() : "";
+      const detail = detailEl instanceof HTMLTextAreaElement ? String(detailEl.value || "").trim() : "";
+      if (!isValidDateKey(dateKey)) {
+        if (errorEl instanceof HTMLElement) {
+          errorEl.textContent = "Informe uma data válida.";
+          errorEl.hidden = false;
+        }
+        return false;
+      }
+      const cancelamento = {
+        dataPedido: toLifecycleIso(parseDateKey(dateKey)),
+        tipo: "abandono",
+        motivo: "Abandono",
+        motivoDetalhe: detail,
+        dataFimPrevista: null,
+        aulasSuspensas: false,
+        dataSuspensao: null,
+        ciclos: buildStudentCancellationCycles("abandono"),
+        desfecho: null,
+        dataEfetivacao: null,
+        historico: [createStudentCancellationHistoryEntry("Abandono registrado", detail || "Efetivação pendente")],
+      };
+      if (modalPrimary) modalPrimary.disabled = true;
+      if (modalSecondary) modalSecondary.disabled = true;
+      (async () => {
+        try {
+          await saveAdminStudentLifecyclePatch({ alunoId: id, patch: { cancelamento } });
+          rerenderAdminStudentLifecycleViews();
+          closeModal();
+        } catch (error) {
+          console.error("[admin] student abandonment failed:", error);
+          if (errorEl instanceof HTMLElement) {
+            errorEl.textContent = "Não foi possível registrar o abandono agora.";
+            errorEl.hidden = false;
+          }
+          if (modalPrimary) modalPrimary.disabled = false;
+          if (modalSecondary) modalSecondary.disabled = false;
+        }
+      })();
+      return false;
+    },
+  });
+};
+
+const openAdminStudentSuspendLessonsModal = ({ alunoId, suspend = true } = {}) => {
+  const id = String(alunoId || "").trim();
+  if (!id) return;
+  const meta = getAdminStudentMetaById(id);
+  const cancelamento = meta?.cancelamento && typeof meta.cancelamento === "object" ? clonePlainData(meta.cancelamento) : null;
+  if (!cancelamento) return;
+  openModal({
+    title: suspend ? "Suspender aulas" : "Retomar aulas",
+    primaryLabel: suspend ? "Confirmar suspensão" : "Confirmar retomada",
+    secondaryLabel: "Cancelar",
+    bodyHtml: suspend
+      ? "Suspender as aulas deste aluno? Os horários dele sairão da agenda do professor até a retomada."
+      : "Retomar as aulas deste aluno e manter o ciclo de cancelamento em andamento?",
+    onPrimary: () => {
+      if (modalPrimary) modalPrimary.disabled = true;
+      if (modalSecondary) modalSecondary.disabled = true;
+      cancelamento.aulasSuspensas = Boolean(suspend);
+      cancelamento.dataSuspensao = suspend ? new Date().toISOString() : null;
+      cancelamento.historico = (Array.isArray(cancelamento.historico) ? cancelamento.historico : []).concat([
+        createStudentCancellationHistoryEntry(suspend ? "Aulas suspensas" : "Aulas retomadas", suspend ? "TODO etapa 2: remover eventos futuros da agenda" : "TODO etapa 2: restaurar eventos"),
+      ]);
+      (async () => {
+        try {
+          await saveAdminStudentLifecyclePatch({ alunoId: id, patch: { cancelamento } });
+          rerenderAdminStudentLifecycleViews();
+          closeModal();
+        } catch (error) {
+          console.error("[admin] toggle student suspension failed:", error);
+          if (modalPrimary) modalPrimary.disabled = false;
+          if (modalSecondary) modalSecondary.disabled = false;
+        }
+      })();
+      return false;
+    },
+  });
+};
+
+const openAdminStudentRevertCancellationModal = ({ alunoId } = {}) => {
+  const id = String(alunoId || "").trim();
+  if (!id) return;
+  const meta = getAdminStudentMetaById(id);
+  const cancelamento = meta?.cancelamento && typeof meta.cancelamento === "object" ? clonePlainData(meta.cancelamento) : null;
+  if (!cancelamento) return;
+  openModal({
+    title: "Reverter cancelamento",
+    primaryLabel: "Reverter",
+    secondaryLabel: "Cancelar",
+    bodyHtml: "O aluno desistiu do cancelamento? O registro será arquivado e o aluno volta ao estado normal.",
+    onPrimary: () => {
+      if (modalPrimary) modalPrimary.disabled = true;
+      if (modalSecondary) modalSecondary.disabled = true;
+      const archived = {
+        ...cancelamento,
+        desfecho: "revertido",
+        dataEfetivacao: new Date().toISOString(),
+        historico: (Array.isArray(cancelamento.historico) ? cancelamento.historico : []).concat([
+          createStudentCancellationHistoryEntry("Cancelamento revertido", "Aluno voltou ao estado normal"),
+        ]),
+      };
+      const cancelamentosAnteriores = archiveStudentCancellationRecord({ alunoMeta: meta, record: archived });
+      (async () => {
+        try {
+          await saveAdminStudentLifecyclePatch({ alunoId: id, patch: { cancelamento: null, cancelamentosAnteriores } });
+          rerenderAdminStudentLifecycleViews();
+          closeModal();
+        } catch (error) {
+          console.error("[admin] revert student cancellation failed:", error);
+          if (modalPrimary) modalPrimary.disabled = false;
+          if (modalSecondary) modalSecondary.disabled = false;
+        }
+      })();
+      return false;
+    },
+  });
 };
 
 const openAdminStudentDeactivateModal = ({ alunoId, nextActive = false } = {}) => {
@@ -26543,6 +27221,12 @@ if (modalOverlay) {
     if (event.target === modalOverlay) {
       closeModal();
     }
+  });
+}
+
+if (modalDialog instanceof HTMLElement) {
+  modalDialog.addEventListener("click", (event) => {
+    event.stopPropagation();
   });
 }
 
@@ -28765,7 +29449,7 @@ document.addEventListener("click", (event) => {
       if (adminPedStudentNewClass instanceof HTMLButtonElement) {
         event.preventDefault();
         const alunoId = String(adminPedStudentNewClass.getAttribute("data-admin-ped-student-new-class") || "").trim();
-        openAdminStudentClassEditor({ alunoId });
+        openAdminStudentClassEditor({ alunoId, returnFocusEl: adminPedStudentNewClass });
         return;
       }
 
@@ -29092,14 +29776,47 @@ document.addEventListener("click", (event) => {
         return;
       }
 
-      const studentDeactivateTrigger = target.closest("[data-admin-student-deactivate]");
-      if (studentDeactivateTrigger instanceof HTMLButtonElement) {
+      const studentLifecycleAction = target.closest("[data-admin-student-lifecycle-action]");
+      if (studentLifecycleAction instanceof HTMLButtonElement) {
         event.preventDefault();
         event.stopPropagation();
         const alunoId = String(adminStudentsState.history?.alunoId || "").trim();
         if (!alunoId) return;
-        const isActive = Boolean(adminStudentsState.history?.alunoMeta?.ativo !== false);
-        openAdminStudentDeactivateModal({ alunoId, nextActive: !isActive });
+        const action = String(studentLifecycleAction.getAttribute("data-admin-student-lifecycle-action") || "").trim();
+        if (action === "register_cancel") {
+          openAdminStudentRegisterCancellationModal({ alunoId });
+          return;
+        }
+        if (action === "mark_abandonment") {
+          openAdminStudentMarkAbandonmentModal({ alunoId });
+          return;
+        }
+        if (action === "suspend") {
+          openAdminStudentSuspendLessonsModal({ alunoId, suspend: true });
+          return;
+        }
+        if (action === "resume") {
+          openAdminStudentSuspendLessonsModal({ alunoId, suspend: false });
+          return;
+        }
+        if (action === "revert") {
+          openAdminStudentRevertCancellationModal({ alunoId });
+          return;
+        }
+      }
+
+      const studentCancelCycleBtn = target.closest("[data-admin-student-cancel-cycle]");
+      if (studentCancelCycleBtn instanceof HTMLButtonElement) {
+        event.preventDefault();
+        event.stopPropagation();
+        const alunoId = String(adminStudentsState.history?.alunoId || "").trim();
+        const cycleIndex = String(studentCancelCycleBtn.getAttribute("data-admin-student-cancel-cycle") || "").trim();
+        const field = String(studentCancelCycleBtn.getAttribute("data-admin-student-cancel-cycle-field") || "").trim();
+        const value = String(studentCancelCycleBtn.getAttribute("data-admin-student-cancel-cycle-value") || "").trim();
+        if (!alunoId || !field) return;
+        saveAdminStudentCancellationCycleField({ alunoId, cycleIndex, field, rawValue: value }).catch((error) => {
+          console.error("[admin] student cancellation cycle update failed:", error);
+        });
         return;
       }
 
@@ -29109,7 +29826,7 @@ document.addEventListener("click", (event) => {
         event.stopPropagation();
         const alunoId = String(studentEditClassTrigger.getAttribute("data-admin-student-edit-class") || adminStudentsState.history?.alunoId || "").trim();
         if (!alunoId) return;
-        openAdminStudentClassEditor({ alunoId });
+        openAdminStudentClassEditor({ alunoId, returnFocusEl: studentEditClassTrigger });
         return;
       }
 
@@ -30800,6 +31517,16 @@ document.addEventListener("keydown", (event) => {
 
     if (modalOverlay && !modalOverlay.hidden) {
       closeModal();
+      return;
+    }
+
+    if (adminStudentsState.history?.isOpen) {
+      closeAdminStudentHistoryDrawer();
+      return;
+    }
+
+    if (adminTeachersState.history?.isOpen) {
+      closeAdminTeacherHistoryDrawer();
       return;
     }
 
