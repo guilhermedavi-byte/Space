@@ -255,6 +255,22 @@ const warnMissingAdminStudentHistoryDrawer = (context) => {
   console.warn("[admin] student history drawer unavailable", context);
 };
 
+const renderAdminStudentSheetLoadError = (error, fallbackMessage = "Não foi possível carregar a ficha do aluno.") => {
+  const sheetEl = getAdminStudentSheet();
+  const subEl = getAdminStudentHistorySub();
+  const message =
+    typeof error === "string"
+      ? error
+      : typeof error?.message === "string" && error.message
+        ? error.message
+        : fallbackMessage;
+  console.error("[admin] student sheet render failed:", error);
+  if (subEl instanceof HTMLElement) subEl.textContent = "Erro ao carregar";
+  if (sheetEl instanceof HTMLElement) {
+    sheetEl.innerHTML = `<div class="admin-student-simple-empty is-error">${escapeHtml(message)}</div>`;
+  }
+};
+
 const getAdminTeacherHistoryDrawer = () =>
   getOrCreateAdminDrawer({
     selector: "[data-admin-teacher-history-drawer]",
@@ -15906,6 +15922,8 @@ const renderAdminStudentSheet = () => {
     return;
   }
 
+  try {
+
   const hist = adminStudentsState.history;
   const alunoMeta = hist.alunoMeta;
   const alunoName = alunoMeta?.nome || "Aluno";
@@ -15970,7 +15988,6 @@ const renderAdminStudentSheet = () => {
     const statusSuffix = status === "active" ? "" : status === "paused" ? " (pausada)" : " (inativa)";
     return {
       classId,
-      isMenuOpen,
       status,
       statusSuffix,
       liveUrl,
@@ -16206,6 +16223,9 @@ const renderAdminStudentSheet = () => {
   `;
 
   renderAdminStudentHistoryTab();
+  } catch (error) {
+    renderAdminStudentSheetLoadError(error);
+  }
 };
 
 const syncAdminStudentSheetTabs = () => {
@@ -24343,59 +24363,70 @@ const openStudentSimpleCard = async ({ alunoId, teacherId } = {}) => {
   setAdminStudentsStatus("Carregando ficha…");
 
   try {
-    await ensureAdminStudentsBaseData({ force: false });
-  } catch (error) {
-    console.error("[admin] base load failed while opening student card:", error);
-    adminStudentsState.history.baseError =
-      typeof error?.message === "string" && error.message ? error.message : "Não foi possível carregar os dados básicos.";
-  }
+    try {
+      await ensureAdminStudentsBaseData({ force: false });
+    } catch (error) {
+      console.error("[admin] base load failed while opening student card:", error);
+      adminStudentsState.history.baseError =
+        typeof error?.message === "string" && error.message ? error.message : "Não foi possível carregar os dados básicos.";
+    }
 
-  const alunoMeta = adminStudentsState.studentsById instanceof Map ? adminStudentsState.studentsById.get(aId) || null : null;
-  const inferredTeacherId =
-    tId ||
-    String(alunoMeta?.professorId || alunoMeta?.teacherId || "").trim() ||
-    "";
-  const teacherMeta =
-    inferredTeacherId && adminStudentsState.teachersById instanceof Map ? adminStudentsState.teachersById.get(inferredTeacherId) || null : null;
+    const alunoMeta = adminStudentsState.studentsById instanceof Map ? adminStudentsState.studentsById.get(aId) || null : null;
+    const inferredTeacherId =
+      tId ||
+      String(alunoMeta?.professorId || alunoMeta?.teacherId || "").trim() ||
+      "";
+    const teacherMeta =
+      inferredTeacherId && adminStudentsState.teachersById instanceof Map ? adminStudentsState.teachersById.get(inferredTeacherId) || null : null;
 
-  adminStudentsState.history.alunoMeta = alunoMeta;
-  adminStudentsState.history.teacherMeta = teacherMeta;
-  adminStudentsState.history.notes = getAdminStudentNotesValue(alunoMeta);
-  adminStudentsState.history.notesLoadedAt = Date.now();
-  adminStudentsState.history.baseLoading = false;
+    adminStudentsState.history.alunoMeta = alunoMeta;
+    adminStudentsState.history.teacherMeta = teacherMeta;
+    adminStudentsState.history.notes = getAdminStudentNotesValue(alunoMeta);
+    adminStudentsState.history.notesLoadedAt = Date.now();
+    adminStudentsState.history.baseLoading = false;
 
-  const nextHistorySubEl = getAdminStudentHistorySub();
-  if (nextHistorySubEl instanceof HTMLElement) {
-    const alunoName = alunoMeta?.nome || "Aluno";
-    const teacherName = teacherMeta?.nome || "";
-    nextHistorySubEl.textContent = teacherName ? `${alunoName} • ${teacherName}` : `${alunoName}`;
-  }
+    const nextHistorySubEl = getAdminStudentHistorySub();
+    if (nextHistorySubEl instanceof HTMLElement) {
+      const alunoName = alunoMeta?.nome || "Aluno";
+      const teacherName = teacherMeta?.nome || "";
+      nextHistorySubEl.textContent = teacherName ? `${alunoName} • ${teacherName}` : `${alunoName}`;
+    }
 
-  renderAdminStudentSheet();
-
-  try {
-    const [allLogs, comments] = await Promise.all([fetchLessonLogsFromFirestore(), fetchAdminStudentCommentsFromFirestore()]);
-    const logs = inferredTeacherId ? allLogs.filter((l) => String(l?.professorId || "").trim() === inferredTeacherId) : allLogs;
-    const derived = deriveAdminStudentsSummaries({ teacherId: inferredTeacherId, logs });
-    const items = buildAdminStudentHistoryItems({
-      alunoId: aId,
-      teacherId: inferredTeacherId,
-      logs,
-      comments,
-      eventsById: derived.eventsById,
-      teacherMeta: derived.teacherMeta,
-    });
-    adminStudentsState.history.items = items;
-    adminStudentsState.history.historyError = "";
-  } catch (error) {
-    console.error("[admin] student history load failed:", error);
-    adminStudentsState.history.items = [];
-    adminStudentsState.history.historyError =
-      typeof error?.message === "string" && error.message ? error.message : "Não foi possível carregar o histórico pedagógico.";
-  } finally {
-    adminStudentsState.history.historyLoading = false;
     renderAdminStudentSheet();
-    setAdminStudentsStatus("");
+
+    try {
+      const [allLogs, comments] = await Promise.all([fetchLessonLogsFromFirestore(), fetchAdminStudentCommentsFromFirestore()]);
+      const logs = inferredTeacherId ? allLogs.filter((l) => String(l?.professorId || "").trim() === inferredTeacherId) : allLogs;
+      const derived = deriveAdminStudentsSummaries({ teacherId: inferredTeacherId, logs });
+      const items = buildAdminStudentHistoryItems({
+        alunoId: aId,
+        teacherId: inferredTeacherId,
+        logs,
+        comments,
+        eventsById: derived.eventsById,
+        teacherMeta: derived.teacherMeta,
+      });
+      adminStudentsState.history.items = items;
+      adminStudentsState.history.historyError = "";
+    } catch (error) {
+      console.error("[admin] student history load failed:", error);
+      adminStudentsState.history.items = [];
+      adminStudentsState.history.historyError =
+        typeof error?.message === "string" && error.message ? error.message : "Não foi possível carregar o histórico pedagógico.";
+    } finally {
+      adminStudentsState.history.historyLoading = false;
+      renderAdminStudentSheet();
+      setAdminStudentsStatus("");
+    }
+  } catch (error) {
+    const message =
+      typeof error?.message === "string" && error.message ? error.message : "Não foi possível carregar a ficha do aluno.";
+    adminStudentsState.history.baseLoading = false;
+    adminStudentsState.history.historyLoading = false;
+    adminStudentsState.history.baseError = message;
+    adminStudentsState.history.historyError = message;
+    renderAdminStudentSheetLoadError(error, message);
+    setAdminStudentsStatus(message, "error");
   }
 };
 
