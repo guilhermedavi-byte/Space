@@ -14128,6 +14128,92 @@ const normalizeUserRow = ({ id, nome, email, tipo, ativo, criadoEm }) => {
   };
 };
 
+const isPlainFirestorePatchObject = (value) => {
+  if (!value || typeof value !== "object") return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+};
+
+const sanitizeFirestorePatch = (value) => {
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeFirestorePatch(item)).filter((item) => item !== undefined);
+  }
+  if (!isPlainFirestorePatchObject(value)) {
+    return value === undefined ? undefined : value;
+  }
+  return Object.fromEntries(
+    Object.entries(value)
+      .map(([key, entryValue]) => [key, sanitizeFirestorePatch(entryValue)])
+      .filter(([, entryValue]) => entryValue !== undefined)
+  );
+};
+
+const normalizeAdminFirestoreUserRow = (sourceRow = {}) => {
+  if (!sourceRow || typeof sourceRow !== "object") return null;
+  const base = normalizeUserRow({
+    id: sourceRow.id || sourceRow.uid || sourceRow.userId || sourceRow.studentId || sourceRow.alunoId,
+    nome: sourceRow.nome || sourceRow.name,
+    email: sourceRow.email,
+    tipo: sourceRow.tipo || sourceRow.role || sourceRow.type,
+    ativo: sourceRow.ativo,
+    criadoEm: sourceRow.criadoEm || sourceRow.createdAt || sourceRow.created_at || sourceRow.cadastroEm || null,
+  });
+  if (!base) return null;
+  const raw = clonePlainData(sourceRow);
+  const createdAt = raw?.criadoEm || raw?.createdAt || raw?.created_at || raw?.cadastroEm || null;
+  const canceladoEm = raw?.canceladoEm || raw?.cancelamentoEm || raw?.dataCancelamento || null;
+  const desativadoEm = raw?.desativadoEm || canceladoEm || null;
+  const professorId = String(raw?.professorId || raw?.teacherId || raw?.teacher_id || "").trim();
+  const professorNome = String(raw?.professorNome || raw?.teacherNome || raw?.teacherName || "").trim();
+  const especialidade = String(raw?.especialidade || raw?.specialty || raw?.nivelLeciona || "").trim();
+  const englishLevelStart = String(raw?.english_level_start || raw?.englishLevelStart || "").trim();
+  const observacoesPedagogicas = String(raw?.observacoesPedagogicas || raw?.notes || "").trim();
+  const telefone = String(raw?.telefone || raw?.phone || raw?.telefoneWhatsapp || "").trim();
+  return {
+    ...raw,
+    ...base,
+    criadoEm: createdAt,
+    initials: getInitials(base.nome),
+    professorId,
+    teacherId: String(raw?.teacherId || professorId).trim(),
+    professorNome,
+    teacherNome: String(raw?.teacherNome || professorNome).trim(),
+    turma: String(raw?.turma || raw?.turmaNome || raw?.groupName || raw?.className || "").trim(),
+    groupId: String(raw?.groupId || raw?.classId || "").trim(),
+    plano: String(raw?.plano || raw?.plan || "").trim(),
+    telefone,
+    pais: String(raw?.pais || raw?.country || "").trim(),
+    endereco: String(raw?.endereco || raw?.address || "").trim(),
+    estadoEua: String(raw?.estadoEua || raw?.estadoEUA || raw?.usState || "").trim(),
+    valorMensalidade: Number.isFinite(Number(raw?.valorMensalidade)) ? Number(raw.valorMensalidade) : raw?.valorMensalidade ?? null,
+    tempoContrato:
+      typeof raw?.tempoContrato === "string" ? raw.tempoContrato : Number.isFinite(Number(raw?.tempoContrato)) ? String(Number(raw.tempoContrato)) : "",
+    faixaIdade: String(raw?.faixaIdade || "").trim(),
+    genero: String(raw?.genero || "").trim(),
+    trabalho: String(raw?.trabalho || "").trim(),
+    possuiFilhos:
+      typeof raw?.possuiFilhos === "string" ? raw.possuiFilhos : typeof raw?.possuiFilhos === "boolean" ? (raw.possuiFilhos ? "sim" : "nao") : "",
+    casado: typeof raw?.casado === "string" ? raw.casado : typeof raw?.casado === "boolean" ? (raw.casado ? "sim" : "nao") : "",
+    pretendeVoltarBrasil: String(raw?.pretendeVoltarBrasil || "").trim(),
+    objetivoPrincipal: String(raw?.objetivoPrincipal || "").trim(),
+    nivelInglesAtual: String(raw?.nivelInglesAtual || "").trim(),
+    english_level_start: englishLevelStart,
+    englishLevelStart,
+    photoURL: String(raw?.photoURL || raw?.photoUrl || "").trim(),
+    especialidade,
+    specialty: especialidade,
+    observacoesPedagogicas,
+    cancelamento: raw?.cancelamento ?? null,
+    cancelamentosAnteriores: Array.isArray(raw?.cancelamentosAnteriores) ? raw.cancelamentosAnteriores : [],
+    canceladoEm,
+    desativadoEm,
+    criadoKey: toDateKeyFromAny(createdAt),
+    cancelKey: toDateKeyFromAny(canceladoEm),
+    desativadoKey: toDateKeyFromAny(desativadoEm),
+    source: raw?.source || "firestore",
+  };
+};
+
 const loadUsersFromFirestore = async (type) => {
   const safeType = type === "teacher" ? "teacher" : type === "growth" ? "growth" : "student";
   const state = adminUsersState[safeType];
@@ -14298,104 +14384,25 @@ const fetchUserRowsFromFirestore = async (tipo) => {
 
   const rows = [];
   sourceRows.forEach((sourceRow) => {
-    const data = sourceRow;
-    if (!data || typeof data !== "object") return;
-    const base = normalizeUserRow({
-      id: sourceRow.id,
-      nome: data.nome,
-      email: data.email,
-      tipo: data.tipo,
-      ativo: data.ativo,
-      criadoEm: data.criadoEm,
-    });
-    if (!base) return;
-    // Optional fields: keep them for Admin > Alunos filters (do not assume they exist).
-    const professorId = typeof data.professorId === "string" ? data.professorId.trim() : typeof data.teacherId === "string" ? data.teacherId.trim() : "";
-    const plano = typeof data.plano === "string" ? data.plano.trim() : typeof data.plan === "string" ? data.plan.trim() : typeof data.planoKey === "string" ? data.planoKey.trim() : "";
-    const pais = typeof data.pais === "string" ? data.pais.trim() : typeof data.country === "string" ? data.country.trim() : "";
-    const canceladoEm = data.canceladoEm || data.cancelamentoEm || data.dataCancelamento || null;
-    const desativadoEm = data.desativadoEm || canceladoEm || null;
-    // Student extended profile fields (admin edit modal/sheet). These may not exist for older users.
-    const endereco = typeof data.endereco === "string" ? data.endereco : typeof data.address === "string" ? data.address : "";
-    const estadoEua = typeof data.estadoEua === "string" ? data.estadoEua : typeof data.estadoEUA === "string" ? data.estadoEUA : typeof data.usState === "string" ? data.usState : "";
-    const valorMensalidade = Number.isFinite(Number(data.valorMensalidade)) ? Number(data.valorMensalidade) : data.valorMensalidade ?? null;
-	    const tempoContrato =
-	      typeof data.tempoContrato === "string"
-	        ? data.tempoContrato
-	        : Number.isFinite(Number(data.tempoContrato))
-	          ? String(Number(data.tempoContrato))
-	          : "";
-    const faixaIdade = typeof data.faixaIdade === "string" ? data.faixaIdade : "";
-    const genero = typeof data.genero === "string" ? data.genero : "";
-    const trabalho = typeof data.trabalho === "string" ? data.trabalho : "";
-    const possuiFilhos = typeof data.possuiFilhos === "string" ? data.possuiFilhos : typeof data.possuiFilhos === "boolean" ? (data.possuiFilhos ? "sim" : "nao") : "";
-    const casado = typeof data.casado === "string" ? data.casado : typeof data.casado === "boolean" ? (data.casado ? "sim" : "nao") : "";
-    const pretendeVoltarBrasil = typeof data.pretendeVoltarBrasil === "string" ? data.pretendeVoltarBrasil : "";
-    const objetivoPrincipal = typeof data.objetivoPrincipal === "string" ? data.objetivoPrincipal : "";
-    const nivelInglesAtual = typeof data.nivelInglesAtual === "string" ? data.nivelInglesAtual : "";
-    const englishLevelStart = typeof data.english_level_start === "string" ? data.english_level_start : typeof data.englishLevelStart === "string" ? data.englishLevelStart : "";
-    const photoURL = typeof data.photoURL === "string" ? data.photoURL.trim() : typeof data.photoUrl === "string" ? data.photoUrl.trim() : "";
-    const telefone =
-      typeof data.telefone === "string"
-        ? data.telefone.trim()
-        : typeof data.phone === "string"
-          ? data.phone.trim()
-          : typeof data.telefoneWhatsapp === "string"
-            ? data.telefoneWhatsapp.trim()
-            : "";
-    const especialidade =
-      typeof data.especialidade === "string"
-        ? data.especialidade.trim()
-        : typeof data.specialty === "string"
-          ? data.specialty.trim()
-          : typeof data.nivelLeciona === "string"
-            ? data.nivelLeciona.trim()
-            : "";
-    const observacoesPedagogicas =
-      typeof data.observacoesPedagogicas === "string"
-        ? data.observacoesPedagogicas.trim()
-        : typeof data.notes === "string"
-          ? data.notes.trim()
-          : "";
-    const cancelamento = data.cancelamento && typeof data.cancelamento === "object" ? clonePlainData(data.cancelamento) : null;
-    const cancelamentosAnteriores = Array.isArray(data.cancelamentosAnteriores) ? clonePlainData(data.cancelamentosAnteriores) : [];
-    const criadoKey = toDateKeyFromAny(data.criadoEm);
-    const cancelKey = toDateKeyFromAny(canceladoEm);
-    const desativadoKey = toDateKeyFromAny(desativadoEm);
-    rows.push({
-      ...base,
-      professorId,
-      plano,
-      pais,
-      canceladoEm,
-      desativadoEm,
-      criadoKey,
-      cancelKey,
-      desativadoKey,
-      endereco,
-      estadoEua,
-      valorMensalidade,
-      tempoContrato,
-      faixaIdade,
-      genero,
-      trabalho,
-      possuiFilhos,
-      casado,
-      pretendeVoltarBrasil,
-      objetivoPrincipal,
-      nivelInglesAtual,
-      english_level_start: englishLevelStart,
-      englishLevelStart,
-      photoURL,
-      telefone,
-      especialidade,
-      specialty: especialidade,
-      observacoesPedagogicas,
-      cancelamento,
-      cancelamentosAnteriores,
-    });
+    const normalized = normalizeAdminFirestoreUserRow(sourceRow);
+    if (normalized) rows.push(normalized);
   });
   return rows.filter(Boolean).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+};
+
+const loadAdminStudentRowFromFirestoreById = async (alunoId) => {
+  const id = String(alunoId || "").trim();
+  if (!id) return null;
+  const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_student_readback");
+  const user = await waitForFirebaseAuthReady(firebase, 5000);
+  if (!user) throw new Error("not_authenticated");
+  const snap = await withTimeout(firebase.getDoc(firebase.doc(firebase.primaryDb, "users", id)), 12_000, "firestore_admin_student_readback");
+  if (!snap?.exists?.()) {
+    const error = new Error("student_document_not_found");
+    error.code = "not-found";
+    throw error;
+  }
+  return normalizeAdminFirestoreUserRow({ id: snap.id, ...(snap.data ? snap.data() : {}) });
 };
 
 const fetchLessonLogsFromFirestore = async () => {
@@ -26851,12 +26858,29 @@ const rerenderAdminStudentLifecycleViews = () => {
 const saveAdminStudentLifecyclePatch = async ({ alunoId, patch = {} } = {}) => {
   const id = String(alunoId || "").trim();
   if (!id) throw new Error("missing_student_id");
+  const cleanPatch = sanitizeFirestorePatch(patch || {});
   const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_student_lifecycle");
   const user = await waitForFirebaseAuthReady(firebase, 5000);
   if (!user) throw new Error("not_authenticated");
-  await withTimeout(firebase.setDoc(firebase.doc(firebase.primaryDb, "users", id), patch, { merge: true }), 12_000, "firestore_student_lifecycle_patch");
-  updateAdminStudentCachedRow(id, patch);
-  return true;
+  console.info("[Cancellation] studentId:", id);
+  console.info("[Cancellation] collection:", "users");
+  console.info("[Cancellation] payload:", cleanPatch);
+  await withTimeout(firebase.setDoc(firebase.doc(firebase.primaryDb, "users", id), cleanPatch, { merge: true }), 12_000, "firestore_student_lifecycle_patch");
+  const persistedRow = await loadAdminStudentRowFromFirestoreById(id);
+  if (!persistedRow) {
+    throw new Error("student_reload_after_lifecycle_patch_failed");
+  }
+  if (Object.prototype.hasOwnProperty.call(cleanPatch, "cancelamento")) {
+    const expectedCancellation = cleanPatch.cancelamento;
+    if (expectedCancellation && typeof expectedCancellation === "object" && !persistedRow.cancelamento) {
+      throw new Error("cancelamento_not_persisted");
+    }
+    if (expectedCancellation == null && persistedRow.cancelamento != null) {
+      throw new Error("cancelamento_not_cleared");
+    }
+  }
+  updateAdminStudentCachedRow(id, persistedRow);
+  return persistedRow;
 };
 
 const archiveStudentCancellationRecord = ({ alunoMeta, record } = {}) => {
