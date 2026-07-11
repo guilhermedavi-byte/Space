@@ -15901,51 +15901,105 @@ const renderAdminStudentSheet = () => {
   const liveClassMenuId = String(hist.liveClassMenuId || "").trim();
   if (hist.editingField || hist.inlineSavingField) return;
 
+  const liveClassBlocks = liveClasses.map((classRow) => {
+    const status = normalizeClassStatus(classRow?.status);
+    const liveUrl = buildAdminPedClassLiveUrl(classRow);
+    const classId = String(classRow?.id || "").trim();
+    const isMenuOpen = liveClassMenuId === classId;
+    const activeScheduleDays = normalizeAdminPedWeeklyScheduleDays(classRow?.scheduleDays || []).filter(
+      (day) => day && day.enabled && String(day.startTime || "").trim() && String(day.endTime || "").trim()
+    );
+    const scheduleItems = activeScheduleDays.length
+      ? activeScheduleDays.map((day) => ({
+          dayLabel: `${daysLabelLong(day.weekday)}-feira`.replace("Domingo-feira", "Domingo").replace("Sábado-feira", "Sábado"),
+          timeLabel: `${String(day.startTime).slice(0, 5)}–${String(day.endTime).slice(0, 5)}`,
+        }))
+      : (() => {
+          const days = normalizeDaysOfWeek(classRow?.daysOfWeek || []);
+          const fallbackTime =
+            Number.isFinite(Number(classRow?.startMin)) && Number.isFinite(Number(classRow?.endMin)) && Number(classRow?.endMin) > Number(classRow?.startMin)
+              ? `${formatHmFromMinutes(classRow.startMin)}–${formatHmFromMinutes(classRow.endMin)}`
+              : "—";
+          return days.length ? days.map((day) => ({ dayLabel: `${daysLabelLong(day)}-feira`.replace("Domingo-feira", "Domingo").replace("Sábado-feira", "Sábado"), timeLabel: fallbackTime })) : [];
+        })();
+    const statusSuffix = status === "active" ? "" : status === "paused" ? " (pausada)" : " (inativa)";
+    return {
+      classId,
+      isMenuOpen,
+      status,
+      statusSuffix,
+      liveUrl,
+      hostLabel: getAdminStudentLiveClassHostLabel(liveUrl),
+      scheduleItems,
+      hasLiveUrl: Boolean(liveUrl),
+    };
+  });
+  const totalScheduleCount = liveClassBlocks.reduce((sum, block) => sum + (Array.isArray(block.scheduleItems) ? block.scheduleItems.length : 0), 0);
+  const liveClassCountLabel = `${totalScheduleCount} horário${totalScheduleCount === 1 ? "" : "s"}`;
+
   const liveClassesHtml = liveClasses.length
-    ? liveClasses
-        .map((classRow) => {
-          const status = normalizeClassStatus(classRow?.status);
-          const liveUrl = buildAdminPedClassLiveUrl(classRow);
-          const classId = String(classRow?.id || "").trim();
-          const isMenuOpen = liveClassMenuId === classId;
-          const activeScheduleDays = normalizeAdminPedWeeklyScheduleDays(classRow?.scheduleDays || [])
-            .filter((day) => day && day.enabled && String(day.startTime || "").trim() && String(day.endTime || "").trim());
-          const scheduleLines = activeScheduleDays.length
-            ? activeScheduleDays.map((day) => `${daysLabelLong(day.weekday)} ${String(day.startTime).slice(0, 5)}–${String(day.endTime).slice(0, 5)}`)
-            : (() => {
-                const days = normalizeDaysOfWeek(classRow?.daysOfWeek || []);
-                const fallbackTime =
-                  Number.isFinite(Number(classRow?.startMin)) && Number.isFinite(Number(classRow?.endMin)) && Number(classRow?.endMin) > Number(classRow?.startMin)
-                    ? `${formatHmFromMinutes(classRow.startMin)}–${formatHmFromMinutes(classRow.endMin)}`
-                    : "—";
-                return days.length ? days.map((day) => `${daysLabelLong(day)} ${fallbackTime}`) : ["—"];
-              })();
-          const statusSuffix = status === "active" ? "" : status === "paused" ? " (pausada)" : " (inativa)";
+    ? liveClassBlocks
+        .map((block) => {
           return `
             <div class="admin-student-live-class-row">
-              <div class="admin-student-live-class-main">
-                <div class="admin-student-live-class-label">Aulas cadastradas:${escapeHtml(statusSuffix)}</div>
+              <div class="admin-student-live-class-col admin-student-live-class-col-schedule">
+                <div class="admin-student-live-class-section-title">Horários semanais${escapeHtml(block.statusSuffix)}</div>
                 <div class="admin-student-live-class-schedule">
-                  ${scheduleLines.map((line) => `<div class="admin-student-live-class-line">${escapeHtml(line)}</div>`).join("")}
+                  ${
+                    block.scheduleItems.length
+                      ? block.scheduleItems
+                          .map(
+                            (item) => `
+                              <div class="admin-student-live-class-line">
+                                <span class="admin-student-live-class-day">${escapeHtml(item.dayLabel)}</span>
+                                <span class="admin-student-live-class-time">${escapeHtml(item.timeLabel)}</span>
+                              </div>
+                            `
+                          )
+                          .join("")
+                      : `<div class="admin-student-live-class-line is-empty"><span class="admin-student-live-class-day">Nenhum horário cadastrado</span><span class="admin-student-live-class-time">—</span></div>`
+                  }
                 </div>
-                <div class="admin-student-live-class-label">Link da videochamada:</div>
-                <a class="admin-student-live-class-link" href="${escapeHtml(liveUrl)}" target="_blank" rel="noopener">${escapeHtml(liveUrl)}</a>
+              </div>
+              <div class="admin-student-live-class-col admin-student-live-class-col-virtual">
+                <div class="admin-student-live-class-section-title">Sala virtual</div>
+                ${
+                  block.hasLiveUrl
+                    ? `
+                      <div class="admin-student-live-class-room-name">Sala de aula do aluno</div>
+                      <a class="admin-student-live-class-link" href="${escapeHtml(block.liveUrl)}" target="_blank" rel="noopener" title="${escapeHtml(block.liveUrl)}">${escapeHtml(
+                        block.hostLabel
+                      )}</a>
+                    `
+                    : `
+                      <div class="admin-student-live-class-room-name">Sala virtual não configurada</div>
+                      <div class="admin-student-live-class-link is-disabled">—</div>
+                    `
+                }
                 <div class="admin-student-live-class-actions">
-                  <a class="admin-ped-action is-muted" href="${escapeHtml(liveUrl)}" target="_blank" rel="noopener">Entrar</a>
-                  <button class="admin-ped-action is-muted" type="button" data-admin-ped-class-copy-live="${escapeHtml(liveUrl)}">Copiar link</button>
-                  <div class="admin-student-live-class-menu-wrap" data-admin-student-live-class-menu-wrap="${escapeHtml(classId)}">
+                  ${
+                    block.hasLiveUrl
+                      ? `<a class="admin-ped-action admin-student-live-class-enter" href="${escapeHtml(block.liveUrl)}" target="_blank" rel="noopener">Entrar na aula</a>`
+                      : `<button class="admin-ped-action admin-student-live-class-enter" type="button" disabled aria-disabled="true">Entrar na aula</button>`
+                  }
+                  ${
+                    block.hasLiveUrl
+                      ? `<button class="admin-ped-action is-muted" type="button" data-admin-ped-class-copy-live="${escapeHtml(block.liveUrl)}">Copiar link</button>`
+                      : `<button class="admin-ped-action is-muted" type="button" disabled aria-disabled="true">Copiar link</button>`
+                  }
+                  <div class="admin-student-live-class-menu-wrap" data-admin-student-live-class-menu-wrap="${escapeHtml(block.classId)}">
                     <button
                       class="admin-student-live-class-menu-trigger"
                       type="button"
-                      data-admin-student-live-class-menu-trigger="${escapeHtml(classId)}"
+                      data-admin-student-live-class-menu-trigger="${escapeHtml(block.classId)}"
                       aria-haspopup="menu"
-                      aria-expanded="${isMenuOpen ? "true" : "false"}"
+                      aria-expanded="${block.isMenuOpen ? "true" : "false"}"
                       aria-label="Mais ações da aula"
                     >…</button>
-                    <div class="admin-student-live-class-menu" role="menu" ${isMenuOpen ? "" : "hidden"}>
-                      <button class="admin-ped-actionmenu-item" type="button" role="menuitem" data-admin-ped-class-edit="${escapeHtml(classId)}">Editar horário</button>
-                      <button class="admin-ped-actionmenu-item" type="button" role="menuitem" data-admin-ped-class-toggle="${escapeHtml(classId)}">${status === "active" ? "Desativar" : "Ativar"}</button>
-                      <button class="admin-ped-actionmenu-item is-danger" type="button" role="menuitem" data-admin-ped-class-delete="${escapeHtml(classId)}">Excluir</button>
+                    <div class="admin-student-live-class-menu" role="menu" ${block.isMenuOpen ? "" : "hidden"}>
+                      <button class="admin-ped-actionmenu-item" type="button" role="menuitem" data-admin-ped-class-edit="${escapeHtml(block.classId)}">Editar horário</button>
+                      <button class="admin-ped-actionmenu-item" type="button" role="menuitem" data-admin-ped-class-toggle="${escapeHtml(block.classId)}">${block.status === "active" ? "Desativar" : "Ativar"}</button>
+                      <button class="admin-ped-actionmenu-item is-danger" type="button" role="menuitem" data-admin-ped-class-delete="${escapeHtml(block.classId)}">Excluir</button>
                     </div>
                   </div>
                 </div>
@@ -16070,6 +16124,13 @@ const renderAdminStudentSheet = () => {
 
       <section class="admin-student-sheet-right admin-student-simple-right" aria-label="Detalhes do aluno">
         <div class="admin-student-panel-card admin-student-live-class-card">
+          <div class="admin-student-live-class-header">
+            <div>
+              <div class="admin-student-panel-title">Aulas cadastradas</div>
+              <div class="admin-student-live-class-subtitle">Horários recorrentes do aluno</div>
+            </div>
+            <div class="admin-student-live-class-count">${escapeHtml(liveClassCountLabel)}</div>
+          </div>
           <div class="admin-student-live-class-list">
             ${liveClassesHtml}
           </div>
@@ -16608,6 +16669,17 @@ const getAdminStudentLiveClassDiagnostics = () => {
   });
   const studentsWithMultipleRooms = [...countsByStudentId.entries()].filter(([, count]) => count > 1).length;
   return { studentsWithMultipleRooms, orphanRows };
+};
+
+const getAdminStudentLiveClassHostLabel = (liveUrl) => {
+  const raw = String(liveUrl || "").trim();
+  if (!raw) return "";
+  try {
+    const parsed = new URL(raw, typeof window !== "undefined" && window.location ? window.location.origin : "https://plataforma.spaceschoolbr.com");
+    return parsed.host || raw;
+  } catch (error) {
+    return raw;
+  }
 };
 
 const getAdminPedStudentActiveClass = (studentId) => {

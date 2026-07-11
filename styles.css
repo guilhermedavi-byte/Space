@@ -5426,7 +5426,36 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
 }
 
 .admin-student-live-class-card {
-  gap: 12px;
+  gap: 20px;
+  padding: 20px;
+}
+
+.admin-student-live-class-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.admin-student-live-class-subtitle {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.48);
+}
+
+.admin-student-live-class-count {
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  display: inline-flex;
+  align-items: center;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+  font-weight: 750;
 }
 
 .admin-student-live-class-list {
@@ -5436,19 +5465,25 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
 
 .admin-student-live-class-row {
   display: grid;
-  gap: 10px;
-  padding: 12px 0;
+  grid-template-columns: minmax(260px, 0.9fr) minmax(320px, 1.1fr);
+  gap: 20px;
+  padding: 0;
 }
 
 .admin-student-live-class-row + .admin-student-live-class-row {
   border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: 20px;
+  margin-top: 20px;
 }
 
-.admin-student-live-class-main {
+.admin-student-live-class-col {
   min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 12px;
 }
 
-.admin-student-live-class-label,
+.admin-student-live-class-section-title,
 .admin-student-live-class-empty-sub {
   font-size: 12px;
   font-weight: 750;
@@ -5457,13 +5492,44 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
 
 .admin-student-live-class-schedule {
   display: grid;
-  gap: 4px;
+  gap: 0;
 }
 
 .admin-student-live-class-line {
+  min-height: 38px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.admin-student-live-class-line:last-child {
+  border-bottom: 0;
+}
+
+.admin-student-live-class-day {
+  min-width: 0;
   font-size: 13px;
   font-weight: 700;
-  color: rgba(255, 255, 255, 0.9);
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.admin-student-live-class-time {
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.admin-student-live-class-line.is-empty .admin-student-live-class-day,
+.admin-student-live-class-line.is-empty .admin-student-live-class-time {
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.admin-student-live-class-room-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.88);
 }
 
 .admin-student-live-class-link {
@@ -5471,7 +5537,10 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
   font-weight: 650;
   color: rgba(255, 255, 255, 0.52);
   text-decoration: none;
-  word-break: break-all;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .admin-student-live-class-link:hover,
@@ -5480,11 +5549,29 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
   text-decoration: underline;
 }
 
+.admin-student-live-class-link.is-disabled {
+  pointer-events: none;
+  text-decoration: none;
+  color: rgba(255, 255, 255, 0.36);
+}
+
 .admin-student-live-class-actions {
   display: inline-flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.admin-student-live-class-enter {
+  min-height: 42px;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.admin-student-live-class-enter:hover,
+.admin-student-live-class-enter:focus-visible {
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .admin-student-live-class-menu-wrap {
@@ -5538,6 +5625,17 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
   font-size: 13px;
   font-weight: 800;
   color: rgba(255, 255, 255, 0.9);
+}
+
+@media (max-width: 900px) {
+  .admin-student-live-class-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .admin-student-live-class-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 .admin-student-panel-title {
