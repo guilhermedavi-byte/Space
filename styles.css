@@ -809,30 +809,32 @@ body[data-role="admin"] .live-credits-row {
 .sidebar-topbar {
   display: flex;
   justify-content: flex-end;
-  padding-right: 6px;
+  padding-right: 16px;
 }
 
 .sidebar-toggle {
   width: 36px;
   height: 36px;
   padding: 0;
-  border: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 50%;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.42);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(244, 239, 231, 0.68);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition:
     color 180ms ease,
-    background-color 180ms ease;
+    background-color 180ms ease,
+    border-color 180ms ease;
 }
 
 .sidebar-toggle:hover,
 .sidebar-toggle:focus-visible {
-  color: rgba(255, 255, 255, 0.72);
-  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.18);
 }
 
 .sidebar-toggle-icon {
