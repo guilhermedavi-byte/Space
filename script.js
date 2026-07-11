@@ -118,6 +118,18 @@ const pedagogicoDrawer = document.querySelector("[data-pedagogico-drawer]");
 const pedagogicoDrawerTitle = document.querySelector("[data-pedagogico-drawer-title]");
 const pedagogicoDrawerAutosave = document.querySelector("[data-pedagogico-autosave]");
 const pedagogicoFormContainer = document.querySelector("[data-pedagogico-form-container]");
+const activitiesRoot = document.querySelector("[data-activities-root]");
+const activitiesContent = document.querySelector("[data-activities-content]");
+const activitiesStatus = document.querySelector("[data-activities-status]");
+const activitiesSearchInput = document.querySelector("[data-activities-search]");
+const activitiesFiltersTrigger = document.querySelector("[data-activities-filters-trigger]");
+const activitiesFiltersBadge = document.querySelector("[data-activities-filters-badge]");
+const activitiesCreateButton = document.querySelector("[data-activities-create]");
+const activitiesViewButtons = document.querySelectorAll("[data-activities-view]");
+const activitiesDrawer = document.querySelector("[data-activities-drawer]");
+const activitiesDrawerTitle = document.querySelector("[data-activities-drawer-title]");
+const activitiesDrawerSub = document.querySelector("[data-activities-drawer-sub]");
+const activitiesDrawerBody = document.querySelector("[data-activities-drawer-body]");
 
 // Admin > Alunos (histórico pedagógico por professor)
 const adminStudentsTeacherSelect = document.querySelector("[data-admin-students-teacher]"); // legacy (removed from template)
@@ -515,6 +527,8 @@ const TEACHER_NOTICE_READ_KEY = "space-platform-teacher-notices-read-v1";
 const TEACHER_CAL_EVENTS_STORAGE_KEY = "space-platform-teacher-calendar-events-v1";
 const TEACHER_WORK_HOURS_STORAGE_KEY = "space-platform-teacher-work-hours-v1";
 const STAFF_USERS_STORAGE_KEY = "space-platform-staff-users-v1";
+const ACTIVITIES_VIEW_STORAGE_KEY = "space-platform-activities-view-v1";
+const ACTIVITIES_CALENDAR_VIEW_STORAGE_KEY = "space-platform-activities-calendar-view-v1";
 const CREDIT_CYCLE_BUSINESS_DAYS = 6;
 const LESSON_DURATION_MINUTES = 30;
 
@@ -592,6 +606,16 @@ const safeStorage = (() => {
     return null;
   }
 })();
+
+let savedActivitiesView = "";
+let savedActivitiesCalendarView = "";
+try {
+  savedActivitiesView = safeStorage ? String(safeStorage.getItem(ACTIVITIES_VIEW_STORAGE_KEY) || "").trim() : "";
+  savedActivitiesCalendarView = safeStorage ? String(safeStorage.getItem(ACTIVITIES_CALENDAR_VIEW_STORAGE_KEY) || "").trim() : "";
+} catch {
+  savedActivitiesView = "";
+  savedActivitiesCalendarView = "";
+}
 
 const clearPlatformStorage = () => {
   if (!safeStorage) return;
@@ -804,6 +828,12 @@ const syncRoleUI = () => {
     }
   });
 
+  document.querySelectorAll("[data-activities-access]").forEach((el) => {
+    if (el instanceof HTMLElement) {
+      el.hidden = !["admin", "teacher", "growth"].includes(String(currentRole || ""));
+    }
+  });
+
   if (currentRole === "FINANCE") {
     document.querySelectorAll("[data-panel-target]").forEach((el) => {
       if (!(el instanceof HTMLElement)) return;
@@ -818,7 +848,7 @@ const syncRoleUI = () => {
     document.querySelectorAll("[data-panel-target]").forEach((el) => {
       if (!(el instanceof HTMLElement)) return;
       const target = String(el.getAttribute("data-panel-target") || "");
-      el.hidden = target !== "growth";
+      el.hidden = !["growth", "activities"].includes(target);
     });
     const growthLink = document.querySelector('[data-panel-target="growth"]');
     if (growthLink instanceof HTMLElement) {
@@ -7403,6 +7433,31 @@ let pedagogicoDirty = false;
 let pedagogicoAutosaveTimer = null;
 let pedagogicoCleanupFns = [];
 
+let activitiesState = {
+  isLoading: false,
+  lastLoadedAt: 0,
+  items: [],
+  users: [],
+  searchQuery: "",
+  view: "list",
+  calendarView: "month",
+  focusDate: startOfDay(new Date()),
+  filterPopoverEl: null,
+  filters: {
+    responsaveis: [],
+    statuses: [],
+    priorities: [],
+    types: [],
+    duePreset: "",
+  },
+  drawer: {
+    isOpen: false,
+    id: "",
+  },
+};
+if (["list", "board", "calendar"].includes(savedActivitiesView)) activitiesState.view = savedActivitiesView;
+if (["month", "week"].includes(savedActivitiesCalendarView)) activitiesState.calendarView = savedActivitiesCalendarView;
+
 const formatPedagogicoDate = (dateKey) => {
   const d = parseDateKey(dateKey);
   if (!d) return "—";
@@ -9412,6 +9467,632 @@ const activatePedagogicoLessonFromEl = (event, pedItem) => {
   handlePedagogicoItemOpen(eventId);
   return true;
 };
+
+const ACTIVITY_STATUS_OPTIONS = ["Pendente", "Em andamento", "Feito"];
+const ACTIVITY_PRIORITY_OPTIONS = ["Alta", "Média", "Baixa"];
+const ACTIVITY_TYPE_OPTIONS = ["Financeiro", "Pedagógico", "Auxiliar"];
+
+const normalizeActivityStatus = (value) => {
+  const safe = String(value || "").trim();
+  return ACTIVITY_STATUS_OPTIONS.includes(safe) ? safe : "Pendente";
+};
+
+const normalizeActivityPriority = (value) => {
+  const safe = String(value || "").trim();
+  return ACTIVITY_PRIORITY_OPTIONS.includes(safe) ? safe : "Média";
+};
+
+const formatActivityDate = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "Sem prazo";
+  const date = parseDateKey(raw) || new Date(`${raw}T00:00:00`);
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "Sem prazo";
+  return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" }).format(date);
+};
+
+const getActivityTypeOptions = () =>
+  Array.from(
+    new Set(
+      ACTIVITY_TYPE_OPTIONS.concat(
+        (Array.isArray(activitiesState.items) ? activitiesState.items : []).map((item) => String(item?.tipo || "").trim()).filter(Boolean)
+      )
+    )
+  ).sort((a, b) => a.localeCompare(b, "pt-BR"));
+
+const getActivityResponsibleUser = (activity) => {
+  const id = String(activity?.responsavelId || "").trim();
+  if (!id) return null;
+  return Array.isArray(activitiesState.users) ? activitiesState.users.find((user) => String(user.id || "") === id) || null : null;
+};
+
+const getActivityResponsibleName = (activity) => getActivityResponsibleUser(activity)?.nome || "Sem responsável";
+
+const getActivityStatusMeta = (status) => {
+  const safe = normalizeActivityStatus(status);
+  if (safe === "Feito") return { className: "is-green", label: safe };
+  if (safe === "Em andamento") return { className: "is-blue", label: safe };
+  return { className: "is-yellow", label: safe };
+};
+
+const getActivityPriorityMeta = (priority) => {
+  const safe = normalizeActivityPriority(priority);
+  if (safe === "Alta") return { className: "is-red", label: safe };
+  if (safe === "Baixa") return { className: "is-green", label: safe };
+  return { className: "is-yellow", label: safe };
+};
+
+const setActivitiesStatus = (text, tone = "") => {
+  if (!(activitiesStatus instanceof HTMLElement)) return;
+  activitiesStatus.textContent = String(text || "");
+  activitiesStatus.dataset.tone = String(tone || "");
+};
+
+const syncActivitiesFiltersBadge = () => {
+  if (!(activitiesFiltersBadge instanceof HTMLElement)) return;
+  const filters = activitiesState.filters || {};
+  const count =
+    (Array.isArray(filters.responsaveis) ? filters.responsaveis.length : 0) +
+    (Array.isArray(filters.statuses) ? filters.statuses.length : 0) +
+    (Array.isArray(filters.priorities) ? filters.priorities.length : 0) +
+    (Array.isArray(filters.types) ? filters.types.length : 0) +
+    (filters.duePreset ? 1 : 0);
+  activitiesFiltersBadge.hidden = count <= 0;
+  activitiesFiltersBadge.textContent = String(count);
+};
+
+const getFilteredActivities = () => {
+  const query = normalizeSearchText(activitiesState.searchQuery || "");
+  const filters = activitiesState.filters || {};
+  const todayKey = createDateKey(new Date());
+  const weekDays = getWeekDaysMonToSat(new Date());
+  const weekStartKey = createDateKey(weekDays[0] || new Date());
+  const weekEndKey = createDateKey(weekDays[weekDays.length - 1] || new Date());
+  return (Array.isArray(activitiesState.items) ? activitiesState.items : []).filter((item) => {
+    if (Array.isArray(filters.responsaveis) && filters.responsaveis.length && !filters.responsaveis.includes(String(item.responsavelId || ""))) return false;
+    if (Array.isArray(filters.statuses) && filters.statuses.length && !filters.statuses.includes(normalizeActivityStatus(item.status))) return false;
+    if (Array.isArray(filters.priorities) && filters.priorities.length && !filters.priorities.includes(normalizeActivityPriority(item.prioridade))) return false;
+    if (Array.isArray(filters.types) && filters.types.length && !filters.types.includes(String(item.tipo || "").trim())) return false;
+    const prazo = String(item.prazo || "").trim();
+    if (filters.duePreset === "overdue" && (!prazo || prazo >= todayKey)) return false;
+    if (filters.duePreset === "today" && prazo !== todayKey) return false;
+    if (filters.duePreset === "week" && (!prazo || prazo < weekStartKey || prazo > weekEndKey)) return false;
+    if (filters.duePreset === "none" && prazo) return false;
+    if (!query) return true;
+    const haystack = normalizeSearchText([item.titulo, item.descricao, item.tipo, getActivityResponsibleName(item)].filter(Boolean).join(" "));
+    return haystack.includes(query);
+  });
+};
+
+const closeActivitiesFiltersPopover = () => {
+  if (activitiesState.filterPopoverEl instanceof HTMLElement) activitiesState.filterPopoverEl.remove();
+  activitiesState.filterPopoverEl = null;
+};
+
+const openActivitiesFiltersPopover = ({ triggerEl } = {}) => {
+  if (!(triggerEl instanceof HTMLElement)) return;
+  closeActivitiesFiltersPopover();
+  const filters = activitiesState.filters || {};
+  const users = Array.isArray(activitiesState.users) ? activitiesState.users : [];
+  const pop = document.createElement("div");
+  pop.className = "admin-students-filters-popover activities-filters-popover";
+  pop.setAttribute("data-activities-filters-popover", "true");
+  const renderChecks = (key, title, values) => `
+    <div class="activities-filters-group">
+      <div class="activities-filters-group-title">${escapeHtml(title)}</div>
+      <div class="activities-filters-checklist">
+        ${(Array.isArray(values) ? values : [])
+          .map((value) => {
+            const optionValue = String(value?.value ?? value);
+            const optionLabel = String(value?.label ?? value);
+            const checked = Array.isArray(filters[key]) && filters[key].includes(optionValue);
+            return `<label class="activities-filters-check"><input type="checkbox" data-activities-filter-check="${escapeHtml(key)}" value="${escapeHtml(optionValue)}" ${checked ? "checked" : ""} /><span>${escapeHtml(optionLabel)}</span></label>`;
+          })
+          .join("")}
+      </div>
+    </div>
+  `;
+  pop.innerHTML = `
+    ${renderChecks("responsaveis", "Responsável", users.map((user) => ({ value: user.id, label: user.nome })))}
+    ${renderChecks("statuses", "Status", ACTIVITY_STATUS_OPTIONS)}
+    ${renderChecks("priorities", "Prioridade", ACTIVITY_PRIORITY_OPTIONS)}
+    ${renderChecks("types", "Tipo", getActivityTypeOptions())}
+    <div class="activities-filters-group">
+      <div class="activities-filters-group-title">Prazo</div>
+      <select class="admin-ped-select" data-activities-filter-select="duePreset">
+        <option value="">Qualquer prazo</option>
+        <option value="overdue">Vencidas</option>
+        <option value="today">Hoje</option>
+        <option value="week">Esta semana</option>
+        <option value="none">Sem prazo</option>
+      </select>
+    </div>
+    <div class="admin-students-filters-actions">
+      <button type="button" class="admin-students-filters-clear" data-activities-filters-clear>Limpar filtros</button>
+    </div>
+  `;
+  document.body.appendChild(pop);
+  activitiesState.filterPopoverEl = pop;
+  const dueSelect = pop.querySelector('[data-activities-filter-select="duePreset"]');
+  if (dueSelect instanceof HTMLSelectElement) dueSelect.value = String(filters.duePreset || "");
+  const rect = triggerEl.getBoundingClientRect();
+  const popRect = pop.getBoundingClientRect();
+  const margin = 10;
+  const top = rect.bottom + margin;
+  const left = rect.right - popRect.width;
+  pop.style.top = `${clampToViewport(top, margin, window.innerHeight - popRect.height - margin)}px`;
+  pop.style.left = `${clampToViewport(left, margin, window.innerWidth - popRect.width - margin)}px`;
+};
+
+const ensureActivitiesDrawerInBody = () => {
+  if (!(activitiesDrawer instanceof HTMLElement)) return null;
+  if (activitiesDrawer.parentElement !== document.body) document.body.appendChild(activitiesDrawer);
+  return activitiesDrawer;
+};
+
+const closeActivitiesDrawer = () => {
+  const drawerEl = ensureActivitiesDrawerInBody();
+  if (drawerEl instanceof HTMLElement) {
+    drawerEl.classList.remove("is-open");
+    window.setTimeout(() => {
+      drawerEl.hidden = true;
+    }, 180);
+  }
+  body.classList.remove("is-modal-open");
+  activitiesState.drawer = { isOpen: false, id: "" };
+  if (activitiesDrawerBody instanceof HTMLElement) activitiesDrawerBody.innerHTML = "";
+};
+
+const saveActivitiesViewPreference = () => {
+  if (!safeStorage) return;
+  try {
+    safeStorage.setItem(ACTIVITIES_VIEW_STORAGE_KEY, String(activitiesState.view || "list"));
+    safeStorage.setItem(ACTIVITIES_CALENDAR_VIEW_STORAGE_KEY, String(activitiesState.calendarView || "month"));
+  } catch {
+    // ignore
+  }
+};
+
+const saveActivityForm = async ({ id = "", payload } = {}) => {
+  try {
+    setActivitiesStatus(id ? "Salvando atividade…" : "Criando atividade…");
+    const res = await fetchWithAuth(`/api/activities${id ? `?id=${encodeURIComponent(id)}` : ""}`, {
+      method: id ? "PATCH" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload || {}),
+    });
+    if (!res.ok) throw new Error(`activities_save_failed:${res.status}`);
+    closeActivitiesDrawer();
+    await loadActivities({ force: true, silent: true });
+    setActivitiesStatus("Salvo ✓", "success");
+    window.setTimeout(() => setActivitiesStatus(""), 2000);
+  } catch (error) {
+    console.error("[activities] save failed:", error);
+    setActivitiesStatus("Não foi possível salvar agora.", "error");
+  }
+};
+
+const deleteActivityById = async (id) => {
+  const safeId = String(id || "").trim();
+  if (!safeId) return;
+  try {
+    setActivitiesStatus("Excluindo atividade…");
+    const res = await fetchWithAuth(`/api/activities?id=${encodeURIComponent(safeId)}`, { method: "DELETE" });
+    if (!res.ok) throw new Error(`activities_delete_failed:${res.status}`);
+    closeActivitiesDrawer();
+    await loadActivities({ force: true, silent: true });
+    setActivitiesStatus("Atividade excluída.", "success");
+    window.setTimeout(() => setActivitiesStatus(""), 2000);
+  } catch (error) {
+    console.error("[activities] delete failed:", error);
+    setActivitiesStatus("Não foi possível excluir agora.", "error");
+  }
+};
+
+const openActivitiesDrawer = ({ activity = null } = {}) => {
+  const drawerEl = ensureActivitiesDrawerInBody();
+  if (!(drawerEl instanceof HTMLElement) || !(activitiesDrawerBody instanceof HTMLElement)) return;
+  const canAssignOthers = currentRole === "admin";
+  const current = activity && typeof activity === "object"
+    ? {
+        id: String(activity.id || ""),
+        titulo: String(activity.titulo || ""),
+        descricao: String(activity.descricao || ""),
+        status: normalizeActivityStatus(activity.status),
+        responsavelId: String(activity.responsavelId || ""),
+        prazo: String(activity.prazo || ""),
+        prioridade: normalizeActivityPriority(activity.prioridade),
+        tipo: String(activity.tipo || ""),
+        observacoes: String(activity.observacoes || ""),
+      }
+    : {
+        id: "",
+        titulo: "",
+        descricao: "",
+        status: "Pendente",
+        responsavelId: canAssignOthers ? "" : String(sessionUser?.id || ""),
+        prazo: "",
+        prioridade: "Média",
+        tipo: "",
+        observacoes: "",
+      };
+  if (activitiesDrawerTitle instanceof HTMLElement) activitiesDrawerTitle.textContent = current.id ? "Editar atividade" : "Nova atividade";
+  if (activitiesDrawerSub instanceof HTMLElement) activitiesDrawerSub.textContent = current.id ? "Atualize os detalhes e salve." : "Preencha os dados principais da tarefa.";
+  const allUsers = Array.isArray(activitiesState.users) ? activitiesState.users : [];
+  const users = canAssignOthers
+    ? allUsers
+    : allUsers.filter((user) => {
+        const userId = String(user.id || "");
+        return userId === String(sessionUser?.id || "") || userId === current.responsavelId;
+      });
+  activitiesDrawerBody.innerHTML = `
+    <form class="activities-form" data-activities-form="${escapeHtml(current.id)}">
+      <label class="activities-field"><span>Título</span><input class="admin-ped-select" type="text" name="titulo" value="${escapeHtml(current.titulo)}" required /></label>
+      <label class="activities-field"><span>Descrição</span><textarea class="admin-ped-select activities-textarea" name="descricao" rows="4">${escapeHtml(current.descricao)}</textarea></label>
+      <div class="activities-grid2">
+        <label class="activities-field"><span>Status</span><select class="admin-ped-select" name="status">${ACTIVITY_STATUS_OPTIONS.map((option) => `<option value="${escapeHtml(option)}" ${option === current.status ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}</select></label>
+        <label class="activities-field"><span>Prioridade</span><select class="admin-ped-select" name="prioridade">${ACTIVITY_PRIORITY_OPTIONS.map((option) => `<option value="${escapeHtml(option)}" ${option === current.prioridade ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}</select></label>
+      </div>
+      <div class="activities-grid2">
+        <label class="activities-field"><span>Responsável</span><select class="admin-ped-select" name="responsavelId" ${canAssignOthers ? "" : "disabled"}><option value="">Sem responsável</option>${users.map((user) => `<option value="${escapeHtml(String(user.id || ""))}">${escapeHtml(String(user.nome || "Usuário"))}</option>`).join("")}</select></label>
+        <label class="activities-field"><span>Prazo</span><input class="admin-ped-select" type="date" name="prazo" value="${escapeHtml(current.prazo)}" /></label>
+      </div>
+      <label class="activities-field"><span>Tipo</span><input class="admin-ped-select" type="text" name="tipo" value="${escapeHtml(current.tipo)}" list="activities-type-options" /><datalist id="activities-type-options">${getActivityTypeOptions().map((option) => `<option value="${escapeHtml(option)}"></option>`).join("")}</datalist></label>
+      <label class="activities-field"><span>Observações</span><textarea class="admin-ped-select activities-textarea" name="observacoes" rows="5">${escapeHtml(current.observacoes)}</textarea></label>
+      <div class="activities-form-actions">
+        ${current.id ? `<button class="ped-btn-close" type="button" data-activities-delete="${escapeHtml(current.id)}">Excluir</button>` : `<span></span>`}
+        <button class="ped-btn-save" type="submit">${current.id ? "Salvar alterações" : "Criar atividade"}</button>
+      </div>
+    </form>
+  `;
+  const form = activitiesDrawerBody.querySelector("[data-activities-form]");
+  if (form instanceof HTMLFormElement) {
+    const responsibleSelect = form.elements.namedItem("responsavelId");
+    if (responsibleSelect instanceof HTMLSelectElement) responsibleSelect.value = String(current.responsavelId || "");
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const formData = new FormData(form);
+      saveActivityForm({
+        id: current.id,
+        payload: {
+          titulo: String(formData.get("titulo") || "").trim(),
+          descricao: String(formData.get("descricao") || "").trim(),
+          status: normalizeActivityStatus(formData.get("status")),
+          responsavelId: canAssignOthers ? String(formData.get("responsavelId") || "").trim() : String(sessionUser?.id || "").trim(),
+          prazo: String(formData.get("prazo") || "").trim(),
+          prioridade: normalizeActivityPriority(formData.get("prioridade")),
+          tipo: String(formData.get("tipo") || "").trim(),
+          observacoes: String(formData.get("observacoes") || "").trim(),
+        },
+      }).catch(() => {});
+    });
+  }
+  body.classList.add("is-modal-open");
+  drawerEl.hidden = false;
+  activitiesState.drawer = { isOpen: true, id: current.id };
+  window.requestAnimationFrame(() => drawerEl.classList.add("is-open"));
+};
+
+const renderActivitiesListView = (items) => {
+  if (!(activitiesContent instanceof HTMLElement)) return;
+  activitiesContent.innerHTML = `
+    <div class="activities-table">
+      <div class="activities-table-head">
+        <div>Tarefa</div><div>Status</div><div>Responsável</div><div>Prazo</div><div>Prioridade</div><div>Tipo</div><div>Descrição</div>
+      </div>
+      <div class="activities-table-body">
+        ${items.map((item) => {
+          const statusMeta = getActivityStatusMeta(item.status);
+          const priorityMeta = getActivityPriorityMeta(item.prioridade);
+          const responsible = getActivityResponsibleUser(item);
+          return `
+            <button class="activities-table-row" type="button" data-activity-open="${escapeHtml(item.id)}">
+              <div class="activities-title-cell">${escapeHtml(item.titulo || "Atividade")}</div>
+              <div><span class="pedteacher-badge ${statusMeta.className}">${escapeHtml(statusMeta.label)}</span></div>
+              <div>${responsible ? `<span class="activities-person"><span class="activities-avatar">${escapeHtml(getInitials(responsible.nome))}</span><span>${escapeHtml(responsible.nome)}</span></span>` : "Sem responsável"}</div>
+              <div>${escapeHtml(formatActivityDate(item.prazo))}</div>
+              <div><span class="pedteacher-badge ${priorityMeta.className}">${escapeHtml(priorityMeta.label)}</span></div>
+              <div>${item.tipo ? `<span class="pedteacher-badge is-slate">${escapeHtml(item.tipo)}</span>` : "—"}</div>
+              <div class="activities-description-cell">${escapeHtml(item.descricao || "—")}</div>
+            </button>
+          `;
+        }).join("")}
+      </div>
+    </div>
+  `;
+};
+
+const renderActivitiesBoardView = (items) => {
+  if (!(activitiesContent instanceof HTMLElement)) return;
+  const buckets = new Map(ACTIVITY_STATUS_OPTIONS.map((status) => [status, []]));
+  items.forEach((item) => {
+    const bucket = buckets.get(normalizeActivityStatus(item.status)) || [];
+    bucket.push(item);
+    buckets.set(normalizeActivityStatus(item.status), bucket);
+  });
+  activitiesContent.innerHTML = `
+    <div class="activities-board">
+      ${ACTIVITY_STATUS_OPTIONS.map((status) => `
+        <section class="activities-board-column" data-activity-drop-status="${escapeHtml(status)}">
+          <header class="activities-board-head"><h3>${escapeHtml(status)}</h3><span>${escapeHtml(String((buckets.get(status) || []).length))}</span></header>
+          <div class="activities-board-list">
+            ${(buckets.get(status) || []).map((item) => {
+              const priorityMeta = getActivityPriorityMeta(item.prioridade);
+              const responsible = getActivityResponsibleUser(item);
+              return `
+                <article class="activities-board-card" draggable="true" data-activity-card="${escapeHtml(item.id)}" data-activity-open="${escapeHtml(item.id)}">
+                  <div class="activities-board-card-title">${escapeHtml(item.titulo || "Atividade")}</div>
+                  <div class="activities-board-card-meta">
+                    <span class="pedteacher-badge ${priorityMeta.className}">${escapeHtml(priorityMeta.label)}</span>
+                    ${item.prazo ? `<span class="activities-card-date">${escapeHtml(formatActivityDate(item.prazo))}</span>` : ""}
+                  </div>
+                  ${responsible ? `<div class="activities-person"><span class="activities-avatar">${escapeHtml(getInitials(responsible.nome))}</span><span>${escapeHtml(responsible.nome)}</span></div>` : ""}
+                </article>
+              `;
+            }).join("")}
+          </div>
+        </section>
+      `).join("")}
+    </div>
+  `;
+};
+
+const renderActivitiesCalendarMonth = (items) => {
+  const focusDate = activitiesState.focusDate instanceof Date ? activitiesState.focusDate : new Date();
+  const firstOfMonth = new Date(focusDate.getFullYear(), focusDate.getMonth(), 1);
+  const gridStart = new Date(firstOfMonth);
+  gridStart.setDate(firstOfMonth.getDate() - firstOfMonth.getDay());
+  const dow = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+  return `
+    <div class="teacher-cal-month">
+      <div class="teacher-cal-month-head">${dow.map((label) => `<div class="teacher-cal-month-dow">${label}</div>`).join("")}</div>
+      <div class="teacher-cal-month-grid">
+        ${Array.from({ length: 42 }).map((_, index) => {
+          const date = addDays(gridStart, index);
+          const dateKey = createDateKey(date);
+          const dayItems = items.filter((item) => String(item.prazo || "") === dateKey);
+          const isToday = sameDateKey(date, new Date());
+          const isOutside = date.getMonth() !== focusDate.getMonth();
+          return `
+            <div class="teacher-cal-month-cell">
+              <div class="teacher-cal-month-date${isToday ? " is-today" : ""}${isOutside ? " is-outside" : ""}">${date.getDate()}</div>
+              ${dayItems.slice(0, 3).map((item) => `<button class="teacher-cal-month-pill" type="button" data-activity-open="${escapeHtml(item.id)}">${escapeHtml(item.titulo)}</button>`).join("")}
+              ${dayItems.length > 3 ? `<div class="activities-calendar-more">+ ${escapeHtml(String(dayItems.length - 3))} mais</div>` : ""}
+            </div>
+          `;
+        }).join("")}
+      </div>
+    </div>
+  `;
+};
+
+const renderActivitiesCalendarWeek = (items) => {
+  const days = getWeekDaysMonToSat(activitiesState.focusDate instanceof Date ? activitiesState.focusDate : new Date());
+  return `
+    <div class="teacher-cal-week">
+      <div class="teacher-cal-week-head">
+        <div class="teacher-cal-head-cell"></div>
+        <div class="teacher-cal-week-head-days">
+          ${days.map((date) => {
+            const label = new Intl.DateTimeFormat("pt-BR", { weekday: "short" }).format(date).replace(/\./g, "").toUpperCase();
+            const isToday = sameDateKey(date, new Date());
+            return `<div class="teacher-cal-week-dayhead"><div class="teacher-cal-week-daylabel"><span>${label}</span><span class="teacher-cal-week-daynum${isToday ? " is-today" : ""}">${date.getDate()}</span></div></div>`;
+          }).join("")}
+        </div>
+      </div>
+      <div class="teacher-cal-week-cols">
+        ${days.map((date) => {
+          const dateKey = createDateKey(date);
+          const dayItems = items.filter((item) => String(item.prazo || "") === dateKey);
+          return `<div class="teacher-cal-week-col activities-week-col"><div class="activities-week-list">${dayItems.length ? dayItems.map((item) => `<button class="teacher-cal-month-pill" type="button" data-activity-open="${escapeHtml(item.id)}">${escapeHtml(item.titulo)}</button>`).join("") : `<div class="activities-week-empty">Sem atividades</div>`}</div></div>`;
+        }).join("")}
+      </div>
+    </div>
+  `;
+};
+
+const renderActivitiesCalendarView = (items) => {
+  if (!(activitiesContent instanceof HTMLElement)) return;
+  const focusDate = activitiesState.focusDate instanceof Date ? activitiesState.focusDate : new Date();
+  const topLabel = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(focusDate);
+  activitiesContent.innerHTML = `
+    <div class="activities-calendar-shell">
+      <div class="teacher-cal-topbar activities-calendar-topbar">
+        <div class="teacher-cal-topbar-left">
+          <button class="teacher-cal-today" type="button" data-activities-calendar-today>Hoje</button>
+          <div class="teacher-cal-arrows" aria-label="Navegação">
+            <button class="teacher-cal-arrow" type="button" data-activities-calendar-nav="prev" aria-label="Anterior"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M14.5 7.5 10 12l4.5 4.5"></path></svg></button>
+            <button class="teacher-cal-arrow" type="button" data-activities-calendar-nav="next" aria-label="Próximo"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9.5 7.5 14 12l-4.5 4.5"></path></svg></button>
+          </div>
+          <div class="teacher-cal-date">${escapeHtml(topLabel.charAt(0).toUpperCase() + topLabel.slice(1))}</div>
+        </div>
+        <div class="teacher-cal-topbar-right">
+          <div class="teacher-cal-view" role="tablist" aria-label="Visualização do calendário">
+            <button class="teacher-cal-view-btn${activitiesState.calendarView === "month" ? " is-active" : ""}" type="button" data-activities-calendar-view="month" role="tab" aria-selected="${activitiesState.calendarView === "month"}">Mês</button>
+            <button class="teacher-cal-view-btn${activitiesState.calendarView === "week" ? " is-active" : ""}" type="button" data-activities-calendar-view="week" role="tab" aria-selected="${activitiesState.calendarView === "week"}">Semana</button>
+          </div>
+        </div>
+      </div>
+      ${activitiesState.calendarView === "week" ? renderActivitiesCalendarWeek(items) : renderActivitiesCalendarMonth(items)}
+    </div>
+  `;
+};
+
+const renderActivitiesPanel = () => {
+  if (!(activitiesContent instanceof HTMLElement)) return;
+  syncActivitiesFiltersBadge();
+  activitiesViewButtons.forEach((button) => {
+    if (!(button instanceof HTMLButtonElement)) return;
+    const isActive = String(button.getAttribute("data-activities-view") || "") === activitiesState.view;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-selected", String(isActive));
+  });
+  const items = getFilteredActivities();
+  if (!items.length) {
+    activitiesContent.innerHTML = `<div class="admin-dashboard-v2-empty activities-empty">Nenhuma atividade encontrada para os filtros atuais.</div>`;
+    return;
+  }
+  if (activitiesState.view === "board") return renderActivitiesBoardView(items);
+  if (activitiesState.view === "calendar") return renderActivitiesCalendarView(items);
+  return renderActivitiesListView(items);
+};
+
+const loadActivities = async ({ force = false, silent = false } = {}) => {
+  if (!["admin", "teacher", "growth"].includes(String(currentRole || ""))) return;
+  if (activitiesState.isLoading) return;
+  if (!force && activitiesState.lastLoadedAt && Date.now() - activitiesState.lastLoadedAt < 20_000) {
+    renderActivitiesPanel();
+    return;
+  }
+  activitiesState.isLoading = true;
+  if (!silent) setActivitiesStatus("Carregando atividades…");
+  try {
+    const res = await fetchWithAuth("/api/activities", { method: "GET" });
+    if (!res.ok) throw new Error(`activities_load_failed:${res.status}`);
+    const data = await res.json().catch(() => ({}));
+    activitiesState.items = Array.isArray(data?.activities) ? data.activities : [];
+    activitiesState.users = Array.isArray(data?.users) ? data.users : [];
+    activitiesState.lastLoadedAt = Date.now();
+    renderActivitiesPanel();
+    if (!silent) setActivitiesStatus("");
+  } catch (error) {
+    console.error("[activities] load failed:", error);
+    if (!silent) setActivitiesStatus("Não foi possível carregar as atividades agora.", "error");
+    if (activitiesContent instanceof HTMLElement) activitiesContent.innerHTML = `<div class="admin-dashboard-v2-empty activities-empty">Não foi possível carregar agora.</div>`;
+  } finally {
+    activitiesState.isLoading = false;
+  }
+};
+
+const bindActivitiesUi = () => {
+  if (!(activitiesRoot instanceof HTMLElement) || activitiesRoot.dataset.bound === "true") return;
+  activitiesRoot.dataset.bound = "true";
+  if (activitiesSearchInput instanceof HTMLInputElement) {
+    activitiesSearchInput.addEventListener("input", () => {
+      activitiesState.searchQuery = String(activitiesSearchInput.value || "");
+      renderActivitiesPanel();
+    });
+  }
+  if (activitiesCreateButton instanceof HTMLButtonElement) {
+    activitiesCreateButton.addEventListener("click", () => openActivitiesDrawer({ activity: null }));
+  }
+  activitiesViewButtons.forEach((button) => {
+    if (!(button instanceof HTMLButtonElement)) return;
+    button.addEventListener("click", () => {
+      activitiesState.view = String(button.getAttribute("data-activities-view") || "list");
+      saveActivitiesViewPreference();
+      renderActivitiesPanel();
+    });
+  });
+  if (activitiesFiltersTrigger instanceof HTMLButtonElement) {
+    activitiesFiltersTrigger.addEventListener("click", () => {
+      if (activitiesState.filterPopoverEl) return closeActivitiesFiltersPopover();
+      openActivitiesFiltersPopover({ triggerEl: activitiesFiltersTrigger });
+    });
+  }
+  if (activitiesContent instanceof HTMLElement) {
+    activitiesContent.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const openButton = target.closest("[data-activity-open]");
+      if (openButton instanceof HTMLElement) {
+        const id = String(openButton.getAttribute("data-activity-open") || "").trim();
+        const activity = (Array.isArray(activitiesState.items) ? activitiesState.items : []).find((item) => String(item.id || "") === id);
+        if (activity) openActivitiesDrawer({ activity });
+        return;
+      }
+      const navButton = target.closest("[data-activities-calendar-nav]");
+      if (navButton instanceof HTMLButtonElement) {
+        const dir = String(navButton.getAttribute("data-activities-calendar-nav") || "");
+        const next = new Date(activitiesState.focusDate);
+        if (activitiesState.calendarView === "week") next.setDate(next.getDate() + (dir === "prev" ? -7 : 7));
+        else next.setMonth(next.getMonth() + (dir === "prev" ? -1 : 1));
+        activitiesState.focusDate = startOfDay(next);
+        renderActivitiesPanel();
+        return;
+      }
+      const viewButton = target.closest("[data-activities-calendar-view]");
+      if (viewButton instanceof HTMLButtonElement) {
+        activitiesState.calendarView = String(viewButton.getAttribute("data-activities-calendar-view") || "month");
+        saveActivitiesViewPreference();
+        renderActivitiesPanel();
+        return;
+      }
+      if (target.closest("[data-activities-calendar-today]")) {
+        activitiesState.focusDate = startOfDay(new Date());
+        renderActivitiesPanel();
+      }
+    });
+    activitiesContent.addEventListener("dragstart", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement) || !event.dataTransfer) return;
+      const card = target.closest("[data-activity-card]");
+      if (!(card instanceof HTMLElement)) return;
+      event.dataTransfer.setData("text/plain", String(card.getAttribute("data-activity-card") || ""));
+    });
+    activitiesContent.addEventListener("dragover", (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest("[data-activity-drop-status]")) event.preventDefault();
+    });
+    activitiesContent.addEventListener("drop", (event) => {
+      const target = event.target;
+      if (!(target instanceof Element) || !event.dataTransfer) return;
+      const col = target.closest("[data-activity-drop-status]");
+      if (!(col instanceof HTMLElement)) return;
+      event.preventDefault();
+      const id = String(event.dataTransfer.getData("text/plain") || "").trim();
+      const status = String(col.getAttribute("data-activity-drop-status") || "").trim();
+      if (!id || !status) return;
+      saveActivityForm({ id, payload: { status } }).catch(() => {});
+    });
+  }
+  if (activitiesDrawer instanceof HTMLElement) {
+    activitiesDrawer.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest("[data-activities-drawer-close]")) return closeActivitiesDrawer();
+      const deleteButton = target.closest("[data-activities-delete]");
+      if (deleteButton instanceof HTMLElement) {
+        deleteActivityById(String(deleteButton.getAttribute("data-activities-delete") || "")).catch(() => {});
+      }
+    });
+  }
+  document.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    if (activitiesState.filterPopoverEl && !target.closest("[data-activities-filters-popover]") && !target.closest("[data-activities-filters-trigger]")) {
+      closeActivitiesFiltersPopover();
+    }
+    if (target.closest("[data-activities-filters-clear]")) {
+      activitiesState.filters = { responsaveis: [], statuses: [], priorities: [], types: [], duePreset: "" };
+      closeActivitiesFiltersPopover();
+      renderActivitiesPanel();
+    }
+  });
+  document.addEventListener("change", (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const checkbox = target.closest("[data-activities-filter-check]");
+    if (checkbox instanceof HTMLInputElement) {
+      const key = String(checkbox.getAttribute("data-activities-filter-check") || "");
+      const current = Array.isArray(activitiesState.filters?.[key]) ? [...activitiesState.filters[key]] : [];
+      activitiesState.filters[key] = checkbox.checked
+        ? Array.from(new Set([...current, checkbox.value]))
+        : current.filter((value) => value !== checkbox.value);
+      renderActivitiesPanel();
+      return;
+    }
+    const select = target.closest('[data-activities-filter-select="duePreset"]');
+    if (select instanceof HTMLSelectElement) {
+      activitiesState.filters.duePreset = String(select.value || "");
+      renderActivitiesPanel();
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && activitiesState.drawer.isOpen) closeActivitiesDrawer();
+  });
+};
+
 const openStudentRescheduleModal = (lesson) => {
   if (!lesson) return;
   const weekday = weekdayLongFromDateKey(lesson.dateKey);
@@ -25641,6 +26322,16 @@ const showPanel = (panelName) => {
     return;
   }
 
+  if (panelName === "activities") {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    bindActivitiesUi();
+    loadActivities({ force: false }).catch(() => {});
+    if (!["admin", "teacher", "growth"].includes(String(currentRole || ""))) {
+      navigateApp(roleBasePath(currentRole), { replace: true });
+    }
+    return;
+  }
+
   if (panelName === "configuracoes-admin") {
     window.scrollTo({ top: 0, behavior: "smooth" });
     if (currentRole !== "admin") {
@@ -25736,6 +26427,7 @@ const panelPathForRole = (role, panel) => {
   const p = String(panel || "");
 
   if (normalized === "teacher") {
+    if (p === "activities") return "/app/professor/atividades";
     if (p === "ao-vivo") return "/app/professor/agenda";
     if (p === "pedagogico") return "/app/professor/pedagogico";
     if (p === "teacher-alunos") return "/app/professor/alunos";
@@ -25746,6 +26438,7 @@ const panelPathForRole = (role, panel) => {
   }
 
   if (normalized === "admin") {
+    if (p === "activities") return "/app/admin/atividades";
     if (["copilot-vendas", "scripts-vendas", "objecoes", "planos", "personas", "frases-vencedoras", "analytics", "training"].includes(p)) return `/app/admin/growth/${p}`;
     if (p === "professores" || p === "alunos") return "/app/admin/controle-pedagogico";
     if (p === "admin-controle-pedagogico") return "/app/admin/controle-pedagogico";
@@ -25763,6 +26456,7 @@ const panelPathForRole = (role, panel) => {
   }
 
   if (normalized === "growth") {
+    if (p === "activities") return "/app/growth/activities";
     if (["scripts-vendas", "objecoes", "planos", "personas", "frases-vencedoras", "analytics", "training"].includes(p)) return `/app/growth/${p}`;
     return "/app/growth/copilot-vendas";
   }
@@ -25804,6 +26498,7 @@ const parseAppRoute = (path) => {
   }
 
   if (role === "teacher") {
+    if (sub === "atividades") return { role, panel: "activities" };
     if (sub === "agenda") return { role, panel: "ao-vivo" };
     if (sub === "pedagogico") return { role, panel: "pedagogico" };
     if (sub === "alunos") return { role, panel: "teacher-alunos" };
@@ -25814,6 +26509,7 @@ const parseAppRoute = (path) => {
   }
 
   if (role === "admin") {
+    if (sub === "atividades") return { role, panel: "activities" };
     if (sub === "professores") return { role, panel: "admin-controle-pedagogico", redirectTo: "/app/admin/controle-pedagogico", pedagogicoGroup: "alunosTurmas", pedagogicoTab: "pessoas", pedagogicoPeopleTab: "teachers" };
     if (sub === "alunos") return { role, panel: "admin-controle-pedagogico", redirectTo: "/app/admin/controle-pedagogico", pedagogicoGroup: "alunosTurmas", pedagogicoTab: "pessoas", pedagogicoPeopleTab: "students" };
     if (sub === "controle-pedagogico") return { role, panel: "admin-controle-pedagogico" };
@@ -25833,6 +26529,7 @@ const parseAppRoute = (path) => {
   }
 
   if (role === "growth") {
+    if (sub === "activities" || sub === "atividades") return { role, panel: "activities" };
     if (["scripts-vendas", "objecoes", "planos", "personas", "frases-vencedoras", "analytics", "training"].includes(sub)) return { role, panel: "growth", growthTab: sub };
     return { role, panel: "growth", growthTab: "copilot-vendas" };
   }

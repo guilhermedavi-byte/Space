@@ -320,6 +320,23 @@
           <button
             class="sidebar-link"
             type="button"
+            data-panel-target="activities"
+            data-activities-access
+            title="Atividades"
+          >
+            <span class="sidebar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <rect x="4" y="4.5" width="16" height="15" rx="2"></rect>
+                <path d="M8 9h8"></path>
+                <path d="M8 12.5h5.5"></path>
+                <path d="M8 16h7"></path>
+              </svg>
+            </span>
+            <span class="sidebar-text">Atividades</span>
+          </button>
+          <button
+            class="sidebar-link"
+            type="button"
             data-panel-target="space-office"
             data-admin-only
             data-launch-hidden
@@ -1465,6 +1482,64 @@
           <article class="surface-card">
             <p class="admin-dashboard-v2-empty">Nenhuma aula gravada foi publicada para este perfil ainda.</p>
           </article>
+        </section>
+
+        <section class="platform-panel" data-panel="activities" data-hide-platform-header="true" hidden aria-label="Atividades">
+          <div class="activities-shell" data-activities-root>
+            <div class="schedule-page-header activities-page-header">
+              <div>
+                <h2 class="schedule-page-title">Atividades</h2>
+              </div>
+              <button class="teacher-calendar-button teacher-calendar-button-primary" type="button" data-activities-create>
+                <span class="teacher-calendar-button-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M12 5v14"></path>
+                    <path d="M5 12h14"></path>
+                  </svg>
+                </span>
+                <span>+ Nova atividade</span>
+              </button>
+            </div>
+
+            <article class="surface-card activities-card" aria-label="Gerenciador de atividades">
+              <div class="admin-ped-table-toolbar activities-toolbar">
+                <div class="admin-ped-table-toolbar-main activities-toolbar-main">
+                  <input
+                    class="admin-ped-select admin-ped-table-search activities-search"
+                    type="text"
+                    placeholder="Buscar atividade por título ou descrição..."
+                    data-activities-search
+                  />
+                  <button class="button button-outline button-small" type="button" data-activities-filters-trigger>
+                    <span>Filtro</span>
+                    <span class="admin-students-filters-badge" data-activities-filters-badge hidden>0</span>
+                  </button>
+                </div>
+                <div class="activities-view-toggle" role="tablist" aria-label="Modo de visualização">
+                  <button class="activities-view-btn is-active" type="button" data-activities-view="list" role="tab" aria-selected="true">Lista</button>
+                  <button class="activities-view-btn" type="button" data-activities-view="board" role="tab" aria-selected="false">Quadro</button>
+                  <button class="activities-view-btn" type="button" data-activities-view="calendar" role="tab" aria-selected="false">Calendário</button>
+                </div>
+              </div>
+
+              <div class="activities-status" data-activities-status aria-live="polite"></div>
+              <div class="activities-content" data-activities-content></div>
+            </article>
+          </div>
+
+          <div class="activities-drawer" data-activities-drawer hidden>
+            <div class="activities-drawer-backdrop" data-activities-drawer-close></div>
+            <div class="activities-drawer-inner" role="dialog" aria-modal="true" aria-label="Detalhes da atividade">
+              <div class="activities-drawer-head">
+                <div>
+                  <div class="activities-drawer-title" data-activities-drawer-title>Nova atividade</div>
+                  <div class="activities-drawer-sub" data-activities-drawer-sub>Preencha os detalhes e salve.</div>
+                </div>
+                <button class="activities-drawer-close" type="button" data-activities-drawer-close aria-label="Fechar">✕</button>
+              </div>
+              <div class="activities-drawer-body" data-activities-drawer-body></div>
+            </div>
+          </div>
         </section>
 
 		        <section class="platform-panel" data-panel="ao-vivo" data-hide-platform-header="true" hidden>
