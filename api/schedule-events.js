@@ -279,6 +279,40 @@ const getUserNameById = async ({ idToken, uid }) => {
   return name || null;
 };
 
+const getUserEmailById = async ({ idToken, uid }) => {
+  const safeUid = String(uid || "").trim();
+  if (!safeUid) return null;
+  const snap = await firestoreGetDocument({ docPath: `users/${encodeURIComponent(safeUid)}`, idToken });
+  if (!snap.ok) return null;
+  const fields = decodeFields(snap.data);
+  const email = typeof fields?.email === "string" ? fields.email.trim().toLowerCase() : "";
+  return email || null;
+};
+
+const resolveTeacherAliasIds = async ({ requesterId, email, usersDocs } = {}) => {
+  const ids = new Set();
+  const baseId = String(requesterId || "").trim();
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  if (baseId) ids.add(baseId);
+  if (!normalizedEmail) return ids;
+  try {
+    const docs = Array.isArray(usersDocs) ? usersDocs : await listCollectionAsAdmin("users", { pageSize: 800 });
+    (Array.isArray(docs) ? docs : []).forEach((doc) => {
+      if (!doc || typeof doc !== "object") return;
+      const fields = doc.fields ? decodeFields(doc) : doc;
+      const docEmail = typeof fields?.email === "string" ? fields.email.trim().toLowerCase() : "";
+      const tipo = normalizeRole(fields?.tipo);
+      if (!docEmail || docEmail !== normalizedEmail) return;
+      if (tipo !== "teacher") return;
+      const docId = doc.id ? String(doc.id) : getDocIdFromName(doc.name);
+      if (docId) ids.add(docId);
+    });
+  } catch (error) {
+    console.warn("[schedule-events] resolveTeacherAliasIds failed", error);
+  }
+  return ids;
+};
+
 const parseMinutes = (value) => {
   if (typeof value === "number" && Number.isFinite(value)) return clampInt(value, 0, 1440);
   const str = typeof value === "string" ? value.trim() : "";
@@ -456,6 +490,7 @@ const decodeAulaDoc = (doc) => {
   if (!Number.isFinite(startMin) || !Number.isFinite(endMin) || endMin <= startMin) return null;
 
   const professorNome = typeof fields.professorNome === "string" ? fields.professorNome.trim() : "";
+  const professorEmail = typeof fields.professorEmail === "string" ? fields.professorEmail.trim().toLowerCase() : "";
   const alunoNome = typeof fields.alunoNome === "string" ? fields.alunoNome.trim() : "";
   const alunoEmail = typeof fields.alunoEmail === "string" ? fields.alunoEmail.trim().toLowerCase() : "";
   const alunoTelefone = typeof fields.alunoTelefone === "string" ? fields.alunoTelefone.trim() : "";
@@ -479,6 +514,7 @@ const decodeAulaDoc = (doc) => {
     status: String(fields.status || "").trim().toLowerCase() || "agendada",
     type: alunoId ? "lesson" : "manual",
     professorNome: professorNome || null,
+    professorEmail: professorEmail || null,
     alunoNome: alunoNome || null,
     alunoEmail: alunoEmail || null,
     alunoTelefone: alunoTelefone || null,
@@ -647,13 +683,22 @@ const normalizeDuracaoReal = (raw) => {
   return allowed.has(s) ? s : "";
 };
 
-const handleLessonLogsApi = async (req, res, { idToken, role, requesterId, url } = {}) => {
+const handleLessonLogsApi = async (req, res, { idToken, role, requesterId, url, sessionEmail = "" } = {}) => {
   const effectiveRole = String(role || "");
+  let teacherAliasIdsPromise = null;
+  const getTeacherAliasIds = async ({ seedId, seedEmail } = {}) => {
+    if (effectiveRole === "teacher" && !seedId && !seedEmail) {
+      if (!teacherAliasIdsPromise) {
+        teacherAliasIdsPromise = resolveTeacherAliasIds({ requesterId, email: sessionEmail });
+      }
+      return teacherAliasIdsPromise;
+    }
+    return resolveTeacherAliasIds({ requesterId: seedId || requesterId, email: seedEmail || "" });
+  };
 
   if (req.method === "GET" || req.method === "HEAD") {
     const eventId = String(url.searchParams.get("eventId") || "").trim();
     const professorIdParam = String(url.searchParams.get("professorId") || "").trim();
-    const professorId = effectiveRole === "admin" && professorIdParam ? professorIdParam : requesterId;
 
     if (eventId) {
       const logId = toLogIdFromEventId(eventId);
@@ -669,22 +714,29 @@ const handleLessonLogsApi = async (req, res, { idToken, role, requesterId, url }
     }
 
     try {
-      const query = {
-        from: [{ collectionId: "lessonLogs" }],
-        where: {
-          fieldFilter: {
-            field: { fieldPath: "professorId" },
-            op: "EQUAL",
-            value: { stringValue: professorId },
-          },
-        },
-      };
-
-      const result = await firestoreRunQuery({ idToken, structuredQuery: query });
-      if (!result.ok) throw new Error("firestore_query_failed");
-      const rows = Array.isArray(result.data) ? result.data : [];
-      const docs = rows.map((row) => row?.document).filter(Boolean);
-      const logs = docs.map((doc) => decodeLessonLogDoc(doc)).filter(Boolean);
+      const docs = await listCollectionAsAdmin("lessonLogs", { pageSize: 2000 });
+      let aliasIds = null;
+      if (effectiveRole === "teacher") {
+        aliasIds = await getTeacherAliasIds({ seedEmail: url.searchParams.get("email") || "" });
+      } else if (effectiveRole === "admin" && professorIdParam) {
+        const usersDocs = await listCollectionAsAdmin("users", { pageSize: 800 }).catch(() => []);
+        const matchedUser = (Array.isArray(usersDocs) ? usersDocs : []).find((doc) => {
+          const docId = doc?.id ? String(doc.id) : getDocIdFromName(doc?.name);
+          return String(docId || "").trim() === professorIdParam;
+        });
+        const fields = matchedUser?.fields ? decodeFields(matchedUser) : matchedUser;
+        const professorEmail = typeof fields?.email === "string" ? fields.email.trim().toLowerCase() : "";
+        aliasIds = await getTeacherAliasIds({ seedId: professorIdParam, seedEmail: professorEmail });
+      }
+      const logs = (Array.isArray(docs) ? docs : [])
+        .map((doc) => decodeLessonLogDoc(doc))
+        .filter(Boolean)
+        .filter((log) => {
+          const logProfessorId = String(log?.professorId || "").trim();
+          if (effectiveRole === "teacher") return aliasIds instanceof Set ? aliasIds.has(logProfessorId) : logProfessorId === requesterId;
+          if (effectiveRole === "admin" && professorIdParam) return aliasIds instanceof Set ? aliasIds.has(logProfessorId) : logProfessorId === professorIdParam;
+          return true;
+        });
       sendJson(res, 200, { logs });
       return;
     } catch (error) {
@@ -961,6 +1013,9 @@ module.exports = async (req, res) => {
   let role = "";
   let requesterId = "";
   let profile;
+  let sessionEmail = "";
+  let sessionPhone = "";
+  let sessionName = "";
   if (idToken) {
     try {
       decoded = await verifyFirebaseIdToken(idToken);
@@ -1000,9 +1055,15 @@ module.exports = async (req, res) => {
     }
     role = normalizeRole(profile.user.role);
     requesterId = decoded.uid;
+    sessionEmail = String(profile?.user?.email || decoded?.email || cookieSession?.email || "").trim().toLowerCase();
+    sessionPhone = String(profile?.user?.phone || cookieSession?.phone || "").trim();
+    sessionName = String(profile?.user?.name || profile?.user?.nome || decoded?.name || cookieSession?.name || "").trim();
   } else if (isReadOnlyList && cookieSession) {
     role = normalizeRole(cookieSession.role);
     requesterId = String(cookieSession.sub || "").trim();
+    sessionEmail = String(cookieSession.email || "").trim().toLowerCase();
+    sessionPhone = String(cookieSession.phone || "").trim();
+    sessionName = String(cookieSession.name || "").trim();
   } else {
     sendJson(res, 401, { error: "unauthorized" });
     return;
@@ -1018,7 +1079,7 @@ module.exports = async (req, res) => {
   const resource = String(url.searchParams.get("resource") || "").trim().toLowerCase();
 
   if (resource === "lesson-logs") {
-    await handleLessonLogsApi(req, res, { idToken, role, requesterId, url });
+    await handleLessonLogsApi(req, res, { idToken, role, requesterId, url, sessionEmail });
     return;
   }
   if (resource === "admin-alerts") {
@@ -1037,7 +1098,16 @@ module.exports = async (req, res) => {
 
     try {
       let docs = [];
-      if (idToken) {
+      let teacherAliasIds = null;
+      if (role === "teacher") {
+        teacherAliasIds = await resolveTeacherAliasIds({ requesterId, email: sessionEmail });
+      }
+      try {
+        // Authorization by role is applied below in in-memory filters. Use admin listing here
+        // because Firestore rules cannot filter list() per document for teachers.
+        docs = await listCollectionAsAdmin("aulas", { pageSize: 2000 });
+      } catch (adminListError) {
+        console.warn("[schedule-events] admin list unavailable, falling back to user token");
         const resList = await firestoreListDocuments({ collectionPath: "aulas", idToken, pageSize: 2000 });
         if (!resList.ok) throw new Error("firestore_list_failed");
         docs = Array.isArray(resList.documents)
@@ -1045,8 +1115,6 @@ module.exports = async (req, res) => {
           : Array.isArray(resList.data?.documents)
             ? resList.data.documents
             : [];
-      } else {
-        docs = await listCollectionAsAdmin("aulas", { pageSize: 2000 });
       }
 
       const events = docs
@@ -1054,13 +1122,19 @@ module.exports = async (req, res) => {
         .filter(Boolean)
         .filter((evt) => !isHiddenAulaStatus(evt.status))
         .filter((evt) => {
-          if (role === "teacher" && evt.professorId !== requesterId) return false;
+          if (
+            role === "teacher" &&
+            !(teacherAliasIds instanceof Set && teacherAliasIds.has(String(evt.professorId || "").trim())) &&
+            !emailsMatch(evt.professorEmail, sessionEmail)
+          ) {
+            return false;
+          }
           if (
             role === "student" &&
             evt.alunoId !== requesterId &&
-            !emailsMatch(evt.alunoEmail, session.email) &&
-            !phonesMatch(evt.alunoTelefone, session.phone) &&
-            !namesMatch(evt.alunoNome, session.name)
+            !emailsMatch(evt.alunoEmail, sessionEmail) &&
+            !phonesMatch(evt.alunoTelefone, sessionPhone) &&
+            !namesMatch(evt.alunoNome, sessionName)
           ) {
             return false;
           }
@@ -1093,6 +1167,7 @@ module.exports = async (req, res) => {
             alunoTelefone: evt.alunoTelefone,
             professorId: evt.professorId,
             professorNome: evt.professorNome,
+            professorEmail: evt.professorEmail,
             liveLessonId: evt.liveLessonId,
             liveUrl: evt.liveLessonId ? `/aula/${encodeURIComponent(evt.liveLessonId)}` : "",
           };
@@ -1121,6 +1196,7 @@ module.exports = async (req, res) => {
     const mode = parseDeleteModeFromUrl(url);
 
     try {
+      const teacherAliasIds = role === "teacher" ? await resolveTeacherAliasIds({ requesterId, email: sessionEmail }) : null;
       const docPath = `aulas/${encodeURIComponent(id)}`;
       const snap = await firestoreGetDocument({ docPath, idToken });
       if (!snap.ok) {
@@ -1135,7 +1211,7 @@ module.exports = async (req, res) => {
       }
 
       if (role === "teacher") {
-        if (evt.professorId !== requesterId) {
+        if (!(teacherAliasIds instanceof Set) || !teacherAliasIds.has(String(evt.professorId || "").trim())) {
           sendJson(res, 403, { error: "forbidden" });
           return;
         }
@@ -1171,7 +1247,7 @@ module.exports = async (req, res) => {
         .filter((row) => (row.startMs || 0) >= (evt.startMs || 0));
 
       if (role === "teacher") {
-        if (toDelete.some((row) => row.professorId !== requesterId)) {
+        if (toDelete.some((row) => !(teacherAliasIds instanceof Set) || !teacherAliasIds.has(String(row.professorId || "").trim()))) {
           sendJson(res, 403, { error: "forbidden" });
           return;
         }
@@ -1289,6 +1365,7 @@ module.exports = async (req, res) => {
 
   // Resolve names to persist denormalized data (keeps the UI fast and avoids joins).
   let professorNome = "";
+  let professorEmail = "";
   let alunoNome = "";
   const professorNomeBody = String(body?.professorNome || body?.professor_nome || "").trim();
   const alunoNomeBody = String(body?.alunoNome || body?.aluno_nome || "").trim();
@@ -1297,13 +1374,16 @@ module.exports = async (req, res) => {
   try {
     if (professorId) {
       professorNome = (await getUserNameById({ idToken, uid: professorId })) || "";
+      professorEmail = (await getUserEmailById({ idToken, uid: professorId })) || "";
     }
     alunoNome = alunoId ? (await getUserNameById({ idToken, uid: alunoId })) || "" : "";
   } catch (error) {
     professorNome = "";
+    professorEmail = "";
     alunoNome = "";
   }
   professorNome = professorNome || professorNomeBody;
+  professorEmail = professorEmail || String(body?.professorEmail || body?.professor_email || "").trim().toLowerCase();
   alunoNome = alunoNome || alunoNomeBody;
 
   const baseDoc = ({ overrideDateKey, overrideStartMin, overrideEndMin, repeatMeta } = {}) => {
@@ -1323,6 +1403,7 @@ module.exports = async (req, res) => {
       alunoEmail: alunoEmail || null,
       alunoTelefone: alunoTelefone || null,
       professorNome: professorNome || null,
+      professorEmail: professorEmail || null,
       data,
       diaSemana: occurrenceDiaSemana || diaSemana,
       horaInicio: minutesToTime(occStartMin),
@@ -1473,12 +1554,14 @@ module.exports = async (req, res) => {
     }
     const existing = decodeFields(snap.data);
     const existingProfessorId = typeof existing.professorId === "string" ? existing.professorId : "";
+    const existingProfessorEmail = typeof existing.professorEmail === "string" ? existing.professorEmail.trim().toLowerCase() : "";
     const existingAlunoId = existing.alunoId == null ? null : typeof existing.alunoId === "string" ? existing.alunoId : null;
     const existingCriadoPor = typeof existing.criadoPor === "string" ? existing.criadoPor : "";
     const existingStatus = String(existing.status || "").trim().toLowerCase() || "agendada";
 
     if (role === "teacher") {
-      if (existingProfessorId !== requesterId) {
+      const teacherAliasIds = await resolveTeacherAliasIds({ requesterId, email: sessionEmail });
+      if (!(teacherAliasIds instanceof Set) || !teacherAliasIds.has(existingProfessorId)) {
         sendJson(res, 403, { error: "forbidden" });
         return;
       }
@@ -1493,10 +1576,14 @@ module.exports = async (req, res) => {
 
     // Re-resolve names only if ids changed or missing.
     let professorNomeFinal = typeof existing.professorNome === "string" ? existing.professorNome.trim() : "";
+    let professorEmailFinal = existingProfessorEmail;
     let alunoNomeFinal = typeof existing.alunoNome === "string" ? existing.alunoNome.trim() : "";
     try {
       if (!professorNomeFinal || professorId !== existingProfessorId) {
         professorNomeFinal = professorId ? (await getUserNameById({ idToken, uid: professorId })) || "" : "";
+      }
+      if (!professorEmailFinal || professorId !== existingProfessorId) {
+        professorEmailFinal = professorId ? (await getUserEmailById({ idToken, uid: professorId })) || "" : "";
       }
       if (alunoIdFinal && (!alunoNomeFinal || alunoIdFinal !== existingAlunoId)) {
         alunoNomeFinal = (await getUserNameById({ idToken, uid: alunoIdFinal })) || "";
@@ -1510,6 +1597,7 @@ module.exports = async (req, res) => {
       professorId,
       alunoId: alunoIdFinal || null,
       professorNome: professorNomeFinal || null,
+      professorEmail: professorEmailFinal || null,
       alunoNome: alunoIdFinal ? alunoNomeFinal || null : null,
       title: isLessonFinal ? "" : title,
       description: isLessonFinal ? "" : description,
