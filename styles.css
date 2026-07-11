@@ -5436,9 +5436,7 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
 
 .admin-student-live-class-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 14px;
-  align-items: start;
+  gap: 10px;
   padding: 12px 0;
 }
 
@@ -5450,33 +5448,42 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
   min-width: 0;
 }
 
-.admin-student-live-class-title {
-  font-size: 14px;
-  font-weight: 850;
-  color: rgba(255, 255, 255, 0.92);
-}
-
-.admin-student-live-class-sub,
-.admin-student-live-class-teacher,
+.admin-student-live-class-label,
 .admin-student-live-class-empty-sub {
-  margin-top: 4px;
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 750;
   color: rgba(255, 255, 255, 0.54);
 }
 
-.admin-student-live-class-side {
+.admin-student-live-class-schedule {
   display: grid;
-  justify-items: end;
-  gap: 10px;
+  gap: 4px;
 }
 
-.admin-student-live-class-pills,
+.admin-student-live-class-line {
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.admin-student-live-class-link {
+  font-size: 12px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.52);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.admin-student-live-class-link:hover,
+.admin-student-live-class-link:focus-visible {
+  color: rgba(255, 255, 255, 0.72);
+  text-decoration: underline;
+}
+
 .admin-student-live-class-actions {
   display: inline-flex;
   align-items: center;
   flex-wrap: wrap;
-  justify-content: flex-end;
   gap: 8px;
 }
 

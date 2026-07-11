@@ -15905,28 +15905,33 @@ const renderAdminStudentSheet = () => {
     ? liveClasses
         .map((classRow) => {
           const status = normalizeClassStatus(classRow?.status);
-          const statusLabel = status === "active" ? "Ativa" : status === "paused" ? "Pausada" : "Encerrada";
-          const badgeClass = status === "active" ? "is-active" : status === "paused" ? "is-paused" : "is-ended";
-          const scheduleSummary = formatAdminPedScheduleSummary(classRow);
           const liveUrl = buildAdminPedClassLiveUrl(classRow);
-          const teacher = String(classRow?.teacherName || "Sem professor").trim() || "Sem professor";
-          const plan = String(classRow?.planName || classRow?.plan || "").trim();
           const classId = String(classRow?.id || "").trim();
           const isMenuOpen = liveClassMenuId === classId;
+          const activeScheduleDays = normalizeAdminPedWeeklyScheduleDays(classRow?.scheduleDays || [])
+            .filter((day) => day && day.enabled && String(day.startTime || "").trim() && String(day.endTime || "").trim());
+          const scheduleLines = activeScheduleDays.length
+            ? activeScheduleDays.map((day) => `${daysLabelLong(day.weekday)} ${String(day.startTime).slice(0, 5)}–${String(day.endTime).slice(0, 5)}`)
+            : (() => {
+                const days = normalizeDaysOfWeek(classRow?.daysOfWeek || []);
+                const fallbackTime =
+                  Number.isFinite(Number(classRow?.startMin)) && Number.isFinite(Number(classRow?.endMin)) && Number(classRow?.endMin) > Number(classRow?.startMin)
+                    ? `${formatHmFromMinutes(classRow.startMin)}–${formatHmFromMinutes(classRow.endMin)}`
+                    : "—";
+                return days.length ? days.map((day) => `${daysLabelLong(day)} ${fallbackTime}`) : ["—"];
+              })();
+          const statusSuffix = status === "active" ? "" : status === "paused" ? " (pausada)" : " (inativa)";
           return `
             <div class="admin-student-live-class-row">
               <div class="admin-student-live-class-main">
-                <div class="admin-student-live-class-title">${escapeHtml(String(classRow?.title || (classRow?.type === "group" ? "Aula em grupo" : "Aula ao vivo") || "Aula ao vivo"))}</div>
-                <div class="admin-student-live-class-sub">${escapeHtml(scheduleSummary)}</div>
-                <div class="admin-student-live-class-teacher">Professor: ${escapeHtml(teacher)}</div>
-              </div>
-              <div class="admin-student-live-class-side">
-                <div class="admin-student-live-class-pills">
-                  <span class="admin-ped-pill ${badgeClass}">${escapeHtml(statusLabel)}</span>
-                  ${plan ? `<span class="admin-ped-pill is-plan">${escapeHtml(String(plan).toUpperCase())}</span>` : ""}
+                <div class="admin-student-live-class-label">Aulas cadastradas:${escapeHtml(statusSuffix)}</div>
+                <div class="admin-student-live-class-schedule">
+                  ${scheduleLines.map((line) => `<div class="admin-student-live-class-line">${escapeHtml(line)}</div>`).join("")}
                 </div>
+                <div class="admin-student-live-class-label">Link da videochamada:</div>
+                <a class="admin-student-live-class-link" href="${escapeHtml(liveUrl)}" target="_blank" rel="noopener">${escapeHtml(liveUrl)}</a>
                 <div class="admin-student-live-class-actions">
-                  <a class="admin-ped-action" href="${escapeHtml(liveUrl)}" target="_blank" rel="noopener">Entrar</a>
+                  <a class="admin-ped-action is-muted" href="${escapeHtml(liveUrl)}" target="_blank" rel="noopener">Entrar</a>
                   <button class="admin-ped-action is-muted" type="button" data-admin-ped-class-copy-live="${escapeHtml(liveUrl)}">Copiar link</button>
                   <div class="admin-student-live-class-menu-wrap" data-admin-student-live-class-menu-wrap="${escapeHtml(classId)}">
                     <button
@@ -16065,12 +16070,6 @@ const renderAdminStudentSheet = () => {
 
       <section class="admin-student-sheet-right admin-student-simple-right" aria-label="Detalhes do aluno">
         <div class="admin-student-panel-card admin-student-live-class-card">
-          <div class="admin-student-live-class-header">
-            <div>
-              <div class="admin-student-panel-title">Aula ao vivo</div>
-              <div class="admin-student-history-subtitle">Gestão da sala, horário recorrente e link de videochamada.</div>
-            </div>
-          </div>
           <div class="admin-student-live-class-list">
             ${liveClassesHtml}
           </div>
@@ -16333,14 +16332,26 @@ const slugifyClassRoomPart = (value) =>
     .replace(/^-+|-+$/g, "")
     .slice(0, 64);
 
+const buildAdminPedShortRoomSlug = (classId) => {
+  const raw = String(classId || "").trim();
+  if (!raw) return `aula-${Math.random().toString(36).slice(2, 10)}`;
+  const compact = raw
+    .replace(/^class[_-]?/i, "")
+    .replace(/[^a-z0-9]+/gi, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase();
+  return compact || `aula-${Math.random().toString(36).slice(2, 10)}`;
+};
+
 const buildAdminPedClassLiveUrl = (classRow) => {
   const c = classRow && typeof classRow === "object" ? classRow : {};
+  const shortRoomSlug = String(c.roomSlug || c.roomId || "").trim();
   const firstStudent = (Array.isArray(c.studentNames) && c.studentNames[0]) || (Array.isArray(c.studentIds) && c.studentIds[0]) || "";
   const title = c.title || c.groupName || (c.type === "group" ? "turma" : firstStudent) || "aula";
   const teacher = c.teacherName || c.teacherId || "professor";
   const days = (Array.isArray(c.daysOfWeek) ? c.daysOfWeek : []).map(daysLabelShort).join("-");
   const time = Number.isFinite(Number(c.startMin)) ? formatHmFromMinutes(c.startMin).replace(/:/g, "") : "";
-  const parts = [
+  const legacyParts = [
     "space",
     "aula",
     slugifyClassRoomPart(title),
@@ -16350,7 +16361,7 @@ const buildAdminPedClassLiveUrl = (classRow) => {
     slugifyClassRoomPart(time),
     slugifyClassRoomPart(c.id),
   ].filter(Boolean);
-  const roomId = parts.join("-").slice(0, 180) || `space-aula-${Date.now()}`;
+  const roomId = shortRoomSlug || legacyParts.join("-").slice(0, 180) || `space-aula-${Date.now()}`;
   const origin = typeof window !== "undefined" && window.location && window.location.origin ? window.location.origin : "";
   const displayTitle = `Space Aula ${title}`;
   return `${origin}/sala/${encodeURIComponent(roomId)}?title=${encodeURIComponent(displayTitle)}`;
@@ -16646,6 +16657,7 @@ const normalizeClassRow = ({ id, data }) => {
   const studentNames = studentNamesRaw.map((v) => String(v || "").trim()).filter(Boolean);
   const linkedEventIds = Array.isArray(src.linkedEventIds) ? src.linkedEventIds.map((v) => String(v || "").trim()).filter(Boolean) : [];
   const linkedEventGroupId = String(src.linkedEventGroupId || src.grupoRecorrenciaId || "").trim();
+  const roomSlug = String(src.roomSlug || src.roomId || "").trim();
 
   const createdAtMs = parseFirestoreDateToMs(src.createdAt || src.criadoEm);
   const updatedAtMs = parseFirestoreDateToMs(src.updatedAt || src.atualizadoEm);
@@ -16672,6 +16684,7 @@ const normalizeClassRow = ({ id, data }) => {
     studentNames,
     linkedEventIds,
     linkedEventGroupId,
+    roomSlug,
     notes: String(src.notes || src.observacoes || "").trim(),
     createdAtMs,
     updatedAtMs,
@@ -17288,6 +17301,18 @@ const daysLabelShort = (dow) => {
   if (n === 5) return "Sex";
   if (n === 6) return "Sáb";
   if (n === 0) return "Dom";
+  return "—";
+};
+
+const daysLabelLong = (dow) => {
+  const n = Number(dow);
+  if (n === 1) return "Segunda";
+  if (n === 2) return "Terça";
+  if (n === 3) return "Quarta";
+  if (n === 4) return "Quinta";
+  if (n === 5) return "Sexta";
+  if (n === 6) return "Sábado";
+  if (n === 0) return "Domingo";
   return "—";
 };
 
@@ -22300,6 +22325,7 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
         notes,
         linkedEventGroupId: linkedGroupId,
         linkedEventIds: existingEventIds,
+        roomSlug: isEdit ? String(row?.roomSlug || "") : buildAdminPedShortRoomSlug(classId),
       };
 
       const all = Array.isArray(adminPedagogicoState.classes) ? adminPedagogicoState.classes : [];
