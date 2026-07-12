@@ -34,9 +34,12 @@ const listCollectionAsAdmin = async (collectionPath, { pageSize = 1000 } = {}) =
     }
     const docs = Array.isArray(response.data?.documents) ? response.data.documents : [];
     docs.forEach((doc) => {
+      const firestoreDocId = getDocIdFromName(doc.name);
+      const fields = decodeFields(doc);
       all.push({
-        id: getDocIdFromName(doc.name),
-        ...decodeFields(doc),
+        ...fields,
+        id: typeof fields?.id === "string" && fields.id.trim() ? fields.id : firestoreDocId,
+        firestoreDocId,
       });
     });
     pageToken = String(response.data?.nextPageToken || "");
@@ -60,8 +63,12 @@ const createDocumentAsAdmin = async (collectionPath, data) => {
     throw error;
   }
   return {
-    id: getDocIdFromName(response.data?.name),
     ...decodeFields(response.data),
+    id:
+      typeof decodeFields(response.data)?.id === "string" && decodeFields(response.data).id.trim()
+        ? decodeFields(response.data).id
+        : getDocIdFromName(response.data?.name),
+    firestoreDocId: getDocIdFromName(response.data?.name),
   };
 };
 

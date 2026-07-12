@@ -10904,6 +10904,7 @@ let adminStudentsState = {
   teachers: [], // [{id,nome,ativo,initials}]
   teachersById: new Map(),
   studentsById: new Map(), // uid -> {id,nome,email,ativo,initials}
+  studentAliasToDocId: new Map(),
   students: [], // raw student rows
   eventsLoadedAt: 0,
   events: [], // from /api/schedule-events
@@ -14179,14 +14180,58 @@ const patchFirestoreUserDocument = async ({ userId, patch = {}, context = "users
   return { firebase, cleanPatch };
 };
 
+const getStudentIdentityAliases = (student = {}) => {
+  const aliases = new Set();
+  [student?.firestoreDocId, student?.docId, student?.documentId, student?.id, student?.uid, student?.userId, student?.studentId, student?.alunoId, student?.aluno_chave].forEach(
+    (value) => {
+      const safe = String(value || "").trim();
+      if (safe) aliases.add(safe);
+    }
+  );
+  return Array.from(aliases);
+};
+
+const buildStudentAliasMap = (students = []) => {
+  const aliasToDocId = new Map();
+  (Array.isArray(students) ? students : []).forEach((student) => {
+    if (!student || typeof student !== "object") return;
+    const canonicalId = String(student.firestoreDocId || student.docId || student.documentId || "").trim();
+    if (!canonicalId) return;
+    getStudentIdentityAliases(student).forEach((alias) => aliasToDocId.set(alias, canonicalId));
+  });
+  return aliasToDocId;
+};
+
+const resolveStudentCanonicalDocId = (studentOrId, { aliasMap = null } = {}) => {
+  if (studentOrId && typeof studentOrId === "object") {
+    const direct = String(studentOrId.firestoreDocId || studentOrId.docId || studentOrId.documentId || "").trim();
+    if (direct) return direct;
+    const maybeAlias = String(studentOrId.id || studentOrId.uid || studentOrId.userId || studentOrId.studentId || studentOrId.alunoId || "").trim();
+    if (maybeAlias && aliasMap instanceof Map) {
+      const resolved = String(aliasMap.get(maybeAlias) || "").trim();
+      if (resolved) return resolved;
+    }
+    throw new Error("student_firestore_document_id_missing");
+  }
+  const raw = String(studentOrId || "").trim();
+  if (!raw) throw new Error("student_firestore_document_id_missing");
+  if (aliasMap instanceof Map) {
+    const resolved = String(aliasMap.get(raw) || "").trim();
+    if (resolved) return resolved;
+  }
+  return raw;
+};
+
 const normalizeAdminFirestoreUserRow = (sourceRow = {}) => {
   if (!sourceRow || typeof sourceRow !== "object") return null;
   const raw = clonePlainData(sourceRow);
-  const uid = String(sourceRow.id || sourceRow.uid || sourceRow.userId || sourceRow.studentId || sourceRow.alunoId || "").trim();
+  const firestoreDocId = String(sourceRow.firestoreDocId || sourceRow.docId || sourceRow.documentId || "").trim();
+  const uid = firestoreDocId;
   const nome = String(sourceRow.nome || sourceRow.name || "Aluno").trim();
   const email = String(sourceRow.email || "").trim().toLowerCase();
   const tipo = normalizeFirestoreRole(sourceRow.tipo || sourceRow.role || sourceRow.type) || "student";
   if (!uid || !nome) return null;
+  const sourceBusinessId = String(raw?.id || raw?.uid || raw?.userId || raw?.studentId || raw?.alunoId || "").trim();
   const createdAt = raw?.criadoEm || raw?.createdAt || raw?.created_at || raw?.cadastroEm || null;
   const canceladoEm = raw?.canceladoEm || raw?.cancelamentoEm || raw?.dataCancelamento || null;
   const desativadoEm = raw?.desativadoEm || canceladoEm || null;
@@ -14199,6 +14244,14 @@ const normalizeAdminFirestoreUserRow = (sourceRow = {}) => {
   return {
     ...raw,
     id: uid,
+    firestoreDocId: uid,
+    docId: uid,
+    documentId: uid,
+    sourceBusinessId,
+    uid: String(raw?.uid || "").trim(),
+    userId: String(raw?.userId || sourceBusinessId || "").trim(),
+    studentId: String(raw?.studentId || sourceBusinessId || "").trim(),
+    alunoId: String(raw?.alunoId || sourceBusinessId || "").trim(),
     nome,
     email,
     tipo,
@@ -14407,7 +14460,12 @@ const fetchUserRowsFromFirestore = async (tipo) => {
     const byId = new Map();
     snapshots.forEach((snap) => {
       snap.forEach((docSnap) => {
-        byId.set(docSnap.id, { id: docSnap.id, ...(docSnap.data ? docSnap.data() : {}) });
+        const data = docSnap.data ? docSnap.data() : {};
+        byId.set(docSnap.id, {
+          ...data,
+          id: typeof data?.id === "string" && data.id.trim() ? data.id : docSnap.id,
+          firestoreDocId: docSnap.id,
+        });
       });
     });
     sourceRows = Array.from(byId.values());
@@ -14789,10 +14847,12 @@ const getLifecycleSensorTone = (estado) => {
 
 const getStudentLifecycleState = (aluno) => {
   const meta = aluno && typeof aluno === "object" ? aluno : {};
-  if (meta.ativo === false) return STUDENT_LIFECYCLE_STATE.INACTIVE;
   const cancelamento = normalizeStudentCancellationRecord(meta.cancelamento);
+  const wasEffectivelyCancelled = Boolean(cancelamento?.dataEfetivacao) || Boolean(cancelamento?.desfecho);
+  if (wasEffectivelyCancelled) return STUDENT_LIFECYCLE_STATE.INACTIVE;
   if (cancelamento?.aulasSuspensas) return STUDENT_LIFECYCLE_STATE.SUSPENDED;
   if (isStudentCancellationActive(cancelamento)) return STUDENT_LIFECYCLE_STATE.NOTICE;
+  if (meta.ativo === false) return STUDENT_LIFECYCLE_STATE.INACTIVE;
   return STUDENT_LIFECYCLE_STATE.ACTIVE;
 };
 
@@ -15169,7 +15229,19 @@ const mergeAdminStudentRows = (...groups) => {
     const key = keyOf(row);
     if (!key || key === "id:") return;
     const prev = byKey.get(key);
-    byKey.set(key, prev ? { ...row, ...prev, professorId: prev.professorId || row.professorId, plano: prev.plano || row.plano } : row);
+    byKey.set(
+      key,
+      prev
+        ? {
+            ...row,
+            ...prev,
+            id: String(prev.firestoreDocId || prev.id || row.firestoreDocId || row.id || "").trim(),
+            firestoreDocId: String(prev.firestoreDocId || row.firestoreDocId || "").trim(),
+            professorId: prev.professorId || row.professorId,
+            plano: prev.plano || row.plano,
+          }
+        : row
+    );
   });
   return Array.from(byKey.values()).sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"));
 };
@@ -15218,11 +15290,14 @@ const ensureAdminStudentsBaseData = async ({ force = false } = {}) => {
     adminStudentsState.teachersById = teachersById;
     const studentsById = new Map();
     (Array.isArray(students) ? students : []).forEach((row) => {
-      if (!row?.id) return;
-      studentsById.set(row.id, row);
+      const canonicalId = String(row?.firestoreDocId || row?.docId || row?.documentId || row?.id || "").trim();
+      if (!canonicalId) return;
+      studentsById.set(canonicalId, { ...row, id: canonicalId, firestoreDocId: canonicalId, docId: canonicalId, documentId: canonicalId });
     });
+    const normalizedStudents = Array.from(studentsById.values());
     adminStudentsState.studentsById = studentsById;
-    adminStudentsState.students = Array.isArray(students) ? students : [];
+    adminStudentsState.studentAliasToDocId = buildStudentAliasMap(normalizedStudents);
+    adminStudentsState.students = normalizedStudents;
 
     const eventsData = eventsResValue && eventsResValue.ok ? await eventsResValue.json().catch(() => null) : null;
     if (!eventsResValue || !eventsResValue.ok) {
@@ -15383,7 +15458,8 @@ const deriveAdminStudentsSummaries = ({ teacherId, logs } = {}) => {
       }
 
       const riskLabel = normalizeRiskLabel(bucket.lastRisk) || "Sem dados";
-      const statusLabel = meta ? (meta.ativo ? "Ativo" : "Inativo") : "—";
+      const lifecycleBadge = meta ? getStudentLifecycleBadgeMeta(meta) : { label: "", state: "", tone: "" };
+      const statusLabel = lifecycleBadge.label || (meta ? (meta.ativo ? "Ativo" : "Inativo") : "—");
 
       const inferredTeacherId =
         tId ||
@@ -15402,6 +15478,7 @@ const deriveAdminStudentsSummaries = ({ teacherId, logs } = {}) => {
         statusLabel,
         teacherId: inferredTeacherId,
         teacherName: inferredTeacher?.nome || teacherMeta?.nome || "—",
+        firestoreDocId: String(meta?.firestoreDocId || alunoId || "").trim(),
         plano: String(meta?.plano || "").trim(),
         pais: String(meta?.pais || "").trim(),
         estadoEua: String(meta?.estadoEua || "").trim(),
@@ -15452,7 +15529,7 @@ const renderAdminStudentsList = () => {
       const chips = [statusPill, teacherChip, planChip, countryChip].filter(Boolean).join("");
 
       return `
-        <div class="admin-students-row" role="button" tabindex="0" data-admin-student-open="${escapeHtml(row.alunoId)}">
+        <div class="admin-students-row" role="button" tabindex="0" data-admin-student-open="${escapeHtml(row.firestoreDocId || row.alunoId)}">
           <div class="admin-students-avatar" aria-hidden="true">${escapeHtml(getInitials(row.nome))}</div>
           <div class="admin-students-main">
             <div class="admin-students-name">
@@ -16008,8 +16085,10 @@ const saveAdminTeacherInlineField = async ({ field, sheetEl } = {}) => {
 };
 
 const updateAdminStudentCachedRow = (alunoId, patch = {}) => {
-  const id = String(alunoId || "").trim();
-  if (!id) return null;
+  const rawId = String(alunoId || "").trim();
+  if (!rawId) return null;
+  const aliasMap = adminStudentsState.studentAliasToDocId instanceof Map ? adminStudentsState.studentAliasToDocId : new Map();
+  const id = String(aliasMap.get(rawId) || rawId).trim();
   if (adminStudentsState.history?.alunoMeta && String(adminStudentsState.history.alunoMeta.id || "") === id) {
     adminStudentsState.history.alunoMeta = { ...adminStudentsState.history.alunoMeta, ...patch };
   }
@@ -16030,7 +16109,12 @@ const updateAdminStudentCachedRow = (alunoId, patch = {}) => {
   if (Array.isArray(adminUsersState.student?.rows)) {
     adminUsersState.student.rows = adminUsersState.student.rows.map((row) => (String(row?.id || "") === id ? { ...row, ...patch } : row));
   }
-  return getAdminStudentMetaById(id);
+  const updated = getAdminStudentMetaById(id);
+  if (updated) {
+    adminStudentsState.studentAliasToDocId = buildStudentAliasMap(adminStudentsState.students);
+    adminPedagogicoState.studentAliasToDocId = buildStudentAliasMap(adminPedagogicoState.students);
+  }
+  return updated;
 };
 
 const saveAdminStudentInlinePatch = async ({ alunoId, patch = {} } = {}) => {
@@ -17115,6 +17199,7 @@ let adminPedagogicoState = {
   teachersById: new Map(),
   students: [],
   studentsById: new Map(),
+  studentAliasToDocId: new Map(),
   classes: [],
   groups: [],
   groupsById: new Map(),
@@ -20437,7 +20522,7 @@ const renderAdminPedagogicoStudentsPanel = () => {
               class="admin-ped-row admin-ped-row--student admin-ped-row--student-open"
               role="button"
               tabindex="0"
-              data-admin-ped-student-open="${escapeHtml(r.id)}"
+              data-admin-ped-student-open="${escapeHtml(r.firestoreDocId || r.id)}"
               aria-label="Abrir ficha de ${escapeHtml(r.nome)}"
             >
               <div>
@@ -23703,8 +23788,17 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
 
     adminPedagogicoState.teachers = mergePeople(teachers, liveTeachers);
     adminPedagogicoState.teachersById = new Map(adminPedagogicoState.teachers.map((t) => [String(t.id || ""), t]));
-    adminPedagogicoState.students = mergePeople(students, [...opsStudents, ...liveStudents]);
-    adminPedagogicoState.studentsById = new Map(adminPedagogicoState.students.map((s) => [String(s.id || ""), s]));
+    const mergedStudents = mergePeople(students, [...opsStudents, ...liveStudents]).map((student) => {
+      const canonicalId = String(student?.firestoreDocId || student?.docId || student?.documentId || student?.id || "").trim();
+      return canonicalId ? { ...student, id: canonicalId, firestoreDocId: canonicalId, docId: canonicalId, documentId: canonicalId } : student;
+    });
+    adminPedagogicoState.students = mergedStudents;
+    adminPedagogicoState.studentsById = new Map(
+      mergedStudents
+        .map((s) => [String(s?.firestoreDocId || s?.id || ""), s])
+        .filter(([id]) => Boolean(id))
+    );
+    adminPedagogicoState.studentAliasToDocId = buildStudentAliasMap(mergedStudents);
     adminPedagogicoState.classes = mergeAdminPedagogicoClasses(classes, liveClasses);
     adminPedagogicoState.groups = Array.isArray(groups) ? groups : [];
     adminPedagogicoState.groupsById = new Map(adminPedagogicoState.groups.map((g) => [String(g.id || ""), g]));
@@ -26824,7 +26918,10 @@ const getAdminStudentMetaById = (alunoId) => {
   const id = String(alunoId || "").trim();
   if (!id) return null;
   const map = adminStudentsState.studentsById instanceof Map ? adminStudentsState.studentsById : new Map();
-  return map.get(id) || null;
+  if (map.has(id)) return map.get(id) || null;
+  const aliasMap = adminStudentsState.studentAliasToDocId instanceof Map ? adminStudentsState.studentAliasToDocId : new Map();
+  const canonicalId = String(aliasMap.get(id) || "").trim();
+  return canonicalId ? map.get(canonicalId) || null : null;
 };
 
 const getAdminStudentRecurringGroupIds = (alunoId) => {
@@ -26884,23 +26981,52 @@ const rerenderAdminStudentLifecycleViews = () => {
 };
 
 const saveAdminStudentLifecyclePatch = async ({ alunoId, patch = {} } = {}) => {
-  const id = String(alunoId || "").trim();
-  if (!id) throw new Error("missing_student_id");
+  const requestedId = String(alunoId || "").trim();
+  if (!requestedId) throw new Error("missing_student_id");
+  const student = getAdminStudentMetaById(requestedId);
+  const aliasMap = adminStudentsState.studentAliasToDocId instanceof Map ? adminStudentsState.studentAliasToDocId : new Map();
+  const id = resolveStudentCanonicalDocId(student || requestedId, { aliasMap });
   const cleanPatch = sanitizeFirestorePatch(patch || {});
   try {
     console.info("[Cancellation] A: payload construído", {
-      studentId: id,
+      selectedStudent: student
+        ? {
+            id: student?.id,
+            docId: student?.docId,
+            firestoreDocId: student?.firestoreDocId,
+            uid: student?.uid,
+            userId: student?.userId,
+            studentId: student?.studentId,
+            alunoId: student?.alunoId,
+            nome: student?.nome,
+            email: student?.email,
+          }
+        : null,
+      studentId: requestedId,
       studentDocId: id,
+      resolvedDocumentId: id,
       collection: "users",
       database: "primaryDb",
+      documentPath: `users/${id}`,
       payload: cleanPatch,
     });
-    await patchFirestoreUserDocument({
-      userId: id,
-      context: "student_lifecycle_patch",
-      patch: cleanPatch,
-      allowProtectedFields: ["cancelamento", "cancelamentosAnteriores"],
-    });
+    const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_student_lifecycle_patch");
+    const user = await waitForFirebaseAuthReady(firebase, 5000);
+    if (!user) throw new Error("not_authenticated");
+    const studentRef = firebase.doc(firebase.primaryDb, "users", id);
+    const beforeSnapshot = await withTimeout(firebase.getDoc(studentRef), 12_000, "firestore_student_lifecycle_before");
+    if (!beforeSnapshot?.exists?.()) {
+      throw new Error(`canonical_student_document_not_found: users/${id}`);
+    }
+    const beforeData = beforeSnapshot.data ? beforeSnapshot.data() : {};
+    const beforeEmail = String(beforeData?.email || "").trim().toLowerCase();
+    const selectedEmail = String(student?.email || "").trim().toLowerCase();
+    const beforeUid = String(beforeData?.uid || beforeData?.userId || "").trim();
+    const selectedUid = String(student?.uid || student?.userId || "").trim();
+    if (selectedEmail && beforeEmail && selectedEmail !== beforeEmail && (!beforeUid || !selectedUid || beforeUid !== selectedUid)) {
+      throw new Error("student_identity_mismatch_before_write");
+    }
+    await withTimeout(firebase.updateDoc(studentRef, cleanPatch), 12_000, "firestore_student_lifecycle_update");
     console.info("[Cancellation] B: gravação concluída em users/%s", id);
     const persistedRow = await loadAdminStudentRowFromFirestoreById(id);
     if (!persistedRow) {
@@ -26928,6 +27054,9 @@ const saveAdminStudentLifecyclePatch = async ({ alunoId, patch = {} } = {}) => {
           throw new Error("cancelamento_persisted_invalid_shape");
         }
       }
+    }
+    if (!String(persistedRow?.nome || "").trim() || (student?.email && !String(persistedRow?.email || "").trim())) {
+      throw new Error("student_integrity_after_write_failed");
     }
     console.info("[Cancellation] D: persistência validada");
     updateAdminStudentCachedRow(id, persistedRow);
