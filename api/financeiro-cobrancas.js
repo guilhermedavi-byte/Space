@@ -56,6 +56,8 @@ const buildPatch = (body, session) => {
   const idConversa = normalizeChatwootConversationId(body?.id_conversa_chatwoot);
   const nowIso = new Date().toISOString();
   const patch = {
+    // ESPELHO DESNORMALIZADO — fonte: Firestore users/{id}
+    firestore_doc_id: nullableString(body?.firestore_doc_id || body?.firestoreDocId),
     aluno_id: nullableString(body?.aluno_id),
     aluno_nome: nullableString(body?.aluno_nome),
     aluno_email: nullableString(body?.aluno_email),

@@ -2,6 +2,7 @@ const { readJsonBody, sendJson } = require("../_lib/http");
 const { getSessionFromRequest } = require("../_lib/session");
 const { verifyFirebaseIdToken } = require("../_lib/firebase-id-token");
 const { getBearerTokenFromRequest, firestorePatchDocument } = require("./_lib/firestore-rest");
+const { syncStudentMirrorToSupabase } = require("./_lib/student-mirror-sync");
 
 const normalizeRole = (value) => {
   const raw = String(value || "").trim().toLowerCase();
@@ -74,15 +75,27 @@ module.exports = async (req, res) => {
     const uid = String(body?.uid || "").trim();
     const name = String(body?.name || "").trim();
     const role = normalizeRole(body?.role);
+    const action = String(body?.action || "").trim().toLowerCase();
+
+    if (action === "sync_mirror") {
+      if (!uid) {
+        sendJson(res, 400, { error: "invalid_request" });
+        return;
+      }
+      await syncStudentMirrorToSupabase(uid).catch(() => null);
+      sendJson(res, 200, { ok: true });
+      return;
+    }
 
     if (!uid || !name || !role) {
       sendJson(res, 400, { error: "invalid_request" });
       return;
     }
 
-    // This endpoint previously synced a local JSON scheduling store. Scheduling is now Firestore-backed,
-    // and the source of truth for user state is the `users/{uid}` document written from the admin UI.
-    // Keep this endpoint as a safe no-op for backward compatibility with older front-end calls.
+    // OWNERSHIP: cadastro=Firestore, operação=Supabase (contrato 2026-07-12)
+    // Mantemos compatibilidade com chamadas legadas e sincronizamos o espelho
+    // desnormalizado no Supabase a partir de users/{uid}.
+    await syncStudentMirrorToSupabase(uid).catch(() => null);
     sendJson(res, 200, { ok: true });
     return;
   }
@@ -127,6 +140,8 @@ module.exports = async (req, res) => {
       sendJson(res, result.status || 500, { error: "firestore_patch_failed" });
       return;
     }
+    // OWNERSHIP: cadastro=Firestore, operação=Supabase (contrato 2026-07-12)
+    await syncStudentMirrorToSupabase(uid).catch(() => null);
     sendJson(res, 200, { ok: true });
   } catch (error) {
     console.error("[api] admin-users patch failed", error);

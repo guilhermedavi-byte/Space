@@ -70,6 +70,7 @@ module.exports = async (req, res) => {
     const now = new Date().toISOString();
     const body = {
       aula_id: lesson.id,
+      firestore_doc_id: lesson.firestore_doc_id || lesson.aluno_id || String(session.sub || "") || null,
       aluno_id: lesson.aluno_id || String(session.sub || "") || null,
       aluno_nome: lesson.aluno_nome || String(session.name || "") || null,
       professor_id: lesson.professor_id || null,

@@ -8,6 +8,12 @@ const {
   buildChatwootConversationUrl,
 } = require("./_lib/finance-integrations");
 
+// OWNERSHIP: cadastro=Firestore, operação=Supabase (contrato 2026-07-12)
+// - cadastro de aluno não nasce aqui; aqui só existe espelho desnormalizado
+// - quando nome/email/telefone aparecem neste módulo, a fonte continua sendo users/{id}
+// - o vínculo canônico entre Supabase e Firestore é firestore_doc_id
+// - financeiro continua dono apenas do estado operacional/cobranças/pagamentos
+
 const PAYMENT_METHODS = new Set(["ASAAS", "CPF_GUILHERME", "XP", "PIX_MANUAL", "OUTRO"]);
 
 const nullableString = (value) => {
@@ -124,6 +130,8 @@ const handleGet = async (res) => {
 
 const buildAlunoPayload = (body) =>
   cleanObject({
+    // ESPELHO DESNORMALIZADO — fonte: Firestore users/{id}
+    firestore_doc_id: nullableString(body?.firestore_doc_id || body?.firestoreDocId),
     aluno_nome: nullableString(body?.aluno_nome),
     telefone: nullableString(body?.telefone),
     email: nullableString(body?.email),
@@ -136,6 +144,8 @@ const buildAlunoPayload = (body) =>
 
 const buildCobrancaPayload = (body) =>
   cleanObject({
+    // ESPELHO DESNORMALIZADO — fonte: Firestore users/{id}
+    firestore_doc_id: nullableString(body?.firestore_doc_id || body?.firestoreDocId),
     id_cobranca_externa: nullableString(body?.id_cobranca_externa),
     aluno_nome: nullableString(body?.aluno_nome),
     telefone: nullableString(body?.telefone),
@@ -208,7 +218,11 @@ const handlePost = async (req, res, session) => {
     const cobrancaId = String(body?.cobranca_id || "").trim();
     const email = String(body?.email || "").trim().toLowerCase();
     const alunoNome = String(body?.aluno_nome || "").trim();
-    const patch = { id_conversa_chatwoot: conversationId, updated_at: nowIso };
+    const patch = {
+      id_conversa_chatwoot: conversationId,
+      updated_at: nowIso,
+      firestore_doc_id: nullableString(body?.firestore_doc_id || body?.firestoreDocId),
+    };
 
     let alunoUpdated = 0;
     let cobrancasUpdated = 0;

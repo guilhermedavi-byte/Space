@@ -194,6 +194,7 @@ const createLiveLessonMirror = async ({ eventId, data, startMs, endMs } = {}) =>
   const baseUrl = String(process.env.JITSI_BASE_URL || "https://meet.jit.si").replace(/\/+$/, "");
   const now = new Date().toISOString();
   const payload = {
+    firestore_doc_id: data.firestoreDocId || data.alunoFirestoreDocId || data.alunoId || null,
     aluno_id: data.alunoId || null,
     aluno_nome: data.alunoNome || null,
     aluno_email: data.alunoEmail || null,

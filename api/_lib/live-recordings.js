@@ -57,6 +57,7 @@ const createRecording = async ({ lesson, session, status = "recording" }) => {
   const folderName = buildStudentFolderName(lesson);
   const body = {
     aula_id: lesson.id,
+    firestore_doc_id: lesson.firestore_doc_id || lesson.aluno_id || null,
     aluno_id: lesson.aluno_id || null,
     aluno_nome: lesson.aluno_nome || null,
     professor_id: lesson.professor_id || null,

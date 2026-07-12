@@ -138,6 +138,7 @@ const normalizeLesson = (row) => {
   const status = String(row.status_aula || row.status || "agendada").trim().toLowerCase();
   return {
     id,
+    firestore_doc_id: row.firestore_doc_id == null ? "" : String(row.firestore_doc_id),
     onboarding_id: row.onboarding_id == null ? "" : String(row.onboarding_id),
     aluno_id: row.aluno_id == null ? "" : String(row.aluno_id),
     aluno_nome: row.aluno_nome == null ? "" : String(row.aluno_nome),
@@ -287,6 +288,7 @@ const createLessonRegister = async ({ lesson, session, payload }) => {
   const status = String(payload?.status || "realizada").trim().toLowerCase();
   const register = {
     aula_id: lesson.id,
+    firestore_doc_id: lesson.firestore_doc_id || lesson.aluno_id || null,
     onboarding_id: payload?.onboarding_id || lesson.onboarding_id || null,
     aluno_id: lesson.aluno_id || null,
     aluno_nome: lesson.aluno_nome || null,

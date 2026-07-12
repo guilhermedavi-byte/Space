@@ -150,6 +150,8 @@ const upsertOnboardingFromContract = async (payload, { source = "platform" } = {
   }
 
   const row = {
+    // ESPELHO DESNORMALIZADO — fonte: Firestore users/{id}
+    firestore_doc_id: payload?.firestore_doc_id || payload?.firestoreDocId || payload?.student_id || payload?.aluno_id || null,
     aluno_id: studentId || null,
     contract_id: contractId || studentId,
     aluno_nome: payload?.aluno_nome || payload?.nome || payload?.nomeCompleto || null,

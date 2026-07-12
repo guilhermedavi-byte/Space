@@ -15,6 +15,12 @@ const TABLES = {
   adminStudentPreferences: "n8n_preferencias_alunos_pedagogico_space",
 };
 
+// OWNERSHIP: cadastro=Firestore, operação=Supabase (contrato 2026-07-12)
+// - cadastro: nome, email, telefone, tipo, ativo, plano, professorId, cancelamento
+// - operação: onboarding, financeiro, registros, ocorrências e telemetria operacional
+// - merges abaixo deixam Firestore vencer em cadastro quando presente
+// - Supabase só preenche buracos cadastrais e domina campos operacionais
+
 const safeEncode = (value) => encodeURIComponent(String(value || ""));
 
 const isMissingRelation = (error) =>
@@ -193,6 +199,7 @@ const loadFirestoreStudentsForTeacher = async ({ session } = {}) => {
         const id = String(row?.id || "").trim();
         return {
           id,
+          firestore_doc_id: id,
           aluno_id: id,
           aluno_nome: row?.nome || "Aluno",
           professor_id: String(row?.professorId || "").trim(),
@@ -201,6 +208,7 @@ const loadFirestoreStudentsForTeacher = async ({ session } = {}) => {
           email: String(row?.email || "").trim(),
           telefone: String(row?.telefone || "").trim(),
           status: row?.ativo === false ? "inativo" : "ativo",
+          source: "firestore",
         };
       });
   } catch (error) {
@@ -212,6 +220,8 @@ const loadFirestoreStudentsForTeacher = async ({ session } = {}) => {
 const onlyDigits = (value) => String(value || "").replace(/\D+/g, "");
 
 const studentIdentityKey = (row) => {
+  const firestoreDocId = String(row?.firestore_doc_id || row?.firestoreDocId || "").trim();
+  if (firestoreDocId) return `firestore:${firestoreDocId}`;
   const email = normalizeIdentity(row?.email || row?.aluno_email || row?.student_email);
   if (email) return `email:${email}`;
   const phone = onlyDigits(row?.telefone || row?.whatsapp || row?.phone);
@@ -228,29 +238,63 @@ const mergePedagogicalStudents = ({ onboarding, financeStudents, preferences }) 
   const merged = new Map();
   const add = (row, source) => {
     if (!row || typeof row !== "object") return;
+    const effectiveSource =
+      source === "pedagogico" && String(row?.source || "").trim().toLowerCase() === "firestore"
+        ? "firestore"
+        : source;
     const key = studentIdentityKey(row);
     if (!key || key === "name:") return;
     const previous = merged.get(key) || {};
-    const combined = source === "pedagogico" ? { ...previous, ...row } : { ...row, ...previous };
+    const combined = effectiveSource === "pedagogico" ? { ...previous, ...row } : { ...row, ...previous };
+    const firestoreDocId = String(row?.firestore_doc_id || previous?.firestore_doc_id || "").trim();
+    const firestoreNome = effectiveSource === "firestore" ? String(row?.aluno_nome || row?.nome || "").trim() : String(previous?.firestore_nome || "").trim();
+    const supabaseNome = effectiveSource !== "firestore" ? String(row?.aluno_nome || row?.nome || "").trim() : String(previous?.supabase_nome || "").trim();
+    const firestoreEmail = effectiveSource === "firestore" ? String(row?.email || row?.aluno_email || "").trim() : String(previous?.firestore_email || "").trim();
+    const supabaseEmail = effectiveSource !== "firestore" ? String(row?.email || row?.aluno_email || "").trim() : String(previous?.supabase_email || "").trim();
+    const firestoreTelefone = effectiveSource === "firestore" ? String(row?.telefone || "").trim() : String(previous?.firestore_telefone || "").trim();
+    const supabaseTelefone = effectiveSource !== "firestore" ? String(row?.telefone || row?.whatsapp || row?.phone || "").trim() : String(previous?.supabase_telefone || "").trim();
+    const firestorePlano = effectiveSource === "firestore" ? String(row?.plano || row?.plan || "").trim() : String(previous?.firestore_plano || "").trim();
+    const supabasePlano = effectiveSource !== "firestore" ? String(row?.plano || row?.plan || "").trim() : String(previous?.supabase_plano || "").trim();
+    const firestoreProfessorId =
+      effectiveSource === "firestore" ? String(row?.professor_id || row?.teacher_id || row?.professorId || "").trim() : String(previous?.firestore_professor_id || "").trim();
+    const supabaseProfessorId =
+      effectiveSource !== "firestore" ? String(row?.professor_id || row?.teacher_id || row?.professorId || "").trim() : String(previous?.supabase_professor_id || "").trim();
+    const firestoreProfessorNome =
+      effectiveSource === "firestore" ? String(row?.professor_nome || row?.teacher_name || row?.professorName || "").trim() : String(previous?.firestore_professor_nome || "").trim();
+    const supabaseProfessorNome =
+      effectiveSource !== "firestore" ? String(row?.professor_nome || row?.teacher_name || row?.professorName || "").trim() : String(previous?.supabase_professor_nome || "").trim();
     const sourceStatus = String(combined.status || combined.status_financeiro || combined.status_onboarding || "ativo").toLowerCase();
     const preferredStatus = preferenceMap.get(key);
     const alunoId = String(combined.aluno_id || combined.student_id || combined.id || key).trim();
-    const alunoNome = combined.aluno_nome || combined.nome || combined.name || combined.student_name || "Aluno";
+    const alunoNome = firestoreNome || supabaseNome || combined.aluno_nome || combined.nome || combined.name || combined.student_name || "Aluno";
     merged.set(key, {
       ...combined,
+      firestore_doc_id: firestoreDocId || null,
+      firestore_nome: firestoreNome || "",
+      firestore_email: firestoreEmail || "",
+      firestore_telefone: firestoreTelefone || "",
+      firestore_plano: firestorePlano || "",
+      firestore_professor_id: firestoreProfessorId || "",
+      firestore_professor_nome: firestoreProfessorNome || "",
+      supabase_nome: supabaseNome || "",
+      supabase_email: supabaseEmail || "",
+      supabase_telefone: supabaseTelefone || "",
+      supabase_plano: supabasePlano || "",
+      supabase_professor_id: supabaseProfessorId || "",
+      supabase_professor_nome: supabaseProfessorNome || "",
       id: alunoId,
       aluno_id: alunoId,
       aluno_nome: alunoNome,
       nome: alunoNome,
-      email: combined.email || combined.aluno_email || combined.student_email || "",
-      telefone: combined.telefone || combined.whatsapp || combined.phone || "",
-      plano: combined.plano || combined.plan || combined.contrato || "",
-      professor_id: combined.professor_id || combined.teacher_id || combined.professorId || "",
-      professor_nome: combined.professor_nome || combined.teacher_name || combined.professorName || "",
+      email: firestoreEmail || supabaseEmail || combined.email || combined.aluno_email || combined.student_email || "",
+      telefone: firestoreTelefone || supabaseTelefone || combined.telefone || combined.whatsapp || combined.phone || "",
+      plano: firestorePlano || supabasePlano || combined.plano || combined.plan || combined.contrato || "",
+      professor_id: firestoreProfessorId || supabaseProfessorId || combined.professor_id || combined.teacher_id || combined.professorId || "",
+      professor_nome: firestoreProfessorNome || supabaseProfessorNome || combined.professor_nome || combined.teacher_name || combined.professorName || "",
       professor_email: combined.professor_email || combined.teacher_email || combined.professorEmail || "",
       status_financeiro: previous.status_financeiro || previous.status || row.status_financeiro || row.status || "",
       aluno_chave: key,
-      source: previous.source ? `${previous.source},${source}` : source,
+      source: previous.source ? `${previous.source},${effectiveSource}` : effectiveSource,
       status_acesso: preferredStatus || (["inativo", "cancelado"].includes(sourceStatus) ? "inativo" : "ativo"),
       ativo_acesso: (preferredStatus || (["inativo", "cancelado"].includes(sourceStatus) ? "inativo" : "ativo")) === "ativo",
     });
@@ -580,7 +624,9 @@ const loadStudentCard = async ({ alunoId, alunoNome }) => {
     ),
   ]);
   const finance = financeStudents[0] || {};
-  const base = { ...finance, ...(onboarding[0] || {}) };
+  // OWNERSHIP: cadastro=Firestore, operação=Supabase (contrato 2026-07-12)
+  // Esta ficha operacional é Supabase-only; aqui só mesclamos fontes operacionais.
+  const base = { ...(onboarding[0] || {}), ...finance };
   const evolution = flexge[0] || {};
   return {
     degraded,

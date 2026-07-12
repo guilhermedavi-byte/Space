@@ -9007,6 +9007,7 @@ const renderTeacherPedagogico = async ({ silent = false } = {}) => {
       .filter((evt) => evt.id && isValidDateKey(evt.dateKey) && evt.endMin > evt.startMin);
 
     const merged = new Map();
+    // OWNERSHIP: agenda interna/base cadastral = Firestore; metadados operacionais live = Supabase
     firestoreLessons.forEach((lesson) => {
       const key = `${lesson.alunoId}:${lesson.professorId}:${lesson.dateKey}:${lesson.startMin}`;
       merged.set(key, lesson);
@@ -14178,12 +14179,17 @@ const patchFirestoreUserDocument = async ({ userId, patch = {}, context = "users
     12_000,
     `firestore_${context}`
   );
+  fetchWithAuth("/api/admin-users", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ uid: id, role: String(cleanPatch?.tipo || "").trim(), name: String(cleanPatch?.nome || "").trim(), action: "sync_mirror" }),
+  }).catch(() => {});
   return { firebase, cleanPatch };
 };
 
 const getStudentIdentityAliases = (student = {}) => {
   const aliases = new Set();
-  [student?.firestoreDocId, student?.docId, student?.documentId, student?.id, student?.uid, student?.userId, student?.studentId, student?.alunoId, student?.aluno_chave].forEach(
+  [student?.firestoreDocId, student?.firestoreDocIdRef, student?.docId, student?.documentId, student?.id, student?.uid, student?.userId, student?.studentId, student?.alunoId, student?.aluno_chave].forEach(
     (value) => {
       const safe = String(value || "").trim();
       if (safe) aliases.add(safe);
@@ -14255,18 +14261,26 @@ const normalizeAdminFirestoreUserRow = (sourceRow = {}) => {
     alunoId: String(raw?.alunoId || sourceBusinessId || "").trim(),
     nome,
     email,
+    firestoreNome: nome,
+    firestoreEmail: email,
     tipo,
+    firestoreTipo: tipo,
     ativo: normalizeFirestoreActive(sourceRow.ativo),
+    firestoreAtivo: normalizeFirestoreActive(sourceRow.ativo),
     criadoEm: createdAt,
     initials: getInitials(nome),
     professorId,
     teacherId: String(raw?.teacherId || professorId).trim(),
     professorNome,
+    firestoreProfessorNome: professorNome,
     teacherNome: String(raw?.teacherNome || professorNome).trim(),
+    firestoreProfessorId: professorId,
     turma: String(raw?.turma || raw?.turmaNome || raw?.groupName || raw?.className || "").trim(),
     groupId: String(raw?.groupId || raw?.classId || "").trim(),
     plano: String(raw?.plano || raw?.plan || "").trim(),
+    firestorePlano: String(raw?.plano || raw?.plan || "").trim(),
     telefone,
+    firestoreTelefone: telefone,
     pais: String(raw?.pais || raw?.country || "").trim(),
     endereco: String(raw?.endereco || raw?.address || "").trim(),
     estadoEua: String(raw?.estadoEua || raw?.estadoEUA || raw?.usState || "").trim(),
@@ -14289,7 +14303,9 @@ const normalizeAdminFirestoreUserRow = (sourceRow = {}) => {
     specialty: especialidade,
     observacoesPedagogicas,
     cancelamento: raw?.cancelamento ?? null,
+    firestoreCancelamento: raw?.cancelamento ?? null,
     cancelamentosAnteriores: Array.isArray(raw?.cancelamentosAnteriores) ? raw.cancelamentosAnteriores : [],
+    firestoreCancelamentosAnteriores: Array.isArray(raw?.cancelamentosAnteriores) ? raw.cancelamentosAnteriores : [],
     canceladoEm,
     desativadoEm,
     criadoKey: toDateKeyFromAny(createdAt),
@@ -15220,6 +15236,7 @@ const normalizeSupabaseStudentForAdmin = (row = {}) => {
     id,
     nome,
     email,
+    firestoreDocIdRef: String(row.firestore_doc_id || "").trim(),
     sourceBusinessId: String(row.aluno_id || row.aluno_chave || row.id || "").trim(),
     tipo: "student",
     ativo,
@@ -15234,6 +15251,11 @@ const normalizeSupabaseStudentForAdmin = (row = {}) => {
     cancelKey: toDateKeyFromAny(row.canceladoEm || row.cancelamentoEm || row.dataCancelamento),
     desativadoKey: toDateKeyFromAny(row.desativadoEm || row.canceladoEm || row.cancelamentoEm || row.dataCancelamento),
     telefone: String(row.telefone || "").trim(),
+    supabaseNome: nome,
+    supabaseEmail: email,
+    supabaseTelefone: String(row.telefone || "").trim(),
+    supabasePlano: String(row.plano || row.plan || "").trim(),
+    supabaseProfessorId: String(row.professor_id || row.teacherId || "").trim(),
     alunoChave: String(row.aluno_chave || "").trim(),
     english_level_start: String(row.english_level_start || row.englishLevelStart || "").trim(),
     photoURL: String(row.photoURL || row.photoUrl || "").trim(),
@@ -15242,6 +15264,7 @@ const normalizeSupabaseStudentForAdmin = (row = {}) => {
 };
 
 const mergeAdminStudentRows = (...groups) => {
+  // OWNERSHIP: cadastro=Firestore, operação=Supabase (contrato 2026-07-12)
   const byKey = new Map();
   const canonicalByAlias = new Map();
   groups.flat().forEach((row) => {
@@ -16160,32 +16183,55 @@ const mergeAdminStudentWithCachedProfile = (existingStudent, incomingStudent) =>
   const nextEmail = String(next.email || "").trim();
   const prevEmail = String(prev.email || "").trim();
   const nextPhone = String(next.telefone || "").trim();
+  const firestoreNome = String(next.firestoreNome || prev.firestoreNome || "").trim();
+  const firestoreEmail = String(next.firestoreEmail || prev.firestoreEmail || "").trim();
+  const firestoreTelefone = String(next.firestoreTelefone || prev.firestoreTelefone || "").trim();
+  const firestorePlano = String(next.firestorePlano || prev.firestorePlano || "").trim();
+  const firestoreProfessorId = String(next.firestoreProfessorId || prev.firestoreProfessorId || "").trim();
+  const firestoreProfessorNome = String(next.firestoreProfessorNome || prev.firestoreProfessorNome || "").trim();
+  const firestoreTipo = String(next.firestoreTipo || prev.firestoreTipo || "").trim();
+  const supabaseNome = String(next.supabaseNome || prev.supabaseNome || "").trim();
+  const supabaseEmail = String(next.supabaseEmail || prev.supabaseEmail || "").trim();
+  const supabaseTelefone = String(next.supabaseTelefone || prev.supabaseTelefone || "").trim();
+  const supabasePlano = String(next.supabasePlano || prev.supabasePlano || "").trim();
+  const supabaseProfessorId = String(next.supabaseProfessorId || prev.supabaseProfessorId || "").trim();
   const nextTeacherName = String(next.professorNome || next.teacherNome || "").trim();
   const nextTeacherId = String(next.professorId || next.teacherId || "").trim();
   return {
     ...prev,
     ...next,
-    nome: nextName || prevName || nextEmail || prevEmail || "Aluno sem nome",
-    email: nextEmail || prevEmail,
-    telefone: nextPhone || String(prev.telefone || "").trim(),
-    professorNome: nextTeacherName || String(prev.professorNome || prev.teacherNome || "").trim(),
-    teacherNome: nextTeacherName || String(prev.teacherNome || prev.professorNome || "").trim(),
-    professorId: nextTeacherId || String(prev.professorId || prev.teacherId || "").trim(),
-    teacherId: nextTeacherId || String(prev.teacherId || prev.professorId || "").trim(),
-    plano: String(next.plano || "").trim() || String(prev.plano || "").trim(),
+    nome: firestoreNome || nextName || prevName || supabaseNome || nextEmail || prevEmail || supabaseEmail || "Aluno sem nome",
+    email: firestoreEmail || nextEmail || prevEmail || supabaseEmail,
+    telefone: firestoreTelefone || nextPhone || String(prev.telefone || "").trim() || supabaseTelefone,
+    professorNome: firestoreProfessorNome || nextTeacherName || String(prev.professorNome || prev.teacherNome || "").trim(),
+    teacherNome: firestoreProfessorNome || nextTeacherName || String(prev.teacherNome || prev.professorNome || "").trim(),
+    professorId: firestoreProfessorId || nextTeacherId || String(prev.professorId || prev.teacherId || "").trim() || supabaseProfessorId,
+    teacherId: firestoreProfessorId || nextTeacherId || String(prev.teacherId || prev.professorId || "").trim() || supabaseProfessorId,
+    plano: firestorePlano || String(next.plano || "").trim() || String(prev.plano || "").trim() || supabasePlano,
     turma: String(next.turma || "").trim() || String(prev.turma || "").trim(),
-    cancelamento: next.cancelamento ?? prev.cancelamento ?? null,
+    tipo: firestoreTipo || String(next.tipo || prev.tipo || "student"),
+    cancelamento: next.firestoreCancelamento ?? prev.firestoreCancelamento ?? next.cancelamento ?? prev.cancelamento ?? null,
     cancelamentosAnteriores: Array.isArray(next.cancelamentosAnteriores)
       ? next.cancelamentosAnteriores
       : Array.isArray(prev.cancelamentosAnteriores)
         ? prev.cancelamentosAnteriores
         : [],
-    ativo: typeof next.ativo === "boolean" ? next.ativo : typeof prev.ativo === "boolean" ? prev.ativo : true,
+    ativo:
+      typeof next.firestoreAtivo === "boolean"
+        ? next.firestoreAtivo
+        : typeof prev.firestoreAtivo === "boolean"
+          ? prev.firestoreAtivo
+          : typeof next.ativo === "boolean"
+            ? next.ativo
+            : typeof prev.ativo === "boolean"
+              ? prev.ativo
+              : true,
     canceladoEm: next.canceladoEm || next.cancelamentoEm || next.dataCancelamento || prev.canceladoEm || prev.cancelamentoEm || prev.dataCancelamento || null,
     desativadoEm: next.desativadoEm || prev.desativadoEm || next.canceladoEm || prev.canceladoEm || null,
     criadoEm: next.criadoEm || next.createdAt || next.created_at || prev.criadoEm || prev.createdAt || prev.created_at || null,
     sourceBusinessId: String(next.sourceBusinessId || prev.sourceBusinessId || next.userId || prev.userId || next.alunoId || prev.alunoId || "").trim(),
-    firestoreDocId: String(next.firestoreDocId || prev.firestoreDocId || next.id || prev.id || "").trim(),
+    firestoreDocId: String(next.firestoreDocId || next.firestoreDocIdRef || prev.firestoreDocId || prev.firestoreDocIdRef || next.id || prev.id || "").trim(),
+    firestoreDocIdRef: String(next.firestoreDocIdRef || prev.firestoreDocIdRef || "").trim(),
     docId: String(next.docId || prev.docId || next.firestoreDocId || prev.firestoreDocId || "").trim(),
     documentId: String(next.documentId || prev.documentId || next.firestoreDocId || prev.firestoreDocId || "").trim(),
     id: String(next.id || next.firestoreDocId || prev.id || prev.firestoreDocId || "").trim(),
@@ -16200,6 +16246,8 @@ const getAdminStudentMergeKeys = (row = {}) => {
   if (phone) keys.add(`phone:${phone}`);
   const sourceBusinessId = String(row?.sourceBusinessId || row?.alunoChave || row?.aluno_chave || "").trim();
   if (sourceBusinessId) keys.add(`source:${sourceBusinessId}`);
+  const firestoreDocIdRef = String(row?.firestoreDocIdRef || row?.firestore_doc_id || "").trim();
+  if (firestoreDocIdRef) keys.add(`id:${firestoreDocIdRef}`);
   getStudentIdentityAliases(row).forEach((alias) => {
     const safe = String(alias || "").trim();
     if (safe) keys.add(`id:${safe}`);
@@ -16233,6 +16281,37 @@ window.auditLegacyStudentFlags = () => {
   console.table(flagged);
   console.groupEnd();
   return flagged;
+};
+
+window.auditOwnership = () => {
+  const students = Array.isArray(adminStudentsState.students) ? adminStudentsState.students : [];
+  const drift = students
+    .map((student) => {
+      if (!student || typeof student !== "object") return null;
+      const diffs = [];
+      const compare = (field, left, right) => {
+        const a = String(left || "").trim();
+        const b = String(right || "").trim();
+        if (!a || !b) return;
+        if (a.toLowerCase() !== b.toLowerCase()) diffs.push({ field, firestore: a, supabase: b });
+      };
+      compare("nome", student.firestoreNome, student.supabaseNome);
+      compare("email", student.firestoreEmail, student.supabaseEmail);
+      compare("telefone", student.firestoreTelefone, student.supabaseTelefone);
+      compare("plano", student.firestorePlano, student.supabasePlano);
+      compare("professorId", student.firestoreProfessorId, student.supabaseProfessorId);
+      if (!diffs.length) return null;
+      return {
+        firestoreDocId: String(student.firestoreDocId || student.id || "").trim(),
+        nome: String(student.nome || student.firestoreNome || student.supabaseNome || "Aluno sem nome").trim(),
+        diffs,
+      };
+    })
+    .filter(Boolean);
+  console.groupCollapsed(`[auditOwnership] ${drift.length} divergência(s) cadastro Firestore vs espelho Supabase`);
+  drift.forEach((item) => console.log(item));
+  console.groupEnd();
+  return drift;
 };
 
 const saveAdminStudentInlinePatch = async ({ alunoId, patch = {} } = {}) => {
@@ -23907,6 +23986,7 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
       return name ? `name:${name}` : `id:${String(row?.id || "")}`;
     };
     const mergePeople = (primary, fallback) => {
+      // OWNERSHIP: cadastro=Firestore, operação=Supabase (contrato 2026-07-12)
       const byId = new Map();
       const canonicalByAlias = new Map();
       [...(Array.isArray(primary) ? primary : []), ...(Array.isArray(fallback) ? fallback : [])].forEach((row) => {
