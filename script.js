@@ -15522,6 +15522,12 @@ const deriveAdminStudentsSummaries = ({ teacherId, logs } = {}) => {
   return { summaries, logsByAluno: perAluno, eventsById, teacherMeta };
 };
 
+const refreshAdminStudentsDerivedState = () => {
+  const derived = deriveAdminStudentsSummaries({ teacherId: "", logs: adminStudentsState.logs });
+  adminStudentsState.summariesAll = Array.isArray(derived?.summaries) ? derived.summaries : [];
+  applyAdminStudentsFilters();
+};
+
 const renderAdminStudentsList = () => {
   if (!(adminStudentsList instanceof HTMLElement)) return;
   if (adminStudentsError instanceof HTMLElement) adminStudentsError.hidden = true;
@@ -16133,6 +16139,7 @@ const updateAdminStudentCachedRow = (alunoId, patch = {}) => {
   if (updated) {
     adminStudentsState.studentAliasToDocId = buildStudentAliasMap(adminStudentsState.students);
     adminPedagogicoState.studentAliasToDocId = buildStudentAliasMap(adminPedagogicoState.students);
+    refreshAdminStudentsDerivedState();
   }
   return updated;
 };
@@ -26206,7 +26213,7 @@ const openStudentSimpleCard = async ({ alunoId, teacherId } = {}) => {
         typeof error?.message === "string" && error.message ? error.message : "Não foi possível carregar os dados básicos.";
     }
 
-    const alunoMeta = adminStudentsState.studentsById instanceof Map ? adminStudentsState.studentsById.get(aId) || null : null;
+    const alunoMeta = getAdminStudentMetaById(aId);
     const inferredTeacherId =
       tId ||
       String(alunoMeta?.professorId || alunoMeta?.teacherId || "").trim() ||
