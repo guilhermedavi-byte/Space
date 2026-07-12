@@ -14869,10 +14869,12 @@ const getStudentLifecycleState = (aluno) => {
   const meta = aluno && typeof aluno === "object" ? aluno : {};
   const cancelamento = normalizeStudentCancellationRecord(meta.cancelamento);
   const wasEffectivelyCancelled = Boolean(cancelamento?.dataEfetivacao) || Boolean(cancelamento?.desfecho);
+  const hasLegacyInactiveFlag =
+    meta.ativo === false || Boolean(meta.desativadoEm || meta.canceladoEm || meta.cancelamentoEm || meta.dataCancelamento);
   if (wasEffectivelyCancelled) return STUDENT_LIFECYCLE_STATE.INACTIVE;
-  if (cancelamento?.aulasSuspensas) return STUDENT_LIFECYCLE_STATE.SUSPENDED;
+  if (isStudentCancellationActive(cancelamento) && cancelamento?.aulasSuspensas) return STUDENT_LIFECYCLE_STATE.SUSPENDED;
   if (isStudentCancellationActive(cancelamento)) return STUDENT_LIFECYCLE_STATE.NOTICE;
-  if (meta.ativo === false) return STUDENT_LIFECYCLE_STATE.INACTIVE;
+  if (hasLegacyInactiveFlag) return STUDENT_LIFECYCLE_STATE.INACTIVE;
   return STUDENT_LIFECYCLE_STATE.ACTIVE;
 };
 
@@ -15043,7 +15045,7 @@ const buildRetentionQueues = ({
           attendanceSensor: activeSensors.attendance,
         });
       }
-    } else if (student.ativo !== false) {
+    } else if (isStudentLifecycleActive(student)) {
       const payment60 = deriveSensorPagamento(student, last60FromKey, todayKey, {
         charges,
         financeStudents,
@@ -15127,6 +15129,9 @@ const getStudentLifecycleBadgeMeta = (aluno) => {
   }
   return { state, label: "", tone: "" };
 };
+
+const isStudentLifecycleInactive = (aluno) => getStudentLifecycleState(aluno) === STUDENT_LIFECYCLE_STATE.INACTIVE;
+const isStudentLifecycleActive = (aluno) => !isStudentLifecycleInactive(aluno);
 
 const getAdminStudentLatestLifecycleRecord = (aluno) => {
   const previous = Array.isArray(aluno?.cancelamentosAnteriores) ? aluno.cancelamentosAnteriores : [];
@@ -16116,24 +16121,30 @@ const updateAdminStudentCachedRow = (alunoId, patch = {}) => {
   const aliasMap = adminStudentsState.studentAliasToDocId instanceof Map ? adminStudentsState.studentAliasToDocId : new Map();
   const id = String(aliasMap.get(rawId) || rawId).trim();
   if (adminStudentsState.history?.alunoMeta && String(adminStudentsState.history.alunoMeta.id || "") === id) {
-    adminStudentsState.history.alunoMeta = { ...adminStudentsState.history.alunoMeta, ...patch };
+    adminStudentsState.history.alunoMeta = mergeAdminStudentWithCachedProfile(adminStudentsState.history.alunoMeta, patch);
   }
   if (adminStudentsState.studentsById instanceof Map) {
     const prev = adminStudentsState.studentsById.get(id);
-    if (prev) adminStudentsState.studentsById.set(id, { ...prev, ...patch });
+    if (prev) adminStudentsState.studentsById.set(id, mergeAdminStudentWithCachedProfile(prev, patch));
   }
   if (Array.isArray(adminStudentsState.students)) {
-    adminStudentsState.students = adminStudentsState.students.map((row) => (String(row?.id || "") === id ? { ...row, ...patch } : row));
+    adminStudentsState.students = adminStudentsState.students.map((row) =>
+      String(row?.id || "") === id ? mergeAdminStudentWithCachedProfile(row, patch) : row
+    );
   }
   if (adminPedagogicoState.studentsById instanceof Map) {
     const prev = adminPedagogicoState.studentsById.get(id);
-    if (prev) adminPedagogicoState.studentsById.set(id, { ...prev, ...patch });
+    if (prev) adminPedagogicoState.studentsById.set(id, mergeAdminStudentWithCachedProfile(prev, patch));
   }
   if (Array.isArray(adminPedagogicoState.students)) {
-    adminPedagogicoState.students = adminPedagogicoState.students.map((row) => (String(row?.id || "") === id ? { ...row, ...patch } : row));
+    adminPedagogicoState.students = adminPedagogicoState.students.map((row) =>
+      String(row?.id || "") === id ? mergeAdminStudentWithCachedProfile(row, patch) : row
+    );
   }
   if (Array.isArray(adminUsersState.student?.rows)) {
-    adminUsersState.student.rows = adminUsersState.student.rows.map((row) => (String(row?.id || "") === id ? { ...row, ...patch } : row));
+    adminUsersState.student.rows = adminUsersState.student.rows.map((row) =>
+      String(row?.id || "") === id ? mergeAdminStudentWithCachedProfile(row, patch) : row
+    );
   }
   const updated = getAdminStudentMetaById(id);
   if (updated) {
@@ -16142,6 +16153,61 @@ const updateAdminStudentCachedRow = (alunoId, patch = {}) => {
     refreshAdminStudentsDerivedState();
   }
   return updated;
+};
+
+const mergeAdminStudentWithCachedProfile = (existingStudent, incomingStudent) => {
+  const prev = existingStudent && typeof existingStudent === "object" ? existingStudent : null;
+  const next = incomingStudent && typeof incomingStudent === "object" ? incomingStudent : null;
+  if (!next) return prev;
+  if (!prev) return next;
+  const nextName = String(next.nome || next.nomeCompleto || next.name || "").trim();
+  const nextEmail = String(next.email || "").trim();
+  const nextPhone = String(next.telefone || "").trim();
+  const nextTeacherName = String(next.professorNome || next.teacherNome || "").trim();
+  const nextTeacherId = String(next.professorId || next.teacherId || "").trim();
+  return {
+    ...prev,
+    ...next,
+    nome: nextName || String(prev.nome || prev.nomeCompleto || prev.name || prev.email || "Aluno sem nome").trim(),
+    email: nextEmail || String(prev.email || "").trim(),
+    telefone: nextPhone || String(prev.telefone || "").trim(),
+    professorNome: nextTeacherName || String(prev.professorNome || prev.teacherNome || "").trim(),
+    teacherNome: nextTeacherName || String(prev.teacherNome || prev.professorNome || "").trim(),
+    professorId: nextTeacherId || String(prev.professorId || prev.teacherId || "").trim(),
+    teacherId: nextTeacherId || String(prev.teacherId || prev.professorId || "").trim(),
+    plano: String(next.plano || "").trim() || String(prev.plano || "").trim(),
+    turma: String(next.turma || "").trim() || String(prev.turma || "").trim(),
+    firestoreDocId: String(next.firestoreDocId || prev.firestoreDocId || next.id || prev.id || "").trim(),
+    docId: String(next.docId || prev.docId || next.firestoreDocId || prev.firestoreDocId || "").trim(),
+    documentId: String(next.documentId || prev.documentId || next.firestoreDocId || prev.firestoreDocId || "").trim(),
+    id: String(next.id || next.firestoreDocId || prev.id || prev.firestoreDocId || "").trim(),
+  };
+};
+
+window.auditLegacyStudentFlags = () => {
+  const students = Array.isArray(adminStudentsState.students) ? adminStudentsState.students : [];
+  const flagged = students
+    .filter((student) => {
+      if (!student || typeof student !== "object") return false;
+      const cancelamento = normalizeStudentCancellationRecord(student.cancelamento);
+      const hasEffectiveCancellation = Boolean(cancelamento?.desfecho) || Boolean(cancelamento?.dataEfetivacao);
+      const hasLegacyInactiveFlag =
+        student.ativo === false || Boolean(student.canceladoEm || student.cancelamentoEm || student.desativadoEm || student.dataCancelamento);
+      return hasLegacyInactiveFlag && !hasEffectiveCancellation;
+    })
+    .map((student) => ({
+      firestoreDocId: String(student.firestoreDocId || student.docId || student.documentId || student.id || "").trim(),
+      nome: String(student.nome || student.nomeCompleto || student.name || student.email || "Aluno sem nome").trim(),
+      ativo: student.ativo,
+      canceladoEm: student.canceladoEm || student.cancelamentoEm || student.dataCancelamento || null,
+      desativadoEm: student.desativadoEm || null,
+      cancelamento: student.cancelamento || null,
+      lifecycleState: getStudentLifecycleState(student),
+    }));
+  console.groupCollapsed(`[auditLegacyStudentFlags] ${flagged.length} aluno(s) com flags legadas`);
+  console.table(flagged);
+  console.groupEnd();
+  return flagged;
 };
 
 const saveAdminStudentInlinePatch = async ({ alunoId, patch = {} } = {}) => {
@@ -16902,10 +16968,11 @@ const renderAdminStudentSheet = () => {
 
   const hist = adminStudentsState.history;
   const alunoMeta = hist.alunoMeta;
-  const alunoName = alunoMeta?.nome || "Aluno";
+  const alunoName = alunoMeta?.nome || alunoMeta?.nomeCompleto || alunoMeta?.name || alunoMeta?.email || "Aluno sem nome";
   const alunoEmail = alunoMeta?.email || "";
-  const statusLabel = alunoMeta ? (alunoMeta.ativo ? "Ativo" : "Inativo") : "—";
-  const statusTone = alunoMeta ? (alunoMeta.ativo ? "is-active" : "is-danger") : "is-gray";
+  const lifecycleBadge = alunoMeta ? getStudentLifecycleBadgeMeta(alunoMeta) : { label: "", tone: "" };
+  const statusLabel = lifecycleBadge.label || (alunoMeta ? "Ativo" : "—");
+  const statusTone = lifecycleBadge.tone ? `is-${lifecycleBadge.tone}` : alunoMeta ? "is-active" : "is-gray";
   const teacherName = hist.teacherMeta?.nome || alunoMeta?.professorNome || alunoMeta?.teacherNome || "";
   const planoRaw = String(alunoMeta?.plano || "").trim();
   const hasPlano = Boolean(planoRaw);
@@ -19934,7 +20001,7 @@ const renderAdminPedagogicoOverview = () => {
   });
   const studentsNoClass = [];
   studentsById.forEach((meta, id) => {
-    const isActive = meta && typeof meta === "object" ? meta.ativo !== false : true;
+    const isActive = meta && typeof meta === "object" ? isStudentLifecycleActive(meta) : true;
     if (!isActive) return;
     if (!linkedStudents.has(String(id))) studentsNoClass.push(meta);
   });
@@ -19978,7 +20045,7 @@ const renderAdminPedagogicoOverview = () => {
   const studentsWithSurvey = new Set(surveys.map((s) => String(s?.studentId || "").trim()).filter(Boolean));
   const studentsNoSurvey = [];
   studentsById.forEach((meta, id) => {
-    const isActive = meta && typeof meta === "object" ? meta.ativo !== false : true;
+    const isActive = meta && typeof meta === "object" ? isStudentLifecycleActive(meta) : true;
     if (!isActive) return;
     if (!studentsWithSurvey.has(String(id))) studentsNoSurvey.push(meta);
   });
@@ -22547,9 +22614,17 @@ const isPedov2StudentActiveAt = (student, referenceMs) => {
   if (!student || typeof student !== "object") return false;
   const createdMs = getPedov2StudentCreatedMs(student);
   const deactivatedMs = getPedov2StudentDeactivatedMs(student);
+  const lifecycleState = getStudentLifecycleState(student);
   if (createdMs && createdMs > referenceMs) return false;
-  if (student.ativo === false && deactivatedMs && deactivatedMs <= referenceMs) return false;
-  if (student.ativo === false && !deactivatedMs) return false;
+  if (
+    lifecycleState === STUDENT_LIFECYCLE_STATE.NOTICE ||
+    lifecycleState === STUDENT_LIFECYCLE_STATE.SUSPENDED ||
+    lifecycleState === STUDENT_LIFECYCLE_STATE.ACTIVE
+  ) {
+    return true;
+  }
+  if (deactivatedMs && deactivatedMs <= referenceMs) return false;
+  if (!deactivatedMs && lifecycleState === STUDENT_LIFECYCLE_STATE.INACTIVE) return false;
   return true;
 };
 
@@ -25880,8 +25955,8 @@ const applyAdminStudentsFilters = () => {
 
   let filtered = all.filter((row) => {
     if (!row || typeof row !== "object") return false;
-    if (status === "active" && !row.ativo) return false;
-    if (status === "inactive" && row.ativo) return false;
+    if (status === "active" && row.lifecycleState === STUDENT_LIFECYCLE_STATE.INACTIVE) return false;
+    if (status === "inactive" && row.lifecycleState !== STUDENT_LIFECYCLE_STATE.INACTIVE) return false;
     if (createdFrom && String(row.criadoKey || "") < createdFrom) return false;
     if (createdTo && String(row.criadoKey || "") > createdTo) return false;
     if (canceledFrom) {
@@ -27132,10 +27207,11 @@ const saveAdminStudentLifecyclePatch = async ({ alunoId, patch = {} } = {}) => {
     if (!sameDocId || (emailMismatch && uidMismatch)) {
       throw new Error("student_integrity_after_write_failed");
     }
+    const mergedPersistedRow = mergeAdminStudentWithCachedProfile(student, persistedRow);
     etapa = "G";
-    updateAdminStudentCachedRow(id, persistedRow);
+    updateAdminStudentCachedRow(id, mergedPersistedRow);
     console.info("[Cancellation] G — cache atualizado", { documentId: id });
-    return persistedRow;
+    return mergedPersistedRow;
   } catch (error) {
     console.error("[Cancellation] Erro", {
       etapa,
