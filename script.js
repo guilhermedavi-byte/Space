@@ -27098,7 +27098,31 @@ const saveAdminStudentLifecyclePatch = async ({ alunoId, patch = {} } = {}) => {
       documentId: id,
       hasCancelamento: Boolean(persistedRow?.cancelamento),
     });
-    if (!String(persistedRow?.nome || "").trim() || (student?.email && !String(persistedRow?.email || "").trim())) {
+    const selectedNome = String(student?.nome || "").trim();
+    const selectedEmailAfter = String(student?.email || "").trim().toLowerCase();
+    const selectedUidAfter = String(student?.uid || student?.userId || "").trim();
+    const persistedNome = String(persistedRow?.nome || "").trim();
+    const persistedEmail = String(persistedRow?.email || "").trim().toLowerCase();
+    const persistedUid = String(persistedRow?.uid || persistedRow?.userId || "").trim();
+    const persistedDocId = String(persistedRow?.firestoreDocId || persistedRow?.docId || persistedRow?.documentId || persistedRow?.id || "").trim();
+    console.log("[Cancellation integrity comparison]", {
+      canonicalDocumentId: id,
+      before: {
+        nome: selectedNome,
+        email: selectedEmailAfter,
+        uid: selectedUidAfter,
+      },
+      after: {
+        nome: persistedNome,
+        email: persistedEmail,
+        uid: persistedUid,
+        firestoreDocId: persistedDocId,
+      },
+    });
+    const sameDocId = persistedDocId === id;
+    const emailMismatch = selectedEmailAfter && persistedEmail && selectedEmailAfter !== persistedEmail;
+    const uidMismatch = selectedUidAfter && persistedUid && selectedUidAfter !== persistedUid;
+    if (!sameDocId || (emailMismatch && uidMismatch)) {
       throw new Error("student_integrity_after_write_failed");
     }
     etapa = "G";
