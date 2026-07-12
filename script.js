@@ -10683,9 +10683,10 @@ const loadFirebaseAdminApi = () => {
       getDoc: fsMod.getDoc,
       getDocs: fsMod.getDocs,
       limit: fsMod.limit,
-	      orderBy: fsMod.orderBy,
+      orderBy: fsMod.orderBy,
 	      query: fsMod.query,
 	      setDoc: fsMod.setDoc,
+        updateDoc: fsMod.updateDoc,
 	      deleteDoc: fsMod.deleteDoc,
 	      serverTimestamp: fsMod.serverTimestamp,
 	      where: fsMod.where,
@@ -26987,8 +26988,9 @@ const saveAdminStudentLifecyclePatch = async ({ alunoId, patch = {} } = {}) => {
   const aliasMap = adminStudentsState.studentAliasToDocId instanceof Map ? adminStudentsState.studentAliasToDocId : new Map();
   const id = resolveStudentCanonicalDocId(student || requestedId, { aliasMap });
   const cleanPatch = sanitizeFirestorePatch(patch || {});
+  let etapa = "A";
   try {
-    console.info("[Cancellation] A: payload construído", {
+    console.info("[Cancellation] A — firestoreDocId resolvido", {
       selectedStudent: student
         ? {
             id: student?.id,
@@ -27010,14 +27012,22 @@ const saveAdminStudentLifecyclePatch = async ({ alunoId, patch = {} } = {}) => {
       documentPath: `users/${id}`,
       payload: cleanPatch,
     });
+    etapa = "B";
     const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_student_lifecycle_patch");
     const user = await waitForFirebaseAuthReady(firebase, 5000);
     if (!user) throw new Error("not_authenticated");
+    if (typeof firebase.updateDoc !== "function") {
+      const error = new Error("firebase_updateDoc_unavailable");
+      error.code = "missing_updateDoc";
+      throw error;
+    }
     const studentRef = firebase.doc(firebase.primaryDb, "users", id);
     const beforeSnapshot = await withTimeout(firebase.getDoc(studentRef), 12_000, "firestore_student_lifecycle_before");
     if (!beforeSnapshot?.exists?.()) {
       throw new Error(`canonical_student_document_not_found: users/${id}`);
     }
+    console.info("[Cancellation] B — documento users/%s encontrado", id);
+    etapa = "C";
     const beforeData = beforeSnapshot.data ? beforeSnapshot.data() : {};
     const beforeEmail = String(beforeData?.email || "").trim().toLowerCase();
     const selectedEmail = String(student?.email || "").trim().toLowerCase();
@@ -27026,17 +27036,27 @@ const saveAdminStudentLifecyclePatch = async ({ alunoId, patch = {} } = {}) => {
     if (selectedEmail && beforeEmail && selectedEmail !== beforeEmail && (!beforeUid || !selectedUid || beforeUid !== selectedUid)) {
       throw new Error("student_identity_mismatch_before_write");
     }
+    console.info("[Cancellation] C — identidade validada", {
+      documentId: id,
+      beforeEmail,
+      selectedEmail,
+      beforeUid,
+      selectedUid,
+    });
+    etapa = "D";
     await withTimeout(firebase.updateDoc(studentRef, cleanPatch), 12_000, "firestore_student_lifecycle_update");
-    console.info("[Cancellation] B: gravação concluída em users/%s", id);
+    console.info("[Cancellation] D — updateDoc concluído", { documentId: id, documentPath: `users/${id}` });
+    etapa = "E";
     const persistedRow = await loadAdminStudentRowFromFirestoreById(id);
     if (!persistedRow) {
       throw new Error("student_reload_after_lifecycle_patch_failed");
     }
-    console.info("[Cancellation] C: documento relido", {
+    console.info("[Cancellation] E — documento relido", {
       studentId: id,
       cancelamento: persistedRow.cancelamento || null,
       tipo: persistedRow.tipo || "",
     });
+    etapa = "F";
     if (Object.prototype.hasOwnProperty.call(cleanPatch, "cancelamento")) {
       const expectedCancellation = cleanPatch.cancelamento;
       const persistedCancellation = normalizeStudentCancellationRecord(persistedRow.cancelamento);
@@ -27055,25 +27075,27 @@ const saveAdminStudentLifecyclePatch = async ({ alunoId, patch = {} } = {}) => {
         }
       }
     }
+    console.info("[Cancellation] F — cancelamento confirmado no documento", {
+      documentId: id,
+      hasCancelamento: Boolean(persistedRow?.cancelamento),
+    });
     if (!String(persistedRow?.nome || "").trim() || (student?.email && !String(persistedRow?.email || "").trim())) {
       throw new Error("student_integrity_after_write_failed");
     }
-    console.info("[Cancellation] D: persistência validada");
+    etapa = "G";
     updateAdminStudentCachedRow(id, persistedRow);
-    console.info("[Cancellation] E: cache e interface prontos");
+    console.info("[Cancellation] G — cache atualizado", { documentId: id });
     return persistedRow;
   } catch (error) {
-    console.error("[Cancellation] Falha ao registrar cancelamento", {
-      error,
+    console.error("[Cancellation] Erro", {
+      etapa,
       code: error?.code,
       message: error?.message,
+      documentId: id,
+      documentPath: `users/${id}`,
       stack: error?.stack,
-      studentId: id,
-      studentDocId: id,
-      collection: "users",
-      database: "primaryDb",
-      cancellationPayload: cleanPatch?.cancelamento || null,
     });
+    error.cancellationStage = etapa;
     throw error;
   }
 };
@@ -27274,9 +27296,7 @@ const openAdminStudentRegisterCancellationModal = ({ alunoId } = {}) => {
             studentDocId: id,
             cancellationPayload: cancelamento,
           });
-          const host = typeof window !== "undefined" ? String(window.location.hostname || "").trim().toLowerCase() : "";
-          const isDevHost = host === "localhost" || host === "127.0.0.1" || host.endsWith(".local");
-          setErr(isDevHost ? `Não foi possível registrar o cancelamento.\nDetalhe: ${error?.code || error?.message || "unknown_error"}` : "Não foi possível registrar o cancelamento agora.");
+          setErr(`Não foi possível registrar o cancelamento agora.\nErro: ${error?.code || error?.message || "unknown_error"}\nEtapa: ${error?.cancellationStage || "?"}`);
           if (modalPrimary) modalPrimary.disabled = false;
           if (modalSecondary) modalSecondary.disabled = false;
         }
