@@ -15220,6 +15220,7 @@ const normalizeSupabaseStudentForAdmin = (row = {}) => {
     id,
     nome,
     email,
+    sourceBusinessId: String(row.aluno_id || row.aluno_chave || row.id || "").trim(),
     tipo: "student",
     ativo,
     criadoEm: row.created_at || row.createdAt || null,
@@ -15241,32 +15242,17 @@ const normalizeSupabaseStudentForAdmin = (row = {}) => {
 };
 
 const mergeAdminStudentRows = (...groups) => {
-  const keyOf = (row) => {
-    const email = String(row?.email || "").trim().toLowerCase();
-    if (email) return `email:${email}`;
-    const phone = String(row?.telefone || "").replace(/\D+/g, "");
-    if (phone) return `phone:${phone}`;
-    return `id:${String(row?.id || "").trim()}`;
-  };
   const byKey = new Map();
+  const canonicalByAlias = new Map();
   groups.flat().forEach((row) => {
     if (!row || typeof row !== "object") return;
-    const key = keyOf(row);
-    if (!key || key === "id:") return;
-    const prev = byKey.get(key);
-    byKey.set(
-      key,
-      prev
-        ? {
-            ...row,
-            ...prev,
-            id: String(prev.firestoreDocId || prev.id || row.firestoreDocId || row.id || "").trim(),
-            firestoreDocId: String(prev.firestoreDocId || row.firestoreDocId || "").trim(),
-            professorId: prev.professorId || row.professorId,
-            plano: prev.plano || row.plano,
-          }
-        : row
-    );
+    const mergeKeys = getAdminStudentMergeKeys(row);
+    const canonicalKey = mergeKeys.find((key) => canonicalByAlias.has(key)) || mergeKeys[0];
+    if (!canonicalKey) return;
+    const prev = byKey.get(canonicalKey);
+    const merged = prev ? mergeAdminStudentWithCachedProfile(prev, row) : row;
+    byKey.set(canonicalKey, merged);
+    getAdminStudentMergeKeys(merged).forEach((key) => canonicalByAlias.set(key, canonicalKey));
   });
   return Array.from(byKey.values()).sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"));
 };
@@ -16160,16 +16146,27 @@ const mergeAdminStudentWithCachedProfile = (existingStudent, incomingStudent) =>
   const next = incomingStudent && typeof incomingStudent === "object" ? incomingStudent : null;
   if (!next) return prev;
   if (!prev) return next;
-  const nextName = String(next.nome || next.nomeCompleto || next.name || "").trim();
+  const pickName = (...candidates) => {
+    for (const candidate of candidates) {
+      const safe = String(candidate || "").trim();
+      if (!safe) continue;
+      if (safe.toLowerCase() === "aluno sem nome") continue;
+      return safe;
+    }
+    return "";
+  };
+  const nextName = pickName(next.nome, next.nomeCompleto, next.name, next.displayName);
+  const prevName = pickName(prev.nome, prev.nomeCompleto, prev.name, prev.displayName);
   const nextEmail = String(next.email || "").trim();
+  const prevEmail = String(prev.email || "").trim();
   const nextPhone = String(next.telefone || "").trim();
   const nextTeacherName = String(next.professorNome || next.teacherNome || "").trim();
   const nextTeacherId = String(next.professorId || next.teacherId || "").trim();
   return {
     ...prev,
     ...next,
-    nome: nextName || String(prev.nome || prev.nomeCompleto || prev.name || prev.email || "Aluno sem nome").trim(),
-    email: nextEmail || String(prev.email || "").trim(),
+    nome: nextName || prevName || nextEmail || prevEmail || "Aluno sem nome",
+    email: nextEmail || prevEmail,
     telefone: nextPhone || String(prev.telefone || "").trim(),
     professorNome: nextTeacherName || String(prev.professorNome || prev.teacherNome || "").trim(),
     teacherNome: nextTeacherName || String(prev.teacherNome || prev.professorNome || "").trim(),
@@ -16177,11 +16174,39 @@ const mergeAdminStudentWithCachedProfile = (existingStudent, incomingStudent) =>
     teacherId: nextTeacherId || String(prev.teacherId || prev.professorId || "").trim(),
     plano: String(next.plano || "").trim() || String(prev.plano || "").trim(),
     turma: String(next.turma || "").trim() || String(prev.turma || "").trim(),
+    cancelamento: next.cancelamento ?? prev.cancelamento ?? null,
+    cancelamentosAnteriores: Array.isArray(next.cancelamentosAnteriores)
+      ? next.cancelamentosAnteriores
+      : Array.isArray(prev.cancelamentosAnteriores)
+        ? prev.cancelamentosAnteriores
+        : [],
+    ativo: typeof next.ativo === "boolean" ? next.ativo : typeof prev.ativo === "boolean" ? prev.ativo : true,
+    canceladoEm: next.canceladoEm || next.cancelamentoEm || next.dataCancelamento || prev.canceladoEm || prev.cancelamentoEm || prev.dataCancelamento || null,
+    desativadoEm: next.desativadoEm || prev.desativadoEm || next.canceladoEm || prev.canceladoEm || null,
+    criadoEm: next.criadoEm || next.createdAt || next.created_at || prev.criadoEm || prev.createdAt || prev.created_at || null,
+    sourceBusinessId: String(next.sourceBusinessId || prev.sourceBusinessId || next.userId || prev.userId || next.alunoId || prev.alunoId || "").trim(),
     firestoreDocId: String(next.firestoreDocId || prev.firestoreDocId || next.id || prev.id || "").trim(),
     docId: String(next.docId || prev.docId || next.firestoreDocId || prev.firestoreDocId || "").trim(),
     documentId: String(next.documentId || prev.documentId || next.firestoreDocId || prev.firestoreDocId || "").trim(),
     id: String(next.id || next.firestoreDocId || prev.id || prev.firestoreDocId || "").trim(),
   };
+};
+
+const getAdminStudentMergeKeys = (row = {}) => {
+  const keys = new Set();
+  const email = String(row?.email || "").trim().toLowerCase();
+  if (email) keys.add(`email:${email}`);
+  const phone = String(row?.telefone || "").replace(/\D+/g, "");
+  if (phone) keys.add(`phone:${phone}`);
+  const sourceBusinessId = String(row?.sourceBusinessId || row?.alunoChave || row?.aluno_chave || "").trim();
+  if (sourceBusinessId) keys.add(`source:${sourceBusinessId}`);
+  getStudentIdentityAliases(row).forEach((alias) => {
+    const safe = String(alias || "").trim();
+    if (safe) keys.add(`id:${safe}`);
+  });
+  const fallbackId = String(row?.id || "").trim();
+  if (fallbackId) keys.add(`id:${fallbackId}`);
+  return Array.from(keys);
 };
 
 window.auditLegacyStudentFlags = () => {
@@ -23859,6 +23884,7 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
     const opsStudents = (Array.isArray(pedagogicalOps?.students) ? pedagogicalOps.students : []).map((row) => ({
       ...row,
       id: String(row.id || row.aluno_id || row.aluno_chave || ""),
+      sourceBusinessId: String(row.aluno_id || row.aluno_chave || row.id || ""),
       nome: String(row.nome || row.aluno_nome || "Aluno"),
       email: String(row.email || ""),
       ativo: row.ativo_acesso !== false,
@@ -23869,6 +23895,10 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
       source: row.source || "supabase",
     }));
     const personMergeKey = (row) => {
+      if (row && typeof row === "object" && (row.firestoreDocId || row.sourceBusinessId || row.cancelamento || row.cancelamentosAnteriores || row.tipo === "student")) {
+        const studentKeys = getAdminStudentMergeKeys(row);
+        if (studentKeys.length) return studentKeys[0];
+      }
       const email = String(row?.email || "").trim().toLowerCase();
       if (email) return `email:${email}`;
       const phone = String(row?.telefone || "").replace(/\D+/g, "");
@@ -23878,12 +23908,28 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
     };
     const mergePeople = (primary, fallback) => {
       const byId = new Map();
+      const canonicalByAlias = new Map();
       [...(Array.isArray(primary) ? primary : []), ...(Array.isArray(fallback) ? fallback : [])].forEach((row) => {
         if (!row || typeof row !== "object") return;
-        const key = personMergeKey(row);
+        const mergeKeys =
+          row && typeof row === "object" && (row.firestoreDocId || row.sourceBusinessId || row.cancelamento || row.cancelamentosAnteriores || row.tipo === "student")
+            ? getAdminStudentMergeKeys(row)
+            : [personMergeKey(row)].filter(Boolean);
+        const key = mergeKeys.find((candidate) => canonicalByAlias.has(candidate)) || mergeKeys[0];
         if (!key || key === "id:") return;
         const previous = byId.get(key);
-        byId.set(key, previous ? { ...row, ...previous, aluno_chave: row.aluno_chave || previous.aluno_chave } : row);
+        const merged =
+          previous && (previous?.firestoreDocId || row?.firestoreDocId || previous?.cancelamento || row?.cancelamento)
+            ? mergeAdminStudentWithCachedProfile(previous, row)
+            : previous
+              ? { ...row, ...previous, aluno_chave: row.aluno_chave || previous.aluno_chave }
+              : row;
+        byId.set(key, merged);
+        const aliases =
+          merged && typeof merged === "object" && (merged.firestoreDocId || merged.sourceBusinessId || merged.cancelamento || merged.cancelamentosAnteriores || merged.tipo === "student")
+            ? getAdminStudentMergeKeys(merged)
+            : [personMergeKey(merged)].filter(Boolean);
+        aliases.forEach((alias) => canonicalByAlias.set(alias, key));
       });
       return Array.from(byId.values());
     };
@@ -27207,11 +27253,21 @@ const saveAdminStudentLifecyclePatch = async ({ alunoId, patch = {} } = {}) => {
     if (!sameDocId || (emailMismatch && uidMismatch)) {
       throw new Error("student_integrity_after_write_failed");
     }
-    const mergedPersistedRow = mergeAdminStudentWithCachedProfile(student, persistedRow);
     etapa = "G";
-    updateAdminStudentCachedRow(id, mergedPersistedRow);
+    if (student && typeof student === "object") {
+      const mergedPersistedRow = mergeAdminStudentWithCachedProfile(student, persistedRow);
+      updateAdminStudentCachedRow(id, mergedPersistedRow);
+      console.info("[Cancellation] G — cache atualizado", { documentId: id });
+      return mergedPersistedRow;
+    }
+    await ensureAdminStudentsBaseData({ force: true });
+    const refreshedStudent = getAdminStudentMetaById(id);
+    if (refreshedStudent) {
+      console.info("[Cancellation] G — cache recarregado", { documentId: id, mode: "base_reload" });
+      return refreshedStudent;
+    }
     console.info("[Cancellation] G — cache atualizado", { documentId: id });
-    return mergedPersistedRow;
+    return persistedRow;
   } catch (error) {
     console.error("[Cancellation] Erro", {
       etapa,
