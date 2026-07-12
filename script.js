@@ -14228,7 +14228,7 @@ const normalizeAdminFirestoreUserRow = (sourceRow = {}) => {
   const raw = clonePlainData(sourceRow);
   const firestoreDocId = String(sourceRow.firestoreDocId || sourceRow.docId || sourceRow.documentId || "").trim();
   const uid = firestoreDocId;
-  const nome = String(sourceRow.nome || sourceRow.name || "Aluno").trim();
+  const nome = String(sourceRow.nome || sourceRow.nomeCompleto || sourceRow.fullName || sourceRow.displayName || sourceRow.name || sourceRow.email || "Aluno sem nome").trim();
   const email = String(sourceRow.email || "").trim().toLowerCase();
   const tipo = normalizeFirestoreRole(sourceRow.tipo || sourceRow.role || sourceRow.type) || "student";
   if (!uid || !nome) return null;
@@ -14493,7 +14493,26 @@ const loadAdminStudentRowFromFirestoreById = async (alunoId) => {
     error.code = "not-found";
     throw error;
   }
-  const row = normalizeAdminFirestoreUserRow({ id: snap.id, ...(snap.data ? snap.data() : {}) });
+  const raw = snap.data ? snap.data() : {};
+  console.log("[Cancellation E — raw readback]", {
+    documentId: snap.id,
+    exists: snap.exists(),
+    keys: Object.keys(raw || {}),
+    nome: raw?.nome,
+    nomeCompleto: raw?.nomeCompleto,
+    name: raw?.name,
+    email: raw?.email,
+    tipo: raw?.tipo,
+    internalId: raw?.id,
+    hasCancellation: Boolean(raw?.cancelamento),
+  });
+  const row = normalizeAdminFirestoreUserRow({
+    ...raw,
+    firestoreDocId: snap.id,
+    docId: snap.id,
+    documentId: snap.id,
+    id: snap.id,
+  });
   if (!row) {
     const error = new Error("student_document_readback_normalization_failed");
     error.code = "normalization_failed";
