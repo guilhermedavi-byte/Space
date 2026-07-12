@@ -222,13 +222,31 @@ const onlyDigits = (value) => String(value || "").replace(/\D+/g, "");
 const studentIdentityKey = (row) => {
   const firestoreDocId = String(row?.firestore_doc_id || row?.firestoreDocId || "").trim();
   if (firestoreDocId) return `firestore:${firestoreDocId}`;
+  const id = String(row?.aluno_id || row?.student_id || row?.id || "").trim();
+  if (id) return `id:${id}`;
   const email = normalizeIdentity(row?.email || row?.aluno_email || row?.student_email);
   if (email) return `email:${email}`;
   const phone = onlyDigits(row?.telefone || row?.whatsapp || row?.phone);
   if (phone) return `phone:${phone}`;
-  const id = String(row?.aluno_id || row?.student_id || row?.id || "").trim();
-  if (id) return `id:${id}`;
-  return `name:${normalizeIdentity(row?.aluno_nome || row?.nome || row?.name || row?.student_name)}`;
+  const source = String(row?.source || "unknown").trim().toLowerCase();
+  const fallbackName = normalizeIdentity(row?.aluno_nome || row?.nome || row?.name || row?.student_name);
+  return fallbackName ? `legacy:${source}:${fallbackName}` : "";
+};
+
+const buildUniqueStudentEmailIndex = (rows = []) => {
+  const frequency = new Map();
+  (Array.isArray(rows) ? rows : []).forEach((row) => {
+    const email = normalizeIdentity(row?.email || row?.aluno_email || row?.student_email);
+    if (!email) return;
+    frequency.set(email, (frequency.get(email) || 0) + 1);
+  });
+  const index = new Map();
+  (Array.isArray(rows) ? rows : []).forEach((row) => {
+    const email = normalizeIdentity(row?.email || row?.aluno_email || row?.student_email);
+    if (!email) return;
+    if (frequency.get(email) === 1) index.set(email, row);
+  });
+  return { frequency, index };
 };
 
 const mergePedagogicalStudents = ({ onboarding, financeStudents, preferences }) => {
@@ -236,13 +254,20 @@ const mergePedagogicalStudents = ({ onboarding, financeStudents, preferences }) 
     preferences.map((row) => [String(row?.aluno_chave || ""), String(row?.status || "ativo").toLowerCase()])
   );
   const merged = new Map();
-  const add = (row, source) => {
+  const firestoreRows = (Array.isArray(onboarding) ? onboarding : []).filter(
+    (row) => String(row?.source || "").trim().toLowerCase() === "firestore" || String(row?.firestore_doc_id || "").trim()
+  );
+  const operationalRows = (Array.isArray(onboarding) ? onboarding : []).filter(
+    (row) => !(String(row?.source || "").trim().toLowerCase() === "firestore" || String(row?.firestore_doc_id || "").trim())
+  );
+  const { frequency: firestoreEmailFrequency, index: firestoreEmailIndex } = buildUniqueStudentEmailIndex(firestoreRows);
+  const add = (row, source, forcedKey = "") => {
     if (!row || typeof row !== "object") return;
     const effectiveSource =
       source === "pedagogico" && String(row?.source || "").trim().toLowerCase() === "firestore"
         ? "firestore"
         : source;
-    const key = studentIdentityKey(row);
+    const key = forcedKey || studentIdentityKey(row);
     if (!key || key === "name:") return;
     const previous = merged.get(key) || {};
     const combined = effectiveSource === "pedagogico" ? { ...previous, ...row } : { ...row, ...previous };
@@ -286,6 +311,7 @@ const mergePedagogicalStudents = ({ onboarding, financeStudents, preferences }) 
       aluno_id: alunoId,
       aluno_nome: alunoNome,
       nome: alunoNome,
+      legacy_orphan: Boolean(combined.legacy_orphan),
       email: firestoreEmail || supabaseEmail || combined.email || combined.aluno_email || combined.student_email || "",
       telefone: firestoreTelefone || supabaseTelefone || combined.telefone || combined.whatsapp || combined.phone || "",
       plano: firestorePlano || supabasePlano || combined.plano || combined.plan || combined.contrato || "",
@@ -299,8 +325,49 @@ const mergePedagogicalStudents = ({ onboarding, financeStudents, preferences }) 
       ativo_acesso: (preferredStatus || (["inativo", "cancelado"].includes(sourceStatus) ? "inativo" : "ativo")) === "ativo",
     });
   };
-  financeStudents.forEach((row) => add(row, "financeiro"));
-  onboarding.forEach((row) => add(row, "pedagogico"));
+  firestoreRows.forEach((row) => add(row, "pedagogico"));
+  operationalRows.forEach((row) => {
+    const explicitFirestoreDocId = String(row?.firestore_doc_id || row?.firestoreDocId || "").trim();
+    if (explicitFirestoreDocId && merged.has(`firestore:${explicitFirestoreDocId}`)) {
+      add(row, "pedagogico", `firestore:${explicitFirestoreDocId}`);
+      return;
+    }
+    const email = normalizeIdentity(row?.email || row?.aluno_email || row?.student_email);
+    const uniqueFirestoreMatch = email ? firestoreEmailIndex.get(email) || null : null;
+    if (uniqueFirestoreMatch) {
+      add(row, "pedagogico", studentIdentityKey(uniqueFirestoreMatch));
+      return;
+    }
+    if (email && (firestoreEmailFrequency.get(email) || 0) > 1) {
+      console.warn("[ownership] ambiguous pedagogical student email match", {
+        email,
+        firestoreCandidates: firestoreEmailFrequency.get(email),
+        aluno_id: row?.aluno_id || row?.id || "",
+      });
+    }
+    add({ ...row, legacy_orphan: true }, "pedagogico");
+  });
+  financeStudents.forEach((row) => {
+    const explicitFirestoreDocId = String(row?.firestore_doc_id || row?.firestoreDocId || "").trim();
+    if (explicitFirestoreDocId && merged.has(`firestore:${explicitFirestoreDocId}`)) {
+      add(row, "financeiro", `firestore:${explicitFirestoreDocId}`);
+      return;
+    }
+    const email = normalizeIdentity(row?.email || row?.aluno_email || row?.student_email);
+    const uniqueFirestoreMatch = email ? firestoreEmailIndex.get(email) || null : null;
+    if (uniqueFirestoreMatch) {
+      add(row, "financeiro", studentIdentityKey(uniqueFirestoreMatch));
+      return;
+    }
+    if (email && (firestoreEmailFrequency.get(email) || 0) > 1) {
+      console.warn("[ownership] ambiguous finance student email match", {
+        email,
+        firestoreCandidates: firestoreEmailFrequency.get(email),
+        aluno_id: row?.aluno_id || row?.id || "",
+      });
+    }
+    add({ ...row, legacy_orphan: true }, "financeiro");
+  });
   return Array.from(merged.values());
 };
 

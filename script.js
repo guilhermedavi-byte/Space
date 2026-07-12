@@ -14183,7 +14183,13 @@ const patchFirestoreUserDocument = async ({ userId, patch = {}, context = "users
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ uid: id, role: String(cleanPatch?.tipo || "").trim(), name: String(cleanPatch?.nome || "").trim(), action: "sync_mirror" }),
-  }).catch(() => {});
+  }).catch((error) => {
+    console.warn("[ownership] mirror sync request failed", {
+      userId: id,
+      context,
+      message: error?.message || error,
+    });
+  });
   return { firebase, cleanPatch };
 };
 
@@ -14452,10 +14458,23 @@ const fetchUserRowsFromFirestore = async (tipo) => {
           : [safeTipo];
   let sourceRows = null;
   if (currentRole === "admin") {
-    const response = await fetchWithAuth(`/api/admin-data?collection=users&type=${encodeURIComponent(safeTipo)}`);
+    const response = await fetchWithAuth(`/api/admin-data?collection=users&type=${encodeURIComponent(safeTipo)}${safeTipo === "student" ? "&debug=1" : ""}`);
     if (response.ok) {
       const payload = await response.json().catch(() => null);
       sourceRows = Array.isArray(payload?.rows) ? payload.rows : [];
+      if (safeTipo === "student") {
+        const focusIds = ["kkeegmFko4Xi0wigwpXLDG0Bo5E3", "qsZScLZ3NpXnqKB3lIISldK97cL2"];
+        console.warn("[ownership] admin-data student payload", {
+          totalRows: sourceRows.length,
+          focused: focusIds.map((id) => ({
+            id,
+            present: sourceRows.some((row) => String(row?.firestoreDocId || row?.id || "").trim() === id),
+            row:
+              sourceRows.find((row) => String(row?.firestoreDocId || row?.id || "").trim() === id) || null,
+          })),
+          debug: payload?.debug || null,
+        });
+      }
     }
   }
 
@@ -15265,19 +15284,75 @@ const normalizeSupabaseStudentForAdmin = (row = {}) => {
 
 const mergeAdminStudentRows = (...groups) => {
   // OWNERSHIP: cadastro=Firestore, operação=Supabase (contrato 2026-07-12)
-  const byKey = new Map();
-  const canonicalByAlias = new Map();
-  groups.flat().forEach((row) => {
-    if (!row || typeof row !== "object") return;
-    const mergeKeys = getAdminStudentMergeKeys(row);
-    const canonicalKey = mergeKeys.find((key) => canonicalByAlias.has(key)) || mergeKeys[0];
-    if (!canonicalKey) return;
-    const prev = byKey.get(canonicalKey);
-    const merged = prev ? mergeAdminStudentWithCachedProfile(prev, row) : row;
-    byKey.set(canonicalKey, merged);
-    getAdminStudentMergeKeys(merged).forEach((key) => canonicalByAlias.set(key, canonicalKey));
+  const allRows = groups.flat().filter((row) => row && typeof row === "object");
+  const firestoreRows = allRows.filter((row) => String(row?.source || "").trim().toLowerCase() === "firestore" || row?.firestoreCancelamento !== undefined);
+  const supabaseRows = allRows.filter((row) => !firestoreRows.includes(row));
+  const mergedByFirestoreId = new Map();
+  firestoreRows.forEach((row) => {
+    const firestoreId = String(row?.firestoreDocId || row?.docId || row?.documentId || row?.id || "").trim();
+    if (!firestoreId) return;
+    const previous = mergedByFirestoreId.get(firestoreId) || null;
+    mergedByFirestoreId.set(firestoreId, previous ? mergeAdminStudentWithCachedProfile(previous, row) : row);
   });
-  return Array.from(byKey.values()).sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"));
+
+  const firestoreEmailFrequency = new Map();
+  mergedByFirestoreId.forEach((row) => {
+    const email = String(row?.email || row?.firestoreEmail || "").trim().toLowerCase();
+    if (!email) return;
+    firestoreEmailFrequency.set(email, (firestoreEmailFrequency.get(email) || 0) + 1);
+  });
+  const firestoreByUniqueEmail = new Map();
+  mergedByFirestoreId.forEach((row, firestoreId) => {
+    const email = String(row?.email || row?.firestoreEmail || "").trim().toLowerCase();
+    if (!email) return;
+    if (firestoreEmailFrequency.get(email) === 1) firestoreByUniqueEmail.set(email, firestoreId);
+  });
+
+  const orphans = new Map();
+  const registerOrphan = (row, reason) => {
+    const orphanRow = { ...row, legacy_orphan: true, legacy_orphan_reason: reason };
+    const key =
+      String(orphanRow?.sourceBusinessId || orphanRow?.alunoChave || orphanRow?.aluno_chave || orphanRow?.id || orphanRow?.email || orphanRow?.telefone || "")
+        .trim() || `orphan:${orphans.size + 1}`;
+    const previous = orphans.get(key) || null;
+    orphans.set(key, previous ? mergeAdminStudentWithCachedProfile(previous, orphanRow) : orphanRow);
+  };
+
+  supabaseRows.forEach((row) => {
+    const explicitFirestoreId = String(row?.firestoreDocIdRef || row?.firestore_doc_id || "").trim();
+    if (explicitFirestoreId) {
+      const existing = mergedByFirestoreId.get(explicitFirestoreId) || null;
+      if (existing) {
+        mergedByFirestoreId.set(explicitFirestoreId, mergeAdminStudentWithCachedProfile(existing, row));
+      } else {
+        registerOrphan(row, "missing_firestore_match");
+      }
+      return;
+    }
+    const email = String(row?.supabaseEmail || row?.email || "").trim().toLowerCase();
+    if (email && firestoreByUniqueEmail.has(email)) {
+      const firestoreId = firestoreByUniqueEmail.get(email);
+      const existing = mergedByFirestoreId.get(firestoreId) || null;
+      if (existing) {
+        mergedByFirestoreId.set(firestoreId, mergeAdminStudentWithCachedProfile(existing, row));
+        return;
+      }
+    }
+    if (email && (firestoreEmailFrequency.get(email) || 0) > 1) {
+      console.warn("[ownership] ambiguous admin student email match", {
+        email,
+        firestoreCandidates: firestoreEmailFrequency.get(email),
+        sourceBusinessId: row?.sourceBusinessId || row?.id || "",
+      });
+      registerOrphan(row, "ambiguous_email_match");
+      return;
+    }
+    registerOrphan(row, "no_firestore_match");
+  });
+
+  return [...Array.from(mergedByFirestoreId.values()), ...Array.from(orphans.values())].sort((a, b) =>
+    String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR")
+  );
 };
 
 const ensureAdminStudentsBaseData = async ({ force = false } = {}) => {
@@ -15315,6 +15390,17 @@ const ensureAdminStudentsBaseData = async ({ force = false } = {}) => {
       .map(normalizeSupabaseStudentForAdmin)
       .filter(Boolean);
     const students = mergeAdminStudentRows(firebaseStudents, supabaseStudents);
+    console.warn("[ownership] admin students merge", {
+      firebaseCount: firebaseStudents.length,
+      supabaseCount: supabaseStudents.length,
+      mergedCount: students.length,
+      focused: ["kkeegmFko4Xi0wigwpXLDG0Bo5E3", "qsZScLZ3NpXnqKB3lIISldK97cL2"].map((id) => ({
+        id,
+        firebase: firebaseStudents.find((row) => String(row?.firestoreDocId || row?.id || "").trim() === id) || null,
+        merged: students.find((row) => String(row?.firestoreDocId || row?.id || "").trim() === id) || null,
+      })),
+      legacyOrphans: students.filter((row) => row?.legacy_orphan).length,
+    });
 
     adminStudentsState.teachers = Array.isArray(teachers) ? teachers : [];
     const teachersById = new Map();
@@ -15493,6 +15579,7 @@ const deriveAdminStudentsSummaries = ({ teacherId, logs } = {}) => {
 
       const riskLabel = normalizeRiskLabel(bucket.lastRisk) || "Sem dados";
       const lifecycleBadge = meta ? getStudentLifecycleBadgeMeta(meta) : { label: "", state: "", tone: "" };
+      const lifecycleState = lifecycleBadge.state || (meta ? getStudentLifecycleState(meta) : STUDENT_LIFECYCLE_STATE.ACTIVE);
       const statusLabel = lifecycleBadge.label || (meta ? (meta.ativo ? "Ativo" : "Inativo") : "—");
 
       const inferredTeacherId =
@@ -15509,6 +15596,7 @@ const deriveAdminStudentsSummaries = ({ teacherId, logs } = {}) => {
         nome: meta?.nome || "Aluno",
         email: meta?.email || "",
         ativo: typeof meta?.ativo === "boolean" ? meta.ativo : true,
+        lifecycleState,
         statusLabel,
         teacherId: inferredTeacherId,
         teacherName: inferredTeacher?.nome || teacherMeta?.nome || "—",
@@ -26121,6 +26209,15 @@ const applyAdminStudentsFilters = () => {
   }
 
   adminStudentsState.summaries = filtered;
+  console.warn("[ownership] admin students render summaries", {
+    totalSummaries: all.length,
+    filteredSummaries: filtered.length,
+    focused: ["kkeegmFko4Xi0wigwpXLDG0Bo5E3", "qsZScLZ3NpXnqKB3lIISldK97cL2"].map((id) => ({
+      id,
+      present: filtered.some((row) => String(row?.firestoreDocId || row?.alunoId || "").trim() === id),
+      row: filtered.find((row) => String(row?.firestoreDocId || row?.alunoId || "").trim() === id) || null,
+    })),
+  });
   syncAdminStudentsFiltersBadge();
   renderAdminStudentsList();
 };
@@ -27337,6 +27434,19 @@ const saveAdminStudentLifecyclePatch = async ({ alunoId, patch = {} } = {}) => {
     if (student && typeof student === "object") {
       const mergedPersistedRow = mergeAdminStudentWithCachedProfile(student, persistedRow);
       updateAdminStudentCachedRow(id, mergedPersistedRow);
+      fetchWithAuth("/api/admin-users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ uid: id, action: "sync_mirror" }),
+      })
+        .then((response) => response.json().catch(() => null).then((body) => ({ ok: response.ok, status: response.status, body })))
+        .then((result) => console.warn("[ownership] cancellation mirror sync", { documentId: id, ...result }))
+        .catch((syncError) =>
+          console.warn("[ownership] cancellation mirror sync failed", {
+            documentId: id,
+            message: syncError?.message || syncError,
+          })
+        );
       console.info("[Cancellation] G — cache atualizado", { documentId: id });
       return mergedPersistedRow;
     }

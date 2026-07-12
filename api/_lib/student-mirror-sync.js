@@ -78,18 +78,79 @@ const buildMirrorPatch = (student, fieldMap) =>
       .filter(([, value]) => value !== undefined)
   );
 
+const extractRows = (result) => (Array.isArray(result?.data) ? result.data : []);
+
+const buildStrategyName = (filter = "") => {
+  if (String(filter).startsWith("firestore_doc_id=")) return "firestore_doc_id";
+  if (String(filter).startsWith("aluno_id=")) return "aluno_id";
+  if (String(filter).startsWith("email=")) return "email";
+  return "unknown";
+};
+
+const queryMirrorCandidates = async ({ table, filter }) => {
+  const response = await supabaseFetch(`/${table}?select=id&${filter}`, { method: "GET" });
+  return extractRows(response);
+};
+
 const tryPatchMirrorTable = async ({ table, fields, filters }, student) => {
   const patch = buildMirrorPatch(student, fields);
   for (const buildFilter of Array.isArray(filters) ? filters : []) {
     const filter = typeof buildFilter === "function" ? buildFilter(student) : "";
     if (!filter) continue;
+    const strategy = buildStrategyName(filter);
     try {
-      await supabaseFetch(`/${table}?${filter}`, {
+      const candidates = await queryMirrorCandidates({ table, filter });
+      if (candidates.length === 0) {
+        console.warn("[ownership] mirror sync not_found", {
+          firestore_doc_id: student.firestoreDocId,
+          table,
+          strategy,
+          filter,
+          rows_affected: 0,
+        });
+        continue;
+      }
+      if (candidates.length > 1) {
+        console.warn("[ownership] mirror sync ambiguous", {
+          firestore_doc_id: student.firestoreDocId,
+          table,
+          strategy,
+          filter,
+          candidates: candidates.length,
+          rows_affected: 0,
+        });
+        return {
+          table,
+          strategy,
+          status: "ambiguous",
+          rowsAffected: 0,
+          candidateCount: candidates.length,
+          filter,
+        };
+      }
+      const response = await supabaseFetch(`/${table}?${filter}`, {
         method: "PATCH",
         // ESPELHO DESNORMALIZADO — fonte: Firestore users/{id}
         body: patch,
       });
-      return true;
+      const rowsAffected = extractRows(response).length;
+      const status = rowsAffected > 0 ? "updated" : "not_found";
+      console.warn("[ownership] mirror sync result", {
+        firestore_doc_id: student.firestoreDocId,
+        table,
+        strategy,
+        filter,
+        status,
+        rows_affected: rowsAffected,
+      });
+      return {
+        table,
+        strategy,
+        status,
+        rowsAffected,
+        candidateCount: candidates.length,
+        filter,
+      };
     } catch (error) {
       const details = `${error?.code || ""} ${error?.message || ""}`.toLowerCase();
       const ignorable =
@@ -98,17 +159,35 @@ const tryPatchMirrorTable = async ({ table, fields, filters }, student) => {
         details.includes("column") ||
         details.includes("schema cache") ||
         details.includes("could not find");
-      if (!ignorable) {
-        console.warn("[ownership] supabase mirror patch failed", {
-          table,
-          filter,
-          code: error?.code || "",
-          message: error?.message || "",
-        });
-      }
+      console.warn("[ownership] supabase mirror patch failed", {
+        firestore_doc_id: student.firestoreDocId,
+        table,
+        strategy,
+        filter,
+        code: error?.code || "",
+        message: error?.message || "",
+        ignorable,
+      });
+      return {
+        table,
+        strategy,
+        status: "error",
+        rowsAffected: 0,
+        candidateCount: 0,
+        filter,
+        code: error?.code || "",
+        message: error?.message || "",
+      };
     }
   }
-  return false;
+  return {
+    table,
+    strategy: "",
+    status: "not_found",
+    rowsAffected: 0,
+    candidateCount: 0,
+    filter: "",
+  };
 };
 
 const syncStudentMirrorToSupabase = async (firestoreDocId) => {
@@ -119,11 +198,17 @@ const syncStudentMirrorToSupabase = async (firestoreDocId) => {
     const student = normalizeStudentDoc((Array.isArray(users) ? users : []).find((row) => normalizeText(row?.firestoreDocId || row?.id) === id));
     if (!student) return { ok: false, reason: "student_not_found" };
     const results = await Promise.all(
-      STUDENT_MIRROR_TABLES.map((config) =>
-        tryPatchMirrorTable(config, student).then((updated) => ({ table: config.table, updated }))
-      )
+      STUDENT_MIRROR_TABLES.map((config) => tryPatchMirrorTable(config, student))
     );
-    return { ok: true, firestoreDocId: id, results };
+    const rowsAffected = results.reduce((sum, item) => sum + (Number(item?.rowsAffected) || 0), 0);
+    return {
+      ok: rowsAffected > 0,
+      firestoreDocId: id,
+      rowsAffected,
+      updatedCount: results.filter((item) => item?.status === "updated").length,
+      results,
+      reason: rowsAffected > 0 ? "" : "mirror_not_found",
+    };
   } catch (error) {
     console.warn("[ownership] syncStudentMirrorToSupabase unavailable", {
       firestoreDocId: id,
@@ -136,4 +221,9 @@ const syncStudentMirrorToSupabase = async (firestoreDocId) => {
 
 module.exports = {
   syncStudentMirrorToSupabase,
+  _test: {
+    normalizeStudentDoc,
+    buildMirrorPatch,
+    buildStrategyName,
+  },
 };

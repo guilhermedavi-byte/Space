@@ -89,6 +89,33 @@ const buildUserDebugSummary = (rows = []) => {
   };
 };
 
+const buildFocusedUserDebug = (rows = [], ids = []) => {
+  const items = Array.isArray(rows) ? rows : [];
+  const focusIds = (Array.isArray(ids) ? ids : []).map((id) => String(id || "").trim()).filter(Boolean);
+  const byId = new Map(
+    items.map((row) => [String(row?.firestoreDocId || row?.id || "").trim(), row]).filter(([id]) => Boolean(id))
+  );
+  return focusIds.map((id) => {
+    const row = byId.get(id) || null;
+    return {
+      id,
+      present: Boolean(row),
+      row: row
+        ? {
+            firestoreDocId: String(row?.firestoreDocId || row?.id || "").trim(),
+            nome: row?.nome ?? row?.nomeCompleto ?? row?.name ?? null,
+            email: row?.email ?? null,
+            tipo: row?.tipo ?? row?.role ?? row?.type ?? null,
+            inferredRole: inferLegacyUserRole(row),
+            professorId: row?.professorId ?? row?.teacherId ?? null,
+            plano: row?.plano ?? row?.plan ?? null,
+            cancelamento: row?.cancelamento ?? null,
+          }
+        : null,
+    };
+  });
+};
+
 module.exports = async (req, res) => {
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET");
@@ -112,6 +139,10 @@ module.exports = async (req, res) => {
     let rows = await listCollectionAsAdmin(collection);
     const type = String(url.searchParams.get("type") || "").trim().toLowerCase();
     const wantsDebug = url.searchParams.get("debug") === "1";
+    const focusIds = [
+      "kkeegmFko4Xi0wigwpXLDG0Bo5E3",
+      "qsZScLZ3NpXnqKB3lIISldK97cL2",
+    ];
     const fullDebugSummary = collection === "users" && wantsDebug ? buildUserDebugSummary(rows) : null;
     if (collection === "users" && type) {
       const normalizedType = normalizeUserRoleFilter(type);
@@ -121,6 +152,7 @@ module.exports = async (req, res) => {
           requestedType: normalizedType,
           beforeFilter: fullDebugSummary,
           afterFilter: buildUserDebugSummary(rows),
+          focused: buildFocusedUserDebug(rows, focusIds),
         });
       }
     }
@@ -129,6 +161,7 @@ module.exports = async (req, res) => {
       body.debug = {
         beforeFilter: fullDebugSummary,
         afterFilter: buildUserDebugSummary(rows),
+        focused: buildFocusedUserDebug(rows, focusIds),
       };
     }
     return sendJson(res, 200, body);
@@ -138,4 +171,11 @@ module.exports = async (req, res) => {
       error: error?.message === "missing_service_account" ? "service_account_not_configured" : "admin_data_failed",
     });
   }
+};
+
+module.exports._test = {
+  normalizeUserRoleFilter,
+  inferLegacyUserRole,
+  buildUserDebugSummary,
+  buildFocusedUserDebug,
 };

@@ -82,8 +82,8 @@ module.exports = async (req, res) => {
         sendJson(res, 400, { error: "invalid_request" });
         return;
       }
-      await syncStudentMirrorToSupabase(uid).catch(() => null);
-      sendJson(res, 200, { ok: true });
+      const sync = await syncStudentMirrorToSupabase(uid);
+      sendJson(res, sync.ok ? 200 : 409, { ok: sync.ok, sync });
       return;
     }
 
@@ -95,8 +95,8 @@ module.exports = async (req, res) => {
     // OWNERSHIP: cadastro=Firestore, operação=Supabase (contrato 2026-07-12)
     // Mantemos compatibilidade com chamadas legadas e sincronizamos o espelho
     // desnormalizado no Supabase a partir de users/{uid}.
-    await syncStudentMirrorToSupabase(uid).catch(() => null);
-    sendJson(res, 200, { ok: true });
+    const sync = await syncStudentMirrorToSupabase(uid);
+    sendJson(res, 200, { ok: true, sync });
     return;
   }
 
@@ -141,8 +141,8 @@ module.exports = async (req, res) => {
       return;
     }
     // OWNERSHIP: cadastro=Firestore, operação=Supabase (contrato 2026-07-12)
-    await syncStudentMirrorToSupabase(uid).catch(() => null);
-    sendJson(res, 200, { ok: true });
+    const sync = await syncStudentMirrorToSupabase(uid);
+    sendJson(res, 200, { ok: true, sync });
   } catch (error) {
     console.error("[api] admin-users patch failed", error);
     sendJson(res, 500, { error: "admin_users_patch_failed" });
