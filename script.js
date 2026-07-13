@@ -187,6 +187,24 @@ const ADMIN_TEACHER_HISTORY_DRAWER_TEMPLATE = `
   </div>
 `;
 
+const ADMIN_PED_LESSON_RECORD_DRAWER_TEMPLATE = `
+  <div class="admin-students-drawer admin-ped-record-drawer" data-admin-ped-lesson-record-drawer hidden>
+    <div class="admin-students-drawer-backdrop" data-admin-ped-lesson-record-close></div>
+    <div class="admin-students-drawer-inner admin-ped-record-drawer-inner" role="dialog" aria-modal="true" aria-label="Detalhe do registro de aula">
+      <div class="admin-students-drawer-head">
+        <div>
+          <div class="admin-students-drawer-title" data-admin-ped-lesson-record-title>Registro da aula</div>
+          <div class="admin-students-drawer-sub" data-admin-ped-lesson-record-sub>—</div>
+        </div>
+        <button class="admin-students-drawer-close" type="button" data-admin-ped-lesson-record-close aria-label="Fechar">✕</button>
+      </div>
+      <div class="admin-students-drawer-body">
+        <div class="admin-ped-record-detail" data-admin-ped-lesson-record-body></div>
+      </div>
+    </div>
+  </div>
+`;
+
 const getOrCreateAdminDrawer = ({ selector, template } = {}) => {
   if (!selector || !template) return null;
   let drawer = document.querySelector(selector);
@@ -19876,6 +19894,10 @@ const buildAdminPedLessonRecordDataset = () => {
       statusKey = "remarcada";
       statusLabel = "Remarcada";
       tone = "amber";
+    } else if (normalizedStatus === PEDAGOGICO_STATUS.CANCELADA) {
+      statusKey = "cancelada";
+      statusLabel = "Cancelada";
+      tone = "muted";
     } else if (row.endMs < nowMs) {
       statusKey = "sem_registro";
       statusLabel = "Sem registro";
@@ -19920,6 +19942,210 @@ const buildAdminPedLessonRecordDataset = () => {
   };
 
   return { filters, range, rows: sortedRows, summary };
+};
+
+const getAdminPedLessonRecordDrawer = () =>
+  getOrCreateAdminDrawer({
+    selector: "[data-admin-ped-lesson-record-drawer]",
+    template: ADMIN_PED_LESSON_RECORD_DRAWER_TEMPLATE,
+  });
+
+const getAdminPedLessonRecordStatusMeta = (status) => {
+  const raw = String(status || "").trim();
+  if (raw === "sem_registro") return { label: "Sem registro", tone: "muted" };
+  if (raw === "presenca") return { label: "Realizada", tone: "green" };
+  if (raw === "falta") return { label: "Falta", tone: "coral" };
+  const normalized = normalizePedagogicoStatus(raw);
+  if (normalized === PEDAGOGICO_STATUS.FALTA_ALUNO) return { label: "Falta", tone: "coral" };
+  if (normalized === PEDAGOGICO_STATUS.REMARCADA) return { label: "Remarcada", tone: "amber" };
+  if (normalized === PEDAGOGICO_STATUS.CANCELADA) return { label: "Cancelada", tone: "muted" };
+  if (normalized === PEDAGOGICO_STATUS.REALIZADA) return { label: "Realizada", tone: "green" };
+  return { label: "Sem registro", tone: "muted" };
+};
+
+const formatAdminPedLessonRecordOption = (options, value) => {
+  const safe = String(value || "").trim();
+  if (!safe) return "";
+  const found = (Array.isArray(options) ? options : []).find((option) => String(option?.[0] || "") === safe);
+  return found ? String(found[1] || safe) : safe.replace(/_/g, " ");
+};
+
+const renderAdminPedLessonRecordValue = (value) => {
+  const text = Array.isArray(value)
+    ? value.map((item) => String(item || "").trim()).filter(Boolean).join(", ")
+    : String(value ?? "").trim();
+  return escapeHtml(text || "Não informado");
+};
+
+const renderAdminPedLessonRecordField = (label, value) => `
+  <div class="admin-ped-record-field">
+    <dt>${escapeHtml(label)}</dt>
+    <dd>${renderAdminPedLessonRecordValue(value)}</dd>
+  </div>
+`;
+
+const renderAdminPedLessonRecordStars = (value) => {
+  const rating = clampInt(Number(value || 0), 0, 5, 0);
+  const stars = [1, 2, 3, 4, 5]
+    .map((idx) => `<span class="${idx <= rating ? "is-on" : ""}" aria-hidden="true">★</span>`)
+    .join("");
+  return `<span class="admin-ped-record-stars" aria-label="${escapeHtml(rating > 0 ? `${rating} de 5` : "Não informado")}">${stars}<em>${escapeHtml(rating > 0 ? `${rating}/5` : "Não informado")}</em></span>`;
+};
+
+const renderAdminPedLessonRecordRatingField = (label, value) => `
+  <div class="admin-ped-record-field">
+    <dt>${escapeHtml(label)}</dt>
+    <dd>${renderAdminPedLessonRecordStars(value)}</dd>
+  </div>
+`;
+
+const renderAdminPedLessonRecordSection = (title, fieldsHtml) => `
+  <section class="admin-ped-record-section">
+    <h3>${escapeHtml(title)}</h3>
+    <dl>${fieldsHtml}</dl>
+  </section>
+`;
+
+const renderAdminPedLessonRecordDynamicSections = (record) => {
+  const logPayload = record?.log?.payload && typeof record.log.payload === "object" ? record.log.payload : {};
+  const draft = sanitizeLessonLogDraft(logPayload);
+  const status = record?.log ? normalizePedagogicoStatus(draft.statusAula || record.log.statusAula) : "";
+  const hasLogField = (...keys) => keys.some((key) => Object.prototype.hasOwnProperty.call(logPayload, key) && String(logPayload[key] ?? "").trim());
+  const valueIfPresent = (value, ...keys) => (hasLogField(...keys) ? value : "");
+
+  if (status === PEDAGOGICO_STATUS.FALTA_ALUNO) {
+    return renderAdminPedLessonRecordSection(
+      "Falta",
+      [
+        renderAdminPedLessonRecordField("Motivo da falta", formatAdminPedLessonRecordOption(PED_MOTIVO_FALTA, valueIfPresent(draft.motivoFalta, "motivoFalta"))),
+        renderAdminPedLessonRecordField("Responsável", formatAdminPedLessonRecordOption(
+          [
+            ["aluno", "Aluno"],
+            ["professor", "Professor"],
+            ["escola", "Escola"],
+            ["outro", "Outro"],
+          ],
+          valueIfPresent(draft.responsavelFalta, "responsavelFalta")
+        )),
+        renderAdminPedLessonRecordField(
+          "Reposição necessária",
+          valueIfPresent(draft.reposicaoNecessaria, "reposicaoNecessaria") === "nao" ? "Não" : valueIfPresent(draft.reposicaoNecessaria, "reposicaoNecessaria") === "sim" ? "Sim" : ""
+        ),
+        renderAdminPedLessonRecordField("Risco de evasão", formatAdminPedLessonRecordOption(PED_RISCO_EVASAO, valueIfPresent(draft.riscoEvasao, "riscoEvasao"))),
+        renderAdminPedLessonRecordField("Observação", valueIfPresent(draft.observacao, "observacao", "observacoesInternas")),
+      ].join("")
+    );
+  }
+
+  if (status === PEDAGOGICO_STATUS.REMARCADA) {
+    const novaData = draft.novaDataRemarcacao ? formatPedagogicoDate(draft.novaDataRemarcacao) : "";
+    const novoHorario = draft.horarioInicioRemarcacao || draft.horarioFimRemarcacao ? `${draft.horarioInicioRemarcacao || "—"}–${draft.horarioFimRemarcacao || "—"}` : "";
+    return renderAdminPedLessonRecordSection(
+      "Remarcação",
+      [
+        renderAdminPedLessonRecordField(
+          "Tipo de movimento",
+          valueIfPresent(draft.tipoMovimento, "tipoMovimento") === "reposicao" ? "Reposição" : valueIfPresent(draft.tipoMovimento, "tipoMovimento") === "remarcacao" ? "Remarcação" : ""
+        ),
+        renderAdminPedLessonRecordField("Motivo", formatAdminPedLessonRecordOption(PED_MOTIVO_REMARCACAO, valueIfPresent(draft.motivoRemarcacao, "motivoRemarcacao"))),
+        renderAdminPedLessonRecordField("Nova data", novaData),
+        renderAdminPedLessonRecordField("Novo horário", novoHorario),
+        renderAdminPedLessonRecordField("Risco de evasão", formatAdminPedLessonRecordOption(PED_RISCO_EVASAO, valueIfPresent(draft.riscoEvasao, "riscoEvasao"))),
+        renderAdminPedLessonRecordField("Observação", valueIfPresent(draft.observacao, "observacao", "observacoesInternas")),
+      ].join("")
+    );
+  }
+
+  if (status === PEDAGOGICO_STATUS.CANCELADA) {
+    return renderAdminPedLessonRecordSection("Cancelamento", renderAdminPedLessonRecordField("Motivo / observação", draft.observacao || draft.observacoesInternas));
+  }
+
+  if (status === PEDAGOGICO_STATUS.REALIZADA) {
+    return [
+      renderAdminPedLessonRecordSection(
+        "Conteúdo da aula",
+        [
+          renderAdminPedLessonRecordField("O que foi trabalhado", draft.conteudoTrabalhado),
+          renderAdminPedLessonRecordField("Gramática", draft.gramaticaTrabalhada),
+          renderAdminPedLessonRecordField("Vocabulário", draft.vocabularioTrabalhado),
+          renderAdminPedLessonRecordField("Pronúncia", draft.pronunciaConversacao),
+          renderAdminPedLessonRecordField("Atividade", draft.atividadeRealizada),
+          renderAdminPedLessonRecordField("Materiais", draft.materiaisUsados),
+          renderAdminPedLessonRecordField("Homework", draft.homework),
+          renderAdminPedLessonRecordField("Próxima aula", draft.proximaAula),
+          renderAdminPedLessonRecordField("Avisos", draft.avisosCoordenacao),
+          renderAdminPedLessonRecordField("Observações internas", draft.observacoesInternas),
+        ].join("")
+      ),
+      renderAdminPedLessonRecordSection(
+        "Avaliação do aluno",
+        [
+          renderAdminPedLessonRecordRatingField("Engajamento", draft.engajamentoNota),
+          renderAdminPedLessonRecordRatingField("Evolução", draft.evolucaoNota),
+          renderAdminPedLessonRecordRatingField("Confiança", draft.confiancaNota),
+          renderAdminPedLessonRecordField("Humor", draft.humorAluno),
+        ].join("")
+      ),
+    ].join("");
+  }
+
+  return renderAdminPedLessonRecordSection(
+    "Registro",
+    [
+      renderAdminPedLessonRecordField("Status", "Sem registro salvo"),
+      renderAdminPedLessonRecordField("Conteúdo", ""),
+      renderAdminPedLessonRecordField("Observação", ""),
+    ].join("")
+  );
+};
+
+const renderAdminPedLessonRecordDetail = (record) => {
+  const statusMeta = getAdminPedLessonRecordStatusMeta(record?.log?.statusAula || record?.statusKey);
+  const titleEl = getAdminPedLessonRecordDrawer()?.querySelector("[data-admin-ped-lesson-record-title]");
+  const subEl = getAdminPedLessonRecordDrawer()?.querySelector("[data-admin-ped-lesson-record-sub]");
+  const bodyEl = getAdminPedLessonRecordDrawer()?.querySelector("[data-admin-ped-lesson-record-body]");
+  if (titleEl instanceof HTMLElement) titleEl.textContent = record?.alunoNome || "Aluno";
+  if (subEl instanceof HTMLElement) {
+    subEl.textContent = `${record?.professorNome || "Professor"} · ${formatPedagogicoDate(record?.dateKey)} · ${formatHmFromMinutes(record?.startMin)}–${formatHmFromMinutes(record?.endMin)}`;
+  }
+  if (!(bodyEl instanceof HTMLElement)) return;
+  bodyEl.innerHTML = `
+    <section class="admin-ped-record-hero">
+      <div>
+        <span class="admin-ped-record-kicker">Registro de aula</span>
+        <h2>${escapeHtml(record?.alunoNome || "Aluno")}</h2>
+        <p>${escapeHtml(record?.professorNome || "Professor")} · ${escapeHtml(formatPedagogicoDate(record?.dateKey))} · ${escapeHtml(
+          `${formatHmFromMinutes(record?.startMin)}–${formatHmFromMinutes(record?.endMin)}`
+        )}</p>
+      </div>
+      <span class="pedrecords-status-badge is-${escapeHtml(statusMeta.tone)}">${escapeHtml(statusMeta.label)}</span>
+    </section>
+    ${renderAdminPedLessonRecordDynamicSections(record)}
+  `;
+};
+
+const openAdminPedLessonRecordDrawer = (record) => {
+  if (!record || typeof record !== "object") return;
+  const drawer = getAdminPedLessonRecordDrawer();
+  if (!(drawer instanceof HTMLElement)) return;
+  renderAdminPedLessonRecordDetail(record);
+  lockAdminStudentDrawerBackgroundScroll();
+  drawer.hidden = false;
+  window.requestAnimationFrame(() => {
+    drawer.classList.add("is-open");
+  });
+};
+
+const closeAdminPedLessonRecordDrawer = () => {
+  const drawer = getAdminPedLessonRecordDrawer();
+  if (drawer instanceof HTMLElement) {
+    drawer.classList.remove("is-open");
+    window.setTimeout(() => {
+      const nextDrawer = getAdminPedLessonRecordDrawer();
+      if (nextDrawer instanceof HTMLElement) nextDrawer.hidden = true;
+    }, 220);
+  }
+  unlockAdminStudentDrawerBackgroundScroll();
 };
 
 const renderAdminPedLessonRecordActiveFilters = ({ filters, range }) => {
@@ -31404,6 +31630,14 @@ document.addEventListener("click", (event) => {
       closeAdminPedLessonRecordsFiltersPopover();
     }
 
+    const lessonRecordDrawerClose = target.closest("[data-admin-ped-lesson-record-close]");
+    if (lessonRecordDrawerClose instanceof HTMLElement) {
+      event.preventDefault();
+      event.stopPropagation();
+      closeAdminPedLessonRecordDrawer();
+      return;
+    }
+
     if (
       adminStudentsState.history?.lifecycleMenuOpen &&
       !target.closest("[data-admin-student-lifecycle-menu]") &&
@@ -32058,8 +32292,7 @@ document.addEventListener("click", (event) => {
         const dataset = buildAdminPedLessonRecordDataset();
         const record = dataset.rows.find((row) => String(row.id || "") === rowId) || null;
         if (record) {
-          // TODO etapa 2: abrir drawer de detalhe do registro
-          console.log("[admin-ped][lesson-record]", record);
+          openAdminPedLessonRecordDrawer(record);
         }
         return;
       }
@@ -34339,6 +34572,14 @@ document.addEventListener("keydown", (event) => {
 
 document.addEventListener("keydown", (event) => {
   if (currentRole !== "admin") return;
+  if (event.key === "Escape") {
+    const lessonRecordDrawer = document.querySelector("[data-admin-ped-lesson-record-drawer]");
+    if (lessonRecordDrawer instanceof HTMLElement && !lessonRecordDrawer.hidden && lessonRecordDrawer.classList.contains("is-open")) {
+      event.preventDefault();
+      closeAdminPedLessonRecordDrawer();
+      return;
+    }
+  }
   if (event.key === "Escape" && adminStudentsState.history?.lifecycleMenuOpen) {
     event.preventDefault();
     adminStudentsState.history.lifecycleMenuOpen = false;
