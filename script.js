@@ -7804,9 +7804,186 @@ const PED_RISCO_EVASAO = [
   ["alto", "Alto"],
 ];
 
+function normalizeResponsavelRemarcacao(value) {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  if (["escola", "professor", "escola-professor", "escola_professor", "school", "teacher"].includes(normalized)) return "escola";
+  if (["aluno", "student"].includes(normalized)) return "aluno";
+  return "";
+}
+
+function normalizeSituacaoReposicao(value) {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  if (["agendada_agora", "ja_tenho_novo_horario", "novo_horario", "agendada"].includes(normalized)) return "agendada_agora";
+  if (["aguardando_aluno", "aguardando_resposta", "aguardando_resposta_aluno"].includes(normalized)) return "aguardando_aluno";
+  if (["incompatibilidade_horario", "incompatibilidade"].includes(normalized)) return "incompatibilidade_horario";
+  return "";
+}
+
+function addDaysToDateKey(dateKey, days) {
+  const date = parseDateKey(dateKey);
+  if (!date) return "";
+  date.setDate(date.getDate() + (Number(days) || 0));
+  return dateKeyFromIso(date.toISOString());
+}
+
+function calculateReposicaoEligibility({ responsavel, planoAluno, dataAulaOriginal, dataAvisoRemarcacao, reposicoesUsadasNoMes } = {}) {
+  const responsible = normalizeResponsavelRemarcacao(responsavel);
+  const plan = normalizePlanKeyLoose(planoAluno);
+  const original = dataAulaOriginal instanceof Date ? dataAulaOriginal : new Date(dataAulaOriginal || "");
+  const notice = dataAvisoRemarcacao instanceof Date ? dataAvisoRemarcacao : new Date(dataAvisoRemarcacao || "");
+  const originalMs = original instanceof Date && Number.isFinite(original.getTime()) ? original.getTime() : NaN;
+  const noticeMs = notice instanceof Date && Number.isFinite(notice.getTime()) ? notice.getTime() : NaN;
+  const originalKey = Number.isFinite(originalMs) ? dateKeyFromIso(original.toISOString()) : "";
+  const dataLimiteReposicao = originalKey ? addDaysToDateKey(originalKey, 15) : "";
+  const count = Math.max(0, Number(reposicoesUsadasNoMes) || 0);
+
+  if (responsible === "escola") {
+    return {
+      elegivel: true,
+      motivo: "Reposição garantida — problema causado pela escola/professor",
+      limiteRestante: null,
+      dataLimiteReposicao,
+    };
+  }
+
+  if (responsible !== "aluno") {
+    return {
+      elegivel: false,
+      motivo: "Informe o responsável pela remarcação",
+      limiteRestante: null,
+      dataLimiteReposicao,
+    };
+  }
+
+  if (!Number.isFinite(originalMs) || !Number.isFinite(noticeMs)) {
+    return {
+      elegivel: false,
+      motivo: "Não foi possível calcular o prazo de aviso",
+      limiteRestante: null,
+      dataLimiteReposicao,
+    };
+  }
+
+  const hoursBeforeLesson = (originalMs - noticeMs) / 36e5;
+  if (hoursBeforeLesson < 24) {
+    return {
+      elegivel: false,
+      motivo: "Aviso fora do prazo de 24h",
+      limiteRestante: plan === "gold" ? Math.max(0, 2 - count) : null,
+      dataLimiteReposicao,
+    };
+  }
+
+  if (plan === "diamond") {
+    return {
+      elegivel: true,
+      motivo: "Plano Diamond — reposições ilimitadas com aviso no prazo",
+      limiteRestante: null,
+      dataLimiteReposicao,
+    };
+  }
+
+  if (plan === "gold") {
+    const remaining = Math.max(0, 2 - count);
+    if (count < 2) {
+      return {
+        elegivel: true,
+        motivo: `${remaining} de 2 reposições do mês restante${remaining === 1 ? "" : "s"}`,
+        limiteRestante: remaining,
+        dataLimiteReposicao,
+      };
+    }
+    return {
+      elegivel: false,
+      motivo: "Limite mensal do plano Gold já utilizado (2/2)",
+      limiteRestante: 0,
+      dataLimiteReposicao,
+    };
+  }
+
+  return {
+    elegivel: false,
+    motivo: "Plano do aluno não identificado para regra de reposição",
+    limiteRestante: null,
+    dataLimiteReposicao,
+  };
+}
+
+const getPedagogicoLessonStudentPlan = (lesson = {}) => {
+  const direct = normalizePlanKeyLoose(lesson?.planoAluno || lesson?.plano || lesson?.plan || lesson?.planName || "");
+  if (direct) return direct;
+  const alunoId = String(lesson?.alunoId || "").trim();
+  if (!alunoId) return "";
+  const summary = Array.isArray(teacherStudentsState?.summaries)
+    ? teacherStudentsState.summaries.find((row) => String(row?.alunoId || row?.id || "").trim() === alunoId)
+    : null;
+  return normalizePlanKeyLoose(summary?.plano || summary?.plan || summary?.planName || "");
+};
+
+const formatDateTimeLocalInputValue = (value) => {
+  if (!value) return "";
+  const date = value instanceof Date ? value : new Date(value);
+  if (!Number.isFinite(date.getTime())) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
+
+const countPedagogicoReposicoesAlunoNoMes = (lesson = {}) => {
+  const alunoId = String(lesson?.alunoId || "").trim();
+  const monthKey = String(lesson?.dateKey || "").slice(0, 7);
+  if (!alunoId || !monthKey) return 0;
+  const logsByEventId = pedagogicoState.logsByEventId instanceof Map ? pedagogicoState.logsByEventId : new Map();
+  const lessons = Array.isArray(pedagogicoState.lessons) ? pedagogicoState.lessons : [];
+  let total = 0;
+  lessons.forEach((item) => {
+    if (!item || typeof item !== "object") return;
+    if (String(item.id || "") === String(lesson.id || "")) return;
+    if (String(item.alunoId || "").trim() !== alunoId) return;
+    if (String(item.dateKey || "").slice(0, 7) !== monthKey) return;
+    const log = logsByEventId.get(String(item.id || ""));
+    const payload = log?.payload && typeof log.payload === "object" ? log.payload : {};
+    if (normalizePedagogicoStatus(log?.statusAula || payload.statusAula) !== PEDAGOGICO_STATUS.REMARCADA) return;
+    if (normalizeResponsavelRemarcacao(payload.responsavelRemarcacao || payload.responsavel_remarcacao) !== "aluno") return;
+    total += 1;
+  });
+  return total;
+};
+
+const calculateCurrentPedagogicoReposicaoEligibility = (draft = {}) => {
+  const lesson = pedagogicoActive?.lesson || {};
+  return calculateReposicaoEligibility({
+    responsavel: draft?.responsavelRemarcacao || "",
+    planoAluno: getPedagogicoLessonStudentPlan(lesson),
+    dataAulaOriginal: buildDateFromDateKeyAndMinutes(lesson.dateKey, lesson.startMin),
+    dataAvisoRemarcacao: draft?.dataAvisoRemarcacao || "",
+    reposicoesUsadasNoMes: countPedagogicoReposicoesAlunoNoMes(lesson),
+  });
+};
+
+const renderPedagogicoReposicaoEligibilityHtml = (draft = {}) => {
+  const responsavel = normalizeResponsavelRemarcacao(draft?.responsavelRemarcacao || "");
+  if (!responsavel) {
+    return `<div class="regv2-eligibility is-muted" data-ped-remarcacao-eligibility>Selecione o responsável para calcular a elegibilidade da reposição.</div>`;
+  }
+  const result = calculateCurrentPedagogicoReposicaoEligibility({ ...draft, responsavelRemarcacao: responsavel });
+  const tone = result.elegivel ? "is-ok" : "is-warn";
+  const prefix = result.elegivel ? "Elegível" : "Não elegível";
+  const limit = result.dataLimiteReposicao ? ` · realizar até ${formatPedagogicoDate(result.dataLimiteReposicao)}` : "";
+  return `<div class="regv2-eligibility ${tone}" data-ped-remarcacao-eligibility>${escapeHtml(`${prefix} — ${result.motivo}${limit}`)}</div>`;
+};
+
 const sanitizeLessonLogDraft = (raw = {}) => {
   const src = raw && typeof raw === "object" ? raw : {};
   const statusAula = normalizePedagogicoStatus(src.statusAula);
+  const eligibility = src.elegibilidade && typeof src.elegibilidade === "object" ? src.elegibilidade : {};
   return {
     statusAula, // realizada | falta_aluno | remarcada
     conteudoTrabalhado: String(src.conteudoTrabalhado || src.oQueFoiTrabalhado || "").trim(),
@@ -7831,7 +8008,16 @@ const sanitizeLessonLogDraft = (raw = {}) => {
     responsavelFalta: String(src.responsavelFalta || "aluno").trim().toLowerCase(),
     reposicaoNecessaria: String(src.reposicaoNecessaria || "sim").trim().toLowerCase(),
     motivoRemarcacao: String(src.motivoRemarcacao || "").trim().toLowerCase(),
-    tipoMovimento: String(src.tipoMovimento || "remarcacao").trim().toLowerCase(),
+    responsavelRemarcacao: normalizeResponsavelRemarcacao(src.responsavelRemarcacao || src.responsavel_remarcacao || ""),
+    dataAvisoRemarcacao: String(src.dataAvisoRemarcacao || src.data_aviso_remarcacao || "").trim(),
+    elegibilidade: {
+      elegivel: eligibility.elegivel === true,
+      motivo: String(eligibility.motivo || "").trim(),
+      limiteRestante: Number.isFinite(Number(eligibility.limiteRestante)) ? Number(eligibility.limiteRestante) : null,
+      dataLimiteReposicao: String(eligibility.dataLimiteReposicao || "").trim(),
+    },
+    situacaoReposicao: normalizeSituacaoReposicao(src.situacaoReposicao || src.situacao_reposicao || (src.novaDataRemarcacao || src.novaData ? "agendada_agora" : "")),
+    needsAdminReview: src.needsAdminReview === true || src.needs_admin_review === true,
     novaDataRemarcacao: String(src.novaDataRemarcacao || src.novaData || "").trim(),
     horarioInicioRemarcacao: String(src.horarioInicioRemarcacao || src.novoHorarioInicio || src.novoInicio || "").trim(),
     horarioFimRemarcacao: String(src.horarioFimRemarcacao || src.novoHorarioFim || src.novoFim || "").trim(),
@@ -8144,9 +8330,13 @@ const renderRemarcadaFieldsHtml = (draft = {}) => {
   const motivo = String(d.motivoRemarcacao || "");
   const risco = String(d.riscoEvasao || "");
   const obs = String(d.observacao || "");
+  const responsavel = normalizeResponsavelRemarcacao(d.responsavelRemarcacao || "");
+  const dataAviso = formatDateTimeLocalInputValue(d.dataAvisoRemarcacao || "");
+  const situacao = normalizeSituacaoReposicao(d.situacaoReposicao || "") || "agendada_agora";
   const dateKey = String(d.novaDataRemarcacao || d.novaData || "");
   const ini = String(d.horarioInicioRemarcacao || d.novoInicio || "");
   const fim = String(d.horarioFimRemarcacao || d.novoFim || "");
+  const showScheduleFields = situacao === "agendada_agora";
 
   // Ajuste: incluir option "Aluno pediu remarcação" com value solicitado.
   const options = [
@@ -8167,19 +8357,26 @@ const renderRemarcadaFieldsHtml = (draft = {}) => {
       "Próximos passos",
       `
         <div class="ped-field regv2-field">
-          <div class="ped-label regv2-label">Tipo de movimento</div>
+          <div class="ped-label regv2-label">Responsável pela remarcação</div>
           <div class="ped-sel-wrap">
-            <select class="ped-sel regv2-select" data-ped-field="tipoMovimento">
+            <select class="ped-sel regv2-select" data-ped-field="responsavelRemarcacao" data-ped-remarcacao-responsavel>
               ${renderPedSelectOptions(
                 [
-                  ["remarcacao", "Remarcação"],
-                  ["reposicao", "Reposição"],
+                  ["", "Selecione"],
+                  ["aluno", "Aluno"],
+                  ["escola", "Escola-Professor"],
                 ],
-                String(d.tipoMovimento || "remarcacao")
+                responsavel
               )}
             </select>
             <span class="ped-arr">▼</span>
           </div>
+          ${renderPedagogicoReposicaoEligibilityHtml({ ...d, responsavelRemarcacao: responsavel })}
+        </div>
+
+        <div class="ped-field regv2-field">
+          <div class="ped-label regv2-label">Aviso recebido em</div>
+          <input class="ped-in regv2-input" type="datetime-local" data-ped-field="dataAvisoRemarcacao" data-ped-remarcacao-aviso value="${escapeHtml(dataAviso)}" />
         </div>
 
         <div class="ped-field regv2-field">
@@ -8193,18 +8390,41 @@ const renderRemarcadaFieldsHtml = (draft = {}) => {
           </div>
         </div>
 
-        <div class="ped-grid2 regv2-grid3">
+        <div class="ped-field regv2-field">
+          <div class="ped-label regv2-label">Situação da reposição</div>
+          <div class="regv2-status-pills regv2-reposition-pills" role="radiogroup" aria-label="Situação da reposição">
+            ${[
+              ["agendada_agora", "Já tenho novo horário"],
+              ["aguardando_aluno", "Aguardando resposta do aluno"],
+              ["incompatibilidade_horario", "Incompatibilidade de horário"],
+            ]
+              .map(
+                ([value, label]) => `
+                  <button
+                    class="regv2-status-pill regv2-status-pill--amber${situacao === value ? " is-selected" : ""}"
+                    type="button"
+                    data-ped-reposicao-situacao="${escapeHtml(value)}"
+                    aria-pressed="${situacao === value ? "true" : "false"}"
+                  >${escapeHtml(label)}</button>
+                `
+              )
+              .join("")}
+          </div>
+          <input type="hidden" data-ped-field="situacaoReposicao" value="${escapeHtml(situacao)}" />
+        </div>
+
+        <div class="ped-grid2 regv2-grid3" data-ped-reposicao-schedule ${showScheduleFields ? "" : "hidden"}>
           <div class="ped-field regv2-field">
             <div class="ped-label regv2-label">Nova data</div>
-            <input class="ped-in regv2-input" type="date" data-ped-field="novaData" value="${escapeHtml(dateKey)}" />
+            <input class="ped-in regv2-input" type="date" data-ped-field="novaData" value="${escapeHtml(dateKey)}" ${showScheduleFields ? "" : "disabled"} />
           </div>
           <div class="ped-field regv2-field">
             <div class="ped-label regv2-label">Início</div>
-            <input class="ped-in regv2-input" type="time" data-ped-field="novoInicio" value="${escapeHtml(ini)}" />
+            <input class="ped-in regv2-input" type="time" data-ped-field="novoInicio" value="${escapeHtml(ini)}" ${showScheduleFields ? "" : "disabled"} />
           </div>
           <div class="ped-field regv2-field">
             <div class="ped-label regv2-label">Fim</div>
-            <input class="ped-in regv2-input" type="time" data-ped-field="novoFim" value="${escapeHtml(fim)}" />
+            <input class="ped-in regv2-input" type="time" data-ped-field="novoFim" value="${escapeHtml(fim)}" ${showScheduleFields ? "" : "disabled"} />
           </div>
         </div>
       `
@@ -8370,6 +8590,8 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
     bindStars(dynamic);
     bindHumor(dynamic);
     bindAvisosTrigger(dynamic);
+    syncPedagogicoReposicaoSituation(dynamic, pedagogicoDraft?.situacaoReposicao || "");
+    syncPedagogicoReposicaoEligibility(dynamic);
   }
   bindAvisosAutoClose(scrollRoot);
 
@@ -8626,6 +8848,42 @@ const bindAvisosAutoClose = (rootEl) => {
     });
 };
 
+const syncPedagogicoReposicaoEligibility = (rootEl) => {
+  const root = rootEl instanceof HTMLElement ? rootEl : pedagogicoFormContainer;
+  const target = root instanceof HTMLElement ? root.querySelector("[data-ped-remarcacao-eligibility]") : null;
+  if (!(target instanceof HTMLElement)) return;
+  const draft = readPedagogicoDraftFromDom();
+  const html = renderPedagogicoReposicaoEligibilityHtml(draft || {});
+  const temp = document.createElement("div");
+  temp.innerHTML = html;
+  const next = temp.firstElementChild;
+  if (next instanceof HTMLElement) target.replaceWith(next);
+};
+
+const syncPedagogicoReposicaoSituation = (rootEl, nextValue) => {
+  const root = rootEl instanceof HTMLElement ? rootEl : pedagogicoFormContainer;
+  if (!(root instanceof HTMLElement)) return;
+  const situation = normalizeSituacaoReposicao(nextValue) || "agendada_agora";
+  const hidden = root.querySelector('[data-ped-field="situacaoReposicao"]');
+  if (hidden instanceof HTMLInputElement) hidden.value = situation;
+  root.querySelectorAll("[data-ped-reposicao-situacao]").forEach((button) => {
+    if (!(button instanceof HTMLElement)) return;
+    const isSelected = String(button.getAttribute("data-ped-reposicao-situacao") || "") === situation;
+    button.classList.toggle("is-selected", isSelected);
+    button.setAttribute("aria-pressed", isSelected ? "true" : "false");
+  });
+  const schedule = root.querySelector("[data-ped-reposicao-schedule]");
+  const showSchedule = situation === "agendada_agora";
+  if (schedule instanceof HTMLElement) {
+    schedule.hidden = !showSchedule;
+    schedule.querySelectorAll("input, select, textarea").forEach((control) => {
+      if (control instanceof HTMLInputElement || control instanceof HTMLSelectElement || control instanceof HTMLTextAreaElement) {
+        control.disabled = !showSchedule;
+      }
+    });
+  }
+};
+
 const rerenderPedagogicoDynamicFields = (nextStatus) => {
   const root = pedagogicoFormContainer instanceof HTMLElement ? pedagogicoFormContainer.querySelector("[data-ped-form]") : null;
   if (!(root instanceof HTMLElement)) return null;
@@ -8640,6 +8898,8 @@ const rerenderPedagogicoDynamicFields = (nextStatus) => {
   bindStars(dynamic);
   bindHumor(dynamic);
   bindAvisosTrigger(dynamic);
+  syncPedagogicoReposicaoSituation(dynamic, pedagogicoDraft?.situacaoReposicao || "");
+  syncPedagogicoReposicaoEligibility(dynamic);
 
   return { scrollRoot, dynamic };
 };
@@ -8689,7 +8949,9 @@ const readPedagogicoDraftFromDom = () => {
     responsavelFalta: getField("responsavelFalta").trim().toLowerCase(),
     reposicaoNecessaria: getField("reposicaoNecessaria").trim().toLowerCase(),
     motivoRemarcacao: getField("motivoRemarcacao").trim().toLowerCase(),
-    tipoMovimento: getField("tipoMovimento").trim().toLowerCase(),
+    responsavelRemarcacao: normalizeResponsavelRemarcacao(getField("responsavelRemarcacao")),
+    dataAvisoRemarcacao: getField("dataAvisoRemarcacao").trim(),
+    situacaoReposicao: normalizeSituacaoReposicao(getField("situacaoReposicao")),
     novaDataRemarcacao: (getField("novaData").trim() || getField("novaDataRemarcacao").trim()),
     horarioInicioRemarcacao: (getField("novoInicio").trim() || getField("horarioInicioRemarcacao").trim()),
     horarioFimRemarcacao: (getField("novoFim").trim() || getField("horarioFimRemarcacao").trim()),
@@ -8708,6 +8970,11 @@ const savePedagogicoLog = async ({ autosave = false } = {}) => {
   const lesson = pedagogicoActive.lesson;
   const draftRaw = readPedagogicoDraftFromDom();
   const draft = sanitizeLessonLogDraft(draftRaw || {});
+  if (draft.statusAula === PEDAGOGICO_STATUS.REMARCADA) {
+    draft.situacaoReposicao = normalizeSituacaoReposicao(draft.situacaoReposicao) || "agendada_agora";
+    draft.elegibilidade = calculateCurrentPedagogicoReposicaoEligibility(draft);
+    draft.needsAdminReview = draft.situacaoReposicao === "incompatibilidade_horario";
+  }
   if (!draft) return false;
   if (!draft.statusAula) {
     if (!autosave) setPedagogicoStatus("Selecione o status da aula para salvar.", "error");
@@ -8750,15 +9017,38 @@ const savePedagogicoLog = async ({ autosave = false } = {}) => {
     }
   }
   if (draft.statusAula === "remarcada") {
-    if (!has(draft.motivoRemarcacao) || !has(draft.novaDataRemarcacao) || !has(draft.horarioInicioRemarcacao) || !has(draft.horarioFimRemarcacao)) {
-      if (!autosave) setPedagogicoStatus("Preencha o motivo, a nova data e os horários para salvar.", "error");
+    if (!has(draft.responsavelRemarcacao)) {
+      if (!autosave) setPedagogicoStatus("Selecione o responsável pela remarcação para salvar.", "error");
+      return false;
+    }
+    if (draft.responsavelRemarcacao === "aluno" && !has(draft.dataAvisoRemarcacao)) {
+      if (!autosave) setPedagogicoStatus("Informe quando o aluno avisou a remarcação.", "error");
+      return false;
+    }
+    if (!has(draft.motivoRemarcacao)) {
+      if (!autosave) setPedagogicoStatus("Selecione o motivo da remarcação para salvar.", "error");
+      return false;
+    }
+    if (!has(draft.situacaoReposicao)) {
+      if (!autosave) setPedagogicoStatus("Selecione a situação da reposição para salvar.", "error");
       return false;
     }
     if (!has(draft.riscoEvasao)) {
       if (!autosave) setPedagogicoStatus("Selecione o risco de evasão para salvar.", "error");
       return false;
     }
-    if (
+    if (draft.situacaoReposicao !== "agendada_agora") {
+      draft.novaDataRemarcacao = "";
+      draft.horarioInicioRemarcacao = "";
+      draft.horarioFimRemarcacao = "";
+    }
+    if (draft.situacaoReposicao === "agendada_agora" && (!has(draft.novaDataRemarcacao) || !has(draft.horarioInicioRemarcacao) || !has(draft.horarioFimRemarcacao))) {
+      if (!autosave) setPedagogicoStatus("Preencha a nova data e os horários para salvar.", "error");
+      return false;
+    }
+    if (draft.situacaoReposicao !== "agendada_agora") {
+      // Sem novo horário definido, o registro fica pendente para coordenação/aluno.
+    } else if (
       !isValidDateKey(draft.novaDataRemarcacao) ||
       !/^\d{2}:\d{2}$/.test(draft.horarioInicioRemarcacao) ||
       !/^\d{2}:\d{2}$/.test(draft.horarioFimRemarcacao)
@@ -8768,7 +9058,7 @@ const savePedagogicoLog = async ({ autosave = false } = {}) => {
     }
     const startMin = timeToMinutes(draft.horarioInicioRemarcacao);
     const endMin = timeToMinutes(draft.horarioFimRemarcacao);
-    if (!Number.isFinite(startMin) || !Number.isFinite(endMin) || endMin <= startMin) {
+    if (draft.situacaoReposicao === "agendada_agora" && (!Number.isFinite(startMin) || !Number.isFinite(endMin) || endMin <= startMin)) {
       if (!autosave) setPedagogicoStatus("Horário de fim deve ser maior que o de início.", "error");
       return false;
     }
@@ -8816,9 +9106,15 @@ const savePedagogicoLog = async ({ autosave = false } = {}) => {
           ? {
               aula_id: liveLessonId,
               onboarding_id: lesson.onboardingId || "",
-              nova_data_aula: `${draft.novaDataRemarcacao}T${draft.horarioInicioRemarcacao}:00-03:00`,
+              ...(draft.situacaoReposicao === "agendada_agora"
+                ? { nova_data_aula: `${draft.novaDataRemarcacao}T${draft.horarioInicioRemarcacao}:00-03:00` }
+                : {}),
               motivo_remarcacao: draft.motivoRemarcacao,
-              tipo_movimento: draft.tipoMovimento || "remarcacao",
+              responsavel_remarcacao: draft.responsavelRemarcacao,
+              data_aviso_remarcacao: draft.dataAvisoRemarcacao,
+              elegibilidade: draft.elegibilidade,
+              situacao_reposicao: draft.situacaoReposicao,
+              needs_admin_review: draft.needsAdminReview === true,
               observacoes: draft.observacao,
             }
           : draft.statusAula === "cancelada"
@@ -8950,10 +9246,11 @@ const renderTeacherPedagogico = async ({ silent = false } = {}) => {
   if (pedagogicoEmpty instanceof HTMLElement) pedagogicoEmpty.hidden = true;
 
   try {
-    const [eventsResult, logsResult, liveResult] = await Promise.allSettled([
+    const [eventsResult, logsResult, liveResult, teacherStudentsResult] = await Promise.allSettled([
       fetchWithAuth("/api/schedule-events"),
       fetchWithAuth("/api/lesson-logs"),
       fetchWithAuth("/api/live-lessons?scope=pedagogico&include_records=1&limit=500"),
+      fetchWithAuth("/api/pedagogico/teacher-students", { method: "GET" }),
     ]);
 
     const eventsRes = eventsResult.status === "fulfilled" ? eventsResult.value : null;
@@ -8961,9 +9258,24 @@ const renderTeacherPedagogico = async ({ silent = false } = {}) => {
     const liveRes = liveResult.status === "fulfilled" ? liveResult.value : null;
     const eventsData = eventsRes?.ok ? await eventsRes.json().catch(() => null) : null;
     const liveData = liveRes?.ok ? await liveRes.json().catch(() => null) : null;
+    const teacherStudentsRes = teacherStudentsResult.status === "fulfilled" ? teacherStudentsResult.value : null;
+    const teacherStudentsData = teacherStudentsRes?.ok ? await teacherStudentsRes.json().catch(() => null) : null;
     const events = Array.isArray(eventsData?.events) ? eventsData.events : [];
     const liveLessons = Array.isArray(liveData?.lessons) ? liveData.lessons : [];
     const liveRecords = Array.isArray(liveData?.records) ? liveData.records : [];
+    const studentPlanById = new Map();
+    if (Array.isArray(teacherStudentsData?.summaries)) {
+      teacherStudentsData.summaries.forEach((row) => {
+        const alunoId = String(row?.alunoId || row?.id || "").trim();
+        if (!alunoId) return;
+        const plan = normalizePlanKeyLoose(row?.plano || row?.plan || row?.planName || "");
+        if (plan) studentPlanById.set(alunoId, plan);
+      });
+      if (teacherStudentsData.summaries.length) {
+        teacherStudentsState.summaries = teacherStudentsData.summaries;
+        teacherStudentsState.loadedAt = Date.now();
+      }
+    }
 
     if (!eventsRes?.ok && !liveRes?.ok) {
       throw new Error(`lessons_fetch_failed:${eventsRes?.status || "network"}:${liveRes?.status || "network"}`);
@@ -9018,7 +9330,11 @@ const renderTeacherPedagogico = async ({ silent = false } = {}) => {
           responsavelFalta: record.responsavel_falta || "aluno",
           reposicaoNecessaria: record.reposicao_necessaria === false ? "nao" : "sim",
           motivoRemarcacao: record.motivo_remarcacao || "",
-          tipoMovimento: record.tipo_movimento || record.tipo_remarcacao || "remarcacao",
+          responsavelRemarcacao: record.responsavel_remarcacao || "",
+          dataAvisoRemarcacao: record.data_aviso_remarcacao || "",
+          elegibilidade: record.elegibilidade || {},
+          situacaoReposicao: record.situacao_reposicao || (record.nova_data_aula || record.nova_data ? "agendada_agora" : ""),
+          needsAdminReview: record.needs_admin_review === true,
           novaDataRemarcacao: record.nova_data_aula || record.nova_data || "",
         },
       });
@@ -9036,6 +9352,7 @@ const renderTeacherPedagogico = async ({ silent = false } = {}) => {
         endMin: Number(evt.endMin) || 0,
         title: String(evt.title || "Aluno"),
         description: String(evt.description || "Aula"),
+        planoAluno: normalizePlanKeyLoose(evt.planoAluno || evt.plano || evt.plan || studentPlanById.get(String(evt.alunoId || "")) || ""),
         source: "firestore",
       }))
       .filter((evt) => evt.id && isValidDateKey(evt.dateKey) && evt.endMin > evt.startMin);
@@ -9056,6 +9373,7 @@ const renderTeacherPedagogico = async ({ silent = false } = {}) => {
         liveUrl: evt.liveUrl || `/aula/${encodeURIComponent(evt.id)}`,
         status: evt.status || "agendada",
         onboardingId: evt.onboardingId || "",
+        planoAluno: normalizePlanKeyLoose(evt.planoAluno || evt.plano || evt.plan || studentPlanById.get(String(evt.alunoId || "")) || ""),
       }))
       .filter((evt) => evt.id && isValidDateKey(evt.dateKey) && evt.endMin > evt.startMin);
 
@@ -20113,13 +20431,24 @@ const renderAdminPedLessonRecordDynamicSections = (record) => {
   if (status === PEDAGOGICO_STATUS.REMARCADA) {
     const novaData = draft.novaDataRemarcacao ? formatPedagogicoDate(draft.novaDataRemarcacao) : "";
     const novoHorario = draft.horarioInicioRemarcacao || draft.horarioFimRemarcacao ? `${draft.horarioInicioRemarcacao || "—"}–${draft.horarioFimRemarcacao || "—"}` : "";
+    const situationLabel =
+      draft.situacaoReposicao === "agendada_agora"
+        ? "Já tenho novo horário"
+        : draft.situacaoReposicao === "aguardando_aluno"
+          ? "Aguardando resposta do aluno"
+          : draft.situacaoReposicao === "incompatibilidade_horario"
+            ? "Incompatibilidade de horário"
+            : "";
+    const eligibilityLabel = draft.elegibilidade?.motivo
+      ? `${draft.elegibilidade.elegivel ? "Elegível" : "Não elegível"} — ${draft.elegibilidade.motivo}`
+      : "";
     return renderAdminPedLessonRecordSection(
       "Remarcação",
       [
-        renderAdminPedLessonRecordField(
-          "Tipo de movimento",
-          valueIfPresent(draft.tipoMovimento, "tipoMovimento") === "reposicao" ? "Reposição" : valueIfPresent(draft.tipoMovimento, "tipoMovimento") === "remarcacao" ? "Remarcação" : ""
-        ),
+        renderAdminPedLessonRecordField("Responsável", draft.responsavelRemarcacao === "aluno" ? "Aluno" : draft.responsavelRemarcacao === "escola" ? "Escola-Professor" : ""),
+        renderAdminPedLessonRecordField("Aviso recebido em", draft.dataAvisoRemarcacao ? new Date(draft.dataAvisoRemarcacao).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : ""),
+        renderAdminPedLessonRecordField("Elegibilidade", eligibilityLabel),
+        renderAdminPedLessonRecordField("Situação", situationLabel),
         renderAdminPedLessonRecordField("Motivo", formatAdminPedLessonRecordOption(PED_MOTIVO_REMARCACAO, valueIfPresent(draft.motivoRemarcacao, "motivoRemarcacao"))),
         renderAdminPedLessonRecordField("Nova data", novaData),
         renderAdminPedLessonRecordField("Novo horário", novoHorario),
@@ -34602,6 +34931,11 @@ document.addEventListener("change", (event) => {
 document.addEventListener("change", (event) => {
   const target = event.target;
   if (!(target instanceof Element)) return;
+  if ((target instanceof HTMLSelectElement && target.matches("[data-ped-remarcacao-responsavel]")) || (target instanceof HTMLInputElement && target.matches("[data-ped-remarcacao-aviso]"))) {
+    syncPedagogicoReposicaoEligibility(target.closest("[data-ped-form]") || pedagogicoFormContainer);
+    markPedagogicoDirty();
+    return;
+  }
   if (!(target instanceof HTMLSelectElement)) return;
   if (!target.matches("[data-ped-status]")) return;
 
@@ -34643,6 +34977,15 @@ document.addEventListener("click", (event) => {
   const target = event.target;
   if (!(target instanceof Element)) return;
   const statusPill = target.closest("[data-ped-status-pill]");
+  const situationPill = target.closest("[data-ped-reposicao-situacao]");
+  if (situationPill instanceof HTMLButtonElement) {
+    event.preventDefault();
+    event.stopPropagation();
+    const formRoot = situationPill.closest("[data-ped-form]");
+    syncPedagogicoReposicaoSituation(formRoot instanceof HTMLElement ? formRoot : pedagogicoFormContainer, situationPill.getAttribute("data-ped-reposicao-situacao"));
+    markPedagogicoDirty();
+    return;
+  }
   if (!(statusPill instanceof HTMLButtonElement)) return;
   const nextValue = String(statusPill.getAttribute("data-ped-status-pill") || "").trim();
   if (!nextValue) return;
