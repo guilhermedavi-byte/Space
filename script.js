@@ -35,6 +35,7 @@ const PEDAGOGICO_SIDEBAR_SECTION_MAP = {
   "admin-controle-pedagogico-aulas": { group: "operacao", tab: "aulas" },
   "admin-controle-pedagogico-pessoas": { group: "alunosTurmas", tab: "pessoas" },
   "admin-controle-pedagogico-retencao": { group: "operacao", tab: "retencao" },
+  "admin-controle-pedagogico-reposicoes": { group: "operacao", tab: "reposicoes" },
   "admin-controle-pedagogico-qualidade": { group: "qualidade", tab: "qualidade" },
   "admin-controle-pedagogico-onboarding": { group: "professores", tab: "onboarding" },
   "admin-controle-pedagogico-relatorios": { group: "gestao", tab: "relatorios" },
@@ -44,6 +45,7 @@ const PEDAGOGICO_SIDEBAR_ACTIVE_TARGET_BY_TAB = {
   aulas: "admin-controle-pedagogico-aulas",
   pessoas: "admin-controle-pedagogico-pessoas",
   retencao: "admin-controle-pedagogico-retencao",
+  reposicoes: "admin-controle-pedagogico-reposicoes",
   qualidade: "admin-controle-pedagogico-qualidade",
   onboarding: "admin-controle-pedagogico-onboarding",
   relatorios: "admin-controle-pedagogico-relatorios",
@@ -331,6 +333,7 @@ const adminPedEmptyStudents = document.querySelector("[data-admin-ped-empty-stud
 const adminPedTeachers = document.querySelector("[data-admin-ped-teachers]");
 const adminPedPeopleRoot = document.querySelector('[data-admin-ped-panel="pessoas"]');
 const adminPedRetention = document.querySelector("[data-admin-ped-retention]");
+const adminPedReposicoes = document.querySelector("[data-admin-ped-reposicoes]");
 const adminPedPlans = document.querySelector("[data-admin-ped-plans]");
 const adminPedEmptyPlans = document.querySelector("[data-admin-ped-empty-plans]");
 const adminPedSurveys = document.querySelector("[data-admin-ped-surveys]");
@@ -984,6 +987,7 @@ const syncRoleUI = () => {
               <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-controle-pedagogico-aulas" data-sidebar-placeholder="true" title="Registros de Aulas"><span class="sidebar-text">Registros de Aulas</span></button>
               <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-controle-pedagogico-pessoas" data-sidebar-placeholder="true" title="Usuários"><span class="sidebar-text">Usuários</span></button>
               <button class="sidebar-link sidebar-link-sub sidebar-link-with-badge" type="button" data-panel-target="admin-controle-pedagogico-retencao" data-sidebar-placeholder="true" title="Retenção"><span class="sidebar-link-main"><span class="sidebar-text">Retenção</span></span><span class="sidebar-badge" data-admin-ped-retention-badge hidden>0</span></button>
+              <button class="sidebar-link sidebar-link-sub sidebar-link-with-badge" type="button" data-panel-target="admin-controle-pedagogico-reposicoes" data-sidebar-placeholder="true" title="Reposições"><span class="sidebar-link-main"><span class="sidebar-text">Reposições</span></span><span class="sidebar-badge" data-admin-ped-reposicoes-badge hidden>0</span></button>
               <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-controle-pedagogico-qualidade" data-sidebar-placeholder="true" title="Qualidade"><span class="sidebar-text">Qualidade</span></button>
               <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-controle-pedagogico-onboarding" data-sidebar-placeholder="true" title="Onboarding"><span class="sidebar-text">Onboarding</span></button>
               <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-controle-pedagogico-relatorios" data-sidebar-placeholder="true" title="Relatórios"><span class="sidebar-text">Relatórios</span></button>
@@ -18116,6 +18120,14 @@ let adminPedagogicoState = {
     month: createDateKey(new Date()).slice(0, 7),
     metrics: null,
   },
+  reposicoes: {
+    status: "idle",
+    loading: false,
+    loadedAt: 0,
+    error: "",
+    badgeCount: 0,
+    queues: null,
+  },
   filters: {
     teacherId: "",
     dow: "",
@@ -19787,6 +19799,7 @@ const ADMIN_PED_NAV_GROUPS = [
       { key: "overview", label: "Visão Geral" },
       { key: "aulas", label: "Registros de Aulas" },
       { key: "retencao", label: "Retenção" },
+      { key: "reposicoes", label: "Reposições" },
       { key: "conflitos", label: "Conflitos" },
     ],
   },
@@ -19840,6 +19853,7 @@ const ADMIN_PED_TAB_SUMMARIES = {
   overview: "Pendências e próximos passos",
   aulas: "Presença, faltas e aulas sem registro",
   retencao: "Central de retenção e decisões pendentes",
+  reposicoes: "Central de reposições e prazos de remarcação",
   conflitos: "Conflitos detectados",
   pessoas: "Usuários",
   alunos: "Visão dos alunos ativos",
@@ -19863,6 +19877,7 @@ const ADMIN_PED_PAGE_TITLES = {
   aulas: "Registros de Aulas",
   pessoas: "Usuários",
   retencao: "Retenção",
+  reposicoes: "Reposições",
   qualidade: "Qualidade",
   onboarding: "Onboarding",
   relatorios: "Relatórios",
@@ -19876,6 +19891,7 @@ const ADMIN_PED_TAB_TO_URL_MODULE = {
   vinculos: "vinculos",
   pessoas: "usuarios",
   retencao: "retencao",
+  reposicoes: "reposicoes",
   conflitos: "conflitos",
   professores: "professores",
   qualidade: "qualidade",
@@ -19902,6 +19918,7 @@ const ADMIN_PED_URL_MODULE_TO_TAB = {
   users: "pessoas",
   pessoas: "pessoas",
   retencao: "retencao",
+  reposicoes: "reposicoes",
   conflitos: "conflitos",
   professores: "professores",
   qualidade: "qualidade",
@@ -20589,6 +20606,130 @@ const syncAdminPedRetentionBadge = (count = 0) => {
   });
 };
 
+const syncAdminPedReposicoesBadge = (count = 0) => {
+  const safe = Math.max(0, Number(count) || 0);
+  document.querySelectorAll("[data-admin-ped-reposicoes-badge]").forEach((badge) => {
+    if (!(badge instanceof HTMLElement)) return;
+    badge.hidden = safe <= 0;
+    badge.textContent = String(safe);
+  });
+};
+
+const getReposicaoDateLimitKey = (payload = {}) => {
+  const eligibility = payload?.elegibilidade && typeof payload.elegibilidade === "object" ? payload.elegibilidade : {};
+  return String(eligibility.dataLimiteReposicao || payload.dataLimiteReposicao || "").trim();
+};
+
+const getReposicaoDaysRemaining = (dateLimitKey, referenceDate = new Date()) => {
+  const limit = parseDateKey(dateLimitKey);
+  if (!limit) return null;
+  const today = parseDateKey(createDateKey(referenceDate));
+  if (!today) return null;
+  return Math.ceil((limit.getTime() - today.getTime()) / 86400000);
+};
+
+const formatReposicaoDaysRemaining = (days) => {
+  if (!Number.isFinite(Number(days))) return "Sem prazo";
+  const n = Number(days);
+  if (n < 0) return `${Math.abs(n)}d em atraso`;
+  if (n === 0) return "Vence hoje";
+  if (n === 1) return "1 dia restante";
+  return `${n} dias restantes`;
+};
+
+const getReposicaoStudentIdFromLog = (log = {}, event = null) =>
+  String(log?.alunoId || log?.studentId || log?.payload?.alunoId || event?.alunoId || "").trim();
+
+const getReposicaoTeacherIdFromLog = (log = {}, event = null) =>
+  String(log?.professorId || log?.teacherId || log?.payload?.professorId || event?.professorId || "").trim();
+
+const buildReposicaoQueues = (dadosPreCarregados = {}) => {
+  const {
+    lessonLogs = [],
+    scheduleEvents = [],
+    students = [],
+    teachers = [],
+    teachersById = new Map(),
+    referenceDate = new Date(),
+  } = dadosPreCarregados || {};
+  const eventsById = new Map();
+  (Array.isArray(scheduleEvents) ? scheduleEvents : []).forEach((event) => {
+    const id = String(event?.id || "").trim();
+    if (id) eventsById.set(id, event);
+  });
+  const studentsById = new Map();
+  (Array.isArray(students) ? students : []).forEach((student) => {
+    const ids = [student?.id, student?.alunoId, student?.firestoreDocId, student?.docId].map((id) => String(id || "").trim()).filter(Boolean);
+    ids.forEach((id) => studentsById.set(id, student));
+  });
+  const localTeachersById = teachersById instanceof Map ? new Map(teachersById) : new Map();
+  (Array.isArray(teachers) ? teachers : []).forEach((teacher) => {
+    const id = String(teacher?.id || teacher?.uid || teacher?.firestoreDocId || "").trim();
+    if (id && !localTeachersById.has(id)) localTeachersById.set(id, teacher);
+  });
+
+  const baseRows = [];
+  (Array.isArray(lessonLogs) ? lessonLogs : []).forEach((log) => {
+    const payload = log?.payload && typeof log.payload === "object" ? log.payload : {};
+    const status = normalizePedagogicoStatus(log?.statusAula || payload.statusAula);
+    if (status !== PEDAGOGICO_STATUS.REMARCADA) return;
+    const situation = normalizeSituacaoReposicao(payload.situacaoReposicao || payload.situacao_reposicao || "");
+    if (!situation) return;
+    const resolved = payload.reposicaoResolvida === true || payload.reposicaoStatus === "resolvido" || payload.reposicao_resolvida === true;
+    if (resolved) return;
+    const eventId = String(log?.eventId || payload.eventId || "").trim();
+    const event = eventsById.get(eventId) || null;
+    const alunoId = getReposicaoStudentIdFromLog(log, event);
+    const professorId = getReposicaoTeacherIdFromLog(log, event);
+    const student = studentsById.get(alunoId) || null;
+    const teacher = localTeachersById.get(professorId) || null;
+    const dateLimitKey = getReposicaoDateLimitKey(payload);
+    const daysRemaining = getReposicaoDaysRemaining(dateLimitKey, referenceDate);
+    const expired = Number.isFinite(Number(daysRemaining)) && Number(daysRemaining) < 0;
+    const urgent = Number.isFinite(Number(daysRemaining)) && Number(daysRemaining) <= 3;
+    const decisionUrgent = Number.isFinite(Number(daysRemaining)) && Number(daysRemaining) <= 2;
+    baseRows.push({
+      id: String(log?.id || log?.documentId || log?.docId || eventId || "").trim(),
+      eventId,
+      alunoId,
+      alunoNome: getRetentionStudentDisplayName(student) || String(event?.alunoNome || event?.title || "Aluno"),
+      professorId,
+      professorNome: String(teacher?.nome || teacher?.name || event?.professorNome || event?.teacherName || "Professor").trim(),
+      dateKey: String(log?.dateKey || payload.dateKey || event?.dateKey || "").trim(),
+      startMin: Number(log?.startMin ?? payload.startMin ?? event?.startMin ?? 0) || 0,
+      endMin: Number(log?.endMin ?? payload.endMin ?? event?.endMin ?? 0) || 0,
+      motivo: String(payload.motivoRemarcacao || "").trim(),
+      observacao: String(payload.observacao || payload.observacoesInternas || "").trim(),
+      situacaoReposicao: situation,
+      needsAdminReview: payload.needsAdminReview === true || payload.needs_admin_review === true || situation === "incompatibilidade_horario",
+      elegibilidade: payload.elegibilidade && typeof payload.elegibilidade === "object" ? payload.elegibilidade : {},
+      dateLimitKey,
+      daysRemaining,
+      daysLabel: formatReposicaoDaysRemaining(daysRemaining),
+      expired,
+      urgent,
+      decisionUrgent,
+      novaDataRemarcacao: String(payload.novaDataRemarcacao || payload.novaData || "").trim(),
+      horarioInicioRemarcacao: String(payload.horarioInicioRemarcacao || payload.novoInicio || "").trim(),
+      horarioFimRemarcacao: String(payload.horarioFimRemarcacao || payload.novoFim || "").trim(),
+    });
+  });
+
+  const aguardando = baseRows
+    .filter((row) => row.situacaoReposicao === "aguardando_aluno" && !row.expired)
+    .sort((a, b) => Number(a.daysRemaining ?? 999) - Number(b.daysRemaining ?? 999));
+  const decisoes = baseRows
+    .filter((row) => row.needsAdminReview || (row.situacaoReposicao === "aguardando_aluno" && row.decisionUrgent))
+    .sort((a, b) => Number(a.daysRemaining ?? 999) - Number(b.daysRemaining ?? 999));
+  const agendadas = baseRows
+    .filter((row) => row.situacaoReposicao === "agendada_agora")
+    .sort((a, b) => String(a.novaDataRemarcacao || "").localeCompare(String(b.novaDataRemarcacao || "")) || a.horarioInicioRemarcacao.localeCompare(b.horarioInicioRemarcacao));
+  const expiradas = baseRows
+    .filter((row) => row.situacaoReposicao !== "agendada_agora" && row.expired)
+    .sort((a, b) => Number(a.daysRemaining ?? 999) - Number(b.daysRemaining ?? 999));
+  return { aguardando, decisoes, agendadas, expiradas, all: baseRows };
+};
+
 const formatRetentionDecisionTitle = (kind) => {
   if (kind === "aviso_vencido") return "Aviso vencido";
   if (kind === "aparenta_abandono_no_aviso") return "Aparenta abandono no aviso";
@@ -20701,6 +20842,137 @@ const renderAdminPedRetentionEfetivados = (rows) => {
           `
         )
         .join("")}
+    </div>
+  `;
+};
+
+const formatReposicaoMotivo = (value) => formatAdminPedLessonRecordOption(PED_MOTIVO_REMARCACAO, String(value || "").trim()) || "Motivo não informado";
+
+const renderAdminPedReposicoesEmpty = (title, sub) => renderAdminPedRetentionSectionEmpty(title, sub);
+
+const renderAdminPedReposicoesRows = (rows, { emptyTitle, emptySub, kind = "default" } = {}) => {
+  if (!Array.isArray(rows) || !rows.length) return renderAdminPedReposicoesEmpty(emptyTitle, emptySub);
+  return `
+    <div class="pedretain-list">
+      ${rows
+        .map((row) => {
+          const isDecision = kind === "decision";
+          const isScheduled = kind === "scheduled";
+          const meta = isScheduled
+            ? `${row.novaDataRemarcacao ? formatPedagogicoDate(row.novaDataRemarcacao) : "Sem data"} · ${row.horarioInicioRemarcacao || "—"}–${row.horarioFimRemarcacao || "—"}`
+            : `${row.dateKey ? formatPedagogicoDate(row.dateKey) : "Aula original"} · ${row.daysLabel || "Sem prazo"}`;
+          const badge = row.expired ? "Prazo vencido" : row.needsAdminReview ? "Admin" : row.urgent ? "Prazo crítico" : row.elegibilidade?.elegivel === false ? "Não elegível" : "Reposição";
+          return `
+            <article class="pedretain-row ${isDecision ? "is-decision" : ""} ${row.urgent || row.expired ? "is-urgent" : ""}" tabindex="0" role="button" data-admin-ped-reposicao-row="${escapeHtml(String(row.alunoId || ""))}">
+              <div class="pedretain-main">
+                <div class="pedretain-title-row">
+                  <strong class="pedretain-name">${escapeHtml(row.alunoNome || "Aluno")}</strong>
+                  <span class="pedretain-inline-meta ${row.expired || isDecision ? "is-coral" : ""}">${escapeHtml(badge)}</span>
+                </div>
+                <div class="pedretain-evidence">
+                  ${escapeHtml(formatReposicaoMotivo(row.motivo))} · ${escapeHtml(row.professorNome || "Professor")} · ${escapeHtml(meta)}
+                  ${row.observacao ? ` · ${escapeHtml(row.observacao)}` : ""}
+                </div>
+              </div>
+              <div class="pedretain-actions">
+                ${
+                  isDecision
+                    ? `<button class="admin-ped-action" type="button" data-admin-ped-reposicao-action="open_sheet" data-admin-ped-reposicao-student="${escapeHtml(String(row.alunoId || ""))}">Ver detalhes</button>
+                       <button class="admin-ped-action is-muted" type="button" data-admin-ped-reposicao-action="resolve" data-admin-ped-reposicao-log="${escapeHtml(String(row.id || ""))}">Marcar como resolvido</button>`
+                    : `<button class="admin-ped-action is-muted" type="button" data-admin-ped-reposicao-action="open_sheet" data-admin-ped-reposicao-student="${escapeHtml(String(row.alunoId || ""))}">Abrir ficha</button>`
+                }
+              </div>
+            </article>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+};
+
+const renderAdminPedagogicoReposicoesPanel = () => {
+  if (!(adminPedReposicoes instanceof HTMLElement)) return;
+  const state = adminPedagogicoState.reposicoes && typeof adminPedagogicoState.reposicoes === "object" ? adminPedagogicoState.reposicoes : {};
+  const status = String(state.status || "idle").trim();
+  const queues = state.queues && typeof state.queues === "object" ? state.queues : null;
+
+  if ((status === "idle" || status === "loading") && !queues) {
+    adminPedReposicoes.innerHTML = `
+      <div class="pedov2 pedretain">
+        <header class="pedov2-page-head pedretain-head">
+          <div>
+            <p class="pedov2-eyebrow">Pedagógico</p>
+            <h1 class="pedov2-title">Reposições</h1>
+            <p class="pedov2-page-sub">Central operacional para remarcações, prazos e exceções.</p>
+          </div>
+        </header>
+        <div class="admin-ped-empty-inline"><div class="admin-ped-empty-title">Carregando central de reposições...</div><div class="admin-ped-empty-sub">Consolidando registros remarcados e agenda.</div></div>
+      </div>
+    `;
+    return;
+  }
+
+  if (status === "error" && !queues) {
+    adminPedReposicoes.innerHTML = `
+      <div class="pedov2 pedretain">
+        <header class="pedov2-page-head pedretain-head">
+          <div>
+            <p class="pedov2-eyebrow">Pedagógico</p>
+            <h1 class="pedov2-title">Reposições</h1>
+            <p class="pedov2-page-sub">Central operacional para remarcações, prazos e exceções.</p>
+          </div>
+        </header>
+        <div class="admin-ped-empty-inline">
+          <div class="admin-ped-empty-title">Não foi possível carregar as reposições.</div>
+          <div class="admin-ped-empty-sub">${escapeHtml(String(state.error || "Tente novamente em alguns instantes."))}</div>
+          <div class="pedretain-retry"><button class="admin-ped-action" type="button" data-admin-ped-reposicao-retry>Tentar novamente</button></div>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  const aguardando = Array.isArray(queues?.aguardando) ? queues.aguardando : [];
+  const decisoes = Array.isArray(queues?.decisoes) ? queues.decisoes : [];
+  const agendadas = Array.isArray(queues?.agendadas) ? queues.agendadas : [];
+  const expiradas = Array.isArray(queues?.expiradas) ? queues.expiradas : [];
+
+  adminPedReposicoes.innerHTML = `
+    <div class="pedov2 pedretain">
+      <header class="pedov2-page-head pedretain-head">
+        <div>
+          <p class="pedov2-eyebrow">Pedagógico</p>
+          <h1 class="pedov2-title">Reposições</h1>
+          <p class="pedov2-page-sub">Fila operacional para acompanhar remarcações, prazos de 15 dias e exceções.</p>
+        </div>
+      </header>
+
+      <section class="pedov2-kpi-row pedretain-kpis" aria-label="Resumo de reposições">
+        ${buildRetentionMiniCard({ label: "Aguardando agendamento", value: aguardando.length })}
+        ${buildRetentionMiniCard({ label: "Precisam de decisão", value: decisoes.length, tone: "coral" })}
+        ${buildRetentionMiniCard({ label: "Agendadas", value: agendadas.length, tone: "green" })}
+        ${buildRetentionMiniCard({ label: "Expiradas", value: expiradas.length, tone: expiradas.length ? "coral" : "" })}
+      </section>
+
+      <section class="pedretain-section">
+        <div class="pedretain-section-head"><h2 class="pedretain-section-title">Aguardando agendamento</h2><span class="pedretain-section-count">${escapeHtml(String(aguardando.length))}</span></div>
+        ${renderAdminPedReposicoesRows(aguardando, { emptyTitle: "Nenhuma reposição aguardando aluno.", emptySub: "Quando o professor marcar “Aguardando resposta do aluno”, aparece aqui." })}
+      </section>
+
+      <section class="pedretain-section">
+        <div class="pedretain-section-head"><h2 class="pedretain-section-title">Precisa de decisão</h2><span class="pedretain-section-count is-coral">${escapeHtml(String(decisoes.length))}</span></div>
+        ${renderAdminPedReposicoesRows(decisoes, { kind: "decision", emptyTitle: "Nenhuma reposição precisando de decisão.", emptySub: "Incompatibilidades e prazos críticos aparecem aqui." })}
+      </section>
+
+      <section class="pedretain-section">
+        <div class="pedretain-section-head"><h2 class="pedretain-section-title">Agendadas</h2><span class="pedretain-section-count">${escapeHtml(String(agendadas.length))}</span></div>
+        ${renderAdminPedReposicoesRows(agendadas, { kind: "scheduled", emptyTitle: "Nenhuma reposição já agendada.", emptySub: "Reposições com novo horário definido aparecem aqui." })}
+      </section>
+
+      <section class="pedretain-section">
+        <div class="pedretain-section-head"><h2 class="pedretain-section-title">Expiradas</h2><span class="pedretain-section-count">${escapeHtml(String(expiradas.length))}</span></div>
+        ${renderAdminPedReposicoesRows(expiradas, { emptyTitle: "Nenhuma reposição expirada.", emptySub: "Direitos vencidos pelo prazo de 15 dias aparecem aqui apenas como histórico." })}
+      </section>
     </div>
   `;
 };
@@ -20980,6 +21252,127 @@ const refreshAdminPedagogicoRetentionState = async ({ force = false } = {}) => {
     renderAdminPedagogicoRetentionPanel();
     return null;
   }
+};
+
+const refreshAdminPedagogicoReposicoesState = async ({ force = false } = {}) => {
+  const current = adminPedagogicoState.reposicoes && typeof adminPedagogicoState.reposicoes === "object" ? adminPedagogicoState.reposicoes : {};
+  if (current.loading) return current.queues || null;
+  if (!force && current.loadedAt && Date.now() - current.loadedAt < 30_000 && current.queues) {
+    syncAdminPedReposicoesBadge(current.badgeCount || 0);
+    return current.queues;
+  }
+
+  const hasEssentialData =
+    adminPedagogicoState.loadedAt &&
+    Array.isArray(adminPedagogicoState.students) &&
+    Array.isArray(adminPedagogicoState.teachers) &&
+    Array.isArray(adminPedagogicoState.lessonLogs) &&
+    Array.isArray(adminPedagogicoState.scheduleEvents);
+  if (!hasEssentialData) {
+    adminPedagogicoState.reposicoes = {
+      ...current,
+      status: "loading",
+      loading: true,
+      error: "",
+    };
+    if (String(adminPedagogicoState.activeTab || "") === "reposicoes") renderAdminPedagogicoReposicoesPanel();
+    return null;
+  }
+
+  adminPedagogicoState.reposicoes = {
+    ...current,
+    status: "loading",
+    loading: true,
+    error: "",
+  };
+  if (String(adminPedagogicoState.activeTab || "") === "reposicoes") renderAdminPedagogicoReposicoesPanel();
+
+  try {
+    const queues = buildReposicaoQueues({
+      students: adminPedagogicoState.students,
+      teachers: adminPedagogicoState.teachers,
+      teachersById: adminPedagogicoState.teachersById,
+      lessonLogs: adminPedagogicoState.lessonLogs,
+      scheduleEvents: adminPedagogicoState.scheduleEvents,
+      referenceDate: new Date(),
+    });
+    adminPedagogicoState.reposicoes = {
+      status: "success",
+      loading: false,
+      loadedAt: Date.now(),
+      error: "",
+      badgeCount: Array.isArray(queues?.decisoes) ? queues.decisoes.length : 0,
+      queues,
+    };
+    syncAdminPedReposicoesBadge(adminPedagogicoState.reposicoes.badgeCount || 0);
+    renderAdminPedagogicoReposicoesPanel();
+    return queues;
+  } catch (error) {
+    console.error("[Reposições] Falha ao carregar central:", error);
+    adminPedagogicoState.reposicoes = {
+      ...current,
+      status: "error",
+      loading: false,
+      loadedAt: 0,
+      error: "Não foi possível carregar os dados de reposição agora.",
+      badgeCount: 0,
+      queues: null,
+    };
+    syncAdminPedReposicoesBadge(0);
+    renderAdminPedagogicoReposicoesPanel();
+    return null;
+  }
+};
+
+const resolveAdminPedReposicaoLog = async (logId) => {
+  const id = String(logId || "").trim();
+  if (!id) throw new Error("missing_reposicao_log_id");
+  const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_reposicao_resolve");
+  const user = await waitForFirebaseAuthReady(firebase, 5000);
+  if (!user) throw new Error("auth/no-current-user");
+  const patch = {
+    "payload.reposicaoResolvida": true,
+    "payload.reposicaoStatus": "resolvido",
+    "payload.reposicaoResolvidaEm": new Date().toISOString(),
+    "payload.reposicaoResolvidaPor": String(sessionUser?.id || user.uid || ""),
+    atualizadoEm: firebase.serverTimestamp(),
+  };
+  if (typeof firebase.updateDoc === "function") {
+    await withTimeout(firebase.updateDoc(firebase.doc(firebase.primaryDb, "lessonLogs", id), patch), 12_000, "firestore_resolve_reposicao");
+  } else {
+    await withTimeout(
+      firebase.setDoc(
+        firebase.doc(firebase.primaryDb, "lessonLogs", id),
+        {
+          payload: {
+            reposicaoResolvida: true,
+            reposicaoStatus: "resolvido",
+            reposicaoResolvidaEm: patch["payload.reposicaoResolvidaEm"],
+            reposicaoResolvidaPor: patch["payload.reposicaoResolvidaPor"],
+          },
+          atualizadoEm: firebase.serverTimestamp(),
+        },
+        { merge: true }
+      ),
+      12_000,
+      "firestore_resolve_reposicao_merge"
+    );
+  }
+  adminPedagogicoState.lessonLogs = (Array.isArray(adminPedagogicoState.lessonLogs) ? adminPedagogicoState.lessonLogs : []).map((log) => {
+    const currentId = String(log?.id || log?.documentId || log?.docId || "").trim();
+    if (currentId !== id) return log;
+    return {
+      ...log,
+      payload: {
+        ...(log?.payload && typeof log.payload === "object" ? log.payload : {}),
+        reposicaoResolvida: true,
+        reposicaoStatus: "resolvido",
+        reposicaoResolvidaEm: patch["payload.reposicaoResolvidaEm"],
+        reposicaoResolvidaPor: patch["payload.reposicaoResolvidaPor"],
+      },
+    };
+  });
+  await refreshAdminPedagogicoReposicoesState({ force: true });
 };
 
 const syncAdminPedagogicoPageTitle = (panelName = body.dataset.activePanel || "") => {
@@ -24941,6 +25334,7 @@ const runAdminPedagogicoRenderers = () => {
     renderAdminPedOverviewV2,
     renderAdminPedagogicoClassesList,
     renderAdminPedagogicoRetentionPanel,
+    renderAdminPedagogicoReposicoesPanel,
     renderAdminPedagogicoGroups,
     renderAdminPedagogicoStudentsPanel,
     renderAdminPedagogicoTeachersPanel,
@@ -24979,6 +25373,7 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
   if (!force && adminPedagogicoState.loadedAt && now - adminPedagogicoState.loadedAt < 45_000) {
     const { failed, failedNames } = runAdminPedagogicoRenderers();
     refreshAdminPedagogicoRetentionState({ force: false }).catch((error) => console.warn("[admin-ped] retention refresh skipped", error));
+    refreshAdminPedagogicoReposicoesState({ force: false }).catch((error) => console.warn("[admin-ped] reposições refresh skipped", error));
     const detail = failedNames.length ? `Renderers com falha: ${failedNames.join(", ")}` : "";
     if (failedNames.length) console.warn("[admin-ped] renderers failed", failedNames);
     setAdminPedagogicoStatus(failed ? "Alguns blocos não puderam ser exibidos agora." : "", failed ? "warn" : "", detail);
@@ -25192,6 +25587,7 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
 
     const { failed, failedNames } = runAdminPedagogicoRenderers();
     refreshAdminPedagogicoRetentionState({ force: true }).catch((error) => console.warn("[admin-ped] retention refresh skipped", error));
+    refreshAdminPedagogicoReposicoesState({ force: true }).catch((error) => console.warn("[admin-ped] reposições refresh skipped", error));
     const degraded = Boolean(adminPedagogicoState.pedagogicalOps?.degraded);
     const degradedReason = String(adminPedagogicoState.pedagogicalOps?.degradedReason || "").trim();
     const detail = [
@@ -31097,7 +31493,7 @@ const panelPathForRole = (role, panel) => {
     if (["copilot-vendas", "scripts-vendas", "objecoes", "planos", "personas", "frases-vencedoras", "analytics", "training"].includes(p)) return `/app/admin/growth/${p}`;
     if (p === "professores" || p === "alunos") return adminPedagogicoPathForState();
     if (p === "admin-controle-pedagogico") return adminPedagogicoPathForState();
-    if (["admin-controle-pedagogico-aulas", "admin-controle-pedagogico-pessoas", "admin-controle-pedagogico-retencao", "admin-controle-pedagogico-qualidade", "admin-controle-pedagogico-onboarding", "admin-controle-pedagogico-relatorios"].includes(p)) return adminPedagogicoPathForState();
+    if (["admin-controle-pedagogico-aulas", "admin-controle-pedagogico-pessoas", "admin-controle-pedagogico-retencao", "admin-controle-pedagogico-reposicoes", "admin-controle-pedagogico-qualidade", "admin-controle-pedagogico-onboarding", "admin-controle-pedagogico-relatorios"].includes(p)) return adminPedagogicoPathForState();
     if (p === "space-office") return "/app/admin/space-office";
     if (p === "status-plataforma") return "/app/admin/status";
     if (p === "guia-colaboradores") return "/app/admin/guia";
@@ -32856,6 +33252,43 @@ document.addEventListener("click", (event) => {
         const alunoId = String(adminPedRetentionRow.getAttribute("data-admin-ped-retention-row") || "").trim();
         if (!alunoId) return;
         openStudentSimpleCard({ alunoId }).catch((error) => console.error("[admin] retention row open failed", error));
+        return;
+      }
+
+      const adminPedReposicaoAction = target.closest("[data-admin-ped-reposicao-action]");
+      if (adminPedReposicaoAction instanceof HTMLElement) {
+        event.preventDefault();
+        event.stopPropagation();
+        const action = String(adminPedReposicaoAction.getAttribute("data-admin-ped-reposicao-action") || "").trim();
+        const alunoId = String(adminPedReposicaoAction.getAttribute("data-admin-ped-reposicao-student") || "").trim();
+        const logId = String(adminPedReposicaoAction.getAttribute("data-admin-ped-reposicao-log") || "").trim();
+        if (action === "open_sheet" && alunoId) {
+          openStudentSimpleCard({ alunoId }).catch((error) => console.error("[admin] reposição open student failed", error));
+          return;
+        }
+        if (action === "resolve" && logId) {
+          resolveAdminPedReposicaoLog(logId).catch((error) => {
+            console.error("[Reposições] resolver falhou", error);
+            setAdminPedagogicoStatus("Não foi possível marcar a reposição como resolvida.", "error");
+          });
+          return;
+        }
+        return;
+      }
+
+      const adminPedReposicaoRetry = target.closest("[data-admin-ped-reposicao-retry]");
+      if (adminPedReposicaoRetry instanceof HTMLButtonElement) {
+        event.preventDefault();
+        refreshAdminPedagogicoReposicoesState({ force: true }).catch(() => {});
+        return;
+      }
+
+      const adminPedReposicaoRow = target.closest("[data-admin-ped-reposicao-row]");
+      if (adminPedReposicaoRow instanceof HTMLElement) {
+        event.preventDefault();
+        const alunoId = String(adminPedReposicaoRow.getAttribute("data-admin-ped-reposicao-row") || "").trim();
+        if (!alunoId) return;
+        openStudentSimpleCard({ alunoId }).catch((error) => console.error("[admin] reposição row open failed", error));
         return;
       }
 
