@@ -21356,6 +21356,7 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 .pedov2-kpi-value{font-size:2rem;font-weight:800;letter-spacing:-.04em;font-variant-numeric:tabular-nums;line-height:1}
 .pedov2-kpi-value.is-risk{color:#ff857f}
 .pedov2-kpi-unit{font-size:1rem;color:var(--text-muted);font-weight:600}
+.pedov2-kpi-sub{font-size:.72rem;color:var(--text-muted);line-height:1.35}
 .pedov2-delta{font-size:.72rem;font-weight:700;padding:3px 8px;border-radius:999px;font-variant-numeric:tabular-nums;white-space:nowrap}
 .pedov2-delta.up-good,.pedov2-delta.down-good{background:var(--ok-soft);color:var(--ok)}
 .pedov2-delta.up-bad,.pedov2-delta.down-bad{background:var(--accent-soft);color:#ff857f}

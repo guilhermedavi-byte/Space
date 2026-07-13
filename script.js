@@ -15329,6 +15329,7 @@ const buildRetentionMetrics = (mesReferencia, dadosPreCarregados = {}, options =
   // Sem snapshot histórico confiável de alunos ativos no primeiro dia; aproximamos por ativos atuais + churn efetivado no mês − cadastros do mês.
   const ativosInicioMes = Math.max(ativosAtuais, ativosAtuais + churnNoMes - novosNoMes);
   const percent = (value) => (ativosInicioMes > 0 ? (Number(value || 0) / ativosInicioMes) * 100 : 0);
+  const casosFechadosNoMes = revertidosNoMes + churnNoMes;
   if (options.withSeries !== false) {
     for (let i = 5; i >= 0; i -= 1) {
       const monthKey = addMonthsToMonthKey(bounds.key, -i);
@@ -15361,7 +15362,8 @@ const buildRetentionMetrics = (mesReferencia, dadosPreCarregados = {}, options =
     revertidosNoMes,
     pedidosPct: percent(pedidosNoMes),
     churnPct: percent(churnNoMes),
-    reversalRate: pedidosNoMes > 0 ? (revertidosNoMes / pedidosNoMes) * 100 : 0,
+    casosFechadosNoMes,
+    reversalRate: casosFechadosNoMes > 0 ? (revertidosNoMes / casosFechadosNoMes) * 100 : null,
     byOutcome: Object.fromEntries(byOutcome),
     byReason: Object.fromEntries(byReason),
     series6m: monthlyRows.map((row) => ({
@@ -19950,12 +19952,13 @@ const formatRetentionDecisionTitle = (kind) => {
   return "Decisão pendente";
 };
 
-const buildRetentionMiniCard = ({ label, value, tone = "" } = {}) => `
-  <article class="pedov2-card pedov2-kpi-card ${tone === "coral" ? "is-emphasis" : ""}">
+const buildRetentionMiniCard = ({ label, value, tone = "", hint = "" } = {}) => `
+  <article class="pedov2-card pedov2-kpi-card ${tone === "coral" ? "is-emphasis" : ""}" ${hint ? `title="${escapeHtml(hint)}"` : ""}>
     <div class="pedov2-kpi-label"><span class="pedov2-kpi-dot" style="background:${tone === "coral" ? "#ff6a60" : tone === "green" ? "#3fd6a4" : "#a0bcff"}"></span>${escapeHtml(
       String(label || "")
     )}</div>
-    <div class="pedov2-kpi-value-row"><span class="pedov2-kpi-value ${tone === "coral" ? "is-risk" : ""}">${escapeHtml(String(value || 0))}</span></div>
+    <div class="pedov2-kpi-value-row"><span class="pedov2-kpi-value ${tone === "coral" ? "is-risk" : ""}">${escapeHtml(String(value ?? 0))}</span></div>
+    ${hint ? `<div class="pedov2-kpi-sub">${escapeHtml(hint)}</div>` : ""}
   </article>
 `;
 
@@ -20080,7 +20083,12 @@ const renderAdminPedRetentionMetrics = (metrics) => {
       <div class="pedov2-kpi-row pedretain-kpis">
         ${buildRetentionMiniCard({ label: "% pedidos", value: formatRetentionPercent(m.pedidosPct), tone: "coral" })}
         ${buildRetentionMiniCard({ label: "% churn", value: formatRetentionPercent(m.churnPct), tone: "coral" })}
-        ${buildRetentionMiniCard({ label: "Reversões", value: formatRetentionPercent(m.reversalRate), tone: "green" })}
+        ${buildRetentionMiniCard({
+          label: "Taxa de reversão",
+          value: m.reversalRate == null ? "—" : formatRetentionPercent(m.reversalRate),
+          tone: "green",
+          hint: m.reversalRate == null ? "Sem casos fechados no mês" : "% dos casos fechados no mês",
+        })}
       </div>
       <article class="pedov2-card pedretain-chart-card">
         <div class="pedov2-card-head">
