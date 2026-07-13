@@ -48,6 +48,16 @@ test("staging falha se apontar para Firebase de produção", () => {
   assert.ok(result.errors.includes("staging_uses_production_firebase"));
 });
 
+test("ambiente inválido falha fechado", () => {
+  const result = validateEnvironmentIsolation({
+    ...makeBaseEnv(),
+    APP_ENV: "",
+    SPACE_APP_ENV: "",
+  });
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.includes("invalid_app_env"));
+});
+
 test("staging falha se apontar para Supabase de produção", () => {
   const result = validateEnvironmentIsolation({
     ...makeBaseEnv(),
@@ -82,6 +92,8 @@ test("runtime público de staging expõe banner de teste", () => {
   assert.equal(runtime.environment.appEnv, "staging");
   assert.equal(runtime.environment.showBanner, true);
   assert.equal(runtime.environment.bannerLabel, "AMBIENTE DE TESTE");
+  const serialized = JSON.stringify(runtime);
+  assert.doesNotMatch(serialized, /SUPABASE_SERVICE_ROLE_KEY|FIREBASE_SERVICE_ACCOUNT_JSON|GOOGLE_SERVICE_ACCOUNT_JSON|GOOGLE_PRIVATE_KEY|SPACE_AUTH_SECRET|ASAAS_API_KEY|N8N_WEBHOOK_SECRET|CHATWOOT_API_TOKEN/);
 });
 
 test("páginas carregam runtime-config para exibir banner de staging", () => {
@@ -96,6 +108,15 @@ test("páginas carregam runtime-config para exibir banner de staging", () => {
     const content = fs.readFileSync(file, "utf8");
     assert.match(content, /\/api\/runtime-config\.js/);
   });
+});
+
+test("arquivos de exemplo não contêm secrets reais", () => {
+  const envExample = fs.readFileSync(path.join(__dirname, "..", ".env.example"), "utf8");
+  const envStaging = fs.readFileSync(path.join(__dirname, "..", ".env.staging.example"), "utf8");
+  const combined = `${envExample}\n${envStaging}`;
+  assert.doesNotMatch(combined, /AIzaSyD0qyhYh6MWRPMRDN_SYqdDEeogS3thQPE/);
+  assert.doesNotMatch(combined, /plataforma-space\.firebaseapp\.com/);
+  assert.doesNotMatch(combined, /SUPABASE_SERVICE_ROLE_KEY=.*[A-Za-z0-9]{16,}/);
 });
 
 test("reset recusa execução fora do staging", () => {

@@ -15,7 +15,16 @@ const getFirestoreRuntime = () => {
   };
 };
 
-const { projectId: PROJECT_ID, apiKey: API_KEY, baseUrl: FIRESTORE_BASE } = getFirestoreRuntime();
+const getFirestoreRuntimeSnapshot = () => {
+  const { projectId, apiKey } = getFirebaseServerConfig();
+  return {
+    projectId: projectId || "",
+    apiKey: apiKey || "",
+    baseUrl: projectId ? `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents` : "",
+  };
+};
+
+const { projectId: PROJECT_ID, apiKey: API_KEY, baseUrl: FIRESTORE_BASE } = getFirestoreRuntimeSnapshot();
 
 const getBearerTokenFromRequest = (req) => {
   const header = String(req?.headers?.authorization || req?.headers?.Authorization || "").trim();

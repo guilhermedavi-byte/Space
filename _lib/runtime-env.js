@@ -15,7 +15,8 @@ const normalizeAppEnv = (value) => {
   const raw = String(value || "").trim().toLowerCase();
   if (raw === "production" || raw === "prod") return "production";
   if (raw === "staging" || raw === "preview" || raw === "homolog") return "staging";
-  return "local";
+  if (raw === "local" || raw === "development" || raw === "dev" || raw === "test") return "local";
+  return "invalid";
 };
 
 const getEnv = (env, ...names) => {
@@ -40,7 +41,6 @@ const getAppEnv = (env = process.env) =>
   normalizeAppEnv(getEnv(env, "APP_ENV", "SPACE_APP_ENV", "VERCEL_ENV", "NODE_ENV"));
 
 const getFirebasePublicConfig = (env = process.env) => {
-  const appEnv = getAppEnv(env);
   const config = {
     apiKey: getEnv(env, "NEXT_PUBLIC_FIREBASE_API_KEY", "FIREBASE_WEB_API_KEY"),
     authDomain: getEnv(env, "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN", "FIREBASE_AUTH_DOMAIN"),
@@ -50,19 +50,6 @@ const getFirebasePublicConfig = (env = process.env) => {
     appId: getEnv(env, "NEXT_PUBLIC_FIREBASE_APP_ID", "FIREBASE_APP_ID"),
     measurementId: getEnv(env, "NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID", "FIREBASE_MEASUREMENT_ID"),
   };
-
-  if (appEnv !== "staging") {
-    return {
-      apiKey: config.apiKey || PROD_FIREBASE_PUBLIC_DEFAULTS.apiKey,
-      authDomain: config.authDomain || PROD_FIREBASE_PUBLIC_DEFAULTS.authDomain,
-      projectId: config.projectId || PROD_FIREBASE_PUBLIC_DEFAULTS.projectId,
-      storageBucket: config.storageBucket || PROD_FIREBASE_PUBLIC_DEFAULTS.storageBucket,
-      messagingSenderId: config.messagingSenderId || PROD_FIREBASE_PUBLIC_DEFAULTS.messagingSenderId,
-      appId: config.appId || PROD_FIREBASE_PUBLIC_DEFAULTS.appId,
-      measurementId: config.measurementId || PROD_FIREBASE_PUBLIC_DEFAULTS.measurementId,
-    };
-  }
-
   return config;
 };
 
@@ -85,6 +72,16 @@ const getFirebaseServerConfig = (env = process.env) => {
 
 const getEnvironmentPresentation = (env = process.env) => {
   const appEnv = getAppEnv(env);
+  if (appEnv === "invalid") {
+    return {
+      appEnv,
+      label: "invalid",
+      titlePrefix: "⚠️ [CONFIG] ",
+      bannerLabel: "CONFIGURAÇÃO INVÁLIDA",
+      bannerDetail: "Defina APP_ENV como local, staging ou production e configure credenciais isoladas.",
+      showBanner: true,
+    };
+  }
   if (appEnv === "staging") {
     return {
       appEnv,
@@ -149,6 +146,26 @@ const validateEnvironmentIsolation = (env = process.env) => {
   };
 
   const errors = [];
+
+  if (appEnv === "invalid") {
+    errors.push("invalid_app_env");
+    return {
+      ok: false,
+      appEnv,
+      errors,
+      current: {
+        firebaseProjectId,
+        supabaseUrl,
+        asaasBaseUrl,
+        n8nBaseUrl,
+        scopeHints,
+      },
+      references: {
+        production: prodRefs,
+        staging: stagingRefs,
+      },
+    };
+  }
 
   if (appEnv === "staging") {
     if (!firebaseProjectId) errors.push("staging_missing_firebase_project_id");
