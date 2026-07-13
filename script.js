@@ -1709,8 +1709,21 @@ const parseFirestoreDateToMs = (value) => {
       const d = value.toDate();
       return d instanceof Date && !Number.isNaN(d.getTime()) ? d.getTime() : 0;
     }
+    if (typeof value === "object" && Number.isFinite(Number(value.seconds))) {
+      return Number(value.seconds) * 1000 + Math.round(Number(value.nanoseconds || 0) / 1_000_000);
+    }
     if (typeof value === "number" && Number.isFinite(value)) return value;
-    const d = new Date(String(value));
+    const raw = String(value).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      const keyed = parseDateKey(raw);
+      return keyed instanceof Date && !Number.isNaN(keyed.getTime()) ? keyed.getTime() : 0;
+    }
+    const br = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (br) {
+      const keyed = parseDateKey(`${br[3]}-${br[2]}-${br[1]}`);
+      return keyed instanceof Date && !Number.isNaN(keyed.getTime()) ? keyed.getTime() : 0;
+    }
+    const d = new Date(raw);
     return Number.isNaN(d.getTime()) ? 0 : d.getTime();
   } catch (error) {
     return 0;
@@ -14950,14 +14963,32 @@ const formatRetentionDaysRemaining = (record, referenceDate = new Date()) => {
   return `${diff} dias restantes`;
 };
 
-const buildRetentionTimelineLabel = (record, referenceDate = new Date()) => {
+const getRetentionDateKey = (value) => {
+  if (!value) return "";
+  if (typeof value === "string") {
+    const raw = value.trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
+    const br = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (br) return `${br[3]}-${br[2]}-${br[1]}`;
+  }
+  const date = toLifecycleDate(value);
+  return date instanceof Date && !Number.isNaN(date.getTime()) ? createDateKey(date) : "";
+};
+
+const getRetentionTimelineProgress = (record, referenceDate = new Date()) => {
   const startDate = toLifecycleDate(record?.dataPedido);
   const endDate = toLifecycleDate(record?.dataFimAviso);
-  if (!(startDate instanceof Date) || Number.isNaN(startDate.getTime()) || !(endDate instanceof Date) || Number.isNaN(endDate.getTime())) return "Sem janela definida";
-  const totalDays = Math.max(1, Math.round((startOfDay(endDate).getTime() - startOfDay(startDate).getTime()) / 86400000) + 1);
-  const elapsedDays = Math.max(1, Math.min(totalDays, Math.round((startOfDay(referenceDate).getTime() - startOfDay(startDate).getTime()) / 86400000) + 1));
-  return `Dia ${elapsedDays} de ${totalDays}`;
+  if (!(startDate instanceof Date) || Number.isNaN(startDate.getTime()) || !(endDate instanceof Date) || Number.isNaN(endDate.getTime())) {
+    return { totalDays: 0, elapsedDays: 0, progressPct: 0, label: "Sem janela definida" };
+  }
+  const totalDays = Math.max(1, Math.floor((startOfDay(endDate).getTime() - startOfDay(startDate).getTime()) / 86400000) + 1);
+  const elapsedRaw = Math.floor((startOfDay(referenceDate).getTime() - startOfDay(startDate).getTime()) / 86400000) + 1;
+  const elapsedDays = Math.max(1, Math.min(totalDays, elapsedRaw));
+  const progressPct = totalDays > 0 ? Math.max(0, Math.min(100, Math.round((elapsedDays / totalDays) * 100))) : 0;
+  return { totalDays, elapsedDays, progressPct, label: `Dia ${elapsedDays} de ${totalDays}` };
 };
+
+const buildRetentionTimelineLabel = (record, referenceDate = new Date()) => getRetentionTimelineProgress(record, referenceDate).label;
 
 const getRetentionStudentDisplayName = (student) => {
   const name = compactAdminPedName(student?.nome || student?.aluno_nome || "Aluno", 2);
@@ -15003,7 +15034,6 @@ const buildRetentionQueues = ({
     const activeCancellation =
       normalizedCurrent &&
       !normalizedCurrent.desfecho &&
-      String(normalizedCurrent.origem || "").trim() !== "abandono_confirmado" &&
       (lifecycleState === STUDENT_LIFECYCLE_STATE.NOTICE || lifecycleState === STUDENT_LIFECYCLE_STATE.SUSPENDED)
         ? normalizedCurrent
         : null;
@@ -15047,7 +15077,7 @@ const buildRetentionQueues = ({
       };
       avisos.push(avisoRow);
 
-      const activeEndKey = toDateKeyFromAny(activeCancellation?.dataFimAviso);
+      const activeEndKey = getRetentionDateKey(activeCancellation?.dataFimAviso);
       if (activeEndKey && activeEndKey < todayKey) {
         decisoes.push({
           kind: "aviso_vencido",
@@ -17219,18 +17249,10 @@ const renderAdminStudentLifecycleCard = (alunoMeta) => {
   const suspensionLabel = activeRecord?.dataSuspensao ? formatAdminDate(activeRecord.dataSuspensao) : "";
   const sensors = adminStudentsState.history?.lifecycleSensors || {};
   const lifecycleRange = getStudentCancellationWindowRange(activeRecord);
-  const totalDays =
-    lifecycleRange && lifecycleRange.startDate && lifecycleRange.endDate
-      ? Math.max(1, Math.round((endOfDay(lifecycleRange.endDate).getTime() - startOfDay(lifecycleRange.startDate).getTime()) / 86400000) + 1)
-      : 0;
-  const elapsedDays =
-    lifecycleRange && lifecycleRange.startDate
-      ? Math.min(
-          totalDays,
-          Math.max(1, Math.round((endOfDay(new Date()).getTime() - startOfDay(lifecycleRange.startDate).getTime()) / 86400000) + 1)
-        )
-      : 0;
-  const progressPct = totalDays > 0 ? Math.max(0, Math.min(100, Math.round((elapsedDays / totalDays) * 100))) : 0;
+  const lifecycleProgress = getRetentionTimelineProgress(activeRecord, new Date());
+  const totalDays = lifecycleProgress.totalDays;
+  const elapsedDays = lifecycleProgress.elapsedDays;
+  const progressPct = lifecycleProgress.progressPct;
 
   if (state === STUDENT_LIFECYCLE_STATE.ACTIVE) {
     return `
