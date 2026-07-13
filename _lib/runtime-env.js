@@ -41,6 +41,7 @@ const getAppEnv = (env = process.env) =>
   normalizeAppEnv(getEnv(env, "APP_ENV", "SPACE_APP_ENV", "VERCEL_ENV", "NODE_ENV"));
 
 const getFirebasePublicConfig = (env = process.env) => {
+  const appEnv = getAppEnv(env);
   const config = {
     apiKey: getEnv(env, "NEXT_PUBLIC_FIREBASE_API_KEY", "FIREBASE_WEB_API_KEY"),
     authDomain: getEnv(env, "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN", "FIREBASE_AUTH_DOMAIN"),
@@ -50,6 +51,17 @@ const getFirebasePublicConfig = (env = process.env) => {
     appId: getEnv(env, "NEXT_PUBLIC_FIREBASE_APP_ID", "FIREBASE_APP_ID"),
     measurementId: getEnv(env, "NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID", "FIREBASE_MEASUREMENT_ID"),
   };
+  if (appEnv === "production" || appEnv === "local") {
+    return {
+      apiKey: config.apiKey || PROD_FIREBASE_PUBLIC_DEFAULTS.apiKey,
+      authDomain: config.authDomain || PROD_FIREBASE_PUBLIC_DEFAULTS.authDomain,
+      projectId: config.projectId || PROD_FIREBASE_PUBLIC_DEFAULTS.projectId,
+      storageBucket: config.storageBucket || PROD_FIREBASE_PUBLIC_DEFAULTS.storageBucket,
+      messagingSenderId: config.messagingSenderId || PROD_FIREBASE_PUBLIC_DEFAULTS.messagingSenderId,
+      appId: config.appId || PROD_FIREBASE_PUBLIC_DEFAULTS.appId,
+      measurementId: config.measurementId || PROD_FIREBASE_PUBLIC_DEFAULTS.measurementId,
+    };
+  }
   return config;
 };
 
