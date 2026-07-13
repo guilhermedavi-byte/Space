@@ -1,4 +1,10 @@
 const body = document.body;
+const getFirebaseRuntimeConfig = () => {
+  if (typeof window.__SPACE_GET_FIREBASE_CONFIG__ === "function") {
+    return window.__SPACE_GET_FIREBASE_CONFIG__();
+  }
+  throw new Error("missing_runtime_firebase_config");
+};
 const openPlatformButtons = document.querySelectorAll("[data-open-platform]");
 const closePlatformButton = document.querySelector("[data-close-platform]");
 const authEnterShell = document.querySelector('[data-auth-page="entrar"]');
@@ -10612,16 +10618,6 @@ const renderStudentLiveLessons = async ({ force = false } = {}) => {
     .join("");
 };
 
-const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyD0qyhYh6MWRPMRDN_SYqdDEeogS3thQPE",
-  authDomain: "plataforma-space.firebaseapp.com",
-  projectId: "plataforma-space",
-  storageBucket: "plataforma-space.firebasestorage.app",
-  messagingSenderId: "984031970274",
-  appId: "1:984031970274:web:fff5da2fe5e318b04aefbb",
-  measurementId: "G-X28MKDJPKE",
-};
-
 let firebaseAdminApiPromise = null;
 
 const withTimeout = (promise, ms, label) => {
@@ -10656,7 +10652,8 @@ const loadFirebaseAdminApi = () => {
       try {
         return name ? appMod.getApp(name) : appMod.getApp();
       } catch (error) {
-        return name ? appMod.initializeApp(FIREBASE_CONFIG, name) : appMod.initializeApp(FIREBASE_CONFIG);
+        const firebaseConfig = getFirebaseRuntimeConfig();
+        return name ? appMod.initializeApp(firebaseConfig, name) : appMod.initializeApp(firebaseConfig);
       }
     };
 

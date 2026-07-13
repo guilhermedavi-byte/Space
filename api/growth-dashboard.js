@@ -2673,6 +2673,7 @@ module.exports = async (req, res) => {
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png" />
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+    <script src="/api/runtime-config.js"></script>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body data-view="interno" data-page="growth" data-sidebar-expanded="false">

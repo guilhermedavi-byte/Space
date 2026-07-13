@@ -1,6 +1,21 @@
-const PROJECT_ID = "plataforma-space";
-const API_KEY = "AIzaSyD0qyhYh6MWRPMRDN_SYqdDEeogS3thQPE";
-const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
+const { assertEnvironmentIsolation, getFirebaseServerConfig } = require("./runtime-env");
+
+const getFirestoreRuntime = () => {
+  assertEnvironmentIsolation();
+  const { projectId, apiKey } = getFirebaseServerConfig();
+  if (!projectId || !apiKey) {
+    const error = new Error("firebase_runtime_not_configured");
+    error.code = "firebase_runtime_not_configured";
+    throw error;
+  }
+  return {
+    projectId,
+    apiKey,
+    baseUrl: `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents`,
+  };
+};
+
+const { projectId: PROJECT_ID, apiKey: API_KEY, baseUrl: FIRESTORE_BASE } = getFirestoreRuntime();
 
 const getBearerTokenFromRequest = (req) => {
   const header = String(req?.headers?.authorization || req?.headers?.Authorization || "").trim();
@@ -165,7 +180,8 @@ const firestoreGetDocument = async ({ docPath, idToken }) => {
   const path = String(docPath || "").replace(/^\/+/, "");
   if (!path || !token) throw new Error("missing_params");
 
-  const url = `${FIRESTORE_BASE}/${encodeURI(path)}?key=${encodeURIComponent(API_KEY)}`;
+  const { apiKey, baseUrl } = getFirestoreRuntime();
+  const url = `${baseUrl}/${encodeURI(path)}?key=${encodeURIComponent(apiKey)}`;
   return requestJson(url, {
     method: "GET",
     headers: { Authorization: `Bearer ${token}` },
@@ -177,14 +193,15 @@ const firestorePatchDocument = async ({ docPath, idToken, data, updateMaskPaths 
   const path = String(docPath || "").replace(/^\/+/, "");
   if (!path || !token) throw new Error("missing_params");
 
+  const { apiKey, baseUrl } = getFirestoreRuntime();
   const params = new URLSearchParams();
-  params.set("key", API_KEY);
+  params.set("key", apiKey);
   const mask = Array.isArray(updateMaskPaths) ? updateMaskPaths.filter((p) => typeof p === "string" && p) : [];
   mask.forEach((fieldPath) => {
     params.append("updateMask.fieldPaths", fieldPath);
   });
 
-  const url = `${FIRESTORE_BASE}/${encodeURI(path)}?${params.toString()}`;
+  const url = `${baseUrl}/${encodeURI(path)}?${params.toString()}`;
   return requestJson(url, {
     method: "PATCH",
     headers: { Authorization: `Bearer ${token}` },
@@ -197,7 +214,8 @@ const firestoreDeleteDocument = async ({ docPath, idToken } = {}) => {
   const path = String(docPath || "").replace(/^\/+/, "");
   if (!path || !token) throw new Error("missing_params");
 
-  const url = `${FIRESTORE_BASE}/${encodeURI(path)}?key=${encodeURIComponent(API_KEY)}`;
+  const { apiKey, baseUrl } = getFirestoreRuntime();
+  const url = `${baseUrl}/${encodeURI(path)}?key=${encodeURIComponent(apiKey)}`;
   return requestJson(url, {
     method: "DELETE",
     headers: { Authorization: `Bearer ${token}` },
@@ -210,7 +228,8 @@ const firestoreRunQuery = async ({ idToken, structuredQuery } = {}) => {
   const query = structuredQuery && typeof structuredQuery === "object" ? structuredQuery : null;
   if (!query) throw new Error("missing_query");
 
-  const url = `${FIRESTORE_BASE}:runQuery?key=${encodeURIComponent(API_KEY)}`;
+  const { apiKey, baseUrl } = getFirestoreRuntime();
+  const url = `${baseUrl}:runQuery?key=${encodeURIComponent(apiKey)}`;
   return requestJson(url, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
@@ -231,12 +250,13 @@ const firestoreListDocuments = async ({ collectionPath, idToken, pageSize = 1000
 
   while (safety < 20) {
     safety += 1;
+    const { apiKey, baseUrl } = getFirestoreRuntime();
     const params = new URLSearchParams();
-    params.set("key", API_KEY);
+    params.set("key", apiKey);
     params.set("pageSize", String(safeSize));
     if (pageToken) params.set("pageToken", pageToken);
 
-    const url = `${FIRESTORE_BASE}/${encodeURI(path)}?${params.toString()}`;
+    const url = `${baseUrl}/${encodeURI(path)}?${params.toString()}`;
     const res = await requestJson(url, {
       method: "GET",
       headers: { Authorization: `Bearer ${token}` },
@@ -258,6 +278,7 @@ module.exports = {
   PROJECT_ID,
   API_KEY,
   FIRESTORE_BASE,
+  getFirestoreRuntime,
   decodeFields,
   decodeValue,
   encodeFields,

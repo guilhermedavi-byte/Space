@@ -1,6 +1,19 @@
-const PROJECT_ID = "plataforma-space";
-const API_KEY = "AIzaSyD0qyhYh6MWRPMRDN_SYqdDEeogS3thQPE";
-const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
+const { assertEnvironmentIsolation, getFirebaseServerConfig } = require("./runtime-env");
+
+const getFirestoreUserRuntime = () => {
+  assertEnvironmentIsolation();
+  const { projectId, apiKey } = getFirebaseServerConfig();
+  if (!projectId || !apiKey) {
+    const error = new Error("firebase_runtime_not_configured");
+    error.code = "firebase_runtime_not_configured";
+    throw error;
+  }
+  return {
+    projectId,
+    apiKey,
+    baseUrl: `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents`,
+  };
+};
 
 const normalizeRole = (value) => {
   const raw = String(value || "").trim().toLowerCase();
@@ -76,7 +89,8 @@ const fetchUserProfileByUid = async ({ uid, idToken }) => {
   const token = String(idToken || "").trim();
   if (!safeUid || !token) return null;
 
-  const url = `${FIRESTORE_BASE}/users/${encodeURIComponent(safeUid)}?key=${encodeURIComponent(API_KEY)}`;
+  const { apiKey, baseUrl } = getFirestoreUserRuntime();
+  const url = `${baseUrl}/users/${encodeURIComponent(safeUid)}?key=${encodeURIComponent(apiKey)}`;
   const { ok, status, data } = await fetchJsonWithHeaders(url, {
     headers: { Authorization: `Bearer ${token}` },
   });

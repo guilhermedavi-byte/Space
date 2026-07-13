@@ -1,4 +1,5 @@
 const { sendJson } = require("../_lib/http");
+const { getAppEnv, validateEnvironmentIsolation } = require("../_lib/runtime-env");
 
 const configured = (...names) =>
   names.some((name) => String(process.env[name] || "").trim().length > 0);
@@ -10,6 +11,7 @@ module.exports = async (req, res) => {
   }
 
   const checks = {
+    appEnv: getAppEnv(),
     auth: configured("SPACE_AUTH_SECRET"),
     publicUrl: configured("SPACE_PUBLIC_BASE_URL"),
     supabase: configured("SUPABASE_URL") && configured("SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_ANON_KEY"),
@@ -28,11 +30,15 @@ module.exports = async (req, res) => {
         configured("GOOGLE_PRIVATE_KEY", "FIREBASE_PRIVATE_KEY")),
   };
 
-  const required = ["auth", "publicUrl", "supabase", "asaas", "chatwoot", "n8n", "webhookProtection"];
+  const envIsolation = validateEnvironmentIsolation();
+  checks.environmentIsolation = envIsolation.ok;
+
+  const required = ["auth", "publicUrl", "supabase", "asaas", "chatwoot", "n8n", "webhookProtection", "environmentIsolation"];
   const ready = required.every((key) => checks[key]);
   return sendJson(res, ready ? 200 : 503, {
     status: ready ? "ready" : "degraded",
     checks,
+    environment: envIsolation,
     timestamp: new Date().toISOString(),
   });
 };

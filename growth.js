@@ -1,11 +1,8 @@
-const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyD0qyhYh6MWRPMRDN_SYqdDEeogS3thQPE",
-  authDomain: "plataforma-space.firebaseapp.com",
-  projectId: "plataforma-space",
-  storageBucket: "plataforma-space.firebasestorage.app",
-  messagingSenderId: "984031970274",
-  appId: "1:984031970274:web:fff5da2fe5e318b04aefbb",
-  measurementId: "G-X28MKDJPKE",
+const getFirebaseRuntimeConfig = () => {
+  if (typeof window.__SPACE_GET_FIREBASE_CONFIG__ === "function") {
+    return window.__SPACE_GET_FIREBASE_CONFIG__();
+  }
+  throw new Error("missing_runtime_firebase_config");
 };
 
 const session = window.__SPACE_SESSION__ && typeof window.__SPACE_SESSION__ === "object" ? window.__SPACE_SESSION__ : null;
@@ -83,7 +80,7 @@ const loadFirebaseAuth = () => {
       try {
         return appMod.getApp();
       } catch (error) {
-        return appMod.initializeApp(FIREBASE_CONFIG);
+        return appMod.initializeApp(getFirebaseRuntimeConfig());
       }
     };
 

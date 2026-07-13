@@ -1,8 +1,21 @@
 const crypto = require("crypto");
+const { assertEnvironmentIsolation, getFirebaseServerConfig } = require("./runtime-env");
 
-const PROJECT_ID = "plataforma-space";
-const ISSUER = `https://securetoken.google.com/${PROJECT_ID}`;
 const CERTS_URL = "https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com";
+
+const getFirebaseTokenRuntime = () => {
+  assertEnvironmentIsolation();
+  const { projectId } = getFirebaseServerConfig();
+  if (!projectId) {
+    const error = new Error("firebase_runtime_not_configured");
+    error.code = "firebase_runtime_not_configured";
+    throw error;
+  }
+  return {
+    projectId,
+    issuer: `https://securetoken.google.com/${projectId}`,
+  };
+};
 
 let cachedCerts = null;
 let cachedCertsExpiresAt = 0;
@@ -118,8 +131,9 @@ const verifyFirebaseIdToken = async (idToken) => {
   }
 
   const nowSec = Math.floor(Date.now() / 1000);
-  if (payload.aud !== PROJECT_ID) throw new Error("invalid_aud");
-  if (payload.iss !== ISSUER) throw new Error("invalid_iss");
+  const { projectId, issuer } = getFirebaseTokenRuntime();
+  if (payload.aud !== projectId) throw new Error("invalid_aud");
+  if (payload.iss !== issuer) throw new Error("invalid_iss");
   if (typeof payload.sub !== "string" || !payload.sub) throw new Error("invalid_sub");
   if (typeof payload.exp !== "number" || payload.exp <= nowSec) throw new Error("expired");
 
@@ -133,4 +147,3 @@ const verifyFirebaseIdToken = async (idToken) => {
 };
 
 module.exports = { verifyFirebaseIdToken };
-

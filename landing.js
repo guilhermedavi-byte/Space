@@ -5,6 +5,10 @@ const nav = document.querySelector("[data-lp-nav]");
 const navToggle = document.querySelector("[data-lp-nav-toggle]");
 const mobileMenu = document.querySelector("[data-lp-mobile-menu]");
 const leadForm = document.querySelector("[data-lead-form]");
+const getSpaceRuntimeConfig = () =>
+  window.__SPACE_RUNTIME_CONFIG__ && typeof window.__SPACE_RUNTIME_CONFIG__ === "object"
+    ? window.__SPACE_RUNTIME_CONFIG__
+    : null;
 
 if (loginMenu instanceof HTMLElement && loginTrigger instanceof HTMLButtonElement && loginDropdown instanceof HTMLElement) {
   let isOpen = false;
@@ -118,9 +122,16 @@ const isValidEmail = (raw) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(raw || ""
 const digitsOnly = (raw) => String(raw || "").replace(/\D/g, "");
 
 const submitLeadDirectlyToFirestore = async (lead) => {
+  const runtimeConfig = getSpaceRuntimeConfig();
+  const projectId = String(runtimeConfig?.leads?.firestoreProjectId || runtimeConfig?.firebase?.projectId || "").trim();
+  const apiKey = String(runtimeConfig?.firebase?.apiKey || "").trim();
+  const fallbackEnabled = Boolean(runtimeConfig?.leads?.directFirestoreFallbackEnabled);
+  if (!projectId || !apiKey || !fallbackEnabled) {
+    throw new Error("lead_firestore_fallback_unavailable");
+  }
   const endpoint =
-    "https://firestore.googleapis.com/v1/projects/plataforma-space/databases/(default)/documents/leads" +
-    "?key=AIzaSyD0qyhYh6MWRPMRDN_SYqdDEeogS3thQPE";
+    `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/databases/(default)/documents/leads` +
+    `?key=${encodeURIComponent(apiKey)}`;
   const response = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

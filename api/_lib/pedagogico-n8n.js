@@ -1,5 +1,6 @@
 const { supabaseFetch } = require("./supabase-rest");
 const { fetchOnboardingRows } = require("./pedagogico-service");
+const { assertEnvironmentIsolation } = require("../../_lib/runtime-env");
 
 const INTEGRATION_LOGS_TABLE = "n8n_logs_pedagogico_space";
 const ONBOARDING_TABLE = "n8n_onboarding_alunos_space";
@@ -13,6 +14,7 @@ const nowIso = () => new Date().toISOString();
 const normalizeStatus = (value) => String(value || "").trim().toLowerCase();
 
 const getEnvUrl = (name) => {
+  assertEnvironmentIsolation();
   const names = Array.isArray(name) ? name : [name];
   for (const item of names) {
     const value = String(process.env[item] || "").trim();

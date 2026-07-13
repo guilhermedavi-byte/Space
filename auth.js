@@ -65,14 +65,11 @@ const sanitizeSessionUser = (value) => {
   return { id, role, name, email };
 };
 
-const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyD0qyhYh6MWRPMRDN_SYqdDEeogS3thQPE",
-  authDomain: "plataforma-space.firebaseapp.com",
-  projectId: "plataforma-space",
-  storageBucket: "plataforma-space.firebasestorage.app",
-  messagingSenderId: "984031970274",
-  appId: "1:984031970274:web:fff5da2fe5e318b04aefbb",
-  measurementId: "G-X28MKDJPKE",
+const getFirebaseRuntimeConfig = () => {
+  if (typeof window.__SPACE_GET_FIREBASE_CONFIG__ === "function") {
+    return window.__SPACE_GET_FIREBASE_CONFIG__();
+  }
+  throw new Error("missing_runtime_firebase_config");
 };
 
 let firebaseAuthApiPromise = null;
@@ -84,7 +81,7 @@ const loadFirebaseAuthApi = () => {
     import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"),
     import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js"),
   ]).then(([appMod, authMod]) => {
-    const app = appMod.initializeApp(FIREBASE_CONFIG);
+    const app = appMod.initializeApp(getFirebaseRuntimeConfig());
     const auth = authMod.getAuth(app);
     return {
       auth,

@@ -1,3 +1,5 @@
+const { assertEnvironmentIsolation } = require("../../_lib/runtime-env");
+
 const FINANCE_TABLES = {
   alunos: "n8n_alunos_financeiro_space",
   cobrancas: "n8n_cobrancas_financeiras_space",
@@ -45,10 +47,13 @@ const buildChatwootConversationUrl = (conversationId) => {
   return `${cfg.baseUrl}/app/accounts/${encodeURIComponent(cfg.accountId)}/conversations/${encodeURIComponent(id)}`;
 };
 
-const getAsaasConfig = () => ({
-  baseUrl: String(process.env.ASAAS_BASE_URL || "https://api-sandbox.asaas.com/v3").replace(/\/+$/, ""),
-  apiKey: String(process.env.ASAAS_API_KEY || "").trim(),
-});
+const getAsaasConfig = () => {
+  assertEnvironmentIsolation();
+  return {
+    baseUrl: String(process.env.ASAAS_BASE_URL || "https://api-sandbox.asaas.com/v3").replace(/\/+$/, ""),
+    apiKey: String(process.env.ASAAS_API_KEY || "").trim(),
+  };
+};
 
 module.exports = {
   FINANCE_TABLE,

@@ -1,4 +1,7 @@
+const { assertEnvironmentIsolation } = require("../../_lib/runtime-env");
+
 const getSupabaseConfig = () => {
+  assertEnvironmentIsolation();
   const url = String(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "").replace(/\/+$/, "");
   const key = String(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || "").trim();
   if (!url || !key) {
