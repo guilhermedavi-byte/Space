@@ -11027,6 +11027,11 @@ const ADMIN_SETTINGS_SECTIONS = [
   { key: "lixeira", label: "Lixeira" },
 ];
 
+const getVisibleAdminSettingsSections = () => {
+  if (normalizeRole(currentRole) === "teacher") return ADMIN_SETTINGS_SECTIONS.filter((item) => item.key === "meu-perfil");
+  return ADMIN_SETTINGS_SECTIONS;
+};
+
 let adminSettingsState = {
   activeSection: "meu-perfil",
   sidebarExpanded: true,
@@ -27792,7 +27797,7 @@ const loadAdminSettingsProfile = async ({ force = false } = {}) => {
 };
 
 const renderAdminSettingsPlaceholder = (section) => {
-  const meta = ADMIN_SETTINGS_SECTIONS.find((item) => item.key === section) || ADMIN_SETTINGS_SECTIONS[0];
+  const meta = getVisibleAdminSettingsSections().find((item) => item.key === section) || getVisibleAdminSettingsSections()[0] || ADMIN_SETTINGS_SECTIONS[0];
   return `
     <div class="surface-card admin-settings-placeholder">
       <div class="admin-settings-placeholder-kicker">Configurações</div>
@@ -27856,7 +27861,24 @@ const renderAdminSettingsProfile = () => {
   `;
 };
 
+const renderAdminSettingsNav = () => {
+  const navEl = document.querySelector("[data-admin-settings-nav]");
+  if (!(navEl instanceof HTMLElement)) return;
+  const visibleSections = getVisibleAdminSettingsSections();
+  navEl.innerHTML = visibleSections
+    .map(
+      (item) => `
+        <button class="admin-settings-nav-item" type="button" data-admin-settings-section="${escapeHtml(item.key)}">${escapeHtml(item.label)}</button>
+      `
+    )
+    .join("");
+};
+
 const syncAdminSettingsNav = () => {
+  const visibleSections = getVisibleAdminSettingsSections();
+  if (!visibleSections.some((item) => item.key === adminSettingsState.activeSection)) {
+    adminSettingsState.activeSection = "meu-perfil";
+  }
   document.querySelectorAll("[data-admin-settings-section]").forEach((button) => {
     if (!(button instanceof HTMLButtonElement)) return;
     const section = String(button.getAttribute("data-admin-settings-section") || "").trim();
@@ -27870,6 +27892,7 @@ const renderAdminSettingsPanel = () => {
   const root = getAdminSettingsRoot();
   const contentEl = getAdminSettingsContent();
   if (!(root instanceof HTMLElement) || !(contentEl instanceof HTMLElement)) return;
+  renderAdminSettingsNav();
   syncAdminSettingsNav();
   if (adminSettingsState.activeSection === "meu-perfil") {
     contentEl.innerHTML = renderAdminSettingsProfile();
@@ -27879,10 +27902,12 @@ const renderAdminSettingsPanel = () => {
 };
 
 const openAdminSettingsSection = (section, { updateRoute = true } = {}) => {
-  const next = ADMIN_SETTINGS_SECTIONS.some((item) => item.key === section) ? section : "meu-perfil";
+  const visibleSections = getVisibleAdminSettingsSections();
+  const next = visibleSections.some((item) => item.key === section) ? section : "meu-perfil";
   adminSettingsState.activeSection = next;
   if (updateRoute) {
-    navigateApp(`/app/admin/configuracoes/${next}`);
+    const settingsBase = normalizeRole(currentRole) === "teacher" ? "/app/professor/configuracoes" : "/app/admin/configuracoes";
+    navigateApp(`${settingsBase}/${next}`);
     return;
   }
   renderAdminSettingsPanel();
@@ -30596,9 +30621,12 @@ const showPanel = (panelName) => {
 
   if (panelName === "configuracoes-admin") {
     window.scrollTo({ top: 0, behavior: "smooth" });
-    if (currentRole !== "admin") {
+    if (!["admin", "teacher"].includes(normalizeRole(currentRole))) {
       navigateApp(roleBasePath(currentRole), { replace: true });
       return;
+    }
+    if (!getVisibleAdminSettingsSections().some((item) => item.key === adminSettingsState.activeSection)) {
+      adminSettingsState.activeSection = "meu-perfil";
     }
     loadAdminSettingsProfile({ force: false })
       .catch((error) => console.error("[admin] settings profile init failed:", error))
@@ -30725,6 +30753,7 @@ const panelPathForRole = (role, panel) => {
 
   if (normalized === "teacher") {
     if (p === "activities") return "/app/professor/atividades";
+    if (p === "configuracoes-admin") return "/app/professor/configuracoes";
     if (p === "ao-vivo") return "/app/professor/agenda";
     if (p === "pedagogico") return "/app/professor/pedagogico";
     if (p === "teacher-alunos") return "/app/professor/alunos";
@@ -30799,6 +30828,7 @@ const parseAppRoute = (path) => {
 
   if (role === "teacher") {
     if (sub === "atividades") return { role, panel: "activities" };
+    if (sub === "configuracoes") return { role, panel: "configuracoes-admin", settingsSection: "meu-perfil" };
     if (sub === "agenda") return { role, panel: "ao-vivo" };
     if (sub === "pedagogico") return { role, panel: "pedagogico" };
     if (sub === "alunos") return { role, panel: "teacher-alunos" };
