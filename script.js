@@ -28452,24 +28452,24 @@ const openAdminStudentEffectiveCancellationModal = async ({ alunoId } = {}) => {
         setErr("Selecione um desfecho para efetivar.");
         return false;
       }
-      if (modalPrimary) modalPrimary.disabled = true;
-      if (modalSecondary) modalSecondary.disabled = true;
-      const nowIso = new Date().toISOString();
-      const nextCancelamento = {
-        ...cancelamento,
-        desfecho: {
-          tipo: outcome,
-          data: nowIso,
-          notas,
-        },
-        dataEfetivacao: nowIso,
-        aulasSuspensas: true,
-        eventos: (Array.isArray(cancelamento.eventos) ? cancelamento.eventos : []).concat([
-          createStudentCancellationHistoryEntry("Cancelamento efetivado", `${getRetentionOutcomeLabel(outcome)}${notes ? ` · ${notes}` : ""}`),
-        ]),
-      };
       (async () => {
         try {
+          if (modalPrimary) modalPrimary.disabled = true;
+          if (modalSecondary) modalSecondary.disabled = true;
+          const nowIso = new Date().toISOString();
+          const nextCancelamento = {
+            ...cancelamento,
+            desfecho: {
+              tipo: outcome,
+              data: nowIso,
+              notas: notes,
+            },
+            dataEfetivacao: nowIso,
+            aulasSuspensas: true,
+            eventos: (Array.isArray(cancelamento.eventos) ? cancelamento.eventos : []).concat([
+              createStudentCancellationHistoryEntry("Cancelamento efetivado", `${getRetentionOutcomeLabel(outcome)}${notes ? ` · ${notes}` : ""}`),
+            ]),
+          };
           await saveAdminStudentLifecyclePatch({
             alunoId: id,
             patch: {
@@ -29980,7 +29980,20 @@ if (modalSecondary) {
 if (modalPrimary) {
   modalPrimary.addEventListener("click", () => {
     if (modalPrimaryHandler) {
-      const shouldClose = modalPrimaryHandler();
+      let shouldClose;
+      try {
+        shouldClose = modalPrimaryHandler();
+      } catch (error) {
+        console.error("[modal] primary action failed", error);
+        const errorEl = modalBody?.querySelector(".admin-student-lifecycle-modal-error, [data-admin-student-effective-error]");
+        if (errorEl instanceof HTMLElement) {
+          errorEl.textContent = `Não foi possível concluir agora. ${error?.message || ""}`.trim();
+          errorEl.hidden = false;
+        }
+        if (modalPrimary) modalPrimary.disabled = false;
+        if (modalSecondary) modalSecondary.disabled = false;
+        return;
+      }
       if (shouldClose === false) return;
     }
     closeModal();
