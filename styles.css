@@ -5088,6 +5088,18 @@ body.admin-student-drawer-open {
   border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+.admin-student-lifecycle-modal-hint.is-warning {
+  background: rgba(245, 182, 75, 0.08);
+  border-color: rgba(245, 182, 75, 0.22);
+  color: #f4c86d;
+}
+
+.admin-student-lifecycle-modal-summary.is-danger {
+  background: rgba(255, 86, 79, 0.08);
+  border-color: rgba(255, 86, 79, 0.22);
+  color: #ffb0aa;
+}
+
 .admin-student-lifecycle-modal-error {
   font-size: 12px;
   color: rgba(255, 112, 104, 0.96);
@@ -21819,6 +21831,16 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 .pedretain-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
 .pedretain-empty{padding:20px 18px;border:1px dashed rgba(255,255,255,.08);border-radius:18px;background:rgba(255,255,255,.02)}
 .pedretain-retry{margin-top:14px}
+.pedretain-metrics{display:grid;gap:14px;margin:0 0 18px}
+.pedretain-metrics-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.pedretain-metrics-sub{margin:5px 0 0;color:var(--text-muted);font-size:.78rem;line-height:1.45}
+.pedretain-month{display:grid;gap:5px;color:var(--text-muted);font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em}
+.pedretain-month input{height:38px;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text-main);padding:0 10px;font:inherit;text-transform:none;letter-spacing:0}
+.pedretain-chart-card{padding:16px}
+.pedretain-chart-box{height:230px}
+.pedretain-breakdown{display:flex;gap:8px;flex-wrap:wrap;color:var(--text-muted);font-size:.78rem}
+.pedretain-breakdown span{padding:7px 10px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.035)}
+.pedov2-kpi-card[data-pedov2-retention-card]{cursor:pointer}
 
 @media (max-width: 900px){
   .pedretain-row{grid-template-columns:1fr}
