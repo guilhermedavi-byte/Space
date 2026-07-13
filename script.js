@@ -27302,6 +27302,43 @@ const rerenderAdminStudentLifecycleViews = () => {
   if (typeof renderAdminStudentsList === "function") renderAdminStudentsList();
 };
 
+const requestAdminStudentMirrorSync = ({ firestoreDocId, context = "student_mirror_sync" } = {}) => {
+  const id = String(firestoreDocId || "").trim();
+  if (!id) return Promise.resolve(null);
+  return fetchWithAuth("/api/admin-users", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ uid: id, action: "sync_mirror" }),
+  })
+    .then((response) =>
+      response
+        .json()
+        .catch(() => null)
+        .then((body) => ({ ok: response.ok, status: response.status, body }))
+    )
+    .then((result) => {
+      const sync = result?.body?.sync || null;
+      const payload = {
+        documentId: id,
+        context,
+        status: result?.status,
+        sync,
+        error: result?.body?.error || "",
+      };
+      if (!result?.ok || result?.body?.ok === false) console.warn("[ownership] student mirror sync incomplete", payload);
+      else console.info("[ownership] student mirror sync complete", payload);
+      return sync || result?.body || null;
+    })
+    .catch((syncError) => {
+      console.error("[ownership] student mirror sync failed", {
+        documentId: id,
+        context,
+        message: syncError?.message || String(syncError || ""),
+      });
+      return null;
+    });
+};
+
 const saveAdminStudentLifecyclePatch = async ({ alunoId, patch = {} } = {}) => {
   const requestedId = String(alunoId || "").trim();
   if (!requestedId) throw new Error("missing_student_id");
@@ -27367,6 +27404,7 @@ const saveAdminStudentLifecyclePatch = async ({ alunoId, patch = {} } = {}) => {
     etapa = "D";
     await withTimeout(firebase.updateDoc(studentRef, cleanPatch), 12_000, "firestore_student_lifecycle_update");
     console.info("[Cancellation] D — updateDoc concluído", { documentId: id, documentPath: `users/${id}` });
+    requestAdminStudentMirrorSync({ firestoreDocId: id, context: "student_lifecycle_patch" });
     etapa = "E";
     const persistedRow = await loadAdminStudentRowFromFirestoreById(id);
     if (!persistedRow) {
@@ -27431,19 +27469,6 @@ const saveAdminStudentLifecyclePatch = async ({ alunoId, patch = {} } = {}) => {
     if (student && typeof student === "object") {
       const mergedPersistedRow = mergeAdminStudentWithCachedProfile(student, persistedRow);
       updateAdminStudentCachedRow(id, mergedPersistedRow);
-      fetchWithAuth("/api/admin-users", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ uid: id, action: "sync_mirror" }),
-      })
-        .then((response) => response.json().catch(() => null).then((body) => ({ ok: response.ok, status: response.status, body })))
-        .then((result) => console.warn("[ownership] cancellation mirror sync", { documentId: id, ...result }))
-        .catch((syncError) =>
-          console.warn("[ownership] cancellation mirror sync failed", {
-            documentId: id,
-            message: syncError?.message || syncError,
-          })
-        );
       console.info("[Cancellation] G — cache atualizado", { documentId: id });
       return mergedPersistedRow;
     }
