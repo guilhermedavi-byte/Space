@@ -19545,6 +19545,74 @@ const ADMIN_PED_PAGE_TITLES = {
   relatorios: "Relatórios",
 };
 
+const ADMIN_PED_TAB_TO_URL_MODULE = {
+  overview: "visao-geral",
+  aulas: "registros-de-aulas",
+  alunos: "alunos",
+  turmas: "turmas",
+  vinculos: "vinculos",
+  pessoas: "usuarios",
+  retencao: "retencao",
+  conflitos: "conflitos",
+  professores: "professores",
+  qualidade: "qualidade",
+  pesquisas: "pesquisas",
+  npscsat: "nps-csat",
+  avisos: "avisos",
+  feedbacks: "feedbacks",
+  onboarding: "onboarding",
+  planos: "planos",
+  relatorios: "relatorios",
+  configuracoes: "configuracoes",
+};
+
+const ADMIN_PED_URL_MODULE_TO_TAB = {
+  "visao-geral": "overview",
+  overview: "overview",
+  aulas: "aulas",
+  "registros-de-aulas": "aulas",
+  registros: "aulas",
+  alunos: "alunos",
+  turmas: "turmas",
+  vinculos: "vinculos",
+  usuarios: "pessoas",
+  users: "pessoas",
+  pessoas: "pessoas",
+  retencao: "retencao",
+  conflitos: "conflitos",
+  professores: "professores",
+  qualidade: "qualidade",
+  pesquisas: "pesquisas",
+  "nps-csat": "npscsat",
+  npscsat: "npscsat",
+  avisos: "avisos",
+  feedbacks: "feedbacks",
+  onboarding: "onboarding",
+  planos: "planos",
+  relatorios: "relatorios",
+  configuracoes: "configuracoes",
+};
+
+const FINANCE_TAB_TO_URL = {
+  overview: "dashboard",
+  alunos: "alunos",
+  cobrancas: "cobrancas",
+  pagamentos: "pagamentos",
+  eventos: "eventos",
+  chatwoot: "conversas",
+};
+
+const FINANCE_URL_TO_TAB = {
+  dashboard: "overview",
+  overview: "overview",
+  alunos: "alunos",
+  cobrancas: "cobrancas",
+  pagamentos: "pagamentos",
+  eventos: "eventos",
+  conversas: "chatwoot",
+  chatwoot: "chatwoot",
+};
+
 const ADMIN_PED_LESSON_RECORD_FILTER_DEFAULTS = {
   periodPreset: "this_month",
   customFrom: "",
@@ -22270,7 +22338,7 @@ const openAdminOnboardingContentModal = ({ mode, contentId } = {}) => {
           closeModal();
           adminPedagogicoState.activeTab = "onboarding";
           await renderAdminControlePedagogicoPanel({ force: true });
-          renderAdminPedagogicoTabs();
+          navigateAdminPedagogicoState({ replace: true });
         } catch (err) {
           console.error("[admin] onboarding content save failed:", err);
           setError("Não foi possível salvar agora.");
@@ -22467,7 +22535,7 @@ const toggleAdminOnboardingContentStatus = async ({ contentId } = {}) => {
     );
     adminPedagogicoState.activeTab = "onboarding";
     await renderAdminControlePedagogicoPanel({ force: true });
-    renderAdminPedagogicoTabs();
+    navigateAdminPedagogicoState({ replace: true });
   } catch (e) {
     console.error("[admin] onboarding toggle failed:", e);
   }
@@ -22508,7 +22576,7 @@ const swapAdminOnboardingContentOrder = async ({ fromId, direction } = {}) => {
 
     adminPedagogicoState.activeTab = "onboarding";
     await renderAdminControlePedagogicoPanel({ force: true });
-    renderAdminPedagogicoTabs();
+    navigateAdminPedagogicoState({ replace: true });
   } catch (e) {
     console.error("[admin] onboarding reorder failed:", e);
   }
@@ -22591,7 +22659,7 @@ const deleteAdminOnboardingContent = async ({ contentId } = {}) => {
           closeModal();
           adminPedagogicoState.activeTab = "onboarding";
           await renderAdminControlePedagogicoPanel({ force: true });
-          renderAdminPedagogicoTabs();
+          navigateAdminPedagogicoState({ replace: true });
         } catch (e) {
           console.error("[admin] onboarding delete failed:", e);
           if (modalPrimary) modalPrimary.disabled = false;
@@ -22770,7 +22838,7 @@ const resetAdminOnboardingTeacher = ({ teacherId } = {}) => {
           closeModal();
           adminPedagogicoState.activeTab = "onboarding";
           await renderAdminControlePedagogicoPanel({ force: true });
-          renderAdminPedagogicoTabs();
+          navigateAdminPedagogicoState({ replace: true });
         } catch (e) {
           console.error("[admin] onboarding reset failed:", e);
           if (modalPrimary) modalPrimary.disabled = false;
@@ -24252,7 +24320,8 @@ const bindPedov2Interactions = () => {
   adminPedOverview.dataset.pedov2Bound = "true";
   const openRetentionFromOverview = () => {
     adminPedagogicoState.activeTab = "retencao";
-    renderAdminControlePedagogicoPanel();
+    adminPedagogicoState.activeGroup = adminPedFindGroupForTab("retencao");
+    navigateAdminPedagogicoState();
     refreshAdminPedagogicoRetentionState({ force: true }).catch(() => {});
   };
   adminPedOverview.addEventListener("click", (event) => {
@@ -30615,6 +30684,41 @@ const roleBasePath = (role) => {
   return "/app/aluno";
 };
 
+const withQueryParam = (path, key, value, defaultValue = "") => {
+  const url = new URL(String(path || "/"), window.location.origin);
+  const safeValue = String(value || "").trim();
+  const safeDefault = String(defaultValue || "").trim();
+  if (!safeValue || safeValue === safeDefault) {
+    url.searchParams.delete(key);
+  } else {
+    url.searchParams.set(key, safeValue);
+  }
+  const query = url.searchParams.toString();
+  return `${url.pathname}${query ? `?${query}` : ""}`;
+};
+
+const adminPedagogicoPathForState = () => {
+  const tab = String(adminPedagogicoState.activeTab || "overview").trim() || "overview";
+  const moduleSlug = ADMIN_PED_TAB_TO_URL_MODULE[tab] || "visao-geral";
+  return withQueryParam("/app/admin/controle-pedagogico", "modulo", moduleSlug, "visao-geral");
+};
+
+const financePathForState = (role) => {
+  const normalized = normalizeRole(role);
+  const base = normalized === "admin" ? "/app/admin/financeiro" : "/app/financeiro";
+  const tab = String(financeState.activeTab || "overview").trim() || "overview";
+  const tabSlug = FINANCE_TAB_TO_URL[tab] || "dashboard";
+  return withQueryParam(base, "aba", tabSlug, "dashboard");
+};
+
+const navigateAdminPedagogicoState = ({ replace = false } = {}) => {
+  navigateApp(adminPedagogicoPathForState(), { replace });
+};
+
+const navigateFinanceState = ({ replace = false } = {}) => {
+  navigateApp(financePathForState(sessionUser?.role || currentRole), { replace });
+};
+
 const panelPathForRole = (role, panel) => {
   const normalized = normalizeRole(role);
   const p = String(panel || "");
@@ -30633,14 +30737,14 @@ const panelPathForRole = (role, panel) => {
   if (normalized === "admin") {
     if (p === "activities") return "/app/admin/atividades";
     if (["copilot-vendas", "scripts-vendas", "objecoes", "planos", "personas", "frases-vencedoras", "analytics", "training"].includes(p)) return `/app/admin/growth/${p}`;
-    if (p === "professores" || p === "alunos") return "/app/admin/controle-pedagogico";
-    if (p === "admin-controle-pedagogico") return "/app/admin/controle-pedagogico";
-    if (["admin-controle-pedagogico-aulas", "admin-controle-pedagogico-pessoas", "admin-controle-pedagogico-retencao", "admin-controle-pedagogico-qualidade", "admin-controle-pedagogico-onboarding", "admin-controle-pedagogico-relatorios"].includes(p)) return "/app/admin/controle-pedagogico";
+    if (p === "professores" || p === "alunos") return adminPedagogicoPathForState();
+    if (p === "admin-controle-pedagogico") return adminPedagogicoPathForState();
+    if (["admin-controle-pedagogico-aulas", "admin-controle-pedagogico-pessoas", "admin-controle-pedagogico-retencao", "admin-controle-pedagogico-qualidade", "admin-controle-pedagogico-onboarding", "admin-controle-pedagogico-relatorios"].includes(p)) return adminPedagogicoPathForState();
     if (p === "space-office") return "/app/admin/space-office";
     if (p === "status-plataforma") return "/app/admin/status";
     if (p === "guia-colaboradores") return "/app/admin/guia";
     if (p === "configuracoes-admin") return "/app/admin/configuracoes";
-    if (p === "financeiro") return "/app/admin/financeiro";
+    if (p === "financeiro") return financePathForState(role);
     if (p === "growth") return "/app/admin/growth";
     if (p === "gravadas") return "/app/admin/gravadas";
     if (p === "ao-vivo") return "/app/admin/ao-vivo";
@@ -30655,7 +30759,7 @@ const panelPathForRole = (role, panel) => {
   }
 
   if (normalized === "FINANCE") {
-    return "/app/financeiro";
+    return financePathForState(role);
   }
 
   if (p === "gravadas") return "/app/aluno/gravadas";
@@ -30665,7 +30769,9 @@ const panelPathForRole = (role, panel) => {
 };
 
 const parseAppRoute = (path) => {
-  const segments = String(path || "").split("/").filter(Boolean);
+  const url = new URL(String(path || "/"), window.location.origin);
+  const segments = normalizePathname(url.pathname).split("/").filter(Boolean);
+  const query = url.searchParams;
   // /app/<role>/<sub>
   const roleSlug = segments[1] || "";
   const sub = segments[2] || "";
@@ -30687,7 +30793,8 @@ const parseAppRoute = (path) => {
   if (!role) return null;
 
   if (roleSlug === "financeiro") {
-    return { role, panel: "financeiro" };
+    const financeTab = FINANCE_URL_TO_TAB[String(query.get("aba") || "").trim()] || "overview";
+    return { role, panel: "financeiro", financeTab };
   }
 
   if (role === "teacher") {
@@ -30703,9 +30810,15 @@ const parseAppRoute = (path) => {
 
   if (role === "admin") {
     if (sub === "atividades") return { role, panel: "activities" };
-    if (sub === "professores") return { role, panel: "admin-controle-pedagogico", redirectTo: "/app/admin/controle-pedagogico", pedagogicoGroup: "alunosTurmas", pedagogicoTab: "pessoas", pedagogicoPeopleTab: "teachers" };
-    if (sub === "alunos") return { role, panel: "admin-controle-pedagogico", redirectTo: "/app/admin/controle-pedagogico", pedagogicoGroup: "alunosTurmas", pedagogicoTab: "pessoas", pedagogicoPeopleTab: "students" };
-    if (sub === "controle-pedagogico") return { role, panel: "admin-controle-pedagogico" };
+    if (sub === "professores") return { role, panel: "admin-controle-pedagogico", redirectTo: "/app/admin/controle-pedagogico?modulo=usuarios", pedagogicoGroup: "alunosTurmas", pedagogicoTab: "pessoas", pedagogicoPeopleTab: "teachers" };
+    if (sub === "alunos") return { role, panel: "admin-controle-pedagogico", redirectTo: "/app/admin/controle-pedagogico?modulo=usuarios", pedagogicoGroup: "alunosTurmas", pedagogicoTab: "pessoas", pedagogicoPeopleTab: "students" };
+    if (sub === "controle-pedagogico") {
+      const moduleSlug = String(query.get("modulo") || "").trim();
+      const pedagogicoTab = ADMIN_PED_URL_MODULE_TO_TAB[moduleSlug] || "";
+      return pedagogicoTab
+        ? { role, panel: "admin-controle-pedagogico", pedagogicoGroup: adminPedFindGroupForTab(pedagogicoTab), pedagogicoTab }
+        : { role, panel: "admin-controle-pedagogico", pedagogicoGroup: "operacao", pedagogicoTab: "overview" };
+    }
     if (sub === "space-office") return { role, panel: "space-office" };
     if (sub === "status") return { role, panel: "status-plataforma" };
     if (sub === "guia") return { role, panel: "guia-colaboradores" };
@@ -30713,7 +30826,10 @@ const parseAppRoute = (path) => {
       const section = ADMIN_SETTINGS_SECTIONS.some((item) => item.key === detail) ? detail : "meu-perfil";
       return { role, panel: "configuracoes-admin", settingsSection: section };
     }
-    if (sub === "financeiro") return { role, panel: "financeiro" };
+    if (sub === "financeiro") {
+      const financeTab = FINANCE_URL_TO_TAB[String(query.get("aba") || "").trim()] || "overview";
+      return { role, panel: "financeiro", financeTab };
+    }
     if (sub === "growth") return { role, panel: "growth", growthTab: ["copilot-vendas", "scripts-vendas", "objecoes", "planos", "personas", "frases-vencedoras", "analytics", "training"].includes(detail) ? detail : "copilot-vendas" };
     if (sub === "ao-vivo") return { role, panel: "ao-vivo" };
     if (sub === "gravadas") return { role, panel: "gravadas" };
@@ -30728,7 +30844,8 @@ const parseAppRoute = (path) => {
   }
 
   if (role === "FINANCE") {
-    return { role, panel: "financeiro" };
+    const financeTab = FINANCE_URL_TO_TAB[String(query.get("aba") || "").trim()] || "overview";
+    return { role, panel: "financeiro", financeTab };
   }
 
   if (sub === "ao-vivo") return { role, panel: "ao-vivo" };
@@ -30785,7 +30902,7 @@ const initAppShell = async () => {
   setAdminSettingsSidebarExpanded(true);
 
   setRole(user.role);
-  const parsed = parseAppRoute(normalizePathname(window.location.pathname));
+  const parsed = parseAppRoute(`${window.location.pathname}${window.location.search}`);
   // Prevent cross-role URL access (ex: /app/admin/* while logged as teacher).
   if (parsed?.role && parsed.role !== currentRole) {
     navigateApp(panelPathForRole(currentRole, "dashboard"));
@@ -30798,6 +30915,7 @@ const initAppShell = async () => {
   if (parsed?.pedagogicoGroup) adminPedagogicoState.activeGroup = parsed.pedagogicoGroup;
   if (parsed?.pedagogicoTab) adminPedagogicoState.activeTab = parsed.pedagogicoTab;
   if (parsed?.pedagogicoPeopleTab) adminPedagogicoState.peopleTab = parsed.pedagogicoPeopleTab;
+  if (parsed?.financeTab) financeState.activeTab = parsed.financeTab;
   if (parsed?.growthTab) salesCopilotState.activeTab = parsed.growthTab;
   if (parsed?.settingsSection) adminSettingsState.activeSection = parsed.settingsSection;
   showPanel(parsed?.panel || "dashboard");
@@ -30831,6 +30949,7 @@ const navigateApp = (path, { replace = false } = {}) => {
   if (parsed?.pedagogicoGroup) adminPedagogicoState.activeGroup = parsed.pedagogicoGroup;
   if (parsed?.pedagogicoTab) adminPedagogicoState.activeTab = parsed.pedagogicoTab;
   if (parsed?.pedagogicoPeopleTab) adminPedagogicoState.peopleTab = parsed.pedagogicoPeopleTab;
+  if (parsed?.financeTab) financeState.activeTab = parsed.financeTab;
   if (parsed.growthTab) salesCopilotState.activeTab = parsed.growthTab;
   if (parsed?.settingsSection) adminSettingsState.activeSection = parsed.settingsSection;
   showPanel(parsed.panel);
@@ -31110,8 +31229,12 @@ document.addEventListener("click", (event) => {
 });
 
 window.addEventListener("popstate", () => {
-  const parsed = parseAppRoute(normalizePathname(window.location.pathname));
+  const parsed = parseAppRoute(`${window.location.pathname}${window.location.search}`);
   if (parsed) {
+    if (parsed?.pedagogicoGroup) adminPedagogicoState.activeGroup = parsed.pedagogicoGroup;
+    if (parsed?.pedagogicoTab) adminPedagogicoState.activeTab = parsed.pedagogicoTab;
+    if (parsed?.pedagogicoPeopleTab) adminPedagogicoState.peopleTab = parsed.pedagogicoPeopleTab;
+    if (parsed?.financeTab) financeState.activeTab = parsed.financeTab;
     if (parsed.growthTab) salesCopilotState.activeTab = parsed.growthTab;
     showPanel(parsed.panel);
   }
@@ -31473,14 +31596,12 @@ document.addEventListener(
         const isFinanceSidebarItem = financeTab.closest("[data-sidebar-accordion-body='financeiro']") instanceof HTMLElement;
         if (isFinanceSidebarItem && isFinanceAccessRole(financeRole)) {
           if (body.dataset.activePanel !== "financeiro") {
-            navigateApp(panelPathForRole(financeRole, "financeiro"));
+            navigateFinanceState();
           } else {
-            renderFinancePanel();
-            syncFinanceSidebar("financeiro");
+            navigateFinanceState();
           }
         } else {
-          renderFinancePanel();
-          syncFinanceSidebar("financeiro");
+          navigateFinanceState();
         }
       }
       return;
@@ -31907,8 +32028,7 @@ document.addEventListener("click", (event) => {
             if (kind === "report") {
               adminPedagogicoState.activeGroup = "gestao";
               adminPedagogicoState.activeTab = "relatorios";
-              renderAdminPedagogicoTabs();
-              renderAdminPedagogicoReportsPanel();
+              navigateAdminPedagogicoState();
               return;
             }
           })
@@ -32094,8 +32214,8 @@ document.addEventListener("click", (event) => {
       if (adminPedGenerateReport instanceof HTMLButtonElement) {
         event.preventDefault();
         adminPedagogicoState.activeTab = "relatorios";
-        renderAdminPedagogicoTabs();
-        renderAdminPedagogicoReportsPanel();
+        adminPedagogicoState.activeGroup = adminPedFindGroupForTab("relatorios");
+        navigateAdminPedagogicoState();
         return;
       }
 
@@ -32107,21 +32227,7 @@ document.addEventListener("click", (event) => {
           adminPedagogicoState.activeGroup = group;
           const groupDef = ADMIN_PED_NAV_GROUPS.find((g) => String(g.key) === group);
           adminPedagogicoState.activeTab = groupDef?.tabs?.[0]?.key ? String(groupDef.tabs[0].key) : "overview";
-          renderAdminPedagogicoTabs();
-          // Render the initial panel for the group (best effort).
-          renderAdminPedagogicoOverview();
-          renderAdminPedagogicoClassesList();
-          renderAdminPedagogicoGroups();
-          renderAdminPedagogicoStudentsPanel();
-          renderAdminPedagogicoTeachersPanel();
-          renderAdminPedagogicoPlansPanel();
-          renderAdminPedagogicoSurveysPanel();
-          renderAdminPedagogicoAlertsPanel();
-          renderAdminPedagogicoFeedbacksPanel();
-          renderAdminPedagogicoOnboardingPanel();
-          renderAdminPedagogicoConflicts();
-          renderAdminPedagogicoNpsCsatPanel();
-          renderAdminPedagogicoLinksPanel();
+          navigateAdminPedagogicoState();
         }
         return;
       }
@@ -32336,7 +32442,7 @@ document.addEventListener("click", (event) => {
         if (tab) {
           adminPedagogicoState.activeTab = tab;
           adminPedagogicoState.activeGroup = adminPedFindGroupForTab(tab);
-          renderAdminPedagogicoTabs();
+          navigateAdminPedagogicoState();
         }
         return;
       }
@@ -32424,42 +32530,26 @@ document.addEventListener("click", (event) => {
           adminPedagogicoState.activeTab = "pessoas";
           adminPedagogicoState.peopleTab = "students";
           adminPedagogicoState.activeGroup = adminPedFindGroupForTab("pessoas");
-          renderAdminPedagogicoTabs();
-          renderAdminPedagogicoPeoplePanel();
+          navigateAdminPedagogicoState();
           return;
         }
         if (tab === "professores") {
           adminPedagogicoState.activeTab = "pessoas";
           adminPedagogicoState.peopleTab = "teachers";
           adminPedagogicoState.activeGroup = adminPedFindGroupForTab("pessoas");
-          renderAdminPedagogicoTabs();
-          renderAdminPedagogicoPeoplePanel();
+          navigateAdminPedagogicoState();
           return;
         }
         if (tab === "feedbacks" || tab === "pesquisas" || tab === "npscsat" || tab === "avisos") {
           adminPedagogicoState.activeTab = "qualidade";
           adminPedagogicoState.qualityTab = tab;
           adminPedagogicoState.activeGroup = adminPedFindGroupForTab("qualidade");
-          renderAdminPedagogicoTabs();
-          renderAdminPedagogicoQualityPanel();
+          navigateAdminPedagogicoState();
           return;
         }
         adminPedagogicoState.activeTab = tab;
         adminPedagogicoState.activeGroup = adminPedFindGroupForTab(tab);
-        renderAdminPedagogicoTabs();
-        // Render target panel (best effort).
-        if (tab === "overview") renderAdminPedagogicoOverview();
-        else if (tab === "aulas") renderAdminPedagogicoClassesList();
-        else if (tab === "retencao") {
-          renderAdminPedagogicoRetentionPanel();
-          refreshAdminPedagogicoRetentionState({ force: false }).catch(() => {});
-        }
-        else if (tab === "conflitos") renderAdminPedagogicoConflicts();
-        else if (tab === "pessoas") renderAdminPedagogicoPeoplePanel();
-        else if (tab === "qualidade") renderAdminPedagogicoQualityPanel();
-        else if (tab === "onboarding") renderAdminPedagogicoOnboardingPanel();
-        else if (tab === "planos") renderAdminPedagogicoPlansPanel();
-        else if (tab === "relatorios") renderAdminPedagogicoReportsPanel();
+        navigateAdminPedagogicoState();
         return;
       }
 
@@ -32493,24 +32583,21 @@ document.addEventListener("click", (event) => {
         if (k === "critical") {
           adminPedagogicoState.activeGroup = "operacao";
           adminPedagogicoState.activeTab = "overview";
-          renderAdminPedagogicoTabs();
-          renderAdminPedagogicoOverview();
+          navigateAdminPedagogicoState();
           return;
         }
         if (k === "risk") {
           adminPedagogicoState.activeGroup = "alunosTurmas";
           adminPedagogicoState.activeTab = "pessoas";
           adminPedagogicoState.peopleTab = "students";
-          renderAdminPedagogicoTabs();
-          renderAdminPedagogicoPeoplePanel();
+          navigateAdminPedagogicoState();
           return;
         }
         if (k === "feedbackPending") {
           adminPedagogicoState.activeGroup = "qualidade";
           adminPedagogicoState.activeTab = "qualidade";
           adminPedagogicoState.qualityTab = "feedbacks";
-          renderAdminPedagogicoTabs();
-          renderAdminPedagogicoQualityPanel();
+          navigateAdminPedagogicoState();
           openAdminPedFeedbackModal({ mode: "create" });
           return;
         }
@@ -32530,8 +32617,7 @@ document.addEventListener("click", (event) => {
         adminPedagogicoState.activeGroup = "qualidade";
         adminPedagogicoState.activeTab = "qualidade";
         adminPedagogicoState.qualityTab = "pesquisas";
-        renderAdminPedagogicoTabs();
-        renderAdminPedagogicoQualityPanel();
+        navigateAdminPedagogicoState();
         return;
       }
 
@@ -33227,21 +33313,19 @@ document.addEventListener("click", (event) => {
         const tab = String(financeTab.getAttribute("data-finance-tab") || "").trim();
         if (["overview", "alunos", "cobrancas", "pagamentos", "eventos", "chatwoot"].includes(tab)) {
           financeState.activeTab = tab;
-          const financeRole = sessionUser?.role || currentRole;
-          const isFinanceSidebarItem = financeTab.closest("[data-sidebar-accordion-body='financeiro']") instanceof HTMLElement;
-          if (isFinanceSidebarItem && isFinanceAccessRole(financeRole)) {
-            if (body.dataset.activePanel !== "financeiro") {
-              navigateApp(panelPathForRole(financeRole, "financeiro"));
-            } else {
-              renderFinancePanel();
-              syncFinanceSidebar("financeiro");
-            }
+        const financeRole = sessionUser?.role || currentRole;
+        const isFinanceSidebarItem = financeTab.closest("[data-sidebar-accordion-body='financeiro']") instanceof HTMLElement;
+        if (isFinanceSidebarItem && isFinanceAccessRole(financeRole)) {
+          if (body.dataset.activePanel !== "financeiro") {
+            navigateFinanceState();
           } else {
-            renderFinancePanel();
-            syncFinanceSidebar("financeiro");
+            navigateFinanceState();
           }
+        } else {
+          navigateFinanceState();
         }
-        return;
+      }
+      return;
       }
 
       const financeNewStudent = target.closest("[data-finance-new-student]");
