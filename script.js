@@ -27604,6 +27604,14 @@ const getAdminStudentMetaById = (alunoId) => {
   return canonicalId ? map.get(canonicalId) || null : null;
 };
 
+const getAdminRetentionDecisionByStudentId = (alunoId) => {
+  const id = String(alunoId || "").trim();
+  if (!id) return null;
+  const queues = adminPedagogicoState.retention?.queues;
+  const decisions = Array.isArray(queues?.decisoes) ? queues.decisoes : [];
+  return decisions.find((row) => String(row?.alunoId || "").trim() === id) || null;
+};
+
 const getAdminStudentRecurringGroupIds = (alunoId) => {
   const id = String(alunoId || "").trim();
   if (!id) return [];
@@ -28343,9 +28351,23 @@ const openAdminStudentRevertCancellationModal = ({ alunoId } = {}) => {
 const openAdminStudentEffectiveCancellationModal = async ({ alunoId } = {}) => {
   const id = String(alunoId || "").trim();
   if (!id) return;
-  const meta = getAdminStudentMetaById(id);
-  const cancelamento = normalizeStudentCancellationRecord(meta?.cancelamento);
-  if (!meta || !cancelamento) return;
+  const decisionRow = getAdminRetentionDecisionByStudentId(id);
+  const studentMeta = getAdminStudentMetaById(id);
+  const meta =
+    studentMeta || decisionRow
+      ? {
+          ...(decisionRow || {}),
+          ...(studentMeta || {}),
+          id: String(studentMeta?.id || decisionRow?.alunoId || id),
+          nome: String(studentMeta?.nome || decisionRow?.alunoNome || "Aluno").trim() || "Aluno",
+          cancelamento: studentMeta?.cancelamento || decisionRow?.activeCancellation || null,
+        }
+      : null;
+  const cancelamento = normalizeStudentCancellationRecord(meta?.cancelamento) || normalizeStudentCancellationRecord(decisionRow?.activeCancellation);
+  if (!meta || !cancelamento) {
+    console.warn("[Retention] effective cancellation aborted: missing student or cancellation", { alunoId: id, hasMeta: Boolean(meta), hasDecision: Boolean(decisionRow) });
+    return;
+  }
   const range = getStudentCancellationWindowRange(cancelamento) || {
     fromKey: String(cancelamento.dataPedido || "").slice(0, 10),
     toKey: String(cancelamento.dataFimAviso || createDateKey(new Date())).slice(0, 10),
@@ -32061,7 +32083,7 @@ document.addEventListener("click", (event) => {
       }
 
       const adminPedRetentionAction = target.closest("[data-admin-ped-retention-action]");
-      if (adminPedRetentionAction instanceof HTMLButtonElement) {
+      if (adminPedRetentionAction instanceof HTMLElement) {
         event.preventDefault();
         event.stopPropagation();
         const action = String(adminPedRetentionAction.getAttribute("data-admin-ped-retention-action") || "").trim();
@@ -32071,7 +32093,7 @@ document.addEventListener("click", (event) => {
           openStudentSimpleCard({ alunoId }).catch((error) => console.error("[admin] retention open student failed", error));
           return;
         }
-        if (action === "aviso_vencido") {
+        if (action === "aviso_vencido" || action === "effective" || action === "efetivar") {
           openAdminStudentEffectiveCancellationModal({ alunoId }).catch((error) => console.error("[admin] effective cancellation modal failed", error));
           return;
         }
@@ -32667,7 +32689,7 @@ document.addEventListener("click", (event) => {
       }
 
       const studentLifecycleAction = target.closest("[data-admin-student-lifecycle-action]");
-      if (studentLifecycleAction instanceof HTMLButtonElement) {
+      if (studentLifecycleAction instanceof HTMLElement) {
         event.preventDefault();
         event.stopPropagation();
         adminStudentsState.history.lifecycleMenuOpen = false;
