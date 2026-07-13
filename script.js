@@ -7921,6 +7921,22 @@ const renderPedagogicoStatusControl = (selectedStatus) => {
   `;
 };
 
+const syncPedagogicoStatusControlState = (rootEl, selectedStatus) => {
+  const root = rootEl instanceof HTMLElement ? rootEl : null;
+  if (!root) return;
+  const safeStatus = normalizePedagogicoStatus(selectedStatus);
+  const select = root.querySelector("[data-ped-status]");
+  if (select instanceof HTMLSelectElement && select.value !== safeStatus) {
+    select.value = safeStatus;
+  }
+  root.querySelectorAll("[data-ped-status-pill]").forEach((pill) => {
+    if (!(pill instanceof HTMLElement)) return;
+    const isSelected = String(pill.getAttribute("data-ped-status-pill") || "").trim() === safeStatus;
+    pill.classList.toggle("is-selected", isSelected);
+    pill.setAttribute("aria-pressed", isSelected ? "true" : "false");
+  });
+};
+
 const renderPedRatingRow = (label, starsHtml) => `
   <div class="regv2-rating-row">
     <div class="regv2-rating-label">${escapeHtml(label)}</div>
@@ -34255,6 +34271,8 @@ document.addEventListener("change", (event) => {
   } else {
     pedagogicoDraft = { statusAula: nextStatus };
   }
+  const formRoot = target.closest("[data-ped-form]");
+  syncPedagogicoStatusControlState(formRoot instanceof HTMLElement ? formRoot : pedagogicoFormContainer, nextStatus);
 
   // If the multi-select portal is open, close it before swapping DOM.
   closePedAvisosPortal();
@@ -34285,7 +34303,9 @@ document.addEventListener("click", (event) => {
   if (!(formRoot instanceof HTMLElement)) return;
   const select = formRoot.querySelector("[data-ped-status]");
   if (!(select instanceof HTMLSelectElement)) return;
-  if (select.value === nextValue) return;
+  const previousValue = select.value;
+  syncPedagogicoStatusControlState(formRoot, nextValue);
+  if (previousValue === nextValue) return;
   select.value = nextValue;
   select.dispatchEvent(new Event("change", { bubbles: true }));
 });
