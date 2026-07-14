@@ -11161,6 +11161,7 @@ const loadFirebaseAdminApi = () => {
       secondaryDb,
       primaryStorage,
       createUserWithEmailAndPassword: authMod.createUserWithEmailAndPassword,
+      updatePassword: authMod.updatePassword,
       sendPasswordResetEmail: authMod.sendPasswordResetEmail,
       onAuthStateChanged: authMod.onAuthStateChanged,
       signOut: authMod.signOut,
@@ -11212,6 +11213,131 @@ const waitForFirebaseAuthReady = (firebase, timeoutMs = 4000) => {
     unsub = firebase.onAuthStateChanged(firebase.primaryAuth, (user) => finish(user));
     window.setTimeout(() => finish(null), safeTimeout);
   });
+};
+
+const getForcePasswordChangeFlag = async () => {
+  const uid = String(sessionUser?.id || "").trim();
+  if (!uid) return false;
+  try {
+    const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_force_password_check");
+    const authUser = await waitForFirebaseAuthReady(firebase, 5000);
+    if (!authUser) return false;
+    const snap = await withTimeout(firebase.getDoc(firebase.doc(firebase.primaryDb, "users", uid)), 10_000, "firestore_force_password_check");
+    const data = snap && typeof snap.data === "function" ? snap.data() : null;
+    return data?.forcePasswordChange === true;
+  } catch (error) {
+    console.error("[auth] force password check failed:", error);
+    return false;
+  }
+};
+
+const closeForcePasswordOverlay = () => {
+  document.querySelector("[data-force-password-overlay]")?.remove();
+  document.body.classList.remove("has-force-password-overlay");
+};
+
+const showForcePasswordOverlay = () =>
+  new Promise((resolve) => {
+    closeForcePasswordOverlay();
+    const overlay = document.createElement("div");
+    overlay.className = "force-password-overlay";
+    overlay.setAttribute("data-force-password-overlay", "");
+    overlay.innerHTML = `
+      <form class="force-password-card" data-force-password-form>
+        <div class="force-password-kicker">Primeiro acesso</div>
+        <h1>Troque sua senha para continuar</h1>
+        <p>Por segurança, a senha padrão <strong>Space123</strong> só vale para o primeiro login.</p>
+        <label class="auth-field">
+          <span>Nova senha</span>
+          <input class="auth-input" type="password" minlength="6" autocomplete="new-password" data-force-password-new />
+        </label>
+        <label class="auth-field">
+          <span>Confirmar nova senha</span>
+          <input class="auth-input" type="password" minlength="6" autocomplete="new-password" data-force-password-confirm />
+        </label>
+        <div class="modal-inline-error" data-force-password-error hidden>—</div>
+        <button class="auth-submit" type="submit" data-force-password-submit>
+          <span data-force-password-label>Salvar nova senha</span>
+          <span class="auth-spinner" data-force-password-spinner hidden aria-hidden="true"></span>
+        </button>
+      </form>
+    `;
+    document.body.appendChild(overlay);
+    document.body.classList.add("has-force-password-overlay");
+
+    const form = overlay.querySelector("[data-force-password-form]");
+    const input = overlay.querySelector("[data-force-password-new]");
+    const confirm = overlay.querySelector("[data-force-password-confirm]");
+    const errorEl = overlay.querySelector("[data-force-password-error]");
+    const submit = overlay.querySelector("[data-force-password-submit]");
+    const spinner = overlay.querySelector("[data-force-password-spinner]");
+    const label = overlay.querySelector("[data-force-password-label]");
+    const setLoading = (loading) => {
+      if (submit instanceof HTMLButtonElement) submit.disabled = loading;
+      if (spinner instanceof HTMLElement) spinner.hidden = !loading;
+      if (label instanceof HTMLElement) label.hidden = loading;
+    };
+    const setError = (message) => {
+      if (!(errorEl instanceof HTMLElement)) return;
+      errorEl.textContent = message;
+      errorEl.hidden = !message;
+    };
+
+    if (input instanceof HTMLInputElement) input.focus();
+    if (form instanceof HTMLFormElement) {
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const nextPassword = input instanceof HTMLInputElement ? input.value : "";
+        const confirmPassword = confirm instanceof HTMLInputElement ? confirm.value : "";
+        setError("");
+        if (nextPassword.length < 6) {
+          setError("Use uma senha com pelo menos 6 caracteres.");
+          return;
+        }
+        if (nextPassword !== confirmPassword) {
+          setError("As senhas não conferem.");
+          return;
+        }
+        if (nextPassword === "Space123") {
+          setError("Escolha uma senha diferente da senha padrão.");
+          return;
+        }
+        setLoading(true);
+        try {
+          const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_force_password_save");
+          const authUser = await waitForFirebaseAuthReady(firebase, 5000);
+          if (!authUser) throw new Error("auth_session_not_found");
+          await withTimeout(firebase.updatePassword(authUser, nextPassword), 12_000, "firebase_update_password_required");
+          const response = await withTimeout(
+            fetchWithAuth("/api/force-password-change", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ uid: String(sessionUser?.id || "") }),
+            }),
+            12_000,
+            "force_password_flag_patch"
+          );
+          if (!response.ok) throw new Error("force_password_flag_patch_failed");
+          closeForcePasswordOverlay();
+          resolve(true);
+        } catch (error) {
+          console.error("[auth] force password save failed:", error);
+          const code = String(error?.code || error?.message || "");
+          let message = "Não foi possível trocar a senha agora. Tente novamente.";
+          if (code.includes("auth/requires-recent-login")) message = "Sua sessão expirou. Faça login novamente e troque a senha.";
+          if (code.includes("auth/weak-password")) message = "Senha fraca. Use uma senha mais forte.";
+          setError(message);
+        } finally {
+          setLoading(false);
+        }
+      });
+    }
+  });
+
+const enforceForcePasswordChangeIfNeeded = async () => {
+  const required = await getForcePasswordChangeFlag();
+  if (!required) return;
+  await showForcePasswordOverlay();
 };
 
 const waitForAuthToken = async (firebase, timeoutMs = 12000) => {
@@ -30253,14 +30379,20 @@ const openAdminPedagogicoImportStudentsModal = () => {
     bodyHtml: `
       <div style="display:grid; gap:12px;">
         <p style="margin:0; color: rgba(255,255,255,0.72); font-size: 13px; line-height: 1.45;">
-          Envie um arquivo CSV com pelo menos as colunas <strong>nome</strong> e <strong>email</strong>. Se a coluna <strong>password</strong> não vier, uma senha temporária será gerada.
+          Envie um CSV ou cole uma lista com duas colunas: <strong>nome</strong> e <strong>email</strong>.
+          A senha inicial será <strong>Space123</strong> e a troca será obrigatória no primeiro login.
         </p>
         <label class="modal-field">
-          <span>Arquivo CSV</span>
+          <span>Arquivo CSV (opcional)</span>
           <input class="modal-input" type="file" accept=".csv,text/csv" data-admin-ped-import-file />
+        </label>
+        <label class="modal-field">
+          <span>Ou cole a lista aqui</span>
+          <textarea class="modal-input" rows="8" spellcheck="false" placeholder="nome,email&#10;Aluno Teste,aluno.teste@example.com" data-admin-ped-import-text></textarea>
         </label>
         <div class="modal-inline-error" data-admin-ped-import-error hidden>—</div>
         <div class="modal-inline-success" data-admin-ped-import-success hidden>—</div>
+        <div class="admin-ped-import-summary" data-admin-ped-import-summary hidden></div>
       </div>
     `,
     primaryLabel: "Importar",
@@ -30269,17 +30401,24 @@ const openAdminPedagogicoImportStudentsModal = () => {
     showTrash: false,
     onPrimary: () => {
       const fileEl = modalBody?.querySelector("[data-admin-ped-import-file]");
+      const textEl = modalBody?.querySelector("[data-admin-ped-import-text]");
       const errorEl = modalBody?.querySelector("[data-admin-ped-import-error]");
       const successEl = modalBody?.querySelector("[data-admin-ped-import-success]");
+      const summaryEl = modalBody?.querySelector("[data-admin-ped-import-summary]");
       const file = fileEl instanceof HTMLInputElement && fileEl.files && fileEl.files.length ? fileEl.files[0] : null;
       if (!(errorEl instanceof HTMLElement) || !(successEl instanceof HTMLElement)) return false;
       errorEl.hidden = true;
       successEl.hidden = true;
       errorEl.textContent = "";
       successEl.textContent = "";
+      if (summaryEl instanceof HTMLElement) {
+        summaryEl.hidden = true;
+        summaryEl.innerHTML = "";
+      }
 
-      if (!file) {
-        errorEl.textContent = "Selecione um CSV para importar.";
+      const pasted = textEl instanceof HTMLTextAreaElement ? String(textEl.value || "").trim() : "";
+      if (!file && !pasted) {
+        errorEl.textContent = "Selecione um CSV ou cole uma lista para importar.";
         errorEl.hidden = false;
         return false;
       }
@@ -30289,31 +30428,22 @@ const openAdminPedagogicoImportStudentsModal = () => {
 
       (async () => {
         try {
-          const raw = await file.text();
-          const rows = parseAdminPedCsvRows(raw);
-          const items = rows
-            .map((row) => ({
-              name: String(row.nome || row.name || "").trim(),
-              email: String(row.email || "").trim().toLowerCase(),
-              password: String(row.password || row.senha || "").trim(),
-            }))
-            .filter((row) => row.name && isValidEmail(row.email));
-
-          if (!items.length) {
-            throw new Error("CSV sem linhas válidas.");
+          const raw = file ? await file.text() : pasted;
+          const response = await withTimeout(
+            fetchWithAuth("/api/admin-students-import", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ text: raw }),
+            }),
+            60_000,
+            "admin_students_import"
+          );
+          const data = await response.json().catch(() => null);
+          if (!response.ok || !data?.ok) {
+            const message = String(data?.error || "import_failed");
+            throw new Error(message);
           }
-
-          let created = 0;
-          for (const item of items) {
-            const password = item.password || `Sp${Math.random().toString(36).slice(2, 8)}!9`;
-            await createAdminUserRecord({
-              role: "student",
-              name: item.name,
-              email: item.email,
-              password,
-            });
-            created += 1;
-          }
+          const summary = data.summary || {};
 
           adminPedagogicoState.loadedAt = 0;
           adminUsersState.student.loadedAt = 0;
@@ -30325,12 +30455,35 @@ const openAdminPedagogicoImportStudentsModal = () => {
             loadUsersFromFirestore("student");
           }
 
-          successEl.textContent = `${created} aluno(s) importado(s) com sucesso.`;
+          successEl.textContent = `${Number(summary.created) || 0} criado(s), ${Number(summary.skipped) || 0} pulado(s), ${Number(summary.failed) || 0} falha(s).`;
           successEl.hidden = false;
-          window.setTimeout(() => closeModal(), 900);
+          if (summaryEl instanceof HTMLElement) {
+            const rows = Array.isArray(summary.results) ? summary.results : [];
+            const failedOrSkipped = rows.filter((row) => row.status !== "created");
+            summaryEl.innerHTML = failedOrSkipped.length
+              ? `
+                <div class="admin-ped-import-summary-title">Resumo por linha</div>
+                <div class="admin-ped-import-summary-list">
+                  ${failedOrSkipped
+                    .slice(0, 30)
+                    .map(
+                      (row) => `
+                        <div class="admin-ped-import-summary-row">
+                          <strong>Linha ${escapeHtml(String(row.lineNumber || "—"))}</strong>
+                          <span>${escapeHtml(row.email || row.name || "—")}</span>
+                          <em>${escapeHtml(row.reason || row.status || "—")}</em>
+                        </div>
+                      `
+                    )
+                    .join("")}
+                </div>
+              `
+              : `<div class="admin-ped-import-summary-title">Todos os alunos foram criados com sucesso.</div>`;
+            summaryEl.hidden = false;
+          }
         } catch (error) {
           console.error("[admin] import students failed:", error);
-          errorEl.textContent = "Não foi possível importar agora. Verifique o arquivo e tente novamente.";
+          errorEl.textContent = "Não foi possível importar agora. Verifique a lista e tente novamente.";
           errorEl.hidden = false;
         } finally {
           if (modalPrimary) modalPrimary.disabled = false;
@@ -31792,6 +31945,7 @@ const initAppShell = async () => {
   if (parsed?.financeTab) financeState.activeTab = parsed.financeTab;
   if (parsed?.growthTab) salesCopilotState.activeTab = parsed.growthTab;
   if (parsed?.settingsSection) adminSettingsState.activeSection = parsed.settingsSection;
+  await enforceForcePasswordChangeIfNeeded();
   showPanel(parsed?.panel || "dashboard");
 
   renderDashboardCharts();
