@@ -16759,10 +16759,22 @@ const focusAdminStudentInlineField = (field) => {
   const sheetEl = getAdminStudentSheet();
   if (!(sheetEl instanceof HTMLElement)) return;
   if (adminStudentsState.history.inlineSavingField) return;
-  const cell = getAdminStudentInlineCell(sheetEl, field);
+  const key = String(field || "").trim();
+  const cell = getAdminStudentInlineCell(sheetEl, key);
   if (!(cell instanceof HTMLElement)) return;
-  setAdminStudentInlineEditing(sheetEl, field, true);
+  setAdminStudentInlineEditing(sheetEl, key, true);
   const editor = cell.querySelector("[data-admin-student-inline-control]");
+  if (key === "plano" && editor instanceof HTMLSelectElement) {
+    editor.focus();
+    if (typeof editor.showPicker === "function") {
+      try {
+        editor.showPicker();
+        return;
+      } catch (error) {
+        void error;
+      }
+    }
+  }
   window.requestAnimationFrame(() => {
     if (editor instanceof HTMLInputElement || editor instanceof HTMLTextAreaElement) {
       editor.focus();
