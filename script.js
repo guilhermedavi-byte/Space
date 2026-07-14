@@ -7639,18 +7639,62 @@ const syncPedagogicoFilterUi = () => {
 };
 
 const statusMetaForPedagogicoLog = (log) => {
-  const status = log && typeof log.statusAula === "string" ? String(log.statusAula).trim().toLowerCase() : "";
+  const status = getPedagogicoRegisteredStatus(log);
   if (status === "realizada") return { label: "Presença registrada", tone: "green", icon: "✓" };
   if (status === "falta_aluno") return { label: "Falta registrada", tone: "red", icon: "•" };
   if (status === "remarcada") return { label: "Remarcada", tone: "yellow", icon: "↺" };
+  if (status === "cancelada") return { label: "Cancelada", tone: "slate", icon: "•" };
   return { label: "Registro concluído", tone: "green", icon: "✓" };
+};
+
+const PEDAGOGICO_REGISTERED_STATUSES = new Set(["realizada", "falta_aluno", "remarcada", "cancelada"]);
+
+const getPedagogicoRegisteredStatus = (log) => {
+  if (!log || typeof log !== "object") return "";
+  const payload = log.payload && typeof log.payload === "object" ? log.payload : {};
+  const rawStatus = String(log.statusAula || payload.statusAula || payload.status_aula || "").trim();
+  if (!rawStatus) return "";
+  const normalized = normalizePedagogicoStatus(rawStatus);
+  return PEDAGOGICO_REGISTERED_STATUSES.has(normalized) ? normalized : "";
+};
+
+const derivePedagogicoEventIdFromLogId = (id) => {
+  const safe = String(id || "").trim();
+  if (!safe.startsWith("log_")) return "";
+  return safe.slice(4);
+};
+
+const indexPedagogicoLogByEvent = (map, key, log) => {
+  if (!(map instanceof Map) || !log || typeof log !== "object") return;
+  const safeKey = String(key || "").trim();
+  if (!safeKey || map.has(safeKey)) return;
+  if (!getPedagogicoRegisteredStatus(log)) return;
+  map.set(safeKey, log);
+};
+
+const getPedagogicoLogForLesson = (lesson, logsByEventId) => {
+  if (!lesson || typeof lesson !== "object" || !(logsByEventId instanceof Map)) return null;
+  const candidates = [
+    lesson.id,
+    lesson.eventId,
+    lesson.liveLessonId,
+    lesson.supabaseLessonId,
+  ]
+    .map((id) => String(id || "").trim())
+    .filter(Boolean);
+  for (const id of candidates) {
+    const log = logsByEventId.get(id);
+    if (getPedagogicoRegisteredStatus(log)) return log;
+  }
+  return null;
 };
 
 const buildPedagogicoLessonViewModel = (lesson, logsByEventId, now, todayKey) => {
   const start = buildDateFromDateKeyAndMinutes(lesson.dateKey, lesson.startMin);
   const startTime = start ? start.getTime() : 0;
-  const log = logsByEventId.get(lesson.id) || null;
-  const isDone = Boolean(log && typeof log.statusAula === "string" && String(log.statusAula).trim());
+  const log = getPedagogicoLogForLesson(lesson, logsByEventId);
+  const registeredStatus = getPedagogicoRegisteredStatus(log);
+  const isDone = Boolean(registeredStatus);
   const isToday = lesson.dateKey === todayKey;
   const isPast = Boolean(start && startTime < now);
   const isFuture = Boolean(start && startTime > now);
@@ -7972,9 +8016,9 @@ const countPedagogicoReposicoesAlunoNoMes = (lesson = {}) => {
     if (String(item.id || "") === String(lesson.id || "")) return;
     if (String(item.alunoId || "").trim() !== alunoId) return;
     if (String(item.dateKey || "").slice(0, 7) !== monthKey) return;
-    const log = logsByEventId.get(String(item.id || ""));
+    const log = getPedagogicoLogForLesson(item, logsByEventId);
     const payload = log?.payload && typeof log.payload === "object" ? log.payload : {};
-    if (normalizePedagogicoStatus(log?.statusAula || payload.statusAula) !== PEDAGOGICO_STATUS.REMARCADA) return;
+    if (getPedagogicoRegisteredStatus(log) !== PEDAGOGICO_STATUS.REMARCADA) return;
     if (normalizeResponsavelRemarcacao(payload.responsavelRemarcacao || payload.responsavel_remarcacao) !== "aluno") return;
     total += 1;
   });
@@ -9270,7 +9314,7 @@ const openPedagogicoDrawer = ({ lesson } = {}) => {
   const start = buildDateFromDateKeyAndMinutes(lesson.dateKey, lesson.startMin);
   if (start && start.getTime() > Date.now()) return;
 
-  const existingLog = pedagogicoState.logsByEventId.get(lesson.id) || null;
+  const existingLog = getPedagogicoLogForLesson(lesson, pedagogicoState.logsByEventId) || null;
   pedagogicoActive = { lesson, existing: Boolean(existingLog) };
   pedagogicoDirty = false;
   setPedagogicoStatus("");
@@ -9350,8 +9394,8 @@ const renderTeacherPedagogico = async ({ silent = false } = {}) => {
     logs.forEach((log) => {
       if (!log || typeof log !== "object") return;
       const eventId = typeof log.eventId === "string" ? log.eventId : "";
-      if (!eventId) return;
-      logsByEventId.set(eventId, log);
+      indexPedagogicoLogByEvent(logsByEventId, eventId, log);
+      indexPedagogicoLogByEvent(logsByEventId, derivePedagogicoEventIdFromLogId(log.id || log.docId || log.documentId), log);
     });
     liveRecords.forEach((record) => {
       if (!record || typeof record !== "object") return;
@@ -9366,7 +9410,7 @@ const renderTeacherPedagogico = async ({ silent = false } = {}) => {
             : statusRaw === "cancelada"
               ? "cancelada"
               : "realizada";
-      logsByEventId.set(eventId, {
+      indexPedagogicoLogByEvent(logsByEventId, eventId, {
         id: String(record.id || ""),
         eventId,
         statusAula,
@@ -9459,7 +9503,7 @@ const renderTeacherPedagogico = async ({ silent = false } = {}) => {
     lessons.forEach((lesson) => {
       const liveId = String(lesson.supabaseLessonId || "");
       if (!liveId || logsByEventId.has(lesson.id) || !logsByEventId.has(liveId)) return;
-      logsByEventId.set(lesson.id, logsByEventId.get(liveId));
+      indexPedagogicoLogByEvent(logsByEventId, lesson.id, logsByEventId.get(liveId));
     });
 
     pedagogicoState.lessons = lessons;
