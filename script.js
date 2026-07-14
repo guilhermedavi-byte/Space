@@ -16733,14 +16733,21 @@ const setAdminStudentInlineEditing = (sheetEl, field, isEditing) => {
       const prevEditor = prevCell.querySelector("[data-admin-student-inline-editor-wrap]");
       const prevDisplay = prevCell.querySelector("[data-admin-student-inline-display]");
       if (prevEditor instanceof HTMLElement) prevEditor.hidden = true;
-      if (prevDisplay instanceof HTMLElement) prevDisplay.hidden = false;
+      if (prevDisplay instanceof HTMLElement) {
+        prevDisplay.hidden = false;
+        prevDisplay.style.visibility = "";
+      }
     }
   }
   cell.classList.toggle("is-editing", Boolean(isEditing));
   const editor = cell.querySelector("[data-admin-student-inline-editor-wrap]");
   const display = cell.querySelector("[data-admin-student-inline-display]");
   if (editor instanceof HTMLElement) editor.hidden = !isEditing;
-  if (display instanceof HTMLElement) display.hidden = Boolean(isEditing);
+  if (display instanceof HTMLElement) {
+    const reserveDisplaySpace = key === "plano" && Boolean(isEditing);
+    display.hidden = Boolean(isEditing) && !reserveDisplaySpace;
+    display.style.visibility = reserveDisplaySpace ? "hidden" : "";
+  }
   if (isEditing) {
     hist.editingField = key;
   } else if (hist.editingField === key) {
