@@ -17286,8 +17286,21 @@ const saveAdminStudentInlinePatch = async ({ alunoId, patch = {} } = {}) => {
     error.detail = data;
     throw error;
   }
-  updateAdminStudentCachedRow(id, cleanPatch);
+  updateAdminStudentCachedRow(id, buildAdminStudentInlineCachePatch(cleanPatch));
   return true;
+};
+
+const buildAdminStudentInlineCachePatch = (patch = {}) => {
+  const cleanPatch = patch && typeof patch === "object" ? { ...patch } : {};
+  if (Object.prototype.hasOwnProperty.call(cleanPatch, "nome")) cleanPatch.firestoreNome = cleanPatch.nome;
+  if (Object.prototype.hasOwnProperty.call(cleanPatch, "email")) cleanPatch.firestoreEmail = cleanPatch.email;
+  if (Object.prototype.hasOwnProperty.call(cleanPatch, "telefone")) cleanPatch.firestoreTelefone = cleanPatch.telefone;
+  if (Object.prototype.hasOwnProperty.call(cleanPatch, "plano")) cleanPatch.firestorePlano = cleanPatch.plano;
+  if (Object.prototype.hasOwnProperty.call(cleanPatch, "professorId")) cleanPatch.firestoreProfessorId = cleanPatch.professorId;
+  if (Object.prototype.hasOwnProperty.call(cleanPatch, "professorNome")) cleanPatch.firestoreProfessorNome = cleanPatch.professorNome;
+  if (Object.prototype.hasOwnProperty.call(cleanPatch, "tipo")) cleanPatch.firestoreTipo = cleanPatch.tipo;
+  if (Object.prototype.hasOwnProperty.call(cleanPatch, "ativo")) cleanPatch.firestoreAtivo = cleanPatch.ativo;
+  return cleanPatch;
 };
 
 const resolveAdminStudentInlinePatch = ({ field, value, alunoMeta } = {}) => {
@@ -17439,7 +17452,6 @@ const saveAdminStudentInlineField = async ({ field, sheetEl } = {}) => {
 
   try {
     await saveAdminStudentInlinePatch({ alunoId, patch: resolved.patch });
-    updateAdminStudentCachedRow(alunoId, resolved.patch);
     setAdminStudentInlineDisplay(sheetEl, field, resolved.displayValue);
     setAdminStudentInlineStatus(sheetEl, field, "Salvo ✓", "success");
     if (hist.inlineSaveTimer) window.clearTimeout(hist.inlineSaveTimer);
