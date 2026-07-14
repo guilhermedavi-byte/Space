@@ -1,3 +1,7 @@
+const { assertEnvironmentIsolation, getAppEnv, getFirebaseServerConfig } = require("../_lib/runtime-env");
+const { commitWritesAsAdmin } = require("../api/_lib/firestore-admin");
+const { FIRESTORE_BASE, encodeFields } = require("../_lib/firestore-rest");
+
 const RESERVED_EMAIL_DOMAINS = ["example.com", "example.net", "example.org", "space.test", "space.invalid"];
 
 const email = (local, domain = "example.com") => `${local}@${domain}`;
@@ -80,11 +84,188 @@ const buildStagingSeedDataset = () => ({
   reservedEmailDomains: RESERVED_EMAIL_DOMAINS,
 });
 
+const documentName = (collection, id) => `${FIRESTORE_BASE}/${collection}/${encodeURIComponent(id)}`;
+
+const makeTimestamp = () => new Date().toISOString();
+
+const buildLegacyUserDocs = (dataset, now = makeTimestamp()) => {
+  const teachersById = new Map(dataset.teachers.map((teacher) => [teacher.teacher_id, teacher]));
+  const enrollmentsByStudentId = new Map(dataset.enrollments.map((enrollment) => [enrollment.student_id, enrollment]));
+
+  const teacherDocs = dataset.teachers.map((teacher) => ({
+    collection: "users",
+    id: teacher.teacher_id,
+    data: {
+      id: teacher.teacher_id,
+      firestoreDocId: teacher.teacher_id,
+      tipo: "teacher",
+      role: "teacher",
+      nome: teacher.full_name,
+      nomeCompleto: teacher.full_name,
+      name: teacher.full_name,
+      email: teacher.email,
+      ativo: true,
+      isSyntheticStagingData: true,
+      source: "staging_seed",
+      createdAt: now,
+      updatedAt: now,
+    },
+  }));
+
+  const studentDocs = dataset.students.map((student) => {
+    const enrollment = enrollmentsByStudentId.get(student.student_id) || {};
+    const teacher = teachersById.get(enrollment.teacher_id) || {};
+    const status = String(enrollment.enrollment_status || "active");
+    const cancelamento =
+      status === "notice"
+        ? {
+            dataPedido: "2026-07-01",
+            dataFimAviso: "2026-07-31",
+            motivo: "Seed sintético de aviso prévio",
+            desfecho: null,
+            aulasSuspensas: false,
+            eventos: [{ tipo: "aviso_previo_seed", criadoEm: now, autor: "staging_seed" }],
+          }
+        : null;
+    return {
+      collection: "users",
+      id: student.student_id,
+      data: {
+        id: student.student_id,
+        firestoreDocId: student.student_id,
+        tipo: "student",
+        role: "student",
+        nome: student.full_name,
+        nomeCompleto: student.full_name,
+        name: student.full_name,
+        email: student.email,
+        telefone: student.phone,
+        ativo: status !== "ended",
+        plano: status === "ended" ? "Legacy" : "Fictício",
+        professorId: enrollment.teacher_id || "",
+        professorNome: teacher.full_name || "",
+        enrollmentStatus: status,
+        ...(cancelamento ? { cancelamento } : {}),
+        isSyntheticStagingData: true,
+        source: "staging_seed",
+        createdAt: now,
+        updatedAt: now,
+      },
+    };
+  });
+
+  return [...teacherDocs, ...studentDocs];
+};
+
+const buildCanonicalDocs = (dataset, now = makeTimestamp()) => [
+  ...dataset.students.map((student) => ({
+    collection: "students",
+    id: student.student_id,
+    data: { ...student, isSyntheticStagingData: true, source: "staging_seed", created_at: now, updated_at: now },
+  })),
+  ...dataset.teachers.map((teacher) => ({
+    collection: "teachers",
+    id: teacher.teacher_id,
+    data: { ...teacher, isSyntheticStagingData: true, source: "staging_seed", created_at: now, updated_at: now },
+  })),
+  ...dataset.enrollments.map((enrollment) => ({
+    collection: "enrollments",
+    id: enrollment.enrollment_id,
+    data: { ...enrollment, isSyntheticStagingData: true, source: "staging_seed", created_at: now, updated_at: now },
+  })),
+];
+
+const buildFirestoreSeedDocs = (dataset = buildStagingSeedDataset()) => {
+  const now = makeTimestamp();
+  return [...buildLegacyUserDocs(dataset, now), ...buildCanonicalDocs(dataset, now)];
+};
+
+const buildFirestoreSeedWrites = (docs) =>
+  docs.map((doc) => ({
+    update: {
+      name: documentName(doc.collection, doc.id),
+      fields: encodeFields(doc.data).fields,
+    },
+  }));
+
+const buildSeedReport = ({ mode, env = process.env, dataset = buildStagingSeedDataset(), docs = buildFirestoreSeedDocs(dataset) }) => {
+  const counts = docs.reduce((acc, doc) => {
+    acc[doc.collection] = (acc[doc.collection] || 0) + 1;
+    return acc;
+  }, {});
+  return {
+    mode,
+    appEnv: getAppEnv(env),
+    firebaseProjectId: getFirebaseServerConfig(env).projectId || "",
+    collections: counts,
+    samples: docs.slice(0, 8).map((doc) => ({
+      collection: doc.collection,
+      id: doc.id,
+      nome: doc.data.nome || doc.data.full_name || doc.data.name || "",
+      email: doc.data.email || "",
+    })),
+    reservedEmailDomains: dataset.reservedEmailDomains,
+  };
+};
+
+const runCli = async () => {
+  const args = new Set(process.argv.slice(2));
+  const apply = args.has("--apply") || args.has("--execute");
+  const dataset = buildStagingSeedDataset();
+  const docs = buildFirestoreSeedDocs(dataset);
+  const validation = assertEnvironmentIsolation(process.env);
+  if (validation.appEnv !== "staging") {
+    const error = new Error("seed_requires_staging");
+    error.code = "seed_requires_staging";
+    throw error;
+  }
+
+  if (!apply) {
+    process.stdout.write(`${JSON.stringify(buildSeedReport({ mode: "dry-run", dataset, docs }), null, 2)}\n`);
+    return;
+  }
+
+  const response = await commitWritesAsAdmin({ writes: buildFirestoreSeedWrites(docs) });
+  if (!response.ok) {
+    const error = new Error("staging_seed_commit_failed");
+    error.code = "staging_seed_commit_failed";
+    error.status = response.status;
+    error.details = response.data || response.text || null;
+    throw error;
+  }
+
+  process.stdout.write(
+    `${JSON.stringify(
+      {
+        ...buildSeedReport({ mode: "apply", dataset, docs }),
+        writeResults: Array.isArray(response.data?.writeResults) ? response.data.writeResults.length : 0,
+      },
+      null,
+      2
+    )}\n`
+  );
+};
+
 if (require.main === module) {
-  process.stdout.write(`${JSON.stringify(buildStagingSeedDataset(), null, 2)}\n`);
+  runCli().catch((error) => {
+    process.stderr.write(
+      `${JSON.stringify(
+        {
+          error: error?.code || error?.message || "staging_seed_failed",
+          message: error?.message || "staging_seed_failed",
+          status: error?.status || null,
+        },
+        null,
+        2
+      )}\n`
+    );
+    process.exitCode = 1;
+  });
 }
 
 module.exports = {
   RESERVED_EMAIL_DOMAINS,
   buildStagingSeedDataset,
+  buildFirestoreSeedDocs,
+  buildSeedReport,
 };

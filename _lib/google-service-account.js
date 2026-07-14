@@ -1,4 +1,5 @@
 const crypto = require("crypto");
+const { normalizeAppEnv } = require("./runtime-env");
 
 /*
   Google service account helper (server-side).
@@ -13,6 +14,7 @@ const crypto = require("crypto");
   Alternative (also supported):
   - FIREBASE_CLIENT_EMAIL / FIREBASE_PRIVATE_KEY
   - FIREBASE_SERVICE_ACCOUNT_JSON (full JSON string)
+  - GOOGLE_SERVICE_ACCOUNT_JSON_STAGING (full JSON string, only for APP_ENV=staging / VERCEL_ENV=preview)
 */
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -30,12 +32,68 @@ const base64Url = (input) =>
     .replace(/\//g, "_")
     .replace(/=+$/g, "");
 
-const loadServiceAccount = () => {
-  const jsonRaw =
+const getServiceAccountAppEnv = () =>
+  normalizeAppEnv(
+    process.env.APP_ENV ||
+      process.env.SPACE_APP_ENV ||
+      process.env.VERCEL_ENV ||
+      process.env.NODE_ENV
+  );
+
+const getServiceAccountJsonRaw = () => {
+  const appEnv = getServiceAccountAppEnv();
+  if (appEnv === "staging") {
+    return (
+      process.env.GOOGLE_SERVICE_ACCOUNT_JSON_STAGING ||
+      process.env.FIREBASE_SERVICE_ACCOUNT_JSON_STAGING ||
+      process.env.FIREBASE_SERVICE_ACCOUNT_STAGING ||
+      ""
+    );
+  }
+  return (
     process.env.FIREBASE_SERVICE_ACCOUNT_JSON ||
     process.env.GOOGLE_SERVICE_ACCOUNT_JSON ||
     process.env.FIREBASE_SERVICE_ACCOUNT ||
-    "";
+    ""
+  );
+};
+
+const getServiceAccountSplitFields = () => {
+  const appEnv = getServiceAccountAppEnv();
+  if (appEnv === "staging") {
+    return {
+      email: String(
+        process.env.GOOGLE_CLIENT_EMAIL_STAGING ||
+          process.env.FIREBASE_CLIENT_EMAIL_STAGING ||
+          process.env.FIREBASE_SERVICE_ACCOUNT_EMAIL_STAGING ||
+          ""
+      ).trim(),
+      key: String(
+        process.env.GOOGLE_PRIVATE_KEY_STAGING ||
+          process.env.FIREBASE_PRIVATE_KEY_STAGING ||
+          process.env.FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY_STAGING ||
+          ""
+      ).trim(),
+    };
+  }
+  return {
+    email: String(
+      process.env.GOOGLE_CLIENT_EMAIL ||
+        process.env.FIREBASE_CLIENT_EMAIL ||
+        process.env.FIREBASE_SERVICE_ACCOUNT_EMAIL ||
+        ""
+    ).trim(),
+    key: String(
+      process.env.GOOGLE_PRIVATE_KEY ||
+        process.env.FIREBASE_PRIVATE_KEY ||
+        process.env.FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY ||
+        ""
+    ).trim(),
+  };
+};
+
+const loadServiceAccount = () => {
+  const jsonRaw = getServiceAccountJsonRaw();
 
   if (jsonRaw) {
     try {
@@ -48,9 +106,8 @@ const loadServiceAccount = () => {
     }
   }
 
-  const email =
-    String(process.env.GOOGLE_CLIENT_EMAIL || process.env.FIREBASE_CLIENT_EMAIL || process.env.FIREBASE_SERVICE_ACCOUNT_EMAIL || "").trim();
-  let key = String(process.env.GOOGLE_PRIVATE_KEY || process.env.FIREBASE_PRIVATE_KEY || process.env.FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY || "").trim();
+  const { email, key: rawKey } = getServiceAccountSplitFields();
+  let key = rawKey;
   if (!email || !key) return null;
 
   // Vercel envs often store newlines as `\n`.

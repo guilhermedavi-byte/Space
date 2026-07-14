@@ -65,12 +65,18 @@ const getFirebasePublicConfig = (env = process.env) => {
   return config;
 };
 
+const getFirebaseServiceAccountJsonRaw = (env = process.env) => {
+  const appEnv = getAppEnv(env);
+  if (appEnv === "staging") {
+    return getEnv(env, "GOOGLE_SERVICE_ACCOUNT_JSON_STAGING", "FIREBASE_SERVICE_ACCOUNT_JSON_STAGING", "FIREBASE_SERVICE_ACCOUNT_STAGING");
+  }
+  return getEnv(env, "FIREBASE_SERVICE_ACCOUNT_JSON", "GOOGLE_SERVICE_ACCOUNT_JSON", "FIREBASE_SERVICE_ACCOUNT");
+};
+
 const getFirebaseProjectId = (env = process.env) => {
   const publicConfig = getFirebasePublicConfig(env);
   if (publicConfig.projectId) return publicConfig.projectId;
-  const serviceAccountJson = safeParseJson(
-    getEnv(env, "FIREBASE_SERVICE_ACCOUNT_JSON", "GOOGLE_SERVICE_ACCOUNT_JSON", "FIREBASE_SERVICE_ACCOUNT")
-  );
+  const serviceAccountJson = safeParseJson(getFirebaseServiceAccountJsonRaw(env));
   return String(serviceAccountJson?.project_id || "").trim();
 };
 
@@ -260,6 +266,7 @@ module.exports = {
   normalizeAppEnv,
   getAppEnv,
   getFirebasePublicConfig,
+  getFirebaseServiceAccountJsonRaw,
   getFirebaseProjectId,
   getFirebaseServerConfig,
   getEnvironmentPresentation,

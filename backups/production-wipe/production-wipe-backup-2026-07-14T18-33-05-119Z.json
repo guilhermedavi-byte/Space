@@ -1,0 +1,17 @@
+{
+  "generatedAt": "2026-07-14T18:33:05.118Z",
+  "target": {
+    "appEnv": "production",
+    "firestoreProjectId": "plataforma-space"
+  },
+  "firestore": {},
+  "auth": {
+    "usersToDelete": [],
+    "error": {
+      "code": "",
+      "message": "missing_service_account",
+      "status": null
+    }
+  },
+  "supabase": {}
+}

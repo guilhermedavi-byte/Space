@@ -1,0 +1,2116 @@
+{
+  "generatedAt": "2026-07-14T19:02:06.884Z",
+  "target": {
+    "appEnv": "production",
+    "firestoreProjectId": "plataforma-space"
+  },
+  "firestore": {
+    "users": [
+      {
+        "objetivoPrincipal": "..",
+        "ativo": true,
+        "possuiFilhos": "sim",
+        "casado": "sim",
+        "valorMensalidade": 1250,
+        "faixaIdade": "18-24",
+        "canceladoEm": null,
+        "professorId": "7WywlPFM4uSls0ui95kU0GIYsUk2",
+        "tempoContrato": 12,
+        "pretendeVoltarBrasil": "sim",
+        "pais": "Brasil",
+        "criadoEm": "2026-07-13T04:46:11.574Z",
+        "nome": "Aluno Teste 01",
+        "email": "guilhermedavi@hotmail.com",
+        "professorNome": "Matheus Dadvidson",
+        "cancelamento": {
+          "desfecho": null,
+          "aulasSuspensas": true,
+          "eventos": [
+            {
+              "detalhe": "Janela de 7 dias até 13/08/2026",
+              "acao": "Pedido registrado",
+              "data": "2026-07-13T19:14:42.651Z"
+            },
+            {
+              "data": "2026-07-13T19:18:44.720Z",
+              "detalhe": "TODO etapa 2: remover eventos futuros da agenda",
+              "acao": "Aulas suspensas"
+            }
+          ],
+          "dataPedido": "2026-07-13T03:00:00.000Z",
+          "motivo": "Falta de tempo",
+          "origem": "pedido",
+          "dataFimAviso": "2026-08-13T03:00:00.000Z",
+          "motivoDetalhe": "",
+          "dataSuspensao": "2026-07-13T19:18:44.720Z",
+          "dataEfetivacao": null
+        },
+        "genero": "Masculino",
+        "desativadoEm": null,
+        "estadoEua": "Massachusetts",
+        "nivelInglesAtual": "A1+",
+        "atualizadoEm": "2026-07-13T19:12:27.727Z",
+        "trabalho": "Empresário",
+        "tipo": "student",
+        "cancelamentosAnteriores": [
+          {
+            "dataPedido": "2026-05-01T03:00:00.000Z",
+            "motivo": "Falta de tempo",
+            "origem": "pedido",
+            "motivoDetalhe": "",
+            "dataFimAviso": "2026-07-01T03:00:00.000Z",
+            "dataSuspensao": null,
+            "dataEfetivacao": "2026-07-13T17:31:49.428Z",
+            "aulasSuspensas": false,
+            "desfecho": "revertido",
+            "eventos": [
+              {
+                "detalhe": "Aviso prévio até 01/07/2026",
+                "acao": "Pedido registrado",
+                "data": "2026-07-13T16:01:48.666Z"
+              },
+              {
+                "detalhe": "Aluno voltou ao estado normal",
+                "acao": "Cancelamento revertido",
+                "data": "2026-07-13T17:31:49.428Z"
+              }
+            ]
+          },
+          {
+            "eventos": [
+              {
+                "detalhe": "Aviso prévio até 28/06/2026",
+                "acao": "Pedido registrado",
+                "data": "2026-07-13T18:14:08.075Z"
+              },
+              {
+                "data": "2026-07-13T18:24:29.754Z",
+                "acao": "Cancelamento efetivado",
+                "detalhe": "Cumpriu aviso integral"
+              },
+              {
+                "detalhe": "Cancelamento arquivado; aluno voltou ao estado ativo",
+                "acao": "Aluno reativado",
+                "data": "2026-07-13T19:12:27.727Z"
+              }
+            ],
+            "aulasSuspensas": true,
+            "desfecho": {
+              "notas": "",
+              "data": "2026-07-13T18:24:29.754Z",
+              "tipo": "cumpriu_integral"
+            },
+            "dataEfetivacao": "2026-07-13T18:24:29.754Z",
+            "dataSuspensao": null,
+            "motivoDetalhe": "",
+            "dataFimAviso": "2026-06-28T03:00:00.000Z",
+            "origem": "pedido",
+            "motivo": "Falta de tempo",
+            "dataPedido": "2026-04-28T03:00:00.000Z"
+          }
+        ],
+        "teacherId": "7WywlPFM4uSls0ui95kU0GIYsUk2",
+        "plano": "Gold",
+        "teacherNome": "Matheus Dadvidson",
+        "endereco": "Avenida Aruanã, 601",
+        "id": "43YgxBac7gPzIViJyrrWj3o9CjU2",
+        "firestoreDocId": "43YgxBac7gPzIViJyrrWj3o9CjU2"
+      },
+      {
+        "notes": "",
+        "professorNome": "Matheus Dadvidson",
+        "casado": "nao",
+        "pretendeVoltarBrasil": "nao_sabe",
+        "professorId": "7WywlPFM4uSls0ui95kU0GIYsUk2",
+        "pais": "Brasil",
+        "plano": "Diamond",
+        "genero": "Feminino",
+        "criadoEm": "2026-07-13T20:02:42.602Z",
+        "tipo": "student",
+        "teacherId": "7WywlPFM4uSls0ui95kU0GIYsUk2",
+        "valorMensalidade": 997,
+        "ativo": true,
+        "updatedAt": "2026-07-14T14:16:15.640Z",
+        "nome": "Ana Flávia Oliveira",
+        "email": "anaflavia.oliveira2497@gmail.com",
+        "possuiFilhos": "nao",
+        "atualizadoEm": "2026-07-14T14:16:15.640Z",
+        "tempoContrato": 12,
+        "englishLevelStart": "Pre-Intermediate",
+        "objetivoPrincipal": "Trabalho. Ela trabalha em uma agência de Marketing, e tem o sonho de morar nos Estados Unidos. Ela disse que vai se casar com um americano, e precisa falar com o marido dela.",
+        "trabalho": "Empresário",
+        "faixaIdade": "25-29",
+        "endereco": "Avenida Aruanã, 601",
+        "english_level_start": "Pre-Intermediate",
+        "observacoesPedagogicas": "",
+        "teacherNome": "Matheus Dadvidson",
+        "nivelInglesAtual": "A2",
+        "id": "L8KiGwohlzRRpTOFOEtNdoiD2v93",
+        "firestoreDocId": "L8KiGwohlzRRpTOFOEtNdoiD2v93"
+      }
+    ],
+    "aulas": [
+      {
+        "lifecycleCascadeAt": "2026-07-13T19:12:27.727Z",
+        "diaSemana": "seg",
+        "data": "2026-07-13T17:00:00.000Z",
+        "professorId": "7WywlPFM4uSls0ui95kU0GIYsUk2",
+        "endMin": 870,
+        "lifecycleCascadeStatus": "reactivated",
+        "documents": [],
+        "horaFim": "14:30",
+        "guests": [],
+        "repeatType": "weekly_custom",
+        "professorEmail": "dstuckert23@gmail.com",
+        "updatedAt": "2026-07-13T19:12:28.046Z",
+        "horaInicio": "14:00",
+        "dateKey": "2026-07-13",
+        "alunoNome": "Aluno Teste 01",
+        "description": "",
+        "criadoPor": "admin",
+        "startMin": 840,
+        "title": "",
+        "status": "agendada",
+        "alunoId": "43YgxBac7gPzIViJyrrWj3o9CjU2",
+        "criadoEm": "2026-07-13T17:32:16.287Z",
+        "professorNome": "Matheus Dadvidson",
+        "recorrente": true,
+        "alunoEmail": "guilhermedavi@hotmail.com",
+        "repeatDays": [
+          {
+            "endTime": "14:30",
+            "startTime": "14:00",
+            "weekday": "seg"
+          },
+          {
+            "weekday": "ter",
+            "endTime": "14:30",
+            "startTime": "14:00"
+          },
+          {
+            "weekday": "qua",
+            "startTime": "14:00",
+            "endTime": "14:30"
+          }
+        ],
+        "grupoRecorrenciaId": "class_mrji25nt_qt89l",
+        "alunoTelefone": null,
+        "id": "aula_1783963936287_a39218d59efe",
+        "firestoreDocId": "aula_1783963936287_a39218d59efe"
+      },
+      {
+        "alunoTelefone": null,
+        "startMin": 840,
+        "description": "",
+        "criadoEm": "2026-07-13T17:32:16.575Z",
+        "lifecycleCascadeStatus": "reactivated",
+        "recorrente": true,
+        "title": "",
+        "documents": [],
+        "status": "agendada",
+        "grupoRecorrenciaId": "class_mrji25nt_qt89l",
+        "alunoNome": "Aluno Teste 01",
+        "data": "2026-07-20T17:00:00.000Z",
+        "lifecycleCascadeAt": "2026-07-13T19:12:27.727Z",
+        "endMin": 870,
+        "dateKey": "2026-07-20",
+        "alunoEmail": "guilhermedavi@hotmail.com",
+        "professorNome": "Matheus Dadvidson",
+        "updatedAt": "2026-07-13T19:12:28.046Z",
+        "professorEmail": "dstuckert23@gmail.com",
+        "horaFim": "14:30",
+        "diaSemana": "seg",
+        "guests": [],
+        "professorId": "7WywlPFM4uSls0ui95kU0GIYsUk2",
+        "repeatType": "weekly_custom",
+        "alunoId": "43YgxBac7gPzIViJyrrWj3o9CjU2",
+        "repeatDays": [
+          {
+            "endTime": "14:30",
+            "startTime": "14:00",
+            "weekday": "seg"
+          },
+          {
+            "weekday": "ter",
+            "startTime": "14:00",
+            "endTime": "14:30"
+          },
+          {
+            "endTime": "14:30",
+            "startTime": "14:00",
+            "weekday": "qua"
+          }
+        ],
+        "horaInicio": "14:00",
+        "criadoPor": "admin",
+        "id": "aula_1783963936575_d17e440ce5ab",
+        "firestoreDocId": "aula_1783963936575_d17e440ce5ab"
+      },
+      {
+        "lifecycleCascadeAt": "2026-07-13T19:12:27.727Z",
+        "description": "",
+        "alunoTelefone": null,
+        "updatedAt": "2026-07-13T19:12:28.046Z",
+        "alunoEmail": "guilhermedavi@hotmail.com",
+        "criadoEm": "2026-07-13T17:32:16.751Z",
+        "startMin": 840,
+        "alunoNome": "Aluno Teste 01",
+        "repeatType": "weekly_custom",
+        "criadoPor": "admin",
+        "endMin": 870,
+        "professorEmail": "dstuckert23@gmail.com",
+        "alunoId": "43YgxBac7gPzIViJyrrWj3o9CjU2",
+        "grupoRecorrenciaId": "class_mrji25nt_qt89l",
+        "lifecycleCascadeStatus": "reactivated",
+        "data": "2026-07-27T17:00:00.000Z",
+        "professorNome": "Matheus Dadvidson",
+        "recorrente": true,
+        "guests": [],
+        "horaFim": "14:30",
+        "dateKey": "2026-07-27",
+        "title": "",
+        "repeatDays": [
+          {
+            "weekday": "seg",
+            "endTime": "14:30",
+            "startTime": "14:00"
+          },
+          {
+            "weekday": "ter",
+            "endTime": "14:30",
+            "startTime": "14:00"
+          },
+          {
+            "weekday": "qua",
+            "endTime": "14:30",
+            "startTime": "14:00"
+          }
+        ],
+        "status": "agendada",
+        "horaInicio": "14:00",
+        "documents": [],
+        "diaSemana": "seg",
+        "professorId": "7WywlPFM4uSls0ui95kU0GIYsUk2",
+        "id": "aula_1783963936751_9f6817fe33b3",
+        "firestoreDocId": "aula_1783963936751_9f6817fe33b3"
+      },
+      {
+        "horaFim": "14:30",
+        "documents": [],
+        "startMin": 840,
+        "status": "agendada",
+        "alunoNome": "Aluno Teste 01",
+        "description": "",
+        "alunoTelefone": null,
+        "title": "",
+        "data": "2026-08-03T17:00:00.000Z",
+        "criadoPor": "admin",
+        "grupoRecorrenciaId": "class_mrji25nt_qt89l",
+        "repeatDays": [
+          {
+            "weekday": "seg",
+            "endTime": "14:30",
+            "startTime": "14:00"
+          },
+          {
+            "endTime": "14:30",
+            "startTime": "14:00",
+            "weekday": "ter"
+          },
+          {
+            "weekday": "qua",
+            "startTime": "14:00",
+            "endTime": "14:30"
+          }
+        ],
+        "alunoEmail": "guilhermedavi@hotmail.com",
+        "professorNome": "Matheus Dadvidson",
+        "criadoEm": "2026-07-13T17:32:16.929Z",
+        "diaSemana": "seg",
+        "recorrente": true,
+        "repeatType": "weekly_custom",
+        "dateKey": "2026-08-03",
+        "guests": [],
+        "professorEmail": "dstuckert23@gmail.com",
+        "endMin": 870,
+        "alunoId": "43YgxBac7gPzIViJyrrWj3o9CjU2",
+        "lifecycleCascadeAt": "2026-07-13T19:12:27.727Z",
+        "updatedAt": "2026-07-13T19:12:28.046Z",
+        "professorId": "7WywlPFM4uSls0ui95kU0GIYsUk2",
+        "lifecycleCascadeStatus": "reactivated",
+        "horaInicio": "14:00",
+        "id": "aula_1783963936929_4b92e9a57072",
+        "firestoreDocId": "aula_1783963936929_4b92e9a57072"
+      },
+      {
+        "horaFim": "14:30",
+        "alunoNome": "Aluno Teste 01",
+        "title": "",
+        "alunoTelefone": null,
+        "data": "2026-08-10T17:00:00.000Z",
+        "status": "agendada",
+        "guests": [],
+        "alunoEmail": "guilhermedavi@hotmail.com",
+        "updatedAt": "2026-07-13T19:12:28.046Z",
+        "professorId": "7WywlPFM4uSls0ui95kU0GIYsUk2",
+        "documents": [],
+        "lifecycleCascadeStatus": "reactivated",
+        "lifecycleCascadeAt": "2026-07-13T19:12:27.727Z",
+        "dateKey": "2026-08-10",
+        "horaInicio": "14:00",
+        "repeatType": "weekly_custom",
+        "repeatDays": [
+          {
+            "startTime": "14:00",
+            "weekday": "seg",
+            "endTime": "14:30"
+          },
+          {
+            "startTime": "14:00",
+            "endTime": "14:30",
+            "weekday": "ter"
+          },
+          {
+            "endTime": "14:30",
+            "weekday": "qua",
+            "startTime": "14:00"
+          }
+        ],
+        "diaSemana": "seg",
+        "recorrente": true,
+        "criadoPor": "admin",
+        "endMin": 870,
+        "description": "",
+        "criadoEm": "2026-07-13T17:32:17.361Z",
+        "grupoRecorrenciaId": "class_mrji25nt_qt89l",
+        "alunoId": "43YgxBac7gPzIViJyrrWj3o9CjU2",
+        "startMin": 840,
+        "professorEmail": "dstuckert23@gmail.com",
+        "professorNome": "Matheus Dadvidson",
+        "id": "aula_1783963937361_5f0bb78b6d0d",
+        "firestoreDocId": "aula_1783963937361_5f0bb78b6d0d"
+      },
+      {
+        "lifecycleCascadeAt": "2026-07-13T19:12:27.727Z",
+        "repeatDays": [
+          {
+            "endTime": "14:30",
+            "startTime": "14:00",
+            "weekday": "seg"
+          },
+          {
+            "endTime": "14:30",
+            "startTime": "14:00",
+            "weekday": "ter"
+          },
+          {
+            "endTime": "14:30",
+            "startTime": "14:00",
+            "weekday": "qua"
+          }
+        ],
+        "endMin": 870,
+        "updatedAt": "2026-07-13T19:12:28.046Z",
+        "documents": [],
+        "horaInicio": "14:00",
+        "lifecycleCascadeStatus": "reactivated",
+        "data": "2026-08-17T17:00:00.000Z",
+        "recorrente": true,
+        "professorNome": "Matheus Dadvidson",
+        "criadoPor": "admin",
+        "grupoRecorrenciaId": "class_mrji25nt_qt89l",
+        "repeatType": "weekly_custom",
+        "horaFim": "14:30",
+        "guests": [],
+        "alunoEmail": "guilhermedavi@hotmail.com",
+        "title": "",
+        "description": "",
+        "alunoId": "43YgxBac7gPzIViJyrrWj3o9CjU2",
+        "startMin": 840,
+        "professorId": "7WywlPFM4uSls0ui95kU0GIYsUk2",
+        "criadoEm": "2026-07-13T17:32:17.815Z",
+        "alunoTelefone": null,
+        "professorEmail": "dstuckert23@gmail.com",
+        "diaSemana": "seg",
+        "status": "agendada",
+        "alunoNome": "Aluno Teste 01",
+        "dateKey": "2026-08-17",
+        "id": "aula_1783963937815_a44cc50577ca",
+        "firestoreDocId": "aula_1783963937815_a44cc50577ca"
+      },
+      {
+        "horaInicio": "14:00",
+        "horaFim": "14:30",
+        "alunoNome": "Aluno Teste 01",
+        "professorId": "7WywlPFM4uSls0ui95kU0GIYsUk2",
+        "endMin": 870,
+        "status": "agendada",
+        "updatedAt": "2026-07-13T19:12:28.046Z",
+        "title": "",
+        "recorrente": true,
+        "alunoTelefone": null,
+        "professorNome": "Matheus Dadvidson",
+        "repeatDays": [
+          {
+            "weekday": "seg",
+            "endTime": "14:30",
+            "startTime": "14:00"
+          },
+          {
+            "endTime": "14:30",
+            "startTime": "14:00",
+            "weekday": "ter"
+          },
+          {
+            "startTime": "14:00",
+            "endTime": "14:30",
+            "weekday": "qua"
+          }
+        ],
+        "lifecycleCascadeAt": "2026-07-13T19:12:27.727Z",
+        "data": "2026-08-24T17:00:00.000Z",
+        "diaSemana": "seg",
+        "lifecycleCascadeStatus": "reactivated",
+        "professorEmail": "dstuckert23@gmail.com",
+        "documents": [],
+        "dateKey": "2026-08-24",
+        "guests": [],
+        "criadoPor": "admin",
+        "criadoEm": "2026-07-13T17:32:18.038Z",
+        "grupoRecorrenciaId": "class_mrji25nt_qt89l",
+        "startMin": 840,
+        "alunoId": "43YgxBac7gPzIViJyrrWj3o9CjU2",
+        "alunoEmail": "guilhermedavi@hotmail.com",
+        "repeatType": "weekly_custom",
+        "description": "",
+        "id": "aula_1783963938038_a5e20f6a34ca",
+        "firestoreDocId": "aula_1783963938038_a5e20f6a34ca"
+      },
+      {
+        "recorrente": true,
+        "endMin": 870,
+        "alunoEmail": "guilhermedavi@hotmail.com",
+        "description": "",
+        "guests": [],
+        "updatedAt": "2026-07-13T19:12:28.046Z",
+        "documents": [],
+        "alunoId": "43YgxBac7gPzIViJyrrWj3o9CjU2",
+        "title": "",
+        "status": "agendada",
+        "professorEmail": "dstuckert23@gmail.com",
+        "alunoTelefone": null,
+        "horaInicio": "14:00",
+        "dateKey": "2026-08-31",
+        "grupoRecorrenciaId": "class_mrji25nt_qt89l",
+        "data": "2026-08-31T17:00:00.000Z",
+        "lifecycleCascadeStatus": "reactivated",
+        "diaSemana": "seg",
+        "repeatType": "weekly_custom",
+        "professorId": "7WywlPFM4uSls0ui95kU0GIYsUk2",
+        "criadoPor": "admin",
+        "professorNome": "Matheus Dadvidson",
+        "alunoNome": "Aluno Teste 01",
+        "horaFim": "14:30",
+        "repeatDays": [
+          {
+            "endTime": "14:30",
+            "weekday": "seg",
+            "startTime": "14:00"
+          },
+          {
+            "startTime": "14:00",
+            "weekday": "ter",
+            "endTime": "14:30"
+          },
+          {
+            "endTime": "14:30",
+            "weekday": "qua",
+            "startTime": "14:00"
+          }
+        ],
+        "lifecycleCascadeAt": "2026-07-13T19:12:27.727Z",
+        "startMin": 840,
+        "criadoEm": "2026-07-13T17:32:18.370Z",
+        "id": "aula_1783963938370_bad369b1bfe3",
+        "firestoreDocId": "aula_1783963938370_bad369b1bfe3"
+      },
+      {
+        "criadoEm": "2026-07-13T17:32:18.809Z",
+        "alunoTelefone": null,
+        "grupoRecorrenciaId": "class_mrji25nt_qt89l",
+        "status": "agendada",
+        "alunoEmail": "guilhermedavi@hotmail.com",
+        "data": "2026-09-07T17:00:00.000Z",
+        "diaSemana": "seg",
+        "endMin": 870,
+        "recorrente": true,
+        "lifecycleCascadeAt": "2026-07-13T19:12:27.727Z",
+        "horaFim": "14:30",
+        "updatedAt": "2026-07-13T19:12:28.046Z",
+        "dateKey": "2026-09-07",
+        "alunoId": "43YgxBac7gPzIViJyrrWj3o9CjU2",
+        "repeatDays": [
+          {
+            "endTime": "14:30",
+            "startTime": "14:00",
+            "weekday": "seg"
+          },
+          {
+            "weekday": "ter",
+            "startTime": "14:00",
+            "endTime": "14:30"
+          },
+          {
+            "endTime": "14:30",
+            "startTime": "14:00",
+            "weekday": "qua"
+          }
+        ],
+        "startMin": 840,
+        "professorId": "7WywlPFM4uSls0ui95kU0GIYsUk2",
+        "alunoNome": "Aluno Teste 01",
+        "description": "",
+        "horaInicio": "14:00",
+        "professorEmail": "dstuckert23@gmail.com",
+        "documents": [],
+        "title": "",
+        "repeatType": "weekly_custom",
+        "professorNome": "Matheus Dadvidson",
+        "guests": [],
+        "criadoPor": "admin",
+        "lifecycleCascadeStatus": "reactivated",
+        "id": "aula_1783963938809_c5d2a1a5fe7e",
+        "firestoreDocId": "aula_1783963938809_c5d2a1a5fe7e"
+      },
+      {
+        "alunoNome": "Aluno Teste 01",
+        "grupoRecorrenciaId": "class_mrji25nt_qt89l",
+        "professorEmail": "dstuckert23@gmail.com",
+        "dateKey": "2026-09-14",
+        "updatedAt": "2026-07-13T19:12:28.046Z",
+        "criadoPor": "admin",
+        "documents": [],
+        "alunoTelefone": null,
+        "data": "2026-09-14T17:00:00.000Z",
+        "endMin": 870,
+        "alunoEmail": "guilhermedavi@hotmail.com",
+        "professorId": "7WywlPFM4uSls0ui95kU0GIYsUk2",
+        "description": "",
+        "title": "",
+        "diaSemana": "seg",
+        "criadoEm": "2026-07-13T17:32:19.132Z",
+        "guests": [],
+        "horaFim": "14:30",
+        "lifecycleCascadeStatus": "reactivated",
+        "repeatType": "weekly_custom",
+        "repeatDays": [
+          {
+            "endTime": "14:30",
+            "startTime": "14:00",
+            "weekday": "seg"
+          },
+          {
+            "weekday": "ter",
+            "endTime": "14:30",
+            "startTime": "14:00"
+          },
+          {
+            "weekday": "qua",
+            "endTime": "14:30",
+            "startTime": "14:00"
+          }
+        ],
+        "horaInicio": "14:00",
+        "professorNome": "Matheus Dadvidson",
+        "startMin": 840,
+        "alunoId": "43YgxBac7gPzIViJyrrWj3o9CjU2",
+        "status": "agendada",
+        "recorrente": true,
+        "lifecycleCascadeAt": "2026-07-13T19:12:27.727Z",
+        "id": "aula_1783963939132_eeef3199b403",
+        "firestoreDocId": "aula_1783963939132_eeef3199b403"
+      },
+      {
+        "documents": [],
+        "criadoPor": "admin",
+        "startMin": 840,
+        "endMin": 870,
+        "repeatDays": [
+          {
+            "startTime": "14:00",
+            "weekday": "seg",
+            "endTime": "14:30"
+          },
+          {
+            "weekday": "ter",
+            "startTime": "14:00",
+            "endTime": "14:30"
+          },
+          {
+            "endTime": "14:30",
+            "startTime": "14:00",
+            "weekday": "qua"
+          }
+        ],
+        "description": "",
+        "recorrente": true,
+        "alunoNome": "Aluno Teste 01",
+        "title": "",
+        "criadoEm": "2026-07-13T17:32:19.317Z",
+        "horaInicio": "14:00",
+        "updatedAt": "2026-07-13T19:12:28.046Z",
+        "repeatType": "weekly_custom",
+        "alunoEmail": "guilhermedavi@hotmail.com",
+        "dateKey": "2026-09-21",
+        "horaFim": "14:30",
+        "professorId": "7WywlPFM4uSls0ui95kU0GIYsUk2",
+        "status": "agendada",
+        "professorEmail": "dstuckert23@gmail.com",
+        "diaSemana": "seg",
+        "alunoId": "43YgxBac7gPzIViJyrrWj3o9CjU2",
+        "professorNome": "Matheus Dadvidson",
+        "data": "2026-09-21T17:00:00.000Z",
+        "guests": [],
+        "grupoRecorrenciaId": "class_mrji25nt_qt89l",
+        "lifecycleCascadeStatus": "reactivated",
+        "alunoTelefone": null,
+        "lifecycleCascadeAt": "2026-07-13T19:12:27.727Z",
+        "id": "aula_1783963939317_463c8cb5da20",
+        "firestoreDocId": "aula_1783963939317_463c8cb5da20"
+      },
+      {
+        "lifecycleCascadeStatus": "reactivated",
+        "professorId": "7WywlPFM4uSls0ui95kU0GIYsUk2",
+        "lifecycleCascadeAt": "2026-07-13T19:12:27.727Z",
+        "professorNome": "Matheus Dadvidson",
+        "dateKey": "2026-09-28",
+        "recorrente": true,
+        "data": "2026-09-28T17:00:00.000Z",
+        "startMin": 840,
+        "updatedAt": "2026-07-13T19:12:28.046Z",
+        "professorEmail": "dstuckert23@gmail.com",
+        "alunoEmail": "guilhermedavi@hotmail.com",
+        "description": "",
+        "repeatType": "weekly_custom",
+        "criadoPor": "admin",
+        "repeatDays": [
+          {
+            "endTime": "14:30",
+            "startTime": "14:00",
+            "weekday": "seg"
+          },
+          {
+            "endTime": "14:30",
+            "startTime": "14:00",
+            "weekday": "ter"
+          },
+          {
+            "weekday": "qua",
+            "endTime": "14:30",
+            "startTime": "14:00"
+          }
+        ],
+        "grupoRecorrenciaId": "class_mrji25nt_qt89l",
+        "title": "",
+        "criadoEm": "2026-07-13T17:32:19.504Z",
+        "endMin": 870,
+        "diaSemana": "seg",
+        "alunoNome": "Aluno Teste 01",
+        "status": "agendada",
+        "alunoId": "43YgxBac7gPzIViJyrrWj3o9CjU2",
+        "documents": [],
+        "guests": [],
+        "horaInicio": "14:00",
+        "alunoTelefone": null,
+        "horaFim": "14:30",
+        "id": "aula_1783963939504_5866ea0b7d0e",
+        "firestoreDocId": "aula_1783963939504_5866ea0b7d0e"
+      },
+      {
+        "repeatType": "weekly_custom",
+        "repeatDays": [
+          {
+            "weekday": "seg",
+            "startTime": "14:00",
+            "endTime": "14:30"
+          },
+          {
+            "endTime": "14:30",
+            "startTime": "14:00",
+            "weekday": "ter"
+          },
+          {
+            "startTime": "14:00",
+            "endTime": "14:30",
+            "weekday": "qua"
+          }
+        ],
+        "status": "agendada",
+        "horaFim": "14:30",
+        "horaInicio": "14:00",
+        "professorNome": "Matheus Dadvidson",
+        "alunoTelefone": null,
+        "lifecycleCascadeStatus": "reactivated",
+        "professorEmail": "dstuckert23@gmail.com",
+        "criadoEm": "2026-07-13T17:32:19.675Z",
+        "grupoRecorrenciaId": "class_mrji25nt_qt89l",
+        "lifecycleCascadeAt": "2026-07-13T19:12:27.727Z",
+        "title": "",
+        "alunoNome": "Aluno Teste 01",
+        "startMin": 840,
+        "professorId": "7WywlPFM4uSls0ui95kU0GIYsUk2",
+        "data": "2026-07-14T17:00:00.000Z",
+        "dateKey": "2026-07-14",
+        "recorrente": true,
+        "endMin": 870,
+        "updatedAt": "2026-07-13T19:12:28.046Z",
+        "guests": [],
+        "diaSemana": "ter",
+        "criadoPor": "admin",
+        "description": "",
+        "documents": [],
+        "alunoId": "43YgxBac7gPzIViJyrrWj3o9CjU2",
+        "alunoEmail": "guilhermedavi@hotmail.com",
+        "id": "aula_1783963939675_528f454cf4e8",
+        "firestoreDocId": "aula_1783963939675_528f454cf4e8"
+      },
+      {
+        "updatedAt": "2026-07-13T19:12:28.046Z",
+        "recorrente": true,
+        "startMin": 840,
+        "alunoNome": "Aluno Teste 01",
+        "grupoRecorrenciaId": "class_mrji25nt_qt89l",
+        "status": "agendada",
+        "professorNome": "Matheus Dadvidson",
+        "professorId": "7WywlPFM4uSls0ui95kU0GIYsUk2",
+        "dateKey": "2026-07-21",
+        "description": "",
+        "horaInicio": "14:00",
+        "criadoPor": "admin",
+        "criadoEm": "2026-07-13T17:32:19.997Z",
+        "lifecycleCascadeAt": "2026-07-13T19:12:27.727Z",
+        "guests": [],
+        "alunoEmail": "guilhermedavi@hotmail.com",
+        "data": "2026-07-21T17:00:00.000Z",
+        "lifecycleCascadeStatus": "reactivated",
+        "alunoId": "43YgxBac7gPzIViJyrrWj3o9CjU2",
+        "alunoTelefone": null,
+        "repeatType": "weekly_custom",
+        "repeatDays": [
+          {
+            "startTime": "14:00",
+            "endTime": "14:30",
+            "weekday": "seg"
+          },
+          {
+            "endTime": "14:30",
+            "weekday": "ter",
+            "startTime": "14:00"
+          },
+          {
+            "endTime": "14:30",
+            "weekday": "qua",
+            "startTime": "14:00"
+          }
+        ],
+        "title": "",
+        "diaSemana": "ter",
+        "endMin": 870,
+        "documents": [],
+        "professorEmail": "dstuckert23@gmail.com",
+        "horaFim": "14:30",
+        "id": "aula_1783963939997_cec675093390",
+        "firestoreDocId": "aula_1783963939997_cec675093390"
+      },
+      {
+        "endMin": 870,
+        "horaFim": "14:30",
+        "documents": [],
+        "lifecycleCascadeStatus": "reactivated",
+        "professorId": "7WywlPFM4uSls0ui95kU0GIYsUk2",
+        "updatedAt": "2026-07-13T19:12:28.046Z",
+        "horaInicio": "14:00",
+        "dateKey": "2026-07-28",
+        "repeatType": "weekly_custom",
+        "guests": [],
+        "professorEmail": "dstuckert23@gmail.com",
+        "diaSemana": "ter",
+        "lifecycleCascadeAt": "2026-07-13T19:12:27.727Z",
+        "data": "2026-07-28T17:00:00.000Z",
+        "alunoId": "43YgxBac7gPzIViJyrrWj3o9CjU2",
+        "alunoTelefone": null,
+        "grupoRecorrenciaId": "class_mrji25nt_qt89l",
+        "criadoEm": "2026-07-13T17:32:20.330Z",
+        "repeatDays": [
+          {
+            "weekday": "seg",
+            "startTime": "14:00",
+            "endTime": "14:30"
+          },
+          {
+            "weekday": "ter",
+            "startTime": "14:00",
+            "endTime": "14:30"
+          },
+          {
+            "weekday": "qua",
+            "endTime": "14:30",
+            "startTime": "14:00"
+          }
+        ],
+        "alunoEmail": "guilhermedavi@hotmail.com",
+        "professorNome": "Matheus Dadvidson",
+        "recorrente": true,
+        "alunoNome": "Aluno Teste 01",
+        "criadoPor": "admin",
+        "status": "agendada",
+        "title": "",
+        "startMin": 840,
+        "description": "",
+        "id": "aula_1783963940330_78d02be21e91",
+        "firestoreDocId": "aula_1783963940330_78d02be21e91"
+      },
+      {
+        "lifecycleCascadeStatus": "reactivated",
+        "recorrente": true,
+        "criadoEm": "2026-07-13T17:32:20.513Z",
+        "description": "",
+        "startMin": 840,
+        "alunoTelefone": null,
+        "status": "agendada",
+        "documents": [],
+        "title": "",
+        "updatedAt": "2026-07-13T19:12:28.046Z",
+        "professorEmail": "dstuckert23@gmail.com",
+        "horaFim": "14:30",
+        "endMin": 870,
+        "alunoEmail": "guilhermedavi@hotmail.com",
+        "professorNome": "Matheus Dadvidson",
+        "dateKey": "2026-08-04",
+        "data": "2026-08-04T17:00:00.000Z",
+        "alunoNome": "Aluno Teste 01",
+        "lifecycleCascadeAt": "2026-07-13T19:12:27.727Z",
+        "grupoRecorrenciaId": "class_mrji25nt_qt89l",
+        "horaInicio": "14:00",
+        "criadoPor": "admin",
+        "alunoId": "43YgxBac7gPzIViJyrrWj3o9CjU2",
+        "repeatDays": [
+          {
+            "weekday": "seg",
+            "startTime": "14:00",
+            "endTime": "14:30"
+          },
+          {
+            "weekday": "ter",
+            "startTime": "14:00",
+            "endTime": "14:30"
+          },
+          {
+            "startTime": "14:00",
+            "endTime": "14:30",
+            "weekday": "qua"
+          }
+        ],
+        "repeatType": "weekly_custom",
+        "guests": [],
+        "professorId": "7WywlPFM4uSls0ui95kU0GIYsUk2",
+        "diaSemana": "ter",
+        "id": "aula_1783963940513_684ca02c37f2",
+        "firestoreDocId": "aula_1783963940513_684ca02c37f2"
+      },
+      {
+        "alunoId": "43YgxBac7gPzIViJyrrWj3o9CjU2",
+        "professorEmail": "dstuckert23@gmail.com",
+        "endMin": 870,
+        "criadoPor": "admin",
+        "repeatType": "weekly_custom",
+        "alunoNome": "Aluno Teste 01",
+        "startMin": 840,
+        "criadoEm": "2026-07-13T17:32:20.827Z",
+        "alunoEmail": "guilhermedavi@hotmail.com",
+        "updatedAt": "2026-07-13T19:12:28.046Z",
+        "alunoTelefone": null,
+        "lifecycleCascadeAt": "2026-07-13T19:12:27.727Z",
+        "description": "",
+        "professorId": "7WywlPFM4uSls0ui95kU0GIYsUk2",
+        "diaSemana": "ter",
+        "horaInicio": "14:00",
+        "documents": [],
+        "status": "agendada",
+        "repeatDays": [
+          {
+            "weekday": "seg",
+            "endTime": "14:30",
+            "startTime": "14:00"
+          },
+          {
+            "weekday": "ter",
+            "endTime": "14:30",
+            "startTime": "14:00"
+          },
+          {
+            "weekday": "qua",
+            "endTime": "14:30",
+            "startTime": "14:00"
+          }
+        ],
+        "dateKey": "2026-08-11",
+        "title": "",
+        "guests": [],
+        "horaFim": "14:30",
+        "recorrente": true,
+        "data": "2026-08-11T17:00:00.000Z",
+        "professorNome": "Matheus Dadvidson",
+        "lifecycleCascadeStatus": "reactivated",
+        "grupoRecorrenciaId": "class_mrji25nt_qt89l",
+        "id": "aula_1783963940827_0521a2866d5e",
+        "firestoreDocId": "aula_1783963940827_0521a2866d5e"
+      },
+      {
+        "updatedAt": "2026-07-13T19:12:28.046Z",
+        "professorId": "7WywlPFM4uSls0ui95kU0GIYsUk2",
+        "horaInicio": "14:00",
+        "lifecycleCascadeStatus": "reactivated",
+        "alunoId": "43YgxBac7gPzIViJyrrWj3o9CjU2",
+        "endMin": 870,
+        "professorEmail": "dstuckert23@gmail.com",
+        "lifecycleCascadeAt": "2026-07-13T19:12:27.727Z",
+        "repeatType": "weekly_custom",
+        "recorrente": true,
+        "diaSemana": "ter",
+        "dateKey": "2026-08-18",
+        "guests": [],
+        "alunoEmail": "guilhermedavi@hotmail.com",
+        "professorNome": "Matheus Dadvidson",
+        "criadoEm": "2026-07-13T17:32:21.128Z",
+        "criadoPor": "admin",
+        "data": "2026-08-18T17:00:00.000Z",
+        "title": "",
+        "grupoRecorrenciaId": "class_mrji25nt_qt89l",
+        "repeatDays": [
+          {
+            "startTime": "14:00",
+            "endTime": "14:30",
+            "weekday": "seg"
+          },
+          {
+            "startTime": "14:00",
+            "endTime": "14:30",
+            "weekday": "ter"
+          },
+          {
+            "startTime": "14:00",
+            "endTime": "14:30",
+            "weekday": "qua"
+          }
+        ],
+        "alunoNome": "Aluno Teste 01",
+        "description": "",
+        "alunoTelefone": null,
+        "status": "agendada",
+        "horaFim": "14:30",
+        "documents": [],
+        "startMin": 840,
+        "id": "aula_1783963941128_acabfe107519",
+        "firestoreDocId": "aula_1783963941128_acabfe107519"
+      },
+      {
+        "lifecycleCascadeStatus": "reactivated",
+        "lifecycleCascadeAt": "2026-07-13T19:12:27.727Z",
+        "documents": [],
+        "title": "",
+        "horaFim": "14:30",
+        "alunoNome": "Aluno Teste 01",
+        "professorId": "7WywlPFM4uSls0ui95kU0GIYsUk2",
+        "updatedAt": "2026-07-13T19:12:28.046Z",
+        "data": "2026-08-25T17:00:00.000Z",
+        "alunoTelefone": null,
+        "alunoEmail": "guilhermedavi@hotmail.com",
+        "guests": [],
+        "status": "agendada",
+        "description": "",
+        "endMin": 870,
+        "startMin": 840,
+        "professorNome": "Matheus Dadvidson",
+        "professorEmail": "dstuckert23@gmail.com",
+        "grupoRecorrenciaId": "class_mrji25nt_qt89l",
+        "alunoId": "43YgxBac7gPzIViJyrrWj3o9CjU2",
+        "criadoEm": "2026-07-13T17:32:21.466Z",
+        "horaInicio": "14:00",
+        "dateKey": "2026-08-25",
+        "repeatType": "weekly_custom",
+        "criadoPor": "admin",
+        "recorrente": true,
+        "repeatDays": [
+          {
+            "startTime": "14:00",
+            "endTime": "14:30",
+            "weekday": "seg"
+          },
+          {
+            "startTime": "14:00",
+            "weekday": "ter",
+            "endTime": "14:30"
+          },
+          {
+            "startTime": "14:00",
+            "endTime": "14:30",
+            "weekday": "qua"
+          }
+        ],
+        "diaSemana": "ter",
+        "id": "aula_1783963941466_19fc1346548c",
+        "firestoreDocId": "aula_1783963941466_19fc1346548c"
+      },
+      {
+        "professorEmail": "dstuckert23@gmail.com",
+        "alunoTelefone": null,
+        "dateKey": "2026-09-01",
+        "alunoNome": "Aluno Teste 01",
+        "status": "agendada",
+        "diaSemana": "ter",
+        "alunoId": "43YgxBac7gPzIViJyrrWj3o9CjU2",
+        "title": "",
+        "description": "",
+        "alunoEmail": "guilhermedavi@hotmail.com",
+        "criadoEm": "2026-07-13T17:32:21.915Z",
+        "professorId": "7WywlPFM4uSls0ui95kU0GIYsUk2",
+        "startMin": 840,
+        "criadoPor": "admin",
+        "professorNome": "Matheus Dadvidson",
+        "lifecycleCascadeStatus": "reactivated",
+        "recorrente": true,
+        "data": "2026-09-01T17:00:00.000Z",
+        "guests": [],
+        "horaFim": "14:30",
+        "repeatType": "weekly_custom",
+        "grupoRecorrenciaId": "class_mrji25nt_qt89l",
+        "repeatDays": [
+          {
+            "weekday": "seg",
+            "startTime": "14:00",
+            "endTime": "14:30"
+          },
+          {
+            "weekday": "ter",
+            "startTime": "14:00",
+            "endTime": "14:30"
+          },
+          {
+            "startTime": "14:00",
+            "endTime": "14:30",
+            "weekday": "qua"
+          }
+        ],
+        "lifecycleCascadeAt": "2026-07-13T19:12:27.727Z",
+        "horaInicio": "14:00",
+        "updatedAt": "2026-07-13T19:12:28.046Z",
+        "documents": [],
+        "endMin": 870,
+        "id": "aula_1783963941915_c9bd825663e5",
+        "firestoreDocId": "aula_1783963941915_c9bd825663e5"
+      },
+      {
+        "grupoRecorrenciaId": "class_mrji25nt_qt89l",
+        "criadoPor": "admin",
+        "criadoEm": "2026-07-13T17:32:22.394Z",
+        "startMin": 840,
+        "alunoId": "43YgxBac7gPzIViJyrrWj3o9CjU2",
+        "alunoEmail": "guilhermedavi@hotmail.com",
+        "repeatType": "weekly_custom",
+        "description": "",
+        "lifecycleCascadeAt": "2026-07-13T19:12:27.727Z",
+        "diaSemana": "ter",
+        "data": "2026-09-08T17:00:00.000Z",
+        "lifecycleCascadeStatus": "reactivated",
+        "professorEmail": "dstuckert23@gmail.com",
+        "guests": [],
+        "documents": [],
+        "dateKey": "2026-09-08",
+        "status": "agendada",
+        "updatedAt": "2026-07-13T19:12:28.046Z",
+        "title": "",
+        "alunoTelefone": null,
+        "recorrente": true,
+        "repeatDays": [
+          {
+            "startTime": "14:00",
+            "endTime": "14:30",
+            "weekday": "seg"
+          },
+          {
+            "weekday": "ter",
+            "endTime": "14:30",
+            "startTime": "14:00"
+          },
+          {
+            "weekday": "qua",
+            "endTime": "14:30",
+            "startTime": "14:00"
+          }
+        ],
+        "professorNome": "Matheus Dadvidson",
+        "horaInicio": "14:00",
+        "horaFim": "14:30",
+        "endMin": 870,
+        "professorId": "7WywlPFM4uSls0ui95kU0GIYsUk2",
+        "alunoNome": "Aluno Teste 01",
+        "id": "aula_1783963942394_3a2ebcbf4893",
+        "firestoreDocId": "aula_1783963942394_3a2ebcbf4893"
+      },
+      {
+        "horaFim": "14:30",
+        "professorNome": "Matheus Dadvidson",
+        "alunoNome": "Aluno Teste 01",
+        "repeatDays": [
+          {
+            "weekday": "seg",
+            "endTime": "14:30",
+            "startTime": "14:00"
+          },
+          {
+            "endTime": "14:30",
+            "weekday": "ter",
+            "startTime": "14:00"
+          },
+          {
+            "weekday": "qua",
+            "endTime": "14:30",
+            "startTime": "14:00"
+          }
+        ],
+        "lifecycleCascadeAt": "2026-07-13T19:12:27.727Z",
+        "startMin": 840,
+        "criadoEm": "2026-07-13T17:32:22.577Z",
+        "lifecycleCascadeStatus": "reactivated",
+        "diaSemana": "ter",
+        "data": "2026-09-15T17:00:00.000Z",
+        "grupoRecorrenciaId": "class_mrji25nt_qt89l",
+        "dateKey": "2026-09-15",
+        "horaInicio": "14:00",
+        "criadoPor": "admin",
+        "professorId": "7WywlPFM4uSls0ui95kU0GIYsUk2",
+        "repeatType": "weekly_custom",
+        "guests": [],
+        "description": "",
+        "alunoEmail": "guilhermedavi@hotmail.com",
+        "endMin": 870,
+        "recorrente": true,
+        "alunoTelefone": null,
+        "status": "agendada",
+        "professorEmail": "dstuckert23@gmail.com",
+        "title": "",
+        "alunoId": "43YgxBac7gPzIViJyrrWj3o9CjU2",
+        "documents": [],
+        "updatedAt": "2026-07-13T19:12:28.046Z",
+        "id": "aula_1783963942577_c29af9174e32",
+        "firestoreDocId": "aula_1783963942577_c29af9174e32"
+      },
+      {
+        "professorId": "7WywlPFM4uSls0ui95kU0GIYsUk2",
+        "alunoNome": "Aluno Teste 01",
+        "horaInicio": "14:00",
+        "description": "",
+        "professorEmail": "dstuckert23@gmail.com",
+        "documents": [],
+        "title": "",
+        "guests": [],
+        "professorNome": "Matheus Dadvidson",
+        "repeatType": "weekly_custom",
+        "lifecycleCascadeStatus": "reactivated",
+        "criadoPor": "admin",
+        "dateKey": "2026-09-22",
+        "updatedAt": "2026-07-13T19:12:28.046Z",
+        "repeatDays": [
+          {
+            "weekday": "seg",
+            "endTime": "14:30",
+            "startTime": "14:00"
+          },
+          {
+            "weekday": "ter",
+            "endTime": "14:30",
+            "startTime": "14:00"
+          },
+          {
+            "endTime": "14:30",
+            "startTime": "14:00",
+            "weekday": "qua"
+          }
+        ],
+        "alunoId": "43YgxBac7gPzIViJyrrWj3o9CjU2",
+        "startMin": 840,
+        "recorrente": true,
+        "lifecycleCascadeAt": "2026-07-13T19:12:27.727Z",
+        "horaFim": "14:30",
+        "criadoEm": "2026-07-13T17:32:22.911Z",
+        "alunoTelefone": null,
+        "grupoRecorrenciaId": "class_mrji25nt_qt89l",
+        "status": "agendada",
+        "alunoEmail": "guilhermedavi@hotmail.com",
+        "data": "2026-09-22T17:00:00.000Z",
+        "diaSemana": "ter",
+        "endMin": 870,
+        "id": "aula_1783963942911_c293bd7458e1",
+        "firestoreDocId": "aula_1783963942911_c293bd7458e1"
+      },
+      {
+        "alunoNome": "Aluno Teste 01",
+        "grupoRecorrenciaId": "class_mrji25nt_qt89l",
+        "professorEmail": "dstuckert23@gmail.com",
+        "dateKey": "2026-09-29",
+        "criadoPor": "admin",
+        "documents": [],
+        "updatedAt": "2026-07-13T19:12:28.046Z",
+        "alunoTelefone": null,
+        "data": "2026-09-29T17:00:00.000Z",
+        "endMin": 870,
+        "alunoEmail": "guilhermedavi@hotmail.com",
+        "title": "",
+        "diaSemana": "ter",
+        "description": "",
+        "professorId": "7WywlPFM4uSls0ui95kU0GIYsUk2",
+        "horaFim": "14:30",
+        "guests": [],
+        "criadoEm": "2026-07-13T17:32:23.360Z",
+        "repeatType": "weekly_custom",
+        "repeatDays": [
+          {
+            "weekday": "seg",
+            "startTime": "14:00",
+            "endTime": "14:30"
+          },
+          {
+            "weekday": "ter",
+            "startTime": "14:00",
+            "endTime": "14:30"
+          },
+          {
+            "startTime": "14:00",
+            "endTime": "14:30",
+            "weekday": "qua"
+          }
+        ],
+        "lifecycleCascadeStatus": "reactivated",
+        "horaInicio": "14:00",
+        "professorNome": "Matheus Dadvidson",
+        "startMin": 840,
+        "alunoId": "43YgxBac7gPzIViJyrrWj3o9CjU2",
+        "status": "agendada",
+        "lifecycleCascadeAt": "2026-07-13T19:12:27.727Z",
+        "recorrente": true,
+        "id": "aula_1783963943360_8f9ef2550904",
+        "firestoreDocId": "aula_1783963943360_8f9ef2550904"
+      },
+      {
+        "professorId": "7WywlPFM4uSls0ui95kU0GIYsUk2",
+        "horaFim": "14:30",
+        "status": "agendada",
+        "professorEmail": "dstuckert23@gmail.com",
+        "diaSemana": "qua",
+        "alunoId": "43YgxBac7gPzIViJyrrWj3o9CjU2",
+        "professorNome": "Matheus Dadvidson",
+        "data": "2026-07-15T17:00:00.000Z",
+        "guests": [],
+        "grupoRecorrenciaId": "class_mrji25nt_qt89l",
+        "alunoTelefone": null,
+        "lifecycleCascadeStatus": "reactivated",
+        "lifecycleCascadeAt": "2026-07-13T19:12:27.727Z",
+        "documents": [],
+        "criadoPor": "admin",
+        "repeatDays": [
+          {
+            "startTime": "14:00",
+            "weekday": "seg",
+            "endTime": "14:30"
+          },
+          {
+            "endTime": "14:30",
+            "startTime": "14:00",
+            "weekday": "ter"
+          },
+          {
+            "endTime": "14:30",
+            "startTime": "14:00",
+            "weekday": "qua"
+          }
+        ],
+        "endMin": 870,
+        "startMin": 840,
+        "recorrente": true,
+        "description": "",
+        "alunoNome": "Aluno Teste 01",
+        "title": "",
+        "criadoEm": "2026-07-13T17:32:23.674Z",
+        "horaInicio": "14:00",
+        "updatedAt": "2026-07-13T19:12:28.046Z",
+        "repeatType": "weekly_custom",
+        "alunoEmail": "guilhermedavi@hotmail.com",
+        "dateKey": "2026-07-15",
+        "id": "aula_1783963943674_c969b0548140",
+        "firestoreDocId": "aula_1783963943674_c969b0548140"
+      },
+      {
+        "horaFim": "14:30",
+        "alunoTelefone": null,
+        "guests": [],
+        "horaInicio": "14:00",
+        "documents": [],
+        "alunoId": "43YgxBac7gPzIViJyrrWj3o9CjU2",
+        "status": "agendada",
+        "alunoNome": "Aluno Teste 01",
+        "diaSemana": "qua",
+        "endMin": 870,
+        "criadoEm": "2026-07-13T17:32:23.845Z",
+        "title": "",
+        "grupoRecorrenciaId": "class_mrji25nt_qt89l",
+        "repeatDays": [
+          {
+            "startTime": "14:00",
+            "endTime": "14:30",
+            "weekday": "seg"
+          },
+          {
+            "weekday": "ter",
+            "endTime": "14:30",
+            "startTime": "14:00"
+          },
+          {
+            "endTime": "14:30",
+            "startTime": "14:00",
+            "weekday": "qua"
+          }
+        ],
+        "criadoPor": "admin",
+        "repeatType": "weekly_custom",
+        "description": "",
+        "alunoEmail": "guilhermedavi@hotmail.com",
+        "professorEmail": "dstuckert23@gmail.com",
+        "updatedAt": "2026-07-13T19:12:28.046Z",
+        "startMin": 840,
+        "data": "2026-07-22T17:00:00.000Z",
+        "recorrente": true,
+        "dateKey": "2026-07-22",
+        "lifecycleCascadeAt": "2026-07-13T19:12:27.727Z",
+        "professorNome": "Matheus Dadvidson",
+        "professorId": "7WywlPFM4uSls0ui95kU0GIYsUk2",
+        "lifecycleCascadeStatus": "reactivated",
+        "id": "aula_1783963943845_3a24d323f417",
+        "firestoreDocId": "aula_1783963943845_3a24d323f417"
+      },
+      {
+        "repeatType": "weekly_custom",
+        "status": "agendada",
+        "repeatDays": [
+          {
+            "weekday": "seg",
+            "startTime": "14:00",
+            "endTime": "14:30"
+          },
+          {
+            "weekday": "ter",
+            "endTime": "14:30",
+            "startTime": "14:00"
+          },
+          {
+            "startTime": "14:00",
+            "endTime": "14:30",
+            "weekday": "qua"
+          }
+        ],
+        "horaInicio": "14:00",
+        "horaFim": "14:30",
+        "professorNome": "Matheus Dadvidson",
+        "criadoEm": "2026-07-13T17:32:24.170Z",
+        "professorEmail": "dstuckert23@gmail.com",
+        "alunoTelefone": null,
+        "lifecycleCascadeStatus": "reactivated",
+        "lifecycleCascadeAt": "2026-07-13T19:12:27.727Z",
+        "title": "",
+        "grupoRecorrenciaId": "class_mrji25nt_qt89l",
+        "professorId": "7WywlPFM4uSls0ui95kU0GIYsUk2",
+        "startMin": 840,
+        "data": "2026-07-29T17:00:00.000Z",
+        "alunoNome": "Aluno Teste 01",
+        "dateKey": "2026-07-29",
+        "recorrente": true,
+        "endMin": 870,
+        "guests": [],
+        "updatedAt": "2026-07-13T19:12:28.046Z",
+        "criadoPor": "admin",
+        "diaSemana": "qua",
+        "description": "",
+        "documents": [],
+        "alunoId": "43YgxBac7gPzIViJyrrWj3o9CjU2",
+        "alunoEmail": "guilhermedavi@hotmail.com",
+        "id": "aula_1783963944170_5c9158c95001",
+        "firestoreDocId": "aula_1783963944170_5c9158c95001"
+      },
+      {
+        "lifecycleCascadeStatus": "reactivated",
+        "alunoId": "43YgxBac7gPzIViJyrrWj3o9CjU2",
+        "alunoTelefone": null,
+        "data": "2026-08-05T17:00:00.000Z",
+        "alunoEmail": "guilhermedavi@hotmail.com",
+        "title": "",
+        "diaSemana": "qua",
+        "repeatType": "weekly_custom",
+        "repeatDays": [
+          {
+            "weekday": "seg",
+            "endTime": "14:30",
+            "startTime": "14:00"
+          },
+          {
+            "startTime": "14:00",
+            "endTime": "14:30",
+            "weekday": "ter"
+          },
+          {
+            "startTime": "14:00",
+            "weekday": "qua",
+            "endTime": "14:30"
+          }
+        ],
+        "professorEmail": "dstuckert23@gmail.com",
+        "horaFim": "14:30",
+        "documents": [],
+        "endMin": 870,
+        "startMin": 840,
+        "recorrente": true,
+        "updatedAt": "2026-07-13T19:12:28.046Z",
+        "alunoNome": "Aluno Teste 01",
+        "grupoRecorrenciaId": "class_mrji25nt_qt89l",
+        "status": "agendada",
+        "description": "",
+        "professorNome": "Matheus Dadvidson",
+        "professorId": "7WywlPFM4uSls0ui95kU0GIYsUk2",
+        "dateKey": "2026-08-05",
+        "criadoEm": "2026-07-13T17:32:24.502Z",
+        "lifecycleCascadeAt": "2026-07-13T19:12:27.727Z",
+        "guests": [],
+        "horaInicio": "14:00",
+        "criadoPor": "admin",
+        "id": "aula_1783963944501_a3069c404bdd",
+        "firestoreDocId": "aula_1783963944501_a3069c404bdd"
+      },
+      {
+        "professorNome": "Matheus Dadvidson",
+        "recorrente": true,
+        "repeatDays": [
+          {
+            "weekday": "seg",
+            "endTime": "14:30",
+            "startTime": "14:00"
+          },
+          {
+            "weekday": "ter",
+            "startTime": "14:00",
+            "endTime": "14:30"
+          },
+          {
+            "startTime": "14:00",
+            "endTime": "14:30",
+            "weekday": "qua"
+          }
+        ],
+        "alunoEmail": "guilhermedavi@hotmail.com",
+        "criadoEm": "2026-07-13T17:32:24.680Z",
+        "alunoTelefone": null,
+        "grupoRecorrenciaId": "class_mrji25nt_qt89l",
+        "alunoId": "43YgxBac7gPzIViJyrrWj3o9CjU2",
+        "description": "",
+        "startMin": 840,
+        "title": "",
+        "status": "agendada",
+        "criadoPor": "admin",
+        "alunoNome": "Aluno Teste 01",
+        "professorEmail": "dstuckert23@gmail.com",
+        "guests": [],
+        "repeatType": "weekly_custom",
+        "dateKey": "2026-08-12",
+        "horaInicio": "14:00",
+        "updatedAt": "2026-07-13T19:12:28.046Z",
+        "professorId": "7WywlPFM4uSls0ui95kU0GIYsUk2",
+        "lifecycleCascadeStatus": "reactivated",
+        "documents": [],
+        "horaFim": "14:30",
+        "endMin": 870,
+        "data": "2026-08-12T17:00:00.000Z",
+        "lifecycleCascadeAt": "2026-07-13T19:12:27.727Z",
+        "diaSemana": "qua",
+        "id": "aula_1783963944680_369bad2b0105",
+        "firestoreDocId": "aula_1783963944680_369bad2b0105"
+      },
+      {
+        "status": "agendada",
+        "title": "",
+        "documents": [],
+        "criadoEm": "2026-07-13T17:32:24.852Z",
+        "recorrente": true,
+        "lifecycleCascadeStatus": "reactivated",
+        "description": "",
+        "startMin": 840,
+        "alunoTelefone": null,
+        "criadoPor": "admin",
+        "horaInicio": "14:00",
+        "alunoId": "43YgxBac7gPzIViJyrrWj3o9CjU2",
+        "repeatDays": [
+          {
+            "weekday": "seg",
+            "endTime": "14:30",
+            "startTime": "14:00"
+          },
+          {
+            "endTime": "14:30",
+            "startTime": "14:00",
+            "weekday": "ter"
+          },
+          {
+            "endTime": "14:30",
+            "startTime": "14:00",
+            "weekday": "qua"
+          }
+        ],
+        "repeatType": "weekly_custom",
+        "diaSemana": "qua",
+        "guests": [],
+        "professorId": "7WywlPFM4uSls0ui95kU0GIYsUk2",
+        "updatedAt": "2026-07-13T19:12:28.046Z",
+        "professorEmail": "dstuckert23@gmail.com",
+        "horaFim": "14:30",
+        "endMin": 870,
+        "dateKey": "2026-08-19",
+        "alunoEmail": "guilhermedavi@hotmail.com",
+        "professorNome": "Matheus Dadvidson",
+        "alunoNome": "Aluno Teste 01",
+        "data": "2026-08-19T17:00:00.000Z",
+        "lifecycleCascadeAt": "2026-07-13T19:12:27.727Z",
+        "grupoRecorrenciaId": "class_mrji25nt_qt89l",
+        "id": "aula_1783963944851_f0dc07412f9e",
+        "firestoreDocId": "aula_1783963944851_f0dc07412f9e"
+      },
+      {
+        "professorEmail": "dstuckert23@gmail.com",
+        "endMin": 870,
+        "alunoId": "43YgxBac7gPzIViJyrrWj3o9CjU2",
+        "description": "",
+        "lifecycleCascadeAt": "2026-07-13T19:12:27.727Z",
+        "updatedAt": "2026-07-13T19:12:28.046Z",
+        "alunoTelefone": null,
+        "repeatType": "weekly_custom",
+        "alunoNome": "Aluno Teste 01",
+        "startMin": 840,
+        "criadoEm": "2026-07-13T17:32:25.035Z",
+        "alunoEmail": "guilhermedavi@hotmail.com",
+        "criadoPor": "admin",
+        "guests": [],
+        "horaFim": "14:30",
+        "dateKey": "2026-08-26",
+        "title": "",
+        "diaSemana": "qua",
+        "horaInicio": "14:00",
+        "documents": [],
+        "status": "agendada",
+        "repeatDays": [
+          {
+            "weekday": "seg",
+            "endTime": "14:30",
+            "startTime": "14:00"
+          },
+          {
+            "weekday": "ter",
+            "endTime": "14:30",
+            "startTime": "14:00"
+          },
+          {
+            "weekday": "qua",
+            "endTime": "14:30",
+            "startTime": "14:00"
+          }
+        ],
+        "professorId": "7WywlPFM4uSls0ui95kU0GIYsUk2",
+        "grupoRecorrenciaId": "class_mrji25nt_qt89l",
+        "recorrente": true,
+        "data": "2026-08-26T17:00:00.000Z",
+        "professorNome": "Matheus Dadvidson",
+        "lifecycleCascadeStatus": "reactivated",
+        "id": "aula_1783963945035_031ba189e1d3",
+        "firestoreDocId": "aula_1783963945035_031ba189e1d3"
+      },
+      {
+        "guests": [],
+        "dateKey": "2026-09-02",
+        "repeatType": "weekly_custom",
+        "recorrente": true,
+        "diaSemana": "qua",
+        "criadoEm": "2026-07-13T17:32:25.216Z",
+        "professorNome": "Matheus Dadvidson",
+        "alunoEmail": "guilhermedavi@hotmail.com",
+        "horaInicio": "14:00",
+        "lifecycleCascadeStatus": "reactivated",
+        "professorId": "7WywlPFM4uSls0ui95kU0GIYsUk2",
+        "updatedAt": "2026-07-13T19:12:28.046Z",
+        "lifecycleCascadeAt": "2026-07-13T19:12:27.727Z",
+        "alunoId": "43YgxBac7gPzIViJyrrWj3o9CjU2",
+        "endMin": 870,
+        "professorEmail": "dstuckert23@gmail.com",
+        "status": "agendada",
+        "documents": [],
+        "startMin": 840,
+        "horaFim": "14:30",
+        "grupoRecorrenciaId": "class_mrji25nt_qt89l",
+        "repeatDays": [
+          {
+            "weekday": "seg",
+            "endTime": "14:30",
+            "startTime": "14:00"
+          },
+          {
+            "weekday": "ter",
+            "endTime": "14:30",
+            "startTime": "14:00"
+          },
+          {
+            "startTime": "14:00",
+            "endTime": "14:30",
+            "weekday": "qua"
+          }
+        ],
+        "data": "2026-09-02T17:00:00.000Z",
+        "criadoPor": "admin",
+        "title": "",
+        "alunoTelefone": null,
+        "description": "",
+        "alunoNome": "Aluno Teste 01",
+        "id": "aula_1783963945216_4ea74153aa49",
+        "firestoreDocId": "aula_1783963945216_4ea74153aa49"
+      },
+      {
+        "updatedAt": "2026-07-13T19:12:28.046Z",
+        "professorId": "7WywlPFM4uSls0ui95kU0GIYsUk2",
+        "data": "2026-09-09T17:00:00.000Z",
+        "alunoTelefone": null,
+        "status": "agendada",
+        "guests": [],
+        "alunoEmail": "guilhermedavi@hotmail.com",
+        "title": "",
+        "horaFim": "14:30",
+        "alunoNome": "Aluno Teste 01",
+        "lifecycleCascadeStatus": "reactivated",
+        "lifecycleCascadeAt": "2026-07-13T19:12:27.727Z",
+        "documents": [],
+        "recorrente": true,
+        "criadoPor": "admin",
+        "repeatDays": [
+          {
+            "weekday": "seg",
+            "endTime": "14:30",
+            "startTime": "14:00"
+          },
+          {
+            "endTime": "14:30",
+            "weekday": "ter",
+            "startTime": "14:00"
+          },
+          {
+            "weekday": "qua",
+            "endTime": "14:30",
+            "startTime": "14:00"
+          }
+        ],
+        "diaSemana": "qua",
+        "dateKey": "2026-09-09",
+        "horaInicio": "14:00",
+        "repeatType": "weekly_custom",
+        "startMin": 840,
+        "professorEmail": "dstuckert23@gmail.com",
+        "professorNome": "Matheus Dadvidson",
+        "criadoEm": "2026-07-13T17:32:25.397Z",
+        "grupoRecorrenciaId": "class_mrji25nt_qt89l",
+        "alunoId": "43YgxBac7gPzIViJyrrWj3o9CjU2",
+        "description": "",
+        "endMin": 870,
+        "id": "aula_1783963945397_2496f6000beb",
+        "firestoreDocId": "aula_1783963945397_2496f6000beb"
+      },
+      {
+        "lifecycleCascadeAt": "2026-07-13T19:12:27.727Z",
+        "repeatDays": [
+          {
+            "endTime": "14:30",
+            "startTime": "14:00",
+            "weekday": "seg"
+          },
+          {
+            "startTime": "14:00",
+            "endTime": "14:30",
+            "weekday": "ter"
+          },
+          {
+            "weekday": "qua",
+            "startTime": "14:00",
+            "endTime": "14:30"
+          }
+        ],
+        "endMin": 870,
+        "horaInicio": "14:00",
+        "documents": [],
+        "updatedAt": "2026-07-13T19:12:28.046Z",
+        "professorNome": "Matheus Dadvidson",
+        "recorrente": true,
+        "data": "2026-09-16T17:00:00.000Z",
+        "lifecycleCascadeStatus": "reactivated",
+        "criadoPor": "admin",
+        "repeatType": "weekly_custom",
+        "grupoRecorrenciaId": "class_mrji25nt_qt89l",
+        "guests": [],
+        "horaFim": "14:30",
+        "alunoEmail": "guilhermedavi@hotmail.com",
+        "alunoId": "43YgxBac7gPzIViJyrrWj3o9CjU2",
+        "description": "",
+        "title": "",
+        "professorId": "7WywlPFM4uSls0ui95kU0GIYsUk2",
+        "startMin": 840,
+        "criadoEm": "2026-07-13T17:32:25.575Z",
+        "professorEmail": "dstuckert23@gmail.com",
+        "alunoTelefone": null,
+        "diaSemana": "qua",
+        "status": "agendada",
+        "dateKey": "2026-09-16",
+        "alunoNome": "Aluno Teste 01",
+        "id": "aula_1783963945575_7ca6a666c82d",
+        "firestoreDocId": "aula_1783963945575_7ca6a666c82d"
+      },
+      {
+        "documents": [],
+        "dateKey": "2026-09-23",
+        "guests": [],
+        "lifecycleCascadeStatus": "reactivated",
+        "professorEmail": "dstuckert23@gmail.com",
+        "data": "2026-09-23T17:00:00.000Z",
+        "diaSemana": "qua",
+        "lifecycleCascadeAt": "2026-07-13T19:12:27.727Z",
+        "repeatType": "weekly_custom",
+        "description": "",
+        "alunoId": "43YgxBac7gPzIViJyrrWj3o9CjU2",
+        "alunoEmail": "guilhermedavi@hotmail.com",
+        "startMin": 840,
+        "criadoEm": "2026-07-13T17:32:25.756Z",
+        "criadoPor": "admin",
+        "grupoRecorrenciaId": "class_mrji25nt_qt89l",
+        "endMin": 870,
+        "professorId": "7WywlPFM4uSls0ui95kU0GIYsUk2",
+        "alunoNome": "Aluno Teste 01",
+        "horaInicio": "14:00",
+        "horaFim": "14:30",
+        "professorNome": "Matheus Dadvidson",
+        "repeatDays": [
+          {
+            "weekday": "seg",
+            "endTime": "14:30",
+            "startTime": "14:00"
+          },
+          {
+            "weekday": "ter",
+            "endTime": "14:30",
+            "startTime": "14:00"
+          },
+          {
+            "endTime": "14:30",
+            "startTime": "14:00",
+            "weekday": "qua"
+          }
+        ],
+        "recorrente": true,
+        "alunoTelefone": null,
+        "title": "",
+        "status": "agendada",
+        "updatedAt": "2026-07-13T19:12:28.046Z",
+        "id": "aula_1783963945756_5aa46b37dffd",
+        "firestoreDocId": "aula_1783963945756_5aa46b37dffd"
+      },
+      {
+        "criadoPor": "admin",
+        "professorId": "7WywlPFM4uSls0ui95kU0GIYsUk2",
+        "repeatType": "weekly_custom",
+        "diaSemana": "qua",
+        "lifecycleCascadeStatus": "reactivated",
+        "data": "2026-09-30T17:00:00.000Z",
+        "grupoRecorrenciaId": "class_mrji25nt_qt89l",
+        "dateKey": "2026-09-30",
+        "horaInicio": "14:00",
+        "alunoTelefone": null,
+        "title": "",
+        "professorEmail": "dstuckert23@gmail.com",
+        "status": "agendada",
+        "alunoId": "43YgxBac7gPzIViJyrrWj3o9CjU2",
+        "documents": [],
+        "updatedAt": "2026-07-13T19:12:28.046Z",
+        "guests": [],
+        "description": "",
+        "alunoEmail": "guilhermedavi@hotmail.com",
+        "endMin": 870,
+        "recorrente": true,
+        "repeatDays": [
+          {
+            "weekday": "seg",
+            "endTime": "14:30",
+            "startTime": "14:00"
+          },
+          {
+            "startTime": "14:00",
+            "weekday": "ter",
+            "endTime": "14:30"
+          },
+          {
+            "endTime": "14:30",
+            "weekday": "qua",
+            "startTime": "14:00"
+          }
+        ],
+        "criadoEm": "2026-07-13T17:32:25.932Z",
+        "lifecycleCascadeAt": "2026-07-13T19:12:27.727Z",
+        "startMin": 840,
+        "horaFim": "14:30",
+        "alunoNome": "Aluno Teste 01",
+        "professorNome": "Matheus Dadvidson",
+        "id": "aula_1783963945932_48e445655260",
+        "firestoreDocId": "aula_1783963945932_48e445655260"
+      }
+    ],
+    "lessonLogs": [
+      {
+        "novaDataRemarcacao": "",
+        "professorId": "7WywlPFM4uSls0ui95kU0GIYsUk2",
+        "conteudoTrabalhado": "",
+        "data_aviso_remarcacao": "",
+        "needs_admin_review": true,
+        "situacaoReposicao": "incompatibilidade_horario",
+        "atualizadoEm": "2026-07-14T02:09:35.113Z",
+        "proximaAula": "",
+        "observacao": "",
+        "horarioInicioRemarcacao": "",
+        "dateKey": "2026-07-13",
+        "alunoId": "43YgxBac7gPzIViJyrrWj3o9CjU2",
+        "eventId": "aula_1783963936287_a39218d59efe",
+        "humorAluno": "",
+        "motivoRemarcacao": "...",
+        "responsavelRemarcacao": "professor",
+        "evolucaoNota": 0,
+        "engajamentoNota": 0,
+        "elegibilidade": {
+          "elegivel": true,
+          "limiteRestante": null,
+          "motivo": "Reposição garantida — problema causado pela professor",
+          "dataLimiteReposicao": "2026-07-28"
+        },
+        "situacao_reposicao": "incompatibilidade_horario",
+        "responsavel_remarcacao": "professor",
+        "needsAdminReview": true,
+        "riscoEvasao": "baixo",
+        "dataAvisoRemarcacao": "",
+        "observacoesInternas": "",
+        "motivoFalta": "",
+        "criadoEm": "2026-07-14T02:09:35.113Z",
+        "horarioFimRemarcacao": "",
+        "avisosCoordenacao": [],
+        "precisaIntervencao": false,
+        "statusAula": "remarcada",
+        "id": "log_aula_1783963936287_a39218d59efe",
+        "firestoreDocId": "log_aula_1783963936287_a39218d59efe"
+      }
+    ],
+    "classes": [
+      {
+        "title": "Aluno Aluno Teste + Prof. Matheus",
+        "linkedEventIds": [
+          "aula_1783963936287_a39218d59efe",
+          "aula_1783963936575_d17e440ce5ab",
+          "aula_1783963936751_9f6817fe33b3",
+          "aula_1783963936929_4b92e9a57072",
+          "aula_1783963937361_5f0bb78b6d0d",
+          "aula_1783963937815_a44cc50577ca",
+          "aula_1783963938038_a5e20f6a34ca",
+          "aula_1783963938370_bad369b1bfe3",
+          "aula_1783963938809_c5d2a1a5fe7e",
+          "aula_1783963939132_eeef3199b403",
+          "aula_1783963939317_463c8cb5da20",
+          "aula_1783963939504_5866ea0b7d0e",
+          "aula_1783963939675_528f454cf4e8",
+          "aula_1783963939997_cec675093390",
+          "aula_1783963940330_78d02be21e91",
+          "aula_1783963940513_684ca02c37f2",
+          "aula_1783963940827_0521a2866d5e",
+          "aula_1783963941128_acabfe107519",
+          "aula_1783963941466_19fc1346548c",
+          "aula_1783963941915_c9bd825663e5",
+          "aula_1783963942394_3a2ebcbf4893",
+          "aula_1783963942577_c29af9174e32",
+          "aula_1783963942911_c293bd7458e1",
+          "aula_1783963943360_8f9ef2550904",
+          "aula_1783963943674_c969b0548140",
+          "aula_1783963943845_3a24d323f417",
+          "aula_1783963944170_5c9158c95001",
+          "aula_1783963944501_a3069c404bdd",
+          "aula_1783963944680_369bad2b0105",
+          "aula_1783963944851_f0dc07412f9e",
+          "aula_1783963945035_031ba189e1d3",
+          "aula_1783963945216_4ea74153aa49",
+          "aula_1783963945397_2496f6000beb",
+          "aula_1783963945575_7ca6a666c82d",
+          "aula_1783963945756_5aa46b37dffd",
+          "aula_1783963945932_48e445655260"
+        ],
+        "teacherName": "Matheus Dadvidson",
+        "lifecycleCascadeStatus": "reactivated",
+        "studentNames": [
+          "Aluno Teste 01"
+        ],
+        "startMin": 840,
+        "status": "active",
+        "roomSlug": "mrji25ntqt89l",
+        "type": "individual",
+        "lifecycleCascadeAt": "2026-07-13T19:12:27.727Z",
+        "teacherId": "7WywlPFM4uSls0ui95kU0GIYsUk2",
+        "scheduleDays": [
+          {
+            "enabled": false,
+            "endTime": "",
+            "startTime": "",
+            "weekday": 0
+          },
+          {
+            "weekday": 1,
+            "enabled": true,
+            "endTime": "14:30",
+            "startTime": "14:00"
+          },
+          {
+            "enabled": true,
+            "startTime": "14:00",
+            "endTime": "14:30",
+            "weekday": 2
+          },
+          {
+            "weekday": 3,
+            "enabled": true,
+            "endTime": "14:30",
+            "startTime": "14:00"
+          },
+          {
+            "enabled": false,
+            "endTime": "",
+            "startTime": "",
+            "weekday": 4
+          },
+          {
+            "weekday": 5,
+            "enabled": false,
+            "startTime": "",
+            "endTime": ""
+          },
+          {
+            "enabled": false,
+            "endTime": "",
+            "startTime": "",
+            "weekday": 6
+          }
+        ],
+        "notes": "",
+        "startDate": "2026-07-13",
+        "createdBy": "8Vl4v3nhCPdSHtfkZxZfDkgrf7T2",
+        "daysOfWeek": [
+          1,
+          2,
+          3
+        ],
+        "updatedBy": "8Vl4v3nhCPdSHtfkZxZfDkgrf7T2",
+        "source": "student_line",
+        "linkedEventGroupId": "class_mrji25nt_qt89l",
+        "updatedAt": "2026-07-13T19:12:28.046Z",
+        "groupName": "",
+        "studentIds": [
+          "43YgxBac7gPzIViJyrrWj3o9CjU2"
+        ],
+        "endMin": 870,
+        "id": "class_mrji25nt_qt89l",
+        "endDate": "",
+        "plan": "gold",
+        "createdAt": "2026-07-13T17:32:27.490Z",
+        "firestoreDocId": "class_mrji25nt_qt89l"
+      }
+    ],
+    "activities": [
+      {
+        "observacoes": "",
+        "responsavelId": "uzxsw8oMZafKa6kSCKRdl4x00Rv1",
+        "descricao": "",
+        "status": "Pendente",
+        "criadoPor": "8Vl4v3nhCPdSHtfkZxZfDkgrf7T2",
+        "titulo": "Enviar contrato João Silva",
+        "prioridade": "Média",
+        "comentarios": [],
+        "tipo": "",
+        "atualizadoEm": "2026-07-13T19:07:28.846Z",
+        "prazo": "2026-07-16",
+        "criadoEm": "2026-07-13T19:07:08.419Z",
+        "id": "GGnWIyR1JQkTAAob9Rxp",
+        "firestoreDocId": "GGnWIyR1JQkTAAob9Rxp"
+      },
+      {
+        "comentarios": [],
+        "descricao": "",
+        "atualizadoEm": "2026-07-13T17:28:33.402Z",
+        "prioridade": "Média",
+        "responsavelId": "uzxsw8oMZafKa6kSCKRdl4x00Rv1",
+        "titulo": "Ligar para o aluno Felipe Silva",
+        "status": "Pendente",
+        "prazo": "2026-07-14",
+        "criadoPor": "8Vl4v3nhCPdSHtfkZxZfDkgrf7T2",
+        "tipo": "",
+        "observacoes": "",
+        "criadoEm": "2026-07-13T17:28:11.183Z",
+        "id": "xVYsPWYCaJbdfuIyTyYu",
+        "firestoreDocId": "xVYsPWYCaJbdfuIyTyYu"
+      }
+    ]
+  },
+  "auth": {
+    "usersToDelete": [
+      {
+        "localId": "43YgxBac7gPzIViJyrrWj3o9CjU2",
+        "email": "guilhermedavi@hotmail.com",
+        "disabled": false,
+        "createdAt": "1783917970680",
+        "lastLoginAt": "1783917970680"
+      },
+      {
+        "localId": "L8KiGwohlzRRpTOFOEtNdoiD2v93",
+        "email": "anaflavia.oliveira2497@gmail.com",
+        "disabled": false,
+        "createdAt": "1783972961455",
+        "lastLoginAt": "1783972961455"
+      }
+    ]
+  },
+  "supabase": {
+    "n8n_avaliacoes_aula_space": [],
+    "n8n_gravacoes_aula_space": [],
+    "n8n_registros_aula_space": [],
+    "n8n_ocorrencias_pedagogicas_space": [],
+    "n8n_satisfacao_alunos_space": [],
+    "n8n_flexge_evolucao_alunos_space": [],
+    "n8n_preferencias_alunos_pedagogico_space": [],
+    "n8n_relatorios_pedagogicos_space": [],
+    "n8n_logs_pedagogico_space": [],
+    "n8n_logs_cobranca_space": [],
+    "n8n_eventos_cobranca_space": [],
+    "n8n_pagamentos_asaas_space": [],
+    "n8n_cobrancas_financeiras_space": [],
+    "n8n_aulas_pedagogicas_space": [],
+    "n8n_onboarding_pedagogico_space": [],
+    "n8n_onboarding_alunos_space": [],
+    "n8n_alunos_financeiro_space": []
+  }
+}

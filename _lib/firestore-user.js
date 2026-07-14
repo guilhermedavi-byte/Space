@@ -1,4 +1,8 @@
 const { assertEnvironmentIsolation, getFirebaseServerConfig } = require("./runtime-env");
+const { getGoogleAccessToken } = require("./google-service-account");
+const { FIRESTORE_BASE, decodeFields, requestJson } = require("./firestore-rest");
+
+const DATASTORE_SCOPE = "https://www.googleapis.com/auth/datastore";
 
 const getFirestoreUserRuntime = () => {
   assertEnvironmentIsolation();
@@ -84,6 +88,46 @@ const fetchJsonWithHeaders = async (url, { headers } = {}) => {
   });
 };
 
+const fetchUserFieldsByUidAsAdmin = async (uid) => {
+  const safeUid = String(uid || "").trim();
+  if (!safeUid) return null;
+  const token = await getGoogleAccessToken({ scope: DATASTORE_SCOPE });
+  const accessToken = String(token?.accessToken || "");
+  if (!accessToken) return null;
+  const response = await requestJson(`${FIRESTORE_BASE}/users/${encodeURIComponent(safeUid)}`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!response.ok) {
+    if (response.status === 404) return null;
+    throw new Error("firestore_admin_fetch_failed");
+  }
+  return decodeFields(response.data);
+};
+
+const normalizeUserProfileFromFields = ({ uid, fields } = {}) => {
+  const safeUid = String(uid || "").trim();
+  const rawFields = fields && typeof fields === "object" ? fields : {};
+  const readString = (key) => {
+    const value = rawFields[key];
+    return typeof value === "string" ? value : "";
+  };
+  const name = String(readString("nome") || readString("nomeCompleto") || readString("displayName") || readString("name") || "").trim();
+  const email = String(readString("email") || "").trim().toLowerCase();
+  const role = normalizeRole(readString("tipo") || readString("role") || readString("type"));
+  const active = typeof rawFields.ativo === "boolean" ? rawFields.ativo : true;
+  if (!safeUid || !name || !email || !role) return null;
+  return {
+    user: {
+      id: safeUid,
+      role,
+      name,
+      email,
+    },
+    active,
+  };
+};
+
 const fetchUserProfileByUid = async ({ uid, idToken }) => {
   const safeUid = String(uid || "").trim();
   const token = String(idToken || "").trim();
@@ -97,26 +141,17 @@ const fetchUserProfileByUid = async ({ uid, idToken }) => {
 
   if (!ok) {
     if (status === 404) return null;
-    throw new Error("firestore_fetch_failed");
+    try {
+      const adminFields = await fetchUserFieldsByUidAsAdmin(safeUid);
+      return normalizeUserProfileFromFields({ uid: safeUid, fields: adminFields });
+    } catch (error) {
+      throw new Error("firestore_fetch_failed");
+    }
   }
 
   const fields = data && typeof data === "object" ? data.fields : null;
-  const name = readStringField(fields, "nome").trim();
-  const email = readStringField(fields, "email").trim().toLowerCase();
-  const role = normalizeRole(readStringField(fields, "tipo"));
-  const active = readBooleanField(fields, "ativo", true);
-
-  if (!name || !email || !role) return null;
-
-  return {
-    user: {
-      id: safeUid,
-      role,
-      name,
-      email,
-    },
-    active,
-  };
+  const decodedFields = decodeFields({ fields });
+  return normalizeUserProfileFromFields({ uid: safeUid, fields: decodedFields });
 };
 
 module.exports = {

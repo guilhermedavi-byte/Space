@@ -21997,3 +21997,92 @@ body.has-space-env-banner{padding-top:46px}
 .space-env-banner strong{font-size:12px}
 .space-env-banner span{font-size:11px;letter-spacing:.04em;text-transform:none;color:rgba(255,244,244,.86)}
 @media (max-width: 720px){body.has-space-env-banner{padding-top:58px}.space-env-banner{flex-direction:column;gap:4px;text-align:center;padding:10px 14px}}
+
+/* === Student Import + Forced Password === */
+.admin-ped-import-summary {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.035);
+  padding: 12px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.admin-ped-import-summary-title {
+  color: var(--text-main);
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.admin-ped-import-summary-list {
+  display: grid;
+  gap: 6px;
+  max-height: 180px;
+  overflow: auto;
+}
+
+.admin-ped-import-summary-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.admin-ped-import-summary-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-ped-import-summary-row em {
+  color: var(--accent);
+  font-style: normal;
+}
+
+.force-password-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(4, 9, 18, 0.78);
+  backdrop-filter: blur(8px);
+}
+
+.has-force-password-overlay {
+  overflow: hidden;
+}
+
+.force-password-card {
+  width: min(440px, 100%);
+  display: grid;
+  gap: 14px;
+  padding: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 24px;
+  background: linear-gradient(145deg, rgba(20, 35, 51, 0.98), rgba(10, 19, 31, 0.98));
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
+}
+
+.force-password-kicker {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.force-password-card h1 {
+  margin: 0;
+  color: var(--text-main);
+  font-size: 24px;
+  line-height: 1.1;
+}
+
+.force-password-card p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}

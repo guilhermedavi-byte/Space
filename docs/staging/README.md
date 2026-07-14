@@ -34,10 +34,9 @@ Garantir que staging:
 
 ### Firebase service account
 
-- `FIREBASE_SERVICE_ACCOUNT_JSON` ou
-- `GOOGLE_SERVICE_ACCOUNT_JSON` ou
-- `GOOGLE_CLIENT_EMAIL`
-- `GOOGLE_PRIVATE_KEY`
+- `GOOGLE_SERVICE_ACCOUNT_JSON_STAGING`
+
+Em Preview/Staging, o backend deve usar somente a service account de staging. A variável de produção `GOOGLE_SERVICE_ACCOUNT_JSON` continua exclusiva de Production e não deve ser configurada no ambiente Preview.
 
 ### Supabase
 
@@ -127,3 +126,15 @@ Existe um seed sintético em `scripts/staging-seed.js` com:
 ## Checklist manual
 
 Ver `docs/staging/manual-checklist.md`.
+
+## Fluxo definitivo de trabalho
+
+1. Criar uma branch de teste a partir de `main`.
+2. Fazer push da branch para o GitHub.
+3. Aguardar a Vercel gerar uma Preview URL com as variáveis de ambiente Preview.
+4. Abrir a Preview URL e confirmar o banner `AMBIENTE DE TESTE`.
+5. Rodar o seed sintético em dry-run contra staging.
+6. Executar o seed real somente após o dry-run confirmar `APP_ENV=staging`.
+7. Validar que os dados fictícios aparecem apenas no Firebase/Supabase de staging.
+8. Abrir PR/merge para `main` somente depois da validação.
+9. Publicar produção a partir de `main` com `vercel --prod` manual enquanto o gatilho automático não estiver confiável.
