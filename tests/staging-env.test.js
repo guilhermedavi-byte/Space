@@ -146,6 +146,36 @@ test("runtime-config renderiza banner mesmo quando isolamento falha", () => {
   assert.match(body.children[0].innerHTML, /staging_missing_firebase_project_id/);
 });
 
+test("runtime-config responde 200 no fallback para o script do banner executar", async () => {
+  const previous = { ...process.env };
+  process.env.APP_ENV = "staging";
+  process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID = "";
+  process.env.NEXT_PUBLIC_FIREBASE_API_KEY = "";
+  process.env.SUPABASE_URL = "";
+  process.env.ASAAS_BASE_URL = "";
+  process.env.SPACE_PRODUCTION_FIREBASE_PROJECT_ID = "plataforma-space";
+  process.env.SPACE_PRODUCTION_ASAAS_BASE_URL = "https://api.asaas.com/v3";
+  try {
+    let body = "";
+    const res = {
+      statusCode: 0,
+      headers: {},
+      setHeader(name, value) {
+        this.headers[name] = value;
+      },
+      end(value) {
+        body = String(value || "");
+      },
+    };
+    await runtimeConfigHandler({ method: "GET" }, res);
+    assert.equal(res.statusCode, 200);
+    assert.match(body, /AMBIENTE DE TESTE/);
+    assert.match(body, /staging_missing_firebase_project_id/);
+  } finally {
+    process.env = previous;
+  }
+});
+
 test("staging usa service account dedicada quando projectId público não existe", () => {
   const env = {
     ...makeBaseEnv(),

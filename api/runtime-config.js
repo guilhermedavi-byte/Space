@@ -44,7 +44,7 @@ module.exports = async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
     res.end(buildRuntimeScript(config));
   } catch (error) {
-    res.statusCode = 503;
+    res.statusCode = 200;
     res.setHeader("Content-Type", "application/javascript; charset=utf-8");
     res.setHeader("Cache-Control", "no-store");
     res.end(buildRuntimeScript(buildIsolationErrorConfig(error)));
