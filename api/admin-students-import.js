@@ -3,7 +3,7 @@ const { getFirebaseServerConfig } = require("../_lib/runtime-env");
 const { getGoogleAccessToken } = require("../_lib/google-service-account");
 const { resolveAdminRequestAuth } = require("./_lib/admin-request-auth");
 const { commitWritesAsAdmin, listCollectionAsAdmin } = require("./_lib/firestore-admin");
-const { FIRESTORE_BASE, PROJECT_ID, encodeFields, requestJson } = require("./_lib/firestore-rest");
+const { PROJECT_ID, encodeFields, requestJson } = require("./_lib/firestore-rest");
 const { syncStudentMirrorToSupabase } = require("./_lib/student-mirror-sync");
 
 const DEFAULT_PASSWORD = "Space123";
@@ -186,6 +186,21 @@ const createAuthUserWithPassword = async ({ email, password, displayName }) => {
   return { uid };
 };
 
+const buildStudentCommitDocumentName = (uid) => {
+  const safeUid = String(uid || "").trim();
+  if (!PROJECT_ID) {
+    const error = new Error("missing_firestore_project_id");
+    error.code = "missing_firestore_project_id";
+    throw error;
+  }
+  if (!safeUid) {
+    const error = new Error("missing_student_uid");
+    error.code = "missing_student_uid";
+    throw error;
+  }
+  return `projects/${PROJECT_ID}/databases/(default)/documents/users/${encodeURIComponent(safeUid)}`;
+};
+
 const deleteAuthUserBestEffort = async (uid) => {
   const localId = String(uid || "").trim();
   if (!localId) return;
@@ -208,7 +223,7 @@ const createStudentFirestoreDoc = async ({ uid, name, email, adminId }) => {
   const doc = buildDefaultStudentDocument({ uid, name, email, adminId });
   const write = {
     update: {
-      name: `${FIRESTORE_BASE}/users/${encodeURIComponent(uid)}`,
+      name: buildStudentCommitDocumentName(uid),
       fields: encodeFields(doc).fields,
     },
   };
@@ -216,14 +231,35 @@ const createStudentFirestoreDoc = async ({ uid, name, email, adminId }) => {
   if (!response.ok) {
     const error = new Error("firestore_create_student_failed");
     error.status = response.status;
+    error.code = "firestore_create_student_failed";
     error.details = response.data || response.text || null;
+    console.warn("[admin-students-import] Firestore create failed", {
+      uid,
+      status: response.status,
+      error: response.data?.error || response.text || null,
+    });
     throw error;
   }
   return doc;
 };
 
+const extractErrorDetail = (error) => {
+  const detail = error?.details;
+  if (detail && typeof detail === "object") {
+    const nested = detail.error && typeof detail.error === "object" ? detail.error : detail;
+    const message = String(nested.message || "").trim();
+    const status = String(nested.status || "").trim();
+    const code = nested.code ? String(nested.code).trim() : "";
+    if (message) return [status || code, message].filter(Boolean).join(": ");
+  }
+  if (typeof detail === "string" && detail.trim()) return detail.trim();
+  return "";
+};
+
 const errorReason = (error) => {
   const code = String(error?.code || error?.message || "").trim();
+  const detail = extractErrorDetail(error);
+  if (code === "firestore_create_student_failed" && detail) return `${code}: ${detail}`;
   if (/EMAIL_EXISTS|email.*exists|already/i.test(code)) return "email_already_exists";
   if (/INVALID_EMAIL/i.test(code)) return "invalid_email";
   if (/WEAK_PASSWORD/i.test(code)) return "weak_password";
@@ -330,5 +366,6 @@ module.exports = async (req, res) => {
 module.exports._private = {
   parseStudentImportText,
   buildDefaultStudentDocument,
+  buildStudentCommitDocumentName,
   isValidEmail,
 };

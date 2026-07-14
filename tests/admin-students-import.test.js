@@ -41,3 +41,9 @@ test("documento padrão marca troca obrigatória e ownership Firestore", () => {
   assert.equal(row.defaultPasswordIssued, true);
   assert.equal(row.source, "admin_student_import");
 });
+
+test("path de criação do aluno usa formato aceito pelo Firestore commit", () => {
+  const path = _private.buildStudentCommitDocumentName("uid 123");
+  assert.equal(path, "projects/plataforma-space/databases/(default)/documents/users/uid%20123");
+  assert.equal(path.startsWith("https://"), false);
+});
