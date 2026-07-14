@@ -17111,6 +17111,22 @@ const updateAdminStudentCachedRow = (alunoId, patch = {}) => {
   return updated;
 };
 
+const refreshAdminStudentCanonicalViews = ({ refreshDerived = false } = {}) => {
+  try {
+    if (typeof renderAdminPedagogicoStudentsPanel === "function") renderAdminPedagogicoStudentsPanel();
+    if (typeof renderAdminPedagogicoLinksPanel === "function") renderAdminPedagogicoLinksPanel();
+    if (typeof renderAdminStudentsList === "function") renderAdminStudentsList();
+    if (typeof renderAdminPedagogicoRetentionPanel === "function") renderAdminPedagogicoRetentionPanel();
+    if (typeof renderAdminPedagogicoReposicoesPanel === "function") renderAdminPedagogicoReposicoesPanel();
+    if (refreshDerived) {
+      if (typeof refreshAdminPedagogicoRetentionState === "function") refreshAdminPedagogicoRetentionState({ force: true }).catch(() => {});
+      if (typeof refreshAdminPedagogicoReposicoesState === "function") refreshAdminPedagogicoReposicoesState({ force: true }).catch(() => {});
+    }
+  } catch (error) {
+    console.warn("[admin] student canonical views refresh failed", error);
+  }
+};
+
 const mergeAdminStudentWithCachedProfile = (existingStudent, incomingStudent) => {
   const prev = existingStudent && typeof existingStudent === "object" ? existingStudent : null;
   const next = incomingStudent && typeof incomingStudent === "object" ? incomingStudent : null;
@@ -17456,6 +17472,7 @@ const saveAdminStudentInlineField = async ({ field, sheetEl } = {}) => {
     await saveAdminStudentInlinePatch({ alunoId, patch: resolved.patch });
     setAdminStudentInlineDisplay(sheetEl, field, resolved.displayValue);
     setAdminStudentInlineStatus(sheetEl, field, "Salvo ✓", "success");
+    refreshAdminStudentCanonicalViews({ refreshDerived: field === "nome" || field === "plano" });
     if (hist.inlineSaveTimer) window.clearTimeout(hist.inlineSaveTimer);
     hist.inlineSaveTimer = window.setTimeout(() => {
       if (hist.inlineSavingField !== field) return;
@@ -29071,9 +29088,7 @@ const findAdminStudentRecurringEventId = (alunoId, groupId) => {
 
 const rerenderAdminStudentLifecycleViews = () => {
   if (adminStudentsState.history?.isOpen) renderAdminStudentSheet();
-  if (typeof renderAdminPedagogicoStudentsPanel === "function") renderAdminPedagogicoStudentsPanel();
-  if (typeof refreshAdminPedagogicoRetentionState === "function") refreshAdminPedagogicoRetentionState({ force: true }).catch(() => {});
-  if (typeof renderAdminStudentsList === "function") renderAdminStudentsList();
+  refreshAdminStudentCanonicalViews({ refreshDerived: true });
 };
 
 const requestAdminStudentMirrorSync = ({ firestoreDocId, context = "student_mirror_sync" } = {}) => {
