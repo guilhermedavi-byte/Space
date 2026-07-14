@@ -17279,7 +17279,12 @@ const saveAdminStudentInlinePatch = async ({ alunoId, patch = {} } = {}) => {
   );
   const data = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new Error(data?.error || "admin_student_inline_patch_failed");
+    const detail = String(data?.errorDetail || data?.message || data?.error || "admin_student_inline_patch_failed").trim();
+    const error = new Error(detail);
+    error.code = data?.code || data?.error || "";
+    error.status = response.status;
+    error.detail = data;
+    throw error;
   }
   updateAdminStudentCachedRow(id, cleanPatch);
   return true;
@@ -17447,7 +17452,7 @@ const saveAdminStudentInlineField = async ({ field, sheetEl } = {}) => {
     }, 2000);
   } catch (error) {
     console.error("[admin] student inline save failed:", error);
-    const message = "Não foi possível salvar agora.";
+    const message = String(error?.message || error?.code || "Não foi possível salvar agora.").trim();
     setAdminStudentInlineStatus(sheetEl, field, message, "error");
     setAdminStudentsStatus(message, "error");
     hist.inlineSavingField = "";

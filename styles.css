@@ -5385,9 +5385,10 @@ body.admin-student-drawer-open {
 
 .admin-student-title-inline .admin-student-inline-field {
   display: grid;
-  gap: 4px;
-  padding: 0;
-  border: 0;
+  gap: 5px;
+  padding: 2px 0;
+  border: 1px solid transparent;
+  border-radius: 14px;
   background: transparent;
 }
 
@@ -5400,12 +5401,30 @@ body.admin-student-drawer-open {
   font-size: 15px;
   font-weight: 850;
   line-height: 1.25;
+  border-radius: 10px;
+  padding: 2px 0;
+  transition: color 160ms ease, background-color 160ms ease;
+}
+
+.admin-student-title-inline .admin-student-inline-display:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.035);
 }
 
 .admin-student-title-inline .admin-student-inline-field.is-editing {
   padding: 8px;
-  border: 1px solid rgba(89, 144, 189, 0.28);
-  background: rgba(89, 144, 189, 0.08);
+  border-color: rgba(255, 86, 79, 0.22);
+  background: rgba(7, 9, 16, 0.72);
+  box-shadow: 0 0 0 3px rgba(255, 86, 79, 0.08);
+}
+
+.admin-student-title-inline .admin-student-input {
+  height: 36px;
+  border-radius: 12px;
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(7, 9, 16, 0.76);
+  font-size: 14px;
+  font-weight: 800;
 }
 
 .admin-student-email {
@@ -5437,15 +5456,20 @@ body.admin-student-drawer-open {
 
 .admin-student-plan-inline {
   height: auto;
-  min-height: 26px;
+  min-height: 28px;
   padding: 0;
+  border-color: rgba(255, 86, 79, 0.14);
+  background: rgba(255, 86, 79, 0.07);
+  overflow: visible;
 }
 
 .admin-student-plan-inline .admin-student-inline-field {
-  gap: 4px;
+  display: grid;
+  gap: 3px;
   padding: 0;
   border: 0;
   background: transparent;
+  min-width: 0;
 }
 
 .admin-student-plan-inline .admin-student-inline-label {
@@ -5453,27 +5477,41 @@ body.admin-student-drawer-open {
 }
 
 .admin-student-plan-inline .admin-student-inline-display {
-  min-height: 24px;
-  padding: 0 10px;
+  min-height: 28px;
+  padding: 0 11px;
   color: inherit;
   font-size: 11px;
   font-weight: 750;
+  border-radius: 999px;
+  line-height: 1;
+  white-space: nowrap;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.admin-student-plan-inline .admin-student-inline-display:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
 }
 
 .admin-student-plan-inline .admin-student-inline-editor {
-  min-width: 122px;
-  padding: 3px;
+  min-width: 136px;
+  padding: 4px;
 }
 
 .admin-student-plan-inline .admin-student-input {
-  height: 28px;
-  border-radius: 999px;
+  height: 32px;
+  border-radius: 12px;
+  border-color: rgba(255, 86, 79, 0.24);
+  background: rgba(7, 9, 16, 0.9);
+  color: rgba(255, 255, 255, 0.94);
   font-size: 11px;
   font-weight: 750;
+  padding: 0 26px 0 10px;
+  appearance: none;
 }
 
 .admin-student-plan-inline .admin-student-inline-status {
-  padding: 0 10px 5px;
+  padding: 0 10px 6px;
   font-size: 10px;
 }
 
