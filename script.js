@@ -16818,6 +16818,7 @@ const buildAdminStudentInlineFieldHtml = ({
   const safeValue = String(value || "").trim();
   const safeDisplayValue = String(displayValue || "").trim() || safeValue || placeholder || "—";
   const editorAttrs = readonly ? 'disabled aria-disabled="true"' : "";
+  const keepEditorMounted = field === "plano";
   const editorMarkup =
     kind === "select"
       ? `<select class="admin-student-input admin-student-inline-control" data-admin-student-inline-control data-admin-student-inline-editor="${escapeHtml(field)}" ${editorAttrs}>${optionsHtml}</select>`
@@ -16831,7 +16832,7 @@ const buildAdminStudentInlineFieldHtml = ({
       <button type="button" class="admin-student-inline-display" data-admin-student-inline-trigger="${escapeHtml(field)}" ${readonly ? "disabled" : ""}>
         <span data-admin-student-inline-display>${escapeHtml(safeDisplayValue)}</span>
       </button>
-      <div class="admin-student-inline-editor" data-admin-student-inline-editor-wrap hidden>
+      <div class="admin-student-inline-editor" data-admin-student-inline-editor-wrap ${keepEditorMounted ? "" : "hidden"}>
         ${editorMarkup}
       </div>
       ${help ? `<div class="admin-student-inline-help">${escapeHtml(help)}</div>` : ""}
