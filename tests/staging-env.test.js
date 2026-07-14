@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("fs");
 const path = require("path");
+const vm = require("vm");
 
 const {
   getFirebaseProjectId,
@@ -9,6 +10,7 @@ const {
   getPublicRuntimeConfig,
   validateEnvironmentIsolation,
 } = require("../_lib/runtime-env");
+const runtimeConfigHandler = require("../api/runtime-config");
 const { buildResetPlan, validateResetEnvironment } = require("../scripts/staging-reset");
 
 const makeBaseEnv = () => ({
@@ -96,6 +98,52 @@ test("runtime público de staging expõe banner de teste", () => {
   assert.equal(runtime.environment.bannerLabel, "AMBIENTE DE TESTE");
   const serialized = JSON.stringify(runtime);
   assert.doesNotMatch(serialized, /SUPABASE_SERVICE_ROLE_KEY|FIREBASE_SERVICE_ACCOUNT_JSON|GOOGLE_SERVICE_ACCOUNT_JSON|GOOGLE_PRIVATE_KEY|SPACE_AUTH_SECRET|ASAAS_API_KEY|N8N_WEBHOOK_SECRET|CHATWOOT_API_TOKEN/);
+});
+
+test("runtime-config renderiza banner mesmo quando isolamento falha", () => {
+  const errorConfig = runtimeConfigHandler._private.buildIsolationErrorConfig({
+    code: "environment_isolation_failed",
+    details: {
+      appEnv: "staging",
+      errors: ["staging_missing_firebase_project_id"],
+      current: { firebaseProjectId: "" },
+    },
+  });
+  const script = runtimeConfigHandler._private.buildRuntimeScript(errorConfig);
+  const body = {
+    dataset: {},
+    classList: { values: [], add(value) { this.values.push(value); } },
+    children: [],
+    prepend(node) { this.children.unshift(node); },
+  };
+  const document = {
+    readyState: "complete",
+    title: "Space",
+    documentElement: { dataset: {} },
+    body,
+    querySelector(selector) {
+      if (selector === "[data-space-env-banner]") return body.children.find((node) => node.attrs?.["data-space-env-banner"] !== undefined) || null;
+      return null;
+    },
+    createElement(tagName) {
+      return {
+        tagName,
+        attrs: {},
+        className: "",
+        innerHTML: "",
+        setAttribute(name, value) {
+          this.attrs[name] = value;
+        },
+      };
+    },
+    addEventListener() {},
+  };
+  vm.runInNewContext(script, { window: {}, document });
+  assert.equal(document.documentElement.dataset.appEnv, "staging");
+  assert.equal(body.dataset.appEnv, "staging");
+  assert.equal(body.children.length, 1);
+  assert.match(body.children[0].innerHTML, /AMBIENTE DE TESTE/);
+  assert.match(body.children[0].innerHTML, /staging_missing_firebase_project_id/);
 });
 
 test("staging usa service account dedicada quando projectId público não existe", () => {
