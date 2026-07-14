@@ -7814,10 +7814,19 @@ function normalizeResponsavelRemarcacao(value) {
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
-  if (["escola", "professor", "escola-professor", "escola_professor", "school", "teacher"].includes(normalized)) return "escola";
+  if (["professor", "teacher"].includes(normalized)) return "professor";
+  if (["escola", "escola-professor", "escola_professor", "school"].includes(normalized)) return "escola";
   if (["aluno", "student"].includes(normalized)) return "aluno";
   return "";
 }
+
+const formatResponsavelRemarcacao = (value) => {
+  const normalized = normalizeResponsavelRemarcacao(value);
+  if (normalized === "aluno") return "Aluno";
+  if (normalized === "professor") return "Professor";
+  if (normalized === "escola") return "Escola";
+  return "";
+};
 
 function normalizeSituacaoReposicao(value) {
   const normalized = String(value || "")
@@ -7849,10 +7858,11 @@ function calculateReposicaoEligibility({ responsavel, planoAluno, dataAulaOrigin
   const dataLimiteReposicao = originalKey ? addDaysToDateKey(originalKey, 15) : "";
   const count = Math.max(0, Number(reposicoesUsadasNoMes) || 0);
 
-  if (responsible === "escola") {
+  if (responsible === "professor" || responsible === "escola") {
+    const actor = responsible === "professor" ? "professor" : "escola";
     return {
       elegivel: true,
-      motivo: "Reposição garantida — problema causado pela escola/professor",
+      motivo: `Reposição garantida — problema causado pela ${actor === "escola" ? "escola" : "professor"}`,
       limiteRestante: null,
       dataLimiteReposicao,
     };
@@ -8011,7 +8021,7 @@ const sanitizeLessonLogDraft = (raw = {}) => {
     motivoFalta: String(src.motivoFalta || "").trim().toLowerCase(),
     responsavelFalta: String(src.responsavelFalta || "aluno").trim().toLowerCase(),
     reposicaoNecessaria: String(src.reposicaoNecessaria || "sim").trim().toLowerCase(),
-    motivoRemarcacao: String(src.motivoRemarcacao || "").trim().toLowerCase(),
+    motivoRemarcacao: String(src.motivoRemarcacao || "").trim(),
     responsavelRemarcacao: normalizeResponsavelRemarcacao(src.responsavelRemarcacao || src.responsavel_remarcacao || ""),
     dataAvisoRemarcacao: String(src.dataAvisoRemarcacao || src.data_aviso_remarcacao || "").trim(),
     elegibilidade: {
@@ -8341,6 +8351,7 @@ const renderRemarcadaFieldsHtml = (draft = {}) => {
   const ini = String(d.horarioInicioRemarcacao || d.novoInicio || "");
   const fim = String(d.horarioFimRemarcacao || d.novoFim || "");
   const showScheduleFields = situacao === "agendada_agora";
+  const isStudentResponsible = responsavel === "aluno";
 
   // Ajuste: incluir option "Aluno pediu remarcação" com value solicitado.
   const options = [
@@ -8368,7 +8379,8 @@ const renderRemarcadaFieldsHtml = (draft = {}) => {
                 [
                   ["", "Selecione"],
                   ["aluno", "Aluno"],
-                  ["escola", "Escola-Professor"],
+                  ["professor", "Professor"],
+                  ["escola", "Escola"],
                 ],
                 responsavel
               )}
@@ -8378,20 +8390,28 @@ const renderRemarcadaFieldsHtml = (draft = {}) => {
           ${renderPedagogicoReposicaoEligibilityHtml({ ...d, responsavelRemarcacao: responsavel })}
         </div>
 
-        <div class="ped-field regv2-field">
-          <div class="ped-label regv2-label">Aviso recebido em</div>
-          <input class="ped-in regv2-input" type="datetime-local" data-ped-field="dataAvisoRemarcacao" data-ped-remarcacao-aviso value="${escapeHtml(dataAviso)}" />
-        </div>
+        ${
+          isStudentResponsible
+            ? `<div class="ped-field regv2-field">
+                <div class="ped-label regv2-label">Aviso recebido em</div>
+                <input class="ped-in regv2-input" type="datetime-local" data-ped-field="dataAvisoRemarcacao" data-ped-remarcacao-aviso value="${escapeHtml(dataAviso)}" />
+              </div>`
+            : `<input type="hidden" data-ped-field="dataAvisoRemarcacao" value="" />`
+        }
 
         <div class="ped-field regv2-field">
           <div class="ped-label regv2-label">Motivo da remarcação</div>
-          <div class="ped-sel-wrap">
-            <select class="ped-sel regv2-select" data-ped-field="motivoRemarcacao">
-              <option value="">Selecione</option>
-              ${renderPedSelectOptions(options, motivo)}
-            </select>
-            <span class="ped-arr">▼</span>
-          </div>
+          ${
+            isStudentResponsible
+              ? `<div class="ped-sel-wrap">
+                  <select class="ped-sel regv2-select" data-ped-field="motivoRemarcacao">
+                    <option value="">Selecione</option>
+                    ${renderPedSelectOptions(options, motivo)}
+                  </select>
+                  <span class="ped-arr">▼</span>
+                </div>`
+              : `<input class="ped-in regv2-input" type="text" data-ped-field="motivoRemarcacao" value="${escapeHtml(motivo)}" placeholder="Descreva o motivo da remarcação" />`
+          }
         </div>
 
         <div class="ped-field regv2-field">
@@ -8952,7 +8972,7 @@ const readPedagogicoDraftFromDom = () => {
     motivoFalta: getField("motivoFalta").trim().toLowerCase(),
     responsavelFalta: getField("responsavelFalta").trim().toLowerCase(),
     reposicaoNecessaria: getField("reposicaoNecessaria").trim().toLowerCase(),
-    motivoRemarcacao: getField("motivoRemarcacao").trim().toLowerCase(),
+    motivoRemarcacao: getField("motivoRemarcacao").trim(),
     responsavelRemarcacao: normalizeResponsavelRemarcacao(getField("responsavelRemarcacao")),
     dataAvisoRemarcacao: getField("dataAvisoRemarcacao").trim(),
     situacaoReposicao: normalizeSituacaoReposicao(getField("situacaoReposicao")),
@@ -20482,7 +20502,7 @@ const renderAdminPedLessonRecordDynamicSections = (record) => {
     return renderAdminPedLessonRecordSection(
       "Remarcação",
       [
-        renderAdminPedLessonRecordField("Responsável", draft.responsavelRemarcacao === "aluno" ? "Aluno" : draft.responsavelRemarcacao === "escola" ? "Escola-Professor" : ""),
+        renderAdminPedLessonRecordField("Responsável", formatResponsavelRemarcacao(draft.responsavelRemarcacao)),
         renderAdminPedLessonRecordField("Aviso recebido em", draft.dataAvisoRemarcacao ? new Date(draft.dataAvisoRemarcacao).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : ""),
         renderAdminPedLessonRecordField("Elegibilidade", eligibilityLabel),
         renderAdminPedLessonRecordField("Situação", situationLabel),
@@ -35394,7 +35414,18 @@ document.addEventListener("change", (event) => {
 document.addEventListener("change", (event) => {
   const target = event.target;
   if (!(target instanceof Element)) return;
-  if ((target instanceof HTMLSelectElement && target.matches("[data-ped-remarcacao-responsavel]")) || (target instanceof HTMLInputElement && target.matches("[data-ped-remarcacao-aviso]"))) {
+  if (target instanceof HTMLSelectElement && target.matches("[data-ped-remarcacao-responsavel]")) {
+    const current = readPedagogicoDraftFromDom();
+    if (current && typeof current === "object") {
+      pedagogicoDraft = pedagogicoDraft && typeof pedagogicoDraft === "object" ? { ...pedagogicoDraft, ...current } : { ...current };
+      pedagogicoDraft.statusAula = PEDAGOGICO_STATUS.REMARCADA;
+    }
+    rerenderPedagogicoDynamicFields(PEDAGOGICO_STATUS.REMARCADA);
+    syncPedagogicoReposicaoEligibility(pedagogicoFormContainer);
+    markPedagogicoDirty();
+    return;
+  }
+  if (target instanceof HTMLInputElement && target.matches("[data-ped-remarcacao-aviso]")) {
     syncPedagogicoReposicaoEligibility(target.closest("[data-ped-form]") || pedagogicoFormContainer);
     markPedagogicoDirty();
     return;
