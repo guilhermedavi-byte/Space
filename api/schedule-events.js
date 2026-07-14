@@ -621,11 +621,14 @@ const toLogIdFromEventId = (eventId) => {
   return `log_${normalized}`;
 };
 
-  const decodeLessonLogDoc = (doc) => {
+const decodeLessonLogDoc = (doc) => {
   if (!doc || typeof doc !== "object") return null;
-  const id = getDocIdFromName(doc.name);
+  const isRestDoc = Boolean(doc.name || doc.fields);
+  const id = isRestDoc
+    ? getDocIdFromName(doc.name)
+    : String(doc.firestoreDocId || doc.docId || doc.documentId || doc.id || "").trim();
   if (!id) return null;
-  const fields = decodeFields(doc);
+  const fields = isRestDoc ? decodeFields(doc) : doc;
 
   const eventId = typeof fields.eventId === "string" ? fields.eventId : "";
   const professorId = typeof fields.professorId === "string" ? fields.professorId : "";
