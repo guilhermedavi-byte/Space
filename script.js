@@ -16742,7 +16742,8 @@ const setAdminStudentInlineEditing = (sheetEl, field, isEditing) => {
   cell.classList.toggle("is-editing", Boolean(isEditing));
   const editor = cell.querySelector("[data-admin-student-inline-editor-wrap]");
   const display = cell.querySelector("[data-admin-student-inline-display]");
-  if (editor instanceof HTMLElement) editor.hidden = !isEditing;
+  const keepPlanEditorMounted = key === "plano";
+  if (editor instanceof HTMLElement) editor.hidden = !isEditing && !keepPlanEditorMounted;
   if (display instanceof HTMLElement) {
     const reserveDisplaySpace = key === "plano" && Boolean(isEditing);
     display.hidden = Boolean(isEditing) && !reserveDisplaySpace;
