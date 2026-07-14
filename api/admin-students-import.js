@@ -288,7 +288,9 @@ module.exports = async (req, res) => {
   try {
     body = await readJsonBody(req);
   } catch (error) {
-    sendJson(res, 400, { error: "invalid_json" });
+    const errorDetail = String(error?.message || "invalid_json");
+    console.warn("[admin-students-import] invalid request body", { error: errorDetail });
+    sendJson(res, 400, { error: "invalid_json", errorDetail });
     return;
   }
 
@@ -297,11 +299,11 @@ module.exports = async (req, res) => {
     : parseStudentImportText(body?.text || "");
 
   if (!rows.length) {
-    sendJson(res, 400, { error: "empty_import" });
+    sendJson(res, 400, { error: "empty_import", errorDetail: "Nenhuma linha válida foi encontrada no arquivo/lista." });
     return;
   }
   if (rows.length > 300) {
-    sendJson(res, 400, { error: "too_many_rows", limit: 300 });
+    sendJson(res, 400, { error: "too_many_rows", errorDetail: "A importação aceita no máximo 300 linhas por vez.", limit: 300 });
     return;
   }
 

@@ -30374,6 +30374,47 @@ const createAdminUserRecord = async ({ role, name, email, password } = {}) => {
 };
 
 const openAdminPedagogicoImportStudentsModal = () => {
+  const decodeStudentImportFile = async (file) => {
+    const buffer = await file.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    try {
+      return {
+        text: new TextDecoder("utf-8", { fatal: true }).decode(bytes),
+        encoding: "utf-8",
+      };
+    } catch (error) {
+      return {
+        text: new TextDecoder("windows-1252").decode(bytes),
+        encoding: "windows-1252",
+      };
+    }
+  };
+
+  const renderImportSummary = (summaryEl, rows) => {
+    if (!(summaryEl instanceof HTMLElement)) return;
+    const safeRows = Array.isArray(rows) ? rows : [];
+    summaryEl.innerHTML = safeRows.length
+      ? `
+        <div class="admin-ped-import-summary-title">Resumo por linha</div>
+        <div class="admin-ped-import-summary-list">
+          ${safeRows
+            .slice(0, 30)
+            .map(
+              (row) => `
+                <div class="admin-ped-import-summary-row">
+                  <strong>Linha ${escapeHtml(String(row.lineNumber || "—"))}</strong>
+                  <span>${escapeHtml(row.email || row.name || "—")}</span>
+                  <em>${escapeHtml(row.reason || row.status || "—")}</em>
+                </div>
+              `
+            )
+            .join("")}
+        </div>
+      `
+      : `<div class="admin-ped-import-summary-title">Todos os alunos foram criados com sucesso.</div>`;
+    summaryEl.hidden = false;
+  };
+
   openModal({
     title: "Importar alunos",
     bodyHtml: `
@@ -30428,19 +30469,20 @@ const openAdminPedagogicoImportStudentsModal = () => {
 
       (async () => {
         try {
-          const raw = file ? await file.text() : pasted;
+          const decoded = file ? await decodeStudentImportFile(file) : { text: pasted, encoding: "manual" };
+          const raw = decoded.text;
           const response = await withTimeout(
             fetchWithAuth("/api/admin-students-import", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ text: raw }),
+              body: JSON.stringify({ text: raw, encoding: decoded.encoding }),
             }),
             60_000,
             "admin_students_import"
           );
           const data = await response.json().catch(() => null);
           if (!response.ok || !data?.ok) {
-            const message = String(data?.error || "import_failed");
+            const message = String(data?.errorDetail || data?.error || "import_failed");
             throw new Error(message);
           }
           const summary = data.summary || {};
@@ -30460,30 +30502,11 @@ const openAdminPedagogicoImportStudentsModal = () => {
           if (summaryEl instanceof HTMLElement) {
             const rows = Array.isArray(summary.results) ? summary.results : [];
             const failedOrSkipped = rows.filter((row) => row.status !== "created");
-            summaryEl.innerHTML = failedOrSkipped.length
-              ? `
-                <div class="admin-ped-import-summary-title">Resumo por linha</div>
-                <div class="admin-ped-import-summary-list">
-                  ${failedOrSkipped
-                    .slice(0, 30)
-                    .map(
-                      (row) => `
-                        <div class="admin-ped-import-summary-row">
-                          <strong>Linha ${escapeHtml(String(row.lineNumber || "—"))}</strong>
-                          <span>${escapeHtml(row.email || row.name || "—")}</span>
-                          <em>${escapeHtml(row.reason || row.status || "—")}</em>
-                        </div>
-                      `
-                    )
-                    .join("")}
-                </div>
-              `
-              : `<div class="admin-ped-import-summary-title">Todos os alunos foram criados com sucesso.</div>`;
-            summaryEl.hidden = false;
+            renderImportSummary(summaryEl, failedOrSkipped);
           }
         } catch (error) {
           console.error("[admin] import students failed:", error);
-          errorEl.textContent = "Não foi possível importar agora. Verifique a lista e tente novamente.";
+          errorEl.textContent = `Não foi possível importar agora: ${String(error?.message || error || "erro desconhecido")}`;
           errorEl.hidden = false;
         } finally {
           if (modalPrimary) modalPrimary.disabled = false;
