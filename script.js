@@ -7609,9 +7609,19 @@ const setPedagogicoPendingBadge = (count) => {
 };
 
 const setPedagogicoStatus = (text, tone = "") => {
-  if (!(pedagogicoStatus instanceof HTMLElement)) return;
-  pedagogicoStatus.textContent = String(text || "");
-  pedagogicoStatus.dataset.tone = String(tone || "");
+  const targets = Array.from(document.querySelectorAll("[data-pedagogico-status]")).filter((el) => el instanceof HTMLElement);
+  if (!targets.length && pedagogicoStatus instanceof HTMLElement) targets.push(pedagogicoStatus);
+  const footerTarget = targets.find((el) => el instanceof HTMLElement && el.closest("[data-ped-footer]"));
+  targets.forEach((el) => {
+    if (!(el instanceof HTMLElement)) return;
+    if (footerTarget && el !== footerTarget) {
+      el.textContent = "";
+      el.dataset.tone = "";
+      return;
+    }
+    el.textContent = String(text || "");
+    el.dataset.tone = String(tone || "");
+  });
 };
 
 const setPedagogicoCountLabel = (text) => {
@@ -8598,8 +8608,11 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
       </div>
 
       <div class="ped-footer" data-ped-footer>
-        <button class="ped-btn-close" type="button" data-pedagogico-drawer-close>Fechar</button>
-        <button class="ped-btn-save" type="button" data-pedagogico-save>Salvar registro</button>
+        <div class="ped-footer-status pedagogico-status" data-pedagogico-status aria-live="polite"></div>
+        <div class="ped-footer-actions">
+          <button class="ped-btn-close" type="button" data-pedagogico-drawer-close>Fechar</button>
+          <button class="ped-btn-save" type="button" data-pedagogico-save>Salvar registro</button>
+        </div>
       </div>
     </div>
   `;

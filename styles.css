@@ -17973,6 +17973,12 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   color: rgba(255, 78, 70, 0.95);
 }
 
+.ped-footer-status[data-tone="error"] {
+  border: 1px solid rgba(255, 78, 70, 0.28);
+  background: rgba(255, 78, 70, 0.1);
+  color: rgba(255, 170, 166, 0.98);
+}
+
 .pedagogico-toolbar {
   display: flex;
   align-items: center;
@@ -18392,10 +18398,31 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   border-top: 0.5px solid rgba(255, 255, 255, 0.05);
   padding: 16px 20px;
   display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  margin: 0;
+}
+
+.ped-footer-actions {
+  display: flex;
   justify-content: flex-end;
   align-items: center;
   gap: 12px;
-  margin: 0;
+}
+
+.ped-footer-status {
+  display: none;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.ped-footer-status:not(:empty) {
+  display: block;
 }
 
 .ped-btn-save {
@@ -21865,7 +21892,8 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   .ped-grid2{grid-template-columns:1fr}
   .regv2-rating-row{grid-template-columns:1fr;gap:8px}
   .regv2-rating-control{justify-content:flex-start}
-  .ped-footer{flex-direction:column-reverse;align-items:stretch}
+  .ped-footer{flex-direction:column;align-items:stretch}
+  .ped-footer-actions{flex-direction:column-reverse;align-items:stretch}
   .ped-btn-save,.ped-btn-close{width:100%;min-width:0}
 }
 

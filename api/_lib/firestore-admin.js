@@ -2,6 +2,7 @@ const { getGoogleAccessToken } = require("../../_lib/google-service-account");
 const {
   FIRESTORE_BASE,
   decodeFields,
+  encodeFields,
   getDocIdFromName,
   requestJson,
 } = require("./firestore-rest");
@@ -55,7 +56,7 @@ const createDocumentAsAdmin = async (collectionPath, data) => {
   const response = await requestJson(`${FIRESTORE_BASE}/${encodeURI(path)}`, {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}` },
-    body: require("./firestore-rest").encodeFields(data),
+    body: encodeFields(data),
   });
   if (!response.ok) {
     const error = new Error("firestore_admin_create_failed");
@@ -72,4 +73,15 @@ const createDocumentAsAdmin = async (collectionPath, data) => {
   };
 };
 
-module.exports = { createDocumentAsAdmin, listCollectionAsAdmin };
+const commitWritesAsAdmin = async ({ writes } = {}) => {
+  const arr = Array.isArray(writes) ? writes.filter(Boolean) : [];
+  if (!arr.length) return { ok: true, status: 200, data: { writeResults: [] }, text: "" };
+  const accessToken = await getAccessToken();
+  return requestJson(`${FIRESTORE_BASE}:commit`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: { writes: arr },
+  });
+};
+
+module.exports = { commitWritesAsAdmin, createDocumentAsAdmin, listCollectionAsAdmin };

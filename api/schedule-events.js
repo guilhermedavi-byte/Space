@@ -3,7 +3,7 @@ const crypto = require("crypto");
 const { readJsonBody, sendJson } = require("../_lib/http");
 const { getSessionFromRequest } = require("../_lib/session");
 const { verifyFirebaseIdToken } = require("../_lib/firebase-id-token");
-const { listCollectionAsAdmin } = require("./_lib/firestore-admin");
+const { commitWritesAsAdmin, listCollectionAsAdmin } = require("./_lib/firestore-admin");
 const { DEFAULT_CONFIG } = require("../_lib/scheduling-firestore");
 const { fetchUserProfileByUid } = require("../_lib/firestore-user");
 const { supabaseFetch } = require("./_lib/supabase-rest");
@@ -590,6 +590,23 @@ const firestoreCommitWrites = async ({ idToken, writes } = {}) => {
   });
 };
 
+const withServerTimeout = (promise, ms, label) => {
+  const timeoutMs = Number(ms);
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return promise;
+  let timeoutId;
+  const timeout = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      const error = new Error("timeout");
+      error.code = "timeout";
+      error.label = label || "";
+      reject(error);
+    }, timeoutMs);
+  });
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timeoutId) clearTimeout(timeoutId);
+  });
+};
+
 const toFirestoreDocName = (docPath) => {
   const path = String(docPath || "").replace(/^\/+/, "");
   // Commit "name" is a Firestore resource name, not a URL.
@@ -635,6 +652,44 @@ const normalizeStatusAula = (raw) => {
   if (s === "falta_aluno" || s === "falta" || s === "falta_do_aluno" || s === "falta do aluno") return "falta_aluno";
   if (s === "remarcada") return "remarcada";
   if (s === "cancelada") return "cancelada";
+  return "";
+};
+
+const normalizeLessonLogRemarcacaoMotivo = (raw) => {
+  const value = String(raw || "").trim();
+  const normalized = normalizeText(value).replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  const aliases = {
+    aluno_pediu_remarcacao: "aluno_pediu",
+  };
+  const allowed = new Set([
+    "atrasou_trabalho",
+    "saude",
+    "familia",
+    "internet_tecnologia",
+    "viagem",
+    "aluno_pediu",
+    "professor_remarcou",
+    "escola_remarcou",
+    "nao_informado",
+    "outro",
+  ]);
+  const safe = aliases[normalized] || normalized;
+  return allowed.has(safe) ? safe : value.slice(0, 160);
+};
+
+const normalizeLessonLogResponsavelRemarcacao = (raw) => {
+  const normalized = normalizeText(raw).replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  if (["aluno", "student"].includes(normalized)) return "aluno";
+  if (["professor", "teacher"].includes(normalized)) return "professor";
+  if (["escola", "school", "escola_professor"].includes(normalized)) return "escola";
+  return "";
+};
+
+const normalizeLessonLogSituacaoReposicao = (raw) => {
+  const normalized = normalizeText(raw).replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  if (["agendada_agora", "agendada", "novo_horario", "ja_tenho_novo_horario"].includes(normalized)) return "agendada_agora";
+  if (["aguardando_aluno", "aguardando_resposta", "aguardando_resposta_aluno"].includes(normalized)) return "aguardando_aluno";
+  if (["incompatibilidade_horario", "incompatibilidade"].includes(normalized)) return "incompatibilidade_horario";
   return "";
 };
 
@@ -831,18 +886,16 @@ const handleLessonLogsApi = async (req, res, { idToken, role, requesterId, url, 
       "nao_informado",
       "outro",
     ]) || "",
-    motivoRemarcacao: normalizeOneOf(body?.motivoRemarcacao, [
-      "atrasou_trabalho",
-      "saude",
-      "familia",
-      "internet_tecnologia",
-      "viagem",
-      "aluno_pediu",
-      "professor_remarcou",
-      "escola_remarcou",
-      "nao_informado",
-      "outro",
-    ]) || "",
+    motivoRemarcacao: normalizeLessonLogRemarcacaoMotivo(body?.motivoRemarcacao),
+    responsavelRemarcacao: normalizeLessonLogResponsavelRemarcacao(body?.responsavelRemarcacao || body?.responsavel_remarcacao),
+    responsavel_remarcacao: normalizeLessonLogResponsavelRemarcacao(body?.responsavelRemarcacao || body?.responsavel_remarcacao),
+    dataAvisoRemarcacao: String(body?.dataAvisoRemarcacao || body?.data_aviso_remarcacao || "").trim() || "",
+    data_aviso_remarcacao: String(body?.dataAvisoRemarcacao || body?.data_aviso_remarcacao || "").trim() || "",
+    elegibilidade: body?.elegibilidade && typeof body.elegibilidade === "object" ? body.elegibilidade : {},
+    situacaoReposicao: normalizeLessonLogSituacaoReposicao(body?.situacaoReposicao || body?.situacao_reposicao),
+    situacao_reposicao: normalizeLessonLogSituacaoReposicao(body?.situacaoReposicao || body?.situacao_reposicao),
+    needsAdminReview: body?.needsAdminReview === true || body?.needs_admin_review === true,
+    needs_admin_review: body?.needsAdminReview === true || body?.needs_admin_review === true,
     novaDataRemarcacao: isValidDateKey(String(body?.novaDataRemarcacao || "")) ? String(body.novaDataRemarcacao) : "",
     // Novo: horários separados (inicio/fim). Mantém compatibilidade com "novoHorarioRemarcacao" se existir.
     horarioInicioRemarcacao: /^\d{2}:\d{2}$/.test(String(body?.horarioInicioRemarcacao || body?.novoHorarioRemarcacao || ""))
@@ -867,6 +920,15 @@ const handleLessonLogsApi = async (req, res, { idToken, role, requesterId, url, 
   }
   if (statusAula !== "remarcada") {
     data.motivoRemarcacao = "";
+    data.responsavelRemarcacao = "";
+    data.responsavel_remarcacao = "";
+    data.dataAvisoRemarcacao = "";
+    data.data_aviso_remarcacao = "";
+    data.elegibilidade = {};
+    data.situacaoReposicao = "";
+    data.situacao_reposicao = "";
+    data.needsAdminReview = false;
+    data.needs_admin_review = false;
     data.novaDataRemarcacao = "";
     data.horarioInicioRemarcacao = "";
     data.horarioFimRemarcacao = "";
@@ -928,7 +990,30 @@ const handleLessonLogsApi = async (req, res, { idToken, role, requesterId, url, 
     });
   }
 
-  const commit = await firestoreCommitWrites({ idToken, writes });
+  let commit;
+  try {
+    try {
+      commit = await withServerTimeout(commitWritesAsAdmin({ writes }), 12_000, "lesson_logs_admin_commit");
+    } catch (error) {
+      console.error("[api] lesson-logs admin commit failed; falling back to user token", {
+        message: error?.message,
+        code: error?.code,
+        label: error?.label,
+      });
+      commit = await withServerTimeout(firestoreCommitWrites({ idToken, writes }), 12_000, "lesson_logs_user_commit");
+    }
+  } catch (error) {
+    console.error("[api] lesson-logs commit timed out/failed", {
+      message: error?.message,
+      code: error?.code,
+      label: error?.label,
+    });
+    sendJson(res, error?.code === "timeout" ? 504 : 500, {
+      error: error?.code === "timeout" ? "lesson_log_commit_timeout" : "lesson_log_commit_failed",
+      message: "Não foi possível salvar o registro da aula agora.",
+    });
+    return;
+  }
   if (!commit.ok) {
     // eslint-disable-next-line no-console
     console.error("[api] lesson-logs commit failed", { status: commit.status, data: commit.data, text: commit.text });
