@@ -821,6 +821,15 @@ const handleLessonLogsApi = async (req, res, { idToken, role, requesterId, url, 
     sendJson(res, 400, { error: "invalid_json" });
     return;
   }
+  console.log("[DEBUG-SAVE] api:lesson-logs:start", {
+    method: req.method,
+    eventId: body?.eventId || "",
+    statusAula: body?.statusAula || "",
+    responsavelRemarcacao: body?.responsavelRemarcacao || body?.responsavel_remarcacao || "",
+    situacaoReposicao: body?.situacaoReposicao || body?.situacao_reposicao || "",
+    needsAdminReview: body?.needsAdminReview ?? body?.needs_admin_review,
+    role: effectiveRole,
+  });
 
   const eventId = String(body?.eventId || "").trim();
   if (!eventId) {
@@ -993,14 +1002,18 @@ const handleLessonLogsApi = async (req, res, { idToken, role, requesterId, url, 
   let commit;
   try {
     try {
+      console.log("[DEBUG-SAVE] api:lesson-logs:beforeAdminCommit", { logId, writes: writes.length });
       commit = await withServerTimeout(commitWritesAsAdmin({ writes }), 12_000, "lesson_logs_admin_commit");
+      console.log("[DEBUG-SAVE] api:lesson-logs:afterAdminCommit", { logId, ok: commit?.ok, status: commit?.status });
     } catch (error) {
       console.error("[api] lesson-logs admin commit failed; falling back to user token", {
         message: error?.message,
         code: error?.code,
         label: error?.label,
       });
+      console.log("[DEBUG-SAVE] api:lesson-logs:beforeUserCommit", { logId, writes: writes.length });
       commit = await withServerTimeout(firestoreCommitWrites({ idToken, writes }), 12_000, "lesson_logs_user_commit");
+      console.log("[DEBUG-SAVE] api:lesson-logs:afterUserCommit", { logId, ok: commit?.ok, status: commit?.status });
     }
   } catch (error) {
     console.error("[api] lesson-logs commit timed out/failed", {

@@ -7867,24 +7867,38 @@ function calculateReposicaoEligibility({ responsavel, planoAluno, dataAulaOrigin
   const originalKey = Number.isFinite(originalMs) ? dateKeyFromIso(original.toISOString()) : "";
   const dataLimiteReposicao = originalKey ? addDaysToDateKey(originalKey, 15) : "";
   const count = Math.max(0, Number(reposicoesUsadasNoMes) || 0);
+  console.info("[DEBUG-SAVE] eligibility:start", {
+    responsavel,
+    responsible,
+    plan,
+    dataAulaOriginal,
+    dataAvisoRemarcacao,
+    reposicoesUsadasNoMes,
+    originalValid: Number.isFinite(originalMs),
+    noticeValid: Number.isFinite(noticeMs),
+  });
 
   if (responsible === "professor" || responsible === "escola") {
     const actor = responsible === "professor" ? "professor" : "escola";
-    return {
+    const result = {
       elegivel: true,
       motivo: `Reposição garantida — problema causado pela ${actor === "escola" ? "escola" : "professor"}`,
       limiteRestante: null,
       dataLimiteReposicao,
     };
+    console.info("[DEBUG-SAVE] eligibility:result", result);
+    return result;
   }
 
   if (responsible !== "aluno") {
-    return {
+    const result = {
       elegivel: false,
       motivo: "Informe o responsável pela remarcação",
       limiteRestante: null,
       dataLimiteReposicao,
     };
+    console.info("[DEBUG-SAVE] eligibility:result", result);
+    return result;
   }
 
   if (!Number.isFinite(originalMs) || !Number.isFinite(noticeMs)) {
@@ -9000,17 +9014,59 @@ const readPedagogicoDraftFromDom = () => {
 };
 
 const savePedagogicoLog = async ({ autosave = false } = {}) => {
+  const debugId = `dbg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  console.info("[DEBUG-SAVE] save:start", {
+    debugId,
+    autosave,
+    currentRole,
+    hasSession: Boolean(sessionUser?.id),
+    hasLesson: Boolean(pedagogicoActive?.lesson),
+  });
   if (currentRole !== "teacher") return false;
   if (!sessionUser?.id) return false;
   if (!pedagogicoActive?.lesson) return false;
 
   const lesson = pedagogicoActive.lesson;
+  console.info("[DEBUG-SAVE] save:lesson", {
+    debugId,
+    lessonId: lesson.id,
+    source: lesson.source,
+    supabaseLessonId: lesson.supabaseLessonId || "",
+    alunoId: lesson.alunoId || "",
+    professorId: lesson.professorId || "",
+    dateKey: lesson.dateKey,
+  });
   const draftRaw = readPedagogicoDraftFromDom();
+  console.info("[DEBUG-SAVE] save:draftRaw", {
+    debugId,
+    statusAula: draftRaw?.statusAula,
+    responsavelRemarcacao: draftRaw?.responsavelRemarcacao,
+    motivoRemarcacao: draftRaw?.motivoRemarcacao,
+    situacaoReposicao: draftRaw?.situacaoReposicao,
+    riscoEvasao: draftRaw?.riscoEvasao,
+    dataAvisoRemarcacao: draftRaw?.dataAvisoRemarcacao,
+  });
   const draft = sanitizeLessonLogDraft(draftRaw || {});
+  console.info("[DEBUG-SAVE] save:draftSanitized", {
+    debugId,
+    statusAula: draft.statusAula,
+    responsavelRemarcacao: draft.responsavelRemarcacao,
+    motivoRemarcacao: draft.motivoRemarcacao,
+    situacaoReposicao: draft.situacaoReposicao,
+    riscoEvasao: draft.riscoEvasao,
+    dataAvisoRemarcacao: draft.dataAvisoRemarcacao,
+  });
   if (draft.statusAula === PEDAGOGICO_STATUS.REMARCADA) {
+    console.info("[DEBUG-SAVE] save:beforeEligibility", { debugId });
     draft.situacaoReposicao = normalizeSituacaoReposicao(draft.situacaoReposicao) || "agendada_agora";
     draft.elegibilidade = calculateCurrentPedagogicoReposicaoEligibility(draft);
     draft.needsAdminReview = draft.situacaoReposicao === "incompatibilidade_horario";
+    console.info("[DEBUG-SAVE] save:afterEligibility", {
+      debugId,
+      situacaoReposicao: draft.situacaoReposicao,
+      needsAdminReview: draft.needsAdminReview,
+      elegibilidade: draft.elegibilidade,
+    });
   }
   if (!draft) return false;
   if (!draft.statusAula) {
@@ -9172,6 +9228,21 @@ const savePedagogicoLog = async ({ autosave = false } = {}) => {
               proxima_aula_recomendada: draft.proximaAula,
             }
       : payload;
+    console.info("[DEBUG-SAVE] save:beforeFetch", {
+      debugId,
+      requestUrl,
+      isSupabaseLesson,
+      statusAula: draft.statusAula,
+      payloadSummary: {
+        eventId: payload.eventId,
+        aula_id: requestPayload?.aula_id,
+        responsavelRemarcacao: requestPayload?.responsavelRemarcacao || requestPayload?.responsavel_remarcacao,
+        motivoRemarcacao: requestPayload?.motivoRemarcacao || requestPayload?.motivo_remarcacao,
+        situacaoReposicao: requestPayload?.situacaoReposicao || requestPayload?.situacao_reposicao,
+        needsAdminReview: requestPayload?.needsAdminReview ?? requestPayload?.needs_admin_review,
+        riscoEvasao: requestPayload?.riscoEvasao,
+      },
+    });
     const res = await fetchWithAuthWithTimeout(
       requestUrl,
       {
@@ -9182,7 +9253,23 @@ const savePedagogicoLog = async ({ autosave = false } = {}) => {
       20_000,
       "teacher_pedagogico_save_log"
     );
+    console.info("[DEBUG-SAVE] save:afterFetch", {
+      debugId,
+      requestUrl,
+      ok: res.ok,
+      status: res.status,
+    });
     const data = await res.json().catch(() => null);
+    console.info("[DEBUG-SAVE] save:afterJson", {
+      debugId,
+      dataSummary: {
+        ok: data?.ok,
+        error: data?.error,
+        message: data?.message,
+        warning: data?.warning,
+        fields: data?.fields,
+      },
+    });
     if (!res.ok) {
       const error = new Error(data?.message || data?.error || "lesson_log_save_failed");
       error.code = data?.error || `http_${res.status}`;
@@ -9250,6 +9337,14 @@ const savePedagogicoLog = async ({ autosave = false } = {}) => {
     return true;
   } catch (error) {
     console.error("[pedagogico] save failed:", error);
+    console.error("[DEBUG-SAVE] save:catch", {
+      debugId,
+      name: error?.name,
+      code: error?.code,
+      message: error?.message,
+      label: error?.label,
+      stack: error?.stack,
+    });
     setPedagogicoAutosaveLabel("Erro ao salvar");
     if (!autosave) {
       const fields = Array.isArray(error?.fields) && error.fields.length ? ` Campos: ${error.fields.join(", ")}.` : "";
@@ -11068,8 +11163,19 @@ const fetchWithAuthWithTimeout = async (input, init = {}, ms = 15_000, label = "
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return fetchWithAuth(input, init);
   const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
   let timeoutId;
+  console.info(`[DEBUG-SAVE] fetchWithAuthWithTimeout:start ${JSON.stringify({
+    input: typeof input === "string" ? input : String(input || ""),
+    ms: timeoutMs,
+    label,
+    hasAbortController: Boolean(controller),
+  })}`);
   const timeoutPromise = new Promise((_, reject) => {
     timeoutId = window.setTimeout(() => {
+      console.error(`[DEBUG-SAVE] fetchWithAuthWithTimeout:timeout ${JSON.stringify({
+        input: typeof input === "string" ? input : String(input || ""),
+        ms: timeoutMs,
+        label,
+      })}`);
       if (controller) controller.abort();
       const error = new Error("timeout");
       error.code = "timeout";
@@ -11078,7 +11184,15 @@ const fetchWithAuthWithTimeout = async (input, init = {}, ms = 15_000, label = "
     }, timeoutMs);
   });
   const requestPromise = fetchWithAuth(input, { ...(init || {}), signal: controller?.signal });
-  return Promise.race([requestPromise, timeoutPromise]).finally(() => {
+  return Promise.race([requestPromise, timeoutPromise]).then((res) => {
+    console.info(`[DEBUG-SAVE] fetchWithAuthWithTimeout:resolved ${JSON.stringify({
+      input: typeof input === "string" ? input : String(input || ""),
+      label,
+      status: res?.status,
+      ok: res?.ok,
+    })}`);
+    return res;
+  }).finally(() => {
     if (timeoutId) window.clearTimeout(timeoutId);
   });
 };
@@ -11226,27 +11340,41 @@ let cachedFirebaseIdToken = {
 
 const getFirebaseIdTokenForApi = async (forceRefresh = false) => {
   try {
+    console.info(`[DEBUG-SAVE] token:start ${JSON.stringify({ forceRefresh })}`);
     const firebase = await loadFirebaseAdminApi();
+    console.info(`[DEBUG-SAVE] token:firebaseLoaded ${JSON.stringify({
+      forceRefresh,
+      hasAuth: Boolean(firebase?.primaryAuth),
+      hasCurrentUser: Boolean(firebase?.primaryAuth?.currentUser),
+      currentUid: firebase?.primaryAuth?.currentUser?.uid || "",
+    })}`);
     if (forceRefresh) {
+      console.info(`[DEBUG-SAVE] token:beforeWaitForced ${JSON.stringify({ forceRefresh })}`);
       const token = await waitForAuthToken(firebase, 12000);
       const user = firebase?.primaryAuth?.currentUser;
       const uid = user ? String(user.uid || "") : "";
       const now = Date.now();
       cachedFirebaseIdToken = { uid, token: String(token || ""), expiresAt: now + 180_000 };
+      console.info(`[DEBUG-SAVE] token:afterWaitForced ${JSON.stringify({ uid, hasToken: Boolean(token) })}`);
       return cachedFirebaseIdToken.token;
     }
 
+    console.info("[DEBUG-SAVE] token:beforeAuthReady");
     const user = await waitForFirebaseAuthReady(firebase, 3500);
+    console.info(`[DEBUG-SAVE] token:afterAuthReady ${JSON.stringify({ hasUser: Boolean(user), uid: user?.uid || "" })}`);
     if (!user || typeof user.getIdToken !== "function") return "";
 
     const uid = String(user.uid || "");
     const now = Date.now();
     if (!forceRefresh && cachedFirebaseIdToken.uid === uid && cachedFirebaseIdToken.token && cachedFirebaseIdToken.expiresAt > now) {
+      console.info(`[DEBUG-SAVE] token:cacheHit ${JSON.stringify({ uid })}`);
       return cachedFirebaseIdToken.token;
     }
 
     // Use `true` to force refresh when needed (ex: growth-goals save right after login).
+    console.info(`[DEBUG-SAVE] token:beforeGetIdToken ${JSON.stringify({ uid, forceRefresh })}`);
     const token = await user.getIdToken(false);
+    console.info(`[DEBUG-SAVE] token:afterGetIdToken ${JSON.stringify({ uid, hasToken: Boolean(token) })}`);
     cachedFirebaseIdToken = {
       uid,
       token: String(token || ""),
@@ -11264,12 +11392,15 @@ const fetchWithAuth = async (input, init = {}) => {
   const opts = init && typeof init === "object" ? init : {};
   const headers = new Headers(opts.headers || {});
   const force = Boolean(opts.forceRefreshIdToken);
+  console.info(`[DEBUG-SAVE] fetchWithAuth:beforeToken ${JSON.stringify({ input: typeof input === "string" ? input : String(input || ""), force })}`);
   const token = await getFirebaseIdTokenForApi(force);
+  console.info(`[DEBUG-SAVE] fetchWithAuth:afterToken ${JSON.stringify({ input: typeof input === "string" ? input : String(input || ""), hasToken: Boolean(token) })}`);
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);
   }
   // Do not forward our custom option to `fetch`.
   if (Object.prototype.hasOwnProperty.call(opts, "forceRefreshIdToken")) delete opts.forceRefreshIdToken;
+  console.info(`[DEBUG-SAVE] fetchWithAuth:beforeNativeFetch ${JSON.stringify({ input: typeof input === "string" ? input : String(input || ""), method: opts.method || "GET" })}`);
   return fetch(input, { ...opts, headers, credentials: opts.credentials || "include" });
 };
 
@@ -32772,6 +32903,12 @@ document.addEventListener("click", (event) => {
     const pedSave = target.closest("[data-pedagogico-save]");
     if (pedSave instanceof HTMLButtonElement) {
       event.preventDefault();
+      console.info("[DEBUG-SAVE] click:pedagogico-save", {
+        text: pedSave.textContent,
+        disabled: pedSave.disabled,
+        hasActiveLesson: Boolean(pedagogicoActive?.lesson),
+        lessonId: pedagogicoActive?.lesson?.id || "",
+      });
       const originalText = pedSave.textContent || "Salvar registro";
       pedSave.disabled = true;
       pedSave.textContent = "Salvando...";

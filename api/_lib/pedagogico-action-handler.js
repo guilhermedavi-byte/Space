@@ -112,20 +112,51 @@ const handlePedagogicoLessonAction = (kind) => async (req, res) => {
 
   const body = await readJsonBody(req).catch(() => null);
   if (!body || typeof body !== "object") return sendJson(res, 400, { error: "invalid_json" });
+  console.log("[DEBUG-SAVE] api:pedagogico-action:start", {
+    kind,
+    role,
+    aulaId: body?.aula_id || "",
+    status: cfg.status,
+    responsavelRemarcacao: body?.responsavel_remarcacao || "",
+    situacaoReposicao: body?.situacao_reposicao || "",
+    needsAdminReview: body?.needs_admin_review,
+  });
   const missing = missingFields(body, cfg.required);
   if (missing.length) return sendJson(res, 400, { error: "missing_required_fields", fields: missing });
   if (kind === "remarcacao_aula") {
     const remarcacaoMissing = validateRemarcacaoPayload(body);
+    console.log("[DEBUG-SAVE] api:pedagogico-action:remarcacaoValidation", {
+      kind,
+      aulaId: body?.aula_id || "",
+      missing: remarcacaoMissing,
+    });
     if (remarcacaoMissing.length) return sendJson(res, 400, { error: "missing_required_fields", fields: remarcacaoMissing });
   }
 
   try {
+    console.log("[DEBUG-SAVE] api:pedagogico-action:beforeFetchLesson", { kind, aulaId: body.aula_id || "" });
     const lesson = await fetchLessonById(body.aula_id);
+    console.log("[DEBUG-SAVE] api:pedagogico-action:afterFetchLesson", { kind, aulaId: body.aula_id || "", found: Boolean(lesson) });
     if (!lesson) return sendJson(res, 404, { error: "lesson_not_found" });
     if (!canEditLesson(session, lesson)) return sendJson(res, 403, { error: "forbidden" });
 
     const payload = normalizePayload(kind, body, lesson);
+    console.log("[DEBUG-SAVE] api:pedagogico-action:beforeCreateRegister", {
+      kind,
+      aulaId: body.aula_id || "",
+      payloadSummary: {
+        situacao_reposicao: payload.situacao_reposicao,
+        responsavel_remarcacao: payload.responsavel_remarcacao,
+        needs_admin_review: payload.needs_admin_review,
+      },
+    });
     const saved = await createLessonRegister({ lesson, session, payload: { ...payload, status: cfg.status } });
+    console.log("[DEBUG-SAVE] api:pedagogico-action:afterCreateRegister", {
+      kind,
+      aulaId: body.aula_id || "",
+      registerId: saved?.register?.id || "",
+    });
+    console.log("[DEBUG-SAVE] api:pedagogico-action:beforeN8n", { kind, aulaId: body.aula_id || "", workflow: cfg.workflow });
     const n8n = await triggerLessonWorkflow({
       workflow: cfg.workflow,
       envName: cfg.envName,
@@ -134,6 +165,11 @@ const handlePedagogicoLessonAction = (kind) => async (req, res) => {
       payload,
       eventKey: `pedagogico:${cfg.workflow}:${lesson.id}:${saved?.register?.id || Date.now()}`,
     }).catch((error) => ({ ok: false, error: error?.message || "n8n_failed" }));
+    console.log("[DEBUG-SAVE] api:pedagogico-action:afterN8n", {
+      kind,
+      aulaId: body.aula_id || "",
+      n8n: { ok: n8n?.ok, configured: n8n?.configured, error: n8n?.error },
+    });
 
     return sendJson(res, 200, {
       ok: true,
