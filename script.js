@@ -16640,9 +16640,31 @@ const getAdminStudentClassOptions = (selectedValue = "") => {
   return options.join("");
 };
 
+const normalizeAdminStudentPlanValue = (value) => {
+  const raw = String(value || "").trim();
+  const low = raw.toLowerCase();
+  if (low === "gold") return "Gold";
+  if (low === "diamond") return "Diamond";
+  if (low === "turma" || low === "grupo" || low === "group") return "Turma";
+  return "";
+};
+
+const getAdminStudentPlanOptions = (selectedValue = "") => {
+  const selected = normalizeAdminStudentPlanValue(selectedValue);
+  return [`<option value="">Sem plano</option>`, "Gold", "Diamond", "Turma"]
+    .map((item, index) => {
+      if (index === 0) return item;
+      const sel = item === selected ? "selected" : "";
+      return `<option value="${escapeHtml(item)}" ${sel}>${escapeHtml(item)}</option>`;
+    })
+    .join("");
+};
+
 const adminStudentInlineValueMap = {
+  nome: (alunoMeta) => String(alunoMeta?.nome || alunoMeta?.nomeCompleto || alunoMeta?.fullName || alunoMeta?.displayName || alunoMeta?.name || "").trim(),
   email: (alunoMeta) => String(alunoMeta?.email || "").trim(),
   telefone: (alunoMeta) => String(alunoMeta?.telefone || "").trim(),
+  plano: (alunoMeta) => normalizeAdminStudentPlanValue(alunoMeta?.plano || alunoMeta?.plan || ""),
   professorId: (alunoMeta) => String(alunoMeta?.professorId || alunoMeta?.teacherId || "").trim(),
   turma: (alunoMeta) => String(alunoMeta?.groupId || alunoMeta?.groupName || alunoMeta?.turma || alunoMeta?.turmaNome || alunoMeta?.className || "").trim(),
   english_level_start: (alunoMeta) => normalizeAdminStudentEnglishStartValue(alunoMeta?.english_level_start || alunoMeta?.englishLevelStart || ""),
@@ -16655,8 +16677,10 @@ const getAdminStudentInlineValue = (alunoMeta, field) => {
 };
 
 const getAdminStudentDisplayValue = (field, alunoMeta) => {
+  if (field === "nome") return String(alunoMeta?.nome || alunoMeta?.nomeCompleto || alunoMeta?.fullName || alunoMeta?.displayName || alunoMeta?.name || alunoMeta?.email || "").trim() || "Aluno sem nome";
   if (field === "email") return String(alunoMeta?.email || "").trim() || "—";
   if (field === "telefone") return String(alunoMeta?.telefone || "").trim() || "—";
+  if (field === "plano") return normalizeAdminStudentPlanValue(alunoMeta?.plano || alunoMeta?.plan || "") || "Sem plano";
   if (field === "professorId") return String(alunoMeta?.professorNome || alunoMeta?.teacherNome || alunoMeta?.teacherName || "").trim() || "Sem professor";
   if (field === "turma") return String(alunoMeta?.groupName || alunoMeta?.turmaNome || alunoMeta?.className || alunoMeta?.turma || "").trim() || "Sem turma";
   if (field === "english_level_start") return normalizeAdminStudentEnglishStartValue(alunoMeta?.english_level_start || alunoMeta?.englishLevelStart || "") || "—";
@@ -17265,6 +17289,18 @@ const resolveAdminStudentInlinePatch = ({ field, value, alunoMeta } = {}) => {
   const key = String(field || "").trim();
   const nextValue = String(value || "").trim();
   if (!key) return null;
+  if (key === "nome") {
+    const normalized = nextValue || "Aluno sem nome";
+    return {
+      patch: {
+        nome: normalized,
+        nomeCompleto: normalized,
+        name: normalized,
+        displayName: normalized,
+      },
+      displayValue: normalized,
+    };
+  }
   if (key === "email") {
     return {
       patch: {
@@ -17279,6 +17315,16 @@ const resolveAdminStudentInlinePatch = ({ field, value, alunoMeta } = {}) => {
         telefone: nextValue,
       },
       displayValue: nextValue || "—",
+    };
+  }
+  if (key === "plano") {
+    const normalized = normalizeAdminStudentPlanValue(nextValue);
+    return {
+      patch: {
+        plano: normalized,
+        plan: normalized,
+      },
+      displayValue: normalized || "Sem plano",
     };
   }
   if (key === "professorId") {
@@ -17355,6 +17401,11 @@ const saveAdminStudentInlineField = async ({ field, sheetEl } = {}) => {
     cancelAdminStudentInlineEditing({ sheetEl, field });
     return;
   }
+  if (field === "nome" && !nextValue) {
+    setAdminStudentInlineStatus(sheetEl, field, "Informe o nome do aluno.", "error");
+    if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement) control.focus?.();
+    return;
+  }
   const resolved = resolveAdminStudentInlinePatch({ field, value: nextValue, alunoMeta: hist.alunoMeta });
   if (!resolved) {
     cancelAdminStudentInlineEditing({ sheetEl, field });
@@ -17362,17 +17413,21 @@ const saveAdminStudentInlineField = async ({ field, sheetEl } = {}) => {
   }
 
   const saveLabel =
-    field === "email"
+    field === "nome"
+      ? "Salvando nome…"
+      : field === "email"
       ? "Salvando e-mail…"
       : field === "telefone"
         ? "Salvando telefone…"
-        : field === "professorId"
-          ? "Salvando professor…"
-          : field === "turma"
-            ? "Salvando turma…"
-            : field === "english_level_start"
-              ? "Salvando nível…"
-              : "Salvando…";
+        : field === "plano"
+          ? "Salvando plano…"
+          : field === "professorId"
+            ? "Salvando professor…"
+            : field === "turma"
+              ? "Salvando turma…"
+              : field === "english_level_start"
+                ? "Salvando nível…"
+                : "Salvando…";
   hist.inlineSavingField = field;
   setAdminStudentInlineStatus(sheetEl, field, saveLabel, "loading");
   if (control instanceof HTMLInputElement || control instanceof HTMLSelectElement || control instanceof HTMLTextAreaElement) control.disabled = true;
@@ -17998,8 +18053,9 @@ const renderAdminStudentSheet = () => {
   const statusTone = lifecycleBadge.tone ? `is-${lifecycleBadge.tone}` : alunoMeta ? "is-active" : "is-gray";
   const teacherName = hist.teacherMeta?.nome || alunoMeta?.professorNome || alunoMeta?.teacherNome || "";
   const planoRaw = String(alunoMeta?.plano || "").trim();
-  const hasPlano = Boolean(planoRaw);
-  const planoLabel = hasPlano ? planoRaw : "Sem plano";
+  const planoNormalized = normalizeAdminStudentPlanValue(planoRaw);
+  const hasPlano = Boolean(planoNormalized);
+  const planoLabel = hasPlano ? planoNormalized : "Sem plano";
   const planoTone = hasPlano ? "is-plan" : "is-gray";
   const riskLabel = getAdminStudentRiskLabel(hist);
   const riskTone = riskLabel === "Alto" ? "is-danger" : riskLabel === "Médio" ? "is-warn" : riskLabel === "Baixo" ? "is-active" : "is-gray";
@@ -18012,6 +18068,7 @@ const renderAdminStudentSheet = () => {
   const historyHtml = renderAdminStudentSimpleHistoryHtml({ hist, teacherMeta: hist.teacherMeta });
   const teacherOptionsHtml = getAdminStudentTeacherOptions(String(alunoMeta?.professorId || alunoMeta?.teacherId || ""));
   const turmaOptionsHtml = getAdminStudentClassOptions(String(alunoMeta?.groupId || alunoMeta?.groupName || alunoMeta?.turma || alunoMeta?.turmaNome || alunoMeta?.className || ""));
+  const planOptionsHtml = getAdminStudentPlanOptions(planoRaw);
   const englishStartValue = normalizeAdminStudentEnglishStartValue(alunoMeta?.english_level_start || alunoMeta?.englishLevelStart || "");
   const createdInputValue = toAdminStudentDateInputValue(alunoMeta?.criadoEm);
   const avatarPhotoURL = String(alunoMeta?.photoURL || alunoMeta?.photoUrl || "").trim();
@@ -18138,11 +18195,29 @@ const renderAdminStudentSheet = () => {
             <input type="file" hidden accept="image/*" data-admin-student-avatar-file />
           </div>
           <div class="admin-student-id-main">
-            <div class="admin-student-name">${escapeHtml(alunoName)}</div>
+            <div class="admin-student-name admin-student-title-inline">
+              ${buildAdminStudentInlineFieldHtml({
+                field: "nome",
+                label: "Nome",
+                value: getAdminStudentInlineValue(alunoMeta, "nome") || alunoName,
+                displayValue: alunoName,
+                placeholder: "Aluno sem nome",
+              })}
+            </div>
             <div class="admin-student-email">${escapeHtml(alunoEmail || "—")}</div>
             <div class="admin-student-tags">
               <span class="admin-student-tag ${statusTone}">${escapeHtml(statusLabel)}</span>
-              <span class="admin-student-tag ${planoTone}">${escapeHtml(planoLabel)}</span>
+              <span class="admin-student-tag admin-student-plan-inline ${planoTone}">
+                ${buildAdminStudentInlineFieldHtml({
+                  field: "plano",
+                  label: "Plano",
+                  value: planoNormalized,
+                  displayValue: planoLabel,
+                  kind: "select",
+                  optionsHtml: planOptionsHtml,
+                  placeholder: "Sem plano",
+                })}
+              </span>
               <span class="admin-student-tag ${riskTone}">${escapeHtml(`Risco: ${riskLabel || "—"}`)}</span>
             </div>
           </div>
