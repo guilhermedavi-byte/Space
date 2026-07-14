@@ -5384,8 +5384,9 @@ body.admin-student-drawer-open {
 }
 
 .admin-student-title-inline .admin-student-inline-field {
-  display: grid;
-  gap: 5px;
+  position: relative;
+  display: block;
+  min-height: 19px;
   padding: 2px 0;
   border: 1px solid transparent;
   border-radius: 14px;
@@ -5411,20 +5412,48 @@ body.admin-student-drawer-open {
   background: rgba(255, 255, 255, 0.035);
 }
 
+.admin-student-title-inline .admin-student-inline-editor {
+  position: absolute;
+  z-index: 70;
+  inset: 2px 0 auto 0;
+  display: block;
+}
+
 .admin-student-title-inline .admin-student-inline-field.is-editing {
-  padding: 8px;
-  border-color: rgba(255, 86, 79, 0.22);
-  background: rgba(7, 9, 16, 0.72);
-  box-shadow: 0 0 0 3px rgba(255, 86, 79, 0.08);
+  padding: 2px 0;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
 }
 
 .admin-student-title-inline .admin-student-input {
-  height: 36px;
-  border-radius: 12px;
-  border-color: rgba(255, 255, 255, 0.12);
-  background: rgba(7, 9, 16, 0.76);
-  font-size: 14px;
+  width: 100%;
+  height: 19px;
+  min-height: 19px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  background: transparent;
+  box-shadow: none;
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 15px;
   font-weight: 800;
+  line-height: 1.25;
+}
+
+.admin-student-title-inline .admin-student-input:focus {
+  border: 0;
+  box-shadow: none;
+}
+
+.admin-student-title-inline .admin-student-inline-status {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  z-index: 72;
+  padding: 0;
+  white-space: nowrap;
 }
 
 .admin-student-email {
@@ -5464,12 +5493,13 @@ body.admin-student-drawer-open {
 }
 
 .admin-student-plan-inline .admin-student-inline-field {
-  display: grid;
-  gap: 3px;
+  position: relative;
+  display: block;
   padding: 0;
   border: 0;
   background: transparent;
   min-width: 0;
+  min-height: 28px;
 }
 
 .admin-student-plan-inline .admin-student-inline-label {
@@ -5494,25 +5524,35 @@ body.admin-student-drawer-open {
 }
 
 .admin-student-plan-inline .admin-student-inline-editor {
+  position: absolute;
+  z-index: 80;
+  inset: 0 auto auto 0;
   min-width: 136px;
-  padding: 4px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
 }
 
 .admin-student-plan-inline .admin-student-input {
   height: 32px;
-  border-radius: 12px;
-  border-color: rgba(255, 86, 79, 0.24);
-  background: rgba(7, 9, 16, 0.9);
-  color: rgba(255, 255, 255, 0.94);
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: #070910;
+  color: rgba(244, 239, 231, 0.94);
   font-size: 11px;
   font-weight: 750;
   padding: 0 26px 0 10px;
-  appearance: none;
 }
 
 .admin-student-plan-inline .admin-student-inline-status {
-  padding: 0 10px 6px;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 82;
+  padding: 0;
   font-size: 10px;
+  white-space: nowrap;
 }
 
 .admin-student-tag.is-green {
@@ -20977,6 +21017,38 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   border-color: rgba(251, 191, 36, 0.22);
   background: rgba(251, 191, 36, 0.12);
   color: rgba(251, 191, 36, 0.95);
+}
+
+.admin-student-tag.is-plan-gold,
+.admin-students-chip.is-plan-gold,
+.admin-ped-pill.is-plan-gold {
+  border-color: rgba(245, 180, 50, 0.34);
+  background: rgba(245, 180, 50, 0.13);
+  color: rgba(255, 214, 102, 0.96);
+}
+
+.admin-student-tag.is-plan-diamond,
+.admin-students-chip.is-plan-diamond,
+.admin-ped-pill.is-plan-diamond {
+  border-color: rgba(96, 189, 255, 0.34);
+  background: rgba(96, 189, 255, 0.13);
+  color: rgba(148, 220, 255, 0.96);
+}
+
+.admin-student-tag.is-plan-turma,
+.admin-students-chip.is-plan-turma,
+.admin-ped-pill.is-plan-turma {
+  border-color: rgba(167, 139, 250, 0.3);
+  background: rgba(167, 139, 250, 0.12);
+  color: rgba(205, 191, 255, 0.94);
+}
+
+.admin-student-tag.is-plan-empty,
+.admin-students-chip.is-plan-empty,
+.admin-ped-pill.is-plan-empty {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.025);
+  color: rgba(255, 255, 255, 0.62);
 }
 
 .admin-ped-class-actions {

@@ -10077,7 +10077,7 @@ const renderTeacherStudentsList = () => {
             <div>
               <div class="admin-ped-row-title">${escapeHtml(row.nome)}</div>
               <div class="admin-ped-row-meta">
-                ${row.plano ? `<span class="admin-ped-pill is-plan">${escapeHtml(row.plano)}</span>` : ""}
+                ${row.plano ? `<span class="admin-ped-pill ${getAdminStudentPlanToneClass(row.plano)}">${escapeHtml(row.plano)}</span>` : ""}
                 ${row.hasAlert ? `<span class="admin-ped-pill is-warn">${escapeHtml(row.riskLabel || "Risco alto")}</span>` : ""}
               </div>
             </div>
@@ -16487,7 +16487,7 @@ const renderAdminStudentsList = () => {
       const statusPill = row.statusLabel ? `<span class="admin-students-chip is-${statusTone}">${escapeHtml(row.statusLabel)}</span>` : "";
       const teacherChip =
         row.teacherName && row.teacherName !== "—" ? `<span class="admin-students-chip">${escapeHtml(row.teacherName)}</span>` : "";
-      const planChip = row.plano ? `<span class="admin-students-chip">${escapeHtml(row.plano)}</span>` : "";
+      const planChip = row.plano ? `<span class="admin-students-chip ${getAdminStudentPlanToneClass(row.plano)}">${escapeHtml(row.plano)}</span>` : "";
       const countryChip = row.pais ? `<span class="admin-students-chip is-country">${escapeHtml(row.pais)}</span>` : "";
       const chips = [statusPill, teacherChip, planChip, countryChip].filter(Boolean).join("");
 
@@ -16658,6 +16658,16 @@ const getAdminStudentPlanOptions = (selectedValue = "") => {
       return `<option value="${escapeHtml(item)}" ${sel}>${escapeHtml(item)}</option>`;
     })
     .join("");
+};
+
+const getAdminStudentPlanToneClass = (value, { base = "is-plan" } = {}) => {
+  const plan = normalizeAdminStudentPlanValue(value);
+  const classes = [base].filter(Boolean);
+  if (plan === "Gold") classes.push("is-plan-gold");
+  else if (plan === "Diamond") classes.push("is-plan-diamond");
+  else if (plan === "Turma") classes.push("is-plan-turma");
+  else classes.push("is-plan-empty");
+  return classes.join(" ");
 };
 
 const adminStudentInlineValueMap = {
@@ -18092,7 +18102,7 @@ const renderAdminStudentSheet = () => {
   const planoNormalized = normalizeAdminStudentPlanValue(planoRaw);
   const hasPlano = Boolean(planoNormalized);
   const planoLabel = hasPlano ? planoNormalized : "Sem plano";
-  const planoTone = hasPlano ? "is-plan" : "is-gray";
+  const planoTone = hasPlano ? getAdminStudentPlanToneClass(planoNormalized) : "is-gray is-plan-empty";
   const riskLabel = getAdminStudentRiskLabel(hist);
   const riskTone = riskLabel === "Alto" ? "is-danger" : riskLabel === "Médio" ? "is-warn" : riskLabel === "Baixo" ? "is-active" : "is-gray";
   const createdLabel = alunoMeta?.criadoEm ? formatAdminDate(alunoMeta.criadoEm) : "—";
@@ -22346,7 +22356,7 @@ const renderAdminPedagogicoGroups = () => {
                 <div class="admin-ped-row-sub">${escapeHtml(`${teacher} · ${days} · ${time}`)}</div>
                 <div class="admin-ped-row-meta">
                   ${pedStatusPillHtml(g.status)}
-                  ${plan ? `<span class="admin-ped-pill is-plan">${escapeHtml(String(plan))}</span>` : ""}
+                  ${plan ? `<span class="admin-ped-pill ${getAdminStudentPlanToneClass(plan)}">${escapeHtml(String(plan))}</span>` : ""}
                   <span class="admin-ped-pill">${escapeHtml(`${count} aluno${count === 1 ? "" : "s"}`)}</span>
                   ${when ? `<span class="admin-ped-pill">${escapeHtml(when)}</span>` : ""}
                 </div>
@@ -22533,7 +22543,7 @@ const renderAdminPedagogicoStudentsPanel = () => {
               <div>
                 <div class="admin-ped-row-title">${escapeHtml(r.nome)}</div>
                 <div class="admin-ped-row-meta">
-                  <span class="admin-ped-pill is-plan">${escapeHtml(r.plan)}</span>
+                  <span class="admin-ped-pill ${getAdminStudentPlanToneClass(r.plan)}">${escapeHtml(r.plan)}</span>
                   ${r.teacherName ? `<span class="admin-ped-pill">${escapeHtml(r.teacherName)}</span>` : `<span class="admin-ped-pill">Sem professor</span>`}
                   ${r.lifecycleLabel ? `<span class="admin-ped-pill is-${escapeHtml(r.lifecycleTone || "muted")}">${escapeHtml(r.lifecycleLabel)}</span>` : ""}
                 </div>
@@ -22628,7 +22638,7 @@ const renderAdminPedagogicoLinksPanel = () => {
                 <div class="admin-ped-link-title">${escapeHtml(String(s.nome || "Aluno"))}</div>
                 <div class="admin-ped-link-sub">${escapeHtml(String(s.email || ""))}</div>
                 <div class="admin-ped-link-meta">
-                  <span class="admin-ped-pill is-plan">${escapeHtml(String(s.plan || "Sem plano"))}</span>
+                  <span class="admin-ped-pill ${getAdminStudentPlanToneClass(s.plan)}">${escapeHtml(String(s.plan || "Sem plano"))}</span>
                   ${s.teacherName ? `<span class="admin-ped-pill">${escapeHtml(String(s.teacherName))}</span>` : `<span class="admin-ped-pill">Sem professor</span>`}
                   ${s.groupName ? `<span class="admin-ped-pill">${escapeHtml(String(s.groupName))}</span>` : `<span class="admin-ped-pill">Sem turma</span>`}
                 </div>
