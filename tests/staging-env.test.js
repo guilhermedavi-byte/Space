@@ -4,6 +4,8 @@ const fs = require("fs");
 const path = require("path");
 
 const {
+  getFirebaseProjectId,
+  getFirebaseServerConfig,
   getPublicRuntimeConfig,
   validateEnvironmentIsolation,
 } = require("../_lib/runtime-env");
@@ -94,6 +96,28 @@ test("runtime público de staging expõe banner de teste", () => {
   assert.equal(runtime.environment.bannerLabel, "AMBIENTE DE TESTE");
   const serialized = JSON.stringify(runtime);
   assert.doesNotMatch(serialized, /SUPABASE_SERVICE_ROLE_KEY|FIREBASE_SERVICE_ACCOUNT_JSON|GOOGLE_SERVICE_ACCOUNT_JSON|GOOGLE_PRIVATE_KEY|SPACE_AUTH_SECRET|ASAAS_API_KEY|N8N_WEBHOOK_SECRET|CHATWOOT_API_TOKEN/);
+});
+
+test("staging usa service account dedicada quando projectId público não existe", () => {
+  const env = {
+    ...makeBaseEnv(),
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: "",
+    GOOGLE_SERVICE_ACCOUNT_JSON: JSON.stringify({ project_id: "plataforma-space" }),
+    GOOGLE_SERVICE_ACCOUNT_JSON_STAGING: JSON.stringify({ project_id: "space-platform-staging" }),
+  };
+  assert.equal(getFirebaseProjectId(env), "space-platform-staging");
+  assert.equal(getFirebaseServerConfig(env).projectId, "space-platform-staging");
+});
+
+test("produção ignora service account de staging", () => {
+  const env = {
+    APP_ENV: "production",
+    NEXT_PUBLIC_FIREBASE_API_KEY: "prod-key",
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: "",
+    GOOGLE_SERVICE_ACCOUNT_JSON: JSON.stringify({ project_id: "plataforma-space" }),
+    GOOGLE_SERVICE_ACCOUNT_JSON_STAGING: JSON.stringify({ project_id: "space-platform-staging" }),
+  };
+  assert.equal(getFirebaseProjectId(env), "plataforma-space");
 });
 
 test("páginas carregam runtime-config para exibir banner de staging", () => {
