@@ -17116,6 +17116,7 @@ const mergeAdminStudentWithCachedProfile = (existingStudent, incomingStudent) =>
   const next = incomingStudent && typeof incomingStudent === "object" ? incomingStudent : null;
   if (!next) return prev;
   if (!prev) return next;
+  const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj || {}, key);
   const pickName = (...candidates) => {
     for (const candidate of candidates) {
       const safe = String(candidate || "").trim();
@@ -17133,7 +17134,8 @@ const mergeAdminStudentWithCachedProfile = (existingStudent, incomingStudent) =>
   const firestoreNome = String(next.firestoreNome || prev.firestoreNome || "").trim();
   const firestoreEmail = String(next.firestoreEmail || prev.firestoreEmail || "").trim();
   const firestoreTelefone = String(next.firestoreTelefone || prev.firestoreTelefone || "").trim();
-  const firestorePlano = String(next.firestorePlano || prev.firestorePlano || "").trim();
+  const hasNextFirestorePlano = hasOwn(next, "firestorePlano");
+  const firestorePlano = String(hasNextFirestorePlano ? next.firestorePlano || "" : prev.firestorePlano || "").trim();
   const firestoreProfessorId = String(next.firestoreProfessorId || prev.firestoreProfessorId || "").trim();
   const firestoreProfessorNome = String(next.firestoreProfessorNome || prev.firestoreProfessorNome || "").trim();
   const firestoreTipo = String(next.firestoreTipo || prev.firestoreTipo || "").trim();
@@ -17154,7 +17156,7 @@ const mergeAdminStudentWithCachedProfile = (existingStudent, incomingStudent) =>
     teacherNome: firestoreProfessorNome || nextTeacherName || String(prev.teacherNome || prev.professorNome || "").trim(),
     professorId: firestoreProfessorId || nextTeacherId || String(prev.professorId || prev.teacherId || "").trim() || supabaseProfessorId,
     teacherId: firestoreProfessorId || nextTeacherId || String(prev.teacherId || prev.professorId || "").trim() || supabaseProfessorId,
-    plano: firestorePlano || String(next.plano || "").trim() || String(prev.plano || "").trim() || supabasePlano,
+    plano: hasNextFirestorePlano ? firestorePlano : firestorePlano || String(next.plano || "").trim() || String(prev.plano || "").trim() || supabasePlano,
     turma: String(next.turma || "").trim() || String(prev.turma || "").trim(),
     tipo: firestoreTipo || String(next.tipo || prev.tipo || "student"),
     cancelamento: next.firestoreCancelamento ?? prev.firestoreCancelamento ?? next.cancelamento ?? prev.cancelamento ?? null,
