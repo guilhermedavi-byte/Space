@@ -32920,6 +32920,16 @@ document.addEventListener(
   true,
 );
 
+document.addEventListener("pointerdown", (event) => {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  const studentPlanInlineTrigger = target.closest('[data-admin-student-inline-trigger="plano"]');
+  if (!(studentPlanInlineTrigger instanceof HTMLButtonElement)) return;
+  event.preventDefault();
+  adminStudentsState.history.suppressPlanInlineClickUntil = Date.now() + 500;
+  focusAdminStudentInlineField("plano");
+});
+
 document.addEventListener("click", (event) => {
   const target = event.target;
 
@@ -34459,6 +34469,9 @@ document.addEventListener("click", (event) => {
       if (studentInlineTrigger instanceof HTMLButtonElement) {
         event.preventDefault();
         const field = String(studentInlineTrigger.getAttribute("data-admin-student-inline-trigger") || "").trim();
+        if (field === "plano" && Number(adminStudentsState.history.suppressPlanInlineClickUntil || 0) > Date.now()) {
+          return;
+        }
         if (field) focusAdminStudentInlineField(field);
         return;
       }
