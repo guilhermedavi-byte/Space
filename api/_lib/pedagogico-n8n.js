@@ -28,6 +28,8 @@ const buildSecretHeaders = () => {
   return secret ? { "x-space-webhook-secret": secret } : {};
 };
 
+const N8N_WORKFLOW_TIMEOUT_MS = 12_000;
+
 const normalizeResponseBody = async (res) => {
   const text = await res.text().catch(() => "");
   if (!text) return null;
@@ -115,6 +117,11 @@ const callN8nWorkflow = async ({ workflow, envName, origem = "platform", alunoId
 
   await patchIntegrationLog(log.id, { status: "enviado" }).catch(() => null);
 
+  const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timeoutId = controller
+    ? setTimeout(() => controller.abort(), N8N_WORKFLOW_TIMEOUT_MS)
+    : null;
+
   try {
     const res = await fetch(url, {
       method: "POST",
@@ -123,6 +130,7 @@ const callN8nWorkflow = async ({ workflow, envName, origem = "platform", alunoId
         ...buildSecretHeaders(),
       },
       body: JSON.stringify(payload || {}),
+      signal: controller?.signal,
     });
     const responseBody = await normalizeResponseBody(res);
     const status = res.ok ? "sucesso" : "erro";
@@ -133,12 +141,15 @@ const callN8nWorkflow = async ({ workflow, envName, origem = "platform", alunoId
     }).catch(() => log);
     return { ok: res.ok, status: res.status, data: responseBody, log: updated };
   } catch (error) {
+    const message = error?.name === "AbortError" ? "n8n_workflow_timeout" : error?.message || "request_failed";
     const updated = await patchIntegrationLog(log.id, {
       status: "erro",
-      erro: error?.message || "request_failed",
-      resposta_recebida: { error: error?.message || "request_failed" },
+      erro: message,
+      resposta_recebida: { error: message },
     }).catch(() => log);
-    return { ok: false, error: error?.message || "request_failed", log: updated };
+    return { ok: false, error: message, log: updated };
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
   }
 };
 

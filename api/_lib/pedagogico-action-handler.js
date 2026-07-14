@@ -22,12 +22,26 @@ const CONFIG = {
     status: "remarcada",
     workflow: "pedagogico_remarcacao",
     envName: ["N8N_PEDAGOGICO_REMARCACAO_AULA_WEBHOOK_URL", "N8N_PEDAGOGICO_REMARCACAO_URL"],
-    required: ["aula_id", "nova_data_aula", "motivo_remarcacao", "tipo_movimento"],
+    required: ["aula_id", "motivo_remarcacao"],
     missingWebhookMessage: "Webhook de remarcação de aula não configurado",
   },
 };
 
 const missingFields = (body, fields) => fields.filter((field) => body?.[field] == null || String(body[field]).trim() === "");
+
+const normalizeRemarcacaoSituacao = (value, body = {}) => {
+  const raw = String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  if (["agendada_agora", "agendada", "novo_horario", "ja_tenho_novo_horario"].includes(raw)) return "agendada_agora";
+  if (["aguardando_aluno", "aguardando", "aguardando_retorno"].includes(raw)) return "aguardando_aluno";
+  if (["incompatibilidade_horario", "incompatibilidade", "sem_horario_compativel"].includes(raw)) return "incompatibilidade_horario";
+  return body?.nova_data_aula || body?.nova_data ? "agendada_agora" : "";
+};
 
 const normalizePayload = (kind, body, lesson) => {
   const common = {
@@ -57,15 +71,30 @@ const normalizePayload = (kind, body, lesson) => {
       reposicao_necessaria: Boolean(body.reposicao_necessaria),
     };
   }
+  const situacaoReposicao = normalizeRemarcacaoSituacao(body.situacao_reposicao, body);
   return {
     ...common,
     nova_data_aula: String(body.nova_data_aula || ""),
     nova_data: String(body.nova_data_aula || ""),
     motivo_remarcacao: String(body.motivo_remarcacao || ""),
-    tipo_movimento: String(body.tipo_movimento || ""),
-    tipo_remarcacao: String(body.tipo_movimento || ""),
+    tipo_movimento: String(body.tipo_movimento || body.tipo_remarcacao || "remarcacao"),
+    tipo_remarcacao: String(body.tipo_movimento || body.tipo_remarcacao || "remarcacao"),
+    responsavel_remarcacao: String(body.responsavel_remarcacao || ""),
+    data_aviso_remarcacao: String(body.data_aviso_remarcacao || ""),
+    elegibilidade: body.elegibilidade && typeof body.elegibilidade === "object" ? body.elegibilidade : {},
+    situacao_reposicao: situacaoReposicao,
+    needs_admin_review: body.needs_admin_review === true,
     observacoes: String(body.observacoes || ""),
   };
+};
+
+const validateRemarcacaoPayload = (body) => {
+  const missing = [];
+  const situacaoReposicao = normalizeRemarcacaoSituacao(body?.situacao_reposicao, body);
+  if (!situacaoReposicao) missing.push("situacao_reposicao");
+  if (!body?.responsavel_remarcacao && !body?.tipo_movimento) missing.push("responsavel_remarcacao");
+  if (situacaoReposicao === "agendada_agora" && !body?.nova_data_aula && !body?.nova_data) missing.push("nova_data_aula");
+  return missing;
 };
 
 const handlePedagogicoLessonAction = (kind) => async (req, res) => {
@@ -85,6 +114,10 @@ const handlePedagogicoLessonAction = (kind) => async (req, res) => {
   if (!body || typeof body !== "object") return sendJson(res, 400, { error: "invalid_json" });
   const missing = missingFields(body, cfg.required);
   if (missing.length) return sendJson(res, 400, { error: "missing_required_fields", fields: missing });
+  if (kind === "remarcacao_aula") {
+    const remarcacaoMissing = validateRemarcacaoPayload(body);
+    if (remarcacaoMissing.length) return sendJson(res, 400, { error: "missing_required_fields", fields: remarcacaoMissing });
+  }
 
   try {
     const lesson = await fetchLessonById(body.aula_id);

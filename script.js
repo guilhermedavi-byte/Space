@@ -9139,13 +9139,22 @@ const savePedagogicoLog = async ({ autosave = false } = {}) => {
               proxima_aula_recomendada: draft.proximaAula,
             }
       : payload;
-    const res = await fetchWithAuth(requestUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(requestPayload),
-    });
-    if (!res.ok) throw new Error("lesson_log_save_failed");
+    const res = await withTimeout(
+      fetchWithAuth(requestUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestPayload),
+      }),
+      20_000,
+      "teacher_pedagogico_save_log"
+    );
     const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      const error = new Error(data?.message || data?.error || "lesson_log_save_failed");
+      error.code = data?.error || `http_${res.status}`;
+      error.fields = Array.isArray(data?.fields) ? data.fields : [];
+      throw error;
+    }
     const logId =
       typeof data?.id === "string"
         ? data.id
@@ -9188,11 +9197,15 @@ const savePedagogicoLog = async ({ autosave = false } = {}) => {
           documents: [],
           repeat: { enabled: false },
         };
-        const resCreate = await fetchWithAuth("/api/schedule-events", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(createPayload),
-        });
+        const resCreate = await withTimeout(
+          fetchWithAuth("/api/schedule-events", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(createPayload),
+          }),
+          15_000,
+          "teacher_pedagogico_remarcacao_create_event"
+        );
         if (!resCreate.ok) throw new Error("remarcacao_create_failed");
       } catch (error) {
         console.error("[pedagogico] remarcacao create event failed:", error);
@@ -9203,7 +9216,14 @@ const savePedagogicoLog = async ({ autosave = false } = {}) => {
   } catch (error) {
     console.error("[pedagogico] save failed:", error);
     setPedagogicoAutosaveLabel("Erro ao salvar");
-    if (!autosave) setPedagogicoStatus("Não foi possível salvar agora.", "error");
+    if (!autosave) {
+      const fields = Array.isArray(error?.fields) && error.fields.length ? ` Campos: ${error.fields.join(", ")}.` : "";
+      const message =
+        error?.code === "timeout"
+          ? "O salvamento demorou demais. Verifique sua conexão e tente novamente."
+          : `Não foi possível salvar agora.${fields}`;
+      setPedagogicoStatus(message, "error");
+    }
     return false;
   }
 };
@@ -32697,7 +32717,17 @@ document.addEventListener("click", (event) => {
     const pedSave = target.closest("[data-pedagogico-save]");
     if (pedSave instanceof HTMLButtonElement) {
       event.preventDefault();
-      savePedagogicoLog({ autosave: false }).catch(() => {});
+      const originalText = pedSave.textContent || "Salvar registro";
+      pedSave.disabled = true;
+      pedSave.textContent = "Salvando...";
+      savePedagogicoLog({ autosave: false })
+        .catch((error) => {
+          console.error("[pedagogico] save click failed:", error);
+        })
+        .finally(() => {
+          pedSave.disabled = false;
+          pedSave.textContent = originalText;
+        });
       return;
     }
 
