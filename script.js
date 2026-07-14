@@ -30377,6 +30377,24 @@ const openAdminPedagogicoImportStudentsModal = () => {
   const decodeStudentImportFile = async (file) => {
     const buffer = await file.arrayBuffer();
     const bytes = new Uint8Array(buffer);
+    const sample = bytes.slice(0, Math.min(bytes.length, 4096));
+    const countZeroBytes = (parity) => {
+      let count = 0;
+      let total = 0;
+      for (let index = parity; index < sample.length; index += 2) {
+        total += 1;
+        if (sample[index] === 0) count += 1;
+      }
+      return total ? count / total : 0;
+    };
+    const decodeWith = (encoding) => ({
+      text: new TextDecoder(encoding).decode(bytes),
+      encoding,
+    });
+    if (bytes[0] === 0xff && bytes[1] === 0xfe) return decodeWith("utf-16le");
+    if (bytes[0] === 0xfe && bytes[1] === 0xff) return decodeWith("utf-16be");
+    if (countZeroBytes(1) > 0.25) return decodeWith("utf-16le");
+    if (countZeroBytes(0) > 0.25) return decodeWith("utf-16be");
     try {
       return {
         text: new TextDecoder("utf-8", { fatal: true }).decode(bytes),

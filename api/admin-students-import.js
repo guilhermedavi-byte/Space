@@ -40,7 +40,9 @@ const splitCsvLine = (line, sep) => {
   return out;
 };
 
-const stripBom = (value) => String(value || "").replace(/^\uFEFF/, "");
+const stripBom = (value) => String(value || "").replace(/^(\uFEFF|ï»¿|ÿþ|þÿ)/, "");
+
+const normalizeImportText = (value) => stripBom(String(value || "").replace(/\u0000/g, ""));
 
 const normalizeHeader = (value) =>
   stripBom(value)
@@ -86,7 +88,7 @@ const STUDENT_IMPORT_EMAIL_HEADERS = new Set([
 const findStudentImportColumnIndex = (headers, acceptedHeaders) => headers.findIndex((header) => acceptedHeaders.has(header));
 
 const parseStudentImportText = (text) => {
-  const lines = String(text || "")
+  const lines = normalizeImportText(text)
     .replace(/\r/g, "")
     .split("\n")
     .map((line) => line.trim())
@@ -370,4 +372,5 @@ module.exports._private = {
   buildDefaultStudentDocument,
   buildStudentCommitDocumentName,
   isValidEmail,
+  normalizeImportText,
 };

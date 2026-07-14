@@ -30,6 +30,18 @@ test("parseStudentImportText cai para posição quando cabeçalho não é reconh
   assert.deepEqual(rows[0], { lineNumber: 2, name: "Fabio Teste", email: "fabio@example.test" });
 });
 
+test("parseStudentImportText ignora bytes nulos de CSV UTF-16 mal decodificado", () => {
+  const csv =
+    "Nome do aluno,E-MAIL\n" +
+    Array.from({ length: 30 }, (_, index) => `João ${index + 1},joao${index + 1}@example.test`).join("\r\n") +
+    "\r\n".repeat(500);
+  const utf16 = Buffer.from(`\ufeff${csv}`, "utf16le");
+  const decodedAsWindows1252 = new TextDecoder("windows-1252").decode(utf16);
+  const rows = _private.parseStudentImportText(decodedAsWindows1252);
+  assert.equal(rows.length, 30);
+  assert.deepEqual(rows[0], { lineNumber: 2, name: "João 1", email: "joao1@example.test" });
+});
+
 test("documento padrão marca troca obrigatória e ownership Firestore", () => {
   const row = _private.buildDefaultStudentDocument({ uid: "uid123", name: "Aluno Falso", email: "aluno@example.test", adminId: "admin1" });
   assert.equal(row.id, "uid123");
