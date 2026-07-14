@@ -9172,12 +9172,13 @@ const savePedagogicoLog = async ({ autosave = false } = {}) => {
               proxima_aula_recomendada: draft.proximaAula,
             }
       : payload;
-    const res = await withTimeout(
-      fetchWithAuth(requestUrl, {
+    const res = await fetchWithAuthWithTimeout(
+      requestUrl,
+      {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestPayload),
-      }),
+      },
       20_000,
       "teacher_pedagogico_save_log"
     );
@@ -9230,12 +9231,13 @@ const savePedagogicoLog = async ({ autosave = false } = {}) => {
           documents: [],
           repeat: { enabled: false },
         };
-        const resCreate = await withTimeout(
-          fetchWithAuth("/api/schedule-events", {
+        const resCreate = await fetchWithAuthWithTimeout(
+          "/api/schedule-events",
+          {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(createPayload),
-          }),
+          },
           15_000,
           "teacher_pedagogico_remarcacao_create_event"
         );
@@ -11057,6 +11059,26 @@ const withTimeout = (promise, ms, label) => {
   });
 
   return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timeoutId) window.clearTimeout(timeoutId);
+  });
+};
+
+const fetchWithAuthWithTimeout = async (input, init = {}, ms = 15_000, label = "") => {
+  const timeoutMs = Number(ms);
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return fetchWithAuth(input, init);
+  const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+  let timeoutId;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = window.setTimeout(() => {
+      if (controller) controller.abort();
+      const error = new Error("timeout");
+      error.code = "timeout";
+      error.label = label || "";
+      reject(error);
+    }, timeoutMs);
+  });
+  const requestPromise = fetchWithAuth(input, { ...(init || {}), signal: controller?.signal });
+  return Promise.race([requestPromise, timeoutPromise]).finally(() => {
     if (timeoutId) window.clearTimeout(timeoutId);
   });
 };
