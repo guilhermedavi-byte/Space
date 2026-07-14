@@ -18,6 +18,18 @@ test("parseStudentImportText aceita lista sem cabeçalho", () => {
   assert.deepEqual(rows[0], { lineNumber: 1, name: "Carla Teste", email: "carla@example.test" });
 });
 
+test("parseStudentImportText aceita variações comuns de cabeçalho", () => {
+  const rows = _private.parseStudentImportText(" Nome do aluno ; E-MAIL \n Elisa Teste ; ELISA@EXAMPLE.TEST ");
+  assert.equal(rows.length, 1);
+  assert.deepEqual(rows[0], { lineNumber: 2, name: "Elisa Teste", email: "elisa@example.test" });
+});
+
+test("parseStudentImportText cai para posição quando cabeçalho não é reconhecido", () => {
+  const rows = _private.parseStudentImportText("Pessoa,Contato\nFabio Teste,fabio@example.test");
+  assert.equal(rows.length, 1);
+  assert.deepEqual(rows[0], { lineNumber: 2, name: "Fabio Teste", email: "fabio@example.test" });
+});
+
 test("documento padrão marca troca obrigatória e ownership Firestore", () => {
   const row = _private.buildDefaultStudentDocument({ uid: "uid123", name: "Aluno Falso", email: "aluno@example.test", adminId: "admin1" });
   assert.equal(row.id, "uid123");

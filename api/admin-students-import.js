@@ -51,6 +51,40 @@ const normalizeHeader = (value) =>
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
 
+const STUDENT_IMPORT_NAME_HEADERS = new Set([
+  "nome",
+  "name",
+  "aluno",
+  "student",
+  "estudante",
+  "nome_aluno",
+  "nome_do_aluno",
+  "nome_estudante",
+  "nome_do_estudante",
+  "nome_completo",
+  "full_name",
+  "student_name",
+  "display_name",
+]);
+
+const STUDENT_IMPORT_EMAIL_HEADERS = new Set([
+  "email",
+  "e_mail",
+  "mail",
+  "email_aluno",
+  "email_do_aluno",
+  "e_mail_aluno",
+  "e_mail_do_aluno",
+  "email_estudante",
+  "email_do_estudante",
+  "e_mail_estudante",
+  "e_mail_do_estudante",
+  "correio",
+  "correio_eletronico",
+]);
+
+const findStudentImportColumnIndex = (headers, acceptedHeaders) => headers.findIndex((header) => acceptedHeaders.has(header));
+
 const parseStudentImportText = (text) => {
   const lines = String(text || "")
     .replace(/\r/g, "")
@@ -62,15 +96,19 @@ const parseStudentImportText = (text) => {
   const delimiter = lines[0].includes(";") ? ";" : lines[0].includes("\t") ? "\t" : ",";
   const firstCells = splitCsvLine(lines[0], delimiter);
   const headers = firstCells.map(normalizeHeader);
-  const hasHeader = headers.some((header) => ["nome", "name", "aluno", "email", "e_mail", "mail"].includes(header));
-  const dataLines = hasHeader ? lines.slice(1) : lines;
-  const nameIndex = hasHeader ? headers.findIndex((header) => ["nome", "name", "aluno"].includes(header)) : 0;
-  const emailIndex = hasHeader ? headers.findIndex((header) => ["email", "e_mail", "mail"].includes(header)) : 1;
+  const nameHeaderIndex = findStudentImportColumnIndex(headers, STUDENT_IMPORT_NAME_HEADERS);
+  const emailHeaderIndex = findStudentImportColumnIndex(headers, STUDENT_IMPORT_EMAIL_HEADERS);
+  const hasRecognizedHeader = nameHeaderIndex >= 0 || emailHeaderIndex >= 0;
+  const firstLineLooksLikeData = firstCells.some((cell) => isValidEmail(cell));
+  const shouldSkipFirstLine = hasRecognizedHeader || (!firstLineLooksLikeData && lines.length > 1);
+  const dataLines = shouldSkipFirstLine ? lines.slice(1) : lines;
+  const nameIndex = nameHeaderIndex >= 0 ? nameHeaderIndex : 0;
+  const emailIndex = emailHeaderIndex >= 0 ? emailHeaderIndex : 1;
 
   return dataLines.map((line, index) => {
     const cells = splitCsvLine(line, delimiter);
     return {
-      lineNumber: (hasHeader ? 2 : 1) + index,
+      lineNumber: (shouldSkipFirstLine ? 2 : 1) + index,
       name: normalizeName(cells[nameIndex] || ""),
       email: normalizeEmail(cells[emailIndex] || ""),
     };
