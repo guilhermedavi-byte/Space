@@ -1679,7 +1679,10 @@ module.exports = async (req, res) => {
       }
 
       for (const chunk of chunks) {
-        const commit = await firestoreCommitWrites({ idToken, writes: chunk });
+        const commit =
+          role === "admin"
+            ? await commitWritesAsAdmin({ writes: chunk })
+            : await firestoreCommitWrites({ idToken, writes: chunk });
         if (!commit.ok) {
           // eslint-disable-next-line no-console
           console.error("[api] schedule events commit failed", {
