@@ -1,13 +1,11 @@
 const { readJsonBody, sendJson } = require("../_lib/http");
-const { getFirebaseServerConfig } = require("../_lib/runtime-env");
-const { getGoogleAccessToken } = require("../_lib/google-service-account");
 const { resolveAdminRequestAuth } = require("./_lib/admin-request-auth");
 const { commitWritesAsAdmin, listCollectionAsAdmin } = require("./_lib/firestore-admin");
-const { PROJECT_ID, encodeFields, requestJson } = require("./_lib/firestore-rest");
+const { PROJECT_ID, encodeFields } = require("./_lib/firestore-rest");
+const { createAuthUserWithPassword, deleteAuthUserBestEffort } = require("./_lib/firebase-auth-admin");
 const { syncStudentMirrorToSupabase } = require("./_lib/student-mirror-sync");
 
 const DEFAULT_PASSWORD = "Space123";
-const CLOUD_PLATFORM_SCOPE = "https://www.googleapis.com/auth/cloud-platform";
 
 const normalizeEmail = (value) => String(value || "").trim().toLowerCase();
 const normalizeName = (value) => String(value || "").trim().replace(/\s+/g, " ");
@@ -163,31 +161,6 @@ const listExistingStudentEmails = async () => {
   return emails;
 };
 
-const createAuthUserWithPassword = async ({ email, password, displayName }) => {
-  const { apiKey } = getFirebaseServerConfig();
-  if (!apiKey) throw new Error("missing_firebase_api_key");
-  const url = `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${encodeURIComponent(apiKey)}`;
-  const response = await requestJson(url, {
-    method: "POST",
-    body: {
-      email,
-      password,
-      displayName,
-      returnSecureToken: true,
-    },
-  });
-  if (!response.ok) {
-    const rawMessage = String(response.data?.error?.message || response.text || "auth_create_failed");
-    const error = new Error(rawMessage);
-    error.code = rawMessage;
-    error.status = response.status;
-    throw error;
-  }
-  const uid = String(response.data?.localId || "").trim();
-  if (!uid) throw new Error("missing_auth_uid");
-  return { uid };
-};
-
 const buildStudentCommitDocumentName = (uid) => {
   const safeUid = String(uid || "").trim();
   if (!PROJECT_ID) {
@@ -201,24 +174,6 @@ const buildStudentCommitDocumentName = (uid) => {
     throw error;
   }
   return `projects/${PROJECT_ID}/databases/(default)/documents/users/${encodeURIComponent(safeUid)}`;
-};
-
-const deleteAuthUserBestEffort = async (uid) => {
-  const localId = String(uid || "").trim();
-  if (!localId) return;
-  try {
-    if (!PROJECT_ID) return;
-    const token = await getGoogleAccessToken({ scope: CLOUD_PLATFORM_SCOPE });
-    const accessToken = String(token?.accessToken || "");
-    if (!accessToken) return;
-    await requestJson(`https://identitytoolkit.googleapis.com/v1/projects/${encodeURIComponent(PROJECT_ID)}/accounts:delete`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${accessToken}` },
-      body: { localId },
-    });
-  } catch (error) {
-    console.warn("[admin-students-import] auth rollback failed", { uid: localId, message: error?.message || String(error || "") });
-  }
 };
 
 const createStudentFirestoreDoc = async ({ uid, name, email, adminId }) => {

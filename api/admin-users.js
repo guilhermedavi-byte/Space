@@ -3,6 +3,7 @@ const { getSessionFromRequest } = require("../_lib/session");
 const { verifyFirebaseIdToken } = require("../_lib/firebase-id-token");
 const { getBearerTokenFromRequest, PROJECT_ID, encodeFields } = require("./_lib/firestore-rest");
 const { commitWritesAsAdmin } = require("./_lib/firestore-admin");
+const { createAuthUserWithPassword, deleteAuthUserBestEffort } = require("./_lib/firebase-auth-admin");
 const { syncStudentMirrorToSupabase } = require("./_lib/student-mirror-sync");
 
 const normalizeRole = (value) => {
@@ -47,6 +48,78 @@ const buildUserCommitDocumentName = (uid) => {
     throw error;
   }
   return `projects/${PROJECT_ID}/databases/(default)/documents/users/${encodeURIComponent(safeUid)}`;
+};
+
+const normalizeText = (value) => String(value || "").trim();
+
+const normalizeEmail = (value) => normalizeText(value).toLowerCase();
+
+const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(value));
+
+const buildCreateUserDocument = ({ uid, role, name, email, adminId, extra = {} }) => {
+  const nowIso = new Date().toISOString();
+  const base = {
+    ...sanitizePatchValue(extra),
+    id: uid,
+    uid,
+    authUserId: uid,
+    firestoreDocId: uid,
+    docId: uid,
+    nome: name,
+    nomeCompleto: name,
+    name,
+    displayName: name,
+    email,
+    tipo: role,
+    role,
+    ativo: true,
+    status: "ativo",
+    createdBy: adminId || "",
+    criadoEm: nowIso,
+    createdAt: nowIso,
+    atualizadoEm: nowIso,
+    updatedAt: nowIso,
+    source: "admin_create_user",
+  };
+  if (role === "student") {
+    base.telefone = normalizeText(base.telefone);
+    base.plano = normalizeText(base.plano);
+    base.professorId = normalizeText(base.professorId);
+    base.professorNome = normalizeText(base.professorNome);
+    base.turma = normalizeText(base.turma);
+    base.nivelInglesAtual = normalizeText(base.nivelInglesAtual);
+    base.objetivoPrincipal = normalizeText(base.objetivoPrincipal);
+    base.observacoesPedagogicas = normalizeText(base.observacoesPedagogicas);
+  }
+  return base;
+};
+
+const createUserDocAsAdmin = async ({ uid, data }) =>
+  commitWritesAsAdmin({
+    writes: [
+      {
+        update: {
+          name: buildUserCommitDocumentName(uid),
+          fields: encodeFields(data).fields,
+        },
+        currentDocument: {
+          exists: false,
+        },
+      },
+    ],
+  });
+
+const extractBackendErrorDetail = (error) => {
+  const detail = error?.details;
+  if (detail && typeof detail === "object") {
+    const nested = detail.error && typeof detail.error === "object" ? detail.error : detail;
+    const message = String(nested.message || "").trim();
+    const status = String(nested.status || "").trim();
+    const code = nested.code ? String(nested.code).trim() : "";
+    if (message) return [status || code, message].filter(Boolean).join(": ");
+  }
+  if (typeof detail === "string" && detail.trim()) return detail.trim();
+  return String(error?.message || error?.code || "").trim();
 };
 
 const patchUserAsAdmin = async ({ uid, data }) => {
@@ -129,6 +202,78 @@ module.exports = async (req, res) => {
       return;
     }
 
+    if (action === "create_user") {
+      const email = normalizeEmail(body?.email);
+      const password = String(body?.password || "");
+      const extra = body?.extra && typeof body.extra === "object" ? body.extra : {};
+
+      if (!name || !email || !role || !password) {
+        sendJson(res, 400, { error: "invalid_request", errorDetail: "Nome, e-mail, perfil e senha são obrigatórios." });
+        return;
+      }
+      if (!isValidEmail(email)) {
+        sendJson(res, 400, { error: "invalid_email", errorDetail: "E-mail inválido." });
+        return;
+      }
+      if (password.length < 6) {
+        sendJson(res, 400, { error: "weak_password", errorDetail: "Senha mínimo 6 caracteres." });
+        return;
+      }
+
+      let createdUid = "";
+      try {
+        const createdAuth = await createAuthUserWithPassword({ email, password, displayName: name });
+        createdUid = createdAuth.uid;
+        const doc = buildCreateUserDocument({
+          uid: createdUid,
+          role,
+          name,
+          email,
+          adminId,
+          extra,
+        });
+        const writeResult = await createUserDocAsAdmin({ uid: createdUid, data: doc });
+        if (!writeResult.ok) {
+          const error = new Error("firestore_create_user_failed");
+          error.code = "firestore_create_user_failed";
+          error.status = writeResult.status;
+          error.details = writeResult.data || writeResult.text || null;
+          throw error;
+        }
+        let sync = null;
+        if (role === "student") {
+          syncStudentMirrorToSupabase(createdUid).catch((syncError) => {
+            console.warn("[api] admin-users create mirror sync failed", {
+              uid: createdUid,
+              message: syncError?.message || String(syncError || ""),
+            });
+          });
+        }
+        sendJson(res, 200, { ok: true, uid: createdUid, user: doc, sync });
+        return;
+      } catch (error) {
+        if (createdUid) await deleteAuthUserBestEffort(createdUid, { logPrefix: "[api] admin-users create" });
+        const errorDetail = extractBackendErrorDetail(error);
+        console.error("[api] admin-users create failed", {
+          role,
+          email,
+          uid: createdUid,
+          code: error?.code || "",
+          status: error?.status || 0,
+          errorDetail,
+        });
+        const code = String(error?.code || error?.message || "admin_user_create_failed");
+        const status = Number(error?.status) || (/EMAIL_EXISTS/i.test(code) ? 409 : 500);
+        sendJson(res, status, {
+          error: "admin_user_create_failed",
+          code,
+          errorDetail: errorDetail || code,
+          authStatus: error?.status || 0,
+        });
+        return;
+      }
+    }
+
     if (!uid || !name || !role) {
       sendJson(res, 400, { error: "invalid_request" });
       return;
@@ -198,4 +343,10 @@ module.exports = async (req, res) => {
       code: error?.code || "",
     });
   }
+};
+
+module.exports._private = {
+  buildCreateUserDocument,
+  extractBackendErrorDetail,
+  normalizeEmail,
 };

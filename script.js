@@ -31270,100 +31270,72 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
           if (modalSecondary) modalSecondary.disabled = true;
           if (modalPrimary) modalPrimary.textContent = "Cadastrando…";
 
-          const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init");
-
-          let credential;
-          try {
-            credential = await withTimeout(
-              firebase.createUserWithEmailAndPassword(firebase.secondaryAuth, email, password),
-              12_000,
-              "auth_create_user"
-            );
-          } catch (authErr) {
-            console.error("[admin] create teacher/student (auth) failed:", authErr);
-            throw authErr;
-          }
-
-          const uid = String(credential?.user?.uid || "").trim();
-          if (!uid) throw new Error("missing_uid");
-
-	          const payload = { nome: name, email, tipo: role, ativo: true, criadoEm: firebase.serverTimestamp() };
-            if (role === "student") {
-              const endereco = addressEl instanceof HTMLInputElement ? String(addressEl.value || "").trim() : "";
-              const plano =
-                planEl instanceof HTMLSelectElement ? String(planEl.value || "").trim() : planEl instanceof HTMLInputElement ? String(planEl.value || "").trim() : "";
-              const pais =
-                countryEl instanceof HTMLSelectElement
+          const extra = {};
+          if (role === "student") {
+            const endereco = addressEl instanceof HTMLInputElement ? String(addressEl.value || "").trim() : "";
+            const plano =
+              planEl instanceof HTMLSelectElement ? String(planEl.value || "").trim() : planEl instanceof HTMLInputElement ? String(planEl.value || "").trim() : "";
+            const pais =
+              countryEl instanceof HTMLSelectElement
+                ? String(countryEl.value || "").trim()
+                : countryEl instanceof HTMLInputElement
                   ? String(countryEl.value || "").trim()
-                  : countryEl instanceof HTMLInputElement
-                    ? String(countryEl.value || "").trim()
-                    : "";
-	              const estadoEua =
-	                usStateEl instanceof HTMLSelectElement
-	                  ? String(usStateEl.value || "").trim()
-	                  : usStateEl instanceof HTMLInputElement
-	                    ? String(usStateEl.value || "").trim()
-	                    : "";
-	              const mensalidadeRaw = monthlyEl instanceof HTMLInputElement ? String(monthlyEl.value || "").trim() : "";
-	              const valorMensalidade = parseMoneyPtBrLoose(mensalidadeRaw);
-	              const contract = contractEl instanceof HTMLSelectElement ? String(contractEl.value || "").trim() : "";
-	              const contractCustomRaw = contractCustomEl instanceof HTMLInputElement ? String(contractCustomEl.value || "").trim() : "";
-	              const contractCustomMonths = Number.parseInt(contractCustomRaw, 10);
-	              const tempoContrato = contract === "12" ? 12 : contract === "6" ? 6 : contract === "custom" && Number.isFinite(contractCustomMonths) ? contractCustomMonths : 0;
-	              const faixaIdade = ageEl instanceof HTMLSelectElement ? String(ageEl.value || "").trim() : "";
-              const genero = genderEl instanceof HTMLSelectElement ? String(genderEl.value || "").trim() : "";
-              const trabalho =
-                jobEl instanceof HTMLSelectElement ? String(jobEl.value || "").trim() : jobEl instanceof HTMLInputElement ? String(jobEl.value || "").trim() : "";
-              const possuiFilhos = kidsEl instanceof HTMLSelectElement ? String(kidsEl.value || "").trim() : "";
-              const casado = marriedEl instanceof HTMLSelectElement ? String(marriedEl.value || "").trim() : "";
-              const pretendeVoltarBrasil = returnEl instanceof HTMLSelectElement ? String(returnEl.value || "").trim() : "";
-              const objetivoPrincipal = goalEl instanceof HTMLTextAreaElement ? String(goalEl.value || "").trim() : "";
-              const nivelInglesAtual = englishEl instanceof HTMLSelectElement ? String(englishEl.value || "").trim() : "";
+                  : "";
+            const estadoEua =
+              usStateEl instanceof HTMLSelectElement
+                ? String(usStateEl.value || "").trim()
+                : usStateEl instanceof HTMLInputElement
+                  ? String(usStateEl.value || "").trim()
+                  : "";
+            const mensalidadeRaw = monthlyEl instanceof HTMLInputElement ? String(monthlyEl.value || "").trim() : "";
+            const valorMensalidade = parseMoneyPtBrLoose(mensalidadeRaw);
+            const contract = contractEl instanceof HTMLSelectElement ? String(contractEl.value || "").trim() : "";
+            const contractCustomRaw = contractCustomEl instanceof HTMLInputElement ? String(contractCustomEl.value || "").trim() : "";
+            const contractCustomMonths = Number.parseInt(contractCustomRaw, 10);
+            const tempoContrato = contract === "12" ? 12 : contract === "6" ? 6 : contract === "custom" && Number.isFinite(contractCustomMonths) ? contractCustomMonths : 0;
+            const faixaIdade = ageEl instanceof HTMLSelectElement ? String(ageEl.value || "").trim() : "";
+            const genero = genderEl instanceof HTMLSelectElement ? String(genderEl.value || "").trim() : "";
+            const trabalho =
+              jobEl instanceof HTMLSelectElement ? String(jobEl.value || "").trim() : jobEl instanceof HTMLInputElement ? String(jobEl.value || "").trim() : "";
+            const possuiFilhos = kidsEl instanceof HTMLSelectElement ? String(kidsEl.value || "").trim() : "";
+            const casado = marriedEl instanceof HTMLSelectElement ? String(marriedEl.value || "").trim() : "";
+            const pretendeVoltarBrasil = returnEl instanceof HTMLSelectElement ? String(returnEl.value || "").trim() : "";
+            const objetivoPrincipal = goalEl instanceof HTMLTextAreaElement ? String(goalEl.value || "").trim() : "";
+            const nivelInglesAtual = englishEl instanceof HTMLSelectElement ? String(englishEl.value || "").trim() : "";
 
-              payload.endereco = endereco;
-              payload.plano = plano;
-              payload.pais = pais;
-              if (estadoEua) payload.estadoEua = estadoEua;
-              payload.valorMensalidade = Number.isFinite(valorMensalidade) ? valorMensalidade : null;
-              payload.tempoContrato = tempoContrato;
-              payload.faixaIdade = faixaIdade;
-              payload.genero = genero;
-              payload.trabalho = trabalho;
-              payload.possuiFilhos = possuiFilhos;
-              payload.casado = casado;
-              payload.pretendeVoltarBrasil = pretendeVoltarBrasil;
-              payload.objetivoPrincipal = objetivoPrincipal;
-              payload.nivelInglesAtual = nivelInglesAtual;
-            }
-	          try {
-	            await withTimeout(
-	              firebase.setDoc(firebase.doc(firebase.primaryDb, "users", uid), payload, { merge: true }),
-	              12_000,
-	              "firestore_setDoc_primary"
-            );
-          } catch (primaryErr) {
-            console.error("[admin] create teacher/student (firestore primary) failed:", primaryErr);
-            try {
-              await withTimeout(
-                firebase.setDoc(firebase.doc(firebase.secondaryDb, "users", uid), payload, { merge: true }),
-                12_000,
-                "firestore_setDoc_secondary"
-              );
-            } catch (secondaryErr) {
-              console.error("[admin] create teacher/student (firestore secondary) failed:", secondaryErr);
-              throw secondaryErr;
-            }
+            extra.endereco = endereco;
+            extra.plano = plano;
+            extra.pais = pais;
+            if (estadoEua) extra.estadoEua = estadoEua;
+            extra.valorMensalidade = Number.isFinite(valorMensalidade) ? valorMensalidade : null;
+            extra.tempoContrato = tempoContrato;
+            extra.faixaIdade = faixaIdade;
+            extra.genero = genero;
+            extra.trabalho = trabalho;
+            extra.possuiFilhos = possuiFilhos;
+            extra.casado = casado;
+            extra.pretendeVoltarBrasil = pretendeVoltarBrasil;
+            extra.objetivoPrincipal = objetivoPrincipal;
+            extra.nivelInglesAtual = nivelInglesAtual;
           }
 
-          await withTimeout(
+          const createResponse = await withTimeout(
             fetchWithAuth("/api/admin-users", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ uid, role, name }),
-            }).catch(() => {}),
-            8000,
-            "admin_users_sync"
+              body: JSON.stringify({ action: "create_user", role, name, email, password, extra }),
+            }),
+            20_000,
+            "admin_users_create"
           );
+          const createData = await createResponse.json().catch(() => null);
+          if (!createResponse.ok || !createData?.ok) {
+            const error = new Error(createData?.errorDetail || createData?.code || createData?.error || "admin_user_create_failed");
+            error.code = createData?.code || createData?.error || "";
+            error.status = createResponse.status;
+            error.details = createData;
+            throw error;
+          }
 
           adminUsersState.teacher.loadedAt = 0;
           adminUsersState.student.loadedAt = 0;
@@ -31389,22 +31361,16 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
 	        } catch (e) {
 	          console.error("[admin] create teacher/student failed:", e);
 	          const code = typeof e?.code === "string" ? e.code : "";
-	          let msg = "Não foi possível criar agora.";
-          if (code === "auth/email-already-in-use") msg = "Este e-mail já está cadastrado";
-          if (code === "auth/weak-password") msg = "Senha muito fraca";
-          if (code === "auth/invalid-email") msg = "E-mail inválido";
+	          let msg = e?.details?.errorDetail || e?.details?.code || e?.message || "Não foi possível criar agora.";
+          if (/EMAIL_EXISTS|email-already-in-use/i.test(code) || /EMAIL_EXISTS|email.*cadastrado|email.*uso/i.test(msg)) msg = "Este e-mail já está cadastrado";
+          if (/WEAK_PASSWORD|weak-password/i.test(code) || /WEAK_PASSWORD/i.test(msg)) msg = "Senha muito fraca";
+          if (/INVALID_EMAIL|invalid-email/i.test(code) || /INVALID_EMAIL/i.test(msg)) msg = "E-mail inválido";
           if (code === "timeout") msg = "Tempo esgotado. Tente novamente.";
           if (errorEl instanceof HTMLElement) {
             errorEl.textContent = msg;
             errorEl.hidden = false;
           }
         } finally {
-          try {
-            const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init");
-            await withTimeout(firebase.signOut(firebase.secondaryAuth), 6000, "auth_secondary_signout");
-          } catch (e) {
-            // ignore
-          }
           if (modalPrimary) modalPrimary.disabled = false;
           if (modalSecondary) modalSecondary.disabled = false;
           if (modalPrimary && previousPrimaryLabel) modalPrimary.textContent = previousPrimaryLabel;
