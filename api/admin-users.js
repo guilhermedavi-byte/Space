@@ -1,7 +1,8 @@
 const { readJsonBody, sendJson } = require("../_lib/http");
 const { getSessionFromRequest } = require("../_lib/session");
 const { verifyFirebaseIdToken } = require("../_lib/firebase-id-token");
-const { getBearerTokenFromRequest, firestorePatchDocument } = require("./_lib/firestore-rest");
+const { getBearerTokenFromRequest, PROJECT_ID, encodeFields } = require("./_lib/firestore-rest");
+const { commitWritesAsAdmin } = require("./_lib/firestore-admin");
 const { syncStudentMirrorToSupabase } = require("./_lib/student-mirror-sync");
 
 const normalizeRole = (value) => {
@@ -31,6 +32,47 @@ const sanitizePatchValue = (value) => {
       .map(([key, entryValue]) => [key, sanitizePatchValue(entryValue)])
       .filter(([, entryValue]) => entryValue !== undefined)
   );
+};
+
+const buildUserCommitDocumentName = (uid) => {
+  const safeUid = String(uid || "").trim();
+  if (!PROJECT_ID) {
+    const error = new Error("missing_firestore_project_id");
+    error.code = "missing_firestore_project_id";
+    throw error;
+  }
+  if (!safeUid) {
+    const error = new Error("missing_user_uid");
+    error.code = "missing_user_uid";
+    throw error;
+  }
+  return `projects/${PROJECT_ID}/databases/(default)/documents/users/${encodeURIComponent(safeUid)}`;
+};
+
+const patchUserAsAdmin = async ({ uid, data }) => {
+  const cleanData = data && typeof data === "object" ? data : {};
+  const updateMask = Object.keys(cleanData);
+  if (!updateMask.length) {
+    const error = new Error("empty_patch");
+    error.code = "empty_patch";
+    throw error;
+  }
+  return commitWritesAsAdmin({
+    writes: [
+      {
+        update: {
+          name: buildUserCommitDocumentName(uid),
+          fields: encodeFields(cleanData).fields,
+        },
+        updateMask: {
+          fieldPaths: updateMask,
+        },
+        currentDocument: {
+          exists: true,
+        },
+      },
+    ],
+  });
 };
 
 module.exports = async (req, res) => {
@@ -130,14 +172,19 @@ module.exports = async (req, res) => {
   cleanPatch.updatedAt = cleanPatch.atualizadoEm;
 
   try {
-    const result = await firestorePatchDocument({
-      docPath: `users/${uid}`,
-      idToken,
-      data: cleanPatch,
-      updateMaskPaths: Object.keys(cleanPatch),
-    });
+    const result = await patchUserAsAdmin({ uid, data: cleanPatch });
     if (!result.ok) {
-      sendJson(res, result.status || 500, { error: "firestore_patch_failed" });
+      const errorDetail = result.data?.error?.message || result.text || "firestore_patch_failed";
+      console.warn("[api] admin-users Firestore patch failed", {
+        uid,
+        status: result.status,
+        errorDetail,
+      });
+      sendJson(res, result.status || 500, {
+        error: "firestore_patch_failed",
+        errorDetail,
+        firestoreStatus: result.status || 0,
+      });
       return;
     }
     // OWNERSHIP: cadastro=Firestore, operação=Supabase (contrato 2026-07-12)
@@ -145,6 +192,10 @@ module.exports = async (req, res) => {
     sendJson(res, 200, { ok: true, sync });
   } catch (error) {
     console.error("[api] admin-users patch failed", error);
-    sendJson(res, 500, { error: "admin_users_patch_failed" });
+    sendJson(res, 500, {
+      error: "admin_users_patch_failed",
+      errorDetail: error?.message || String(error || ""),
+      code: error?.code || "",
+    });
   }
 };

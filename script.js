@@ -1570,7 +1570,7 @@ const renderAdminAlertsList = (alerts) => {
   adminAlertsList.innerHTML = safeRows
     .map((a) => {
       const aluno = String(a?.alunoNome || a?.alunoId || "Aluno");
-      const prof = String(a?.professorNome || a?.professorId || "Professor");
+      const prof = getAdminTeacherDisplayNameById(a?.professorId, { fallback: a?.professorNome || "Professor" }) || "Professor";
       const dateKey = String(a?.dateKey || "");
       const when = isValidDateKey(dateKey) ? formatPedagogicoDate(dateKey) : "—";
       const nextKey = String(a?.novaDataRemarcacao || "");
@@ -10077,7 +10077,7 @@ const renderTeacherStudentsList = () => {
             <div>
               <div class="admin-ped-row-title">${escapeHtml(row.nome)}</div>
               <div class="admin-ped-row-meta">
-                ${row.plano ? `<span class="admin-ped-pill is-plan">${escapeHtml(row.plano)}</span>` : ""}
+                ${row.plano ? `<span class="admin-ped-pill ${getAdminStudentPlanToneClass(row.plano)}">${escapeHtml(row.plano)}</span>` : ""}
                 ${row.hasAlert ? `<span class="admin-ped-pill is-warn">${escapeHtml(row.riskLabel || "Risco alto")}</span>` : ""}
               </div>
             </div>
@@ -11564,6 +11564,68 @@ let adminStudentsState = {
     photoError: "",
   },
 };
+
+function getAdminTeacherDisplayNameById(teacherId, { fallback = "", allowRawIdFallback = false } = {}) {
+  const id = String(teacherId || "").trim();
+  const fallbackText = String(fallback || "").trim();
+  if (!id) return fallbackText;
+  const isRawIdFallback = fallbackText && fallbackText === id;
+  const pickTeacherName = (teacher) => {
+    if (!teacher || typeof teacher !== "object") return "";
+    return String(teacher.nome || teacher.name || teacher.displayName || teacher.email || "").trim();
+  };
+  const mapCandidates = [
+    adminStudentsState?.teachersById instanceof Map ? adminStudentsState.teachersById : null,
+    typeof adminPedagogicoState !== "undefined" && adminPedagogicoState?.teachersById instanceof Map ? adminPedagogicoState.teachersById : null,
+  ].filter(Boolean);
+  for (const map of mapCandidates) {
+    const name = pickTeacherName(map.get(id));
+    if (name) return name;
+  }
+  const listCandidates = [
+    Array.isArray(adminStudentsState?.teachers) ? adminStudentsState.teachers : [],
+    typeof adminPedagogicoState !== "undefined" && Array.isArray(adminPedagogicoState?.teachers) ? adminPedagogicoState.teachers : [],
+  ];
+  for (const list of listCandidates) {
+    const found = list.find((teacher) => {
+      const ids = [teacher?.id, teacher?.uid, teacher?.authUserId, teacher?.firestoreDocId, teacher?.docId, teacher?.documentId]
+        .map((value) => String(value || "").trim())
+        .filter(Boolean);
+      return ids.includes(id);
+    });
+    const name = pickTeacherName(found);
+    if (name) return name;
+  }
+  if (fallbackText && !isRawIdFallback) return fallbackText;
+  return allowRawIdFallback ? id : "";
+}
+
+function buildAdminTeacherMap(teachers = []) {
+  const map = new Map();
+  (Array.isArray(teachers) ? teachers : []).forEach((teacher) => {
+    if (!teacher || typeof teacher !== "object") return;
+    [teacher.id, teacher.uid, teacher.authUserId, teacher.firestoreDocId, teacher.docId, teacher.documentId]
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+      .forEach((id) => map.set(id, teacher));
+  });
+  return map;
+}
+
+function enrichAdminStudentTeacherDisplay(row = {}) {
+  if (!row || typeof row !== "object") return row;
+  const teacherId = String(row.professorId || row.teacherId || row.firestoreProfessorId || "").trim();
+  const resolvedName = getAdminTeacherDisplayNameById(teacherId, {
+    fallback: row.professorNome || row.teacherNome || row.teacherName || "",
+  });
+  if (!resolvedName) return row;
+  return {
+    ...row,
+    professorNome: resolvedName,
+    teacherNome: resolvedName,
+    teacherName: resolvedName,
+  };
+}
 
 let adminTeachersState = {
   history: {
@@ -16238,16 +16300,15 @@ const ensureAdminStudentsBaseData = async ({ force = false } = {}) => {
     });
 
     adminStudentsState.teachers = Array.isArray(teachers) ? teachers : [];
-    const teachersById = new Map();
-    adminStudentsState.teachers.forEach((t) => {
-      if (t && typeof t === "object" && t.id) teachersById.set(String(t.id), t);
-    });
-    adminStudentsState.teachersById = teachersById;
+    adminStudentsState.teachersById = buildAdminTeacherMap(adminStudentsState.teachers);
     const studentsById = new Map();
     (Array.isArray(students) ? students : []).forEach((row) => {
       const canonicalId = String(row?.firestoreDocId || row?.docId || row?.documentId || row?.id || "").trim();
       if (!canonicalId) return;
-      studentsById.set(canonicalId, { ...row, id: canonicalId, firestoreDocId: canonicalId, docId: canonicalId, documentId: canonicalId });
+      studentsById.set(
+        canonicalId,
+        enrichAdminStudentTeacherDisplay({ ...row, id: canonicalId, firestoreDocId: canonicalId, docId: canonicalId, documentId: canonicalId })
+      );
     });
     const normalizedStudents = Array.from(studentsById.values());
     adminStudentsState.studentsById = studentsById;
@@ -16487,7 +16548,7 @@ const renderAdminStudentsList = () => {
       const statusPill = row.statusLabel ? `<span class="admin-students-chip is-${statusTone}">${escapeHtml(row.statusLabel)}</span>` : "";
       const teacherChip =
         row.teacherName && row.teacherName !== "—" ? `<span class="admin-students-chip">${escapeHtml(row.teacherName)}</span>` : "";
-      const planChip = row.plano ? `<span class="admin-students-chip">${escapeHtml(row.plano)}</span>` : "";
+      const planChip = row.plano ? `<span class="admin-students-chip ${getAdminStudentPlanToneClass(row.plano)}">${escapeHtml(row.plano)}</span>` : "";
       const countryChip = row.pais ? `<span class="admin-students-chip is-country">${escapeHtml(row.pais)}</span>` : "";
       const chips = [statusPill, teacherChip, planChip, countryChip].filter(Boolean).join("");
 
@@ -16640,9 +16701,41 @@ const getAdminStudentClassOptions = (selectedValue = "") => {
   return options.join("");
 };
 
+const normalizeAdminStudentPlanValue = (value) => {
+  const raw = String(value || "").trim();
+  const low = raw.toLowerCase();
+  if (low === "gold") return "Gold";
+  if (low === "diamond") return "Diamond";
+  if (low === "turma" || low === "grupo" || low === "group") return "Turma";
+  return "";
+};
+
+const getAdminStudentPlanOptions = (selectedValue = "") => {
+  const selected = normalizeAdminStudentPlanValue(selectedValue);
+  return [`<option value="">Sem plano</option>`, "Gold", "Diamond", "Turma"]
+    .map((item, index) => {
+      if (index === 0) return item;
+      const sel = item === selected ? "selected" : "";
+      return `<option value="${escapeHtml(item)}" ${sel}>${escapeHtml(item)}</option>`;
+    })
+    .join("");
+};
+
+const getAdminStudentPlanToneClass = (value, { base = "is-plan" } = {}) => {
+  const plan = normalizeAdminStudentPlanValue(value);
+  const classes = [base].filter(Boolean);
+  if (plan === "Gold") classes.push("is-plan-gold");
+  else if (plan === "Diamond") classes.push("is-plan-diamond");
+  else if (plan === "Turma") classes.push("is-plan-turma");
+  else classes.push("is-plan-empty");
+  return classes.join(" ");
+};
+
 const adminStudentInlineValueMap = {
+  nome: (alunoMeta) => String(alunoMeta?.nome || alunoMeta?.nomeCompleto || alunoMeta?.fullName || alunoMeta?.displayName || alunoMeta?.name || "").trim(),
   email: (alunoMeta) => String(alunoMeta?.email || "").trim(),
   telefone: (alunoMeta) => String(alunoMeta?.telefone || "").trim(),
+  plano: (alunoMeta) => normalizeAdminStudentPlanValue(alunoMeta?.plano || alunoMeta?.plan || ""),
   professorId: (alunoMeta) => String(alunoMeta?.professorId || alunoMeta?.teacherId || "").trim(),
   turma: (alunoMeta) => String(alunoMeta?.groupId || alunoMeta?.groupName || alunoMeta?.turma || alunoMeta?.turmaNome || alunoMeta?.className || "").trim(),
   english_level_start: (alunoMeta) => normalizeAdminStudentEnglishStartValue(alunoMeta?.english_level_start || alunoMeta?.englishLevelStart || ""),
@@ -16655,8 +16748,10 @@ const getAdminStudentInlineValue = (alunoMeta, field) => {
 };
 
 const getAdminStudentDisplayValue = (field, alunoMeta) => {
+  if (field === "nome") return String(alunoMeta?.nome || alunoMeta?.nomeCompleto || alunoMeta?.fullName || alunoMeta?.displayName || alunoMeta?.name || alunoMeta?.email || "").trim() || "Aluno sem nome";
   if (field === "email") return String(alunoMeta?.email || "").trim() || "—";
   if (field === "telefone") return String(alunoMeta?.telefone || "").trim() || "—";
+  if (field === "plano") return normalizeAdminStudentPlanValue(alunoMeta?.plano || alunoMeta?.plan || "") || "Sem plano";
   if (field === "professorId") return String(alunoMeta?.professorNome || alunoMeta?.teacherNome || alunoMeta?.teacherName || "").trim() || "Sem professor";
   if (field === "turma") return String(alunoMeta?.groupName || alunoMeta?.turmaNome || alunoMeta?.className || alunoMeta?.turma || "").trim() || "Sem turma";
   if (field === "english_level_start") return normalizeAdminStudentEnglishStartValue(alunoMeta?.english_level_start || alunoMeta?.englishLevelStart || "") || "—";
@@ -16699,14 +16794,22 @@ const setAdminStudentInlineEditing = (sheetEl, field, isEditing) => {
       const prevEditor = prevCell.querySelector("[data-admin-student-inline-editor-wrap]");
       const prevDisplay = prevCell.querySelector("[data-admin-student-inline-display]");
       if (prevEditor instanceof HTMLElement) prevEditor.hidden = true;
-      if (prevDisplay instanceof HTMLElement) prevDisplay.hidden = false;
+      if (prevDisplay instanceof HTMLElement) {
+        prevDisplay.hidden = false;
+        prevDisplay.style.visibility = "";
+      }
     }
   }
   cell.classList.toggle("is-editing", Boolean(isEditing));
   const editor = cell.querySelector("[data-admin-student-inline-editor-wrap]");
   const display = cell.querySelector("[data-admin-student-inline-display]");
-  if (editor instanceof HTMLElement) editor.hidden = !isEditing;
-  if (display instanceof HTMLElement) display.hidden = Boolean(isEditing);
+  const keepPlanEditorMounted = key === "plano";
+  if (editor instanceof HTMLElement) editor.hidden = !isEditing && !keepPlanEditorMounted;
+  if (display instanceof HTMLElement) {
+    const reserveDisplaySpace = key === "plano" && Boolean(isEditing);
+    display.hidden = Boolean(isEditing) && !reserveDisplaySpace;
+    display.style.visibility = reserveDisplaySpace ? "hidden" : "";
+  }
   if (isEditing) {
     hist.editingField = key;
   } else if (hist.editingField === key) {
@@ -16718,10 +16821,22 @@ const focusAdminStudentInlineField = (field) => {
   const sheetEl = getAdminStudentSheet();
   if (!(sheetEl instanceof HTMLElement)) return;
   if (adminStudentsState.history.inlineSavingField) return;
-  const cell = getAdminStudentInlineCell(sheetEl, field);
+  const key = String(field || "").trim();
+  const cell = getAdminStudentInlineCell(sheetEl, key);
   if (!(cell instanceof HTMLElement)) return;
-  setAdminStudentInlineEditing(sheetEl, field, true);
+  setAdminStudentInlineEditing(sheetEl, key, true);
   const editor = cell.querySelector("[data-admin-student-inline-control]");
+  if (key === "plano" && editor instanceof HTMLSelectElement) {
+    editor.focus();
+    if (typeof editor.showPicker === "function") {
+      try {
+        editor.showPicker();
+        return;
+      } catch (error) {
+        void error;
+      }
+    }
+  }
   window.requestAnimationFrame(() => {
     if (editor instanceof HTMLInputElement || editor instanceof HTMLTextAreaElement) {
       editor.focus();
@@ -16764,6 +16879,7 @@ const buildAdminStudentInlineFieldHtml = ({
   const safeValue = String(value || "").trim();
   const safeDisplayValue = String(displayValue || "").trim() || safeValue || placeholder || "—";
   const editorAttrs = readonly ? 'disabled aria-disabled="true"' : "";
+  const keepEditorMounted = field === "plano";
   const editorMarkup =
     kind === "select"
       ? `<select class="admin-student-input admin-student-inline-control" data-admin-student-inline-control data-admin-student-inline-editor="${escapeHtml(field)}" ${editorAttrs}>${optionsHtml}</select>`
@@ -16777,7 +16893,7 @@ const buildAdminStudentInlineFieldHtml = ({
       <button type="button" class="admin-student-inline-display" data-admin-student-inline-trigger="${escapeHtml(field)}" ${readonly ? "disabled" : ""}>
         <span data-admin-student-inline-display>${escapeHtml(safeDisplayValue)}</span>
       </button>
-      <div class="admin-student-inline-editor" data-admin-student-inline-editor-wrap hidden>
+      <div class="admin-student-inline-editor" data-admin-student-inline-editor-wrap ${keepEditorMounted ? "" : "hidden"}>
         ${editorMarkup}
       </div>
       ${help ? `<div class="admin-student-inline-help">${escapeHtml(help)}</div>` : ""}
@@ -17087,11 +17203,28 @@ const updateAdminStudentCachedRow = (alunoId, patch = {}) => {
   return updated;
 };
 
+const refreshAdminStudentCanonicalViews = ({ refreshDerived = false } = {}) => {
+  try {
+    if (typeof renderAdminPedagogicoStudentsPanel === "function") renderAdminPedagogicoStudentsPanel();
+    if (typeof renderAdminPedagogicoLinksPanel === "function") renderAdminPedagogicoLinksPanel();
+    if (typeof renderAdminStudentsList === "function") renderAdminStudentsList();
+    if (typeof renderAdminPedagogicoRetentionPanel === "function") renderAdminPedagogicoRetentionPanel();
+    if (typeof renderAdminPedagogicoReposicoesPanel === "function") renderAdminPedagogicoReposicoesPanel();
+    if (refreshDerived) {
+      if (typeof refreshAdminPedagogicoRetentionState === "function") refreshAdminPedagogicoRetentionState({ force: true }).catch(() => {});
+      if (typeof refreshAdminPedagogicoReposicoesState === "function") refreshAdminPedagogicoReposicoesState({ force: true }).catch(() => {});
+    }
+  } catch (error) {
+    console.warn("[admin] student canonical views refresh failed", error);
+  }
+};
+
 const mergeAdminStudentWithCachedProfile = (existingStudent, incomingStudent) => {
   const prev = existingStudent && typeof existingStudent === "object" ? existingStudent : null;
   const next = incomingStudent && typeof incomingStudent === "object" ? incomingStudent : null;
   if (!next) return prev;
   if (!prev) return next;
+  const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj || {}, key);
   const pickName = (...candidates) => {
     for (const candidate of candidates) {
       const safe = String(candidate || "").trim();
@@ -17109,7 +17242,8 @@ const mergeAdminStudentWithCachedProfile = (existingStudent, incomingStudent) =>
   const firestoreNome = String(next.firestoreNome || prev.firestoreNome || "").trim();
   const firestoreEmail = String(next.firestoreEmail || prev.firestoreEmail || "").trim();
   const firestoreTelefone = String(next.firestoreTelefone || prev.firestoreTelefone || "").trim();
-  const firestorePlano = String(next.firestorePlano || prev.firestorePlano || "").trim();
+  const hasNextFirestorePlano = hasOwn(next, "firestorePlano");
+  const firestorePlano = String(hasNextFirestorePlano ? next.firestorePlano || "" : prev.firestorePlano || "").trim();
   const firestoreProfessorId = String(next.firestoreProfessorId || prev.firestoreProfessorId || "").trim();
   const firestoreProfessorNome = String(next.firestoreProfessorNome || prev.firestoreProfessorNome || "").trim();
   const firestoreTipo = String(next.firestoreTipo || prev.firestoreTipo || "").trim();
@@ -17130,7 +17264,7 @@ const mergeAdminStudentWithCachedProfile = (existingStudent, incomingStudent) =>
     teacherNome: firestoreProfessorNome || nextTeacherName || String(prev.teacherNome || prev.professorNome || "").trim(),
     professorId: firestoreProfessorId || nextTeacherId || String(prev.professorId || prev.teacherId || "").trim() || supabaseProfessorId,
     teacherId: firestoreProfessorId || nextTeacherId || String(prev.teacherId || prev.professorId || "").trim() || supabaseProfessorId,
-    plano: firestorePlano || String(next.plano || "").trim() || String(prev.plano || "").trim() || supabasePlano,
+    plano: hasNextFirestorePlano ? firestorePlano : firestorePlano || String(next.plano || "").trim() || String(prev.plano || "").trim() || supabasePlano,
     turma: String(next.turma || "").trim() || String(prev.turma || "").trim(),
     tipo: firestoreTipo || String(next.tipo || prev.tipo || "student"),
     cancelamento: next.firestoreCancelamento ?? prev.firestoreCancelamento ?? next.cancelamento ?? prev.cancelamento ?? null,
@@ -17255,16 +17389,46 @@ const saveAdminStudentInlinePatch = async ({ alunoId, patch = {} } = {}) => {
   );
   const data = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new Error(data?.error || "admin_student_inline_patch_failed");
+    const detail = String(data?.errorDetail || data?.message || data?.error || "admin_student_inline_patch_failed").trim();
+    const error = new Error(detail);
+    error.code = data?.code || data?.error || "";
+    error.status = response.status;
+    error.detail = data;
+    throw error;
   }
-  updateAdminStudentCachedRow(id, cleanPatch);
+  updateAdminStudentCachedRow(id, buildAdminStudentInlineCachePatch(cleanPatch));
   return true;
+};
+
+const buildAdminStudentInlineCachePatch = (patch = {}) => {
+  const cleanPatch = patch && typeof patch === "object" ? { ...patch } : {};
+  if (Object.prototype.hasOwnProperty.call(cleanPatch, "nome")) cleanPatch.firestoreNome = cleanPatch.nome;
+  if (Object.prototype.hasOwnProperty.call(cleanPatch, "email")) cleanPatch.firestoreEmail = cleanPatch.email;
+  if (Object.prototype.hasOwnProperty.call(cleanPatch, "telefone")) cleanPatch.firestoreTelefone = cleanPatch.telefone;
+  if (Object.prototype.hasOwnProperty.call(cleanPatch, "plano")) cleanPatch.firestorePlano = cleanPatch.plano;
+  if (Object.prototype.hasOwnProperty.call(cleanPatch, "professorId")) cleanPatch.firestoreProfessorId = cleanPatch.professorId;
+  if (Object.prototype.hasOwnProperty.call(cleanPatch, "professorNome")) cleanPatch.firestoreProfessorNome = cleanPatch.professorNome;
+  if (Object.prototype.hasOwnProperty.call(cleanPatch, "tipo")) cleanPatch.firestoreTipo = cleanPatch.tipo;
+  if (Object.prototype.hasOwnProperty.call(cleanPatch, "ativo")) cleanPatch.firestoreAtivo = cleanPatch.ativo;
+  return cleanPatch;
 };
 
 const resolveAdminStudentInlinePatch = ({ field, value, alunoMeta } = {}) => {
   const key = String(field || "").trim();
   const nextValue = String(value || "").trim();
   if (!key) return null;
+  if (key === "nome") {
+    const normalized = nextValue || "Aluno sem nome";
+    return {
+      patch: {
+        nome: normalized,
+        nomeCompleto: normalized,
+        name: normalized,
+        displayName: normalized,
+      },
+      displayValue: normalized,
+    };
+  }
   if (key === "email") {
     return {
       patch: {
@@ -17279,6 +17443,16 @@ const resolveAdminStudentInlinePatch = ({ field, value, alunoMeta } = {}) => {
         telefone: nextValue,
       },
       displayValue: nextValue || "—",
+    };
+  }
+  if (key === "plano") {
+    const normalized = normalizeAdminStudentPlanValue(nextValue);
+    return {
+      patch: {
+        plano: normalized,
+        plan: normalized,
+      },
+      displayValue: normalized || "Sem plano",
     };
   }
   if (key === "professorId") {
@@ -17355,6 +17529,11 @@ const saveAdminStudentInlineField = async ({ field, sheetEl } = {}) => {
     cancelAdminStudentInlineEditing({ sheetEl, field });
     return;
   }
+  if (field === "nome" && !nextValue) {
+    setAdminStudentInlineStatus(sheetEl, field, "Informe o nome do aluno.", "error");
+    if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement) control.focus?.();
+    return;
+  }
   const resolved = resolveAdminStudentInlinePatch({ field, value: nextValue, alunoMeta: hist.alunoMeta });
   if (!resolved) {
     cancelAdminStudentInlineEditing({ sheetEl, field });
@@ -17362,26 +17541,30 @@ const saveAdminStudentInlineField = async ({ field, sheetEl } = {}) => {
   }
 
   const saveLabel =
-    field === "email"
+    field === "nome"
+      ? "Salvando nome…"
+      : field === "email"
       ? "Salvando e-mail…"
       : field === "telefone"
         ? "Salvando telefone…"
-        : field === "professorId"
-          ? "Salvando professor…"
-          : field === "turma"
-            ? "Salvando turma…"
-            : field === "english_level_start"
-              ? "Salvando nível…"
-              : "Salvando…";
+        : field === "plano"
+          ? "Salvando plano…"
+          : field === "professorId"
+            ? "Salvando professor…"
+            : field === "turma"
+              ? "Salvando turma…"
+              : field === "english_level_start"
+                ? "Salvando nível…"
+                : "Salvando…";
   hist.inlineSavingField = field;
   setAdminStudentInlineStatus(sheetEl, field, saveLabel, "loading");
   if (control instanceof HTMLInputElement || control instanceof HTMLSelectElement || control instanceof HTMLTextAreaElement) control.disabled = true;
 
   try {
     await saveAdminStudentInlinePatch({ alunoId, patch: resolved.patch });
-    updateAdminStudentCachedRow(alunoId, resolved.patch);
     setAdminStudentInlineDisplay(sheetEl, field, resolved.displayValue);
     setAdminStudentInlineStatus(sheetEl, field, "Salvo ✓", "success");
+    refreshAdminStudentCanonicalViews({ refreshDerived: field === "nome" || field === "plano" });
     if (hist.inlineSaveTimer) window.clearTimeout(hist.inlineSaveTimer);
     hist.inlineSaveTimer = window.setTimeout(() => {
       if (hist.inlineSavingField !== field) return;
@@ -17392,7 +17575,7 @@ const saveAdminStudentInlineField = async ({ field, sheetEl } = {}) => {
     }, 2000);
   } catch (error) {
     console.error("[admin] student inline save failed:", error);
-    const message = "Não foi possível salvar agora.";
+    const message = String(error?.message || error?.code || "Não foi possível salvar agora.").trim();
     setAdminStudentInlineStatus(sheetEl, field, message, "error");
     setAdminStudentsStatus(message, "error");
     hist.inlineSavingField = "";
@@ -17996,11 +18179,15 @@ const renderAdminStudentSheet = () => {
   const lifecycleBadge = alunoMeta ? getStudentLifecycleBadgeMeta(alunoMeta) : { label: "", tone: "" };
   const statusLabel = lifecycleBadge.label || (alunoMeta ? "Ativo" : "—");
   const statusTone = lifecycleBadge.tone ? `is-${lifecycleBadge.tone}` : alunoMeta ? "is-active" : "is-gray";
-  const teacherName = hist.teacherMeta?.nome || alunoMeta?.professorNome || alunoMeta?.teacherNome || "";
+  const linkedTeacherId = String(alunoMeta?.professorId || alunoMeta?.teacherId || "").trim();
+  const teacherName = getAdminTeacherDisplayNameById(linkedTeacherId, {
+    fallback: hist.teacherMeta?.nome || alunoMeta?.professorNome || alunoMeta?.teacherNome || "",
+  });
   const planoRaw = String(alunoMeta?.plano || "").trim();
-  const hasPlano = Boolean(planoRaw);
-  const planoLabel = hasPlano ? planoRaw : "Sem plano";
-  const planoTone = hasPlano ? "is-plan" : "is-gray";
+  const planoNormalized = normalizeAdminStudentPlanValue(planoRaw);
+  const hasPlano = Boolean(planoNormalized);
+  const planoLabel = hasPlano ? planoNormalized : "Sem plano";
+  const planoTone = hasPlano ? getAdminStudentPlanToneClass(planoNormalized) : "is-gray is-plan-empty";
   const riskLabel = getAdminStudentRiskLabel(hist);
   const riskTone = riskLabel === "Alto" ? "is-danger" : riskLabel === "Médio" ? "is-warn" : riskLabel === "Baixo" ? "is-active" : "is-gray";
   const createdLabel = alunoMeta?.criadoEm ? formatAdminDate(alunoMeta.criadoEm) : "—";
@@ -18010,8 +18197,9 @@ const renderAdminStudentSheet = () => {
   const notesStatus = hist.notesSaving ? "Salvando notas…" : hist.notesError ? String(hist.notesError) : hist.notesLoadedAt ? "Notas carregadas." : "";
   const baseError = String(hist.baseError || "").trim();
   const historyHtml = renderAdminStudentSimpleHistoryHtml({ hist, teacherMeta: hist.teacherMeta });
-  const teacherOptionsHtml = getAdminStudentTeacherOptions(String(alunoMeta?.professorId || alunoMeta?.teacherId || ""));
+  const teacherOptionsHtml = getAdminStudentTeacherOptions(linkedTeacherId);
   const turmaOptionsHtml = getAdminStudentClassOptions(String(alunoMeta?.groupId || alunoMeta?.groupName || alunoMeta?.turma || alunoMeta?.turmaNome || alunoMeta?.className || ""));
+  const planOptionsHtml = getAdminStudentPlanOptions(planoRaw);
   const englishStartValue = normalizeAdminStudentEnglishStartValue(alunoMeta?.english_level_start || alunoMeta?.englishLevelStart || "");
   const createdInputValue = toAdminStudentDateInputValue(alunoMeta?.criadoEm);
   const avatarPhotoURL = String(alunoMeta?.photoURL || alunoMeta?.photoUrl || "").trim();
@@ -18138,11 +18326,29 @@ const renderAdminStudentSheet = () => {
             <input type="file" hidden accept="image/*" data-admin-student-avatar-file />
           </div>
           <div class="admin-student-id-main">
-            <div class="admin-student-name">${escapeHtml(alunoName)}</div>
+            <div class="admin-student-name admin-student-title-inline">
+              ${buildAdminStudentInlineFieldHtml({
+                field: "nome",
+                label: "Nome",
+                value: getAdminStudentInlineValue(alunoMeta, "nome") || alunoName,
+                displayValue: alunoName,
+                placeholder: "Aluno sem nome",
+              })}
+            </div>
             <div class="admin-student-email">${escapeHtml(alunoEmail || "—")}</div>
             <div class="admin-student-tags">
               <span class="admin-student-tag ${statusTone}">${escapeHtml(statusLabel)}</span>
-              <span class="admin-student-tag ${planoTone}">${escapeHtml(planoLabel)}</span>
+              <span class="admin-student-tag admin-student-plan-inline ${planoTone}">
+                ${buildAdminStudentInlineFieldHtml({
+                  field: "plano",
+                  label: "Plano",
+                  value: planoNormalized,
+                  displayValue: planoLabel,
+                  kind: "select",
+                  optionsHtml: planOptionsHtml,
+                  placeholder: "Sem plano",
+                })}
+              </span>
               <span class="admin-student-tag ${riskTone}">${escapeHtml(`Risco: ${riskLabel || "—"}`)}</span>
             </div>
           </div>
@@ -18210,7 +18416,8 @@ const renderAdminStudentSheet = () => {
             ${buildAdminStudentInlineFieldHtml({
               field: "professorId",
               label: "Professor vinculado",
-              value: String(alunoMeta?.professorId || alunoMeta?.teacherId || "").trim(),
+              value: linkedTeacherId,
+              displayValue: teacherName || "Sem professor",
               kind: "select",
               optionsHtml: teacherOptionsHtml,
               placeholder: "Sem professor",
@@ -18560,7 +18767,7 @@ const buildAdminPedClassLiveUrl = (classRow) => {
   const shortRoomSlug = String(c.roomSlug || c.roomId || "").trim();
   const firstStudent = (Array.isArray(c.studentNames) && c.studentNames[0]) || (Array.isArray(c.studentIds) && c.studentIds[0]) || "";
   const title = c.title || c.groupName || (c.type === "group" ? "turma" : firstStudent) || "aula";
-  const teacher = c.teacherName || c.teacherId || "professor";
+  const teacher = getAdminTeacherDisplayNameById(c.teacherId, { fallback: c.teacherName || "professor" }) || "professor";
   const days = (Array.isArray(c.daysOfWeek) ? c.daysOfWeek : []).map(daysLabelShort).join("-");
   const time = Number.isFinite(Number(c.startMin)) ? formatHmFromMinutes(c.startMin).replace(/:/g, "") : "";
   const legacyParts = [
@@ -22182,7 +22389,7 @@ const renderAdminPedagogicoOverview = () => {
                 ? recentFeedbacks
                     .map((f) => {
                       const when = formatShortDateFromMs(f.createdAtMs);
-                      const prof = f.teacherName ? f.teacherName : f.teacherId ? f.teacherId : "Professor";
+                      const prof = getAdminTeacherDisplayNameById(f.teacherId, { fallback: f.teacherName || "Professor" }) || "Professor";
                       const score = Number.isFinite(Number(f.generalScore)) ? String(f.generalScore) : "—";
                       return `<div class="admin-ped-mini-row"><div class="admin-ped-mini-title">${escapeHtml(
                         prof
@@ -22226,7 +22433,7 @@ const renderAdminPedagogicoGroups = () => {
               ? `${formatHmFromMinutes(g.startMin)}–${formatHmFromMinutes(g.endMin)}`
               : "—";
           const plan = g.planName ? String(g.planName) : g.planId ? g.planId : "—";
-          const teacher = g.teacherName ? g.teacherName : g.teacherId ? g.teacherId : "—";
+          const teacher = getAdminTeacherDisplayNameById(g.teacherId, { fallback: g.teacherName || "—" }) || "—";
           const count = Array.isArray(g.studentIds) ? g.studentIds.length : 0;
           return `
             <div class="admin-ped-row">
@@ -22235,7 +22442,7 @@ const renderAdminPedagogicoGroups = () => {
                 <div class="admin-ped-row-sub">${escapeHtml(`${teacher} · ${days} · ${time}`)}</div>
                 <div class="admin-ped-row-meta">
                   ${pedStatusPillHtml(g.status)}
-                  ${plan ? `<span class="admin-ped-pill is-plan">${escapeHtml(String(plan))}</span>` : ""}
+                  ${plan ? `<span class="admin-ped-pill ${getAdminStudentPlanToneClass(plan)}">${escapeHtml(String(plan))}</span>` : ""}
                   <span class="admin-ped-pill">${escapeHtml(`${count} aluno${count === 1 ? "" : "s"}`)}</span>
                   ${when ? `<span class="admin-ped-pill">${escapeHtml(when)}</span>` : ""}
                 </div>
@@ -22338,7 +22545,7 @@ const renderAdminPedagogicoStudentsPanel = () => {
     .sort((a, b) => String(a?.nome || "").localeCompare(String(b?.nome || ""), "pt-BR"))
     .map((s) => {
       const teacherId = String(s?.professorId || s?.teacherId || "").trim();
-      const teacherName = teacherId ? String(teachersById.get(teacherId)?.nome || "").trim() : "";
+      const teacherName = teacherId ? getAdminTeacherDisplayNameById(teacherId, { fallback: s?.professorNome || s?.teacherNome || "" }) : "";
       const groupId = String(s?.groupId || "").trim();
       const groupName = groupId ? String(groupsById.get(groupId)?.name || "").trim() : String(s?.groupName || "").trim();
       const plan = String(s?.plano || "").trim() || "Sem plano";
@@ -22422,7 +22629,7 @@ const renderAdminPedagogicoStudentsPanel = () => {
               <div>
                 <div class="admin-ped-row-title">${escapeHtml(r.nome)}</div>
                 <div class="admin-ped-row-meta">
-                  <span class="admin-ped-pill is-plan">${escapeHtml(r.plan)}</span>
+                  <span class="admin-ped-pill ${getAdminStudentPlanToneClass(r.plan)}">${escapeHtml(r.plan)}</span>
                   ${r.teacherName ? `<span class="admin-ped-pill">${escapeHtml(r.teacherName)}</span>` : `<span class="admin-ped-pill">Sem professor</span>`}
                   ${r.lifecycleLabel ? `<span class="admin-ped-pill is-${escapeHtml(r.lifecycleTone || "muted")}">${escapeHtml(r.lifecycleLabel)}</span>` : ""}
                 </div>
@@ -22467,7 +22674,7 @@ const renderAdminPedagogicoLinksPanel = () => {
     const sid = String(s.id || "");
     const teacherId = String(s.professorId || s.teacherId || "").trim();
     const groupId = String(s.groupId || "").trim();
-    const teacherName = teacherId ? String(teachersById.get(teacherId)?.nome || "").trim() : "";
+    const teacherName = teacherId ? getAdminTeacherDisplayNameById(teacherId, { fallback: s?.professorNome || s?.teacherNome || "" }) : "";
     const groupName = groupId ? String(groupsById.get(groupId)?.name || "").trim() : String(s.groupName || "").trim();
     const plan = String(s.plano || "").trim() || "Sem plano";
     const activeClass = getAdminPedStudentActiveClass(sid);
@@ -22517,7 +22724,7 @@ const renderAdminPedagogicoLinksPanel = () => {
                 <div class="admin-ped-link-title">${escapeHtml(String(s.nome || "Aluno"))}</div>
                 <div class="admin-ped-link-sub">${escapeHtml(String(s.email || ""))}</div>
                 <div class="admin-ped-link-meta">
-                  <span class="admin-ped-pill is-plan">${escapeHtml(String(s.plan || "Sem plano"))}</span>
+                  <span class="admin-ped-pill ${getAdminStudentPlanToneClass(s.plan)}">${escapeHtml(String(s.plan || "Sem plano"))}</span>
                   ${s.teacherName ? `<span class="admin-ped-pill">${escapeHtml(String(s.teacherName))}</span>` : `<span class="admin-ped-pill">Sem professor</span>`}
                   ${s.groupName ? `<span class="admin-ped-pill">${escapeHtml(String(s.groupName))}</span>` : `<span class="admin-ped-pill">Sem turma</span>`}
                 </div>
@@ -24851,7 +25058,7 @@ const computePedov2ViewModel = ({ events, liveLessons, records, onboardingRows, 
   const normalizedLessons = normalizePedov2LiveLessons(liveLessons);
   const recordsByLessonId = normalizePedov2Records(records);
   const recordByEventId = buildPedov2EventRecordIndex({ events: normalizedEvents, liveLessons: normalizedLessons, recordsByLessonId });
-  const teachersById = new Map((Array.isArray(teachers) ? teachers : []).map((teacher) => [String(teacher?.id || ""), teacher]));
+  const teachersById = buildAdminTeacherMap(teachers);
   const currentWeekKeys = new Set(getWeekDaysMonToSat(referenceDate).map((date) => createDateKey(date)));
   const weekLessons = normalizedEvents.filter((event) => currentWeekKeys.has(String(event.dateKey || "")));
   const activeStudents = (Array.isArray(students) ? students : []).filter((student) => isPedov2StudentActiveAt(student, referenceDate.getTime()));
@@ -25751,10 +25958,11 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
     };
 
     adminPedagogicoState.teachers = mergePeople(teachers, liveTeachers);
-    adminPedagogicoState.teachersById = new Map(adminPedagogicoState.teachers.map((t) => [String(t.id || ""), t]));
+    adminPedagogicoState.teachersById = buildAdminTeacherMap(adminPedagogicoState.teachers);
     const mergedStudents = mergePeople(students, [...opsStudents, ...liveStudents]).map((student) => {
       const canonicalId = String(student?.firestoreDocId || student?.docId || student?.documentId || student?.id || "").trim();
-      return canonicalId ? { ...student, id: canonicalId, firestoreDocId: canonicalId, docId: canonicalId, documentId: canonicalId } : student;
+      const normalized = canonicalId ? { ...student, id: canonicalId, firestoreDocId: canonicalId, docId: canonicalId, documentId: canonicalId } : student;
+      return enrichAdminStudentTeacherDisplay(normalized);
     });
     adminPedagogicoState.students = mergedStudents;
     adminPedagogicoState.studentsById = new Map(
@@ -27424,7 +27632,7 @@ const openAdminPedFeedbackViewModal = ({ feedbackId } = {}) => {
   if (!row) return;
   const p = row.payload && typeof row.payload === "object" ? row.payload : {};
   const lines = [
-    ["Professor", row.teacherName || row.teacherId || "—"],
+    ["Professor", getAdminTeacherDisplayNameById(row.teacherId, { fallback: row.teacherName || "—" }) || "—"],
     ["Data", row.observationDate || "—"],
     ["Tipo", row.classType === "group" ? "Grupo" : "Individual"],
     ["Nota geral", Number.isFinite(Number(row.generalScore)) ? String(row.generalScore) : "—"],
@@ -27590,7 +27798,9 @@ const openAdminPedAlertViewModal = ({ alertId } = {}) => {
         <div class="admin-ped-overview-card">
           <div class="admin-ped-overview-title">${escapeHtml(row.category || "Aviso")}</div>
           <ul class="admin-ped-overview-list">
-            <li class="admin-ped-overview-item"><span>Professor</span><strong>${escapeHtml(row.teacherName || row.teacherId || "—")}</strong></li>
+            <li class="admin-ped-overview-item"><span>Professor</span><strong>${escapeHtml(
+              getAdminTeacherDisplayNameById(row.teacherId, { fallback: row.teacherName || "—" }) || "—"
+            )}</strong></li>
             <li class="admin-ped-overview-item"><span>Aluno</span><strong>${escapeHtml(row.studentName || row.studentId || "—")}</strong></li>
             <li class="admin-ped-overview-item"><span>Prioridade</span><strong>${escapeHtml(row.priority === "high" ? "Alta" : row.priority === "medium" ? "Média" : "Baixa")}</strong></li>
             <li class="admin-ped-overview-item"><span>Status</span><strong>${escapeHtml(row.status === "resolved" ? "Resolvido" : row.status === "analysis" ? "Em análise" : "Aberto")}</strong></li>
@@ -28977,9 +29187,7 @@ const findAdminStudentRecurringEventId = (alunoId, groupId) => {
 
 const rerenderAdminStudentLifecycleViews = () => {
   if (adminStudentsState.history?.isOpen) renderAdminStudentSheet();
-  if (typeof renderAdminPedagogicoStudentsPanel === "function") renderAdminPedagogicoStudentsPanel();
-  if (typeof refreshAdminPedagogicoRetentionState === "function") refreshAdminPedagogicoRetentionState({ force: true }).catch(() => {});
-  if (typeof renderAdminStudentsList === "function") renderAdminStudentsList();
+  refreshAdminStudentCanonicalViews({ refreshDerived: true });
 };
 
 const requestAdminStudentMirrorSync = ({ firestoreDocId, context = "student_mirror_sync" } = {}) => {
@@ -32782,6 +32990,16 @@ document.addEventListener(
   true,
 );
 
+document.addEventListener("pointerdown", (event) => {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  const studentPlanInlineTrigger = target.closest('[data-admin-student-inline-trigger="plano"]');
+  if (!(studentPlanInlineTrigger instanceof HTMLButtonElement)) return;
+  event.preventDefault();
+  adminStudentsState.history.suppressPlanInlineClickUntil = Date.now() + 500;
+  focusAdminStudentInlineField("plano");
+});
+
 document.addEventListener("click", (event) => {
   const target = event.target;
 
@@ -34321,6 +34539,9 @@ document.addEventListener("click", (event) => {
       if (studentInlineTrigger instanceof HTMLButtonElement) {
         event.preventDefault();
         const field = String(studentInlineTrigger.getAttribute("data-admin-student-inline-trigger") || "").trim();
+        if (field === "plano" && Number(adminStudentsState.history.suppressPlanInlineClickUntil || 0) > Date.now()) {
+          return;
+        }
         if (field) focusAdminStudentInlineField(field);
         return;
       }

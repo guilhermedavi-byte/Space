@@ -4286,11 +4286,17 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
 }
 
 .admin-students-head {
+  position: sticky;
+  top: 0;
+  z-index: 12;
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
   gap: 14px;
   flex-wrap: wrap;
+  padding: 10px 0 12px;
+  background: linear-gradient(180deg, rgba(9, 18, 30, 0.98) 0%, rgba(9, 18, 30, 0.9) 72%, rgba(9, 18, 30, 0) 100%);
+  backdrop-filter: blur(12px);
 }
 
 .admin-students-title {
@@ -4546,6 +4552,7 @@ body[data-role="FINANCE"] [data-admin-only]:not([data-panel-target="alunos"]) {
 
 .admin-students-list {
   display: grid;
+  padding-bottom: max(32px, env(safe-area-inset-bottom));
 }
 
 .admin-students-row {
@@ -5372,6 +5379,83 @@ body.admin-student-drawer-open {
   color: rgba(255, 255, 255, 0.95);
 }
 
+.admin-student-title-inline {
+  display: block;
+}
+
+.admin-student-title-inline .admin-student-inline-field {
+  position: relative;
+  display: block;
+  min-height: 19px;
+  padding: 2px 0;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: transparent;
+}
+
+.admin-student-title-inline .admin-student-inline-label {
+  display: none;
+}
+
+.admin-student-title-inline .admin-student-inline-display {
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 15px;
+  font-weight: 850;
+  line-height: 1.25;
+  border-radius: 10px;
+  padding: 2px 0;
+  transition: color 160ms ease, background-color 160ms ease;
+}
+
+.admin-student-title-inline .admin-student-inline-display:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.admin-student-title-inline .admin-student-inline-editor {
+  position: absolute;
+  z-index: 70;
+  inset: 2px 0 auto 0;
+  display: block;
+}
+
+.admin-student-title-inline .admin-student-inline-field.is-editing {
+  padding: 2px 0;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.admin-student-title-inline .admin-student-input {
+  width: 100%;
+  height: 19px;
+  min-height: 19px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  background: transparent;
+  box-shadow: none;
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.admin-student-title-inline .admin-student-input:focus {
+  border: 0;
+  box-shadow: none;
+}
+
+.admin-student-title-inline .admin-student-inline-status {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  z-index: 72;
+  padding: 0;
+  white-space: nowrap;
+}
+
 .admin-student-email {
   margin-top: 4px;
   font-size: 12px;
@@ -5397,6 +5481,120 @@ body.admin-student-drawer-open {
   color: rgba(255, 255, 255, 0.72);
   font-size: 11px;
   font-weight: 750;
+}
+
+.admin-student-plan-inline {
+  height: auto;
+  min-height: 28px;
+  padding: 0;
+  border-color: rgba(255, 86, 79, 0.14);
+  background: rgba(255, 86, 79, 0.07);
+  overflow: visible;
+}
+
+.admin-student-plan-inline .admin-student-inline-field {
+  position: relative;
+  display: block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  min-width: 0;
+  min-height: 28px;
+}
+
+.admin-student-plan-inline .admin-student-inline-label {
+  display: none;
+}
+
+.admin-student-plan-inline .admin-student-inline-display {
+  min-height: 28px;
+  padding: 0 11px;
+  color: inherit;
+  font-size: 11px;
+  font-weight: 750;
+  border-radius: 999px;
+  line-height: 1;
+  white-space: nowrap;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.admin-student-plan-inline .admin-student-inline-display:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+}
+
+.admin-student-plan-inline .admin-student-inline-display[hidden] {
+  display: inline-flex;
+  visibility: hidden;
+}
+
+.admin-student-plan-inline .admin-student-inline-editor {
+  position: absolute;
+  z-index: 80;
+  inset: 0;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.admin-student-plan-inline .admin-student-inline-editor::after {
+  content: "⌄";
+  position: absolute;
+  top: 50%;
+  right: 7px;
+  transform: translateY(-58%);
+  pointer-events: none;
+  color: currentColor;
+  font-size: 11px;
+  line-height: 1;
+  opacity: 0.82;
+}
+
+.admin-student-plan-inline:not(.is-editing) .admin-student-inline-editor::after {
+  opacity: 0;
+}
+
+.admin-student-plan-inline .admin-student-input {
+  width: 100%;
+  min-width: 0;
+  height: 28px;
+  border-radius: 999px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 11px;
+  font-weight: 750;
+  padding: 0 12px 0 10px;
+  outline: 0;
+  appearance: none;
+}
+
+.admin-student-plan-inline:not(.is-editing) .admin-student-input {
+  cursor: pointer;
+  opacity: 0;
+}
+
+.admin-student-plan-inline:has(.admin-student-input:hover) .admin-student-inline-display {
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+}
+
+.admin-student-plan-inline .admin-student-input:focus {
+  border: 0;
+  box-shadow: none;
+}
+
+.admin-student-plan-inline .admin-student-inline-status {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 82;
+  padding: 0;
+  font-size: 10px;
+  white-space: nowrap;
 }
 
 .admin-student-tag.is-green {
@@ -20861,6 +21059,38 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   border-color: rgba(251, 191, 36, 0.22);
   background: rgba(251, 191, 36, 0.12);
   color: rgba(251, 191, 36, 0.95);
+}
+
+.admin-student-tag.is-plan-gold,
+.admin-students-chip.is-plan-gold,
+.admin-ped-pill.is-plan-gold {
+  border-color: rgba(245, 180, 50, 0.34);
+  background: rgba(245, 180, 50, 0.13);
+  color: rgba(255, 214, 102, 0.96);
+}
+
+.admin-student-tag.is-plan-diamond,
+.admin-students-chip.is-plan-diamond,
+.admin-ped-pill.is-plan-diamond {
+  border-color: rgba(96, 189, 255, 0.34);
+  background: rgba(96, 189, 255, 0.13);
+  color: rgba(148, 220, 255, 0.96);
+}
+
+.admin-student-tag.is-plan-turma,
+.admin-students-chip.is-plan-turma,
+.admin-ped-pill.is-plan-turma {
+  border-color: rgba(167, 139, 250, 0.3);
+  background: rgba(167, 139, 250, 0.12);
+  color: rgba(205, 191, 255, 0.94);
+}
+
+.admin-student-tag.is-plan-empty,
+.admin-students-chip.is-plan-empty,
+.admin-ped-pill.is-plan-empty {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.025);
+  color: rgba(255, 255, 255, 0.62);
 }
 
 .admin-ped-class-actions {
