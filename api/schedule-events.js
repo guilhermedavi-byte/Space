@@ -529,6 +529,93 @@ const decodeAulaDoc = (doc) => {
   };
 };
 
+const schedulesOverlap = (left, right) => {
+  if (!left || !right) return false;
+  if (String(left.dateKey || "") !== String(right.dateKey || "")) return false;
+  const leftStart = Number(left.startMin);
+  const leftEnd = Number(left.endMin);
+  const rightStart = Number(right.startMin);
+  const rightEnd = Number(right.endMin);
+  if (![leftStart, leftEnd, rightStart, rightEnd].every(Number.isFinite)) return false;
+  return leftStart < rightEnd && rightStart < leftEnd;
+};
+
+const normalizeScheduleCandidate = (row) => {
+  if (!row || typeof row !== "object") return null;
+  const professorId = String(row.professorId || row.teacherId || "").trim();
+  const dateKey = String(row.dateKey || "").trim();
+  const startMin = Number(row.startMin);
+  const endMin = Number(row.endMin);
+  if (!professorId || !isValidDateKey(dateKey)) return null;
+  if (!Number.isFinite(startMin) || !Number.isFinite(endMin) || endMin <= startMin) return null;
+  return {
+    id: String(row.id || "").trim(),
+    professorId,
+    dateKey,
+    startMin: clampInt(startMin, 0, 1440),
+    endMin: clampInt(endMin, 0, 1440),
+    alunoId: row.alunoId == null ? null : String(row.alunoId || "").trim() || null,
+    alunoNome: row.alunoNome == null ? null : String(row.alunoNome || "").trim() || null,
+    professorNome: row.professorNome == null ? null : String(row.professorNome || "").trim() || null,
+  };
+};
+
+const findScheduleConflict = ({ candidates, existingEvents, excludeId = "" } = {}) => {
+  const safeCandidates = (Array.isArray(candidates) ? candidates : []).map(normalizeScheduleCandidate).filter(Boolean);
+  const safeExisting = (Array.isArray(existingEvents) ? existingEvents : [])
+    .map(normalizeScheduleCandidate)
+    .filter(Boolean)
+    .filter((evt) => !excludeId || evt.id !== excludeId);
+
+  for (let i = 0; i < safeCandidates.length; i += 1) {
+    const candidate = safeCandidates[i];
+    for (let j = i + 1; j < safeCandidates.length; j += 1) {
+      const other = safeCandidates[j];
+      if (candidate.professorId === other.professorId && schedulesOverlap(candidate, other)) {
+        return { candidate, existing: other, source: "request" };
+      }
+    }
+    const existing = safeExisting.find((evt) => evt.professorId === candidate.professorId && schedulesOverlap(candidate, evt));
+    if (existing) return { candidate, existing, source: "firestore" };
+  }
+  return null;
+};
+
+const loadExistingScheduleEventsForConflictCheck = async ({ idToken } = {}) => {
+  try {
+    const docs = await listCollectionAsAdmin("aulas", { pageSize: 2000 });
+    return docs.map((doc) => decodeAulaDoc(doc)).filter(Boolean).filter((evt) => !isHiddenAulaStatus(evt.status));
+  } catch (adminListError) {
+    const resList = await firestoreListDocuments({ collectionPath: "aulas", idToken, pageSize: 2000 });
+    if (!resList.ok) throw new Error("firestore_list_failed");
+    const docs = Array.isArray(resList.documents)
+      ? resList.documents
+      : Array.isArray(resList.data?.documents)
+        ? resList.data.documents
+        : [];
+    return docs.map((doc) => decodeAulaDoc(doc)).filter(Boolean).filter((evt) => !isHiddenAulaStatus(evt.status));
+  }
+};
+
+const sendScheduleConflict = (res, conflict) => {
+  const candidate = conflict?.candidate || {};
+  const existing = conflict?.existing || {};
+  sendJson(res, 409, {
+    error: "schedule_conflict",
+    errorDetail: "Este professor já tem uma aula ou evento nesse horário.",
+    conflict: {
+      source: conflict?.source || "",
+      professorId: candidate.professorId || existing.professorId || "",
+      dateKey: candidate.dateKey || existing.dateKey || "",
+      startMin: candidate.startMin ?? null,
+      endMin: candidate.endMin ?? null,
+      existingId: existing.id || "",
+      existingAlunoId: existing.alunoId || "",
+      existingAlunoNome: existing.alunoNome || "",
+    },
+  });
+};
+
 const parseDeleteModeFromUrl = (url) => {
   const mode = String(url?.searchParams?.get("mode") || "")
     .trim()
@@ -1536,19 +1623,31 @@ module.exports = async (req, res) => {
               : null
         : null;
 
+      const candidateDocs = occurrences
+        .map((occ) => {
+          const key = String(occ?.dateKey || "").trim();
+          if (!isValidDateKey(key)) return null;
+          return baseDoc({
+            overrideDateKey: key,
+            overrideStartMin: isWeeklyCustom ? occ?.startMin : undefined,
+            overrideEndMin: isWeeklyCustom ? occ?.endMin : undefined,
+            repeatMeta,
+          });
+        })
+        .filter(Boolean);
+
+      const existingEvents = await loadExistingScheduleEventsForConflictCheck({ idToken });
+      const conflict = findScheduleConflict({ candidates: candidateDocs, existingEvents });
+      if (conflict) {
+        sendScheduleConflict(res, conflict);
+        return;
+      }
+
       const writes = [];
-      for (const occ of occurrences) {
-        const key = String(occ?.dateKey || "").trim();
-        if (!isValidDateKey(key)) continue;
+      for (const data of candidateDocs) {
         const id = buildId("aula");
         createdIds.push(id);
         const docPath = `aulas/${id}`;
-        const data = baseDoc({
-          overrideDateKey: key,
-          overrideStartMin: isWeeklyCustom ? occ?.startMin : undefined,
-          overrideEndMin: isWeeklyCustom ? occ?.endMin : undefined,
-          repeatMeta,
-        });
 
         if (data.alunoId) {
           const occStartMs = toUtcMsForDateKeyAndMinutes(data.dateKey, data.startMin, { tzOffsetMinutes });
@@ -1696,6 +1795,13 @@ module.exports = async (req, res) => {
     patchData.criadoPor = existingCriadoPor || patchData.criadoPor;
     patchData.atualizadoEm = new Date();
 
+    const existingEvents = await loadExistingScheduleEventsForConflictCheck({ idToken });
+    const conflict = findScheduleConflict({ candidates: [{ ...patchData, id: eventId }], existingEvents, excludeId: eventId });
+    if (conflict) {
+      sendScheduleConflict(res, conflict);
+      return;
+    }
+
     const updateMaskPaths = Object.keys(patchData);
     const patch = await firestorePatchDocument({ docPath, idToken, data: patchData, updateMaskPaths });
     if (!patch.ok) throw new Error("firestore_patch_failed");
@@ -1715,4 +1821,9 @@ module.exports = async (req, res) => {
     });
     sendJson(res, 500, { error: "internal_error" });
   }
+};
+
+module.exports._private = {
+  findScheduleConflict,
+  schedulesOverlap,
 };
