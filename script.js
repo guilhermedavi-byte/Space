@@ -4982,6 +4982,12 @@ const applyAdminTeacherAgendasToUI = () => {
   const teachers = Array.isArray(adminTeacherAgendasState.teachers) ? adminTeacherAgendasState.teachers : [];
   const activeTeachers = teachers.filter((t) => t.ativo !== false);
 
+  if (adminTeacherAgendasState.isLoading && !activeTeachers.length) {
+    if (adminAgendasEmpty instanceof HTMLElement) adminAgendasEmpty.hidden = true;
+    adminAgendasList.innerHTML = renderAdminAgendaListSkeleton();
+    return;
+  }
+
   // Assign palette colors by index for the current snapshot (keeps colors stable as long as ordering is stable).
   activeTeachers.forEach((teacher, idx) => {
     if (!adminTeacherAgendasState.colorById.get(teacher.id)) {
@@ -5036,6 +5042,7 @@ const renderAdminTeacherAgendas = async ({ force = false } = {}) => {
   }
 
   adminTeacherAgendasState.isLoading = true;
+  applyAdminTeacherAgendasToUI();
   try {
     const teachers = await fetchAdminAgendaTeachers();
     adminTeacherAgendasState.teachers = teachers;
@@ -18662,6 +18669,145 @@ let adminPedagogicoState = {
   conflicts: [],
 };
 let adminPedTableSearchDebounce = null;
+
+const isAdminPedagogicoInitialLoading = () => Boolean(adminPedagogicoState.isLoading && !adminPedagogicoState.loadedAt);
+
+const renderSkeletonBlock = (className = "", style = "") =>
+  `<span class="platform-skeleton ${escapeHtml(className)}"${style ? ` style="${escapeHtml(style)}"` : ""} aria-hidden="true"></span>`;
+
+const renderAdminPedSkeletonHeader = ({ titleWidth = "220px", subWidth = "360px" } = {}) => `
+  <header class="pedov2-page-head pedskel-head">
+    <div>
+      ${renderSkeletonBlock("is-eyebrow", "width:96px")}
+      ${renderSkeletonBlock("is-title", `width:${titleWidth}`)}
+      ${renderSkeletonBlock("is-subtitle", `width:${subWidth}`)}
+    </div>
+  </header>
+`;
+
+const renderAdminPedSkeletonKpis = (count = 4) => `
+  <section class="pedov2-kpi-row pedskel-kpis" aria-hidden="true">
+    ${Array.from({ length: count })
+      .map(
+        () => `
+          <article class="pedov2-card pedov2-kpi-card pedskel-card">
+            ${renderSkeletonBlock("is-line", "width:58%")}
+            ${renderSkeletonBlock("is-value", "width:42%")}
+            ${renderSkeletonBlock("is-spark", "width:100%")}
+          </article>
+        `
+      )
+      .join("")}
+  </section>
+`;
+
+const renderAdminPedSkeletonRows = (count = 6) => `
+  <div class="pedskel-list" aria-hidden="true">
+    ${Array.from({ length: count })
+      .map(
+        (_, index) => `
+          <div class="pedskel-row">
+            <div class="pedskel-row-main">
+              ${renderSkeletonBlock("is-line", `width:${index % 3 === 0 ? "46%" : index % 3 === 1 ? "62%" : "54%"}`)}
+              <div class="pedskel-chip-row">
+                ${renderSkeletonBlock("is-chip", "width:76px")}
+                ${renderSkeletonBlock("is-chip", "width:118px")}
+                ${renderSkeletonBlock("is-chip", "width:92px")}
+              </div>
+            </div>
+            ${renderSkeletonBlock("is-pill", "width:112px")}
+          </div>
+        `
+      )
+      .join("")}
+  </div>
+`;
+
+const renderAdminPedStudentsSkeleton = () => `
+  <div class="pedskel-module pedskel-students">
+    <div class="pedskel-toolbar">
+      ${renderSkeletonBlock("is-search", "width:min(520px,100%)")}
+      ${renderSkeletonBlock("is-button", "width:104px")}
+      ${renderSkeletonBlock("is-count", "width:92px")}
+    </div>
+    ${renderAdminPedSkeletonRows(8)}
+  </div>
+`;
+
+const renderAdminPedLessonRecordsSkeleton = () => `
+  <div class="pedov2 pedrecords pedskel-module">
+    ${renderAdminPedSkeletonHeader({ titleWidth: "260px", subWidth: "420px" })}
+    ${renderAdminPedSkeletonKpis(4)}
+    <section class="pedrecords-toolbar-wrap">
+      <div class="pedrecords-toolbar pedskel-toolbar-card">
+        <div class="pedrecords-toolbar-head">
+          <div class="pedrecords-meta">
+            ${renderSkeletonBlock("is-count", "width:120px")}
+            ${renderSkeletonBlock("is-line", "width:160px")}
+          </div>
+          ${renderSkeletonBlock("is-button", "width:112px")}
+        </div>
+      </div>
+    </section>
+    <section class="pedov2-card pedrecords-table-card pedskel-table-card">
+      ${renderAdminPedSkeletonTable(5, 7)}
+    </section>
+  </div>
+`;
+
+const renderAdminPedSkeletonTable = (columns = 5, rows = 6) => `
+  <div class="pedskel-table" aria-hidden="true">
+    <div class="pedskel-table-head" style="grid-template-columns:repeat(${Number(columns) || 5},minmax(90px,1fr))">
+      ${Array.from({ length: columns }).map(() => renderSkeletonBlock("is-line", "width:72%")).join("")}
+    </div>
+    ${Array.from({ length: rows })
+      .map(
+        (_, rowIndex) => `
+          <div class="pedskel-table-row" style="grid-template-columns:repeat(${Number(columns) || 5},minmax(90px,1fr))">
+            ${Array.from({ length: columns })
+              .map((__, colIndex) => renderSkeletonBlock(colIndex === columns - 1 ? "is-pill" : "is-line", `width:${colIndex === 2 ? "82%" : rowIndex % 2 ? "64%" : "72%"}`))
+              .join("")}
+          </div>
+        `
+      )
+      .join("")}
+  </div>
+`;
+
+const renderAdminPedRetentionSkeleton = (title = "Retenção") => `
+  <div class="pedov2 pedretain pedskel-module">
+    ${renderAdminPedSkeletonHeader({ titleWidth: title === "Reposições" ? "180px" : "160px", subWidth: "440px" })}
+    ${renderAdminPedSkeletonKpis(title === "Reposições" ? 4 : 3)}
+    <section class="pedretain-section">
+      <div class="pedretain-section-head">
+        ${renderSkeletonBlock("is-section-title", "width:220px")}
+        ${renderSkeletonBlock("is-pill", "width:46px")}
+      </div>
+      ${renderAdminPedSkeletonRows(4)}
+    </section>
+    <section class="pedretain-section">
+      <div class="pedretain-section-head">
+        ${renderSkeletonBlock("is-section-title", "width:190px")}
+        ${renderSkeletonBlock("is-pill", "width:46px")}
+      </div>
+      ${renderAdminPedSkeletonRows(3)}
+    </section>
+  </div>
+`;
+
+const renderAdminAgendaListSkeleton = () => `
+  ${Array.from({ length: 6 })
+    .map(
+      (_, index) => `
+        <li class="admin-agenda-item admin-agenda-skeleton" aria-hidden="true">
+          ${renderSkeletonBlock("is-dot", "width:14px")}
+          ${renderSkeletonBlock("is-avatar", "width:28px")}
+          ${renderSkeletonBlock("is-line", `width:${index % 2 ? "130px" : "170px"}`)}
+        </li>
+      `
+    )
+    .join("")}
+`;
 let adminPedOverviewV2State = {
   period: "30d",
   chartJsPromise: null,
@@ -21416,18 +21562,7 @@ const renderAdminPedagogicoReposicoesPanel = () => {
   const queues = state.queues && typeof state.queues === "object" ? state.queues : null;
 
   if ((status === "idle" || status === "loading") && !queues) {
-    adminPedReposicoes.innerHTML = `
-      <div class="pedov2 pedretain">
-        <header class="pedov2-page-head pedretain-head">
-          <div>
-            <p class="pedov2-eyebrow">Pedagógico</p>
-            <h1 class="pedov2-title">Reposições</h1>
-            <p class="pedov2-page-sub">Central operacional para remarcações, prazos e exceções.</p>
-          </div>
-        </header>
-        <div class="admin-ped-empty-inline"><div class="admin-ped-empty-title">Carregando central de reposições...</div><div class="admin-ped-empty-sub">Consolidando registros remarcados e agenda.</div></div>
-      </div>
-    `;
+    adminPedReposicoes.innerHTML = renderAdminPedRetentionSkeleton("Reposições");
     return;
   }
 
@@ -21586,18 +21721,7 @@ const renderAdminPedagogicoRetentionPanel = () => {
   const partialErrors = retentionState.partialErrors && typeof retentionState.partialErrors === "object" ? retentionState.partialErrors : {};
 
   if ((status === "idle" || status === "loading") && !queues) {
-    adminPedRetention.innerHTML = `
-      <div class="pedov2 pedretain">
-        <header class="pedov2-page-head pedretain-head">
-          <div>
-            <p class="pedov2-eyebrow">Pedagógico</p>
-            <h1 class="pedov2-title">Retenção</h1>
-            <p class="pedov2-page-sub">Inbox de decisão para cancelamentos, abandono e risco de churn.</p>
-          </div>
-        </header>
-        <div class="admin-ped-empty-inline"><div class="admin-ped-empty-title">Carregando central de retenção...</div><div class="admin-ped-empty-sub">Consolidando financeiro, frequência e cancelamentos.</div></div>
-      </div>
-    `;
+    adminPedRetention.innerHTML = renderAdminPedRetentionSkeleton("Retenção");
     return;
   }
 
@@ -22580,6 +22704,11 @@ const renderAdminPedagogicoPlansPanel = () => {
 
 const renderAdminPedagogicoStudentsPanel = () => {
   if (!(adminPedStudents instanceof HTMLElement)) return;
+  if (isAdminPedagogicoInitialLoading()) {
+    if (adminPedEmptyStudents instanceof HTMLElement) adminPedEmptyStudents.hidden = true;
+    adminPedStudents.innerHTML = renderAdminPedStudentsSkeleton();
+    return;
+  }
   const students = Array.isArray(adminPedagogicoState.students) ? adminPedagogicoState.students : [];
   const teachersById = adminPedagogicoState.teachersById instanceof Map ? adminPedagogicoState.teachersById : new Map();
   const groupsById = adminPedagogicoState.groupsById instanceof Map ? adminPedagogicoState.groupsById : new Map();
@@ -24194,6 +24323,11 @@ const renderAdminOnboardingPerformance = () => {
 
 const renderAdminPedagogicoClassesList = () => {
   if (!(adminPedClasses instanceof HTMLElement)) return;
+  if (isAdminPedagogicoInitialLoading()) {
+    if (adminPedEmptyClasses instanceof HTMLElement) adminPedEmptyClasses.hidden = true;
+    adminPedClasses.innerHTML = renderAdminPedLessonRecordsSkeleton();
+    return;
+  }
   const { filters, range, rows, summary } = buildAdminPedLessonRecordDataset();
   const pageState = getAdminPedLessonRecordFilters();
   const { pageRows, total, totalPages, safePage } = adminPedPaginate(rows, pageState.page, pageState.pageSize);
@@ -25902,6 +26036,7 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
   adminPedagogicoState.isLoading = true;
   setAdminPedagogicoStatus("Carregando…");
   if (adminPedError instanceof HTMLElement) adminPedError.hidden = true;
+  runAdminPedagogicoRenderers();
 
   try {
     const loadFallback = (label, promise, fallback) =>
