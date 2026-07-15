@@ -6915,6 +6915,62 @@ const validateCreateEventDraft = () => {
   return !hasError;
 };
 
+const doScheduleRangesOverlap = (left, right) => {
+  if (!left || !right) return false;
+  if (String(left.dateKey || "") !== String(right.dateKey || "")) return false;
+  const leftStart = Number(left.startMin);
+  const leftEnd = Number(left.endMin);
+  const rightStart = Number(right.startMin);
+  const rightEnd = Number(right.endMin);
+  if (![leftStart, leftEnd, rightStart, rightEnd].every(Number.isFinite)) return false;
+  return leftStart < rightEnd && rightStart < leftEnd;
+};
+
+const getScheduleConflictForPayload = (payload, { excludeId = "" } = {}) => {
+  const professorId = String(payload?.professorId || "").trim();
+  if (!professorId) return null;
+  const candidates = [{ dateKey: payload.dateKey, startMin: payload.startMin, endMin: payload.endMin }];
+  const repeat = payload?.repeat && typeof payload.repeat === "object" ? payload.repeat : null;
+  if (payload?.recorrente && repeat?.enabled && String(repeat.type || "").toLowerCase() === "weekly_custom" && Array.isArray(repeat.days)) {
+    repeat.days.forEach((day) => {
+      const weekday = String(day?.weekday || "").trim();
+      const start = String(day?.startTime || "").trim();
+      const end = String(day?.endTime || "").trim();
+      const def = WEEKLY_CUSTOM_DAY_DEFS.find((item) => item.key === weekday);
+      if (!def) return;
+      const startMin = timeToMinutes(start);
+      const endMin = timeToMinutes(end);
+      if (!Number.isFinite(startMin) || !Number.isFinite(endMin) || endMin <= startMin) return;
+      const base = parseDateKey(payload.dateKey);
+      if (!base) return;
+      for (let offset = 0; offset < 7; offset += 1) {
+        const candidateDate = addDays(base, offset);
+        if (weekdayKeyFromDateKey(createDateKey(candidateDate)) === weekday) {
+          candidates.push({ dateKey: createDateKey(candidateDate), startMin, endMin });
+          break;
+        }
+      }
+    });
+  }
+  const existing = Array.isArray(teacherEventsState?.events) ? teacherEventsState.events : [];
+  for (const candidate of candidates) {
+    const normalizedCandidate = {
+      professorId,
+      dateKey: String(candidate.dateKey || "").trim(),
+      startMin: Number(candidate.startMin),
+      endMin: Number(candidate.endMin),
+    };
+    const conflict = existing.find((evt) => {
+      const evtId = String(evt?.id || "").trim();
+      if (excludeId && evtId === excludeId) return false;
+      if (String(evt?.professorId || "").trim() !== professorId) return false;
+      return doScheduleRangesOverlap(normalizedCandidate, evt);
+    });
+    if (conflict) return { candidate: normalizedCandidate, existing: conflict };
+  }
+  return null;
+};
+
 const buildEventTimeHm = (date) => {
   const hours = String(date.getHours()).padStart(2, "0");
   const minutes = String(date.getMinutes()).padStart(2, "0");
@@ -7051,6 +7107,15 @@ const openTeacherEventFormModalFromDraft = () => {
     }
 
     const errorEl = modalBody?.querySelector("[data-ce-error]");
+    const conflict = getScheduleConflictForPayload(payload, { excludeId: mode === "edit" ? createEventDraft.eventId || "" : "" });
+    if (conflict) {
+      if (errorEl instanceof HTMLElement) {
+        errorEl.hidden = false;
+        errorEl.textContent = "Professor indisponível neste horário. Escolha outro horário ou professor.";
+      }
+      return false;
+    }
+
     if (errorEl instanceof HTMLElement) {
       errorEl.hidden = true;
       errorEl.textContent = "";
@@ -7078,10 +7143,12 @@ const openTeacherEventFormModalFromDraft = () => {
                   ? "Selecione um professor para salvar."
                   : data?.error === "invalid_payload" && missingFields.includes("alunoId")
                     ? "Selecione um aluno para criar a aula."
-                    : data?.error === "invalid_repeat"
-                      ? "Revise a recorrência: tipo, dias e horários."
-                      : data?.error === "forbidden"
-                        ? "Você não tem permissão para salvar este evento."
+                        : data?.error === "invalid_repeat"
+                          ? "Revise a recorrência: tipo, dias e horários."
+                          : data?.error === "schedule_conflict"
+                            ? data?.errorDetail || "Professor indisponível neste horário. Escolha outro horário ou professor."
+                          : data?.error === "forbidden"
+                            ? "Você não tem permissão para salvar este evento."
                         : data?.error === "unauthorized" || data?.error === "invalid_credentials"
                           ? "Sua sessão expirou. Recarregue a página e faça login novamente."
                           : res.status === 429
@@ -32232,6 +32299,53 @@ const navigateApp = (path, { replace = false } = {}) => {
   showPanel(parsed.panel);
 };
 
+const handleAdminEventUserPickerClick = (adminUserPick) => {
+  if (
+    activeModalKind !== "event-form" ||
+    !createEventDraft ||
+    createEventDraft.readOnly ||
+    !modalOverlay ||
+    modalOverlay.hidden ||
+    !(adminUserPick instanceof HTMLButtonElement)
+  ) {
+    return false;
+  }
+  const pickerType = String(adminUserPick.getAttribute("data-ce-admin-user-pick-type") || "").trim() === "teacher" ? "teacher" : "student";
+  const pickerId = String(adminUserPick.getAttribute("data-ce-admin-user-pick-id") || "").trim();
+  const meta = getAdminEventUserPickerMeta(pickerType);
+  const row = meta.rows.find((item) => String(item.id || "") === pickerId) || null;
+  if (!row || !pickerId) return false;
+  if (pickerType === "teacher") {
+    createEventDraft.professorId = pickerId;
+    createEventDraft.teacherSearch = "";
+  } else {
+    createEventDraft.alunoId = pickerId;
+    createEventDraft.studentSearch = "";
+  }
+  const searchEl = modalBody?.querySelector(`[data-ce-admin-${pickerType}-search]`);
+  if (searchEl instanceof HTMLInputElement) searchEl.value = "";
+  const selectEl = modalBody?.querySelector(`[data-ce-admin-${pickerType}]`);
+  if (selectEl instanceof HTMLSelectElement) selectEl.value = pickerId;
+  syncAdminEventUserSelects();
+  validateCreateEventDraft();
+  if (searchEl instanceof HTMLInputElement) searchEl.focus();
+  return true;
+};
+
+document.addEventListener(
+  "click",
+  (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const adminUserPick = target.closest("[data-ce-admin-user-pick]");
+    if (adminUserPick instanceof HTMLButtonElement && handleAdminEventUserPickerClick(adminUserPick)) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  },
+  true
+);
+
 document.addEventListener("click", (event) => {
   const target = event.target;
   if (!(target instanceof Element)) return;
@@ -35233,26 +35347,8 @@ document.addEventListener("click", (event) => {
       !modalOverlay.hidden
     ) {
       const adminUserPick = target.closest("[data-ce-admin-user-pick]");
-      if (adminUserPick instanceof HTMLButtonElement) {
-        const pickerType = String(adminUserPick.getAttribute("data-ce-admin-user-pick-type") || "").trim() === "teacher" ? "teacher" : "student";
-        const pickerId = String(adminUserPick.getAttribute("data-ce-admin-user-pick-id") || "").trim();
-        const meta = getAdminEventUserPickerMeta(pickerType);
-        const row = meta.rows.find((item) => String(item.id || "") === pickerId) || null;
-        if (!row || !pickerId) return;
-        if (pickerType === "teacher") {
-          createEventDraft.professorId = pickerId;
-          createEventDraft.teacherSearch = "";
-        } else {
-          createEventDraft.alunoId = pickerId;
-          createEventDraft.studentSearch = "";
-        }
-        const searchEl = modalBody?.querySelector(`[data-ce-admin-${pickerType}-search]`);
-        if (searchEl instanceof HTMLInputElement) searchEl.value = "";
-        const selectEl = modalBody?.querySelector(`[data-ce-admin-${pickerType}]`);
-        if (selectEl instanceof HTMLSelectElement) selectEl.value = pickerId;
-        syncAdminEventUserSelects();
-        validateCreateEventDraft();
-        if (searchEl instanceof HTMLInputElement) searchEl.focus();
+      if (adminUserPick instanceof HTMLButtonElement && handleAdminEventUserPickerClick(adminUserPick)) {
+        event.preventDefault();
         return;
       }
 
