@@ -32299,6 +32299,53 @@ const navigateApp = (path, { replace = false } = {}) => {
   showPanel(parsed.panel);
 };
 
+const handleAdminEventUserPickerClick = (adminUserPick) => {
+  if (
+    activeModalKind !== "event-form" ||
+    !createEventDraft ||
+    createEventDraft.readOnly ||
+    !modalOverlay ||
+    modalOverlay.hidden ||
+    !(adminUserPick instanceof HTMLButtonElement)
+  ) {
+    return false;
+  }
+  const pickerType = String(adminUserPick.getAttribute("data-ce-admin-user-pick-type") || "").trim() === "teacher" ? "teacher" : "student";
+  const pickerId = String(adminUserPick.getAttribute("data-ce-admin-user-pick-id") || "").trim();
+  const meta = getAdminEventUserPickerMeta(pickerType);
+  const row = meta.rows.find((item) => String(item.id || "") === pickerId) || null;
+  if (!row || !pickerId) return false;
+  if (pickerType === "teacher") {
+    createEventDraft.professorId = pickerId;
+    createEventDraft.teacherSearch = "";
+  } else {
+    createEventDraft.alunoId = pickerId;
+    createEventDraft.studentSearch = "";
+  }
+  const searchEl = modalBody?.querySelector(`[data-ce-admin-${pickerType}-search]`);
+  if (searchEl instanceof HTMLInputElement) searchEl.value = "";
+  const selectEl = modalBody?.querySelector(`[data-ce-admin-${pickerType}]`);
+  if (selectEl instanceof HTMLSelectElement) selectEl.value = pickerId;
+  syncAdminEventUserSelects();
+  validateCreateEventDraft();
+  if (searchEl instanceof HTMLInputElement) searchEl.focus();
+  return true;
+};
+
+document.addEventListener(
+  "click",
+  (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const adminUserPick = target.closest("[data-ce-admin-user-pick]");
+    if (adminUserPick instanceof HTMLButtonElement && handleAdminEventUserPickerClick(adminUserPick)) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  },
+  true
+);
+
 document.addEventListener("click", (event) => {
   const target = event.target;
   if (!(target instanceof Element)) return;
@@ -35300,26 +35347,8 @@ document.addEventListener("click", (event) => {
       !modalOverlay.hidden
     ) {
       const adminUserPick = target.closest("[data-ce-admin-user-pick]");
-      if (adminUserPick instanceof HTMLButtonElement) {
-        const pickerType = String(adminUserPick.getAttribute("data-ce-admin-user-pick-type") || "").trim() === "teacher" ? "teacher" : "student";
-        const pickerId = String(adminUserPick.getAttribute("data-ce-admin-user-pick-id") || "").trim();
-        const meta = getAdminEventUserPickerMeta(pickerType);
-        const row = meta.rows.find((item) => String(item.id || "") === pickerId) || null;
-        if (!row || !pickerId) return;
-        if (pickerType === "teacher") {
-          createEventDraft.professorId = pickerId;
-          createEventDraft.teacherSearch = "";
-        } else {
-          createEventDraft.alunoId = pickerId;
-          createEventDraft.studentSearch = "";
-        }
-        const searchEl = modalBody?.querySelector(`[data-ce-admin-${pickerType}-search]`);
-        if (searchEl instanceof HTMLInputElement) searchEl.value = "";
-        const selectEl = modalBody?.querySelector(`[data-ce-admin-${pickerType}]`);
-        if (selectEl instanceof HTMLSelectElement) selectEl.value = pickerId;
-        syncAdminEventUserSelects();
-        validateCreateEventDraft();
-        if (searchEl instanceof HTMLInputElement) searchEl.focus();
+      if (adminUserPick instanceof HTMLButtonElement && handleAdminEventUserPickerClick(adminUserPick)) {
+        event.preventDefault();
         return;
       }
 
