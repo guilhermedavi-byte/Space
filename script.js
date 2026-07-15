@@ -18938,6 +18938,7 @@ const setAdminPedagogicoStatus = (text, tone = "", detail = "") => {
   adminPedStatus.textContent = String(text || "");
   adminPedStatus.dataset.tone = String(tone || "");
   adminPedStatus.title = String(detail || "");
+  adminPedStatus.hidden = !String(text || "").trim();
 };
 
 const normalizeClassType = (value) => {
@@ -20321,6 +20322,7 @@ const adminPedagogicoFilteredClasses = () => {
 };
 
 const renderAdminPedagogicoMetrics = () => {
+  if (isAdminPedagogicoInitialLoading()) return;
   const classes = Array.isArray(adminPedagogicoState.classes) ? adminPedagogicoState.classes : [];
   const active = classes.filter((c) => normalizeClassStatus(c?.status) === "active");
   const conflicts = Array.isArray(adminPedagogicoState.conflicts) ? adminPedagogicoState.conflicts : [];
@@ -22111,7 +22113,7 @@ const renderAdminPedagogicoTabs = () => {
 
   const statusBarEl = document.querySelector("[data-admin-ped-v2-status-bar]");
   if (statusBarEl instanceof HTMLElement) {
-    statusBarEl.hidden = activeTab === "pessoas";
+    statusBarEl.hidden = isAdminPedagogicoInitialLoading() || activeTab === "pessoas";
   }
 
   document.querySelectorAll("[data-admin-ped-panel]").forEach((panel) => {
@@ -26054,7 +26056,7 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
   }
 
   adminPedagogicoState.isLoading = true;
-  setAdminPedagogicoStatus("Carregando…");
+  setAdminPedagogicoStatus("");
   if (adminPedError instanceof HTMLElement) adminPedError.hidden = true;
   runAdminPedagogicoRenderers();
 
