@@ -22398,6 +22398,10 @@ body.has-space-env-banner{padding-top:46px}
 .pedskel-table-head { background: rgba(255, 255, 255, 0.018); }
 .admin-agenda-skeleton { cursor: default; }
 .admin-agenda-skeleton .platform-skeleton.is-line { min-width: 0; }
+[data-admin-pedagogico][data-loading="true"] [data-admin-ped-v2-status-bar],
+[data-admin-pedagogico][data-loading="true"] [data-admin-ped-status] {
+  display: none !important;
+}
 
 @keyframes platformSkeletonPulse {
   0% { background-position: 120% 0; opacity: 0.78; }

@@ -26056,6 +26056,7 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
   }
 
   adminPedagogicoState.isLoading = true;
+  adminPedRoot.dataset.loading = "true";
   setAdminPedagogicoStatus("");
   if (adminPedError instanceof HTMLElement) adminPedError.hidden = true;
   runAdminPedagogicoRenderers();
@@ -26287,6 +26288,7 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
     if (adminPedError instanceof HTMLElement) adminPedError.hidden = false;
   } finally {
     adminPedagogicoState.isLoading = false;
+    if (adminPedRoot instanceof HTMLElement) delete adminPedRoot.dataset.loading;
   }
 };
 
