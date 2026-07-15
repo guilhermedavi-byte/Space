@@ -1570,7 +1570,7 @@ const renderAdminAlertsList = (alerts) => {
   adminAlertsList.innerHTML = safeRows
     .map((a) => {
       const aluno = String(a?.alunoNome || a?.alunoId || "Aluno");
-      const prof = String(a?.professorNome || a?.professorId || "Professor");
+      const prof = getAdminTeacherDisplayNameById(a?.professorId, { fallback: a?.professorNome || "Professor" }) || "Professor";
       const dateKey = String(a?.dateKey || "");
       const when = isValidDateKey(dateKey) ? formatPedagogicoDate(dateKey) : "—";
       const nextKey = String(a?.novaDataRemarcacao || "");
@@ -11565,6 +11565,68 @@ let adminStudentsState = {
   },
 };
 
+function getAdminTeacherDisplayNameById(teacherId, { fallback = "", allowRawIdFallback = false } = {}) {
+  const id = String(teacherId || "").trim();
+  const fallbackText = String(fallback || "").trim();
+  if (!id) return fallbackText;
+  const isRawIdFallback = fallbackText && fallbackText === id;
+  const pickTeacherName = (teacher) => {
+    if (!teacher || typeof teacher !== "object") return "";
+    return String(teacher.nome || teacher.name || teacher.displayName || teacher.email || "").trim();
+  };
+  const mapCandidates = [
+    adminStudentsState?.teachersById instanceof Map ? adminStudentsState.teachersById : null,
+    typeof adminPedagogicoState !== "undefined" && adminPedagogicoState?.teachersById instanceof Map ? adminPedagogicoState.teachersById : null,
+  ].filter(Boolean);
+  for (const map of mapCandidates) {
+    const name = pickTeacherName(map.get(id));
+    if (name) return name;
+  }
+  const listCandidates = [
+    Array.isArray(adminStudentsState?.teachers) ? adminStudentsState.teachers : [],
+    typeof adminPedagogicoState !== "undefined" && Array.isArray(adminPedagogicoState?.teachers) ? adminPedagogicoState.teachers : [],
+  ];
+  for (const list of listCandidates) {
+    const found = list.find((teacher) => {
+      const ids = [teacher?.id, teacher?.uid, teacher?.authUserId, teacher?.firestoreDocId, teacher?.docId, teacher?.documentId]
+        .map((value) => String(value || "").trim())
+        .filter(Boolean);
+      return ids.includes(id);
+    });
+    const name = pickTeacherName(found);
+    if (name) return name;
+  }
+  if (fallbackText && !isRawIdFallback) return fallbackText;
+  return allowRawIdFallback ? id : "";
+}
+
+function buildAdminTeacherMap(teachers = []) {
+  const map = new Map();
+  (Array.isArray(teachers) ? teachers : []).forEach((teacher) => {
+    if (!teacher || typeof teacher !== "object") return;
+    [teacher.id, teacher.uid, teacher.authUserId, teacher.firestoreDocId, teacher.docId, teacher.documentId]
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+      .forEach((id) => map.set(id, teacher));
+  });
+  return map;
+}
+
+function enrichAdminStudentTeacherDisplay(row = {}) {
+  if (!row || typeof row !== "object") return row;
+  const teacherId = String(row.professorId || row.teacherId || row.firestoreProfessorId || "").trim();
+  const resolvedName = getAdminTeacherDisplayNameById(teacherId, {
+    fallback: row.professorNome || row.teacherNome || row.teacherName || "",
+  });
+  if (!resolvedName) return row;
+  return {
+    ...row,
+    professorNome: resolvedName,
+    teacherNome: resolvedName,
+    teacherName: resolvedName,
+  };
+}
+
 let adminTeachersState = {
   history: {
     isOpen: false,
@@ -16238,16 +16300,15 @@ const ensureAdminStudentsBaseData = async ({ force = false } = {}) => {
     });
 
     adminStudentsState.teachers = Array.isArray(teachers) ? teachers : [];
-    const teachersById = new Map();
-    adminStudentsState.teachers.forEach((t) => {
-      if (t && typeof t === "object" && t.id) teachersById.set(String(t.id), t);
-    });
-    adminStudentsState.teachersById = teachersById;
+    adminStudentsState.teachersById = buildAdminTeacherMap(adminStudentsState.teachers);
     const studentsById = new Map();
     (Array.isArray(students) ? students : []).forEach((row) => {
       const canonicalId = String(row?.firestoreDocId || row?.docId || row?.documentId || row?.id || "").trim();
       if (!canonicalId) return;
-      studentsById.set(canonicalId, { ...row, id: canonicalId, firestoreDocId: canonicalId, docId: canonicalId, documentId: canonicalId });
+      studentsById.set(
+        canonicalId,
+        enrichAdminStudentTeacherDisplay({ ...row, id: canonicalId, firestoreDocId: canonicalId, docId: canonicalId, documentId: canonicalId })
+      );
     });
     const normalizedStudents = Array.from(studentsById.values());
     adminStudentsState.studentsById = studentsById;
@@ -18118,7 +18179,10 @@ const renderAdminStudentSheet = () => {
   const lifecycleBadge = alunoMeta ? getStudentLifecycleBadgeMeta(alunoMeta) : { label: "", tone: "" };
   const statusLabel = lifecycleBadge.label || (alunoMeta ? "Ativo" : "—");
   const statusTone = lifecycleBadge.tone ? `is-${lifecycleBadge.tone}` : alunoMeta ? "is-active" : "is-gray";
-  const teacherName = hist.teacherMeta?.nome || alunoMeta?.professorNome || alunoMeta?.teacherNome || "";
+  const linkedTeacherId = String(alunoMeta?.professorId || alunoMeta?.teacherId || "").trim();
+  const teacherName = getAdminTeacherDisplayNameById(linkedTeacherId, {
+    fallback: hist.teacherMeta?.nome || alunoMeta?.professorNome || alunoMeta?.teacherNome || "",
+  });
   const planoRaw = String(alunoMeta?.plano || "").trim();
   const planoNormalized = normalizeAdminStudentPlanValue(planoRaw);
   const hasPlano = Boolean(planoNormalized);
@@ -18133,7 +18197,7 @@ const renderAdminStudentSheet = () => {
   const notesStatus = hist.notesSaving ? "Salvando notas…" : hist.notesError ? String(hist.notesError) : hist.notesLoadedAt ? "Notas carregadas." : "";
   const baseError = String(hist.baseError || "").trim();
   const historyHtml = renderAdminStudentSimpleHistoryHtml({ hist, teacherMeta: hist.teacherMeta });
-  const teacherOptionsHtml = getAdminStudentTeacherOptions(String(alunoMeta?.professorId || alunoMeta?.teacherId || ""));
+  const teacherOptionsHtml = getAdminStudentTeacherOptions(linkedTeacherId);
   const turmaOptionsHtml = getAdminStudentClassOptions(String(alunoMeta?.groupId || alunoMeta?.groupName || alunoMeta?.turma || alunoMeta?.turmaNome || alunoMeta?.className || ""));
   const planOptionsHtml = getAdminStudentPlanOptions(planoRaw);
   const englishStartValue = normalizeAdminStudentEnglishStartValue(alunoMeta?.english_level_start || alunoMeta?.englishLevelStart || "");
@@ -18352,7 +18416,8 @@ const renderAdminStudentSheet = () => {
             ${buildAdminStudentInlineFieldHtml({
               field: "professorId",
               label: "Professor vinculado",
-              value: String(alunoMeta?.professorId || alunoMeta?.teacherId || "").trim(),
+              value: linkedTeacherId,
+              displayValue: teacherName || "Sem professor",
               kind: "select",
               optionsHtml: teacherOptionsHtml,
               placeholder: "Sem professor",
@@ -18702,7 +18767,7 @@ const buildAdminPedClassLiveUrl = (classRow) => {
   const shortRoomSlug = String(c.roomSlug || c.roomId || "").trim();
   const firstStudent = (Array.isArray(c.studentNames) && c.studentNames[0]) || (Array.isArray(c.studentIds) && c.studentIds[0]) || "";
   const title = c.title || c.groupName || (c.type === "group" ? "turma" : firstStudent) || "aula";
-  const teacher = c.teacherName || c.teacherId || "professor";
+  const teacher = getAdminTeacherDisplayNameById(c.teacherId, { fallback: c.teacherName || "professor" }) || "professor";
   const days = (Array.isArray(c.daysOfWeek) ? c.daysOfWeek : []).map(daysLabelShort).join("-");
   const time = Number.isFinite(Number(c.startMin)) ? formatHmFromMinutes(c.startMin).replace(/:/g, "") : "";
   const legacyParts = [
@@ -22324,7 +22389,7 @@ const renderAdminPedagogicoOverview = () => {
                 ? recentFeedbacks
                     .map((f) => {
                       const when = formatShortDateFromMs(f.createdAtMs);
-                      const prof = f.teacherName ? f.teacherName : f.teacherId ? f.teacherId : "Professor";
+                      const prof = getAdminTeacherDisplayNameById(f.teacherId, { fallback: f.teacherName || "Professor" }) || "Professor";
                       const score = Number.isFinite(Number(f.generalScore)) ? String(f.generalScore) : "—";
                       return `<div class="admin-ped-mini-row"><div class="admin-ped-mini-title">${escapeHtml(
                         prof
@@ -22368,7 +22433,7 @@ const renderAdminPedagogicoGroups = () => {
               ? `${formatHmFromMinutes(g.startMin)}–${formatHmFromMinutes(g.endMin)}`
               : "—";
           const plan = g.planName ? String(g.planName) : g.planId ? g.planId : "—";
-          const teacher = g.teacherName ? g.teacherName : g.teacherId ? g.teacherId : "—";
+          const teacher = getAdminTeacherDisplayNameById(g.teacherId, { fallback: g.teacherName || "—" }) || "—";
           const count = Array.isArray(g.studentIds) ? g.studentIds.length : 0;
           return `
             <div class="admin-ped-row">
@@ -22480,7 +22545,7 @@ const renderAdminPedagogicoStudentsPanel = () => {
     .sort((a, b) => String(a?.nome || "").localeCompare(String(b?.nome || ""), "pt-BR"))
     .map((s) => {
       const teacherId = String(s?.professorId || s?.teacherId || "").trim();
-      const teacherName = teacherId ? String(teachersById.get(teacherId)?.nome || "").trim() : "";
+      const teacherName = teacherId ? getAdminTeacherDisplayNameById(teacherId, { fallback: s?.professorNome || s?.teacherNome || "" }) : "";
       const groupId = String(s?.groupId || "").trim();
       const groupName = groupId ? String(groupsById.get(groupId)?.name || "").trim() : String(s?.groupName || "").trim();
       const plan = String(s?.plano || "").trim() || "Sem plano";
@@ -22609,7 +22674,7 @@ const renderAdminPedagogicoLinksPanel = () => {
     const sid = String(s.id || "");
     const teacherId = String(s.professorId || s.teacherId || "").trim();
     const groupId = String(s.groupId || "").trim();
-    const teacherName = teacherId ? String(teachersById.get(teacherId)?.nome || "").trim() : "";
+    const teacherName = teacherId ? getAdminTeacherDisplayNameById(teacherId, { fallback: s?.professorNome || s?.teacherNome || "" }) : "";
     const groupName = groupId ? String(groupsById.get(groupId)?.name || "").trim() : String(s.groupName || "").trim();
     const plan = String(s.plano || "").trim() || "Sem plano";
     const activeClass = getAdminPedStudentActiveClass(sid);
@@ -24993,7 +25058,7 @@ const computePedov2ViewModel = ({ events, liveLessons, records, onboardingRows, 
   const normalizedLessons = normalizePedov2LiveLessons(liveLessons);
   const recordsByLessonId = normalizePedov2Records(records);
   const recordByEventId = buildPedov2EventRecordIndex({ events: normalizedEvents, liveLessons: normalizedLessons, recordsByLessonId });
-  const teachersById = new Map((Array.isArray(teachers) ? teachers : []).map((teacher) => [String(teacher?.id || ""), teacher]));
+  const teachersById = buildAdminTeacherMap(teachers);
   const currentWeekKeys = new Set(getWeekDaysMonToSat(referenceDate).map((date) => createDateKey(date)));
   const weekLessons = normalizedEvents.filter((event) => currentWeekKeys.has(String(event.dateKey || "")));
   const activeStudents = (Array.isArray(students) ? students : []).filter((student) => isPedov2StudentActiveAt(student, referenceDate.getTime()));
@@ -25893,10 +25958,11 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
     };
 
     adminPedagogicoState.teachers = mergePeople(teachers, liveTeachers);
-    adminPedagogicoState.teachersById = new Map(adminPedagogicoState.teachers.map((t) => [String(t.id || ""), t]));
+    adminPedagogicoState.teachersById = buildAdminTeacherMap(adminPedagogicoState.teachers);
     const mergedStudents = mergePeople(students, [...opsStudents, ...liveStudents]).map((student) => {
       const canonicalId = String(student?.firestoreDocId || student?.docId || student?.documentId || student?.id || "").trim();
-      return canonicalId ? { ...student, id: canonicalId, firestoreDocId: canonicalId, docId: canonicalId, documentId: canonicalId } : student;
+      const normalized = canonicalId ? { ...student, id: canonicalId, firestoreDocId: canonicalId, docId: canonicalId, documentId: canonicalId } : student;
+      return enrichAdminStudentTeacherDisplay(normalized);
     });
     adminPedagogicoState.students = mergedStudents;
     adminPedagogicoState.studentsById = new Map(
@@ -27566,7 +27632,7 @@ const openAdminPedFeedbackViewModal = ({ feedbackId } = {}) => {
   if (!row) return;
   const p = row.payload && typeof row.payload === "object" ? row.payload : {};
   const lines = [
-    ["Professor", row.teacherName || row.teacherId || "—"],
+    ["Professor", getAdminTeacherDisplayNameById(row.teacherId, { fallback: row.teacherName || "—" }) || "—"],
     ["Data", row.observationDate || "—"],
     ["Tipo", row.classType === "group" ? "Grupo" : "Individual"],
     ["Nota geral", Number.isFinite(Number(row.generalScore)) ? String(row.generalScore) : "—"],
@@ -27732,7 +27798,9 @@ const openAdminPedAlertViewModal = ({ alertId } = {}) => {
         <div class="admin-ped-overview-card">
           <div class="admin-ped-overview-title">${escapeHtml(row.category || "Aviso")}</div>
           <ul class="admin-ped-overview-list">
-            <li class="admin-ped-overview-item"><span>Professor</span><strong>${escapeHtml(row.teacherName || row.teacherId || "—")}</strong></li>
+            <li class="admin-ped-overview-item"><span>Professor</span><strong>${escapeHtml(
+              getAdminTeacherDisplayNameById(row.teacherId, { fallback: row.teacherName || "—" }) || "—"
+            )}</strong></li>
             <li class="admin-ped-overview-item"><span>Aluno</span><strong>${escapeHtml(row.studentName || row.studentId || "—")}</strong></li>
             <li class="admin-ped-overview-item"><span>Prioridade</span><strong>${escapeHtml(row.priority === "high" ? "Alta" : row.priority === "medium" ? "Média" : "Baixa")}</strong></li>
             <li class="admin-ped-overview-item"><span>Status</span><strong>${escapeHtml(row.status === "resolved" ? "Resolvido" : row.status === "analysis" ? "Em análise" : "Aberto")}</strong></li>
