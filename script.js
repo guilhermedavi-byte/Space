@@ -18723,6 +18723,27 @@ const renderAdminPedSkeletonRows = (count = 6) => `
   </div>
 `;
 
+const renderAdminPedCompactListSkeleton = (count = 8) => `
+  <div class="pedskel-list pedskel-list--compact" aria-hidden="true">
+    ${Array.from({ length: count })
+      .map(
+        (_, index) => `
+          <div class="pedskel-row pedskel-row--compact">
+            <div class="pedskel-row-main">
+              ${renderSkeletonBlock("is-line", `width:${index % 3 === 0 ? "42%" : index % 3 === 1 ? "56%" : "48%"}`)}
+              <div class="pedskel-chip-row">
+                ${renderSkeletonBlock("is-chip", "width:72px")}
+                ${renderSkeletonBlock("is-chip", "width:104px")}
+                ${renderSkeletonBlock("is-chip", "width:88px")}
+              </div>
+            </div>
+          </div>
+        `
+      )
+      .join("")}
+  </div>
+`;
+
 const renderAdminPedStudentsSkeleton = () => `
   <div class="pedskel-module pedskel-students">
     <div class="pedskel-toolbar">
@@ -18730,14 +18751,13 @@ const renderAdminPedStudentsSkeleton = () => `
       ${renderSkeletonBlock("is-button", "width:104px")}
       ${renderSkeletonBlock("is-count", "width:92px")}
     </div>
-    ${renderAdminPedSkeletonRows(8)}
+    ${renderAdminPedCompactListSkeleton(8)}
   </div>
 `;
 
 const renderAdminPedLessonRecordsSkeleton = () => `
   <div class="pedov2 pedrecords pedskel-module">
     ${renderAdminPedSkeletonHeader({ titleWidth: "260px", subWidth: "420px" })}
-    ${renderAdminPedSkeletonKpis(4)}
     <section class="pedrecords-toolbar-wrap">
       <div class="pedrecords-toolbar pedskel-toolbar-card">
         <div class="pedrecords-toolbar-head">
@@ -18750,7 +18770,7 @@ const renderAdminPedLessonRecordsSkeleton = () => `
       </div>
     </section>
     <section class="pedov2-card pedrecords-table-card pedskel-table-card">
-      ${renderAdminPedSkeletonTable(5, 7)}
+      ${renderAdminPedSkeletonTable(5, 9)}
     </section>
   </div>
 `;
@@ -32195,6 +32215,16 @@ const navigateFinanceState = ({ replace = false } = {}) => {
   navigateApp(financePathForState(sessionUser?.role || currentRole), { replace });
 };
 
+const applyParsedAppRouteState = (parsed) => {
+  if (!parsed || typeof parsed !== "object") return;
+  if (parsed?.pedagogicoGroup) adminPedagogicoState.activeGroup = parsed.pedagogicoGroup;
+  if (parsed?.pedagogicoTab) adminPedagogicoState.activeTab = parsed.pedagogicoTab;
+  if (parsed?.pedagogicoPeopleTab) adminPedagogicoState.peopleTab = parsed.pedagogicoPeopleTab;
+  if (parsed?.financeTab) financeState.activeTab = parsed.financeTab;
+  if (parsed?.growthTab) salesCopilotState.activeTab = parsed.growthTab;
+  if (parsed?.settingsSection) adminSettingsState.activeSection = parsed.settingsSection;
+};
+
 const panelPathForRole = (role, panel) => {
   const normalized = normalizeRole(role);
   const p = String(panel || "");
@@ -32390,12 +32420,7 @@ const initAppShell = async () => {
     navigateApp(parsed.redirectTo, { replace: true });
     return;
   }
-  if (parsed?.pedagogicoGroup) adminPedagogicoState.activeGroup = parsed.pedagogicoGroup;
-  if (parsed?.pedagogicoTab) adminPedagogicoState.activeTab = parsed.pedagogicoTab;
-  if (parsed?.pedagogicoPeopleTab) adminPedagogicoState.peopleTab = parsed.pedagogicoPeopleTab;
-  if (parsed?.financeTab) financeState.activeTab = parsed.financeTab;
-  if (parsed?.growthTab) salesCopilotState.activeTab = parsed.growthTab;
-  if (parsed?.settingsSection) adminSettingsState.activeSection = parsed.settingsSection;
+  applyParsedAppRouteState(parsed);
   await enforceForcePasswordChangeIfNeeded();
   showPanel(parsed?.panel || "dashboard");
 
@@ -32425,12 +32450,7 @@ const navigateApp = (path, { replace = false } = {}) => {
     navigateApp(parsed.redirectTo, { replace: true });
     return;
   }
-  if (parsed?.pedagogicoGroup) adminPedagogicoState.activeGroup = parsed.pedagogicoGroup;
-  if (parsed?.pedagogicoTab) adminPedagogicoState.activeTab = parsed.pedagogicoTab;
-  if (parsed?.pedagogicoPeopleTab) adminPedagogicoState.peopleTab = parsed.pedagogicoPeopleTab;
-  if (parsed?.financeTab) financeState.activeTab = parsed.financeTab;
-  if (parsed.growthTab) salesCopilotState.activeTab = parsed.growthTab;
-  if (parsed?.settingsSection) adminSettingsState.activeSection = parsed.settingsSection;
+  applyParsedAppRouteState(parsed);
   showPanel(parsed.panel);
 };
 
@@ -36957,9 +36977,13 @@ window.addEventListener("resize", syncSidebarMode);
 
 const recoverInitialAppPanel = () => {
   if (body.dataset.page !== "app") return;
+  const parsed = parseAppRoute(`${window.location.pathname}${window.location.search}`);
+  if (parsed?.redirectTo) return;
+  if (parsed?.role && currentRole && normalizeRole(parsed.role) !== normalizeRole(currentRole)) return;
+  applyParsedAppRouteState(parsed);
   const initialPanel = String(body.dataset.initialPanel || "").trim();
   const activePanel = String(body.dataset.activePanel || "").trim();
-  const panel = activePanel || initialPanel || "dashboard";
+  const panel = activePanel || parsed?.panel || initialPanel || "dashboard";
 
   if (!activePanel && panel) {
     try {

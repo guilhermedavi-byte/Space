@@ -22377,6 +22377,12 @@ body.has-space-env-banner{padding-top:46px}
   border: 1px solid rgba(255, 255, 255, 0.06);
   background: rgba(12, 18, 30, 0.72);
 }
+.pedskel-list--compact { gap: 8px; }
+.pedskel-row--compact {
+  grid-template-columns: minmax(0, 1fr);
+  padding: 14px 16px;
+  min-height: 74px;
+}
 .pedskel-row-main { display: grid; gap: 10px; min-width: 0; }
 .pedskel-chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .pedskel-table-card { overflow: hidden; }
