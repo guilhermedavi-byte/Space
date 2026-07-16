@@ -11720,6 +11720,7 @@ let adminTeachersState = {
 
 const ADMIN_SETTINGS_SECTIONS = [
   { key: "meu-perfil", label: "Meu perfil" },
+  { key: "acessos", label: "Acessos", superAdminOnly: true },
   { key: "tags", label: "Tags" },
   { key: "planos", label: "Planos" },
   { key: "motivos-cancelamento", label: "Motivos de cancelamento" },
@@ -11732,7 +11733,8 @@ const ADMIN_SETTINGS_SECTIONS = [
 
 const getVisibleAdminSettingsSections = () => {
   if (normalizeRole(currentRole) === "teacher") return ADMIN_SETTINGS_SECTIONS.filter((item) => item.key === "meu-perfil");
-  return ADMIN_SETTINGS_SECTIONS;
+  const isSuperAdmin = adminSettingsState?.profileMeta?.isSuperAdmin === true;
+  return ADMIN_SETTINGS_SECTIONS.filter((item) => !item.superAdminOnly || isSuperAdmin);
 };
 
 let adminSettingsState = {
@@ -11747,6 +11749,10 @@ let adminSettingsState = {
   inlineSaveTimer: 0,
   photoSaving: false,
   photoError: "",
+  accessRows: [],
+  accessLoadedAt: 0,
+  accessLoading: false,
+  accessError: "",
 };
 
 const setAdminStudentsStatus = (text, tone = "") => {
@@ -29183,6 +29189,7 @@ const loadAdminSettingsProfile = async ({ force = false } = {}) => {
       email: String(data?.email || sessionUser?.email || "").trim(),
       telefone: String(data?.telefone || data?.phone || "").trim(),
       photoURL: String(data?.photoURL || data?.photoUrl || "").trim(),
+      isSuperAdmin: data?.isSuperAdmin === true,
       criadoEm: data?.criadoEm || null,
     };
     adminSettingsState.profileLoadedAt = Date.now();
@@ -29195,11 +29202,122 @@ const loadAdminSettingsProfile = async ({ force = false } = {}) => {
       email: String(sessionUser?.email || "").trim(),
       telefone: "",
       photoURL: "",
+      isSuperAdmin: false,
       criadoEm: null,
     };
   } finally {
     adminSettingsState.profileLoading = false;
   }
+};
+
+const normalizeAdminAccessRow = (id, raw = {}) => {
+  const role = normalizeRole(raw?.tipo || raw?.role || raw?.type);
+  if (role !== "admin") return null;
+  const nome = String(raw?.nome || raw?.name || raw?.displayName || raw?.email || "Administrador").trim();
+  const email = String(raw?.email || "").trim().toLowerCase();
+  return {
+    id: String(id || raw?.id || raw?.uid || raw?.firestoreDocId || "").trim(),
+    nome: nome || "Administrador",
+    email,
+    criadoEm: raw?.criadoEm || raw?.createdAt || raw?.created_at || null,
+    ativo: raw?.ativo !== false,
+    isSuperAdmin: raw?.isSuperAdmin === true,
+  };
+};
+
+const loadAdminAccessRows = async ({ force = false } = {}) => {
+  if (adminSettingsState.accessLoading) return;
+  const isSuperAdmin = adminSettingsState.profileMeta?.isSuperAdmin === true;
+  if (!isSuperAdmin) {
+    adminSettingsState.accessRows = [];
+    adminSettingsState.accessLoadedAt = 0;
+    adminSettingsState.accessError = "";
+    return;
+  }
+  const now = Date.now();
+  if (!force && adminSettingsState.accessLoadedAt && now - adminSettingsState.accessLoadedAt < 45_000) return;
+  adminSettingsState.accessLoading = true;
+  adminSettingsState.accessError = "";
+  try {
+    const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_accesses");
+    const user = await waitForFirebaseAuthReady(firebase, 5000);
+    if (!user) {
+      const err = new Error("firebase_not_authenticated");
+      err.code = "auth/no-current-user";
+      throw err;
+    }
+    const snap = await withTimeout(firebase.getDocs(firebase.collection(firebase.primaryDb, "users")), 12_000, "firestore_get_admin_accesses");
+    const rows = [];
+    snap.forEach((docSnap) => {
+      const data = docSnap.data ? docSnap.data() : {};
+      const row = normalizeAdminAccessRow(docSnap.id, data);
+      if (row) rows.push(row);
+    });
+    adminSettingsState.accessRows = rows.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+    adminSettingsState.accessLoadedAt = Date.now();
+  } catch (error) {
+    console.error("[admin] access list load failed:", error);
+    adminSettingsState.accessError = typeof error?.message === "string" && error.message ? error.message : "Não foi possível carregar os acessos.";
+  } finally {
+    adminSettingsState.accessLoading = false;
+  }
+};
+
+const renderAdminSettingsAccesses = () => {
+  const rows = Array.isArray(adminSettingsState.accessRows) ? adminSettingsState.accessRows : [];
+  const error = String(adminSettingsState.accessError || "").trim();
+  const loading = adminSettingsState.accessLoading;
+  return `
+    <div class="admin-settings-page acessos-page">
+      <div class="surface-card acessos-hero">
+        <div>
+          <div class="acessos-kicker">Configurações</div>
+          <h2 class="acessos-title">Acessos administrativos</h2>
+          <p class="acessos-subtitle">Gerencie quem pode acessar o dashboard admin da Space.</p>
+        </div>
+        <button class="button button-primary button-small acessos-add-button" type="button" data-acessos-add-admin>Adicionar administrador</button>
+      </div>
+      ${error ? `<div class="acessos-alert" role="alert">${escapeHtml(error)}</div>` : ""}
+      <section class="surface-card acessos-card" aria-label="Administradores cadastrados">
+        <div class="acessos-card-head">
+          <div>
+            <span class="acessos-kicker">Equipe</span>
+            <strong>${escapeHtml(String(rows.length))} administrador(es)</strong>
+          </div>
+          <button class="button button-outline button-small" type="button" data-acessos-refresh ${loading ? "disabled" : ""}>Atualizar</button>
+        </div>
+        ${
+          loading
+            ? `<div class="acessos-loading">
+                <span></span><span></span><span></span>
+              </div>`
+            : rows.length
+              ? `<div class="acessos-table">
+                  <div class="acessos-row acessos-row-head">
+                    <span>Nome</span>
+                    <span>E-mail</span>
+                    <span>Criação</span>
+                  </div>
+                  ${rows
+                    .map(
+                      (row) => `
+                        <div class="acessos-row">
+                          <div class="acessos-person">
+                            <strong>${escapeHtml(row.nome)}</strong>
+                            ${row.isSuperAdmin ? `<em>Super admin</em>` : row.ativo ? `<em>Admin</em>` : `<em>Inativo</em>`}
+                          </div>
+                          <span>${escapeHtml(row.email || "—")}</span>
+                          <span>${escapeHtml(formatAdminDate(row.criadoEm))}</span>
+                        </div>
+                      `
+                    )
+                    .join("")}
+                </div>`
+              : `<div class="acessos-empty">Nenhum administrador encontrado.</div>`
+        }
+      </section>
+    </div>
+  `;
 };
 
 const renderAdminSettingsPlaceholder = (section) => {
@@ -29304,6 +29422,18 @@ const renderAdminSettingsPanel = () => {
     contentEl.innerHTML = renderAdminSettingsProfile();
     return;
   }
+  if (adminSettingsState.activeSection === "acessos" && adminSettingsState.profileMeta?.isSuperAdmin === true) {
+    contentEl.innerHTML = renderAdminSettingsAccesses();
+    loadAdminAccessRows({ force: false })
+      .catch((error) => console.error("[admin] access list init failed:", error))
+      .finally(() => {
+        if (adminSettingsState.activeSection === "acessos") {
+          const latestContentEl = getAdminSettingsContent();
+          if (latestContentEl instanceof HTMLElement) latestContentEl.innerHTML = renderAdminSettingsAccesses();
+        }
+      });
+    return;
+  }
   contentEl.innerHTML = renderAdminSettingsPlaceholder(adminSettingsState.activeSection);
 };
 
@@ -29317,6 +29447,125 @@ const openAdminSettingsSection = (section, { updateRoute = true } = {}) => {
     return;
   }
   renderAdminSettingsPanel();
+};
+
+const setAcessosModalError = (message) => {
+  const errorEl = modalBody?.querySelector("[data-acessos-modal-error]");
+  if (errorEl instanceof HTMLElement) {
+    errorEl.textContent = String(message || "");
+    errorEl.hidden = !String(message || "").trim();
+  }
+};
+
+const openAdminAccessCreateModal = () => {
+  if (adminSettingsState.profileMeta?.isSuperAdmin !== true) return;
+  openModal({
+    title: "Adicionar administrador",
+    bodyHtml: `
+      <form class="acessos-form" data-acessos-form novalidate>
+        <label class="auth-field">
+          <span>Nome</span>
+          <input class="auth-input acessos-input" type="text" autocomplete="name" data-acessos-name />
+        </label>
+        <label class="auth-field">
+          <span>E-mail</span>
+          <input class="auth-input acessos-input" type="email" autocomplete="email" data-acessos-email />
+        </label>
+        <label class="auth-field">
+          <span>Senha</span>
+          <input class="auth-input acessos-input" type="password" autocomplete="new-password" data-acessos-password />
+          <div class="auth-inline-hint">Mínimo de 6 caracteres.</div>
+        </label>
+        <label class="auth-field">
+          <span>Confirmar senha</span>
+          <input class="auth-input acessos-input" type="password" autocomplete="new-password" data-acessos-password-confirm />
+        </label>
+        <div class="acessos-modal-error" data-acessos-modal-error hidden></div>
+      </form>
+    `,
+    primaryLabel: "Criar administrador",
+    secondaryLabel: "Cancelar",
+    hideSecondary: false,
+    showTrash: false,
+    onPrimary: () => {
+      const nameEl = modalBody?.querySelector("[data-acessos-name]");
+      const emailEl = modalBody?.querySelector("[data-acessos-email]");
+      const passwordEl = modalBody?.querySelector("[data-acessos-password]");
+      const confirmEl = modalBody?.querySelector("[data-acessos-password-confirm]");
+      const nome = nameEl instanceof HTMLInputElement ? nameEl.value.trim().replace(/\s+/g, " ") : "";
+      const email = emailEl instanceof HTMLInputElement ? emailEl.value.trim().toLowerCase() : "";
+      const senha = passwordEl instanceof HTMLInputElement ? passwordEl.value : "";
+      const confirm = confirmEl instanceof HTMLInputElement ? confirmEl.value : "";
+      const emailOk = isValidEmail(email);
+      const passwordOk = senha.length >= 6;
+      const confirmOk = senha === confirm && Boolean(confirm);
+      const nameOk = nome.length >= 2;
+      [
+        [nameEl, nameOk],
+        [emailEl, emailOk],
+        [passwordEl, passwordOk],
+        [confirmEl, confirmOk],
+      ].forEach(([el, ok]) => {
+        if (el instanceof HTMLElement) el.classList.toggle("is-error", !ok);
+      });
+      if (!nameOk || !emailOk || !passwordOk || !confirmOk) {
+        setAcessosModalError(
+          !nameOk
+            ? "Informe o nome do administrador."
+            : !emailOk
+              ? "Informe um e-mail válido."
+              : !passwordOk
+                ? "A senha precisa ter pelo menos 6 caracteres."
+                : "A confirmação de senha não confere."
+        );
+        return false;
+      }
+
+      (async () => {
+        const previousLabel = modalPrimary instanceof HTMLButtonElement ? modalPrimary.textContent : "";
+        try {
+          setAcessosModalError("");
+          if (modalPrimary instanceof HTMLButtonElement) {
+            modalPrimary.disabled = true;
+            modalPrimary.textContent = "Criando…";
+          }
+          if (modalSecondary instanceof HTMLButtonElement) modalSecondary.disabled = true;
+          const response = await withTimeout(
+            fetchWithAuth("/api/admin-create-user", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ nome, email, senha }),
+            }),
+            15_000,
+            "admin_create_access_user"
+          );
+          const data = await response.json().catch(() => null);
+          if (!response.ok) {
+            const error = new Error(data?.message || data?.errorDetail || data?.error || "admin_create_user_failed");
+            error.code = data?.error || "";
+            throw error;
+          }
+          adminSettingsState.accessLoadedAt = 0;
+          await loadAdminAccessRows({ force: true });
+          closeModal();
+          renderAdminSettingsPanel();
+        } catch (error) {
+          console.error("[admin] create access user failed:", error);
+          const message =
+            error?.code === "timeout"
+              ? "Tempo esgotado. Tente novamente."
+              : String(error?.message || "Não foi possível criar o administrador agora.");
+          setAcessosModalError(message);
+          if (modalPrimary instanceof HTMLButtonElement) {
+            modalPrimary.disabled = false;
+            modalPrimary.textContent = previousLabel || "Criar administrador";
+          }
+          if (modalSecondary instanceof HTMLButtonElement) modalSecondary.disabled = false;
+        }
+      })();
+      return false;
+    },
+  });
 };
 
 
@@ -34586,6 +34835,25 @@ document.addEventListener("click", (event) => {
         event.preventDefault();
         const section = String(settingsSection.getAttribute("data-admin-settings-section") || "").trim();
         if (section) openAdminSettingsSection(section);
+        return;
+      }
+
+      const acessosAddAdmin = target.closest("[data-acessos-add-admin]");
+      if (acessosAddAdmin instanceof HTMLButtonElement) {
+        event.preventDefault();
+        openAdminAccessCreateModal();
+        return;
+      }
+
+      const acessosRefresh = target.closest("[data-acessos-refresh]");
+      if (acessosRefresh instanceof HTMLButtonElement) {
+        event.preventDefault();
+        loadAdminAccessRows({ force: true })
+          .catch((error) => console.error("[admin] access list refresh failed:", error))
+          .finally(() => {
+            if (adminSettingsState.activeSection === "acessos") renderAdminSettingsPanel();
+          });
+        renderAdminSettingsPanel();
         return;
       }
 

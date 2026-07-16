@@ -1,0 +1,161 @@
+{
+  "generatedAt": "2026-07-15T03:29:40.009Z",
+  "mode": "dry-run",
+  "note": "Nenhuma escrita executada. Revisar antes de aplicar qualquer correção.",
+  "totals": {
+    "occurrences": 16,
+    "distinctBeforeAfter": 4
+  },
+  "distinct": [
+    {
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "count": 4
+    },
+    {
+      "before": "JoĂo Luiz",
+      "after": "João Luiz",
+      "count": 4
+    },
+    {
+      "before": "JoĂo Pedro S.",
+      "after": "João Pedro S.",
+      "count": 4
+    },
+    {
+      "before": "RomĂo C.",
+      "after": "Romão C.",
+      "count": 4
+    }
+  ],
+  "occurrences": [
+    {
+      "collection": "users",
+      "id": "CyMUBwYbdFYtKrjovLdqPxcyT2x1",
+      "field": "displayName",
+      "before": "JoĂo Pedro S.",
+      "after": "João Pedro S.",
+      "changed": true
+    },
+    {
+      "collection": "users",
+      "id": "CyMUBwYbdFYtKrjovLdqPxcyT2x1",
+      "field": "name",
+      "before": "JoĂo Pedro S.",
+      "after": "João Pedro S.",
+      "changed": true
+    },
+    {
+      "collection": "users",
+      "id": "CyMUBwYbdFYtKrjovLdqPxcyT2x1",
+      "field": "nome",
+      "before": "JoĂo Pedro S.",
+      "after": "João Pedro S.",
+      "changed": true
+    },
+    {
+      "collection": "users",
+      "id": "CyMUBwYbdFYtKrjovLdqPxcyT2x1",
+      "field": "nomeCompleto",
+      "before": "JoĂo Pedro S.",
+      "after": "João Pedro S.",
+      "changed": true
+    },
+    {
+      "collection": "users",
+      "id": "jJBR1oFywuWN5kTZzQ6f87sO1BK2",
+      "field": "displayName",
+      "before": "JoĂo Luiz",
+      "after": "João Luiz",
+      "changed": true
+    },
+    {
+      "collection": "users",
+      "id": "jJBR1oFywuWN5kTZzQ6f87sO1BK2",
+      "field": "name",
+      "before": "JoĂo Luiz",
+      "after": "João Luiz",
+      "changed": true
+    },
+    {
+      "collection": "users",
+      "id": "jJBR1oFywuWN5kTZzQ6f87sO1BK2",
+      "field": "nome",
+      "before": "JoĂo Luiz",
+      "after": "João Luiz",
+      "changed": true
+    },
+    {
+      "collection": "users",
+      "id": "jJBR1oFywuWN5kTZzQ6f87sO1BK2",
+      "field": "nomeCompleto",
+      "before": "JoĂo Luiz",
+      "after": "João Luiz",
+      "changed": true
+    },
+    {
+      "collection": "users",
+      "id": "RvxeUcvfXYM6fKZT393QhpwgK8A3",
+      "field": "displayName",
+      "before": "RomĂo C.",
+      "after": "Romão C.",
+      "changed": true
+    },
+    {
+      "collection": "users",
+      "id": "RvxeUcvfXYM6fKZT393QhpwgK8A3",
+      "field": "name",
+      "before": "RomĂo C.",
+      "after": "Romão C.",
+      "changed": true
+    },
+    {
+      "collection": "users",
+      "id": "RvxeUcvfXYM6fKZT393QhpwgK8A3",
+      "field": "nome",
+      "before": "RomĂo C.",
+      "after": "Romão C.",
+      "changed": true
+    },
+    {
+      "collection": "users",
+      "id": "RvxeUcvfXYM6fKZT393QhpwgK8A3",
+      "field": "nomeCompleto",
+      "before": "RomĂo C.",
+      "after": "Romão C.",
+      "changed": true
+    },
+    {
+      "collection": "users",
+      "id": "xUkdzAa4zDRx4q8usUJGOQxiCtG3",
+      "field": "displayName",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true
+    },
+    {
+      "collection": "users",
+      "id": "xUkdzAa4zDRx4q8usUJGOQxiCtG3",
+      "field": "name",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true
+    },
+    {
+      "collection": "users",
+      "id": "xUkdzAa4zDRx4q8usUJGOQxiCtG3",
+      "field": "nome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true
+    },
+    {
+      "collection": "users",
+      "id": "xUkdzAa4zDRx4q8usUJGOQxiCtG3",
+      "field": "nomeCompleto",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true
+    }
+  ]
+}

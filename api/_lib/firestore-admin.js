@@ -49,6 +49,29 @@ const listCollectionAsAdmin = async (collectionPath, { pageSize = 1000 } = {}) =
   return all;
 };
 
+const getDocumentAsAdmin = async (docPath) => {
+  const path = String(docPath || "").replace(/^\/+/, "");
+  if (!path) throw new Error("missing_document_path");
+  const accessToken = await getAccessToken();
+  const response = await requestJson(`${FIRESTORE_BASE}/${encodeURI(path)}`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!response.ok) {
+    const error = new Error("firestore_admin_get_failed");
+    error.status = response.status;
+    error.details = response.data || response.text || null;
+    throw error;
+  }
+  const fields = decodeFields(response.data);
+  const firestoreDocId = getDocIdFromName(response.data?.name);
+  return {
+    ...fields,
+    id: typeof fields?.id === "string" && fields.id.trim() ? fields.id : firestoreDocId,
+    firestoreDocId,
+  };
+};
+
 const createDocumentAsAdmin = async (collectionPath, data) => {
   const path = String(collectionPath || "").replace(/^\/+/, "");
   if (!path) throw new Error("missing_collection");
@@ -84,4 +107,4 @@ const commitWritesAsAdmin = async ({ writes } = {}) => {
   });
 };
 
-module.exports = { commitWritesAsAdmin, createDocumentAsAdmin, listCollectionAsAdmin };
+module.exports = { commitWritesAsAdmin, createDocumentAsAdmin, getDocumentAsAdmin, listCollectionAsAdmin };

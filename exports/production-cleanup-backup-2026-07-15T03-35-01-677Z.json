@@ -1,0 +1,1388 @@
+{
+  "generatedAt": "2026-07-15T03:35:01.671Z",
+  "projectId": "plataforma-space",
+  "duplicateDeletes": [
+    {
+      "alunoEmail": "adaovieirafilho@icloud.com",
+      "documents": [],
+      "professorNome": "Maria Clara Maciel",
+      "title": "",
+      "dateKey": "2026-07-14",
+      "horaInicio": "20:00",
+      "diaSemana": "ter",
+      "alunoNome": "AdĂo Vieira",
+      "endMin": 1230,
+      "description": "",
+      "horaFim": "20:30",
+      "data": "2026-07-14T23:00:00.000Z",
+      "guests": [],
+      "repeatType": "weekly_custom",
+      "recorrente": true,
+      "professorEmail": "macielnerymariaclara@gmail.com",
+      "repeatDays": [
+        {
+          "endTime": "20:30",
+          "weekday": "seg",
+          "startTime": "20:00"
+        },
+        {
+          "startTime": "20:00",
+          "endTime": "20:30",
+          "weekday": "ter"
+        },
+        {
+          "endTime": "20:30",
+          "weekday": "qua",
+          "startTime": "20:00"
+        },
+        {
+          "startTime": "20:00",
+          "weekday": "qui",
+          "endTime": "20:30"
+        },
+        {
+          "endTime": "20:30",
+          "weekday": "sex",
+          "startTime": "20:00"
+        }
+      ],
+      "alunoTelefone": null,
+      "professorId": "4OqhnMaieJe1dL7yxKlwsPaYRjS2",
+      "grupoRecorrenciaId": "class_mrl5vjbd_fakgy",
+      "startMin": 1200,
+      "criadoPor": "admin",
+      "criadoEm": "2026-07-14T21:30:47.960Z",
+      "status": "agendada",
+      "alunoId": "xUkdzAa4zDRx4q8usUJGOQxiCtG3",
+      "id": "aula_1784064647960_ea8673c321f6",
+      "firestoreDocId": "aula_1784064647960_ea8673c321f6"
+    },
+    {
+      "startMin": 1200,
+      "alunoTelefone": null,
+      "professorId": "4OqhnMaieJe1dL7yxKlwsPaYRjS2",
+      "grupoRecorrenciaId": "class_mrl5vjbd_fakgy",
+      "criadoEm": "2026-07-14T21:30:50.282Z",
+      "criadoPor": "admin",
+      "status": "agendada",
+      "alunoId": "xUkdzAa4zDRx4q8usUJGOQxiCtG3",
+      "horaInicio": "20:00",
+      "dateKey": "2026-07-15",
+      "title": "",
+      "alunoEmail": "adaovieirafilho@icloud.com",
+      "documents": [],
+      "professorNome": "Maria Clara Maciel",
+      "description": "",
+      "horaFim": "20:30",
+      "data": "2026-07-15T23:00:00.000Z",
+      "guests": [],
+      "professorEmail": "macielnerymariaclara@gmail.com",
+      "recorrente": true,
+      "repeatDays": [
+        {
+          "startTime": "20:00",
+          "endTime": "20:30",
+          "weekday": "seg"
+        },
+        {
+          "startTime": "20:00",
+          "weekday": "ter",
+          "endTime": "20:30"
+        },
+        {
+          "endTime": "20:30",
+          "weekday": "qua",
+          "startTime": "20:00"
+        },
+        {
+          "startTime": "20:00",
+          "endTime": "20:30",
+          "weekday": "qui"
+        },
+        {
+          "startTime": "20:00",
+          "weekday": "sex",
+          "endTime": "20:30"
+        }
+      ],
+      "repeatType": "weekly_custom",
+      "diaSemana": "qua",
+      "alunoNome": "AdĂo Vieira",
+      "endMin": 1230,
+      "id": "aula_1784064650282_e72981043962",
+      "firestoreDocId": "aula_1784064650282_e72981043962"
+    },
+    {
+      "alunoNome": "AdĂo Vieira",
+      "endMin": 1230,
+      "diaSemana": "qui",
+      "data": "2026-07-16T23:00:00.000Z",
+      "horaFim": "20:30",
+      "description": "",
+      "repeatType": "weekly_custom",
+      "professorEmail": "macielnerymariaclara@gmail.com",
+      "recorrente": true,
+      "repeatDays": [
+        {
+          "startTime": "20:00",
+          "weekday": "seg",
+          "endTime": "20:30"
+        },
+        {
+          "startTime": "20:00",
+          "weekday": "ter",
+          "endTime": "20:30"
+        },
+        {
+          "endTime": "20:30",
+          "weekday": "qua",
+          "startTime": "20:00"
+        },
+        {
+          "endTime": "20:30",
+          "weekday": "qui",
+          "startTime": "20:00"
+        },
+        {
+          "startTime": "20:00",
+          "endTime": "20:30",
+          "weekday": "sex"
+        }
+      ],
+      "guests": [],
+      "documents": [],
+      "alunoEmail": "adaovieirafilho@icloud.com",
+      "professorNome": "Maria Clara Maciel",
+      "title": "",
+      "dateKey": "2026-07-16",
+      "horaInicio": "20:00",
+      "criadoPor": "admin",
+      "criadoEm": "2026-07-14T21:30:52.427Z",
+      "alunoId": "xUkdzAa4zDRx4q8usUJGOQxiCtG3",
+      "status": "agendada",
+      "grupoRecorrenciaId": "class_mrl5vjbd_fakgy",
+      "professorId": "4OqhnMaieJe1dL7yxKlwsPaYRjS2",
+      "alunoTelefone": null,
+      "startMin": 1200,
+      "id": "aula_1784064652427_0bc52872df11",
+      "firestoreDocId": "aula_1784064652427_0bc52872df11"
+    },
+    {
+      "data": "2026-07-17T23:00:00.000Z",
+      "description": "",
+      "horaFim": "20:30",
+      "repeatDays": [
+        {
+          "startTime": "20:00",
+          "endTime": "20:30",
+          "weekday": "seg"
+        },
+        {
+          "weekday": "ter",
+          "endTime": "20:30",
+          "startTime": "20:00"
+        },
+        {
+          "endTime": "20:30",
+          "weekday": "qua",
+          "startTime": "20:00"
+        },
+        {
+          "weekday": "qui",
+          "endTime": "20:30",
+          "startTime": "20:00"
+        },
+        {
+          "startTime": "20:00",
+          "endTime": "20:30",
+          "weekday": "sex"
+        }
+      ],
+      "recorrente": true,
+      "professorEmail": "macielnerymariaclara@gmail.com",
+      "repeatType": "weekly_custom",
+      "guests": [],
+      "alunoNome": "AdĂo Vieira",
+      "endMin": 1230,
+      "diaSemana": "sex",
+      "horaInicio": "20:00",
+      "dateKey": "2026-07-17",
+      "title": "",
+      "documents": [],
+      "alunoEmail": "adaovieirafilho@icloud.com",
+      "professorNome": "Maria Clara Maciel",
+      "criadoEm": "2026-07-14T21:30:54.451Z",
+      "criadoPor": "admin",
+      "alunoId": "xUkdzAa4zDRx4q8usUJGOQxiCtG3",
+      "status": "agendada",
+      "startMin": 1200,
+      "alunoTelefone": null,
+      "professorId": "4OqhnMaieJe1dL7yxKlwsPaYRjS2",
+      "grupoRecorrenciaId": "class_mrl5vjbd_fakgy",
+      "id": "aula_1784064654451_1d1bf8ced9b1",
+      "firestoreDocId": "aula_1784064654451_1d1bf8ced9b1"
+    },
+    {
+      "horaFim": "22:30",
+      "documents": [],
+      "startMin": 1320,
+      "status": "agendada",
+      "alunoNome": "Albison Abreu",
+      "description": "",
+      "alunoTelefone": null,
+      "criadoPor": "admin",
+      "data": "2026-07-15T01:00:00.000Z",
+      "title": "",
+      "grupoRecorrenciaId": "class_mrl6lrrm_9nrph",
+      "repeatDays": [
+        {
+          "weekday": "seg",
+          "startTime": "22:00",
+          "endTime": "22:30"
+        },
+        {
+          "startTime": "22:00",
+          "endTime": "22:30",
+          "weekday": "ter"
+        },
+        {
+          "weekday": "qua",
+          "endTime": "22:30",
+          "startTime": "22:00"
+        },
+        {
+          "startTime": "22:00",
+          "endTime": "22:30",
+          "weekday": "qui"
+        },
+        {
+          "weekday": "sex",
+          "endTime": "22:30",
+          "startTime": "22:00"
+        }
+      ],
+      "alunoEmail": "albisonasantos10@gmail.com",
+      "professorNome": "Priscilla Gracielle",
+      "criadoEm": "2026-07-15T01:07:49.565Z",
+      "repeatType": "weekly_custom",
+      "recorrente": true,
+      "diaSemana": "ter",
+      "dateKey": "2026-07-14",
+      "guests": [],
+      "endMin": 1350,
+      "professorEmail": "prigjamas@gmail.com",
+      "alunoId": "SZAVFEHoa0MQZAskZaLoRrGjuE62",
+      "professorId": "ZqjHzGFtUKaC4Hg5I2SPvBdiXrr2",
+      "horaInicio": "22:00",
+      "id": "aula_1784077669565_8bcb57f158c5",
+      "firestoreDocId": "aula_1784077669565_8bcb57f158c5"
+    },
+    {
+      "documents": [],
+      "startMin": 1320,
+      "horaFim": "22:30",
+      "status": "agendada",
+      "alunoNome": "Albison Abreu",
+      "alunoTelefone": null,
+      "description": "",
+      "criadoPor": "admin",
+      "data": "2026-07-16T01:00:00.000Z",
+      "title": "",
+      "grupoRecorrenciaId": "class_mrl6lrrm_9nrph",
+      "repeatDays": [
+        {
+          "endTime": "22:30",
+          "startTime": "22:00",
+          "weekday": "seg"
+        },
+        {
+          "startTime": "22:00",
+          "endTime": "22:30",
+          "weekday": "ter"
+        },
+        {
+          "startTime": "22:00",
+          "endTime": "22:30",
+          "weekday": "qua"
+        },
+        {
+          "weekday": "qui",
+          "startTime": "22:00",
+          "endTime": "22:30"
+        },
+        {
+          "weekday": "sex",
+          "endTime": "22:30",
+          "startTime": "22:00"
+        }
+      ],
+      "alunoEmail": "albisonasantos10@gmail.com",
+      "criadoEm": "2026-07-15T01:07:51.657Z",
+      "professorNome": "Priscilla Gracielle",
+      "repeatType": "weekly_custom",
+      "diaSemana": "qua",
+      "recorrente": true,
+      "guests": [],
+      "dateKey": "2026-07-15",
+      "endMin": 1350,
+      "professorEmail": "prigjamas@gmail.com",
+      "alunoId": "SZAVFEHoa0MQZAskZaLoRrGjuE62",
+      "professorId": "ZqjHzGFtUKaC4Hg5I2SPvBdiXrr2",
+      "horaInicio": "22:00",
+      "id": "aula_1784077671657_f6ee706e7f65",
+      "firestoreDocId": "aula_1784077671657_f6ee706e7f65"
+    },
+    {
+      "alunoEmail": "albisonasantos10@gmail.com",
+      "criadoEm": "2026-07-15T01:07:53.740Z",
+      "professorNome": "Priscilla Gracielle",
+      "repeatType": "weekly_custom",
+      "recorrente": true,
+      "diaSemana": "qui",
+      "guests": [],
+      "dateKey": "2026-07-16",
+      "professorEmail": "prigjamas@gmail.com",
+      "endMin": 1350,
+      "alunoId": "SZAVFEHoa0MQZAskZaLoRrGjuE62",
+      "professorId": "ZqjHzGFtUKaC4Hg5I2SPvBdiXrr2",
+      "horaInicio": "22:00",
+      "documents": [],
+      "startMin": 1320,
+      "horaFim": "22:30",
+      "status": "agendada",
+      "alunoNome": "Albison Abreu",
+      "alunoTelefone": null,
+      "description": "",
+      "criadoPor": "admin",
+      "data": "2026-07-17T01:00:00.000Z",
+      "title": "",
+      "grupoRecorrenciaId": "class_mrl6lrrm_9nrph",
+      "repeatDays": [
+        {
+          "startTime": "22:00",
+          "endTime": "22:30",
+          "weekday": "seg"
+        },
+        {
+          "startTime": "22:00",
+          "endTime": "22:30",
+          "weekday": "ter"
+        },
+        {
+          "weekday": "qua",
+          "endTime": "22:30",
+          "startTime": "22:00"
+        },
+        {
+          "startTime": "22:00",
+          "endTime": "22:30",
+          "weekday": "qui"
+        },
+        {
+          "weekday": "sex",
+          "endTime": "22:30",
+          "startTime": "22:00"
+        }
+      ],
+      "id": "aula_1784077673740_b652cb6365f6",
+      "firestoreDocId": "aula_1784077673740_b652cb6365f6"
+    },
+    {
+      "grupoRecorrenciaId": "class_mrl6lrrm_9nrph",
+      "repeatDays": [
+        {
+          "weekday": "seg",
+          "endTime": "22:30",
+          "startTime": "22:00"
+        },
+        {
+          "startTime": "22:00",
+          "endTime": "22:30",
+          "weekday": "ter"
+        },
+        {
+          "weekday": "qua",
+          "startTime": "22:00",
+          "endTime": "22:30"
+        },
+        {
+          "endTime": "22:30",
+          "startTime": "22:00",
+          "weekday": "qui"
+        },
+        {
+          "endTime": "22:30",
+          "startTime": "22:00",
+          "weekday": "sex"
+        }
+      ],
+      "title": "",
+      "criadoPor": "admin",
+      "data": "2026-07-18T01:00:00.000Z",
+      "description": "",
+      "alunoTelefone": null,
+      "alunoNome": "Albison Abreu",
+      "status": "agendada",
+      "horaFim": "22:30",
+      "startMin": 1320,
+      "documents": [],
+      "horaInicio": "22:00",
+      "professorId": "ZqjHzGFtUKaC4Hg5I2SPvBdiXrr2",
+      "endMin": 1350,
+      "professorEmail": "prigjamas@gmail.com",
+      "alunoId": "SZAVFEHoa0MQZAskZaLoRrGjuE62",
+      "dateKey": "2026-07-17",
+      "guests": [],
+      "diaSemana": "sex",
+      "recorrente": true,
+      "repeatType": "weekly_custom",
+      "professorNome": "Priscilla Gracielle",
+      "criadoEm": "2026-07-15T01:07:55.935Z",
+      "alunoEmail": "albisonasantos10@gmail.com",
+      "id": "aula_1784077675935_c3404e3ae460",
+      "firestoreDocId": "aula_1784077675935_c3404e3ae460"
+    },
+    {
+      "data": "2026-07-15T00:00:00.000Z",
+      "criadoPor": "admin",
+      "title": "",
+      "grupoRecorrenciaId": "class_mrldslrr_6dwbw",
+      "repeatDays": [
+        {
+          "startTime": "21:00",
+          "endTime": "21:30",
+          "weekday": "seg"
+        },
+        {
+          "endTime": "21:30",
+          "startTime": "21:00",
+          "weekday": "ter"
+        },
+        {
+          "weekday": "qua",
+          "endTime": "21:30",
+          "startTime": "21:00"
+        },
+        {
+          "weekday": "qui",
+          "startTime": "21:00",
+          "endTime": "21:30"
+        },
+        {
+          "startTime": "21:00",
+          "endTime": "21:30",
+          "weekday": "sex"
+        }
+      ],
+      "alunoNome": "Karla Rezende",
+      "description": "",
+      "alunoTelefone": null,
+      "status": "agendada",
+      "horaFim": "21:30",
+      "startMin": 1260,
+      "documents": [],
+      "professorId": "ZqjHzGFtUKaC4Hg5I2SPvBdiXrr2",
+      "horaInicio": "21:00",
+      "alunoId": "7PkWumbMC0a3z6mFcS3HV4fdLMD3",
+      "endMin": 1290,
+      "professorEmail": "prigjamas@gmail.com",
+      "repeatType": "weekly_custom",
+      "recorrente": true,
+      "diaSemana": "ter",
+      "dateKey": "2026-07-14",
+      "guests": [],
+      "alunoEmail": "rezendekak@gmail.com",
+      "professorNome": "Priscilla Gracielle",
+      "criadoEm": "2026-07-15T01:11:03.358Z",
+      "id": "aula_1784077863358_f0bdbaddf743",
+      "firestoreDocId": "aula_1784077863358_f0bdbaddf743"
+    },
+    {
+      "title": "",
+      "data": "2026-07-16T00:00:00.000Z",
+      "criadoPor": "admin",
+      "repeatDays": [
+        {
+          "startTime": "21:00",
+          "endTime": "21:30",
+          "weekday": "seg"
+        },
+        {
+          "weekday": "ter",
+          "endTime": "21:30",
+          "startTime": "21:00"
+        },
+        {
+          "startTime": "21:00",
+          "endTime": "21:30",
+          "weekday": "qua"
+        },
+        {
+          "weekday": "qui",
+          "endTime": "21:30",
+          "startTime": "21:00"
+        },
+        {
+          "endTime": "21:30",
+          "startTime": "21:00",
+          "weekday": "sex"
+        }
+      ],
+      "grupoRecorrenciaId": "class_mrldslrr_6dwbw",
+      "alunoNome": "Karla Rezende",
+      "alunoTelefone": null,
+      "description": "",
+      "status": "agendada",
+      "documents": [],
+      "startMin": 1260,
+      "horaFim": "21:30",
+      "professorId": "ZqjHzGFtUKaC4Hg5I2SPvBdiXrr2",
+      "horaInicio": "21:00",
+      "professorEmail": "prigjamas@gmail.com",
+      "endMin": 1290,
+      "alunoId": "7PkWumbMC0a3z6mFcS3HV4fdLMD3",
+      "recorrente": true,
+      "diaSemana": "qua",
+      "repeatType": "weekly_custom",
+      "guests": [],
+      "dateKey": "2026-07-15",
+      "alunoEmail": "rezendekak@gmail.com",
+      "criadoEm": "2026-07-15T01:11:05.394Z",
+      "professorNome": "Priscilla Gracielle",
+      "id": "aula_1784077865394_bc525da1cb07",
+      "firestoreDocId": "aula_1784077865394_bc525da1cb07"
+    },
+    {
+      "professorEmail": "prigjamas@gmail.com",
+      "endMin": 1290,
+      "alunoId": "7PkWumbMC0a3z6mFcS3HV4fdLMD3",
+      "professorId": "ZqjHzGFtUKaC4Hg5I2SPvBdiXrr2",
+      "horaInicio": "21:00",
+      "alunoEmail": "rezendekak@gmail.com",
+      "professorNome": "Priscilla Gracielle",
+      "criadoEm": "2026-07-15T01:11:07.426Z",
+      "repeatType": "weekly_custom",
+      "recorrente": true,
+      "diaSemana": "qui",
+      "dateKey": "2026-07-16",
+      "guests": [],
+      "alunoNome": "Karla Rezende",
+      "description": "",
+      "alunoTelefone": null,
+      "data": "2026-07-17T00:00:00.000Z",
+      "criadoPor": "admin",
+      "title": "",
+      "repeatDays": [
+        {
+          "startTime": "21:00",
+          "endTime": "21:30",
+          "weekday": "seg"
+        },
+        {
+          "weekday": "ter",
+          "startTime": "21:00",
+          "endTime": "21:30"
+        },
+        {
+          "weekday": "qua",
+          "endTime": "21:30",
+          "startTime": "21:00"
+        },
+        {
+          "weekday": "qui",
+          "endTime": "21:30",
+          "startTime": "21:00"
+        },
+        {
+          "weekday": "sex",
+          "startTime": "21:00",
+          "endTime": "21:30"
+        }
+      ],
+      "grupoRecorrenciaId": "class_mrldslrr_6dwbw",
+      "horaFim": "21:30",
+      "documents": [],
+      "startMin": 1260,
+      "status": "agendada",
+      "id": "aula_1784077867426_9701f55de62e",
+      "firestoreDocId": "aula_1784077867426_9701f55de62e"
+    },
+    {
+      "professorId": "ZqjHzGFtUKaC4Hg5I2SPvBdiXrr2",
+      "horaInicio": "21:00",
+      "alunoId": "7PkWumbMC0a3z6mFcS3HV4fdLMD3",
+      "endMin": 1290,
+      "professorEmail": "prigjamas@gmail.com",
+      "repeatType": "weekly_custom",
+      "recorrente": true,
+      "diaSemana": "sex",
+      "guests": [],
+      "dateKey": "2026-07-17",
+      "alunoEmail": "rezendekak@gmail.com",
+      "criadoEm": "2026-07-15T01:11:09.537Z",
+      "professorNome": "Priscilla Gracielle",
+      "data": "2026-07-18T00:00:00.000Z",
+      "criadoPor": "admin",
+      "title": "",
+      "grupoRecorrenciaId": "class_mrldslrr_6dwbw",
+      "repeatDays": [
+        {
+          "endTime": "21:30",
+          "startTime": "21:00",
+          "weekday": "seg"
+        },
+        {
+          "startTime": "21:00",
+          "endTime": "21:30",
+          "weekday": "ter"
+        },
+        {
+          "weekday": "qua",
+          "startTime": "21:00",
+          "endTime": "21:30"
+        },
+        {
+          "weekday": "qui",
+          "endTime": "21:30",
+          "startTime": "21:00"
+        },
+        {
+          "endTime": "21:30",
+          "startTime": "21:00",
+          "weekday": "sex"
+        }
+      ],
+      "alunoNome": "Karla Rezende",
+      "alunoTelefone": null,
+      "description": "",
+      "status": "agendada",
+      "startMin": 1260,
+      "documents": [],
+      "horaFim": "21:30",
+      "id": "aula_1784077869537_f9b01650bd9f",
+      "firestoreDocId": "aula_1784077869537_f9b01650bd9f"
+    }
+  ],
+  "mojibakeUpdates": [
+    {
+      "collection": "aulas",
+      "id": "aula_1784064459065_cd07878e8cd7",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064461059_6297d81e201f",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064463046_907b54538f6d",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064464991_314a0fa59cf2",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064644665_bcb71ee2b553",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064645221_2701832cf76c",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064645536_cee2caa079b2",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064645853_7f02a5b86292",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064646157_4afa67d1bfdb",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064646344_1fe7f3438b66",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064646513_f321d4495b8d",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064646676_7360eeb39ff6",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064646857_30ea41fe6958",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064647304_a6e30ce3e630",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064647478_f27819d3c51f",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064647658_20c46c7d07b5",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064647960_ea8673c321f6",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064648153_fafdc0026283",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064648319_92870eff9199",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064648631_65d12f821c71",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064648794_827c9f030a5e",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064648955_31b9a74a6e2d",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064649127_fbbd853ac66c",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064649295_2b684dd3ccb3",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064649622_b19b4cdb085a",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064649790_9323032da78a",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064649958_b586b44d56b9",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064650119_2761e0414c7d",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064650282_e72981043962",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064650589_56c6dfd2e88e",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064650754_66c78c2aef91",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064650917_7a7565cabd80",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064651093_596c387dc68d",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064651270_915e9def839e",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064651438_d2909fb04c83",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064651605_2cbcf1945016",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064651780_0f8f36ea08cf",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064651944_42e422e6b177",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064652104_404f42346a7a",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064652264_ff1d22e2bbb0",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064652427_0bc52872df11",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064652598_3057a2652773",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064652765_f915b57efd4f",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064652927_f8f1c0b29d9e",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064653101_7e6087513d07",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064653278_093ea1a9a72e",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064653473_4460bf49ea94",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064653633_d290b0a00a7c",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064653798_e08e2a32b5ed",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064653953_4378e1c2657a",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064654114_dfc135357b7f",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064654280_a6aa308dc648",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064654451_1d1bf8ced9b1",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064654616_4e809681ed3b",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064654779_8e34c4338821",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064654953_5d335f5c315d",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064655121_a6c2b7234124",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064655281_cb1956f274b3",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064655437_13b76e4a6bab",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064655614_f40e9d0774b4",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064655930_fe5ec4583689",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064656103_b461ae3d30d5",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064656266_abe0b4b8b570",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "aulas",
+      "id": "aula_1784064656432_0316435cda88",
+      "field": "alunoNome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "users",
+      "id": "CyMUBwYbdFYtKrjovLdqPxcyT2x1",
+      "field": "displayName",
+      "before": "JoĂo Pedro S.",
+      "after": "João Pedro S.",
+      "changed": true,
+      "currentValue": "JoĂo Pedro S."
+    },
+    {
+      "collection": "users",
+      "id": "CyMUBwYbdFYtKrjovLdqPxcyT2x1",
+      "field": "name",
+      "before": "JoĂo Pedro S.",
+      "after": "João Pedro S.",
+      "changed": true,
+      "currentValue": "JoĂo Pedro S."
+    },
+    {
+      "collection": "users",
+      "id": "CyMUBwYbdFYtKrjovLdqPxcyT2x1",
+      "field": "nome",
+      "before": "JoĂo Pedro S.",
+      "after": "João Pedro S.",
+      "changed": true,
+      "currentValue": "JoĂo Pedro S."
+    },
+    {
+      "collection": "users",
+      "id": "CyMUBwYbdFYtKrjovLdqPxcyT2x1",
+      "field": "nomeCompleto",
+      "before": "JoĂo Pedro S.",
+      "after": "João Pedro S.",
+      "changed": true,
+      "currentValue": "JoĂo Pedro S."
+    },
+    {
+      "collection": "users",
+      "id": "jJBR1oFywuWN5kTZzQ6f87sO1BK2",
+      "field": "displayName",
+      "before": "JoĂo Luiz",
+      "after": "João Luiz",
+      "changed": true,
+      "currentValue": "JoĂo Luiz"
+    },
+    {
+      "collection": "users",
+      "id": "jJBR1oFywuWN5kTZzQ6f87sO1BK2",
+      "field": "name",
+      "before": "JoĂo Luiz",
+      "after": "João Luiz",
+      "changed": true,
+      "currentValue": "JoĂo Luiz"
+    },
+    {
+      "collection": "users",
+      "id": "jJBR1oFywuWN5kTZzQ6f87sO1BK2",
+      "field": "nome",
+      "before": "JoĂo Luiz",
+      "after": "João Luiz",
+      "changed": true,
+      "currentValue": "JoĂo Luiz"
+    },
+    {
+      "collection": "users",
+      "id": "jJBR1oFywuWN5kTZzQ6f87sO1BK2",
+      "field": "nomeCompleto",
+      "before": "JoĂo Luiz",
+      "after": "João Luiz",
+      "changed": true,
+      "currentValue": "JoĂo Luiz"
+    },
+    {
+      "collection": "users",
+      "id": "RvxeUcvfXYM6fKZT393QhpwgK8A3",
+      "field": "displayName",
+      "before": "RomĂo C.",
+      "after": "Romão C.",
+      "changed": true,
+      "currentValue": "RomĂo C."
+    },
+    {
+      "collection": "users",
+      "id": "RvxeUcvfXYM6fKZT393QhpwgK8A3",
+      "field": "name",
+      "before": "RomĂo C.",
+      "after": "Romão C.",
+      "changed": true,
+      "currentValue": "RomĂo C."
+    },
+    {
+      "collection": "users",
+      "id": "RvxeUcvfXYM6fKZT393QhpwgK8A3",
+      "field": "nome",
+      "before": "RomĂo C.",
+      "after": "Romão C.",
+      "changed": true,
+      "currentValue": "RomĂo C."
+    },
+    {
+      "collection": "users",
+      "id": "RvxeUcvfXYM6fKZT393QhpwgK8A3",
+      "field": "nomeCompleto",
+      "before": "RomĂo C.",
+      "after": "Romão C.",
+      "changed": true,
+      "currentValue": "RomĂo C."
+    },
+    {
+      "collection": "users",
+      "id": "xUkdzAa4zDRx4q8usUJGOQxiCtG3",
+      "field": "displayName",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "users",
+      "id": "xUkdzAa4zDRx4q8usUJGOQxiCtG3",
+      "field": "name",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "users",
+      "id": "xUkdzAa4zDRx4q8usUJGOQxiCtG3",
+      "field": "nome",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    },
+    {
+      "collection": "users",
+      "id": "xUkdzAa4zDRx4q8usUJGOQxiCtG3",
+      "field": "nomeCompleto",
+      "before": "AdĂo Vieira",
+      "after": "Adão Vieira",
+      "changed": true,
+      "currentValue": "AdĂo Vieira"
+    }
+  ]
+}

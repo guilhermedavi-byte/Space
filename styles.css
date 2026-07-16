@@ -22415,6 +22415,207 @@ body.has-space-env-banner{padding-top:46px}
   }
 }
 
+/* === Acessos Administrativos === */
+.acessos-page {
+  display: grid;
+  gap: 18px;
+}
+
+.acessos-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 22px;
+  background:
+    radial-gradient(circle at top right, rgba(255, 86, 79, 0.14), transparent 34%),
+    rgba(10, 16, 28, 0.92);
+}
+
+.acessos-kicker {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.acessos-title {
+  margin: 6px 0 6px;
+  color: var(--text-main);
+  font-size: clamp(1.4rem, 2vw, 2rem);
+  letter-spacing: -0.04em;
+}
+
+.acessos-subtitle {
+  margin: 0;
+  max-width: 520px;
+  color: var(--text-muted);
+  font-size: 0.94rem;
+}
+
+.acessos-add-button {
+  flex: 0 0 auto;
+}
+
+.acessos-alert,
+.acessos-modal-error {
+  border: 1px solid rgba(255, 86, 79, 0.28);
+  border-radius: 16px;
+  background: rgba(255, 86, 79, 0.12);
+  color: #ffb9b5;
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.acessos-alert {
+  padding: 13px 15px;
+}
+
+.acessos-modal-error {
+  padding: 12px 14px;
+}
+
+.acessos-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.acessos-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.acessos-card-head strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-main);
+  font-size: 1rem;
+}
+
+.acessos-table {
+  display: grid;
+}
+
+.acessos-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.2fr) minmax(220px, 1fr) minmax(110px, 0.5fr);
+  gap: 16px;
+  align-items: center;
+  padding: 15px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.acessos-row:last-child {
+  border-bottom: 0;
+}
+
+.acessos-row-head {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.acessos-person {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.acessos-person strong {
+  overflow: hidden;
+  color: var(--text-main);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acessos-person em {
+  width: fit-content;
+  border-radius: 999px;
+  padding: 4px 9px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.acessos-person em:first-letter {
+  text-transform: uppercase;
+}
+
+.acessos-row span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acessos-loading {
+  display: grid;
+  gap: 10px;
+  padding: 18px 20px 22px;
+}
+
+.acessos-loading span {
+  display: block;
+  height: 58px;
+  border-radius: 18px;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.04)),
+    rgba(255, 255, 255, 0.035);
+  background-size: 220% 100%;
+  animation: platformSkeletonPulse 1.45s ease-in-out infinite;
+}
+
+.acessos-empty {
+  padding: 28px 20px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.acessos-form {
+  display: grid;
+  gap: 14px;
+}
+
+.acessos-input {
+  background: rgba(7, 9, 16, 0.72);
+}
+
+@media (max-width: 760px) {
+  .acessos-hero,
+  .acessos-card-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .acessos-add-button {
+    width: 100%;
+  }
+
+  .acessos-row,
+  .acessos-row-head {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .acessos-loading span {
+    animation: none;
+  }
+}
+
 @media (max-width: 760px) {
   .pedskel-toolbar { top: 8px; align-items: stretch; }
   .pedskel-toolbar .platform-skeleton.is-search { width: 100% !important; }
