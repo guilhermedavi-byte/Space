@@ -20258,9 +20258,10 @@ const classDateRangesOverlap = (a, b) => {
   return aFrom <= bTo && bFrom <= aTo;
 };
 
-const computeAdminPedagogicoConflicts = (classes) => {
+const computeAdminPedagogicoConflicts = (classes, { excludeId = "" } = {}) => {
   const arr = Array.isArray(classes) ? classes : [];
-  const active = arr.filter((c) => c && normalizeClassStatus(c.status) !== "ended");
+  const safeExcludeId = String(excludeId || "").trim();
+  const active = arr.filter((c) => c && normalizeClassStatus(c.status) === "active" && (!safeExcludeId || String(c.id || "") !== safeExcludeId));
   const conflicts = [];
   for (let i = 0; i < active.length; i += 1) {
     const a = active[i];
@@ -26669,7 +26670,7 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
       const all = Array.isArray(adminPedagogicoState.classes) ? adminPedagogicoState.classes : [];
       const candidates = isEdit ? all.filter((c) => String(c.id || "") !== String(classId)) : all;
       const tempList = candidates.concat([nextRow]);
-      const conflicts = computeAdminPedagogicoConflicts(tempList);
+      const conflicts = computeAdminPedagogicoConflicts(tempList, { excludeId: isEdit ? classId : "" });
       const hit = conflicts.find((c) => {
         const a = c.classA || {};
         const b = c.classB || {};
@@ -27328,7 +27329,7 @@ const openAdminPedGroupModal = ({ mode = "create", groupRow = null } = {}) => {
         endMin,
       };
       const candidates = (Array.isArray(adminPedagogicoState.classes) ? adminPedagogicoState.classes : []).filter((c) => String(c.id || "") !== classId);
-      const conflicts = computeAdminPedagogicoConflicts(candidates.concat([tempGroupAsClass]));
+      const conflicts = computeAdminPedagogicoConflicts(candidates.concat([tempGroupAsClass]), { excludeId: isEdit ? classId : "" });
       if (conflicts.length) {
         setErr(`Conflito detectado: ${conflicts[0].reason}. Ajuste dias/horários para continuar.`);
         return false;
@@ -28202,6 +28203,18 @@ const deleteAdminPedClass = ({ classId } = {}) => {
           const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_pedagogico_delete");
           const user = await waitForFirebaseAuthReady(firebase, 5000);
           if (!user) throw new Error("not_authenticated");
+          const linkedEventIds = Array.isArray(row?.linkedEventIds) ? row.linkedEventIds.map((eventId) => String(eventId || "").trim()).filter(Boolean) : [];
+          const linkedGroupId = String(row?.linkedEventGroupId || row?.grupoRecorrenciaId || "").trim();
+          const fallbackEvent = (Array.isArray(adminPedagogicoState.scheduleEvents) ? adminPedagogicoState.scheduleEvents : []).find((eventRow) => {
+            if (!eventRow || typeof eventRow !== "object") return false;
+            return Boolean(linkedGroupId && String(eventRow.grupoRecorrenciaId || "") === linkedGroupId);
+          });
+          const eventIdForCascade = linkedEventIds[0] || String(fallbackEvent?.id || "").trim();
+          if (eventIdForCascade) {
+            const response = await fetchWithAuth(`/api/schedule-events?id=${encodeURIComponent(eventIdForCascade)}&mode=future`, { method: "DELETE" });
+            const payload = await response.json().catch(() => null);
+            if (!response.ok) throw new Error(payload?.error || "schedule_future_delete_failed");
+          }
           const docRef = firebase.doc(firebase.primaryDb, "classes", id);
           await withTimeout(
             firebase.setDoc(

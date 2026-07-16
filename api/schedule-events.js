@@ -630,6 +630,81 @@ const parseDeleteIdFromUrl = (url, body) => {
   return fromBody || "";
 };
 
+const normalizeClassStatusForSync = (value) => {
+  const raw = String(value || "").trim().toLowerCase();
+  if (["ended", "encerrada", "encerrado", "inactive", "inativa", "inativo", "cancelada", "cancelado", "deleted"].includes(raw)) {
+    return "ended";
+  }
+  if (["paused", "pausada", "pausado"].includes(raw)) return "paused";
+  return "active";
+};
+
+const classMatchesScheduleGroup = (classRow, { groupId = "", eventIds = [] } = {}) => {
+  if (!classRow || typeof classRow !== "object") return false;
+  const safeGroupId = String(groupId || "").trim();
+  const safeEventIds = new Set((Array.isArray(eventIds) ? eventIds : []).map((id) => String(id || "").trim()).filter(Boolean));
+  const classId = String(classRow.id || classRow.firestoreDocId || "").trim();
+  const linkedGroupId = String(classRow.linkedEventGroupId || classRow.grupoRecorrenciaId || "").trim();
+  if (safeGroupId && (classId === safeGroupId || linkedGroupId === safeGroupId)) return true;
+  const linkedEventIds = Array.isArray(classRow.linkedEventIds) ? classRow.linkedEventIds : [];
+  return linkedEventIds.some((eventId) => safeEventIds.has(String(eventId || "").trim()));
+};
+
+const syncClassesAfterFutureEventDelete = async ({ groupId = "", eventIds = [], pivotDateKey = "" } = {}) => {
+  const safeGroupId = String(groupId || "").trim();
+  const safePivotDateKey = String(pivotDateKey || "").trim();
+  const safeEventIds = (Array.isArray(eventIds) ? eventIds : []).map((id) => String(id || "").trim()).filter(Boolean);
+  if (!safeGroupId && !safeEventIds.length) return { updated: 0, classIds: [] };
+
+  const classRows = await listCollectionAsAdmin("classes", { pageSize: 2000 });
+  const linkedClasses = classRows.filter((row) => classMatchesScheduleGroup(row, { groupId: safeGroupId, eventIds: safeEventIds }));
+  if (!linkedClasses.length) return { updated: 0, classIds: [] };
+
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const previousDateKey = isValidDateKey(safePivotDateKey) ? addDaysToDateKey(safePivotDateKey, -1) : "";
+  const writes = [];
+  const classIds = [];
+
+  linkedClasses.forEach((row) => {
+    const classId = String(row.firestoreDocId || row.id || "").trim();
+    if (!classId || normalizeClassStatusForSync(row.status) === "ended") return;
+    const startDate = String(row.startDate || row.startDateKey || "").trim();
+    const shouldEnd =
+      !previousDateKey ||
+      (isValidDateKey(startDate) && previousDateKey < startDate) ||
+      (isValidDateKey(previousDateKey) && previousDateKey < todayKey);
+    const patch = shouldEnd
+      ? {
+          status: "ended",
+          active: false,
+          endDate: isValidDateKey(previousDateKey) ? previousDateKey : String(row.endDate || ""),
+          deletedAt: new Date(),
+          updatedAt: new Date(),
+          syncReason: "schedule_future_delete",
+        }
+      : {
+          endDate: previousDateKey,
+          updatedAt: new Date(),
+          syncReason: "schedule_future_delete",
+        };
+    writes.push({
+      update: { name: toFirestoreDocName(`classes/${encodeURIComponent(classId)}`), fields: encodeFields(patch).fields },
+      updateMask: { fieldPaths: Object.keys(patch) },
+    });
+    classIds.push(classId);
+  });
+
+  if (!writes.length) return { updated: 0, classIds: [] };
+  const commit = await commitWritesAsAdmin({ writes });
+  if (!commit.ok) {
+    const error = new Error("classes_sync_failed");
+    error.status = commit.status;
+    error.data = commit.data || commit.text || null;
+    throw error;
+  }
+  return { updated: writes.length, classIds };
+};
+
 const decodeAulaCoreForDelete = (doc) => {
   if (!doc || typeof doc !== "object") return null;
   const id = getDocIdFromName(doc.name);
@@ -1429,7 +1504,13 @@ module.exports = async (req, res) => {
         if (ok) deleted += 1;
       }
 
-      sendJson(res, 200, { ok: true, deleted, cancelled: deleted });
+      const classSync = await syncClassesAfterFutureEventDelete({
+        groupId: evt.grupoRecorrenciaId,
+        eventIds: toDelete.map((row) => row.id),
+        pivotDateKey: evt.dateKey,
+      });
+
+      sendJson(res, 200, { ok: true, deleted, cancelled: deleted, classSync });
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error("[api] schedule events delete failed", error);
