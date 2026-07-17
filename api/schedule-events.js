@@ -1489,7 +1489,14 @@ module.exports = async (req, res) => {
         .map((doc) => decodeAulaCoreForDelete(doc))
         .filter(Boolean)
         .filter((row) => row.grupoRecorrenciaId === evt.grupoRecorrenciaId)
-        .filter((row) => (row.startMs || 0) >= (evt.startMs || 0));
+        .filter((row) => {
+          const rowStartMs = Number(row.startMs) || 0;
+          const eventStartMs = Number(evt.startMs) || 0;
+          const nowMs = Date.now();
+          if (!rowStartMs) return false;
+          if (eventStartMs && eventStartMs > nowMs) return rowStartMs >= eventStartMs;
+          return rowStartMs > nowMs;
+        });
 
       if (role === "teacher") {
         if (toDelete.some((row) => !(teacherAliasIds instanceof Set) || !teacherAliasIds.has(String(row.professorId || "").trim()))) {
@@ -1507,7 +1514,10 @@ module.exports = async (req, res) => {
       const classSync = await syncClassesAfterFutureEventDelete({
         groupId: evt.grupoRecorrenciaId,
         eventIds: toDelete.map((row) => row.id),
-        pivotDateKey: evt.dateKey,
+        pivotDateKey: toDelete
+          .map((row) => String(row.dateKey || "").trim())
+          .filter(isValidDateKey)
+          .sort()[0] || evt.dateKey,
       });
 
       sendJson(res, 200, { ok: true, deleted, cancelled: deleted, classSync });
