@@ -19087,6 +19087,60 @@ const ADMIN_PED_WEEKLY_DAY_DEFS = [
   { weekday: 6, label: "Sáb" },
 ];
 
+const getSaoPauloDateTimeParts = (date = new Date()) => {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+  const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const hour = Number(byType.hour) || 0;
+  const minute = Number(byType.minute) || 0;
+  return {
+    dateKey: `${byType.year}-${byType.month}-${byType.day}`,
+    minuteOfDay: (hour % 24) * 60 + minute,
+  };
+};
+
+const weekdayFromDateKeyUtc = (dateKey) => {
+  const raw = String(dateKey || "").trim();
+  if (!isValidDateKey(raw)) return null;
+  const year = Number(raw.slice(0, 4));
+  const month = Number(raw.slice(5, 7));
+  const day = Number(raw.slice(8, 10));
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+  return new Date(Date.UTC(year, month - 1, day, 12)).getUTCDay();
+};
+
+const getAdminPedRecurrenceMaterializationStartDate = ({ startDate, activeSchedule, referenceDate = new Date() } = {}) => {
+  const originalStartKey = isValidDateKey(startDate) ? String(startDate) : createDateKey(referenceDate);
+  const enabledDays = (Array.isArray(activeSchedule) ? activeSchedule : [])
+    .filter((day) => day && day.enabled !== false)
+    .map((day) => ({
+      weekday: Number(day.weekday),
+      startMin: timeToMinutes(day.startTime),
+    }))
+    .filter((day) => Number.isFinite(day.weekday) && day.weekday >= 0 && day.weekday <= 6 && Number.isFinite(day.startMin));
+  if (!enabledDays.length) return originalStartKey;
+
+  const now = getSaoPauloDateTimeParts(referenceDate);
+  const baseKey = originalStartKey > now.dateKey ? originalStartKey : now.dateKey;
+  for (let offset = 0; offset <= 14; offset += 1) {
+    const candidateKey = addDaysToDateKey(baseKey, offset);
+    const weekday = weekdayFromDateKeyUtc(candidateKey);
+    if (weekday == null) continue;
+    const day = enabledDays.find((item) => item.weekday === weekday);
+    if (!day) continue;
+    if (candidateKey === now.dateKey && day.startMin <= now.minuteOfDay) continue;
+    return candidateKey;
+  }
+  return baseKey;
+};
+
 const normalizeAdminPedWeeklyScheduleDays = (value) => {
   const defaults = new Map(
     ADMIN_PED_WEEKLY_DAY_DEFS.map((def) => [def.weekday, { weekday: def.weekday, enabled: false, startTime: "", endTime: "" }])
@@ -26710,6 +26764,9 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
               endTime: String(day.endTime || "").trim(),
             }))
             .filter((day) => day.weekday);
+          const recurrenceMaterializationStartDate = isEdit
+            ? getAdminPedRecurrenceMaterializationStartDate({ startDate, activeSchedule })
+            : startDate;
 
           const schedulePayload = {
             id: classId,
@@ -26720,7 +26777,7 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
             alunoEmail: String(adminPedagogicoState.studentsById?.get(studentIds[0] || "")?.email || "").trim(),
             alunoTelefone: String(adminPedagogicoState.studentsById?.get(studentIds[0] || "")?.telefone || "").trim(),
             professorNome: teacherName,
-            dateKey: startDate,
+            dateKey: recurrenceMaterializationStartDate,
             startMin: classStartMin,
             endMin: classEndMin,
             recorrente: true,
