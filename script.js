@@ -26430,7 +26430,7 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
   const planValue = isEdit ? normalizePlanKeyLoose(row.plan) : normalizePlanKeyLoose(seed?.plan || "");
   const groupNameValue = isEdit ? String(row.groupName || "") : String(seed?.groupName || "");
   const originalStartDateValue = isEdit ? String(row.startDate || "") : String(seed?.startDate || createDateKey(new Date()));
-  const endDateValue = isEdit ? String(row.endDate || "") : String(seed?.endDate || "");
+  const preservedEndDateValue = isEdit ? String(row.endDate || "") : "";
   const teacherNameValue = String(adminPedagogicoState.teachersById?.get(teacherValue)?.nome || "").trim();
   const lockedStudentIds = (() => {
     const fromRow = isEdit ? (Array.isArray(row.studentIds) ? row.studentIds : []) : [];
@@ -26576,10 +26576,6 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
             <span>${isEdit ? "Alterações valem a partir de" : "Data de início"}</span>
             <input class="admin-ped-modal-input" type="date" data-admin-ped-field="startDate" ${isEdit ? `min="${escapeHtml(todaySaoPauloKey)}"` : ""} />
           </label>
-          <label class="admin-ped-modal-field">
-            <span>Data de término (opcional)</span>
-            <input class="admin-ped-modal-input" type="date" data-admin-ped-field="endDate" />
-          </label>
         </div>
 
         <label class="admin-ped-modal-field">
@@ -26617,7 +26613,7 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
       const plan = normalizePlanKeyLoose(read("plan"));
       const status = normalizeClassStatus(read("status"));
       const startDate = read("startDate");
-      const endDate = read("endDate");
+      const endDate = preservedEndDateValue;
       const notes = read("notes");
 
       const rawStudents = [];
@@ -26677,15 +26673,6 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
         setErr("As alterações não podem valer a partir de uma data passada.");
         return false;
       }
-      if (endDate && !isValidDateKey(endDate)) {
-        setErr("Selecione uma data de término válida ou deixe em branco.");
-        return false;
-      }
-      if (endDate && startDate > endDate) {
-        setErr("A data de término deve ser posterior à data de início.");
-        return false;
-      }
-
       for (const day of activeSchedule) {
         if (!/^\d{2}:\d{2}$/.test(String(day.startTime || "")) || !/^\d{2}:\d{2}$/.test(String(day.endTime || ""))) {
           setErr("Preencha o início e o fim de cada dia ativo.");
@@ -26791,8 +26778,6 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
             grupoRecorrenciaId: linkedGroupId,
             repeat: { enabled: true, type: "weekly_custom", days: scheduleDaysPayload },
           };
-          if (endDate) schedulePayload.endDate = endDate;
-
           const apiRes = await fetchWithAuth("/api/schedule-events", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -26878,7 +26863,6 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
     setVal("status", statusValue);
     setVal("groupName", groupNameValue);
     setVal("startDate", editEffectiveDateValue);
-    setVal("endDate", endDateValue);
     setVal("notes", notesValue);
     const typeSel = form.querySelector('[data-admin-ped-field="type"]');
     const groupWrap = form.querySelector("[data-admin-ped-group-name]");
