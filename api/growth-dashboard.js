@@ -380,6 +380,7 @@ const percent = (num, den) => {
 const mapPlano = (rawProductName) => {
   const name = String(rawProductName || "").trim().toLowerCase();
   if (name.includes("diamond")) return "diamond";
+  if (name.includes("premium")) return "premium";
   if (name.includes("gold")) return "gold";
   if (name.includes("turma")) return "turma";
   return "semPlano";
@@ -1129,7 +1130,7 @@ const handleGrowthMetricsApi = async (req, res) => {
     // ignore logging failures
   }
 
-  const planosVendidos = { diamond: 0, gold: 0, turma: 0, semPlano: 0 };
+  const planosVendidos = { diamond: 0, premium: 0, gold: 0, turma: 0, semPlano: 0 };
   const rankingMap = new Map();
 
   closedDealsMonth.forEach((b) => {
@@ -2457,6 +2458,11 @@ module.exports = async (req, res) => {
 	                      <span class="growth-v2-dot is-diamond" aria-hidden="true"></span>
 	                      <span>Diamond</span>
 	                      <strong data-growth-plan="diamond">12</strong>
+	                    </div>
+	                    <div class="growth-v2-plans-item">
+	                      <span class="growth-v2-dot is-premium" aria-hidden="true"></span>
+	                      <span>Premium</span>
+	                      <strong data-growth-plan="premium">0</strong>
 	                    </div>
 	                  </div>
 	                </div>

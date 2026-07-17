@@ -734,6 +734,11 @@ main {
   box-shadow: 0 0 0 3px rgba(93, 167, 255, 0.18);
 }
 
+.plan-badge.is-premium .plan-dot {
+  background: #c0c0c0;
+  box-shadow: 0 0 0 3px rgba(192, 192, 192, 0.18);
+}
+
 .plan-badge.is-turma .plan-dot {
   background: #45d483;
   box-shadow: 0 0 0 3px rgba(69, 212, 131, 0.18);
@@ -16724,6 +16729,10 @@ body[data-page="growth"] .platform-main {
   background: rgba(255, 78, 70, 0.92);
 }
 
+.growth-v2-dot.is-premium {
+  background: rgba(192, 192, 192, 0.92);
+}
+
 .growth-v2-icon {
   width: 28px;
   height: 28px;
@@ -21075,6 +21084,14 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   border-color: rgba(96, 189, 255, 0.34);
   background: rgba(96, 189, 255, 0.13);
   color: rgba(148, 220, 255, 0.96);
+}
+
+.admin-student-tag.is-plan-premium,
+.admin-students-chip.is-plan-premium,
+.admin-ped-pill.is-plan-premium {
+  border-color: rgba(192, 192, 192, 0.34);
+  background: rgba(184, 188, 196, 0.14);
+  color: rgba(236, 239, 244, 0.96);
 }
 
 .admin-student-tag.is-plan-turma,

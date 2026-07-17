@@ -625,6 +625,7 @@ let teacherOnboardingState = {
 const PLAN_DEFS = {
   gold: { label: "Gold", creditsPerCycle: 3, creditType: "VIP", badgeClass: "is-gold", badgeDot: "ambar" },
   diamond: { label: "Diamond", creditsPerCycle: 5, creditType: "VIP", badgeClass: "is-diamond", badgeDot: "azul" },
+  premium: { label: "Premium", creditsPerCycle: 5, creditType: "VIP", badgeClass: "is-premium", badgeDot: "prata" },
   turma: { label: "Turma", creditsPerCycle: 4, creditType: "GROUP", badgeClass: "is-turma", badgeDot: "verde" },
 };
 
@@ -8024,10 +8025,11 @@ function calculateReposicaoEligibility({ responsavel, planoAluno, dataAulaOrigin
     };
   }
 
-  if (plan === "diamond") {
+  if (plan === "diamond" || plan === "premium") {
+    const planLabel = plan === "premium" ? "Premium" : "Diamond";
     return {
       elegivel: true,
-      motivo: "Plano Diamond — reposições ilimitadas com aviso no prazo",
+      motivo: `Plano ${planLabel} — reposições ilimitadas com aviso no prazo`,
       limiteRestante: null,
       dataLimiteReposicao,
     };
@@ -16786,13 +16788,14 @@ const normalizeAdminStudentPlanValue = (value) => {
   const low = raw.toLowerCase();
   if (low === "gold") return "Gold";
   if (low === "diamond") return "Diamond";
+  if (low === "premium") return "Premium";
   if (low === "turma" || low === "grupo" || low === "group") return "Turma";
   return "";
 };
 
 const getAdminStudentPlanOptions = (selectedValue = "") => {
   const selected = normalizeAdminStudentPlanValue(selectedValue);
-  return [`<option value="">Sem plano</option>`, "Gold", "Diamond", "Turma"]
+  return [`<option value="">Sem plano</option>`, "Gold", "Diamond", "Premium", "Turma"]
     .map((item, index) => {
       if (index === 0) return item;
       const sel = item === selected ? "selected" : "";
@@ -16806,6 +16809,7 @@ const getAdminStudentPlanToneClass = (value, { base = "is-plan" } = {}) => {
   const classes = [base].filter(Boolean);
   if (plan === "Gold") classes.push("is-plan-gold");
   else if (plan === "Diamond") classes.push("is-plan-diamond");
+  else if (plan === "Premium") classes.push("is-plan-premium");
   else if (plan === "Turma") classes.push("is-plan-turma");
   else classes.push("is-plan-empty");
   return classes.join(" ");
@@ -17885,7 +17889,7 @@ const renderAdminStudentEditFormHtml = (alunoMeta = {}) => {
   const objetivoPrincipal = String(alunoMeta?.objetivoPrincipal || "").trim();
   const nivelInglesAtual = String(alunoMeta?.nivelInglesAtual || "").trim();
 
-  const planOptions = ["Turma", "Gold", "Diamond"];
+  const planOptions = ["Turma", "Gold", "Diamond", "Premium"];
   const countryOptions = ["Brasil", "EUA", "Canadá", "Reino Unido", "Outro"];
   const jobOptions = [
     "Empresário",
@@ -18977,6 +18981,7 @@ const normalizePlanKeyLoose = (value) => {
   const raw = String(value || "").trim().toLowerCase();
   if (!raw) return "";
   if (raw.includes("diamond")) return "diamond";
+  if (raw.includes("premium")) return "premium";
   if (raw.includes("gold")) return "gold";
   if (raw.includes("turma")) return "turma";
   return raw;
@@ -26317,7 +26322,7 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
         .filter((p) => p && typeof p === "object" && String(p.status || "").toLowerCase() !== "inactive")
         .map((p) => normalizePlanKeyLoose(p.name))
         .filter(Boolean);
-      const unique = [...new Set(keys.length ? keys : ["turma", "gold", "diamond"])]
+      const unique = [...new Set(keys.length ? keys : ["turma", "gold", "diamond", "premium"])]
         .slice()
         .sort((a, b) => String(a).localeCompare(String(b), "pt-BR"));
       planSelect.innerHTML = `<option value="">Todos</option>` + unique.map((k) => `<option value="${escapeHtml(k)}">${escapeHtml(k.toUpperCase())}</option>`).join("");
@@ -26408,7 +26413,7 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
     .filter((p) => p && typeof p === "object" && String(p.status || "").toLowerCase() !== "inactive")
     .map((p) => normalizePlanKeyLoose(p.name))
     .filter(Boolean);
-  const uniquePlanKeys = [...new Set(planKeys.length ? planKeys : ["turma", "gold", "diamond"])];
+  const uniquePlanKeys = [...new Set(planKeys.length ? planKeys : ["turma", "gold", "diamond", "premium"])];
   const planOptions =
     `<option value="">Selecione...</option>` +
     uniquePlanKeys
@@ -28390,7 +28395,7 @@ const openAdminStudentsFiltersPopover = ({ triggerEl } = {}) => {
 
   // Fixed filter options (do not depend on what is currently loaded in Firestore).
   // This prevents the select from being disabled when there are no rows yet.
-  const planOptionsList = ["Turma", "Gold", "Diamond"];
+  const planOptionsList = ["Turma", "Gold", "Diamond", "Premium"];
   const planOptions = [`<option value="">Qualquer plano</option>`]
     .concat(planOptionsList.map((p) => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`))
     .join("");
