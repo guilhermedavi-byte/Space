@@ -19,9 +19,9 @@ const APPLY = process.argv.includes('--apply');
 const CONFIRMED = String(process.env.CLEANUP_ORPHAN_CLASSES_CONFIRM || '').trim().toLowerCase() === 'sim';
 
 const toFirestoreDocName = (docPath) => {
-  const { FIRESTORE_BASE } = require('../_lib/firestore-rest');
+  const { PROJECT_ID } = require('../_lib/firestore-rest');
   const path = String(docPath || '').replace(/^\/+/, '');
-  return `${FIRESTORE_BASE.replace(/\/documents$/, '')}/documents/${path}`;
+  return `projects/${PROJECT_ID}/databases/(default)/documents/${path}`;
 };
 
 const normalizeClassStatus = (value) => {
