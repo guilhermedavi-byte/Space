@@ -1477,6 +1477,8 @@ module.exports = async (req, res) => {
         return;
       }
 
+      const effectiveFrom = String(url.searchParams.get("effectiveFrom") || url.searchParams.get("from") || "").trim();
+      const effectiveFromKey = isValidDateKey(effectiveFrom) ? effectiveFrom : "";
       const resList = await firestoreListDocuments({ collectionPath: "aulas", idToken, pageSize: 2000 });
       if (!resList.ok) throw new Error("firestore_list_failed");
       const docs = Array.isArray(resList.documents)
@@ -1494,6 +1496,12 @@ module.exports = async (req, res) => {
           const eventStartMs = Number(evt.startMs) || 0;
           const nowMs = Date.now();
           if (!rowStartMs) return false;
+          if (effectiveFromKey) {
+            const rowDateKey = String(row.dateKey || "").trim();
+            if (!isValidDateKey(rowDateKey) || rowDateKey < effectiveFromKey) return false;
+            if (rowDateKey === effectiveFromKey && rowStartMs <= nowMs) return false;
+            return true;
+          }
           if (eventStartMs && eventStartMs > nowMs) return rowStartMs >= eventStartMs;
           return rowStartMs > nowMs;
         });
@@ -1514,7 +1522,7 @@ module.exports = async (req, res) => {
       const classSync = await syncClassesAfterFutureEventDelete({
         groupId: evt.grupoRecorrenciaId,
         eventIds: toDelete.map((row) => row.id),
-        pivotDateKey: toDelete
+        pivotDateKey: effectiveFromKey || toDelete
           .map((row) => String(row.dateKey || "").trim())
           .filter(isValidDateKey)
           .sort()[0] || evt.dateKey,

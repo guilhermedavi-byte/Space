@@ -26429,7 +26429,7 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
   const teacherValue = isEdit ? String(row.teacherId || "") : String(seed?.teacherId || "");
   const planValue = isEdit ? normalizePlanKeyLoose(row.plan) : normalizePlanKeyLoose(seed?.plan || "");
   const groupNameValue = isEdit ? String(row.groupName || "") : String(seed?.groupName || "");
-  const startDateValue = isEdit ? String(row.startDate || "") : String(seed?.startDate || createDateKey(new Date()));
+  const originalStartDateValue = isEdit ? String(row.startDate || "") : String(seed?.startDate || createDateKey(new Date()));
   const endDateValue = isEdit ? String(row.endDate || "") : String(seed?.endDate || "");
   const teacherNameValue = String(adminPedagogicoState.teachersById?.get(teacherValue)?.nome || "").trim();
   const lockedStudentIds = (() => {
@@ -26478,6 +26478,10 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
     ]);
   })();
   const activeScheduleDays = initialSchedule.filter((day) => day && day.enabled);
+  const editEffectiveDateValue = isEdit
+    ? getAdminPedRecurrenceMaterializationStartDate({ startDate: originalStartDateValue, activeSchedule: activeScheduleDays })
+    : originalStartDateValue;
+  const todaySaoPauloKey = getSaoPauloDateTimeParts().dateKey;
   const initialStartTime = activeScheduleDays[0]?.startTime || clampTime(seed?.startTime || "14:00", "14:00");
   const initialEndTime = activeScheduleDays[0]?.endTime || clampTime(seed?.endTime || "14:30", "14:30");
   const notesValue = isEdit ? String(row.notes || "") : String(seed?.notes || "");
@@ -26569,8 +26573,8 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
 
         <div class="admin-ped-modal-row">
           <label class="admin-ped-modal-field">
-            <span>Data de início</span>
-            <input class="admin-ped-modal-input" type="date" data-admin-ped-field="startDate" />
+            <span>${isEdit ? "Alterações valem a partir de" : "Data de início"}</span>
+            <input class="admin-ped-modal-input" type="date" data-admin-ped-field="startDate" ${isEdit ? `min="${escapeHtml(todaySaoPauloKey)}"` : ""} />
           </label>
           <label class="admin-ped-modal-field">
             <span>Data de término (opcional)</span>
@@ -26666,7 +26670,11 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
         return false;
       }
       if (!isValidDateKey(startDate)) {
-        setErr("Selecione uma data de início válida.");
+        setErr(isEdit ? "Selecione uma data válida para aplicar as alterações." : "Selecione uma data de início válida.");
+        return false;
+      }
+      if (isEdit && startDate < todaySaoPauloKey) {
+        setErr("As alterações não podem valer a partir de uma data passada.");
         return false;
       }
       if (endDate && !isValidDateKey(endDate)) {
@@ -26711,13 +26719,14 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
         scheduleDays: normalizeAdminPedWeeklyScheduleDays(scheduleDays),
         startMin: classStartMin,
         endMin: classEndMin,
-        startDate,
+        startDate: isEdit ? originalStartDateValue : startDate,
         endDate,
         studentIds,
         studentNames,
         notes,
         linkedEventGroupId: linkedGroupId,
         linkedEventIds: existingEventIds,
+        ...(isEdit ? { lastEditEffectiveDate: startDate } : null),
         roomSlug: isEdit ? String(row?.roomSlug || "") : buildAdminPedShortRoomSlug(classId),
       };
 
@@ -26749,7 +26758,7 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
 
           if (isEdit && existingEventIds.length) {
             await fetchWithAuth(
-              `/api/schedule-events?id=${encodeURIComponent(existingEventIds[0])}&mode=future`,
+              `/api/schedule-events?id=${encodeURIComponent(existingEventIds[0])}&mode=future&effectiveFrom=${encodeURIComponent(startDate)}`,
               { method: "DELETE" }
             ).then(async (res) => {
               if (!res.ok) throw new Error("recurrence_delete_failed");
@@ -26764,9 +26773,7 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
               endTime: String(day.endTime || "").trim(),
             }))
             .filter((day) => day.weekday);
-          const recurrenceMaterializationStartDate = isEdit
-            ? getAdminPedRecurrenceMaterializationStartDate({ startDate, activeSchedule })
-            : startDate;
+          const recurrenceMaterializationStartDate = startDate;
 
           const schedulePayload = {
             id: classId,
@@ -26824,6 +26831,7 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
             ...nextRow,
             linkedEventGroupId,
             linkedEventIds,
+            ...(isEdit ? { lastEditEffectiveDate: startDate } : null),
             source: "student_line",
             updatedBy: String(user.uid || ""),
             updatedAt: firebase.serverTimestamp(),
@@ -26869,7 +26877,7 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
     setVal("plan", planValue);
     setVal("status", statusValue);
     setVal("groupName", groupNameValue);
-    setVal("startDate", startDateValue);
+    setVal("startDate", editEffectiveDateValue);
     setVal("endDate", endDateValue);
     setVal("notes", notesValue);
     const typeSel = form.querySelector('[data-admin-ped-field="type"]');
