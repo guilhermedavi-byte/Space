@@ -26777,6 +26777,16 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
             ).then(async (res) => {
               if (!res.ok) {
                 const data = await res.json().catch(() => null);
+                if (res.status === 404 || String(data?.error || "").trim() === "not_found") {
+                  console.warn("[admin] controle-pedagogico future recurrence delete skipped: seed event not found", {
+                    classId,
+                    eventId: existingEventIds[0],
+                    effectiveFrom: startDate,
+                    status: res.status,
+                    error: data?.error || "",
+                  });
+                  return;
+                }
                 throw buildScheduleApiError("recurrence_delete_failed", data, res.status);
               }
             });
