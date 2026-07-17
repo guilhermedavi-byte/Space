@@ -19015,17 +19015,18 @@ const buildAdminPedClassLiveUrl = (classRow) => {
   const teacher = getAdminTeacherDisplayNameById(c.teacherId, { fallback: c.teacherName || "professor" }) || "professor";
   const days = (Array.isArray(c.daysOfWeek) ? c.daysOfWeek : []).map(daysLabelShort).join("-");
   const time = Number.isFinite(Number(c.startMin)) ? formatHmFromMinutes(c.startMin).replace(/:/g, "") : "";
+  const stableClassSlug = buildAdminPedShortRoomSlug(c.id);
   const legacyParts = [
     "space",
     "aula",
     slugifyClassRoomPart(title),
-    slugifyClassRoomPart(firstStudent),
+    slugifyClassRoomPart(title).includes(slugifyClassRoomPart(firstStudent)) ? "" : slugifyClassRoomPart(firstStudent),
     slugifyClassRoomPart(teacher),
     slugifyClassRoomPart(days),
     slugifyClassRoomPart(time),
-    slugifyClassRoomPart(c.id),
+    slugifyClassRoomPart(stableClassSlug),
   ].filter(Boolean);
-  const roomId = shortRoomSlug || legacyParts.join("-").slice(0, 180) || `space-aula-${Date.now()}`;
+  const roomId = shortRoomSlug || stableClassSlug || legacyParts.join("-").slice(0, 180) || `space-aula-${Date.now()}`;
   const origin = typeof window !== "undefined" && window.location && window.location.origin ? window.location.origin : "";
   return `${origin}/sala/${encodeURIComponent(roomId)}`;
 };
@@ -19293,6 +19294,8 @@ const getAdminStudentLinkedClasses = (studentId) => {
   const rows = Array.isArray(adminPedagogicoState.classes) ? adminPedagogicoState.classes : [];
   return rows
     .filter((row) => {
+      if (row?.source === "supabase" || String(row?.id || "").startsWith("live:")) return false;
+      if (normalizeClassStatus(row?.status) !== "active") return false;
       const ids = Array.isArray(row?.studentIds) ? row.studentIds : [];
       return ids.map((id) => String(id || "").trim()).includes(safe);
     })
@@ -19358,7 +19361,10 @@ const normalizeClassRow = ({ id, data }) => {
   if (!docId) return null;
 
   const type = normalizeClassType(src.type);
-  const status = src.deletedAt || src.deleted_at || src.cancelledAt || src.canceladoEm ? "ended" : normalizeClassStatus(src.status || src.statusAula);
+  const explicitStatusRaw = String(src.status || src.statusAula || "").trim();
+  const explicitStatus = explicitStatusRaw ? normalizeClassStatus(explicitStatusRaw) : "";
+  const hasEndedMarker = Boolean(src.deletedAt || src.deleted_at || src.cancelledAt || src.canceladoEm);
+  const status = explicitStatus === "active" ? "active" : hasEndedMarker ? "ended" : explicitStatus || "active";
   const title = String(src.title || "").trim();
   const teacherId = String(src.teacherId || src.professorId || "").trim();
   const teacherName = String(src.teacherName || src.professorNome || src.professorName || "").trim();
