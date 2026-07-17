@@ -18300,22 +18300,7 @@ const renderAdminStudentSheet = () => {
     const status = normalizeClassStatus(classRow?.status);
     const liveUrl = buildAdminPedClassLiveUrl(classRow);
     const classId = String(classRow?.id || "").trim();
-    const activeScheduleDays = normalizeAdminPedWeeklyScheduleDays(classRow?.scheduleDays || []).filter(
-      (day) => day && day.enabled && String(day.startTime || "").trim() && String(day.endTime || "").trim()
-    );
-    const scheduleItems = activeScheduleDays.length
-      ? activeScheduleDays.map((day) => ({
-          dayLabel: `${daysLabelLong(day.weekday)}-feira`.replace("Domingo-feira", "Domingo").replace("Sábado-feira", "Sábado"),
-          timeLabel: `${String(day.startTime).slice(0, 5)}–${String(day.endTime).slice(0, 5)}`,
-        }))
-      : (() => {
-          const days = normalizeDaysOfWeek(classRow?.daysOfWeek || []);
-          const fallbackTime =
-            Number.isFinite(Number(classRow?.startMin)) && Number.isFinite(Number(classRow?.endMin)) && Number(classRow?.endMin) > Number(classRow?.startMin)
-              ? `${formatHmFromMinutes(classRow.startMin)}–${formatHmFromMinutes(classRow.endMin)}`
-              : "—";
-          return days.length ? days.map((day) => ({ dayLabel: `${daysLabelLong(day)}-feira`.replace("Domingo-feira", "Domingo").replace("Sábado-feira", "Sábado"), timeLabel: fallbackTime })) : [];
-        })();
+    const scheduleState = getAdminPedClassScheduleDisplayState(classRow);
     const statusSuffix = status === "active" ? "" : status === "paused" ? " (pausada)" : " (inativa)";
     return {
       classId,
@@ -18323,7 +18308,9 @@ const renderAdminStudentSheet = () => {
       statusSuffix,
       liveUrl,
       hostLabel: getAdminStudentLiveClassHostLabel(liveUrl),
-      scheduleItems,
+      scheduleItems: scheduleState.currentItems,
+      pendingScheduleItems: scheduleState.pendingItems,
+      pendingEffectiveFrom: scheduleState.pendingEffectiveFrom,
       hasLiveUrl: Boolean(liveUrl),
     };
   });
@@ -18333,6 +18320,7 @@ const renderAdminStudentSheet = () => {
           return `
             <div class="admin-student-live-class-row">
               <div class="admin-student-live-class-schedule">
+                ${block.pendingScheduleItems.length ? `<div class="admin-student-live-class-section-title">Horário atual</div>` : ""}
                 ${
                   block.scheduleItems.length
                     ? block.scheduleItems
@@ -18346,6 +18334,23 @@ const renderAdminStudentSheet = () => {
                         )
                         .join("")
                     : `<div class="admin-student-live-class-line is-empty"><span class="admin-student-live-class-day">Nenhum horário cadastrado</span><span class="admin-student-live-class-time">—</span></div>`
+                }
+                ${
+                  block.pendingScheduleItems.length
+                    ? `
+                      <div class="admin-student-live-class-section-title">Muda a partir de ${escapeHtml(formatAdminDate(block.pendingEffectiveFrom))}</div>
+                      ${block.pendingScheduleItems
+                        .map(
+                          (item) => `
+                            <div class="admin-student-live-class-line">
+                              <span class="admin-student-live-class-day">${escapeHtml(item.dayLabel)}</span>
+                              <span class="admin-student-live-class-time">${escapeHtml(item.timeLabel)}</span>
+                            </div>
+                          `
+                        )
+                        .join("")}
+                    `
+                    : ""
                 }
               </div>
               <div class="admin-student-live-class-virtual">
@@ -19225,6 +19230,138 @@ const normalizeAdminPedWeeklyScheduleDays = (value) => {
   return ADMIN_PED_WEEKLY_DAY_DEFS.map((def) => defaults.get(def.weekday) || { weekday: def.weekday, enabled: false, startTime: "", endTime: "" });
 };
 
+const buildAdminPedScheduleFromLegacy = (row = {}) => {
+  const normalized = normalizeAdminPedWeeklyScheduleDays(row?.scheduleDays || row?.repeatDays || row?.weeklySchedule || row?.schedule || []);
+  if (normalized.some((day) => day && day.enabled)) return normalized;
+  const days = normalizeDaysOfWeek(row?.daysOfWeek || row?.weekDays || row?.diasSemana || []);
+  const startTime =
+    Number.isFinite(Number(row?.startMin)) && Number.isFinite(Number(row?.endMin))
+      ? formatHmFromMinutes(row.startMin)
+      : clampTime(row?.startTime || row?.horaInicio || "14:00", "14:00");
+  const endTime =
+    Number.isFinite(Number(row?.startMin)) && Number.isFinite(Number(row?.endMin))
+      ? formatHmFromMinutes(row.endMin)
+      : clampTime(row?.endTime || row?.horaFim || "14:30", "14:30");
+  return normalizeAdminPedWeeklyScheduleDays(
+    days.map((weekday) => ({
+      weekday,
+      enabled: true,
+      startTime,
+      endTime,
+    }))
+  );
+};
+
+const normalizeAdminPedClassPendingChange = (value) => {
+  if (!value || typeof value !== "object") return null;
+  const effectiveFrom = String(value.effectiveFrom || value.effectiveFromDate || value.startDate || "").trim();
+  if (!isValidDateKey(effectiveFrom)) return null;
+  const scheduleDays = buildAdminPedScheduleFromLegacy(value);
+  const activeDays = scheduleDays.filter((day) => day && day.enabled && String(day.startTime || "").trim() && String(day.endTime || "").trim());
+  if (!activeDays.length) return null;
+  const daysOfWeek = normalizeDaysOfWeek(value.daysOfWeek || activeDays.map((day) => day.weekday));
+  const firstActiveDay = activeDays[0] || null;
+  const startMin = firstActiveDay ? timeToMinutes(firstActiveDay.startTime) : normalizeMinutesValue(value.startMin ?? value.startTime);
+  const endMin = firstActiveDay ? timeToMinutes(firstActiveDay.endTime) : normalizeMinutesValue(value.endMin ?? value.endTime);
+  return {
+    ...value,
+    effectiveFrom,
+    daysOfWeek,
+    scheduleDays,
+    startMin,
+    endMin,
+    teacherId: String(value.teacherId || value.professorId || "").trim(),
+    teacherName: String(value.teacherName || value.professorNome || value.professorName || "").trim(),
+    plan: normalizePlanKeyLoose(value.plan || value.plano || ""),
+    linkedEventGroupId: String(value.linkedEventGroupId || value.grupoRecorrenciaId || "").trim(),
+    linkedEventIds: Array.isArray(value.linkedEventIds) ? value.linkedEventIds.map((id) => String(id || "").trim()).filter(Boolean) : [],
+  };
+};
+
+const getAdminPedTodayKey = () => getSaoPauloDateTimeParts().dateKey;
+
+const applyAdminPedClassPendingChangeIfDue = (row, referenceDateKey = getAdminPedTodayKey()) => {
+  const pendingChange = normalizeAdminPedClassPendingChange(row?.pendingChange);
+  if (!pendingChange || pendingChange.effectiveFrom > referenceDateKey) return row;
+  return {
+    ...row,
+    scheduleDays: pendingChange.scheduleDays,
+    daysOfWeek: pendingChange.daysOfWeek,
+    startMin: pendingChange.startMin,
+    endMin: pendingChange.endMin,
+    teacherId: pendingChange.teacherId || row?.teacherId || "",
+    teacherName: pendingChange.teacherName || row?.teacherName || "",
+    plan: pendingChange.plan || row?.plan || "",
+    linkedEventGroupId: pendingChange.linkedEventGroupId || row?.linkedEventGroupId || "",
+    linkedEventIds: pendingChange.linkedEventIds?.length ? pendingChange.linkedEventIds : row?.linkedEventIds || [],
+    lastEditEffectiveDate: pendingChange.effectiveFrom,
+    pendingChange: null,
+  };
+};
+
+const buildAdminPedScheduleItems = (row = {}) => {
+  const activeScheduleDays = buildAdminPedScheduleFromLegacy(row).filter(
+    (day) => day && day.enabled && String(day.startTime || "").trim() && String(day.endTime || "").trim()
+  );
+  if (activeScheduleDays.length) {
+    return activeScheduleDays.map((day) => ({
+      dayLabel: `${daysLabelLong(day.weekday)}-feira`.replace("Domingo-feira", "Domingo").replace("Sábado-feira", "Sábado"),
+      timeLabel: `${String(day.startTime).slice(0, 5)}–${String(day.endTime).slice(0, 5)}`,
+    }));
+  }
+  const days = normalizeDaysOfWeek(row?.daysOfWeek || []);
+  const fallbackTime =
+    Number.isFinite(Number(row?.startMin)) && Number.isFinite(Number(row?.endMin)) && Number(row?.endMin) > Number(row?.startMin)
+      ? `${formatHmFromMinutes(row.startMin)}–${formatHmFromMinutes(row.endMin)}`
+      : "—";
+  return days.length
+    ? days.map((day) => ({
+        dayLabel: `${daysLabelLong(day)}-feira`.replace("Domingo-feira", "Domingo").replace("Sábado-feira", "Sábado"),
+        timeLabel: fallbackTime,
+      }))
+    : [];
+};
+
+const getAdminPedClassScheduleDisplayState = (row = {}) => {
+  const todayKey = getAdminPedTodayKey();
+  const currentRow = applyAdminPedClassPendingChangeIfDue(row, todayKey);
+  const pendingChange = normalizeAdminPedClassPendingChange(currentRow?.pendingChange);
+  return {
+    currentItems: buildAdminPedScheduleItems(currentRow),
+    pendingItems: pendingChange && pendingChange.effectiveFrom > todayKey ? buildAdminPedScheduleItems(pendingChange) : [],
+    pendingEffectiveFrom: pendingChange && pendingChange.effectiveFrom > todayKey ? pendingChange.effectiveFrom : "",
+  };
+};
+
+const expandAdminPedClassRowsForConflict = (row) => {
+  const canonical = applyAdminPedClassPendingChangeIfDue(row);
+  const pendingChange = normalizeAdminPedClassPendingChange(canonical?.pendingChange);
+  if (!pendingChange || pendingChange.effectiveFrom <= getAdminPedTodayKey()) return [canonical];
+  const previousEndDate = addDaysToDateKey(pendingChange.effectiveFrom, -1);
+  const currentPhase = {
+    ...canonical,
+    endDate:
+      canonical?.endDate && isValidDateKey(canonical.endDate) && canonical.endDate < previousEndDate
+        ? canonical.endDate
+        : previousEndDate,
+  };
+  const pendingPhase = {
+    ...canonical,
+    id: `${String(canonical?.id || "")}::pending`,
+    sourceClassId: String(canonical?.id || ""),
+    scheduleDays: pendingChange.scheduleDays,
+    daysOfWeek: pendingChange.daysOfWeek,
+    startMin: pendingChange.startMin,
+    endMin: pendingChange.endMin,
+    startDate: pendingChange.effectiveFrom,
+    endDate: canonical?.endDate || "",
+    teacherId: pendingChange.teacherId || canonical?.teacherId || "",
+    teacherName: pendingChange.teacherName || canonical?.teacherName || "",
+    studentIds: canonical?.studentIds || [],
+  };
+  return [currentPhase, pendingPhase].filter((item) => item && (!item.endDate || item.startDate <= item.endDate));
+};
+
 const compactAdminPedName = (value, parts = 2) => {
   const tokens = String(value || "")
     .trim()
@@ -19299,6 +19436,7 @@ const getAdminStudentLinkedClasses = (studentId) => {
       const ids = Array.isArray(row?.studentIds) ? row.studentIds : [];
       return ids.map((id) => String(id || "").trim()).includes(safe);
     })
+    .map((row) => applyAdminPedClassPendingChangeIfDue(row))
     .slice()
     .sort((a, b) => {
       const statusDiff =
@@ -19344,15 +19482,7 @@ const getAdminStudentLiveClassHostLabel = (liveUrl) => {
 };
 
 const getAdminPedStudentActiveClass = (studentId) => {
-  const safe = String(studentId || "").trim();
-  if (!safe) return null;
-  const rows = Array.isArray(adminPedagogicoState.classes) ? adminPedagogicoState.classes : [];
-  const matching = rows.filter((row) => {
-    const ids = Array.isArray(row.studentIds) ? row.studentIds : [];
-    return ids.map((id) => String(id || "").trim()).includes(safe);
-  });
-  matching.sort((a, b) => (Number(b.updatedAtMs || 0) || Number(b.createdAtMs || 0)) - (Number(a.updatedAtMs || 0) || Number(a.createdAtMs || 0)));
-  return matching[0] || null;
+  return getAdminStudentLinkedClasses(studentId)[0] || null;
 };
 
 const normalizeClassRow = ({ id, data }) => {
@@ -19392,6 +19522,7 @@ const normalizeClassRow = ({ id, data }) => {
   const linkedEventIds = Array.isArray(src.linkedEventIds) ? src.linkedEventIds.map((v) => String(v || "").trim()).filter(Boolean) : [];
   const linkedEventGroupId = String(src.linkedEventGroupId || src.grupoRecorrenciaId || "").trim();
   const roomSlug = String(src.roomSlug || src.roomId || "").trim();
+  const pendingChange = normalizeAdminPedClassPendingChange(src.pendingChange);
 
   const createdAtMs = parseFirestoreDateToMs(src.createdAt || src.criadoEm);
   const updatedAtMs = parseFirestoreDateToMs(src.updatedAt || src.atualizadoEm);
@@ -19419,6 +19550,7 @@ const normalizeClassRow = ({ id, data }) => {
     linkedEventIds,
     linkedEventGroupId,
     roomSlug,
+    pendingChange,
     notes: String(src.notes || src.observacoes || "").trim(),
     createdAtMs,
     updatedAtMs,
@@ -20326,7 +20458,15 @@ const classDateRangesOverlap = (a, b) => {
 const computeAdminPedagogicoConflicts = (classes, { excludeId = "" } = {}) => {
   const arr = Array.isArray(classes) ? classes : [];
   const safeExcludeId = String(excludeId || "").trim();
-  const active = arr.filter((c) => c && normalizeClassStatus(c.status) === "active" && (!safeExcludeId || String(c.id || "") !== safeExcludeId));
+  const active = arr
+    .filter((c) => {
+      if (!c || normalizeClassStatus(c.status) !== "active") return false;
+      const id = String(c.id || "").trim();
+      if (c.source === "supabase" || id.startsWith("live:")) return false;
+      if (safeExcludeId && id === safeExcludeId) return false;
+      return true;
+    })
+    .flatMap((c) => expandAdminPedClassRowsForConflict(c));
   const conflicts = [];
   for (let i = 0; i < active.length; i += 1) {
     const a = active[i];
@@ -26426,10 +26566,13 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
   `;
 
   const classId = isEdit ? String(row.id) : `class_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+  const todaySaoPauloKey = getAdminPedTodayKey();
+  const pendingForEdit = isEdit ? normalizeAdminPedClassPendingChange(row?.pendingChange) : null;
+  const shouldEditPendingChange = Boolean(isEdit && pendingForEdit && pendingForEdit.effectiveFrom > todaySaoPauloKey);
   const typeValue = isEdit ? normalizeClassType(row.type) : normalizeClassType(seed?.type) || "individual";
   const statusValue = isEdit ? normalizeClassStatus(row.status) : normalizeClassStatus(seed?.status) || "active";
-  const teacherValue = isEdit ? String(row.teacherId || "") : String(seed?.teacherId || "");
-  const planValue = isEdit ? normalizePlanKeyLoose(row.plan) : normalizePlanKeyLoose(seed?.plan || "");
+  const teacherValue = shouldEditPendingChange ? String(pendingForEdit.teacherId || row.teacherId || "") : isEdit ? String(row.teacherId || "") : String(seed?.teacherId || "");
+  const planValue = shouldEditPendingChange ? normalizePlanKeyLoose(pendingForEdit.plan || row.plan) : isEdit ? normalizePlanKeyLoose(row.plan) : normalizePlanKeyLoose(seed?.plan || "");
   const groupNameValue = isEdit ? String(row.groupName || "") : String(seed?.groupName || "");
   const originalStartDateValue = isEdit ? String(row.startDate || "") : String(seed?.startDate || createDateKey(new Date()));
   const preservedEndDateValue = isEdit ? String(row.endDate || "") : "";
@@ -26447,16 +26590,16 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
     .map((id) => String(adminPedagogicoState.studentsById?.get(String(id))?.nome || "").trim())
     .filter(Boolean);
   const existingEventIds = isEdit
-    ? Array.isArray(row.linkedEventIds)
-      ? row.linkedEventIds.map((id) => String(id || "").trim()).filter(Boolean)
+    ? Array.isArray(shouldEditPendingChange ? pendingForEdit.linkedEventIds : row.linkedEventIds)
+      ? (shouldEditPendingChange ? pendingForEdit.linkedEventIds : row.linkedEventIds).map((id) => String(id || "").trim()).filter(Boolean)
       : []
     : [];
   const linkedGroupId = isEdit
-    ? String(row.linkedEventGroupId || row.grupoRecorrenciaId || "").trim()
+    ? String((shouldEditPendingChange ? pendingForEdit.linkedEventGroupId : "") || row.linkedEventGroupId || row.grupoRecorrenciaId || "").trim()
     : String(seed?.linkedEventGroupId || seed?.grupoRecorrenciaId || classId).trim() || classId;
 
   const initialSchedule = (() => {
-    const source = isEdit ? row?.scheduleDays : seed?.scheduleDays;
+    const source = shouldEditPendingChange ? pendingForEdit.scheduleDays : isEdit ? row?.scheduleDays : seed?.scheduleDays;
     const normalized = normalizeAdminPedWeeklyScheduleDays(source || []);
     const hasAny = normalized.some((day) => day.enabled);
     if (hasAny) return normalized;
@@ -26480,10 +26623,11 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
     ]);
   })();
   const activeScheduleDays = initialSchedule.filter((day) => day && day.enabled);
-  const editEffectiveDateValue = isEdit
+  const editEffectiveDateValue = shouldEditPendingChange
+    ? pendingForEdit.effectiveFrom
+    : isEdit
     ? getAdminPedRecurrenceMaterializationStartDate({ startDate: originalStartDateValue, activeSchedule: activeScheduleDays })
     : originalStartDateValue;
-  const todaySaoPauloKey = getSaoPauloDateTimeParts().dateKey;
   const initialStartTime = activeScheduleDays[0]?.startTime || clampTime(seed?.startTime || "14:00", "14:00");
   const initialEndTime = activeScheduleDays[0]?.endTime || clampTime(seed?.endTime || "14:30", "14:30");
   const notesValue = isEdit ? String(row.notes || "") : String(seed?.notes || "");
@@ -26740,15 +26884,17 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
         ...(isEdit ? { lastEditEffectiveDate: startDate } : null),
         roomSlug: isEdit ? String(row?.roomSlug || "") : buildAdminPedShortRoomSlug(classId),
       };
+      const isFutureEffectiveChange = Boolean(isEdit && startDate > todaySaoPauloKey);
 
       const all = Array.isArray(adminPedagogicoState.classes) ? adminPedagogicoState.classes : [];
       const candidates = isEdit ? all.filter((c) => String(c.id || "") !== String(classId)) : all;
-      const tempList = candidates.concat([nextRow]);
+      const tempConflictRow = { ...nextRow, startDate };
+      const tempList = candidates.concat([tempConflictRow]);
       const conflicts = computeAdminPedagogicoConflicts(tempList, { excludeId: isEdit ? classId : "" });
       const hit = conflicts.find((c) => {
         const a = c.classA || {};
         const b = c.classB || {};
-        return String(a.id || "") === String(nextRow.id) || String(b.id || "") === String(nextRow.id);
+        return String(a.id || "") === String(tempConflictRow.id) || String(b.id || "") === String(tempConflictRow.id);
       });
       if (hit) {
         setErr(`Conflito detectado: ${hit.reason}. Ajuste dias/horários para continuar.`);
@@ -26829,36 +26975,69 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
           const linkedEventGroupId = String(apiData?.grupoRecorrenciaId || linkedGroupId || classId).trim() || classId;
           createdEventIdForRollback = linkedEventIds[0] || "";
           const docRef = firebase.doc(firebase.primaryDb, "classes", classId);
-          for (const studentId of studentIds) {
-            if (!studentId) continue;
-            await patchFirestoreUserDocument({
-              userId: studentId,
-              context: "admin_pedagogico_student_link",
-              patch: {
+          if (!isFutureEffectiveChange) {
+            for (const studentId of studentIds) {
+              if (!studentId) continue;
+              await patchFirestoreUserDocument({
+                userId: studentId,
+                context: "admin_pedagogico_student_link",
+                patch: {
+                  professorId: teacherId,
+                  teacherId: teacherId,
+                  professorNome: teacherName,
+                  teacherNome: teacherName,
+                  atualizadoEm: firebase.serverTimestamp(),
+                },
+              });
+              updateAdminStudentCachedRow(studentId, {
                 professorId: teacherId,
                 teacherId: teacherId,
                 professorNome: teacherName,
                 teacherNome: teacherName,
-                atualizadoEm: firebase.serverTimestamp(),
-              },
-            });
-            updateAdminStudentCachedRow(studentId, {
-              professorId: teacherId,
-              teacherId: teacherId,
-              professorNome: teacherName,
-              teacherNome: teacherName,
-            });
+              });
+            }
           }
-          const payload = {
-            ...nextRow,
+          const pendingChangePayload = {
+            effectiveFrom: startDate,
+            type,
+            title,
+            teacherId,
+            teacherName,
+            groupName: type === "group" ? groupName : "",
+            plan,
+            status,
+            daysOfWeek,
+            scheduleDays: nextRow.scheduleDays,
+            startMin: classStartMin,
+            endMin: classEndMin,
+            endDate,
+            studentIds,
+            studentNames,
+            notes,
             linkedEventGroupId,
             linkedEventIds,
-            ...(isEdit ? { lastEditEffectiveDate: startDate } : null),
-            source: "student_line",
             updatedBy: String(user.uid || ""),
-            updatedAt: firebase.serverTimestamp(),
-            ...(isEdit ? null : { createdBy: String(user.uid || ""), createdAt: firebase.serverTimestamp() }),
+            updatedAt: new Date().toISOString(),
           };
+          const payload = isFutureEffectiveChange
+            ? {
+                pendingChange: pendingChangePayload,
+                lastEditEffectiveDate: startDate,
+                source: "student_line",
+                updatedBy: String(user.uid || ""),
+                updatedAt: firebase.serverTimestamp(),
+              }
+            : {
+                ...nextRow,
+                linkedEventGroupId,
+                linkedEventIds,
+                pendingChange: null,
+                ...(isEdit ? { lastEditEffectiveDate: startDate } : null),
+                source: "student_line",
+                updatedBy: String(user.uid || ""),
+                updatedAt: firebase.serverTimestamp(),
+                ...(isEdit ? null : { createdBy: String(user.uid || ""), createdAt: firebase.serverTimestamp() }),
+              };
           await withTimeout(firebase.setDoc(docRef, payload, { merge: true }), 12_000, "firestore_admin_pedagogico_class_merge");
           closeModal();
           await renderAdminControlePedagogicoPanel({ force: true });
