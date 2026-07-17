@@ -26191,15 +26191,6 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
         ativo: true,
         source: "supabase",
       }));
-    const liveStudents = liveClasses.flatMap((row) =>
-      row.studentIds.map((id, index) => ({
-        id: id || `name:${row.studentNames[index] || ""}`,
-        nome: row.studentNames[index] || "Aluno",
-        ativo: true,
-        professorId: row.teacherId || "",
-        source: "supabase",
-      }))
-    );
     const opsStudents = (Array.isArray(pedagogicalOps?.students) ? pedagogicalOps.students : []).map((row) => ({
       ...row,
       id: String(row.id || row.aluno_id || row.aluno_chave || ""),
@@ -26256,7 +26247,7 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
 
     adminPedagogicoState.teachers = mergePeople(teachers, liveTeachers);
     adminPedagogicoState.teachersById = buildAdminTeacherMap(adminPedagogicoState.teachers);
-    const mergedStudents = mergePeople(students, [...opsStudents, ...liveStudents]).map((student) => {
+    const mergedStudents = mergePeople(students, opsStudents).map((student) => {
       const canonicalId = String(student?.firestoreDocId || student?.docId || student?.documentId || student?.id || "").trim();
       const normalized = canonicalId ? { ...student, id: canonicalId, firestoreDocId: canonicalId, docId: canonicalId, documentId: canonicalId } : student;
       return enrichAdminStudentTeacherDisplay(normalized);
