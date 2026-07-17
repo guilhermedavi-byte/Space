@@ -26326,10 +26326,19 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
     const liveTeachers = liveClasses
       .filter((row) => row.teacherId || row.teacherName)
       .map((row) => ({
-        id: row.teacherId || `name:${row.teacherName}`,
+        id: row.teacherId || "",
         nome: row.teacherName || "Professor",
         ativo: true,
-        source: "supabase",
+        liveLessonId: row.liveLessonId || "",
+        source: "supabase-live",
+      }));
+    const liveStudents = liveClasses
+      .filter((row) => (Array.isArray(row.studentIds) && row.studentIds[0]) || (Array.isArray(row.studentNames) && row.studentNames[0]))
+      .map((row) => ({
+        id: Array.isArray(row.studentIds) ? String(row.studentIds[0] || "").trim() : "",
+        nome: Array.isArray(row.studentNames) ? String(row.studentNames[0] || "Aluno").trim() : "Aluno",
+        liveLessonId: row.liveLessonId || "",
+        source: "supabase-live",
       }));
     const opsStudents = (Array.isArray(pedagogicalOps?.students) ? pedagogicalOps.students : []).map((row) => ({
       ...row,
@@ -26384,10 +26393,52 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
       });
       return Array.from(byId.values());
     };
+    const enrichPersonWithLiveLessonData = (primary, derivedRows, { roleLabel = "usuário" } = {}) => {
+      // REGRA PERMANENTE:
+      // Nenhuma fonte derivada (aulas ao vivo, eventos, backfills) pode criar uma linha nova na lista de Usuários.
+      // Usuário só é criado pelo fluxo de cadastro real (Auth + users/{uid}).
+      // Toda mesclagem de dado derivado deve casar por UID real existente ou ser descartada/logada.
+      const canonicalRows = Array.isArray(primary) ? primary.filter((row) => row && typeof row === "object") : [];
+      const byUid = new Map();
+      canonicalRows.forEach((row) => {
+        const uid = String(row?.firestoreDocId || row?.docId || row?.documentId || row?.id || "").trim();
+        if (uid) byUid.set(uid, row);
+      });
+      const warned = new Set();
+      (Array.isArray(derivedRows) ? derivedRows : []).forEach((row) => {
+        if (!row || typeof row !== "object") return;
+        const uid = String(row?.firestoreDocId || row?.docId || row?.documentId || row?.id || "").trim();
+        const existing = uid ? byUid.get(uid) || null : null;
+        if (!uid || !existing) {
+          const warningKey = `${roleLabel}:${uid || String(row?.nome || row?.name || "")}:${row?.liveLessonId || ""}`;
+          if (!warned.has(warningKey)) {
+            warned.add(warningKey);
+            console.warn(`[admin-ped] aula ao vivo sem ${roleLabel}_uid válido`, {
+              uid,
+              nome: row?.nome || row?.name || "",
+              liveLessonId: row?.liveLessonId || "",
+              source: row?.source || "",
+            });
+          }
+          return;
+        }
+        byUid.set(uid, {
+          ...row,
+          ...existing,
+          hasLiveLessonData: true,
+          liveLessonId: existing.liveLessonId || row.liveLessonId || "",
+          liveLessonSource: row.source || "supabase-live",
+        });
+      });
+      return canonicalRows.map((row) => {
+        const uid = String(row?.firestoreDocId || row?.docId || row?.documentId || row?.id || "").trim();
+        return (uid && byUid.get(uid)) || row;
+      });
+    };
 
-    adminPedagogicoState.teachers = mergePeople(teachers, liveTeachers);
+    adminPedagogicoState.teachers = enrichPersonWithLiveLessonData(teachers, liveTeachers, { roleLabel: "professor" });
     adminPedagogicoState.teachersById = buildAdminTeacherMap(adminPedagogicoState.teachers);
-    const mergedStudents = mergePeople(students, opsStudents).map((student) => {
+    const mergedStudents = mergePeople(enrichPersonWithLiveLessonData(students, liveStudents, { roleLabel: "aluno" }), opsStudents).map((student) => {
       const canonicalId = String(student?.firestoreDocId || student?.docId || student?.documentId || student?.id || "").trim();
       const normalized = canonicalId ? { ...student, id: canonicalId, firestoreDocId: canonicalId, docId: canonicalId, documentId: canonicalId } : student;
       return enrichAdminStudentTeacherDisplay(normalized);
