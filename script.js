@@ -26612,6 +26612,28 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
         return "";
       };
 
+      const buildScheduleApiError = (fallback, data = null, status = 0) => {
+        const detail = String(data?.errorDetail || data?.message || data?.error || fallback || "schedule_save_failed").trim();
+        const error = new Error(detail);
+        error.code = data?.error || detail;
+        error.status = Number(status) || 0;
+        error.detail = data || null;
+        return error;
+      };
+      const getClassSaveErrorMessage = (error) => {
+        const code = String(error?.code || error?.name || "").trim();
+        const message = String(error?.message || "").trim();
+        if (code === "schedule_conflict") return message || "Este professor já tem uma aula ou evento nesse horário.";
+        if (code === "recurrence_delete_failed") return "Não foi possível remover as ocorrências futuras antigas. Tente novamente.";
+        if (code === "permission-denied" || /permission|insufficient permissions/i.test(message)) {
+          return "Sem permissão para salvar esta aula. Confirme se sua conta está com acesso de admin.";
+        }
+        if (/network|failed to fetch/i.test(message)) return "Falha de conexão ao salvar. Verifique a internet e tente novamente.";
+        if (/timeout|timed out|demorou/i.test(message)) return "O salvamento demorou demais. Tente novamente.";
+        if (message && !/^schedule_save_failed$|^class_save_failed$/i.test(message)) return message;
+        return "Não foi possível salvar agora. Tente novamente.";
+      };
+
       const type = normalizeClassType(read("type") || typeValue);
       const teacherId = read("teacherId");
       const groupName = read("groupName");
@@ -26753,7 +26775,10 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
               `/api/schedule-events?id=${encodeURIComponent(existingEventIds[0])}&mode=future&effectiveFrom=${encodeURIComponent(startDate)}`,
               { method: "DELETE" }
             ).then(async (res) => {
-              if (!res.ok) throw new Error("recurrence_delete_failed");
+              if (!res.ok) {
+                const data = await res.json().catch(() => null);
+                throw buildScheduleApiError("recurrence_delete_failed", data, res.status);
+              }
             });
           }
 
@@ -26790,7 +26815,7 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
           });
           const apiData = await apiRes.json().catch(() => null);
           if (!apiRes.ok) {
-            throw new Error(apiData?.error || "schedule_save_failed");
+            throw buildScheduleApiError("schedule_save_failed", apiData, apiRes.status);
           }
 
           const linkedEventIds = Array.isArray(apiData?.ids) ? apiData.ids.map((id) => String(id || "").trim()).filter(Boolean) : [];
@@ -26841,8 +26866,14 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
               console.warn("[admin] controle-pedagogico rollback failed:", rollbackError);
             }
           }
-          console.error("[admin] controle-pedagogico save failed:", e);
-          setErr("Não foi possível salvar agora.");
+          console.error("[admin] controle-pedagogico save failed:", {
+            message: e?.message || String(e || ""),
+            code: e?.code || "",
+            status: e?.status || 0,
+            detail: e?.detail || null,
+            stack: e?.stack || "",
+          });
+          setErr(getClassSaveErrorMessage(e));
         } finally {
           if (modalPrimary) modalPrimary.disabled = false;
           if (modalSecondary) modalSecondary.disabled = false;
