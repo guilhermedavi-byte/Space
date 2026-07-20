@@ -10591,7 +10591,7 @@ const openActivitiesDrawer = ({ activity = null } = {}) => {
         <label class="activities-field"><span>Prioridade</span><select class="admin-ped-select" name="prioridade">${ACTIVITY_PRIORITY_OPTIONS.map((option) => `<option value="${escapeHtml(option)}" ${option === current.prioridade ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}</select></label>
       </div>
       <div class="activities-grid2">
-        <label class="activities-field"><span>Responsável</span><select class="admin-ped-select" name="responsavelId" ${canAssignOthers ? "" : "disabled"}><option value="">Sem responsável</option>${users.map((user) => `<option value="${escapeHtml(String(user.id || ""))}">${escapeHtml(String(user.nome || "Usuário"))}</option>`).join("")}</select></label>
+        <label class="activities-field"><span>Responsável</span>${canAssignOthers ? `<input class="admin-ped-select activities-responsible-search" type="search" data-activities-responsible-search placeholder="Buscar responsável..." autocomplete="off" />` : ""}<select class="admin-ped-select" name="responsavelId" ${canAssignOthers ? "" : "disabled"}><option value="">Sem responsável</option>${users.map((user) => `<option value="${escapeHtml(String(user.id || ""))}">${escapeHtml(String(user.nome || "Usuário"))}</option>`).join("")}</select></label>
         <label class="activities-field"><span>Prazo</span><input class="admin-ped-select" type="date" name="prazo" value="${escapeHtml(current.prazo)}" /></label>
       </div>
       <label class="activities-field"><span>Tipo</span><input class="admin-ped-select" type="text" name="tipo" value="${escapeHtml(current.tipo)}" list="activities-type-options" /><datalist id="activities-type-options">${getActivityTypeOptions().map((option) => `<option value="${escapeHtml(option)}"></option>`).join("")}</datalist></label>
@@ -10606,6 +10606,28 @@ const openActivitiesDrawer = ({ activity = null } = {}) => {
   if (form instanceof HTMLFormElement) {
     const responsibleSelect = form.elements.namedItem("responsavelId");
     if (responsibleSelect instanceof HTMLSelectElement) responsibleSelect.value = String(current.responsavelId || "");
+    const responsibleSearch = form.querySelector("[data-activities-responsible-search]");
+    const renderResponsibleOptions = (query = "") => {
+      if (!(responsibleSelect instanceof HTMLSelectElement)) return;
+      const selectedValue = String(responsibleSelect.value || current.responsavelId || "").trim();
+      const normalizedQuery = normalizeSearchText(query);
+      const filteredUsers = users.filter((user) => {
+        if (!normalizedQuery) return true;
+        const haystack = normalizeSearchText([user.nome, user.email, user.role].filter(Boolean).join(" "));
+        return haystack.includes(normalizedQuery);
+      });
+      const selectedUser = selectedValue ? users.find((user) => String(user.id || "") === selectedValue) : null;
+      const optionUsers = selectedUser && !filteredUsers.some((user) => String(user.id || "") === selectedValue)
+        ? [selectedUser, ...filteredUsers]
+        : filteredUsers;
+      responsibleSelect.innerHTML = `<option value="">Sem responsável</option>${optionUsers
+        .map((user) => `<option value="${escapeHtml(String(user.id || ""))}">${escapeHtml(String(user.nome || "Usuário"))}</option>`)
+        .join("")}`;
+      responsibleSelect.value = selectedValue;
+    };
+    if (responsibleSearch instanceof HTMLInputElement) {
+      responsibleSearch.addEventListener("input", () => renderResponsibleOptions(responsibleSearch.value));
+    }
     form.addEventListener("submit", (event) => {
       event.preventDefault();
       const formData = new FormData(form);

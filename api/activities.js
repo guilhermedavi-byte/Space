@@ -90,7 +90,7 @@ const sortActivities = (rows) =>
 const listVisibleUsers = (session, rows) => {
   const role = normalizeRole(session?.role);
   const uid = safeText(session?.sub);
-  const visibleRoles = new Set(["admin", "teacher", "growth"]);
+  const visibleRoles = role === "teacher" ? new Set(["teacher"]) : new Set(["admin", "growth", "FINANCE"]);
   return (Array.isArray(rows) ? rows : [])
     .map((row) => ({
       id: safeText(row.id),
@@ -106,8 +106,11 @@ const listVisibleUsers = (session, rows) => {
     .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 };
 
-const listActivityDirectoryUsers = (rows) =>
-  (Array.isArray(rows) ? rows : [])
+const listActivityDirectoryUsers = (session, rows) => {
+  const role = normalizeRole(session?.role);
+  const uid = safeText(session?.sub);
+  const visibleRoles = role === "teacher" ? new Set(["teacher"]) : new Set(["admin", "growth", "FINANCE"]);
+  return (Array.isArray(rows) ? rows : [])
     .map((row) => ({
       id: safeText(row.id),
       nome: safeText(row.nome),
@@ -118,7 +121,10 @@ const listActivityDirectoryUsers = (rows) =>
       telefone: safeText(row.telefone),
     }))
     .filter((row) => row.id && row.nome && row.ativo)
+    .filter((row) => visibleRoles.has(row.role))
+    .filter((row) => (role === "teacher" ? row.id === uid : true))
     .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+};
 
 const getAccessToken = async () => {
   const result = await getGoogleAccessToken({ scope: DATASTORE_SCOPE });
@@ -193,7 +199,7 @@ module.exports = async (req, res) => {
       return sendJson(res, 200, {
         activities,
         users: listVisibleUsers(session, userRows),
-        directoryUsers: listActivityDirectoryUsers(userRows),
+        directoryUsers: listActivityDirectoryUsers(session, userRows),
         permissions: {
           role,
           canViewAll: role === "admin",

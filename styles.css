@@ -21942,6 +21942,7 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 .activities-grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .activities-field{display:grid;gap:8px}
 .activities-field>span{font-size:12px;font-weight:700;color:rgba(255,255,255,.78)}
+.activities-responsible-search{margin-bottom:2px}
 .activities-textarea{min-height:110px;resize:vertical;padding-top:12px;padding-bottom:12px}
 .activities-form-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:8px}
 
