@@ -14249,25 +14249,32 @@ const renderSdrDelta = (current, previous, label = "vs. dia anterior") => {
   const diff = Number(current || 0) - Number(previous || 0);
   const tone = diff > 0 ? "positive" : diff < 0 ? "negative" : "neutral";
   const sign = diff > 0 ? "+" : "";
-  return `<em class="sdr-delta is-${tone}">${escapeHtml(`${sign}${diff}`)} <span>${escapeHtml(label)}</span></em>`;
+  return `<em class="sdr-delta is-${tone}" title="${escapeHtml(label)}">${escapeHtml(`${sign}${diff}`)}</em>`;
 };
 
 const renderSdrSparkline = (values = [], tone = "neutral") => {
   const series = (Array.isArray(values) && values.length ? values : [0, 0, 0, 0, 0, 0, 0]).map((value) => Number(value) || 0);
+  const isFlat = new Set(series).size <= 1;
   const max = Math.max(...series, 1);
   const min = Math.min(...series, 0);
   const range = Math.max(max - min, 1);
   const width = 164;
   const height = 42;
   const step = series.length > 1 ? width / (series.length - 1) : width;
-  const points = series
-    .map((value, index) => `${(index * step).toFixed(1)},${(height - ((value - min) / range) * (height - 8) - 4).toFixed(1)}`)
-    .join(" ");
-  const area = `0,${height} ${points} ${width},${height}`;
+  const coords = series.map((value, index) => ({ x: index * step, y: height - ((value - min) / range) * (height - 8) - 4 }));
+  const path = isFlat
+    ? `M0 ${height - 6} L${width} ${height - 6}`
+    : coords.reduce((acc, point, index) => {
+        if (index === 0) return `M${point.x.toFixed(1)} ${point.y.toFixed(1)}`;
+        const prev = coords[index - 1];
+        const midX = (prev.x + point.x) / 2;
+        return `${acc} Q${prev.x.toFixed(1)} ${prev.y.toFixed(1)} ${midX.toFixed(1)} ${((prev.y + point.y) / 2).toFixed(1)} T${point.x.toFixed(1)} ${point.y.toFixed(1)}`;
+      }, "");
+  const area = isFlat ? "" : `${path} L${width} ${height} L0 ${height} Z`;
   return `
-    <svg class="sdr-sparkline is-${escapeHtml(tone)}" viewBox="0 0 ${width} ${height}" aria-hidden="true" focusable="false">
-      <polyline class="sdr-sparkline-area" points="${escapeHtml(area)}"></polyline>
-      <polyline class="sdr-sparkline-line" points="${escapeHtml(points)}"></polyline>
+    <svg class="sdr-sparkline is-${escapeHtml(tone)} ${isFlat ? "is-flat" : ""}" viewBox="0 0 ${width} ${height}" aria-hidden="true" focusable="false">
+      ${area ? `<path class="sdr-sparkline-area" d="${escapeHtml(area)}"></path>` : ""}
+      <path class="sdr-sparkline-line" d="${escapeHtml(path)}"></path>
     </svg>
   `;
 };
@@ -14313,7 +14320,6 @@ const renderSdrHoje = () => {
     <section class="sdr-day-pulse">
       <i></i>
       <div><strong>Resumo do dia</strong><span>${escapeHtml(pulseText)}</span></div>
-      <small>${escapeHtml(stats.scheduled ? `${stats.scheduled} agendamento(s)` : "Sem agendamentos ainda")}</small>
     </section>
 
     <section class="sdr-kpi-grid" aria-label="KPIs do dia">
@@ -14325,7 +14331,7 @@ const renderSdrHoje = () => {
     <section class="sdr-today-layout">
       <div class="sdr-today-main">
         <section class="sdr-card sdr-actions-card">
-          <div class="sdr-card-title"><span>Registrar ligação</span><small>Ação rápida</small></div>
+          <div class="sdr-card-title"><span>Registrar ligação</span></div>
           <div class="sdr-actions sdr-actions-primary">
             <button class="sdr-action is-no" type="button" data-sdr-call="nao_atendeu"><b>Não atendeu</b><span>+1 ligação</span></button>
             <button class="sdr-action is-yes" type="button" data-sdr-call="atendeu"><b>Atendeu</b><span>sem agenda</span></button>
@@ -14336,7 +14342,7 @@ const renderSdrHoje = () => {
         </section>
 
         <section class="sdr-card sdr-feed-card">
-          <div class="sdr-card-title"><span>Últimas ligações</span><small>Timeline</small></div>
+          <div class="sdr-card-title"><span>Últimas ligações</span></div>
           <div class="sdr-feed">
             ${
               calls
@@ -14360,7 +14366,7 @@ const renderSdrHoje = () => {
 
       <aside class="sdr-today-side">
         <section class="sdr-card sdr-meeting-card ${metaShows > 0 && stats.shows >= metaShows ? "is-complete" : ""}">
-          <div class="sdr-card-title"><span>Reuniões de hoje</span><small>Show rate</small></div>
+          <div class="sdr-card-title"><span>Reuniões de hoje</span></div>
           <div class="sdr-show-row"><strong>${stats.totalMeetings ? escapeHtml(formatSdrPct(stats.showRate)) : "—"}</strong><span>${escapeHtml(String(stats.shows))} compareceram · ${escapeHtml(String(stats.noShows))} no-show</span></div>
           <p class="sdr-muted">${
             referenceDay
@@ -14438,7 +14444,7 @@ const renderSdrHistorico = () => {
         ${renderSdrAverageCard("Últimos 30 dias", month, "scheduled")}
       </section>
       <section class="sdr-card sdr-days-card">
-        <div class="sdr-card-title"><span>Dias registrados</span><small>Histórico individual</small></div>
+        <div class="sdr-card-title"><span>Dias registrados</span></div>
         <div class="sdr-days-list">
           ${
             days
@@ -14456,7 +14462,7 @@ const renderSdrHistorico = () => {
         </div>
       </section>
       <section class="sdr-card sdr-manual-card">
-        <div class="sdr-card-title"><span>Lançar dia anterior</span><small>Ajuste manual</small></div>
+        <div class="sdr-card-title"><span>Lançar dia anterior</span></div>
         <div class="sdr-manual-grid">
           <label>Data<input type="date" data-sdr-manual="date" value="${escapeHtml(todayKey)}"></label>
           <label>Total de ligações<input type="number" min="0" inputmode="numeric" data-sdr-manual="total"></label>
@@ -14522,7 +14528,7 @@ const renderSdrEquipe = () => {
       </div>
     </section>
     <section class="sdr-card sdr-ranking-card">
-      <div class="sdr-card-title"><span>Ranking SDR</span><small>Volumetria e conversão</small></div>
+      <div class="sdr-card-title"><span>Ranking SDR</span></div>
       <div class="sdr-team-list">
         ${
           rows
@@ -14614,14 +14620,6 @@ const renderSdrPanel = () => {
   const tab = sdrPanelState.activeTab === "historico" ? "historico" : sdrPanelState.activeTab === "equipe" ? "equipe" : "hoje";
   const error = String(sdrPanelState.error || "").trim();
   root.innerHTML = `
-    <header class="sdr-head">
-      <div>
-        <div class="sdr-kicker">Growth / SDR</div>
-        <h2>Controle de ligações</h2>
-        <p>Placar diário, histórico e visão da equipe em uma leitura sóbria.</p>
-      </div>
-      <button class="button button-outline button-small" type="button" data-sdr-refresh ${sdrPanelState.isLoading ? "disabled" : ""}>Atualizar</button>
-    </header>
     <nav class="sdr-tabs" aria-label="Painel SDR">
       <button type="button" data-sdr-tab="hoje" class="${tab === "hoje" ? "is-active" : ""}">Hoje</button>
       <button type="button" data-sdr-tab="historico" class="${tab === "historico" ? "is-active" : ""}">Histórico</button>
