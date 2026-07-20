@@ -162,13 +162,16 @@ const listSdrData = async ({ session, days = 30 } = {}) => {
       const userStats = dailyStats.filter((row) => row.sdrUid === user.uid);
       const today = userStats.find((row) => row.dateKey === todayKey) || buildDailyStat({ sdrUid: user.uid, sdrName: user.nome, sdrEmail: user.email, dateKey: todayKey, events: [] });
       const weekStart = addDaysToKey(todayKey, -6);
+      const monthStart = addDaysToKey(todayKey, -29);
       const weekEvents = events.filter((event) => event.sdrUid === user.uid && event.dateKey >= weekStart && event.dateKey <= todayKey);
+      const monthEvents = events.filter((event) => event.sdrUid === user.uid && event.dateKey >= monthStart && event.dateKey <= todayKey);
       return {
         uid: user.uid,
         nome: user.nome,
         email: user.email,
         today,
         week: computeStats(weekEvents),
+        month: computeStats(monthEvents),
       };
     })
     .sort((a, b) => (b.today.scheduled || 0) - (a.today.scheduled || 0) || (b.week.scheduled || 0) - (a.week.scheduled || 0) || String(a.nome).localeCompare(String(b.nome), "pt-BR"));
