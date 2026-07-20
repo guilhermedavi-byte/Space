@@ -16458,7 +16458,8 @@ body[data-role="teacher"][data-active-panel="dashboard"] .platform-header {
    Growth Dashboard (v2)
    ========================= */
 
-body[data-page="growth"] {
+body[data-page="growth"],
+body[data-app-role="growth"] {
   --growth-bg: #0f1d2d;
   --growth-accent: #ff4e46;
   --growth-blue: #5990bd;
@@ -16471,11 +16472,13 @@ body[data-page="growth"] {
   color: #ffffff;
 }
 
-body[data-page="growth"] .page-glow {
+body[data-page="growth"] .page-glow,
+body[data-app-role="growth"] .page-glow {
   opacity: 0.26;
 }
 
-body[data-page="growth"] .platform-main {
+body[data-page="growth"] .platform-main,
+body[data-app-role="growth"] .platform-main {
   height: auto;
   min-height: 100vh;
   padding-bottom: 40px;

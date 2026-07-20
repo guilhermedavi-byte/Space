@@ -936,10 +936,15 @@ const syncRoleUI = () => {
         return;
       }
       const target = String(el.getAttribute("data-panel-target") || "");
-      el.hidden = !["dashboard", "growth", "activities"].includes(target);
+      el.hidden = !["growth-dashboard", "growth", "activities"].includes(target);
     });
-    const dashboardLink = document.querySelector('[data-panel-target="dashboard"] .sidebar-text');
-    if (dashboardLink instanceof HTMLElement) dashboardLink.textContent = "Dashboard";
+    const dashboardTarget = document.querySelector("[data-growth-dashboard-link]");
+    if (dashboardTarget instanceof HTMLElement) {
+      dashboardTarget.setAttribute("data-panel-target", "growth-dashboard");
+      dashboardTarget.hidden = false;
+      const dashboardLink = dashboardTarget.querySelector(".sidebar-text");
+      if (dashboardLink instanceof HTMLElement) dashboardLink.textContent = "Dashboard";
+    }
     const growthLink = document.querySelector("[data-growth-sdr-link]") || document.querySelector('[data-panel-target="growth"]');
     if (growthLink instanceof HTMLElement) {
       growthLink.hidden = false;
@@ -14245,6 +14250,632 @@ const getSdrPreviousDayValue = (metric) => {
   const days = getSdrRecentDays(2);
   return days.length > 1 ? getSdrDayMetric(days[0], metric) : 0;
 };
+
+/* =========================
+   Métricas (Growth Dashboard)
+   ========================= */
+
+const dashboardRoot = document.querySelector("[data-growth-dashboard]");
+const dashboardResultGrid = document.querySelector(
+  '.growth-v2-section[aria-label="Resultado do mês"] .growth-v2-grid'
+);
+const dashboardIndicatorsPrimaryGrid = document.querySelector(
+  '.growth-v2-section[aria-label="Indicadores comerciais"] .growth-v2-grid.growth-v2-grid-4'
+);
+const dashboardIndicatorsSecondaryGrid = document.querySelector(
+  '.growth-v2-section[aria-label="Indicadores comerciais"] .growth-v2-grid.growth-v2-grid-3'
+);
+
+const parseMoneyLoose = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw) return NaN;
+  const sanitized = raw.replace(/[^\d.,-]/g, "");
+  let normalized = sanitized;
+  if (normalized.includes(",")) {
+    normalized = normalized.replace(/\./g, "").replace(/,/g, ".");
+  } else if (normalized.includes(".")) {
+    const parts = normalized.split(".");
+    const last = parts[parts.length - 1] || "";
+    if (parts.length > 2 || last.length === 3) normalized = parts.join("");
+  }
+  const n = Number(normalized);
+  return Number.isFinite(n) ? n : NaN;
+};
+
+const formatPercentPtBr = (value, decimals = 1) => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "—";
+  const d = Number.isFinite(Number(decimals)) ? Number(decimals) : 1;
+  return `${n.toFixed(Math.max(0, Math.min(d, 2))).replace(".", ",")}%`;
+};
+
+const formatMoneyNoCentsPtBr = (value) => {
+  try {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return "—";
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+      maximumFractionDigits: 0,
+      minimumFractionDigits: 0,
+    }).format(n);
+  } catch (error) {
+    return "—";
+  }
+};
+
+const getInitialsShort = (rawName) => {
+  const name = String(rawName || "").trim();
+  if (!name) return "--";
+  const parts = name.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+};
+
+const planLabelForUi = (raw) => {
+  const name = String(raw || "").toLowerCase();
+  if (name.includes("diamond")) return "Diamond";
+  if (name.includes("gold")) return "Gold";
+  if (name.includes("turma")) return "Turma";
+  return "Sem plano";
+};
+
+const buildPlansPieBackground = ({ turma = 0, gold = 0, diamond = 0 } = {}) => {
+  const t = Math.max(0, Number(turma) || 0);
+  const g = Math.max(0, Number(gold) || 0);
+  const d = Math.max(0, Number(diamond) || 0);
+  const total = t + g + d;
+  if (total <= 0) {
+    return "conic-gradient(rgba(255,255,255,0.06) 0deg 360deg)";
+  }
+
+  const tDeg = (t / total) * 360;
+  const gDeg = (g / total) * 360;
+  const a1 = tDeg;
+  const a2 = tDeg + gDeg;
+
+  // Keep the same palette used in CSS for the dashboard.
+  const cTurma = "rgba(251, 191, 36, 0.92)";
+  const cGold = "rgba(89, 144, 189, 0.92)";
+  const cDiamond = "rgba(255, 78, 70, 0.92)";
+
+  return `conic-gradient(${cTurma} 0deg ${a1}deg, ${cGold} ${a1}deg ${a2}deg, ${cDiamond} ${a2}deg 360deg)`;
+};
+
+const adjustGrowthDashboardLayout = () => {
+  if (!(dashboardRoot instanceof HTMLElement)) return;
+
+  // Move Forecast card to "Resultado do mês" to match the visual hierarchy (no backend changes).
+  const forecastValue = document.querySelector('[data-growth-indicator="forecast"]');
+  const forecastCard = forecastValue instanceof HTMLElement ? forecastValue.closest("article") : null;
+  if (forecastCard instanceof HTMLElement && dashboardResultGrid instanceof HTMLElement) {
+    if (!dashboardResultGrid.contains(forecastCard)) {
+      dashboardResultGrid.appendChild(forecastCard);
+    }
+    forecastCard.classList.add("is-forecast");
+    forecastCard.setAttribute("aria-label", "Forecast");
+  }
+
+  // Move Ticket card to the secondary indicators grid (No Show / Agendamento / Funil).
+  const ticketValue = document.querySelector('[data-growth-indicator="ticket"]');
+  const ticketCard = ticketValue instanceof HTMLElement ? ticketValue.closest("article") : null;
+  if (ticketCard instanceof HTMLElement && dashboardIndicatorsSecondaryGrid instanceof HTMLElement) {
+    if (!dashboardIndicatorsSecondaryGrid.contains(ticketCard)) {
+      dashboardIndicatorsSecondaryGrid.appendChild(ticketCard);
+    }
+  }
+
+  // Ensure the primary indicators grid only contains the two main cards visually.
+  if (dashboardIndicatorsPrimaryGrid instanceof HTMLElement) {
+    Array.from(dashboardIndicatorsPrimaryGrid.querySelectorAll("article")).forEach((el) => {
+      const hasVendas = el.querySelector('[data-growth-indicator="vendas"]');
+      const hasConversao = el.querySelector('[data-growth-indicator="conversao"]');
+      if (!hasVendas && !hasConversao) el.style.display = "none";
+    });
+  }
+};
+
+const ensureRealizadoProgressUi = () => {
+  if (!(dashboardRoot instanceof HTMLElement)) return;
+  const realizedValueEl = document.querySelector('[data-growth-kpi="realizado"]');
+  const realizedCard = realizedValueEl instanceof HTMLElement ? realizedValueEl.closest("article") : null;
+  if (!(realizedCard instanceof HTMLElement)) return;
+
+  if (!realizedCard.querySelector(".growth-v2-realizado-progress")) {
+    const bar = document.createElement("div");
+    bar.className = "growth-v2-realizado-progress";
+    bar.setAttribute("aria-hidden", "true");
+    bar.innerHTML = "<span></span>";
+    realizedCard.appendChild(bar);
+  }
+
+  if (!realizedCard.querySelector(".growth-v2-realizado-sub")) {
+    const sub = document.createElement("div");
+    sub.className = "growth-v2-realizado-sub";
+    sub.dataset.growthRealizadoSub = "true";
+    realizedCard.appendChild(sub);
+  }
+};
+
+const updateRealizadoProgressUi = ({ meta, realizado } = {}) => {
+  const metaNum = Number(meta);
+  const realizadoNum = Number(realizado);
+  if (!Number.isFinite(metaNum) || metaNum <= 0 || !Number.isFinite(realizadoNum) || realizadoNum < 0) return;
+
+  const realizedValueEl = document.querySelector('[data-growth-kpi="realizado"]');
+  const realizedCard = realizedValueEl instanceof HTMLElement ? realizedValueEl.closest("article") : null;
+  if (!(realizedCard instanceof HTMLElement)) return;
+
+  const pct = Math.max(0, Math.min(100, (realizadoNum / metaNum) * 100));
+  realizedCard.style.setProperty("--growth-realizado-progress", `${pct}%`);
+
+  const remaining = Math.max(0, metaNum - realizadoNum);
+  const sub = realizedCard.querySelector(".growth-v2-realizado-sub");
+  if (sub instanceof HTMLElement) {
+    const pctText = `${pct.toFixed(1).replace(".", ",")}%`;
+    sub.textContent = `${pctText} da meta · faltam ${formatMoneyNoCentsPtBr(remaining)}`;
+  }
+};
+
+const updateForecastMetaSub = () => {
+  if (!(dashboardRoot instanceof HTMLElement)) return;
+  const forecastValueEl = document.querySelector('[data-growth-indicator="forecast"]');
+  const forecastCard = forecastValueEl instanceof HTMLElement ? forecastValueEl.closest("article") : null;
+  if (!(forecastCard instanceof HTMLElement)) return;
+
+  const metaEl = document.querySelector('[data-growth-kpi="meta"]');
+  const meta = metaEl instanceof HTMLElement ? parseMoneyLoose(metaEl.textContent) : NaN;
+  const forecast = forecastValueEl instanceof HTMLElement ? parseMoneyLoose(forecastValueEl.textContent) : NaN;
+  if (!Number.isFinite(meta) || meta <= 0 || !Number.isFinite(forecast) || forecast < 0) return;
+
+  const pct = Math.max(0, Math.min(100, (forecast / meta) * 100));
+  const sub = forecastCard.querySelector(".growth-v2-card-sub");
+  if (sub instanceof HTMLElement) {
+    sub.classList.remove("is-yellow");
+    sub.classList.add("is-green");
+    sub.textContent = `${pct.toFixed(1).replace(".", ",")}% da meta`;
+  }
+};
+
+const crmConnectedEls = () => {
+  return {
+    realizado: document.querySelector('[data-growth-kpi="realizado"]'),
+    forecast: document.querySelector('[data-growth-indicator="forecast"]'),
+    vendas: document.querySelector('[data-growth-indicator="vendas"]'),
+    conversao: document.querySelector('[data-growth-indicator="conversao"]'),
+    ticket: document.querySelector('[data-growth-indicator="ticket"]'),
+    noshow: document.querySelector('[data-growth-rate="noshow"]'),
+    agendamento: document.querySelector('[data-growth-rate="agendamento"]'),
+    funil: document.querySelector('[data-growth-rate="funil"]'),
+    planTurma: document.querySelector('[data-growth-plan="turma"]'),
+    planGold: document.querySelector('[data-growth-plan="gold"]'),
+    planDiamond: document.querySelector('[data-growth-plan="diamond"]'),
+    ranking: document.querySelector("[data-growth-ranking]"),
+    lastTime: document.querySelector("[data-growth-last-time]"),
+    lastSub: document.querySelector("[data-growth-last-sub]"),
+    paceDias: document.querySelector('[data-growth-pace="dias"]'),
+    paceReceitaDia: document.querySelector('[data-growth-pace="receitaDia"]'),
+    paceAgendamentosDia: document.querySelector('[data-growth-pace="agendamentosDia"]'),
+    paceProspeccoesDia: document.querySelector('[data-growth-pace="prospeccoesDia"]'),
+    paceCardDias: document.querySelector('[data-growth-pace-card="dias"]'),
+    paceCardReceita: document.querySelector('[data-growth-pace-card="receita"]'),
+    paceCardAgendamentos: document.querySelector('[data-growth-pace-card="agendamentos"]'),
+    paceCardProspeccoes: document.querySelector('[data-growth-pace-card="prospeccoes"]'),
+  };
+};
+
+const setGrowthCrmState = (state) => {
+  if (!(dashboardRoot instanceof HTMLElement)) return;
+  const next = String(state || "").trim().toLowerCase();
+  dashboardRoot.dataset.growthCrmState = next || "";
+};
+
+const setSkeleton = (el, on) => {
+  if (!(el instanceof HTMLElement)) return;
+  el.classList.toggle("growth-v2-skeleton", Boolean(on));
+};
+
+const renderRankingSkeleton = () => {
+  const { ranking } = crmConnectedEls();
+  if (!(ranking instanceof HTMLElement)) return;
+  ranking.innerHTML = Array.from({ length: 4 })
+    .map(
+      (_, idx) => `
+        <div class="growth-v2-rank-row ${idx === 0 ? "is-top" : ""}">
+          <div class="growth-v2-rank-pos">${idx + 1}</div>
+          <div class="growth-v2-rank-vendor">
+            <span class="growth-v2-rank-avatar ${idx === 0 ? "is-coral" : "is-blue"}" aria-hidden="true">--</span>
+            <span class="growth-v2-rank-name growth-v2-skeleton">&nbsp;</span>
+          </div>
+          <div class="growth-v2-rank-sales growth-v2-skeleton">&nbsp;</div>
+          <div class="growth-v2-rank-value growth-v2-skeleton">&nbsp;</div>
+          <div class="growth-v2-rank-bar" aria-hidden="true"><span style="width: 0%"></span></div>
+        </div>
+      `
+    )
+    .join("");
+};
+
+const renderRankingError = () => {
+  const { ranking } = crmConnectedEls();
+  if (!(ranking instanceof HTMLElement)) return;
+  ranking.innerHTML = `
+    <div class="growth-v2-rank-row" style="padding: 18px 16px; opacity: 0.75;">
+      <div class="growth-v2-rank-pos">—</div>
+      <div class="growth-v2-rank-vendor">
+        <span class="growth-v2-rank-avatar is-blue" aria-hidden="true">--</span>
+        <span class="growth-v2-rank-name">—</span>
+      </div>
+      <div class="growth-v2-rank-sales">—</div>
+      <div class="growth-v2-rank-value">—</div>
+      <div class="growth-v2-rank-bar" aria-hidden="true"><span class="is-blue" style="width: 0%"></span></div>
+    </div>
+  `;
+};
+
+const applyCrmLoadingUi = () => {
+  const els = crmConnectedEls();
+  setGrowthCrmState("loading");
+
+  // Replace any server-rendered mock values with neutral placeholders.
+  [
+    els.realizado,
+    els.forecast,
+    els.vendas,
+    els.conversao,
+    els.ticket,
+    els.noshow,
+    els.agendamento,
+    els.funil,
+    els.planTurma,
+    els.planGold,
+    els.planDiamond,
+    els.lastTime,
+    els.lastSub,
+    els.paceDias,
+    els.paceReceitaDia,
+    els.paceAgendamentosDia,
+    els.paceProspeccoesDia,
+  ].forEach((el) => {
+    if (!(el instanceof HTMLElement)) return;
+    el.textContent = "—";
+    setSkeleton(el, true);
+  });
+
+  renderRankingSkeleton();
+};
+
+const applyCrmErrorUi = () => {
+  const els = crmConnectedEls();
+  setGrowthCrmState("error");
+
+  [
+    els.realizado,
+    els.forecast,
+    els.vendas,
+    els.conversao,
+    els.ticket,
+    els.noshow,
+    els.agendamento,
+    els.funil,
+    els.planTurma,
+    els.planGold,
+    els.planDiamond,
+    els.lastTime,
+    els.lastSub,
+    els.paceDias,
+    els.paceReceitaDia,
+    els.paceAgendamentosDia,
+    els.paceProspeccoesDia,
+  ].forEach((el) => {
+    if (!(el instanceof HTMLElement)) return;
+    el.textContent = "—";
+    setSkeleton(el, false);
+  });
+
+  renderRankingError();
+};
+
+const clearCrmLoadingUi = () => {
+  const els = crmConnectedEls();
+  setGrowthCrmState("ready");
+
+  [
+    els.realizado,
+    els.forecast,
+    els.vendas,
+    els.conversao,
+    els.ticket,
+    els.noshow,
+    els.agendamento,
+    els.funil,
+    els.planTurma,
+    els.planGold,
+    els.planDiamond,
+    els.lastTime,
+    els.lastSub,
+    els.paceDias,
+    els.paceReceitaDia,
+    els.paceAgendamentosDia,
+    els.paceProspeccoesDia,
+  ].forEach((el) => setSkeleton(el, false));
+};
+
+const syncGrowthDashboardHeader = () => {
+  const userNameEl = document.querySelector("[data-growth-user-name]");
+  if (userNameEl instanceof HTMLElement) {
+    const name = String(sessionUser?.name || "").trim();
+    userNameEl.textContent = name || "Growth";
+  }
+
+  const userAvatarEl = document.querySelector("[data-growth-avatar]");
+  if (userAvatarEl instanceof HTMLElement) {
+    userAvatarEl.textContent = getInitials(sessionUser?.name || "Growth");
+  }
+
+  const monthLabelEl = document.querySelector("[data-growth-month]");
+  if (monthLabelEl instanceof HTMLElement) {
+    const now = new Date();
+    const formatted = new Intl.DateTimeFormat("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      month: "long",
+      year: "numeric",
+    }).format(now);
+    monthLabelEl.textContent = `Gestão à vista do mês · ${formatted.charAt(0).toUpperCase()}${formatted.slice(1)}`;
+  }
+};
+
+const renderGrowthRanking = (rows) => {
+  const list = document.querySelector("[data-growth-ranking]");
+  if (!(list instanceof HTMLElement)) return;
+
+  const items = Array.isArray(rows) ? rows.filter(Boolean) : [];
+  if (!items.length) {
+    list.innerHTML = `
+      <div class="growth-v2-rank-row" style="padding: 18px 16px; opacity: 0.7;">
+        <div class="growth-v2-rank-pos">—</div>
+        <div class="growth-v2-rank-vendor">
+          <span class="growth-v2-rank-avatar is-blue" aria-hidden="true">--</span>
+          <span class="growth-v2-rank-name">Nenhuma venda no período</span>
+        </div>
+        <div class="growth-v2-rank-sales">0</div>
+        <div class="growth-v2-rank-value">${formatMoneyNoCentsPtBr(0)}</div>
+        <div class="growth-v2-rank-bar" aria-hidden="true"><span class="is-blue" style="width: 0%"></span></div>
+      </div>
+    `;
+    return;
+  }
+
+  const top = items[0];
+  const topValue = Math.max(0, Number(top?.valor) || 0);
+  const metaEl = document.querySelector('[data-growth-kpi="meta"]');
+  const metaValue = metaEl instanceof HTMLElement ? parseMoneyLoose(metaEl.textContent) : NaN;
+  const maxRows = 4;
+  const palette = ["coral", "blue", "green", "yellow"];
+
+  list.innerHTML = "";
+
+  items.slice(0, maxRows).forEach((row, idx) => {
+    const nome = String(row?.nome || "").trim() || "Sem vendedor";
+    const vendas = Math.max(0, Number(row?.vendas) || 0);
+    const valor = Math.max(0, Number(row?.valor) || 0);
+    let width = 0;
+    if (items.length === 1 && Number.isFinite(metaValue) && metaValue > 0) {
+      // With a single vendor, use % of the monthly meta to avoid a misleading 100% bar.
+      width = Math.round(Math.max(0, Math.min(1, valor / metaValue)) * 100);
+    } else {
+      const ratio = topValue > 0 ? Math.max(0, Math.min(1, valor / topValue)) : 0;
+      width = Math.round(ratio * 100);
+    }
+
+    const colorKey = palette[Math.min(idx, palette.length - 1)];
+    const rowClass = idx === 0 ? "growth-v2-rank-row is-top" : "growth-v2-rank-row";
+    const avatarClass = idx === 0 ? "growth-v2-rank-avatar is-coral" : `growth-v2-rank-avatar is-${colorKey}`;
+    const barClass = idx === 0 ? "" : `class="is-${colorKey}"`;
+
+    const el = document.createElement("div");
+    el.className = rowClass;
+    el.innerHTML = `
+      <div class="growth-v2-rank-pos">${idx + 1}</div>
+      <div class="growth-v2-rank-vendor">
+        <span class="${avatarClass}" aria-hidden="true">${getInitialsShort(nome)}</span>
+        <span class="growth-v2-rank-name">${nome}</span>
+      </div>
+      <div class="growth-v2-rank-sales">${vendas}</div>
+      <div class="growth-v2-rank-value">${formatMoneyNoCentsPtBr(valor)}</div>
+      <div class="growth-v2-rank-bar" aria-hidden="true"><span ${barClass} style="width: ${width}%"></span></div>
+    `;
+    list.appendChild(el);
+  });
+};
+
+const applyGrowthMetricsToDom = (payload) => {
+  if (!payload || typeof payload !== "object") return;
+  clearCrmLoadingUi();
+  const summary = payload.summary && typeof payload.summary === "object" ? payload.summary : {};
+
+  const realizadoEl = document.querySelector('[data-growth-kpi="realizado"]');
+  if (realizadoEl instanceof HTMLElement) realizadoEl.textContent = formatMoneyNoCentsPtBr(summary.realizado);
+
+  const forecastEl = document.querySelector('[data-growth-indicator="forecast"]');
+  if (forecastEl instanceof HTMLElement) {
+    const n = Number(summary.forecast);
+    forecastEl.textContent = Number.isFinite(n) && n >= 0 ? formatMoneyNoCentsPtBr(n) : "—";
+  }
+
+  const metaEl = document.querySelector('[data-growth-kpi="meta"]');
+  const metaValue = metaEl instanceof HTMLElement ? parseMoneyLoose(metaEl.textContent) : NaN;
+  if (Number.isFinite(metaValue) && metaValue > 0) {
+    ensureRealizadoProgressUi();
+    updateRealizadoProgressUi({ meta: metaValue, realizado: Number(summary.realizado) });
+  }
+
+  const vendasEl = document.querySelector('[data-growth-indicator="vendas"]');
+  if (vendasEl instanceof HTMLElement) vendasEl.textContent = String(Math.max(0, Number(summary.totalVendas) || 0));
+
+  const conversaoEl = document.querySelector('[data-growth-indicator="conversao"]');
+  if (conversaoEl instanceof HTMLElement) conversaoEl.textContent = formatPercentPtBr(summary.conversao, 1);
+
+  const ticketEl = document.querySelector('[data-growth-indicator="ticket"]');
+  if (ticketEl instanceof HTMLElement) ticketEl.textContent = formatMoneyNoCentsPtBr(summary.ticketMedio);
+
+  const noShowEl = document.querySelector('[data-growth-rate="noshow"]');
+  if (noShowEl instanceof HTMLElement) noShowEl.textContent = formatPercentPtBr(summary.noShowPercent, 1);
+
+  const agendamentoEl = document.querySelector('[data-growth-rate="agendamento"]');
+  if (agendamentoEl instanceof HTMLElement) agendamentoEl.textContent = formatPercentPtBr(summary.taxaAgendamento, 1);
+
+  const funilEl = document.querySelector('[data-growth-rate="funil"]');
+  if (funilEl instanceof HTMLElement) funilEl.textContent = formatPercentPtBr(summary.taxaFunil, 1);
+
+  const planos = payload.planosVendidos && typeof payload.planosVendidos === "object" ? payload.planosVendidos : {};
+  const turmaCount = Math.max(0, Number(planos.turma) || 0);
+  const goldCount = Math.max(0, Number(planos.gold) || 0);
+  const diamondCount = Math.max(0, Number(planos.diamond) || 0);
+
+  const planTurma = document.querySelector('[data-growth-plan="turma"]');
+  if (planTurma instanceof HTMLElement) planTurma.textContent = String(turmaCount);
+  const planGold = document.querySelector('[data-growth-plan="gold"]');
+  if (planGold instanceof HTMLElement) planGold.textContent = String(goldCount);
+  const planDiamond = document.querySelector('[data-growth-plan="diamond"]');
+  if (planDiamond instanceof HTMLElement) planDiamond.textContent = String(diamondCount);
+
+  const pie = document.querySelector("[data-growth-plans-pie]");
+  if (pie instanceof HTMLElement) {
+    pie.style.background = buildPlansPieBackground({ turma: turmaCount, gold: goldCount, diamond: diamondCount });
+  }
+
+  renderGrowthRanking(payload.rankingTime);
+
+  const lastTime = document.querySelector("[data-growth-last-time]");
+  if (lastTime instanceof HTMLElement) {
+    lastTime.textContent = payload?.ultimaVenda?.relativeTime ? String(payload.ultimaVenda.relativeTime) : "—";
+  }
+  const lastSub = document.querySelector("[data-growth-last-sub]");
+  if (lastSub instanceof HTMLElement) {
+    const plan = planLabelForUi(payload?.ultimaVenda?.plano);
+    const value = formatMoneyNoCentsPtBr(payload?.ultimaVenda?.valor);
+    lastSub.textContent = `${plan} · ${value}`;
+  }
+
+  const ritmo = payload.ritmoNecessario && typeof payload.ritmoNecessario === "object" ? payload.ritmoNecessario : null;
+  if (ritmo) {
+    const els = crmConnectedEls();
+    if (els.paceDias instanceof HTMLElement) els.paceDias.textContent = String(Math.max(0, Number(ritmo.diasUteisRestantes) || 0));
+    if (els.paceReceitaDia instanceof HTMLElement)
+      els.paceReceitaDia.textContent = formatMoneyNoCentsPtBr(Number(ritmo.receitaNecessariaDia) || 0);
+    if (els.paceAgendamentosDia instanceof HTMLElement)
+      els.paceAgendamentosDia.textContent = String(Math.max(0, Number(ritmo.agendamentosDia) || 0));
+    if (els.paceProspeccoesDia instanceof HTMLElement)
+      els.paceProspeccoesDia.textContent = String(Math.max(0, Number(ritmo.prospeccoesDia) || 0));
+
+    const critical = ritmo.critical && typeof ritmo.critical === "object" ? ritmo.critical : {};
+    const setCritical = (cardEl, on) => {
+      if (!(cardEl instanceof HTMLElement)) return;
+      cardEl.classList.toggle("is-critical", Boolean(on));
+    };
+    setCritical(els.paceCardDias, Boolean(critical.dias));
+    setCritical(els.paceCardReceita, Boolean(critical.receitaDia));
+    setCritical(els.paceCardAgendamentos, Boolean(critical.agendamentosDia));
+    setCritical(els.paceCardProspeccoes, Boolean(critical.prospeccoesDia));
+  }
+
+  try {
+    const fb = payload?.forecastBreakdown && typeof payload.forecastBreakdown === "object" ? payload.forecastBreakdown : null;
+    if (fb) {
+      const parte1 = Number(fb.parte1_fechado) || 0;
+      const parte2 = Number(fb.parte2_pipeline) || 0;
+      const parte3 = Number(fb.parte3_novosLeads) || 0;
+      const forecastTotal = Number.isFinite(Number(fb.total)) ? Number(fb.total) : Number(summary.forecast) || 0;
+      const dbg = fb.debug && typeof fb.debug === "object" ? fb.debug : {};
+      // eslint-disable-next-line no-console
+      console.log({
+        parte1_fechado: parte1,
+        parte2_pipeline: parte2,
+        parte3_novosLeads: parte3,
+        forecast_total: forecastTotal,
+        diasPassados: Number(dbg.diasPassados) || 0,
+        diasRestantes: Number(dbg.diasRestantes) || 0,
+        mediaDiariaLeads: Number(dbg.mediaDiariaLeads) || 0,
+        novosLeadsEsperados: Number(dbg.novosLeadsEsperados) || 0,
+        dealsPipeline_count: Number(dbg.deals_parte2) || 0,
+      });
+    }
+  } catch (e) {
+    // ignore debug log failures
+  }
+
+  updateForecastMetaSub();
+};
+
+const initGrowthDashboardMetrics = () => {
+  if (!(dashboardRoot instanceof HTMLElement)) return;
+
+  syncGrowthDashboardHeader();
+  adjustGrowthDashboardLayout();
+  ensureRealizadoProgressUi();
+  updateForecastMetaSub();
+
+  applyCrmLoadingUi();
+
+  let swrRefreshTimer = null;
+  let swrRefreshAttempts = 0;
+
+  const loadGoal = async () => {
+    const metaEl = document.querySelector('[data-growth-kpi="meta"]');
+    if (!(metaEl instanceof HTMLElement)) return;
+    try {
+      const res = await fetchWithAuth("/api/growth-dashboard?api=growth-goals&mode=current", {
+        method: "GET",
+        forceRefreshIdToken: true,
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || "request_failed");
+      const goal = data?.goal && typeof data.goal === "object" ? data.goal : null;
+      const valorMeta = goal && Number.isFinite(Number(goal.valorMeta)) ? Number(goal.valorMeta) : NaN;
+      if (!Number.isFinite(valorMeta) || valorMeta <= 0) {
+        metaEl.textContent = "Meta não definida";
+        metaEl.dataset.tone = "muted";
+        return;
+      }
+      metaEl.textContent = formatMoneyNoCentsPtBr(valorMeta);
+      metaEl.dataset.tone = "";
+      ensureRealizadoProgressUi();
+      updateRealizadoProgressUi({ meta: valorMeta, realizado: parseMoneyLoose(document.querySelector('[data-growth-kpi="realizado"]')?.textContent) });
+      updateForecastMetaSub();
+    } catch (error) {
+      // Keep the placeholder meta.
+    }
+  };
+
+  const load = async () => {
+    try {
+      const res = await fetchWithAuth("/api/growth-metrics", { method: "GET" });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || "request_failed");
+      applyGrowthMetricsToDom(data);
+      updateForecastMetaSub();
+
+      // If the API served a stale cached response, re-fetch once shortly after.
+      // This pairs with the backend SWR behavior so the UI updates without the user noticing.
+      if (data && data.stale && swrRefreshAttempts < 2) {
+        swrRefreshAttempts += 1;
+        if (swrRefreshTimer) window.clearTimeout(swrRefreshTimer);
+        swrRefreshTimer = window.setTimeout(() => {
+          load();
+        }, 1200);
+      } else if (data && !data.stale) {
+        swrRefreshAttempts = 0;
+      }
+    } catch (error) {
+      applyCrmErrorUi();
+    }
+  };
+
+  loadGoal();
+  load();
+};
+
 
 const renderSdrDelta = (current, previous, label = "vs. dia anterior") => {
   const diff = Number(current || 0) - Number(previous || 0);
@@ -32783,6 +33414,16 @@ const showPanel = (panelName) => {
     return;
   }
 
+  if (panelName === "growth-dashboard") {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (!isGrowthAccessRole(currentRole)) {
+      navigateApp(roleBasePath(currentRole), { replace: true });
+      return;
+    }
+    initGrowthDashboardMetrics();
+    return;
+  }
+
 	  if (panelName === "growth") {
     window.scrollTo({ top: 0, behavior: "smooth" });
     renderSalesCopilot();
@@ -32907,7 +33548,7 @@ const roleBasePath = (role) => {
   const normalized = normalizeRole(role);
   if (normalized === "teacher") return "/app/professor";
   if (normalized === "admin") return "/app/admin";
-  if (normalized === "growth") return "/growth/dashboard";
+  if (normalized === "growth") return "/app/growth/dashboard";
   if (normalized === "FINANCE") return "/app/financeiro";
   return "/app/aluno";
 };
@@ -32993,8 +33634,8 @@ const panelPathForRole = (role, panel) => {
   }
 
   if (normalized === "growth") {
-    if (p === "dashboard") return "/growth/dashboard";
-    if (p === "activities") return "/app/growth/activities";
+    if (p === "dashboard" || p === "growth-dashboard") return "/app/growth/dashboard";
+    if (p === "activities") return "/app/growth/atividades";
     if (["sdr", "scripts-vendas", "objecoes", "training"].includes(p)) return `/app/growth/${p}`;
     return "/app/growth/sdr";
   }
@@ -33081,9 +33722,10 @@ const parseAppRoute = (path) => {
   }
 
   if (role === "growth") {
+    if (sub === "dashboard" || !sub) return { role, panel: "growth-dashboard" };
     if (sub === "activities" || sub === "atividades") return { role, panel: "activities" };
     if (["sdr", "scripts-vendas", "objecoes", "training"].includes(sub)) return { role, panel: "growth", growthTab: sub };
-    return { role, panel: "growth", growthTab: "sdr" };
+    return { role, panel: "growth-dashboard" };
   }
 
   if (role === "FINANCE") {

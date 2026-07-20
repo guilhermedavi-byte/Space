@@ -35,7 +35,7 @@ const safeJsonForHtml = (value) => {
 
 const roleToBasePath = (role) => {
   const raw = String(role || "").trim().toLowerCase();
-  if (raw === "growth") return "/growth/dashboard";
+  if (raw === "growth") return "/app/growth/dashboard";
   if (raw === "teacher") return "/app/professor";
   if (raw === "admin") return "/app/admin";
   return "/app/aluno";
@@ -2306,6 +2306,11 @@ module.exports = async (req, res) => {
   const page = String(url.searchParams.get("page") || "").trim().toLowerCase();
   const isContracts = page === "contracts" || page === "contratos";
 
+  if (!isContracts) {
+    sendRedirect(res, "/app/growth/dashboard");
+    return;
+  }
+
   const navDashboardClass = isContracts ? "sidebar-link" : "sidebar-link is-active";
   const pageTitle = isContracts ? "Space | Contratos" : "Space | Growth";
 
@@ -2716,7 +2721,7 @@ module.exports = async (req, res) => {
         </div>
 
         <nav class="sidebar-nav" aria-label="Seções Growth">
-          <a class="${navDashboardClass}" href="/growth/dashboard" title="Dashboard">
+          <a class="${navDashboardClass}" href="/app/growth/dashboard" title="Dashboard">
             <span class="sidebar-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none">
                 <rect x="3.5" y="3.5" width="7" height="7" rx="1.5"></rect>

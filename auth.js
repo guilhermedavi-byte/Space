@@ -44,7 +44,7 @@ const normalizeRole = (value) => {
 const roleBasePath = (role) => {
   const normalized = normalizeRole(role);
   if (normalized === "FINANCE") return "/app/financeiro";
-  if (normalized === "growth") return "/growth/dashboard";
+  if (normalized === "growth") return "/app/growth/dashboard";
   if (normalized === "teacher") return "/app/professor";
   if (normalized === "admin") return "/app/admin";
   return "/app/aluno";
