@@ -2474,132 +2474,28 @@
             <header class="sales-copilot-top">
               <div>
                 <div class="sales-copilot-kicker">Growth / Comercial</div>
-                <h2 class="sales-copilot-title">Space Sales Copilot</h2>
-                <p class="sales-copilot-subtitle">Suporte em tempo real para calls de venda, baseado no playbook oficial da Space.</p>
+                <h2 class="sales-copilot-title">Space SDR</h2>
+                <p class="sales-copilot-subtitle">Operação SDR, scripts, objeções e treinamento comercial.</p>
               </div>
               <div class="sales-copilot-status" data-copilot-status>Parado</div>
             </header>
 
             <nav class="sales-copilot-tabs" aria-label="Growth Comercial">
-              <button class="sales-copilot-tab" type="button" data-growth-copilot-tab="sdr">SDR</button>
-              <button class="sales-copilot-tab is-active" type="button" data-growth-copilot-tab="copilot-vendas">Copilot</button>
+              <button class="sales-copilot-tab is-active" type="button" data-growth-copilot-tab="sdr">SDR</button>
               <button class="sales-copilot-tab" type="button" data-growth-copilot-tab="scripts-vendas">Scripts</button>
               <button class="sales-copilot-tab" type="button" data-growth-copilot-tab="objecoes">Objeções</button>
-              <button class="sales-copilot-tab" type="button" data-growth-copilot-tab="planos">Planos</button>
-              <button class="sales-copilot-tab" type="button" data-growth-copilot-tab="personas">Personas</button>
-              <button class="sales-copilot-tab" type="button" data-growth-copilot-tab="frases-vencedoras">Frases vencedoras</button>
-              <button class="sales-copilot-tab" type="button" data-growth-copilot-tab="analytics">Analytics</button>
               <button class="sales-copilot-tab" type="button" data-growth-copilot-tab="training">Treinamento</button>
-              <button class="sales-copilot-tab" type="button" data-growth-copilot-tab="equipe" data-admin-only>Equipe Growth</button>
             </nav>
 
-            <section class="sales-copilot-view" data-growth-copilot-view="sdr" hidden>
+            <section class="sales-copilot-view is-active" data-growth-copilot-view="sdr">
               <div class="sdr-panel" data-sdr-panel>
                 <div class="sdr-loading">Carregando painel SDR…</div>
               </div>
             </section>
 
-            <section class="sales-copilot-view is-active" data-growth-copilot-view="copilot-vendas">
-              <div class="sales-copilot-layout">
-                <aside class="sales-copilot-card sales-copilot-context">
-                  <div class="sales-copilot-card-head">
-                    <strong>Contexto da call</strong>
-                    <span>Usado nas sugestões</span>
-                  </div>
-                  <div class="sales-copilot-form">
-                    <label><span>Nome do lead</span><input class="modal-input" data-copilot-context="leadName" /></label>
-                    <label><span>Telefone</span><input class="modal-input" data-copilot-context="phone" /></label>
-                    <label><span>Closer</span><input class="modal-input" data-copilot-context="closer" /></label>
-                    <label><span>Origem</span><input class="modal-input" data-copilot-context="source" placeholder="Instagram, indicação..." /></label>
-                    <label><span>Objetivo</span><input class="modal-input" data-copilot-context="goal" /></label>
-                    <label><span>Dor principal</span><input class="modal-input" data-copilot-context="pain" /></label>
-                    <label><span>Nível declarado</span><input class="modal-input" data-copilot-context="level" /></label>
-                    <label><span>Urgência</span><input class="modal-input" data-copilot-context="urgency" /></label>
-                    <label><span>Orçamento</span><input class="modal-input" data-copilot-context="budget" /></label>
-                    <label><span>Plano de interesse</span><input class="modal-input" data-copilot-context="planInterest" /></label>
-                    <label class="sales-copilot-wide"><span>Observações</span><textarea class="modal-input" rows="3" data-copilot-context="notes"></textarea></label>
-                  </div>
-                </aside>
-
-                <main class="sales-copilot-main">
-                  <section class="sales-copilot-card">
-                    <div class="sales-copilot-actions">
-                      <button class="button button-solid button-small" type="button" data-copilot-start>Iniciar</button>
-                      <button class="button button-outline button-small" type="button" data-copilot-pause>Pausar</button>
-                      <button class="button button-outline button-small" type="button" data-copilot-end>Encerrar call</button>
-                      <button class="button button-outline button-small" type="button" data-copilot-suggest>Gerar sugestão agora</button>
-                      <button class="button button-outline button-small" type="button" data-copilot-summary>Gerar resumo da call</button>
-                      <button class="button button-outline button-small" type="button" data-copilot-extension-token>Conectar extensão</button>
-                      <button class="button button-outline button-small" type="button" data-copilot-save-insight>Salvar insight da call</button>
-                    </div>
-                    <div class="sales-copilot-mode">
-                      <button class="sales-copilot-mode-btn is-active" type="button" data-copilot-mode="free">Playbook livre</button>
-                      <button class="sales-copilot-mode-btn" type="button" data-copilot-mode="strict">Playbook strict</button>
-                    </div>
-                    <div class="sales-copilot-stage">
-                      <span>Etapa atual</span>
-                      <strong data-copilot-stage>abertura</strong>
-                    </div>
-                    <div class="sales-copilot-temperature">
-                      <span>Temperatura</span>
-                      <strong data-copilot-temperature>Frio</strong>
-                      <small data-copilot-temperature-reason>Aguardando sinais da conversa.</small>
-                    </div>
-                    <p class="sales-copilot-consent">Use apenas em calls autorizadas e com ciência dos participantes quando necessário.</p>
-                  </section>
-
-                  <section class="sales-copilot-card">
-                    <div class="sales-copilot-card-head">
-                      <strong>Sugestões em tempo quase real</strong>
-                      <span data-copilot-suggestions-meta>Pronto para ajudar</span>
-                    </div>
-                    <div class="sales-copilot-suggestions" data-copilot-suggestions>
-                      <div class="sales-copilot-empty">Inicie a escuta ou cole um trecho para receber sugestões.</div>
-                    </div>
-                  </section>
-
-                  <section class="sales-copilot-card">
-                    <div class="sales-copilot-card-head">
-                      <strong>Resumo parcial ao vivo</strong>
-                      <span data-copilot-signals>Sem sinais ainda</span>
-                    </div>
-                    <div class="sales-copilot-live-summary" data-copilot-live-summary>
-                      <div><span>Dor</span><strong>—</strong></div>
-                      <div><span>Objetivo</span><strong>—</strong></div>
-                      <div><span>Urgência</span><strong>—</strong></div>
-                      <div><span>Objeções</span><strong>—</strong></div>
-                      <div><span>Próximo passo</span><strong>—</strong></div>
-                    </div>
-                  </section>
-
-                  <section class="sales-copilot-card">
-                    <div class="sales-copilot-card-head">
-                      <strong>Transcrição</strong>
-                      <span>Microfone do navegador ou modo manual</span>
-                    </div>
-                    <div class="sales-copilot-transcript" data-copilot-transcript>Sem transcrição ainda.</div>
-                    <textarea class="modal-input sales-copilot-manual" rows="4" placeholder="Cole aqui um trecho da conversa se o navegador não suportar transcrição automática..." data-copilot-manual></textarea>
-                    <div class="sales-copilot-actions">
-                      <button class="admin-student-file-btn" type="button" data-copilot-manual-suggest>Gerar sugestão</button>
-                      <button class="admin-student-file-btn" type="button" data-copilot-clear>Limpar transcrição</button>
-                      <button class="admin-student-file-btn" type="button" data-copilot-copy-transcript>Copiar transcrição</button>
-                    </div>
-                  </section>
-
-                  <section class="sales-copilot-card" data-copilot-summary-box hidden>
-                    <div class="sales-copilot-card-head">
-                      <strong>Resumo da call</strong>
-                      <span>Pós-call / CRM</span>
-                    </div>
-                    <div class="sales-copilot-summary" data-copilot-summary-output></div>
-                  </section>
-                </main>
-              </div>
-            </section>
-
             <section class="sales-copilot-view" data-growth-copilot-view="scripts-vendas" hidden>
               <div class="sales-copilot-crud-head">
-                <div><strong>Scripts de vendas</strong><span>Blocos usados como base pelo Copilot</span></div>
+                <div><strong>Scripts de vendas</strong><span>Blocos usados pelo time comercial</span></div>
                 <button class="button button-solid button-small" type="button" data-copilot-new-script>Novo bloco</button>
               </div>
               <div class="sales-copilot-crud-list" data-copilot-scripts-list></div>
@@ -2613,38 +2509,6 @@
               <div class="sales-copilot-crud-list" data-copilot-objections-list></div>
             </section>
 
-            <section class="sales-copilot-view" data-growth-copilot-view="planos" hidden>
-              <div class="sales-copilot-crud-head">
-                <div><strong>Planos oficiais</strong><span>Turma, Gold e Diamond usados na recomendação</span></div>
-                <button class="button button-solid button-small" type="button" data-copilot-new-plan>Novo plano</button>
-              </div>
-              <div class="sales-copilot-crud-list sales-copilot-grid-list" data-copilot-plans-list></div>
-            </section>
-
-            <section class="sales-copilot-view" data-growth-copilot-view="personas" hidden>
-              <div class="sales-copilot-crud-head">
-                <div><strong>Personas oficiais</strong><span>Perfis usados para orientar diagnóstico e recomendação</span></div>
-                <button class="button button-solid button-small" type="button" data-copilot-new-persona>Nova persona</button>
-              </div>
-              <div class="sales-copilot-crud-list sales-copilot-grid-list" data-copilot-personas-list></div>
-            </section>
-
-            <section class="sales-copilot-view" data-growth-copilot-view="frases-vencedoras" hidden>
-              <div class="sales-copilot-crud-head">
-                <div><strong>Frases vencedoras</strong><span>Frases salvas pelo time comercial</span></div>
-                <button class="button button-solid button-small" type="button" data-copilot-new-phrase>Nova frase</button>
-              </div>
-              <div class="sales-copilot-crud-list" data-copilot-phrases-list></div>
-            </section>
-
-            <section class="sales-copilot-view" data-growth-copilot-view="analytics" hidden>
-              <div class="sales-copilot-crud-head">
-                <div><strong>Analytics do Copilot</strong><span>Métricas reais de uso, feedback e temperatura</span></div>
-                <button class="button button-outline button-small" type="button" data-copilot-refresh-analytics>Atualizar</button>
-              </div>
-              <div class="sales-copilot-analytics-grid" data-copilot-analytics></div>
-            </section>
-
             <section class="sales-copilot-view" data-growth-copilot-view="training" hidden>
               <div class="sales-copilot-crud-head">
                 <div><strong>Treinamento da IA</strong><span>Aprovar frases, revisar ruins e transformar insights em playbook</span></div>
@@ -2653,48 +2517,6 @@
               <div class="sales-copilot-crud-list" data-copilot-training-list></div>
             </section>
 
-            <section class="sales-copilot-view" data-growth-copilot-view="equipe" hidden>
-              <div class="admin-manage-head">
-                <h2 class="admin-manage-title">Growth</h2>
-              <div class="admin-manage-actions">
-                <button class="button button-outline button-small" type="button" data-admin-growth-goal-open>
-                  Definir meta do mês
-                </button>
-                <button class="button button-solid button-small" type="button" data-admin-new-user="growth">
-                  + Adicionar usuário
-                </button>
-              </div>
-            </div>
-
-            <div class="admin-manage-tools">
-              <input
-                class="admin-search"
-                type="search"
-                inputmode="search"
-                placeholder="Buscar por nome ou e-mail"
-                data-admin-search="growth"
-              />
-              <div class="admin-manage-status" data-admin-manage-status="growth" aria-live="polite"></div>
-            </div>
-
-            <article class="surface-card admin-users-card" aria-label="Lista de usuários Growth">
-              <div class="admin-users-table" data-admin-users-table="growth"></div>
-              <div class="admin-users-empty" data-admin-users-empty="growth" hidden>Nenhum usuário Growth encontrado.</div>
-              <div class="admin-users-error" data-admin-users-error="growth" hidden>Não foi possível carregar os usuários Growth.</div>
-            </article>
-
-            <article class="surface-card admin-goals-card" aria-label="Metas mensais do Growth">
-              <div class="admin-goals-head">
-                <div>
-                  <div class="admin-goals-title">Metas mensais</div>
-                  <div class="admin-goals-sub">Uma meta por competência (mês/ano). Atualize o mês atual ou programe meses futuros.</div>
-                </div>
-              </div>
-              <div class="admin-goals-table" data-admin-goals-table></div>
-              <div class="admin-goals-empty" data-admin-goals-empty hidden>Nenhuma meta cadastrada.</div>
-              <div class="admin-goals-error" data-admin-goals-error hidden>Não foi possível carregar as metas.</div>
-            </article>
-            </section>
           </div>
         </section>
 

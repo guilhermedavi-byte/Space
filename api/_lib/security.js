@@ -60,7 +60,7 @@ const applyCors = (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", safeOrigin);
   res.setHeader("Vary", "Origin");
   res.setHeader("Access-Control-Allow-Credentials", "true");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Copilot-Token");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
 };
 
