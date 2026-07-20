@@ -932,7 +932,7 @@ const syncRoleUI = () => {
     if (growthLink instanceof HTMLElement) {
       growthLink.hidden = false;
       const text = growthLink.querySelector(".sidebar-text");
-      if (text instanceof HTMLElement) text.textContent = "Copilot de Vendas";
+      if (text instanceof HTMLElement) text.textContent = "SDR / Growth";
     }
   }
 
@@ -14141,6 +14141,14 @@ const salesCopilotState = {
 };
 let salesCopilotSuggestTimer = null;
 
+const sdrPanelState = {
+  isLoading: false,
+  loadedAt: 0,
+  error: "",
+  activeTab: "hoje",
+  data: null,
+};
+
 const salesCopilotResources = [
   ["scripts", "scripts"],
   ["objections", "objections"],
@@ -14191,6 +14199,307 @@ const renderSalesCopilotTabs = () => {
     view.hidden = !active;
     view.classList.toggle("is-active", active);
   });
+};
+
+const formatSdrPct = (value, digits = 0) => `${(Number(value) || 0).toLocaleString("pt-BR", { maximumFractionDigits: digits, minimumFractionDigits: digits })}%`;
+
+const formatSdrDate = (dateKey) => {
+  if (!isValidDateKey(dateKey)) return "—";
+  const date = parseDateKey(dateKey);
+  return date instanceof Date && !Number.isNaN(date.getTime()) ? date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : dateKey;
+};
+
+const getSdrStats = (events = []) => {
+  const calls = (Array.isArray(events) ? events : []).filter((event) => event?.eventType === "call");
+  const meetings = (Array.isArray(events) ? events : []).filter((event) => event?.eventType === "meeting");
+  const totalCalls = calls.length;
+  const answered = calls.filter((event) => ["atendeu", "agendou", "double"].includes(String(event?.outcome || ""))).length;
+  const scheduled = calls.filter((event) => ["agendou", "double"].includes(String(event?.outcome || ""))).length;
+  const double = calls.filter((event) => String(event?.outcome || "") === "double").length;
+  const shows = meetings.filter((event) => String(event?.outcome || "") === "show").length;
+  const noShows = meetings.filter((event) => String(event?.outcome || "") === "noshow").length;
+  return {
+    totalCalls,
+    answered,
+    scheduled,
+    double,
+    shows,
+    noShows,
+    totalMeetings: shows + noShows,
+    answerRate: totalCalls ? (answered / totalCalls) * 100 : 0,
+    scheduleRate: answered ? (scheduled / answered) * 100 : 0,
+    callToScheduleRate: totalCalls ? (scheduled / totalCalls) * 100 : 0,
+    showRate: shows + noShows ? (shows / (shows + noShows)) * 100 : 0,
+  };
+};
+
+const getSdrTodayEvents = () => {
+  const data = sdrPanelState.data || {};
+  const todayKey = String(data.todayKey || createDateKey(new Date())).trim();
+  return (Array.isArray(data.events) ? data.events : []).filter((event) => String(event?.dateKey || "") === todayKey);
+};
+
+const getSdrReferenceDay = () => {
+  const data = sdrPanelState.data || {};
+  const todayKey = String(data.todayKey || createDateKey(new Date())).trim();
+  return (Array.isArray(data.days) ? data.days : [])
+    .filter((day) => String(day?.dateKey || "") < todayKey)
+    .sort((a, b) => String(b?.dateKey || "").localeCompare(String(a?.dateKey || "")))[0] || null;
+};
+
+const renderSdrStatCard = (label, value, tone = "") => `
+  <article class="sdr-stat ${tone ? `is-${escapeHtml(tone)}` : ""}">
+    <strong>${escapeHtml(String(value ?? "—"))}</strong>
+    <span>${escapeHtml(label)}</span>
+  </article>
+`;
+
+const renderSdrHoje = () => {
+  const events = getSdrTodayEvents();
+  const stats = getSdrStats(events);
+  const calls = events.filter((event) => event.eventType === "call");
+  const meetings = events.filter((event) => event.eventType === "meeting");
+  const referenceDay = getSdrReferenceDay();
+  const metaShows = Math.ceil(Number(referenceDay?.scheduled || 0) * 0.6);
+  const progress = metaShows > 0 ? Math.min((stats.shows / metaShows) * 100, 100) : 0;
+  const labels = {
+    nao_atendeu: "Não atendeu",
+    atendeu: "Atendeu, não agendou",
+    agendou: "Atendeu e agendou",
+    double: "Fechamento duplo",
+  };
+  return `
+    <section class="sdr-grid sdr-grid-3">
+      ${renderSdrStatCard("Ligações", stats.totalCalls)}
+      ${renderSdrStatCard("Atendidas", stats.answered, "blue")}
+      ${renderSdrStatCard("Agendadas", stats.scheduled, "green")}
+    </section>
+    <section class="sdr-rate-row">
+      <span><b>${escapeHtml(formatSdrPct(stats.answerRate))}</b> tx. atendimento</span>
+      <span><b>${escapeHtml(formatSdrPct(stats.scheduleRate))}</b> atend.→agenda</span>
+      <span><b>${escapeHtml(formatSdrPct(stats.callToScheduleRate, 1))}</b> lig.→agenda</span>
+    </section>
+    <section class="sdr-card">
+      <div class="sdr-section-title">Registrar ligação</div>
+      <div class="sdr-actions">
+        <button class="sdr-action is-no" type="button" data-sdr-call="nao_atendeu">Não atendeu <span>+1 ligação</span></button>
+        <button class="sdr-action is-yes" type="button" data-sdr-call="atendeu">Atendeu, não agendou <span>+1 ligação</span></button>
+        <button class="sdr-action is-scheduled" type="button" data-sdr-call="agendou">Atendeu e agendou <span>+1 agenda</span></button>
+        <button class="sdr-action is-double" type="button" data-sdr-call="double">Fechamento duplo <span>+1 agenda</span></button>
+      </div>
+      ${calls.length ? `<button class="sdr-undo" type="button" data-sdr-undo="call">↩ desfazer última ligação</button>` : ""}
+    </section>
+    <section class="sdr-card">
+      <div class="sdr-section-title">Reuniões de hoje</div>
+      <div class="sdr-meeting-head">
+        <span>Show rate</span>
+        <strong>${stats.totalMeetings ? escapeHtml(formatSdrPct(stats.showRate)) : "—"}</strong>
+      </div>
+      <p class="sdr-muted">${
+        referenceDay
+          ? `Ref. ${escapeHtml(formatSdrDate(referenceDay.dateKey))}: ${escapeHtml(String(referenceDay.scheduled || 0))} agendados · meta ${escapeHtml(String(metaShows))} shows (60%)`
+          : "Lance o dia anterior no Histórico para calcular a meta."
+      }</p>
+      <div class="sdr-grid sdr-grid-3">
+        ${renderSdrStatCard("compareceu", stats.shows, "green")}
+        ${renderSdrStatCard("no-show", stats.noShows, "red")}
+        ${renderSdrStatCard("meta", metaShows || "—")}
+      </div>
+      ${metaShows > 0 ? `<div class="sdr-bar"><span style="width:${escapeHtml(String(progress))}%"></span></div>` : ""}
+      <div class="sdr-actions sdr-actions-2">
+        <button class="sdr-action is-scheduled" type="button" data-sdr-meeting="show">Compareceu <span>+1</span></button>
+        <button class="sdr-action is-no" type="button" data-sdr-meeting="noshow">No-show <span>+1</span></button>
+      </div>
+      ${meetings.length ? `<button class="sdr-undo" type="button" data-sdr-undo="meeting">↩ desfazer última reunião</button>` : ""}
+    </section>
+    <section class="sdr-card">
+      <div class="sdr-section-title">Últimas ligações</div>
+      <div class="sdr-feed">
+        ${
+          calls
+            .slice()
+            .reverse()
+            .slice(0, 10)
+            .map(
+              (call) => `
+                <div class="sdr-feed-item">
+                  <i class="sdr-dot is-${escapeHtml(String(call.outcome || ""))}"></i>
+                  <span>${escapeHtml(labels[call.outcome] || call.outcome || "Ligação")}</span>
+                  <em>${escapeHtml(new Date(call.time || call.createdAt || Date.now()).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }))}</em>
+                </div>
+              `
+            )
+            .join("") || `<div class="sdr-empty">Nenhuma ligação registrada ainda.</div>`
+        }
+      </div>
+    </section>
+  `;
+};
+
+const renderSdrHistorico = () => {
+  const days = Array.isArray(sdrPanelState.data?.days) ? sdrPanelState.data.days : [];
+  const todayKey = String(sdrPanelState.data?.todayKey || createDateKey(new Date())).trim();
+  const last7Key = addDaysToDateKey(todayKey, -6);
+  const last30Key = addDaysToDateKey(todayKey, -29);
+  const aggregate = (rows) => {
+    const total = rows.reduce(
+      (acc, row) => ({
+        totalCalls: acc.totalCalls + Number(row.totalCalls || 0),
+        answered: acc.answered + Number(row.answered || 0),
+        scheduled: acc.scheduled + Number(row.scheduled || 0),
+        shows: acc.shows + Number(row.shows || 0),
+        noShows: acc.noShows + Number(row.noShows || 0),
+      }),
+      { totalCalls: 0, answered: 0, scheduled: 0, shows: 0, noShows: 0 }
+    );
+    const dayCount = Math.max(rows.length, 1);
+    return {
+      ...total,
+      days: rows.length,
+      avgCalls: total.totalCalls / dayCount,
+      avgScheduled: total.scheduled / dayCount,
+      answerRate: total.totalCalls ? (total.answered / total.totalCalls) * 100 : 0,
+      callToScheduleRate: total.totalCalls ? (total.scheduled / total.totalCalls) * 100 : 0,
+    };
+  };
+  const week = aggregate(days.filter((day) => String(day.dateKey || "") >= last7Key));
+  const month = aggregate(days.filter((day) => String(day.dateKey || "") >= last30Key));
+  return `
+    <section class="sdr-card">
+      <div class="sdr-section-title">Médias</div>
+      ${[
+        ["Últimos 7 dias", week],
+        ["Últimos 30 dias", month],
+      ]
+        .map(
+          ([label, row]) => `
+            <article class="sdr-day">
+              <div><strong>${escapeHtml(label)}</strong><span>${escapeHtml(String(row.days))} dia(s)</span></div>
+              <p><b>${escapeHtml(row.avgCalls.toFixed(1))}</b> lig./dia · <b>${escapeHtml(row.avgScheduled.toFixed(1))}</b> agenda/dia · <b>${escapeHtml(formatSdrPct(row.answerRate))}</b> atend. · <b>${escapeHtml(formatSdrPct(row.callToScheduleRate, 1))}</b> lig→agenda</p>
+            </article>
+          `
+        )
+        .join("")}
+    </section>
+    <section class="sdr-card">
+      <div class="sdr-section-title">Dias registrados</div>
+      ${
+        days
+          .map(
+            (day) => `
+              <article class="sdr-day">
+                <div><strong>${escapeHtml(formatSdrDate(day.dateKey))}${day.dateKey === todayKey ? " 📍" : ""}</strong><span>${day.totalMeetings ? `${escapeHtml(formatSdrPct(day.showRate))} show` : ""}</span></div>
+                <p><b>${escapeHtml(String(day.totalCalls || 0))}</b> ligações · <b>${escapeHtml(String(day.answered || 0))}</b> atendidas · <b>${escapeHtml(String(day.scheduled || 0))}</b> agendadas · <b>${escapeHtml(formatSdrPct(day.answerRate))}</b> atend.</p>
+              </article>
+            `
+          )
+          .join("") || `<div class="sdr-empty">Nenhum dia registrado ainda.</div>`
+      }
+    </section>
+    <section class="sdr-card">
+      <div class="sdr-section-title">Lançar dia anterior</div>
+      <div class="sdr-manual-grid">
+        <label>Data<input type="date" data-sdr-manual="date" value="${escapeHtml(todayKey)}"></label>
+        <label>Total de ligações<input type="number" min="0" inputmode="numeric" data-sdr-manual="total"></label>
+        <label>Atenderam<input type="number" min="0" inputmode="numeric" data-sdr-manual="answered"></label>
+        <label>Agendaram<input type="number" min="0" inputmode="numeric" data-sdr-manual="scheduled"></label>
+      </div>
+      <button class="sdr-submit" type="button" data-sdr-manual-save>Salvar no histórico</button>
+    </section>
+  `;
+};
+
+const renderSdrEquipe = () => {
+  const rows = Array.isArray(sdrPanelState.data?.team) ? sdrPanelState.data.team : [];
+  return `
+    <section class="sdr-card">
+      <div class="sdr-section-title">Ranking do time</div>
+      <div class="sdr-team-list">
+        ${
+          rows
+            .map(
+              (row, index) => `
+                <article class="sdr-team-row">
+                  <div class="sdr-rank">${index + 1}</div>
+                  <div class="sdr-team-person">
+                    <strong>${escapeHtml(row.nome || "SDR")}</strong>
+                    <span>${escapeHtml(row.email || "")}</span>
+                  </div>
+                  <div><b>${escapeHtml(String(row.today?.scheduled || 0))}</b><span>agendas hoje</span></div>
+                  <div><b>${escapeHtml(String(row.today?.totalCalls || 0))}</b><span>ligações hoje</span></div>
+                  <div><b>${escapeHtml(formatSdrPct(row.today?.answerRate || 0))}</b><span>lig→atendeu</span></div>
+                  <div><b>${escapeHtml(formatSdrPct(row.today?.scheduleRate || 0))}</b><span>atend→agendou</span></div>
+                  <div><b>${escapeHtml(String(row.week?.scheduled || 0))}</b><span>agendas 7d</span></div>
+                </article>
+              `
+            )
+            .join("") || `<div class="sdr-empty">Nenhum usuário Growth encontrado.</div>`
+        }
+      </div>
+    </section>
+  `;
+};
+
+const renderSdrPanel = () => {
+  const root = document.querySelector("[data-sdr-panel]");
+  if (!(root instanceof HTMLElement)) return;
+  const tab = sdrPanelState.activeTab === "historico" ? "historico" : sdrPanelState.activeTab === "equipe" ? "equipe" : "hoje";
+  const error = String(sdrPanelState.error || "").trim();
+  root.innerHTML = `
+    <header class="sdr-head">
+      <div>
+        <div class="sdr-kicker">Growth / SDR</div>
+        <h2>Controle de ligações</h2>
+        <p>Prospecção diária, reuniões e ranking transparente do time.</p>
+      </div>
+      <button class="button button-outline button-small" type="button" data-sdr-refresh ${sdrPanelState.isLoading ? "disabled" : ""}>Atualizar</button>
+    </header>
+    <nav class="sdr-tabs" aria-label="Painel SDR">
+      <button type="button" data-sdr-tab="hoje" class="${tab === "hoje" ? "is-active" : ""}">Hoje</button>
+      <button type="button" data-sdr-tab="historico" class="${tab === "historico" ? "is-active" : ""}">Histórico</button>
+      <button type="button" data-sdr-tab="equipe" class="${tab === "equipe" ? "is-active" : ""}">Equipe</button>
+    </nav>
+    ${error ? `<div class="sdr-error">${escapeHtml(error)}</div>` : ""}
+    ${sdrPanelState.isLoading && !sdrPanelState.data ? `<div class="sdr-loading">Carregando painel SDR…</div>` : ""}
+    ${sdrPanelState.data ? (tab === "historico" ? renderSdrHistorico() : tab === "equipe" ? renderSdrEquipe() : renderSdrHoje()) : ""}
+  `;
+};
+
+const loadSdrPanelData = async ({ force = false } = {}) => {
+  if (!isGrowthAccessRole(currentRole) || sdrPanelState.isLoading) return;
+  const now = Date.now();
+  if (!force && sdrPanelState.data && now - Number(sdrPanelState.loadedAt || 0) < 45_000) {
+    renderSdrPanel();
+    return;
+  }
+  sdrPanelState.isLoading = true;
+  sdrPanelState.error = "";
+  renderSdrPanel();
+  try {
+    const res = await fetchWithAuth("/api/sdr-metrics?days=30", { method: "GET" });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.message || data?.error || "sdr_load_failed");
+    sdrPanelState.data = data;
+    sdrPanelState.loadedAt = Date.now();
+  } catch (error) {
+    console.error("[sdr] load failed:", error);
+    sdrPanelState.error = error?.message || "Não foi possível carregar o painel SDR.";
+  } finally {
+    sdrPanelState.isLoading = false;
+    renderSdrPanel();
+  }
+};
+
+const postSdrAction = async (payload = {}) => {
+  const res = await fetchWithAuth("/api/sdr-metrics", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(data?.message || data?.errorDetail || data?.error || "sdr_write_failed");
+  sdrPanelState.loadedAt = 0;
+  await loadSdrPanelData({ force: true });
 };
 
 const renderSalesCopilotSession = () => {
@@ -14404,6 +14713,7 @@ const renderSalesCopilotCrud = () => {
 
 const renderSalesCopilot = () => {
   renderSalesCopilotTabs();
+  renderSdrPanel();
   renderSalesCopilotSession();
   renderSalesCopilotTranscript();
   renderSalesCopilotCards();
@@ -32653,6 +32963,7 @@ const showPanel = (panelName) => {
     window.scrollTo({ top: 0, behavior: "smooth" });
     renderSalesCopilot();
     loadSalesCopilotData().catch((error) => console.error("[growth copilot] initial load failed:", error));
+    if (salesCopilotState.activeTab === "sdr") loadSdrPanelData({ force: false }).catch((error) => console.error("[sdr] initial load failed:", error));
     if (salesCopilotState.activeTab === "analytics") loadSalesCopilotAnalytics().catch((error) => console.error("[growth copilot] analytics failed", error));
     if (salesCopilotState.activeTab === "training") loadSalesCopilotTraining().catch((error) => console.error("[growth copilot] training failed", error));
     if (currentRole === "admin") {
@@ -32763,7 +33074,7 @@ const roleBasePath = (role) => {
   const normalized = normalizeRole(role);
   if (normalized === "teacher") return "/app/professor";
   if (normalized === "admin") return "/app/admin";
-  if (normalized === "growth") return "/growth/dashboard";
+  if (normalized === "growth") return "/app/growth/sdr";
   if (normalized === "FINANCE") return "/app/financeiro";
   return "/app/aluno";
 };
@@ -32831,7 +33142,7 @@ const panelPathForRole = (role, panel) => {
 
   if (normalized === "admin") {
     if (p === "activities") return "/app/admin/atividades";
-    if (["copilot-vendas", "scripts-vendas", "objecoes", "planos", "personas", "frases-vencedoras", "analytics", "training"].includes(p)) return `/app/admin/growth/${p}`;
+    if (["sdr", "copilot-vendas", "scripts-vendas", "objecoes", "planos", "personas", "frases-vencedoras", "analytics", "training"].includes(p)) return `/app/admin/growth/${p}`;
     if (p === "professores" || p === "alunos") return adminPedagogicoPathForState();
     if (p === "admin-controle-pedagogico") return adminPedagogicoPathForState();
     if (["admin-controle-pedagogico-aulas", "admin-controle-pedagogico-pessoas", "admin-controle-pedagogico-retencao", "admin-controle-pedagogico-reposicoes", "admin-controle-pedagogico-qualidade", "admin-controle-pedagogico-onboarding", "admin-controle-pedagogico-relatorios"].includes(p)) return adminPedagogicoPathForState();
@@ -32849,8 +33160,8 @@ const panelPathForRole = (role, panel) => {
 
   if (normalized === "growth") {
     if (p === "activities") return "/app/growth/activities";
-    if (["scripts-vendas", "objecoes", "planos", "personas", "frases-vencedoras", "analytics", "training"].includes(p)) return `/app/growth/${p}`;
-    return "/app/growth/copilot-vendas";
+    if (["sdr", "scripts-vendas", "objecoes", "planos", "personas", "frases-vencedoras", "analytics", "training"].includes(p)) return `/app/growth/${p}`;
+    return "/app/growth/sdr";
   }
 
   if (normalized === "FINANCE") {
@@ -32926,7 +33237,7 @@ const parseAppRoute = (path) => {
       const financeTab = FINANCE_URL_TO_TAB[String(query.get("aba") || "").trim()] || "overview";
       return { role, panel: "financeiro", financeTab };
     }
-    if (sub === "growth") return { role, panel: "growth", growthTab: ["copilot-vendas", "scripts-vendas", "objecoes", "planos", "personas", "frases-vencedoras", "analytics", "training"].includes(detail) ? detail : "copilot-vendas" };
+    if (sub === "growth") return { role, panel: "growth", growthTab: ["sdr", "copilot-vendas", "scripts-vendas", "objecoes", "planos", "personas", "frases-vencedoras", "analytics", "training"].includes(detail) ? detail : "copilot-vendas" };
     if (sub === "ao-vivo") return { role, panel: "ao-vivo" };
     if (sub === "gravadas") return { role, panel: "gravadas" };
     if (sub === "materiais") return { role, panel: "materiais" };
@@ -32935,8 +33246,8 @@ const parseAppRoute = (path) => {
 
   if (role === "growth") {
     if (sub === "activities" || sub === "atividades") return { role, panel: "activities" };
-    if (["scripts-vendas", "objecoes", "planos", "personas", "frases-vencedoras", "analytics", "training"].includes(sub)) return { role, panel: "growth", growthTab: sub };
-    return { role, panel: "growth", growthTab: "copilot-vendas" };
+    if (["sdr", "scripts-vendas", "objecoes", "planos", "personas", "frases-vencedoras", "analytics", "training"].includes(sub)) return { role, panel: "growth", growthTab: sub };
+    return { role, panel: "growth", growthTab: "sdr" };
   }
 
   if (role === "FINANCE") {
@@ -33136,11 +33447,83 @@ document.addEventListener("click", (event) => {
     const next = String(tab.getAttribute("data-growth-copilot-tab") || "copilot-vendas");
     salesCopilotState.activeTab = next;
     renderSalesCopilot();
-    if (["copilot-vendas", "scripts-vendas", "objecoes", "planos", "personas", "frases-vencedoras", "analytics", "training"].includes(next)) {
+    if (["sdr", "copilot-vendas", "scripts-vendas", "objecoes", "planos", "personas", "frases-vencedoras", "analytics", "training"].includes(next)) {
       navigateApp(panelPathForRole(currentRole, next), { replace: false });
     }
+    if (next === "sdr") loadSdrPanelData({ force: false }).catch((error) => console.error("[sdr] load failed", error));
     if (next === "analytics") loadSalesCopilotAnalytics().catch((error) => console.error("[growth copilot] analytics failed", error));
     if (next === "training") loadSalesCopilotTraining().catch((error) => console.error("[growth copilot] training failed", error));
+    return;
+  }
+
+  const sdrTab = target.closest("[data-sdr-tab]");
+  if (sdrTab instanceof HTMLButtonElement) {
+    event.preventDefault();
+    const next = String(sdrTab.getAttribute("data-sdr-tab") || "hoje").trim();
+    sdrPanelState.activeTab = next === "historico" || next === "equipe" ? next : "hoje";
+    renderSdrPanel();
+    return;
+  }
+
+  const sdrRefresh = target.closest("[data-sdr-refresh]");
+  if (sdrRefresh instanceof HTMLButtonElement) {
+    event.preventDefault();
+    loadSdrPanelData({ force: true }).catch((error) => console.error("[sdr] refresh failed", error));
+    return;
+  }
+
+  const sdrCall = target.closest("[data-sdr-call]");
+  if (sdrCall instanceof HTMLButtonElement) {
+    event.preventDefault();
+    const outcome = String(sdrCall.getAttribute("data-sdr-call") || "").trim();
+    postSdrAction({ action: "log_call", outcome }).catch((error) => {
+      console.error("[sdr] log call failed", error);
+      sdrPanelState.error = error?.message || "Não foi possível registrar a ligação.";
+      renderSdrPanel();
+    });
+    return;
+  }
+
+  const sdrMeeting = target.closest("[data-sdr-meeting]");
+  if (sdrMeeting instanceof HTMLButtonElement) {
+    event.preventDefault();
+    const outcome = String(sdrMeeting.getAttribute("data-sdr-meeting") || "").trim();
+    postSdrAction({ action: "log_meeting", outcome }).catch((error) => {
+      console.error("[sdr] log meeting failed", error);
+      sdrPanelState.error = error?.message || "Não foi possível registrar a reunião.";
+      renderSdrPanel();
+    });
+    return;
+  }
+
+  const sdrUndo = target.closest("[data-sdr-undo]");
+  if (sdrUndo instanceof HTMLButtonElement) {
+    event.preventDefault();
+    const eventType = String(sdrUndo.getAttribute("data-sdr-undo") || "call").trim() === "meeting" ? "meeting" : "call";
+    postSdrAction({ action: "undo_last", eventType }).catch((error) => {
+      console.error("[sdr] undo failed", error);
+      sdrPanelState.error = error?.message || "Não foi possível desfazer agora.";
+      renderSdrPanel();
+    });
+    return;
+  }
+
+  const sdrManual = target.closest("[data-sdr-manual-save]");
+  if (sdrManual instanceof HTMLButtonElement) {
+    event.preventDefault();
+    const root = sdrManual.closest("[data-sdr-panel]") || document;
+    const read = (key) => root.querySelector(`[data-sdr-manual="${CSS.escape(key)}"]`)?.value || "";
+    postSdrAction({
+      action: "manual_day",
+      dateKey: read("date"),
+      totalCalls: Number.parseInt(read("total"), 10) || 0,
+      answered: Number.parseInt(read("answered"), 10) || 0,
+      scheduled: Number.parseInt(read("scheduled"), 10) || 0,
+    }).catch((error) => {
+      console.error("[sdr] manual day failed", error);
+      sdrPanelState.error = error?.message || "Não foi possível salvar o histórico.";
+      renderSdrPanel();
+    });
     return;
   }
 
