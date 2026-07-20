@@ -8822,6 +8822,13 @@ body[data-settings-sidebar-expanded="false"] .admin-settings-sidebar-toggle-icon
   color: #ffffff;
 }
 
+.admin-manage-subtitle {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .admin-goals-card {
   padding: 16px 16px;
   overflow: hidden;

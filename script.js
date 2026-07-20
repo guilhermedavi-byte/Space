@@ -50,6 +50,7 @@ const PEDAGOGICO_SIDEBAR_ACTIVE_TARGET_BY_TAB = {
   onboarding: "admin-controle-pedagogico-onboarding",
   relatorios: "admin-controle-pedagogico-relatorios",
 };
+const COMERCIAL_SIDEBAR_PANEL_TARGETS = new Set(["admin-comercial-usuarios"]);
 const greetingElement = document.querySelector("[data-greeting]");
 const roleEyebrow = document.querySelector("[data-role-eyebrow]");
 const roleSidebarSubtitle = document.querySelector("[data-role-sidebar-subtitle]");
@@ -113,6 +114,11 @@ const adminUsersEmptyGrowth = document.querySelector('[data-admin-users-empty="g
 const adminUsersErrorTeacher = document.querySelector('[data-admin-users-error="teacher"]');
 const adminUsersErrorStudent = document.querySelector('[data-admin-users-error="student"]');
 const adminUsersErrorGrowth = document.querySelector('[data-admin-users-error="growth"]');
+const adminCommercialGrowthSearch = document.querySelector("[data-commercial-growth-search]");
+const adminCommercialGrowthStatus = document.querySelector("[data-commercial-growth-status]");
+const adminCommercialGrowthTable = document.querySelector("[data-commercial-growth-table]");
+const adminCommercialGrowthEmpty = document.querySelector("[data-commercial-growth-empty]");
+const adminCommercialGrowthError = document.querySelector("[data-commercial-growth-error]");
 const adminGrowthGoalOpen = document.querySelector("[data-admin-growth-goal-open]");
 const adminGoalsTable = document.querySelector("[data-admin-goals-table]");
 const adminGoalsEmpty = document.querySelector("[data-admin-goals-empty]");
@@ -11579,6 +11585,10 @@ let adminUsersState = {
   growth: { rows: [], query: "", loadedAt: 0, isLoading: false, error: "" },
 };
 
+let adminCommercialUsersState = {
+  query: "",
+};
+
 let adminGrowthGoalsState = {
   rows: [],
   byCompetencia: new Map(),
@@ -15410,6 +15420,7 @@ const loadUsersFromFirestore = async (type) => {
     state.loadedAt = Date.now();
     setAdminManageStatus(safeType, "");
     renderAdminUsersTable(safeType);
+    if (safeType === "growth") renderAdminCommercialUsersTable();
     if (currentRole === "admin" && activeModalKind === "event-form") {
       syncAdminEventUserSelects();
       validateCreateEventDraft();
@@ -15426,6 +15437,7 @@ const loadUsersFromFirestore = async (type) => {
     if (code === "timeout") message = "Tempo esgotado ao carregar. Tente novamente.";
     if (code === "auth/no-current-user") message = "Sessão expirada. Faça login novamente.";
     setAdminManageStatus(safeType, message, "error");
+    if (safeType === "growth") renderAdminCommercialUsersTable();
   } finally {
     state.isLoading = false;
     if (currentRole === "admin" && activeModalKind === "event-form") {
@@ -15485,7 +15497,7 @@ const renderAdminUsersTable = (type) => {
         const badgeClass = row.ativo ? "admin-badge is-active" : "admin-badge is-inactive";
         const badgeLabel = row.ativo ? "Ativo" : "Inativo";
         return `
-          <div class="admin-users-row" data-admin-user-row="${escapeHtml(row.id)}" data-admin-user-email="${escapeHtml(
+	          <div class="admin-users-row" data-admin-user-type="${escapeHtml(safeType)}" data-admin-user-row="${escapeHtml(row.id)}" data-admin-user-email="${escapeHtml(
           row.email
         )}" data-admin-user-name="${escapeHtml(row.nome)}" data-admin-user-active="${row.ativo ? "1" : "0"}">
             <div class="admin-user-avatar" aria-hidden="true">${escapeHtml(row.initials)}</div>
@@ -15514,7 +15526,83 @@ const renderAdminUsersTable = (type) => {
         `;
       })
       .join("")}
+	  `;
+};
+
+const renderAdminCommercialUsersTable = () => {
+  if (!(adminCommercialGrowthTable instanceof HTMLElement)) return;
+  const state = adminUsersState.growth || { rows: [], isLoading: false, error: "" };
+  const query = String(adminCommercialUsersState.query || "").trim().toLowerCase();
+  const rows = Array.isArray(state.rows) ? state.rows : [];
+  const filtered = query ? rows.filter((row) => row.nome.toLowerCase().includes(query) || row.email.toLowerCase().includes(query)) : rows;
+
+  if (adminCommercialGrowthStatus instanceof HTMLElement) {
+    adminCommercialGrowthStatus.textContent = state.isLoading ? "Carregando…" : state.error ? "Não foi possível carregar." : `${filtered.length} usuário(s)`;
+    adminCommercialGrowthStatus.dataset.tone = state.error ? "error" : "";
+  }
+  if (adminCommercialGrowthError instanceof HTMLElement) adminCommercialGrowthError.hidden = !state.error;
+  if (adminCommercialGrowthEmpty instanceof HTMLElement) adminCommercialGrowthEmpty.hidden = Boolean(state.error) || filtered.length > 0 || state.isLoading;
+
+  if (state.error) {
+    adminCommercialGrowthTable.innerHTML = "";
+    return;
+  }
+
+  adminCommercialGrowthTable.innerHTML = `
+    <div class="admin-users-row admin-users-head">
+      <span> </span>
+      <span>Nome</span>
+      <span>E-mail</span>
+      <span>Status</span>
+      <span>Cadastro</span>
+      <span> </span>
+    </div>
+    ${
+      filtered
+        .map((row) => {
+          const badgeClass = row.ativo ? "admin-badge is-active" : "admin-badge is-inactive";
+          const badgeLabel = row.ativo ? "Ativo" : "Inativo";
+          return `
+            <div class="admin-users-row" data-admin-user-type="growth" data-admin-user-row="${escapeHtml(row.id)}" data-admin-user-email="${escapeHtml(row.email)}" data-admin-user-name="${escapeHtml(row.nome)}" data-admin-user-active="${row.ativo ? "1" : "0"}">
+              <div class="admin-user-avatar" aria-hidden="true">${escapeHtml(row.initials)}</div>
+              <div class="admin-user-name">${escapeHtml(row.nome)}</div>
+              <div class="admin-user-email">${escapeHtml(row.email)}</div>
+              <div><span class="${badgeClass}">${badgeLabel}</span></div>
+              <div class="admin-user-date">${escapeHtml(formatAdminDate(row.criadoEm))}</div>
+              <div class="admin-row-actions" data-admin-actions>
+                <button class="admin-actions-trigger" type="button" aria-label="Ações" data-admin-actions-trigger>
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M6.5 12h.01"></path>
+                    <path d="M12 12h.01"></path>
+                    <path d="M17.5 12h.01"></path>
+                  </svg>
+                </button>
+                <div class="admin-actions-menu" role="menu" aria-label="Ações do usuário">
+                  <button class="admin-action-item${row.ativo ? " is-danger" : ""}" type="button" data-admin-action-toggle>
+                    ${row.ativo ? "Desativar" : "Ativar"}
+                  </button>
+                  <button class="admin-action-item" type="button" data-admin-action-reset>
+                    Redefinir senha
+                  </button>
+                </div>
+              </div>
+            </div>
+          `;
+        })
+        .join("")
+    }
   `;
+};
+
+const renderAdminCommercialUsersPanel = async ({ force = false } = {}) => {
+  if (currentRole !== "admin") return;
+  const state = adminUsersState.growth;
+  if (adminCommercialGrowthError instanceof HTMLElement) adminCommercialGrowthError.hidden = true;
+  if (!state.loadedAt || force) {
+    renderAdminCommercialUsersTable();
+    await loadUsersFromFirestore("growth");
+  }
+  renderAdminCommercialUsersTable();
 };
 
 const fetchUserRowsFromFirestore = async (tipo) => {
@@ -31460,7 +31548,7 @@ const getAdminUserTypeFromRow = (rowEl) => {
   if (explicit === "teacher" || explicit === "student" || explicit === "growth") return explicit;
   const activePanel = String(body.dataset.activePanel || "");
   if (activePanel === "professores") return "teacher";
-  if (activePanel === "growth") return "growth";
+  if (activePanel === "growth" || activePanel === "admin-comercial-usuarios") return "growth";
   return "student";
 };
 
@@ -32385,12 +32473,51 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
 
       (async () => {
         const previousPrimaryLabel = modalPrimary ? modalPrimary.textContent : "";
-        try {
-          if (modalPrimary) modalPrimary.disabled = true;
-          if (modalSecondary) modalSecondary.disabled = true;
-          if (modalPrimary) modalPrimary.textContent = "Cadastrando…";
+	        try {
+	          if (modalPrimary) modalPrimary.disabled = true;
+	          if (modalSecondary) modalSecondary.disabled = true;
+	          if (modalPrimary) modalPrimary.textContent = "Cadastrando…";
 
-          const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init");
+          if (role === "growth") {
+            const response = await withTimeout(
+              fetchWithAuth("/api/admin-create-growth-user", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ nome: name, email, senha: password }),
+              }),
+              15_000,
+              "admin_create_growth_user"
+            );
+            const data = await response.json().catch(() => null);
+            if (!response.ok || !data?.ok) {
+              const err = new Error(String(data?.message || data?.errorDetail || data?.error || "growth_create_failed"));
+              err.code = String(data?.error || "");
+              err.status = response.status;
+              err.errorDetail = String(data?.errorDetail || "");
+              throw err;
+            }
+
+            adminUsersState.growth.loadedAt = 0;
+            if (successEl instanceof HTMLElement) successEl.hidden = false;
+            setAdminManageStatus(role, "Criado com sucesso.", "success");
+            if (adminCommercialGrowthStatus instanceof HTMLElement) {
+              adminCommercialGrowthStatus.textContent = "Criado com sucesso.";
+              adminCommercialGrowthStatus.dataset.tone = "success";
+            }
+            window.setTimeout(() => {
+              setAdminManageStatus(role, "");
+              if (adminCommercialGrowthStatus instanceof HTMLElement) {
+                adminCommercialGrowthStatus.textContent = "";
+                adminCommercialGrowthStatus.dataset.tone = "";
+              }
+            }, 1200);
+            closeModal();
+            await loadUsersFromFirestore("growth");
+            if (body.dataset.activePanel === "admin-comercial-usuarios") renderAdminCommercialUsersTable();
+            return;
+          }
+
+	          const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init");
 
           let credential;
           try {
@@ -32510,18 +32637,21 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
 	          console.error("[admin] create teacher/student failed:", e);
 	          const code = typeof e?.code === "string" ? e.code : "";
 	          let msg = "Não foi possível criar agora.";
-          if (code === "auth/email-already-in-use") msg = "Este e-mail já está cadastrado";
-          if (code === "auth/weak-password") msg = "Senha muito fraca";
-          if (code === "auth/invalid-email") msg = "E-mail inválido";
-          if (code === "timeout") msg = "Tempo esgotado. Tente novamente.";
-          if (errorEl instanceof HTMLElement) {
-            errorEl.textContent = msg;
+	          if (code === "auth/email-already-in-use" || code === "email_already_exists") msg = "Este e-mail já está cadastrado";
+	          if (code === "auth/weak-password" || code === "weak_password") msg = "Senha muito fraca";
+	          if (code === "auth/invalid-email" || code === "invalid_email") msg = "E-mail inválido";
+	          if (code === "timeout") msg = "Tempo esgotado. Tente novamente.";
+            if (role === "growth" && e?.message) msg = String(e.message);
+	          if (errorEl instanceof HTMLElement) {
+	            errorEl.textContent = msg;
             errorEl.hidden = false;
           }
         } finally {
           try {
-            const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init");
-            await withTimeout(firebase.signOut(firebase.secondaryAuth), 6000, "auth_secondary_signout");
+            if (role !== "growth") {
+              const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init");
+              await withTimeout(firebase.signOut(firebase.secondaryAuth), 6000, "auth_secondary_signout");
+            }
           } catch (e) {
             // ignore
           }
@@ -32650,6 +32780,13 @@ adminSearchInputs.forEach((input) => {
     renderAdminUsersTable(type);
   });
 });
+
+if (adminCommercialGrowthSearch instanceof HTMLInputElement) {
+  adminCommercialGrowthSearch.addEventListener("input", () => {
+    adminCommercialUsersState.query = adminCommercialGrowthSearch.value || "";
+    renderAdminCommercialUsersTable();
+  });
+}
 
 if (adminStudentsTeacherSelect instanceof HTMLSelectElement) {
   adminStudentsTeacherSelect.addEventListener("change", () => {
@@ -32850,6 +32987,11 @@ const syncPedagogicoSidebarAccordion = (panelName) => {
   syncSidebarAccordionState("pedagogico", shouldOpen);
 };
 
+const syncComercialSidebarAccordion = (panelName) => {
+  const shouldOpen = COMERCIAL_SIDEBAR_PANEL_TARGETS.has(String(panelName || ""));
+  syncSidebarAccordionState("comercial", shouldOpen);
+};
+
 const activatePedagogicoSidebarSection = (panelTarget) => {
   const section = PEDAGOGICO_SIDEBAR_SECTION_MAP[String(panelTarget || "")];
   if (!section) return false;
@@ -32868,6 +33010,16 @@ const syncPedagogicoSidebarActiveState = (panelName) => {
     if (!(link instanceof HTMLElement)) return;
     const target = String(link.getAttribute("data-panel-target") || "");
     const isActive = target === activeTarget;
+    link.classList.toggle("is-active", isActive);
+    link.setAttribute("aria-pressed", String(isActive));
+  });
+};
+
+const syncComercialSidebarActiveState = (panelName) => {
+  document.querySelectorAll("[data-sidebar-accordion-body='comercial'] [data-panel-target]").forEach((link) => {
+    if (!(link instanceof HTMLElement)) return;
+    const target = String(link.getAttribute("data-panel-target") || "");
+    const isActive = target === String(panelName || "");
     link.classList.toggle("is-active", isActive);
     link.setAttribute("aria-pressed", String(isActive));
   });
@@ -32905,7 +33057,9 @@ const showPanel = (panelName) => {
     panel.hidden = !isVisible;
   });
   syncPedagogicoSidebarAccordion(panelName);
+  syncComercialSidebarAccordion(panelName);
   syncPedagogicoSidebarActiveState(panelName);
+  syncComercialSidebarActiveState(panelName);
   syncAdminPedagogicoPageTitle(panelName);
 
   const activePanel = document.querySelector(`[data-panel="${panelName}"]`);
@@ -32959,7 +33113,7 @@ const showPanel = (panelName) => {
     return;
   }
 
-  if (panelName === "growth") {
+	  if (panelName === "growth") {
     window.scrollTo({ top: 0, behavior: "smooth" });
     renderSalesCopilot();
     loadSalesCopilotData().catch((error) => console.error("[growth copilot] initial load failed:", error));
@@ -32973,10 +33127,20 @@ const showPanel = (panelName) => {
     if (!isGrowthAccessRole(currentRole)) {
       navigateApp(roleBasePath(currentRole), { replace: true });
     }
+	    return;
+	  }
+
+  if (panelName === "admin-comercial-usuarios") {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (currentRole !== "admin") {
+      navigateApp(roleBasePath(currentRole), { replace: true });
+      return;
+    }
+    renderAdminCommercialUsersPanel({ force: false }).catch((error) => console.error("[admin] commercial users load failed:", error));
     return;
   }
 
-  if (panelName === "activities") {
+	  if (panelName === "activities") {
     window.scrollTo({ top: 0, behavior: "smooth" });
     bindActivitiesUi();
     loadActivities({ force: false }).catch(() => {});
@@ -33150,8 +33314,9 @@ const panelPathForRole = (role, panel) => {
     if (p === "status-plataforma") return "/app/admin/status";
     if (p === "guia-colaboradores") return "/app/admin/guia";
     if (p === "configuracoes-admin") return "/app/admin/configuracoes";
-    if (p === "financeiro") return financePathForState(role);
-    if (p === "growth") return "/app/admin/growth";
+	    if (p === "financeiro") return financePathForState(role);
+    if (p === "admin-comercial-usuarios") return "/app/admin/comercial/usuarios";
+	    if (p === "growth") return "/app/admin/growth";
     if (p === "gravadas") return "/app/admin/gravadas";
     if (p === "ao-vivo") return "/app/admin/ao-vivo";
     if (p === "materiais") return "/app/admin/materiais";
@@ -33233,11 +33398,12 @@ const parseAppRoute = (path) => {
       const section = ADMIN_SETTINGS_SECTIONS.some((item) => item.key === detail) ? detail : "meu-perfil";
       return { role, panel: "configuracoes-admin", settingsSection: section };
     }
-    if (sub === "financeiro") {
-      const financeTab = FINANCE_URL_TO_TAB[String(query.get("aba") || "").trim()] || "overview";
-      return { role, panel: "financeiro", financeTab };
-    }
-    if (sub === "growth") return { role, panel: "growth", growthTab: ["sdr", "copilot-vendas", "scripts-vendas", "objecoes", "planos", "personas", "frases-vencedoras", "analytics", "training"].includes(detail) ? detail : "copilot-vendas" };
+	    if (sub === "financeiro") {
+	      const financeTab = FINANCE_URL_TO_TAB[String(query.get("aba") || "").trim()] || "overview";
+	      return { role, panel: "financeiro", financeTab };
+	    }
+    if (sub === "comercial") return { role, panel: detail === "usuarios" ? "admin-comercial-usuarios" : "admin-comercial-usuarios" };
+	    if (sub === "growth") return { role, panel: "growth", growthTab: ["sdr", "copilot-vendas", "scripts-vendas", "objecoes", "planos", "personas", "frases-vencedoras", "analytics", "training"].includes(detail) ? detail : "copilot-vendas" };
     if (sub === "ao-vivo") return { role, panel: "ao-vivo" };
     if (sub === "gravadas") return { role, panel: "gravadas" };
     if (sub === "materiais") return { role, panel: "materiais" };
@@ -33994,11 +34160,16 @@ document.addEventListener(
       const isSidebarCollapsed = document.body.dataset.sidebarExpanded === "false";
       const nextOpen = isSidebarCollapsed || !(accordionBody instanceof HTMLElement) || accordionBody.hidden;
 
-      if (accordionName === "pedagogico") {
-        syncSidebarAccordionState("financeiro", false);
-      } else if (accordionName === "financeiro") {
-        syncSidebarAccordionState("pedagogico", false);
-      }
+	      if (accordionName === "pedagogico") {
+	        syncSidebarAccordionState("financeiro", false);
+          syncSidebarAccordionState("comercial", false);
+        } else if (accordionName === "comercial") {
+          syncSidebarAccordionState("pedagogico", false);
+          syncSidebarAccordionState("financeiro", false);
+	      } else if (accordionName === "financeiro") {
+	        syncSidebarAccordionState("pedagogico", false);
+          syncSidebarAccordionState("comercial", false);
+	      }
 
       if (isSidebarCollapsed) {
         setSidebarExpanded(true);
@@ -36379,10 +36550,11 @@ document.addEventListener("click", (event) => {
               list[idx] = { ...list[idx], ativo: nextActive };
               adminUsersState[type].rows = [...list].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
             }
-            setAdminManageStatus(type, nextActive ? "Usuário ativado." : "Usuário desativado.", "success");
-            window.setTimeout(() => setAdminManageStatus(type, ""), 1200);
-            renderAdminUsersTable(type);
-          } catch (error) {
+	            setAdminManageStatus(type, nextActive ? "Usuário ativado." : "Usuário desativado.", "success");
+	            window.setTimeout(() => setAdminManageStatus(type, ""), 1200);
+	            renderAdminUsersTable(type);
+            if (type === "growth") renderAdminCommercialUsersTable();
+	          } catch (error) {
             console.error("[admin] toggle active failed:", error);
             setAdminManageStatus(type, "Não foi possível atualizar o status.", "error");
           }

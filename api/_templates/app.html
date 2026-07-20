@@ -418,6 +418,37 @@
               </button>
             </div>
           </div>
+          <div class="sidebar-accordion" data-sidebar-accordion="comercial" data-admin-only>
+            <button
+              class="sidebar-link sidebar-accordion-toggle"
+              type="button"
+              data-sidebar-accordion-toggle="comercial"
+              aria-expanded="false"
+              aria-controls="sidebar-comercial-items"
+              title="Comercial"
+            >
+              <span class="sidebar-link-main">
+                <span class="sidebar-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M4.5 16.5 10 11l3.25 3.25L20 7.5"></path>
+                    <path d="M20 13.5v6h-6"></path>
+                    <path d="M4 20h6"></path>
+                  </svg>
+                </span>
+                <span class="sidebar-text">Comercial</span>
+              </span>
+              <span class="sidebar-accordion-chevron" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="m8 10 4 4 4-4"></path>
+                </svg>
+              </span>
+            </button>
+            <div class="sidebar-accordion-body" id="sidebar-comercial-items" data-sidebar-accordion-body="comercial" hidden>
+              <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-comercial-usuarios" title="Usuários">
+                <span class="sidebar-text">Usuários</span>
+              </button>
+            </div>
+          </div>
           <button
             class="sidebar-link"
             type="button"
@@ -1995,6 +2026,37 @@
 	                <div class="admin-student-sheet" data-admin-student-sheet></div>
 	              </div>
 	            </div>
+	          </div>
+	        </section>
+
+	        <section class="platform-panel" data-panel="admin-comercial-usuarios" data-hide-platform-header="true" hidden aria-label="Comercial - Usuários">
+	          <div class="admin-manage-shell" data-admin-commercial-users>
+	            <div class="admin-manage-head">
+	              <div>
+	                <h2 class="admin-manage-title">Comercial</h2>
+	                <p class="admin-manage-subtitle">Gerencie os usuários Growth/SDR com acesso ao módulo Comercial.</p>
+	              </div>
+	              <button class="button button-solid button-small" type="button" data-admin-new-user="growth">
+	                + Criar usuário
+	              </button>
+	            </div>
+
+	            <div class="admin-manage-tools">
+	              <input
+	                class="admin-search"
+	                type="search"
+	                inputmode="search"
+	                placeholder="Buscar por nome ou e-mail"
+	                data-commercial-growth-search
+	              />
+	              <div class="admin-manage-status" data-commercial-growth-status aria-live="polite"></div>
+	            </div>
+
+	            <article class="surface-card admin-users-card" aria-label="Lista de usuários comerciais">
+	              <div class="admin-users-table" data-commercial-growth-table></div>
+	              <div class="admin-users-empty" data-commercial-growth-empty hidden>Nenhum usuário Growth encontrado.</div>
+	              <div class="admin-users-error" data-commercial-growth-error hidden>Não foi possível carregar os usuários Growth.</div>
+	            </article>
 	          </div>
 	        </section>
 
