@@ -74,7 +74,7 @@ const canAccessActivity = (session, activity) => {
 const canAssignResponsavel = (session, responsavelId) => {
   const role = normalizeRole(session?.role);
   const safeResponsavelId = safeText(responsavelId);
-  if (role === "admin") return true;
+  if (role === "admin" || role === "growth") return true;
   if (!safeResponsavelId) return true;
   return safeResponsavelId === safeText(session?.sub);
 };
@@ -102,7 +102,7 @@ const listVisibleUsers = (session, rows) => {
       telefone: safeText(row.telefone),
     }))
     .filter((row) => row.id && row.nome && row.ativo && visibleRoles.has(row.role))
-    .filter((row) => (role === "admin" ? true : row.id === uid))
+    .filter((row) => (role === "admin" || role === "growth" ? true : row.id === uid))
     .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 };
 
@@ -197,7 +197,7 @@ module.exports = async (req, res) => {
         permissions: {
           role,
           canViewAll: role === "admin",
-          canAssignOthers: role === "admin",
+          canAssignOthers: role === "admin" || role === "growth",
         },
       });
     } catch (error) {

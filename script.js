@@ -10543,7 +10543,7 @@ const deleteActivityById = async (id) => {
 const openActivitiesDrawer = ({ activity = null } = {}) => {
   const drawerEl = ensureActivitiesDrawerInBody();
   if (!(drawerEl instanceof HTMLElement) || !(activitiesDrawerBody instanceof HTMLElement)) return;
-  const canAssignOthers = currentRole === "admin";
+  const canAssignOthers = Boolean(activitiesState.permissions?.canAssignOthers) || currentRole === "admin" || currentRole === "growth";
   const current = activity && typeof activity === "object"
     ? {
         id: String(activity.id || ""),
@@ -10570,8 +10570,9 @@ const openActivitiesDrawer = ({ activity = null } = {}) => {
   if (activitiesDrawerTitle instanceof HTMLElement) activitiesDrawerTitle.textContent = current.id ? "Editar atividade" : "Nova atividade";
   if (activitiesDrawerSub instanceof HTMLElement) activitiesDrawerSub.textContent = current.id ? "Atualize os detalhes e salve." : "Preencha os dados principais da tarefa.";
   const allUsers = Array.isArray(activitiesState.users) ? activitiesState.users : [];
+  const directoryUsers = Array.isArray(activitiesState.directoryUsers) ? activitiesState.directoryUsers : [];
   const users = canAssignOthers
-    ? allUsers
+    ? (directoryUsers.length ? directoryUsers : allUsers)
     : allUsers.filter((user) => {
         const userId = String(user.id || "");
         return userId === String(sessionUser?.id || "") || userId === current.responsavelId;
