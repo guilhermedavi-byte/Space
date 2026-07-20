@@ -1556,7 +1556,6 @@ let adminSheetsMetricsState = {
   fetchedAt: 0,
   isLoading: false,
   data: null,
-  teamPeriod: "hoje",
 };
 
 let adminAlertsState = {
@@ -14140,6 +14139,7 @@ const sdrPanelState = {
   loadedAt: 0,
   error: "",
   activeTab: "hoje",
+  teamPeriod: "hoje",
   data: null,
 };
 
@@ -14606,6 +14606,32 @@ const hydrateSdrVisuals = async (activeTab) => {
   const root = document.querySelector("[data-sdr-panel]");
   hydrateSdrCountUps(root);
   if (activeTab === "historico") await hydrateSdrHistoryChart(root);
+};
+
+const renderSdrPanel = () => {
+  const root = document.querySelector("[data-sdr-panel]");
+  if (!(root instanceof HTMLElement)) return;
+  const tab = sdrPanelState.activeTab === "historico" ? "historico" : sdrPanelState.activeTab === "equipe" ? "equipe" : "hoje";
+  const error = String(sdrPanelState.error || "").trim();
+  root.innerHTML = `
+    <header class="sdr-head">
+      <div>
+        <div class="sdr-kicker">Growth / SDR</div>
+        <h2>Controle de ligações</h2>
+        <p>Placar diário, histórico e visão da equipe em uma leitura sóbria.</p>
+      </div>
+      <button class="button button-outline button-small" type="button" data-sdr-refresh ${sdrPanelState.isLoading ? "disabled" : ""}>Atualizar</button>
+    </header>
+    <nav class="sdr-tabs" aria-label="Painel SDR">
+      <button type="button" data-sdr-tab="hoje" class="${tab === "hoje" ? "is-active" : ""}">Hoje</button>
+      <button type="button" data-sdr-tab="historico" class="${tab === "historico" ? "is-active" : ""}">Histórico</button>
+      <button type="button" data-sdr-tab="equipe" class="${tab === "equipe" ? "is-active" : ""}">Equipe</button>
+    </nav>
+    ${error ? `<div class="sdr-error">${escapeHtml(error)}</div>` : ""}
+    ${sdrPanelState.isLoading && !sdrPanelState.data ? `<div class="sdr-loading">Carregando painel SDR…</div>` : ""}
+    ${sdrPanelState.data ? (tab === "historico" ? renderSdrHistorico() : tab === "equipe" ? renderSdrEquipe() : renderSdrHoje()) : ""}
+  `;
+  hydrateSdrVisuals(tab).catch((error) => console.warn("[sdr] visual hydration failed", error));
 };
 
 const loadSdrPanelData = async ({ force = false } = {}) => {
