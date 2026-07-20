@@ -14336,7 +14336,6 @@ const renderSdrHoje = () => {
             <button class="sdr-action is-no" type="button" data-sdr-call="nao_atendeu"><b>Não atendeu</b><span>+1 ligação</span></button>
             <button class="sdr-action is-yes" type="button" data-sdr-call="atendeu"><b>Atendeu</b><span>sem agenda</span></button>
             <button class="sdr-action is-scheduled" type="button" data-sdr-call="agendou"><b>Atendeu e agendou</b><span>+1 agenda</span></button>
-            <button class="sdr-action is-double" type="button" data-sdr-call="double"><b>Fechamento duplo</b><span>evento raro</span></button>
           </div>
           ${calls.length ? `<button class="sdr-undo" type="button" data-sdr-undo="call">Desfazer última ligação</button>` : ""}
         </section>

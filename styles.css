@@ -22947,6 +22947,7 @@ body.has-space-env-banner{padding-top:46px}
 }
 
 .sdr-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.sdr-actions-primary { grid-template-columns: 1fr; }
 .sdr-grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
 .sdr-action {
