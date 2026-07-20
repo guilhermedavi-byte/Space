@@ -2307,7 +2307,6 @@ module.exports = async (req, res) => {
   const isContracts = page === "contracts" || page === "contratos";
 
   const navDashboardClass = isContracts ? "sidebar-link" : "sidebar-link is-active";
-  const navContractsClass = isContracts ? "sidebar-link is-active" : "sidebar-link";
   const pageTitle = isContracts ? "Space | Contratos" : "Space | Growth";
 
   const mainHtml = isContracts
@@ -2729,29 +2728,17 @@ module.exports = async (req, res) => {
             <span class="sidebar-text">Dashboard</span>
           </a>
 
-          <a class="${navContractsClass}" href="/growth/contratos" title="Contratos">
-            <span class="sidebar-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none">
-                <path d="M8 7h8"></path>
-                <path d="M8 11h8"></path>
-                <path d="M8 15h6"></path>
-                <path d="M7 3.5h7l3 3V20a1.5 1.5 0 0 1-1.5 1.5H7A1.5 1.5 0 0 1 5.5 20V5A1.5 1.5 0 0 1 7 3.5Z"></path>
-              </svg>
-            </span>
-            <span class="sidebar-text">Contratos</span>
-          </a>
-
-          <a class="sidebar-link" href="/app/growth/copilot-vendas" title="Copilot de vendas">
-            <span class="sidebar-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none">
-                <path d="M5 7.5h14"></path>
-                <path d="M7 12h8"></path>
-                <path d="M9 16.5h6"></path>
-                <path d="M4.5 5.5A2.5 2.5 0 0 1 7 3h10a2.5 2.5 0 0 1 2.5 2.5v11A2.5 2.5 0 0 1 17 19H9l-4.5 2v-15.5Z"></path>
-              </svg>
-            </span>
-            <span class="sidebar-text">Copilot de vendas</span>
-          </a>
+	          <a class="sidebar-link" href="/app/growth/sdr" title="SDR">
+	            <span class="sidebar-icon" aria-hidden="true">
+	              <svg viewBox="0 0 24 24" fill="none">
+	                <path d="M4.5 6.5h15"></path>
+	                <path d="M4.5 12h10"></path>
+	                <path d="M4.5 17.5h7"></path>
+	                <path d="M17 15.5 20 18.5l-3 3"></path>
+	              </svg>
+	            </span>
+	            <span class="sidebar-text">SDR</span>
+	          </a>
 
           <button class="sidebar-link" type="button" data-growth-logout title="Sair">
             <span class="sidebar-icon" aria-hidden="true">

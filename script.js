@@ -931,14 +931,20 @@ const syncRoleUI = () => {
   if (currentRole === "growth") {
     document.querySelectorAll("[data-panel-target]").forEach((el) => {
       if (!(el instanceof HTMLElement)) return;
+      if (el.hasAttribute("data-admin-only")) {
+        el.hidden = true;
+        return;
+      }
       const target = String(el.getAttribute("data-panel-target") || "");
-      el.hidden = !["growth", "activities"].includes(target);
+      el.hidden = !["dashboard", "growth", "activities"].includes(target);
     });
-    const growthLink = document.querySelector('[data-panel-target="growth"]');
+    const dashboardLink = document.querySelector('[data-panel-target="dashboard"] .sidebar-text');
+    if (dashboardLink instanceof HTMLElement) dashboardLink.textContent = "Dashboard";
+    const growthLink = document.querySelector("[data-growth-sdr-link]") || document.querySelector('[data-panel-target="growth"]');
     if (growthLink instanceof HTMLElement) {
       growthLink.hidden = false;
       const text = growthLink.querySelector(".sidebar-text");
-      if (text instanceof HTMLElement) text.textContent = "SDR / Growth";
+      if (text instanceof HTMLElement) text.textContent = "SDR";
     }
   }
 
@@ -33238,7 +33244,7 @@ const roleBasePath = (role) => {
   const normalized = normalizeRole(role);
   if (normalized === "teacher") return "/app/professor";
   if (normalized === "admin") return "/app/admin";
-  if (normalized === "growth") return "/app/growth/sdr";
+  if (normalized === "growth") return "/growth/dashboard";
   if (normalized === "FINANCE") return "/app/financeiro";
   return "/app/aluno";
 };
@@ -33324,6 +33330,7 @@ const panelPathForRole = (role, panel) => {
   }
 
   if (normalized === "growth") {
+    if (p === "dashboard") return "/growth/dashboard";
     if (p === "activities") return "/app/growth/activities";
     if (["sdr", "scripts-vendas", "objecoes", "planos", "personas", "frases-vencedoras", "analytics", "training"].includes(p)) return `/app/growth/${p}`;
     return "/app/growth/sdr";
@@ -33496,6 +33503,14 @@ initAppShell();
 
 const navigateApp = (path, { replace = false } = {}) => {
   const next = normalizePathname(String(path || roleBasePath(sessionUser?.role || currentRole)));
+  if (!next.startsWith("/app")) {
+    if (replace) {
+      window.location.replace(next);
+    } else {
+      window.location.assign(next);
+    }
+    return;
+  }
   if (replace) {
     window.history.replaceState({}, "", next);
   } else {
