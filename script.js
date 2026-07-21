@@ -15053,7 +15053,7 @@ const getCommercialOverviewTeamSeries = (metric) => {
 
 const renderCommercialOverviewKpi = ({ label, value, pill = "", sub = "", series = [], tone = "neutral" } = {}) => `
   <article class="commercial-overview-kpi is-${escapeHtml(tone)}">
-    <div class="commercial-overview-kpi-label">${escapeHtml(label || "")}</div>
+    <div class="commercial-overview-kpi-label"><span class="commercial-overview-kpi-dot"></span>${escapeHtml(label || "")}</div>
     <div class="commercial-overview-kpi-row">
       <strong>${escapeHtml(String(value ?? "—"))}</strong>
       ${pill ? `<span class="commercial-overview-pill">${escapeHtml(pill)}</span>` : ""}
@@ -15148,6 +15148,7 @@ const renderAdminCommercialOverview = () => {
   const forecast = Number(summary.forecast || 0);
   const gap = meta > 0 ? Math.max(0, meta - realizado) : 0;
   const attainment = meta > 0 ? Math.min(999, (realizado / meta) * 100) : null;
+  const attainmentWidth = Math.max(0, Math.min(100, Number(attainment || 0)));
   const sdrStats = getCommercialOverviewTeamStats();
   const sdrSeries = (metric) => getCommercialOverviewTeamSeries(metric);
   const period = String(state.period || "month");
@@ -15170,17 +15171,24 @@ const renderAdminCommercialOverview = () => {
       </div>
     </div>
 
-    <section class="commercial-overview-pulse">
-      <div>
-        <span>Resumo do mês</span>
-        <strong>${meta > 0 ? `${formatMoneyNoCentsPtBr(realizado)} de ${formatMoneyNoCentsPtBr(meta)}` : `${formatMoneyNoCentsPtBr(realizado)} realizado`}</strong>
+    <section class="commercial-overview-pulse" aria-label="Resumo do mês comercial">
+      <div class="commercial-overview-pulse-orb" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l5-5 4 4 7-8"></path><path d="M14 8h6v6"></path></svg>
+      </div>
+      <div class="commercial-overview-pulse-copy">
+        <div class="commercial-overview-pulse-tag">Resumo do mês</div>
+        <div class="commercial-overview-progress-line">
+          <strong>${escapeHtml(formatMoneyNoCentsPtBr(realizado))}</strong>
+          ${meta > 0 ? `<span>de ${escapeHtml(formatMoneyNoCentsPtBr(meta))}</span>` : `<span>realizado</span>`}
+        </div>
+        <div class="commercial-overview-progress" aria-hidden="true"><i style="width:${attainmentWidth.toFixed(1)}%"></i></div>
         <p>${meta > 0 ? `${attainment.toFixed(1).replace(".", ",")}% da meta · gap de ${formatMoneyNoCentsPtBr(gap)}` : "Meta do mês ainda não definida."}</p>
       </div>
-      <div class="commercial-overview-pulse-grid">
+      <div class="commercial-overview-pulse-metrics">
         <div><small>Ritmo/dia</small><b>${escapeHtml(formatMoneyNoCentsPtBr(ritmo.receitaNecessariaDia || 0))}</b></div>
         <div><small>Agenda/dia</small><b>${escapeHtml(String(Math.max(0, Number(ritmo.agendamentosDia || 0))))}</b></div>
-        <div><small>Forecast</small><b>${escapeHtml(formatMoneyNoCentsPtBr(forecast))}</b></div>
       </div>
+      <a class="commercial-overview-pulse-action" href="#commercial-overview-funnel">Agir →</a>
     </section>
 
     <section class="commercial-overview-section">
@@ -15194,7 +15202,7 @@ const renderAdminCommercialOverview = () => {
     </section>
 
     <section class="commercial-overview-section commercial-overview-two-col">
-      <article class="commercial-overview-card">
+      <article class="commercial-overview-card" id="commercial-overview-funnel">
         <div class="commercial-overview-card-head"><h3>Funil comercial</h3><span>DataCrazy</span></div>
         <div class="commercial-overview-mini-grid">
           <div><small>Leads do mês</small><strong>${escapeHtml(String(leadsMonth))}</strong></div>
