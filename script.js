@@ -23551,6 +23551,7 @@ const renderAdminPedagogicoTabs = () => {
     panel.classList.toggle("is-active", isActive);
     panel.hidden = !isActive;
   });
+  window.requestAnimationFrame(() => syncAdminPedPeopleViewportHeight());
 };
 
 const formatShortDateFromMs = (ms) => {
@@ -25991,6 +25992,22 @@ const syncAdminPedagogicoHeaderActionMenu = () => {
   `;
 };
 
+const syncAdminPedPeopleViewportHeight = (pass = 0) => {
+  document.querySelectorAll(".admin-ped-surface--people").forEach((card) => {
+    if (!(card instanceof HTMLElement)) return;
+    if (!card.getClientRects().length) return;
+    const rect = card.getBoundingClientRect();
+    const top = Math.max(0, rect.top);
+    const height = Math.max(320, window.innerHeight - top);
+    card.style.setProperty("--admin-ped-people-viewport-offset", `${top}px`);
+    card.style.height = `${height}px`;
+    card.style.maxHeight = `${height}px`;
+  });
+  if (pass < 1) {
+    window.requestAnimationFrame(() => syncAdminPedPeopleViewportHeight(pass + 1));
+  }
+};
+
 const renderAdminPedagogicoPeoplePanel = () => {
   if (!(adminPedPeopleRoot instanceof HTMLElement)) return;
   const activeTab = String(adminPedagogicoState.peopleTab || "students");
@@ -26015,6 +26032,7 @@ const renderAdminPedagogicoPeoplePanel = () => {
   } else {
     renderAdminPedagogicoStudentsPanel();
   }
+  window.requestAnimationFrame(() => syncAdminPedPeopleViewportHeight());
 };
 
 const renderAdminPedagogicoQualityOverview = () => {
@@ -38820,6 +38838,8 @@ document.addEventListener("drop", (event) => {
 });
 
 window.addEventListener("resize", syncSidebarMode);
+window.addEventListener("resize", () => window.requestAnimationFrame(() => syncAdminPedPeopleViewportHeight()), { passive: true });
+window.addEventListener("scroll", () => window.requestAnimationFrame(() => syncAdminPedPeopleViewportHeight()), { passive: true });
 
 const recoverInitialAppPanel = () => {
   if (body.dataset.page !== "app") return;

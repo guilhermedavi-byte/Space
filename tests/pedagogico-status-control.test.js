@@ -20,4 +20,7 @@ test("painel de usuários do pedagógico não usa corte fixo de altura", () => {
   assert.match(styles, /\.admin-ped-surface--people\s*\{[^}]*border-bottom-color:\s*transparent/s);
   assert.match(styles, /\.admin-ped-list--students,\s*\.admin-ped-teachers\s*\{[^}]*overflow-y:\s*auto/s);
   assert.match(script, /class="admin-ped-list admin-ped-list--students"/);
+  assert.match(script, /const syncAdminPedPeopleViewportHeight = \(pass = 0\) =>/);
+  assert.match(script, /card\.style\.setProperty\("--admin-ped-people-viewport-offset", `\$\{top\}px`\)/);
+  assert.match(script, /card\.style\.height = `\$\{height\}px`/);
 });
