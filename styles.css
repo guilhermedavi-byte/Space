@@ -21942,7 +21942,15 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 .activities-grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .activities-field{display:grid;gap:8px}
 .activities-field>span{font-size:12px;font-weight:700;color:rgba(255,255,255,.78)}
-.activities-responsible-search{margin-bottom:2px}
+.activities-responsible-combobox{position:relative}
+.activities-responsible-combobox .activities-responsible-search{width:100%;margin:0}
+.activities-responsible-combobox .activities-responsible-search:focus{border-bottom-right-radius:0;border-bottom-left-radius:0}
+.activities-responsible-options{position:absolute;top:calc(100% - 1px);right:0;left:0;z-index:30;display:grid;max-height:220px;overflow:auto;background:#101c2d;border:1px solid rgba(125,165,210,.34);border-top:0;border-radius:0 0 14px 14px;box-shadow:0 18px 36px rgba(0,0,0,.28)}
+.activities-responsible-options[hidden]{display:none}
+.activities-responsible-option{appearance:none;width:100%;border:0;background:transparent;color:rgba(255,255,255,.9);display:grid;gap:3px;text-align:left;padding:11px 13px;cursor:pointer;font:inherit;font-size:13px}
+.activities-responsible-option:hover,.activities-responsible-option.is-active{background:rgba(255,86,79,.12);color:#fff}
+.activities-responsible-option small{font-size:11px;color:rgba(255,255,255,.48)}
+.activities-responsible-empty{padding:12px 13px;color:rgba(255,255,255,.5);font-size:12px}
 .activities-textarea{min-height:110px;resize:vertical;padding-top:12px;padding-bottom:12px}
 .activities-form-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:8px}
 
