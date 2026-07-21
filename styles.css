@@ -24099,3 +24099,189 @@ body.has-space-env-banner{padding-top:46px}
   .sdr-show-row span { text-align: left; }
   .sdr-chart-wrap { height: 230px; }
 }
+
+/* Comercial overview final polish: compact cards, fewer labels, subtle charting. */
+.commercial-overview-shell {
+  gap: 20px;
+}
+
+.commercial-overview-section {
+  gap: 10px;
+}
+
+.commercial-overview-kpi-grid {
+  align-items: stretch;
+}
+
+.commercial-overview-kpi {
+  min-height: 128px;
+  padding: 15px 16px 12px;
+}
+
+.commercial-overview-kpi-label {
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+}
+
+.commercial-overview-kpi-row {
+  margin-top: 9px;
+  min-height: 34px;
+}
+
+.commercial-overview-kpi-row strong {
+  font-size: clamp(1.55rem, 2.2vw, 1.95rem);
+}
+
+.commercial-overview-kpi p {
+  max-width: 92%;
+  margin-top: 4px;
+}
+
+.commercial-overview-kpi .sdr-sparkline {
+  bottom: 9px;
+  height: 26px;
+  opacity: 0.36;
+}
+
+.commercial-overview-card {
+  padding: 16px;
+}
+
+.commercial-overview-card-head {
+  margin-bottom: 12px;
+}
+
+.commercial-overview-card-head h3 {
+  color: var(--text-main);
+  font-size: 1rem;
+}
+
+.commercial-overview-card-head span {
+  display: none;
+}
+
+.commercial-overview-mini-grid {
+  gap: 8px;
+  margin-bottom: 13px;
+}
+
+.commercial-overview-mini-grid div {
+  min-height: 58px;
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  padding: 10px 12px;
+}
+
+.commercial-overview-mini-grid small {
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.commercial-overview-mini-grid strong {
+  margin-top: 0;
+  font-size: 1.05rem;
+}
+
+.commercial-overview-funnel,
+.commercial-overview-ranking {
+  gap: 11px;
+}
+
+.commercial-overview-funnel-row i,
+.commercial-overview-rank-row i {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.commercial-overview-funnel-row i b,
+.commercial-overview-rank-row i u {
+  background: rgba(255, 133, 127, 0.72);
+}
+
+.commercial-overview-rank-row {
+  padding: 11px 12px;
+}
+
+.commercial-overview-chart-card {
+  min-height: 262px;
+}
+
+.commercial-overview-chart-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: -2px 0 10px;
+  flex-wrap: wrap;
+}
+
+.commercial-overview-chart-summary strong {
+  color: var(--text-main);
+  font-size: clamp(1.55rem, 2.3vw, 2rem);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.commercial-overview-chart-summary span {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.commercial-overview-conversion-chart {
+  width: 100%;
+  height: 180px;
+  display: block;
+  overflow: visible;
+}
+
+.commercial-overview-chart-grid {
+  stroke: rgba(255, 255, 255, 0.06);
+  stroke-width: 1;
+}
+
+.commercial-overview-chart-area {
+  fill: url(#commercial-conversion-fill);
+}
+
+.commercial-overview-chart-line {
+  fill: none;
+  stroke: rgba(255, 133, 127, 0.86);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.commercial-overview-chart-dot {
+  fill: #ff857f;
+  stroke: #101824;
+  stroke-width: 2;
+}
+
+.commercial-overview-chart-label {
+  fill: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+@media (max-width: 680px) {
+  .commercial-overview-kpi {
+    min-height: 122px;
+  }
+
+  .commercial-overview-card {
+    padding: 15px;
+  }
+
+  .commercial-overview-chart-card {
+    min-height: 238px;
+  }
+
+  .commercial-overview-conversion-chart {
+    height: 158px;
+  }
+}

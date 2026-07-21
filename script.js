@@ -15117,6 +15117,75 @@ const renderCommercialOverviewRanking = (rows = []) => {
   `;
 };
 
+const formatCommercialOverviewMonthShort = (monthKey = "") => {
+  const raw = String(monthKey || "").trim();
+  if (!/^\d{4}-\d{2}$/.test(raw)) return raw || "—";
+  try {
+    const date = new Date(`${raw}-01T12:00:00-03:00`);
+    return new Intl.DateTimeFormat("pt-BR", { month: "short", timeZone: "America/Sao_Paulo" }).format(date).replace(".", "");
+  } catch {
+    return raw.slice(5);
+  }
+};
+
+const renderCommercialOverviewConversionChart = (rows = []) => {
+  const items = (Array.isArray(rows) ? rows : []).filter((row) => String(row?.month || "").trim()).slice(-6);
+  if (items.length < 2) {
+    return `<div class="commercial-overview-empty">Histórico insuficiente do funil Conversão para desenhar tendência mensal.</div>`;
+  }
+  const width = 620;
+  const height = 180;
+  const paddingX = 26;
+  const paddingTop = 18;
+  const paddingBottom = 34;
+  const maxRate = Math.max(...items.map((row) => Number(row?.rate || 0)), 5);
+  const step = items.length > 1 ? (width - paddingX * 2) / (items.length - 1) : 0;
+  const usableHeight = height - paddingTop - paddingBottom;
+  const points = items.map((row, index) => {
+    const rate = Math.max(0, Number(row?.rate || 0));
+    const x = paddingX + index * step;
+    const y = paddingTop + usableHeight - (rate / maxRate) * usableHeight;
+    return { x, y, rate, month: String(row.month || ""), leads: Number(row.leads || 0), closed: Number(row.closed || 0) };
+  });
+  const path = points.reduce((acc, point, index) => {
+    if (index === 0) return `M${point.x.toFixed(1)} ${point.y.toFixed(1)}`;
+    const prev = points[index - 1];
+    const midX = (prev.x + point.x) / 2;
+    return `${acc} C${midX.toFixed(1)} ${prev.y.toFixed(1)} ${midX.toFixed(1)} ${point.y.toFixed(1)} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`;
+  }, "");
+  const area = `${path} L${points[points.length - 1].x.toFixed(1)} ${height - paddingBottom} L${points[0].x.toFixed(1)} ${height - paddingBottom} Z`;
+  const latest = points[points.length - 1];
+  return `
+    <div class="commercial-overview-chart-summary">
+      <strong>${escapeHtml(formatPercentPtBr(latest.rate, 1))}</strong>
+      <span>${escapeHtml(`${latest.closed} fechados / ${latest.leads} leads em ${formatCommercialOverviewMonthShort(latest.month)}`)}</span>
+    </div>
+    <svg class="commercial-overview-conversion-chart" viewBox="0 0 ${width} ${height}" aria-label="Conversão mensal do funil Conversão" role="img">
+      <defs>
+        <linearGradient id="commercial-conversion-fill" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stop-color="#ff857f" stop-opacity="0.18"></stop>
+          <stop offset="100%" stop-color="#ff857f" stop-opacity="0"></stop>
+        </linearGradient>
+      </defs>
+      <line x1="${paddingX}" y1="${paddingTop}" x2="${width - paddingX}" y2="${paddingTop}" class="commercial-overview-chart-grid"></line>
+      <line x1="${paddingX}" y1="${paddingTop + usableHeight / 2}" x2="${width - paddingX}" y2="${paddingTop + usableHeight / 2}" class="commercial-overview-chart-grid"></line>
+      <line x1="${paddingX}" y1="${height - paddingBottom}" x2="${width - paddingX}" y2="${height - paddingBottom}" class="commercial-overview-chart-grid"></line>
+      <path class="commercial-overview-chart-area" d="${escapeHtml(area)}"></path>
+      <path class="commercial-overview-chart-line" d="${escapeHtml(path)}"></path>
+      ${points
+        .map(
+          (point) => `
+            <g>
+              <circle class="commercial-overview-chart-dot" cx="${point.x.toFixed(1)}" cy="${point.y.toFixed(1)}" r="3.2"></circle>
+              <text class="commercial-overview-chart-label" x="${point.x.toFixed(1)}" y="${height - 9}" text-anchor="middle">${escapeHtml(formatCommercialOverviewMonthShort(point.month))}</text>
+            </g>
+          `
+        )
+        .join("")}
+    </svg>
+  `;
+};
+
 const renderAdminCommercialOverview = () => {
   if (!(adminCommercialOverviewContent instanceof HTMLElement)) return;
   const state = adminCommercialOverviewState;
@@ -15176,7 +15245,6 @@ const renderAdminCommercialOverview = () => {
         <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l5-5 4 4 7-8"></path><path d="M14 8h6v6"></path></svg>
       </div>
       <div class="commercial-overview-pulse-copy">
-        <div class="commercial-overview-pulse-tag">Resumo do mês</div>
         <div class="commercial-overview-progress-line">
           <strong>${escapeHtml(formatMoneyNoCentsPtBr(realizado))}</strong>
           ${meta > 0 ? `<span>de ${escapeHtml(formatMoneyNoCentsPtBr(meta))}</span>` : `<span>realizado</span>`}
@@ -15192,7 +15260,6 @@ const renderAdminCommercialOverview = () => {
     </section>
 
     <section class="commercial-overview-section">
-      <div class="commercial-overview-section-label">Meta & Resultado</div>
       <div class="commercial-overview-kpi-grid">
         ${renderCommercialOverviewKpi({ label: "Receita realizada", value: formatMoneyNoCentsPtBr(realizado), pill: attainment == null ? "" : `${attainment.toFixed(1).replace(".", ",")}%`, sub: "Valor de negócios fechados no CRM", series: [0, realizado * 0.25, realizado * 0.5, realizado], tone: "coral" })}
         ${renderCommercialOverviewKpi({ label: "Vendas fechadas", value: fechadosMonth, pill: "mês", sub: "Etapa Fechado no DataCrazy", series: [0, fechadosMonth], tone: "blue" })}
@@ -15201,9 +15268,16 @@ const renderAdminCommercialOverview = () => {
       </div>
     </section>
 
+    <section class="commercial-overview-section">
+      <article class="commercial-overview-card commercial-overview-chart-card">
+        <div class="commercial-overview-card-head"><h3>Conversão do funil por mês</h3></div>
+        ${renderCommercialOverviewConversionChart(crm.conversionHistory)}
+      </article>
+    </section>
+
     <section class="commercial-overview-section commercial-overview-two-col">
       <article class="commercial-overview-card" id="commercial-overview-funnel">
-        <div class="commercial-overview-card-head"><h3>Funil comercial</h3><span>DataCrazy</span></div>
+        <div class="commercial-overview-card-head"><h3>Funil comercial</h3></div>
         <div class="commercial-overview-mini-grid">
           <div><small>Leads do mês</small><strong>${escapeHtml(String(leadsMonth))}</strong></div>
           <div><small>Agendamentos</small><strong>${escapeHtml(String(agendamentosMonth))}</strong></div>
@@ -15212,13 +15286,12 @@ const renderAdminCommercialOverview = () => {
         ${renderCommercialOverviewFunnel(crm.stageBreakdown)}
       </article>
       <article class="commercial-overview-card">
-        <div class="commercial-overview-card-head"><h3>Ranking de responsáveis</h3><span>Fechados no mês</span></div>
+        <div class="commercial-overview-card-head"><h3>Ranking de responsáveis</h3></div>
         ${renderCommercialOverviewRanking(crm.rankingTime)}
       </article>
     </section>
 
     <section class="commercial-overview-section">
-      <div class="commercial-overview-section-label">Atividade SDR · ${escapeHtml(periodLabel)}</div>
       <div class="commercial-overview-kpi-grid">
         ${renderCommercialOverviewKpi({ label: "Ligações", value: sdrStats.totalCalls, pill: periodLabel, sub: "Total do time", series: sdrSeries("totalCalls"), tone: "blue" })}
         ${renderCommercialOverviewKpi({ label: "Atendimentos", value: sdrStats.answered, pill: formatPercentPtBr(sdrStats.answerRate, 1), sub: "Taxa de atendimento", series: sdrSeries("answered"), tone: "green" })}

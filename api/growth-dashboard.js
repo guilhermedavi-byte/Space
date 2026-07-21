@@ -895,8 +895,10 @@ const handleGrowthMetricsApi = async (req, res) => {
   const pipelinePreferred = normalizeKey("Funil principal");
   const preferredDeals = businesses.filter((b) => normalizeKey(b?.stage?.pipeline?.name) === pipelinePreferred);
   const pipelineTarget = preferredDeals.length ? pipelinePreferred : normalizeKey("Conversão");
+  const conversionPipelineKey = normalizeKey("Conversão");
 
   const filtered = businesses.filter((b) => normalizeKey(b?.stage?.pipeline?.name) === pipelineTarget);
+  const conversionPipelineDeals = businesses.filter((b) => normalizeKey(b?.stage?.pipeline?.name) === conversionPipelineKey);
 
   // Temporary debug: inspect fields for a deal in "Em fechamento" to identify lost flags/status fields.
   try {
@@ -1161,6 +1163,34 @@ const handleGrowthMetricsApi = async (req, res) => {
 
   const rankingTime = Array.from(rankingMap.values()).sort((a, b) => b.valor - a.valor);
 
+  const conversionByMonthMap = new Map();
+  conversionPipelineDeals.forEach((b) => {
+    const createdAt = b?.createdAt || b?.created_at || null;
+    const createdMonth = createdAt ? getMonthKeySaoPaulo(createdAt) : "";
+    if (createdMonth) {
+      const entry = conversionByMonthMap.get(createdMonth) || { month: createdMonth, leads: 0, closed: 0 };
+      entry.leads += 1;
+      conversionByMonthMap.set(createdMonth, entry);
+    }
+    if (normalizeKey(b?.stage?.name) === normalizeKey("Fechado")) {
+      const closedInfo = getBusinessWonLostDate(b);
+      const closedMonth = closedInfo.date ? getMonthKeySaoPaulo(closedInfo.date) : "";
+      if (closedMonth) {
+        const entry = conversionByMonthMap.get(closedMonth) || { month: closedMonth, leads: 0, closed: 0 };
+        entry.closed += 1;
+        conversionByMonthMap.set(closedMonth, entry);
+      }
+    }
+  });
+  const conversionHistory = Array.from(conversionByMonthMap.values())
+    .filter((row) => row.month)
+    .sort((a, b) => String(a.month).localeCompare(String(b.month)))
+    .slice(-6)
+    .map((row) => ({
+      ...row,
+      rate: row.leads > 0 ? (row.closed / row.leads) * 100 : 0,
+    }));
+
   const latest = closedDealsMonth
     .slice()
     .sort((a, b) => {
@@ -1205,6 +1235,7 @@ const handleGrowthMetricsApi = async (req, res) => {
     ultimaVenda,
     forecastBreakdown,
     stageBreakdown,
+    conversionHistory,
     debug: {
       totalFetched: Number(crm?.pagination?.totalFetched) || businesses.length,
       paginationPages: Number(crm?.pagination?.pages) || 1,
