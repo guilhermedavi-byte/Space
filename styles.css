@@ -24211,7 +24211,18 @@ body.has-space-env-banner{padding-top:46px}
 }
 
 .commercial-overview-rank-row {
+  grid-template-columns: 28px minmax(0, 1fr) auto auto auto;
   padding: 11px 12px;
+}
+
+.commercial-overview-rank-row mark {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(255, 86, 79, 0.12);
+  color: #ff857f;
+  font-size: 0.74rem;
+  font-weight: 800;
+  line-height: 1;
 }
 
 .commercial-overview-chart-card {
@@ -24418,6 +24429,17 @@ body.has-space-env-banner{padding-top:46px}
 
   .commercial-overview-conversion-chart {
     height: 206px;
+  }
+
+  .commercial-overview-rank-row {
+    grid-template-columns: 28px minmax(0, 1fr);
+  }
+
+  .commercial-overview-rank-row em,
+  .commercial-overview-rank-row mark,
+  .commercial-overview-rank-row b {
+    grid-column: 2;
+    justify-self: start;
   }
 }
 

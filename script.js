@@ -15091,21 +15091,24 @@ const renderCommercialOverviewFunnel = (rows = []) => {
 
 const renderCommercialOverviewRanking = (rows = []) => {
   const items = (Array.isArray(rows) ? rows : []).filter(Boolean).slice(0, 6);
-  if (!items.length) return `<div class="commercial-overview-empty">Nenhuma venda fechada no mês.</div>`;
+  if (!items.length) return `<div class="commercial-overview-empty">Nenhuma reunião feita no mês.</div>`;
   const max = Math.max(...items.map((row) => Number(row?.valor || 0)), 1);
   return `
     <div class="commercial-overview-ranking">
       ${items
         .map((row, index) => {
           const nome = String(row?.nome || "Sem responsável").trim();
+          const reunioes = Math.max(0, Number(row?.reunioes || 0));
           const vendas = Math.max(0, Number(row?.vendas || 0));
           const valor = Math.max(0, Number(row?.valor || 0));
+          const taxa = reunioes > 0 ? (vendas / reunioes) * 100 : 0;
           const width = Math.max(5, Math.round((valor / max) * 100));
           return `
             <div class="commercial-overview-rank-row">
               <span>${index + 1}</span>
               <strong>${escapeHtml(nome)}</strong>
-              <em>${escapeHtml(`${vendas} venda${vendas === 1 ? "" : "s"}`)}</em>
+              <em>${escapeHtml(`${reunioes} reuniões · ${vendas} venda${vendas === 1 ? "" : "s"}`)}</em>
+              <mark>${escapeHtml(formatPercentPtBr(taxa, 0))}</mark>
               <b>${escapeHtml(formatMoneyNoCentsPtBr(valor))}</b>
               <i aria-hidden="true"><u style="width:${width}%"></u></i>
             </div>
@@ -15318,7 +15321,6 @@ const renderAdminCommercialOverview = () => {
     <div class="commercial-overview-head">
       <div>
         <h2>Visão Geral</h2>
-        <p>Dados reais do DataCrazy, metas Growth e atividade SDR · ${escapeHtml(getCommercialOverviewMonthLabel())}</p>
       </div>
       <div class="commercial-overview-periods" role="tablist" aria-label="Período da atividade SDR">
         ${["7d", "30d", "month"]
@@ -15343,7 +15345,6 @@ const renderAdminCommercialOverview = () => {
         <div><small>Ritmo/dia</small><b>${escapeHtml(formatMoneyNoCentsPtBr(ritmo.receitaNecessariaDia || 0))}</b></div>
         <div><small>Agenda/dia</small><b>${escapeHtml(String(Math.max(0, Number(ritmo.agendamentosDia || 0))))}</b></div>
       </div>
-      <a class="commercial-overview-pulse-action" href="#commercial-overview-funnel">Agir →</a>
     </section>
 
     <section class="commercial-overview-section">

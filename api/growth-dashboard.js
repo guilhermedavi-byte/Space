@@ -386,6 +386,14 @@ const mapPlano = (rawProductName) => {
   return "semPlano";
 };
 
+const CONVERSION_MEETING_OR_AFTER_STAGE_KEYS = new Set(
+  ["Reunião feita (Follow-up)", "Hot Lead", "Forecast", "Pagamento Parcial", "Fechado"].map(normalizeKey)
+);
+
+const CONVERSION_PRE_MEETING_STAGE_KEYS = new Set(
+  ["Leads Forms", "Leads Indicação", "Contato inicial feito", "Follow up", "Agendado", "No-show", "Reunião Reagendada"].map(normalizeKey)
+);
+
 const relativeTimePtBr = (isoDate) => {
   const d = isoDate ? new Date(String(isoDate)) : null;
   if (!(d instanceof Date) || Number.isNaN(d.getTime())) return "";
@@ -1133,7 +1141,6 @@ const handleGrowthMetricsApi = async (req, res) => {
   }
 
   const planosVendidos = { diamond: 0, premium: 0, gold: 0, turma: 0, semPlano: 0 };
-  const rankingMap = new Map();
   const stageBreakdown = Array.from(stageCounts.entries())
     .map(([key, count]) => {
       const sample = filtered.find((b) => normalizeKey(b?.stage?.name) === key);
@@ -1153,15 +1160,37 @@ const handleGrowthMetricsApi = async (req, res) => {
     const planName = b?.products?.[0]?.product?.name;
     const planoKey = mapPlano(planName);
     planosVendidos[planoKey] = (planosVendidos[planoKey] || 0) + 1;
-
-    const vendor = b?.attendant?.name ? String(b.attendant.name).trim() : "Sem vendedor";
-    const entry = rankingMap.get(vendor) || { nome: vendor, vendas: 0, valor: 0 };
-    entry.vendas += 1;
-    entry.valor += getDealValueForecast(b);
-    rankingMap.set(vendor, entry);
   });
 
-  const rankingTime = Array.from(rankingMap.values()).sort((a, b) => b.valor - a.valor);
+  const rankingMap = new Map();
+  const unknownConversionStages = new Set();
+  conversionPipelineDeals.forEach((b) => {
+    const createdAt = b?.createdAt || b?.created_at || null;
+    const createdMonth = createdAt ? getMonthKeySaoPaulo(createdAt) : "";
+    if (createdMonth !== nowMonthKey) return;
+    const rawStage = b?.stage?.name ? String(b.stage.name).trim() : "";
+    const stageKey = normalizeKey(rawStage);
+    const isMeetingOrAfter = CONVERSION_MEETING_OR_AFTER_STAGE_KEYS.has(stageKey);
+    const isKnownPreMeeting = CONVERSION_PRE_MEETING_STAGE_KEYS.has(stageKey);
+    if (!isMeetingOrAfter && !isKnownPreMeeting && rawStage) unknownConversionStages.add(rawStage);
+    if (!isMeetingOrAfter) return;
+
+    const vendor = b?.attendant?.name ? String(b.attendant.name).trim() : "Sem vendedor";
+    const entry = rankingMap.get(vendor) || { nome: vendor, reunioes: 0, vendas: 0, valor: 0, taxaConversao: 0 };
+    entry.reunioes += 1;
+    if (stageKey === normalizeKey("Fechado")) {
+      entry.vendas += 1;
+      entry.valor += getDealValueForecast(b);
+    }
+    rankingMap.set(vendor, entry);
+  });
+  if (unknownConversionStages.size) {
+    console.warn("[growth-metrics] etapas desconhecidas no funil Conversão", Array.from(unknownConversionStages));
+  }
+
+  const rankingTime = Array.from(rankingMap.values())
+    .map((row) => ({ ...row, taxaConversao: row.reunioes > 0 ? (row.vendas / row.reunioes) * 100 : 0 }))
+    .sort((a, b) => b.valor - a.valor || b.vendas - a.vendas || b.reunioes - a.reunioes);
 
   const conversionByMonthMap = new Map();
   conversionPipelineDeals.forEach((b) => {
@@ -1182,7 +1211,7 @@ const handleGrowthMetricsApi = async (req, res) => {
       }
     }
   });
-  const conversionStartMonth = "2025-10";
+  const conversionStartMonth = "2026-02";
   const conversionMonthKeys = [];
   for (let cursor = new Date(`${conversionStartMonth}-01T12:00:00-03:00`); getMonthKeySaoPaulo(cursor) <= nowMonthKey; cursor.setMonth(cursor.getMonth() + 1)) {
     conversionMonthKeys.push(getMonthKeySaoPaulo(cursor));
