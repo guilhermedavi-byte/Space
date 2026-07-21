@@ -1144,13 +1144,14 @@ const handleGrowthMetricsApi = async (req, res) => {
   const stageBreakdown = Array.from(stageCounts.entries())
     .map(([key, count]) => {
       const sample = filtered.find((b) => normalizeKey(b?.stage?.name) === key);
+      const isClosedStage = key === normalizeKey("Fechado");
       return {
         key,
         stageName: sample?.stage?.name ? String(sample.stage.name).trim() : key || "Sem etapa",
         count: Math.max(0, Number(count) || 0),
-        monthCount: Math.max(0, Number(stageCountsMonth.get(key)) || 0),
+        monthCount: isClosedStage ? totalVendas : Math.max(0, Number(stageCountsMonth.get(key)) || 0),
         total: Math.max(0, Number(stageTotals.get(key)) || 0),
-        monthTotal: Math.max(0, Number(stageTotalsMonth.get(key)) || 0),
+        monthTotal: isClosedStage ? realizado : Math.max(0, Number(stageTotalsMonth.get(key)) || 0),
       };
     })
     .filter((row) => row.count > 0 || row.monthCount > 0)
@@ -1165,15 +1166,15 @@ const handleGrowthMetricsApi = async (req, res) => {
   const rankingMap = new Map();
   const unknownConversionStages = new Set();
   conversionPipelineDeals.forEach((b) => {
-    const createdAt = b?.createdAt || b?.created_at || null;
-    const createdMonth = createdAt ? getMonthKeySaoPaulo(createdAt) : "";
-    if (createdMonth !== nowMonthKey) return;
     const rawStage = b?.stage?.name ? String(b.stage.name).trim() : "";
     const stageKey = normalizeKey(rawStage);
     const isMeetingOrAfter = CONVERSION_MEETING_OR_AFTER_STAGE_KEYS.has(stageKey);
     const isKnownPreMeeting = CONVERSION_PRE_MEETING_STAGE_KEYS.has(stageKey);
     if (!isMeetingOrAfter && !isKnownPreMeeting && rawStage) unknownConversionStages.add(rawStage);
     if (!isMeetingOrAfter) return;
+    const eventInfo = getBusinessWonLostDate(b);
+    const eventMonth = eventInfo.date ? getMonthKeySaoPaulo(eventInfo.date) : "";
+    if (eventMonth !== nowMonthKey) return;
 
     const vendor = b?.attendant?.name ? String(b.attendant.name).trim() : "Sem vendedor";
     const entry = rankingMap.get(vendor) || { nome: vendor, reunioes: 0, vendas: 0, valor: 0, taxaConversao: 0 };
@@ -1258,7 +1259,7 @@ const handleGrowthMetricsApi = async (req, res) => {
       agendamentos,
       agendamentosMonth,
       fechados,
-      fechadosMonth,
+      fechadosMonth: totalVendas,
       noShow,
       noShowMonth,
     },
