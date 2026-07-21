@@ -15051,14 +15051,13 @@ const getCommercialOverviewTeamSeries = (metric) => {
   return team.map((row) => Number(row?.[periodKey]?.[metric] || 0));
 };
 
-const renderCommercialOverviewKpi = ({ label, value, pill = "", sub = "", series = [], tone = "neutral" } = {}) => `
+const renderCommercialOverviewKpi = ({ label, value, pill = "", series = [], tone = "neutral" } = {}) => `
   <article class="commercial-overview-kpi is-${escapeHtml(tone)}">
-    <div class="commercial-overview-kpi-label"><span class="commercial-overview-kpi-dot"></span>${escapeHtml(label || "")}</div>
+    <div class="commercial-overview-kpi-label">${escapeHtml(label || "")}</div>
     <div class="commercial-overview-kpi-row">
-      <strong>${escapeHtml(String(value ?? "—"))}</strong>
+      <strong data-commercial-countup>${escapeHtml(String(value ?? "—"))}</strong>
       ${pill ? `<span class="commercial-overview-pill">${escapeHtml(pill)}</span>` : ""}
     </div>
-    ${sub ? `<p>${escapeHtml(sub)}</p>` : ""}
     ${renderCommercialOverviewSparkline(series, tone)}
   </article>
 `;
@@ -15129,15 +15128,15 @@ const formatCommercialOverviewMonthShort = (monthKey = "") => {
 };
 
 const renderCommercialOverviewConversionChart = (rows = []) => {
-  const items = (Array.isArray(rows) ? rows : []).filter((row) => String(row?.month || "").trim()).slice(-6);
+  const items = (Array.isArray(rows) ? rows : []).filter((row) => String(row?.month || "").trim());
   if (items.length < 2) {
     return `<div class="commercial-overview-empty">Histórico insuficiente do funil Conversão para desenhar tendência mensal.</div>`;
   }
-  const width = 620;
-  const height = 180;
-  const paddingX = 26;
-  const paddingTop = 18;
-  const paddingBottom = 34;
+  const width = 920;
+  const height = 270;
+  const paddingX = 34;
+  const paddingTop = 26;
+  const paddingBottom = 42;
   const maxRate = Math.max(...items.map((row) => Number(row?.rate || 0)), 5);
   const step = items.length > 1 ? (width - paddingX * 2) / (items.length - 1) : 0;
   const usableHeight = height - paddingTop - paddingBottom;
@@ -15160,30 +15159,120 @@ const renderCommercialOverviewConversionChart = (rows = []) => {
       <strong>${escapeHtml(formatPercentPtBr(latest.rate, 1))}</strong>
       <span>${escapeHtml(`${latest.closed} fechados / ${latest.leads} leads em ${formatCommercialOverviewMonthShort(latest.month)}`)}</span>
     </div>
-    <svg class="commercial-overview-conversion-chart" viewBox="0 0 ${width} ${height}" aria-label="Conversão mensal do funil Conversão" role="img">
-      <defs>
-        <linearGradient id="commercial-conversion-fill" x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stop-color="#ff857f" stop-opacity="0.18"></stop>
-          <stop offset="100%" stop-color="#ff857f" stop-opacity="0"></stop>
-        </linearGradient>
-      </defs>
-      <line x1="${paddingX}" y1="${paddingTop}" x2="${width - paddingX}" y2="${paddingTop}" class="commercial-overview-chart-grid"></line>
-      <line x1="${paddingX}" y1="${paddingTop + usableHeight / 2}" x2="${width - paddingX}" y2="${paddingTop + usableHeight / 2}" class="commercial-overview-chart-grid"></line>
-      <line x1="${paddingX}" y1="${height - paddingBottom}" x2="${width - paddingX}" y2="${height - paddingBottom}" class="commercial-overview-chart-grid"></line>
-      <path class="commercial-overview-chart-area" d="${escapeHtml(area)}"></path>
-      <path class="commercial-overview-chart-line" d="${escapeHtml(path)}"></path>
-      ${points
-        .map(
-          (point) => `
-            <g>
-              <circle class="commercial-overview-chart-dot" cx="${point.x.toFixed(1)}" cy="${point.y.toFixed(1)}" r="3.2"></circle>
-              <text class="commercial-overview-chart-label" x="${point.x.toFixed(1)}" y="${height - 9}" text-anchor="middle">${escapeHtml(formatCommercialOverviewMonthShort(point.month))}</text>
-            </g>
-          `
-        )
-        .join("")}
-    </svg>
+    <div class="commercial-overview-chart-wrap">
+      <svg class="commercial-overview-conversion-chart" viewBox="0 0 ${width} ${height}" aria-label="Conversão mensal do funil Conversão" role="img">
+        <defs>
+          <linearGradient id="commercial-conversion-fill" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stop-color="#ff857f" stop-opacity="0.18"></stop>
+            <stop offset="100%" stop-color="#ff857f" stop-opacity="0"></stop>
+          </linearGradient>
+        </defs>
+        <line x1="${paddingX}" y1="${paddingTop}" x2="${width - paddingX}" y2="${paddingTop}" class="commercial-overview-chart-grid"></line>
+        <line x1="${paddingX}" y1="${paddingTop + usableHeight / 2}" x2="${width - paddingX}" y2="${paddingTop + usableHeight / 2}" class="commercial-overview-chart-grid"></line>
+        <line x1="${paddingX}" y1="${height - paddingBottom}" x2="${width - paddingX}" y2="${height - paddingBottom}" class="commercial-overview-chart-grid"></line>
+        <path class="commercial-overview-chart-area" d="${escapeHtml(area)}"></path>
+        <path class="commercial-overview-chart-line" pathLength="1" d="${escapeHtml(path)}"></path>
+        ${points
+          .map(
+            (point, index) => {
+              const label = `${formatCommercialOverviewMonthShort(point.month)} · ${formatPercentPtBr(point.rate, 1)}`;
+              return `
+                <g>
+                  <circle class="commercial-overview-chart-hit" cx="${point.x.toFixed(1)}" cy="${point.y.toFixed(1)}" r="15" data-commercial-chart-point data-label="${escapeHtml(label)}" style="--point-index:${index}"></circle>
+                  <circle class="commercial-overview-chart-dot" cx="${point.x.toFixed(1)}" cy="${point.y.toFixed(1)}" r="3.2" style="--point-index:${index}"></circle>
+                  <text class="commercial-overview-chart-label" x="${point.x.toFixed(1)}" y="${height - 11}" text-anchor="middle">${escapeHtml(formatCommercialOverviewMonthShort(point.month))}</text>
+                </g>
+              `;
+            }
+          )
+          .join("")}
+      </svg>
+      <div class="commercial-overview-chart-tooltip" role="status" aria-live="polite"></div>
+    </div>
   `;
+};
+
+const parseCommercialOverviewAnimatedNumber = (text = "") => {
+  const raw = String(text || "").trim();
+  if (!raw || raw === "—") return null;
+  const isMoney = raw.includes("R$");
+  const isPercent = raw.includes("%");
+  const normalized = raw.replace(/[^\d,.-]/g, "").replace(/\./g, "").replace(",", ".");
+  const value = Number(normalized);
+  if (!Number.isFinite(value)) return null;
+  return { value, isMoney, isPercent, decimals: isPercent ? (raw.includes(",") ? 1 : 0) : 0 };
+};
+
+const formatCommercialOverviewAnimatedNumber = (value, meta) => {
+  if (meta?.isMoney) return formatMoneyNoCentsPtBr(Math.round(value));
+  if (meta?.isPercent) return formatPercentPtBr(value, meta.decimals || 0);
+  return String(Math.round(value).toLocaleString("pt-BR"));
+};
+
+const animateCommercialOverviewNumbers = () => {
+  if (!(adminCommercialOverviewContent instanceof HTMLElement)) return;
+  if (window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) return;
+  const targets = adminCommercialOverviewContent.querySelectorAll("[data-commercial-countup]");
+  targets.forEach((element) => {
+    const meta = parseCommercialOverviewAnimatedNumber(element.textContent || "");
+    if (!meta) return;
+    const duration = 700;
+    const start = performance.now();
+    const easeOut = (t) => 1 - Math.pow(1 - t, 3);
+    const tick = (now) => {
+      const progress = Math.min(1, (now - start) / duration);
+      element.textContent = formatCommercialOverviewAnimatedNumber(meta.value * easeOut(progress), meta);
+      if (progress < 1) window.requestAnimationFrame(tick);
+    };
+    element.textContent = formatCommercialOverviewAnimatedNumber(0, meta);
+    window.requestAnimationFrame(tick);
+  });
+};
+
+const setupCommercialOverviewChartTooltip = () => {
+  if (!(adminCommercialOverviewContent instanceof HTMLElement)) return;
+  const wrap = adminCommercialOverviewContent.querySelector(".commercial-overview-chart-wrap");
+  const tooltip = wrap?.querySelector(".commercial-overview-chart-tooltip");
+  const points = Array.from(wrap?.querySelectorAll("[data-commercial-chart-point]") || []);
+  if (!(wrap instanceof HTMLElement) || !(tooltip instanceof HTMLElement) || !points.length) return;
+  const hide = () => {
+    tooltip.classList.remove("is-visible");
+    wrap.querySelectorAll(".commercial-overview-chart-dot.is-active").forEach((dot) => dot.classList.remove("is-active"));
+  };
+  wrap.addEventListener("mouseleave", hide);
+  wrap.addEventListener("mousemove", (event) => {
+    let nearest = null;
+    let nearestDistance = Infinity;
+    points.forEach((point) => {
+      const rect = point.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      const distance = Math.hypot(event.clientX - centerX, event.clientY - centerY);
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearest = point;
+      }
+    });
+    if (!nearest || nearestDistance > 34) {
+      hide();
+      return;
+    }
+    wrap.querySelectorAll(".commercial-overview-chart-dot.is-active").forEach((dot) => dot.classList.remove("is-active"));
+    const dot = nearest.nextElementSibling;
+    if (dot instanceof SVGCircleElement) dot.classList.add("is-active");
+    const wrapRect = wrap.getBoundingClientRect();
+    const pointRect = nearest.getBoundingClientRect();
+    tooltip.textContent = nearest.getAttribute("data-label") || "";
+    tooltip.style.left = `${pointRect.left + pointRect.width / 2 - wrapRect.left}px`;
+    tooltip.style.top = `${Math.max(10, pointRect.top - wrapRect.top - 12)}px`;
+    tooltip.classList.add("is-visible");
+  });
+};
+
+const initCommercialOverviewMotion = () => {
+  if (!(adminCommercialOverviewContent instanceof HTMLElement)) return;
+  animateCommercialOverviewNumbers();
+  setupCommercialOverviewChartTooltip();
 };
 
 const renderAdminCommercialOverview = () => {
@@ -15192,7 +15281,7 @@ const renderAdminCommercialOverview = () => {
   if (state.isLoading && !state.crm && !state.sdr) {
     adminCommercialOverviewContent.innerHTML = `
       <div class="commercial-overview-head">
-        <div><div class="commercial-overview-eyebrow">COMERCIAL</div><h2>Visão Geral</h2><p>${escapeHtml(getCommercialOverviewMonthLabel())}</p></div>
+        <div><h2>Visão Geral</h2><p>${escapeHtml(getCommercialOverviewMonthLabel())}</p></div>
         <div class="commercial-overview-periods" aria-hidden="true"><span></span><span></span><span></span></div>
       </div>
       <div class="commercial-overview-loading"></div>
@@ -15202,7 +15291,7 @@ const renderAdminCommercialOverview = () => {
   if (state.error && !state.crm && !state.sdr) {
     adminCommercialOverviewContent.innerHTML = `
       <div class="commercial-overview-head">
-        <div><div class="commercial-overview-eyebrow">COMERCIAL</div><h2>Visão Geral</h2><p>${escapeHtml(getCommercialOverviewMonthLabel())}</p></div>
+        <div><h2>Visão Geral</h2><p>${escapeHtml(getCommercialOverviewMonthLabel())}</p></div>
       </div>
       <div class="commercial-overview-empty is-error">${escapeHtml(state.error)}</div>
     `;
@@ -15221,7 +15310,6 @@ const renderAdminCommercialOverview = () => {
   const sdrStats = getCommercialOverviewTeamStats();
   const sdrSeries = (metric) => getCommercialOverviewTeamSeries(metric);
   const period = String(state.period || "month");
-  const periodLabel = getCommercialOverviewPeriodLabel(period);
   const leadsMonth = Math.max(0, Number(summary.leadsMonth || crm?.forecastBreakdown?.debug?.leadsDoMes || 0));
   const agendamentosMonth = Math.max(0, Number(summary.agendamentosMonth || 0));
   const fechadosMonth = Math.max(0, Number(summary.fechadosMonth || summary.totalVendas || 0));
@@ -15229,7 +15317,6 @@ const renderAdminCommercialOverview = () => {
   adminCommercialOverviewContent.innerHTML = `
     <div class="commercial-overview-head">
       <div>
-        <div class="commercial-overview-eyebrow">COMERCIAL</div>
         <h2>Visão Geral</h2>
         <p>Dados reais do DataCrazy, metas Growth e atividade SDR · ${escapeHtml(getCommercialOverviewMonthLabel())}</p>
       </div>
@@ -15246,7 +15333,7 @@ const renderAdminCommercialOverview = () => {
       </div>
       <div class="commercial-overview-pulse-copy">
         <div class="commercial-overview-progress-line">
-          <strong>${escapeHtml(formatMoneyNoCentsPtBr(realizado))}</strong>
+          <strong data-commercial-countup>${escapeHtml(formatMoneyNoCentsPtBr(realizado))}</strong>
           ${meta > 0 ? `<span>de ${escapeHtml(formatMoneyNoCentsPtBr(meta))}</span>` : `<span>realizado</span>`}
         </div>
         <div class="commercial-overview-progress" aria-hidden="true"><i style="width:${attainmentWidth.toFixed(1)}%"></i></div>
@@ -15261,10 +15348,10 @@ const renderAdminCommercialOverview = () => {
 
     <section class="commercial-overview-section">
       <div class="commercial-overview-kpi-grid">
-        ${renderCommercialOverviewKpi({ label: "Receita realizada", value: formatMoneyNoCentsPtBr(realizado), pill: attainment == null ? "" : `${attainment.toFixed(1).replace(".", ",")}%`, sub: "Valor de negócios fechados no CRM", series: [0, realizado * 0.25, realizado * 0.5, realizado], tone: "coral" })}
-        ${renderCommercialOverviewKpi({ label: "Vendas fechadas", value: fechadosMonth, pill: "mês", sub: "Etapa Fechado no DataCrazy", series: [0, fechadosMonth], tone: "blue" })}
-        ${renderCommercialOverviewKpi({ label: "Ticket médio", value: formatMoneyNoCentsPtBr(summary.ticketMedio || 0), pill: "CRM", sub: "Média dos fechados no mês", series: [Number(summary.ticketMedio || 0)], tone: "green" })}
-        ${renderCommercialOverviewKpi({ label: "Forecast", value: formatMoneyNoCentsPtBr(forecast), pill: meta > 0 ? `${Math.min(999, (forecast / meta) * 100).toFixed(1).replace(".", ",")}%` : "", sub: "Fechado + pipeline ponderado", series: [realizado, forecast], tone: "amber" })}
+        ${renderCommercialOverviewKpi({ label: "Receita realizada", value: formatMoneyNoCentsPtBr(realizado), pill: attainment == null ? "" : `${attainment.toFixed(1).replace(".", ",")}%`, series: [0, realizado * 0.25, realizado * 0.5, realizado], tone: "coral" })}
+        ${renderCommercialOverviewKpi({ label: "Vendas fechadas", value: fechadosMonth, series: [0, fechadosMonth], tone: "blue" })}
+        ${renderCommercialOverviewKpi({ label: "Ticket médio", value: formatMoneyNoCentsPtBr(summary.ticketMedio || 0), series: [Number(summary.ticketMedio || 0)], tone: "green" })}
+        ${renderCommercialOverviewKpi({ label: "Forecast", value: formatMoneyNoCentsPtBr(forecast), pill: meta > 0 ? `${Math.min(999, (forecast / meta) * 100).toFixed(1).replace(".", ",")}%` : "", series: [realizado, forecast], tone: "amber" })}
       </div>
     </section>
 
@@ -15293,14 +15380,15 @@ const renderAdminCommercialOverview = () => {
 
     <section class="commercial-overview-section">
       <div class="commercial-overview-kpi-grid">
-        ${renderCommercialOverviewKpi({ label: "Ligações", value: sdrStats.totalCalls, pill: periodLabel, sub: "Total do time", series: sdrSeries("totalCalls"), tone: "blue" })}
-        ${renderCommercialOverviewKpi({ label: "Atendimentos", value: sdrStats.answered, pill: formatPercentPtBr(sdrStats.answerRate, 1), sub: "Taxa de atendimento", series: sdrSeries("answered"), tone: "green" })}
-        ${renderCommercialOverviewKpi({ label: "Agendamentos", value: sdrStats.scheduled, pill: formatPercentPtBr(sdrStats.callToScheduleRate, 1), sub: "Ligação → agenda", series: sdrSeries("scheduled"), tone: "coral" })}
-        ${renderCommercialOverviewKpi({ label: "Show rate", value: formatPercentPtBr(sdrStats.showRate, 1), pill: `${sdrStats.noShows} no-show`, sub: `${sdrStats.shows} comparecimentos`, series: sdrSeries("shows"), tone: "amber" })}
+        ${renderCommercialOverviewKpi({ label: "Ligações", value: sdrStats.totalCalls, series: sdrSeries("totalCalls"), tone: "blue" })}
+        ${renderCommercialOverviewKpi({ label: "Atendimentos", value: sdrStats.answered, pill: formatPercentPtBr(sdrStats.answerRate, 1), series: sdrSeries("answered"), tone: "green" })}
+        ${renderCommercialOverviewKpi({ label: "Agendamentos", value: sdrStats.scheduled, pill: formatPercentPtBr(sdrStats.callToScheduleRate, 1), series: sdrSeries("scheduled"), tone: "coral" })}
+        ${renderCommercialOverviewKpi({ label: "Show rate", value: formatPercentPtBr(sdrStats.showRate, 1), series: sdrSeries("shows"), tone: "amber" })}
       </div>
       <a class="commercial-overview-detail-link" href="/app/admin/growth/sdr" data-panel-target="growth" data-growth-tab-target="sdr">Ver detalhes no módulo SDR</a>
     </section>
   `;
+  initCommercialOverviewMotion();
 };
 
 const loadAdminCommercialOverview = async ({ force = false } = {}) => {

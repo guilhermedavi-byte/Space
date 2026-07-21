@@ -1182,14 +1182,18 @@ const handleGrowthMetricsApi = async (req, res) => {
       }
     }
   });
-  const conversionHistory = Array.from(conversionByMonthMap.values())
-    .filter((row) => row.month)
-    .sort((a, b) => String(a.month).localeCompare(String(b.month)))
-    .slice(-6)
-    .map((row) => ({
+  const conversionStartMonth = "2025-10";
+  const conversionMonthKeys = [];
+  for (let cursor = new Date(`${conversionStartMonth}-01T12:00:00-03:00`); getMonthKeySaoPaulo(cursor) <= nowMonthKey; cursor.setMonth(cursor.getMonth() + 1)) {
+    conversionMonthKeys.push(getMonthKeySaoPaulo(cursor));
+  }
+  const conversionHistory = conversionMonthKeys.map((month) => {
+    const row = conversionByMonthMap.get(month) || { month, leads: 0, closed: 0 };
+    return {
       ...row,
       rate: row.leads > 0 ? (row.closed / row.leads) * 100 : 0,
-    }));
+    };
+  });
 
   const latest = closedDealsMonth
     .slice()
