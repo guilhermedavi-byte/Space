@@ -445,6 +445,9 @@
               </span>
             </button>
             <div class="sidebar-accordion-body" id="sidebar-comercial-items" data-sidebar-accordion-body="comercial" hidden>
+              <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-comercial-visao-geral" title="Visão Geral">
+                <span class="sidebar-text">Visão Geral</span>
+              </button>
               <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-comercial-usuarios" title="Usuários">
                 <span class="sidebar-text">Usuários</span>
               </button>
@@ -2048,7 +2051,15 @@
 	          </div>
 	        </section>
 
-	        <section class="platform-panel" data-panel="admin-comercial-usuarios" data-hide-platform-header="true" hidden aria-label="Comercial - Usuários">
+        <section class="platform-panel" data-panel="admin-comercial-visao-geral" data-hide-platform-header="true" hidden aria-label="Comercial - Visão Geral">
+          <div class="commercial-overview" data-admin-commercial-overview>
+            <div class="commercial-overview-shell" data-admin-commercial-overview-content>
+              <div class="commercial-overview-loading" aria-label="Carregando visão comercial"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="platform-panel" data-panel="admin-comercial-usuarios" data-hide-platform-header="true" hidden aria-label="Comercial - Usuários">
 	          <div class="admin-manage-shell" data-admin-commercial-users>
 	            <div class="admin-manage-head">
 	              <div>

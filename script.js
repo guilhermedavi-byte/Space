@@ -50,7 +50,7 @@ const PEDAGOGICO_SIDEBAR_ACTIVE_TARGET_BY_TAB = {
   onboarding: "admin-controle-pedagogico-onboarding",
   relatorios: "admin-controle-pedagogico-relatorios",
 };
-const COMERCIAL_SIDEBAR_PANEL_TARGETS = new Set(["admin-comercial-usuarios"]);
+const COMERCIAL_SIDEBAR_PANEL_TARGETS = new Set(["admin-comercial-visao-geral", "admin-comercial-usuarios"]);
 const greetingElement = document.querySelector("[data-greeting]");
 const roleEyebrow = document.querySelector("[data-role-eyebrow]");
 const roleSidebarSubtitle = document.querySelector("[data-role-sidebar-subtitle]");
@@ -119,6 +119,8 @@ const adminCommercialGrowthStatus = document.querySelector("[data-commercial-gro
 const adminCommercialGrowthTable = document.querySelector("[data-commercial-growth-table]");
 const adminCommercialGrowthEmpty = document.querySelector("[data-commercial-growth-empty]");
 const adminCommercialGrowthError = document.querySelector("[data-commercial-growth-error]");
+const adminCommercialOverviewRoot = document.querySelector("[data-admin-commercial-overview]");
+const adminCommercialOverviewContent = document.querySelector("[data-admin-commercial-overview-content]");
 const adminGrowthGoalOpen = document.querySelector("[data-admin-growth-goal-open]");
 const adminGoalsTable = document.querySelector("[data-admin-goals-table]");
 const adminGoalsEmpty = document.querySelector("[data-admin-goals-empty]");
@@ -14224,6 +14226,14 @@ const sdrPanelState = {
   teamPeriod: "hoje",
   data: null,
 };
+const adminCommercialOverviewState = {
+  isLoading: false,
+  loadedAt: 0,
+  error: "",
+  period: "month",
+  crm: null,
+  sdr: null,
+};
 
 const salesCopilotResources = [
   ["scripts", "scripts"],
@@ -14985,6 +14995,267 @@ const renderSdrSparkline = (values = [], tone = "neutral") => {
       <path class="sdr-sparkline-line" d="${escapeHtml(path)}"></path>
     </svg>
   `;
+};
+
+const getCommercialOverviewMonthLabel = () => {
+  try {
+    const formatted = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", month: "long", year: "numeric" }).format(new Date());
+    return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+  } catch {
+    return "Mês atual";
+  }
+};
+
+const getCommercialOverviewPeriodLabel = (period = adminCommercialOverviewState.period) =>
+  period === "7d" ? "Últimos 7 dias" : period === "30d" ? "Últimos 30 dias" : "Mês atual";
+
+const getCommercialOverviewSdrPeriodKey = () => (String(adminCommercialOverviewState.period || "month") === "7d" ? "week" : "month");
+
+const sumCommercialSdrStats = (rows = []) => {
+  const stats = {
+    totalCalls: 0,
+    answered: 0,
+    scheduled: 0,
+    shows: 0,
+    noShows: 0,
+  };
+  (Array.isArray(rows) ? rows : []).forEach((row) => {
+    stats.totalCalls += Number(row?.totalCalls || 0);
+    stats.answered += Number(row?.answered || 0);
+    stats.scheduled += Number(row?.scheduled || 0);
+    stats.shows += Number(row?.shows || 0);
+    stats.noShows += Number(row?.noShows || 0);
+  });
+  const meetings = stats.shows + stats.noShows;
+  return {
+    ...stats,
+    answerRate: stats.totalCalls ? (stats.answered / stats.totalCalls) * 100 : 0,
+    callToScheduleRate: stats.totalCalls ? (stats.scheduled / stats.totalCalls) * 100 : 0,
+    showRate: meetings ? (stats.shows / meetings) * 100 : 0,
+    noShowRate: meetings ? (stats.noShows / meetings) * 100 : 0,
+  };
+};
+
+const renderCommercialOverviewSparkline = (values = [], tone = "neutral") =>
+  renderSdrSparkline(Array.isArray(values) && values.length ? values : [0, 0, 0, 0, 0, 0, 0], tone);
+
+const getCommercialOverviewTeamStats = () => {
+  const team = Array.isArray(adminCommercialOverviewState.sdr?.team) ? adminCommercialOverviewState.sdr.team : [];
+  const periodKey = getCommercialOverviewSdrPeriodKey();
+  return sumCommercialSdrStats(team.map((row) => row?.[periodKey] || {}));
+};
+
+const getCommercialOverviewTeamSeries = (metric) => {
+  const team = Array.isArray(adminCommercialOverviewState.sdr?.team) ? adminCommercialOverviewState.sdr.team : [];
+  const periodKey = getCommercialOverviewSdrPeriodKey();
+  return team.map((row) => Number(row?.[periodKey]?.[metric] || 0));
+};
+
+const renderCommercialOverviewKpi = ({ label, value, pill = "", sub = "", series = [], tone = "neutral" } = {}) => `
+  <article class="commercial-overview-kpi is-${escapeHtml(tone)}">
+    <div class="commercial-overview-kpi-label">${escapeHtml(label || "")}</div>
+    <div class="commercial-overview-kpi-row">
+      <strong>${escapeHtml(String(value ?? "—"))}</strong>
+      ${pill ? `<span class="commercial-overview-pill">${escapeHtml(pill)}</span>` : ""}
+    </div>
+    ${sub ? `<p>${escapeHtml(sub)}</p>` : ""}
+    ${renderCommercialOverviewSparkline(series, tone)}
+  </article>
+`;
+
+const renderCommercialOverviewFunnel = (rows = []) => {
+  const items = (Array.isArray(rows) ? rows : []).filter((row) => Number(row?.count || 0) > 0).slice(0, 8);
+  if (!items.length) return `<div class="commercial-overview-empty">Nenhuma etapa retornada pelo CRM agora.</div>`;
+  const max = Math.max(...items.map((row) => Number(row.count || 0)), 1);
+  return `
+    <div class="commercial-overview-funnel">
+      ${items
+        .map((row) => {
+          const count = Math.max(0, Number(row.count || 0));
+          const monthCount = Math.max(0, Number(row.monthCount || 0));
+          const width = Math.max(5, Math.round((count / max) * 100));
+          return `
+            <div class="commercial-overview-funnel-row">
+              <div>
+                <strong>${escapeHtml(String(row.stageName || "Sem etapa"))}</strong>
+                <span>${escapeHtml(String(monthCount))} no mês · ${escapeHtml(formatMoneyNoCentsPtBr(row.monthTotal || 0))}</span>
+              </div>
+              <em>${escapeHtml(String(count))}</em>
+              <i aria-hidden="true"><b style="width:${width}%"></b></i>
+            </div>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+};
+
+const renderCommercialOverviewRanking = (rows = []) => {
+  const items = (Array.isArray(rows) ? rows : []).filter(Boolean).slice(0, 6);
+  if (!items.length) return `<div class="commercial-overview-empty">Nenhuma venda fechada no mês.</div>`;
+  const max = Math.max(...items.map((row) => Number(row?.valor || 0)), 1);
+  return `
+    <div class="commercial-overview-ranking">
+      ${items
+        .map((row, index) => {
+          const nome = String(row?.nome || "Sem responsável").trim();
+          const vendas = Math.max(0, Number(row?.vendas || 0));
+          const valor = Math.max(0, Number(row?.valor || 0));
+          const width = Math.max(5, Math.round((valor / max) * 100));
+          return `
+            <div class="commercial-overview-rank-row">
+              <span>${index + 1}</span>
+              <strong>${escapeHtml(nome)}</strong>
+              <em>${escapeHtml(`${vendas} venda${vendas === 1 ? "" : "s"}`)}</em>
+              <b>${escapeHtml(formatMoneyNoCentsPtBr(valor))}</b>
+              <i aria-hidden="true"><u style="width:${width}%"></u></i>
+            </div>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+};
+
+const renderAdminCommercialOverview = () => {
+  if (!(adminCommercialOverviewContent instanceof HTMLElement)) return;
+  const state = adminCommercialOverviewState;
+  if (state.isLoading && !state.crm && !state.sdr) {
+    adminCommercialOverviewContent.innerHTML = `
+      <div class="commercial-overview-head">
+        <div><div class="commercial-overview-eyebrow">COMERCIAL</div><h2>Visão Geral</h2><p>${escapeHtml(getCommercialOverviewMonthLabel())}</p></div>
+        <div class="commercial-overview-periods" aria-hidden="true"><span></span><span></span><span></span></div>
+      </div>
+      <div class="commercial-overview-loading"></div>
+    `;
+    return;
+  }
+  if (state.error && !state.crm && !state.sdr) {
+    adminCommercialOverviewContent.innerHTML = `
+      <div class="commercial-overview-head">
+        <div><div class="commercial-overview-eyebrow">COMERCIAL</div><h2>Visão Geral</h2><p>${escapeHtml(getCommercialOverviewMonthLabel())}</p></div>
+      </div>
+      <div class="commercial-overview-empty is-error">${escapeHtml(state.error)}</div>
+    `;
+    return;
+  }
+
+  const crm = state.crm || {};
+  const summary = crm.summary || {};
+  const ritmo = crm.ritmoNecessario || {};
+  const meta = Number(state.goal?.valorMeta || 0);
+  const realizado = Number(summary.realizado || 0);
+  const forecast = Number(summary.forecast || 0);
+  const gap = meta > 0 ? Math.max(0, meta - realizado) : 0;
+  const attainment = meta > 0 ? Math.min(999, (realizado / meta) * 100) : null;
+  const sdrStats = getCommercialOverviewTeamStats();
+  const sdrSeries = (metric) => getCommercialOverviewTeamSeries(metric);
+  const period = String(state.period || "month");
+  const periodLabel = getCommercialOverviewPeriodLabel(period);
+  const leadsMonth = Math.max(0, Number(summary.leadsMonth || crm?.forecastBreakdown?.debug?.leadsDoMes || 0));
+  const agendamentosMonth = Math.max(0, Number(summary.agendamentosMonth || 0));
+  const fechadosMonth = Math.max(0, Number(summary.fechadosMonth || summary.totalVendas || 0));
+
+  adminCommercialOverviewContent.innerHTML = `
+    <div class="commercial-overview-head">
+      <div>
+        <div class="commercial-overview-eyebrow">COMERCIAL</div>
+        <h2>Visão Geral</h2>
+        <p>Dados reais do DataCrazy, metas Growth e atividade SDR · ${escapeHtml(getCommercialOverviewMonthLabel())}</p>
+      </div>
+      <div class="commercial-overview-periods" role="tablist" aria-label="Período da atividade SDR">
+        ${["7d", "30d", "month"]
+          .map((key) => `<button type="button" data-commercial-overview-period="${key}" class="${period === key ? "is-active" : ""}">${escapeHtml(key === "7d" ? "7d" : key === "30d" ? "30d" : "mês")}</button>`)
+          .join("")}
+      </div>
+    </div>
+
+    <section class="commercial-overview-pulse">
+      <div>
+        <span>Resumo do mês</span>
+        <strong>${meta > 0 ? `${formatMoneyNoCentsPtBr(realizado)} de ${formatMoneyNoCentsPtBr(meta)}` : `${formatMoneyNoCentsPtBr(realizado)} realizado`}</strong>
+        <p>${meta > 0 ? `${attainment.toFixed(1).replace(".", ",")}% da meta · gap de ${formatMoneyNoCentsPtBr(gap)}` : "Meta do mês ainda não definida."}</p>
+      </div>
+      <div class="commercial-overview-pulse-grid">
+        <div><small>Ritmo/dia</small><b>${escapeHtml(formatMoneyNoCentsPtBr(ritmo.receitaNecessariaDia || 0))}</b></div>
+        <div><small>Agenda/dia</small><b>${escapeHtml(String(Math.max(0, Number(ritmo.agendamentosDia || 0))))}</b></div>
+        <div><small>Forecast</small><b>${escapeHtml(formatMoneyNoCentsPtBr(forecast))}</b></div>
+      </div>
+    </section>
+
+    <section class="commercial-overview-section">
+      <div class="commercial-overview-section-label">Meta & Resultado</div>
+      <div class="commercial-overview-kpi-grid">
+        ${renderCommercialOverviewKpi({ label: "Receita realizada", value: formatMoneyNoCentsPtBr(realizado), pill: attainment == null ? "" : `${attainment.toFixed(1).replace(".", ",")}%`, sub: "Valor de negócios fechados no CRM", series: [0, realizado * 0.25, realizado * 0.5, realizado], tone: "coral" })}
+        ${renderCommercialOverviewKpi({ label: "Vendas fechadas", value: fechadosMonth, pill: "mês", sub: "Etapa Fechado no DataCrazy", series: [0, fechadosMonth], tone: "blue" })}
+        ${renderCommercialOverviewKpi({ label: "Ticket médio", value: formatMoneyNoCentsPtBr(summary.ticketMedio || 0), pill: "CRM", sub: "Média dos fechados no mês", series: [Number(summary.ticketMedio || 0)], tone: "green" })}
+        ${renderCommercialOverviewKpi({ label: "Forecast", value: formatMoneyNoCentsPtBr(forecast), pill: meta > 0 ? `${Math.min(999, (forecast / meta) * 100).toFixed(1).replace(".", ",")}%` : "", sub: "Fechado + pipeline ponderado", series: [realizado, forecast], tone: "amber" })}
+      </div>
+    </section>
+
+    <section class="commercial-overview-section commercial-overview-two-col">
+      <article class="commercial-overview-card">
+        <div class="commercial-overview-card-head"><h3>Funil comercial</h3><span>DataCrazy</span></div>
+        <div class="commercial-overview-mini-grid">
+          <div><small>Leads do mês</small><strong>${escapeHtml(String(leadsMonth))}</strong></div>
+          <div><small>Agendamentos</small><strong>${escapeHtml(String(agendamentosMonth))}</strong></div>
+          <div><small>Fechados</small><strong>${escapeHtml(String(fechadosMonth))}</strong></div>
+        </div>
+        ${renderCommercialOverviewFunnel(crm.stageBreakdown)}
+      </article>
+      <article class="commercial-overview-card">
+        <div class="commercial-overview-card-head"><h3>Ranking de responsáveis</h3><span>Fechados no mês</span></div>
+        ${renderCommercialOverviewRanking(crm.rankingTime)}
+      </article>
+    </section>
+
+    <section class="commercial-overview-section">
+      <div class="commercial-overview-section-label">Atividade SDR · ${escapeHtml(periodLabel)}</div>
+      <div class="commercial-overview-kpi-grid">
+        ${renderCommercialOverviewKpi({ label: "Ligações", value: sdrStats.totalCalls, pill: periodLabel, sub: "Total do time", series: sdrSeries("totalCalls"), tone: "blue" })}
+        ${renderCommercialOverviewKpi({ label: "Atendimentos", value: sdrStats.answered, pill: formatPercentPtBr(sdrStats.answerRate, 1), sub: "Taxa de atendimento", series: sdrSeries("answered"), tone: "green" })}
+        ${renderCommercialOverviewKpi({ label: "Agendamentos", value: sdrStats.scheduled, pill: formatPercentPtBr(sdrStats.callToScheduleRate, 1), sub: "Ligação → agenda", series: sdrSeries("scheduled"), tone: "coral" })}
+        ${renderCommercialOverviewKpi({ label: "Show rate", value: formatPercentPtBr(sdrStats.showRate, 1), pill: `${sdrStats.noShows} no-show`, sub: `${sdrStats.shows} comparecimentos`, series: sdrSeries("shows"), tone: "amber" })}
+      </div>
+      <a class="commercial-overview-detail-link" href="/app/admin/growth/sdr" data-panel-target="growth" data-growth-tab-target="sdr">Ver detalhes no módulo SDR</a>
+    </section>
+  `;
+};
+
+const loadAdminCommercialOverview = async ({ force = false } = {}) => {
+  if (currentRole !== "admin") return;
+  const now = Date.now();
+  if (!force && adminCommercialOverviewState.loadedAt && now - adminCommercialOverviewState.loadedAt < 60_000) {
+    renderAdminCommercialOverview();
+    return;
+  }
+  adminCommercialOverviewState.isLoading = true;
+  adminCommercialOverviewState.error = "";
+  renderAdminCommercialOverview();
+  try {
+    const [crmRes, goalRes, sdrRes] = await Promise.all([
+      fetchWithAuth("/api/growth-metrics", { method: "GET" }),
+      fetchWithAuth("/api/growth-dashboard?api=growth-goals&mode=current", { method: "GET", forceRefreshIdToken: true }),
+      fetchWithAuth("/api/sdr-metrics?days=30", { method: "GET" }),
+    ]);
+    const [crm, goalPayload, sdr] = await Promise.all([
+      crmRes.json().catch(() => null),
+      goalRes.json().catch(() => null),
+      sdrRes.json().catch(() => null),
+    ]);
+    if (!crmRes.ok) throw new Error(crm?.error || "growth_metrics_failed");
+    if (!sdrRes.ok) throw new Error(sdr?.message || sdr?.error || "sdr_metrics_failed");
+    adminCommercialOverviewState.crm = crm || {};
+    adminCommercialOverviewState.goal = goalRes.ok ? goalPayload?.goal || null : null;
+    adminCommercialOverviewState.sdr = sdr || {};
+    adminCommercialOverviewState.loadedAt = Date.now();
+  } catch (error) {
+    console.error("[admin] commercial overview load failed:", error);
+    adminCommercialOverviewState.error = "Não foi possível carregar a Visão Geral Comercial agora.";
+  } finally {
+    adminCommercialOverviewState.isLoading = false;
+    renderAdminCommercialOverview();
+  }
 };
 
 const sdrNumber = (value, extra = "") => `<strong class="sdr-num" data-sdr-countup="${escapeHtml(String(Number(value) || 0))}">${escapeHtml(String(Number(value) || 0))}${extra}</strong>`;
@@ -33500,6 +33771,16 @@ const showPanel = (panelName) => {
     return;
   }
 
+  if (panelName === "admin-comercial-visao-geral") {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (currentRole !== "admin") {
+      navigateApp(roleBasePath(currentRole), { replace: true });
+      return;
+    }
+    loadAdminCommercialOverview({ force: false }).catch((error) => console.error("[admin] commercial overview load failed:", error));
+    return;
+  }
+
 	  if (panelName === "growth") {
     window.scrollTo({ top: 0, behavior: "smooth" });
     renderSalesCopilot();
@@ -33701,6 +33982,7 @@ const panelPathForRole = (role, panel) => {
     if (p === "guia-colaboradores") return "/app/admin/guia";
     if (p === "configuracoes-admin") return "/app/admin/configuracoes";
 	    if (p === "financeiro") return financePathForState(role);
+    if (p === "admin-comercial-visao-geral") return "/app/admin/comercial";
     if (p === "admin-comercial-usuarios") return "/app/admin/comercial/usuarios";
 	    if (p === "growth") return "/app/admin/growth";
     if (p === "gravadas") return "/app/admin/gravadas";
@@ -33789,7 +34071,7 @@ const parseAppRoute = (path) => {
 	      const financeTab = FINANCE_URL_TO_TAB[String(query.get("aba") || "").trim()] || "overview";
 	      return { role, panel: "financeiro", financeTab };
 	    }
-    if (sub === "comercial") return { role, panel: detail === "usuarios" ? "admin-comercial-usuarios" : "admin-comercial-usuarios" };
+    if (sub === "comercial") return { role, panel: detail === "usuarios" ? "admin-comercial-usuarios" : "admin-comercial-visao-geral" };
 	    if (sub === "growth") return { role, panel: "growth", growthTab: ["sdr", "scripts-vendas", "objecoes", "training"].includes(detail) ? detail : "sdr" };
     if (sub === "ao-vivo") return { role, panel: "ao-vivo" };
     if (sub === "gravadas") return { role, panel: "gravadas" };
@@ -34039,6 +34321,15 @@ document.addEventListener("click", (event) => {
     const period = String(sdrTeamPeriod.getAttribute("data-sdr-team-period") || "hoje").trim();
     sdrPanelState.teamPeriod = ["hoje", "semana", "mes"].includes(period) ? period : "hoje";
     renderSdrPanel();
+    return;
+  }
+
+  const commercialOverviewPeriod = target.closest("[data-commercial-overview-period]");
+  if (commercialOverviewPeriod instanceof HTMLButtonElement) {
+    event.preventDefault();
+    const period = String(commercialOverviewPeriod.getAttribute("data-commercial-overview-period") || "month").trim();
+    adminCommercialOverviewState.period = ["7d", "30d", "month"].includes(period) ? period : "month";
+    renderAdminCommercialOverview();
     return;
   }
 

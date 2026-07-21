@@ -1132,6 +1132,20 @@ const handleGrowthMetricsApi = async (req, res) => {
 
   const planosVendidos = { diamond: 0, premium: 0, gold: 0, turma: 0, semPlano: 0 };
   const rankingMap = new Map();
+  const stageBreakdown = Array.from(stageCounts.entries())
+    .map(([key, count]) => {
+      const sample = filtered.find((b) => normalizeKey(b?.stage?.name) === key);
+      return {
+        key,
+        stageName: sample?.stage?.name ? String(sample.stage.name).trim() : key || "Sem etapa",
+        count: Math.max(0, Number(count) || 0),
+        monthCount: Math.max(0, Number(stageCountsMonth.get(key)) || 0),
+        total: Math.max(0, Number(stageTotals.get(key)) || 0),
+        monthTotal: Math.max(0, Number(stageTotalsMonth.get(key)) || 0),
+      };
+    })
+    .filter((row) => row.count > 0 || row.monthCount > 0)
+    .sort((a, b) => (b.count || 0) - (a.count || 0));
 
   closedDealsMonth.forEach((b) => {
     const planName = b?.products?.[0]?.product?.name;
@@ -1177,12 +1191,20 @@ const handleGrowthMetricsApi = async (req, res) => {
       taxaAgendamento,
       taxaFunil,
       noShowPercent,
+      leadsMonth: totalPipelineMonth,
+      agendamentos,
+      agendamentosMonth,
+      fechados,
+      fechadosMonth,
+      noShow,
+      noShowMonth,
     },
     ritmoNecessario,
     planosVendidos,
     rankingTime,
     ultimaVenda,
     forecastBreakdown,
+    stageBreakdown,
     debug: {
       totalFetched: Number(crm?.pagination?.totalFetched) || businesses.length,
       paginationPages: Number(crm?.pagination?.pages) || 1,
