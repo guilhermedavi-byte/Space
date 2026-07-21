@@ -17692,6 +17692,8 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   color: var(--text-muted);
   font-size: 0.88rem;
   font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .commercial-overview-progress {
@@ -17937,7 +17939,7 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 
 .commercial-overview-funnel-row i b,
 .commercial-overview-rank-row i u {
-  background: #ff857f;
+  background: rgba(255, 133, 127, 0.82);
   box-shadow: none;
 }
 
