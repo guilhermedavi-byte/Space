@@ -20112,6 +20112,22 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   margin-top: 14px;
 }
 
+.admin-ped-surface--people {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+  max-height: calc(100vh - 164px);
+}
+
+.admin-ped-surface--people .admin-ped-people-view {
+  margin-top: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .admin-ped-quality-overview {
   display: grid;
   gap: 12px;
@@ -20563,23 +20579,20 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 .admin-ped-panel {
   display: grid;
   gap: 12px;
-  overflow: hidden;
-  max-height: 0;
   opacity: 0;
   transform: translateY(-4px);
   pointer-events: none;
-  transition: max-height 240ms ease, opacity 180ms ease, transform 180ms ease;
+  transition: opacity 180ms ease, transform 180ms ease;
 }
 
 .admin-ped-panel.is-active {
-  max-height: 4000px;
   opacity: 1;
   transform: translateY(0);
   pointer-events: auto;
 }
 
 .admin-ped-panel[hidden] {
-  display: grid;
+  display: none !important;
 }
 
 .admin-ped-op {
@@ -21122,6 +21135,11 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   overflow: hidden;
 }
 
+.admin-ped-surface--people .admin-ped-panelhead {
+  margin-bottom: 0;
+  flex: 0 0 auto;
+}
+
 .admin-ped-panelhead {
   display: flex;
   align-items: center;
@@ -21539,6 +21557,25 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 
 .admin-ped-list {
   display: grid;
+}
+
+.admin-ped-students,
+.admin-ped-teachers {
+  min-height: 0;
+}
+
+.admin-ped-students {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.admin-ped-list--students,
+.admin-ped-teachers {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .admin-ped-row {

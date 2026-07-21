@@ -24288,7 +24288,7 @@ const renderAdminPedagogicoStudentsPanel = () => {
 
   adminPedStudents.innerHTML = `
     ${toolbarHtml}
-    <div class="admin-ped-list">
+    <div class="admin-ped-list admin-ped-list--students">
       ${rowsHtml}
     </div>
   `;

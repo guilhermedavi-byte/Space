@@ -4,6 +4,7 @@ const fs = require("fs");
 const path = require("path");
 
 const script = fs.readFileSync(path.join(__dirname, "..", "script.js"), "utf8");
+const styles = fs.readFileSync(path.join(__dirname, "..", "styles.css"), "utf8");
 
 test("status visual do registro pedagógico é sincronizado pela mesma fonte de verdade", () => {
   assert.match(script, /const syncPedagogicoStatusControlState = \(rootEl, selectedStatus\) =>/);
@@ -11,4 +12,11 @@ test("status visual do registro pedagógico é sincronizado pela mesma fonte de 
   assert.match(script, /pill\.setAttribute\("aria-pressed", isSelected \? "true" : "false"\)/);
   assert.match(script, /syncPedagogicoStatusControlState\(formRoot instanceof HTMLElement \? formRoot : pedagogicoFormContainer, nextStatus\)/);
   assert.match(script, /syncPedagogicoStatusControlState\(formRoot, nextValue\)/);
+});
+
+test("painel de usuários do pedagógico não usa corte fixo de altura", () => {
+  assert.doesNotMatch(styles, /\.admin-ped-panel\s*\{[^}]*max-height:\s*4000px/s);
+  assert.match(styles, /\.admin-ped-surface--people\s*\{[^}]*max-height:\s*calc\(100vh - 164px\)/s);
+  assert.match(styles, /\.admin-ped-list--students,\s*\.admin-ped-teachers\s*\{[^}]*overflow-y:\s*auto/s);
+  assert.match(script, /class="admin-ped-list admin-ped-list--students"/);
 });
