@@ -20113,11 +20113,15 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 }
 
 .admin-ped-surface--people {
+  --admin-ped-people-viewport-offset: 164px;
   display: flex;
   flex-direction: column;
   gap: 14px;
   min-height: 0;
-  max-height: calc(100vh - 164px);
+  height: calc(100dvh - var(--admin-ped-people-viewport-offset));
+  max-height: calc(100dvh - var(--admin-ped-people-viewport-offset));
+  border-bottom-color: transparent;
+  position: relative;
 }
 
 .admin-ped-surface--people .admin-ped-people-view {
@@ -21140,6 +21144,18 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   flex: 0 0 auto;
 }
 
+.admin-ped-surface--people::after {
+  content: "";
+  position: absolute;
+  right: 14px;
+  bottom: 0;
+  left: 14px;
+  height: 28px;
+  border-radius: 0 0 20px 20px;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(17, 27, 40, 0), rgba(17, 27, 40, 0.96) 70%, rgba(17, 27, 40, 1));
+}
+
 .admin-ped-panelhead {
   display: flex;
   align-items: center;
@@ -21576,6 +21592,7 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
+  padding-bottom: 28px;
 }
 
 .admin-ped-row {
