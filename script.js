@@ -31424,11 +31424,12 @@ const isHiddenAdminLifecycleEventStatus = (status) => {
   return raw === "cancelada" || raw === "cancelado" || raw === "cancelled" || raw === "canceled" || raw === "deleted";
 };
 
-const queueAdminStudentLifecycleCascade = async ({ firebase, batch, alunoId, active, nowIso } = {}) => {
+const queueAdminStudentLifecycleCascade = async ({ firebase, batch, alunoId, active, nowIso, cascadeStatusActive = "reactivated", cascadeStatusInactive = "effective_cancelled" } = {}) => {
   const id = String(alunoId || "").trim();
   if (!id || !firebase || !batch) return { classes: 0, events: 0 };
   const nextClassStatus = active ? "active" : "paused";
   const nextEventStatus = active ? "agendada" : "cancelada";
+  const lifecycleCascadeStatus = active ? cascadeStatusActive : cascadeStatusInactive;
   const todayKey = createDateKey(new Date());
   let classesCount = 0;
   let eventsCount = 0;
@@ -31442,7 +31443,7 @@ const queueAdminStudentLifecycleCascade = async ({ firebase, batch, alunoId, act
       firebase.doc(firebase.primaryDb, "classes", classId),
       {
         status: nextClassStatus,
-        lifecycleCascadeStatus: active ? "reactivated" : "effective_cancelled",
+        lifecycleCascadeStatus,
         lifecycleCascadeAt: nowIso,
         updatedAt: firebase.serverTimestamp(),
       },
@@ -31466,7 +31467,7 @@ const queueAdminStudentLifecycleCascade = async ({ firebase, batch, alunoId, act
       firebase.doc(firebase.primaryDb, "aulas", docSnap.id),
       {
         status: nextEventStatus,
-        lifecycleCascadeStatus: active ? "reactivated" : "effective_cancelled",
+        lifecycleCascadeStatus,
         lifecycleCascadeAt: nowIso,
         updatedAt: firebase.serverTimestamp(),
       },
@@ -31986,12 +31987,30 @@ const openAdminStudentSuspendLessonsModal = ({ alunoId, suspend = true } = {}) =
       if (modalSecondary) modalSecondary.disabled = true;
       cancelamento.aulasSuspensas = Boolean(suspend);
       cancelamento.dataSuspensao = suspend ? new Date().toISOString() : null;
+      const nowIso = new Date().toISOString();
       cancelamento.eventos = (Array.isArray(cancelamento.eventos) ? cancelamento.eventos : []).concat([
-        createStudentCancellationHistoryEntry(suspend ? "Aulas suspensas" : "Aulas retomadas", suspend ? "TODO etapa 2: remover eventos futuros da agenda" : "TODO etapa 2: restaurar eventos"),
+        createStudentCancellationHistoryEntry(
+          suspend ? "Aulas suspensas" : "Aulas retomadas",
+          suspend ? "Ocorrências futuras removidas da agenda do professor" : "Ocorrências futuras reativadas na agenda do professor",
+          nowIso
+        ),
       ]);
       (async () => {
         try {
-          await saveAdminStudentLifecyclePatch({ alunoId: id, patch: { cancelamento } });
+          await saveAdminStudentLifecyclePatch({
+            alunoId: id,
+            patch: { cancelamento },
+            cascade: ({ firebase, batch, studentId }) =>
+              queueAdminStudentLifecycleCascade({
+                firebase,
+                batch,
+                alunoId: studentId,
+                active: !suspend,
+                nowIso,
+                cascadeStatusActive: "suspension_resumed",
+                cascadeStatusInactive: "suspended",
+              }),
+          });
           rerenderAdminStudentLifecycleViews();
           closeModal();
         } catch (error) {
