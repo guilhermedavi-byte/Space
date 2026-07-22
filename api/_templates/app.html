@@ -1871,36 +1871,17 @@
 
           <div class="teacher-students-drawer" data-teacher-student-history-drawer hidden>
             <div class="teacher-students-drawer-backdrop" data-teacher-student-history-close></div>
-            <div class="teacher-students-drawer-inner" role="dialog" aria-modal="true" aria-label="Histórico do aluno">
+            <div class="teacher-students-drawer-inner admin-student-sheet-drawer-inner" role="dialog" aria-modal="true" aria-label="Ficha do aluno">
               <div class="teacher-students-drawer-head">
                 <div>
-                  <div class="teacher-students-drawer-title" data-teacher-student-history-title>Histórico do aluno</div>
+                  <div class="teacher-students-drawer-title" data-teacher-student-history-title>Ficha do aluno</div>
                   <div class="teacher-students-drawer-sub" data-teacher-student-history-sub>—</div>
                 </div>
                 <button class="teacher-students-drawer-close" type="button" data-teacher-student-history-close aria-label="Fechar">✕</button>
               </div>
 
               <div class="teacher-students-drawer-body">
-                <div class="teacher-students-history-filters" role="tablist" aria-label="Filtrar histórico do aluno">
-                  <button class="teacher-students-history-filter is-active" type="button" role="tab" aria-selected="true" data-teacher-student-history-filter="all">
-                    Todos
-                  </button>
-                  <button class="teacher-students-history-filter" type="button" role="tab" aria-selected="false" data-teacher-student-history-filter="realizada">
-                    Realizadas
-                  </button>
-                  <button class="teacher-students-history-filter" type="button" role="tab" aria-selected="false" data-teacher-student-history-filter="falta_aluno">
-                    Faltas
-                  </button>
-                  <button class="teacher-students-history-filter" type="button" role="tab" aria-selected="false" data-teacher-student-history-filter="remarcada">
-                    Remarcadas
-                  </button>
-                  <button class="teacher-students-history-filter" type="button" role="tab" aria-selected="false" data-teacher-student-history-filter="alerts">
-                    Alertas
-                  </button>
-                </div>
-
-                <div class="teacher-students-history" data-teacher-student-history-body></div>
-                <div class="teacher-students-history-empty" data-teacher-student-history-empty hidden>Nenhum registro pedagógico encontrado para este aluno.</div>
+                <div class="admin-student-sheet teacher-student-sheet" data-teacher-student-sheet></div>
               </div>
             </div>
           </div>

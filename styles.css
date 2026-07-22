@@ -5716,6 +5716,20 @@ body.admin-student-drawer-open {
   color: rgba(255, 255, 255, 0.52);
 }
 
+.admin-student-inline-field-static {
+  gap: 8px;
+}
+
+.admin-student-inline-static-value {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
 .admin-student-inline-display {
   border: 0;
   background: transparent;

@@ -398,6 +398,7 @@ const teacherStudentHistoryTitle = document.querySelector("[data-teacher-student
 const teacherStudentHistorySub = document.querySelector("[data-teacher-student-history-sub]");
 const teacherStudentHistoryBody = document.querySelector("[data-teacher-student-history-body]");
 const teacherStudentHistoryEmpty = document.querySelector("[data-teacher-student-history-empty]");
+const teacherStudentSheet = document.querySelector("[data-teacher-student-sheet]");
 const teacherOccupancyPercent = document.querySelector("[data-teacher-occupancy-percent]");
 const teacherOccupancySub = document.querySelector("[data-teacher-occupancy-sub]");
 const teacherOccupancyRing = document.querySelector("[data-teacher-occupancy-ring]");
@@ -7854,11 +7855,30 @@ let teacherStudentsState = {
   eventsById: new Map(),
   logs: [],
   summaries: [],
+  sheetResources: {
+    loadedAt: 0,
+    studentsById: new Map(),
+    teachers: [],
+    teachersById: new Map(),
+    classes: [],
+    comments: [],
+  },
   history: {
     isOpen: false,
     alunoId: "",
-    filter: "all", // all | realizada | falta_aluno | remarcada | alerts
+    activeTab: "history",
+    commentComposerOpen: false,
+    commentComposerText: "",
+    commentComposerSaving: false,
+    commentComposerError: "",
     items: [],
+    alunoMeta: null,
+    teacherMeta: null,
+    baseLoading: false,
+    baseError: "",
+    historyLoading: false,
+    historyError: "",
+    linkedClasses: [],
   },
 };
 let teacherStudentsFilters = { query: "" };
@@ -9838,152 +9858,124 @@ const buildTeacherStudentHistoryItems = ({ alunoId } = {}) => {
   return out;
 };
 
-const renderTeacherStudentHistoryDrawer = () => {
-  if (!(teacherStudentHistoryBody instanceof HTMLElement)) return;
-  const hist = teacherStudentsState.history;
-  const items = Array.isArray(hist.items) ? hist.items : [];
-  const filter = String(hist.filter || "all");
+const renderTeacherStudentSheet = () => {
+  const sheetEl = getTeacherStudentSheet();
+  if (!(sheetEl instanceof HTMLElement)) return;
+  renderStudentSheetInto({ sheetEl, hist: teacherStudentsState.history, mode: "teacher" });
+};
 
-  const filtered = items.filter((it) => {
-    if (filter === "all") return true;
-    if (filter === "alerts") return Boolean(it.precisaIntervencao);
-    return it.statusAula === filter;
+const ensureTeacherStudentSheetResources = async ({ force = false } = {}) => {
+  const resources = teacherStudentsState.sheetResources || {};
+  const now = Date.now();
+  if (!force && resources.loadedAt && now - resources.loadedAt < 60_000) return resources;
+
+  const [studentRows, teachers, classes, comments] = await Promise.all([
+    fetchUserRowsFromFirestore("student"),
+    fetchAdminAgendaTeachers(),
+    fetchClassesFromFirestore(),
+    fetchAdminStudentCommentsFromFirestore(),
+  ]);
+  const allowedIds = new Set((Array.isArray(teacherStudentsState.summaries) ? teacherStudentsState.summaries : []).map((row) => String(row?.alunoId || row?.id || "").trim()).filter(Boolean));
+  const studentsById = new Map();
+  (Array.isArray(studentRows) ? studentRows : []).forEach((row) => {
+    const id = String(row?.firestoreDocId || row?.id || "").trim();
+    if (!id || !allowedIds.has(id)) return;
+    studentsById.set(id, enrichAdminStudentTeacherDisplay({ ...row, id, firestoreDocId: id }));
   });
 
-  const total = items.length;
-  const realizadas = items.filter((i) => i.statusAula === "realizada").length;
-  const faltas = items.filter((i) => i.statusAula === "falta_aluno").length;
-  const remarcadas = items.filter((i) => i.statusAula === "remarcada").length;
-  const last = items[0] || null;
-  const lastRisk = normalizeRiskLabel(last?.payload?.riscoEvasao || "") || "Sem dados";
-  const lastUpdated = last?.updatedAt ? formatAdminHistoryStamp(last.updatedAt) : "Sem dados";
-
-  let lastContent = "";
-  let lastEng = "";
-  let lastEvo = "";
-  let lastHumor = "";
-  let lastNext = "";
-  let lastAvisos = [];
-  let lastObs = "";
-  if (last && last.statusAula === "realizada") {
-    lastContent = String(last.payload?.conteudoTrabalhado || "").trim();
-    const e1 = Number(last.payload?.engajamentoNota || 0);
-    const e2 = Number(last.payload?.evolucaoNota || 0);
-    lastEng = e1 ? `${e1}/5` : "";
-    lastEvo = e2 ? `${e2}/5` : "";
-    lastHumor = String(last.payload?.humorAluno || "").trim();
-    lastNext = String(last.payload?.proximaAula || "").trim();
-    lastAvisos = Array.isArray(last.payload?.avisosCoordenacao) ? last.payload.avisosCoordenacao : [];
-    lastObs = String(last.payload?.observacoesInternas || "").trim();
-  }
-
-  const summaryHtml = `
-    <div class="teacher-students-history-summary">
-      <div class="teacher-students-summary-card"><span>Total de registros</span><strong>${escapeHtml(String(total))}</strong></div>
-      <div class="teacher-students-summary-card"><span>Aulas realizadas</span><strong>${escapeHtml(String(realizadas))}</strong></div>
-      <div class="teacher-students-summary-card"><span>Faltas</span><strong>${escapeHtml(String(faltas))}</strong></div>
-      <div class="teacher-students-summary-card"><span>Remarcações</span><strong>${escapeHtml(String(remarcadas))}</strong></div>
-      <div class="teacher-students-summary-card"><span>Último risco</span><strong>${escapeHtml(lastRisk)}</strong></div>
-      <div class="teacher-students-summary-card"><span>Última atualização</span><strong>${escapeHtml(lastUpdated)}</strong></div>
-    </div>
-  `;
-
-  const infoHtml = `
-    <div class="teacher-students-history-info">
-      <div class="teacher-students-info-row"><span>Último conteúdo</span><strong>${escapeHtml(lastContent || "Sem dados")}</strong></div>
-      <div class="teacher-students-info-row"><span>Último engajamento</span><strong>${escapeHtml(lastEng || "Sem dados")}</strong></div>
-      <div class="teacher-students-info-row"><span>Última evolução</span><strong>${escapeHtml(lastEvo || "Sem dados")}</strong></div>
-      <div class="teacher-students-info-row"><span>Último humor</span><strong>${escapeHtml(lastHumor || "Sem dados")}</strong></div>
-      <div class="teacher-students-info-row"><span>Próxima aula</span><strong>${escapeHtml(lastNext || "Sem dados")}</strong></div>
-      <div class="teacher-students-info-row"><span>Avisos</span><strong>${escapeHtml(lastAvisos.length ? `${lastAvisos.length} aviso(s)` : "Sem dados")}</strong></div>
-      <div class="teacher-students-info-row"><span>Observações recentes</span><strong>${escapeHtml(lastObs || "Sem dados")}</strong></div>
-    </div>
-  `;
-
-  const timelineHtml = filtered
-    .map((it) => {
-      const stamp = it.dateKey ? `${formatPedagogicoDate(it.dateKey)} • ${formatHmFromMinutes(it.startMin)}–${formatHmFromMinutes(it.endMin)}` : "—";
-      const statusLabel = it.statusAula === "realizada" ? "Realizada" : it.statusAula === "falta_aluno" ? "Falta do aluno" : "Remarcada";
-      const alertBadge = it.precisaIntervencao ? `<span class="teacher-students-tl-alert">Alerta</span>` : "";
-      const p = it.payload || {};
-      let details = "";
-      if (it.statusAula === "realizada") {
-        const avisos = Array.isArray(p.avisosCoordenacao) ? p.avisosCoordenacao : [];
-        details = `
-          <div class="teacher-students-tl-details">Conteúdo: ${escapeHtml(String(p.conteudoTrabalhado || "").trim() || "—")}</div>
-          <div class="teacher-students-tl-details">Engajamento: <strong>${escapeHtml(String(p.engajamentoNota || 0))}/5</strong> · Evolução: <strong>${escapeHtml(
-          String(p.evolucaoNota || 0)
-        )}/5</strong></div>
-          <div class="teacher-students-tl-details">Humor: ${escapeHtml(String(p.humorAluno || "").trim() || "—")} · Próxima aula: ${escapeHtml(
-          String(p.proximaAula || "").trim() || "—"
-        )}</div>
-          ${avisos.length ? `<div class="teacher-students-tl-avisos">${avisos.map((a) => `<span class="admin-students-pill">${escapeHtml(String(a))}</span>`).join("")}</div>` : ""}
-          ${p.observacoesInternas ? `<div class="teacher-students-tl-obs">${escapeHtml(String(p.observacoesInternas))}</div>` : ""}
-        `;
-      } else if (it.statusAula === "falta_aluno") {
-        details = `
-          <div class="teacher-students-tl-details">Motivo: ${escapeHtml(String(p.motivoFalta || "").trim() || "—")}</div>
-          <div class="teacher-students-tl-details">Risco: <strong>${escapeHtml(normalizeRiskLabel(p.riscoEvasao || "") || "Sem dados")}</strong></div>
-          ${p.observacao ? `<div class="teacher-students-tl-obs">${escapeHtml(String(p.observacao))}</div>` : ""}
-        `;
-      } else {
-        const novaData = String(p.novaDataRemarcacao || p.novaData || "").trim();
-        const ini = String(p.horarioInicioRemarcacao || p.novoInicio || "").trim();
-        const fim = String(p.horarioFimRemarcacao || p.novoFim || "").trim();
-        const when = novaData && ini && fim ? `${formatPedagogicoDate(novaData)} • ${ini}–${fim}` : novaData ? formatPedagogicoDate(novaData) : "";
-        details = `
-          <div class="teacher-students-tl-details">Motivo: ${escapeHtml(String(p.motivoRemarcacao || "").trim() || "—")}</div>
-          ${when ? `<div class=\"teacher-students-tl-details\">Nova aula: <strong>${escapeHtml(when)}</strong></div>` : ""}
-          <div class="teacher-students-tl-details">Risco: <strong>${escapeHtml(normalizeRiskLabel(p.riscoEvasao || "") || "Sem dados")}</strong></div>
-          ${p.observacao ? `<div class="teacher-students-tl-obs">${escapeHtml(String(p.observacao))}</div>` : ""}
-        `;
-      }
-
-      return `
-        <article class="teacher-students-tl-item">
-          <div class="teacher-students-tl-head">
-            <div class="teacher-students-tl-stamp">${escapeHtml(stamp)}</div>
-            ${alertBadge}
-          </div>
-          <div class="teacher-students-tl-title">${escapeHtml(statusLabel)}</div>
-          <div class="teacher-students-tl-by">Professor: ${escapeHtml(sessionUser?.name || "Professor")}</div>
-          ${details}
-        </article>
-      `;
-    })
-    .join("");
-
-  teacherStudentHistoryBody.innerHTML = `${summaryHtml}${infoHtml}<div class="teacher-students-timeline">${timelineHtml}</div>`;
-  if (teacherStudentHistoryEmpty instanceof HTMLElement) teacherStudentHistoryEmpty.hidden = filtered.length > 0;
+  teacherStudentsState.sheetResources = {
+    loadedAt: Date.now(),
+    studentsById,
+    teachers: Array.isArray(teachers) ? teachers : [],
+    teachersById: buildAdminTeacherMap(Array.isArray(teachers) ? teachers : []),
+    classes: (Array.isArray(classes) ? classes : []).filter((row) => {
+      const studentIds = Array.isArray(row?.studentIds) ? row.studentIds.map((value) => String(value || "").trim()) : [];
+      return studentIds.some((id) => allowedIds.has(id));
+    }),
+    comments: Array.isArray(comments) ? comments : [],
+  };
+  return teacherStudentsState.sheetResources;
 };
 
 const openTeacherStudentHistoryDrawer = async ({ alunoId } = {}) => {
   if (currentRole !== "teacher") return;
   const aId = String(alunoId || "").trim();
   if (!aId) return;
-  const items = buildTeacherStudentHistoryItems({ alunoId: aId });
-  teacherStudentsState.history = { isOpen: true, alunoId: aId, filter: "all", items };
-
-  if (teacherStudentHistoryTitle instanceof HTMLElement) teacherStudentHistoryTitle.textContent = "Histórico do aluno";
-  if (teacherStudentHistorySub instanceof HTMLElement) {
-    const name = teacherStudentsState.summaries.find((s) => s.alunoId === aId)?.nome || "Aluno";
-    teacherStudentHistorySub.textContent = name;
+  const summary = teacherStudentsState.summaries.find((row) => String(row?.alunoId || "").trim() === aId) || null;
+  if (!summary) {
+    setTeacherStudentsStatus("Esse aluno não está vinculado a você.", "error");
+    return;
   }
 
-  document.querySelectorAll("[data-teacher-student-history-filter]").forEach((btn) => {
-    if (!(btn instanceof HTMLButtonElement)) return;
-    const isActive = String(btn.getAttribute("data-teacher-student-history-filter") || "") === "all";
-    btn.classList.toggle("is-active", isActive);
-    btn.setAttribute("aria-selected", isActive ? "true" : "false");
-  });
+  teacherStudentsState.history = createTeacherStudentHistoryState(aId);
+  teacherStudentsState.history.isOpen = true;
+  teacherStudentsState.history.baseLoading = true;
+  teacherStudentsState.history.historyLoading = true;
 
-  renderTeacherStudentHistoryDrawer();
+  if (teacherStudentHistoryTitle instanceof HTMLElement) teacherStudentHistoryTitle.textContent = "Ficha do aluno";
+  if (teacherStudentHistorySub instanceof HTMLElement) teacherStudentHistorySub.textContent = summary?.nome || "Aluno";
 
   if (teacherStudentHistoryDrawer instanceof HTMLElement) {
     teacherStudentHistoryDrawer.hidden = false;
     window.requestAnimationFrame(() => {
       if (teacherStudentHistoryDrawer instanceof HTMLElement) teacherStudentHistoryDrawer.classList.add("is-open");
     });
+  }
+  renderTeacherStudentSheet();
+  setTeacherStudentsStatus("Carregando ficha…");
+
+  try {
+    const resources = await ensureTeacherStudentSheetResources({ force: false });
+    const alunoMeta =
+      (resources.studentsById instanceof Map ? resources.studentsById.get(aId) : null) ||
+      enrichAdminStudentTeacherDisplay({
+        id: aId,
+        firestoreDocId: aId,
+        nome: summary?.nome || "Aluno",
+        email: summary?.email || "",
+        plano: summary?.plano || "",
+        professorId: String(summary?.teacherId || "").trim(),
+        professorNome: summary?.teacherName || "",
+        ativo: true,
+      });
+    const linkedTeacherId = String(alunoMeta?.professorId || summary?.teacherId || "").trim();
+    const teacherMeta = linkedTeacherId && resources.teachersById instanceof Map ? resources.teachersById.get(linkedTeacherId) || null : null;
+    const logs = Array.isArray(teacherStudentsState.logs) ? teacherStudentsState.logs.filter((row) => String(row?.alunoId || "").trim() === aId) : [];
+    const comments = Array.isArray(resources.comments) ? resources.comments.filter((row) => String(row?.alunoId || "").trim() === aId) : [];
+    const items = buildAdminStudentHistoryItems({
+      alunoId: aId,
+      teacherId: linkedTeacherId,
+      logs,
+      comments,
+      eventsById: teacherStudentsState.eventsById,
+      teacherMeta,
+    });
+
+    teacherStudentsState.history.alunoMeta = alunoMeta;
+    teacherStudentsState.history.teacherMeta = teacherMeta;
+    teacherStudentsState.history.linkedClasses = getTeacherStudentLinkedClasses(aId);
+    teacherStudentsState.history.items = items;
+    teacherStudentsState.history.baseLoading = false;
+    teacherStudentsState.history.historyLoading = false;
+    teacherStudentsState.history.baseError = "";
+    teacherStudentsState.history.historyError = "";
+
+    if (teacherStudentHistorySub instanceof HTMLElement) {
+      const teacherName = teacherMeta?.nome || summary?.teacherName || "";
+      teacherStudentHistorySub.textContent = teacherName ? `${summary?.nome || "Aluno"} • ${teacherName}` : summary?.nome || "Aluno";
+    }
+
+    renderTeacherStudentSheet();
+    setTeacherStudentsStatus("");
+  } catch (error) {
+    console.error("[teacher] student sheet load failed:", error);
+    const message = typeof error?.message === "string" && error.message ? error.message : "Não foi possível carregar a ficha do aluno.";
+    teacherStudentsState.history.baseLoading = false;
+    teacherStudentsState.history.historyLoading = false;
+    teacherStudentsState.history.baseError = message;
+    teacherStudentsState.history.historyError = message;
+    renderTeacherStudentSheet();
+    setTeacherStudentsStatus(message, "error");
   }
 };
 
@@ -9994,7 +9986,7 @@ const closeTeacherStudentHistoryDrawer = () => {
       if (teacherStudentHistoryDrawer instanceof HTMLElement) teacherStudentHistoryDrawer.hidden = true;
     }, 220);
   }
-  teacherStudentsState.history = { isOpen: false, alunoId: "", filter: "all", items: [] };
+  teacherStudentsState.history = createTeacherStudentHistoryState();
 };
 
 const renderTeacherStudentsPanel = async ({ force = false } = {}) => {
@@ -11752,6 +11744,7 @@ function getAdminTeacherDisplayNameById(teacherId, { fallback = "", allowRawIdFa
   };
   const mapCandidates = [
     adminStudentsState?.teachersById instanceof Map ? adminStudentsState.teachersById : null,
+    teacherStudentsState?.sheetResources?.teachersById instanceof Map ? teacherStudentsState.sheetResources.teachersById : null,
     typeof adminPedagogicoState !== "undefined" && adminPedagogicoState?.teachersById instanceof Map ? adminPedagogicoState.teachersById : null,
   ].filter(Boolean);
   for (const map of mapCandidates) {
@@ -18202,6 +18195,53 @@ const buildAdminStudentInlineFieldHtml = ({
   `;
 };
 
+const buildStudentStaticInfoHtml = ({ label, value } = {}) => `
+  <div class="admin-student-inline-field admin-student-inline-field-static">
+    <div class="admin-student-inline-label">${escapeHtml(String(label || ""))}</div>
+    <div class="admin-student-inline-static-value">${escapeHtml(String(value || "—"))}</div>
+  </div>
+`;
+
+const createTeacherStudentHistoryState = (alunoId = "") => ({
+  isOpen: false,
+  alunoId: String(alunoId || "").trim(),
+  activeTab: "history",
+  commentComposerOpen: false,
+  commentComposerText: "",
+  commentComposerSaving: false,
+  commentComposerError: "",
+  items: [],
+  alunoMeta: null,
+  teacherMeta: null,
+  baseLoading: false,
+  baseError: "",
+  historyLoading: false,
+  historyError: "",
+  linkedClasses: [],
+});
+
+const getTeacherStudentSheet = () => (teacherStudentSheet instanceof HTMLElement ? teacherStudentSheet : null);
+
+const getStudentSheetModeConfig = (mode = "admin") => {
+  const isTeacher = mode === "teacher";
+  return {
+    mode,
+    isTeacher,
+    canEditIdentity: !isTeacher,
+    canEditPlan: !isTeacher,
+    canEditClass: !isTeacher,
+    canEditLifecycle: !isTeacher,
+    canEditNotes: !isTeacher,
+    canEditAvatar: !isTeacher,
+    showPersonalData: !isTeacher,
+    showNotes: !isTeacher,
+    showTeacherSummary: isTeacher,
+    allowCommentComposer: true,
+    emptyClassCta: !isTeacher,
+    showEmailInHero: !isTeacher,
+  };
+};
+
 const getAdminTeacherInlineValue = (teacherMeta, field) => {
   const key = String(field || "").trim();
   if (!teacherMeta || !key) return "";
@@ -19329,7 +19369,8 @@ const renderAdminStudentLifecycleSensorLine = ({ label, sensor, error } = {}) =>
   `;
 };
 
-const renderAdminStudentLifecycleCard = (alunoMeta) => {
+const renderAdminStudentLifecycleCard = (alunoMeta, options = {}) => {
+  const { canEditLifecycle = true, historyState = adminStudentsState.history } = options || {};
   const meta = alunoMeta && typeof alunoMeta === "object" ? alunoMeta : null;
   const state = getStudentLifecycleState(meta);
   const cancelamento = normalizeStudentCancellationRecord(meta?.cancelamento);
@@ -19338,12 +19379,65 @@ const renderAdminStudentLifecycleCard = (alunoMeta) => {
   const reason = String(activeRecord?.motivo || "").trim();
   const reasonDetail = String(activeRecord?.motivoDetalhe || "").trim();
   const suspensionLabel = activeRecord?.dataSuspensao ? formatAdminDate(activeRecord.dataSuspensao) : "";
-  const sensors = adminStudentsState.history?.lifecycleSensors || {};
+  const sensors = historyState?.lifecycleSensors || {};
   const lifecycleRange = getStudentCancellationWindowRange(activeRecord);
   const lifecycleProgress = getRetentionTimelineProgress(activeRecord, new Date());
   const totalDays = lifecycleProgress.totalDays;
   const elapsedDays = lifecycleProgress.elapsedDays;
   const progressPct = lifecycleProgress.progressPct;
+
+  if (!canEditLifecycle) {
+    const badgeTone =
+      state === STUDENT_LIFECYCLE_STATE.INACTIVE
+        ? "is-gray"
+        : state === STUDENT_LIFECYCLE_STATE.SUSPENDED
+          ? "is-muted"
+          : state === STUDENT_LIFECYCLE_STATE.ACTIVE
+            ? "is-active"
+            : "is-warn";
+    const badgeLabel =
+      state === STUDENT_LIFECYCLE_STATE.ACTIVE
+        ? "Ativo"
+        : state === STUDENT_LIFECYCLE_STATE.SUSPENDED
+          ? `Suspenso${suspensionLabel ? ` desde ${suspensionLabel}` : ""}`
+          : state === STUDENT_LIFECYCLE_STATE.INACTIVE
+            ? "Inativo"
+            : describeStudentCancellationType(activeRecord);
+    return `
+      <div class="admin-student-panel-card admin-student-lifecycle-card ${state === STUDENT_LIFECYCLE_STATE.SUSPENDED ? "is-suspended" : state === STUDENT_LIFECYCLE_STATE.INACTIVE ? "is-inactive" : state === STUDENT_LIFECYCLE_STATE.ACTIVE ? "" : "is-notice"}">
+        <div class="admin-student-lifecycle-head">
+          <div>
+            <div class="admin-student-panel-title">Ciclo de vida</div>
+            <div class="admin-student-lifecycle-title">${escapeHtml(summary.title)}</div>
+            <div class="admin-student-lifecycle-subtitle">${escapeHtml(summary.subtitle || "Sem ações disponíveis nesta etapa.")}</div>
+          </div>
+          <span class="admin-student-lifecycle-badge ${badgeTone}">${escapeHtml(badgeLabel)}</span>
+        </div>
+        ${
+          reason || reasonDetail
+            ? `<div class="admin-student-lifecycle-meta">Motivo: ${escapeHtml(reason || "—")}${reasonDetail ? ` · ${escapeHtml(reasonDetail)}` : ""}</div>`
+            : ""
+        }
+        ${
+          lifecycleRange
+            ? `
+              <div class="admin-student-lifecycle-timeline">
+                <div class="admin-student-lifecycle-timeline-copy">
+                  <span>Pedido ${escapeHtml(formatAdminDate(activeRecord?.dataPedido))}</span>
+                  <span>Fim ${escapeHtml(activeRecord?.dataFimAviso ? formatAdminDate(activeRecord.dataFimAviso) : "—")}</span>
+                </div>
+                <div class="admin-student-lifecycle-timeline-bar">
+                  <i style="width:${escapeHtml(String(progressPct))}%"></i>
+                  <span class="admin-student-lifecycle-timeline-today" style="left:${escapeHtml(String(progressPct))}%"></span>
+                </div>
+                <div class="admin-student-lifecycle-timeline-sub">Dia ${escapeHtml(String(elapsedDays || 0))} de ${escapeHtml(String(totalDays || 0))}</div>
+              </div>
+            `
+            : ""
+        }
+      </div>
+    `;
+  }
 
   if (state === STUDENT_LIFECYCLE_STATE.ACTIVE) {
     return `
@@ -19364,7 +19458,7 @@ const renderAdminStudentLifecycleCard = (alunoMeta) => {
                 <path d="M17.5 12h.01"></path>
               </svg>
             </button>
-            <div class="admin-student-lifecycle-menu" ${adminStudentsState.history?.lifecycleMenuOpen ? "" : "hidden"}>
+            <div class="admin-student-lifecycle-menu" ${historyState?.lifecycleMenuOpen ? "" : "hidden"}>
               <button type="button" class="admin-student-lifecycle-menu-item admin-student-lifecycle-danger" data-admin-student-lifecycle-action="mark_abandonment">Confirmar abandono</button>
             </div>
           </div>
@@ -19448,7 +19542,7 @@ const renderAdminStudentLifecycleCard = (alunoMeta) => {
               <path d="M17.5 12h.01"></path>
             </svg>
           </button>
-          <div class="admin-student-lifecycle-menu" ${adminStudentsState.history?.lifecycleMenuOpen ? "" : "hidden"}>
+          <div class="admin-student-lifecycle-menu" ${historyState?.lifecycleMenuOpen ? "" : "hidden"}>
             <button type="button" class="admin-student-lifecycle-menu-item admin-student-lifecycle-danger" data-admin-student-lifecycle-action="effective">Efetivar cancelamento</button>
             <button type="button" class="admin-student-lifecycle-menu-item" data-admin-student-lifecycle-action="revert">Reverter cancelamento</button>
           </div>
@@ -19458,21 +19552,28 @@ const renderAdminStudentLifecycleCard = (alunoMeta) => {
   `;
 };
 
-const renderAdminStudentSheet = () => {
-  const drawerEl = getAdminStudentHistoryDrawer();
-  if (!(drawerEl instanceof HTMLElement)) {
-    warnMissingAdminStudentHistoryDrawer("renderAdminStudentSheet");
-    return;
-  }
-  const sheetEl = getAdminStudentSheet();
-  if (!(sheetEl instanceof HTMLElement)) {
-    console.warn("[admin] student sheet unavailable", "renderAdminStudentSheet");
-    return;
-  }
+const getTeacherStudentLinkedClasses = (studentId) => {
+  const id = String(studentId || "").trim();
+  if (!id) return [];
+  const resources = teacherStudentsState.sheetResources || {};
+  const rows = Array.isArray(resources.classes) ? resources.classes : [];
+  return rows
+    .filter((row) => {
+      const studentIds = Array.isArray(row?.studentIds) ? row.studentIds.map((value) => String(value || "").trim()) : [];
+      return studentIds.includes(id);
+    })
+    .sort((a, b) => {
+      const statusDiff = (normalizeClassStatus(a?.status) === "active" ? 0 : 1) - (normalizeClassStatus(b?.status) === "active" ? 0 : 1);
+      if (statusDiff) return statusDiff;
+      const teacherDiff = String(a?.teacherName || "").localeCompare(String(b?.teacherName || ""), "pt-BR");
+      if (teacherDiff) return teacherDiff;
+      return String(a?.id || "").localeCompare(String(b?.id || ""), "pt-BR");
+    });
+};
 
-  try {
-
-  const hist = adminStudentsState.history;
+const renderStudentSheetInto = ({ sheetEl, hist, mode = "admin" } = {}) => {
+  if (!(sheetEl instanceof HTMLElement) || !hist) return;
+  const cfg = getStudentSheetModeConfig(mode);
   const alunoMeta = hist.alunoMeta;
   const alunoName = alunoMeta?.nome || alunoMeta?.nomeCompleto || alunoMeta?.name || alunoMeta?.email || "Aluno sem nome";
   const alunoEmail = alunoMeta?.email || "";
@@ -19508,32 +19609,37 @@ const renderAdminStudentSheet = () => {
   const commentComposerError = String(hist.commentComposerError || "");
   const commentComposerSaving = Boolean(hist.commentComposerSaving);
   const photoStatus = hist.photoSaving ? "Enviando foto…" : hist.photoError ? String(hist.photoError) : "";
-  const liveClasses = getAdminStudentLinkedClasses(alunoMeta?.id || hist.alunoId);
-  const lifecycleCardHtml = renderAdminStudentLifecycleCard(alunoMeta);
+  const liveClasses =
+    mode === "teacher"
+      ? Array.isArray(hist.linkedClasses)
+        ? hist.linkedClasses
+        : getTeacherStudentLinkedClasses(alunoMeta?.id || hist.alunoId)
+      : getAdminStudentLinkedClasses(alunoMeta?.id || hist.alunoId);
+  const lifecycleCardHtml = renderAdminStudentLifecycleCard(alunoMeta, {
+    canEditLifecycle: cfg.canEditLifecycle,
+    historyState: hist,
+  });
   if (hist.editingField || hist.inlineSavingField) return;
 
   const liveClassBlocks = liveClasses.map((classRow) => {
     const status = normalizeClassStatus(classRow?.status);
     const liveUrl = buildAdminPedClassLiveUrl(classRow);
-    const classId = String(classRow?.id || "").trim();
     const scheduleState = getAdminPedClassScheduleDisplayState(classRow);
     const statusSuffix = status === "active" ? "" : status === "paused" ? " (pausada)" : " (inativa)";
     return {
-      classId,
-      status,
       statusSuffix,
+      hasLiveUrl: Boolean(liveUrl),
       liveUrl,
       hostLabel: getAdminStudentLiveClassHostLabel(liveUrl),
       scheduleItems: scheduleState.currentItems,
       pendingScheduleItems: scheduleState.pendingItems,
       pendingEffectiveFrom: scheduleState.pendingEffectiveFrom,
-      hasLiveUrl: Boolean(liveUrl),
     };
   });
   const liveClassesHtml = liveClasses.length
     ? liveClassBlocks
-        .map((block) => {
-          return `
+        .map(
+          (block) => `
             <div class="admin-student-live-class-row">
               <div class="admin-student-live-class-schedule">
                 ${block.pendingScheduleItems.length ? `<div class="admin-student-live-class-section-title">Horário atual</div>` : ""}
@@ -19592,68 +19698,84 @@ const renderAdminStudentSheet = () => {
                         </button>
                       </div>
                     `
-                    : `
-                      <div class="admin-student-live-class-link is-disabled">Sala virtual não configurada</div>
-                    `
+                    : `<div class="admin-student-live-class-link is-disabled">Sala virtual não configurada</div>`
                 }
                 <div class="admin-student-live-class-actions">
-                  ${
-                    block.hasLiveUrl
-                      ? `<a class="admin-ped-action admin-student-live-class-enter" href="${escapeHtml(block.liveUrl)}" target="_blank" rel="noopener">Entrar na aula</a>`
-                      : ``
-                  }
+                  ${block.hasLiveUrl ? `<a class="admin-ped-action admin-student-live-class-enter" href="${escapeHtml(block.liveUrl)}" target="_blank" rel="noopener">Entrar na aula</a>` : ``}
                 </div>
               </div>
             </div>
-          `;
-        })
+          `
+        )
         .join("")
     : `
       <div class="admin-student-live-class-empty">
         <div class="admin-student-live-class-empty-title">Nenhuma aula cadastrada</div>
-        <button class="button button-solid button-small" type="button" data-admin-ped-student-new-class="${escapeHtml(String(alunoMeta?.id || hist.alunoId || ""))}">Criar aula</button>
+        ${
+          cfg.emptyClassCta
+            ? `<button class="button button-solid button-small" type="button" data-admin-ped-student-new-class="${escapeHtml(String(alunoMeta?.id || hist.alunoId || ""))}">Criar aula</button>`
+            : ``
+        }
       </div>
     `;
+
+  const heroNameHtml = cfg.canEditIdentity
+    ? buildAdminStudentInlineFieldHtml({
+        field: "nome",
+        label: "Nome",
+        value: getAdminStudentInlineValue(alunoMeta, "nome") || alunoName,
+        displayValue: alunoName,
+        placeholder: "Aluno sem nome",
+      })
+    : `<span>${escapeHtml(alunoName)}</span>`;
+  const heroPlanHtml = cfg.canEditPlan
+    ? buildAdminStudentInlineFieldHtml({
+        field: "plano",
+        label: "Plano",
+        value: planoNormalized,
+        displayValue: planoLabel,
+        kind: "select",
+        optionsHtml: planOptionsHtml,
+        placeholder: "Sem plano",
+      })
+    : escapeHtml(planoLabel);
+  const historyToggleAttr = mode === "teacher" ? "data-teacher-student-comment-toggle" : "data-admin-student-comment-toggle";
+  const historyTextAttr = mode === "teacher" ? "data-teacher-student-comment-text" : "data-admin-student-comment-text";
+  const historyStatusAttr = mode === "teacher" ? "data-teacher-student-comment-status" : "data-admin-student-comment-status";
+  const historySendAttr = mode === "teacher" ? "data-teacher-student-comment-send" : "data-admin-student-comment-send";
+  const commentComposerAttr = mode === "teacher" ? "data-teacher-student-comment-composer" : "data-admin-student-comment-composer";
 
   sheetEl.innerHTML = `
     <div class="admin-student-sheet-grid admin-student-simple-grid">
       <aside class="admin-student-sheet-left admin-student-simple-left" aria-label="Identidade do aluno">
         <div class="admin-student-id admin-student-id-photo">
           <div class="admin-student-avatar-wrap">
-            <button type="button" class="admin-student-avatar admin-student-avatar-photo" data-admin-student-avatar-trigger aria-label="Alterar foto do aluno" ${hist.photoSaving ? "disabled" : ""}>
-              ${
-                avatarPhotoURL
-                  ? `<img class="admin-student-avatar-image" src="${escapeHtml(avatarPhotoURL)}" alt="" />`
-                  : `<span class="admin-student-avatar-initials">${escapeHtml(initials)}</span>`
-              }
-            </button>
-            <span class="admin-student-avatar-edit" aria-hidden="true">${hist.photoSaving ? "…" : "✎"}</span>
-            <input type="file" hidden accept="image/*" data-admin-student-avatar-file />
+            ${
+              cfg.canEditAvatar
+                ? `
+                  <button type="button" class="admin-student-avatar admin-student-avatar-photo" data-admin-student-avatar-trigger aria-label="Alterar foto do aluno" ${hist.photoSaving ? "disabled" : ""}>
+                    ${
+                      avatarPhotoURL
+                        ? `<img class="admin-student-avatar-image" src="${escapeHtml(avatarPhotoURL)}" alt="" />`
+                        : `<span class="admin-student-avatar-initials">${escapeHtml(initials)}</span>`
+                    }
+                  </button>
+                  <span class="admin-student-avatar-edit" aria-hidden="true">${hist.photoSaving ? "…" : "✎"}</span>
+                  <input type="file" hidden accept="image/*" data-admin-student-avatar-file />
+                `
+                : `
+                  <div class="admin-student-avatar admin-student-avatar-photo">
+                    ${avatarPhotoURL ? `<img class="admin-student-avatar-image" src="${escapeHtml(avatarPhotoURL)}" alt="" />` : `<span class="admin-student-avatar-initials">${escapeHtml(initials)}</span>`}
+                  </div>
+                `
+            }
           </div>
           <div class="admin-student-id-main">
-            <div class="admin-student-name admin-student-title-inline">
-              ${buildAdminStudentInlineFieldHtml({
-                field: "nome",
-                label: "Nome",
-                value: getAdminStudentInlineValue(alunoMeta, "nome") || alunoName,
-                displayValue: alunoName,
-                placeholder: "Aluno sem nome",
-              })}
-            </div>
-            <div class="admin-student-email">${escapeHtml(alunoEmail || "—")}</div>
+            <div class="admin-student-name admin-student-title-inline">${heroNameHtml}</div>
+            ${cfg.showEmailInHero ? `<div class="admin-student-email">${escapeHtml(alunoEmail || "—")}</div>` : ``}
             <div class="admin-student-tags">
               <span class="admin-student-tag ${statusTone}">${escapeHtml(statusLabel)}</span>
-              <span class="admin-student-tag admin-student-plan-inline ${planoTone}">
-                ${buildAdminStudentInlineFieldHtml({
-                  field: "plano",
-                  label: "Plano",
-                  value: planoNormalized,
-                  displayValue: planoLabel,
-                  kind: "select",
-                  optionsHtml: planOptionsHtml,
-                  placeholder: "Sem plano",
-                })}
-              </span>
+              <span class="admin-student-tag admin-student-plan-inline ${planoTone}">${heroPlanHtml}</span>
               <span class="admin-student-tag ${riskTone}">${escapeHtml(`Risco: ${riskLabel || "—"}`)}</span>
             </div>
           </div>
@@ -19661,106 +19783,119 @@ const renderAdminStudentSheet = () => {
 
         ${lifecycleCardHtml}
 
-        <div class="admin-student-simple-notes">
-          <div class="admin-student-panel-title">Observações pedagógicas</div>
-          <textarea
-            class="admin-student-input admin-student-textarea admin-student-notes-textarea"
-            rows="6"
-            data-admin-student-notes-field
-          >${escapeHtml(notesValue)}</textarea>
-          <div class="admin-student-simple-notes-actions">
-            <button type="button" class="button button-solid button-small" data-admin-student-notes-save ${hist.notesSaving ? "disabled" : ""}>
-              ${hist.notesSaving ? "Salvando…" : "Salvar notas"}
-            </button>
-            <div class="admin-student-simple-notes-status${notesStatus ? "" : " is-empty"}" data-admin-student-notes-status data-tone="${escapeHtml(notesTone)}">
-              ${escapeHtml(notesStatus || "—")}
-            </div>
-          </div>
-        </div>
+        ${
+          cfg.showTeacherSummary
+            ? `
+              <div class="admin-student-personal admin-student-quick-data" aria-label="Resumo do aluno">
+                <div class="admin-student-personal-title">Resumo do aluno</div>
+                <div class="admin-student-inline-list">
+                  ${buildStudentStaticInfoHtml({ label: "Professor vinculado", value: teacherName || "Sem professor" })}
+                  ${buildStudentStaticInfoHtml({ label: "Plano", value: planoLabel })}
+                  ${buildStudentStaticInfoHtml({ label: "Data de cadastro", value: createdLabel })}
+                </div>
+              </div>
+            `
+            : ``
+        }
+
+        ${
+          cfg.showNotes
+            ? `
+              <div class="admin-student-simple-notes">
+                <div class="admin-student-panel-title">Observações pedagógicas</div>
+                <textarea
+                  class="admin-student-input admin-student-textarea admin-student-notes-textarea"
+                  rows="6"
+                  data-admin-student-notes-field
+                >${escapeHtml(notesValue)}</textarea>
+                <div class="admin-student-simple-notes-actions">
+                  <button type="button" class="button button-solid button-small" data-admin-student-notes-save ${hist.notesSaving ? "disabled" : ""}>
+                    ${hist.notesSaving ? "Salvando…" : "Salvar notas"}
+                  </button>
+                  <div class="admin-student-simple-notes-status${notesStatus ? "" : " is-empty"}" data-admin-student-notes-status data-tone="${escapeHtml(notesTone)}">
+                    ${escapeHtml(notesStatus || "—")}
+                  </div>
+                </div>
+              </div>
+            `
+            : ``
+        }
+
         ${baseError ? `<div class="admin-student-simple-block-error">${escapeHtml(baseError)}</div>` : ""}
         ${hist.baseLoading ? `<div class="admin-student-simple-block-loading">Carregando dados básicos…</div>` : ""}
 
         <div class="admin-student-panel-card admin-student-live-class-card">
           <div class="admin-student-live-class-card-head">
             <div class="admin-student-panel-title">Aulas cadastradas</div>
-            <button
-              class="admin-student-live-class-edit"
-              type="button"
-              data-admin-student-edit-class="${escapeHtml(String(alunoMeta?.id || hist.alunoId || ""))}"
-              aria-label="Editar aulas cadastradas"
-              title="Editar aulas"
-            >
-              <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <path d="M10.9 2.1a1.5 1.5 0 0 1 2.1 2.1l-6.8 6.8-2.7.6.6-2.7 6.8-6.8Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"></path>
-                <path d="M9.8 3.2 12.8 6.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
-              </svg>
-            </button>
+            ${
+              cfg.canEditClass
+                ? `
+                  <button
+                    class="admin-student-live-class-edit"
+                    type="button"
+                    data-admin-student-edit-class="${escapeHtml(String(alunoMeta?.id || hist.alunoId || ""))}"
+                    aria-label="Editar aulas cadastradas"
+                    title="Editar aulas"
+                  >
+                    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                      <path d="M10.9 2.1a1.5 1.5 0 0 1 2.1 2.1l-6.8 6.8-2.7.6.6-2.7 6.8-6.8Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"></path>
+                      <path d="M9.8 3.2 12.8 6.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
+                    </svg>
+                  </button>
+                `
+                : ``
+            }
           </div>
-          <div class="admin-student-live-class-list">
-            ${liveClassesHtml}
-          </div>
+          <div class="admin-student-live-class-list">${liveClassesHtml}</div>
         </div>
 
-        <div class="admin-student-personal admin-student-quick-data" aria-label="Dados do aluno">
-          <div class="admin-student-personal-title">Dados do aluno</div>
-          <div class="admin-student-inline-list">
-            ${buildAdminStudentInlineFieldHtml({
-              field: "email",
-              label: "E-mail",
-              value: alunoEmail,
-              kind: "email",
-              placeholder: "—",
-            })}
-            ${buildAdminStudentInlineFieldHtml({
-              field: "telefone",
-              label: "Telefone",
-              value: getAdminStudentInlineValue(alunoMeta, "telefone"),
-              kind: "tel",
-              placeholder: "—",
-            })}
-            ${buildAdminStudentInlineFieldHtml({
-              field: "professorId",
-              label: "Professor vinculado",
-              value: linkedTeacherId,
-              displayValue: teacherName || "Sem professor",
-              kind: "select",
-              optionsHtml: teacherOptionsHtml,
-              placeholder: "Sem professor",
-            })}
-            ${buildAdminStudentInlineFieldHtml({
-              field: "turma",
-              label: "Turma",
-              value: String(alunoMeta?.groupId || alunoMeta?.classId || alunoMeta?.groupName || alunoMeta?.turmaNome || alunoMeta?.className || alunoMeta?.turma || "").trim(),
-              kind: "select",
-              optionsHtml: turmaOptionsHtml,
-              placeholder: "Sem turma",
-            })}
-            ${buildAdminStudentInlineFieldHtml({
-              field: "english_level_start",
-              label: "Nível de inglês de partida",
-              value: englishStartValue,
-              kind: "select",
-              optionsHtml: [`<option value="">Sem nível</option>`]
-                .concat(
-                  ADMIN_STUDENT_INGLES_START_OPTIONS.map((opt) => {
-                    const sel = englishStartValue === opt ? "selected" : "";
-                    return `<option value="${escapeHtml(opt)}" ${sel}>${escapeHtml(opt)}</option>`;
-                  })
-                )
-                .join(""),
-              placeholder: "Sem nível",
-            })}
-            ${buildAdminStudentInlineFieldHtml({
-              field: "criadoEm",
-              label: "Data de cadastro",
-              value: createdInputValue,
-              displayValue: createdLabel,
-              kind: "date",
-              placeholder: "—",
-            })}
-          </div>
-          ${photoStatus ? `<div class="admin-student-inline-photo-status${hist.photoSaving ? " is-loading" : " is-error"}">${escapeHtml(photoStatus)}</div>` : ""}
-        </div>
+        ${
+          cfg.showPersonalData
+            ? `
+              <div class="admin-student-personal admin-student-quick-data" aria-label="Dados do aluno">
+                <div class="admin-student-personal-title">Dados do aluno</div>
+                <div class="admin-student-inline-list">
+                  ${buildAdminStudentInlineFieldHtml({ field: "email", label: "E-mail", value: alunoEmail, kind: "email", placeholder: "—" })}
+                  ${buildAdminStudentInlineFieldHtml({ field: "telefone", label: "Telefone", value: getAdminStudentInlineValue(alunoMeta, "telefone"), kind: "tel", placeholder: "—" })}
+                  ${buildAdminStudentInlineFieldHtml({
+                    field: "professorId",
+                    label: "Professor vinculado",
+                    value: linkedTeacherId,
+                    displayValue: teacherName || "Sem professor",
+                    kind: "select",
+                    optionsHtml: teacherOptionsHtml,
+                    placeholder: "Sem professor",
+                  })}
+                  ${buildAdminStudentInlineFieldHtml({
+                    field: "turma",
+                    label: "Turma",
+                    value: String(alunoMeta?.groupId || alunoMeta?.classId || alunoMeta?.groupName || alunoMeta?.turmaNome || alunoMeta?.className || alunoMeta?.turma || "").trim(),
+                    kind: "select",
+                    optionsHtml: turmaOptionsHtml,
+                    placeholder: "Sem turma",
+                  })}
+                  ${buildAdminStudentInlineFieldHtml({
+                    field: "english_level_start",
+                    label: "Nível de inglês de partida",
+                    value: englishStartValue,
+                    kind: "select",
+                    optionsHtml: [`<option value="">Sem nível</option>`]
+                      .concat(
+                        ADMIN_STUDENT_INGLES_START_OPTIONS.map((opt) => {
+                          const sel = englishStartValue === opt ? "selected" : "";
+                          return `<option value="${escapeHtml(opt)}" ${sel}>${escapeHtml(opt)}</option>`;
+                        })
+                      )
+                      .join(""),
+                    placeholder: "Sem nível",
+                  })}
+                  ${buildAdminStudentInlineFieldHtml({ field: "criadoEm", label: "Data de cadastro", value: createdInputValue, displayValue: createdLabel, kind: "date", placeholder: "—" })}
+                </div>
+                ${photoStatus ? `<div class="admin-student-inline-photo-status${hist.photoSaving ? " is-loading" : " is-error"}">${escapeHtml(photoStatus)}</div>` : ""}
+              </div>
+            `
+            : ``
+        }
       </aside>
 
       <section class="admin-student-sheet-right admin-student-simple-right" aria-label="Detalhes do aluno">
@@ -19770,20 +19905,18 @@ const renderAdminStudentSheet = () => {
             <div class="admin-student-history-subtitle">Linha do tempo das aulas e comentários do aluno.</div>
           </div>
           <div class="admin-student-history-actions">
-            <button type="button" class="button button-outline button-small admin-student-comment-toggle" data-admin-student-comment-toggle>
+            <button type="button" class="button button-outline button-small admin-student-comment-toggle" ${historyToggleAttr}>
               + Comentário
             </button>
           </div>
         </div>
-        <div class="admin-student-comment-composer${commentComposerOpen ? " is-open" : ""}" data-admin-student-comment-composer ${commentComposerOpen ? "" : "hidden"}>
-          <textarea class="admin-student-input admin-student-comment-textarea" rows="3" data-admin-student-comment-text placeholder="Escreva um comentário...">${escapeHtml(
-            commentComposerText
-          )}</textarea>
+        <div class="admin-student-comment-composer${commentComposerOpen ? " is-open" : ""}" ${commentComposerAttr} ${commentComposerOpen ? "" : "hidden"}>
+          <textarea class="admin-student-input admin-student-comment-textarea" rows="3" ${historyTextAttr} placeholder="Escreva um comentário...">${escapeHtml(commentComposerText)}</textarea>
           <div class="admin-student-comment-composer-footer">
-            <div class="admin-student-comment-status${commentComposerError ? "" : " is-empty"}" data-admin-student-comment-status data-tone="${commentComposerError ? "error" : ""}">
+            <div class="admin-student-comment-status${commentComposerError ? "" : " is-empty"}" ${historyStatusAttr} data-tone="${commentComposerError ? "error" : ""}">
               ${escapeHtml(commentComposerError || "—")}
             </div>
-            <button type="button" class="button button-solid button-small admin-student-comment-send" data-admin-student-comment-send ${commentComposerSaving ? "disabled" : ""}>
+            <button type="button" class="button button-solid button-small admin-student-comment-send" ${historySendAttr} ${commentComposerSaving ? "disabled" : ""}>
               ${commentComposerSaving ? "Enviando…" : "Enviar"}
             </button>
           </div>
@@ -19794,8 +19927,23 @@ const renderAdminStudentSheet = () => {
       </section>
     </div>
   `;
+};
 
-  renderAdminStudentHistoryTab();
+const renderAdminStudentSheet = () => {
+  const drawerEl = getAdminStudentHistoryDrawer();
+  if (!(drawerEl instanceof HTMLElement)) {
+    warnMissingAdminStudentHistoryDrawer("renderAdminStudentSheet");
+    return;
+  }
+  const sheetEl = getAdminStudentSheet();
+  if (!(sheetEl instanceof HTMLElement)) {
+    console.warn("[admin] student sheet unavailable", "renderAdminStudentSheet");
+    return;
+  }
+
+  try {
+    renderStudentSheetInto({ sheetEl, hist: adminStudentsState.history, mode: "admin" });
+    renderAdminStudentHistoryTab();
   } catch (error) {
     renderAdminStudentSheetLoadError(error);
   }
@@ -35277,19 +35425,12 @@ document.addEventListener("click", (event) => {
         return;
       }
 
-      const teacherHistoryFilterBtn = target.closest("[data-teacher-student-history-filter]");
-      if (teacherHistoryFilterBtn instanceof HTMLButtonElement) {
+      const teacherCommentToggle = target.closest("[data-teacher-student-comment-toggle]");
+      if (teacherCommentToggle instanceof HTMLButtonElement) {
         event.preventDefault();
-        const next = String(teacherHistoryFilterBtn.getAttribute("data-teacher-student-history-filter") || "all").trim();
-        teacherStudentsState.history.filter = next || "all";
-        document.querySelectorAll("[data-teacher-student-history-filter]").forEach((btn) => {
-          if (!(btn instanceof HTMLButtonElement)) return;
-          const isActive =
-            String(btn.getAttribute("data-teacher-student-history-filter") || "") === String(teacherStudentsState.history.filter || "all");
-          btn.classList.toggle("is-active", isActive);
-          btn.setAttribute("aria-selected", isActive ? "true" : "false");
-        });
-        renderTeacherStudentHistoryDrawer();
+        teacherStudentsState.history.commentComposerOpen = !teacherStudentsState.history.commentComposerOpen;
+        teacherStudentsState.history.commentComposerError = "";
+        renderTeacherStudentSheet();
         return;
       }
 
@@ -35319,6 +35460,52 @@ document.addEventListener("click", (event) => {
           openTeacherStudentHistoryDrawer({ alunoId }).catch(() => {});
           return;
         }
+      }
+
+      const teacherCommentSend = target.closest("[data-teacher-student-comment-send]");
+      if (teacherCommentSend instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const sheetEl = getTeacherStudentSheet();
+        if (!(sheetEl instanceof HTMLElement)) return;
+        const textEl = sheetEl.querySelector("[data-teacher-student-comment-text]");
+        const statusEl = sheetEl.querySelector("[data-teacher-student-comment-status]");
+        const text = textEl instanceof HTMLTextAreaElement ? String(textEl.value || "").trim() : "";
+        if (!text) {
+          if (statusEl instanceof HTMLElement) {
+            statusEl.textContent = "Escreva um comentário antes de enviar.";
+            statusEl.dataset.tone = "error";
+          }
+          return;
+        }
+        teacherStudentsState.history.commentComposerSaving = true;
+        teacherStudentsState.history.commentComposerError = "";
+        teacherStudentsState.history.commentComposerText = text;
+        renderTeacherStudentSheet();
+        (async () => {
+          try {
+            const saved = await saveAdminStudentComment({ alunoId: teacherStudentsState.history.alunoId, texto: text });
+            if (!saved) throw new Error("comment_save_failed");
+            const item = buildAdminStudentCommentItem(saved);
+            teacherStudentsState.history.items = [
+              item,
+              ...((Array.isArray(teacherStudentsState.history.items) ? teacherStudentsState.history.items : []).filter((entry) => String(entry?.id || "") !== item.id)),
+            ];
+            if (teacherStudentsState.sheetResources && Array.isArray(teacherStudentsState.sheetResources.comments)) {
+              teacherStudentsState.sheetResources.comments = [saved, ...teacherStudentsState.sheetResources.comments];
+            }
+            teacherStudentsState.history.commentComposerOpen = false;
+            teacherStudentsState.history.commentComposerText = "";
+            teacherStudentsState.history.commentComposerSaving = false;
+            teacherStudentsState.history.commentComposerError = "";
+            renderTeacherStudentSheet();
+          } catch (error) {
+            console.error("[teacher] student comment save failed:", error);
+            teacherStudentsState.history.commentComposerSaving = false;
+            teacherStudentsState.history.commentComposerError = "Não foi possível enviar o comentário agora.";
+            renderTeacherStudentSheet();
+          }
+        })();
+        return;
       }
     }
 

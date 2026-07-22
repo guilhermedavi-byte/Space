@@ -1,7 +1,14 @@
 const { sendJson } = require("../_lib/http");
 const { getSessionFromRequest } = require("../_lib/session");
 const { normalizeRole } = require("../_lib/live-lessons");
-const { loadStudentCard } = require("../_lib/pedagogico-service");
+const { loadStudentCard, loadTeacherStudents } = require("../_lib/pedagogico-service");
+
+const normalizeText = (value) =>
+  String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
 
 const canUseStudentCard = (session) => {
   const role = normalizeRole(session?.role);
@@ -33,6 +40,27 @@ module.exports = async (req, res) => {
   }
 
   try {
+    if (normalizeRole(session.role) === "teacher") {
+      const owned = await loadTeacherStudents({ session });
+      const ownRows = [
+        ...(Array.isArray(owned?.students) ? owned.students : []),
+        ...(Array.isArray(owned?.summaries) ? owned.summaries : []),
+      ];
+      const safeAlunoId = String(alunoId || "").trim();
+      const safeAlunoNome = normalizeText(alunoNome);
+      const isOwned = ownRows.some((row) => {
+        const rowId = String(row?.aluno_id || row?.alunoId || row?.id || "").trim();
+        const rowName = normalizeText(row?.aluno_nome || row?.nome || row?.name || "");
+        if (safeAlunoId && rowId && rowId === safeAlunoId) return true;
+        if (safeAlunoNome && rowName && rowName === safeAlunoNome) return true;
+        return false;
+      });
+      if (!isOwned) {
+        sendJson(res, 403, { error: "student_out_of_scope" });
+        return;
+      }
+    }
+
     const ficha = await loadStudentCard({ alunoId, alunoNome });
     sendJson(res, 200, { ok: true, ficha });
   } catch (error) {
