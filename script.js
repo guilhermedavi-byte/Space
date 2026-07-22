@@ -5216,7 +5216,7 @@ const formatTeacherTopDate = (view, focusDate) => {
   }
 
   if (view === "week") {
-    const days = getWeekDaysMonToSat(focusDate);
+    const days = getWeekDaysMonToSun(focusDate);
     return formatWeekRange(days);
   }
 
