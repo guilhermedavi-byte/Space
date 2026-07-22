@@ -5874,6 +5874,17 @@ body.admin-student-drawer-open {
   align-items: start;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
+}
+
+.admin-student-history-header > :first-child {
+  min-width: min(100%, 320px);
+  flex: 1 1 320px;
+}
+
+.admin-student-history-header .button {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .admin-student-history-subtitle {
@@ -8357,6 +8368,10 @@ body.admin-student-drawer-open {
   overflow: hidden;
 }
 
+.teacher-students-drawer-inner.admin-student-sheet-drawer-inner {
+  width: min(1120px, 94vw);
+}
+
 .teacher-students-drawer.is-open .teacher-students-drawer-inner {
   transform: translateX(0);
 }
@@ -8401,6 +8416,11 @@ body.admin-student-drawer-open {
   padding: 18px 20px 20px;
   display: grid;
   gap: 14px;
+}
+
+.teacher-students-drawer-inner.admin-student-sheet-drawer-inner .teacher-students-drawer-body {
+  padding: 0;
+  display: block;
 }
 
 .teacher-students-history-filters {
