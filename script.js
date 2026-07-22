@@ -9864,39 +9864,6 @@ const renderTeacherStudentSheet = () => {
   renderStudentSheetInto({ sheetEl, hist: teacherStudentsState.history, mode: "teacher" });
 };
 
-const ensureTeacherStudentSheetResources = async ({ force = false } = {}) => {
-  const resources = teacherStudentsState.sheetResources || {};
-  const now = Date.now();
-  if (!force && resources.loadedAt && now - resources.loadedAt < 60_000) return resources;
-
-  const [studentRows, teachers, classes, comments] = await Promise.all([
-    fetchUserRowsFromFirestore("student"),
-    fetchAdminAgendaTeachers(),
-    fetchClassesFromFirestore(),
-    fetchAdminStudentCommentsFromFirestore(),
-  ]);
-  const allowedIds = new Set((Array.isArray(teacherStudentsState.summaries) ? teacherStudentsState.summaries : []).map((row) => String(row?.alunoId || row?.id || "").trim()).filter(Boolean));
-  const studentsById = new Map();
-  (Array.isArray(studentRows) ? studentRows : []).forEach((row) => {
-    const id = String(row?.firestoreDocId || row?.id || "").trim();
-    if (!id || !allowedIds.has(id)) return;
-    studentsById.set(id, enrichAdminStudentTeacherDisplay({ ...row, id, firestoreDocId: id }));
-  });
-
-  teacherStudentsState.sheetResources = {
-    loadedAt: Date.now(),
-    studentsById,
-    teachers: Array.isArray(teachers) ? teachers : [],
-    teachersById: buildAdminTeacherMap(Array.isArray(teachers) ? teachers : []),
-    classes: (Array.isArray(classes) ? classes : []).filter((row) => {
-      const studentIds = Array.isArray(row?.studentIds) ? row.studentIds.map((value) => String(value || "").trim()) : [];
-      return studentIds.some((id) => allowedIds.has(id));
-    }),
-    comments: Array.isArray(comments) ? comments : [],
-  };
-  return teacherStudentsState.sheetResources;
-};
-
 const openTeacherStudentHistoryDrawer = async ({ alunoId } = {}) => {
   if (currentRole !== "teacher") return;
   const aId = String(alunoId || "").trim();
@@ -9925,23 +9892,29 @@ const openTeacherStudentHistoryDrawer = async ({ alunoId } = {}) => {
   setTeacherStudentsStatus("Carregando ficha…");
 
   try {
-    const resources = await ensureTeacherStudentSheetResources({ force: false });
-    const alunoMeta =
-      (resources.studentsById instanceof Map ? resources.studentsById.get(aId) : null) ||
-      enrichAdminStudentTeacherDisplay({
-        id: aId,
-        firestoreDocId: aId,
-        nome: summary?.nome || "Aluno",
-        email: summary?.email || "",
-        plano: summary?.plano || "",
-        professorId: String(summary?.teacherId || "").trim(),
-        professorNome: summary?.teacherName || "",
-        ativo: true,
-      });
-    const linkedTeacherId = String(alunoMeta?.professorId || summary?.teacherId || "").trim();
-    const teacherMeta = linkedTeacherId && resources.teachersById instanceof Map ? resources.teachersById.get(linkedTeacherId) || null : null;
+    const params = new URLSearchParams();
+    if (aId) params.set("aluno_id", aId);
+    if (summary?.nome) params.set("aluno_nome", String(summary.nome));
+    const res = await fetchWithAuth(`/api/pedagogico/student?${params.toString()}`, { method: "GET" });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error || "teacher_student_sheet_failed");
+    const teacherSheet = data?.teacherSheet && typeof data.teacherSheet === "object" ? data.teacherSheet : null;
+    if (!teacherSheet) throw new Error("teacher_student_sheet_missing");
+
+    const alunoMeta = enrichAdminStudentTeacherDisplay({
+      ...(teacherSheet?.alunoMeta && typeof teacherSheet.alunoMeta === "object" ? teacherSheet.alunoMeta : {}),
+      id: String(teacherSheet?.alunoMeta?.id || aId).trim(),
+      firestoreDocId: String(teacherSheet?.alunoMeta?.firestoreDocId || teacherSheet?.alunoMeta?.id || aId).trim(),
+      nome: String(teacherSheet?.alunoMeta?.nome || summary?.nome || "Aluno").trim(),
+      email: "",
+      professorId: String(teacherSheet?.alunoMeta?.professorId || summary?.teacherId || "").trim(),
+      professorNome: String(teacherSheet?.alunoMeta?.professorNome || summary?.teacherName || "").trim(),
+      plano: String(teacherSheet?.alunoMeta?.plano || summary?.plano || "").trim(),
+    });
+    const teacherMeta = teacherSheet?.teacherMeta && typeof teacherSheet.teacherMeta === "object" ? teacherSheet.teacherMeta : null;
+    const linkedTeacherId = String(alunoMeta?.professorId || teacherMeta?.id || summary?.teacherId || "").trim();
     const logs = Array.isArray(teacherStudentsState.logs) ? teacherStudentsState.logs.filter((row) => String(row?.alunoId || "").trim() === aId) : [];
-    const comments = Array.isArray(resources.comments) ? resources.comments.filter((row) => String(row?.alunoId || "").trim() === aId) : [];
+    const comments = Array.isArray(teacherSheet?.comments) ? teacherSheet.comments : [];
     const items = buildAdminStudentHistoryItems({
       alunoId: aId,
       teacherId: linkedTeacherId,
@@ -9953,12 +9926,20 @@ const openTeacherStudentHistoryDrawer = async ({ alunoId } = {}) => {
 
     teacherStudentsState.history.alunoMeta = alunoMeta;
     teacherStudentsState.history.teacherMeta = teacherMeta;
-    teacherStudentsState.history.linkedClasses = getTeacherStudentLinkedClasses(aId);
+    teacherStudentsState.history.linkedClasses = Array.isArray(teacherSheet?.linkedClasses) ? teacherSheet.linkedClasses : [];
     teacherStudentsState.history.items = items;
     teacherStudentsState.history.baseLoading = false;
     teacherStudentsState.history.historyLoading = false;
     teacherStudentsState.history.baseError = "";
     teacherStudentsState.history.historyError = "";
+    teacherStudentsState.sheetResources = {
+      loadedAt: Date.now(),
+      studentsById: new Map([[aId, alunoMeta]]),
+      teachers: teacherMeta ? [teacherMeta] : [],
+      teachersById: teacherMeta?.id ? new Map([[String(teacherMeta.id), teacherMeta]]) : new Map(),
+      classes: Array.isArray(teacherSheet?.linkedClasses) ? teacherSheet.linkedClasses : [],
+      comments: Array.isArray(comments) ? comments : [],
+    };
 
     if (teacherStudentHistorySub instanceof HTMLElement) {
       const teacherName = teacherMeta?.nome || summary?.teacherName || "";
@@ -19119,6 +19100,7 @@ const saveAdminStudentComment = async ({ alunoId, texto } = {}) => {
     texto: content,
     autorId: String(user.uid || "").trim(),
     autorNome: String(user.displayName || user.email || "").trim(),
+    professorId: String(user.uid || "").trim(),
     criadoEm: firebase.serverTimestamp(),
     atualizadoEm: firebase.serverTimestamp(),
   };

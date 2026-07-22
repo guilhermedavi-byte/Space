@@ -7,7 +7,7 @@ const sessionPath = require.resolve("../api/_lib/session");
 const liveLessonsPath = require.resolve("../api/_lib/live-lessons");
 const pedagogicoServicePath = require.resolve("../api/_lib/pedagogico-service");
 
-const loadHandler = ({ session, ownedRows = [], ficha = { aluno_id: "aluno-1" } } = {}) => {
+const loadHandler = ({ session, ownedRows = [], ficha = { aluno_id: "aluno-1" }, teacherSheet = null } = {}) => {
   delete require.cache[handlerPath];
   require.cache[httpPath] = {
     id: httpPath,
@@ -54,6 +54,9 @@ const loadHandler = ({ session, ownedRows = [], ficha = { aluno_id: "aluno-1" } 
       async loadStudentCard() {
         return ficha;
       },
+      async loadTeacherStudentSheet() {
+        return teacherSheet;
+      },
     },
   };
   return require("../api/pedagogico/student");
@@ -75,10 +78,12 @@ test("professor acessa ficha de aluno vinculado", async () => {
     session: { role: "teacher", sub: "teacher-1", name: "Prof Demo" },
     ownedRows: [{ alunoId: "aluno-1", nome: "Angela Demo" }],
     ficha: { aluno_id: "aluno-1", aluno_nome: "Angela Demo" },
+    teacherSheet: { alunoMeta: { id: "aluno-1", nome: "Angela Demo" }, comments: [] },
   });
   const res = {};
   await handler({ method: "GET", query: { aluno_id: "aluno-1" } }, res);
   assert.equal(res.statusCode, 200);
   assert.equal(res.body?.ok, true);
   assert.equal(res.body?.ficha?.aluno_id, "aluno-1");
+  assert.equal(res.body?.teacherSheet?.alunoMeta?.id, "aluno-1");
 });

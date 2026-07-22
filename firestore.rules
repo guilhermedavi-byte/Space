@@ -135,15 +135,20 @@ service cloud.firestore {
       allow read: if request.auth != null
         && (
           isAdmin()
-          || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.tipo == "teacher"
-          || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.tipo == "professor"
+          || (
+            isTeacher()
+            && resource.data.professorId == request.auth.uid
+          )
         );
       allow write: if request.auth != null
         && (
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.tipo == "teacher"
-          || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.tipo == "professor"
+          isAdmin()
+          || isTeacher()
         )
-        && request.resource.data.professorId == request.auth.uid;
+        && (
+          isAdmin()
+          || request.resource.data.professorId == request.auth.uid
+        );
     }
 
     // Admin alerts (ex: remarcação causada pelo professor)

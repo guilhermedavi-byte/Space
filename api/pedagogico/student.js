@@ -1,7 +1,7 @@
 const { sendJson } = require("../_lib/http");
 const { getSessionFromRequest } = require("../_lib/session");
 const { normalizeRole } = require("../_lib/live-lessons");
-const { loadStudentCard, loadTeacherStudents } = require("../_lib/pedagogico-service");
+const { loadStudentCard, loadTeacherStudents, loadTeacherStudentSheet } = require("../_lib/pedagogico-service");
 
 const normalizeText = (value) =>
   String(value || "")
@@ -40,6 +40,7 @@ module.exports = async (req, res) => {
   }
 
   try {
+    const role = normalizeRole(session.role);
     if (normalizeRole(session.role) === "teacher") {
       const owned = await loadTeacherStudents({ session });
       const ownRows = [
@@ -62,7 +63,8 @@ module.exports = async (req, res) => {
     }
 
     const ficha = await loadStudentCard({ alunoId, alunoNome });
-    sendJson(res, 200, { ok: true, ficha });
+    const teacherSheet = role === "teacher" ? await loadTeacherStudentSheet({ session, alunoId, alunoNome }) : null;
+    sendJson(res, 200, { ok: true, ficha, teacherSheet });
   } catch (error) {
     console.error("[pedagogico] student card load failed", error);
     sendJson(res, 200, {

@@ -1,5 +1,5 @@
 const { supabaseFetch } = require("./supabase-rest");
-const { listCollectionAsAdmin } = require("./firestore-admin");
+const { listCollectionAsAdmin, getDocumentAsAdmin } = require("./firestore-admin");
 
 const TABLES = {
   onboarding: "n8n_onboarding_alunos_space",
@@ -715,6 +715,163 @@ const loadStudentCard = async ({ alunoId, alunoNome }) => {
   };
 };
 
+const normalizeDateKey = (value) => {
+  const raw = String(value || "").trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : "";
+};
+
+const normalizeWeeklyScheduleDays = (value) => {
+  const rows = Array.isArray(value) ? value : [];
+  return rows
+    .map((row, index) => {
+      const weekday = Number(row?.weekday ?? row?.dayOfWeek ?? row?.day ?? index);
+      const startTime = String(row?.startTime || row?.horaInicio || "").trim().slice(0, 5);
+      const endTime = String(row?.endTime || row?.horaFim || "").trim().slice(0, 5);
+      return {
+        weekday: Number.isFinite(weekday) ? weekday : index,
+        enabled: row?.enabled !== false,
+        startTime,
+        endTime,
+      };
+    })
+    .filter((row) => Number.isFinite(row.weekday));
+};
+
+const normalizeClassDocForTeacherSheet = (row = {}) => {
+  if (!row || typeof row !== "object") return null;
+  const id = String(row.id || row.firestoreDocId || "").trim();
+  if (!id) return null;
+  const studentIdsRaw = Array.isArray(row.studentIds) ? row.studentIds : Array.isArray(row.alunoIds) ? row.alunoIds : [];
+  const studentNamesRaw = Array.isArray(row.studentNames) ? row.studentNames : Array.isArray(row.alunoNomes) ? row.alunoNomes : [];
+  const linkedEventIdsRaw = Array.isArray(row.linkedEventIds) ? row.linkedEventIds : [];
+  const pendingChange = row.pendingChange && typeof row.pendingChange === "object"
+    ? {
+        ...row.pendingChange,
+        effectiveFrom: normalizeDateKey(row.pendingChange.effectiveFrom || row.pendingChange.effectiveFromDate || row.pendingChange.startDate || ""),
+        teacherId: String(row.pendingChange.teacherId || row.pendingChange.professorId || "").trim(),
+        teacherName: String(row.pendingChange.teacherName || row.pendingChange.professorNome || row.pendingChange.professorName || "").trim(),
+        plan: String(row.pendingChange.plan || row.pendingChange.plano || "").trim(),
+        linkedEventGroupId: String(row.pendingChange.linkedEventGroupId || row.pendingChange.grupoRecorrenciaId || "").trim(),
+        linkedEventIds: linkedEventIdsRaw.map((value) => String(value || "").trim()).filter(Boolean),
+        scheduleDays: normalizeWeeklyScheduleDays(row.pendingChange.scheduleDays || row.pendingChange.repeatDays || row.pendingChange.weeklySchedule || row.pendingChange.schedule || []),
+      }
+    : null;
+  return {
+    id,
+    status: String(row.status || row.statusAula || "").trim(),
+    title: String(row.title || "").trim(),
+    teacherId: String(row.teacherId || row.professorId || "").trim(),
+    teacherName: String(row.teacherName || row.professorNome || row.professorName || "").trim(),
+    plan: String(row.plan || row.plano || row.planName || "").trim(),
+    studentIds: studentIdsRaw.map((value) => String(value || "").trim()).filter(Boolean),
+    studentNames: studentNamesRaw.map((value) => String(value || "").trim()).filter(Boolean),
+    linkedEventIds: linkedEventIdsRaw.map((value) => String(value || "").trim()).filter(Boolean),
+    linkedEventGroupId: String(row.linkedEventGroupId || row.grupoRecorrenciaId || "").trim(),
+    roomSlug: String(row.roomSlug || row.roomId || "").trim(),
+    startDate: normalizeDateKey(row.startDate || row.startDateKey || row.dateKey || ""),
+    endDate: normalizeDateKey(row.endDate || row.endDateKey || ""),
+    daysOfWeek: Array.isArray(row.daysOfWeek) ? row.daysOfWeek.map((value) => Number(value)).filter((value) => Number.isFinite(value)) : [],
+    scheduleDays: normalizeWeeklyScheduleDays(row.scheduleDays || row.repeatDays || row.weeklySchedule || row.schedule || []),
+    startMin: Number.isFinite(Number(row.startMin)) ? Number(row.startMin) : null,
+    endMin: Number.isFinite(Number(row.endMin)) ? Number(row.endMin) : null,
+    pendingChange: pendingChange && pendingChange.effectiveFrom ? pendingChange : null,
+    createdAt: row.createdAt || row.criadoEm || null,
+    updatedAt: row.updatedAt || row.atualizadoEm || null,
+  };
+};
+
+const normalizeCommentDocForTeacherSheet = (row = {}) => {
+  if (!row || typeof row !== "object") return null;
+  const type = String(row.type || row.tipo || "").trim().toLowerCase();
+  if (type !== "comentario" && type !== "comment") return null;
+  return {
+    id: String(row.id || row.commentId || row.docId || row.firestoreDocId || "").trim(),
+    alunoId: String(row.alunoId || "").trim(),
+    texto: String(row.texto || row.comment || row.comentario || "").trim(),
+    autorId: String(row.autorId || "").trim(),
+    autorNome: String(row.autorNome || "").trim(),
+    professorId: String(row.professorId || "").trim(),
+    criadoEm: row.criadoEm || row.createdAt || row.updatedAt || "",
+    atualizadoEm: row.atualizadoEm || row.updatedAt || "",
+    type: "comentario",
+  };
+};
+
+const loadTeacherStudentSheet = async ({ session, alunoId, alunoNome } = {}) => {
+  const safeAlunoId = String(alunoId || "").trim();
+  const safeAlunoNome = String(alunoNome || "").trim();
+  if (!safeAlunoId && !safeAlunoNome) {
+    const error = new Error("missing_student");
+    error.code = "missing_student";
+    throw error;
+  }
+
+  const owned = await loadTeacherStudents({ session });
+  const ownRows = [
+    ...(Array.isArray(owned?.students) ? owned.students : []),
+    ...(Array.isArray(owned?.summaries) ? owned.summaries : []),
+  ];
+  const ownedRow =
+    ownRows.find((row) => String(row?.aluno_id || row?.alunoId || row?.id || "").trim() === safeAlunoId) ||
+    ownRows.find((row) => normalizeIdentity(row?.aluno_nome || row?.nome || row?.name || "") === normalizeIdentity(safeAlunoNome)) ||
+    null;
+  if (!ownedRow) {
+    const error = new Error("student_out_of_scope");
+    error.code = "student_out_of_scope";
+    throw error;
+  }
+
+  const canonicalStudentId = String(ownedRow?.firestore_doc_id || ownedRow?.firestoreDocId || ownedRow?.aluno_id || ownedRow?.alunoId || ownedRow?.id || "").trim();
+  const studentDoc = canonicalStudentId ? await getDocumentAsAdmin(`users/${canonicalStudentId}`) : null;
+  const teacherId = String(studentDoc?.professorId || ownedRow?.professor_id || ownedRow?.teacherId || ownedRow?.teacher_id || "").trim();
+  const teacherDoc = teacherId ? await getDocumentAsAdmin(`users/${teacherId}`).catch(() => null) : null;
+  const allClasses = await listCollectionAsAdmin("classes", { pageSize: 2000 }).catch(() => []);
+  const linkedClasses = (Array.isArray(allClasses) ? allClasses : [])
+    .map((row) => normalizeClassDocForTeacherSheet(row))
+    .filter(Boolean)
+    .filter((row) => Array.isArray(row.studentIds) && row.studentIds.includes(canonicalStudentId));
+  const allLessonLogs = await listCollectionAsAdmin("lessonLogs", { pageSize: 2000 }).catch(() => []);
+  const comments = (Array.isArray(allLessonLogs) ? allLessonLogs : [])
+    .map((row) => normalizeCommentDocForTeacherSheet(row))
+    .filter(Boolean)
+    .filter((row) => String(row.alunoId || "").trim() === canonicalStudentId);
+
+  const alunoMeta = {
+    id: canonicalStudentId,
+    firestoreDocId: canonicalStudentId,
+    nome: String(studentDoc?.nome || ownedRow?.aluno_nome || ownedRow?.nome || "Aluno").trim(),
+    photoURL: String(studentDoc?.photoURL || studentDoc?.photoUrl || "").trim(),
+    plano: String(studentDoc?.plano || ownedRow?.plano || "").trim(),
+    professorId: teacherId,
+    professorNome: String(teacherDoc?.nome || studentDoc?.professorNome || ownedRow?.professor_nome || "").trim(),
+    ativo: studentDoc?.ativo !== false,
+    criadoEm: studentDoc?.criadoEm || studentDoc?.createdAt || null,
+    cancelamento: studentDoc?.cancelamento || null,
+    cancelamentosAnteriores: Array.isArray(studentDoc?.cancelamentosAnteriores) ? studentDoc.cancelamentosAnteriores : [],
+  };
+
+  const teacherMeta = teacherId
+    ? {
+        id: teacherId,
+        nome: String(teacherDoc?.nome || alunoMeta.professorNome || "Professor").trim(),
+        initials: String(teacherDoc?.nome || alunoMeta.professorNome || "Professor")
+          .split(/\s+/)
+          .filter(Boolean)
+          .slice(0, 2)
+          .map((part) => part[0] || "")
+          .join("")
+          .toUpperCase(),
+      }
+    : null;
+
+  return {
+    alunoMeta,
+    teacherMeta,
+    linkedClasses,
+    comments,
+  };
+};
+
 module.exports = {
   TABLES,
   fetchRows,
@@ -724,6 +881,7 @@ module.exports = {
   listRegisters,
   loadAdminDashboard,
   loadStudentCard,
+  loadTeacherStudentSheet,
   loadTeacherStudents,
   studentIdentityKey,
   mergePedagogicalStudents,
