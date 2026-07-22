@@ -24,3 +24,14 @@ test("painel de usuários do pedagógico não usa corte fixo de altura", () => {
   assert.match(script, /card\.style\.setProperty\("--admin-ped-people-viewport-offset", `\$\{top\}px`\)/);
   assert.match(script, /card\.style\.height = `\$\{height\}px`/);
 });
+
+test("agenda admin suporta semana de 7 dias e split com 1 professor", () => {
+  assert.match(script, /const getWeekDaysMonToSun = \(date\) =>/);
+  assert.match(script, /const formatWeekRange = \(days\) =>/);
+  assert.match(script, /const days = getWeekDaysMonToSun\(focus\)/);
+  assert.match(script, /const days = getWeekDaysMonToSun\(focusDate\)/);
+  assert.match(script, /if \(selected instanceof Set && selected\.size > 0\)/);
+  assert.match(script, /teacher-cal-week-head-days" style="grid-template-columns:repeat\(\$\{days\.length\}, minmax\(0, 1fr\)\)"/);
+  assert.match(script, /teacher-cal-week-cols" style="grid-template-columns:repeat\(\$\{days\.length\}, minmax\(0, 1fr\)\)"/);
+  assert.match(script, /const color = currentRole === "admin" \? getAdminTeacherColor\(event\.professorId\) : ""/);
+});

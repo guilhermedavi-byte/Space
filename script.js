@@ -2546,6 +2546,31 @@ const getWeekDaysMonToSat = (date) => {
   });
 };
 
+const getWeekDaysMonToSun = (date) => {
+  const start = getMonday(date);
+  return Array.from({ length: 7 }).map((_, index) => {
+    const day = new Date(start);
+    day.setDate(start.getDate() + index);
+    return day;
+  });
+};
+
+const formatWeekRange = (days) => {
+  const range = Array.isArray(days) ? days.filter((day) => day instanceof Date && !Number.isNaN(day.getTime())) : [];
+  if (!range.length) return "";
+  const start = range[0];
+  const end = range[range.length - 1];
+  const monthFormatter = new Intl.DateTimeFormat("pt-BR", { month: "short" });
+  const yearFormatter = new Intl.DateTimeFormat("pt-BR", { year: "numeric" });
+  const startMonth = monthFormatter.format(start).replace(".", "");
+  const endMonth = monthFormatter.format(end).replace(".", "");
+  const sameMonth = start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear();
+  const sameYear = start.getFullYear() === end.getFullYear();
+  if (sameMonth) return `${start.getDate()}–${end.getDate()} de ${startMonth} de ${yearFormatter.format(start)}`;
+  if (sameYear) return `${start.getDate()} de ${startMonth} – ${end.getDate()} de ${endMonth} de ${yearFormatter.format(end)}`;
+  return `${start.getDate()} de ${startMonth} de ${yearFormatter.format(start)} – ${end.getDate()} de ${endMonth} de ${yearFormatter.format(end)}`;
+};
+
 const getInitials = (name) => {
   const safe = String(name || "").trim();
   if (!safe) return "SP";
@@ -4755,7 +4780,7 @@ const getTeacherEventsRangeForView = () => {
   const focus = teacherCalendarState.focusDate;
 
   if (view === "week") {
-    const days = getWeekDaysMonToSat(focus);
+    const days = getWeekDaysMonToSun(focus);
     const from = createDateKey(days[0]);
     const to = createDateKey(days[days.length - 1]);
     return { from, to };
@@ -5562,7 +5587,7 @@ const renderTeacherCalendarViewportDay = (date) => {
       ? activeTeachers.filter((t) => selected.has(t.id))
       : [];
 
-    if (selected instanceof Set && selected.size > 1) {
+    if (selected instanceof Set && selected.size > 0) {
       const columns =
         selectedTeachers.length > 0
           ? selectedTeachers
@@ -5677,7 +5702,7 @@ const renderTeacherCalendarViewportWeek = (focusDate) => {
   const startHour = 6;
   const endHour = 23;
   const hourHeight = 56;
-  const days = getWeekDaysMonToSat(focusDate);
+  const days = getWeekDaysMonToSun(focusDate);
   const weekStart = startOfDay(days[0]);
   const weekEnd = addDays(startOfDay(days[days.length - 1]), 1);
   const events = getTeacherEventsForRange(weekStart, weekEnd);
@@ -5762,10 +5787,17 @@ const renderTeacherCalendarViewportWeek = (focusDate) => {
           const leftPct = (event.colIndex / event.colCount) * 100;
           const widthPct = 100 / event.colCount;
           const timeLabel = `${formatTimeHm(event.start)} – ${formatTimeHm(event.end)}`;
+          const color = currentRole === "admin" ? getAdminTeacherColor(event.professorId) : "";
+          const tintBg = color ? toRgba(color, 0.22) : "";
+          const tintBorder = color ? toRgba(color, 0.6) : "";
+          const tintShadow = color ? `0 12px 26px ${toRgba(color, 0.18)}` : "";
+          const extraStyle = color
+            ? `background:${tintBg};border:1px solid ${tintBorder};box-shadow:${tintShadow};`
+            : "";
           return `
             <button
               class="teacher-cal-event is-${event.type}"
-              style="top:${top}px;height:${height}px;left:calc(${leftPct}% + 8px);width:calc(${widthPct}% - 16px);"
+              style="top:${top}px;height:${height}px;left:calc(${leftPct}% + 8px);width:calc(${widthPct}% - 16px);${extraStyle}"
               type="button"
               data-teacher-cal-event-type="${event.type}"
               data-teacher-cal-event-id="${escapeHtml(event.id)}"
@@ -5803,10 +5835,10 @@ const renderTeacherCalendarViewportWeek = (focusDate) => {
     <div class="teacher-cal-week">
       <div class="teacher-cal-week-head">
         <div class="teacher-cal-head-cell"></div>
-        <div class="teacher-cal-week-head-days">${headDays}</div>
+        <div class="teacher-cal-week-head-days" style="grid-template-columns:repeat(${days.length}, minmax(0, 1fr))">${headDays}</div>
       </div>
       <div class="teacher-cal-timecol">${times.join("")}</div>
-      <div class="teacher-cal-week-cols">${dayColumns}</div>
+      <div class="teacher-cal-week-cols" style="grid-template-columns:repeat(${days.length}, minmax(0, 1fr))">${dayColumns}</div>
     </div>
   `;
 };
