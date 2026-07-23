@@ -53,8 +53,10 @@
 
     Em resumo:
     - Agenda/recorrência: comparar por `dateKey` local.
-    - Tabelas operacionais em timestamp puro (ex.: Supabase `inicio`): comparar por
-      timestamp, mas sempre revisando o timezone de referência do processo.
+    - Feed live do Supabase (`n8n_aulas_pedagogicas_space`): comparar pelo horário
+      local de Brasília derivado de `inicio`/`fim`, nunca pelo dia UTC bruto.
+    - Tabelas operacionais em timestamp puro: documentar explicitamente o timezone
+      de referência usado no corte antes de executar o wipe.
 */
 
 const fs = require("node:fs");
