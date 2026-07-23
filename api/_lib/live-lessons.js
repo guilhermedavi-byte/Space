@@ -1,8 +1,11 @@
 const { supabaseFetch } = require("./supabase-rest");
+const { createDocumentAsAdmin, commitWritesAsAdmin } = require("./firestore-admin");
+const { encodeFields, FIRESTORE_BASE } = require("./firestore-rest");
 const { listTeacherLessons } = require("./pedagogico-service");
 
 const LESSONS_TABLE = "n8n_aulas_pedagogicas_space";
 const REGISTERS_TABLE = "n8n_registros_aula_space";
+const PEDAGOGICO_PENDING_WRITES_COLLECTION = "pedagogico_pending_writes";
 
 const normalizeRole = (role) => {
   const raw = String(role || "").trim().toLowerCase();
@@ -52,6 +55,135 @@ const omitKeys = (obj, keys) => {
 
 const omitNilValues = (obj) =>
   Object.fromEntries(Object.entries(obj || {}).filter(([, value]) => value !== null && value !== undefined));
+
+const toFirestoreAdminDocName = (docPath) => {
+  const path = String(docPath || "").replace(/^\/+/, "");
+  if (!path) throw new Error("missing_document_path");
+  return `${FIRESTORE_BASE}/${encodeURI(path)}`;
+};
+
+const normalizePedagogicoPendingWriteError = (error) => ({
+  message: String(error?.message || "unknown_error"),
+  code: String(error?.code || ""),
+  status: Number.isFinite(Number(error?.status)) ? Number(error.status) : null,
+  details: error?.details || error?.data || null,
+  hint: error?.hint || null,
+  capturedAt: new Date().toISOString(),
+});
+
+const buildLessonRegisterRecord = ({ lesson, session, payload, now }) => {
+  const status = String(payload?.status || "realizada").trim().toLowerCase();
+  const observacoes = String(payload?.observacoes || "").trim() || null;
+  const motivoAtencao =
+    String(payload?.motivo_atencao || payload?.motivo_remarcacao || payload?.motivo_falta || "").trim() || null;
+  return {
+    aula_id: lesson.id,
+    firestore_doc_id: lesson.firestore_doc_id || lesson.aluno_id || null,
+    onboarding_id: payload?.onboarding_id || lesson.onboarding_id || null,
+    aluno_id: lesson.aluno_id || null,
+    aluno_nome: lesson.aluno_nome || null,
+    telefone: lesson.aluno_telefone || null,
+    email: lesson.aluno_email || null,
+    professor_id: lesson.professor_id || null,
+    professor_nome: lesson.professor_nome || null,
+    professor_email: lesson.professor_email || null,
+    status,
+    status_registro: status,
+    conteudo_trabalhado: String(payload?.conteudo_trabalhado || "").trim() || null,
+    conteudo_aula: String(payload?.conteudo_aula || payload?.conteudo_trabalhado || "").trim() || null,
+    gramatica_trabalhada: String(payload?.gramatica_trabalhada || "").trim() || null,
+    vocabulario_trabalhado: String(payload?.vocabulario_trabalhado || "").trim() || null,
+    pronuncia_conversacao: String(payload?.pronuncia_conversacao || "").trim() || null,
+    atividade_realizada: String(payload?.atividade_realizada || "").trim() || null,
+    materiais_usados: String(payload?.materiais_usados || "").trim() || null,
+    desempenho_aluno: String(payload?.desempenho_aluno || payload?.desempenho || "").trim() || null,
+    observacoes,
+    observacao_professor: observacoes,
+    engajamento: String(payload?.engajamento || "").trim() || null,
+    confianca: String(payload?.confianca || "").trim() || null,
+    humor: String(payload?.humor || "").trim() || null,
+    humor_aluno: String(payload?.humor_aluno || payload?.humor || "").trim() || null,
+    estrelas: Number.isFinite(Number(payload?.estrelas || payload?.nota)) ? Number(payload?.estrelas || payload?.nota) : null,
+    homework: String(payload?.homework || payload?.tarefa || "").trim() || null,
+    dificuldades_percebidas: String(payload?.dificuldades_percebidas || "").trim() || null,
+    proximo_foco: String(payload?.proximo_foco || payload?.proxima_recomendacao || "").trim() || null,
+    proxima_recomendacao: String(payload?.proxima_recomendacao || payload?.proximo_foco || "").trim() || null,
+    proxima_aula_recomendada:
+      String(payload?.proxima_aula_recomendada || payload?.proxima_recomendacao || payload?.proximo_foco || "").trim() || null,
+    motivo_falta: String(payload?.motivo_falta || "").trim() || null,
+    observacoes_falta: String(payload?.observacoes_falta || (status === "falta" ? payload?.observacoes : "") || "").trim() || null,
+    responsavel_falta: String(payload?.responsavel_falta || "").trim() || null,
+    reposicao_necessaria: Boolean(payload?.reposicao_necessaria),
+    nova_data: payload?.nova_data || null,
+    nova_data_aula: payload?.nova_data_aula || payload?.nova_data || null,
+    tipo_remarcacao: String(payload?.tipo || payload?.tipo_remarcacao || "").trim() || null,
+    tipo_movimento: String(payload?.tipo_movimento || payload?.tipo || payload?.tipo_remarcacao || "").trim() || null,
+    motivo_remarcacao: String(payload?.motivo_remarcacao || "").trim() || null,
+    responsavel_remarcacao: String(payload?.responsavel_remarcacao || "").trim() || null,
+    data_aviso_remarcacao: String(payload?.data_aviso_remarcacao || "").trim() || null,
+    elegibilidade: payload?.elegibilidade && typeof payload.elegibilidade === "object" ? payload.elegibilidade : null,
+    situacao_reposicao: String(payload?.situacao_reposicao || "").trim() || null,
+    needs_admin_review: Boolean(payload?.needs_admin_review),
+    precisa_atencao: Boolean(payload?.needs_admin_review),
+    motivo_atencao: motivoAtencao,
+    registrado_por: String(session?.name || session?.email || session?.sub || "professor"),
+    registrado_em: now,
+    created_at: now,
+    updated_at: now,
+  };
+};
+
+const createPedagogicoPendingWrite = async ({ lesson, session, payload }) => {
+  const now = new Date();
+  const record = await createDocumentAsAdmin(PEDAGOGICO_PENDING_WRITES_COLLECTION, {
+    kind: "lesson_register",
+    state: "pending_supabase",
+    lessonId: String(lesson?.id || ""),
+    onboardingId: String(payload?.onboarding_id || lesson?.onboarding_id || ""),
+    status: String(payload?.status || ""),
+    source: "createLessonRegister",
+    lesson: {
+      id: String(lesson?.id || ""),
+      aluno_id: String(lesson?.aluno_id || ""),
+      aluno_nome: String(lesson?.aluno_nome || ""),
+      professor_id: String(lesson?.professor_id || ""),
+      professor_nome: String(lesson?.professor_nome || ""),
+      inicio: lesson?.inicio || null,
+      fim: lesson?.fim || null,
+    },
+    session: {
+      sub: String(session?.sub || ""),
+      role: String(session?.role || ""),
+      name: String(session?.name || ""),
+      email: String(session?.email || ""),
+    },
+    payload,
+    createdAt: now,
+    updatedAt: now,
+    lastError: null,
+  });
+  const docId = String(record?.firestoreDocId || record?.id || "");
+  return docId ? { id: docId, path: `${PEDAGOGICO_PENDING_WRITES_COLLECTION}/${docId}` } : null;
+};
+
+const updatePedagogicoPendingWrite = async (pendingWrite, patch = {}) => {
+  if (!pendingWrite?.path) return;
+  const data = {
+    ...patch,
+    updatedAt: new Date(),
+  };
+  const fieldPaths = Object.keys(data);
+  if (!fieldPaths.length) return;
+  await commitWritesAsAdmin({
+    writes: [{
+      update: {
+        name: toFirestoreAdminDocName(pendingWrite.path),
+        fields: encodeFields(data).fields,
+      },
+      updateMask: { fieldPaths },
+    }],
+  });
+};
 
 const supabaseWriteWithColumnFallback = async (path, options, { requiredKeys = [] } = {}) => {
   const required = new Set(requiredKeys);
@@ -289,75 +421,56 @@ const findLessonRegisterByLessonId = async (lessonId) => {
 const createLessonRegister = async ({ lesson, session, payload }) => {
   const now = new Date().toISOString();
   const status = String(payload?.status || "realizada").trim().toLowerCase();
-  const register = {
-    aula_id: lesson.id,
-    firestore_doc_id: lesson.firestore_doc_id || lesson.aluno_id || null,
-    onboarding_id: payload?.onboarding_id || lesson.onboarding_id || null,
-    aluno_id: lesson.aluno_id || null,
-    aluno_nome: lesson.aluno_nome || null,
-    professor_id: lesson.professor_id || null,
-    professor_nome: lesson.professor_nome || null,
-    professor_email: lesson.professor_email || null,
-    status,
-    conteudo_trabalhado: String(payload?.conteudo_trabalhado || "").trim() || null,
-    conteudo_aula: String(payload?.conteudo_aula || payload?.conteudo_trabalhado || "").trim() || null,
-    gramatica_trabalhada: String(payload?.gramatica_trabalhada || "").trim() || null,
-    vocabulario_trabalhado: String(payload?.vocabulario_trabalhado || "").trim() || null,
-    pronuncia_conversacao: String(payload?.pronuncia_conversacao || "").trim() || null,
-    atividade_realizada: String(payload?.atividade_realizada || "").trim() || null,
-    materiais_usados: String(payload?.materiais_usados || "").trim() || null,
-    desempenho_aluno: String(payload?.desempenho_aluno || payload?.desempenho || "").trim() || null,
-    observacoes: String(payload?.observacoes || "").trim() || null,
-    engajamento: String(payload?.engajamento || "").trim() || null,
-    confianca: String(payload?.confianca || "").trim() || null,
-    humor: String(payload?.humor || "").trim() || null,
-    humor_aluno: String(payload?.humor_aluno || payload?.humor || "").trim() || null,
-    estrelas: Number.isFinite(Number(payload?.estrelas || payload?.nota)) ? Number(payload?.estrelas || payload?.nota) : null,
-    homework: String(payload?.homework || payload?.tarefa || "").trim() || null,
-    dificuldades_percebidas: String(payload?.dificuldades_percebidas || "").trim() || null,
-    proximo_foco: String(payload?.proximo_foco || payload?.proxima_recomendacao || "").trim() || null,
-    proxima_recomendacao: String(payload?.proxima_recomendacao || payload?.proximo_foco || "").trim() || null,
-    proxima_aula_recomendada:
-      String(payload?.proxima_aula_recomendada || payload?.proxima_recomendacao || payload?.proximo_foco || "").trim() || null,
-    motivo_falta: String(payload?.motivo_falta || "").trim() || null,
-    observacoes_falta: String(payload?.observacoes_falta || (status === "falta" ? payload?.observacoes : "") || "").trim() || null,
-    responsavel_falta: String(payload?.responsavel_falta || "").trim() || null,
-    reposicao_necessaria: Boolean(payload?.reposicao_necessaria),
-    nova_data: payload?.nova_data || null,
-    nova_data_aula: payload?.nova_data_aula || payload?.nova_data || null,
-    tipo_remarcacao: String(payload?.tipo || payload?.tipo_remarcacao || "").trim() || null,
-    tipo_movimento: String(payload?.tipo_movimento || payload?.tipo || payload?.tipo_remarcacao || "").trim() || null,
-    motivo_remarcacao: String(payload?.motivo_remarcacao || "").trim() || null,
-    responsavel_remarcacao: String(payload?.responsavel_remarcacao || "").trim() || null,
-    data_aviso_remarcacao: String(payload?.data_aviso_remarcacao || "").trim() || null,
-    elegibilidade: payload?.elegibilidade && typeof payload.elegibilidade === "object" ? payload.elegibilidade : null,
-    situacao_reposicao: String(payload?.situacao_reposicao || "").trim() || null,
-    needs_admin_review: Boolean(payload?.needs_admin_review),
-    registrado_por: String(session?.name || session?.email || session?.sub || "professor"),
-    created_at: now,
-    updated_at: now,
-  };
-
-  const existing = await findLessonRegisterByLessonId(lesson.id).catch(() => null);
-  const writePath = existing?.id
-    ? `/${REGISTERS_TABLE}?id=eq.${safeEncode(existing.id)}`
-    : `/${REGISTERS_TABLE}`;
-  const writeMethod = existing?.id ? "PATCH" : "POST";
-  const writeBody = omitNilValues(existing?.id ? { ...register, created_at: existing.created_at || register.created_at } : register);
-  const { data } = await supabaseWriteWithColumnFallback(writePath, {
-    method: writeMethod,
-    body: writeBody,
-  }, { requiredKeys: ["aula_id", "status"] });
-  const saved = Array.isArray(data) ? data[0] : data;
-  const lessonPatch = {
-    status_aula:
-      status === "remarcada" ? "remarcada" : status === "falta" ? "falta" : status === "cancelada" ? "cancelada" : "realizada",
-  };
-  if (status === "remarcada" && (payload?.nova_data_aula || payload?.nova_data)) {
-    lessonPatch.inicio = payload.nova_data_aula || payload.nova_data;
+  const register = buildLessonRegisterRecord({ lesson, session, payload, now });
+  let pendingWrite = null;
+  try {
+    pendingWrite = await createPedagogicoPendingWrite({ lesson, session, payload });
+  } catch (error) {
+    console.warn("[pedagogico] failed to create Firestore fallback before Supabase write", error?.message || error);
   }
-  const updatedLesson = await patchLesson(lesson.id, lessonPatch);
-  return { register: saved || register, lesson: updatedLesson };
+
+  try {
+    const existing = await findLessonRegisterByLessonId(lesson.id).catch(() => null);
+    const writePath = existing?.id
+      ? `/${REGISTERS_TABLE}?id=eq.${safeEncode(existing.id)}`
+      : `/${REGISTERS_TABLE}`;
+    const writeMethod = existing?.id ? "PATCH" : "POST";
+    const writeBody = omitNilValues(existing?.id ? { ...register, created_at: existing.created_at || register.created_at } : register);
+    const { data } = await supabaseWriteWithColumnFallback(writePath, {
+      method: writeMethod,
+      body: writeBody,
+    }, { requiredKeys: ["aula_id", "status", "status_registro"] });
+    const saved = Array.isArray(data) ? data[0] : data;
+    const lessonPatch = {
+      status_aula:
+        status === "remarcada" ? "remarcada" : status === "falta" ? "falta" : status === "cancelada" ? "cancelada" : "realizada",
+    };
+    if (status === "remarcada" && (payload?.nova_data_aula || payload?.nova_data)) {
+      lessonPatch.inicio = payload.nova_data_aula || payload.nova_data;
+    }
+    const updatedLesson = await patchLesson(lesson.id, lessonPatch);
+    if (pendingWrite) {
+      await updatePedagogicoPendingWrite(pendingWrite, {
+        state: "supabase_saved",
+        supabaseRegisterId: saved?.id == null ? "" : String(saved.id),
+        supabaseWriteMethod: writeMethod,
+        lastError: null,
+      }).catch((error) => {
+        console.warn("[pedagogico] failed to mark Firestore fallback as saved", error?.message || error);
+      });
+    }
+    return { register: saved || register, lesson: updatedLesson };
+  } catch (error) {
+    if (pendingWrite) {
+      await updatePedagogicoPendingWrite(pendingWrite, {
+        state: "supabase_failed",
+        lastError: normalizePedagogicoPendingWriteError(error),
+      }).catch((fallbackError) => {
+        console.warn("[pedagogico] failed to mark Firestore fallback as failed", fallbackError?.message || fallbackError);
+      });
+    }
+    throw error;
+  }
 };
 
 const summarizeLiveLessons = (lessons, now = Date.now()) => {
@@ -419,6 +532,7 @@ module.exports = {
   listLessonRegisters,
   patchLesson,
   createLessonRegister,
+  buildLessonRegisterRecord,
   summarizeLiveLessons,
   omitNilValues,
   createLiveLessonViaN8n,
