@@ -54,7 +54,9 @@ const normalizePayload = (kind, body, lesson) => {
       conteudo_aula: String(body.conteudo_aula || ""),
       conteudo_trabalhado: String(body.conteudo_aula || ""),
       observacoes: String(body.observacoes || ""),
+      engajamento: String(body.engajamento || ""),
       desempenho_aluno: String(body.desempenho_aluno || ""),
+      confianca: String(body.confianca || ""),
       humor_aluno: String(body.humor_aluno || ""),
       estrelas: Number(body.estrelas) || null,
       homework: String(body.homework || ""),
@@ -149,4 +151,4 @@ const handlePedagogicoLessonAction = (kind) => async (req, res) => {
   }
 };
 
-module.exports = { handlePedagogicoLessonAction };
+module.exports = { handlePedagogicoLessonAction, normalizePayload };
