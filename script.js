@@ -3701,11 +3701,7 @@ const renderTeacherDashboard = () => {
             .map(normalizeLiveLessonForTeacherDashboard)
             .filter(Boolean);
           if (liveAulas.length) {
-            const byId = new Map(aulas.map((evt) => [String(evt.id || ""), evt]).filter(([id]) => id));
-            liveAulas.forEach((evt) => {
-              byId.set(String(evt.id || ""), evt);
-            });
-            aulas.splice(0, aulas.length, ...Array.from(byId.values()).sort((a, b) => (a.startMs || 0) - (b.startMs || 0)));
+            aulas.splice(0, aulas.length, ...mergeTeacherDashboardLessons(aulas, liveAulas));
           }
         }
       } catch (error) {
@@ -7686,6 +7682,37 @@ const normalizeLiveLessonForTeacherDashboard = (lesson) => {
           ""
       ),
   };
+};
+
+const mergeTeacherDashboardLessons = (firestoreLessons, liveLessons) => {
+  const merged = new Map();
+  (Array.isArray(firestoreLessons) ? firestoreLessons : []).forEach((lesson) => {
+    if (!lesson || typeof lesson !== "object") return;
+    const key = `${String(lesson.alunoId || "")}:${String(lesson.professorId || "")}:${String(lesson.dateKey || "")}:${Number(lesson.startMin) || 0}`;
+    merged.set(key, lesson);
+  });
+  (Array.isArray(liveLessons) ? liveLessons : []).forEach((lesson) => {
+    if (!lesson || typeof lesson !== "object") return;
+    const key = `${String(lesson.alunoId || "")}:${String(lesson.professorId || "")}:${String(lesson.dateKey || "")}:${Number(lesson.startMin) || 0}`;
+    const existing = merged.get(key);
+    if (existing) {
+      existing.liveLessonId = lesson.id;
+      existing.liveUrl = lesson.liveUrl || existing.liveUrl;
+      existing.supabaseLessonId = lesson.id;
+      if (!existing.onboardingId && lesson.onboardingId) existing.onboardingId = lesson.onboardingId;
+      if (!existing.professorEmail && lesson.professorEmail) existing.professorEmail = lesson.professorEmail;
+      if (!existing.tema && lesson.tema) existing.tema = lesson.tema;
+      if ((!Array.isArray(existing.topicos) || !existing.topicos.length) && Array.isArray(lesson.topicos) && lesson.topicos.length) {
+        existing.topicos = lesson.topicos;
+      }
+      if (!existing.observacoes && lesson.observacoes) existing.observacoes = lesson.observacoes;
+      if (!existing.nivelAluno && lesson.nivelAluno) existing.nivelAluno = lesson.nivelAluno;
+      if (!existing.alunoObjetivo && lesson.alunoObjetivo) existing.alunoObjetivo = lesson.alunoObjetivo;
+      return;
+    }
+    merged.set(key, lesson);
+  });
+  return Array.from(merged.values()).sort((a, b) => (a.startMs || 0) - (b.startMs || 0));
 };
 
 const statusLabelForRequest = (status) => {
