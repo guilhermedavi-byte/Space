@@ -8507,7 +8507,6 @@ const renderFaltaAlunoFieldsHtml = (draft = {}) => {
 
 const renderRemarcadaFieldsHtml = (draft = {}) => {
   const d = draft && typeof draft === "object" ? draft : {};
-  const motivo = String(d.motivoRemarcacao || "");
   const risco = String(d.riscoEvasao || "");
   const obs = String(d.observacao || "");
   const responsavel = normalizeResponsavelRemarcacao(d.responsavelRemarcacao || "");
@@ -8518,20 +8517,6 @@ const renderRemarcadaFieldsHtml = (draft = {}) => {
   const fim = String(d.horarioFimRemarcacao || d.novoFim || "");
   const showScheduleFields = situacao === "agendada_agora";
   const isStudentResponsible = responsavel === "aluno";
-
-  // Ajuste: incluir option "Aluno pediu remarcação" com value solicitado.
-  const options = [
-    ["atrasou_trabalho", "Se atrasou no trabalho"],
-    ["saude", "Saúde"],
-    ["familia", "Família"],
-    ["internet_tecnologia", "Internet/tecnologia"],
-    ["viagem", "Viagem"],
-    ["aluno_pediu_remarcacao", "Aluno pediu remarcação"],
-    ["professor_remarcou", "Professor remarcou"],
-    ["escola_remarcou", "Escola remarcou"],
-    ["nao_informado", "Não informado"],
-    ["outro", "Outro"],
-  ];
 
   return `
     ${renderPedagogicoSection(
@@ -8564,21 +8549,6 @@ const renderRemarcadaFieldsHtml = (draft = {}) => {
               </div>`
             : `<input type="hidden" data-ped-field="dataAvisoRemarcacao" value="" />`
         }
-
-        <div class="ped-field regv2-field">
-          <div class="ped-label regv2-label">Motivo da remarcação</div>
-          ${
-            isStudentResponsible
-              ? `<div class="ped-sel-wrap">
-                  <select class="ped-sel regv2-select" data-ped-field="motivoRemarcacao">
-                    <option value="">Selecione</option>
-                    ${renderPedSelectOptions(options, motivo)}
-                  </select>
-                  <span class="ped-arr">▼</span>
-                </div>`
-              : `<input class="ped-in regv2-input" type="text" data-ped-field="motivoRemarcacao" value="${escapeHtml(motivo)}" placeholder="Descreva o motivo da remarcação" />`
-          }
-        </div>
 
         <div class="ped-field regv2-field">
           <div class="ped-label regv2-label">Situação da reposição</div>
@@ -9216,10 +9186,6 @@ const savePedagogicoLog = async ({ autosave = false } = {}) => {
     }
     if (draft.responsavelRemarcacao === "aluno" && !has(draft.dataAvisoRemarcacao)) {
       if (!autosave) setPedagogicoStatus("Informe quando o aluno avisou a remarcação.", "error");
-      return false;
-    }
-    if (!has(draft.motivoRemarcacao)) {
-      if (!autosave) setPedagogicoStatus("Selecione o motivo da remarcação para salvar.", "error");
       return false;
     }
     if (!has(draft.situacaoReposicao)) {
