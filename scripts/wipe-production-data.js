@@ -41,6 +41,20 @@
     - contas Auth desses perfis preservados.
     - plans, onboardingContents, onboardingQuizzes, config/*.
     - Growth/Outbound/SDR/metas/copilot e qualquer tabela fora de SUPABASE_TABLES_TO_WIPE.
+
+  IMPORTANTE — CORTES POR DATA EM AULAS/AGENDA
+    Quando a limpeza for por período (ex.: "apagar tudo antes de 23/07/2026"),
+    a coleção Firestore `aulas` deve usar `dateKey` local (America/Sao_Paulo)
+    como fonte canônica de data de agenda.
+
+    NÃO usar `data`/timestamp UTC como critério primário para decidir se uma aula
+    é "antes" ou "depois" do corte, porque aulas noturnas de 22:00/23:00 locais
+    podem cair em 00:00+/UTC do dia seguinte e escapar indevidamente do wipe.
+
+    Em resumo:
+    - Agenda/recorrência: comparar por `dateKey` local.
+    - Tabelas operacionais em timestamp puro (ex.: Supabase `inicio`): comparar por
+      timestamp, mas sempre revisando o timezone de referência do processo.
 */
 
 const fs = require("node:fs");

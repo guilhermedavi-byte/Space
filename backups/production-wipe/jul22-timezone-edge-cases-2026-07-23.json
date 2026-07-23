@@ -1,0 +1,312 @@
+{
+  "generatedAt": "2026-07-23T03:34:01.136Z",
+  "cutoffLocalDateKey": "2026-07-23",
+  "criterion": "Firestore aulas with dateKey < cutoffLocalDateKey but UTC data >= cutoff ISO",
+  "total": 38,
+  "rows": [
+    {
+      "id": "aula_1784238672039_8df38dad6f71",
+      "professor": "Adriano Lippi",
+      "aluno": "Gilberto",
+      "dataLocal": "2026-07-22",
+      "horarioLocal": "21:00–21:30",
+      "dataUtc": "2026-07-23T00:00:00.000Z"
+    },
+    {
+      "id": "aula_1784065176042_81a7d9f21bf0",
+      "professor": "Adriano Lippi",
+      "aluno": "Adilson Machado",
+      "dataLocal": "2026-07-22",
+      "horarioLocal": "21:30–22:00",
+      "dataUtc": "2026-07-23T00:30:00.000Z"
+    },
+    {
+      "id": "aula_1784066229624_bd387c512358",
+      "professor": "Adriano Lippi",
+      "aluno": "Alessandra C.",
+      "dataLocal": "2026-07-22",
+      "horarioLocal": "22:00–23:00",
+      "dataUtc": "2026-07-23T01:00:00.000Z"
+    },
+    {
+      "id": "aula_1784320812027_b1358d1d226b",
+      "professor": "Adriano Lippi",
+      "aluno": "Lucas Ribeiro",
+      "dataLocal": "2026-07-22",
+      "horarioLocal": "23:00–23:30",
+      "dataUtc": "2026-07-23T02:00:00.000Z"
+    },
+    {
+      "id": "aula_1784237001919_89af07e3ff0a",
+      "professor": "Carlos Eduardo",
+      "aluno": "Arlene Ferreira",
+      "dataLocal": "2026-07-22",
+      "horarioLocal": "21:00–22:00",
+      "dataUtc": "2026-07-23T00:00:00.000Z"
+    },
+    {
+      "id": "aula_1784686491319_037b085a21af",
+      "professor": "Carlos Eduardo",
+      "aluno": "Leandro",
+      "dataLocal": "2026-07-22",
+      "horarioLocal": "22:00–22:30",
+      "dataUtc": "2026-07-23T01:00:00.000Z"
+    },
+    {
+      "id": "aula_1784646364808_0c0e0aae2a7d",
+      "professor": "Cássio",
+      "aluno": "Kelly Oliveira",
+      "dataLocal": "2026-07-22",
+      "horarioLocal": "21:00–22:00",
+      "dataUtc": "2026-07-23T00:00:00.000Z"
+    },
+    {
+      "id": "aula_1784248478257_2a95f1624fee",
+      "professor": "Cássio",
+      "aluno": "Nilton Ramos",
+      "dataLocal": "2026-07-22",
+      "horarioLocal": "22:00–22:30",
+      "dataUtc": "2026-07-23T01:00:00.000Z"
+    },
+    {
+      "id": "aula_1784671206734_6eacdabfc90d",
+      "professor": "Cássio",
+      "aluno": "Willyan",
+      "dataLocal": "2026-07-22",
+      "horarioLocal": "22:30–23:00",
+      "dataUtc": "2026-07-23T01:30:00.000Z"
+    },
+    {
+      "id": "aula_1784238558041_0c6be759e6ea",
+      "professor": "Diego",
+      "aluno": "Filipe S.",
+      "dataLocal": "2026-07-22",
+      "horarioLocal": "21:00–21:30",
+      "dataUtc": "2026-07-23T00:00:00.000Z"
+    },
+    {
+      "id": "aula_1784239033679_1e7dac62a837",
+      "professor": "Diego",
+      "aluno": "Manoel Antonio",
+      "dataLocal": "2026-07-22",
+      "horarioLocal": "21:30–22:00",
+      "dataUtc": "2026-07-23T00:30:00.000Z"
+    },
+    {
+      "id": "aula_1784649523848_1a66befe141a",
+      "professor": "Diego",
+      "aluno": "Josivan",
+      "dataLocal": "2026-07-22",
+      "horarioLocal": "22:00–22:30",
+      "dataUtc": "2026-07-23T01:00:00.000Z"
+    },
+    {
+      "id": "aula_1784065073789_928ff560bae7",
+      "professor": "Diego",
+      "aluno": "Ademilson",
+      "dataLocal": "2026-07-22",
+      "horarioLocal": "23:00–23:30",
+      "dataUtc": "2026-07-23T02:00:00.000Z"
+    },
+    {
+      "id": "aula_1784242090504_5533c33ae8ff",
+      "professor": "Eduardo de Andrade",
+      "aluno": "Leo Rezende",
+      "dataLocal": "2026-07-22",
+      "horarioLocal": "22:00–22:30",
+      "dataUtc": "2026-07-23T01:00:00.000Z"
+    },
+    {
+      "id": "aula_1784242564682_1bd8ae52e03e",
+      "professor": "Eduardo de Andrade",
+      "aluno": "Rogerio Olegário",
+      "dataLocal": "2026-07-22",
+      "horarioLocal": "22:30–23:00",
+      "dataUtc": "2026-07-23T01:30:00.000Z"
+    },
+    {
+      "id": "aula_1784066616423_252b52c9eaf8",
+      "professor": "Eduardo de Andrade",
+      "aluno": "Alexandre Silva",
+      "dataLocal": "2026-07-22",
+      "horarioLocal": "23:00–23:30",
+      "dataUtc": "2026-07-23T02:00:00.000Z"
+    },
+    {
+      "id": "aula_1784648708384_0363d04247e6",
+      "professor": "João Victor Cruz",
+      "aluno": "Juciane",
+      "dataLocal": "2026-07-22",
+      "horarioLocal": "21:30–22:30",
+      "dataUtc": "2026-07-23T00:30:00.000Z"
+    },
+    {
+      "id": "aula_1784673559024_3168abc209f4",
+      "professor": "Luiz",
+      "aluno": "Cátia",
+      "dataLocal": "2026-07-22",
+      "horarioLocal": "22:30–23:00",
+      "dataUtc": "2026-07-23T01:30:00.000Z"
+    },
+    {
+      "id": "aula_1784684829318_347192b8d235",
+      "professor": "Maria Clara Maciel",
+      "aluno": "Claudiane",
+      "dataLocal": "2026-07-22",
+      "horarioLocal": "22:00–22:30",
+      "dataUtc": "2026-07-23T01:00:00.000Z"
+    },
+    {
+      "id": "aula_1784240612148_b1d2b9117f26",
+      "professor": "Mariana de Aguiar",
+      "aluno": "Marcelo Machado",
+      "dataLocal": "2026-07-22",
+      "horarioLocal": "21:00–21:30",
+      "dataUtc": "2026-07-23T00:00:00.000Z"
+    },
+    {
+      "id": "aula_1784240975874_bb056d50d7fe",
+      "professor": "Mariana de Aguiar",
+      "aluno": "Vanderlei R.",
+      "dataLocal": "2026-07-22",
+      "horarioLocal": "21:30–22:00",
+      "dataUtc": "2026-07-23T00:30:00.000Z"
+    },
+    {
+      "id": "aula_1784653254246_b70ff9ce20c3",
+      "professor": "Mariana de Aguiar",
+      "aluno": "Roseli",
+      "dataLocal": "2026-07-22",
+      "horarioLocal": "22:00–22:30",
+      "dataUtc": "2026-07-23T01:00:00.000Z"
+    },
+    {
+      "id": "aula_1784241405140_5e156b4e6da0",
+      "professor": "Mariana de Aguiar",
+      "aluno": "Ronaldo F.",
+      "dataLocal": "2026-07-22",
+      "horarioLocal": "22:30–23:00",
+      "dataUtc": "2026-07-23T01:30:00.000Z"
+    },
+    {
+      "id": "aula_1784685556953_6a0e11ffd065",
+      "professor": "Mariana de Aguiar",
+      "aluno": "Adão Robert",
+      "dataLocal": "2026-07-22",
+      "horarioLocal": "23:00–23:30",
+      "dataUtc": "2026-07-23T02:00:00.000Z"
+    },
+    {
+      "id": "aula_1784242210702_78fe2f4faa63",
+      "professor": "Mariana de Aguiar",
+      "aluno": "Danilo F.",
+      "dataLocal": "2026-07-22",
+      "horarioLocal": "23:30–23:59",
+      "dataUtc": "2026-07-23T02:30:00.000Z"
+    },
+    {
+      "id": "aula_1784662100111_c954d8c66399",
+      "professor": "Matheus Dadvidson",
+      "aluno": "Neison",
+      "dataLocal": "2026-07-22",
+      "horarioLocal": "21:00–21:30",
+      "dataUtc": "2026-07-23T00:00:00.000Z"
+    },
+    {
+      "id": "aula_1784078590582_e28ac467b962",
+      "professor": "Matheus Dadvidson",
+      "aluno": "Célio A.",
+      "dataLocal": "2026-07-22",
+      "horarioLocal": "22:00–22:30",
+      "dataUtc": "2026-07-23T01:00:00.000Z"
+    },
+    {
+      "id": "aula_1784662202629_1d9a62168af5",
+      "professor": "Matheus Dadvidson",
+      "aluno": "Valdinei",
+      "dataLocal": "2026-07-22",
+      "horarioLocal": "23:00–23:30",
+      "dataUtc": "2026-07-23T02:00:00.000Z"
+    },
+    {
+      "id": "aula_1784681543382_e13abb0fc46a",
+      "professor": "Pedro Gaspare",
+      "aluno": "Celio",
+      "dataLocal": "2026-07-22",
+      "horarioLocal": "21:00–21:30",
+      "dataUtc": "2026-07-23T00:00:00.000Z"
+    },
+    {
+      "id": "aula_1784077865562_2f77cfca5f1c",
+      "professor": "Priscilla Gracielle",
+      "aluno": "Karla Rezende",
+      "dataLocal": "2026-07-22",
+      "horarioLocal": "21:00–21:30",
+      "dataUtc": "2026-07-23T00:00:00.000Z"
+    },
+    {
+      "id": "aula_1784686342452_99555b46eac9",
+      "professor": "Priscilla Gracielle",
+      "aluno": "Debora",
+      "dataLocal": "2026-07-22",
+      "horarioLocal": "21:30–22:00",
+      "dataUtc": "2026-07-23T00:30:00.000Z"
+    },
+    {
+      "id": "aula_1784077671833_8cc844f58bac",
+      "professor": "Priscilla Gracielle",
+      "aluno": "Albison Abreu",
+      "dataLocal": "2026-07-22",
+      "horarioLocal": "22:00–22:30",
+      "dataUtc": "2026-07-23T01:00:00.000Z"
+    },
+    {
+      "id": "aula_1784137756142_3e80d1ba3f4a",
+      "professor": "Rodrigo Batista",
+      "aluno": "André Luiz",
+      "dataLocal": "2026-07-22",
+      "horarioLocal": "21:00–21:30",
+      "dataUtc": "2026-07-23T00:00:00.000Z"
+    },
+    {
+      "id": "aula_1784668463938_593a2c4a4bf0",
+      "professor": "Rodrigo Batista",
+      "aluno": "Renata França",
+      "dataLocal": "2026-07-22",
+      "horarioLocal": "21:30–22:00",
+      "dataUtc": "2026-07-23T00:30:00.000Z"
+    },
+    {
+      "id": "aula_1784645380032_7e33402fc54c",
+      "professor": "Rodrigo Batista",
+      "aluno": "Ronie F.",
+      "dataLocal": "2026-07-22",
+      "horarioLocal": "22:00–22:30",
+      "dataUtc": "2026-07-23T01:00:00.000Z"
+    },
+    {
+      "id": "aula_1784668328697_a8e256a1b1a2",
+      "professor": "Rodrigo Batista",
+      "aluno": "Bruno L.",
+      "dataLocal": "2026-07-22",
+      "horarioLocal": "22:30–23:00",
+      "dataUtc": "2026-07-23T01:30:00.000Z"
+    },
+    {
+      "id": "aula_1784670125309_50fe15679db9",
+      "professor": "Susana Montero",
+      "aluno": "Marcos S.",
+      "dataLocal": "2026-07-22",
+      "horarioLocal": "21:00–21:30",
+      "dataUtc": "2026-07-23T00:00:00.000Z"
+    },
+    {
+      "id": "aula_1784237295004_702b653bb253",
+      "professor": "Susana Montero",
+      "aluno": "E. Carol",
+      "dataLocal": "2026-07-22",
+      "horarioLocal": "21:30–22:00",
+      "dataUtc": "2026-07-23T00:30:00.000Z"
+    }
+  ]
+}
