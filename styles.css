@@ -8344,6 +8344,11 @@ body.admin-student-drawer-open {
   overflow: hidden;
 }
 
+.teacher-student-drawer-open,
+.teacher-student-drawer-open body {
+  overflow: hidden;
+}
+
 .teacher-students-drawer.is-open {
   opacity: 1;
   pointer-events: auto;
@@ -8352,13 +8357,16 @@ body.admin-student-drawer-open {
 .teacher-students-drawer-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(3, 8, 18, 0.76);
-  backdrop-filter: blur(16px) saturate(135%);
-  -webkit-backdrop-filter: blur(16px) saturate(135%);
+  background: rgba(3, 8, 18, 0.82);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
 }
 
 .teacher-students-drawer-inner {
-  position: relative;
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
   width: min(560px, 94vw);
   height: 100vh;
   height: 100dvh;

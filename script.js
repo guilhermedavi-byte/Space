@@ -417,6 +417,10 @@ const teacherTodaySlotsEmpty = document.querySelector("[data-teacher-today-slots
 const teacherNoticeList = document.querySelector("[data-teacher-notice-list]");
 const teacherNoticeEmpty = document.querySelector("[data-teacher-notice-empty]");
 
+if (teacherStudentHistoryDrawer instanceof HTMLElement && teacherStudentHistoryDrawer.parentElement !== document.body) {
+  document.body.appendChild(teacherStudentHistoryDrawer);
+}
+
 // Student dashboard v5 (new home screen for students).
 const studentV5Greeting = document.querySelector("[data-student-v5-greeting]");
 const studentV5Date = document.querySelector("[data-student-v5-date]");
@@ -9974,6 +9978,8 @@ const openTeacherStudentHistoryDrawer = async ({ alunoId } = {}) => {
 
   if (teacherStudentHistoryDrawer instanceof HTMLElement) {
     teacherStudentHistoryDrawer.hidden = false;
+    document.documentElement.classList.add("teacher-student-drawer-open");
+    document.body.classList.add("teacher-student-drawer-open");
     window.requestAnimationFrame(() => {
       if (teacherStudentHistoryDrawer instanceof HTMLElement) teacherStudentHistoryDrawer.classList.add("is-open");
     });
@@ -10057,6 +10063,8 @@ const closeTeacherStudentHistoryDrawer = () => {
       if (teacherStudentHistoryDrawer instanceof HTMLElement) teacherStudentHistoryDrawer.hidden = true;
     }, 220);
   }
+  document.documentElement.classList.remove("teacher-student-drawer-open");
+  document.body.classList.remove("teacher-student-drawer-open");
   teacherStudentsState.history = createTeacherStudentHistoryState();
 };
 
