@@ -600,6 +600,7 @@ let teacherV4DashboardState = {
   loadedAt: 0,
   teacherId: "",
   aulas: [],
+  logsByEventId: new Map(),
   avaliacoes: [],
   avisos: [],
   feedbacks: [],
@@ -3153,6 +3154,7 @@ const renderTeacherDashboard = () => {
 
   const renderFromCache = () => {
     const aulas = Array.isArray(teacherV4DashboardState.aulas) ? teacherV4DashboardState.aulas : [];
+    const logsByEventId = teacherV4DashboardState.logsByEventId instanceof Map ? teacherV4DashboardState.logsByEventId : new Map();
     const avaliacoes = Array.isArray(teacherV4DashboardState.avaliacoes) ? teacherV4DashboardState.avaliacoes : [];
     const avisos = Array.isArray(teacherV4DashboardState.avisos) ? teacherV4DashboardState.avisos : [];
     const feedbacks = Array.isArray(teacherV4DashboardState.feedbacks) ? teacherV4DashboardState.feedbacks : [];
@@ -3177,8 +3179,8 @@ const renderTeacherDashboard = () => {
 
     const monthLessons = lessonsOnly.filter((evt) => isInRange(evt.startMs, monthStart, monthEnd));
     const lastMonthLessons = lessonsOnly.filter((evt) => isInRange(evt.startMs, lastMonthStart, lastMonthEnd));
-    const monthMinutes = monthLessons.reduce((acc, evt) => acc + Math.max(0, evt.endMin - evt.startMin), 0);
-    const lastMonthMinutes = lastMonthLessons.reduce((acc, evt) => acc + Math.max(0, evt.endMin - evt.startMin), 0);
+    const monthMinutes = monthLessons.reduce((acc, evt) => acc + getTeacherDashboardLessonCreditedMinutes(evt, logsByEventId), 0);
+    const lastMonthMinutes = lastMonthLessons.reduce((acc, evt) => acc + getTeacherDashboardLessonCreditedMinutes(evt, logsByEventId), 0);
 
     if (teacherV4MonthHours instanceof HTMLElement) teacherV4MonthHours.textContent = formatHoursLabel(monthMinutes);
     if (teacherV4MonthDelta instanceof HTMLElement) {
@@ -3690,10 +3692,11 @@ const renderTeacherDashboard = () => {
         });
       });
 
+      let liveData = null;
       try {
-        const liveRes = await withTimeout(fetchWithAuth("/api/live-lessons?limit=200"), 10_000, "teacher_v4_live_lessons");
+        const liveRes = await withTimeout(fetchWithAuth("/api/live-lessons?scope=pedagogico&include_records=1&limit=500"), 10_000, "teacher_v4_live_lessons");
         if (liveRes.ok) {
-          const liveData = await liveRes.json().catch(() => null);
+          liveData = await liveRes.json().catch(() => null);
           const liveAulas = (Array.isArray(liveData?.lessons) ? liveData.lessons : [])
             .map(normalizeLiveLessonForTeacherDashboard)
             .filter(Boolean);
@@ -3708,6 +3711,51 @@ const renderTeacherDashboard = () => {
       } catch (error) {
         // Keep the existing Firestore agenda if the Supabase classroom API is unavailable.
       }
+
+      let lessonLogs = [];
+      try {
+        const logsRes = await withTimeout(fetchWithAuth("/api/lesson-logs"), 10_000, "teacher_v4_lesson_logs");
+        if (logsRes.ok) {
+          const logsData = await logsRes.json().catch(() => null);
+          lessonLogs = Array.isArray(logsData?.logs) ? logsData.logs : [];
+        }
+      } catch (error) {
+        lessonLogs = [];
+      }
+
+      const logsByEventId = new Map();
+      lessonLogs.forEach((log) => {
+        if (!log || typeof log !== "object") return;
+        const eventId = typeof log.eventId === "string" ? log.eventId : "";
+        indexPedagogicoLogByEvent(logsByEventId, eventId, log);
+        indexPedagogicoLogByEvent(logsByEventId, derivePedagogicoEventIdFromLogId(log.id || log.docId || log.documentId), log);
+      });
+      const liveRecords = Array.isArray(liveData?.records) ? liveData.records : [];
+      liveRecords.forEach((record) => {
+        if (!record || typeof record !== "object") return;
+        const eventId = String(record.aula_id || "");
+        if (!eventId || logsByEventId.has(eventId)) return;
+        const statusRaw = String(record.status || "").toLowerCase();
+        const statusAula =
+          statusRaw === "falta"
+            ? "falta_aluno"
+            : statusRaw === "remarcada"
+              ? "remarcada"
+              : statusRaw === "cancelada"
+                ? "cancelada"
+                : "realizada";
+        indexPedagogicoLogByEvent(logsByEventId, eventId, {
+          id: String(record.id || ""),
+          eventId,
+          statusAula,
+          payload: { statusAula },
+        });
+      });
+      aulas.forEach((lesson) => {
+        const liveId = String(lesson.supabaseLessonId || "");
+        if (!liveId || logsByEventId.has(lesson.id) || !logsByEventId.has(liveId)) return;
+        indexPedagogicoLogByEvent(logsByEventId, lesson.id, logsByEventId.get(liveId));
+      });
 
       // Determine next lesson for today and fetch student profile/goal for it (single doc read).
       const lessonsToday = aulas.filter((evt) => evt.type === "lesson" && evt.dateKey === todayKey && !isCancelledStatus(evt.status));
@@ -3879,6 +3927,7 @@ const renderTeacherDashboard = () => {
       }
 
       teacherV4DashboardState.aulas = aulas;
+      teacherV4DashboardState.logsByEventId = logsByEventId;
       teacherV4DashboardState.avaliacoes = avaliacoes;
       teacherV4DashboardState.avisos = avisos;
       teacherV4DashboardState.feedbacks = feedbacks;
@@ -7818,6 +7867,19 @@ const getPedagogicoLogForLesson = (lesson, logsByEventId) => {
     if (getPedagogicoRegisteredStatus(log)) return log;
   }
   return null;
+};
+
+const getTeacherDashboardLessonCreditedMinutes = (lesson, logsByEventId) => {
+  if (!lesson || typeof lesson !== "object") return 0;
+  const startMin = Number(lesson.startMin);
+  const endMin = Number(lesson.endMin);
+  if (!Number.isFinite(startMin) || !Number.isFinite(endMin) || endMin <= startMin) return 0;
+  const duration = endMin - startMin;
+  const log = getPedagogicoLogForLesson(lesson, logsByEventId);
+  const status = getPedagogicoRegisteredStatus(log);
+  if (status === "realizada") return duration;
+  if (status === "falta_aluno") return duration * 0.5;
+  return 0;
 };
 
 const buildPedagogicoLessonViewModel = (lesson, logsByEventId, now, todayKey) => {
