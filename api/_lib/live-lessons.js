@@ -50,6 +50,9 @@ const omitKeys = (obj, keys) => {
   return Object.fromEntries(Object.entries(obj || {}).filter(([key]) => !blocked.has(key)));
 };
 
+const omitNilValues = (obj) =>
+  Object.fromEntries(Object.entries(obj || {}).filter(([, value]) => value !== null && value !== undefined));
+
 const supabaseWriteWithColumnFallback = async (path, options, { requiredKeys = [] } = {}) => {
   const required = new Set(requiredKeys);
   let body = options?.body && typeof options.body === "object" ? options.body : {};
@@ -340,7 +343,7 @@ const createLessonRegister = async ({ lesson, session, payload }) => {
     ? `/${REGISTERS_TABLE}?id=eq.${safeEncode(existing.id)}`
     : `/${REGISTERS_TABLE}`;
   const writeMethod = existing?.id ? "PATCH" : "POST";
-  const writeBody = existing?.id ? { ...register, created_at: existing.created_at || register.created_at } : register;
+  const writeBody = omitNilValues(existing?.id ? { ...register, created_at: existing.created_at || register.created_at } : register);
   const { data } = await supabaseWriteWithColumnFallback(writePath, {
     method: writeMethod,
     body: writeBody,
@@ -417,6 +420,7 @@ module.exports = {
   patchLesson,
   createLessonRegister,
   summarizeLiveLessons,
+  omitNilValues,
   createLiveLessonViaN8n,
   createVideoRoomViaN8n,
   rescheduleLiveLessonViaN8n,

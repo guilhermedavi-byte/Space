@@ -9372,10 +9372,18 @@ const savePedagogicoLog = async ({ autosave = false } = {}) => {
     setPedagogicoAutosaveLabel("Erro ao salvar");
     if (!autosave) {
       const fields = Array.isArray(error?.fields) && error.fields.length ? ` Campos: ${error.fields.join(", ")}.` : "";
+      const backendMessage =
+        typeof error?.message === "string" &&
+        error.message.trim() &&
+        error.message.trim() !== "lesson_log_save_failed"
+          ? error.message.trim()
+          : "";
       const message =
         error?.code === "timeout"
           ? "O salvamento demorou demais. Verifique sua conexão e tente novamente."
-          : `Não foi possível salvar agora.${fields}`;
+          : backendMessage
+            ? `${backendMessage}${fields}`
+            : `Não foi possível salvar agora.${fields}`;
       setPedagogicoStatus(message, "error");
     }
     return false;
