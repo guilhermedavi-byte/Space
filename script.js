@@ -9479,6 +9479,63 @@ const openPedagogicoDrawer = ({ lesson } = {}) => {
   }, 30_000);
 };
 
+const readPedagogicoApiResponse = async (response, label) => {
+  const safeLabel = String(label || "unknown");
+  if (!(response instanceof Response)) {
+    return {
+      ok: false,
+      status: "network",
+      data: null,
+      raw: "",
+      error: `${safeLabel}_network`,
+    };
+  }
+
+  const status = Number(response.status) || 0;
+  const raw = await response
+    .clone()
+    .text()
+    .catch(() => "");
+
+  let data = null;
+  if (raw) {
+    try {
+      data = JSON.parse(raw);
+    } catch (error) {
+      data = null;
+    }
+  }
+
+  return {
+    ok: response.ok,
+    status,
+    data,
+    raw,
+    error: response.ok ? "" : String(data?.error || raw || `${safeLabel}_failed`).slice(0, 240),
+  };
+};
+
+const normalizeTeacherPedagogicoLessonRow = (evt, studentPlanById) => {
+  if (!evt || typeof evt !== "object") return null;
+  if (evt.type !== "lesson" && evt.type !== "manual") return null;
+
+  const row = {
+    id: String(evt.id || ""),
+    alunoId: typeof evt.alunoId === "string" ? evt.alunoId : "",
+    professorId: typeof evt.professorId === "string" ? evt.professorId : "",
+    dateKey: String(evt.dateKey || ""),
+    startMin: Number(evt.startMin) || 0,
+    endMin: Number(evt.endMin) || 0,
+    title: String(evt.title || "Aluno"),
+    description: String(evt.description || "Aula"),
+    planoAluno: normalizePlanKeyLoose(evt.planoAluno || evt.plano || evt.plan || studentPlanById.get(String(evt.alunoId || "")) || ""),
+    source: "firestore",
+  };
+
+  if (!row.id || !isValidDateKey(row.dateKey) || row.endMin <= row.startMin) return null;
+  return row;
+};
+
 const renderTeacherPedagogico = async ({ silent = false } = {}) => {
   if (currentRole !== "teacher") return;
   if (!(pedagogicoList instanceof HTMLElement)) return;
@@ -9506,11 +9563,20 @@ const renderTeacherPedagogico = async ({ silent = false } = {}) => {
     const eventsRes = eventsResult.status === "fulfilled" ? eventsResult.value : null;
     const logsRes = logsResult.status === "fulfilled" ? logsResult.value : null;
     const liveRes = liveResult.status === "fulfilled" ? liveResult.value : null;
-    const eventsData = eventsRes?.ok ? await eventsRes.json().catch(() => null) : null;
-    const liveData = liveRes?.ok ? await liveRes.json().catch(() => null) : null;
     const teacherStudentsRes = teacherStudentsResult.status === "fulfilled" ? teacherStudentsResult.value : null;
-    const teacherStudentsData = teacherStudentsRes?.ok ? await teacherStudentsRes.json().catch(() => null) : null;
-    const events = Array.isArray(eventsData?.events) ? eventsData.events : [];
+    const [eventsApi, logsApi, liveApi, teacherStudentsApi] = await Promise.all([
+      readPedagogicoApiResponse(eventsRes, "schedule_events"),
+      readPedagogicoApiResponse(logsRes, "lesson_logs"),
+      readPedagogicoApiResponse(liveRes, "live_lessons"),
+      readPedagogicoApiResponse(teacherStudentsRes, "teacher_students"),
+    ]);
+
+    const eventsData = eventsApi.data;
+    const liveData = liveApi.data;
+    const teacherStudentsData = teacherStudentsApi.data;
+    const eventsFallback = Array.isArray(teacherStudentsData?.events) ? teacherStudentsData.events : [];
+    const logsFallback = Array.isArray(teacherStudentsData?.logs) ? teacherStudentsData.logs : [];
+    const events = Array.isArray(eventsData?.events) ? eventsData.events : eventsFallback;
     const liveLessons = Array.isArray(liveData?.lessons) ? liveData.lessons : [];
     const liveRecords = Array.isArray(liveData?.records) ? liveData.records : [];
     const studentPlanById = new Map();
@@ -9527,15 +9593,17 @@ const renderTeacherPedagogico = async ({ silent = false } = {}) => {
       }
     }
 
-    if (!eventsRes?.ok && !liveRes?.ok) {
-      throw new Error(`lessons_fetch_failed:${eventsRes?.status || "network"}:${liveRes?.status || "network"}`);
+    if (!eventsApi.ok && !liveApi.ok) {
+      console.error("[pedagogico] upstream responses failed", {
+        scheduleEvents: { status: eventsApi.status, error: eventsApi.error },
+        liveLessons: { status: liveApi.status, error: liveApi.error },
+        lessonLogs: { status: logsApi.status, error: logsApi.error },
+        teacherStudents: { status: teacherStudentsApi.status, error: teacherStudentsApi.error },
+      });
+      throw new Error(`lessons_fetch_failed:${eventsApi.status || "network"}:${liveApi.status || "network"}`);
     }
 
-    let logs = [];
-    if (logsRes?.ok) {
-      const logsData = await logsRes.json().catch(() => null);
-      logs = Array.isArray(logsData?.logs) ? logsData.logs : [];
-    }
+    const logs = Array.isArray(logsApi.data?.logs) ? logsApi.data.logs : logsFallback;
 
     const logsByEventId = new Map();
     logs.forEach((log) => {
@@ -9591,21 +9659,8 @@ const renderTeacherPedagogico = async ({ silent = false } = {}) => {
     });
 
     const firestoreLessons = events
-      // O professor pode registrar logs também para eventos "manual" (muitos professores criam "Aula" como evento manual).
-      .filter((evt) => evt && typeof evt === "object" && (evt.type === "lesson" || evt.type === "manual"))
-      .map((evt) => ({
-        id: String(evt.id || ""),
-        alunoId: typeof evt.alunoId === "string" ? evt.alunoId : "",
-        professorId: typeof evt.professorId === "string" ? evt.professorId : "",
-        dateKey: String(evt.dateKey || ""),
-        startMin: Number(evt.startMin) || 0,
-        endMin: Number(evt.endMin) || 0,
-        title: String(evt.title || "Aluno"),
-        description: String(evt.description || "Aula"),
-        planoAluno: normalizePlanKeyLoose(evt.planoAluno || evt.plano || evt.plan || studentPlanById.get(String(evt.alunoId || "")) || ""),
-        source: "firestore",
-      }))
-      .filter((evt) => evt.id && isValidDateKey(evt.dateKey) && evt.endMin > evt.startMin);
+      .map((evt) => normalizeTeacherPedagogicoLessonRow(evt, studentPlanById))
+      .filter(Boolean);
 
     const supabaseLessons = liveLessons
       .map(normalizeLiveLessonForTeacherDashboard)
@@ -9663,6 +9718,9 @@ const renderTeacherPedagogico = async ({ silent = false } = {}) => {
         liveData?.degraded ? String(liveData?.warning || "A lista carregou em modo seguro; alguns dados podem estar indisponíveis.") : "",
         liveData?.degraded ? "warn" : ""
       );
+      if (!eventsApi.ok && lessons.length) {
+        setPedagogicoStatus("A lista carregou em modo seguro; alguns dados auxiliares podem estar indisponíveis.", "warn");
+      }
     }
   } catch (error) {
     console.error("[pedagogico] load failed:", error);

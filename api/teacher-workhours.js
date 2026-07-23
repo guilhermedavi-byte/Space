@@ -3,6 +3,7 @@ const { getSessionFromRequest } = require("../_lib/session");
 const { clampInt } = require("../_lib/scheduling-utils");
 const { verifyFirebaseIdToken } = require("../_lib/firebase-id-token");
 const { fetchUserProfileByUid } = require("../_lib/firestore-user");
+const { getDocumentAsAdmin } = require("./_lib/firestore-admin");
 const {
   decodeFields,
   firestoreGetDocument,
@@ -154,30 +155,23 @@ const workHoursToFirestoreHorarios = (workHours) => {
   return horarios;
 };
 
+const buildMergedWorkHours = (fields) => {
+  const stored =
+    fields?.horarios && typeof fields.horarios === "object"
+      ? decodeFirestoreHorarios(fields.horarios)
+      : normalizeStoredWorkHours(fields?.workHours);
+  const fallback = defaultWorkHoursDoc();
+  const merged = {};
+  for (let dow = 0; dow <= 6; dow += 1) {
+    const key = String(dow);
+    merged[key] = Array.isArray(stored[key]) ? stored[key] : fallback[key] || [];
+  }
+  return merged;
+};
+
 module.exports = async (req, res) => {
   try {
     const idToken = getBearerTokenFromRequest(req);
-    if (!idToken) {
-      sendJson(res, 401, { error: "missing_id_token" });
-      return;
-    }
-
-    let decoded;
-    try {
-      decoded = await verifyFirebaseIdToken(idToken);
-    } catch (error) {
-      sendJson(res, 401, { error: "invalid_credentials" });
-      return;
-    }
-
-    // Role is derived from Firestore to avoid relying on cookie sessions (they can be stale/mismatched).
-    let profile = null;
-    try {
-      profile = await fetchUserProfileByUid({ uid: decoded.uid, idToken });
-    } catch (error) {
-      profile = null;
-    }
-    const role = String(profile?.user?.role || "").trim().toLowerCase();
 
     // Teacher reads/edits their own work hours.
     // Admin can read any teacher's work hours by providing `uid` in the query string (read-only).
@@ -188,12 +182,37 @@ module.exports = async (req, res) => {
     const session = getSessionFromRequest(req);
     const cookieRole = String(session?.role || "").trim().toLowerCase();
     const cookieUid = String(session?.sub || "").trim();
+    const cookieEmail = String(session?.email || "").trim().toLowerCase();
 
-    let teacherId = decoded.uid;
+    let decoded = null;
+    if (idToken) {
+      try {
+        decoded = await verifyFirebaseIdToken(idToken);
+      } catch (error) {
+        decoded = null;
+      }
+    }
+
+    // Role is derived from Firestore when possible, but we can safely fall back to the verified cookie session for GET.
+    let profile = null;
+    if (decoded?.uid && idToken) {
+      try {
+        profile = await fetchUserProfileByUid({ uid: decoded.uid, idToken });
+      } catch (error) {
+        profile = null;
+      }
+    }
+    const role = String(profile?.user?.role || "").trim().toLowerCase();
+
+    let teacherId = decoded?.uid || cookieUid;
     const isAdmin = role === "admin" || cookieRole === "admin";
     const isTeacher = role === "teacher" || cookieRole === "teacher";
 
     if (req.method === "POST") {
+      if (!idToken || !decoded?.uid) {
+        sendJson(res, 401, { error: "missing_id_token" });
+        return;
+      }
       if (!isTeacher) {
         sendJson(res, 403, { error: "forbidden" });
         return;
@@ -213,29 +232,43 @@ module.exports = async (req, res) => {
       if (isAdmin && uidFromQuery) teacherId = uidFromQuery;
     }
 
+    if (!teacherId) {
+      sendJson(res, 401, { error: "unauthorized" });
+      return;
+    }
+
     if (req.method === "GET" || req.method === "HEAD") {
       const docPath = `workHours/${encodeURIComponent(teacherId)}`;
-      const snap = await firestoreGetDocument({ docPath, idToken });
-      if (!snap.ok) {
-        if (snap.status === 404) {
-          sendJson(res, 200, { workHours: defaultWorkHoursDoc() });
-          return;
+      let fields = null;
+
+      if (idToken) {
+        const snap = await firestoreGetDocument({ docPath, idToken });
+        if (snap.ok) {
+          fields = decodeFields(snap.data);
+        } else if (snap.status !== 404) {
+          console.warn("[api] teacher work-hours user-token read failed; retrying as admin", {
+            status: snap.status,
+            teacherId,
+            requesterId: decoded?.uid || cookieUid || "",
+            requesterRole: role || cookieRole || "",
+            requesterEmail: cookieEmail,
+          });
         }
-        throw new Error("firestore_get_failed");
       }
 
-      const fields = decodeFields(snap.data);
-      const stored =
-        fields?.horarios && typeof fields.horarios === "object"
-          ? decodeFirestoreHorarios(fields.horarios)
-          : normalizeStoredWorkHours(fields?.workHours);
-      const fallback = defaultWorkHoursDoc();
-      const merged = {};
-      for (let dow = 0; dow <= 6; dow += 1) {
-        const key = String(dow);
-        merged[key] = Array.isArray(stored[key]) ? stored[key] : fallback[key] || [];
+      if (!fields) {
+        try {
+          fields = await getDocumentAsAdmin(docPath);
+        } catch (error) {
+          if (Number(error?.status) === 404) {
+            sendJson(res, 200, { workHours: defaultWorkHoursDoc() });
+            return;
+          }
+          throw error;
+        }
       }
-      sendJson(res, 200, { workHours: merged });
+
+      sendJson(res, 200, { workHours: buildMergedWorkHours(fields) });
       return;
     }
 
