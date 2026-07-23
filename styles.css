@@ -8333,12 +8333,15 @@ body.admin-student-drawer-open {
 .teacher-students-drawer {
   position: fixed;
   inset: 0;
+  height: 100vh;
+  height: 100dvh;
   z-index: 1300;
   display: flex;
   justify-content: flex-end;
   opacity: 0;
   pointer-events: none;
   transition: opacity 220ms ease;
+  overflow: hidden;
 }
 
 .teacher-students-drawer.is-open {
@@ -8347,17 +8350,19 @@ body.admin-student-drawer-open {
 }
 
 .teacher-students-drawer-backdrop {
-  position: absolute;
+  position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  background: rgba(3, 8, 18, 0.76);
+  backdrop-filter: blur(16px) saturate(135%);
+  -webkit-backdrop-filter: blur(16px) saturate(135%);
 }
 
 .teacher-students-drawer-inner {
   position: relative;
   width: min(560px, 94vw);
   height: 100vh;
+  height: 100dvh;
+  max-height: 100dvh;
   background: #0d1a2a;
   border-left: 0.5px solid rgba(89, 144, 189, 0.12);
   box-shadow: -24px 0 54px rgba(0, 0, 0, 0.35);
@@ -8413,6 +8418,8 @@ body.admin-student-drawer-open {
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   padding: 18px 20px 20px;
   display: grid;
   gap: 14px;
@@ -8421,6 +8428,15 @@ body.admin-student-drawer-open {
 .teacher-students-drawer-inner.admin-student-sheet-drawer-inner .teacher-students-drawer-body {
   padding: 0;
   display: block;
+}
+
+.teacher-students-drawer-inner.admin-student-sheet-drawer-inner .admin-student-sheet,
+.teacher-students-drawer-inner.admin-student-sheet-drawer-inner .admin-student-sheet-grid {
+  min-height: 100%;
+}
+
+.teacher-students-drawer-inner.admin-student-sheet-drawer-inner .admin-student-sheet-left {
+  max-height: calc(100dvh - 164px);
 }
 
 .teacher-students-history-filters {
