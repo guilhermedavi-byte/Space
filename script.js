@@ -8386,33 +8386,6 @@ const renderRealizadaFieldsHtml = (draft = {}) => {
           String(d.conteudoTrabalhado || "")
         )}</textarea>
       </div>
-
-      <div class="ped-grid2 regv2-grid2">
-        <div class="ped-field regv2-field">
-          <div class="ped-label regv2-label">Gramática</div>
-          <input class="ped-in regv2-input" type="text" data-ped-field="gramaticaTrabalhada" value="${escapeHtml(String(d.gramaticaTrabalhada || ""))}" />
-        </div>
-        <div class="ped-field regv2-field">
-          <div class="ped-label regv2-label">Vocabulário</div>
-          <input class="ped-in regv2-input" type="text" data-ped-field="vocabularioTrabalhado" value="${escapeHtml(String(d.vocabularioTrabalhado || ""))}" />
-        </div>
-      </div>
-
-      <div class="ped-grid2 regv2-grid2">
-        <div class="ped-field regv2-field">
-          <div class="ped-label regv2-label">Pronúncia</div>
-          <input class="ped-in regv2-input" type="text" data-ped-field="pronunciaConversacao" value="${escapeHtml(String(d.pronunciaConversacao || ""))}" />
-        </div>
-        <div class="ped-field regv2-field">
-          <div class="ped-label regv2-label">Atividade</div>
-          <input class="ped-in regv2-input" type="text" data-ped-field="atividadeRealizada" value="${escapeHtml(String(d.atividadeRealizada || ""))}" />
-        </div>
-      </div>
-
-      <div class="ped-field regv2-field">
-        <div class="ped-label regv2-label">Materiais</div>
-        <input class="ped-in regv2-input" type="text" data-ped-field="materiaisUsados" value="${escapeHtml(String(d.materiaisUsados || ""))}" />
-      </div>
     `
   );
   const avaliacaoSection = renderPedagogicoSection(
@@ -8433,11 +8406,6 @@ const renderRealizadaFieldsHtml = (draft = {}) => {
     "Próximos passos",
     `
       <div class="ped-field regv2-field">
-        <div class="ped-label regv2-label">Homework</div>
-        <input class="ped-in regv2-input" type="text" data-ped-field="homework" value="${escapeHtml(String(d.homework || ""))}" placeholder="Atividade para o aluno..." />
-      </div>
-
-      <div class="ped-field regv2-field">
         <div class="ped-label regv2-label">Próxima aula</div>
         <input class="ped-in regv2-input" type="text" data-ped-field="proximaAula" value="${escapeHtml(String(d.proximaAula || ""))}" placeholder="Tema para a próxima aula..." />
       </div>
@@ -8449,13 +8417,6 @@ const renderRealizadaFieldsHtml = (draft = {}) => {
       <div class="ped-field regv2-field">
         <div class="ped-label regv2-label">Avisos</div>
         ${renderPedAvisosTrigger(d.avisosCoordenacao || [])}
-      </div>
-
-      <div class="ped-field regv2-field">
-        <div class="ped-label regv2-label">Observações internas</div>
-        <textarea class="ped-ta ped-ta--obs regv2-textarea" data-ped-field="observacoesInternas" rows="2" placeholder="Apenas visível para professor e admin...">${escapeHtml(
-          String(d.observacoesInternas || "")
-        )}</textarea>
       </div>
     `
   );
