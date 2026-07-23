@@ -8616,17 +8616,14 @@ const renderRemarcadaFieldsHtml = (draft = {}) => {
 };
 
 const renderCanceladaFieldsHtml = (draft = {}) => `
-  ${renderPedagogicoSection(
-    "Coordenação",
-    `
-      <div class="ped-field regv2-field">
-        <div class="ped-label regv2-label">Motivo / observação do cancelamento</div>
-        <textarea class="ped-ta regv2-textarea" data-ped-field="observacao" rows="3" maxlength="250" placeholder="Explique brevemente o cancelamento...">${escapeHtml(
-          String(draft?.observacao || draft?.observacoesInternas || "")
-        )}</textarea>
-      </div>
-    `
-  )}
+  <section class="ped-card regv2-card">
+    <div class="ped-field regv2-field">
+      <div class="ped-label regv2-label">Motivo do cancelamento</div>
+      <textarea class="ped-ta regv2-textarea" data-ped-field="observacao" rows="3" maxlength="250" placeholder="Explique brevemente o cancelamento...">${escapeHtml(
+        String(draft?.observacao || draft?.observacoesInternas || "")
+      )}</textarea>
+    </div>
+  </section>
 `;
 
 const getPedagogicoDynamicFieldsHtml = (status, draft) => {
