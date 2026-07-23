@@ -7585,8 +7585,8 @@ const normalizeLiveLessonForUi = (lesson) => {
 const normalizeLiveLessonForTeacherDashboard = (lesson) => {
   const ui = normalizeLiveLessonForUi(lesson);
   if (!ui) return null;
-  const start = dateTimeFromKeyMinutes(ui.dateKey, ui.startMin);
-  const end = dateTimeFromKeyMinutes(ui.dateKey, ui.endMin);
+  const start = buildDateFromDateKeyAndMinutes(ui.dateKey, ui.startMin);
+  const end = buildDateFromDateKeyAndMinutes(ui.dateKey, ui.endMin);
   if (!start || !end) return null;
   const title = ui.aluno || "Aluno";
   const nivelAluno = String(lesson.nivel_declarado || lesson.nivel || "").trim();
