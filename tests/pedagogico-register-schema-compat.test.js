@@ -46,3 +46,28 @@ test("buildLessonRegisterRecord mantém colunas novas e legadas em paralelo", ()
   assert.equal(row.telefone, "5511999999999");
   assert.equal(row.email, "joao@example.com");
 });
+
+test("buildLessonRegisterRecord normaliza ids textuais para colunas text", () => {
+  const row = buildLessonRegisterRecord({
+    lesson: {
+      id: 6393,
+      onboarding_id: "onb-1",
+      aluno_id: "student-1",
+      professor_id: "7WywlPFM4uSls0ui95kU0GIYsUk2",
+      professor_nome: "Matheus Davidson",
+    },
+    session: {
+      sub: "7WywlPFM4uSls0ui95kU0GIYsUk2",
+    },
+    payload: {
+      status: "realizada",
+      conteudo_aula: "Conversation",
+    },
+    now: "2026-07-24T20:00:00.000Z",
+  });
+
+  assert.equal(row.aula_id, "6393");
+  assert.equal(row.professor_id, "7WywlPFM4uSls0ui95kU0GIYsUk2");
+  assert.equal(row.aluno_id, "student-1");
+  assert.equal(row.onboarding_id, "onb-1");
+});

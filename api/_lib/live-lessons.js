@@ -71,20 +71,26 @@ const normalizePedagogicoPendingWriteError = (error) => ({
   capturedAt: new Date().toISOString(),
 });
 
+const toNullableText = (value) => {
+  if (value === null || value === undefined) return null;
+  const normalized = String(value).trim();
+  return normalized ? normalized : null;
+};
+
 const buildLessonRegisterRecord = ({ lesson, session, payload, now }) => {
   const status = String(payload?.status || "realizada").trim().toLowerCase();
   const observacoes = String(payload?.observacoes || "").trim() || null;
   const motivoAtencao =
     String(payload?.motivo_atencao || payload?.motivo_remarcacao || payload?.motivo_falta || "").trim() || null;
   return {
-    aula_id: lesson.id,
-    firestore_doc_id: lesson.firestore_doc_id || lesson.aluno_id || null,
-    onboarding_id: payload?.onboarding_id || lesson.onboarding_id || null,
-    aluno_id: lesson.aluno_id || null,
+    aula_id: toNullableText(lesson.id),
+    firestore_doc_id: toNullableText(lesson.firestore_doc_id || lesson.aluno_id),
+    onboarding_id: toNullableText(payload?.onboarding_id || lesson.onboarding_id),
+    aluno_id: toNullableText(lesson.aluno_id),
     aluno_nome: lesson.aluno_nome || null,
     telefone: lesson.aluno_telefone || null,
     email: lesson.aluno_email || null,
-    professor_id: lesson.professor_id || null,
+    professor_id: toNullableText(lesson.professor_id),
     professor_nome: lesson.professor_nome || null,
     professor_email: lesson.professor_email || null,
     status,
