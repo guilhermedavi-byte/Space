@@ -48,3 +48,8 @@ test('api de schedule-events persiste tipoEvento no documento da agenda', () => 
   assert.match(scheduleEventsApi, /tipo_evento: data\.tipoEvento \|\| null/);
   assert.match(scheduleEventsApi, /const requestedEventType = String\(body\?\.eventType \|\| ""\)\.trim\(\)\.toLowerCase\(\)/);
 });
+
+test('api legada de lesson-logs não persiste mais statusAula operacional no Firestore', () => {
+  assert.match(scheduleEventsApi, /const statusAula = normalizeStatusAula\(body\?\.statusAula\)/);
+  assert.doesNotMatch(scheduleEventsApi, /statusAula,\n\s*\/\/ Realizada/);
+});

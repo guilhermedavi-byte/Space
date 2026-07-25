@@ -1096,7 +1096,6 @@ const handleLessonLogsApi = async (req, res, { idToken, role, requesterId, url, 
     dateKey: isValidDateKey(String(body?.dateKey || "")) ? String(body.dateKey) : "",
     criadoEm: body?.criadoEm ? new Date(String(body.criadoEm)) : now,
     atualizadoEm: now,
-    statusAula,
     // Realizada (form curto)
     conteudoTrabalhado: String(body?.conteudoTrabalhado || "").trim() || "",
     engajamentoNota: clampInt(Number(body?.engajamentoNota || 0), 0, 5, 0),

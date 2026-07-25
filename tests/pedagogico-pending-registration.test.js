@@ -16,3 +16,10 @@ test("logs pedagógicos são indexados também pelo id derivado do documento", (
   assert.match(script, /const derivePedagogicoEventIdFromLogId = \(id\) =>/);
   assert.match(script, /indexPedagogicoLogByEvent\(logsByEventId, derivePedagogicoEventIdFromLogId\(log\.id \|\| log\.docId \|\| log\.documentId\), log\)/);
 });
+
+test("status pedagógico operacional pode ser adaptado do Supabase sem depender de lessonLogs", () => {
+  assert.match(script, /const normalizePedagogicoStatusRegisterLog = \(row, eventMeta = null\) =>/);
+  assert.match(script, /const buildPedagogicoStatusLogs = \(\{ metadataLogs = \[\], registerRows = \[\], eventMetaMap = new Map\(\) \} = \{\}\) =>/);
+  assert.match(script, /statusAula: statusLog\.statusAula/);
+  assert.match(script, /const liveRecords = Array\.isArray\(liveData\?\.records\) \? liveData\.records : \[\]/);
+});

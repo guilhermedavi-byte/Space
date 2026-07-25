@@ -3710,44 +3710,11 @@ const renderTeacherDashboard = () => {
         // Keep the existing Firestore agenda if the Supabase classroom API is unavailable.
       }
 
-      let lessonLogs = [];
-      try {
-        const logsRes = await withTimeout(fetchWithAuth("/api/lesson-logs"), 10_000, "teacher_v4_lesson_logs");
-        if (logsRes.ok) {
-          const logsData = await logsRes.json().catch(() => null);
-          lessonLogs = Array.isArray(logsData?.logs) ? logsData.logs : [];
-        }
-      } catch (error) {
-        lessonLogs = [];
-      }
-
-      const logsByEventId = new Map();
-      lessonLogs.forEach((log) => {
-        if (!log || typeof log !== "object") return;
-        const eventId = typeof log.eventId === "string" ? log.eventId : "";
-        indexPedagogicoLogByEvent(logsByEventId, eventId, log);
-        indexPedagogicoLogByEvent(logsByEventId, derivePedagogicoEventIdFromLogId(log.id || log.docId || log.documentId), log);
-      });
       const liveRecords = Array.isArray(liveData?.records) ? liveData.records : [];
-      liveRecords.forEach((record) => {
-        if (!record || typeof record !== "object") return;
-        const eventId = String(record.aula_id || "");
-        if (!eventId || logsByEventId.has(eventId)) return;
-        const statusRaw = String(record.status || "").toLowerCase();
-        const statusAula =
-          statusRaw === "falta"
-            ? "falta_aluno"
-            : statusRaw === "remarcada"
-              ? "remarcada"
-              : statusRaw === "cancelada"
-                ? "cancelada"
-                : "realizada";
-        indexPedagogicoLogByEvent(logsByEventId, eventId, {
-          id: String(record.id || ""),
-          eventId,
-          statusAula,
-          payload: { statusAula },
-        });
+      const logsByEventId = new Map();
+      const eventMetaMap = buildPedagogicoEventMetaMap(aulas, Array.isArray(liveData?.lessons) ? liveData.lessons : []);
+      buildPedagogicoStatusLogs({ registerRows: liveRecords, eventMetaMap }).forEach((log) => {
+        indexPedagogicoLogByEvent(logsByEventId, log.eventId, log);
       });
       aulas.forEach((lesson) => {
         const liveId = String(lesson.supabaseLessonId || "");
@@ -7961,6 +7928,137 @@ const derivePedagogicoEventIdFromLogId = (id) => {
   const safe = String(id || "").trim();
   if (!safe.startsWith("log_")) return "";
   return safe.slice(4);
+};
+
+const normalizePedagogicoStatusRegisterLog = (row, eventMeta = null) => {
+  if (!row || typeof row !== "object") return null;
+  const eventId = String(row.aula_id || row.eventId || "").trim();
+  if (!eventId) return null;
+  const statusAula = normalizePedagogicoStatus(String(row.status || row.status_aula || row.status_registro || "").trim());
+  if (!PEDAGOGICO_REGISTERED_STATUSES.has(statusAula)) return null;
+  const meta = eventMeta && typeof eventMeta === "object" ? eventMeta : {};
+  const isoRemarcacao = String(row.nova_data_aula || row.nova_data || row.nova_data_remarcacao || "").trim();
+  const remarcacaoTime = isoRemarcacao && isoRemarcacao.length >= 16 ? isoRemarcacao.slice(11, 16) : "";
+  return {
+    id: String(row.id || eventId).trim(),
+    eventId,
+    professorId: String(row.professor_id || meta.professorId || "").trim(),
+    alunoId: String(row.aluno_id || meta.alunoId || "").trim(),
+    dateKey: String(meta.dateKey || "").trim(),
+    startMin: Number(meta.startMin) || 0,
+    endMin: Number(meta.endMin) || 0,
+    statusAula,
+    criadoEm: row.created_at || row.registrado_em || null,
+    atualizadoEm: row.updated_at || row.created_at || row.registrado_em || null,
+    payload: {
+      ...row,
+      statusAula,
+      eventId,
+      conteudoTrabalhado: String(row.conteudo_trabalhado || row.conteudo_aula || "").trim(),
+      engajamentoNota: String(row.engajamento || "").trim(),
+      evolucaoNota: String(row.evolucao || row.desempenho_aluno || "").trim(),
+      confiancaNota: String(row.confianca || "").trim(),
+      humorAluno: String(row.humor || row.humor_aluno || "").trim(),
+      proximaAula: String(row.proxima_aula || row.proxima_aula_recomendada || row.proxima_recomendacao || row.proximo_foco || "").trim(),
+      observacao: String(row.observacoes || row.observacao_professor || row.observacoes_falta || "").trim(),
+      observacoesInternas: String(row.observacoes || row.observacao_professor || row.observacoes_falta || "").trim(),
+      motivoFalta: String(row.motivo_falta || row.motivo_atencao || "").trim(),
+      responsavelFalta: String(row.responsavel_falta || "").trim(),
+      riscoEvasao: String(row.risco_evasao || "").trim(),
+      motivoRemarcacao: String(row.motivo_remarcacao || "").trim(),
+      responsavelRemarcacao: String(row.responsavel_remarcacao || "").trim(),
+      dataAvisoRemarcacao: String(row.data_aviso_remarcacao || "").trim(),
+      situacaoReposicao: String(row.situacao_reposicao || "").trim(),
+      needsAdminReview: row.needs_admin_review === true || row.needsAdminReview === true,
+      novaDataRemarcacao: isoRemarcacao ? isoRemarcacao.slice(0, 10) : "",
+      horarioInicioRemarcacao: remarcacaoTime,
+      horarioFimRemarcacao: "",
+    },
+  };
+};
+
+const normalizePedagogicoEventMeta = (src) => {
+  if (!src || typeof src !== "object") return null;
+  const id = String(src.id || src.eventId || src.aula_id || "").trim();
+  if (!id) return null;
+  const explicitDateKey = String(src.dateKey || "").trim();
+  const explicitStartMin = Number(src.startMin);
+  const explicitEndMin = Number(src.endMin);
+  if (isValidDateKey(explicitDateKey) && Number.isFinite(explicitStartMin) && Number.isFinite(explicitEndMin) && explicitEndMin > explicitStartMin) {
+    return {
+      id,
+      dateKey: explicitDateKey,
+      startMin: explicitStartMin,
+      endMin: explicitEndMin,
+      alunoId: String(src.alunoId || src.aluno_id || "").trim(),
+      professorId: String(src.professorId || src.professor_id || "").trim(),
+    };
+  }
+  const start = src.inicio ? new Date(src.inicio) : null;
+  const end = src.fim ? new Date(src.fim) : null;
+  if (!(start instanceof Date) || Number.isNaN(start.getTime())) return null;
+  const startMin = start.getHours() * 60 + start.getMinutes();
+  const endMin =
+    end instanceof Date && !Number.isNaN(end.getTime()) ? end.getHours() * 60 + end.getMinutes() : startMin + 30;
+  return {
+    id,
+    dateKey: createDateKey(start),
+    startMin,
+    endMin,
+    alunoId: String(src.alunoId || src.aluno_id || "").trim(),
+    professorId: String(src.professorId || src.professor_id || "").trim(),
+  };
+};
+
+const buildPedagogicoEventMetaMap = (...sources) => {
+  const byId = new Map();
+  sources.flat().forEach((src) => {
+    const meta = normalizePedagogicoEventMeta(src);
+    if (!meta) return;
+    byId.set(meta.id, meta);
+  });
+  return byId;
+};
+
+const buildPedagogicoStatusLogs = ({ metadataLogs = [], registerRows = [], eventMetaMap = new Map() } = {}) => {
+  const byEventId = new Map();
+  (Array.isArray(metadataLogs) ? metadataLogs : []).forEach((log) => {
+    if (!log || typeof log !== "object") return;
+    const eventId = String(log.eventId || "").trim() || derivePedagogicoEventIdFromLogId(log.id || log.docId || log.documentId);
+    if (!eventId) return;
+    const meta = eventMetaMap instanceof Map ? eventMetaMap.get(eventId) || null : null;
+    byEventId.set(eventId, {
+      ...log,
+      eventId,
+      dateKey: String(log.dateKey || meta?.dateKey || "").trim(),
+      startMin: Number(log.startMin ?? meta?.startMin ?? 0) || 0,
+      endMin: Number(log.endMin ?? meta?.endMin ?? 0) || 0,
+      professorId: String(log.professorId || meta?.professorId || "").trim(),
+      alunoId: String(log.alunoId || meta?.alunoId || "").trim(),
+    });
+  });
+  (Array.isArray(registerRows) ? registerRows : []).forEach((row) => {
+    const eventId = String(row?.aula_id || row?.eventId || "").trim();
+    if (!eventId) return;
+    const meta = eventMetaMap instanceof Map ? eventMetaMap.get(eventId) || null : null;
+    const statusLog = normalizePedagogicoStatusRegisterLog(row, meta);
+    if (!statusLog) return;
+    const existing = byEventId.get(eventId) || null;
+    if (existing) {
+      byEventId.set(eventId, {
+        ...existing,
+        ...statusLog,
+        payload: {
+          ...(statusLog.payload && typeof statusLog.payload === "object" ? statusLog.payload : {}),
+          ...(existing.payload && typeof existing.payload === "object" ? existing.payload : {}),
+          statusAula: statusLog.statusAula,
+        },
+      });
+      return;
+    }
+    byEventId.set(eventId, statusLog);
+  });
+  return [...byEventId.values()];
 };
 
 const indexPedagogicoLogByEvent = (map, key, log) => {
@@ -17933,7 +18031,7 @@ const ensureAdminStudentsBaseData = async ({ force = false } = {}) => {
     const teachers = teachersRes.status === "fulfilled" ? teachersRes.value : [];
     const firebaseStudents = firebaseStudentsRes.status === "fulfilled" ? firebaseStudentsRes.value : [];
     const eventsResValue = eventsRes.status === "fulfilled" ? eventsRes.value : null;
-    const logs = logsRes.status === "fulfilled" ? logsRes.value : [];
+    const metadataLogs = logsRes.status === "fulfilled" ? logsRes.value : [];
     const pedagogicalOps = pedagogicalOpsRes.status === "fulfilled" ? pedagogicalOpsRes.value : { students: [] };
 
     if (teachersRes.status === "rejected") console.warn("[admin] teachers base load fell back to empty:", teachersRes.reason);
@@ -17980,7 +18078,15 @@ const ensureAdminStudentsBaseData = async ({ force = false } = {}) => {
     adminStudentsState.events = Array.isArray(eventsData?.events) ? eventsData.events : [];
     adminStudentsState.eventsLoadedAt = Date.now();
 
-    adminStudentsState.logs = Array.isArray(logs) ? logs : [];
+    const eventMetaMap = buildPedagogicoEventMetaMap(
+      adminStudentsState.events,
+      Array.isArray(pedagogicalOps?.lessons) ? pedagogicalOps.lessons : []
+    );
+    adminStudentsState.logs = buildPedagogicoStatusLogs({
+      metadataLogs,
+      registerRows: Array.isArray(pedagogicalOps?.registers) ? pedagogicalOps.registers : [],
+      eventMetaMap,
+    });
     adminStudentsState.logsLoadedAt = Date.now();
 
     adminStudentsState.loadedAt = Date.now();
@@ -22777,6 +22883,26 @@ const buildAdminPedLessonLogsByEventId = (logs) => {
   return byEventId;
 };
 
+const buildAdminPedLessonRecordLogs = () => {
+  const metadataLogs = Array.isArray(adminPedagogicoState.lessonLogs) ? adminPedagogicoState.lessonLogs : [];
+  const liveRegisters = Array.isArray(adminPedagogicoState.pedagogicalOps?.registers) ? adminPedagogicoState.pedagogicalOps.registers : [];
+  const eventMetaMap = buildPedagogicoEventMetaMap(
+    adminPedagogicoState.scheduleEvents || [],
+    Array.isArray(adminPedagogicoState.pedagogicalOps?.lessons) ? adminPedagogicoState.pedagogicalOps.lessons : []
+  );
+  return buildPedagogicoStatusLogs({ metadataLogs, registerRows: liveRegisters, eventMetaMap });
+};
+
+const getAdminPedagogicoStatusLogs = () => {
+  const metadataLogs = Array.isArray(adminPedagogicoState.lessonLogs) ? adminPedagogicoState.lessonLogs : [];
+  const liveRegisters = Array.isArray(adminPedagogicoState.pedagogicalOps?.registers) ? adminPedagogicoState.pedagogicalOps.registers : [];
+  const eventMetaMap = buildPedagogicoEventMetaMap(
+    adminPedagogicoState.scheduleEvents || [],
+    Array.isArray(adminPedagogicoState.pedagogicalOps?.lessons) ? adminPedagogicoState.pedagogicalOps.lessons : []
+  );
+  return buildPedagogicoStatusLogs({ metadataLogs, registerRows: liveRegisters, eventMetaMap });
+};
+
 const buildAdminPedLessonRecordSparkline = (values, color) => {
   const points = Array.isArray(values) ? values.map((value) => Math.max(0, Number(value) || 0)) : [];
   if (!points.length) return "";
@@ -22913,7 +23039,7 @@ const buildAdminPedLessonRecordDataset = () => {
       };
     });
 
-  const logsByEventId = buildAdminPedLessonLogsByEventId(adminPedagogicoState.lessonLogs || []);
+  const logsByEventId = buildAdminPedLessonLogsByEventId(buildAdminPedLessonRecordLogs());
   const nowMs = Date.now();
   const rows = baseRows.map((row) => {
     const log = logsByEventId.get(String(row.id || "")) || null;
@@ -23815,7 +23941,7 @@ const refreshAdminPedagogicoRetentionState = async ({ force = false } = {}) => {
     });
     const queues = buildRetentionQueues({
       students: adminPedagogicoState.students,
-      lessonLogs: adminPedagogicoState.lessonLogs,
+      lessonLogs: getAdminPedagogicoStatusLogs(),
       scheduleEvents: adminPedagogicoState.scheduleEvents,
       classes: adminPedagogicoState.classes,
       financeStudents: financeError ? [] : financeState.alunos,
@@ -32496,7 +32622,7 @@ const openAdminStudentEffectiveCancellationModal = async ({ alunoId } = {}) => {
     console.warn("[Retention] sensor financeiro indisponível na efetivação", error);
   }
   attendanceSensor = deriveSensorFrequencia(meta, range.fromKey, range.toKey, {
-    logs: adminPedagogicoState.lessonLogs,
+    logs: getAdminPedagogicoStatusLogs(),
     events: adminPedagogicoState.scheduleEvents,
     classes: adminPedagogicoState.classes,
   });
