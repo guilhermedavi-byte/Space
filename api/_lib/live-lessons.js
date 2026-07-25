@@ -272,6 +272,13 @@ const getLessonEndMs = (lesson) => {
   return Number.isFinite(ms) ? ms : 0;
 };
 
+const computeLessonDurationMs = (lesson) => {
+  const start = getLessonStartMs(lesson);
+  const end = getLessonEndMs(lesson);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return 30 * 60 * 1000;
+  return end - start;
+};
+
 const normalizeLesson = (row) => {
   if (!row || typeof row !== "object") return null;
   const id = String(row.id || "").trim();
@@ -452,7 +459,13 @@ const createLessonRegister = async ({ lesson, session, payload }) => {
         status === "remarcada" ? "remarcada" : status === "falta" ? "falta" : status === "cancelada" ? "cancelada" : "realizada",
     };
     if (status === "remarcada" && (payload?.nova_data_aula || payload?.nova_data)) {
-      lessonPatch.inicio = payload.nova_data_aula || payload.nova_data;
+      const nextStartIso = payload.nova_data_aula || payload.nova_data;
+      const nextStartMs = Date.parse(String(nextStartIso || ""));
+      const durationMs = computeLessonDurationMs(lesson);
+      lessonPatch.inicio = nextStartIso;
+      if (Number.isFinite(nextStartMs)) {
+        lessonPatch.fim = new Date(nextStartMs + durationMs).toISOString();
+      }
     }
     const updatedLesson = await patchLesson(lesson.id, lessonPatch);
     if (pendingWrite) {

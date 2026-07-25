@@ -9545,6 +9545,7 @@ const readPedagogicoApiResponse = async (response, label) => {
 const normalizeTeacherPedagogicoLessonRow = (evt, studentPlanById) => {
   if (!evt || typeof evt !== "object") return null;
   if (evt.type !== "lesson" && evt.type !== "manual") return null;
+  const liveLessonId = String(evt.liveLessonId || evt.supabaseLessonId || "").trim();
 
   const row = {
     id: String(evt.id || ""),
@@ -9557,6 +9558,8 @@ const normalizeTeacherPedagogicoLessonRow = (evt, studentPlanById) => {
     description: String(evt.description || "Aula"),
     planoAluno: normalizePlanKeyLoose(evt.planoAluno || evt.plano || evt.plan || studentPlanById.get(String(evt.alunoId || "")) || ""),
     source: "firestore",
+    liveLessonId,
+    supabaseLessonId: liveLessonId,
   };
 
   if (!row.id || !isValidDateKey(row.dateKey) || row.endMin <= row.startMin) return null;

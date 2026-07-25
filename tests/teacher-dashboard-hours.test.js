@@ -49,3 +49,8 @@ test("script do dashboard usa minutos creditados por status no card mensal", () 
   assert.match(script, /const monthMinutes = monthLessons\.reduce\(\(acc, evt\) => acc \+ getTeacherDashboardLessonCreditedMinutes\(evt, logsByEventId\), 0\)/);
   assert.match(script, /const lastMonthMinutes = lastMonthLessons\.reduce\(\(acc, evt\) => acc \+ getTeacherDashboardLessonCreditedMinutes\(evt, logsByEventId\), 0\)/);
 });
+
+test("pedagógico do professor preserva liveLessonId do evento de agenda para casar registros após remarcação", () => {
+  assert.match(script, /const liveLessonId = String\(evt\.liveLessonId \|\| evt\.supabaseLessonId \|\| ""\)\.trim\(\)/);
+  assert.match(script, /liveLessonId,\s*supabaseLessonId: liveLessonId/);
+});

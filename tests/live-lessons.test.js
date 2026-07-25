@@ -1,5 +1,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const liveLessonsSource = fs.readFileSync(path.join(__dirname, "..", "api", "_lib", "live-lessons.js"), "utf8");
 const { summarizeLiveLessons, omitNilValues } = require("../api/_lib/live-lessons");
 
 test("aula antiga com status ao_vivo não entra como aula ativa", () => {
@@ -57,4 +60,10 @@ test("omitNilValues remove campos legados nulos sem perder false e zero", () => 
     estrelas: 0,
     observacoes: "",
   });
+});
+
+test("remarcação atualiza início e fim da aula live para manter duração válida", () => {
+  assert.match(liveLessonsSource, /const durationMs = computeLessonDurationMs\(lesson\)/);
+  assert.match(liveLessonsSource, /lessonPatch\.inicio = nextStartIso/);
+  assert.match(liveLessonsSource, /lessonPatch\.fim = new Date\(nextStartMs \+ durationMs\)\.toISOString\(\)/);
 });
