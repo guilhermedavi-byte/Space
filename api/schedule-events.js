@@ -3,7 +3,7 @@ const crypto = require("crypto");
 const { readJsonBody, sendJson } = require("../_lib/http");
 const { getSessionFromRequest } = require("../_lib/session");
 const { verifyFirebaseIdToken } = require("../_lib/firebase-id-token");
-const { commitWritesAsAdmin, listCollectionAsAdmin } = require("./_lib/firestore-admin");
+const { commitWritesAsAdmin, getDocumentAsAdmin, listCollectionAsAdmin } = require("./_lib/firestore-admin");
 const { DEFAULT_CONFIG } = require("../_lib/scheduling-firestore");
 const { fetchUserProfileByUid } = require("../_lib/firestore-user");
 const { supabaseFetch } = require("./_lib/supabase-rest");
@@ -182,7 +182,7 @@ const buildLiveRoomId = ({ eventId, alunoNome, professorNome, dateKey, startMin 
   return parts.join("-");
 };
 
-const createLiveLessonMirror = async ({ eventId, data, startMs, endMs } = {}) => {
+const buildLiveLessonMirrorPayload = ({ eventId, data, startMs, endMs } = {}) => {
   if (!data || !data.alunoId) return null;
   const roomId = buildLiveRoomId({
     eventId,
@@ -221,6 +221,13 @@ const createLiveLessonMirror = async ({ eventId, data, startMs, endMs } = {}) =>
     payload.observacoes = data.observacoes;
     payload.briefing_pedagogico = data.observacoes;
   }
+
+  return payload;
+};
+
+const createLiveLessonMirror = async ({ eventId, data, startMs, endMs } = {}) => {
+  const payload = buildLiveLessonMirrorPayload({ eventId, data, startMs, endMs });
+  if (!payload) return null;
 
   const insertPayload = async (body) => {
     const { data: inserted } = await supabaseFetch("/n8n_aulas_pedagogicas_space", {
@@ -280,6 +287,18 @@ const getUserNameById = async ({ idToken, uid }) => {
   return name || null;
 };
 
+const getUserNameByIdAdmin = async ({ uid }) => {
+  const safeUid = String(uid || "").trim();
+  if (!safeUid) return null;
+  try {
+    const doc = await getDocumentAsAdmin(`users/${safeUid}`);
+    const name = typeof doc?.nome === "string" ? doc.nome.trim() : "";
+    return name || null;
+  } catch (error) {
+    return null;
+  }
+};
+
 const getUserEmailById = async ({ idToken, uid }) => {
   const safeUid = String(uid || "").trim();
   if (!safeUid) return null;
@@ -288,6 +307,55 @@ const getUserEmailById = async ({ idToken, uid }) => {
   const fields = decodeFields(snap.data);
   const email = typeof fields?.email === "string" ? fields.email.trim().toLowerCase() : "";
   return email || null;
+};
+
+const getUserEmailByIdAdmin = async ({ uid }) => {
+  const safeUid = String(uid || "").trim();
+  if (!safeUid) return null;
+  try {
+    const doc = await getDocumentAsAdmin(`users/${safeUid}`);
+    const email = typeof doc?.email === "string" ? doc.email.trim().toLowerCase() : "";
+    return email || null;
+  } catch (error) {
+    return null;
+  }
+};
+
+const canTeacherWriteOwnSchedule = ({ role, requesterId, professorId }) =>
+  role === "teacher" && String(requesterId || "").trim() && String(requesterId || "").trim() === String(professorId || "").trim();
+
+const commitScheduleWrites = async ({ role, requesterId, professorId, idToken, writes } = {}) => {
+  if (role === "admin" || canTeacherWriteOwnSchedule({ role, requesterId, professorId })) {
+    return commitWritesAsAdmin({ writes });
+  }
+  return firestoreCommitWrites({ idToken, writes });
+};
+
+const deleteScheduleDoc = async ({ role, requesterId, professorId, idToken, docPath } = {}) => {
+  const safeDocPath = String(docPath || "").replace(/^\/+/, "");
+  if (!safeDocPath) return false;
+  const docName = toFirestoreDocName(safeDocPath);
+  const commit =
+    role === "admin" || canTeacherWriteOwnSchedule({ role, requesterId, professorId })
+      ? await commitWritesAsAdmin({ writes: [{ delete: docName }] })
+      : await firestoreCommitWrites({ idToken, writes: [{ delete: docName }] });
+  return Boolean(commit?.ok);
+};
+
+const patchScheduleDoc = async ({ role, requesterId, professorId, idToken, docPath, data, updateMaskPaths } = {}) => {
+  const safeDocPath = String(docPath || "").replace(/^\/+/, "");
+  const fieldPaths = Array.isArray(updateMaskPaths) ? updateMaskPaths.filter(Boolean) : [];
+  const write = {
+    update: {
+      name: toFirestoreDocName(safeDocPath),
+      fields: encodeFields(data).fields,
+    },
+    updateMask: { fieldPaths },
+  };
+  if (role === "admin" || canTeacherWriteOwnSchedule({ role, requesterId, professorId })) {
+    return commitWritesAsAdmin({ writes: [write] });
+  }
+  return firestorePatchDocument({ docPath: safeDocPath, idToken, data, updateMaskPaths: fieldPaths });
 };
 
 const resolveTeacherAliasIds = async ({ requesterId, email, usersDocs } = {}) => {
@@ -1462,13 +1530,14 @@ module.exports = async (req, res) => {
         }
       }
 
-      const cancelAula = async (targetId) => {
-        const del = await firestoreDeleteDocument({
-          docPath: `aulas/${encodeURIComponent(targetId)}`,
+      const cancelAula = async (targetId) =>
+        deleteScheduleDoc({
+          role,
+          requesterId,
+          professorId: evt.professorId,
           idToken,
+          docPath: `aulas/${targetId}`,
         });
-        return del.ok;
-      };
 
       if (mode !== "future" || !evt.grupoRecorrenciaId) {
         const ok = await cancelAula(evt.id);
@@ -1651,6 +1720,9 @@ module.exports = async (req, res) => {
     professorEmail = "";
     alunoNome = "";
   }
+  if (!professorNome && professorId) professorNome = (await getUserNameByIdAdmin({ uid: professorId })) || "";
+  if (!professorEmail && professorId) professorEmail = (await getUserEmailByIdAdmin({ uid: professorId })) || "";
+  if (!alunoNome && alunoId) alunoNome = (await getUserNameByIdAdmin({ uid: alunoId })) || "";
   professorNome = professorNome || professorNomeBody;
   professorEmail = professorEmail || String(body?.professorEmail || body?.professor_email || "").trim().toLowerCase();
   alunoNome = alunoNome || alunoNomeBody;
@@ -1778,10 +1850,13 @@ module.exports = async (req, res) => {
       }
 
       for (const chunk of chunks) {
-        const commit =
-          role === "admin"
-            ? await commitWritesAsAdmin({ writes: chunk })
-            : await firestoreCommitWrites({ idToken, writes: chunk });
+        const commit = await commitScheduleWrites({
+          role,
+          requesterId,
+          professorId,
+          idToken,
+          writes: chunk,
+        });
         if (!commit.ok) {
           // eslint-disable-next-line no-console
           console.error("[api] schedule events commit failed", {
@@ -1905,7 +1980,15 @@ module.exports = async (req, res) => {
     }
 
     const updateMaskPaths = Object.keys(patchData);
-    const patch = await firestorePatchDocument({ docPath, idToken, data: patchData, updateMaskPaths });
+    const patch = await patchScheduleDoc({
+      role,
+      requesterId,
+      professorId,
+      idToken,
+      docPath,
+      data: patchData,
+      updateMaskPaths,
+    });
     if (!patch.ok) throw new Error("firestore_patch_failed");
     sendJson(res, 200, { ok: true });
   } catch (error) {
@@ -1926,6 +2009,8 @@ module.exports = async (req, res) => {
 };
 
 module.exports._private = {
+  buildLiveLessonMirrorPayload,
+  canTeacherWriteOwnSchedule,
   findScheduleConflict,
   schedulesOverlap,
 };

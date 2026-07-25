@@ -56,7 +56,11 @@ service cloud.firestore {
             && resource.data.professorId == request.auth.uid
           )
         );
-      allow write: if isAdmin();
+      allow write: if isAdmin()
+        || (
+          isTeacher()
+          && request.resource.data.professorId == request.auth.uid
+        );
     }
 
     // Cadastros e operação pedagógica administrados dentro da plataforma.

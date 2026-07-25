@@ -45,3 +45,40 @@ test("findScheduleConflict ignora o próprio evento ao editar", () => {
 
   assert.equal(conflict, null);
 });
+
+test("teacher só pode escrever na própria agenda", () => {
+  assert.equal(
+    _private.canTeacherWriteOwnSchedule({ role: "teacher", requesterId: "teacher-1", professorId: "teacher-1" }),
+    true
+  );
+  assert.equal(
+    _private.canTeacherWriteOwnSchedule({ role: "teacher", requesterId: "teacher-1", professorId: "teacher-2" }),
+    false
+  );
+  assert.equal(
+    _private.canTeacherWriteOwnSchedule({ role: "admin", requesterId: "admin-1", professorId: "teacher-1" }),
+    false
+  );
+});
+
+test("payload live mantém alunoNome quando backend recebe fallback do front", () => {
+  const payload = _private.buildLiveLessonMirrorPayload({
+    eventId: "aula-1",
+    data: {
+      firestoreDocId: "student-1",
+      alunoId: "student-1",
+      alunoNome: "André Luiz",
+      professorId: "teacher-1",
+      professorNome: "Rodrigo Batista",
+      dateKey: "2026-07-28",
+      startMin: 1290,
+      endMin: 1320,
+    },
+    startMs: Date.parse("2026-07-29T00:30:00.000Z"),
+    endMs: Date.parse("2026-07-29T01:00:00.000Z"),
+  });
+
+  assert.equal(payload.aluno_nome, "André Luiz");
+  assert.equal(payload.professor_id, "teacher-1");
+  assert.equal(payload.professor_nome, "Rodrigo Batista");
+});

@@ -9431,7 +9431,9 @@ const savePedagogicoLog = async ({ autosave = false } = {}) => {
         const createPayload = {
           eventType: "lesson",
           alunoId: lesson.alunoId || "",
+          alunoNome: lesson.title || "",
           professorId: lesson.professorId || sessionUser.id,
+          professorNome: sessionUser.name || lesson.professorNome || "",
           dateKey: draft.novaDataRemarcacao,
           startMin,
           endMin,
