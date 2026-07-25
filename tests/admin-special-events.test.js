@@ -15,6 +15,12 @@ test('agenda do admin expõe os 4 tipos especiais e exige professor responsável
   assert.match(script, /data-ce-special-kind/);
   assert.match(script, /Professor responsável/);
   assert.match(script, /const requiresAdminTeacher = currentRole === "admin"/);
+  assert.match(script, /data-ce-admin-student-combobox/);
+  assert.match(script, /data-ce-admin-teacher-combobox/);
+  assert.match(script, /setAdminEventUserPickerOpen\("student", false\)/);
+  assert.match(script, /setAdminEventUserPickerOpen\("teacher", false\)/);
+  assert.doesNotMatch(script, /<span>Convidados<\/span>/);
+  assert.doesNotMatch(script, /data-ce-guest-search/);
 });
 
 test('eventos experimentais e onboarding usam registro pedagógico simplificado', () => {

@@ -6368,6 +6368,13 @@ const getAdminEventUserPickerSelectedText = (meta) => {
 };
 
 const getAdminEventUserPickerPlaceholder = (type) => (type === "teacher" ? "Buscar professor..." : "Buscar aluno...");
+const getAdminEventUserPickerOpenField = (type) => (type === "teacher" ? "teacherPickerOpen" : "studentPickerOpen");
+const isAdminEventUserPickerOpen = (type) => Boolean(createEventDraft?.[getAdminEventUserPickerOpenField(type)]);
+
+const setAdminEventUserPickerOpen = (type, open) => {
+  if (!createEventDraft) return;
+  createEventDraft[getAdminEventUserPickerOpenField(type)] = Boolean(open);
+};
 
 const SPECIAL_EVENT_KIND_OPTIONS = [
   ["", "Padrão"],
@@ -6492,6 +6499,8 @@ function syncAdminEventUserSelects() {
     const searchEl = modalBody.querySelector(`[data-ce-admin-${meta.safeType}-search]`);
     const selectedEl = modalBody.querySelector(`[data-ce-admin-${meta.safeType}-selected]`);
     const resultsEl = modalBody.querySelector(`[data-ce-admin-${meta.safeType}-results]`);
+    const comboboxEl = modalBody.querySelector(`[data-ce-admin-${meta.safeType}-combobox]`);
+    const isOpen = isAdminEventUserPickerOpen(meta.safeType);
 
     if (selectEl instanceof HTMLSelectElement) {
       const nextOptions = renderAdminEventUserPickerSelectOptions(meta);
@@ -6511,6 +6520,11 @@ function syncAdminEventUserSelects() {
 
     if (resultsEl instanceof HTMLElement) {
       resultsEl.innerHTML = renderAdminEventUserPickerResults(meta);
+      resultsEl.hidden = !isOpen;
+    }
+
+    if (comboboxEl instanceof HTMLElement) {
+      comboboxEl.classList.toggle("is-open", isOpen);
     }
   };
 
@@ -6535,7 +6549,6 @@ function syncAdminEventUserSelects() {
 
 const buildCreateEventBody = ({ readOnly = false } = {}) => {
   const draft = createEventDraft || {};
-  const guests = Array.isArray(draft.guests) ? draft.guests : [];
   const docs = Array.isArray(draft.documents) ? draft.documents : [];
   const isAdmin = currentRole === "admin";
   const isTeacher = currentRole === "teacher";
@@ -6553,15 +6566,6 @@ const buildCreateEventBody = ({ readOnly = false } = {}) => {
       : String(draft.title || "");
   const teacherMeta = getAdminEventUserPickerMeta("teacher");
   const studentMeta = getAdminEventUserPickerMeta("student");
-
-  const chips = guests
-    .map((guest) => {
-      const remove = readOnly
-        ? ""
-        : `<button type="button" data-ce-remove-guest="${escapeHtml(guest.id)}" aria-label="Remover convidado">×</button>`;
-      return `<span class="guest-chip">${escapeHtml(guest.name)}${remove}</span>`;
-    })
-    .join("");
 
   const docRows = docs
     .map((doc) => {
@@ -6612,18 +6616,22 @@ const buildCreateEventBody = ({ readOnly = false } = {}) => {
                 <span>Aluno</span>
                 <div class="admin-ped-user-picker">
                   <div class="admin-ped-user-picker-selected" data-ce-admin-student-selected>${escapeHtml(getAdminEventUserPickerSelectedText(studentMeta))}</div>
-                  <input class="modal-input admin-ped-user-picker-search" type="text" data-ce-admin-student-search placeholder="${escapeHtml(getAdminEventUserPickerPlaceholder("student"))}" value="${escapeHtml(String(draft.studentSearch || ""))}" ${disabledAttr} />
-                  <select class="modal-input admin-ped-user-picker-hidden" data-ce-admin-student ${disabledAttr} hidden>${renderAdminEventUserPickerSelectOptions(studentMeta)}</select>
-                  <div class="admin-ped-user-picker-results" data-ce-admin-student-results>${renderAdminEventUserPickerResults(studentMeta)}</div>
+                  <div class="admin-ped-user-picker-combobox ${isAdminEventUserPickerOpen("student") ? "is-open" : ""}" data-ce-admin-student-combobox>
+                    <input class="modal-input admin-ped-user-picker-search" type="text" data-ce-admin-student-search placeholder="${escapeHtml(getAdminEventUserPickerPlaceholder("student"))}" value="${escapeHtml(String(draft.studentSearch || ""))}" ${disabledAttr} />
+                    <select class="modal-input admin-ped-user-picker-hidden" data-ce-admin-student ${disabledAttr} hidden>${renderAdminEventUserPickerSelectOptions(studentMeta)}</select>
+                    <div class="admin-ped-user-picker-results" data-ce-admin-student-results ${isAdminEventUserPickerOpen("student") ? "" : "hidden"}>${renderAdminEventUserPickerResults(studentMeta)}</div>
+                  </div>
                 </div>
               </label>
               <label class="modal-field">
                 <span>Professor</span>
                 <div class="admin-ped-user-picker">
                   <div class="admin-ped-user-picker-selected" data-ce-admin-teacher-selected>${escapeHtml(getAdminEventUserPickerSelectedText(teacherMeta))}</div>
-                  <input class="modal-input admin-ped-user-picker-search" type="text" data-ce-admin-teacher-search placeholder="${escapeHtml(getAdminEventUserPickerPlaceholder("teacher"))}" value="${escapeHtml(String(draft.teacherSearch || ""))}" ${disabledAttr} />
-                  <select class="modal-input admin-ped-user-picker-hidden" data-ce-admin-teacher ${disabledAttr} hidden>${renderAdminEventUserPickerSelectOptions(teacherMeta)}</select>
-                  <div class="admin-ped-user-picker-results" data-ce-admin-teacher-results>${renderAdminEventUserPickerResults(teacherMeta)}</div>
+                  <div class="admin-ped-user-picker-combobox ${isAdminEventUserPickerOpen("teacher") ? "is-open" : ""}" data-ce-admin-teacher-combobox>
+                    <input class="modal-input admin-ped-user-picker-search" type="text" data-ce-admin-teacher-search placeholder="${escapeHtml(getAdminEventUserPickerPlaceholder("teacher"))}" value="${escapeHtml(String(draft.teacherSearch || ""))}" ${disabledAttr} />
+                    <select class="modal-input admin-ped-user-picker-hidden" data-ce-admin-teacher ${disabledAttr} hidden>${renderAdminEventUserPickerSelectOptions(teacherMeta)}</select>
+                    <div class="admin-ped-user-picker-results" data-ce-admin-teacher-results ${isAdminEventUserPickerOpen("teacher") ? "" : "hidden"}>${renderAdminEventUserPickerResults(teacherMeta)}</div>
+                  </div>
                 </div>
               </label>
             </div>
@@ -6659,9 +6667,11 @@ const buildCreateEventBody = ({ readOnly = false } = {}) => {
                 <span>Aluno</span>
                 <div class="admin-ped-user-picker">
                   <div class="admin-ped-user-picker-selected" data-ce-admin-student-selected>${escapeHtml(getAdminEventUserPickerSelectedText(studentMeta))}</div>
-                  <input class="modal-input admin-ped-user-picker-search" type="text" data-ce-admin-student-search placeholder="${escapeHtml(getAdminEventUserPickerPlaceholder("student"))}" value="${escapeHtml(String(draft.studentSearch || ""))}" ${disabledAttr} />
-                  <select class="modal-input admin-ped-user-picker-hidden" data-ce-admin-student ${disabledAttr} hidden>${renderAdminEventUserPickerSelectOptions(studentMeta)}</select>
-                  <div class="admin-ped-user-picker-results" data-ce-admin-student-results>${renderAdminEventUserPickerResults(studentMeta)}</div>
+                  <div class="admin-ped-user-picker-combobox ${isAdminEventUserPickerOpen("student") ? "is-open" : ""}" data-ce-admin-student-combobox>
+                    <input class="modal-input admin-ped-user-picker-search" type="text" data-ce-admin-student-search placeholder="${escapeHtml(getAdminEventUserPickerPlaceholder("student"))}" value="${escapeHtml(String(draft.studentSearch || ""))}" ${disabledAttr} />
+                    <select class="modal-input admin-ped-user-picker-hidden" data-ce-admin-student ${disabledAttr} hidden>${renderAdminEventUserPickerSelectOptions(studentMeta)}</select>
+                    <div class="admin-ped-user-picker-results" data-ce-admin-student-results ${isAdminEventUserPickerOpen("student") ? "" : "hidden"}>${renderAdminEventUserPickerResults(studentMeta)}</div>
+                  </div>
                 </div>
               </label>
               <label class="modal-field">
@@ -6686,9 +6696,11 @@ const buildCreateEventBody = ({ readOnly = false } = {}) => {
                 <span>Professor responsável</span>
                 <div class="admin-ped-user-picker">
                   <div class="admin-ped-user-picker-selected" data-ce-admin-teacher-selected>${escapeHtml(getAdminEventUserPickerSelectedText(teacherMeta))}</div>
-                  <input class="modal-input admin-ped-user-picker-search" type="text" data-ce-admin-teacher-search placeholder="${escapeHtml(getAdminEventUserPickerPlaceholder("teacher"))}" value="${escapeHtml(String(draft.teacherSearch || ""))}" ${disabledAttr} />
-                  <select class="modal-input admin-ped-user-picker-hidden" data-ce-admin-teacher ${disabledAttr} hidden>${renderAdminEventUserPickerSelectOptions(teacherMeta)}</select>
-                  <div class="admin-ped-user-picker-results" data-ce-admin-teacher-results>${renderAdminEventUserPickerResults(teacherMeta)}</div>
+                  <div class="admin-ped-user-picker-combobox ${isAdminEventUserPickerOpen("teacher") ? "is-open" : ""}" data-ce-admin-teacher-combobox>
+                    <input class="modal-input admin-ped-user-picker-search" type="text" data-ce-admin-teacher-search placeholder="${escapeHtml(getAdminEventUserPickerPlaceholder("teacher"))}" value="${escapeHtml(String(draft.teacherSearch || ""))}" ${disabledAttr} />
+                    <select class="modal-input admin-ped-user-picker-hidden" data-ce-admin-teacher ${disabledAttr} hidden>${renderAdminEventUserPickerSelectOptions(teacherMeta)}</select>
+                    <div class="admin-ped-user-picker-results" data-ce-admin-teacher-results ${isAdminEventUserPickerOpen("teacher") ? "" : "hidden"}>${renderAdminEventUserPickerResults(teacherMeta)}</div>
+                  </div>
                 </div>
               </label>
             </div>
@@ -6819,17 +6831,6 @@ const buildCreateEventBody = ({ readOnly = false } = {}) => {
         <textarea class="modal-textarea" data-ce-desc placeholder="Adicionar descrição..." ${disabledAttr}>${escapeHtml(draft.description || "")}</textarea>
       </label>
 
-      <div class="guest-field">
-        <div class="modal-field">
-          <span>Convidados</span>
-        </div>
-        <div class="guest-chipbox" data-ce-chipbox>
-          ${chips}
-          <input class="guest-search" type="text" data-ce-guest-search placeholder="Buscar pessoas..." value="${escapeHtml(draft.guestQuery || "")}" ${disabledAttr} />
-        </div>
-        <div class="guest-dropdown" data-ce-guest-dropdown hidden></div>
-      </div>
-
       <div class="modal-field">
         <span>Documentos</span>
         <div class="${uploadClass}" data-ce-upload ${uploadDisabled}>
@@ -6852,54 +6853,6 @@ const buildCreateEventBody = ({ readOnly = false } = {}) => {
       <div class="modal-inline-error" data-ce-error hidden></div>
     </div>
   `;
-};
-
-const computeGuestDropdownItems = () => {
-  const query = String(createEventDraft?.guestQuery || "").trim().toLowerCase();
-  const staff = getStaffUsers();
-  const selectedIds = new Set((createEventDraft?.guests || []).map((g) => g.id));
-  return staff
-    .filter((user) => !selectedIds.has(user.id))
-    .filter((user) => (query ? user.name.toLowerCase().includes(query) : true))
-    .slice(0, 8);
-};
-
-const syncGuestDropdown = () => {
-  const dropdown = modalBody?.querySelector("[data-ce-guest-dropdown]");
-  if (!(dropdown instanceof HTMLElement)) return;
-
-  const input = modalBody?.querySelector("[data-ce-guest-search]");
-  if (!(input instanceof HTMLInputElement)) return;
-
-  const isOpen = document.activeElement === input || String(input.value || "").trim().length > 0;
-  const items = computeGuestDropdownItems();
-
-  if (!isOpen) {
-    dropdown.hidden = true;
-    dropdown.innerHTML = "";
-    return;
-  }
-
-  if (!items.length) {
-    dropdown.hidden = false;
-    dropdown.innerHTML = `<div class="guest-empty">Nenhum usuário encontrado</div>`;
-    return;
-  }
-
-  dropdown.hidden = false;
-  dropdown.innerHTML = items
-    .map((user) => {
-      return `
-        <button class="guest-option" type="button" data-ce-guest-pick="${escapeHtml(user.id)}">
-          <span class="ranking-avatar">${escapeHtml(getInitials(user.name))}</span>
-          <div>
-            <strong>${escapeHtml(user.name)}</strong>
-            <span>${escapeHtml(roleLabelForUser(user.role))}</span>
-          </div>
-        </button>
-      `;
-    })
-    .join("");
 };
 
 const validateCreateEventDraft = () => {
@@ -7547,7 +7500,6 @@ const openTeacherEventFormModalFromDraft = () => {
       }
 	  }
 	  validateCreateEventDraft();
-	  syncGuestDropdown();
 	} else {
 	  setModalPrimaryDisabled(false);
 	}
@@ -7568,6 +7520,8 @@ const openTeacherCreateEventModalAt = ({ dateKey, startTime, endTime } = {}) => 
 	    professorId: currentRole === "teacher" ? String(sessionUser?.id || "").trim() : "",
 	    studentSearch: "",
 	    teacherSearch: "",
+      studentPickerOpen: false,
+      teacherPickerOpen: false,
 	    title: "",
 	    description: "",
 	    guests: [],
@@ -7602,6 +7556,8 @@ const openTeacherCreateEventModal = () => {
     professorId: currentRole === "teacher" ? String(sessionUser?.id || "").trim() : "",
     studentSearch: "",
     teacherSearch: "",
+    studentPickerOpen: false,
+    teacherPickerOpen: false,
     title: "",
     description: "",
     guests: [],
@@ -7647,6 +7603,8 @@ const openTeacherEventModal = ({ type, id }) => {
       professorId: target.professorId || String(sessionUser?.id || "").trim(),
       studentSearch: "",
       teacherSearch: "",
+      studentPickerOpen: false,
+      teacherPickerOpen: false,
       recorrente: Boolean(target.recorrente),
       repeatMode: "weekly",
       repeat: createDefaultRepeatConfig(),
@@ -7672,6 +7630,8 @@ const openTeacherEventModal = ({ type, id }) => {
     professorId: target.professorId || "",
     studentSearch: "",
     teacherSearch: "",
+    studentPickerOpen: false,
+    teacherPickerOpen: false,
     title: target.title || "",
     description: target.description || "",
     guests,
@@ -34979,9 +34939,11 @@ const handleAdminEventUserPickerClick = (adminUserPick) => {
   if (pickerType === "teacher") {
     createEventDraft.professorId = pickerId;
     createEventDraft.teacherSearch = "";
+    setAdminEventUserPickerOpen("teacher", false);
   } else {
     createEventDraft.alunoId = pickerId;
     createEventDraft.studentSearch = "";
+    setAdminEventUserPickerOpen("student", false);
   }
   const searchEl = modalBody?.querySelector(`[data-ce-admin-${pickerType}-search]`);
   if (searchEl instanceof HTMLInputElement) searchEl.value = "";
@@ -34989,7 +34951,7 @@ const handleAdminEventUserPickerClick = (adminUserPick) => {
   if (selectEl instanceof HTMLSelectElement) selectEl.value = pickerId;
   syncAdminEventUserSelects();
   validateCreateEventDraft();
-  if (searchEl instanceof HTMLInputElement) searchEl.focus();
+  if (searchEl instanceof HTMLInputElement) searchEl.blur();
   return true;
 };
 
@@ -37985,47 +37947,6 @@ document.addEventListener("click", (event) => {
         return;
       }
 
-      const pick = target.closest("[data-ce-guest-pick]");
-      if (pick instanceof HTMLButtonElement) {
-        const id = pick.getAttribute("data-ce-guest-pick") || "";
-        const staff = getStaffUsers();
-        const user = staff.find((u) => u.id === id);
-        if (!user) return;
-        createEventDraft.guests.push({ id: user.id, name: user.name, role: user.role });
-        createEventDraft.guestQuery = "";
-        const chipbox = modalBody?.querySelector("[data-ce-chipbox]");
-        if (chipbox instanceof HTMLElement) {
-          // Re-render minimal chipbox content.
-          chipbox.innerHTML =
-            (createEventDraft.guests || [])
-              .map((guest) => `<span class="guest-chip">${escapeHtml(guest.name)}<button type="button" data-ce-remove-guest="${escapeHtml(guest.id)}" aria-label="Remover convidado">×</button></span>`)
-              .join("") +
-            `<input class="guest-search" type="text" data-ce-guest-search placeholder="Buscar pessoas..." value="" />`;
-        }
-        syncGuestDropdown();
-        validateCreateEventDraft();
-        const input = modalBody?.querySelector("[data-ce-guest-search]");
-        if (input instanceof HTMLInputElement) input.focus();
-        return;
-      }
-
-      const removeGuest = target.closest("[data-ce-remove-guest]");
-      if (removeGuest instanceof HTMLButtonElement) {
-        const id = removeGuest.getAttribute("data-ce-remove-guest") || "";
-        createEventDraft.guests = (createEventDraft.guests || []).filter((g) => g.id !== id);
-        const chipbox = modalBody?.querySelector("[data-ce-chipbox]");
-        if (chipbox instanceof HTMLElement) {
-          chipbox.innerHTML =
-            (createEventDraft.guests || [])
-              .map((guest) => `<span class="guest-chip">${escapeHtml(guest.name)}<button type="button" data-ce-remove-guest="${escapeHtml(guest.id)}" aria-label="Remover convidado">×</button></span>`)
-              .join("") +
-            `<input class="guest-search" type="text" data-ce-guest-search placeholder="Buscar pessoas..." value="${escapeHtml(createEventDraft.guestQuery || "")}" />`;
-        }
-        syncGuestDropdown();
-        validateCreateEventDraft();
-        return;
-      }
-
       const uploadZone = target.closest("[data-ce-upload]");
       if (uploadZone instanceof HTMLElement) {
         const input = modalBody?.querySelector("[data-ce-doc-input]");
@@ -38066,15 +37987,13 @@ document.addEventListener("click", (event) => {
         return;
       }
 
-      // Click outside guest field closes dropdown.
-      const guestField = modalBody?.querySelector(".guest-field");
-      const dropdown = modalBody?.querySelector("[data-ce-guest-dropdown]");
-      if (dropdown instanceof HTMLElement && guestField instanceof HTMLElement) {
-        if (!target.closest(".guest-field")) {
-          dropdown.hidden = true;
-          dropdown.innerHTML = "";
-        }
+      if (!target.closest("[data-ce-admin-student-combobox]")) {
+        setAdminEventUserPickerOpen("student", false);
       }
+      if (!target.closest("[data-ce-admin-teacher-combobox]")) {
+        setAdminEventUserPickerOpen("teacher", false);
+      }
+      syncAdminEventUserSelects();
     }
 
     const calEvent = target.closest("[data-teacher-cal-event-id]");
@@ -39056,6 +38975,7 @@ document.addEventListener("input", (event) => {
 
   if (target instanceof HTMLInputElement && target.matches("[data-ce-admin-student-search]")) {
     createEventDraft.studentSearch = target.value;
+    setAdminEventUserPickerOpen("student", true);
     if (adminEventUserPickerSearchDebounce) clearTimeout(adminEventUserPickerSearchDebounce);
     adminEventUserPickerSearchDebounce = window.setTimeout(() => {
       syncAdminEventUserSelects();
@@ -39066,6 +38986,7 @@ document.addEventListener("input", (event) => {
 
   if (target instanceof HTMLInputElement && target.matches("[data-ce-admin-teacher-search]")) {
     createEventDraft.teacherSearch = target.value;
+    setAdminEventUserPickerOpen("teacher", true);
     if (adminEventUserPickerSearchDebounce) clearTimeout(adminEventUserPickerSearchDebounce);
     adminEventUserPickerSearchDebounce = window.setTimeout(() => {
       syncAdminEventUserSelects();
@@ -39166,10 +39087,6 @@ document.addEventListener("input", (event) => {
     return;
   }
 
-  if (target instanceof HTMLInputElement && target.matches("[data-ce-guest-search]")) {
-    createEventDraft.guestQuery = target.value;
-    syncGuestDropdown();
-  }
 });
 
 document.addEventListener("change", (event) => {
@@ -39286,12 +39203,14 @@ document.addEventListener("change", (event) => {
 
   if (target instanceof HTMLSelectElement && target.matches("[data-ce-admin-student]")) {
     createEventDraft.alunoId = target.value;
+    setAdminEventUserPickerOpen("student", false);
     validateCreateEventDraft();
     return;
   }
 
   if (target instanceof HTMLSelectElement && target.matches("[data-ce-admin-teacher]")) {
     createEventDraft.professorId = target.value;
+    setAdminEventUserPickerOpen("teacher", false);
     validateCreateEventDraft();
     return;
   }
@@ -39391,11 +39310,13 @@ document.addEventListener("focusin", (event) => {
   if (!createEventDraft || !modalBody || modalOverlay?.hidden) return;
   if (activeModalKind !== "event-form") return;
   if (createEventDraft.readOnly) return;
-  if (target.matches("[data-ce-guest-search]")) {
-    syncGuestDropdown();
+  if (target.matches("[data-ce-admin-student-search]")) {
+    setAdminEventUserPickerOpen("student", true);
+    syncAdminEventUserSelects();
     return;
   }
-  if (target.matches("[data-ce-admin-student-search]") || target.matches("[data-ce-admin-teacher-search]")) {
+  if (target.matches("[data-ce-admin-teacher-search]")) {
+    setAdminEventUserPickerOpen("teacher", true);
     syncAdminEventUserSelects();
   }
 });
