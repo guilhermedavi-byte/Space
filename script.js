@@ -23007,6 +23007,13 @@ const buildAdminPedLessonRecordDataset = () => {
   const studentsById = adminPedagogicoState.studentsById instanceof Map ? adminPedagogicoState.studentsById : new Map();
   const teachersById = adminPedagogicoState.teachersById instanceof Map ? adminPedagogicoState.teachersById : new Map();
   const normalizedEvents = normalizePedov2ScheduleEvents(adminPedagogicoState.scheduleEvents || []);
+  const normalizedLessons = normalizePedov2LiveLessons(Array.isArray(adminPedagogicoState.pedagogicalOps?.lessons) ? adminPedagogicoState.pedagogicalOps.lessons : []);
+  const recordsByLessonId = normalizePedov2Records(Array.isArray(adminPedagogicoState.pedagogicalOps?.registers) ? adminPedagogicoState.pedagogicalOps.registers : []);
+  const recordByEventId = buildPedov2EventRecordIndex({
+    events: normalizedEvents,
+    liveLessons: normalizedLessons,
+    recordsByLessonId,
+  });
   const fallbackClassRows =
     normalizedEvents.length > 0
       ? []
@@ -23042,7 +23049,29 @@ const buildAdminPedLessonRecordDataset = () => {
   const logsByEventId = buildAdminPedLessonLogsByEventId(buildAdminPedLessonRecordLogs());
   const nowMs = Date.now();
   const rows = baseRows.map((row) => {
-    const log = logsByEventId.get(String(row.id || "")) || null;
+    const mappedRecord = recordByEventId.get(String(row.id || "")) || null;
+    const liveLessonId = String(mappedRecord?.aulaId || "").trim();
+    const mappedStatus = normalizePedagogicoStatus(String(mappedRecord?.status || mappedRecord?.statusAula || "").trim());
+    const mappedLog =
+      mappedRecord && mappedStatus
+        ? {
+            id: String(mappedRecord.id || liveLessonId || row.id || "").trim(),
+            eventId: liveLessonId || String(row.id || "").trim(),
+            professorId: String(row.professorId || "").trim(),
+            alunoId: String(row.alunoId || "").trim(),
+            dateKey: String(row.dateKey || "").trim(),
+            startMin: Number(row.startMin) || 0,
+            endMin: Number(row.endMin) || 0,
+            statusAula: mappedStatus,
+            criadoEm: mappedRecord.updatedMs ? new Date(mappedRecord.updatedMs).toISOString() : "",
+            atualizadoEm: mappedRecord.updatedMs ? new Date(mappedRecord.updatedMs).toISOString() : "",
+            payload: {
+              ...(mappedRecord && typeof mappedRecord === "object" ? mappedRecord : {}),
+              statusAula: mappedStatus,
+            },
+          }
+        : null;
+    const log = logsByEventId.get(String(row.id || "")) || (liveLessonId ? logsByEventId.get(liveLessonId) || null : null) || mappedLog;
     const normalizedStatus = log ? normalizePedagogicoStatus(log.statusAula) : "";
     let statusKey = "agendada";
     let statusLabel = "Agendada";
