@@ -67,6 +67,7 @@ const summarizeScheduleEventBody = (body) => {
   return {
     id: String(body?.id || "").trim(),
     eventType: String(body?.eventType || "").trim(),
+    tipoEvento: String(body?.tipoEvento || "").trim(),
     title: String(body?.title || "").trim(),
     description: String(body?.description || "").trim(),
     alunoId: body?.alunoId ?? body?.studentId ?? null,
@@ -213,6 +214,7 @@ const buildLiveLessonMirrorPayload = ({ eventId, data, startMs, endMs } = {}) =>
     video_room_url: `${baseUrl}/${encodeURIComponent(roomId)}`,
     video_status: "ready",
     origem: "plataforma",
+    tipo_evento: data.tipoEvento || null,
     plano: null,
     created_at: now,
     updated_at: now,
@@ -250,6 +252,7 @@ const createLiveLessonMirror = async ({ eventId, data, startMs, endMs } = {}) =>
         professor_id: payload.professor_id,
         professor_nome: payload.professor_nome,
         status_aula: payload.status_aula,
+        tipo_evento: payload.tipo_evento,
         inicio: payload.inicio,
         fim: payload.fim,
         timezone: payload.timezone,
@@ -571,6 +574,7 @@ const decodeAulaDoc = (doc) => {
 
   const title = typeof fields.title === "string" ? fields.title : "";
   const description = typeof fields.description === "string" ? fields.description : "";
+  const tipoEvento = typeof fields.tipoEvento === "string" ? fields.tipoEvento.trim() : "";
   const guests = Array.isArray(fields.guests) ? fields.guests.filter((g) => typeof g === "string") : [];
   const documents = Array.isArray(fields.documents) ? fields.documents.filter((d) => d && typeof d === "object") : [];
   const liveLessonId = fields.liveLessonId == null ? null : String(fields.liveLessonId || "").trim() || null;
@@ -595,6 +599,7 @@ const decodeAulaDoc = (doc) => {
     grupoRecorrenciaId: grupoRecorrenciaId || null,
     title,
     description,
+    tipoEvento: tipoEvento || null,
     guests,
     documents,
     liveLessonId,
@@ -1675,6 +1680,7 @@ module.exports = async (req, res) => {
   const professorIdFromBody = String(body?.professorId || body?.teacherId || "").trim();
   let professorId = role === "teacher" ? requesterId : professorIdFromBody;
   const requestedEventType = String(body?.eventType || "").trim().toLowerCase();
+  const tipoEvento = String(body?.tipoEvento || "").trim();
   const wantsLesson = requestedEventType === "lesson";
   if (isCreate && role === "admin" && !professorId && !wantsLesson) {
     professorId = requesterId;
@@ -1776,6 +1782,7 @@ module.exports = async (req, res) => {
       status: "agendada",
       recorrente: Boolean(recorrente),
       grupoRecorrenciaId: grupoRecorrenciaId || null,
+      tipoEvento: tipoEvento || null,
       originEventId: originEventId || null,
       originLessonId: originLessonId || null,
       criadoEm: new Date(),

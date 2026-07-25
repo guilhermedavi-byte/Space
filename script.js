@@ -3478,10 +3478,12 @@ const renderTeacherDashboard = () => {
     // Performance.
     const pastLessons = lessonsOnly.filter((evt) => evt.endMs < now.getTime());
     const pastMonth = pastLessons.filter((evt) => isInRange(evt.startMs, monthStart, monthEnd));
-    const present = pastMonth.length;
-    const canceledPastMonth = aulas.filter((evt) => evt && evt.type === "lesson" && isCancelledStatus(evt.status)).filter((evt) =>
-      isInRange(evt.startMs, monthStart, monthEnd)
-    ).length;
+    const presencePastMonth = pastMonth.filter((evt) => shouldIncludeLessonInTeacherPresence(evt));
+    const present = presencePastMonth.length;
+    const canceledPastMonth = aulas
+      .filter((evt) => evt && evt.type === "lesson" && isCancelledStatus(evt.status))
+      .filter((evt) => isInRange(evt.startMs, monthStart, monthEnd))
+      .filter((evt) => shouldIncludeLessonInTeacherPresence(evt)).length;
     const denom = present + canceledPastMonth;
     const presencePct = denom ? Math.round((present / denom) * 100) : 0;
 
@@ -4873,6 +4875,7 @@ const refreshTeacherEvents = async ({ force = false } = {}) => {
         return {
           id: evt.id,
           type: evt.type === "lesson" ? "lesson" : "manual",
+          tipoEvento: normalizeSpecialEventKind(evt.tipoEvento || ""),
           dateKey: evt.dateKey,
           startMin,
           endMin,
@@ -4902,6 +4905,7 @@ const refreshTeacherEvents = async ({ force = false } = {}) => {
           .map((evt) => ({
             id: `live:${evt.id}`,
             type: "lesson",
+            tipoEvento: normalizeSpecialEventKind(evt.tipoEvento || ""),
             dateKey: evt.dateKey,
             startMin: evt.startMin,
             endMin: evt.endMin,
@@ -6365,6 +6369,43 @@ const getAdminEventUserPickerSelectedText = (meta) => {
 
 const getAdminEventUserPickerPlaceholder = (type) => (type === "teacher" ? "Buscar professor..." : "Buscar aluno...");
 
+const SPECIAL_EVENT_KIND_OPTIONS = [
+  ["", "Padrão"],
+  ["experimental", "Aula Experimental"],
+  ["onboarding", "Onboarding de Aluno"],
+  ["coordenacao", "Reunião com Coordenação"],
+  ["outro", "Outro"],
+];
+
+const normalizeSpecialEventKind = (value) => {
+  const raw = String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  if (raw === "aula_experimental") return "experimental";
+  if (raw === "onboarding_de_aluno") return "onboarding";
+  if (raw === "reuniao_com_coordenacao") return "coordenacao";
+  if (["experimental", "onboarding", "coordenacao", "outro"].includes(raw)) return raw;
+  return "";
+};
+
+const getEventTypeForSpecialKind = (kind, fallback = "manual") => {
+  const normalized = normalizeSpecialEventKind(kind);
+  if (normalized === "experimental" || normalized === "onboarding") return "lesson";
+  if (normalized === "coordenacao" || normalized === "outro") return "manual";
+  return String(fallback || "manual").trim().toLowerCase() === "lesson" ? "lesson" : "manual";
+};
+
+const isSpecialLessonKind = (kind) => {
+  const normalized = normalizeSpecialEventKind(kind);
+  return normalized === "experimental" || normalized === "onboarding";
+};
+
+const shouldCountLessonKindInPresence = (kind) => !normalizeSpecialEventKind(kind);
+
 const renderAdminEventUserPickerSelectOptions = (meta) => {
   if (meta.error) return `<option value="">Não foi possível carregar a lista</option>`;
   if (meta.loading) return `<option value="">Carregando...</option>`;
@@ -6499,9 +6540,17 @@ const buildCreateEventBody = ({ readOnly = false } = {}) => {
   const isAdmin = currentRole === "admin";
   const isTeacher = currentRole === "teacher";
   const isCreateMode = String(draft.mode || "create") === "create";
-  const eventType = String(draft.eventType || "manual").trim().toLowerCase() === "lesson" ? "lesson" : "manual";
+  const tipoEvento = normalizeSpecialEventKind(draft.tipoEvento || "");
+  const eventType = getEventTypeForSpecialKind(tipoEvento, draft.eventType || "manual");
   const showAdminLinks = isAdmin && !readOnly && eventType === "lesson";
   const showTeacherLinks = isTeacher && !readOnly && eventType === "lesson";
+  const showTeacherOnlyLink = isAdmin && !readOnly && eventType === "manual";
+  const showTitleField = eventType === "manual" && tipoEvento !== "coordenacao";
+  const titleLabel = tipoEvento === "outro" ? "Título" : "Título";
+  const titleValue =
+    tipoEvento === "coordenacao"
+      ? "Reunião com Coordenação"
+      : String(draft.title || "");
   const teacherMeta = getAdminEventUserPickerMeta("teacher");
   const studentMeta = getAdminEventUserPickerMeta("student");
 
@@ -6588,6 +6637,21 @@ const buildCreateEventBody = ({ readOnly = false } = {}) => {
       }
 
       ${
+        isAdmin && !readOnly
+          ? `
+            <div class="modal-row" style="grid-template-columns:minmax(0, 1fr);">
+              <label class="modal-field">
+                <span>Tipo de evento</span>
+                <select class="modal-input" data-ce-special-kind ${disabledAttr}>
+                  ${renderPedSelectOptions(SPECIAL_EVENT_KIND_OPTIONS, tipoEvento)}
+                </select>
+              </label>
+            </div>
+          `
+          : ""
+      }
+
+      ${
         showTeacherLinks
           ? `
             <div class="modal-row" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);">
@@ -6614,10 +6678,36 @@ const buildCreateEventBody = ({ readOnly = false } = {}) => {
           : ""
       }
 
-      <label class="modal-field">
-        <span>Título</span>
-        <input class="modal-input" type="text" data-ce-title value="${escapeHtml(draft.title || "")}" ${disabledAttr} />
-      </label>
+      ${
+        showTeacherOnlyLink
+          ? `
+            <div class="modal-row" style="grid-template-columns:minmax(0, 1fr);">
+              <label class="modal-field">
+                <span>Professor responsável</span>
+                <div class="admin-ped-user-picker">
+                  <div class="admin-ped-user-picker-selected" data-ce-admin-teacher-selected>${escapeHtml(getAdminEventUserPickerSelectedText(teacherMeta))}</div>
+                  <input class="modal-input admin-ped-user-picker-search" type="text" data-ce-admin-teacher-search placeholder="${escapeHtml(getAdminEventUserPickerPlaceholder("teacher"))}" value="${escapeHtml(String(draft.teacherSearch || ""))}" ${disabledAttr} />
+                  <select class="modal-input admin-ped-user-picker-hidden" data-ce-admin-teacher ${disabledAttr} hidden>${renderAdminEventUserPickerSelectOptions(teacherMeta)}</select>
+                  <div class="admin-ped-user-picker-results" data-ce-admin-teacher-results>${renderAdminEventUserPickerResults(teacherMeta)}</div>
+                </div>
+              </label>
+            </div>
+          `
+          : ""
+      }
+
+      ${
+        showTitleField
+          ? `
+            <label class="modal-field">
+              <span>${escapeHtml(titleLabel)}</span>
+              <input class="modal-input" type="text" data-ce-title value="${escapeHtml(titleValue)}" ${disabledAttr} />
+            </label>
+          `
+          : tipoEvento === "coordenacao"
+            ? `<input type="hidden" data-ce-title value="${escapeHtml(titleValue)}" />`
+            : ""
+      }
 
       <div class="modal-row" style="grid-template-columns: minmax(0, 1fr) 120px 120px;">
         <label class="modal-field">
@@ -6821,6 +6911,7 @@ const validateCreateEventDraft = () => {
     const titleEl = modalBody.querySelector("[data-ce-title]");
     const adminStudentEl = modalBody.querySelector("[data-ce-admin-student]");
     const adminTeacherEl = modalBody.querySelector("[data-ce-admin-teacher]");
+    const specialKindEl = modalBody.querySelector("[data-ce-special-kind]");
     const dateEl = modalBody.querySelector("[data-ce-date]");
     const startEl = modalBody.querySelector("[data-ce-start]");
     const endEl = modalBody.querySelector("[data-ce-end]");
@@ -6829,6 +6920,7 @@ const validateCreateEventDraft = () => {
     if (titleEl instanceof HTMLInputElement) createEventDraft.title = titleEl.value;
     if (adminStudentEl instanceof HTMLSelectElement) createEventDraft.alunoId = adminStudentEl.value;
     if (adminTeacherEl instanceof HTMLSelectElement) createEventDraft.professorId = adminTeacherEl.value;
+    if (specialKindEl instanceof HTMLSelectElement) createEventDraft.tipoEvento = normalizeSpecialEventKind(specialKindEl.value);
     if (dateEl instanceof HTMLInputElement) createEventDraft.dateKey = dateEl.value;
     if (startEl instanceof HTMLInputElement) createEventDraft.startTime = startEl.value;
     if (endEl instanceof HTMLInputElement) createEventDraft.endTime = endEl.value;
@@ -6859,15 +6951,18 @@ const validateCreateEventDraft = () => {
     if (el instanceof HTMLElement) el.classList.remove("is-error");
   });
 
-  const title = String(createEventDraft.title || "").trim();
-  const requiresTitle = currentRole === "teacher" && createEventDraft.eventType !== "lesson";
+  const tipoEvento = normalizeSpecialEventKind(createEventDraft.tipoEvento || "");
+  const effectiveEventType = getEventTypeForSpecialKind(tipoEvento, createEventDraft.eventType || "manual");
+  const title = tipoEvento === "coordenacao" ? "Reunião com Coordenação" : String(createEventDraft.title || "").trim();
+  const requiresTitle = (currentRole === "teacher" && createEventDraft.eventType !== "lesson") || (currentRole === "admin" && effectiveEventType === "manual" && tipoEvento === "outro");
   if (requiresTitle && !title) {
     if (titleEl instanceof HTMLElement) titleEl.classList.add("is-error");
     hasError = true;
   }
 
-  const requiresAdminLinks = currentRole === "admin" && createEventDraft.eventType === "lesson";
-  const requiresTeacherLinks = currentRole === "teacher" && createEventDraft.eventType === "lesson";
+  const requiresAdminLinks = currentRole === "admin" && effectiveEventType === "lesson";
+  const requiresTeacherLinks = currentRole === "teacher" && effectiveEventType === "lesson";
+  const requiresAdminTeacher = currentRole === "admin";
   if (requiresAdminLinks) {
     const alunoId = String(createEventDraft.alunoId || "").trim() || (adminStudentEl instanceof HTMLSelectElement ? adminStudentEl.value : "");
     const professorId =
@@ -6889,6 +6984,14 @@ const validateCreateEventDraft = () => {
       hasError = true;
     }
     if (!professorId) {
+      hasError = true;
+    }
+  }
+  if (requiresAdminTeacher) {
+    const professorId =
+      String(createEventDraft.professorId || "").trim() || (adminTeacherEl instanceof HTMLSelectElement ? adminTeacherEl.value : "");
+    if (!professorId) {
+      if (adminTeacherEl instanceof HTMLElement) adminTeacherEl.classList.add("is-error");
       hasError = true;
     }
   }
@@ -7091,7 +7194,8 @@ const openTeacherEventFormModalFromDraft = () => {
 
   const readOnly = Boolean(createEventDraft.readOnly);
   const mode = createEventDraft.mode === "edit" ? "edit" : createEventDraft.mode === "view" ? "view" : "create";
-  const eventType = createEventDraft.eventType === "lesson" ? "lesson" : "manual";
+  const tipoEvento = normalizeSpecialEventKind(createEventDraft.tipoEvento || "");
+  const eventType = getEventTypeForSpecialKind(tipoEvento, createEventDraft.eventType || "manual");
 
   activeModalKind = "event-form";
 
@@ -7106,6 +7210,7 @@ const openTeacherEventFormModalFromDraft = () => {
     const adminStudentEl = modalBody?.querySelector("[data-ce-admin-student]");
     const adminTeacherEl = modalBody?.querySelector("[data-ce-admin-teacher]");
     const titleEl = modalBody?.querySelector("[data-ce-title]");
+    const specialKindEl = modalBody?.querySelector("[data-ce-special-kind]");
 
     if (adminStudentEl instanceof HTMLSelectElement && adminStudentEl.value) {
       createEventDraft.alunoId = adminStudentEl.value;
@@ -7115,6 +7220,9 @@ const openTeacherEventFormModalFromDraft = () => {
     }
     if (titleEl instanceof HTMLInputElement && titleEl.value) {
       createEventDraft.title = titleEl.value;
+    }
+    if (specialKindEl instanceof HTMLSelectElement) {
+      createEventDraft.tipoEvento = normalizeSpecialEventKind(specialKindEl.value);
     }
 
     const ok = validateCreateEventDraft();
@@ -7129,8 +7237,9 @@ const openTeacherEventFormModalFromDraft = () => {
 
     const payload = {
       id: createEventDraft.eventId || undefined,
-      eventType: createEventDraft.eventType === "lesson" ? "lesson" : "manual",
-      title: String(createEventDraft.title || "").trim(),
+      eventType,
+      tipoEvento,
+      title: tipoEvento === "coordenacao" ? "Reunião com Coordenação" : String(createEventDraft.title || "").trim(),
       description: String(createEventDraft.description || "").trim(),
       guests: (createEventDraft.guests || []).map((g) => g.id),
       documents: (createEventDraft.documents || []).map((doc) => ({
@@ -7182,6 +7291,25 @@ const openTeacherEventFormModalFromDraft = () => {
         if (errorEl instanceof HTMLElement) {
           errorEl.hidden = false;
           errorEl.textContent = !alunoId ? "Selecione um aluno." : "Professor indisponível.";
+        }
+        validateCreateEventDraft();
+        return false;
+      }
+    } else if (currentRole === "admin") {
+      const professorId = String(adminTeacherEl instanceof HTMLSelectElement ? adminTeacherEl.value : createEventDraft.professorId || "").trim();
+      const professorMeta =
+        (adminStudentsState?.teachersById instanceof Map ? adminStudentsState.teachersById.get(professorId) || null : null) ||
+        (Array.isArray(adminStudentsState?.teachers)
+          ? adminStudentsState.teachers.find((row) => row && String(row.id || "") === professorId) || null
+          : null);
+      payload.professorId = professorId;
+      payload.professorNome = professorMeta?.nome || "";
+      payload.professorEmail = professorMeta?.email || "";
+      if (!professorId) {
+        const errorEl = modalBody?.querySelector("[data-ce-error]");
+        if (errorEl instanceof HTMLElement) {
+          errorEl.hidden = false;
+          errorEl.textContent = "Selecione um professor responsável.";
         }
         validateCreateEventDraft();
         return false;
@@ -7434,6 +7562,7 @@ const openTeacherCreateEventModalAt = ({ dateKey, startTime, endTime } = {}) => 
 		    mode: "create",
 		    readOnly: false,
 		    eventType,
+        tipoEvento: "",
 		    eventId: "",
 	    alunoId: "",
 	    professorId: currentRole === "teacher" ? String(sessionUser?.id || "").trim() : "",
@@ -7463,11 +7592,12 @@ const openTeacherCreateEventModal = () => {
   const endDefault = `${String(Math.min(startHour + 1, 23)).padStart(2, "0")}:00`;
   const eventType = "lesson";
 
-  createEventDraft = {
-    mode: "create",
-    readOnly: false,
-    eventType,
-    eventId: "",
+	  createEventDraft = {
+	    mode: "create",
+	    readOnly: false,
+	    eventType,
+      tipoEvento: "",
+	    eventId: "",
     alunoId: "",
     professorId: currentRole === "teacher" ? String(sessionUser?.id || "").trim() : "",
     studentSearch: "",
@@ -7503,6 +7633,7 @@ const openTeacherEventModal = ({ type, id }) => {
       mode: "edit",
       readOnly: false,
       eventType: "lesson",
+      tipoEvento: normalizeSpecialEventKind(target.tipoEvento || ""),
       eventId: target.id,
       title: target.title || "Aula ao vivo",
       description: "",
@@ -7535,6 +7666,7 @@ const openTeacherEventModal = ({ type, id }) => {
     mode: "edit",
     readOnly: false,
     eventType: "manual",
+    tipoEvento: normalizeSpecialEventKind(target.tipoEvento || ""),
     eventId: target.id,
     alunoId: "",
     professorId: target.professorId || "",
@@ -7907,6 +8039,11 @@ const getTeacherDashboardLessonCreditedMinutes = (lesson, logsByEventId) => {
   if (status === "realizada") return duration;
   if (status === "falta_aluno") return duration * 0.5;
   return 0;
+};
+
+const shouldIncludeLessonInTeacherPresence = (lesson) => {
+  if (!lesson || typeof lesson !== "object") return false;
+  return shouldCountLessonKindInPresence(lesson.tipoEvento || "");
 };
 
 const buildPedagogicoLessonViewModel = (lesson, logsByEventId, now, todayKey) => {
@@ -8443,6 +8580,13 @@ const PEDAGOGICO_STATUS_OPTIONS = [
   { value: PEDAGOGICO_STATUS.CANCELADA, label: "Cancelada", tone: "muted" },
 ];
 
+const PEDAGOGICO_SPECIAL_STATUS_OPTIONS = [
+  { value: PEDAGOGICO_STATUS.REALIZADA, label: "Ocorreu", tone: "green" },
+  { value: PEDAGOGICO_STATUS.FALTA_ALUNO, label: "Não ocorreu", tone: "coral" },
+];
+
+const isSpecialPedagogicoLesson = (lesson) => isSpecialLessonKind(lesson?.tipoEvento || "");
+
 const renderPedagogicoSection = (title, content) => {
   const safeContent = String(content || "").trim();
   if (!safeContent) return "";
@@ -8480,6 +8624,35 @@ const renderPedagogicoStatusControl = (selectedStatus) => {
       </div>
       <select class="ped-sel regv2-status-select" data-ped-status tabindex="-1" aria-hidden="true">
         ${PEDAGOGICO_STATUS_OPTIONS.map((option) => `<option value="${escapeHtml(option.value)}" ${option.value === safeStatus ? "selected" : ""}>${escapeHtml(option.label)}</option>`).join("")}
+      </select>
+    </div>
+  `;
+};
+
+const renderPedagogicoSpecialStatusControl = (selectedStatus) => {
+  const safeStatus = normalizePedagogicoStatus(selectedStatus);
+  return `
+    <div class="regv2-status-shell">
+      <div class="regv2-field-head">
+        <div class="regv2-label">Status do evento</div>
+      </div>
+      <div class="regv2-status-pills" role="radiogroup" aria-label="Status do evento">
+        ${PEDAGOGICO_SPECIAL_STATUS_OPTIONS.map((option) => {
+          const isSelected = option.value === safeStatus;
+          return `
+            <button
+              type="button"
+              class="regv2-status-pill regv2-status-pill--${escapeHtml(option.tone)}${isSelected ? " is-selected" : ""}"
+              data-ped-status-pill="${escapeHtml(option.value)}"
+              aria-pressed="${isSelected ? "true" : "false"}"
+            >
+              ${escapeHtml(option.label)}
+            </button>
+          `;
+        }).join("")}
+      </div>
+      <select class="ped-sel regv2-status-select" data-ped-status tabindex="-1" aria-hidden="true">
+        ${PEDAGOGICO_SPECIAL_STATUS_OPTIONS.map((option) => `<option value="${escapeHtml(option.value)}" ${option.value === safeStatus ? "selected" : ""}>${escapeHtml(option.label)}</option>`).join("")}
       </select>
     </div>
   `;
@@ -8767,7 +8940,22 @@ const renderCanceladaFieldsHtml = (draft = {}) => `
   </section>
 `;
 
-const getPedagogicoDynamicFieldsHtml = (status, draft) => {
+const renderSpecialPedagogicoFieldsHtml = (draft = {}) => `
+  ${renderPedagogicoSection(
+    "Observações",
+    `
+      <div class="ped-field regv2-field">
+        <div class="ped-label regv2-label">Observações</div>
+        <textarea class="ped-ta regv2-textarea" data-ped-field="observacao" rows="3" maxlength="250" placeholder="Observações sobre o evento...">${escapeHtml(
+          String(draft?.observacao || draft?.observacoesInternas || "")
+        )}</textarea>
+      </div>
+    `
+  )}
+`;
+
+const getPedagogicoDynamicFieldsHtml = (status, draft, lesson = null) => {
+  if (isSpecialPedagogicoLesson(lesson)) return renderSpecialPedagogicoFieldsHtml(draft);
   const normalizedStatus = normalizePedagogicoStatus(status);
   if (normalizedStatus === PEDAGOGICO_STATUS.FALTA_ALUNO) return renderFaltaAlunoFieldsHtml(draft);
   if (normalizedStatus === PEDAGOGICO_STATUS.REMARCADA) return renderRemarcadaFieldsHtml(draft);
@@ -8864,10 +9052,10 @@ const renderPedagogicoForm = ({ lesson, existingLog } = {}) => {
         </div>
       </section>
 
-      ${renderPedagogicoStatusControl(status)}
+      ${isSpecialPedagogicoLesson(safeLesson) ? renderPedagogicoSpecialStatusControl(status) : renderPedagogicoStatusControl(status)}
 
       <div data-ped-dynamic-fields>
-        ${getPedagogicoDynamicFieldsHtml(status, pedagogicoDraft)}
+        ${getPedagogicoDynamicFieldsHtml(status, pedagogicoDraft, safeLesson)}
       </div>
       </div>
 
@@ -9193,7 +9381,7 @@ const rerenderPedagogicoDynamicFields = (nextStatus) => {
   if (!(dynamic instanceof HTMLElement)) return null;
 
   const normalized = normalizePedagogicoStatus(nextStatus);
-  dynamic.innerHTML = getPedagogicoDynamicFieldsHtml(normalized, pedagogicoDraft || {});
+  dynamic.innerHTML = getPedagogicoDynamicFieldsHtml(normalized, pedagogicoDraft || {}, pedagogicoActive?.lesson || null);
 
   // Rebind interactive widgets inside the swapped markup.
   bindStars(dynamic);
@@ -9271,6 +9459,7 @@ const savePedagogicoLog = async ({ autosave = false } = {}) => {
   const lesson = pedagogicoActive.lesson;
   const draftRaw = readPedagogicoDraftFromDom();
   const draft = sanitizeLessonLogDraft(draftRaw || {});
+  const isSpecialLesson = isSpecialPedagogicoLesson(lesson);
   if (draft.statusAula === PEDAGOGICO_STATUS.REMARCADA) {
     draft.situacaoReposicao = normalizeSituacaoReposicao(draft.situacaoReposicao) || "agendada_agora";
     draft.elegibilidade = calculateCurrentPedagogicoReposicaoEligibility(draft);
@@ -9285,7 +9474,12 @@ const savePedagogicoLog = async ({ autosave = false } = {}) => {
   const has = (v) => Boolean(String(v || "").trim());
 
   // Regras mínimas (não deixar salvar payload inconsistente)
-  if (draft.statusAula === "realizada") {
+  if (isSpecialLesson) {
+    if (draft.statusAula !== PEDAGOGICO_STATUS.REALIZADA && draft.statusAula !== PEDAGOGICO_STATUS.FALTA_ALUNO) {
+      if (!autosave) setPedagogicoStatus("Esse tipo de evento aceita apenas “Ocorreu” ou “Não ocorreu”.", "error");
+      return false;
+    }
+  } else if (draft.statusAula === "realizada") {
     if (!has(draft.conteudoTrabalhado)) {
       if (!autosave) setPedagogicoStatus("Preencha o que foi trabalhado para salvar.", "error");
       return false;
@@ -9307,7 +9501,7 @@ const savePedagogicoLog = async ({ autosave = false } = {}) => {
       return false;
     }
   }
-  if (draft.statusAula === "falta_aluno") {
+  if (!isSpecialLesson && draft.statusAula === "falta_aluno") {
     if (!has(draft.motivoFalta)) {
       if (!autosave) setPedagogicoStatus("Selecione o motivo da falta para salvar.", "error");
       return false;
@@ -9317,7 +9511,7 @@ const savePedagogicoLog = async ({ autosave = false } = {}) => {
       return false;
     }
   }
-  if (draft.statusAula === "remarcada") {
+  if (!isSpecialLesson && draft.statusAula === "remarcada") {
     if (!has(draft.responsavelRemarcacao)) {
       if (!autosave) setPedagogicoStatus("Selecione o responsável pela remarcação para salvar.", "error");
       return false;
@@ -9390,7 +9584,30 @@ const savePedagogicoLog = async ({ autosave = false } = {}) => {
           : "/api/pedagogico/registro-aula"
       : "/api/lesson-logs";
     const requestPayload = isSupabaseLesson
-      ? draft.statusAula === "falta_aluno"
+      ? isSpecialLesson && draft.statusAula === "falta_aluno"
+        ? {
+            aula_id: liveLessonId,
+            onboarding_id: lesson.onboardingId || "",
+            motivo_falta: "nao_informado",
+            responsavel_falta: "professor",
+            observacoes: draft.observacao,
+            reposicao_necessaria: false,
+          }
+        : isSpecialLesson
+          ? {
+              aula_id: liveLessonId,
+              onboarding_id: lesson.onboardingId || "",
+              conteudo_aula: "Evento especial realizado",
+              observacoes: draft.observacao,
+              engajamento: "",
+              desempenho_aluno: "",
+              confianca: "",
+              humor_aluno: "",
+              estrelas: null,
+              homework: "",
+              proxima_aula_recomendada: "",
+            }
+          : draft.statusAula === "falta_aluno"
         ? {
             aula_id: liveLessonId,
             onboarding_id: lesson.onboardingId || "",
@@ -9433,7 +9650,25 @@ const savePedagogicoLog = async ({ autosave = false } = {}) => {
               homework: draft.homework,
               proxima_aula_recomendada: draft.proximaAula,
             }
-      : payload;
+      : {
+          ...payload,
+          ...(isSpecialLesson
+            ? {
+                conteudoTrabalhado: draft.statusAula === PEDAGOGICO_STATUS.REALIZADA ? "Evento especial realizado" : "",
+                engajamentoNota: 0,
+                evolucaoNota: 0,
+                confiancaNota: 0,
+                humorAluno: "",
+                proximaAula: "",
+                avisosCoordenacao: [],
+                motivoFalta: draft.statusAula === PEDAGOGICO_STATUS.FALTA_ALUNO ? "nao_informado" : "",
+                responsavelFalta: draft.statusAula === PEDAGOGICO_STATUS.FALTA_ALUNO ? "professor" : "",
+                reposicaoNecessaria: "nao",
+                riscoEvasao: "",
+                observacoesInternas: draft.observacao || "",
+              }
+            : {}),
+        };
     const res = await fetchWithAuthWithTimeout(
       requestUrl,
       {
@@ -9619,6 +9854,7 @@ const normalizeTeacherPedagogicoLessonRow = (evt, studentPlanById) => {
     endMin: Number(evt.endMin) || 0,
     title: String(evt.title || "Aluno"),
     description: String(evt.description || "Aula"),
+    tipoEvento: normalizeSpecialEventKind(evt.tipoEvento || ""),
     planoAluno: normalizePlanKeyLoose(evt.planoAluno || evt.plano || evt.plan || studentPlanById.get(String(evt.alunoId || "")) || ""),
     source: "firestore",
     liveLessonId,
@@ -9769,6 +10005,7 @@ const renderTeacherPedagogico = async ({ silent = false } = {}) => {
         endMin: Number(evt.endMin) || 0,
         title: String(evt.alunoNome || evt.title || "Aluno"),
         description: String(evt.tema || "Aula ao vivo"),
+        tipoEvento: normalizeSpecialEventKind(evt.tipoEvento || ""),
         source: "supabase",
         liveUrl: evt.liveUrl || `/aula/${encodeURIComponent(evt.id)}`,
         status: evt.status || "agendada",
@@ -38780,6 +39017,16 @@ document.addEventListener("change", (event) => {
       if (target.matches("[data-ce-admin-student]")) createEventDraft.alunoId = target.value;
       if (target.matches("[data-ce-admin-teacher]")) createEventDraft.professorId = target.value;
       validateCreateEventDraft();
+      return;
+    }
+    if (target instanceof HTMLSelectElement && target.matches("[data-ce-special-kind]")) {
+      createEventDraft.tipoEvento = normalizeSpecialEventKind(target.value);
+      if (normalizeSpecialEventKind(target.value) === "coordenacao") {
+        createEventDraft.title = "Reunião com Coordenação";
+      } else if (normalizeSpecialEventKind(target.value) !== "outro") {
+        createEventDraft.title = "";
+      }
+      openTeacherEventFormModalFromDraft();
       return;
     }
   }

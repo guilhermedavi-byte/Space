@@ -524,6 +524,7 @@ const lessonToTeacherEvent = (lesson) => {
     startMin,
     endMin,
     status: String(lesson.status_aula || "agendada").toLowerCase(),
+    tipoEvento: String(lesson.tipo_evento || lesson.tipoEvento || "").trim().toLowerCase(),
     liveLessonId: id,
     liveUrl: `/aula/${encodeURIComponent(id)}`,
     payload: lesson,

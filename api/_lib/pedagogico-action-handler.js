@@ -29,6 +29,24 @@ const CONFIG = {
 
 const missingFields = (body, fields) => fields.filter((field) => body?.[field] == null || String(body[field]).trim() === "");
 
+const normalizeLessonKind = (value) => {
+  const raw = String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  if (raw === "aula_experimental") return "experimental";
+  if (raw === "onboarding_de_aluno") return "onboarding";
+  return ["experimental", "onboarding", "coordenacao", "outro"].includes(raw) ? raw : "";
+};
+
+const isSpecialLessonRegister = (lesson) => {
+  const kind = normalizeLessonKind(lesson?.tipo_evento || lesson?.tipoEvento || "");
+  return kind === "experimental" || kind === "onboarding";
+};
+
 const normalizeRemarcacaoSituacao = (value, body = {}) => {
   const raw = String(value || "")
     .trim()
@@ -49,10 +67,12 @@ const normalizePayload = (kind, body, lesson) => {
     onboarding_id: body.onboarding_id || lesson.onboarding_id || "",
   };
   if (kind === "registro_aula") {
+    const isSpecial = isSpecialLessonRegister(lesson);
+    const content = String(body.conteudo_aula || "").trim() || (isSpecial ? "Evento especial realizado" : "");
     return {
       ...common,
-      conteudo_aula: String(body.conteudo_aula || ""),
-      conteudo_trabalhado: String(body.conteudo_aula || ""),
+      conteudo_aula: content,
+      conteudo_trabalhado: content,
       observacoes: String(body.observacoes || ""),
       engajamento: String(body.engajamento || ""),
       desempenho_aluno: String(body.desempenho_aluno || ""),
@@ -114,17 +134,21 @@ const handlePedagogicoLessonAction = (kind) => async (req, res) => {
 
   const body = await readJsonBody(req).catch(() => null);
   if (!body || typeof body !== "object") return sendJson(res, 400, { error: "invalid_json" });
-  const missing = missingFields(body, cfg.required);
-  if (missing.length) return sendJson(res, 400, { error: "missing_required_fields", fields: missing });
-  if (kind === "remarcacao_aula") {
-    const remarcacaoMissing = validateRemarcacaoPayload(body);
-    if (remarcacaoMissing.length) return sendJson(res, 400, { error: "missing_required_fields", fields: remarcacaoMissing });
-  }
 
   try {
     const lesson = await fetchLessonById(body.aula_id);
     if (!lesson) return sendJson(res, 404, { error: "lesson_not_found" });
     if (!canEditLesson(session, lesson)) return sendJson(res, 403, { error: "forbidden" });
+    const requiredFields =
+      kind === "registro_aula" && isSpecialLessonRegister(lesson)
+        ? ["aula_id"]
+        : cfg.required;
+    const missing = missingFields(body, requiredFields);
+    if (missing.length) return sendJson(res, 400, { error: "missing_required_fields", fields: missing });
+    if (kind === "remarcacao_aula") {
+      const remarcacaoMissing = validateRemarcacaoPayload(body);
+      if (remarcacaoMissing.length) return sendJson(res, 400, { error: "missing_required_fields", fields: remarcacaoMissing });
+    }
 
     const payload = normalizePayload(kind, body, lesson);
     const saved = await createLessonRegister({ lesson, session, payload: { ...payload, status: cfg.status } });

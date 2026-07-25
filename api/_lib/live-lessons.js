@@ -295,6 +295,7 @@ const normalizeLesson = (row) => {
     professor_id: row.professor_id == null ? "" : String(row.professor_id),
     professor_nome: row.professor_nome == null ? "" : String(row.professor_nome),
     professor_email: row.professor_email == null ? "" : String(row.professor_email),
+    tipo_evento: row.tipo_evento == null ? "" : String(row.tipo_evento),
     titulo: row.titulo == null ? "" : String(row.titulo),
     status_aula: status || "agendada",
     inicio: row.inicio || null,
