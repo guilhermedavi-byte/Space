@@ -8334,6 +8334,58 @@ const sanitizeLessonLogDraft = (raw = {}) => {
   };
 };
 
+const buildPedagogicoReplacementLinkMeta = (lesson) => {
+  const sourceLesson = lesson && typeof lesson === "object" ? lesson : {};
+  return {
+    originEventId: String(sourceLesson.id || sourceLesson.eventId || "").trim(),
+    originLessonId: String(sourceLesson.supabaseLessonId || sourceLesson.liveLessonId || sourceLesson.id || "").trim(),
+  };
+};
+
+const buildPedagogicoReplacementEventPayload = ({ lesson, draft, sessionUser: activeSessionUser } = {}) => {
+  if (!lesson || typeof lesson !== "object") return null;
+  if (!draft || typeof draft !== "object") return null;
+  if (String(draft.statusAula || "") !== "remarcada") return null;
+  if (String(draft.situacaoReposicao || "") !== "agendada_agora") return null;
+  if (!draft.novaDataRemarcacao || !draft.horarioInicioRemarcacao || !draft.horarioFimRemarcacao) return null;
+
+  const startMin = timeToMinutes(draft.horarioInicioRemarcacao);
+  const endMin = timeToMinutes(draft.horarioFimRemarcacao);
+  if (!Number.isFinite(startMin) || !Number.isFinite(endMin) || endMin <= startMin) return null;
+
+  const { originEventId, originLessonId } = buildPedagogicoReplacementLinkMeta(lesson);
+  return {
+    eventType: "lesson",
+    alunoId: lesson.alunoId || "",
+    alunoNome: lesson.title || lesson.alunoNome || "",
+    professorId: lesson.professorId || activeSessionUser?.id || "",
+    professorNome: activeSessionUser?.name || lesson.professorNome || "",
+    dateKey: draft.novaDataRemarcacao,
+    startMin,
+    endMin,
+    title: "Aula",
+    description: "",
+    guests: [],
+    documents: [],
+    repeat: { enabled: false },
+    originEventId,
+    originLessonId,
+  };
+};
+
+const findPedagogicoReplacementEvent = (events, { originEventId = "", originLessonId = "" } = {}) => {
+  const safeOriginEventId = String(originEventId || "").trim();
+  const safeOriginLessonId = String(originLessonId || "").trim();
+  if (!safeOriginEventId && !safeOriginLessonId) return null;
+  const rows = Array.isArray(events) ? events : [];
+  return rows.find((event) => {
+    const rowOriginEventId = String(event?.originEventId || "").trim();
+    const rowOriginLessonId = String(event?.originLessonId || "").trim();
+    return (safeOriginEventId && rowOriginEventId === safeOriginEventId)
+      || (safeOriginLessonId && rowOriginLessonId === safeOriginLessonId);
+  }) || null;
+};
+
 const PED_AVISOS_COORD = [
   { value: "🔴 Risco de cancelamento", tone: "red" },
   { value: "🟡 Aluno desmotivado", tone: "yellow" },
@@ -9416,37 +9468,20 @@ const savePedagogicoLog = async ({ autosave = false } = {}) => {
     pedagogicoState.logsByEventId.set(lesson.id, stored);
     renderTeacherPedagogico({ silent: true });
 
-    // Se remarcada, criar novo evento na agenda (apenas no save manual, não no autosave).
-    if (
-      !autosave &&
-      !isSupabaseLesson &&
-      draft.statusAula === "remarcada" &&
-      draft.novaDataRemarcacao &&
-      draft.horarioInicioRemarcacao &&
-      draft.horarioFimRemarcacao
-    ) {
+    // Se remarcada com novo horário, garantir um novo evento vinculado para a reposição.
+    if (!autosave && draft.statusAula === "remarcada") {
       try {
-        const startMin = timeToMinutes(draft.horarioInicioRemarcacao);
-        const endMin = timeToMinutes(draft.horarioFimRemarcacao);
-        const createPayload = {
-          eventType: "lesson",
-          alunoId: lesson.alunoId || "",
-          alunoNome: lesson.title || "",
-          professorId: lesson.professorId || sessionUser.id,
-          professorNome: sessionUser.name || lesson.professorNome || "",
-          dateKey: draft.novaDataRemarcacao,
-          startMin,
-          endMin,
-          title: "Aula",
-          description: "",
-          guests: [],
-          documents: [],
-          repeat: { enabled: false },
-        };
+        const createPayload = buildPedagogicoReplacementEventPayload({ lesson, draft, sessionUser });
+        if (!createPayload) return true;
+        const existingReplacement = findPedagogicoReplacementEvent(
+          Array.isArray(pedagogicoState?.lessons) ? pedagogicoState.lessons : [],
+          buildPedagogicoReplacementLinkMeta(lesson)
+        );
+        if (existingReplacement?.id) createPayload.id = existingReplacement.id;
         const resCreate = await fetchWithAuthWithTimeout(
           "/api/schedule-events",
           {
-            method: "POST",
+            method: existingReplacement?.id ? "PUT" : "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(createPayload),
           },
@@ -9454,6 +9489,32 @@ const savePedagogicoLog = async ({ autosave = false } = {}) => {
           "teacher_pedagogico_remarcacao_create_event"
         );
         if (!resCreate.ok) throw new Error("remarcacao_create_failed");
+        const createData = await resCreate.json().catch(() => null);
+        const createdEventId =
+          existingReplacement?.id
+          || (Array.isArray(createData?.ids) ? String(createData.ids[0] || "").trim() : "");
+        if (createdEventId) {
+          const replacementRow = {
+            id: createdEventId,
+            alunoId: createPayload.alunoId,
+            professorId: createPayload.professorId,
+            dateKey: createPayload.dateKey,
+            startMin: createPayload.startMin,
+            endMin: createPayload.endMin,
+            title: createPayload.alunoNome || "Aluno",
+            description: "Aula",
+            source: "firestore",
+            liveLessonId: "",
+            supabaseLessonId: "",
+            originEventId: createPayload.originEventId,
+            originLessonId: createPayload.originLessonId,
+          };
+          const others = (Array.isArray(pedagogicoState.lessons) ? pedagogicoState.lessons : []).filter((item) => String(item?.id || "") !== createdEventId);
+          pedagogicoState.lessons = [...others, replacementRow].sort((a, b) =>
+            a.dateKey === b.dateKey ? a.startMin - b.startMin : a.dateKey.localeCompare(b.dateKey)
+          );
+          renderTeacherPedagogico({ silent: true });
+        }
       } catch (error) {
         console.error("[pedagogico] remarcacao create event failed:", error);
         setPedagogicoStatus("Registro salvo, mas não foi possível criar o novo evento.", "error");
@@ -9562,6 +9623,8 @@ const normalizeTeacherPedagogicoLessonRow = (evt, studentPlanById) => {
     source: "firestore",
     liveLessonId,
     supabaseLessonId: liveLessonId,
+    originEventId: String(evt.originEventId || "").trim(),
+    originLessonId: String(evt.originLessonId || "").trim(),
   };
 
   if (!row.id || !isValidDateKey(row.dateKey) || row.endMin <= row.startMin) return null;

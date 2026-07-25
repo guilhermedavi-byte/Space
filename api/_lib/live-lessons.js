@@ -458,15 +458,6 @@ const createLessonRegister = async ({ lesson, session, payload }) => {
       status_aula:
         status === "remarcada" ? "remarcada" : status === "falta" ? "falta" : status === "cancelada" ? "cancelada" : "realizada",
     };
-    if (status === "remarcada" && (payload?.nova_data_aula || payload?.nova_data)) {
-      const nextStartIso = payload.nova_data_aula || payload.nova_data;
-      const nextStartMs = Date.parse(String(nextStartIso || ""));
-      const durationMs = computeLessonDurationMs(lesson);
-      lessonPatch.inicio = nextStartIso;
-      if (Number.isFinite(nextStartMs)) {
-        lessonPatch.fim = new Date(nextStartMs + durationMs).toISOString();
-      }
-    }
     const updatedLesson = await patchLesson(lesson.id, lessonPatch);
     if (pendingWrite) {
       await updatePedagogicoPendingWrite(pendingWrite, {

@@ -62,8 +62,8 @@ test("omitNilValues remove campos legados nulos sem perder false e zero", () => 
   });
 });
 
-test("remarcação atualiza início e fim da aula live para manter duração válida", () => {
-  assert.match(liveLessonsSource, /const durationMs = computeLessonDurationMs\(lesson\)/);
-  assert.match(liveLessonsSource, /lessonPatch\.inicio = nextStartIso/);
-  assert.match(liveLessonsSource, /lessonPatch\.fim = new Date\(nextStartMs \+ durationMs\)\.toISOString\(\)/);
+test("remarcação live não move mais a aula original para a nova data", () => {
+  assert.match(liveLessonsSource, /const lessonPatch = \{\s*status_aula:/);
+  assert.doesNotMatch(liveLessonsSource, /lessonPatch\.inicio = nextStartIso/);
+  assert.doesNotMatch(liveLessonsSource, /lessonPatch\.fim = new Date\(nextStartMs \+ durationMs\)\.toISOString\(\)/);
 });

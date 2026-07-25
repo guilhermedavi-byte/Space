@@ -82,3 +82,16 @@ test("payload live mantém alunoNome quando backend recebe fallback do front", (
   assert.equal(payload.professor_id, "teacher-1");
   assert.equal(payload.professor_nome, "Rodrigo Batista");
 });
+
+test("findLinkedReplacementEvent encontra reposição já criada pelo vínculo de origem", () => {
+  const linked = _private.findLinkedReplacementEvent({
+    existingEvents: [
+      { id: "aula_old", originEventId: "", originLessonId: "" },
+      { id: "aula_new", originEventId: "fire_event_1", originLessonId: "live_5014" },
+    ],
+    originEventId: "fire_event_1",
+    originLessonId: "live_5014",
+  });
+
+  assert.equal(linked?.id, "aula_new");
+});

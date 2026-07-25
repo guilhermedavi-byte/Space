@@ -71,6 +71,8 @@ const summarizeScheduleEventBody = (body) => {
     description: String(body?.description || "").trim(),
     alunoId: body?.alunoId ?? body?.studentId ?? null,
     professorId: body?.professorId ?? body?.teacherId ?? null,
+    originEventId: String(body?.originEventId || body?.origin_event_id || "").trim(),
+    originLessonId: String(body?.originLessonId || body?.origin_lesson_id || "").trim(),
     dateKey: String(body?.dateKey || "").trim(),
     startMin: body?.startMin ?? body?.horaInicio ?? body?.startTime ?? null,
     endMin: body?.endMin ?? body?.horaFim ?? body?.endTime ?? null,
@@ -572,6 +574,8 @@ const decodeAulaDoc = (doc) => {
   const guests = Array.isArray(fields.guests) ? fields.guests.filter((g) => typeof g === "string") : [];
   const documents = Array.isArray(fields.documents) ? fields.documents.filter((d) => d && typeof d === "object") : [];
   const liveLessonId = fields.liveLessonId == null ? null : String(fields.liveLessonId || "").trim() || null;
+  const originEventId = typeof fields.originEventId === "string" ? fields.originEventId.trim() : "";
+  const originLessonId = typeof fields.originLessonId === "string" ? fields.originLessonId.trim() : "";
 
   return {
     id,
@@ -594,7 +598,22 @@ const decodeAulaDoc = (doc) => {
     guests,
     documents,
     liveLessonId,
+    originEventId: originEventId || null,
+    originLessonId: originLessonId || null,
   };
+};
+
+const findLinkedReplacementEvent = ({ existingEvents, originEventId = "", originLessonId = "" } = {}) => {
+  const safeOriginEventId = String(originEventId || "").trim();
+  const safeOriginLessonId = String(originLessonId || "").trim();
+  if (!safeOriginEventId && !safeOriginLessonId) return null;
+  const rows = Array.isArray(existingEvents) ? existingEvents : [];
+  return rows.find((row) => {
+    const rowOriginEventId = String(row?.originEventId || "").trim();
+    const rowOriginLessonId = String(row?.originLessonId || "").trim();
+    return (safeOriginEventId && rowOriginEventId === safeOriginEventId)
+      || (safeOriginLessonId && rowOriginLessonId === safeOriginLessonId);
+  }) || null;
 };
 
 const schedulesOverlap = (left, right) => {
@@ -1650,6 +1669,8 @@ module.exports = async (req, res) => {
   const alunoIdProvided = Object.prototype.hasOwnProperty.call(body || {}, "alunoId") || Object.prototype.hasOwnProperty.call(body || {}, "studentId");
   const alunoIdRaw = body?.alunoId ?? body?.studentId ?? null;
   const alunoId = alunoIdRaw == null ? null : String(alunoIdRaw || "").trim() || null;
+  const originEventId = String(body?.originEventId || body?.origin_event_id || "").trim();
+  const originLessonId = String(body?.originLessonId || body?.origin_lesson_id || "").trim();
 
   const professorIdFromBody = String(body?.professorId || body?.teacherId || "").trim();
   let professorId = role === "teacher" ? requesterId : professorIdFromBody;
@@ -1755,6 +1776,8 @@ module.exports = async (req, res) => {
       status: "agendada",
       recorrente: Boolean(recorrente),
       grupoRecorrenciaId: grupoRecorrenciaId || null,
+      originEventId: originEventId || null,
+      originLessonId: originLessonId || null,
       criadoEm: new Date(),
       criadoPor: createdBy,
       // Manual event fields (compatible with the existing calendar modal).
@@ -1808,6 +1831,42 @@ module.exports = async (req, res) => {
         .filter(Boolean);
 
       const existingEvents = await loadExistingScheduleEventsForConflictCheck({ idToken });
+      const linkedReplacement = !repeatEnabled && isLesson
+        ? findLinkedReplacementEvent({ existingEvents, originEventId, originLessonId })
+        : null;
+      if (linkedReplacement?.id) {
+        const patchData = {
+          ...baseDoc(),
+          status: String(linkedReplacement.status || "").trim().toLowerCase() || "agendada",
+          criadoEm: linkedReplacement.criadoEm instanceof Date ? linkedReplacement.criadoEm : new Date(),
+          criadoPor: typeof linkedReplacement.criadoPor === "string" && linkedReplacement.criadoPor.trim()
+            ? linkedReplacement.criadoPor
+            : createdBy,
+          atualizadoEm: new Date(),
+        };
+        const linkedConflict = findScheduleConflict({
+          candidates: [{ ...patchData, id: linkedReplacement.id }],
+          existingEvents,
+          excludeId: linkedReplacement.id,
+        });
+        if (linkedConflict) {
+          sendScheduleConflict(res, linkedConflict);
+          return;
+        }
+        const updateMaskPaths = Object.keys(patchData);
+        const patch = await patchScheduleDoc({
+          role,
+          requesterId,
+          professorId,
+          idToken,
+          docPath: `aulas/${linkedReplacement.id}`,
+          data: patchData,
+          updateMaskPaths,
+        });
+        if (!patch.ok) throw new Error("firestore_patch_failed");
+        sendJson(res, 200, { ok: true, ids: [linkedReplacement.id], updatedExisting: true, grupoRecorrenciaId: null });
+        return;
+      }
       const conflict = findScheduleConflict({ candidates: candidateDocs, existingEvents });
       if (conflict) {
         sendScheduleConflict(res, conflict);
@@ -1964,6 +2023,8 @@ module.exports = async (req, res) => {
       documents: isLessonFinal ? [] : documents,
       status: existingStatus,
     };
+    patchData.originEventId = typeof existing.originEventId === "string" ? existing.originEventId : patchData.originEventId;
+    patchData.originLessonId = typeof existing.originLessonId === "string" ? existing.originLessonId : patchData.originLessonId;
     // Preserve recurrence group info on edit (do not accidentally flip it).
     patchData.recorrente = typeof existing.recorrente === "boolean" ? existing.recorrente : patchData.recorrente;
     patchData.grupoRecorrenciaId =
@@ -2011,6 +2072,7 @@ module.exports = async (req, res) => {
 module.exports._private = {
   buildLiveLessonMirrorPayload,
   canTeacherWriteOwnSchedule,
+  findLinkedReplacementEvent,
   findScheduleConflict,
   schedulesOverlap,
 };
