@@ -22,7 +22,7 @@ const CONFIG = {
     status: "remarcada",
     workflow: "pedagogico_remarcacao",
     envName: ["N8N_PEDAGOGICO_REMARCACAO_AULA_WEBHOOK_URL", "N8N_PEDAGOGICO_REMARCACAO_URL"],
-    required: ["aula_id", "motivo_remarcacao"],
+    required: ["aula_id"],
     missingWebhookMessage: "Webhook de remarcação de aula não configurado",
   },
 };

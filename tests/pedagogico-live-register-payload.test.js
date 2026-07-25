@@ -4,6 +4,10 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const script = fs.readFileSync(path.join(__dirname, "..", "script.js"), "utf8");
+const pedagogicoHandler = fs.readFileSync(
+  path.join(__dirname, "..", "api", "_lib", "pedagogico-action-handler.js"),
+  "utf8",
+);
 const { normalizePayload } = require("../api/_lib/pedagogico-action-handler");
 
 test("payload live do professor envia engajamento e confiança", () => {
@@ -35,4 +39,11 @@ test("normalizePayload preserva engajamento e confiança em registro_aula", () =
   assert.equal(payload.conteudo_aula, "Will x Going to Conversation");
   assert.equal(payload.desempenho_aluno, "5/5");
   assert.equal(payload.humor_aluno, "Animado");
+});
+
+test("backend de remarcação não exige mais motivo_remarcacao", () => {
+  assert.match(
+    pedagogicoHandler,
+    /remarcacao_aula:\s*\{[\s\S]*?required:\s*\[\s*"aula_id"\s*\]/,
+  );
 });
