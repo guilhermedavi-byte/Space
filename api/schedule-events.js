@@ -489,6 +489,7 @@ const isHiddenAulaStatus = (value) => {
 };
 
 const WEEKDAY_TO_DOW = {
+  sunday: 0,
   monday: 1,
   tuesday: 2,
   wednesday: 3,
@@ -496,6 +497,8 @@ const WEEKDAY_TO_DOW = {
   friday: 5,
   saturday: 6,
   // pt-BR shorthands (for safety)
+  dom: 0,
+  domingo: 0,
   seg: 1,
   ter: 2,
   qua: 3,
@@ -2291,6 +2294,7 @@ module.exports = async (req, res) => {
 
 module.exports._private = {
   buildOccurrenceId,
+  buildCustomWeeklyOccurrences,
   buildRecurringSeriesMutationPlan,
   buildLiveLessonMirrorPayload,
   canTeacherWriteOwnSchedule,

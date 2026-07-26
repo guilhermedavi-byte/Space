@@ -124,3 +124,40 @@ test("buildRecurringSeriesMutationPlan preserva passado, atualiza datas futuras 
   assert.equal(plan.creates[0].dateKey, "2026-07-30");
   assert.deepEqual(plan.cancels.map((row) => row.id), ["cancel-29"]);
 });
+
+test("buildCustomWeeklyOccurrences reconhece os 7 dias da semana, incluindo domingo", () => {
+  const occurrences = _private.buildCustomWeeklyOccurrences({
+    dateKey: "2026-07-26",
+    days: [
+      { weekday: "dom", startMin: 300, endMin: 330 },
+      { weekday: "seg", startMin: 300, endMin: 330 },
+      { weekday: "ter", startMin: 300, endMin: 330 },
+      { weekday: "qua", startMin: 300, endMin: 330 },
+      { weekday: "qui", startMin: 300, endMin: 330 },
+      { weekday: "sex", startMin: 300, endMin: 330 },
+      { weekday: "sab", startMin: 300, endMin: 330 },
+    ],
+  });
+
+  const allKeys = new Set(occurrences.map((entry) => entry.dateKey));
+  assert.deepEqual(
+    [
+      "2026-07-26",
+      "2026-07-27",
+      "2026-07-28",
+      "2026-07-29",
+      "2026-07-30",
+      "2026-07-31",
+      "2026-08-01",
+    ].filter((dateKey) => allKeys.has(dateKey)).sort(),
+    [
+      "2026-07-26",
+      "2026-07-27",
+      "2026-07-28",
+      "2026-07-29",
+      "2026-07-30",
+      "2026-07-31",
+      "2026-08-01",
+    ]
+  );
+});
