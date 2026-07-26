@@ -58,6 +58,7 @@ const normalizeText = (value) =>
     .replace(/[\u0300-\u036f]/g, "");
 
 const normalizeCompact = (value) => normalizeText(value).replace(/[^a-z0-9]+/g, "");
+const safeEncode = (value) => encodeURIComponent(String(value || ""));
 
 const nameTokens = (value) => normalizeText(value).split(/[^a-z0-9]+/).filter((token) => token.length >= 2);
 
@@ -351,9 +352,9 @@ const patchLiveLessonMirror = async ({ liveLessonId, eventId, data, startMs, end
   const patch = {
     ...payload,
     status_aula: statusAula,
-    deleted_at: deletedAt,
     updated_at: new Date().toISOString(),
   };
+  if (deletedAt != null) patch.deleted_at = deletedAt;
   delete patch.created_at;
   const { data: updated } = await supabaseFetch(`/n8n_aulas_pedagogicas_space?id=eq.${safeEncode(safeLiveLessonId)}`, {
     method: "PATCH",
@@ -665,6 +666,8 @@ const decodeAulaDoc = (doc) => {
   const originEventId = typeof fields.originEventId === "string" ? fields.originEventId.trim() : "";
   const originLessonId = typeof fields.originLessonId === "string" ? fields.originLessonId.trim() : "";
   const occurrenceId = typeof fields.occurrenceId === "string" ? fields.occurrenceId.trim() : "";
+  const startMs = toUtcMsForDateKeyAndMinutes(dateKey, startMin, { tzOffsetMinutes: DEFAULT_CONFIG.tzOffsetMinutes });
+  const endMs = toUtcMsForDateKeyAndMinutes(dateKey, endMin, { tzOffsetMinutes: DEFAULT_CONFIG.tzOffsetMinutes });
 
   return {
     id,
@@ -689,6 +692,8 @@ const decodeAulaDoc = (doc) => {
     guests,
     documents,
     liveLessonId,
+    startMs: startMs || 0,
+    endMs: endMs || 0,
     originEventId: originEventId || null,
     originLessonId: originLessonId || null,
   };
@@ -2132,7 +2137,17 @@ module.exports = async (req, res) => {
               endMs: occEndMs,
               statusAula: "agendada",
               deletedAt: null,
-            }).catch(() => null);
+            }).catch((error) => {
+              console.error("[schedule-events] recurring live mirror update failed", {
+                eventId: existing.id,
+                liveLessonId: data.liveLessonId,
+                message: error?.message,
+                code: error?.code,
+                details: error?.details,
+                hint: error?.hint,
+              });
+              return null;
+            });
           } else {
             const liveLessonId = await createLiveLessonMirror({ eventId: existing.id, data, startMs: occStartMs, endMs: occEndMs }).catch(() => null);
             if (liveLessonId) {
@@ -2174,8 +2189,17 @@ module.exports = async (req, res) => {
           startMs: row.startMs,
           endMs: toUtcMsForDateKeyAndMinutes(row.dateKey, row.endMin, { tzOffsetMinutes }),
           statusAula: "cancelada",
-          deletedAt: new Date().toISOString(),
-        }).catch(() => null);
+        }).catch((error) => {
+          console.error("[schedule-events] recurring live mirror cancel failed", {
+            eventId: row.id,
+            liveLessonId: safeLiveLessonId,
+            message: error?.message,
+            code: error?.code,
+            details: error?.details,
+            hint: error?.hint,
+          });
+          return null;
+        });
       }
 
       sendJson(res, 200, { ok: true, ids: resultIds.length ? resultIds : createdIds, grupoRecorrenciaId: grupoRecorrenciaId || null });
