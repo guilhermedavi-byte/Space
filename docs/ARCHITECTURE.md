@@ -120,12 +120,17 @@ Método primário de backfill:
 
 1. extrair o sufixo do `video_room_id`;
 2. cruzar com o hash do `eventId` Firestore;
-3. validar com data/horário local de Brasília;
+3. validar com data/horário local de Brasília, **sempre derivados dos campos da aula/ocorrência** (`aulas`, live lesson ou aula espelhada no payload);
 4. aceitar match somente se o tuple também bater.
 
 Fallback:
 
 - `(student, teacher, local_date, start_time, end_time)`
+
+Observação obrigatória:
+
+- `created_at` / timestamp de criação do register **não entra no matching principal**;
+- ele é apenas metadado auxiliar de desempate e auditoria.
 
 Se ainda houver mais de um candidato plausível:
 
@@ -273,6 +278,76 @@ Saída mínima:
 - trocar lookup frágil por resolução via `occurrence_id`/mapa legado
 - validar na URL de preview com casos reais conhecidos
 - rollback: Instant Rollback Vercel
+
+### Item 3 — desenho do backfill legado
+
+Pré-condições:
+
+- deploy conjunto dos itens 1+2 validado;
+- backup fresco de `n8n_aulas_pedagogicas_space` e `n8n_registros_aula_space`;
+- execução começa em **dry-run read-only**, sob comando explícito.
+
+Pipeline de normalização:
+
+1. normalizar todas as comparações para `America/Sao_Paulo`;
+2. derivar `local_date`, `start_time_local` e `end_time_local` **a partir dos campos da aula/ocorrência**, nunca do timestamp do register;
+3. usar timestamp do register apenas como metadado de desempate/auditoria.
+
+Buckets do relatório:
+
+- `safe_match`: 1 register ↔ 1 ocorrência, com evidência suficiente;
+- `orphan_register`: register sem ocorrência correspondente;
+- `ambiguous_register_match`: mais de um candidato plausível;
+- `proposed_recovery`: pendência sem register atual, mas com payload durável suficiente para propor recuperação manual;
+- `proposed_recovery_pending_occurrence`: payload recuperável cujo `occurrence_id` ainda não foi resolvido e que precisa de revisão manual.
+
+Regra de dedupe:
+
+- uma `occurrence_id` aceita no máximo um register válido;
+- conflito entre dois registers plausíveis para a mesma ocorrência nunca é auto-resolvido.
+
+Decisão de escrita aprovada para a fase posterior:
+
+- além de gerar `legacy_occurrence_map`, a fase de escrita **carimba `occurrence_id` nos dados existentes**:
+  - Firestore `aulas`
+  - `n8n_aulas_pedagogicas_space`
+  - `n8n_registros_aula_space` nos `safe_match`
+
+Impacto em backup / rollback:
+
+- backup obrigatório antes de escrever nas 3 superfícies acima;
+- rollback de código: Instant Rollback do deploy;
+- rollback de dado: usar o backup para desfazer carimbos e restaurar valores anteriores, porque o backfill passa a mutar tabelas/coleções existentes;
+- `legacy_occurrence_map` permanece como trilha auditável mesmo em rollback.
+
+Cobertura esperada da execução:
+
+- base atual: `52/59` por `video_room_id suffix + tuple`;
+- `3/59` por fallback tuple;
+- `4/59` permanecem em `orphan_register` / `ambiguous_register_match`;
+- `5` aulas perdidas entram como `proposed_recovery`, sem insert automático.
+
+Casos de recuperação manual já conhecidos:
+
+- `Adriano Lippi` / `Fausto` / `2026-07-23` / `20:00–20:30`
+- `Adriano Lippi` / `David C.` / `2026-07-23` / `20:30–21:00`
+- `Carlos Eduardo` / `Sophia Rodrigues` / `2026-07-23` / `10:00–10:30`
+- `Diego` / `Anny` / `2026-07-23` / `11:00–11:30`
+- `Matheus Davidson` / `João Luiz` / caso com resolução pendente de ocorrência após normalização de timezone
+
+Saída esperada do dry-run:
+
+- contagem por bucket;
+- `legacy_occurrence_map` em modo relatório;
+- lista dos `safe_match` a carimbar;
+- lista dos `orphan_register`;
+- lista dos `ambiguous_register_match`;
+- lista dos `proposed_recovery`;
+- lista dos `proposed_recovery_pending_occurrence`.
+
+Observação operacional:
+
+- o dry-run fica pronto para execução assim que houver sua ordem, mas não deve rodar antes da validação do deploy 1+2 e do backup das tabelas.
 
 ### Item 4 — reconciliação básica
 
