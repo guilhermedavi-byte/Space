@@ -349,11 +349,184 @@ Observação operacional:
 
 - o dry-run fica pronto para execução assim que houver sua ordem, mas não deve rodar antes da validação do deploy 1+2 e do backup das tabelas.
 
+#### Operacional do dry-run (copy-paste, não executar sem ordem)
+
+Pré-check manual:
+
+1. confirmar deploy conjunto dos itens 1+2 já validado;
+2. confirmar backup fresco de:
+   - `n8n_aulas_pedagogicas_space`
+   - `n8n_registros_aula_space`
+3. confirmar que o modo é `read-only` / `dry-run`.
+
+Comando-alvo:
+
+```bash
+node --env-file=.env.local scripts/backfill-occurrence-id.js \
+  --mode=dry-run \
+  --timezone=America/Sao_Paulo \
+  --report=./tmp/occurrence-backfill-dry-run-$(date +%Y%m%d-%H%M%S).json
+```
+
+Saída esperada para revisão:
+
+- resumo de cobertura (`safe_match`, `orphan_register`, `ambiguous_register_match`, `proposed_recovery`, `proposed_recovery_pending_occurrence`);
+- amostras por bucket;
+- lista dos `safe_match` elegíveis a carimbo;
+- lista dos 5 `proposed_recovery`;
+- lista das ocorrências pendentes de resolução manual;
+- caminho do artefato JSON gerado.
+
+Critérios para seguir depois:
+
+- nenhuma escrita executada;
+- contagem total reconciliável bate com a base esperada;
+- buckets problemáticos ficam explicitamente listados para revisão humana.
+
+#### Operacional do write posterior (não executar agora)
+
+Pré-check manual:
+
+1. reaproveitar o relatório do dry-run aprovado;
+2. gerar novo backup imediatamente antes da escrita;
+3. congelar a versão exata do código/backfill aprovada.
+
+Etapas previstas:
+
+1. carimbar `occurrence_id` em `aulas` (Firestore) dos `safe_match`;
+2. carimbar `occurrence_id` em `n8n_aulas_pedagogicas_space`;
+3. carimbar `occurrence_id` em `n8n_registros_aula_space`;
+4. gerar/persistir `legacy_occurrence_map`;
+5. emitir relatório final de escrita + pendências manuais.
+
+Rollback previsto:
+
+- Instant Rollback do deploy se necessário;
+- restore das duas tabelas Supabase e dos docs Firestore a partir do backup pré-write;
+- preservação do relatório e do `legacy_occurrence_map` como trilha auditável.
+
 ### Item 4 — reconciliação básica
 
 - endpoint/job read-only com órfãos, faltantes e ambiguidades
 - publicar saída para revisão humana
 - rollback: remoção do job/endpoint sem impacto transacional
+
+### Item 4 — painel Registros de Aulas após `occurrence_id`
+
+Objetivo:
+
+- fazer o painel ler status por `occurrence_id` como chave primária;
+- usar `legacy_occurrence_map` apenas como fallback explícito para legado ainda não carimbado;
+- eliminar lookup heurístico local por `eventId`/`aula_id`.
+
+Contrato de leitura:
+
+1. a linha da aula no painel nasce da ocorrência da agenda;
+2. o join principal busca register por `occurrence_id`;
+3. se a ocorrência ainda não tiver `occurrence_id` materializado na leitura histórica, a resolução passa pelo `legacy_occurrence_map`;
+4. se nem assim houver vínculo, a linha cai em `sem_registro` ou em categoria de reconciliação apropriada.
+
+Fontes:
+
+- agenda/ocorrência: Firestore `aulas` e/ou espelho live já carimbado;
+- status operacional: `n8n_registros_aula_space`;
+- fallback legado: `legacy_occurrence_map`.
+
+Regras:
+
+- nenhum consumidor de UI monta casamento por heurística ad hoc;
+- todo join usa a mesma camada de resolução (`occurrence_id` -> register, com fallback map);
+- o painel não inventa status a partir de ausência de match sem antes passar pelo mapa legado.
+
+Validação esperada:
+
+- casos conhecidos (presença, falta, remarcada, cancelada) aparecem corretos no período;
+- cards agregados batem com a soma dos registers reconciliados;
+- após o backfill, o uso do fallback tende a zero para a janela histórica coberta.
+
+Rollback:
+
+- Instant Rollback do deploy de leitura;
+- nenhuma mutação de dado no item 4.
+
+### Item 5 — spec do endpoint/job de reconciliação
+
+Objetivo:
+
+- publicar uma visão única e revisável das divergências entre agenda, live lessons, registers e outbox;
+- servir tanto para auditoria quanto para replay/manual review no pós-migração.
+
+Formato sugerido:
+
+- `GET /api/pedagogico/reconciliation`
+- parâmetros opcionais:
+  - `from`
+  - `to`
+  - `teacher_id`
+  - `severity`
+  - `category`
+  - `limit`
+  - `cursor`
+- modo alternativo batch/job:
+  - execução agendada diária
+  - execução manual sob demanda
+
+Categorias mínimas:
+
+1. `orphan_register`
+   - register sem ocorrência correspondente, mesmo após `legacy_occurrence_map`
+2. `orphan_lesson`
+   - ocorrência passada ou espelho live sem register correspondente após a tolerância definida
+3. `missing_register`
+   - aula que deveria ter registro operacional e ainda não tem
+4. `ambiguous_match`
+   - mais de um candidato plausível no casamento register ↔ ocorrência
+5. `manual_review`
+   - fila explícita dos casos que não podem ser auto-resolvidos (`proposed_recovery_pending_occurrence`, conflitos de dedupe, etc.)
+
+Payload mínimo por item:
+
+- `category`
+- `severity`
+- `occurrence_id` (quando existir)
+- chaves legadas envolvidas:
+  - `firestore_event_id`
+  - `live_lesson_id`
+  - `legacy_register_aula_id`
+- `student_id` / `student_name`
+- `teacher_id` / `teacher_name`
+- `local_date`
+- `start_time_local`
+- `end_time_local`
+- `evidence`
+- `suggested_action`
+- `requires_manual_review`
+- `detected_at`
+
+Saídas derivadas:
+
+- resumo agregado por categoria e severidade;
+- lista paginada para revisão;
+- export JSON/CSV para operação manual;
+- insumo para replay manual do outbox no futuro.
+
+Regras operacionais:
+
+- o endpoint/job é read-only;
+- nenhuma categoria faz auto-correção;
+- qualquer replay ou recuperação continua sendo ação separada e explícita.
+
+Validação esperada:
+
+- os 4 órfãos já conhecidos aparecem;
+- os 4 conflitos/ambiguidades já conhecidos aparecem;
+- os 5 `proposed_recovery` aparecem na lista de revisão manual até decisão humana;
+- depois do item 3 executado, o volume de `orphan_register` e `ambiguous_match` vira métrica observável do sistema.
+
+Rollback:
+
+- remover endpoint/job sem impacto transacional;
+- nenhum dado mutado pelo item 5.
 
 ### Item 6 — auditoria do pseudo-outbox (`pedagogico_pending_writes`)
 
