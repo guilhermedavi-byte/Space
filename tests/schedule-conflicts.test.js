@@ -66,6 +66,7 @@ test("payload live mantém alunoNome quando backend recebe fallback do front", (
     eventId: "aula-1",
     data: {
       firestoreDocId: "student-1",
+      occurrenceId: "occ_123",
       alunoId: "student-1",
       alunoNome: "André Luiz",
       professorId: "teacher-1",
@@ -81,6 +82,12 @@ test("payload live mantém alunoNome quando backend recebe fallback do front", (
   assert.equal(payload.aluno_nome, "André Luiz");
   assert.equal(payload.professor_id, "teacher-1");
   assert.equal(payload.professor_nome, "Rodrigo Batista");
+  assert.equal(payload.occurrence_id, "occ_123");
+});
+
+test("buildOccurrenceId gera chave canônica com prefixo occ", () => {
+  const occurrenceId = _private.buildOccurrenceId();
+  assert.match(occurrenceId, /^occ_/);
 });
 
 test("findLinkedReplacementEvent encontra reposição já criada pelo vínculo de origem", () => {
@@ -94,4 +101,26 @@ test("findLinkedReplacementEvent encontra reposição já criada pelo vínculo d
   });
 
   assert.equal(linked?.id, "aula_new");
+});
+
+test("buildRecurringSeriesMutationPlan preserva passado, atualiza datas futuras e cancela slots removidos", () => {
+  const plan = _private.buildRecurringSeriesMutationPlan({
+    groupId: "grp-1",
+    effectiveFromKey: "2026-07-28",
+    nowMs: Date.parse("2026-07-26T12:00:00.000Z"),
+    candidateDocs: [
+      { dateKey: "2026-07-28", startMin: 1290, endMin: 1320 },
+      { dateKey: "2026-07-30", startMin: 1290, endMin: 1320 },
+    ],
+    existingEvents: [
+      { id: "past-1", grupoRecorrenciaId: "grp-1", dateKey: "2026-07-24", startMs: Date.parse("2026-07-25T01:00:00.000Z") },
+      { id: "keep-28", grupoRecorrenciaId: "grp-1", dateKey: "2026-07-28", startMs: Date.parse("2026-07-29T01:00:00.000Z") },
+      { id: "cancel-29", grupoRecorrenciaId: "grp-1", dateKey: "2026-07-29", startMs: Date.parse("2026-07-30T01:00:00.000Z") },
+    ],
+  });
+
+  assert.deepEqual(plan.updates.map((entry) => entry.existing.id), ["keep-28"]);
+  assert.equal(plan.creates.length, 1);
+  assert.equal(plan.creates[0].dateKey, "2026-07-30");
+  assert.deepEqual(plan.cancels.map((row) => row.id), ["cancel-29"]);
 });

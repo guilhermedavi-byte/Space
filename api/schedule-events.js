@@ -163,6 +163,65 @@ const buildId = (prefix) => {
   return `${prefix}_${Date.now()}_${rand}`;
 };
 
+const resolveOccurrenceId = (value) => {
+  const raw = String(value || "").trim();
+  return raw || "";
+};
+
+const buildOccurrenceId = () => buildId("occ");
+
+const buildRecurringOccurrenceKey = (row = {}) => String(row?.dateKey || "").trim();
+
+const isSeriesEventFromEffectiveDate = ({ row, effectiveFromKey = "", nowMs = Date.now() } = {}) => {
+  const rowDateKey = String(row?.dateKey || "").trim();
+  const rowStartMs = Number(row?.startMs || 0);
+  if (!rowStartMs || !isValidDateKey(rowDateKey) || !isValidDateKey(effectiveFromKey)) return false;
+  if (rowDateKey < effectiveFromKey) return false;
+  if (rowDateKey === effectiveFromKey && rowStartMs <= nowMs) return false;
+  return true;
+};
+
+const buildRecurringSeriesMutationPlan = ({ candidateDocs = [], existingEvents = [], groupId = "", effectiveFromKey = "", nowMs = Date.now() } = {}) => {
+  const safeGroupId = String(groupId || "").trim();
+  const safeEffectiveFromKey = String(effectiveFromKey || "").trim();
+  const scopedExisting = (Array.isArray(existingEvents) ? existingEvents : [])
+    .filter((row) => String(row?.grupoRecorrenciaId || "").trim() === safeGroupId)
+    .filter((row) => isSeriesEventFromEffectiveDate({ row, effectiveFromKey: safeEffectiveFromKey, nowMs }));
+
+  const existingByKey = new Map();
+  const duplicateExisting = [];
+  scopedExisting.forEach((row) => {
+    const key = buildRecurringOccurrenceKey(row);
+    if (!key) return;
+    if (existingByKey.has(key)) {
+      duplicateExisting.push(row);
+      return;
+    }
+    existingByKey.set(key, row);
+  });
+
+  const updates = [];
+  const creates = [];
+  const matchedIds = new Set();
+
+  (Array.isArray(candidateDocs) ? candidateDocs : []).forEach((candidate) => {
+    const key = buildRecurringOccurrenceKey(candidate);
+    const existing = key ? existingByKey.get(key) || null : null;
+    if (existing?.id) {
+      matchedIds.add(String(existing.id));
+      updates.push({ candidate, existing });
+      return;
+    }
+    creates.push(candidate);
+  });
+
+  const cancels = scopedExisting
+    .filter((row) => !matchedIds.has(String(row?.id || "")))
+    .concat(duplicateExisting);
+
+  return { updates, creates, cancels, scopedExisting };
+};
+
 const slugifyRoomPart = (value) =>
   String(value || "")
     .trim()
@@ -197,6 +256,7 @@ const buildLiveLessonMirrorPayload = ({ eventId, data, startMs, endMs } = {}) =>
   const baseUrl = String(process.env.JITSI_BASE_URL || "https://meet.jit.si").replace(/\/+$/, "");
   const now = new Date().toISOString();
   const payload = {
+    occurrence_id: resolveOccurrenceId(data.occurrenceId) || null,
     firestore_doc_id: data.firestoreDocId || data.alunoFirestoreDocId || data.alunoId || null,
     aluno_id: data.alunoId || null,
     aluno_nome: data.alunoNome || null,
@@ -247,6 +307,7 @@ const createLiveLessonMirror = async ({ eventId, data, startMs, endMs } = {}) =>
   } catch (error) {
     if (error?.code === "PGRST204" || /Could not find|column/i.test(String(error?.message || ""))) {
       const fallbackPayload = {
+        occurrence_id: payload.occurrence_id,
         aluno_id: payload.aluno_id,
         aluno_nome: payload.aluno_nome,
         professor_id: payload.professor_id,
@@ -280,6 +341,26 @@ const createLiveLessonMirror = async ({ eventId, data, startMs, endMs } = {}) =>
     });
     return null;
   }
+};
+
+const patchLiveLessonMirror = async ({ liveLessonId, eventId, data, startMs, endMs, statusAula = "agendada", deletedAt = null } = {}) => {
+  const safeLiveLessonId = String(liveLessonId || "").trim();
+  if (!safeLiveLessonId || !data?.alunoId) return null;
+  const payload = buildLiveLessonMirrorPayload({ eventId, data, startMs, endMs });
+  if (!payload) return null;
+  const patch = {
+    ...payload,
+    status_aula: statusAula,
+    deleted_at: deletedAt,
+    updated_at: new Date().toISOString(),
+  };
+  delete patch.created_at;
+  const { data: updated } = await supabaseFetch(`/n8n_aulas_pedagogicas_space?id=eq.${safeEncode(safeLiveLessonId)}`, {
+    method: "PATCH",
+    body: patch,
+  });
+  const row = Array.isArray(updated) ? updated[0] : updated;
+  return row && row.id != null ? String(row.id) : safeLiveLessonId;
 };
 
 const getUserNameById = async ({ idToken, uid }) => {
@@ -580,9 +661,11 @@ const decodeAulaDoc = (doc) => {
   const liveLessonId = fields.liveLessonId == null ? null : String(fields.liveLessonId || "").trim() || null;
   const originEventId = typeof fields.originEventId === "string" ? fields.originEventId.trim() : "";
   const originLessonId = typeof fields.originLessonId === "string" ? fields.originLessonId.trim() : "";
+  const occurrenceId = typeof fields.occurrenceId === "string" ? fields.occurrenceId.trim() : "";
 
   return {
     id,
+    occurrenceId: occurrenceId || null,
     professorId,
     alunoId,
     dateKey,
@@ -1764,6 +1847,7 @@ module.exports = async (req, res) => {
     const data = occStartMs ? new Date(occStartMs) : new Date(startMs);
 
     return {
+      occurrenceId: resolveOccurrenceId(repeatMeta?.occurrenceId || body?.occurrenceId) || buildOccurrenceId(),
       alunoId: alunoId || null,
       professorId,
       alunoNome: alunoNome || null,
@@ -1837,12 +1921,30 @@ module.exports = async (req, res) => {
         .filter(Boolean);
 
       const existingEvents = await loadExistingScheduleEventsForConflictCheck({ idToken });
+      const recurringSeriesPlan =
+        recorrente && grupoRecorrenciaId
+          ? buildRecurringSeriesMutationPlan({
+              candidateDocs,
+              existingEvents,
+              groupId: grupoRecorrenciaId,
+              effectiveFromKey: dateKey,
+              nowMs: Date.now(),
+            })
+          : null;
+      const recurringIdsBeingMutated = new Set(
+        recurringSeriesPlan
+          ? recurringSeriesPlan.scopedExisting.map((row) => String(row?.id || "")).filter(Boolean)
+          : []
+      );
       const linkedReplacement = !repeatEnabled && isLesson
         ? findLinkedReplacementEvent({ existingEvents, originEventId, originLessonId })
         : null;
       if (linkedReplacement?.id) {
         const patchData = {
           ...baseDoc(),
+          occurrenceId:
+            resolveOccurrenceId(linkedReplacement.occurrenceId || linkedReplacement.occurrence_id) ||
+            buildOccurrenceId(),
           status: String(linkedReplacement.status || "").trim().toLowerCase() || "agendada",
           criadoEm: linkedReplacement.criadoEm instanceof Date ? linkedReplacement.criadoEm : new Date(),
           criadoPor: typeof linkedReplacement.criadoPor === "string" && linkedReplacement.criadoPor.trim()
@@ -1873,16 +1975,59 @@ module.exports = async (req, res) => {
         sendJson(res, 200, { ok: true, ids: [linkedReplacement.id], updatedExisting: true, grupoRecorrenciaId: null });
         return;
       }
-      const conflict = findScheduleConflict({ candidates: candidateDocs, existingEvents });
+      const conflict = findScheduleConflict({
+        candidates: candidateDocs,
+        existingEvents: existingEvents.filter((row) => !recurringIdsBeingMutated.has(String(row?.id || ""))),
+      });
       if (conflict) {
         sendScheduleConflict(res, conflict);
         return;
       }
 
       const writes = [];
-      for (const data of candidateDocs) {
+      const resultIds = [];
+
+      for (const entry of recurringSeriesPlan?.updates || []) {
+        const existing = entry.existing || {};
+        const data = {
+          ...entry.candidate,
+          occurrenceId: resolveOccurrenceId(existing.occurrenceId || existing.occurrence_id) || entry.candidate.occurrenceId || buildOccurrenceId(),
+          liveLessonId: existing.liveLessonId || existing.live_lesson_id || entry.candidate.liveLessonId || null,
+          criadoEm: existing.criadoEm instanceof Date ? existing.criadoEm : entry.candidate.criadoEm,
+          criadoPor: typeof existing.criadoPor === "string" && existing.criadoPor.trim() ? existing.criadoPor : entry.candidate.criadoPor,
+          atualizadoEm: new Date(),
+          status: "agendada",
+        };
+        const docPath = `aulas/${existing.id}`;
+        const mask = Object.keys(data);
+        const encoded = encodeFields(data);
+        writes.push({
+          update: { name: toFirestoreDocName(docPath), fields: encoded.fields },
+          updateMask: { fieldPaths: mask },
+        });
+        resultIds.push(String(existing.id));
+      }
+
+      for (const row of recurringSeriesPlan?.cancels || []) {
+        const cancelledAt = new Date();
+        const data = {
+          status: "cancelado",
+          statusAula: "cancelada",
+          deletedAt: cancelledAt,
+          cancelledAt,
+          canceladoEm: cancelledAt,
+          atualizadoEm: cancelledAt,
+        };
+        writes.push({
+          update: { name: toFirestoreDocName(`aulas/${row.id}`), fields: encodeFields(data).fields },
+          updateMask: { fieldPaths: Object.keys(data) },
+        });
+      }
+
+      for (const data of recurringSeriesPlan?.creates || candidateDocs) {
         const id = buildId("aula");
         createdIds.push(id);
+        resultIds.push(id);
         const docPath = `aulas/${id}`;
 
         if (data.alunoId) {
@@ -1965,7 +2110,72 @@ module.exports = async (req, res) => {
         }
       }
 
-      sendJson(res, 200, { ok: true, ids: createdIds, grupoRecorrenciaId: grupoRecorrenciaId || null });
+      for (const entry of recurringSeriesPlan?.updates || []) {
+        const existing = entry.existing || {};
+        const data = {
+          ...entry.candidate,
+          occurrenceId: resolveOccurrenceId(existing.occurrenceId || existing.occurrence_id) || entry.candidate.occurrenceId || buildOccurrenceId(),
+          liveLessonId: existing.liveLessonId || existing.live_lesson_id || entry.candidate.liveLessonId || null,
+        };
+        const occStartMs = toUtcMsForDateKeyAndMinutes(data.dateKey, data.startMin, { tzOffsetMinutes });
+        const occEndMs = toUtcMsForDateKeyAndMinutes(data.dateKey, data.endMin, { tzOffsetMinutes });
+        if (data.alunoId && occStartMs && occEndMs) {
+          if (data.liveLessonId) {
+            await patchLiveLessonMirror({
+              liveLessonId: data.liveLessonId,
+              eventId: existing.id,
+              data,
+              startMs: occStartMs,
+              endMs: occEndMs,
+              statusAula: "agendada",
+              deletedAt: null,
+            }).catch(() => null);
+          } else {
+            const liveLessonId = await createLiveLessonMirror({ eventId: existing.id, data, startMs: occStartMs, endMs: occEndMs }).catch(() => null);
+            if (liveLessonId) {
+              await patchScheduleDoc({
+                role,
+                requesterId,
+                professorId: data.professorId,
+                idToken,
+                docPath: `aulas/${existing.id}`,
+                data: { liveLessonId, atualizadoEm: new Date() },
+                updateMaskPaths: ["liveLessonId", "atualizadoEm"],
+              }).catch(() => null);
+            }
+          }
+        }
+      }
+
+      for (const row of recurringSeriesPlan?.cancels || []) {
+        const safeLiveLessonId = String(row.liveLessonId || row.live_lesson_id || "").trim();
+        if (!safeLiveLessonId) continue;
+        await patchLiveLessonMirror({
+          liveLessonId: safeLiveLessonId,
+          eventId: row.id,
+          data: {
+            occurrenceId: row.occurrenceId || row.occurrence_id || "",
+            firestoreDocId: row.firestoreDocId || row.firestore_doc_id || row.alunoId || "",
+            alunoId: row.alunoId || "",
+            alunoNome: row.alunoNome || "",
+            alunoEmail: row.alunoEmail || "",
+            alunoTelefone: row.alunoTelefone || "",
+            professorId: row.professorId || "",
+            professorNome: row.professorNome || "",
+            professorEmail: row.professorEmail || "",
+            dateKey: row.dateKey,
+            startMin: row.startMin,
+            endMin: row.endMin,
+            tipoEvento: row.tipoEvento || "",
+          },
+          startMs: row.startMs,
+          endMs: toUtcMsForDateKeyAndMinutes(row.dateKey, row.endMin, { tzOffsetMinutes }),
+          statusAula: "cancelada",
+          deletedAt: new Date().toISOString(),
+        }).catch(() => null);
+      }
+
+      sendJson(res, 200, { ok: true, ids: resultIds.length ? resultIds : createdIds, grupoRecorrenciaId: grupoRecorrenciaId || null });
       return;
     }
 
@@ -2031,6 +2241,10 @@ module.exports = async (req, res) => {
     };
     patchData.originEventId = typeof existing.originEventId === "string" ? existing.originEventId : patchData.originEventId;
     patchData.originLessonId = typeof existing.originLessonId === "string" ? existing.originLessonId : patchData.originLessonId;
+    patchData.occurrenceId =
+      typeof existing.occurrenceId === "string" && existing.occurrenceId.trim()
+        ? existing.occurrenceId.trim()
+        : patchData.occurrenceId;
     // Preserve recurrence group info on edit (do not accidentally flip it).
     patchData.recorrente = typeof existing.recorrente === "boolean" ? existing.recorrente : patchData.recorrente;
     patchData.grupoRecorrenciaId =
@@ -2076,9 +2290,13 @@ module.exports = async (req, res) => {
 };
 
 module.exports._private = {
+  buildOccurrenceId,
+  buildRecurringSeriesMutationPlan,
   buildLiveLessonMirrorPayload,
   canTeacherWriteOwnSchedule,
   findLinkedReplacementEvent,
   findScheduleConflict,
+  isSeriesEventFromEffectiveDate,
+  resolveOccurrenceId,
   schedulesOverlap,
 };

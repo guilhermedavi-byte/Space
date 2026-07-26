@@ -50,6 +50,7 @@ Este documento formaliza a arquitetura de dados da Space para sair do fim de sem
 1. **O bug da Claudiane confirma a causa estrutural.** O painel cruza `event.id` do Firestore (`aula_...`) com `aula_id` numérico do Supabase; sem uma ponte canônica, o casamento é frágil por definição.
 2. **`video_room_id` é a melhor ponte oficial do legado hoje.** O sufixo do `video_room_id` em `n8n_aulas_pedagogicas_space` bate com o hash final do `eventId` Firestore e, quando validado por data/horário local, resolve a maior parte do histórico com segurança.
 3. **Existem registros órfãos reais.** Os cases `3994` e `4006` provam que há registers apontando para ocorrências que não existem mais na agenda atual, provavelmente por regeneração com novo `eventId`.
+4. **`pedagogico_pending_writes` não é um outbox confiável no estado atual.** Hoje ele cria um documento por tentativa de gravação, mas a transição de estado para `supabase_saved` / `supabase_failed` é best-effort e silenciosa em caso de falha. O resultado prático é acúmulo de pendências “presas” que não representam backlog real processável.
 
 ### 3.3 Cobertura real do mapeamento legado
 
@@ -90,9 +91,12 @@ Toda ocorrência de aula terá um `occurrence_id` estável, imutável e reaprove
 Regras:
 
 - `occurrence_id` passa a ser a identidade oficial de toda ocorrência.
+- formato oficial: `occ_<ulid>`.
+- é cunhado pelo backend de agenda na primeira criação da ocorrência lógica.
 - `aula_id`, em schema novo, passa a significar **sempre** o `occurrence_id`.
 - IDs legados (`aula_...` do Firestore, `id` numérico de live lesson, `aula_id` numérico em register) viram apenas chaves históricas.
 - Regenerar agenda deixa de ser `delete + recreate`; vira `upsert` preservando `occurrence_id`.
+- cancelamento preserva o mesmo `occurrence_id`; nunca há reuso para outra ocorrência.
 
 ### 5.2 Estratégia de transição
 
@@ -103,6 +107,12 @@ Enquanto a agenda ainda nasce em Firestore:
 3. O espelho operacional no Supabase passa a gravar o mesmo `occurrence_id`.
 4. Registers passam a referenciar `occurrence_id`, não mais o `id` local da live lesson.
 5. Uma tabela de mapeamento legado cobre o histórico até o corte completo.
+
+Local aprovado para o mapa legado:
+
+- artefato explícito do backfill oficial / reconciliação (`legacy_occurrence_map`);
+- guarda `occurrence_id`, `firestore_event_id`, `live_lesson_id`, `legacy_register_aula_id` e `match_method`;
+- não substitui a ocorrência atual; serve só para costurar o legado com rastreabilidade.
 
 ### 5.3 Ponte de legado aprovada
 
@@ -255,6 +265,7 @@ Saída mínima:
   - órfãos
   - ambiguidades
 - validar em preview/staging com casos reais (Claudiane, Naira, Renata, etc.)
+- registrar no plano que `scripts/backfill-live-lessons.js` precisa virar `occurrence_id`-aware ou ser aposentado quando o backfill oficial entrar
 - rollback: desfazer apenas o backfill da tabela de mapeamento, sem tocar agenda origem
 
 ### Item 3 — leitura unificada no painel de presença
@@ -268,6 +279,33 @@ Saída mínima:
 - endpoint/job read-only com órfãos, faltantes e ambiguidades
 - publicar saída para revisão humana
 - rollback: remoção do job/endpoint sem impacto transacional
+
+### Item 6 — auditoria do pseudo-outbox (`pedagogico_pending_writes`)
+
+- explicar a duplicação de pendings por retry/tentativa repetida;
+- agrupar pendings sem register por aula lógica (`student`, `teacher`, `local_date`, `start`, `end`);
+- decidir entre:
+  - promover a coleção a outbox real, com estado confiável + consumidor; ou
+  - aposentar a coleção após estabilizar a escrita primária no Supabase;
+- não usar a coleção atual como backlog operacional até essa decisão acontecer.
+
+### Validação sacrificial de domingo
+
+1. criar aula teste e confirmar o mesmo `occurrence_id` nas 3 camadas;
+2. alterar o horário recorrente e confirmar preservação do `occurrence_id`;
+3. confirmar que nenhuma ocorrência passada foi tocada;
+4. confirmar que slot removido virou cancelamento lógico, sem delete físico;
+5. rodar no Supabase:
+
+```sql
+select occurrence_id, count(*)
+from n8n_aulas_pedagogicas_space
+where occurrence_id is not null
+group by occurrence_id
+having count(*) > 1;
+```
+
+Resultado esperado: vazio. O mirror deve atualizar a linha existente, nunca criar uma segunda live lesson para o mesmo `occurrence_id`.
 
 ## 11. Fase 3(b) — roadmap incremental (strangler fig)
 

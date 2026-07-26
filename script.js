@@ -28869,28 +28869,6 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
           const user = await waitForFirebaseAuthReady(firebase, 5000);
           if (!user) throw new Error("not_authenticated");
 
-          if (isEdit && existingEventIds.length) {
-            await fetchWithAuth(
-              `/api/schedule-events?id=${encodeURIComponent(existingEventIds[0])}&mode=future&effectiveFrom=${encodeURIComponent(startDate)}`,
-              { method: "DELETE" }
-            ).then(async (res) => {
-              if (!res.ok) {
-                const data = await res.json().catch(() => null);
-                if (res.status === 404 || String(data?.error || "").trim() === "not_found") {
-                  console.warn("[admin] controle-pedagogico future recurrence delete skipped: seed event not found", {
-                    classId,
-                    eventId: existingEventIds[0],
-                    effectiveFrom: startDate,
-                    status: res.status,
-                    error: data?.error || "",
-                  });
-                  return;
-                }
-                throw buildScheduleApiError("recurrence_delete_failed", data, res.status);
-              }
-            });
-          }
-
           const scheduleDaysPayload = activeSchedule
             .map((day) => ({
               weekday:
@@ -28915,6 +28893,7 @@ const openAdminPedClassModal = ({ mode = "create", classRow = null, prefill = nu
             endMin: classEndMin,
             recorrente: true,
             grupoRecorrenciaId: linkedGroupId,
+            effectiveFrom: recurrenceMaterializationStartDate,
             repeat: { enabled: true, type: "weekly_custom", days: scheduleDaysPayload },
           };
           const apiRes = await fetchWithAuth("/api/schedule-events", {

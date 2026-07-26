@@ -84,6 +84,7 @@ const buildLessonRegisterRecord = ({ lesson, session, payload, now }) => {
     String(payload?.motivo_atencao || payload?.motivo_remarcacao || payload?.motivo_falta || "").trim() || null;
   return {
     aula_id: toNullableText(lesson.id),
+    occurrence_id: toNullableText(lesson.occurrence_id || lesson.occurrenceId),
     firestore_doc_id: toNullableText(lesson.firestore_doc_id || lesson.aluno_id),
     onboarding_id: toNullableText(payload?.onboarding_id || lesson.onboarding_id),
     aluno_id: toNullableText(lesson.aluno_id),
@@ -286,6 +287,7 @@ const normalizeLesson = (row) => {
   const status = String(row.status_aula || row.status || "agendada").trim().toLowerCase();
   return {
     id,
+    occurrence_id: row.occurrence_id == null ? "" : String(row.occurrence_id),
     firestore_doc_id: row.firestore_doc_id == null ? "" : String(row.firestore_doc_id),
     onboarding_id: row.onboarding_id == null ? "" : String(row.onboarding_id),
     aluno_id: row.aluno_id == null ? "" : String(row.aluno_id),

@@ -46,6 +46,13 @@ const buildId = (prefix) => {
   return `${prefix}_${Date.now()}_${rand}`;
 };
 
+const resolveOccurrenceId = (value) => {
+  const raw = String(value || "").trim();
+  return raw || "";
+};
+
+const buildOccurrenceId = () => buildId("occ");
+
 const getUserNameById = async ({ idToken, uid }) => {
   const safeUid = String(uid || "").trim();
   if (!safeUid) return null;
@@ -125,9 +132,11 @@ const decodeAulaDoc = (doc) => {
   const description = typeof fields.description === "string" ? fields.description : "";
   const guests = Array.isArray(fields.guests) ? fields.guests.filter((g) => typeof g === "string") : [];
   const documents = Array.isArray(fields.documents) ? fields.documents.filter((d) => d && typeof d === "object") : [];
+  const occurrenceId = typeof fields.occurrenceId === "string" ? fields.occurrenceId.trim() : "";
 
   return {
     id,
+    occurrenceId: occurrenceId || null,
     professorId,
     alunoId,
     dateKey,
@@ -466,6 +475,7 @@ module.exports = async (req, res) => {
     const data = occStartMs ? new Date(occStartMs) : new Date(startMs);
 
     return {
+      occurrenceId: resolveOccurrenceId(body?.occurrenceId) || buildOccurrenceId(),
       alunoId: alunoId || null,
       professorId,
       alunoNome: alunoNome || null,
@@ -574,6 +584,10 @@ module.exports = async (req, res) => {
     patchData.recorrente = typeof existing.recorrente === "boolean" ? existing.recorrente : patchData.recorrente;
     patchData.grupoRecorrenciaId =
       typeof existing.grupoRecorrenciaId === "string" ? existing.grupoRecorrenciaId : patchData.grupoRecorrenciaId;
+    patchData.occurrenceId =
+      typeof existing.occurrenceId === "string" && existing.occurrenceId.trim()
+        ? existing.occurrenceId.trim()
+        : patchData.occurrenceId;
     patchData.criadoEm = existing.criadoEm instanceof Date ? existing.criadoEm : patchData.criadoEm;
     patchData.criadoPor = existingCriadoPor || patchData.criadoPor;
     patchData.atualizadoEm = new Date();
