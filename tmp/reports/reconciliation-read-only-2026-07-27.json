@@ -1,0 +1,477 @@
+{
+  "generatedAt": "2026-07-27T18:01:10.836Z",
+  "mode": "read-only",
+  "interpretation": {
+    "orphan_register": "register sem occurrence_id resolvível ou sem ocorrência/live correspondente",
+    "orphan_lesson": "live lesson estrutural sem occurrence_id/match canônico; esta é a categoria que absorve o backlog dos 266 unmatchedLiveLessons",
+    "missing_register": "ocorrência passada em Firestore já carimbada com occurrence_id e ainda sem register",
+    "ambiguous_match": "conflito estrutural de casamento; baseline canônica vem do relatório oficial de eventCollisions do backfill"
+  },
+  "sourceTotals": {
+    "firestoreEvents": 5883,
+    "liveLessons": 6341,
+    "registers": 94,
+    "legacyMapRows": 63
+  },
+  "counts": {
+    "orphan_register": 6,
+    "orphan_lesson": 647,
+    "missing_register": 130,
+    "ambiguous_match_register_level": 2,
+    "ambiguous_match_structural_event_collisions": 185,
+    "manual_review_total_union": 968
+  },
+  "knownBacklogCheck": {
+    "joaoLuizOrphanPresent": false,
+    "unmatchedLiveLessonsExpected266": 647,
+    "eventCollisionsExpected185": 185
+  },
+  "samples": {
+    "orphan_register": [
+      {
+        "id": "44",
+        "occurrenceId": "",
+        "aulaId": "5014",
+        "alunoId": "uoP6sLaYakSPPgn1Y8z9JEwTqeE2",
+        "alunoNome": "Renata França",
+        "professorId": "YyI5BNIrPEcVchnx1TdlRVwiiu43",
+        "professorNome": "Rodrigo Batista",
+        "dateKey": "2026-07-24",
+        "startTime": "00:30",
+        "endTime": "01:00",
+        "status": "remarcada"
+      },
+      {
+        "id": "49",
+        "occurrenceId": "",
+        "aulaId": "5518",
+        "alunoId": "ZbFf9TM75GNE4ilEcQepXCNqHpk2",
+        "alunoNome": "Naira",
+        "professorId": "4OqhnMaieJe1dL7yxKlwsPaYRjS2",
+        "professorNome": "Maria Clara Maciel",
+        "dateKey": "2026-07-23",
+        "startTime": "23:30",
+        "endTime": "00:00",
+        "status": "falta"
+      },
+      {
+        "id": "50",
+        "occurrenceId": "",
+        "aulaId": "3994",
+        "alunoId": "c9tnS7Ly3yMKTKQ3jbzSWQNWxn23",
+        "alunoNome": "Claudiane",
+        "professorId": "4OqhnMaieJe1dL7yxKlwsPaYRjS2",
+        "professorNome": "Maria Clara Maciel",
+        "dateKey": "2026-07-24",
+        "startTime": "00:00",
+        "endTime": "00:30",
+        "status": "realizada"
+      },
+      {
+        "id": "51",
+        "occurrenceId": "",
+        "aulaId": "5578",
+        "alunoId": "ZbFf9TM75GNE4ilEcQepXCNqHpk2",
+        "alunoNome": "Naira",
+        "professorId": "4OqhnMaieJe1dL7yxKlwsPaYRjS2",
+        "professorNome": "Maria Clara Maciel",
+        "dateKey": "2026-07-23",
+        "startTime": "23:30",
+        "endTime": "00:00",
+        "status": "falta"
+      },
+      {
+        "id": "60",
+        "occurrenceId": "",
+        "aulaId": "5530",
+        "alunoId": "ZbFf9TM75GNE4ilEcQepXCNqHpk2",
+        "alunoNome": "Naira",
+        "professorId": "4OqhnMaieJe1dL7yxKlwsPaYRjS2",
+        "professorNome": "Maria Clara Maciel",
+        "dateKey": "2026-07-24",
+        "startTime": "23:30",
+        "endTime": "00:00",
+        "status": "falta"
+      },
+      {
+        "id": "61",
+        "occurrenceId": "",
+        "aulaId": "4006",
+        "alunoId": "c9tnS7Ly3yMKTKQ3jbzSWQNWxn23",
+        "alunoNome": "Claudiane",
+        "professorId": "4OqhnMaieJe1dL7yxKlwsPaYRjS2",
+        "professorNome": "Maria Clara Maciel",
+        "dateKey": "2026-07-25",
+        "startTime": "00:00",
+        "endTime": "00:30",
+        "status": "realizada"
+      }
+    ],
+    "orphan_lesson": [
+      {
+        "liveLessonId": "902",
+        "alunoNome": "Ana Paula",
+        "professorNome": "Matheus Dadvidson",
+        "dateKey": "2026-08-24",
+        "startTime": "10:00",
+        "endTime": "10:30",
+        "origem": "plataforma_backfill"
+      },
+      {
+        "liveLessonId": "903",
+        "alunoNome": "Claudiane",
+        "professorNome": "Maria Clara Maciel",
+        "dateKey": "2026-08-11",
+        "startTime": "00:00",
+        "endTime": "00:30",
+        "origem": "plataforma_backfill"
+      },
+      {
+        "liveLessonId": "904",
+        "alunoNome": "Claudiane",
+        "professorNome": "Maria Clara Maciel",
+        "dateKey": "2026-09-08",
+        "startTime": "00:00",
+        "endTime": "00:30",
+        "origem": "plataforma_backfill"
+      },
+      {
+        "liveLessonId": "906",
+        "alunoNome": "Ana Paula",
+        "professorNome": "Matheus Dadvidson",
+        "dateKey": "2026-08-06",
+        "startTime": "10:00",
+        "endTime": "10:30",
+        "origem": "plataforma_backfill"
+      },
+      {
+        "liveLessonId": "907",
+        "alunoNome": "Ana Paula",
+        "professorNome": "Matheus Dadvidson",
+        "dateKey": "2026-09-08",
+        "startTime": "10:00",
+        "endTime": "10:30",
+        "origem": "plataforma_backfill"
+      },
+      {
+        "liveLessonId": "908",
+        "alunoNome": "Ana Paula",
+        "professorNome": "Matheus Dadvidson",
+        "dateKey": "2026-07-27",
+        "startTime": "10:00",
+        "endTime": "10:30",
+        "origem": "plataforma_backfill"
+      },
+      {
+        "liveLessonId": "909",
+        "alunoNome": "Ana Paula",
+        "professorNome": "Matheus Dadvidson",
+        "dateKey": "2026-08-18",
+        "startTime": "10:00",
+        "endTime": "10:30",
+        "origem": "plataforma_backfill"
+      },
+      {
+        "liveLessonId": "911",
+        "alunoNome": "Ana Paula",
+        "professorNome": "Matheus Dadvidson",
+        "dateKey": "2026-08-13",
+        "startTime": "10:00",
+        "endTime": "10:30",
+        "origem": "plataforma_backfill"
+      },
+      {
+        "liveLessonId": "912",
+        "alunoNome": "Ana Paula",
+        "professorNome": "Matheus Dadvidson",
+        "dateKey": "2026-10-05",
+        "startTime": "10:00",
+        "endTime": "10:30",
+        "origem": "plataforma_backfill"
+      },
+      {
+        "liveLessonId": "913",
+        "alunoNome": "Ana Paula",
+        "professorNome": "Matheus Dadvidson",
+        "dateKey": "2026-07-23",
+        "startTime": "10:00",
+        "endTime": "10:30",
+        "origem": "plataforma_backfill"
+      }
+    ],
+    "missing_register": [
+      {
+        "occurrenceId": "occ_1785124909532_8fb9eb79a86d",
+        "firestoreEventId": "aula_1784066097316_52c53d3e578a",
+        "liveLessonId": "224",
+        "alunoNome": "Alcione M.",
+        "professorNome": "Cássio",
+        "dateKey": "2026-07-23",
+        "startTime": "21:00",
+        "endTime": "22:00"
+      },
+      {
+        "occurrenceId": "occ_1785124909532_643a83418033",
+        "firestoreEventId": "aula_1784066618461_229f88721d42",
+        "liveLessonId": "303",
+        "alunoNome": "Alexandre Silva",
+        "professorNome": "Eduardo de Andrade",
+        "dateKey": "2026-07-23",
+        "startTime": "23:00",
+        "endTime": "23:30"
+      },
+      {
+        "occurrenceId": "occ_1785124909532_5e77b1d47b49",
+        "firestoreEventId": "aula_1784066620465_bc3eeb91c1b5",
+        "liveLessonId": "341",
+        "alunoNome": "Alexandre Silva",
+        "professorNome": "Eduardo de Andrade",
+        "dateKey": "2026-07-24",
+        "startTime": "23:00",
+        "endTime": "23:30"
+      },
+      {
+        "occurrenceId": "occ_1785124909532_b464116fba55",
+        "firestoreEventId": "aula_1784066731201_c28942b1ee71",
+        "liveLessonId": "307",
+        "alunoNome": "Ana Flávia",
+        "professorNome": "Matheus Dadvidson",
+        "dateKey": "2026-07-27",
+        "startTime": "10:00",
+        "endTime": "10:30"
+      },
+      {
+        "occurrenceId": "occ_1785124909532_2aaad27f6713",
+        "firestoreEventId": "aula_1784066741298_037101eb3cea",
+        "liveLessonId": "366",
+        "alunoNome": "Ana Flávia",
+        "professorNome": "Matheus Dadvidson",
+        "dateKey": "2026-07-23",
+        "startTime": "10:00",
+        "endTime": "10:30"
+      },
+      {
+        "occurrenceId": "occ_1785124909532_698052ca0ee6",
+        "firestoreEventId": "aula_1784066743365_b6a4fa8aec7c",
+        "liveLessonId": "390",
+        "alunoNome": "Ana Flávia",
+        "professorNome": "Matheus Dadvidson",
+        "dateKey": "2026-07-24",
+        "startTime": "16:30",
+        "endTime": "17:00"
+      },
+      {
+        "occurrenceId": "occ_1785124909532_fdfc75d6dcaf",
+        "firestoreEventId": "aula_1784078593302_da40b73facb0",
+        "liveLessonId": "618",
+        "alunoNome": "Célio A.",
+        "professorNome": "Matheus Dadvidson",
+        "dateKey": "2026-07-23",
+        "startTime": "22:00",
+        "endTime": "22:30"
+      },
+      {
+        "occurrenceId": "occ_1785124909532_9a7e21a4acf9",
+        "firestoreEventId": "aula_1784078595571_d3277c03c3d8",
+        "liveLessonId": "622",
+        "alunoNome": "Célio A.",
+        "professorNome": "Matheus Dadvidson",
+        "dateKey": "2026-07-24",
+        "startTime": "22:00",
+        "endTime": "22:30"
+      },
+      {
+        "occurrenceId": "occ_1785124909532_c28bea313027",
+        "firestoreEventId": "aula_1784225309233_f66bcef1df93",
+        "liveLessonId": "732",
+        "alunoNome": "Anny",
+        "professorNome": "Diego",
+        "dateKey": "2026-07-27",
+        "startTime": "11:00",
+        "endTime": "11:30"
+      },
+      {
+        "occurrenceId": "occ_1785124909533_0279411e735a",
+        "firestoreEventId": "aula_1784225318557_f489b629a3dc",
+        "liveLessonId": "796",
+        "alunoNome": "Anny",
+        "professorNome": "Diego",
+        "dateKey": "2026-07-24",
+        "startTime": "11:00",
+        "endTime": "11:30"
+      },
+      {
+        "occurrenceId": "occ_1785124909532_1bd09d505739",
+        "firestoreEventId": "aula_1784226814140_67c9b0ce4c0d",
+        "liveLessonId": "771",
+        "alunoNome": "Chris D.",
+        "professorNome": "Matheus Dadvidson",
+        "dateKey": "2026-07-27",
+        "startTime": "08:00",
+        "endTime": "08:30"
+      },
+      {
+        "occurrenceId": "occ_1785124909533_4e847b53cad1",
+        "firestoreEventId": "aula_1784226821972_ee70a9b65b3f",
+        "liveLessonId": "809",
+        "alunoNome": "Chris D.",
+        "professorNome": "Matheus Dadvidson",
+        "dateKey": "2026-07-23",
+        "startTime": "08:00",
+        "endTime": "08:30"
+      },
+      {
+        "occurrenceId": "occ_1785124909533_d20e157ba8d0",
+        "firestoreEventId": "aula_1784226824199_be605c5d8d81",
+        "liveLessonId": "847",
+        "alunoNome": "Chris D.",
+        "professorNome": "Matheus Dadvidson",
+        "dateKey": "2026-07-24",
+        "startTime": "08:00",
+        "endTime": "08:30"
+      },
+      {
+        "occurrenceId": "occ_1785124909533_7c661775b3ad",
+        "firestoreEventId": "aula_1784234397871_2976d68ebdec",
+        "liveLessonId": "861",
+        "alunoNome": "Analece",
+        "professorNome": "Matheus Dadvidson",
+        "dateKey": "2026-07-23",
+        "startTime": "20:00",
+        "endTime": "20:30"
+      },
+      {
+        "occurrenceId": "occ_1785124909533_ea748ab594fa",
+        "firestoreEventId": "aula_1784235376979_031250937769",
+        "liveLessonId": "1046",
+        "alunoNome": "Daiane Moura",
+        "professorNome": "Matheus Dadvidson",
+        "dateKey": "2026-07-27",
+        "startTime": "09:00",
+        "endTime": "09:30"
+      }
+    ],
+    "ambiguous_match_register_level": [
+      {
+        "occurrenceId": "occ_1785124909539_6fd279287008",
+        "registerIds": [
+          "52",
+          "53"
+        ],
+        "alunoNome": "Claudiane",
+        "professorNome": "Maria Clara Maciel",
+        "dateKey": "2026-07-24",
+        "startTime": "01:00"
+      },
+      {
+        "occurrenceId": "occ_1785124909532_e869449fe3e9",
+        "registerIds": [
+          "85",
+          "86"
+        ],
+        "alunoNome": "Adilson Machado",
+        "professorNome": "Adriano Lippi",
+        "dateKey": "2026-07-24",
+        "startTime": "00:30"
+      }
+    ],
+    "ambiguous_match_structural": [
+      {
+        "reason": "multiple_live_lessons_same_event",
+        "eventId": "aula_1784753158656_153a691b12cb",
+        "liveLessonIds": [
+          "1003",
+          "6293"
+        ],
+        "methodSet": [
+          "normalized_tuple",
+          "video_room_suffix_plus_tuple"
+        ]
+      },
+      {
+        "reason": "multiple_live_lessons_same_event",
+        "eventId": "aula_1784753158970_54008c3574fe",
+        "liveLessonIds": [
+          "1007",
+          "6295"
+        ],
+        "methodSet": [
+          "normalized_tuple",
+          "video_room_suffix_plus_tuple"
+        ]
+      },
+      {
+        "reason": "multiple_live_lessons_same_event",
+        "eventId": "aula_1784753158878_8f9448ef6258",
+        "liveLessonIds": [
+          "1009",
+          "6294"
+        ],
+        "methodSet": [
+          "normalized_tuple",
+          "video_room_suffix_plus_tuple"
+        ]
+      },
+      {
+        "reason": "multiple_live_lessons_same_event",
+        "eventId": "aula_1784753157681_09904f7914bb",
+        "liveLessonIds": [
+          "1010",
+          "6287"
+        ],
+        "methodSet": [
+          "normalized_tuple",
+          "video_room_suffix_plus_tuple"
+        ]
+      },
+      {
+        "reason": "multiple_live_lessons_same_event",
+        "eventId": "aula_1784753157907_b170b5c82f7c",
+        "liveLessonIds": [
+          "1011",
+          "6288"
+        ],
+        "methodSet": [
+          "normalized_tuple",
+          "video_room_suffix_plus_tuple"
+        ]
+      },
+      {
+        "reason": "multiple_live_lessons_same_event",
+        "eventId": "aula_1784753160219_6086ac05230b",
+        "liveLessonIds": [
+          "1014",
+          "6303"
+        ],
+        "methodSet": [
+          "normalized_tuple",
+          "video_room_suffix_plus_tuple"
+        ]
+      },
+      {
+        "reason": "multiple_live_lessons_same_event",
+        "eventId": "aula_1784753158542_e7f9e0c60473",
+        "liveLessonIds": [
+          "1015",
+          "6292"
+        ],
+        "methodSet": [
+          "normalized_tuple",
+          "video_room_suffix_plus_tuple"
+        ]
+      },
+      {
+        "reason": "multiple_live_lessons_same_event",
+        "eventId": "aula_1784753158141_15ed0d38f7de",
+        "liveLessonIds": [
+          "1016",
+          "6289"
+        ],
+        "methodSet": [
+          "normalized_tuple",
+          "video_room_suffix_plus_tuple"
+        ]
+      }
+    ]
+  }
+}
