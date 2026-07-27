@@ -1,0 +1,313 @@
+{
+  "generatedAt": "2026-07-27T03:57:32.310Z",
+  "totals": {
+    "firestoreEvents": 5837,
+    "liveLessons": 6295
+  },
+  "backfillReady": {
+    "matchedPairs": 5648,
+    "firestoreEventsToStamp": 5648,
+    "liveLessonsToStamp": 5648,
+    "matchedByVideoRoomSuffixPlusTuple": 5646,
+    "matchedByNormalizedTuple": 2
+  },
+  "notAutoStampable": {
+    "unmatchedLiveLessons": 266,
+    "ambiguousLiveLessons": 0,
+    "eventCollisions": 185,
+    "unmatchedFirestoreEvents": 189
+  },
+  "samples": {
+    "matchedBySuffix": [
+      {
+        "liveLessonId": "2",
+        "eventId": "aula_1784064646344_1fe7f3438b66",
+        "alunoNome": "Adão Vieira",
+        "professorNome": "Maria Clara Maciel",
+        "dateKey": "2026-08-24",
+        "startTime": "20:00"
+      },
+      {
+        "liveLessonId": "3",
+        "eventId": "aula_1784064651605_2cbcf1945016",
+        "alunoNome": "Adão Vieira",
+        "professorNome": "Maria Clara Maciel",
+        "dateKey": "2026-09-02",
+        "startTime": "20:00"
+      },
+      {
+        "liveLessonId": "4",
+        "eventId": "aula_1784064648794_827c9f030a5e",
+        "alunoNome": "Adão Vieira",
+        "professorNome": "Maria Clara Maciel",
+        "dateKey": "2026-08-11",
+        "startTime": "20:00"
+      },
+      {
+        "liveLessonId": "6",
+        "eventId": "aula_1784064648631_65d12f821c71",
+        "alunoNome": "Adão Vieira",
+        "professorNome": "Maria Clara Maciel",
+        "dateKey": "2026-08-04",
+        "startTime": "20:00"
+      },
+      {
+        "liveLessonId": "7",
+        "eventId": "aula_1784064653798_e08e2a32b5ed",
+        "alunoNome": "Adão Vieira",
+        "professorNome": "Maria Clara Maciel",
+        "dateKey": "2026-09-10",
+        "startTime": "20:00"
+      }
+    ],
+    "matchedByTuple": [
+      {
+        "liveLessonId": "664",
+        "eventId": "aula_1784957325423_64f9f8180c3a",
+        "alunoNome": "André Luiz",
+        "professorNome": "Rodrigo Batista",
+        "dateKey": "2026-07-28",
+        "startTime": "21:30"
+      },
+      {
+        "liveLessonId": "665",
+        "eventId": "aula_1784957325762_afc682d5ab8d",
+        "alunoNome": "André Luiz",
+        "professorNome": "Rodrigo Batista",
+        "dateKey": "2026-07-30",
+        "startTime": "21:30"
+      }
+    ],
+    "unmatchedLiveLessons": [
+      {
+        "liveLessonId": "902",
+        "alunoNome": "Ana Paula",
+        "professorNome": "Matheus Dadvidson",
+        "dateKey": "2026-08-24",
+        "startTime": "07:00",
+        "origem": "plataforma_backfill"
+      },
+      {
+        "liveLessonId": "903",
+        "alunoNome": "Claudiane",
+        "professorNome": "Maria Clara Maciel",
+        "dateKey": "2026-08-10",
+        "startTime": "21:00",
+        "origem": "plataforma_backfill"
+      },
+      {
+        "liveLessonId": "904",
+        "alunoNome": "Claudiane",
+        "professorNome": "Maria Clara Maciel",
+        "dateKey": "2026-09-07",
+        "startTime": "21:00",
+        "origem": "plataforma_backfill"
+      },
+      {
+        "liveLessonId": "906",
+        "alunoNome": "Ana Paula",
+        "professorNome": "Matheus Dadvidson",
+        "dateKey": "2026-08-06",
+        "startTime": "07:00",
+        "origem": "plataforma_backfill"
+      },
+      {
+        "liveLessonId": "907",
+        "alunoNome": "Ana Paula",
+        "professorNome": "Matheus Dadvidson",
+        "dateKey": "2026-09-08",
+        "startTime": "07:00",
+        "origem": "plataforma_backfill"
+      },
+      {
+        "liveLessonId": "908",
+        "alunoNome": "Ana Paula",
+        "professorNome": "Matheus Dadvidson",
+        "dateKey": "2026-07-27",
+        "startTime": "07:00",
+        "origem": "plataforma_backfill"
+      },
+      {
+        "liveLessonId": "909",
+        "alunoNome": "Ana Paula",
+        "professorNome": "Matheus Dadvidson",
+        "dateKey": "2026-08-18",
+        "startTime": "07:00",
+        "origem": "plataforma_backfill"
+      },
+      {
+        "liveLessonId": "911",
+        "alunoNome": "Ana Paula",
+        "professorNome": "Matheus Dadvidson",
+        "dateKey": "2026-08-13",
+        "startTime": "07:00",
+        "origem": "plataforma_backfill"
+      }
+    ],
+    "ambiguousLiveLessons": [],
+    "eventCollisions": [
+      {
+        "reason": "multiple_live_lessons_same_event",
+        "eventId": "aula_1784753158656_153a691b12cb",
+        "liveLessonIds": [
+          "1003",
+          "6293"
+        ],
+        "methodSet": [
+          "normalized_tuple",
+          "video_room_suffix_plus_tuple"
+        ]
+      },
+      {
+        "reason": "multiple_live_lessons_same_event",
+        "eventId": "aula_1784753158970_54008c3574fe",
+        "liveLessonIds": [
+          "1007",
+          "6295"
+        ],
+        "methodSet": [
+          "normalized_tuple",
+          "video_room_suffix_plus_tuple"
+        ]
+      },
+      {
+        "reason": "multiple_live_lessons_same_event",
+        "eventId": "aula_1784753158878_8f9448ef6258",
+        "liveLessonIds": [
+          "1009",
+          "6294"
+        ],
+        "methodSet": [
+          "normalized_tuple",
+          "video_room_suffix_plus_tuple"
+        ]
+      },
+      {
+        "reason": "multiple_live_lessons_same_event",
+        "eventId": "aula_1784753157681_09904f7914bb",
+        "liveLessonIds": [
+          "1010",
+          "6287"
+        ],
+        "methodSet": [
+          "normalized_tuple",
+          "video_room_suffix_plus_tuple"
+        ]
+      },
+      {
+        "reason": "multiple_live_lessons_same_event",
+        "eventId": "aula_1784753157907_b170b5c82f7c",
+        "liveLessonIds": [
+          "1011",
+          "6288"
+        ],
+        "methodSet": [
+          "normalized_tuple",
+          "video_room_suffix_plus_tuple"
+        ]
+      },
+      {
+        "reason": "multiple_live_lessons_same_event",
+        "eventId": "aula_1784753160219_6086ac05230b",
+        "liveLessonIds": [
+          "1014",
+          "6303"
+        ],
+        "methodSet": [
+          "normalized_tuple",
+          "video_room_suffix_plus_tuple"
+        ]
+      },
+      {
+        "reason": "multiple_live_lessons_same_event",
+        "eventId": "aula_1784753158542_e7f9e0c60473",
+        "liveLessonIds": [
+          "1015",
+          "6292"
+        ],
+        "methodSet": [
+          "normalized_tuple",
+          "video_room_suffix_plus_tuple"
+        ]
+      },
+      {
+        "reason": "multiple_live_lessons_same_event",
+        "eventId": "aula_1784753158141_15ed0d38f7de",
+        "liveLessonIds": [
+          "1016",
+          "6289"
+        ],
+        "methodSet": [
+          "normalized_tuple",
+          "video_room_suffix_plus_tuple"
+        ]
+      }
+    ],
+    "unmatchedFirestoreEvents": [
+      {
+        "eventId": "aula_1784137758137_eef6b346cc4f",
+        "alunoNome": "André Luiz",
+        "professorNome": "Rodrigo Batista",
+        "dateKey": "2026-07-23",
+        "startTime": "21:00",
+        "liveLessonId": "664"
+      },
+      {
+        "eventId": "aula_1784137760165_e30c692ab2b8",
+        "alunoNome": "André Luiz",
+        "professorNome": "Rodrigo Batista",
+        "dateKey": "2026-07-24",
+        "startTime": "21:00",
+        "liveLessonId": "665"
+      },
+      {
+        "eventId": "aula_1784315652835_eb5f6778d5fa",
+        "alunoNome": "Angela",
+        "professorNome": "Matheus Dadvidson",
+        "dateKey": "2026-07-29",
+        "startTime": "17:30",
+        "liveLessonId": "3011"
+      },
+      {
+        "eventId": "aula_1784315652949_f5c8048fd418",
+        "alunoNome": "Angela",
+        "professorNome": "Matheus Dadvidson",
+        "dateKey": "2026-08-05",
+        "startTime": "17:30",
+        "liveLessonId": "3012"
+      },
+      {
+        "eventId": "aula_1784315653098_59977d9a99d7",
+        "alunoNome": "Angela",
+        "professorNome": "Matheus Dadvidson",
+        "dateKey": "2026-08-12",
+        "startTime": "17:30",
+        "liveLessonId": "3013"
+      },
+      {
+        "eventId": "aula_1784315653220_26858ba920c7",
+        "alunoNome": "Angela",
+        "professorNome": "Matheus Dadvidson",
+        "dateKey": "2026-08-19",
+        "startTime": "17:30",
+        "liveLessonId": "3014"
+      },
+      {
+        "eventId": "aula_1784315653338_61d98709a3ac",
+        "alunoNome": "Angela",
+        "professorNome": "Matheus Dadvidson",
+        "dateKey": "2026-08-26",
+        "startTime": "17:30",
+        "liveLessonId": "3015"
+      },
+      {
+        "eventId": "aula_1784315653449_81cae9187f86",
+        "alunoNome": "Angela",
+        "professorNome": "Matheus Dadvidson",
+        "dateKey": "2026-09-02",
+        "startTime": "17:30",
+        "liveLessonId": "3016"
+      }
+    ]
+  }
+}
