@@ -1577,6 +1577,7 @@ module.exports = async (req, res) => {
           const adminTitle = evt.type === "lesson" ? `${title}${evt.professorNome ? ` · ${evt.professorNome}` : ""}` : title;
           return {
             id: evt.id,
+            occurrenceId: evt.occurrenceId || null,
             type: evt.type,
             dateKey: evt.dateKey,
             startMin: evt.startMin,

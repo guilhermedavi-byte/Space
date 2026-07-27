@@ -7676,6 +7676,7 @@ const normalizeLiveLessonForUi = (lesson) => {
   const reqStatus = req && typeof req.status === "string" ? req.status : "";
   return {
     id,
+    occurrenceId: String(lesson.occurrence_id || lesson.occurrenceId || "").trim(),
     dateKey,
     startMin,
     endMin: safeEndMin,
@@ -20462,6 +20463,7 @@ let adminPedagogicoState = {
   liveLessonFeedbacks: [],
   lessonLogs: [],
   scheduleEvents: [],
+  legacyOccurrenceMap: { rows: [], byEventId: new Map(), byLessonId: new Map() },
   groupsByClassId: new Map(),
   onboardingContents: [],
   onboardingContentsAll: [],
@@ -23006,13 +23008,20 @@ const buildAdminPedLessonRecordDataset = () => {
   const range = getAdminPedLessonRecordPeriodRange(filters.periodPreset, filters.customFrom, filters.customTo);
   const studentsById = adminPedagogicoState.studentsById instanceof Map ? adminPedagogicoState.studentsById : new Map();
   const teachersById = adminPedagogicoState.teachersById instanceof Map ? adminPedagogicoState.teachersById : new Map();
+  const legacyOccurrenceMap =
+    adminPedagogicoState.legacyOccurrenceMap && typeof adminPedagogicoState.legacyOccurrenceMap === "object"
+      ? adminPedagogicoState.legacyOccurrenceMap
+      : normalizeAdminPedLegacyOccurrenceMap([]);
   const normalizedEvents = normalizePedov2ScheduleEvents(adminPedagogicoState.scheduleEvents || []);
   const normalizedLessons = normalizePedov2LiveLessons(Array.isArray(adminPedagogicoState.pedagogicalOps?.lessons) ? adminPedagogicoState.pedagogicalOps.lessons : []);
-  const recordsByLessonId = normalizePedov2Records(Array.isArray(adminPedagogicoState.pedagogicalOps?.registers) ? adminPedagogicoState.pedagogicalOps.registers : []);
+  const recordsIndex = normalizePedov2Records(
+    Array.isArray(adminPedagogicoState.pedagogicalOps?.registers) ? adminPedagogicoState.pedagogicalOps.registers : [],
+    legacyOccurrenceMap
+  );
   const recordByEventId = buildPedov2EventRecordIndex({
     events: normalizedEvents,
-    liveLessons: normalizedLessons,
-    recordsByLessonId,
+    recordsByOccurrenceId: recordsIndex.byOccurrenceId,
+    legacyOccurrenceMap,
   });
   const fallbackClassRows =
     normalizedEvents.length > 0
@@ -23033,6 +23042,14 @@ const buildAdminPedLessonRecordDataset = () => {
       const teacher = professorId ? teachersById.get(professorId) : null;
       return {
         id: String(event.id || "").trim(),
+        occurrenceId: String(
+          event.occurrenceId ||
+            (legacyOccurrenceMap.byEventId instanceof Map
+              ? legacyOccurrenceMap.byEventId.get(String(event.id || "").trim())
+              : "") ||
+            ""
+        ).trim(),
+        liveLessonId: String(event.liveLessonId || "").trim(),
         alunoId,
         alunoNome: String(student?.nome || event.alunoNome || event.studentName || event.title || "Aluno").trim(),
         professorId,
@@ -23050,13 +23067,13 @@ const buildAdminPedLessonRecordDataset = () => {
   const nowMs = Date.now();
   const rows = baseRows.map((row) => {
     const mappedRecord = recordByEventId.get(String(row.id || "")) || null;
-    const liveLessonId = String(mappedRecord?.aulaId || "").trim();
     const mappedStatus = normalizePedagogicoStatus(String(mappedRecord?.status || mappedRecord?.statusAula || "").trim());
     const mappedLog =
       mappedRecord && mappedStatus
         ? {
-            id: String(mappedRecord.id || liveLessonId || row.id || "").trim(),
-            eventId: liveLessonId || String(row.id || "").trim(),
+            id: String(mappedRecord.id || row.occurrenceId || row.id || "").trim(),
+            eventId: String(row.id || "").trim(),
+            occurrenceId: String(row.occurrenceId || mappedRecord.occurrenceId || "").trim(),
             professorId: String(row.professorId || "").trim(),
             alunoId: String(row.alunoId || "").trim(),
             dateKey: String(row.dateKey || "").trim(),
@@ -23071,7 +23088,7 @@ const buildAdminPedLessonRecordDataset = () => {
             },
           }
         : null;
-    const log = logsByEventId.get(String(row.id || "")) || (liveLessonId ? logsByEventId.get(liveLessonId) || null : null) || mappedLog;
+    const log = mappedLog || logsByEventId.get(String(row.id || "")) || null;
     const normalizedStatus = log ? normalizePedagogicoStatus(log.statusAula) : "";
     let statusKey = "agendada";
     let statusLabel = "Agendada";
@@ -26866,11 +26883,13 @@ const normalizePedov2ScheduleEvents = (events) =>
       if (!(startDate instanceof Date) || Number.isNaN(startDate.getTime()) || !(endDate instanceof Date) || Number.isNaN(endDate.getTime())) return null;
       return {
         id,
+        occurrenceId: String(event.occurrenceId || event.occurrence_id || "").trim(),
         alunoId,
         professorId,
         dateKey,
         startMin,
         endMin,
+        liveLessonId: String(event.liveLessonId || "").trim(),
         title: String(event.title || "").trim(),
         type: String(event.type || "lesson").trim().toLowerCase(),
         startMs: startDate.getTime(),
@@ -26887,6 +26906,7 @@ const normalizePedov2LiveLessons = (lessons) =>
       if (!ui) return null;
       return {
         id: String(ui.id || "").trim(),
+        occurrenceId: String(ui.occurrenceId || "").trim(),
         alunoId: String(ui.alunoId || "").trim(),
         professorId: String(ui.professorId || "").trim(),
         dateKey: String(ui.dateKey || "").trim(),
@@ -26897,48 +26917,82 @@ const normalizePedov2LiveLessons = (lessons) =>
     })
     .filter(Boolean);
 
-const normalizePedov2Records = (records) => {
+const normalizeAdminPedLegacyOccurrenceMap = (rows) => {
+  const normalizedRows = Array.isArray(rows) ? rows.filter((row) => row && typeof row === "object") : [];
+  const byEventId = new Map();
   const byLessonId = new Map();
+  normalizedRows.forEach((row) => {
+    const occurrenceId = String(row.occurrence_id || row.occurrenceId || "").trim();
+    if (!occurrenceId) return;
+    const eventId = String(row.firestore_event_id || row.firestoreEventId || "").trim();
+    const lessonId = String(row.live_lesson_id || row.liveLessonId || row.legacy_register_aula_id || row.legacyRegisterAulaId || "").trim();
+    const legacyLessonId = String(row.legacy_register_aula_id || row.legacyRegisterAulaId || row.live_lesson_id || row.liveLessonId || "").trim();
+    if (eventId && !byEventId.has(eventId)) byEventId.set(eventId, occurrenceId);
+    if (legacyLessonId && !byLessonId.has(legacyLessonId)) byLessonId.set(legacyLessonId, occurrenceId);
+    if (lessonId && !byLessonId.has(lessonId)) byLessonId.set(lessonId, occurrenceId);
+  });
+  return { rows: normalizedRows, byEventId, byLessonId };
+};
+
+const fetchAdminPedLegacyOccurrenceMap = async () => {
+  const response = await fetchWithAuth("/api/pedagogico/legacy-occurrence-map", { method: "GET", cache: "no-store" });
+  if (!response.ok) throw new Error("legacy_occurrence_map_failed");
+  const payload = await response.json().catch(() => null);
+  const rows = Array.isArray(payload?.rows) ? payload.rows : [];
+  return normalizeAdminPedLegacyOccurrenceMap(rows);
+};
+
+const normalizePedov2Records = (records, legacyOccurrenceMap = null) => {
+  const byLessonId = new Map();
+  const byOccurrenceId = new Map();
   (Array.isArray(records) ? records : []).forEach((record) => {
     if (!record || typeof record !== "object") return;
     const lessonId = String(record.aula_id || "").trim();
-    if (!lessonId) return;
+    const legacyOccurrenceId =
+      legacyOccurrenceMap && legacyOccurrenceMap.byLessonId instanceof Map && lessonId
+        ? String(legacyOccurrenceMap.byLessonId.get(lessonId) || "").trim()
+        : "";
+    const occurrenceId = String(record.occurrence_id || record.occurrenceId || legacyOccurrenceId || "").trim();
+    if (!lessonId && !occurrenceId) return;
     const ts = parseFirestoreDateToMs(record.updated_at || record.updatedAt || record.created_at || record.createdAt);
-    const prev = byLessonId.get(lessonId);
-    if (prev && (prev.updatedMs || 0) > ts) return;
-    byLessonId.set(lessonId, {
+    const normalized = {
       id: String(record.id || "").trim(),
       aulaId: lessonId,
+      occurrenceId,
       status: String(record.status || "").trim().toLowerCase(),
       engajamento: Number.parseFloat(String(record.engajamento || "").replace(",", ".")) || 0,
       desempenho: Number.parseFloat(String(record.desempenho_aluno || "").replace(",", ".")) || 0,
       confianca: Number.parseFloat(String(record.confianca || "").replace(",", ".")) || 0,
       updatedMs: ts,
-    });
+    };
+    if (lessonId) {
+      const prev = byLessonId.get(lessonId);
+      if (!prev || (prev.updatedMs || 0) <= ts) byLessonId.set(lessonId, normalized);
+    }
+    if (occurrenceId) {
+      const prev = byOccurrenceId.get(occurrenceId);
+      if (!prev || (prev.updatedMs || 0) <= ts) byOccurrenceId.set(occurrenceId, normalized);
+    }
   });
-  return byLessonId;
+  return { byLessonId, byOccurrenceId };
 };
 
 const getPedov2EventCompositeKey = ({ alunoId, professorId, dateKey, startMin }) =>
   [String(alunoId || "").trim(), String(professorId || "").trim(), String(dateKey || "").trim(), String(Number(startMin) || 0)].join("|");
 
-const buildPedov2EventRecordIndex = ({ events, liveLessons, recordsByLessonId }) => {
-  const liveByComposite = new Map();
-  (Array.isArray(liveLessons) ? liveLessons : []).forEach((lesson) => {
-    const key = getPedov2EventCompositeKey(lesson);
-    if (key && !liveByComposite.has(key)) liveByComposite.set(key, lesson);
-  });
+const buildPedov2EventRecordIndex = ({ events, recordsByOccurrenceId, legacyOccurrenceMap }) => {
   const recordByEventId = new Map();
   (Array.isArray(events) ? events : []).forEach((event) => {
-    const exact = recordsByLessonId.get(String(event.id || ""));
-    if (exact) {
-      recordByEventId.set(String(event.id), exact);
-      return;
-    }
-    const live = liveByComposite.get(getPedov2EventCompositeKey(event));
-    if (!live) return;
-    const mapped = recordsByLessonId.get(String(live.id || ""));
-    if (mapped) recordByEventId.set(String(event.id), mapped);
+    const eventId = String(event?.id || "").trim();
+    if (!eventId) return;
+    const occurrenceId =
+      String(event?.occurrenceId || "").trim() ||
+      (legacyOccurrenceMap && legacyOccurrenceMap.byEventId instanceof Map
+        ? String(legacyOccurrenceMap.byEventId.get(eventId) || "").trim()
+        : "");
+    if (!occurrenceId) return;
+    const mapped = recordsByOccurrenceId instanceof Map ? recordsByOccurrenceId.get(occurrenceId) || null : null;
+    if (mapped) recordByEventId.set(eventId, mapped);
   });
   return recordByEventId;
 };
@@ -27396,8 +27450,12 @@ const computePedov2ViewModel = ({ events, liveLessons, records, onboardingRows, 
   model.meta.note = "Dados reais · atualização local";
   const normalizedEvents = normalizePedov2ScheduleEvents(events);
   const normalizedLessons = normalizePedov2LiveLessons(liveLessons);
-  const recordsByLessonId = normalizePedov2Records(records);
-  const recordByEventId = buildPedov2EventRecordIndex({ events: normalizedEvents, liveLessons: normalizedLessons, recordsByLessonId });
+  const recordsIndex = normalizePedov2Records(records);
+  const recordByEventId = buildPedov2EventRecordIndex({
+    events: normalizedEvents,
+    recordsByOccurrenceId: recordsIndex.byOccurrenceId,
+    legacyOccurrenceMap: null,
+  });
   const teachersById = buildAdminTeacherMap(teachers);
   const currentWeekKeys = new Set(getWeekDaysMonToSat(referenceDate).map((date) => createDateKey(date)));
   const weekLessons = normalizedEvents.filter((event) => currentWeekKeys.has(String(event.dateKey || "")));
@@ -27408,7 +27466,7 @@ const computePedov2ViewModel = ({ events, liveLessons, records, onboardingRows, 
   const previousRetentionMetrics = buildRetentionMetrics(addMonthsToMonthKey(currentRetentionMonth, -1), { students }, { withSeries: false });
   const churnDelta = Number(retentionMetrics.churnPct || 0) - Number(previousRetentionMetrics.churnPct || 0);
   const hasEventsSource = sourceStatus?.events !== "degraded" || normalizedEvents.length > 0;
-  const hasLiveSource = sourceStatus?.liveLessons !== "degraded" || normalizedLessons.length > 0 || recordsByLessonId.size > 0;
+  const hasLiveSource = sourceStatus?.liveLessons !== "degraded" || normalizedLessons.length > 0 || recordsIndex.byOccurrenceId.size > 0;
   const weekAbsences = hasLiveSource ? weekLessons.filter((event) => getPedov2PastStatus(recordByEventId.get(String(event.id || ""))) === "falta").length : 0;
   const currentRisk = hasEventsSource && hasLiveSource ? computePedov2RiskSnapshot({ students, teachersById, events: normalizedEvents, recordByEventId, referenceDate }) : { rows: [], factorCounts: {}, byLevel: { saudaveis: 0, atencao: 0, criticos: 0 } };
   const previousRisk =
@@ -28202,6 +28260,7 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
       liveLessons,
       scheduleEvents,
       pedagogicalOps,
+      legacyOccurrenceMap,
     ] = await Promise.all([
       loadFallback("teachers", fetchUserRowsFromFirestore("teacher"), []),
       loadFallback("students", fetchUserRowsFromFirestore("student"), []),
@@ -28225,6 +28284,7 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
           console.error("[admin-ped] pedagogical dashboard load failed", error);
           return { metrics: {} };
         }),
+      loadFallback("legacyOccurrenceMap", fetchAdminPedLegacyOccurrenceMap(), normalizeAdminPedLegacyOccurrenceMap([])),
     ]);
 
     const liveClasses = normalizeLiveLessonsAsAdminClasses(liveLessons);
@@ -28369,6 +28429,10 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
     adminPedagogicoState.liveLessonFeedbacks = Array.isArray(liveLessonFeedbacksData?.feedbacks) ? liveLessonFeedbacksData.feedbacks : [];
     adminPedagogicoState.lessonLogs = Array.isArray(lessonLogs) ? lessonLogs : [];
     adminPedagogicoState.scheduleEvents = Array.isArray(scheduleEvents) ? scheduleEvents : [];
+    adminPedagogicoState.legacyOccurrenceMap =
+      legacyOccurrenceMap && typeof legacyOccurrenceMap === "object"
+        ? legacyOccurrenceMap
+        : normalizeAdminPedLegacyOccurrenceMap([]);
     adminPedagogicoState.onboardingContentsAll = Array.isArray(onboardingContentsAll) ? onboardingContentsAll : [];
     adminPedagogicoState.onboardingContents = adminPedagogicoState.onboardingContentsAll.slice().sort((a, b) => (a.order || 0) - (b.order || 0));
     adminPedagogicoState.onboardingQuizzes = Array.isArray(onboardingQuizzes) ? onboardingQuizzes : [];
