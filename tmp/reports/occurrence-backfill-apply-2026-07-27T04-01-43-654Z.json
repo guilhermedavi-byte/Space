@@ -1,0 +1,86 @@
+{
+  "appliedAt": "2026-07-27T04:01:43.654Z",
+  "safePairs": 5648,
+  "firestoreStamped": 5648,
+  "supabaseStamped": 5648,
+  "recoveryOccurrenceIds": [
+    {
+      "eventId": "aula_1784324447808_00e7d244777e",
+      "occurrenceId": "occ_1785124909536_663ae8b71c83"
+    },
+    {
+      "eventId": "aula_1784225315985_f4c62fed0f92",
+      "occurrenceId": "occ_1785124909532_a834a44b7b8f"
+    },
+    {
+      "eventId": "aula_1784649020165_57713738b959",
+      "occurrenceId": "occ_1785124909538_77da4f1644b5"
+    },
+    {
+      "eventId": "aula_1784321793570_e9cdc47b4f20",
+      "occurrenceId": "occ_1785124909536_4e73f5e79229"
+    }
+  ],
+  "sample": [
+    {
+      "liveLessonId": "2",
+      "eventId": "aula_1784064646344_1fe7f3438b66",
+      "occurrenceId": "occ_1785124909530_576b18bae480",
+      "method": "video_room_suffix_plus_tuple"
+    },
+    {
+      "liveLessonId": "3",
+      "eventId": "aula_1784064651605_2cbcf1945016",
+      "occurrenceId": "occ_1785124909531_8f92b07d391a",
+      "method": "video_room_suffix_plus_tuple"
+    },
+    {
+      "liveLessonId": "4",
+      "eventId": "aula_1784064648794_827c9f030a5e",
+      "occurrenceId": "occ_1785124909531_3bdd79d29330",
+      "method": "video_room_suffix_plus_tuple"
+    },
+    {
+      "liveLessonId": "6",
+      "eventId": "aula_1784064648631_65d12f821c71",
+      "occurrenceId": "occ_1785124909531_e9af745be9a4",
+      "method": "video_room_suffix_plus_tuple"
+    },
+    {
+      "liveLessonId": "7",
+      "eventId": "aula_1784064653798_e08e2a32b5ed",
+      "occurrenceId": "occ_1785124909531_d19ae4057fe8",
+      "method": "video_room_suffix_plus_tuple"
+    },
+    {
+      "liveLessonId": "8",
+      "eventId": "aula_1784064645221_2701832cf76c",
+      "occurrenceId": "occ_1785124909531_daa7e6309d4d",
+      "method": "video_room_suffix_plus_tuple"
+    },
+    {
+      "liveLessonId": "9",
+      "eventId": "aula_1784064645853_7f02a5b86292",
+      "occurrenceId": "occ_1785124909531_8b1c20119fec",
+      "method": "video_room_suffix_plus_tuple"
+    },
+    {
+      "liveLessonId": "10",
+      "eventId": "aula_1784064645536_cee2caa079b2",
+      "occurrenceId": "occ_1785124909531_c938f690c339",
+      "method": "video_room_suffix_plus_tuple"
+    },
+    {
+      "liveLessonId": "12",
+      "eventId": "aula_1784064646513_f321d4495b8d",
+      "occurrenceId": "occ_1785124909531_d9f7b469582e",
+      "method": "video_room_suffix_plus_tuple"
+    },
+    {
+      "liveLessonId": "13",
+      "eventId": "aula_1784064647658_20c46c7d07b5",
+      "occurrenceId": "occ_1785124909531_54f9d2ef9841",
+      "method": "video_room_suffix_plus_tuple"
+    }
+  ]
+}
