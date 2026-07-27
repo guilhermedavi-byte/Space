@@ -434,6 +434,21 @@ const findLessonRegisterByLessonId = async (lessonId) => {
   return Array.isArray(data) ? data[0] || null : null;
 };
 
+const findLessonRegisterByOccurrenceId = async (occurrenceId) => {
+  const id = String(occurrenceId || "").trim();
+  if (!id) return null;
+  const { data } = await supabaseFetch(
+    `/${REGISTERS_TABLE}?select=*&occurrence_id=eq.${safeEncode(id)}&order=updated_at.desc.nullslast&limit=1`
+  );
+  return Array.isArray(data) ? data[0] || null : null;
+};
+
+const isOccurrenceUniqueViolation = (error) =>
+  String(error?.code || "") === "23505" &&
+  /ux_n8n_registros_aula_space_occurrence_id|occurrence_id/i.test(
+    `${String(error?.message || "")} ${String(error?.details || "")} ${String(error?.hint || "")}`
+  );
+
 const createLessonRegister = async ({ lesson, session, payload }) => {
   const now = new Date().toISOString();
   const status = String(payload?.status || "realizada").trim().toLowerCase();
@@ -474,6 +489,27 @@ const createLessonRegister = async ({ lesson, session, payload }) => {
     }
     return { register: saved || register, lesson: updatedLesson };
   } catch (error) {
+    if (isOccurrenceUniqueViolation(error) && register?.occurrence_id) {
+      const existingByOccurrence = await findLessonRegisterByOccurrenceId(register.occurrence_id).catch(() => null);
+      if (existingByOccurrence) {
+        const lessonPatch = {
+          status_aula:
+            status === "remarcada" ? "remarcada" : status === "falta" ? "falta" : status === "cancelada" ? "cancelada" : "realizada",
+        };
+        const updatedLesson = await patchLesson(lesson.id, lessonPatch);
+        if (pendingWrite) {
+          await updatePedagogicoPendingWrite(pendingWrite, {
+            state: "supabase_saved",
+            supabaseRegisterId: existingByOccurrence?.id == null ? "" : String(existingByOccurrence.id),
+            supabaseWriteMethod: "duplicate_reused",
+            lastError: null,
+          }).catch((fallbackError) => {
+            console.warn("[pedagogico] failed to mark Firestore fallback as duplicate_reused", fallbackError?.message || fallbackError);
+          });
+        }
+        return { register: existingByOccurrence, lesson: updatedLesson, deduplicated: true };
+      }
+    }
     if (pendingWrite) {
       await updatePedagogicoPendingWrite(pendingWrite, {
         state: "supabase_failed",
@@ -548,6 +584,7 @@ module.exports = {
   buildLessonRegisterRecord,
   summarizeLiveLessons,
   omitNilValues,
+  isOccurrenceUniqueViolation,
   createLiveLessonViaN8n,
   createVideoRoomViaN8n,
   rescheduleLiveLessonViaN8n,
