@@ -24586,3 +24586,192 @@ body.has-space-env-banner{padding-top:46px}
     stroke-dashoffset: 0 !important;
   }
 }
+
+.commercial-sdr-activity-shell {
+  gap: 18px;
+}
+
+.commercial-sdr-activity-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.commercial-sdr-custom-range {
+  display: flex;
+  align-items: end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.commercial-sdr-custom-range label {
+  display: grid;
+  gap: 6px;
+  color: rgba(222, 230, 244, 0.72);
+  font-size: 12px;
+}
+
+.commercial-sdr-custom-range input {
+  min-height: 38px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(10, 17, 28, 0.72);
+  color: #f5f7fb;
+  padding: 0 12px;
+}
+
+.commercial-sdr-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.commercial-sdr-card {
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(9, 16, 27, 0.82);
+  padding: 16px;
+  display: grid;
+  gap: 14px;
+}
+
+.commercial-sdr-card-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.commercial-sdr-card-head strong {
+  display: block;
+  color: #f5f7fb;
+  font-size: 15px;
+}
+
+.commercial-sdr-card-head span {
+  color: rgba(222, 230, 244, 0.58);
+  font-size: 12px;
+}
+
+.commercial-sdr-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(222, 230, 244, 0.82);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.commercial-sdr-origin-live {
+  color: rgba(93, 202, 165, 0.92);
+  font-size: 12px;
+}
+
+.commercial-sdr-stat-grid,
+.commercial-sdr-rate-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+}
+
+.commercial-sdr-stat-grid small,
+.commercial-sdr-rate-grid small {
+  display: block;
+  color: rgba(222, 230, 244, 0.54);
+  font-size: 11px;
+  margin-bottom: 4px;
+}
+
+.commercial-sdr-stat-grid b,
+.commercial-sdr-rate-grid span {
+  color: #f5f7fb;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.commercial-sdr-events-card {
+  overflow: hidden;
+}
+
+.commercial-sdr-table-wrap {
+  overflow: auto;
+}
+
+.commercial-sdr-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 760px;
+}
+
+.commercial-sdr-table th,
+.commercial-sdr-table td {
+  padding: 12px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.commercial-sdr-table th {
+  color: rgba(222, 230, 244, 0.56);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.commercial-sdr-table td {
+  color: #f5f7fb;
+  font-size: 13px;
+}
+
+.commercial-sdr-table td strong {
+  display: block;
+}
+
+.commercial-sdr-table td small {
+  display: block;
+  color: rgba(222, 230, 244, 0.54);
+  margin-top: 2px;
+}
+
+.commercial-sdr-outcome {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 9px;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.commercial-sdr-outcome.is-agendou,
+.commercial-sdr-outcome.is-show {
+  background: rgba(93, 202, 165, 0.14);
+  color: #8ef0c6;
+}
+
+.commercial-sdr-outcome.is-atendeu,
+.commercial-sdr-outcome.is-double {
+  background: rgba(89, 144, 189, 0.16);
+  color: #9ed1ff;
+}
+
+.commercial-sdr-outcome.is-nao_atendeu,
+.commercial-sdr-outcome.is-noshow {
+  background: rgba(255, 78, 70, 0.14);
+  color: #ff9b95;
+}
+
+.commercial-sdr-empty-cell {
+  text-align: center !important;
+  color: rgba(222, 230, 244, 0.64) !important;
+}
+
+@media (max-width: 900px) {
+  .commercial-sdr-activity-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
