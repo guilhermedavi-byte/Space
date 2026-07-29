@@ -15537,7 +15537,7 @@ const getFilteredAdminCommercialSdrActivityData = (data = {}, filters = {}) => {
     availableSdrs,
     selectedUids: effectiveUids,
     selectedSet,
-    summary: summarizeDailyRows(sdrs.filter((row) => selectedSet.has(String(row.sdrUid || "").trim()))),
+    summary: summarizeCommercialSdrDailyRows(sdrs.filter((row) => selectedSet.has(String(row.sdrUid || "").trim()))),
     sdrs: sdrs.filter((row) => selectedSet.has(String(row.sdrUid || "").trim())),
     events: events.filter((row) => selectedSet.has(String(row.sdrUid || "").trim())),
   };
@@ -15592,6 +15592,29 @@ const sumCommercialSdrStats = (rows = []) => {
     callToScheduleRate: stats.totalCalls ? (stats.scheduled / stats.totalCalls) * 100 : 0,
     showRate: meetings ? (stats.shows / meetings) * 100 : 0,
     noShowRate: meetings ? (stats.noShows / meetings) * 100 : 0,
+  };
+};
+
+const summarizeCommercialSdrDailyRows = (rows = []) => {
+  const base = (Array.isArray(rows) ? rows : []).reduce(
+    (acc, row) => {
+      acc.totalCalls += Math.max(0, Number(row?.totalCalls || 0));
+      acc.answered += Math.max(0, Number(row?.answered || 0));
+      acc.scheduled += Math.max(0, Number(row?.scheduled || 0));
+      acc.double += Math.max(0, Number(row?.double || 0));
+      acc.shows += Math.max(0, Number(row?.shows || 0));
+      acc.noShows += Math.max(0, Number(row?.noShows || 0));
+      acc.totalMeetings += Math.max(0, Number(row?.totalMeetings || 0));
+      return acc;
+    },
+    { totalCalls: 0, answered: 0, scheduled: 0, double: 0, shows: 0, noShows: 0, totalMeetings: 0 }
+  );
+  return {
+    ...base,
+    answerRate: base.totalCalls ? (base.answered / base.totalCalls) * 100 : 0,
+    scheduleRate: base.answered ? (base.scheduled / base.answered) * 100 : 0,
+    callToScheduleRate: base.totalCalls ? (base.scheduled / base.totalCalls) * 100 : 0,
+    showRate: base.totalMeetings ? (base.shows / base.totalMeetings) * 100 : 0,
   };
 };
 
