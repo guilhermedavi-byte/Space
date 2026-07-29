@@ -38,6 +38,16 @@ const addDaysToKey = (dateKey, offset) => {
   return saoPauloDateKey(date);
 };
 
+const countRangeDaysInclusive = (fromKey, toKey) => {
+  const from = parseDateKey(fromKey);
+  const to = parseDateKey(toKey);
+  if (!from || !to) return 1;
+  const fromDate = new Date(`${from}T12:00:00-03:00`);
+  const toDate = new Date(`${to}T12:00:00-03:00`);
+  const diff = Math.round((toDate.getTime() - fromDate.getTime()) / 86_400_000);
+  return Math.max(1, diff + 1);
+};
+
 const formatLocalDateTimeParts = (isoString) => {
   const raw = safeString(isoString);
   if (!raw) return { dateKey: "", time: "" };
@@ -166,6 +176,26 @@ const resolvePeriodRange = ({ period = "today", from = "", to = "", now = new Da
   return { period: "today", fromKey: todayKey, toKey: todayKey, todayKey };
 };
 
+const resolvePreviousRange = ({ period = "today", fromKey = "", toKey = "", todayKey = "" } = {}) => {
+  const normalizedPeriod = ["today", "week", "month", "custom"].includes(safeString(period)) ? safeString(period) : "today";
+  const safeFrom = parseDateKey(fromKey) || parseDateKey(todayKey) || saoPauloDateKey();
+  const safeTo = parseDateKey(toKey) || safeFrom;
+  if (normalizedPeriod === "today") {
+    const prevKey = addDaysToKey(safeFrom, -1);
+    return { period: normalizedPeriod, fromKey: prevKey, toKey: prevKey };
+  }
+  if (normalizedPeriod === "week") {
+    return { period: normalizedPeriod, fromKey: addDaysToKey(safeFrom, -7), toKey: addDaysToKey(safeTo, -7) };
+  }
+  if (normalizedPeriod === "month") {
+    return { period: normalizedPeriod, fromKey: addDaysToKey(safeFrom, -30), toKey: addDaysToKey(safeTo, -30) };
+  }
+  const span = countRangeDaysInclusive(safeFrom, safeTo);
+  const previousTo = addDaysToKey(safeFrom, -1);
+  const previousFrom = addDaysToKey(previousTo, -(span - 1));
+  return { period: normalizedPeriod, fromKey: previousFrom, toKey: previousTo };
+};
+
 const filterByRange = (rows, fromKey, toKey, getKey) =>
   (Array.isArray(rows) ? rows : []).filter((row) => {
     const key = parseDateKey(getKey(row));
@@ -192,22 +222,22 @@ const loadAdminCommercialSdrActivity = async ({ period = "today", from = "", to 
   const range = resolvePeriodRange({ period, from, to });
   const users = userRows.map(normalizeGrowthUser).filter(Boolean);
   const usersByUid = new Map(users.map((user) => [user.uid, user]));
-  const events = filterByRange(eventRows.map(normalizeActivityEvent).filter(Boolean), range.fromKey, range.toKey, (row) => row.localDateKey || row.dateKey);
-  const daily = filterByRange(dailyRows.map(normalizeDailyStat).filter(Boolean), range.fromKey, range.toKey, (row) => row.dateKey);
+  const knownUids = new Set(users.map((user) => user.uid));
+  const normalizedEvents = eventRows.map(normalizeActivityEvent).filter((row) => row && knownUids.has(row.sdrUid));
+  const normalizedDaily = dailyRows.map(normalizeDailyStat).filter((row) => row && knownUids.has(row.sdrUid));
+  const events = filterByRange(normalizedEvents, range.fromKey, range.toKey, (row) => row.localDateKey || row.dateKey);
+  const daily = filterByRange(normalizedDaily, range.fromKey, range.toKey, (row) => row.dateKey);
+  const previousRange = resolvePreviousRange(range);
+  const previousDaily = filterByRange(normalizedDaily, previousRange.fromKey, previousRange.toKey, (row) => row.dateKey);
 
-  const uids = new Set([
-    ...users.filter((user) => user.ativo).map((user) => user.uid),
-    ...events.map((event) => event.sdrUid),
-    ...daily.map((row) => row.sdrUid),
-  ]);
-
-  const summaries = [...uids]
+  const summaries = users
     .map((uid) => {
-      const user = usersByUid.get(uid) || {};
-      const rows = daily.filter((row) => row.sdrUid === uid);
+      const safeUid = safeString(uid?.uid || uid);
+      const user = usersByUid.get(safeUid) || {};
+      const rows = daily.filter((row) => row.sdrUid === safeUid);
       const summary = summarizeDailyRows(rows);
       return {
-        sdrUid: uid,
+        sdrUid: safeUid,
         sdrName: safeString(user.nome || rows[0]?.sdrName) || "SDR",
         sdrEmail: safeString(user.email || rows[0]?.sdrEmail).toLowerCase(),
         ativo: user.ativo !== false,
@@ -234,6 +264,8 @@ const loadAdminCommercialSdrActivity = async ({ period = "today", from = "", to 
     ok: true,
     filters: range,
     summary: summarizeDailyRows(daily),
+    previousSummary: summarizeDailyRows(previousDaily),
+    previousFilters: previousRange,
     sdrs: summaries,
     events: enrichedEvents,
     sourceTotals: {
@@ -252,5 +284,6 @@ module.exports = {
   normalizeActivityEvent,
   normalizeDailyStat,
   resolvePeriodRange,
+  resolvePreviousRange,
   summarizeDailyRows,
 };

@@ -14707,6 +14707,10 @@ const adminCommercialSdrActivityState = {
     selectedSdrUids: [],
     rankMetric: "scheduled",
     pickerOpen: false,
+    tableSortKey: "time",
+    tableSortDir: "desc",
+    tablePage: 1,
+    zeroGroupOpen: false,
   },
   data: null,
 };
@@ -15507,14 +15511,12 @@ const getCommercialSdrTypeLabel = (eventType) => (String(eventType || "") === "m
 const getAdminCommercialSdrRankMetricLabel = (metric) =>
   ({
     scheduled: "Agendadas",
-    callToScheduleRate: "Call→Schedule",
+    callToScheduleRate: "Conversão em agendamento",
     totalCalls: "Ligações",
-    totalMeetings: "Reuniões",
   })[String(metric || "")] || "Agendadas";
 const getAdminCommercialSdrRankMetricValue = (row = {}, metric = "scheduled") => {
   if (String(metric || "") === "callToScheduleRate") return Number(row.callToScheduleRate || 0);
   if (String(metric || "") === "totalCalls") return Number(row.totalCalls || 0);
-  if (String(metric || "") === "totalMeetings") return Number(row.totalMeetings || 0);
   return Number(row.scheduled || 0);
 };
 const getFilteredAdminCommercialSdrActivityData = (data = {}, filters = {}) => {
@@ -15531,45 +15533,20 @@ const getFilteredAdminCommercialSdrActivityData = (data = {}, filters = {}) => {
   const availableUidSet = new Set(availableSdrs.map((row) => row.uid));
   const requested = Array.isArray(filters.selectedSdrUids) ? filters.selectedSdrUids.map((value) => String(value || "").trim()).filter(Boolean) : [];
   const selectedUids = requested.filter((uid) => availableUidSet.has(uid));
-  const effectiveUids = selectedUids.length ? selectedUids : availableSdrs.map((row) => row.uid);
+  const effectiveUids = Array.isArray(filters.selectedSdrUids) ? selectedUids : availableSdrs.map((row) => row.uid);
   const selectedSet = new Set(effectiveUids);
   return {
     availableSdrs,
     selectedUids: effectiveUids,
     selectedSet,
+    previousSummary: data?.previousSummary && typeof data.previousSummary === "object" ? data.previousSummary : {},
+    previousFilters: data?.previousFilters && typeof data.previousFilters === "object" ? data.previousFilters : {},
+    sourceTotals: data?.sourceTotals && typeof data.sourceTotals === "object" ? data.sourceTotals : {},
     summary: summarizeCommercialSdrDailyRows(sdrs.filter((row) => selectedSet.has(String(row.sdrUid || "").trim()))),
     sdrs: sdrs.filter((row) => selectedSet.has(String(row.sdrUid || "").trim())),
     events: events.filter((row) => selectedSet.has(String(row.sdrUid || "").trim())),
   };
 };
-const renderAdminCommercialSdrKpiCard = ({ label, value, sublabel = "", tone = "neutral", pill = "" }) => `
-  <article class="sdr-kpi-card is-${escapeHtml(tone)}">
-    <div class="sdr-kpi-label">${escapeHtml(label)}</div>
-    <div class="sdr-kpi-value">
-      ${sdrNumber(value)}
-      ${pill ? `<em class="sdr-delta">${escapeHtml(pill)}</em>` : ""}
-    </div>
-    <p>${escapeHtml(sublabel)}</p>
-  </article>
-`;
-const renderAdminCommercialSdrTeamRow = (row = {}, index = 0, metric = "scheduled", maxMetric = 1) => {
-  const rankValue = getAdminCommercialSdrRankMetricValue(row, metric);
-  const width = maxMetric > 0 ? Math.min((rankValue / maxMetric) * 100, 100) : 0;
-  const metricLabel = getAdminCommercialSdrRankMetricLabel(metric);
-  const metricValue = metric === "callToScheduleRate" ? formatCommercialSdrActivityPct(rankValue) : String(Math.round(rankValue));
-  return `
-    <article class="sdr-team-row ${index === 0 ? "is-leader" : ""}">
-      <div class="sdr-rank">${index + 1}</div>
-      <div class="sdr-avatar">${escapeHtml(getSdrInitials(row.sdrName || "SDR"))}</div>
-      <div class="sdr-team-person"><strong>${escapeHtml(row.sdrName || "SDR")}</strong><span>${escapeHtml(row.sdrEmail || "")}</span></div>
-      <div class="sdr-team-metric"><b>${escapeHtml(String(row.scheduled || 0))}</b><span>agendadas</span></div>
-      <div class="sdr-team-metric"><b>${escapeHtml(String(row.totalCalls || 0))}</b><span>ligações</span></div>
-      <div class="sdr-team-metric"><b>${escapeHtml(metricValue)}</b><span>${escapeHtml(metricLabel)}</span></div>
-      <div class="sdr-team-bar"><span style="width:${escapeHtml(String(width))}%"></span></div>
-    </article>
-  `;
-};
-
 const sumCommercialSdrStats = (rows = []) => {
   const stats = {
     totalCalls: 0,
@@ -16010,31 +15987,288 @@ const loadAdminCommercialOverview = async ({ force = false } = {}) => {
   }
 };
 
-const renderAdminCommercialSdrSummaryCard = (row = {}) => `
-  <article class="commercial-sdr-card">
-    <div class="commercial-sdr-card-head">
+const ADMIN_COMMERCIAL_SDR_TABLE_PAGE_SIZE = 18;
+const ADMIN_COMMERCIAL_SDR_SORTABLE_COLUMNS = new Set(["sdr", "date", "time", "type", "outcome"]);
+
+const formatAdminCommercialSdrPlural = (value, singular, plural = `${singular}s`) => {
+  const total = Math.abs(Number(value) || 0);
+  return `${total} ${total === 1 ? singular : plural}`;
+};
+
+const getAdminCommercialSdrPeriodDescription = (period, from, to) => {
+  if (period === "today") return "Quem está produzindo hoje e se o ritmo está saudável.";
+  if (period === "week") return "Ritmo acumulado dos últimos 7 dias.";
+  if (period === "month") return "Ritmo acumulado dos últimos 30 dias.";
+  return `Intervalo customizado · ${formatCommercialSdrActivityDate(from || "")} → ${formatCommercialSdrActivityDate(to || "")}`;
+};
+
+const getAdminCommercialSdrDeltaContext = (period, previousFilters = {}) => {
+  if (period === "today") return "vs ontem";
+  if (period === "week") return "vs semana anterior";
+  if (period === "month") return "vs período anterior";
+  const from = formatCommercialSdrActivityDate(previousFilters.fromKey || "");
+  const to = formatCommercialSdrActivityDate(previousFilters.toKey || "");
+  return from && to && from !== "—" && to !== "—" ? `vs ${from} → ${to}` : "vs período anterior";
+};
+
+const formatAdminCommercialSdrDeltaLine = (currentValue, previousValue, period, previousFilters = {}, { suffix = "", invert = false } = {}) => {
+  const current = Number(currentValue || 0);
+  const previous = Number(previousValue || 0);
+  const delta = current - previous;
+  const direction = delta > 0 ? "up" : delta < 0 ? "down" : "flat";
+  const tone =
+    direction === "flat"
+      ? "neutral"
+      : invert
+        ? direction === "up"
+          ? "negative"
+          : "positive"
+        : direction === "up"
+          ? "positive"
+          : "negative";
+  const base = previous > 0 ? Math.round((Math.abs(delta) / previous) * 100) : current > 0 ? 100 : 0;
+  const arrow = direction === "up" ? "↑" : direction === "down" ? "↓" : "•";
+  const percentText = direction === "flat" ? "0%" : `${direction === "up" ? "+" : "−"}${base}%`;
+  return {
+    tone,
+    text: `${arrow} ${percentText} ${getAdminCommercialSdrDeltaContext(period, previousFilters)}${suffix ? ` ${suffix}` : ""}`.trim(),
+  };
+};
+
+const getAdminCommercialSdrSelectedLabel = (availableSdrs = [], selectedUids = []) => {
+  const total = availableSdrs.length;
+  const selected = Array.isArray(selectedUids) ? selectedUids.length : 0;
+  if (!total) return "Nenhum SDR encontrado";
+  if (selected <= 0) return "Nenhum SDR selecionado";
+  if (selected >= total) return "Todos os SDRs";
+  if (selected === 1) {
+    return availableSdrs.find((row) => row.uid === selectedUids[0])?.name || "1 SDR";
+  }
+  return `${selected} SDRs`;
+};
+
+const getAdminCommercialSdrOutcomeTone = (outcome) =>
+  ({
+    agendou: "accent",
+    atendeu: "soft-positive",
+    nao_atendeu: "neutral",
+    double: "neutral",
+    noshow: "warning",
+    show: "positive",
+  })[String(outcome || "")] || "neutral";
+
+const normalizeAdminCommercialSdrRate = (value) => Math.max(0, Math.min(100, Number(value || 0)));
+
+const compareAdminCommercialSdrRows = (a, b, metric = "scheduled") =>
+  getAdminCommercialSdrRankMetricValue(b, metric) - getAdminCommercialSdrRankMetricValue(a, metric) ||
+  Number(b.scheduled || 0) - Number(a.scheduled || 0) ||
+  Number(b.totalCalls || 0) - Number(a.totalCalls || 0) ||
+  String(a.sdrName || "").localeCompare(String(b.sdrName || ""), "pt-BR");
+
+const compareAdminCommercialSdrEventsByKey = (a, b, key = "time", dir = "desc") => {
+  const direction = dir === "asc" ? 1 : -1;
+  if (key === "type") return direction * String(getCommercialSdrTypeLabel(a.eventType || "")).localeCompare(String(getCommercialSdrTypeLabel(b.eventType || "")), "pt-BR");
+  if (key === "outcome") return direction * String(getCommercialSdrOutcomeLabel(a.outcome || "")).localeCompare(String(getCommercialSdrOutcomeLabel(b.outcome || "")), "pt-BR");
+  if (key === "date") return direction * String(a.localDateKey || a.dateKey || "").localeCompare(String(b.localDateKey || b.dateKey || ""));
+  if (key === "sdr") return direction * String(a.sdrName || "").localeCompare(String(b.sdrName || ""), "pt-BR");
+  const aKey = `${String(a.localDateKey || a.dateKey || "")} ${String(a.localTime || "")}`;
+  const bKey = `${String(b.localDateKey || b.dateKey || "")} ${String(b.localTime || "")}`;
+  return direction * aKey.localeCompare(bKey);
+};
+
+const buildAdminCommercialSdrRankingBuckets = (rows = [], rankMetric = "scheduled") => {
+  const active = [];
+  const idle = [];
+  (Array.isArray(rows) ? rows : []).forEach((row) => {
+    const total = Number(row.totalCalls || 0) + Number(row.scheduled || 0) + Number(row.totalMeetings || 0);
+    if (total > 0) active.push(row);
+    else idle.push(row);
+  });
+  active.sort((a, b) => compareAdminCommercialSdrRows(a, b, rankMetric));
+  idle.sort((a, b) => String(a.sdrName || "").localeCompare(String(b.sdrName || ""), "pt-BR"));
+  return { active, idle };
+};
+
+const renderAdminCommercialSdrSkeleton = () => `
+  <div class="sdr-panel commercial-sdr-admin-panel">
+    <div class="commercial-overview-head">
       <div>
-        <strong>${escapeHtml(row.sdrName || "SDR")}</strong>
-        <span>${escapeHtml(row.sdrEmail || "")}</span>
+        <span class="sdr-kicker">Comercial · visão admin</span>
+        <h2>Atividade SDR</h2>
+        <p>Carregando produtividade diária dos SDRs.</p>
       </div>
-      ${row.ativo === false ? `<em class="commercial-sdr-pill">inativo</em>` : ""}
     </div>
-    <div class="commercial-sdr-stat-grid">
-      <div><small>Ligações</small><b>${escapeHtml(String(Number(row.totalCalls || 0)))}</b></div>
-      <div><small>Atendidas</small><b>${escapeHtml(String(Number(row.answered || 0)))}</b></div>
-      <div><small>Agendadas</small><b>${escapeHtml(String(Number(row.scheduled || 0)))}</b></div>
-      <div><small>Reuniões</small><b>${escapeHtml(String(Number(row.totalMeetings || 0)))}</b></div>
-      <div><small>Show</small><b>${escapeHtml(String(Number(row.shows || 0)))}</b></div>
-      <div><small>No-show</small><b>${escapeHtml(String(Number(row.noShows || 0)))}</b></div>
-    </div>
-    <div class="commercial-sdr-rate-grid">
-      <div><small>Answer rate</small><span>${escapeHtml(formatCommercialSdrActivityPct(row.answerRate || 0))}</span></div>
-      <div><small>Schedule rate</small><span>${escapeHtml(formatCommercialSdrActivityPct(row.scheduleRate || 0))}</span></div>
-      <div><small>Call→Schedule</small><span>${escapeHtml(formatCommercialSdrActivityPct(row.callToScheduleRate || 0))}</span></div>
-      <div><small>Show rate</small><span>${escapeHtml(formatCommercialSdrActivityPct(row.showRate || 0))}</span></div>
-    </div>
-  </article>
+    <section class="commercial-sdr-admin-toolbar is-skeleton">
+      <div class="commercial-sdr-skeleton-line is-wide"></div>
+      <div class="commercial-sdr-skeleton-line"></div>
+      <div class="commercial-sdr-skeleton-line is-short"></div>
+    </section>
+    <section class="commercial-sdr-admin-kpi-strip">
+      ${Array.from({ length: 4 })
+        .map(() => `<article class="commercial-sdr-kpi-card is-skeleton"><div class="commercial-sdr-skeleton-line"></div><div class="commercial-sdr-skeleton-block"></div><div class="commercial-sdr-skeleton-line is-wide"></div></article>`)
+        .join("")}
+    </section>
+    <section class="commercial-sdr-admin-grid">
+      <article class="sdr-card commercial-sdr-ranking-card is-skeleton"><div class="commercial-sdr-skeleton-block"></div></article>
+      <article class="sdr-card commercial-sdr-graph-card is-skeleton"><div class="commercial-sdr-skeleton-block"></div></article>
+    </section>
+  </div>
 `;
+
+const renderAdminCommercialSdrKpiCard = ({ label, value, previousValue, period, previousFilters, tone = "neutral", context = "" }) => {
+  const delta = formatAdminCommercialSdrDeltaLine(value, previousValue, period, previousFilters);
+  return `
+    <article class="commercial-sdr-kpi-card is-${escapeHtml(tone)}">
+      <span class="commercial-sdr-kpi-label">${escapeHtml(label)}</span>
+      <strong class="commercial-sdr-kpi-value" data-sdr-countup="${escapeHtml(String(Number(value) || 0))}">${escapeHtml(String(Number(value) || 0))}</strong>
+      <span class="commercial-sdr-kpi-context">${escapeHtml(context)}</span>
+      <span class="commercial-sdr-kpi-delta is-${escapeHtml(delta.tone)}">${escapeHtml(delta.text)}</span>
+    </article>
+  `;
+};
+
+const renderAdminCommercialSdrChart = (rows = []) => {
+  const items = (Array.isArray(rows) ? rows : []).filter((row) => Number(row.totalCalls || 0) > 0);
+  if (!items.length) {
+    return `<div class="commercial-sdr-empty-state">Nenhuma ligação registrada neste período.</div>`;
+  }
+  const leaderCalls = Math.max(...items.map((row) => Number(row.totalCalls || 0)), 1);
+  return `
+    <div class="commercial-sdr-bars" role="img" aria-label="Comparativo de ligações e agendamentos por SDR">
+      ${items
+        .map((row) => {
+          const calls = Math.max(0, Number(row.totalCalls || 0));
+          const scheduled = Math.max(0, Number(row.scheduled || 0));
+          const callsWidth = Math.max(6, Math.round((calls / leaderCalls) * 100));
+          const scheduledWidth = calls > 0 ? Math.max(0, Math.min(100, Math.round((scheduled / calls) * 100))) : 0;
+          return `
+            <div class="commercial-sdr-bars-row">
+              <div class="commercial-sdr-bars-label">
+                <strong>${escapeHtml(row.sdrName || "SDR")}</strong>
+                <span>${escapeHtml(formatAdminCommercialSdrPlural(calls, "ligação"))} · ${escapeHtml(formatAdminCommercialSdrPlural(scheduled, "agendada"))}</span>
+              </div>
+              <div class="commercial-sdr-bars-track-wrap">
+                <div class="commercial-sdr-bars-track" style="--calls-width:${escapeHtml(String(callsWidth))}%;--scheduled-width:${escapeHtml(String(scheduledWidth))}%">
+                  <i class="commercial-sdr-bars-calls"></i>
+                  <b class="commercial-sdr-bars-scheduled"></b>
+                </div>
+                <span class="commercial-sdr-bars-value">${escapeHtml(String(calls))}</span>
+              </div>
+            </div>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+};
+
+const renderAdminCommercialSdrRankingRow = (row = {}, index = 0, rankMetric = "scheduled", maxMetric = 1) => {
+  const metricValue = getAdminCommercialSdrRankMetricValue(row, rankMetric);
+  const scaleWidth = maxMetric > 0 ? Math.max(0, Math.min(100, Math.round((metricValue / maxMetric) * 100))) : 0;
+  return `
+    <div class="commercial-sdr-ranking-row">
+      <span class="commercial-sdr-ranking-index">${index + 1}</span>
+      <div class="commercial-sdr-ranking-person">
+        <strong>${escapeHtml(row.sdrName || "SDR")}</strong>
+        ${row.sdrEmail ? `<span title="${escapeHtml(row.sdrEmail)}">${escapeHtml(row.sdrEmail)}</span>` : ""}
+      </div>
+      <div class="commercial-sdr-ranking-metric">${escapeHtml(String(Number(row.totalCalls || 0)))}</div>
+      <div class="commercial-sdr-ranking-metric">${escapeHtml(String(Number(row.scheduled || 0)))}</div>
+      <div class="commercial-sdr-ranking-metric">${escapeHtml(formatCommercialSdrActivityPct(row.callToScheduleRate || 0))}</div>
+      <div class="commercial-sdr-ranking-bar" aria-hidden="true">
+        <i style="width:${escapeHtml(String(scaleWidth))}%"></i>
+      </div>
+    </div>
+  `;
+};
+
+const renderAdminCommercialSdrTable = ({ events = [], period = "today", sortKey = "time", sortDir = "desc", page = 1, rankedRows = [] } = {}) => {
+  const safeSortKey = ADMIN_COMMERCIAL_SDR_SORTABLE_COLUMNS.has(String(sortKey || "")) ? String(sortKey) : "time";
+  const safeSortDir = String(sortDir || "").toLowerCase() === "asc" ? "asc" : "desc";
+  const showDate = period !== "today";
+  const orderMap = new Map((Array.isArray(rankedRows) ? rankedRows : []).map((row, index) => [String(row.sdrUid || ""), index]));
+  const sorted = (Array.isArray(events) ? events : [])
+    .slice()
+    .sort((a, b) => {
+      if (safeSortKey === "sdr") return compareAdminCommercialSdrEventsByKey(a, b, safeSortKey, safeSortDir);
+      const groupDelta = (orderMap.get(String(a.sdrUid || "")) ?? Number.MAX_SAFE_INTEGER) - (orderMap.get(String(b.sdrUid || "")) ?? Number.MAX_SAFE_INTEGER);
+      if (groupDelta !== 0) return groupDelta;
+      return compareAdminCommercialSdrEventsByKey(a, b, safeSortKey, safeSortDir);
+    });
+  const totalPages = Math.max(1, Math.ceil(sorted.length / ADMIN_COMMERCIAL_SDR_TABLE_PAGE_SIZE));
+  const safePage = Math.min(Math.max(1, Number(page) || 1), totalPages);
+  const pageRows = sorted.slice((safePage - 1) * ADMIN_COMMERCIAL_SDR_TABLE_PAGE_SIZE, safePage * ADMIN_COMMERCIAL_SDR_TABLE_PAGE_SIZE);
+  const sortArrow = (key) => (safeSortKey === key ? (safeSortDir === "asc" ? "↑" : "↓") : "");
+  return {
+    totalPages,
+    safePage,
+    markup: `
+      <div class="commercial-sdr-table-wrap">
+        <table class="commercial-sdr-table">
+          <thead>
+            <tr>
+              <th><button type="button" data-commercial-sdr-table-sort="sdr">SDR ${sortArrow("sdr")}</button></th>
+              ${showDate ? `<th><button type="button" data-commercial-sdr-table-sort="date">Data ${sortArrow("date")}</button></th>` : ""}
+              <th><button type="button" data-commercial-sdr-table-sort="time">Hora ${sortArrow("time")}</button></th>
+              <th><button type="button" data-commercial-sdr-table-sort="type">Tipo ${sortArrow("type")}</button></th>
+              <th><button type="button" data-commercial-sdr-table-sort="outcome">Resultado ${sortArrow("outcome")}</button></th>
+              <th>Origem</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${
+              pageRows.length
+                ? pageRows
+                    .map((event, index) => {
+                      const previous = pageRows[index - 1];
+                      const showSdr = index === 0 || String(previous?.sdrUid || "") !== String(event?.sdrUid || "");
+                      return `
+                        <tr>
+                          <td class="${showSdr ? "commercial-sdr-table-person" : "commercial-sdr-table-person is-muted"}">
+                            ${
+                              showSdr
+                                ? `<strong>${escapeHtml(event.sdrName || "SDR")}</strong>${event.sdrEmail ? `<small>${escapeHtml(event.sdrEmail)}</small>` : ""}`
+                                : `<span>↳</span>`
+                            }
+                          </td>
+                          ${
+                            showDate
+                              ? `<td class="commercial-sdr-table-num">${escapeHtml(formatCommercialSdrActivityDate(event.localDateKey || event.dateKey || ""))}</td>`
+                              : ""
+                          }
+                          <td class="commercial-sdr-table-num">${escapeHtml(event.localTime || "—")}</td>
+                          <td>${escapeHtml(getCommercialSdrTypeLabel(event.eventType))}</td>
+                          <td><span class="commercial-sdr-outcome is-${escapeHtml(getAdminCommercialSdrOutcomeTone(event.outcome))}">${escapeHtml(getCommercialSdrOutcomeLabel(event.outcome))}</span></td>
+                          <td>${event.isRetroactive ? `<span class="commercial-sdr-retro-badge">retroativo</span>` : `<span class="commercial-sdr-origin-dot" aria-label="Tempo real"></span>`}</td>
+                        </tr>
+                      `;
+                    })
+                    .join("")
+                : `<tr><td colspan="${showDate ? 6 : 5}" class="commercial-sdr-empty-cell">Nenhuma ligação registrada neste período.</td></tr>`
+            }
+          </tbody>
+        </table>
+      </div>
+      ${
+        sorted.length > ADMIN_COMMERCIAL_SDR_TABLE_PAGE_SIZE
+          ? `
+            <div class="commercial-sdr-pagination">
+              <button type="button" data-commercial-sdr-page="${safePage - 1}" ${safePage <= 1 ? "disabled" : ""}>Anterior</button>
+              <span>Página ${escapeHtml(String(safePage))} de ${escapeHtml(String(totalPages))}</span>
+              <button type="button" data-commercial-sdr-page="${safePage + 1}" ${safePage >= totalPages ? "disabled" : ""}>Próxima</button>
+            </div>
+          `
+          : ""
+      }
+    `,
+  };
+};
+
+const hydrateAdminCommercialSdrActivityVisuals = async () => {
+  const root = adminCommercialSdrActivityContent;
+  if (!(root instanceof HTMLElement)) return;
+  hydrateSdrCountUps(root);
+};
 
 const renderAdminCommercialSdrActivity = () => {
   if (!(adminCommercialSdrActivityContent instanceof HTMLElement)) return;
@@ -16044,73 +16278,74 @@ const renderAdminCommercialSdrActivity = () => {
   const period = ["today", "week", "month", "custom"].includes(String(filters.period || "")) ? String(filters.period) : "today";
   const filtered = getFilteredAdminCommercialSdrActivityData(data, filters);
   const summary = filtered.summary || {};
-  const sdrs = Array.isArray(filtered.sdrs) ? filtered.sdrs : [];
-  const events = Array.isArray(filtered.events) ? filtered.events : [];
+  const previousSummary = filtered.previousSummary || {};
   const availableSdrs = Array.isArray(filtered.availableSdrs) ? filtered.availableSdrs : [];
-  const showCustom = period === "custom";
-  const rankMetric = ["scheduled", "callToScheduleRate", "totalCalls", "totalMeetings"].includes(String(filters.rankMetric || "")) ? String(filters.rankMetric) : "scheduled";
   const selectedCount = filtered.selectedUids.length;
   const totalCount = availableSdrs.length;
-  const rankedSdrs = sdrs
-    .slice()
-    .sort((a, b) => getAdminCommercialSdrRankMetricValue(b, rankMetric) - getAdminCommercialSdrRankMetricValue(a, rankMetric) || Number(b.scheduled || 0) - Number(a.scheduled || 0) || String(a.sdrName || "").localeCompare(String(b.sdrName || ""), "pt-BR"));
-  const maxRankValue = Math.max(1, ...rankedSdrs.map((row) => getAdminCommercialSdrRankMetricValue(row, rankMetric)));
+  const showCustom = period === "custom";
+  const rankMetric = ["scheduled", "callToScheduleRate", "totalCalls"].includes(String(filters.rankMetric || "")) ? String(filters.rankMetric) : "scheduled";
+  const { active: rankedActive, idle: rankedIdle } = buildAdminCommercialSdrRankingBuckets(filtered.sdrs || [], rankMetric);
+  const allRankedRows = [...rankedActive, ...rankedIdle];
+  const maxRankValue = Math.max(1, ...rankedActive.map((row) => getAdminCommercialSdrRankMetricValue(row, rankMetric)));
+  const table = renderAdminCommercialSdrTable({
+    events: filtered.events || [],
+    period,
+    sortKey: filters.tableSortKey,
+    sortDir: filters.tableSortDir,
+    page: filters.tablePage,
+    rankedRows: allRankedRows,
+  });
+  adminCommercialSdrActivityState.filters.tablePage = table.safePage;
 
   if (state.isLoading && !state.data) {
-    adminCommercialSdrActivityContent.innerHTML = `
-      <div class="commercial-overview-head">
-        <div><h2>Atividade SDR</h2><p>Carregando atividade diária dos SDRs.</p></div>
-      </div>
-      <div class="commercial-overview-loading"></div>
-    `;
+    adminCommercialSdrActivityContent.innerHTML = renderAdminCommercialSdrSkeleton();
     return;
   }
 
   if (state.error && !state.data) {
     adminCommercialSdrActivityContent.innerHTML = `
-      <div class="commercial-overview-head">
-        <div><h2>Atividade SDR</h2><p>Não foi possível carregar agora.</p></div>
+      <div class="sdr-panel commercial-sdr-admin-panel">
+        <div class="commercial-overview-head">
+          <div>
+            <span class="sdr-kicker">Comercial · visão admin</span>
+            <h2>Atividade SDR</h2>
+            <p>Não foi possível carregar agora.</p>
+          </div>
+        </div>
+        <div class="commercial-overview-empty is-error">${escapeHtml(state.error)}</div>
       </div>
-      <div class="commercial-overview-empty is-error">${escapeHtml(state.error)}</div>
     `;
     return;
   }
 
+  const noneSelected = selectedCount <= 0 && totalCount > 0;
   adminCommercialSdrActivityContent.innerHTML = `
     <div class="sdr-panel commercial-sdr-admin-panel">
       <div class="commercial-overview-head">
         <div>
           <span class="sdr-kicker">Comercial · visão admin</span>
           <h2>Atividade SDR</h2>
-          <p>${escapeHtml(
-            period === "today"
-              ? "Hoje"
-              : period === "week"
-                ? "Últimos 7 dias"
-                : period === "month"
-                  ? "Últimos 30 dias"
-                  : `Intervalo customizado · ${formatCommercialSdrActivityDate(filters.from || "")} → ${formatCommercialSdrActivityDate(filters.to || "")}`
-          )}</p>
-        </div>
-        <div class="sdr-period-toggle commercial-sdr-admin-periods" role="tablist" aria-label="Período da atividade SDR">
-          ${["today", "week", "month", "custom"]
-            .map((key) => `<button type="button" data-commercial-sdr-period="${key}" class="${period === key ? "is-active" : ""}">${escapeHtml(key === "today" ? "Hoje" : key === "week" ? "Semana" : key === "month" ? "Mês" : "Custom")}</button>`)
-            .join("")}
+          <p>${escapeHtml(getAdminCommercialSdrPeriodDescription(period, filters.from || "", filters.to || ""))}</p>
         </div>
       </div>
 
       <section class="sdr-card commercial-sdr-admin-toolbar ${showCustom ? "is-custom-open" : ""}">
-        <div class="commercial-sdr-admin-filter-row">
+        <div class="commercial-sdr-admin-toolbar-main">
+          <div class="sdr-period-toggle commercial-sdr-admin-periods" role="tablist" aria-label="Período da atividade SDR">
+            ${["today", "week", "month", "custom"]
+              .map((key) => `<button type="button" data-commercial-sdr-period="${key}" class="${period === key ? "is-active" : ""}">${escapeHtml(key === "today" ? "Hoje" : key === "week" ? "Semana" : key === "month" ? "Mês" : "Custom")}</button>`)
+              .join("")}
+          </div>
           <div class="commercial-sdr-admin-filter-block" data-commercial-sdr-filter>
-            <span class="sdr-kpi-label">SDRs</span>
+            <span class="commercial-sdr-field-label">SDRs</span>
             <button type="button" class="commercial-sdr-picker-trigger" data-commercial-sdr-picker-toggle aria-expanded="${filters.pickerOpen ? "true" : "false"}">
-              <span>${escapeHtml(selectedCount >= totalCount ? "Todos os SDRs" : selectedCount === 1 ? (availableSdrs.find((row) => row.uid === filtered.selectedUids[0])?.name || "1 SDR") : `${selectedCount} SDRs selecionados`)}</span>
-              <strong>${escapeHtml(String(totalCount))}</strong>
+              <span>${escapeHtml(getAdminCommercialSdrSelectedLabel(availableSdrs, filtered.selectedUids))}</span>
+              <strong>${escapeHtml(formatAdminCommercialSdrPlural(totalCount, "SDR"))}</strong>
             </button>
             <div class="commercial-sdr-picker ${filters.pickerOpen ? "is-open" : ""}" ${filters.pickerOpen ? "" : "hidden"}>
               <label class="commercial-sdr-picker-option is-all">
                 <input type="checkbox" data-commercial-sdr-picker-all ${selectedCount >= totalCount ? "checked" : ""}>
-                <span>Todos os SDRs</span>
+                <span><strong>Todos os SDRs</strong><small>${escapeHtml(formatAdminCommercialSdrPlural(totalCount, "SDR"))}</small></span>
               </label>
               <div class="commercial-sdr-picker-list">
                 ${
@@ -16123,173 +16358,152 @@ const renderAdminCommercialSdrActivity = () => {
                         </label>
                       `
                     )
-                    .join("") || `<div class="sdr-empty">Nenhum SDR encontrado.</div>`
+                    .join("") || `<div class="commercial-sdr-empty-state">Nenhum SDR encontrado.</div>`
                 }
               </div>
             </div>
           </div>
-
-          <div class="commercial-sdr-admin-filter-block">
-            <span class="sdr-kpi-label">Ordenar ranking</span>
-            <div class="sdr-period-toggle commercial-sdr-rank-toggle">
-              ${["scheduled", "callToScheduleRate", "totalCalls"]
-                .map((metric) => `<button type="button" data-commercial-sdr-rank-metric="${metric}" class="${rankMetric === metric ? "is-active" : ""}">${escapeHtml(getAdminCommercialSdrRankMetricLabel(metric))}</button>`)
-                .join("")}
-            </div>
-          </div>
+          <button type="button" class="commercial-sdr-refresh-button" data-commercial-sdr-refresh aria-label="Atualizar painel">↻</button>
         </div>
-        <div class="commercial-sdr-admin-toolbar-actions">
-          <div class="commercial-sdr-custom-range">
-            <label>De<input type="date" data-commercial-sdr-range="from" value="${escapeHtml(filters.from || "")}" ${showCustom ? "" : "disabled"}></label>
-            <label>Até<input type="date" data-commercial-sdr-range="to" value="${escapeHtml(filters.to || "")}" ${showCustom ? "" : "disabled"}></label>
-            <button type="button" class="button button-outline button-small" data-commercial-sdr-apply ${showCustom ? "" : "disabled"}>Aplicar</button>
-          </div>
-          <button type="button" class="button button-outline button-small" data-commercial-sdr-refresh>Atualizar</button>
-        </div>
+        ${
+          showCustom
+            ? `
+              <div class="commercial-sdr-custom-range">
+                <label><span>De</span><input type="date" data-commercial-sdr-range="from" value="${escapeHtml(filters.from || "")}"></label>
+                <label><span>Até</span><input type="date" data-commercial-sdr-range="to" value="${escapeHtml(filters.to || "")}"></label>
+              </div>
+            `
+            : ""
+        }
       </section>
 
       ${state.error ? `<div class="sdr-error">${escapeHtml(state.error)}</div>` : ""}
 
-      <section class="sdr-kpi-grid" aria-label="Resumo de atividade SDR">
-        ${renderAdminCommercialSdrKpiCard({ label: "Ligações", value: summary.totalCalls || 0, sublabel: `${sdrs.length} SDR(s) no período`, tone: "blue" })}
-        ${renderAdminCommercialSdrKpiCard({ label: "Atendidas", value: summary.answered || 0, sublabel: `${formatCommercialSdrActivityPct(summary.answerRate || 0)} answer rate`, tone: "green" })}
-        ${renderAdminCommercialSdrKpiCard({ label: "Agendadas", value: summary.scheduled || 0, sublabel: `${formatCommercialSdrActivityPct(summary.callToScheduleRate || 0)} call→schedule`, tone: "coral" })}
-        ${renderAdminCommercialSdrKpiCard({ label: "Reuniões", value: summary.totalMeetings || 0, sublabel: `${formatCommercialSdrActivityPct(summary.showRate || 0)} show rate`, tone: "amber" })}
+      <section class="commercial-sdr-admin-kpi-strip" aria-label="Resumo de atividade SDR">
+        ${renderAdminCommercialSdrKpiCard({
+          label: "Ligações",
+          value: summary.totalCalls || 0,
+          previousValue: previousSummary.totalCalls || 0,
+          period,
+          previousFilters: filtered.previousFilters,
+          tone: "neutral",
+          context: formatAdminCommercialSdrPlural(summary.totalCalls || 0, "ligação"),
+        })}
+        ${renderAdminCommercialSdrKpiCard({
+          label: "Atendidas",
+          value: summary.answered || 0,
+          previousValue: previousSummary.answered || 0,
+          period,
+          previousFilters: filtered.previousFilters,
+          tone: "soft-positive",
+          context: `${formatCommercialSdrActivityPct(summary.answerRate || 0)} taxa de atendimento`,
+        })}
+        ${renderAdminCommercialSdrKpiCard({
+          label: "Agendadas",
+          value: summary.scheduled || 0,
+          previousValue: previousSummary.scheduled || 0,
+          period,
+          previousFilters: filtered.previousFilters,
+          tone: "accent",
+          context: formatAdminCommercialSdrPlural(summary.scheduled || 0, "agendada"),
+        })}
+        ${renderAdminCommercialSdrKpiCard({
+          label: "Conversão em agendamento",
+          value: Math.round((summary.callToScheduleRate || 0) * 10) / 10,
+          previousValue: Math.round((previousSummary.callToScheduleRate || 0) * 10) / 10,
+          period,
+          previousFilters: filtered.previousFilters,
+          tone: "accent",
+          context: `${formatCommercialSdrActivityPct(summary.callToScheduleRate || 0)} das ligações`,
+        })}
       </section>
 
-      <section class="commercial-sdr-admin-grid">
-        <section class="sdr-card sdr-chart-card">
-          <div class="sdr-card-title"><span>Comparativo entre SDRs</span><small>${escapeHtml(selectedCount >= totalCount ? "todos os SDRs" : `${selectedCount} selecionado(s)`)}</small></div>
-          <div class="sdr-chart-legend"><i class="is-blue"></i><span>Ligações</span><i class="is-green"></i><span>Agendadas</span></div>
-          <div class="sdr-chart-wrap commercial-sdr-admin-chart-wrap"><canvas data-admin-commercial-sdr-chart></canvas></div>
-        </section>
-
-        <section>
-          <section class="sdr-team-summary commercial-sdr-admin-summary">
-            <div class="sdr-card-title"><span>Ranking SDR</span><small>${escapeHtml(getAdminCommercialSdrRankMetricLabel(rankMetric))}</small></div>
-            <div class="sdr-team-radar" style="--sdr-radar:${escapeHtml(String(Math.min(summary.callToScheduleRate || 0, 100)))}">
-              <strong>${escapeHtml(formatCommercialSdrActivityPct(summary.callToScheduleRate || 0))}</strong>
-              <span>call→schedule</span>
-            </div>
-            <div class="sdr-team-summary-copy">
-              <p>${escapeHtml(String(summary.scheduled || 0))} agendamento(s) em ${escapeHtml(String(summary.totalCalls || 0))} ligações no período filtrado.</p>
-            </div>
-          </section>
-          <section class="sdr-card sdr-ranking-card">
-            <div class="sdr-card-title"><span>Ranking dos SDRs</span><small>${escapeHtml(getAdminCommercialSdrRankMetricLabel(rankMetric))}</small></div>
-            <div class="sdr-team-list">
-              ${rankedSdrs.map((row, index) => renderAdminCommercialSdrTeamRow(row, index, rankMetric, maxRankValue)).join("") || `<div class="sdr-empty">Nenhum SDR com atividade no período.</div>`}
-            </div>
-          </section>
-        </section>
-      </section>
-
-      <section class="commercial-sdr-admin-cards">
-        ${sdrs.map((row) => renderAdminCommercialSdrSummaryCard(row)).join("") || `<div class="sdr-empty"><strong>Nenhum SDR com atividade no período.</strong><small>Altere o período ou o filtro acima.</small></div>`}
-      </section>
-
-      <section class="sdr-card commercial-sdr-events-card">
-        <div class="sdr-card-title">
-          <span>Eventos do período</span>
-          <small>${escapeHtml(String(events.length))} registro(s)</small>
-        </div>
-        <div class="commercial-sdr-table-wrap">
-          <table class="commercial-sdr-table">
-            <thead>
-              <tr>
-                <th>SDR</th>
-                <th>Data</th>
-                <th>Hora</th>
-                <th>Tipo</th>
-                <th>Resultado</th>
-                <th>Origem</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${
-                events
-                  .map(
-                    (event) => `
-                      <tr>
-                        <td>
-                          <strong>${escapeHtml(event.sdrName || "SDR")}</strong>
-                          <small>${escapeHtml(event.sdrEmail || "")}</small>
-                        </td>
-                        <td>${escapeHtml(formatCommercialSdrActivityDate(event.localDateKey || event.dateKey || ""))}</td>
-                        <td>${escapeHtml(event.localTime || "—")}</td>
-                        <td>${escapeHtml(getCommercialSdrTypeLabel(event.eventType))}</td>
-                        <td><span class="commercial-sdr-outcome is-${escapeHtml(String(event.outcome || "neutral"))}">${escapeHtml(getCommercialSdrOutcomeLabel(event.outcome))}</span></td>
-                        <td>${event.isRetroactive ? `<span class="commercial-sdr-pill">retroativo</span>` : `<span class="commercial-sdr-origin-live">tempo real</span>`}</td>
-                      </tr>
+      ${
+        noneSelected
+          ? `<section class="sdr-card"><div class="commercial-sdr-empty-state">Nenhum SDR selecionado. Escolha ao menos um para ver o período.</div></section>`
+          : `
+            <section class="commercial-sdr-admin-grid">
+              <section class="sdr-card commercial-sdr-ranking-card">
+                <div class="commercial-sdr-section-head">
+                  <div>
+                    <span>Ranking dos SDRs</span>
+                    <small>${escapeHtml(formatAdminCommercialSdrPlural(rankedActive.length, "SDR"))} com atividade no período</small>
+                  </div>
+                  <div class="sdr-period-toggle commercial-sdr-rank-toggle">
+                    ${["scheduled", "callToScheduleRate", "totalCalls"]
+                      .map((metric) => `<button type="button" data-commercial-sdr-rank-metric="${metric}" class="${rankMetric === metric ? "is-active" : ""}">${escapeHtml(metric === "scheduled" ? "Agendadas" : metric === "callToScheduleRate" ? "Call→Schedule" : "Ligações")}</button>`)
+                      .join("")}
+                  </div>
+                </div>
+                ${
+                  rankedActive.length
+                    ? `
+                      <div class="commercial-sdr-ranking-head">
+                        <span></span>
+                        <span>SDR</span>
+                        <span>Ligações</span>
+                        <span>Agendadas</span>
+                        <span>Call→Schedule</span>
+                        <span class="commercial-sdr-ranking-head-tail">rel. ao líder</span>
+                      </div>
+                      <div class="commercial-sdr-ranking-list">
+                        ${rankedActive.map((row, index) => renderAdminCommercialSdrRankingRow(row, index, rankMetric, maxRankValue)).join("")}
+                      </div>
                     `
-                  )
-                  .join("") || `<tr><td colspan="6" class="commercial-sdr-empty-cell">Nenhum evento encontrado no período.</td></tr>`
-              }
-            </tbody>
-          </table>
-        </div>
-      </section>
+                    : `<div class="commercial-sdr-empty-state">Nenhuma ligação registrada neste período.</div>`
+                }
+                ${
+                  rankedIdle.length
+                    ? `
+                      <div class="commercial-sdr-zero-group">
+                        <button type="button" class="commercial-sdr-zero-toggle" data-commercial-sdr-zero-toggle aria-expanded="${filters.zeroGroupOpen ? "true" : "false"}">
+                          Sem atividade no período (${escapeHtml(String(rankedIdle.length))})
+                        </button>
+                        <div class="commercial-sdr-zero-list" ${filters.zeroGroupOpen ? "" : "hidden"}>
+                          ${rankedIdle
+                            .map(
+                              (row) => `
+                                <div class="commercial-sdr-zero-row">
+                                  <strong>${escapeHtml(row.sdrName || "SDR")}</strong>
+                                  ${row.sdrEmail ? `<span>${escapeHtml(row.sdrEmail)}</span>` : ""}
+                                </div>
+                              `
+                            )
+                            .join("")}
+                        </div>
+                      </div>
+                    `
+                    : ""
+                }
+              </section>
+
+              <section class="sdr-card commercial-sdr-graph-card">
+                <div class="commercial-sdr-section-head">
+                  <div>
+                    <span>Comparativo entre SDRs</span>
+                    <small>Ligações em neutro e agendadas sobrepostas em coral.</small>
+                  </div>
+                </div>
+                ${renderAdminCommercialSdrChart(rankedActive)}
+              </section>
+            </section>
+
+            <section class="sdr-card commercial-sdr-events-card">
+              <div class="commercial-sdr-section-head">
+                <div>
+                  <span>Eventos do período</span>
+                  <small>${escapeHtml(formatAdminCommercialSdrPlural((filtered.events || []).length, "registro"))}</small>
+                </div>
+              </div>
+              ${table.markup}
+            </section>
+          `
+      }
     </div>
   `;
   window.requestAnimationFrame(() => {
     hydrateAdminCommercialSdrActivityVisuals().catch((error) => console.error("[admin] commercial sdr visuals failed", error));
   });
-};
-
-const hydrateAdminCommercialSdrChart = async () => {
-  const root = adminCommercialSdrActivityContent;
-  if (!(root instanceof HTMLElement)) return;
-  const canvas = root.querySelector("[data-admin-commercial-sdr-chart]");
-  if (!(canvas instanceof HTMLCanvasElement)) return;
-  if (adminCommercialSdrActivityState.chart?.destroy) adminCommercialSdrActivityState.chart.destroy();
-  const filtered = getFilteredAdminCommercialSdrActivityData(adminCommercialSdrActivityState.data || {}, adminCommercialSdrActivityState.filters || {});
-  const rows = filtered.sdrs
-    .slice()
-    .sort((a, b) => Number(b.scheduled || 0) - Number(a.scheduled || 0) || Number(b.totalCalls || 0) - Number(a.totalCalls || 0))
-    .slice(0, 8);
-  if (!rows.length) {
-    adminCommercialSdrActivityState.chart = null;
-    return;
-  }
-  const ChartJs = await loadChartJs();
-  adminCommercialSdrActivityState.chart = new ChartJs(canvas.getContext("2d"), {
-    type: "bar",
-    data: {
-      labels: rows.map((row) => String(row.sdrName || "SDR")),
-      datasets: [
-        {
-          label: "Ligações",
-          data: rows.map((row) => Number(row.totalCalls || 0)),
-          backgroundColor: "rgba(127, 183, 255, 0.72)",
-          borderRadius: 10,
-          borderSkipped: false,
-        },
-        {
-          label: "Agendadas",
-          data: rows.map((row) => Number(row.scheduled || 0)),
-          backgroundColor: "rgba(52, 211, 153, 0.78)",
-          borderRadius: 10,
-          borderSkipped: false,
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: { legend: { display: false }, tooltip: { mode: "index", intersect: false } },
-      scales: {
-        x: { ticks: { color: "rgba(222,230,244,0.62)", maxRotation: 0 }, grid: { display: false } },
-        y: { beginAtZero: true, ticks: { color: "rgba(222,230,244,0.5)", precision: 0 }, grid: { color: "rgba(255,255,255,0.06)" } },
-      },
-    },
-  });
-};
-
-const hydrateAdminCommercialSdrActivityVisuals = async () => {
-  const root = adminCommercialSdrActivityContent;
-  if (!(root instanceof HTMLElement)) return;
-  hydrateSdrCountUps(root);
-  await hydrateAdminCommercialSdrChart();
 };
 
 const loadAdminCommercialSdrActivity = async ({ force = false } = {}) => {
@@ -35673,12 +35887,24 @@ document.addEventListener("change", (event) => {
     if (target.checked) current.add(uid);
     else current.delete(uid);
     adminCommercialSdrActivityState.filters.selectedSdrUids = [...current];
+    adminCommercialSdrActivityState.filters.tablePage = 1;
     renderAdminCommercialSdrActivity();
   }
   if (target instanceof HTMLInputElement && target.matches("[data-commercial-sdr-picker-all]")) {
     const available = Array.isArray(adminCommercialSdrActivityState.data?.sdrs) ? adminCommercialSdrActivityState.data.sdrs.map((row) => String(row?.sdrUid || "").trim()).filter(Boolean) : [];
     adminCommercialSdrActivityState.filters.selectedSdrUids = target.checked ? available : [];
+    adminCommercialSdrActivityState.filters.tablePage = 1;
     renderAdminCommercialSdrActivity();
+  }
+  if (target instanceof HTMLInputElement && target.matches('[data-commercial-sdr-range="from"], [data-commercial-sdr-range="to"]')) {
+    const root = target.closest("[data-admin-commercial-sdr-activity-content]") || document;
+    const from = root.querySelector('[data-commercial-sdr-range="from"]')?.value || "";
+    const to = root.querySelector('[data-commercial-sdr-range="to"]')?.value || "";
+    adminCommercialSdrActivityState.filters.from = String(from || "").trim();
+    adminCommercialSdrActivityState.filters.to = String(to || "").trim();
+    adminCommercialSdrActivityState.filters.tablePage = 1;
+    adminCommercialSdrActivityState.loadedAt = 0;
+    loadAdminCommercialSdrActivity({ force: true }).catch((error) => console.error("[admin] commercial sdr custom range failed", error));
   }
 });
 
@@ -35739,6 +35965,7 @@ document.addEventListener("click", (event) => {
     event.preventDefault();
     const period = String(commercialSdrPeriod.getAttribute("data-commercial-sdr-period") || "today").trim();
     adminCommercialSdrActivityState.filters.period = ["today", "week", "month", "custom"].includes(period) ? period : "today";
+    adminCommercialSdrActivityState.filters.tablePage = 1;
     if (period !== "custom") {
       adminCommercialSdrActivityState.loadedAt = 0;
       loadAdminCommercialSdrActivity({ force: true }).catch((error) => console.error("[admin] commercial sdr period failed", error));
@@ -35768,7 +35995,35 @@ document.addEventListener("click", (event) => {
   if (commercialSdrRankMetric instanceof HTMLButtonElement) {
     event.preventDefault();
     const metric = String(commercialSdrRankMetric.getAttribute("data-commercial-sdr-rank-metric") || "scheduled").trim();
-    adminCommercialSdrActivityState.filters.rankMetric = ["scheduled", "callToScheduleRate", "totalCalls", "totalMeetings"].includes(metric) ? metric : "scheduled";
+    adminCommercialSdrActivityState.filters.rankMetric = ["scheduled", "callToScheduleRate", "totalCalls"].includes(metric) ? metric : "scheduled";
+    renderAdminCommercialSdrActivity();
+    return;
+  }
+
+  const commercialSdrZeroToggle = target.closest("[data-commercial-sdr-zero-toggle]");
+  if (commercialSdrZeroToggle instanceof HTMLButtonElement) {
+    event.preventDefault();
+    adminCommercialSdrActivityState.filters.zeroGroupOpen = !adminCommercialSdrActivityState.filters.zeroGroupOpen;
+    renderAdminCommercialSdrActivity();
+    return;
+  }
+
+  const commercialSdrTableSort = target.closest("[data-commercial-sdr-table-sort]");
+  if (commercialSdrTableSort instanceof HTMLButtonElement) {
+    event.preventDefault();
+    const nextKey = String(commercialSdrTableSort.getAttribute("data-commercial-sdr-table-sort") || "time").trim();
+    const sameKey = adminCommercialSdrActivityState.filters.tableSortKey === nextKey;
+    adminCommercialSdrActivityState.filters.tableSortKey = ADMIN_COMMERCIAL_SDR_SORTABLE_COLUMNS.has(nextKey) ? nextKey : "time";
+    adminCommercialSdrActivityState.filters.tableSortDir = sameKey && adminCommercialSdrActivityState.filters.tableSortDir === "desc" ? "asc" : "desc";
+    adminCommercialSdrActivityState.filters.tablePage = 1;
+    renderAdminCommercialSdrActivity();
+    return;
+  }
+
+  const commercialSdrPage = target.closest("[data-commercial-sdr-page]");
+  if (commercialSdrPage instanceof HTMLButtonElement) {
+    event.preventDefault();
+    adminCommercialSdrActivityState.filters.tablePage = Math.max(1, Number(commercialSdrPage.getAttribute("data-commercial-sdr-page")) || 1);
     renderAdminCommercialSdrActivity();
     return;
   }
