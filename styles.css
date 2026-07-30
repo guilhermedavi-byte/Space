@@ -24603,6 +24603,82 @@ body.has-space-env-banner{padding-top:46px}
   gap: 32px;
 }
 
+.commercial-sdr-admin-panel .commercial-overview-head {
+  position: relative;
+  align-items: center;
+}
+
+.commercial-sdr-admin-panel .commercial-overview-head > div:first-child {
+  min-width: 0;
+}
+
+.commercial-sdr-admin-panel .commercial-overview-head h2 {
+  margin: 0;
+}
+
+.commercial-sdr-header-actions {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  margin-left: auto;
+}
+
+.commercial-sdr-head-filter,
+.commercial-sdr-rank-trigger {
+  min-height: 36px;
+  padding: 0 10px;
+  gap: 7px;
+  border-radius: 11px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.commercial-sdr-head-filter {
+  max-width: min(100%, 220px);
+}
+
+.commercial-sdr-head-filter span,
+.commercial-sdr-rank-trigger span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.commercial-sdr-head-filter.is-active::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #ff6d58;
+  box-shadow: 0 0 0 3px rgba(255, 109, 88, 0.14);
+  flex: 0 0 auto;
+}
+
+.commercial-sdr-filters-popover,
+.commercial-sdr-rank-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(20, 24, 34, 0.99), rgba(13, 16, 24, 0.995));
+  box-shadow: 0 20px 44px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(18px);
+}
+
+.commercial-sdr-filters-popover {
+  width: min(360px, calc(100vw - 32px));
+  padding: 14px;
+  display: grid;
+  gap: 14px;
+}
+
+.commercial-sdr-filters-group {
+  display: grid;
+  gap: 8px;
+}
+
 .commercial-sdr-admin-periods {
   grid-template-columns: repeat(4, minmax(82px, 1fr));
 }
@@ -24760,13 +24836,13 @@ body.has-space-env-banner{padding-top:46px}
 
 .commercial-sdr-admin-kpi-strip {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 24px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 20px;
 }
 
 .commercial-sdr-admin-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 24px;
   align-items: start;
 }
@@ -24779,6 +24855,13 @@ body.has-space-env-banner{padding-top:46px}
   padding: 20px;
   display: grid;
   gap: 8px;
+}
+
+.commercial-sdr-kpi-value-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .commercial-sdr-kpi-label {
@@ -24797,8 +24880,9 @@ body.has-space-env-banner{padding-top:46px}
 }
 
 .commercial-sdr-kpi-context {
-  color: rgba(222, 230, 244, 0.74);
-  font-size: 13px;
+  color: rgba(222, 230, 244, 0.58);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .commercial-sdr-kpi-delta {
@@ -24843,6 +24927,47 @@ body.has-space-env-banner{padding-top:46px}
 .commercial-sdr-graph-card,
 .commercial-sdr-events-card {
   gap: 20px;
+}
+
+.commercial-sdr-rank-filter {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.commercial-sdr-rank-trigger {
+  max-width: min(100%, 260px);
+}
+
+.commercial-sdr-rank-menu {
+  width: 240px;
+  padding: 8px;
+  display: grid;
+  gap: 4px;
+}
+
+.commercial-sdr-rank-menu-item {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: rgba(244, 246, 250, 0.88);
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font: 700 13px "Plus Jakarta Sans", system-ui, sans-serif;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.commercial-sdr-rank-menu-item:hover,
+.commercial-sdr-rank-menu-item:focus-visible {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.commercial-sdr-rank-menu-item.is-active {
+  background: rgba(255, 109, 88, 0.12);
+  color: #ffd6ce;
 }
 
 .commercial-sdr-ranking-head,
@@ -25224,13 +25349,29 @@ body.has-space-env-banner{padding-top:46px}
 }
 
 @media (max-width: 1080px) {
-  .commercial-sdr-admin-toolbar-main,
-  .commercial-sdr-admin-grid {
-    grid-template-columns: 1fr;
+  .commercial-sdr-admin-kpi-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 900px) {
+  .commercial-sdr-admin-panel .commercial-overview-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .commercial-sdr-header-actions {
+    width: 100%;
+    justify-content: flex-start;
+    margin-left: 0;
+  }
+
+  .commercial-sdr-filters-popover,
+  .commercial-sdr-rank-menu {
+    right: auto;
+    left: 0;
+  }
+
   .commercial-sdr-ranking-head,
   .commercial-sdr-ranking-row {
     grid-template-columns: 28px minmax(0, 1fr) 64px 72px 92px;
@@ -25243,8 +25384,8 @@ body.has-space-env-banner{padding-top:46px}
 }
 
 @media (max-width: 720px) {
-  .commercial-sdr-admin-toolbar {
-    padding: 16px;
+  .commercial-sdr-admin-kpi-strip {
+    grid-template-columns: 1fr;
   }
 
   .commercial-sdr-custom-range {
@@ -25260,5 +25401,9 @@ body.has-space-env-banner{padding-top:46px}
   .commercial-sdr-bars-label {
     flex-direction: column;
     align-items: start;
+  }
+
+  .commercial-sdr-filters-popover {
+    width: min(100vw - 32px, 360px);
   }
 }
