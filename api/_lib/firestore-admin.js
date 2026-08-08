@@ -3,6 +3,8 @@ const {
   FIRESTORE_BASE,
   decodeFields,
   encodeFields,
+  encodeValue,
+  firestoreRunQuery,
   getDocIdFromName,
   requestJson,
 } = require("./firestore-rest");
@@ -47,6 +49,63 @@ const listCollectionAsAdmin = async (collectionPath, { pageSize = 1000 } = {}) =
     if (!pageToken) break;
   }
   return all;
+};
+
+const queryCollectionByDateRangeAsAdmin = async (collectionPath, { dateField = "dateKey", from = "", to = "" } = {}) => {
+  const path = String(collectionPath || "").replace(/^\/+/, "");
+  const fromKey = String(from || "").trim();
+  const toKey = String(to || "").trim();
+  if (!path) throw new Error("missing_collection");
+  if (!fromKey || !toKey) throw new Error("missing_date_range");
+  if (path.includes("/")) throw new Error("nested_collection_query_not_supported");
+  const accessToken = await getAccessToken();
+  const response = await firestoreRunQuery({
+    idToken: accessToken,
+    structuredQuery: {
+      from: [{ collectionId: path }],
+      where: {
+        compositeFilter: {
+          op: "AND",
+          filters: [
+            {
+              fieldFilter: {
+                field: { fieldPath: dateField },
+                op: "GREATER_THAN_OR_EQUAL",
+                value: encodeValue(fromKey),
+              },
+            },
+            {
+              fieldFilter: {
+                field: { fieldPath: dateField },
+                op: "LESS_THAN_OR_EQUAL",
+                value: encodeValue(toKey),
+              },
+            },
+          ],
+        },
+      },
+      orderBy: [{ field: { fieldPath: dateField }, direction: "ASCENDING" }],
+    },
+  });
+  if (!response.ok) {
+    const error = new Error("firestore_admin_query_failed");
+    error.status = response.status;
+    error.details = response.data || response.text || null;
+    throw error;
+  }
+  const rows = Array.isArray(response.data) ? response.data : [];
+  return rows
+    .map((row) => row?.document)
+    .filter(Boolean)
+    .map((doc) => {
+      const firestoreDocId = getDocIdFromName(doc.name);
+      const fields = decodeFields(doc);
+      return {
+        ...fields,
+        id: typeof fields?.id === "string" && fields.id.trim() ? fields.id : firestoreDocId,
+        firestoreDocId,
+      };
+    });
 };
 
 const getDocumentAsAdmin = async (docPath) => {
@@ -107,4 +166,10 @@ const commitWritesAsAdmin = async ({ writes } = {}) => {
   });
 };
 
-module.exports = { commitWritesAsAdmin, createDocumentAsAdmin, getDocumentAsAdmin, listCollectionAsAdmin };
+module.exports = {
+  commitWritesAsAdmin,
+  createDocumentAsAdmin,
+  getDocumentAsAdmin,
+  listCollectionAsAdmin,
+  queryCollectionByDateRangeAsAdmin,
+};

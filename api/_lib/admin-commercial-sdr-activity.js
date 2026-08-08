@@ -1,7 +1,6 @@
-const { listCollectionAsAdmin } = require("./firestore-admin");
+const { listCollectionAsAdmin, queryCollectionByDateRangeAsAdmin } = require("./firestore-admin");
 
 const ACTIVITY_COLLECTION = "sdrActivityEvents";
-const DAILY_COLLECTION = "sdrDailyStats";
 const TIME_ZONE = "America/Sao_Paulo";
 const VALID_CALL_OUTCOMES = new Set(["nao_atendeu", "atendeu", "agendou", "double"]);
 const VALID_MEETING_OUTCOMES = new Set(["show", "noshow"]);
@@ -113,32 +112,6 @@ const normalizeActivityEvent = (row = {}) => {
   };
 };
 
-const normalizeDailyStat = (row = {}) => {
-  const id = safeString(row?.firestoreDocId || row?.id);
-  const sdrUid = safeString(row?.sdrUid);
-  const dateKey = parseDateKey(row?.dateKey);
-  if (!id || !sdrUid || !dateKey) return null;
-  return {
-    id,
-    sdrUid,
-    sdrName: safeString(row?.sdrName) || "SDR",
-    sdrEmail: safeString(row?.sdrEmail).toLowerCase(),
-    dateKey,
-    totalCalls: Math.max(0, Number(row?.totalCalls || 0)),
-    answered: Math.max(0, Number(row?.answered || 0)),
-    scheduled: Math.max(0, Number(row?.scheduled || 0)),
-    double: Math.max(0, Number(row?.double || 0)),
-    shows: Math.max(0, Number(row?.shows || 0)),
-    noShows: Math.max(0, Number(row?.noShows || 0)),
-    totalMeetings: Math.max(0, Number(row?.totalMeetings || 0)),
-    answerRate: Number(row?.answerRate || 0),
-    scheduleRate: Number(row?.scheduleRate || 0),
-    callToScheduleRate: Number(row?.callToScheduleRate || 0),
-    showRate: Number(row?.showRate || 0),
-    updatedAt: safeString(row?.updatedAt),
-  };
-};
-
 const summarizeDailyRows = (rows = []) => {
   const base = (Array.isArray(rows) ? rows : []).reduce(
     (acc, row) => {
@@ -160,6 +133,31 @@ const summarizeDailyRows = (rows = []) => {
     callToScheduleRate: base.totalCalls ? (base.scheduled / base.totalCalls) * 100 : 0,
     showRate: base.totalMeetings ? (base.shows / base.totalMeetings) * 100 : 0,
   };
+};
+
+const summarizeActivityEvents = (rows = []) => {
+  const base = (Array.isArray(rows) ? rows : []).reduce(
+    (acc, row) => {
+      const type = safeString(row?.eventType);
+      const outcome = safeString(row?.outcome);
+      if (type === "call") {
+        acc.totalCalls += 1;
+        if (outcome === "atendeu" || outcome === "agendou" || outcome === "double") acc.answered += 1;
+        if (outcome === "agendou" || outcome === "double") {
+          acc.scheduled += 1;
+          if (outcome === "double") acc.double += 1;
+        }
+      }
+      if (type === "meeting") {
+        acc.totalMeetings += 1;
+        if (outcome === "show") acc.shows += 1;
+        if (outcome === "noshow") acc.noShows += 1;
+      }
+      return acc;
+    },
+    { totalCalls: 0, answered: 0, scheduled: 0, double: 0, shows: 0, noShows: 0, totalMeetings: 0 }
+  );
+  return summarizeDailyRows([base]);
 };
 
 const resolvePeriodRange = ({ period = "today", from = "", to = "", now = new Date() } = {}) => {
@@ -213,34 +211,36 @@ const compareEventsDesc = (a, b) => {
 };
 
 const loadAdminCommercialSdrActivity = async ({ period = "today", from = "", to = "" } = {}) => {
-  const [userRows, eventRows, dailyRows] = await Promise.all([
-    listCollectionAsAdmin("users", { pageSize: 1000 }),
-    listCollectionAsAdmin(ACTIVITY_COLLECTION, { pageSize: 1000 }).catch(() => []),
-    listCollectionAsAdmin(DAILY_COLLECTION, { pageSize: 1000 }).catch(() => []),
-  ]);
-
   const range = resolvePeriodRange({ period, from, to });
+  const previousRange = resolvePreviousRange(range);
+  const combinedFromKey = previousRange.fromKey < range.fromKey ? previousRange.fromKey : range.fromKey;
+  const combinedToKey = previousRange.toKey > range.toKey ? previousRange.toKey : range.toKey;
+  const [userRows, eventRows] = await Promise.all([
+    listCollectionAsAdmin("users", { pageSize: 1000 }),
+    queryCollectionByDateRangeAsAdmin(ACTIVITY_COLLECTION, {
+      dateField: "dateKey",
+      from: combinedFromKey,
+      to: combinedToKey,
+    }).catch(() => []),
+  ]);
   const users = userRows.map(normalizeGrowthUser).filter(Boolean);
   const usersByUid = new Map(users.map((user) => [user.uid, user]));
   const knownUids = new Set(users.map((user) => user.uid));
   const normalizedEvents = eventRows.map(normalizeActivityEvent).filter((row) => row && knownUids.has(row.sdrUid));
-  const normalizedDaily = dailyRows.map(normalizeDailyStat).filter((row) => row && knownUids.has(row.sdrUid));
   const events = filterByRange(normalizedEvents, range.fromKey, range.toKey, (row) => row.localDateKey || row.dateKey);
-  const daily = filterByRange(normalizedDaily, range.fromKey, range.toKey, (row) => row.dateKey);
-  const previousRange = resolvePreviousRange(range);
-  const previousDaily = filterByRange(normalizedDaily, previousRange.fromKey, previousRange.toKey, (row) => row.dateKey);
+  const previousEvents = filterByRange(normalizedEvents, previousRange.fromKey, previousRange.toKey, (row) => row.localDateKey || row.dateKey);
 
   const summaries = users
-    .map((uid) => {
-      const safeUid = safeString(uid?.uid || uid);
-      const user = usersByUid.get(safeUid) || {};
-      const rows = daily.filter((row) => row.sdrUid === safeUid);
-      const summary = summarizeDailyRows(rows);
+    .map((user) => {
+      const safeUid = safeString(user?.uid);
+      const matchedUser = usersByUid.get(safeUid) || {};
+      const rows = events.filter((row) => row.sdrUid === safeUid);
+      const summary = summarizeActivityEvents(rows);
       return {
         sdrUid: safeUid,
-        sdrName: safeString(user.nome || rows[0]?.sdrName) || "SDR",
-        sdrEmail: safeString(user.email || rows[0]?.sdrEmail).toLowerCase(),
-        ativo: user.ativo !== false,
+        sdrName: safeString(matchedUser.nome || rows[0]?.sdrName) || "SDR",
+        sdrEmail: safeString(matchedUser.email || rows[0]?.sdrEmail).toLowerCase(),
+        ativo: matchedUser.ativo !== false,
         ...summary,
       };
     })
@@ -263,14 +263,14 @@ const loadAdminCommercialSdrActivity = async ({ period = "today", from = "", to 
   return {
     ok: true,
     filters: range,
-    summary: summarizeDailyRows(daily),
-    previousSummary: summarizeDailyRows(previousDaily),
+    summary: summarizeActivityEvents(events),
+    previousSummary: summarizeActivityEvents(previousEvents),
     previousFilters: previousRange,
     sdrs: summaries,
     events: enrichedEvents,
     sourceTotals: {
       users: users.length,
-      dailyRows: daily.length,
+      dailyRows: 0,
       eventRows: enrichedEvents.length,
     },
   };
@@ -278,12 +278,11 @@ const loadAdminCommercialSdrActivity = async ({ period = "today", from = "", to 
 
 module.exports = {
   ACTIVITY_COLLECTION,
-  DAILY_COLLECTION,
   addDaysToKey,
   loadAdminCommercialSdrActivity,
   normalizeActivityEvent,
-  normalizeDailyStat,
   resolvePeriodRange,
   resolvePreviousRange,
+  summarizeActivityEvents,
   summarizeDailyRows,
 };

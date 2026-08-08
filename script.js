@@ -14700,6 +14700,15 @@ const adminCommercialSdrActivityState = {
   loadedAt: 0,
   error: "",
   chart: null,
+  draftFilters: null,
+  cacheEntries: [],
+  requestSeq: 0,
+  activeRequestController: null,
+  activeRequestId: 0,
+  showSkeleton: false,
+  skeletonVisibleAt: 0,
+  skeletonDelayTimer: 0,
+  lastProfile: null,
   filters: {
     period: "today",
     from: "",
@@ -15520,10 +15529,170 @@ const getAdminCommercialSdrRankMetricValue = (row = {}, metric = "scheduled") =>
   if (String(metric || "") === "totalCalls") return Number(row.totalCalls || 0);
   return Number(row.scheduled || 0);
 };
-const getFilteredAdminCommercialSdrActivityData = (data = {}, filters = {}) => {
-  const sdrs = Array.isArray(data.sdrs) ? data.sdrs.slice() : [];
-  const events = Array.isArray(data.events) ? data.events.slice() : [];
-  const availableSdrs = sdrs
+const ADMIN_COMMERCIAL_SDR_SKELETON_DELAY_MS = 150;
+const ADMIN_COMMERCIAL_SDR_SKELETON_MIN_MS = 300;
+const cloneAdminCommercialSdrSelection = (value) =>
+  Array.isArray(value) ? value.map((item) => String(item || "").trim()).filter(Boolean) : null;
+const cloneAdminCommercialSdrFilterDraft = (value = {}) => ({
+  period: ["today", "week", "month", "custom"].includes(String(value?.period || "")) ? String(value.period) : "today",
+  from: isValidDateKey(String(value?.from || "")) ? String(value.from) : "",
+  to: isValidDateKey(String(value?.to || "")) ? String(value.to) : "",
+  selectedSdrUids: cloneAdminCommercialSdrSelection(value?.selectedSdrUids),
+});
+const getAdminCommercialSdrAppliedFilters = () =>
+  cloneAdminCommercialSdrFilterDraft({
+    period: adminCommercialSdrActivityState.filters.period,
+    from: adminCommercialSdrActivityState.filters.from,
+    to: adminCommercialSdrActivityState.filters.to,
+    selectedSdrUids: adminCommercialSdrActivityState.filters.selectedSdrUids,
+  });
+const applyAdminCommercialSdrDraftToState = (draft = {}) => {
+  const next = cloneAdminCommercialSdrFilterDraft(draft);
+  adminCommercialSdrActivityState.filters.period = next.period;
+  adminCommercialSdrActivityState.filters.from = next.from;
+  adminCommercialSdrActivityState.filters.to = next.to;
+  adminCommercialSdrActivityState.filters.selectedSdrUids = next.selectedSdrUids;
+};
+const resolveAdminCommercialSdrRange = ({ period = "today", from = "", to = "" } = {}) => {
+  const todayKey = createDateKey(new Date());
+  const safePeriod = ["today", "week", "month", "custom"].includes(String(period || "")) ? String(period) : "today";
+  if (safePeriod === "custom") {
+    if (isValidDateKey(from) && isValidDateKey(to) && from <= to) return { period: safePeriod, fromKey: from, toKey: to, todayKey };
+    return { period: safePeriod, fromKey: todayKey, toKey: todayKey, todayKey };
+  }
+  if (safePeriod === "week") {
+    const start = createDateKey(addDays(parseDateKey(todayKey) || new Date(), -6));
+    return { period: safePeriod, fromKey: start, toKey: todayKey, todayKey };
+  }
+  if (safePeriod === "month") {
+    const start = createDateKey(addDays(parseDateKey(todayKey) || new Date(), -29));
+    return { period: safePeriod, fromKey: start, toKey: todayKey, todayKey };
+  }
+  return { period: "today", fromKey: todayKey, toKey: todayKey, todayKey };
+};
+const resolveAdminCommercialSdrPreviousRange = ({ period = "today", fromKey = "", toKey = "", todayKey = "" } = {}) => {
+  const safePeriod = ["today", "week", "month", "custom"].includes(String(period || "")) ? String(period) : "today";
+  const safeFrom = isValidDateKey(fromKey) ? fromKey : isValidDateKey(todayKey) ? todayKey : createDateKey(new Date());
+  const safeTo = isValidDateKey(toKey) ? toKey : safeFrom;
+  if (safePeriod === "today") {
+    const prev = createDateKey(addDays(parseDateKey(safeFrom) || new Date(), -1));
+    return { period: safePeriod, fromKey: prev, toKey: prev };
+  }
+  if (safePeriod === "week") {
+    return {
+      period: safePeriod,
+      fromKey: createDateKey(addDays(parseDateKey(safeFrom) || new Date(), -7)),
+      toKey: createDateKey(addDays(parseDateKey(safeTo) || new Date(), -7)),
+    };
+  }
+  if (safePeriod === "month") {
+    return {
+      period: safePeriod,
+      fromKey: createDateKey(addDays(parseDateKey(safeFrom) || new Date(), -30)),
+      toKey: createDateKey(addDays(parseDateKey(safeTo) || new Date(), -30)),
+    };
+  }
+  const spanDays = Math.max(1, Math.round(((parseDateKey(safeTo)?.getTime() || 0) - (parseDateKey(safeFrom)?.getTime() || 0)) / 86400000) + 1);
+  const previousTo = createDateKey(addDays(parseDateKey(safeFrom) || new Date(), -1));
+  const previousFrom = createDateKey(addDays(parseDateKey(previousTo) || new Date(), -(spanDays - 1)));
+  return { period: safePeriod, fromKey: previousFrom, toKey: previousTo };
+};
+const rangesContainAdminCommercialSdr = (outer, inner) =>
+  Boolean(outer && inner && isValidDateKey(outer.fromKey) && isValidDateKey(outer.toKey) && isValidDateKey(inner.fromKey) && isValidDateKey(inner.toKey) && outer.fromKey <= inner.fromKey && outer.toKey >= inner.toKey);
+const getAdminCommercialSdrFilterRangeKey = (range = {}) => `${String(range?.fromKey || "")}:${String(range?.toKey || "")}`;
+const getAdminCommercialSdrFilterValidation = (draft = {}) => {
+  if (String(draft?.period || "") !== "custom") return { isValid: true, message: "" };
+  const from = String(draft?.from || "");
+  const to = String(draft?.to || "");
+  if (!from || !to) return { isValid: false, message: "Preencha De e Até." };
+  if (!isValidDateKey(from) || !isValidDateKey(to)) return { isValid: false, message: "Datas inválidas." };
+  if (from > to) return { isValid: false, message: "A data inicial não pode ser maior que a final." };
+  return { isValid: true, message: "" };
+};
+const areAdminCommercialSdrDraftsEqual = (left = {}, right = {}) => {
+  const a = cloneAdminCommercialSdrFilterDraft(left);
+  const b = cloneAdminCommercialSdrFilterDraft(right);
+  if (a.period !== b.period || a.from !== b.from || a.to !== b.to) return false;
+  const leftUids = Array.isArray(a.selectedSdrUids) ? [...a.selectedSdrUids].sort() : [];
+  const rightUids = Array.isArray(b.selectedSdrUids) ? [...b.selectedSdrUids].sort() : [];
+  if (leftUids.length !== rightUids.length) return false;
+  return leftUids.every((value, index) => value === rightUids[index]);
+};
+const summarizeCommercialSdrEvents = (rows = []) => {
+  const base = (Array.isArray(rows) ? rows : []).reduce(
+    (acc, row) => {
+      const type = String(row?.eventType || "");
+      const outcome = String(row?.outcome || "");
+      if (type === "call") {
+        acc.totalCalls += 1;
+        if (outcome === "atendeu" || outcome === "agendou" || outcome === "double") acc.answered += 1;
+        if (outcome === "agendou" || outcome === "double") {
+          acc.scheduled += 1;
+          if (outcome === "double") acc.double += 1;
+        }
+      }
+      if (type === "meeting") {
+        acc.totalMeetings += 1;
+        if (outcome === "show") acc.shows += 1;
+        if (outcome === "noshow") acc.noShows += 1;
+      }
+      return acc;
+    },
+    { totalCalls: 0, answered: 0, scheduled: 0, double: 0, shows: 0, noShows: 0, totalMeetings: 0 }
+  );
+  return summarizeCommercialSdrDailyRows([base]);
+};
+const deriveAdminCommercialSdrEventSlice = (events = [], fromKey = "", toKey = "") =>
+  (Array.isArray(events) ? events : []).filter((row) => {
+    const key = String(row?.localDateKey || row?.dateKey || "");
+    return isValidDateKey(key) && key >= fromKey && key <= toKey;
+  });
+const buildAdminCommercialSdrSummariesFromEvents = (events = [], availableSdrs = []) => {
+  const eventsByUid = new Map();
+  (Array.isArray(events) ? events : []).forEach((row) => {
+    const uid = String(row?.sdrUid || "").trim();
+    if (!uid) return;
+    if (!eventsByUid.has(uid)) eventsByUid.set(uid, []);
+    eventsByUid.get(uid).push(row);
+  });
+  return (Array.isArray(availableSdrs) ? availableSdrs : [])
+    .map((row) => {
+      const rows = eventsByUid.get(String(row.uid || "").trim()) || [];
+      const summary = summarizeCommercialSdrEvents(rows);
+      return {
+        sdrUid: row.uid,
+        sdrName: row.name,
+        sdrEmail: row.email,
+        ativo: row.active !== false,
+        ...summary,
+      };
+    })
+    .sort(
+      (a, b) =>
+        Number(b.scheduled || 0) - Number(a.scheduled || 0) ||
+        Number(b.totalCalls || 0) - Number(a.totalCalls || 0) ||
+        String(a.sdrName || "").localeCompare(String(b.sdrName || ""), "pt-BR")
+    );
+};
+const getAdminCommercialSdrCoveringCacheEntry = (range = {}) => {
+  const entries = Array.isArray(adminCommercialSdrActivityState.cacheEntries) ? adminCommercialSdrActivityState.cacheEntries : [];
+  const matches = entries.filter((entry) => rangesContainAdminCommercialSdr(entry?.range, range));
+  if (!matches.length) return null;
+  matches.sort((left, right) => {
+    const leftSpan = (parseDateKey(left.range.toKey)?.getTime() || 0) - (parseDateKey(left.range.fromKey)?.getTime() || 0);
+    const rightSpan = (parseDateKey(right.range.toKey)?.getTime() || 0) - (parseDateKey(right.range.fromKey)?.getTime() || 0);
+    return leftSpan - rightSpan;
+  });
+  return matches[0] || null;
+};
+const storeAdminCommercialSdrCacheEntry = (range = {}, data = {}) => {
+  const nextEntry = { key: getAdminCommercialSdrFilterRangeKey(range), range: { ...range }, data, cachedAt: Date.now() };
+  const current = Array.isArray(adminCommercialSdrActivityState.cacheEntries) ? adminCommercialSdrActivityState.cacheEntries : [];
+  adminCommercialSdrActivityState.cacheEntries = [nextEntry, ...current.filter((entry) => entry?.key !== nextEntry.key)].slice(0, 6);
+};
+const deriveAdminCommercialSdrDataForRange = (source = {}, range = {}, selectedFilters = {}) => {
+  const sdrRows = Array.isArray(source.sdrs) ? source.sdrs : [];
+  const availableSdrs = sdrRows
     .map((row) => ({
       uid: String(row.sdrUid || "").trim(),
       name: String(row.sdrName || "SDR").trim() || "SDR",
@@ -15532,21 +15701,41 @@ const getFilteredAdminCommercialSdrActivityData = (data = {}, filters = {}) => {
     }))
     .filter((row) => row.uid);
   const availableUidSet = new Set(availableSdrs.map((row) => row.uid));
-  const requested = Array.isArray(filters.selectedSdrUids) ? filters.selectedSdrUids.map((value) => String(value || "").trim()).filter(Boolean) : [];
+  const requested = Array.isArray(selectedFilters.selectedSdrUids) ? selectedFilters.selectedSdrUids.map((value) => String(value || "").trim()).filter(Boolean) : [];
   const selectedUids = requested.filter((uid) => availableUidSet.has(uid));
-  const effectiveUids = Array.isArray(filters.selectedSdrUids) ? selectedUids : availableSdrs.map((row) => row.uid);
+  const effectiveUids = Array.isArray(selectedFilters.selectedSdrUids) ? selectedUids : availableSdrs.map((row) => row.uid);
   const selectedSet = new Set(effectiveUids);
+  const eventsInRange = deriveAdminCommercialSdrEventSlice(source.events, range.fromKey, range.toKey);
+  const previousRange = resolveAdminCommercialSdrPreviousRange(range);
+  const baseCoverage = source?.filters && typeof source.filters === "object" ? source.filters : range;
+  const previousCovered = rangesContainAdminCommercialSdr(baseCoverage, previousRange);
+  const previousEvents = previousCovered ? deriveAdminCommercialSdrEventSlice(source.events, previousRange.fromKey, previousRange.toKey) : [];
+  const summaries = buildAdminCommercialSdrSummariesFromEvents(eventsInRange, availableSdrs);
   return {
     availableSdrs,
     selectedUids: effectiveUids,
     selectedSet,
-    previousSummary: data?.previousSummary && typeof data.previousSummary === "object" ? data.previousSummary : {},
-    previousFilters: data?.previousFilters && typeof data.previousFilters === "object" ? data.previousFilters : {},
-    sourceTotals: data?.sourceTotals && typeof data.sourceTotals === "object" ? data.sourceTotals : {},
-    summary: summarizeCommercialSdrDailyRows(sdrs.filter((row) => selectedSet.has(String(row.sdrUid || "").trim()))),
-    sdrs: sdrs.filter((row) => selectedSet.has(String(row.sdrUid || "").trim())),
-    events: events.filter((row) => selectedSet.has(String(row.sdrUid || "").trim())),
+    previousSummary:
+      previousCovered || getAdminCommercialSdrFilterRangeKey(range) !== getAdminCommercialSdrFilterRangeKey(source?.filters || {})
+        ? summarizeCommercialSdrEvents(previousEvents.filter((row) => selectedSet.has(String(row?.sdrUid || "").trim())))
+        : source?.previousSummary && typeof source.previousSummary === "object"
+          ? source.previousSummary
+          : {},
+    previousFilters:
+      previousCovered || getAdminCommercialSdrFilterRangeKey(range) !== getAdminCommercialSdrFilterRangeKey(source?.filters || {})
+        ? previousRange
+        : source?.previousFilters && typeof source.previousFilters === "object"
+          ? source.previousFilters
+          : previousRange,
+    sourceTotals: source?.sourceTotals && typeof source.sourceTotals === "object" ? source.sourceTotals : {},
+    summary: summarizeCommercialSdrEvents(eventsInRange.filter((row) => selectedSet.has(String(row?.sdrUid || "").trim()))),
+    sdrs: summaries.filter((row) => selectedSet.has(String(row.sdrUid || "").trim())),
+    events: eventsInRange.filter((row) => selectedSet.has(String(row?.sdrUid || "").trim())),
   };
+};
+const getFilteredAdminCommercialSdrActivityData = (data = {}, filters = {}) => {
+  const range = data?.filters && typeof data.filters === "object" ? data.filters : resolveAdminCommercialSdrRange(filters);
+  return deriveAdminCommercialSdrDataForRange(data, range, filters);
 };
 const sumCommercialSdrStats = (rows = []) => {
   const stats = {
@@ -16121,20 +16310,45 @@ const buildAdminCommercialSdrRankingBuckets = (rows = [], rankMetric = "schedule
   return { active, idle };
 };
 
-const renderAdminCommercialSdrSkeleton = () => `
-  <div class="sdr-panel commercial-sdr-admin-panel">
+const renderAdminCommercialSdrSkeleton = ({ filterLabel = "Hoje", filterActive = false, shimmer = false } = {}) => `
+  <div class="sdr-panel commercial-sdr-admin-panel commercial-sdr-admin-panel--loading ${shimmer ? "is-shimmer" : ""}" aria-busy="true">
     <div class="commercial-overview-head">
       <div>
         <h2>Pré-Vendas</h2>
       </div>
+      <div class="commercial-sdr-header-actions">
+        <button type="button" class="admin-ped-filter-trigger commercial-sdr-head-filter ${filterActive ? "is-active" : ""}" disabled aria-label="Filtros de Pré-Vendas">
+          ${renderAdminCommercialSdrFilterIcon()}
+          <span>${escapeHtml(filterLabel)}</span>
+        </button>
+      </div>
     </div>
     <section class="commercial-sdr-admin-kpi-strip">
       ${Array.from({ length: 4 })
-        .map(() => `<article class="commercial-sdr-kpi-card is-skeleton"><div class="commercial-sdr-skeleton-line"></div><div class="commercial-sdr-skeleton-block"></div><div class="commercial-sdr-skeleton-line is-wide"></div></article>`)
+        .map(
+          () => `<article class="commercial-sdr-kpi-card is-skeleton"><div class="commercial-sdr-skeleton-line"></div><div class="commercial-sdr-skeleton-line is-wide"></div><div class="commercial-sdr-skeleton-line is-short"></div></article>`
+        )
         .join("")}
     </section>
     <section class="commercial-sdr-admin-grid">
-      <article class="sdr-card commercial-sdr-ranking-card is-skeleton"><div class="commercial-sdr-skeleton-block"></div></article>
+      <article class="sdr-card commercial-sdr-ranking-card is-skeleton">
+        <div class="commercial-sdr-skeleton-line is-wide"></div>
+        <div class="commercial-sdr-skeleton-block"></div>
+      </article>
+    </section>
+    <section class="sdr-card commercial-sdr-events-card is-skeleton ${shimmer ? "is-shimmer" : ""}">
+      <div class="commercial-sdr-skeleton-line is-wide"></div>
+      <div class="commercial-sdr-table-skeleton">
+        ${Array.from({ length: 5 })
+          .map(
+            () => `
+              <div class="commercial-sdr-table-skeleton-row">
+                <span></span><span></span><span></span><span></span><span></span><span></span>
+              </div>
+            `
+          )
+          .join("")}
+      </div>
     </section>
   </div>
 `;
@@ -16296,26 +16510,47 @@ const hydrateAdminCommercialSdrActivityVisuals = async () => {
   hydrateSdrCountUps(root);
 };
 
+const discardAdminCommercialSdrDraft = () => {
+  adminCommercialSdrActivityState.draftFilters = null;
+  adminCommercialSdrActivityState.filters.pickerOpen = false;
+};
+
+const openAdminCommercialSdrDraft = () => {
+  adminCommercialSdrActivityState.draftFilters = getAdminCommercialSdrAppliedFilters();
+  adminCommercialSdrActivityState.filters.pickerOpen = true;
+  adminCommercialSdrActivityState.filters.rankMenuOpen = false;
+};
+
 const renderAdminCommercialSdrActivity = () => {
   if (!(adminCommercialSdrActivityContent instanceof HTMLElement)) return;
   const state = adminCommercialSdrActivityState;
-  const data = state.data || {};
+  adminCommercialSdrActivityContent.setAttribute("aria-busy", state.isLoading ? "true" : "false");
   const filters = state.filters || {};
-  const period = ["today", "week", "month", "custom"].includes(String(filters.period || "")) ? String(filters.period) : "today";
+  const appliedPeriod = ["today", "week", "month", "custom"].includes(String(filters.period || "")) ? String(filters.period) : "today";
+  const data = state.data && typeof state.data === "object" ? state.data : { filters: resolveAdminCommercialSdrRange(filters), sdrs: [], events: [] };
   const filtered = getFilteredAdminCommercialSdrActivityData(data, filters);
   const summary = filtered.summary || {};
   const previousSummary = filtered.previousSummary || {};
   const availableSdrs = Array.isArray(filtered.availableSdrs) ? filtered.availableSdrs : [];
   const selectedCount = filtered.selectedUids.length;
   const totalCount = availableSdrs.length;
-  const showCustom = period === "custom";
+  const appliedDraft = getAdminCommercialSdrAppliedFilters();
+  const draft = filters.pickerOpen ? cloneAdminCommercialSdrFilterDraft(state.draftFilters || appliedDraft) : appliedDraft;
+  const draftValidation = getAdminCommercialSdrFilterValidation(draft);
+  const hasDraftChanges = filters.pickerOpen ? !areAdminCommercialSdrDraftsEqual(draft, appliedDraft) : false;
+  const showCustom = draft.period === "custom";
+  const draftSelectedUids = Array.isArray(draft.selectedSdrUids)
+    ? draft.selectedSdrUids.filter((uid) => availableSdrs.some((row) => row.uid === uid))
+    : availableSdrs.map((row) => row.uid);
+  const draftSelectedSet = new Set(draftSelectedUids);
+  const draftSelectedCount = draftSelectedUids.length;
   const rankMetric = ["scheduled", "callToScheduleRate", "totalCalls"].includes(String(filters.rankMetric || "")) ? String(filters.rankMetric) : "scheduled";
   const { active: rankedActive, idle: rankedIdle } = buildAdminCommercialSdrRankingBuckets(filtered.sdrs || [], rankMetric);
   const allRankedRows = [...rankedActive, ...rankedIdle];
   const maxRankValue = Math.max(1, ...rankedActive.map((row) => getAdminCommercialSdrRankMetricValue(row, rankMetric)));
   const table = renderAdminCommercialSdrTable({
     events: filtered.events || [],
-    period,
+    period: appliedPeriod,
     sortKey: filters.tableSortKey,
     sortDir: filters.tableSortDir,
     page: filters.tablePage,
@@ -16323,8 +16558,11 @@ const renderAdminCommercialSdrActivity = () => {
   });
   adminCommercialSdrActivityState.filters.tablePage = table.safePage;
 
-  if (state.isLoading && !state.data) {
-    adminCommercialSdrActivityContent.innerHTML = renderAdminCommercialSdrSkeleton();
+  const filterSummaryLabel = getAdminCommercialSdrFilterSummaryLabel({ period: appliedPeriod, selectedCount, totalCount });
+  const filterActive = selectedCount < totalCount;
+
+  if (state.isLoading) {
+    adminCommercialSdrActivityContent.innerHTML = renderAdminCommercialSdrSkeleton({ filterLabel: filterSummaryLabel, filterActive, shimmer: state.showSkeleton });
     return;
   }
 
@@ -16332,12 +16570,12 @@ const renderAdminCommercialSdrActivity = () => {
     adminCommercialSdrActivityContent.innerHTML = `
       <div class="sdr-panel commercial-sdr-admin-panel">
         <div class="commercial-overview-head">
-          <div>
-            <h2>Pré-Vendas</h2>
-            <p>Não foi possível carregar agora.</p>
-          </div>
+          <div><h2>Pré-Vendas</h2></div>
         </div>
         <div class="commercial-overview-empty is-error">${escapeHtml(state.error)}</div>
+        <div class="commercial-sdr-error-actions">
+          <button type="button" class="admin-ped-filter-trigger" data-commercial-sdr-retry>Tentar novamente</button>
+        </div>
       </div>
     `;
     return;
@@ -16345,20 +16583,20 @@ const renderAdminCommercialSdrActivity = () => {
 
   const noneSelected = selectedCount <= 0 && totalCount > 0;
   adminCommercialSdrActivityContent.innerHTML = `
-    <div class="sdr-panel commercial-sdr-admin-panel">
+    <div class="sdr-panel commercial-sdr-admin-panel" aria-busy="false">
       <div class="commercial-overview-head">
         <div><h2>Pré-Vendas</h2></div>
         <div class="commercial-sdr-header-actions" data-commercial-sdr-filter>
-          <button type="button" class="admin-ped-filter-trigger commercial-sdr-head-filter ${selectedCount < totalCount ? "is-active" : ""}" data-commercial-sdr-picker-toggle aria-expanded="${filters.pickerOpen ? "true" : "false"}" aria-label="Abrir filtros de Pré-Vendas">
+          <button type="button" class="admin-ped-filter-trigger commercial-sdr-head-filter ${filterActive ? "is-active" : ""}" data-commercial-sdr-picker-toggle aria-expanded="${filters.pickerOpen ? "true" : "false"}" aria-label="Abrir filtros de Pré-Vendas">
             ${renderAdminCommercialSdrFilterIcon()}
-            <span>${escapeHtml(getAdminCommercialSdrFilterSummaryLabel({ period, selectedCount, totalCount }))}</span>
+            <span>${escapeHtml(filterSummaryLabel)}</span>
           </button>
           <div class="commercial-sdr-filters-popover ${filters.pickerOpen ? "is-open" : ""}" ${filters.pickerOpen ? "" : "hidden"}>
             <div class="commercial-sdr-filters-group">
               <span class="commercial-sdr-field-label">Período</span>
               <div class="sdr-period-toggle commercial-sdr-admin-periods" role="tablist" aria-label="Período da atividade SDR">
                 ${["today", "week", "month", "custom"]
-                  .map((key) => `<button type="button" data-commercial-sdr-period="${key}" class="${period === key ? "is-active" : ""}">${escapeHtml(getAdminCommercialSdrPeriodLabel(key))}</button>`)
+                  .map((key) => `<button type="button" data-commercial-sdr-period="${key}" class="${draft.period === key ? "is-active" : ""}">${escapeHtml(getAdminCommercialSdrPeriodLabel(key))}</button>`)
                   .join("")}
               </div>
             </div>
@@ -16366,8 +16604,8 @@ const renderAdminCommercialSdrActivity = () => {
               showCustom
                 ? `
                   <div class="commercial-sdr-custom-range">
-                    <label><span>De</span><input type="date" data-commercial-sdr-range="from" value="${escapeHtml(filters.from || "")}"></label>
-                    <label><span>Até</span><input type="date" data-commercial-sdr-range="to" value="${escapeHtml(filters.to || "")}"></label>
+                    <label><span>De</span><input type="date" data-commercial-sdr-range="from" value="${escapeHtml(draft.from || "")}"></label>
+                    <label><span>Até</span><input type="date" data-commercial-sdr-range="to" value="${escapeHtml(draft.to || "")}"></label>
                   </div>
                 `
                 : ""
@@ -16375,7 +16613,7 @@ const renderAdminCommercialSdrActivity = () => {
             <div class="commercial-sdr-filters-group">
               <span class="commercial-sdr-field-label">SDRs</span>
               <label class="commercial-sdr-picker-option is-all">
-                <input type="checkbox" data-commercial-sdr-picker-all ${selectedCount >= totalCount ? "checked" : ""}>
+                <input type="checkbox" data-commercial-sdr-picker-all ${draftSelectedCount >= totalCount && totalCount > 0 ? "checked" : ""}>
                 <span><strong>Todos os SDRs</strong><small>${escapeHtml(formatAdminCommercialSdrPlural(totalCount, "SDR"))}</small></span>
               </label>
               <div class="commercial-sdr-picker-list">
@@ -16384,13 +16622,22 @@ const renderAdminCommercialSdrActivity = () => {
                     .map(
                       (row) => `
                         <label class="commercial-sdr-picker-option">
-                          <input type="checkbox" data-commercial-sdr-picker-item="${escapeHtml(row.uid)}" ${filtered.selectedSet.has(row.uid) ? "checked" : ""}>
+                          <input type="checkbox" data-commercial-sdr-picker-item="${escapeHtml(row.uid)}" ${draftSelectedSet.has(row.uid) ? "checked" : ""}>
                           <span><strong>${escapeHtml(row.name)}</strong><small>${escapeHtml(row.email || "sem e-mail")}</small></span>
                         </label>
                       `
                     )
                     .join("") || `<div class="commercial-sdr-empty-state">Nenhum SDR encontrado.</div>`
                 }
+              </div>
+            </div>
+            <div class="commercial-sdr-filter-footer">
+              <div class="commercial-sdr-filter-status">
+                ${!draftValidation.isValid ? `<span class="commercial-sdr-filter-error">${escapeHtml(draftValidation.message)}</span>` : hasDraftChanges ? `<span class="commercial-sdr-filter-dirty">Alterações não aplicadas</span>` : `<span class="commercial-sdr-filter-clean">Filtro atualizado</span>`}
+              </div>
+              <div class="commercial-sdr-filter-actions">
+                <button type="button" class="commercial-sdr-filter-clear" data-commercial-sdr-clear>Limpar</button>
+                <button type="button" class="commercial-sdr-filter-apply ${hasDraftChanges ? "is-dirty" : ""}" data-commercial-sdr-apply ${!hasDraftChanges || !draftValidation.isValid || state.isLoading ? "disabled" : ""}>Aplicar</button>
               </div>
             </div>
           </div>
@@ -16404,7 +16651,7 @@ const renderAdminCommercialSdrActivity = () => {
           label: "Ligações",
           value: summary.totalCalls || 0,
           previousValue: previousSummary.totalCalls || 0,
-          period,
+          period: appliedPeriod,
           previousFilters: filtered.previousFilters,
           tone: "neutral",
           context: "",
@@ -16413,7 +16660,7 @@ const renderAdminCommercialSdrActivity = () => {
           label: "Atendidas",
           value: summary.answered || 0,
           previousValue: previousSummary.answered || 0,
-          period,
+          period: appliedPeriod,
           previousFilters: filtered.previousFilters,
           tone: "soft-positive",
           context: `${formatCommercialSdrActivityPct(summary.answerRate || 0)} taxa de atendimento`,
@@ -16422,7 +16669,7 @@ const renderAdminCommercialSdrActivity = () => {
           label: "Agendadas",
           value: summary.scheduled || 0,
           previousValue: previousSummary.scheduled || 0,
-          period,
+          period: appliedPeriod,
           previousFilters: filtered.previousFilters,
           tone: "accent",
           context: "",
@@ -16431,7 +16678,7 @@ const renderAdminCommercialSdrActivity = () => {
           label: "Conversão em agendamento",
           value: formatCommercialSdrActivityPct(summary.callToScheduleRate || 0),
           previousValue: Math.round((previousSummary.callToScheduleRate || 0) * 10) / 10,
-          period,
+          period: appliedPeriod,
           previousFilters: filtered.previousFilters,
           tone: "accent",
           context: "",
@@ -16534,24 +16781,64 @@ const renderAdminCommercialSdrActivity = () => {
 
 const loadAdminCommercialSdrActivity = async ({ force = false } = {}) => {
   if (currentRole !== "admin") return;
-  const now = Date.now();
-  if (!force && adminCommercialSdrActivityState.loadedAt && now - adminCommercialSdrActivityState.loadedAt < 60_000) {
+  const appliedFilters = getAdminCommercialSdrAppliedFilters();
+  const requestedRange = resolveAdminCommercialSdrRange(appliedFilters);
+  const cacheEntry = !force ? getAdminCommercialSdrCoveringCacheEntry(requestedRange) : null;
+  if (cacheEntry?.data) {
+    adminCommercialSdrActivityState.data = cacheEntry.data;
+    adminCommercialSdrActivityState.loadedAt = Date.now();
+    adminCommercialSdrActivityState.error = "";
+    adminCommercialSdrActivityState.isLoading = false;
+    adminCommercialSdrActivityState.showSkeleton = false;
+    adminCommercialSdrActivityState.lastProfile = { requestId: adminCommercialSdrActivityState.requestSeq, networkMs: 0, processingMs: 0, renderMs: 0, cacheHit: true };
     renderAdminCommercialSdrActivity();
     return;
   }
+
+  if (adminCommercialSdrActivityState.activeRequestController) {
+    try {
+      adminCommercialSdrActivityState.activeRequestController.abort();
+    } catch (error) {
+      // ignore
+    }
+  }
+  if (adminCommercialSdrActivityState.skeletonDelayTimer) {
+    window.clearTimeout(adminCommercialSdrActivityState.skeletonDelayTimer);
+    adminCommercialSdrActivityState.skeletonDelayTimer = 0;
+  }
+
+  const requestId = (adminCommercialSdrActivityState.requestSeq || 0) + 1;
+  adminCommercialSdrActivityState.requestSeq = requestId;
+  adminCommercialSdrActivityState.activeRequestId = requestId;
+  const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+  adminCommercialSdrActivityState.activeRequestController = controller;
   adminCommercialSdrActivityState.isLoading = true;
+  adminCommercialSdrActivityState.showSkeleton = false;
+  adminCommercialSdrActivityState.skeletonVisibleAt = 0;
   adminCommercialSdrActivityState.error = "";
+  adminCommercialSdrActivityState.skeletonDelayTimer = window.setTimeout(() => {
+    if (adminCommercialSdrActivityState.activeRequestId !== requestId || !adminCommercialSdrActivityState.isLoading) return;
+    adminCommercialSdrActivityState.showSkeleton = true;
+    adminCommercialSdrActivityState.skeletonVisibleAt = performance.now();
+    renderAdminCommercialSdrActivity();
+  }, ADMIN_COMMERCIAL_SDR_SKELETON_DELAY_MS);
   renderAdminCommercialSdrActivity();
+
   try {
-    const filters = adminCommercialSdrActivityState.filters || {};
+    const requestStartedAt = performance.now();
     const params = new URLSearchParams();
-    params.set("period", String(filters.period || "today"));
-    if (filters.from) params.set("from", String(filters.from));
-    if (filters.to) params.set("to", String(filters.to));
-    const res = await fetchWithAuth(`/api/admin-commercial-sdr-activity?${params.toString()}`, { method: "GET" });
+    params.set("period", requestedRange.period);
+    if (appliedFilters.from) params.set("from", String(appliedFilters.from));
+    if (appliedFilters.to) params.set("to", String(appliedFilters.to));
+    const res = await fetchWithAuth(`/api/admin-commercial-sdr-activity?${params.toString()}`, { method: "GET", signal: controller?.signal });
+    const networkMs = performance.now() - requestStartedAt;
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(data?.message || data?.error || "admin_commercial_sdr_activity_failed");
+    if (adminCommercialSdrActivityState.activeRequestId !== requestId) return;
+
+    const processingStartedAt = performance.now();
     adminCommercialSdrActivityState.data = data;
+    storeAdminCommercialSdrCacheEntry(data?.filters && typeof data.filters === "object" ? data.filters : requestedRange, data);
     const availableUids = Array.isArray(data?.sdrs) ? data.sdrs.map((row) => String(row?.sdrUid || "").trim()).filter(Boolean) : [];
     const selectedUids = Array.isArray(adminCommercialSdrActivityState.filters.selectedSdrUids)
       ? adminCommercialSdrActivityState.filters.selectedSdrUids.map((value) => String(value || "").trim()).filter((value) => availableUids.includes(value))
@@ -16560,14 +16847,39 @@ const loadAdminCommercialSdrActivity = async ({ force = false } = {}) => {
       ? selectedUids
       : availableUids;
     adminCommercialSdrActivityState.loadedAt = Date.now();
+    const processingMs = performance.now() - processingStartedAt;
+    adminCommercialSdrActivityState.lastProfile = { requestId, networkMs, processingMs, cacheHit: false };
+
+    if (adminCommercialSdrActivityState.showSkeleton && adminCommercialSdrActivityState.skeletonVisibleAt) {
+      const visibleForMs = performance.now() - adminCommercialSdrActivityState.skeletonVisibleAt;
+      const remainingMs = Math.max(0, ADMIN_COMMERCIAL_SDR_SKELETON_MIN_MS - visibleForMs);
+      if (remainingMs > 0) {
+        await new Promise((resolve) => window.setTimeout(resolve, remainingMs));
+      }
+    }
   } catch (error) {
+    if (error?.name === "AbortError" || adminCommercialSdrActivityState.activeRequestId !== requestId) return;
     console.error("[admin] commercial sdr activity load failed:", error);
     adminCommercialSdrActivityState.error = error?.message || "Não foi possível carregar a atividade SDR agora.";
   } finally {
+    if (adminCommercialSdrActivityState.skeletonDelayTimer) {
+      window.clearTimeout(adminCommercialSdrActivityState.skeletonDelayTimer);
+      adminCommercialSdrActivityState.skeletonDelayTimer = 0;
+    }
+    if (adminCommercialSdrActivityState.activeRequestId !== requestId) return;
     adminCommercialSdrActivityState.isLoading = false;
+    adminCommercialSdrActivityState.showSkeleton = false;
+    adminCommercialSdrActivityState.activeRequestController = null;
+    const renderStartedAt = performance.now();
     renderAdminCommercialSdrActivity();
+    const renderMs = performance.now() - renderStartedAt;
+    if (adminCommercialSdrActivityState.lastProfile?.requestId === requestId) {
+      adminCommercialSdrActivityState.lastProfile.renderMs = renderMs;
+      console.info("[pre-vendas] profile", adminCommercialSdrActivityState.lastProfile);
+    }
   }
 };
+
 
 const sdrNumber = (value, extra = "") => `<strong class="sdr-num" data-sdr-countup="${escapeHtml(String(Number(value) || 0))}">${escapeHtml(String(Number(value) || 0))}${extra}</strong>`;
 
@@ -35881,7 +36193,7 @@ document.addEventListener("click", (event) => {
   const target = event.target;
   if (!(target instanceof Element)) return;
   if (adminCommercialSdrActivityState.filters.pickerOpen && !target.closest("[data-commercial-sdr-filter]")) {
-    adminCommercialSdrActivityState.filters.pickerOpen = false;
+    discardAdminCommercialSdrDraft();
     renderAdminCommercialSdrActivity();
   }
   if (adminCommercialSdrActivityState.filters.rankMenuOpen && !target.closest("[data-commercial-sdr-rank-filter]")) {
@@ -35891,11 +36203,22 @@ document.addEventListener("click", (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
-  if (event.key !== "Escape") return;
-  if (adminCommercialSdrActivityState.filters.pickerOpen || adminCommercialSdrActivityState.filters.rankMenuOpen) {
-    adminCommercialSdrActivityState.filters.pickerOpen = false;
+  if (event.key === "Escape" && (adminCommercialSdrActivityState.filters.pickerOpen || adminCommercialSdrActivityState.filters.rankMenuOpen)) {
+    if (adminCommercialSdrActivityState.filters.pickerOpen) discardAdminCommercialSdrDraft();
     adminCommercialSdrActivityState.filters.rankMenuOpen = false;
     renderAdminCommercialSdrActivity();
+    return;
+  }
+  if (event.key === "Enter" && adminCommercialSdrActivityState.filters.pickerOpen) {
+    const draft = cloneAdminCommercialSdrFilterDraft(adminCommercialSdrActivityState.draftFilters || getAdminCommercialSdrAppliedFilters());
+    const validation = getAdminCommercialSdrFilterValidation(draft);
+    const hasDraftChanges = !areAdminCommercialSdrDraftsEqual(draft, getAdminCommercialSdrAppliedFilters());
+    if (!validation.isValid || !hasDraftChanges) return;
+    event.preventDefault();
+    applyAdminCommercialSdrDraftToState(draft);
+    discardAdminCommercialSdrDraft();
+    adminCommercialSdrActivityState.filters.tablePage = 1;
+    loadAdminCommercialSdrActivity({ force: false }).catch((error) => console.error("[admin] commercial sdr apply failed", error));
   }
 });
 
@@ -35923,29 +36246,31 @@ document.addEventListener("change", (event) => {
   }
   if (target instanceof HTMLInputElement && target.matches("[data-commercial-sdr-picker-item]")) {
     const uid = String(target.getAttribute("data-commercial-sdr-picker-item") || "").trim();
-    const current = new Set(Array.isArray(adminCommercialSdrActivityState.filters.selectedSdrUids) ? adminCommercialSdrActivityState.filters.selectedSdrUids : []);
+    const draft = cloneAdminCommercialSdrFilterDraft(adminCommercialSdrActivityState.draftFilters || getAdminCommercialSdrAppliedFilters());
+    const current = new Set(Array.isArray(draft.selectedSdrUids) ? draft.selectedSdrUids : []);
     if (!uid) return;
     if (target.checked) current.add(uid);
     else current.delete(uid);
-    adminCommercialSdrActivityState.filters.selectedSdrUids = [...current];
-    adminCommercialSdrActivityState.filters.tablePage = 1;
+    draft.selectedSdrUids = [...current];
+    adminCommercialSdrActivityState.draftFilters = draft;
     renderAdminCommercialSdrActivity();
   }
   if (target instanceof HTMLInputElement && target.matches("[data-commercial-sdr-picker-all]")) {
     const available = Array.isArray(adminCommercialSdrActivityState.data?.sdrs) ? adminCommercialSdrActivityState.data.sdrs.map((row) => String(row?.sdrUid || "").trim()).filter(Boolean) : [];
-    adminCommercialSdrActivityState.filters.selectedSdrUids = target.checked ? available : [];
-    adminCommercialSdrActivityState.filters.tablePage = 1;
+    const draft = cloneAdminCommercialSdrFilterDraft(adminCommercialSdrActivityState.draftFilters || getAdminCommercialSdrAppliedFilters());
+    draft.selectedSdrUids = target.checked ? available : [];
+    adminCommercialSdrActivityState.draftFilters = draft;
     renderAdminCommercialSdrActivity();
   }
   if (target instanceof HTMLInputElement && target.matches('[data-commercial-sdr-range="from"], [data-commercial-sdr-range="to"]')) {
     const root = target.closest("[data-admin-commercial-sdr-activity-content]") || document;
     const from = root.querySelector('[data-commercial-sdr-range="from"]')?.value || "";
     const to = root.querySelector('[data-commercial-sdr-range="to"]')?.value || "";
-    adminCommercialSdrActivityState.filters.from = String(from || "").trim();
-    adminCommercialSdrActivityState.filters.to = String(to || "").trim();
-    adminCommercialSdrActivityState.filters.tablePage = 1;
-    adminCommercialSdrActivityState.loadedAt = 0;
-    loadAdminCommercialSdrActivity({ force: true }).catch((error) => console.error("[admin] commercial sdr custom range failed", error));
+    const draft = cloneAdminCommercialSdrFilterDraft(adminCommercialSdrActivityState.draftFilters || getAdminCommercialSdrAppliedFilters());
+    draft.from = String(from || "").trim();
+    draft.to = String(to || "").trim();
+    adminCommercialSdrActivityState.draftFilters = draft;
+    renderAdminCommercialSdrActivity();
   }
 });
 
@@ -36005,30 +36330,22 @@ document.addEventListener("click", (event) => {
   if (commercialSdrPeriod instanceof HTMLButtonElement) {
     event.preventDefault();
     const period = String(commercialSdrPeriod.getAttribute("data-commercial-sdr-period") || "today").trim();
-    adminCommercialSdrActivityState.filters.period = ["today", "week", "month", "custom"].includes(period) ? period : "today";
-    adminCommercialSdrActivityState.filters.tablePage = 1;
-    if (period !== "custom") {
-      adminCommercialSdrActivityState.loadedAt = 0;
-      loadAdminCommercialSdrActivity({ force: true }).catch((error) => console.error("[admin] commercial sdr period failed", error));
-    } else {
-      renderAdminCommercialSdrActivity();
+    const draft = cloneAdminCommercialSdrFilterDraft(adminCommercialSdrActivityState.draftFilters || getAdminCommercialSdrAppliedFilters());
+    draft.period = ["today", "week", "month", "custom"].includes(period) ? period : "today";
+    if (draft.period !== "custom") {
+      draft.from = "";
+      draft.to = "";
     }
-    return;
-  }
-
-  const commercialSdrRefresh = target.closest("[data-commercial-sdr-refresh]");
-  if (commercialSdrRefresh instanceof HTMLButtonElement) {
-    event.preventDefault();
-    adminCommercialSdrActivityState.loadedAt = 0;
-    loadAdminCommercialSdrActivity({ force: true }).catch((error) => console.error("[admin] commercial sdr refresh failed", error));
+    adminCommercialSdrActivityState.draftFilters = draft;
+    renderAdminCommercialSdrActivity();
     return;
   }
 
   const commercialSdrPickerToggle = target.closest("[data-commercial-sdr-picker-toggle]");
   if (commercialSdrPickerToggle instanceof HTMLButtonElement) {
     event.preventDefault();
-    adminCommercialSdrActivityState.filters.pickerOpen = !adminCommercialSdrActivityState.filters.pickerOpen;
-    adminCommercialSdrActivityState.filters.rankMenuOpen = false;
+    if (adminCommercialSdrActivityState.filters.pickerOpen) discardAdminCommercialSdrDraft();
+    else openAdminCommercialSdrDraft();
     renderAdminCommercialSdrActivity();
     return;
   }
@@ -36083,13 +36400,33 @@ document.addEventListener("click", (event) => {
   const commercialSdrApply = target.closest("[data-commercial-sdr-apply]");
   if (commercialSdrApply instanceof HTMLButtonElement) {
     event.preventDefault();
-    const root = commercialSdrApply.closest("[data-admin-commercial-sdr-activity-content]") || document;
-    const from = root.querySelector('[data-commercial-sdr-range="from"]')?.value || "";
-    const to = root.querySelector('[data-commercial-sdr-range="to"]')?.value || "";
-    adminCommercialSdrActivityState.filters.from = String(from || "").trim();
-    adminCommercialSdrActivityState.filters.to = String(to || "").trim();
-    adminCommercialSdrActivityState.loadedAt = 0;
-    loadAdminCommercialSdrActivity({ force: true }).catch((error) => console.error("[admin] commercial sdr apply failed", error));
+    const draft = cloneAdminCommercialSdrFilterDraft(adminCommercialSdrActivityState.draftFilters || getAdminCommercialSdrAppliedFilters());
+    const validation = getAdminCommercialSdrFilterValidation(draft);
+    if (!validation.isValid || areAdminCommercialSdrDraftsEqual(draft, getAdminCommercialSdrAppliedFilters())) return;
+    applyAdminCommercialSdrDraftToState(draft);
+    discardAdminCommercialSdrDraft();
+    adminCommercialSdrActivityState.filters.tablePage = 1;
+    loadAdminCommercialSdrActivity({ force: false }).catch((error) => console.error("[admin] commercial sdr apply failed", error));
+    return;
+  }
+
+  const commercialSdrClear = target.closest("[data-commercial-sdr-clear]");
+  if (commercialSdrClear instanceof HTMLButtonElement) {
+    event.preventDefault();
+    adminCommercialSdrActivityState.draftFilters = {
+      period: "today",
+      from: "",
+      to: "",
+      selectedSdrUids: null,
+    };
+    renderAdminCommercialSdrActivity();
+    return;
+  }
+
+  const commercialSdrRetry = target.closest("[data-commercial-sdr-retry]");
+  if (commercialSdrRetry instanceof HTMLButtonElement) {
+    event.preventDefault();
+    loadAdminCommercialSdrActivity({ force: true }).catch((error) => console.error("[admin] commercial sdr retry failed", error));
     return;
   }
 

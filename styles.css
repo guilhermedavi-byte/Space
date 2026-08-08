@@ -24674,6 +24674,106 @@ body.has-space-env-banner{padding-top:46px}
   gap: 14px;
 }
 
+.commercial-sdr-filter-footer {
+  position: sticky;
+  bottom: 0;
+  display: grid;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(20, 24, 34, 0), rgba(13, 16, 24, 0.98) 24%);
+}
+
+.commercial-sdr-filter-status {
+  min-height: 16px;
+}
+
+.commercial-sdr-filter-clean,
+.commercial-sdr-filter-dirty,
+.commercial-sdr-filter-error {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.commercial-sdr-filter-clean {
+  color: rgba(222, 230, 244, 0.48);
+}
+
+.commercial-sdr-filter-dirty {
+  color: rgba(255, 208, 198, 0.9);
+}
+
+.commercial-sdr-filter-dirty::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #ff564f;
+  box-shadow: 0 0 0 3px rgba(255, 86, 79, 0.14);
+}
+
+.commercial-sdr-filter-error {
+  color: #ff9f98;
+}
+
+.commercial-sdr-filter-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.commercial-sdr-filter-clear,
+.commercial-sdr-filter-apply {
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 12px;
+  font: 800 13px "Plus Jakarta Sans", system-ui, sans-serif;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+}
+
+.commercial-sdr-filter-clear {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(244, 246, 250, 0.88);
+}
+
+.commercial-sdr-filter-apply {
+  position: relative;
+  border: 1px solid rgba(255, 86, 79, 0.36);
+  background: #ff564f;
+  color: #fff6f4;
+}
+
+.commercial-sdr-filter-apply.is-dirty::after {
+  content: "";
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(7, 9, 16, 0.85);
+}
+
+.commercial-sdr-filter-clear:hover,
+.commercial-sdr-filter-apply:hover,
+.commercial-sdr-filter-clear:focus-visible,
+.commercial-sdr-filter-apply:focus-visible {
+  transform: translateY(-1px);
+}
+
+.commercial-sdr-filter-clear:disabled,
+.commercial-sdr-filter-apply:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
 .commercial-sdr-filters-group {
   display: grid;
   gap: 8px;
@@ -25339,6 +25439,47 @@ body.has-space-env-banner{padding-top:46px}
   min-height: 120px;
 }
 
+.commercial-sdr-admin-panel--loading .commercial-sdr-skeleton-line,
+.commercial-sdr-admin-panel--loading .commercial-sdr-skeleton-block,
+.commercial-sdr-events-card.is-skeleton .commercial-sdr-skeleton-line,
+.commercial-sdr-events-card.is-skeleton .commercial-sdr-skeleton-block {
+  animation: none;
+}
+
+.commercial-sdr-admin-panel--loading.is-shimmer .commercial-sdr-skeleton-line,
+.commercial-sdr-admin-panel--loading.is-shimmer .commercial-sdr-skeleton-block,
+.commercial-sdr-events-card.is-skeleton.is-shimmer .commercial-sdr-skeleton-line,
+.commercial-sdr-events-card.is-skeleton.is-shimmer .commercial-sdr-skeleton-block {
+  animation: commercial-sdr-skeleton 1.4s linear infinite;
+}
+
+.commercial-sdr-table-skeleton {
+  display: grid;
+  gap: 10px;
+}
+
+.commercial-sdr-table-skeleton-row {
+  display: grid;
+  grid-template-columns: 1.4fr 0.9fr 0.8fr 0.8fr 1fr 0.8fr;
+  gap: 10px;
+}
+
+.commercial-sdr-table-skeleton-row span {
+  display: block;
+  height: 14px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.05));
+  background-size: 200% 100%;
+}
+
+.commercial-sdr-events-card.is-skeleton.is-shimmer .commercial-sdr-table-skeleton-row span {
+  animation: commercial-sdr-skeleton 1.4s linear infinite;
+}
+
+.commercial-sdr-error-actions {
+  margin-top: 12px;
+}
+
 @keyframes commercial-sdr-skeleton {
   from {
     background-position: 200% 0;
@@ -25405,5 +25546,14 @@ body.has-space-env-banner{padding-top:46px}
 
   .commercial-sdr-filters-popover {
     width: min(100vw - 32px, 360px);
+  }
+
+  .commercial-sdr-filter-actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .commercial-sdr-table-skeleton-row {
+    grid-template-columns: 1fr 0.8fr 0.7fr 0.8fr;
   }
 }
