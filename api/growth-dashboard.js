@@ -1171,8 +1171,15 @@ const handleGrowthMetricsApi = async (req, res) => {
     const isKnownPreMeeting = CONVERSION_PRE_MEETING_STAGE_KEYS.has(stageKey);
     if (!isMeetingOrAfter && !isKnownPreMeeting && rawStage) unknownConversionStages.add(rawStage);
     if (!isMeetingOrAfter) return;
-    const eventInfo = getBusinessWonLostDate(b);
-    const eventMonth = eventInfo.date ? getMonthKeySaoPaulo(eventInfo.date) : "";
+    const rawLastMovedAt = b?.lastMovedAt;
+    if (!rawLastMovedAt) {
+      console.warn("[growth-metrics] negócio sem lastMovedAt no ranking", {
+        businessId: getBusinessId(b) || null,
+      });
+      return;
+    }
+    const eventDate = rawLastMovedAt instanceof Date ? rawLastMovedAt : new Date(String(rawLastMovedAt));
+    const eventMonth = Number.isNaN(eventDate.getTime()) ? "" : getMonthKeySaoPaulo(eventDate);
     if (eventMonth !== nowMonthKey) return;
 
     const vendor = b?.attendant?.name ? String(b.attendant.name).trim() : "Sem vendedor";
