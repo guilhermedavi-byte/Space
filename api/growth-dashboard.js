@@ -387,7 +387,7 @@ const mapPlano = (rawProductName) => {
 };
 
 const CONVERSION_MEETING_OR_AFTER_STAGE_KEYS = new Set(
-  ["Reunião feita (Follow-up)", "Hot Lead", "Forecast", "Pagamento Parcial", "Fechado"].map(normalizeKey)
+  ["Reunião Realizada", "Hot Lead", "Forecast", "Pagamento Parcial", "Fechado"].map(normalizeKey)
 );
 
 const CONVERSION_PRE_MEETING_STAGE_KEYS = new Set(
