@@ -2,6 +2,14 @@ const { getSessionFromRequest } = require("../_lib/session");
 const { readJsonBody, sendJson } = require("../_lib/http");
 const { getGoogleAccessToken } = require("../_lib/google-service-account");
 const { calculateGrowthForecast3Parts, getDealValue: getDealValueForecast, normalizeKey: normalizeKeyForecast } = require("../_lib/forecast-service");
+const {
+  resolveCommercialPeriod,
+  isDateWithinCommercialPeriod,
+  countPeriodDaysElapsedInclusive,
+  countRemainingWeekdaysMonFri,
+  countRemainingSalesDaysSegSabInclusive,
+  isValidDateKey,
+} = require("./_lib/commercial-period");
 const { triggerContractSignedOnboarding } = require("./_lib/pedagogico-n8n");
 const {
   decodeFields,
@@ -314,6 +322,18 @@ const writeGrowthMetricsCacheDoc = async ({ payload, generatedAt }) => {
     accessToken,
     data: { payload, generatedAt },
     updateMaskPaths: ["payload", "generatedAt"],
+  });
+};
+
+const invalidateGrowthMetricsCacheDoc = async ({ idToken } = {}) => {
+  try {
+    delete globalThis.__growthMetricsCache;
+  } catch {
+    globalThis.__growthMetricsCache = null;
+  }
+  return firestoreDeleteDocument({
+    docPath: getGrowthMetricsCacheDocPath(),
+    idToken,
   });
 };
 
@@ -728,6 +748,8 @@ const decodeGoalDoc = (doc) => {
   const updatedBy = typeof fields.updatedBy === "string" ? fields.updatedBy : "";
   const createdByName = typeof fields.createdByName === "string" ? fields.createdByName : "";
   const updatedByName = typeof fields.updatedByName === "string" ? fields.updatedByName : "";
+  const periodStart = typeof fields.periodStart === "string" && isValidDateKey(fields.periodStart) ? fields.periodStart.trim() : "";
+  const periodEnd = typeof fields.periodEnd === "string" && isValidDateKey(fields.periodEnd) ? fields.periodEnd.trim() : "";
 
   if (!isValidCompetencia(competencia)) return null;
 
@@ -741,6 +763,8 @@ const decodeGoalDoc = (doc) => {
     updatedBy: updatedBy || null,
     createdByName: createdByName || null,
     updatedByName: updatedByName || null,
+    periodStart: periodStart || null,
+    periodEnd: periodEnd || null,
   };
 };
 
@@ -749,6 +773,8 @@ const buildGrowthMetricsPayload = async ({ crm, idToken }) => {
   const nowMonthKey = getMonthKeySaoPaulo(new Date());
 
   let metaDoMes = null;
+  let goalPeriodStart = "";
+  let goalPeriodEnd = "";
   try {
     if (idToken) {
       const snap = await firestoreGetDocument({ docPath: `${GOALS_COLLECTION}/${encodeURIComponent(nowMonthKey)}`, idToken });
@@ -756,11 +782,20 @@ const buildGrowthMetricsPayload = async ({ crm, idToken }) => {
         const goal = decodeGoalDoc(snap.data);
         const v = Number(goal?.valorMeta);
         if (Number.isFinite(v) && v > 0) metaDoMes = v;
+        goalPeriodStart = typeof goal?.periodStart === "string" ? goal.periodStart.trim() : "";
+        goalPeriodEnd = typeof goal?.periodEnd === "string" ? goal.periodEnd.trim() : "";
       }
     }
   } catch {
     metaDoMes = null;
+    goalPeriodStart = "";
+    goalPeriodEnd = "";
   }
+  const commercialPeriod = resolveCommercialPeriod({
+    now: new Date(),
+    periodStart: goalPeriodStart,
+    periodEnd: goalPeriodEnd,
+  });
 
   // Prefer the main pipeline name used by the commercial team. Fall back to the old "Conversão" pipeline if needed.
   const pipelinePreferred = normalizeKey("Funil principal");
@@ -804,8 +839,8 @@ const buildGrowthMetricsPayload = async ({ crm, idToken }) => {
     stageTotals.set(stageName, (stageTotals.get(stageName) || 0) + total);
 
     const createdAt = b?.createdAt || b?.created_at || null;
-    const isMonth = createdAt ? getMonthKeySaoPaulo(createdAt) === nowMonthKey : false;
-    if (isMonth) {
+    const isCurrentPeriod = createdAt ? isDateWithinCommercialPeriod(createdAt, commercialPeriod) : false;
+    if (isCurrentPeriod) {
       totalPipelineMonth += 1;
       stageCountsMonth.set(stageName, (stageCountsMonth.get(stageName) || 0) + 1);
       stageTotalsMonth.set(stageName, (stageTotalsMonth.get(stageName) || 0) + total);
@@ -852,8 +887,7 @@ const buildGrowthMetricsPayload = async ({ crm, idToken }) => {
     const info = getBusinessWonLostDate(b);
     const field = info.field || "unknown";
     dateFieldCounts.set(field, (dateFieldCounts.get(field) || 0) + 1);
-    const key = info.date ? getMonthKeySaoPaulo(info.date) : "";
-    return key && nowMonthKey ? key === nowMonthKey : false;
+    return info.date ? isDateWithinCommercialPeriod(info.date, commercialPeriod) : false;
   });
 
   const dateFieldUsed =
@@ -878,57 +912,9 @@ const buildGrowthMetricsPayload = async ({ crm, idToken }) => {
   const taxaFunil = percent(fechadosMonth, totalPipelineMonth);
   const noShowPercent = percent(noShowMonth, agendamentosMonth);
 
-  const getSaoPauloNow = () => {
-    try {
-      const parts = new Intl.DateTimeFormat("pt-BR", {
-        timeZone: "America/Sao_Paulo",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-      }).formatToParts(new Date());
-      const year = Number(parts.find((p) => p.type === "year")?.value || 0);
-      const month = Number(parts.find((p) => p.type === "month")?.value || 0);
-      const day = Number(parts.find((p) => p.type === "day")?.value || 0);
-      if (!year || !month || !day) return new Date();
-      return new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
-    } catch {
-      return new Date();
-    }
-  };
-
-  const getWorkdaysRemaining = () => {
-    const now = getSaoPauloNow();
-    const year = now.getUTCFullYear();
-    const month = now.getUTCMonth();
-    const today = now.getUTCDate();
-    const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
-    let count = 0;
-    for (let d = today + 1; d <= lastDay; d++) {
-      const weekday = new Date(Date.UTC(year, month, d)).getUTCDay();
-      if (weekday !== 0 && weekday !== 6) count++;
-    }
-    return count;
-  };
-
-  const spNow = getSaoPauloNow();
-  const diasPassados = spNow.getUTCDate();
-  const diasRestantes = getWorkdaysRemaining();
-
-  const getDiasUteisRestantesSegSab = () => {
-    const now = getSaoPauloNow();
-    const year = now.getUTCFullYear();
-    const month = now.getUTCMonth();
-    const today = now.getUTCDate();
-    const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
-    let count = 0;
-    for (let d = today; d <= lastDay; d++) {
-      const weekday = new Date(Date.UTC(year, month, d)).getUTCDay();
-      if (weekday !== 0) count++;
-    }
-    return count;
-  };
-
-  const diasUteisRestantes = getDiasUteisRestantesSegSab();
+  const diasPassados = countPeriodDaysElapsedInclusive(commercialPeriod, new Date());
+  const diasRestantes = countRemainingWeekdaysMonFri(commercialPeriod, new Date());
+  const diasUteisRestantes = countRemainingSalesDaysSegSabInclusive(commercialPeriod, new Date());
   const faltaParaMeta = Number.isFinite(metaDoMes) && metaDoMes > 0 ? Math.max(0, metaDoMes - realizado) : 0;
   const ticketBase = Number.isFinite(ticketMedio) && ticketMedio > 0 ? ticketMedio : 1057;
   const taxaAgendamentoFrac = Math.max(0, Math.min(1, safeNumber(taxaAgendamento) / 100));
@@ -962,6 +948,7 @@ const buildGrowthMetricsPayload = async ({ crm, idToken }) => {
     nowMonthKey,
     getMonthKey: getMonthKeySaoPaulo,
     getClosedDate: (deal) => getBusinessWonLostDate(deal).date || null,
+    isWithinCurrentPeriod: (value) => isDateWithinCommercialPeriod(value, commercialPeriod),
     daysPassed: Math.max(1, Number(diasPassados) || 1),
     daysRemaining: diasRestantes,
     rates: {
@@ -1034,8 +1021,7 @@ const buildGrowthMetricsPayload = async ({ crm, idToken }) => {
       return;
     }
     const eventDate = rawLastMovedAt instanceof Date ? rawLastMovedAt : new Date(String(rawLastMovedAt));
-    const eventMonth = Number.isNaN(eventDate.getTime()) ? "" : getMonthKeySaoPaulo(eventDate);
-    if (eventMonth !== nowMonthKey) return;
+    if (Number.isNaN(eventDate.getTime()) || !isDateWithinCommercialPeriod(eventDate, commercialPeriod)) return;
 
     const vendor = b?.attendant?.name ? String(b.attendant.name).trim() : "Sem vendedor";
     const entry = rankingMap.get(vendor) || { nome: vendor, reunioes: 0, vendas: 0, valor: 0, taxaConversao: 0 };
@@ -1138,6 +1124,7 @@ const buildGrowthMetricsPayload = async ({ crm, idToken }) => {
       totalFechadoStage,
       totalFechadoMes: totalVendas,
       somaFechadoMes: realizado,
+      commercialPeriod,
       dateFieldUsed,
       first10FechadoStage: closedDeals
         .slice()
@@ -1289,13 +1276,22 @@ const handleGrowthGoalsApi = async (req, res, url) => {
   }
 
   const competencia = String(body?.competencia || "").trim();
-  const valorMeta = parseNumber(body?.valorMeta);
+  const hasValorMeta = body && Object.prototype.hasOwnProperty.call(body, "valorMeta");
+  const valorMetaInput = hasValorMeta ? parseNumber(body?.valorMeta) : NaN;
+  const periodStartRaw = String(body?.periodStart || "").trim();
+  const periodEndRaw = String(body?.periodEnd || "").trim();
+  const periodStart = periodStartRaw ? (isValidDateKey(periodStartRaw) ? periodStartRaw : null) : "";
+  const periodEnd = periodEndRaw ? (isValidDateKey(periodEndRaw) ? periodEndRaw : null) : "";
   if (!isValidCompetencia(competencia)) {
     sendJson(res, 400, { error: "invalid_competencia" });
     return;
   }
-  if (!Number.isFinite(valorMeta) || valorMeta <= 0) {
-    sendJson(res, 400, { error: "invalid_valor" });
+  if (periodStart === null || periodEnd === null) {
+    sendJson(res, 400, { error: "invalid_period_bounds" });
+    return;
+  }
+  if (periodStart && periodEnd && periodStart > periodEnd) {
+    sendJson(res, 400, { error: "invalid_period_range" });
     return;
   }
 
@@ -1309,11 +1305,24 @@ const handleGrowthGoalsApi = async (req, res, url) => {
   const now = new Date();
 
   let exists = false;
+  let existingGoal = null;
   try {
     const snap = await firestoreGetDocument({ docPath, idToken: auth.idToken });
     exists = snap.ok;
+    if (snap.ok) existingGoal = decodeGoalDoc(snap.data);
   } catch (error) {
     exists = false;
+    existingGoal = null;
+  }
+
+  const valorMeta = hasValorMeta
+    ? valorMetaInput
+    : Number.isFinite(Number(existingGoal?.valorMeta))
+      ? Number(existingGoal.valorMeta)
+      : NaN;
+  if (!Number.isFinite(valorMeta) || valorMeta <= 0) {
+    sendJson(res, 400, { error: "invalid_valor" });
+    return;
   }
 
   const base = {
@@ -1323,6 +1332,8 @@ const handleGrowthGoalsApi = async (req, res, url) => {
     updatedBy: auth.id,
     updatedByName: auth.name || null,
   };
+  if (periodStart) base.periodStart = periodStart;
+  if (periodEnd) base.periodEnd = periodEnd;
   const data = exists
     ? base
     : {
@@ -1358,6 +1369,19 @@ const handleGrowthGoalsApi = async (req, res, url) => {
         firestorePayload: patch.data ?? patch.text ?? null,
       });
       return;
+    }
+
+    try {
+      const invalidate = await invalidateGrowthMetricsCacheDoc({ idToken: auth.idToken });
+      if (!invalidate?.ok && invalidate?.status !== 404) {
+        console.warn("[growth-goals] cache invalidation failed", {
+          status: invalidate?.status || null,
+          data: invalidate?.data ?? null,
+          text: invalidate?.text ?? null,
+        });
+      }
+    } catch (cacheError) {
+      console.warn("[growth-goals] cache invalidation threw", cacheError);
     }
 
     sendJson(res, 200, { ok: true, competencia, action: exists ? "updated" : "created" });

@@ -85,6 +85,7 @@ const calculateGrowthForecast3Parts = ({
   nowMonthKey = "",
   getMonthKey,
   getClosedDate, // (deal) => Date|null
+  isWithinCurrentPeriod,
   daysPassed = 0,
   daysRemaining = 0,
   rates = null, // { taxaAgendamento, taxaNoShow, taxaConversao, ticketMedio }
@@ -93,10 +94,12 @@ const calculateGrowthForecast3Parts = ({
   const monthKey = String(nowMonthKey || "").trim();
   const monthKeyFn = typeof getMonthKey === "function" ? getMonthKey : () => "";
   const closedDateFn = typeof getClosedDate === "function" ? getClosedDate : () => null;
+  const inPeriodFn = typeof isWithinCurrentPeriod === "function" ? isWithinCurrentPeriod : null;
 
   const createdThisMonth = items.filter((d) => {
     const createdAt = d?.createdAt || d?.created_at || null;
     if (!createdAt) return false;
+    if (inPeriodFn) return Boolean(inPeriodFn(createdAt));
     return monthKeyFn(createdAt) === monthKey;
   });
 
@@ -106,6 +109,7 @@ const calculateGrowthForecast3Parts = ({
     if (stageKey !== normalizeKey("Fechado")) return false;
     const closedAt = closedDateFn(d) || d?.closedAt || d?.closed_at || null;
     if (!closedAt) return false;
+    if (inPeriodFn) return Boolean(inPeriodFn(closedAt));
     return monthKeyFn(closedAt) === monthKey;
   });
   const parte1 = closedThisMonth.reduce((sum, d) => sum + getDealValue(d), 0);
