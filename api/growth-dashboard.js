@@ -391,7 +391,7 @@ const CONVERSION_MEETING_OR_AFTER_STAGE_KEYS = new Set(
 );
 
 const CONVERSION_PRE_MEETING_STAGE_KEYS = new Set(
-  ["Leads Forms", "Leads Indicação", "Contato inicial feito", "Follow up", "Agendado", "No-show", "Reunião Reagendada"].map(normalizeKey)
+  ["Leads Forms", "Leads Indicação", "Contato inicial feito", "Follow Up SDR", "Agendado", "No-show", "Reunião Reagendada"].map(normalizeKey)
 );
 
 const relativeTimePtBr = (isoDate) => {
@@ -956,9 +956,10 @@ const handleGrowthMetricsApi = async (req, res) => {
     normalizeKey("Agendado"),
     normalizeKey("No-show"),
     normalizeKey("Reunião Reagendada"),
-    normalizeKey("Reunião feita (Follow-up)"),
+    normalizeKey("Reunião Realizada"),
     normalizeKey("Hot Lead"),
-    normalizeKey("Em fechamento"),
+    normalizeKey("Forecast"),
+    normalizeKey("Pagamento Parcial"),
     normalizeKey("Fechado"),
   ]);
 
@@ -967,22 +968,20 @@ const handleGrowthMetricsApi = async (req, res) => {
   const fechados = stageCounts.get(normalizeKey("Fechado")) || 0;
   const noShow = stageCounts.get(normalizeKey("No-show")) || 0;
 
-  const baseConversao =
-    (stageCounts.get(normalizeKey("Reunião feita (Follow-up)")) || 0) +
-    (stageCounts.get(normalizeKey("Hot Lead")) || 0) +
-    (stageCounts.get(normalizeKey("Em fechamento")) || 0) +
-    (stageCounts.get(normalizeKey("Fechado")) || 0);
+  const baseConversao = Array.from(CONVERSION_MEETING_OR_AFTER_STAGE_KEYS).reduce(
+    (sum, stageKey) => sum + (stageCounts.get(stageKey) || 0),
+    0
+  );
 
   const agendamentosMonth =
     Array.from(agendamentoStages).reduce((sum, name) => sum + (stageCountsMonth.get(name) || 0), 0);
   const fechadosMonth = stageCountsMonth.get(normalizeKey("Fechado")) || 0;
   const noShowMonth = stageCountsMonth.get(normalizeKey("No-show")) || 0;
 
-  const baseConversaoMonth =
-    (stageCountsMonth.get(normalizeKey("Reunião feita (Follow-up)")) || 0) +
-    (stageCountsMonth.get(normalizeKey("Hot Lead")) || 0) +
-    (stageCountsMonth.get(normalizeKey("Em fechamento")) || 0) +
-    (stageCountsMonth.get(normalizeKey("Fechado")) || 0);
+  const baseConversaoMonth = Array.from(CONVERSION_MEETING_OR_AFTER_STAGE_KEYS).reduce(
+    (sum, stageKey) => sum + (stageCountsMonth.get(stageKey) || 0),
+    0
+  );
 
   const dateFieldCounts = new Map();
 

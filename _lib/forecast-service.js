@@ -46,9 +46,8 @@ const getDealValue = (deal) => {
 };
 
 const PIPELINE_STAGE_KEYS = new Set([
-  normalizeKey("Reunião feita (Follow-up)"),
+  normalizeKey("Reunião Realizada"),
   normalizeKey("Hot Lead"),
-  normalizeKey("Em fechamento"),
 ]);
 
 const PIPELINE_WEIGHT = 0.35;
@@ -111,7 +110,7 @@ const calculateGrowthForecast3Parts = ({
   });
   const parte1 = closedThisMonth.reduce((sum, d) => sum + getDealValue(d), 0);
 
-  // Parte 2: pipeline ativo (3 etapas) ponderado
+  // Parte 2: pipeline ativo nas etapas configuradas em PIPELINE_STAGE_KEYS, ponderado
   const pipelineDeals = createdThisMonth.filter((d) => {
     if (isDealLost(d)) return false;
     const stageKey = normalizeKey(d?.stage?.name ?? d?.stage);
