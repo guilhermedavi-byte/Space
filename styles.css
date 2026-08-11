@@ -17283,6 +17283,75 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   cursor: pointer;
 }
 
+.growth-goal-weekly-list {
+  display: grid;
+  gap: 10px;
+}
+
+.growth-goal-weekly-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) 170px minmax(180px, 220px);
+  gap: 12px;
+  align-items: end;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.growth-goal-weekly-row.is-error {
+  border-color: rgba(255, 78, 70, 0.35);
+}
+
+.growth-goal-weekly-person {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.growth-goal-weekly-person strong {
+  color: rgba(255, 255, 255, 0.94);
+  font-size: 14px;
+}
+
+.growth-goal-weekly-person span {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+}
+
+.growth-goal-weekly-cell {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.growth-goal-weekly-cell > span {
+  color: rgba(255, 255, 255, 0.56);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.growth-goal-weekly-target-wrap {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.growth-goal-weekly-unit {
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+@media (max-width: 880px) {
+  .growth-goal-weekly-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 .commercial-overview-periods button.is-active {
   background: rgba(255, 86, 79, 0.92);
   color: #fff;

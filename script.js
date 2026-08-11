@@ -14451,6 +14451,103 @@ const formatCompetenciaLabelPtBr = (competencia) => {
   }
 };
 
+const GROWTH_SPECIAL_WEEK_START = "2026-08-11";
+const GROWTH_SPECIAL_WEEK_END = "2026-08-18";
+
+const formatDateKeyPtBr = (dateKey) => {
+  const raw = String(dateKey || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw || "—";
+  const [, month, day] = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/) || [];
+  return day && month ? `${day}/${month}` : raw;
+};
+
+const parseDateKeyToSaoPauloDate = (dateKey) => {
+  const raw = String(dateKey || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+  const date = new Date(`${raw}T12:00:00-03:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const toSaoPauloDateKey = (value) => {
+  const date = value instanceof Date ? value : new Date(value || Date.now());
+  if (Number.isNaN(date.getTime())) return "";
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const get = (type) => parts.find((part) => part.type === type)?.value || "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
+};
+
+const resolveGrowthCommercialWeek = (now = new Date()) => {
+  const dateKey = toSaoPauloDateKey(now);
+  if (!dateKey) return { weekKey: "", startDateKey: "", endDateKey: "", nowDateKey: "", isSpecial: false, competencia: "" };
+  if (dateKey >= GROWTH_SPECIAL_WEEK_START && dateKey <= GROWTH_SPECIAL_WEEK_END) {
+    return {
+      weekKey: `wk_${GROWTH_SPECIAL_WEEK_START}`,
+      startDateKey: GROWTH_SPECIAL_WEEK_START,
+      endDateKey: GROWTH_SPECIAL_WEEK_END,
+      nowDateKey: dateKey,
+      isSpecial: true,
+      competencia: GROWTH_SPECIAL_WEEK_START.slice(0, 7),
+    };
+  }
+  const base = parseDateKeyToSaoPauloDate(dateKey);
+  const day = base.getDay();
+  const diffToWednesday = (day + 7 - 3) % 7;
+  const start = new Date(base);
+  start.setDate(start.getDate() - diffToWednesday);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  const startDateKey = toSaoPauloDateKey(start);
+  const endDateKey = toSaoPauloDateKey(end);
+  return {
+    weekKey: `wk_${startDateKey}`,
+    startDateKey,
+    endDateKey,
+    nowDateKey: dateKey,
+    isSpecial: false,
+    competencia: startDateKey.slice(0, 7),
+  };
+};
+
+const getGrowthCommercialWeekOptions = () => {
+  const current = resolveGrowthCommercialWeek(new Date());
+  const nextSeed = parseDateKeyToSaoPauloDate(addDaysToDateKey(current.endDateKey, 1));
+  const next = resolveGrowthCommercialWeek(nextSeed || new Date());
+  return [current, next];
+};
+
+const formatGrowthCommercialWeekLabel = (week) => `${formatDateKeyPtBr(week?.startDateKey)} a ${formatDateKeyPtBr(week?.endDateKey)}`;
+
+const formatGrowthWeeklyActualValue = (role, actualValue) => {
+  const n = Number(actualValue || 0);
+  if (String(role || "").trim().toLowerCase() === "closer") return currencyPtBrNoCents(n);
+  return String(Math.max(0, n));
+};
+
+const getDefaultWeeklyRoleForPerson = (person) => {
+  const roles = Array.isArray(person?.roles) ? person.roles.map((role) => String(role || "").trim().toLowerCase()) : [];
+  if (roles.includes("closer")) return "closer";
+  if (roles.includes("sdr")) return "sdr";
+  return "sdr";
+};
+
+const loadGrowthGoalsWeekPayload = async ({ competencia, weekStart }) => {
+  const params = new URLSearchParams();
+  params.set("api", "growth-goals");
+  params.set("competencia", competencia);
+  params.set("includePeople", "1");
+  params.set("includeWeeklyProgress", "1");
+  params.set("weekStart", weekStart);
+  const res = await fetchWithAuth(`/api/growth-dashboard?${params.toString()}`, { method: "GET", forceRefreshIdToken: true });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(data?.error || "request_failed");
+  return data;
+};
+
 const renderAdminGrowthGoals = () => {
   if (!(adminGoalsTable instanceof HTMLElement)) return;
   if (adminGoalsError instanceof HTMLElement) adminGoalsError.hidden = true;
@@ -14530,6 +14627,16 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
   const currentKey = adminGrowthGoalsState.currentCompetencia || getCompetenciaKeySaoPaulo();
   const competencia = presetCompetencia && isValidCompetenciaKey(presetCompetencia) ? presetCompetencia : currentKey;
   const existing = adminGrowthGoalsState.byCompetencia.get(competencia);
+  const weekOptions = getGrowthCommercialWeekOptions();
+  const weekOptionsByStart = new Map(weekOptions.map((week) => [week.startDateKey, week]));
+  const modalState = {
+    selectedWeekStart: weekOptions[0]?.startDateKey || "",
+    selectedWeek: weekOptions[0] || null,
+    weekPayload: null,
+    previousWeekGoal: null,
+    weeklyLoading: false,
+    weeklyRows: [],
+  };
 
   const bodyHtml = `
     <form class="auth-form" data-growth-goal-form>
@@ -14545,6 +14652,30 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
           existing?.valorMeta ? escapeHtml(String(existing.valorMeta)) : ""
         }" />
         <div class="auth-field-error" data-goal-valor-error hidden>Valor inválido.</div>
+      </div>
+
+      <div class="auth-field">
+        <div class="auth-label">META DA SEMANA</div>
+        <select class="auth-input" data-goal-week-select>
+          ${weekOptions
+            .map((week, index) => {
+              const labelPrefix = index === 0 ? "Semana atual" : "Próxima semana";
+              return `<option value="${escapeHtml(week.startDateKey)}">${escapeHtml(`${labelPrefix} · ${formatGrowthCommercialWeekLabel(week)}`)}</option>`;
+            })
+            .join("")}
+        </select>
+        <div class="auth-field-hint" data-goal-week-storage-hint>Salva em ${escapeHtml(formatCompetenciaLabelPtBr((weekOptions[0]?.competencia || competencia)))}.</div>
+      </div>
+
+      <div class="auth-field" data-goal-unresolved-wrap hidden>
+        <div class="auth-field-error" data-goal-unresolved-box hidden></div>
+      </div>
+
+      <div class="auth-field">
+        <div class="auth-label">PESSOAS ATIVAS</div>
+        <div class="growth-goal-weekly-list" data-goal-weekly-list>
+          <div class="growth-contracts-loading">Carregando meta semanal…</div>
+        </div>
       </div>
 
       <div class="auth-form-error" data-goal-error hidden>Não foi possível salvar agora.</div>
@@ -14567,21 +14698,44 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
       const valorErr = form.querySelector("[data-goal-valor-error]");
       const errEl = form.querySelector("[data-goal-error]");
       const okEl = form.querySelector("[data-goal-success]");
+      const weekSelectEl = form.querySelector("[data-goal-week-select]");
 
       const competenciaValue = competenciaEl instanceof HTMLInputElement ? String(competenciaEl.value || "").trim() : "";
       const valorRaw = valorEl instanceof HTMLInputElement ? String(valorEl.value || "").trim() : "";
-      const valorMeta = parseMoneyPtBrLoose(valorRaw);
+      const valorMeta = valorRaw ? parseMoneyPtBrLoose(valorRaw) : NaN;
+      const shouldSaveMonthly = Boolean(valorRaw);
+      const selectedWeekStart = weekSelectEl instanceof HTMLSelectElement ? String(weekSelectEl.value || "").trim() : modalState.selectedWeekStart;
+      const selectedWeek = weekOptionsByStart.get(selectedWeekStart) || modalState.selectedWeek;
+      const weeklyRows = Array.from(form.querySelectorAll("[data-goal-weekly-row]"))
+        .map((row) => {
+          const personId = String(row.getAttribute("data-goal-weekly-row") || "").trim();
+          const roleEl = row.querySelector("[data-goal-weekly-role]");
+          const targetEl = row.querySelector("[data-goal-weekly-target]");
+          const role = roleEl instanceof HTMLSelectElement ? String(roleEl.value || "").trim().toLowerCase() : "";
+          const targetRaw = targetEl instanceof HTMLInputElement ? String(targetEl.value || "").trim() : "";
+          const targetValue = role === "closer" ? (targetRaw ? parseMoneyPtBrLoose(targetRaw) : 0) : Number.parseInt(targetRaw || "0", 10);
+          return { row, personId, role, targetValue, targetRaw };
+        })
+        .filter((item) => item.personId);
 
       const competenciaOk = isValidCompetenciaKey(competenciaValue);
-      const valorOk = Number.isFinite(valorMeta) && valorMeta > 0;
+      const valorOk = !shouldSaveMonthly || (Number.isFinite(valorMeta) && valorMeta > 0);
+      const weeklyOk =
+        !!selectedWeek &&
+        weeklyRows.every((item) => {
+          const roleOk = item.role === "closer" || item.role === "sdr";
+          const targetOk = Number.isFinite(Number(item.targetValue)) && Number(item.targetValue) >= 0;
+          item.row.classList.toggle("is-error", !roleOk || !targetOk);
+          return roleOk && targetOk;
+        });
 
       if (valorErr instanceof HTMLElement) valorErr.hidden = valorOk;
       if (valorEl instanceof HTMLElement) valorEl.classList.toggle("is-error", !valorOk);
       if (errEl instanceof HTMLElement) errEl.hidden = true;
       if (okEl instanceof HTMLElement) okEl.hidden = true;
 
-      if (!competenciaOk || !valorOk) return false;
-      if (competenciaValue < currentKey) {
+      if ((shouldSaveMonthly && !competenciaOk) || !valorOk || !weeklyOk) return false;
+      if (shouldSaveMonthly && competenciaValue < currentKey) {
         if (errEl instanceof HTMLElement) {
           errEl.textContent = "Não é possível cadastrar meta para um mês passado.";
           errEl.hidden = false;
@@ -14605,16 +14759,50 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
           if (modalSecondary) modalSecondary.disabled = true;
           if (modalPrimary) modalPrimary.textContent = "Salvando…";
 
-          const res = await fetchWithAuth("/api/growth-dashboard?api=growth-goals", {
+          if (shouldSaveMonthly) {
+            const res = await fetchWithAuth("/api/growth-dashboard?api=growth-goals", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ competencia: competenciaValue, valorMeta }),
+              forceRefreshIdToken: true,
+            });
+            const data = await res.json().catch(() => null);
+            if (!res.ok) {
+              const code = String(data?.error || "request_failed");
+              const details = data && typeof data === "object" ? data : null;
+              const err = new Error(code);
+              err.details = details;
+              throw err;
+            }
+          }
+
+          const weeklyPeople = Object.fromEntries(
+            weeklyRows.map((item) => [
+              item.personId,
+              {
+                role: item.role,
+                targetValue: Number(item.targetValue) || 0,
+              },
+            ])
+          );
+          const weeklyRes = await fetchWithAuth("/api/growth-dashboard?api=growth-goals", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ competencia: competenciaValue, valorMeta }),
+            body: JSON.stringify({
+              competencia: selectedWeek.competencia,
+              weeklyGoal: {
+                weekKey: selectedWeek.weekKey,
+                startDateKey: selectedWeek.startDateKey,
+                endDateKey: selectedWeek.endDateKey,
+                people: weeklyPeople,
+              },
+            }),
             forceRefreshIdToken: true,
           });
-          const data = await res.json().catch(() => null);
-          if (!res.ok) {
-            const code = String(data?.error || "request_failed");
-            const details = data && typeof data === "object" ? data : null;
+          const weeklyData = await weeklyRes.json().catch(() => null);
+          if (!weeklyRes.ok) {
+            const code = String(weeklyData?.error || "request_failed");
+            const details = weeklyData && typeof weeklyData === "object" ? weeklyData : null;
             const err = new Error(code);
             err.details = details;
             throw err;
@@ -14640,6 +14828,7 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
           if (code === "past_competencia_not_allowed") msg = "Não é possível cadastrar meta para um mês passado.";
           if (code === "invalid_competencia") msg = "Competência inválida. Selecione mês/ano corretamente.";
           if (code === "invalid_valor") msg = "Valor inválido. Use um número maior que zero.";
+          if (code === "invalid_weekly_goal") msg = "A meta semanal está incompleta ou inválida.";
           if (code === "firestore_write_failed") {
             const st = Number(details?.firestoreStatus) || 0;
             if (st === 403) {
@@ -14668,6 +14857,158 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
     const form = modalBody?.querySelector("[data-growth-goal-form]");
     const competenciaEl = form?.querySelector("[data-goal-competencia]");
     if (competenciaEl instanceof HTMLInputElement) competenciaEl.focus();
+
+    const weekSelectEl = form?.querySelector("[data-goal-week-select]");
+    const weeklyListEl = form?.querySelector("[data-goal-weekly-list]");
+    const weekStorageHintEl = form?.querySelector("[data-goal-week-storage-hint]");
+    const unresolvedWrapEl = form?.querySelector("[data-goal-unresolved-wrap]");
+    const unresolvedBoxEl = form?.querySelector("[data-goal-unresolved-box]");
+
+    const renderWeeklyRows = () => {
+      if (!(weeklyListEl instanceof HTMLElement)) return;
+      const payload = modalState.weekPayload;
+      const people = Array.isArray(payload?.people) ? payload.people.filter((person) => person && person.active !== false) : [];
+      const selectedWeekGoal = payload?.weeklyReadModel?.weeklyGoal && Array.isArray(payload.weeklyReadModel.weeklyGoal.people) ? payload.weeklyReadModel.weeklyGoal.people : [];
+      const currentGoalMap = new Map(selectedWeekGoal.map((row) => [String(row.personId || ""), row]));
+      const previousGoalPeople = Array.isArray(modalState.previousWeekGoal?.people) ? modalState.previousWeekGoal.people : [];
+      const previousGoalMap = new Map(previousGoalPeople.map((row) => [String(row.personId || ""), row]));
+      const progressRows = [
+        ...(Array.isArray(payload?.weeklyReadModel?.progress?.closers) ? payload.weeklyReadModel.progress.closers : []),
+        ...(Array.isArray(payload?.weeklyReadModel?.progress?.sdrs) ? payload.weeklyReadModel.progress.sdrs : []),
+      ];
+      const progressMap = new Map(progressRows.map((row) => [String(row.personId || ""), row]));
+      modalState.weeklyRows = people
+        .slice()
+        .sort((a, b) => String(a.displayName || "").localeCompare(String(b.displayName || ""), "pt-BR"))
+        .map((person) => {
+          const personId = String(person.personId || "");
+          const currentRow = currentGoalMap.get(personId);
+          const previousRow = previousGoalMap.get(personId);
+          const role = String(currentRow?.role || previousRow?.role || getDefaultWeeklyRoleForPerson(person)).trim().toLowerCase();
+          const targetValue = Number(currentRow?.targetValue ?? previousRow?.targetValue ?? 0) || 0;
+          const progress = progressMap.get(personId) || null;
+          return { person, personId, role, targetValue, progress };
+        });
+      weeklyListEl.innerHTML = modalState.weeklyRows.length
+        ? modalState.weeklyRows
+            .map(({ person, personId, role, targetValue, progress }) => {
+              const progressPct = Number(progress?.progressPct || 0);
+              const progressText = progress
+                ? `${formatGrowthWeeklyActualValue(role, progress.actualValue)} · ${progressPct.toFixed(1).replace(".", ",")}%`
+                : role === "closer"
+                  ? `${currencyPtBrNoCents(0)} · 0,0%`
+                  : `0 · 0,0%`;
+              const unitLabel = role === "closer" ? "R$" : "reuniões";
+              const targetDisplay = role === "closer" ? String(targetValue || "") : String(Math.max(0, Math.round(targetValue || 0)));
+              return `
+                <div class="growth-goal-weekly-row" data-goal-weekly-row="${escapeHtml(personId)}">
+                  <div class="growth-goal-weekly-person">
+                    <strong>${escapeHtml(String(person.displayName || personId))}</strong>
+                    <span>${escapeHtml(progressText)}</span>
+                  </div>
+                  <label class="growth-goal-weekly-cell">
+                    <span>Papel</span>
+                    <select class="auth-input" data-goal-weekly-role>
+                      <option value="closer" ${role === "closer" ? "selected" : ""}>Closer</option>
+                      <option value="sdr" ${role === "sdr" ? "selected" : ""}>SDR</option>
+                    </select>
+                  </label>
+                  <label class="growth-goal-weekly-cell">
+                    <span>Meta</span>
+                    <div class="growth-goal-weekly-target-wrap">
+                      <span class="growth-goal-weekly-unit" data-goal-weekly-target-unit>${escapeHtml(unitLabel)}</span>
+                      <input
+                        class="auth-input"
+                        type="text"
+                        inputmode="decimal"
+                        data-goal-weekly-target
+                        value="${escapeHtml(targetDisplay)}"
+                        placeholder="${role === "closer" ? "R$ 8.000" : "30"}"
+                      />
+                    </div>
+                  </label>
+                </div>
+              `;
+            })
+            .join("")
+        : `<div class="growth-contracts-loading">Nenhuma pessoa ativa cadastrada em growthPeople.</div>`;
+
+      const unresolvedCrm = Array.isArray(payload?.weeklyReadModel?.unresolved?.crmAttendantIds) ? payload.weeklyReadModel.unresolved.crmAttendantIds : [];
+      const unresolvedSdr = Array.isArray(payload?.weeklyReadModel?.unresolved?.sdrActors) ? payload.weeklyReadModel.unresolved.sdrActors : [];
+      const warnings = [
+        ...unresolvedCrm.map((row) => `${String(row.attendantName || row.crmAttendantId || "Closer não reconhecido")} · ${Number(row.count || 0)} negócio(s)`),
+        ...unresolvedSdr.map((row) => `${String(row.sdrName || row.sdrEmail || row.sdrUid || "SDR não reconhecido")} · ${Number(row.totalEvents || 0)} evento(s)`),
+      ];
+      if (unresolvedWrapEl instanceof HTMLElement) unresolvedWrapEl.hidden = warnings.length === 0;
+      if (unresolvedBoxEl instanceof HTMLElement) {
+        unresolvedBoxEl.hidden = warnings.length === 0;
+        unresolvedBoxEl.innerHTML = warnings.length
+          ? `<strong>Não reconhecidos nesta semana:</strong><br />${warnings.map((line) => escapeHtml(line)).join("<br />")}`
+          : "";
+      }
+    };
+
+    const loadPreviousWeekGoal = async (selectedWeek) => {
+      const previousWeekSeed = parseDateKeyToSaoPauloDate(addDaysToDateKey(selectedWeek.startDateKey, -1));
+      if (!(previousWeekSeed instanceof Date)) return null;
+      const previousWeek = resolveGrowthCommercialWeek(previousWeekSeed);
+      if (!previousWeek?.weekKey) return null;
+      const params = new URLSearchParams();
+      params.set("api", "growth-goals");
+      params.set("competencia", previousWeek.competencia);
+      const res = await fetchWithAuth(`/api/growth-dashboard?${params.toString()}`, { method: "GET", forceRefreshIdToken: true });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || "request_failed");
+      const weeklyGoals = data?.goal?.weeklyGoals && typeof data.goal.weeklyGoals === "object" ? data.goal.weeklyGoals : {};
+      return weeklyGoals[previousWeek.weekKey] || null;
+    };
+
+    const loadSelectedWeek = async (weekStart) => {
+      const selectedWeek = weekOptionsByStart.get(String(weekStart || "").trim()) || weekOptions[0] || null;
+      modalState.selectedWeek = selectedWeek;
+      modalState.selectedWeekStart = selectedWeek?.startDateKey || "";
+      if (weekStorageHintEl instanceof HTMLElement) {
+        weekStorageHintEl.textContent = selectedWeek
+          ? `Salva em ${formatCompetenciaLabelPtBr(selectedWeek.competencia)}.`
+          : "Selecione uma semana comercial.";
+      }
+      if (!(weeklyListEl instanceof HTMLElement)) return;
+      modalState.weeklyLoading = true;
+      weeklyListEl.innerHTML = `<div class="growth-contracts-loading">Carregando meta semanal…</div>`;
+      try {
+        const payload = await loadGrowthGoalsWeekPayload({ competencia: selectedWeek.competencia, weekStart: selectedWeek.startDateKey });
+        modalState.weekPayload = payload;
+        modalState.previousWeekGoal = payload?.weeklyReadModel?.weeklyGoal ? null : await loadPreviousWeekGoal(selectedWeek);
+        renderWeeklyRows();
+      } catch (error) {
+        console.error("[admin] load weekly growth-goal failed:", error);
+        weeklyListEl.innerHTML = `<div class="auth-form-error">Não foi possível carregar a meta semanal agora.</div>`;
+      } finally {
+        modalState.weeklyLoading = false;
+      }
+    };
+
+    if (weekSelectEl instanceof HTMLSelectElement) {
+      weekSelectEl.addEventListener("change", () => {
+        loadSelectedWeek(weekSelectEl.value);
+      });
+    }
+
+    if (weeklyListEl instanceof HTMLElement) {
+      weeklyListEl.addEventListener("change", (event) => {
+        const roleEl = event.target instanceof HTMLElement ? event.target.closest("[data-goal-weekly-role]") : null;
+        if (!(roleEl instanceof HTMLSelectElement)) return;
+        const row = roleEl.closest("[data-goal-weekly-row]");
+        if (!(row instanceof HTMLElement)) return;
+        const unitEl = row.querySelector("[data-goal-weekly-target-unit]");
+        const targetEl = row.querySelector("[data-goal-weekly-target]");
+        const isCloser = String(roleEl.value || "").trim().toLowerCase() === "closer";
+        if (unitEl instanceof HTMLElement) unitEl.textContent = isCloser ? "R$" : "reuniões";
+        if (targetEl instanceof HTMLInputElement) targetEl.placeholder = isCloser ? "R$ 8.000" : "30";
+      });
+    }
+
+    loadSelectedWeek(modalState.selectedWeekStart);
   }, 0);
 };
 

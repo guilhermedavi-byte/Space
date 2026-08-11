@@ -10,6 +10,12 @@ const {
   countRemainingSalesDaysSegSabInclusive,
   isValidDateKey,
 } = require("./_lib/commercial-period");
+const {
+  GROWTH_PEOPLE_COLLECTION,
+  decodeGrowthPeopleDoc,
+  decodeWeeklyGoalsMap,
+  buildWeeklyGoalsReadModel,
+} = require("./_lib/growth-people");
 const { triggerContractSignedOnboarding } = require("./_lib/pedagogico-n8n");
 const {
   decodeFields,
@@ -750,6 +756,7 @@ const decodeGoalDoc = (doc) => {
   const updatedByName = typeof fields.updatedByName === "string" ? fields.updatedByName : "";
   const periodStart = typeof fields.periodStart === "string" && isValidDateKey(fields.periodStart) ? fields.periodStart.trim() : "";
   const periodEnd = typeof fields.periodEnd === "string" && isValidDateKey(fields.periodEnd) ? fields.periodEnd.trim() : "";
+  const weeklyGoals = decodeWeeklyGoalsMap(fields.weeklyGoals);
 
   if (!isValidCompetencia(competencia)) return null;
 
@@ -765,7 +772,63 @@ const decodeGoalDoc = (doc) => {
     updatedByName: updatedByName || null,
     periodStart: periodStart || null,
     periodEnd: periodEnd || null,
+    weeklyGoals,
   };
+};
+
+const normalizeWeeklyGoalPayload = (value) => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const weekKey = typeof value.weekKey === "string" ? value.weekKey.trim() : "";
+  const startDateKey = typeof value.startDateKey === "string" && isValidDateKey(value.startDateKey) ? value.startDateKey.trim() : "";
+  const endDateKey = typeof value.endDateKey === "string" && isValidDateKey(value.endDateKey) ? value.endDateKey.trim() : "";
+  const teamTarget = Number.isFinite(Number(value.teamTarget)) ? Number(value.teamTarget) : 0;
+  const rawPeople = value.people && typeof value.people === "object" && !Array.isArray(value.people) ? value.people : {};
+  if (!weekKey || !startDateKey || !endDateKey || startDateKey > endDateKey) return null;
+  const people = {};
+  Object.entries(rawPeople).forEach(([personIdRaw, row]) => {
+    const personId = String(personIdRaw || "").trim();
+    if (!personId || !row || typeof row !== "object" || Array.isArray(row)) return;
+    const role = String(row.role || "").trim().toLowerCase();
+    const targetValue = Number(row.targetValue);
+    if (!["closer", "sdr", "both"].includes(role)) return;
+    if (!Number.isFinite(targetValue) || targetValue < 0) return;
+    people[personId] = { role, targetValue };
+  });
+  return { weekKey, startDateKey, endDateKey, teamTarget, people };
+};
+
+const decodeSdrActivityEventDoc = (doc) => {
+  if (!doc || typeof doc !== "object") return null;
+  const fields = decodeFields(doc);
+  const id = getDocIdFromName(doc.name);
+  const dateKey = typeof fields.dateKey === "string" && isValidDateKey(fields.dateKey) ? fields.dateKey.trim() : "";
+  const eventType = typeof fields.eventType === "string" ? fields.eventType.trim() : "";
+  const outcome = typeof fields.outcome === "string" ? fields.outcome.trim() : "";
+  if (!id || !dateKey || !eventType || !outcome) return null;
+  return {
+    id,
+    dateKey,
+    eventType,
+    outcome,
+    sdrUid: typeof fields.sdrUid === "string" ? fields.sdrUid.trim() : "",
+    sdrName: typeof fields.sdrName === "string" ? fields.sdrName.trim() : "",
+    sdrEmail: typeof fields.sdrEmail === "string" ? fields.sdrEmail.trim().toLowerCase() : "",
+    deletedAt: fields.deletedAt instanceof Date ? fields.deletedAt.toISOString() : typeof fields.deletedAt === "string" ? fields.deletedAt.trim() : "",
+  };
+};
+
+const loadGrowthPeople = async ({ idToken } = {}) => {
+  const response = await firestoreListDocuments({ collectionPath: GROWTH_PEOPLE_COLLECTION, idToken, pageSize: 1000 });
+  if (!response.ok) throw new Error("growth_people_list_failed");
+  const docs = Array.isArray(response.documents) ? response.documents : [];
+  return docs.map((doc) => decodeGrowthPeopleDoc(doc)).filter(Boolean);
+};
+
+const loadSdrActivityEvents = async ({ idToken } = {}) => {
+  const response = await firestoreListDocuments({ collectionPath: "sdrActivityEvents", idToken, pageSize: 2000 });
+  if (!response.ok) throw new Error("sdr_activity_list_failed");
+  const docs = Array.isArray(response.documents) ? response.documents : [];
+  return docs.map((doc) => decodeSdrActivityEventDoc(doc)).filter(Boolean);
 };
 
 const buildGrowthMetricsPayload = async ({ crm, idToken }) => {
@@ -1185,7 +1248,11 @@ const handleGrowthGoalsApi = async (req, res, url) => {
 
     const currentKey = getCurrentCompetenciaKeySaoPaulo();
     const requestedCompetencia = String(url.searchParams.get("competencia") || "").trim();
+    const requestedWeekStart = String(url.searchParams.get("weekStart") || "").trim();
+    const requestedWeekDate = isValidDateKey(requestedWeekStart) ? new Date(`${requestedWeekStart}T12:00:00-03:00`) : null;
     const competencia = mode === "current" ? currentKey : requestedCompetencia;
+    const includePeople = ["1", "true", "yes"].includes(String(url.searchParams.get("includePeople") || "").trim().toLowerCase());
+    const includeWeeklyProgress = ["1", "true", "yes"].includes(String(url.searchParams.get("includeWeeklyProgress") || "").trim().toLowerCase());
 
     // Single goal (current or explicit competence)
     if (competencia) {
@@ -1197,17 +1264,37 @@ const handleGrowthGoalsApi = async (req, res, url) => {
       try {
         const docPath = `${GOALS_COLLECTION}/${encodeURIComponent(competencia)}`;
         const snap = await firestoreGetDocument({ docPath, idToken: auth.idToken });
-
+        let goal = null;
         if (!snap.ok) {
-          if (snap.status === 404) {
-            sendJson(res, 200, { competencia, goal: null });
-            return;
+          if (snap.status !== 404) {
+            throw new Error("firestore_get_failed");
           }
+        } else {
+          goal = decodeGoalDoc(snap.data);
+        }
+        if (!snap.ok && snap.status !== 404) {
           throw new Error("firestore_get_failed");
         }
+        const payload = { competencia, goal };
 
-        const goal = decodeGoalDoc(snap.data);
-        sendJson(res, 200, { competencia, goal });
+        if (includePeople || includeWeeklyProgress) {
+          const people = await loadGrowthPeople({ idToken: auth.idToken });
+          payload.people = people;
+        }
+
+        if (includeWeeklyProgress) {
+          const [crm, sdrEvents] = await Promise.all([fetchAllCrmBusinesses(), loadSdrActivityEvents({ idToken: auth.idToken })]);
+          const people = Array.isArray(payload.people) ? payload.people : await loadGrowthPeople({ idToken: auth.idToken });
+          payload.weeklyReadModel = buildWeeklyGoalsReadModel({
+            goal,
+            people,
+            businesses: Array.isArray(crm?.businesses) ? crm.businesses : [],
+            sdrEvents,
+            now: requestedWeekDate || new Date(),
+          });
+        }
+
+        sendJson(res, 200, payload);
         return;
       } catch (error) {
         // eslint-disable-next-line no-console
@@ -1278,12 +1365,17 @@ const handleGrowthGoalsApi = async (req, res, url) => {
   const competencia = String(body?.competencia || "").trim();
   const hasValorMeta = body && Object.prototype.hasOwnProperty.call(body, "valorMeta");
   const valorMetaInput = hasValorMeta ? parseNumber(body?.valorMeta) : NaN;
+  const weeklyGoalInput = normalizeWeeklyGoalPayload(body?.weeklyGoal);
   const periodStartRaw = String(body?.periodStart || "").trim();
   const periodEndRaw = String(body?.periodEnd || "").trim();
   const periodStart = periodStartRaw ? (isValidDateKey(periodStartRaw) ? periodStartRaw : null) : "";
   const periodEnd = periodEndRaw ? (isValidDateKey(periodEndRaw) ? periodEndRaw : null) : "";
   if (!isValidCompetencia(competencia)) {
     sendJson(res, 400, { error: "invalid_competencia" });
+    return;
+  }
+  if (body && Object.prototype.hasOwnProperty.call(body, "weeklyGoal") && !weeklyGoalInput) {
+    sendJson(res, 400, { error: "invalid_weekly_goal" });
     return;
   }
   if (periodStart === null || periodEnd === null) {
@@ -1315,25 +1407,35 @@ const handleGrowthGoalsApi = async (req, res, url) => {
     existingGoal = null;
   }
 
-  const valorMeta = hasValorMeta
-    ? valorMetaInput
-    : Number.isFinite(Number(existingGoal?.valorMeta))
-      ? Number(existingGoal.valorMeta)
-      : NaN;
-  if (!Number.isFinite(valorMeta) || valorMeta <= 0) {
+  const existingValorMeta = Number.isFinite(Number(existingGoal?.valorMeta)) ? Number(existingGoal.valorMeta) : NaN;
+  const valorMeta = hasValorMeta ? valorMetaInput : existingValorMeta;
+  const shouldPersistValorMeta = Number.isFinite(valorMeta) && valorMeta > 0;
+  if (!shouldPersistValorMeta && !weeklyGoalInput) {
     sendJson(res, 400, { error: "invalid_valor" });
     return;
   }
 
   const base = {
     competencia,
-    valorMeta,
     updatedAt: now,
     updatedBy: auth.id,
     updatedByName: auth.name || null,
   };
+  if (shouldPersistValorMeta) base.valorMeta = valorMeta;
   if (periodStart) base.periodStart = periodStart;
   if (periodEnd) base.periodEnd = periodEnd;
+  if (weeklyGoalInput) {
+    const existingWeeklyGoals = existingGoal?.weeklyGoals && typeof existingGoal.weeklyGoals === "object" && !Array.isArray(existingGoal.weeklyGoals) ? existingGoal.weeklyGoals : {};
+    base.weeklyGoals = {
+      ...existingWeeklyGoals,
+      [weeklyGoalInput.weekKey]: {
+        startDateKey: weeklyGoalInput.startDateKey,
+        endDateKey: weeklyGoalInput.endDateKey,
+        teamTarget: weeklyGoalInput.teamTarget,
+        people: weeklyGoalInput.people,
+      },
+    };
+  }
   const data = exists
     ? base
     : {

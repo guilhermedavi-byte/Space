@@ -99,3 +99,16 @@ test("POST parcial de growth-goals preserva valorMeta existente quando omitido",
   assert.match(source, /const hasValorMeta = body && Object\.prototype\.hasOwnProperty\.call\(body, "valorMeta"\)/);
   assert.match(source, /const valorMeta = hasValorMeta[\s\S]*existingGoal/);
 });
+
+test("GET de growth-goals aceita weekStart para calcular weeklyReadModel fora da semana atual", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "api", "growth-dashboard.js"), "utf8");
+  assert.match(source, /const requestedWeekStart = String\(url\.searchParams\.get\("weekStart"\) \|\| ""\)\.trim\(\)/);
+  assert.match(source, /now: requestedWeekDate \|\| new Date\(\)/);
+});
+
+test("POST de growth-goals aceita salvar weeklyGoal sem exigir valorMeta mensal", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "api", "growth-dashboard.js"), "utf8");
+  assert.match(source, /const weeklyGoalInput = normalizeWeeklyGoalPayload\(body\?\.weeklyGoal\)/);
+  assert.match(source, /if \(!shouldPersistValorMeta && !weeklyGoalInput\)/);
+  assert.match(source, /base\.weeklyGoals = \{/);
+});
