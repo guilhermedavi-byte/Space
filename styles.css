@@ -17614,6 +17614,17 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   color: rgba(255, 210, 207, 0.94);
 }
 
+.commercial-overview-cache-note {
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(251, 191, 36, 0.18);
+  background: rgba(251, 191, 36, 0.08);
+  color: #f6d98f;
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
 .commercial-overview-loading {
   min-height: 520px;
   border-radius: 24px;

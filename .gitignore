@@ -2,3 +2,5 @@
 .DS_Store
 .vercel
 .env*
+tmp-*.json
+scripts/tmp-*

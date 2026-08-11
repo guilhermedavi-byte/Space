@@ -16065,6 +16065,10 @@ const renderAdminCommercialOverview = () => {
   const leadsMonth = Math.max(0, Number(summary.leadsMonth || crm?.forecastBreakdown?.debug?.leadsDoMes || 0));
   const agendamentosMonth = Math.max(0, Number(summary.agendamentosMonth || 0));
   const fechadosMonth = Math.max(0, Number(summary.fechadosMonth || summary.totalVendas || 0));
+  const staleAgeMinutes = Math.max(0, Number(crm?.staleAgeMinutes || 0));
+  const staleNotice = crm?.stale
+    ? `<div class="commercial-overview-cache-note" role="status">Exibindo cache de ${escapeHtml(String(staleAgeMinutes))} min atrás enquanto o CRM está instável.</div>`
+    : "";
 
   adminCommercialOverviewContent.innerHTML = `
     <div class="commercial-overview-head">
@@ -16077,6 +16081,7 @@ const renderAdminCommercialOverview = () => {
           .join("")}
       </div>
     </div>
+    ${staleNotice}
 
     <section class="commercial-overview-pulse" aria-label="Resumo do mês comercial">
       <div class="commercial-overview-pulse-orb" aria-hidden="true">
@@ -16152,8 +16157,9 @@ const loadAdminCommercialOverview = async ({ force = false } = {}) => {
   adminCommercialOverviewState.error = "";
   renderAdminCommercialOverview();
   try {
+    const crmUrl = force ? "/api/growth-metrics?refresh=1" : "/api/growth-metrics";
     const [crmRes, goalRes, sdrRes] = await Promise.all([
-      fetchWithAuth("/api/growth-metrics", { method: "GET" }),
+      fetchWithAuth(crmUrl, { method: "GET" }),
       fetchWithAuth("/api/growth-dashboard?api=growth-goals&mode=current", { method: "GET", forceRefreshIdToken: true }),
       fetchWithAuth("/api/sdr-metrics?days=30", { method: "GET" }),
     ]);

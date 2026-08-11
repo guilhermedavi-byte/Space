@@ -27,6 +27,10 @@ const sendRedirect = (res, location) => {
 };
 
 const GOALS_COLLECTION = "growthGoals";
+const GROWTH_METRICS_CACHE_COLLECTION = "growthMetricsCache";
+const GROWTH_METRICS_CACHE_DOC_ID = "overview";
+const GROWTH_METRICS_CACHE_TTL_MS = 15 * 60 * 1000;
+const DATASTORE_SCOPE = "https://www.googleapis.com/auth/datastore";
 
 const safeJsonForHtml = (value) => {
   // Prevent `</script>` injection when embedding JSON in HTML.
@@ -277,6 +281,70 @@ const firestorePatchDocumentWithAccessToken = async ({ docPath, accessToken, dat
     body: encodeFields(data),
   });
 };
+
+const getFirestoreAdminAccessToken = async () => {
+  const result = await getGoogleAccessToken({ scope: DATASTORE_SCOPE });
+  return String(result?.accessToken || "").trim();
+};
+
+const getGrowthMetricsCacheDocPath = () => `${GROWTH_METRICS_CACHE_COLLECTION}/${encodeURIComponent(GROWTH_METRICS_CACHE_DOC_ID)}`;
+
+const readGrowthMetricsCacheDoc = async () => {
+  const accessToken = await getFirestoreAdminAccessToken();
+  const snap = await firestoreGetDocumentWithAccessToken({
+    docPath: getGrowthMetricsCacheDocPath(),
+    accessToken,
+  });
+  if (!snap.ok) return snap;
+  const fields = decodeFields(snap.data);
+  return {
+    ok: true,
+    status: snap.status || 200,
+    data: {
+      payload: fields?.payload && typeof fields.payload === "object" ? fields.payload : null,
+      generatedAt: typeof fields?.generatedAt === "string" ? fields.generatedAt : "",
+    },
+  };
+};
+
+const writeGrowthMetricsCacheDoc = async ({ payload, generatedAt }) => {
+  const accessToken = await getFirestoreAdminAccessToken();
+  return firestorePatchDocumentWithAccessToken({
+    docPath: getGrowthMetricsCacheDocPath(),
+    accessToken,
+    data: { payload, generatedAt },
+    updateMaskPaths: ["payload", "generatedAt"],
+  });
+};
+
+const parseIsoDateSafe = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  const date = new Date(raw);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const getGrowthMetricsCacheMeta = (cacheRow = {}) => {
+  const generatedAtDate = parseIsoDateSafe(cacheRow?.generatedAt);
+  const generatedAtMs = generatedAtDate ? generatedAtDate.getTime() : 0;
+  const ageMs = generatedAtMs > 0 ? Math.max(0, Date.now() - generatedAtMs) : Number.POSITIVE_INFINITY;
+  const ageMinutes = Number.isFinite(ageMs) ? Math.max(0, Math.round(ageMs / 60000)) : null;
+  return {
+    generatedAt: generatedAtDate ? generatedAtDate.toISOString() : "",
+    generatedAtMs,
+    ageMs,
+    ageMinutes,
+    isFresh: generatedAtMs > 0 && ageMs < GROWTH_METRICS_CACHE_TTL_MS,
+  };
+};
+
+const decorateGrowthMetricsPayload = (payload = {}, { cached = false, stale = false, staleAgeMinutes = null, generatedAt = "" } = {}) => ({
+  ...(payload && typeof payload === "object" ? payload : {}),
+  cached: Boolean(cached),
+  stale: Boolean(stale),
+  staleAgeMinutes: Number.isFinite(Number(staleAgeMinutes)) ? Math.max(0, Number(staleAgeMinutes)) : null,
+  generatedAt: typeof generatedAt === "string" ? generatedAt : "",
+});
 
 const requireGrowthAuth = async (req, res) => {
   const session = getSessionFromRequest(req);
@@ -676,6 +744,451 @@ const decodeGoalDoc = (doc) => {
   };
 };
 
+const buildGrowthMetricsPayload = async ({ crm, idToken }) => {
+  const businesses = Array.isArray(crm?.businesses) ? crm.businesses : [];
+  const nowMonthKey = getMonthKeySaoPaulo(new Date());
+
+  let metaDoMes = null;
+  try {
+    if (idToken) {
+      const snap = await firestoreGetDocument({ docPath: `${GOALS_COLLECTION}/${encodeURIComponent(nowMonthKey)}`, idToken });
+      if (snap.ok) {
+        const goal = decodeGoalDoc(snap.data);
+        const v = Number(goal?.valorMeta);
+        if (Number.isFinite(v) && v > 0) metaDoMes = v;
+      }
+    }
+  } catch {
+    metaDoMes = null;
+  }
+
+  // Prefer the main pipeline name used by the commercial team. Fall back to the old "Conversão" pipeline if needed.
+  const pipelinePreferred = normalizeKey("Funil principal");
+  const preferredDeals = businesses.filter((b) => normalizeKey(b?.stage?.pipeline?.name) === pipelinePreferred);
+  const pipelineTarget = preferredDeals.length ? pipelinePreferred : normalizeKey("Conversão");
+  const conversionPipelineKey = normalizeKey("Conversão");
+
+  const filtered = businesses.filter((b) => normalizeKey(b?.stage?.pipeline?.name) === pipelineTarget);
+  const conversionPipelineDeals = businesses.filter((b) => normalizeKey(b?.stage?.pipeline?.name) === conversionPipelineKey);
+
+  // Temporary debug: inspect fields for a deal in "Em fechamento" to identify lost flags/status fields.
+  try {
+    const sampleDeal = filtered.find((b) => {
+      const stageKey = normalizeKey(b?.stage?.name);
+      if (stageKey !== normalizeKey("Em fechamento")) return false;
+      const createdAt = b?.createdAt || b?.created_at || null;
+      return createdAt ? getMonthKeySaoPaulo(createdAt) === getMonthKeySaoPaulo(new Date()) : true;
+    });
+    if (sampleDeal) {
+      // eslint-disable-next-line no-console
+      console.log("[DEAL FIELDS]", JSON.stringify(Object.keys(sampleDeal)));
+      // eslint-disable-next-line no-console
+      console.log("[DEAL SAMPLE]", JSON.stringify(sampleDeal));
+    }
+  } catch {
+    // ignore debug failures
+  }
+
+  const stageCounts = new Map();
+  const stageTotals = new Map();
+  const stageCountsMonth = new Map();
+  const stageTotalsMonth = new Map();
+
+  const closedDeals = [];
+  let totalPipelineMonth = 0;
+
+  filtered.forEach((b) => {
+    const stageName = normalizeKey(b?.stage?.name);
+    const total = safeNumber(b?.total);
+    stageCounts.set(stageName, (stageCounts.get(stageName) || 0) + 1);
+    stageTotals.set(stageName, (stageTotals.get(stageName) || 0) + total);
+
+    const createdAt = b?.createdAt || b?.created_at || null;
+    const isMonth = createdAt ? getMonthKeySaoPaulo(createdAt) === nowMonthKey : false;
+    if (isMonth) {
+      totalPipelineMonth += 1;
+      stageCountsMonth.set(stageName, (stageCountsMonth.get(stageName) || 0) + 1);
+      stageTotalsMonth.set(stageName, (stageTotalsMonth.get(stageName) || 0) + total);
+    }
+    if (stageName === "fechado") closedDeals.push(b);
+  });
+
+  const totalPipeline = filtered.length;
+
+  const agendamentoStages = new Set([
+    normalizeKey("Agendado"),
+    normalizeKey("No-show"),
+    normalizeKey("Reunião Reagendada"),
+    normalizeKey("Reunião Realizada"),
+    normalizeKey("Hot Lead"),
+    normalizeKey("Forecast"),
+    normalizeKey("Pagamento Parcial"),
+    normalizeKey("Fechado"),
+  ]);
+
+  const agendamentos =
+    Array.from(agendamentoStages).reduce((sum, name) => sum + (stageCounts.get(name) || 0), 0);
+  const fechados = stageCounts.get(normalizeKey("Fechado")) || 0;
+  const noShow = stageCounts.get(normalizeKey("No-show")) || 0;
+
+  const baseConversao = Array.from(CONVERSION_MEETING_OR_AFTER_STAGE_KEYS).reduce(
+    (sum, stageKey) => sum + (stageCounts.get(stageKey) || 0),
+    0
+  );
+
+  const agendamentosMonth =
+    Array.from(agendamentoStages).reduce((sum, name) => sum + (stageCountsMonth.get(name) || 0), 0);
+  const fechadosMonth = stageCountsMonth.get(normalizeKey("Fechado")) || 0;
+  const noShowMonth = stageCountsMonth.get(normalizeKey("No-show")) || 0;
+
+  const baseConversaoMonth = Array.from(CONVERSION_MEETING_OR_AFTER_STAGE_KEYS).reduce(
+    (sum, stageKey) => sum + (stageCountsMonth.get(stageKey) || 0),
+    0
+  );
+
+  const dateFieldCounts = new Map();
+
+  const closedDealsMonth = closedDeals.filter((b) => {
+    const info = getBusinessWonLostDate(b);
+    const field = info.field || "unknown";
+    dateFieldCounts.set(field, (dateFieldCounts.get(field) || 0) + 1);
+    const key = info.date ? getMonthKeySaoPaulo(info.date) : "";
+    return key && nowMonthKey ? key === nowMonthKey : false;
+  });
+
+  const dateFieldUsed =
+    Array.from(dateFieldCounts.entries())
+      .sort((a, b) => b[1] - a[1])[0]?.[0] || "";
+
+  const totalFechadoStage = closedDeals.length;
+
+  const closedDealsMonthIds = new Set(closedDealsMonth.map((b) => getBusinessId(b)).filter(Boolean));
+  const closedDealsStageOutsideMonth = closedDeals.filter((b) => {
+    const id = getBusinessId(b);
+    if (!id) return true;
+    return !closedDealsMonthIds.has(id);
+  });
+
+  const realizado = closedDealsMonth.reduce((sum, b) => sum + getDealValueForecast(b), 0);
+  const totalVendas = closedDealsMonth.length;
+  const ticketMedio = totalVendas > 0 ? realizado / totalVendas : 0;
+
+  const conversao = percent(fechadosMonth, baseConversaoMonth);
+  const taxaAgendamento = percent(agendamentosMonth, totalPipelineMonth);
+  const taxaFunil = percent(fechadosMonth, totalPipelineMonth);
+  const noShowPercent = percent(noShowMonth, agendamentosMonth);
+
+  const getSaoPauloNow = () => {
+    try {
+      const parts = new Intl.DateTimeFormat("pt-BR", {
+        timeZone: "America/Sao_Paulo",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).formatToParts(new Date());
+      const year = Number(parts.find((p) => p.type === "year")?.value || 0);
+      const month = Number(parts.find((p) => p.type === "month")?.value || 0);
+      const day = Number(parts.find((p) => p.type === "day")?.value || 0);
+      if (!year || !month || !day) return new Date();
+      return new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+    } catch {
+      return new Date();
+    }
+  };
+
+  const getWorkdaysRemaining = () => {
+    const now = getSaoPauloNow();
+    const year = now.getUTCFullYear();
+    const month = now.getUTCMonth();
+    const today = now.getUTCDate();
+    const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+    let count = 0;
+    for (let d = today + 1; d <= lastDay; d++) {
+      const weekday = new Date(Date.UTC(year, month, d)).getUTCDay();
+      if (weekday !== 0 && weekday !== 6) count++;
+    }
+    return count;
+  };
+
+  const spNow = getSaoPauloNow();
+  const diasPassados = spNow.getUTCDate();
+  const diasRestantes = getWorkdaysRemaining();
+
+  const getDiasUteisRestantesSegSab = () => {
+    const now = getSaoPauloNow();
+    const year = now.getUTCFullYear();
+    const month = now.getUTCMonth();
+    const today = now.getUTCDate();
+    const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+    let count = 0;
+    for (let d = today; d <= lastDay; d++) {
+      const weekday = new Date(Date.UTC(year, month, d)).getUTCDay();
+      if (weekday !== 0) count++;
+    }
+    return count;
+  };
+
+  const diasUteisRestantes = getDiasUteisRestantesSegSab();
+  const faltaParaMeta = Number.isFinite(metaDoMes) && metaDoMes > 0 ? Math.max(0, metaDoMes - realizado) : 0;
+  const ticketBase = Number.isFinite(ticketMedio) && ticketMedio > 0 ? ticketMedio : 1057;
+  const taxaAgendamentoFrac = Math.max(0, Math.min(1, safeNumber(taxaAgendamento) / 100));
+  const taxaNoShowFrac = Math.max(0, Math.min(1, safeNumber(noShowPercent) / 100));
+  const taxaConversaoFrac = Math.max(0, Math.min(1, safeNumber(conversao) / 100));
+
+  const vendasNecessariasDia =
+    diasUteisRestantes > 0 && ticketBase > 0 ? faltaParaMeta / (ticketBase * diasUteisRestantes) : 0;
+  const receitaNecessariaDia = diasUteisRestantes > 0 ? Math.ceil(faltaParaMeta / diasUteisRestantes) : 0;
+
+  const showsNecessariosDia = taxaConversaoFrac > 0 ? vendasNecessariasDia / taxaConversaoFrac : 0;
+  const agendamentosNecessariosDia = 1 - taxaNoShowFrac > 0 ? showsNecessariosDia / (1 - taxaNoShowFrac) : 0;
+  const agendamentosDia = Math.max(0, Math.ceil(agendamentosNecessariosDia));
+  const prospeccoesDia = taxaAgendamentoFrac > 0 ? Math.max(0, Math.ceil(agendamentosNecessariosDia / taxaAgendamentoFrac)) : 0;
+
+  const ritmoNecessario = {
+    diasUteisRestantes,
+    receitaNecessariaDia,
+    agendamentosDia,
+    prospeccoesDia,
+    critical: {
+      dias: diasUteisRestantes <= 3,
+      receitaDia: receitaNecessariaDia > 3000,
+      agendamentosDia: agendamentosDia > 8,
+      prospeccoesDia: prospeccoesDia > 20,
+    },
+  };
+
+  const forecastBreakdown = calculateGrowthForecast3Parts({
+    deals: filtered,
+    nowMonthKey,
+    getMonthKey: getMonthKeySaoPaulo,
+    getClosedDate: (deal) => getBusinessWonLostDate(deal).date || null,
+    daysPassed: Math.max(1, Number(diasPassados) || 1),
+    daysRemaining: diasRestantes,
+    rates: {
+      taxaAgendamento: Number.isFinite(taxaAgendamento) ? Math.max(0, Math.min(1, taxaAgendamento / 100)) : undefined,
+      taxaNoShow: Number.isFinite(noShowPercent) ? Math.max(0, Math.min(1, noShowPercent / 100)) : undefined,
+      taxaConversao: Number.isFinite(conversao) ? Math.max(0, Math.min(1, conversao / 100)) : undefined,
+      ticketMedio: Number.isFinite(ticketMedio) && ticketMedio > 0 ? ticketMedio : undefined,
+    },
+  });
+
+  forecastBreakdown.parte1_fechado = realizado;
+  const forecast = Math.max(0, realizado + safeNumber(forecastBreakdown.parte2_pipeline) + safeNumber(forecastBreakdown.parte3_novosLeads));
+  forecastBreakdown.total = forecast;
+
+  try {
+    const dbg = forecastBreakdown.debug && typeof forecastBreakdown.debug === "object" ? forecastBreakdown.debug : {};
+    // eslint-disable-next-line no-console
+    console.log("[FORECAST DEBUG]", {
+      parte1_fechado: realizado,
+      parte2_pipeline: safeNumber(forecastBreakdown.parte2_pipeline),
+      parte3_novosLeads: safeNumber(forecastBreakdown.parte3_novosLeads),
+      forecast_total: forecast,
+      diasPassados: Number(dbg.diasPassados) || Math.max(1, Number(diasPassados) || 1),
+      diasRestantes: Number(dbg.diasRestantes) || diasRestantes,
+      mediaDiariaLeads: Number(dbg.mediaDiariaLeads) || 0,
+      novosLeadsEsperados: Number(dbg.novosLeadsEsperados) || 0,
+      dealsPipeline_count: Number(dbg.deals_parte2) || 0,
+    });
+  } catch {
+    // ignore logging failures
+  }
+
+  const planosVendidos = { diamond: 0, premium: 0, gold: 0, turma: 0, semPlano: 0 };
+  const stageBreakdown = Array.from(stageCounts.entries())
+    .map(([key, count]) => {
+      const sample = filtered.find((b) => normalizeKey(b?.stage?.name) === key);
+      const isClosedStage = key === normalizeKey("Fechado");
+      return {
+        key,
+        stageName: sample?.stage?.name ? String(sample.stage.name).trim() : key || "Sem etapa",
+        count: Math.max(0, Number(count) || 0),
+        monthCount: isClosedStage ? totalVendas : Math.max(0, Number(stageCountsMonth.get(key)) || 0),
+        total: Math.max(0, Number(stageTotals.get(key)) || 0),
+        monthTotal: isClosedStage ? realizado : Math.max(0, Number(stageTotalsMonth.get(key)) || 0),
+      };
+    })
+    .filter((row) => row.count > 0 || row.monthCount > 0)
+    .sort((a, b) => (b.count || 0) - (a.count || 0));
+
+  closedDealsMonth.forEach((b) => {
+    const planName = b?.products?.[0]?.product?.name;
+    const planoKey = mapPlano(planName);
+    planosVendidos[planoKey] = (planosVendidos[planoKey] || 0) + 1;
+  });
+
+  const rankingMap = new Map();
+  const unknownConversionStages = new Set();
+  conversionPipelineDeals.forEach((b) => {
+    const rawStage = b?.stage?.name ? String(b.stage.name).trim() : "";
+    const stageKey = normalizeKey(rawStage);
+    const isMeetingOrAfter = CONVERSION_MEETING_OR_AFTER_STAGE_KEYS.has(stageKey);
+    const isKnownPreMeeting = CONVERSION_PRE_MEETING_STAGE_KEYS.has(stageKey);
+    if (!isMeetingOrAfter && !isKnownPreMeeting && rawStage) unknownConversionStages.add(rawStage);
+    if (!isMeetingOrAfter) return;
+    const rawLastMovedAt = b?.lastMovedAt;
+    if (!rawLastMovedAt) {
+      console.warn("[growth-metrics] negócio sem lastMovedAt no ranking", {
+        businessId: getBusinessId(b) || null,
+      });
+      return;
+    }
+    const eventDate = rawLastMovedAt instanceof Date ? rawLastMovedAt : new Date(String(rawLastMovedAt));
+    const eventMonth = Number.isNaN(eventDate.getTime()) ? "" : getMonthKeySaoPaulo(eventDate);
+    if (eventMonth !== nowMonthKey) return;
+
+    const vendor = b?.attendant?.name ? String(b.attendant.name).trim() : "Sem vendedor";
+    const entry = rankingMap.get(vendor) || { nome: vendor, reunioes: 0, vendas: 0, valor: 0, taxaConversao: 0 };
+    entry.reunioes += 1;
+    if (stageKey === normalizeKey("Fechado")) {
+      entry.vendas += 1;
+      entry.valor += getDealValueForecast(b);
+    }
+    rankingMap.set(vendor, entry);
+  });
+  if (unknownConversionStages.size) {
+    console.warn("[growth-metrics] etapas desconhecidas no funil Conversão", Array.from(unknownConversionStages));
+  }
+
+  const rankingTime = Array.from(rankingMap.values())
+    .map((row) => ({ ...row, taxaConversao: row.reunioes > 0 ? (row.vendas / row.reunioes) * 100 : 0 }))
+    .sort((a, b) => b.valor - a.valor || b.vendas - a.vendas || b.reunioes - a.reunioes);
+
+  const conversionByMonthMap = new Map();
+  conversionPipelineDeals.forEach((b) => {
+    const createdAt = b?.createdAt || b?.created_at || null;
+    const createdMonth = createdAt ? getMonthKeySaoPaulo(createdAt) : "";
+    if (createdMonth) {
+      const entry = conversionByMonthMap.get(createdMonth) || { month: createdMonth, leads: 0, closed: 0 };
+      entry.leads += 1;
+      conversionByMonthMap.set(createdMonth, entry);
+    }
+    if (normalizeKey(b?.stage?.name) === normalizeKey("Fechado")) {
+      const closedInfo = getBusinessWonLostDate(b);
+      const closedMonth = closedInfo.date ? getMonthKeySaoPaulo(closedInfo.date) : "";
+      if (closedMonth) {
+        const entry = conversionByMonthMap.get(closedMonth) || { month: closedMonth, leads: 0, closed: 0 };
+        entry.closed += 1;
+        conversionByMonthMap.set(closedMonth, entry);
+      }
+    }
+  });
+  const conversionStartMonth = "2026-02";
+  const conversionMonthKeys = [];
+  for (let cursor = new Date(`${conversionStartMonth}-01T12:00:00-03:00`); getMonthKeySaoPaulo(cursor) <= nowMonthKey; cursor.setMonth(cursor.getMonth() + 1)) {
+    conversionMonthKeys.push(getMonthKeySaoPaulo(cursor));
+  }
+  const conversionHistory = conversionMonthKeys.map((month) => {
+    const row = conversionByMonthMap.get(month) || { month, leads: 0, closed: 0 };
+    return {
+      ...row,
+      rate: row.leads > 0 ? (row.closed / row.leads) * 100 : 0,
+    };
+  });
+
+  const latest = closedDealsMonth
+    .slice()
+    .sort((a, b) => {
+      const daInfo = getBusinessWonLostDate(a);
+      const dbInfo = getBusinessWonLostDate(b);
+      const da = daInfo.date ? daInfo.date.getTime() : 0;
+      const db = dbInfo.date ? dbInfo.date.getTime() : 0;
+      return db - da;
+    })[0];
+
+  const ultimaVenda = latest
+    ? {
+        lead: latest?.lead?.name ? String(latest.lead.name).trim() : "",
+        plano: latest?.products?.[0]?.product?.name ? String(latest.products[0].product.name).trim() : "",
+        valor: getDealValueForecast(latest),
+        lastMovedAt: latest?.lastMovedAt ? String(latest.lastMovedAt) : "",
+        relativeTime: relativeTimePtBr(getBusinessWonLostDate(latest).date || latest?.lastMovedAt || latest?.createdAt),
+      }
+    : { lead: "", plano: "", valor: 0, lastMovedAt: "", relativeTime: "" };
+
+  return {
+    summary: {
+      realizado,
+      totalVendas,
+      conversao,
+      ticketMedio,
+      forecast,
+      taxaAgendamento,
+      taxaFunil,
+      noShowPercent,
+      leadsMonth: totalPipelineMonth,
+      agendamentos,
+      agendamentosMonth,
+      fechados,
+      fechadosMonth: totalVendas,
+      noShow,
+      noShowMonth,
+    },
+    ritmoNecessario,
+    planosVendidos,
+    rankingTime,
+    ultimaVenda,
+    forecastBreakdown,
+    stageBreakdown,
+    conversionHistory,
+    debug: {
+      totalFetched: Number(crm?.pagination?.totalFetched) || businesses.length,
+      paginationPages: Number(crm?.pagination?.pages) || 1,
+      totalPipelineConversao: totalPipeline,
+      totalFechadoStage,
+      totalFechadoMes: totalVendas,
+      somaFechadoMes: realizado,
+      dateFieldUsed,
+      first10FechadoStage: closedDeals
+        .slice()
+        .sort((a, b) => {
+          const daInfo = getBusinessWonLostDate(a);
+          const dbInfo = getBusinessWonLostDate(b);
+          const da = daInfo.date ? daInfo.date.getTime() : 0;
+          const db = dbInfo.date ? dbInfo.date.getTime() : 0;
+          return db - da;
+        })
+        .slice(0, 10)
+        .map((b) => {
+          const info = getBusinessWonLostDate(b);
+          return pickBusinessDebugFields(b, { statusChangedField: info.field || "" });
+        }),
+      first10FechadoMes: closedDealsMonth
+        .slice()
+        .sort((a, b) => {
+          const daInfo = getBusinessWonLostDate(a);
+          const dbInfo = getBusinessWonLostDate(b);
+          const da = daInfo.date ? daInfo.date.getTime() : 0;
+          const db = dbInfo.date ? dbInfo.date.getTime() : 0;
+          return db - da;
+        })
+        .slice(0, 10)
+        .map((b) => {
+          const info = getBusinessWonLostDate(b);
+          return pickBusinessDebugFields(b, { statusChangedField: info.field || "" });
+        }),
+      first10FechadoStageForaMes: closedDealsStageOutsideMonth
+        .slice()
+        .sort((a, b) => {
+          const daInfo = getBusinessWonLostDate(a);
+          const dbInfo = getBusinessWonLostDate(b);
+          const da = daInfo.date ? daInfo.date.getTime() : 0;
+          const db = dbInfo.date ? dbInfo.date.getTime() : 0;
+          return db - da;
+        })
+        .slice(0, 10)
+        .map((b) => {
+          const info = getBusinessWonLostDate(b);
+          return pickBusinessDebugFields(b, { statusChangedField: info.field || "" });
+        }),
+      agendamentos,
+      fechados,
+      noShow,
+      baseConversao,
+    },
+  };
+};
+
 const handleGrowthGoalsApi = async (req, res, url) => {
   const mode = String(url.searchParams.get("mode") || "").trim().toLowerCase();
 
@@ -866,475 +1379,102 @@ const handleGrowthMetricsApi = async (req, res) => {
 
   const auth = requireInternalAuth(req, res);
   if (!auth) return;
-
-  // In-memory cache (best-effort) to reduce CRM load. TTL: 60 seconds.
+  const host = String(req.headers.host || "localhost");
+  const url = new URL(req.url || "/api/growth-dashboard?api=growth-metrics", `https://${host}`);
+  const forceRefresh = String(url.searchParams.get("refresh") || "").trim() === "1";
   const nowMs = Date.now();
-  if (globalThis.__growthMetricsCache && globalThis.__growthMetricsCache.expiresAt > nowMs) {
-    sendJson(res, 200, { ...globalThis.__growthMetricsCache.payload, cached: true });
+  if (!forceRefresh && globalThis.__growthMetricsCache && globalThis.__growthMetricsCache.expiresAt > nowMs) {
+    sendJson(
+      res,
+      200,
+      decorateGrowthMetricsPayload(globalThis.__growthMetricsCache.payload, {
+        cached: true,
+        stale: false,
+        generatedAt: globalThis.__growthMetricsCache.generatedAt || "",
+      })
+    );
     return;
   }
 
-  const crm = await fetchAllCrmBusinesses();
-  const businesses = Array.isArray(crm?.businesses) ? crm.businesses : [];
-  if (!crm || !crm.ok) {
-    sendJson(res, crm?.status || 500, crm || { error: "crm_failed" });
-    return;
+  let cacheRow = null;
+  let cacheMeta = null;
+  try {
+    const cachedDoc = await readGrowthMetricsCacheDoc();
+    if (cachedDoc.ok && cachedDoc.data?.payload && typeof cachedDoc.data.payload === "object") {
+      cacheRow = cachedDoc.data;
+      cacheMeta = getGrowthMetricsCacheMeta(cacheRow);
+      if (!forceRefresh && cacheMeta.isFresh) {
+        globalThis.__growthMetricsCache = {
+          payload: cacheRow.payload,
+          generatedAt: cacheMeta.generatedAt,
+          expiresAt: Date.now() + 60 * 1000,
+        };
+        sendJson(
+          res,
+          200,
+          decorateGrowthMetricsPayload(cacheRow.payload, {
+            cached: true,
+            stale: false,
+            staleAgeMinutes: cacheMeta.ageMinutes,
+            generatedAt: cacheMeta.generatedAt,
+          })
+        );
+        return;
+      }
+    }
+  } catch (error) {
+    console.warn("[growth-metrics] firestore cache read failed", error);
   }
 
   const idToken = getBearerTokenFromRequest(req);
-  const nowMonthKey = getMonthKeySaoPaulo(new Date());
-
-  // Load Growth goal (meta do mês) from Firestore (REST) if the client provided a Firebase idToken.
-  let metaDoMes = null;
   try {
-    if (idToken) {
-      const snap = await firestoreGetDocument({ docPath: `${GOALS_COLLECTION}/${encodeURIComponent(nowMonthKey)}`, idToken });
-      if (snap.ok) {
-        const goal = decodeGoalDoc(snap.data);
-        const v = Number(goal?.valorMeta);
-        if (Number.isFinite(v) && v > 0) metaDoMes = v;
-      }
-    }
-  } catch {
-    metaDoMes = null;
-  }
-
-  // Prefer the main pipeline name used by the commercial team. Fall back to the old "Conversão" pipeline if needed.
-  const pipelinePreferred = normalizeKey("Funil principal");
-  const preferredDeals = businesses.filter((b) => normalizeKey(b?.stage?.pipeline?.name) === pipelinePreferred);
-  const pipelineTarget = preferredDeals.length ? pipelinePreferred : normalizeKey("Conversão");
-  const conversionPipelineKey = normalizeKey("Conversão");
-
-  const filtered = businesses.filter((b) => normalizeKey(b?.stage?.pipeline?.name) === pipelineTarget);
-  const conversionPipelineDeals = businesses.filter((b) => normalizeKey(b?.stage?.pipeline?.name) === conversionPipelineKey);
-
-  // Temporary debug: inspect fields for a deal in "Em fechamento" to identify lost flags/status fields.
-  try {
-    const sampleDeal = filtered.find((b) => {
-      const stageKey = normalizeKey(b?.stage?.name);
-      if (stageKey !== normalizeKey("Em fechamento")) return false;
-      const createdAt = b?.createdAt || b?.created_at || null;
-      return createdAt ? getMonthKeySaoPaulo(createdAt) === getMonthKeySaoPaulo(new Date()) : true;
-    });
-    if (sampleDeal) {
-      // eslint-disable-next-line no-console
-      console.log("[DEAL FIELDS]", JSON.stringify(Object.keys(sampleDeal)));
-      // eslint-disable-next-line no-console
-      console.log("[DEAL SAMPLE]", JSON.stringify(sampleDeal));
-    }
-  } catch {
-    // ignore debug failures
-  }
-
-  const stageCounts = new Map();
-  const stageTotals = new Map();
-  const stageCountsMonth = new Map();
-  const stageTotalsMonth = new Map();
-
-  const closedDeals = [];
-  let totalPipelineMonth = 0;
-
-  filtered.forEach((b) => {
-    const stageName = normalizeKey(b?.stage?.name);
-    const total = safeNumber(b?.total);
-    stageCounts.set(stageName, (stageCounts.get(stageName) || 0) + 1);
-    stageTotals.set(stageName, (stageTotals.get(stageName) || 0) + total);
-
-    const createdAt = b?.createdAt || b?.created_at || null;
-    const isMonth = createdAt ? getMonthKeySaoPaulo(createdAt) === nowMonthKey : false;
-    if (isMonth) {
-      totalPipelineMonth += 1;
-      stageCountsMonth.set(stageName, (stageCountsMonth.get(stageName) || 0) + 1);
-      stageTotalsMonth.set(stageName, (stageTotalsMonth.get(stageName) || 0) + total);
-    }
-    if (stageName === "fechado") closedDeals.push(b);
-  });
-
-  const totalPipeline = filtered.length;
-
-  const agendamentoStages = new Set([
-    normalizeKey("Agendado"),
-    normalizeKey("No-show"),
-    normalizeKey("Reunião Reagendada"),
-    normalizeKey("Reunião Realizada"),
-    normalizeKey("Hot Lead"),
-    normalizeKey("Forecast"),
-    normalizeKey("Pagamento Parcial"),
-    normalizeKey("Fechado"),
-  ]);
-
-  const agendamentos =
-    Array.from(agendamentoStages).reduce((sum, name) => sum + (stageCounts.get(name) || 0), 0);
-  const fechados = stageCounts.get(normalizeKey("Fechado")) || 0;
-  const noShow = stageCounts.get(normalizeKey("No-show")) || 0;
-
-  const baseConversao = Array.from(CONVERSION_MEETING_OR_AFTER_STAGE_KEYS).reduce(
-    (sum, stageKey) => sum + (stageCounts.get(stageKey) || 0),
-    0
-  );
-
-  const agendamentosMonth =
-    Array.from(agendamentoStages).reduce((sum, name) => sum + (stageCountsMonth.get(name) || 0), 0);
-  const fechadosMonth = stageCountsMonth.get(normalizeKey("Fechado")) || 0;
-  const noShowMonth = stageCountsMonth.get(normalizeKey("No-show")) || 0;
-
-  const baseConversaoMonth = Array.from(CONVERSION_MEETING_OR_AFTER_STAGE_KEYS).reduce(
-    (sum, stageKey) => sum + (stageCountsMonth.get(stageKey) || 0),
-    0
-  );
-
-  const dateFieldCounts = new Map();
-
-  const closedDealsMonth = closedDeals.filter((b) => {
-    const info = getBusinessWonLostDate(b);
-    const field = info.field || "unknown";
-    dateFieldCounts.set(field, (dateFieldCounts.get(field) || 0) + 1);
-    const key = info.date ? getMonthKeySaoPaulo(info.date) : "";
-    return key && nowMonthKey ? key === nowMonthKey : false;
-  });
-
-  const dateFieldUsed =
-    Array.from(dateFieldCounts.entries())
-      .sort((a, b) => b[1] - a[1])[0]?.[0] || "";
-
-  const totalFechadoStage = closedDeals.length;
-
-  const closedDealsMonthIds = new Set(closedDealsMonth.map((b) => getBusinessId(b)).filter(Boolean));
-  const closedDealsStageOutsideMonth = closedDeals.filter((b) => {
-    const id = getBusinessId(b);
-    if (!id) return true;
-    return !closedDealsMonthIds.has(id);
-  });
-
-  const realizado = closedDealsMonth.reduce((sum, b) => sum + getDealValueForecast(b), 0);
-  const totalVendas = closedDealsMonth.length;
-  const ticketMedio = totalVendas > 0 ? realizado / totalVendas : 0;
-
-  const conversao = percent(fechadosMonth, baseConversaoMonth);
-  const taxaAgendamento = percent(agendamentosMonth, totalPipelineMonth);
-  const taxaFunil = percent(fechadosMonth, totalPipelineMonth);
-  const noShowPercent = percent(noShowMonth, agendamentosMonth);
-
-  // metaDoMes is fetched in parallel with the CRM call (see computeFreshPayload).
-
-  // Forecast (3 partes): fechado + pipeline (3 etapas) + projeção de novos leads.
-  // Para a parte 3, contamos apenas dias úteis (seg-sex) restantes no mês na timezone de SP.
-  const getSaoPauloNow = () => {
+    const crm = await fetchAllCrmBusinesses();
+    if (!crm || !crm.ok) throw crm || { status: 500, error: "crm_failed" };
+    const payload = await buildGrowthMetricsPayload({ crm, idToken });
+    const generatedAt = new Date().toISOString();
     try {
-      const parts = new Intl.DateTimeFormat("pt-BR", {
-        timeZone: "America/Sao_Paulo",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-      }).formatToParts(new Date());
-      const year = Number(parts.find((p) => p.type === "year")?.value || 0);
-      const month = Number(parts.find((p) => p.type === "month")?.value || 0); // 1-12
-      const day = Number(parts.find((p) => p.type === "day")?.value || 0);
-      if (!year || !month || !day) return new Date();
-      // Use UTC noon to avoid timezone boundary issues when computing weekdays.
-      return new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
-    } catch {
-      return new Date();
+      const cacheWrite = await writeGrowthMetricsCacheDoc({ payload, generatedAt });
+      if (!cacheWrite?.ok) {
+        console.warn("[growth-metrics] firestore cache write failed", {
+          status: cacheWrite?.status || null,
+          data: cacheWrite?.data ?? null,
+          text: cacheWrite?.text ?? null,
+        });
+      }
+    } catch (cacheError) {
+      console.warn("[growth-metrics] firestore cache write threw", cacheError);
     }
-  };
-
-  const getWorkdaysRemaining = () => {
-    const now = getSaoPauloNow();
-    const year = now.getUTCFullYear();
-    const month = now.getUTCMonth(); // 0-11
-    const today = now.getUTCDate();
-    const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
-    let count = 0;
-    for (let d = today + 1; d <= lastDay; d++) {
-      const weekday = new Date(Date.UTC(year, month, d)).getUTCDay(); // 0=Sun .. 6=Sat
-      if (weekday !== 0 && weekday !== 6) count++;
-    }
-    return count;
-  };
-
-  const spNow = getSaoPauloNow();
-  const diasPassados = spNow.getUTCDate();
-  const diasRestantes = getWorkdaysRemaining(); // ex: hoje dia 22 -> 6 dias úteis restantes
-
-  // Ritmo necessário (seg-sáb): time comercial trabalha sábado, exclui apenas domingo.
-  const getDiasUteisRestantesSegSab = () => {
-    const now = getSaoPauloNow();
-    const year = now.getUTCFullYear();
-    const month = now.getUTCMonth();
-    const today = now.getUTCDate();
-    const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
-    let count = 0;
-    // Inclui o dia de hoje no "restante" (se não for domingo), já que o time ainda pode executar no dia atual.
-    for (let d = today; d <= lastDay; d++) {
-      const weekday = new Date(Date.UTC(year, month, d)).getUTCDay();
-      if (weekday !== 0) count++; // exclui apenas domingo
-    }
-    return count;
-  };
-
-  const diasUteisRestantes = getDiasUteisRestantesSegSab();
-  const faltaParaMeta = Number.isFinite(metaDoMes) && metaDoMes > 0 ? Math.max(0, metaDoMes - realizado) : 0;
-  const ticketBase = Number.isFinite(ticketMedio) && ticketMedio > 0 ? ticketMedio : 1057;
-  const taxaAgendamentoFrac = Math.max(0, Math.min(1, safeNumber(taxaAgendamento) / 100));
-  const taxaNoShowFrac = Math.max(0, Math.min(1, safeNumber(noShowPercent) / 100));
-  const taxaConversaoFrac = Math.max(0, Math.min(1, safeNumber(conversao) / 100));
-
-  const vendasNecessariasDia =
-    diasUteisRestantes > 0 && ticketBase > 0 ? faltaParaMeta / (ticketBase * diasUteisRestantes) : 0;
-  const receitaNecessariaDia = diasUteisRestantes > 0 ? Math.ceil(faltaParaMeta / diasUteisRestantes) : 0;
-
-  const showsNecessariosDia = taxaConversaoFrac > 0 ? vendasNecessariasDia / taxaConversaoFrac : 0;
-  const agendamentosNecessariosDia = 1 - taxaNoShowFrac > 0 ? showsNecessariosDia / (1 - taxaNoShowFrac) : 0;
-  const agendamentosDia = Math.max(0, Math.ceil(agendamentosNecessariosDia));
-  const prospeccoesDia = taxaAgendamentoFrac > 0 ? Math.max(0, Math.ceil(agendamentosNecessariosDia / taxaAgendamentoFrac)) : 0;
-
-  const ritmoNecessario = {
-    diasUteisRestantes,
-    receitaNecessariaDia,
-    agendamentosDia,
-    prospeccoesDia,
-    critical: {
-      dias: diasUteisRestantes <= 3,
-      receitaDia: receitaNecessariaDia > 3000,
-      agendamentosDia: agendamentosDia > 8,
-      prospeccoesDia: prospeccoesDia > 20,
-    },
-  };
-
-  const forecastBreakdown = calculateGrowthForecast3Parts({
-    deals: filtered,
-    nowMonthKey,
-    getMonthKey: getMonthKeySaoPaulo,
-    getClosedDate: (deal) => getBusinessWonLostDate(deal).date || null,
-    daysPassed: Math.max(1, Number(diasPassados) || 1),
-    daysRemaining: diasRestantes,
-    rates: {
-      taxaAgendamento: Number.isFinite(taxaAgendamento) ? Math.max(0, Math.min(1, taxaAgendamento / 100)) : undefined,
-      taxaNoShow: Number.isFinite(noShowPercent) ? Math.max(0, Math.min(1, noShowPercent / 100)) : undefined,
-      taxaConversao: Number.isFinite(conversao) ? Math.max(0, Math.min(1, conversao / 100)) : undefined,
-      ticketMedio: Number.isFinite(ticketMedio) && ticketMedio > 0 ? ticketMedio : undefined,
-    },
-  });
-
-  // Garantir que Parte 1 bata com o card "Realizado".
-  forecastBreakdown.parte1_fechado = realizado;
-  const forecast = Math.max(0, realizado + safeNumber(forecastBreakdown.parte2_pipeline) + safeNumber(forecastBreakdown.parte3_novosLeads));
-  forecastBreakdown.total = forecast;
-
-  try {
-    const dbg = forecastBreakdown.debug && typeof forecastBreakdown.debug === "object" ? forecastBreakdown.debug : {};
-    // eslint-disable-next-line no-console
-    console.log("[FORECAST DEBUG]", {
-      parte1_fechado: realizado,
-      parte2_pipeline: safeNumber(forecastBreakdown.parte2_pipeline),
-      parte3_novosLeads: safeNumber(forecastBreakdown.parte3_novosLeads),
-      forecast_total: forecast,
-      diasPassados: Number(dbg.diasPassados) || Math.max(1, Number(diasPassados) || 1),
-      diasRestantes: Number(dbg.diasRestantes) || diasRestantes,
-      mediaDiariaLeads: Number(dbg.mediaDiariaLeads) || 0,
-      novosLeadsEsperados: Number(dbg.novosLeadsEsperados) || 0,
-      dealsPipeline_count: Number(dbg.deals_parte2) || 0,
-    });
-  } catch {
-    // ignore logging failures
-  }
-
-  const planosVendidos = { diamond: 0, premium: 0, gold: 0, turma: 0, semPlano: 0 };
-  const stageBreakdown = Array.from(stageCounts.entries())
-    .map(([key, count]) => {
-      const sample = filtered.find((b) => normalizeKey(b?.stage?.name) === key);
-      const isClosedStage = key === normalizeKey("Fechado");
-      return {
-        key,
-        stageName: sample?.stage?.name ? String(sample.stage.name).trim() : key || "Sem etapa",
-        count: Math.max(0, Number(count) || 0),
-        monthCount: isClosedStage ? totalVendas : Math.max(0, Number(stageCountsMonth.get(key)) || 0),
-        total: Math.max(0, Number(stageTotals.get(key)) || 0),
-        monthTotal: isClosedStage ? realizado : Math.max(0, Number(stageTotalsMonth.get(key)) || 0),
-      };
-    })
-    .filter((row) => row.count > 0 || row.monthCount > 0)
-    .sort((a, b) => (b.count || 0) - (a.count || 0));
-
-  closedDealsMonth.forEach((b) => {
-    const planName = b?.products?.[0]?.product?.name;
-    const planoKey = mapPlano(planName);
-    planosVendidos[planoKey] = (planosVendidos[planoKey] || 0) + 1;
-  });
-
-  const rankingMap = new Map();
-  const unknownConversionStages = new Set();
-  conversionPipelineDeals.forEach((b) => {
-    const rawStage = b?.stage?.name ? String(b.stage.name).trim() : "";
-    const stageKey = normalizeKey(rawStage);
-    const isMeetingOrAfter = CONVERSION_MEETING_OR_AFTER_STAGE_KEYS.has(stageKey);
-    const isKnownPreMeeting = CONVERSION_PRE_MEETING_STAGE_KEYS.has(stageKey);
-    if (!isMeetingOrAfter && !isKnownPreMeeting && rawStage) unknownConversionStages.add(rawStage);
-    if (!isMeetingOrAfter) return;
-    const rawLastMovedAt = b?.lastMovedAt;
-    if (!rawLastMovedAt) {
-      console.warn("[growth-metrics] negócio sem lastMovedAt no ranking", {
-        businessId: getBusinessId(b) || null,
-      });
+    globalThis.__growthMetricsCache = { payload, generatedAt, expiresAt: Date.now() + 60 * 1000 };
+    sendJson(res, 200, decorateGrowthMetricsPayload(payload, { cached: false, stale: false, generatedAt }));
+  } catch (crmError) {
+    const effectiveCacheRow =
+      cacheRow && cacheRow.payload && typeof cacheRow.payload === "object"
+        ? cacheRow
+        : null;
+    const effectiveMeta = effectiveCacheRow ? cacheMeta || getGrowthMetricsCacheMeta(effectiveCacheRow) : null;
+    if (effectiveCacheRow && effectiveMeta) {
+      sendJson(
+        res,
+        200,
+        decorateGrowthMetricsPayload(effectiveCacheRow.payload, {
+          cached: true,
+          stale: true,
+          staleAgeMinutes: effectiveMeta.ageMinutes,
+          generatedAt: effectiveMeta.generatedAt,
+        })
+      );
       return;
     }
-    const eventDate = rawLastMovedAt instanceof Date ? rawLastMovedAt : new Date(String(rawLastMovedAt));
-    const eventMonth = Number.isNaN(eventDate.getTime()) ? "" : getMonthKeySaoPaulo(eventDate);
-    if (eventMonth !== nowMonthKey) return;
-
-    const vendor = b?.attendant?.name ? String(b.attendant.name).trim() : "Sem vendedor";
-    const entry = rankingMap.get(vendor) || { nome: vendor, reunioes: 0, vendas: 0, valor: 0, taxaConversao: 0 };
-    entry.reunioes += 1;
-    if (stageKey === normalizeKey("Fechado")) {
-      entry.vendas += 1;
-      entry.valor += getDealValueForecast(b);
-    }
-    rankingMap.set(vendor, entry);
-  });
-  if (unknownConversionStages.size) {
-    console.warn("[growth-metrics] etapas desconhecidas no funil Conversão", Array.from(unknownConversionStages));
+    const fallbackError =
+      crmError && typeof crmError === "object" && !Array.isArray(crmError)
+        ? crmError
+        : { error: "crm_failed" };
+    sendJson(res, crmError?.status || 500, {
+      ...fallbackError,
+      error: fallbackError.error || "crm_failed",
+      message: fallbackError.message || fallbackError.text || "crm_failed",
+    });
   }
-
-  const rankingTime = Array.from(rankingMap.values())
-    .map((row) => ({ ...row, taxaConversao: row.reunioes > 0 ? (row.vendas / row.reunioes) * 100 : 0 }))
-    .sort((a, b) => b.valor - a.valor || b.vendas - a.vendas || b.reunioes - a.reunioes);
-
-  const conversionByMonthMap = new Map();
-  conversionPipelineDeals.forEach((b) => {
-    const createdAt = b?.createdAt || b?.created_at || null;
-    const createdMonth = createdAt ? getMonthKeySaoPaulo(createdAt) : "";
-    if (createdMonth) {
-      const entry = conversionByMonthMap.get(createdMonth) || { month: createdMonth, leads: 0, closed: 0 };
-      entry.leads += 1;
-      conversionByMonthMap.set(createdMonth, entry);
-    }
-    if (normalizeKey(b?.stage?.name) === normalizeKey("Fechado")) {
-      const closedInfo = getBusinessWonLostDate(b);
-      const closedMonth = closedInfo.date ? getMonthKeySaoPaulo(closedInfo.date) : "";
-      if (closedMonth) {
-        const entry = conversionByMonthMap.get(closedMonth) || { month: closedMonth, leads: 0, closed: 0 };
-        entry.closed += 1;
-        conversionByMonthMap.set(closedMonth, entry);
-      }
-    }
-  });
-  const conversionStartMonth = "2026-02";
-  const conversionMonthKeys = [];
-  for (let cursor = new Date(`${conversionStartMonth}-01T12:00:00-03:00`); getMonthKeySaoPaulo(cursor) <= nowMonthKey; cursor.setMonth(cursor.getMonth() + 1)) {
-    conversionMonthKeys.push(getMonthKeySaoPaulo(cursor));
-  }
-  const conversionHistory = conversionMonthKeys.map((month) => {
-    const row = conversionByMonthMap.get(month) || { month, leads: 0, closed: 0 };
-    return {
-      ...row,
-      rate: row.leads > 0 ? (row.closed / row.leads) * 100 : 0,
-    };
-  });
-
-  const latest = closedDealsMonth
-    .slice()
-    .sort((a, b) => {
-      const daInfo = getBusinessWonLostDate(a);
-      const dbInfo = getBusinessWonLostDate(b);
-      const da = daInfo.date ? daInfo.date.getTime() : 0;
-      const db = dbInfo.date ? dbInfo.date.getTime() : 0;
-      return db - da;
-    })[0];
-
-  const ultimaVenda = latest
-    ? {
-        lead: latest?.lead?.name ? String(latest.lead.name).trim() : "",
-        plano: latest?.products?.[0]?.product?.name ? String(latest.products[0].product.name).trim() : "",
-        valor: getDealValueForecast(latest),
-        lastMovedAt: latest?.lastMovedAt ? String(latest.lastMovedAt) : "",
-        relativeTime: relativeTimePtBr(getBusinessWonLostDate(latest).date || latest?.lastMovedAt || latest?.createdAt),
-      }
-    : { lead: "", plano: "", valor: 0, lastMovedAt: "", relativeTime: "" };
-
-  const payload = {
-    summary: {
-      realizado,
-      totalVendas,
-      conversao,
-      ticketMedio,
-      forecast,
-      taxaAgendamento,
-      taxaFunil,
-      noShowPercent,
-      leadsMonth: totalPipelineMonth,
-      agendamentos,
-      agendamentosMonth,
-      fechados,
-      fechadosMonth: totalVendas,
-      noShow,
-      noShowMonth,
-    },
-    ritmoNecessario,
-    planosVendidos,
-    rankingTime,
-    ultimaVenda,
-    forecastBreakdown,
-    stageBreakdown,
-    conversionHistory,
-    debug: {
-      totalFetched: Number(crm?.pagination?.totalFetched) || businesses.length,
-      paginationPages: Number(crm?.pagination?.pages) || 1,
-      totalPipelineConversao: totalPipeline,
-      totalFechadoStage,
-      totalFechadoMes: totalVendas,
-      somaFechadoMes: realizado,
-      dateFieldUsed,
-      first10FechadoStage: closedDeals
-        .slice()
-        .sort((a, b) => {
-          const daInfo = getBusinessWonLostDate(a);
-          const dbInfo = getBusinessWonLostDate(b);
-          const da = daInfo.date ? daInfo.date.getTime() : 0;
-          const db = dbInfo.date ? dbInfo.date.getTime() : 0;
-          return db - da;
-        })
-        .slice(0, 10)
-        .map((b) => {
-          const info = getBusinessWonLostDate(b);
-          return pickBusinessDebugFields(b, { statusChangedField: info.field || "" });
-        }),
-      first10FechadoMes: closedDealsMonth
-        .slice()
-        .sort((a, b) => {
-          const daInfo = getBusinessWonLostDate(a);
-          const dbInfo = getBusinessWonLostDate(b);
-          const da = daInfo.date ? daInfo.date.getTime() : 0;
-          const db = dbInfo.date ? dbInfo.date.getTime() : 0;
-          return db - da;
-        })
-        .slice(0, 10)
-        .map((b) => {
-          const info = getBusinessWonLostDate(b);
-          return pickBusinessDebugFields(b, { statusChangedField: info.field || "" });
-        }),
-      first10FechadoStageForaMes: closedDealsStageOutsideMonth
-        .slice()
-        .sort((a, b) => {
-          const daInfo = getBusinessWonLostDate(a);
-          const dbInfo = getBusinessWonLostDate(b);
-          const da = daInfo.date ? daInfo.date.getTime() : 0;
-          const db = dbInfo.date ? dbInfo.date.getTime() : 0;
-          return db - da;
-        })
-        .slice(0, 10)
-        .map((b) => {
-          const info = getBusinessWonLostDate(b);
-          return pickBusinessDebugFields(b, { statusChangedField: info.field || "" });
-        }),
-      agendamentos,
-      fechados,
-      noShow,
-      baseConversao,
-    },
-  };
-
-  globalThis.__growthMetricsCache = { payload, expiresAt: Date.now() + 60 * 1000 };
-  sendJson(res, 200, payload);
 };
 
 const decodeContratoDoc = (doc) => {
