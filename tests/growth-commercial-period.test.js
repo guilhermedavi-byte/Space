@@ -90,7 +90,7 @@ test("forecast 3-partes aceita callback de período customizado", () => {
 test("save de growth-goals invalida o cache persistente imediatamente", () => {
   const source = fs.readFileSync(path.join(__dirname, "..", "api", "growth-dashboard.js"), "utf8");
   assert.match(source, /const invalidateGrowthMetricsCacheDoc = async/);
-  assert.match(source, /await invalidateGrowthMetricsCacheDoc\(\{ idToken: auth\.idToken \}\)/);
+  assert.match(source, /await invalidateGrowthMetricsCacheDoc\(\{ accessToken \}\)/);
   assert.match(source, /delete globalThis\.__growthMetricsCache/);
 });
 

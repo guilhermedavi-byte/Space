@@ -296,6 +296,19 @@ const firestorePatchDocumentWithAccessToken = async ({ docPath, accessToken, dat
   });
 };
 
+const firestoreDeleteDocumentWithAccessToken = async ({ docPath, accessToken } = {}) => {
+  const path = String(docPath || "").replace(/^\/+/, "");
+  if (!path) throw new Error("missing_doc");
+  const token = String(accessToken || "").trim();
+  const params = new URLSearchParams();
+  params.set("key", API_KEY);
+  const url = `${FIRESTORE_BASE}/${encodeURI(path)}?${params.toString()}`;
+  return requestJsonRaw(url, {
+    method: "DELETE",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+};
+
 const getFirestoreAdminAccessToken = async () => {
   const result = await getGoogleAccessToken({ scope: DATASTORE_SCOPE });
   return String(result?.accessToken || "").trim();
@@ -331,11 +344,17 @@ const writeGrowthMetricsCacheDoc = async ({ payload, generatedAt }) => {
   });
 };
 
-const invalidateGrowthMetricsCacheDoc = async ({ idToken } = {}) => {
+const invalidateGrowthMetricsCacheDoc = async ({ idToken, accessToken } = {}) => {
   try {
     delete globalThis.__growthMetricsCache;
   } catch {
     globalThis.__growthMetricsCache = null;
+  }
+  if (String(accessToken || "").trim()) {
+    return firestoreDeleteDocumentWithAccessToken({
+      docPath: getGrowthMetricsCacheDocPath(),
+      accessToken,
+    });
   }
   return firestoreDeleteDocument({
     docPath: getGrowthMetricsCacheDocPath(),
@@ -443,6 +462,28 @@ const requireRoleAuthWithFirebaseToken = async (req, res, allowedRoles) => {
     name: String(session.name || ""),
     email: String(session.email || ""),
     idToken,
+  };
+};
+
+const requireRoleSession = (req, res, allowedRoles) => {
+  const session = getSessionFromRequest(req);
+  if (!session) {
+    sendJson(res, 401, { error: "unauthorized" });
+    return null;
+  }
+
+  const role = normalizeRole(session.role);
+  const allowed = Array.isArray(allowedRoles) ? allowedRoles : [];
+  if (!allowed.includes(role)) {
+    sendJson(res, 403, { error: "forbidden" });
+    return null;
+  }
+
+  return {
+    id: String(session.sub || ""),
+    role,
+    name: String(session.name || ""),
+    email: String(session.email || ""),
   };
 };
 
@@ -817,15 +858,19 @@ const decodeSdrActivityEventDoc = (doc) => {
   };
 };
 
-const loadGrowthPeople = async ({ idToken } = {}) => {
-  const response = await firestoreListDocuments({ collectionPath: GROWTH_PEOPLE_COLLECTION, idToken, pageSize: 1000 });
+const loadGrowthPeople = async ({ idToken, accessToken } = {}) => {
+  const response = accessToken
+    ? await firestoreListDocumentsWithAccessToken({ collectionPath: GROWTH_PEOPLE_COLLECTION, accessToken, pageSize: 1000 })
+    : await firestoreListDocuments({ collectionPath: GROWTH_PEOPLE_COLLECTION, idToken, pageSize: 1000 });
   if (!response.ok) throw new Error("growth_people_list_failed");
   const docs = Array.isArray(response.documents) ? response.documents : [];
   return docs.map((doc) => decodeGrowthPeopleDoc(doc)).filter(Boolean);
 };
 
-const loadSdrActivityEvents = async ({ idToken } = {}) => {
-  const response = await firestoreListDocuments({ collectionPath: "sdrActivityEvents", idToken, pageSize: 2000 });
+const loadSdrActivityEvents = async ({ idToken, accessToken } = {}) => {
+  const response = accessToken
+    ? await firestoreListDocumentsWithAccessToken({ collectionPath: "sdrActivityEvents", accessToken, pageSize: 2000 })
+    : await firestoreListDocuments({ collectionPath: "sdrActivityEvents", idToken, pageSize: 2000 });
   if (!response.ok) throw new Error("sdr_activity_list_failed");
   const docs = Array.isArray(response.documents) ? response.documents : [];
   return docs.map((doc) => decodeSdrActivityEventDoc(doc)).filter(Boolean);
@@ -1243,8 +1288,9 @@ const handleGrowthGoalsApi = async (req, res, url) => {
   const mode = String(url.searchParams.get("mode") || "").trim().toLowerCase();
 
   if (req.method === "GET" || req.method === "HEAD") {
-    const auth = await requireRoleAuthWithFirebaseToken(req, res, ["admin", "growth"]);
+    const auth = requireRoleSession(req, res, ["admin", "growth"]);
     if (!auth) return;
+    const accessToken = await getFirestoreAdminAccessToken();
 
     const currentKey = getCurrentCompetenciaKeySaoPaulo();
     const requestedCompetencia = String(url.searchParams.get("competencia") || "").trim();
@@ -1263,7 +1309,7 @@ const handleGrowthGoalsApi = async (req, res, url) => {
 
       try {
         const docPath = `${GOALS_COLLECTION}/${encodeURIComponent(competencia)}`;
-        const snap = await firestoreGetDocument({ docPath, idToken: auth.idToken });
+        const snap = await firestoreGetDocumentWithAccessToken({ docPath, accessToken });
         let goal = null;
         if (!snap.ok) {
           if (snap.status !== 404) {
@@ -1278,13 +1324,13 @@ const handleGrowthGoalsApi = async (req, res, url) => {
         const payload = { competencia, goal };
 
         if (includePeople || includeWeeklyProgress) {
-          const people = await loadGrowthPeople({ idToken: auth.idToken });
+          const people = await loadGrowthPeople({ accessToken });
           payload.people = people;
         }
 
         if (includeWeeklyProgress) {
-          const [crm, sdrEvents] = await Promise.all([fetchAllCrmBusinesses(), loadSdrActivityEvents({ idToken: auth.idToken })]);
-          const people = Array.isArray(payload.people) ? payload.people : await loadGrowthPeople({ idToken: auth.idToken });
+          const [crm, sdrEvents] = await Promise.all([fetchAllCrmBusinesses(), loadSdrActivityEvents({ accessToken })]);
+          const people = Array.isArray(payload.people) ? payload.people : await loadGrowthPeople({ accessToken });
           payload.weeklyReadModel = buildWeeklyGoalsReadModel({
             goal,
             people,
@@ -1306,7 +1352,7 @@ const handleGrowthGoalsApi = async (req, res, url) => {
 
     // List goals
     try {
-      const resList = await firestoreListDocuments({ collectionPath: GOALS_COLLECTION, idToken: auth.idToken, pageSize: 2000 });
+      const resList = await firestoreListDocumentsWithAccessToken({ collectionPath: GOALS_COLLECTION, accessToken, pageSize: 2000 });
 
       if (!resList.ok) {
         // eslint-disable-next-line no-console
@@ -1351,8 +1397,9 @@ const handleGrowthGoalsApi = async (req, res, url) => {
   // eslint-disable-next-line no-console
   console.log("[growth-goals] auth header:", req?.headers?.authorization ? "present" : "missing");
 
-  const auth = await requireRoleAuthWithFirebaseToken(req, res, ["admin"]);
+  const auth = requireRoleSession(req, res, ["admin"]);
   if (!auth) return;
+  const accessToken = await getFirestoreAdminAccessToken();
 
   let body;
   try {
@@ -1399,7 +1446,7 @@ const handleGrowthGoalsApi = async (req, res, url) => {
   let exists = false;
   let existingGoal = null;
   try {
-    const snap = await firestoreGetDocument({ docPath, idToken: auth.idToken });
+    const snap = await firestoreGetDocumentWithAccessToken({ docPath, accessToken });
     exists = snap.ok;
     if (snap.ok) existingGoal = decodeGoalDoc(snap.data);
   } catch (error) {
@@ -1446,9 +1493,9 @@ const handleGrowthGoalsApi = async (req, res, url) => {
       };
 
   try {
-    const patch = await firestorePatchDocument({
+    const patch = await firestorePatchDocumentWithAccessToken({
       docPath,
-      idToken: auth.idToken,
+      accessToken,
       data,
       updateMaskPaths: Object.keys(data),
     });
@@ -1474,7 +1521,7 @@ const handleGrowthGoalsApi = async (req, res, url) => {
     }
 
     try {
-      const invalidate = await invalidateGrowthMetricsCacheDoc({ idToken: auth.idToken });
+      const invalidate = await invalidateGrowthMetricsCacheDoc({ accessToken });
       if (!invalidate?.ok && invalidate?.status !== 404) {
         console.warn("[growth-goals] cache invalidation failed", {
           status: invalidate?.status || null,

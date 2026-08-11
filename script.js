@@ -14457,7 +14457,7 @@ const GROWTH_SPECIAL_WEEK_END = "2026-08-18";
 const formatDateKeyPtBr = (dateKey) => {
   const raw = String(dateKey || "").trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw || "—";
-  const [, month, day] = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/) || [];
+  const [, , month, day] = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/) || [];
   return day && month ? `${day}/${month}` : raw;
 };
 
@@ -14542,7 +14542,7 @@ const loadGrowthGoalsWeekPayload = async ({ competencia, weekStart }) => {
   params.set("includePeople", "1");
   params.set("includeWeeklyProgress", "1");
   params.set("weekStart", weekStart);
-  const res = await fetchWithAuth(`/api/growth-dashboard?${params.toString()}`, { method: "GET", forceRefreshIdToken: true });
+  const res = await fetchWithAuth(`/api/growth-dashboard?${params.toString()}`, { method: "GET" });
   const data = await res.json().catch(() => null);
   if (!res.ok) throw new Error(data?.error || "request_failed");
   return data;
@@ -14600,7 +14600,7 @@ const loadAdminGrowthGoals = async () => {
   adminGoalsTable.innerHTML = `<div class="growth-contracts-loading">Carregando...</div>`;
 
   try {
-    const res = await fetchWithAuth("/api/growth-dashboard?api=growth-goals", { method: "GET", forceRefreshIdToken: true });
+    const res = await fetchWithAuth("/api/growth-dashboard?api=growth-goals", { method: "GET" });
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(data?.error || "request_failed");
 
@@ -14746,15 +14746,6 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
       (async () => {
         const previousPrimaryLabel = modalPrimary ? modalPrimary.textContent : "";
         try {
-          const firebase = await loadFirebaseAdminApi();
-          // eslint-disable-next-line no-console
-          console.log("[meta] currentUser:", firebase?.primaryAuth?.currentUser?.uid ?? "null");
-          // eslint-disable-next-line no-console
-          console.log("[meta] tentando obter token...");
-          const token = await getFirebaseIdTokenForApi(true);
-          if (!token) {
-            throw new Error("invalid_credentials");
-          }
           if (modalPrimary) modalPrimary.disabled = true;
           if (modalSecondary) modalSecondary.disabled = true;
           if (modalPrimary) modalPrimary.textContent = "Salvando…";
@@ -14764,7 +14755,6 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ competencia: competenciaValue, valorMeta }),
-              forceRefreshIdToken: true,
             });
             const data = await res.json().catch(() => null);
             if (!res.ok) {
@@ -14797,7 +14787,6 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
                 people: weeklyPeople,
               },
             }),
-            forceRefreshIdToken: true,
           });
           const weeklyData = await weeklyRes.json().catch(() => null);
           if (!weeklyRes.ok) {
@@ -14956,7 +14945,7 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
       const params = new URLSearchParams();
       params.set("api", "growth-goals");
       params.set("competencia", previousWeek.competencia);
-      const res = await fetchWithAuth(`/api/growth-dashboard?${params.toString()}`, { method: "GET", forceRefreshIdToken: true });
+      const res = await fetchWithAuth(`/api/growth-dashboard?${params.toString()}`, { method: "GET" });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error || "request_failed");
       const weeklyGoals = data?.goal?.weeklyGoals && typeof data.goal.weeklyGoals === "object" ? data.goal.weeklyGoals : {};
@@ -14978,7 +14967,16 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
       try {
         const payload = await loadGrowthGoalsWeekPayload({ competencia: selectedWeek.competencia, weekStart: selectedWeek.startDateKey });
         modalState.weekPayload = payload;
-        modalState.previousWeekGoal = payload?.weeklyReadModel?.weeklyGoal ? null : await loadPreviousWeekGoal(selectedWeek);
+        if (payload?.weeklyReadModel?.weeklyGoal) {
+          modalState.previousWeekGoal = null;
+        } else {
+          try {
+            modalState.previousWeekGoal = await loadPreviousWeekGoal(selectedWeek);
+          } catch (previousWeekError) {
+            console.warn("[admin] load previous weekly growth-goal failed:", previousWeekError);
+            modalState.previousWeekGoal = null;
+          }
+        }
         renderWeeklyRows();
       } catch (error) {
         console.error("[admin] load weekly growth-goal failed:", error);
@@ -15744,7 +15742,6 @@ const initGrowthDashboardMetrics = () => {
     try {
       const res = await fetchWithAuth("/api/growth-dashboard?api=growth-goals&mode=current", {
         method: "GET",
-        forceRefreshIdToken: true,
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error || "request_failed");
@@ -16501,7 +16498,7 @@ const loadAdminCommercialOverview = async ({ force = false } = {}) => {
     const crmUrl = force ? "/api/growth-metrics?refresh=1" : "/api/growth-metrics";
     const [crmRes, goalRes, sdrRes] = await Promise.all([
       fetchWithAuth(crmUrl, { method: "GET" }),
-      fetchWithAuth("/api/growth-dashboard?api=growth-goals&mode=current", { method: "GET", forceRefreshIdToken: true }),
+      fetchWithAuth("/api/growth-dashboard?api=growth-goals&mode=current", { method: "GET" }),
       fetchWithAuth("/api/sdr-metrics?days=30", { method: "GET" }),
     ]);
     const [crm, goalPayload, sdr] = await Promise.all([

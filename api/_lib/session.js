@@ -151,4 +151,7 @@ module.exports = {
   getSessionFromRequest,
   createSessionForUser,
   isSecureRequest,
+  signJwt,
+  verifyJwt,
+  parseCookies,
 };
