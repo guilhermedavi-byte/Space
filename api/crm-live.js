@@ -48,6 +48,7 @@ const buildHtml = () => `<!DOCTYPE html>
         color-scheme: dark;
         --bg: #0d1014;
         --accent: #ff564f;
+        --success: #31d69b;
         --text: #f5f5f4;
         --text-secondary: #a8a8a4;
         --text-tertiary: #6b7280;
@@ -70,7 +71,7 @@ const buildHtml = () => `<!DOCTYPE html>
         position: relative;
         width: 100vw;
         height: 100vh;
-        padding: 5.8vh 6vw 4.8vh;
+        padding: 4.8vh 6vw 5.2vh;
         background:
           radial-gradient(circle at top left, rgba(255,86,79,.14), transparent 28%),
           radial-gradient(circle at 78% 18%, rgba(255,255,255,.04), transparent 26%),
@@ -85,9 +86,7 @@ const buildHtml = () => `<!DOCTYPE html>
       .crm-live-screen {
         position: absolute;
         inset: 0;
-        display: grid;
-        grid-template-rows: auto 1fr;
-        gap: 2.8vh;
+        display: block;
         opacity: 0;
         pointer-events: none;
         transition: opacity .4s ease;
@@ -101,15 +100,16 @@ const buildHtml = () => `<!DOCTYPE html>
         height: 100%;
         display: grid;
         grid-template-rows: auto 1fr;
-        gap: 2.8vh;
+        gap: 2.2vh;
       }
       .crm-live-head {
         display: block;
+        padding-top: .8vh;
       }
       .crm-live-title {
         margin: 0;
-        font-size: 2.6vh;
-        line-height: 1;
+        font-size: 2.4vh;
+        line-height: 1.1;
         letter-spacing: -.03em;
         font-weight: 400;
         color: var(--text-secondary);
@@ -117,13 +117,20 @@ const buildHtml = () => `<!DOCTYPE html>
       .crm-live-body {
         min-height: 0;
         display: grid;
-        align-items: center;
+        align-items: stretch;
       }
-      .crm-live-stack {
+      .crm-live-center {
         height: 100%;
         display: grid;
         align-content: center;
-        gap: 4.2vh;
+        gap: 4.8vh;
+      }
+      .crm-live-center.is-spread {
+        align-content: stretch;
+      }
+      .crm-live-stack {
+        display: grid;
+        gap: 4vh;
       }
       .crm-live-metric-block { display: grid; gap: 1.5vh; }
       .crm-live-metric-label {
@@ -146,6 +153,7 @@ const buildHtml = () => `<!DOCTYPE html>
         font-weight: 500;
       }
       .crm-live-metric-value.is-medium { font-size: min(8vw, 11.6vh); }
+      .crm-live-metric-value.is-small-hero { font-size: min(10vw, 13vh); }
       .crm-live-metric-side {
         display: grid;
         gap: .55vh;
@@ -178,7 +186,7 @@ const buildHtml = () => `<!DOCTYPE html>
       .crm-live-support-grid {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 2.8vw;
+        gap: 3vw;
       }
       .crm-live-support-item { display: grid; gap: .8vh; }
       .crm-live-support-item strong {
@@ -193,6 +201,30 @@ const buildHtml = () => `<!DOCTYPE html>
         line-height: 1.35;
         font-weight: 400;
       }
+      .crm-live-state-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: .7vw;
+        width: fit-content;
+        padding: 1vh 1.4vw;
+        border-radius: 999px;
+        background: rgba(255,255,255,.04);
+        color: var(--text-secondary);
+        font-size: 1.9vh;
+        line-height: 1;
+        font-weight: 400;
+      }
+      .crm-live-state-pill strong {
+        font-weight: 500;
+      }
+      .crm-live-state-pill.is-success {
+        color: var(--success);
+        background: rgba(49, 214, 155, .12);
+      }
+      .crm-live-state-pill.is-danger {
+        color: var(--accent);
+        background: rgba(255, 86, 79, .12);
+      }
       .crm-live-week-grid,
       .crm-live-highlight-grid,
       .crm-live-last-sale-grid {
@@ -201,9 +233,9 @@ const buildHtml = () => `<!DOCTYPE html>
         align-items: center;
       }
       .crm-live-week-grid {
-        grid-template-columns: repeat(2, minmax(24vw, 30vw));
+        grid-template-columns: minmax(28vw, 32vw) minmax(38vw, 44vw);
         justify-content: center;
-        gap: 4vw;
+        gap: 5vw;
       }
       .crm-live-highlight-grid,
       .crm-live-last-sale-grid {
@@ -224,8 +256,15 @@ const buildHtml = () => `<!DOCTYPE html>
       .crm-live-ranking {
         height: 100%;
         display: grid;
-        grid-auto-rows: minmax(0, 1fr);
-        gap: 2.4vh;
+        align-content: center;
+        gap: 2.8vh;
+      }
+      .crm-live-ranking.is-tight {
+        gap: 2.2vh;
+      }
+      .crm-live-ranking.is-fill {
+        min-height: 100%;
+        grid-auto-rows: 1fr;
         align-content: stretch;
       }
       .crm-live-ranking-row {
@@ -254,9 +293,10 @@ const buildHtml = () => `<!DOCTYPE html>
         width: 100%;
         height: 100%;
         object-fit: cover;
+        object-position: center top;
         display: block;
       }
-      .crm-live-avatar.is-photo { filter: grayscale(1); }
+      .crm-live-avatar.is-photo { filter: grayscale(1) brightness(1.12) contrast(.88); }
       .crm-live-avatar.is-leader {
         width: 7.6vh;
         height: 7.6vh;
@@ -282,6 +322,12 @@ const buildHtml = () => `<!DOCTYPE html>
       .crm-live-ranking-sub {
         color: var(--text-secondary);
         font-size: 2.1vh;
+        line-height: 1.35;
+        font-weight: 400;
+      }
+      .crm-live-ranking-chase {
+        color: var(--text-tertiary);
+        font-size: 1.65vh;
         line-height: 1.35;
         font-weight: 400;
       }
@@ -335,6 +381,103 @@ const buildHtml = () => `<!DOCTYPE html>
       .crm-live-highlight-note {
         color: var(--text-secondary);
         font-size: 1.8vh;
+        line-height: 1.35;
+      }
+      .crm-live-duel {
+        height: 100%;
+        display: grid;
+        grid-template-columns: minmax(20vw, 24vw) minmax(28vw, 1fr) minmax(20vw, 24vw);
+        align-items: center;
+        gap: 4vw;
+      }
+      .crm-live-duel-side {
+        display: grid;
+        justify-items: center;
+        align-content: center;
+        gap: 1.8vh;
+        text-align: center;
+      }
+      .crm-live-duel-side .crm-live-avatar {
+        width: 13vh;
+        height: 13vh;
+        font-size: 3.3vh;
+      }
+      .crm-live-duel-side.is-leader .crm-live-avatar {
+        border: .45vh solid var(--accent);
+        box-shadow: 0 0 0 .7vh var(--leader-ring);
+        filter: none;
+      }
+      .crm-live-duel-name {
+        font-size: 4.2vh;
+        line-height: .95;
+        letter-spacing: -.06em;
+        font-weight: 500;
+      }
+      .crm-live-duel-sub {
+        color: var(--text-secondary);
+        font-size: 2vh;
+        line-height: 1.35;
+      }
+      .crm-live-duel-center {
+        display: grid;
+        justify-items: center;
+        align-content: center;
+        gap: 2vh;
+        text-align: center;
+      }
+      .crm-live-duel-center .crm-live-metric-label {
+        justify-self: center;
+      }
+      .crm-live-duel-message {
+        font-size: min(6.4vw, 8.8vh);
+        line-height: .96;
+        letter-spacing: -.08em;
+        font-weight: 500;
+        max-width: 32vw;
+      }
+      .crm-live-duel-context {
+        color: var(--text-secondary);
+        font-size: 2.1vh;
+        line-height: 1.4;
+      }
+      .crm-live-duel-delta {
+        color: var(--accent);
+      }
+      .crm-live-week-countdown {
+        display: grid;
+        gap: 1.4vh;
+      }
+      .crm-live-week-countdown .crm-live-metric-value {
+        font-size: min(11vw, 15vh);
+      }
+      .crm-live-week-rails {
+        display: grid;
+        gap: 2.4vh;
+      }
+      .crm-live-week-rail {
+        display: grid;
+        gap: 1vh;
+      }
+      .crm-live-week-rail-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 2vw;
+      }
+      .crm-live-week-rail-name {
+        font-size: 2.2vh;
+        color: var(--text-secondary);
+        font-weight: 500;
+      }
+      .crm-live-week-rail-gap {
+        font-size: 2.4vh;
+        line-height: 1;
+        letter-spacing: -.04em;
+        font-weight: 500;
+      }
+      .crm-live-week-rail-sub {
+        color: var(--text-tertiary);
+        font-size: 1.55vh;
         line-height: 1.35;
       }
       .crm-live-last-sale-client {
@@ -419,11 +562,115 @@ const buildHtml = () => `<!DOCTYPE html>
         letter-spacing: -.04em;
         font-weight: 500;
       }
+      .crm-live-interruption {
+        position: absolute;
+        inset: 0;
+        z-index: 20;
+        display: none;
+      }
+      .crm-live-interruption.is-visible {
+        display: block;
+      }
+      .crm-live-interruption-screen {
+        width: 100%;
+        height: 100%;
+        padding: 5.2vh 6vw;
+        display: grid;
+        grid-template-rows: 1fr auto;
+      }
+      .crm-live-interruption-screen.is-sale {
+        background: var(--accent);
+        color: #fff6f5;
+      }
+      .crm-live-interruption-screen.is-generic {
+        background:
+          radial-gradient(circle at top left, rgba(255,255,255,.08), transparent 26%),
+          var(--bg);
+        color: var(--text);
+      }
+      .crm-live-interruption-main {
+        display: grid;
+        align-content: center;
+        justify-items: center;
+        text-align: center;
+        gap: 2.4vh;
+      }
+      .crm-live-interruption-kicker {
+        font-size: 1.6vh;
+        letter-spacing: .28em;
+        text-transform: uppercase;
+        font-weight: 500;
+        opacity: .76;
+      }
+      .crm-live-interruption-avatar {
+        width: 16vh;
+        height: 16vh;
+        border-radius: 999px;
+        overflow: hidden;
+        background: rgba(13, 16, 20, .18);
+        display: grid;
+        place-items: center;
+        font-size: 5vh;
+        letter-spacing: .04em;
+      }
+      .crm-live-interruption-avatar img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: center top;
+        display: block;
+      }
+      .crm-live-interruption-name {
+        font-size: min(5.2vw, 7.6vh);
+        line-height: .94;
+        letter-spacing: -.06em;
+        font-weight: 500;
+      }
+      .crm-live-interruption-hero {
+        font-size: min(13vw, 19vh);
+        line-height: .86;
+        letter-spacing: -.08em;
+        font-weight: 500;
+      }
+      .crm-live-interruption-client {
+        font-size: min(4.4vw, 6vh);
+        line-height: .94;
+        letter-spacing: -.05em;
+        font-weight: 500;
+      }
+      .crm-live-interruption-plan {
+        font-size: 2.4vh;
+        line-height: 1.35;
+        opacity: .82;
+      }
+      .crm-live-interruption-footer {
+        align-self: end;
+        min-height: 10vh;
+        padding: 2.2vh 2vw;
+        border-radius: 2vh;
+        background: rgba(13, 16, 20, .82);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 2vw;
+      }
+      .crm-live-interruption-footer strong {
+        font-size: 3.6vh;
+        line-height: .95;
+        letter-spacing: -.05em;
+        font-weight: 500;
+      }
+      .crm-live-interruption-footer span {
+        font-size: 2vh;
+        line-height: 1.35;
+        color: rgba(255,255,255,.82);
+      }
       @media (max-width: 1200px) {
         .crm-live { padding: 4.4vh 5vw 4vh; }
         .crm-live-week-grid,
         .crm-live-highlight-grid,
-        .crm-live-last-sale-grid {
+        .crm-live-last-sale-grid,
+        .crm-live-duel {
           grid-template-columns: 1fr;
           gap: 3vh;
         }
@@ -445,6 +692,7 @@ const buildHtml = () => `<!DOCTYPE html>
       <div class="crm-live-stage" data-crm-live-root>
         <div class="crm-live-empty" data-crm-live-empty>Carregando CRM Live…</div>
       </div>
+      <div class="crm-live-interruption" data-crm-live-interruption></div>
       <div class="crm-live-footer">
         <div data-crm-live-status>Atualizando…</div>
         <div class="crm-live-dots" data-crm-live-dots></div>
@@ -453,17 +701,24 @@ const buildHtml = () => `<!DOCTYPE html>
     <script>
       (() => {
         const root = document.querySelector('[data-crm-live-root]');
+        const interruptionEl = document.querySelector('[data-crm-live-interruption]');
         const statusEl = document.querySelector('[data-crm-live-status]');
         const dotsEl = document.querySelector('[data-crm-live-dots]');
         const emptyEl = document.querySelector('[data-crm-live-empty]');
-        const SCREENS = ['month', 'week', 'closers', 'sdrs', 'highlights', 'last-sale'];
         const ROTATE_MS = 10000;
         const POLL_MS = 120000;
+        const EVENT_POLL_MS = 25000;
+        const EVENT_SCREEN_MS = 20000;
         let payload = null;
         let active = 0;
         let rotateTimer = null;
         let pollTimer = null;
+        let eventPollTimer = null;
+        let interruptionTimer = null;
         let imageCache = new Map();
+        let screenKeys = [];
+        let eventQueue = [];
+        let activeInterruption = null;
 
         const escapeHtml = (value) => String(value == null ? '' : value)
           .replace(/&/g, '&amp;')
@@ -498,6 +753,55 @@ const buildHtml = () => `<!DOCTYPE html>
           } catch (error) {
             return '—';
           }
+        };
+        const parseDateKeyAtEnd = (dateKey) => {
+          const raw = String(dateKey || '').trim();
+          if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(raw)) return null;
+          const date = new Date(raw + 'T23:59:59-03:00');
+          return Number.isNaN(date.getTime()) ? null : date;
+        };
+        const parseDateKeyAtStart = (dateKey) => {
+          const raw = String(dateKey || '').trim();
+          if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(raw)) return null;
+          const date = new Date(raw + 'T00:00:00-03:00');
+          return Number.isNaN(date.getTime()) ? null : date;
+        };
+        const startOfSaoPauloDay = (date) => {
+          const key = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'America/Sao_Paulo',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+          }).format(date);
+          return parseDateKeyAtStart(key);
+        };
+        const getSaoPauloWeekday = (date) => {
+          const label = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'America/Sao_Paulo',
+            weekday: 'short',
+          }).format(date);
+          const map = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+          return map[label] ?? -1;
+        };
+        const businessDaysBetween = (startDate, endDate) => {
+          if (!(startDate instanceof Date) || !(endDate instanceof Date)) return 0;
+          if (endDate.getTime() < startDate.getTime()) return 0;
+          let count = 0;
+          let cursor = new Date(startDate.getTime());
+          while (cursor.getTime() <= endDate.getTime()) {
+            const weekday = getSaoPauloWeekday(cursor);
+            if (weekday >= 1 && weekday <= 5) count += 1;
+            cursor.setUTCDate(cursor.getUTCDate() + 1);
+          }
+          return count;
+        };
+        const formatCountdown = (endDate) => {
+          if (!(endDate instanceof Date)) return '0d 0h';
+          const diff = Math.max(0, endDate.getTime() - Date.now());
+          const totalHours = Math.floor(diff / 3600000);
+          const days = Math.floor(totalHours / 24);
+          const hours = totalHours % 24;
+          return days + 'd ' + hours + 'h';
         };
         const safeArray = (value) => Array.isArray(value) ? value : [];
         const getPhotoUrl = (row) => {
@@ -550,6 +854,16 @@ const buildHtml = () => `<!DOCTYPE html>
           }
           return '<span class="' + classes + '"><span>' + escapeHtml(initials(name)) + '</span></span>';
         };
+        const interruptionAvatarHtml = (row) => {
+          const state = personImageState(row);
+          const name = getDisplayName(row) || 'Sem nome';
+          if (state.usable) {
+            return '<span class="crm-live-interruption-avatar"><img src="' + escapeHtml(state.src) + '" alt="" onerror="this.parentElement.innerHTML=\\\'' +
+              '<span>' + escapeHtml(initials(name)) + '</span>' +
+            '\\\'" /></span>';
+          }
+          return '<span class="crm-live-interruption-avatar"><span>' + escapeHtml(initials(name)) + '</span></span>';
+        };
         const preloadImages = (rows = []) => {
           safeArray(rows).forEach((row) => {
             const url = getPhotoUrl(row);
@@ -569,8 +883,15 @@ const buildHtml = () => `<!DOCTYPE html>
           if (getNested(data, ['highlights', 'sdr'], null)) rows.push(data.highlights.sdr);
           preloadImages(rows);
         };
+        const preloadFromEvents = (events = []) => {
+          const rows = safeArray(events).map((event) => ({
+            displayName: getNested(event, ['payload', 'displayName'], '') || getNested(event, ['payload', 'closerName'], ''),
+            photoURL: getNested(event, ['payload', 'photoURL'], ''),
+          }));
+          preloadImages(rows);
+        };
         const renderDots = () => {
-          dotsEl.innerHTML = SCREENS.map((_, index) => '<span class="crm-live-dot ' + (index === active ? 'is-active' : '') + '"></span>').join('');
+          dotsEl.innerHTML = safeArray(screenKeys).map((_, index) => '<span class="crm-live-dot ' + (index === active ? 'is-active' : '') + '"></span>').join('');
         };
         const renderMetric = ({ label, value, sideTitle = '', sideText = '', progress = null, valueClass = '' }) =>
           '<div class="crm-live-metric-block">' +
@@ -595,12 +916,18 @@ const buildHtml = () => `<!DOCTYPE html>
           return limited.map((row, index) => {
             const leader = index === 0;
             const roleRow = Object.assign({}, row || {}, { role });
+            const leaderRow = limited[0] || null;
+            const aheadOf = leaderRow && !leader ? Math.max(0, Number(leaderRow.actualValue || 0) - Number(row.actualValue || 0) + 1) : 0;
+            const chaseCopy = leader
+              ? (limited[1] ? 'na frente por ' + (role === 'closer' ? moneyShort(Math.max(0, Number(row.actualValue || 0) - Number(limited[1].actualValue || 0))) : String(Math.max(0, Number(row.actualValue || 0) - Number(limited[1].actualValue || 0)))) + ' sobre ' + String(limited[1].displayName || 'o time') : 'liderança isolada')
+              : 'faltam ' + (role === 'closer' ? moneyShort(aheadOf) : String(aheadOf)) + ' para ultrapassar ' + String(leaderRow?.displayName || 'a liderança');
             return '<div class="crm-live-ranking-row ' + (leader ? 'is-leader' : '') + '">' +
               avatarHtml(row, { leader }) +
               '<div class="crm-live-ranking-copy">' +
                 '<div class="crm-live-ranking-name">' + escapeHtml(row.displayName || '—') + '</div>' +
                 '<div class="crm-live-ranking-sub">' + escapeHtml(abbreviateProgress(roleRow)) + '</div>' +
                 '<div class="crm-live-ranking-bar"><span style="width:' + clampPercent(row.progressPct || 0).toFixed(1) + '%"></span></div>' +
+                '<div class="crm-live-ranking-chase">' + escapeHtml(chaseCopy) + '</div>' +
               '</div>' +
               '<div class="crm-live-ranking-metric">' +
                 '<div class="crm-live-ranking-pct">' + escapeHtml(percent(row.progressPct || 0)) + '</div>' +
@@ -619,78 +946,141 @@ const buildHtml = () => `<!DOCTYPE html>
             avatarHtml(person, { leader }) +
             '<div class="crm-live-highlight-name">' + escapeHtml(person.displayName || 'Sem destaque') + '</div>' +
             '<div class="crm-live-highlight-value">' + escapeHtml(hasRow ? metricMain(metricRow) : '—') + '</div>' +
-            '<div class="crm-live-highlight-note">' + escapeHtml(hasRow ? percent(row.dailyProgressPct || 0) : (role === 'closer' ? 'Sem fechamento' : 'Sem reunião')) + '</div>' +
+            '<div class="crm-live-highlight-note">' + escapeHtml(hasRow ? 'ontem: ' + percent(row.dailyProgressPct || 0) + ' da meta individual' : (role === 'closer' ? 'Sem fechamento' : 'Sem reunião')) + '</div>' +
           '</div>';
+        };
+        const renderPaceState = (month) => {
+          const summary = month.summary || {};
+          const period = month.period || {};
+          const endDate = parseDateKeyAtEnd(period.endDateKey);
+          const startDate = parseDateKeyAtStart(period.startDateKey);
+          const todayStart = startOfSaoPauloDay(new Date());
+          const totalDays = businessDaysBetween(startDate, endDate);
+          const elapsedDays = businessDaysBetween(startDate, todayStart);
+          const remainingDays = businessDaysBetween(todayStart, endDate);
+          const meta = Number(summary.meta || 0);
+          const realized = Number(summary.realizado || 0);
+          const shouldHave = totalDays > 0 ? meta * Math.min(1, elapsedDays / totalDays) : 0;
+          const delta = realized - shouldHave;
+          const requiredPerDay = remainingDays > 0 ? Math.max(0, Number(summary.gap || 0)) / remainingDays : Math.max(0, Number(summary.gap || 0));
+          return {
+            remainingDays,
+            requiredPerDay,
+            abovePace: delta >= 0,
+            delta,
+          };
         };
         const renderMonthScreen = (month) => {
           const summary = month.summary || {};
+          const pace = renderPaceState(month);
           return '<section class="crm-live-screen">' +
             '<div class="crm-live-shell">' +
               '<div class="crm-live-head">' +
-                '<h1 class="crm-live-title">Placar do mês</h1>' +
+                '<h1 class="crm-live-title">Falta para a meta do mês</h1>' +
               '</div>' +
               '<div class="crm-live-body">' +
-                '<div class="crm-live-stack">' +
+                '<div class="crm-live-center">' +
                   renderMetric({
-                    label: 'Receita vendida',
-                    value: moneyShort(summary.realizado || 0),
-                    sideTitle: percent(summary.percentAtingimento || 0),
-                    sideText: 'Gap ' + moneyShort(summary.gap || 0),
+                    label: 'Faltam',
+                    value: moneyShort(summary.gap || 0),
+                    sideTitle: moneyShort(summary.realizado || 0) + ' realizado',
+                    sideText: percent(summary.percentAtingimento || 0),
                     progress: summary.percentAtingimento || 0,
                   }) +
                   '<div class="crm-live-support-grid">' +
+                    '<div class="crm-live-support-item"><strong>' + escapeHtml(moneyShort(pace.requiredPerDay || 0)) + '</strong><span>Ritmo necessário por dia</span></div>' +
                     '<div class="crm-live-support-item"><strong>' + escapeHtml(moneyShort(summary.meta || 0)) + '</strong><span>Meta do mês</span></div>' +
-                    '<div class="crm-live-support-item"><strong>' + escapeHtml(String(summary.totalVendas || 0)) + '</strong><span>Vendas fechadas</span></div>' +
-                    '<div class="crm-live-support-item"><strong>' + escapeHtml(String(month.windowCount || 0)) + '</strong><span>Negócios lidos na janela</span></div>' +
+                    '<div class="crm-live-support-item"><div class="crm-live-state-pill ' + (pace.abovePace ? 'is-success' : 'is-danger') + '"><strong>' + escapeHtml(pace.abovePace ? 'ACIMA' : 'ABAIXO') + '</strong><span>do ritmo</span></div><span>' + escapeHtml((pace.abovePace ? '+' : '') + moneyShort(pace.delta || 0) + ' vs esperado hoje') + '</span></div>' +
                   '</div>' +
                 '</div>' +
               '</div>' +
             '</div>' +
           '</section>';
         };
+        const renderWeekRail = ({ label, actual, target, role }) => {
+          const remaining = Math.max(0, Number(target || 0) - Number(actual || 0));
+          const gapLabel = role === 'closer' ? moneyShort(remaining) : String(remaining) + ' reuniões';
+          const progress = target > 0 ? (Number(actual || 0) / Number(target || 0)) * 100 : 0;
+          const actualLabel = role === 'closer' ? moneyShort(actual || 0) : String(actual || 0);
+          const targetLabel = role === 'closer' ? moneyShort(target || 0) : String(target || 0);
+          return '<div class="crm-live-week-rail">' +
+            '<div class="crm-live-week-rail-head">' +
+              '<div class="crm-live-week-rail-name">' + escapeHtml(label) + '</div>' +
+              '<div class="crm-live-week-rail-gap">' + escapeHtml('faltam ' + gapLabel) + '</div>' +
+            '</div>' +
+            '<div class="crm-live-ranking-bar"><span style="width:' + clampPercent(progress).toFixed(1) + '%; background:' + (role === 'closer' ? 'var(--accent)' : 'rgba(255,255,255,.28)') + '"></span></div>' +
+            '<div class="crm-live-week-rail-sub">' + escapeHtml(actualLabel + ' de ' + targetLabel) + '</div>' +
+          '</div>';
+        };
         const renderWeekScreen = (weekly) => '<section class="crm-live-screen">' +
           '<div class="crm-live-shell">' +
             '<div class="crm-live-head">' +
-              '<h1 class="crm-live-title">Meta da semana</h1>' +
+              '<h1 class="crm-live-title">Relógio da semana</h1>' +
             '</div>' +
             '<div class="crm-live-body crm-live-week-grid">' +
               '<div class="crm-live-column">' +
-                renderMetric({
-                  label: 'Closers',
-                  value: moneyShort(getNested(weekly, ['team', 'closers', 'actualValue'], 0) || 0),
-                  sideTitle: percent(getNested(weekly, ['team', 'closers', 'progressPct'], 0) || 0),
-                  sideText: 'Meta ' + moneyShort(getNested(weekly, ['team', 'closers', 'targetValue'], 0) || 0),
-                  progress: getNested(weekly, ['team', 'closers', 'progressPct'], 0) || 0,
-                  valueClass: 'is-medium',
-                }) +
+                '<div class="crm-live-week-countdown">' +
+                  renderMetric({
+                    label: 'Termina em',
+                    value: formatCountdown(parseDateKeyAtEnd(getNested(weekly, ['commercialWeek', 'endDateKey'], ''))),
+                    sideTitle: dateLabel(getNested(weekly, ['commercialWeek', 'startDateKey'], '')) + ' a ' + dateLabel(getNested(weekly, ['commercialWeek', 'endDateKey'], '')),
+                    sideText: 'ciclo comercial',
+                    valueClass: 'is-small-hero',
+                  }) +
+                '</div>' +
               '</div>' +
               '<div class="crm-live-column crm-live-column-right">' +
-                renderMetric({
-                  label: 'SDRs',
-                  value: String(getNested(weekly, ['team', 'sdrs', 'actualValue'], 0) || 0),
-                  sideTitle: percent(getNested(weekly, ['team', 'sdrs', 'progressPct'], 0) || 0),
-                  sideText: 'Meta ' + String(getNested(weekly, ['team', 'sdrs', 'targetValue'], 0) || 0) + ' reuniões',
-                  progress: getNested(weekly, ['team', 'sdrs', 'progressPct'], 0) || 0,
-                  valueClass: 'is-medium',
-                }) +
+                '<div class="crm-live-week-rails">' +
+                  renderWeekRail({ label: 'Time de closers', actual: getNested(weekly, ['team', 'closers', 'actualValue'], 0), target: getNested(weekly, ['team', 'closers', 'targetValue'], 0), role: 'closer' }) +
+                  renderWeekRail({ label: 'Time de SDRs', actual: getNested(weekly, ['team', 'sdrs', 'actualValue'], 0), target: getNested(weekly, ['team', 'sdrs', 'targetValue'], 0), role: 'sdr' }) +
+                '</div>' +
               '</div>' +
             '</div>' +
           '</div>' +
         '</section>';
-        const renderClosersScreen = (weekly) => '<section class="crm-live-screen">' +
-          '<div class="crm-live-shell">' +
-            '<div class="crm-live-head">' +
-              '<h1 class="crm-live-title">Ranking dos closers</h1>' +
+        const renderClosersScreen = (weekly) => {
+          const rows = safeArray(weekly.closers).slice(0, 2);
+          if (rows.length < 2) {
+            return '<section class="crm-live-screen"><div class="crm-live-shell"><div class="crm-live-head"><h1 class="crm-live-title">Duelo dos closers</h1></div><div class="crm-live-body"><div class="crm-live-empty"><div><strong>Sem duelo</strong><div>Cadastre ao menos dois closers com meta nesta semana.</div></div></div></div></div></section>';
+          }
+          const leader = rows[0];
+          const challenger = rows[1];
+          const needed = Math.max(0, Number(leader.actualValue || 0) - Number(challenger.actualValue || 0) + 1);
+          return '<section class="crm-live-screen">' +
+            '<div class="crm-live-shell">' +
+              '<div class="crm-live-head">' +
+                '<h1 class="crm-live-title">Duelo dos closers</h1>' +
+              '</div>' +
+              '<div class="crm-live-body">' +
+                '<div class="crm-live-duel">' +
+                  '<div class="crm-live-duel-side is-leader">' +
+                    avatarHtml(leader, { leader: true }) +
+                    '<div class="crm-live-duel-name">' + escapeHtml(leader.displayName || '—') + '</div>' +
+                    '<div class="crm-live-duel-sub">' + escapeHtml(abbreviateProgress({ ...leader, role: 'closer' })) + '</div>' +
+                    '<div class="crm-live-duel-sub">' + escapeHtml(percent(leader.progressPct || 0)) + '</div>' +
+                  '</div>' +
+                  '<div class="crm-live-duel-center">' +
+                    '<div class="crm-live-metric-label">Distância para a virada</div>' +
+                    '<div class="crm-live-duel-message"><span class="crm-live-duel-delta">' + escapeHtml(challenger.displayName || 'O desafiante') + '</span> precisa de ' + escapeHtml(moneyShort(needed)) + ' para assumir a liderança</div>' +
+                    '<div class="crm-live-duel-context">' + escapeHtml(moneyShort(Math.max(0, Number(leader.actualValue || 0) - Number(challenger.actualValue || 0))) + ' separam os dois agora') + '</div>' +
+                  '</div>' +
+                  '<div class="crm-live-duel-side">' +
+                    avatarHtml(challenger, { leader: false }) +
+                    '<div class="crm-live-duel-name">' + escapeHtml(challenger.displayName || '—') + '</div>' +
+                    '<div class="crm-live-duel-sub">' + escapeHtml(abbreviateProgress({ ...challenger, role: 'closer' })) + '</div>' +
+                    '<div class="crm-live-duel-sub">' + escapeHtml(percent(challenger.progressPct || 0)) + '</div>' +
+                  '</div>' +
+                '</div>' +
+              '</div>' +
             '</div>' +
-            '<div class="crm-live-body"><div class="crm-live-ranking">' + renderRankingRows(weekly.closers, { role: 'closer' }) + '</div></div>' +
-          '</div>' +
-        '</section>';
+          '</section>';
+        };
         const renderSdrsScreen = (weekly) => '<section class="crm-live-screen">' +
           '<div class="crm-live-shell">' +
             '<div class="crm-live-head">' +
               '<h1 class="crm-live-title">Ranking dos SDRs</h1>' +
             '</div>' +
-            '<div class="crm-live-body"><div class="crm-live-ranking">' + renderRankingRows(weekly.sdrs, { role: 'sdr' }) + '</div></div>' +
+            '<div class="crm-live-body"><div class="crm-live-ranking is-fill">' + renderRankingRows(weekly.sdrs, { role: 'sdr' }) + '</div></div>' +
           '</div>' +
         '</section>';
         const renderHighlightsScreen = (highlight) => '<section class="crm-live-screen">' +
@@ -704,56 +1094,123 @@ const buildHtml = () => `<!DOCTYPE html>
             '</div>' +
           '</div>' +
         '</section>';
-        const renderLastSaleScreen = (latestSale) => '<section class="crm-live-screen">' +
-          '<div class="crm-live-shell">' +
-            '<div class="crm-live-head">' +
-              '<h1 class="crm-live-title">Última venda</h1>' +
-            '</div>' +
-            '<div class="crm-live-body">' +
-              (latestSale
-                ? '<div class="crm-live-last-sale-grid">' +
-                    '<div class="crm-live-column">' +
-                      '<div class="crm-live-metric-label">Cliente</div>' +
-                      '<div class="crm-live-last-sale-client">' + escapeHtml(latestSale.cliente || '—') + '</div>' +
-                      '<div class="crm-live-last-sale-plan">Plano ' + escapeHtml(latestSale.plano || '—') + '</div>' +
-                    '</div>' +
-                    '<div class="crm-live-column crm-live-column-right">' +
-                      '<div class="crm-live-metric-block">' +
-                        '<div class="crm-live-metric-label">Valor</div>' +
-                        '<div class="crm-live-metric-value is-medium">' + escapeHtml(moneyShort(latestSale.valor || 0)) + '</div>' +
-                      '</div>' +
-                      '<div class="crm-live-last-sale-list">' +
-                        '<div class="crm-live-last-sale-row"><span>Closer</span><strong>' + escapeHtml(latestSale.closer || '—') + '</strong></div>' +
-                        '<div class="crm-live-last-sale-row"><span>Horário</span><strong>' + escapeHtml(dateTimeLabel(latestSale.when)) + '</strong></div>' +
-                      '</div>' +
-                    '</div>' +
-                  '</div>'
-                : '<div class="crm-live-empty"><div><strong>Sem venda</strong><div>Nenhuma venda fechada na janela atual.</div></div></div>') +
-            '</div>' +
-          '</div>' +
-        '</section>';
+        const renderInterruption = (event) => {
+          if (!interruptionEl || !event) return;
+          const type = String(event.type || '').trim();
+          if (type === 'sale_closed') {
+            const payload = event.payload || {};
+            const gapText = moneyShort(Math.max(0, Number(payload.weekGap || 0)));
+            interruptionEl.innerHTML =
+              '<div class="crm-live-interruption-screen is-sale">' +
+                '<div class="crm-live-interruption-main">' +
+                  '<div class="crm-live-interruption-kicker">Venda fechada</div>' +
+                  interruptionAvatarHtml({ displayName: payload.closerName || 'Closer', photoURL: payload.photoURL || '' }) +
+                  '<div class="crm-live-interruption-name">' + escapeHtml(payload.closerName || 'Sem responsável') + '</div>' +
+                  '<div class="crm-live-interruption-hero">' + escapeHtml(moneyShort(payload.value || 0)) + '</div>' +
+                  '<div class="crm-live-interruption-client">' + escapeHtml(payload.clientName || 'Cliente sem nome') + '</div>' +
+                  '<div class="crm-live-interruption-plan">' + escapeHtml(payload.planName || 'Plano não informado') + ' · ' + escapeHtml(dateTimeLabel(payload.movedAt || '')) + '</div>' +
+                '</div>' +
+                '<div class="crm-live-interruption-footer">' +
+                  '<div><span>Próximo alvo da semana</span><strong>Faltam ' + escapeHtml(gapText) + ' para bater a semana</strong></div>' +
+                '</div>' +
+              '</div>';
+            interruptionEl.classList.add('is-visible');
+            return;
+          }
+          const payload = event.payload || {};
+          const titleMap = {
+            individual_goal_hit: 'Meta individual batida',
+            leader_changed: 'Virada de liderança',
+            team_goal_hit: 'Meta da semana batida',
+          };
+          const subtitleMap = {
+            individual_goal_hit: percent(payload.progressPct || 0) + ' da meta individual',
+            leader_changed: 'novo líder do ranking ' + (event.leaderboard === 'sdrs' ? 'dos SDRs' : 'dos closers'),
+            team_goal_hit: (payload.team === 'sdrs' ? 'Time de SDRs' : 'Time de closers') + ' bateu a meta semanal',
+          };
+          interruptionEl.innerHTML =
+            '<div class="crm-live-interruption-screen is-generic">' +
+              '<div class="crm-live-interruption-main">' +
+                '<div class="crm-live-interruption-kicker">' + escapeHtml(titleMap[type] || 'Evento do CRM Live') + '</div>' +
+                interruptionAvatarHtml({ displayName: payload.displayName || payload.team || 'Time', photoURL: payload.photoURL || '' }) +
+                '<div class="crm-live-interruption-name">' + escapeHtml(payload.displayName || (payload.team === 'sdrs' ? 'Time de SDRs' : payload.team === 'closers' ? 'Time de closers' : 'Atualização do placar')) + '</div>' +
+                '<div class="crm-live-interruption-hero">' + escapeHtml(type === 'leader_changed' || type === 'individual_goal_hit' ? percent(payload.progressPct || 0) : (payload.team === 'sdrs' ? String(payload.actualValue || 0) : moneyShort(payload.actualValue || 0))) + '</div>' +
+                '<div class="crm-live-interruption-plan">' + escapeHtml(subtitleMap[type] || '') + '</div>' +
+              '</div>' +
+              '<div class="crm-live-interruption-footer">' +
+                '<div><span>Atualização automática</span><strong>O placar volta em instantes</strong></div>' +
+              '</div>' +
+            '</div>';
+          interruptionEl.classList.add('is-visible');
+        };
+        const clearInterruption = () => {
+          if (!interruptionEl) return;
+          interruptionEl.classList.remove('is-visible');
+          interruptionEl.innerHTML = '';
+          activeInterruption = null;
+        };
+        const pauseRotation = () => {
+          if (rotateTimer) {
+            clearInterval(rotateTimer);
+            rotateTimer = null;
+          }
+        };
+        const playNextInterruption = () => {
+          if (activeInterruption || !eventQueue.length) return;
+          activeInterruption = eventQueue.shift();
+          pauseRotation();
+          renderInterruption(activeInterruption);
+          if (interruptionTimer) clearTimeout(interruptionTimer);
+          interruptionTimer = setTimeout(() => {
+            clearInterruption();
+            if (eventQueue.length) {
+              playNextInterruption();
+            } else if (payload) {
+              render();
+              scheduleRotation();
+            }
+          }, EVENT_SCREEN_MS);
+        };
+        const enqueueEvents = (events = []) => {
+          const currentIds = new Set([activeInterruption?.id, ...eventQueue.map((event) => event?.id)].filter(Boolean));
+          safeArray(events).forEach((event) => {
+            if (!event || !event.id || currentIds.has(event.id)) return;
+            currentIds.add(event.id);
+            eventQueue.push(event);
+          });
+          if (!activeInterruption) playNextInterruption();
+        };
+        const buildScreenKeys = (currentPayload) => {
+          const keys = ['month', 'week', 'closers', 'sdrs'];
+          const closerHighlight = getNested(currentPayload, ['highlights', 'closer'], null);
+          const sdrHighlight = getNested(currentPayload, ['highlights', 'sdr'], null);
+          const hasHighlight = (closerHighlight && Number(closerHighlight.dailyValue || 0) > 0) || (sdrHighlight && Number(sdrHighlight.dailyValue || 0) > 0);
+          if (hasHighlight) keys.push('highlights');
+          return keys;
+        };
         const render = () => {
           if (!payload) return;
           const month = payload.month || {};
           const weekly = payload.weekly || {};
           const highlight = payload.highlights || {};
-          const latestSale = payload.latestSale || null;
+          screenKeys = buildScreenKeys(payload);
+          if (!screenKeys.length) screenKeys = ['month'];
+          if (active >= screenKeys.length) active = 0;
           const screens = {
             month: renderMonthScreen(month),
             week: renderWeekScreen(weekly),
             closers: renderClosersScreen(weekly),
             sdrs: renderSdrsScreen(weekly),
             highlights: renderHighlightsScreen(highlight),
-            'last-sale': renderLastSaleScreen(latestSale),
           };
-          root.innerHTML = SCREENS.map((key, index) => screens[key].replace('<section class="crm-live-screen">', '<section class="crm-live-screen ' + (index === active ? 'is-active' : '') + '">')).join('');
+          root.innerHTML = safeArray(screenKeys).map((key, index) => screens[key].replace('<section class="crm-live-screen">', '<section class="crm-live-screen ' + (index === active ? 'is-active' : '') + '">')).join('');
           renderDots();
           if (emptyEl) emptyEl.remove();
         };
         const setStatus = (text) => { if (statusEl) statusEl.textContent = text; };
         const rotate = () => {
           if (!payload) return;
-          active = (active + 1) % SCREENS.length;
+          active = (active + 1) % screenKeys.length;
           render();
         };
         const scheduleRotation = () => {
@@ -819,7 +1276,7 @@ const buildHtml = () => `<!DOCTYPE html>
               payload = fallback;
               preloadFromPayload(fallback);
               render();
-              scheduleRotation();
+              if (!activeInterruption) scheduleRotation();
               setStatus('Sem atualização nova · mantendo última tela boa');
               return;
             }
@@ -828,10 +1285,26 @@ const buildHtml = () => `<!DOCTYPE html>
             setStatus(((error && error.status) ? 'Erro ' + String(error.status) + ' · ' : '') + ((error && error.errorCode) || 'sem snapshot'));
           }
         };
+        const loadEvents = async () => {
+          try {
+            const res = await fetch('/api/crm-live-events', { credentials: 'include', cache: 'no-store' });
+            const data = await res.json().catch(() => null);
+            if (!res.ok || !data) return;
+            if (data.coldStart) return;
+            preloadFromEvents(data.events || []);
+            enqueueEvents(data.events || []);
+          } catch (error) {
+          }
+        };
         loadData();
         pollTimer = setInterval(loadData, POLL_MS);
+        loadEvents();
+        eventPollTimer = setInterval(loadEvents, EVENT_POLL_MS);
         document.addEventListener('visibilitychange', () => {
-          if (!document.hidden) loadData();
+          if (!document.hidden) {
+            loadData();
+            loadEvents();
+          }
         });
       })();
     </script>

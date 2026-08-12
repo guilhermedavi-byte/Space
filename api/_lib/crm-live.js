@@ -14,6 +14,8 @@ const GROWTH_PEOPLE_COLLECTION = "growthPeople";
 const SDR_ACTIVITY_COLLECTION = "sdrActivityEvents";
 const CRM_LIVE_CACHE_COLLECTION = "crmLiveCache";
 const CRM_LIVE_ACCESS_COLLECTION = "crmLiveAccessTokens";
+const CRM_LIVE_EVENTS_COLLECTION = "crmLiveEventsState";
+const CRM_LIVE_DAILY_ROLLUPS_COLLECTION = "crmLiveDailyRollups";
 const CRM_LIVE_COOKIE_NAME = "space_crm_live";
 const CRM_LIVE_COOKIE_SCOPE = "crm-live:read";
 const CRM_LIVE_COOKIE_MAX_AGE_SECONDS = 90 * 24 * 60 * 60;
@@ -80,6 +82,7 @@ const extractBusinessClientName = (business) =>
 const extractBusinessPlanName = (business) =>
   safeString(business?.products?.[0]?.product?.name || business?.planName || business?.produto?.nome);
 const extractBusinessAttendantName = (business) => safeString(business?.attendant?.name || business?.attendantName);
+const extractBusinessStatus = (business) => safeString(business?.status || business?.dealStatus || business?.situation);
 const extractBusinessLastMovedAt = (business) => {
   const raw = business?.lastMovedAt;
   if (!raw) return null;
@@ -165,6 +168,23 @@ const getCacheMeta = (row) => {
   return { generatedAt, ageMs, ageMinutes: Math.round(ageMs / 60000) };
 };
 
+const readStateDoc = async (collection, docId) => {
+  try {
+    const doc = await getDocumentAsAdmin(`${collection}/${encodeURIComponent(docId)}`);
+    return { ok: true, data: doc };
+  } catch (error) {
+    if (Number(error?.status) === 404) return { ok: false, status: 404, data: null };
+    throw error;
+  }
+};
+
+const writeStateDoc = async ({ collection, docId, data, updateMaskPaths } = {}) =>
+  writeDocAsAdmin({
+    docPath: `${collection}/${encodeURIComponent(docId)}`,
+    data,
+    updateMaskPaths,
+  });
+
 const decodeGoalDoc = (doc) => {
   if (!doc || typeof doc !== "object") return null;
   const id = getDocIdFromName(doc.name);
@@ -247,7 +267,7 @@ const loadSdrEventsRange = async ({ fromKey, toKey } = {}) => {
   return rows.map(decodeSdrEventRow).filter(Boolean);
 };
 
-const fetchCrmWindow = async ({ startDateKey } = {}) => {
+const fetchCrmBusinesses = async ({ startDateKey, lastMovedAfter = "", status = "" } = {}) => {
   const apiKey = safeString(process.env.CRM_API_KEY);
   const base = safeString(process.env.CRM_API_BASE_URL).replace(/\/+$/, "");
   if (!apiKey || !base) {
@@ -255,7 +275,7 @@ const fetchCrmWindow = async ({ startDateKey } = {}) => {
     error.status = 500;
     throw error;
   }
-  const lastMovedAfter = formatDateKeyStartIso(startDateKey);
+  const since = safeString(lastMovedAfter) || formatDateKeyStartIso(startDateKey);
   const take = 200;
   let skip = 0;
   let pages = 0;
@@ -266,7 +286,8 @@ const fetchCrmWindow = async ({ startDateKey } = {}) => {
     const params = new URLSearchParams();
     params.set("skip", String(skip));
     params.set("take", String(take));
-    params.set("filter[lastMovedAfter]", lastMovedAfter);
+    if (since) params.set("filter[lastMovedAfter]", since);
+    if (safeString(status)) params.set("filter[status]", safeString(status));
     const res = await requestJsonRaw(`${base}/api/v1/businesses?${params.toString()}`, {
       method: "GET",
       headers: { Authorization: `Bearer ${apiKey}` },
@@ -292,15 +313,23 @@ const fetchCrmWindow = async ({ startDateKey } = {}) => {
       baselinePages: 44,
       baselineTotal: 8790,
       elapsedMs: Date.now() - startedAt,
-      lastMovedAfter,
+      lastMovedAfter: since,
+      status: safeString(status),
     },
   };
 };
+
+const fetchCrmWindow = async ({ startDateKey } = {}) => fetchCrmBusinesses({ startDateKey });
 
 const choosePipelineKey = (businesses = []) => {
   const preferred = normalizeKey("Funil principal");
   const hasPreferred = businesses.some((business) => normalizeKey(extractPipelineName(business)) === preferred);
   return hasPreferred ? preferred : CONVERSION_PIPELINE_FALLBACK_KEY;
+};
+
+const formatBusinessDateKey = (business) => {
+  const movedAt = extractBusinessLastMovedAt(business);
+  return movedAt ? formatSaoPauloDateKey(movedAt) : "";
 };
 
 const filterWindowBusinesses = ({ businesses = [], period }) =>
@@ -623,6 +652,272 @@ const buildCrmLivePayload = async ({ now = new Date() } = {}) => {
   };
 };
 
+const decodeDetectorState = (doc = {}) => {
+  const state = doc && typeof doc === "object" ? doc : {};
+  const lastLeaders = state.lastLeaders && typeof state.lastLeaders === "object" ? state.lastLeaders : {};
+  const currentWeek = state.currentWeek && typeof state.currentWeek === "object" ? state.currentWeek : {};
+  return {
+    cursor: safeString(state.cursor),
+    initializedAt: safeString(state.initializedAt),
+    updatedAt: safeString(state.updatedAt),
+    lastLeaders: {
+      closers: safeString(lastLeaders.closers),
+      sdrs: safeString(lastLeaders.sdrs),
+    },
+    currentWeek: {
+      weekKey: safeString(currentWeek.weekKey),
+      metaIndividualsHit: Array.isArray(currentWeek.metaIndividualsHit) ? currentWeek.metaIndividualsHit.map((value) => safeString(value)).filter(Boolean) : [],
+      teamMetasHit: Array.isArray(currentWeek.teamMetasHit) ? currentWeek.teamMetasHit.map((value) => safeString(value)).filter(Boolean) : [],
+    },
+    announcedSaleIds: Array.isArray(state.announcedSaleIds) ? state.announcedSaleIds.map((value) => safeString(value)).filter(Boolean) : [],
+  };
+};
+
+const buildDetectorStateSnapshot = ({ cursor = "", weeklyReadModel, announcedSaleIds = [], currentWeek = null, initializedAt = "", updatedAt = "" } = {}) => {
+  const closerLeader = safeString(weeklyReadModel?.progress?.closers?.[0]?.personId);
+  const sdrLeader = safeString(weeklyReadModel?.progress?.sdrs?.[0]?.personId);
+  const weekKey = safeString(weeklyReadModel?.commercialWeek?.weekKey);
+  const currentWeekState = currentWeek && typeof currentWeek === "object" ? currentWeek : {};
+  return {
+    cursor: safeString(cursor),
+    initializedAt: safeString(initializedAt),
+    updatedAt: safeString(updatedAt),
+    lastLeaders: {
+      closers: closerLeader,
+      sdrs: sdrLeader,
+    },
+    currentWeek: {
+      weekKey,
+      metaIndividualsHit: Array.isArray(currentWeekState.metaIndividualsHit) ? currentWeekState.metaIndividualsHit.map((value) => safeString(value)).filter(Boolean) : [],
+      teamMetasHit: Array.isArray(currentWeekState.teamMetasHit) ? currentWeekState.teamMetasHit.map((value) => safeString(value)).filter(Boolean) : [],
+    },
+    announcedSaleIds: Array.isArray(announcedSaleIds) ? [...new Set(announcedSaleIds.map((value) => safeString(value)).filter(Boolean))].slice(-500) : [],
+  };
+};
+
+const buildWonBusinessEventContext = ({ business, weeklyReadModel, monthSummary }) => {
+  const weekGap = Math.max(0, safeNumber(weeklyReadModel?.team?.closers?.targetValue) - safeNumber(weeklyReadModel?.team?.closers?.actualValue));
+  return {
+    businessId: extractBusinessId(business),
+    clientName: extractBusinessClientName(business) || "Cliente sem nome",
+    planName: extractBusinessPlanName(business) || "Plano não informado",
+    closerName: extractBusinessAttendantName(business) || "Sem responsável",
+    value: getDealValue(business),
+    movedAt: extractBusinessLastMovedAt(business)?.toISOString() || "",
+    dateKey: formatBusinessDateKey(business),
+    status: extractBusinessStatus(business),
+    weekGap,
+    monthGap: Math.max(0, safeNumber(monthSummary?.summary?.gap)),
+  };
+};
+
+const buildCrmLiveEventQueue = ({ previousState, weeklyReadModel, weekTeamSummary, freshWonBusinesses = [], monthSummary, now = new Date() } = {}) => {
+  const currentState = decodeDetectorState(previousState || {});
+  const nowIso = now instanceof Date ? now.toISOString() : new Date().toISOString();
+  const announcedSaleIds = new Set(currentState.announcedSaleIds);
+  const currentWeekKey = safeString(weeklyReadModel?.commercialWeek?.weekKey);
+  const previousWeekKey = safeString(currentState.currentWeek?.weekKey);
+  const weekRolled = Boolean(previousWeekKey && currentWeekKey && previousWeekKey !== currentWeekKey);
+  const coldStart = !safeString(currentState.cursor);
+
+  const sortedWon = (Array.isArray(freshWonBusinesses) ? freshWonBusinesses : [])
+    .slice()
+    .sort((left, right) => {
+      const leftMs = extractBusinessLastMovedAt(left)?.getTime() || 0;
+      const rightMs = extractBusinessLastMovedAt(right)?.getTime() || 0;
+      return leftMs - rightMs;
+    });
+
+  const latestCursor = sortedWon.length
+    ? (extractBusinessLastMovedAt(sortedWon[sortedWon.length - 1])?.toISOString() || safeString(currentState.cursor) || nowIso)
+    : safeString(currentState.cursor) || nowIso;
+
+  const currentClosers = Array.isArray(weeklyReadModel?.progress?.closers) ? weeklyReadModel.progress.closers : [];
+  const currentSdrs = Array.isArray(weeklyReadModel?.progress?.sdrs) ? weeklyReadModel.progress.sdrs : [];
+  const previousHitPeople = new Set(weekRolled ? [] : (currentState.currentWeek?.metaIndividualsHit || []));
+  const previousTeamHits = new Set(weekRolled ? [] : (currentState.currentWeek?.teamMetasHit || []));
+  const events = [];
+
+  if (coldStart) {
+    const seededPeople = [
+      ...currentClosers.filter((row) => safeNumber(row.progressPct) >= 100).map((row) => safeString(row.personId)),
+      ...currentSdrs.filter((row) => safeNumber(row.progressPct) >= 100).map((row) => safeString(row.personId)),
+    ].filter(Boolean);
+    const seededTeams = [];
+    if (safeNumber(weekTeamSummary?.closers?.progressPct) >= 100) seededTeams.push("closers");
+    if (safeNumber(weekTeamSummary?.sdrs?.progressPct) >= 100) seededTeams.push("sdrs");
+    return {
+      coldStart: true,
+      weekRolled,
+      events: [],
+      newSales: [],
+      nextState: buildDetectorStateSnapshot({
+        cursor: latestCursor,
+        weeklyReadModel,
+        announcedSaleIds: [...announcedSaleIds, ...sortedWon.map((business) => extractBusinessId(business))],
+        currentWeek: {
+          metaIndividualsHit: seededPeople,
+          teamMetasHit: seededTeams,
+        },
+        initializedAt: currentState.initializedAt || nowIso,
+        updatedAt: nowIso,
+      }),
+    };
+  }
+
+  const newSales = sortedWon.filter((business) => {
+    const id = extractBusinessId(business);
+    return id && !announcedSaleIds.has(id);
+  });
+
+  newSales.forEach((business) => {
+    const context = buildWonBusinessEventContext({ business, weeklyReadModel: { ...weeklyReadModel, team: weekTeamSummary }, monthSummary });
+    events.push({
+      id: `sale:${context.businessId}`,
+      type: "sale_closed",
+      happenedAt: context.movedAt || nowIso,
+      saleId: context.businessId,
+      payload: context,
+    });
+    announcedSaleIds.add(context.businessId);
+  });
+
+  const currentLeaderClosers = safeString(currentClosers[0]?.personId);
+  const currentLeaderSdrs = safeString(currentSdrs[0]?.personId);
+  if (!weekRolled && safeString(currentState.lastLeaders?.closers) && currentLeaderClosers && currentLeaderClosers !== safeString(currentState.lastLeaders.closers)) {
+    const leader = currentClosers[0];
+    events.push({
+      id: `leader:closers:${currentWeekKey}:${currentLeaderClosers}`,
+      type: "leader_changed",
+      happenedAt: nowIso,
+      leaderboard: "closers",
+      payload: {
+        leaderboard: "closers",
+        personId: currentLeaderClosers,
+        displayName: safeString(leader?.displayName),
+        progressPct: safeNumber(leader?.progressPct),
+        actualValue: safeNumber(leader?.actualValue),
+        targetValue: safeNumber(leader?.targetValue),
+      },
+    });
+  }
+  if (!weekRolled && safeString(currentState.lastLeaders?.sdrs) && currentLeaderSdrs && currentLeaderSdrs !== safeString(currentState.lastLeaders.sdrs)) {
+    const leader = currentSdrs[0];
+    events.push({
+      id: `leader:sdrs:${currentWeekKey}:${currentLeaderSdrs}`,
+      type: "leader_changed",
+      happenedAt: nowIso,
+      leaderboard: "sdrs",
+      payload: {
+        leaderboard: "sdrs",
+        personId: currentLeaderSdrs,
+        displayName: safeString(leader?.displayName),
+        progressPct: safeNumber(leader?.progressPct),
+        actualValue: safeNumber(leader?.actualValue),
+        targetValue: safeNumber(leader?.targetValue),
+      },
+    });
+  }
+
+  [...currentClosers, ...currentSdrs].forEach((row) => {
+    const personId = safeString(row?.personId);
+    if (!personId || previousHitPeople.has(personId) || safeNumber(row?.progressPct) < 100) return;
+    events.push({
+      id: `meta:person:${currentWeekKey}:${personId}`,
+      type: "individual_goal_hit",
+      happenedAt: nowIso,
+      payload: {
+        personId,
+        displayName: safeString(row?.displayName),
+        role: safeString(row?.role),
+        progressPct: safeNumber(row?.progressPct),
+        actualValue: safeNumber(row?.actualValue),
+        targetValue: safeNumber(row?.targetValue),
+      },
+    });
+    previousHitPeople.add(personId);
+  });
+
+  [
+    { key: "closers", row: weekTeamSummary?.closers },
+    { key: "sdrs", row: weekTeamSummary?.sdrs },
+  ].forEach(({ key, row }) => {
+    if (previousTeamHits.has(key) || safeNumber(row?.progressPct) < 100) return;
+    events.push({
+      id: `meta:team:${currentWeekKey}:${key}`,
+      type: "team_goal_hit",
+      happenedAt: nowIso,
+      payload: {
+        team: key,
+        progressPct: safeNumber(row?.progressPct),
+        actualValue: safeNumber(row?.actualValue),
+        targetValue: safeNumber(row?.targetValue),
+      },
+    });
+    previousTeamHits.add(key);
+  });
+
+  events.sort((left, right) => {
+    const leftTs = Date.parse(left?.happenedAt || "") || 0;
+    const rightTs = Date.parse(right?.happenedAt || "") || 0;
+    if (leftTs !== rightTs) return leftTs - rightTs;
+    const weight = {
+      sale_closed: 0,
+      individual_goal_hit: 1,
+      leader_changed: 2,
+      team_goal_hit: 3,
+    };
+    return (weight[left?.type] ?? 99) - (weight[right?.type] ?? 99);
+  });
+
+  return {
+    coldStart: false,
+    weekRolled,
+    events,
+    newSales,
+    nextState: buildDetectorStateSnapshot({
+      cursor: latestCursor,
+      weeklyReadModel,
+      announcedSaleIds: Array.from(announcedSaleIds),
+      currentWeek: {
+        metaIndividualsHit: Array.from(previousHitPeople),
+        teamMetasHit: Array.from(previousTeamHits),
+      },
+      initializedAt: currentState.initializedAt || nowIso,
+      updatedAt: nowIso,
+    }),
+  };
+};
+
+const writeDailyRollups = async ({ sales = [] } = {}) => {
+  const grouped = new Map();
+  (Array.isArray(sales) ? sales : []).forEach((business) => {
+    const dateKey = formatBusinessDateKey(business);
+    if (!dateKey) return;
+    const entry = grouped.get(dateKey) || { dateKey, count: 0, latestMovedAt: "" };
+    entry.count += 1;
+    const movedAt = extractBusinessLastMovedAt(business)?.toISOString() || "";
+    if (movedAt && (!entry.latestMovedAt || movedAt > entry.latestMovedAt)) entry.latestMovedAt = movedAt;
+    grouped.set(dateKey, entry);
+  });
+  for (const entry of grouped.values()) {
+    const existing = await readStateDoc(CRM_LIVE_DAILY_ROLLUPS_COLLECTION, entry.dateKey);
+    const previousCount = safeNumber(existing?.data?.count || 0);
+    await writeStateDoc({
+      collection: CRM_LIVE_DAILY_ROLLUPS_COLLECTION,
+      docId: entry.dateKey,
+      data: {
+        dateKey: entry.dateKey,
+        teveVenda: true,
+        count: previousCount + entry.count,
+        lastSaleAt: entry.latestMovedAt || null,
+        updatedAt: new Date(),
+      },
+      updateMaskPaths: ["dateKey", "teveVenda", "count", "lastSaleAt", "updatedAt"],
+    });
+  }
+};
+
 const buildCrmLiveReadCookie = ({ tokenId } = {}) => {
   const now = Math.floor(Date.now() / 1000);
   return signJwt({
@@ -756,24 +1051,33 @@ const revokeAccessToken = async ({ tokenId } = {}) => {
 module.exports = {
   CRM_LIVE_ACCESS_COLLECTION,
   CRM_LIVE_CACHE_COLLECTION,
+  CRM_LIVE_DAILY_ROLLUPS_COLLECTION,
+  CRM_LIVE_EVENTS_COLLECTION,
   CRM_LIVE_COOKIE_NAME,
   CRM_LIVE_COOKIE_MAX_AGE_SECONDS,
+  buildCrmLiveEventQueue,
   buildCookie,
   buildCrmLiveCrmSlice,
   buildCrmLivePayload,
   buildCrmLiveReadCookie,
   buildCrmLiveSdrSlice,
+  buildWeeklyTeamSummary,
   loadCurrentGoal,
   loadGrowthPeople,
+  loadSdrEventsRange,
   clearCookie,
   createAccessTokenRecord,
+  fetchCrmBusinesses,
   listAccessTokens,
   parseCrmLiveReadCookie,
   readCacheDoc,
+  readStateDoc,
   revokeAccessToken,
   validateCookieViewer,
   validateEntryToken,
+  writeDailyRollups,
   writeCacheDoc,
+  writeStateDoc,
   getCacheMeta,
   isSecureRequest,
   CRM_CACHE_TTL_MS,
