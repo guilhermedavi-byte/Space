@@ -655,41 +655,75 @@ const buildHtml = () => `<!DOCTYPE html>
         height: 100%;
         display: grid;
         align-content: center;
-        gap: 2.4vh;
+        gap: 3.6vh;
+      }
+      .crm-live-pipeline-hero {
+        display: flex;
+        align-items: baseline;
+        gap: 1.2vw;
+        flex-wrap: wrap;
+      }
+      .crm-live-pipeline-total {
+        color: var(--accent);
+        font-size: min(12vw, 16vh);
+        line-height: .88;
+        letter-spacing: -.08em;
+        font-weight: 500;
+      }
+      .crm-live-pipeline-total-note {
+        color: var(--text-secondary);
+        font-size: 2.2vh;
+        line-height: 1.2;
+        font-weight: 400;
       }
       .crm-live-pipeline-sub {
         color: var(--text-secondary);
-        font-size: 1.95vh;
+        font-size: 1.7vh;
         line-height: 1.35;
-        max-width: 38vw;
+        white-space: nowrap;
+        margin-bottom: 2.6vh;
       }
       .crm-live-pipeline-list {
         display: grid;
-        gap: 1.5vh;
+        gap: 2.2vh;
       }
       .crm-live-pipeline-row {
-        display: flex;
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
         align-items: center;
-        justify-content: space-between;
         gap: 2vw;
       }
       .crm-live-pipeline-row .crm-live-avatar {
-        width: 5.8vh;
-        height: 5.8vh;
-        font-size: 1.6vh;
+        width: 7.4vh;
+        height: 7.4vh;
+        font-size: 2vh;
+      }
+      .crm-live-pipeline-row.is-leader .crm-live-avatar {
+        border: .35vh solid var(--accent);
+        box-shadow: 0 0 0 .55vh var(--leader-ring);
+      }
+      .crm-live-pipeline-row.is-leader strong {
+        color: var(--text);
+      }
+      .crm-live-pipeline-row:not(.is-leader) strong,
+      .crm-live-pipeline-row:not(.is-leader) span {
+        color: var(--text-secondary);
       }
       .crm-live-pipeline-row strong {
         flex: 1 1 auto;
-        font-size: 3.8vh;
+        font-size: 4.4vh;
         line-height: .95;
         letter-spacing: -.05em;
         font-weight: 500;
       }
       .crm-live-pipeline-row span {
         flex: 0 0 auto;
-        color: var(--text-secondary);
-        font-size: 2.3vh;
-        line-height: 1.2;
+        color: var(--text);
+        font-size: 4vh;
+        line-height: .95;
+        letter-spacing: -.05em;
+        font-weight: 500;
+        text-align: right;
       }
       .crm-live-footer {
         position: absolute;
@@ -1320,24 +1354,27 @@ const buildHtml = () => `<!DOCTYPE html>
         const renderPipelineScreen = (pipeline) => {
           const rows = safeArray(pipeline?.rows).slice(0, 5);
           if (!rows.length) return '';
+          const totalValue = rows.reduce((sum, row) => sum + (Number(row.value || 0) || 0), 0);
           return '<section class="crm-live-screen">' +
             '<div class="crm-live-shell">' +
-              '<div class="crm-live-head">' +
-                '<h1 class="crm-live-title">Dinheiro na mesa</h1>' +
-              '</div>' +
               '<div class="crm-live-body">' +
                 '<div class="crm-live-center">' +
                   '<div class="crm-live-pipeline">' +
+                    '<div class="crm-live-metric-label">Dinheiro na mesa</div>' +
+                    '<div class="crm-live-pipeline-hero">' +
+                      '<div class="crm-live-pipeline-total">' + escapeHtml(moneyShort(totalValue)) + '</div>' +
+                      '<div class="crm-live-pipeline-total-note">esperando fechamento</div>' +
+                    '</div>' +
+                    '<div class="crm-live-pipeline-sub">aberto em Forecast e Pagamento Parcial · movimentado nos últimos 10 dias</div>' +
                     '<div class="crm-live-pipeline-list">' +
-                      rows.map((row) =>
-                        '<div class="crm-live-pipeline-row">' +
+                      rows.map((row, index) =>
+                        '<div class="crm-live-pipeline-row ' + (index === 0 ? 'is-leader' : '') + '">' +
                           avatarHtml(row, { leader: false }) +
                           '<strong>' + escapeHtml(row.displayName || 'Sem responsável') + '</strong>' +
                           '<span>' + escapeHtml(moneyShort(row.value || 0)) + '</span>' +
                         '</div>'
                       ).join('') +
                     '</div>' +
-                    '<div class="crm-live-pipeline-sub">aberto em Forecast e Pagamento Parcial, movimentado nos últimos 10 dias</div>' +
                   '</div>' +
                 '</div>' +
               '</div>' +
