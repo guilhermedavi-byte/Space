@@ -70,7 +70,7 @@ const buildHtml = () => `<!DOCTYPE html>
         position: relative;
         width: 100vw;
         height: 100vh;
-        padding: 5.4vh 4.4vw 4.4vh;
+        padding: 5.8vh 6vw 4.8vh;
         background:
           radial-gradient(circle at top left, rgba(255,86,79,.14), transparent 28%),
           radial-gradient(circle at 78% 18%, rgba(255,255,255,.04), transparent 26%),
@@ -87,7 +87,7 @@ const buildHtml = () => `<!DOCTYPE html>
         inset: 0;
         display: grid;
         grid-template-rows: auto 1fr;
-        gap: 3.2vh;
+        gap: 2.8vh;
         opacity: 0;
         pointer-events: none;
         transition: opacity .4s ease;
@@ -101,65 +101,29 @@ const buildHtml = () => `<!DOCTYPE html>
         height: 100%;
         display: grid;
         grid-template-rows: auto 1fr;
-        gap: 3.2vh;
+        gap: 2.8vh;
       }
       .crm-live-head {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 3vw;
-      }
-      .crm-live-kicker {
-        margin: 0 0 1.2vh;
-        color: var(--text-tertiary);
-        font-size: 1.35vh;
-        line-height: 1;
-        letter-spacing: .34em;
-        text-transform: uppercase;
-        font-weight: 500;
+        display: block;
       }
       .crm-live-title {
         margin: 0;
-        font-size: 4.2vh;
-        line-height: .98;
-        letter-spacing: -.04em;
-        font-weight: 500;
-      }
-      .crm-live-sub {
-        margin-top: 1.2vh;
-        color: var(--text-secondary);
-        font-size: 1.9vh;
-        line-height: 1.35;
-        font-weight: 400;
-      }
-      .crm-live-status-pill {
-        display: inline-flex;
-        align-items: center;
-        gap: .75vw;
-        min-height: 3.8vh;
-        color: var(--text-secondary);
-        font-size: 1.45vh;
+        font-size: 2.6vh;
         line-height: 1;
-        white-space: nowrap;
+        letter-spacing: -.03em;
+        font-weight: 400;
+        color: var(--text-secondary);
       }
-      .crm-live-status-pill::before {
-        content: "";
-        width: .7vh;
-        height: .7vh;
-        border-radius: 999px;
-        background: var(--text-tertiary);
-      }
-      .crm-live-status-pill.is-live::before { background: var(--accent); }
-      .crm-live-status-pill.is-stale::before { background: #f59e0b; }
       .crm-live-body {
         min-height: 0;
         display: grid;
+        align-items: center;
       }
       .crm-live-stack {
         height: 100%;
         display: grid;
-        align-content: space-between;
-        gap: 3vh;
+        align-content: center;
+        gap: 4.2vh;
       }
       .crm-live-metric-block { display: grid; gap: 1.5vh; }
       .crm-live-metric-label {
@@ -198,7 +162,7 @@ const buildHtml = () => `<!DOCTYPE html>
         font-weight: 400;
       }
       .crm-live-progress {
-        width: min(72vw, 100%);
+        width: min(62vw, 100%);
         height: .7vh;
         border-radius: 999px;
         background: var(--track);
@@ -214,7 +178,7 @@ const buildHtml = () => `<!DOCTYPE html>
       .crm-live-support-grid {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 2.2vw;
+        gap: 2.8vw;
       }
       .crm-live-support-item { display: grid; gap: .8vh; }
       .crm-live-support-item strong {
@@ -234,41 +198,43 @@ const buildHtml = () => `<!DOCTYPE html>
       .crm-live-last-sale-grid {
         height: 100%;
         display: grid;
+        align-items: center;
+      }
+      .crm-live-week-grid {
+        grid-template-columns: repeat(2, minmax(24vw, 30vw));
+        justify-content: center;
+        gap: 4vw;
+      }
+      .crm-live-highlight-grid,
+      .crm-live-last-sale-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 3vw;
+        gap: 6vw;
       }
       .crm-live-column {
         height: 100%;
         display: grid;
         align-content: center;
-        gap: 2vh;
+        gap: 2.4vh;
         min-width: 0;
       }
       .crm-live-column-right {
-        justify-items: end;
-        text-align: right;
-      }
-      .crm-live-column-right .crm-live-progress { justify-self: end; }
-      .crm-live-mini-note {
-        color: var(--text-secondary);
-        font-size: 1.8vh;
-        line-height: 1.35;
-        font-weight: 400;
+        justify-items: start;
+        text-align: left;
       }
       .crm-live-ranking {
         height: 100%;
         display: grid;
-        gap: 2vh;
-        align-content: start;
+        grid-auto-rows: minmax(0, 1fr);
+        gap: 2.4vh;
+        align-content: stretch;
       }
       .crm-live-ranking-row {
         display: grid;
         grid-template-columns: auto minmax(0, 1fr) auto;
         align-items: center;
-        gap: 1.6vw;
-        min-height: 10.5vh;
+        gap: 2vw;
+        min-height: 0;
       }
-      .crm-live-ranking-row.is-leader { min-height: 13.8vh; }
       .crm-live-avatar {
         position: relative;
         flex: 0 0 auto;
@@ -301,7 +267,7 @@ const buildHtml = () => `<!DOCTYPE html>
       .crm-live-ranking-copy {
         min-width: 0;
         display: grid;
-        gap: .7vh;
+        gap: 1vh;
       }
       .crm-live-ranking-name {
         font-size: 3vh;
@@ -315,7 +281,7 @@ const buildHtml = () => `<!DOCTYPE html>
       .crm-live-ranking-row.is-leader .crm-live-ranking-name { font-size: 4.3vh; }
       .crm-live-ranking-sub {
         color: var(--text-secondary);
-        font-size: 1.65vh;
+        font-size: 2.1vh;
         line-height: 1.35;
         font-weight: 400;
       }
@@ -336,8 +302,6 @@ const buildHtml = () => `<!DOCTYPE html>
       .crm-live-ranking-row.is-leader .crm-live-ranking-bar > span { background: var(--accent); }
       .crm-live-ranking-metric {
         text-align: right;
-        display: grid;
-        gap: .8vh;
         justify-items: end;
       }
       .crm-live-ranking-pct {
@@ -347,15 +311,10 @@ const buildHtml = () => `<!DOCTYPE html>
         font-weight: 500;
       }
       .crm-live-ranking-row.is-leader .crm-live-ranking-pct { color: var(--accent); font-size: 8.6vh; }
-      .crm-live-ranking-actual {
-        color: var(--text-secondary);
-        font-size: 1.7vh;
-        font-weight: 400;
-      }
       .crm-live-highlight-person {
         display: grid;
         justify-items: start;
-        gap: 1.4vh;
+        gap: 1.8vh;
       }
       .crm-live-highlight-person.is-right {
         justify-items: end;
@@ -391,8 +350,8 @@ const buildHtml = () => `<!DOCTYPE html>
       }
       .crm-live-last-sale-list {
         display: grid;
-        gap: 1.6vh;
-        width: min(26vw, 100%);
+        gap: 2.4vh;
+        width: min(24vw, 100%);
       }
       .crm-live-last-sale-row {
         display: grid;
@@ -413,8 +372,8 @@ const buildHtml = () => `<!DOCTYPE html>
       }
       .crm-live-footer {
         position: absolute;
-        left: 4.4vw;
-        right: 4.4vw;
+        left: 6vw;
+        right: 6vw;
         bottom: 3.2vh;
         display: flex;
         justify-content: space-between;
@@ -461,26 +420,23 @@ const buildHtml = () => `<!DOCTYPE html>
         font-weight: 500;
       }
       @media (max-width: 1200px) {
-        .crm-live { padding: 4.2vh 4vw 4vh; }
+        .crm-live { padding: 4.4vh 5vw 4vh; }
         .crm-live-week-grid,
         .crm-live-highlight-grid,
         .crm-live-last-sale-grid {
           grid-template-columns: 1fr;
-          gap: 2.8vh;
+          gap: 3vh;
         }
         .crm-live-column-right,
         .crm-live-highlight-person.is-right {
           justify-items: start;
           text-align: left;
         }
-        .crm-live-column-right .crm-live-progress { justify-self: start; }
         .crm-live-last-sale-list { width: 100%; }
       }
       @media (max-aspect-ratio: 1/1) {
-        .crm-live { padding: 4vh 4vw; }
+        .crm-live { padding: 4vh 5vw; }
         .crm-live-screen { gap: 2.2vh; }
-        .crm-live-ranking-row { min-height: 9.6vh; }
-        .crm-live-ranking-row.is-leader { min-height: 11.6vh; }
       }
     </style>
   </head>
@@ -613,10 +569,6 @@ const buildHtml = () => `<!DOCTYPE html>
           if (getNested(data, ['highlights', 'sdr'], null)) rows.push(data.highlights.sdr);
           preloadImages(rows);
         };
-        const footerStatusClass = () => {
-          if (!payload) return '';
-          return payload.stale ? 'crm-live-status-pill is-stale' : 'crm-live-status-pill is-live';
-        };
         const renderDots = () => {
           dotsEl.innerHTML = SCREENS.map((_, index) => '<span class="crm-live-dot ' + (index === active ? 'is-active' : '') + '"></span>').join('');
         };
@@ -652,7 +604,6 @@ const buildHtml = () => `<!DOCTYPE html>
               '</div>' +
               '<div class="crm-live-ranking-metric">' +
                 '<div class="crm-live-ranking-pct">' + escapeHtml(percent(row.progressPct || 0)) + '</div>' +
-                '<div class="crm-live-ranking-actual">' + escapeHtml(metricMain(roleRow)) + '</div>' +
               '</div>' +
             '</div>';
           }).join('');
@@ -668,7 +619,7 @@ const buildHtml = () => `<!DOCTYPE html>
             avatarHtml(person, { leader }) +
             '<div class="crm-live-highlight-name">' + escapeHtml(person.displayName || 'Sem destaque') + '</div>' +
             '<div class="crm-live-highlight-value">' + escapeHtml(hasRow ? metricMain(metricRow) : '—') + '</div>' +
-            '<div class="crm-live-highlight-note">' + escapeHtml(hasRow ? percent(row.dailyProgressPct || 0) + ' da meta semanal em um dia' : (role === 'closer' ? 'Nenhum fechamento ontem' : 'Nenhuma reunião feita ontem')) + '</div>' +
+            '<div class="crm-live-highlight-note">' + escapeHtml(hasRow ? percent(row.dailyProgressPct || 0) : (role === 'closer' ? 'Sem fechamento' : 'Sem reunião')) + '</div>' +
           '</div>';
         };
         const renderMonthScreen = (month) => {
@@ -676,12 +627,7 @@ const buildHtml = () => `<!DOCTYPE html>
           return '<section class="crm-live-screen">' +
             '<div class="crm-live-shell">' +
               '<div class="crm-live-head">' +
-                '<div>' +
-                  '<div class="crm-live-kicker">CRM Live</div>' +
-                  '<h1 class="crm-live-title">Placar do mês</h1>' +
-                  '<div class="crm-live-sub">Janela ' + escapeHtml(dateLabel(getNested(month, ['period', 'startDateKey'], ''))) + ' a ' + escapeHtml(dateLabel(getNested(month, ['period', 'endDateKey'], ''))) + '</div>' +
-                '</div>' +
-                '<div class="' + footerStatusClass() + '">' + (payload.stale ? 'Cache ' + escapeHtml(String(payload.staleAgeMinutes || 0)) + ' min' : 'Ao vivo') + '</div>' +
+                '<h1 class="crm-live-title">Placar do mês</h1>' +
               '</div>' +
               '<div class="crm-live-body">' +
                 '<div class="crm-live-stack">' +
@@ -705,12 +651,7 @@ const buildHtml = () => `<!DOCTYPE html>
         const renderWeekScreen = (weekly) => '<section class="crm-live-screen">' +
           '<div class="crm-live-shell">' +
             '<div class="crm-live-head">' +
-              '<div>' +
-                '<div class="crm-live-kicker">Semana comercial</div>' +
-                '<h1 class="crm-live-title">Meta da semana</h1>' +
-                '<div class="crm-live-sub">' + escapeHtml(dateLabel(getNested(weekly, ['commercialWeek', 'startDateKey'], ''))) + ' a ' + escapeHtml(dateLabel(getNested(weekly, ['commercialWeek', 'endDateKey'], ''))) + '</div>' +
-              '</div>' +
-              '<div class="' + footerStatusClass() + '">' + (payload.stale ? 'Snapshot mantido' : 'Atualização automática') + '</div>' +
+              '<h1 class="crm-live-title">Meta da semana</h1>' +
             '</div>' +
             '<div class="crm-live-body crm-live-week-grid">' +
               '<div class="crm-live-column">' +
@@ -739,12 +680,7 @@ const buildHtml = () => `<!DOCTYPE html>
         const renderClosersScreen = (weekly) => '<section class="crm-live-screen">' +
           '<div class="crm-live-shell">' +
             '<div class="crm-live-head">' +
-              '<div>' +
-                '<div class="crm-live-kicker">Ranking semanal</div>' +
-                '<h1 class="crm-live-title">Closers</h1>' +
-                '<div class="crm-live-sub">Ordenado por percentual da meta individual</div>' +
-              '</div>' +
-              '<div class="' + footerStatusClass() + '">' + escapeHtml(String(safeArray(weekly.closers).length)) + ' participantes</div>' +
+              '<h1 class="crm-live-title">Ranking dos closers</h1>' +
             '</div>' +
             '<div class="crm-live-body"><div class="crm-live-ranking">' + renderRankingRows(weekly.closers, { role: 'closer' }) + '</div></div>' +
           '</div>' +
@@ -752,12 +688,7 @@ const buildHtml = () => `<!DOCTYPE html>
         const renderSdrsScreen = (weekly) => '<section class="crm-live-screen">' +
           '<div class="crm-live-shell">' +
             '<div class="crm-live-head">' +
-              '<div>' +
-                '<div class="crm-live-kicker">Ranking semanal</div>' +
-                '<h1 class="crm-live-title">SDRs</h1>' +
-                '<div class="crm-live-sub">Ordenado por percentual da meta individual</div>' +
-              '</div>' +
-              '<div class="' + footerStatusClass() + '">' + escapeHtml(String(safeArray(weekly.sdrs).length)) + ' participantes</div>' +
+              '<h1 class="crm-live-title">Ranking dos SDRs</h1>' +
             '</div>' +
             '<div class="crm-live-body"><div class="crm-live-ranking">' + renderRankingRows(weekly.sdrs, { role: 'sdr' }) + '</div></div>' +
           '</div>' +
@@ -765,12 +696,7 @@ const buildHtml = () => `<!DOCTYPE html>
         const renderHighlightsScreen = (highlight) => '<section class="crm-live-screen">' +
           '<div class="crm-live-shell">' +
             '<div class="crm-live-head">' +
-              '<div>' +
-                '<div class="crm-live-kicker">Ontem</div>' +
-                '<h1 class="crm-live-title">Destaques do dia anterior</h1>' +
-                '<div class="crm-live-sub">Quem mais avançou na meta em ' + escapeHtml(dateLabel(highlight.dayKey)) + '</div>' +
-              '</div>' +
-              '<div class="' + footerStatusClass() + '">' + escapeHtml(highlight.dayKey || '') + '</div>' +
+              '<h1 class="crm-live-title">Destaques do dia anterior</h1>' +
             '</div>' +
             '<div class="crm-live-body crm-live-highlight-grid">' +
               '<div class="crm-live-column">' + renderHighlight(highlight.closer, { role: 'closer' }) + '</div>' +
@@ -781,12 +707,7 @@ const buildHtml = () => `<!DOCTYPE html>
         const renderLastSaleScreen = (latestSale) => '<section class="crm-live-screen">' +
           '<div class="crm-live-shell">' +
             '<div class="crm-live-head">' +
-              '<div>' +
-                '<div class="crm-live-kicker">Fechamento mais recente</div>' +
-                '<h1 class="crm-live-title">Última venda</h1>' +
-                '<div class="crm-live-sub">Movimento mais recente da janela comercial</div>' +
-              '</div>' +
-              '<div class="' + footerStatusClass() + '">' + escapeHtml(getNested(latestSale, ['closer'], 'Sem closer') || 'Sem closer') + '</div>' +
+              '<h1 class="crm-live-title">Última venda</h1>' +
             '</div>' +
             '<div class="crm-live-body">' +
               (latestSale
@@ -797,16 +718,13 @@ const buildHtml = () => `<!DOCTYPE html>
                       '<div class="crm-live-last-sale-plan">Plano ' + escapeHtml(latestSale.plano || '—') + '</div>' +
                     '</div>' +
                     '<div class="crm-live-column crm-live-column-right">' +
-                      renderMetric({
-                        label: 'Valor',
-                        value: moneyShort(latestSale.valor || 0),
-                        sideTitle: latestSale.closer || 'Sem closer',
-                        sideText: dateTimeLabel(latestSale.when),
-                        valueClass: 'is-medium',
-                      }) +
+                      '<div class="crm-live-metric-block">' +
+                        '<div class="crm-live-metric-label">Valor</div>' +
+                        '<div class="crm-live-metric-value is-medium">' + escapeHtml(moneyShort(latestSale.valor || 0)) + '</div>' +
+                      '</div>' +
                       '<div class="crm-live-last-sale-list">' +
                         '<div class="crm-live-last-sale-row"><span>Closer</span><strong>' + escapeHtml(latestSale.closer || '—') + '</strong></div>' +
-                        '<div class="crm-live-last-sale-row"><span>Quando</span><strong>' + escapeHtml(dateTimeLabel(latestSale.when)) + '</strong></div>' +
+                        '<div class="crm-live-last-sale-row"><span>Horário</span><strong>' + escapeHtml(dateTimeLabel(latestSale.when)) + '</strong></div>' +
                       '</div>' +
                     '</div>' +
                   '</div>'
