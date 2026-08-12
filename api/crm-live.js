@@ -366,6 +366,22 @@ const buildHtml = () => `<!DOCTYPE html>
         justify-items: center;
         text-align: center;
       }
+      .crm-live-highlight-person.is-center .crm-live-avatar {
+        width: 14vh;
+        height: 14vh;
+        font-size: 3.5vh;
+      }
+      .crm-live-highlight-person.is-center .crm-live-avatar.is-leader {
+        width: 16vh;
+        height: 16vh;
+      }
+      .crm-live-highlight-title {
+        font-size: 4.2vh;
+        line-height: .95;
+        letter-spacing: -.05em;
+        font-weight: 500;
+        text-align: center;
+      }
       .crm-live-highlight-person.is-right {
         justify-items: end;
         text-align: right;
@@ -653,17 +669,24 @@ const buildHtml = () => `<!DOCTYPE html>
       }
       .crm-live-pipeline-row {
         display: flex;
-        align-items: baseline;
+        align-items: center;
         justify-content: space-between;
         gap: 2vw;
       }
+      .crm-live-pipeline-row .crm-live-avatar {
+        width: 5.8vh;
+        height: 5.8vh;
+        font-size: 1.6vh;
+      }
       .crm-live-pipeline-row strong {
+        flex: 1 1 auto;
         font-size: 3.8vh;
         line-height: .95;
         letter-spacing: -.05em;
         font-weight: 500;
       }
       .crm-live-pipeline-row span {
+        flex: 0 0 auto;
         color: var(--text-secondary);
         font-size: 2.3vh;
         line-height: 1.2;
@@ -1065,8 +1088,14 @@ const buildHtml = () => `<!DOCTYPE html>
             if (!url || imageCache.has(url)) return;
             const img = new Image();
             imageCache.set(url, 'loading');
-            img.onload = () => { imageCache.set(url, 'loaded'); };
-            img.onerror = () => { imageCache.set(url, 'error'); };
+            img.onload = () => {
+              imageCache.set(url, 'loaded');
+              if (payload && !activeInterruption) requestAnimationFrame(() => render());
+            };
+            img.onerror = () => {
+              imageCache.set(url, 'error');
+              if (payload && !activeInterruption) requestAnimationFrame(() => render());
+            };
             img.src = url;
           });
         };
@@ -1268,7 +1297,7 @@ const buildHtml = () => `<!DOCTYPE html>
             '<div class="crm-live-head">' +
               '<h1 class="crm-live-title">' + escapeHtml(title) + '</h1>' +
             '</div>' +
-            '<div class="crm-live-body"><div class="crm-live-ranking is-fill">' + renderRankingRows(rows, { role: role }) + '</div></div>' +
+            '<div class="crm-live-body"><div class="crm-live-ranking ' + ((role === 'closer' && safeArray(rows).length <= 2) ? '' : 'is-fill') + '">' + renderRankingRows(rows, { role: role }) + '</div></div>' +
           '</div>' +
         '</section>';
         const renderTeamProgressScreen = ({ title, actual, target, noun }) => {
@@ -1302,8 +1331,9 @@ const buildHtml = () => `<!DOCTYPE html>
                     '<div class="crm-live-pipeline-list">' +
                       rows.map((row) =>
                         '<div class="crm-live-pipeline-row">' +
+                          avatarHtml(row, { leader: false }) +
                           '<strong>' + escapeHtml(row.displayName || 'Sem responsável') + '</strong>' +
-                          '<span>' + escapeHtml(moneyShort(row.totalValue || 0)) + '</span>' +
+                          '<span>' + escapeHtml(moneyShort(row.value || 0)) + '</span>' +
                         '</div>'
                       ).join('') +
                     '</div>' +
@@ -1316,11 +1346,11 @@ const buildHtml = () => `<!DOCTYPE html>
         };
         const renderHighlightScreen = ({ title, row, role }) => '<section class="crm-live-screen">' +
           '<div class="crm-live-shell">' +
-            '<div class="crm-live-head">' +
-              '<h1 class="crm-live-title">' + escapeHtml(title) + '</h1>' +
-            '</div>' +
             '<div class="crm-live-body">' +
-              '<div class="crm-live-center">' + renderHighlight(row, { role, alignCenter: true }) + '</div>' +
+              '<div class="crm-live-center">' +
+                '<div class="crm-live-highlight-title">' + escapeHtml(title) + '</div>' +
+                renderHighlight(row, { role, alignCenter: true }) +
+              '</div>' +
             '</div>' +
           '</div>' +
         '</section>';
@@ -1352,6 +1382,7 @@ const buildHtml = () => `<!DOCTYPE html>
           } else {
             return '';
           }
+          const kicker = '';
           return '<section class="crm-live-screen">' +
             '<div class="crm-live-shell">' +
               '<div class="crm-live-head"><h1 class="crm-live-title">' + escapeHtml(title) + '</h1></div>' +
@@ -1359,7 +1390,7 @@ const buildHtml = () => `<!DOCTYPE html>
                 '<div class="crm-live-news ' + (withPhoto ? '' : 'is-no-photo') + '">' +
                   (withPhoto ? media : '') +
                   '<div class="crm-live-news-copy">' +
-                    '<div class="crm-live-news-kicker">' + escapeHtml(title) + '</div>' +
+                    (kicker ? '<div class="crm-live-news-kicker">' + escapeHtml(kicker) + '</div>' : '') +
                     '<div class="crm-live-news-phrase">' + phrase + '</div>' +
                     '<div class="crm-live-news-context">' + escapeHtml(context) + '</div>' +
                   '</div>' +
