@@ -15523,9 +15523,11 @@ const syncGrowthDashboardHeader = () => {
     userNameEl.textContent = name || "Growth";
   }
 
-  const userAvatarEl = document.querySelector("[data-growth-avatar]");
-  if (userAvatarEl instanceof HTMLElement) {
-    userAvatarEl.textContent = getInitials(sessionUser?.name || "Growth");
+  renderGrowthProfileAvatar();
+  if (isGrowthAccessRole(sessionUser?.role || currentRole) && !growthProfileState.loadedAt && !growthProfileState.loading) {
+    loadGrowthOwnProfile().catch((error) => {
+      console.error("[growth] profile load failed:", error);
+    });
   }
 
   const monthLabelEl = document.querySelector("[data-growth-month]");
@@ -15538,6 +15540,147 @@ const syncGrowthDashboardHeader = () => {
     }).format(now);
     monthLabelEl.textContent = `Gestão à vista do mês · ${formatted.charAt(0).toUpperCase()}${formatted.slice(1)}`;
   }
+};
+
+const growthProfileState = {
+  loading: false,
+  loadedAt: 0,
+  photoURL: "",
+  photoStoragePath: "",
+  photoSaving: false,
+  photoError: "",
+  previewURL: "",
+  previewObjectURL: "",
+};
+
+const revokeGrowthPreviewObjectUrl = () => {
+  if (growthProfileState.previewObjectURL) {
+    try {
+      URL.revokeObjectURL(growthProfileState.previewObjectURL);
+    } catch (error) {
+      // ignore
+    }
+    growthProfileState.previewObjectURL = "";
+  }
+};
+
+const setGrowthAvatarFeedback = (message, tone = "") => {
+  document.querySelectorAll("[data-growth-avatar-feedback]").forEach((el) => {
+    if (!(el instanceof HTMLElement)) return;
+    const text = String(message || "").trim();
+    el.textContent = text;
+    el.hidden = !text;
+    el.dataset.tone = tone || "";
+  });
+};
+
+const renderGrowthProfileAvatar = () => {
+  const name = String(sessionUser?.name || "Growth").trim() || "Growth";
+  const initials = getInitials(name);
+  const photoURL = String(growthProfileState.previewURL || growthProfileState.photoURL || "").trim();
+  document.querySelectorAll("[data-growth-avatar]").forEach((el) => {
+    if (!(el instanceof HTMLElement)) return;
+    el.innerHTML = photoURL
+      ? `<img class="growth-v2-avatar-image" src="${escapeHtml(photoURL)}" alt="" />`
+      : `<span class="growth-v2-avatar-fallback">${escapeHtml(initials)}</span>`;
+  });
+  document.querySelectorAll("[data-growth-avatar-trigger]").forEach((button) => {
+    if (!(button instanceof HTMLButtonElement)) return;
+    button.disabled = growthProfileState.photoSaving;
+    button.setAttribute("aria-busy", growthProfileState.photoSaving ? "true" : "false");
+  });
+  document.querySelectorAll("[data-growth-avatar-edit]").forEach((el) => {
+    if (!(el instanceof HTMLElement)) return;
+    el.textContent = growthProfileState.photoSaving ? "…" : "✎";
+  });
+  const feedback = growthProfileState.photoSaving
+    ? "Enviando foto…"
+    : growthProfileState.photoError
+      ? String(growthProfileState.photoError)
+      : "";
+  setGrowthAvatarFeedback(feedback, growthProfileState.photoSaving ? "loading" : growthProfileState.photoError ? "error" : "");
+};
+
+const loadGrowthOwnProfile = async ({ force = false } = {}) => {
+  if (growthProfileState.loading) return;
+  const uid = String(sessionUser?.id || "").trim();
+  if (!uid) return;
+  const now = Date.now();
+  if (!force && growthProfileState.loadedAt && now - growthProfileState.loadedAt < 45_000) return;
+  growthProfileState.loading = true;
+  try {
+    const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_growth_profile");
+    const user = await waitForFirebaseAuthReady(firebase, 5000);
+    if (!user) throw new Error("firebase_not_authenticated");
+    const snap = await withTimeout(firebase.getDoc(firebase.doc(firebase.primaryDb, "users", uid)), 10_000, "firestore_get_growth_profile");
+    const data = snap && typeof snap.data === "function" ? snap.data() : null;
+    growthProfileState.photoURL = String(data?.photoURL || data?.photoUrl || "").trim();
+    growthProfileState.photoStoragePath = String(data?.photoStoragePath || "").trim();
+    growthProfileState.loadedAt = Date.now();
+  } finally {
+    growthProfileState.loading = false;
+    renderGrowthProfileAvatar();
+  }
+};
+
+const AVATAR_ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
+
+const loadImageFromObjectUrl = (objectUrl) =>
+  new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("image_load_failed"));
+    image.src = objectUrl;
+  });
+
+const canvasToBlob = (canvas, type, quality) =>
+  new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        reject(new Error("canvas_to_blob_failed"));
+        return;
+      }
+      resolve(blob);
+    }, type, quality);
+  });
+
+const resizeAvatarFileForUpload = async (file) => {
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const image = await loadImageFromObjectUrl(objectUrl);
+    const sourceWidth = image.naturalWidth || image.width || 0;
+    const sourceHeight = image.naturalHeight || image.height || 0;
+    const size = Math.min(sourceWidth, sourceHeight);
+    if (!size) throw new Error("invalid_image_dimensions");
+    const sx = Math.max(0, Math.round((sourceWidth - size) / 2));
+    const sy = Math.max(0, Math.round((sourceHeight - size) / 2));
+    const canvas = document.createElement("canvas");
+    canvas.width = 400;
+    canvas.height = 400;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("canvas_context_unavailable");
+    ctx.drawImage(image, sx, sy, size, size, 0, 0, 400, 400);
+    return canvasToBlob(canvas, "image/webp", 0.9);
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+};
+
+const readBlobAsDataUrl = (blob) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("file_reader_failed"));
+    reader.readAsDataURL(blob);
+  });
+
+const describeGrowthAvatarUploadError = (error, responseData) => {
+  const code = String(responseData?.error || error?.message || "").trim();
+  if (code === "image_too_large" || code === "payload_too_large") return "A imagem deve ter no máximo 5 MB.";
+  if (code === "unsupported_image_type") return "Use apenas JPG, PNG ou WEBP.";
+  if (code === "invalid_credentials" || code === "unauthorized") return "Sua sessão expirou. Entre novamente para trocar a foto.";
+  return "Não foi possível enviar a foto agora.";
 };
 
 const renderGrowthRanking = (rows) => {
@@ -38761,6 +38904,15 @@ document.addEventListener("click", (event) => {
         return;
       }
 
+      const growthAvatarTrigger = target.closest("[data-growth-avatar-trigger]");
+      if (growthAvatarTrigger instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const wrap = growthAvatarTrigger.closest(".growth-v2-avatar-wrap");
+        const input = wrap instanceof HTMLElement ? wrap.querySelector("[data-growth-avatar-file]") : null;
+        if (input instanceof HTMLInputElement) input.click();
+        return;
+      }
+
       const settingsChangePassword = target.closest("[data-admin-settings-change-password]");
       if (settingsChangePassword instanceof HTMLButtonElement) {
         event.preventDefault();
@@ -41267,6 +41419,67 @@ document.addEventListener(
           adminSettingsState.photoError = "Não foi possível enviar a foto agora.";
           renderAdminSettingsPanel();
         } finally {
+          target.value = "";
+        }
+      })();
+      return;
+    }
+    if (target instanceof HTMLInputElement && target.matches("[data-growth-avatar-file]")) {
+      const file = target.files && target.files[0] ? target.files[0] : null;
+      const uid = String(sessionUser?.id || "").trim();
+      if (!uid || !file) return;
+      if (file.size > AVATAR_MAX_BYTES) {
+        growthProfileState.photoError = "A imagem deve ter no máximo 5 MB.";
+        renderGrowthProfileAvatar();
+        target.value = "";
+        return;
+      }
+      if (!AVATAR_ALLOWED_TYPES.has(String(file.type || "").trim().toLowerCase())) {
+        growthProfileState.photoError = "Use apenas JPG, PNG ou WEBP.";
+        renderGrowthProfileAvatar();
+        target.value = "";
+        return;
+      }
+      growthProfileState.photoSaving = true;
+      growthProfileState.photoError = "";
+      renderGrowthProfileAvatar();
+      (async () => {
+        try {
+          const resizedBlob = await resizeAvatarFileForUpload(file);
+          const previewObjectURL = URL.createObjectURL(resizedBlob);
+          revokeGrowthPreviewObjectUrl();
+          growthProfileState.previewObjectURL = previewObjectURL;
+          growthProfileState.previewURL = previewObjectURL;
+          renderGrowthProfileAvatar();
+          const dataBase64 = await readBlobAsDataUrl(resizedBlob);
+          const response = await withTimeout(
+            fetchWithAuth("/api/growth-profile-photo", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ dataBase64 }),
+            }),
+            45_000,
+            "growth_profile_photo_upload"
+          );
+          const data = await response.json().catch(() => null);
+          if (!response.ok) {
+            throw new Error(describeGrowthAvatarUploadError(null, data));
+          }
+          growthProfileState.photoURL = String(data?.photoURL || "").trim();
+          growthProfileState.photoStoragePath = String(data?.photoStoragePath || "").trim();
+          growthProfileState.loadedAt = Date.now();
+          growthProfileState.photoError = "";
+          growthProfileState.previewURL = "";
+          revokeGrowthPreviewObjectUrl();
+          renderGrowthProfileAvatar();
+        } catch (error) {
+          growthProfileState.photoError = error?.message || "Não foi possível enviar a foto agora.";
+          growthProfileState.previewURL = "";
+          revokeGrowthPreviewObjectUrl();
+          renderGrowthProfileAvatar();
+        } finally {
+          growthProfileState.photoSaving = false;
+          renderGrowthProfileAvatar();
           target.value = "";
         }
       })();

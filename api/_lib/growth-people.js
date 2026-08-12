@@ -77,6 +77,7 @@ const decodeGrowthPeopleDoc = (doc) => {
     roles: normalizePersonRoles(fields.roles),
     crmAttendantIds: uniq(toStringArray(fields.crmAttendantIds)),
     crmAttendantAliases: uniq(toStringArray(fields.crmAttendantAliases)),
+    userUid: safeString(fields.userUid),
     sdrUid: safeString(fields.sdrUid),
     sdrEmails: uniq(toStringArray(fields.sdrEmails).map((value) => safeString(value).toLowerCase())),
     createdAt: fields.createdAt instanceof Date ? fields.createdAt.toISOString() : null,

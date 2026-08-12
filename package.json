@@ -4,5 +4,9 @@
   "scripts": {
     "test": "node --test tests/*.test.js",
     "check": "node --check script.js && node --check landing.js && node --check auth.js"
+  },
+  "dependencies": {
+    "file-type": "^22.0.1",
+    "sharp": "^0.35.3"
   }
 }
