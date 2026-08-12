@@ -383,6 +383,56 @@ const buildHtml = () => `<!DOCTYPE html>
         font-size: 1.8vh;
         line-height: 1.35;
       }
+      .crm-live-news {
+        height: 100%;
+        display: grid;
+        grid-template-columns: minmax(22vw, 26vw) minmax(0, 1fr);
+        align-items: center;
+        gap: 5vw;
+      }
+      .crm-live-news.is-no-photo {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      .crm-live-news-media {
+        display: grid;
+        place-items: center;
+      }
+      .crm-live-news-media .crm-live-avatar {
+        width: 18vh;
+        height: 18vh;
+        font-size: 4.2vh;
+      }
+      .crm-live-news-copy {
+        display: grid;
+        gap: 2vh;
+        align-content: center;
+      }
+      .crm-live-news-kicker {
+        color: var(--text-tertiary);
+        font-size: 1.5vh;
+        letter-spacing: .28em;
+        text-transform: uppercase;
+        font-weight: 500;
+      }
+      .crm-live-news-phrase {
+        font-size: min(7vw, 10.6vh);
+        line-height: .98;
+        letter-spacing: -.06em;
+        font-weight: 500;
+        color: var(--text);
+        max-width: 48vw;
+      }
+      .crm-live-news-phrase strong {
+        color: var(--text);
+        font-weight: 500;
+      }
+      .crm-live-news-context {
+        color: var(--text-secondary);
+        font-size: 2.2vh;
+        line-height: 1.35;
+        font-weight: 400;
+        max-width: 44vw;
+      }
       .crm-live-duel {
         height: 100%;
         display: grid;
@@ -670,7 +720,8 @@ const buildHtml = () => `<!DOCTYPE html>
         .crm-live-week-grid,
         .crm-live-highlight-grid,
         .crm-live-last-sale-grid,
-        .crm-live-duel {
+        .crm-live-duel,
+        .crm-live-news {
           grid-template-columns: 1fr;
           gap: 3vh;
         }
@@ -680,6 +731,8 @@ const buildHtml = () => `<!DOCTYPE html>
           text-align: left;
         }
         .crm-live-last-sale-list { width: 100%; }
+        .crm-live-news-phrase,
+        .crm-live-news-context { max-width: none; }
       }
       @media (max-aspect-ratio: 1/1) {
         .crm-live { padding: 4vh 5vw; }
@@ -881,6 +934,7 @@ const buildHtml = () => `<!DOCTYPE html>
           rows.push.apply(rows, safeArray(getNested(data, ['weekly', 'sdrs'], [])));
           if (getNested(data, ['highlights', 'closer'], null)) rows.push(data.highlights.closer);
           if (getNested(data, ['highlights', 'sdr'], null)) rows.push(data.highlights.sdr);
+          rows.push.apply(rows, safeArray(getNested(data, ['news'], [])).filter(Boolean));
           preloadImages(rows);
         };
         const preloadFromEvents = (events = []) => {
@@ -916,11 +970,11 @@ const buildHtml = () => `<!DOCTYPE html>
           return limited.map((row, index) => {
             const leader = index === 0;
             const roleRow = Object.assign({}, row || {}, { role });
-            const leaderRow = limited[0] || null;
-            const aheadOf = leaderRow && !leader ? Math.max(0, Number(leaderRow.actualValue || 0) - Number(row.actualValue || 0) + 1) : 0;
             const chaseCopy = leader
-              ? (limited[1] ? 'na frente por ' + (role === 'closer' ? moneyShort(Math.max(0, Number(row.actualValue || 0) - Number(limited[1].actualValue || 0))) : String(Math.max(0, Number(row.actualValue || 0) - Number(limited[1].actualValue || 0)))) + ' sobre ' + String(limited[1].displayName || 'o time') : 'liderança isolada')
-              : 'faltam ' + (role === 'closer' ? moneyShort(aheadOf) : String(aheadOf)) + ' para ultrapassar ' + String(leaderRow?.displayName || 'a liderança');
+              ? (limited[1] && Number(row.leaderPressureUnits || 0) > 0
+                  ? 'pressão de ' + (role === 'closer' ? moneyShort(row.leaderPressureUnits || 0) : String(row.leaderPressureUnits || 0) + ' reuniões') + ' de ' + String(row.leaderPressureFromName || limited[1].displayName || 'quem vem atrás')
+                  : 'liderança isolada')
+              : 'faltam ' + (role === 'closer' ? moneyShort(row.missingToLead || 0) : String(row.missingToLead || 0) + ' reuniões') + ' para ultrapassar ' + String(row.leaderName || 'a liderança');
             return '<div class="crm-live-ranking-row ' + (leader ? 'is-leader' : '') + '">' +
               avatarHtml(row, { leader }) +
               '<div class="crm-live-ranking-copy">' +
@@ -1045,7 +1099,7 @@ const buildHtml = () => `<!DOCTYPE html>
           }
           const leader = rows[0];
           const challenger = rows[1];
-          const needed = Math.max(0, Number(leader.actualValue || 0) - Number(challenger.actualValue || 0) + 1);
+          const needed = Math.max(0, Number(challenger.missingToLead || 0));
           return '<section class="crm-live-screen">' +
             '<div class="crm-live-shell">' +
               '<div class="crm-live-head">' +
@@ -1062,7 +1116,7 @@ const buildHtml = () => `<!DOCTYPE html>
                   '<div class="crm-live-duel-center">' +
                     '<div class="crm-live-metric-label">Distância para a virada</div>' +
                     '<div class="crm-live-duel-message"><span class="crm-live-duel-delta">' + escapeHtml(challenger.displayName || 'O desafiante') + '</span> precisa de ' + escapeHtml(moneyShort(needed)) + ' para assumir a liderança</div>' +
-                    '<div class="crm-live-duel-context">' + escapeHtml(moneyShort(Math.max(0, Number(leader.actualValue || 0) - Number(challenger.actualValue || 0))) + ' separam os dois agora') + '</div>' +
+                    '<div class="crm-live-duel-context">' + escapeHtml(percent(leader.progressPct || 0) + ' contra ' + percent(challenger.progressPct || 0) + ' agora') + '</div>' +
                   '</div>' +
                   '<div class="crm-live-duel-side">' +
                     avatarHtml(challenger, { leader: false }) +
@@ -1094,6 +1148,60 @@ const buildHtml = () => `<!DOCTYPE html>
             '</div>' +
           '</div>' +
         '</section>';
+        const renderNewsScreen = (item) => {
+          if (!item || typeof item !== 'object' || !item.type) return '';
+          const media = item.personName ? '<div class="crm-live-news-media">' + avatarHtml({ displayName: item.personName, photoURL: item.photoURL || '' }, { leader: true }) + '</div>' : '';
+          const withPhoto = !!item.personName;
+          let title = 'Notícia';
+          let phrase = '';
+          let context = '';
+          if (item.type === 'pressure_leader') {
+            title = 'Pressão no líder';
+            phrase = '<strong>' + escapeHtml(item.personName || 'Líder') + '</strong>, mais ' + escapeHtml(moneyShort(item.leaderPressureUnits || 0)) + ' e ' + escapeHtml(item.challengerName || 'o vice') + ' te passa.';
+            context = 'A vantagem atual está no percentual da meta individual, não no valor bruto.';
+          } else if (item.type === 'week_projection') {
+            title = 'Projeção da semana';
+            phrase = item.beatsTarget
+              ? 'No ritmo de hoje, a semana fecha em <strong>' + escapeHtml(moneyShort(item.projected || 0)) + '</strong>. Meta batida.'
+              : 'No ritmo de hoje, a semana fecha em <strong>' + escapeHtml(moneyShort(item.projected || 0)) + '</strong>. A meta é ' + escapeHtml(moneyShort(item.target || 0)) + '.';
+            context = 'Média diária projetada até terça 23:59.';
+          } else if (item.type === 'sales_to_lead') {
+            title = 'Faltam vendas';
+            phrase = 'Faltam <strong>' + escapeHtml(String(item.salesNeeded || 0)) + ' ' + ((Number(item.salesNeeded || 0) === 1) ? 'venda' : 'vendas') + '</strong> para ' + escapeHtml(item.personName || 'o closer') + ' assumir a liderança.';
+            context = 'Conta baseada no ticket médio real do período: ' + escapeHtml(moneyShort(item.ticketMedio || 0)) + '.';
+          } else if (item.type === 'personal_best') {
+            title = 'Recorde pessoal';
+            phrase = '<strong>' + escapeHtml(item.personName || 'Pessoa') + '</strong> está a ' + escapeHtml(String(item.remaining || 0)) + ' ' + ((Number(item.remaining || 0) === 1) ? 'reunião' : 'reuniões') + ' do melhor dele na semana.';
+            context = 'Melhor marca anterior: ' + escapeHtml(String(item.historicalBest || 0)) + ' reuniões.';
+          } else if (item.type === 'closest_to_goal') {
+            title = 'Mais perto de bater';
+            phrase = '<strong>' + escapeHtml(item.personName || 'Pessoa') + '</strong> é quem está mais perto de bater a meta: faltam ' + escapeHtml(item.role === 'closer' ? moneyShort(item.missingUnits || 0) : String(item.missingUnits || 0) + ' reuniões') + '.';
+            context = 'Comparação sempre por percentual de progressão da meta individual.';
+          } else if (item.type === 'month_vs_previous') {
+            title = 'Agosto vs julho';
+            phrase = item.ahead
+              ? 'Agosto está <strong>' + escapeHtml(moneyShort(Math.abs(item.delta || 0))) + '</strong> à frente de julho no mesmo dia.'
+              : 'Agosto está <strong>' + escapeHtml(moneyShort(Math.abs(item.delta || 0))) + '</strong> atrás de julho no mesmo dia.';
+            context = 'Mesmo número de dias úteis de venda no ciclo comercial.';
+          } else {
+            return '';
+          }
+          return '<section class="crm-live-screen">' +
+            '<div class="crm-live-shell">' +
+              '<div class="crm-live-head"><h1 class="crm-live-title">' + escapeHtml(title) + '</h1></div>' +
+              '<div class="crm-live-body">' +
+                '<div class="crm-live-news ' + (withPhoto ? '' : 'is-no-photo') + '">' +
+                  (withPhoto ? media : '') +
+                  '<div class="crm-live-news-copy">' +
+                    '<div class="crm-live-news-kicker">' + escapeHtml(title) + '</div>' +
+                    '<div class="crm-live-news-phrase">' + phrase + '</div>' +
+                    '<div class="crm-live-news-context">' + escapeHtml(context) + '</div>' +
+                  '</div>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+          '</section>';
+        };
         const renderInterruption = (event) => {
           if (!interruptionEl || !event) return;
           const type = String(event.type || '').trim();
@@ -1182,6 +1290,9 @@ const buildHtml = () => `<!DOCTYPE html>
         };
         const buildScreenKeys = (currentPayload) => {
           const keys = ['month', 'week', 'closers', 'sdrs'];
+          safeArray(getNested(currentPayload, ['news'], [])).forEach((item, index) => {
+            if (item && item.type) keys.push('news_' + index);
+          });
           const closerHighlight = getNested(currentPayload, ['highlights', 'closer'], null);
           const sdrHighlight = getNested(currentPayload, ['highlights', 'sdr'], null);
           const hasHighlight = (closerHighlight && Number(closerHighlight.dailyValue || 0) > 0) || (sdrHighlight && Number(sdrHighlight.dailyValue || 0) > 0);
@@ -1193,6 +1304,7 @@ const buildHtml = () => `<!DOCTYPE html>
           const month = payload.month || {};
           const weekly = payload.weekly || {};
           const highlight = payload.highlights || {};
+          const news = safeArray(payload.news);
           screenKeys = buildScreenKeys(payload);
           if (!screenKeys.length) screenKeys = ['month'];
           if (active >= screenKeys.length) active = 0;
@@ -1203,6 +1315,9 @@ const buildHtml = () => `<!DOCTYPE html>
             sdrs: renderSdrsScreen(weekly),
             highlights: renderHighlightsScreen(highlight),
           };
+          news.forEach((item, index) => {
+            screens['news_' + index] = renderNewsScreen(item);
+          });
           root.innerHTML = safeArray(screenKeys).map((key, index) => screens[key].replace('<section class="crm-live-screen">', '<section class="crm-live-screen ' + (index === active ? 'is-active' : '') + '">')).join('');
           renderDots();
           if (emptyEl) emptyEl.remove();

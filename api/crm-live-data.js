@@ -3,12 +3,15 @@ const { getSessionFromRequest } = require("../_lib/session");
 const {
   buildCrmLiveCrmSlice,
   buildCrmLiveSdrSlice,
+  buildWeeklyNewsScreens,
+  decorateLeaderboardComparisons,
   validateCookieViewer,
   readCacheDoc,
   writeCacheDoc,
   getCacheMeta,
   CRM_CACHE_TTL_MS,
   SDR_CACHE_TTL_MS,
+  loadWeeklyRollupsHistory,
   loadCurrentGoal,
   loadGrowthPeople,
 } = require("./_lib/crm-live");
@@ -99,9 +102,17 @@ module.exports = async (req, res) => {
       }),
     ]);
 
-    const stale = Boolean(crmSlice.stale || sdrSlice.stale);
-    const staleAgeMinutes = Math.max(Number(crmSlice.meta?.ageMinutes || 0), Number(sdrSlice.meta?.ageMinutes || 0));
-    return sendJson(res, 200, {
+    const closers = decorateLeaderboardComparisons({
+      rows: crmSlice.payload.weekly?.closers || [],
+      discrete: false,
+    });
+    const sdrs = decorateLeaderboardComparisons({
+      rows: sdrSlice.payload.weekly?.sdrs || [],
+      discrete: true,
+    });
+    const weekKey = crmSlice.payload.weekly?.commercialWeek?.weekKey || sdrSlice.payload.weekly?.commercialWeek?.weekKey || "";
+    const weeklyRollups = await loadWeeklyRollupsHistory({ limit: 32 });
+    const news = buildWeeklyNewsScreens({
       month: crmSlice.payload.month,
       weekly: {
         commercialWeek: crmSlice.payload.weekly?.commercialWeek || sdrSlice.payload.weekly?.commercialWeek,
@@ -109,8 +120,27 @@ module.exports = async (req, res) => {
           closers: crmSlice.payload.weekly?.team?.closers || { targetValue: 0, actualValue: 0, progressPct: 0 },
           sdrs: sdrSlice.payload.weekly?.team?.sdrs || { targetValue: 0, actualValue: 0, progressPct: 0 },
         },
-        closers: crmSlice.payload.weekly?.closers || [],
-        sdrs: sdrSlice.payload.weekly?.sdrs || [],
+        closers,
+        sdrs,
+      },
+      previousMonthComparison: crmSlice.payload.monthComparison || null,
+      weeklyRollups: weeklyRollups.filter((row) => row.weekKey !== weekKey),
+      now,
+    });
+
+    const stale = Boolean(crmSlice.stale || sdrSlice.stale);
+    const staleAgeMinutes = Math.max(Number(crmSlice.meta?.ageMinutes || 0), Number(sdrSlice.meta?.ageMinutes || 0));
+    return sendJson(res, 200, {
+      month: crmSlice.payload.month,
+      news,
+      weekly: {
+        commercialWeek: crmSlice.payload.weekly?.commercialWeek || sdrSlice.payload.weekly?.commercialWeek,
+        team: {
+          closers: crmSlice.payload.weekly?.team?.closers || { targetValue: 0, actualValue: 0, progressPct: 0 },
+          sdrs: sdrSlice.payload.weekly?.team?.sdrs || { targetValue: 0, actualValue: 0, progressPct: 0 },
+        },
+        closers,
+        sdrs,
       },
       highlights: {
         dayKey: crmSlice.payload.highlights?.dayKey || sdrSlice.payload.highlights?.dayKey || "",

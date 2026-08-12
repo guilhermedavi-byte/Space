@@ -10,6 +10,7 @@ const {
   loadCurrentGoal,
   loadGrowthPeople,
   loadSdrEventsRange,
+  writeWeeklyRollup,
   readStateDoc,
   validateCookieViewer,
   writeDailyRollups,
@@ -148,6 +149,14 @@ module.exports = async (req, res) => {
       docId: DETECTOR_DOC_ID,
       data: detection.nextState,
       updateMaskPaths: ["cursor", "initializedAt", "updatedAt", "lastLeaders", "currentWeek", "announcedSaleIds"],
+    });
+
+    await writeWeeklyRollup({
+      weeklyReadModel,
+      weekTeamSummary: team,
+      now,
+    }).catch((error) => {
+      console.warn("[crm-live-events] weekly rollup write failed", error);
     });
 
     if (!detection.coldStart && detection.newSales.length) {
