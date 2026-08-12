@@ -51,7 +51,6 @@ module.exports = async (req, res) => {
   const url = new URL(req.url || "/api/crm-live-data", `https://${host}`);
   const forceRefresh = String(url.searchParams.get("refresh") || "").trim() === "1";
   const now = new Date();
-  const [goal, people] = await Promise.all([loadCurrentGoal({ now }), loadGrowthPeople()]);
 
   const loadSlice = async ({ cacheDocId, ttlMs, build }) => {
     let cached = null;
@@ -86,6 +85,7 @@ module.exports = async (req, res) => {
   };
 
   try {
+    const [goal, people] = await Promise.all([loadCurrentGoal({ now }), loadGrowthPeople()]);
     const [crmSlice, sdrSlice] = await Promise.all([
       loadSlice({
         cacheDocId: CRM_CACHE_DOC_ID,
@@ -134,6 +134,15 @@ module.exports = async (req, res) => {
       staleAgeMinutes,
     });
   } catch (error) {
-    return sendJson(res, 500, { error: "crm_live_payload_failed" });
+    console.error("[crm-live] top-level payload failed", error);
+    return sendJson(res, error?.status || 500, {
+      error: error?.error || error?.code || "crm_live_payload_failed",
+      message:
+        error?.status === 401
+          ? "Acesso CRM Live não autorizado."
+          : error?.message
+            ? String(error.message)
+            : "Não foi possível montar o payload do CRM Live agora.",
+    });
   }
 };

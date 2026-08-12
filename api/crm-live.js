@@ -210,12 +210,40 @@ const buildHtml = () => `<!DOCTYPE html>
             return raw ? JSON.parse(raw) : null;
           } catch { return null; }
         };
+        const showError = (title, body) => {
+          root.innerHTML = '<div class=\"crm-live-empty\"><div><strong style=\"display:block;font-size:clamp(30px,2.4vw,42px);margin-bottom:14px\">' + escapeHtml(title) + '</strong><div style=\"max-width:760px;line-height:1.5\">' + escapeHtml(body) + '</div></div></div>';
+          if (dotsEl) dotsEl.innerHTML = '';
+        };
+        const explainError = (status, errorCode, message) => {
+          const code = String(errorCode || '').trim();
+          if (status === 401 || code === 'missing_cookie' || code === 'invalid_token' || code === 'token_not_found' || code === 'token_revoked' || code === 'unauthorized') {
+            return {
+              title: 'Acesso não autorizado',
+              body: 'Abra a URL completa com token uma vez para ativar o cookie da TV. Depois disso, use /tv/crm-live sem o token.',
+            };
+          }
+          if (code === 'crm_live_payload_failed' || code === 'missing_crm_env' || String(message || '').includes('crm')) {
+            return {
+              title: 'Dados do CRM indisponíveis',
+              body: 'O backend não conseguiu montar os dados do CRM Live agora. Se houver snapshot anterior, ele será mantido; se este for o primeiro acesso, a TV precisa de uma nova tentativa quando o CRM responder.',
+            };
+          }
+          return {
+            title: 'Falha ao carregar o CRM Live',
+            body: message || 'O backend respondeu com erro e ainda não existe um snapshot anterior para exibir.',
+          };
+        };
 
         const loadData = async () => {
           try {
             const res = await fetch('/api/crm-live-data', { credentials: 'include', cache: 'no-store' });
             const data = await res.json().catch(() => null);
-            if (!res.ok || !data) throw new Error('crm_live_fetch_failed');
+            if (!res.ok || !data) {
+              const err = new Error(data?.message || 'crm_live_fetch_failed');
+              err.status = res.status;
+              err.errorCode = data?.error || '';
+              throw err;
+            }
             payload = data;
             saveLastGood(data);
             render();
@@ -230,7 +258,9 @@ const buildHtml = () => `<!DOCTYPE html>
               setStatus('Sem atualização nova · mantendo última tela boa');
               return;
             }
-            setStatus('Aguardando primeiro snapshot');
+            const explained = explainError(error?.status, error?.errorCode, error?.message);
+            showError(explained.title, explained.body);
+            setStatus((error?.status ? 'Erro ' + String(error.status) + ' · ' : '') + (error?.errorCode || 'sem snapshot'));
           }
         };
 
