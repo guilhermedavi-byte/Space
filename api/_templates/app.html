@@ -2490,8 +2490,15 @@
               <div class="growth-v2-usercard">
                 <div class="growth-v2-user-name" data-growth-user-name></div>
                 <div class="growth-v2-user-role">Acesso Growth</div>
+                <div class="growth-v2-user-feedback" data-growth-avatar-feedback hidden></div>
               </div>
-              <div class="growth-v2-avatar" data-growth-avatar aria-label="Avatar do usuário">GR</div>
+              <div class="growth-v2-avatar-wrap">
+                <button class="growth-v2-avatar growth-v2-avatar-button" type="button" data-growth-avatar-trigger aria-label="Alterar foto de perfil">
+                  <span data-growth-avatar>GR</span>
+                </button>
+                <span class="growth-v2-avatar-edit" data-growth-avatar-edit aria-hidden="true">✎</span>
+                <input type="file" hidden accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" data-growth-avatar-file />
+              </div>
             </div>
           </header>
 
