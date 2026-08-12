@@ -1089,11 +1089,15 @@ const buildHtml = () => `<!DOCTYPE html>
           return limited.map((row, index) => {
             const leader = index === 0;
             const roleRow = Object.assign({}, row || {}, { role });
-            const chaseCopy = leader
-              ? (limited[1] && Number(row.leaderPressureUnits || 0) > 0
-                  ? 'pressão de ' + (role === 'closer' ? moneyShort(row.leaderPressureUnits || 0) : String(row.leaderPressureUnits || 0) + ' reuniões') + ' de ' + String(row.leaderPressureFromName || limited[1].displayName || 'quem vem atrás')
-                  : 'liderança isolada')
-              : 'faltam ' + (role === 'closer' ? moneyShort(row.missingToLead || 0) : String(row.missingToLead || 0) + ' reuniões') + ' para ultrapassar ' + String(row.leaderName || 'a liderança');
+            const chaseCopy = role === 'closer'
+              ? ((Number(row.missingToGoal || 0) > 0)
+                  ? 'faltam ' + moneyShort(row.missingToGoal || 0) + ' para bater a meta'
+                  : 'meta individual batida')
+              : (leader
+                  ? (limited[1] && Number(row.leaderPressureUnits || 0) > 0
+                      ? 'pressão de ' + String(row.leaderPressureUnits || 0) + ' reuniões de ' + String(row.leaderPressureFromName || limited[1].displayName || 'quem vem atrás')
+                      : 'liderança isolada')
+                  : 'faltam ' + String(row.missingToLead || 0) + ' reuniões para ultrapassar ' + String(row.leaderName || 'a liderança'));
             return '<div class="crm-live-ranking-row ' + (leader ? 'is-leader' : '') + '">' +
               avatarHtml(row, { leader }) +
               '<div class="crm-live-ranking-copy">' +
@@ -1221,7 +1225,7 @@ const buildHtml = () => `<!DOCTYPE html>
                   '<div class="crm-live-duel-center">' +
                     '<div class="crm-live-metric-label">Distância para a virada</div>' +
                     '<div class="crm-live-duel-message"><span class="crm-live-duel-delta">' + escapeHtml(moneyShort(needed)) + '</span></div>' +
-                    '<div class="crm-live-duel-context">' + escapeHtml(salesCopy) + '</div>' +
+                    '<div class="crm-live-duel-context">' + escapeHtml('para a virada · ' + salesCopy) + '</div>' +
                   '</div>' +
                   '<div class="crm-live-duel-side">' +
                     avatarHtml(challenger, { leader: false }) +
@@ -1427,7 +1431,7 @@ const buildHtml = () => `<!DOCTYPE html>
           if (!activeInterruption) playNextInterruption();
         };
         const buildScreenKeys = (currentPayload) => {
-          const keys = ['goal', 'week', 'closers', 'sdrs', 'duel'];
+          const keys = ['closers', 'sdrs', 'goal', 'week'];
           if (Number(getNested(currentPayload, ['weekly', 'team', 'sdrs', 'targetValue'], 0)) > 0) keys.push('team_sdr');
           if (safeArray(getNested(currentPayload, ['pipeline', 'rows'], [])).length) keys.push('pipeline');
           safeArray(getNested(currentPayload, ['news'], [])).forEach((item, index) => {
@@ -1437,6 +1441,7 @@ const buildHtml = () => `<!DOCTYPE html>
           const sdrHighlight = getNested(currentPayload, ['highlights', 'sdr'], null);
           const hasHighlight = (closerHighlight && Number(closerHighlight.dailyValue || 0) > 0) || (sdrHighlight && Number(sdrHighlight.dailyValue || 0) > 0);
           if (hasHighlight) keys.push('highlights');
+          keys.push('duel');
           return keys;
         };
         const render = () => {
