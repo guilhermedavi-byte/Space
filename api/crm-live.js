@@ -40,68 +40,447 @@ const buildHtml = () => `<!DOCTYPE html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CRM Live | Space</title>
     <meta name="robots" content="noindex,nofollow" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500&display=swap" rel="stylesheet" />
     <style>
       :root {
         color-scheme: dark;
-        --bg: #07101d;
-        --card: rgba(17, 28, 46, 0.9);
-        --card-soft: rgba(255,255,255,0.04);
-        --stroke: rgba(255,255,255,0.08);
-        --text: #f7f3ed;
-        --muted: rgba(247,243,237,0.64);
-        --accent: #ff5b4d;
-        --accent-soft: rgba(255,91,77,0.16);
-        --blue: #76a7ff;
-        --green: #3fd6a4;
-        --amber: #f5b64b;
+        --bg: #0d1014;
+        --accent: #ff564f;
+        --text: #f5f5f4;
+        --text-secondary: #a8a8a4;
+        --text-tertiary: #6b7280;
+        --track: #1c2027;
+        --row: rgba(255,255,255,.03);
+        --leader-ring: rgba(255, 86, 79, .28);
       }
       * { box-sizing: border-box; }
-      html, body { margin: 0; min-height: 100%; background: radial-gradient(circle at top left, rgba(255,91,77,0.18), transparent 32%), radial-gradient(circle at top right, rgba(118,167,255,0.18), transparent 30%), var(--bg); color: var(--text); font-family: Inter, ui-sans-serif, system-ui, sans-serif; overflow: hidden; }
-      body { display: grid; place-items: stretch; }
-      .crm-live { position: relative; width: 100vw; height: 100vh; padding: 48px; }
-      .crm-live-stage { position: relative; width: 100%; height: 100%; border-radius: 32px; border: 1px solid var(--stroke); background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.015)); overflow: hidden; }
-      .crm-live-screen { position: absolute; inset: 0; padding: 42px 48px; display: grid; gap: 28px; opacity: 0; transform: translateY(14px); pointer-events: none; transition: opacity .45s ease, transform .45s ease; }
-      .crm-live-screen.is-active { opacity: 1; transform: translateY(0); pointer-events: auto; }
-      .crm-live-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
-      .crm-live-title { font-size: clamp(26px, 2vw, 36px); line-height: 1; font-weight: 700; letter-spacing: -.03em; }
-      .crm-live-sub { margin-top: 10px; font-size: clamp(16px, 1.2vw, 22px); color: var(--muted); }
-      .crm-live-badge { display: inline-flex; align-items: center; gap: 10px; padding: 12px 16px; border-radius: 999px; background: var(--card-soft); color: var(--muted); font-size: 14px; }
-      .crm-live-badge-dot { width: 10px; height: 10px; border-radius: 999px; background: var(--green); box-shadow: 0 0 0 6px rgba(63,214,164,.12); }
-      .crm-live-badge.is-stale .crm-live-badge-dot { background: var(--amber); box-shadow: 0 0 0 6px rgba(245,182,75,.12); }
-      .crm-live-hero { display: grid; grid-template-columns: 1.4fr .8fr; gap: 24px; min-height: 0; }
-      .crm-live-card { background: var(--card); border: 1px solid var(--stroke); border-radius: 28px; padding: 28px; box-shadow: 0 20px 50px rgba(0,0,0,.16); }
-      .crm-live-label { font-size: 16px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
-      .crm-live-value { margin-top: 14px; font-size: clamp(64px, 6vw, 108px); line-height: .92; font-weight: 800; letter-spacing: -.06em; }
-      .crm-live-meta { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; margin-top: 18px; font-size: clamp(18px, 1.4vw, 24px); color: var(--muted); }
-      .crm-live-progress { margin-top: 24px; height: 18px; border-radius: 999px; background: rgba(255,255,255,.08); overflow: hidden; }
-      .crm-live-progress > span { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), #ff8666); border-radius: inherit; }
-      .crm-live-grid-two { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 22px; }
-      .crm-live-kpi-big { font-size: clamp(44px, 4vw, 72px); line-height: .95; font-weight: 800; margin-top: 10px; }
-      .crm-live-kpi-sub { margin-top: 10px; font-size: clamp(16px, 1.2vw, 22px); color: var(--muted); }
-      .crm-live-ranking { display: grid; gap: 16px; }
-      .crm-live-row { display: grid; grid-template-columns: 72px 1fr auto; gap: 18px; align-items: center; padding: 18px 20px; border-radius: 22px; background: rgba(255,255,255,.035); border: 1px solid rgba(255,255,255,.05); }
-      .crm-live-row-pos { font-size: 32px; font-weight: 800; color: var(--muted); text-align: center; }
-      .crm-live-row-name { font-size: clamp(26px, 2vw, 38px); font-weight: 700; letter-spacing: -.03em; }
-      .crm-live-row-sub { margin-top: 6px; font-size: clamp(16px, 1.1vw, 20px); color: var(--muted); }
-      .crm-live-row-main { text-align: right; }
-      .crm-live-row-value { font-size: clamp(30px, 2.4vw, 46px); font-weight: 800; }
-      .crm-live-row-pct { margin-top: 6px; font-size: clamp(16px, 1.1vw, 20px); color: var(--muted); }
-      .crm-live-highlight-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 24px; }
-      .crm-live-highlight-name { margin-top: 14px; font-size: clamp(32px, 2.5vw, 46px); font-weight: 800; }
-      .crm-live-highlight-value { margin-top: 14px; font-size: clamp(52px, 4vw, 80px); line-height: .95; font-weight: 800; }
-      .crm-live-last-sale { display: grid; grid-template-columns: 1.2fr .8fr; gap: 24px; align-items: stretch; }
-      .crm-live-last-sale-name { margin-top: 18px; font-size: clamp(40px, 3vw, 60px); line-height: .95; font-weight: 800; }
-      .crm-live-list { display: grid; gap: 14px; }
-      .crm-live-list-row { display: flex; justify-content: space-between; gap: 18px; padding: 16px 0; border-bottom: 1px solid rgba(255,255,255,.06); font-size: clamp(18px,1.3vw,24px); }
-      .crm-live-footer { position: absolute; left: 48px; right: 48px; bottom: 24px; display: flex; justify-content: space-between; align-items: center; gap: 20px; font-size: 15px; color: var(--muted); }
-      .crm-live-dots { display: flex; gap: 10px; align-items: center; }
-      .crm-live-dot { width: 10px; height: 10px; border-radius: 999px; background: rgba(255,255,255,.2); transition: transform .25s ease, background .25s ease; }
-      .crm-live-dot.is-active { background: var(--accent); transform: scale(1.35); }
-      .crm-live-empty { display: grid; place-items: center; text-align: center; font-size: clamp(22px, 1.8vw, 30px); color: var(--muted); }
-      @media (max-width: 980px) {
-        .crm-live { padding: 22px; }
-        .crm-live-screen { padding: 28px; }
-        .crm-live-hero, .crm-live-highlight-grid, .crm-live-last-sale, .crm-live-grid-two { grid-template-columns: 1fr; }
+      html, body {
+        margin: 0;
+        width: 100%;
+        min-height: 100%;
+        overflow: hidden;
+        background: var(--bg);
+        color: var(--text);
+        font-family: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+      }
+      body { display: block; }
+      .crm-live {
+        position: relative;
+        width: 100vw;
+        height: 100vh;
+        padding: 5.4vh 4.4vw 4.4vh;
+        background:
+          radial-gradient(circle at top left, rgba(255,86,79,.14), transparent 28%),
+          radial-gradient(circle at 78% 18%, rgba(255,255,255,.04), transparent 26%),
+          var(--bg);
+      }
+      .crm-live-stage {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+      }
+      .crm-live-screen {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        grid-template-rows: auto 1fr;
+        gap: 3.2vh;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity .4s ease;
+      }
+      .crm-live-screen.is-active {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      .crm-live-shell {
+        width: 100%;
+        height: 100%;
+        display: grid;
+        grid-template-rows: auto 1fr;
+        gap: 3.2vh;
+      }
+      .crm-live-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 3vw;
+      }
+      .crm-live-kicker {
+        margin: 0 0 1.2vh;
+        color: var(--text-tertiary);
+        font-size: 1.35vh;
+        line-height: 1;
+        letter-spacing: .34em;
+        text-transform: uppercase;
+        font-weight: 500;
+      }
+      .crm-live-title {
+        margin: 0;
+        font-size: 4.2vh;
+        line-height: .98;
+        letter-spacing: -.04em;
+        font-weight: 500;
+      }
+      .crm-live-sub {
+        margin-top: 1.2vh;
+        color: var(--text-secondary);
+        font-size: 1.9vh;
+        line-height: 1.35;
+        font-weight: 400;
+      }
+      .crm-live-status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: .75vw;
+        min-height: 3.8vh;
+        color: var(--text-secondary);
+        font-size: 1.45vh;
+        line-height: 1;
+        white-space: nowrap;
+      }
+      .crm-live-status-pill::before {
+        content: "";
+        width: .7vh;
+        height: .7vh;
+        border-radius: 999px;
+        background: var(--text-tertiary);
+      }
+      .crm-live-status-pill.is-live::before { background: var(--accent); }
+      .crm-live-status-pill.is-stale::before { background: #f59e0b; }
+      .crm-live-body {
+        min-height: 0;
+        display: grid;
+      }
+      .crm-live-stack {
+        height: 100%;
+        display: grid;
+        align-content: space-between;
+        gap: 3vh;
+      }
+      .crm-live-metric-block { display: grid; gap: 1.5vh; }
+      .crm-live-metric-label {
+        color: var(--text-tertiary);
+        font-size: 1.45vh;
+        letter-spacing: .28em;
+        text-transform: uppercase;
+        font-weight: 500;
+      }
+      .crm-live-metric-line {
+        display: flex;
+        align-items: flex-end;
+        gap: 1.4vw;
+        flex-wrap: wrap;
+      }
+      .crm-live-metric-value {
+        font-size: min(12vw, 18vh);
+        line-height: .88;
+        letter-spacing: -.08em;
+        font-weight: 500;
+      }
+      .crm-live-metric-value.is-medium { font-size: min(8vw, 11.6vh); }
+      .crm-live-metric-side {
+        display: grid;
+        gap: .55vh;
+        padding-bottom: 1.1vh;
+      }
+      .crm-live-metric-side strong {
+        color: var(--text-secondary);
+        font-size: 2.1vh;
+        font-weight: 500;
+      }
+      .crm-live-metric-side span {
+        color: var(--text-tertiary);
+        font-size: 1.6vh;
+        font-weight: 400;
+      }
+      .crm-live-progress {
+        width: min(72vw, 100%);
+        height: .7vh;
+        border-radius: 999px;
+        background: var(--track);
+        overflow: hidden;
+      }
+      .crm-live-progress > span {
+        display: block;
+        height: 100%;
+        width: 0;
+        border-radius: inherit;
+        background: var(--accent);
+      }
+      .crm-live-support-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 2.2vw;
+      }
+      .crm-live-support-item { display: grid; gap: .8vh; }
+      .crm-live-support-item strong {
+        font-size: 3.4vh;
+        line-height: .95;
+        letter-spacing: -.05em;
+        font-weight: 500;
+      }
+      .crm-live-support-item span {
+        color: var(--text-secondary);
+        font-size: 1.7vh;
+        line-height: 1.35;
+        font-weight: 400;
+      }
+      .crm-live-week-grid,
+      .crm-live-highlight-grid,
+      .crm-live-last-sale-grid {
+        height: 100%;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 3vw;
+      }
+      .crm-live-column {
+        height: 100%;
+        display: grid;
+        align-content: center;
+        gap: 2vh;
+        min-width: 0;
+      }
+      .crm-live-column-right {
+        justify-items: end;
+        text-align: right;
+      }
+      .crm-live-column-right .crm-live-progress { justify-self: end; }
+      .crm-live-mini-note {
+        color: var(--text-secondary);
+        font-size: 1.8vh;
+        line-height: 1.35;
+        font-weight: 400;
+      }
+      .crm-live-ranking {
+        height: 100%;
+        display: grid;
+        gap: 2vh;
+        align-content: start;
+      }
+      .crm-live-ranking-row {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 1.6vw;
+        min-height: 10.5vh;
+      }
+      .crm-live-ranking-row.is-leader { min-height: 13.8vh; }
+      .crm-live-avatar {
+        position: relative;
+        flex: 0 0 auto;
+        width: 5.6vh;
+        height: 5.6vh;
+        border-radius: 999px;
+        overflow: hidden;
+        background: rgba(255,255,255,.08);
+        color: var(--text);
+        display: grid;
+        place-items: center;
+        font-size: 1.55vh;
+        font-weight: 500;
+        letter-spacing: .04em;
+      }
+      .crm-live-avatar img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+      .crm-live-avatar.is-photo { filter: grayscale(1); }
+      .crm-live-avatar.is-leader {
+        width: 7.6vh;
+        height: 7.6vh;
+        border: .35vh solid var(--accent);
+        box-shadow: 0 0 0 .55vh var(--leader-ring);
+      }
+      .crm-live-avatar.is-leader.is-photo { filter: none; }
+      .crm-live-ranking-copy {
+        min-width: 0;
+        display: grid;
+        gap: .7vh;
+      }
+      .crm-live-ranking-name {
+        font-size: 3vh;
+        line-height: .95;
+        letter-spacing: -.05em;
+        font-weight: 500;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .crm-live-ranking-row.is-leader .crm-live-ranking-name { font-size: 4.3vh; }
+      .crm-live-ranking-sub {
+        color: var(--text-secondary);
+        font-size: 1.65vh;
+        line-height: 1.35;
+        font-weight: 400;
+      }
+      .crm-live-ranking-bar {
+        width: 100%;
+        height: .7vh;
+        border-radius: 999px;
+        background: var(--track);
+        overflow: hidden;
+      }
+      .crm-live-ranking-bar > span {
+        display: block;
+        height: 100%;
+        width: 0;
+        border-radius: inherit;
+        background: rgba(255,255,255,.28);
+      }
+      .crm-live-ranking-row.is-leader .crm-live-ranking-bar > span { background: var(--accent); }
+      .crm-live-ranking-metric {
+        text-align: right;
+        display: grid;
+        gap: .8vh;
+        justify-items: end;
+      }
+      .crm-live-ranking-pct {
+        font-size: 6.2vh;
+        line-height: .88;
+        letter-spacing: -.08em;
+        font-weight: 500;
+      }
+      .crm-live-ranking-row.is-leader .crm-live-ranking-pct { color: var(--accent); font-size: 8.6vh; }
+      .crm-live-ranking-actual {
+        color: var(--text-secondary);
+        font-size: 1.7vh;
+        font-weight: 400;
+      }
+      .crm-live-highlight-person {
+        display: grid;
+        justify-items: start;
+        gap: 1.4vh;
+      }
+      .crm-live-highlight-person.is-right {
+        justify-items: end;
+        text-align: right;
+      }
+      .crm-live-highlight-name {
+        font-size: 5.2vh;
+        line-height: .92;
+        letter-spacing: -.06em;
+        font-weight: 500;
+      }
+      .crm-live-highlight-value {
+        font-size: min(9vw, 12vh);
+        line-height: .9;
+        letter-spacing: -.08em;
+        font-weight: 500;
+      }
+      .crm-live-highlight-note {
+        color: var(--text-secondary);
+        font-size: 1.8vh;
+        line-height: 1.35;
+      }
+      .crm-live-last-sale-client {
+        font-size: min(8vw, 10.5vh);
+        line-height: .9;
+        letter-spacing: -.07em;
+        font-weight: 500;
+      }
+      .crm-live-last-sale-plan {
+        color: var(--text-secondary);
+        font-size: 2vh;
+        line-height: 1.35;
+      }
+      .crm-live-last-sale-list {
+        display: grid;
+        gap: 1.6vh;
+        width: min(26vw, 100%);
+      }
+      .crm-live-last-sale-row {
+        display: grid;
+        gap: .5vh;
+      }
+      .crm-live-last-sale-row span {
+        color: var(--text-tertiary);
+        font-size: 1.45vh;
+        letter-spacing: .24em;
+        text-transform: uppercase;
+        font-weight: 500;
+      }
+      .crm-live-last-sale-row strong {
+        font-size: 2.5vh;
+        line-height: 1.05;
+        letter-spacing: -.04em;
+        font-weight: 500;
+      }
+      .crm-live-footer {
+        position: absolute;
+        left: 4.4vw;
+        right: 4.4vw;
+        bottom: 3.2vh;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 2vw;
+        color: var(--text-tertiary);
+        font-size: 1.45vh;
+        line-height: 1.2;
+      }
+      .crm-live-dots {
+        display: flex;
+        align-items: center;
+        gap: .55vw;
+      }
+      .crm-live-dot {
+        width: 1.2vw;
+        max-width: 28px;
+        min-width: 14px;
+        height: 3px;
+        border-radius: 999px;
+        background: rgba(255,255,255,.16);
+        transition: background .25s ease, transform .25s ease;
+      }
+      .crm-live-dot.is-active {
+        background: var(--accent);
+        transform: scaleX(1.08);
+      }
+      .crm-live-empty {
+        height: 100%;
+        display: grid;
+        place-items: center;
+        text-align: center;
+        color: var(--text-secondary);
+        font-size: 2.4vh;
+        line-height: 1.45;
+      }
+      .crm-live-empty strong {
+        display: block;
+        margin-bottom: 1.6vh;
+        color: var(--text);
+        font-size: 4vh;
+        line-height: 1;
+        letter-spacing: -.04em;
+        font-weight: 500;
+      }
+      @media (max-width: 1200px) {
+        .crm-live { padding: 4.2vh 4vw 4vh; }
+        .crm-live-week-grid,
+        .crm-live-highlight-grid,
+        .crm-live-last-sale-grid {
+          grid-template-columns: 1fr;
+          gap: 2.8vh;
+        }
+        .crm-live-column-right,
+        .crm-live-highlight-person.is-right {
+          justify-items: start;
+          text-align: left;
+        }
+        .crm-live-column-right .crm-live-progress { justify-self: start; }
+        .crm-live-last-sale-list { width: 100%; }
+      }
+      @media (max-aspect-ratio: 1/1) {
+        .crm-live { padding: 4vh 4vw; }
+        .crm-live-screen { gap: 2.2vh; }
+        .crm-live-ranking-row { min-height: 9.6vh; }
+        .crm-live-ranking-row.is-leader { min-height: 11.6vh; }
       }
     </style>
   </head>
@@ -121,13 +500,14 @@ const buildHtml = () => `<!DOCTYPE html>
         const statusEl = document.querySelector('[data-crm-live-status]');
         const dotsEl = document.querySelector('[data-crm-live-dots]');
         const emptyEl = document.querySelector('[data-crm-live-empty]');
-        const SCREENS = ['month','week','closers','sdrs','highlights','last-sale'];
+        const SCREENS = ['month', 'week', 'closers', 'sdrs', 'highlights', 'last-sale'];
         const ROTATE_MS = 5000;
         const POLL_MS = 120000;
         let payload = null;
         let active = 0;
         let rotateTimer = null;
         let pollTimer = null;
+        let imageCache = new Map();
 
         const escapeHtml = (value) => String(value == null ? '' : value)
           .replace(/&/g, '&amp;')
@@ -142,33 +522,298 @@ const buildHtml = () => `<!DOCTYPE html>
           if (!Number.isFinite(n)) return '0%';
           return n.toFixed(1).replace('.', ',') + '%';
         };
+        const clampPercent = (value) => Math.max(0, Math.min(100, Number(value || 0) || 0));
         const dateLabel = (dateKey) => {
           const raw = String(dateKey || '');
-          const [y,m,d] = raw.split('-');
+          const [y, m, d] = raw.split('-');
           if (!y || !m || !d) return raw;
           return d + '/' + m;
         };
         const dateTimeLabel = (iso) => {
           if (!iso) return '—';
           try {
-            return new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(iso));
-          } catch { return '—'; }
+            return new Intl.DateTimeFormat('pt-BR', {
+              timeZone: 'America/Sao_Paulo',
+              day: '2-digit',
+              month: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit',
+            }).format(new Date(iso));
+          } catch (error) {
+            return '—';
+          }
         };
         const safeArray = (value) => Array.isArray(value) ? value : [];
-
-        const renderDots = () => {
-          dotsEl.innerHTML = SCREENS.map((_, index) => '<span class=\"crm-live-dot ' + (index === active ? 'is-active' : '') + '\"></span>').join('');
+        const getPhotoUrl = (row) => {
+          if (!row || typeof row !== 'object') return '';
+          return String(row.photoURL || row.photoUrl || '').trim();
         };
-
-        const rowHtml = (row, index, formatter) => {
-          const extra = formatter(row);
-          return '<div class=\"crm-live-row\">' +
-            '<div class=\"crm-live-row-pos\">' + String(index + 1) + '</div>' +
-            '<div><div class=\"crm-live-row-name\">' + escapeHtml(row.displayName || '—') + '</div><div class=\"crm-live-row-sub\">Meta ' + escapeHtml(extra.target) + ' · Realizado ' + escapeHtml(extra.actual) + '</div></div>' +
-            '<div class=\"crm-live-row-main\"><div class=\"crm-live-row-value\">' + escapeHtml(extra.main) + '</div><div class=\"crm-live-row-pct\">' + escapeHtml(percent(row.progressPct || 0)) + '</div></div>' +
+        const getDisplayName = (row) => {
+          if (!row || typeof row !== 'object') return '';
+          return String(row.displayName || '').trim();
+        };
+        const getNested = (rootValue, keys, fallback) => {
+          let current = rootValue;
+          for (const key of safeArray(keys)) {
+            if (!current || typeof current !== 'object' || !(key in current)) return fallback;
+            current = current[key];
+          }
+          return current == null ? fallback : current;
+        };
+        const initials = (value) => {
+          const words = String(value || '').trim().split(/\\s+/).filter(Boolean);
+          if (!words.length) return 'SP';
+          return words.slice(0, 2).map((part) => part[0] || '').join('').toUpperCase();
+        };
+        const abbreviateProgress = (row) => {
+          if (!row) return '0 de 0';
+          if (row.role === 'closer') return moneyShort(row.actualValue || 0) + ' de ' + moneyShort(row.targetValue || 0);
+          return String(row.actualValue || 0) + ' de ' + String(row.targetValue || 0);
+        };
+        const metricMain = (row) => {
+          if (!row) return '0';
+          return row.role === 'closer' ? moneyShort(row.actualValue || 0) : String(row.actualValue || 0);
+        };
+        const personImageState = (row) => {
+          const url = getPhotoUrl(row);
+          if (!url) return { usable: false, src: '' };
+          const cached = imageCache.get(url);
+          if (cached === 'loaded') return { usable: true, src: url };
+          if (cached === 'error') return { usable: false, src: '' };
+          return { usable: false, src: '' };
+        };
+        const avatarHtml = (row, options = {}) => {
+          const leader = !!options.leader;
+          const state = personImageState(row);
+          const name = getDisplayName(row) || 'Sem nome';
+          const classes = ['crm-live-avatar', leader ? 'is-leader' : '', state.usable ? 'is-photo' : ''].filter(Boolean).join(' ');
+          if (state.usable) {
+            return '<span class="' + classes + '"><img src="' + escapeHtml(state.src) + '" alt="" onerror="this.parentElement.innerHTML=\\\'' +
+              '<span>' + escapeHtml(initials(name)) + '</span>' +
+            '\\\'" /></span>';
+          }
+          return '<span class="' + classes + '"><span>' + escapeHtml(initials(name)) + '</span></span>';
+        };
+        const preloadImages = (rows = []) => {
+          safeArray(rows).forEach((row) => {
+            const url = getPhotoUrl(row);
+            if (!url || imageCache.has(url)) return;
+            const img = new Image();
+            imageCache.set(url, 'loading');
+            img.onload = () => { imageCache.set(url, 'loaded'); };
+            img.onerror = () => { imageCache.set(url, 'error'); };
+            img.src = url;
+          });
+        };
+        const preloadFromPayload = (data) => {
+          const rows = [];
+          rows.push.apply(rows, safeArray(getNested(data, ['weekly', 'closers'], [])));
+          rows.push.apply(rows, safeArray(getNested(data, ['weekly', 'sdrs'], [])));
+          if (getNested(data, ['highlights', 'closer'], null)) rows.push(data.highlights.closer);
+          if (getNested(data, ['highlights', 'sdr'], null)) rows.push(data.highlights.sdr);
+          preloadImages(rows);
+        };
+        const footerStatusClass = () => {
+          if (!payload) return '';
+          return payload.stale ? 'crm-live-status-pill is-stale' : 'crm-live-status-pill is-live';
+        };
+        const renderDots = () => {
+          dotsEl.innerHTML = SCREENS.map((_, index) => '<span class="crm-live-dot ' + (index === active ? 'is-active' : '') + '"></span>').join('');
+        };
+        const renderMetric = ({ label, value, sideTitle = '', sideText = '', progress = null, valueClass = '' }) =>
+          '<div class="crm-live-metric-block">' +
+            '<div class="crm-live-metric-label">' + escapeHtml(label) + '</div>' +
+            '<div class="crm-live-metric-line">' +
+              '<div class="crm-live-metric-value ' + escapeHtml(valueClass) + '">' + escapeHtml(value) + '</div>' +
+              ((sideTitle || sideText)
+                ? '<div class="crm-live-metric-side">' +
+                    (sideTitle ? '<strong>' + escapeHtml(sideTitle) + '</strong>' : '') +
+                    (sideText ? '<span>' + escapeHtml(sideText) + '</span>' : '') +
+                  '</div>'
+                : '') +
+            '</div>' +
+            (progress == null ? '' : '<div class="crm-live-progress"><span style="width:' + clampPercent(progress).toFixed(1) + '%"></span></div>') +
+          '</div>';
+        const renderRankingRows = (rows, options = {}) => {
+          const role = options.role || '';
+          const limited = safeArray(rows).slice(0, 5);
+          if (!limited.length) {
+            return '<div class="crm-live-empty"><div><strong>Sem dados</strong><div>Nenhuma pessoa com meta nessa semana.</div></div></div>';
+          }
+          return limited.map((row, index) => {
+            const leader = index === 0;
+            const roleRow = Object.assign({}, row || {}, { role });
+            return '<div class="crm-live-ranking-row ' + (leader ? 'is-leader' : '') + '">' +
+              avatarHtml(row, { leader }) +
+              '<div class="crm-live-ranking-copy">' +
+                '<div class="crm-live-ranking-name">' + escapeHtml(row.displayName || '—') + '</div>' +
+                '<div class="crm-live-ranking-sub">' + escapeHtml(abbreviateProgress(roleRow)) + '</div>' +
+                '<div class="crm-live-ranking-bar"><span style="width:' + clampPercent(row.progressPct || 0).toFixed(1) + '%"></span></div>' +
+              '</div>' +
+              '<div class="crm-live-ranking-metric">' +
+                '<div class="crm-live-ranking-pct">' + escapeHtml(percent(row.progressPct || 0)) + '</div>' +
+                '<div class="crm-live-ranking-actual">' + escapeHtml(metricMain(roleRow)) + '</div>' +
+              '</div>' +
+            '</div>';
+          }).join('');
+        };
+        const renderHighlight = (row, options = {}) => {
+          const role = options.role || '';
+          const alignRight = !!options.alignRight;
+          const hasRow = !!row;
+          const person = row || { displayName: 'Sem destaque' };
+          const leader = true;
+          const metricRow = Object.assign({}, person, { role, actualValue: hasRow ? (row.dailyValue || 0) : 0 });
+          return '<div class="crm-live-highlight-person ' + (alignRight ? 'is-right' : '') + '">' +
+            avatarHtml(person, { leader }) +
+            '<div class="crm-live-highlight-name">' + escapeHtml(person.displayName || 'Sem destaque') + '</div>' +
+            '<div class="crm-live-highlight-value">' + escapeHtml(hasRow ? metricMain(metricRow) : '—') + '</div>' +
+            '<div class="crm-live-highlight-note">' + escapeHtml(hasRow ? percent(row.dailyProgressPct || 0) + ' da meta semanal em um dia' : (role === 'closer' ? 'Nenhum fechamento ontem' : 'Nenhuma reunião feita ontem')) + '</div>' +
           '</div>';
         };
-
+        const renderMonthScreen = (month) => {
+          const summary = month.summary || {};
+          return '<section class="crm-live-screen">' +
+            '<div class="crm-live-shell">' +
+              '<div class="crm-live-head">' +
+                '<div>' +
+                  '<div class="crm-live-kicker">CRM Live</div>' +
+                  '<h1 class="crm-live-title">Placar do mês</h1>' +
+                  '<div class="crm-live-sub">Janela ' + escapeHtml(dateLabel(getNested(month, ['period', 'startDateKey'], ''))) + ' a ' + escapeHtml(dateLabel(getNested(month, ['period', 'endDateKey'], ''))) + '</div>' +
+                '</div>' +
+                '<div class="' + footerStatusClass() + '">' + (payload.stale ? 'Cache ' + escapeHtml(String(payload.staleAgeMinutes || 0)) + ' min' : 'Ao vivo') + '</div>' +
+              '</div>' +
+              '<div class="crm-live-body">' +
+                '<div class="crm-live-stack">' +
+                  renderMetric({
+                    label: 'Receita vendida',
+                    value: moneyShort(summary.realizado || 0),
+                    sideTitle: percent(summary.percentAtingimento || 0),
+                    sideText: 'Gap ' + moneyShort(summary.gap || 0),
+                    progress: summary.percentAtingimento || 0,
+                  }) +
+                  '<div class="crm-live-support-grid">' +
+                    '<div class="crm-live-support-item"><strong>' + escapeHtml(moneyShort(summary.meta || 0)) + '</strong><span>Meta do mês</span></div>' +
+                    '<div class="crm-live-support-item"><strong>' + escapeHtml(String(summary.totalVendas || 0)) + '</strong><span>Vendas fechadas</span></div>' +
+                    '<div class="crm-live-support-item"><strong>' + escapeHtml(String(month.windowCount || 0)) + '</strong><span>Negócios lidos na janela</span></div>' +
+                  '</div>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+          '</section>';
+        };
+        const renderWeekScreen = (weekly) => '<section class="crm-live-screen">' +
+          '<div class="crm-live-shell">' +
+            '<div class="crm-live-head">' +
+              '<div>' +
+                '<div class="crm-live-kicker">Semana comercial</div>' +
+                '<h1 class="crm-live-title">Meta da semana</h1>' +
+                '<div class="crm-live-sub">' + escapeHtml(dateLabel(getNested(weekly, ['commercialWeek', 'startDateKey'], ''))) + ' a ' + escapeHtml(dateLabel(getNested(weekly, ['commercialWeek', 'endDateKey'], ''))) + '</div>' +
+              '</div>' +
+              '<div class="' + footerStatusClass() + '">' + (payload.stale ? 'Snapshot mantido' : 'Atualização automática') + '</div>' +
+            '</div>' +
+            '<div class="crm-live-body crm-live-week-grid">' +
+              '<div class="crm-live-column">' +
+                renderMetric({
+                  label: 'Closers',
+                  value: moneyShort(getNested(weekly, ['team', 'closers', 'actualValue'], 0) || 0),
+                  sideTitle: percent(getNested(weekly, ['team', 'closers', 'progressPct'], 0) || 0),
+                  sideText: 'Meta ' + moneyShort(getNested(weekly, ['team', 'closers', 'targetValue'], 0) || 0),
+                  progress: getNested(weekly, ['team', 'closers', 'progressPct'], 0) || 0,
+                  valueClass: 'is-medium',
+                }) +
+              '</div>' +
+              '<div class="crm-live-column crm-live-column-right">' +
+                renderMetric({
+                  label: 'SDRs',
+                  value: String(getNested(weekly, ['team', 'sdrs', 'actualValue'], 0) || 0),
+                  sideTitle: percent(getNested(weekly, ['team', 'sdrs', 'progressPct'], 0) || 0),
+                  sideText: 'Meta ' + String(getNested(weekly, ['team', 'sdrs', 'targetValue'], 0) || 0) + ' reuniões',
+                  progress: getNested(weekly, ['team', 'sdrs', 'progressPct'], 0) || 0,
+                  valueClass: 'is-medium',
+                }) +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+        '</section>';
+        const renderClosersScreen = (weekly) => '<section class="crm-live-screen">' +
+          '<div class="crm-live-shell">' +
+            '<div class="crm-live-head">' +
+              '<div>' +
+                '<div class="crm-live-kicker">Ranking semanal</div>' +
+                '<h1 class="crm-live-title">Closers</h1>' +
+                '<div class="crm-live-sub">Ordenado por percentual da meta individual</div>' +
+              '</div>' +
+              '<div class="' + footerStatusClass() + '">' + escapeHtml(String(safeArray(weekly.closers).length)) + ' participantes</div>' +
+            '</div>' +
+            '<div class="crm-live-body"><div class="crm-live-ranking">' + renderRankingRows(weekly.closers, { role: 'closer' }) + '</div></div>' +
+          '</div>' +
+        '</section>';
+        const renderSdrsScreen = (weekly) => '<section class="crm-live-screen">' +
+          '<div class="crm-live-shell">' +
+            '<div class="crm-live-head">' +
+              '<div>' +
+                '<div class="crm-live-kicker">Ranking semanal</div>' +
+                '<h1 class="crm-live-title">SDRs</h1>' +
+                '<div class="crm-live-sub">Ordenado por percentual da meta individual</div>' +
+              '</div>' +
+              '<div class="' + footerStatusClass() + '">' + escapeHtml(String(safeArray(weekly.sdrs).length)) + ' participantes</div>' +
+            '</div>' +
+            '<div class="crm-live-body"><div class="crm-live-ranking">' + renderRankingRows(weekly.sdrs, { role: 'sdr' }) + '</div></div>' +
+          '</div>' +
+        '</section>';
+        const renderHighlightsScreen = (highlight) => '<section class="crm-live-screen">' +
+          '<div class="crm-live-shell">' +
+            '<div class="crm-live-head">' +
+              '<div>' +
+                '<div class="crm-live-kicker">Ontem</div>' +
+                '<h1 class="crm-live-title">Destaques do dia anterior</h1>' +
+                '<div class="crm-live-sub">Quem mais avançou na meta em ' + escapeHtml(dateLabel(highlight.dayKey)) + '</div>' +
+              '</div>' +
+              '<div class="' + footerStatusClass() + '">' + escapeHtml(highlight.dayKey || '') + '</div>' +
+            '</div>' +
+            '<div class="crm-live-body crm-live-highlight-grid">' +
+              '<div class="crm-live-column">' + renderHighlight(highlight.closer, { role: 'closer' }) + '</div>' +
+              '<div class="crm-live-column">' + renderHighlight(highlight.sdr, { role: 'sdr', alignRight: true }) + '</div>' +
+            '</div>' +
+          '</div>' +
+        '</section>';
+        const renderLastSaleScreen = (latestSale) => '<section class="crm-live-screen">' +
+          '<div class="crm-live-shell">' +
+            '<div class="crm-live-head">' +
+              '<div>' +
+                '<div class="crm-live-kicker">Fechamento mais recente</div>' +
+                '<h1 class="crm-live-title">Última venda</h1>' +
+                '<div class="crm-live-sub">Movimento mais recente da janela comercial</div>' +
+              '</div>' +
+              '<div class="' + footerStatusClass() + '">' + escapeHtml(getNested(latestSale, ['closer'], 'Sem closer') || 'Sem closer') + '</div>' +
+            '</div>' +
+            '<div class="crm-live-body">' +
+              (latestSale
+                ? '<div class="crm-live-last-sale-grid">' +
+                    '<div class="crm-live-column">' +
+                      '<div class="crm-live-metric-label">Cliente</div>' +
+                      '<div class="crm-live-last-sale-client">' + escapeHtml(latestSale.cliente || '—') + '</div>' +
+                      '<div class="crm-live-last-sale-plan">Plano ' + escapeHtml(latestSale.plano || '—') + '</div>' +
+                    '</div>' +
+                    '<div class="crm-live-column crm-live-column-right">' +
+                      renderMetric({
+                        label: 'Valor',
+                        value: moneyShort(latestSale.valor || 0),
+                        sideTitle: latestSale.closer || 'Sem closer',
+                        sideText: dateTimeLabel(latestSale.when),
+                        valueClass: 'is-medium',
+                      }) +
+                      '<div class="crm-live-last-sale-list">' +
+                        '<div class="crm-live-last-sale-row"><span>Closer</span><strong>' + escapeHtml(latestSale.closer || '—') + '</strong></div>' +
+                        '<div class="crm-live-last-sale-row"><span>Quando</span><strong>' + escapeHtml(dateTimeLabel(latestSale.when)) + '</strong></div>' +
+                      '</div>' +
+                    '</div>' +
+                  '</div>'
+                : '<div class="crm-live-empty"><div><strong>Sem venda</strong><div>Nenhuma venda fechada na janela atual.</div></div></div>') +
+            '</div>' +
+          '</div>' +
+        '</section>';
         const render = () => {
           if (!payload) return;
           const month = payload.month || {};
@@ -176,31 +821,27 @@ const buildHtml = () => `<!DOCTYPE html>
           const highlight = payload.highlights || {};
           const latestSale = payload.latestSale || null;
           const screens = {
-            month: '<section class=\"crm-live-screen\"><div class=\"crm-live-head\"><div><div class=\"crm-live-title\">Placar do mês</div><div class=\"crm-live-sub\">Janela ' + escapeHtml(dateLabel(month.period?.startDateKey)) + ' → ' + escapeHtml(dateLabel(month.period?.endDateKey)) + '</div></div><div class=\"crm-live-badge ' + (payload.stale ? 'is-stale' : '') + '\"><span class=\"crm-live-badge-dot\"></span>' + (payload.stale ? 'Cache ' + escapeHtml(String(payload.staleAgeMinutes || 0)) + ' min' : 'Ao vivo') + '</div></div><div class=\"crm-live-hero\"><article class=\"crm-live-card\"><div class=\"crm-live-label\">Receita vendida</div><div class=\"crm-live-value\">' + escapeHtml(moneyShort(month.summary?.realizado || 0)) + '</div><div class=\"crm-live-meta\"><span>Meta ' + escapeHtml(moneyShort(month.summary?.meta || 0)) + '</span><span>' + escapeHtml(percent(month.summary?.percentAtingimento || 0)) + '</span><span>Gap ' + escapeHtml(moneyShort(month.summary?.gap || 0)) + '</span></div><div class=\"crm-live-progress\"><span style=\"width:' + Math.max(0, Math.min(100, Number(month.summary?.percentAtingimento || 0))).toFixed(1) + '%\"></span></div></article><article class=\"crm-live-card\"><div class=\"crm-live-label\">Fechamentos do mês</div><div class=\"crm-live-kpi-big\">' + escapeHtml(String(month.summary?.totalVendas || 0)) + '</div><div class=\"crm-live-kpi-sub\">' + escapeHtml(String(month.windowCount || 0)) + ' movimentações lidas na janela</div><div class=\"crm-live-kpi-sub\">Cache CRM: ' + escapeHtml(String(payload.cacheDebug?.crm?.pages || 0)) + ' páginas · ' + escapeHtml(String(payload.cacheDebug?.crm?.totalFetched || 0)) + ' negócios</div></article></div></section>',
-            week: '<section class=\"crm-live-screen\"><div class=\"crm-live-head\"><div><div class=\"crm-live-title\">Meta da semana</div><div class=\"crm-live-sub\">Semana comercial ' + escapeHtml(dateLabel(weekly.commercialWeek?.startDateKey)) + ' → ' + escapeHtml(dateLabel(weekly.commercialWeek?.endDateKey)) + '</div></div><div class=\"crm-live-badge\"><span class=\"crm-live-badge-dot\"></span>Time</div></div><div class=\"crm-live-grid-two\"><article class=\"crm-live-card\"><div class=\"crm-live-label\">Closers</div><div class=\"crm-live-kpi-big\">' + escapeHtml(moneyShort(weekly.team?.closers?.actualValue || 0)) + '</div><div class=\"crm-live-kpi-sub\">Meta ' + escapeHtml(moneyShort(weekly.team?.closers?.targetValue || 0)) + ' · ' + escapeHtml(percent(weekly.team?.closers?.progressPct || 0)) + '</div><div class=\"crm-live-progress\"><span style=\"width:' + Math.max(0, Math.min(100, Number(weekly.team?.closers?.progressPct || 0))).toFixed(1) + '%\"></span></div></article><article class=\"crm-live-card\"><div class=\"crm-live-label\">SDRs</div><div class=\"crm-live-kpi-big\">' + escapeHtml(String(weekly.team?.sdrs?.actualValue || 0)) + '</div><div class=\"crm-live-kpi-sub\">Meta ' + escapeHtml(String(weekly.team?.sdrs?.targetValue || 0)) + ' reuniões · ' + escapeHtml(percent(weekly.team?.sdrs?.progressPct || 0)) + '</div><div class=\"crm-live-progress\"><span style=\"width:' + Math.max(0, Math.min(100, Number(weekly.team?.sdrs?.progressPct || 0))).toFixed(1) + '%\"></span></div></article></div></section>',
-            closers: '<section class=\"crm-live-screen\"><div class=\"crm-live-head\"><div><div class=\"crm-live-title\">Ranking dos closers</div><div class=\"crm-live-sub\">Ordenado por % da meta individual da semana</div></div><div class=\"crm-live-badge\"><span class=\"crm-live-badge-dot\"></span>' + escapeHtml(String(safeArray(weekly.closers).length)) + ' participantes</div></div><div class=\"crm-live-ranking\">' + (safeArray(weekly.closers).length ? safeArray(weekly.closers).map((row, index) => rowHtml(row, index, (entry) => ({ target: moneyShort(entry.targetValue || 0), actual: moneyShort(entry.actualValue || 0), main: moneyShort(entry.actualValue || 0) }))).join('') : '<div class=\"crm-live-card crm-live-empty\">Nenhum closer com meta nesta semana.</div>') + '</div></section>',
-            sdrs: '<section class=\"crm-live-screen\"><div class=\"crm-live-head\"><div><div class=\"crm-live-title\">Ranking dos SDRs</div><div class=\"crm-live-sub\">Ordenado por % da meta individual da semana</div></div><div class=\"crm-live-badge\"><span class=\"crm-live-badge-dot\"></span>' + escapeHtml(String(safeArray(weekly.sdrs).length)) + ' participantes</div></div><div class=\"crm-live-ranking\">' + (safeArray(weekly.sdrs).length ? safeArray(weekly.sdrs).map((row, index) => rowHtml(row, index, (entry) => ({ target: String(entry.targetValue || 0) + ' reuniões', actual: String(entry.actualValue || 0) + ' feitas', main: String(entry.actualValue || 0) }))).join('') : '<div class=\"crm-live-card crm-live-empty\">Nenhum SDR com meta nesta semana.</div>') + '</div></section>',
-            highlights: '<section class=\"crm-live-screen\"><div class=\"crm-live-head\"><div><div class=\"crm-live-title\">Destaque do dia anterior</div><div class=\"crm-live-sub\">Quem mais avançou na meta em ' + escapeHtml(dateLabel(highlight.dayKey)) + '</div></div><div class=\"crm-live-badge\"><span class=\"crm-live-badge-dot\"></span>' + escapeHtml(highlight.dayKey || '') + '</div></div><div class=\"crm-live-highlight-grid\"><article class=\"crm-live-card\"><div class=\"crm-live-label\">Closer</div><div class=\"crm-live-highlight-name\">' + escapeHtml(highlight.closer?.displayName || 'Sem destaque') + '</div><div class=\"crm-live-highlight-value\">' + escapeHtml(highlight.closer ? moneyShort(highlight.closer.dailyValue || 0) : '—') + '</div><div class=\"crm-live-kpi-sub\">' + escapeHtml(highlight.closer ? percent(highlight.closer.dailyProgressPct || 0) + ' da meta semanal em um dia' : 'Nenhum fechamento ontem') + '</div></article><article class=\"crm-live-card\"><div class=\"crm-live-label\">SDR</div><div class=\"crm-live-highlight-name\">' + escapeHtml(highlight.sdr?.displayName || 'Sem destaque') + '</div><div class=\"crm-live-highlight-value\">' + escapeHtml(highlight.sdr ? String(highlight.sdr.dailyValue || 0) : '—') + '</div><div class=\"crm-live-kpi-sub\">' + escapeHtml(highlight.sdr ? percent(highlight.sdr.dailyProgressPct || 0) + ' da meta semanal em um dia' : 'Nenhuma reunião feita ontem') + '</div></article></div></section>',
-            'last-sale': '<section class=\"crm-live-screen\"><div class=\"crm-live-head\"><div><div class=\"crm-live-title\">Última venda</div><div class=\"crm-live-sub\">Movimento mais recente do mês comercial</div></div><div class=\"crm-live-badge\"><span class=\"crm-live-badge-dot\"></span>' + escapeHtml(latestSale?.closer || 'Sem closer') + '</div></div><div class=\"crm-live-last-sale\">' + (latestSale ? '<article class=\"crm-live-card\"><div class=\"crm-live-label\">Cliente</div><div class=\"crm-live-last-sale-name\">' + escapeHtml(latestSale.cliente || '—') + '</div><div class=\"crm-live-meta\"><span>Plano ' + escapeHtml(latestSale.plano || '—') + '</span><span>' + escapeHtml(dateTimeLabel(latestSale.when)) + '</span></div></article><article class=\"crm-live-card\"><div class=\"crm-live-label\">Valor</div><div class=\"crm-live-value\" style=\"font-size:clamp(56px,5vw,88px)\">' + escapeHtml(moneyShort(latestSale.valor || 0)) + '</div><div class=\"crm-live-list\"><div class=\"crm-live-list-row\"><span>Closer</span><strong>' + escapeHtml(latestSale.closer || '—') + '</strong></div><div class=\"crm-live-list-row\"><span>Quando</span><strong>' + escapeHtml(dateTimeLabel(latestSale.when)) + '</strong></div></div></article>' : '<div class=\"crm-live-card crm-live-empty\">Nenhuma venda fechada na janela atual.</div>') + '</div></section>',
+            month: renderMonthScreen(month),
+            week: renderWeekScreen(weekly),
+            closers: renderClosersScreen(weekly),
+            sdrs: renderSdrsScreen(weekly),
+            highlights: renderHighlightsScreen(highlight),
+            'last-sale': renderLastSaleScreen(latestSale),
           };
-          root.innerHTML = SCREENS.map((key, index) => screens[key].replace('<section class=\"crm-live-screen\"', '<section class=\"crm-live-screen ' + (index === active ? 'is-active' : '') + '\"')).join('');
+          root.innerHTML = SCREENS.map((key, index) => screens[key].replace('<section class="crm-live-screen">', '<section class="crm-live-screen ' + (index === active ? 'is-active' : '') + '">')).join('');
           renderDots();
-          emptyEl?.remove();
+          if (emptyEl) emptyEl.remove();
         };
-
         const setStatus = (text) => { if (statusEl) statusEl.textContent = text; };
-
         const rotate = () => {
           if (!payload) return;
           active = (active + 1) % SCREENS.length;
           render();
         };
-
         const scheduleRotation = () => {
           if (rotateTimer) clearInterval(rotateTimer);
           rotateTimer = setInterval(rotate, ROTATE_MS);
         };
-
         const saveLastGood = (data) => {
           try { localStorage.setItem('crmLive:lastGood', JSON.stringify(data)); } catch {}
         };
@@ -211,7 +852,7 @@ const buildHtml = () => `<!DOCTYPE html>
           } catch { return null; }
         };
         const showError = (title, body) => {
-          root.innerHTML = '<div class=\"crm-live-empty\"><div><strong style=\"display:block;font-size:clamp(30px,2.4vw,42px);margin-bottom:14px\">' + escapeHtml(title) + '</strong><div style=\"max-width:760px;line-height:1.5\">' + escapeHtml(body) + '</div></div></div>';
+          root.innerHTML = '<div class="crm-live-empty"><div><strong>' + escapeHtml(title) + '</strong><div>' + escapeHtml(body) + '</div></div></div>';
           if (dotsEl) dotsEl.innerHTML = '';
         };
         const explainError = (status, errorCode, message) => {
@@ -233,18 +874,23 @@ const buildHtml = () => `<!DOCTYPE html>
             body: message || 'O backend respondeu com erro e ainda não existe um snapshot anterior para exibir.',
           };
         };
-
         const loadData = async () => {
           try {
             const res = await fetch('/api/crm-live-data', { credentials: 'include', cache: 'no-store' });
-            const data = await res.json().catch(() => null);
+            let data = null;
+            try {
+              data = await res.json();
+            } catch (parseError) {
+              data = null;
+            }
             if (!res.ok || !data) {
-              const err = new Error(data?.message || 'crm_live_fetch_failed');
+              const err = new Error(getNested(data, ['message'], 'crm_live_fetch_failed') || 'crm_live_fetch_failed');
               err.status = res.status;
-              err.errorCode = data?.error || '';
+              err.errorCode = getNested(data, ['error'], '') || '';
               throw err;
             }
             payload = data;
+            preloadFromPayload(data);
             saveLastGood(data);
             render();
             scheduleRotation();
@@ -253,17 +899,17 @@ const buildHtml = () => `<!DOCTYPE html>
             const fallback = loadLastGood();
             if (fallback) {
               payload = fallback;
+              preloadFromPayload(fallback);
               render();
               scheduleRotation();
               setStatus('Sem atualização nova · mantendo última tela boa');
               return;
             }
-            const explained = explainError(error?.status, error?.errorCode, error?.message);
+            const explained = explainError(error && error.status, error && error.errorCode, error && error.message);
             showError(explained.title, explained.body);
-            setStatus((error?.status ? 'Erro ' + String(error.status) + ' · ' : '') + (error?.errorCode || 'sem snapshot'));
+            setStatus(((error && error.status) ? 'Erro ' + String(error.status) + ' · ' : '') + ((error && error.errorCode) || 'sem snapshot'));
           }
         };
-
         loadData();
         pollTimer = setInterval(loadData, POLL_MS);
         document.addEventListener('visibilitychange', () => {

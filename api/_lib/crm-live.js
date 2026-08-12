@@ -193,10 +193,30 @@ const loadCurrentGoal = async ({ now = new Date() } = {}) => {
 
 const loadGrowthPeople = async () => {
   const docs = await listCollectionAsAdmin(GROWTH_PEOPLE_COLLECTION, { pageSize: 1000 });
-  return docs
+  const people = docs
     .map((row) => decodeGrowthPeopleDoc({ name: `${GROWTH_PEOPLE_COLLECTION}/${encodeURIComponent(row.firestoreDocId || row.id)}`, fields: encodeFields(row).fields }))
     .filter(Boolean)
     .filter((row) => row.active !== false);
+  const userUids = [...new Set(people.map((row) => safeString(row.userUid)).filter(Boolean))];
+  if (!userUids.length) return people;
+  const photoByUid = new Map();
+  await Promise.all(
+    userUids.map(async (uid) => {
+      try {
+        const userDoc = await getDocumentAsAdmin(`users/${encodeURIComponent(uid)}`);
+        const photoURL = safeString(userDoc?.photoURL || userDoc?.photoUrl);
+        if (photoURL) photoByUid.set(uid, photoURL);
+      } catch (error) {
+        if (Number(error?.status) !== 404) {
+          console.warn("[crm-live] user photo lookup failed", { uid, status: Number(error?.status) || null });
+        }
+      }
+    })
+  );
+  return people.map((row) => ({
+    ...row,
+    photoURL: safeString(row.photoURL) || photoByUid.get(safeString(row.userUid)) || "",
+  }));
 };
 
 const decodeSdrEventRow = (row = {}) => {
