@@ -133,6 +133,7 @@ module.exports = async (req, res) => {
     return sendJson(res, 200, {
       month: crmSlice.payload.month,
       news,
+      pipeline: crmSlice.payload.pipeline || { rows: [], windowStartDateKey: "" },
       weekly: {
         commercialWeek: crmSlice.payload.weekly?.commercialWeek || sdrSlice.payload.weekly?.commercialWeek,
         team: {

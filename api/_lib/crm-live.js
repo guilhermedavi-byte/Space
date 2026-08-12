@@ -489,20 +489,73 @@ const buildWeeklyTeamSummary = ({ weeklyReadModel }) => {
   const sdrRows = Array.isArray(weeklyReadModel?.progress?.sdrs) ? weeklyReadModel.progress.sdrs : [];
   const closersTarget = closerRows.reduce((sum, row) => sum + safeNumber(row.targetValue), 0);
   const closersActual = closerRows.reduce((sum, row) => sum + safeNumber(row.actualValue), 0);
+  const closersCount = closerRows.reduce((sum, row) => sum + safeNumber(row.count), 0);
   const sdrTarget = sdrRows.reduce((sum, row) => sum + safeNumber(row.targetValue), 0);
   const sdrActual = sdrRows.reduce((sum, row) => sum + safeNumber(row.actualValue), 0);
+  const sdrCount = sdrRows.reduce((sum, row) => sum + safeNumber(row.count), 0);
   return {
     closers: {
       targetValue: closersTarget,
       actualValue: closersActual,
       progressPct: closersTarget > 0 ? (closersActual / closersTarget) * 100 : 0,
+      count: closersCount,
+      ticketMedio: closersCount > 0 ? closersActual / closersCount : 0,
     },
     sdrs: {
       targetValue: sdrTarget,
       actualValue: sdrActual,
       progressPct: sdrTarget > 0 ? (sdrActual / sdrTarget) * 100 : 0,
+      count: sdrCount,
     },
   };
+};
+
+const countSalesDaysRemainingInclusive = (period, now = new Date()) => {
+  if (!period) return 0;
+  const nowKey = formatSaoPauloDateKey(now);
+  const fromKey = !nowKey || nowKey < period.startDateKey ? period.startDateKey : nowKey;
+  const fromDate = new Date(`${fromKey}T12:00:00-03:00`);
+  const endDate = new Date(`${period.endDateKey}T12:00:00-03:00`);
+  if (Number.isNaN(fromDate.getTime()) || Number.isNaN(endDate.getTime()) || fromDate > endDate) return 0;
+  let count = 0;
+  for (const cursor = new Date(fromDate); cursor <= endDate; cursor.setDate(cursor.getDate() + 1)) {
+    if (cursor.getDay() !== 0) count += 1;
+  }
+  return count;
+};
+
+const buildPipelineRows = ({ businesses = [], people = [], now = new Date(), commercialStartDateKey = "" } = {}) => {
+  const indexes = buildGrowthPeopleIndexes(people);
+  const tenDaysAgo = new Date((now instanceof Date ? now : new Date(now)).getTime() - (10 * 86400000));
+  const tenDaysAgoKey = formatSaoPauloDateKey(tenDaysAgo);
+  const thresholdKey = [safeString(commercialStartDateKey), tenDaysAgoKey].filter(Boolean).sort()[0] || tenDaysAgoKey;
+  const grouped = new Map();
+  (Array.isArray(businesses) ? businesses : []).forEach((business) => {
+    const status = normalizeKey(extractBusinessStatus(business));
+    const stageKey = normalizeKey(extractStageName(business));
+    const movedAt = extractBusinessLastMovedAt(business);
+    const dateKey = movedAt ? formatSaoPauloDateKey(movedAt) : "";
+    if (!dateKey || dateKey < thresholdKey) return;
+    if (status !== normalizeKey("in_process")) return;
+    if (stageKey !== normalizeKey("Forecast") && stageKey !== normalizeKey("Pagamento Parcial")) return;
+    const attendantId = extractCrmAttendantId(business);
+    const personId = safeString(attendantId && indexes.byCrmAttendantId.get(attendantId));
+    if (!personId) return;
+    const person = indexes.byPersonId.get(personId);
+    const entry = grouped.get(personId) || {
+      personId,
+      displayName: safeString(person?.displayName) || extractBusinessAttendantName(business) || "Sem responsável",
+      photoURL: safeString(person?.photoURL),
+      value: 0,
+      dealsCount: 0,
+    };
+    entry.value += getDealValue(business);
+    entry.dealsCount += 1;
+    grouped.set(personId, entry);
+  });
+  return Array.from(grouped.values())
+    .filter((row) => safeNumber(row.value) > 0)
+    .sort((left, right) => safeNumber(right.value) - safeNumber(left.value) || safeString(left.displayName).localeCompare(safeString(right.displayName), "pt-BR"));
 };
 
 const loadGoalByMonthKey = async (monthKey) => {
@@ -632,25 +685,8 @@ const buildPersonalBestHeadline = ({ weeklyRollups = [], currentRows = [], role 
 
 const buildWeeklyNewsScreens = ({ month = {}, weekly = {}, previousMonthComparison = null, weeklyRollups = [], now = new Date() } = {}) => {
   const screens = [];
-  const closerRows = Array.isArray(weekly?.closers) ? weekly.closers : [];
   const sdrRows = Array.isArray(weekly?.sdrs) ? weekly.sdrs : [];
-  const closerLeader = closerRows[0] || null;
-  const closerChallenger = closerRows[1] || null;
-  const monthSummary = month?.summary || {};
-  const ticketMedio = safeNumber(monthSummary?.ticketMedio);
   const weekProjection = buildWeeklyProjection({ weeklyTeam: weekly?.team?.closers, commercialWeek: weekly?.commercialWeek, now });
-
-  if (closerLeader && closerLeader.leaderPressureFromName && safeNumber(closerLeader.leaderPressureUnits) > 0) {
-    screens.push({
-      id: "pressure_leader",
-      type: "pressure_leader",
-      personId: closerLeader.personId,
-      personName: closerLeader.displayName,
-      photoURL: closerLeader.photoURL || "",
-      leaderPressureUnits: roundMoney(closerLeader.leaderPressureUnits),
-      challengerName: closerLeader.leaderPressureFromName,
-    });
-  }
 
   if (weekly?.team?.closers && weekly?.commercialWeek) {
     screens.push({
@@ -664,49 +700,8 @@ const buildWeeklyNewsScreens = ({ month = {}, weekly = {}, previousMonthComparis
     });
   }
 
-  if (closerLeader && closerChallenger && ticketMedio > 0) {
-    const missingRevenue = Math.max(0, safeNumber(closerChallenger.missingToLead));
-    const salesNeeded = Math.max(1, Math.ceil(missingRevenue / ticketMedio));
-    screens.push({
-      id: "sales_to_lead",
-      type: "sales_to_lead",
-      personId: closerChallenger.personId,
-      personName: closerChallenger.displayName,
-      photoURL: closerChallenger.photoURL || "",
-      salesNeeded,
-      gapRevenue: missingRevenue,
-      ticketMedio,
-    });
-  }
-
-  const allRows = [...closerRows.map((row) => ({ ...row, role: "closer" })), ...sdrRows.map((row) => ({ ...row, role: "sdr" }))].filter(
-    (row) => safeNumber(row.targetValue) > 0 && safeNumber(row.progressPct) < 100
-  );
-  const closest = allRows.sort((left, right) => safeNumber(right.progressPct) - safeNumber(left.progressPct))[0] || null;
-  if (closest) {
-    screens.push({
-      id: "closest_to_goal",
-      type: "closest_to_goal",
-      personId: closest.personId,
-      personName: closest.displayName,
-      photoURL: closest.photoURL || "",
-      role: closest.role,
-      missingUnits: safeNumber(closest.missingToGoal),
-    });
-  }
-
   const personalBest = buildPersonalBestHeadline({ weeklyRollups, currentRows: sdrRows, role: "sdrs" });
   if (personalBest) screens.push(personalBest);
-
-  if (previousMonthComparison && safeNumber(previousMonthComparison.previousRealized) >= 0) {
-    screens.push({
-      id: "month_vs_previous",
-      type: "month_vs_previous",
-      delta: safeNumber(previousMonthComparison.delta),
-      ahead: Boolean(previousMonthComparison.ahead),
-      previousMonthKey: previousMonthComparison.previousMonthKey,
-    });
-  }
 
   return screens;
 };
@@ -824,7 +819,11 @@ const buildCrmLiveCrmSlice = async ({ goal, people, now = new Date() } = {}) => 
     periodStart: safeString(goal?.periodStart),
     periodEnd: safeString(goal?.periodEnd),
   });
-  const crm = await fetchCrmWindow({ startDateKey: monthPeriod.startDateKey });
+  const tenDaysAgoKey = formatSaoPauloDateKey(new Date((now instanceof Date ? now : new Date(now)).getTime() - (10 * 86400000)));
+  const crmWindowStartDateKey = [monthPeriod.startDateKey, tenDaysAgoKey].filter(Boolean).sort()[0] || monthPeriod.startDateKey;
+  // Pipeline é estoque, não ciclo: por isso a tela "Dinheiro na mesa" usa a janela mais ampla
+  // entre o início do ciclo comercial e os últimos 10 dias de movimentação.
+  const crm = await fetchCrmWindow({ startDateKey: crmWindowStartDateKey });
   const monthSummary = buildMonthSummary({ businesses: crm.businesses, goal, now });
   const previousMonthKey = subtractMonthsFromMonthKey(monthPeriod.monthKey, 1);
   const previousGoal = previousMonthKey ? await loadGoalByMonthKey(previousMonthKey) : null;
@@ -864,15 +863,25 @@ const buildCrmLiveCrmSlice = async ({ goal, people, now = new Date() } = {}) => 
     sdrEvents: [],
     now,
   });
+  const weeklyTeam = buildWeeklyTeamSummary({ weeklyReadModel });
   return {
     generatedAt: new Date().toISOString(),
     month: monthSummary,
     weekly: {
       commercialWeek: weeklyReadModel.commercialWeek,
       team: {
-        closers: buildWeeklyTeamSummary({ weeklyReadModel }).closers,
+        closers: weeklyTeam.closers,
       },
       closers: weeklyReadModel.progress.closers || [],
+    },
+    pipeline: {
+      windowStartDateKey: crmWindowStartDateKey,
+      rows: buildPipelineRows({
+        businesses: crm.businesses,
+        people,
+        now,
+        commercialStartDateKey: monthPeriod.startDateKey,
+      }),
     },
     highlights: {
       dayKey: highlights.dayKey,
@@ -886,7 +895,11 @@ const buildCrmLiveCrmSlice = async ({ goal, people, now = new Date() } = {}) => 
       unknownResponsible: unresolved.unknownResponsible,
     },
     cacheDebug: {
-      crm: crm.pagination,
+      crm: {
+        ...(crm.pagination || {}),
+        commercialStartDateKey: monthPeriod.startDateKey,
+        pipelineWindowStartDateKey: crmWindowStartDateKey,
+      },
     },
   };
 };

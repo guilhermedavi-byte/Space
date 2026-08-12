@@ -233,9 +233,9 @@ const buildHtml = () => `<!DOCTYPE html>
         align-items: center;
       }
       .crm-live-week-grid {
-        grid-template-columns: minmax(28vw, 32vw) minmax(38vw, 44vw);
+        grid-template-columns: minmax(0, 1fr);
         justify-content: center;
-        gap: 5vw;
+        gap: 4vh;
       }
       .crm-live-highlight-grid,
       .crm-live-last-sale-grid {
@@ -436,21 +436,21 @@ const buildHtml = () => `<!DOCTYPE html>
       .crm-live-duel {
         height: 100%;
         display: grid;
-        grid-template-columns: minmax(20vw, 24vw) minmax(28vw, 1fr) minmax(20vw, 24vw);
+        grid-template-columns: minmax(17vw, 20vw) minmax(32vw, 1fr) minmax(17vw, 20vw);
         align-items: center;
-        gap: 4vw;
+        gap: 7vw;
       }
       .crm-live-duel-side {
         display: grid;
         justify-items: center;
         align-content: center;
-        gap: 1.8vh;
+        gap: 1.2vh;
         text-align: center;
       }
       .crm-live-duel-side .crm-live-avatar {
-        width: 13vh;
-        height: 13vh;
-        font-size: 3.3vh;
+        width: 11.5vh;
+        height: 11.5vh;
+        font-size: 2.9vh;
       }
       .crm-live-duel-side.is-leader .crm-live-avatar {
         border: .45vh solid var(--accent);
@@ -458,47 +458,84 @@ const buildHtml = () => `<!DOCTYPE html>
         filter: none;
       }
       .crm-live-duel-name {
-        font-size: 4.2vh;
+        font-size: 3.2vh;
         line-height: .95;
         letter-spacing: -.06em;
         font-weight: 500;
       }
       .crm-live-duel-sub {
         color: var(--text-secondary);
-        font-size: 2vh;
+        font-size: 1.75vh;
         line-height: 1.35;
       }
       .crm-live-duel-center {
         display: grid;
         justify-items: center;
         align-content: center;
-        gap: 2vh;
+        gap: 1.8vh;
         text-align: center;
       }
       .crm-live-duel-center .crm-live-metric-label {
         justify-self: center;
       }
       .crm-live-duel-message {
-        font-size: min(6.4vw, 8.8vh);
-        line-height: .96;
+        font-size: min(12vw, 17vh);
+        line-height: .88;
         letter-spacing: -.08em;
         font-weight: 500;
-        max-width: 32vw;
+        max-width: 30vw;
       }
       .crm-live-duel-context {
         color: var(--text-secondary);
-        font-size: 2.1vh;
+        font-size: 2.2vh;
         line-height: 1.4;
+        max-width: 26vw;
       }
       .crm-live-duel-delta {
-        color: var(--accent);
+        color: var(--text);
       }
       .crm-live-week-countdown {
         display: grid;
-        gap: 1.4vh;
+        gap: 2.2vh;
+        justify-items: center;
       }
       .crm-live-week-countdown .crm-live-metric-value {
-        font-size: min(11vw, 15vh);
+        font-size: min(16vw, 22vh);
+      }
+      .crm-live-week-countdown-main {
+        display: flex;
+        align-items: baseline;
+        justify-content: center;
+        gap: 1.2vw;
+        line-height: .9;
+      }
+      .crm-live-week-countdown-unit {
+        font-size: min(4vw, 5.2vh);
+        color: var(--text-secondary);
+        letter-spacing: -.03em;
+      }
+      .crm-live-week-countdown-progress {
+        width: min(72vw, 100%);
+        height: .9vh;
+        border-radius: 999px;
+        background: var(--track);
+        overflow: hidden;
+      }
+      .crm-live-week-countdown-progress > span {
+        display: block;
+        height: 100%;
+        width: 0;
+        border-radius: inherit;
+        background: rgba(255,255,255,.55);
+      }
+      .crm-live-week-countdown-scale {
+        width: min(72vw, 100%);
+        display: flex;
+        justify-content: space-between;
+        gap: 2vw;
+        color: var(--text-tertiary);
+        font-size: 1.55vh;
+        line-height: 1.35;
       }
       .crm-live-week-rails {
         display: grid;
@@ -562,6 +599,55 @@ const buildHtml = () => `<!DOCTYPE html>
         line-height: 1.05;
         letter-spacing: -.04em;
         font-weight: 500;
+      }
+      .crm-live-team-progress {
+        height: 100%;
+        display: grid;
+        align-content: center;
+        justify-items: center;
+        gap: 2.4vh;
+        text-align: center;
+      }
+      .crm-live-team-progress-sub {
+        color: var(--text-secondary);
+        font-size: 2.1vh;
+        line-height: 1.35;
+      }
+      .crm-live-team-progress .crm-live-progress {
+        width: min(56vw, 100%);
+      }
+      .crm-live-pipeline {
+        height: 100%;
+        display: grid;
+        align-content: center;
+        gap: 2.4vh;
+      }
+      .crm-live-pipeline-sub {
+        color: var(--text-secondary);
+        font-size: 1.95vh;
+        line-height: 1.35;
+        max-width: 38vw;
+      }
+      .crm-live-pipeline-list {
+        display: grid;
+        gap: 1.5vh;
+      }
+      .crm-live-pipeline-row {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 2vw;
+      }
+      .crm-live-pipeline-row strong {
+        font-size: 3.8vh;
+        line-height: .95;
+        letter-spacing: -.05em;
+        font-weight: 500;
+      }
+      .crm-live-pipeline-row span {
+        color: var(--text-secondary);
+        font-size: 2.3vh;
+        line-height: 1.2;
       }
       .crm-live-footer {
         position: absolute;
@@ -850,13 +936,44 @@ const buildHtml = () => `<!DOCTYPE html>
           }
           return count;
         };
-        const formatCountdown = (endDate) => {
-          if (!(endDate instanceof Date)) return '0d 0h';
+        const formatWeekCountdown = (endDate) => {
+          if (!(endDate instanceof Date)) return { value: '0', unit: 'horas' };
           const diff = Math.max(0, endDate.getTime() - Date.now());
-          const totalHours = Math.floor(diff / 3600000);
+          const totalMinutes = Math.floor(diff / 60000);
+          const totalHours = Math.floor(totalMinutes / 60);
+          if (totalHours < 24) {
+            const hours = Math.floor(totalMinutes / 60);
+            const minutes = totalMinutes % 60;
+            return {
+              value: String(hours) + 'h ' + String(minutes).padStart(2, '0'),
+              unit: 'horas',
+            };
+          }
           const days = Math.floor(totalHours / 24);
           const hours = totalHours % 24;
-          return days + 'd ' + hours + 'h';
+          return {
+            value: String(days) + 'd ' + String(hours) + 'h',
+            unit: 'dias',
+          };
+        };
+        const weekElapsedProgress = (startDateKey, endDateKey) => {
+          const startDate = parseDateKeyAtStart(startDateKey);
+          const endDate = parseDateKeyAtEnd(endDateKey);
+          if (!(startDate instanceof Date) || !(endDate instanceof Date)) return 0;
+          const total = Math.max(1, endDate.getTime() - startDate.getTime());
+          const elapsed = Math.max(0, Math.min(total, Date.now() - startDate.getTime()));
+          return (elapsed / total) * 100;
+        };
+        const weekdayDateLabel = (dateKey, options = {}) => {
+          const date = parseDateKeyAtStart(dateKey);
+          if (!(date instanceof Date)) return dateKey || '—';
+          const includeTime = !!options.includeTime;
+          const weekday = new Intl.DateTimeFormat('pt-BR', {
+            timeZone: 'America/Sao_Paulo',
+            weekday: 'long',
+          }).format(date);
+          const formatted = weekday + ', ' + dateLabel(dateKey);
+          return includeTime ? formatted + ' · 23:59' : formatted;
         };
         const safeArray = (value) => Array.isArray(value) ? value : [];
         const getPhotoUrl = (row) => {
@@ -1005,9 +1122,7 @@ const buildHtml = () => `<!DOCTYPE html>
             '<div class="crm-live-highlight-note">' + escapeHtml(hasRow ? 'ontem: ' + percent(row.dailyProgressPct || 0) + ' da meta individual' : (role === 'closer' ? 'Sem fechamento' : 'Sem reunião')) + '</div>' +
           '</div>';
         };
-        const renderPaceState = (month) => {
-          const summary = month.summary || {};
-          const period = month.period || {};
+        const renderPaceState = (period, summary) => {
           const endDate = parseDateKeyAtEnd(period.endDateKey);
           const startDate = parseDateKeyAtStart(period.startDateKey);
           const todayStart = startOfSaoPauloDay(new Date());
@@ -1026,26 +1141,27 @@ const buildHtml = () => `<!DOCTYPE html>
             delta,
           };
         };
-        const renderMonthScreen = (month) => {
-          const summary = month.summary || {};
-          const pace = renderPaceState(month);
+        const renderGoalScreen = (weekly) => {
+          const team = getNested(weekly, ['team', 'closers'], {});
+          const period = getNested(weekly, ['commercialWeek'], {});
+          const pace = renderPaceState(period, team);
           return '<section class="crm-live-screen">' +
             '<div class="crm-live-shell">' +
               '<div class="crm-live-head">' +
-                '<h1 class="crm-live-title">Falta para a meta do mês</h1>' +
+                '<h1 class="crm-live-title">Falta para a meta da semana</h1>' +
               '</div>' +
               '<div class="crm-live-body">' +
                 '<div class="crm-live-center">' +
                   renderMetric({
                     label: 'Faltam',
-                    value: moneyShort(summary.gap || 0),
-                    sideTitle: moneyShort(summary.realizado || 0) + ' realizado',
-                    sideText: percent(summary.percentAtingimento || 0),
-                    progress: summary.percentAtingimento || 0,
+                    value: moneyShort(team.missingValue || 0),
+                    sideTitle: moneyShort(team.actualValue || 0) + ' realizado',
+                    sideText: percent(team.progressPct || 0),
+                    progress: team.progressPct || 0,
                   }) +
                   '<div class="crm-live-support-grid">' +
                     '<div class="crm-live-support-item"><strong>' + escapeHtml(moneyShort(pace.requiredPerDay || 0)) + '</strong><span>Ritmo necessário por dia</span></div>' +
-                    '<div class="crm-live-support-item"><strong>' + escapeHtml(moneyShort(summary.meta || 0)) + '</strong><span>Meta do mês</span></div>' +
+                    '<div class="crm-live-support-item"><strong>' + escapeHtml(moneyShort(team.targetValue || 0)) + '</strong><span>Meta da semana</span></div>' +
                     '<div class="crm-live-support-item"><div class="crm-live-state-pill ' + (pace.abovePace ? 'is-success' : 'is-danger') + '"><strong>' + escapeHtml(pace.abovePace ? 'ACIMA' : 'ABAIXO') + '</strong><span>do ritmo</span></div><span>' + escapeHtml((pace.abovePace ? '+' : '') + moneyShort(pace.delta || 0) + ' vs esperado hoje') + '</span></div>' +
                   '</div>' +
                 '</div>' +
@@ -1053,47 +1169,29 @@ const buildHtml = () => `<!DOCTYPE html>
             '</div>' +
           '</section>';
         };
-        const renderWeekRail = ({ label, actual, target, role }) => {
-          const remaining = Math.max(0, Number(target || 0) - Number(actual || 0));
-          const gapLabel = role === 'closer' ? moneyShort(remaining) : String(remaining) + ' reuniões';
-          const progress = target > 0 ? (Number(actual || 0) / Number(target || 0)) * 100 : 0;
-          const actualLabel = role === 'closer' ? moneyShort(actual || 0) : String(actual || 0);
-          const targetLabel = role === 'closer' ? moneyShort(target || 0) : String(target || 0);
-          return '<div class="crm-live-week-rail">' +
-            '<div class="crm-live-week-rail-head">' +
-              '<div class="crm-live-week-rail-name">' + escapeHtml(label) + '</div>' +
-              '<div class="crm-live-week-rail-gap">' + escapeHtml('faltam ' + gapLabel) + '</div>' +
-            '</div>' +
-            '<div class="crm-live-ranking-bar"><span style="width:' + clampPercent(progress).toFixed(1) + '%; background:' + (role === 'closer' ? 'var(--accent)' : 'rgba(255,255,255,.28)') + '"></span></div>' +
-            '<div class="crm-live-week-rail-sub">' + escapeHtml(actualLabel + ' de ' + targetLabel) + '</div>' +
-          '</div>';
-        };
-        const renderWeekScreen = (weekly) => '<section class="crm-live-screen">' +
+        const renderWeekScreen = (weekly) => {
+          const startDateKey = getNested(weekly, ['commercialWeek', 'startDateKey'], '');
+          const endDateKey = getNested(weekly, ['commercialWeek', 'endDateKey'], '');
+          const countdown = formatWeekCountdown(parseDateKeyAtEnd(endDateKey));
+          const progress = weekElapsedProgress(startDateKey, endDateKey);
+          const barColor = progress > 85 ? 'var(--accent)' : progress >= 60 ? 'var(--accent)' : 'rgba(255,255,255,.55)';
+          const countColor = progress > 85 ? 'var(--accent)' : 'var(--text-primary)';
+          return '<section class="crm-live-screen">' +
           '<div class="crm-live-shell">' +
             '<div class="crm-live-head">' +
               '<h1 class="crm-live-title">Relógio da semana</h1>' +
             '</div>' +
             '<div class="crm-live-body crm-live-week-grid">' +
-              '<div class="crm-live-column">' +
-                '<div class="crm-live-week-countdown">' +
-                  renderMetric({
-                    label: 'Termina em',
-                    value: formatCountdown(parseDateKeyAtEnd(getNested(weekly, ['commercialWeek', 'endDateKey'], ''))),
-                    sideTitle: dateLabel(getNested(weekly, ['commercialWeek', 'startDateKey'], '')) + ' a ' + dateLabel(getNested(weekly, ['commercialWeek', 'endDateKey'], '')),
-                    sideText: 'ciclo comercial',
-                    valueClass: 'is-small-hero',
-                  }) +
-                '</div>' +
-              '</div>' +
-              '<div class="crm-live-column crm-live-column-right">' +
-                '<div class="crm-live-week-rails">' +
-                  renderWeekRail({ label: 'Time de closers', actual: getNested(weekly, ['team', 'closers', 'actualValue'], 0), target: getNested(weekly, ['team', 'closers', 'targetValue'], 0), role: 'closer' }) +
-                  renderWeekRail({ label: 'Time de SDRs', actual: getNested(weekly, ['team', 'sdrs', 'actualValue'], 0), target: getNested(weekly, ['team', 'sdrs', 'targetValue'], 0), role: 'sdr' }) +
-                '</div>' +
+              '<div class="crm-live-center">' +
+                '<div class="crm-live-metric-label">A semana termina em</div>' +
+                '<div class="crm-live-week-countdown-main" style="color:' + escapeHtml(countColor) + '">' + escapeHtml(countdown.value) + '<span class="crm-live-week-countdown-unit">' + escapeHtml(countdown.unit) + '</span></div>' +
+                '<div class="crm-live-week-countdown-progress"><span style="width:' + clampPercent(progress).toFixed(1) + '%; background:' + escapeHtml(barColor) + '"></span></div>' +
+                '<div class="crm-live-week-countdown-scale"><span>' + escapeHtml(weekdayDateLabel(startDateKey)) + '</span><span>' + escapeHtml(weekdayDateLabel(endDateKey, { includeTime: true })) + '</span></div>' +
               '</div>' +
             '</div>' +
           '</div>' +
         '</section>';
+        };
         const renderClosersScreen = (weekly) => {
           const rows = safeArray(weekly.closers).slice(0, 2);
           if (rows.length < 2) {
@@ -1102,6 +1200,11 @@ const buildHtml = () => `<!DOCTYPE html>
           const leader = rows[0];
           const challenger = rows[1];
           const needed = Math.max(0, Number(challenger.missingToLead || 0));
+          const ticketMedio = Math.max(0, Number(getNested(weekly, ['team', 'closers', 'ticketMedio'], 0) || 0));
+          const salesNeeded = ticketMedio > 0 ? Math.max(1, Math.ceil(needed / ticketMedio)) : 0;
+          const salesCopy = salesNeeded > 0
+            ? String(salesNeeded) + ' ' + (salesNeeded === 1 ? 'venda' : 'vendas') + ' para ' + String(challenger.displayName || 'o desafiante') + ' assumir a liderança'
+            : percent(leader.progressPct || 0) + ' contra ' + percent(challenger.progressPct || 0) + ' agora';
           return '<section class="crm-live-screen">' +
             '<div class="crm-live-shell">' +
               '<div class="crm-live-head">' +
@@ -1117,8 +1220,8 @@ const buildHtml = () => `<!DOCTYPE html>
                   '</div>' +
                   '<div class="crm-live-duel-center">' +
                     '<div class="crm-live-metric-label">Distância para a virada</div>' +
-                    '<div class="crm-live-duel-message"><span class="crm-live-duel-delta">' + escapeHtml(challenger.displayName || 'O desafiante') + '</span> precisa de ' + escapeHtml(moneyShort(needed)) + ' para assumir a liderança</div>' +
-                    '<div class="crm-live-duel-context">' + escapeHtml(percent(leader.progressPct || 0) + ' contra ' + percent(challenger.progressPct || 0) + ' agora') + '</div>' +
+                    '<div class="crm-live-duel-message"><span class="crm-live-duel-delta">' + escapeHtml(moneyShort(needed)) + '</span></div>' +
+                    '<div class="crm-live-duel-context">' + escapeHtml(salesCopy) + '</div>' +
                   '</div>' +
                   '<div class="crm-live-duel-side">' +
                     avatarHtml(challenger, { leader: false }) +
@@ -1131,14 +1234,57 @@ const buildHtml = () => `<!DOCTYPE html>
             '</div>' +
           '</section>';
         };
-        const renderSdrsScreen = (weekly) => '<section class="crm-live-screen">' +
+        const renderRankingScreen = ({ title, rows, role }) => '<section class="crm-live-screen">' +
           '<div class="crm-live-shell">' +
             '<div class="crm-live-head">' +
-              '<h1 class="crm-live-title">Ranking dos SDRs</h1>' +
+              '<h1 class="crm-live-title">' + escapeHtml(title) + '</h1>' +
             '</div>' +
-            '<div class="crm-live-body"><div class="crm-live-ranking is-fill">' + renderRankingRows(weekly.sdrs, { role: 'sdr' }) + '</div></div>' +
+            '<div class="crm-live-body"><div class="crm-live-ranking is-fill">' + renderRankingRows(rows, { role: role }) + '</div></div>' +
           '</div>' +
         '</section>';
+        const renderTeamProgressScreen = ({ title, actual, target, noun }) => {
+          const progress = target > 0 ? (Number(actual || 0) / Number(target || 0)) * 100 : 0;
+          return '<section class="crm-live-screen">' +
+            '<div class="crm-live-shell">' +
+              '<div class="crm-live-head">' +
+                '<h1 class="crm-live-title">' + escapeHtml(title) + '</h1>' +
+              '</div>' +
+              '<div class="crm-live-body">' +
+                '<div class="crm-live-center">' +
+                  '<div class="crm-live-team-progress">' + escapeHtml(String(actual || 0)) + ' / ' + escapeHtml(String(target || 0)) + '</div>' +
+                  '<div class="crm-live-team-progress-sub">' + escapeHtml(noun) + '</div>' +
+                  '<div class="crm-live-progress"><span style="width:' + clampPercent(progress).toFixed(1) + '%"></span></div>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+          '</section>';
+        };
+        const renderPipelineScreen = (pipeline) => {
+          const rows = safeArray(pipeline?.rows).slice(0, 5);
+          if (!rows.length) return '';
+          return '<section class="crm-live-screen">' +
+            '<div class="crm-live-shell">' +
+              '<div class="crm-live-head">' +
+                '<h1 class="crm-live-title">Dinheiro na mesa</h1>' +
+              '</div>' +
+              '<div class="crm-live-body">' +
+                '<div class="crm-live-center">' +
+                  '<div class="crm-live-pipeline">' +
+                    '<div class="crm-live-pipeline-list">' +
+                      rows.map((row) =>
+                        '<div class="crm-live-pipeline-row">' +
+                          '<strong>' + escapeHtml(row.displayName || 'Sem responsável') + '</strong>' +
+                          '<span>' + escapeHtml(moneyShort(row.totalValue || 0)) + '</span>' +
+                        '</div>'
+                      ).join('') +
+                    '</div>' +
+                    '<div class="crm-live-pipeline-sub">aberto em Forecast e Pagamento Parcial, movimentado nos últimos 10 dias</div>' +
+                  '</div>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+          '</section>';
+        };
         const renderHighlightsScreen = (highlight) => '<section class="crm-live-screen">' +
           '<div class="crm-live-shell">' +
             '<div class="crm-live-head">' +
@@ -1175,16 +1321,6 @@ const buildHtml = () => `<!DOCTYPE html>
             title = 'Recorde pessoal';
             phrase = '<strong>' + escapeHtml(item.personName || 'Pessoa') + '</strong> está a ' + escapeHtml(String(item.remaining || 0)) + ' ' + ((Number(item.remaining || 0) === 1) ? 'reunião' : 'reuniões') + ' do melhor dele na semana.';
             context = 'Melhor marca anterior: ' + escapeHtml(String(item.historicalBest || 0)) + ' reuniões.';
-          } else if (item.type === 'closest_to_goal') {
-            title = 'Mais perto de bater';
-            phrase = '<strong>' + escapeHtml(item.personName || 'Pessoa') + '</strong> é quem está mais perto de bater a meta: faltam ' + escapeHtml(item.role === 'closer' ? moneyShort(item.missingUnits || 0) : String(item.missingUnits || 0) + ' reuniões') + '.';
-            context = 'Comparação sempre por percentual de progressão da meta individual.';
-          } else if (item.type === 'month_vs_previous') {
-            title = 'Agosto vs julho';
-            phrase = item.ahead
-              ? 'Agosto está <strong>' + escapeHtml(moneyShort(Math.abs(item.delta || 0))) + '</strong> à frente de julho no mesmo dia.'
-              : 'Agosto está <strong>' + escapeHtml(moneyShort(Math.abs(item.delta || 0))) + '</strong> atrás de julho no mesmo dia.';
-            context = 'Mesmo número de dias úteis de venda no ciclo comercial.';
           } else {
             return '';
           }
@@ -1291,7 +1427,9 @@ const buildHtml = () => `<!DOCTYPE html>
           if (!activeInterruption) playNextInterruption();
         };
         const buildScreenKeys = (currentPayload) => {
-          const keys = ['month', 'week', 'closers', 'sdrs'];
+          const keys = ['goal', 'week', 'closers', 'sdrs', 'duel'];
+          if (Number(getNested(currentPayload, ['weekly', 'team', 'sdrs', 'targetValue'], 0)) > 0) keys.push('team_sdr');
+          if (safeArray(getNested(currentPayload, ['pipeline', 'rows'], [])).length) keys.push('pipeline');
           safeArray(getNested(currentPayload, ['news'], [])).forEach((item, index) => {
             if (item && item.type) keys.push('news_' + index);
           });
@@ -1306,15 +1444,24 @@ const buildHtml = () => `<!DOCTYPE html>
           const month = payload.month || {};
           const weekly = payload.weekly || {};
           const highlight = payload.highlights || {};
+          const pipeline = payload.pipeline || {};
           const news = safeArray(payload.news);
           screenKeys = buildScreenKeys(payload);
-          if (!screenKeys.length) screenKeys = ['month'];
+          if (!screenKeys.length) screenKeys = ['goal'];
           if (active >= screenKeys.length) active = 0;
           const screens = {
-            month: renderMonthScreen(month),
+            goal: renderGoalScreen(weekly),
             week: renderWeekScreen(weekly),
-            closers: renderClosersScreen(weekly),
-            sdrs: renderSdrsScreen(weekly),
+            closers: renderRankingScreen({ title: 'Ranking dos closers', rows: weekly.closers, role: 'closer' }),
+            sdrs: renderRankingScreen({ title: 'Ranking dos SDRs', rows: weekly.sdrs, role: 'sdr' }),
+            duel: renderClosersScreen(weekly),
+            team_sdr: renderTeamProgressScreen({
+              title: 'Meta de reuniões do time',
+              actual: getNested(weekly, ['team', 'sdrs', 'actualValue'], 0),
+              target: getNested(weekly, ['team', 'sdrs', 'targetValue'], 0),
+              noun: 'reuniões feitas na semana',
+            }),
+            pipeline: renderPipelineScreen(pipeline),
             highlights: renderHighlightsScreen(highlight),
           };
           news.forEach((item, index) => {
