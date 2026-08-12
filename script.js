@@ -37511,6 +37511,17 @@ document.addEventListener("pointerdown", (event) => {
 
 document.addEventListener("click", (event) => {
   const target = event.target;
+  if (!(target instanceof Element)) return;
+  const growthAvatarTrigger = target.closest("[data-growth-avatar-trigger]");
+  if (!(growthAvatarTrigger instanceof HTMLButtonElement)) return;
+  event.preventDefault();
+  const wrap = growthAvatarTrigger.closest(".growth-v2-avatar-wrap");
+  const input = wrap instanceof HTMLElement ? wrap.querySelector("[data-growth-avatar-file]") : null;
+  if (input instanceof HTMLInputElement) input.click();
+});
+
+document.addEventListener("click", (event) => {
+  const target = event.target;
 
   if (target instanceof Element) {
     const adminStudentSheet = getAdminStudentSheet();
@@ -38900,15 +38911,6 @@ document.addEventListener("click", (event) => {
       if (settingsAvatarTrigger instanceof HTMLButtonElement) {
         event.preventDefault();
         const input = document.querySelector("[data-admin-settings-avatar-file]");
-        if (input instanceof HTMLInputElement) input.click();
-        return;
-      }
-
-      const growthAvatarTrigger = target.closest("[data-growth-avatar-trigger]");
-      if (growthAvatarTrigger instanceof HTMLButtonElement) {
-        event.preventDefault();
-        const wrap = growthAvatarTrigger.closest(".growth-v2-avatar-wrap");
-        const input = wrap instanceof HTMLElement ? wrap.querySelector("[data-growth-avatar-file]") : null;
         if (input instanceof HTMLInputElement) input.click();
         return;
       }
