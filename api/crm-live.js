@@ -643,25 +643,29 @@ const buildHtml = () => `<!DOCTYPE html>
         align-content: center;
         justify-items: center;
         text-align: center;
-        gap: 2.4vh;
+        gap: 0;
       }
       .crm-live-interruption-kicker {
         font-size: 1.6vh;
         letter-spacing: .28em;
         text-transform: uppercase;
         font-weight: 500;
-        opacity: .76;
+        opacity: .78;
+        color: rgba(13, 16, 20, .72);
+        margin-bottom: 7vh;
       }
       .crm-live-interruption-avatar {
         width: 16vh;
         height: 16vh;
         border-radius: 999px;
         overflow: hidden;
-        background: rgba(13, 16, 20, .18);
+        background: rgba(255,255,255,.92);
         display: grid;
         place-items: center;
         font-size: 5vh;
         letter-spacing: .04em;
+        color: var(--accent);
+        margin-bottom: 2.2vh;
       }
       .crm-live-interruption-avatar img {
         width: 100%;
@@ -671,49 +675,47 @@ const buildHtml = () => `<!DOCTYPE html>
         display: block;
       }
       .crm-live-interruption-name {
-        font-size: min(5.2vw, 7.6vh);
+        font-size: min(4.4vw, 5.8vh);
         line-height: .94;
         letter-spacing: -.06em;
         font-weight: 500;
+        margin-bottom: 1.6vh;
       }
       .crm-live-interruption-hero {
-        font-size: min(13vw, 19vh);
+        font-size: min(16vw, 23vh);
         line-height: .86;
         letter-spacing: -.08em;
         font-weight: 500;
-      }
-      .crm-live-interruption-client {
-        font-size: min(4.4vw, 6vh);
-        line-height: .94;
-        letter-spacing: -.05em;
-        font-weight: 500;
+        color: #ffffff;
       }
       .crm-live-interruption-plan {
-        font-size: 2.4vh;
+        font-size: 2.2vh;
         line-height: 1.35;
         opacity: .82;
+        margin-top: 6.2vh;
       }
       .crm-live-interruption-footer {
         align-self: end;
-        min-height: 10vh;
-        padding: 2.2vh 2vw;
-        border-radius: 2vh;
-        background: rgba(13, 16, 20, .82);
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 2vw;
+        min-height: 0;
+        padding-top: 2.6vh;
+        border-top: 1px solid rgba(255,255,255,.24);
+        display: grid;
+        gap: 1.2vh;
+        justify-items: center;
+        text-align: center;
       }
       .crm-live-interruption-footer strong {
-        font-size: 3.6vh;
-        line-height: .95;
+        font-size: 2.7vh;
+        line-height: 1.08;
         letter-spacing: -.05em;
         font-weight: 500;
       }
       .crm-live-interruption-footer span {
-        font-size: 2vh;
+        font-size: 1.5vh;
         line-height: 1.35;
-        color: rgba(255,255,255,.82);
+        color: rgba(255,255,255,.74);
+        letter-spacing: .24em;
+        text-transform: uppercase;
       }
       @media (max-width: 1200px) {
         .crm-live { padding: 4.4vh 5vw 4vh; }
@@ -1215,11 +1217,10 @@ const buildHtml = () => `<!DOCTYPE html>
                   interruptionAvatarHtml({ displayName: payload.closerName || 'Closer', photoURL: payload.photoURL || '' }) +
                   '<div class="crm-live-interruption-name">' + escapeHtml(payload.closerName || 'Sem responsável') + '</div>' +
                   '<div class="crm-live-interruption-hero">' + escapeHtml(moneyShort(payload.value || 0)) + '</div>' +
-                  '<div class="crm-live-interruption-client">' + escapeHtml(payload.clientName || 'Cliente sem nome') + '</div>' +
-                  '<div class="crm-live-interruption-plan">' + escapeHtml(payload.planName || 'Plano não informado') + ' · ' + escapeHtml(dateTimeLabel(payload.movedAt || '')) + '</div>' +
                 '</div>' +
                 '<div class="crm-live-interruption-footer">' +
-                  '<div><span>Próximo alvo da semana</span><strong>Faltam ' + escapeHtml(gapText) + ' para bater a semana</strong></div>' +
+                  '<span>Próximo alvo da semana</span>' +
+                  '<strong>' + escapeHtml(payload.planName || 'Plano não informado') + ' · Faltam ' + escapeHtml(gapText) + ' para bater a semana</strong>' +
                 '</div>' +
               '</div>';
             interruptionEl.classList.add('is-visible');
@@ -1246,7 +1247,8 @@ const buildHtml = () => `<!DOCTYPE html>
                 '<div class="crm-live-interruption-plan">' + escapeHtml(subtitleMap[type] || '') + '</div>' +
               '</div>' +
               '<div class="crm-live-interruption-footer">' +
-                '<div><span>Atualização automática</span><strong>O placar volta em instantes</strong></div>' +
+                '<span>Atualização automática</span>' +
+                '<strong>O placar volta em instantes</strong>' +
               '</div>' +
             '</div>';
           interruptionEl.classList.add('is-visible');
