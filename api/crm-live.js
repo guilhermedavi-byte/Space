@@ -501,7 +501,7 @@ const buildHtml = () => `<!DOCTYPE html>
         const dotsEl = document.querySelector('[data-crm-live-dots]');
         const emptyEl = document.querySelector('[data-crm-live-empty]');
         const SCREENS = ['month', 'week', 'closers', 'sdrs', 'highlights', 'last-sale'];
-        const ROTATE_MS = 5000;
+        const ROTATE_MS = 10000;
         const POLL_MS = 120000;
         let payload = null;
         let active = 0;
