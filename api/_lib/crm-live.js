@@ -1,7 +1,7 @@
 const crypto = require("crypto");
 
 const { getGoogleAccessToken } = require("../../_lib/google-service-account");
-const { requestJson, FIRESTORE_BASE, API_KEY, encodeFields, decodeFields, getDocIdFromName } = require("../../_lib/firestore-rest");
+const { requestJson, FIRESTORE_BASE, API_KEY, PROJECT_ID, encodeFields, decodeFields, getDocIdFromName } = require("../../_lib/firestore-rest");
 const { getDocumentAsAdmin, listCollectionAsAdmin, queryCollectionByDateRangeAsAdmin, commitWritesAsAdmin } = require("./firestore-admin");
 const { signJwt, verifyJwt, parseCookies, isSecureRequest } = require("./session");
 const { resolveCommercialPeriod, formatSaoPauloDateKey, getCalendarMonthBounds } = require("./commercial-period");
@@ -29,6 +29,16 @@ const safeNumber = (value) => {
 };
 
 const hashSecret = (value) => crypto.createHash("sha256").update(String(value || ""), "utf8").digest("hex");
+const buildDocumentName = (collection, docId) => {
+  const safeCollection = safeString(collection);
+  const safeDocId = safeString(docId);
+  if (!PROJECT_ID || !safeCollection || !safeDocId) {
+    const error = new Error("invalid_firestore_document_name");
+    error.code = "invalid_firestore_document_name";
+    throw error;
+  }
+  return `projects/${PROJECT_ID}/databases/(default)/documents/${safeCollection}/${encodeURIComponent(safeDocId)}`;
+};
 const buildCookie = (name, value, { maxAgeSeconds = CRM_LIVE_COOKIE_MAX_AGE_SECONDS, secure = false, path = "/tv/crm-live" } = {}) => {
   const parts = [
     `${name}=${encodeURIComponent(value)}`,
@@ -97,13 +107,15 @@ const firestoreGetDocumentWithAccessToken = async ({ docPath, accessToken } = {}
 const writeDocAsAdmin = async ({ docPath, data, updateMaskPaths } = {}) => {
   const path = safeString(docPath).replace(/^\/+/, "");
   if (!path) throw new Error("missing_doc_path");
+  const [collection, docId] = path.split("/");
+  const name = buildDocumentName(collection, docId);
   const fields = encodeFields(data).fields || {};
   const fieldPaths = Array.isArray(updateMaskPaths) ? updateMaskPaths.filter(Boolean) : Object.keys(fields);
   return commitWritesAsAdmin({
     writes: [
       {
         update: {
-          name: `${FIRESTORE_BASE}/${path}`,
+          name,
           fields,
         },
         updateMask: { fieldPaths },
@@ -115,8 +127,9 @@ const writeDocAsAdmin = async ({ docPath, data, updateMaskPaths } = {}) => {
 const deleteDocAsAdmin = async ({ docPath } = {}) => {
   const path = safeString(docPath).replace(/^\/+/, "");
   if (!path) throw new Error("missing_doc_path");
+  const [collection, docId] = path.split("/");
   return commitWritesAsAdmin({
-    writes: [{ delete: `${FIRESTORE_BASE}/${path}` }],
+    writes: [{ delete: buildDocumentName(collection, docId) }],
   });
 };
 
@@ -675,7 +688,9 @@ const createAccessTokenRecord = async ({ label = "", expiresAt = "" } = {}) => {
   });
   if (!write?.ok) {
     const error = new Error("crm_live_token_create_failed");
+    error.code = "crm_live_token_create_failed";
     error.status = write?.status || 500;
+    error.details = write?.data || write?.text || null;
     throw error;
   }
   return {
@@ -710,7 +725,9 @@ const revokeAccessToken = async ({ tokenId } = {}) => {
   });
   if (!write?.ok) {
     const error = new Error("crm_live_token_revoke_failed");
+    error.code = "crm_live_token_revoke_failed";
     error.status = write?.status || 500;
+    error.details = write?.data || write?.text || null;
     throw error;
   }
   return { ok: true };

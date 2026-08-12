@@ -136,7 +136,7 @@ const buildHtml = () => `<!DOCTYPE html>
           .replace(/\"/g, '&quot;')
           .replace(/'/g, '&#39;');
 
-        const moneyShort = (value) => ${formatMoneyShort.toString()}(value);
+        const moneyShort = ${formatMoneyShort.toString()};
         const percent = (value) => {
           const n = Number(value || 0);
           if (!Number.isFinite(n)) return '0%';

@@ -60,6 +60,12 @@ module.exports = async (req, res) => {
     });
   } catch (error) {
     console.error("[crm-live-access] write failed", error);
-    return sendJson(res, 500, { error: "crm_live_access_write_failed" });
+    return sendJson(res, error?.status || 500, {
+      error: error?.code || "crm_live_access_write_failed",
+      message: error?.message || "crm_live_access_write_failed",
+      details: error?.details || null,
+      collection: "crmLiveAccessTokens",
+      permissionModel: "firestore_admin_service_account",
+    });
   }
 };
