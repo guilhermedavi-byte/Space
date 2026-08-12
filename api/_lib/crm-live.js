@@ -497,6 +497,7 @@ const buildWeeklyTeamSummary = ({ weeklyReadModel }) => {
     closers: {
       targetValue: closersTarget,
       actualValue: closersActual,
+      missingValue: Math.max(0, closersTarget - closersActual),
       progressPct: closersTarget > 0 ? (closersActual / closersTarget) * 100 : 0,
       count: closersCount,
       ticketMedio: closersCount > 0 ? closersActual / closersCount : 0,
@@ -504,6 +505,7 @@ const buildWeeklyTeamSummary = ({ weeklyReadModel }) => {
     sdrs: {
       targetValue: sdrTarget,
       actualValue: sdrActual,
+      missingValue: Math.max(0, sdrTarget - sdrActual),
       progressPct: sdrTarget > 0 ? (sdrActual / sdrTarget) * 100 : 0,
       count: sdrCount,
     },

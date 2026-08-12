@@ -362,6 +362,10 @@ const buildHtml = () => `<!DOCTYPE html>
         justify-items: start;
         gap: 1.8vh;
       }
+      .crm-live-highlight-person.is-center {
+        justify-items: center;
+        text-align: center;
+      }
       .crm-live-highlight-person.is-right {
         justify-items: end;
         text-align: right;
@@ -479,11 +483,12 @@ const buildHtml = () => `<!DOCTYPE html>
         justify-self: center;
       }
       .crm-live-duel-message {
-        font-size: min(12vw, 17vh);
+        font-size: min(10vw, 14vh);
         line-height: .88;
         letter-spacing: -.08em;
         font-weight: 500;
-        max-width: 30vw;
+        max-width: 34vw;
+        white-space: nowrap;
       }
       .crm-live-duel-context {
         color: var(--text-secondary);
@@ -506,13 +511,21 @@ const buildHtml = () => `<!DOCTYPE html>
         display: flex;
         align-items: baseline;
         justify-content: center;
-        gap: 1.2vw;
+        gap: 1vw;
         line-height: .9;
+        flex-wrap: nowrap;
+      }
+      .crm-live-week-countdown-number {
+        font-size: min(16vw, 22vh);
+        letter-spacing: -.08em;
+        font-weight: 500;
+        color: inherit;
       }
       .crm-live-week-countdown-unit {
         font-size: min(4vw, 5.2vh);
         color: var(--text-secondary);
         letter-spacing: -.03em;
+        font-weight: 400;
       }
       .crm-live-week-countdown-progress {
         width: min(72vw, 100%);
@@ -605,12 +618,18 @@ const buildHtml = () => `<!DOCTYPE html>
         display: grid;
         align-content: center;
         justify-items: center;
-        gap: 2.4vh;
+        gap: 1.4vh;
         text-align: center;
+      }
+      .crm-live-team-progress-hero {
+        font-size: min(12vw, 16vh);
+        line-height: .88;
+        letter-spacing: -.08em;
+        font-weight: 500;
       }
       .crm-live-team-progress-sub {
         color: var(--text-secondary);
-        font-size: 2.1vh;
+        font-size: 1.85vh;
         line-height: 1.35;
       }
       .crm-live-team-progress .crm-live-progress {
@@ -937,7 +956,7 @@ const buildHtml = () => `<!DOCTYPE html>
           return count;
         };
         const formatWeekCountdown = (endDate) => {
-          if (!(endDate instanceof Date)) return { value: '0', unit: 'horas' };
+          if (!(endDate instanceof Date)) return { primaryNumber: '0', primaryUnit: 'horas', secondaryNumber: '00', secondaryUnit: 'min' };
           const diff = Math.max(0, endDate.getTime() - Date.now());
           const totalMinutes = Math.floor(diff / 60000);
           const totalHours = Math.floor(totalMinutes / 60);
@@ -945,15 +964,19 @@ const buildHtml = () => `<!DOCTYPE html>
             const hours = Math.floor(totalMinutes / 60);
             const minutes = totalMinutes % 60;
             return {
-              value: String(hours) + 'h ' + String(minutes).padStart(2, '0'),
-              unit: 'horas',
+              primaryNumber: String(hours),
+              primaryUnit: 'horas',
+              secondaryNumber: String(minutes).padStart(2, '0'),
+              secondaryUnit: 'min',
             };
           }
           const days = Math.floor(totalHours / 24);
           const hours = totalHours % 24;
           return {
-            value: String(days) + 'd ' + String(hours) + 'h',
-            unit: 'dias',
+            primaryNumber: String(days),
+            primaryUnit: 'dias',
+            secondaryNumber: String(hours),
+            secondaryUnit: 'horas',
           };
         };
         const weekElapsedProgress = (startDateKey, endDateKey) => {
@@ -1115,11 +1138,12 @@ const buildHtml = () => `<!DOCTYPE html>
         const renderHighlight = (row, options = {}) => {
           const role = options.role || '';
           const alignRight = !!options.alignRight;
+          const alignCenter = !!options.alignCenter;
           const hasRow = !!row;
           const person = row || { displayName: 'Sem destaque' };
           const leader = true;
           const metricRow = Object.assign({}, person, { role, actualValue: hasRow ? (row.dailyValue || 0) : 0 });
-          return '<div class="crm-live-highlight-person ' + (alignRight ? 'is-right' : '') + '">' +
+          return '<div class="crm-live-highlight-person ' + (alignCenter ? 'is-center' : (alignRight ? 'is-right' : '')) + '">' +
             avatarHtml(person, { leader }) +
             '<div class="crm-live-highlight-name">' + escapeHtml(person.displayName || 'Sem destaque') + '</div>' +
             '<div class="crm-live-highlight-value">' + escapeHtml(hasRow ? metricMain(metricRow) : '—') + '</div>' +
@@ -1133,11 +1157,12 @@ const buildHtml = () => `<!DOCTYPE html>
           const totalDays = businessDaysBetween(startDate, endDate);
           const elapsedDays = businessDaysBetween(startDate, todayStart);
           const remainingDays = businessDaysBetween(todayStart, endDate);
-          const meta = Number(summary.meta || 0);
-          const realized = Number(summary.realizado || 0);
+          const meta = Number(summary.targetValue || 0);
+          const realized = Number(summary.actualValue || 0);
+          const missing = Math.max(0, Number(summary.missingValue != null ? summary.missingValue : (meta - realized)));
           const shouldHave = totalDays > 0 ? meta * Math.min(1, elapsedDays / totalDays) : 0;
           const delta = realized - shouldHave;
-          const requiredPerDay = remainingDays > 0 ? Math.max(0, Number(summary.gap || 0)) / remainingDays : Math.max(0, Number(summary.gap || 0));
+          const requiredPerDay = remainingDays > 0 ? missing / remainingDays : missing;
           return {
             remainingDays,
             requiredPerDay,
@@ -1188,7 +1213,12 @@ const buildHtml = () => `<!DOCTYPE html>
             '<div class="crm-live-body crm-live-week-grid">' +
               '<div class="crm-live-center">' +
                 '<div class="crm-live-metric-label">A semana termina em</div>' +
-                '<div class="crm-live-week-countdown-main" style="color:' + escapeHtml(countColor) + '">' + escapeHtml(countdown.value) + '<span class="crm-live-week-countdown-unit">' + escapeHtml(countdown.unit) + '</span></div>' +
+                '<div class="crm-live-week-countdown-main" style="color:' + escapeHtml(countColor) + '">' +
+                  '<span class="crm-live-week-countdown-number">' + escapeHtml(countdown.primaryNumber) + '</span>' +
+                  '<span class="crm-live-week-countdown-unit">' + escapeHtml(countdown.primaryUnit) + '</span>' +
+                  '<span class="crm-live-week-countdown-number">' + escapeHtml(countdown.secondaryNumber) + '</span>' +
+                  '<span class="crm-live-week-countdown-unit">' + escapeHtml(countdown.secondaryUnit) + '</span>' +
+                '</div>' +
                 '<div class="crm-live-week-countdown-progress"><span style="width:' + clampPercent(progress).toFixed(1) + '%; background:' + escapeHtml(barColor) + '"></span></div>' +
                 '<div class="crm-live-week-countdown-scale"><span>' + escapeHtml(weekdayDateLabel(startDateKey)) + '</span><span>' + escapeHtml(weekdayDateLabel(endDateKey, { includeTime: true })) + '</span></div>' +
               '</div>' +
@@ -1204,11 +1234,6 @@ const buildHtml = () => `<!DOCTYPE html>
           const leader = rows[0];
           const challenger = rows[1];
           const needed = Math.max(0, Number(challenger.missingToLead || 0));
-          const ticketMedio = Math.max(0, Number(getNested(weekly, ['team', 'closers', 'ticketMedio'], 0) || 0));
-          const salesNeeded = ticketMedio > 0 ? Math.max(1, Math.ceil(needed / ticketMedio)) : 0;
-          const salesCopy = salesNeeded > 0
-            ? String(salesNeeded) + ' ' + (salesNeeded === 1 ? 'venda' : 'vendas') + ' para ' + String(challenger.displayName || 'o desafiante') + ' assumir a liderança'
-            : percent(leader.progressPct || 0) + ' contra ' + percent(challenger.progressPct || 0) + ' agora';
           return '<section class="crm-live-screen">' +
             '<div class="crm-live-shell">' +
               '<div class="crm-live-head">' +
@@ -1225,7 +1250,7 @@ const buildHtml = () => `<!DOCTYPE html>
                   '<div class="crm-live-duel-center">' +
                     '<div class="crm-live-metric-label">Distância para a virada</div>' +
                     '<div class="crm-live-duel-message"><span class="crm-live-duel-delta">' + escapeHtml(moneyShort(needed)) + '</span></div>' +
-                    '<div class="crm-live-duel-context">' + escapeHtml('para a virada · ' + salesCopy) + '</div>' +
+                    '<div class="crm-live-duel-context">' + escapeHtml('para ' + String(challenger.displayName || 'o desafiante') + ' assumir a liderança') + '</div>' +
                   '</div>' +
                   '<div class="crm-live-duel-side">' +
                     avatarHtml(challenger, { leader: false }) +
@@ -1255,7 +1280,7 @@ const buildHtml = () => `<!DOCTYPE html>
               '</div>' +
               '<div class="crm-live-body">' +
                 '<div class="crm-live-center">' +
-                  '<div class="crm-live-team-progress">' + escapeHtml(String(actual || 0)) + ' / ' + escapeHtml(String(target || 0)) + '</div>' +
+                  '<div class="crm-live-team-progress-hero">' + escapeHtml(String(actual || 0)) + ' / ' + escapeHtml(String(target || 0)) + '</div>' +
                   '<div class="crm-live-team-progress-sub">' + escapeHtml(noun) + '</div>' +
                   '<div class="crm-live-progress"><span style="width:' + clampPercent(progress).toFixed(1) + '%"></span></div>' +
                 '</div>' +
@@ -1289,14 +1314,13 @@ const buildHtml = () => `<!DOCTYPE html>
             '</div>' +
           '</section>';
         };
-        const renderHighlightsScreen = (highlight) => '<section class="crm-live-screen">' +
+        const renderHighlightScreen = ({ title, row, role }) => '<section class="crm-live-screen">' +
           '<div class="crm-live-shell">' +
             '<div class="crm-live-head">' +
-              '<h1 class="crm-live-title">Destaques do dia anterior</h1>' +
+              '<h1 class="crm-live-title">' + escapeHtml(title) + '</h1>' +
             '</div>' +
-            '<div class="crm-live-body crm-live-highlight-grid">' +
-              '<div class="crm-live-column">' + renderHighlight(highlight.closer, { role: 'closer' }) + '</div>' +
-              '<div class="crm-live-column">' + renderHighlight(highlight.sdr, { role: 'sdr', alignRight: true }) + '</div>' +
+            '<div class="crm-live-body">' +
+              '<div class="crm-live-center">' + renderHighlight(row, { role, alignCenter: true }) + '</div>' +
             '</div>' +
           '</div>' +
         '</section>';
@@ -1439,8 +1463,8 @@ const buildHtml = () => `<!DOCTYPE html>
           });
           const closerHighlight = getNested(currentPayload, ['highlights', 'closer'], null);
           const sdrHighlight = getNested(currentPayload, ['highlights', 'sdr'], null);
-          const hasHighlight = (closerHighlight && Number(closerHighlight.dailyValue || 0) > 0) || (sdrHighlight && Number(sdrHighlight.dailyValue || 0) > 0);
-          if (hasHighlight) keys.push('highlights');
+          if (closerHighlight && Number(closerHighlight.dailyValue || 0) > 0) keys.push('highlight_closer');
+          if (sdrHighlight && Number(sdrHighlight.dailyValue || 0) > 0) keys.push('highlight_sdr');
           keys.push('duel');
           return keys;
         };
@@ -1467,7 +1491,8 @@ const buildHtml = () => `<!DOCTYPE html>
               noun: 'reuniões feitas na semana',
             }),
             pipeline: renderPipelineScreen(pipeline),
-            highlights: renderHighlightsScreen(highlight),
+            highlight_closer: renderHighlightScreen({ title: 'Closer destaque de ontem', row: highlight.closer, role: 'closer' }),
+            highlight_sdr: renderHighlightScreen({ title: 'SDR destaque de ontem', row: highlight.sdr, role: 'sdr' }),
           };
           news.forEach((item, index) => {
             screens['news_' + index] = renderNewsScreen(item);
