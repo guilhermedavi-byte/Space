@@ -296,7 +296,7 @@ const buildHtml = () => `<!DOCTYPE html>
         object-position: center top;
         display: block;
       }
-      .crm-live-avatar.is-photo { filter: grayscale(1) brightness(1.12) contrast(.88); }
+      .crm-live-avatar.is-photo { filter: brightness(1.12) contrast(.88); }
       .crm-live-avatar.is-leader {
         width: 7.6vh;
         height: 7.6vh;
