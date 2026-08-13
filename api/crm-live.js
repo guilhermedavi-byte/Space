@@ -71,7 +71,7 @@ const buildHtml = () => `<!DOCTYPE html>
         position: relative;
         width: 100vw;
         height: 100vh;
-        padding: 4.8vh 6vw 5.2vh;
+        padding: 3.2vh 4.5vw 3.6vh;
         background:
           radial-gradient(circle at top left, rgba(255,86,79,.14), transparent 28%),
           radial-gradient(circle at 78% 18%, rgba(255,255,255,.04), transparent 26%),
@@ -100,15 +100,15 @@ const buildHtml = () => `<!DOCTYPE html>
         height: 100%;
         display: grid;
         grid-template-rows: auto 1fr;
-        gap: 2.2vh;
+        gap: 1.8vh;
       }
       .crm-live-head {
         display: block;
-        padding-top: .8vh;
+        padding-top: .4vh;
       }
       .crm-live-title {
         margin: 0;
-        font-size: 2.4vh;
+        font-size: 3.4vh;
         line-height: 1.1;
         letter-spacing: -.03em;
         font-weight: 400;
@@ -123,19 +123,19 @@ const buildHtml = () => `<!DOCTYPE html>
         height: 100%;
         display: grid;
         align-content: center;
-        gap: 4.8vh;
+        gap: 3.6vh;
       }
       .crm-live-center.is-spread {
         align-content: stretch;
       }
       .crm-live-stack {
         display: grid;
-        gap: 4vh;
+        gap: 3.2vh;
       }
-      .crm-live-metric-block { display: grid; gap: 1.5vh; }
+      .crm-live-metric-block { display: grid; gap: 1.2vh; }
       .crm-live-metric-label {
         color: var(--text-tertiary);
-        font-size: 1.45vh;
+        font-size: 2vh;
         letter-spacing: .28em;
         text-transform: uppercase;
         font-weight: 500;
@@ -147,13 +147,13 @@ const buildHtml = () => `<!DOCTYPE html>
         flex-wrap: wrap;
       }
       .crm-live-metric-value {
-        font-size: min(12vw, 18vh);
+        font-size: clamp(20vh, 22vh, 26vh);
         line-height: .88;
         letter-spacing: -.08em;
         font-weight: 500;
       }
-      .crm-live-metric-value.is-medium { font-size: min(8vw, 11.6vh); }
-      .crm-live-metric-value.is-small-hero { font-size: min(10vw, 13vh); }
+      .crm-live-metric-value.is-medium { font-size: clamp(12vh, 14vh, 16vh); }
+      .crm-live-metric-value.is-small-hero { font-size: clamp(15vh, 17vh, 20vh); }
       .crm-live-metric-side {
         display: grid;
         gap: .55vh;
@@ -161,12 +161,12 @@ const buildHtml = () => `<!DOCTYPE html>
       }
       .crm-live-metric-side strong {
         color: var(--text-secondary);
-        font-size: 2.1vh;
+        font-size: 5vh;
         font-weight: 500;
       }
       .crm-live-metric-side span {
         color: var(--text-tertiary);
-        font-size: 1.6vh;
+        font-size: 3.2vh;
         font-weight: 400;
       }
       .crm-live-progress {
@@ -186,18 +186,18 @@ const buildHtml = () => `<!DOCTYPE html>
       .crm-live-support-grid {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 3vw;
+        gap: 2vw;
       }
       .crm-live-support-item { display: grid; gap: .8vh; }
       .crm-live-support-item strong {
-        font-size: 3.4vh;
+        font-size: 5.2vh;
         line-height: .95;
         letter-spacing: -.05em;
         font-weight: 500;
       }
       .crm-live-support-item span {
         color: var(--text-secondary);
-        font-size: 1.7vh;
+        font-size: 3vh;
         line-height: 1.35;
         font-weight: 400;
       }
@@ -210,7 +210,7 @@ const buildHtml = () => `<!DOCTYPE html>
         border-radius: 999px;
         background: rgba(255,255,255,.04);
         color: var(--text-secondary);
-        font-size: 1.9vh;
+        font-size: 3vh;
         line-height: 1;
         font-weight: 400;
       }
@@ -235,7 +235,7 @@ const buildHtml = () => `<!DOCTYPE html>
       .crm-live-week-grid {
         grid-template-columns: minmax(0, 1fr);
         justify-content: center;
-        gap: 4vh;
+        gap: 3vh;
       }
       .crm-live-highlight-grid,
       .crm-live-last-sale-grid {
@@ -257,7 +257,7 @@ const buildHtml = () => `<!DOCTYPE html>
         height: 100%;
         display: grid;
         align-content: center;
-        gap: 2.8vh;
+        gap: 2.2vh;
       }
       .crm-live-ranking.is-tight {
         gap: 2.2vh;
@@ -277,15 +277,15 @@ const buildHtml = () => `<!DOCTYPE html>
       .crm-live-avatar {
         position: relative;
         flex: 0 0 auto;
-        width: 5.6vh;
-        height: 5.6vh;
+        width: 10vh;
+        height: 10vh;
         border-radius: 999px;
         overflow: hidden;
         background: rgba(255,255,255,.08);
         color: var(--text);
         display: grid;
         place-items: center;
-        font-size: 1.55vh;
+        font-size: 2.8vh;
         font-weight: 500;
         letter-spacing: .04em;
       }
@@ -298,8 +298,8 @@ const buildHtml = () => `<!DOCTYPE html>
       }
       .crm-live-avatar.is-photo { filter: grayscale(1) brightness(1.12) contrast(.88); }
       .crm-live-avatar.is-leader {
-        width: 7.6vh;
-        height: 7.6vh;
+        width: 12vh;
+        height: 12vh;
         border: .35vh solid var(--accent);
         box-shadow: 0 0 0 .55vh var(--leader-ring);
       }
@@ -310,7 +310,7 @@ const buildHtml = () => `<!DOCTYPE html>
         gap: 1vh;
       }
       .crm-live-ranking-name {
-        font-size: 3vh;
+        font-size: 6.4vh;
         line-height: .95;
         letter-spacing: -.05em;
         font-weight: 500;
@@ -318,16 +318,16 @@ const buildHtml = () => `<!DOCTYPE html>
         overflow: hidden;
         text-overflow: ellipsis;
       }
-      .crm-live-ranking-row.is-leader .crm-live-ranking-name { font-size: 4.3vh; }
+      .crm-live-ranking-row.is-leader .crm-live-ranking-name { font-size: 8vh; }
       .crm-live-ranking-sub {
         color: var(--text-secondary);
-        font-size: 2.1vh;
+        font-size: 3.4vh;
         line-height: 1.35;
         font-weight: 400;
       }
       .crm-live-ranking-chase {
         color: var(--text-tertiary);
-        font-size: 1.65vh;
+        font-size: 2.6vh;
         line-height: 1.35;
         font-weight: 400;
       }
@@ -351,12 +351,12 @@ const buildHtml = () => `<!DOCTYPE html>
         justify-items: end;
       }
       .crm-live-ranking-pct {
-        font-size: 6.2vh;
+        font-size: 9vh;
         line-height: .88;
         letter-spacing: -.08em;
         font-weight: 500;
       }
-      .crm-live-ranking-row.is-leader .crm-live-ranking-pct { color: var(--accent); font-size: 8.6vh; }
+      .crm-live-ranking-row.is-leader .crm-live-ranking-pct { color: var(--accent); font-size: 12vh; }
       .crm-live-highlight-person {
         display: grid;
         justify-items: start;
@@ -367,16 +367,16 @@ const buildHtml = () => `<!DOCTYPE html>
         text-align: center;
       }
       .crm-live-highlight-person.is-center .crm-live-avatar {
-        width: 14vh;
-        height: 14vh;
-        font-size: 3.5vh;
+        width: 30vh;
+        height: 30vh;
+        font-size: 7vh;
       }
       .crm-live-highlight-person.is-center .crm-live-avatar.is-leader {
-        width: 16vh;
-        height: 16vh;
+        width: 34vh;
+        height: 34vh;
       }
       .crm-live-highlight-title {
-        font-size: 4.2vh;
+        font-size: 6.8vh;
         line-height: .95;
         letter-spacing: -.05em;
         font-weight: 500;
@@ -387,20 +387,20 @@ const buildHtml = () => `<!DOCTYPE html>
         text-align: right;
       }
       .crm-live-highlight-name {
-        font-size: 5.2vh;
+        font-size: 8.6vh;
         line-height: .92;
         letter-spacing: -.06em;
         font-weight: 500;
       }
       .crm-live-highlight-value {
-        font-size: min(9vw, 12vh);
+        font-size: clamp(16vh, 18vh, 22vh);
         line-height: .9;
         letter-spacing: -.08em;
         font-weight: 500;
       }
       .crm-live-highlight-note {
         color: var(--text-secondary);
-        font-size: 1.8vh;
+        font-size: 3vh;
         line-height: 1.35;
       }
       .crm-live-news {
@@ -418,9 +418,9 @@ const buildHtml = () => `<!DOCTYPE html>
         place-items: center;
       }
       .crm-live-news-media .crm-live-avatar {
-        width: 18vh;
-        height: 18vh;
-        font-size: 4.2vh;
+        width: 24vh;
+        height: 24vh;
+        font-size: 5.2vh;
       }
       .crm-live-news-copy {
         display: grid;
@@ -429,13 +429,13 @@ const buildHtml = () => `<!DOCTYPE html>
       }
       .crm-live-news-kicker {
         color: var(--text-tertiary);
-        font-size: 1.5vh;
+        font-size: 2vh;
         letter-spacing: .28em;
         text-transform: uppercase;
         font-weight: 500;
       }
       .crm-live-news-phrase {
-        font-size: min(7vw, 10.6vh);
+        font-size: clamp(7vh, 8vh, 9vh);
         line-height: .98;
         letter-spacing: -.06em;
         font-weight: 500;
@@ -448,7 +448,7 @@ const buildHtml = () => `<!DOCTYPE html>
       }
       .crm-live-news-context {
         color: var(--text-secondary);
-        font-size: 2.2vh;
+        font-size: 3.2vh;
         line-height: 1.35;
         font-weight: 400;
         max-width: 44vw;
@@ -464,13 +464,13 @@ const buildHtml = () => `<!DOCTYPE html>
         display: grid;
         justify-items: center;
         align-content: center;
-        gap: 1.2vh;
+        gap: 1vh;
         text-align: center;
       }
       .crm-live-duel-side .crm-live-avatar {
-        width: 11.5vh;
-        height: 11.5vh;
-        font-size: 2.9vh;
+        width: 18vh;
+        height: 18vh;
+        font-size: 4.2vh;
       }
       .crm-live-duel-side.is-leader .crm-live-avatar {
         border: .45vh solid var(--accent);
@@ -478,14 +478,14 @@ const buildHtml = () => `<!DOCTYPE html>
         filter: none;
       }
       .crm-live-duel-name {
-        font-size: 3.2vh;
+        font-size: 5.8vh;
         line-height: .95;
         letter-spacing: -.06em;
         font-weight: 500;
       }
       .crm-live-duel-sub {
         color: var(--text-secondary);
-        font-size: 1.75vh;
+        font-size: 3vh;
         line-height: 1.35;
       }
       .crm-live-duel-center {
@@ -499,7 +499,7 @@ const buildHtml = () => `<!DOCTYPE html>
         justify-self: center;
       }
       .crm-live-duel-message {
-        font-size: min(10vw, 14vh);
+        font-size: clamp(18vh, 20vh, 24vh);
         line-height: .88;
         letter-spacing: -.08em;
         font-weight: 500;
@@ -508,7 +508,7 @@ const buildHtml = () => `<!DOCTYPE html>
       }
       .crm-live-duel-context {
         color: var(--text-secondary);
-        font-size: 2.2vh;
+        font-size: 3.4vh;
         line-height: 1.4;
         max-width: 26vw;
       }
@@ -532,13 +532,13 @@ const buildHtml = () => `<!DOCTYPE html>
         flex-wrap: nowrap;
       }
       .crm-live-week-countdown-number {
-        font-size: min(16vw, 22vh);
+        font-size: clamp(20vh, 22vh, 26vh);
         letter-spacing: -.08em;
         font-weight: 500;
         color: inherit;
       }
       .crm-live-week-countdown-unit {
-        font-size: min(4vw, 5.2vh);
+        font-size: 5vh;
         color: var(--text-secondary);
         letter-spacing: -.03em;
         font-weight: 400;
@@ -563,7 +563,7 @@ const buildHtml = () => `<!DOCTYPE html>
         justify-content: space-between;
         gap: 2vw;
         color: var(--text-tertiary);
-        font-size: 1.55vh;
+        font-size: 2.2vh;
         line-height: 1.35;
       }
       .crm-live-week-rails {
@@ -604,7 +604,7 @@ const buildHtml = () => `<!DOCTYPE html>
       }
       .crm-live-last-sale-plan {
         color: var(--text-secondary);
-        font-size: 2vh;
+        font-size: 3vh;
         line-height: 1.35;
       }
       .crm-live-last-sale-list {
@@ -618,13 +618,13 @@ const buildHtml = () => `<!DOCTYPE html>
       }
       .crm-live-last-sale-row span {
         color: var(--text-tertiary);
-        font-size: 1.45vh;
+        font-size: 2vh;
         letter-spacing: .24em;
         text-transform: uppercase;
         font-weight: 500;
       }
       .crm-live-last-sale-row strong {
-        font-size: 2.5vh;
+        font-size: 3.6vh;
         line-height: 1.05;
         letter-spacing: -.04em;
         font-weight: 500;
@@ -638,14 +638,14 @@ const buildHtml = () => `<!DOCTYPE html>
         text-align: center;
       }
       .crm-live-team-progress-hero {
-        font-size: min(12vw, 16vh);
+        font-size: clamp(20vh, 22vh, 24vh);
         line-height: .88;
         letter-spacing: -.08em;
         font-weight: 500;
       }
       .crm-live-team-progress-sub {
         color: var(--text-secondary);
-        font-size: 1.85vh;
+        font-size: 3.2vh;
         line-height: 1.35;
       }
       .crm-live-team-progress .crm-live-progress {
@@ -665,20 +665,20 @@ const buildHtml = () => `<!DOCTYPE html>
       }
       .crm-live-pipeline-total {
         color: var(--accent);
-        font-size: min(12vw, 16vh);
+        font-size: clamp(20vh, 22vh, 24vh);
         line-height: .88;
         letter-spacing: -.08em;
         font-weight: 500;
       }
       .crm-live-pipeline-total-note {
         color: var(--text-secondary);
-        font-size: 2.2vh;
+        font-size: 5vh;
         line-height: 1.2;
         font-weight: 400;
       }
       .crm-live-pipeline-sub {
         color: var(--text-secondary);
-        font-size: 1.7vh;
+        font-size: 3vh;
         line-height: 1.35;
         white-space: nowrap;
         margin-bottom: 2.6vh;
@@ -694,9 +694,9 @@ const buildHtml = () => `<!DOCTYPE html>
         gap: 2vw;
       }
       .crm-live-pipeline-row .crm-live-avatar {
-        width: 7.4vh;
-        height: 7.4vh;
-        font-size: 2vh;
+        width: 10vh;
+        height: 10vh;
+        font-size: 2.8vh;
       }
       .crm-live-pipeline-row.is-leader .crm-live-avatar {
         border: .35vh solid var(--accent);
@@ -711,7 +711,7 @@ const buildHtml = () => `<!DOCTYPE html>
       }
       .crm-live-pipeline-row strong {
         flex: 1 1 auto;
-        font-size: 4.4vh;
+        font-size: 7.2vh;
         line-height: .95;
         letter-spacing: -.05em;
         font-weight: 500;
@@ -719,7 +719,7 @@ const buildHtml = () => `<!DOCTYPE html>
       .crm-live-pipeline-row span {
         flex: 0 0 auto;
         color: var(--text);
-        font-size: 4vh;
+        font-size: 6.4vh;
         line-height: .95;
         letter-spacing: -.05em;
         font-weight: 500;
@@ -727,15 +727,15 @@ const buildHtml = () => `<!DOCTYPE html>
       }
       .crm-live-footer {
         position: absolute;
-        left: 6vw;
-        right: 6vw;
-        bottom: 3.2vh;
+        left: 4.5vw;
+        right: 4.5vw;
+        bottom: 2.4vh;
         display: flex;
         justify-content: space-between;
         align-items: center;
         gap: 2vw;
         color: var(--text-tertiary);
-        font-size: 1.45vh;
+        font-size: 1.8vh;
         line-height: 1.2;
       }
       .crm-live-dots {
@@ -744,10 +744,10 @@ const buildHtml = () => `<!DOCTYPE html>
         gap: .55vw;
       }
       .crm-live-dot {
-        width: 1.2vw;
-        max-width: 28px;
-        min-width: 14px;
-        height: 3px;
+        width: clamp(1.6vh, 1.8vw, 2.4vh);
+        max-width: 2.8vh;
+        min-width: 1.4vh;
+        height: .35vh;
         border-radius: 999px;
         background: rgba(255,255,255,.16);
         transition: background .25s ease, transform .25s ease;
@@ -762,14 +762,14 @@ const buildHtml = () => `<!DOCTYPE html>
         place-items: center;
         text-align: center;
         color: var(--text-secondary);
-        font-size: 2.4vh;
+        font-size: 3.2vh;
         line-height: 1.45;
       }
       .crm-live-empty strong {
         display: block;
         margin-bottom: 1.6vh;
         color: var(--text);
-        font-size: 4vh;
+        font-size: 6vh;
         line-height: 1;
         letter-spacing: -.04em;
         font-weight: 500;
@@ -786,7 +786,7 @@ const buildHtml = () => `<!DOCTYPE html>
       .crm-live-interruption-screen {
         width: 100%;
         height: 100%;
-        padding: 5.2vh 6vw;
+        padding: 3.6vh 4.5vw;
         display: grid;
         grid-template-rows: 1fr auto;
       }
@@ -808,7 +808,7 @@ const buildHtml = () => `<!DOCTYPE html>
         gap: 0;
       }
       .crm-live-interruption-kicker {
-        font-size: 1.6vh;
+        font-size: 2vh;
         letter-spacing: .28em;
         text-transform: uppercase;
         font-weight: 500;
@@ -817,14 +817,14 @@ const buildHtml = () => `<!DOCTYPE html>
         margin-bottom: 7vh;
       }
       .crm-live-interruption-avatar {
-        width: 16vh;
-        height: 16vh;
+        width: 20vh;
+        height: 20vh;
         border-radius: 999px;
         overflow: hidden;
         background: rgba(255,255,255,.92);
         display: grid;
         place-items: center;
-        font-size: 5vh;
+        font-size: 6.5vh;
         letter-spacing: .04em;
         color: var(--accent);
         margin-bottom: 2.2vh;
@@ -837,21 +837,21 @@ const buildHtml = () => `<!DOCTYPE html>
         display: block;
       }
       .crm-live-interruption-name {
-        font-size: min(4.4vw, 5.8vh);
+        font-size: 6vh;
         line-height: .94;
         letter-spacing: -.06em;
         font-weight: 500;
         margin-bottom: 1.6vh;
       }
       .crm-live-interruption-hero {
-        font-size: min(16vw, 23vh);
+        font-size: clamp(20vh, 22vh, 26vh);
         line-height: .86;
         letter-spacing: -.08em;
         font-weight: 500;
         color: #ffffff;
       }
       .crm-live-interruption-plan {
-        font-size: 2.2vh;
+        font-size: 3.4vh;
         line-height: 1.35;
         opacity: .82;
         margin-top: 6.2vh;
@@ -867,13 +867,13 @@ const buildHtml = () => `<!DOCTYPE html>
         text-align: center;
       }
       .crm-live-interruption-footer strong {
-        font-size: 2.7vh;
+        font-size: 3.6vh;
         line-height: 1.08;
         letter-spacing: -.05em;
         font-weight: 500;
       }
       .crm-live-interruption-footer span {
-        font-size: 1.5vh;
+        font-size: 1.8vh;
         line-height: 1.35;
         color: rgba(255,255,255,.74);
         letter-spacing: .24em;
@@ -936,6 +936,12 @@ const buildHtml = () => `<!DOCTYPE html>
         let screenKeys = [];
         let eventQueue = [];
         let activeInterruption = null;
+
+        console.log('[crm-live] viewport', {
+          innerWidth: window.innerWidth,
+          innerHeight: window.innerHeight,
+          devicePixelRatio: window.devicePixelRatio,
+        });
 
         const escapeHtml = (value) => String(value == null ? '' : value)
           .replace(/&/g, '&amp;')
