@@ -129,7 +129,20 @@ module.exports = async (req, res) => {
     });
 
     const stale = Boolean(crmSlice.stale || sdrSlice.stale);
+    const sliceMetas = [
+      { key: "crm", meta: crmSlice.meta || {}, stale: Boolean(crmSlice.stale) },
+      { key: "sdr", meta: sdrSlice.meta || {}, stale: Boolean(sdrSlice.stale) },
+    ];
+    const staleSource = sliceMetas
+      .filter((entry) => entry.stale)
+      .sort((left, right) => Number(right.meta?.ageMs || 0) - Number(left.meta?.ageMs || 0))[0] || null;
+    const freshestSource = sliceMetas
+      .slice()
+      .sort((left, right) => Date.parse(String(right.meta?.generatedAt || "")) - Date.parse(String(left.meta?.generatedAt || "")))[0] || null;
     const staleAgeMinutes = Math.max(Number(crmSlice.meta?.ageMinutes || 0), Number(sdrSlice.meta?.ageMinutes || 0));
+    const snapshotGeneratedAt = stale
+      ? String(staleSource?.meta?.generatedAt || freshestSource?.meta?.generatedAt || "")
+      : String(freshestSource?.meta?.generatedAt || "");
     return sendJson(res, 200, {
       month: crmSlice.payload.month,
       news,
@@ -159,7 +172,9 @@ module.exports = async (req, res) => {
         crm: crmSlice.payload.cacheDebug?.crm || null,
         sdr: sdrSlice.payload.cacheDebug?.sdr || null,
       },
-      generatedAt: new Date().toISOString(),
+      generatedAt: snapshotGeneratedAt || new Date().toISOString(),
+      snapshotGeneratedAt: snapshotGeneratedAt || "",
+      staleSource: stale ? String(staleSource?.key || "") : "",
       stale,
       cached: Boolean(crmSlice.cached || sdrSlice.cached),
       staleAgeMinutes,

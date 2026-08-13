@@ -138,7 +138,7 @@ const buildDocumentName = (collection, docId) => {
   }
   return `projects/${PROJECT_ID}/databases/(default)/documents/${safeCollection}/${encodeURIComponent(safeDocId)}`;
 };
-const buildCookie = (name, value, { maxAgeSeconds = CRM_LIVE_COOKIE_MAX_AGE_SECONDS, secure = false, path = "/tv/crm-live" } = {}) => {
+const buildCookie = (name, value, { maxAgeSeconds = CRM_LIVE_COOKIE_MAX_AGE_SECONDS, secure = false, path = "/" } = {}) => {
   const parts = [
     `${name}=${encodeURIComponent(value)}`,
     `Path=${path}`,
@@ -149,7 +149,7 @@ const buildCookie = (name, value, { maxAgeSeconds = CRM_LIVE_COOKIE_MAX_AGE_SECO
   if (secure) parts.push("Secure");
   return parts.join("; ");
 };
-const clearCookie = ({ secure = false, path = "/tv/crm-live" } = {}) => buildCookie(CRM_LIVE_COOKIE_NAME, "", { maxAgeSeconds: 0, secure, path });
+const clearCookie = ({ secure = false, path = "/" } = {}) => buildCookie(CRM_LIVE_COOKIE_NAME, "", { maxAgeSeconds: 0, secure, path });
 
 const formatDateKeyStartIso = (dateKey) => {
   const safe = safeString(dateKey);

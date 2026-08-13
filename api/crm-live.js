@@ -738,6 +738,14 @@ const buildHtml = () => `<!DOCTYPE html>
         font-size: 1.8vh;
         line-height: 1.2;
       }
+      .crm-live-footer [data-crm-live-status][data-tone="warning"] {
+        color: var(--accent);
+      }
+      .crm-live-footer [data-crm-live-status][data-tone="critical"] {
+        color: var(--accent);
+        font-size: 2.6vh;
+        letter-spacing: .04em;
+      }
       .crm-live-dots {
         display: flex;
         align-items: center;
@@ -1575,7 +1583,70 @@ const buildHtml = () => `<!DOCTYPE html>
           renderDots();
           if (emptyEl) emptyEl.remove();
         };
-        const setStatus = (text) => { if (statusEl) statusEl.textContent = text; };
+        const setStatus = (text, tone) => {
+          if (!statusEl) return;
+          statusEl.textContent = text;
+          statusEl.dataset.tone = tone || 'default';
+        };
+        const staleTimestampLabel = (value) => {
+          const date = value ? new Date(String(value)) : null;
+          if (!date || Number.isNaN(date.getTime())) return '';
+          const now = new Date();
+          const sameYear = now.getFullYear() === date.getFullYear();
+          const sameMonth = now.getMonth() === date.getMonth();
+          const sameDate = now.getDate() === date.getDate();
+          const yesterday = new Date(now);
+          yesterday.setDate(now.getDate() - 1);
+          const isYesterday = yesterday.getFullYear() === date.getFullYear() && yesterday.getMonth() === date.getMonth() && yesterday.getDate() === date.getDate();
+          const time = new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(date);
+          if (sameDate && sameMonth && sameYear) return 'dados de ' + time;
+          if (isYesterday) return 'dados de ' + time + ' de ontem';
+          return 'dados de ' + new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(date);
+        };
+        const buildStatusText = (data, fallbackMode) => {
+          const staleAgeMinutes = Math.max(0, Number(getNested(data, ['staleAgeMinutes'], 0) || 0));
+          const snapshotGeneratedAt = getNested(data, ['snapshotGeneratedAt'], '') || getNested(data, ['generatedAt'], '');
+          if (fallbackMode) {
+            if (staleAgeMinutes > 180) {
+              return {
+                text: staleTimestampLabel(snapshotGeneratedAt) || ('dados defasados · ' + String(staleAgeMinutes) + ' min'),
+                tone: 'critical',
+              };
+            }
+            if (staleAgeMinutes > 30) {
+              return {
+                text: 'Sem atualização nova · mantendo última tela boa',
+                tone: 'warning',
+              };
+            }
+            return {
+              text: 'Sem atualização nova · mantendo última tela boa',
+              tone: 'default',
+            };
+          }
+          if (data.stale) {
+            if (staleAgeMinutes > 180) {
+              return {
+                text: staleTimestampLabel(snapshotGeneratedAt) || ('Exibindo último snapshot útil · ' + String(staleAgeMinutes) + ' min'),
+                tone: 'critical',
+              };
+            }
+            if (staleAgeMinutes > 30) {
+              return {
+                text: 'Exibindo último snapshot útil · ' + String(staleAgeMinutes) + ' min',
+                tone: 'warning',
+              };
+            }
+            return {
+              text: 'Exibindo último snapshot útil · ' + String(staleAgeMinutes) + ' min',
+              tone: 'default',
+            };
+          }
+          return {
+            text: 'Atualizado ' + dateTimeLabel(data.generatedAt),
+            tone: 'default',
+          };
+        };
         const rotate = () => {
           if (!payload) return;
           active = (active + 1) % screenKeys.length;
@@ -1637,7 +1708,8 @@ const buildHtml = () => `<!DOCTYPE html>
             saveLastGood(data);
             render();
             scheduleRotation();
-            setStatus(data.stale ? 'Exibindo último snapshot útil · ' + String(data.staleAgeMinutes || 0) + ' min' : 'Atualizado ' + dateTimeLabel(data.generatedAt));
+            const status = buildStatusText(data, false);
+            setStatus(status.text, status.tone);
           } catch (error) {
             const fallback = loadLastGood();
             if (fallback) {
@@ -1645,12 +1717,13 @@ const buildHtml = () => `<!DOCTYPE html>
               preloadFromPayload(fallback);
               render();
               if (!activeInterruption) scheduleRotation();
-              setStatus('Sem atualização nova · mantendo última tela boa');
+              const status = buildStatusText(fallback, true);
+              setStatus(status.text, status.tone);
               return;
             }
             const explained = explainError(error && error.status, error && error.errorCode, error && error.message);
             showError(explained.title, explained.body);
-            setStatus(((error && error.status) ? 'Erro ' + String(error.status) + ' · ' : '') + ((error && error.errorCode) || 'sem snapshot'));
+            setStatus(((error && error.status) ? 'Erro ' + String(error.status) + ' · ' : '') + ((error && error.errorCode) || 'sem snapshot'), 'critical');
           }
         };
         const loadEvents = async () => {
