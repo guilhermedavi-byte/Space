@@ -7,6 +7,7 @@ const { signJwt, verifyJwt, parseCookies, isSecureRequest } = require("./session
 const { resolveCommercialPeriod, formatSaoPauloDateKey, getCalendarMonthBounds } = require("./commercial-period");
 const { buildWeeklyGoalsReadModel, decodeGrowthPeopleDoc, decodeWeeklyGoalsMap, resolveCommercialWeek, extractCrmAttendantId, buildGrowthPeopleIndexes } = require("./growth-people");
 const { getDealValue, normalizeKey } = require("../../_lib/forecast-service");
+const { fetchMirroredBusinesses, getSyncState, isDatacrazyMirrorEnabled } = require("./datacrazy-mirror");
 
 const DATASTORE_SCOPE = "https://www.googleapis.com/auth/datastore";
 const GOALS_COLLECTION = "growthGoals";
@@ -364,7 +365,7 @@ const loadSdrEventsRange = async ({ fromKey, toKey } = {}) => {
   return rows.map(decodeSdrEventRow).filter(Boolean);
 };
 
-const fetchCrmBusinesses = async ({ startDateKey, lastMovedAfter = "", status = "" } = {}) => {
+const fetchCrmBusinessesLegacy = async ({ startDateKey, lastMovedAfter = "", status = "" } = {}) => {
   const apiKey = safeString(process.env.CRM_API_KEY);
   const base = safeString(process.env.CRM_API_BASE_URL).replace(/\/+$/, "");
   if (!apiKey || !base) {
@@ -414,6 +415,21 @@ const fetchCrmBusinesses = async ({ startDateKey, lastMovedAfter = "", status = 
       status: safeString(status),
     },
   };
+};
+
+const fetchCrmBusinesses = async ({ startDateKey, lastMovedAfter = "", status = "" } = {}) => {
+  if (isDatacrazyMirrorEnabled()) {
+    const result = await fetchMirroredBusinesses({ startDateKey, lastMovedAfter, status });
+    const syncState = await getSyncState("incremental").catch(() => null);
+    return {
+      businesses: result.businesses || [],
+      pagination: {
+        ...(result.pagination || {}),
+        lastSuccessfulSyncAt: safeString(syncState?.last_successful_sync_at),
+      },
+    };
+  }
+  return fetchCrmBusinessesLegacy({ startDateKey, lastMovedAfter, status });
 };
 
 const fetchCrmWindow = async ({ startDateKey } = {}) => fetchCrmBusinesses({ startDateKey });

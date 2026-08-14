@@ -32,6 +32,7 @@ const {
 } = require("../_lib/firestore-rest");
 const crypto = require("crypto");
 const { validateWebhookSecret } = require("./_lib/security");
+const { fetchAllMirroredBusinesses, isDatacrazyMirrorEnabled } = require("./_lib/datacrazy-mirror");
 
 const sendRedirect = (res, location) => {
   res.statusCode = 302;
@@ -723,7 +724,7 @@ const fetchCrmBusinessesPage = async ({ base, apiKey, skip, take } = {}) => {
   return { ok: true, status: res.status || 200, items, total };
 };
 
-const fetchAllCrmBusinesses = async () => {
+const fetchAllCrmBusinessesLegacy = async () => {
   const apiKey = String(process.env.CRM_API_KEY || "").trim();
   const base = String(process.env.CRM_API_BASE_URL || "").trim().replace(/\/+$/, "");
   if (!apiKey || !base) {
@@ -779,6 +780,22 @@ const fetchAllCrmBusinesses = async () => {
       expectedTotal,
     },
   };
+};
+
+const fetchAllCrmBusinesses = async () => {
+  if (isDatacrazyMirrorEnabled()) {
+    const mirror = await fetchAllMirroredBusinesses();
+    return {
+      ok: true,
+      status: 200,
+      businesses: mirror.businesses || [],
+      pagination: {
+        ...(mirror.pagination || {}),
+        source: "mirror",
+      },
+    };
+  }
+  return fetchAllCrmBusinessesLegacy();
 };
 
 const decodeGoalDoc = (doc) => {
@@ -3060,4 +3077,10 @@ module.exports = async (req, res) => {
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.setHeader("Cache-Control", "no-store");
   res.end(html);
+};
+
+module.exports.__private = {
+  buildGrowthMetricsPayload,
+  fetchAllCrmBusinesses,
+  fetchAllCrmBusinessesLegacy,
 };
