@@ -1598,6 +1598,9 @@ module.exports = async (req, res) => {
             professorEmail: evt.professorEmail,
             liveLessonId: evt.liveLessonId,
             liveUrl: evt.liveLessonId ? `/aula/${encodeURIComponent(evt.liveLessonId)}` : "",
+            tipoEvento: evt.tipoEvento || "",
+            originEventId: evt.originEventId || "",
+            originLessonId: evt.originLessonId || "",
           };
         });
 

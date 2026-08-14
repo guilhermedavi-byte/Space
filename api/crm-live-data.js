@@ -20,6 +20,7 @@ const normalizeRole = (value) => {
   const raw = String(value || "").trim().toLowerCase();
   if (raw === "admin" || raw === "administrador") return "admin";
   if (raw === "growth") return "growth";
+  if (["comercial", "closer", "sales"].includes(raw)) return "commercial";
   return "";
 };
 
@@ -29,7 +30,7 @@ const SDR_CACHE_DOC_ID = "sdr";
 const canReadViaSession = (req) => {
   const session = getSessionFromRequest(req);
   const role = normalizeRole(session?.role);
-  if (role === "admin" || role === "growth") return { ok: true, mode: "session", session };
+  if (role === "admin" || role === "growth" || role === "commercial") return { ok: true, mode: "session", session };
   return null;
 };
 

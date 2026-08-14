@@ -119,6 +119,13 @@ const validateRemarcacaoPayload = (body) => {
   return missing;
 };
 
+const isValidIsoDateTime = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw) return false;
+  const ms = Date.parse(raw);
+  return Number.isFinite(ms);
+};
+
 const handlePedagogicoLessonAction = (kind) => async (req, res) => {
   const cfg = CONFIG[kind];
   if (!cfg) return sendJson(res, 500, { error: "invalid_action_config" });
@@ -148,6 +155,12 @@ const handlePedagogicoLessonAction = (kind) => async (req, res) => {
     if (kind === "remarcacao_aula") {
       const remarcacaoMissing = validateRemarcacaoPayload(body);
       if (remarcacaoMissing.length) return sendJson(res, 400, { error: "missing_required_fields", fields: remarcacaoMissing });
+      if (normalizeRemarcacaoSituacao(body?.situacao_reposicao, body) === "agendada_agora") {
+        const nextDateIso = String(body?.nova_data_aula || body?.nova_data || "").trim();
+        if (!isValidIsoDateTime(nextDateIso)) {
+          return sendJson(res, 400, { error: "invalid_date", fields: ["nova_data_aula"] });
+        }
+      }
     }
 
     const payload = normalizePayload(kind, body, lesson);

@@ -22,3 +22,9 @@ test("evento de reposição entra no estado local com vínculo de origem", () =>
   assert.match(script, /originLessonId: createPayload\.originLessonId/);
   assert.match(script, /pedagogicoState\.lessons = \[\.\.\.others, replacementRow\]\.sort/);
 });
+
+test("remarcação valida janela plausível para nova data", () => {
+  assert.match(script, /Nova data fora da janela válida da remarcação\./);
+  assert.match(script, /replacementStart\.getTime\(\) < originalStart\.getTime\(\) - oneDayMs/);
+  assert.match(script, /replacementStart\.getTime\(\) > originalStart\.getTime\(\) \+ oneYearMs/);
+});

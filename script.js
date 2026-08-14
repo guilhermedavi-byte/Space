@@ -7648,16 +7648,22 @@ const formatBrDateFromDateKey = (dateKey) => {
 const dateKeyFromIso = (value) => {
   const date = value ? new Date(value) : null;
   if (!date || Number.isNaN(date.getTime())) return "";
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(date);
 };
 
 const minutesFromIso = (value) => {
   const date = value ? new Date(value) : null;
   if (!date || Number.isNaN(date.getTime())) return NaN;
-  return date.getHours() * 60 + date.getMinutes();
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const hour = Number(parts.find((part) => part.type === "hour")?.value);
+  const minute = Number(parts.find((part) => part.type === "minute")?.value);
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return NaN;
+  return hour * 60 + minute;
 };
 
 const normalizeLiveLessonForUi = (lesson) => {
@@ -8550,6 +8556,19 @@ const buildPedagogicoReplacementEventPayload = ({ lesson, draft, sessionUser: ac
   const startMin = timeToMinutes(draft.horarioInicioRemarcacao);
   const endMin = timeToMinutes(draft.horarioFimRemarcacao);
   if (!Number.isFinite(startMin) || !Number.isFinite(endMin) || endMin <= startMin) return null;
+  const originalStart = buildDateFromDateKeyAndMinutes(lesson.dateKey, lesson.startMin);
+  const replacementStart = buildDateFromDateKeyAndMinutes(draft.novaDataRemarcacao, startMin);
+  const dayWindowMs = 366 * 24 * 60 * 60 * 1000;
+  if (
+    originalStart instanceof Date &&
+    replacementStart instanceof Date &&
+    Number.isFinite(originalStart.getTime()) &&
+    Number.isFinite(replacementStart.getTime()) &&
+    (replacementStart.getTime() < originalStart.getTime() - 24 * 60 * 60 * 1000 ||
+      replacementStart.getTime() > originalStart.getTime() + dayWindowMs)
+  ) {
+    return null;
+  }
 
   const { originEventId, originLessonId } = buildPedagogicoReplacementLinkMeta(lesson);
   return {
@@ -9612,6 +9631,21 @@ const savePedagogicoLog = async ({ autosave = false } = {}) => {
     const endMin = timeToMinutes(draft.horarioFimRemarcacao);
     if (draft.situacaoReposicao === "agendada_agora" && (!Number.isFinite(startMin) || !Number.isFinite(endMin) || endMin <= startMin)) {
       if (!autosave) setPedagogicoStatus("Horário de fim deve ser maior que o de início.", "error");
+      return false;
+    }
+    const originalStart = buildDateFromDateKeyAndMinutes(lesson.dateKey, lesson.startMin);
+    const replacementStart = buildDateFromDateKeyAndMinutes(draft.novaDataRemarcacao, startMin);
+    const oneDayMs = 24 * 60 * 60 * 1000;
+    const oneYearMs = 366 * oneDayMs;
+    if (
+      originalStart instanceof Date &&
+      replacementStart instanceof Date &&
+      Number.isFinite(originalStart.getTime()) &&
+      Number.isFinite(replacementStart.getTime()) &&
+      (replacementStart.getTime() < originalStart.getTime() - oneDayMs ||
+        replacementStart.getTime() > originalStart.getTime() + oneYearMs)
+    ) {
+      if (!autosave) setPedagogicoStatus("Nova data fora da janela válida da remarcação.", "error");
       return false;
     }
   }

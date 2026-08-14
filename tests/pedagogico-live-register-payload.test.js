@@ -8,6 +8,10 @@ const pedagogicoHandler = fs.readFileSync(
   path.join(__dirname, "..", "api", "_lib", "pedagogico-action-handler.js"),
   "utf8",
 );
+const scheduleEvents = fs.readFileSync(
+  path.join(__dirname, "..", "api", "schedule-events.js"),
+  "utf8",
+);
 const { normalizePayload } = require("../api/_lib/pedagogico-action-handler");
 
 test("payload live do professor envia engajamento e confiança", () => {
@@ -46,4 +50,15 @@ test("backend de remarcação não exige mais motivo_remarcacao", () => {
     pedagogicoHandler,
     /remarcacao_aula:\s*\{[\s\S]*?required:\s*\[\s*"aula_id"\s*\]/,
   );
+});
+
+test("backend de remarcação rejeita nova data inválida", () => {
+  assert.match(pedagogicoHandler, /const isValidIsoDateTime = \(value\) =>/);
+  assert.match(pedagogicoHandler, /return sendJson\(res, 400, \{ error: "invalid_date", fields: \["nova_data_aula"\] \}\);/);
+});
+
+test("API de agenda devolve vínculos de remarcação no GET", () => {
+  assert.match(scheduleEvents, /originEventId: evt\.originEventId \|\| "",/);
+  assert.match(scheduleEvents, /originLessonId: evt\.originLessonId \|\| "",/);
+  assert.match(scheduleEvents, /tipoEvento: evt\.tipoEvento \|\| "",/);
 });

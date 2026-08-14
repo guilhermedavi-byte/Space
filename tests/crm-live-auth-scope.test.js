@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 
 const crmLiveDataPath = require.resolve('../api/crm-live-data');
 const growthDashboardPath = require.resolve('../api/growth-dashboard');
-const sessionPath = require.resolve('../api/_lib/session');
+const sessionPath = require.resolve('../_lib/session');
 const httpPath = require.resolve('../_lib/http');
 const crmLiveLibPath = require.resolve('../api/_lib/crm-live');
 
@@ -90,4 +90,43 @@ test('cookie da TV não autentica /api/growth-dashboard?api=growth-metrics', asy
   await handler({ method: 'GET', url: '/api/growth-dashboard?api=growth-metrics', headers: { host: 'localhost', cookie: 'space_crm_live=token' } }, res);
   assert.equal(res.statusCode, 401);
   assert.equal(res.body?.error, 'unauthorized');
+});
+
+test('sessão comercial autenticada passa em /api/crm-live-data', async () => {
+  delete require.cache[crmLiveDataPath];
+  installHttpStub();
+  require.cache[sessionPath] = {
+    id: sessionPath,
+    filename: sessionPath,
+    loaded: true,
+    exports: {
+      getSessionFromRequest() {
+        return { role: 'comercial', sub: 'u-1', email: 'fabio@example.com' };
+      },
+    },
+  };
+  require.cache[crmLiveLibPath] = {
+    id: crmLiveLibPath,
+    filename: crmLiveLibPath,
+    loaded: true,
+    exports: {
+      buildCrmLiveCrmSlice: async () => ({ weekly: { team: { closers: {}, sdrs: {} }, closers: [], commercialWeek: { weekKey: 'wk_2026-08-13' } }, month: {}, highlights: {}, latestSale: null, unresolved: {}, cacheDebug: {} }),
+      buildCrmLiveSdrSlice: async () => ({ weekly: { commercialWeek: { weekKey: 'wk_2026-08-13' }, team: { closers: {}, sdrs: {} }, sdrs: [] }, highlights: {}, unresolved: {}, cacheDebug: {} }),
+      buildWeeklyNewsScreens: () => [],
+      decorateLeaderboardComparisons: ({ rows = [] }) => rows,
+      validateCookieViewer: async () => ({ ok: false, status: 401, error: 'missing_cookie' }),
+      readCacheDoc: async () => ({ ok: false, status: 404, data: null }),
+      writeCacheDoc: async () => ({ ok: true }),
+      getCacheMeta: () => ({ generatedAt: '', ageMs: Infinity, ageMinutes: 0 }),
+      CRM_CACHE_TTL_MS: 120000,
+      SDR_CACHE_TTL_MS: 60000,
+      loadWeeklyRollupsHistory: async () => [],
+      loadCurrentGoal: async () => null,
+      loadGrowthPeople: async () => [],
+    },
+  };
+  const handler = require('../api/crm-live-data');
+  const res = makeRes();
+  await handler({ method: 'GET', url: '/api/crm-live-data', headers: { host: 'localhost' } }, res);
+  assert.equal(res.statusCode, 200);
 });

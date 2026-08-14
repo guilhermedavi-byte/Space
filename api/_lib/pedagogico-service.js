@@ -121,10 +121,26 @@ const listRegisters = ({ limit = 1000 } = {}) => {
 };
 
 const statusOpen = (value) => !["resolvida", "resolvido", "fechada", "fechado"].includes(String(value || "").toLowerCase());
+const SAO_PAULO_TIME_ZONE = "America/Sao_Paulo";
 const dateKey = (value) => {
   const date = value ? new Date(value) : null;
   if (!date || Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(date);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: SAO_PAULO_TIME_ZONE }).format(date);
+};
+
+const getSaoPauloTimeParts = (value) => {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return null;
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: SAO_PAULO_TIME_ZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const hour = Number(parts.find((part) => part.type === "hour")?.value);
+  const minute = Number(parts.find((part) => part.type === "minute")?.value);
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
+  return { hour, minute, totalMinutes: hour * 60 + minute };
 };
 
 const normalizeIdentity = (value) =>
@@ -508,10 +524,10 @@ const lessonToTeacherEvent = (lesson) => {
   if (!lesson || typeof lesson !== "object") return null;
   const id = String(lesson.id || "").trim();
   if (!id) return null;
-  const start = lesson.inicio ? new Date(lesson.inicio) : null;
-  const end = lesson.fim ? new Date(lesson.fim) : null;
-  const startMin = start && !Number.isNaN(start.getTime()) ? start.getHours() * 60 + start.getMinutes() : 0;
-  const endMin = end && !Number.isNaN(end.getTime()) ? end.getHours() * 60 + end.getMinutes() : startMin + 30;
+  const startParts = getSaoPauloTimeParts(lesson.inicio);
+  const endParts = getSaoPauloTimeParts(lesson.fim);
+  const startMin = startParts ? startParts.totalMinutes : 0;
+  const endMin = endParts ? endParts.totalMinutes : startMin + 30;
   return {
     id,
     type: "lesson",

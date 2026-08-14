@@ -35,3 +35,10 @@ test("agenda admin suporta semana de 7 dias e split com 1 professor", () => {
   assert.match(script, /teacher-cal-week-cols" style="grid-template-columns:repeat\(\$\{days\.length\}, minmax\(0, 1fr\)\)"/);
   assert.match(script, /const color = currentRole === "admin" \? getAdminTeacherColor\(event\.professorId\) : ""/);
 });
+
+test("datas ISO do live usam America/Sao_Paulo no front", () => {
+  assert.match(script, /const dateKeyFromIso = \(value\) =>/);
+  assert.match(script, /new Intl\.DateTimeFormat\("en-CA", \{ timeZone: "America\/Sao_Paulo" \}\)\.format\(date\)/);
+  assert.match(script, /const minutesFromIso = \(value\) =>/);
+  assert.match(script, /timeZone: "America\/Sao_Paulo",/);
+});

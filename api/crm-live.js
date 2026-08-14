@@ -13,6 +13,7 @@ const normalizeRole = (value) => {
   const raw = String(value || "").trim().toLowerCase();
   if (raw === "admin" || raw === "administrador") return "admin";
   if (raw === "growth") return "growth";
+  if (["comercial", "closer", "sales"].includes(raw)) return "commercial";
   return "";
 };
 
@@ -1781,7 +1782,7 @@ module.exports = async (req, res) => {
 
   const session = getSessionFromRequest(req);
   const role = normalizeRole(session?.role);
-  const cookieViewer = role === "admin" || role === "growth" ? { ok: true } : await validateCookieViewer(req);
+  const cookieViewer = role === "admin" || role === "growth" || role === "commercial" ? { ok: true } : await validateCookieViewer(req);
   if (!cookieViewer?.ok) {
     res.statusCode = 401;
     res.setHeader("Set-Cookie", clearCookie({ secure }));
