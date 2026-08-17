@@ -8,6 +8,7 @@ const {
   buildWeeklyTeamSummary,
   fetchCrmBusinesses,
   loadCurrentGoal,
+  loadCrmLiveDefaultsConfig,
   loadGrowthPeople,
   loadSdrEventsRange,
   writeWeeklyRollup,
@@ -86,8 +87,9 @@ module.exports = async (req, res) => {
 
   try {
     const now = new Date();
-    const [goal, people, detectorStateSnap] = await Promise.all([
+    const [goal, globalConfig, people, detectorStateSnap] = await Promise.all([
       loadCurrentGoal({ now }),
+      loadCrmLiveDefaultsConfig(),
       loadGrowthPeople(),
       readStateDoc(CRM_LIVE_EVENTS_COLLECTION, DETECTOR_DOC_ID),
     ]);
@@ -112,6 +114,7 @@ module.exports = async (req, res) => {
 
     const weeklyProbe = buildWeeklyGoalsReadModel({
       goal,
+      globalConfig,
       people,
       businesses: wonMonth.businesses,
       sdrEvents: [],
@@ -124,6 +127,7 @@ module.exports = async (req, res) => {
     });
     const weeklyReadModel = buildWeeklyGoalsReadModel({
       goal,
+      globalConfig,
       people,
       businesses: wonMonth.businesses,
       sdrEvents,

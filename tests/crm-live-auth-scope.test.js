@@ -63,6 +63,7 @@ test('cookie da TV passa em /api/crm-live-data', async () => {
       SDR_CACHE_TTL_MS: 60000,
       loadWeeklyRollupsHistory: async () => [],
       loadCurrentGoal: async () => null,
+      loadCrmLiveDefaultsConfig: async () => null,
       loadGrowthPeople: async () => [],
     },
   };
@@ -122,6 +123,7 @@ test('sessão comercial autenticada passa em /api/crm-live-data', async () => {
       SDR_CACHE_TTL_MS: 60000,
       loadWeeklyRollupsHistory: async () => [],
       loadCurrentGoal: async () => null,
+      loadCrmLiveDefaultsConfig: async () => null,
       loadGrowthPeople: async () => [],
     },
   };
@@ -129,4 +131,106 @@ test('sessão comercial autenticada passa em /api/crm-live-data', async () => {
   const res = makeRes();
   await handler({ method: 'GET', url: '/api/crm-live-data', headers: { host: 'localhost' } }, res);
   assert.equal(res.statusCode, 200);
+});
+
+test('cache stale só é reaproveitado se for da mesma semana comercial', async () => {
+  delete require.cache[crmLiveDataPath];
+  installHttpStub();
+  require.cache[sessionPath] = {
+    id: sessionPath,
+    filename: sessionPath,
+    loaded: true,
+    exports: {
+      getSessionFromRequest() {
+        return { role: 'comercial', sub: 'u-1' };
+      },
+    },
+  };
+  require.cache[crmLiveLibPath] = {
+    id: crmLiveLibPath,
+    filename: crmLiveLibPath,
+    loaded: true,
+    exports: {
+      buildCrmLiveCrmSlice: async () => {
+        throw new Error('crm_failed');
+      },
+      buildCrmLiveSdrSlice: async () => ({ weekly: { commercialWeek: { weekKey: 'wk_2026-08-11' }, team: { closers: {}, sdrs: {} }, sdrs: [] }, highlights: {}, unresolved: {}, cacheDebug: {} }),
+      buildWeeklyNewsScreens: () => [],
+      decorateLeaderboardComparisons: ({ rows = [] }) => rows,
+      validateCookieViewer: async () => ({ ok: false, status: 401, error: 'missing_cookie' }),
+      readCacheDoc: async (docId) => docId === 'crm'
+        ? ({ ok: true, data: { payload: { weekly: { commercialWeek: { weekKey: 'wk_2026-08-11' }, team: { closers: {}, sdrs: {} }, closers: [] }, month: {}, highlights: {}, unresolved: {}, cacheDebug: {} }, generatedAt: '2026-08-17T10:00:00.000Z' } })
+        : ({ ok: false, status: 404, data: null }),
+      writeCacheDoc: async () => ({ ok: true }),
+      getCacheMeta: () => ({ generatedAt: '2026-08-17T10:00:00.000Z', ageMs: 999999, ageMinutes: 17 }),
+      CRM_CACHE_TTL_MS: 120000,
+      SDR_CACHE_TTL_MS: 60000,
+      loadWeeklyRollupsHistory: async () => [],
+      loadCurrentGoal: async () => null,
+      loadCrmLiveDefaultsConfig: async () => null,
+      loadGrowthPeople: async () => [],
+    },
+  };
+  const handler = require('../api/crm-live-data');
+  const res = makeRes();
+  await handler({ method: 'GET', url: '/api/crm-live-data', headers: { host: 'localhost' } }, res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body?.stale, true);
+});
+
+test('cache stale de semana anterior é descartado na virada de semana', async () => {
+  delete require.cache[crmLiveDataPath];
+  installHttpStub();
+  require.cache[sessionPath] = {
+    id: sessionPath,
+    filename: sessionPath,
+    loaded: true,
+    exports: {
+      getSessionFromRequest() {
+        return { role: 'comercial', sub: 'u-1' };
+      },
+    },
+  };
+  require.cache[crmLiveLibPath] = {
+    id: crmLiveLibPath,
+    filename: crmLiveLibPath,
+    loaded: true,
+    exports: {
+      buildCrmLiveCrmSlice: async () => {
+        throw new Error('crm_failed');
+      },
+      buildCrmLiveSdrSlice: async () => ({ weekly: { commercialWeek: { weekKey: 'wk_2026-08-19' }, team: { closers: {}, sdrs: {} }, sdrs: [] }, highlights: {}, unresolved: {}, cacheDebug: {} }),
+      buildWeeklyNewsScreens: () => [],
+      decorateLeaderboardComparisons: ({ rows = [] }) => rows,
+      validateCookieViewer: async () => ({ ok: false, status: 401, error: 'missing_cookie' }),
+      readCacheDoc: async (docId) => docId === 'crm'
+        ? ({ ok: true, data: { payload: { weekly: { commercialWeek: { weekKey: 'wk_2026-08-11' }, team: { closers: {}, sdrs: {} }, closers: [] }, month: {}, highlights: {}, unresolved: {}, cacheDebug: {} }, generatedAt: '2026-08-18T23:58:00.000Z' } })
+        : ({ ok: false, status: 404, data: null }),
+      writeCacheDoc: async () => ({ ok: true }),
+      getCacheMeta: () => ({ generatedAt: '2026-08-18T23:58:00.000Z', ageMs: 120000, ageMinutes: 2 }),
+      CRM_CACHE_TTL_MS: 120000,
+      SDR_CACHE_TTL_MS: 60000,
+      loadWeeklyRollupsHistory: async () => [],
+      loadCurrentGoal: async () => null,
+      loadCrmLiveDefaultsConfig: async () => null,
+      loadGrowthPeople: async () => [],
+    },
+  };
+  const RealDate = Date;
+  global.Date = class extends RealDate {
+    constructor(value) {
+      super(value || '2026-08-19T00:01:00-03:00');
+    }
+    static now() {
+      return new RealDate('2026-08-19T00:01:00-03:00').getTime();
+    }
+  };
+  try {
+    const handler = require('../api/crm-live-data');
+    const res = makeRes();
+    await handler({ method: 'GET', url: '/api/crm-live-data', headers: { host: 'localhost' } }, res);
+    assert.equal(res.statusCode, 500);
+  } finally {
+    global.Date = RealDate;
+  }
 });

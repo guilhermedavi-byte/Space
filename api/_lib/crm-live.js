@@ -8,13 +8,17 @@ const { resolveCommercialPeriod, formatSaoPauloDateKey, getCalendarMonthBounds }
 const {
   buildWeeklyGoalsReadModel,
   decodeGrowthPeopleDoc,
+  decodeGrowthConfigDoc,
   decodeWeeklyGoalsMap,
+  normalizeWeeklyGoalConfigEntry,
   resolveCommercialWeek,
   extractCrmAttendantId,
   buildGrowthPeopleIndexes,
   resolveCloserBucketForBusiness,
   AGGREGATE_OTHERS_PERSON_ID,
   AGGREGATE_OTHERS_DISPLAY_NAME,
+  GROWTH_CONFIG_COLLECTION,
+  CRM_LIVE_DEFAULTS_DOC_ID,
 } = require("./growth-people");
 const { getDealValue, normalizeKey } = require("../../_lib/forecast-service");
 const { fetchMirroredBusinesses, getSyncState, isDatacrazyMirrorEnabled } = require("./datacrazy-mirror");
@@ -304,8 +308,22 @@ const decodeGoalDoc = (doc) => {
     valorMeta: Number.isFinite(Number(fields.valorMeta)) ? Number(fields.valorMeta) : null,
     periodStart: safeString(fields.periodStart) || null,
     periodEnd: safeString(fields.periodEnd) || null,
+    defaultWeeklyConfig: fields.defaultWeeklyConfig ? normalizeWeeklyGoalConfigEntry({ weekKey: "", rawConfig: fields.defaultWeeklyConfig }) : null,
     weeklyGoals: decodeWeeklyGoalsMap(fields.weeklyGoals),
   };
+};
+
+const loadCrmLiveDefaultsConfig = async () => {
+  try {
+    const doc = await getDocumentAsAdmin(`${GROWTH_CONFIG_COLLECTION}/${encodeURIComponent(CRM_LIVE_DEFAULTS_DOC_ID)}`);
+    return decodeGrowthConfigDoc({
+      name: `${GROWTH_CONFIG_COLLECTION}/${encodeURIComponent(CRM_LIVE_DEFAULTS_DOC_ID)}`,
+      fields: encodeFields(doc).fields,
+    });
+  } catch (error) {
+    if (Number(error?.status) === 404) return null;
+    throw error;
+  }
 };
 
 const loadCurrentGoal = async ({ now = new Date() } = {}) => {
@@ -736,11 +754,11 @@ const buildWeeklyNewsScreens = ({ month = {}, weekly = {}, previousMonthComparis
   return screens;
 };
 
-const buildPreviousDayHighlights = ({ goal, people, businesses = [], sdrEvents = [], now = new Date() } = {}) => {
+const buildPreviousDayHighlights = ({ goal, globalConfig = null, people, businesses = [], sdrEvents = [], now = new Date() } = {}) => {
   const previousDay = new Date(now instanceof Date ? now.getTime() : Date.now());
   previousDay.setDate(previousDay.getDate() - 1);
   const weekForPreviousDay = resolveCommercialWeek({ now: previousDay });
-  const weeklyReadModel = buildWeeklyGoalsReadModel({ goal, people, businesses, sdrEvents, now: previousDay });
+  const weeklyReadModel = buildWeeklyGoalsReadModel({ goal, globalConfig, people, businesses, sdrEvents, now: previousDay });
   const indexes = buildGrowthPeopleIndexes(people);
   const previousDayKey = formatSaoPauloDateKey(previousDay);
   const pipelineKey = choosePipelineKey(businesses);
@@ -803,8 +821,8 @@ const buildPreviousDayHighlights = ({ goal, people, businesses = [], sdrEvents =
   };
 };
 
-const buildUnresolvedBuckets = ({ businesses = [], people = [], goal, sdrEvents = [], now = new Date() } = {}) => {
-  const weekly = buildWeeklyGoalsReadModel({ goal, people, businesses, sdrEvents, now });
+const buildUnresolvedBuckets = ({ businesses = [], people = [], goal, globalConfig = null, sdrEvents = [], now = new Date() } = {}) => {
+  const weekly = buildWeeklyGoalsReadModel({ goal, globalConfig, people, businesses, sdrEvents, now });
   const missingResponsible = [];
   const unknownResponsible = [];
   const week = weekly.commercialWeek;
@@ -836,7 +854,7 @@ const buildUnresolvedBuckets = ({ businesses = [], people = [], goal, sdrEvents 
   };
 };
 
-const buildCrmLiveCrmSlice = async ({ goal, people, now = new Date() } = {}) => {
+const buildCrmLiveCrmSlice = async ({ goal, globalConfig = null, people, now = new Date() } = {}) => {
   const monthPeriod = resolveCommercialPeriod({
     now,
     periodStart: safeString(goal?.periodStart),
@@ -867,6 +885,7 @@ const buildCrmLiveCrmSlice = async ({ goal, people, now = new Date() } = {}) => 
     : null;
   const weeklyReadModel = buildWeeklyGoalsReadModel({
     goal,
+    globalConfig,
     people,
     businesses: crm.businesses,
     sdrEvents: [],
@@ -874,6 +893,7 @@ const buildCrmLiveCrmSlice = async ({ goal, people, now = new Date() } = {}) => 
   });
   const highlights = buildPreviousDayHighlights({
     goal,
+    globalConfig,
     people,
     businesses: crm.businesses,
     sdrEvents: [],
@@ -883,6 +903,7 @@ const buildCrmLiveCrmSlice = async ({ goal, people, now = new Date() } = {}) => 
     businesses: crm.businesses,
     people,
     goal,
+    globalConfig,
     sdrEvents: [],
     now,
   });
@@ -896,6 +917,7 @@ const buildCrmLiveCrmSlice = async ({ goal, people, now = new Date() } = {}) => 
         closers: weeklyTeam.closers,
       },
       closers: weeklyReadModel.progress.closers || [],
+      configSource: weeklyReadModel.weeklyGoalConfigSource || "",
     },
     pipeline: {
       windowStartDateKey: crmWindowStartDateKey,
@@ -922,18 +944,20 @@ const buildCrmLiveCrmSlice = async ({ goal, people, now = new Date() } = {}) => 
         ...(crm.pagination || {}),
         commercialStartDateKey: monthPeriod.startDateKey,
         pipelineWindowStartDateKey: crmWindowStartDateKey,
+        weeklyConfigSource: weeklyReadModel.weeklyGoalConfigSource || "",
       },
     },
   };
 };
 
-const buildCrmLiveSdrSlice = async ({ goal, people, now = new Date() } = {}) => {
+const buildCrmLiveSdrSlice = async ({ goal, globalConfig = null, people, now = new Date() } = {}) => {
   const sdrWeek = resolveCommercialWeek({ now });
   const yesterdayKey = formatSaoPauloDateKey(new Date(now.getTime() - 86400000));
   const sdrFromKey = sdrWeek.startDateKey < yesterdayKey ? sdrWeek.startDateKey : yesterdayKey;
   const sdrEvents = await loadSdrEventsRange({ fromKey: sdrFromKey, toKey: sdrWeek.endDateKey });
   const weeklyReadModel = buildWeeklyGoalsReadModel({
     goal,
+    globalConfig,
     people,
     businesses: [],
     sdrEvents,
@@ -941,6 +965,7 @@ const buildCrmLiveSdrSlice = async ({ goal, people, now = new Date() } = {}) => 
   });
   const highlights = buildPreviousDayHighlights({
     goal,
+    globalConfig,
     people,
     businesses: [],
     sdrEvents,
@@ -954,6 +979,7 @@ const buildCrmLiveSdrSlice = async ({ goal, people, now = new Date() } = {}) => 
         sdrs: buildWeeklyTeamSummary({ weeklyReadModel }).sdrs,
       },
       sdrs: weeklyReadModel.progress.sdrs || [],
+      configSource: weeklyReadModel.weeklyGoalConfigSource || "",
     },
     highlights: {
       dayKey: highlights.dayKey,
@@ -968,6 +994,7 @@ const buildCrmLiveSdrSlice = async ({ goal, people, now = new Date() } = {}) => 
         eventsLoaded: sdrEvents.length,
         fromKey: sdrFromKey,
         toKey: sdrWeek.endDateKey,
+        weeklyConfigSource: weeklyReadModel.weeklyGoalConfigSource || "",
       },
     },
   };
@@ -975,10 +1002,10 @@ const buildCrmLiveSdrSlice = async ({ goal, people, now = new Date() } = {}) => 
 
 const buildCrmLivePayload = async ({ now = new Date() } = {}) => {
   const goal = await loadCurrentGoal({ now });
-  const people = await loadGrowthPeople();
+  const [globalConfig, people] = await Promise.all([loadCrmLiveDefaultsConfig(), loadGrowthPeople()]);
   const [crm, sdr] = await Promise.all([
-    buildCrmLiveCrmSlice({ goal, people, now }),
-    buildCrmLiveSdrSlice({ goal, people, now }),
+    buildCrmLiveCrmSlice({ goal, globalConfig, people, now }),
+    buildCrmLiveSdrSlice({ goal, globalConfig, people, now }),
   ]);
   const closers = decorateLeaderboardComparisons({ rows: crm.weekly?.closers || [], discrete: false });
   const sdrs = decorateLeaderboardComparisons({ rows: sdr.weekly?.sdrs || [], discrete: true });
@@ -1010,6 +1037,7 @@ const buildCrmLivePayload = async ({ now = new Date() } = {}) => {
       },
       closers,
       sdrs,
+      configSource: crm.weekly.configSource || sdr.weekly.configSource || "",
     },
     highlights: {
       dayKey: crm.highlights.dayKey || sdr.highlights.dayKey,
@@ -1541,6 +1569,7 @@ module.exports = {
   loadCurrentGoal,
   loadGoalByMonthKey,
   loadGrowthPeople,
+  loadCrmLiveDefaultsConfig,
   loadSdrEventsRange,
   loadWeeklyRollupsHistory,
   clearCookie,

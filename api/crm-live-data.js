@@ -14,7 +14,9 @@ const {
   loadWeeklyRollupsHistory,
   loadCurrentGoal,
   loadGrowthPeople,
+  loadCrmLiveDefaultsConfig,
 } = require("./_lib/crm-live");
+const { resolveCommercialWeek } = require("./_lib/growth-people");
 
 const normalizeRole = (value) => {
   const raw = String(value || "").trim().toLowerCase();
@@ -55,6 +57,7 @@ module.exports = async (req, res) => {
   const url = new URL(req.url || "/api/crm-live-data", `https://${host}`);
   const forceRefresh = String(url.searchParams.get("refresh") || "").trim() === "1";
   const now = new Date();
+  const currentWeekKey = resolveCommercialWeek({ now }).weekKey;
 
   const loadSlice = async ({ cacheDocId, ttlMs, build }) => {
     let cached = null;
@@ -64,8 +67,14 @@ module.exports = async (req, res) => {
       if (snap.ok && snap.data?.payload) {
         cached = snap.data;
         meta = getCacheMeta(cached);
-        if (!forceRefresh && meta.ageMs <= ttlMs) {
+        const cachedWeekKey = String(cached?.payload?.weekly?.commercialWeek?.weekKey || "");
+        const isCurrentWeekCache = Boolean(cachedWeekKey) && cachedWeekKey === currentWeekKey;
+        if (!forceRefresh && isCurrentWeekCache && meta.ageMs <= ttlMs) {
           return { payload: cached.payload, meta, cached: true, stale: false };
+        }
+        if (!isCurrentWeekCache) {
+          cached = null;
+          meta = null;
         }
       }
     } catch (error) {
@@ -89,17 +98,17 @@ module.exports = async (req, res) => {
   };
 
   try {
-    const [goal, people] = await Promise.all([loadCurrentGoal({ now }), loadGrowthPeople()]);
+    const [goal, globalConfig, people] = await Promise.all([loadCurrentGoal({ now }), loadCrmLiveDefaultsConfig(), loadGrowthPeople()]);
     const [crmSlice, sdrSlice] = await Promise.all([
       loadSlice({
         cacheDocId: CRM_CACHE_DOC_ID,
         ttlMs: CRM_CACHE_TTL_MS,
-        build: () => buildCrmLiveCrmSlice({ goal, people, now }),
+        build: () => buildCrmLiveCrmSlice({ goal, globalConfig, people, now }),
       }),
       loadSlice({
         cacheDocId: SDR_CACHE_DOC_ID,
         ttlMs: SDR_CACHE_TTL_MS,
-        build: () => buildCrmLiveSdrSlice({ goal, people, now }),
+        build: () => buildCrmLiveSdrSlice({ goal, globalConfig, people, now }),
       }),
     ]);
 
@@ -123,6 +132,7 @@ module.exports = async (req, res) => {
         },
         closers,
         sdrs,
+        configSource: crmSlice.payload.weekly?.configSource || sdrSlice.payload.weekly?.configSource || "",
       },
       previousMonthComparison: crmSlice.payload.monthComparison || null,
       weeklyRollups: weeklyRollups.filter((row) => row.weekKey !== weekKey),

@@ -5,26 +5,44 @@ const { resolveCommercialWeek } = require('../api/_lib/commercial-week');
 const { buildWeeklyGoalsReadModel, decodeWeeklyGoalsMap } = require('../api/_lib/growth-people');
 const { buildWeeklyTeamSummary } = require('../api/_lib/crm-live');
 
-const makeGoal = (people, teamTarget = 120000, extra = {}) => ({
+const PERSON_IDS = {
+  matheus: 'matheus-afonso',
+  luis: 'luis-eduardo',
+  luana: 'luana-mendonca',
+  ayres: 'ayres-andre',
+  felipe: 'felipe-santos',
+  outros: 'outros',
+};
+
+const makeGoal = (peopleConfig, teamTarget = 120000, extra = {}) => ({
   weeklyGoals: decodeWeeklyGoalsMap({
     'wk_2026-08-11': {
       startDateKey: '2026-08-11',
       endDateKey: '2026-08-18',
       teamTarget,
-      individualMonthlyGoals: people,
+      individualMonthlyGoals: peopleConfig,
       ...extra,
     },
   }),
 });
 
+const canonicalDefaultPeople = {
+  [PERSON_IDS.matheus]: { role: 'closer', targetValue: 8000 },
+  [PERSON_IDS.luis]: { role: 'closer', targetValue: 8000 },
+  [PERSON_IDS.outros]: { role: 'closer', targetValue: 4000 },
+  [PERSON_IDS.luana]: { role: 'sdr', targetValue: 30 },
+  [PERSON_IDS.felipe]: { role: 'sdr', targetValue: 30 },
+  [PERSON_IDS.ayres]: { role: 'sdr', targetValue: 40 },
+};
+
 const baseGoal = makeGoal({
-  closer_1: { role: 'closer', targetValue: 50000 },
-  sdr_1: { role: 'sdr', targetValue: 8 },
+  [PERSON_IDS.matheus]: { role: 'closer', targetValue: 50000 },
+  [PERSON_IDS.luana]: { role: 'sdr', targetValue: 8 },
 });
 
 const people = [
   {
-    personId: 'closer_1',
+    personId: PERSON_IDS.matheus,
     displayName: 'Matheus Afonso',
     active: true,
     roles: ['closer'],
@@ -33,7 +51,7 @@ const people = [
     sdrEmails: [],
   },
   {
-    personId: 'sdr_1',
+    personId: PERSON_IDS.luana,
     displayName: 'Luana Mendonça',
     active: true,
     roles: ['sdr'],
@@ -42,7 +60,7 @@ const people = [
     sdrEmails: ['luana@space.test'],
   },
   {
-    personId: 'closer_2',
+    personId: PERSON_IDS.luis,
     displayName: 'Luis Eduardo',
     active: true,
     roles: ['closer'],
@@ -51,7 +69,7 @@ const people = [
     sdrEmails: [],
   },
   {
-    personId: 'outros',
+    personId: PERSON_IDS.outros,
     displayName: 'Outros',
     active: true,
     isAggregate: true,
@@ -60,6 +78,24 @@ const people = [
     crmAttendantIds: [],
     crmAttendantAliases: [],
     sdrEmails: [],
+  },
+  {
+    personId: PERSON_IDS.ayres,
+    displayName: 'Ayres André',
+    active: true,
+    roles: ['sdr'],
+    crmAttendantIds: [],
+    crmAttendantAliases: [],
+    sdrEmails: ['ayres@space.test'],
+  },
+  {
+    personId: PERSON_IDS.felipe,
+    displayName: 'Felipe Santos',
+    active: true,
+    roles: ['sdr'],
+    crmAttendantIds: [],
+    crmAttendantAliases: [],
+    sdrEmails: ['felipe@space.test'],
   },
 ];
 
@@ -105,7 +141,7 @@ test('weekly read model usa attendantId como chave principal para o closer da se
 
   assert.equal(payload.commercialWeek.weekKey, 'wk_2026-08-11');
   assert.equal(payload.progress.closers.length, 1);
-  assert.equal(payload.progress.closers[0].personId, 'closer_1');
+  assert.equal(payload.progress.closers[0].personId, PERSON_IDS.matheus);
   assert.equal(payload.progress.closers[0].role, 'closer');
   assert.equal(payload.progress.closers[0].actualValue, 12000);
   assert.equal(payload.progress.closers[0].targetValue, 50000);
@@ -115,7 +151,7 @@ test('weekly read model usa attendantId como chave principal para o closer da se
 test('weekly read model usa fallback por alias e expõe attendantId não reconhecido', () => {
   const payload = buildWeeklyGoalsReadModel({
     goal: makeGoal({
-      closer_2: { role: 'closer', targetValue: 10000 },
+      [PERSON_IDS.luis]: { role: 'closer', targetValue: 10000 },
     }),
     people,
     businesses: [
@@ -139,7 +175,7 @@ test('weekly read model usa fallback por alias e expõe attendantId não reconhe
     now: new Date('2026-08-12T12:00:00-03:00'),
   });
 
-  assert.equal(payload.progress.closers[0].personId, 'closer_2');
+  assert.equal(payload.progress.closers[0].personId, PERSON_IDS.luis);
   assert.equal(payload.progress.closers[0].actualValue, 8000);
   assert.equal(payload.unresolved.crmAttendantIds.length, 1);
   assert.equal(payload.unresolved.crmAttendantIds[0].crmAttendantId, 'crm-uuid-desconhecido');
@@ -150,9 +186,9 @@ test('weekly read model usa fallback por alias e expõe attendantId não reconhe
 test('weekly read model agrega attendant não cadastrado em Outros e mantém unresolved para diagnóstico', () => {
   const payload = buildWeeklyGoalsReadModel({
     goal: makeGoal({
-      closer_1: { role: 'closer', targetValue: 8000 },
-      closer_2: { role: 'closer', targetValue: 8000 },
-      outros: { role: 'closer', targetValue: 4000 },
+      [PERSON_IDS.matheus]: { role: 'closer', targetValue: 8000 },
+      [PERSON_IDS.luis]: { role: 'closer', targetValue: 8000 },
+      [PERSON_IDS.outros]: { role: 'closer', targetValue: 4000 },
     }, 20000),
     people,
     businesses: [
@@ -169,7 +205,7 @@ test('weekly read model agrega attendant não cadastrado em Outros e mantém unr
     now: new Date('2026-08-12T12:00:00-03:00'),
   });
 
-  const outros = payload.progress.closers.find((row) => row.personId === 'outros');
+  const outros = payload.progress.closers.find((row) => row.personId === PERSON_IDS.outros);
   assert.equal(outros?.actualValue, 4500);
   assert.equal(outros?.count, 1);
   assert.equal(payload.unresolved.crmAttendantIds.length, 1);
@@ -178,9 +214,9 @@ test('weekly read model agrega attendant não cadastrado em Outros e mantém unr
 test('weekly read model agrega receita de pessoa com role SDR em Outros', () => {
   const payload = buildWeeklyGoalsReadModel({
     goal: makeGoal({
-      closer_1: { role: 'closer', targetValue: 8000 },
-      closer_2: { role: 'closer', targetValue: 8000 },
-      outros: { role: 'closer', targetValue: 4000 },
+      [PERSON_IDS.matheus]: { role: 'closer', targetValue: 8000 },
+      [PERSON_IDS.luis]: { role: 'closer', targetValue: 8000 },
+      [PERSON_IDS.outros]: { role: 'closer', targetValue: 4000 },
     }, 20000),
     people,
     businesses: [
@@ -197,17 +233,17 @@ test('weekly read model agrega receita de pessoa com role SDR em Outros', () => 
     now: new Date('2026-08-12T12:00:00-03:00'),
   });
 
-  const outros = payload.progress.closers.find((row) => row.personId === 'outros');
+  const outros = payload.progress.closers.find((row) => row.personId === PERSON_IDS.outros);
   assert.equal(outros?.actualValue, 3000);
-  assert.equal(outros?.breakdown?.[0]?.resolvedPersonId, 'sdr_1');
+  assert.equal(outros?.breakdown?.[0]?.resolvedPersonId, PERSON_IDS.luana);
 });
 
 test('weekly read model agrega attendantId nulo em Outros', () => {
   const payload = buildWeeklyGoalsReadModel({
     goal: makeGoal({
-      closer_1: { role: 'closer', targetValue: 8000 },
-      closer_2: { role: 'closer', targetValue: 8000 },
-      outros: { role: 'closer', targetValue: 4000 },
+      [PERSON_IDS.matheus]: { role: 'closer', targetValue: 8000 },
+      [PERSON_IDS.luis]: { role: 'closer', targetValue: 8000 },
+      [PERSON_IDS.outros]: { role: 'closer', targetValue: 4000 },
     }, 20000),
     people,
     businesses: [
@@ -223,7 +259,7 @@ test('weekly read model agrega attendantId nulo em Outros', () => {
     now: new Date('2026-08-12T12:00:00-03:00'),
   });
 
-  const outros = payload.progress.closers.find((row) => row.personId === 'outros');
+  const outros = payload.progress.closers.find((row) => row.personId === PERSON_IDS.outros);
   assert.equal(outros?.actualValue, 1500);
   assert.equal(payload.unresolved.crmAttendantIds[0]?.crmAttendantId, '');
 });
@@ -254,9 +290,9 @@ test('weekly read model expõe unresolved mesmo sem weeklyGoal cadastrado', () =
 test('ranking de closers ordena Outros no meio por percentual', () => {
   const payload = buildWeeklyGoalsReadModel({
     goal: makeGoal({
-      closer_1: { role: 'closer', targetValue: 8000 },
-      closer_2: { role: 'closer', targetValue: 8000 },
-      outros: { role: 'closer', targetValue: 4000 },
+      [PERSON_IDS.matheus]: { role: 'closer', targetValue: 8000 },
+      [PERSON_IDS.luis]: { role: 'closer', targetValue: 8000 },
+      [PERSON_IDS.outros]: { role: 'closer', targetValue: 4000 },
     }, 20000),
     people,
     businesses: [
@@ -288,15 +324,15 @@ test('ranking de closers ordena Outros no meio por percentual', () => {
     now: new Date('2026-08-12T12:00:00-03:00'),
   });
 
-  assert.deepEqual(payload.progress.closers.map((row) => row.personId), ['closer_1', 'outros', 'closer_2']);
+  assert.deepEqual(payload.progress.closers.map((row) => row.personId), [PERSON_IDS.matheus, PERSON_IDS.outros, PERSON_IDS.luis]);
 });
 
 test('ranking de closers ordena Outros no topo por percentual', () => {
   const payload = buildWeeklyGoalsReadModel({
     goal: makeGoal({
-      closer_1: { role: 'closer', targetValue: 8000 },
-      closer_2: { role: 'closer', targetValue: 8000 },
-      outros: { role: 'closer', targetValue: 4000 },
+      [PERSON_IDS.matheus]: { role: 'closer', targetValue: 8000 },
+      [PERSON_IDS.luis]: { role: 'closer', targetValue: 8000 },
+      [PERSON_IDS.outros]: { role: 'closer', targetValue: 4000 },
     }, 20000),
     people,
     businesses: [
@@ -328,7 +364,7 @@ test('ranking de closers ordena Outros no topo por percentual', () => {
     now: new Date('2026-08-12T12:00:00-03:00'),
   });
 
-  assert.deepEqual(payload.progress.closers.map((row) => row.personId), ['outros', 'closer_1', 'closer_2']);
+  assert.deepEqual(payload.progress.closers.map((row) => row.personId), [PERSON_IDS.outros, PERSON_IDS.matheus, PERSON_IDS.luis]);
 });
 
 test('weekly read model conta reunião feita do SDR por show em sdrActivityEvents', () => {
@@ -346,7 +382,7 @@ test('weekly read model conta reunião feita do SDR por show em sdrActivityEvent
   });
 
   assert.equal(payload.progress.sdrs.length, 1);
-  assert.equal(payload.progress.sdrs[0].personId, 'sdr_1');
+  assert.equal(payload.progress.sdrs[0].personId, PERSON_IDS.luana);
   assert.equal(payload.progress.sdrs[0].actualValue, 1);
   assert.equal(payload.progress.sdrs[0].targetValue, 8);
   assert.equal(payload.progress.sdrs[0].role, 'sdr');
@@ -357,7 +393,7 @@ test('weekly read model expõe sdrUid e email não reconhecidos em unresolved.sd
     goal: { weeklyGoals: {} },
     people: [
       {
-        personId: 'sdr_1',
+        personId: PERSON_IDS.luana,
         displayName: 'Luana Mendonça',
         active: true,
         roles: ['sdr'],
@@ -385,9 +421,9 @@ test('weekly read model expõe sdrUid e email não reconhecidos em unresolved.sd
 test('meta semanal do time de closers usa 20000 independente da soma individual', () => {
   const weeklyReadModel = buildWeeklyGoalsReadModel({
     goal: makeGoal({
-      closer_1: { role: 'closer', targetValue: 8000 },
-      closer_2: { role: 'closer', targetValue: 8000 },
-      outros: { role: 'closer', targetValue: 4000 },
+      [PERSON_IDS.matheus]: { role: 'closer', targetValue: 8000 },
+      [PERSON_IDS.luis]: { role: 'closer', targetValue: 8000 },
+      [PERSON_IDS.outros]: { role: 'closer', targetValue: 4000 },
     }, 20000),
     people,
     businesses: [],
@@ -397,4 +433,146 @@ test('meta semanal do time de closers usa 20000 independente da soma individual'
 
   const team = buildWeeklyTeamSummary({ weeklyReadModel });
   assert.equal(team.closers.targetValue, 20000);
+});
+
+test('meta semanal do time de closers cai para a soma das linhas quando teamTarget está ausente', () => {
+  const weeklyReadModel = buildWeeklyGoalsReadModel({
+    goal: makeGoal({
+      [PERSON_IDS.matheus]: { role: 'closer', targetValue: 8000 },
+      [PERSON_IDS.luis]: { role: 'closer', targetValue: 8000 },
+    }, 0),
+    people,
+    businesses: [],
+    sdrEvents: [],
+    now: new Date('2026-08-12T12:00:00-03:00'),
+  });
+
+  assert.equal(weeklyReadModel.weeklyGoal?.teamTarget, 0);
+  const team = buildWeeklyTeamSummary({ weeklyReadModel });
+  assert.equal(team.closers.targetValue, 16000);
+});
+
+test('weekly read model usa default da competência quando a semana não está preenchida', () => {
+  const weeklyReadModel = buildWeeklyGoalsReadModel({
+    goal: {
+      defaultWeeklyConfig: {
+        teamTarget: 20000,
+        individualMonthlyGoals: canonicalDefaultPeople,
+      },
+      weeklyGoals: {},
+    },
+    people,
+    businesses: [],
+    sdrEvents: [],
+    now: new Date('2026-08-12T12:00:00-03:00'),
+  });
+
+  assert.equal(weeklyReadModel.weeklyGoalConfigSource, 'competencia');
+  assert.deepEqual(weeklyReadModel.progress.closers.map((row) => row.personId), [PERSON_IDS.matheus, PERSON_IDS.luis, PERSON_IDS.outros]);
+  assert.equal(weeklyReadModel.weeklyGoal?.teamTarget, 20000);
+  assert.deepEqual(weeklyReadModel.progress.sdrs.map((row) => [row.personId, row.targetValue]), [
+    [PERSON_IDS.luana, 30],
+    [PERSON_IDS.felipe, 30],
+    [PERSON_IDS.ayres, 40],
+  ]);
+});
+
+test('weekly read model faz merge campo a campo entre semana e default da competência', () => {
+  const weeklyReadModel = buildWeeklyGoalsReadModel({
+    goal: {
+      defaultWeeklyConfig: {
+        teamTarget: 20000,
+        individualMonthlyGoals: canonicalDefaultPeople,
+      },
+      weeklyGoals: decodeWeeklyGoalsMap({
+        'wk_2026-08-11': {
+          individualMonthlyGoals: {
+            [PERSON_IDS.matheus]: { role: 'closer', targetValue: 9000 },
+            [PERSON_IDS.luis]: { role: 'closer', targetValue: 8000 },
+          },
+        },
+      }),
+    },
+    people,
+    businesses: [],
+    sdrEvents: [],
+    now: new Date('2026-08-12T12:00:00-03:00'),
+  });
+
+  assert.equal(weeklyReadModel.weeklyGoalConfigSource, 'mixed');
+  assert.deepEqual(weeklyReadModel.weeklyGoalConfigSourceDetails, { teamTarget: 'competencia', people: 'week' });
+  assert.equal(weeklyReadModel.weeklyGoal?.teamTarget, 20000);
+  assert.deepEqual(
+    weeklyReadModel.progress.closers.map((row) => [row.personId, row.targetValue]),
+    [
+      [PERSON_IDS.matheus, 9000],
+      [PERSON_IDS.luis, 8000],
+      [PERSON_IDS.outros, 4000],
+    ]
+  );
+  assert.deepEqual(
+    weeklyReadModel.progress.sdrs.map((row) => [row.personId, row.targetValue]),
+    [
+      [PERSON_IDS.luana, 30],
+      [PERSON_IDS.felipe, 30],
+      [PERSON_IDS.ayres, 40],
+    ]
+  );
+});
+
+test('weekly read model permite excluir pessoa do default por flag explícita na semana', () => {
+  const weeklyReadModel = buildWeeklyGoalsReadModel({
+    goal: {
+      defaultWeeklyConfig: {
+        teamTarget: 20000,
+        individualMonthlyGoals: canonicalDefaultPeople,
+      },
+      weeklyGoals: decodeWeeklyGoalsMap({
+        'wk_2026-08-11': {
+          individualMonthlyGoals: {
+            [PERSON_IDS.outros]: { excluded: true },
+          },
+        },
+      }),
+    },
+    people,
+    businesses: [],
+    sdrEvents: [],
+    now: new Date('2026-08-12T12:00:00-03:00'),
+  });
+
+  assert.equal(weeklyReadModel.weeklyGoalConfigSource, 'mixed');
+  assert.deepEqual(weeklyReadModel.weeklyGoalConfigSourceDetails, { teamTarget: 'competencia', people: 'week' });
+  assert.deepEqual(weeklyReadModel.progress.closers.map((row) => row.personId), [PERSON_IDS.matheus, PERSON_IDS.luis]);
+});
+
+test('weekly read model usa default global quando competência e semana não estão preenchidas', () => {
+  const weeklyReadModel = buildWeeklyGoalsReadModel({
+    goal: { weeklyGoals: {} },
+    globalConfig: {
+      defaultWeeklyConfig: {
+        teamTarget: 20000,
+        individualMonthlyGoals: canonicalDefaultPeople,
+      },
+    },
+    people,
+    businesses: [],
+    sdrEvents: [],
+    now: new Date('2026-08-12T12:00:00-03:00'),
+  });
+
+  assert.equal(weeklyReadModel.weeklyGoalConfigSource, 'global');
+  assert.deepEqual(weeklyReadModel.progress.closers.map((row) => row.personId), [PERSON_IDS.matheus, PERSON_IDS.luis, PERSON_IDS.outros]);
+  assert.equal(weeklyReadModel.weeklyGoal?.teamTarget, 20000);
+  assert.deepEqual(weeklyReadModel.progress.sdrs.map((row) => [row.personId, row.targetValue]), [
+    [PERSON_IDS.luana, 30],
+    [PERSON_IDS.felipe, 30],
+    [PERSON_IDS.ayres, 40],
+  ]);
+});
+
+test('defaultWeeklyConfig canônico referencia apenas personIds existentes em growthPeople', () => {
+  const personIds = new Set(people.map((person) => String(person.personId || '')));
+  const missing = Object.keys(canonicalDefaultPeople).filter((personId) => !personIds.has(personId));
+  assert.deepEqual(missing, []);
 });

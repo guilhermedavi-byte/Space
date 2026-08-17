@@ -14699,6 +14699,7 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
             .join("")}
         </select>
         <div class="auth-field-hint" data-goal-week-storage-hint>Salva em ${escapeHtml(formatCompetenciaLabelPtBr((weekOptions[0]?.competencia || competencia)))}.</div>
+        <div class="auth-field-hint" data-goal-week-config-source-hint></div>
       </div>
 
       <div class="auth-field" data-goal-unresolved-wrap hidden>
@@ -14884,8 +14885,18 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
     const weekSelectEl = form?.querySelector("[data-goal-week-select]");
     const weeklyListEl = form?.querySelector("[data-goal-weekly-list]");
     const weekStorageHintEl = form?.querySelector("[data-goal-week-storage-hint]");
+    const weekConfigSourceHintEl = form?.querySelector("[data-goal-week-config-source-hint]");
     const unresolvedWrapEl = form?.querySelector("[data-goal-unresolved-wrap]");
     const unresolvedBoxEl = form?.querySelector("[data-goal-unresolved-box]");
+
+    const formatWeeklyConfigSourceLabel = (value) => {
+      const source = String(value || "").trim().toLowerCase();
+      if (source === "week") return "Origem da configuração: override semanal";
+      if (source === "competencia") return "Origem da configuração: default da competência";
+      if (source === "global") return "Origem da configuração: default global";
+      if (source === "mixed") return "Origem da configuração: mista (semana + defaults)";
+      return "Origem da configuração: não definida";
+    };
 
     const renderWeeklyRows = () => {
       if (!(weeklyListEl instanceof HTMLElement)) return;
@@ -15003,6 +15014,9 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
       try {
         const payload = await loadGrowthGoalsWeekPayload({ competencia: selectedWeek.competencia, weekStart: selectedWeek.startDateKey });
         modalState.weekPayload = payload;
+        if (weekConfigSourceHintEl instanceof HTMLElement) {
+          weekConfigSourceHintEl.textContent = formatWeeklyConfigSourceLabel(payload?.weeklyReadModel?.weeklyGoalConfigSource);
+        }
         if (payload?.weeklyReadModel?.weeklyGoal) {
           modalState.previousWeekGoal = null;
         } else {
@@ -15016,6 +15030,9 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
         renderWeeklyRows();
       } catch (error) {
         console.error("[admin] load weekly growth-goal failed:", error);
+        if (weekConfigSourceHintEl instanceof HTMLElement) {
+          weekConfigSourceHintEl.textContent = "Origem da configuração: indisponível";
+        }
         weeklyListEl.innerHTML = `<div class="auth-form-error">Não foi possível carregar a meta semanal agora.</div>`;
       } finally {
         modalState.weeklyLoading = false;

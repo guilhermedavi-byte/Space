@@ -3,6 +3,8 @@ const { normalizeKey: normalizeForecastKey, getDealValue } = require('../../_lib
 const { resolveCommercialWeek, isValidDateKey } = require('./commercial-week');
 
 const GROWTH_PEOPLE_COLLECTION = 'growthPeople';
+const GROWTH_CONFIG_COLLECTION = 'growthConfig';
+const CRM_LIVE_DEFAULTS_DOC_ID = 'crmLiveDefaults';
 const VALID_WEEKLY_ROLES = new Set(['closer', 'sdr', 'both']);
 const VALID_CURRENT_ROLES = new Set(['closer', 'sdr', 'both']);
 const CONVERSION_PIPELINE_KEY = normalizeForecastKey('Conversão');
@@ -94,44 +96,191 @@ const decodeGrowthPeopleDoc = (doc) => {
   };
 };
 
+function getWeeklyPeopleSource(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  if (Array.isArray(value.people)) return value.people;
+  if (value.individualMonthlyGoals && typeof value.individualMonthlyGoals === 'object' && !Array.isArray(value.individualMonthlyGoals)) return value.individualMonthlyGoals;
+  if (value.defaultIndividualGoals && typeof value.defaultIndividualGoals === 'object' && !Array.isArray(value.defaultIndividualGoals)) return value.defaultIndividualGoals;
+  if (value.individualGoals && typeof value.individualGoals === 'object' && !Array.isArray(value.individualGoals)) return value.individualGoals;
+  if (value.people && typeof value.people === 'object' && !Array.isArray(value.people)) return value.people;
+  return {};
+}
+
+function normalizeWeeklyGoalConfigEntry({ weekKey = '', rawConfig = null, fallbackStartDateKey = '', fallbackEndDateKey = '' } = {}) {
+  const source = rawConfig && typeof rawConfig === 'object' && !Array.isArray(rawConfig) ? rawConfig : {};
+  const safeWeekKey = safeString(weekKey);
+  const startDateKey = isValidDateKey(source.startDateKey) ? safeString(source.startDateKey) : safeString(fallbackStartDateKey);
+  const endDateKey = isValidDateKey(source.endDateKey) ? safeString(source.endDateKey) : safeString(fallbackEndDateKey);
+  const teamTarget = safeNumber(source.teamTarget ?? source.defaultTeamTarget);
+  const rawPeopleSource = getWeeklyPeopleSource(source);
+  const people = (Array.isArray(rawPeopleSource) ? rawPeopleSource : Object.entries(rawPeopleSource).map(([personId, row]) => ({ ...(row || {}), personId })))
+    .map((entry) => {
+      const row = entry && typeof entry === 'object' ? entry : null;
+      if (!row || Array.isArray(row)) return null;
+      const personId = safeString(row.personId);
+      const excluded = row.excluded === true || row.exclude === true || row.disabled === true;
+      const role = normalizeWeeklyRole(row.role);
+      const target = safeNumber(row.targetValue ?? row.target ?? row.meta);
+      if (!personId) return null;
+      if (excluded) {
+        return {
+          personId,
+          excluded: true,
+        };
+      }
+      if (!role) return null;
+      return {
+        personId,
+        role,
+        targetValue: target,
+        excluded: false,
+      };
+    })
+    .filter(Boolean);
+  return {
+    weekKey: safeWeekKey,
+    startDateKey,
+    endDateKey,
+    teamTarget,
+    people,
+  };
+}
+
 const decodeWeeklyGoalsMap = (value) => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   const result = {};
   for (const [weekKeyRaw, weekValue] of Object.entries(value)) {
     const weekKey = safeString(weekKeyRaw);
     if (!weekKey || !weekValue || typeof weekValue !== 'object' || Array.isArray(weekValue)) continue;
-    const startDateKey = isValidDateKey(weekValue.startDateKey) ? safeString(weekValue.startDateKey) : weekKey.startsWith('wk_') && isValidDateKey(weekKey.slice(3)) ? weekKey.slice(3) : '';
-    const endDateKey = isValidDateKey(weekValue.endDateKey) ? safeString(weekValue.endDateKey) : '';
-    const teamTarget = safeNumber(weekValue.teamTarget);
-    const peopleSource =
-      weekValue.individualMonthlyGoals && typeof weekValue.individualMonthlyGoals === 'object' && !Array.isArray(weekValue.individualMonthlyGoals)
-        ? weekValue.individualMonthlyGoals
-        : weekValue.people && typeof weekValue.people === 'object' && !Array.isArray(weekValue.people)
-          ? weekValue.people
-          : {};
-    const people = Object.entries(peopleSource)
-      .map(([personIdRaw, row]) => {
-        if (!row || typeof row !== 'object' || Array.isArray(row)) return null;
-        const personId = safeString(personIdRaw);
-        const role = normalizeWeeklyRole(row.role);
-        const target = safeNumber(row.targetValue ?? row.target ?? row.meta);
-        if (!personId || !role) return null;
-        return {
-          personId,
-          role,
-          targetValue: target,
-        };
-      })
-      .filter(Boolean);
-    result[weekKey] = {
+    result[weekKey] = normalizeWeeklyGoalConfigEntry({
       weekKey,
-      startDateKey,
-      endDateKey,
-      teamTarget,
-      people,
-    };
+      rawConfig: weekValue,
+      fallbackStartDateKey: weekKey.startsWith('wk_') && isValidDateKey(weekKey.slice(3)) ? weekKey.slice(3) : '',
+      fallbackEndDateKey: '',
+    });
   }
   return result;
+};
+
+const decodeGrowthConfigDoc = (doc) => {
+  if (!doc || typeof doc !== 'object') return null;
+  const fields = decodeFields(doc);
+  const id = safeString(fields.id || getDocIdFromName(doc.name));
+  return {
+    id,
+    defaultWeeklyConfig: fields.defaultWeeklyConfig
+      ? normalizeWeeklyGoalConfigEntry({
+          weekKey: '',
+          rawConfig: fields.defaultWeeklyConfig,
+        })
+      : null,
+  };
+};
+
+const hasWeeklyGoalConfig = (config) =>
+  !!config &&
+  typeof config === 'object' &&
+  (safeNumber(config.teamTarget) > 0 || (Array.isArray(config.people) && config.people.length > 0));
+
+const mergeWeeklyGoalPeople = (...configs) => {
+  const peopleById = new Map();
+  (Array.isArray(configs) ? configs : []).forEach((config) => {
+    const people = Array.isArray(config?.people) ? config.people : [];
+    people.forEach((row) => {
+      const personId = safeString(row?.personId);
+      if (!personId) return;
+      if (row?.excluded === true) {
+        peopleById.delete(personId);
+        return;
+      }
+      peopleById.set(personId, {
+        personId,
+        role: normalizeWeeklyRole(row?.role),
+        targetValue: safeNumber(row?.targetValue),
+        excluded: false,
+      });
+    });
+  });
+  return Array.from(peopleById.values()).filter((row) => row.personId && row.role);
+};
+
+const resolveWeeklyGoalConfig = ({ goal = null, globalConfig = null, week } = {}) => {
+  const currentWeek = week && typeof week === 'object' ? week : resolveCommercialWeek({ now: new Date() });
+  const weekGoalRaw = goal?.weeklyGoals?.[currentWeek.weekKey] || null;
+  const weekConfig =
+    weekGoalRaw && typeof weekGoalRaw === 'object'
+      ? normalizeWeeklyGoalConfigEntry({
+          weekKey: currentWeek.weekKey,
+          rawConfig: weekGoalRaw,
+          fallbackStartDateKey: currentWeek.startDateKey,
+          fallbackEndDateKey: currentWeek.endDateKey,
+        })
+      : null;
+  const competenciaDefaultRaw = goal?.defaultWeeklyConfig;
+  const competenciaConfig =
+    competenciaDefaultRaw && typeof competenciaDefaultRaw === 'object'
+      ? normalizeWeeklyGoalConfigEntry({
+          weekKey: currentWeek.weekKey,
+          rawConfig: competenciaDefaultRaw,
+          fallbackStartDateKey: currentWeek.startDateKey,
+          fallbackEndDateKey: currentWeek.endDateKey,
+        })
+      : null;
+  const globalDefaultRaw = globalConfig?.defaultWeeklyConfig;
+  const globalDefaultConfig =
+    globalDefaultRaw && typeof globalDefaultRaw === 'object'
+      ? normalizeWeeklyGoalConfigEntry({
+          weekKey: currentWeek.weekKey,
+          rawConfig: globalDefaultRaw,
+          fallbackStartDateKey: currentWeek.startDateKey,
+          fallbackEndDateKey: currentWeek.endDateKey,
+        })
+      : null;
+
+  const teamTargetSource =
+    safeNumber(weekConfig?.teamTarget) > 0
+      ? 'week'
+      : safeNumber(competenciaConfig?.teamTarget) > 0
+        ? 'competencia'
+        : safeNumber(globalDefaultConfig?.teamTarget) > 0
+          ? 'global'
+          : '';
+  const teamTarget =
+    teamTargetSource === 'week'
+      ? safeNumber(weekConfig?.teamTarget)
+      : teamTargetSource === 'competencia'
+        ? safeNumber(competenciaConfig?.teamTarget)
+        : teamTargetSource === 'global'
+          ? safeNumber(globalDefaultConfig?.teamTarget)
+          : 0;
+  const mergedPeople = mergeWeeklyGoalPeople(globalDefaultConfig, competenciaConfig, weekConfig);
+  const peopleSource = Array.isArray(weekConfig?.people) && weekConfig.people.length > 0 ? 'week' : Array.isArray(competenciaConfig?.people) && competenciaConfig.people.length > 0 ? 'competencia' : Array.isArray(globalDefaultConfig?.people) && globalDefaultConfig.people.length > 0 ? 'global' : '';
+  const weeklyGoal = {
+    weekKey: currentWeek.weekKey,
+    startDateKey: currentWeek.startDateKey,
+    endDateKey: currentWeek.endDateKey,
+    teamTarget,
+    people: mergedPeople,
+  };
+  if (!hasWeeklyGoalConfig(weeklyGoal)) {
+    return {
+      weeklyGoal: null,
+      source: '',
+      sourceDetails: {
+        teamTarget: '',
+        people: '',
+      },
+    };
+  }
+  const source = teamTargetSource === peopleSource ? teamTargetSource : teamTargetSource || peopleSource || '';
+  return {
+    weeklyGoal,
+    source: source && teamTargetSource && peopleSource && teamTargetSource !== peopleSource ? 'mixed' : source,
+    sourceDetails: {
+      teamTarget: teamTargetSource,
+      people: peopleSource,
+    },
+  };
 };
 
 const buildGrowthPeopleIndexes = (people = []) => {
@@ -273,12 +422,13 @@ const summarizeWeeklyCloserProgress = ({ businesses = [], goalPeople = [], index
   const rowsByPerson = new Map(
     goalPeople
       .filter((row) => row.role === 'closer' || row.role === 'both')
-      .map((row) => [
+      .map((row, index) => [
         row.personId,
         {
           personId: row.personId,
           role: row.role,
           targetValue: safeNumber(row.targetValue),
+          goalOrder: index,
           actualValue: 0,
           count: 0,
           breakdown: row.personId === AGGREGATE_OTHERS_PERSON_ID ? [] : undefined,
@@ -324,7 +474,11 @@ const summarizeWeeklyCloserProgress = ({ businesses = [], goalPeople = [], index
 };
 
 const summarizeWeeklySdrProgress = ({ events = [], goalPeople = [], indexes, week }) => {
-  const rowsByPerson = new Map(goalPeople.filter((row) => row.role === 'sdr' || row.role === 'both').map((row) => [row.personId, { personId: row.personId, role: row.role, targetValue: safeNumber(row.targetValue), actualValue: 0, count: 0 }]));
+  const rowsByPerson = new Map(
+    goalPeople
+      .filter((row) => row.role === 'sdr' || row.role === 'both')
+      .map((row, index) => [row.personId, { personId: row.personId, role: row.role, targetValue: safeNumber(row.targetValue), goalOrder: index, actualValue: 0, count: 0 }])
+  );
   (Array.isArray(events) ? events : []).forEach((event) => {
     const eventType = safeString(event?.eventType);
     const outcome = safeString(event?.outcome);
@@ -356,6 +510,7 @@ const attachPersonMeta = (rows = [], indexes) =>
         photoURL: person?.photoURL || "",
         isAggregate: person?.isAggregate === true || row.personId === AGGREGATE_OTHERS_PERSON_ID,
         sortOrder: Number.isFinite(Number(person?.sortOrder)) ? Number(person.sortOrder) : row.personId === AGGREGATE_OTHERS_PERSON_ID ? 999 : 0,
+        goalOrder: Number.isFinite(Number(row.goalOrder)) ? Number(row.goalOrder) : Number.MAX_SAFE_INTEGER,
         targetValue,
         actualValue,
         progressPct: targetValue > 0 ? (actualValue / targetValue) * 100 : 0,
@@ -373,12 +528,13 @@ const attachPersonMeta = (rows = [], indexes) =>
           : undefined,
       };
     })
-    .sort((a, b) => b.progressPct - a.progressPct || b.actualValue - a.actualValue || safeNumber(a.sortOrder) - safeNumber(b.sortOrder) || safeString(a.displayName).localeCompare(safeString(b.displayName), 'pt-BR'));
+    .sort((a, b) => b.progressPct - a.progressPct || b.actualValue - a.actualValue || safeNumber(a.sortOrder) - safeNumber(b.sortOrder) || safeNumber(a.goalOrder) - safeNumber(b.goalOrder) || safeString(a.displayName).localeCompare(safeString(b.displayName), 'pt-BR'));
 
-const buildWeeklyGoalsReadModel = ({ goal = null, people = [], businesses = [], sdrEvents = [], now = new Date() } = {}) => {
+const buildWeeklyGoalsReadModel = ({ goal = null, globalConfig = null, people = [], businesses = [], sdrEvents = [], now = new Date() } = {}) => {
   const week = resolveCommercialWeek({ now });
   const safeGoal = goal && typeof goal === 'object' ? goal : null;
-  const weeklyGoal = safeGoal?.weeklyGoals?.[week.weekKey] || null;
+  const resolvedConfig = resolveWeeklyGoalConfig({ goal: safeGoal, globalConfig, week });
+  const weeklyGoal = resolvedConfig.weeklyGoal;
   const indexes = buildGrowthPeopleIndexes(people);
   const goalPeople = Array.isArray(weeklyGoal?.people) ? weeklyGoal.people : [];
   const closerRows = attachPersonMeta(summarizeWeeklyCloserProgress({ businesses, goalPeople, indexes, week }), indexes);
@@ -386,6 +542,8 @@ const buildWeeklyGoalsReadModel = ({ goal = null, people = [], businesses = [], 
   return {
     commercialWeek: week,
     weeklyGoal,
+    weeklyGoalConfigSource: resolvedConfig.source,
+    weeklyGoalConfigSourceDetails: resolvedConfig.sourceDetails || { teamTarget: '', people: '' },
     people,
     progress: {
       closers: closerRows,
@@ -400,10 +558,15 @@ const buildWeeklyGoalsReadModel = ({ goal = null, people = [], businesses = [], 
 
 module.exports = {
   GROWTH_PEOPLE_COLLECTION,
+  GROWTH_CONFIG_COLLECTION,
+  CRM_LIVE_DEFAULTS_DOC_ID,
   decodeGrowthPeopleDoc,
+  decodeGrowthConfigDoc,
   decodeWeeklyGoalsMap,
   buildGrowthPeopleIndexes,
   buildWeeklyGoalsReadModel,
+  resolveWeeklyGoalConfig,
+  normalizeWeeklyGoalConfigEntry,
   resolveCommercialWeek,
   extractCrmAttendantId,
   resolveCloserBucketForBusiness,

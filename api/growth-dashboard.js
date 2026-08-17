@@ -12,9 +12,13 @@ const {
 } = require("./_lib/commercial-period");
 const {
   GROWTH_PEOPLE_COLLECTION,
+  GROWTH_CONFIG_COLLECTION,
+  CRM_LIVE_DEFAULTS_DOC_ID,
   decodeGrowthPeopleDoc,
+  decodeGrowthConfigDoc,
   decodeWeeklyGoalsMap,
   buildWeeklyGoalsReadModel,
+  normalizeWeeklyGoalConfigEntry,
 } = require("./_lib/growth-people");
 const { triggerContractSignedOnboarding } = require("./_lib/pedagogico-n8n");
 const {
@@ -830,8 +834,21 @@ const decodeGoalDoc = (doc) => {
     updatedByName: updatedByName || null,
     periodStart: periodStart || null,
     periodEnd: periodEnd || null,
+    defaultWeeklyConfig: fields.defaultWeeklyConfig ? normalizeWeeklyGoalConfigEntry({ weekKey: "", rawConfig: fields.defaultWeeklyConfig }) : null,
     weeklyGoals,
   };
+};
+
+const loadCrmLiveDefaultsConfigWithAccessToken = async ({ accessToken } = {}) => {
+  const snap = await firestoreGetDocumentWithAccessToken({
+    docPath: `${GROWTH_CONFIG_COLLECTION}/${encodeURIComponent(CRM_LIVE_DEFAULTS_DOC_ID)}`,
+    accessToken,
+  }).catch((error) => ({ ok: false, status: Number(error?.status) || 500 }));
+  if (!snap.ok) {
+    if (snap.status === 404) return null;
+    throw new Error("firestore_get_global_defaults_failed");
+  }
+  return decodeGrowthConfigDoc(snap.data);
 };
 
 const normalizeWeeklyGoalPayload = (value) => {
@@ -1351,10 +1368,12 @@ const handleGrowthGoalsApi = async (req, res, url) => {
         }
 
         if (includeWeeklyProgress) {
+          const globalConfig = await loadCrmLiveDefaultsConfigWithAccessToken({ accessToken });
           const [crm, sdrEvents] = await Promise.all([fetchAllCrmBusinesses(), loadSdrActivityEvents({ accessToken })]);
           const people = Array.isArray(payload.people) ? payload.people : await loadGrowthPeople({ accessToken });
           payload.weeklyReadModel = buildWeeklyGoalsReadModel({
             goal,
+            globalConfig,
             people,
             businesses: Array.isArray(crm?.businesses) ? crm.businesses : [],
             sdrEvents,
