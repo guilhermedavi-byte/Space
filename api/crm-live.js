@@ -271,6 +271,9 @@ const buildHtml = () => `<!DOCTYPE html>
       .crm-live-ranking.has-three-rows {
         gap: 1.6vh;
       }
+      .crm-live-ranking.has-three-rows .crm-live-ranking-row {
+        gap: 1.5vw;
+      }
       .crm-live-ranking-row {
         display: grid;
         grid-template-columns: auto minmax(0, 1fr) auto;
@@ -292,6 +295,14 @@ const buildHtml = () => `<!DOCTYPE html>
         font-size: 2.8vh;
         font-weight: 500;
         letter-spacing: .04em;
+      }
+      .crm-live-ranking.has-three-rows .crm-live-avatar {
+        width: 8.8vh;
+        height: 8.8vh;
+      }
+      .crm-live-ranking.has-three-rows .crm-live-avatar.is-leader {
+        width: 10.4vh;
+        height: 10.4vh;
       }
       .crm-live-avatar-icon {
         width: 62%;
@@ -332,6 +343,9 @@ const buildHtml = () => `<!DOCTYPE html>
         display: grid;
         gap: 1vh;
       }
+      .crm-live-ranking.has-three-rows .crm-live-ranking-copy {
+        gap: .7vh;
+      }
       .crm-live-ranking-name {
         font-size: 6.4vh;
         line-height: .95;
@@ -342,22 +356,18 @@ const buildHtml = () => `<!DOCTYPE html>
         text-overflow: ellipsis;
       }
       .crm-live-ranking-row.is-leader .crm-live-ranking-name { font-size: 8vh; }
-      .crm-live-ranking.has-three-rows .crm-live-ranking-name { font-size: 5.3vh; }
-      .crm-live-ranking.has-three-rows .crm-live-ranking-row.is-leader .crm-live-ranking-name { font-size: 6.4vh; }
       .crm-live-ranking-sub {
         color: var(--text-secondary);
         font-size: 3.4vh;
         line-height: 1.35;
         font-weight: 400;
       }
-      .crm-live-ranking.has-three-rows .crm-live-ranking-sub { font-size: 2.9vh; }
       .crm-live-ranking-chase {
         color: var(--text-tertiary);
         font-size: 2.6vh;
         line-height: 1.35;
         font-weight: 400;
       }
-      .crm-live-ranking.has-three-rows .crm-live-ranking-chase { font-size: 2.2vh; }
       .crm-live-ranking-bar {
         width: 100%;
         height: .7vh;
@@ -384,8 +394,6 @@ const buildHtml = () => `<!DOCTYPE html>
         font-weight: 500;
       }
       .crm-live-ranking-row.is-leader .crm-live-ranking-pct { color: var(--accent); font-size: 12vh; }
-      .crm-live-ranking.has-three-rows .crm-live-ranking-pct { font-size: 7.2vh; }
-      .crm-live-ranking.has-three-rows .crm-live-ranking-row.is-leader .crm-live-ranking-pct { font-size: 9.4vh; }
       .crm-live-highlight-person {
         display: grid;
         justify-items: start;

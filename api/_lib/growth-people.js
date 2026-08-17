@@ -351,11 +351,11 @@ const attachPersonMeta = (rows = [], indexes) =>
       const actualValue = safeNumber(row.actualValue);
       return {
         personId: row.personId,
-        displayName: person?.displayName || row.personId,
+        displayName: person?.displayName || (row.personId === AGGREGATE_OTHERS_PERSON_ID ? AGGREGATE_OTHERS_DISPLAY_NAME : row.personId),
         role: row.role,
         photoURL: person?.photoURL || "",
-        isAggregate: person?.isAggregate === true,
-        sortOrder: Number.isFinite(Number(person?.sortOrder)) ? Number(person.sortOrder) : 0,
+        isAggregate: person?.isAggregate === true || row.personId === AGGREGATE_OTHERS_PERSON_ID,
+        sortOrder: Number.isFinite(Number(person?.sortOrder)) ? Number(person.sortOrder) : row.personId === AGGREGATE_OTHERS_PERSON_ID ? 999 : 0,
         targetValue,
         actualValue,
         progressPct: targetValue > 0 ? (actualValue / targetValue) * 100 : 0,
