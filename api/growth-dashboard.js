@@ -839,8 +839,13 @@ const normalizeWeeklyGoalPayload = (value) => {
   const weekKey = typeof value.weekKey === "string" ? value.weekKey.trim() : "";
   const startDateKey = typeof value.startDateKey === "string" && isValidDateKey(value.startDateKey) ? value.startDateKey.trim() : "";
   const endDateKey = typeof value.endDateKey === "string" && isValidDateKey(value.endDateKey) ? value.endDateKey.trim() : "";
-  const teamTarget = Number.isFinite(Number(value.teamTarget)) ? Number(value.teamTarget) : 0;
-  const rawPeople = value.people && typeof value.people === "object" && !Array.isArray(value.people) ? value.people : {};
+  const teamTarget = Number.isFinite(Number(value.teamTarget)) ? Number(value.teamTarget) : null;
+  const rawPeople =
+    value.individualMonthlyGoals && typeof value.individualMonthlyGoals === "object" && !Array.isArray(value.individualMonthlyGoals)
+      ? value.individualMonthlyGoals
+      : value.people && typeof value.people === "object" && !Array.isArray(value.people)
+        ? value.people
+        : {};
   if (!weekKey || !startDateKey || !endDateKey || startDateKey > endDateKey) return null;
   const people = {};
   Object.entries(rawPeople).forEach(([personIdRaw, row]) => {
@@ -1490,13 +1495,14 @@ const handleGrowthGoalsApi = async (req, res, url) => {
   if (periodEnd) base.periodEnd = periodEnd;
   if (weeklyGoalInput) {
     const existingWeeklyGoals = existingGoal?.weeklyGoals && typeof existingGoal.weeklyGoals === "object" && !Array.isArray(existingGoal.weeklyGoals) ? existingGoal.weeklyGoals : {};
+    const previousWeekGoal = existingWeeklyGoals?.[weeklyGoalInput.weekKey] && typeof existingWeeklyGoals[weeklyGoalInput.weekKey] === "object" ? existingWeeklyGoals[weeklyGoalInput.weekKey] : {};
     base.weeklyGoals = {
       ...existingWeeklyGoals,
       [weeklyGoalInput.weekKey]: {
         startDateKey: weeklyGoalInput.startDateKey,
         endDateKey: weeklyGoalInput.endDateKey,
-        teamTarget: weeklyGoalInput.teamTarget,
-        people: weeklyGoalInput.people,
+        teamTarget: weeklyGoalInput.teamTarget != null ? weeklyGoalInput.teamTarget : Number.isFinite(Number(previousWeekGoal.teamTarget)) ? Number(previousWeekGoal.teamTarget) : 0,
+        individualMonthlyGoals: weeklyGoalInput.people,
       },
     };
   }

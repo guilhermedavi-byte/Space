@@ -3,27 +3,31 @@ const assert = require('node:assert/strict');
 
 const { resolveCommercialWeek } = require('../api/_lib/commercial-week');
 const { buildWeeklyGoalsReadModel, decodeWeeklyGoalsMap } = require('../api/_lib/growth-people');
+const { buildWeeklyTeamSummary } = require('../api/_lib/crm-live');
 
-const baseGoal = {
+const makeGoal = (people, teamTarget = 120000, extra = {}) => ({
   weeklyGoals: decodeWeeklyGoalsMap({
     'wk_2026-08-11': {
       startDateKey: '2026-08-11',
       endDateKey: '2026-08-18',
-      teamTarget: 120000,
-      people: {
-        closer_1: { role: 'closer', targetValue: 50000 },
-        sdr_1: { role: 'sdr', targetValue: 8 },
-      },
+      teamTarget,
+      individualMonthlyGoals: people,
+      ...extra,
     },
   }),
-};
+});
+
+const baseGoal = makeGoal({
+  closer_1: { role: 'closer', targetValue: 50000 },
+  sdr_1: { role: 'sdr', targetValue: 8 },
+});
 
 const people = [
   {
     personId: 'closer_1',
     displayName: 'Matheus Afonso',
     active: true,
-    roles: ['sdr'],
+    roles: ['closer'],
     crmAttendantIds: ['crm-uuid-matheus'],
     crmAttendantAliases: ['Matheus Afonso | Space'],
     sdrEmails: [],
@@ -32,8 +36,8 @@ const people = [
     personId: 'sdr_1',
     displayName: 'Luana Mendonça',
     active: true,
-    roles: ['closer'],
-    crmAttendantIds: [],
+    roles: ['sdr'],
+    crmAttendantIds: ['crm-uuid-luana'],
     crmAttendantAliases: [],
     sdrEmails: ['luana@space.test'],
   },
@@ -44,6 +48,17 @@ const people = [
     roles: ['closer'],
     crmAttendantIds: [],
     crmAttendantAliases: ['Luis Eduardo | Space'],
+    sdrEmails: [],
+  },
+  {
+    personId: 'outros',
+    displayName: 'Outros',
+    active: true,
+    isAggregate: true,
+    sortOrder: 999,
+    roles: ['closer'],
+    crmAttendantIds: [],
+    crmAttendantAliases: [],
     sdrEmails: [],
   },
 ];
@@ -70,7 +85,7 @@ test('resolveCommercialWeek usa quarta-terça após 19/08/2026', () => {
   });
 });
 
-test('weekly read model usa attendantId como chave principal e papel da semana, não o papel atual da pessoa', () => {
+test('weekly read model usa attendantId como chave principal para o closer da semana', () => {
   const payload = buildWeeklyGoalsReadModel({
     goal: baseGoal,
     people,
@@ -99,17 +114,9 @@ test('weekly read model usa attendantId como chave principal e papel da semana, 
 
 test('weekly read model usa fallback por alias e expõe attendantId não reconhecido', () => {
   const payload = buildWeeklyGoalsReadModel({
-    goal: {
-      weeklyGoals: decodeWeeklyGoalsMap({
-        'wk_2026-08-11': {
-          startDateKey: '2026-08-11',
-          endDateKey: '2026-08-18',
-          people: {
-            closer_2: { role: 'closer', targetValue: 10000 },
-          },
-        },
-      }),
-    },
+    goal: makeGoal({
+      closer_2: { role: 'closer', targetValue: 10000 },
+    }),
     people,
     businesses: [
       {
@@ -140,6 +147,87 @@ test('weekly read model usa fallback por alias e expõe attendantId não reconhe
   assert.equal(payload.unresolved.crmAttendantIds[0].revenue, 4500);
 });
 
+test('weekly read model agrega attendant não cadastrado em Outros e mantém unresolved para diagnóstico', () => {
+  const payload = buildWeeklyGoalsReadModel({
+    goal: makeGoal({
+      closer_1: { role: 'closer', targetValue: 8000 },
+      closer_2: { role: 'closer', targetValue: 8000 },
+      outros: { role: 'closer', targetValue: 4000 },
+    }, 20000),
+    people,
+    businesses: [
+      {
+        id: 'biz_unknown_to_outros',
+        total: 4500,
+        lastMovedAt: '2026-08-12T18:00:00.000Z',
+        attendantId: 'crm-uuid-desconhecido',
+        attendant: { name: 'Pessoa Desconhecida' },
+        stage: { name: 'Fechado', pipeline: { name: 'Conversão' } },
+      },
+    ],
+    sdrEvents: [],
+    now: new Date('2026-08-12T12:00:00-03:00'),
+  });
+
+  const outros = payload.progress.closers.find((row) => row.personId === 'outros');
+  assert.equal(outros?.actualValue, 4500);
+  assert.equal(outros?.count, 1);
+  assert.equal(payload.unresolved.crmAttendantIds.length, 1);
+});
+
+test('weekly read model agrega receita de pessoa com role SDR em Outros', () => {
+  const payload = buildWeeklyGoalsReadModel({
+    goal: makeGoal({
+      closer_1: { role: 'closer', targetValue: 8000 },
+      closer_2: { role: 'closer', targetValue: 8000 },
+      outros: { role: 'closer', targetValue: 4000 },
+    }, 20000),
+    people,
+    businesses: [
+      {
+        id: 'biz_sdr_closing',
+        total: 3000,
+        lastMovedAt: '2026-08-12T14:00:00.000Z',
+        attendantId: 'crm-uuid-luana',
+        attendant: { name: 'Luana Mendonça' },
+        stage: { name: 'Fechado', pipeline: { name: 'Conversão' } },
+      },
+    ],
+    sdrEvents: [],
+    now: new Date('2026-08-12T12:00:00-03:00'),
+  });
+
+  const outros = payload.progress.closers.find((row) => row.personId === 'outros');
+  assert.equal(outros?.actualValue, 3000);
+  assert.equal(outros?.breakdown?.[0]?.resolvedPersonId, 'sdr_1');
+});
+
+test('weekly read model agrega attendantId nulo em Outros', () => {
+  const payload = buildWeeklyGoalsReadModel({
+    goal: makeGoal({
+      closer_1: { role: 'closer', targetValue: 8000 },
+      closer_2: { role: 'closer', targetValue: 8000 },
+      outros: { role: 'closer', targetValue: 4000 },
+    }, 20000),
+    people,
+    businesses: [
+      {
+        id: 'biz_missing_attendant',
+        total: 1500,
+        lastMovedAt: '2026-08-12T14:00:00.000Z',
+        attendant: { name: '' },
+        stage: { name: 'Fechado', pipeline: { name: 'Conversão' } },
+      },
+    ],
+    sdrEvents: [],
+    now: new Date('2026-08-12T12:00:00-03:00'),
+  });
+
+  const outros = payload.progress.closers.find((row) => row.personId === 'outros');
+  assert.equal(outros?.actualValue, 1500);
+  assert.equal(payload.unresolved.crmAttendantIds[0]?.crmAttendantId, '');
+});
+
 test('weekly read model expõe unresolved mesmo sem weeklyGoal cadastrado', () => {
   const payload = buildWeeklyGoalsReadModel({
     goal: { weeklyGoals: {} },
@@ -161,6 +249,86 @@ test('weekly read model expõe unresolved mesmo sem weeklyGoal cadastrado', () =
   assert.equal(payload.weeklyGoal, null);
   assert.equal(payload.unresolved.crmAttendantIds.length, 1);
   assert.equal(payload.unresolved.crmAttendantIds[0].crmAttendantId, 'crm-uuid-sem-cadastro');
+});
+
+test('ranking de closers ordena Outros no meio por percentual', () => {
+  const payload = buildWeeklyGoalsReadModel({
+    goal: makeGoal({
+      closer_1: { role: 'closer', targetValue: 8000 },
+      closer_2: { role: 'closer', targetValue: 8000 },
+      outros: { role: 'closer', targetValue: 4000 },
+    }, 20000),
+    people,
+    businesses: [
+      {
+        id: 'biz_matheus',
+        total: 7000,
+        lastMovedAt: '2026-08-12T12:00:00.000Z',
+        attendantId: 'crm-uuid-matheus',
+        attendant: { name: 'Matheus Afonso | Space' },
+        stage: { name: 'Fechado', pipeline: { name: 'Conversão' } },
+      },
+      {
+        id: 'biz_luis',
+        total: 2000,
+        lastMovedAt: '2026-08-12T13:00:00.000Z',
+        attendant: { name: 'Luis Eduardo | Space' },
+        stage: { name: 'Fechado', pipeline: { name: 'Conversão' } },
+      },
+      {
+        id: 'biz_unknown_mid',
+        total: 3000,
+        lastMovedAt: '2026-08-12T14:00:00.000Z',
+        attendantId: 'crm-uuid-desconhecido',
+        attendant: { name: 'Pessoa Desconhecida' },
+        stage: { name: 'Fechado', pipeline: { name: 'Conversão' } },
+      },
+    ],
+    sdrEvents: [],
+    now: new Date('2026-08-12T12:00:00-03:00'),
+  });
+
+  assert.deepEqual(payload.progress.closers.map((row) => row.personId), ['closer_1', 'outros', 'closer_2']);
+});
+
+test('ranking de closers ordena Outros no topo por percentual', () => {
+  const payload = buildWeeklyGoalsReadModel({
+    goal: makeGoal({
+      closer_1: { role: 'closer', targetValue: 8000 },
+      closer_2: { role: 'closer', targetValue: 8000 },
+      outros: { role: 'closer', targetValue: 4000 },
+    }, 20000),
+    people,
+    businesses: [
+      {
+        id: 'biz_matheus_top',
+        total: 6000,
+        lastMovedAt: '2026-08-12T12:00:00.000Z',
+        attendantId: 'crm-uuid-matheus',
+        attendant: { name: 'Matheus Afonso | Space' },
+        stage: { name: 'Fechado', pipeline: { name: 'Conversão' } },
+      },
+      {
+        id: 'biz_luis_top',
+        total: 2000,
+        lastMovedAt: '2026-08-12T13:00:00.000Z',
+        attendant: { name: 'Luis Eduardo | Space' },
+        stage: { name: 'Fechado', pipeline: { name: 'Conversão' } },
+      },
+      {
+        id: 'biz_unknown_top',
+        total: 3500,
+        lastMovedAt: '2026-08-12T14:00:00.000Z',
+        attendantId: 'crm-uuid-desconhecido',
+        attendant: { name: 'Pessoa Desconhecida' },
+        stage: { name: 'Fechado', pipeline: { name: 'Conversão' } },
+      },
+    ],
+    sdrEvents: [],
+    now: new Date('2026-08-12T12:00:00-03:00'),
+  });
+
+  assert.deepEqual(payload.progress.closers.map((row) => row.personId), ['outros', 'closer_1', 'closer_2']);
 });
 
 test('weekly read model conta reunião feita do SDR por show em sdrActivityEvents', () => {
@@ -212,4 +380,21 @@ test('weekly read model expõe sdrUid e email não reconhecidos em unresolved.sd
   assert.equal(payload.unresolved.sdrActors[0].sdrEmail, 'nao.mapeado@space.test');
   assert.equal(payload.unresolved.sdrActors[0].meetingShows, 1);
   assert.equal(payload.unresolved.sdrActors[0].calls, 1);
+});
+
+test('meta semanal do time de closers usa 20000 independente da soma individual', () => {
+  const weeklyReadModel = buildWeeklyGoalsReadModel({
+    goal: makeGoal({
+      closer_1: { role: 'closer', targetValue: 8000 },
+      closer_2: { role: 'closer', targetValue: 8000 },
+      outros: { role: 'closer', targetValue: 4000 },
+    }, 20000),
+    people,
+    businesses: [],
+    sdrEvents: [],
+    now: new Date('2026-08-12T12:00:00-03:00'),
+  });
+
+  const team = buildWeeklyTeamSummary({ weeklyReadModel });
+  assert.equal(team.closers.targetValue, 20000);
 });

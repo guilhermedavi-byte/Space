@@ -5,10 +5,19 @@ const { buildCrmLiveEventQueue } = require("../api/_lib/crm-live");
 
 const makeWeeklyReadModel = () => ({
   commercialWeek: { weekKey: "wk_2026-08-11", startDateKey: "2026-08-11", endDateKey: "2026-08-18" },
+  weeklyGoal: { teamTarget: 20000 },
+  people: [
+    { personId: "matheus", displayName: "Matheus Afonso", roles: ["closer"], active: true, crmAttendantIds: [], crmAttendantAliases: ["Matheus Afonso"], sdrEmails: [] },
+    { personId: "luis", displayName: "Luis Eduardo", roles: ["closer"], active: true, crmAttendantIds: [], crmAttendantAliases: ["Luis Eduardo"], sdrEmails: [] },
+    { personId: "outros", displayName: "Outros", roles: ["closer"], active: true, isAggregate: true, crmAttendantIds: [], crmAttendantAliases: [], sdrEmails: [] },
+    { personId: "luana", displayName: "Luana Mendonça", roles: ["sdr"], active: true, crmAttendantIds: [], crmAttendantAliases: [], sdrEmails: [] },
+    { personId: "ayres", displayName: "Ayres André", roles: ["sdr"], active: true, crmAttendantIds: [], crmAttendantAliases: [], sdrEmails: [] },
+  ],
   progress: {
     closers: [
       { personId: "matheus", displayName: "Matheus Afonso", role: "closer", actualValue: 8100, targetValue: 8000, progressPct: 101.25 },
       { personId: "luis", displayName: "Luis Eduardo", role: "closer", actualValue: 6200, targetValue: 8000, progressPct: 77.5 },
+      { personId: "outros", displayName: "Outros", role: "closer", actualValue: 0, targetValue: 4000, progressPct: 0, isAggregate: true },
     ],
     sdrs: [
       { personId: "luana", displayName: "Luana Mendonça", role: "sdr", actualValue: 31, targetValue: 30, progressPct: 103.33 },
@@ -18,7 +27,7 @@ const makeWeeklyReadModel = () => ({
 });
 
 const makeTeamSummary = () => ({
-  closers: { actualValue: 14300, targetValue: 16000, progressPct: 89.375 },
+  closers: { actualValue: 14300, targetValue: 20000, progressPct: 71.5 },
   sdrs: { actualValue: 61, targetValue: 100, progressPct: 61 },
 });
 
@@ -133,4 +142,40 @@ test("troca de semana reseta metas e líderes sem disparar falso positivo", () =
   assert.deepEqual(result.nextState.currentWeek.teamMetasHit, []);
   assert.equal(result.nextState.lastLeaders.closers, "luis");
   assert.equal(result.nextState.lastLeaders.sdrs, "ayres");
+});
+
+test("sale_closed anuncia Outros para vendedor fora de Matheus e Luis", () => {
+  const previousState = {
+    cursor: "2026-08-12T12:00:00.000Z",
+    initializedAt: "2026-08-12T12:00:00.000Z",
+    updatedAt: "2026-08-12T12:00:00.000Z",
+    lastLeaders: { closers: "matheus", sdrs: "luana" },
+    currentWeek: {
+      weekKey: "wk_2026-08-11",
+      metaIndividualsHit: [],
+      teamMetasHit: [],
+    },
+    announcedSaleIds: [],
+  };
+
+  const result = buildCrmLiveEventQueue({
+    previousState,
+    weeklyReadModel: makeWeeklyReadModel(),
+    weekTeamSummary: makeTeamSummary(),
+    freshWonBusinesses: [
+      makeBusiness({
+        id: "deal_outros",
+        movedAt: "2026-08-12T12:10:00.000Z",
+        total: 2800,
+        client: "Cliente Outros",
+        closer: "Fábio Camargo",
+      }),
+    ],
+    monthSummary: { summary: { gap: 8000 } },
+    now: new Date("2026-08-12T12:11:00.000Z"),
+  });
+
+  assert.equal(result.events[0].type, "sale_closed");
+  assert.equal(result.events[0].payload.closerName, "Outros");
+  assert.equal(result.events[0].payload.isAggregate, true);
 });

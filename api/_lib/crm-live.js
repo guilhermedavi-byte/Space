@@ -5,7 +5,17 @@ const { requestJson, FIRESTORE_BASE, API_KEY, PROJECT_ID, encodeFields, decodeFi
 const { getDocumentAsAdmin, listCollectionAsAdmin, queryCollectionByDateRangeAsAdmin, commitWritesAsAdmin } = require("./firestore-admin");
 const { signJwt, verifyJwt, parseCookies, isSecureRequest } = require("./session");
 const { resolveCommercialPeriod, formatSaoPauloDateKey, getCalendarMonthBounds } = require("./commercial-period");
-const { buildWeeklyGoalsReadModel, decodeGrowthPeopleDoc, decodeWeeklyGoalsMap, resolveCommercialWeek, extractCrmAttendantId, buildGrowthPeopleIndexes } = require("./growth-people");
+const {
+  buildWeeklyGoalsReadModel,
+  decodeGrowthPeopleDoc,
+  decodeWeeklyGoalsMap,
+  resolveCommercialWeek,
+  extractCrmAttendantId,
+  buildGrowthPeopleIndexes,
+  resolveCloserBucketForBusiness,
+  AGGREGATE_OTHERS_PERSON_ID,
+  AGGREGATE_OTHERS_DISPLAY_NAME,
+} = require("./growth-people");
 const { getDealValue, normalizeKey } = require("../../_lib/forecast-service");
 const { fetchMirroredBusinesses, getSyncState, isDatacrazyMirrorEnabled } = require("./datacrazy-mirror");
 
@@ -503,7 +513,8 @@ const buildMonthSummary = ({ businesses = [], goal = null, now = new Date() } = 
 const buildWeeklyTeamSummary = ({ weeklyReadModel }) => {
   const closerRows = Array.isArray(weeklyReadModel?.progress?.closers) ? weeklyReadModel.progress.closers : [];
   const sdrRows = Array.isArray(weeklyReadModel?.progress?.sdrs) ? weeklyReadModel.progress.sdrs : [];
-  const closersTarget = closerRows.reduce((sum, row) => sum + safeNumber(row.targetValue), 0);
+  const configuredCloserTarget = safeNumber(weeklyReadModel?.weeklyGoal?.teamTarget);
+  const closersTarget = configuredCloserTarget > 0 ? configuredCloserTarget : closerRows.reduce((sum, row) => sum + safeNumber(row.targetValue), 0);
   const closersActual = closerRows.reduce((sum, row) => sum + safeNumber(row.actualValue), 0);
   const closersCount = closerRows.reduce((sum, row) => sum + safeNumber(row.count), 0);
   const sdrTarget = sdrRows.reduce((sum, row) => sum + safeNumber(row.targetValue), 0);
@@ -556,14 +567,15 @@ const buildPipelineRows = ({ businesses = [], people = [], now = new Date(), com
     if (!dateKey || dateKey < thresholdKey) return;
     if (status !== normalizeKey("in_process")) return;
     if (stageKey !== normalizeKey("Forecast") && stageKey !== normalizeKey("Pagamento Parcial")) return;
-    const attendantId = extractCrmAttendantId(business);
-    const personId = safeString(attendantId && indexes.byCrmAttendantId.get(attendantId));
-    if (!personId) return;
+    const bucket = resolveCloserBucketForBusiness(business, indexes);
+    const personId = safeString(bucket.bucketPersonId);
     const person = indexes.byPersonId.get(personId);
+    if (!personId) return;
     const entry = grouped.get(personId) || {
       personId,
-      displayName: safeString(person?.displayName) || extractBusinessAttendantName(business) || "Sem responsável",
+      displayName: safeString(person?.displayName) || safeString(bucket.bucketDisplayName) || AGGREGATE_OTHERS_DISPLAY_NAME,
       photoURL: safeString(person?.photoURL),
+      isAggregate: person?.isAggregate === true || personId === AGGREGATE_OTHERS_PERSON_ID,
       value: 0,
       dealsCount: 0,
     };
@@ -738,18 +750,10 @@ const buildPreviousDayHighlights = ({ goal, people, businesses = [], sdrEvents =
     .filter((business) => normalizeKey(extractPipelineName(business)) === pipelineKey)
     .filter((business) => normalizeKey(extractStageName(business)) === CLOSED_STAGE_KEY)
     .forEach((business) => {
-      const attendantId = extractCrmAttendantId(business);
-      const attendantName = extractBusinessAttendantName(business);
-      const normalizedName = attendantName
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .toLowerCase();
-      const resolved =
-        (attendantId && indexes.byCrmAttendantId.get(attendantId)) ||
-        (normalizedName && indexes.byCrmAlias.get(normalizedName)) ||
-        "";
+      const bucket = resolveCloserBucketForBusiness(business, indexes);
+      if (bucket.bucketPersonId === AGGREGATE_OTHERS_PERSON_ID) return;
       const row = Array.isArray(weeklyReadModel?.progress?.closers)
-        ? weeklyReadModel.progress.closers.find((entry) => entry.personId && entry.personId === resolved)
+        ? weeklyReadModel.progress.closers.find((entry) => entry.personId && entry.personId === bucket.bucketPersonId)
         : null;
       if (!row) return;
       closerDaily.set(row.personId, (closerDaily.get(row.personId) || 0) + getDealValue(business));
@@ -777,6 +781,7 @@ const buildPreviousDayHighlights = ({ goal, people, businesses = [], sdrEvents =
     });
 
   const closerHighlight = (weeklyReadModel?.progress?.closers || [])
+    .filter((row) => row?.isAggregate !== true)
     .map((row) => {
       const dailyValue = closerDaily.get(row.personId) || 0;
       return { ...row, dailyValue, dailyProgressPct: row.targetValue > 0 ? (dailyValue / row.targetValue) * 100 : 0 };
@@ -1069,12 +1074,21 @@ const buildDetectorStateSnapshot = ({ cursor = "", weeklyReadModel, announcedSal
 };
 
 const buildWonBusinessEventContext = ({ business, weeklyReadModel, monthSummary }) => {
+  const indexes = buildGrowthPeopleIndexes(Array.isArray(weeklyReadModel?.people) ? weeklyReadModel.people : []);
+  const bucket = resolveCloserBucketForBusiness(business, indexes);
+  const bucketPerson = bucket.bucketPersonId ? indexes.byPersonId.get(bucket.bucketPersonId) || null : null;
   const weekGap = Math.max(0, safeNumber(weeklyReadModel?.team?.closers?.targetValue) - safeNumber(weeklyReadModel?.team?.closers?.actualValue));
   return {
     businessId: extractBusinessId(business),
     clientName: extractBusinessClientName(business) || "Cliente sem nome",
     planName: extractBusinessPlanName(business) || "Plano não informado",
-    closerName: extractBusinessAttendantName(business) || "Sem responsável",
+    personId: safeString(bucket.bucketPersonId),
+    isAggregate: bucket.bucketPersonId === AGGREGATE_OTHERS_PERSON_ID || bucketPerson?.isAggregate === true,
+    closerName:
+      bucket.bucketPersonId === AGGREGATE_OTHERS_PERSON_ID
+        ? AGGREGATE_OTHERS_DISPLAY_NAME
+        : safeString(bucketPerson?.displayName || extractBusinessAttendantName(business) || "Sem responsável"),
+    photoURL: bucket.bucketPersonId === AGGREGATE_OTHERS_PERSON_ID ? "" : safeString(bucketPerson?.photoURL),
     value: getDealValue(business),
     movedAt: extractBusinessLastMovedAt(business)?.toISOString() || "",
     dateKey: formatBusinessDateKey(business),
@@ -1168,6 +1182,8 @@ const buildCrmLiveEventQueue = ({ previousState, weeklyReadModel, weekTeamSummar
         leaderboard: "closers",
         personId: currentLeaderClosers,
         displayName: safeString(leader?.displayName),
+        isAggregate: leader?.isAggregate === true,
+        photoURL: safeString(leader?.photoURL),
         progressPct: safeNumber(leader?.progressPct),
         actualValue: safeNumber(leader?.actualValue),
         targetValue: safeNumber(leader?.targetValue),
@@ -1185,6 +1201,8 @@ const buildCrmLiveEventQueue = ({ previousState, weeklyReadModel, weekTeamSummar
         leaderboard: "sdrs",
         personId: currentLeaderSdrs,
         displayName: safeString(leader?.displayName),
+        isAggregate: leader?.isAggregate === true,
+        photoURL: safeString(leader?.photoURL),
         progressPct: safeNumber(leader?.progressPct),
         actualValue: safeNumber(leader?.actualValue),
         targetValue: safeNumber(leader?.targetValue),
@@ -1203,6 +1221,8 @@ const buildCrmLiveEventQueue = ({ previousState, weeklyReadModel, weekTeamSummar
         personId,
         displayName: safeString(row?.displayName),
         role: safeString(row?.role),
+        isAggregate: row?.isAggregate === true,
+        photoURL: safeString(row?.photoURL),
         progressPct: safeNumber(row?.progressPct),
         actualValue: safeNumber(row?.actualValue),
         targetValue: safeNumber(row?.targetValue),

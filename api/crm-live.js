@@ -268,6 +268,9 @@ const buildHtml = () => `<!DOCTYPE html>
         grid-auto-rows: 1fr;
         align-content: stretch;
       }
+      .crm-live-ranking.has-three-rows {
+        gap: 1.6vh;
+      }
       .crm-live-ranking-row {
         display: grid;
         grid-template-columns: auto minmax(0, 1fr) auto;
@@ -290,6 +293,17 @@ const buildHtml = () => `<!DOCTYPE html>
         font-weight: 500;
         letter-spacing: .04em;
       }
+      .crm-live-avatar-icon {
+        width: 62%;
+        height: 62%;
+        display: block;
+      }
+      .crm-live-avatar-icon svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+        fill: currentColor;
+      }
       .crm-live-avatar img {
         width: 100%;
         height: 100%;
@@ -298,6 +312,10 @@ const buildHtml = () => `<!DOCTYPE html>
         display: block;
       }
       .crm-live-avatar.is-photo { filter: grayscale(1) brightness(1.12) contrast(.88); }
+      .crm-live-avatar.is-aggregate {
+        color: rgba(255,255,255,.55);
+        background: rgba(255,255,255,.08);
+      }
       .crm-live-avatar.is-leader {
         width: 12vh;
         height: 12vh;
@@ -305,6 +323,10 @@ const buildHtml = () => `<!DOCTYPE html>
         box-shadow: 0 0 0 .55vh var(--leader-ring);
       }
       .crm-live-avatar.is-leader.is-photo { filter: none; }
+      .crm-live-avatar.is-leader.is-aggregate {
+        color: var(--accent);
+        background: rgba(255,255,255,.12);
+      }
       .crm-live-ranking-copy {
         min-width: 0;
         display: grid;
@@ -320,18 +342,22 @@ const buildHtml = () => `<!DOCTYPE html>
         text-overflow: ellipsis;
       }
       .crm-live-ranking-row.is-leader .crm-live-ranking-name { font-size: 8vh; }
+      .crm-live-ranking.has-three-rows .crm-live-ranking-name { font-size: 5.3vh; }
+      .crm-live-ranking.has-three-rows .crm-live-ranking-row.is-leader .crm-live-ranking-name { font-size: 6.4vh; }
       .crm-live-ranking-sub {
         color: var(--text-secondary);
         font-size: 3.4vh;
         line-height: 1.35;
         font-weight: 400;
       }
+      .crm-live-ranking.has-three-rows .crm-live-ranking-sub { font-size: 2.9vh; }
       .crm-live-ranking-chase {
         color: var(--text-tertiary);
         font-size: 2.6vh;
         line-height: 1.35;
         font-weight: 400;
       }
+      .crm-live-ranking.has-three-rows .crm-live-ranking-chase { font-size: 2.2vh; }
       .crm-live-ranking-bar {
         width: 100%;
         height: .7vh;
@@ -358,6 +384,8 @@ const buildHtml = () => `<!DOCTYPE html>
         font-weight: 500;
       }
       .crm-live-ranking-row.is-leader .crm-live-ranking-pct { color: var(--accent); font-size: 12vh; }
+      .crm-live-ranking.has-three-rows .crm-live-ranking-pct { font-size: 7.2vh; }
+      .crm-live-ranking.has-three-rows .crm-live-ranking-row.is-leader .crm-live-ranking-pct { font-size: 9.4vh; }
       .crm-live-highlight-person {
         display: grid;
         justify-items: start;
@@ -838,6 +866,9 @@ const buildHtml = () => `<!DOCTYPE html>
         color: var(--accent);
         margin-bottom: 2.2vh;
       }
+      .crm-live-interruption-avatar.is-aggregate {
+        color: rgba(13, 16, 20, .58);
+      }
       .crm-live-interruption-avatar img {
         width: 100%;
         height: 100%;
@@ -1109,11 +1140,27 @@ const buildHtml = () => `<!DOCTYPE html>
           if (cached === 'error') return { usable: false, src: '' };
           return { usable: false, src: '' };
         };
+        const isAggregateRow = (row) => !!(row && row.isAggregate);
+        const aggregateAvatarSvg = () =>
+          '<span class="crm-live-avatar-icon" aria-hidden="true">' +
+            '<svg viewBox="0 0 64 64" focusable="false">' +
+              '<path d="M32 33c7.4 0 13-5.8 13-13S39.4 7 32 7 19 12.8 19 20s5.6 13 13 13Z"></path>' +
+              '<path d="M14 36c4.7 0 8.5-3.7 8.5-8.5S18.7 19 14 19s-8.5 3.8-8.5 8.5S9.3 36 14 36Z" opacity=".72"></path>' +
+              '<path d="M50 36c4.7 0 8.5-3.7 8.5-8.5S54.7 19 50 19s-8.5 3.8-8.5 8.5S45.3 36 50 36Z" opacity=".72"></path>' +
+              '<path d="M32 37c-9.7 0-17.5 5.9-20.3 14.2-.6 1.8.8 3.8 2.8 3.8h35c2 0 3.4-2 2.8-3.8C49.5 42.9 41.7 37 32 37Z"></path>' +
+              '<path d="M14 39c-5.8 0-10.7 3.2-13 8.1-.7 1.6.5 3.4 2.2 3.4H17c.6-4.1 2.1-7.9 4.4-11.5-1.9-.7-4.4 0-7.4 0Z" opacity=".72"></path>' +
+              '<path d="M50 39c-3 0-5.5-.7-7.4 0 2.3 3.6 3.8 7.4 4.4 11.5h13.8c1.7 0 2.9-1.8 2.2-3.4-2.3-4.9-7.2-8.1-13-8.1Z" opacity=".72"></path>' +
+            '</svg>' +
+          '</span>';
         const avatarHtml = (row, options = {}) => {
           const leader = !!options.leader;
           const state = personImageState(row);
           const name = getDisplayName(row) || 'Sem nome';
-          const classes = ['crm-live-avatar', leader ? 'is-leader' : '', state.usable ? 'is-photo' : ''].filter(Boolean).join(' ');
+          const aggregate = isAggregateRow(row);
+          const classes = ['crm-live-avatar', leader ? 'is-leader' : '', aggregate ? 'is-aggregate' : '', state.usable ? 'is-photo' : ''].filter(Boolean).join(' ');
+          if (aggregate) {
+            return '<span class="' + classes + '">' + aggregateAvatarSvg() + '</span>';
+          }
           if (state.usable) {
             return '<span class="' + classes + '"><img src="' + escapeHtml(state.src) + '" alt="" onerror="this.parentElement.innerHTML=\\\'' +
               '<span>' + escapeHtml(initials(name)) + '</span>' +
@@ -1124,6 +1171,9 @@ const buildHtml = () => `<!DOCTYPE html>
         const interruptionAvatarHtml = (row) => {
           const state = personImageState(row);
           const name = getDisplayName(row) || 'Sem nome';
+          if (isAggregateRow(row)) {
+            return '<span class="crm-live-interruption-avatar is-aggregate">' + aggregateAvatarSvg() + '</span>';
+          }
           if (state.usable) {
             return '<span class="crm-live-interruption-avatar"><img src="' + escapeHtml(state.src) + '" alt="" onerror="this.parentElement.innerHTML=\\\'' +
               '<span>' + escapeHtml(initials(name)) + '</span>' +
@@ -1305,7 +1355,7 @@ const buildHtml = () => `<!DOCTYPE html>
         '</section>';
         };
         const renderClosersScreen = (weekly) => {
-          const rows = safeArray(weekly.closers).slice(0, 2);
+          const rows = safeArray(weekly.closers).filter((row) => !row.isAggregate).slice(0, 2);
           if (rows.length < 2) {
             return '<section class="crm-live-screen"><div class="crm-live-shell"><div class="crm-live-head"><h1 class="crm-live-title">Duelo dos closers</h1></div><div class="crm-live-body"><div class="crm-live-empty"><div><strong>Sem duelo</strong><div>Cadastre ao menos dois closers com meta nesta semana.</div></div></div></div></div></section>';
           }
@@ -1346,7 +1396,7 @@ const buildHtml = () => `<!DOCTYPE html>
             '<div class="crm-live-head">' +
               '<h1 class="crm-live-title">' + escapeHtml(title) + '</h1>' +
             '</div>' +
-            '<div class="crm-live-body"><div class="crm-live-ranking ' + ((role === 'closer' && safeArray(rows).length <= 2) ? '' : 'is-fill') + '">' + renderRankingRows(rows, { role: role }) + '</div></div>' +
+            '<div class="crm-live-body"><div class="crm-live-ranking ' + ((role === 'closer' && safeArray(rows).length <= 2) ? '' : 'is-fill') + ' ' + ((role === 'closer' && safeArray(rows).length >= 3) ? 'has-three-rows' : '') + '">' + renderRankingRows(rows, { role: role }) + '</div></div>' +
           '</div>' +
         '</section>';
         const renderTeamProgressScreen = ({ title, actual, target, noun }) => {
@@ -1461,7 +1511,7 @@ const buildHtml = () => `<!DOCTYPE html>
               '<div class="crm-live-interruption-screen is-sale">' +
                 '<div class="crm-live-interruption-main">' +
                   '<div class="crm-live-interruption-kicker">Venda fechada</div>' +
-                  interruptionAvatarHtml({ displayName: payload.closerName || 'Closer', photoURL: payload.photoURL || '' }) +
+                  interruptionAvatarHtml({ displayName: payload.closerName || 'Closer', photoURL: payload.photoURL || '', isAggregate: !!payload.isAggregate }) +
                   '<div class="crm-live-interruption-name">' + escapeHtml(payload.closerName || 'Sem responsável') + '</div>' +
                   '<div class="crm-live-interruption-hero">' + escapeHtml(moneyShort(payload.value || 0)) + '</div>' +
                 '</div>' +
@@ -1488,7 +1538,7 @@ const buildHtml = () => `<!DOCTYPE html>
             '<div class="crm-live-interruption-screen is-generic">' +
               '<div class="crm-live-interruption-main">' +
                 '<div class="crm-live-interruption-kicker">' + escapeHtml(titleMap[type] || 'Evento do CRM Live') + '</div>' +
-                interruptionAvatarHtml({ displayName: payload.displayName || payload.team || 'Time', photoURL: payload.photoURL || '' }) +
+                interruptionAvatarHtml({ displayName: payload.displayName || payload.team || 'Time', photoURL: payload.photoURL || '', isAggregate: !!payload.isAggregate }) +
                 '<div class="crm-live-interruption-name">' + escapeHtml(payload.displayName || (payload.team === 'sdrs' ? 'Time de SDRs' : payload.team === 'closers' ? 'Time de closers' : 'Atualização do placar')) + '</div>' +
                 '<div class="crm-live-interruption-hero">' + escapeHtml(type === 'leader_changed' || type === 'individual_goal_hit' ? percent(payload.progressPct || 0) : (payload.team === 'sdrs' ? String(payload.actualValue || 0) : moneyShort(payload.actualValue || 0))) + '</div>' +
                 '<div class="crm-live-interruption-plan">' + escapeHtml(subtitleMap[type] || '') + '</div>' +

@@ -7,6 +7,8 @@ const VALID_WEEKLY_ROLES = new Set(['closer', 'sdr', 'both']);
 const VALID_CURRENT_ROLES = new Set(['closer', 'sdr', 'both']);
 const CONVERSION_PIPELINE_KEY = normalizeForecastKey('Conversão');
 const CLOSED_STAGE_KEY = normalizeForecastKey('Fechado');
+const AGGREGATE_OTHERS_PERSON_ID = 'outros';
+const AGGREGATE_OTHERS_DISPLAY_NAME = 'Outros';
 
 const safeString = (value) => (value == null ? '' : String(value).trim());
 const safeNumber = (value) => {
@@ -45,6 +47,10 @@ const extractCrmAttendantName = (business = {}) => safeString(business?.attendan
 
 const getBusinessId = (business = {}) => safeString(business?.id || business?._id || business?.uuid || business?.businessId || '');
 
+const isCloserRole = (role) => role === 'closer' || role === 'both';
+const isCloserPerson = (person) =>
+  !!person && person.active !== false && Array.isArray(person.roles) && person.roles.some((role) => isCloserRole(normalizeLoose(role)));
+
 const getBusinessLastMovedAt = (business = {}) => {
   const raw = business?.lastMovedAt;
   if (!raw) return null;
@@ -74,6 +80,8 @@ const decodeGrowthPeopleDoc = (doc) => {
     personId,
     displayName: safeString(fields.displayName || fields.nome || personId) || personId,
     active: fields.active !== false,
+    isAggregate: fields.isAggregate === true,
+    sortOrder: Number.isFinite(Number(fields.sortOrder)) ? Number(fields.sortOrder) : 0,
     roles: normalizePersonRoles(fields.roles),
     crmAttendantIds: uniq(toStringArray(fields.crmAttendantIds)),
     crmAttendantAliases: uniq(toStringArray(fields.crmAttendantAliases)),
@@ -95,8 +103,13 @@ const decodeWeeklyGoalsMap = (value) => {
     const startDateKey = isValidDateKey(weekValue.startDateKey) ? safeString(weekValue.startDateKey) : weekKey.startsWith('wk_') && isValidDateKey(weekKey.slice(3)) ? weekKey.slice(3) : '';
     const endDateKey = isValidDateKey(weekValue.endDateKey) ? safeString(weekValue.endDateKey) : '';
     const teamTarget = safeNumber(weekValue.teamTarget);
-    const peopleRaw = weekValue.people && typeof weekValue.people === 'object' && !Array.isArray(weekValue.people) ? weekValue.people : {};
-    const people = Object.entries(peopleRaw)
+    const peopleSource =
+      weekValue.individualMonthlyGoals && typeof weekValue.individualMonthlyGoals === 'object' && !Array.isArray(weekValue.individualMonthlyGoals)
+        ? weekValue.individualMonthlyGoals
+        : weekValue.people && typeof weekValue.people === 'object' && !Array.isArray(weekValue.people)
+          ? weekValue.people
+          : {};
+    const people = Object.entries(peopleSource)
       .map(([personIdRaw, row]) => {
         if (!row || typeof row !== 'object' || Array.isArray(row)) return null;
         const personId = safeString(personIdRaw);
@@ -144,6 +157,43 @@ const buildGrowthPeopleIndexes = (people = []) => {
     });
   });
   return { byPersonId, byCrmAttendantId, byCrmAlias, bySdrUid, bySdrEmail };
+};
+
+const resolvePersonForBusiness = (business, indexes) => {
+  const resolved = resolvePersonIdForBusiness(business, indexes);
+  return {
+    ...resolved,
+    person: resolved.personId ? indexes.byPersonId.get(resolved.personId) || null : null,
+    attendantName: extractCrmAttendantName(business),
+  };
+};
+
+const resolveCloserBucketForBusiness = (business, indexes) => {
+  const resolved = resolvePersonForBusiness(business, indexes);
+  const person = resolved.person;
+  if (resolved.personId && person && isCloserPerson(person) && person.isAggregate !== true) {
+    return {
+      bucketPersonId: resolved.personId,
+      bucketDisplayName: safeString(person.displayName) || resolved.personId,
+      bucketIsAggregate: false,
+      resolvedPersonId: resolved.personId,
+      resolvedPerson: person,
+      crmAttendantId: resolved.crmAttendantId,
+      attendantName: resolved.attendantName,
+      method: resolved.method,
+    };
+  }
+  const aggregatePerson = indexes?.byPersonId?.get(AGGREGATE_OTHERS_PERSON_ID) || null;
+  return {
+    bucketPersonId: AGGREGATE_OTHERS_PERSON_ID,
+    bucketDisplayName: safeString(aggregatePerson?.displayName) || AGGREGATE_OTHERS_DISPLAY_NAME,
+    bucketIsAggregate: true,
+    resolvedPersonId: resolved.personId,
+    resolvedPerson: person,
+    crmAttendantId: resolved.crmAttendantId,
+    attendantName: resolved.attendantName,
+    method: resolved.method,
+  };
 };
 
 const resolvePersonIdForBusiness = (business, indexes) => {
@@ -220,7 +270,21 @@ const buildUnknownSdrActors = (events = [], indexes, week) => {
 };
 
 const summarizeWeeklyCloserProgress = ({ businesses = [], goalPeople = [], indexes, week }) => {
-  const rowsByPerson = new Map(goalPeople.filter((row) => row.role === 'closer' || row.role === 'both').map((row) => [row.personId, { personId: row.personId, role: row.role, targetValue: safeNumber(row.targetValue), actualValue: 0, count: 0 }]));
+  const rowsByPerson = new Map(
+    goalPeople
+      .filter((row) => row.role === 'closer' || row.role === 'both')
+      .map((row) => [
+        row.personId,
+        {
+          personId: row.personId,
+          role: row.role,
+          targetValue: safeNumber(row.targetValue),
+          actualValue: 0,
+          count: 0,
+          breakdown: row.personId === AGGREGATE_OTHERS_PERSON_ID ? [] : undefined,
+        },
+      ])
+  );
   (Array.isArray(businesses) ? businesses : []).forEach((business) => {
     const lastMovedAt = getBusinessLastMovedAt(business);
     if (!lastMovedAt) return;
@@ -229,11 +293,32 @@ const summarizeWeeklyCloserProgress = ({ businesses = [], goalPeople = [], index
     const pipelineKey = normalizeForecastKey(business?.stage?.pipeline?.name);
     const stageKey = normalizeForecastKey(business?.stage?.name);
     if (pipelineKey !== CONVERSION_PIPELINE_KEY || stageKey !== CLOSED_STAGE_KEY) return;
-    const resolved = resolvePersonIdForBusiness(business, indexes);
-    if (!resolved.personId || !rowsByPerson.has(resolved.personId)) return;
-    const row = rowsByPerson.get(resolved.personId);
-    row.actualValue += getDealValue(business);
+    const bucket = resolveCloserBucketForBusiness(business, indexes);
+    if (!bucket.bucketPersonId || !rowsByPerson.has(bucket.bucketPersonId)) return;
+    const row = rowsByPerson.get(bucket.bucketPersonId);
+    const value = getDealValue(business);
+    row.actualValue += value;
     row.count += 1;
+    if (bucket.bucketIsAggregate) {
+      const label = safeString(bucket.attendantName || bucket.crmAttendantId || bucket.resolvedPerson?.displayName || 'Sem responsável');
+      const breakdownKey = safeString(bucket.crmAttendantId || label || 'missing_attendant_id');
+      const breakdown = Array.isArray(row.breakdown) ? row.breakdown : [];
+      const existing = breakdown.find((entry) => entry.key === breakdownKey);
+      if (existing) {
+        existing.value += value;
+        existing.count += 1;
+      } else {
+        breakdown.push({
+          key: breakdownKey,
+          crmAttendantId: safeString(bucket.crmAttendantId),
+          attendantName: label || null,
+          value,
+          count: 1,
+          resolvedPersonId: safeString(bucket.resolvedPersonId),
+        });
+      }
+      row.breakdown = breakdown;
+    }
   });
   return Array.from(rowsByPerson.values());
 };
@@ -269,13 +354,26 @@ const attachPersonMeta = (rows = [], indexes) =>
         displayName: person?.displayName || row.personId,
         role: row.role,
         photoURL: person?.photoURL || "",
+        isAggregate: person?.isAggregate === true,
+        sortOrder: Number.isFinite(Number(person?.sortOrder)) ? Number(person.sortOrder) : 0,
         targetValue,
         actualValue,
         progressPct: targetValue > 0 ? (actualValue / targetValue) * 100 : 0,
         count: safeNumber(row.count),
+        breakdown: Array.isArray(row.breakdown)
+          ? row.breakdown
+              .map((entry) => ({
+                crmAttendantId: safeString(entry.crmAttendantId),
+                attendantName: safeString(entry.attendantName) || null,
+                value: safeNumber(entry.value),
+                count: safeNumber(entry.count),
+                resolvedPersonId: safeString(entry.resolvedPersonId),
+              }))
+              .sort((a, b) => b.value - a.value || b.count - a.count || safeString(a.attendantName).localeCompare(safeString(b.attendantName), 'pt-BR'))
+          : undefined,
       };
     })
-    .sort((a, b) => b.progressPct - a.progressPct || b.actualValue - a.actualValue || safeString(a.displayName).localeCompare(safeString(b.displayName), 'pt-BR'));
+    .sort((a, b) => b.progressPct - a.progressPct || b.actualValue - a.actualValue || safeNumber(a.sortOrder) - safeNumber(b.sortOrder) || safeString(a.displayName).localeCompare(safeString(b.displayName), 'pt-BR'));
 
 const buildWeeklyGoalsReadModel = ({ goal = null, people = [], businesses = [], sdrEvents = [], now = new Date() } = {}) => {
   const week = resolveCommercialWeek({ now });
@@ -308,4 +406,7 @@ module.exports = {
   buildWeeklyGoalsReadModel,
   resolveCommercialWeek,
   extractCrmAttendantId,
+  resolveCloserBucketForBusiness,
+  AGGREGATE_OTHERS_PERSON_ID,
+  AGGREGATE_OTHERS_DISPLAY_NAME,
 };

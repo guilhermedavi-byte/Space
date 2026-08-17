@@ -14902,7 +14902,11 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
       const progressMap = new Map(progressRows.map((row) => [String(row.personId || ""), row]));
       modalState.weeklyRows = people
         .slice()
-        .sort((a, b) => String(a.displayName || "").localeCompare(String(b.displayName || ""), "pt-BR"))
+        .sort((a, b) => {
+          const orderDiff = Number(a?.sortOrder || 0) - Number(b?.sortOrder || 0);
+          if (orderDiff) return orderDiff;
+          return String(a.displayName || "").localeCompare(String(b.displayName || ""), "pt-BR");
+        })
         .map((person) => {
           const personId = String(person.personId || "");
           const currentRow = currentGoalMap.get(personId);
@@ -14956,10 +14960,8 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
             .join("")
         : `<div class="growth-contracts-loading">Nenhuma pessoa ativa cadastrada em growthPeople.</div>`;
 
-      const unresolvedCrm = Array.isArray(payload?.weeklyReadModel?.unresolved?.crmAttendantIds) ? payload.weeklyReadModel.unresolved.crmAttendantIds : [];
       const unresolvedSdr = Array.isArray(payload?.weeklyReadModel?.unresolved?.sdrActors) ? payload.weeklyReadModel.unresolved.sdrActors : [];
       const warnings = [
-        ...unresolvedCrm.map((row) => `${String(row.attendantName || row.crmAttendantId || "Closer não reconhecido")} · ${Number(row.count || 0)} negócio(s)`),
         ...unresolvedSdr.map((row) => `${String(row.sdrName || row.sdrEmail || row.sdrUid || "SDR não reconhecido")} · ${Number(row.totalEvents || 0)} evento(s)`),
       ];
       if (unresolvedWrapEl instanceof HTMLElement) unresolvedWrapEl.hidden = warnings.length === 0;
