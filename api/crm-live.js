@@ -8,6 +8,7 @@ const {
   isSecureRequest,
   CRM_LIVE_COOKIE_NAME,
 } = require("./_lib/crm-live");
+const { buildScreenKeys, createCrmLiveLoopController } = require("./_lib/crm-live-rotation");
 
 const normalizeRole = (value) => {
   const raw = String(value || "").trim().toLowerCase();
@@ -83,6 +84,69 @@ const buildHtml = () => `<!DOCTYPE html>
         width: 100%;
         height: 100%;
         overflow: hidden;
+      }
+      .crm-live-controls {
+        position: absolute;
+        top: 2.4vh;
+        right: 4.5vw;
+        z-index: 26;
+        display: flex;
+        align-items: center;
+        gap: .9vh;
+      }
+      .crm-live-control {
+        width: 5.6vh;
+        height: 5.6vh;
+        border: 0;
+        border-radius: 999px;
+        background: rgba(255,255,255,.05);
+        color: rgba(245,245,244,.78);
+        opacity: .36;
+        display: grid;
+        place-items: center;
+        padding: 0;
+        cursor: pointer;
+        transition: opacity .2s ease, background .2s ease, transform .2s ease;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .crm-live-control:hover,
+      .crm-live-control:focus-visible,
+      .crm-live-control:active {
+        opacity: .88;
+        background: rgba(255,255,255,.11);
+        outline: none;
+      }
+      .crm-live-control:active {
+        transform: scale(.98);
+      }
+      .crm-live-control svg {
+        width: 2.1vh;
+        height: 2.1vh;
+        display: block;
+        fill: currentColor;
+      }
+      .crm-live-control.is-toggle[data-state="paused"] {
+        opacity: .8;
+        color: rgba(255,255,255,.92);
+      }
+      .crm-live-pause-indicator {
+        width: 2.7vh;
+        height: 2.7vh;
+        border-radius: 999px;
+        display: none;
+        place-items: center;
+        background: rgba(255, 86, 79, .14);
+        color: rgba(255, 86, 79, .85);
+        opacity: .72;
+      }
+      .crm-live.is-rotation-paused .crm-live-pause-indicator {
+        display: grid;
+      }
+      .crm-live-pause-indicator svg {
+        width: 1.2vh;
+        height: 1.2vh;
+        display: block;
+        fill: currentColor;
       }
       .crm-live-screen {
         position: absolute;
@@ -927,6 +991,13 @@ const buildHtml = () => `<!DOCTYPE html>
         letter-spacing: .24em;
         text-transform: uppercase;
       }
+      @media (prefers-reduced-motion: reduce) {
+        .crm-live-screen,
+        .crm-live-control,
+        .crm-live-dot {
+          transition: none !important;
+        }
+      }
       @media (max-width: 1200px) {
         .crm-live { padding: 4.4vh 5vw 4vh; }
         .crm-live-week-grid,
@@ -954,6 +1025,22 @@ const buildHtml = () => `<!DOCTYPE html>
   </head>
   <body>
     <div class="crm-live">
+      <div class="crm-live-controls" aria-label="Controles da rotação">
+        <button class="crm-live-control" type="button" data-crm-live-prev aria-label="Tela anterior">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+        </button>
+        <button class="crm-live-control" type="button" data-crm-live-next aria-label="Próxima tela">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8.59 16.59 1.41 1.41 6-6-6-6-1.41 1.41L13.17 12z"/></svg>
+        </button>
+        <button class="crm-live-control is-toggle" type="button" data-crm-live-toggle data-state="running" aria-label="Pausar rotação">
+          <span data-crm-live-toggle-icon>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5h3v14H8zm5 0h3v14h-3z"/></svg>
+          </span>
+        </button>
+        <span class="crm-live-pause-indicator" data-crm-live-paused-indicator aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M8 5h3v14H8zm5 0h3v14h-3z"/></svg>
+        </span>
+      </div>
       <div class="crm-live-stage" data-crm-live-root>
         <div class="crm-live-empty" data-crm-live-empty>Carregando CRM Live…</div>
       </div>
@@ -965,25 +1052,31 @@ const buildHtml = () => `<!DOCTYPE html>
     </div>
     <script>
       (() => {
+        const crmLiveEl = document.querySelector('.crm-live');
         const root = document.querySelector('[data-crm-live-root]');
         const interruptionEl = document.querySelector('[data-crm-live-interruption]');
         const statusEl = document.querySelector('[data-crm-live-status]');
         const dotsEl = document.querySelector('[data-crm-live-dots]');
         const emptyEl = document.querySelector('[data-crm-live-empty]');
+        const prevButton = document.querySelector('[data-crm-live-prev]');
+        const nextButton = document.querySelector('[data-crm-live-next]');
+        const toggleButton = document.querySelector('[data-crm-live-toggle]');
+        const toggleIconEl = document.querySelector('[data-crm-live-toggle-icon]');
         const ROTATE_MS = 10000;
         const POLL_MS = 120000;
         const EVENT_POLL_MS = 25000;
         const EVENT_SCREEN_MS = 20000;
         let payload = null;
         let active = 0;
-        let rotateTimer = null;
         let pollTimer = null;
         let eventPollTimer = null;
-        let interruptionTimer = null;
+        let countdownTimer = null;
         let imageCache = new Map();
         let screenKeys = [];
-        let eventQueue = [];
         let activeInterruption = null;
+        let rotationPaused = false;
+        const buildScreenKeys = ${buildScreenKeys.toString()};
+        const createCrmLiveLoopController = ${createCrmLiveLoopController.toString()};
 
         console.log('[crm-live] viewport', {
           innerWidth: window.innerWidth,
@@ -1110,6 +1203,9 @@ const buildHtml = () => `<!DOCTYPE html>
           return includeTime ? formatted + ' · 23:59' : formatted;
         };
         const safeArray = (value) => Array.isArray(value) ? value : [];
+        const renderToggleIcon = (paused) => paused
+          ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7z"/></svg>'
+          : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5h3v14H8zm5 0h3v14h-3z"/></svg>';
         const getPhotoUrl = (row) => {
           if (!row || typeof row !== 'object') return '';
           return String(row.photoURL || row.photoUrl || '').trim();
@@ -1221,6 +1317,14 @@ const buildHtml = () => `<!DOCTYPE html>
             photoURL: getNested(event, ['payload', 'photoURL'], ''),
           }));
           preloadImages(rows);
+        };
+        const syncRotationUi = () => {
+          if (crmLiveEl) crmLiveEl.classList.toggle('is-rotation-paused', rotationPaused);
+          if (toggleButton) {
+            toggleButton.dataset.state = rotationPaused ? 'paused' : 'running';
+            toggleButton.setAttribute('aria-label', rotationPaused ? 'Continuar rotação' : 'Pausar rotação');
+          }
+          if (toggleIconEl) toggleIconEl.innerHTML = renderToggleIcon(rotationPaused);
         };
         const renderDots = () => {
           dotsEl.innerHTML = safeArray(screenKeys).map((_, index) => '<span class="crm-live-dot ' + (index === active ? 'is-active' : '') + '"></span>').join('');
@@ -1340,7 +1444,7 @@ const buildHtml = () => `<!DOCTYPE html>
           const countdown = formatWeekCountdown(parseDateKeyAtEnd(endDateKey));
           const progress = weekElapsedProgress(startDateKey, endDateKey);
           const barColor = progress > 85 ? 'var(--accent)' : progress >= 60 ? 'var(--accent)' : 'rgba(255,255,255,.55)';
-          const countColor = progress > 85 ? 'var(--accent)' : 'var(--text-primary)';
+          const countColor = progress > 85 ? 'var(--accent)' : 'var(--text)';
           return '<section class="crm-live-screen">' +
           '<div class="crm-live-shell">' +
             '<div class="crm-live-head">' +
@@ -1349,13 +1453,13 @@ const buildHtml = () => `<!DOCTYPE html>
             '<div class="crm-live-body crm-live-week-grid">' +
               '<div class="crm-live-center">' +
                 '<div class="crm-live-metric-label">A semana termina em</div>' +
-                '<div class="crm-live-week-countdown-main" style="color:' + escapeHtml(countColor) + '">' +
-                  '<span class="crm-live-week-countdown-number">' + escapeHtml(countdown.primaryNumber) + '</span>' +
-                  '<span class="crm-live-week-countdown-unit">' + escapeHtml(countdown.primaryUnit) + '</span>' +
-                  '<span class="crm-live-week-countdown-number">' + escapeHtml(countdown.secondaryNumber) + '</span>' +
-                  '<span class="crm-live-week-countdown-unit">' + escapeHtml(countdown.secondaryUnit) + '</span>' +
+                '<div class="crm-live-week-countdown-main" style="color:' + escapeHtml(countColor) + '" data-crm-live-week-countdown data-start-date-key="' + escapeHtml(startDateKey) + '" data-end-date-key="' + escapeHtml(endDateKey) + '">' +
+                  '<span class="crm-live-week-countdown-number" data-crm-live-week-primary-number>' + escapeHtml(countdown.primaryNumber) + '</span>' +
+                  '<span class="crm-live-week-countdown-unit" data-crm-live-week-primary-unit>' + escapeHtml(countdown.primaryUnit) + '</span>' +
+                  '<span class="crm-live-week-countdown-number" data-crm-live-week-secondary-number>' + escapeHtml(countdown.secondaryNumber) + '</span>' +
+                  '<span class="crm-live-week-countdown-unit" data-crm-live-week-secondary-unit>' + escapeHtml(countdown.secondaryUnit) + '</span>' +
                 '</div>' +
-                '<div class="crm-live-week-countdown-progress"><span style="width:' + clampPercent(progress).toFixed(1) + '%; background:' + escapeHtml(barColor) + '"></span></div>' +
+                '<div class="crm-live-week-countdown-progress"><span data-crm-live-week-progress style="width:' + clampPercent(progress).toFixed(1) + '%; background:' + escapeHtml(barColor) + '"></span></div>' +
                 '<div class="crm-live-week-countdown-scale"><span>' + escapeHtml(weekdayDateLabel(startDateKey)) + '</span><span>' + escapeHtml(weekdayDateLabel(endDateKey, { includeTime: true })) + '</span></div>' +
               '</div>' +
             '</div>' +
@@ -1562,52 +1666,64 @@ const buildHtml = () => `<!DOCTYPE html>
           if (!interruptionEl) return;
           interruptionEl.classList.remove('is-visible');
           interruptionEl.innerHTML = '';
-          activeInterruption = null;
         };
-        const pauseRotation = () => {
-          if (rotateTimer) {
-            clearInterval(rotateTimer);
-            rotateTimer = null;
-          }
-        };
-        const playNextInterruption = () => {
-          if (activeInterruption || !eventQueue.length) return;
-          activeInterruption = eventQueue.shift();
-          pauseRotation();
-          renderInterruption(activeInterruption);
-          if (interruptionTimer) clearTimeout(interruptionTimer);
-          interruptionTimer = setTimeout(() => {
-            clearInterruption();
-            if (eventQueue.length) {
-              playNextInterruption();
-            } else if (payload) {
-              render();
-              scheduleRotation();
+        const refreshWeekCountdown = () => {
+          if (!root) return;
+          const countdownNodes = root.querySelectorAll('[data-crm-live-week-countdown]');
+          countdownNodes.forEach((node) => {
+            const startDateKey = String(node.getAttribute('data-start-date-key') || '');
+            const endDateKey = String(node.getAttribute('data-end-date-key') || '');
+            const countdown = formatWeekCountdown(parseDateKeyAtEnd(endDateKey));
+            const progress = weekElapsedProgress(startDateKey, endDateKey);
+            const barColor = progress > 85 ? 'var(--accent)' : progress >= 60 ? 'var(--accent)' : 'rgba(255,255,255,.55)';
+            const countColor = progress > 85 ? 'var(--accent)' : 'var(--text)';
+            const primaryNumber = node.querySelector('[data-crm-live-week-primary-number]');
+            const primaryUnit = node.querySelector('[data-crm-live-week-primary-unit]');
+            const secondaryNumber = node.querySelector('[data-crm-live-week-secondary-number]');
+            const secondaryUnit = node.querySelector('[data-crm-live-week-secondary-unit]');
+            const progressEl = node.parentElement ? node.parentElement.querySelector('[data-crm-live-week-progress]') : null;
+            if (primaryNumber) primaryNumber.textContent = countdown.primaryNumber;
+            if (primaryUnit) primaryUnit.textContent = countdown.primaryUnit;
+            if (secondaryNumber) secondaryNumber.textContent = countdown.secondaryNumber;
+            if (secondaryUnit) secondaryUnit.textContent = countdown.secondaryUnit;
+            node.style.color = countColor;
+            if (progressEl) {
+              progressEl.style.width = clampPercent(progress).toFixed(1) + '%';
+              progressEl.style.background = barColor;
             }
-          }, EVENT_SCREEN_MS);
+          });
         };
+        const rotationController = createCrmLiveLoopController({
+          rotateMs: ROTATE_MS,
+          eventScreenMs: EVENT_SCREEN_MS,
+          buildKeys: (currentPayload) => buildScreenKeys(currentPayload, { getNested, safeArray }),
+          onScreenChange: (state) => {
+            active = state.activeIndex;
+            screenKeys = state.screenKeys;
+            rotationPaused = state.paused;
+            syncRotationUi();
+            if (payload && !activeInterruption) {
+              render();
+              refreshWeekCountdown();
+            }
+          },
+          onInterruptionStart: (event) => {
+            activeInterruption = event;
+            renderInterruption(event);
+            syncRotationUi();
+          },
+          onInterruptionEnd: () => {
+            clearInterruption();
+            activeInterruption = null;
+            syncRotationUi();
+            if (payload) {
+              render();
+              refreshWeekCountdown();
+            }
+          },
+        });
         const enqueueEvents = (events = []) => {
-          const currentIds = new Set([activeInterruption?.id, ...eventQueue.map((event) => event?.id)].filter(Boolean));
-          safeArray(events).forEach((event) => {
-            if (!event || !event.id || currentIds.has(event.id)) return;
-            currentIds.add(event.id);
-            eventQueue.push(event);
-          });
-          if (!activeInterruption) playNextInterruption();
-        };
-        const buildScreenKeys = (currentPayload) => {
-          const keys = ['closers', 'sdrs', 'goal', 'week'];
-          if (Number(getNested(currentPayload, ['weekly', 'team', 'sdrs', 'targetValue'], 0)) > 0) keys.push('team_sdr');
-          if (safeArray(getNested(currentPayload, ['pipeline', 'rows'], [])).length) keys.push('pipeline');
-          safeArray(getNested(currentPayload, ['news'], [])).forEach((item, index) => {
-            if (item && item.type) keys.push('news_' + index);
-          });
-          const closerHighlight = getNested(currentPayload, ['highlights', 'closer'], null);
-          const sdrHighlight = getNested(currentPayload, ['highlights', 'sdr'], null);
-          if (closerHighlight && Number(closerHighlight.dailyValue || 0) > 0) keys.push('highlight_closer');
-          if (sdrHighlight && Number(sdrHighlight.dailyValue || 0) > 0) keys.push('highlight_sdr');
-          keys.push('duel');
-          return keys;
+          rotationController.enqueueEvents(events);
         };
         const render = () => {
           if (!payload) return;
@@ -1707,13 +1823,7 @@ const buildHtml = () => `<!DOCTYPE html>
           };
         };
         const rotate = () => {
-          if (!payload) return;
-          active = (active + 1) % screenKeys.length;
-          render();
-        };
-        const scheduleRotation = () => {
-          if (rotateTimer) clearInterval(rotateTimer);
-          rotateTimer = setInterval(rotate, ROTATE_MS);
+          rotationController.step(1);
         };
         const saveLastGood = (data) => {
           try { localStorage.setItem('crmLive:lastGood', JSON.stringify(data)); } catch {}
@@ -1765,8 +1875,8 @@ const buildHtml = () => `<!DOCTYPE html>
             payload = data;
             preloadFromPayload(data);
             saveLastGood(data);
-            render();
-            scheduleRotation();
+            rotationController.setPayload(data);
+            refreshWeekCountdown();
             const status = buildStatusText(data, false);
             setStatus(status.text, status.tone);
           } catch (error) {
@@ -1774,8 +1884,8 @@ const buildHtml = () => `<!DOCTYPE html>
             if (fallback) {
               payload = fallback;
               preloadFromPayload(fallback);
-              render();
-              if (!activeInterruption) scheduleRotation();
+              rotationController.setPayload(fallback);
+              refreshWeekCountdown();
               const status = buildStatusText(fallback, true);
               setStatus(status.text, status.tone);
               return;
@@ -1800,12 +1910,41 @@ const buildHtml = () => `<!DOCTYPE html>
         pollTimer = setInterval(loadData, POLL_MS);
         loadEvents();
         eventPollTimer = setInterval(loadEvents, EVENT_POLL_MS);
+        countdownTimer = setInterval(refreshWeekCountdown, 1000);
+        const handleManualStep = (direction) => {
+          rotationController.step(direction);
+        };
+        const handleTogglePause = () => {
+          rotationController.togglePaused();
+        };
+        if (prevButton) prevButton.addEventListener('click', () => handleManualStep(-1));
+        if (nextButton) nextButton.addEventListener('click', () => handleManualStep(1));
+        if (toggleButton) toggleButton.addEventListener('click', handleTogglePause);
+        document.addEventListener('keydown', (event) => {
+          const key = String(event.key || '');
+          if (key === 'ArrowLeft') {
+            event.preventDefault();
+            handleManualStep(-1);
+            return;
+          }
+          if (key === 'ArrowRight') {
+            event.preventDefault();
+            handleManualStep(1);
+            return;
+          }
+          if (key === ' ' || key === 'Spacebar' || key === 'Enter' || key === 'NumpadEnter') {
+            event.preventDefault();
+            handleTogglePause();
+          }
+        });
         document.addEventListener('visibilitychange', () => {
           if (!document.hidden) {
             loadData();
             loadEvents();
+            refreshWeekCountdown();
           }
         });
+        syncRotationUi();
       })();
     </script>
   </body>
