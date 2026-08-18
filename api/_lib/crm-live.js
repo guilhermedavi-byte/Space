@@ -422,6 +422,15 @@ const fetchCrmBusinessesLegacy = async ({ startDateKey, lastMovedAfter = "", sta
       const error = new Error("crm_window_fetch_failed");
       error.status = res.status || 500;
       error.details = res.data || res.text || null;
+      error.elapsedMs = Date.now() - startedAt;
+      error.request = {
+        startDateKey: safeString(startDateKey),
+        lastMovedAfter: since,
+        status: safeString(status),
+        skip,
+        take,
+        page: pages + 1,
+      };
       throw error;
     }
     const items = extractBusinessesArray(res.data);

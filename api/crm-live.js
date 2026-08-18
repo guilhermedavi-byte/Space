@@ -921,6 +921,49 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
         letter-spacing: -.04em;
         font-weight: 500;
       }
+      .crm-live-degraded {
+        height: 100%;
+        display: grid;
+        align-content: center;
+        justify-items: start;
+        gap: 2.2vh;
+      }
+      .crm-live-degraded-card {
+        width: min(64vw, 100%);
+        display: grid;
+        gap: 1.6vh;
+        padding: 3.2vh 3vw;
+        border-radius: 2.4vh;
+        background: rgba(255,255,255,.04);
+        border: 1px solid rgba(255,255,255,.08);
+      }
+      .crm-live-degraded-kicker {
+        color: var(--accent);
+        font-size: 2vh;
+        line-height: 1.35;
+        letter-spacing: .24em;
+        text-transform: uppercase;
+        font-weight: 500;
+      }
+      .crm-live-degraded-title {
+        font-size: 7.4vh;
+        line-height: .94;
+        letter-spacing: -.06em;
+        font-weight: 500;
+      }
+      .crm-live-degraded-body {
+        color: var(--text-secondary);
+        font-size: 3.2vh;
+        line-height: 1.38;
+        max-width: 48vw;
+      }
+      .crm-live-degraded-meta {
+        display: grid;
+        gap: .8vh;
+        color: var(--text-tertiary);
+        font-size: 2.2vh;
+        line-height: 1.35;
+      }
       .crm-live-interruption {
         position: absolute;
         inset: 0;
@@ -1251,6 +1294,26 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
         let activeInterruption = null;
         let rotationPaused = false;
         let deadlineSplitActive = false;
+        const sourceState = {
+          data: {
+            state: 'idle',
+            lastAttemptAt: '',
+            lastSuccessAt: '',
+            lastFailureAt: '',
+            errorCode: '',
+            errorMessage: '',
+            status: 0,
+          },
+          events: {
+            state: 'idle',
+            lastAttemptAt: '',
+            lastSuccessAt: '',
+            lastFailureAt: '',
+            errorCode: '',
+            errorMessage: '',
+            status: 0,
+          },
+        };
         const buildScreenKeys = ${buildScreenKeys.toString()};
         const createCrmLiveLoopController = ${createCrmLiveLoopController.toString()};
         const createCrmLiveBuildReloadCoordinator = ${createCrmLiveBuildReloadCoordinator.toString()};
@@ -1596,8 +1659,80 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
           }));
           preloadImages(rows);
         };
+        const markSourceAttempt = (sourceName) => {
+          const entry = sourceState[sourceName];
+          if (!entry) return;
+          entry.state = entry.lastSuccessAt ? 'refreshing' : 'loading';
+          entry.lastAttemptAt = new Date().toISOString();
+          entry.errorCode = '';
+          entry.errorMessage = '';
+          entry.status = 0;
+        };
+        const markSourceSuccess = (sourceName) => {
+          const entry = sourceState[sourceName];
+          if (!entry) return;
+          const nowIso = new Date().toISOString();
+          entry.state = 'ready';
+          entry.lastAttemptAt = nowIso;
+          entry.lastSuccessAt = nowIso;
+          entry.lastFailureAt = '';
+          entry.errorCode = '';
+          entry.errorMessage = '';
+          entry.status = 0;
+        };
+        const markSourceFailure = (sourceName, error) => {
+          const entry = sourceState[sourceName];
+          if (!entry) return;
+          const nowIso = new Date().toISOString();
+          entry.state = 'error';
+          entry.lastAttemptAt = entry.lastAttemptAt || nowIso;
+          entry.lastFailureAt = nowIso;
+          entry.errorCode = String(error && (error.errorCode || error.code || error.error) || '').trim();
+          entry.errorMessage = String(error && error.message || '').trim();
+          entry.status = Number(error && error.status || 0) || 0;
+        };
+        const hasSourceFailure = (sourceName) => {
+          const entry = sourceState[sourceName];
+          return !!(entry && entry.state === 'error');
+        };
+        const describeSourceFailure = (sourceName) => {
+          const entry = sourceState[sourceName] || {};
+          const attemptedAt = entry.lastAttemptAt ? dateTimeLabel(entry.lastAttemptAt) : 'agora há pouco';
+          if (sourceName === 'events') {
+            if (entry.errorCode === 'crm_window_fetch_failed') {
+              return {
+                title: 'Interrupções indisponíveis',
+                body: 'O feed de eventos não respondeu agora. A rotação principal continua ativa enquanto tentamos de novo automaticamente.',
+                detail: 'Última tentativa: ' + attemptedAt + (entry.status ? ' · HTTP ' + String(entry.status) : ''),
+              };
+            }
+            if (entry.status === 401 || entry.errorCode === 'unauthorized' || entry.errorCode === 'missing_cookie') {
+              return {
+                title: 'Interrupções sem autorização',
+                body: 'O feed de eventos perdeu acesso. O placar segue no ar com os dados principais já carregados.',
+                detail: 'Última tentativa: ' + attemptedAt + (entry.status ? ' · HTTP ' + String(entry.status) : ''),
+              };
+            }
+            return {
+              title: 'Interrupções indisponíveis',
+              body: entry.errorMessage || 'O feed de eventos falhou nesta tentativa. O placar continua rodando e vamos tentar de novo sem bloquear a TV.',
+              detail: 'Última tentativa: ' + attemptedAt + (entry.status ? ' · HTTP ' + String(entry.status) : ''),
+            };
+          }
+          return {
+            title: 'Dados principais indisponíveis',
+            body: entry.errorMessage || 'Os dados principais do CRM Live falharam nesta tentativa.',
+            detail: 'Última tentativa: ' + attemptedAt + (entry.status ? ' · HTTP ' + String(entry.status) : ''),
+          };
+        };
+        const buildAuxiliaryScreenKeys = () => {
+          const keys = [];
+          if (hasSourceFailure('events')) keys.push('events_status');
+          if (hasSourceFailure('data') && payload) keys.push('data_status');
+          return keys;
+        };
         const resolveVisibleScreenKeys = (currentPayload, referenceNow = new Date()) => {
-          const keys = buildScreenKeys(currentPayload, { getNested, safeArray });
+          const keys = buildScreenKeys(currentPayload, { getNested, safeArray }).concat(buildAuxiliaryScreenKeys());
           const deadlineState = getDeadlineStateFromPayload(currentPayload, referenceNow);
           return deadlineState.splitActive ? keys.filter((key) => key !== 'week') : keys;
         };
@@ -1797,6 +1932,28 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
                     '<div class="crm-live-support-item"><strong>' + escapeHtml(moneyShort(pace.requiredPerDay || 0)) + '</strong><span>Ritmo necessário por dia</span></div>' +
                     '<div class="crm-live-support-item"><strong>' + escapeHtml(moneyShort(team.targetValue || 0)) + '</strong><span>Meta da semana</span></div>' +
                     '<div class="crm-live-support-item"><div class="crm-live-state-pill ' + (pace.abovePace ? 'is-success' : 'is-danger') + '"><strong>' + escapeHtml(pace.abovePace ? 'ACIMA' : 'ABAIXO') + '</strong><span>do ritmo</span></div><span>' + escapeHtml((pace.abovePace ? '+' : '') + moneyShort(pace.delta || 0) + ' vs esperado hoje') + '</span></div>' +
+                  '</div>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+          '</section>';
+        };
+        const renderSourceStatusScreen = (sourceName) => {
+          const copy = describeSourceFailure(sourceName);
+          return '<section class="crm-live-screen">' +
+            '<div class="crm-live-shell">' +
+              '<div class="crm-live-head">' +
+                '<h1 class="crm-live-title">Monitoramento da rotação</h1>' +
+              '</div>' +
+              '<div class="crm-live-body">' +
+                '<div class="crm-live-degraded">' +
+                  '<div class="crm-live-degraded-card">' +
+                    '<div class="crm-live-degraded-kicker">Modo degradado</div>' +
+                    '<div class="crm-live-degraded-title">' + escapeHtml(copy.title) + '</div>' +
+                    '<div class="crm-live-degraded-body">' + escapeHtml(copy.body) + '</div>' +
+                    '<div class="crm-live-degraded-meta">' +
+                      '<div>' + escapeHtml(copy.detail) + '</div>' +
+                    '</div>' +
                   '</div>' +
                 '</div>' +
               '</div>' +
@@ -2117,6 +2274,8 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
               target: getNested(weekly, ['team', 'sdrs', 'targetValue'], 0),
               noun: 'reuniões feitas na semana',
             }),
+            events_status: renderSourceStatusScreen('events'),
+            data_status: renderSourceStatusScreen('data'),
             pipeline: renderPipelineScreen(pipeline),
             highlight_closer: renderHighlightScreen({ title: 'Closer destaque de ontem', row: highlight.closer, role: 'closer' }),
             highlight_sdr: renderHighlightScreen({ title: 'SDR destaque de ontem', row: highlight.sdr, role: 'sdr' }),
@@ -2237,6 +2396,7 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
           };
         };
         const loadData = async () => {
+          markSourceAttempt('data');
           try {
             const res = await fetch('/api/crm-live-data', { credentials: 'include', cache: 'no-store' });
             let data = null;
@@ -2251,6 +2411,7 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
               err.errorCode = getNested(data, ['error'], '') || '';
               throw err;
             }
+            markSourceSuccess('data');
             buildReloadCoordinator.queueReloadIfNeeded(getNested(data, ['buildId'], ''));
             payload = data;
             preloadFromPayload(data);
@@ -2261,6 +2422,7 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
             const status = buildStatusText(data, false);
             setStatus(status.text, status.tone);
           } catch (error) {
+            markSourceFailure('data', error);
             const fallback = loadLastGood();
             if (fallback) {
               payload = fallback;
@@ -2278,14 +2440,29 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
           }
         };
         const loadEvents = async () => {
+          markSourceAttempt('events');
           try {
             const res = await fetch('/api/crm-live-events', { credentials: 'include', cache: 'no-store' });
             const data = await res.json().catch(() => null);
-            if (!res.ok || !data) return;
+            if (!res.ok || !data) {
+              const err = new Error(getNested(data, ['message'], 'crm_live_events_failed') || 'crm_live_events_failed');
+              err.status = res.status;
+              err.errorCode = getNested(data, ['error'], '') || '';
+              throw err;
+            }
+            markSourceSuccess('events');
             if (data.coldStart) return;
             preloadFromEvents(data.events || []);
             enqueueEvents(data.events || []);
+            if (payload) rotationController.setPayload(payload);
           } catch (error) {
+            markSourceFailure('events', error);
+            console.warn('[crm-live] events source degraded', {
+              status: Number(error && error.status || 0) || 0,
+              errorCode: String(error && (error.errorCode || error.code || error.error) || ''),
+              message: String(error && error.message || ''),
+            });
+            if (payload) rotationController.setPayload(payload);
           }
         };
         loadData();

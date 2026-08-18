@@ -85,6 +85,7 @@ module.exports = async (req, res) => {
   const auth = await canReadCrmLive(req);
   if (!auth?.ok) return sendJson(res, auth?.status || 401, { error: auth?.error || "unauthorized" });
 
+  const startedAt = Date.now();
   try {
     const now = new Date();
     const [goal, globalConfig, people, detectorStateSnap] = await Promise.all([
@@ -182,7 +183,14 @@ module.exports = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("[crm-live-events] detector failed", error);
+    console.error("[crm-live-events] detector failed", {
+      status: Number(error?.status || 0) || 500,
+      code: error?.code || error?.error || error?.message || "crm_live_events_failed",
+      message: error?.message || "Não foi possível processar as interrupções do CRM Live agora.",
+      elapsedMs: Number(error?.elapsedMs || 0) || (Date.now() - startedAt),
+      upstream: error?.request || null,
+      details: error?.details || null,
+    });
     return sendJson(res, error?.status || 500, {
       error: error?.code || error?.error || "crm_live_events_failed",
       message: error?.message || "Não foi possível processar as interrupções do CRM Live agora.",
