@@ -293,7 +293,6 @@ const bootCrmLive = async ({ dataResponse, eventsResponse }) => {
     parseFloat,
     encodeURIComponent,
     decodeURIComponent,
-    clamp: (value, min, max) => Math.min(max, Math.max(min, value)),
     console: {
       log() {},
       warn() {},
@@ -354,4 +353,15 @@ test('fonte não-crítica em erro renderiza estado degradado e continua na rota�
   booted.nextButton.click();
 
   assert.match(booted.root.innerHTML, /Monitoramento da rotação/);
+});
+
+test('HTML servido executa o script do cliente sem exceção e monta ao menos uma tela', async () => {
+  const booted = await bootCrmLive({
+    dataResponse: { ok: true, status: 200, body: createPayload() },
+    eventsResponse: { ok: true, status: 200, body: { coldStart: true, events: [] } },
+  });
+
+  const screenCount = (booted.root.innerHTML.match(/crm-live-screen/g) || []).length;
+  assert.ok(screenCount > 0);
+  assert.doesNotMatch(booted.root.innerHTML, /Carregando CRM Live/);
 });

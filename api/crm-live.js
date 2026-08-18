@@ -1442,6 +1442,7 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
           const formatted = weekday + ', ' + dateLabel(dateKey);
           return includeTime ? formatted + ' · 23:59' : formatted;
         };
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
         const lerp = (start, end, t) => start + ((end - start) * t);
         const resolvePulseVisuals = (remainingClampedMs) => {
           const hour = 60 * 60 * 1000;
@@ -1731,10 +1732,88 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
           if (hasSourceFailure('data') && payload) keys.push('data_status');
           return keys;
         };
+        const createDeadlineFallbackState = () => ({
+          splitActive: false,
+          deadlineReached: false,
+          remainingMs: 0,
+          remainingClampedMs: 0,
+          progressPct: 0,
+          urgencyLevel: 'normal',
+          hours: '00',
+          minutes: '00',
+          seconds: '00',
+          label: 'para fechar a semana',
+          statusText: 'semana indisponível',
+          pointerOffsetMs: 0,
+          driftX: 0,
+          driftY: 0,
+          accentAlpha: 0.58,
+          pulseDurationMs: 5600,
+          pulseMinOpacity: 0.78,
+          pulseMaxOpacity: 0.88,
+          pulseBrightnessMin: 0.84,
+          pulseBrightnessMax: 0.94,
+          textAlpha: 0.78,
+        });
+        const getDeadlineStateSafely = (currentPayload, referenceNow = new Date()) => {
+          try {
+            return getDeadlineStateFromPayload(currentPayload, referenceNow);
+          } catch (error) {
+            console.error('[crm-live] deadline state failed', error);
+            return createDeadlineFallbackState();
+          }
+        };
+        const resolveScreenCandidates = (currentPayload) => {
+          const candidates = [];
+          const addCandidate = (key, include, reason = '') => {
+            candidates.push({ key, include: !!include, reason: String(reason || '') });
+          };
+          const safePredicate = (key, predicate, reason) => {
+            try {
+              addCandidate(key, predicate(), reason);
+            } catch (error) {
+              console.error('[crm-live] screen predicate failed', { key, error });
+              addCandidate(key, false, 'predicate_failed');
+            }
+          };
+          addCandidate('closers', true, '');
+          addCandidate('sdrs', true, '');
+          addCandidate('goal', true, '');
+          addCandidate('week', true, '');
+          safePredicate('team_sdr', () => Number(getNested(currentPayload, ['weekly', 'team', 'sdrs', 'targetValue'], 0)) > 0, 'no_team_sdr_target');
+          safePredicate('pipeline', () => safeArray(getNested(currentPayload, ['pipeline', 'rows'], [])).length > 0, 'empty_pipeline');
+          safeArray(getNested(currentPayload, ['news'], [])).forEach((item, index) => {
+            safePredicate('news_' + index, () => !!(item && item.type), 'news_without_type');
+          });
+          safePredicate('highlight_closer', () => {
+            const closerHighlight = getNested(currentPayload, ['highlights', 'closer'], null);
+            return !!(closerHighlight && Number(closerHighlight.dailyValue || 0) > 0);
+          }, 'empty_closer_highlight');
+          safePredicate('highlight_sdr', () => {
+            const sdrHighlight = getNested(currentPayload, ['highlights', 'sdr'], null);
+            return !!(sdrHighlight && Number(sdrHighlight.dailyValue || 0) > 0);
+          }, 'empty_sdr_highlight');
+          addCandidate('duel', true, '');
+          buildAuxiliaryScreenKeys().forEach((key) => addCandidate(key, true, ''));
+          return candidates;
+        };
         const resolveVisibleScreenKeys = (currentPayload, referenceNow = new Date()) => {
-          const keys = buildScreenKeys(currentPayload, { getNested, safeArray }).concat(buildAuxiliaryScreenKeys());
-          const deadlineState = getDeadlineStateFromPayload(currentPayload, referenceNow);
-          return deadlineState.splitActive ? keys.filter((key) => key !== 'week') : keys;
+          const candidates = resolveScreenCandidates(currentPayload);
+          const deadlineState = getDeadlineStateSafely(currentPayload, referenceNow);
+          const keys = [];
+          candidates.forEach((candidate) => {
+            if (!candidate || !candidate.key) return;
+            if (!candidate.include) {
+              console.warn('[crm-live] screen discarded', { key: candidate.key, reason: candidate.reason || 'excluded' });
+              return;
+            }
+            if (deadlineState.splitActive && candidate.key === 'week') {
+              console.warn('[crm-live] screen discarded', { key: candidate.key, reason: 'deadline_split_active' });
+              return;
+            }
+            keys.push(candidate.key);
+          });
+          return keys.length ? keys : ['boot_error'];
         };
         const syncRotationUi = () => {
           buildReloadCoordinator.setPaused(rotationPaused);
@@ -1960,6 +2039,16 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
             '</div>' +
           '</section>';
         };
+        const renderBootErrorScreen = (message = '') => '<section class="crm-live-screen">' +
+          '<div class="crm-live-shell">' +
+            '<div class="crm-live-head">' +
+              '<h1 class="crm-live-title">CRM Live indisponível</h1>' +
+            '</div>' +
+            '<div class="crm-live-body">' +
+              '<div class="crm-live-empty"><div><strong>Não foi possível montar a rotação</strong><div>' + escapeHtml(message || 'Uma ou mais telas falharam ao carregar. O painel vai tentar novamente automaticamente.') + '</div></div></div>' +
+            '</div>' +
+          '</div>' +
+        '</section>';
         const renderWeekScreen = (weekly) => {
           const startDateKey = getNested(weekly, ['commercialWeek', 'startDateKey'], '');
           const endDateKey = getNested(weekly, ['commercialWeek', 'endDateKey'], '');
@@ -2254,36 +2343,62 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
         };
         const render = () => {
           if (!payload) return;
-          const month = payload.month || {};
           const weekly = payload.weekly || {};
           const highlight = payload.highlights || {};
           const pipeline = payload.pipeline || {};
           const news = safeArray(payload.news);
           screenKeys = safeArray(screenKeys).length ? safeArray(screenKeys) : resolveVisibleScreenKeys(payload, new Date());
-          if (!screenKeys.length) screenKeys = ['goal'];
+          if (!screenKeys.length) screenKeys = ['boot_error'];
           if (active >= screenKeys.length) active = 0;
-          const screens = {
-            goal: renderGoalScreen(weekly),
-            week: renderWeekScreen(weekly),
-            closers: renderRankingScreen({ title: 'Ranking dos closers', rows: weekly.closers, role: 'closer' }),
-            sdrs: renderRankingScreen({ title: 'Ranking dos SDRs', rows: weekly.sdrs, role: 'sdr' }),
-            duel: renderClosersScreen(weekly),
-            team_sdr: renderTeamProgressScreen({
+          const screenBuilders = {
+            goal: () => renderGoalScreen(weekly),
+            week: () => renderWeekScreen(weekly),
+            closers: () => renderRankingScreen({ title: 'Ranking dos closers', rows: weekly.closers, role: 'closer' }),
+            sdrs: () => renderRankingScreen({ title: 'Ranking dos SDRs', rows: weekly.sdrs, role: 'sdr' }),
+            duel: () => renderClosersScreen(weekly),
+            team_sdr: () => renderTeamProgressScreen({
               title: 'Meta de reuniões do time',
               actual: getNested(weekly, ['team', 'sdrs', 'actualValue'], 0),
               target: getNested(weekly, ['team', 'sdrs', 'targetValue'], 0),
               noun: 'reuniões feitas na semana',
             }),
-            events_status: renderSourceStatusScreen('events'),
-            data_status: renderSourceStatusScreen('data'),
-            pipeline: renderPipelineScreen(pipeline),
-            highlight_closer: renderHighlightScreen({ title: 'Closer destaque de ontem', row: highlight.closer, role: 'closer' }),
-            highlight_sdr: renderHighlightScreen({ title: 'SDR destaque de ontem', row: highlight.sdr, role: 'sdr' }),
+            events_status: () => renderSourceStatusScreen('events'),
+            data_status: () => renderSourceStatusScreen('data'),
+            pipeline: () => renderPipelineScreen(pipeline),
+            highlight_closer: () => renderHighlightScreen({ title: 'Closer destaque de ontem', row: highlight.closer, role: 'closer' }),
+            highlight_sdr: () => renderHighlightScreen({ title: 'SDR destaque de ontem', row: highlight.sdr, role: 'sdr' }),
+            boot_error: () => renderBootErrorScreen(),
           };
           news.forEach((item, index) => {
-            screens['news_' + index] = renderNewsScreen(item);
+            screenBuilders['news_' + index] = () => renderNewsScreen(item);
           });
-          root.innerHTML = safeArray(screenKeys).map((key, index) => screens[key].replace('<section class="crm-live-screen">', '<section class="crm-live-screen ' + (index === active ? 'is-active' : '') + '">')).join('');
+          const renderedScreens = [];
+          safeArray(screenKeys).forEach((key, index) => {
+            const builder = screenBuilders[key];
+            if (typeof builder !== 'function') {
+              console.warn('[crm-live] screen discarded', { key, reason: 'missing_builder' });
+              return;
+            }
+            try {
+              const html = String(builder() || '');
+              if (!html) {
+                console.warn('[crm-live] screen discarded', { key, reason: 'empty_html' });
+                return;
+              }
+              renderedScreens.push(html.replace('<section class="crm-live-screen">', '<section class="crm-live-screen ' + (renderedScreens.length === active ? 'is-active' : '') + '">'));
+            } catch (error) {
+              console.error('[crm-live] screen render failed', { key, error });
+            }
+          });
+          if (!renderedScreens.length) {
+            screenKeys = ['boot_error'];
+            active = 0;
+            root.innerHTML = renderBootErrorScreen('Todas as telas da rotação falharam ao renderizar. A TV continua tentando recuperar automaticamente.');
+            if (dotsEl) dotsEl.innerHTML = '';
+            if (emptyEl) emptyEl.remove();
+            return;
+          }
+          root.innerHTML = renderedScreens.join('');
           renderDots();
           if (emptyEl) emptyEl.remove();
         };
