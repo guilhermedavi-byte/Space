@@ -91,6 +91,8 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
         width: 100%;
         height: 100%;
         overflow: hidden;
+        container-type: inline-size;
+        container-name: crm-live-stage;
       }
       .crm-live-sidepanel {
         display: none;
@@ -181,7 +183,8 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
         box-shadow: 0 0 0 .35vh rgba(255, 86, 79, .14);
       }
       .crm-live.is-deadline-mode .crm-live-controls {
-        right: calc(38% + 3vw);
+        top: 2.8vh;
+        right: 2.8vw;
       }
       .crm-live-screen {
         position: absolute;
@@ -289,6 +292,10 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
         gap: 2vw;
       }
       .crm-live-support-item { display: grid; gap: .8vh; }
+      .crm-live-support-item.is-pace-status {
+        min-width: 0;
+        align-content: start;
+      }
       .crm-live-support-item strong {
         font-size: 5.2vh;
         line-height: .95;
@@ -316,6 +323,26 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
       }
       .crm-live-state-pill strong {
         font-weight: 500;
+      }
+      .crm-live-support-item.is-pace-status .crm-live-state-pill {
+        width: fit-content;
+        max-width: 100%;
+        min-width: 0;
+        padding: .9vh 1.1vw;
+        gap: .5vw;
+        font-size: 2.4vh;
+        flex-wrap: wrap;
+      }
+      .crm-live-support-item.is-pace-status .crm-live-state-pill span,
+      .crm-live-support-item.is-pace-status .crm-live-state-pill strong {
+        white-space: normal;
+      }
+      .crm-live-support-item.is-pace-status > span {
+        max-width: 100%;
+        min-width: 0;
+        font-size: 2.5vh;
+        line-height: 1.28;
+        overflow-wrap: anywhere;
       }
       .crm-live-state-pill.is-success {
         color: var(--success);
@@ -1094,14 +1121,12 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
         text-align: center;
       }
       .crm-live-deadline-ring {
-        --deadline-pct: 100;
-        --deadline-accent: rgba(255, 86, 79, .58);
-        --deadline-track: rgba(255,255,255,.08);
+        --deadline-accent: rgba(255, 86, 79, .76);
         --deadline-pulse-duration: 5600ms;
-        --deadline-pulse-min-opacity: .78;
-        --deadline-pulse-max-opacity: .88;
-        --deadline-pulse-brightness-min: .84;
-        --deadline-pulse-brightness-max: .94;
+        --deadline-pulse-min-opacity: .52;
+        --deadline-pulse-max-opacity: .9;
+        --deadline-pulse-brightness-min: .82;
+        --deadline-pulse-brightness-max: 1.12;
         width: min(32vw, 42vh);
         height: min(32vw, 42vh);
         min-width: 34vh;
@@ -1111,9 +1136,8 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
         display: grid;
         place-items: center;
         background:
-          radial-gradient(circle at center, transparent 61%, rgba(0,0,0,.0) 61%),
-          conic-gradient(from -90deg, var(--deadline-accent) 0 calc(var(--deadline-pct) * 1%), var(--deadline-track) calc(var(--deadline-pct) * 1%) 100%);
-        animation: crm-live-deadline-pulse var(--deadline-pulse-duration) ease-in-out infinite;
+          radial-gradient(circle at center, transparent 57.5%, var(--deadline-accent) 57.5%, var(--deadline-accent) 66%, transparent 66%);
+        animation: crm-live-deadline-siren var(--deadline-pulse-duration) linear infinite;
         will-change: opacity, filter, transform;
       }
       .crm-live-deadline-ring::before {
@@ -1123,26 +1147,6 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
         border-radius: 999px;
         background: rgba(13,16,20,.96);
         box-shadow: inset 0 0 0 1px rgba(255,255,255,.04);
-      }
-      .crm-live-deadline-pointer {
-        position: absolute;
-        inset: 0;
-        animation: crm-live-deadline-pulse var(--deadline-pulse-duration) ease-in-out infinite;
-        transform: rotate(-90deg);
-        transform-origin: 50% 50%;
-        will-change: transform, opacity, filter;
-        transition: none;
-      }
-      .crm-live-deadline-pointer::before {
-        content: "";
-        position: absolute;
-        top: 1.2vh;
-        left: 50%;
-        width: 2px;
-        height: 7.8vh;
-        transform: translateX(-50%);
-        border-radius: 999px;
-        background: linear-gradient(180deg, rgba(255, 145, 139, .98), rgba(255, 86, 79, .16));
       }
       .crm-live-deadline-center {
         position: relative;
@@ -1194,17 +1198,21 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
       .crm-live-deadline.is-expired .crm-live-deadline-ring {
         --deadline-accent: rgba(255, 86, 79, var(--deadline-accent-alpha, .72));
       }
-      .crm-live-deadline.is-expired .crm-live-deadline-pointer {
-        animation-play-state: paused;
-      }
-      @keyframes crm-live-deadline-pulse {
-        0%, 100% {
-          opacity: var(--deadline-pulse-max-opacity);
-          filter: brightness(var(--deadline-pulse-brightness-max)) saturate(1.08);
-        }
-        50% {
+      @keyframes crm-live-deadline-siren {
+        0% {
           opacity: var(--deadline-pulse-min-opacity);
           filter: brightness(var(--deadline-pulse-brightness-min)) saturate(.96);
+          transform: scale(.985);
+        }
+        14% {
+          opacity: var(--deadline-pulse-max-opacity);
+          filter: brightness(var(--deadline-pulse-brightness-max)) saturate(1.12);
+          transform: scale(1);
+        }
+        100% {
+          opacity: var(--deadline-pulse-min-opacity);
+          filter: brightness(var(--deadline-pulse-brightness-min)) saturate(.96);
+          transform: scale(.985);
         }
       }
       @media (prefers-reduced-motion: reduce) {
@@ -1213,6 +1221,239 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
         .crm-live-dot {
           transition: none !important;
         }
+        .crm-live-deadline-ring {
+          animation: none !important;
+          opacity: .92;
+          filter: brightness(1.04) saturate(1.04);
+          transform: none;
+        }
+      }
+      .crm-live.is-deadline-mode .crm-live-title {
+        font-size: clamp(2.8vh, 3.1cqi, 4vh);
+      }
+      .crm-live.is-deadline-mode .crm-live-shell {
+        gap: 1.5vh;
+      }
+      .crm-live.is-deadline-mode .crm-live-center {
+        gap: 2.4vh;
+      }
+      .crm-live.is-deadline-mode .crm-live-stack {
+        gap: 2.2vh;
+      }
+      .crm-live.is-deadline-mode .crm-live-metric-line {
+        gap: 1.1cqi;
+      }
+      .crm-live.is-deadline-mode .crm-live-metric-value {
+        font-size: clamp(12vh, 14cqi, 18vh);
+      }
+      .crm-live.is-deadline-mode .crm-live-metric-value.is-medium {
+        font-size: clamp(8vh, 10cqi, 12vh);
+      }
+      .crm-live.is-deadline-mode .crm-live-metric-value.is-small-hero {
+        font-size: clamp(10vh, 12cqi, 14vh);
+      }
+      .crm-live.is-deadline-mode .crm-live-metric-side strong {
+        font-size: clamp(3vh, 4.2cqi, 5vh);
+      }
+      .crm-live.is-deadline-mode .crm-live-metric-side span {
+        font-size: clamp(2vh, 2.7cqi, 3.2vh);
+      }
+      .crm-live.is-deadline-mode .crm-live-progress,
+      .crm-live.is-deadline-mode .crm-live-team-progress .crm-live-progress,
+      .crm-live.is-deadline-mode .crm-live-week-countdown-progress,
+      .crm-live.is-deadline-mode .crm-live-week-countdown-scale {
+        width: 100%;
+      }
+      .crm-live.is-deadline-mode .crm-live-support-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1.4cqi 1.6cqi;
+      }
+      .crm-live.is-deadline-mode .crm-live-support-item strong {
+        font-size: clamp(3.8vh, 4.6cqi, 5.2vh);
+      }
+      .crm-live.is-deadline-mode .crm-live-support-item span {
+        font-size: clamp(2.1vh, 2.5cqi, 3vh);
+      }
+      .crm-live.is-deadline-mode .crm-live-support-item.is-pace-status {
+        grid-column: 1 / -1;
+      }
+      .crm-live.is-deadline-mode .crm-live-week-grid,
+      .crm-live.is-deadline-mode .crm-live-highlight-grid,
+      .crm-live.is-deadline-mode .crm-live-last-sale-grid {
+        gap: 2.2cqi;
+      }
+      .crm-live.is-deadline-mode .crm-live-news {
+        grid-template-columns: minmax(17cqi, 21cqi) minmax(0, 1fr);
+        gap: 2.2cqi;
+      }
+      .crm-live.is-deadline-mode .crm-live-news-media .crm-live-avatar {
+        width: 17cqi;
+        height: 17cqi;
+        font-size: 3.8cqi;
+      }
+      .crm-live.is-deadline-mode .crm-live-news-phrase,
+      .crm-live.is-deadline-mode .crm-live-news-context {
+        max-width: none;
+      }
+      .crm-live.is-deadline-mode .crm-live-news-phrase {
+        font-size: clamp(5.2vh, 7.3cqi, 9vh);
+      }
+      .crm-live.is-deadline-mode .crm-live-news-context {
+        font-size: clamp(2.2vh, 2.7cqi, 3.2vh);
+      }
+      .crm-live.is-deadline-mode .crm-live-duel {
+        grid-template-columns: minmax(14cqi, 17cqi) minmax(0, 1fr) minmax(14cqi, 17cqi);
+        gap: 2.2cqi;
+      }
+      .crm-live.is-deadline-mode .crm-live-duel-side .crm-live-avatar {
+        width: 13cqi;
+        height: 13cqi;
+        font-size: 3.1cqi;
+      }
+      .crm-live.is-deadline-mode .crm-live-duel-name {
+        font-size: clamp(4vh, 5.1cqi, 5.8vh);
+      }
+      .crm-live.is-deadline-mode .crm-live-duel-sub {
+        font-size: clamp(2vh, 2.3cqi, 3vh);
+      }
+      .crm-live.is-deadline-mode .crm-live-duel-message {
+        font-size: clamp(10vh, 12cqi, 18vh);
+        max-width: none;
+        white-space: normal;
+      }
+      .crm-live.is-deadline-mode .crm-live-duel-context {
+        font-size: clamp(2.2vh, 2.7cqi, 3.4vh);
+        max-width: none;
+      }
+      .crm-live.is-deadline-mode .crm-live-ranking {
+        gap: 1.8vh;
+      }
+      .crm-live.is-deadline-mode .crm-live-ranking.has-three-rows {
+        gap: 1.2vh;
+      }
+      .crm-live.is-deadline-mode .crm-live-ranking-row {
+        gap: 1.2cqi;
+      }
+      .crm-live.is-deadline-mode .crm-live-avatar {
+        width: 8.2cqi;
+        height: 8.2cqi;
+        font-size: 2.1cqi;
+      }
+      .crm-live.is-deadline-mode .crm-live-avatar.is-leader {
+        width: 9.6cqi;
+        height: 9.6cqi;
+      }
+      .crm-live.is-deadline-mode .crm-live-ranking-name {
+        font-size: clamp(4.8vh, 5.8cqi, 6.4vh);
+      }
+      .crm-live.is-deadline-mode .crm-live-ranking-row.is-leader .crm-live-ranking-name {
+        font-size: clamp(5.6vh, 6.8cqi, 8vh);
+      }
+      .crm-live.is-deadline-mode .crm-live-ranking-sub {
+        font-size: clamp(2.2vh, 2.7cqi, 3.4vh);
+      }
+      .crm-live.is-deadline-mode .crm-live-ranking-chase {
+        font-size: clamp(1.8vh, 2.1cqi, 2.6vh);
+      }
+      .crm-live.is-deadline-mode .crm-live-ranking-pct {
+        font-size: clamp(6.6vh, 8cqi, 9vh);
+      }
+      .crm-live.is-deadline-mode .crm-live-ranking-row.is-leader .crm-live-ranking-pct {
+        font-size: clamp(8vh, 9.5cqi, 12vh);
+      }
+      .crm-live.is-deadline-mode .crm-live-highlight-person.is-center .crm-live-avatar {
+        width: 19cqi;
+        height: 19cqi;
+        font-size: 4.2cqi;
+      }
+      .crm-live.is-deadline-mode .crm-live-highlight-person.is-center .crm-live-avatar.is-leader {
+        width: 22cqi;
+        height: 22cqi;
+      }
+      .crm-live.is-deadline-mode .crm-live-highlight-title {
+        font-size: clamp(4.8vh, 5.8cqi, 6.8vh);
+      }
+      .crm-live.is-deadline-mode .crm-live-highlight-name {
+        font-size: clamp(5.4vh, 6.9cqi, 8.6vh);
+      }
+      .crm-live.is-deadline-mode .crm-live-highlight-value {
+        font-size: clamp(10vh, 12cqi, 16vh);
+      }
+      .crm-live.is-deadline-mode .crm-live-highlight-note {
+        font-size: clamp(2vh, 2.3cqi, 3vh);
+      }
+      .crm-live.is-deadline-mode .crm-live-week-countdown .crm-live-metric-value,
+      .crm-live.is-deadline-mode .crm-live-week-countdown-number {
+        font-size: clamp(10vh, 12cqi, 16vh);
+      }
+      .crm-live.is-deadline-mode .crm-live-week-countdown-unit {
+        font-size: clamp(3.2vh, 4.2cqi, 5vh);
+      }
+      .crm-live.is-deadline-mode .crm-live-week-countdown-scale {
+        gap: 1.2cqi;
+        font-size: clamp(1.6vh, 1.9cqi, 2.2vh);
+      }
+      .crm-live.is-deadline-mode .crm-live-week-rail-name {
+        font-size: clamp(1.8vh, 2.1cqi, 2.2vh);
+      }
+      .crm-live.is-deadline-mode .crm-live-week-rail-gap {
+        font-size: clamp(1.9vh, 2.2cqi, 2.4vh);
+      }
+      .crm-live.is-deadline-mode .crm-live-week-rail-sub {
+        font-size: clamp(1.3vh, 1.5cqi, 1.7vh);
+      }
+      .crm-live.is-deadline-mode .crm-live-team-progress-hero {
+        font-size: clamp(10vh, 12cqi, 20vh);
+      }
+      .crm-live.is-deadline-mode .crm-live-team-progress-sub {
+        font-size: clamp(2.2vh, 2.6cqi, 3.2vh);
+      }
+      .crm-live.is-deadline-mode .crm-live-pipeline {
+        gap: 2.2vh;
+      }
+      .crm-live.is-deadline-mode .crm-live-pipeline-total {
+        font-size: clamp(10vh, 12cqi, 20vh);
+      }
+      .crm-live.is-deadline-mode .crm-live-pipeline-total-note {
+        font-size: clamp(3vh, 3.7cqi, 5vh);
+      }
+      .crm-live.is-deadline-mode .crm-live-pipeline-sub {
+        font-size: clamp(2vh, 2.3cqi, 3vh);
+        white-space: normal;
+        margin-bottom: 1.6vh;
+      }
+      .crm-live.is-deadline-mode .crm-live-pipeline-row {
+        gap: 1.2cqi;
+      }
+      .crm-live.is-deadline-mode .crm-live-pipeline-row .crm-live-avatar {
+        width: 8.2cqi;
+        height: 8.2cqi;
+        font-size: 2cqi;
+      }
+      .crm-live.is-deadline-mode .crm-live-pipeline-row strong {
+        font-size: clamp(5vh, 5.8cqi, 7.2vh);
+      }
+      .crm-live.is-deadline-mode .crm-live-pipeline-row span {
+        font-size: clamp(4.6vh, 5.3cqi, 6.4vh);
+      }
+      .crm-live.is-deadline-mode .crm-live-last-sale-client {
+        font-size: clamp(6vh, 7.8cqi, 10.5vh);
+      }
+      .crm-live.is-deadline-mode .crm-live-last-sale-plan {
+        font-size: clamp(2vh, 2.4cqi, 3vh);
+      }
+      .crm-live.is-deadline-mode .crm-live-last-sale-list {
+        width: 100%;
+      }
+      .crm-live.is-deadline-mode .crm-live-last-sale-row strong {
+        font-size: clamp(2.8vh, 3.3cqi, 3.6vh);
+      }
+      .crm-live.is-deadline-mode .crm-live-degraded-card {
+        width: 100%;
+        max-width: none;
+      }
+      .crm-live.is-deadline-mode .crm-live-degraded-body {
+        max-width: none;
       }
       @media (max-width: 1200px) {
         .crm-live { padding: 4.4vh 5vw 4vh; }
@@ -1441,18 +1682,7 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
           return includeTime ? formatted + ' · 23:59' : formatted;
         };
         const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
-        // Troque entre 'countdown' e 'clockwise' para inverter o sentido do ponteiro sem mexer no cálculo.
-        const SECOND_HAND_DIRECTION = 'countdown';
-        const SECOND_HAND_TICK_TRANSITION_MS = 0;
         const lerp = (start, end, t) => start + ((end - start) * t);
-        const resolveSecondHandAngleDeg = (secondsValue, direction = SECOND_HAND_DIRECTION) => {
-          const normalizedSeconds = ((Number(secondsValue) || 0) % 60 + 60) % 60;
-          const normalizedDirection = String(direction || SECOND_HAND_DIRECTION).trim().toLowerCase();
-          const clockwiseSeconds = normalizedDirection === 'clockwise'
-            ? ((60 - normalizedSeconds) % 60)
-            : normalizedSeconds;
-          return (clockwiseSeconds * 6) - 90;
-        };
         const resolvePulseVisuals = (remainingClampedMs) => {
           const hour = 60 * 60 * 1000;
           if (remainingClampedMs <= 0) {
@@ -1460,18 +1690,18 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
           }
           if (remainingClampedMs <= hour) {
             const t = 1 - clamp(remainingClampedMs / hour, 0, 1);
-            return { accentAlpha: lerp(0.92, 1, t), pulseDurationMs: lerp(1150, 520, t), pulseMinOpacity: lerp(0.34, 0.22, t), pulseMaxOpacity: 1, pulseBrightnessMin: lerp(1.02, 0.92, t), pulseBrightnessMax: lerp(1.18, 1.36, t), textAlpha: 1 };
+            return { accentAlpha: lerp(0.92, 1, t), pulseDurationMs: lerp(1200, 520, t), pulseMinOpacity: lerp(0.38, 0.22, t), pulseMaxOpacity: 1, pulseBrightnessMin: lerp(0.98, 0.92, t), pulseBrightnessMax: lerp(1.18, 1.36, t), textAlpha: 1 };
           }
           if (remainingClampedMs <= 3 * hour) {
             const t = 1 - clamp((remainingClampedMs - hour) / (2 * hour), 0, 1);
-            return { accentAlpha: lerp(0.82, 0.92, t), pulseDurationMs: lerp(2400, 1150, t), pulseMinOpacity: lerp(0.5, 0.34, t), pulseMaxOpacity: lerp(0.98, 1, t), pulseBrightnessMin: lerp(0.94, 1.02, t), pulseBrightnessMax: lerp(1.08, 1.18, t), textAlpha: lerp(0.92, 1, t) };
+            return { accentAlpha: lerp(0.82, 0.92, t), pulseDurationMs: lerp(2400, 1200, t), pulseMinOpacity: lerp(0.5, 0.38, t), pulseMaxOpacity: lerp(0.98, 1, t), pulseBrightnessMin: lerp(0.9, 0.98, t), pulseBrightnessMax: lerp(1.06, 1.18, t), textAlpha: lerp(0.92, 1, t) };
           }
           if (remainingClampedMs <= 12 * hour) {
             const t = 1 - clamp((remainingClampedMs - 3 * hour) / (9 * hour), 0, 1);
-            return { accentAlpha: lerp(0.72, 0.82, t), pulseDurationMs: lerp(4300, 2400, t), pulseMinOpacity: lerp(0.66, 0.5, t), pulseMaxOpacity: lerp(0.9, 0.98, t), pulseBrightnessMin: lerp(0.88, 0.94, t), pulseBrightnessMax: lerp(0.98, 1.08, t), textAlpha: lerp(0.84, 0.92, t) };
+            return { accentAlpha: lerp(0.72, 0.82, t), pulseDurationMs: lerp(4300, 2400, t), pulseMinOpacity: lerp(0.62, 0.5, t), pulseMaxOpacity: lerp(0.9, 0.98, t), pulseBrightnessMin: lerp(0.86, 0.9, t), pulseBrightnessMax: lerp(0.96, 1.06, t), textAlpha: lerp(0.84, 0.92, t) };
           }
           const t = 1 - clamp((remainingClampedMs - 12 * hour) / (12 * hour), 0, 1);
-          return { accentAlpha: lerp(0.58, 0.72, t), pulseDurationMs: lerp(5600, 4300, t), pulseMinOpacity: lerp(0.78, 0.66, t), pulseMaxOpacity: lerp(0.88, 0.9, t), pulseBrightnessMin: lerp(0.84, 0.88, t), pulseBrightnessMax: lerp(0.94, 0.98, t), textAlpha: lerp(0.78, 0.84, t) };
+          return { accentAlpha: lerp(0.58, 0.72, t), pulseDurationMs: lerp(5600, 4300, t), pulseMinOpacity: lerp(0.72, 0.62, t), pulseMaxOpacity: lerp(0.84, 0.9, t), pulseBrightnessMin: lerp(0.8, 0.86, t), pulseBrightnessMax: lerp(0.9, 0.96, t), textAlpha: lerp(0.78, 0.84, t) };
         };
         const computeDeadlineModeState = ({ endDateKey = '', now = new Date() } = {}) => {
           const endDate = parseDateKeyAtEnd(endDateKey);
@@ -1487,9 +1717,6 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
               minutes: '00',
               seconds: '00',
               totalSecondsRemaining: 0,
-              secondHandAngleDeg: resolveSecondHandAngleDeg(0),
-              secondHandDirection: SECOND_HAND_DIRECTION,
-              secondHandTickTransitionMs: SECOND_HAND_TICK_TRANSITION_MS,
               label: 'para fechar a semana',
               statusText: 'semana indisponível',
               driftX: 0,
@@ -1531,9 +1758,6 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
             minutes: String(minutes).padStart(2, '0'),
             seconds: String(seconds).padStart(2, '0'),
             totalSecondsRemaining: totalSeconds,
-            secondHandAngleDeg: resolveSecondHandAngleDeg(seconds),
-            secondHandDirection: SECOND_HAND_DIRECTION,
-            secondHandTickTransitionMs: SECOND_HAND_TICK_TRANSITION_MS,
             label: deadlineReached ? 'aguardando a virada da semana' : 'para fechar a semana',
             statusText: deadlineReached ? 'semana encerrando' : 'contagem final da semana',
             driftX: drift.x,
@@ -1757,9 +1981,6 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
           minutes: '00',
           seconds: '00',
           totalSecondsRemaining: 0,
-          secondHandAngleDeg: resolveSecondHandAngleDeg(0),
-          secondHandDirection: SECOND_HAND_DIRECTION,
-          secondHandTickTransitionMs: SECOND_HAND_TICK_TRANSITION_MS,
           label: 'para fechar a semana',
           statusText: 'semana indisponível',
           driftX: 0,
@@ -1859,8 +2080,7 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
             '<div class="crm-live-deadline ' + urgencyClass + '" data-crm-live-deadline-root data-end-date-key="' + escapeHtml(getNested(weekly, ['commercialWeek', 'endDateKey'], '')) + '">' +
               '<div class="crm-live-deadline-shell">' +
                 '<div class="crm-live-deadline-kicker">Últimas 24 horas</div>' +
-                '<div class="crm-live-deadline-ring" data-crm-live-deadline-ring style="--deadline-pct:' + clampPercent(deadlineState.progressPct).toFixed(3) + '">' +
-                  '<div class="crm-live-deadline-pointer" data-crm-live-deadline-pointer style="transform:rotate(' + String(Number(deadlineState.secondHandAngleDeg || -90)) + 'deg);transition:' + ((Number(deadlineState.secondHandTickTransitionMs || 0) > 0) ? ('transform ' + String(Number(deadlineState.secondHandTickTransitionMs || 0)) + 'ms linear') : 'none') + ';"></div>' +
+                '<div class="crm-live-deadline-ring" data-crm-live-deadline-ring>' +
                   '<div class="crm-live-deadline-center">' +
                     '<div class="crm-live-deadline-label" data-crm-live-deadline-label>' + escapeHtml(deadlineState.label) + '</div>' +
                     '<div class="crm-live-deadline-value">' +
@@ -1905,20 +2125,12 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
           sidePanelEl.style.setProperty('--crm-live-drift-x', String(deadlineState.driftX || 0) + 'px');
           sidePanelEl.style.setProperty('--crm-live-drift-y', String(deadlineState.driftY || 0) + 'px');
           const ring = sidePanelEl.querySelector('[data-crm-live-deadline-ring]');
-          const pointer = sidePanelEl.querySelector('[data-crm-live-deadline-pointer]');
           const labelEl = sidePanelEl.querySelector('[data-crm-live-deadline-label]');
           const hoursEl = sidePanelEl.querySelector('[data-crm-live-deadline-hours]');
           const minutesEl = sidePanelEl.querySelector('[data-crm-live-deadline-minutes]');
           const secondsEl = sidePanelEl.querySelector('[data-crm-live-deadline-seconds]');
           const noteEl = sidePanelEl.querySelector('[data-crm-live-deadline-note]');
-          if (ring) ring.style.setProperty('--deadline-pct', clampPercent(deadlineState.progressPct).toFixed(3));
-          if (pointer) {
-            pointer.style.transform = 'rotate(' + String(Number(deadlineState.secondHandAngleDeg || -90)) + 'deg)';
-            pointer.style.transition = Number(deadlineState.secondHandTickTransitionMs || 0) > 0
-              ? ('transform ' + String(Number(deadlineState.secondHandTickTransitionMs || 0)) + 'ms linear')
-              : 'none';
-            pointer.style.animationPlayState = deadlineState.deadlineReached ? 'paused' : 'running';
-          }
+          if (ring) ring.style.animationPlayState = deadlineState.deadlineReached ? 'paused' : 'running';
           if (labelEl) labelEl.textContent = deadlineState.label;
           if (hoursEl) hoursEl.textContent = deadlineState.hours;
           if (minutesEl) minutesEl.textContent = deadlineState.minutes;
@@ -2030,7 +2242,7 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
                   '<div class="crm-live-support-grid">' +
                     '<div class="crm-live-support-item"><strong>' + escapeHtml(moneyShort(pace.requiredPerDay || 0)) + '</strong><span>Ritmo necessário por dia</span></div>' +
                     '<div class="crm-live-support-item"><strong>' + escapeHtml(moneyShort(team.targetValue || 0)) + '</strong><span>Meta da semana</span></div>' +
-                    '<div class="crm-live-support-item"><div class="crm-live-state-pill ' + (pace.abovePace ? 'is-success' : 'is-danger') + '"><strong>' + escapeHtml(pace.abovePace ? 'ACIMA' : 'ABAIXO') + '</strong><span>do ritmo</span></div><span>' + escapeHtml((pace.abovePace ? '+' : '') + moneyShort(pace.delta || 0) + ' vs esperado hoje') + '</span></div>' +
+                    '<div class="crm-live-support-item is-pace-status"><div class="crm-live-state-pill ' + (pace.abovePace ? 'is-success' : 'is-danger') + '"><strong>' + escapeHtml(pace.abovePace ? 'ACIMA' : 'ABAIXO') + '</strong><span>do ritmo</span></div><span>' + escapeHtml((pace.abovePace ? '+' : '') + moneyShort(pace.delta || 0) + ' vs esperado hoje') + '</span></div>' +
                   '</div>' +
                 '</div>' +
               '</div>' +

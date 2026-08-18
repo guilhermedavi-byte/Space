@@ -365,3 +365,13 @@ test('HTML servido executa o script do cliente sem exceção e monta ao menos um
   assert.ok(screenCount > 0);
   assert.doesNotMatch(booted.root.innerHTML, /Carregando CRM Live/);
 });
+
+test('modo últimas 24h não renderiza mais o ponteiro de segundos', async () => {
+  const booted = await bootCrmLive({
+    dataResponse: { ok: true, status: 200, body: createPayload() },
+    eventsResponse: { ok: true, status: 200, body: { coldStart: true, events: [] } },
+  });
+
+  assert.doesNotMatch(booted.root.innerHTML, /data-crm-live-deadline-pointer/);
+  assert.doesNotMatch(crmLiveRoute.buildHtml({ buildId: 'test-build' }), /crm-live-deadline-pointer/);
+});
