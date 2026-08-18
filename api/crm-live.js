@@ -8,6 +8,7 @@ const {
   isSecureRequest,
   CRM_LIVE_COOKIE_NAME,
 } = require("./_lib/crm-live");
+const { computeDeadlineModeState } = require("./_lib/crm-live-deadline");
 const { buildScreenKeys, createCrmLiveLoopController } = require("./_lib/crm-live-rotation");
 
 const normalizeRole = (value) => {
@@ -85,6 +86,31 @@ const buildHtml = () => `<!DOCTYPE html>
         height: 100%;
         overflow: hidden;
       }
+      .crm-live-sidepanel {
+        display: none;
+      }
+      .crm-live.is-deadline-mode .crm-live-stage {
+        width: calc(62% - 1.8vw);
+      }
+      .crm-live.is-deadline-mode .crm-live-sidepanel {
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: 38%;
+        display: grid;
+        align-items: stretch;
+        padding-left: 2.2vw;
+      }
+      .crm-live.is-deadline-mode .crm-live-sidepanel::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        width: 1px;
+        background: rgba(255,255,255,.09);
+      }
       .crm-live-controls {
         position: absolute;
         top: 2.4vh;
@@ -141,6 +167,9 @@ const buildHtml = () => `<!DOCTYPE html>
       }
       .crm-live.is-rotation-paused .crm-live-pause-indicator {
         display: grid;
+      }
+      .crm-live.is-deadline-mode .crm-live-controls {
+        right: calc(38% + 3vw);
       }
       .crm-live-pause-indicator svg {
         width: 1.2vh;
@@ -839,6 +868,9 @@ const buildHtml = () => `<!DOCTYPE html>
         font-size: 1.8vh;
         line-height: 1.2;
       }
+      .crm-live.is-deadline-mode .crm-live-footer {
+        right: calc(38% + 3vw);
+      }
       .crm-live-footer [data-crm-live-status][data-tone="warning"] {
         color: var(--accent);
       }
@@ -886,7 +918,7 @@ const buildHtml = () => `<!DOCTYPE html>
       .crm-live-interruption {
         position: absolute;
         inset: 0;
-        z-index: 20;
+        z-index: 40;
         display: none;
       }
       .crm-live-interruption.is-visible {
@@ -991,6 +1023,143 @@ const buildHtml = () => `<!DOCTYPE html>
         letter-spacing: .24em;
         text-transform: uppercase;
       }
+      .crm-live-deadline {
+        height: 100%;
+        display: grid;
+        place-items: center;
+        padding: 4vh 1.6vw 4vh 2.4vw;
+        transform: translate(var(--crm-live-drift-x, 0px), var(--crm-live-drift-y, 0px));
+      }
+      .crm-live-deadline-shell {
+        width: 100%;
+        max-width: 46vh;
+        display: grid;
+        justify-items: center;
+        gap: 2.2vh;
+      }
+      .crm-live-deadline-kicker {
+        color: var(--text-tertiary);
+        font-size: 1.8vh;
+        letter-spacing: .22em;
+        text-transform: uppercase;
+        text-align: center;
+      }
+      .crm-live-deadline-ring {
+        --deadline-pct: 100;
+        --deadline-accent: rgba(255, 86, 79, .58);
+        --deadline-track: rgba(255,255,255,.08);
+        --deadline-pulse-duration: 5600ms;
+        --deadline-pulse-min-opacity: .78;
+        --deadline-pulse-max-opacity: .88;
+        --deadline-pulse-brightness-min: .84;
+        --deadline-pulse-brightness-max: .94;
+        width: min(32vw, 42vh);
+        height: min(32vw, 42vh);
+        min-width: 34vh;
+        min-height: 34vh;
+        border-radius: 999px;
+        position: relative;
+        display: grid;
+        place-items: center;
+        background:
+          radial-gradient(circle at center, transparent 61%, rgba(0,0,0,.0) 61%),
+          conic-gradient(from -90deg, var(--deadline-accent) 0 calc(var(--deadline-pct) * 1%), var(--deadline-track) calc(var(--deadline-pct) * 1%) 100%);
+        animation: crm-live-deadline-pulse var(--deadline-pulse-duration) ease-in-out infinite;
+        will-change: opacity, filter, transform;
+      }
+      .crm-live-deadline-ring::before {
+        content: "";
+        position: absolute;
+        inset: 1.8vh;
+        border-radius: 999px;
+        background: rgba(13,16,20,.96);
+        box-shadow: inset 0 0 0 1px rgba(255,255,255,.04);
+      }
+      .crm-live-deadline-pointer {
+        position: absolute;
+        inset: 0;
+        animation: crm-live-deadline-sweep 60s linear infinite, crm-live-deadline-pulse var(--deadline-pulse-duration) ease-in-out infinite;
+        transform: rotate(-90deg);
+        will-change: transform, opacity, filter;
+      }
+      .crm-live-deadline-pointer::before {
+        content: "";
+        position: absolute;
+        top: 1.2vh;
+        left: 50%;
+        width: 2px;
+        height: 7.8vh;
+        transform: translateX(-50%);
+        border-radius: 999px;
+        background: linear-gradient(180deg, rgba(255, 145, 139, .98), rgba(255, 86, 79, .16));
+      }
+      .crm-live-deadline-center {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        justify-items: center;
+        gap: 1.3vh;
+        text-align: center;
+      }
+      .crm-live-deadline-label {
+        color: var(--text-secondary);
+        font-size: 1.9vh;
+        line-height: 1.3;
+        max-width: 24vh;
+      }
+      .crm-live-deadline-value {
+        display: flex;
+        align-items: end;
+        gap: .55vh;
+        line-height: .84;
+        letter-spacing: -.06em;
+        color: rgba(255, 210, 207, var(--deadline-text-alpha, .78));
+      }
+      .crm-live-deadline-hours,
+      .crm-live-deadline-minutes {
+        font-size: clamp(8vh, 9vh, 10.2vh);
+        font-weight: 500;
+      }
+      .crm-live-deadline-separator {
+        font-size: 5.2vh;
+        font-weight: 400;
+        opacity: .56;
+        transform: translateY(-.45vh);
+      }
+      .crm-live-deadline-seconds {
+        font-size: 4.2vh;
+        font-weight: 500;
+        opacity: .82;
+        transform: translateY(-.4vh);
+      }
+      .crm-live-deadline-note {
+        color: rgba(255, 188, 184, var(--deadline-text-alpha, .78));
+        font-size: 1.7vh;
+        letter-spacing: .14em;
+        text-transform: uppercase;
+      }
+      .crm-live-deadline.is-warning .crm-live-deadline-ring,
+      .crm-live-deadline.is-critical .crm-live-deadline-ring,
+      .crm-live-deadline.is-expired .crm-live-deadline-ring {
+        --deadline-accent: rgba(255, 86, 79, var(--deadline-accent-alpha, .72));
+      }
+      .crm-live-deadline.is-expired .crm-live-deadline-pointer {
+        animation-play-state: paused;
+      }
+      @keyframes crm-live-deadline-pulse {
+        0%, 100% {
+          opacity: var(--deadline-pulse-max-opacity);
+          filter: brightness(var(--deadline-pulse-brightness-max)) saturate(1.08);
+        }
+        50% {
+          opacity: var(--deadline-pulse-min-opacity);
+          filter: brightness(var(--deadline-pulse-brightness-min)) saturate(.96);
+        }
+      }
+      @keyframes crm-live-deadline-sweep {
+        from { transform: rotate(-90deg); }
+        to { transform: rotate(270deg); }
+      }
       @media (prefers-reduced-motion: reduce) {
         .crm-live-screen,
         .crm-live-control,
@@ -1044,6 +1213,7 @@ const buildHtml = () => `<!DOCTYPE html>
       <div class="crm-live-stage" data-crm-live-root>
         <div class="crm-live-empty" data-crm-live-empty>Carregando CRM Live…</div>
       </div>
+      <aside class="crm-live-sidepanel" data-crm-live-sidepanel aria-hidden="true"></aside>
       <div class="crm-live-interruption" data-crm-live-interruption></div>
       <div class="crm-live-footer">
         <div data-crm-live-status>Atualizando…</div>
@@ -1054,6 +1224,7 @@ const buildHtml = () => `<!DOCTYPE html>
       (() => {
         const crmLiveEl = document.querySelector('.crm-live');
         const root = document.querySelector('[data-crm-live-root]');
+        const sidePanelEl = document.querySelector('[data-crm-live-sidepanel]');
         const interruptionEl = document.querySelector('[data-crm-live-interruption]');
         const statusEl = document.querySelector('[data-crm-live-status]');
         const dotsEl = document.querySelector('[data-crm-live-dots]');
@@ -1075,6 +1246,7 @@ const buildHtml = () => `<!DOCTYPE html>
         let screenKeys = [];
         let activeInterruption = null;
         let rotationPaused = false;
+        let deadlineSplitActive = false;
         const buildScreenKeys = ${buildScreenKeys.toString()};
         const createCrmLiveLoopController = ${createCrmLiveLoopController.toString()};
 
@@ -1202,6 +1374,100 @@ const buildHtml = () => `<!DOCTYPE html>
           const formatted = weekday + ', ' + dateLabel(dateKey);
           return includeTime ? formatted + ' · 23:59' : formatted;
         };
+        const lerp = (start, end, t) => start + ((end - start) * t);
+        const resolvePulseVisuals = (remainingClampedMs) => {
+          const hour = 60 * 60 * 1000;
+          if (remainingClampedMs <= 0) {
+            return { accentAlpha: 1, pulseDurationMs: 520, pulseMinOpacity: 0.22, pulseMaxOpacity: 1, pulseBrightnessMin: 0.92, pulseBrightnessMax: 1.36, textAlpha: 1 };
+          }
+          if (remainingClampedMs <= hour) {
+            const t = 1 - clamp(remainingClampedMs / hour, 0, 1);
+            return { accentAlpha: lerp(0.92, 1, t), pulseDurationMs: lerp(1150, 520, t), pulseMinOpacity: lerp(0.34, 0.22, t), pulseMaxOpacity: 1, pulseBrightnessMin: lerp(1.02, 0.92, t), pulseBrightnessMax: lerp(1.18, 1.36, t), textAlpha: 1 };
+          }
+          if (remainingClampedMs <= 3 * hour) {
+            const t = 1 - clamp((remainingClampedMs - hour) / (2 * hour), 0, 1);
+            return { accentAlpha: lerp(0.82, 0.92, t), pulseDurationMs: lerp(2400, 1150, t), pulseMinOpacity: lerp(0.5, 0.34, t), pulseMaxOpacity: lerp(0.98, 1, t), pulseBrightnessMin: lerp(0.94, 1.02, t), pulseBrightnessMax: lerp(1.08, 1.18, t), textAlpha: lerp(0.92, 1, t) };
+          }
+          if (remainingClampedMs <= 12 * hour) {
+            const t = 1 - clamp((remainingClampedMs - 3 * hour) / (9 * hour), 0, 1);
+            return { accentAlpha: lerp(0.72, 0.82, t), pulseDurationMs: lerp(4300, 2400, t), pulseMinOpacity: lerp(0.66, 0.5, t), pulseMaxOpacity: lerp(0.9, 0.98, t), pulseBrightnessMin: lerp(0.88, 0.94, t), pulseBrightnessMax: lerp(0.98, 1.08, t), textAlpha: lerp(0.84, 0.92, t) };
+          }
+          const t = 1 - clamp((remainingClampedMs - 12 * hour) / (12 * hour), 0, 1);
+          return { accentAlpha: lerp(0.58, 0.72, t), pulseDurationMs: lerp(5600, 4300, t), pulseMinOpacity: lerp(0.78, 0.66, t), pulseMaxOpacity: lerp(0.88, 0.9, t), pulseBrightnessMin: lerp(0.84, 0.88, t), pulseBrightnessMax: lerp(0.94, 0.98, t), textAlpha: lerp(0.78, 0.84, t) };
+        };
+        const computeDeadlineModeState = ({ endDateKey = '', now = new Date() } = {}) => {
+          const endDate = parseDateKeyAtEnd(endDateKey);
+          if (!(endDate instanceof Date)) {
+            return {
+              splitActive: false,
+              deadlineReached: false,
+              remainingMs: 0,
+              remainingClampedMs: 0,
+              progressPct: 0,
+              urgencyLevel: 'normal',
+              hours: '00',
+              minutes: '00',
+              seconds: '00',
+              label: 'para fechar a semana',
+              statusText: 'semana indisponível',
+              pointerOffsetMs: 0,
+              driftX: 0,
+              driftY: 0,
+            };
+          }
+          const current = now instanceof Date ? now : new Date(now);
+          const safeNow = Number.isNaN(current.getTime()) ? new Date() : current;
+          const finalWindowMs = 24 * 60 * 60 * 1000;
+          const remainingMs = endDate.getTime() - safeNow.getTime();
+          const remainingClampedMs = Math.max(0, remainingMs);
+          const splitActive = remainingMs <= finalWindowMs;
+          const deadlineReached = remainingMs <= 0;
+          const totalSeconds = Math.floor(remainingClampedMs / 1000);
+          const hours = Math.floor(totalSeconds / 3600);
+          const minutes = Math.floor((totalSeconds % 3600) / 60);
+          const seconds = totalSeconds % 60;
+          const progressPct = Math.max(0, Math.min(100, (remainingClampedMs / finalWindowMs) * 100));
+          const urgencyLevel = deadlineReached ? 'expired' : remainingClampedMs <= 60 * 60 * 1000 ? 'critical' : remainingClampedMs <= 6 * 60 * 60 * 1000 ? 'warning' : 'normal';
+          const pulseVisuals = resolvePulseVisuals(remainingClampedMs);
+          const minuteMs = ((safeNow.getSeconds() * 1000) + safeNow.getMilliseconds()) % 60000;
+          const driftBucket = Math.floor(safeNow.getTime() / (5 * 60 * 1000));
+          const driftOffsets = [
+            { x: 0, y: 0 },
+            { x: 1, y: -1 },
+            { x: -1, y: 1 },
+            { x: 1, y: 1 },
+            { x: -1, y: 0 },
+            { x: 0, y: 1 },
+          ];
+          const drift = driftOffsets[driftBucket % driftOffsets.length] || driftOffsets[0];
+          return {
+            splitActive,
+            deadlineReached,
+            remainingMs,
+            remainingClampedMs,
+            progressPct,
+            urgencyLevel,
+            hours: String(hours).padStart(2, '0'),
+            minutes: String(minutes).padStart(2, '0'),
+            seconds: String(seconds).padStart(2, '0'),
+            label: deadlineReached ? 'aguardando a virada da semana' : 'para fechar a semana',
+            statusText: deadlineReached ? 'semana encerrando' : 'contagem final da semana',
+            pointerOffsetMs: minuteMs,
+            driftX: drift.x,
+            driftY: drift.y,
+            accentAlpha: pulseVisuals.accentAlpha,
+            pulseDurationMs: pulseVisuals.pulseDurationMs,
+            pulseMinOpacity: pulseVisuals.pulseMinOpacity,
+            pulseMaxOpacity: pulseVisuals.pulseMaxOpacity,
+            pulseBrightnessMin: pulseVisuals.pulseBrightnessMin,
+            pulseBrightnessMax: pulseVisuals.pulseBrightnessMax,
+            textAlpha: pulseVisuals.textAlpha,
+          };
+        };
+        const getDeadlineStateFromPayload = (currentPayload, referenceNow = new Date()) => {
+          const endDateKey = getNested(currentPayload, ['weekly', 'commercialWeek', 'endDateKey'], '');
+          return computeDeadlineModeState({ endDateKey, now: referenceNow });
+        };
         const safeArray = (value) => Array.isArray(value) ? value : [];
         const renderToggleIcon = (paused) => paused
           ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7z"/></svg>'
@@ -1318,13 +1584,98 @@ const buildHtml = () => `<!DOCTYPE html>
           }));
           preloadImages(rows);
         };
+        const resolveVisibleScreenKeys = (currentPayload, referenceNow = new Date()) => {
+          const keys = buildScreenKeys(currentPayload, { getNested, safeArray });
+          const deadlineState = getDeadlineStateFromPayload(currentPayload, referenceNow);
+          return deadlineState.splitActive ? keys.filter((key) => key !== 'week') : keys;
+        };
         const syncRotationUi = () => {
           if (crmLiveEl) crmLiveEl.classList.toggle('is-rotation-paused', rotationPaused);
+          if (crmLiveEl) crmLiveEl.classList.toggle('is-deadline-mode', deadlineSplitActive);
           if (toggleButton) {
             toggleButton.dataset.state = rotationPaused ? 'paused' : 'running';
             toggleButton.setAttribute('aria-label', rotationPaused ? 'Continuar rotação' : 'Pausar rotação');
           }
           if (toggleIconEl) toggleIconEl.innerHTML = renderToggleIcon(rotationPaused);
+        };
+        const renderDeadlinePanel = (weekly, deadlineState) => {
+          if (!sidePanelEl) return;
+          if (!deadlineState.splitActive) {
+            sidePanelEl.innerHTML = '';
+            sidePanelEl.setAttribute('aria-hidden', 'true');
+            sidePanelEl.style.removeProperty('--crm-live-drift-x');
+            sidePanelEl.style.removeProperty('--crm-live-drift-y');
+            return;
+          }
+          const urgencyClass = 'is-' + escapeHtml(deadlineState.urgencyLevel);
+          sidePanelEl.style.setProperty('--crm-live-drift-x', String(deadlineState.driftX || 0) + 'px');
+          sidePanelEl.style.setProperty('--crm-live-drift-y', String(deadlineState.driftY || 0) + 'px');
+          sidePanelEl.setAttribute('aria-hidden', 'false');
+          sidePanelEl.innerHTML =
+            '<div class="crm-live-deadline ' + urgencyClass + '" data-crm-live-deadline-root data-end-date-key="' + escapeHtml(getNested(weekly, ['commercialWeek', 'endDateKey'], '')) + '">' +
+              '<div class="crm-live-deadline-shell">' +
+                '<div class="crm-live-deadline-kicker">Últimas 24 horas</div>' +
+                '<div class="crm-live-deadline-ring" data-crm-live-deadline-ring style="--deadline-pct:' + clampPercent(deadlineState.progressPct).toFixed(3) + '">' +
+                  '<div class="crm-live-deadline-pointer" data-crm-live-deadline-pointer style="animation-delay:-' + String(deadlineState.pointerOffsetMs || 0) + 'ms"></div>' +
+                  '<div class="crm-live-deadline-center">' +
+                    '<div class="crm-live-deadline-label" data-crm-live-deadline-label>' + escapeHtml(deadlineState.label) + '</div>' +
+                    '<div class="crm-live-deadline-value">' +
+                      '<span class="crm-live-deadline-hours" data-crm-live-deadline-hours>' + escapeHtml(deadlineState.hours) + '</span>' +
+                      '<span class="crm-live-deadline-separator">:</span>' +
+                      '<span class="crm-live-deadline-minutes" data-crm-live-deadline-minutes>' + escapeHtml(deadlineState.minutes) + '</span>' +
+                      '<span class="crm-live-deadline-seconds" data-crm-live-deadline-seconds>' + escapeHtml(deadlineState.seconds) + '</span>' +
+                    '</div>' +
+                    '<div class="crm-live-deadline-note" data-crm-live-deadline-note>' + escapeHtml(deadlineState.statusText) + '</div>' +
+                  '</div>' +
+                '</div>' +
+              '</div>' +
+            '</div>';
+        };
+        const refreshDeadlinePanel = (referenceNow = new Date()) => {
+          if (!sidePanelEl || !payload) return;
+          const deadlineState = getDeadlineStateFromPayload(payload, referenceNow);
+          const shouldToggleMode = deadlineSplitActive !== deadlineState.splitActive;
+          deadlineSplitActive = deadlineState.splitActive;
+          syncRotationUi();
+          if (shouldToggleMode) {
+            rotationController.setPayload(payload);
+          }
+          if (!deadlineState.splitActive) {
+            renderDeadlinePanel(payload.weekly || {}, deadlineState);
+            return;
+          }
+          if (!sidePanelEl.querySelector('[data-crm-live-deadline-root]') || shouldToggleMode) {
+            renderDeadlinePanel(payload.weekly || {}, deadlineState);
+          }
+          const deadlineRoot = sidePanelEl.querySelector('[data-crm-live-deadline-root]');
+          if (!deadlineRoot) return;
+          deadlineRoot.className = 'crm-live-deadline is-' + deadlineState.urgencyLevel;
+          deadlineRoot.style.setProperty('--deadline-accent-alpha', String(deadlineState.accentAlpha || 0.58));
+          deadlineRoot.style.setProperty('--deadline-pulse-duration', String(Math.round(deadlineState.pulseDurationMs || 5600)) + 'ms');
+          deadlineRoot.style.setProperty('--deadline-pulse-min-opacity', String(deadlineState.pulseMinOpacity || 0.78));
+          deadlineRoot.style.setProperty('--deadline-pulse-max-opacity', String(deadlineState.pulseMaxOpacity || 0.88));
+          deadlineRoot.style.setProperty('--deadline-pulse-brightness-min', String(deadlineState.pulseBrightnessMin || 0.84));
+          deadlineRoot.style.setProperty('--deadline-pulse-brightness-max', String(deadlineState.pulseBrightnessMax || 0.94));
+          deadlineRoot.style.setProperty('--deadline-text-alpha', String(deadlineState.textAlpha || 0.78));
+          sidePanelEl.style.setProperty('--crm-live-drift-x', String(deadlineState.driftX || 0) + 'px');
+          sidePanelEl.style.setProperty('--crm-live-drift-y', String(deadlineState.driftY || 0) + 'px');
+          const ring = sidePanelEl.querySelector('[data-crm-live-deadline-ring]');
+          const pointer = sidePanelEl.querySelector('[data-crm-live-deadline-pointer]');
+          const labelEl = sidePanelEl.querySelector('[data-crm-live-deadline-label]');
+          const hoursEl = sidePanelEl.querySelector('[data-crm-live-deadline-hours]');
+          const minutesEl = sidePanelEl.querySelector('[data-crm-live-deadline-minutes]');
+          const secondsEl = sidePanelEl.querySelector('[data-crm-live-deadline-seconds]');
+          const noteEl = sidePanelEl.querySelector('[data-crm-live-deadline-note]');
+          if (ring) ring.style.setProperty('--deadline-pct', clampPercent(deadlineState.progressPct).toFixed(3));
+          if (pointer) {
+            pointer.style.animationDelay = '-' + String(deadlineState.pointerOffsetMs || 0) + 'ms';
+            pointer.style.animationPlayState = deadlineState.deadlineReached ? 'paused' : 'running';
+          }
+          if (labelEl) labelEl.textContent = deadlineState.label;
+          if (hoursEl) hoursEl.textContent = deadlineState.hours;
+          if (minutesEl) minutesEl.textContent = deadlineState.minutes;
+          if (secondsEl) secondsEl.textContent = deadlineState.seconds;
+          if (noteEl) noteEl.textContent = deadlineState.statusText;
         };
         const renderDots = () => {
           dotsEl.innerHTML = safeArray(screenKeys).map((_, index) => '<span class="crm-live-dot ' + (index === active ? 'is-active' : '') + '"></span>').join('');
@@ -1696,7 +2047,7 @@ const buildHtml = () => `<!DOCTYPE html>
         const rotationController = createCrmLiveLoopController({
           rotateMs: ROTATE_MS,
           eventScreenMs: EVENT_SCREEN_MS,
-          buildKeys: (currentPayload) => buildScreenKeys(currentPayload, { getNested, safeArray }),
+          buildKeys: (currentPayload) => resolveVisibleScreenKeys(currentPayload, new Date()),
           onScreenChange: (state) => {
             active = state.activeIndex;
             screenKeys = state.screenKeys;
@@ -1732,7 +2083,7 @@ const buildHtml = () => `<!DOCTYPE html>
           const highlight = payload.highlights || {};
           const pipeline = payload.pipeline || {};
           const news = safeArray(payload.news);
-          screenKeys = buildScreenKeys(payload);
+          screenKeys = safeArray(screenKeys).length ? safeArray(screenKeys) : resolveVisibleScreenKeys(payload, new Date());
           if (!screenKeys.length) screenKeys = ['goal'];
           if (active >= screenKeys.length) active = 0;
           const screens = {
@@ -1876,6 +2227,7 @@ const buildHtml = () => `<!DOCTYPE html>
             preloadFromPayload(data);
             saveLastGood(data);
             rotationController.setPayload(data);
+            refreshDeadlinePanel(new Date());
             refreshWeekCountdown();
             const status = buildStatusText(data, false);
             setStatus(status.text, status.tone);
@@ -1885,6 +2237,7 @@ const buildHtml = () => `<!DOCTYPE html>
               payload = fallback;
               preloadFromPayload(fallback);
               rotationController.setPayload(fallback);
+              refreshDeadlinePanel(new Date());
               refreshWeekCountdown();
               const status = buildStatusText(fallback, true);
               setStatus(status.text, status.tone);
@@ -1910,7 +2263,10 @@ const buildHtml = () => `<!DOCTYPE html>
         pollTimer = setInterval(loadData, POLL_MS);
         loadEvents();
         eventPollTimer = setInterval(loadEvents, EVENT_POLL_MS);
-        countdownTimer = setInterval(refreshWeekCountdown, 1000);
+        countdownTimer = setInterval(() => {
+          refreshWeekCountdown();
+          refreshDeadlinePanel(new Date());
+        }, 1000);
         const handleManualStep = (direction) => {
           rotationController.step(direction);
         };
@@ -1942,6 +2298,7 @@ const buildHtml = () => `<!DOCTYPE html>
             loadData();
             loadEvents();
             refreshWeekCountdown();
+            refreshDeadlinePanel(new Date());
           }
         });
         syncRotationUi();
