@@ -81,6 +81,45 @@ test('auto-reload não dispara no meio da transição de tela', () => {
   assert.deepEqual(reloads, ['build-b']);
 });
 
+test('auto-reload nunca dispara duas vezes para o mesmo build alvo e respeita intervalo mínimo', () => {
+  const clock = createFakeClock();
+  const storage = new Map();
+  const sessionStorage = {
+    getItem(key) { return storage.has(key) ? storage.get(key) : null; },
+    setItem(key, value) { storage.set(key, String(value)); },
+  };
+  const reloads = [];
+  const coordinator = createCrmLiveBuildReloadCoordinator({
+    buildId: 'build-a',
+    reload: (buildId) => reloads.push(buildId),
+    nowFn: clock.now,
+    setTimeoutFn: clock.setTimeout,
+    clearTimeoutFn: clock.clearTimeout,
+    minReloadIntervalMs: 5 * 60 * 1000,
+    storage: sessionStorage,
+  });
+
+  coordinator.queueReloadIfNeeded('build-b');
+  assert.deepEqual(reloads, ['build-b']);
+  assert.equal(coordinator.queueReloadIfNeeded('build-b'), false);
+  assert.deepEqual(reloads, ['build-b']);
+
+  const secondPage = createCrmLiveBuildReloadCoordinator({
+    buildId: 'build-a',
+    reload: (buildId) => reloads.push(buildId),
+    nowFn: clock.now,
+    setTimeoutFn: clock.setTimeout,
+    clearTimeoutFn: clock.clearTimeout,
+    minReloadIntervalMs: 5 * 60 * 1000,
+    storage: sessionStorage,
+  });
+  assert.equal(secondPage.queueReloadIfNeeded('build-b'), false);
+  assert.equal(secondPage.queueReloadIfNeeded('build-c'), false);
+  clock.advance(5 * 60 * 1000);
+  assert.equal(secondPage.queueReloadIfNeeded('build-c'), true);
+  assert.deepEqual(reloads, ['build-b', 'build-c']);
+});
+
 test('toggle da rotação renderiza um único alvo clicável com ícone correto por estado', () => {
   const html = crmLiveRoute.buildHtml({ buildId: 'test-build' });
   assert.equal((html.match(/<button class="crm-live-control is-toggle"/g) || []).length, 1);

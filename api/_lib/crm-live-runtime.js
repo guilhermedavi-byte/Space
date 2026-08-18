@@ -5,6 +5,10 @@ function createCrmLiveBuildReloadCoordinator({
   setTimeoutFn = setTimeout,
   clearTimeoutFn = clearTimeout,
   transitionMs = 450,
+  minReloadIntervalMs = 5 * 60 * 1000,
+  storage = null,
+  storageTargetKey = 'crmLive:lastReloadTargetBuildId',
+  storageTimeKey = 'crmLive:lastReloadAtMs',
 } = {}) {
   let currentBuildId = String(buildId || '').trim();
   let pendingBuildId = '';
@@ -12,6 +16,35 @@ function createCrmLiveBuildReloadCoordinator({
   let interrupting = false;
   let transitionUntil = 0;
   let timerId = null;
+
+  const readStoredTarget = () => {
+    if (!storage || typeof storage.getItem !== 'function') return '';
+    try {
+      return String(storage.getItem(storageTargetKey) || '').trim();
+    } catch {
+      return '';
+    }
+  };
+
+  const readStoredTime = () => {
+    if (!storage || typeof storage.getItem !== 'function') return null;
+    try {
+      const raw = storage.getItem(storageTimeKey);
+      if (raw == null || raw === '') return null;
+      const value = Number(raw);
+      return Number.isFinite(value) ? value : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const writeStoredAttempt = (targetBuildId) => {
+    if (!storage || typeof storage.setItem !== 'function') return;
+    try {
+      storage.setItem(storageTargetKey, String(targetBuildId || '').trim());
+      storage.setItem(storageTimeKey, String(nowFn()));
+    } catch {}
+  };
 
   const clearScheduled = () => {
     if (!timerId) return;
@@ -45,6 +78,7 @@ function createCrmLiveBuildReloadCoordinator({
     pendingBuildId = '';
     currentBuildId = nextBuildId;
     clearScheduled();
+    writeStoredAttempt(nextBuildId);
     reload(nextBuildId);
     return true;
   }
@@ -52,6 +86,10 @@ function createCrmLiveBuildReloadCoordinator({
   const queueReloadIfNeeded = (nextBuildId) => {
     const normalized = String(nextBuildId || '').trim();
     if (!normalized || normalized === currentBuildId) return false;
+    const storedTarget = readStoredTarget();
+    const storedTime = readStoredTime();
+    if (storedTarget && storedTarget === normalized) return false;
+    if (storedTime != null && (nowFn() - storedTime) < minReloadIntervalMs) return false;
     pendingBuildId = normalized;
     flush();
     return true;
@@ -84,6 +122,8 @@ function createCrmLiveBuildReloadCoordinator({
     interrupting,
     transitionUntil,
     scheduled: !!timerId,
+    storedTarget: readStoredTarget(),
+    storedTime: readStoredTime(),
   });
 
   return {

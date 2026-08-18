@@ -35,7 +35,9 @@ const sendRedirect = (res, location, cookie) => {
   res.statusCode = 302;
   if (cookie) res.setHeader("Set-Cookie", cookie);
   res.setHeader("Location", location);
-  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
   res.end("");
 };
 
@@ -1578,10 +1580,14 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
           rows.push.apply(rows, safeArray(getNested(data, ['news'], [])).filter(Boolean));
           preloadImages(rows);
         };
+        const runtimeSessionStorage = (() => {
+          try { return window.sessionStorage; } catch { return null; }
+        })();
         const buildReloadCoordinator = createCrmLiveBuildReloadCoordinator({
           buildId: pageBuildId,
           reload: () => { window.location.reload(); },
           nowFn: () => Date.now(),
+          storage: runtimeSessionStorage,
         });
         const preloadFromEvents = (events = []) => {
           const rows = safeArray(events).map((event) => ({
@@ -2189,8 +2195,17 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
         const rotate = () => {
           rotationController.step(1);
         };
+        const sanitizeLastGoodPayload = (data) => {
+          if (!data || typeof data !== 'object') return null;
+          const clone = JSON.parse(JSON.stringify(data));
+          if (clone && typeof clone === 'object' && 'buildId' in clone) delete clone.buildId;
+          return clone;
+        };
         const saveLastGood = (data) => {
-          try { localStorage.setItem('crmLive:lastGood', JSON.stringify(data)); } catch {}
+          try {
+            const sanitized = sanitizeLastGoodPayload(data);
+            if (sanitized) localStorage.setItem('crmLive:lastGood', JSON.stringify(sanitized));
+          } catch {}
         };
         const loadLastGood = () => {
           try {
@@ -2248,7 +2263,6 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
           } catch (error) {
             const fallback = loadLastGood();
             if (fallback) {
-              buildReloadCoordinator.queueReloadIfNeeded(getNested(fallback, ['buildId'], ''));
               payload = fallback;
               preloadFromPayload(fallback);
               rotationController.setPayload(fallback);
@@ -2341,6 +2355,9 @@ module.exports = async (req, res) => {
       res.statusCode = result.status || 401;
       res.setHeader("Set-Cookie", clearCookie({ secure }));
       res.setHeader("Content-Type", "text/plain; charset=utf-8");
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
       res.end("Token inválido ou revogado.");
       return;
     }
@@ -2356,14 +2373,18 @@ module.exports = async (req, res) => {
     res.statusCode = 401;
     res.setHeader("Set-Cookie", clearCookie({ secure }));
     res.setHeader("Content-Type", "text/plain; charset=utf-8");
-    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
     res.end("Acesso CRM Live não autorizado.");
     return;
   }
 
   res.statusCode = 200;
   res.setHeader("Content-Type", "text/html; charset=utf-8");
-  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
   res.end(buildHtml({ buildId: getCrmLiveBuildId() }));
 };
 
