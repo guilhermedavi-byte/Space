@@ -1127,9 +1127,11 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
       .crm-live-deadline-pointer {
         position: absolute;
         inset: 0;
-        animation: crm-live-deadline-sweep 60s linear infinite, crm-live-deadline-pulse var(--deadline-pulse-duration) ease-in-out infinite;
+        animation: crm-live-deadline-pulse var(--deadline-pulse-duration) ease-in-out infinite;
         transform: rotate(-90deg);
+        transform-origin: 50% 50%;
         will-change: transform, opacity, filter;
+        transition: none;
       }
       .crm-live-deadline-pointer::before {
         content: "";
@@ -1204,10 +1206,6 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
           opacity: var(--deadline-pulse-min-opacity);
           filter: brightness(var(--deadline-pulse-brightness-min)) saturate(.96);
         }
-      }
-      @keyframes crm-live-deadline-sweep {
-        from { transform: rotate(-90deg); }
-        to { transform: rotate(270deg); }
       }
       @media (prefers-reduced-motion: reduce) {
         .crm-live-screen,
@@ -1443,7 +1441,18 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
           return includeTime ? formatted + ' · 23:59' : formatted;
         };
         const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        // Troque entre 'countdown' e 'clockwise' para inverter o sentido do ponteiro sem mexer no cálculo.
+        const SECOND_HAND_DIRECTION = 'countdown';
+        const SECOND_HAND_TICK_TRANSITION_MS = 0;
         const lerp = (start, end, t) => start + ((end - start) * t);
+        const resolveSecondHandAngleDeg = (secondsValue, direction = SECOND_HAND_DIRECTION) => {
+          const normalizedSeconds = ((Number(secondsValue) || 0) % 60 + 60) % 60;
+          const normalizedDirection = String(direction || SECOND_HAND_DIRECTION).trim().toLowerCase();
+          const clockwiseSeconds = normalizedDirection === 'clockwise'
+            ? ((60 - normalizedSeconds) % 60)
+            : normalizedSeconds;
+          return (clockwiseSeconds * 6) - 90;
+        };
         const resolvePulseVisuals = (remainingClampedMs) => {
           const hour = 60 * 60 * 1000;
           if (remainingClampedMs <= 0) {
@@ -1477,9 +1486,12 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
               hours: '00',
               minutes: '00',
               seconds: '00',
+              totalSecondsRemaining: 0,
+              secondHandAngleDeg: resolveSecondHandAngleDeg(0),
+              secondHandDirection: SECOND_HAND_DIRECTION,
+              secondHandTickTransitionMs: SECOND_HAND_TICK_TRANSITION_MS,
               label: 'para fechar a semana',
               statusText: 'semana indisponível',
-              pointerOffsetMs: 0,
               driftX: 0,
               driftY: 0,
             };
@@ -1498,7 +1510,6 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
           const progressPct = Math.max(0, Math.min(100, (remainingClampedMs / finalWindowMs) * 100));
           const urgencyLevel = deadlineReached ? 'expired' : remainingClampedMs <= 60 * 60 * 1000 ? 'critical' : remainingClampedMs <= 6 * 60 * 60 * 1000 ? 'warning' : 'normal';
           const pulseVisuals = resolvePulseVisuals(remainingClampedMs);
-          const minuteMs = ((safeNow.getSeconds() * 1000) + safeNow.getMilliseconds()) % 60000;
           const driftBucket = Math.floor(safeNow.getTime() / (5 * 60 * 1000));
           const driftOffsets = [
             { x: 0, y: 0 },
@@ -1519,9 +1530,12 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
             hours: String(hours).padStart(2, '0'),
             minutes: String(minutes).padStart(2, '0'),
             seconds: String(seconds).padStart(2, '0'),
+            totalSecondsRemaining: totalSeconds,
+            secondHandAngleDeg: resolveSecondHandAngleDeg(seconds),
+            secondHandDirection: SECOND_HAND_DIRECTION,
+            secondHandTickTransitionMs: SECOND_HAND_TICK_TRANSITION_MS,
             label: deadlineReached ? 'aguardando a virada da semana' : 'para fechar a semana',
             statusText: deadlineReached ? 'semana encerrando' : 'contagem final da semana',
-            pointerOffsetMs: minuteMs,
             driftX: drift.x,
             driftY: drift.y,
             accentAlpha: pulseVisuals.accentAlpha,
@@ -1742,9 +1756,12 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
           hours: '00',
           minutes: '00',
           seconds: '00',
+          totalSecondsRemaining: 0,
+          secondHandAngleDeg: resolveSecondHandAngleDeg(0),
+          secondHandDirection: SECOND_HAND_DIRECTION,
+          secondHandTickTransitionMs: SECOND_HAND_TICK_TRANSITION_MS,
           label: 'para fechar a semana',
           statusText: 'semana indisponível',
-          pointerOffsetMs: 0,
           driftX: 0,
           driftY: 0,
           accentAlpha: 0.58,
@@ -1843,7 +1860,7 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
               '<div class="crm-live-deadline-shell">' +
                 '<div class="crm-live-deadline-kicker">Últimas 24 horas</div>' +
                 '<div class="crm-live-deadline-ring" data-crm-live-deadline-ring style="--deadline-pct:' + clampPercent(deadlineState.progressPct).toFixed(3) + '">' +
-                  '<div class="crm-live-deadline-pointer" data-crm-live-deadline-pointer style="animation-delay:-' + String(deadlineState.pointerOffsetMs || 0) + 'ms"></div>' +
+                  '<div class="crm-live-deadline-pointer" data-crm-live-deadline-pointer style="transform:rotate(' + String(Number(deadlineState.secondHandAngleDeg || -90)) + 'deg);transition:' + ((Number(deadlineState.secondHandTickTransitionMs || 0) > 0) ? ('transform ' + String(Number(deadlineState.secondHandTickTransitionMs || 0)) + 'ms linear') : 'none') + ';"></div>' +
                   '<div class="crm-live-deadline-center">' +
                     '<div class="crm-live-deadline-label" data-crm-live-deadline-label>' + escapeHtml(deadlineState.label) + '</div>' +
                     '<div class="crm-live-deadline-value">' +
@@ -1896,7 +1913,10 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
           const noteEl = sidePanelEl.querySelector('[data-crm-live-deadline-note]');
           if (ring) ring.style.setProperty('--deadline-pct', clampPercent(deadlineState.progressPct).toFixed(3));
           if (pointer) {
-            pointer.style.animationDelay = '-' + String(deadlineState.pointerOffsetMs || 0) + 'ms';
+            pointer.style.transform = 'rotate(' + String(Number(deadlineState.secondHandAngleDeg || -90)) + 'deg)';
+            pointer.style.transition = Number(deadlineState.secondHandTickTransitionMs || 0) > 0
+              ? ('transform ' + String(Number(deadlineState.secondHandTickTransitionMs || 0)) + 'ms linear')
+              : 'none';
             pointer.style.animationPlayState = deadlineState.deadlineReached ? 'paused' : 'running';
           }
           if (labelEl) labelEl.textContent = deadlineState.label;

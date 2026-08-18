@@ -1,7 +1,19 @@
 const FINAL_WINDOW_MS = 24 * 60 * 60 * 1000;
+// Troque entre "countdown" e "clockwise" para inverter o sentido do ponteiro sem mexer no cálculo.
+const SECOND_HAND_DIRECTION = "countdown";
+const SECOND_HAND_TICK_TRANSITION_MS = 0;
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const lerp = (start, end, t) => start + ((end - start) * t);
+
+function resolveSecondHandAngleDeg(secondsValue, direction = SECOND_HAND_DIRECTION) {
+  const normalizedSeconds = ((Number(secondsValue) || 0) % 60 + 60) % 60;
+  const normalizedDirection = String(direction || SECOND_HAND_DIRECTION).trim().toLowerCase();
+  const clockwiseSeconds = normalizedDirection === "clockwise"
+    ? ((60 - normalizedSeconds) % 60)
+    : normalizedSeconds;
+  return (clockwiseSeconds * 6) - 90;
+}
 
 function resolvePulseVisuals(remainingClampedMs) {
   const hour = 60 * 60 * 1000;
@@ -84,9 +96,12 @@ function computeDeadlineModeState({ endDateKey = '', now = new Date() } = {}) {
       hours: '00',
       minutes: '00',
       seconds: '00',
+      totalSecondsRemaining: 0,
+      secondHandAngleDeg: resolveSecondHandAngleDeg(0),
+      secondHandDirection: SECOND_HAND_DIRECTION,
+      secondHandTickTransitionMs: SECOND_HAND_TICK_TRANSITION_MS,
       label: 'para fechar a semana',
       statusText: 'semana indisponível',
-      pointerOffsetMs: 0,
       driftX: 0,
       driftY: 0,
     };
@@ -104,7 +119,6 @@ function computeDeadlineModeState({ endDateKey = '', now = new Date() } = {}) {
   const progressPct = clamp((remainingClampedMs / FINAL_WINDOW_MS) * 100, 0, 100);
   const urgencyLevel = deadlineReached ? 'expired' : remainingClampedMs <= 60 * 60 * 1000 ? 'critical' : remainingClampedMs <= 6 * 60 * 60 * 1000 ? 'warning' : 'normal';
   const pulseVisuals = resolvePulseVisuals(remainingClampedMs);
-  const minuteMs = ((safeNow.getSeconds() * 1000) + safeNow.getMilliseconds()) % 60000;
   const driftBucket = Math.floor(safeNow.getTime() / (5 * 60 * 1000));
   const driftOffsets = [
     { x: 0, y: 0 },
@@ -125,9 +139,12 @@ function computeDeadlineModeState({ endDateKey = '', now = new Date() } = {}) {
     hours: String(hours).padStart(2, '0'),
     minutes: String(minutes).padStart(2, '0'),
     seconds: String(seconds).padStart(2, '0'),
+    totalSecondsRemaining: totalSeconds,
+    secondHandAngleDeg: resolveSecondHandAngleDeg(seconds),
+    secondHandDirection: SECOND_HAND_DIRECTION,
+    secondHandTickTransitionMs: SECOND_HAND_TICK_TRANSITION_MS,
     label: deadlineReached ? 'aguardando a virada da semana' : 'para fechar a semana',
     statusText: deadlineReached ? 'semana encerrando' : 'contagem final da semana',
-    pointerOffsetMs: minuteMs,
     driftX: drift.x,
     driftY: drift.y,
     accentAlpha: pulseVisuals.accentAlpha,
@@ -142,6 +159,9 @@ function computeDeadlineModeState({ endDateKey = '', now = new Date() } = {}) {
 
 module.exports = {
   FINAL_WINDOW_MS,
+  SECOND_HAND_DIRECTION,
+  SECOND_HAND_TICK_TRANSITION_MS,
   parseDateKeyAtEnd,
+  resolveSecondHandAngleDeg,
   computeDeadlineModeState,
 };

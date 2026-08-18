@@ -1,7 +1,12 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { computeDeadlineModeState, FINAL_WINDOW_MS } = require('../api/_lib/crm-live-deadline');
+const {
+  computeDeadlineModeState,
+  FINAL_WINDOW_MS,
+  SECOND_HAND_DIRECTION,
+  resolveSecondHandAngleDeg,
+} = require('../api/_lib/crm-live-deadline');
 
 test('24h01 restantes mantém modo normal', () => {
   const state = computeDeadlineModeState({
@@ -65,4 +70,44 @@ test('reavalia a janela final mesmo com a página aberta horas antes', () => {
   assert.equal(duringWindow.splitActive, true);
   assert.equal(duringWindow.hours, '13');
   assert.equal(duringWindow.minutes, '38');
+});
+
+test('ponteiro countdown mapeia 0, 15, 30 e 45 segundos nos pontos cardeais', () => {
+  assert.equal(SECOND_HAND_DIRECTION, 'countdown');
+  assert.equal(resolveSecondHandAngleDeg(0, 'countdown'), -90);
+  assert.equal(resolveSecondHandAngleDeg(15, 'countdown'), 0);
+  assert.equal(resolveSecondHandAngleDeg(30, 'countdown'), 90);
+  assert.equal(resolveSecondHandAngleDeg(45, 'countdown'), 180);
+});
+
+test('ângulo não muda dentro do mesmo segundo inteiro', () => {
+  const first = computeDeadlineModeState({
+    endDateKey: '2026-08-18',
+    now: new Date('2026-08-18T23:59:37.100-03:00'),
+  });
+  const second = computeDeadlineModeState({
+    endDateKey: '2026-08-18',
+    now: new Date('2026-08-18T23:59:37.900-03:00'),
+  });
+
+  assert.equal(first.seconds, second.seconds);
+  assert.equal(first.secondHandAngleDeg, second.secondHandAngleDeg);
+});
+
+test('display e ponteiro derivam da mesma leitura de tempo restante', () => {
+  const state = computeDeadlineModeState({
+    endDateKey: '2026-08-18',
+    now: new Date('2026-08-18T23:59:37.900-03:00'),
+  });
+
+  const expectedSeconds = Math.floor(state.remainingClampedMs / 1000) % 60;
+  assert.equal(state.seconds, String(expectedSeconds).padStart(2, '0'));
+  assert.equal(state.secondHandAngleDeg, resolveSecondHandAngleDeg(expectedSeconds, state.secondHandDirection));
+  assert.doesNotMatch(computeDeadlineModeState.toString(), /getSeconds\(/);
+});
+
+test('trocar a direção inverte o ângulo sem quebrar o mapeamento', () => {
+  assert.equal(resolveSecondHandAngleDeg(15, 'clockwise'), 180);
+  assert.equal(resolveSecondHandAngleDeg(30, 'clockwise'), 90);
+  assert.equal(resolveSecondHandAngleDeg(45, 'clockwise'), 0);
 });
