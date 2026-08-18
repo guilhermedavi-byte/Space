@@ -10,6 +10,9 @@ const {
 } = require("./_lib/crm-live");
 const { computeDeadlineModeState } = require("./_lib/crm-live-deadline");
 const { buildScreenKeys, createCrmLiveLoopController } = require("./_lib/crm-live-rotation");
+const { createCrmLiveBuildReloadCoordinator } = require("./_lib/crm-live-runtime");
+const { getCrmLiveBuildId } = require("./_lib/crm-live-build");
+const { renderToggleIcon } = require("./_lib/crm-live-toggle");
 
 const normalizeRole = (value) => {
   const raw = String(value || "").trim().toLowerCase();
@@ -36,13 +39,14 @@ const sendRedirect = (res, location, cookie) => {
   res.end("");
 };
 
-const buildHtml = () => `<!DOCTYPE html>
+const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CRM Live | Space</title>
     <meta name="robots" content="noindex,nofollow" />
+    <meta name="crm-live-build-id" content="${buildId}" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500&display=swap" rel="stylesheet" />
@@ -151,31 +155,31 @@ const buildHtml = () => `<!DOCTYPE html>
         display: block;
         fill: currentColor;
       }
-      .crm-live-control.is-toggle[data-state="paused"] {
-        opacity: .8;
-        color: rgba(255,255,255,.92);
+      .crm-live-control.is-toggle {
+        position: relative;
       }
-      .crm-live-pause-indicator {
-        width: 2.7vh;
-        height: 2.7vh;
+      .crm-live-control.is-toggle::after {
+        content: "";
+        position: absolute;
+        inset: -.35vh;
         border-radius: 999px;
-        display: none;
-        place-items: center;
-        background: rgba(255, 86, 79, .14);
-        color: rgba(255, 86, 79, .85);
-        opacity: .72;
+        border: 1px solid transparent;
+        opacity: 0;
+        transition: opacity .2s ease, border-color .2s ease, box-shadow .2s ease;
+        pointer-events: none;
       }
-      .crm-live.is-rotation-paused .crm-live-pause-indicator {
-        display: grid;
+      .crm-live-control.is-toggle[data-state="paused"] {
+        opacity: .88;
+        color: rgba(255,255,255,.96);
+        background: rgba(255,255,255,.1);
+      }
+      .crm-live-control.is-toggle[data-state="paused"]::after {
+        opacity: 1;
+        border-color: rgba(255, 86, 79, .42);
+        box-shadow: 0 0 0 .35vh rgba(255, 86, 79, .14);
       }
       .crm-live.is-deadline-mode .crm-live-controls {
         right: calc(38% + 3vw);
-      }
-      .crm-live-pause-indicator svg {
-        width: 1.2vh;
-        height: 1.2vh;
-        display: block;
-        fill: currentColor;
       }
       .crm-live-screen {
         position: absolute;
@@ -1203,12 +1207,9 @@ const buildHtml = () => `<!DOCTYPE html>
         </button>
         <button class="crm-live-control is-toggle" type="button" data-crm-live-toggle data-state="running" aria-label="Pausar rotação">
           <span data-crm-live-toggle-icon>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5h3v14H8zm5 0h3v14h-3z"/></svg>
+            ${renderToggleIcon(false)}
           </span>
         </button>
-        <span class="crm-live-pause-indicator" data-crm-live-paused-indicator aria-hidden="true">
-          <svg viewBox="0 0 24 24"><path d="M8 5h3v14H8zm5 0h3v14h-3z"/></svg>
-        </span>
       </div>
       <div class="crm-live-stage" data-crm-live-root>
         <div class="crm-live-empty" data-crm-live-empty>Carregando CRM Live…</div>
@@ -1233,6 +1234,7 @@ const buildHtml = () => `<!DOCTYPE html>
         const nextButton = document.querySelector('[data-crm-live-next]');
         const toggleButton = document.querySelector('[data-crm-live-toggle]');
         const toggleIconEl = document.querySelector('[data-crm-live-toggle-icon]');
+        const pageBuildId = ${JSON.stringify(buildId)};
         const ROTATE_MS = 10000;
         const POLL_MS = 120000;
         const EVENT_POLL_MS = 25000;
@@ -1249,6 +1251,7 @@ const buildHtml = () => `<!DOCTYPE html>
         let deadlineSplitActive = false;
         const buildScreenKeys = ${buildScreenKeys.toString()};
         const createCrmLiveLoopController = ${createCrmLiveLoopController.toString()};
+        const createCrmLiveBuildReloadCoordinator = ${createCrmLiveBuildReloadCoordinator.toString()};
 
         console.log('[crm-live] viewport', {
           innerWidth: window.innerWidth,
@@ -1469,9 +1472,7 @@ const buildHtml = () => `<!DOCTYPE html>
           return computeDeadlineModeState({ endDateKey, now: referenceNow });
         };
         const safeArray = (value) => Array.isArray(value) ? value : [];
-        const renderToggleIcon = (paused) => paused
-          ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7z"/></svg>'
-          : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5h3v14H8zm5 0h3v14h-3z"/></svg>';
+        const renderToggleIcon = ${renderToggleIcon.toString()};
         const getPhotoUrl = (row) => {
           if (!row || typeof row !== 'object') return '';
           return String(row.photoURL || row.photoUrl || '').trim();
@@ -1577,6 +1578,11 @@ const buildHtml = () => `<!DOCTYPE html>
           rows.push.apply(rows, safeArray(getNested(data, ['news'], [])).filter(Boolean));
           preloadImages(rows);
         };
+        const buildReloadCoordinator = createCrmLiveBuildReloadCoordinator({
+          buildId: pageBuildId,
+          reload: () => { window.location.reload(); },
+          nowFn: () => Date.now(),
+        });
         const preloadFromEvents = (events = []) => {
           const rows = safeArray(events).map((event) => ({
             displayName: getNested(event, ['payload', 'displayName'], '') || getNested(event, ['payload', 'closerName'], ''),
@@ -1590,6 +1596,7 @@ const buildHtml = () => `<!DOCTYPE html>
           return deadlineState.splitActive ? keys.filter((key) => key !== 'week') : keys;
         };
         const syncRotationUi = () => {
+          buildReloadCoordinator.setPaused(rotationPaused);
           if (crmLiveEl) crmLiveEl.classList.toggle('is-rotation-paused', rotationPaused);
           if (crmLiveEl) crmLiveEl.classList.toggle('is-deadline-mode', deadlineSplitActive);
           if (toggleButton) {
@@ -1637,6 +1644,7 @@ const buildHtml = () => `<!DOCTYPE html>
           const shouldToggleMode = deadlineSplitActive !== deadlineState.splitActive;
           deadlineSplitActive = deadlineState.splitActive;
           syncRotationUi();
+        buildReloadCoordinator.noteTransition();
           if (shouldToggleMode) {
             rotationController.setPayload(payload);
           }
@@ -2056,20 +2064,25 @@ const buildHtml = () => `<!DOCTYPE html>
             if (payload && !activeInterruption) {
               render();
               refreshWeekCountdown();
+              buildReloadCoordinator.noteTransition();
             }
           },
           onInterruptionStart: (event) => {
             activeInterruption = event;
+            buildReloadCoordinator.setInterrupting(true);
             renderInterruption(event);
             syncRotationUi();
+            buildReloadCoordinator.noteTransition();
           },
           onInterruptionEnd: () => {
             clearInterruption();
             activeInterruption = null;
+            buildReloadCoordinator.setInterrupting(false);
             syncRotationUi();
             if (payload) {
               render();
               refreshWeekCountdown();
+              buildReloadCoordinator.noteTransition();
             }
           },
         });
@@ -2223,6 +2236,7 @@ const buildHtml = () => `<!DOCTYPE html>
               err.errorCode = getNested(data, ['error'], '') || '';
               throw err;
             }
+            buildReloadCoordinator.queueReloadIfNeeded(getNested(data, ['buildId'], ''));
             payload = data;
             preloadFromPayload(data);
             saveLastGood(data);
@@ -2234,6 +2248,7 @@ const buildHtml = () => `<!DOCTYPE html>
           } catch (error) {
             const fallback = loadLastGood();
             if (fallback) {
+              buildReloadCoordinator.queueReloadIfNeeded(getNested(fallback, ['buildId'], ''));
               payload = fallback;
               preloadFromPayload(fallback);
               rotationController.setPayload(fallback);
@@ -2349,5 +2364,7 @@ module.exports = async (req, res) => {
   res.statusCode = 200;
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.setHeader("Cache-Control", "no-store");
-  res.end(buildHtml());
+  res.end(buildHtml({ buildId: getCrmLiveBuildId() }));
 };
+
+module.exports.buildHtml = buildHtml;

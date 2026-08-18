@@ -17,6 +17,7 @@ const {
   loadCrmLiveDefaultsConfig,
 } = require("./_lib/crm-live");
 const { resolveCommercialWeek } = require("./_lib/growth-people");
+const { getCrmLiveBuildId } = require("./_lib/crm-live-build");
 
 const normalizeRole = (value) => {
   const raw = String(value || "").trim().toLowerCase();
@@ -54,6 +55,7 @@ module.exports = async (req, res) => {
   if (!auth?.ok) return sendJson(res, auth?.status || 401, { error: auth?.error || "unauthorized" });
 
   const host = String(req.headers.host || "localhost");
+  const buildId = getCrmLiveBuildId();
   const url = new URL(req.url || "/api/crm-live-data", `https://${host}`);
   const forceRefresh = String(url.searchParams.get("refresh") || "").trim() === "1";
   const now = new Date();
@@ -189,6 +191,7 @@ module.exports = async (req, res) => {
       stale,
       cached: Boolean(crmSlice.cached || sdrSlice.cached),
       staleAgeMinutes,
+      buildId,
     });
   } catch (error) {
     console.error("[crm-live] top-level payload failed", error);
