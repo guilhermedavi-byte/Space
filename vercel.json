@@ -31,6 +31,7 @@
     { "source": "/growth/dashboard", "destination": "/api/growth-dashboard" },
     { "source": "/growth/contratos", "destination": "/api/growth-dashboard?page=contracts" },
     { "source": "/tv/crm-live", "destination": "/api/crm-live" },
+    { "source": "/tv/cs-live", "destination": "/api/cs-live" },
     { "source": "/aula/:id/encerramento", "destination": "/api/aula-encerramento?id=:id" },
     { "source": "/aula/:id", "destination": "/api/aula?id=:id" },
     { "source": "/sala/:room", "destination": "/api/sala?room=:room" },
