@@ -4,6 +4,7 @@ const { getGoogleAccessToken } = require("../../_lib/google-service-account");
 const { requestJson, FIRESTORE_BASE, API_KEY, PROJECT_ID, encodeFields, decodeFields, getDocIdFromName } = require("../../_lib/firestore-rest");
 const { getDocumentAsAdmin, listCollectionAsAdmin, queryCollectionByDateRangeAsAdmin, commitWritesAsAdmin } = require("./firestore-admin");
 const { signJwt, verifyJwt, parseCookies, isSecureRequest } = require("./session");
+const { createLiveTvAccess } = require("./live-tv-access");
 const { resolveCommercialPeriod, formatSaoPauloDateKey, getCalendarMonthBounds } = require("./commercial-period");
 const {
   buildWeeklyGoalsReadModel,
@@ -153,18 +154,16 @@ const buildDocumentName = (collection, docId) => {
   }
   return `projects/${PROJECT_ID}/databases/(default)/documents/${safeCollection}/${encodeURIComponent(safeDocId)}`;
 };
-const buildCookie = (name, value, { maxAgeSeconds = CRM_LIVE_COOKIE_MAX_AGE_SECONDS, secure = false, path = "/" } = {}) => {
-  const parts = [
-    `${name}=${encodeURIComponent(value)}`,
-    `Path=${path}`,
-    "HttpOnly",
-    "SameSite=Lax",
-    `Max-Age=${Math.max(0, Number(maxAgeSeconds) || 0)}`,
-  ];
-  if (secure) parts.push("Secure");
-  return parts.join("; ");
-};
-const clearCookie = ({ secure = false, path = "/" } = {}) => buildCookie(CRM_LIVE_COOKIE_NAME, "", { maxAgeSeconds: 0, secure, path });
+const liveTvAccess = createLiveTvAccess({
+  collection: CRM_LIVE_ACCESS_COLLECTION,
+  cookieName: CRM_LIVE_COOKIE_NAME,
+  cookieScope: CRM_LIVE_COOKIE_SCOPE,
+  cookieMaxAgeSeconds: CRM_LIVE_COOKIE_MAX_AGE_SECONDS,
+  defaultLabel: "CRM Live TV",
+});
+const { buildCookie } = liveTvAccess;
+const clearCookie = ({ secure = false, path = "/" } = {}) =>
+  buildCookie(CRM_LIVE_COOKIE_NAME, "", { maxAgeSeconds: 0, secure, path });
 
 const formatDateKeyStartIso = (dateKey) => {
   const safe = safeString(dateKey);
@@ -1427,24 +1426,9 @@ const writeWeeklyRollup = async ({ weeklyReadModel, weekTeamSummary, now = new D
   });
 };
 
-const buildCrmLiveReadCookie = ({ tokenId } = {}) => {
-  const now = Math.floor(Date.now() / 1000);
-  return signJwt({
-    scope: CRM_LIVE_COOKIE_SCOPE,
-    tokenId: safeString(tokenId),
-    iat: now,
-    exp: now + CRM_LIVE_COOKIE_MAX_AGE_SECONDS,
-  });
-};
+const buildCrmLiveReadCookie = ({ tokenId } = {}) => liveTvAccess.buildReadCookie({ tokenId });
 
-const parseCrmLiveReadCookie = (req) => {
-  const cookies = parseCookies(req);
-  const raw = cookies[CRM_LIVE_COOKIE_NAME];
-  if (!raw) return null;
-  const payload = verifyJwt(raw);
-  if (!payload || payload.scope !== CRM_LIVE_COOKIE_SCOPE || !safeString(payload.tokenId)) return null;
-  return payload;
-};
+const parseCrmLiveReadCookie = (req) => liveTvAccess.parseReadCookie(req);
 
 const parseEntryToken = (rawToken) => {
   const raw = safeString(rawToken);
@@ -1453,109 +1437,16 @@ const parseEntryToken = (rawToken) => {
   return { tokenId: raw.slice(0, dot), secret: raw.slice(dot + 1) };
 };
 
-const validateEntryToken = async (rawToken) => {
-  const parsed = parseEntryToken(rawToken);
-  if (!parsed) return { ok: false, error: "invalid_token_format", status: 401 };
-  try {
-    const doc = await getDocumentAsAdmin(`${CRM_LIVE_ACCESS_COLLECTION}/${encodeURIComponent(parsed.tokenId)}`);
-    const active = doc?.active !== false && !doc?.revokedAt;
-    const expiresAt = safeString(doc?.expiresAt);
-    const expired = expiresAt ? Date.parse(expiresAt) < Date.now() : false;
-    if (!active || expired) return { ok: false, error: "token_revoked", status: 401 };
-    if (safeString(doc?.secretHash) !== hashSecret(parsed.secret)) return { ok: false, error: "invalid_token", status: 401 };
-    await writeDocAsAdmin({
-      docPath: `${CRM_LIVE_ACCESS_COLLECTION}/${encodeURIComponent(parsed.tokenId)}`,
-      data: { lastUsedAt: new Date() },
-      updateMaskPaths: ["lastUsedAt"],
-    }).catch(() => {});
-    return { ok: true, tokenId: parsed.tokenId, doc };
-  } catch (error) {
-    if (Number(error?.status) === 404) return { ok: false, error: "token_not_found", status: 401 };
-    throw error;
-  }
-};
+const validateEntryToken = async (rawToken) => liveTvAccess.validateEntryToken(rawToken);
 
-const validateCookieViewer = async (req) => {
-  const payload = parseCrmLiveReadCookie(req);
-  if (!payload) return { ok: false, error: "missing_cookie", status: 401 };
-  try {
-    const doc = await getDocumentAsAdmin(`${CRM_LIVE_ACCESS_COLLECTION}/${encodeURIComponent(payload.tokenId)}`);
-    const active = doc?.active !== false && !doc?.revokedAt;
-    const expiresAt = safeString(doc?.expiresAt);
-    const expired = expiresAt ? Date.parse(expiresAt) < Date.now() : false;
-    if (!active || expired) return { ok: false, error: "token_revoked", status: 401 };
-    return { ok: true, tokenId: payload.tokenId, doc };
-  } catch (error) {
-    if (Number(error?.status) === 404) return { ok: false, error: "token_not_found", status: 401 };
-    throw error;
-  }
-};
+const validateCookieViewer = async (req) => liveTvAccess.validateCookieViewer(req);
 
-const createAccessTokenRecord = async ({ label = "", expiresAt = "" } = {}) => {
-  const tokenId = `tv_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
-  const secret = crypto.randomBytes(24).toString("hex");
-  const now = new Date();
-  const data = {
-    label: safeString(label) || "CRM Live TV",
-    active: true,
-    secretHash: hashSecret(secret),
-    createdAt: now,
-    updatedAt: now,
-    revokedAt: null,
-    lastUsedAt: null,
-    expiresAt: safeString(expiresAt) || null,
-  };
-  const write = await writeDocAsAdmin({
-    docPath: `${CRM_LIVE_ACCESS_COLLECTION}/${encodeURIComponent(tokenId)}`,
-    data,
-    updateMaskPaths: Object.keys(data),
-  });
-  if (!write?.ok) {
-    const error = new Error("crm_live_token_create_failed");
-    error.code = "crm_live_token_create_failed";
-    error.status = write?.status || 500;
-    error.details = write?.data || write?.text || null;
-    throw error;
-  }
-  return {
-    tokenId,
-    token: `${tokenId}.${secret}`,
-    data,
-  };
-};
+const createAccessTokenRecord = async ({ label = "", expiresAt = "" } = {}) =>
+  liveTvAccess.createAccessTokenRecord({ label, expiresAt });
 
-const listAccessTokens = async () => {
-  const rows = await listCollectionAsAdmin(CRM_LIVE_ACCESS_COLLECTION, { pageSize: 200 });
-  return rows.map((row) => ({
-    tokenId: safeString(row.firestoreDocId || row.id),
-    label: safeString(row.label),
-    active: row.active !== false && !row.revokedAt,
-    createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : safeString(row.createdAt),
-    updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : safeString(row.updatedAt),
-    expiresAt: row.expiresAt instanceof Date ? row.expiresAt.toISOString() : safeString(row.expiresAt),
-    revokedAt: row.revokedAt instanceof Date ? row.revokedAt.toISOString() : safeString(row.revokedAt),
-    lastUsedAt: row.lastUsedAt instanceof Date ? row.lastUsedAt.toISOString() : safeString(row.lastUsedAt),
-  }));
-};
+const listAccessTokens = async () => liveTvAccess.listAccessTokens();
 
-const revokeAccessToken = async ({ tokenId } = {}) => {
-  const id = safeString(tokenId);
-  if (!id) throw new Error("missing_token_id");
-  const now = new Date();
-  const write = await writeDocAsAdmin({
-    docPath: `${CRM_LIVE_ACCESS_COLLECTION}/${encodeURIComponent(id)}`,
-    data: { active: false, revokedAt: now, updatedAt: now },
-    updateMaskPaths: ["active", "revokedAt", "updatedAt"],
-  });
-  if (!write?.ok) {
-    const error = new Error("crm_live_token_revoke_failed");
-    error.code = "crm_live_token_revoke_failed";
-    error.status = write?.status || 500;
-    error.details = write?.data || write?.text || null;
-    throw error;
-  }
-  return { ok: true };
-};
+const revokeAccessToken = async ({ tokenId } = {}) => liveTvAccess.revokeAccessToken({ tokenId });
 
 module.exports = {
   CRM_LIVE_ACCESS_COLLECTION,

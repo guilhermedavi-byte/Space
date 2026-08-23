@@ -9,10 +9,11 @@ const {
   CRM_LIVE_COOKIE_NAME,
 } = require("./_lib/crm-live");
 const { computeDeadlineModeState } = require("./_lib/crm-live-deadline");
-const { buildScreenKeys, createCrmLiveLoopController } = require("./_lib/crm-live-rotation");
-const { createCrmLiveBuildReloadCoordinator } = require("./_lib/crm-live-runtime");
+const { buildScreenKeys, createLiveTvLoopController: createCrmLiveLoopController } = require("./_lib/live-tv-rotation");
+const { createLiveTvBuildReloadCoordinator: createCrmLiveBuildReloadCoordinator } = require("./_lib/live-tv-runtime");
 const { getCrmLiveBuildId } = require("./_lib/crm-live-build");
 const { renderToggleIcon } = require("./_lib/crm-live-toggle");
+const { handleLiveTvPageRequest } = require("./_lib/live-tv-route");
 
 const normalizeRole = (value) => {
   const raw = String(value || "").trim().toLowerCase();
@@ -2860,56 +2861,22 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
   </body>
 </html>`;
 
-module.exports = async (req, res) => {
-  if (req.method !== "GET" && req.method !== "HEAD") {
-    res.setHeader("Allow", "GET, HEAD");
-    res.statusCode = 405;
-    res.end("Method Not Allowed");
-    return;
-  }
-
-  const host = String(req.headers.host || "localhost");
-  const url = new URL(req.url || "/tv/crm-live", `https://${host}`);
-  const token = String(url.searchParams.get("token") || "").trim();
-  const secure = isSecureRequest(req);
-
-  if (token) {
-    const result = await validateEntryToken(token);
-    if (!result.ok) {
-      res.statusCode = result.status || 401;
-      res.setHeader("Set-Cookie", clearCookie({ secure }));
-      res.setHeader("Content-Type", "text/plain; charset=utf-8");
-      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
-      res.setHeader("Pragma", "no-cache");
-      res.setHeader("Expires", "0");
-      res.end("Token inválido ou revogado.");
-      return;
-    }
-    const cookieToken = buildCrmLiveReadCookie({ tokenId: result.tokenId });
-    sendRedirect(res, "/tv/crm-live", buildCookie(CRM_LIVE_COOKIE_NAME, cookieToken, { secure }));
-    return;
-  }
-
-  const session = getSessionFromRequest(req);
-  const role = normalizeRole(session?.role);
-  const cookieViewer = role === "admin" || role === "growth" || role === "commercial" ? { ok: true } : await validateCookieViewer(req);
-  if (!cookieViewer?.ok) {
-    res.statusCode = 401;
-    res.setHeader("Set-Cookie", clearCookie({ secure }));
-    res.setHeader("Content-Type", "text/plain; charset=utf-8");
-    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
-    res.setHeader("Pragma", "no-cache");
-    res.setHeader("Expires", "0");
-    res.end("Acesso CRM Live não autorizado.");
-    return;
-  }
-
-  res.statusCode = 200;
-  res.setHeader("Content-Type", "text/html; charset=utf-8");
-  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
-  res.setHeader("Pragma", "no-cache");
-  res.setHeader("Expires", "0");
-  res.end(buildHtml({ buildId: getCrmLiveBuildId() }));
-};
+module.exports = async (req, res) => handleLiveTvPageRequest(req, res, {
+  routePath: "/tv/crm-live",
+  cookiePath: "/",
+  invalidTokenMessage: "Token inválido ou revogado.",
+  unauthorizedMessage: "Acesso CRM Live não autorizado.",
+  normalizeRole,
+  sessionRoles: ["admin", "growth", "commercial"],
+  isSecureRequest,
+  validateEntryToken,
+  validateCookieViewer,
+  clearCookie,
+  buildReadCookie: buildCrmLiveReadCookie,
+  buildCookie,
+  cookieName: CRM_LIVE_COOKIE_NAME,
+  buildHtml,
+  buildId: getCrmLiveBuildId(),
+});
 
 module.exports.buildHtml = buildHtml;
