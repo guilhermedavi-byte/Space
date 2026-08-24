@@ -15073,6 +15073,7 @@ const salesCopilotState = {
 };
 const sdrPanelState = {
   isLoading: false,
+  isSubmitting: false,
   loadedAt: 0,
   error: "",
   activeTab: "hoje",
@@ -17458,6 +17459,7 @@ const renderSdrHoje = () => {
   const pulseText = referenceDay
     ? `Você fez ${stats.totalCalls} ligações hoje · ${formatSdrPct(callProgress)} do ritmo de referência`
     : `Você fez ${stats.totalCalls} ligações hoje · ritmo de referência aguardando histórico`;
+  const disabledAttr = sdrPanelState.isSubmitting ? "disabled" : "";
   return `
     <section class="sdr-day-pulse">
       <i></i>
@@ -17475,11 +17477,12 @@ const renderSdrHoje = () => {
         <section class="sdr-card sdr-actions-card">
           <div class="sdr-card-title"><span>Registrar ligação</span></div>
           <div class="sdr-actions sdr-actions-primary">
-            <button class="sdr-action is-no" type="button" data-sdr-call="nao_atendeu"><b>Não atendeu</b><span>+1 ligação</span></button>
-            <button class="sdr-action is-yes" type="button" data-sdr-call="atendeu"><b>Atendeu</b><span>sem agenda</span></button>
-            <button class="sdr-action is-scheduled" type="button" data-sdr-call="agendou"><b>Atendeu e agendou</b><span>+1 agenda</span></button>
+            <button class="sdr-action is-no" type="button" data-sdr-call="nao_atendeu" ${disabledAttr}><b>Não atendeu</b><span>+1 ligação</span></button>
+            <button class="sdr-action is-yes" type="button" data-sdr-call="atendeu" ${disabledAttr}><b>Atendeu</b><span>sem agenda</span></button>
+            <button class="sdr-action is-scheduled" type="button" data-sdr-call="agendou" ${disabledAttr}><b>Atendeu e agendou</b><span>+1 agenda</span></button>
           </div>
-          ${calls.length ? `<button class="sdr-undo" type="button" data-sdr-undo="call">Desfazer última ligação</button>` : ""}
+          ${sdrPanelState.isSubmitting ? `<div class="sdr-saving" role="status">Salvando registro…</div>` : ""}
+          ${calls.length ? `<button class="sdr-undo" type="button" data-sdr-undo="call" ${disabledAttr}>Desfazer última ligação</button>` : ""}
         </section>
 
         <section class="sdr-card sdr-feed-card">
@@ -17521,10 +17524,10 @@ const renderSdrHoje = () => {
             ${renderSdrStatCard("meta", metaShows || "—", "amber")}
           </div>
           <div class="sdr-actions sdr-actions-2 sdr-actions-secondary">
-            <button class="sdr-action is-scheduled" type="button" data-sdr-meeting="show"><b>Compareceu</b><span>+1</span></button>
-            <button class="sdr-action is-no" type="button" data-sdr-meeting="noshow"><b>No-show</b><span>+1</span></button>
+            <button class="sdr-action is-scheduled" type="button" data-sdr-meeting="show" ${disabledAttr}><b>Compareceu</b><span>+1</span></button>
+            <button class="sdr-action is-no" type="button" data-sdr-meeting="noshow" ${disabledAttr}><b>No-show</b><span>+1</span></button>
           </div>
-          ${meetings.length ? `<button class="sdr-undo" type="button" data-sdr-undo="meeting">Desfazer última reunião</button>` : ""}
+          ${meetings.length ? `<button class="sdr-undo" type="button" data-sdr-undo="meeting" ${disabledAttr}>Desfazer última reunião</button>` : ""}
         </section>
       </aside>
     </section>
@@ -17610,7 +17613,7 @@ const renderSdrHistorico = () => {
           <label>Atenderam<input type="number" min="0" inputmode="numeric" data-sdr-manual="answered"></label>
           <label>Agendaram<input type="number" min="0" inputmode="numeric" data-sdr-manual="scheduled"></label>
         </div>
-        <button class="sdr-submit" type="button" data-sdr-manual-save>Salvar histórico</button>
+        <button class="sdr-submit" type="button" data-sdr-manual-save ${sdrPanelState.isSubmitting ? "disabled" : ""}>Salvar histórico</button>
       </section>
     </section>
   `;
@@ -17798,16 +17801,46 @@ const loadSdrPanelData = async ({ force = false } = {}) => {
   }
 };
 
+const normalizeSdrWriteErrorMessage = (error) => {
+  const raw = String(error?.message || error?.code || error || "").trim();
+  if (!raw) return "Não foi possível salvar o registro. Tente novamente.";
+  if (raw === "timeout") return "O registro demorou demais e não foi salvo. Tente novamente.";
+  if (["unauthenticated", "unauthorized", "forbidden", "not-authenticated"].includes(raw)) {
+    return "Sua sessão expirou e o registro não foi salvo. Atualize a página e entre novamente.";
+  }
+  if (raw === "invalid_outcome" || raw === "invalid_action") {
+    return "O registro enviado é inválido. Atualize a página e tente novamente.";
+  }
+  if (raw === "sdr_write_failed") return "O servidor não confirmou o registro. Tente novamente.";
+  return raw;
+};
+
 const postSdrAction = async (payload = {}) => {
-  const res = await fetchWithAuth("/api/sdr-metrics", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  const data = await res.json().catch(() => null);
-  if (!res.ok) throw new Error(data?.message || data?.errorDetail || data?.error || "sdr_write_failed");
-  sdrPanelState.loadedAt = 0;
-  await loadSdrPanelData({ force: true });
+  if (sdrPanelState.isSubmitting) return;
+  sdrPanelState.isSubmitting = true;
+  sdrPanelState.error = "";
+  renderSdrPanel();
+  try {
+    const res = await fetchWithAuthWithTimeout(
+      "/api/sdr-metrics",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+      15_000,
+      "sdr_metrics_write"
+    );
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.message || data?.errorDetail || data?.error || "sdr_write_failed");
+    sdrPanelState.loadedAt = 0;
+    await loadSdrPanelData({ force: true });
+  } catch (error) {
+    throw new Error(normalizeSdrWriteErrorMessage(error));
+  } finally {
+    sdrPanelState.isSubmitting = false;
+    renderSdrPanel();
+  }
 };
 
 const renderSalesCopilotTraining = () => {

@@ -2,7 +2,7 @@ const crypto = require("crypto");
 
 const { readJsonBody, sendJson } = require("../_lib/http");
 const { resolveAdminRequestAuth } = require("./_lib/admin-request-auth");
-const { commitWritesAsAdmin, listCollectionAsAdmin } = require("./_lib/firestore-admin");
+const { commitWritesAsAdmin, listCollectionAsAdmin, queryCollectionByDateRangeAsAdmin } = require("./_lib/firestore-admin");
 const { PROJECT_ID, encodeFields } = require("./_lib/firestore-rest");
 
 const ACTIVITY_COLLECTION = "sdrActivityEvents";
@@ -142,7 +142,7 @@ const listSdrData = async ({ session, days = 30 } = {}) => {
   const fromKey = addDaysToKey(todayKey, -(safeDays - 1));
   const [userRows, eventRows] = await Promise.all([
     listCollectionAsAdmin("users", { pageSize: 1000 }),
-    listCollectionAsAdmin(ACTIVITY_COLLECTION, { pageSize: 1000 }).catch(() => []),
+    queryCollectionByDateRangeAsAdmin(ACTIVITY_COLLECTION, { from: fromKey, to: todayKey }).catch(() => []),
   ]);
   const users = userRows.map(normalizeGrowthUser).filter(Boolean);
   const usersByUid = new Map(users.map((user) => [user.uid, user]));
@@ -195,7 +195,7 @@ const writeDailyStat = (stat) => ({
 });
 
 const refreshDailyStatWrite = async ({ sdrUid, dateKey, sdrName, sdrEmail }) => {
-  const rows = await listCollectionAsAdmin(ACTIVITY_COLLECTION, { pageSize: 1000 }).catch(() => []);
+  const rows = await queryCollectionByDateRangeAsAdmin(ACTIVITY_COLLECTION, { from: dateKey, to: dateKey }).catch(() => []);
   const events = rows
     .map(normalizeEvent)
     .filter(Boolean)
@@ -238,7 +238,7 @@ const handleWrite = async ({ req, session }) => {
     });
   } else if (action === "undo_last") {
     const eventType = String(body?.eventType || "call").trim() === "meeting" ? "meeting" : "call";
-    const rows = await listCollectionAsAdmin(ACTIVITY_COLLECTION, { pageSize: 1000 }).catch(() => []);
+    const rows = await queryCollectionByDateRangeAsAdmin(ACTIVITY_COLLECTION, { from: dateKey, to: dateKey }).catch(() => []);
     const last = rows
       .map(normalizeEvent)
       .filter(Boolean)
@@ -257,7 +257,7 @@ const handleWrite = async ({ req, session }) => {
     const total = Math.max(0, Math.floor(Number(body?.totalCalls) || 0));
     const answered = Math.max(0, Math.min(total, Math.floor(Number(body?.answered) || 0)));
     const scheduled = Math.max(0, Math.min(answered, Math.floor(Number(body?.scheduled) || 0)));
-    const existing = await listCollectionAsAdmin(ACTIVITY_COLLECTION, { pageSize: 1000 }).catch(() => []);
+    const existing = await queryCollectionByDateRangeAsAdmin(ACTIVITY_COLLECTION, { from: dateKey, to: dateKey }).catch(() => []);
     existing
       .map(normalizeEvent)
       .filter(Boolean)
