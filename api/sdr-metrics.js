@@ -290,7 +290,8 @@ const handleWrite = async ({ req, session }) => {
     if (!response.ok) return { status: response.status || 500, body: { error: "sdr_write_failed", errorDetail: response.data || response.text || null } };
   }
   const stat = await refreshDailyStatWrite({ sdrUid, dateKey, sdrName, sdrEmail });
-  return { status: 200, body: { ok: true, stat } };
+  const payload = await listSdrData({ session, days: 30 });
+  return { status: 200, body: { ok: true, stat, payload } };
 };
 
 module.exports = async (req, res) => {

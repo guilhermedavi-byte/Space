@@ -15079,6 +15079,7 @@ const sdrPanelState = {
   activeTab: "hoje",
   teamPeriod: "hoje",
   data: null,
+  renderedCounters: new Map(),
 };
 const adminCommercialOverviewState = {
   isLoading: false,
@@ -17422,23 +17423,32 @@ const loadAdminCommercialSdrActivity = async ({ force = false } = {}) => {
 };
 
 
-const sdrNumber = (value, extra = "") => `<strong class="sdr-num" data-sdr-countup="${escapeHtml(String(Number(value) || 0))}">${escapeHtml(String(Number(value) || 0))}${extra}</strong>`;
+const sdrNumber = (value, extra = "", key = "") => {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) {
+    return `<strong class="sdr-num">${escapeHtml(String(value || ""))}${extra}</strong>`;
+  }
+  const safeKey = String(key || "").trim();
+  return `<strong class="sdr-num" data-sdr-countup="${escapeHtml(String(numericValue))}"${safeKey ? ` data-sdr-count-key="${escapeHtml(safeKey)}"` : ""}>${escapeHtml(
+    String(numericValue)
+  )}${extra}</strong>`;
+};
 
 const renderSdrKpiCard = ({ label, value, metric, sublabel, tone = "neutral" }) => {
   const previous = getSdrPreviousDayValue(metric);
   return `
     <article class="sdr-kpi-card is-${escapeHtml(tone)}">
       <div class="sdr-kpi-label">${escapeHtml(label)}</div>
-      <div class="sdr-kpi-value">${sdrNumber(value)}${renderSdrDelta(value, previous)}</div>
+      <div class="sdr-kpi-value">${sdrNumber(value, "", `kpi_${metric}`)}${renderSdrDelta(value, previous)}</div>
       <p>${escapeHtml(sublabel)}</p>
       ${renderSdrSparkline(getSdrMetricSeries(metric), tone)}
     </article>
   `;
 };
 
-const renderSdrStatCard = (label, value, tone = "") => `
+const renderSdrStatCard = (label, value, tone = "", metricKey = "") => `
   <article class="sdr-stat ${tone ? `is-${escapeHtml(tone)}` : ""}">
-    ${sdrNumber(value)}
+    ${sdrNumber(value, "", metricKey)}
     <span>${escapeHtml(label)}</span>
   </article>
 `;
@@ -17519,9 +17529,9 @@ const renderSdrHoje = () => {
           }</p>
           ${metaShows > 0 ? `<div class="sdr-progress is-meeting"><span style="width:${escapeHtml(String(progress))}%"></span></div>` : ""}
           <div class="sdr-grid sdr-grid-3">
-            ${renderSdrStatCard("compareceu", stats.shows, "green")}
-            ${renderSdrStatCard("no-show", stats.noShows, "red")}
-            ${renderSdrStatCard("meta", metaShows || "—", "amber")}
+            ${renderSdrStatCard("compareceu", stats.shows, "green", "meeting_shows")}
+            ${renderSdrStatCard("no-show", stats.noShows, "red", "meeting_noshows")}
+            ${renderSdrStatCard("meta", metaShows || "—", "amber", "meeting_meta")}
           </div>
           <div class="sdr-actions sdr-actions-2 sdr-actions-secondary">
             <button class="sdr-action is-scheduled" type="button" data-sdr-meeting="show" ${disabledAttr}><b>Compareceu</b><span>+1</span></button>
@@ -17704,14 +17714,26 @@ const hydrateSdrCountUps = (root) => {
   root.querySelectorAll("[data-sdr-countup]").forEach((el) => {
     if (!(el instanceof HTMLElement)) return;
     const target = Number(el.getAttribute("data-sdr-countup") || "0");
-    if (!Number.isFinite(target) || target <= 0) return;
-    const suffix = el.textContent && el.textContent.includes("%") ? "%" : "";
+    if (!Number.isFinite(target)) return;
+    const key = String(el.getAttribute("data-sdr-count-key") || "").trim() || String(target);
+    const previousValue = Number(sdrPanelState.renderedCounters.get(key));
+    if (!Number.isFinite(previousValue)) {
+      sdrPanelState.renderedCounters.set(key, target);
+      el.textContent = String(target);
+      return;
+    }
+    if (previousValue === target) {
+      el.textContent = String(target);
+      return;
+    }
+    sdrPanelState.renderedCounters.set(key, target);
     const started = performance.now();
     const duration = 500;
     const step = (now) => {
       const t = Math.min((now - started) / duration, 1);
       const eased = 1 - Math.pow(1 - t, 3);
-      el.textContent = `${Math.round(target * eased)}${suffix}`;
+      const nextValue = previousValue + (target - previousValue) * eased;
+      el.textContent = String(Math.round(nextValue));
       if (t < 1) requestAnimationFrame(step);
     };
     requestAnimationFrame(step);
@@ -17833,6 +17855,11 @@ const postSdrAction = async (payload = {}) => {
     );
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(data?.message || data?.errorDetail || data?.error || "sdr_write_failed");
+    if (data?.payload && typeof data.payload === "object") {
+      sdrPanelState.data = data.payload;
+      sdrPanelState.loadedAt = Date.now();
+      return;
+    }
     sdrPanelState.loadedAt = 0;
     await loadSdrPanelData({ force: true });
   } catch (error) {

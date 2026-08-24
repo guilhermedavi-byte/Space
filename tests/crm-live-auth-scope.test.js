@@ -7,6 +7,7 @@ const growthDashboardPath = require.resolve('../api/growth-dashboard');
 const sessionPath = require.resolve('../_lib/session');
 const httpPath = require.resolve('../_lib/http');
 const crmLiveLibPath = require.resolve('../api/_lib/crm-live');
+const { resolveCommercialWeek } = require('../api/_lib/growth-people');
 
 const makeRes = () => ({
   statusCode: 0,
@@ -135,6 +136,7 @@ test('sessão comercial autenticada passa em /api/crm-live-data', async () => {
 });
 
 test('cache stale só é reaproveitado se for da mesma semana comercial', async () => {
+  const currentWeekKey = resolveCommercialWeek({ now: new Date() }).weekKey;
   delete require.cache[crmLiveDataPath];
   installHttpStub();
   require.cache[sessionPath] = {
@@ -155,12 +157,12 @@ test('cache stale só é reaproveitado se for da mesma semana comercial', async 
       buildCrmLiveCrmSlice: async () => {
         throw new Error('crm_failed');
       },
-      buildCrmLiveSdrSlice: async () => ({ weekly: { commercialWeek: { weekKey: 'wk_2026-08-11' }, team: { closers: {}, sdrs: {} }, sdrs: [] }, highlights: {}, unresolved: {}, cacheDebug: {} }),
+      buildCrmLiveSdrSlice: async () => ({ weekly: { commercialWeek: { weekKey: currentWeekKey }, team: { closers: {}, sdrs: {} }, sdrs: [] }, highlights: {}, unresolved: {}, cacheDebug: {} }),
       buildWeeklyNewsScreens: () => [],
       decorateLeaderboardComparisons: ({ rows = [] }) => rows,
       validateCookieViewer: async () => ({ ok: false, status: 401, error: 'missing_cookie' }),
       readCacheDoc: async (docId) => docId === 'crm'
-        ? ({ ok: true, data: { payload: { weekly: { commercialWeek: { weekKey: 'wk_2026-08-11' }, team: { closers: {}, sdrs: {} }, closers: [] }, month: {}, highlights: {}, unresolved: {}, cacheDebug: {} }, generatedAt: '2026-08-17T10:00:00.000Z' } })
+        ? ({ ok: true, data: { payload: { weekly: { commercialWeek: { weekKey: currentWeekKey }, team: { closers: {}, sdrs: {} }, closers: [] }, month: {}, highlights: {}, unresolved: {}, cacheDebug: {} }, generatedAt: '2026-08-17T10:00:00.000Z' } })
         : ({ ok: false, status: 404, data: null }),
       writeCacheDoc: async () => ({ ok: true }),
       getCacheMeta: () => ({ generatedAt: '2026-08-17T10:00:00.000Z', ageMs: 999999, ageMinutes: 17 }),
@@ -295,6 +297,7 @@ test('HTML e payload resolvem o mesmo buildId no mesmo processo', async () => {
 
 test('snapshot cacheado não influencia o buildId do payload', async () => {
   process.env.CRM_LIVE_BUILD_ID = 'live_build_now';
+  const currentWeekKey = resolveCommercialWeek({ now: new Date() }).weekKey;
   delete require.cache[crmLiveDataPath];
   installHttpStub();
   require.cache[sessionPath] = {
@@ -315,12 +318,12 @@ test('snapshot cacheado não influencia o buildId do payload', async () => {
       buildCrmLiveCrmSlice: async () => {
         throw new Error('crm_failed');
       },
-      buildCrmLiveSdrSlice: async () => ({ weekly: { commercialWeek: { weekKey: 'wk_2026-08-11' }, team: { closers: {}, sdrs: {} }, sdrs: [] }, highlights: {}, unresolved: {}, cacheDebug: {} }),
+      buildCrmLiveSdrSlice: async () => ({ weekly: { commercialWeek: { weekKey: currentWeekKey }, team: { closers: {}, sdrs: {} }, sdrs: [] }, highlights: {}, unresolved: {}, cacheDebug: {} }),
       buildWeeklyNewsScreens: () => [],
       decorateLeaderboardComparisons: ({ rows = [] }) => rows,
       validateCookieViewer: async () => ({ ok: false, status: 401, error: 'missing_cookie' }),
       readCacheDoc: async (docId) => docId === 'crm'
-        ? ({ ok: true, data: { payload: { buildId: 'cached_old_build', weekly: { commercialWeek: { weekKey: 'wk_2026-08-11' }, team: { closers: {}, sdrs: {} }, closers: [] }, month: {}, highlights: {}, unresolved: {}, cacheDebug: {} }, generatedAt: '2026-08-18T10:00:00.000Z' } })
+        ? ({ ok: true, data: { payload: { buildId: 'cached_old_build', weekly: { commercialWeek: { weekKey: currentWeekKey }, team: { closers: {}, sdrs: {} }, closers: [] }, month: {}, highlights: {}, unresolved: {}, cacheDebug: {} }, generatedAt: '2026-08-18T10:00:00.000Z' } })
         : ({ ok: false, status: 404, data: null }),
       writeCacheDoc: async () => ({ ok: true }),
       getCacheMeta: () => ({ generatedAt: '2026-08-18T10:00:00.000Z', ageMs: 121000, ageMinutes: 2 }),

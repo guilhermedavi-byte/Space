@@ -125,8 +125,8 @@ test("POST log_call não faz full scan de sdrActivityEvents", async () => {
     const res = makeRes();
     await handler({ method: "POST", headers: {}, url: "/api/sdr-metrics" }, res);
     assert.equal(res.statusCode, 200);
-    assert.equal(stats.listUsersCount, 0);
-    assert.equal(stats.dateQueryCount, 1);
+    assert.equal(stats.listUsersCount, 1);
+    assert.equal(stats.dateQueryCount, 2);
     assert.equal(stats.commitCount, 2);
   } finally {
     restore();
@@ -155,4 +155,7 @@ test("script SDR usa timeout e estado de envio visível no POST", () => {
   assert.match(source, /sdrPanelState\.isSubmitting = true/);
   assert.match(source, /Salvando registro…/);
   assert.match(source, /normalizeSdrWriteErrorMessage/);
+  assert.match(source, /if \(previousValue === target\) \{/);
+  assert.match(source, /if \(data\?\.payload && typeof data\.payload === "object"\)/);
+  assert.match(source, /sdrPanelState\.data = data\.payload/);
 });
