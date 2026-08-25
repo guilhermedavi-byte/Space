@@ -24,6 +24,7 @@ const loadHandler = ({
   body = { action: "log_call", outcome: "nao_atendeu" },
   authSession = { sub: "growth-1", role: "growth", name: "SDR Teste", email: "sdr@example.com" },
 } = {}) => {
+  let bodyValue = body;
   const originalHttp = require.cache[httpPath];
   const originalAuth = require.cache[authPath];
   const originalFirestoreAdmin = require.cache[firestoreAdminPath];
@@ -32,13 +33,14 @@ const loadHandler = ({
   let listUsersCount = 0;
   let dateQueryCount = 0;
   let commitCount = 0;
+  const writtenEvents = new Map();
 
   require.cache[httpPath] = {
     id: httpPath,
     filename: httpPath,
     loaded: true,
     exports: {
-      readJsonBody: async () => body,
+      readJsonBody: async () => bodyValue,
       sendJson(res, status, payload) {
         res.statusCode = status;
         res.body = payload;
@@ -71,10 +73,21 @@ const loadHandler = ({
       },
       queryCollectionByDateRangeAsAdmin: async () => {
         dateQueryCount += 1;
-        return [];
+        return Array.from(writtenEvents.values());
       },
-      commitWritesAsAdmin: async () => {
+      commitWritesAsAdmin: async ({ writes = [] } = {}) => {
         commitCount += 1;
+        const duplicate = (Array.isArray(writes) ? writes : []).find((write) => write?.currentDocument?.exists === false && writtenEvents.has(String(write?.update?.name || "")));
+        if (duplicate) return { ok: false, status: 409, data: { error: { status: "ALREADY_EXISTS" } } };
+        (Array.isArray(writes) ? writes : []).forEach((write) => {
+          const name = String(write?.update?.name || "");
+          if (!name) return;
+          writtenEvents.set(name, {
+            ...write.update.fields,
+            firestoreDocId: name.split("/").pop(),
+            id: write.update.fields?.id || name.split("/").pop(),
+          });
+        });
         return { ok: true, status: 200, data: {} };
       },
     },
@@ -105,6 +118,9 @@ const loadHandler = ({
         return commitCount;
       },
     },
+    setBody(nextBody) {
+      bodyValue = nextBody;
+    },
     restore() {
       delete require.cache[sdrMetricsPath];
       if (originalHttp) require.cache[httpPath] = originalHttp;
@@ -120,7 +136,9 @@ const loadHandler = ({
 };
 
 test("POST log_call não faz full scan de sdrActivityEvents", async () => {
-  const { handler, stats, restore } = loadHandler();
+  const { handler, stats, restore } = loadHandler({
+    body: { action: "log_call", outcome: "nao_atendeu", clientRequestId: "sdrreq_testcase_001" },
+  });
   try {
     const res = makeRes();
     await handler({ method: "POST", headers: {}, url: "/api/sdr-metrics" }, res);
@@ -149,6 +167,52 @@ test("POST undo_last consulta apenas a data do dia", async () => {
   }
 });
 
+test("POST log_call é idempotente quando o mesmo clientRequestId chega duas vezes", async () => {
+  const { handler, stats, restore } = loadHandler({
+    body: { action: "log_call", outcome: "agendou", clientRequestId: "sdrreq_same_click_001" },
+  });
+  try {
+    const first = makeRes();
+    await handler({ method: "POST", headers: {}, url: "/api/sdr-metrics" }, first);
+    const second = makeRes();
+    await handler({ method: "POST", headers: {}, url: "/api/sdr-metrics" }, second);
+    assert.equal(first.statusCode, 200);
+    assert.equal(second.statusCode, 200);
+    assert.equal(stats.commitCount, 4);
+    assert.equal(stats.dateQueryCount, 4);
+  } finally {
+    restore();
+  }
+});
+
+test("POST log_call cria dois eventos para dois cliques legítimos consecutivos", async () => {
+  const firstClientRequestId = "sdrreq_legit_click_001";
+  const secondClientRequestId = "sdrreq_legit_click_002";
+  const { handler, stats, setBody, restore } = loadHandler({
+    body: { action: "log_call", outcome: "nao_atendeu", clientRequestId: firstClientRequestId },
+  });
+  try {
+    const first = makeRes();
+    await handler({ method: "POST", headers: {}, url: "/api/sdr-metrics" }, first);
+    assert.equal(first.statusCode, 200);
+    assert.equal(first.body?.payload?.events?.length, 1);
+
+    const second = makeRes();
+    setBody({
+      action: "log_call",
+      outcome: "nao_atendeu",
+      clientRequestId: secondClientRequestId,
+    });
+    await handler({ method: "POST", headers: {}, url: "/api/sdr-metrics" }, second);
+    assert.equal(second.statusCode, 200);
+    assert.equal(second.body?.payload?.events?.length, 2);
+    assert.equal(stats.commitCount, 4);
+    assert.equal(stats.dateQueryCount, 4);
+  } finally {
+    restore();
+  }
+});
+
 test("script SDR usa timeout e estado de envio visível no POST", () => {
   const source = fs.readFileSync(path.join(__dirname, "..", "script.js"), "utf8");
   assert.match(source, /fetchWithAuthWithTimeout\(\s*"\s*\/api\/sdr-metrics"/);
@@ -158,4 +222,6 @@ test("script SDR usa timeout e estado de envio visível no POST", () => {
   assert.match(source, /if \(previousValue === target\) \{/);
   assert.match(source, /if \(data\?\.payload && typeof data\.payload === "object"\)/);
   assert.match(source, /sdrPanelState\.data = data\.payload/);
+  assert.match(source, /clientRequestId: requestId/);
+  assert.match(source, /retryRequest = \{ requestId, signature, createdAt: Date\.now\(\) \}/);
 });

@@ -9,6 +9,7 @@ const ACTIVITY_COLLECTION = "sdrActivityEvents";
 const DAILY_COLLECTION = "sdrDailyStats";
 const VALID_CALL_OUTCOMES = new Set(["nao_atendeu", "atendeu", "agendou", "double"]);
 const VALID_MEETING_OUTCOMES = new Set(["show", "noshow"]);
+const VALID_CLIENT_REQUEST_ID = /^[A-Za-z0-9_-]{12,120}$/;
 
 const normalizeRole = (value) => {
   const raw = String(value || "").trim().toLowerCase();
@@ -43,6 +44,7 @@ const addDaysToKey = (dateKey, offset) => {
 };
 
 const buildEventId = () => `sdr_${Date.now()}_${crypto.randomBytes(6).toString("hex")}`;
+const buildClientRequestEventId = (clientRequestId) => `sdrreq_${String(clientRequestId || "").trim()}`;
 
 const buildDocumentName = (collection, docId) => {
   const safeCollection = String(collection || "").trim();
@@ -217,6 +219,7 @@ const handleWrite = async ({ req, session }) => {
   const sdrUid = String(session?.sub || "").trim();
   const sdrName = String(session?.name || "SDR").trim() || "SDR";
   const sdrEmail = String(session?.email || "").trim().toLowerCase();
+  const clientRequestId = String(body?.clientRequestId || "").trim();
   // SEGURANÇA: sdrUid SEMPRE vem da sessão autenticada. Qualquer sdrUid enviado no body é ignorado.
   if (!sdrUid) return { status: 401, body: { error: "unauthenticated" } };
 
@@ -227,14 +230,16 @@ const handleWrite = async ({ req, session }) => {
   if (action === "log_call" || action === "log_meeting") {
     const outcome = String(body?.outcome || "").trim();
     const eventType = action === "log_call" ? "call" : "meeting";
+    if (!VALID_CLIENT_REQUEST_ID.test(clientRequestId)) return { status: 400, body: { error: "invalid_client_request_id" } };
     if (eventType === "call" && !VALID_CALL_OUTCOMES.has(outcome)) return { status: 400, body: { error: "invalid_outcome" } };
     if (eventType === "meeting" && !VALID_MEETING_OUTCOMES.has(outcome)) return { status: 400, body: { error: "invalid_outcome" } };
-    const id = buildEventId();
+    const id = buildClientRequestEventId(clientRequestId);
     writes.push({
       update: {
         name: buildDocumentName(ACTIVITY_COLLECTION, id),
-        fields: encodeFields({ id, sdrUid, sdrName, sdrEmail, dateKey, eventType, outcome, time: nowIso, createdAt: nowIso, source: "sdr_panel" }).fields,
+        fields: encodeFields({ id, clientRequestId, sdrUid, sdrName, sdrEmail, dateKey, eventType, outcome, time: nowIso, createdAt: nowIso, source: "sdr_panel" }).fields,
       },
+      currentDocument: { exists: false },
     });
   } else if (action === "undo_last") {
     const eventType = String(body?.eventType || "call").trim() === "meeting" ? "meeting" : "call";
@@ -287,7 +292,8 @@ const handleWrite = async ({ req, session }) => {
 
   if (writes.length) {
     const response = await commitWritesAsAdmin({ writes });
-    if (!response.ok) return { status: response.status || 500, body: { error: "sdr_write_failed", errorDetail: response.data || response.text || null } };
+    const duplicateRequest = response.status === 409 && (action === "log_call" || action === "log_meeting");
+    if (!response.ok && !duplicateRequest) return { status: response.status || 500, body: { error: "sdr_write_failed", errorDetail: response.data || response.text || null } };
   }
   const stat = await refreshDailyStatWrite({ sdrUid, dateKey, sdrName, sdrEmail });
   const payload = await listSdrData({ session, days: 30 });

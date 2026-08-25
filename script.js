@@ -15080,6 +15080,34 @@ const sdrPanelState = {
   teamPeriod: "hoje",
   data: null,
   renderedCounters: new Map(),
+  retryRequest: null,
+};
+
+const SDR_RETRY_REQUEST_TTL_MS = 10 * 60 * 1000;
+
+const buildSdrActionSignature = (payload = {}) =>
+  JSON.stringify({
+    action: String(payload?.action || "").trim(),
+    outcome: String(payload?.outcome || "").trim(),
+    eventType: String(payload?.eventType || "").trim(),
+    dateKey: String(payload?.dateKey || "").trim(),
+    totalCalls: Number(payload?.totalCalls || 0),
+    answered: Number(payload?.answered || 0),
+    scheduled: Number(payload?.scheduled || 0),
+  });
+
+const generateSdrClientRequestId = () => {
+  if (globalThis?.crypto?.randomUUID) return `sdrreq_${globalThis.crypto.randomUUID()}`;
+  return `sdrreq_${Date.now()}_${Math.random().toString(16).slice(2, 10)}`;
+};
+
+const resolveSdrClientRequestId = (payload = {}) => {
+  const signature = buildSdrActionSignature(payload);
+  const retry = sdrPanelState.retryRequest;
+  if (retry && retry.signature === signature && Date.now() - Number(retry.createdAt || 0) <= SDR_RETRY_REQUEST_TTL_MS) {
+    return { requestId: retry.requestId, signature, reused: true };
+  }
+  return { requestId: generateSdrClientRequestId(), signature, reused: false };
 };
 const adminCommercialOverviewState = {
   isLoading: false,
@@ -17839,6 +17867,7 @@ const normalizeSdrWriteErrorMessage = (error) => {
 
 const postSdrAction = async (payload = {}) => {
   if (sdrPanelState.isSubmitting) return;
+  const { requestId, signature } = resolveSdrClientRequestId(payload);
   sdrPanelState.isSubmitting = true;
   sdrPanelState.error = "";
   renderSdrPanel();
@@ -17848,13 +17877,14 @@ const postSdrAction = async (payload = {}) => {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, clientRequestId: requestId }),
       },
       15_000,
       "sdr_metrics_write"
     );
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(data?.message || data?.errorDetail || data?.error || "sdr_write_failed");
+    sdrPanelState.retryRequest = null;
     if (data?.payload && typeof data.payload === "object") {
       sdrPanelState.data = data.payload;
       sdrPanelState.loadedAt = Date.now();
@@ -17863,6 +17893,7 @@ const postSdrAction = async (payload = {}) => {
     sdrPanelState.loadedAt = 0;
     await loadSdrPanelData({ force: true });
   } catch (error) {
+    sdrPanelState.retryRequest = { requestId, signature, createdAt: Date.now() };
     throw new Error(normalizeSdrWriteErrorMessage(error));
   } finally {
     sdrPanelState.isSubmitting = false;
