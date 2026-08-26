@@ -10,6 +10,7 @@ const PROD_FIREBASE_PUBLIC_DEFAULTS = {
 
 const PROD_ASAAS_BASE_URL = "https://api.asaas.com/v3";
 const SANDBOX_ASAAS_BASE_URL = "https://api-sandbox.asaas.com/v3";
+const truthy = (value) => ["1", "true", "yes", "on", "enabled"].includes(String(value || "").trim().toLowerCase());
 
 const normalizeAppEnv = (value) => {
   const raw = String(value || "").trim().toLowerCase();
@@ -255,6 +256,11 @@ const getPublicRuntimeConfig = (env = process.env) => {
     leads: {
       firestoreProjectId: firebase.projectId || "",
       directFirestoreFallbackEnabled: presentation.appEnv !== "staging",
+    },
+    features: {
+      retentionV2Enabled: truthy(env.RETENTION_V2_ENABLED),
+      retentionInvoluntaryChurnEnabled: truthy(env.RETENTION_INVOLUNTARY_CHURN_ENABLED),
+      retentionFinancialKpisEnabled: truthy(env.RETENTION_FINANCIAL_KPIS_ENABLED),
     },
   };
 };

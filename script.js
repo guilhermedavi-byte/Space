@@ -12109,6 +12109,20 @@ const fetchWithAuth = async (input, init = {}) => {
   return fetch(input, { ...opts, headers, credentials: opts.credentials || "include" });
 };
 
+const getRuntimeFeatureFlags = () => {
+  const config = window.__SPACE_RUNTIME_CONFIG__;
+  return config && typeof config === "object" && config.features && typeof config.features === "object" ? config.features : {};
+};
+
+const isRetentionV2FeatureEnabled = () => Boolean(getRuntimeFeatureFlags().retentionV2Enabled);
+
+const createRetentionClientActionId = () => {
+  if (window.crypto && typeof window.crypto.randomUUID === "function") {
+    return window.crypto.randomUUID();
+  }
+  return `ret-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+};
+
 const normalizeUserCreationRole = (value) => {
   const role = normalizeRole(value);
   if (role === "student" || role === "teacher") return role;
@@ -25605,6 +25619,36 @@ const refreshAdminPedagogicoRetentionState = async ({ force = false } = {}) => {
   if (String(adminPedagogicoState.activeTab || "") === "retencao") renderAdminPedagogicoRetentionPanel();
 
   try {
+    if (isRetentionV2FeatureEnabled()) {
+      const params = new URLSearchParams({ view: "queues", month: String(current.month || createDateKey(new Date()).slice(0, 7)) });
+      const response = await fetchWithAuth(`/api/retention-cases?${params.toString()}`, { method: "GET" });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(String(payload?.error || "retention_v2_fetch_failed"));
+      const queues = payload?.queues && typeof payload.queues === "object" ? payload.queues : { avisos: [], decisoes: [], efetivados: [] };
+      const monthKey = String(current.month || createDateKey(new Date()).slice(0, 7));
+      const metrics = buildRetentionMetrics(monthKey, {
+        students: adminPedagogicoState.students,
+        lessonLogs: adminPedagogicoState.lessonLogs,
+        scheduleEvents: adminPedagogicoState.scheduleEvents,
+        classes: adminPedagogicoState.classes,
+      });
+      adminPedagogicoState.retention = {
+        status: "success",
+        loading: false,
+        loadedAt: Date.now(),
+        error: "",
+        partialErrors: {},
+        badgeCount: Array.isArray(queues?.decisoes) ? queues.decisoes.length : 0,
+        queues,
+        month: monthKey,
+        metrics,
+        rows: Array.isArray(payload?.rows) ? payload.rows : [],
+        source: String(payload?.source || "retention_v2"),
+      };
+      syncAdminPedRetentionBadge(adminPedagogicoState.retention.badgeCount || 0);
+      renderAdminPedagogicoRetentionPanel();
+      return queues;
+    }
     let financeError = "";
     await ensureFinanceLoaded({ force: false }).catch((error) => {
       financeError = String(error?.message || error || "finance_unavailable");
@@ -33519,6 +33563,86 @@ const getAdminRetentionDecisionByStudentId = (alunoId) => {
   return decisions.find((row) => String(row?.alunoId || "").trim() === id) || null;
 };
 
+const getAdminRetentionCaseByStudentId = (alunoId) => {
+  const id = String(alunoId || "").trim();
+  if (!id) return null;
+  const queues = adminPedagogicoState.retention?.queues;
+  const lists = [queues?.decisoes, queues?.avisos, queues?.efetivados];
+  for (const list of lists) {
+    const hit = Array.isArray(list) ? list.find((row) => String(row?.alunoId || "").trim() === id) : null;
+    if (hit) return hit;
+  }
+  return null;
+};
+
+const syncRetentionV2SnapshotToCache = (snapshot) => {
+  const caseSnapshot = snapshot?.case && typeof snapshot.case === "object" ? snapshot.case : {};
+  const studentSnapshot = snapshot?.student && typeof snapshot.student === "object" ? snapshot.student : {};
+  const firestoreStudentId = String(studentSnapshot.firestore_student_id || "").trim();
+  if (!firestoreStudentId) return null;
+  const existing = getAdminStudentMetaById(firestoreStudentId) || {};
+  const lifecycleStatus = String(studentSnapshot.lifecycle_status || caseSnapshot.lifecycle_status || "active").trim();
+  const pauseStatus = String(studentSnapshot.pause_status || caseSnapshot.pause_status || "none").trim();
+  const isChurned = lifecycleStatus === "churned";
+  const isScheduled = lifecycleStatus === "cancellation_scheduled";
+  const cancelamento = isScheduled
+    ? {
+        dataPedido: existing?.cancelamento?.dataPedido || caseSnapshot.created_at || new Date().toISOString(),
+        origem: String(caseSnapshot.case_kind || "") === "legacy_import" ? "abandono_confirmado" : "pedido",
+        motivo: existing?.cancelamento?.motivo || "",
+        motivoDetalhe: existing?.cancelamento?.motivoDetalhe || "",
+        dataFimAviso: caseSnapshot.scheduled_service_end_at || null,
+        aulasSuspensas: pauseStatus !== "none",
+        dataSuspensao: pauseStatus !== "none" ? caseSnapshot.updated_at || new Date().toISOString() : null,
+        desfecho: null,
+        dataEfetivacao: null,
+        eventos: Array.isArray(existing?.cancelamento?.eventos) ? existing.cancelamento.eventos : [],
+      }
+    : null;
+  return updateAdminStudentCachedRow(firestoreStudentId, {
+    id: firestoreStudentId,
+    firestoreDocId: firestoreStudentId,
+    nome: String(studentSnapshot.full_name || existing?.nome || "Aluno").trim() || "Aluno",
+    email: String(studentSnapshot.email || existing?.email || "").trim(),
+    telefone: String(studentSnapshot.phone || existing?.telefone || "").trim(),
+    ativo: !isChurned,
+    cancelamento: isChurned ? null : cancelamento,
+    canceladoEm: isChurned ? caseSnapshot.churned_at || caseSnapshot.closed_at || new Date().toISOString() : null,
+    desativadoEm: isChurned ? caseSnapshot.churned_at || caseSnapshot.closed_at || new Date().toISOString() : null,
+    atualizadoEm: caseSnapshot.updated_at || studentSnapshot.updated_at || new Date().toISOString(),
+  });
+};
+
+const submitRetentionV2Command = async ({ command, alunoId, payload = {}, justification = "", override = false } = {}) => {
+  const linkedCase = getAdminRetentionCaseByStudentId(alunoId) || getAdminRetentionDecisionByStudentId(alunoId);
+  const body = {
+    command,
+    caseId: linkedCase?.caseId || "",
+    expectedVersion: Number(linkedCase?.version) || 0,
+    firestoreStudentId: String(alunoId || "").trim(),
+    clientActionId: createRetentionClientActionId(),
+    justification: String(justification || "").trim(),
+    override: override === true,
+    payload: payload && typeof payload === "object" ? payload : {},
+  };
+  const res = await fetchWithAuth("/api/retention-cases", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    const error = new Error(String(data?.message || data?.error || "retention_command_failed"));
+    error.code = data?.error || "retention_command_failed";
+    throw error;
+  }
+  if (data?.result?.snapshot) syncRetentionV2SnapshotToCache(data.result.snapshot);
+  adminPedagogicoState.retention.loadedAt = 0;
+  await refreshAdminPedagogicoRetentionState({ force: true }).catch(() => null);
+  rerenderAdminStudentLifecycleViews();
+  return data;
+};
+
 const getAdminStudentRecurringGroupIds = (alunoId) => {
   const id = String(alunoId || "").trim();
   if (!id) return [];
@@ -34061,6 +34185,20 @@ const openAdminStudentRegisterCancellationModal = ({ alunoId } = {}) => {
       if (modalSecondary) modalSecondary.disabled = true;
       (async () => {
         try {
+          if (isRetentionV2FeatureEnabled()) {
+            await submitRetentionV2Command({
+              command: "register_formal_request",
+              alunoId: id,
+              payload: {
+                requested_at: pedidoDate.toISOString(),
+                first_lesson_at: firstDate instanceof Date && !Number.isNaN(firstDate.getTime()) ? firstDate.toISOString() : null,
+                reason,
+                detail,
+              },
+            });
+            closeModal();
+            return;
+          }
           await saveAdminStudentLifecyclePatch({ alunoId: id, patch: { cancelamento } });
           rerenderAdminStudentLifecycleViews();
           closeModal();
@@ -34160,6 +34298,20 @@ const openAdminStudentMarkAbandonmentModal = ({ alunoId } = {}) => {
       if (modalSecondary) modalSecondary.disabled = true;
       (async () => {
         try {
+          if (isRetentionV2FeatureEnabled()) {
+            await submitRetentionV2Command({
+              command: "register_formal_request",
+              alunoId: id,
+              payload: {
+                requested_at: parseDateKey(dateKey).toISOString(),
+                reason: "Abandono",
+                detail,
+                origin: "abandono_confirmado",
+              },
+            });
+            closeModal();
+            return;
+          }
           await saveAdminStudentLifecyclePatch({ alunoId: id, patch: { cancelamento } });
           rerenderAdminStudentLifecycleViews();
           closeModal();
@@ -34206,6 +34358,17 @@ const openAdminStudentSuspendLessonsModal = ({ alunoId, suspend = true } = {}) =
       ]);
       (async () => {
         try {
+          if (isRetentionV2FeatureEnabled()) {
+            await submitRetentionV2Command({
+              command: suspend ? "pause_non_billable" : "resume_lessons",
+              alunoId: id,
+              payload: {
+                reason: suspend ? "Aulas suspensas durante aviso" : "Aulas retomadas durante aviso",
+              },
+            });
+            closeModal();
+            return;
+          }
           await saveAdminStudentLifecyclePatch({
             alunoId: id,
             patch: { cancelamento },
@@ -34258,6 +34421,17 @@ const openAdminStudentRevertCancellationModal = ({ alunoId } = {}) => {
       const cancelamentosAnteriores = archiveStudentCancellationRecord({ alunoMeta: meta, record: archived });
       (async () => {
         try {
+          if (isRetentionV2FeatureEnabled()) {
+            await submitRetentionV2Command({
+              command: "retract_cancellation",
+              alunoId: id,
+              payload: {
+                detail: "Aluno voltou ao estado normal",
+              },
+            });
+            closeModal();
+            return;
+          }
           await saveAdminStudentLifecyclePatch({ alunoId: id, patch: { cancelamento: null, cancelamentosAnteriores } });
           rerenderAdminStudentLifecycleViews();
           closeModal();
@@ -34381,6 +34555,25 @@ const openAdminStudentEffectiveCancellationModal = async ({ alunoId } = {}) => {
           if (modalPrimary) modalPrimary.disabled = true;
           if (modalSecondary) modalSecondary.disabled = true;
           const nowIso = new Date().toISOString();
+          if (isRetentionV2FeatureEnabled()) {
+            await submitRetentionV2Command({
+              command: "effectuate_churn",
+              alunoId: id,
+              justification: notes || "Efetivação manual de churn",
+              override: true,
+              payload: {
+                mode: "manual",
+                outcome,
+                notes,
+                occurred_at: nowIso,
+              },
+            });
+            if (adminStudentsState.history?.isOpen && String(adminStudentsState.history?.alunoId || "") === id) closeAdminStudentHistoryDrawer();
+            setAdminPedagogicoStatus("Cancelamento efetivado.", "success");
+            setAdminStudentsStatus("Cancelamento efetivado.", "success");
+            closeModal();
+            return;
+          }
           const nextCancelamento = {
             ...cancelamento,
             desfecho: {
@@ -34461,6 +34654,21 @@ const openAdminStudentReactivateLifecycleModal = ({ alunoId } = {}) => {
       const cancelamentosAnteriores = archived ? archiveStudentCancellationRecord({ alunoMeta: meta, record: archived }) : Array.isArray(meta?.cancelamentosAnteriores) ? meta.cancelamentosAnteriores : [];
       (async () => {
         try {
+          if (isRetentionV2FeatureEnabled()) {
+            await submitRetentionV2Command({
+              command: "reactivate_subscription",
+              alunoId: id,
+              justification: "Reativação manual",
+              override: true,
+              payload: {
+                reason: "Cancelamento arquivado; aluno voltou ao estado ativo",
+              },
+            });
+            setAdminPedagogicoStatus("Aluno reativado.", "success");
+            setAdminStudentsStatus("Aluno reativado.", "success");
+            closeModal();
+            return;
+          }
           await saveAdminStudentLifecyclePatch({
             alunoId: id,
             patch: {
