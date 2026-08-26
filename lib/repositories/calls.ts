@@ -42,3 +42,29 @@ export class CallsRepository {
     return { meetingId, meeting: parseIntelligenceRow(meetingResult), call, assets, transcript, audio, visual, fusion, objectionAnalysis, objections, outcomeEnrichment };
   }
 }
+
+export type CallsListFilters = {
+  page?: number; pageSize?: number; search?: string; closer?: string;
+  outcome?: "won" | "lost" | "unknown"; needsReview?: boolean;
+  sort?: "newest" | "oldest" | "execution_desc" | "execution_asc";
+};
+
+export async function listCalls(filters: CallsListFilters = {}) {
+  const client = createServerDatabaseClient();
+  const page = Math.max(1, filters.page ?? 1);
+  const pageSize = Math.min(48, Math.max(1, filters.pageSize ?? 12));
+  const from = (page - 1) * pageSize;
+  let query = client.from("v_calls_overview").select("*", { count: "exact" });
+  if (filters.search) query = query.or(`title.ilike.%${filters.search}%,lead.ilike.%${filters.search}%`);
+  if (filters.closer) query = query.eq("closer", filters.closer);
+  if (filters.outcome) query = query.eq("outcome", filters.outcome);
+  if (filters.needsReview !== undefined) query = query.eq("needs_review", filters.needsReview);
+  const sort = filters.sort ?? "newest";
+  const sortColumn = sort.startsWith("execution") ? "seller_execution_score" : "date";
+  const ascending = sort === "oldest" || sort === "execution_asc";
+  const { data, error, count } = await query.order(sortColumn, { ascending, nullsFirst: false }).range(from, from + pageSize - 1);
+  if (error) throw new Error(`Unable to list calls: ${error.message}`, { cause: error });
+  const rows = parseIntelligenceRows(data ?? []);
+  const { toCallOverview } = await import("@/lib/domain/call-overview");
+  return { items: rows.map(toCallOverview), page, pageSize, total: count ?? 0, totalPages: Math.max(1, Math.ceil((count ?? 0) / pageSize)) };
+}
