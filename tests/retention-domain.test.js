@@ -128,12 +128,46 @@ test("awaiting_customer preserva a data final já programada", () => {
   assert.equal(projection.scheduledServiceEndAt, "2026-10-26T12:00:00.000Z");
 });
 
+test("continuidade confirmada devolve o caso para scheduled", () => {
+  const projection = rebuildCaseProjectionFromEvents([
+    { event_type: "register_formal_request", payload: { scheduled_service_end_at: "2026-10-26T12:00:00.000Z" } },
+    { event_type: "mark_awaiting_customer" },
+    { event_type: "confirm_cancellation_continuity" },
+  ]);
+  assert.equal(projection.stage, "scheduled");
+  assert.equal(projection.lifecycleStatus, "cancellation_scheduled");
+});
+
 test("delinquency_recovered retorna o financeiro para current", () => {
   const projection = rebuildCaseProjectionFromEvents(
     [{ event_type: "delinquency_recovered" }],
     { financialStatus: "delinquent" }
   );
   assert.equal(projection.financialStatus, "current");
+});
+
+test("delinquency_started leva o financeiro para delinquent", () => {
+  const projection = rebuildCaseProjectionFromEvents([{ event_type: "delinquency_started" }]);
+  assert.equal(projection.financialStatus, "delinquent");
+});
+
+test("legacy_import com state_after semeia a projeção reconstruída", () => {
+  const projection = rebuildCaseProjectionFromEvents([
+    {
+      event_type: "legacy_import",
+      state_after: {
+        stage: "scheduled",
+        lifecycle_status: "cancellation_scheduled",
+        pause_status: "paused_non_billable",
+        financial_status: "unknown",
+        scheduled_service_end_at: "2026-10-27T12:00:00.000Z",
+      },
+    },
+  ]);
+  assert.equal(projection.stage, "scheduled");
+  assert.equal(projection.lifecycleStatus, "cancellation_scheduled");
+  assert.equal(projection.pauseStatus, "paused_non_billable");
+  assert.equal(projection.scheduledServiceEndAt, "2026-10-27T12:00:00.000Z");
 });
 
 test("sanitizePayloadByCommand ignora campos técnicos fora do contrato", () => {

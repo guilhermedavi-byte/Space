@@ -20,6 +20,7 @@ const COMMAND_CAPABILITY = {
   schedule_program_end: "retention.resolve",
   effectuate_churn: "retention.resolve",
   reactivate_subscription: "retention.resolve",
+  delinquency_started: "finance.manage",
   delinquency_recovered: "finance.manage",
 };
 
@@ -149,6 +150,12 @@ const sanitizePayloadByCommand = ({ command, payload = {} } = {}) => {
     };
   }
   if (command === "reactivate_subscription") {
+    return {
+      reason: sanitizeText(input.reason, 240),
+      detail: sanitizeText(input.detail, 500),
+    };
+  }
+  if (command === "delinquency_started") {
     return {
       reason: sanitizeText(input.reason, 240),
       detail: sanitizeText(input.detail, 500),
@@ -324,6 +331,7 @@ const getRetentionTimelineEventLabel = (eventType) => {
   if (raw === "schedule_program_end") return "Encerramento programado";
   if (raw === "cancellation_effective") return "Churn efetivado";
   if (raw === "reactivate_subscription") return "Assinatura reativada";
+  if (raw === "delinquency_started") return "Inadimplência iniciada";
   if (raw === "delinquency_recovered") return "Inadimplência recuperada";
   if (raw === "legacy_import") return "Importação legada";
   return "Evento";
@@ -343,7 +351,12 @@ const applyCommandToProjection = (projection = {}, event = {}) => {
   const type = String(event?.event_type || event?.eventType || "").trim();
   const payload = event?.payload && typeof event.payload === "object" ? event.payload : {};
   const occurredAt = event?.occurred_at || event?.occurredAt || null;
+  const stateAfter = event?.state_after && typeof event.state_after === "object" ? event.state_after : event?.stateAfter && typeof event.stateAfter === "object" ? event.stateAfter : null;
   if (type === "register_formal_request") {
+    current.stage = "scheduled";
+    current.lifecycleStatus = "cancellation_scheduled";
+    current.scheduledServiceEndAt = payload.scheduled_service_end_at || current.scheduledServiceEndAt;
+  } else if (type === "confirm_cancellation_continuity" || type === "schedule_program_end") {
     current.stage = "scheduled";
     current.lifecycleStatus = "cancellation_scheduled";
     current.scheduledServiceEndAt = payload.scheduled_service_end_at || current.scheduledServiceEndAt;
@@ -368,8 +381,17 @@ const applyCommandToProjection = (projection = {}, event = {}) => {
     current.lifecycleStatus = "active";
     current.pauseStatus = "none";
     current.savedAt = occurredAt;
+  } else if (type === "delinquency_started") {
+    current.financialStatus = "delinquent";
   } else if (type === "delinquency_recovered") {
     current.financialStatus = "current";
+  }
+  if (stateAfter) {
+    current.stage = String(stateAfter.stage || current.stage || "").trim() || current.stage;
+    current.lifecycleStatus = String(stateAfter.lifecycle_status || stateAfter.lifecycleStatus || current.lifecycleStatus || "").trim() || current.lifecycleStatus;
+    current.pauseStatus = String(stateAfter.pause_status || stateAfter.pauseStatus || current.pauseStatus || "").trim() || current.pauseStatus;
+    current.financialStatus = String(stateAfter.financial_status || stateAfter.financialStatus || current.financialStatus || "").trim() || current.financialStatus;
+    current.scheduledServiceEndAt = stateAfter.scheduled_service_end_at || stateAfter.scheduledServiceEndAt || current.scheduledServiceEndAt;
   }
   return current;
 };

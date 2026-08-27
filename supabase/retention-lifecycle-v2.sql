@@ -659,6 +659,7 @@ begin
     'schedule_program_end',
     'effectuate_churn',
     'reactivate_subscription',
+    'delinquency_started',
     'delinquency_recovered'
   ) then
     raise exception 'unsupported_retention_command';
@@ -809,6 +810,12 @@ begin
     if v_case.lifecycle_status <> 'cancellation_scheduled' then
       raise exception 'cannot_churn_without_schedule';
     end if;
+    if v_case.scheduled_service_end_at is null then
+      raise exception 'cannot_churn_without_scheduled_end_at';
+    end if;
+    if (v_case.scheduled_service_end_at at time zone 'America/Sao_Paulo') > (v_now at time zone 'America/Sao_Paulo') then
+      raise exception 'cannot_churn_before_scheduled_end';
+    end if;
     if v_case.closed_at is not null and v_case.stage = 'lost' then
       raise exception 'case_already_lost';
     end if;
@@ -827,6 +834,8 @@ begin
     v_case.saved_at := coalesce(v_case.saved_at, v_now);
     v_case.closed_at := coalesce(v_case.closed_at, v_now);
     v_close_reason := 'reactivated';
+  elsif v_command = 'delinquency_started' then
+    v_case.financial_status := 'delinquent';
   elsif v_command = 'delinquency_recovered' then
     v_case.financial_status := 'current';
   end if;
@@ -1258,7 +1267,13 @@ begin
       coalesce(nullif(v_row->>'idempotency_key', ''), md5(v_row::text)),
       coalesce(nullif(v_row->>'command_fingerprint', ''), md5(v_row::text)),
       null,
-      null,
+      jsonb_build_object(
+        'stage', (select rc.stage from public.retention_cases rc where rc.id = v_case_id),
+        'lifecycle_status', (select rc.lifecycle_status from public.retention_cases rc where rc.id = v_case_id),
+        'pause_status', (select rc.pause_status from public.retention_cases rc where rc.id = v_case_id),
+        'financial_status', (select rc.financial_status from public.retention_cases rc where rc.id = v_case_id),
+        'scheduled_service_end_at', (select rc.scheduled_service_end_at from public.retention_cases rc where rc.id = v_case_id)
+      ),
       coalesce(v_row->'payload', '{}'::jsonb),
       coalesce(nullif(v_row->>'source_system', ''), 'legacy_import'),
       coalesce(nullif(v_row->>'source_confidence', ''), 'medium')

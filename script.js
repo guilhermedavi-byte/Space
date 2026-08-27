@@ -21212,6 +21212,7 @@ const getRetentionTimelineEventLabel = (eventType) => {
   if (raw === "schedule_program_end") return "Encerramento programado";
   if (raw === "cancellation_effective") return "Churn efetivado";
   if (raw === "reactivate_subscription") return "Assinatura reativada";
+  if (raw === "delinquency_started") return "Inadimplência iniciada";
   if (raw === "delinquency_recovered") return "Inadimplência recuperada";
   if (raw === "legacy_import") return "Importação legada";
   return "Evento";
