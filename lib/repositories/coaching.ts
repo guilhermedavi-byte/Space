@@ -1,0 +1,6 @@
+import "server-only";
+import { createServerDatabaseClient } from "@/lib/db/server";
+import { parseIntelligenceRows } from "@/lib/validation/intelligence";
+import { readText } from "@/lib/domain/call-detail";
+export type CoachingItem = { id: string; closer: string; meetingId: string | null; source: string; title: string; description: string; successMetric: string | null; status: "active" | "completed" | "dismissed" };
+export async function listCoachingItems(): Promise<CoachingItem[]> { const client = createServerDatabaseClient(); const { data, error } = await client.from("app_coaching_items").select("*").order("updated_at", { ascending: false }); if (error) throw new Error(`Unable to load coaching items: ${error.message}`, { cause: error }); return parseIntelligenceRows(data ?? []).flatMap((row) => { const id = readText(row, "id"), closer = readText(row, "closer"), title = readText(row, "title"), description = readText(row, "description"); if (!id || !closer || !title || !description) return []; const rawStatus = readText(row, "status"); const status = rawStatus === "completed" || rawStatus === "dismissed" ? rawStatus : "active"; return [{ id, closer, meetingId: readText(row, "meeting_id"), source: readText(row, "source") ?? "intelligence", title, description, successMetric: readText(row, "success_metric"), status }]; }); }
