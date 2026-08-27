@@ -6,7 +6,7 @@ type DebugCallPageProps = { params: Promise<{ meetingId: string }> };
 export default async function DebugCallPage({ params }: DebugCallPageProps) {
   const { meetingId } = await params;
   const call = await new CallsRepository().findByMeetingId(meetingId);
-  if (!call) notFound();
+  if (!call) return notFound();
 
   const modalityStatus = [
     ["Transcript", call.transcript], ["Audio", call.audio], ["Visual", call.visual],
