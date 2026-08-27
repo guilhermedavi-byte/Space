@@ -148,7 +148,7 @@ test("POST resolve student/subscription a partir do firestore_student_id", async
         command: "register_formal_request",
         clientActionId: "click-3",
         firestoreStudentId: "firestore-123",
-        payload: { reason: "Quero cancelar" },
+        payload: { requested_at: "2026-08-26T12:00:00.000Z", reason: "Quero cancelar" },
       })));
       if (event === "end") callback();
     },
@@ -157,4 +157,86 @@ test("POST resolve student/subscription a partir do firestore_student_id", async
   assert.equal(res.statusCode, 200);
   assert.equal(res.body.result.receivedCommand.student_id, "student-uuid");
   assert.equal(res.body.result.receivedCommand.subscription_id, "subscription-uuid");
+});
+
+test("POST exige requested_at saneado no pedido formal", async () => {
+  const handler = installCommonStubs({ role: "growth" });
+  const res = makeRes();
+  const req = {
+    method: "POST",
+    url: "/api/retention-cases",
+    headers: { host: "localhost" },
+    on(event, callback) {
+      if (event === "data") callback(Buffer.from(JSON.stringify({
+        command: "register_formal_request",
+        clientActionId: "click-4",
+        firestoreStudentId: "firestore-123",
+        payload: { requested_at: "invalid-date", reason: "Quero cancelar" },
+      })));
+      if (event === "end") callback();
+    },
+  };
+  await handler(req, res);
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.body.error, "missing_requested_at");
+});
+
+test("POST traduz mismatch de idempotência em conflito controlado", async () => {
+  delete require.cache[handlerPath];
+  require.cache[authPath] = {
+    id: authPath,
+    filename: authPath,
+    loaded: true,
+    exports: {
+      resolveAdminRequestAuth: async () => ({
+        ok: true,
+        status: 200,
+        session: { sub: "user-1", role: "admin", name: "Usuário" },
+      }),
+    },
+  };
+  require.cache[storePath] = {
+    id: storePath,
+    filename: storePath,
+    loaded: true,
+    exports: {
+      listRetentionCases: async () => ({ rows: [], counts: {}, queues: { avisos: [], decisoes: [], efetivados: [] } }),
+      getRetentionCaseTimeline: async () => ({ events: [] }),
+      applyRetentionCommand: async () => {
+        const error = new Error("idempotency_key_payload_mismatch");
+        error.code = "idempotency_key_payload_mismatch";
+        throw error;
+      },
+      resolveRetentionSubjectByFirestoreStudentId: async () => ({ studentId: "student-uuid", subscriptionId: "subscription-uuid" }),
+    },
+  };
+  require.cache[flagsPath] = {
+    id: flagsPath,
+    filename: flagsPath,
+    loaded: true,
+    exports: {
+      isRetentionV2Enabled: () => true,
+      isRetentionInvoluntaryChurnEnabled: () => true,
+    },
+  };
+  const handler = require("../api/retention-cases");
+  const res = makeRes();
+  const req = {
+    method: "POST",
+    url: "/api/retention-cases",
+    headers: { host: "localhost" },
+    on(event, callback) {
+      if (event === "data") callback(Buffer.from(JSON.stringify({
+        command: "effectuate_churn",
+        clientActionId: "click-5",
+        firestoreStudentId: "firestore-123",
+        justification: "ok",
+        override: true,
+      })));
+      if (event === "end") callback();
+    },
+  };
+  await handler(req, res);
+  assert.equal(res.statusCode, 409);
+  assert.equal(res.body.error, "idempotency_key_payload_mismatch");
 });

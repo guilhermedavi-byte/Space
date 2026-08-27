@@ -63,7 +63,7 @@ module.exports = async (req, res) => {
         counts: result.counts,
       });
     } catch (error) {
-      console.error("[retention] list failed", error);
+      console.error("[retention] list failed", { code: error?.code || "", message: error?.message || "retention_list_failed" });
       return sendJson(res, 500, {
         error: error?.code || "retention_list_failed",
         message: "Não foi possível carregar os casos de retenção agora.",
@@ -106,6 +106,9 @@ module.exports = async (req, res) => {
       actor: auth.session,
       body,
     });
+    if (command.command === "register_formal_request" && !command.payload.requested_at) {
+      return sendJson(res, 400, { error: "missing_requested_at" });
+    }
     if (!command.case_id && command.firestore_student_id && (!command.student_id || !command.subscription_id)) {
       const resolved = await resolveRetentionSubjectByFirestoreStudentId({ firestoreStudentId: command.firestore_student_id });
       command.student_id = resolved.studentId;
@@ -118,13 +121,20 @@ module.exports = async (req, res) => {
     });
   } catch (error) {
     const code = String(error?.message || error?.code || "retention_command_failed");
-    const status = code === "retention_version_conflict" ? 409 : code === "invalid_retention_command" || code === "missing_client_action_id" ? 400 : 500;
-    console.error("[retention] command failed", { code, error });
+    const status =
+      code === "retention_version_conflict" || code === "idempotency_key_payload_mismatch"
+        ? 409
+        : code === "invalid_retention_command" || code === "missing_client_action_id" || code === "missing_requested_at" || code === "retention_student_not_found"
+          ? 400
+          : 500;
+    console.error("[retention] command failed", { code });
     return sendJson(res, status, {
       error: code,
       message:
         code === "retention_version_conflict"
           ? "Este caso foi alterado em outro acesso. Atualize antes de tentar novamente."
+          : code === "idempotency_key_payload_mismatch"
+            ? "A mesma tentativa foi reenviada com dados diferentes. Gere uma nova ação."
           : "Não foi possível salvar a ação de retenção agora.",
     });
   }

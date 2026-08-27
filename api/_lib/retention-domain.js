@@ -1,3 +1,5 @@
+const { createHash } = require("crypto");
+
 const SAO_PAULO_TIME_ZONE = "America/Sao_Paulo";
 
 const LIFECYCLE_STATUSES = ["active", "cancellation_scheduled", "churned"];
@@ -18,11 +20,23 @@ const COMMAND_CAPABILITY = {
   schedule_program_end: "retention.resolve",
   effectuate_churn: "retention.resolve",
   reactivate_subscription: "retention.resolve",
+  delinquency_recovered: "finance.manage",
 };
 
 const OVERRIDE_REQUIRED_COMMANDS = new Set(["effectuate_churn", "reactivate_subscription"]);
 
 const normalizeText = (value) => String(value || "").trim();
+const sanitizeText = (value, max = 240) => normalizeText(value).slice(0, max);
+const sanitizeTimestamp = (value) => {
+  const raw = normalizeText(value);
+  if (!raw) return null;
+  const date = new Date(raw);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+};
+const sanitizeEnum = (value, allowed = [], fallback = "") => {
+  const raw = normalizeText(value);
+  return allowed.includes(raw) ? raw : fallback;
+};
 
 const normalizeLifecycleStatus = (value, fallback = "active") => {
   const raw = normalizeText(value);
@@ -70,6 +84,88 @@ const formatMrrDisplay = (value) => {
 const buildIdempotencyKey = ({ command, caseId = "", subscriptionId = "", clientActionId = "" } = {}) =>
   [normalizeText(command), normalizeText(caseId), normalizeText(subscriptionId), normalizeText(clientActionId)].join(":");
 
+const sanitizePayloadByCommand = ({ command, payload = {} } = {}) => {
+  const input = payload && typeof payload === "object" ? payload : {};
+  if (command === "flag_risk") {
+    return {
+      risk_level: sanitizeEnum(input.risk_level || input.riskLevel, ["low", "medium", "high", "critical"], "medium"),
+      reason: sanitizeText(input.reason, 240),
+    };
+  }
+  if (command === "register_preventive_intent") {
+    return {
+      reason: sanitizeText(input.reason, 240),
+      detail: sanitizeText(input.detail, 500),
+    };
+  }
+  if (command === "register_formal_request") {
+    return {
+      requested_at: sanitizeTimestamp(input.requested_at || input.requestedAt),
+      first_lesson_at: sanitizeTimestamp(input.first_lesson_at || input.firstLessonAt),
+      reason: sanitizeText(input.reason, 240),
+      detail: sanitizeText(input.detail, 500),
+      origin: sanitizeEnum(input.origin, ["pedido", "abandono_confirmado"], ""),
+    };
+  }
+  if (command === "register_contact") {
+    return {
+      reason: sanitizeText(input.reason, 240),
+      detail: sanitizeText(input.detail, 500),
+    };
+  }
+  if (command === "mark_awaiting_customer") {
+    return {
+      detail: sanitizeText(input.detail, 500),
+    };
+  }
+  if (command === "retract_cancellation") {
+    return {
+      detail: sanitizeText(input.detail, 500),
+    };
+  }
+  if (command === "pause_billable" || command === "pause_non_billable" || command === "resume_lessons") {
+    return {
+      reason: sanitizeText(input.reason, 240),
+      detail: sanitizeText(input.detail, 500),
+    };
+  }
+  if (command === "confirm_cancellation_continuity") {
+    return {
+      detail: sanitizeText(input.detail, 500),
+    };
+  }
+  if (command === "schedule_program_end") {
+    return {
+      scheduled_service_end_at: sanitizeTimestamp(input.scheduled_service_end_at || input.scheduledServiceEndAt),
+      detail: sanitizeText(input.detail, 500),
+    };
+  }
+  if (command === "effectuate_churn") {
+    return {
+      mode: sanitizeEnum(input.mode, ["manual", "automatic"], "manual"),
+      outcome: sanitizeText(input.outcome, 120),
+      notes: sanitizeText(input.notes, 500),
+      occurred_at: sanitizeTimestamp(input.occurred_at || input.occurredAt),
+    };
+  }
+  if (command === "reactivate_subscription") {
+    return {
+      reason: sanitizeText(input.reason, 240),
+      detail: sanitizeText(input.detail, 500),
+    };
+  }
+  if (command === "delinquency_recovered") {
+    return {
+      reason: sanitizeText(input.reason, 240),
+      detail: sanitizeText(input.detail, 500),
+    };
+  }
+  return {};
+};
+
+const buildCommandFingerprint = (command) =>
+  createHash("sha256").update(JSON.stringify(command || {})).digest("hex");
+
 const buildCommandPayload = ({ command, actor, body = {} } = {}) => {
   const safeCommand = normalizeText(command);
   if (!safeCommand) {
@@ -89,26 +185,29 @@ const buildCommandPayload = ({ command, actor, body = {} } = {}) => {
     subscriptionId: body.subscriptionId || body.subscription_id,
     clientActionId,
   });
-  return {
+  const sanitizedPayload = sanitizePayloadByCommand({ command: safeCommand, payload: body.payload });
+  const output = {
     command: safeCommand,
+    event_type: safeCommand === "effectuate_churn" ? "cancellation_effective" : safeCommand,
     case_id: normalizeText(body.caseId || body.case_id) || null,
     student_id: normalizeText(body.studentId || body.student_id) || null,
     subscription_id: normalizeText(body.subscriptionId || body.subscription_id) || null,
     firestore_student_id: normalizeText(body.firestoreStudentId || body.firestore_student_id) || null,
     expected_version: Number(body.expectedVersion ?? body.expected_version) || 0,
-    justification: normalizeText(body.justification),
+    justification: sanitizeText(body.justification, 500),
     client_action_id: clientActionId,
     idempotency_key: idempotencyKey,
     actor: {
       uid: normalizeText(actor?.sub),
-      name: normalizeText(actor?.name),
+      name: sanitizeText(actor?.name, 120),
       role: normalizeText(actor?.role),
-      email: normalizeText(actor?.email),
     },
-    payload: body.payload && typeof body.payload === "object" ? body.payload : {},
+    payload: sanitizedPayload,
     source_system: normalizeText(body.sourceSystem || body.source_system) || "api",
     source_confidence: normalizeText(body.sourceConfidence || body.source_confidence) || "high",
   };
+  output.command_fingerprint = buildCommandFingerprint(output);
+  return output;
 };
 
 const needsOverrideJustification = ({ command, role, forceOverride = false } = {}) =>
@@ -138,8 +237,6 @@ const normalizeRetentionRow = (row = {}) => ({
   studentId: normalizeText(row.student_id),
   subscriptionId: normalizeText(row.subscription_id),
   fullName: normalizeText(row.full_name) || "Aluno",
-  email: normalizeText(row.email),
-  phone: normalizeText(row.phone),
   planName: normalizeText(row.plan_name),
   mrrValue: row.mrr_brl == null || row.mrr_brl === "" ? null : Number.isFinite(Number(row.mrr_brl)) ? Number(row.mrr_brl) : null,
   mrrDisplay: row.mrr_display || formatMrrDisplay(row.mrr_brl),
@@ -148,7 +245,7 @@ const normalizeRetentionRow = (row = {}) => ({
 const describeCaseReason = (row) => {
   if (row.stage === "awaiting_customer") return "Aguardando retorno do aluno";
   if (row.stage === "scheduled" && row.scheduledServiceEndAt) return `Encerramento previsto em ${new Date(row.scheduledServiceEndAt).toLocaleDateString("pt-BR", { timeZone: SAO_PAULO_TIME_ZONE })}`;
-  if (row.stage === "churned") return "Encerramento efetivado";
+  if (row.stage === "lost") return "Encerramento efetivado";
   if (row.stage === "saved") return "Caso revertido";
   if (row.riskLevel) return `Risco ${row.riskLevel}`;
   return "Ação em andamento";
@@ -199,11 +296,12 @@ const buildQueuesFromCases = (rows = []) => {
         secondaryActionLabel: "Abrir ficha",
       });
     }
-    if (row.stage === "saved" || row.stage === "churned") {
+    if (row.stage === "saved" || row.stage === "lost") {
+      const finalStage = row.stage;
       efetivados.push({
         ...base,
-        type: row.stage,
-        desfecho: row.stage === "saved" ? "revertido" : "churned",
+        type: finalStage,
+        desfecho: row.stage === "saved" ? "revertido" : "lost",
         dataEfetivacao: row.closedAt || row.updatedAt,
       });
     }
@@ -211,11 +309,32 @@ const buildQueuesFromCases = (rows = []) => {
   return { avisos, decisoes, efetivados };
 };
 
+const getRetentionTimelineEventLabel = (eventType) => {
+  const raw = normalizeText(eventType);
+  if (raw === "flag_risk") return "Risco sinalizado";
+  if (raw === "register_preventive_intent") return "Intenção preventiva";
+  if (raw === "register_formal_request") return "Pedido formal";
+  if (raw === "register_contact") return "Contato registrado";
+  if (raw === "mark_awaiting_customer") return "Aguardando aluno";
+  if (raw === "retract_cancellation") return "Cancelamento revertido";
+  if (raw === "pause_billable") return "Pausa faturável";
+  if (raw === "pause_non_billable") return "Pausa não faturável";
+  if (raw === "resume_lessons") return "Retomada das aulas";
+  if (raw === "confirm_cancellation_continuity") return "Continuidade confirmada";
+  if (raw === "schedule_program_end") return "Encerramento programado";
+  if (raw === "cancellation_effective") return "Churn efetivado";
+  if (raw === "reactivate_subscription") return "Assinatura reativada";
+  if (raw === "delinquency_recovered") return "Inadimplência recuperada";
+  if (raw === "legacy_import") return "Importação legada";
+  return "Evento";
+};
+
 const applyCommandToProjection = (projection = {}, event = {}) => {
   const current = {
     stage: "open",
     lifecycleStatus: "active",
     pauseStatus: "none",
+    financialStatus: "unknown",
     savedAt: null,
     churnedAt: null,
     scheduledServiceEndAt: null,
@@ -240,8 +359,8 @@ const applyCommandToProjection = (projection = {}, event = {}) => {
     current.stage = "saved";
     current.lifecycleStatus = "active";
     current.savedAt = occurredAt;
-  } else if (type === "effectuate_churn") {
-    current.stage = "churned";
+  } else if (type === "effectuate_churn" || type === "cancellation_effective") {
+    current.stage = "lost";
     current.lifecycleStatus = "churned";
     current.churnedAt = occurredAt;
   } else if (type === "reactivate_subscription") {
@@ -249,6 +368,8 @@ const applyCommandToProjection = (projection = {}, event = {}) => {
     current.lifecycleStatus = "active";
     current.pauseStatus = "none";
     current.savedAt = occurredAt;
+  } else if (type === "delinquency_recovered") {
+    current.financialStatus = "current";
   }
   return current;
 };
@@ -258,6 +379,7 @@ const rebuildCaseProjectionFromEvents = (events = [], seed = {}) =>
     stage: "open",
     lifecycleStatus: "active",
     pauseStatus: "none",
+    financialStatus: "unknown",
     savedAt: null,
     churnedAt: null,
     scheduledServiceEndAt: null,
@@ -279,8 +401,11 @@ module.exports = {
   buildIdempotencyKey,
   buildCommandPayload,
   needsOverrideJustification,
+  sanitizePayloadByCommand,
+  buildCommandFingerprint,
   normalizeRetentionRow,
   buildQueuesFromCases,
+  getRetentionTimelineEventLabel,
   applyCommandToProjection,
   rebuildCaseProjectionFromEvents,
 };

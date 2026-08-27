@@ -77,7 +77,7 @@ const buildLegacyCaseRecord = ({ student, cancellation, isClosed = false, row = 
     firestore_student_id: student.firestore_student_id,
     external_subscription_key: `firestore:${student.firestore_student_id}`,
     case_kind: cancellation?.origem === "abandono_confirmado" ? "legacy_import" : "formal",
-    stage: isClosed ? (cancellation?.desfecho ? "churned" : "saved") : "scheduled",
+    stage: isClosed ? (cancellation?.desfecho ? "lost" : "saved") : "scheduled",
     risk_level: null,
     lifecycle_status: isClosed ? "churned" : "cancellation_scheduled",
     pause_status: cancellation?.aulasSuspensas ? "paused_non_billable" : "none",

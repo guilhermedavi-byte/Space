@@ -7,6 +7,7 @@ const {
   computeScheduledServiceEndAt,
   needsOverrideJustification,
   rebuildCaseProjectionFromEvents,
+  sanitizePayloadByCommand,
 } = require("../api/_lib/retention-domain");
 
 test("pedido dentro de 7 dias da primeira aula encerra em 1 mês da primeira aula", () => {
@@ -41,6 +42,27 @@ test("command payload preserva retry idempotente e aceita resolução por firest
   assert.equal(payload.idempotency_key, "register_formal_request:::click-1");
 });
 
+test("command payload saneia campos e bloqueia mass assignment fora do comando", () => {
+  const payload = buildCommandPayload({
+    command: "register_formal_request",
+    actor: { sub: "growth-1", role: "growth", name: "Growth", email: "hidden@example.com" },
+    body: {
+      firestoreStudentId: "firestore-123",
+      clientActionId: "click-1",
+      payload: {
+        requested_at: "2026-08-26T12:00:00.000Z",
+        reason: "Quero cancelar",
+        injected: "nope",
+        lifecycle_status: "churned",
+      },
+    },
+  });
+  assert.equal(payload.actor.email, undefined);
+  assert.deepEqual(Object.keys(payload.payload).sort(), ["detail", "first_lesson_at", "origin", "reason", "requested_at"]);
+  assert.equal(payload.payload.injected, undefined);
+  assert.equal(payload.payload.lifecycle_status, undefined);
+});
+
 test("queues exibem financeiro indisponível sem forçar R$ 0,00", () => {
   const queues = buildQueuesFromCases([
     {
@@ -61,6 +83,24 @@ test("queues exibem financeiro indisponível sem forçar R$ 0,00", () => {
   assert.equal(queues.avisos[0].financialUnavailable, true);
 });
 
+test("queues mapeiam caso perdido como desfecho lost", () => {
+  const queues = buildQueuesFromCases([
+    {
+      id: "case-1",
+      case_kind: "formal",
+      stage: "lost",
+      lifecycle_status: "churned",
+      pause_status: "none",
+      financial_status: "unknown",
+      version: 3,
+      firestore_student_id: "student-1",
+      full_name: "Aluno Teste",
+    },
+  ]);
+  assert.equal(queues.efetivados.length, 1);
+  assert.equal(queues.efetivados[0].desfecho, "lost");
+});
+
 test("override administrativo exige justificativa nos comandos críticos", () => {
   assert.equal(needsOverrideJustification({ command: "effectuate_churn", role: "admin" }), true);
   assert.equal(needsOverrideJustification({ command: "effectuate_churn", role: "growth" }), false);
@@ -77,4 +117,37 @@ test("projeção pode ser reconstruída a partir do histórico append-only", () 
   assert.equal(projection.pauseStatus, "paused_non_billable");
   assert.equal(projection.stage, "saved");
   assert.equal(projection.savedAt, "2026-08-27T12:00:00.000Z");
+});
+
+test("awaiting_customer preserva a data final já programada", () => {
+  const projection = rebuildCaseProjectionFromEvents([
+    { event_type: "register_formal_request", payload: { scheduled_service_end_at: "2026-10-26T12:00:00.000Z" } },
+    { event_type: "mark_awaiting_customer" },
+  ]);
+  assert.equal(projection.stage, "awaiting_customer");
+  assert.equal(projection.scheduledServiceEndAt, "2026-10-26T12:00:00.000Z");
+});
+
+test("delinquency_recovered retorna o financeiro para current", () => {
+  const projection = rebuildCaseProjectionFromEvents(
+    [{ event_type: "delinquency_recovered" }],
+    { financialStatus: "delinquent" }
+  );
+  assert.equal(projection.financialStatus, "current");
+});
+
+test("sanitizePayloadByCommand ignora campos técnicos fora do contrato", () => {
+  const payload = sanitizePayloadByCommand({
+    command: "effectuate_churn",
+    payload: {
+      mode: "automatic",
+      occurred_at: "2026-08-26T15:00:00.000Z",
+      notes: "ok",
+      actor_uid: "leak",
+      pause_status: "paused_billable",
+    },
+  });
+  assert.deepEqual(Object.keys(payload).sort(), ["mode", "notes", "occurred_at", "outcome"]);
+  assert.equal(payload.actor_uid, undefined);
+  assert.equal(payload.pause_status, undefined);
 });

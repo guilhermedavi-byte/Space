@@ -21197,6 +21197,143 @@ const renderAdminStudentSimpleHistoryHtml = ({ hist, teacherMeta } = {}) => {
   return `<div class="admin-students-timeline admin-student-simple-history admin-student-timeline-v2">${timelineHtml}</div>`;
 };
 
+const getRetentionTimelineEventLabel = (eventType) => {
+  const raw = String(eventType || "").trim();
+  if (raw === "flag_risk") return "Risco sinalizado";
+  if (raw === "register_preventive_intent") return "Intenção preventiva";
+  if (raw === "register_formal_request") return "Pedido formal";
+  if (raw === "register_contact") return "Contato registrado";
+  if (raw === "mark_awaiting_customer") return "Aguardando aluno";
+  if (raw === "retract_cancellation") return "Cancelamento revertido";
+  if (raw === "pause_billable") return "Pausa faturável";
+  if (raw === "pause_non_billable") return "Pausa não faturável";
+  if (raw === "resume_lessons") return "Retomada das aulas";
+  if (raw === "confirm_cancellation_continuity") return "Continuidade confirmada";
+  if (raw === "schedule_program_end") return "Encerramento programado";
+  if (raw === "cancellation_effective") return "Churn efetivado";
+  if (raw === "reactivate_subscription") return "Assinatura reativada";
+  if (raw === "delinquency_recovered") return "Inadimplência recuperada";
+  if (raw === "legacy_import") return "Importação legada";
+  return "Evento";
+};
+
+const formatRetentionTimelineStateSummary = (state) => {
+  if (!state || typeof state !== "object") return "";
+  const parts = [];
+  if (state.stage) parts.push(`Caso: ${String(state.stage)}`);
+  if (state.lifecycle_status) parts.push(`Ciclo: ${String(state.lifecycle_status)}`);
+  if (state.pause_status && state.pause_status !== "none") parts.push(`Pausa: ${String(state.pause_status)}`);
+  if (state.financial_status && state.financial_status !== "unknown") parts.push(`Financeiro: ${String(state.financial_status)}`);
+  return parts.join(" · ");
+};
+
+const renderAdminStudentRetentionTimelineHtml = ({ hist } = {}) => {
+  const state = hist?.retentionTimeline && typeof hist.retentionTimeline === "object" ? hist.retentionTimeline : {};
+  if (!isRetentionV2FeatureEnabled()) return "";
+  if (state.loading) {
+    return `<div class="admin-student-simple-empty">Carregando timeline de retenção…</div>`;
+  }
+  if (state.error) {
+    return `<div class="admin-student-simple-empty is-error">${escapeHtml(String(state.error || "Não foi possível carregar a timeline canônica."))}</div>`;
+  }
+  const events = Array.isArray(state.events) ? state.events : [];
+  if (!events.length) {
+    return `<div class="admin-student-simple-empty admin-student-simple-empty-center">Nenhum evento canônico de retenção ainda.</div>`;
+  }
+  return `
+    <div class="admin-students-timeline admin-student-simple-history admin-student-timeline-v2">
+      ${events
+        .map((event) => {
+          const origin = String(event?.origin || "automatic").trim();
+          const title = getRetentionTimelineEventLabel(event?.event_type);
+          const stamp = event?.occurred_at ? formatAdminHistoryStamp(event.occurred_at) : "—";
+          const actorLabel =
+            origin === "human"
+              ? String(event?.actor_name || "Usuário autorizado").trim()
+              : origin === "legacy_import"
+                ? "Importação legada"
+                : "Sistema";
+          const beforeLabel = formatRetentionTimelineStateSummary(event?.state_before);
+          const afterLabel = formatRetentionTimelineStateSummary(event?.state_after);
+          const summary = String(event?.summary || "").trim();
+          return `
+            <article class="admin-students-tl-item admin-students-tl-item-blue">
+              <div class="admin-students-tl-marker">
+                <span class="admin-students-tl-dot is-blue">↺</span>
+              </div>
+              <div class="admin-students-tl-card">
+                <div class="admin-students-tl-head">
+                  <div class="admin-students-tl-stamp">${escapeHtml(stamp)}</div>
+                  <span class="admin-student-simple-history-pill is-blue">${escapeHtml(origin === "human" ? "Manual" : origin === "legacy_import" ? "Legado" : "Automático")}</span>
+                </div>
+                <div class="admin-students-tl-title">${escapeHtml(title)}</div>
+                <div class="admin-students-tl-by">Origem: ${escapeHtml(actorLabel)}</div>
+                ${summary && summary !== "—" ? `<div class="admin-students-tl-summary">${escapeHtml(summary)}</div>` : ""}
+                ${beforeLabel || afterLabel ? `<div class="admin-student-simple-history-meta"><span class="admin-student-simple-history-comment">${escapeHtml(`${beforeLabel || "Sem estado anterior"} → ${afterLabel || "Sem estado posterior"}`)}</span></div>` : ""}
+              </div>
+            </article>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+};
+
+const loadAdminStudentRetentionTimeline = async ({ alunoId, force = false } = {}) => {
+  const history = adminStudentsState.history;
+  if (!history?.isOpen || !isRetentionV2FeatureEnabled()) return;
+  const id = String(alunoId || history.alunoId || "").trim();
+  if (!id) return;
+  const linkedCase = getAdminRetentionCaseByStudentId(id) || getAdminRetentionDecisionByStudentId(id) || null;
+  const caseId = String(linkedCase?.caseId || "").trim();
+  if (!caseId) {
+    adminStudentsState.history.retentionTimeline = {
+      loading: false,
+      loadedAt: Date.now(),
+      error: "",
+      events: [],
+      caseId: "",
+    };
+    renderAdminStudentSheet();
+    return;
+  }
+  const currentState = history.retentionTimeline && typeof history.retentionTimeline === "object" ? history.retentionTimeline : {};
+  if (!force && currentState.caseId === caseId && currentState.loadedAt && Date.now() - currentState.loadedAt < 30_000) return;
+  adminStudentsState.history.retentionTimeline = {
+    ...currentState,
+    loading: true,
+    error: "",
+    caseId,
+  };
+  renderAdminStudentSheet();
+  try {
+    const params = new URLSearchParams({ view: "timeline", caseId });
+    const response = await fetchWithAuth(`/api/retention-cases?${params.toString()}`, { method: "GET" });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(String(payload?.message || payload?.error || "retention_timeline_fetch_failed"));
+    const timeline = payload?.timeline && typeof payload.timeline === "object" ? payload.timeline : {};
+    const events = Array.isArray(timeline.events) ? timeline.events : [];
+    if (!adminStudentsState.history?.isOpen || String(adminStudentsState.history?.alunoId || "").trim() !== id) return;
+    adminStudentsState.history.retentionTimeline = {
+      loading: false,
+      loadedAt: Date.now(),
+      error: "",
+      events,
+      caseId,
+    };
+  } catch (error) {
+    if (!adminStudentsState.history?.isOpen || String(adminStudentsState.history?.alunoId || "").trim() !== id) return;
+    adminStudentsState.history.retentionTimeline = {
+      loading: false,
+      loadedAt: Date.now(),
+      error: typeof error?.message === "string" && error.message ? error.message : "Não foi possível carregar a timeline canônica.",
+      events: [],
+      caseId,
+    };
+  }
+  renderAdminStudentSheet();
+};
+
 const saveAdminStudentPedagogicalNotes = async ({ alunoId, notes } = {}) => {
   const id = String(alunoId || "").trim();
   if (!id) return false;
@@ -21712,6 +21849,7 @@ const renderStudentSheetInto = ({ sheetEl, hist, mode = "admin" } = {}) => {
   const notesStatus = hist.notesSaving ? "Salvando notas…" : hist.notesError ? String(hist.notesError) : hist.notesLoadedAt ? "Notas carregadas." : "";
   const baseError = String(hist.baseError || "").trim();
   const historyHtml = renderAdminStudentSimpleHistoryHtml({ hist, teacherMeta: hist.teacherMeta });
+  const retentionTimelineHtml = renderAdminStudentRetentionTimelineHtml({ hist });
   const teacherOptionsHtml = getAdminStudentTeacherOptions(linkedTeacherId);
   const turmaOptionsHtml = getAdminStudentClassOptions(String(alunoMeta?.groupId || alunoMeta?.groupName || alunoMeta?.turma || alunoMeta?.turmaNome || alunoMeta?.className || ""));
   const planOptionsHtml = getAdminStudentPlanOptions(planoRaw);
@@ -22013,6 +22151,21 @@ const renderStudentSheetInto = ({ sheetEl, hist, mode = "admin" } = {}) => {
       </aside>
 
       <section class="admin-student-sheet-right admin-student-simple-right" aria-label="Detalhes do aluno">
+        ${
+          isRetentionV2FeatureEnabled()
+            ? `
+              <div class="admin-student-history-header">
+                <div>
+                  <div class="admin-student-panel-title">Timeline de retenção</div>
+                  <div class="admin-student-history-subtitle">Eventos canônicos do caso, com origem e mudança de estado.</div>
+                </div>
+              </div>
+              <div class="admin-student-panel-card admin-student-timeline-card">
+                ${retentionTimelineHtml}
+              </div>
+            `
+            : ""
+        }
         <div class="admin-student-history-header">
           <div>
             <div class="admin-student-panel-title">Histórico Pedagógico</div>
@@ -32529,6 +32682,13 @@ const openStudentSimpleCard = async ({ alunoId, teacherId } = {}) => {
       attendanceError: "",
       loadedAt: 0,
     },
+    retentionTimeline: {
+      loading: false,
+      loadedAt: 0,
+      error: "",
+      events: [],
+      caseId: "",
+    },
   };
 
   const historyTitleEl = getAdminStudentHistoryTitle();
@@ -32578,6 +32738,9 @@ const openStudentSimpleCard = async ({ alunoId, teacherId } = {}) => {
     renderAdminStudentSheet();
     loadAdminStudentLifecycleSensors({ alunoId: aId, force: true }).catch((error) => {
       console.error("[admin] lifecycle sensors load failed:", error);
+    });
+    loadAdminStudentRetentionTimeline({ alunoId: aId, force: true }).catch((error) => {
+      console.error("[admin] retention timeline load failed:", error);
     });
 
     try {
@@ -32652,6 +32815,13 @@ const closeAdminStudentHistoryDrawer = () => {
     editingField: "",
     inlineSavingField: "",
     inlineSaveTimer: 0,
+    retentionTimeline: {
+      loading: false,
+      loadedAt: 0,
+      error: "",
+      events: [],
+      caseId: "",
+    },
   };
 };
 
@@ -33639,6 +33809,7 @@ const submitRetentionV2Command = async ({ command, alunoId, payload = {}, justif
   if (data?.result?.snapshot) syncRetentionV2SnapshotToCache(data.result.snapshot);
   adminPedagogicoState.retention.loadedAt = 0;
   await refreshAdminPedagogicoRetentionState({ force: true }).catch(() => null);
+  await loadAdminStudentRetentionTimeline({ alunoId, force: true }).catch(() => null);
   rerenderAdminStudentLifecycleViews();
   return data;
 };

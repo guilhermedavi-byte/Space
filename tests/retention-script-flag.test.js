@@ -15,3 +15,10 @@ test("modais de retenção mantêm o legado, mas redirecionam pela flag", () => 
   assert.match(script, /command: "effectuate_churn"/);
   assert.match(script, /command: "reactivate_subscription"/);
 });
+
+test("drawer do aluno carrega e renderiza timeline canônica quando a flag v2 está ativa", () => {
+  assert.match(script, /const loadAdminStudentRetentionTimeline = async \(\{ alunoId, force = false \} = \{\}\) =>/);
+  assert.match(script, /fetchWithAuth\(`\/api\/retention-cases\?\$\{params\.toString\(\)\}`,\s*\{ method: "GET" \}\)/);
+  assert.match(script, /<div class="admin-student-panel-title">Timeline de retenção<\/div>/);
+  assert.match(script, /await loadAdminStudentRetentionTimeline\(\{ alunoId, force: true \}\)\.catch\(\(\) => null\)/);
+});
