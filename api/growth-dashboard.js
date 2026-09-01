@@ -609,23 +609,25 @@ const getMonthKeySaoPaulo = (date) => {
   }
 };
 
-const getBusinessWonLostDate = (business) => {
-  // Best approximation for "Data de Ganho/Perdido" used by the CRM UI.
-  // If DataCrazy adds an explicit field (ex: `wonAt`), we can switch here without touching the rest of the metrics.
-  const b = business && typeof business === "object" ? business : {};
-  const candidates = [
-    "wonAt",
-    "wonDate",
-    "gainedAt",
-    "gainAt",
-    "closedAt",
-    "finishedAt",
-    "statusChangedAt",
-    "stageChangedAt",
-    "lastMovedAt",
-  ];
+const BUSINESS_CLOSING_DATE_FIELDS = [
+  "wonAt",
+  "wonDate",
+  "soldAt",
+  "soldDate",
+  "saleAt",
+  "closedAt",
+  "finishedAt",
+  "statusChangedAt",
+  "stageChangedAt",
+  "lastMovedAt",
+];
 
-  for (const field of candidates) {
+const getBusinessWonLostDate = (business) => {
+  // DataCrazy currently exposes `statusChangedAt` for won businesses. Explicit
+  // won/sold/closed fields stay ahead of it, while lastMovedAt is only a legacy
+  // fallback for records that do not carry a dedicated status timestamp.
+  const b = business && typeof business === "object" ? business : {};
+  for (const field of BUSINESS_CLOSING_DATE_FIELDS) {
     const raw = b[field];
     if (!raw) continue;
     const d = new Date(String(raw));
@@ -961,8 +963,8 @@ const buildGrowthMetricsPayload = async ({ crm, idToken, periodStart = "", perio
   );
   const pipelineTarget = preferredDeals.length ? pipelinePreferred : conversionPipelineKey;
   const filteredAll = businesses.filter((business) => normalizeKey(business?.stage?.pipeline?.name) === pipelineTarget);
-  // Admin → Comercial filters are cohort filters: every KPI starts from businesses
-  // created inside the selected range, matching the CRM date semantics.
+  // Funnel/cohort metrics keep the CRM createdAt semantics. Financial outcomes
+  // are selected separately below by their closing timestamp.
   const filtered = filterByCreatedAt ? filteredAll.filter(wasCreatedInPeriod) : filteredAll;
   const conversionPipelineDeals = filterByCreatedAt
     ? filtered
@@ -991,7 +993,6 @@ const buildGrowthMetricsPayload = async ({ crm, idToken, periodStart = "", perio
   const stageCountsMonth = new Map();
   const stageTotalsMonth = new Map();
 
-  const closedDeals = [];
   let totalPipelineMonth = 0;
 
   filtered.forEach((b) => {
@@ -1007,7 +1008,6 @@ const buildGrowthMetricsPayload = async ({ crm, idToken, periodStart = "", perio
       stageCountsMonth.set(stageName, (stageCountsMonth.get(stageName) || 0) + 1);
       stageTotalsMonth.set(stageName, (stageTotalsMonth.get(stageName) || 0) + total);
     }
-    if (stageName === "fechado") closedDeals.push(b);
   });
 
   const totalPipeline = filtered.length;
@@ -1043,13 +1043,17 @@ const buildGrowthMetricsPayload = async ({ crm, idToken, periodStart = "", perio
     0
   );
 
+  // Revenue, closed sales and average ticket are financial outcome metrics.
+  // A lead created before the selected range must still count when it was won
+  // inside the range, and a lead created inside must not count if won later.
+  const closedDeals = filteredAll.filter((business) => normalizeKey(business?.stage?.name) === normalizeKey("Fechado"));
   const dateFieldCounts = new Map();
-
+  let closedDealsWithoutClosingDate = 0;
   const closedDealsMonth = closedDeals.filter((b) => {
-    if (filterByCreatedAt) return wasCreatedInPeriod(b);
     const info = getBusinessWonLostDate(b);
     const field = info.field || "unknown";
     dateFieldCounts.set(field, (dateFieldCounts.get(field) || 0) + 1);
+    if (!info.date) closedDealsWithoutClosingDate += 1;
     return info.date ? isDateWithinCommercialPeriod(info.date, commercialPeriod) : false;
   });
 
@@ -1069,6 +1073,29 @@ const buildGrowthMetricsPayload = async ({ crm, idToken, periodStart = "", perio
   const realizado = closedDealsMonth.reduce((sum, b) => sum + getDealValueForecast(b), 0);
   const totalVendas = closedDealsMonth.length;
   const ticketMedio = totalVendas > 0 ? realizado / totalVendas : 0;
+  const closedCreatedOutsidePeriod = closedDealsMonth.filter((business) => !wasCreatedInPeriod(business));
+  const createdInsideButClosedOutsidePeriod = closedDeals.filter(
+    (business) => wasCreatedInPeriod(business) && !closedDealsMonthIds.has(getBusinessId(business))
+  );
+
+  console.info("[commercial-overview][financial-audit]", {
+    periodoSelecionado: {
+      inicio: `${commercialPeriod.startDateKey}T00:00:00-03:00`,
+      fim: `${commercialPeriod.endDateKey}T23:59:59.999-03:00`,
+      timezone: "America/Sao_Paulo",
+    },
+    origemDados: "DataCrazy businesses",
+    pipeline: pipelineTarget,
+    quantidadeFechadosEncontrados: totalVendas,
+    somaReceita: realizado,
+    ticketMedio,
+    campoDataUsado: dateFieldUsed || "indisponível",
+    distribuicaoCamposData: Object.fromEntries(dateFieldCounts),
+    negociosExcluidosPorData: closedDeals.length - totalVendas,
+    negociosSemDataFechamento: closedDealsWithoutClosingDate,
+    criadosAntesMasFechadosNoPeriodo: closedCreatedOutsidePeriod.length,
+    criadosNoPeriodoMasFechadosFora: createdInsideButClosedOutsidePeriod.length,
+  });
 
   const conversao = percent(fechadosMonth, baseConversaoMonth);
   const taxaAgendamento = percent(agendamentosMonth, totalPipelineMonth);
@@ -1111,9 +1138,7 @@ const buildGrowthMetricsPayload = async ({ crm, idToken, periodStart = "", perio
     nowMonthKey,
     getMonthKey: getMonthKeySaoPaulo,
     getClosedDate: (deal) =>
-      filterByCreatedAt
-        ? deal?.createdAt || deal?.created_at || null
-        : getBusinessWonLostDate(deal).date || null,
+      getBusinessWonLostDate(deal).date || null,
     isWithinCurrentPeriod: (value) => isDateWithinCommercialPeriod(value, commercialPeriod),
     daysPassed: Math.max(1, Number(diasPassados) || 1),
     daysRemaining: diasRestantes,
@@ -1290,6 +1315,7 @@ const buildGrowthMetricsPayload = async ({ crm, idToken, periodStart = "", perio
       startAt: `${commercialPeriod.startDateKey}T00:00:00-03:00`,
       endAt: `${commercialPeriod.endDateKey}T23:59:59.999-03:00`,
       filterField: filterByCreatedAt ? "createdAt" : "commercial-default",
+      financialFilterField: dateFieldUsed || "closing-date-unavailable",
       pipelineKey: pipelineTarget,
     },
     debug: {
@@ -1301,6 +1327,11 @@ const buildGrowthMetricsPayload = async ({ crm, idToken, periodStart = "", perio
       somaFechadoMes: realizado,
       commercialPeriod,
       dateFieldUsed,
+      financialDateFieldCounts: Object.fromEntries(dateFieldCounts),
+      closedDealsWithoutClosingDate,
+      closedCreatedOutsidePeriod: closedCreatedOutsidePeriod.length,
+      createdInsideButClosedOutsidePeriod: createdInsideButClosedOutsidePeriod.length,
+      forecastRule: "closed revenue + 35% of active Reunião Realizada/Hot Lead + projected new leads",
       first10FechadoStage: closedDeals
         .slice()
         .sort((a, b) => {

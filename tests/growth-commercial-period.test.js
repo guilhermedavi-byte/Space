@@ -88,10 +88,12 @@ test("forecast 3-partes aceita callback de período customizado", () => {
   assert.equal(result.debug.leadsDoMes, 1);
 });
 
-test("growth metrics escolhe o pipeline dentro da coorte e filtra pela criação", async () => {
-  const makeDeal = ({ id, createdAt, total, pipeline = "Conversão" }) => ({
+test("growth metrics mantém o funil por criação e calcula financeiro por fechamento", async () => {
+  const makeDeal = ({ id, createdAt, statusChangedAt, total, pipeline = "Conversão" }) => ({
     id,
     createdAt,
+    statusChangedAt,
+    status: "won",
     total,
     stage: { name: "Fechado", pipeline: { name: pipeline } },
     attendant: { name: "Responsável" },
@@ -99,9 +101,10 @@ test("growth metrics escolhe o pipeline dentro da coorte e filtra pela criação
   const payload = await buildGrowthMetricsPayload({
     crm: {
       businesses: [
-        makeDeal({ id: "inside", createdAt: "2026-05-05T12:00:00-03:00", total: 1000 }),
-        makeDeal({ id: "outside", createdAt: "2026-05-20T12:00:00-03:00", total: 9000 }),
-        makeDeal({ id: "new-pipeline", createdAt: "2026-09-01T12:00:00-03:00", total: 12000, pipeline: "Funil principal" }),
+        makeDeal({ id: "inside", createdAt: "2026-05-05T12:00:00-03:00", statusChangedAt: "2026-05-06T12:00:00-03:00", total: 1000 }),
+        makeDeal({ id: "created-before", createdAt: "2026-04-20T12:00:00-03:00", statusChangedAt: "2026-05-10T12:00:00-03:00", total: 9000 }),
+        makeDeal({ id: "closed-after", createdAt: "2026-05-07T12:00:00-03:00", statusChangedAt: "2026-05-20T12:00:00-03:00", total: 5000 }),
+        makeDeal({ id: "new-pipeline", createdAt: "2026-09-01T12:00:00-03:00", statusChangedAt: "2026-09-02T12:00:00-03:00", total: 12000, pipeline: "Funil principal" }),
       ],
     },
     periodStart: "2026-05-01",
@@ -109,17 +112,21 @@ test("growth metrics escolhe o pipeline dentro da coorte e filtra pela criação
     filterByCreatedAt: true,
   });
 
-  assert.equal(payload.summary.realizado, 1000);
-  assert.equal(payload.summary.totalVendas, 1);
-  assert.equal(payload.summary.ticketMedio, 1000);
-  assert.equal(payload.summary.forecast, 1000);
-  assert.equal(payload.stageBreakdown[0].count, 1);
+  assert.equal(payload.summary.realizado, 10000);
+  assert.equal(payload.summary.totalVendas, 2);
+  assert.equal(payload.summary.ticketMedio, 5000);
+  assert.equal(payload.summary.forecast, 10000);
+  assert.equal(payload.stageBreakdown[0].count, 2);
+  assert.equal(payload.debug.closedCreatedOutsidePeriod, 1);
+  assert.equal(payload.debug.createdInsideButClosedOutsidePeriod, 1);
+  assert.equal(payload.debug.dateFieldUsed, "statusChangedAt");
   assert.deepEqual(payload.period, {
     startDateKey: "2026-05-01",
     endDateKey: "2026-05-12",
     startAt: "2026-05-01T00:00:00-03:00",
     endAt: "2026-05-12T23:59:59.999-03:00",
     filterField: "createdAt",
+    financialFilterField: "statusChangedAt",
     pipelineKey: "conversao",
   });
 });
