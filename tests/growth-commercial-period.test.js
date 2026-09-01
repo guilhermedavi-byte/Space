@@ -142,6 +142,8 @@ test("API de growth metrics valida e usa periodStart/periodEnd fora do cache men
   assert.match(source, /const hasRequestedPeriod = Boolean\(periodStart \|\| periodEnd\)/);
   assert.match(source, /filterByCreatedAt: hasRequestedPeriod/);
   assert.match(source, /periodStart > periodEnd/);
+  assert.match(source, /params\.set\("filter\[lastMovedAfter\]", String\(lastMovedAfter\)\.trim\(\)\)/);
+  assert.match(source, /new Date\(`\$\{periodStart\}T00:00:00-03:00`\)\.toISOString\(\)/);
   assert.match(clientSource, /new URLSearchParams\(\{ api: "growth-metrics", periodStart: range\.start, periodEnd: range\.end \}\)/);
   assert.match(clientSource, /crm\?\.period\?\.startDateKey !== range\.start/);
 });

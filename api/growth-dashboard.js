@@ -691,13 +691,14 @@ const pickBusinessDebugFields = (business, { statusChangedField } = {}) => {
   };
 };
 
-const fetchCrmBusinessesPage = async ({ base, apiKey, skip, take } = {}) => {
+const fetchCrmBusinessesPage = async ({ base, apiKey, skip, take, lastMovedAfter = "" } = {}) => {
   const safeSkip = Math.max(0, Number(skip) || 0);
   const safeTake = Math.max(1, Math.min(Number(take) || 200, 500));
 
   const params = new URLSearchParams();
   params.set("skip", String(safeSkip));
   params.set("take", String(safeTake));
+  if (String(lastMovedAfter || "").trim()) params.set("filter[lastMovedAfter]", String(lastMovedAfter).trim());
 
   const url = `${base}/api/v1/businesses?${params.toString()}`;
   const res = await requestJsonRaw(url, {
@@ -728,7 +729,7 @@ const fetchCrmBusinessesPage = async ({ base, apiKey, skip, take } = {}) => {
   return { ok: true, status: res.status || 200, items, total };
 };
 
-const fetchAllCrmBusinessesLegacy = async () => {
+const fetchAllCrmBusinessesLegacy = async ({ lastMovedAfter = "" } = {}) => {
   const apiKey = String(process.env.CRM_API_KEY || "").trim();
   const base = String(process.env.CRM_API_BASE_URL || "").trim().replace(/\/+$/, "");
   if (!apiKey || !base) {
@@ -754,7 +755,7 @@ const fetchAllCrmBusinessesLegacy = async () => {
   // Keep fetching until we reach the last page (items < take), or until we hit the reported `total` (when available).
   while (pages < 200) {
     // Safety cap to avoid infinite loops if the CRM misbehaves.
-    const page = await fetchCrmBusinessesPage({ base, apiKey, skip, take });
+    const page = await fetchCrmBusinessesPage({ base, apiKey, skip, take, lastMovedAfter });
     if (!page.ok) return page;
 
     pages += 1;
@@ -782,13 +783,14 @@ const fetchAllCrmBusinessesLegacy = async () => {
       take,
       totalFetched,
       expectedTotal,
+      lastMovedAfter: String(lastMovedAfter || "").trim(),
     },
   };
 };
 
-const fetchAllCrmBusinesses = async () => {
+const fetchAllCrmBusinesses = async ({ lastMovedAfter = "" } = {}) => {
   if (isDatacrazyMirrorEnabled()) {
-    const mirror = await fetchAllMirroredBusinesses();
+    const mirror = await fetchAllMirroredBusinesses({ lastMovedAfter });
     return {
       ok: true,
       status: 200,
@@ -799,7 +801,7 @@ const fetchAllCrmBusinesses = async () => {
       },
     };
   }
-  return fetchAllCrmBusinessesLegacy();
+  return fetchAllCrmBusinessesLegacy({ lastMovedAfter });
 };
 
 const decodeGoalDoc = (doc) => {
@@ -1678,7 +1680,11 @@ const handleGrowthMetricsApi = async (req, res) => {
 
   const idToken = getBearerTokenFromRequest(req);
   try {
-    const crm = await fetchAllCrmBusinesses();
+    // A business cannot move before it is created. Restricting the remote read
+    // by lastMovedAt therefore keeps every createdAt candidate in the requested
+    // cohort while avoiding a full CRM export on every date-filter change.
+    const lastMovedAfter = hasRequestedPeriod ? new Date(`${periodStart}T00:00:00-03:00`).toISOString() : "";
+    const crm = await fetchAllCrmBusinesses({ lastMovedAfter });
     if (!crm || !crm.ok) throw crm || { status: 500, error: "crm_failed" };
     const payload = await buildGrowthMetricsPayload({
       crm,
