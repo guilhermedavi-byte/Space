@@ -612,6 +612,8 @@ const getMonthKeySaoPaulo = (date) => {
 const BUSINESS_CLOSING_DATE_FIELDS = [
   "wonAt",
   "wonDate",
+  "gainedAt",
+  "gainAt",
   "soldAt",
   "soldDate",
   "saleAt",
