@@ -15220,7 +15220,7 @@ const getSdrStats = (events = []) => {
     answerRate: totalCalls ? (answered / totalCalls) * 100 : 0,
     scheduleRate: answered ? (scheduled / answered) * 100 : 0,
     callToScheduleRate: totalCalls ? (scheduled / totalCalls) * 100 : 0,
-    showRate: shows + noShows ? (shows / (shows + noShows)) * 100 : 0,
+    showRate: scheduled ? (shows / scheduled) * 100 : 0,
   };
 };
 
@@ -15254,7 +15254,7 @@ const getSdrDayMetric = (day, metric) => {
   const noShows = Number(day?.noShows || 0);
   if (metric === "answered") return answered;
   if (metric === "scheduled") return scheduled;
-  if (metric === "showRate") return shows + noShows ? Math.round((shows / (shows + noShows)) * 100) : 0;
+  if (metric === "showRate") return scheduled ? Math.round((shows / scheduled) * 100) : 0;
   if (metric === "answerRate") return totalCalls ? Math.round((answered / totalCalls) * 100) : 0;
   if (metric === "callToScheduleRate") return totalCalls ? Math.round((scheduled / totalCalls) * 100) : 0;
   return totalCalls;
@@ -16375,7 +16375,7 @@ const sumCommercialSdrStats = (rows = []) => {
     ...stats,
     answerRate: stats.totalCalls ? (stats.answered / stats.totalCalls) * 100 : 0,
     callToScheduleRate: stats.totalCalls ? (stats.scheduled / stats.totalCalls) * 100 : 0,
-    showRate: meetings ? (stats.shows / meetings) * 100 : 0,
+    showRate: stats.scheduled ? (stats.shows / stats.scheduled) * 100 : 0,
     noShowRate: meetings ? (stats.noShows / meetings) * 100 : 0,
   };
 };
@@ -16399,7 +16399,7 @@ const summarizeCommercialSdrDailyRows = (rows = []) => {
     answerRate: base.totalCalls ? (base.answered / base.totalCalls) * 100 : 0,
     scheduleRate: base.answered ? (base.scheduled / base.answered) * 100 : 0,
     callToScheduleRate: base.totalCalls ? (base.scheduled / base.totalCalls) * 100 : 0,
-    showRate: base.totalMeetings ? (base.shows / base.totalMeetings) * 100 : 0,
+    showRate: base.scheduled ? (base.shows / base.scheduled) * 100 : 0,
   };
 };
 
@@ -16416,6 +16416,29 @@ const getCommercialOverviewTeamSeries = (metric) => {
   const team = Array.isArray(adminCommercialOverviewState.sdr?.team) ? adminCommercialOverviewState.sdr.team : [];
   const periodKey = getCommercialOverviewSdrPeriodKey();
   return team.map((row) => Number(row?.[periodKey]?.[metric] || 0));
+};
+
+const logCommercialOverviewShowRateAudit = (range = {}) => {
+  const stats = getCommercialOverviewTeamStats();
+  const totalAgendamentos = Math.max(0, Number(stats.scheduled || 0));
+  const totalReunioesFeitas = Math.max(0, Number(stats.shows || 0));
+  const totalNoShow = Math.max(0, Number(stats.noShows || 0));
+  const showRateCalculado = totalAgendamentos ? (totalReunioesFeitas / totalAgendamentos) * 100 : 0;
+  console.info("[commercial-overview][show-rate-audit]", {
+    totalAgendamentos,
+    totalReunioesFeitas,
+    totalNoShow,
+    showRateCalculado,
+    periodoAplicado: {
+      dataInicial: String(range.start || ""),
+      dataFinal: String(range.end || ""),
+      inicioInclusivo: "00:00:00",
+      fimInclusivo: "23:59:59",
+      timezone: "America/Sao_Paulo",
+    },
+    origemDados: "Firestore/sdrActivityEvents (painéis SDR/Growth)",
+    campoData: "dateKey",
+  });
 };
 
 const renderCommercialOverviewKpi = ({ label, value, pill = "", series = [], tone = "neutral" } = {}) => `
@@ -16829,6 +16852,7 @@ const loadAdminCommercialOverview = async ({ force = false } = {}) => {
     adminCommercialOverviewState.crm = crm || {};
     adminCommercialOverviewState.goal = goalRes.ok ? goalPayload?.goal || null : null;
     adminCommercialOverviewState.sdr = sdr || {};
+    logCommercialOverviewShowRateAudit(range);
     adminCommercialOverviewState.loadedAt = Date.now();
   } catch (error) {
     console.error("[admin] commercial overview load failed:", error);

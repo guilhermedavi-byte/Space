@@ -43,7 +43,7 @@ test("summarizeDailyRows recalcula taxas a partir dos totais agregados", () => {
   assert.equal(summary.answerRate, (14 / 30) * 100);
   assert.equal(summary.scheduleRate, (7 / 14) * 100);
   assert.equal(summary.callToScheduleRate, (7 / 30) * 100);
-  assert.equal(summary.showRate, (3 / 4) * 100);
+  assert.equal(summary.showRate, (3 / 7) * 100);
 });
 
 test("normalizeActivityEvent ignora deletados e marca horário local do evento", () => {

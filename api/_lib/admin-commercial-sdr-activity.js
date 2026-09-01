@@ -131,7 +131,7 @@ const summarizeDailyRows = (rows = []) => {
     answerRate: base.totalCalls ? (base.answered / base.totalCalls) * 100 : 0,
     scheduleRate: base.answered ? (base.scheduled / base.answered) * 100 : 0,
     callToScheduleRate: base.totalCalls ? (base.scheduled / base.totalCalls) * 100 : 0,
-    showRate: base.totalMeetings ? (base.shows / base.totalMeetings) * 100 : 0,
+    showRate: base.scheduled ? (base.shows / base.scheduled) * 100 : 0,
   };
 };
 

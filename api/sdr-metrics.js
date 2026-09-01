@@ -100,7 +100,9 @@ const computeStats = (events = []) => {
     answerRate: totalCalls ? (answered / totalCalls) * 100 : 0,
     scheduleRate: answered ? (scheduled / answered) * 100 : 0,
     callToScheduleRate: totalCalls ? (scheduled / totalCalls) * 100 : 0,
-    showRate: shows + noShows ? (shows / (shows + noShows)) * 100 : 0,
+    // The commercial overview uses the appointments registered by SDRs as the
+    // single denominator for both cards: shows / scheduled appointments.
+    showRate: scheduled ? (shows / scheduled) * 100 : 0,
   };
 };
 
