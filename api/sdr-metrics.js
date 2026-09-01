@@ -138,20 +138,28 @@ const getAuthorizedSession = async (req) => {
   return { ok: true, session: auth.session, profile: auth.profile, role };
 };
 
-const listSdrData = async ({ session, days = 30 } = {}) => {
+const listSdrData = async ({ session, days = 30, from = "", to = "" } = {}) => {
   const safeDays = Math.max(1, Math.min(Number(days) || 30, 120));
   const todayKey = saoPauloDateKey();
-  const fromKey = addDaysToKey(todayKey, -(safeDays - 1));
+  const requestedFrom = parseDateKey(from);
+  const requestedTo = parseDateKey(to);
+  if ((requestedFrom || requestedTo) && (!requestedFrom || !requestedTo || requestedFrom > requestedTo)) {
+    const error = new Error("invalid_period_range");
+    error.status = 400;
+    throw error;
+  }
+  const fromKey = requestedFrom || addDaysToKey(todayKey, -(safeDays - 1));
+  const toKey = requestedTo || todayKey;
   const [userRows, eventRows] = await Promise.all([
     listCollectionAsAdmin("users", { pageSize: 1000 }),
-    queryCollectionByDateRangeAsAdmin(ACTIVITY_COLLECTION, { from: fromKey, to: todayKey }).catch(() => []),
+    queryCollectionByDateRangeAsAdmin(ACTIVITY_COLLECTION, { from: fromKey, to: toKey }).catch(() => []),
   ]);
   const users = userRows.map(normalizeGrowthUser).filter(Boolean);
   const usersByUid = new Map(users.map((user) => [user.uid, user]));
   const events = eventRows
     .map(normalizeEvent)
     .filter(Boolean)
-    .filter((event) => event.dateKey >= fromKey && event.dateKey <= todayKey)
+    .filter((event) => event.dateKey >= fromKey && event.dateKey <= toKey)
     .sort((a, b) => String(a.createdAt || a.time || "").localeCompare(String(b.createdAt || b.time || "")));
   const ownUid = String(session?.sub || "").trim();
   const ownEvents = events.filter((event) => event.sdrUid === ownUid);
@@ -167,6 +175,7 @@ const listSdrData = async ({ session, days = 30 } = {}) => {
       const monthStart = addDaysToKey(todayKey, -29);
       const weekEvents = events.filter((event) => event.sdrUid === user.uid && event.dateKey >= weekStart && event.dateKey <= todayKey);
       const monthEvents = events.filter((event) => event.sdrUid === user.uid && event.dateKey >= monthStart && event.dateKey <= todayKey);
+      const customEvents = events.filter((event) => event.sdrUid === user.uid && event.dateKey >= fromKey && event.dateKey <= toKey);
       return {
         uid: user.uid,
         nome: user.nome,
@@ -174,6 +183,7 @@ const listSdrData = async ({ session, days = 30 } = {}) => {
         today,
         week: computeStats(weekEvents),
         month: computeStats(monthEvents),
+        custom: computeStats(customEvents),
       };
     })
     .sort((a, b) => (b.today.scheduled || 0) - (a.today.scheduled || 0) || (b.week.scheduled || 0) - (a.week.scheduled || 0) || String(a.nome).localeCompare(String(b.nome), "pt-BR"));
@@ -181,6 +191,7 @@ const listSdrData = async ({ session, days = 30 } = {}) => {
     ok: true,
     todayKey,
     fromKey,
+    toKey,
     user: { uid: ownUid, nome: session?.name || usersByUid.get(ownUid)?.nome || "SDR", email: session?.email || usersByUid.get(ownUid)?.email || "" },
     events: ownEvents,
     todayEvents,
@@ -308,7 +319,12 @@ module.exports = async (req, res) => {
     if (req.method === "GET") {
       const host = String(req.headers.host || "localhost");
       const url = new URL(req.url || "/api/sdr-metrics", `https://${host}`);
-      const payload = await listSdrData({ session: auth.session, days: Number(url.searchParams.get("days") || 30) });
+      const payload = await listSdrData({
+        session: auth.session,
+        days: Number(url.searchParams.get("days") || 30),
+        from: url.searchParams.get("from") || "",
+        to: url.searchParams.get("to") || "",
+      });
       sendJson(res, 200, payload);
       return;
     }

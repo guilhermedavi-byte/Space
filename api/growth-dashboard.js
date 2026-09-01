@@ -915,7 +915,7 @@ const loadSdrActivityEvents = async ({ idToken, accessToken } = {}) => {
   return docs.map((doc) => decodeSdrActivityEventDoc(doc)).filter(Boolean);
 };
 
-const buildGrowthMetricsPayload = async ({ crm, idToken }) => {
+const buildGrowthMetricsPayload = async ({ crm, idToken, periodStart = "", periodEnd = "", filterByCreatedAt = false }) => {
   const businesses = Array.isArray(crm?.businesses) ? crm.businesses : [];
   const nowMonthKey = getMonthKeySaoPaulo(new Date());
 
@@ -940,8 +940,8 @@ const buildGrowthMetricsPayload = async ({ crm, idToken }) => {
   }
   const commercialPeriod = resolveCommercialPeriod({
     now: new Date(),
-    periodStart: goalPeriodStart,
-    periodEnd: goalPeriodEnd,
+    periodStart: periodStart || goalPeriodStart,
+    periodEnd: periodEnd || goalPeriodEnd,
   });
 
   // Prefer the main pipeline name used by the commercial team. Fall back to the old "Conversão" pipeline if needed.
@@ -950,8 +950,18 @@ const buildGrowthMetricsPayload = async ({ crm, idToken }) => {
   const pipelineTarget = preferredDeals.length ? pipelinePreferred : normalizeKey("Conversão");
   const conversionPipelineKey = normalizeKey("Conversão");
 
-  const filtered = businesses.filter((b) => normalizeKey(b?.stage?.pipeline?.name) === pipelineTarget);
-  const conversionPipelineDeals = businesses.filter((b) => normalizeKey(b?.stage?.pipeline?.name) === conversionPipelineKey);
+  const filteredAll = businesses.filter((b) => normalizeKey(b?.stage?.pipeline?.name) === pipelineTarget);
+  const conversionPipelineDealsAll = businesses.filter((b) => normalizeKey(b?.stage?.pipeline?.name) === conversionPipelineKey);
+  const wasCreatedInPeriod = (business) => {
+    const createdAt = business?.createdAt || business?.created_at || null;
+    return createdAt ? isDateWithinCommercialPeriod(createdAt, commercialPeriod) : false;
+  };
+  // Admin → Comercial filters are cohort filters: every KPI starts from businesses
+  // created inside the selected range, matching the CRM date semantics.
+  const filtered = filterByCreatedAt ? filteredAll.filter(wasCreatedInPeriod) : filteredAll;
+  const conversionPipelineDeals = filterByCreatedAt
+    ? conversionPipelineDealsAll.filter(wasCreatedInPeriod)
+    : conversionPipelineDealsAll;
 
   // Temporary debug: inspect fields for a deal in "Em fechamento" to identify lost flags/status fields.
   try {
@@ -1031,6 +1041,7 @@ const buildGrowthMetricsPayload = async ({ crm, idToken }) => {
   const dateFieldCounts = new Map();
 
   const closedDealsMonth = closedDeals.filter((b) => {
+    if (filterByCreatedAt) return wasCreatedInPeriod(b);
     const info = getBusinessWonLostDate(b);
     const field = info.field || "unknown";
     dateFieldCounts.set(field, (dateFieldCounts.get(field) || 0) + 1);
@@ -1094,7 +1105,10 @@ const buildGrowthMetricsPayload = async ({ crm, idToken }) => {
     deals: filtered,
     nowMonthKey,
     getMonthKey: getMonthKeySaoPaulo,
-    getClosedDate: (deal) => getBusinessWonLostDate(deal).date || null,
+    getClosedDate: (deal) =>
+      filterByCreatedAt
+        ? deal?.createdAt || deal?.created_at || null
+        : getBusinessWonLostDate(deal).date || null,
     isWithinCurrentPeriod: (value) => isDateWithinCommercialPeriod(value, commercialPeriod),
     daysPassed: Math.max(1, Number(diasPassados) || 1),
     daysRemaining: diasRestantes,
@@ -1160,14 +1174,14 @@ const buildGrowthMetricsPayload = async ({ crm, idToken }) => {
     const isKnownPreMeeting = CONVERSION_PRE_MEETING_STAGE_KEYS.has(stageKey);
     if (!isMeetingOrAfter && !isKnownPreMeeting && rawStage) unknownConversionStages.add(rawStage);
     if (!isMeetingOrAfter) return;
-    const rawLastMovedAt = b?.lastMovedAt;
-    if (!rawLastMovedAt) {
-      console.warn("[growth-metrics] negócio sem lastMovedAt no ranking", {
+    const rankingDateValue = filterByCreatedAt ? b?.createdAt || b?.created_at : b?.lastMovedAt;
+    if (!rankingDateValue) {
+      console.warn("[growth-metrics] negócio sem data de referência no ranking", {
         businessId: getBusinessId(b) || null,
       });
       return;
     }
-    const eventDate = rawLastMovedAt instanceof Date ? rawLastMovedAt : new Date(String(rawLastMovedAt));
+    const eventDate = rankingDateValue instanceof Date ? rankingDateValue : new Date(String(rankingDateValue));
     if (Number.isNaN(eventDate.getTime()) || !isDateWithinCommercialPeriod(eventDate, commercialPeriod)) return;
 
     const vendor = b?.attendant?.name ? String(b.attendant.name).trim() : "Sem vendedor";
@@ -1198,7 +1212,7 @@ const buildGrowthMetricsPayload = async ({ crm, idToken }) => {
     }
     if (normalizeKey(b?.stage?.name) === normalizeKey("Fechado")) {
       const closedInfo = getBusinessWonLostDate(b);
-      const closedMonth = closedInfo.date ? getMonthKeySaoPaulo(closedInfo.date) : "";
+      const closedMonth = filterByCreatedAt ? createdMonth : closedInfo.date ? getMonthKeySaoPaulo(closedInfo.date) : "";
       if (closedMonth) {
         const entry = conversionByMonthMap.get(closedMonth) || { month: closedMonth, leads: 0, closed: 0 };
         entry.closed += 1;
@@ -1206,9 +1220,10 @@ const buildGrowthMetricsPayload = async ({ crm, idToken }) => {
       }
     }
   });
-  const conversionStartMonth = "2026-02";
+  const conversionStartMonth = filterByCreatedAt ? commercialPeriod.startDateKey.slice(0, 7) : "2026-02";
+  const conversionEndMonth = filterByCreatedAt ? commercialPeriod.endDateKey.slice(0, 7) : nowMonthKey;
   const conversionMonthKeys = [];
-  for (let cursor = new Date(`${conversionStartMonth}-01T12:00:00-03:00`); getMonthKeySaoPaulo(cursor) <= nowMonthKey; cursor.setMonth(cursor.getMonth() + 1)) {
+  for (let cursor = new Date(`${conversionStartMonth}-01T12:00:00-03:00`); getMonthKeySaoPaulo(cursor) <= conversionEndMonth; cursor.setMonth(cursor.getMonth() + 1)) {
     conversionMonthKeys.push(getMonthKeySaoPaulo(cursor));
   }
   const conversionHistory = conversionMonthKeys.map((month) => {
@@ -1264,6 +1279,11 @@ const buildGrowthMetricsPayload = async ({ crm, idToken }) => {
     forecastBreakdown,
     stageBreakdown,
     conversionHistory,
+    period: {
+      startDateKey: commercialPeriod.startDateKey,
+      endDateKey: commercialPeriod.endDateKey,
+      filterField: filterByCreatedAt ? "createdAt" : "commercial-default",
+    },
     debug: {
       totalFetched: Number(crm?.pagination?.totalFetched) || businesses.length,
       paginationPages: Number(crm?.pagination?.pages) || 1,
@@ -1597,8 +1617,15 @@ const handleGrowthMetricsApi = async (req, res) => {
   const host = String(req.headers.host || "localhost");
   const url = new URL(req.url || "/api/growth-dashboard?api=growth-metrics", `https://${host}`);
   const forceRefresh = String(url.searchParams.get("refresh") || "").trim() === "1";
+  const periodStart = String(url.searchParams.get("periodStart") || "").trim();
+  const periodEnd = String(url.searchParams.get("periodEnd") || "").trim();
+  const hasRequestedPeriod = Boolean(periodStart || periodEnd);
+  if (hasRequestedPeriod && (!isValidDateKey(periodStart) || !isValidDateKey(periodEnd) || periodStart > periodEnd)) {
+    sendJson(res, 400, { error: "invalid_period_range" });
+    return;
+  }
   const nowMs = Date.now();
-  if (!forceRefresh && globalThis.__growthMetricsCache && globalThis.__growthMetricsCache.expiresAt > nowMs) {
+  if (!hasRequestedPeriod && !forceRefresh && globalThis.__growthMetricsCache && globalThis.__growthMetricsCache.expiresAt > nowMs) {
     sendJson(
       res,
       200,
@@ -1613,53 +1640,63 @@ const handleGrowthMetricsApi = async (req, res) => {
 
   let cacheRow = null;
   let cacheMeta = null;
-  try {
-    const cachedDoc = await readGrowthMetricsCacheDoc();
-    if (cachedDoc.ok && cachedDoc.data?.payload && typeof cachedDoc.data.payload === "object") {
-      cacheRow = cachedDoc.data;
-      cacheMeta = getGrowthMetricsCacheMeta(cacheRow);
-      if (!forceRefresh && cacheMeta.isFresh) {
-        globalThis.__growthMetricsCache = {
-          payload: cacheRow.payload,
-          generatedAt: cacheMeta.generatedAt,
-          expiresAt: Date.now() + 60 * 1000,
-        };
-        sendJson(
-          res,
-          200,
-          decorateGrowthMetricsPayload(cacheRow.payload, {
-            cached: true,
-            stale: false,
-            staleAgeMinutes: cacheMeta.ageMinutes,
+  if (!hasRequestedPeriod) {
+    try {
+      const cachedDoc = await readGrowthMetricsCacheDoc();
+      if (cachedDoc.ok && cachedDoc.data?.payload && typeof cachedDoc.data.payload === "object") {
+        cacheRow = cachedDoc.data;
+        cacheMeta = getGrowthMetricsCacheMeta(cacheRow);
+        if (!forceRefresh && cacheMeta.isFresh) {
+          globalThis.__growthMetricsCache = {
+            payload: cacheRow.payload,
             generatedAt: cacheMeta.generatedAt,
-          })
-        );
-        return;
+            expiresAt: Date.now() + 60 * 1000,
+          };
+          sendJson(
+            res,
+            200,
+            decorateGrowthMetricsPayload(cacheRow.payload, {
+              cached: true,
+              stale: false,
+              staleAgeMinutes: cacheMeta.ageMinutes,
+              generatedAt: cacheMeta.generatedAt,
+            })
+          );
+          return;
+        }
       }
+    } catch (error) {
+      console.warn("[growth-metrics] firestore cache read failed", error);
     }
-  } catch (error) {
-    console.warn("[growth-metrics] firestore cache read failed", error);
   }
 
   const idToken = getBearerTokenFromRequest(req);
   try {
     const crm = await fetchAllCrmBusinesses();
     if (!crm || !crm.ok) throw crm || { status: 500, error: "crm_failed" };
-    const payload = await buildGrowthMetricsPayload({ crm, idToken });
+    const payload = await buildGrowthMetricsPayload({
+      crm,
+      idToken,
+      periodStart,
+      periodEnd,
+      filterByCreatedAt: hasRequestedPeriod,
+    });
     const generatedAt = new Date().toISOString();
-    try {
-      const cacheWrite = await writeGrowthMetricsCacheDoc({ payload, generatedAt });
-      if (!cacheWrite?.ok) {
-        console.warn("[growth-metrics] firestore cache write failed", {
-          status: cacheWrite?.status || null,
-          data: cacheWrite?.data ?? null,
-          text: cacheWrite?.text ?? null,
-        });
+    if (!hasRequestedPeriod) {
+      try {
+        const cacheWrite = await writeGrowthMetricsCacheDoc({ payload, generatedAt });
+        if (!cacheWrite?.ok) {
+          console.warn("[growth-metrics] firestore cache write failed", {
+            status: cacheWrite?.status || null,
+            data: cacheWrite?.data ?? null,
+            text: cacheWrite?.text ?? null,
+          });
+        }
+      } catch (cacheError) {
+        console.warn("[growth-metrics] firestore cache write threw", cacheError);
       }
-    } catch (cacheError) {
-      console.warn("[growth-metrics] firestore cache write threw", cacheError);
     }
-    globalThis.__growthMetricsCache = { payload, generatedAt, expiresAt: Date.now() + 60 * 1000 };
+    if (!hasRequestedPeriod) globalThis.__growthMetricsCache = { payload, generatedAt, expiresAt: Date.now() + 60 * 1000 };
     sendJson(res, 200, decorateGrowthMetricsPayload(payload, { cached: false, stale: false, generatedAt }));
   } catch (crmError) {
     const effectiveCacheRow =

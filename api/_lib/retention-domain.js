@@ -24,6 +24,8 @@ const COMMAND_CAPABILITY = {
   delinquency_recovered: "finance.manage",
 };
 
+const ADMIN_ONLY_COMMANDS = new Set(["effectuate_churn", "reactivate_subscription", "schedule_program_end"]);
+
 const OVERRIDE_REQUIRED_COMMANDS = new Set(["effectuate_churn", "reactivate_subscription"]);
 
 const normalizeText = (value) => String(value || "").trim();
@@ -219,6 +221,14 @@ const buildCommandPayload = ({ command, actor, body = {} } = {}) => {
 
 const needsOverrideJustification = ({ command, role, forceOverride = false } = {}) =>
   forceOverride || (String(role || "").trim().toLowerCase() === "admin" && OVERRIDE_REQUIRED_COMMANDS.has(String(command || "").trim()));
+
+const isRetentionCommandRoleAllowed = ({ command, role } = {}) => {
+  const safeRole = String(role || "").trim().toLowerCase();
+  const safeCommand = String(command || "").trim();
+  if (!safeRole || !safeCommand) return false;
+  if (ADMIN_ONLY_COMMANDS.has(safeCommand)) return safeRole === "admin";
+  return true;
+};
 
 const normalizeRetentionRow = (row = {}) => ({
   id: normalizeText(row.id),
@@ -423,6 +433,7 @@ module.exports = {
   buildIdempotencyKey,
   buildCommandPayload,
   needsOverrideJustification,
+  isRetentionCommandRoleAllowed,
   sanitizePayloadByCommand,
   buildCommandFingerprint,
   normalizeRetentionRow,

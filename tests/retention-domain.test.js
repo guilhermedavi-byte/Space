@@ -5,6 +5,7 @@ const {
   buildCommandPayload,
   buildQueuesFromCases,
   computeScheduledServiceEndAt,
+  isRetentionCommandRoleAllowed,
   needsOverrideJustification,
   rebuildCaseProjectionFromEvents,
   sanitizePayloadByCommand,
@@ -104,6 +105,12 @@ test("queues mapeiam caso perdido como desfecho lost", () => {
 test("override administrativo exige justificativa nos comandos críticos", () => {
   assert.equal(needsOverrideJustification({ command: "effectuate_churn", role: "admin" }), true);
   assert.equal(needsOverrideJustification({ command: "effectuate_churn", role: "growth" }), false);
+});
+
+test("comandos críticos ficam restritos a admin", () => {
+  assert.equal(isRetentionCommandRoleAllowed({ command: "effectuate_churn", role: "admin" }), true);
+  assert.equal(isRetentionCommandRoleAllowed({ command: "effectuate_churn", role: "growth" }), false);
+  assert.equal(isRetentionCommandRoleAllowed({ command: "register_formal_request", role: "growth" }), true);
 });
 
 test("projeção pode ser reconstruída a partir do histórico append-only", () => {

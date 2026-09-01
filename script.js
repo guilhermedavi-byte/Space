@@ -15128,6 +15128,10 @@ const adminCommercialOverviewState = {
   loadedAt: 0,
   error: "",
   period: "month",
+  customRange: { start: "", end: "" },
+  customDraft: { start: "", end: "" },
+  customPickerOpen: false,
+  customError: "",
   crm: null,
   sdr: null,
 };
@@ -16075,9 +16079,45 @@ const getCommercialOverviewMonthLabel = () => {
 };
 
 const getCommercialOverviewPeriodLabel = (period = adminCommercialOverviewState.period) =>
-  period === "7d" ? "Últimos 7 dias" : period === "30d" ? "Últimos 30 dias" : "Mês atual";
+  period === "7d" ? "Últimos 7 dias" : period === "30d" ? "Últimos 30 dias" : period === "custom" ? "Personalizado" : "Mês atual";
 
-const getCommercialOverviewSdrPeriodKey = () => (String(adminCommercialOverviewState.period || "month") === "7d" ? "week" : "month");
+const getCommercialOverviewDateKey = (date = new Date()) => {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const read = (type) => parts.find((part) => part.type === type)?.value || "";
+  return `${read("year")}-${read("month")}-${read("day")}`;
+};
+
+const shiftCommercialOverviewDateKey = (dateKey, days) => {
+  const date = new Date(`${dateKey}T12:00:00-03:00`);
+  date.setDate(date.getDate() + Number(days || 0));
+  return getCommercialOverviewDateKey(date);
+};
+
+const getCommercialOverviewRange = () => {
+  const period = String(adminCommercialOverviewState.period || "month");
+  if (period === "custom") return { ...adminCommercialOverviewState.customRange };
+  const today = getCommercialOverviewDateKey();
+  if (period === "7d") return { start: shiftCommercialOverviewDateKey(today, -6), end: today };
+  if (period === "30d") return { start: shiftCommercialOverviewDateKey(today, -29), end: today };
+  const monthStart = `${today.slice(0, 7)}-01`;
+  const nextMonth = new Date(`${monthStart}T12:00:00-03:00`);
+  nextMonth.setMonth(nextMonth.getMonth() + 1);
+  nextMonth.setDate(0);
+  return { start: monthStart, end: getCommercialOverviewDateKey(nextMonth) };
+};
+
+const formatCommercialOverviewRange = (range = getCommercialOverviewRange()) => {
+  const start = formatCommercialSdrActivityDate(range?.start || "");
+  const end = formatCommercialSdrActivityDate(range?.end || "");
+  return start !== "—" && end !== "—" ? `${start} - ${end}` : getCommercialOverviewPeriodLabel();
+};
+
+const getCommercialOverviewSdrPeriodKey = () => "custom";
 const formatCommercialSdrActivityDate = (dateKey = "") => {
   if (!isValidDateKey(dateKey)) return "—";
   const date = parseDateKey(dateKey);
@@ -16404,7 +16444,7 @@ const renderCommercialOverviewFunnel = (rows = []) => {
             <div class="commercial-overview-funnel-row">
               <div>
                 <strong>${escapeHtml(String(row.stageName || "Sem etapa"))}</strong>
-                <span>${escapeHtml(String(monthCount))} no mês · ${escapeHtml(formatMoneyNoCentsPtBr(row.monthTotal || 0))}</span>
+                <span>${escapeHtml(String(monthCount))} no período · ${escapeHtml(formatMoneyNoCentsPtBr(row.monthTotal || 0))}</span>
               </div>
               <em>${escapeHtml(String(count))}</em>
               <i aria-hidden="true"><b style="width:${width}%"></b></i>
@@ -16418,7 +16458,7 @@ const renderCommercialOverviewFunnel = (rows = []) => {
 
 const renderCommercialOverviewRanking = (rows = []) => {
   const items = (Array.isArray(rows) ? rows : []).filter(Boolean).slice(0, 6);
-  if (!items.length) return `<div class="commercial-overview-empty">Nenhuma reunião feita no mês.</div>`;
+  if (!items.length) return `<div class="commercial-overview-empty">Nenhuma reunião feita no período.</div>`;
   const max = Math.max(...items.map((row) => Number(row?.valor || 0)), 1);
   return `
     <div class="commercial-overview-ranking">
@@ -16459,8 +16499,18 @@ const formatCommercialOverviewMonthShort = (monthKey = "") => {
 
 const renderCommercialOverviewConversionChart = (rows = []) => {
   const items = (Array.isArray(rows) ? rows : []).filter((row) => String(row?.month || "").trim());
-  if (items.length < 2) {
+  if (!items.length) {
     return `<div class="commercial-overview-empty">Histórico insuficiente do funil Conversão para desenhar tendência mensal.</div>`;
+  }
+  if (items.length === 1) {
+    const point = items[0];
+    return `
+      <div class="commercial-overview-chart-summary">
+        <strong>${escapeHtml(formatPercentPtBr(point.rate || 0, 1))}</strong>
+        <span>${escapeHtml(`${Number(point.closed || 0)} fechados / ${Number(point.leads || 0)} leads no período`)}</span>
+      </div>
+      <div class="commercial-overview-empty">O intervalo está concentrado em um único mês; a tendência aparece quando houver mais de um mês no período.</div>
+    `;
   }
   const width = 920;
   const height = 270;
@@ -16612,7 +16662,7 @@ const renderAdminCommercialOverview = () => {
     adminCommercialOverviewContent.innerHTML = `
       <div class="commercial-overview-head">
         <div><h2>Visão Geral</h2><p>${escapeHtml(getCommercialOverviewMonthLabel())}</p></div>
-        <div class="commercial-overview-periods" aria-hidden="true"><span></span><span></span><span></span></div>
+        <div class="commercial-overview-periods" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
       </div>
       <div class="commercial-overview-loading"></div>
     `;
@@ -16640,6 +16690,7 @@ const renderAdminCommercialOverview = () => {
   const sdrStats = getCommercialOverviewTeamStats();
   const sdrSeries = (metric) => getCommercialOverviewTeamSeries(metric);
   const period = String(state.period || "month");
+  const selectedRange = getCommercialOverviewRange();
   const leadsMonth = Math.max(0, Number(summary.leadsMonth || crm?.forecastBreakdown?.debug?.leadsDoMes || 0));
   const agendamentosMonth = Math.max(0, Number(summary.agendamentosMonth || 0));
   const fechadosMonth = Math.max(0, Number(summary.fechadosMonth || summary.totalVendas || 0));
@@ -16652,16 +16703,30 @@ const renderAdminCommercialOverview = () => {
     <div class="commercial-overview-head">
       <div>
         <h2>Visão Geral</h2>
+        <p class="commercial-overview-selected-range">${escapeHtml(formatCommercialOverviewRange(selectedRange))}</p>
       </div>
-      <div class="commercial-overview-periods" role="tablist" aria-label="Período da atividade SDR">
-        ${["7d", "30d", "month"]
-          .map((key) => `<button type="button" data-commercial-overview-period="${key}" class="${period === key ? "is-active" : ""}">${escapeHtml(key === "7d" ? "7d" : key === "30d" ? "30d" : "mês")}</button>`)
-          .join("")}
+      <div class="commercial-overview-filter" data-commercial-overview-filter>
+        <div class="commercial-overview-periods" role="tablist" aria-label="Período da Visão Geral Comercial">
+          ${["7d", "30d", "month", "custom"]
+            .map((key) => `<button type="button" data-commercial-overview-period="${key}" class="${period === key ? "is-active" : ""}" aria-selected="${period === key ? "true" : "false"}">${escapeHtml(key === "7d" ? "7d" : key === "30d" ? "30d" : key === "month" ? "mês" : "Personalizado")}</button>`)
+            .join("")}
+        </div>
+        <div class="commercial-overview-date-popover ${state.customPickerOpen ? "is-open" : ""}" ${state.customPickerOpen ? "" : "hidden"} role="dialog" aria-label="Selecionar período personalizado">
+          <div class="commercial-overview-date-fields">
+            <label><span>Data inicial</span><input type="date" data-commercial-overview-date="start" value="${escapeHtml(state.customDraft?.start || "")}"></label>
+            <label><span>Data final</span><input type="date" data-commercial-overview-date="end" value="${escapeHtml(state.customDraft?.end || "")}"></label>
+          </div>
+          ${state.customError ? `<div class="commercial-overview-date-error" role="alert">${escapeHtml(state.customError)}</div>` : ""}
+          <div class="commercial-overview-date-actions">
+            <button type="button" data-commercial-overview-cancel>Cancelar</button>
+            <button type="button" class="is-primary" data-commercial-overview-apply>Aplicar</button>
+          </div>
+        </div>
       </div>
     </div>
     ${staleNotice}
 
-    <section class="commercial-overview-pulse" aria-label="Resumo do mês comercial">
+    <section class="commercial-overview-pulse" aria-label="Resumo do período comercial">
       <div class="commercial-overview-pulse-orb" aria-hidden="true">
         <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l5-5 4 4 7-8"></path><path d="M14 8h6v6"></path></svg>
       </div>
@@ -16690,7 +16755,7 @@ const renderAdminCommercialOverview = () => {
 
     <section class="commercial-overview-section">
       <article class="commercial-overview-card commercial-overview-chart-card">
-        <div class="commercial-overview-card-head"><h3>Conversão do funil por mês</h3></div>
+        <div class="commercial-overview-card-head"><h3>Conversão do funil</h3></div>
         ${renderCommercialOverviewConversionChart(crm.conversionHistory)}
       </article>
     </section>
@@ -16699,7 +16764,7 @@ const renderAdminCommercialOverview = () => {
       <article class="commercial-overview-card" id="commercial-overview-funnel">
         <div class="commercial-overview-card-head"><h3>Funil comercial</h3></div>
         <div class="commercial-overview-mini-grid">
-          <div><small>Leads do mês</small><strong>${escapeHtml(String(leadsMonth))}</strong></div>
+        <div><small>Leads do período</small><strong>${escapeHtml(String(leadsMonth))}</strong></div>
           <div><small>Agendamentos</small><strong>${escapeHtml(String(agendamentosMonth))}</strong></div>
           <div><small>Fechados</small><strong>${escapeHtml(String(fechadosMonth))}</strong></div>
         </div>
@@ -16735,11 +16800,18 @@ const loadAdminCommercialOverview = async ({ force = false } = {}) => {
   adminCommercialOverviewState.error = "";
   renderAdminCommercialOverview();
   try {
-    const crmUrl = force ? "/api/growth-metrics?refresh=1" : "/api/growth-metrics";
+    const range = getCommercialOverviewRange();
+    if (!isValidDateKey(range.start) || !isValidDateKey(range.end) || range.start > range.end) {
+      throw new Error("invalid_commercial_overview_range");
+    }
+    const crmParams = new URLSearchParams({ periodStart: range.start, periodEnd: range.end });
+    if (force) crmParams.set("refresh", "1");
+    const sdrParams = new URLSearchParams({ from: range.start, to: range.end });
+    const crmUrl = `/api/growth-metrics?${crmParams.toString()}`;
     const [crmRes, goalRes, sdrRes] = await Promise.all([
       fetchWithAuth(crmUrl, { method: "GET" }),
       fetchWithAuth("/api/growth-dashboard?api=growth-goals&mode=current", { method: "GET" }),
-      fetchWithAuth("/api/sdr-metrics?days=30", { method: "GET" }),
+      fetchWithAuth(`/api/sdr-metrics?${sdrParams.toString()}`, { method: "GET" }),
     ]);
     const [crm, goalPayload, sdr] = await Promise.all([
       crmRes.json().catch(() => null),
@@ -37203,6 +37275,11 @@ document.addEventListener("click", (event) => {
 document.addEventListener("click", (event) => {
   const target = event.target;
   if (!(target instanceof Element)) return;
+  if (adminCommercialOverviewState.customPickerOpen && !target.closest("[data-commercial-overview-filter]")) {
+    adminCommercialOverviewState.customPickerOpen = false;
+    adminCommercialOverviewState.customError = "";
+    renderAdminCommercialOverview();
+  }
   if (adminCommercialSdrActivityState.filters.pickerOpen && !target.closest("[data-commercial-sdr-filter]")) {
     discardAdminCommercialSdrDraft();
     renderAdminCommercialSdrActivity();
@@ -37214,6 +37291,12 @@ document.addEventListener("click", (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && adminCommercialOverviewState.customPickerOpen) {
+    adminCommercialOverviewState.customPickerOpen = false;
+    adminCommercialOverviewState.customError = "";
+    renderAdminCommercialOverview();
+    return;
+  }
   if (event.key === "Escape" && (adminCommercialSdrActivityState.filters.pickerOpen || adminCommercialSdrActivityState.filters.rankMenuOpen)) {
     if (adminCommercialSdrActivityState.filters.pickerOpen) discardAdminCommercialSdrDraft();
     adminCommercialSdrActivityState.filters.rankMenuOpen = false;
@@ -37247,6 +37330,14 @@ document.addEventListener("input", (event) => {
 
 document.addEventListener("change", (event) => {
   const target = event.target;
+  if (target instanceof HTMLInputElement && target.matches('[data-commercial-overview-date="start"], [data-commercial-overview-date="end"]')) {
+    const field = target.getAttribute("data-commercial-overview-date") === "end" ? "end" : "start";
+    adminCommercialOverviewState.customDraft = {
+      ...adminCommercialOverviewState.customDraft,
+      [field]: String(target.value || "").trim(),
+    };
+    adminCommercialOverviewState.customError = "";
+  }
   if (target instanceof HTMLSelectElement && target.matches("[data-finance-filter-alunos]")) {
     financeState.filters.alunos = target.value || "todos";
     renderFinancePanel();
@@ -37332,7 +37423,59 @@ document.addEventListener("click", (event) => {
   if (commercialOverviewPeriod instanceof HTMLButtonElement) {
     event.preventDefault();
     const period = String(commercialOverviewPeriod.getAttribute("data-commercial-overview-period") || "month").trim();
+    if (period === "custom") {
+      const currentRange = adminCommercialOverviewState.customRange || {};
+      const fallbackRange = getCommercialOverviewRange();
+      adminCommercialOverviewState.customDraft = {
+        start: currentRange.start || fallbackRange.start,
+        end: currentRange.end || fallbackRange.end,
+      };
+      adminCommercialOverviewState.customPickerOpen = !adminCommercialOverviewState.customPickerOpen;
+      adminCommercialOverviewState.customError = "";
+      renderAdminCommercialOverview();
+      return;
+    }
     adminCommercialOverviewState.period = ["7d", "30d", "month"].includes(period) ? period : "month";
+    adminCommercialOverviewState.customRange = { start: "", end: "" };
+    adminCommercialOverviewState.customDraft = { start: "", end: "" };
+    adminCommercialOverviewState.customPickerOpen = false;
+    adminCommercialOverviewState.customError = "";
+    adminCommercialOverviewState.loadedAt = 0;
+    renderAdminCommercialOverview();
+    loadAdminCommercialOverview({ force: false }).catch((error) => console.error("[admin] commercial overview period failed", error));
+    return;
+  }
+
+  const commercialOverviewApply = target.closest("[data-commercial-overview-apply]");
+  if (commercialOverviewApply instanceof HTMLButtonElement) {
+    event.preventDefault();
+    const start = String(adminCommercialOverviewState.customDraft?.start || "").trim();
+    const end = String(adminCommercialOverviewState.customDraft?.end || "").trim();
+    if (!isValidDateKey(start) || !isValidDateKey(end)) {
+      adminCommercialOverviewState.customError = "Selecione a data inicial e a data final.";
+      renderAdminCommercialOverview();
+      return;
+    }
+    if (start > end) {
+      adminCommercialOverviewState.customError = "A data inicial não pode ser maior que a data final.";
+      renderAdminCommercialOverview();
+      return;
+    }
+    adminCommercialOverviewState.period = "custom";
+    adminCommercialOverviewState.customRange = { start, end };
+    adminCommercialOverviewState.customPickerOpen = false;
+    adminCommercialOverviewState.customError = "";
+    adminCommercialOverviewState.loadedAt = 0;
+    renderAdminCommercialOverview();
+    loadAdminCommercialOverview({ force: false }).catch((error) => console.error("[admin] commercial overview custom period failed", error));
+    return;
+  }
+
+  const commercialOverviewCancel = target.closest("[data-commercial-overview-cancel]");
+  if (commercialOverviewCancel instanceof HTMLButtonElement) {
+    event.preventDefault();
+    adminCommercialOverviewState.customPickerOpen = false;
+    adminCommercialOverviewState.customError = "";
     renderAdminCommercialOverview();
     return;
   }

@@ -9,7 +9,11 @@ const { rebuildCaseProjectionFromEvents } = require("../api/_lib/retention-domai
 
 const shouldRun = process.env.RUN_RETENTION_SQL_INTEGRATION === "1";
 const summaryPath = process.env.RETENTION_SQL_SUMMARY_PATH ? path.resolve(process.env.RETENTION_SQL_SUMMARY_PATH) : "";
-const migrationPath = path.join(__dirname, "..", "supabase", "retention-lifecycle-v2.sql");
+const migrationPaths = [
+  path.join(__dirname, "..", "supabase", "retention-lifecycle-v2.sql"),
+  path.join(__dirname, "..", "supabase", "retention-lifecycle-v2-provisioning.sql"),
+];
+const pgImage = process.env.RETENTION_SQL_PG_IMAGE || "postgres:14-alpine";
 
 const run = (command, args, { input, env } = {}) =>
   execFileSync(command, args, {
@@ -84,7 +88,7 @@ test(
     const harness = createHarness();
     const summary = {
       environment: {
-        engine: "docker postgres:16-alpine",
+        engine: `docker ${pgImage}`,
         containerName: harness.containerName,
         databaseName: harness.databaseName,
         appUser: harness.appUser,
@@ -121,7 +125,7 @@ test(
         "-p",
         `${harness.hostPort}:5432`,
         "-d",
-        "postgres:16-alpine",
+        pgImage,
       ]);
 
       for (let attempt = 0; attempt < 40; attempt += 1) {
@@ -144,7 +148,7 @@ test(
         `
       );
 
-      const migrationSql = fs.readFileSync(migrationPath, "utf8");
+      const migrationSql = migrationPaths.map((filePath) => fs.readFileSync(filePath, "utf8")).join("\n\n");
       psql(harness, migrationSql);
       summary.migration.firstApply = "ok";
       psql(harness, migrationSql);
@@ -178,7 +182,7 @@ test(
         )
       );
       assert.equal(structure.tables, 17);
-      assert.ok(structure.functions >= 8);
+      assert.ok(structure.functions >= 9);
       assert.ok(structure.triggers >= 4);
       assert.ok(structure.indexes >= 10);
       assert.equal(structure.rls_enabled, true);
@@ -227,6 +231,114 @@ test(
         `
       );
       record("seed entities", "ok");
+
+      const provisioned = parseJson(
+        psql(
+          harness,
+          `
+            select public.retention_provision_subject(jsonb_build_object(
+              'student', jsonb_build_object(
+                'firestore_student_id', 'fs-provisioned',
+                'full_name', 'Aluno Provisionado',
+                'email', 'provisioned@example.com',
+                'phone', '5511999990099',
+                'lifecycle_status', 'active',
+                'pause_status', 'none',
+                'source_system', 'firestore_on_demand',
+                'legacy_source', jsonb_build_object('firestore_doc', 'fs-provisioned'),
+                'legacy_confidence', 'medium'
+              ),
+              'billing_account', jsonb_build_object(
+                'external_key', 'firestore-student:fs-provisioned',
+                'display_name', 'Aluno Provisionado',
+                'email', 'provisioned@example.com',
+                'phone', '5511999990099',
+                'source_system', 'firestore_on_demand'
+              ),
+              'subscription', jsonb_build_object(
+                'external_subscription_key', 'firestore:fs-provisioned',
+                'plan_name', 'Plano Provisionado',
+                'billing_cycle', 'monthly',
+                'lifecycle_status', 'active',
+                'pause_status', 'none',
+                'financial_status', 'unknown',
+                'started_at', '2026-08-10T12:00:00.000Z',
+                'source_system', 'firestore_on_demand'
+              ),
+              'service_period', jsonb_build_object(
+                'period_start', '2026-08-10',
+                'period_end', '2026-09-09',
+                'source_system', 'firestore_on_demand'
+              )
+            ))::text;
+          `
+        )
+      );
+      assert.equal(provisioned.ok, true);
+      const provisionCounts = parseJson(
+        psql(
+          harness,
+          `
+            select json_build_object(
+              'students', (select count(*) from public.students where firestore_student_id = 'fs-provisioned'),
+              'billing', (select count(*) from public.billing_accounts where external_key = 'firestore-student:fs-provisioned'),
+              'subscriptions', (select count(*) from public.subscriptions where external_subscription_key = 'firestore:fs-provisioned'),
+              'periods', (select count(*) from public.service_periods sp join public.subscriptions s on s.id = sp.subscription_id where s.external_subscription_key = 'firestore:fs-provisioned')
+            )::text;
+          `
+        )
+      );
+      assert.deepEqual(provisionCounts, { students: 1, billing: 1, subscriptions: 1, periods: 1 });
+
+      const reprovisionCountsText = psql(
+        harness,
+        `
+          select public.retention_provision_subject(jsonb_build_object(
+            'student', jsonb_build_object('firestore_student_id', 'fs-provisioned', 'full_name', 'Aluno Provisionado', 'lifecycle_status', 'active', 'pause_status', 'none'),
+            'billing_account', jsonb_build_object('external_key', 'firestore-student:fs-provisioned', 'display_name', 'Aluno Provisionado'),
+            'subscription', jsonb_build_object('external_subscription_key', 'firestore:fs-provisioned', 'billing_cycle', 'monthly', 'lifecycle_status', 'active', 'pause_status', 'none', 'financial_status', 'unknown', 'started_at', '2026-08-10T12:00:00.000Z'),
+            'service_period', jsonb_build_object('period_start', '2026-08-10', 'period_end', '2026-09-09')
+          ));
+          select json_build_object(
+            'students', (select count(*) from public.students where firestore_student_id = 'fs-provisioned'),
+            'billing', (select count(*) from public.billing_accounts where external_key = 'firestore-student:fs-provisioned'),
+            'subscriptions', (select count(*) from public.subscriptions where external_subscription_key = 'firestore:fs-provisioned'),
+            'periods', (select count(*) from public.service_periods sp join public.subscriptions s on s.id = sp.subscription_id where s.external_subscription_key = 'firestore:fs-provisioned')
+          )::text;
+        `
+      );
+      const reprovisionCounts = parseJson(reprovisionCountsText.trim().split("\n").pop());
+      assert.deepEqual(reprovisionCounts, { students: 1, billing: 1, subscriptions: 1, periods: 1 });
+      record("retention_provision_subject idempotente", "ok");
+
+      const failedProvisionRollbackText = psql(
+        harness,
+        `
+          do $$
+          begin
+            perform public.retention_provision_subject(jsonb_build_object(
+              'student', jsonb_build_object('firestore_student_id', 'fs-provision-fail', 'full_name', 'Aluno Falho', 'lifecycle_status', 'active', 'pause_status', 'none'),
+              'billing_account', jsonb_build_object('external_key', 'firestore-student:fs-provision-fail', 'display_name', 'Aluno Falho'),
+              'subscription', jsonb_build_object('external_subscription_key', 'firestore:fs-provision-fail', 'billing_cycle', 'monthly', 'lifecycle_status', 'active', 'pause_status', 'none', 'financial_status', 'unknown', 'started_at', '2026-08-10T12:00:00.000Z'),
+              'service_period', jsonb_build_object('period_start', '2026-09-10', 'period_end', '2026-09-09')
+            ));
+            raise exception 'expected_fail';
+          exception when others then
+            if SQLERRM <> 'invalid_service_period_bounds' then
+              raise;
+            end if;
+          end $$;
+          select json_build_object(
+            'students', (select count(*) from public.students where firestore_student_id = 'fs-provision-fail'),
+            'billing', (select count(*) from public.billing_accounts where external_key = 'firestore-student:fs-provision-fail'),
+            'subscriptions', (select count(*) from public.subscriptions where external_subscription_key = 'firestore:fs-provision-fail'),
+            'periods', (select count(*) from public.service_periods sp join public.subscriptions s on s.id = sp.subscription_id where s.external_subscription_key = 'firestore:fs-provision-fail')
+          )::text;
+        `
+      );
+      const failedProvisionRollback = parseJson(failedProvisionRollbackText.trim().split("\n").pop());
+      assert.deepEqual(failedProvisionRollback, { students: 0, billing: 0, subscriptions: 0, periods: 0 });
+      record("retention_provision_subject rollback transacional", "ok");
 
       const preventive = parseJson(
         psql(

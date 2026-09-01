@@ -17829,6 +17829,95 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   box-shadow: none;
 }
 
+.commercial-overview-filter {
+  position: relative;
+  z-index: 12;
+}
+
+.commercial-overview-selected-range {
+  font-variant-numeric: tabular-nums;
+}
+
+.commercial-overview-date-popover {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: min(390px, calc(100vw - 32px));
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  background: #111a27;
+  box-shadow: 0 22px 64px rgba(0, 0, 0, 0.42);
+}
+
+.commercial-overview-date-popover[hidden] {
+  display: none;
+}
+
+.commercial-overview-date-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.commercial-overview-date-fields label {
+  display: grid;
+  gap: 7px;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.commercial-overview-date-fields input {
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 11px;
+  outline: none;
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--text-main);
+  color-scheme: dark;
+  font: inherit;
+}
+
+.commercial-overview-date-fields input:focus {
+  border-color: rgba(255, 133, 127, 0.72);
+  box-shadow: 0 0 0 3px rgba(255, 86, 79, 0.12);
+}
+
+.commercial-overview-date-error {
+  margin-top: 10px;
+  color: #ff9b96;
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+
+.commercial-overview-date-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.commercial-overview-date-actions button {
+  min-height: 36px;
+  padding: 8px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-main);
+  font-size: 0.78rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.commercial-overview-date-actions button.is-primary {
+  border-color: rgba(255, 86, 79, 0.6);
+  background: #ff564f;
+  color: #fff;
+}
+
 .commercial-overview-pulse {
   position: relative;
   grid-template-columns: auto minmax(0, 1fr) auto auto;
@@ -18206,10 +18295,24 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 
   .commercial-overview-periods {
     width: 100%;
+    flex-wrap: wrap;
   }
 
   .commercial-overview-periods button {
     flex: 1;
+  }
+
+  .commercial-overview-filter {
+    width: 100%;
+  }
+
+  .commercial-overview-date-popover {
+    right: auto;
+    left: 0;
+  }
+
+  .commercial-overview-date-fields {
+    grid-template-columns: 1fr;
   }
 
   .commercial-overview-kpi-grid,

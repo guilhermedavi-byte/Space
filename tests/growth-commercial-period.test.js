@@ -11,6 +11,7 @@ const {
   isDateWithinCommercialPeriod,
 } = require("../api/_lib/commercial-period");
 const { calculateGrowthForecast3Parts } = require("../_lib/forecast-service");
+const { buildGrowthMetricsPayload } = require("../api/growth-dashboard").__private;
 
 test("resolveCommercialPeriod mantém calendário quando não há override", () => {
   const period = resolveCommercialPeriod({ now: new Date("2026-08-11T12:00:00-03:00") });
@@ -85,6 +86,45 @@ test("forecast 3-partes aceita callback de período customizado", () => {
   });
   assert.equal(result.parte1_fechado, 500);
   assert.equal(result.debug.leadsDoMes, 1);
+});
+
+test("growth metrics filtra toda a coorte pela criação no intervalo solicitado", async () => {
+  const makeDeal = ({ id, createdAt, total }) => ({
+    id,
+    createdAt,
+    total,
+    stage: { name: "Fechado", pipeline: { name: "Funil principal" } },
+    attendant: { name: "Responsável" },
+  });
+  const payload = await buildGrowthMetricsPayload({
+    crm: {
+      businesses: [
+        makeDeal({ id: "inside", createdAt: "2026-05-05T12:00:00-03:00", total: 1000 }),
+        makeDeal({ id: "outside", createdAt: "2026-05-20T12:00:00-03:00", total: 9000 }),
+      ],
+    },
+    periodStart: "2026-05-01",
+    periodEnd: "2026-05-12",
+    filterByCreatedAt: true,
+  });
+
+  assert.equal(payload.summary.realizado, 1000);
+  assert.equal(payload.summary.totalVendas, 1);
+  assert.equal(payload.summary.ticketMedio, 1000);
+  assert.equal(payload.summary.forecast, 1000);
+  assert.equal(payload.stageBreakdown[0].count, 1);
+  assert.deepEqual(payload.period, {
+    startDateKey: "2026-05-01",
+    endDateKey: "2026-05-12",
+    filterField: "createdAt",
+  });
+});
+
+test("API de growth metrics valida e usa periodStart/periodEnd fora do cache mensal", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "api", "growth-dashboard.js"), "utf8");
+  assert.match(source, /const hasRequestedPeriod = Boolean\(periodStart \|\| periodEnd\)/);
+  assert.match(source, /filterByCreatedAt: hasRequestedPeriod/);
+  assert.match(source, /periodStart > periodEnd/);
 });
 
 test("save de growth-goals invalida o cache persistente imediatamente", () => {

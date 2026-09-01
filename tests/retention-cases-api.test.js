@@ -78,6 +78,14 @@ test("GET queues retorna fonte nova e filas serializadas", async () => {
   assert.equal(res.body.queues.avisos.length, 1);
 });
 
+test("GET fica bloqueado quando retention v2 está desligada", async () => {
+  const handler = installCommonStubs({ retentionEnabled: false });
+  const res = makeRes();
+  await handler({ method: "GET", url: "/api/retention-cases?view=queues", headers: { host: "localhost" } }, res);
+  assert.equal(res.statusCode, 409);
+  assert.equal(res.body.error, "retention_v2_disabled");
+});
+
 test("POST bloqueia usuário sem capability", async () => {
   const handler = installCommonStubs({ role: "financeiro" });
   const res = makeRes();
@@ -93,6 +101,23 @@ test("POST bloqueia usuário sem capability", async () => {
   await handler(req, res);
   assert.equal(res.statusCode, 403);
   assert.equal(res.body.error, "forbidden");
+});
+
+test("POST fica bloqueado quando retention v2 está desligada", async () => {
+  const handler = installCommonStubs({ role: "admin", retentionEnabled: false });
+  const res = makeRes();
+  const req = {
+    method: "POST",
+    url: "/api/retention-cases",
+    headers: { host: "localhost" },
+    on(event, callback) {
+      if (event === "data") callback(Buffer.from(JSON.stringify({ command: "register_formal_request", clientActionId: "click-off", firestoreStudentId: "firestore-123" })));
+      if (event === "end") callback();
+    },
+  };
+  await handler(req, res);
+  assert.equal(res.statusCode, 409);
+  assert.equal(res.body.error, "retention_v2_disabled");
 });
 
 test("POST exige justificativa em churn manual administrativo", async () => {
@@ -134,6 +159,28 @@ test("POST bloqueia churn involuntário quando a flag está desligada", async ()
   await handler(req, res);
   assert.equal(res.statusCode, 409);
   assert.equal(res.body.error, "involuntary_churn_disabled");
+});
+
+test("POST crítico exige admin mesmo com capability ampla", async () => {
+  const handler = installCommonStubs({ role: "growth", involuntaryEnabled: true, retentionEnabled: true });
+  const res = makeRes();
+  const req = {
+    method: "POST",
+    url: "/api/retention-cases",
+    headers: { host: "localhost" },
+    on(event, callback) {
+      if (event === "data") callback(Buffer.from(JSON.stringify({
+        command: "effectuate_churn",
+        clientActionId: "click-critical",
+        firestoreStudentId: "firestore-123",
+        payload: { mode: "manual" },
+      })));
+      if (event === "end") callback();
+    },
+  };
+  await handler(req, res);
+  assert.equal(res.statusCode, 403);
+  assert.equal(res.body.error, "forbidden");
 });
 
 test("POST resolve student/subscription a partir do firestore_student_id", async () => {

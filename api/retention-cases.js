@@ -2,7 +2,7 @@ const { readJsonBody, sendJson } = require("./_lib/http");
 const { resolveAdminRequestAuth } = require("./_lib/admin-request-auth");
 const { hasCapability } = require("./_lib/retention-capabilities");
 const { isRetentionInvoluntaryChurnEnabled, isRetentionV2Enabled } = require("./_lib/retention-flags");
-const { COMMAND_CAPABILITY, buildCommandPayload, needsOverrideJustification } = require("./_lib/retention-domain");
+const { COMMAND_CAPABILITY, buildCommandPayload, needsOverrideJustification, isRetentionCommandRoleAllowed } = require("./_lib/retention-domain");
 const { applyRetentionCommand, getRetentionCaseTimeline, listRetentionCases, resolveRetentionSubjectByFirestoreStudentId } = require("./_lib/retention-store");
 
 const getUrl = (req) => new URL(req.url || "/api/retention-cases", `https://${String(req.headers.host || "localhost")}`);
@@ -27,6 +27,12 @@ module.exports = async (req, res) => {
   }
 
   if (req.method === "GET" || req.method === "HEAD") {
+    if (!isRetentionV2Enabled()) {
+      return sendJson(res, 409, {
+        error: "retention_v2_disabled",
+        message: "A Central de Retenção v2 permanece desativada neste ambiente.",
+      });
+    }
     const auth = await requireAuth(req, "retention.view");
     if (!auth.ok) return sendJson(res, auth.status, auth.body);
     const url = getUrl(req);
@@ -81,8 +87,17 @@ module.exports = async (req, res) => {
   const commandName = String(body?.command || "").trim();
   const capability = COMMAND_CAPABILITY[commandName];
   if (!capability) return sendJson(res, 400, { error: "unsupported_command" });
+  if (!isRetentionV2Enabled()) {
+    return sendJson(res, 409, {
+      error: "retention_v2_disabled",
+      message: "A Central de Retenção v2 permanece desativada neste ambiente.",
+    });
+  }
   const auth = await requireAuth(req, capability);
   if (!auth.ok) return sendJson(res, auth.status, auth.body);
+  if (!isRetentionCommandRoleAllowed({ command: commandName, role: auth.session?.role })) {
+    return sendJson(res, 403, { error: "forbidden" });
+  }
 
   if (commandName === "effectuate_churn" && body?.payload?.mode === "automatic" && !isRetentionInvoluntaryChurnEnabled()) {
     return sendJson(res, 409, {
@@ -124,7 +139,11 @@ module.exports = async (req, res) => {
     const status =
       code === "retention_version_conflict" || code === "idempotency_key_payload_mismatch"
         ? 409
-        : code === "invalid_retention_command" || code === "missing_client_action_id" || code === "missing_requested_at" || code === "retention_student_not_found"
+        : code === "invalid_retention_command" ||
+            code === "missing_client_action_id" ||
+            code === "missing_requested_at" ||
+            code === "retention_student_not_found" ||
+            code === "retention_student_missing_entry_date"
           ? 400
           : 500;
     console.error("[retention] command failed", { code });
