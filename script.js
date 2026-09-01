@@ -16139,11 +16139,15 @@ const getCommercialSdrTypeLabel = (eventType) => (String(eventType || "") === "m
 const getAdminCommercialSdrRankMetricLabel = (metric) =>
   ({
     scheduled: "Agendadas",
+    shows: "Reuniões feitas",
+    showRate: "Agendado → Feito",
     callToScheduleRate: "Conversão em agendamento",
     totalCalls: "Ligações",
   })[String(metric || "")] || "Agendadas";
 const getAdminCommercialSdrRankMetricValue = (row = {}, metric = "scheduled") => {
   if (String(metric || "") === "callToScheduleRate") return Number(row.callToScheduleRate || 0);
+  if (String(metric || "") === "showRate") return Number(row.showRate || 0);
+  if (String(metric || "") === "shows") return Number(row.shows || 0);
   if (String(metric || "") === "totalCalls") return Number(row.totalCalls || 0);
   return Number(row.scheduled || 0);
 };
@@ -16944,6 +16948,8 @@ const getAdminCommercialSdrRankMenuLabel = (metric = "scheduled") =>
     totalCalls: "Volume de Ligações",
     callToScheduleRate: "Taxa de Conversão",
     scheduled: "Agendamentos",
+    shows: "Reuniões feitas",
+    showRate: "Agendado → Feito",
   })[String(metric || "")] || "Agendamentos";
 
 const renderAdminCommercialSdrFilterIcon = () => `
@@ -17010,7 +17016,7 @@ const renderAdminCommercialSdrSkeleton = ({ filterLabel = "Hoje", filterActive =
       </div>
     </div>
     <section class="commercial-sdr-admin-kpi-strip">
-      ${Array.from({ length: 4 })
+      ${Array.from({ length: 6 })
         .map(
           () => `<article class="commercial-sdr-kpi-card is-skeleton"><div class="commercial-sdr-skeleton-line"></div><div class="commercial-sdr-skeleton-line is-wide"></div><div class="commercial-sdr-skeleton-line is-short"></div></article>`
         )
@@ -17039,8 +17045,8 @@ const renderAdminCommercialSdrSkeleton = ({ filterLabel = "Hoje", filterActive =
   </div>
 `;
 
-const renderAdminCommercialSdrKpiCard = ({ label, value, previousValue, period, previousFilters, tone = "neutral", context = "" }) => {
-  const delta = formatAdminCommercialSdrDeltaLine(value, previousValue, period, previousFilters);
+const renderAdminCommercialSdrKpiCard = ({ label, value, deltaValue = value, previousValue, period, previousFilters, tone = "neutral", context = "" }) => {
+  const delta = formatAdminCommercialSdrDeltaLine(deltaValue, previousValue, period, previousFilters);
   return `
     <article class="commercial-sdr-kpi-card is-${escapeHtml(tone)}">
       <span class="commercial-sdr-kpi-label">${escapeHtml(label)}</span>
@@ -17100,7 +17106,9 @@ const renderAdminCommercialSdrRankingRow = (row = {}, index = 0, rankMetric = "s
       </div>
       <div class="commercial-sdr-ranking-metric">${escapeHtml(String(Number(row.totalCalls || 0)))}</div>
       <div class="commercial-sdr-ranking-metric">${escapeHtml(String(Number(row.scheduled || 0)))}</div>
+      <div class="commercial-sdr-ranking-metric">${escapeHtml(String(Number(row.shows || 0)))}</div>
       <div class="commercial-sdr-ranking-metric">${escapeHtml(formatCommercialSdrActivityPct(row.callToScheduleRate || 0))}</div>
+      <div class="commercial-sdr-ranking-metric">${escapeHtml(formatCommercialSdrActivityPct(row.showRate || 0))}</div>
       <div class="commercial-sdr-ranking-bar" aria-hidden="true">
         <i style="width:${escapeHtml(String(scaleWidth))}%"></i>
       </div>
@@ -17230,7 +17238,7 @@ const renderAdminCommercialSdrActivity = () => {
     : availableSdrs.map((row) => row.uid);
   const draftSelectedSet = new Set(draftSelectedUids);
   const draftSelectedCount = draftSelectedUids.length;
-  const rankMetric = ["scheduled", "callToScheduleRate", "totalCalls"].includes(String(filters.rankMetric || "")) ? String(filters.rankMetric) : "scheduled";
+  const rankMetric = ["scheduled", "shows", "showRate", "callToScheduleRate", "totalCalls"].includes(String(filters.rankMetric || "")) ? String(filters.rankMetric) : "scheduled";
   const { active: rankedActive, idle: rankedIdle } = buildAdminCommercialSdrRankingBuckets(filtered.sdrs || [], rankMetric);
   const allRankedRows = [...rankedActive, ...rankedIdle];
   const maxRankValue = Math.max(1, ...rankedActive.map((row) => getAdminCommercialSdrRankMetricValue(row, rankMetric)));
@@ -17363,11 +17371,31 @@ const renderAdminCommercialSdrActivity = () => {
         ${renderAdminCommercialSdrKpiCard({
           label: "Conversão em agendamento",
           value: formatCommercialSdrActivityPct(summary.callToScheduleRate || 0),
+          deltaValue: summary.callToScheduleRate || 0,
           previousValue: Math.round((previousSummary.callToScheduleRate || 0) * 10) / 10,
           period: appliedPeriod,
           previousFilters: filtered.previousFilters,
           tone: "accent",
           context: "",
+        })}
+        ${renderAdminCommercialSdrKpiCard({
+          label: "Reuniões feitas",
+          value: summary.shows || 0,
+          previousValue: previousSummary.shows || 0,
+          period: appliedPeriod,
+          previousFilters: filtered.previousFilters,
+          tone: "soft-positive",
+          context: "Eventos meeting/show no período",
+        })}
+        ${renderAdminCommercialSdrKpiCard({
+          label: "Agendado → Feito",
+          value: formatCommercialSdrActivityPct(summary.showRate || 0),
+          deltaValue: summary.showRate || 0,
+          previousValue: Math.round((previousSummary.showRate || 0) * 10) / 10,
+          period: appliedPeriod,
+          previousFilters: filtered.previousFilters,
+          tone: "soft-positive",
+          context: "Reuniões feitas ÷ agendamentos",
         })}
       </section>
 
@@ -17392,6 +17420,8 @@ const renderAdminCommercialSdrActivity = () => {
                         ["totalCalls", "Volume de Ligações"],
                         ["callToScheduleRate", "Taxa de Conversão"],
                         ["scheduled", "Agendamentos"],
+                        ["shows", "Reuniões feitas"],
+                        ["showRate", "Agendado → Feito"],
                       ]
                         .map(
                           ([metric, label]) => `
@@ -17407,16 +17437,20 @@ const renderAdminCommercialSdrActivity = () => {
                 ${
                   rankedActive.length
                     ? `
-                      <div class="commercial-sdr-ranking-head">
-                        <span></span>
-                        <span>SDR</span>
-                        <span>Ligações</span>
-                        <span>Agendadas</span>
-                        <span>Call→Schedule</span>
-                        <span class="commercial-sdr-ranking-head-tail">rel. ao líder</span>
-                      </div>
-                      <div class="commercial-sdr-ranking-list">
-                        ${rankedActive.map((row, index) => renderAdminCommercialSdrRankingRow(row, index, rankMetric, maxRankValue)).join("")}
+                      <div class="commercial-sdr-ranking-table">
+                        <div class="commercial-sdr-ranking-head">
+                          <span></span>
+                          <span>SDR</span>
+                          <span>Ligações</span>
+                          <span>Agendadas</span>
+                          <span>Feitas</span>
+                          <span>Call→Schedule</span>
+                          <span>Agendado→Feito</span>
+                          <span class="commercial-sdr-ranking-head-tail">rel. ao líder</span>
+                        </div>
+                        <div class="commercial-sdr-ranking-list">
+                          ${rankedActive.map((row, index) => renderAdminCommercialSdrRankingRow(row, index, rankMetric, maxRankValue)).join("")}
+                        </div>
                       </div>
                     `
                     : `<div class="commercial-sdr-empty-state">Nenhuma ligação registrada neste período.</div>`
@@ -37547,7 +37581,7 @@ document.addEventListener("click", (event) => {
   if (commercialSdrRankMetric instanceof HTMLButtonElement) {
     event.preventDefault();
     const metric = String(commercialSdrRankMetric.getAttribute("data-commercial-sdr-rank-metric") || "scheduled").trim();
-    adminCommercialSdrActivityState.filters.rankMetric = ["scheduled", "callToScheduleRate", "totalCalls"].includes(metric) ? metric : "scheduled";
+    adminCommercialSdrActivityState.filters.rankMetric = ["scheduled", "shows", "showRate", "callToScheduleRate", "totalCalls"].includes(metric) ? metric : "scheduled";
     adminCommercialSdrActivityState.filters.rankMenuOpen = false;
     renderAdminCommercialSdrActivity();
     return;

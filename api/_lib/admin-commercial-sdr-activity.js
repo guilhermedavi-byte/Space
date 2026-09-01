@@ -227,8 +227,8 @@ const loadAdminCommercialSdrActivity = async ({ period = "today", from = "", to 
   const usersByUid = new Map(users.map((user) => [user.uid, user]));
   const knownUids = new Set(users.map((user) => user.uid));
   const normalizedEvents = eventRows.map(normalizeActivityEvent).filter((row) => row && knownUids.has(row.sdrUid));
-  const events = filterByRange(normalizedEvents, range.fromKey, range.toKey, (row) => row.localDateKey || row.dateKey);
-  const previousEvents = filterByRange(normalizedEvents, previousRange.fromKey, previousRange.toKey, (row) => row.localDateKey || row.dateKey);
+  const events = filterByRange(normalizedEvents, range.fromKey, range.toKey, (row) => row.dateKey);
+  const previousEvents = filterByRange(normalizedEvents, previousRange.fromKey, previousRange.toKey, (row) => row.dateKey);
 
   const summaries = users
     .map((user) => {

@@ -25199,7 +25199,7 @@ body.has-space-env-banner{padding-top:46px}
 
 .commercial-sdr-admin-kpi-strip {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 20px;
 }
 
@@ -25336,9 +25336,19 @@ body.has-space-env-banner{padding-top:46px}
 .commercial-sdr-ranking-head,
 .commercial-sdr-ranking-row {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1.5fr) 72px 84px 110px minmax(110px, 0.8fr);
+  grid-template-columns: 34px minmax(150px, 1.5fr) 72px 84px 72px 110px 118px minmax(110px, 0.8fr);
   gap: 12px;
   align-items: center;
+}
+
+.commercial-sdr-ranking-table {
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.commercial-sdr-ranking-table .commercial-sdr-ranking-head,
+.commercial-sdr-ranking-table .commercial-sdr-ranking-row {
+  min-width: 980px;
 }
 
 .commercial-sdr-ranking-head {
@@ -25778,7 +25788,12 @@ body.has-space-env-banner{padding-top:46px}
 
   .commercial-sdr-ranking-head,
   .commercial-sdr-ranking-row {
-    grid-template-columns: 28px minmax(0, 1fr) 64px 72px 92px;
+    grid-template-columns: 28px minmax(150px, 1fr) 64px 72px 64px 92px 104px;
+  }
+
+  .commercial-sdr-ranking-table .commercial-sdr-ranking-head,
+  .commercial-sdr-ranking-table .commercial-sdr-ranking-row {
+    min-width: 760px;
   }
 
   .commercial-sdr-ranking-bar,

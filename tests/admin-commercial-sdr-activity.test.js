@@ -1,8 +1,11 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 
 const {
   resolvePeriodRange,
+  summarizeActivityEvents,
   summarizeDailyRows,
   normalizeActivityEvent,
 } = require("../api/_lib/admin-commercial-sdr-activity");
@@ -44,6 +47,37 @@ test("summarizeDailyRows recalcula taxas a partir dos totais agregados", () => {
   assert.equal(summary.scheduleRate, (7 / 14) * 100);
   assert.equal(summary.callToScheduleRate, (7 / 30) * 100);
   assert.equal(summary.showRate, (3 / 7) * 100);
+});
+
+test("Agendado para Feito usa eventos históricos e preserva agendamentos", () => {
+  const rows = [
+    ...Array.from({ length: 10 }, (_, index) => ({ id: `scheduled-${index}`, eventType: "call", outcome: "agendou" })),
+    ...Array.from({ length: 5 }, (_, index) => ({ id: `show-${index}`, eventType: "meeting", outcome: "show" })),
+    ...Array.from({ length: 2 }, (_, index) => ({ id: `noshow-${index}`, eventType: "meeting", outcome: "noshow" })),
+  ];
+  const summary = summarizeActivityEvents(rows);
+  assert.equal(summary.scheduled, 10);
+  assert.equal(summary.shows, 5);
+  assert.equal(summary.noShows, 2);
+  assert.equal(summary.showRate, 50);
+});
+
+test("Agendado para Feito retorna zero sem agendamentos", () => {
+  const summary = summarizeActivityEvents([{ id: "show-only", eventType: "meeting", outcome: "show" }]);
+  assert.equal(summary.scheduled, 0);
+  assert.equal(summary.shows, 1);
+  assert.equal(summary.showRate, 0);
+});
+
+test("Pré-Vendas renderiza reuniões feitas e conversão total e por SDR", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "script.js"), "utf8");
+  const activitySource = fs.readFileSync(path.join(__dirname, "..", "api", "_lib", "admin-commercial-sdr-activity.js"), "utf8");
+  assert.match(source, /label: "Reuniões feitas",[\s\S]*value: summary\.shows/);
+  assert.match(source, /label: "Agendado → Feito",[\s\S]*value: formatCommercialSdrActivityPct\(summary\.showRate/);
+  assert.match(source, /String\(Number\(row\.shows \|\| 0\)\)/);
+  assert.match(source, /formatCommercialSdrActivityPct\(row\.showRate \|\| 0\)/);
+  assert.match(source, /\["scheduled", "shows", "showRate", "callToScheduleRate", "totalCalls"\]/);
+  assert.match(activitySource, /filterByRange\(normalizedEvents, range\.fromKey, range\.toKey, \(row\) => row\.dateKey\)/);
 });
 
 test("normalizeActivityEvent ignora deletados e marca horário local do evento", () => {
