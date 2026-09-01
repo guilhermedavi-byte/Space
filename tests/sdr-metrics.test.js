@@ -8,6 +8,19 @@ const httpPath = require.resolve("../_lib/http");
 const authPath = require.resolve("../api/_lib/admin-request-auth");
 const firestoreAdminPath = require.resolve("../api/_lib/firestore-admin");
 const firestoreRestPath = require.resolve("../api/_lib/firestore-rest");
+const { computeStats } = require("../api/sdr-metrics").__private;
+
+test("Show Rate usa reuniões feitas dividido por feitas mais no-show", () => {
+  const events = [
+    ...Array.from({ length: 25 }, (_, index) => ({ id: `show-${index}`, eventType: "meeting", outcome: "show" })),
+    ...Array.from({ length: 56 }, (_, index) => ({ id: `noshow-${index}`, eventType: "meeting", outcome: "noshow" })),
+  ];
+  const stats = computeStats(events);
+  assert.equal(stats.shows, 25);
+  assert.equal(stats.noShows, 56);
+  assert.equal(stats.totalMeetings, 81);
+  assert.equal(Number(stats.showRate.toFixed(1)), 30.9);
+});
 
 const makeRes = () => ({
   statusCode: 0,
@@ -224,4 +237,11 @@ test("script SDR usa timeout e estado de envio visível no POST", () => {
   assert.match(source, /sdrPanelState\.data = data\.payload/);
   assert.match(source, /clientRequestId: requestId/);
   assert.match(source, /retryRequest = \{ requestId, signature, createdAt: Date\.now\(\) \}/);
+});
+
+test("Visão Geral exibe reuniões feitas e Show Rate do recorte SDR", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "script.js"), "utf8");
+  assert.match(source, /label: "Reuniões feitas", value: sdrStats\.shows/);
+  assert.match(source, /label: "Show rate", value: formatPercentPtBr\(sdrStats\.showRate, 1\)/);
+  assert.match(source, /new URLSearchParams\(\{ from: range\.start, to: range\.end \}\)/);
 });

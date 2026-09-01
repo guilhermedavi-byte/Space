@@ -944,24 +944,27 @@ const buildGrowthMetricsPayload = async ({ crm, idToken, periodStart = "", perio
     periodEnd: periodEnd || goalPeriodEnd,
   });
 
-  // Prefer the main pipeline name used by the commercial team. Fall back to the old "Conversão" pipeline if needed.
-  const pipelinePreferred = normalizeKey("Funil principal");
-  const preferredDeals = businesses.filter((b) => normalizeKey(b?.stage?.pipeline?.name) === pipelinePreferred);
-  const pipelineTarget = preferredDeals.length ? pipelinePreferred : normalizeKey("Conversão");
-  const conversionPipelineKey = normalizeKey("Conversão");
-
-  const filteredAll = businesses.filter((b) => normalizeKey(b?.stage?.pipeline?.name) === pipelineTarget);
-  const conversionPipelineDealsAll = businesses.filter((b) => normalizeKey(b?.stage?.pipeline?.name) === conversionPipelineKey);
   const wasCreatedInPeriod = (business) => {
     const createdAt = business?.createdAt || business?.created_at || null;
     return createdAt ? isDateWithinCommercialPeriod(createdAt, commercialPeriod) : false;
   };
+  // Pipeline migrations can leave historical cohorts in "Conversão" while new
+  // deals already use "Funil principal". Choose the pipeline from the selected
+  // cohort, otherwise an unrelated recent deal can zero an older date range.
+  const pipelinePreferred = normalizeKey("Funil principal");
+  const conversionPipelineKey = normalizeKey("Conversão");
+  const pipelineSelectionPool = filterByCreatedAt ? businesses.filter(wasCreatedInPeriod) : businesses;
+  const preferredDeals = pipelineSelectionPool.filter(
+    (business) => normalizeKey(business?.stage?.pipeline?.name) === pipelinePreferred
+  );
+  const pipelineTarget = preferredDeals.length ? pipelinePreferred : conversionPipelineKey;
+  const filteredAll = businesses.filter((business) => normalizeKey(business?.stage?.pipeline?.name) === pipelineTarget);
   // Admin → Comercial filters are cohort filters: every KPI starts from businesses
   // created inside the selected range, matching the CRM date semantics.
   const filtered = filterByCreatedAt ? filteredAll.filter(wasCreatedInPeriod) : filteredAll;
   const conversionPipelineDeals = filterByCreatedAt
-    ? conversionPipelineDealsAll.filter(wasCreatedInPeriod)
-    : conversionPipelineDealsAll;
+    ? filtered
+    : businesses.filter((business) => normalizeKey(business?.stage?.pipeline?.name) === conversionPipelineKey);
 
   // Temporary debug: inspect fields for a deal in "Em fechamento" to identify lost flags/status fields.
   try {
@@ -1282,7 +1285,10 @@ const buildGrowthMetricsPayload = async ({ crm, idToken, periodStart = "", perio
     period: {
       startDateKey: commercialPeriod.startDateKey,
       endDateKey: commercialPeriod.endDateKey,
+      startAt: `${commercialPeriod.startDateKey}T00:00:00-03:00`,
+      endAt: `${commercialPeriod.endDateKey}T23:59:59.999-03:00`,
       filterField: filterByCreatedAt ? "createdAt" : "commercial-default",
+      pipelineKey: pipelineTarget,
     },
     debug: {
       totalFetched: Number(crm?.pagination?.totalFetched) || businesses.length,

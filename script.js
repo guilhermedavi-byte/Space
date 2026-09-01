@@ -16777,10 +16777,11 @@ const renderAdminCommercialOverview = () => {
     </section>
 
     <section class="commercial-overview-section">
-      <div class="commercial-overview-kpi-grid">
+      <div class="commercial-overview-kpi-grid commercial-overview-sdr-kpi-grid">
         ${renderCommercialOverviewKpi({ label: "Ligações", value: sdrStats.totalCalls, series: sdrSeries("totalCalls"), tone: "blue" })}
         ${renderCommercialOverviewKpi({ label: "Atendimentos", value: sdrStats.answered, pill: formatPercentPtBr(sdrStats.answerRate, 1), series: sdrSeries("answered"), tone: "green" })}
         ${renderCommercialOverviewKpi({ label: "Agendamentos", value: sdrStats.scheduled, pill: formatPercentPtBr(sdrStats.callToScheduleRate, 1), series: sdrSeries("scheduled"), tone: "coral" })}
+        ${renderCommercialOverviewKpi({ label: "Reuniões feitas", value: sdrStats.shows, series: sdrSeries("shows"), tone: "green" })}
         ${renderCommercialOverviewKpi({ label: "Show rate", value: formatPercentPtBr(sdrStats.showRate, 1), series: sdrSeries("shows"), tone: "amber" })}
       </div>
       <a class="commercial-overview-detail-link" href="/app/admin/growth/sdr" data-panel-target="growth" data-growth-tab-target="sdr">Ver detalhes no módulo SDR</a>
@@ -16804,10 +16805,12 @@ const loadAdminCommercialOverview = async ({ force = false } = {}) => {
     if (!isValidDateKey(range.start) || !isValidDateKey(range.end) || range.start > range.end) {
       throw new Error("invalid_commercial_overview_range");
     }
-    const crmParams = new URLSearchParams({ periodStart: range.start, periodEnd: range.end });
+    const crmParams = new URLSearchParams({ api: "growth-metrics", periodStart: range.start, periodEnd: range.end });
     if (force) crmParams.set("refresh", "1");
     const sdrParams = new URLSearchParams({ from: range.start, to: range.end });
-    const crmUrl = `/api/growth-metrics?${crmParams.toString()}`;
+    // Use the concrete handler URL so periodStart/periodEnd cannot be lost while
+    // an alias rewrite adds its own query string.
+    const crmUrl = `/api/growth-dashboard?${crmParams.toString()}`;
     const [crmRes, goalRes, sdrRes] = await Promise.all([
       fetchWithAuth(crmUrl, { method: "GET" }),
       fetchWithAuth("/api/growth-dashboard?api=growth-goals&mode=current", { method: "GET" }),
@@ -16820,6 +16823,9 @@ const loadAdminCommercialOverview = async ({ force = false } = {}) => {
     ]);
     if (!crmRes.ok) throw new Error(crm?.error || "growth_metrics_failed");
     if (!sdrRes.ok) throw new Error(sdr?.message || sdr?.error || "sdr_metrics_failed");
+    if (crm?.period?.startDateKey !== range.start || crm?.period?.endDateKey !== range.end || crm?.period?.filterField !== "createdAt") {
+      throw new Error("growth_metrics_period_mismatch");
+    }
     adminCommercialOverviewState.crm = crm || {};
     adminCommercialOverviewState.goal = goalRes.ok ? goalPayload?.goal || null : null;
     adminCommercialOverviewState.sdr = sdr || {};

@@ -88,12 +88,12 @@ test("forecast 3-partes aceita callback de período customizado", () => {
   assert.equal(result.debug.leadsDoMes, 1);
 });
 
-test("growth metrics filtra toda a coorte pela criação no intervalo solicitado", async () => {
-  const makeDeal = ({ id, createdAt, total }) => ({
+test("growth metrics escolhe o pipeline dentro da coorte e filtra pela criação", async () => {
+  const makeDeal = ({ id, createdAt, total, pipeline = "Conversão" }) => ({
     id,
     createdAt,
     total,
-    stage: { name: "Fechado", pipeline: { name: "Funil principal" } },
+    stage: { name: "Fechado", pipeline: { name: pipeline } },
     attendant: { name: "Responsável" },
   });
   const payload = await buildGrowthMetricsPayload({
@@ -101,6 +101,7 @@ test("growth metrics filtra toda a coorte pela criação no intervalo solicitado
       businesses: [
         makeDeal({ id: "inside", createdAt: "2026-05-05T12:00:00-03:00", total: 1000 }),
         makeDeal({ id: "outside", createdAt: "2026-05-20T12:00:00-03:00", total: 9000 }),
+        makeDeal({ id: "new-pipeline", createdAt: "2026-09-01T12:00:00-03:00", total: 12000, pipeline: "Funil principal" }),
       ],
     },
     periodStart: "2026-05-01",
@@ -116,15 +117,33 @@ test("growth metrics filtra toda a coorte pela criação no intervalo solicitado
   assert.deepEqual(payload.period, {
     startDateKey: "2026-05-01",
     endDateKey: "2026-05-12",
+    startAt: "2026-05-01T00:00:00-03:00",
+    endAt: "2026-05-12T23:59:59.999-03:00",
     filterField: "createdAt",
+    pipelineKey: "conversao",
   });
+});
+
+test("intervalo comercial inclui 00:00 inicial e 23:59:59 final em São Paulo", () => {
+  const period = resolveCommercialPeriod({
+    now: new Date("2026-09-01T12:00:00-03:00"),
+    periodStart: "2026-08-01",
+    periodEnd: "2026-08-31",
+  });
+  assert.equal(isDateWithinCommercialPeriod("2026-08-01T02:59:59.999Z", period), false);
+  assert.equal(isDateWithinCommercialPeriod("2026-08-01T03:00:00.000Z", period), true);
+  assert.equal(isDateWithinCommercialPeriod("2026-09-01T02:59:59.999Z", period), true);
+  assert.equal(isDateWithinCommercialPeriod("2026-09-01T03:00:00.000Z", period), false);
 });
 
 test("API de growth metrics valida e usa periodStart/periodEnd fora do cache mensal", () => {
   const source = fs.readFileSync(path.join(__dirname, "..", "api", "growth-dashboard.js"), "utf8");
+  const clientSource = fs.readFileSync(path.join(__dirname, "..", "script.js"), "utf8");
   assert.match(source, /const hasRequestedPeriod = Boolean\(periodStart \|\| periodEnd\)/);
   assert.match(source, /filterByCreatedAt: hasRequestedPeriod/);
   assert.match(source, /periodStart > periodEnd/);
+  assert.match(clientSource, /new URLSearchParams\(\{ api: "growth-metrics", periodStart: range\.start, periodEnd: range\.end \}\)/);
+  assert.match(clientSource, /crm\?\.period\?\.startDateKey !== range\.start/);
 });
 
 test("save de growth-goals invalida o cache persistente imediatamente", () => {

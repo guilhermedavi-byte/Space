@@ -342,3 +342,5 @@ module.exports = async (req, res) => {
     sendError(res, error.status || 500, error.message || "sdr_metrics_failed", "Não foi possível processar o painel SDR agora.");
   }
 };
+
+module.exports.__private = { computeStats };

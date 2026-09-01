@@ -24497,6 +24497,12 @@ body.has-space-env-banner{padding-top:46px}
   align-items: stretch;
 }
 
+@media (min-width: 1181px) {
+  .commercial-overview-sdr-kpi-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
 .commercial-overview-kpi {
   min-height: 128px;
   padding: 15px 16px 12px;
