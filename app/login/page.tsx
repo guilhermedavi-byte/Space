@@ -1,0 +1,2 @@
+import { LoginForm } from "./login-form";
+export default function LoginPage() { return <main className="grid min-h-screen place-items-center p-6 lg:ml-64"><div className="w-full max-w-sm rounded-2xl border border-line bg-panel p-7"><p className="text-xs uppercase tracking-widest text-violet-300">Área restrita</p><h1 className="mt-3 text-2xl font-semibold text-white">Space Sales Intelligence</h1><p className="mt-2 text-sm text-zinc-500">Autenticação administrativa inicial. Permissões por equipe permanecem isoladas para evolução.</p><LoginForm /></div></main>; }
