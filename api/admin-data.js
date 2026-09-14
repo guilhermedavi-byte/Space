@@ -1,6 +1,7 @@
 const { sendJson } = require("../_lib/http");
 const { resolveAdminRequestAuth } = require("./_lib/admin-request-auth");
 const { listCollectionAsAdmin } = require("./_lib/firestore-admin");
+const { isCommercialUser } = require("./_lib/growth-people");
 
 const ALLOWED_COLLECTIONS = new Set([
   "users",
@@ -146,7 +147,7 @@ module.exports = async (req, res) => {
     const fullDebugSummary = collection === "users" && wantsDebug ? buildUserDebugSummary(rows) : null;
     if (collection === "users" && type) {
       const normalizedType = normalizeUserRoleFilter(type);
-      rows = rows.filter((row) => inferLegacyUserRole(row) === normalizedType);
+      rows = rows.filter((row) => normalizedType === "growth" ? isCommercialUser(row) : inferLegacyUserRole(row) === normalizedType);
       if (wantsDebug) {
         console.warn("[api] admin-data users debug", {
           requestedType: normalizedType,

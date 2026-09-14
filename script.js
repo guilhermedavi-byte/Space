@@ -14682,7 +14682,9 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
     selectedWeek: weekOptions[0] || null,
     weekPayload: null,
     previousWeekGoal: null,
-    weeklyLoading: false,
+    weeklyLoading: true,
+    weeklyLoaded: false,
+    weeklyRequestId: 0,
     weeklyRows: [],
   };
 
@@ -14740,6 +14742,7 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
     hideSecondary: false,
     showTrash: false,
     onPrimary: () => {
+      if (modalState.weeklyLoading || !modalState.weeklyLoaded) return false;
       const form = modalBody?.querySelector("[data-growth-goal-form]");
       if (!(form instanceof HTMLFormElement)) return false;
       const competenciaEl = form.querySelector("[data-goal-competencia]");
@@ -14762,7 +14765,7 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
           const targetEl = row.querySelector("[data-goal-weekly-target]");
           const role = roleEl instanceof HTMLSelectElement ? String(roleEl.value || "").trim().toLowerCase() : "";
           const targetRaw = targetEl instanceof HTMLInputElement ? String(targetEl.value || "").trim() : "";
-          const targetValue = role === "closer" ? (targetRaw ? parseMoneyPtBrLoose(targetRaw) : 0) : Number.parseInt(targetRaw || "0", 10);
+          const targetValue = (role === "closer" || role === "both") ? (targetRaw ? parseMoneyPtBrLoose(targetRaw) : 0) : Number.parseInt(targetRaw || "0", 10);
           return { row, personId, role, targetValue, targetRaw };
         })
         .filter((item) => item.personId);
@@ -14772,7 +14775,7 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
       const weeklyOk =
         !!selectedWeek &&
         weeklyRows.every((item) => {
-          const roleOk = item.role === "closer" || item.role === "sdr";
+          const roleOk = item.role === "closer" || item.role === "sdr" || item.role === "both";
           const targetOk = Number.isFinite(Number(item.targetValue)) && Number(item.targetValue) >= 0;
           item.row.classList.toggle("is-error", !roleOk || !targetOk);
           return roleOk && targetOk;
@@ -14947,11 +14950,11 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
               const progressPct = Number(progress?.progressPct || 0);
               const progressText = progress
                 ? `${formatGrowthWeeklyActualValue(role, progress.actualValue)} · ${progressPct.toFixed(1).replace(".", ",")}%`
-                : role === "closer"
+                : (role === "closer" || role === "both")
                   ? `${currencyPtBrNoCents(0)} · 0,0%`
                   : `0 · 0,0%`;
-              const unitLabel = role === "closer" ? "R$" : "reuniões";
-              const targetDisplay = role === "closer" ? String(targetValue || "") : String(Math.max(0, Math.round(targetValue || 0)));
+              const unitLabel = (role === "closer" || role === "both") ? "R$" : "reuniões";
+              const targetDisplay = (role === "closer" || role === "both") ? String(targetValue || "") : String(Math.max(0, Math.round(targetValue || 0)));
               return `
                 <div class="growth-goal-weekly-row" data-goal-weekly-row="${escapeHtml(personId)}">
                   <div class="growth-goal-weekly-person">
@@ -14961,7 +14964,8 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
                   <label class="growth-goal-weekly-cell">
                     <span>Papel</span>
                     <select class="auth-input" data-goal-weekly-role>
-                      <option value="closer" ${role === "closer" ? "selected" : ""}>Closer</option>
+                      ${role === "both" ? '<option value="both" selected>SDR e Closer</option>' : ""}
+                      <option value="closer" ${(role === "closer" || role === "both") ? "selected" : ""}>Closer</option>
                       <option value="sdr" ${role === "sdr" ? "selected" : ""}>SDR</option>
                     </select>
                   </label>
@@ -14975,7 +14979,7 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
                         inputmode="decimal"
                         data-goal-weekly-target
                         value="${escapeHtml(targetDisplay)}"
-                        placeholder="${role === "closer" ? "R$ 8.000" : "30"}"
+                        placeholder="${(role === "closer" || role === "both") ? "R$ 8.000" : "30"}"
                       />
                     </div>
                   </label>
@@ -14983,7 +14987,7 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
               `;
             })
             .join("")
-        : `<div class="growth-contracts-loading">Nenhuma pessoa ativa cadastrada em growthPeople.</div>`;
+        : `<div class="growth-contracts-loading">Nenhum usuário ativo no Comercial.</div>`;
 
       const unresolvedSdr = Array.isArray(payload?.weeklyReadModel?.unresolved?.sdrActors) ? payload.weeklyReadModel.unresolved.sdrActors : [];
       const warnings = [
@@ -15014,6 +15018,7 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
     };
 
     const loadSelectedWeek = async (weekStart) => {
+      const requestId = ++modalState.weeklyRequestId;
       const selectedWeek = weekOptionsByStart.get(String(weekStart || "").trim()) || weekOptions[0] || null;
       modalState.selectedWeek = selectedWeek;
       modalState.selectedWeekStart = selectedWeek?.startDateKey || "";
@@ -15024,9 +15029,11 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
       }
       if (!(weeklyListEl instanceof HTMLElement)) return;
       modalState.weeklyLoading = true;
+      modalState.weeklyLoaded = false;
       weeklyListEl.innerHTML = `<div class="growth-contracts-loading">Carregando meta semanal…</div>`;
       try {
         const payload = await loadGrowthGoalsWeekPayload({ competencia: selectedWeek.competencia, weekStart: selectedWeek.startDateKey });
+        if (requestId !== modalState.weeklyRequestId) return;
         modalState.weekPayload = payload;
         if (weekConfigSourceHintEl instanceof HTMLElement) {
           weekConfigSourceHintEl.textContent = formatWeeklyConfigSourceLabel(payload?.weeklyReadModel?.weeklyGoalConfigSource);
@@ -15035,21 +15042,27 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
           modalState.previousWeekGoal = null;
         } else {
           try {
-            modalState.previousWeekGoal = await loadPreviousWeekGoal(selectedWeek);
+            const previousWeekGoal = await loadPreviousWeekGoal(selectedWeek);
+            if (requestId !== modalState.weeklyRequestId) return;
+            modalState.previousWeekGoal = previousWeekGoal;
           } catch (previousWeekError) {
+            if (requestId !== modalState.weeklyRequestId) return;
             console.warn("[admin] load previous weekly growth-goal failed:", previousWeekError);
             modalState.previousWeekGoal = null;
           }
         }
+        if (requestId !== modalState.weeklyRequestId) return;
         renderWeeklyRows();
+        modalState.weeklyLoaded = true;
       } catch (error) {
+        if (requestId !== modalState.weeklyRequestId) return;
         console.error("[admin] load weekly growth-goal failed:", error);
         if (weekConfigSourceHintEl instanceof HTMLElement) {
           weekConfigSourceHintEl.textContent = "Origem da configuração: indisponível";
         }
         weeklyListEl.innerHTML = `<div class="auth-form-error">Não foi possível carregar a meta semanal agora.</div>`;
       } finally {
-        modalState.weeklyLoading = false;
+        if (requestId === modalState.weeklyRequestId) modalState.weeklyLoading = false;
       }
     };
 
@@ -15067,7 +15080,7 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
         if (!(row instanceof HTMLElement)) return;
         const unitEl = row.querySelector("[data-goal-weekly-target-unit]");
         const targetEl = row.querySelector("[data-goal-weekly-target]");
-        const isCloser = String(roleEl.value || "").trim().toLowerCase() === "closer";
+        const isCloser = ["closer", "both"].includes(String(roleEl.value || "").trim().toLowerCase());
         if (unitEl instanceof HTMLElement) unitEl.textContent = isCloser ? "R$" : "reuniões";
         if (targetEl instanceof HTMLInputElement) targetEl.placeholder = isCloser ? "R$ 8.000" : "30";
       });

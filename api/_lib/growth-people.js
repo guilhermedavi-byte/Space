@@ -96,6 +96,45 @@ const decodeGrowthPeopleDoc = (doc) => {
   };
 };
 
+// Match Comercial > Usuários: eligibility comes from users, never from goals
+// or the optional growthPeople configuration. Missing ativo means active there.
+const isCommercialUser = (user) => normalizeLoose(user?.tipo || user?.role || user?.type || user?.perfil) === 'growth';
+
+const buildActiveCommercialPeople = (users = [], people = []) => {
+  const usersByUid = new Map(users.map((user) => [safeString(user.firestoreDocId || user.id), user]).filter(([uid]) => uid));
+  const result = new Map();
+  for (const [uid, user] of usersByUid) {
+    if (!isCommercialUser(user) || user.ativo === false) continue;
+    const email = safeString(user.email).toLowerCase();
+    const ids = uniq([uid, user.uid, user.userId]);
+    const byUid = people.filter((person) => person.isAggregate !== true &&
+      (ids.includes(person.userUid) || ids.includes(person.sdrUid) || person.personId === uid));
+    // Legacy SDR records can be linked by a unique email, but never by name.
+    const byEmail = byUid.length ? [] : people.filter((person) => person.isAggregate !== true &&
+      !person.userUid && !person.sdrUid && email && person.sdrEmails?.includes(email));
+    const candidates = byUid.length ? byUid : byEmail;
+    if (candidates.length > 1) throw new Error('ambiguous_commercial_person');
+    const configured = candidates[0];
+    const personId = configured?.personId || uid;
+    if (result.has(personId)) throw new Error('ambiguous_commercial_person');
+    result.set(personId, {
+      personId,
+      roles: [],
+      sortOrder: 0,
+      crmAttendantIds: [],
+      crmAttendantAliases: [],
+      ...configured,
+      displayName: safeString(user.nome || user.nomeCompleto || user.fullName || user.displayName || user.name || user.email) || uid,
+      active: true,
+      userUid: uid,
+      sdrUid: configured?.sdrUid || uid,
+      sdrEmails: uniq([...(configured?.sdrEmails || []), email]),
+      photoURL: configured?.photoURL || safeString(user.photoURL || user.photoUrl),
+    });
+  }
+  return Array.from(result.values());
+};
+
 function getWeeklyPeopleSource(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   if (Array.isArray(value.people)) return value.people;
@@ -557,6 +596,8 @@ const buildWeeklyGoalsReadModel = ({ goal = null, globalConfig = null, people = 
 };
 
 module.exports = {
+  isCommercialUser,
+  buildActiveCommercialPeople,
   GROWTH_PEOPLE_COLLECTION,
   GROWTH_CONFIG_COLLECTION,
   CRM_LIVE_DEFAULTS_DOC_ID,

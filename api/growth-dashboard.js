@@ -19,6 +19,7 @@ const {
   decodeWeeklyGoalsMap,
   buildWeeklyGoalsReadModel,
   normalizeWeeklyGoalConfigEntry,
+  buildActiveCommercialPeople,
 } = require("./_lib/growth-people");
 const { triggerContractSignedOnboarding } = require("./_lib/pedagogico-n8n");
 const {
@@ -1422,20 +1423,27 @@ const handleGrowthGoalsApi = async (req, res, url) => {
           throw new Error("firestore_get_failed");
         }
         const payload = { competencia, goal };
+        let progressPeople = [];
 
         if (includePeople || includeWeeklyProgress) {
-          const people = await loadGrowthPeople({ accessToken });
-          payload.people = people;
+          const [people, usersResponse] = await Promise.all([
+            loadGrowthPeople({ accessToken }),
+            firestoreListDocumentsWithAccessToken({ collectionPath: "users", accessToken, pageSize: 1000 }),
+          ]);
+          if (!usersResponse.ok) throw new Error("commercial_users_list_failed");
+          const users = (usersResponse.documents || []).map((doc) => ({ ...decodeFields(doc), firestoreDocId: getDocIdFromName(doc.name) }));
+          payload.people = buildActiveCommercialPeople(users, people);
+          // Keep legacy/aggregate identities available for existing progress.
+          progressPeople = [...new Map([...people, ...payload.people].map((person) => [person.personId, person])).values()];
         }
 
         if (includeWeeklyProgress) {
           const globalConfig = await loadCrmLiveDefaultsConfigWithAccessToken({ accessToken });
           const [crm, sdrEvents] = await Promise.all([fetchAllCrmBusinesses(), loadSdrActivityEvents({ accessToken })]);
-          const people = Array.isArray(payload.people) ? payload.people : await loadGrowthPeople({ accessToken });
           payload.weeklyReadModel = buildWeeklyGoalsReadModel({
             goal,
             globalConfig,
-            people,
+            people: progressPeople,
             businesses: Array.isArray(crm?.businesses) ? crm.businesses : [],
             sdrEvents,
             now: requestedWeekDate || new Date(),
@@ -1547,13 +1555,18 @@ const handleGrowthGoalsApi = async (req, res, url) => {
 
   let exists = false;
   let existingGoal = null;
+  let existingWeeklyGoalsRaw = {};
   try {
     const snap = await firestoreGetDocumentWithAccessToken({ docPath, accessToken });
+    if (!snap.ok && snap.status !== 404) throw new Error("firestore_get_failed");
     exists = snap.ok;
-    if (snap.ok) existingGoal = decodeGoalDoc(snap.data);
+    if (snap.ok) {
+      existingGoal = decodeGoalDoc(snap.data);
+      existingWeeklyGoalsRaw = decodeFields(snap.data).weeklyGoals || {};
+    }
   } catch (error) {
-    exists = false;
-    existingGoal = null;
+    sendJson(res, 500, { error: "firestore_get_failed" });
+    return;
   }
 
   const existingValorMeta = Number.isFinite(Number(existingGoal?.valorMeta)) ? Number(existingGoal.valorMeta) : NaN;
@@ -1577,12 +1590,16 @@ const handleGrowthGoalsApi = async (req, res, url) => {
     const existingWeeklyGoals = existingGoal?.weeklyGoals && typeof existingGoal.weeklyGoals === "object" && !Array.isArray(existingGoal.weeklyGoals) ? existingGoal.weeklyGoals : {};
     const previousWeekGoal = existingWeeklyGoals?.[weeklyGoalInput.weekKey] && typeof existingWeeklyGoals[weeklyGoalInput.weekKey] === "object" ? existingWeeklyGoals[weeklyGoalInput.weekKey] : {};
     base.weeklyGoals = {
-      ...existingWeeklyGoals,
+      ...existingWeeklyGoalsRaw,
       [weeklyGoalInput.weekKey]: {
         startDateKey: weeklyGoalInput.startDateKey,
         endDateKey: weeklyGoalInput.endDateKey,
         teamTarget: weeklyGoalInput.teamTarget != null ? weeklyGoalInput.teamTarget : Number.isFinite(Number(previousWeekGoal.teamTarget)) ? Number(previousWeekGoal.teamTarget) : 0,
-        individualMonthlyGoals: weeklyGoalInput.people,
+        individualMonthlyGoals: {
+          // Hidden/inactive/aggregate people retain their saved configuration.
+          ...Object.fromEntries((previousWeekGoal.people || []).map(({ personId, ...row }) => [personId, row])),
+          ...weeklyGoalInput.people,
+        },
       },
     };
   }
