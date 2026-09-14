@@ -1459,6 +1459,7 @@ module.exports = {
   buildCrmLiveReadCookie,
   buildCrmLiveSdrSlice,
   buildWeeklyTeamSummary,
+  buildMonthSummary,
   loadCurrentGoal,
   loadApplicableWeeklyGoal,
   loadGoalByMonthKey,

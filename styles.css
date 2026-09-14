@@ -25835,3 +25835,55 @@ body.has-space-env-banner{padding-top:46px}
     grid-template-columns: 1fr 0.8fr 0.7fr 0.8fr;
   }
 }
+
+/* Comercial > Metas uses the platform surfaces, controls and drawer. */
+.space-goals { display: grid; gap: 20px; width: 100%; }
+.space-goals-period { display: flex; align-items: center; gap: 8px; }
+.space-goals-period .auth-input { width: auto; color-scheme: dark; }
+.space-goals-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.space-goals-card { background: var(--surface-bg); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 22px; }
+.space-goals-card h3, .space-goals-drawer h3 { margin: 0 0 12px; font-size: 16px; }
+.space-goals-card p, .space-goals-drawer p { color: var(--text-muted); font-size: 12px; line-height: 1.7; }
+.space-goals-kpis span { color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+.space-goals-kpis strong { display: block; margin-top: 12px; font-size: clamp(18px, 1.6vw, 26px); font-variant-numeric: tabular-nums; }
+.space-goals-month { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.space-goals-month strong { font-size: 26px; margin-right: 12px; }
+.space-goals-badge { display: inline-block; padding: 5px 9px; border: 1px solid var(--line); border-radius: 8px; font-size: 11px; color: var(--text-soft); white-space: nowrap; }
+.space-goals-table-wrap { overflow-x: auto; }
+.space-goals-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
+.space-goals-table th { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em; }
+.space-goals-table td, .space-goals-table th { padding: 16px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.space-goals-table tr:last-child td { border-bottom: 0; }
+.space-goals-table small { display: block; margin-top: 6px; color: var(--text-muted); }
+.space-goals-table .is-current { background: var(--accent-soft); }
+.space-goals-table .is-current td:first-child { box-shadow: inset 2px 0 var(--accent); }
+.space-goals-planning { display: flex; gap: 36px; flex-wrap: wrap; }
+.space-goals-planning span { font-size: 12px; color: var(--text-muted); }
+.space-goals-planning strong { display: block; margin-top: 10px; font-size: 20px; color: var(--text-main); }
+.space-goals-drawer-form { height: 100%; display: flex; flex-direction: column; min-height: 0; }
+.space-goals-drawer-form header, .space-goals-drawer-form footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 24px; border-bottom: 1px solid var(--line); }
+.space-goals-drawer-form h2 { font-size: 20px; margin: 0; }
+.space-goals-drawer-form footer { border-top: 1px solid var(--line); border-bottom: 0; }
+.space-goals-drawer-body { flex: 1; min-height: 0; overflow-y: auto; padding: 24px; }
+.space-goals-drawer-body section { margin: 24px 0; }
+.space-goals-person { display: grid; grid-template-columns: minmax(100px, 1fr) 120px 100px; gap: 12px; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--line); }
+.space-goals-person strong { font-size: 13px; overflow-wrap: anywhere; }
+.space-goals-drawer label { display: grid; gap: 8px; color: var(--text-muted); font-size: 12px; }
+.space-goals-person .auth-input { padding: 10px; min-width: 0; width: 100%; }
+.space-goals-skeleton { min-height: 108px; animation: space-goals-pulse 1.4s ease-in-out infinite alternate; background: var(--surface-strong); }
+.space-goals-skeleton-large { min-height: 320px; }
+.space-goals-toast { position: fixed; right: 24px; bottom: 24px; max-width: calc(100vw - 48px); z-index: 1500; padding: 16px 22px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface-bg); color: var(--text-main); box-shadow: var(--shadow-md); }
+.space-goals-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+@keyframes space-goals-pulse { to { opacity: .45; } }
+@media (max-width: 900px) { .space-goals-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .space-goals .admin-manage-head, .space-goals-month { align-items: flex-start; flex-direction: column; } }
+@media (max-width: 480px) { .space-goals-card { padding: 16px; } .space-goals-person { grid-template-columns: 1fr 1fr; } .space-goals-person strong { grid-column: 1 / -1; } .space-goals-drawer .admin-students-drawer-inner { width: 100vw; } }
+@media (prefers-reduced-motion: reduce) { .space-goals-skeleton { animation: none; } }
+.space-goals, .space-goals > *, .space-goals-card, .space-goals-table-wrap { min-width: 0; }
+.space-goals-period label { position: relative; display: grid; align-items: center; min-height: 44px; border: 1px solid var(--line-strong); border-radius: 10px; padding: 0 14px; }
+.space-goals-period label:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.space-goals-period .space-goals-period-title { text-transform: capitalize; font-size: 13px; white-space: nowrap; }
+.space-goals-period label .auth-input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+.space-goals-drawer-form header > div { min-width: 0; }
+.space-goals-drawer-form header > button { flex: 0 0 44px; width: 44px; min-width: 44px; padding: 0; height: 44px; }
+.space-goals-period .space-goals-period-title { text-transform: none; }
+.space-goals-period-title::first-letter { text-transform: uppercase; }

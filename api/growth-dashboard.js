@@ -23,6 +23,7 @@ const {
   getGrowthGoalBuckets,
   AGGREGATE_OTHERS_PERSON_ID,
 } = require("./_lib/growth-people");
+const { buildCommercialGoalsModel, listCompetenciaWeeks } = require("./_lib/commercial-goals");
 const { triggerContractSignedOnboarding } = require("./_lib/pedagogico-n8n");
 const {
   decodeFields,
@@ -1399,7 +1400,7 @@ const handleGrowthGoalsApi = async (req, res, url) => {
         const payload = { competencia, goal };
         let progressPeople = [];
 
-        if (includePeople || includeWeeklyProgress) {
+        if (includePeople || includeWeeklyProgress || mode === "management") {
           const [people, usersResponse] = await Promise.all([
             loadGrowthPeople({ accessToken }),
             firestoreListDocumentsWithAccessToken({ collectionPath: "users", accessToken, pageSize: 1000 }),
@@ -1409,6 +1410,24 @@ const handleGrowthGoalsApi = async (req, res, url) => {
           payload.people = buildActiveCommercialPeople(users, people);
           payload.goalBuckets = getGrowthGoalBuckets();
           progressPeople = [...payload.people, ...payload.goalBuckets];
+        }
+
+        if (mode === "management") {
+          const firstWeek = listCompetenciaWeeks(competencia)[0];
+          const previousDate = new Date(`${firstWeek.startDateKey}T12:00:00-03:00`);
+          previousDate.setDate(previousDate.getDate() - 1);
+          const { resolveCommercialWeek } = require("./_lib/commercial-week");
+          const previousMonth = resolveCommercialWeek({ now: previousDate }).startDateKey.slice(0, 7);
+          const [globalConfig, crm, sdrEvents, previousSnap] = await Promise.all([
+            loadCrmLiveDefaultsConfigWithAccessToken({ accessToken }), fetchAllCrmBusinesses(),
+            loadSdrActivityEvents({ accessToken }),
+            firestoreGetDocumentWithAccessToken({ docPath: `${GOALS_COLLECTION}/${previousMonth}`, accessToken }),
+          ]);
+          if (crm?.ok === false || !Array.isArray(crm?.businesses)) throw new Error("commercial_sales_read_failed");
+          if (!previousSnap.ok && previousSnap.status !== 404) throw new Error("previous_goal_read_failed");
+          payload.management = buildCommercialGoalsModel({ competencia, goal,
+            previousGoal: previousSnap.ok ? decodeGoalDoc(previousSnap.data) : null,
+            globalConfig, people: progressPeople, businesses: crm.businesses, sdrEvents });
         }
 
         if (includeWeeklyProgress) {
@@ -1563,17 +1582,29 @@ const handleGrowthGoalsApi = async (req, res, url) => {
   if (weeklyGoalInput) {
     const existingWeeklyGoals = existingGoal?.weeklyGoals && typeof existingGoal.weeklyGoals === "object" && !Array.isArray(existingGoal.weeklyGoals) ? existingGoal.weeklyGoals : {};
     const previousWeekGoal = existingWeeklyGoals?.[weeklyGoalInput.weekKey] && typeof existingWeeklyGoals[weeklyGoalInput.weekKey] === "object" ? existingWeeklyGoals[weeklyGoalInput.weekKey] : {};
+    const previousRawWeek = existingWeeklyGoalsRaw[weeklyGoalInput.weekKey] || {};
+    const previousRawPeople = previousRawWeek.individualMonthlyGoals || previousRawWeek.defaultIndividualGoals || previousRawWeek.individualGoals || previousRawWeek.people || {};
+    const previousRawPeopleMap = Array.isArray(previousRawPeople) ? Object.fromEntries(previousRawPeople.map(row => [row.personId, row])) : previousRawPeople;
+    const mergedWeekPeople = {
+      ...previousRawPeopleMap,
+      ...Object.fromEntries((previousWeekGoal.people || []).map(({ personId, ...row }) => [personId, { ...previousRawPeopleMap[personId], ...row }])),
+      ...Object.fromEntries(Object.entries(weeklyGoalInput.people).map(([personId, row]) => {
+        const previous = { ...previousRawPeopleMap[personId] };
+        // An explicit update includes the person, matching the existing write behavior.
+        delete previous.excluded; delete previous.exclude; delete previous.disabled;
+        return [personId, { ...previous, ...row }];
+      })),
+    };
     base.weeklyGoals = {
       ...existingWeeklyGoalsRaw,
       [weeklyGoalInput.weekKey]: {
+        ...existingWeeklyGoalsRaw[weeklyGoalInput.weekKey],
         startDateKey: weeklyGoalInput.startDateKey,
         endDateKey: weeklyGoalInput.endDateKey,
         teamTarget: weeklyGoalInput.teamTarget != null ? weeklyGoalInput.teamTarget : Number.isFinite(Number(previousWeekGoal.teamTarget)) ? Number(previousWeekGoal.teamTarget) : 0,
-        individualMonthlyGoals: {
-          // Hidden/inactive/aggregate people retain their saved configuration.
-          ...Object.fromEntries((previousWeekGoal.people || []).map(({ personId, ...row }) => [personId, row])),
-          ...weeklyGoalInput.people,
-        },
+        // Keep the legacy array representation synchronized: readers prioritize it.
+        ...(Array.isArray(previousRawWeek.people) ? { people: Object.entries(mergedWeekPeople).map(([personId, row]) => ({ ...row, personId })) } : {}),
+        individualMonthlyGoals: mergedWeekPeople,
       },
     };
   }
@@ -1627,7 +1658,7 @@ const handleGrowthGoalsApi = async (req, res, url) => {
       console.warn("[growth-goals] cache invalidation threw", cacheError);
     }
 
-    sendJson(res, 200, { ok: true, competencia, action: exists ? "updated" : "created" });
+    sendJson(res, 200, { ok: true, competencia, action: (weeklyGoalInput ? Object.prototype.hasOwnProperty.call(existingWeeklyGoalsRaw, weeklyGoalInput.weekKey) : existingGoal?.valorMeta != null) ? "updated" : "created" });
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error("[api] growth-goals upsert failed", error);

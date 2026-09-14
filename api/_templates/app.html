@@ -457,6 +457,7 @@
               <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-comercial-atividade-sdr" title="Pré-Vendas">
                 <span class="sidebar-text">Pré-Vendas</span>
               </button>
+              <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-comercial-metas" title="Metas"><span class="sidebar-text">Metas</span></button>
               <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-comercial-usuarios" title="Usuários">
                 <span class="sidebar-text">Usuários</span>
               </button>
@@ -2057,6 +2058,7 @@
           </div>
         </section>
 
+        <section class="platform-panel" data-panel="admin-comercial-metas" data-hide-platform-header="true" hidden aria-label="Comercial - Metas"><div class="admin-manage-shell space-goals" data-commercial-goals></div></section>
         <section class="platform-panel" data-panel="admin-comercial-usuarios" data-hide-platform-header="true" hidden aria-label="Comercial - Usuários">
 	          <div class="admin-manage-shell" data-admin-commercial-users>
 	            <div class="admin-manage-head">
@@ -2065,9 +2067,6 @@
 	                <p class="admin-manage-subtitle">Gerencie os usuários Growth/SDR com acesso ao módulo Comercial.</p>
 	              </div>
               <div class="admin-manage-actions">
-                <button class="button button-outline button-small" type="button" data-admin-growth-goal-open>
-                  Definir meta do mês
-                </button>
                 <button class="button button-solid button-small" type="button" data-admin-new-user="growth">
                   + Criar usuário
                 </button>
@@ -2868,6 +2867,7 @@
       </div>
     </div>
 
+    <script src="commercial-goals.js"></script>
     <script src="script.js"></script>
   </body>
 </html>

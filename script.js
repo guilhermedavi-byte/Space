@@ -50,7 +50,7 @@ const PEDAGOGICO_SIDEBAR_ACTIVE_TARGET_BY_TAB = {
   onboarding: "admin-controle-pedagogico-onboarding",
   relatorios: "admin-controle-pedagogico-relatorios",
 };
-const COMERCIAL_SIDEBAR_PANEL_TARGETS = new Set(["admin-comercial-visao-geral", "admin-comercial-atividade-sdr", "admin-comercial-usuarios"]);
+const COMERCIAL_SIDEBAR_PANEL_TARGETS = new Set(["admin-comercial-metas", "admin-comercial-visao-geral", "admin-comercial-atividade-sdr", "admin-comercial-usuarios"]);
 const greetingElement = document.querySelector("[data-greeting]");
 const roleEyebrow = document.querySelector("[data-role-eyebrow]");
 const roleSidebarSubtitle = document.querySelector("[data-role-sidebar-subtitle]");
@@ -12187,6 +12187,8 @@ let adminCommercialUsersState = {
   query: "",
 };
 
+let commercialGoalsController = null;
+let commercialGoalsRequestedCompetencia = "";
 let adminGrowthGoalsState = {
   rows: [],
   byCompetencia: new Map(),
@@ -36893,6 +36895,16 @@ const showPanel = (panelName) => {
 	    return;
 	  }
 
+  if (panelName === "admin-comercial-metas") {
+    if (currentRole !== "admin") { navigateApp(roleBasePath(currentRole), { replace: true }); return; }
+    if (!commercialGoalsController) commercialGoalsController = window.SpaceCommercialGoals.create({
+      root: document.querySelector("[data-commercial-goals]"), fetchWithAuth, currentCompetencia: getCompetenciaKeySaoPaulo(),
+    });
+    commercialGoalsController.load(commercialGoalsRequestedCompetencia || undefined);
+    commercialGoalsRequestedCompetencia = "";
+    return;
+  }
+
   if (panelName === "admin-comercial-usuarios") {
     window.scrollTo({ top: 0, behavior: "smooth" });
     if (currentRole !== "admin") {
@@ -37080,6 +37092,7 @@ const panelPathForRole = (role, panel) => {
 	    if (p === "financeiro") return financePathForState(role);
     if (p === "admin-comercial-visao-geral") return "/app/admin/comercial";
     if (p === "admin-comercial-atividade-sdr") return "/app/admin/comercial/pre-vendas";
+    if (p === "admin-comercial-metas") return "/app/admin/comercial/metas";
     if (p === "admin-comercial-usuarios") return "/app/admin/comercial/usuarios";
 	    if (p === "growth") return "/app/admin/growth";
     if (p === "gravadas") return "/app/admin/gravadas";
@@ -37169,6 +37182,7 @@ const parseAppRoute = (path) => {
 	      return { role, panel: "financeiro", financeTab };
 	    }
     if (sub === "comercial") {
+      if (detail === "metas") return { role, panel: "admin-comercial-metas" };
       if (detail === "usuarios") return { role, panel: "admin-comercial-usuarios" };
       if (detail === "atividade-sdr" || detail === "pre-vendas") return { role, panel: "admin-comercial-atividade-sdr" };
       return { role, panel: "admin-comercial-visao-geral" };
@@ -40365,7 +40379,7 @@ document.addEventListener("click", (event) => {
       const goalOpen = target.closest("[data-admin-growth-goal-open]");
       if (goalOpen instanceof HTMLButtonElement) {
         event.preventDefault();
-        openAdminGrowthGoalModal();
+        navigateApp("/app/admin/comercial/metas");
         return;
       }
 
@@ -40373,7 +40387,8 @@ document.addEventListener("click", (event) => {
       if (goalEdit instanceof HTMLButtonElement) {
         event.preventDefault();
         const competencia = String(goalEdit.getAttribute("data-admin-goal-edit") || "").trim();
-        openAdminGrowthGoalModal(competencia);
+        commercialGoalsRequestedCompetencia = competencia;
+        navigateApp("/app/admin/comercial/metas");
         return;
       }
 

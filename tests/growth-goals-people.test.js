@@ -52,7 +52,7 @@ test('homonyms stay distinct and duplicate configurations resolve to one real us
   assert.ok(joined.find((row) => row.userUid === 'existing-user').identityKeys.includes('existing-person'));
 });
 
-const makeApi = ({ missingGoal = false, failRead = false, failUsers = false } = {}) => {
+const makeApi = ({ missingGoal = false, failRead = false, failUsers = false, legacyArray = false } = {}) => {
   const filename = require.resolve('../api/growth-dashboard');
   const localRequire = createRequire(filename);
   const calls = [];
@@ -65,6 +65,9 @@ const makeApi = ({ missingGoal = false, failRead = false, failUsers = false } = 
       'wk_2099-09-23': { startDateKey: '2099-09-23', endDateKey: '2099-09-29', customField: 'keep', individualMonthlyGoals: { 'existing-person': { role: 'sdr', targetValue: 77 } } },
     },
   };
+  initial.weeklyGoals['wk_2099-09-16'].customWeekField = 'preserve-week';
+  initial.weeklyGoals['wk_2099-09-16'].individualMonthlyGoals['existing-person'].customPersonField = 'preserve-person';
+  if (legacyArray) initial.weeklyGoals['wk_2099-09-16'].people = Object.entries(initial.weeklyGoals['wk_2099-09-16'].individualMonthlyGoals).map(([personId, row]) => ({ personId, ...row }));
   let saved = missingGoal ? null : structuredClone(initial);
   const doc = (path, fields) => ({ name: `documents/${path}`, ...firestore.encodeFields(fields) });
   const requestJson = async (url, options = {}) => {
@@ -80,6 +83,7 @@ const makeApi = ({ missingGoal = false, failRead = false, failUsers = false } = 
       if (failRead) return { ok: false, status: 503 };
       return saved ? { ok: true, status: 200, data: doc(path, saved) } : { ok: false, status: 404 };
     }
+    if (path?.startsWith('growthGoals/')) return { ok: false, status: 404 };
     if (path === 'users') {
       if (failUsers) return { ok: false, status: 503 };
       const secondPage = new URL(url).searchParams.has('pageToken');
@@ -231,4 +235,41 @@ test('modal renders unconfigured users, retains saved inputs and posts only afte
   assert.equal(requests[0].body.competencia, week.competencia);
   assert.deepEqual(requests[0].body.weeklyGoal.people['new-user'], { role: 'sdr', targetValue: 25 });
   assert.deepEqual(requests[0].body.weeklyGoal.people['existing-person'], { role: 'closer', targetValue: 8123.45 });
+});
+
+
+test('management GET aggregates the competence in one read-only response', async () => {
+  const api = makeApi();
+  const res = await api.request('GET', {}, '&mode=management');
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.management.monthlyExists, true);
+  assert.equal(res.body.management.month.summary.meta, 123456);
+  assert.equal(res.body.management.competencia, api.month);
+  assert.ok(res.body.management.weeks.length >= 4);
+  assert.ok(api.calls.every(call => call.method === 'GET'));
+});
+
+test('entity action is create for a new week inside an existing month and update after saving', async () => {
+  const api = makeApi();
+  const payload = { competencia: api.month, weeklyGoal: { weekKey: 'wk_2099-09-30', startDateKey: '2099-09-30', endDateKey: '2099-10-06', people: { 'new-user': { role: 'sdr', targetValue: 0 } } } };
+  assert.equal((await api.request('POST', payload)).body.action, 'created');
+  assert.equal((await api.request('POST', payload)).body.action, 'updated');
+  assert.equal(api.getSaved().valorMeta, api.initial.valorMeta);
+  assert.equal(api.getSaved().weeklyGoals['wk_2099-09-23'].customField, 'keep');
+});
+
+
+test('updating a legacy week preserves unknown fields and synchronizes legacy people arrays', async () => {
+  const api = makeApi({ legacyArray: true });
+  const result = await api.request('POST', { competencia: api.month, weeklyGoal: {
+    weekKey: 'wk_2099-09-16', startDateKey: '2099-09-16', endDateKey: '2099-09-22',
+    people: { 'existing-person': { role: 'closer', targetValue: 9500 } },
+  } });
+  assert.equal(result.statusCode, 200);
+  const saved = api.getSaved().weeklyGoals['wk_2099-09-16'];
+  assert.equal(saved.customWeekField, 'preserve-week');
+  assert.equal(saved.individualMonthlyGoals['existing-person'].customPersonField, 'preserve-person');
+  const read = await api.request();
+  assert.equal(read.body.goal.weeklyGoals['wk_2099-09-16'].people.find(row => row.personId === 'existing-person').targetValue, 9500);
+  assert.equal(saved.individualMonthlyGoals['inactive-person'].targetValue, 42);
 });
