@@ -1,6 +1,7 @@
 const { decodeFields, getDocIdFromName } = require('../../_lib/firestore-rest');
 const { normalizeKey: normalizeForecastKey, getDealValue } = require('../../_lib/forecast-service');
 const { resolveCommercialWeek, isValidDateKey } = require('./commercial-week');
+const { summarizeClosedSales } = require('./commercial-sales');
 
 const GROWTH_PEOPLE_COLLECTION = 'growthPeople';
 const GROWTH_CONFIG_COLLECTION = 'growthConfig';
@@ -80,7 +81,7 @@ const decodeGrowthPeopleDoc = (doc) => {
   if (!personId) return null;
   return {
     personId,
-    displayName: safeString(fields.displayName || fields.nome || personId) || personId,
+    displayName: safeString(fields.displayName || fields.nome),
     active: fields.active !== false,
     isAggregate: fields.isAggregate === true,
     sortOrder: Number.isFinite(Number(fields.sortOrder)) ? Number(fields.sortOrder) : 0,
@@ -100,6 +101,21 @@ const decodeGrowthPeopleDoc = (doc) => {
 // or the optional growthPeople configuration. Missing ativo means active there.
 const isCommercialUser = (user) => normalizeLoose(user?.tipo || user?.role || user?.type || user?.perfil) === 'growth';
 
+const getCommercialDisplayName = (user, ids = []) => {
+  const name = safeString(user?.nome || user?.nomeCompleto || user?.fullName || user?.displayName || user?.name);
+  if (!name || name.includes('@') || ids.includes(name) || /^(?=.*\d)[a-z\d_-]{20,}$/i.test(name) || !/\p{L}/u.test(name)) return '';
+  return name;
+};
+
+const isRankablePerson = (person) => Boolean(person && person.active !== false && person.hasValidDisplayName !== false &&
+  getCommercialDisplayName(person, [person.personId]));
+
+const getGrowthGoalBuckets = () => [{
+  personId: AGGREGATE_OTHERS_PERSON_ID, displayName: AGGREGATE_OTHERS_DISPLAY_NAME,
+  active: true, isAggregate: true, sortOrder: 999, roles: ['closer'],
+  crmAttendantIds: [], crmAttendantAliases: [], sdrEmails: [],
+}];
+
 const buildActiveCommercialPeople = (users = [], people = []) => {
   const usersByUid = new Map(users.map((user) => [safeString(user.firestoreDocId || user.id), user]).filter(([uid]) => uid));
   const result = new Map();
@@ -112,10 +128,20 @@ const buildActiveCommercialPeople = (users = [], people = []) => {
     // Legacy SDR records can be linked by a unique email, but never by name.
     const byEmail = byUid.length ? [] : people.filter((person) => person.isAggregate !== true &&
       !person.userUid && !person.sdrUid && email && person.sdrEmails?.includes(email));
-    const candidates = byUid.length ? byUid : byEmail;
-    if (candidates.length > 1) throw new Error('ambiguous_commercial_person');
-    const configured = candidates[0];
+    const candidates = (byUid.length ? byUid : byEmail).slice().sort((a, b) =>
+      Number(Boolean(b.userUid)) - Number(Boolean(a.userUid)) || a.personId.localeCompare(b.personId));
+    // Multiple legacy configurations linked to the same user are aliases, not
+    // additional people. Keep a deterministic canonical key and all references.
+    const configured = candidates[0] ? {
+      ...candidates[0],
+      roles: uniq(candidates.flatMap((person) => person.roles || [])),
+      crmAttendantIds: uniq(candidates.flatMap((person) => person.crmAttendantIds || [])),
+      crmAttendantAliases: uniq(candidates.flatMap((person) => person.crmAttendantAliases || [])),
+      sdrEmails: uniq(candidates.flatMap((person) => person.sdrEmails || [])),
+    } : null;
     const personId = configured?.personId || uid;
+    const identityKeys = uniq([personId, ...ids, ...candidates.map((person) => person.personId)]);
+    const displayName = getCommercialDisplayName(user, identityKeys);
     if (result.has(personId)) throw new Error('ambiguous_commercial_person');
     result.set(personId, {
       personId,
@@ -124,7 +150,10 @@ const buildActiveCommercialPeople = (users = [], people = []) => {
       crmAttendantIds: [],
       crmAttendantAliases: [],
       ...configured,
-      displayName: safeString(user.nome || user.nomeCompleto || user.fullName || user.displayName || user.name || user.email) || uid,
+      displayName: displayName || 'Usuário sem nome cadastrado',
+      hasValidDisplayName: Boolean(displayName),
+      identityKeys,
+      sdrUids: uniq([...candidates.map((person) => person.sdrUid), ...ids]),
       active: true,
       userUid: uid,
       sdrUid: configured?.sdrUid || uid,
@@ -243,7 +272,7 @@ const mergeWeeklyGoalPeople = (...configs) => {
   return Array.from(peopleById.values()).filter((row) => row.personId && row.role);
 };
 
-const resolveWeeklyGoalConfig = ({ goal = null, globalConfig = null, week } = {}) => {
+const resolveWeeklyGoalConfig = ({ goal = null, globalConfig = null, week, people = null } = {}) => {
   const currentWeek = week && typeof week === 'object' ? week : resolveCommercialWeek({ now: new Date() });
   const weekGoalRaw = goal?.weeklyGoals?.[currentWeek.weekKey] || null;
   const weekConfig =
@@ -292,7 +321,17 @@ const resolveWeeklyGoalConfig = ({ goal = null, globalConfig = null, week } = {}
         : teamTargetSource === 'global'
           ? safeNumber(globalDefaultConfig?.teamTarget)
           : 0;
-  const mergedPeople = mergeWeeklyGoalPeople(globalDefaultConfig, competenciaConfig, weekConfig);
+  // Reconcile each layer before merging so a week saved under users/UID overrides
+  // an older default keyed by growthPeople/personId without duplicating the person.
+  const indexes = people ? buildGrowthPeopleIndexes(people) : null;
+  const reconcile = (config) => !config || !indexes ? config : {
+    ...config,
+    people: config.people.slice().sort((a, b) => Number(indexes.byPersonId.has(a.personId)) - Number(indexes.byPersonId.has(b.personId))).map((row) => ({
+      ...row, personId: indexes.byIdentityKey.get(row.personId) || row.personId,
+      ...(row.personId === AGGREGATE_OTHERS_PERSON_ID ? { role: 'closer' } : {}),
+    })),
+  };
+  const mergedPeople = mergeWeeklyGoalPeople(...[globalDefaultConfig, competenciaConfig, weekConfig].map(reconcile));
   const peopleSource = Array.isArray(weekConfig?.people) && weekConfig.people.length > 0 ? 'week' : Array.isArray(competenciaConfig?.people) && competenciaConfig.people.length > 0 ? 'competencia' : Array.isArray(globalDefaultConfig?.people) && globalDefaultConfig.people.length > 0 ? 'global' : '';
   const weeklyGoal = {
     weekKey: currentWeek.weekKey,
@@ -324,6 +363,7 @@ const resolveWeeklyGoalConfig = ({ goal = null, globalConfig = null, week } = {}
 
 const buildGrowthPeopleIndexes = (people = []) => {
   const byPersonId = new Map();
+  const byIdentityKey = new Map();
   const byCrmAttendantId = new Map();
   const byCrmAlias = new Map();
   const bySdrUid = new Map();
@@ -331,6 +371,7 @@ const buildGrowthPeopleIndexes = (people = []) => {
   (Array.isArray(people) ? people : []).forEach((person) => {
     if (!person || !person.personId) return;
     byPersonId.set(person.personId, person);
+    uniq([person.personId, ...(person.identityKeys || [])]).forEach((key) => byIdentityKey.set(key, person.personId));
     person.crmAttendantIds.forEach((crmAttendantId) => {
       if (!byCrmAttendantId.has(crmAttendantId)) byCrmAttendantId.set(crmAttendantId, person.personId);
     });
@@ -339,12 +380,13 @@ const buildGrowthPeopleIndexes = (people = []) => {
       if (normalized && !byCrmAlias.has(normalized)) byCrmAlias.set(normalized, person.personId);
     });
     if (person.sdrUid && !bySdrUid.has(person.sdrUid)) bySdrUid.set(person.sdrUid, person.personId);
+    (person.sdrUids || []).forEach((uid) => { if (!bySdrUid.has(uid)) bySdrUid.set(uid, person.personId); });
     person.sdrEmails.forEach((email) => {
       const normalized = safeString(email).toLowerCase();
       if (normalized && !bySdrEmail.has(normalized)) bySdrEmail.set(normalized, person.personId);
     });
   });
-  return { byPersonId, byCrmAttendantId, byCrmAlias, bySdrUid, bySdrEmail };
+  return { byPersonId, byIdentityKey, byCrmAttendantId, byCrmAlias, bySdrUid, bySdrEmail };
 };
 
 const resolvePersonForBusiness = (business, indexes) => {
@@ -457,7 +499,7 @@ const buildUnknownSdrActors = (events = [], indexes, week) => {
   return Array.from(grouped.values()).sort((a, b) => b.totalEvents - a.totalEvents || b.meetingShows - a.meetingShows || safeString(a.sdrName).localeCompare(safeString(b.sdrName), 'pt-BR'));
 };
 
-const summarizeWeeklyCloserProgress = ({ businesses = [], goalPeople = [], indexes, week }) => {
+const summarizeWeeklyCloserProgress = ({ sales = [], goalPeople = [], indexes }) => {
   const rowsByPerson = new Map(
     goalPeople
       .filter((row) => row.role === 'closer' || row.role === 'both')
@@ -474,22 +516,20 @@ const summarizeWeeklyCloserProgress = ({ businesses = [], goalPeople = [], index
         },
       ])
   );
-  (Array.isArray(businesses) ? businesses : []).forEach((business) => {
-    const lastMovedAt = getBusinessLastMovedAt(business);
-    if (!lastMovedAt) return;
-    const dateKey = getSaoPauloDateKey(lastMovedAt);
-    if (!dateKey || dateKey < week.startDateKey || dateKey > week.endDateKey) return;
-    const pipelineKey = normalizeForecastKey(business?.stage?.pipeline?.name);
-    const stageKey = normalizeForecastKey(business?.stage?.name);
-    if (pipelineKey !== CONVERSION_PIPELINE_KEY || stageKey !== CLOSED_STAGE_KEY) return;
+  sales.forEach(({ business, value }) => {
     const bucket = resolveCloserBucketForBusiness(business, indexes);
-    if (!bucket.bucketPersonId || !rowsByPerson.has(bucket.bucketPersonId)) return;
+    if (!rowsByPerson.has(bucket.bucketPersonId)) {
+      bucket.bucketPersonId = AGGREGATE_OTHERS_PERSON_ID;
+      bucket.bucketIsAggregate = true;
+    }
+    if (!rowsByPerson.has(bucket.bucketPersonId)) {
+      rowsByPerson.set(bucket.bucketPersonId, { personId: bucket.bucketPersonId, role: 'closer', targetValue: 0, actualValue: 0, count: 0, breakdown: [] });
+    }
     const row = rowsByPerson.get(bucket.bucketPersonId);
-    const value = getDealValue(business);
     row.actualValue += value;
     row.count += 1;
     if (bucket.bucketIsAggregate) {
-      const label = safeString(bucket.attendantName || bucket.crmAttendantId || bucket.resolvedPerson?.displayName || 'Sem responsável');
+      const label = safeString(bucket.attendantName || bucket.resolvedPerson?.displayName || 'Sem responsável');
       const breakdownKey = safeString(bucket.crmAttendantId || label || 'missing_attendant_id');
       const breakdown = Array.isArray(row.breakdown) ? row.breakdown : [];
       const existing = breakdown.find((entry) => entry.key === breakdownKey);
@@ -538,13 +578,14 @@ const summarizeWeeklySdrProgress = ({ events = [], goalPeople = [], indexes, wee
 
 const attachPersonMeta = (rows = [], indexes) =>
   (Array.isArray(rows) ? rows : [])
+    .filter((row) => row.personId === AGGREGATE_OTHERS_PERSON_ID || isRankablePerson(indexes.byPersonId.get(row.personId)))
     .map((row) => {
       const person = indexes.byPersonId.get(row.personId);
       const targetValue = safeNumber(row.targetValue);
       const actualValue = safeNumber(row.actualValue);
       return {
         personId: row.personId,
-        displayName: person?.displayName || (row.personId === AGGREGATE_OTHERS_PERSON_ID ? AGGREGATE_OTHERS_DISPLAY_NAME : row.personId),
+        displayName: row.personId === AGGREGATE_OTHERS_PERSON_ID ? AGGREGATE_OTHERS_DISPLAY_NAME : person.displayName,
         role: row.role,
         photoURL: person?.photoURL || "",
         isAggregate: person?.isAggregate === true || row.personId === AGGREGATE_OTHERS_PERSON_ID,
@@ -572,11 +613,18 @@ const attachPersonMeta = (rows = [], indexes) =>
 const buildWeeklyGoalsReadModel = ({ goal = null, globalConfig = null, people = [], businesses = [], sdrEvents = [], now = new Date() } = {}) => {
   const week = resolveCommercialWeek({ now });
   const safeGoal = goal && typeof goal === 'object' ? goal : null;
-  const resolvedConfig = resolveWeeklyGoalConfig({ goal: safeGoal, globalConfig, week });
+  const resolvedConfig = resolveWeeklyGoalConfig({ goal: safeGoal, globalConfig, week, people });
   const weeklyGoal = resolvedConfig.weeklyGoal;
-  const indexes = buildGrowthPeopleIndexes(people);
-  const goalPeople = Array.isArray(weeklyGoal?.people) ? weeklyGoal.people : [];
-  const closerRows = attachPersonMeta(summarizeWeeklyCloserProgress({ businesses, goalPeople, indexes, week }), indexes);
+  const configuredPeople = Array.isArray(weeklyGoal?.people) ? weeklyGoal.people : [];
+  const roleByPerson = new Map(configuredPeople.map((row) => [row.personId, row.role]));
+  const indexes = buildGrowthPeopleIndexes(people.map((person) => ({ ...person,
+    roles: roleByPerson.has(person.personId) ? [roleByPerson.get(person.personId)] : person.roles,
+  })));
+  const goalPeople = configuredPeople.filter((row) => row.personId === AGGREGATE_OTHERS_PERSON_ID ||
+    isRankablePerson(indexes.byPersonId.get(row.personId))
+  ).map((row) => row.personId === AGGREGATE_OTHERS_PERSON_ID ? { ...row, role: 'closer' } : row);
+  const closedSales = summarizeClosedSales({ businesses, period: week });
+  const closerRows = attachPersonMeta(summarizeWeeklyCloserProgress({ sales: closedSales.sales, goalPeople, indexes }), indexes);
   const sdrRows = attachPersonMeta(summarizeWeeklySdrProgress({ events: sdrEvents, goalPeople, indexes, week }), indexes);
   return {
     commercialWeek: week,
@@ -584,6 +632,7 @@ const buildWeeklyGoalsReadModel = ({ goal = null, globalConfig = null, people = 
     weeklyGoalConfigSource: resolvedConfig.source,
     weeklyGoalConfigSourceDetails: resolvedConfig.sourceDetails || { teamTarget: '', people: '' },
     people,
+    closedSales: { actualValue: closedSales.actualValue, count: closedSales.count, pipelineKey: closedSales.pipelineKey },
     progress: {
       closers: closerRows,
       sdrs: sdrRows,
@@ -596,6 +645,8 @@ const buildWeeklyGoalsReadModel = ({ goal = null, globalConfig = null, people = 
 };
 
 module.exports = {
+  getCommercialDisplayName,
+  getGrowthGoalBuckets,
   isCommercialUser,
   buildActiveCommercialPeople,
   GROWTH_PEOPLE_COLLECTION,

@@ -257,11 +257,15 @@ const upsertMirrorBatch = async ({ businesses = [], runId = null, reconciledRunI
   };
 };
 
-const fetchMirroredBusinesses = async ({ lastMovedAfter = "", startDateKey = "", status = "", includeDeleted = false, pageSize = DEFAULT_LOCAL_PAGE_SIZE } = {}) => {
+const fetchMirroredBusinesses = async ({ lastMovedAfter = "", startDateKey = "", status = "", includeDeleted = false, includeClosings = false, pageSize = DEFAULT_LOCAL_PAGE_SIZE } = {}) => {
   const filters = [];
   if (!includeDeleted) filters.push("deleted_at=is.null");
   const since = safeString(lastMovedAfter) || (safeString(startDateKey) ? `${safeString(startDateKey)}T00:00:00-03:00` : "");
-  if (since) filters.push(`last_moved_at=gte.${encodeURIComponent(since)}`);
+  // Closing timestamps have legacy aliases in payload; include closed records
+  // regardless of last movement, then apply the shared closing-date rule.
+  if (since) filters.push(includeClosings
+    ? `or=${encodeURIComponent(`(last_moved_at.gte.${since},stage_key.eq.fechado)`)}`
+    : `last_moved_at=gte.${encodeURIComponent(since)}`);
   if (safeString(status)) filters.push(`status=eq.${encodeURIComponent(safeString(status))}`);
   const safePageSize = Math.max(1, Math.min(Number(pageSize) || DEFAULT_LOCAL_PAGE_SIZE, 5000));
   let offset = 0;

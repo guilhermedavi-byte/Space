@@ -20,6 +20,8 @@ const {
   buildWeeklyGoalsReadModel,
   normalizeWeeklyGoalConfigEntry,
   buildActiveCommercialPeople,
+  getGrowthGoalBuckets,
+  AGGREGATE_OTHERS_PERSON_ID,
 } = require("./_lib/growth-people");
 const { triggerContractSignedOnboarding } = require("./_lib/pedagogico-n8n");
 const {
@@ -610,36 +612,7 @@ const getMonthKeySaoPaulo = (date) => {
   }
 };
 
-const BUSINESS_CLOSING_DATE_FIELDS = [
-  "wonAt",
-  "wonDate",
-  "gainedAt",
-  "gainAt",
-  "soldAt",
-  "soldDate",
-  "saleAt",
-  "closedAt",
-  "finishedAt",
-  "statusChangedAt",
-  "stageChangedAt",
-  "lastMovedAt",
-];
-
-const getBusinessWonLostDate = (business) => {
-  // DataCrazy currently exposes `statusChangedAt` for won businesses. Explicit
-  // won/sold/closed fields stay ahead of it, while lastMovedAt is only a legacy
-  // fallback for records that do not carry a dedicated status timestamp.
-  const b = business && typeof business === "object" ? business : {};
-  for (const field of BUSINESS_CLOSING_DATE_FIELDS) {
-    const raw = b[field];
-    if (!raw) continue;
-    const d = new Date(String(raw));
-    if (!(d instanceof Date) || Number.isNaN(d.getTime())) continue;
-    return { date: d, field };
-  }
-
-  return { date: null, field: "" };
-};
+const { getBusinessClosingDate: getBusinessWonLostDate, summarizeClosedSales } = require("./_lib/commercial-sales");
 
 const getBusinessId = (business) => {
   const b = business && typeof business === "object" ? business : {};
@@ -875,7 +848,7 @@ const normalizeWeeklyGoalPayload = (value) => {
   Object.entries(rawPeople).forEach(([personIdRaw, row]) => {
     const personId = String(personIdRaw || "").trim();
     if (!personId || !row || typeof row !== "object" || Array.isArray(row)) return;
-    const role = String(row.role || "").trim().toLowerCase();
+    const role = personId === AGGREGATE_OTHERS_PERSON_ID ? "closer" : String(row.role || "").trim().toLowerCase();
     const targetValue = Number(row.targetValue);
     if (!["closer", "sdr", "both"].includes(role)) return;
     if (!Number.isFinite(targetValue) || targetValue < 0) return;
@@ -1052,13 +1025,14 @@ const buildGrowthMetricsPayload = async ({ crm, idToken, periodStart = "", perio
   const closedDeals = filteredAll.filter((business) => normalizeKey(business?.stage?.name) === normalizeKey("Fechado"));
   const dateFieldCounts = new Map();
   let closedDealsWithoutClosingDate = 0;
-  const closedDealsMonth = closedDeals.filter((b) => {
+  closedDeals.forEach((b) => {
     const info = getBusinessWonLostDate(b);
     const field = info.field || "unknown";
     dateFieldCounts.set(field, (dateFieldCounts.get(field) || 0) + 1);
     if (!info.date) closedDealsWithoutClosingDate += 1;
-    return info.date ? isDateWithinCommercialPeriod(info.date, commercialPeriod) : false;
   });
+  const closedSales = summarizeClosedSales({ businesses, period: commercialPeriod, pipelineKey: pipelineTarget });
+  const closedDealsMonth = closedSales.sales.map((sale) => sale.business);
 
   const dateFieldUsed =
     Array.from(dateFieldCounts.entries())
@@ -1073,7 +1047,7 @@ const buildGrowthMetricsPayload = async ({ crm, idToken, periodStart = "", perio
     return !closedDealsMonthIds.has(id);
   });
 
-  const realizado = closedDealsMonth.reduce((sum, b) => sum + getDealValueForecast(b), 0);
+  const realizado = closedSales.actualValue;
   const totalVendas = closedDealsMonth.length;
   const ticketMedio = totalVendas > 0 ? realizado / totalVendas : 0;
   const closedCreatedOutsidePeriod = closedDealsMonth.filter((business) => !wasCreatedInPeriod(business));
@@ -1433,8 +1407,8 @@ const handleGrowthGoalsApi = async (req, res, url) => {
           if (!usersResponse.ok) throw new Error("commercial_users_list_failed");
           const users = (usersResponse.documents || []).map((doc) => ({ ...decodeFields(doc), firestoreDocId: getDocIdFromName(doc.name) }));
           payload.people = buildActiveCommercialPeople(users, people);
-          // Keep legacy/aggregate identities available for existing progress.
-          progressPeople = [...new Map([...people, ...payload.people].map((person) => [person.personId, person])).values()];
+          payload.goalBuckets = getGrowthGoalBuckets();
+          progressPeople = [...payload.people, ...payload.goalBuckets];
         }
 
         if (includeWeeklyProgress) {

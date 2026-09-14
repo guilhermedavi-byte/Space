@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const { createRequire } = require('node:module');
-const { buildActiveCommercialPeople, buildWeeklyGoalsReadModel, decodeWeeklyGoalsMap } = require('../api/_lib/growth-people');
+const { buildActiveCommercialPeople, buildWeeklyGoalsReadModel, decodeWeeklyGoalsMap, getGrowthGoalBuckets } = require('../api/_lib/growth-people');
 const firestore = require('../_lib/firestore-rest');
 
 const users = [
@@ -45,9 +45,11 @@ test('goals join by stable identity and selected week, retaining zero targets', 
   }
 });
 
-test('homonyms are distinct users and conflicting identity links fail instead of overwriting goals', () => {
+test('homonyms stay distinct and duplicate configurations resolve to one real user', () => {
   assert.equal(buildActiveCommercialPeople([{ ...users[0] }, { ...users[0], firestoreDocId: 'homonym' }], []).length, 2);
-  assert.throws(() => buildActiveCommercialPeople(users, [...people, person('duplicate', { userUid: 'existing-user' })]), /ambiguous_commercial_person/);
+  const joined = buildActiveCommercialPeople(users, [...people, person('duplicate', { userUid: 'existing-user' })]);
+  assert.equal(joined.length, 3);
+  assert.ok(joined.find((row) => row.userUid === 'existing-user').identityKeys.includes('existing-person'));
 });
 
 const makeApi = ({ missingGoal = false, failRead = false, failUsers = false } = {}) => {
@@ -119,6 +121,7 @@ test('GET includes active users even without a month document and never writes',
     assert.equal(res.statusCode, 200);
     assert.deepEqual(res.body.people.map((person) => person.personId), ['new-user', 'existing-person', 'legacy-person']);
     assert.equal(res.body.goal === null, missingGoal);
+    assert.deepEqual(res.body.goalBuckets.map((bucket) => [bucket.personId, bucket.roles, bucket.isAggregate]), [['outros', ['closer'], true]]);
     assert.ok(res.body.weeklyReadModel.people.some((person) => person.personId === 'new-user'));
     assert.equal(api.calls.filter((call) => call.path === 'users').length, 2, 'reads every user page');
     assert.ok(api.calls.every((call) => call.method === 'GET'));
@@ -130,7 +133,7 @@ test('POST saves new user with SDR or Closer, preserving hidden goals, other wee
     const api = makeApi();
     const res = await api.request('POST', { competencia: api.month, weeklyGoal: {
       weekKey: 'wk_2099-09-16', startDateKey: '2099-09-16', endDateKey: '2099-09-22',
-      people: { 'new-user': { role, targetValue: 30 }, 'existing-person': { role: 'closer', targetValue: 8000 } },
+      people: { 'new-user': { role, targetValue: 30 }, 'existing-person': { role: 'closer', targetValue: 8000 }, outros: { role: 'sdr', targetValue: 5000 } },
     } });
     assert.equal(res.statusCode, 200);
     const saved = api.getSaved();
@@ -139,7 +142,8 @@ test('POST saves new user with SDR or Closer, preserving hidden goals, other wee
     const entries = saved.weeklyGoals['wk_2099-09-16'].individualMonthlyGoals;
     assert.equal(entries['new-user'].role, role);
     assert.equal(entries['inactive-person'].targetValue, 42);
-    assert.equal(entries.outros.targetValue, 4000);
+    assert.equal(entries.outros.targetValue, 5000);
+    assert.equal(entries.outros.role, 'closer');
     assert.equal(entries['existing-person'].targetValue, 8000);
     assert.equal((await api.request()).body.goal.weeklyGoals['wk_2099-09-16'].people.length, 4);
     assert.ok(api.calls.filter((call) => call.method === 'PATCH').every((call) => call.path === `growthGoals/${api.month}`));
@@ -169,12 +173,14 @@ test('modal renders unconfigured users, retains saved inputs and posts only afte
     ['[data-goal-valor]', new Input()],
     ['[data-goal-week-select]', new Select(week.startDateKey)],
     ['[data-goal-weekly-list]', new Element()],
+    ['[data-goal-buckets-list]', new Element()],
   ]);
   const list = elements.get('[data-goal-weekly-list]');
+  const buckets = elements.get('[data-goal-buckets-list]');
   const form = new Form();
   form.querySelector = (selector) => elements.get(selector) || null;
   // Minimal DOM adapter reads the actual rendered inputs for the save handler.
-  form.querySelectorAll = () => [...list.innerHTML.matchAll(/data-goal-weekly-row="([^"]+)"([\s\S]*?)(?=<div class="growth-goal-weekly-row"|$)/g)].map((match) => {
+  form.querySelectorAll = () => [...(list.innerHTML + buckets.innerHTML).matchAll(/data-goal-weekly-row="([^"]+)"([\s\S]*?)(?=<div class="growth-goal-weekly-row"|$)/g)].map((match) => {
     const row = new Element();
     row.getAttribute = () => match[1];
     const role = match[2].match(/<option value="([^"]+)" selected>/)?.[1];
@@ -204,11 +210,15 @@ test('modal renders unconfigured users, retains saved inputs and posts only afte
   });
   modal.onPrimary();
   assert.equal(requests.length, 0, 'cannot save while loading');
-  resolvePayload({ people: buildActiveCommercialPeople(users, people), weeklyReadModel: {
-    weeklyGoal: { people: [{ personId: 'existing-person', role: 'closer', targetValue: 8123.45 }] },
+  resolvePayload({ people: buildActiveCommercialPeople(users, people), goalBuckets: getGrowthGoalBuckets(), weeklyReadModel: {
+    weeklyGoal: { people: [{ personId: 'existing-person', role: 'closer', targetValue: 8123.45 }, { personId: 'outros', role: 'closer', targetValue: 4000 }] },
   } });
   await new Promise(setImmediate);
   assert.match(list.innerHTML, /Luis Perdigão/);
+  assert.doesNotMatch(list.innerHTML, /data-goal-weekly-row="outros"/);
+  assert.match(buckets.innerHTML, /data-goal-weekly-role disabled/);
+  assert.match(buckets.innerHTML, /value="4000"/);
+  assert.doesNotMatch(buckets.innerHTML, /value="sdr"/);
   assert.doesNotMatch(list.innerHTML, /inactive-person/);
   assert.equal((list.innerHTML.match(/data-goal-weekly-row="new-user"/g) || []).length, 1);
   assert.match(list.innerHTML, /value="8123.45"/);
@@ -217,6 +227,7 @@ test('modal renders unconfigured users, retains saved inputs and posts only afte
   await new Promise(setImmediate);
   assert.equal(requests.length, 1);
   assert.equal(requests[0].method, 'POST');
+  assert.deepEqual(requests[0].body.weeklyGoal.people.outros, { role: 'closer', targetValue: 4000 });
   assert.equal(requests[0].body.competencia, week.competencia);
   assert.deepEqual(requests[0].body.weeklyGoal.people['new-user'], { role: 'sdr', targetValue: 25 });
   assert.deepEqual(requests[0].body.weeklyGoal.people['existing-person'], { role: 'closer', targetValue: 8123.45 });

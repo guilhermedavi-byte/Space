@@ -8,6 +8,8 @@ const { createLiveTvAccess } = require("./live-tv-access");
 const { resolveCommercialPeriod, formatSaoPauloDateKey, getCalendarMonthBounds } = require("./commercial-period");
 const {
   buildWeeklyGoalsReadModel,
+  buildActiveCommercialPeople,
+  getGrowthGoalBuckets,
   decodeGrowthPeopleDoc,
   decodeGrowthConfigDoc,
   decodeWeeklyGoalsMap,
@@ -24,6 +26,8 @@ const {
 const { getDealValue, normalizeKey } = require("../../_lib/forecast-service");
 const { fetchMirroredBusinesses, getSyncState, isDatacrazyMirrorEnabled } = require("./datacrazy-mirror");
 
+const { summarizeClosedSales, getBusinessClosingDate, chooseCommercialPipeline } = require("./commercial-sales");
+
 const DATASTORE_SCOPE = "https://www.googleapis.com/auth/datastore";
 const GOALS_COLLECTION = "growthGoals";
 const GROWTH_PEOPLE_COLLECTION = "growthPeople";
@@ -38,7 +42,7 @@ const CRM_LIVE_COOKIE_SCOPE = "crm-live:read";
 const CRM_LIVE_COOKIE_MAX_AGE_SECONDS = 90 * 24 * 60 * 60;
 const CRM_CACHE_TTL_MS = 2 * 60 * 1000;
 const SDR_CACHE_TTL_MS = 60 * 1000;
-const CONVERSION_PIPELINE_FALLBACK_KEY = normalizeKey("Conversão");
+const CRM_LIVE_READ_MODEL_VERSION = 2;
 const CLOSED_STAGE_KEY = normalizeKey("Fechado");
 
 const safeString = (value) => (value == null ? "" : String(value).trim());
@@ -336,32 +340,22 @@ const loadCurrentGoal = async ({ now = new Date() } = {}) => {
   }
 };
 
+const loadApplicableWeeklyGoal = async ({ goal, now }) => {
+  const monthKey = resolveCommercialWeek({ now }).startDateKey.slice(0, 7);
+  const loadedMonth = safeString(goal?.competencia) || getCalendarMonthBounds(now).monthKey;
+  return monthKey === loadedMonth ? goal : loadGoalByMonthKey(monthKey);
+};
+
 const loadGrowthPeople = async () => {
-  const docs = await listCollectionAsAdmin(GROWTH_PEOPLE_COLLECTION, { pageSize: 1000 });
-  const people = docs
-    .map((row) => decodeGrowthPeopleDoc({ name: `${GROWTH_PEOPLE_COLLECTION}/${encodeURIComponent(row.firestoreDocId || row.id)}`, fields: encodeFields(row).fields }))
-    .filter(Boolean)
-    .filter((row) => row.active !== false);
-  const userUids = [...new Set(people.map((row) => safeString(row.userUid)).filter(Boolean))];
-  if (!userUids.length) return people;
-  const photoByUid = new Map();
-  await Promise.all(
-    userUids.map(async (uid) => {
-      try {
-        const userDoc = await getDocumentAsAdmin(`users/${encodeURIComponent(uid)}`);
-        const photoURL = safeString(userDoc?.photoURL || userDoc?.photoUrl);
-        if (photoURL) photoByUid.set(uid, photoURL);
-      } catch (error) {
-        if (Number(error?.status) !== 404) {
-          console.warn("[crm-live] user photo lookup failed", { uid, status: Number(error?.status) || null });
-        }
-      }
-    })
-  );
-  return people.map((row) => ({
-    ...row,
-    photoURL: safeString(row.photoURL) || photoByUid.get(safeString(row.userUid)) || "",
-  }));
+  const [docs, users] = await Promise.all([
+    listCollectionAsAdmin(GROWTH_PEOPLE_COLLECTION, { pageSize: 1000 }),
+    listCollectionAsAdmin("users", { pageSize: 1000 }),
+  ]);
+  const configurations = docs.map((row) => decodeGrowthPeopleDoc({
+    name: `${GROWTH_PEOPLE_COLLECTION}/${encodeURIComponent(row.firestoreDocId || row.id)}`,
+    fields: encodeFields(row).fields,
+  })).filter(Boolean);
+  return [...buildActiveCommercialPeople(users, configurations), ...getGrowthGoalBuckets()];
 };
 
 const decodeSdrEventRow = (row = {}) => {
@@ -392,7 +386,7 @@ const loadSdrEventsRange = async ({ fromKey, toKey } = {}) => {
   return rows.map(decodeSdrEventRow).filter(Boolean);
 };
 
-const fetchCrmBusinessesLegacy = async ({ startDateKey, lastMovedAfter = "", status = "" } = {}) => {
+const fetchCrmBusinessesLegacy = async ({ startDateKey, lastMovedAfter = "", status = "", includeClosings = false } = {}) => {
   const apiKey = safeString(process.env.CRM_API_KEY);
   const base = safeString(process.env.CRM_API_BASE_URL).replace(/\/+$/, "");
   if (!apiKey || !base) {
@@ -400,7 +394,10 @@ const fetchCrmBusinessesLegacy = async ({ startDateKey, lastMovedAfter = "", sta
     error.status = 500;
     throw error;
   }
-  const since = safeString(lastMovedAfter) || formatDateKeyStartIso(startDateKey);
+  // Financial windows cannot rely on movement timestamps: closed deals may have
+  // a dedicated closing date and no recent movement. The legacy integration
+  // only uses a movement filter, so financial reads must omit that restriction.
+  const since = includeClosings ? "" : safeString(lastMovedAfter) || formatDateKeyStartIso(startDateKey);
   const take = 200;
   let skip = 0;
   let pages = 0;
@@ -453,9 +450,9 @@ const fetchCrmBusinessesLegacy = async ({ startDateKey, lastMovedAfter = "", sta
   };
 };
 
-const fetchCrmBusinesses = async ({ startDateKey, lastMovedAfter = "", status = "" } = {}) => {
+const fetchCrmBusinesses = async ({ startDateKey, lastMovedAfter = "", status = "", includeClosings = false } = {}) => {
   if (isDatacrazyMirrorEnabled()) {
-    const result = await fetchMirroredBusinesses({ startDateKey, lastMovedAfter, status });
+    const result = await fetchMirroredBusinesses({ startDateKey, lastMovedAfter, status, includeClosings });
     const syncState = await getSyncState("incremental").catch(() => null);
     return {
       businesses: result.businesses || [],
@@ -465,16 +462,12 @@ const fetchCrmBusinesses = async ({ startDateKey, lastMovedAfter = "", status = 
       },
     };
   }
-  return fetchCrmBusinessesLegacy({ startDateKey, lastMovedAfter, status });
+  return fetchCrmBusinessesLegacy({ startDateKey, lastMovedAfter, status, includeClosings });
 };
 
-const fetchCrmWindow = async ({ startDateKey } = {}) => fetchCrmBusinesses({ startDateKey });
+const fetchCrmWindow = async ({ startDateKey } = {}) => fetchCrmBusinesses({ startDateKey, includeClosings: true });
 
-const choosePipelineKey = (businesses = []) => {
-  const preferred = normalizeKey("Funil principal");
-  const hasPreferred = businesses.some((business) => normalizeKey(extractPipelineName(business)) === preferred);
-  return hasPreferred ? preferred : CONVERSION_PIPELINE_FALLBACK_KEY;
-};
+const choosePipelineKey = chooseCommercialPipeline;
 
 const formatBusinessDateKey = (business) => {
   const movedAt = extractBusinessLastMovedAt(business);
@@ -496,18 +489,18 @@ const buildMonthSummary = ({ businesses = [], goal = null, now = new Date() } = 
     periodEnd: safeString(goal?.periodEnd),
   });
   const monthWindow = filterWindowBusinesses({ businesses, period });
-  const pipelineKey = choosePipelineKey(monthWindow);
-  const filtered = monthWindow.filter((business) => normalizeKey(extractPipelineName(business)) === pipelineKey);
-  const closed = filtered.filter((business) => normalizeKey(extractStageName(business)) === CLOSED_STAGE_KEY);
-  const realized = closed.reduce((sum, business) => sum + getDealValue(business), 0);
+  const closedSales = summarizeClosedSales({ businesses, period });
+  const pipelineKey = closedSales.pipelineKey;
+  const closed = closedSales.sales.map((sale) => sale.business);
+  const realized = closedSales.actualValue;
   const totalVendas = closed.length;
   const meta = Number(goal?.valorMeta || 0);
   const percent = meta > 0 ? (realized / meta) * 100 : 0;
   const latestSale = closed
     .slice()
     .sort((left, right) => {
-      const leftMs = extractBusinessLastMovedAt(left)?.getTime() || 0;
-      const rightMs = extractBusinessLastMovedAt(right)?.getTime() || 0;
+      const leftMs = getBusinessClosingDate(left).date?.getTime() || 0;
+      const rightMs = getBusinessClosingDate(right).date?.getTime() || 0;
       return rightMs - leftMs;
     })[0] || null;
 
@@ -528,7 +521,7 @@ const buildMonthSummary = ({ businesses = [], goal = null, now = new Date() } = 
           plano: extractBusinessPlanName(latestSale),
           valor: getDealValue(latestSale),
           closer: extractBusinessAttendantName(latestSale) || "Sem responsável",
-          when: extractBusinessLastMovedAt(latestSale)?.toISOString() || "",
+          when: getBusinessClosingDate(latestSale).date?.toISOString() || "",
         }
       : null,
     pipelineKey,
@@ -541,8 +534,8 @@ const buildWeeklyTeamSummary = ({ weeklyReadModel }) => {
   const sdrRows = Array.isArray(weeklyReadModel?.progress?.sdrs) ? weeklyReadModel.progress.sdrs : [];
   const configuredCloserTarget = safeNumber(weeklyReadModel?.weeklyGoal?.teamTarget);
   const closersTarget = configuredCloserTarget > 0 ? configuredCloserTarget : closerRows.reduce((sum, row) => sum + safeNumber(row.targetValue), 0);
-  const closersActual = closerRows.reduce((sum, row) => sum + safeNumber(row.actualValue), 0);
-  const closersCount = closerRows.reduce((sum, row) => sum + safeNumber(row.count), 0);
+  const closersActual = weeklyReadModel?.closedSales ? safeNumber(weeklyReadModel.closedSales.actualValue) : closerRows.reduce((sum, row) => sum + safeNumber(row.actualValue), 0);
+  const closersCount = weeklyReadModel?.closedSales ? safeNumber(weeklyReadModel.closedSales.count) : closerRows.reduce((sum, row) => sum + safeNumber(row.count), 0);
   const sdrTarget = sdrRows.reduce((sum, row) => sum + safeNumber(row.targetValue), 0);
   const sdrActual = sdrRows.reduce((sum, row) => sum + safeNumber(row.actualValue), 0);
   const sdrCount = sdrRows.reduce((sum, row) => sum + safeNumber(row.count), 0);
@@ -634,15 +627,10 @@ const resolveGoalCommercialPeriod = ({ goal = null, now = new Date() } = {}) =>
   });
 
 const sumClosedRevenueForPeriod = ({ businesses = [], period, pipelineKey = "" } = {}) =>
-  filterWindowBusinesses({ businesses, period })
-    .filter((business) => normalizeKey(extractPipelineName(business)) === pipelineKey)
-    .filter((business) => normalizeKey(extractStageName(business)) === CLOSED_STAGE_KEY)
-    .reduce((sum, business) => sum + getDealValue(business), 0);
+  summarizeClosedSales({ businesses, period, pipelineKey }).actualValue;
 
 const countClosedSalesForPeriod = ({ businesses = [], period, pipelineKey = "" } = {}) =>
-  filterWindowBusinesses({ businesses, period })
-    .filter((business) => normalizeKey(extractPipelineName(business)) === pipelineKey)
-    .filter((business) => normalizeKey(extractStageName(business)) === CLOSED_STAGE_KEY).length;
+  summarizeClosedSales({ businesses, period, pipelineKey }).count;
 
 const buildWeeklyProjection = ({ weeklyTeam = {}, commercialWeek, now = new Date() } = {}) => {
   const actual = safeNumber(weeklyTeam?.actualValue);
@@ -772,10 +760,8 @@ const buildPreviousDayHighlights = ({ goal, globalConfig = null, people, busines
   const pipelineKey = choosePipelineKey(businesses);
 
   const closerDaily = new Map();
-  filterWindowBusinesses({ businesses, period: { startDateKey: previousDayKey, endDateKey: previousDayKey } })
-    .filter((business) => normalizeKey(extractPipelineName(business)) === pipelineKey)
-    .filter((business) => normalizeKey(extractStageName(business)) === CLOSED_STAGE_KEY)
-    .forEach((business) => {
+  summarizeClosedSales({ businesses, period: { startDateKey: previousDayKey, endDateKey: previousDayKey }, pipelineKey }).sales
+    .forEach(({ business }) => {
       const bucket = resolveCloserBucketForBusiness(business, indexes);
       if (bucket.bucketPersonId === AGGREGATE_OTHERS_PERSON_ID) return;
       const row = Array.isArray(weeklyReadModel?.progress?.closers)
@@ -863,6 +849,7 @@ const buildUnresolvedBuckets = ({ businesses = [], people = [], goal, globalConf
 };
 
 const buildCrmLiveCrmSlice = async ({ goal, globalConfig = null, people, now = new Date() } = {}) => {
+  const weeklyGoal = await loadApplicableWeeklyGoal({ goal, now });
   const monthPeriod = resolveCommercialPeriod({
     now,
     periodStart: safeString(goal?.periodStart),
@@ -879,7 +866,9 @@ const buildCrmLiveCrmSlice = async ({ goal, globalConfig = null, people, now = n
   const previousPeriod = previousMonthKey
     ? resolveGoalCommercialPeriod({ goal: previousGoal, now: new Date(`${previousMonthKey}-15T12:00:00-03:00`) })
     : null;
-  const previousCrm = previousPeriod ? await fetchCrmWindow({ startDateKey: previousPeriod.startDateKey }) : { businesses: [], pagination: null };
+  // The financial query includes every closing, including prior periods; reuse
+  // it instead of downloading the same closing history a second time.
+  const previousCrm = crm;
   const monthComparison = previousPeriod
     ? buildMonthVsPrevious({
         currentPeriod: monthSummary.period,
@@ -892,7 +881,7 @@ const buildCrmLiveCrmSlice = async ({ goal, globalConfig = null, people, now = n
       })
     : null;
   const weeklyReadModel = buildWeeklyGoalsReadModel({
-    goal,
+    goal: weeklyGoal,
     globalConfig,
     people,
     businesses: crm.businesses,
@@ -917,6 +906,7 @@ const buildCrmLiveCrmSlice = async ({ goal, globalConfig = null, people, now = n
   });
   const weeklyTeam = buildWeeklyTeamSummary({ weeklyReadModel });
   return {
+    readModelVersion: CRM_LIVE_READ_MODEL_VERSION,
     generatedAt: new Date().toISOString(),
     month: monthSummary,
     weekly: {
@@ -959,12 +949,13 @@ const buildCrmLiveCrmSlice = async ({ goal, globalConfig = null, people, now = n
 };
 
 const buildCrmLiveSdrSlice = async ({ goal, globalConfig = null, people, now = new Date() } = {}) => {
+  const weeklyGoal = await loadApplicableWeeklyGoal({ goal, now });
   const sdrWeek = resolveCommercialWeek({ now });
   const yesterdayKey = formatSaoPauloDateKey(new Date(now.getTime() - 86400000));
   const sdrFromKey = sdrWeek.startDateKey < yesterdayKey ? sdrWeek.startDateKey : yesterdayKey;
   const sdrEvents = await loadSdrEventsRange({ fromKey: sdrFromKey, toKey: sdrWeek.endDateKey });
   const weeklyReadModel = buildWeeklyGoalsReadModel({
-    goal,
+    goal: weeklyGoal,
     globalConfig,
     people,
     businesses: [],
@@ -980,6 +971,7 @@ const buildCrmLiveSdrSlice = async ({ goal, globalConfig = null, people, now = n
     now,
   });
   return {
+    readModelVersion: CRM_LIVE_READ_MODEL_VERSION,
     generatedAt: new Date().toISOString(),
     weekly: {
       commercialWeek: weeklyReadModel.commercialWeek,
@@ -1449,6 +1441,7 @@ const listAccessTokens = async () => liveTvAccess.listAccessTokens();
 const revokeAccessToken = async ({ tokenId } = {}) => liveTvAccess.revokeAccessToken({ tokenId });
 
 module.exports = {
+  CRM_LIVE_READ_MODEL_VERSION,
   CRM_LIVE_ACCESS_COLLECTION,
   CRM_LIVE_CACHE_COLLECTION,
   CRM_LIVE_DAILY_ROLLUPS_COLLECTION,
@@ -1467,6 +1460,7 @@ module.exports = {
   buildCrmLiveSdrSlice,
   buildWeeklyTeamSummary,
   loadCurrentGoal,
+  loadApplicableWeeklyGoal,
   loadGoalByMonthKey,
   loadGrowthPeople,
   loadCrmLiveDefaultsConfig,

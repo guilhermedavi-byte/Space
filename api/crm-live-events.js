@@ -8,6 +8,7 @@ const {
   buildWeeklyTeamSummary,
   fetchCrmBusinesses,
   loadCurrentGoal,
+  loadApplicableWeeklyGoal,
   loadCrmLiveDefaultsConfig,
   loadGrowthPeople,
   loadSdrEventsRange,
@@ -17,6 +18,8 @@ const {
   writeDailyRollups,
   writeStateDoc,
 } = require("./_lib/crm-live");
+
+const { summarizeClosedSales } = require("./_lib/commercial-sales");
 
 const DETECTOR_DOC_ID = "detector";
 const EVENT_QUEUE_DURATION_MS = 20_000;
@@ -50,22 +53,7 @@ const safeNumber = (value) => {
 };
 
 const buildMonthSummaryForDetector = ({ businesses = [], goal = null, period }) => {
-  const filtered = (Array.isArray(businesses) ? businesses : []).filter((business) => {
-    const movedAt = business?.lastMovedAt ? new Date(String(business.lastMovedAt)) : null;
-    if (!movedAt || Number.isNaN(movedAt.getTime())) return false;
-    const key = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "America/Sao_Paulo",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(movedAt);
-    return key >= period.startDateKey && key <= period.endDateKey;
-  });
-  const realized = filtered.reduce((sum, business) => {
-    const raw = Number(business?.total ?? business?.value);
-    if (Number.isFinite(raw) && raw > 0) return sum + raw;
-    return sum;
-  }, 0);
+  const realized = summarizeClosedSales({ businesses, period }).actualValue;
   const meta = safeNumber(goal?.valorMeta);
   return {
     summary: {
@@ -95,6 +83,7 @@ module.exports = async (req, res) => {
       readStateDoc(CRM_LIVE_EVENTS_COLLECTION, DETECTOR_DOC_ID),
     ]);
 
+    const weeklyGoal = await loadApplicableWeeklyGoal({ goal, now });
     const monthPeriod = resolveCommercialPeriod({
       now,
       periodStart: String(goal?.periodStart || ""),
@@ -105,7 +94,7 @@ module.exports = async (req, res) => {
     const cursor = String(previousState?.cursor || "").trim();
 
     const [wonMonth, wonSinceCursor] = await Promise.all([
-      fetchCrmBusinesses({ startDateKey: monthPeriod.startDateKey, status: "won" }),
+      fetchCrmBusinesses({ startDateKey: monthPeriod.startDateKey, includeClosings: true }),
       fetchCrmBusinesses({
         startDateKey: monthPeriod.startDateKey,
         lastMovedAfter: cursor,
@@ -114,7 +103,7 @@ module.exports = async (req, res) => {
     ]);
 
     const weeklyProbe = buildWeeklyGoalsReadModel({
-      goal,
+      goal: weeklyGoal,
       globalConfig,
       people,
       businesses: wonMonth.businesses,
@@ -127,7 +116,7 @@ module.exports = async (req, res) => {
       toKey: currentWeek.endDateKey,
     });
     const weeklyReadModel = buildWeeklyGoalsReadModel({
-      goal,
+      goal: weeklyGoal,
       globalConfig,
       people,
       businesses: wonMonth.businesses,

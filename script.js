@@ -14729,6 +14729,12 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
         </div>
       </div>
 
+      <div class="auth-field">
+        <div class="auth-label">META NÃO ATRIBUÍDA</div>
+        <div class="auth-field-hint">Parcela da meta dos Closers não atribuída a uma pessoa.</div>
+        <div class="growth-goal-weekly-list" data-goal-buckets-list></div>
+      </div>
+
       <div class="auth-form-error" data-goal-error hidden>Não foi possível salvar agora.</div>
       <div class="auth-form-success" data-goal-success hidden>Meta salva com sucesso.</div>
     </form>
@@ -14901,6 +14907,7 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
 
     const weekSelectEl = form?.querySelector("[data-goal-week-select]");
     const weeklyListEl = form?.querySelector("[data-goal-weekly-list]");
+    const bucketsListEl = form?.querySelector("[data-goal-buckets-list]");
     const weekStorageHintEl = form?.querySelector("[data-goal-week-storage-hint]");
     const weekConfigSourceHintEl = form?.querySelector("[data-goal-week-config-source-hint]");
     const unresolvedWrapEl = form?.querySelector("[data-goal-unresolved-wrap]");
@@ -14919,6 +14926,7 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
       if (!(weeklyListEl instanceof HTMLElement)) return;
       const payload = modalState.weekPayload;
       const people = Array.isArray(payload?.people) ? payload.people.filter((person) => person && person.active !== false) : [];
+      const buckets = Array.isArray(payload?.goalBuckets) ? payload.goalBuckets.filter((bucket) => bucket?.isAggregate === true) : [];
       const selectedWeekGoal = payload?.weeklyReadModel?.weeklyGoal && Array.isArray(payload.weeklyReadModel.weeklyGoal.people) ? payload.weeklyReadModel.weeklyGoal.people : [];
       const currentGoalMap = new Map(selectedWeekGoal.map((row) => [String(row.personId || ""), row]));
       const previousGoalPeople = Array.isArray(modalState.previousWeekGoal?.people) ? modalState.previousWeekGoal.people : [];
@@ -14928,7 +14936,7 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
         ...(Array.isArray(payload?.weeklyReadModel?.progress?.sdrs) ? payload.weeklyReadModel.progress.sdrs : []),
       ];
       const progressMap = new Map(progressRows.map((row) => [String(row.personId || ""), row]));
-      modalState.weeklyRows = people
+      modalState.weeklyRows = [...people, ...buckets]
         .slice()
         .sort((a, b) => {
           const orderDiff = Number(a?.sortOrder || 0) - Number(b?.sortOrder || 0);
@@ -14939,14 +14947,12 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
           const personId = String(person.personId || "");
           const currentRow = currentGoalMap.get(personId);
           const previousRow = previousGoalMap.get(personId);
-          const role = String(currentRow?.role || previousRow?.role || getDefaultWeeklyRoleForPerson(person)).trim().toLowerCase();
+          const role = person.isAggregate ? "closer" : String(currentRow?.role || previousRow?.role || getDefaultWeeklyRoleForPerson(person)).trim().toLowerCase();
           const targetValue = Number(currentRow?.targetValue ?? previousRow?.targetValue ?? 0) || 0;
           const progress = progressMap.get(personId) || null;
           return { person, personId, role, targetValue, progress };
         });
-      weeklyListEl.innerHTML = modalState.weeklyRows.length
-        ? modalState.weeklyRows
-            .map(({ person, personId, role, targetValue, progress }) => {
+      const renderRow = ({ person, personId, role, targetValue, progress }) => {
               const progressPct = Number(progress?.progressPct || 0);
               const progressText = progress
                 ? `${formatGrowthWeeklyActualValue(role, progress.actualValue)} · ${progressPct.toFixed(1).replace(".", ",")}%`
@@ -14958,15 +14964,15 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
               return `
                 <div class="growth-goal-weekly-row" data-goal-weekly-row="${escapeHtml(personId)}">
                   <div class="growth-goal-weekly-person">
-                    <strong>${escapeHtml(String(person.displayName || personId))}</strong>
+                    <strong>${escapeHtml(String(person.displayName || "Usuário sem nome cadastrado"))}</strong>
                     <span>${escapeHtml(progressText)}</span>
                   </div>
                   <label class="growth-goal-weekly-cell">
                     <span>Papel</span>
-                    <select class="auth-input" data-goal-weekly-role>
+                    <select class="auth-input" data-goal-weekly-role ${person.isAggregate ? "disabled" : ""}>
                       ${role === "both" ? '<option value="both" selected>SDR e Closer</option>' : ""}
-                      <option value="closer" ${(role === "closer" || role === "both") ? "selected" : ""}>Closer</option>
-                      <option value="sdr" ${role === "sdr" ? "selected" : ""}>SDR</option>
+                      <option value="closer" ${role === "closer" ? "selected" : ""}>Closer</option>
+                      ${person.isAggregate ? "" : `<option value="sdr" ${role === "sdr" ? "selected" : ""}>SDR</option>`}
                     </select>
                   </label>
                   <label class="growth-goal-weekly-cell">
@@ -14985,9 +14991,13 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
                   </label>
                 </div>
               `;
-            })
-            .join("")
+      };
+      const realRows = modalState.weeklyRows.filter(({ person }) => !person.isAggregate);
+      weeklyListEl.innerHTML = realRows.length ? realRows.map(renderRow).join("")
         : `<div class="growth-contracts-loading">Nenhum usuário ativo no Comercial.</div>`;
+      if (bucketsListEl instanceof HTMLElement) {
+        bucketsListEl.innerHTML = modalState.weeklyRows.filter(({ person }) => person.isAggregate).map(renderRow).join("");
+      }
 
       const unresolvedSdr = Array.isArray(payload?.weeklyReadModel?.unresolved?.sdrActors) ? payload.weeklyReadModel.unresolved.sdrActors : [];
       const warnings = [
@@ -15031,6 +15041,7 @@ const openAdminGrowthGoalModal = (presetCompetencia) => {
       modalState.weeklyLoading = true;
       modalState.weeklyLoaded = false;
       weeklyListEl.innerHTML = `<div class="growth-contracts-loading">Carregando meta semanal…</div>`;
+      if (bucketsListEl instanceof HTMLElement) bucketsListEl.innerHTML = "";
       try {
         const payload = await loadGrowthGoalsWeekPayload({ competencia: selectedWeek.competencia, weekStart: selectedWeek.startDateKey });
         if (requestId !== modalState.weeklyRequestId) return;

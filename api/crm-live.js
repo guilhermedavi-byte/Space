@@ -398,6 +398,11 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
       .crm-live-ranking.has-three-rows {
         gap: 1.6vh;
       }
+      .crm-live-ranking.has-many-rows {
+        overflow-y: auto;
+        align-content: start;
+        grid-auto-rows: minmax(12vh, auto);
+      }
       .crm-live-ranking.has-three-rows .crm-live-ranking-row {
         gap: 1.5vw;
       }
@@ -2157,7 +2162,7 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
           '</div>';
         const renderRankingRows = (rows, options = {}) => {
           const role = options.role || '';
-          const limited = safeArray(rows).slice(0, 5);
+          const limited = safeArray(rows);
           if (!limited.length) {
             return '<div class="crm-live-empty"><div><strong>Sem dados</strong><div>Nenhuma pessoa com meta nessa semana.</div></div></div>';
           }
@@ -2352,7 +2357,7 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
             '<div class="crm-live-head">' +
               '<h1 class="crm-live-title">' + escapeHtml(title) + '</h1>' +
             '</div>' +
-            '<div class="crm-live-body"><div class="crm-live-ranking ' + ((role === 'closer' && safeArray(rows).length <= 2) ? '' : 'is-fill') + ' ' + ((role === 'closer' && safeArray(rows).length >= 3) ? 'has-three-rows' : '') + '">' + renderRankingRows(rows, { role: role }) + '</div></div>' +
+            '<div class="crm-live-body"><div class="crm-live-ranking ' + (safeArray(rows).length > 5 ? 'has-many-rows ' : '') + ((role === 'closer' && safeArray(rows).length <= 2) ? '' : 'is-fill') + ' ' + ((role === 'closer' && safeArray(rows).length >= 3) ? 'has-three-rows' : '') + '">' + renderRankingRows(rows, { role: role }) + '</div></div>' +
           '</div>' +
         '</section>';
         const renderTeamProgressScreen = ({ title, actual, target, noun }) => {

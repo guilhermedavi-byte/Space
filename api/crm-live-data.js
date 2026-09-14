@@ -11,6 +11,7 @@ const {
   getCacheMeta,
   CRM_CACHE_TTL_MS,
   SDR_CACHE_TTL_MS,
+  CRM_LIVE_READ_MODEL_VERSION,
   loadWeeklyRollupsHistory,
   loadCurrentGoal,
   loadGrowthPeople,
@@ -70,7 +71,8 @@ module.exports = async (req, res) => {
         cached = snap.data;
         meta = getCacheMeta(cached);
         const cachedWeekKey = String(cached?.payload?.weekly?.commercialWeek?.weekKey || "");
-        const isCurrentWeekCache = Boolean(cachedWeekKey) && cachedWeekKey === currentWeekKey;
+        const isCurrentWeekCache = Boolean(cachedWeekKey) && cachedWeekKey === currentWeekKey &&
+          cached.payload.readModelVersion === CRM_LIVE_READ_MODEL_VERSION;
         if (!forceRefresh && isCurrentWeekCache && meta.ageMs <= ttlMs) {
           return { payload: cached.payload, meta, cached: true, stale: false };
         }
