@@ -28,7 +28,9 @@ const loadStore = ({ supabaseFetchImpl, getDocumentImpl = async () => ({}) } = {
   return require("../api/_lib/retention-store");
 };
 
-test("provisiona aluno ausente e resolve subject depois do upsert local", async () => {
+test("provisiona aluno ausente e resolve subject depois do upsert local", async (t) => {
+  // This fixture asserts the August service period, independently of the execution date.
+  t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-08-15T12:00:00Z") });
   const calls = [];
   let provisioned = false;
   const store = loadStore({

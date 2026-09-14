@@ -24,7 +24,6 @@ const {
   CRM_LIVE_DEFAULTS_DOC_ID,
 } = require("./growth-people");
 const { getDealValue, normalizeKey } = require("../../_lib/forecast-service");
-const { fetchMirroredBusinesses, getSyncState, isDatacrazyMirrorEnabled } = require("./datacrazy-mirror");
 
 const { summarizeClosedSales, getBusinessClosingDate, chooseCommercialPipeline } = require("./commercial-sales");
 
@@ -42,7 +41,7 @@ const CRM_LIVE_COOKIE_SCOPE = "crm-live:read";
 const CRM_LIVE_COOKIE_MAX_AGE_SECONDS = 90 * 24 * 60 * 60;
 const CRM_CACHE_TTL_MS = 2 * 60 * 1000;
 const SDR_CACHE_TTL_MS = 60 * 1000;
-const CRM_LIVE_READ_MODEL_VERSION = 2;
+const CRM_LIVE_READ_MODEL_VERSION = 3;
 const CLOSED_STAGE_KEY = normalizeKey("Fechado");
 
 const safeString = (value) => (value == null ? "" : String(value).trim());
@@ -386,83 +385,16 @@ const loadSdrEventsRange = async ({ fromKey, toKey } = {}) => {
   return rows.map(decodeSdrEventRow).filter(Boolean);
 };
 
-const fetchCrmBusinessesLegacy = async ({ startDateKey, lastMovedAfter = "", status = "", includeClosings = false } = {}) => {
-  const apiKey = safeString(process.env.CRM_API_KEY);
-  const base = safeString(process.env.CRM_API_BASE_URL).replace(/\/+$/, "");
-  if (!apiKey || !base) {
-    const error = new Error("missing_crm_env");
-    error.status = 500;
-    throw error;
-  }
-  // Financial windows cannot rely on movement timestamps: closed deals may have
-  // a dedicated closing date and no recent movement. The legacy integration
-  // only uses a movement filter, so financial reads must omit that restriction.
-  const since = includeClosings ? "" : safeString(lastMovedAfter) || formatDateKeyStartIso(startDateKey);
-  const take = 200;
-  let skip = 0;
-  let pages = 0;
-  const businesses = [];
-  const startedAt = Date.now();
-
-  while (pages < 200) {
-    const params = new URLSearchParams();
-    params.set("skip", String(skip));
-    params.set("take", String(take));
-    if (since) params.set("filter[lastMovedAfter]", since);
-    if (safeString(status)) params.set("filter[status]", safeString(status));
-    const res = await requestJsonRaw(`${base}/api/v1/businesses?${params.toString()}`, {
-      method: "GET",
-      headers: { Authorization: `Bearer ${apiKey}` },
-    });
-    if (!res.ok) {
-      const error = new Error("crm_window_fetch_failed");
-      error.status = res.status || 500;
-      error.details = res.data || res.text || null;
-      error.elapsedMs = Date.now() - startedAt;
-      error.request = {
-        startDateKey: safeString(startDateKey),
-        lastMovedAfter: since,
-        status: safeString(status),
-        skip,
-        take,
-        page: pages + 1,
-      };
-      throw error;
-    }
-    const items = extractBusinessesArray(res.data);
-    pages += 1;
-    businesses.push(...items);
-    if (items.length < take) break;
-    skip += take;
-  }
-
-  return {
-    businesses,
-    pagination: {
-      pages,
-      totalFetched: businesses.length,
-      baselinePages: 44,
-      baselineTotal: 8790,
-      elapsedMs: Date.now() - startedAt,
-      lastMovedAfter: since,
-      status: safeString(status),
-    },
-  };
-};
-
-const fetchCrmBusinesses = async ({ startDateKey, lastMovedAfter = "", status = "", includeClosings = false } = {}) => {
-  if (isDatacrazyMirrorEnabled()) {
-    const result = await fetchMirroredBusinesses({ startDateKey, lastMovedAfter, status, includeClosings });
-    const syncState = await getSyncState("incremental").catch(() => null);
-    return {
-      businesses: result.businesses || [],
-      pagination: {
-        ...(result.pagination || {}),
-        lastSuccessfulSyncAt: safeString(syncState?.last_successful_sync_at),
-      },
-    };
-  }
-  return fetchCrmBusinessesLegacy({ startDateKey, lastMovedAfter, status, includeClosings });
+// All Live readers share one complete, leased Datacrazy dataset. No per-TV remote scans.
+const fetchCrmBusinesses = async ({ lastMovedAfter = "", status = "" } = {}) => {
+  const source = await require('./crm-source-snapshot').getCompleteCrmSource();
+  let businesses = source.businesses;
+  if (status) businesses = businesses.filter(b => extractBusinessStatus(b) === status);
+  if (lastMovedAfter) businesses = businesses.filter(b => {
+    const date = getBusinessClosingDate(b).date;
+    return date && date.getTime() >= Date.parse(lastMovedAfter);
+  });
+  return { ...source, businesses };
 };
 
 const fetchCrmWindow = async ({ startDateKey } = {}) => fetchCrmBusinesses({ startDateKey, includeClosings: true });
@@ -848,7 +780,7 @@ const buildUnresolvedBuckets = ({ businesses = [], people = [], goal, globalConf
   };
 };
 
-const buildCrmLiveCrmSlice = async ({ goal, globalConfig = null, people, now = new Date() } = {}) => {
+const buildCrmLiveCrmSlice = async ({ goal, globalConfig = null, people, now = new Date(), snapshotId = crypto.randomUUID() } = {}) => {
   const weeklyGoal = await loadApplicableWeeklyGoal({ goal, now });
   const monthPeriod = resolveCommercialPeriod({
     now,
@@ -860,6 +792,10 @@ const buildCrmLiveCrmSlice = async ({ goal, globalConfig = null, people, now = n
   // Pipeline é estoque, não ciclo: por isso a tela "Dinheiro na mesa" usa a janela mais ampla
   // entre o início do ciclo comercial e os últimos 10 dias de movimentação.
   const crm = await fetchCrmWindow({ startDateKey: crmWindowStartDateKey });
+  if (crm.stale) throw Object.assign(new Error('crm_source_stale'), { status: 503, sourceAttempt: crm.lastAttempt });
+  const calculationStarted = Date.now();
+  const { log } = require('./datacrazy-ingestion');
+  log('calculation_started', { snapshotId, sourceSnapshotId: crm.metadata.snapshotId });
   const monthSummary = buildMonthSummary({ businesses: crm.businesses, goal, now });
   const previousMonthKey = subtractMonthsFromMonthKey(monthPeriod.monthKey, 1);
   const previousGoal = previousMonthKey ? await loadGoalByMonthKey(previousMonthKey) : null;
@@ -905,7 +841,16 @@ const buildCrmLiveCrmSlice = async ({ goal, globalConfig = null, people, now = n
     now,
   });
   const weeklyTeam = buildWeeklyTeamSummary({ weeklyReadModel });
+  const calculatedAt = new Date().toISOString();
+  const snapshot = {
+    ...crm.metadata, chunks: undefined, snapshotId, sourceSnapshotId: crm.metadata.snapshotId,
+    status: 'VALID', calculationStartedAt: now.toISOString(), calculatedAt, calculationVersion: CRM_LIVE_READ_MODEL_VERSION,
+    calculationCompleted: true, recordsEligible: weeklyTeam.closers.count, error: null,
+    durationMs: crm.metadata.durationMs + Date.now() - calculationStarted,
+  };
+  log('calculation_completed', { snapshotId, actualValue: weeklyTeam.closers.actualValue, count: weeklyTeam.closers.count });
   return {
+    snapshot,
     readModelVersion: CRM_LIVE_READ_MODEL_VERSION,
     generatedAt: new Date().toISOString(),
     month: monthSummary,

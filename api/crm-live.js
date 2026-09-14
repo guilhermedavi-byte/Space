@@ -1,3 +1,4 @@
+const { describeSnapshot } = require('./_lib/crm-snapshot-freshness');
 const { getSessionFromRequest } = require("../_lib/session");
 const {
   buildCookie,
@@ -2660,57 +2661,14 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
           if (isYesterday) return 'dados de ' + time + ' de ontem';
           return 'dados de ' + new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(date);
         };
-        const buildStatusText = (data, fallbackMode) => {
-          const staleAgeMinutes = Math.max(0, Number(getNested(data, ['staleAgeMinutes'], 0) || 0));
-          const snapshotGeneratedAt = getNested(data, ['snapshotGeneratedAt'], '') || getNested(data, ['generatedAt'], '');
-          if (fallbackMode) {
-            if (staleAgeMinutes > 180) {
-              return {
-                text: staleTimestampLabel(snapshotGeneratedAt) || ('dados defasados · ' + String(staleAgeMinutes) + ' min'),
-                tone: 'critical',
-              };
-            }
-            if (staleAgeMinutes > 30) {
-              return {
-                text: 'Sem atualização nova · mantendo última tela boa',
-                tone: 'warning',
-              };
-            }
-            return {
-              text: 'Sem atualização nova · mantendo última tela boa',
-              tone: 'default',
-            };
-          }
-          if (data.stale) {
-            if (staleAgeMinutes > 180) {
-              return {
-                text: staleTimestampLabel(snapshotGeneratedAt) || ('Exibindo último snapshot útil · ' + String(staleAgeMinutes) + ' min'),
-                tone: 'critical',
-              };
-            }
-            if (staleAgeMinutes > 30) {
-              return {
-                text: 'Exibindo último snapshot útil · ' + String(staleAgeMinutes) + ' min',
-                tone: 'warning',
-              };
-            }
-            return {
-              text: 'Exibindo último snapshot útil · ' + String(staleAgeMinutes) + ' min',
-              tone: 'default',
-            };
-          }
-          return {
-            text: 'Atualizado ' + dateTimeLabel(data.generatedAt),
-            tone: 'default',
-          };
-        };
+        const buildStatusText = ${describeSnapshot.toString()};
         const rotate = () => {
           rotationController.step(1);
         };
         const sanitizeLastGoodPayload = (data) => {
           if (!data || typeof data !== 'object') return null;
           const clone = JSON.parse(JSON.stringify(data));
-          if (clone && typeof clone === 'object' && 'buildId' in clone) delete clone.buildId;
+          // Preserve calculation/build identity; fallback is always labelled as pending.
           return clone;
         };
         const saveLastGood = (data) => {

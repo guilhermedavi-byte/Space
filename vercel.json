@@ -1,4 +1,9 @@
 {
+  "functions": {
+    "api/crm-live-data.js": { "maxDuration": 300 },
+    "api/crm-live-events.js": { "maxDuration": 300 },
+    "api/growth-dashboard.js": { "maxDuration": 300 }
+  },
   "headers": [
     {
       "source": "/(.*)",
