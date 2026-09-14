@@ -768,19 +768,13 @@ const fetchAllCrmBusinessesLegacy = async ({ lastMovedAfter = "" } = {}) => {
 };
 
 const fetchAllCrmBusinesses = async ({ lastMovedAfter = "" } = {}) => {
-  if (isDatacrazyMirrorEnabled()) {
-    const mirror = await fetchAllMirroredBusinesses({ lastMovedAfter });
-    return {
-      ok: true,
-      status: 200,
-      businesses: mirror.businesses || [],
-      pagination: {
-        ...(mirror.pagination || {}),
-        source: "mirror",
-      },
-    };
+  try {
+    const source = await require('./_lib/crm-source-snapshot').getCompleteCrmSource({ allowStale: false });
+    const businesses = lastMovedAfter ? source.businesses.filter(b => Date.parse(b.lastMovedAt || '') >= Date.parse(lastMovedAfter)) : source.businesses;
+    return { ok: true, status: 200, businesses, pagination: source.pagination };
+  } catch (error) {
+    return { ok: false, status: error.status || 503, error: error.code || 'crm_sync_failed' };
   }
-  return fetchAllCrmBusinessesLegacy({ lastMovedAfter });
 };
 
 const decodeGoalDoc = (doc) => {

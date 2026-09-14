@@ -21,6 +21,10 @@ const makeRes = () => ({
 });
 
 const installHttpStub = () => {
+  // Auth tests isolate the publication boundary; pipeline tests exercise its real implementation.
+  const publisherPath = require.resolve('../api/_lib/crm-snapshot-publish');
+  require.cache[publisherPath] = { id: publisherPath, filename: publisherPath, loaded: true,
+    exports: { runCrmSnapshot: async (build) => build('auth-test-snapshot') } };
   require.cache[httpPath] = {
     id: httpPath,
     filename: httpPath,

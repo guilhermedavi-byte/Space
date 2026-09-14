@@ -15,7 +15,6 @@ const {
   writeWeeklyRollup,
   readStateDoc,
   validateCookieViewer,
-  writeDailyRollups,
   writeStateDoc,
 } = require("./_lib/crm-live");
 
@@ -93,14 +92,10 @@ module.exports = async (req, res) => {
     const previousState = detectorStateSnap.ok ? detectorStateSnap.data : null;
     const cursor = String(previousState?.cursor || "").trim();
 
-    const [wonMonth, wonSinceCursor] = await Promise.all([
-      fetchCrmBusinesses({ startDateKey: monthPeriod.startDateKey, includeClosings: true }),
-      fetchCrmBusinesses({
-        startDateKey: monthPeriod.startDateKey,
-        lastMovedAfter: cursor,
-        status: "won",
-      }),
-    ]);
+    // Reuse the same complete source as the payload; do not scan Datacrazy twice per poll.
+    const wonMonth = await fetchCrmBusinesses({ includeClosings: true });
+    if (wonMonth.stale) return sendJson(res, 200, { ok: true, stale: true, events: [], generatedAt: wonMonth.metadata.fetchCompletedAt, snapshotId: wonMonth.metadata.snapshotId });
+    const wonSinceCursor = { businesses: wonMonth.businesses.filter(b => String(b.status || '') === 'won'), pagination: wonMonth.pagination };
 
     const weeklyProbe = buildWeeklyGoalsReadModel({
       goal: weeklyGoal,
@@ -155,7 +150,7 @@ module.exports = async (req, res) => {
     });
 
     if (!detection.coldStart && detection.newSales.length) {
-      await writeDailyRollups({ sales: detection.newSales });
+      await require('./_lib/crm-daily-rollups').publishDailyCounts({ businesses: wonMonth.businesses, source: wonMonth.metadata, period: monthPeriod });
     }
 
     return sendJson(res, 200, {

@@ -17,6 +17,7 @@ const {
   loadGrowthPeople,
   loadCrmLiveDefaultsConfig,
 } = require("./_lib/crm-live");
+const { runCrmSnapshot } = require('./_lib/crm-snapshot-publish');
 const { resolveCommercialWeek } = require("./_lib/growth-people");
 const { getCrmLiveBuildId } = require("./_lib/crm-live-build");
 
@@ -58,6 +59,22 @@ module.exports = async (req, res) => {
   const host = String(req.headers.host || "localhost");
   const buildId = getCrmLiveBuildId();
   const url = new URL(req.url || "/api/crm-live-data", `https://${host}`);
+  if (url.searchParams.has('auditFrom') || url.searchParams.has('auditTo')) {
+    if (auth.mode !== 'session' || !['admin', 'growth'].includes(normalizeRole(auth.session?.role))) return sendJson(res, 403, { error: 'audit_admin_required' });
+    try {
+      const { getCompleteCrmSource } = require('./_lib/crm-source-snapshot');
+      const { auditSource } = require('./_lib/crm-source-audit');
+      const source = await getCompleteCrmSource({ allowStale: false });
+      const audit = auditSource(source, url.searchParams.get('auditFrom') || '', url.searchParams.get('auditTo') || '');
+      const excludedByReason = {};
+      audit.rows.filter(r => !r.included).forEach(r => { excludedByReason[r.reason] = (excludedByReason[r.reason] || 0) + 1; });
+      const requestedPage = url.searchParams.get('auditPage');
+      const page = requestedPage === null ? null : Number(requestedPage);
+      if (page !== null && (!Number.isSafeInteger(page) || page < 0)) return sendJson(res, 400, { error: 'invalid_audit_page' });
+      return sendJson(res, 200, { ...audit, excludedByReason, recordsTotal: audit.rows.length, page,
+        rows: page === null ? audit.rows.filter(r => r.included) : audit.rows.slice(page * 200, (page + 1) * 200) });
+    } catch (error) { return sendJson(res, error.status || 503, { error: error.code || 'audit_failed' }); }
+  }
   const forceRefresh = String(url.searchParams.get("refresh") || "").trim() === "1";
   const now = new Date();
   const currentWeekKey = resolveCommercialWeek({ now }).weekKey;
@@ -76,26 +93,27 @@ module.exports = async (req, res) => {
         if (!forceRefresh && isCurrentWeekCache && meta.ageMs <= ttlMs) {
           return { payload: cached.payload, meta, cached: true, stale: false };
         }
-        if (!isCurrentWeekCache) {
-          cached = null;
-          meta = null;
-        }
+        // Retain old calculation versions as explicitly stale within the same week.
+        // Do not combine last week's CRM metrics with this week's SDR metrics.
+        if (cachedWeekKey !== currentWeekKey) { cached = null; meta = null; }
       }
     } catch (error) {
       console.warn("[crm-live] cache read failed", cacheDocId, error);
     }
 
     try {
-      const payload = await build();
+      const payload = cacheDocId === CRM_CACHE_DOC_ID
+        ? await runCrmSnapshot((snapshotId) => build(snapshotId)) : await build();
       const generatedAt = new Date().toISOString();
-      await writeCacheDoc({ docId: cacheDocId, payload, generatedAt }).catch((error) => {
-        console.warn("[crm-live] cache write failed", cacheDocId, error);
-      });
+      if (cacheDocId !== CRM_CACHE_DOC_ID) {
+        const write = await writeCacheDoc({ docId: cacheDocId, payload, generatedAt });
+        if (!write.ok) throw new Error('snapshot_write_failed');
+      }
       return { payload, meta: { generatedAt, ageMs: 0, ageMinutes: 0 }, cached: false, stale: false };
     } catch (error) {
       console.error("[crm-live] slice build failed", cacheDocId, error);
       if (cached?.payload && meta) {
-        return { payload: cached.payload, meta, cached: true, stale: true };
+        return { payload: cached.payload, meta, cached: true, stale: true, lastError: { code: error.code || error.message, status: error.status || 0 } };
       }
       throw error;
     }
@@ -107,7 +125,7 @@ module.exports = async (req, res) => {
       loadSlice({
         cacheDocId: CRM_CACHE_DOC_ID,
         ttlMs: CRM_CACHE_TTL_MS,
-        build: () => buildCrmLiveCrmSlice({ goal, globalConfig, people, now }),
+        build: (snapshotId) => buildCrmLiveCrmSlice({ goal, globalConfig, people, now, snapshotId }),
       }),
       loadSlice({
         cacheDocId: SDR_CACHE_DOC_ID,
@@ -143,7 +161,13 @@ module.exports = async (req, res) => {
       now,
     });
 
-    const stale = Boolean(crmSlice.stale || sdrSlice.stale);
+    const sourceDate = crmSlice.payload.snapshot?.fetchCompletedAt || crmSlice.meta.generatedAt;
+    const sourceAgeMs = Date.now() - Date.parse(sourceDate || '');
+    const stale = Boolean(crmSlice.stale || sdrSlice.stale || !crmSlice.payload.snapshot || sourceAgeMs >= 5 * 60000);
+    const snapshotQuality = { ...crmSlice.payload.snapshot, status: crmSlice.payload.snapshot?.status || 'LEGACY',
+      calculationVersion: crmSlice.payload.snapshot?.calculationVersion || 0, lastCompleteAt: sourceDate || null,
+      stale, lastError: crmSlice.lastError || sdrSlice.lastError || null,
+      dataFreshnessLagMs: Number.isFinite(sourceAgeMs) ? Math.max(0, sourceAgeMs) : null };
     const sliceMetas = [
       { key: "crm", meta: crmSlice.meta || {}, stale: Boolean(crmSlice.stale) },
       { key: "sdr", meta: sdrSlice.meta || {}, stale: Boolean(sdrSlice.stale) },
@@ -159,6 +183,8 @@ module.exports = async (req, res) => {
       ? String(staleSource?.meta?.generatedAt || freshestSource?.meta?.generatedAt || "")
       : String(freshestSource?.meta?.generatedAt || "");
     return sendJson(res, 200, {
+      snapshot: snapshotQuality,
+      calculationVersion: CRM_LIVE_READ_MODEL_VERSION,
       month: crmSlice.payload.month,
       news,
       pipeline: crmSlice.payload.pipeline || { rows: [], windowStartDateKey: "" },
@@ -188,7 +214,7 @@ module.exports = async (req, res) => {
         sdr: sdrSlice.payload.cacheDebug?.sdr || null,
       },
       generatedAt: snapshotGeneratedAt || new Date().toISOString(),
-      snapshotGeneratedAt: snapshotGeneratedAt || "",
+      snapshotGeneratedAt: sourceDate || snapshotGeneratedAt || "",
       staleSource: stale ? String(staleSource?.key || "") : "",
       stale,
       cached: Boolean(crmSlice.cached || sdrSlice.cached),
