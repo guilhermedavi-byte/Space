@@ -1,0 +1,2 @@
+import Link from "next/link";
+export default function NotFound() { return <main className="grid min-h-screen place-items-center p-6 lg:ml-64"><div className="text-center"><p className="text-sm text-violet-300">404</p><h1 className="mt-2 text-3xl font-semibold text-white">Página não encontrada</h1><Link href="/dashboard" className="mt-6 inline-block text-sm text-zinc-400 underline">Voltar ao dashboard</Link></div></main>; }

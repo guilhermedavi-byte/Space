@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+html { background: #080a0f; }
+body { margin: 0; background: radial-gradient(circle at 80% 0%, rgb(91 33 182 / .13), transparent 32rem), #080a0f; color: #d4d4d8; font-family: Arial, Helvetica, sans-serif; }
+::selection { background: rgb(139 92 246 / .35); color: white; }
