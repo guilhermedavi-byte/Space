@@ -1,0 +1,14 @@
+{
+  "checked_at": "2026-09-15T22:56:56.885Z",
+  "rows": 56,
+  "customers": 56,
+  "methods": {
+    "email": 56
+  },
+  "provenance_and_timestamp": true,
+  "ui": {
+    "customers_context": true,
+    "receivables_context": true,
+    "drawer_fields": true
+  }
+}

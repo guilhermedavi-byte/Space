@@ -1,13 +1,11 @@
-const {timingSafeEqual}=require('node:crypto');
 const {getSessionFromRequest}=require('../_lib/session');
 const {readJsonBody,sendJson}=require('./_lib/http');
 const {createAsaasClient}=require('./_lib/asaas');
 const {createFinanceFoundation}=require('./_lib/finance-foundation');
 const {supabaseFetch}=require('./_lib/supabase-rest');
 const space=require('./_lib/finance-space'),bridge=require('./_lib/finance-identity-bridge');
-function maintenance(req){const given=String(req.headers.authorization||'').replace(/^Bearer /,''),expected=process.env.FINANCE_RECOVERY_MAINTENANCE_TOKEN||'';return /^[a-f0-9]{64}$/.test(given)&&expected.length===64&&Date.now()<Date.parse(process.env.FINANCE_RECOVERY_MAINTENANCE_UNTIL||'')&&timingSafeEqual(Buffer.from(given),Buffer.from(expected));}
-module.exports=async(req,res)=>{res.setHeader('Cache-Control','private, no-store');const temporary=maintenance(req),user=getSessionFromRequest(req);if(!temporary&&user?.role!=='admin')return sendJson(res,403,{error:'forbidden'});if(process.env.FINANCE_FOUNDATION_ENABLED!=='true')return sendJson(res,503,{error:'foundation_disabled'});if(!['GET','POST'].includes(req.method))return sendJson(res,405,{error:'method_not_allowed'});if(req.method==='POST'&&!temporary&&req.headers.origin!==process.env.SPACE_PUBLIC_BASE_URL)return sendJson(res,403,{error:'invalid_origin'});
- try{if(req.method==='POST'&&(await readJsonBody(req)).action!=='apply')return sendJson(res,400,{error:'invalid_action'});const actor=temporary?'identity_bridge_operator':String(user.sub||user.uid||user.id||'');if(!actor)return sendJson(res,403,{error:'actor_required'});
+module.exports=async(req,res)=>{res.setHeader('Cache-Control','private, no-store');const user=getSessionFromRequest(req);if(user?.role!=='admin')return sendJson(res,403,{error:'forbidden'});if(process.env.FINANCE_FOUNDATION_ENABLED!=='true')return sendJson(res,503,{error:'foundation_disabled'});if(!['GET','POST'].includes(req.method))return sendJson(res,405,{error:'method_not_allowed'});if(req.method==='POST'&&req.headers.origin!==process.env.SPACE_PUBLIC_BASE_URL)return sendJson(res,403,{error:'invalid_origin'});
+ try{if(req.method==='POST'&&(await readJsonBody(req)).action!=='apply')return sendJson(res,400,{error:'invalid_action'});const actor=String(user.sub||user.uid||user.id||'');if(!actor)return sendJson(res,403,{error:'actor_required'});
  const client=createAsaasClient({readOnly:true}),f=createFinanceFoundation({client,logger:()=>{}});await f.verifyConnection({recordHealth:false});
  const legacy=[];const legacyCounts={};for(const table of ['n8n_alunos_financeiro_space','n8n_onboarding_alunos_space','n8n_cobrancas_financeiras_space','billing_accounts']){const rows=await space.all(table,'*');legacyCounts[table]=rows.length;legacy.push(...rows.map(r=>({...r,bridge_source:table})));}
  const sources=await space.loadSources(),customers=[],subscriptions=[];for(const [resource,rows]of [['customers',customers],['subscriptions',subscriptions]])for await(const p of client.pages(resource,{limit:100,maxPages:100}))rows.push(...p.data);
