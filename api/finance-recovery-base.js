@@ -27,7 +27,7 @@ module.exports=async(req,res)=>{
     await f.linkCustomer(m.customer_id,m.student_id,{actor:actor+':'+m.sources.join('+'),resolveStudent:async sid=>sources.users.find(s=>s.firestoreDocId===sid)});applied++;
    }
   }
-  const fields={};for(const s of sources.users.filter(space.isStudent))for(const [key,value]of Object.entries(s))if(value!=null&&value!==''&&/asaas|customer|plan|ativo|status|respons|^cs|lifecycle/i.test(key))fields[key]=(fields[key]||0)+1;
+  const fields={};for(const s of sources.users.filter(space.isStudent))for(const [key,value]of Object.entries(s))if(value!=null&&value!=='')fields[key]=(fields[key]||0)+1;
   return sendJson(res,200,{customers:customers.length,subscriptions:subscriptions.length,students:sources.users.filter(space.isStudent).length,existing_links:existing.length,eligible:matches.accepted.length,uncertain:matches.uncertain.length,applied,pending:matches.accepted.filter(m=>!existing.some(l=>l.asaas_customer_id===m.customer_id&&l.firestore_doc_id===m.student_id)).length-applied,student_fields:fields,external_reference_exact:matches.accepted.filter(m=>m.sources.includes('asaas_external_reference')).length});
  }catch{return sendJson(res,503,{error:'finance_recovery_base_failed'});}
 };

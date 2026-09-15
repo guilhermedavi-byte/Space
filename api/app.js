@@ -128,7 +128,7 @@ const buildAppHtml = ({ sessionJson, role, roleSlug, templateHtml, initialPanel 
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
     <script src="/api/runtime-config.js"></script>
     <link rel="stylesheet" href="styles.css" />
-    <link rel="stylesheet" href="finance-v1.css?v=1" />
+    <link rel="stylesheet" href="finance-v1.css?v=2" />
   </head>
   <body data-view="interno" data-page="app" data-app-role="${String(roleSlug || "")}" data-initial-panel="${String(initialPanel || "dashboard")}">
     <div class="page-glow page-glow-left" aria-hidden="true"></div>
@@ -138,7 +138,7 @@ const buildAppHtml = ({ sessionJson, role, roleSlug, templateHtml, initialPanel 
     </script>
     ${platformVisible}
     ${modalHtml}
-    <script src="finance-v1.js?v=1"></script>
+    <script src="finance-v1.js?v=2"></script>
     <script src="script.js"></script>
     <script src="pedagogico-n8n-ui.js"></script>
     <script src="space-office.js"></script>

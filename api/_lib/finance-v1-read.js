@@ -2,6 +2,7 @@ const {supabaseFetch}=require('./supabase-rest');
 const {createAsaasClient}=require('./asaas');
 const {createFinanceFoundation}=require('./finance-foundation');
 const {uuid,externalId}=require('./finance-domain');
+const space=require('./finance-space');
 const OPEN=new Set(['PENDING','OVERDUE','DUNNING_REQUESTED']);
 const PAID=new Set(['RECEIVED','RECEIVED_IN_CASH','DUNNING_RECEIVED']);
 const CLOSED=new Set(['DELETED','REFUNDED','PARTIALLY_REFUNDED','CHARGEBACK_REQUESTED','CHARGEBACK_DISPUTE','AWAITING_CHARGEBACK_REVERSAL']);
@@ -15,7 +16,7 @@ const fold=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLo
 const days=(due,today)=>due&&due<today?Math.floor((Date.parse(today+'T00:00:00Z')-Date.parse(due+'T00:00:00Z'))/86400000):0;
 const safeLink=value=>{try{const u=new URL(value);return u.protocol==='https:'&&(u.hostname==='asaas.com'||u.hostname.endsWith('.asaas.com'))?u.href:null;}catch{return null;}};
 function cached(loader,ttl){let value,until=0,pending;return async()=>{if(value&&Date.now()<until)return value;if(!pending)pending=loader().then(v=>{value=v;until=Date.now()+ttl;return v;}).finally(()=>{pending=null;});return pending;};}
-function createReader({request=supabaseFetch,client=createAsaasClient({readOnly:true}),connectionId=process.env.FINANCE_CONNECTION_ID,today=todayBR,verify=()=>createFinanceFoundation({connectionId,client,logger:()=>{}}).verifyConnection({recordHealth:false})}={}){
+function createReader({request=supabaseFetch,client=createAsaasClient({readOnly:true}),connectionId=process.env.FINANCE_CONNECTION_ID,today=todayBR,spaceLoader=space.loadSources,verify=()=>createFinanceFoundation({connectionId,client,logger:()=>{}}).verifyConnection({recordHealth:false})}={}){
  const scope=()=>uuid(connectionId);
  const readAll=async(table,select,extra='')=>{const rows=[];for(let offset=0;offset<20000;offset+=500){const r=await request(`/${table}?connection_id=eq.${scope()}&select=${select}${extra}&order=${table==='finance_customer_student_links'?'asaas_customer_id,firestore_doc_id':'id'}&offset=${offset}&limit=500`);if(!Array.isArray(r.data))throw Error('finance_read_failed');rows.push(...r.data);if(r.data.length<500)return rows;}throw Error('finance_read_limit');};
  const core=cached(async()=>{const [receivables,payments,objects,links]=await Promise.all([
@@ -27,17 +28,20 @@ function createReader({request=supabaseFetch,client=createAsaasClient({readOnly:
  const directory=cached(async()=>{
   await verify();const result={customers:[],subscriptions:[]};
   // Existing central client, GET-only. This enrichment never changes projections.
-  for(const resource of ['customers','subscriptions'])for await(const page of client.pages(resource,{limit:100,maxPages:100})){result[resource].push(...page.data.map(r=>resource==='customers'?{id:r.id,name:r.name||null,deleted:r.deleted===true}:{id:r.id,customer:r.customer,status:r.deleted?'DELETED':r.status,value:r.value,cycle:r.cycle,next_due_date:r.nextDueDate,billing_type:r.billingType}));}
+  for(const resource of ['customers'])for await(const page of client.pages(resource,{limit:100,maxPages:100})){result[resource].push(...page.data.map(r=>resource==='customers'?{id:r.id,name:r.name||null,deleted:r.deleted===true}:{id:r.id,customer:r.customer,status:r.deleted?'DELETED':r.status,value:r.value,cycle:r.cycle,next_due_date:r.nextDueDate,billing_type:r.billingType}));}
   return result;
  },300000);
+ const spaceDirectory=cached(async()=>space.profiles(await spaceLoader()),300000);
  const dataset=async()=>{const data=await core();let enrichment,warning=null;try{enrichment=await directory();}catch{warning='Não foi possível consultar os nomes e as assinaturas no Asaas. Os valores financeiros continuam disponíveis.';enrichment={customers:data.objects.filter(o=>o.resource==='customers').map(o=>({id:o.external_object_id,name:o.snapshot.name,deleted:o.snapshot.deleted})),subscriptions:data.objects.filter(o=>o.resource==='subscriptions').map(o=>({id:o.external_object_id,...o.snapshot}))};}
+  enrichment.subscriptions=data.objects.filter(o=>o.resource==='subscriptions').map(o=>({id:o.external_object_id,...o.snapshot,status:o.snapshot.deleted?'DELETED':o.snapshot.status}));
+  let studentProfiles=new Map();try{studentProfiles=await spaceDirectory();}catch{warning=[warning,'Dados Space temporariamente indisponíveis; vínculos existentes preservados.'].filter(Boolean).join(' ');}
   const names=new Map(enrichment.customers.map(c=>[c.id,c]));const linked=new Map();for(const l of data.links){const ids=linked.get(l.asaas_customer_id)||[];ids.push(l.firestore_doc_id);linked.set(l.asaas_customer_id,ids);}
-  const now=today();const customer=id=>({customer_id:id,name:names.get(id)?.name||null,student_ids:linked.get(id)||[],linked:Boolean(linked.get(id)?.length)});
+  const now=today();const customer=id=>({customer_id:id,name:names.get(id)?.name||null,student_ids:linked.get(id)||[],linked:Boolean(linked.get(id)?.length),space_students:(linked.get(id)||[]).map(sid=>studentProfiles.get(sid)||{student_id:sid,unavailable:true})});
   const rows=data.receivables.map(r=>{const open=!r.deleted&&OPEN.has(r.status),late=open&&r.due_date&&r.due_date<now;return {id:r.asaas_payment_id,...customer(r.asaas_customer_id),status:r.status,status_label:late?'Vencido':LABELS[r.status]||r.status,group:r.deleted||CLOSED.has(r.status)?'closed':PAID.has(r.status)?'received':late?'overdue':open?'upcoming':'other',value:cents(r.value),due_date:r.due_date,days_overdue:late?days(r.due_date,now):0,method:r.billing_type,method_label:METHOD[r.billing_type]||r.billing_type||'Não informado',subscription_id:r.asaas_subscription_id,last_synced_at:r.last_synced_at};});
   const subscriptions=enrichment.subscriptions.map(s=>({id:s.id,...customer(s.customer),status:s.status,status_label:LABELS[s.status]||s.status||'Não informado',value:cents(s.value),cycle:s.cycle,cycle_label:CYCLE[s.cycle]||s.cycle||'Não informado',next_due_date:s.next_due_date,method:s.billing_type,method_label:METHOD[s.billing_type]||s.billing_type||'Não informado'}));
   return {...data,rows,subscriptions,customer,names,warning,directory_complete:!warning,today:now};
  };
- const metadata=d=>({source:'Financial Foundation',directory_source:d.directory_complete?'Asaas · consulta de leitura':'Projeções disponíveis',directory_complete:d.directory_complete,warning:d.warning,read_at:d.read_at,today:d.today,receivables:d.rows.length,unlinked_customers:new Set(d.rows.filter(r=>!r.linked&&r.customer_id).map(r=>r.customer_id)).size,missing_values:d.rows.filter(r=>r.value==null).length});
+ const metadata=d=>({source:'Financial Foundation',subscription_source:'Financial Foundation · projeções Asaas',directory_source:d.directory_complete?'Asaas · consulta de leitura':'Projeções disponíveis',directory_complete:d.directory_complete,warning:d.warning,read_at:d.read_at,today:d.today,receivables:d.rows.length,unlinked_customers:new Set(d.rows.filter(r=>!r.linked&&r.customer_id).map(r=>r.customer_id)).size,missing_values:d.rows.filter(r=>r.value==null).length});
  const paginate=(items,q)=>{const size=30,page=Math.min(Math.max(1,Number(q.page)||1),Math.max(1,Math.ceil(items.length/size)));return {items:items.slice((page-1)*size,page*size),total:items.length,page,pages:Math.max(1,Math.ceil(items.length/size)),page_size:size};};
  const search=(row,q)=>!q||fold([row.name,row.id,row.customer_id,row.subscription_id,...(row.student_ids||[])].join(' ')).includes(fold(q));
  return {async get(view,q={}){

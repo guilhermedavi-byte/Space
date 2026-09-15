@@ -15,3 +15,8 @@ test('subscription page uses existing lease projection and blocks invalid cursor
  const f=require('../api/_lib/finance-foundation').createFinanceFoundation({store,client,connectionId:'589367ba-e7c4-4c26-af71-53f97eac31a4',logger:()=>{}});
  assert.equal((await f.syncSubscriptionPage()).examined,1);assert.ok(calls.find(([a,b])=>a==='commit'&&b.resource==='subscriptions'&&b.token==='lease'));await assert.rejects(()=>f.syncSubscriptionPage({offset:-1}));
 });
+test('reader uses projected subscriptions and exposes only linked Space profiles',async()=>{
+ const {createReader}=require('../api/_lib/finance-v1-read');const tables={finance_receivables:[{asaas_payment_id:'pay_one',asaas_customer_id:'cus_exact',value:'100.00',status:'PENDING'}],finance_payments:[],finance_provider_objects:[{resource:'subscriptions',external_object_id:'sub_exact',snapshot:{customer:'cus_exact',status:'ACTIVE',value:'100.00',cycle:'MONTHLY'}}],finance_customer_student_links:[{asaas_customer_id:'cus_exact',firestore_doc_id:'student1'}]};
+ const r=createReader({connectionId:'589367ba-e7c4-4c26-af71-53f97eac31a4',spaceLoader:async()=>source,verify:async()=>{},request:async p=>({data:tables[p.split('?')[0].slice(1)]}),client:{pages:async function*(resource){assert.equal(resource,'customers');yield {data:[{id:'cus_exact',name:'Customer'},{id:'cus_unlinked',name:'Mesmo nome'}]};}}});
+ const subs=await r.get('subscriptions');assert.equal(subs.items[0].id,'sub_exact');const c=await r.get('customers');assert.equal(c.items.find(x=>x.id==='cus_exact').space_students[0].plans[0],'Gold');assert.deepEqual(c.items.find(x=>x.id==='cus_unlinked').space_students,[]);
+});
