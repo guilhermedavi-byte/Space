@@ -1,0 +1,22 @@
+const {isStudent}=require('./finance-space');
+const clean=v=>typeof v==='string'?v.trim():'';
+const email=v=>{const s=clean(v).toLowerCase();return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)?s:null;};
+const phone=v=>{let s=clean(v).replace(/[\s()+.-]/g,'');if(s.startsWith('00'))s=s.slice(2);return /^\d{10,15}$/.test(s)&&! /^(\d)\1+$/.test(s)?s:null;};
+function document(v){const s=clean(v).replace(/[.\s/-]/g,'');if(!/^\d{11}$|^\d{14}$/.test(s)||/^(\d)\1+$/.test(s))return null;const n=[...s].map(Number);const check=(len,weights)=>{const sum=n.slice(0,len).reduce((a,x,i)=>a+x*weights[i],0),r=sum%11;return n[len]===(r<2?0:11-r);};return s.length===11?(check(9,[10,9,8,7,6,5,4,3,2])&&check(10,[11,10,9,8,7,6,5,4,3,2])?s:null):(check(12,[5,4,3,2,9,8,7,6,5,4,3,2])&&check(13,[6,5,4,3,2,9,8,7,6,5,4,3,2])?s:null);}
+const values=(r,keys,normalize)=>[...new Set(keys.map(k=>normalize(r[k])).filter(Boolean))];
+const identifiers=(r,student)=>({document:values(r,student?['cpf','cnpj','cpfCnpj','cpf_cnpj']:['cpfCnpj'],document),phone:values(r,student?['telefone','phone','telefoneWhatsapp','whatsapp']:['phone','mobilePhone'],phone),email:values(r,['email'],email)});
+function index(rows,key,extract){const m=new Map();for(const r of rows)for(const value of extract(r)){const set=m.get(value)||new Set();set.add(r[key]);m.set(value,set);}return m;}
+function classify({sources,customers,subscriptions=[],existing=[],legacy=[]}){
+ const students=sources.users.filter(isStudent),valid=new Map(students.map(s=>[s.firestoreDocId,s]));const cs=new Map(customers.map(c=>[c.id,c]));const aliases=index(students,'firestoreDocId',s=>values(s,['firestoreDocId','uid','authUserId'],clean));
+ const evidence=new Map();const add=(cid,ids,method,source,ambiguous=false)=>{if(!cs.has(cid)||!ids?.size)return;const list=evidence.get(cid)||[];list.push({ids,method,source,ambiguous});evidence.set(cid,list);};
+ for(const c of customers){if(c.externalReference)add(c.id,aliases.get(c.externalReference),'id','asaas.externalReference');}
+ for(const s of subscriptions)if(s.externalReference)add(s.customer,aliases.get(s.externalReference),'id','asaas.subscription.externalReference');
+ for(const s of students)for(const key of ['asaas_customer_id','asaasCustomerId'])if(s[key])add(s[key],new Set([s.firestoreDocId]),'id','firestore.'+key);
+ for(const l of legacy){const sid=l.firestore_doc_id||l.firestoreDocId||l.firestore_student_id;add(l.asaas_customer_id,aliases.get(sid),'id',l.bridge_source);}
+ const spaceId=new Map(sources.students.map(s=>[s.id,s.firestore_student_id])),subs=new Map(subscriptions.map(s=>[s.id,s.customer]));for(const s of sources.contracts)add(subs.get(s.external_subscription_key),aliases.get(spaceId.get(s.student_id)),'id','space.external_subscription_key');
+ for(const l of existing)add(l.asaas_customer_id,new Set([l.firestore_doc_id]),'id','finance.canonical_link',!valid.has(l.firestore_doc_id));
+ for(const method of ['document','phone','email']){const a=index(students,'firestoreDocId',s=>identifiers(s,true)[method]),b=index(customers,'id',c=>identifiers(c,false)[method]);for(const c of customers)for(const v of identifiers(c,false)[method])if(a.has(v))add(c.id,a.get(v),method,'asaas.'+method+'=firestore.'+method,a.get(v).size!==1||b.get(v).size!==1);}
+ const priority=['id','document','phone','email'];return customers.map(c=>{const es=evidence.get(c.id)||[],ids=new Set(es.flatMap(e=>[...e.ids]));const prior=existing.filter(l=>l.asaas_customer_id===c.id);if(es.some(e=>e.ambiguous)||ids.size>1)return {customer_id:c.id,status:'AMBIGUOUS'};if(c.deleted||c.unavailable||!ids.size)return {customer_id:c.id,status:'UNMATCHED'};const method=priority.find(m=>es.some(e=>e.method===m));let recorded;try{recorded=JSON.parse(prior[0]?.verified_by||'{}').method;}catch{}return {customer_id:c.id,student_id:[...ids][0],status:'MATCHED',method:priority.includes(recorded)?recorded:method,source:[...new Set(es.filter(e=>e.method===method).map(e=>e.source))].join('+'),existing:prior.length>0};});
+}
+function summarize(rows){return {analyzed:rows.length,by_method:Object.fromEntries(['id','document','phone','email'].map(m=>[m,rows.filter(r=>r.status==='MATCHED'&&r.method===m).length])),ambiguous:rows.filter(r=>r.status==='AMBIGUOUS').length,unmatched:rows.filter(r=>r.status==='UNMATCHED').length,linked:rows.filter(r=>r.status==='MATCHED'&&r.existing).length,pending:rows.filter(r=>r.status==='MATCHED'&&!r.existing).length};}
+module.exports={classify,summarize,phone,email,document};

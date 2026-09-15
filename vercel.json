@@ -14,6 +14,9 @@
     },
     "api/finance-recovery-base.js": {
       "maxDuration": 300
+    },
+    "api/finance-identity-bridge.js": {
+      "maxDuration": 300
     }
   },
   "headers": [
