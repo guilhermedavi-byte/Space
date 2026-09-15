@@ -21,18 +21,8 @@ async function collect(reads,{env,onProgress=()=>{}}={}){
   const snapshotRecords=[...history,current].filter(Boolean),snapshots={};
   for(const record of [...snapshotRecords].sort((a,b)=>String(a.generatedAt||'').localeCompare(String(b.generatedAt||'')))){const payload=record.payload;if(payload?.month?.period?.monthKey)snapshots[payload.month.period.monthKey]=payload;}
   const globalConfig=await get('growthConfig/crmLiveDefaults');onProgress('firestoreLoaded');
-  // Only explicit absence is no_attribution. A non-null SDR requires an explicit
-  // deal->event link and matching actor; meetings alone are NOT origin evidence.
-  const evidence=[];
-  const eventsById=new Map();for(const e of sdrEvents){const id=e.id||e.firestoreDocId;if(!eventsById.has(id))eventsById.set(id,[]);eventsById.get(id).push(e);}
-  const {getBusinessId}=require('../../api/_lib/commercial-sales');
-  for(const b of source.businesses){
-    const dealId=getBusinessId(b);
-    if(Object.hasOwn(b,'sdrId')&&b.sdrId===null&&!b.sdrUid&&!b.sdr?.id)evidence.push({dealId,sdrId:null,source:'explicit_datacrazy_sdrId_null'});
-    const linked=(eventsById.get(b.sdrEventId)||[]).filter(e=>(e.dealId||e.businessId)===dealId&&!e.deletedAt);
-    if(b.sdrEventId&&linked.length===1){const e=linked[0];if((e.sdrUid||e.sdrId)===(b.sdrUid||b.sdrId||b.sdr?.id))evidence.push({dealId,sdrId:e.sdrUid||e.sdrId,source:'explicit_deal_event_link',eventId:b.sdrEventId,timestamp:e.time||e.createdAt});}
-  }
-  return {businesses:source.businesses,recordPages:source.recordPages,source:source.metadata,identityKind:'dealId',users,growthPeople,goals,sdrEvents,sdrEventsComplete:true,sdrAttribution:{status:'loaded',evidence},globalConfig,snapshots,snapshotRecords,retries};
+  const sdrAttribution=require('../../api/_lib/commercial-sdr-origin').buildSdrEvidence(source.businesses,sdrEvents,{sourceComplete:true,eventsComplete:true});
+  return {businesses:source.businesses,recordPages:source.recordPages,source:source.metadata,identityKind:'dealId',users,growthPeople,goals,sdrEvents,sdrEventsComplete:true,sdrAttribution,globalConfig,snapshots,snapshotRecords,retries};
 }
 function adapters(){
   const {getDocumentAsAdmin,listCollectionAsAdmin}=require('../../api/_lib/firestore-admin');

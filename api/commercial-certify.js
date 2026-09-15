@@ -13,6 +13,6 @@ module.exports=async(req,res)=>{
   if(req.method==='GET')return res.end(JSON.stringify({runtime:'commercial-certification-v1',commit:process.env.VERCEL_GIT_COMMIT_SHA||null,credentialsAvailable:['CRM_API_BASE_URL','CRM_API_KEY','GOOGLE_SERVICE_ACCOUNT_JSON'].every(k=>!!process.env[k]?.trim())}));
   if(running){res.statusCode=409;return res.end('{"error":"already_running"}');}
   running=true;res.once('finish',()=>{running=false;});res.once('close',()=>{running=false;});
-  req.url='/api/certify';
-  return createHandler({manifest:{expiresAt}})(req,res);
+  try{const result=await require('../scripts/commercial-certification/finish.cjs')();return res.end(JSON.stringify(result));}
+  catch(e){res.statusCode=500;const allowed=['source_incomplete','certified_deal_missing','certified_baseline_changed','backfill_validation_failed','backfill_readback_failed','backfill_scope_rejected'];return res.end(JSON.stringify({certification:'FAIL',failure:allowed.includes(e.message)?e.message:'targeted_certification_failed'}));}
 };
