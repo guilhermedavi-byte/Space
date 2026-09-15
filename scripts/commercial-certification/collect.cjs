@@ -27,6 +27,6 @@ async function collect(reads,{env,onProgress=()=>{}}={}){
 }
 function adapters(){
   const {getDocumentAsAdmin,listCollectionAsAdmin}=require('../../api/_lib/firestore-admin');
-  return {get:async path=>{try{return await getDocumentAsAdmin(path);}catch(e){if(e.status===404)return null;throw e;}},list:path=>listCollectionAsAdmin(path)};
+  return {get:async path=>{try{return await getDocumentAsAdmin(path);}catch(e){if(e.status===404)return null;throw e;}},list:path=>listCollectionAsAdmin(path,{maxPages:path==='sdrActivityEvents'?200:20})};
 }
 module.exports={collect,adapters};
