@@ -11,12 +11,15 @@ function createHandler({ session=getSessionFromRequest, service=()=>createFinanc
     if(env.FINANCE_FOUNDATION_ENABLED!=='true')return sendJson(res,503,{error:'finance_foundation_disabled'});
     try {
       const f=service();
-      if(req.method==='GET')return sendJson(res,200,await f.health());
+      if(req.method==='GET')return sendJson(res,200,await f.health({recordHealth:env.FINANCE_ENV_SCOPE!=='production'}));
       if(req.method!=='POST'){res.setHeader('Allow','GET, POST');return sendJson(res,405,{error:'method_not_allowed'});}
       // Cookie-authenticated mutations must originate from the configured application.
       if(!env.SPACE_PUBLIC_BASE_URL || req.headers.origin!==new URL(env.SPACE_PUBLIC_BASE_URL).origin) return sendJson(res,403,{error:'invalid_origin'});
       let body;try{body=await readJsonBody(req);}catch{throw new FinanceError('finance_payload_invalid');}
-      const actor=String(user.uid||user.id||'');if(!actor)throw new FinanceError('finance_actor_missing',false,403);
+      // Production maintenance uses the CLI's explicit apply and private snapshots.
+      if(env.FINANCE_ENV_SCOPE==='production' && (body.action!=='repair'||body.apply===true))
+        return sendJson(res,409,{error:'finance_production_use_audited_cli'});
+      const actor=String(user.sub||user.uid||user.id||'');if(!actor)throw new FinanceError('finance_actor_missing',false,403);
       if(body.action==='retry')return sendJson(res,200,await f.retryWebhookEvent(body.event_id,{actor}));
       if(body.action==='process')return sendJson(res,200,await f.drain({limit:Math.min(20,Math.max(1,Number(body.limit)||10)),actor}));
       // Bulk apply is intentionally CLI-only. Repair is preview-first unless explicitly requested.

@@ -17,7 +17,7 @@ const safeAsaasError = (error) => ({
   retryable: error instanceof AsaasError ? error.retryable : false,
 });
 function createAsaasClient({ config = getAsaasConfig, fetchImpl = (...args) => fetch(...args),
-  timeoutMs = 10000, onSuccess = async () => {} } = {}) {
+  timeoutMs = 10000, onSuccess = async () => {}, readOnly = false } = {}) {
   const getConfig = () => {
     let cfg;
     try { cfg = config(); } catch { throw new AsaasError('asaas_environment_invalid'); }
@@ -28,6 +28,7 @@ function createAsaasClient({ config = getAsaasConfig, fetchImpl = (...args) => f
   const request = async (path, { method = 'GET', body } = {}) => {
     const cfg = getConfig();
     const verb = String(method).toUpperCase();
+    if (readOnly && verb !== 'GET') throw new AsaasError('asaas_read_only');
     // PUT is Asaas v3's update verb. PATCH is not silently translated.
     if (!['GET', 'POST', 'PUT', 'DELETE'].includes(verb)) throw new AsaasError('asaas_method_invalid');
     if (!/^\/[A-Za-z][A-Za-z0-9/_?=&.%\[\]-]*$/.test(path) || path.includes('..') || path.includes('://')) {

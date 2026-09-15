@@ -108,9 +108,13 @@ declare
   ext text := p_args->>'external_object_id'; resource_name text := p_args->>'resource';
   source_name text := coalesce(p_args->>'source','SYSTEM'); actor_name text := coalesce(p_args->>'actor','system');
 begin
-  if p_action='configure' then
+  if p_action in ('configure','preview_configure') then
     if p_args->>'environment' not in ('sandbox','production') or p_args->>'account_reference' !~ '^[0-9:-]{3,80}$' then
       raise exception 'finance_config_invalid';
+    end if;
+    if p_action='preview_configure' then
+      return (select to_jsonb(con) from public.connections con where provider='asaas'
+        and external_account_type='asaas:'||(p_args->>'environment') and external_account_id=p_args->>'account_reference');
     end if;
     insert into public.connections(provider,external_account_type,external_account_id,display_name,status)
       values('asaas','asaas:'||(p_args->>'environment'),p_args->>'account_reference','Asaas','active')
@@ -139,7 +143,10 @@ begin
       'last_webhook_received',(select max(received_at) from public.finance_webhook_events where connection_id=c),
       'last_webhook_processed',(select max(processed_at) from public.finance_webhook_events where connection_id=c and processing_status='processed'),
       'pending_events',(select count(*) from public.finance_webhook_events where connection_id=c and processing_status in ('pending','processing')),
-      'failed_events',(select count(*) from public.finance_webhook_events where connection_id=c and processing_status='failed')
+      'failed_events',(select count(*) from public.finance_webhook_events where connection_id=c and processing_status='failed'),
+      'last_repair',(select max(created_at) from public.finance_audit_events where connection_id=c and source='ASAAS_REPAIR'),
+      'last_backfill',(select jsonb_build_object('id',id,'status',status,'started_at',started_at,'finished_at',finished_at)
+        from public.finance_sync_runs where connection_id=c and source='ASAAS_BACKFILL' order by started_at desc,id desc limit 1)
     ) from public.finance_connection_state s where connection_id=c);
   elsif p_action='connection' then
     return jsonb_build_object('connection_id',c,'environment',cs.environment,'account_reference',cs.external_account_id);

@@ -16,6 +16,8 @@ test('Finance: real PostgreSQL/PostgREST transactional foundation with simulated
     const h=await createHarness();
     try{
       const store=createFinanceStore({request:h.request});
+      assert.equal(await store.rpc('preview_configure',{environment:'production',account_reference:'0001:987:1'}),null);
+      assert.equal(h.sql("select count(*) from public.connections"),'0');
       const {connection_id}=await store.rpc('configure',{environment:'sandbox',account_reference:'0001:123:4'});
       const scope={connection_id};
       const remote=new Map();const calls=[];let fault=null,hold=null;
@@ -133,8 +135,8 @@ test('Finance: real PostgreSQL/PostgREST transactional foundation with simulated
         const preview=await service.sync({dryRun:true,limit:2});assert.ok(preview.counts.MISSING_LOCAL>=1);assert.ok(preview.counts.UNMATCHED_CUSTOMER>=1);
         assert.ok(calls.some(x=>x.includes('offset=2')));assert.equal(await get('pay_backfill'),null);
         assert.equal(scalar('select count(*) from finance_audit_events'),before);assert.equal(scalar('select count(*) from finance_sync_runs'),runs);
-        await service.sync({dryRun:false,limit:2});const count=scalar('select count(*) from finance_receivables'),audits=scalar('select count(*) from finance_audit_events');
-        await service.sync({dryRun:false,limit:2});assert.equal(scalar('select count(*) from finance_receivables'),count);assert.equal(scalar('select count(*) from finance_audit_events'),audits);
+        await service.sync({dryRun:false,limit:2,concurrency:3});const count=scalar('select count(*) from finance_receivables'),audits=scalar('select count(*) from finance_audit_events');
+        await service.sync({dryRun:false,limit:2,concurrency:3});assert.equal(scalar('select count(*) from finance_receivables'),count);assert.equal(scalar('select count(*) from finance_audit_events'),audits);
       });
       await t.test('reconciliation detects typed-column drift; repair restores Asaas state with source audit',async()=>{
         h.sql("update finance_receivables set status='OVERDUE',value=999,due_date='2027-01-01' where asaas_payment_id='pay_backfill';");
@@ -189,11 +191,25 @@ test('Finance: real PostgreSQL/PostgREST transactional foundation with simulated
         h.sql(fs.readFileSync(path.join(__dirname,'../supabase/migrations/202609140001_attendance_foundation.sql'),'utf8'));
         h.migrate();assert.equal((await service.verifyConnection()).connection_id,connection_id);
         assert.equal((await get('pay_created')).status,'PENDING');
+        const preview=await store.rpc('preview_configure',{environment:'sandbox',account_reference:'0001:123:4'});
+        assert.equal(preview.connection_id,connection_id);
+        const metrics=await store.rpc('health',scope);
+        assert.ok(metrics.last_repair);assert.ok(metrics.last_backfill);
       });
       await t.test('unknown events stored then ignored visibly; migration replay preserves records',async()=>{
         const e=await service.ingestWebhook({id:'evt_unknown',event:'UNKNOWN_EVENT'});await service.processWebhookEvent(e.event_id);
         assert.equal((await store.rpc('event',{...scope,event_id:e.event_id})).processing_status,'ignored');
         const count=scalar('select count(*) from finance_receivables');h.migrate();assert.equal(scalar('select count(*) from finance_receivables'),count);
+      });
+      await t.test('local-only reconciliation reads PostgreSQL IDs and preserves unmatched history',async()=>{
+        const saved=remote.get('pay_created');remote.delete('pay_created');
+        const before=scalar('select count(*) from finance_audit_events');
+        try {
+          const report=await service.sync({source:'ASAAS_RECONCILIATION',dryRun:true,inspectLocalOnly:true,limit:2});
+          assert.equal(report.local_only_scan,'complete');
+          assert.ok(report.issues.some(i=>i.external_object_id==='pay_created'&&i.issues.includes('LOCAL_ONLY')));
+          assert.ok(await get('pay_created'));assert.equal(scalar('select count(*) from finance_audit_events'),before);
+        }finally{remote.set('pay_created',saved);}
       });
     }finally{h.cleanup();}
   });
