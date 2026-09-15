@@ -29,6 +29,7 @@ async function collectBusinesses({ snapshotId = crypto.randomUUID(), fetchImpl =
     expectedRecords: null, requestsCount: 0, retryCount: 0, datacrazy429Count: 0, durationMs: 0,
     fetchCompleted: false, paginationCompleted: false };
   const rows = new Map();
+  const recordPages = {};
   let lastRequestAt = -Infinity;
   logger('fetch_started', { snapshotId });
   const delay = async (ms) => {
@@ -85,6 +86,7 @@ async function collectBusinesses({ snapshotId = crypto.randomUUID(), fetchImpl =
         if (!id) throw failure('missing_business_id');
         const serialized = canonicalJson(business);
         if (rows.has(id) && rows.get(id).serialized !== serialized) throw failure('conflicting_duplicate_business');
+        (recordPages[id] ||= []).push(page);
         rows.set(id, { business, serialized });
       }
       logger('page_completed', { snapshotId, page, expectedPages: metadata.expectedPages, received: decoded.items.length, recordsFetched: metadata.recordsFetched });
@@ -98,13 +100,14 @@ async function collectBusinesses({ snapshotId = crypto.randomUUID(), fetchImpl =
     if (!metadata.paginationCompleted) throw failure('pagination_limit_exceeded');
     const businesses = [...rows.entries()].sort(([a], [b]) => a.localeCompare(b, 'en')).map(([, row]) => row.business);
     metadata.recordsConsidered = businesses.length;
+
     metadata.sourceMaxDate = businesses.map(b => getBusinessClosingDate(b).date?.toISOString()).filter(Boolean).sort().pop() || null;
     metadata.fetchCompleted = true;
     metadata.fetchCompletedAt = new Date(clock()).toISOString();
     metadata.durationMs = clock() - started;
     metadata.datasetHash = crypto.createHash('sha256').update(canonicalJson(businesses)).digest('hex');
     logger('fetch_completed', metadata);
-    return { businesses, metadata };
+    return { businesses, metadata, recordPages };
   } catch (error) {
     metadata.durationMs = clock() - started;
     error.syncMetadata = metadata;

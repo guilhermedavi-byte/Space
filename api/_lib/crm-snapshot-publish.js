@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 const { createFirestoreStore } = require('./crm-snapshot-store');
 const { failure, log } = require('./datacrazy-ingestion');
-const CALCULATION_VERSION = 3;
+const CALCULATION_VERSION = 4;
 function validateCrmSnapshot(payload) {
   const m = payload.snapshot;
   const week = payload.weekly?.team?.closers;
@@ -9,7 +9,19 @@ function validateCrmSnapshot(payload) {
   if (!m || m.status !== 'VALID' || m.calculationVersion !== CALCULATION_VERSION || !m.fetchCompleted || !m.paginationCompleted || !m.calculationCompleted || (m.expectedPages !== null && m.pagesFetched !== m.expectedPages)) throw failure('snapshot_quality_gate_failed');
   if (m.recordsEligible > m.recordsConsidered) throw failure('invalid_eligible_count');
   if (!week || !month || ![week.actualValue, week.count, month.realizado, month.totalVendas].every(Number.isFinite)) throw failure('invalid_snapshot_metrics');
+  for (const [deals, value, count] of [[m.includedDeals, week.actualValue, week.count], [m.monthlyIncludedDeals, month.realizado, month.totalVendas]]) {
+    if (!Array.isArray(deals) || deals.length !== count || new Set(deals.map(d=>d.id)).size !== deals.length ||
+        deals.some(d=>!d.id || !d.weekKey || !d.competencia || !d.responsibleId || !d.dateField || !d.dateKey || !d.status || !d.role || !Number.isFinite(d.value)) ||
+        Math.abs(deals.reduce((s,d)=>s+d.value,0)-value)>0.005) throw failure('snapshot_deal_reconciliation_failed');
+  }
+  for (const metric of [m.reconciliation?.month,m.reconciliation?.week]) {
+    if (!metric || ['monthly_weekly_delta','overlapping_periods','improper_gaps','orphan_deals','unallocated_revenue','duplicate_attribution_revenue','estimated_value_deals','invalid_financial_deals'].some(k=>metric[k] !== 0)) throw failure('snapshot_ledger_invariant_failed');
+  }
   const rows = payload.weekly.closers || [];
+  for (const row of rows) {
+    const attributed=m.includedDeals.filter(d=>d.responsibleId===row.personId);
+    if(attributed.length!==row.count || Math.abs(attributed.reduce((s,d)=>s+d.value,0)-row.actualValue)>0.005) throw failure('snapshot_role_reconciliation_failed');
+  }
   if (new Set(rows.map(r => r.personId)).size !== rows.length || Math.abs(rows.reduce((s,r)=>s+r.actualValue,0) - week.actualValue) > 0.005 || rows.reduce((s,r)=>s+r.count,0) !== week.count) throw failure('snapshot_reconciliation_failed');
 }
 async function publishCrmSnapshot(payload, { store = createFirestoreStore(), logger = log } = {}) {

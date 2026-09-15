@@ -17,6 +17,7 @@ test("resolveCommercialPeriod mantém calendário quando não há override", () 
   const period = resolveCommercialPeriod({ now: new Date("2026-08-11T12:00:00-03:00") });
   assert.deepEqual(period, {
     monthKey: "2026-08",
+    start: "2026-08-01T03:00:00.000Z", end: "2026-09-01T03:00:00.000Z", endExclusiveDateKey: "2026-09-01", timezone: "America/Sao_Paulo",
     startDateKey: "2026-08-01",
     endDateKey: "2026-08-31",
     nowDateKey: "2026-08-11",
@@ -35,6 +36,7 @@ test("resolveCommercialPeriod aplica janela customizada do comercial", () => {
   });
   assert.deepEqual(period, {
     monthKey: "2026-08",
+    start: "2026-08-02T03:00:00.000Z", end: "2026-09-01T03:00:00.000Z", endExclusiveDateKey: "2026-09-01", timezone: "America/Sao_Paulo",
     startDateKey: "2026-08-02",
     endDateKey: "2026-08-31",
     nowDateKey: "2026-08-11",

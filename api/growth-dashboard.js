@@ -282,7 +282,7 @@ const firestoreListDocumentsWithAccessToken = async ({ collectionPath, accessTok
     if (!pageToken) return { ...res, documents: all };
   }
 
-  return { ok: true, status: 200, data: null, text: "", documents: all };
+  throw new Error("firestore_pagination_incomplete");
 };
 
 const firestorePatchDocumentWithAccessToken = async ({ docPath, accessToken, data, updateMaskPaths } = {}) => {

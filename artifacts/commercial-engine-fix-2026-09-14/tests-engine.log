@@ -1,0 +1,268 @@
+TAP version 13
+# Subtest: closed deals without identity or closing date cannot be certified as zero
+ok 1 - closed deals without identity or closing date cannot be certified as zero
+  ---
+  duration_ms: 2.346208
+  type: 'test'
+  ...
+# Subtest: cross-month weekly ledger preserves each real competence
+ok 2 - cross-month weekly ledger preserves each real competence
+  ---
+  duration_ms: 1.385166
+  type: 'test'
+  ...
+# Subtest: half-open boundary first
+ok 3 - half-open boundary first
+  ---
+  duration_ms: 0.111208
+  type: 'test'
+  ...
+# Subtest: half-open boundary last
+ok 4 - half-open boundary last
+  ---
+  duration_ms: 0.068958
+  type: 'test'
+  ...
+# Subtest: half-open boundary next
+ok 5 - half-open boundary next
+  ---
+  duration_ms: 0.130792
+  type: 'test'
+  ...
+# Subtest: half-open boundary august-before
+ok 6 - half-open boundary august-before
+  ---
+  duration_ms: 0.207333
+  type: 'test'
+  ...
+# Subtest: half-open boundary august-special
+ok 7 - half-open boundary august-special
+  ---
+  duration_ms: 0.179959
+  type: 'test'
+  ...
+# Subtest: half-open boundary special-last
+ok 8 - half-open boundary special-last
+  ---
+  duration_ms: 0.067375
+  type: 'test'
+  ...
+# Subtest: half-open boundary special-next
+ok 9 - half-open boundary special-next
+  ---
+  duration_ms: 0.282375
+  type: 'test'
+  ...
+# Subtest: half-open boundary year
+ok 10 - half-open boundary year
+  ---
+  duration_ms: 0.418083
+  type: 'test'
+  ...
+# Subtest: partition has no overlaps/gaps 2025-02
+ok 11 - partition has no overlaps/gaps 2025-02
+  ---
+  duration_ms: 19.692417
+  type: 'test'
+  ...
+# Subtest: partition has no overlaps/gaps 2024-02
+ok 12 - partition has no overlaps/gaps 2024-02
+  ---
+  duration_ms: 17.669417
+  type: 'test'
+  ...
+# Subtest: partition has no overlaps/gaps 2026-04
+ok 13 - partition has no overlaps/gaps 2026-04
+  ---
+  duration_ms: 18.344583
+  type: 'test'
+  ...
+# Subtest: partition has no overlaps/gaps 2026-07
+ok 14 - partition has no overlaps/gaps 2026-07
+  ---
+  duration_ms: 18.590083
+  type: 'test'
+  ...
+# Subtest: partition has no overlaps/gaps 2026-08
+ok 15 - partition has no overlaps/gaps 2026-08
+  ---
+  duration_ms: 19.551459
+  type: 'test'
+  ...
+# Subtest: partition has no overlaps/gaps 2026-12
+ok 16 - partition has no overlaps/gaps 2026-12
+  ---
+  duration_ms: 22.56575
+  type: 'test'
+  ...
+# Subtest: host timezone cannot change commercial date, month, or week
+ok 17 - host timezone cannot change commercial date, month, or week
+  ---
+  duration_ms: 190.36525
+  type: 'test'
+  ...
+# Subtest: date-only values mean Sao Paulo civil date, invalid/ambiguous dates fail
+ok 18 - date-only values mean Sao Paulo civil date, invalid/ambiguous dates fail
+  ---
+  duration_ms: 0.078792
+  type: 'test'
+  ...
+# Subtest: historical DST midnight gap resolves to first real instant
+ok 19 - historical DST midnight gap resolves to first real instant
+  ---
+  duration_ms: 0.175667
+  type: 'test'
+  ...
+# Subtest: created in May and gained at new-week midnight belongs to September
+ok 20 - created in May and gained at new-week midnight belongs to September
+  ---
+  duration_ms: 0.568584
+  type: 'test'
+  ...
+# Subtest: explicit zero remains zero and counts one sale, not a fallback ticket
+ok 21 - explicit zero remains zero and counts one sale, not a fallback ticket
+  ---
+  duration_ms: 0.160416
+  type: 'test'
+  ...
+# Subtest: identical deal IDs counted once; conflicting financial facts reject
+ok 22 - identical deal IDs counted once; conflicting financial facts reject
+  ---
+  duration_ms: 0.327625
+  type: 'test'
+  ...
+# Subtest: revenue preserved in Outros: inactive
+ok 23 - revenue preserved in Outros: inactive
+  ---
+  duration_ms: 0.829167
+  type: 'test'
+  ...
+# Subtest: revenue preserved in Outros: removed
+ok 24 - revenue preserved in Outros: removed
+  ---
+  duration_ms: 0.456958
+  type: 'test'
+  ...
+# Subtest: revenue preserved in Outros: changed-role
+ok 25 - revenue preserved in Outros: changed-role
+  ---
+  duration_ms: 0.425458
+  type: 'test'
+  ...
+# Subtest: revenue preserved in Outros: missing-owner
+ok 26 - revenue preserved in Outros: missing-owner
+  ---
+  duration_ms: 0.456958
+  type: 'test'
+  ...
+# Subtest: revenue preserved in Outros: SDR
+ok 27 - revenue preserved in Outros: SDR
+  ---
+  duration_ms: 0.5145
+  type: 'test'
+  ...
+# Subtest: historical explicit closer role overrides current SDR role
+ok 28 - historical explicit closer role overrides current SDR role
+  ---
+  duration_ms: 0.345792
+  type: 'test'
+  ...
+# Subtest: monthly = clipped weekly partitions, including days from adjacent planning weeks
+ok 29 - monthly = clipped weekly partitions, including days from adjacent planning weeks
+  ---
+  duration_ms: 0.79175
+  type: 'test'
+  ...
+# Subtest: overlapping custom competences are detected, never silently double-assigned
+ok 30 - overlapping custom competences are detected, never silently double-assigned
+  ---
+  duration_ms: 0.218125
+  type: 'test'
+  ...
+# Subtest: monthly and weekly CRM helpers reconcile to management and financial ledger
+ok 31 - monthly and weekly CRM helpers reconcile to management and financial ledger
+  ---
+  duration_ms: 2.339334
+  type: 'test'
+  ...
+# Subtest: deal-level reconciliation detects value drift
+ok 32 - deal-level reconciliation detects value drift
+  ---
+  duration_ms: 0.130042
+  type: 'test'
+  ...
+# Subtest: deal-level reconciliation detects dateKey drift
+ok 33 - deal-level reconciliation detects dateKey drift
+  ---
+  duration_ms: 0.036
+  type: 'test'
+  ...
+# Subtest: deal-level reconciliation detects dateField drift
+ok 34 - deal-level reconciliation detects dateField drift
+  ---
+  duration_ms: 0.031041
+  type: 'test'
+  ...
+# Subtest: deal-level reconciliation detects weekKey drift
+ok 35 - deal-level reconciliation detects weekKey drift
+  ---
+  duration_ms: 0.124083
+  type: 'test'
+  ...
+# Subtest: deal-level reconciliation detects competencia drift
+ok 36 - deal-level reconciliation detects competencia drift
+  ---
+  duration_ms: 0.041375
+  type: 'test'
+  ...
+# Subtest: deal-level reconciliation detects status drift
+ok 37 - deal-level reconciliation detects status drift
+  ---
+  duration_ms: 0.028708
+  type: 'test'
+  ...
+# Subtest: deal-level reconciliation detects responsibleId drift
+ok 38 - deal-level reconciliation detects responsibleId drift
+  ---
+  duration_ms: 0.025292
+  type: 'test'
+  ...
+# Subtest: deal-level reconciliation detects role drift
+ok 39 - deal-level reconciliation detects role drift
+  ---
+  duration_ms: 0.024292
+  type: 'test'
+  ...
+# Subtest: same aggregate does not hide exchanged, duplicate or missing deals
+ok 40 - same aggregate does not hide exchanged, duplicate or missing deals
+  ---
+  duration_ms: 0.106333
+  type: 'test'
+  ...
+# Subtest: SDR events: identity, duplicate, deletion, wrong outcome, missing actor all explicit
+ok 41 - SDR events: identity, duplicate, deletion, wrong outcome, missing actor all explicit
+  ---
+  duration_ms: 0.250459
+  type: 'test'
+  ...
+# Subtest: readOnly source path cannot acquire lease, collect, or publish
+ok 42 - readOnly source path cannot acquire lease, collect, or publish
+  ---
+  duration_ms: 0.6405
+  type: 'test'
+  ...
+# Subtest: publication requires per-deal ledger even when team totals match
+ok 43 - publication requires per-deal ledger even when team totals match
+  ---
+  duration_ms: 0.24275
+  type: 'test'
+  ...
+1..43
+# tests 43
+# suites 0
+# pass 43
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 399.846875

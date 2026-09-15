@@ -1,6 +1,7 @@
 // Read-only management model. Financial and role rules remain owned by CRM Live.
 const { resolveCommercialWeek, addDaysToDateKey, formatDateKey } = require('./commercial-week');
 const { buildWeeklyGoalsReadModel } = require('./growth-people');
+const { buildCommercialLedger } = require('./commercial-reconciliation');
 const { buildMonthSummary, buildWeeklyTeamSummary } = require('./crm-live');
 
 const listCompetenciaWeeks = (competencia) => {
@@ -38,6 +39,7 @@ const buildCommercialGoalsModel = ({ competencia, goal, previousGoal = null, glo
     return { ...week, exists, rows, effectiveConfig: Boolean(read.weeklyGoal), configSource: read.weeklyGoalConfigSource,
       teamTarget: read.weeklyGoal?.teamTarget || 0,
       summary: buildWeeklyTeamSummary({ weeklyReadModel: read }).closers,
+      sdrReconciliation: read.sdrReconciliation,
       progress: read.progress };
   };
   const weeks = listCompetenciaWeeks(competencia).map(week => {
@@ -49,9 +51,10 @@ const buildCommercialGoalsModel = ({ competencia, goal, previousGoal = null, glo
       copyFromPrevious: !model.exists && previousModel.exists ? { rows: previousModel.rows, teamTarget: previousModel.teamTarget } : null };
   });
   const month = buildMonthSummary({ businesses, goal, now: new Date(`${competencia}-15T12:00:00-03:00`) });
+  const reconciliation = buildCommercialLedger({ competencia, goal, globalConfig, people, businesses, goals: { [competencia]: goal, ...(previousGoal?.competencia ? { [previousGoal.competencia]: previousGoal } : {}) } });
   const monthlyExists = goal?.valorMeta != null;
   const distributed = weeks.filter(week => week.exists).reduce((sum, week) => sum + week.summary.targetValue, 0);
-  return { competencia, currentCompetencia: today.slice(0, 7), editable, monthlyExists, goal, month, weeks,
+  return { competencia, currentCompetencia: today.slice(0, 7), editable, monthlyExists, goal, month, weeks, reconciliation,
     planning: { distributed, difference: month.summary.meta - distributed } };
 };
 

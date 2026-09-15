@@ -102,6 +102,7 @@ const people = [
 test('resolveCommercialWeek respeita a semana especial inicial', () => {
   const week = resolveCommercialWeek({ now: new Date('2026-08-11T10:00:00-03:00') });
   assert.deepEqual(week, {
+    start: '2026-08-11T03:00:00.000Z', end: '2026-08-19T03:00:00.000Z', endExclusiveDateKey: '2026-08-19', timezone: 'America/Sao_Paulo',
     weekKey: 'wk_2026-08-11',
     startDateKey: '2026-08-11',
     endDateKey: '2026-08-18',
@@ -113,6 +114,7 @@ test('resolveCommercialWeek respeita a semana especial inicial', () => {
 test('resolveCommercialWeek usa quarta-terça após 19/08/2026', () => {
   const week = resolveCommercialWeek({ now: new Date('2026-08-20T10:00:00-03:00') });
   assert.deepEqual(week, {
+    start: '2026-08-19T03:00:00.000Z', end: '2026-08-26T03:00:00.000Z', endExclusiveDateKey: '2026-08-26', timezone: 'America/Sao_Paulo',
     weekKey: 'wk_2026-08-19',
     startDateKey: '2026-08-19',
     endDateKey: '2026-08-25',

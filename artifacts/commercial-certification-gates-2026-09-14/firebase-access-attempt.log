@@ -1,0 +1,3 @@
+Read failed: FirebaseError Authentication Error: Your credentials are no longer valid. Please run firebase login --reauth
+
+For CI servers and headless environments, generate a new token w

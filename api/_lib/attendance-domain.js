@@ -1,4 +1,5 @@
 const { assertEnvironmentIsolation } = require('../../_lib/runtime-env');
+const { assertAttendanceTarget } = require('../../_lib/attendance-environment');
 
 const fail = (code = 'attendance_invalid_request', status = 422) => {
   const error = new Error(code);
@@ -40,6 +41,7 @@ const assertAttendanceEnvironment = (env = process.env) => {
   if (env.APP_ENV !== 'staging' || env.SUPABASE_ENV_SCOPE !== 'staging' || !current
     || current !== clean(env.SPACE_STAGING_SUPABASE_URL) || !clean(env.SPACE_PRODUCTION_SUPABASE_URL)
     || current === clean(env.SPACE_PRODUCTION_SUPABASE_URL)) fail('attendance_staging_not_verified', 503);
+  assertAttendanceTarget(env);
   assertEnvironmentIsolation(env);
 };
 

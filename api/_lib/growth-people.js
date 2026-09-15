@@ -552,28 +552,12 @@ const summarizeWeeklyCloserProgress = ({ sales = [], goalPeople = [], indexes })
   return Array.from(rowsByPerson.values());
 };
 
+const { summarizeSdrEvents } = require('./commercial-sdr');
 const summarizeWeeklySdrProgress = ({ events = [], goalPeople = [], indexes, week }) => {
-  const rowsByPerson = new Map(
-    goalPeople
-      .filter((row) => row.role === 'sdr' || row.role === 'both')
-      .map((row, index) => [row.personId, { personId: row.personId, role: row.role, targetValue: safeNumber(row.targetValue), goalOrder: index, actualValue: 0, count: 0 }])
-  );
-  (Array.isArray(events) ? events : []).forEach((event) => {
-    const eventType = safeString(event?.eventType);
-    const outcome = safeString(event?.outcome);
-    const deletedAt = safeString(event?.deletedAt);
-    const dateKey = safeString(event?.dateKey);
-    const sdrUid = safeString(event?.sdrUid);
-    const email = safeString(event?.sdrEmail).toLowerCase();
-    if (deletedAt || eventType !== 'meeting' || outcome !== 'show') return;
-    if (!dateKey || dateKey < week.startDateKey || dateKey > week.endDateKey) return;
-    const personId = (sdrUid && indexes.bySdrUid.get(sdrUid)) || indexes.bySdrEmail.get(email);
-    if (!personId || !rowsByPerson.has(personId)) return;
-    const row = rowsByPerson.get(personId);
-    row.actualValue += 1;
-    row.count += 1;
-  });
-  return Array.from(rowsByPerson.values());
+  const rows = goalPeople.filter(r=>r.role === 'sdr' || r.role === 'both').map((r,index)=>({personId:r.personId,role:r.role,targetValue:safeNumber(r.targetValue),goalOrder:index,actualValue:0,count:0}));
+  const audit=summarizeSdrEvents({events,indexes,week,eligiblePersonIds:rows.map(r=>r.personId)});
+  for (const event of audit.included) { const row=rows.find(r=>r.personId===event.personId);if(row){row.actualValue++;row.count++;} }
+  return { rows, audit };
 };
 
 const attachPersonMeta = (rows = [], indexes) =>
@@ -625,9 +609,11 @@ const buildWeeklyGoalsReadModel = ({ goal = null, globalConfig = null, people = 
   ).map((row) => row.personId === AGGREGATE_OTHERS_PERSON_ID ? { ...row, role: 'closer' } : row);
   const closedSales = summarizeClosedSales({ businesses, period: week });
   const closerRows = attachPersonMeta(summarizeWeeklyCloserProgress({ sales: closedSales.sales, goalPeople, indexes }), indexes);
-  const sdrRows = attachPersonMeta(summarizeWeeklySdrProgress({ events: sdrEvents, goalPeople, indexes, week }), indexes);
+  const sdrResult = summarizeWeeklySdrProgress({ events: sdrEvents, goalPeople, indexes, week });
+  const sdrRows = attachPersonMeta(sdrResult.rows, indexes);
   return {
     commercialWeek: week,
+    sdrReconciliation: sdrResult.audit,
     weeklyGoal,
     weeklyGoalConfigSource: resolvedConfig.source,
     weeklyGoalConfigSourceDetails: resolvedConfig.sourceDetails || { teamTarget: '', people: '' },

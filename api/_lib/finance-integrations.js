@@ -48,9 +48,10 @@ const buildChatwootConversationUrl = (conversationId) => {
 };
 
 const getAsaasConfig = () => {
-  assertEnvironmentIsolation();
+  // Report an absent key without requiring unrelated integrations to be configured.
+  if (String(process.env.ASAAS_API_KEY || "").trim()) assertEnvironmentIsolation();
   return {
-    baseUrl: String(process.env.ASAAS_BASE_URL || "https://api-sandbox.asaas.com/v3").replace(/\/+$/, ""),
+    baseUrl: String(process.env.ASAAS_BASE_URL || "").replace(/\/+$/, ""),
     apiKey: String(process.env.ASAAS_API_KEY || "").trim(),
   };
 };

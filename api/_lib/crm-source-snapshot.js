@@ -18,10 +18,24 @@ const createSourceService = ({ store = createFirestoreStore(), collect = collect
     const businesses = JSON.parse(gunzipSync(Buffer.from(encoded.join(''), 'base64')).toString());
     const hash = crypto.createHash('sha256').update(canonicalJson(businesses)).digest('hex');
     if (hash !== manifest.datasetHash || businesses.length !== manifest.recordsConsidered) throw failure('dataset_integrity_failed');
-    return { businesses, metadata: manifest, stale, lastAttempt: attempt || null,
+    let recordPages = {};
+    if (manifest.provenanceChunks?.length) {
+      const parts=[];
+      for(const path of manifest.provenanceChunks){const chunk=await store.read(path);if(!chunk?.data?.content)throw failure('missing_provenance_chunk');parts.push(chunk.data.content);}
+      const json=gunzipSync(Buffer.from(parts.join(''),'base64')).toString();
+      if(crypto.createHash('sha256').update(json).digest('hex')!==manifest.provenanceHash)throw failure('provenance_integrity_failed');
+      recordPages=JSON.parse(json);
+    }
+    return { businesses, recordPages, metadata: manifest, stale, lastAttempt: attempt || null,
       pagination: { ...manifest, pages: manifest.pagesFetched, totalFetched: manifest.recordsFetched, source: 'datacrazy-complete-snapshot' } };
   };
   return {
+    async readOnly() {
+      const prior = await store.read(STATE_PATH);
+      const state = prior?.data || {};
+      const age = clock() - Date.parse(state.current?.fetchCompletedAt || '');
+      return hydrate(state.current, state.lastAttempt, !Number.isFinite(age) || age < 0 || age >= SOURCE_TTL_MS || state.lastAttempt?.status === 'FAILED');
+    },
     async get({ allowStale = true } = {}) {
       const prior = await store.read(STATE_PATH);
       const state = prior?.data || {};
@@ -64,14 +78,22 @@ const createSourceService = ({ store = createFirestoreStore(), collect = collect
             chunks.push(path);
           }
         }
-        const manifest = { ...m, sourceVersion: SOURCE_VERSION, status: 'VALID', error: null, chunks };
+        const provenanceChunks=[];
+        const provenanceJson=canonicalJson(result.recordPages || {});
+        const provenanceHash=crypto.createHash('sha256').update(provenanceJson).digest('hex');
+        const provenanceContent=gzipSync(provenanceJson).toString('base64');
+        for(let offset=0;offset<provenanceContent.length;offset+=500000){
+          const path=`crmLiveDatasetChunks/pages-${provenanceHash}-${provenanceChunks.length}`;
+          await store.commit([{path,data:{content:provenanceContent.slice(offset,offset+500000)}}]);provenanceChunks.push(path);
+        }
+        const manifest = { ...m, provenanceChunks, provenanceHash, sourceVersion: SOURCE_VERSION, status: 'VALID', error: null, chunks };
         // Staging chunks cannot be read as current before this atomic, fenced commit.
         await store.commit([
           { path: STATE_PATH, data: { current: manifest, leaseUntil: 0, retryNotBefore: 0, lastAttempt: manifest }, version: leaseVersion },
           { path: runPath, data: manifest },
         ]);
         logger('source_published', { snapshotId, recordsFetched: m.recordsFetched, sync_success_rate: 1, sync_duration: m.durationMs, datacrazy_429_count: m.datacrazy429Count, datacrazy_retry_count: m.retryCount });
-        return { businesses: result.businesses, metadata: manifest, stale: false, lastAttempt: manifest,
+        return { businesses: result.businesses, recordPages: result.recordPages || {}, metadata: manifest, stale: false, lastAttempt: manifest,
           pagination: { ...m, pages: m.pagesFetched, totalFetched: m.recordsFetched, source: 'datacrazy-complete-snapshot' } };
       } catch (error) {
         const failed = { ...attempt, ...(error.syncMetadata || result?.metadata || {}), status: 'FAILED', failedAt: new Date(clock()).toISOString(),
@@ -91,4 +113,5 @@ const createSourceService = ({ store = createFirestoreStore(), collect = collect
 };
 let service;
 const getCompleteCrmSource = (options) => (service ||= createSourceService()).get(options);
-module.exports = { createSourceService, getCompleteCrmSource, SOURCE_TTL_MS, STATE_PATH };
+const readCompleteCrmSource = () => (service ||= createSourceService()).readOnly();
+module.exports = { readCompleteCrmSource, createSourceService, getCompleteCrmSource, SOURCE_TTL_MS, STATE_PATH };

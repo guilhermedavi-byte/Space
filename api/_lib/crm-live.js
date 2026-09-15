@@ -41,7 +41,7 @@ const CRM_LIVE_COOKIE_SCOPE = "crm-live:read";
 const CRM_LIVE_COOKIE_MAX_AGE_SECONDS = 90 * 24 * 60 * 60;
 const CRM_CACHE_TTL_MS = 2 * 60 * 1000;
 const SDR_CACHE_TTL_MS = 60 * 1000;
-const CRM_LIVE_READ_MODEL_VERSION = 3;
+const CRM_LIVE_READ_MODEL_VERSION = 4;
 const CLOSED_STAGE_KEY = normalizeKey("Fechado");
 
 const safeString = (value) => (value == null ? "" : String(value).trim());
@@ -381,7 +381,7 @@ const loadSdrEventsRange = async ({ fromKey, toKey } = {}) => {
     dateField: "dateKey",
     from: fromKey,
     to: toKey,
-  }).catch(() => []);
+  });
   return rows.map(decodeSdrEventRow).filter(Boolean);
 };
 
@@ -841,15 +841,21 @@ const buildCrmLiveCrmSlice = async ({ goal, globalConfig = null, people, now = n
     now,
   });
   const weeklyTeam = buildWeeklyTeamSummary({ weeklyReadModel });
-  const weeklySales = summarizeClosedSales({ businesses: crm.businesses, period: weeklyReadModel.commercialWeek });
+  const { buildCommercialLedger } = require('./commercial-reconciliation');
+  const nextMonthKey = subtractMonthsFromMonthKey(monthPeriod.monthKey, -1);
+  const nextGoal = await loadGoalByMonthKey(nextMonthKey);
+  const ledgerGoals = { [monthPeriod.monthKey]: goal, [previousMonthKey]: previousGoal, [nextMonthKey]: nextGoal };
+  const monthLedger = buildCommercialLedger({ competencia: monthPeriod.monthKey, goal, globalConfig, people, businesses: crm.businesses, recordPages: crm.recordPages, goals: ledgerGoals });
+  const weekLedger = buildCommercialLedger({ competencia: monthPeriod.monthKey, goal, globalConfig, people, businesses: crm.businesses, recordPages: crm.recordPages, goals: ledgerGoals, periodOverride: weeklyReadModel.commercialWeek });
   const calculatedAt = new Date().toISOString();
   const snapshot = {
     ...crm.metadata, chunks: undefined, snapshotId, sourceSnapshotId: crm.metadata.snapshotId,
     status: 'VALID', calculationStartedAt: now.toISOString(), calculatedAt, calculationVersion: CRM_LIVE_READ_MODEL_VERSION,
     calculationCompleted: true, recordsEligible: weeklyTeam.closers.count, error: null,
     period: { from: weeklyReadModel.commercialWeek.startDateKey, to: weeklyReadModel.commercialWeek.endDateKey },
-    includedDeals: weeklySales.sales.map(sale => ({ id: sale.id, number: sale.business.number ?? sale.business.code ?? null,
-      value: sale.value, dateField: sale.dateField, dateKey: sale.dateKey })),
+    includedDeals: weekLedger.rows,
+    monthlyIncludedDeals: monthLedger.rows,
+    reconciliation: { month: monthLedger.metrics, week: weekLedger.metrics },
     durationMs: crm.metadata.durationMs + Date.now() - calculationStarted,
   };
   log('calculation_completed', { snapshotId, actualValue: weeklyTeam.closers.actualValue, count: weeklyTeam.closers.count });
@@ -921,6 +927,7 @@ const buildCrmLiveSdrSlice = async ({ goal, globalConfig = null, people, now = n
   });
   return {
     readModelVersion: CRM_LIVE_READ_MODEL_VERSION,
+    sdrReconciliation: weeklyReadModel.sdrReconciliation,
     generatedAt: new Date().toISOString(),
     weekly: {
       commercialWeek: weeklyReadModel.commercialWeek,

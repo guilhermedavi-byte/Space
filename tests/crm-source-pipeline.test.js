@@ -26,7 +26,11 @@ function memoryStore() {
       return entries.map(e => { const v = String(++version); docs.set(e.path, { data: structuredClone(e.data), version: v }); return v; });
     } };
 }
-const metricPayload = (metadata, id = 'snapshot-a') => ({ snapshot: { ...metadata, snapshotId: id, status: 'VALID', sourceSnapshotId: metadata.snapshotId, calculationVersion: 3, calculationCompleted: true, calculatedAt: new Date().toISOString(), recordsEligible: 1 }, weekly: { team: { closers: { actualValue: 42, count: 1 } }, closers: [{ personId: 'a', actualValue: 42, count: 1 }] }, month: { summary: { realizado: 42, totalVendas: 1 } } });
+const metricPayload = (metadata, id = 'snapshot-a') => {
+  const rows=[{id:'a',value:42,dateKey:'2026-09-09',dateField:'statusChangedAt',weekKey:'wk_2026-09-09',competencia:'2026-09',status:'Fechado',responsibleId:'a',role:'closer'}];
+  const metrics={monthly_weekly_delta:0,overlapping_periods:0,improper_gaps:0,orphan_deals:0,unallocated_revenue:0,duplicate_attribution_revenue:0,estimated_value_deals:0,invalid_financial_deals:0};
+  return { snapshot: { ...metadata, snapshotId: id, status: 'VALID', sourceSnapshotId: metadata.snapshotId, calculationVersion: 4, calculationCompleted: true, calculatedAt: new Date().toISOString(), recordsEligible: 1, includedDeals:rows, monthlyIncludedDeals:rows, reconciliation:{month:metrics,week:metrics} }, weekly: { team: { closers: { actualValue: 42, count: 1 } }, closers: [{ personId: 'a', actualValue: 42, count: 1 }] }, month: { summary: { realizado: 42, totalVendas: 1 } } };
+};
 
 test('normal pagination: terminal page, counts, stable IDs and atomic publication', async () => {
   const h = harness([response(200, { items: [deal('b'), deal('a')], total: 3 }), response(200, { items: [deal('c')], total: 3 })]);
@@ -114,7 +118,7 @@ test('gain date includes restored sale on new day, and SDR revenues remain in te
 });
 test('freshness: legacy, failures and aged browser fallbacks never look fresh', () => {
   const now = Date.parse('2026-09-14T12:00:00Z');
-  const data = { snapshot: { status:'VALID', calculationVersion:3, fetchCompletedAt:new Date(now).toISOString() } };
+  const data = { snapshot: { status:'VALID', calculationVersion:4, fetchCompletedAt:new Date(now).toISOString() } };
   assert.equal(describeSnapshot(data,false,now).pending,false);
   assert.match(describeSnapshot(data,true,now).text,/Atualização pendente/);
   assert.equal(describeSnapshot(data,false,now+301000).pending,true);

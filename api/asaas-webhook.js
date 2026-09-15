@@ -1,99 +1,50 @@
-const { readJsonBody, sendJson } = require("./_lib/http");
-const { supabaseFetch } = require("./_lib/supabase-rest");
-const { FINANCE_TABLE } = require("./_lib/finance-integrations");
-const { validateWebhookSecret } = require("./_lib/security");
+const legacy = require('./_lib/asaas-webhook-legacy');
+const { createFinanceFoundation } = require('./_lib/finance-foundation');
+const { FinanceError } = require('./_lib/finance-domain');
+const { safeFinanceError } = require('./_lib/finance-store');
+const { timingSafeTextEqual } = require('./_lib/security');
+const { sendJson } = require('./_lib/http');
 
-const PAID_EVENTS = new Set(["PAYMENT_RECEIVED", "PAYMENT_CONFIRMED"]);
-const OVERDUE_EVENTS = new Set(["PAYMENT_OVERDUE"]);
-const CANCELED_EVENTS = new Set(["PAYMENT_DELETED", "PAYMENT_REFUNDED", "PAYMENT_CHARGEBACK_REQUESTED", "PAYMENT_CHARGEBACK_DISPUTE"]);
-const UPDATED_EVENTS = new Set(["PAYMENT_UPDATED"]);
-
-const asaasStatusToFinanceStatus = (status) => {
-  const raw = String(status || "").trim().toUpperCase();
-  if (["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"].includes(raw)) return "pago";
-  if (raw === "OVERDUE") return "vencido";
-  if (["DELETED", "REFUNDED", "REFUND_REQUESTED", "CHARGEBACK_REQUESTED", "CHARGEBACK_DISPUTE"].includes(raw)) return "cancelado";
-  return "";
-};
-
-const buildPatchForEvent = (eventName, payment = {}) => {
-  const nowIso = new Date().toISOString();
-  if (PAID_EVENTS.has(eventName)) {
-    return {
-      status: "pago",
-      pago_em: payment?.paymentDate || payment?.confirmedDate || payment?.clientPaymentDate || nowIso,
-      forma_confirmacao: "ASAAS",
-      updated_at: nowIso,
-    };
-  }
-  if (OVERDUE_EVENTS.has(eventName)) {
-    return { status: "vencido", updated_at: nowIso };
-  }
-  if (CANCELED_EVENTS.has(eventName)) {
-    return { status: "cancelado", updated_at: nowIso };
-  }
-  if (UPDATED_EVENTS.has(eventName)) {
-    const status = asaasStatusToFinanceStatus(payment?.status);
-    const patch = {
-      updated_at: nowIso,
-      valor: Number.isFinite(Number(payment?.value)) ? Number(payment.value) : undefined,
-      vencimento: payment?.dueDate || undefined,
-      link_fatura: payment?.invoiceUrl || undefined,
-      link_boleto: payment?.bankSlipUrl || undefined,
-    };
-    if (status) patch.status = status;
-    if (status === "pago") {
-      patch.pago_em = payment?.paymentDate || payment?.confirmedDate || payment?.clientPaymentDate || nowIso;
-      patch.forma_confirmacao = "ASAAS";
-    }
-    Object.keys(patch).forEach((key) => {
-      if (patch[key] == null || patch[key] === "") delete patch[key];
+// A bounded parser keeps untrusted input from accumulating after the limit is exceeded.
+function readWebhookBody(req) {
+  return new Promise((resolve, reject) => {
+    let raw = '', bytes = 0, rejected = false;
+    req.on('data', chunk => {
+      bytes += Buffer.byteLength(chunk);
+      if (bytes > 262144) { if (!rejected) reject(new FinanceError('finance_payload_too_large', false, 413)); rejected = true; raw = ''; return; }
+      if (!rejected) raw += chunk;
     });
-    return patch;
-  }
-  return null;
-};
-
-module.exports = async (req, res) => {
-  if (req.method !== "POST") {
-    res.setHeader("Allow", "POST");
-    return sendJson(res, 405, { error: "method_not_allowed" });
-  }
-
-  const auth = validateWebhookSecret(
-    req,
-    process.env.ASAAS_WEBHOOK_TOKEN || process.env.ASAAS_WEBHOOK_SECRET || process.env.N8N_WEBHOOK_SECRET
-  );
-  if (!auth.ok) return sendJson(res, auth.status, { error: auth.error });
-
-  let body;
-  try {
-    body = await readJsonBody(req);
-  } catch {
-    return sendJson(res, 400, { error: "invalid_json" });
-  }
-
-  const eventName = String(body?.event || "").trim().toUpperCase();
-  const payment = body?.payment && typeof body.payment === "object" ? body.payment : {};
-  const paymentId = String(payment?.id || body?.paymentId || "").trim();
-  const patch = buildPatchForEvent(eventName, payment);
-
-  if (!paymentId || !patch) {
-    return sendJson(res, 200, { ok: true, ignored: true });
-  }
-
-  try {
-    const result = await supabaseFetch(`/${FINANCE_TABLE}?id_cobranca_externa=eq.${encodeURIComponent(paymentId)}`, {
-      method: "PATCH",
-      body: patch,
-    });
-    const updated = Array.isArray(result.data) ? result.data.length : 0;
-    return sendJson(res, 200, { ok: true, updated });
-  } catch (error) {
-    if (error?.code === "supabase_not_configured") {
-      return sendJson(res, 500, { error: "supabase_not_configured" });
+    req.on('end', () => { if (rejected) return; try { resolve(JSON.parse(raw)); } catch { reject(new FinanceError('finance_payload_invalid')); } });
+    req.on('error', () => reject(new FinanceError('finance_payload_invalid')));
+    req.on('aborted', () => reject(new FinanceError('finance_payload_invalid')));
+  });
+}
+function createHandler({ service = () => createFinanceFoundation(), env = process.env, legacyHandler = legacy } = {}) {
+  return async (req, res) => {
+    if (env.FINANCE_FOUNDATION_ENABLED !== 'true') return legacyHandler(req, res);
+    if (req.method !== 'POST') { res.setHeader('Allow', 'POST'); return sendJson(res, 405, { error: 'method_not_allowed' }); }
+    const expected = String(env.ASAAS_WEBHOOK_TOKEN || '').trim();
+    if (!expected) return sendJson(res, 503, { error: 'finance_webhook_secret_not_configured' });
+    const supplied = typeof req.headers?.['asaas-access-token'] === 'string' ? req.headers['asaas-access-token'] : '';
+    if (!supplied || !timingSafeTextEqual(supplied, expected)) return sendJson(res, 401, { error: 'invalid_webhook_secret' });
+    try {
+      const body = await readWebhookBody(req);
+      const foundation = service();
+      const receipt = await foundation.ingestWebhook(body);
+      if (receipt.conflict) return sendJson(res, 409, { error: 'finance_idempotency_conflict', event_id: receipt.event_id });
+      // Awaited and bounded; no fire-and-forget serverless promise. A durable queue remains
+      // if the process dies, the provider is down, or processing is intentionally disabled.
+      let processing = null;
+      if (env.FINANCE_WEBHOOK_PROCESS_INLINE === 'true') {
+        try { processing = await foundation.processWebhookEvent(receipt.event_id); }
+        catch (error) { processing = { error: safeFinanceError(error).code }; }
+      }
+      return sendJson(res, 200, { ok: true, ...receipt, processing });
+    } catch (error) {
+      const safe = safeFinanceError(error);
+      return sendJson(res, safe.status || 503, { error: safe.code });
     }
-    console.error("[api] asaas webhook failed", error);
-    return sendJson(res, 500, { error: "webhook_update_failed" });
-  }
-};
+  };
+}
+module.exports = createHandler();
+module.exports.createHandler = createHandler;

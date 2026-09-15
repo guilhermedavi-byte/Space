@@ -48,6 +48,7 @@ const listCollectionAsAdmin = async (collectionPath, { pageSize = 1000 } = {}) =
     pageToken = String(response.data?.nextPageToken || "");
     if (!pageToken) break;
   }
+  if (pageToken) throw new Error("firestore_pagination_incomplete");
   return all;
 };
 
