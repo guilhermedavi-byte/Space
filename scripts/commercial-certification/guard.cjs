@@ -17,7 +17,10 @@ function createGuard({env,fetchImpl=global.fetch}){
     if(url.username||url.password||url.hash)return deny();
     const firestore=url.origin==='https://firestore.googleapis.com';
     const datacrazy=url.origin===crm.origin;
-    if(firestore&&method!=='GET'){
+    const queryPath=firestore&&url.pathname===firestorePrefix.slice(0,-1)+':runQuery';
+    const auditQuery=queryPath&&method==='POST'&&!url.search&&require('./read-sdr.cjs').isAllowedQuery(options.body);
+    if(queryPath&&!auditQuery)return deny();
+    if(firestore&&method!=='GET'&&!auditQuery){
       counts.firestoreWritesAttempted++;
       if(/crmLive|:commit|:batchWrite/.test(url.pathname)||/crmLive/.test(String(options.body||'')))counts.snapshotWritesAttempted++;
       throw new Error('audit_write_or_network_blocked');
@@ -26,8 +29,9 @@ function createGuard({env,fetchImpl=global.fetch}){
     if(method==='GET'&&options.body!==undefined)return deny();
     const oauth=url.href==='https://oauth2.googleapis.com/token'&&method==='POST';
     const crmRead=datacrazy&&method==='GET'&&url.pathname===crm.pathname.replace(/\/$/,'')+'/api/v1/businesses'&&[...url.searchParams.keys()].every(k=>['skip','take'].includes(k));
-    const fsRead=firestore&&method==='GET'&&url.pathname.startsWith(firestorePrefix)&&readPaths.has(decodeURIComponent(url.pathname.slice(firestorePrefix.length)))&&[...url.searchParams.keys()].every(k=>['pageSize','pageToken','mask.fieldPaths'].includes(k));
-    if(!(oauth||crmRead||fsRead))return deny();
+    const fsPath=decodeURIComponent(url.pathname.slice(firestorePrefix.length));
+    const fsRead=firestore&&method==='GET'&&url.pathname.startsWith(firestorePrefix)&&(readPaths.has(fsPath)||/^sdrActivityEvents\/[A-Za-z0-9_-]{1,128}$/.test(fsPath))&&[...url.searchParams.keys()].every(k=>['pageSize','pageToken','mask.fieldPaths'].includes(k));
+    if(!(oauth||crmRead||fsRead||auditQuery))return deny();
     if(oauth){const form=new URLSearchParams(options.body);if(form.get('grant_type')!=='urn:ietf:params:oauth:grant-type:jwt-bearer')return deny();}
     const response=await context.run(true,()=>fetchImpl(url.href,{...options,redirect:'error'}));
     if(oauth&&response.ok){const body=await response.clone().json();if(body.access_token)secrets.add(body.access_token);}

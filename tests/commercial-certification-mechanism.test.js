@@ -86,6 +86,7 @@ test('complete worker simulation: real collector, Firestore read adapter, OAuth 
  global.fetch=async(url,opts={})=>{
   url=new URL(url);
   if(url.hostname==='oauth2.googleapis.com')return new Response(JSON.stringify({access_token:'TEST_ONLY_OAUTH_ACCESS_TOKEN_12345',expires_in:3600}));
+  if(url.pathname.endsWith('documents:runQuery'))return new Response('[]');
   if((opts.method||'GET')!=='GET')throw new Error('fixture_write');
   if(url.hostname==='crm.example.test')return new Response(JSON.stringify({items:input.businesses,total:input.businesses.length}));
   const key=decodeURIComponent(url.pathname.split('/documents/')[1]||'');

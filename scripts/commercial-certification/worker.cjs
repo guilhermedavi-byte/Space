@@ -18,7 +18,7 @@
     const code=['missing_credentials','unsafe_output','audit_write_or_network_blocked','report_too_large'].includes(e.message)?e.message:'audit_failed';
     const report=failure(guard?.counts||zero,loaded,code);
     report.failureStage=phase;
-    const known=['oauth_token_failed','oauth_token_missing','missing_service_account','firestore_admin_get_failed','firestore_admin_list_failed','firestore_pagination_incomplete','firebase_runtime_not_configured','conflicting_duplicate_business','conflicting_duplicate_sdr_event'];
+    const known=['oauth_token_failed','oauth_token_missing','missing_service_account','firestore_admin_get_failed','firestore_admin_list_failed','firestore_pagination_incomplete','firestore_audit_query_failed','firestore_audit_query_invalid','firestore_audit_cursor_repeated','firebase_runtime_not_configured','conflicting_duplicate_business','conflicting_duplicate_sdr_event'];
     report.diagnosticCode=known.includes(e.message)?e.message:'unclassified';
     report.httpStatus=Number.isInteger(e.status)?e.status:null;
     report.errorType=['Error','TypeError','SyntaxError','RangeError'].includes(e.name)?e.name:'other';

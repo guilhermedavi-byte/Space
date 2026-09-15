@@ -21,7 +21,7 @@ function createHandler({manifest,env=process.env,spawn=fork,clock=Date.now}){
     const timer=setTimeout(()=>done(unknown('execution_timeout'),504),280000);
     child.once('message',message=>{try{done(sanitize(message,new Set(Object.values(cleanEnv))));}catch{done(unknown('unsafe_output'),500);}});
     child.once('error',()=>done(unknown('worker_failed'),500));
-    child.once('exit',()=>{if(!finished)done(unknown('worker_failed'),500);});
+    child.once('exit',(code,signal)=>{if(!finished)done({...unknown('worker_failed'),exitCode:Number.isInteger(code)?code:null,exitSignal:['SIGKILL','SIGTERM','SIGABRT','SIGSEGV'].includes(signal)?signal:null},500);});
   };
 }
 module.exports={createHandler};
