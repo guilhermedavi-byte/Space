@@ -11,6 +11,9 @@
     },
     "api/finance-v1.js": {
       "maxDuration": 60
+    },
+    "api/finance-recovery-base.js": {
+      "maxDuration": 300
     }
   },
   "headers": [

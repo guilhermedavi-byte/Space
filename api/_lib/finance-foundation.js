@@ -167,6 +167,17 @@ function createFinanceFoundation({store=createFinanceStore(),client=createAsaasC
     if(customer.id!==customerId || customer.deleted)throw new FinanceError('finance_customer_invalid');
     return store.rpc('link',{...scope(),customer_id:customerId,firestore_doc_id:firestoreDocId,verified_by:actor});
   };
-  return {health,observe,verifyConnection,ingestWebhook,processWebhookEvent,retryWebhookEvent,drain,repairPaymentById,sync,linkCustomer};
+  const syncSubscriptionPage=async({offset=0,limit=20,actor='operator'}={})=>{
+    if(!Number.isInteger(offset)||offset<0||!Number.isInteger(limit)||limit<1||limit>20)throw new FinanceError('finance_pagination_invalid');
+    await verifyConnection();
+    const {run_id}=await store.rpc('run_start',{...scope(),source:'ASAAS_RECONCILIATION',resource:'subscriptions',dry_run:false,filters:{},offset});
+    try {
+      const page=(await client.pages('subscriptions',{offset,limit}).next()).value;
+      let changed=0;for(const raw of page.data){const r=await project('subscriptions',externalId(raw.id),{source:'ASAAS_RECONCILIATION',actor,correlationId:run_id});if(r.busy)throw new FinanceError('finance_object_busy',true,409);if(r.changed)changed++;}
+      const report={examined:page.data.length,changed,next_offset:page.nextOffset,has_more:page.hasMore};
+      await store.rpc('run_update',{...scope(),run_id,next_offset:page.nextOffset,report,status:'completed'});return report;
+    }catch(error){await store.rpc('run_update',{...scope(),run_id,status:'failed',error_code:safeFinanceError(error).code});throw error;}
+  };
+  return {syncSubscriptionPage,health,observe,verifyConnection,ingestWebhook,processWebhookEvent,retryWebhookEvent,drain,repairPaymentById,sync,linkCustomer};
 }
 module.exports={createFinanceFoundation};
