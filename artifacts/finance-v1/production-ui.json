@@ -1,0 +1,32 @@
+{
+  "checked_at": "2026-09-15T18:14:40.653184+00:00",
+  "url": "https://plataforma.spaceschoolbr.com/app/admin/financeiro",
+  "source_commit": "a329ec32b4bc4a4f96ce8ad6e49e69fe63d387ce",
+  "authenticated_browser": true,
+  "scenarios": {
+    "overview_real_kpis": "PASS",
+    "receivables_load": "PASS",
+    "overdue_filter": "PASS",
+    "drawer_details_links_history": "PASS",
+    "drawer_escape": "PASS",
+    "subscriptions_load": "PASS",
+    "subscription_receivables_navigation": "PASS",
+    "customers_load": "PASS",
+    "customer_receivables_navigation": "PASS",
+    "search_empty_state": "PASS",
+    "four_workspaces_navigation": "PASS"
+  },
+  "observed_counts": {
+    "receivables": 2076,
+    "overdue": 199,
+    "subscriptions": 172,
+    "customers": 652
+  },
+  "console_errors_observed": 0,
+  "http": {
+    "/": 200,
+    "/api/health": 200
+  },
+  "financial_writes_performed": false,
+  "foundation_tests_repeated": false
+}

@@ -32,3 +32,13 @@ Não foram executadas novas projeções de customers/subscriptions; o diretório
 ## Validação focada
 
 Seis testes em `tests/finance-v1.test.js` e `tests/finance-v1-ui.test.js`: valores/competência/aging, filtros e identidade, links/auditoria sanitizados e fallback, permissões e somente leitura, tabela/drawer e navegação. Evidência em `artifacts/finance-v1/focused-tests.tap`. Nenhuma suíte ou certificação anterior da Foundation foi repetida.
+
+## Publicação e operação — 15/09/2026
+
+Implementação integrada à `main` em `a329ec32b4bc4a4f96ce8ad6e49e69fe63d387ce`, publicada pelo deploy automático GitHub/Vercel em Production, READY no domínio `https://plataforma.spaceschoolbr.com`.
+
+Verificação autenticada no navegador: quatro workspaces carregados; 2.076 recebíveis, filtro de vencidos com 199 resultados, 172 assinaturas e 652 clientes na união do diretório com os IDs financeiros existentes. Os números refletem o instante da consulta, não valores fixos do produto. Drawer abriu detalhes, link Asaas e histórico real; Escape fechou sem mudar de página. Atalhos por assinatura e cliente filtraram respectivamente três e cinco cobranças existentes. Busca sem correspondência mostrou estado vazio. Nenhum erro de console observado na conferência.
+
+KPIs observados em setembro: recebido R$ 77.154,80; a receber R$ 131.443,00; vencido R$ 186.870,00; inadimplência 41,65%. Fórmulas e períodos definidos acima. Evidências sanitizadas em `artifacts/finance-v1/production-ui.json` e `deployment.json`.
+
+Lacuna de identificação: alguns IDs históricos de clientes não retornam nome no diretório atual; a interface informa “Nome não disponível”. Ausência de vínculo acadêmico explícito aparece como “Não vinculado”. A implantação não criou vínculos, transações ou novas projeções de diretório. Assinaturas são consultadas diretamente na API real enquanto sua projeção dedicada permanece incompleta.
