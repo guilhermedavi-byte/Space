@@ -767,11 +767,12 @@ const fetchAllCrmBusinessesLegacy = async ({ lastMovedAfter = "" } = {}) => {
   };
 };
 
-const fetchAllCrmBusinesses = async ({ lastMovedAfter = "" } = {}) => {
+const fetchAllCrmBusinesses = async ({ lastMovedAfter = "", readOnly = false } = {}) => {
   try {
-    const source = await require('./_lib/crm-source-snapshot').getCompleteCrmSource({ allowStale: false });
+    const service = require('./_lib/crm-source-snapshot');
+    const source = readOnly ? await service.createSourceService().readOnly() : await service.getCompleteCrmSource({ allowStale: false });
     const businesses = lastMovedAfter ? source.businesses.filter(b => Date.parse(b.lastMovedAt || '') >= Date.parse(lastMovedAfter)) : source.businesses;
-    return { ok: true, status: 200, businesses, pagination: source.pagination };
+    return { ok: true, status: 200, businesses, pagination: source.pagination, sourceUpdatedAt: source.metadata?.fetchCompletedAt || null, sourceStale: source.stale === true };
   } catch (error) {
     return { ok: false, status: error.status || 503, error: error.code || 'crm_sync_failed' };
   }
@@ -1412,7 +1413,7 @@ const handleGrowthGoalsApi = async (req, res, url) => {
           const { resolveCommercialWeek } = require("./_lib/commercial-week");
           const previousMonth = resolveCommercialWeek({ now: previousDate }).startDateKey.slice(0, 7);
           const [globalConfig, crm, sdrEvents, previousSnap] = await Promise.all([
-            loadCrmLiveDefaultsConfigWithAccessToken({ accessToken }), fetchAllCrmBusinesses(),
+            loadCrmLiveDefaultsConfigWithAccessToken({ accessToken }), fetchAllCrmBusinesses({readOnly:true}),
             loadSdrActivityEvents({ accessToken, from: resolveCommercialWeek({now:previousDate}).startDateKey, to: managementWeeks.at(-1).endDateKey }),
             firestoreGetDocumentWithAccessToken({ docPath: `${GOALS_COLLECTION}/${previousMonth}`, accessToken }),
           ]);
@@ -1421,6 +1422,8 @@ const handleGrowthGoalsApi = async (req, res, url) => {
           payload.management = buildCommercialGoalsModel({ competencia, goal,
             previousGoal: previousSnap.ok ? decodeGoalDoc(previousSnap.data) : null,
             globalConfig, people: progressPeople, businesses: crm.businesses, sdrEvents });
+          payload.management.sourceUpdatedAt = crm.sourceUpdatedAt;
+          payload.management.sourceStale = crm.sourceStale;
         }
 
         if (includeWeeklyProgress) {
