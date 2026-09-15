@@ -1,0 +1,904 @@
+{
+  "2026-08": {
+    "provenance": "DOM Datacrazy Total ganhos; datas comerciais reais de growthGoals; valores por linha, sem UUID/número de ficha.",
+    "deals": [
+      {
+        "name": "Leiliane Pereira Sorochak",
+        "value": 1475,
+        "owner": "Matheus Afonso Rodrigues",
+        "wonDate": "2026-08-29",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Leandro Siqueira",
+        "value": 700,
+        "owner": "Felipe Santos | Space",
+        "wonDate": "2026-08-28",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Daiane Alves da Silva",
+        "value": 1171,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-08-28",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Vanilda Francisca Monteiro",
+        "value": 905,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-08-28",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Aéliton Flor Leite",
+        "value": 1375,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-08-25",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Izaquel Linhares",
+        "value": 1275,
+        "owner": "Felipe Santos | Space",
+        "wonDate": "2026-08-24",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Anamaria Valente",
+        "value": 1475,
+        "owner": "Matheus Afonso Rodrigues",
+        "wonDate": "2026-08-28",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Thiago Tavares de Almeida",
+        "value": 985,
+        "owner": "Felipe Santos | Space",
+        "wonDate": "2026-08-21",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Wesley Teixeira Sebastião",
+        "value": 1280,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-08-21",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Natalia Beatriz Souza Gomes",
+        "value": 1475,
+        "owner": "Matheus Afonso Rodrigues",
+        "wonDate": "2026-08-21",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Leila Marques",
+        "value": 985,
+        "owner": "Felipe Santos | Space",
+        "wonDate": "2026-08-21",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Lucileia de Assis Campos",
+        "value": 1100,
+        "owner": "Matheus Afonso Rodrigues",
+        "wonDate": "2026-08-21",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Pedro Alcântara de Queiroz",
+        "value": 1350,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-08-21",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Geraldo Ismael Coelho",
+        "value": 625,
+        "owner": "Matheus Afonso Rodrigues",
+        "wonDate": "2026-08-20",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Marcelo Joaquim de Lima",
+        "value": 1100,
+        "owner": "Matheus Afonso Rodrigues",
+        "wonDate": "2026-08-18",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Gilberto Carlos Gonçalves",
+        "value": 1175,
+        "owner": "Matheus Afonso Rodrigues",
+        "wonDate": "2026-08-16",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Valdeir Silva Fernandes",
+        "value": 1230,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-08-22",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Ailton Andrade",
+        "value": 800,
+        "owner": "Felipe Santos | Space",
+        "wonDate": "2026-08-17",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Enderson João de Souza Vieira",
+        "value": 504,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-08-14",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Emilia dos Reis Santos",
+        "value": 1511,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-08-15",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Jhemerson Luan da Cruz Araujo",
+        "value": 1517,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-08-14",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Edi Carlos da Silva",
+        "value": 1110,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-08-11",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Rayane Gomes",
+        "value": 1075,
+        "owner": "Felipe Santos | Space",
+        "wonDate": "2026-08-27",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Wardeny Soares Sousa Andrade",
+        "value": 1287,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-08-10",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Bruno de Souza Freitas",
+        "value": 950,
+        "owner": "Felipe Santos | Space",
+        "wonDate": "2026-08-28",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Nycolas Gabriel Rocha Vitorino",
+        "value": 1300,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-08-08",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Ana Paula Alves Veras",
+        "value": 1250,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-08-10",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Darcy Rogerio da Silva",
+        "value": 1240,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-08-17",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Edson Carlos Ribeiro",
+        "value": 820,
+        "owner": "Fábio Camargo",
+        "wonDate": "2026-08-08",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Kerolly Lorrane",
+        "value": 1075,
+        "owner": "Felipe Santos | Space",
+        "wonDate": "2026-08-17",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Liliam Teixeira Godinho Silva",
+        "value": 1110,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-08-11",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Rômulo Souza Aguiar",
+        "value": 1477,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-08-06",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Augusto Prata",
+        "value": 890,
+        "owner": "Felipe Santos | Space",
+        "wonDate": "2026-08-04",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Mike Marchiotto Mendes",
+        "value": 1000,
+        "owner": "Matheus Afonso Rodrigues",
+        "wonDate": "2026-08-13",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Raquel Vieira Lima",
+        "value": 1475,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-08-03",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Maria Leal",
+        "value": 508,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-08-11",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Marli Batista",
+        "value": 950,
+        "owner": "Matheus Afonso Rodrigues",
+        "wonDate": "2026-08-04",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "David Alexandre Verli da Silva",
+        "value": 1350,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-08-19",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Liliane Rufino Cerqueira",
+        "value": 1400,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-08-12",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Fabrício Tonin Zanotto",
+        "value": 1400,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-08-21",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Edmar Franciso dos Reis",
+        "value": 985,
+        "owner": "Felipe Santos | Space",
+        "wonDate": "2026-08-02",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Marcelo Valiante",
+        "value": 1075,
+        "owner": "Fábio Camargo",
+        "wonDate": "2026-08-18",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Marcelo Amado Ferreira",
+        "value": 1290,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-08-25",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Regina Célia Rodrigues Lapa",
+        "value": 1290,
+        "owner": "Matheus Afonso Rodrigues",
+        "wonDate": "2026-08-15",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      }
+    ],
+    "total": 50320,
+    "count": 44
+  },
+  "2026-07": {
+    "provenance": "DOM Datacrazy Total ganhos; datas comerciais reais de growthGoals; valores por linha, sem UUID/número de ficha.",
+    "deals": [
+      {
+        "name": "Evaldo Malta",
+        "value": 1125,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-08-01",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Leonilda Rodrigues Shelby",
+        "value": 500,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-08-01",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Werick Pinheiro ciriaco",
+        "value": 1325,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-07-30",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Rosana Alvarenga de Pinho Aguiar",
+        "value": 1775,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-08-01",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Alisson Matheus Nobre Gomes",
+        "value": 1325,
+        "owner": "Felipe Santos | Space",
+        "wonDate": "2026-07-30",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Wellington Mendes",
+        "value": 1325,
+        "owner": "Felipe Santos | Space",
+        "wonDate": "2026-07-29",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Cleusa Tesine",
+        "value": 1125,
+        "owner": "Felipe Santos | Space",
+        "wonDate": "2026-07-28",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Arthur Castilho",
+        "value": 700,
+        "owner": "Felipe Santos | Space",
+        "wonDate": "2026-07-28",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Ademar de Andrade Medeiros (Neto)",
+        "value": 1325,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-07-28",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Flaviana Fernandes Martins Ferreira",
+        "value": 1190,
+        "owner": "Fábio Camargo",
+        "wonDate": "2026-07-28",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Edna Maria Claudino Pereira",
+        "value": 830,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-07-29",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Claís Oliveira dos Santos",
+        "value": 1320,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-08-01",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Marcio de Andrade",
+        "value": 500,
+        "owner": "Matheus Afonso Rodrigues",
+        "wonDate": "2026-07-24",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Ana Maria Martins Fernandes",
+        "value": 1125,
+        "owner": "Matheus Afonso Rodrigues",
+        "wonDate": "2026-07-25",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Sergio Rosa de Souza",
+        "value": 1200,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-07-23",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Francisco Santos",
+        "value": 1325,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-07-22",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Fabio bliscosque",
+        "value": 1000,
+        "owner": "Felipe Santos | Space",
+        "wonDate": "2026-07-22",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Raiel Stringari",
+        "value": 1325,
+        "owner": "Felipe Santos | Space",
+        "wonDate": "2026-07-22",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Adriana Barbosa",
+        "value": 1325,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-07-20",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Simone Gomes da Cruz",
+        "value": 1100,
+        "owner": "Fábio Camargo",
+        "wonDate": "2026-07-22",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Eleomar",
+        "value": 1050,
+        "owner": "Felipe Santos | Space",
+        "wonDate": "2026-07-21",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Fabiola Bourguignon",
+        "value": 877,
+        "owner": "Matheus Afonso Rodrigues",
+        "wonDate": "2026-07-27",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Tayná Silva",
+        "value": 1125,
+        "owner": "Matheus Afonso Rodrigues",
+        "wonDate": "2026-07-19",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "David Quesada",
+        "value": 500,
+        "owner": "Matheus Afonso Rodrigues",
+        "wonDate": "2026-07-23",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Augusto Schittini",
+        "value": 1337,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-07-20",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Ederson",
+        "value": 960,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-07-16",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Celio Gomes",
+        "value": 950,
+        "owner": "Felipe Santos | Space",
+        "wonDate": "2026-07-16",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Juan Silva Soares",
+        "value": 826,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-07-08",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Sergio Reis",
+        "value": 1325,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-07-22",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Andre Luiz",
+        "value": 1000,
+        "owner": "Felipe Santos | Space",
+        "wonDate": "2026-07-07",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Fernando Ribeiro",
+        "value": 1000,
+        "owner": "Matheus Afonso Rodrigues",
+        "wonDate": "2026-07-07",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Albison de Abreu Neves dos Santos",
+        "value": 1125,
+        "owner": "Matheus Afonso Rodrigues",
+        "wonDate": "2026-07-09",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Fabricio Soares",
+        "value": 1325,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-07-08",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Paulo Regato Soares",
+        "value": 1250,
+        "owner": "Matheus Afonso Rodrigues",
+        "wonDate": "2026-07-07",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Luciene Andrade",
+        "value": 1290,
+        "owner": "Fábio Camargo",
+        "wonDate": "2026-07-08",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Daiana de Moura",
+        "value": 1325,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-07-14",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Renata Silva",
+        "value": 600,
+        "owner": "Fábio Camargo",
+        "wonDate": "2026-07-15",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Martha Soares",
+        "value": 1250,
+        "owner": "Matheus Afonso Rodrigues",
+        "wonDate": "2026-07-07",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Debora",
+        "value": 1150,
+        "owner": "Felipe Santos | Space",
+        "wonDate": "2026-07-07",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Alexandre Silva Pacheco",
+        "value": 1300,
+        "owner": "Matheus Afonso Rodrigues",
+        "wonDate": "2026-07-01",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Nilmara Cardoso",
+        "value": 600,
+        "owner": "Felipe Santos | Space",
+        "wonDate": "2026-07-22",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Leonardo",
+        "value": 700,
+        "owner": "Felipe Santos | Space",
+        "wonDate": "2026-07-23",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Enderson João de Souza Vieira",
+        "value": 501,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-07-27",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Célio Dias de Araújo",
+        "value": 1190,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-07-04",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Antonio Augusto Vieira de Melo",
+        "value": 600,
+        "owner": "Matheus Afonso Rodrigues",
+        "wonDate": "2026-07-17",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Paulo Sérgio Oliveira da Silva",
+        "value": 1007,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-07-28",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Karla Rezende",
+        "value": 1010,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-07-09",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Nayara",
+        "value": 950,
+        "owner": "Felipe Santos | Space",
+        "wonDate": "2026-07-08",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Catia",
+        "value": 1000,
+        "owner": "Matheus Afonso Rodrigues",
+        "wonDate": "2026-07-17",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Vanderli Fernandes",
+        "value": 900,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-07-21",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Alan Barcellos Pires",
+        "value": 1390,
+        "owner": "Fábio Camargo",
+        "wonDate": "2026-08-01",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Eldon Castro 🇧🇷🇺🇸",
+        "value": 675,
+        "owner": "Matheus Afonso Rodrigues",
+        "wonDate": "2026-07-31",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Ronair",
+        "value": 620,
+        "owner": "Luis Eduardo",
+        "wonDate": "2026-07-03",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      },
+      {
+        "name": "Luciana",
+        "value": 700,
+        "owner": "Felipe Santos | Space",
+        "wonDate": "2026-07-01",
+        "pipeline": "Conversão",
+        "status": "Ganho",
+        "number": null
+      }
+    ],
+    "total": 56173,
+    "count": 54
+  },
+  "julyExcludedObservation": {
+    "name": "Rogério",
+    "status": "Em aberto",
+    "reason": "Apareceu na lista histórica, mas está aberto e não integra os 54 ganhos. O DOM apresentou valores distintos em momentos diferentes (1190 e 1490); não incluído no cálculo nem tratado como venda.",
+    "value": null
+  }
+}

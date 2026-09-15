@@ -1,0 +1,51 @@
+{
+  "scope": "Replay of real DOM observations, not production API execution",
+  "A": {
+    "meta": 60000,
+    "realizado": 28188,
+    "totalVendas": 26,
+    "ticketMedio": 1084.1538461538462,
+    "percentAtingimento": 46.98,
+    "gap": 31812
+  },
+  "B": {
+    "meta": 60000,
+    "realizado": 28188,
+    "totalVendas": 26,
+    "ticketMedio": 1084.1538461538462,
+    "percentAtingimento": 46.98,
+    "gap": 31812
+  },
+  "weeklyA": {
+    "targetValue": 18000,
+    "actualValue": 12646,
+    "missingValue": 5354,
+    "progressPct": 70.25555555555556,
+    "count": 11,
+    "ticketMedio": 1149.6363636363637
+  },
+  "weeklyB": {
+    "targetValue": 18000,
+    "actualValue": 12646,
+    "missingValue": 5354,
+    "progressPct": 70.25555555555556,
+    "count": 11,
+    "ticketMedio": 1149.6363636363637
+  },
+  "cache": {
+    "generatedAt": "2026-09-14T23:02:50.843Z",
+    "monthly": {
+      "target": 60000,
+      "actual": 28188,
+      "count": 26
+    },
+    "weekly": {
+      "start": "2026-09-09",
+      "end": "2026-09-15",
+      "target": 18000,
+      "actual": 8385,
+      "count": 7
+    }
+  },
+  "peopleCount": 8
+}

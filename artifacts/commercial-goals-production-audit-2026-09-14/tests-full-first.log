@@ -1,0 +1,1887 @@
+
+> test
+> node --test tests/*.test.js
+
+TAP version 13
+# Subtest: resolvePeriodRange monta hoje, semana e mês em São Paulo
+ok 1 - resolvePeriodRange monta hoje, semana e mês em São Paulo
+  ---
+  duration_ms: 35.770667
+  type: 'test'
+  ...
+# Subtest: summarizeDailyRows recalcula taxas a partir dos totais agregados
+ok 2 - summarizeDailyRows recalcula taxas a partir dos totais agregados
+  ---
+  duration_ms: 0.237417
+  type: 'test'
+  ...
+# Subtest: Agendado para Feito usa eventos históricos e preserva agendamentos
+ok 3 - Agendado para Feito usa eventos históricos e preserva agendamentos
+  ---
+  duration_ms: 0.227625
+  type: 'test'
+  ...
+# Subtest: Agendado para Feito retorna zero sem agendamentos
+ok 4 - Agendado para Feito retorna zero sem agendamentos
+  ---
+  duration_ms: 0.0695
+  type: 'test'
+  ...
+# Subtest: Pré-Vendas renderiza reuniões feitas e conversão total e por SDR
+ok 5 - Pré-Vendas renderiza reuniões feitas e conversão total e por SDR
+  ---
+  duration_ms: 22.70175
+  type: 'test'
+  ...
+# Subtest: normalizeActivityEvent ignora deletados e marca horário local do evento
+ok 6 - normalizeActivityEvent ignora deletados e marca horário local do evento
+  ---
+  duration_ms: 2.843542
+  type: 'test'
+  ...
+# Subtest: Registros de Aulas usa occurrence_id como chave primária do join
+ok 7 - Registros de Aulas usa occurrence_id como chave primária do join
+  ---
+  duration_ms: 8.230542
+  type: 'test'
+  ...
+# Subtest: Registros de Aulas usa fallback explícito só pelo legacy occurrence map
+ok 8 - Registros de Aulas usa fallback explícito só pelo legacy occurrence map
+  ---
+  duration_ms: 5.583542
+  type: 'test'
+  ...
+# Subtest: agenda do admin expõe os 4 tipos especiais e exige professor responsável
+ok 9 - agenda do admin expõe os 4 tipos especiais e exige professor responsável
+  ---
+  duration_ms: 7.944459
+  type: 'test'
+  ...
+# Subtest: eventos experimentais e onboarding usam registro pedagógico simplificado
+ok 10 - eventos experimentais e onboarding usam registro pedagógico simplificado
+  ---
+  duration_ms: 2.785833
+  type: 'test'
+  ...
+# Subtest: horas-aula incluem especiais de aula e presença exclui todos os tipoEvento especiais
+ok 11 - horas-aula incluem especiais de aula e presença exclui todos os tipoEvento especiais
+  ---
+  duration_ms: 0.3795
+  type: 'test'
+  ...
+# Subtest: api de schedule-events persiste tipoEvento no documento da agenda
+ok 12 - api de schedule-events persiste tipoEvento no documento da agenda
+  ---
+  duration_ms: 0.418292
+  type: 'test'
+  ...
+# Subtest: api legada de lesson-logs não persiste mais statusAula operacional no Firestore
+ok 13 - api legada de lesson-logs não persiste mais statusAula operacional no Firestore
+  ---
+  duration_ms: 0.323084
+  type: 'test'
+  ...
+# Subtest: parseStudentImportText aceita CSV com nome e email
+ok 14 - parseStudentImportText aceita CSV com nome e email
+  ---
+  duration_ms: 4.175
+  type: 'test'
+  ...
+# Subtest: parseStudentImportText aceita lista sem cabeçalho
+ok 15 - parseStudentImportText aceita lista sem cabeçalho
+  ---
+  duration_ms: 0.139
+  type: 'test'
+  ...
+# Subtest: parseStudentImportText aceita variações comuns de cabeçalho
+ok 16 - parseStudentImportText aceita variações comuns de cabeçalho
+  ---
+  duration_ms: 0.14625
+  type: 'test'
+  ...
+# Subtest: parseStudentImportText cai para posição quando cabeçalho não é reconhecido
+ok 17 - parseStudentImportText cai para posição quando cabeçalho não é reconhecido
+  ---
+  duration_ms: 0.13775
+  type: 'test'
+  ...
+# Subtest: parseStudentImportText ignora bytes nulos de CSV UTF-16 mal decodificado
+ok 18 - parseStudentImportText ignora bytes nulos de CSV UTF-16 mal decodificado
+  ---
+  duration_ms: 3.425084
+  type: 'test'
+  ...
+# Subtest: documento padrão marca troca obrigatória e ownership Firestore
+ok 19 - documento padrão marca troca obrigatória e ownership Firestore
+  ---
+  duration_ms: 0.957667
+  type: 'test'
+  ...
+# Subtest: path de criação do aluno usa formato aceito pelo Firestore commit
+ok 20 - path de criação do aluno usa formato aceito pelo Firestore commit
+  ---
+  duration_ms: 0.474792
+  type: 'test'
+  ...
+# Subtest: management preserves weekly calendar, cross-month ownership and historical special week
+ok 21 - management preserves weekly calendar, cross-month ownership and historical special week
+  ---
+  duration_ms: 82.7625
+  type: 'test'
+  ...
+# Subtest: monthly existence is independent from document and weekly defaults
+ok 22 - monthly existence is independent from document and weekly defaults
+  ---
+  duration_ms: 191.167333
+  type: 'test'
+  ...
+# Subtest: explicit week existence, current week and four statuses reflect real storage
+ok 23 - explicit week existence, current week and four statuses reflect real storage
+  ---
+  duration_ms: 107.325292
+  type: 'test'
+  ...
+# Subtest: roster keeps Luis and zero, rejects ghosts and internal names, and retains Outros as bucket
+ok 24 - roster keeps Luis and zero, rejects ghosts and internal names, and retains Outros as bucket
+  ---
+  duration_ms: 28.809417
+  type: 'test'
+  ...
+# Subtest: financial truth matches official sales and planning respects explicit team targets
+ok 25 - financial truth matches official sales and planning respects explicit team targets
+  ---
+  duration_ms: 96.253583
+  type: 'test'
+  ...
+# Subtest: copy is only available with immediately previous saved week, including previous competence
+ok 26 - copy is only available with immediately previous saved week, including previous competence
+  ---
+  duration_ms: 24.074083
+  type: 'test'
+  ...
+# Subtest: historical roles come from period, not current role; model does not mutate inputs
+ok 27 - historical roles come from period, not current role; model does not mutate inputs
+  ---
+  duration_ms: 7.517833
+  type: 'test'
+  ...
+# Subtest: explicit exclusions through aliases are not reintroduced in the editor
+ok 28 - explicit exclusions through aliases are not reintroduced in the editor
+  ---
+  duration_ms: 13.756875
+  type: 'test'
+  ...
+# Subtest: page loads current competence; existing month opens edit with saved amount and no writes
+ok 29 - page loads current competence; existing month opens edit with saved amount and no writes
+  ---
+  duration_ms: 108.100667
+  type: 'test'
+  ...
+# Subtest: empty month uses define and monthly save refreshes existence
+ok 30 - empty month uses define and monthly save refreshes existence
+  ---
+  duration_ms: 158.248542
+  type: 'test'
+  ...
+# Subtest: month arrows and picker navigate, preserve scope and show history as read-only
+ok 31 - month arrows and picker navigate, preserve scope and show history as read-only
+  ---
+  duration_ms: 101.565541
+  type: 'test'
+  ...
+# Subtest: existing week opens edit; new week opens define; neither opening writes
+ok 32 - existing week opens edit; new week opens define; neither opening writes
+  ---
+  duration_ms: 46.525792
+  type: 'test'
+  ...
+# Subtest: copy changes only local draft; save posts configuration without results or record IDs and refreshes status
+ok 33 - copy changes only local draft; save posts configuration without results or record IDs and refreshes status
+  ---
+  duration_ms: 69.751042
+  type: 'test'
+  ...
+# Subtest: save error preserves draft and closing without save never persists copied values
+ok 34 - save error preserves draft and closing without save never persists copied values
+  ---
+  duration_ms: 49.732042
+  type: 'test'
+  ...
+# Subtest: rapid competence changes cannot replace the latest month with a stale response
+ok 35 - rapid competence changes cannot replace the latest month with a stale response
+  ---
+  duration_ms: 29.776833
+  type: 'test'
+  ...
+# Subtest: historical drawer has no save; Escape closes and returns focus
+ok 36 - historical drawer has no save; Escape closes and returns focus
+  ---
+  duration_ms: 32.530125
+  type: 'test'
+  ...
+# Subtest: completed week opens consultation and offers explicit editing only in an editable competence
+ok 37 - completed week opens consultation and offers explicit editing only in an editable competence
+  ---
+  duration_ms: 40.258
+  type: 'test'
+  ...
+# [commercial-overview][financial-audit] {
+#   periodoSelecionado: {
+#     inicio: '2026-09-09T00:00:00-03:00',
+#     fim: '2026-09-15T23:59:59.999-03:00',
+#     timezone: 'America/Sao_Paulo'
+#   },
+#   origemDados: 'DataCrazy businesses',
+#   pipeline: 'conversao',
+#   quantidadeFechadosEncontrados: 3,
+#   somaReceita: 12650,
+#   ticketMedio: 4216.666666666667,
+#   campoDataUsado: 'lastMovedAt',
+#   distribuicaoCamposData: { lastMovedAt: 2, statusChangedAt: 1 },
+#   negociosExcluidosPorData: 0,
+#   negociosSemDataFechamento: 0,
+#   criadosAntesMasFechadosNoPeriodo: 3,
+#   criadosNoPeriodoMasFechadosFora: 0
+# }
+# [FORECAST DEBUG] {
+#   parte1_fechado: 12650,
+#   parte2_pipeline: 0,
+#   parte3_novosLeads: 0,
+#   forecast_total: 12650,
+#   diasPassados: 6,
+#   diasRestantes: 1,
+#   mediaDiariaLeads: 0,
+#   novosLeadsEsperados: 0,
+#   dealsPipeline_count: 0
+# }
+# Subtest: SDR roster joins real active users and monthly role, includes zero and suppresses orphan/internal names
+ok 38 - SDR roster joins real active users and monthly role, includes zero and suppresses orphan/internal names
+  ---
+  duration_ms: 27.305709
+  type: 'test'
+  ...
+# Subtest: weekly UID overrides legacy defaults by identity without changing historical configuration
+ok 39 - weekly UID overrides legacy defaults by identity without changing historical configuration
+  ---
+  duration_ms: 4.759125
+  type: 'test'
+  ...
+# Subtest: R$12,650 includes all valid closings regardless of closer, goal or result roster, once per deal
+ok 40 - R$12,650 includes all valid closings regardless of closer, goal or result roster, once per deal
+  ---
+  duration_ms: 31.609875
+  type: 'test'
+  ...
+# Subtest: Outros is a closer bucket and its saved target contributes to the team target
+ok 41 - Outros is a closer bucket and its saved target contributes to the team target
+  ---
+  duration_ms: 2.714917
+  type: 'test'
+  ...
+# Subtest: financial date precedence, timezone boundaries and established pipeline rule are shared
+ok 42 - financial date precedence, timezone boundaries and established pipeline rule are shared
+  ---
+  duration_ms: 0.43975
+  type: 'test'
+  ...
+# Subtest: dashboard and CRM weekly total agree for identical periods and equivalent R$12,650 data
+ok 43 - dashboard and CRM weekly total agree for identical periods and equivalent R$12,650 data
+  ---
+  duration_ms: 12.536
+  type: 'test'
+  ...
+# Subtest: read-only audit explains the synthetic R$8,400 -> R$12,650 difference by deal
+ok 44 - read-only audit explains the synthetic R$8,400 -> R$12,650 difference by deal
+  ---
+  duration_ms: 13.197042
+  type: 'test'
+  ...
+# Subtest: ranking renders the backend names, including eligible SDRs below fifth place
+ok 45 - ranking renders the backend names, including eligible SDRs below fifth place
+  ---
+  duration_ms: 19.157708
+  type: 'test'
+  ...
+# Subtest: mirror financial windows include closed deals without recent movement
+ok 46 - mirror financial windows include closed deals without recent movement
+  ---
+  duration_ms: 1.748542
+  type: 'test'
+  ...
+# Subtest: CRM Live loader reads users, rejects ghosts, and uses the week competence across a month boundary
+ok 47 - CRM Live loader reads users, rejects ghosts, and uses the week competence across a month boundary
+  ---
+  duration_ms: 10.989042
+  type: 'test'
+  ...
+# [crm-live] slice build failed crm Error: crm_failed
+#     at buildCrmLiveCrmSlice (/Users/spaceonline/Documents/New project/tests/crm-live-auth-scope.test.js:162:15)
+#     at build (/Users/spaceonline/Documents/New project/api/crm-live-data.js:121:32)
+#     at /Users/spaceonline/Documents/New project/api/crm-live-data.js:99:48
+#     at runCrmSnapshot (/Users/spaceonline/Documents/New project/tests/crm-live-auth-scope.test.js:27:49)
+#     at loadSlice (/Users/spaceonline/Documents/New project/api/crm-live-data.js:99:17)
+#     at async Promise.all (index 0)
+#     at async module.exports (/Users/spaceonline/Documents/New project/api/crm-live-data.js:117:34)
+#     at async TestContext.<anonymous> (/Users/spaceonline/Documents/New project/tests/crm-live-auth-scope.test.js:183:3)
+#     at async Test.run (node:internal/test_runner/test:1054:7)
+#     at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+# [crm-live] slice build failed crm Error: crm_failed
+#     at buildCrmLiveCrmSlice (/Users/spaceonline/Documents/New project/tests/crm-live-auth-scope.test.js:207:15)
+#     at build (/Users/spaceonline/Documents/New project/api/crm-live-data.js:121:32)
+#     at /Users/spaceonline/Documents/New project/api/crm-live-data.js:99:48
+#     at runCrmSnapshot (/Users/spaceonline/Documents/New project/tests/crm-live-auth-scope.test.js:27:49)
+#     at loadSlice (/Users/spaceonline/Documents/New project/api/crm-live-data.js:99:17)
+#     at async Promise.all (index 0)
+#     at async module.exports (/Users/spaceonline/Documents/New project/api/crm-live-data.js:117:34)
+#     at async TestContext.<anonymous> (/Users/spaceonline/Documents/New project/tests/crm-live-auth-scope.test.js:238:5)
+#     at async Test.run (node:internal/test_runner/test:1054:7)
+#     at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+# [crm-live] top-level payload failed Error: crm_failed
+#     at buildCrmLiveCrmSlice (/Users/spaceonline/Documents/New project/tests/crm-live-auth-scope.test.js:207:15)
+#     at build (/Users/spaceonline/Documents/New project/api/crm-live-data.js:121:32)
+#     at /Users/spaceonline/Documents/New project/api/crm-live-data.js:99:48
+#     at runCrmSnapshot (/Users/spaceonline/Documents/New project/tests/crm-live-auth-scope.test.js:27:49)
+#     at loadSlice (/Users/spaceonline/Documents/New project/api/crm-live-data.js:99:17)
+#     at async Promise.all (index 0)
+#     at async module.exports (/Users/spaceonline/Documents/New project/api/crm-live-data.js:117:34)
+#     at async TestContext.<anonymous> (/Users/spaceonline/Documents/New project/tests/crm-live-auth-scope.test.js:238:5)
+#     at async Test.run (node:internal/test_runner/test:1054:7)
+#     at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+# [session] no cookie found
+# [crm-live] slice build failed crm Error: crm_failed
+#     at buildCrmLiveCrmSlice (/Users/spaceonline/Documents/New project/tests/crm-live-auth-scope.test.js:323:15)
+#     at build (/Users/spaceonline/Documents/New project/api/crm-live-data.js:121:32)
+#     at /Users/spaceonline/Documents/New project/api/crm-live-data.js:99:48
+#     at runCrmSnapshot (/Users/spaceonline/Documents/New project/tests/crm-live-auth-scope.test.js:27:49)
+#     at loadSlice (/Users/spaceonline/Documents/New project/api/crm-live-data.js:99:17)
+#     at async Promise.all (index 0)
+#     at async module.exports (/Users/spaceonline/Documents/New project/api/crm-live-data.js:117:34)
+#     at async TestContext.<anonymous> (/Users/spaceonline/Documents/New project/tests/crm-live-auth-scope.test.js:344:3)
+#     at async Test.run (node:internal/test_runner/test:1054:7)
+#     at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+# Subtest: cookie da TV passa em /api/crm-live-data
+ok 48 - cookie da TV passa em /api/crm-live-data
+  ---
+  duration_ms: 39.631958
+  type: 'test'
+  ...
+# Subtest: cookie da TV não autentica /api/growth-dashboard?api=growth-metrics
+ok 49 - cookie da TV não autentica /api/growth-dashboard?api=growth-metrics
+  ---
+  duration_ms: 23.343416
+  type: 'test'
+  ...
+# Subtest: sessão comercial autenticada passa em /api/crm-live-data
+ok 50 - sessão comercial autenticada passa em /api/crm-live-data
+  ---
+  duration_ms: 2.571042
+  type: 'test'
+  ...
+# Subtest: cache stale só é reaproveitado se for da mesma semana comercial
+ok 51 - cache stale só é reaproveitado se for da mesma semana comercial
+  ---
+  duration_ms: 6.021541
+  type: 'test'
+  ...
+# Subtest: cache stale de semana anterior é descartado na virada de semana
+ok 52 - cache stale de semana anterior é descartado na virada de semana
+  ---
+  duration_ms: 0.910208
+  type: 'test'
+  ...
+# Subtest: HTML e payload resolvem o mesmo buildId no mesmo processo
+ok 53 - HTML e payload resolvem o mesmo buildId no mesmo processo
+  ---
+  duration_ms: 5.760167
+  type: 'test'
+  ...
+# Subtest: snapshot cacheado não influencia o buildId do payload
+ok 54 - snapshot cacheado não influencia o buildId do payload
+  ---
+  duration_ms: 3.170042
+  type: 'test'
+  ...
+# Subtest: crm-live-data OK e crm-live-events falhando sai do loading e pinta o primeiro slide
+ok 55 - crm-live-data OK e crm-live-events falhando sai do loading e pinta o primeiro slide
+  ---
+  duration_ms: 62.976416
+  type: 'test'
+  ...
+# Subtest: fonte não-crítica em erro renderiza estado degradado e continua na rotação
+ok 56 - fonte não-crítica em erro renderiza estado degradado e continua na rotação
+  ---
+  duration_ms: 35.754833
+  type: 'test'
+  ...
+# Subtest: HTML servido executa o script do cliente sem exceção e monta ao menos uma tela
+ok 57 - HTML servido executa o script do cliente sem exceção e monta ao menos uma tela
+  ---
+  duration_ms: 10.246125
+  type: 'test'
+  ...
+# Subtest: modo últimas 24h não renderiza mais o ponteiro de segundos
+ok 58 - modo últimas 24h não renderiza mais o ponteiro de segundos
+  ---
+  duration_ms: 16.962708
+  type: 'test'
+  ...
+# Subtest: 24h01 restantes mantém modo normal
+ok 59 - 24h01 restantes mantém modo normal
+  ---
+  duration_ms: 1.635292
+  type: 'test'
+  ...
+# Subtest: 23h59 restantes ativa modo dividido
+ok 60 - 23h59 restantes ativa modo dividido
+  ---
+  duration_ms: 0.150542
+  type: 'test'
+  ...
+# Subtest: 5 segundos restantes continua no modo dividido sem tempo negativo
+ok 61 - 5 segundos restantes continua no modo dividido sem tempo negativo
+  ---
+  duration_ms: 0.082917
+  type: 'test'
+  ...
+# Subtest: ao chegar em zero o modo segue dividido, zera o relógio e entra em estado final
+ok 62 - ao chegar em zero o modo segue dividido, zera o relógio e entra em estado final
+  ---
+  duration_ms: 0.076791
+  type: 'test'
+  ...
+# Subtest: reavalia a janela final mesmo com a página aberta horas antes
+ok 63 - reavalia a janela final mesmo com a página aberta horas antes
+  ---
+  duration_ms: 0.674
+  type: 'test'
+  ...
+# Subtest: detector em partida a frio só semeia cursor e não dispara eventos
+ok 64 - detector em partida a frio só semeia cursor e não dispara eventos
+  ---
+  duration_ms: 6.4835
+  type: 'test'
+  ...
+# Subtest: detector enfileira venda, meta individual, virada e meta do time em ordem estável
+ok 65 - detector enfileira venda, meta individual, virada e meta do time em ordem estável
+  ---
+  duration_ms: 28.490917
+  type: 'test'
+  ...
+# Subtest: troca de semana reseta metas e líderes sem disparar falso positivo
+ok 66 - troca de semana reseta metas e líderes sem disparar falso positivo
+  ---
+  duration_ms: 0.273166
+  type: 'test'
+  ...
+# Subtest: sale_closed anuncia Outros para vendedor fora de Matheus e Luis
+ok 67 - sale_closed anuncia Outros para vendedor fora de Matheus e Luis
+  ---
+  duration_ms: 0.758458
+  type: 'test'
+  ...
+# Subtest: ranking SDR calcula ultrapassagem por percentual da meta, não por diferença bruta
+ok 68 - ranking SDR calcula ultrapassagem por percentual da meta, não por diferença bruta
+  ---
+  duration_ms: 0.807375
+  type: 'test'
+  ...
+# Subtest: pausa da rotação não interrompe timers separados de dados
+ok 69 - pausa da rotação não interrompe timers separados de dados
+  ---
+  duration_ms: 2.500458
+  type: 'test'
+  ...
+# Subtest: seta manual reinicia o cronômetro cheio da tela sem pausar a rotação
+ok 70 - seta manual reinicia o cronômetro cheio da tela sem pausar a rotação
+  ---
+  duration_ms: 2.657667
+  type: 'test'
+  ...
+# Subtest: navegação pula telas condicionais vazias nos dois sentidos
+ok 71 - navegação pula telas condicionais vazias nos dois sentidos
+  ---
+  duration_ms: 2.03875
+  type: 'test'
+  ...
+# Subtest: interrupção aparece mesmo pausado, preserva fila e volta para a tela pausada
+ok 72 - interrupção aparece mesmo pausado, preserva fila e volta para a tela pausada
+  ---
+  duration_ms: 0.352125
+  type: 'test'
+  ...
+# Subtest: auto-reload espera fim seguro quando build muda durante interrupção e pausa manual
+ok 73 - auto-reload espera fim seguro quando build muda durante interrupção e pausa manual
+  ---
+  duration_ms: 2.460958
+  type: 'test'
+  ...
+# Subtest: auto-reload não dispara no meio da transição de tela
+ok 74 - auto-reload não dispara no meio da transição de tela
+  ---
+  duration_ms: 0.479958
+  type: 'test'
+  ...
+# Subtest: auto-reload nunca dispara duas vezes para o mesmo build alvo e respeita intervalo mínimo
+ok 75 - auto-reload nunca dispara duas vezes para o mesmo build alvo e respeita intervalo mínimo
+  ---
+  duration_ms: 0.317083
+  type: 'test'
+  ...
+# Subtest: toggle da rotação renderiza um único alvo clicável com ícone correto por estado
+ok 76 - toggle da rotação renderiza um único alvo clicável com ícone correto por estado
+  ---
+  duration_ms: 1.380667
+  type: 'test'
+  ...
+# Subtest: normal pagination: terminal page, counts, stable IDs and atomic publication
+ok 77 - normal pagination: terminal page, counts, stable IDs and atomic publication
+  ---
+  duration_ms: 35.343209
+  type: 'test'
+  ...
+# Subtest: 429 recovers with exponential backoff, jitter, Retry-After and same page
+ok 78 - 429 recovers with exponential backoff, jitter, Retry-After and same page
+  ---
+  duration_ms: 0.761875
+  type: 'test'
+  ...
+# Subtest: permanent 429: FAILED attempt, previous source and metric snapshot untouched, cooldown
+ok 79 - permanent 429: FAILED attempt, previous source and metric snapshot untouched, cooldown
+  ---
+  duration_ms: 8.482916
+  type: 'test'
+  ...
+# Subtest: intermediate failure and pagination safety cap cannot publish partial datasets
+ok 80 - intermediate failure and pagination safety cap cannot publish partial datasets
+  ---
+  duration_ms: 5.598
+  type: 'test'
+  ...
+# Subtest: idempotence: repeated identical IDs do not change total, reordered pages preserve hash; conflicting IDs fail
+ok 81 - idempotence: repeated identical IDs do not change total, reordered pages preserve hash; conflicting IDs fail
+  ---
+  duration_ms: 3.309166
+  type: 'test'
+  ...
+# Subtest: distributed concurrency: only one worker collects; expired worker is fenced
+ok 82 - distributed concurrency: only one worker collects; expired worker is fenced
+  ---
+  duration_ms: 1.442584
+  type: 'test'
+  ...
+# Subtest: quality gate and calculation failure leave current intact
+ok 83 - quality gate and calculation failure leave current intact
+  ---
+  duration_ms: 0.486
+  type: 'test'
+  ...
+# Subtest: gain date includes restored sale on new day, and SDR revenues remain in team
+ok 84 - gain date includes restored sale on new day, and SDR revenues remain in team
+  ---
+  duration_ms: 17.399167
+  type: 'test'
+  ...
+# Subtest: freshness: legacy, failures and aged browser fallbacks never look fresh
+ok 85 - freshness: legacy, failures and aged browser fallbacks never look fresh
+  ---
+  duration_ms: 3.646708
+  type: 'test'
+  ...
+# Subtest: Retry-After beyond job deadline fails without another request; 401 does not retry
+ok 86 - Retry-After beyond job deadline fails without another request; 401 does not retry
+  ---
+  duration_ms: 0.582417
+  type: 'test'
+  ...
+# Subtest: CS Live payload mock expõe metas e direção por métrica
+ok 87 - CS Live payload mock expõe metas e direção por métrica
+  ---
+  duration_ms: 25.324583
+  type: 'test'
+  ...
+# Subtest: CS Live usa cookie Path=/ no redirect com token
+ok 88 - CS Live usa cookie Path=/ no redirect com token
+  ---
+  duration_ms: 1.668583
+  type: 'test'
+  ...
+# Subtest: HTML do CS Live deixa dados de exemplo visíveis
+ok 89 - HTML do CS Live deixa dados de exemplo visíveis
+  ---
+  duration_ms: 1.578625
+  type: 'test'
+  ...
+# Subtest: buildMirrorRow normaliza os campos principais do negócio
+ok 90 - buildMirrorRow normaliza os campos principais do negócio
+  ---
+  duration_ms: 11.360083
+  type: 'test'
+  ...
+# Subtest: computeSourceHash é estável para o mesmo payload
+ok 91 - computeSourceHash é estável para o mesmo payload
+  ---
+  duration_ms: 0.155
+  type: 'test'
+  ...
+# Subtest: computeOverlapCursor recua a janela para evitar perder timestamps iguais
+ok 92 - computeOverlapCursor recua a janela para evitar perder timestamps iguais
+  ---
+  duration_ms: 0.087625
+  type: 'test'
+  ...
+# Subtest: normalizeKey remove acento e caixa
+ok 93 - normalizeKey remove acento e caixa
+  ---
+  duration_ms: 0.077166
+  type: 'test'
+  ...
+# Subtest: endpoint de sync rejeita sem sessão nem segredo
+ok 94 - endpoint de sync rejeita sem sessão nem segredo
+  ---
+  duration_ms: 1.481125
+  type: 'test'
+  ...
+# [commercial-overview][financial-audit] {
+#   periodoSelecionado: {
+#     inicio: '2026-05-01T00:00:00-03:00',
+#     fim: '2026-05-12T23:59:59.999-03:00',
+#     timezone: 'America/Sao_Paulo'
+#   },
+#   origemDados: 'DataCrazy businesses',
+#   pipeline: 'conversao',
+#   quantidadeFechadosEncontrados: 2,
+#   somaReceita: 10000,
+#   ticketMedio: 5000,
+#   campoDataUsado: 'statusChangedAt',
+#   distribuicaoCamposData: { statusChangedAt: 3 },
+#   negociosExcluidosPorData: 1,
+#   negociosSemDataFechamento: 0,
+#   criadosAntesMasFechadosNoPeriodo: 1,
+#   criadosNoPeriodoMasFechadosFora: 1
+# }
+# [FORECAST DEBUG] {
+#   parte1_fechado: 10000,
+#   parte2_pipeline: 0,
+#   parte3_novosLeads: 0,
+#   forecast_total: 10000,
+#   diasPassados: 12,
+#   diasRestantes: 0,
+#   mediaDiariaLeads: 0.16666666666666666,
+#   novosLeadsEsperados: 0,
+#   dealsPipeline_count: 0
+# }
+# Subtest: resolveCommercialPeriod mantém calendário quando não há override
+ok 95 - resolveCommercialPeriod mantém calendário quando não há override
+  ---
+  duration_ms: 48.76325
+  type: 'test'
+  ...
+# Subtest: resolveCommercialPeriod aplica janela customizada do comercial
+ok 96 - resolveCommercialPeriod aplica janela customizada do comercial
+  ---
+  duration_ms: 3.783375
+  type: 'test'
+  ...
+# Subtest: forecast 3-partes aceita callback de período customizado
+ok 97 - forecast 3-partes aceita callback de período customizado
+  ---
+  duration_ms: 3.63875
+  type: 'test'
+  ...
+# Subtest: growth metrics mantém o funil por criação e calcula financeiro por fechamento
+ok 98 - growth metrics mantém o funil por criação e calcula financeiro por fechamento
+  ---
+  duration_ms: 15.61475
+  type: 'test'
+  ...
+# Subtest: intervalo comercial inclui 00:00 inicial e 23:59:59 final em São Paulo
+ok 99 - intervalo comercial inclui 00:00 inicial e 23:59:59 final em São Paulo
+  ---
+  duration_ms: 0.634
+  type: 'test'
+  ...
+# Subtest: API de growth metrics valida e usa periodStart/periodEnd fora do cache mensal
+ok 100 - API de growth metrics valida e usa periodStart/periodEnd fora do cache mensal
+  ---
+  duration_ms: 13.358292
+  type: 'test'
+  ...
+# Subtest: save de growth-goals invalida o cache persistente imediatamente
+ok 101 - save de growth-goals invalida o cache persistente imediatamente
+  ---
+  duration_ms: 4.156875
+  type: 'test'
+  ...
+# Subtest: POST parcial de growth-goals preserva valorMeta existente quando omitido
+ok 102 - POST parcial de growth-goals preserva valorMeta existente quando omitido
+  ---
+  duration_ms: 1.28875
+  type: 'test'
+  ...
+# Subtest: GET de growth-goals aceita weekStart para calcular weeklyReadModel fora da semana atual
+ok 103 - GET de growth-goals aceita weekStart para calcular weeklyReadModel fora da semana atual
+  ---
+  duration_ms: 1.710875
+  type: 'test'
+  ...
+# Subtest: POST de growth-goals aceita salvar weeklyGoal sem exigir valorMeta mensal
+ok 104 - POST de growth-goals aceita salvar weeklyGoal sem exigir valorMeta mensal
+  ---
+  duration_ms: 1.165291
+  type: 'test'
+  ...
+# [growth-goals] auth header: missing
+# [growth-goals] auth header: missing
+# [api] growth-goals get failed Error: commercial_users_list_failed
+#     at handleGrowthGoalsApi (/Users/spaceonline/Documents/New project/api/growth-dashboard.js:1402:40)
+#     at async module.exports (/Users/spaceonline/Documents/New project/api/growth-dashboard.js:2811:5)
+#     at async Object.request (/Users/spaceonline/Documents/New project/tests/growth-goals-people.test.js:116:5)
+#     at async TestContext.<anonymous> (/Users/spaceonline/Documents/New project/tests/growth-goals-people.test.js:160:17)
+#     at async Test.run (node:internal/test_runner/test:1054:7)
+#     at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+# [growth-goals] auth header: missing
+# Subtest: active Commercial users are the base, independently of configuration, goals or role
+ok 105 - active Commercial users are the base, independently of configuration, goals or role
+  ---
+  duration_ms: 4.970417
+  type: 'test'
+  ...
+# Subtest: goals join by stable identity and selected week, retaining zero targets
+ok 106 - goals join by stable identity and selected week, retaining zero targets
+  ---
+  duration_ms: 32.534666
+  type: 'test'
+  ...
+# Subtest: homonyms stay distinct and duplicate configurations resolve to one real user
+ok 107 - homonyms stay distinct and duplicate configurations resolve to one real user
+  ---
+  duration_ms: 1.495708
+  type: 'test'
+  ...
+# Subtest: GET includes active users even without a month document and never writes
+ok 108 - GET includes active users even without a month document and never writes
+  ---
+  duration_ms: 49.894834
+  type: 'test'
+  ...
+# Subtest: POST saves new user with SDR or Closer, preserving hidden goals, other weeks and monthly total
+ok 109 - POST saves new user with SDR or Closer, preserving hidden goals, other weeks and monthly total
+  ---
+  duration_ms: 14.254167
+  type: 'test'
+  ...
+# Subtest: read failures do not produce incomplete editable data or overwrite existing goals
+ok 110 - read failures do not produce incomplete editable data or overwrite existing goals
+  ---
+  duration_ms: 5.499125
+  type: 'test'
+  ...
+# [growth-goals] auth header: missing
+# [growth-goals] auth header: missing
+# [growth-goals] auth header: missing
+# Subtest: modal renders unconfigured users, retains saved inputs and posts only after Salvar
+ok 111 - modal renders unconfigured users, retains saved inputs and posts only after Salvar
+  ---
+  duration_ms: 30.000208
+  type: 'test'
+  ...
+# Subtest: management GET aggregates the competence in one read-only response
+ok 112 - management GET aggregates the competence in one read-only response
+  ---
+  duration_ms: 46.855959
+  type: 'test'
+  ...
+# Subtest: entity action is create for a new week inside an existing month and update after saving
+ok 113 - entity action is create for a new week inside an existing month and update after saving
+  ---
+  duration_ms: 13.401375
+  type: 'test'
+  ...
+# Subtest: updating a legacy week preserves unknown fields and synchronizes legacy people arrays
+ok 114 - updating a legacy week preserves unknown fields and synchronizes legacy people arrays
+  ---
+  duration_ms: 3.472834
+  type: 'test'
+  ...
+# Subtest: decodeBase64ImagePayload rejects empty payload
+ok 115 - decodeBase64ImagePayload rejects empty payload
+  ---
+  duration_ms: 2.6595
+  type: 'test'
+  ...
+# Subtest: transformProfilePhotoBuffer recodes supported image to 400x400 webp
+ok 116 - transformProfilePhotoBuffer recodes supported image to 400x400 webp
+  ---
+  duration_ms: 194.744334
+  type: 'test'
+  ...
+# Subtest: transformProfilePhotoBuffer rejects non-image payload
+ok 117 - transformProfilePhotoBuffer rejects non-image payload
+  ---
+  duration_ms: 2.701584
+  type: 'test'
+  ...
+# Subtest: resolveCommercialWeek respeita a semana especial inicial
+ok 118 - resolveCommercialWeek respeita a semana especial inicial
+  ---
+  duration_ms: 29.483375
+  type: 'test'
+  ...
+# Subtest: resolveCommercialWeek usa quarta-terça após 19/08/2026
+ok 119 - resolveCommercialWeek usa quarta-terça após 19/08/2026
+  ---
+  duration_ms: 3.807667
+  type: 'test'
+  ...
+# Subtest: weekly read model usa attendantId como chave principal para o closer da semana
+ok 120 - weekly read model usa attendantId como chave principal para o closer da semana
+  ---
+  duration_ms: 6.956083
+  type: 'test'
+  ...
+# Subtest: weekly read model usa fallback por alias e expõe attendantId não reconhecido
+ok 121 - weekly read model usa fallback por alias e expõe attendantId não reconhecido
+  ---
+  duration_ms: 0.831083
+  type: 'test'
+  ...
+# Subtest: weekly read model agrega attendant não cadastrado em Outros e mantém unresolved para diagnóstico
+ok 122 - weekly read model agrega attendant não cadastrado em Outros e mantém unresolved para diagnóstico
+  ---
+  duration_ms: 1.044333
+  type: 'test'
+  ...
+# Subtest: weekly read model agrega receita de pessoa com role SDR em Outros
+ok 123 - weekly read model agrega receita de pessoa com role SDR em Outros
+  ---
+  duration_ms: 0.617083
+  type: 'test'
+  ...
+# Subtest: weekly read model agrega attendantId nulo em Outros
+ok 124 - weekly read model agrega attendantId nulo em Outros
+  ---
+  duration_ms: 1.099917
+  type: 'test'
+  ...
+# Subtest: weekly read model expõe unresolved mesmo sem weeklyGoal cadastrado
+ok 125 - weekly read model expõe unresolved mesmo sem weeklyGoal cadastrado
+  ---
+  duration_ms: 0.327542
+  type: 'test'
+  ...
+# Subtest: ranking de closers ordena Outros no meio por percentual
+ok 126 - ranking de closers ordena Outros no meio por percentual
+  ---
+  duration_ms: 1.118958
+  type: 'test'
+  ...
+# Subtest: ranking de closers ordena Outros no topo por percentual
+ok 127 - ranking de closers ordena Outros no topo por percentual
+  ---
+  duration_ms: 1.016292
+  type: 'test'
+  ...
+# Subtest: weekly read model conta reunião feita do SDR por show em sdrActivityEvents
+ok 128 - weekly read model conta reunião feita do SDR por show em sdrActivityEvents
+  ---
+  duration_ms: 1.573709
+  type: 'test'
+  ...
+# Subtest: weekly read model expõe sdrUid e email não reconhecidos em unresolved.sdrActors
+ok 129 - weekly read model expõe sdrUid e email não reconhecidos em unresolved.sdrActors
+  ---
+  duration_ms: 0.544709
+  type: 'test'
+  ...
+# Subtest: meta semanal do time de closers usa 20000 independente da soma individual
+ok 130 - meta semanal do time de closers usa 20000 independente da soma individual
+  ---
+  duration_ms: 2.411
+  type: 'test'
+  ...
+# Subtest: meta semanal do time de closers cai para a soma das linhas quando teamTarget está ausente
+ok 131 - meta semanal do time de closers cai para a soma das linhas quando teamTarget está ausente
+  ---
+  duration_ms: 1.031334
+  type: 'test'
+  ...
+# Subtest: weekly read model usa default da competência quando a semana não está preenchida
+ok 132 - weekly read model usa default da competência quando a semana não está preenchida
+  ---
+  duration_ms: 3.014084
+  type: 'test'
+  ...
+# Subtest: weekly read model faz merge campo a campo entre semana e default da competência
+ok 133 - weekly read model faz merge campo a campo entre semana e default da competência
+  ---
+  duration_ms: 0.960708
+  type: 'test'
+  ...
+# Subtest: weekly read model permite excluir pessoa do default por flag explícita na semana
+ok 134 - weekly read model permite excluir pessoa do default por flag explícita na semana
+  ---
+  duration_ms: 1.172542
+  type: 'test'
+  ...
+# Subtest: weekly read model usa default global quando competência e semana não estão preenchidas
+ok 135 - weekly read model usa default global quando competência e semana não estão preenchidas
+  ---
+  duration_ms: 0.570833
+  type: 'test'
+  ...
+# Subtest: defaultWeeklyConfig canônico referencia apenas personIds existentes em growthPeople
+ok 136 - defaultWeeklyConfig canônico referencia apenas personIds existentes em growthPeople
+  ---
+  duration_ms: 0.313666
+  type: 'test'
+  ...
+# Subtest: efetivação de cancelamento usa writeBatch para aluno e cascata Firestore
+ok 137 - efetivação de cancelamento usa writeBatch para aluno e cascata Firestore
+  ---
+  duration_ms: 1.775333
+  type: 'test'
+  ...
+# Subtest: sync Supabase acontece somente depois da confirmação Firestore
+ok 138 - sync Supabase acontece somente depois da confirmação Firestore
+  ---
+  duration_ms: 0.723541
+  type: 'test'
+  ...
+# Subtest: isOccurrenceUniqueViolation detecta 23505 do índice de occurrence_id
+ok 139 - isOccurrenceUniqueViolation detecta 23505 do índice de occurrence_id
+  ---
+  duration_ms: 4.612084
+  type: 'test'
+  ...
+# Subtest: isOccurrenceUniqueViolation ignora erros de outra natureza
+ok 140 - isOccurrenceUniqueViolation ignora erros de outra natureza
+  ---
+  duration_ms: 0.269375
+  type: 'test'
+  ...
+# Subtest: aula antiga com status ao_vivo não entra como aula ativa
+ok 141 - aula antiga com status ao_vivo não entra como aula ativa
+  ---
+  duration_ms: 37.465
+  type: 'test'
+  ...
+# Subtest: aula dentro do horário aparece ao vivo mesmo antes da atualização do status
+ok 142 - aula dentro do horário aparece ao vivo mesmo antes da atualização do status
+  ---
+  duration_ms: 0.691375
+  type: 'test'
+  ...
+# Subtest: omitNilValues remove campos legados nulos sem perder false e zero
+ok 143 - omitNilValues remove campos legados nulos sem perder false e zero
+  ---
+  duration_ms: 2.754375
+  type: 'test'
+  ...
+# Subtest: remarcação live não move mais a aula original para a nova data
+ok 144 - remarcação live não move mais a aula original para a nova data
+  ---
+  duration_ms: 1.093292
+  type: 'test'
+  ...
+# Subtest: register novo herda occurrence_id canônico da lesson
+ok 145 - register novo herda occurrence_id canônico da lesson
+  ---
+  duration_ms: 1.187125
+  type: 'test'
+  ...
+# Subtest: normalizeLesson preserva occurrence_id quando a linha live já o possui
+ok 146 - normalizeLesson preserva occurrence_id quando a linha live já o possui
+  ---
+  duration_ms: 1.734708
+  type: 'test'
+  ...
+# Subtest: payload live do professor envia engajamento e confiança
+ok 147 - payload live do professor envia engajamento e confiança
+  ---
+  duration_ms: 1.144375
+  type: 'test'
+  ...
+# Subtest: normalizePayload preserva engajamento e confiança em registro_aula
+ok 148 - normalizePayload preserva engajamento e confiança em registro_aula
+  ---
+  duration_ms: 0.284875
+  type: 'test'
+  ...
+# Subtest: backend de remarcação não exige mais motivo_remarcacao
+ok 149 - backend de remarcação não exige mais motivo_remarcacao
+  ---
+  duration_ms: 0.100083
+  type: 'test'
+  ...
+# Subtest: backend de remarcação rejeita nova data inválida
+ok 150 - backend de remarcação rejeita nova data inválida
+  ---
+  duration_ms: 0.174417
+  type: 'test'
+  ...
+# Subtest: API de agenda devolve vínculos de remarcação no GET
+ok 151 - API de agenda devolve vínculos de remarcação no GET
+  ---
+  duration_ms: 0.14575
+  type: 'test'
+  ...
+# Subtest: pendência pedagógica usa somente status de registro válido
+ok 152 - pendência pedagógica usa somente status de registro válido
+  ---
+  duration_ms: 3.422792
+  type: 'test'
+  ...
+# Subtest: logs pedagógicos são indexados também pelo id derivado do documento
+ok 153 - logs pedagógicos são indexados também pelo id derivado do documento
+  ---
+  duration_ms: 0.204792
+  type: 'test'
+  ...
+# Subtest: status pedagógico operacional pode ser adaptado do Supabase sem depender de lessonLogs
+ok 154 - status pedagógico operacional pode ser adaptado do Supabase sem depender de lessonLogs
+  ---
+  duration_ms: 0.306959
+  type: 'test'
+  ...
+# Subtest: buildCollisionGroups separa órfãos singulares de grupos em colisão
+ok 155 - buildCollisionGroups separa órfãos singulares de grupos em colisão
+  ---
+  duration_ms: 2.054875
+  type: 'test'
+  ...
+# Subtest: buildLessonRegisterRecord mantém colunas novas e legadas em paralelo
+ok 156 - buildLessonRegisterRecord mantém colunas novas e legadas em paralelo
+  ---
+  duration_ms: 2.262333
+  type: 'test'
+  ...
+# Subtest: buildLessonRegisterRecord normaliza ids textuais para colunas text
+ok 157 - buildLessonRegisterRecord normaliza ids textuais para colunas text
+  ---
+  duration_ms: 0.381791
+  type: 'test'
+  ...
+# Subtest: professor cria payload de reposição com vínculo para aula Firestore
+ok 158 - professor cria payload de reposição com vínculo para aula Firestore
+  ---
+  duration_ms: 0.992917
+  type: 'test'
+  ...
+# Subtest: professor cria ou atualiza reposição também para aula Supabase live
+ok 159 - professor cria ou atualiza reposição também para aula Supabase live
+  ---
+  duration_ms: 6.540916
+  type: 'test'
+  ...
+# Subtest: evento de reposição entra no estado local com vínculo de origem
+ok 160 - evento de reposição entra no estado local com vínculo de origem
+  ---
+  duration_ms: 0.719458
+  type: 'test'
+  ...
+# Subtest: remarcação valida janela plausível para nova data
+ok 161 - remarcação valida janela plausível para nova data
+  ---
+  duration_ms: 1.033834
+  type: 'test'
+  ...
+# Subtest: registro_aula especial preenche placeholder quando conteudo_aula vem vazio
+ok 162 - registro_aula especial preenche placeholder quando conteudo_aula vem vazio
+  ---
+  duration_ms: 2.024834
+  type: 'test'
+  ...
+# Subtest: registro_aula regular preserva exigência de conteúdo real
+ok 163 - registro_aula regular preserva exigência de conteúdo real
+  ---
+  duration_ms: 0.695041
+  type: 'test'
+  ...
+# Subtest: status visual do registro pedagógico é sincronizado pela mesma fonte de verdade
+ok 164 - status visual do registro pedagógico é sincronizado pela mesma fonte de verdade
+  ---
+  duration_ms: 2.145125
+  type: 'test'
+  ...
+# Subtest: painel de usuários do pedagógico não usa corte fixo de altura
+ok 165 - painel de usuários do pedagógico não usa corte fixo de altura
+  ---
+  duration_ms: 3.508917
+  type: 'test'
+  ...
+# Subtest: agenda admin suporta semana de 7 dias e split com 1 professor
+ok 166 - agenda admin suporta semana de 7 dias e split com 1 professor
+  ---
+  duration_ms: 0.638125
+  type: 'test'
+  ...
+# Subtest: datas ISO do live usam America/Sao_Paulo no front
+ok 167 - datas ISO do live usam America/Sao_Paulo no front
+  ---
+  duration_ms: 0.707167
+  type: 'test'
+  ...
+# Subtest: Premium está disponível nos seletores e badges de plano
+ok 168 - Premium está disponível nos seletores e badges de plano
+  ---
+  duration_ms: 2.310417
+  type: 'test'
+  ...
+# Subtest: Premium herda elegibilidade ilimitada do Diamond em reposições
+ok 169 - Premium herda elegibilidade ilimitada do Diamond em reposições
+  ---
+  duration_ms: 0.584
+  type: 'test'
+  ...
+# Subtest: backend local conversa com PostgREST descartável e respeita gates/segurança
+ok 170 - backend local conversa com PostgREST descartável e respeita gates/segurança # SKIP
+  ---
+  duration_ms: 0.479292
+  type: 'test'
+  ...
+# [retention] command failed { code: 'idempotency_key_payload_mismatch' }
+# Subtest: GET queues retorna fonte nova e filas serializadas
+ok 171 - GET queues retorna fonte nova e filas serializadas
+  ---
+  duration_ms: 40.909583
+  type: 'test'
+  ...
+# Subtest: GET fica bloqueado quando retention v2 está desligada
+ok 172 - GET fica bloqueado quando retention v2 está desligada
+  ---
+  duration_ms: 0.638291
+  type: 'test'
+  ...
+# Subtest: POST bloqueia usuário sem capability
+ok 173 - POST bloqueia usuário sem capability
+  ---
+  duration_ms: 1.3295
+  type: 'test'
+  ...
+# Subtest: POST fica bloqueado quando retention v2 está desligada
+ok 174 - POST fica bloqueado quando retention v2 está desligada
+  ---
+  duration_ms: 0.450125
+  type: 'test'
+  ...
+# Subtest: POST exige justificativa em churn manual administrativo
+ok 175 - POST exige justificativa em churn manual administrativo
+  ---
+  duration_ms: 1.007333
+  type: 'test'
+  ...
+# Subtest: POST bloqueia churn involuntário quando a flag está desligada
+ok 176 - POST bloqueia churn involuntário quando a flag está desligada
+  ---
+  duration_ms: 3.164875
+  type: 'test'
+  ...
+# Subtest: POST crítico exige admin mesmo com capability ampla
+ok 177 - POST crítico exige admin mesmo com capability ampla
+  ---
+  duration_ms: 0.632291
+  type: 'test'
+  ...
+# Subtest: POST resolve student/subscription a partir do firestore_student_id
+ok 178 - POST resolve student/subscription a partir do firestore_student_id
+  ---
+  duration_ms: 6.901541
+  type: 'test'
+  ...
+# Subtest: POST exige requested_at saneado no pedido formal
+ok 179 - POST exige requested_at saneado no pedido formal
+  ---
+  duration_ms: 3.027458
+  type: 'test'
+  ...
+# Subtest: POST traduz mismatch de idempotência em conflito controlado
+ok 180 - POST traduz mismatch de idempotência em conflito controlado
+  ---
+  duration_ms: 3.034166
+  type: 'test'
+  ...
+# Subtest: job recusa execução sem segredo configurado
+ok 181 - job recusa execução sem segredo configurado
+  ---
+  duration_ms: 9.422542
+  type: 'test'
+  ...
+# Subtest: job exige segredo correto e respeita flag
+ok 182 - job exige segredo correto e respeita flag
+  ---
+  duration_ms: 59.051
+  type: 'test'
+  ...
+# Subtest: job executa com segredo válido
+ok 183 - job executa com segredo válido
+  ---
+  duration_ms: 1.363583
+  type: 'test'
+  ...
+# Subtest: pedido dentro de 7 dias da primeira aula encerra em 1 mês da primeira aula
+ok 184 - pedido dentro de 7 dias da primeira aula encerra em 1 mês da primeira aula
+  ---
+  duration_ms: 7.712791
+  type: 'test'
+  ...
+# Subtest: pedido fora da janela inicial encerra em 2 meses do pedido
+ok 185 - pedido fora da janela inicial encerra em 2 meses do pedido
+  ---
+  duration_ms: 0.352791
+  type: 'test'
+  ...
+# Subtest: command payload preserva retry idempotente e aceita resolução por firestore_student_id
+ok 186 - command payload preserva retry idempotente e aceita resolução por firestore_student_id
+  ---
+  duration_ms: 1.7015
+  type: 'test'
+  ...
+# Subtest: command payload saneia campos e bloqueia mass assignment fora do comando
+ok 187 - command payload saneia campos e bloqueia mass assignment fora do comando
+  ---
+  duration_ms: 36.412542
+  type: 'test'
+  ...
+# Subtest: queues exibem financeiro indisponível sem forçar R$ 0,00
+ok 188 - queues exibem financeiro indisponível sem forçar R$ 0,00
+  ---
+  duration_ms: 0.599709
+  type: 'test'
+  ...
+# Subtest: queues mapeiam caso perdido como desfecho lost
+ok 189 - queues mapeiam caso perdido como desfecho lost
+  ---
+  duration_ms: 0.192625
+  type: 'test'
+  ...
+# Subtest: override administrativo exige justificativa nos comandos críticos
+ok 190 - override administrativo exige justificativa nos comandos críticos
+  ---
+  duration_ms: 0.215625
+  type: 'test'
+  ...
+# Subtest: comandos críticos ficam restritos a admin
+ok 191 - comandos críticos ficam restritos a admin
+  ---
+  duration_ms: 0.081958
+  type: 'test'
+  ...
+# Subtest: projeção pode ser reconstruída a partir do histórico append-only
+ok 192 - projeção pode ser reconstruída a partir do histórico append-only
+  ---
+  duration_ms: 0.497375
+  type: 'test'
+  ...
+# Subtest: awaiting_customer preserva a data final já programada
+ok 193 - awaiting_customer preserva a data final já programada
+  ---
+  duration_ms: 0.406625
+  type: 'test'
+  ...
+# Subtest: continuidade confirmada devolve o caso para scheduled
+ok 194 - continuidade confirmada devolve o caso para scheduled
+  ---
+  duration_ms: 0.18275
+  type: 'test'
+  ...
+# Subtest: delinquency_recovered retorna o financeiro para current
+ok 195 - delinquency_recovered retorna o financeiro para current
+  ---
+  duration_ms: 0.057833
+  type: 'test'
+  ...
+# Subtest: delinquency_started leva o financeiro para delinquent
+ok 196 - delinquency_started leva o financeiro para delinquent
+  ---
+  duration_ms: 0.040083
+  type: 'test'
+  ...
+# Subtest: legacy_import com state_after semeia a projeção reconstruída
+ok 197 - legacy_import com state_after semeia a projeção reconstruída
+  ---
+  duration_ms: 0.052584
+  type: 'test'
+  ...
+# Subtest: sanitizePayloadByCommand ignora campos técnicos fora do contrato
+ok 198 - sanitizePayloadByCommand ignora campos técnicos fora do contrato
+  ---
+  duration_ms: 0.111333
+  type: 'test'
+  ...
+# Subtest: importador permanece bloqueado com flag desligada
+ok 199 - importador permanece bloqueado com flag desligada
+  ---
+  duration_ms: 3.769083
+  type: 'test'
+  ...
+# Subtest: dryRun não dispara importação real
+ok 200 - dryRun não dispara importação real
+  ---
+  duration_ms: 1.097209
+  type: 'test'
+  ...
+# Subtest: importação real exige confirmação explícita
+ok 201 - importação real exige confirmação explícita
+  ---
+  duration_ms: 1.489375
+  type: 'test'
+  ...
+# Subtest: importador legado gera dry-run idempotente sem duplicar o snapshot
+ok 202 - importador legado gera dry-run idempotente sem duplicar o snapshot
+  ---
+  duration_ms: 62.274166
+  type: 'test'
+  ...
+# Subtest: cancelamento efetivado entra como caso legado encerrado
+ok 203 - cancelamento efetivado entra como caso legado encerrado
+  ---
+  duration_ms: 0.517458
+  type: 'test'
+  ...
+# Subtest: taxa de reversão usa casos fechados no mês como denominador
+ok 204 - taxa de reversão usa casos fechados no mês como denominador
+  ---
+  duration_ms: 1.498417
+  type: 'test'
+  ...
+# Subtest: taxa de reversão sem casos fechados é exibida como sem dados
+ok 205 - taxa de reversão sem casos fechados é exibida como sem dados
+  ---
+  duration_ms: 1.121042
+  type: 'test'
+  ...
+# Subtest: Central de retenção consulta a API nova quando a flag está ativa
+ok 206 - Central de retenção consulta a API nova quando a flag está ativa
+  ---
+  duration_ms: 0.911709
+  type: 'test'
+  ...
+# Subtest: modais de retenção mantêm o legado, mas redirecionam pela flag
+ok 207 - modais de retenção mantêm o legado, mas redirecionam pela flag
+  ---
+  duration_ms: 3.775542
+  type: 'test'
+  ...
+# Subtest: drawer do aluno carrega e renderiza timeline canônica quando a flag v2 está ativa
+ok 208 - drawer do aluno carrega e renderiza timeline canônica quando a flag v2 está ativa
+  ---
+  duration_ms: 2.978667
+  type: 'test'
+  ...
+# Subtest: migration e RPCs de retenção validam em PostgreSQL descartável
+ok 209 - migration e RPCs de retenção validam em PostgreSQL descartável # SKIP
+  ---
+  duration_ms: 1.603542
+  type: 'test'
+  ...
+# Subtest: provisiona aluno ausente e resolve subject depois do upsert local
+not ok 210 - provisiona aluno ausente e resolve subject depois do upsert local
+  ---
+  duration_ms: 82.00425
+  type: 'test'
+  location: '/Users/spaceonline/Documents/New project/tests/retention-store-provisioning.test.js:31:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + '2026-09-10'
+    - '2026-08-10'
+             ^
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: '2026-08-10'
+  actual: '2026-09-10'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/Users/spaceonline/Documents/New project/tests/retention-store-provisioning.test.js:65:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: aluno já existente não reprovisiona nem consulta Firestore
+ok 211 - aluno já existente não reprovisiona nem consulta Firestore
+  ---
+  duration_ms: 6.504791
+  type: 'test'
+  ...
+# Subtest: chamadas concorrentes do mesmo aluno compartilham um único provisionamento
+ok 212 - chamadas concorrentes do mesmo aluno compartilham um único provisionamento
+  ---
+  duration_ms: 51.827875
+  type: 'test'
+  ...
+# Subtest: aluno inexistente no Firestore falha com erro claro e sem provisionar
+ok 213 - aluno inexistente no Firestore falha com erro claro e sem provisionar
+  ---
+  duration_ms: 2.091959
+  type: 'test'
+  ...
+# Subtest: falha no provisionamento não avança para nova resolução nem cria sequência parcial no store
+ok 214 - falha no provisionamento não avança para nova resolução nem cria sequência parcial no store
+  ---
+  duration_ms: 12.531583
+  type: 'test'
+  ...
+# Subtest: service period mensal ancora no dia de entrada e renova por ciclo corrente
+ok 215 - service period mensal ancora no dia de entrada e renova por ciclo corrente
+  ---
+  duration_ms: 2.014708
+  type: 'test'
+  ...
+# Subtest: findScheduleConflict bloqueia professor com aula sobreposta
+ok 216 - findScheduleConflict bloqueia professor com aula sobreposta
+  ---
+  duration_ms: 3.449416
+  type: 'test'
+  ...
+# Subtest: findScheduleConflict permite mesmo horário para professores diferentes
+ok 217 - findScheduleConflict permite mesmo horário para professores diferentes
+  ---
+  duration_ms: 0.292875
+  type: 'test'
+  ...
+# Subtest: findScheduleConflict bloqueia duplicata dentro do mesmo payload
+ok 218 - findScheduleConflict bloqueia duplicata dentro do mesmo payload
+  ---
+  duration_ms: 0.083083
+  type: 'test'
+  ...
+# Subtest: findScheduleConflict ignora o próprio evento ao editar
+ok 219 - findScheduleConflict ignora o próprio evento ao editar
+  ---
+  duration_ms: 0.135834
+  type: 'test'
+  ...
+# Subtest: teacher só pode escrever na própria agenda
+ok 220 - teacher só pode escrever na própria agenda
+  ---
+  duration_ms: 0.1255
+  type: 'test'
+  ...
+# Subtest: payload live mantém alunoNome quando backend recebe fallback do front
+ok 221 - payload live mantém alunoNome quando backend recebe fallback do front
+  ---
+  duration_ms: 2.950583
+  type: 'test'
+  ...
+# Subtest: buildOccurrenceId gera chave canônica com prefixo occ
+ok 222 - buildOccurrenceId gera chave canônica com prefixo occ
+  ---
+  duration_ms: 3.440083
+  type: 'test'
+  ...
+# Subtest: findLinkedReplacementEvent encontra reposição já criada pelo vínculo de origem
+ok 223 - findLinkedReplacementEvent encontra reposição já criada pelo vínculo de origem
+  ---
+  duration_ms: 0.623292
+  type: 'test'
+  ...
+# Subtest: buildRecurringSeriesMutationPlan preserva passado, atualiza datas futuras e cancela slots removidos
+ok 224 - buildRecurringSeriesMutationPlan preserva passado, atualiza datas futuras e cancela slots removidos
+  ---
+  duration_ms: 2.331208
+  type: 'test'
+  ...
+# Subtest: buildCustomWeeklyOccurrences reconhece os 7 dias da semana, incluindo domingo
+ok 225 - buildCustomWeeklyOccurrences reconhece os 7 dias da semana, incluindo domingo
+  ---
+  duration_ms: 2.370958
+  type: 'test'
+  ...
+# Subtest: Show Rate usa reuniões feitas dividido por agendamentos da mesma fonte
+ok 226 - Show Rate usa reuniões feitas dividido por agendamentos da mesma fonte
+  ---
+  duration_ms: 1.893125
+  type: 'test'
+  ...
+# Subtest: Show Rate retorna zero quando não há agendamentos
+ok 227 - Show Rate retorna zero quando não há agendamentos
+  ---
+  duration_ms: 1.470333
+  type: 'test'
+  ...
+# Subtest: POST log_call não faz full scan de sdrActivityEvents
+ok 228 - POST log_call não faz full scan de sdrActivityEvents
+  ---
+  duration_ms: 89.714625
+  type: 'test'
+  ...
+# Subtest: POST undo_last consulta apenas a data do dia
+ok 229 - POST undo_last consulta apenas a data do dia
+  ---
+  duration_ms: 10.665166
+  type: 'test'
+  ...
+# Subtest: POST log_call é idempotente quando o mesmo clientRequestId chega duas vezes
+ok 230 - POST log_call é idempotente quando o mesmo clientRequestId chega duas vezes
+  ---
+  duration_ms: 13.30125
+  type: 'test'
+  ...
+# Subtest: POST log_call cria dois eventos para dois cliques legítimos consecutivos
+ok 231 - POST log_call cria dois eventos para dois cliques legítimos consecutivos
+  ---
+  duration_ms: 7.63
+  type: 'test'
+  ...
+# Subtest: script SDR usa timeout e estado de envio visível no POST
+ok 232 - script SDR usa timeout e estado de envio visível no POST
+  ---
+  duration_ms: 44.413417
+  type: 'test'
+  ...
+# Subtest: Visão Geral exibe reuniões feitas e Show Rate do recorte SDR
+ok 233 - Visão Geral exibe reuniões feitas e Show Rate do recorte SDR
+  ---
+  duration_ms: 18.180792
+  type: 'test'
+  ...
+# Subtest: webhook exige segredo configurado
+ok 234 - webhook exige segredo configurado
+  ---
+  duration_ms: 0.922208
+  type: 'test'
+  ...
+# Subtest: webhook aceita segredo correto no cabeçalho
+ok 235 - webhook aceita segredo correto no cabeçalho
+  ---
+  duration_ms: 0.567209
+  type: 'test'
+  ...
+# Subtest: webhook rejeita segredo incorreto
+ok 236 - webhook rejeita segredo incorreto
+  ---
+  duration_ms: 0.292
+  type: 'test'
+  ...
+# Subtest: Supabase server-side exige service role explícito
+ok 237 - Supabase server-side exige service role explícito
+  ---
+  duration_ms: 1.241542
+  type: 'test'
+  ...
+# Subtest: staging falha se apontar para Firebase de produção
+ok 238 - staging falha se apontar para Firebase de produção
+  ---
+  duration_ms: 16.928416
+  type: 'test'
+  ...
+# Subtest: ambiente inválido falha fechado
+ok 239 - ambiente inválido falha fechado
+  ---
+  duration_ms: 0.1805
+  type: 'test'
+  ...
+# Subtest: staging falha se apontar para Supabase de produção
+ok 240 - staging falha se apontar para Supabase de produção
+  ---
+  duration_ms: 1.18525
+  type: 'test'
+  ...
+# Subtest: staging falha se usar Asaas real
+ok 241 - staging falha se usar Asaas real
+  ---
+  duration_ms: 1.013458
+  type: 'test'
+  ...
+# Subtest: staging falha se webhook de produção estiver configurado
+ok 242 - staging falha se webhook de produção estiver configurado
+  ---
+  duration_ms: 1.167417
+  type: 'test'
+  ...
+# Subtest: runtime público de staging expõe banner de teste
+ok 243 - runtime público de staging expõe banner de teste
+  ---
+  duration_ms: 1.38675
+  type: 'test'
+  ...
+# Subtest: runtime-config renderiza banner mesmo quando isolamento falha
+ok 244 - runtime-config renderiza banner mesmo quando isolamento falha
+  ---
+  duration_ms: 7.9055
+  type: 'test'
+  ...
+# Subtest: runtime-config responde 200 no fallback para o script do banner executar
+ok 245 - runtime-config responde 200 no fallback para o script do banner executar
+  ---
+  duration_ms: 1.503292
+  type: 'test'
+  ...
+# Subtest: staging usa service account dedicada quando projectId público não existe
+ok 246 - staging usa service account dedicada quando projectId público não existe
+  ---
+  duration_ms: 1.57325
+  type: 'test'
+  ...
+# Subtest: produção ignora service account de staging
+ok 247 - produção ignora service account de staging
+  ---
+  duration_ms: 1.030833
+  type: 'test'
+  ...
+# Subtest: páginas carregam runtime-config para exibir banner de staging
+ok 248 - páginas carregam runtime-config para exibir banner de staging
+  ---
+  duration_ms: 10.423167
+  type: 'test'
+  ...
+# Subtest: arquivos de exemplo não contêm secrets reais
+ok 249 - arquivos de exemplo não contêm secrets reais
+  ---
+  duration_ms: 7.265
+  type: 'test'
+  ...
+# Subtest: reset recusa execução fora do staging
+ok 250 - reset recusa execução fora do staging
+  ---
+  duration_ms: 7.675
+  type: 'test'
+  ...
+# Subtest: reset dry-run preserva plano seguro
+ok 251 - reset dry-run preserva plano seguro
+  ---
+  duration_ms: 0.459958
+  type: 'test'
+  ...
+# [ownership] mirror sync not_found {
+#   firestore_doc_id: 'fs-sync-0',
+#   table: 'n8n_alunos_financeiro_space',
+#   strategy: 'firestore_doc_id',
+#   filter: 'firestore_doc_id=eq.fs-sync-0',
+#   rows_affected: 0
+# }
+# [ownership] mirror sync not_found {
+#   firestore_doc_id: 'fs-sync-0',
+#   table: 'n8n_onboarding_alunos_space',
+#   strategy: 'firestore_doc_id',
+#   filter: 'firestore_doc_id=eq.fs-sync-0',
+#   rows_affected: 0
+# }
+# [ownership] mirror sync not_found {
+#   firestore_doc_id: 'fs-sync-0',
+#   table: 'n8n_alunos_financeiro_space',
+#   strategy: 'email',
+#   filter: 'email=eq.sync%40example.com',
+#   rows_affected: 0
+# }
+# [ownership] mirror sync not_found {
+#   firestore_doc_id: 'fs-sync-0',
+#   table: 'n8n_onboarding_alunos_space',
+#   strategy: 'email',
+#   filter: 'email=eq.sync%40example.com',
+#   rows_affected: 0
+# }
+# [ownership] mirror sync not_found {
+#   firestore_doc_id: 'fs-sync-0',
+#   table: 'n8n_onboarding_alunos_space',
+#   strategy: 'aluno_id',
+#   filter: 'aluno_id=eq.fs-sync-0',
+#   rows_affected: 0
+# }
+# [ownership] mirror sync not_found {
+#   firestore_doc_id: 'fs-sync-1',
+#   table: 'n8n_alunos_financeiro_space',
+#   strategy: 'firestore_doc_id',
+#   filter: 'firestore_doc_id=eq.fs-sync-1',
+#   rows_affected: 0
+# }
+# [ownership] mirror sync not_found {
+#   firestore_doc_id: 'fs-sync-1',
+#   table: 'n8n_onboarding_alunos_space',
+#   strategy: 'firestore_doc_id',
+#   filter: 'firestore_doc_id=eq.fs-sync-1',
+#   rows_affected: 0
+# }
+# [ownership] mirror sync ambiguous {
+#   firestore_doc_id: 'fs-sync-1',
+#   table: 'n8n_alunos_financeiro_space',
+#   strategy: 'email',
+#   filter: 'email=eq.sync%40example.com',
+#   candidates: 2,
+#   rows_affected: 0
+# }
+# [ownership] mirror sync ambiguous {
+#   firestore_doc_id: 'fs-sync-1',
+#   table: 'n8n_onboarding_alunos_space',
+#   strategy: 'email',
+#   filter: 'email=eq.sync%40example.com',
+#   candidates: 2,
+#   rows_affected: 0
+# }
+# [ownership] mirror sync result {
+#   firestore_doc_id: 'fs-sync-2',
+#   table: 'n8n_alunos_financeiro_space',
+#   strategy: 'firestore_doc_id',
+#   filter: 'firestore_doc_id=eq.fs-sync-2',
+#   status: 'updated',
+#   rows_affected: 1
+# }
+# [ownership] mirror sync result {
+#   firestore_doc_id: 'fs-sync-2',
+#   table: 'n8n_onboarding_alunos_space',
+#   strategy: 'firestore_doc_id',
+#   filter: 'firestore_doc_id=eq.fs-sync-2',
+#   status: 'updated',
+#   rows_affected: 1
+# }
+# Subtest: aluno somente no Firestore aparece
+ok 252 - aluno somente no Firestore aparece
+  ---
+  duration_ms: 2.628333
+  type: 'test'
+  ...
+# Subtest: aluno nos dois bancos aparece uma vez
+ok 253 - aluno nos dois bancos aparece uma vez
+  ---
+  duration_ms: 1.606208
+  type: 'test'
+  ...
+# Subtest: cancelamento do Firestore prevalece
+ok 254 - cancelamento do Firestore prevalece
+  ---
+  duration_ms: 0.9765
+  type: 'test'
+  ...
+# Subtest: Supabase sem firestore_doc_id não remove o aluno do Firestore
+ok 255 - Supabase sem firestore_doc_id não remove o aluno do Firestore
+  ---
+  duration_ms: 1.728708
+  type: 'test'
+  ...
+# Subtest: dois alunos com nome igual não são fundidos
+ok 256 - dois alunos com nome igual não são fundidos
+  ---
+  duration_ms: 1.510333
+  type: 'test'
+  ...
+# Subtest: match ambíguo por e-mail gera warning e preserva registros
+ok 257 - match ambíguo por e-mail gera warning e preserva registros
+  ---
+  duration_ms: 0.599667
+  type: 'test'
+  ...
+# Subtest: admin-data classifica aluno explícito e legado por markers
+ok 258 - admin-data classifica aluno explícito e legado por markers
+  ---
+  duration_ms: 0.448958
+  type: 'test'
+  ...
+# Subtest: sync do espelho retorna ok=false quando rows_affected = 0
+ok 259 - sync do espelho retorna ok=false quando rows_affected = 0
+  ---
+  duration_ms: 2.312625
+  type: 'test'
+  ...
+# Subtest: sync do espelho diferencia ambiguous e updated
+ok 260 - sync do espelho diferencia ambiguous e updated
+  ---
+  duration_ms: 8.288708
+  type: 'test'
+  ...
+# Subtest: sync do espelho retorna updated com rows_affected explícito
+ok 261 - sync do espelho retorna updated com rows_affected explícito
+  ---
+  duration_ms: 3.97075
+  type: 'test'
+  ...
+# Subtest: dashboard do professor faz merge por aluno+professor+data+horário
+ok 262 - dashboard do professor faz merge por aluno+professor+data+horário
+  ---
+  duration_ms: 2.504917
+  type: 'test'
+  ...
+# Subtest: dashboard reaproveita o merge deduplicado ao juntar Firestore e live lessons
+ok 263 - dashboard reaproveita o merge deduplicado ao juntar Firestore e live lessons
+  ---
+  duration_ms: 0.197209
+  type: 'test'
+  ...
+# Subtest: badge Concluída na agenda de hoje depende apenas do horário já passado
+ok 264 - badge Concluída na agenda de hoje depende apenas do horário já passado
+  ---
+  duration_ms: 0.909792
+  type: 'test'
+  ...
+# Subtest: normalizeLessonRegisterStatus trata status pedagógicos relevantes
+ok 265 - normalizeLessonRegisterStatus trata status pedagógicos relevantes
+  ---
+  duration_ms: 3.1955
+  type: 'test'
+  ...
+# Subtest: getLessonStatusWeight aplica pesos corretos
+ok 266 - getLessonStatusWeight aplica pesos corretos
+  ---
+  duration_ms: 0.656417
+  type: 'test'
+  ...
+# Subtest: getCreditedLessonMinutes soma integral para aula realizada
+ok 267 - getCreditedLessonMinutes soma integral para aula realizada
+  ---
+  duration_ms: 0.410291
+  type: 'test'
+  ...
+# Subtest: getCreditedLessonMinutes soma metade para falta
+ok 268 - getCreditedLessonMinutes soma metade para falta
+  ---
+  duration_ms: 0.094125
+  type: 'test'
+  ...
+# Subtest: getCreditedLessonMinutes zera cancelada, remarcada e sem registro
+ok 269 - getCreditedLessonMinutes zera cancelada, remarcada e sem registro
+  ---
+  duration_ms: 0.625459
+  type: 'test'
+  ...
+# Subtest: reposicao realizada conta 100% pela duração real
+ok 270 - reposicao realizada conta 100% pela duração real
+  ---
+  duration_ms: 0.120125
+  type: 'test'
+  ...
+# Subtest: script do dashboard usa minutos creditados por status no card mensal
+ok 271 - script do dashboard usa minutos creditados por status no card mensal
+  ---
+  duration_ms: 0.635583
+  type: 'test'
+  ...
+# Subtest: pedagógico do professor preserva liveLessonId do evento de agenda para casar registros após remarcação
+ok 272 - pedagógico do professor preserva liveLessonId do evento de agenda para casar registros após remarcação
+  ---
+  duration_ms: 1.189584
+  type: 'test'
+  ...
+# Subtest: professor não acessa ficha de aluno fora do escopo
+ok 273 - professor não acessa ficha de aluno fora do escopo
+  ---
+  duration_ms: 3.251583
+  type: 'test'
+  ...
+# Subtest: professor acessa ficha de aluno vinculado
+ok 274 - professor acessa ficha de aluno vinculado
+  ---
+  duration_ms: 9.40875
+  type: 'test'
+  ...
+# Subtest: GET teacher-workhours usa fallback admin quando não há idToken
+ok 275 - GET teacher-workhours usa fallback admin quando não há idToken
+  ---
+  duration_ms: 3.011334
+  type: 'test'
+  ...
+# Subtest: POST teacher-workhours continua exigindo idToken válido
+ok 276 - POST teacher-workhours continua exigindo idToken válido
+  ---
+  duration_ms: 0.568625
+  type: 'test'
+  ...
+1..276
+# tests 276
+# suites 0
+# pass 273
+# fail 1
+# cancelled 0
+# skipped 2
+# todo 0
+# duration_ms 2533.604708

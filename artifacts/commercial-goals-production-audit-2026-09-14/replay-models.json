@@ -1,0 +1,2163 @@
+{
+  "2026-09": {
+    "competencia": "2026-09",
+    "currentCompetencia": "2026-09",
+    "editable": true,
+    "monthlyExists": true,
+    "goal": {
+      "competencia": "2026-09",
+      "valorMeta": 60000,
+      "updatedAt": "2026-09-14T19:36:24-03:00",
+      "updatedByName": "Guilherme Davi",
+      "weeklyGoals": {
+        "wk_2026-09-02": {
+          "weekKey": "wk_2026-09-02",
+          "startDateKey": "2026-09-02",
+          "endDateKey": "2026-09-08",
+          "teamTarget": 0,
+          "people": [
+            {
+              "personId": "ayres-andre",
+              "role": "sdr",
+              "targetValue": 35,
+              "excluded": false
+            },
+            {
+              "personId": "felipe-santos",
+              "role": "sdr",
+              "targetValue": 25,
+              "excluded": false
+            },
+            {
+              "personId": "luana-mendonca",
+              "role": "sdr",
+              "targetValue": 25,
+              "excluded": false
+            },
+            {
+              "personId": "luis-eduardo",
+              "role": "closer",
+              "targetValue": 9000,
+              "excluded": false
+            },
+            {
+              "personId": "matheus-afonso",
+              "role": "closer",
+              "targetValue": 9000,
+              "excluded": false
+            },
+            {
+              "personId": "outros",
+              "role": "closer",
+              "targetValue": 2000,
+              "excluded": false
+            }
+          ]
+        },
+        "wk_2026-09-09": {
+          "weekKey": "wk_2026-09-09",
+          "startDateKey": "2026-09-09",
+          "endDateKey": "2026-09-15",
+          "teamTarget": 0,
+          "people": [
+            {
+              "personId": "ayres-andre",
+              "role": "sdr",
+              "targetValue": 30,
+              "excluded": false
+            },
+            {
+              "personId": "felipe-santos",
+              "role": "sdr",
+              "targetValue": 20,
+              "excluded": false
+            },
+            {
+              "personId": "luana-mendonca",
+              "role": "sdr",
+              "targetValue": 20,
+              "excluded": false
+            },
+            {
+              "personId": "luis-eduardo",
+              "role": "closer",
+              "targetValue": 9000,
+              "excluded": false
+            },
+            {
+              "personId": "matheus-afonso",
+              "role": "closer",
+              "targetValue": 9000,
+              "excluded": false
+            },
+            {
+              "personId": "AQtLQSgx4xP3oZAzkOF4znUxO5f1",
+              "role": "sdr",
+              "targetValue": 0,
+              "excluded": false
+            },
+            {
+              "personId": "LafuFrHf9XanTC9SRniRMV2aJbN2",
+              "role": "sdr",
+              "targetValue": 20,
+              "excluded": false
+            },
+            {
+              "personId": "XA9g1pzEYQgD3i9C5NzZguFSVK32",
+              "role": "sdr",
+              "targetValue": 0,
+              "excluded": false
+            }
+          ]
+        }
+      }
+    },
+    "month": {
+      "period": {
+        "monthKey": "2026-09",
+        "startDateKey": "2026-09-01",
+        "endDateKey": "2026-09-30",
+        "nowDateKey": "2026-09-15",
+        "isCustom": false
+      },
+      "summary": {
+        "meta": 60000,
+        "realizado": 28188,
+        "totalVendas": 26,
+        "ticketMedio": 1084.1538461538462,
+        "percentAtingimento": 46.98,
+        "gap": 31812
+      },
+      "latestSale": {
+        "id": "11372",
+        "cliente": "Michelle Quintão Ferreira Luna",
+        "plano": "",
+        "valor": 1125,
+        "closer": "Matheus Afonso Rodrigues",
+        "when": "2026-09-14T15:00:00.000Z"
+      },
+      "pipelineKey": "conversao",
+      "windowCount": 0
+    },
+    "weeks": [
+      {
+        "weekKey": "wk_2026-09-02",
+        "startDateKey": "2026-09-02",
+        "endDateKey": "2026-09-08",
+        "nowDateKey": "2026-09-08",
+        "isSpecial": false,
+        "exists": true,
+        "rows": [
+          {
+            "personId": "ayres-andre",
+            "displayName": "Ayres André",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 35
+          },
+          {
+            "personId": "felipe-santos",
+            "displayName": "Felipe Santos",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 25
+          },
+          {
+            "personId": "AQtLQSgx4xP3oZAzkOF4znUxO5f1",
+            "displayName": "Guilherme Davi",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "luana-mendonca",
+            "displayName": "Luana Mendonça",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 25
+          },
+          {
+            "personId": "luis-eduardo",
+            "displayName": "Luis Eduardo",
+            "isAggregate": false,
+            "role": "closer",
+            "targetValue": 9000
+          },
+          {
+            "personId": "LafuFrHf9XanTC9SRniRMV2aJbN2",
+            "displayName": "Luis Perdigão",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "matheus-afonso",
+            "displayName": "Matheus Afonso",
+            "isAggregate": false,
+            "role": "closer",
+            "targetValue": 9000
+          },
+          {
+            "personId": "XA9g1pzEYQgD3i9C5NzZguFSVK32",
+            "displayName": "Tarcísio Gomes",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "outros",
+            "displayName": "Outros",
+            "isAggregate": true,
+            "role": "closer",
+            "targetValue": 2000
+          }
+        ],
+        "effectiveConfig": true,
+        "configSource": "week",
+        "teamTarget": 0,
+        "summary": {
+          "targetValue": 20000,
+          "actualValue": 13237,
+          "missingValue": 6763,
+          "progressPct": 66.185,
+          "count": 13,
+          "ticketMedio": 1018.2307692307693
+        },
+        "progress": {
+          "closers": [
+            {
+              "personId": "outros",
+              "displayName": "Outros",
+              "role": "closer",
+              "photoURL": "",
+              "isAggregate": true,
+              "sortOrder": 999,
+              "goalOrder": 2,
+              "targetValue": 2000,
+              "actualValue": 4212,
+              "progressPct": 210.6,
+              "count": 5,
+              "breakdown": [
+                {
+                  "crmAttendantId": "",
+                  "attendantName": "Felipe Santos | Space",
+                  "value": 4212,
+                  "count": 5,
+                  "resolvedPersonId": "felipe-santos"
+                }
+              ]
+            },
+            {
+              "personId": "matheus-afonso",
+              "displayName": "Matheus Afonso",
+              "role": "closer",
+              "photoURL": "",
+              "isAggregate": false,
+              "sortOrder": 0,
+              "goalOrder": 1,
+              "targetValue": 9000,
+              "actualValue": 5575,
+              "progressPct": 61.94444444444444,
+              "count": 5
+            },
+            {
+              "personId": "luis-eduardo",
+              "displayName": "Luis Eduardo",
+              "role": "closer",
+              "photoURL": "",
+              "isAggregate": false,
+              "sortOrder": 0,
+              "goalOrder": 0,
+              "targetValue": 9000,
+              "actualValue": 3450,
+              "progressPct": 38.333333333333336,
+              "count": 3
+            }
+          ],
+          "sdrs": [
+            {
+              "personId": "ayres-andre",
+              "displayName": "Ayres André",
+              "role": "sdr",
+              "photoURL": "",
+              "isAggregate": false,
+              "sortOrder": 0,
+              "goalOrder": 0,
+              "targetValue": 35,
+              "actualValue": null,
+              "progressPct": null,
+              "count": null
+            },
+            {
+              "personId": "felipe-santos",
+              "displayName": "Felipe Santos",
+              "role": "sdr",
+              "photoURL": "",
+              "isAggregate": false,
+              "sortOrder": 0,
+              "goalOrder": 1,
+              "targetValue": 25,
+              "actualValue": null,
+              "progressPct": null,
+              "count": null
+            },
+            {
+              "personId": "luana-mendonca",
+              "displayName": "Luana Mendonça",
+              "role": "sdr",
+              "photoURL": "",
+              "isAggregate": false,
+              "sortOrder": 0,
+              "goalOrder": 2,
+              "targetValue": 25,
+              "actualValue": null,
+              "progressPct": null,
+              "count": null
+            }
+          ]
+        },
+        "isCurrent": false,
+        "status": "Concluída",
+        "copyFromPrevious": null
+      },
+      {
+        "weekKey": "wk_2026-09-09",
+        "startDateKey": "2026-09-09",
+        "endDateKey": "2026-09-15",
+        "nowDateKey": "2026-09-15",
+        "isSpecial": false,
+        "exists": true,
+        "rows": [
+          {
+            "personId": "ayres-andre",
+            "displayName": "Ayres André",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 30
+          },
+          {
+            "personId": "felipe-santos",
+            "displayName": "Felipe Santos",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 20
+          },
+          {
+            "personId": "AQtLQSgx4xP3oZAzkOF4znUxO5f1",
+            "displayName": "Guilherme Davi",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "luana-mendonca",
+            "displayName": "Luana Mendonça",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 20
+          },
+          {
+            "personId": "luis-eduardo",
+            "displayName": "Luis Eduardo",
+            "isAggregate": false,
+            "role": "closer",
+            "targetValue": 9000
+          },
+          {
+            "personId": "LafuFrHf9XanTC9SRniRMV2aJbN2",
+            "displayName": "Luis Perdigão",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 20
+          },
+          {
+            "personId": "matheus-afonso",
+            "displayName": "Matheus Afonso",
+            "isAggregate": false,
+            "role": "closer",
+            "targetValue": 9000
+          },
+          {
+            "personId": "XA9g1pzEYQgD3i9C5NzZguFSVK32",
+            "displayName": "Tarcísio Gomes",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "outros",
+            "displayName": "Outros",
+            "isAggregate": true,
+            "role": "closer",
+            "targetValue": 0
+          }
+        ],
+        "effectiveConfig": true,
+        "configSource": "week",
+        "teamTarget": 0,
+        "summary": {
+          "targetValue": 18000,
+          "actualValue": 12646,
+          "missingValue": 5354,
+          "progressPct": 70.25555555555556,
+          "count": 11,
+          "ticketMedio": 1149.6363636363637
+        },
+        "progress": {
+          "closers": [
+            {
+              "personId": "luis-eduardo",
+              "displayName": "Luis Eduardo",
+              "role": "closer",
+              "photoURL": "",
+              "isAggregate": false,
+              "sortOrder": 0,
+              "goalOrder": 0,
+              "targetValue": 9000,
+              "actualValue": 5471,
+              "progressPct": 60.78888888888889,
+              "count": 5
+            },
+            {
+              "personId": "matheus-afonso",
+              "displayName": "Matheus Afonso",
+              "role": "closer",
+              "photoURL": "",
+              "isAggregate": false,
+              "sortOrder": 0,
+              "goalOrder": 1,
+              "targetValue": 9000,
+              "actualValue": 3875,
+              "progressPct": 43.05555555555556,
+              "count": 3
+            },
+            {
+              "personId": "outros",
+              "displayName": "Outros",
+              "role": "closer",
+              "photoURL": "",
+              "isAggregate": true,
+              "sortOrder": 999,
+              "goalOrder": 9007199254740991,
+              "targetValue": 0,
+              "actualValue": 3300,
+              "progressPct": 0,
+              "count": 3,
+              "breakdown": [
+                {
+                  "crmAttendantId": "",
+                  "attendantName": "Felipe Santos | Space",
+                  "value": 3300,
+                  "count": 3,
+                  "resolvedPersonId": "felipe-santos"
+                }
+              ]
+            }
+          ],
+          "sdrs": [
+            {
+              "personId": "ayres-andre",
+              "displayName": "Ayres André",
+              "role": "sdr",
+              "photoURL": "",
+              "isAggregate": false,
+              "sortOrder": 0,
+              "goalOrder": 0,
+              "targetValue": 30,
+              "actualValue": null,
+              "progressPct": null,
+              "count": null
+            },
+            {
+              "personId": "felipe-santos",
+              "displayName": "Felipe Santos",
+              "role": "sdr",
+              "photoURL": "",
+              "isAggregate": false,
+              "sortOrder": 0,
+              "goalOrder": 1,
+              "targetValue": 20,
+              "actualValue": null,
+              "progressPct": null,
+              "count": null
+            },
+            {
+              "personId": "luana-mendonca",
+              "displayName": "Luana Mendonça",
+              "role": "sdr",
+              "photoURL": "",
+              "isAggregate": false,
+              "sortOrder": 0,
+              "goalOrder": 2,
+              "targetValue": 20,
+              "actualValue": null,
+              "progressPct": null,
+              "count": null
+            },
+            {
+              "personId": "AQtLQSgx4xP3oZAzkOF4znUxO5f1",
+              "displayName": "Guilherme Davi",
+              "role": "sdr",
+              "photoURL": "",
+              "isAggregate": false,
+              "sortOrder": 0,
+              "goalOrder": 3,
+              "targetValue": 0,
+              "actualValue": null,
+              "progressPct": null,
+              "count": null
+            },
+            {
+              "personId": "LafuFrHf9XanTC9SRniRMV2aJbN2",
+              "displayName": "Luis Perdigão",
+              "role": "sdr",
+              "photoURL": "",
+              "isAggregate": false,
+              "sortOrder": 0,
+              "goalOrder": 4,
+              "targetValue": 20,
+              "actualValue": null,
+              "progressPct": null,
+              "count": null
+            },
+            {
+              "personId": "XA9g1pzEYQgD3i9C5NzZguFSVK32",
+              "displayName": "Tarcísio Gomes",
+              "role": "sdr",
+              "photoURL": "",
+              "isAggregate": false,
+              "sortOrder": 0,
+              "goalOrder": 5,
+              "targetValue": 0,
+              "actualValue": null,
+              "progressPct": null,
+              "count": null
+            }
+          ]
+        },
+        "isCurrent": true,
+        "status": "Em andamento",
+        "copyFromPrevious": null
+      },
+      {
+        "weekKey": "wk_2026-09-16",
+        "startDateKey": "2026-09-16",
+        "endDateKey": "2026-09-22",
+        "nowDateKey": "2026-09-22",
+        "isSpecial": false,
+        "exists": false,
+        "rows": [
+          {
+            "personId": "ayres-andre",
+            "displayName": "Ayres André",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "felipe-santos",
+            "displayName": "Felipe Santos",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "AQtLQSgx4xP3oZAzkOF4znUxO5f1",
+            "displayName": "Guilherme Davi",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "luana-mendonca",
+            "displayName": "Luana Mendonça",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "luis-eduardo",
+            "displayName": "Luis Eduardo",
+            "isAggregate": false,
+            "role": "closer",
+            "targetValue": 0
+          },
+          {
+            "personId": "LafuFrHf9XanTC9SRniRMV2aJbN2",
+            "displayName": "Luis Perdigão",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "matheus-afonso",
+            "displayName": "Matheus Afonso",
+            "isAggregate": false,
+            "role": "closer",
+            "targetValue": 0
+          },
+          {
+            "personId": "XA9g1pzEYQgD3i9C5NzZguFSVK32",
+            "displayName": "Tarcísio Gomes",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "outros",
+            "displayName": "Outros",
+            "isAggregate": true,
+            "role": "closer",
+            "targetValue": 0
+          }
+        ],
+        "effectiveConfig": false,
+        "configSource": "",
+        "teamTarget": 0,
+        "summary": {
+          "targetValue": 0,
+          "actualValue": 0,
+          "missingValue": 0,
+          "progressPct": 0,
+          "count": 0,
+          "ticketMedio": 0
+        },
+        "progress": {
+          "closers": [],
+          "sdrs": []
+        },
+        "isCurrent": false,
+        "status": "Não definida",
+        "copyFromPrevious": {
+          "rows": [
+            {
+              "personId": "ayres-andre",
+              "displayName": "Ayres André",
+              "isAggregate": false,
+              "role": "sdr",
+              "targetValue": 30
+            },
+            {
+              "personId": "felipe-santos",
+              "displayName": "Felipe Santos",
+              "isAggregate": false,
+              "role": "sdr",
+              "targetValue": 20
+            },
+            {
+              "personId": "AQtLQSgx4xP3oZAzkOF4znUxO5f1",
+              "displayName": "Guilherme Davi",
+              "isAggregate": false,
+              "role": "sdr",
+              "targetValue": 0
+            },
+            {
+              "personId": "luana-mendonca",
+              "displayName": "Luana Mendonça",
+              "isAggregate": false,
+              "role": "sdr",
+              "targetValue": 20
+            },
+            {
+              "personId": "luis-eduardo",
+              "displayName": "Luis Eduardo",
+              "isAggregate": false,
+              "role": "closer",
+              "targetValue": 9000
+            },
+            {
+              "personId": "LafuFrHf9XanTC9SRniRMV2aJbN2",
+              "displayName": "Luis Perdigão",
+              "isAggregate": false,
+              "role": "sdr",
+              "targetValue": 20
+            },
+            {
+              "personId": "matheus-afonso",
+              "displayName": "Matheus Afonso",
+              "isAggregate": false,
+              "role": "closer",
+              "targetValue": 9000
+            },
+            {
+              "personId": "XA9g1pzEYQgD3i9C5NzZguFSVK32",
+              "displayName": "Tarcísio Gomes",
+              "isAggregate": false,
+              "role": "sdr",
+              "targetValue": 0
+            },
+            {
+              "personId": "outros",
+              "displayName": "Outros",
+              "isAggregate": true,
+              "role": "closer",
+              "targetValue": 0
+            }
+          ],
+          "teamTarget": 0
+        }
+      },
+      {
+        "weekKey": "wk_2026-09-23",
+        "startDateKey": "2026-09-23",
+        "endDateKey": "2026-09-29",
+        "nowDateKey": "2026-09-29",
+        "isSpecial": false,
+        "exists": false,
+        "rows": [
+          {
+            "personId": "ayres-andre",
+            "displayName": "Ayres André",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "felipe-santos",
+            "displayName": "Felipe Santos",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "AQtLQSgx4xP3oZAzkOF4znUxO5f1",
+            "displayName": "Guilherme Davi",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "luana-mendonca",
+            "displayName": "Luana Mendonça",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "luis-eduardo",
+            "displayName": "Luis Eduardo",
+            "isAggregate": false,
+            "role": "closer",
+            "targetValue": 0
+          },
+          {
+            "personId": "LafuFrHf9XanTC9SRniRMV2aJbN2",
+            "displayName": "Luis Perdigão",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "matheus-afonso",
+            "displayName": "Matheus Afonso",
+            "isAggregate": false,
+            "role": "closer",
+            "targetValue": 0
+          },
+          {
+            "personId": "XA9g1pzEYQgD3i9C5NzZguFSVK32",
+            "displayName": "Tarcísio Gomes",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "outros",
+            "displayName": "Outros",
+            "isAggregate": true,
+            "role": "closer",
+            "targetValue": 0
+          }
+        ],
+        "effectiveConfig": false,
+        "configSource": "",
+        "teamTarget": 0,
+        "summary": {
+          "targetValue": 0,
+          "actualValue": 0,
+          "missingValue": 0,
+          "progressPct": 0,
+          "count": 0,
+          "ticketMedio": 0
+        },
+        "progress": {
+          "closers": [],
+          "sdrs": []
+        },
+        "isCurrent": false,
+        "status": "Não definida",
+        "copyFromPrevious": null
+      },
+      {
+        "weekKey": "wk_2026-09-30",
+        "startDateKey": "2026-09-30",
+        "endDateKey": "2026-10-06",
+        "nowDateKey": "2026-09-30",
+        "isSpecial": false,
+        "exists": false,
+        "rows": [
+          {
+            "personId": "ayres-andre",
+            "displayName": "Ayres André",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "felipe-santos",
+            "displayName": "Felipe Santos",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "AQtLQSgx4xP3oZAzkOF4znUxO5f1",
+            "displayName": "Guilherme Davi",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "luana-mendonca",
+            "displayName": "Luana Mendonça",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "luis-eduardo",
+            "displayName": "Luis Eduardo",
+            "isAggregate": false,
+            "role": "closer",
+            "targetValue": 0
+          },
+          {
+            "personId": "LafuFrHf9XanTC9SRniRMV2aJbN2",
+            "displayName": "Luis Perdigão",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "matheus-afonso",
+            "displayName": "Matheus Afonso",
+            "isAggregate": false,
+            "role": "closer",
+            "targetValue": 0
+          },
+          {
+            "personId": "XA9g1pzEYQgD3i9C5NzZguFSVK32",
+            "displayName": "Tarcísio Gomes",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "outros",
+            "displayName": "Outros",
+            "isAggregate": true,
+            "role": "closer",
+            "targetValue": 0
+          }
+        ],
+        "effectiveConfig": false,
+        "configSource": "",
+        "teamTarget": 0,
+        "summary": {
+          "targetValue": 0,
+          "actualValue": 0,
+          "missingValue": 0,
+          "progressPct": 0,
+          "count": 0,
+          "ticketMedio": 0
+        },
+        "progress": {
+          "closers": [],
+          "sdrs": []
+        },
+        "isCurrent": false,
+        "status": "Não definida",
+        "copyFromPrevious": null
+      }
+    ],
+    "planning": {
+      "distributed": 38000,
+      "difference": 22000
+    }
+  },
+  "2026-08": {
+    "competencia": "2026-08",
+    "currentCompetencia": "2026-09",
+    "editable": false,
+    "monthlyExists": true,
+    "goal": {
+      "competencia": "2026-08",
+      "valorMeta": 70000,
+      "periodStart": "2026-08-02",
+      "updatedAt": "2026-08-26T18:44:21-03:00",
+      "updatedByName": "Guilherme Davi",
+      "weeklyGoals": {
+        "wk_2026-08-11": {
+          "weekKey": "wk_2026-08-11",
+          "startDateKey": "2026-08-11",
+          "endDateKey": "2026-08-18",
+          "teamTarget": 20000,
+          "people": [
+            {
+              "personId": "ayres-andre",
+              "role": "sdr",
+              "targetValue": 40,
+              "excluded": false
+            },
+            {
+              "personId": "felipe-santos",
+              "role": "sdr",
+              "targetValue": 30,
+              "excluded": false
+            },
+            {
+              "personId": "luana-mendonca",
+              "role": "sdr",
+              "targetValue": 30,
+              "excluded": false
+            },
+            {
+              "personId": "luis-eduardo",
+              "role": "closer",
+              "targetValue": 8000,
+              "excluded": false
+            },
+            {
+              "personId": "matheus-afonso",
+              "role": "closer",
+              "targetValue": 8000,
+              "excluded": false
+            },
+            {
+              "personId": "outros",
+              "role": "closer",
+              "targetValue": 4000,
+              "excluded": false
+            }
+          ]
+        },
+        "wk_2026-08-19": {
+          "weekKey": "wk_2026-08-19",
+          "startDateKey": "2026-08-19",
+          "endDateKey": "2026-08-25",
+          "teamTarget": 0,
+          "people": [
+            {
+              "personId": "ayres-andre",
+              "role": "sdr",
+              "targetValue": 35,
+              "excluded": false
+            },
+            {
+              "personId": "felipe-santos",
+              "role": "sdr",
+              "targetValue": 25,
+              "excluded": false
+            },
+            {
+              "personId": "luana-mendonca",
+              "role": "sdr",
+              "targetValue": 25,
+              "excluded": false
+            },
+            {
+              "personId": "luis-eduardo",
+              "role": "closer",
+              "targetValue": 9000,
+              "excluded": false
+            },
+            {
+              "personId": "matheus-afonso",
+              "role": "closer",
+              "targetValue": 9000,
+              "excluded": false
+            },
+            {
+              "personId": "outros",
+              "role": "closer",
+              "targetValue": 2000,
+              "excluded": false
+            }
+          ]
+        },
+        "wk_2026-08-26": {
+          "weekKey": "wk_2026-08-26",
+          "startDateKey": "2026-08-26",
+          "endDateKey": "2026-09-01",
+          "teamTarget": 0,
+          "people": [
+            {
+              "personId": "ayres-andre",
+              "role": "sdr",
+              "targetValue": 35,
+              "excluded": false
+            },
+            {
+              "personId": "felipe-santos",
+              "role": "sdr",
+              "targetValue": 25,
+              "excluded": false
+            },
+            {
+              "personId": "luana-mendonca",
+              "role": "sdr",
+              "targetValue": 25,
+              "excluded": false
+            },
+            {
+              "personId": "luis-eduardo",
+              "role": "closer",
+              "targetValue": 9000,
+              "excluded": false
+            },
+            {
+              "personId": "matheus-afonso",
+              "role": "closer",
+              "targetValue": 9000,
+              "excluded": false
+            },
+            {
+              "personId": "outros",
+              "role": "closer",
+              "targetValue": 2000,
+              "excluded": false
+            }
+          ]
+        }
+      }
+    },
+    "month": {
+      "period": {
+        "monthKey": "2026-08",
+        "startDateKey": "2026-08-02",
+        "endDateKey": "2026-08-31",
+        "nowDateKey": "2026-08-15",
+        "isCustom": true
+      },
+      "summary": {
+        "meta": 70000,
+        "realizado": 50320,
+        "totalVendas": 44,
+        "ticketMedio": 1143.6363636363637,
+        "percentAtingimento": 71.88571428571429,
+        "gap": 19680
+      },
+      "latestSale": null,
+      "pipelineKey": "conversao",
+      "windowCount": 0
+    },
+    "weeks": [
+      {
+        "weekKey": "wk_2026-08-05",
+        "startDateKey": "2026-08-05",
+        "endDateKey": "2026-08-11",
+        "nowDateKey": "2026-08-10",
+        "isSpecial": false,
+        "exists": false,
+        "rows": [
+          {
+            "personId": "ayres-andre",
+            "displayName": "Ayres André",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "felipe-santos",
+            "displayName": "Felipe Santos",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "AQtLQSgx4xP3oZAzkOF4znUxO5f1",
+            "displayName": "Guilherme Davi",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "luana-mendonca",
+            "displayName": "Luana Mendonça",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "luis-eduardo",
+            "displayName": "Luis Eduardo",
+            "isAggregate": false,
+            "role": "closer",
+            "targetValue": 0
+          },
+          {
+            "personId": "LafuFrHf9XanTC9SRniRMV2aJbN2",
+            "displayName": "Luis Perdigão",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "matheus-afonso",
+            "displayName": "Matheus Afonso",
+            "isAggregate": false,
+            "role": "closer",
+            "targetValue": 0
+          },
+          {
+            "personId": "XA9g1pzEYQgD3i9C5NzZguFSVK32",
+            "displayName": "Tarcísio Gomes",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "outros",
+            "displayName": "Outros",
+            "isAggregate": true,
+            "role": "closer",
+            "targetValue": 0
+          }
+        ],
+        "effectiveConfig": false,
+        "configSource": "",
+        "teamTarget": 0,
+        "summary": {
+          "targetValue": 0,
+          "actualValue": 8862,
+          "missingValue": 0,
+          "progressPct": 0,
+          "count": 8,
+          "ticketMedio": 1107.75
+        },
+        "progress": {
+          "closers": [],
+          "sdrs": []
+        },
+        "isCurrent": false,
+        "status": "Não definida",
+        "copyFromPrevious": null
+      },
+      {
+        "weekKey": "wk_2026-08-11",
+        "startDateKey": "2026-08-11",
+        "endDateKey": "2026-08-18",
+        "nowDateKey": "2026-08-18",
+        "isSpecial": true,
+        "exists": true,
+        "rows": [
+          {
+            "personId": "ayres-andre",
+            "displayName": "Ayres André",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 40
+          },
+          {
+            "personId": "felipe-santos",
+            "displayName": "Felipe Santos",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 30
+          },
+          {
+            "personId": "AQtLQSgx4xP3oZAzkOF4znUxO5f1",
+            "displayName": "Guilherme Davi",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "luana-mendonca",
+            "displayName": "Luana Mendonça",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 30
+          },
+          {
+            "personId": "luis-eduardo",
+            "displayName": "Luis Eduardo",
+            "isAggregate": false,
+            "role": "closer",
+            "targetValue": 8000
+          },
+          {
+            "personId": "LafuFrHf9XanTC9SRniRMV2aJbN2",
+            "displayName": "Luis Perdigão",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "matheus-afonso",
+            "displayName": "Matheus Afonso",
+            "isAggregate": false,
+            "role": "closer",
+            "targetValue": 8000
+          },
+          {
+            "personId": "XA9g1pzEYQgD3i9C5NzZguFSVK32",
+            "displayName": "Tarcísio Gomes",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "outros",
+            "displayName": "Outros",
+            "isAggregate": true,
+            "role": "closer",
+            "targetValue": 4000
+          }
+        ],
+        "effectiveConfig": true,
+        "configSource": "week",
+        "teamTarget": 20000,
+        "summary": {
+          "targetValue": 20000,
+          "actualValue": 16415,
+          "missingValue": 3585,
+          "progressPct": 82.075,
+          "count": 15,
+          "ticketMedio": 1094.3333333333333
+        },
+        "progress": {
+          "closers": [
+            {
+              "personId": "luis-eduardo",
+              "displayName": "Luis Eduardo",
+              "role": "closer",
+              "photoURL": "",
+              "isAggregate": false,
+              "sortOrder": 0,
+              "goalOrder": 0,
+              "targetValue": 8000,
+              "actualValue": 0,
+              "progressPct": 0,
+              "count": 0
+            },
+            {
+              "personId": "matheus-afonso",
+              "displayName": "Matheus Afonso",
+              "role": "closer",
+              "photoURL": "",
+              "isAggregate": false,
+              "sortOrder": 0,
+              "goalOrder": 1,
+              "targetValue": 8000,
+              "actualValue": 0,
+              "progressPct": 0,
+              "count": 0
+            },
+            {
+              "personId": "outros",
+              "displayName": "Outros",
+              "role": "closer",
+              "photoURL": "",
+              "isAggregate": true,
+              "sortOrder": 999,
+              "goalOrder": 2,
+              "targetValue": 4000,
+              "actualValue": 0,
+              "progressPct": 0,
+              "count": 0,
+              "breakdown": []
+            }
+          ],
+          "sdrs": [
+            {
+              "personId": "ayres-andre",
+              "displayName": "Ayres André",
+              "role": "sdr",
+              "photoURL": "",
+              "isAggregate": false,
+              "sortOrder": 0,
+              "goalOrder": 0,
+              "targetValue": 40,
+              "actualValue": null,
+              "progressPct": null,
+              "count": null
+            },
+            {
+              "personId": "felipe-santos",
+              "displayName": "Felipe Santos",
+              "role": "sdr",
+              "photoURL": "",
+              "isAggregate": false,
+              "sortOrder": 0,
+              "goalOrder": 1,
+              "targetValue": 30,
+              "actualValue": null,
+              "progressPct": null,
+              "count": null
+            },
+            {
+              "personId": "luana-mendonca",
+              "displayName": "Luana Mendonça",
+              "role": "sdr",
+              "photoURL": "",
+              "isAggregate": false,
+              "sortOrder": 0,
+              "goalOrder": 2,
+              "targetValue": 30,
+              "actualValue": null,
+              "progressPct": null,
+              "count": null
+            }
+          ]
+        },
+        "isCurrent": false,
+        "status": "Concluída",
+        "copyFromPrevious": null
+      },
+      {
+        "weekKey": "wk_2026-08-19",
+        "startDateKey": "2026-08-19",
+        "endDateKey": "2026-08-25",
+        "nowDateKey": "2026-08-25",
+        "isSpecial": false,
+        "exists": true,
+        "rows": [
+          {
+            "personId": "ayres-andre",
+            "displayName": "Ayres André",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 35
+          },
+          {
+            "personId": "felipe-santos",
+            "displayName": "Felipe Santos",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 25
+          },
+          {
+            "personId": "AQtLQSgx4xP3oZAzkOF4znUxO5f1",
+            "displayName": "Guilherme Davi",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "luana-mendonca",
+            "displayName": "Luana Mendonça",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 25
+          },
+          {
+            "personId": "luis-eduardo",
+            "displayName": "Luis Eduardo",
+            "isAggregate": false,
+            "role": "closer",
+            "targetValue": 9000
+          },
+          {
+            "personId": "LafuFrHf9XanTC9SRniRMV2aJbN2",
+            "displayName": "Luis Perdigão",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "matheus-afonso",
+            "displayName": "Matheus Afonso",
+            "isAggregate": false,
+            "role": "closer",
+            "targetValue": 9000
+          },
+          {
+            "personId": "XA9g1pzEYQgD3i9C5NzZguFSVK32",
+            "displayName": "Tarcísio Gomes",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "outros",
+            "displayName": "Outros",
+            "isAggregate": true,
+            "role": "closer",
+            "targetValue": 2000
+          }
+        ],
+        "effectiveConfig": true,
+        "configSource": "week",
+        "teamTarget": 0,
+        "summary": {
+          "targetValue": 20000,
+          "actualValue": 15720,
+          "missingValue": 4280,
+          "progressPct": 78.60000000000001,
+          "count": 13,
+          "ticketMedio": 1209.2307692307693
+        },
+        "progress": {
+          "closers": [
+            {
+              "personId": "luis-eduardo",
+              "displayName": "Luis Eduardo",
+              "role": "closer",
+              "photoURL": "",
+              "isAggregate": false,
+              "sortOrder": 0,
+              "goalOrder": 0,
+              "targetValue": 9000,
+              "actualValue": 0,
+              "progressPct": 0,
+              "count": 0
+            },
+            {
+              "personId": "matheus-afonso",
+              "displayName": "Matheus Afonso",
+              "role": "closer",
+              "photoURL": "",
+              "isAggregate": false,
+              "sortOrder": 0,
+              "goalOrder": 1,
+              "targetValue": 9000,
+              "actualValue": 0,
+              "progressPct": 0,
+              "count": 0
+            },
+            {
+              "personId": "outros",
+              "displayName": "Outros",
+              "role": "closer",
+              "photoURL": "",
+              "isAggregate": true,
+              "sortOrder": 999,
+              "goalOrder": 2,
+              "targetValue": 2000,
+              "actualValue": 0,
+              "progressPct": 0,
+              "count": 0,
+              "breakdown": []
+            }
+          ],
+          "sdrs": [
+            {
+              "personId": "ayres-andre",
+              "displayName": "Ayres André",
+              "role": "sdr",
+              "photoURL": "",
+              "isAggregate": false,
+              "sortOrder": 0,
+              "goalOrder": 0,
+              "targetValue": 35,
+              "actualValue": null,
+              "progressPct": null,
+              "count": null
+            },
+            {
+              "personId": "felipe-santos",
+              "displayName": "Felipe Santos",
+              "role": "sdr",
+              "photoURL": "",
+              "isAggregate": false,
+              "sortOrder": 0,
+              "goalOrder": 1,
+              "targetValue": 25,
+              "actualValue": null,
+              "progressPct": null,
+              "count": null
+            },
+            {
+              "personId": "luana-mendonca",
+              "displayName": "Luana Mendonça",
+              "role": "sdr",
+              "photoURL": "",
+              "isAggregate": false,
+              "sortOrder": 0,
+              "goalOrder": 2,
+              "targetValue": 25,
+              "actualValue": null,
+              "progressPct": null,
+              "count": null
+            }
+          ]
+        },
+        "isCurrent": false,
+        "status": "Concluída",
+        "copyFromPrevious": null
+      },
+      {
+        "weekKey": "wk_2026-08-26",
+        "startDateKey": "2026-08-26",
+        "endDateKey": "2026-09-01",
+        "nowDateKey": "2026-08-31",
+        "isSpecial": false,
+        "exists": true,
+        "rows": [
+          {
+            "personId": "ayres-andre",
+            "displayName": "Ayres André",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 35
+          },
+          {
+            "personId": "felipe-santos",
+            "displayName": "Felipe Santos",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 25
+          },
+          {
+            "personId": "AQtLQSgx4xP3oZAzkOF4znUxO5f1",
+            "displayName": "Guilherme Davi",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "luana-mendonca",
+            "displayName": "Luana Mendonça",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 25
+          },
+          {
+            "personId": "luis-eduardo",
+            "displayName": "Luis Eduardo",
+            "isAggregate": false,
+            "role": "closer",
+            "targetValue": 9000
+          },
+          {
+            "personId": "LafuFrHf9XanTC9SRniRMV2aJbN2",
+            "displayName": "Luis Perdigão",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "matheus-afonso",
+            "displayName": "Matheus Afonso",
+            "isAggregate": false,
+            "role": "closer",
+            "targetValue": 9000
+          },
+          {
+            "personId": "XA9g1pzEYQgD3i9C5NzZguFSVK32",
+            "displayName": "Tarcísio Gomes",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "outros",
+            "displayName": "Outros",
+            "isAggregate": true,
+            "role": "closer",
+            "targetValue": 2000
+          }
+        ],
+        "effectiveConfig": true,
+        "configSource": "week",
+        "teamTarget": 0,
+        "summary": {
+          "targetValue": 20000,
+          "actualValue": 10056,
+          "missingValue": 9944,
+          "progressPct": 50.28,
+          "count": 9,
+          "ticketMedio": 1117.3333333333333
+        },
+        "progress": {
+          "closers": [
+            {
+              "personId": "luis-eduardo",
+              "displayName": "Luis Eduardo",
+              "role": "closer",
+              "photoURL": "",
+              "isAggregate": false,
+              "sortOrder": 0,
+              "goalOrder": 0,
+              "targetValue": 9000,
+              "actualValue": 0,
+              "progressPct": 0,
+              "count": 0
+            },
+            {
+              "personId": "matheus-afonso",
+              "displayName": "Matheus Afonso",
+              "role": "closer",
+              "photoURL": "",
+              "isAggregate": false,
+              "sortOrder": 0,
+              "goalOrder": 1,
+              "targetValue": 9000,
+              "actualValue": 0,
+              "progressPct": 0,
+              "count": 0
+            },
+            {
+              "personId": "outros",
+              "displayName": "Outros",
+              "role": "closer",
+              "photoURL": "",
+              "isAggregate": true,
+              "sortOrder": 999,
+              "goalOrder": 2,
+              "targetValue": 2000,
+              "actualValue": 0,
+              "progressPct": 0,
+              "count": 0,
+              "breakdown": []
+            }
+          ],
+          "sdrs": [
+            {
+              "personId": "ayres-andre",
+              "displayName": "Ayres André",
+              "role": "sdr",
+              "photoURL": "",
+              "isAggregate": false,
+              "sortOrder": 0,
+              "goalOrder": 0,
+              "targetValue": 35,
+              "actualValue": null,
+              "progressPct": null,
+              "count": null
+            },
+            {
+              "personId": "felipe-santos",
+              "displayName": "Felipe Santos",
+              "role": "sdr",
+              "photoURL": "",
+              "isAggregate": false,
+              "sortOrder": 0,
+              "goalOrder": 1,
+              "targetValue": 25,
+              "actualValue": null,
+              "progressPct": null,
+              "count": null
+            },
+            {
+              "personId": "luana-mendonca",
+              "displayName": "Luana Mendonça",
+              "role": "sdr",
+              "photoURL": "",
+              "isAggregate": false,
+              "sortOrder": 0,
+              "goalOrder": 2,
+              "targetValue": 25,
+              "actualValue": null,
+              "progressPct": null,
+              "count": null
+            }
+          ]
+        },
+        "isCurrent": false,
+        "status": "Concluída",
+        "copyFromPrevious": null
+      }
+    ],
+    "planning": {
+      "distributed": 60000,
+      "difference": 10000
+    }
+  },
+  "2026-07": {
+    "competencia": "2026-07",
+    "currentCompetencia": "2026-09",
+    "editable": false,
+    "monthlyExists": true,
+    "goal": {
+      "competencia": "2026-07",
+      "valorMeta": 60000,
+      "periodEnd": "2026-08-01",
+      "updatedAt": "2026-07-20T16:23:12-03:00",
+      "updatedByName": "Guilherme Davi",
+      "weeklyGoals": {}
+    },
+    "month": {
+      "period": {
+        "monthKey": "2026-07",
+        "startDateKey": "2026-07-01",
+        "endDateKey": "2026-08-01",
+        "nowDateKey": "2026-07-15",
+        "isCustom": true
+      },
+      "summary": {
+        "meta": 60000,
+        "realizado": 56173,
+        "totalVendas": 54,
+        "ticketMedio": 1040.2407407407406,
+        "percentAtingimento": 93.62166666666667,
+        "gap": 3827
+      },
+      "latestSale": null,
+      "pipelineKey": "conversao",
+      "windowCount": 0
+    },
+    "weeks": [
+      {
+        "weekKey": "wk_2026-07-01",
+        "startDateKey": "2026-07-01",
+        "endDateKey": "2026-07-07",
+        "nowDateKey": "2026-07-07",
+        "isSpecial": false,
+        "exists": false,
+        "rows": [
+          {
+            "personId": "ayres-andre",
+            "displayName": "Ayres André",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "felipe-santos",
+            "displayName": "Felipe Santos",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "AQtLQSgx4xP3oZAzkOF4znUxO5f1",
+            "displayName": "Guilherme Davi",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "luana-mendonca",
+            "displayName": "Luana Mendonça",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "luis-eduardo",
+            "displayName": "Luis Eduardo",
+            "isAggregate": false,
+            "role": "closer",
+            "targetValue": 0
+          },
+          {
+            "personId": "LafuFrHf9XanTC9SRniRMV2aJbN2",
+            "displayName": "Luis Perdigão",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "matheus-afonso",
+            "displayName": "Matheus Afonso",
+            "isAggregate": false,
+            "role": "closer",
+            "targetValue": 0
+          },
+          {
+            "personId": "XA9g1pzEYQgD3i9C5NzZguFSVK32",
+            "displayName": "Tarcísio Gomes",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "outros",
+            "displayName": "Outros",
+            "isAggregate": true,
+            "role": "closer",
+            "targetValue": 0
+          }
+        ],
+        "effectiveConfig": false,
+        "configSource": "",
+        "teamTarget": 0,
+        "summary": {
+          "targetValue": 0,
+          "actualValue": 9460,
+          "missingValue": 0,
+          "progressPct": 0,
+          "count": 9,
+          "ticketMedio": 1051.111111111111
+        },
+        "progress": {
+          "closers": [],
+          "sdrs": []
+        },
+        "isCurrent": false,
+        "status": "Não definida",
+        "copyFromPrevious": null
+      },
+      {
+        "weekKey": "wk_2026-07-08",
+        "startDateKey": "2026-07-08",
+        "endDateKey": "2026-07-14",
+        "nowDateKey": "2026-07-14",
+        "isSpecial": false,
+        "exists": false,
+        "rows": [
+          {
+            "personId": "ayres-andre",
+            "displayName": "Ayres André",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "felipe-santos",
+            "displayName": "Felipe Santos",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "AQtLQSgx4xP3oZAzkOF4znUxO5f1",
+            "displayName": "Guilherme Davi",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "luana-mendonca",
+            "displayName": "Luana Mendonça",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "luis-eduardo",
+            "displayName": "Luis Eduardo",
+            "isAggregate": false,
+            "role": "closer",
+            "targetValue": 0
+          },
+          {
+            "personId": "LafuFrHf9XanTC9SRniRMV2aJbN2",
+            "displayName": "Luis Perdigão",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "matheus-afonso",
+            "displayName": "Matheus Afonso",
+            "isAggregate": false,
+            "role": "closer",
+            "targetValue": 0
+          },
+          {
+            "personId": "XA9g1pzEYQgD3i9C5NzZguFSVK32",
+            "displayName": "Tarcísio Gomes",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "outros",
+            "displayName": "Outros",
+            "isAggregate": true,
+            "role": "closer",
+            "targetValue": 0
+          }
+        ],
+        "effectiveConfig": false,
+        "configSource": "",
+        "teamTarget": 0,
+        "summary": {
+          "targetValue": 0,
+          "actualValue": 7851,
+          "missingValue": 0,
+          "progressPct": 0,
+          "count": 7,
+          "ticketMedio": 1121.5714285714287
+        },
+        "progress": {
+          "closers": [],
+          "sdrs": []
+        },
+        "isCurrent": false,
+        "status": "Não definida",
+        "copyFromPrevious": null
+      },
+      {
+        "weekKey": "wk_2026-07-15",
+        "startDateKey": "2026-07-15",
+        "endDateKey": "2026-07-21",
+        "nowDateKey": "2026-07-21",
+        "isSpecial": false,
+        "exists": false,
+        "rows": [
+          {
+            "personId": "ayres-andre",
+            "displayName": "Ayres André",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "felipe-santos",
+            "displayName": "Felipe Santos",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "AQtLQSgx4xP3oZAzkOF4znUxO5f1",
+            "displayName": "Guilherme Davi",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "luana-mendonca",
+            "displayName": "Luana Mendonça",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "luis-eduardo",
+            "displayName": "Luis Eduardo",
+            "isAggregate": false,
+            "role": "closer",
+            "targetValue": 0
+          },
+          {
+            "personId": "LafuFrHf9XanTC9SRniRMV2aJbN2",
+            "displayName": "Luis Perdigão",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "matheus-afonso",
+            "displayName": "Matheus Afonso",
+            "isAggregate": false,
+            "role": "closer",
+            "targetValue": 0
+          },
+          {
+            "personId": "XA9g1pzEYQgD3i9C5NzZguFSVK32",
+            "displayName": "Tarcísio Gomes",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "outros",
+            "displayName": "Outros",
+            "isAggregate": true,
+            "role": "closer",
+            "targetValue": 0
+          }
+        ],
+        "effectiveConfig": false,
+        "configSource": "",
+        "teamTarget": 0,
+        "summary": {
+          "targetValue": 0,
+          "actualValue": 9847,
+          "missingValue": 0,
+          "progressPct": 0,
+          "count": 10,
+          "ticketMedio": 984.7
+        },
+        "progress": {
+          "closers": [],
+          "sdrs": []
+        },
+        "isCurrent": false,
+        "status": "Não definida",
+        "copyFromPrevious": null
+      },
+      {
+        "weekKey": "wk_2026-07-22",
+        "startDateKey": "2026-07-22",
+        "endDateKey": "2026-07-28",
+        "nowDateKey": "2026-07-28",
+        "isSpecial": false,
+        "exists": false,
+        "rows": [
+          {
+            "personId": "ayres-andre",
+            "displayName": "Ayres André",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "felipe-santos",
+            "displayName": "Felipe Santos",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "AQtLQSgx4xP3oZAzkOF4znUxO5f1",
+            "displayName": "Guilherme Davi",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "luana-mendonca",
+            "displayName": "Luana Mendonça",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "luis-eduardo",
+            "displayName": "Luis Eduardo",
+            "isAggregate": false,
+            "role": "closer",
+            "targetValue": 0
+          },
+          {
+            "personId": "LafuFrHf9XanTC9SRniRMV2aJbN2",
+            "displayName": "Luis Perdigão",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "matheus-afonso",
+            "displayName": "Matheus Afonso",
+            "isAggregate": false,
+            "role": "closer",
+            "targetValue": 0
+          },
+          {
+            "personId": "XA9g1pzEYQgD3i9C5NzZguFSVK32",
+            "displayName": "Tarcísio Gomes",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "outros",
+            "displayName": "Outros",
+            "isAggregate": true,
+            "role": "closer",
+            "targetValue": 0
+          }
+        ],
+        "effectiveConfig": false,
+        "configSource": "",
+        "teamTarget": 0,
+        "summary": {
+          "targetValue": 0,
+          "actualValue": 17425,
+          "missingValue": 0,
+          "progressPct": 0,
+          "count": 18,
+          "ticketMedio": 968.0555555555555
+        },
+        "progress": {
+          "closers": [],
+          "sdrs": []
+        },
+        "isCurrent": false,
+        "status": "Não definida",
+        "copyFromPrevious": null
+      },
+      {
+        "weekKey": "wk_2026-07-29",
+        "startDateKey": "2026-07-29",
+        "endDateKey": "2026-08-04",
+        "nowDateKey": "2026-07-31",
+        "isSpecial": false,
+        "exists": false,
+        "rows": [
+          {
+            "personId": "ayres-andre",
+            "displayName": "Ayres André",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "felipe-santos",
+            "displayName": "Felipe Santos",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "AQtLQSgx4xP3oZAzkOF4znUxO5f1",
+            "displayName": "Guilherme Davi",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "luana-mendonca",
+            "displayName": "Luana Mendonça",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "luis-eduardo",
+            "displayName": "Luis Eduardo",
+            "isAggregate": false,
+            "role": "closer",
+            "targetValue": 0
+          },
+          {
+            "personId": "LafuFrHf9XanTC9SRniRMV2aJbN2",
+            "displayName": "Luis Perdigão",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "matheus-afonso",
+            "displayName": "Matheus Afonso",
+            "isAggregate": false,
+            "role": "closer",
+            "targetValue": 0
+          },
+          {
+            "personId": "XA9g1pzEYQgD3i9C5NzZguFSVK32",
+            "displayName": "Tarcísio Gomes",
+            "isAggregate": false,
+            "role": "sdr",
+            "targetValue": 0
+          },
+          {
+            "personId": "outros",
+            "displayName": "Outros",
+            "isAggregate": true,
+            "role": "closer",
+            "targetValue": 0
+          }
+        ],
+        "effectiveConfig": false,
+        "configSource": "",
+        "teamTarget": 0,
+        "summary": {
+          "targetValue": 0,
+          "actualValue": 15890,
+          "missingValue": 0,
+          "progressPct": 0,
+          "count": 14,
+          "ticketMedio": 1135
+        },
+        "progress": {
+          "closers": [],
+          "sdrs": []
+        },
+        "isCurrent": false,
+        "status": "Não definida",
+        "copyFromPrevious": null
+      }
+    ],
+    "planning": {
+      "distributed": 0,
+      "difference": 60000
+    }
+  }
+}

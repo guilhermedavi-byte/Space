@@ -1,0 +1,388 @@
+TAP version 13
+# Subtest: management preserves weekly calendar, cross-month ownership and historical special week
+ok 1 - management preserves weekly calendar, cross-month ownership and historical special week
+  ---
+  duration_ms: 33.792333
+  type: 'test'
+  ...
+# Subtest: monthly existence is independent from document and weekly defaults
+ok 2 - monthly existence is independent from document and weekly defaults
+  ---
+  duration_ms: 38.484875
+  type: 'test'
+  ...
+# Subtest: explicit week existence, current week and four statuses reflect real storage
+ok 3 - explicit week existence, current week and four statuses reflect real storage
+  ---
+  duration_ms: 19.819084
+  type: 'test'
+  ...
+# Subtest: roster keeps Luis and zero, rejects ghosts and internal names, and retains Outros as bucket
+ok 4 - roster keeps Luis and zero, rejects ghosts and internal names, and retains Outros as bucket
+  ---
+  duration_ms: 7.69825
+  type: 'test'
+  ...
+# Subtest: financial truth matches official sales and planning respects explicit team targets
+ok 5 - financial truth matches official sales and planning respects explicit team targets
+  ---
+  duration_ms: 18.694667
+  type: 'test'
+  ...
+# Subtest: copy is only available with immediately previous saved week, including previous competence
+ok 6 - copy is only available with immediately previous saved week, including previous competence
+  ---
+  duration_ms: 21.261584
+  type: 'test'
+  ...
+# Subtest: historical roles come from period, not current role; model does not mutate inputs
+ok 7 - historical roles come from period, not current role; model does not mutate inputs
+  ---
+  duration_ms: 9.105792
+  type: 'test'
+  ...
+# Subtest: explicit exclusions through aliases are not reintroduced in the editor
+ok 8 - explicit exclusions through aliases are not reintroduced in the editor
+  ---
+  duration_ms: 7.920625
+  type: 'test'
+  ...
+# Subtest: page loads current competence; existing month opens edit with saved amount and no writes
+ok 9 - page loads current competence; existing month opens edit with saved amount and no writes
+  ---
+  duration_ms: 143.167125
+  type: 'test'
+  ...
+# Subtest: empty month uses define and monthly save refreshes existence
+ok 10 - empty month uses define and monthly save refreshes existence
+  ---
+  duration_ms: 111.235083
+  type: 'test'
+  ...
+# Subtest: month arrows and picker navigate, preserve scope and show history as read-only
+ok 11 - month arrows and picker navigate, preserve scope and show history as read-only
+  ---
+  duration_ms: 96.817625
+  type: 'test'
+  ...
+# Subtest: existing week opens edit; new week opens define; neither opening writes
+ok 12 - existing week opens edit; new week opens define; neither opening writes
+  ---
+  duration_ms: 35.859167
+  type: 'test'
+  ...
+# Subtest: copy changes only local draft; save posts configuration without results or record IDs and refreshes status
+ok 13 - copy changes only local draft; save posts configuration without results or record IDs and refreshes status
+  ---
+  duration_ms: 66.349917
+  type: 'test'
+  ...
+# Subtest: save error preserves draft and closing without save never persists copied values
+ok 14 - save error preserves draft and closing without save never persists copied values
+  ---
+  duration_ms: 55.584833
+  type: 'test'
+  ...
+# Subtest: rapid competence changes cannot replace the latest month with a stale response
+ok 15 - rapid competence changes cannot replace the latest month with a stale response
+  ---
+  duration_ms: 38.744875
+  type: 'test'
+  ...
+# Subtest: historical drawer has no save; Escape closes and returns focus
+ok 16 - historical drawer has no save; Escape closes and returns focus
+  ---
+  duration_ms: 32.834541
+  type: 'test'
+  ...
+# Subtest: completed week opens consultation and offers explicit editing only in an editable competence
+ok 17 - completed week opens consultation and offers explicit editing only in an editable competence
+  ---
+  duration_ms: 40.046125
+  type: 'test'
+  ...
+# [commercial-overview][financial-audit] {
+#   periodoSelecionado: {
+#     inicio: '2026-09-09T00:00:00-03:00',
+#     fim: '2026-09-15T23:59:59.999-03:00',
+#     timezone: 'America/Sao_Paulo'
+#   },
+#   origemDados: 'DataCrazy businesses',
+#   pipeline: 'conversao',
+#   quantidadeFechadosEncontrados: 3,
+#   somaReceita: 12650,
+#   ticketMedio: 4216.666666666667,
+#   campoDataUsado: 'lastMovedAt',
+#   distribuicaoCamposData: { lastMovedAt: 2, statusChangedAt: 1 },
+#   negociosExcluidosPorData: 0,
+#   negociosSemDataFechamento: 0,
+#   criadosAntesMasFechadosNoPeriodo: 3,
+#   criadosNoPeriodoMasFechadosFora: 0
+# }
+# [FORECAST DEBUG] {
+#   parte1_fechado: 12650,
+#   parte2_pipeline: 0,
+#   parte3_novosLeads: 0,
+#   forecast_total: 12650,
+#   diasPassados: 6,
+#   diasRestantes: 1,
+#   mediaDiariaLeads: 0,
+#   novosLeadsEsperados: 0,
+#   dealsPipeline_count: 0
+# }
+# Subtest: SDR roster joins real active users and monthly role, includes zero and suppresses orphan/internal names
+ok 18 - SDR roster joins real active users and monthly role, includes zero and suppresses orphan/internal names
+  ---
+  duration_ms: 35.876291
+  type: 'test'
+  ...
+# Subtest: weekly UID overrides legacy defaults by identity without changing historical configuration
+ok 19 - weekly UID overrides legacy defaults by identity without changing historical configuration
+  ---
+  duration_ms: 0.957125
+  type: 'test'
+  ...
+# Subtest: R$12,650 includes all valid closings regardless of closer, goal or result roster, once per deal
+ok 20 - R$12,650 includes all valid closings regardless of closer, goal or result roster, once per deal
+  ---
+  duration_ms: 10.133834
+  type: 'test'
+  ...
+# Subtest: Outros is a closer bucket and its saved target contributes to the team target
+ok 21 - Outros is a closer bucket and its saved target contributes to the team target
+  ---
+  duration_ms: 3.306958
+  type: 'test'
+  ...
+# Subtest: financial date precedence, timezone boundaries and established pipeline rule are shared
+ok 22 - financial date precedence, timezone boundaries and established pipeline rule are shared
+  ---
+  duration_ms: 1.058083
+  type: 'test'
+  ...
+# Subtest: dashboard and CRM weekly total agree for identical periods and equivalent R$12,650 data
+ok 23 - dashboard and CRM weekly total agree for identical periods and equivalent R$12,650 data
+  ---
+  duration_ms: 11.137125
+  type: 'test'
+  ...
+# Subtest: read-only audit explains the synthetic R$8,400 -> R$12,650 difference by deal
+ok 24 - read-only audit explains the synthetic R$8,400 -> R$12,650 difference by deal
+  ---
+  duration_ms: 16.157833
+  type: 'test'
+  ...
+# Subtest: ranking renders the backend names, including eligible SDRs below fifth place
+ok 25 - ranking renders the backend names, including eligible SDRs below fifth place
+  ---
+  duration_ms: 1.389583
+  type: 'test'
+  ...
+# Subtest: mirror financial windows include closed deals without recent movement
+ok 26 - mirror financial windows include closed deals without recent movement
+  ---
+  duration_ms: 2.254292
+  type: 'test'
+  ...
+# Subtest: CRM Live loader reads users, rejects ghosts, and uses the week competence across a month boundary
+ok 27 - CRM Live loader reads users, rejects ghosts, and uses the week competence across a month boundary
+  ---
+  duration_ms: 10.080792
+  type: 'test'
+  ...
+# [growth-goals] auth header: missing
+# [growth-goals] auth header: missing
+# [api] growth-goals get failed Error: commercial_users_list_failed
+#     at handleGrowthGoalsApi (/Users/spaceonline/Documents/New project/api/growth-dashboard.js:1402:40)
+#     at async module.exports (/Users/spaceonline/Documents/New project/api/growth-dashboard.js:2811:5)
+#     at async Object.request (/Users/spaceonline/Documents/New project/tests/growth-goals-people.test.js:116:5)
+#     at async TestContext.<anonymous> (/Users/spaceonline/Documents/New project/tests/growth-goals-people.test.js:160:17)
+#     at async Test.run (node:internal/test_runner/test:1054:7)
+#     at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+# [growth-goals] auth header: missing
+# Subtest: active Commercial users are the base, independently of configuration, goals or role
+ok 28 - active Commercial users are the base, independently of configuration, goals or role
+  ---
+  duration_ms: 3.342917
+  type: 'test'
+  ...
+# Subtest: goals join by stable identity and selected week, retaining zero targets
+ok 29 - goals join by stable identity and selected week, retaining zero targets
+  ---
+  duration_ms: 24.959125
+  type: 'test'
+  ...
+# Subtest: homonyms stay distinct and duplicate configurations resolve to one real user
+ok 30 - homonyms stay distinct and duplicate configurations resolve to one real user
+  ---
+  duration_ms: 0.704875
+  type: 'test'
+  ...
+# Subtest: GET includes active users even without a month document and never writes
+ok 31 - GET includes active users even without a month document and never writes
+  ---
+  duration_ms: 34.615166
+  type: 'test'
+  ...
+# Subtest: POST saves new user with SDR or Closer, preserving hidden goals, other weeks and monthly total
+ok 32 - POST saves new user with SDR or Closer, preserving hidden goals, other weeks and monthly total
+  ---
+  duration_ms: 12.471459
+  type: 'test'
+  ...
+# Subtest: read failures do not produce incomplete editable data or overwrite existing goals
+ok 33 - read failures do not produce incomplete editable data or overwrite existing goals
+  ---
+  duration_ms: 17.366333
+  type: 'test'
+  ...
+# [growth-goals] auth header: missing
+# [growth-goals] auth header: missing
+# [growth-goals] auth header: missing
+# Subtest: modal renders unconfigured users, retains saved inputs and posts only after Salvar
+ok 34 - modal renders unconfigured users, retains saved inputs and posts only after Salvar
+  ---
+  duration_ms: 16.851458
+  type: 'test'
+  ...
+# Subtest: management GET aggregates the competence in one read-only response
+ok 35 - management GET aggregates the competence in one read-only response
+  ---
+  duration_ms: 58.142916
+  type: 'test'
+  ...
+# Subtest: entity action is create for a new week inside an existing month and update after saving
+ok 36 - entity action is create for a new week inside an existing month and update after saving
+  ---
+  duration_ms: 7.390666
+  type: 'test'
+  ...
+# Subtest: updating a legacy week preserves unknown fields and synchronizes legacy people arrays
+ok 37 - updating a legacy week preserves unknown fields and synchronizes legacy people arrays
+  ---
+  duration_ms: 11.33275
+  type: 'test'
+  ...
+# Subtest: resolveCommercialWeek respeita a semana especial inicial
+ok 38 - resolveCommercialWeek respeita a semana especial inicial
+  ---
+  duration_ms: 29.589833
+  type: 'test'
+  ...
+# Subtest: resolveCommercialWeek usa quarta-terça após 19/08/2026
+ok 39 - resolveCommercialWeek usa quarta-terça após 19/08/2026
+  ---
+  duration_ms: 0.856792
+  type: 'test'
+  ...
+# Subtest: weekly read model usa attendantId como chave principal para o closer da semana
+ok 40 - weekly read model usa attendantId como chave principal para o closer da semana
+  ---
+  duration_ms: 7.175375
+  type: 'test'
+  ...
+# Subtest: weekly read model usa fallback por alias e expõe attendantId não reconhecido
+ok 41 - weekly read model usa fallback por alias e expõe attendantId não reconhecido
+  ---
+  duration_ms: 2.12425
+  type: 'test'
+  ...
+# Subtest: weekly read model agrega attendant não cadastrado em Outros e mantém unresolved para diagnóstico
+ok 42 - weekly read model agrega attendant não cadastrado em Outros e mantém unresolved para diagnóstico
+  ---
+  duration_ms: 0.883667
+  type: 'test'
+  ...
+# Subtest: weekly read model agrega receita de pessoa com role SDR em Outros
+ok 43 - weekly read model agrega receita de pessoa com role SDR em Outros
+  ---
+  duration_ms: 0.601083
+  type: 'test'
+  ...
+# Subtest: weekly read model agrega attendantId nulo em Outros
+ok 44 - weekly read model agrega attendantId nulo em Outros
+  ---
+  duration_ms: 0.688417
+  type: 'test'
+  ...
+# Subtest: weekly read model expõe unresolved mesmo sem weeklyGoal cadastrado
+ok 45 - weekly read model expõe unresolved mesmo sem weeklyGoal cadastrado
+  ---
+  duration_ms: 0.410333
+  type: 'test'
+  ...
+# Subtest: ranking de closers ordena Outros no meio por percentual
+ok 46 - ranking de closers ordena Outros no meio por percentual
+  ---
+  duration_ms: 0.951917
+  type: 'test'
+  ...
+# Subtest: ranking de closers ordena Outros no topo por percentual
+ok 47 - ranking de closers ordena Outros no topo por percentual
+  ---
+  duration_ms: 1.058708
+  type: 'test'
+  ...
+# Subtest: weekly read model conta reunião feita do SDR por show em sdrActivityEvents
+ok 48 - weekly read model conta reunião feita do SDR por show em sdrActivityEvents
+  ---
+  duration_ms: 0.587833
+  type: 'test'
+  ...
+# Subtest: weekly read model expõe sdrUid e email não reconhecidos em unresolved.sdrActors
+ok 49 - weekly read model expõe sdrUid e email não reconhecidos em unresolved.sdrActors
+  ---
+  duration_ms: 0.249167
+  type: 'test'
+  ...
+# Subtest: meta semanal do time de closers usa 20000 independente da soma individual
+ok 50 - meta semanal do time de closers usa 20000 independente da soma individual
+  ---
+  duration_ms: 0.416917
+  type: 'test'
+  ...
+# Subtest: meta semanal do time de closers cai para a soma das linhas quando teamTarget está ausente
+ok 51 - meta semanal do time de closers cai para a soma das linhas quando teamTarget está ausente
+  ---
+  duration_ms: 0.25125
+  type: 'test'
+  ...
+# Subtest: weekly read model usa default da competência quando a semana não está preenchida
+ok 52 - weekly read model usa default da competência quando a semana não está preenchida
+  ---
+  duration_ms: 0.290708
+  type: 'test'
+  ...
+# Subtest: weekly read model faz merge campo a campo entre semana e default da competência
+ok 53 - weekly read model faz merge campo a campo entre semana e default da competência
+  ---
+  duration_ms: 1.139333
+  type: 'test'
+  ...
+# Subtest: weekly read model permite excluir pessoa do default por flag explícita na semana
+ok 54 - weekly read model permite excluir pessoa do default por flag explícita na semana
+  ---
+  duration_ms: 0.393375
+  type: 'test'
+  ...
+# Subtest: weekly read model usa default global quando competência e semana não estão preenchidas
+ok 55 - weekly read model usa default global quando competência e semana não estão preenchidas
+  ---
+  duration_ms: 0.222208
+  type: 'test'
+  ...
+# Subtest: defaultWeeklyConfig canônico referencia apenas personIds existentes em growthPeople
+ok 56 - defaultWeeklyConfig canônico referencia apenas personIds existentes em growthPeople
+  ---
+  duration_ms: 0.066709
+  type: 'test'
+  ...
+1..56
+# tests 56
+# suites 0
+# pass 56
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1801.89575

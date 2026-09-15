@@ -1,0 +1,644 @@
+{
+  "provenance": {
+    "method": "Transcrição de DOM visível autenticado. Não é export bruto da API.",
+    "observedDate": "2026-09-14 America/Sao_Paulo",
+    "deals": "Datacrazy Dashboard, Total ganhos, setembro; cada número e criação lidos na ficha.",
+    "users": "Comercial > Usuários, atributos DOM data-admin-user-row/type/active/name",
+    "goals": "Firestore plataforma-space growthGoals/2026-07,2026-08,2026-09",
+    "people": "growthPeople: projeção dos campos financeiros/identidade; e-mails SDR não incluídos nesta reprodução.",
+    "limits": "Data de ganho sem horário; UUIDs não exportados; eventos SDR não extraídos. Nenhum horário artificial representa evidência."
+  },
+  "users": [
+    {
+      "firestoreDocId": "kwfTVEVa8gYUnQM0IK0DIzIneUR2",
+      "nome": "Ayres André",
+      "tipo": "growth",
+      "ativo": true
+    },
+    {
+      "firestoreDocId": "i17smULTFHh9dAjEicoBsv3Cz7s2",
+      "nome": "Felipe Santos",
+      "tipo": "growth",
+      "ativo": true
+    },
+    {
+      "firestoreDocId": "AQtLQSgx4xP3oZAzkOF4znUxO5f1",
+      "nome": "Guilherme Davi",
+      "tipo": "growth",
+      "ativo": true
+    },
+    {
+      "firestoreDocId": "Iu45TJz4zbfezGYpgZnfzYwEW4Z2",
+      "nome": "Luana Mendonça",
+      "tipo": "growth",
+      "ativo": true
+    },
+    {
+      "firestoreDocId": "wK6aokqvdIQpYetQ49xPohunMK53",
+      "nome": "Luis Eduardo",
+      "tipo": "growth",
+      "ativo": true
+    },
+    {
+      "firestoreDocId": "hTbH5IuPzNW4rLiR851Uh7R6F6E3",
+      "nome": "Luis Eduardo Ferreira Jorge",
+      "tipo": "growth",
+      "ativo": false
+    },
+    {
+      "firestoreDocId": "LafuFrHf9XanTC9SRniRMV2aJbN2",
+      "nome": "Luis Perdigão",
+      "tipo": "growth",
+      "ativo": true
+    },
+    {
+      "firestoreDocId": "RBxojfKaYEcoUNtWgoLxEH1Webb2",
+      "nome": "Matheus Afonso",
+      "tipo": "growth",
+      "ativo": true
+    },
+    {
+      "firestoreDocId": "egJKI57bbnYqFi0WTeRB1uVfHev2",
+      "nome": "Tarcísio Filho",
+      "tipo": "growth",
+      "ativo": false
+    },
+    {
+      "firestoreDocId": "uzxsw8oMZafKa6kSCKRdl4x00Rv1",
+      "nome": "Tarcísio Filho",
+      "tipo": "growth",
+      "ativo": false
+    },
+    {
+      "firestoreDocId": "XA9g1pzEYQgD3i9C5NzZguFSVK32",
+      "nome": "Tarcísio Gomes",
+      "tipo": "growth",
+      "ativo": true
+    }
+  ],
+  "people": [
+    {
+      "personId": "ayres-andre",
+      "displayName": "Ayres André",
+      "userUid": "kwfTVEVa8gYUnQM0IK0DIzIneUR2",
+      "active": true,
+      "roles": [
+        "sdr"
+      ],
+      "crmAttendantIds": [],
+      "crmAttendantAliases": [],
+      "sdrEmails": []
+    },
+    {
+      "personId": "felipe-santos",
+      "displayName": "Felipe Santos",
+      "userUid": "i17smULTFHh9dAjEicoBsv3Cz7s2",
+      "active": true,
+      "roles": [
+        "sdr"
+      ],
+      "crmAttendantIds": [],
+      "crmAttendantAliases": [
+        "Felipe Santos | Space"
+      ],
+      "sdrEmails": []
+    },
+    {
+      "personId": "luana-mendonca",
+      "displayName": "Luana Mendonça",
+      "userUid": "Iu45TJz4zbfezGYpgZnfzYwEW4Z2",
+      "active": true,
+      "roles": [
+        "sdr"
+      ],
+      "crmAttendantIds": [],
+      "crmAttendantAliases": [],
+      "sdrEmails": []
+    },
+    {
+      "personId": "luis-eduardo",
+      "displayName": "Luis Eduardo",
+      "userUid": "wK6aokqvdIQpYetQ49xPohunMK53",
+      "active": true,
+      "roles": [
+        "closer"
+      ],
+      "crmAttendantIds": [
+        "d58a9f90-d959-439f-8dc7-aca4fedbb7e6"
+      ],
+      "crmAttendantAliases": [
+        "Luis Eduardo"
+      ],
+      "sdrEmails": []
+    },
+    {
+      "personId": "matheus-afonso",
+      "displayName": "Matheus Afonso",
+      "userUid": "RBxojfKaYEcoUNtWgoLxEH1Webb2",
+      "active": true,
+      "roles": [
+        "closer"
+      ],
+      "crmAttendantIds": [
+        "04d03e9c-3132-4c94-b83e-be6263f4e073"
+      ],
+      "crmAttendantAliases": [
+        "Matheus Afonso",
+        "Matheus Afonso Rodrigues"
+      ],
+      "sdrEmails": []
+    }
+  ],
+  "goals": {
+    "2026-09": {
+      "competencia": "2026-09",
+      "valorMeta": 60000,
+      "updatedAt": "2026-09-14T19:36:24-03:00",
+      "updatedByName": "Guilherme Davi",
+      "weeklyGoals": {
+        "wk_2026-09-02": {
+          "startDateKey": "2026-09-02",
+          "endDateKey": "2026-09-08",
+          "teamTarget": 0,
+          "individualMonthlyGoals": {
+            "ayres-andre": {
+              "role": "sdr",
+              "targetValue": 35
+            },
+            "felipe-santos": {
+              "role": "sdr",
+              "targetValue": 25
+            },
+            "luana-mendonca": {
+              "role": "sdr",
+              "targetValue": 25
+            },
+            "luis-eduardo": {
+              "role": "closer",
+              "targetValue": 9000
+            },
+            "matheus-afonso": {
+              "role": "closer",
+              "targetValue": 9000
+            },
+            "outros": {
+              "role": "closer",
+              "targetValue": 2000
+            }
+          }
+        },
+        "wk_2026-09-09": {
+          "startDateKey": "2026-09-09",
+          "endDateKey": "2026-09-15",
+          "teamTarget": 0,
+          "individualMonthlyGoals": {
+            "ayres-andre": {
+              "role": "sdr",
+              "targetValue": 30
+            },
+            "felipe-santos": {
+              "role": "sdr",
+              "targetValue": 20
+            },
+            "luana-mendonca": {
+              "role": "sdr",
+              "targetValue": 20
+            },
+            "luis-eduardo": {
+              "role": "closer",
+              "targetValue": 9000
+            },
+            "matheus-afonso": {
+              "role": "closer",
+              "targetValue": 9000
+            },
+            "AQtLQSgx4xP3oZAzkOF4znUxO5f1": {
+              "role": "sdr",
+              "targetValue": 0
+            },
+            "LafuFrHf9XanTC9SRniRMV2aJbN2": {
+              "role": "sdr",
+              "targetValue": 20
+            },
+            "XA9g1pzEYQgD3i9C5NzZguFSVK32": {
+              "role": "sdr",
+              "targetValue": 0
+            }
+          }
+        }
+      }
+    },
+    "2026-08": {
+      "competencia": "2026-08",
+      "valorMeta": 70000,
+      "periodStart": "2026-08-02",
+      "updatedAt": "2026-08-26T18:44:21-03:00",
+      "updatedByName": "Guilherme Davi",
+      "weeklyGoals": {
+        "wk_2026-08-11": {
+          "startDateKey": "2026-08-11",
+          "endDateKey": "2026-08-18",
+          "teamTarget": 20000,
+          "weekKey": "wk_2026-08-11",
+          "people": [
+            {
+              "personId": "ayres-andre",
+              "excluded": false,
+              "role": "sdr",
+              "targetValue": 40
+            },
+            {
+              "personId": "felipe-santos",
+              "excluded": false,
+              "role": "sdr",
+              "targetValue": 30
+            },
+            {
+              "personId": "luana-mendonca",
+              "excluded": false,
+              "role": "sdr",
+              "targetValue": 30
+            },
+            {
+              "personId": "luis-eduardo",
+              "excluded": false,
+              "role": "closer",
+              "targetValue": 8000
+            },
+            {
+              "personId": "matheus-afonso",
+              "excluded": false,
+              "role": "closer",
+              "targetValue": 8000
+            },
+            {
+              "personId": "outros",
+              "excluded": false,
+              "role": "closer",
+              "targetValue": 4000
+            }
+          ]
+        },
+        "wk_2026-08-19": {
+          "startDateKey": "2026-08-19",
+          "endDateKey": "2026-08-25",
+          "teamTarget": 0,
+          "weekKey": "wk_2026-08-19",
+          "people": [
+            {
+              "personId": "ayres-andre",
+              "excluded": false,
+              "role": "sdr",
+              "targetValue": 35
+            },
+            {
+              "personId": "felipe-santos",
+              "excluded": false,
+              "role": "sdr",
+              "targetValue": 25
+            },
+            {
+              "personId": "luana-mendonca",
+              "excluded": false,
+              "role": "sdr",
+              "targetValue": 25
+            },
+            {
+              "personId": "luis-eduardo",
+              "excluded": false,
+              "role": "closer",
+              "targetValue": 9000
+            },
+            {
+              "personId": "matheus-afonso",
+              "excluded": false,
+              "role": "closer",
+              "targetValue": 9000
+            },
+            {
+              "personId": "outros",
+              "excluded": false,
+              "role": "closer",
+              "targetValue": 2000
+            }
+          ]
+        },
+        "wk_2026-08-26": {
+          "startDateKey": "2026-08-26",
+          "endDateKey": "2026-09-01",
+          "teamTarget": 0,
+          "individualMonthlyGoals": {
+            "ayres-andre": {
+              "role": "sdr",
+              "targetValue": 35
+            },
+            "felipe-santos": {
+              "role": "sdr",
+              "targetValue": 25
+            },
+            "luana-mendonca": {
+              "role": "sdr",
+              "targetValue": 25
+            },
+            "luis-eduardo": {
+              "role": "closer",
+              "targetValue": 9000
+            },
+            "matheus-afonso": {
+              "role": "closer",
+              "targetValue": 9000
+            },
+            "outros": {
+              "role": "closer",
+              "targetValue": 2000
+            }
+          }
+        }
+      }
+    },
+    "2026-07": {
+      "competencia": "2026-07",
+      "valorMeta": 60000,
+      "periodEnd": "2026-08-01",
+      "updatedAt": "2026-07-20T16:23:12-03:00",
+      "updatedByName": "Guilherme Davi"
+    }
+  },
+  "septemberDeals": [
+    {
+      "number": "11421",
+      "name": "Marcelo Augusto Vieira",
+      "value": 1475,
+      "owner": "Matheus Afonso Rodrigues",
+      "wonDate": "2026-09-11",
+      "createdDisplay": "10/09/2026",
+      "status": "Ganho",
+      "pipeline": "Conversão"
+    },
+    {
+      "number": "11420",
+      "name": "Leticia Ferreira de Souza",
+      "value": 1275,
+      "owner": "Matheus Afonso Rodrigues",
+      "wonDate": "2026-09-10",
+      "createdDisplay": "10/09/2026",
+      "status": "Ganho",
+      "pipeline": "Conversão"
+    },
+    {
+      "number": "11401",
+      "name": "Livia Moreira Martins Roberto",
+      "value": 1120,
+      "owner": "Luis Eduardo",
+      "wonDate": "2026-09-11",
+      "createdDisplay": "10/09/2026",
+      "status": "Ganho",
+      "pipeline": "Conversão"
+    },
+    {
+      "number": "11396",
+      "name": "Samuel Luiz da Silva",
+      "value": 1275,
+      "owner": "Felipe Santos | Space",
+      "wonDate": "2026-09-10",
+      "createdDisplay": "10/09/2026",
+      "status": "Ganho",
+      "pipeline": "Conversão"
+    },
+    {
+      "number": "11372",
+      "name": "Michelle Quintão Ferreira Luna",
+      "value": 1125,
+      "owner": "Matheus Afonso Rodrigues",
+      "wonDate": "2026-09-14",
+      "createdDisplay": "09/09/2026",
+      "status": "Ganho",
+      "pipeline": "Conversão"
+    },
+    {
+      "number": "11367",
+      "name": "Maycon Alves",
+      "value": 880,
+      "owner": "Felipe Santos | Space",
+      "wonDate": "2026-09-08",
+      "createdDisplay": "08/09/2026",
+      "status": "Ganho",
+      "pipeline": "Conversão"
+    },
+    {
+      "number": "11365",
+      "name": "Fatima Silvestre",
+      "value": 757,
+      "owner": "Felipe Santos | Space",
+      "wonDate": "2026-09-08",
+      "createdDisplay": "08/09/2026",
+      "status": "Ganho",
+      "pipeline": "Conversão"
+    },
+    {
+      "number": "11355",
+      "name": "Elaine",
+      "value": 700,
+      "owner": "Felipe Santos | Space",
+      "wonDate": "2026-09-08",
+      "createdDisplay": "08/09/2026",
+      "status": "Ganho",
+      "pipeline": "Conversão"
+    },
+    {
+      "number": "11351",
+      "name": "Joyce Carla Diogo Oliveira",
+      "value": 1275,
+      "owner": "Matheus Afonso Rodrigues",
+      "wonDate": "2026-09-08",
+      "createdDisplay": "08/09/2026",
+      "status": "Ganho",
+      "pipeline": "Conversão"
+    },
+    {
+      "number": "11348",
+      "name": "Marcelo de Lima Machado Spanazzi",
+      "value": 500,
+      "owner": "Matheus Afonso Rodrigues",
+      "wonDate": "2026-09-08",
+      "createdDisplay": "08/09/2026",
+      "status": "Ganho",
+      "pipeline": "Conversão"
+    },
+    {
+      "number": "11344",
+      "name": "Suelen Fernandes dos Santos",
+      "value": 1000,
+      "owner": "Luis Eduardo",
+      "wonDate": "2026-09-08",
+      "createdDisplay": "08/09/2026",
+      "status": "Ganho",
+      "pipeline": "Conversão"
+    },
+    {
+      "number": "11338",
+      "name": "Julio Ramos dos Santos",
+      "value": 1150,
+      "owner": "Luis Eduardo",
+      "wonDate": "2026-09-08",
+      "createdDisplay": "08/09/2026",
+      "status": "Ganho",
+      "pipeline": "Conversão"
+    },
+    {
+      "number": "11317",
+      "name": "Marcos Daniel",
+      "value": 1250,
+      "owner": "Matheus Afonso Rodrigues",
+      "wonDate": "2026-09-05",
+      "createdDisplay": "04/09/2026",
+      "status": "Ganho",
+      "pipeline": "Conversão"
+    },
+    {
+      "number": "11296",
+      "name": "Michael",
+      "value": 1075,
+      "owner": "Felipe Santos | Space",
+      "wonDate": "2026-09-09",
+      "createdDisplay": "03/09/2026",
+      "status": "Ganho",
+      "pipeline": "Conversão"
+    },
+    {
+      "number": "11287",
+      "name": "Kennedy Lacerda Andrade",
+      "value": 970,
+      "owner": "Luis Eduardo",
+      "wonDate": "2026-09-09",
+      "createdDisplay": "02/09/2026",
+      "status": "Ganho",
+      "pipeline": "Conversão"
+    },
+    {
+      "number": "11283",
+      "name": "Lucio Da Silva Thomaz Junior",
+      "value": 1275,
+      "owner": "Matheus Afonso Rodrigues",
+      "wonDate": "2026-09-04",
+      "createdDisplay": "02/09/2026",
+      "status": "Ganho",
+      "pipeline": "Conversão"
+    },
+    {
+      "number": "11274",
+      "name": "Joyce Ferreira de Lima",
+      "value": 1475,
+      "owner": "Luis Eduardo",
+      "wonDate": "2026-09-10",
+      "createdDisplay": "02/09/2026",
+      "status": "Ganho",
+      "pipeline": "Conversão"
+    },
+    {
+      "number": "11211",
+      "name": "Luiz Carlos dos Reis Príncipe Junior",
+      "value": 1030,
+      "owner": "Luis Eduardo",
+      "wonDate": "2026-09-01",
+      "createdDisplay": "31/08/2026",
+      "status": "Ganho",
+      "pipeline": "Conversão"
+    },
+    {
+      "number": "11180",
+      "name": "Reginaldo Dos Santos",
+      "value": 1275,
+      "owner": "Matheus Afonso Rodrigues",
+      "wonDate": "2026-09-01",
+      "createdDisplay": "30/08/2026",
+      "status": "Ganho",
+      "pipeline": "Conversão"
+    },
+    {
+      "number": "11142",
+      "name": "Bernadete Silva",
+      "value": 1075,
+      "owner": "Felipe Santos | Space",
+      "wonDate": "2026-09-02",
+      "createdDisplay": "28/08/2026",
+      "status": "Ganho",
+      "pipeline": "Conversão"
+    },
+    {
+      "number": "11084",
+      "name": "Nerio Marçal da Silva",
+      "value": 1275,
+      "owner": "Matheus Afonso Rodrigues",
+      "wonDate": "2026-09-04",
+      "createdDisplay": "27/08/2026",
+      "status": "Ganho",
+      "pipeline": "Conversão"
+    },
+    {
+      "number": "10934",
+      "name": "Sara Ferreira Terra",
+      "value": 800,
+      "owner": "Felipe Santos | Space",
+      "wonDate": "2026-09-08",
+      "createdDisplay": "24/08/2026",
+      "status": "Ganho",
+      "pipeline": "Conversão"
+    },
+    {
+      "number": "10873",
+      "name": "Jackeline Dutra da Silva",
+      "value": 945,
+      "owner": "Luis Eduardo",
+      "wonDate": "2026-09-14",
+      "createdDisplay": "22/08/2026",
+      "status": "Ganho",
+      "pipeline": "Conversão"
+    },
+    {
+      "number": "10125",
+      "name": "Evandro Carvalho Silva",
+      "value": 1300,
+      "owner": "Luis Eduardo",
+      "wonDate": "2026-09-03",
+      "createdDisplay": "05/08/2026",
+      "status": "Ganho",
+      "pipeline": "Conversão"
+    },
+    {
+      "number": "8895",
+      "name": "Maikel Alvarenga",
+      "value": 950,
+      "owner": "Felipe Santos | Space",
+      "wonDate": "2026-09-11",
+      "createdDisplay": "13/07/2026",
+      "status": "Ganho",
+      "pipeline": "Conversão"
+    },
+    {
+      "number": "7580",
+      "name": "Eduardo Nunes Moreira",
+      "value": 961,
+      "owner": "Luis Eduardo",
+      "wonDate": "2026-09-09",
+      "createdDisplay": "29/05/2026",
+      "status": "Ganho",
+      "pipeline": "Conversão"
+    }
+  ],
+  "crmLiveSnapshot": {
+    "generatedAt": "2026-09-14T23:02:50.843Z",
+    "monthly": {
+      "target": 60000,
+      "actual": 28188,
+      "count": 26
+    },
+    "weekly": {
+      "start": "2026-09-09",
+      "end": "2026-09-15",
+      "target": 18000,
+      "actual": 8385,
+      "count": 7
+    }
+  }
+}
