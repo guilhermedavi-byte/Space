@@ -20,3 +20,7 @@ test('reader uses projected subscriptions and exposes only linked Space profiles
  const r=createReader({connectionId:'589367ba-e7c4-4c26-af71-53f97eac31a4',spaceLoader:async()=>source,verify:async()=>{},request:async p=>({data:tables[p.split('?')[0].slice(1)]}),client:{pages:async function*(resource){assert.equal(resource,'customers');yield {data:[{id:'cus_exact',name:'Customer'},{id:'cus_unlinked',name:'Mesmo nome'}]};}}});
  const subs=await r.get('subscriptions');assert.equal(subs.items[0].id,'sub_exact');const c=await r.get('customers');assert.equal(c.items.find(x=>x.id==='cus_exact').space_students[0].plans[0],'Gold');assert.deepEqual(c.items.find(x=>x.id==='cus_unlinked').space_students,[]);
 });
+test('auth UID reference resolves only when unique across verified Space students',()=>{
+ const src={...source,users:source.users.map((s,i)=>({...s,uid:i?'anotherUid':'authUid'}))};assert.equal(candidates(src,[{id:'cus_uid',externalReference:'authUid'}],[]).accepted[0].student_id,'student1');
+ src.users[1].uid='authUid';assert.equal(candidates(src,[{id:'cus_uid',externalReference:'authUid'}],[]).accepted.length,0);
+});

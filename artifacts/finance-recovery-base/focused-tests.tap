@@ -1,0 +1,40 @@
+TAP version 13
+# Subtest: only explicit identifiers link; names/emails, missing students, conflicts stay unlinked
+ok 1 - only explicit identifiers link; names/emails, missing students, conflicts stay unlinked
+  ---
+  duration_ms: 1.395084
+  type: 'test'
+  ...
+# Subtest: Space enrichment preserves canonical notice and does not fabricate absent owner or lifecycle
+ok 2 - Space enrichment preserves canonical notice and does not fabricate absent owner or lifecycle
+  ---
+  duration_ms: 40.537083
+  type: 'test'
+  ...
+# Subtest: subscription page uses existing lease projection and blocks invalid cursors
+ok 3 - subscription page uses existing lease projection and blocks invalid cursors
+  ---
+  duration_ms: 6.938292
+  type: 'test'
+  ...
+# Subtest: reader uses projected subscriptions and exposes only linked Space profiles
+ok 4 - reader uses projected subscriptions and exposes only linked Space profiles
+  ---
+  duration_ms: 16.279208
+  type: 'test'
+  ...
+# Subtest: auth UID reference resolves only when unique across verified Space students
+ok 5 - auth UID reference resolves only when unique across verified Space students
+  ---
+  duration_ms: 0.3435
+  type: 'test'
+  ...
+1..5
+# tests 5
+# suites 0
+# pass 5
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 126.593458

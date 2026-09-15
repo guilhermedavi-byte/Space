@@ -28,6 +28,6 @@ module.exports=async(req,res)=>{
    }
   }
   const fields={};for(const s of sources.users.filter(space.isStudent))for(const [key,value]of Object.entries(s))if(value!=null&&value!=='')fields[key]=(fields[key]||0)+1;
-  return sendJson(res,200,{customers:customers.length,subscriptions:subscriptions.length,students:sources.users.filter(space.isStudent).length,existing_links:existing.length,eligible:matches.accepted.length,uncertain:matches.uncertain.length,applied,pending:matches.accepted.filter(m=>!existing.some(l=>l.asaas_customer_id===m.customer_id&&l.firestore_doc_id===m.student_id)).length-applied,student_fields:fields,external_reference_exact:matches.accepted.filter(m=>m.sources.includes('asaas_external_reference')).length});
+  return sendJson(res,200,{customers:customers.length,subscriptions:subscriptions.length,students:sources.users.filter(space.isStudent).length,existing_links:existing.length,eligible:matches.accepted.length,uncertain:matches.uncertain.length,applied,pending:matches.accepted.filter(m=>!existing.some(l=>l.asaas_customer_id===m.customer_id&&l.firestore_doc_id===m.student_id)).length-applied,student_fields:fields,customer_references_present:customers.filter(c=>c.externalReference).length,subscription_references_present:subscriptions.filter(c=>c.externalReference).length,external_reference_exact:matches.accepted.filter(m=>m.sources.includes('asaas_external_reference')).length});
  }catch{return sendJson(res,503,{error:'finance_recovery_base_failed'});}
 };
