@@ -121,7 +121,24 @@ function createFinanceFoundation({store=createFinanceStore(),client=createAsaasC
           const localPage=await store.localPaymentIds(scope().connection_id,{offset:page*limit,limit});
           for(const rawId of localPage.ids) {
             const id=externalId(rawId);if(seen.has(id))continue;
-            try {await client.request(`/payments/${encodeURIComponent(id)}`);}
+            try {
+              // Asaas can omit deleted payments from lists while GET still returns
+              // the real object with deleted=true. Compare that evidence as well.
+              const remote=await client.request(`/payments/${encodeURIComponent(id)}`);
+              const snapshot=normalizeResource('payments',remote);
+              if(snapshot.id!==id)throw new FinanceError('finance_snapshot_id_mismatch');
+              const local=await store.rpc('get',{...scope(),resource:'payments',external_object_id:id});
+              const refs=await store.rpc('identity',{...scope(),customer_id:snapshot.customer});
+              const issues=comparePayment(local,snapshot,refs);
+              report.individual_lookups=(report.individual_lookups||0)+1;
+              for(const issue of issues)report.counts[issue]=(report.counts[issue]||0)+1;
+              if(issues.some(i=>i!=='MATCH')) {
+                if(report.issues.length<1000)report.issues.push({external_object_id:id,issues,evidence:'asaas_get_existing_outside_list'});
+                else report.issues_truncated=true;
+              }
+              // This scan observes IDs outside the requested listing/filter; any
+              // repair remains an explicit, individually backed-up operation.
+            }
             catch(error) {
               if(!(error instanceof AsaasError)||error.code!=='asaas_not_found')throw error;
               // A GET 404 is evidence of local-only visibility, not proof of deletion.

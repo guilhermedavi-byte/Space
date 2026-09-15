@@ -39,9 +39,9 @@ test('read-only health and observability never send health telemetry to RPC',asy
 test('reconciliation checks local-only IDs by GET and never deletes or fabricates remote state',async()=>{
  const {AsaasError}=require('../api/_lib/asaas');const writes=[];
  const f=createFinanceFoundation({connectionId:'11111111-1111-4111-8111-111111111111',logger:()=>{},store:{
-  rpc:async(action)=>{if(action==='connection')return{environment:'production',account_reference:'0001:123:4'};writes.push(action);},
+  rpc:async(action)=>{if(action==='connection')return{environment:'production',account_reference:'0001:123:4'};if(action==='get')return {status:'PENDING',provider_status:'PENDING',deleted:false,value:null,due_date:null,snapshot:require('../api/_lib/finance-domain').normalizePayment({id:'pay_outside_window',status:'PENDING'})};if(action==='identity')return ['student'];writes.push(action);},
   localPaymentIds:async()=>({ids:['pay_outside_window','pay_missing'],hasMore:false})
- },client:{checkAsaasConnection:async()=>({environment:'production',account_reference:'0001:123:4'}),pages:async function*(){yield{data:[],nextOffset:0};},request:async(p)=>{if(p.endsWith('pay_missing'))throw new AsaasError('asaas_not_found',404);return{id:'pay_outside_window'};}}});
+ },client:{checkAsaasConnection:async()=>({environment:'production',account_reference:'0001:123:4'}),pages:async function*(){yield{data:[],nextOffset:0};},request:async(p)=>{if(p.endsWith('pay_missing'))throw new AsaasError('asaas_not_found',404);return{id:'pay_outside_window',status:'PENDING'};}}});
  const report=await f.sync({source:'ASAAS_RECONCILIATION',dryRun:true,inspectLocalOnly:true});
  assert.equal(report.counts.LOCAL_ONLY,1);assert.equal(report.local_only_scan,'complete');assert.deepEqual(writes,[]);
  assert.deepEqual(report.issues,[{external_object_id:'pay_missing',issues:['LOCAL_ONLY'],evidence:'asaas_get_404'}]);
