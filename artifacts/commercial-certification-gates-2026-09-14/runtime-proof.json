@@ -1,0 +1,118 @@
+{
+  "comparedCommit": "470a80a",
+  "currentHead": "bb3dad34a9cb3b0293e53031416b038cabc084e3",
+  "files": [
+    {
+      "file": "api/_lib/commercial-time.js",
+      "sha256": "1ed187369e538635dd160b5b2d1f2998594dbbdb19522f81b58746b824d31d09",
+      "existsInDeployedCommit": false,
+      "differsFromDeployedCommit": true,
+      "importsArtifactsOrTests": false
+    },
+    {
+      "file": "api/_lib/commercial-week.js",
+      "sha256": "2cea6218ee0d85436272b02c9d7a32891555b846284ff37f16280ca0e37e98af",
+      "existsInDeployedCommit": true,
+      "differsFromDeployedCommit": true,
+      "importsArtifactsOrTests": false
+    },
+    {
+      "file": "api/_lib/commercial-period.js",
+      "sha256": "e790d0983fad5d1767caa2fff154c2d5a7be53d69551e514095d2e2ac2d03486",
+      "existsInDeployedCommit": true,
+      "differsFromDeployedCommit": true,
+      "importsArtifactsOrTests": false
+    },
+    {
+      "file": "api/_lib/commercial-sales.js",
+      "sha256": "5954d2a5a3f4ae4f00833b9397b09db1287b478cc9569d7a4b1e2ec8009cc8c7",
+      "existsInDeployedCommit": true,
+      "differsFromDeployedCommit": true,
+      "importsArtifactsOrTests": false
+    },
+    {
+      "file": "api/_lib/commercial-reconciliation.js",
+      "sha256": "620d2f099e78501698660177fb1637207bfe05d32f30b3354341ee88458283c3",
+      "existsInDeployedCommit": false,
+      "differsFromDeployedCommit": true,
+      "importsArtifactsOrTests": false
+    },
+    {
+      "file": "api/_lib/commercial-sdr.js",
+      "sha256": "22c99e8106e6e899580e34c22bea03ac20123db1b6a799454104b9d99412e08d",
+      "existsInDeployedCommit": false,
+      "differsFromDeployedCommit": true,
+      "importsArtifactsOrTests": false
+    },
+    {
+      "file": "api/_lib/commercial-goals.js",
+      "sha256": "012b90a6ac76446201effaf81ff76a4a12f86bbdd91757f39a1286e1c831759c",
+      "existsInDeployedCommit": true,
+      "differsFromDeployedCommit": true,
+      "importsArtifactsOrTests": false
+    },
+    {
+      "file": "api/_lib/growth-people.js",
+      "sha256": "bb2a4ee357ce4f9e0ba8f0e41cce03348a74d73809dfdaef708054c43fae6a5a",
+      "existsInDeployedCommit": true,
+      "differsFromDeployedCommit": true,
+      "importsArtifactsOrTests": false
+    },
+    {
+      "file": "api/_lib/crm-live.js",
+      "sha256": "e7122c9d2db3456aca111eff763835a1182b5d92a63077e4bd1aa7f37a429ebe",
+      "existsInDeployedCommit": true,
+      "differsFromDeployedCommit": true,
+      "importsArtifactsOrTests": false
+    },
+    {
+      "file": "api/_lib/crm-snapshot-publish.js",
+      "sha256": "2296f536b014412d9a62e8af80a65b4e6254fda36c9ba1c90e4cdc62467e677c",
+      "existsInDeployedCommit": true,
+      "differsFromDeployedCommit": true,
+      "importsArtifactsOrTests": false
+    },
+    {
+      "file": "api/_lib/crm-snapshot-freshness.js",
+      "sha256": "0311928bd7d4f89e60f901ca5f3be98a2248c246e4fdff872f23e260be8d0ab8",
+      "existsInDeployedCommit": true,
+      "differsFromDeployedCommit": true,
+      "importsArtifactsOrTests": false
+    },
+    {
+      "file": "api/_lib/datacrazy-ingestion.js",
+      "sha256": "d56d088340c0162e8c6c64d031315e56dc802d240303cf448eb34b3c507f167b",
+      "existsInDeployedCommit": true,
+      "differsFromDeployedCommit": true,
+      "importsArtifactsOrTests": false
+    },
+    {
+      "file": "api/_lib/crm-source-snapshot.js",
+      "sha256": "41d6b0f1afd1747fd34099d0624d1ec6ee36d4ce7eb27ba111a8a99920aed62c",
+      "existsInDeployedCommit": true,
+      "differsFromDeployedCommit": true,
+      "importsArtifactsOrTests": false
+    },
+    {
+      "file": "api/_lib/firestore-admin.js",
+      "sha256": "b85233fee8067320b070deb3e757a6a841ed73e631427b22cdc9003041e1f0c2",
+      "existsInDeployedCommit": true,
+      "differsFromDeployedCommit": true,
+      "importsArtifactsOrTests": false
+    },
+    {
+      "file": "api/growth-dashboard.js",
+      "sha256": "622680b6d4bc9ac2a5ec308ab68a74a67c87fd18aa90837b847a1bb85e93e28c",
+      "existsInDeployedCommit": true,
+      "differsFromDeployedCommit": true,
+      "importsArtifactsOrTests": false
+    },
+    {
+      "file": "api/_lib/crm-snapshot-store.js",
+      "sha256": "58ae302033fa57d357afcf58601e01ece88ee72cafbd89b8a7297f9dabeae67a",
+      "existsInDeployedCommit": true,
+      "differsFromDeployedCommit": false,
+      "importsArtifactsOrTests": false
+    }
+  ]
+}

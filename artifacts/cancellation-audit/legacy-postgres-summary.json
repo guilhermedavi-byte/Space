@@ -1,0 +1,164 @@
+{
+  "environment": {
+    "engine": "docker postgres:14-alpine",
+    "containerName": "retention_sql_1789436264671_36609_5b4bcf",
+    "databaseName": "retention_sql_1789436264671_36609_5b4bcf",
+    "appUser": "retention_user_36609",
+    "hostPort": "55721"
+  },
+  "migration": {
+    "firstApply": "ok",
+    "secondApply": "ok",
+    "structure": {
+      "tables": 17,
+      "functions": 11,
+      "triggers": 8,
+      "indexes": 33,
+      "rls_enabled": true
+    }
+  },
+  "scenarios": [
+    {
+      "name": "seed entities",
+      "status": "ok"
+    },
+    {
+      "name": "retention_provision_subject idempotente",
+      "status": "ok"
+    },
+    {
+      "name": "retention_provision_subject rollback transacional",
+      "status": "ok"
+    },
+    {
+      "name": "register_preventive_intent",
+      "status": "ok"
+    },
+    {
+      "name": "register_formal_request + scheduled_service_end_at",
+      "status": "ok",
+      "caseId": "8178fb42-344c-4706-a99c-80d2c565c4f6"
+    },
+    {
+      "name": "retry mesma chave",
+      "status": "ok"
+    },
+    {
+      "name": "mesma chave com payload diferente",
+      "status": "ok"
+    },
+    {
+      "name": "optimistic locking com versão antiga",
+      "status": "ok"
+    },
+    {
+      "name": "register_contact",
+      "status": "ok"
+    },
+    {
+      "name": "mark_awaiting_customer",
+      "status": "ok"
+    },
+    {
+      "name": "confirmação de continuidade",
+      "status": "ok"
+    },
+    {
+      "name": "coexistência cancellation_scheduled + paused_billable",
+      "status": "ok"
+    },
+    {
+      "name": "resume_lessons",
+      "status": "ok"
+    },
+    {
+      "name": "coexistência cancellation_scheduled + paused_non_billable",
+      "status": "ok"
+    },
+    {
+      "name": "retract_cancellation preservando pause status",
+      "status": "ok"
+    },
+    {
+      "name": "churn antes da data é recusado",
+      "status": "ok"
+    },
+    {
+      "name": "churn na data correta + caso lost",
+      "status": "ok"
+    },
+    {
+      "name": "reativação depois do churn",
+      "status": "ok"
+    },
+    {
+      "name": "delinquency_started",
+      "status": "ok"
+    },
+    {
+      "name": "delinquency_recovered",
+      "status": "ok"
+    },
+    {
+      "name": "rebuild por eventos",
+      "status": "ok",
+      "timelineEvents": 5
+    },
+    {
+      "name": "importação dry-run sem escrita",
+      "status": "ok"
+    },
+    {
+      "name": "importação real controlada",
+      "status": "ok"
+    },
+    {
+      "name": "repetição da importação sem duplicação",
+      "status": "ok"
+    },
+    {
+      "name": "churn job em lote executado duas vezes",
+      "status": "ok"
+    },
+    {
+      "name": "tentativa de alterar evento append-only",
+      "status": "ok"
+    },
+    {
+      "name": "tentativa de apagar evento append-only",
+      "status": "ok"
+    },
+    {
+      "name": "chamada sem role autorizada",
+      "status": "ok"
+    },
+    {
+      "name": "chamada com capability/role insuficiente no banco",
+      "status": "ok"
+    },
+    {
+      "name": "falha intermediária sem persistência parcial",
+      "status": "ok"
+    }
+  ],
+  "reconciliation": {
+    "subscriptions": 6,
+    "retention_cases": 5,
+    "retention_events": 16,
+    "subscription_status_history": 6,
+    "pause_status_history": 3,
+    "financial_status_history": 2,
+    "audit_logs": 15,
+    "outbox_events": 15,
+    "duplicate_events": 0,
+    "conflicting_formal_cases": 0,
+    "orphan_case_students": 0,
+    "orphan_case_subscriptions": 0,
+    "case_version_mismatch": 0,
+    "rebuild_matches_materialized": true,
+    "rebuild_mismatches": []
+  },
+  "cleanup": {
+    "removed": true
+  }
+}

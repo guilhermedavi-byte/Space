@@ -14,19 +14,30 @@ const getSupabaseConfig = () => {
 
 const supabaseFetch = async (path, { method = "GET", headers = {}, body } = {}) => {
   const { url, key } = getSupabaseConfig();
-  const res = await fetch(`${url}/rest/v1${path}`, {
-    method,
-    headers: {
-      apikey: key,
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
-      Prefer: "return=representation",
-      ...headers,
-    },
-    body: body == null ? undefined : JSON.stringify(body),
-  });
+  let res;
+  try {
+    res = await fetch(`${url}/rest/v1${path}`, {
+      method,
+      // A redirect could forward the custom apikey header to a different origin.
+      redirect: "error",
+      headers: {
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+        Prefer: "return=representation",
+        ...headers,
+      },
+      body: body == null ? undefined : JSON.stringify(body),
+    });
+  } catch {
+    // Transport errors may include request headers/URLs. Never propagate their cause.
+    const error = new Error("supabase_transport_failed");
+    error.code = "supabase_transport_failed";
+    throw error;
+  }
 
-  const text = await res.text().catch(() => "");
+  // Sanitize before parsing, including successful responses and nested error payloads.
+  const text = (await res.text().catch(() => "")).split(key).join("[REDACTED]");
   let data = null;
   if (text) {
     try {
@@ -35,6 +46,14 @@ const supabaseFetch = async (path, { method = "GET", headers = {}, body } = {}) 
       data = text;
     }
   }
+  // JSON escapes can conceal the key in the raw response. Redact decoded values/keys too.
+  const redact = (value) => {
+    if (typeof value === "string") return value.split(key).join("[REDACTED]");
+    if (Array.isArray(value)) return value.map(redact);
+    if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([name, item]) => [redact(name), redact(item)]));
+    return value;
+  };
+  data = redact(data);
 
   if (!res.ok) {
     const error = new Error("supabase_request_failed");

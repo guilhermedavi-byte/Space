@@ -7,7 +7,8 @@ const { buildGrowthPeopleIndexes, resolveCloserBucketForBusiness, resolveWeeklyG
 const money = n => Math.round((n + Number.EPSILON) * 100) / 100;
 const sum = rows => money(rows.reduce((s,r) => s+r.value,0));
 const canonicalKeys = ['value','dateKey','dateField','weekKey','competencia','status','responsibleId','role'];
-function compareDealLedgers(expected, observed) {
+const attributionKeys = ['sourceResponsibleId','sourceSdrId','resolvedPersonId','closingDate'];
+function compareDealLedgers(expected, observed, {fields=canonicalKeys, attribution=true}={}) {
   if (!Array.isArray(observed)) return { available:false, pass:false, differences:[], snapshot_reconciliation_rate:null, snapshot_delta:null };
   const exp = new Map(expected.map(r=>[r.id,r])), actual = new Map(), differences=[];
   for (const r of observed) { if(actual.has(r.id)) differences.push({id:r.id,type:'duplicate_deal',value:r.value}); else actual.set(r.id,r); }
@@ -15,10 +16,11 @@ function compareDealLedgers(expected, observed) {
   for (const [id,e] of exp) {
     const a=actual.get(id);
     if(!a){differences.push({id,type:'missing_deal',expected:e});continue;}
-    const fields=canonicalKeys.filter(k=>a[k]===undefined);
-    if(fields.length) differences.push({id,type:'unverifiable_fields',fields});
-    let same=!fields.length;
-    for(const key of canonicalKeys) if(a[key]!==undefined && e[key]!==a[key]) {same=false;differences.push({id,type:key==='weekKey'?'wrong_week':`${key}_difference`,expected:e[key],actual:a[key]});}
+    const keys=[...fields,...(attribution?attributionKeys.filter(k=>e[k]!==undefined):[])];
+    const missingFields=keys.filter(k=>a[k]===undefined);
+    if(missingFields.length) differences.push({id,type:'unverifiable_fields',fields:missingFields});
+    let same=!missingFields.length;
+    for(const key of keys) if(a[key]!==undefined && e[key]!==a[key]) {same=false;differences.push({id,type:key==='weekKey'?'wrong_week':`${key}_difference`,expected:e[key],actual:a[key]});}
     if(same && !differences.some(d=>d.id===id && d.type==='duplicate_deal')) matched.add(id);
   }
   for(const [id,a] of actual)if(!exp.has(id))differences.push({id,type:'unexpected_deal',actual:a});
@@ -69,6 +71,7 @@ function buildCommercialLedger({competencia,goal,globalConfig=null,people=[],bus
   const weeklyTotal=money(weekly.reduce((s,w)=>s+w.actualValue,0));
   return {competencia,period,rows,weekly,excluded:sales.excluded,sourceDuplicates,
     metrics:{monthly_realized:sales.actualValue,weekly_realized:weeklyTotal,monthly_weekly_delta:money(sales.actualValue-weeklyTotal),
+      unverified_revenue_dates:rows.filter(r=>['lastMovedAt','stageChangedAt','finishedAt'].includes(r.dateField)).length,
       invalid_financial_deals:sales.excluded.filter(r=>r.reason==='missing_business_id'||r.reason==='missing_closing_date').length,
       deals:rows.length,overlapping_periods:overlaps,improper_gaps:gaps,orphan_deals:unallocated.length,
       unallocated_revenue:sum(unallocated),duplicate_attribution_revenue:sum(multiple),duplicate_attributions:multiple.length,

@@ -7,6 +7,44 @@ const { describeSnapshot } = require('../api/_lib/crm-snapshot-freshness');
 const { auditSource } = require('../api/_lib/crm-source-audit');
 const { buildWeeklyGoalsReadModel } = require('../api/_lib/growth-people');
 const silent = () => {};
+test('gate 11: pages 1/2 OK, page 3 exhausts 429; recovery publishes one atomic canonical payload', async()=>{
+  const {buildCommercialLedger}=require('../api/_lib/commercial-reconciliation');
+  const store=memoryStore(),commits=[];
+  const commit=store.commit.bind(store);
+  store.commit=async entries=>{commits.push(entries.map(e=>e.path));return commit(entries);};
+  const calculate=source=>{
+    const ledger=buildCommercialLedger({competencia:'2026-09',businesses:source.businesses,periodOverride:require('../api/_lib/commercial-week').resolveCommercialWeek({now:'2026-09-14'})});
+    const weekly=buildWeeklyGoalsReadModel({businesses:source.businesses,now:new Date('2026-09-14T12:00:00-03:00')});
+    return {snapshot:{...source.metadata,status:'VALID',snapshotId:'recovered',sourceSnapshotId:source.metadata.snapshotId,calculationVersion:4,calculationCompleted:true,recordsEligible:ledger.rows.length,calculatedAt:new Date().toISOString(),includedDeals:ledger.rows,monthlyIncludedDeals:ledger.rows,reconciliation:{month:ledger.metrics,week:ledger.metrics}},
+      weekly:{team:{closers:{actualValue:ledger.metrics.monthly_realized,count:ledger.rows.length}},closers:weekly.progress.closers},
+      month:{summary:{realizado:ledger.metrics.monthly_realized,totalVendas:ledger.rows.length}}};
+  };
+  const first=harness([response(200,{items:[deal('old')],total:1})]);
+  const old=await createSourceService({store,collect:first.run,clock:first.clock,logger:silent}).get();
+  const original=calculate(old);original.snapshot.snapshotId='original';
+  await publishCrmSnapshot(original,{store,logger:silent});
+  const before=await store.read('crmLiveCache/crm');
+  first.advance(301000);
+  const page1=response(200,{items:[deal('a'),deal('b')],total:5});
+  const page2=response(200,{items:[deal('c'),deal('d')],total:5});
+  const failed=harness([page1,page2,...Array.from({length:5},()=>response(429,{},'1'))]);
+  await assert.rejects(runCrmSnapshot(async()=>calculate(await createSourceService({store,collect:failed.run,clock:first.clock,logger:silent}).get({allowStale:false})),{store,logger:silent}));
+  assert.equal(failed.calls.length,7);
+  assert.equal(new Set(failed.calls.slice(2)).size,1);
+  assert.equal((await store.read(STATE_PATH)).data.lastAttempt.status,'FAILED');
+  assert.deepEqual(await store.read('crmLiveCache/crm'),before);
+  first.advance(301000);
+  const recovered=harness([page1,page2,response(200,{items:[deal('e')],total:5})]);
+  const source=await createSourceService({store,collect:recovered.run,clock:first.clock,logger:silent}).get({allowStale:false});
+  assert.equal(source.metadata.pagesFetched,3);assert.equal(source.metadata.expectedPages,3);
+  const countBefore=commits.filter(c=>c.includes('crmLiveCache/crm')).length;
+  await publishCrmSnapshot(calculate(source),{store,logger:silent});
+  const publications=commits.filter(c=>c.includes('crmLiveCache/crm'));
+  assert.equal(publications.length,countBefore+1);
+  assert.ok(publications.at(-1).includes('crmLiveSnapshots/recovered'));
+  assert.equal((await store.read('crmLiveCache/crm')).data.payload.weekly.team.closers.actualValue,210);
+  assert.equal((await store.read('crmLiveCache/crm')).data.payload.snapshot.includedDeals.length,5);
+});
 const deal = (id, value = 42) => ({ id, total: value, status: 'won', stage: { name: 'Fechado', pipeline: { name: 'Conversão' } }, lastMovedAt: '2026-09-08T20:00:00-03:00', statusChangedAt: '2026-09-09T00:00:00-03:00', attendant: { id: 'sdr-a', name: 'SDR A' } });
 const response = (status, data, after = '') => ({ status, ok: status === 200, headers: { get: () => after }, json: async () => data });
 const harness = (responses, options = {}) => {
@@ -28,7 +66,7 @@ function memoryStore() {
 }
 const metricPayload = (metadata, id = 'snapshot-a') => {
   const rows=[{id:'a',value:42,dateKey:'2026-09-09',dateField:'statusChangedAt',weekKey:'wk_2026-09-09',competencia:'2026-09',status:'Fechado',responsibleId:'a',role:'closer'}];
-  const metrics={monthly_weekly_delta:0,overlapping_periods:0,improper_gaps:0,orphan_deals:0,unallocated_revenue:0,duplicate_attribution_revenue:0,estimated_value_deals:0,invalid_financial_deals:0};
+  const metrics={monthly_weekly_delta:0,overlapping_periods:0,improper_gaps:0,orphan_deals:0,unallocated_revenue:0,duplicate_attribution_revenue:0,estimated_value_deals:0,invalid_financial_deals:0,unverified_revenue_dates:0};
   return { snapshot: { ...metadata, snapshotId: id, status: 'VALID', sourceSnapshotId: metadata.snapshotId, calculationVersion: 4, calculationCompleted: true, calculatedAt: new Date().toISOString(), recordsEligible: 1, includedDeals:rows, monthlyIncludedDeals:rows, reconciliation:{month:metrics,week:metrics} }, weekly: { team: { closers: { actualValue: 42, count: 1 } }, closers: [{ personId: 'a', actualValue: 42, count: 1 }] }, month: { summary: { realizado: 42, totalVendas: 1 } } };
 };
 

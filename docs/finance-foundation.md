@@ -4,6 +4,8 @@
 **Especificação:** [auditoria financeira](finance-architecture-audit.md).  
 **Estado:** implementação e integração local verificadas; **homologação Asaas sandbox pendente de credenciais**. Não está liberada para produção nem certificada como base pronta para a Fase 1.
 
+**Homologação posterior:** consultar [relatório de certificação](finance-foundation-certification.md). A CLI recebeu os controles adicionais descritos abaixo; a ausência de ambiente comprovado mantém o resultado NO-GO.
+
 ## 1. Escopo entregue e decisão de schema
 
 Implementamos cliente Asaas centralizado, health server-side, inbox durável, processador, projeções de cobranças/pagamentos/customers/assinaturas, vínculos explícitos de alunos, backfill, reconciliação manual, repair por ID, auditoria e retry. A UI Financeiro, sidebar, Firestore, Chatwoot e automações não foram alterados.
@@ -247,10 +249,16 @@ Na Fase 1, a UI deve consultar a projeção nova. Na Fase 2, substituir as muta�
 | SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY | REST/RPC do banco alvo, server-side |
 | SPACE_STAGING_SUPABASE_URL | Referência explícita obrigatória para apply da CLI; deve coincidir com SUPABASE_URL |
 | SPACE_PRODUCTION_SUPABASE_URL | Referência de produção usada para impedir alvo indevido |
+| FINANCE_STAGING_PROJECT_REF | Ref staging previamente aprovada em config/finance-staging-targets.json |
+| SPACE_PRODUCTION_PUBLIC_BASE_URL | Origem de produção conhecida, conferida contra a política aprovada |
+| FINANCE_SANDBOX_WEBHOOK_URL | Endpoint exato de webhook no domínio staging aprovado |
+| FINANCE_STAGING_APPLY | YES explícito, além de --apply e --actor, para operações que gravam |
 | APP_ENV, SPACE_APP_ENV, ASAAS_KEY_SCOPE e configuração Firebase staging | Contrato de isolamento já existente da plataforma |
 | SPACE_PUBLIC_BASE_URL / SPACE_AUTH_SECRET | Sessão/origin para a API administrativa |
 
 A CLI **não carrega `.env.local` automaticamente**. Use arquivo privado ignorado e `node --env-file=...`; nunca coloque secret no comando/README/log. Template em `scripts/finance-sandbox.env.example`. Validadores de staging do projeto também exigem Firebase staging separado, mesmo que o fluxo não escreva Firestore.
+
+Todas as operações da CLI, inclusive health/dry-run, agora exigem alvo e domínio em allowlist independente, APP_ENV/SUPABASE_ENV_SCOPE=staging, ASAAS_KEY_SCOPE=sandbox e hashes das credenciais previamente revisados. A allowlist começa vazia, sem autorização implícita. Preflight é offline e não certifica o deploy. Health com FINANCE_CONNECTION_ID grava telemetria: exige --apply, --actor e FINANCE_STAGING_APPLY=YES. Sem connection ID, o health remoto é somente leitura, mas também exige a configuração sandbox aprovada. O health interno do cliente continua disponível para testes de ausência de configuração.
 
 ### Sequência de ativação em sandbox
 
@@ -262,6 +270,7 @@ A CLI **não carrega `.env.local` automaticamente**. Use arquivo privado ignorad
 6. Validar os cenários da seção 14 antes de qualquer rollout de produção.
 
 ```sh
+node --env-file=.env.finance-sandbox scripts/finance-foundation.js preflight
 node --env-file=.env.finance-sandbox scripts/finance-foundation.js health
 node --env-file=.env.finance-sandbox scripts/finance-foundation.js init --apply --actor operador-uid
 node --env-file=.env.finance-sandbox scripts/finance-foundation.js backfill --dry-run
@@ -278,6 +287,8 @@ node --env-file=.env.finance-sandbox scripts/finance-foundation.js link-customer
 ```
 
 Substituir parâmetros em maiúsculas pelos IDs reais **do teste sandbox**. Apply exige ator e é rejeitado se Asaas não for sandbox ou se banco não coincidir com referência staging. Não existe flag de bypass para apply de produção nesta CLI. Dry-run e apply simultâneos são inválidos.
+
+Antes da sequência, revisar e preencher a allowlist com evidência administrativa independente de ref/domínio/credenciais staging; não copiar hashes do arquivo alvo e tratar isso como prova. FINANCE_STAGING_APPLY deve ser habilitada explicitamente pelo operador somente para a operação aprovada. Após init, usar `health --apply --actor operador-uid` para persistir o diagnóstico da conexão.
 
 Paginação: `--offset N`, `--max-pages N`, `--resource payments|customers|subscriptions`. Retomar último offset concluído do run failed, ou reiniciar integralmente. Além de due-from/to há created-from/to e status. Não filtrar customer/subscription com filtros não documentados para aquele recurso.
 

@@ -1,0 +1,304 @@
+TAP version 13
+# Subtest: legacy movement date remains explicit and cannot pass financial certification
+ok 1 - legacy movement date remains explicit and cannot pass financial certification
+  ---
+  duration_ms: 9.5545
+  type: 'test'
+  ...
+# Subtest: SDR evidence missing origin or event timestamp stays not_loaded
+ok 2 - SDR evidence missing origin or event timestamp stays not_loaded
+  ---
+  duration_ms: 0.38625
+  type: 'test'
+  ...
+# Subtest: stored 8385 is mechanically classified STALE against 12646
+ok 3 - stored 8385 is mechanically classified STALE against 12646
+  ---
+  duration_ms: 0.425333
+  type: 'test'
+  ...
+# Subtest: SDR not_loaded does not produce financial zero
+ok 4 - SDR not_loaded does not produce financial zero
+  ---
+  duration_ms: 0.610458
+  type: 'test'
+  ...
+# Subtest: SDR source_error does not produce financial zero
+ok 5 - SDR source_error does not produce financial zero
+  ---
+  duration_ms: 0.220125
+  type: 'test'
+  ...
+# Subtest: SDR explicit no attribution, zero sale and wrong origin are distinct
+ok 6 - SDR explicit no attribution, zero sale and wrong origin are distinct
+  ---
+  duration_ms: 0.189542
+  type: 'test'
+  ...
+# Subtest: closed deals without identity or closing date cannot be certified as zero
+ok 7 - closed deals without identity or closing date cannot be certified as zero
+  ---
+  duration_ms: 0.541334
+  type: 'test'
+  ...
+# Subtest: cross-month weekly ledger preserves each real competence
+ok 8 - cross-month weekly ledger preserves each real competence
+  ---
+  duration_ms: 2.277708
+  type: 'test'
+  ...
+# Subtest: half-open boundary first
+ok 9 - half-open boundary first
+  ---
+  duration_ms: 1.544042
+  type: 'test'
+  ...
+# Subtest: half-open boundary last
+ok 10 - half-open boundary last
+  ---
+  duration_ms: 1.068916
+  type: 'test'
+  ...
+# Subtest: half-open boundary next
+ok 11 - half-open boundary next
+  ---
+  duration_ms: 0.453083
+  type: 'test'
+  ...
+# Subtest: half-open boundary august-before
+ok 12 - half-open boundary august-before
+  ---
+  duration_ms: 0.694541
+  type: 'test'
+  ...
+# Subtest: half-open boundary august-special
+ok 13 - half-open boundary august-special
+  ---
+  duration_ms: 0.164125
+  type: 'test'
+  ...
+# Subtest: half-open boundary special-last
+ok 14 - half-open boundary special-last
+  ---
+  duration_ms: 0.059
+  type: 'test'
+  ...
+# Subtest: half-open boundary special-next
+ok 15 - half-open boundary special-next
+  ---
+  duration_ms: 0.057834
+  type: 'test'
+  ...
+# Subtest: half-open boundary year
+ok 16 - half-open boundary year
+  ---
+  duration_ms: 0.217166
+  type: 'test'
+  ...
+# Subtest: partition has no overlaps/gaps 2025-02
+ok 17 - partition has no overlaps/gaps 2025-02
+  ---
+  duration_ms: 21.950167
+  type: 'test'
+  ...
+# Subtest: partition has no overlaps/gaps 2024-02
+ok 18 - partition has no overlaps/gaps 2024-02
+  ---
+  duration_ms: 18.464875
+  type: 'test'
+  ...
+# Subtest: partition has no overlaps/gaps 2026-04
+ok 19 - partition has no overlaps/gaps 2026-04
+  ---
+  duration_ms: 19.390917
+  type: 'test'
+  ...
+# Subtest: partition has no overlaps/gaps 2026-07
+ok 20 - partition has no overlaps/gaps 2026-07
+  ---
+  duration_ms: 19.1395
+  type: 'test'
+  ...
+# Subtest: partition has no overlaps/gaps 2026-08
+ok 21 - partition has no overlaps/gaps 2026-08
+  ---
+  duration_ms: 18.857667
+  type: 'test'
+  ...
+# Subtest: partition has no overlaps/gaps 2026-12
+ok 22 - partition has no overlaps/gaps 2026-12
+  ---
+  duration_ms: 22.967416
+  type: 'test'
+  ...
+# Subtest: host timezone cannot change commercial date, month, or week
+ok 23 - host timezone cannot change commercial date, month, or week
+  ---
+  duration_ms: 198.591708
+  type: 'test'
+  ...
+# Subtest: date-only values mean Sao Paulo civil date, invalid/ambiguous dates fail
+ok 24 - date-only values mean Sao Paulo civil date, invalid/ambiguous dates fail
+  ---
+  duration_ms: 0.079708
+  type: 'test'
+  ...
+# Subtest: historical DST midnight gap resolves to first real instant
+ok 25 - historical DST midnight gap resolves to first real instant
+  ---
+  duration_ms: 0.175208
+  type: 'test'
+  ...
+# Subtest: created in May and gained at new-week midnight belongs to September
+ok 26 - created in May and gained at new-week midnight belongs to September
+  ---
+  duration_ms: 0.492833
+  type: 'test'
+  ...
+# Subtest: explicit zero remains zero and counts one sale, not a fallback ticket
+ok 27 - explicit zero remains zero and counts one sale, not a fallback ticket
+  ---
+  duration_ms: 0.090875
+  type: 'test'
+  ...
+# Subtest: identical deal IDs counted once; conflicting financial facts reject
+ok 28 - identical deal IDs counted once; conflicting financial facts reject
+  ---
+  duration_ms: 0.323541
+  type: 'test'
+  ...
+# Subtest: revenue preserved in Outros: inactive
+ok 29 - revenue preserved in Outros: inactive
+  ---
+  duration_ms: 0.997166
+  type: 'test'
+  ...
+# Subtest: revenue preserved in Outros: removed
+ok 30 - revenue preserved in Outros: removed
+  ---
+  duration_ms: 0.344417
+  type: 'test'
+  ...
+# Subtest: revenue preserved in Outros: changed-role
+ok 31 - revenue preserved in Outros: changed-role
+  ---
+  duration_ms: 0.528125
+  type: 'test'
+  ...
+# Subtest: revenue preserved in Outros: missing-owner
+ok 32 - revenue preserved in Outros: missing-owner
+  ---
+  duration_ms: 0.475
+  type: 'test'
+  ...
+# Subtest: revenue preserved in Outros: SDR
+ok 33 - revenue preserved in Outros: SDR
+  ---
+  duration_ms: 0.511208
+  type: 'test'
+  ...
+# Subtest: historical explicit closer role overrides current SDR role
+ok 34 - historical explicit closer role overrides current SDR role
+  ---
+  duration_ms: 0.488209
+  type: 'test'
+  ...
+# Subtest: monthly = clipped weekly partitions, including days from adjacent planning weeks
+ok 35 - monthly = clipped weekly partitions, including days from adjacent planning weeks
+  ---
+  duration_ms: 0.705958
+  type: 'test'
+  ...
+# Subtest: overlapping custom competences are detected, never silently double-assigned
+ok 36 - overlapping custom competences are detected, never silently double-assigned
+  ---
+  duration_ms: 0.235125
+  type: 'test'
+  ...
+# Subtest: monthly and weekly CRM helpers reconcile to management and financial ledger
+ok 37 - monthly and weekly CRM helpers reconcile to management and financial ledger
+  ---
+  duration_ms: 3.16375
+  type: 'test'
+  ...
+# Subtest: deal-level reconciliation detects value drift
+ok 38 - deal-level reconciliation detects value drift
+  ---
+  duration_ms: 0.087125
+  type: 'test'
+  ...
+# Subtest: deal-level reconciliation detects dateKey drift
+ok 39 - deal-level reconciliation detects dateKey drift
+  ---
+  duration_ms: 0.040542
+  type: 'test'
+  ...
+# Subtest: deal-level reconciliation detects dateField drift
+ok 40 - deal-level reconciliation detects dateField drift
+  ---
+  duration_ms: 0.034333
+  type: 'test'
+  ...
+# Subtest: deal-level reconciliation detects weekKey drift
+ok 41 - deal-level reconciliation detects weekKey drift
+  ---
+  duration_ms: 0.1815
+  type: 'test'
+  ...
+# Subtest: deal-level reconciliation detects competencia drift
+ok 42 - deal-level reconciliation detects competencia drift
+  ---
+  duration_ms: 0.0465
+  type: 'test'
+  ...
+# Subtest: deal-level reconciliation detects status drift
+ok 43 - deal-level reconciliation detects status drift
+  ---
+  duration_ms: 0.032791
+  type: 'test'
+  ...
+# Subtest: deal-level reconciliation detects responsibleId drift
+ok 44 - deal-level reconciliation detects responsibleId drift
+  ---
+  duration_ms: 0.030042
+  type: 'test'
+  ...
+# Subtest: deal-level reconciliation detects role drift
+ok 45 - deal-level reconciliation detects role drift
+  ---
+  duration_ms: 0.027625
+  type: 'test'
+  ...
+# Subtest: same aggregate does not hide exchanged, duplicate or missing deals
+ok 46 - same aggregate does not hide exchanged, duplicate or missing deals
+  ---
+  duration_ms: 0.087084
+  type: 'test'
+  ...
+# Subtest: SDR events: identity, duplicate, deletion, wrong outcome, missing actor all explicit
+ok 47 - SDR events: identity, duplicate, deletion, wrong outcome, missing actor all explicit
+  ---
+  duration_ms: 0.301667
+  type: 'test'
+  ...
+# Subtest: readOnly source path cannot acquire lease, collect, or publish
+ok 48 - readOnly source path cannot acquire lease, collect, or publish
+  ---
+  duration_ms: 0.365792
+  type: 'test'
+  ...
+# Subtest: publication requires per-deal ledger even when team totals match
+ok 49 - publication requires per-deal ledger even when team totals match
+  ---
+  duration_ms: 0.158958
+  type: 'test'
+  ...
+1..49
+# tests 49
+# suites 0
+# pass 49
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 438.600667

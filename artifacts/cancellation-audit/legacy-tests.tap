@@ -1,0 +1,295 @@
+TAP version 13
+# Subtest: efetivação de cancelamento usa writeBatch para aluno e cascata Firestore
+ok 1 - efetivação de cancelamento usa writeBatch para aluno e cascata Firestore
+  ---
+  duration_ms: 1.971459
+  type: 'test'
+  ...
+# Subtest: sync Supabase acontece somente depois da confirmação Firestore
+ok 2 - sync Supabase acontece somente depois da confirmação Firestore
+  ---
+  duration_ms: 0.411708
+  type: 'test'
+  ...
+# Subtest: backend local conversa com PostgREST descartável e respeita gates/segurança
+ok 3 - backend local conversa com PostgREST descartável e respeita gates/segurança # SKIP
+  ---
+  duration_ms: 1.441792
+  type: 'test'
+  ...
+# [retention] command failed { code: 'idempotency_key_payload_mismatch' }
+# Subtest: GET queues retorna fonte nova e filas serializadas
+ok 4 - GET queues retorna fonte nova e filas serializadas
+  ---
+  duration_ms: 11.404333
+  type: 'test'
+  ...
+# Subtest: GET fica bloqueado quando retention v2 está desligada
+ok 5 - GET fica bloqueado quando retention v2 está desligada
+  ---
+  duration_ms: 0.787958
+  type: 'test'
+  ...
+# Subtest: POST bloqueia usuário sem capability
+ok 6 - POST bloqueia usuário sem capability
+  ---
+  duration_ms: 0.388333
+  type: 'test'
+  ...
+# Subtest: POST fica bloqueado quando retention v2 está desligada
+ok 7 - POST fica bloqueado quando retention v2 está desligada
+  ---
+  duration_ms: 0.244166
+  type: 'test'
+  ...
+# Subtest: POST exige justificativa em churn manual administrativo
+ok 8 - POST exige justificativa em churn manual administrativo
+  ---
+  duration_ms: 0.437208
+  type: 'test'
+  ...
+# Subtest: POST bloqueia churn involuntário quando a flag está desligada
+ok 9 - POST bloqueia churn involuntário quando a flag está desligada
+  ---
+  duration_ms: 0.239625
+  type: 'test'
+  ...
+# Subtest: POST crítico exige admin mesmo com capability ampla
+ok 10 - POST crítico exige admin mesmo com capability ampla
+  ---
+  duration_ms: 0.252834
+  type: 'test'
+  ...
+# Subtest: POST resolve student/subscription a partir do firestore_student_id
+ok 11 - POST resolve student/subscription a partir do firestore_student_id
+  ---
+  duration_ms: 6.193792
+  type: 'test'
+  ...
+# Subtest: POST exige requested_at saneado no pedido formal
+ok 12 - POST exige requested_at saneado no pedido formal
+  ---
+  duration_ms: 1.241959
+  type: 'test'
+  ...
+# Subtest: POST traduz mismatch de idempotência em conflito controlado
+ok 13 - POST traduz mismatch de idempotência em conflito controlado
+  ---
+  duration_ms: 2.310167
+  type: 'test'
+  ...
+# Subtest: job recusa execução sem segredo configurado
+ok 14 - job recusa execução sem segredo configurado
+  ---
+  duration_ms: 3.394417
+  type: 'test'
+  ...
+# Subtest: job exige segredo correto e respeita flag
+ok 15 - job exige segredo correto e respeita flag
+  ---
+  duration_ms: 2.76075
+  type: 'test'
+  ...
+# Subtest: job executa com segredo válido
+ok 16 - job executa com segredo válido
+  ---
+  duration_ms: 0.474209
+  type: 'test'
+  ...
+# Subtest: pedido dentro de 7 dias da primeira aula encerra em 1 mês da primeira aula
+ok 17 - pedido dentro de 7 dias da primeira aula encerra em 1 mês da primeira aula
+  ---
+  duration_ms: 3.257333
+  type: 'test'
+  ...
+# Subtest: pedido fora da janela inicial encerra em 2 meses do pedido
+ok 18 - pedido fora da janela inicial encerra em 2 meses do pedido
+  ---
+  duration_ms: 0.941209
+  type: 'test'
+  ...
+# Subtest: command payload preserva retry idempotente e aceita resolução por firestore_student_id
+ok 19 - command payload preserva retry idempotente e aceita resolução por firestore_student_id
+  ---
+  duration_ms: 0.6615
+  type: 'test'
+  ...
+# Subtest: command payload saneia campos e bloqueia mass assignment fora do comando
+ok 20 - command payload saneia campos e bloqueia mass assignment fora do comando
+  ---
+  duration_ms: 0.57625
+  type: 'test'
+  ...
+# Subtest: queues exibem financeiro indisponível sem forçar R$ 0,00
+ok 21 - queues exibem financeiro indisponível sem forçar R$ 0,00
+  ---
+  duration_ms: 0.326584
+  type: 'test'
+  ...
+# Subtest: queues mapeiam caso perdido como desfecho lost
+ok 22 - queues mapeiam caso perdido como desfecho lost
+  ---
+  duration_ms: 0.08825
+  type: 'test'
+  ...
+# Subtest: override administrativo exige justificativa nos comandos críticos
+ok 23 - override administrativo exige justificativa nos comandos críticos
+  ---
+  duration_ms: 0.129584
+  type: 'test'
+  ...
+# Subtest: comandos críticos ficam restritos a admin
+ok 24 - comandos críticos ficam restritos a admin
+  ---
+  duration_ms: 0.066834
+  type: 'test'
+  ...
+# Subtest: projeção pode ser reconstruída a partir do histórico append-only
+ok 25 - projeção pode ser reconstruída a partir do histórico append-only
+  ---
+  duration_ms: 0.974125
+  type: 'test'
+  ...
+# Subtest: awaiting_customer preserva a data final já programada
+ok 26 - awaiting_customer preserva a data final já programada
+  ---
+  duration_ms: 1.097125
+  type: 'test'
+  ...
+# Subtest: continuidade confirmada devolve o caso para scheduled
+ok 27 - continuidade confirmada devolve o caso para scheduled
+  ---
+  duration_ms: 0.447959
+  type: 'test'
+  ...
+# Subtest: delinquency_recovered retorna o financeiro para current
+ok 28 - delinquency_recovered retorna o financeiro para current
+  ---
+  duration_ms: 0.102792
+  type: 'test'
+  ...
+# Subtest: delinquency_started leva o financeiro para delinquent
+ok 29 - delinquency_started leva o financeiro para delinquent
+  ---
+  duration_ms: 0.075875
+  type: 'test'
+  ...
+# Subtest: legacy_import com state_after semeia a projeção reconstruída
+ok 30 - legacy_import com state_after semeia a projeção reconstruída
+  ---
+  duration_ms: 0.071875
+  type: 'test'
+  ...
+# Subtest: sanitizePayloadByCommand ignora campos técnicos fora do contrato
+ok 31 - sanitizePayloadByCommand ignora campos técnicos fora do contrato
+  ---
+  duration_ms: 0.128792
+  type: 'test'
+  ...
+# Subtest: importador permanece bloqueado com flag desligada
+ok 32 - importador permanece bloqueado com flag desligada
+  ---
+  duration_ms: 2.149958
+  type: 'test'
+  ...
+# Subtest: dryRun não dispara importação real
+ok 33 - dryRun não dispara importação real
+  ---
+  duration_ms: 0.461292
+  type: 'test'
+  ...
+# Subtest: importação real exige confirmação explícita
+ok 34 - importação real exige confirmação explícita
+  ---
+  duration_ms: 0.387625
+  type: 'test'
+  ...
+# Subtest: importador legado gera dry-run idempotente sem duplicar o snapshot
+ok 35 - importador legado gera dry-run idempotente sem duplicar o snapshot
+  ---
+  duration_ms: 13.481292
+  type: 'test'
+  ...
+# Subtest: cancelamento efetivado entra como caso legado encerrado
+ok 36 - cancelamento efetivado entra como caso legado encerrado
+  ---
+  duration_ms: 0.228208
+  type: 'test'
+  ...
+# Subtest: taxa de reversão usa casos fechados no mês como denominador
+ok 37 - taxa de reversão usa casos fechados no mês como denominador
+  ---
+  duration_ms: 1.877041
+  type: 'test'
+  ...
+# Subtest: taxa de reversão sem casos fechados é exibida como sem dados
+ok 38 - taxa de reversão sem casos fechados é exibida como sem dados
+  ---
+  duration_ms: 1.253917
+  type: 'test'
+  ...
+# Subtest: Central de retenção consulta a API nova quando a flag está ativa
+ok 39 - Central de retenção consulta a API nova quando a flag está ativa
+  ---
+  duration_ms: 0.838875
+  type: 'test'
+  ...
+# Subtest: modais de retenção mantêm o legado, mas redirecionam pela flag
+ok 40 - modais de retenção mantêm o legado, mas redirecionam pela flag
+  ---
+  duration_ms: 3.335709
+  type: 'test'
+  ...
+# Subtest: drawer do aluno carrega e renderiza timeline canônica quando a flag v2 está ativa
+ok 41 - drawer do aluno carrega e renderiza timeline canônica quando a flag v2 está ativa
+  ---
+  duration_ms: 1.629834
+  type: 'test'
+  ...
+# (node:36648) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: provisiona aluno ausente e resolve subject depois do upsert local
+ok 42 - provisiona aluno ausente e resolve subject depois do upsert local
+  ---
+  duration_ms: 29.666167
+  type: 'test'
+  ...
+# Subtest: aluno já existente não reprovisiona nem consulta Firestore
+ok 43 - aluno já existente não reprovisiona nem consulta Firestore
+  ---
+  duration_ms: 0.768042
+  type: 'test'
+  ...
+# Subtest: chamadas concorrentes do mesmo aluno compartilham um único provisionamento
+ok 44 - chamadas concorrentes do mesmo aluno compartilham um único provisionamento
+  ---
+  duration_ms: 44.2085
+  type: 'test'
+  ...
+# Subtest: aluno inexistente no Firestore falha com erro claro e sem provisionar
+ok 45 - aluno inexistente no Firestore falha com erro claro e sem provisionar
+  ---
+  duration_ms: 2.261375
+  type: 'test'
+  ...
+# Subtest: falha no provisionamento não avança para nova resolução nem cria sequência parcial no store
+ok 46 - falha no provisionamento não avança para nova resolução nem cria sequência parcial no store
+  ---
+  duration_ms: 2.14225
+  type: 'test'
+  ...
+# Subtest: service period mensal ancora no dia de entrada e renova por ciclo corrente
+ok 47 - service period mensal ancora no dia de entrada e renova por ciclo corrente
+  ---
+  duration_ms: 1.9635
+  type: 'test'
+  ...
+1..47
+# tests 47
+# suites 0
+# pass 46
+# fail 0
+# cancelled 0
+# skipped 1
+# todo 0
+# duration_ms 415.044333

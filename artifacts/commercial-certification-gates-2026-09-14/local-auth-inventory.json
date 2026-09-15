@@ -1,0 +1,67 @@
+{
+  "process": {
+    "CRM_API_BASE_URL": false,
+    "CRM_API_KEY": false,
+    "GOOGLE_SERVICE_ACCOUNT_JSON": false,
+    "FIREBASE_SERVICE_ACCOUNT_JSON": false,
+    "GOOGLE_CLIENT_EMAIL": false,
+    "GOOGLE_PRIVATE_KEY": false,
+    "GOOGLE_APPLICATION_CREDENTIALS": false,
+    "FIREBASE_CLIENT_EMAIL": false,
+    "FIREBASE_PRIVATE_KEY": false,
+    "SUPABASE_URL": false,
+    "SUPABASE_SERVICE_ROLE_KEY": false
+  },
+  "files": {
+    ".env.staging.example": {
+      "SUPABASE_URL": false,
+      "SUPABASE_SERVICE_ROLE_KEY": false
+    },
+    ".env.local": {
+      "CRM_API_BASE_URL": false,
+      "CRM_API_KEY": false,
+      "GOOGLE_SERVICE_ACCOUNT_JSON": false,
+      "SUPABASE_URL": true,
+      "SUPABASE_SERVICE_ROLE_KEY": true
+    },
+    ".env.vercel.pull": {
+      "CRM_API_BASE_URL": false,
+      "CRM_API_KEY": false,
+      "GOOGLE_SERVICE_ACCOUNT_JSON": false,
+      "SUPABASE_URL": true,
+      "SUPABASE_SERVICE_ROLE_KEY": true
+    },
+    ".env.example": {
+      "GOOGLE_SERVICE_ACCOUNT_JSON": false,
+      "FIREBASE_SERVICE_ACCOUNT_JSON": false,
+      "GOOGLE_CLIENT_EMAIL": false,
+      "GOOGLE_PRIVATE_KEY": false,
+      "SUPABASE_URL": false,
+      "SUPABASE_SERVICE_ROLE_KEY": false
+    },
+    ".vercel/.env.production.local": {
+      "CRM_API_BASE_URL": false,
+      "CRM_API_KEY": false,
+      "GOOGLE_SERVICE_ACCOUNT_JSON": false,
+      "SUPABASE_URL": true,
+      "SUPABASE_SERVICE_ROLE_KEY": true
+    },
+    "/var/folders/tr/wsycg7rj03d3khh0g9r94phm0000gn/T/space-goals-production-2zfre6lo/production.env": {
+      "CRM_API_BASE_URL": false,
+      "CRM_API_KEY": false,
+      "GOOGLE_SERVICE_ACCOUNT_JSON": false,
+      "SUPABASE_URL": true,
+      "SUPABASE_SERVICE_ROLE_KEY": true
+    }
+  },
+  "cli": {
+    "vercel": true,
+    "firebase": false,
+    "gcloud": false,
+    "supabase": false
+  },
+  "impersonation": {
+    "adc_file_exists": false,
+    "configured_in_runtime": false
+  }
+}

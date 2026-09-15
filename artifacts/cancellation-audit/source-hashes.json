@@ -1,0 +1,15 @@
+{
+  "captured_at": "2026-09-15T01:42:01.762Z",
+  "files": {
+    "script.js": "947600f9f22470558f7e019a486646ac418f976fa2ab84e3392d287f3339dca5",
+    "api/retention-cases.js": "6c0d1cf2a6ebf882b5110cc7829cb7f7177016e37221db1aae75092b5dfe861d",
+    "api/retention-churn-job.js": "1f632ce1998b7a7efcc414798bff1432cbb9fb66cc6af2ea19ba34a84e1f5f2f",
+    "api/_lib/retention-domain.js": "e193e8716c08d6db91447e413545c114411d6eda7f2009318dd76294ef41342a",
+    "api/_lib/retention-store.js": "751588e3b3e1a94608f5b5c0e1c7927cf8a8562bb669fd2b26f13cb02c40ae6c",
+    "api/_lib/retention-import.js": "e3d844ba36e08b7ad12b098b6da3e15962067b185fd7ddfa59c909b8287b62bb",
+    "api/_lib/supabase-rest.js": "27b42a0dbc3ea1395ab3b077d8eff09def82a0d729c57ebcd9cf422873b0544c",
+    "api/schedule/book.js": "bb915023d36289bc21d1b4d38720ed836f0077a068e54ffc48154bf92d5b4894",
+    "supabase/retention-lifecycle-v2.sql": "4e7e6e2cfaad14ab1b6c920f65a137a7da7b18ae9b4f36f6c4187699f83c85cf",
+    "supabase/retention-lifecycle-v2-provisioning.sql": "bd8d2f01db7e5ca1b9cf5c504789204c22054fd587c0803b1e1293a8e27ee7be"
+  }
+}

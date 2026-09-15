@@ -16,6 +16,35 @@ const configs=[{personId:'c',userUid:'c',roles:['closer'],crmAttendantIds:['c']}
 const people=[...buildActiveCommercialPeople(users,configs),...getGrowthGoalBuckets()];
 const goal={competencia:'2026-09',valorMeta:1000,weeklyGoals:decodeWeeklyGoalsMap({'wk_2026-09-09':{people:{c:{role:'closer',targetValue:1000},s:{role:'sdr',targetValue:3}}}})};
 const now=new Date('2026-09-14T12:00:00-03:00');
+test('legacy movement date remains explicit and cannot pass financial certification',()=>{
+  const ledger=buildCommercialLedger({competencia:'2026-09',goal,people,businesses:[makeDeal('legacy',null,100,{lastMovedAt:'2026-09-10T12:00:00Z'})]});
+  assert.equal(ledger.rows[0].dateField,'lastMovedAt');assert.equal(ledger.metrics.unverified_revenue_dates,1);
+});
+test('SDR evidence missing origin or event timestamp stays not_loaded',()=>{
+  const {reconcileSdrAttribution}=require('../api/_lib/commercial-sdr');
+  const result=reconcileSdrAttribution([{id:'a',value:100,sourceSdrId:'s'}],{status:'loaded',evidence:[{dealId:'a',sdrId:'s'}]});
+  assert.equal(result.records[0].status,'not_loaded');assert.equal(result.pass,false);assert.equal(result.reconciliation_delta,null);
+});
+test('stored 8385 is mechanically classified STALE against 12646',()=>{
+  const {assessStoredSnapshot}=require('../api/_lib/crm-snapshot-publish');
+  const result=assessStoredSnapshot({generatedAt:'2026-09-14T23:02:50.843Z',weekly:{team:{closers:{actualValue:8385,count:7}}}},[{id:'fixture',value:12646}]);
+  assert.equal(result.status,'STALE');assert.equal(result.delta,-4261);
+});
+for(const status of ['not_loaded','source_error'])test(`SDR ${status} does not produce financial zero`,()=>{
+  const {reconcileSdrAttribution}=require('../api/_lib/commercial-sdr');
+  const result=reconcileSdrAttribution([{id:'a',value:100}],{status});
+  assert.equal(result.records[0].status,status);assert.equal(result.reconciliation_delta,null);assert.equal(result.unassigned_revenue,null);assert.equal(result.pass,false);
+});
+test('SDR explicit no attribution, zero sale and wrong origin are distinct',()=>{
+  const {reconcileSdrAttribution}=require('../api/_lib/commercial-sdr');
+  const rows=[{id:'a',value:100,sourceSdrId:null},{id:'zero',value:0,sourceSdrId:'s'}];
+  const evidence=[{dealId:'a',sdrId:null,source:'authoritative_export'},{dealId:'zero',sdrId:'s',source:'event',eventId:'e',timestamp:'2026-09-09T03:00:00Z'}];
+  const result=reconcileSdrAttribution(rows,{status:'loaded',evidence});
+  assert.equal(result.records[0].status,'no_attribution');assert.equal(result.records[1].status,'value');
+  assert.equal(result.unassigned_revenue,100);assert.equal(result.reconciliation_delta,0);assert.equal(result.pass,true);
+  const drift=reconcileSdrAttribution(rows,{status:'loaded',evidence:[{...evidence[0],sdrId:'other',eventId:'e2',timestamp:'2026-09-09T03:00:00Z'},evidence[1]]});
+  assert.equal(drift.pass,false);assert.equal(drift.reconciliation_delta,100);
+});
 test('closed deals without identity or closing date cannot be certified as zero',()=>{
   const ledger=buildCommercialLedger({competencia:'2026-09',goal,people,
     businesses:[makeDeal('', '2026-09-10T12:00:00Z'),makeDeal('undated',null)]});

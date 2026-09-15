@@ -1,0 +1,504 @@
+{
+  "source": "disposable_local_postgresql_not_supabase_staging",
+  "created_at": "2026-09-15T01:36:57.891Z",
+  "migration_sha256": "db1714525fe63fbfb3559c16b440c8ec11550e4ccd0a0efc841f63d10d3a1cc9",
+  "inventory": {
+    "tables": [
+      {
+        "acl": null,
+        "rls": false,
+        "name": "connections"
+      },
+      {
+        "acl": [
+          "postgres=arwdDxt/postgres",
+          "service_role=r/postgres"
+        ],
+        "rls": true,
+        "name": "finance_audit_events"
+      },
+      {
+        "acl": [
+          "postgres=arwdDxt/postgres",
+          "service_role=r/postgres"
+        ],
+        "rls": true,
+        "name": "finance_connection_state"
+      },
+      {
+        "acl": [
+          "postgres=arwdDxt/postgres",
+          "service_role=r/postgres"
+        ],
+        "rls": true,
+        "name": "finance_customer_student_links"
+      },
+      {
+        "acl": [
+          "postgres=arwdDxt/postgres",
+          "service_role=r/postgres"
+        ],
+        "rls": true,
+        "name": "finance_object_leases"
+      },
+      {
+        "acl": [
+          "postgres=arwdDxt/postgres",
+          "service_role=r/postgres"
+        ],
+        "rls": true,
+        "name": "finance_payments"
+      },
+      {
+        "acl": [
+          "postgres=arwdDxt/postgres",
+          "service_role=r/postgres"
+        ],
+        "rls": true,
+        "name": "finance_provider_objects"
+      },
+      {
+        "acl": [
+          "postgres=arwdDxt/postgres",
+          "service_role=r/postgres"
+        ],
+        "rls": true,
+        "name": "finance_receivables"
+      },
+      {
+        "acl": [
+          "postgres=arwdDxt/postgres",
+          "service_role=r/postgres"
+        ],
+        "rls": true,
+        "name": "finance_sync_runs"
+      },
+      {
+        "acl": [
+          "postgres=arwdDxt/postgres",
+          "service_role=r/postgres"
+        ],
+        "rls": true,
+        "name": "finance_webhook_events"
+      }
+    ],
+    "indexes": [
+      {
+        "indexdef": "CREATE UNIQUE INDEX connections_pkey ON public.connections USING btree (connection_id)",
+        "indexname": "connections_pkey",
+        "tablename": "connections",
+        "schemaname": "public",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX connections_provider_external_account_type_external_account_key ON public.connections USING btree (provider, external_account_type, external_account_id)",
+        "indexname": "connections_provider_external_account_type_external_account_key",
+        "tablename": "connections",
+        "schemaname": "public",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX finance_audit_events_pkey ON public.finance_audit_events USING btree (id)",
+        "indexname": "finance_audit_events_pkey",
+        "tablename": "finance_audit_events",
+        "schemaname": "public",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE INDEX finance_audit_object_idx ON public.finance_audit_events USING btree (connection_id, object_type, external_object_id, created_at)",
+        "indexname": "finance_audit_object_idx",
+        "tablename": "finance_audit_events",
+        "schemaname": "public",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX finance_connection_state_pkey ON public.finance_connection_state USING btree (connection_id)",
+        "indexname": "finance_connection_state_pkey",
+        "tablename": "finance_connection_state",
+        "schemaname": "public",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX finance_customer_student_links_pkey ON public.finance_customer_student_links USING btree (connection_id, asaas_customer_id, firestore_doc_id)",
+        "indexname": "finance_customer_student_links_pkey",
+        "tablename": "finance_customer_student_links",
+        "schemaname": "public",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX finance_object_leases_pkey ON public.finance_object_leases USING btree (connection_id, resource, external_object_id)",
+        "indexname": "finance_object_leases_pkey",
+        "tablename": "finance_object_leases",
+        "schemaname": "public",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX finance_payments_connection_id_asaas_payment_id_key ON public.finance_payments USING btree (connection_id, asaas_payment_id)",
+        "indexname": "finance_payments_connection_id_asaas_payment_id_key",
+        "tablename": "finance_payments",
+        "schemaname": "public",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX finance_payments_pkey ON public.finance_payments USING btree (id)",
+        "indexname": "finance_payments_pkey",
+        "tablename": "finance_payments",
+        "schemaname": "public",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX finance_payments_receivable_id_key ON public.finance_payments USING btree (receivable_id)",
+        "indexname": "finance_payments_receivable_id_key",
+        "tablename": "finance_payments",
+        "schemaname": "public",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX finance_provider_objects_connection_id_resource_external_ob_key ON public.finance_provider_objects USING btree (connection_id, resource, external_object_id)",
+        "indexname": "finance_provider_objects_connection_id_resource_external_ob_key",
+        "tablename": "finance_provider_objects",
+        "schemaname": "public",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX finance_provider_objects_pkey ON public.finance_provider_objects USING btree (id)",
+        "indexname": "finance_provider_objects_pkey",
+        "tablename": "finance_provider_objects",
+        "schemaname": "public",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX finance_receivables_connection_id_asaas_payment_id_key ON public.finance_receivables USING btree (connection_id, asaas_payment_id)",
+        "indexname": "finance_receivables_connection_id_asaas_payment_id_key",
+        "tablename": "finance_receivables",
+        "schemaname": "public",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE INDEX finance_receivables_customer_idx ON public.finance_receivables USING btree (connection_id, asaas_customer_id)",
+        "indexname": "finance_receivables_customer_idx",
+        "tablename": "finance_receivables",
+        "schemaname": "public",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE INDEX finance_receivables_due_idx ON public.finance_receivables USING btree (connection_id, status, due_date)",
+        "indexname": "finance_receivables_due_idx",
+        "tablename": "finance_receivables",
+        "schemaname": "public",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX finance_receivables_id_connection_id_asaas_payment_id_key ON public.finance_receivables USING btree (id, connection_id, asaas_payment_id)",
+        "indexname": "finance_receivables_id_connection_id_asaas_payment_id_key",
+        "tablename": "finance_receivables",
+        "schemaname": "public",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX finance_receivables_pkey ON public.finance_receivables USING btree (id)",
+        "indexname": "finance_receivables_pkey",
+        "tablename": "finance_receivables",
+        "schemaname": "public",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX finance_sync_runs_pkey ON public.finance_sync_runs USING btree (id)",
+        "indexname": "finance_sync_runs_pkey",
+        "tablename": "finance_sync_runs",
+        "schemaname": "public",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX finance_webhook_events_connection_id_dedupe_key_key ON public.finance_webhook_events USING btree (connection_id, dedupe_key)",
+        "indexname": "finance_webhook_events_connection_id_dedupe_key_key",
+        "tablename": "finance_webhook_events",
+        "schemaname": "public",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX finance_webhook_events_pkey ON public.finance_webhook_events USING btree (id)",
+        "indexname": "finance_webhook_events_pkey",
+        "tablename": "finance_webhook_events",
+        "schemaname": "public",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE INDEX finance_webhook_pending_idx ON public.finance_webhook_events USING btree (connection_id, processing_status, available_at)",
+        "indexname": "finance_webhook_pending_idx",
+        "tablename": "finance_webhook_events",
+        "schemaname": "public",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX finance_webhook_provider_event_uidx ON public.finance_webhook_events USING btree (connection_id, provider_event_id) WHERE (provider_event_id IS NOT NULL)",
+        "indexname": "finance_webhook_provider_event_uidx",
+        "tablename": "finance_webhook_events",
+        "schemaname": "public",
+        "tablespace": null
+      }
+    ],
+    "triggers": [
+      {
+        "name": "finance_audit_immutable",
+        "table": "finance_audit_events",
+        "definition": "CREATE TRIGGER finance_audit_immutable BEFORE DELETE OR UPDATE ON public.finance_audit_events FOR EACH ROW EXECUTE FUNCTION finance_audit_immutable()"
+      }
+    ],
+    "functions": [
+      {
+        "acl": [
+          "postgres=X/postgres"
+        ],
+        "name": "finance_audit_immutable",
+        "settings": [
+          "search_path=pg_catalog, public"
+        ],
+        "definition_md5": "910702e4c9104b1f5b3e1f7dcaf0e936",
+        "security_definer": false
+      },
+      {
+        "acl": [
+          "postgres=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "name": "finance_rpc",
+        "settings": [
+          "search_path=pg_catalog, public"
+        ],
+        "definition_md5": "d2ae26a43638a57acefa846f7dce9b5e",
+        "security_definer": true
+      }
+    ],
+    "constraints": [
+      {
+        "name": "connections_pkey",
+        "type": "p",
+        "table": "connections",
+        "definition": "PRIMARY KEY (connection_id)"
+      },
+      {
+        "name": "connections_provider_external_account_type_external_account_key",
+        "type": "u",
+        "table": "connections",
+        "definition": "UNIQUE (provider, external_account_type, external_account_id)"
+      },
+      {
+        "name": "connections_status_check",
+        "type": "c",
+        "table": "connections",
+        "definition": "CHECK ((status = ANY (ARRAY['pending'::text, 'active'::text, 'disabled'::text])))"
+      },
+      {
+        "name": "finance_audit_events_connection_id_fkey",
+        "type": "f",
+        "table": "finance_audit_events",
+        "definition": "FOREIGN KEY (connection_id) REFERENCES finance_connection_state(connection_id)"
+      },
+      {
+        "name": "finance_audit_events_pkey",
+        "type": "p",
+        "table": "finance_audit_events",
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "name": "finance_audit_events_source_check",
+        "type": "c",
+        "table": "finance_audit_events",
+        "definition": "CHECK ((source = ANY (ARRAY['ASAAS_WEBHOOK'::text, 'ASAAS_BACKFILL'::text, 'ASAAS_RECONCILIATION'::text, 'ASAAS_REPAIR'::text, 'SYSTEM'::text, 'ADMIN_USER'::text])))"
+      },
+      {
+        "name": "finance_connection_state_connection_id_fkey",
+        "type": "f",
+        "table": "finance_connection_state",
+        "definition": "FOREIGN KEY (connection_id) REFERENCES connections(connection_id)"
+      },
+      {
+        "name": "finance_connection_state_environment_check",
+        "type": "c",
+        "table": "finance_connection_state",
+        "definition": "CHECK ((environment = ANY (ARRAY['sandbox'::text, 'production'::text])))"
+      },
+      {
+        "name": "finance_connection_state_pkey",
+        "type": "p",
+        "table": "finance_connection_state",
+        "definition": "PRIMARY KEY (connection_id)"
+      },
+      {
+        "name": "finance_customer_student_links_connection_id_fkey",
+        "type": "f",
+        "table": "finance_customer_student_links",
+        "definition": "FOREIGN KEY (connection_id) REFERENCES finance_connection_state(connection_id)"
+      },
+      {
+        "name": "finance_customer_student_links_firestore_doc_id_check",
+        "type": "c",
+        "table": "finance_customer_student_links",
+        "definition": "CHECK (((length(firestore_doc_id) >= 1) AND (length(firestore_doc_id) <= 128)))"
+      },
+      {
+        "name": "finance_customer_student_links_pkey",
+        "type": "p",
+        "table": "finance_customer_student_links",
+        "definition": "PRIMARY KEY (connection_id, asaas_customer_id, firestore_doc_id)"
+      },
+      {
+        "name": "finance_object_leases_connection_id_fkey",
+        "type": "f",
+        "table": "finance_object_leases",
+        "definition": "FOREIGN KEY (connection_id) REFERENCES finance_connection_state(connection_id)"
+      },
+      {
+        "name": "finance_object_leases_pkey",
+        "type": "p",
+        "table": "finance_object_leases",
+        "definition": "PRIMARY KEY (connection_id, resource, external_object_id)"
+      },
+      {
+        "name": "finance_object_leases_resource_check",
+        "type": "c",
+        "table": "finance_object_leases",
+        "definition": "CHECK ((resource = ANY (ARRAY['payments'::text, 'customers'::text, 'subscriptions'::text])))"
+      },
+      {
+        "name": "finance_payments_connection_id_asaas_payment_id_key",
+        "type": "u",
+        "table": "finance_payments",
+        "definition": "UNIQUE (connection_id, asaas_payment_id)"
+      },
+      {
+        "name": "finance_payments_pkey",
+        "type": "p",
+        "table": "finance_payments",
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "name": "finance_payments_receivable_id_connection_id_asaas_payment_fkey",
+        "type": "f",
+        "table": "finance_payments",
+        "definition": "FOREIGN KEY (receivable_id, connection_id, asaas_payment_id) REFERENCES finance_receivables(id, connection_id, asaas_payment_id)"
+      },
+      {
+        "name": "finance_payments_receivable_id_key",
+        "type": "u",
+        "table": "finance_payments",
+        "definition": "UNIQUE (receivable_id)"
+      },
+      {
+        "name": "finance_provider_objects_connection_id_fkey",
+        "type": "f",
+        "table": "finance_provider_objects",
+        "definition": "FOREIGN KEY (connection_id) REFERENCES finance_connection_state(connection_id)"
+      },
+      {
+        "name": "finance_provider_objects_connection_id_resource_external_ob_key",
+        "type": "u",
+        "table": "finance_provider_objects",
+        "definition": "UNIQUE (connection_id, resource, external_object_id)"
+      },
+      {
+        "name": "finance_provider_objects_pkey",
+        "type": "p",
+        "table": "finance_provider_objects",
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "name": "finance_provider_objects_resource_check",
+        "type": "c",
+        "table": "finance_provider_objects",
+        "definition": "CHECK ((resource = ANY (ARRAY['customers'::text, 'subscriptions'::text])))"
+      },
+      {
+        "name": "finance_receivables_connection_id_asaas_payment_id_key",
+        "type": "u",
+        "table": "finance_receivables",
+        "definition": "UNIQUE (connection_id, asaas_payment_id)"
+      },
+      {
+        "name": "finance_receivables_connection_id_fkey",
+        "type": "f",
+        "table": "finance_receivables",
+        "definition": "FOREIGN KEY (connection_id) REFERENCES finance_connection_state(connection_id)"
+      },
+      {
+        "name": "finance_receivables_id_connection_id_asaas_payment_id_key",
+        "type": "u",
+        "table": "finance_receivables",
+        "definition": "UNIQUE (id, connection_id, asaas_payment_id)"
+      },
+      {
+        "name": "finance_receivables_pkey",
+        "type": "p",
+        "table": "finance_receivables",
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "name": "finance_receivables_value_check",
+        "type": "c",
+        "table": "finance_receivables",
+        "definition": "CHECK (((value IS NULL) OR (value >= (0)::numeric)))"
+      },
+      {
+        "name": "finance_sync_runs_connection_id_fkey",
+        "type": "f",
+        "table": "finance_sync_runs",
+        "definition": "FOREIGN KEY (connection_id) REFERENCES finance_connection_state(connection_id)"
+      },
+      {
+        "name": "finance_sync_runs_pkey",
+        "type": "p",
+        "table": "finance_sync_runs",
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "name": "finance_sync_runs_status_check",
+        "type": "c",
+        "table": "finance_sync_runs",
+        "definition": "CHECK ((status = ANY (ARRAY['running'::text, 'completed'::text, 'failed'::text])))"
+      },
+      {
+        "name": "finance_webhook_events_attempt_count_check",
+        "type": "c",
+        "table": "finance_webhook_events",
+        "definition": "CHECK (((attempt_count >= 0) AND (attempt_count <= 5)))"
+      },
+      {
+        "name": "finance_webhook_events_connection_id_dedupe_key_key",
+        "type": "u",
+        "table": "finance_webhook_events",
+        "definition": "UNIQUE (connection_id, dedupe_key)"
+      },
+      {
+        "name": "finance_webhook_events_connection_id_fkey",
+        "type": "f",
+        "table": "finance_webhook_events",
+        "definition": "FOREIGN KEY (connection_id) REFERENCES finance_connection_state(connection_id)"
+      },
+      {
+        "name": "finance_webhook_events_payload_hash_check",
+        "type": "c",
+        "table": "finance_webhook_events",
+        "definition": "CHECK ((payload_hash ~ '^[a-f0-9]{64}$'::text))"
+      },
+      {
+        "name": "finance_webhook_events_pkey",
+        "type": "p",
+        "table": "finance_webhook_events",
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "name": "finance_webhook_events_processing_status_check",
+        "type": "c",
+        "table": "finance_webhook_events",
+        "definition": "CHECK ((processing_status = ANY (ARRAY['pending'::text, 'processing'::text, 'processed'::text, 'failed'::text, 'ignored'::text])))"
+      },
+      {
+        "name": "finance_webhook_events_provider_check",
+        "type": "c",
+        "table": "finance_webhook_events",
+        "definition": "CHECK ((provider = 'asaas'::text))"
+      }
+    ]
+  }
+}

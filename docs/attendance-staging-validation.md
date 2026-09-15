@@ -2,7 +2,9 @@
 
 Data: 14/09/2026, America/Sao_Paulo (execuções finais em 15/09 UTC).
 
-**Decisão formal: NO-GO para iniciar a integração Meta.** Não foi identificado um Supabase staging remoto utilizável e inequivocamente isolado. A Vercel possui cadastros de variáveis Preview, mas os valores de identificação do Supabase estão vazios e não existe service role de Preview. Não foi executado SQL, RPC, migration, seed ou cleanup em qualquer banco remoto nesta fase. Nenhuma configuração externa foi alterada.
+**Decisão atual: NO-GO para iniciar a integração Meta — configuração externa de credenciais e homologação pendentes.** Na fase seguinte, autorizada pelo usuário, foi encontrado o projeto separado **space-staging (`uac…xgm`)**, retomado de paused para **Healthy**, e executado o inventário remoto read-only. PostgreSQL 17.6, schema public vazio. Produção permanece sem alterações por esta tarefa. A migration ainda não foi aplicada; faltam credenciais SQL/API vinculadas ao guard, Vercel e testes remotos do domínio.
+
+**Atualização de identificação/provisionamento:** [attendance-environments.md](attendance-environments.md). Evidência exportada do catálogo: [JSON remoto](evidence/attendance-staging-inventory-2026-09-14.json). Os §§1–23 abaixo preservam o registro da auditoria anterior e seu runbook; afirmações de staging não identificado/nenhum SQL remoto descrevem aquela execução anterior, não o estado atualizado acima. O novo pedido autoriza identificar/provisionar staging, superando a restrição administrativa do runbook anterior.
 
 Esta revisão leu integralmente [a arquitetura](attendance-whatsapp-architecture.md), [a foundation](attendance-foundation.md) e [a migration](../supabase/migrations/202609140001_attendance_foundation.sql). Preserva esses documentos e a migration; acrescenta segurança de ambiente e preparação operacional. Validação local não equivale à homologação cloud.
 

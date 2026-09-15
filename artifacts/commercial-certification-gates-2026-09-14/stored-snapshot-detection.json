@@ -1,0 +1,19 @@
+{
+  "evidence": "prior DOM observation; no fresh snapshot read; business number not UUID",
+  "status": "STALE",
+  "generated_at": "2026-09-14T23:02:50.843Z",
+  "source_completeness": null,
+  "page_count": null,
+  "expected_page_count": null,
+  "deal_count": 7,
+  "revenue": 8385,
+  "canonical_revenue": 12646,
+  "delta": -4261,
+  "comparison": {
+    "available": false,
+    "pass": false,
+    "differences": [],
+    "snapshot_reconciliation_rate": null,
+    "snapshot_delta": null
+  }
+}

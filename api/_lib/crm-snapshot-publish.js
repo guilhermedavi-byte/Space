@@ -2,6 +2,25 @@ const crypto = require('crypto');
 const { createFirestoreStore } = require('./crm-snapshot-store');
 const { failure, log } = require('./datacrazy-ingestion');
 const CALCULATION_VERSION = 4;
+function assessStoredSnapshot(payload, canonicalRows, scope = 'week') {
+  const { compareDealLedgers } = require('./commercial-reconciliation');
+  const snapshot = payload?.snapshot || {};
+  const aggregate = scope === 'month' ? payload?.month?.summary : payload?.weekly?.team?.closers;
+  const revenue = scope === 'month' ? aggregate?.realizado : aggregate?.actualValue;
+  const rows = scope === 'month' ? snapshot.monthlyIncludedDeals : snapshot.includedDeals;
+  const canonicalRevenue = canonicalRows.reduce((s,d)=>s+d.value,0);
+  const delta = Number.isFinite(revenue) ? Math.round((revenue-canonicalRevenue)*100)/100 : null;
+  const comparison = compareDealLedgers(canonicalRows, rows);
+  const complete = snapshot.fetchCompleted === true && snapshot.paginationCompleted === true;
+  const status = !payload || delta === null ? 'INVALID'
+    : delta !== 0 ? 'STALE'
+    : !complete || (snapshot.expectedPages != null && snapshot.pagesFetched !== snapshot.expectedPages) ? 'INCOMPLETE'
+    : !comparison.pass ? 'INVALID' : 'RECONCILED';
+  return { status, generated_at:payload?.generatedAt || snapshot.calculatedAt || null,
+    source_completeness:complete?true:snapshot.fetchCompleted===false||snapshot.paginationCompleted===false?false:null, page_count:snapshot.pagesFetched ?? null, expected_page_count:snapshot.expectedPages ?? null,
+    deal_count:scope==='month' ? aggregate?.totalVendas ?? null : aggregate?.count ?? null,
+    revenue:revenue ?? null, canonical_revenue:canonicalRevenue, delta, comparison };
+}
 function validateCrmSnapshot(payload) {
   const m = payload.snapshot;
   const week = payload.weekly?.team?.closers;
@@ -15,7 +34,7 @@ function validateCrmSnapshot(payload) {
         Math.abs(deals.reduce((s,d)=>s+d.value,0)-value)>0.005) throw failure('snapshot_deal_reconciliation_failed');
   }
   for (const metric of [m.reconciliation?.month,m.reconciliation?.week]) {
-    if (!metric || ['monthly_weekly_delta','overlapping_periods','improper_gaps','orphan_deals','unallocated_revenue','duplicate_attribution_revenue','estimated_value_deals','invalid_financial_deals'].some(k=>metric[k] !== 0)) throw failure('snapshot_ledger_invariant_failed');
+    if (!metric || ['monthly_weekly_delta','overlapping_periods','improper_gaps','orphan_deals','unallocated_revenue','duplicate_attribution_revenue','estimated_value_deals','invalid_financial_deals','unverified_revenue_dates'].some(k=>metric[k] !== 0)) throw failure('snapshot_ledger_invariant_failed');
   }
   const rows = payload.weekly.closers || [];
   for (const row of rows) {
@@ -70,4 +89,4 @@ async function runCrmSnapshot(build, { store = createFirestoreStore(), logger = 
     throw error;
   }
 }
-module.exports = { CALCULATION_VERSION, validateCrmSnapshot, publishCrmSnapshot, runCrmSnapshot };
+module.exports = { CALCULATION_VERSION, assessStoredSnapshot, validateCrmSnapshot, publishCrmSnapshot, runCrmSnapshot };

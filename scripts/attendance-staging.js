@@ -85,6 +85,10 @@ const run = (args, deps = {}) => {
   if (fs.existsSync(options.output)) fail('attendance_output_already_exists');
   const migration = fs.readFileSync(migrationPath, 'utf8');
   assertReview(JSON.parse(fs.readFileSync(options['review-file'], 'utf8')), target, before, migration);
+  const announce = deps.announce || ((value) => process.stdout.write(`${JSON.stringify(value)}\n`));
+  announce({ timestamp: new Date().toISOString(), phase: 'before_apply', SPACE_ENV: 'staging',
+    projectRef: target.maskedRef, hostname: `${target.maskedRef}.supabase.co`,
+    migration: path.basename(migrationPath), productionGuardPassed: true });
   // Only this fixed reviewed migration can run. No arbitrary SQL path or command passthrough.
   sql(target, migration);
   const after = sql(target, inventorySql);

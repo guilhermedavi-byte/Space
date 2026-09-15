@@ -35,9 +35,12 @@ test('webhook auth/body/persistence acknowledgement and rollout compatibility',a
   const handler=createHandler({env,service:()=>({ingestWebhook:async b=>{normalizeWebhook(b);saves++;return{event_id:'event',duplicate:saves>1}}})});
   assert.equal((await invoke(handler)).status,401);
   assert.equal((await invoke(handler,{headers:{authorization:'Bearer test-secret'}})).status,401);
+  assert.equal((await invoke(handler,{headers:{'asaas-access-token':'wrong-token'}})).status,401);
   const headers={'asaas-access-token':'test-secret'};
+  assert.equal((await invoke(handler,{method:'GET',headers})).status,405);
   assert.equal((await invoke(handler,{body:'invalid',headers})).status,400);
   assert.equal((await invoke(handler,{body:'x'.repeat(262145),headers})).status,413);
+  assert.equal(saves,0);
   const body={id:'evt_test',event:'PAYMENT_CREATED',payment:fixture()};
   assert.equal((await invoke(handler,{body,headers})).status,200);
   for(let i=0;i<20;i++)assert.equal((await invoke(handler,{body,headers})).duplicate,true);
@@ -58,8 +61,10 @@ test('foundation maintenance API: admin/CSRF/feature flag enforced',async()=>{
 });
 test('CLI apply blocks production and unverified DB targets',()=>{
   const flags=new Set(['--apply']);
-  assert.throws(()=>assertApplyEnvironment({ASAAS_BASE_URL:'https://api.asaas.com/v3'},flags),/sandbox_required/);
-  assert.throws(()=>assertApplyEnvironment({ASAAS_BASE_URL:'https://api-sandbox.asaas.com/v3',SUPABASE_URL:'https://prod'},flags),/staging_database_required/);
-  assert.doesNotThrow(()=>assertApplyEnvironment({ASAAS_BASE_URL:'https://api-sandbox.asaas.com/v3',SUPABASE_URL:'https://test',SPACE_STAGING_SUPABASE_URL:'https://test'},flags));
+  for(const env of [{ASAAS_BASE_URL:'https://api.asaas.com/v3'},
+    {ASAAS_BASE_URL:'https://api-sandbox.asaas.com/v3',SUPABASE_URL:'https://prod'},
+    {NODE_ENV:'staging',SUPABASE_URL:'https://test',SPACE_STAGING_SUPABASE_URL:'https://test'}]) {
+    assert.throws(()=>assertApplyEnvironment(env,flags),/staging_required/);
+  }
 });
 module.exports={fixture,invoke};

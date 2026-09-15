@@ -1,0 +1,195 @@
+{
+  "observed_at": "2026-09-15T01:38:46.022Z",
+  "mode": "READ_ONLY",
+  "endpoint_ref": "39271d30e4333b21",
+  "scope": "Configured environment only; visibility is not proof of production completeness.",
+  "tables": [
+    {
+      "table": "students",
+      "status": 200,
+      "sampled_rows": 0,
+      "columns": [],
+      "completeness": "NOT_ASSESSED"
+    },
+    {
+      "table": "subscriptions",
+      "status": 200,
+      "sampled_rows": 0,
+      "columns": [],
+      "completeness": "NOT_ASSESSED"
+    },
+    {
+      "table": "service_periods",
+      "status": 200,
+      "sampled_rows": 0,
+      "columns": [],
+      "completeness": "NOT_ASSESSED"
+    },
+    {
+      "table": "retention_cases",
+      "status": 200,
+      "sampled_rows": 0,
+      "columns": [],
+      "completeness": "NOT_ASSESSED"
+    },
+    {
+      "table": "retention_events",
+      "status": 200,
+      "sampled_rows": 0,
+      "columns": [],
+      "completeness": "NOT_ASSESSED"
+    },
+    {
+      "table": "subscription_status_history",
+      "status": 200,
+      "sampled_rows": 0,
+      "columns": [],
+      "completeness": "NOT_ASSESSED"
+    },
+    {
+      "table": "pause_status_history",
+      "status": 200,
+      "sampled_rows": 0,
+      "columns": [],
+      "completeness": "NOT_ASSESSED"
+    },
+    {
+      "table": "financial_status_history",
+      "status": 200,
+      "sampled_rows": 0,
+      "columns": [],
+      "completeness": "NOT_ASSESSED"
+    },
+    {
+      "table": "charges",
+      "status": 200,
+      "sampled_rows": 0,
+      "columns": [],
+      "completeness": "NOT_ASSESSED"
+    },
+    {
+      "table": "payments",
+      "status": 200,
+      "sampled_rows": 0,
+      "columns": [],
+      "completeness": "NOT_ASSESSED"
+    },
+    {
+      "table": "outbox_events",
+      "status": 200,
+      "sampled_rows": 0,
+      "columns": [],
+      "completeness": "NOT_ASSESSED"
+    },
+    {
+      "table": "monthly_base_snapshots",
+      "status": 200,
+      "sampled_rows": 0,
+      "columns": [],
+      "completeness": "NOT_ASSESSED"
+    },
+    {
+      "table": "kpi_formula_versions",
+      "status": 200,
+      "sampled_rows": 0,
+      "columns": [],
+      "completeness": "NOT_ASSESSED"
+    },
+    {
+      "table": "kpi_monthly_snapshots",
+      "status": 200,
+      "sampled_rows": 0,
+      "columns": [],
+      "completeness": "NOT_ASSESSED"
+    },
+    {
+      "table": "n8n_alunos_financeiro_space",
+      "status": 200,
+      "sampled_rows": 0,
+      "columns": [],
+      "completeness": "NOT_ASSESSED"
+    },
+    {
+      "table": "n8n_cobrancas_financeiras_space",
+      "status": 200,
+      "sampled_rows": 0,
+      "columns": [],
+      "completeness": "NOT_ASSESSED"
+    },
+    {
+      "table": "n8n_pagamentos_asaas_space",
+      "status": 200,
+      "sampled_rows": 0,
+      "columns": [],
+      "completeness": "NOT_ASSESSED"
+    },
+    {
+      "table": "n8n_aulas_pedagogicas_space",
+      "status": 200,
+      "sampled_rows": 1,
+      "columns": [
+        "id",
+        "aluno_nome",
+        "telefone",
+        "email",
+        "professor_id",
+        "professor_nome",
+        "plano",
+        "nivel_aluno",
+        "objetivo_ingles",
+        "data_aula",
+        "duracao_minutos",
+        "google_calendar_event_id",
+        "google_meet_url",
+        "tipo_aula",
+        "status_aula",
+        "observacoes",
+        "created_at",
+        "updated_at",
+        "titulo",
+        "inicio",
+        "fim",
+        "timezone",
+        "video_provider",
+        "video_room_id",
+        "video_room_url",
+        "video_status",
+        "origem",
+        "briefing_pedagogico",
+        "objetivo_aluno",
+        "nivel_declarado",
+        "video_join_url_aluno",
+        "video_join_url_professor",
+        "professor_notificado_em",
+        "professor_notificado_status",
+        "aluno_notificado_em",
+        "aluno_notificado_status",
+        "registro_status",
+        "registro_cobrado_em",
+        "registrada_em",
+        "onboarding_id",
+        "firestore_doc_id",
+        "aluno_id",
+        "aluno_email",
+        "aluno_telefone",
+        "tipo_evento",
+        "occurrence_id"
+      ],
+      "completeness": "NOT_ASSESSED"
+    },
+    {
+      "table": "n8n_onboarding_alunos_space",
+      "status": 200,
+      "sampled_rows": 0,
+      "columns": [],
+      "completeness": "NOT_ASSESSED"
+    }
+  ],
+  "firestore": {
+    "status": "BLOCKED",
+    "error": {
+      "status": null,
+      "code": "missing_service_account"
+    }
+  }
+}

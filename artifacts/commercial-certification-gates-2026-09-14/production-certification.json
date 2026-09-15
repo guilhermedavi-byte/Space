@@ -1,0 +1,90 @@
+{
+  "result": "FAIL",
+  "authenticatedCertification": false,
+  "productionAltered": false,
+  "deployExecuted": false,
+  "reason": "No complete authenticated dealId source or SDR origin evidence",
+  "months": {
+    "2026-07": {
+      "sourceStatus": "not_loaded",
+      "sets": {
+        "SOURCE_DEALS": null,
+        "CANONICAL_MONTHLY_DEALS": null,
+        "CANONICAL_WEEKLY_DEALS": null,
+        "CRM_LIVE_DEALS": null,
+        "GOALS_DEALS": null,
+        "SNAPSHOT_DEALS": null
+      },
+      "metrics": {
+        "monthly": null,
+        "weekly": null,
+        "financial_delta": null,
+        "dealId_delta": null,
+        "snapshot_delta": null,
+        "duplicated": null,
+        "unallocated": null,
+        "wrong_week": null,
+        "wrong_owner": null,
+        "wrong_sdr": null,
+        "wrong_closer": null,
+        "wrong_amount": null,
+        "wrong_date": null,
+        "wrong_status": null
+      }
+    },
+    "2026-08": {
+      "sourceStatus": "not_loaded",
+      "sets": {
+        "SOURCE_DEALS": null,
+        "CANONICAL_MONTHLY_DEALS": null,
+        "CANONICAL_WEEKLY_DEALS": null,
+        "CRM_LIVE_DEALS": null,
+        "GOALS_DEALS": null,
+        "SNAPSHOT_DEALS": null
+      },
+      "metrics": {
+        "monthly": null,
+        "weekly": null,
+        "financial_delta": null,
+        "dealId_delta": null,
+        "snapshot_delta": null,
+        "duplicated": null,
+        "unallocated": null,
+        "wrong_week": null,
+        "wrong_owner": null,
+        "wrong_sdr": null,
+        "wrong_closer": null,
+        "wrong_amount": null,
+        "wrong_date": null,
+        "wrong_status": null
+      }
+    },
+    "2026-09": {
+      "sourceStatus": "not_loaded",
+      "sets": {
+        "SOURCE_DEALS": null,
+        "CANONICAL_MONTHLY_DEALS": null,
+        "CANONICAL_WEEKLY_DEALS": null,
+        "CRM_LIVE_DEALS": null,
+        "GOALS_DEALS": null,
+        "SNAPSHOT_DEALS": null
+      },
+      "metrics": {
+        "monthly": null,
+        "weekly": null,
+        "financial_delta": null,
+        "dealId_delta": null,
+        "snapshot_delta": null,
+        "duplicated": null,
+        "unallocated": null,
+        "wrong_week": null,
+        "wrong_owner": null,
+        "wrong_sdr": null,
+        "wrong_closer": null,
+        "wrong_amount": null,
+        "wrong_date": null,
+        "wrong_status": null
+      }
+    }
+  }
+}

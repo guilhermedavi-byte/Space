@@ -3,6 +3,8 @@
 // node scripts/reconcile-commercial-metrics.js --input /secure/export.json --output /local/report.json
 // node scripts/reconcile-commercial-metrics.js --production-read-only --output /local/report.json
 const fs=require('node:fs');
+const {assessStoredSnapshot}=require('../api/_lib/crm-snapshot-publish');
+const {reconcileSdrAttribution}=require('../api/_lib/commercial-sdr');
 const {buildCommercialLedger,compareDealLedgers}=require('../api/_lib/commercial-reconciliation');
 const {buildActiveCommercialPeople,getGrowthGoalBuckets,decodeWeeklyGoalsMap,decodeGrowthPeopleDoc,buildWeeklyGoalsReadModel}=require('../api/_lib/growth-people');
 const {encodeFields}=require('../_lib/firestore-rest');
@@ -24,11 +26,17 @@ function reconcileExport(input){
     const snap=input.snapshots?.[competencia];
     const snapshotComparison=compareDealLedgers(ledger.rows,snap?.snapshot?.monthlyIncludedDeals);
     const managementComparison=compareDealLedgers(ledger.rows,management.reconciliation.rows);
+    const sets={SOURCE_DEALS:input.businesses,CANONICAL_MONTHLY_DEALS:ledger.rows,
+      CANONICAL_WEEKLY_DEALS:ledger.weekly.flatMap(w=>w.rows),CRM_LIVE_DEALS:month.includedDeals,
+      GOALS_DEALS:management.reconciliation.rows,SNAPSHOT_DEALS:snap?.snapshot?.monthlyIncludedDeals??null};
+    const monthlyWeekly=compareDealLedgers(sets.CANONICAL_MONTHLY_DEALS,sets.CANONICAL_WEEKLY_DEALS);
+    const crmGoals=compareDealLedgers(sets.GOALS_DEALS,sets.CRM_LIVE_DEALS,{fields:['value','dateKey','dateField'],attribution:false});
+    const sdrAttribution=reconcileSdrAttribution(ledger.rows,input.sdrAttribution);
     const sdr=ledger.weekly.map(part=>{
       const owner=part.fullWeekStartDateKey.slice(0,7);
       return buildWeeklyGoalsReadModel({goal:goals[owner],people,businesses:[],sdrEvents:(input.sdrEvents||[]).filter(e=>e.dateKey>=part.startDateKey&&e.dateKey<=part.endDateKey),globalConfig:input.globalConfig,now:new Date(part.start+'')}).sdrReconciliation;
     });
-    months[competencia]={meta:goal?.valorMeta??null,ledger,metrics:{...ledger.metrics,
+    months[competencia]={sets,monthlyWeekly,crmGoals,sdrAttribution,snapshotAssessment:assessStoredSnapshot(snap,ledger.rows,'month'),meta:goal?.valorMeta??null,ledger,metrics:{...ledger.metrics,
       crm_live_metas_delta:month.summary.realizado-management.month.summary.realizado,
       snapshot_delta:snap?.month?.summary? snap.month.summary.realizado-ledger.metrics.monthly_realized:null,
       snapshot_reconciliation_rate:snapshotComparison.snapshot_reconciliation_rate},snapshotComparison,managementComparison,
@@ -40,16 +48,19 @@ function reconcileExport(input){
   const weeklySnapshot=input.snapshots?.['2026-09'];
   const weekly={...buildWeeklyTeamSummary({weeklyReadModel:w}).closers,rows:ledger.rows,
     snapshotComparison:compareDealLedgers(ledger.rows,weeklySnapshot?.snapshot?.includedDeals),
+    snapshotAssessment:assessStoredSnapshot(weeklySnapshot,ledger.rows),
     oldSnapshotValue:weeklySnapshot?.weekly?.team?.closers?.actualValue??null};
-  const invariantPass=Object.values(months).every(m=>['monthly_weekly_delta','overlapping_periods','improper_gaps','orphan_deals','unallocated_revenue','duplicate_attribution_revenue','estimated_value_deals','invalid_financial_deals','crm_live_metas_delta'].every(k=>m.metrics[k]===0));
-  const certified=sourceComplete&&input.sdrEventsComplete===true&&invariantPass&&Object.values(months).every(m=>m.snapshotComparison.pass&&m.managementComparison.pass&&m.sdr.unallocated===0&&m.sdr.missingIds===0)&&weekly.snapshotComparison.pass;
+  const invariantPass=Object.values(months).every(m=>['monthly_weekly_delta','overlapping_periods','improper_gaps','orphan_deals','unallocated_revenue','duplicate_attribution_revenue','estimated_value_deals','invalid_financial_deals','unverified_revenue_dates','crm_live_metas_delta'].every(k=>m.metrics[k]===0));
+  const certified=sourceComplete&&input.sdrEventsComplete===true&&invariantPass&&Object.values(months).every(m=>m.snapshotComparison.pass&&m.managementComparison.pass&&m.monthlyWeekly.pass&&m.crmGoals.pass&&m.sdrAttribution.pass&&m.sdr.unallocated===0&&m.sdr.missingIds===0)&&weekly.snapshotComparison.pass;
   return {result:certified?'PASS':'FAIL',certified,sourceComplete,productionAltered:false,deployExecuted:false,source:input.source||null,identityKind:input.identityKind||'unknown',months,weekly,
     limits:!sourceComplete?['Not a certified complete transactional export with dealId; replay is not a production dry-run.']:[]};
 }
 async function collectProduction(){
   // Only list/get reads and Datacrazy GET collection. Deliberately DO NOT import
   // getCompleteCrmSource(), runCrmSnapshot(), or a publication/backfill endpoint.
-  if(!process.env.CRM_API_BASE_URL||!process.env.CRM_API_KEY||!process.env.GOOGLE_SERVICE_ACCOUNT_JSON)throw new Error('production_read_only_credentials_unavailable');
+  const missing=['CRM_API_BASE_URL','CRM_API_KEY'].filter(k=>!process.env[k]);
+  if(missing.length)throw new Error('missing_local_'+missing.join('_and_'));
+  // Firestore uses the runtime service-account resolver, including supported aliases.
   const {listCollectionAsAdmin,getDocumentAsAdmin}=require('../api/_lib/firestore-admin');
   const {collectBusinesses}=require('../api/_lib/datacrazy-ingestion');
   const read=async p=>{try{return await getDocumentAsAdmin(p)}catch(e){if(e.status===404)return null;throw e}};

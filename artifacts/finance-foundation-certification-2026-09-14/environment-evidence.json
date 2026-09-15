@@ -1,0 +1,111 @@
+{
+  "checked_at": "2026-09-15T01:40:20.061Z",
+  "external_financial_requests": 0,
+  "remote_writes": 0,
+  "local_environment_sources": [
+    {
+      "source": ".env.local",
+      "exists": true,
+      "vercel_environment": "production",
+      "supabase_origin": "https://mlpojyvwyqcrelagtgkw.supabase.co",
+      "presence": {
+        "SUPABASE_SERVICE_ROLE_KEY": true,
+        "ASAAS_API_KEY": false,
+        "ASAAS_WEBHOOK_TOKEN": false,
+        "FINANCE_CONNECTION_ID": false,
+        "FINANCE_FOUNDATION_ENABLED": false,
+        "FINANCE_WEBHOOK_PROCESS_INLINE": false,
+        "FINANCE_STAGING_APPLY": false
+      }
+    },
+    {
+      "source": ".env.vercel.pull",
+      "exists": true,
+      "vercel_environment": "production",
+      "supabase_origin": "https://mlpojyvwyqcrelagtgkw.supabase.co",
+      "presence": {
+        "SUPABASE_SERVICE_ROLE_KEY": true,
+        "ASAAS_API_KEY": false,
+        "ASAAS_WEBHOOK_TOKEN": false,
+        "FINANCE_CONNECTION_ID": false,
+        "FINANCE_FOUNDATION_ENABLED": false,
+        "FINANCE_WEBHOOK_PROCESS_INLINE": false,
+        "FINANCE_STAGING_APPLY": false
+      }
+    },
+    {
+      "source": ".vercel/.env.production.local",
+      "exists": true,
+      "vercel_environment": "production",
+      "supabase_origin": "https://mlpojyvwyqcrelagtgkw.supabase.co",
+      "presence": {
+        "SUPABASE_SERVICE_ROLE_KEY": true,
+        "ASAAS_API_KEY": false,
+        "ASAAS_WEBHOOK_TOKEN": false,
+        "FINANCE_CONNECTION_ID": false,
+        "FINANCE_FOUNDATION_ENABLED": false,
+        "FINANCE_WEBHOOK_PROCESS_INLINE": false,
+        "FINANCE_STAGING_APPLY": false
+      }
+    },
+    {
+      "source": ".env.finance-sandbox",
+      "exists": false
+    },
+    {
+      "source": ".env.staging",
+      "exists": false
+    },
+    {
+      "source": ".env.staging.local",
+      "exists": false
+    },
+    {
+      "source": ".env.preview",
+      "exists": false
+    },
+    {
+      "source": ".env",
+      "exists": false
+    }
+  ],
+  "process_presence": {
+    "SUPABASE_SERVICE_ROLE_KEY": false,
+    "ASAAS_API_KEY": false,
+    "ASAAS_WEBHOOK_TOKEN": false,
+    "FINANCE_CONNECTION_ID": false,
+    "FINANCE_FOUNDATION_ENABLED": false,
+    "FINANCE_WEBHOOK_PROCESS_INLINE": false,
+    "FINANCE_STAGING_APPLY": false
+  },
+  "client_health_without_credentials": {
+    "configured": false,
+    "reachable": false,
+    "authenticated": false,
+    "account_accessible": false,
+    "environment": null,
+    "checked_at": "2026-09-15T01:40:20.053Z",
+    "error": {
+      "code": "asaas_not_configured",
+      "status": 0,
+      "retryable": false
+    }
+  },
+  "vercel_metadata": {
+    "project": "space",
+    "preview": "https://space-gl1nwvqlk-guilhermedavi-4547s-projects.vercel.app",
+    "status": "READY",
+    "safe_for_finance_test": false,
+    "preview_missing_variables": [
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "SUPABASE_SERVICE_KEY",
+      "ASAAS_API_KEY",
+      "ASAAS_WEBHOOK_TOKEN",
+      "FINANCE_CONNECTION_ID",
+      "FINANCE_FOUNDATION_ENABLED",
+      "FINANCE_WEBHOOK_PROCESS_INLINE"
+    ],
+    "values_not_retrieved": true
+  },
+  "created_sandbox_objects": []
+}

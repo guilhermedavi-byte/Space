@@ -117,7 +117,9 @@ test('runner exige revisão antes da escrita e faz verificação após migration
     fs.writeFileSync(envFile, Object.entries(environment()).map(([k, v]) => `${k}=${v}`).join('\n'));
     const args = [`--env-file=${envFile}`, '--environment=staging', '--confirm-staging'];
     let calls = [];
-    const deps = { inherited: {}, policy, executeSql: (_target, sql) => { calls.push(sql); return '{}'; } };
+    const announcements = [];
+    const deps = { inherited: {}, policy, executeSql: (_target, sql) => { calls.push(sql); return '{}'; },
+      announce: (value) => { assert.equal(calls.length, 1, 'anúncio ocorre após inventário e antes da mutation'); announcements.push(value); } };
     assert.equal(run(['--mode=preflight', ...args], deps).status, 'configuration_verified_only');
     assert.equal(calls.length, 0);
     assert.throws(() => run(['--mode=apply', ...args], deps), /schema_review_required/);
@@ -129,6 +131,12 @@ test('runner exige revisão antes da escrita e faz verificação após migration
     calls = [];
     assert.throws(() => run(['--mode=apply', ...args, `--review-file=${reviewFile}`, `--output=${output}`], deps), /post_apply_verification_failed/);
     assert.equal(calls.length, 3);
+    assert.equal(announcements.length, 1);
+    assert.equal(announcements[0].productionGuardPassed, true);
+    assert.equal(announcements[0].SPACE_ENV, 'staging');
+    assert.ok(!JSON.stringify(announcements).includes(stage));
+    assert.ok(!JSON.stringify(announcements).includes(key));
+    assert.ok(!JSON.stringify(announcements).includes('synthetic-password'));
     assert.equal(calls[1], migration, 'somente migration fixa revisada é passada ao executor');
     assert.match(calls[2], /begin read only;/);
     assert.ok(fs.existsSync(output), 'inventário pós-apply preservado mesmo quando insuficiente');

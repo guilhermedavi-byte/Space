@@ -1,0 +1,783 @@
+diff --git a/api/_lib/commercial-goals.js b/api/_lib/commercial-goals.js
+index 961204c..f32e6ff 100644
+--- a/api/_lib/commercial-goals.js
++++ b/api/_lib/commercial-goals.js
+@@ -1,6 +1,7 @@
+ // Read-only management model. Financial and role rules remain owned by CRM Live.
+ const { resolveCommercialWeek, addDaysToDateKey, formatDateKey } = require('./commercial-week');
+ const { buildWeeklyGoalsReadModel } = require('./growth-people');
++const { buildCommercialLedger } = require('./commercial-reconciliation');
+ const { buildMonthSummary, buildWeeklyTeamSummary } = require('./crm-live');
+ 
+ const listCompetenciaWeeks = (competencia) => {
+@@ -38,6 +39,7 @@ const buildCommercialGoalsModel = ({ competencia, goal, previousGoal = null, glo
+     return { ...week, exists, rows, effectiveConfig: Boolean(read.weeklyGoal), configSource: read.weeklyGoalConfigSource,
+       teamTarget: read.weeklyGoal?.teamTarget || 0,
+       summary: buildWeeklyTeamSummary({ weeklyReadModel: read }).closers,
++      sdrReconciliation: read.sdrReconciliation,
+       progress: read.progress };
+   };
+   const weeks = listCompetenciaWeeks(competencia).map(week => {
+@@ -49,9 +51,10 @@ const buildCommercialGoalsModel = ({ competencia, goal, previousGoal = null, glo
+       copyFromPrevious: !model.exists && previousModel.exists ? { rows: previousModel.rows, teamTarget: previousModel.teamTarget } : null };
+   });
+   const month = buildMonthSummary({ businesses, goal, now: new Date(`${competencia}-15T12:00:00-03:00`) });
++  const reconciliation = buildCommercialLedger({ competencia, goal, globalConfig, people, businesses, goals: { [competencia]: goal, ...(previousGoal?.competencia ? { [previousGoal.competencia]: previousGoal } : {}) } });
+   const monthlyExists = goal?.valorMeta != null;
+   const distributed = weeks.filter(week => week.exists).reduce((sum, week) => sum + week.summary.targetValue, 0);
+-  return { competencia, currentCompetencia: today.slice(0, 7), editable, monthlyExists, goal, month, weeks,
++  return { competencia, currentCompetencia: today.slice(0, 7), editable, monthlyExists, goal, month, weeks, reconciliation,
+     planning: { distributed, difference: month.summary.meta - distributed } };
+ };
+ 
+diff --git a/api/_lib/commercial-period.js b/api/_lib/commercial-period.js
+index 332f95d..6bc1cde 100644
+--- a/api/_lib/commercial-period.js
++++ b/api/_lib/commercial-period.js
+@@ -1,22 +1,4 @@
+-const TIME_ZONE = "America/Sao_Paulo";
+-
+-const formatSaoPauloDateKey = (value) => {
+-  const date = value instanceof Date ? value : new Date(value);
+-  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "";
+-  const parts = new Intl.DateTimeFormat("en-CA", {
+-    timeZone: TIME_ZONE,
+-    year: "numeric",
+-    month: "2-digit",
+-    day: "2-digit",
+-  }).formatToParts(date);
+-  const year = parts.find((part) => part.type === "year")?.value || "";
+-  const month = parts.find((part) => part.type === "month")?.value || "";
+-  const day = parts.find((part) => part.type === "day")?.value || "";
+-  if (!year || !month || !day) return "";
+-  return `${year}-${month}-${day}`;
+-};
+-
+-const isValidDateKey = (value) => /^\d{4}-\d{2}-\d{2}$/.test(String(value || "").trim());
++const { formatDateKey: formatSaoPauloDateKey, isValidDateKey, periodBounds, containsInstant } = require('./commercial-time');
+ 
+ const toLocalNoonDate = (dateKey) => {
+   if (!isValidDateKey(dateKey)) return null;
+@@ -32,8 +14,8 @@ const getCalendarMonthBounds = (now = new Date()) => {
+   const startDate = toLocalNoonDate(startDateKey);
+   const endDate = startDate ? new Date(startDate) : null;
+   if (endDate) {
+-    endDate.setMonth(endDate.getMonth() + 1);
+-    endDate.setDate(0);
++    endDate.setUTCMonth(endDate.getUTCMonth() + 1);
++    endDate.setUTCDate(0);
+   }
+   return {
+     monthKey,
+@@ -51,27 +33,20 @@ const resolveCommercialPeriod = ({ now = new Date(), periodStart = "", periodEnd
+   if (startDateKey > endDateKey) {
+     return {
+       monthKey: bounds.monthKey,
+-      startDateKey: bounds.startDateKey,
+-      endDateKey: bounds.endDateKey,
++      ...periodBounds(bounds.startDateKey, bounds.endDateKey),
+       nowDateKey,
+       isCustom: false,
+     };
+   }
+   return {
+     monthKey: bounds.monthKey,
+-    startDateKey,
+-    endDateKey,
++    ...periodBounds(startDateKey, endDateKey),
+     nowDateKey,
+     isCustom: startDateKey !== bounds.startDateKey || endDateKey !== bounds.endDateKey,
+   };
+ };
+ 
+-const isDateWithinCommercialPeriod = (value, period) => {
+-  if (!period || typeof period !== "object") return false;
+-  const dateKey = formatSaoPauloDateKey(value);
+-  if (!dateKey) return false;
+-  return dateKey >= String(period.startDateKey || "") && dateKey <= String(period.endDateKey || "");
+-};
++const isDateWithinCommercialPeriod = (value, period) => containsInstant(value, period);
+ 
+ const countPeriodDaysElapsedInclusive = (period, now = new Date()) => {
+   if (!period) return 0;
+@@ -92,9 +67,9 @@ const countRemainingWeekdaysMonFri = (period, now = new Date()) => {
+   const endDate = toLocalNoonDate(period.endDateKey);
+   if (!fromDate || !endDate || fromDate > endDate) return 0;
+   let count = 0;
+-  for (const cursor = new Date(fromDate); cursor <= endDate; cursor.setDate(cursor.getDate() + 1)) {
++  for (const cursor = new Date(fromDate); cursor <= endDate; cursor.setUTCDate(cursor.getUTCDate() + 1)) {
+     if (formatSaoPauloDateKey(cursor) === fromKey) continue;
+-    const weekday = cursor.getDay();
++    const weekday = cursor.getUTCDay();
+     if (weekday !== 0 && weekday !== 6) count += 1;
+   }
+   return count;
+@@ -108,8 +83,8 @@ const countRemainingSalesDaysSegSabInclusive = (period, now = new Date()) => {
+   const endDate = toLocalNoonDate(period.endDateKey);
+   if (!fromDate || !endDate || fromDate > endDate) return 0;
+   let count = 0;
+-  for (const cursor = new Date(fromDate); cursor <= endDate; cursor.setDate(cursor.getDate() + 1)) {
+-    if (cursor.getDay() !== 0) count += 1;
++  for (const cursor = new Date(fromDate); cursor <= endDate; cursor.setUTCDate(cursor.getUTCDate() + 1)) {
++    if (cursor.getUTCDay() !== 0) count += 1;
+   }
+   return count;
+ };
+diff --git a/api/_lib/commercial-reconciliation.js b/api/_lib/commercial-reconciliation.js
+new file mode 100644
+index 0000000..42d694f
+--- /dev/null
++++ b/api/_lib/commercial-reconciliation.js
+@@ -0,0 +1,81 @@
++// Pure, deterministic reconciliation. Never reads/writes a database or calls CRM.
++const { summarizeClosedSales, getBusinessClosingDate, getBusinessId, getCommercialDealValue } = require('./commercial-sales');
++const { resolveCommercialPeriod } = require('./commercial-period');
++const { resolveCommercialWeek, partitionCommercialPeriod } = require('./commercial-week');
++const { containsInstant } = require('./commercial-time');
++const { buildGrowthPeopleIndexes, resolveCloserBucketForBusiness, resolveWeeklyGoalConfig } = require('./growth-people');
++const money = n => Math.round((n + Number.EPSILON) * 100) / 100;
++const sum = rows => money(rows.reduce((s,r) => s+r.value,0));
++const canonicalKeys = ['value','dateKey','dateField','weekKey','competencia','status','responsibleId','role'];
++const attributionKeys = ['sourceResponsibleId','sourceSdrId','resolvedPersonId','closingDate'];
++function compareDealLedgers(expected, observed, {fields=canonicalKeys, attribution=true}={}) {
++  if (!Array.isArray(observed)) return { available:false, pass:false, differences:[], snapshot_reconciliation_rate:null, snapshot_delta:null };
++  const exp = new Map(expected.map(r=>[r.id,r])), actual = new Map(), differences=[];
++  for (const r of observed) { if(actual.has(r.id)) differences.push({id:r.id,type:'duplicate_deal',value:r.value}); else actual.set(r.id,r); }
++  const matched = new Set();
++  for (const [id,e] of exp) {
++    const a=actual.get(id);
++    if(!a){differences.push({id,type:'missing_deal',expected:e});continue;}
++    const keys=[...fields,...(attribution?attributionKeys.filter(k=>e[k]!==undefined):[])];
++    const missingFields=keys.filter(k=>a[k]===undefined);
++    if(missingFields.length) differences.push({id,type:'unverifiable_fields',fields:missingFields});
++    let same=!missingFields.length;
++    for(const key of keys) if(a[key]!==undefined && e[key]!==a[key]) {same=false;differences.push({id,type:key==='weekKey'?'wrong_week':`${key}_difference`,expected:e[key],actual:a[key]});}
++    if(same && !differences.some(d=>d.id===id && d.type==='duplicate_deal')) matched.add(id);
++  }
++  for(const [id,a] of actual)if(!exp.has(id))differences.push({id,type:'unexpected_deal',actual:a});
++  const denominator=new Set([...exp.keys(),...actual.keys()]).size;
++  return {available:true,pass:differences.length===0,differences,
++    snapshot_reconciliation_rate:denominator?matched.size/denominator*100:100,
++    snapshot_delta:money(sum(observed)-sum(expected))};
++}
++function buildCommercialLedger({competencia,goal,globalConfig=null,people=[],businesses=[],goals={},periodOverride=null,recordPages={}}){
++  const period=periodOverride || resolveCommercialPeriod({now:new Date(`${competencia}-15T12:00:00-03:00`),periodStart:goal?.periodStart,periodEnd:goal?.periodEnd});
++  const partitions=partitionCommercialPeriod(period);
++  const sales=summarizeClosedSales({businesses,period});
++  const months=Object.entries({...goals,[competencia]:goal}).map(([key,g])=>({key,...resolveCommercialPeriod({now:new Date(`${key}-15T12:00:00-03:00`),periodStart:g?.periodStart,periodEnd:g?.periodEnd})}));
++  const indexByWeek=new Map();
++  const rows=sales.sales.map(s=>{
++    const week=resolveCommercialWeek({now:s.dateKey});
++    if(!indexByWeek.has(week.weekKey)){
++      const ownerMonth=week.startDateKey.slice(0,7),weekGoal=goals[ownerMonth] ?? (ownerMonth===competencia?goal:null);
++      const config=resolveWeeklyGoalConfig({goal:weekGoal,globalConfig,week,people}).weeklyGoal;
++      const roles=new Map((config?.people||[]).map(r=>[r.personId,r.role]));
++      indexByWeek.set(week.weekKey,{ indexes:buildGrowthPeopleIndexes(people.map(p=>({...p,roles:roles.has(p.personId)?[roles.get(p.personId)]:p.roles}))), closers:new Set((config?.people||[]).filter(r=>r.role==='closer'||r.role==='both').map(r=>r.personId)) });
++    }
++    const attribution=indexByWeek.get(week.weekKey);
++    const bucket=resolveCloserBucketForBusiness(s.business,attribution.indexes);
++    if(!attribution.closers.has(bucket.bucketPersonId)){bucket.bucketPersonId='outros';bucket.bucketIsAggregate=true;}
++    const memberships=months.filter(p=>containsInstant(getBusinessClosingDate(s.business).date,p)).map(p=>p.key);
++    const slices=partitions.filter(p=>s.dateKey>=p.startDateKey&&s.dateKey<=p.endDateKey);
++    const rawValue=s.business.total??s.business.value;
++    return {id:s.id,number:s.business.number??s.business.code??null,name:s.business.lead?.name||s.business.name||'',value:s.value,
++      dateKey:s.dateKey,dateField:s.dateField,closingDate:getBusinessClosingDate(s.business).date.toISOString(),createdAt:s.business.createdAt??null,
++      status:String(s.business.stage?.name||s.business.stageName||s.business.stage||''),competencia:memberships.length===1?memberships[0]:competencia,weekKey:week.weekKey,
++      responsibleId:bucket.bucketPersonId,role:bucket.bucketIsAggregate?'aggregate':'closer',
++      sourceResponsibleId:bucket.crmAttendantId||null,sourceResponsibleName:bucket.attendantName||null,
++      resolvedPersonId:bucket.resolvedPersonId||null,attributionMethod:bucket.method||'explicit_others_fallback',
++      // No inferred SDR from attendant or free-text tags. Credit requires an explicit source link.
++      sourceSdrId:s.business.sdrUid||s.business.sdrId||s.business.sdr?.id||null,
++      sourceSdrName:s.business.sdr?.name||null,
++      sourcePages:recordPages[s.id]||[],competenciaMemberships:memberships,weekMemberships:slices.map(p=>p.weekKey),
++      valuation:rawValue===null||rawValue===undefined||rawValue===''||!Number.isFinite(Number(rawValue))?'legacy_estimate':'source_value'};
++  }).sort((a,b)=>a.id.localeCompare(b.id,'en'));
++  const weekly=partitions.map(w=>({...w,competencia,rows:rows.filter(r=>r.weekKey===w.weekKey),actualValue:sum(rows.filter(r=>r.weekKey===w.weekKey))}));
++  const unallocated=rows.filter(r=>r.weekMemberships.length===0||r.competenciaMemberships.length===0||!r.responsibleId);
++  const multiple=rows.filter(r=>r.weekMemberships.length>1||r.competenciaMemberships.length>1);
++  const gaps=partitions.slice(1).filter((p,i)=>p.start!==partitions[i].end).length;
++  const overlaps=partitions.slice(1).filter((p,i)=>p.start<partitions[i].end).length;
++  const byId=new Map();const sourceDuplicates=[];
++  for(const b of businesses){const id=getBusinessId(b);if(byId.has(id))sourceDuplicates.push({id,value:getCommercialDealValue(b)});else byId.set(id,b);}
++  const weeklyTotal=money(weekly.reduce((s,w)=>s+w.actualValue,0));
++  return {competencia,period,rows,weekly,excluded:sales.excluded,sourceDuplicates,
++    metrics:{monthly_realized:sales.actualValue,weekly_realized:weeklyTotal,monthly_weekly_delta:money(sales.actualValue-weeklyTotal),
++      unverified_revenue_dates:rows.filter(r=>['lastMovedAt','stageChangedAt','finishedAt'].includes(r.dateField)).length,
++      invalid_financial_deals:sales.excluded.filter(r=>r.reason==='missing_business_id'||r.reason==='missing_closing_date').length,
++      deals:rows.length,overlapping_periods:overlaps,improper_gaps:gaps,orphan_deals:unallocated.length,
++      unallocated_revenue:sum(unallocated),duplicate_attribution_revenue:sum(multiple),duplicate_attributions:multiple.length,
++      source_duplicate_deals:sourceDuplicates.length,unmatched_source_responsibles:rows.filter(r=>!r.resolvedPersonId).length,
++      unknown_sdr_links:rows.filter(r=>!r.sourceSdrId).length,estimated_value_deals:rows.filter(r=>r.valuation!=='source_value').length}};
++}
++module.exports={buildCommercialLedger,compareDealLedgers};
+diff --git a/api/_lib/commercial-sales.js b/api/_lib/commercial-sales.js
+index 2a653a6..d005813 100644
+--- a/api/_lib/commercial-sales.js
++++ b/api/_lib/commercial-sales.js
+@@ -1,13 +1,14 @@
+ const { getDealValue, normalizeKey } = require('../../_lib/forecast-service');
+ const { formatSaoPauloDateKey } = require('./commercial-period');
++const { parseCommercialDate, containsInstant } = require('./commercial-time');
+ 
+ // Same precedence as the Commercial dashboard: movement is only a legacy fallback.
+ const BUSINESS_CLOSING_DATE_FIELDS = ['wonAt', 'wonDate', 'gainedAt', 'gainAt', 'soldAt', 'soldDate', 'saleAt', 'closedAt', 'finishedAt', 'statusChangedAt', 'stageChangedAt', 'lastMovedAt'];
+ const getBusinessClosingDate = (business = {}) => {
+   for (const field of BUSINESS_CLOSING_DATE_FIELDS) {
+     if (!business[field]) continue;
+-    const date = new Date(business[field]);
+-    if (!Number.isNaN(date.getTime())) return { date, field };
++    const date = parseCommercialDate(business[field]);
++    if (date) return { date, field };
+   }
+   return { date: null, field: '' };
+ };
+@@ -17,21 +18,32 @@ const getStageKey = (business) => normalizeKey(business?.stage?.name || business
+ const chooseCommercialPipeline = (businesses = []) => businesses.some((business) => getPipelineKey(business) === normalizeKey('Funil principal'))
+   ? normalizeKey('Funil principal') : normalizeKey('Conversão');
+ 
++// Preserve explicit zero. Legacy ticket fallback is used only for a missing value
++// and is surfaced by reconciliation; it is never silently certified as source money.
++const getCommercialDealValue = business => {
++  const raw = business?.total ?? business?.value;
++  if (raw !== null && raw !== undefined && raw !== '' && Number.isFinite(Number(raw))) return Number(raw);
++  return getDealValue(business);
++};
+ const summarizeClosedSales = ({ businesses = [], period, pipelineKey = chooseCommercialPipeline(businesses) } = {}) => {
+   const byId = new Map();
++  const seenFacts = new Map();
+   const excluded = [];
+   for (const business of businesses) {
+     const id = getBusinessId(business);
+     const { date, field } = getBusinessClosingDate(business);
+     const dateKey = date ? formatSaoPauloDateKey(date) : '';
+-    const reason = !id ? 'missing_business_id'
+-      : getPipelineKey(business) !== pipelineKey ? 'other_pipeline'
++    const facts = JSON.stringify([getPipelineKey(business),getStageKey(business),date?.toISOString()||'',getCommercialDealValue(business),business.attendant?.id||business.attendantId||'',business.attendant?.name||business.attendantName||'']);
++    if (id && seenFacts.has(id) && seenFacts.get(id) !== facts) throw new Error('conflicting_duplicate_business');
++    if (id) seenFacts.set(id, facts);
++    const reason = getPipelineKey(business) !== pipelineKey ? 'other_pipeline'
+       : getStageKey(business) !== normalizeKey('Fechado') ? 'not_closed'
+       : !dateKey ? 'missing_closing_date'
+-      : !period || dateKey < period.startDateKey || dateKey > period.endDateKey ? 'outside_period'
++      : !containsInstant(date, period) ? 'outside_period'
++      : !id ? 'missing_business_id'
+       : byId.has(id) ? 'duplicate' : '';
+     if (reason) { excluded.push({ id, reason, dateKey, dateField: field }); continue; }
+-    byId.set(id, { id, business, value: getDealValue(business), dateKey, dateField: field });
++    byId.set(id, { id, business, value: getCommercialDealValue(business), dateKey, dateField: field });
+   }
+   const sales = [...byId.values()];
+   return {
+@@ -43,4 +55,4 @@ const summarizeClosedSales = ({ businesses = [], period, pipelineKey = chooseCom
+   };
+ };
+ 
+-module.exports = { BUSINESS_CLOSING_DATE_FIELDS, getBusinessClosingDate, getBusinessId, chooseCommercialPipeline, summarizeClosedSales };
++module.exports = { getCommercialDealValue, BUSINESS_CLOSING_DATE_FIELDS, getBusinessClosingDate, getBusinessId, chooseCommercialPipeline, summarizeClosedSales };
+diff --git a/api/_lib/commercial-sdr.js b/api/_lib/commercial-sdr.js
+new file mode 100644
+index 0000000..be9e4f1
+--- /dev/null
++++ b/api/_lib/commercial-sdr.js
+@@ -0,0 +1,45 @@
++const { isValidDateKey } = require('./commercial-time');
++// SDR performance is activity (meeting/show), not deal revenue. Never infer
++// a selling SDR from a closer, a tag, or a customer name.
++function summarizeSdrEvents({events=[],indexes,week,eligiblePersonIds=[]}) {
++  const eligible=new Set(eligiblePersonIds), seen=new Map(),included=[],excluded=[];
++  for(const e of events){
++    const id=String(e.id||e.firestoreDocId||'');
++    const facts=JSON.stringify([e.dateKey,e.eventType,e.outcome,Boolean(e.deletedAt),e.sdrUid||'',String(e.sdrEmail||'').toLowerCase()]);
++    if(id&&seen.has(id)){
++      if(seen.get(id)!==facts)throw new Error('conflicting_duplicate_sdr_event');
++      excluded.push({id,reason:'duplicate_event'});continue;
++    }
++    if(id)seen.set(id,facts);
++    const reason=e.deletedAt?'deleted':e.eventType!=='meeting'||e.outcome!=='show'?'not_meeting_show':!isValidDateKey(e.dateKey)?'invalid_date':e.dateKey<week.startDateKey||e.dateKey>week.endDateKey?'outside_period':'';
++    if(reason){excluded.push({id,reason});continue;}
++    const personId=indexes.bySdrUid.get(e.sdrUid)||indexes.bySdrEmail.get(String(e.sdrEmail||'').toLowerCase())||null;
++    included.push({id:id||null,personId:personId&&eligible.has(personId)?personId:null,resolvedPersonId:personId,dateKey:e.dateKey,
++      reason:!personId?'unknown_or_inactive_sdr':!eligible.has(personId)?'sdr_not_configured':'attributed',value:1});
++  }
++  return {included,excluded,metrics:{total_meeting_shows:included.length,attributed:included.filter(r=>r.personId).length,
++    unallocated_events:included.filter(r=>!r.personId).length,missing_event_ids:included.filter(r=>!r.id).length,duplicate_events:excluded.filter(r=>r.reason==='duplicate_event').length}};
++}
++// Certification requires explicit evidence per sale. Reading activity counts does
++// not prove which SDR originated a sale; absent evidence is never inferred zero.
++function reconcileSdrAttribution(rows, { status='not_loaded', evidence=[] }={}) {
++  const byId=new Map(evidence.map(e=>[e.dealId,e]));
++  const duplicateEvidence=new Set(evidence.filter((e,i)=>evidence.findIndex(x=>x.dealId===e.dealId)!==i).map(e=>e.dealId));
++  const records=rows.map(row=>{
++    const e=byId.get(row.id);
++    const validEvidence=e&&typeof e.source==='string'&&e.source.length>0&&(e.sdrId===null||(typeof e.sdrId==='string'&&e.sdrId.length>0&&e.eventId&&Number.isFinite(Date.parse(e.timestamp))));
++    const readStatus=status==='source_error'?'source_error':status!=='loaded'||!validEvidence?'not_loaded'
++      :duplicateEvidence.has(row.id)?'source_error':e.sdrId===null?'no_attribution':'value';
++    return {dealId:row.id,value:row.value,expectedSdr:e?.sdrId??null,calculatedSdr:row.sourceSdrId??null,
++      origin:e?.source??null,event:e?.eventId??null,timestamp:e?.timestamp??null,status:readStatus,
++      match:['value','no_attribution'].includes(readStatus)?(e.sdrId??null)===(row.sourceSdrId??null):null};
++  });
++  const loaded=status==='loaded'&&records.every(r=>r.match!==null);
++  return {records,status:loaded?'loaded':status==='source_error'?'source_error':'not_loaded',
++    coverage:loaded?(records.length?records.filter(r=>r.expectedSdr!==null).length/records.length*100:100):null,
++    source_error_rate:status==='not_loaded'||records.some(r=>r.status==='not_loaded')?null:records.length?records.filter(r=>r.status==='source_error').length/records.length*100:status==='source_error'?100:0,
++    unassigned_revenue:loaded?records.filter(r=>r.status==='no_attribution').reduce((s,r)=>s+r.value,0):null,
++    reconciliation_delta:loaded?records.filter(r=>!r.match).reduce((s,r)=>s+Math.abs(r.value),0):null,
++    pass:loaded&&records.every(r=>r.match)};
++}
++module.exports={summarizeSdrEvents,reconcileSdrAttribution};
+diff --git a/api/_lib/commercial-time.js b/api/_lib/commercial-time.js
+new file mode 100644
+index 0000000..81a3e79
+--- /dev/null
++++ b/api/_lib/commercial-time.js
+@@ -0,0 +1,45 @@
++// Canonical civil calendar and half-open instants. Independent of process TZ.
++const TIME_ZONE = 'America/Sao_Paulo';
++const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' });
++const formatDateKey = value => {
++  const d = value instanceof Date ? value : new Date(value);
++  if (!Number.isFinite(d.getTime())) return '';
++  const parts = formatter.formatToParts(d);
++  return ['year', 'month', 'day'].map(k => parts.find(p => p.type === k).value).join('-');
++};
++const isValidDateKey = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0,10) === value;
++const addDaysToDateKey = (key, days) => {
++  if (!isValidDateKey(key) || !Number.isInteger(days)) throw new Error('invalid_commercial_date');
++  return new Date(Date.parse(key) + days * 86400000).toISOString().slice(0,10);
++};
++const starts = new Map();
++function startOfDateMs(key) {
++  if (!isValidDateKey(key)) throw new Error('invalid_commercial_date');
++  if (starts.has(key)) return starts.get(key);
++  // First actual instant of a civil day also handles historical DST midnight gaps.
++  let low = Date.parse(key) - 36 * 3600000, high = Date.parse(key) + 36 * 3600000;
++  while (low < high) { const mid = Math.floor((low + high) / 2); if (formatDateKey(mid) < key) low = mid + 1; else high = mid; }
++  if (starts.size > 4096) starts.clear();
++  starts.set(key, low); return low;
++}
++function periodBounds(startDateKey, endDateKey) {
++  if (!isValidDateKey(startDateKey) || !isValidDateKey(endDateKey) || startDateKey > endDateKey) throw new Error('invalid_commercial_period');
++  const endExclusiveDateKey = addDaysToDateKey(endDateKey, 1);
++  return { startDateKey, endDateKey, endExclusiveDateKey, timezone: TIME_ZONE,
++    start: new Date(startOfDateMs(startDateKey)).toISOString(), end: new Date(startOfDateMs(endExclusiveDateKey)).toISOString() };
++}
++function containsInstant(value, period) {
++  if (!period) return false;
++  const ms = value instanceof Date ? value.getTime() : Date.parse(value);
++  if (!Number.isFinite(ms)) return false;
++  const bounds = periodBounds(period.startDateKey, period.endDateKey);
++  return ms >= Date.parse(bounds.start) && ms < Date.parse(bounds.end);
++}
++// Date-only source fields mean a civil day, not UTC midnight.
++function parseCommercialDate(value) {
++  if (isValidDateKey(value)) return new Date(startOfDateMs(value));
++  if (typeof value === 'string' && !/(Z|[+-]\d{2}:?\d{2})$/i.test(value)) return null;
++  const d = value instanceof Date ? value : new Date(value);
++  return Number.isFinite(d.getTime()) ? d : null;
++}
++module.exports = { TIME_ZONE, formatDateKey, isValidDateKey, addDaysToDateKey, startOfDateMs, periodBounds, containsInstant, parseCommercialDate };
+diff --git a/api/_lib/commercial-week.js b/api/_lib/commercial-week.js
+index f584ab2..4c2e73f 100644
+--- a/api/_lib/commercial-week.js
++++ b/api/_lib/commercial-week.js
+@@ -1,42 +1,10 @@
+-const TIME_ZONE = 'America/Sao_Paulo';
+ const SPECIAL_FIRST_WEEK_START = '2026-08-11';
+ const SPECIAL_FIRST_WEEK_END = '2026-08-18';
+ const WEDNESDAY_INDEX = 3;
+ 
+-const pad2 = (value) => String(value).padStart(2, '0');
+-
+-const formatDateKey = (date) => {
+-  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
+-  const parts = new Intl.DateTimeFormat('en-CA', {
+-    timeZone: TIME_ZONE,
+-    year: 'numeric',
+-    month: '2-digit',
+-    day: '2-digit',
+-  }).formatToParts(date);
+-  const get = (type) => parts.find((part) => part.type === type)?.value || '';
+-  return `${get('year')}-${get('month')}-${get('day')}`;
+-};
+-
+-const isValidDateKey = (value) => /^\d{4}-\d{2}-\d{2}$/.test(String(value || '').trim());
+-
+-const toReferenceDate = (value) => {
+-  if (value instanceof Date) return new Date(value.getTime());
+-  if (typeof value === 'string' && isValidDateKey(value)) return new Date(`${value}T12:00:00-03:00`);
+-  const date = new Date(value || Date.now());
+-  return Number.isNaN(date.getTime()) ? new Date() : date;
+-};
+-
+-const addDaysToDateKey = (dateKey, days) => {
+-  const safe = isValidDateKey(dateKey) ? dateKey : formatDateKey(new Date());
+-  const date = new Date(`${safe}T12:00:00-03:00`);
+-  date.setDate(date.getDate() + Number(days || 0));
+-  return formatDateKey(date);
+-};
+-
+-const getDayOfWeekInSaoPaulo = (dateKey) => {
+-  const date = new Date(`${dateKey}T12:00:00-03:00`);
+-  return Number.isNaN(date.getTime()) ? NaN : date.getDay();
+-};
++const { TIME_ZONE, formatDateKey, isValidDateKey, addDaysToDateKey, periodBounds } = require('./commercial-time');
++const toReferenceDate = value => typeof value === 'string' && isValidDateKey(value) ? new Date(`${value}T12:00:00-03:00`) : new Date(value);
++const getDayOfWeekInSaoPaulo = key => new Date(key).getUTCDay();
+ 
+ const resolveCommercialWeek = ({ now = new Date() } = {}) => {
+   const reference = toReferenceDate(now);
+@@ -44,8 +12,7 @@ const resolveCommercialWeek = ({ now = new Date() } = {}) => {
+   if (nowDateKey >= SPECIAL_FIRST_WEEK_START && nowDateKey <= SPECIAL_FIRST_WEEK_END) {
+     return {
+       weekKey: `wk_${SPECIAL_FIRST_WEEK_START}`,
+-      startDateKey: SPECIAL_FIRST_WEEK_START,
+-      endDateKey: SPECIAL_FIRST_WEEK_END,
++      ...periodBounds(SPECIAL_FIRST_WEEK_START, SPECIAL_FIRST_WEEK_END),
+       nowDateKey,
+       isSpecial: true,
+     };
+@@ -54,17 +21,33 @@ const resolveCommercialWeek = ({ now = new Date() } = {}) => {
+   const dow = getDayOfWeekInSaoPaulo(nowDateKey);
+   const diffToWednesday = Number.isNaN(dow) ? 0 : (dow - WEDNESDAY_INDEX + 7) % 7;
+   const startDateKey = addDaysToDateKey(nowDateKey, -diffToWednesday);
+-  const endDateKey = addDaysToDateKey(startDateKey, 6);
++  const nominalEnd = addDaysToDateKey(startDateKey, 6);
++  const endDateKey = startDateKey < SPECIAL_FIRST_WEEK_START && nominalEnd >= SPECIAL_FIRST_WEEK_START
++    ? addDaysToDateKey(SPECIAL_FIRST_WEEK_START, -1) : nominalEnd;
+   return {
+     weekKey: `wk_${startDateKey}`,
+-    startDateKey,
+-    endDateKey,
++    ...periodBounds(startDateKey, endDateKey),
+     nowDateKey,
+     isSpecial: false,
+   };
+ };
+ 
++// Accounting partition includes partial weeks at BOTH competence boundaries.
++// Planning still owns a complete week by its start month; never prorate targets.
++const partitionCommercialPeriod = (period) => {
++  const parts = [];
++  for (let day = period.startDateKey; day <= period.endDateKey;) {
++    const week = resolveCommercialWeek({ now: day });
++    const end = week.endDateKey < period.endDateKey ? week.endDateKey : period.endDateKey;
++    parts.push({ ...periodBounds(day, end), weekKey: week.weekKey,
++      fullWeekStartDateKey: week.startDateKey, fullWeekEndDateKey: week.endDateKey });
++    day = addDaysToDateKey(end, 1);
++  }
++  return parts;
++};
++
+ module.exports = {
++  partitionCommercialPeriod,
+   TIME_ZONE,
+   SPECIAL_FIRST_WEEK_START,
+   SPECIAL_FIRST_WEEK_END,
+diff --git a/api/_lib/crm-live.js b/api/_lib/crm-live.js
+index 55ccdf9..42cc191 100644
+--- a/api/_lib/crm-live.js
++++ b/api/_lib/crm-live.js
+@@ -41,7 +41,7 @@ const CRM_LIVE_COOKIE_SCOPE = "crm-live:read";
+ const CRM_LIVE_COOKIE_MAX_AGE_SECONDS = 90 * 24 * 60 * 60;
+ const CRM_CACHE_TTL_MS = 2 * 60 * 1000;
+ const SDR_CACHE_TTL_MS = 60 * 1000;
+-const CRM_LIVE_READ_MODEL_VERSION = 3;
++const CRM_LIVE_READ_MODEL_VERSION = 4;
+ const CLOSED_STAGE_KEY = normalizeKey("Fechado");
+ 
+ const safeString = (value) => (value == null ? "" : String(value).trim());
+@@ -381,7 +381,7 @@ const loadSdrEventsRange = async ({ fromKey, toKey } = {}) => {
+     dateField: "dateKey",
+     from: fromKey,
+     to: toKey,
+-  }).catch(() => []);
++  });
+   return rows.map(decodeSdrEventRow).filter(Boolean);
+ };
+ 
+@@ -458,6 +458,7 @@ const buildMonthSummary = ({ businesses = [], goal = null, now = new Date() } =
+       : null,
+     pipelineKey,
+     windowCount: monthWindow.length,
++    includedDeals: closedSales.sales.map(({id,value,dateKey,dateField})=>({id,value,dateKey,dateField})),
+   };
+ };
+ 
+@@ -841,15 +842,21 @@ const buildCrmLiveCrmSlice = async ({ goal, globalConfig = null, people, now = n
+     now,
+   });
+   const weeklyTeam = buildWeeklyTeamSummary({ weeklyReadModel });
+-  const weeklySales = summarizeClosedSales({ businesses: crm.businesses, period: weeklyReadModel.commercialWeek });
++  const { buildCommercialLedger } = require('./commercial-reconciliation');
++  const nextMonthKey = subtractMonthsFromMonthKey(monthPeriod.monthKey, -1);
++  const nextGoal = await loadGoalByMonthKey(nextMonthKey);
++  const ledgerGoals = { [monthPeriod.monthKey]: goal, [previousMonthKey]: previousGoal, [nextMonthKey]: nextGoal };
++  const monthLedger = buildCommercialLedger({ competencia: monthPeriod.monthKey, goal, globalConfig, people, businesses: crm.businesses, recordPages: crm.recordPages, goals: ledgerGoals });
++  const weekLedger = buildCommercialLedger({ competencia: monthPeriod.monthKey, goal, globalConfig, people, businesses: crm.businesses, recordPages: crm.recordPages, goals: ledgerGoals, periodOverride: weeklyReadModel.commercialWeek });
+   const calculatedAt = new Date().toISOString();
+   const snapshot = {
+     ...crm.metadata, chunks: undefined, snapshotId, sourceSnapshotId: crm.metadata.snapshotId,
+     status: 'VALID', calculationStartedAt: now.toISOString(), calculatedAt, calculationVersion: CRM_LIVE_READ_MODEL_VERSION,
+     calculationCompleted: true, recordsEligible: weeklyTeam.closers.count, error: null,
+     period: { from: weeklyReadModel.commercialWeek.startDateKey, to: weeklyReadModel.commercialWeek.endDateKey },
+-    includedDeals: weeklySales.sales.map(sale => ({ id: sale.id, number: sale.business.number ?? sale.business.code ?? null,
+-      value: sale.value, dateField: sale.dateField, dateKey: sale.dateKey })),
++    includedDeals: weekLedger.rows,
++    monthlyIncludedDeals: monthLedger.rows,
++    reconciliation: { month: monthLedger.metrics, week: weekLedger.metrics },
+     durationMs: crm.metadata.durationMs + Date.now() - calculationStarted,
+   };
+   log('calculation_completed', { snapshotId, actualValue: weeklyTeam.closers.actualValue, count: weeklyTeam.closers.count });
+@@ -921,6 +928,7 @@ const buildCrmLiveSdrSlice = async ({ goal, globalConfig = null, people, now = n
+   });
+   return {
+     readModelVersion: CRM_LIVE_READ_MODEL_VERSION,
++    sdrReconciliation: weeklyReadModel.sdrReconciliation,
+     generatedAt: new Date().toISOString(),
+     weekly: {
+       commercialWeek: weeklyReadModel.commercialWeek,
+diff --git a/api/_lib/crm-snapshot-freshness.js b/api/_lib/crm-snapshot-freshness.js
+index 9435855..47f9ff0 100644
+--- a/api/_lib/crm-snapshot-freshness.js
++++ b/api/_lib/crm-snapshot-freshness.js
+@@ -3,7 +3,7 @@ function describeSnapshot(data, fallbackMode = false, nowMs = Date.now()) {
+   const snapshot = data?.snapshot || {};
+   const at = snapshot.lastCompleteAt || snapshot.fetchCompletedAt || data?.snapshotGeneratedAt || data?.generatedAt;
+   const ms = Date.parse(at || '');
+-  const valid = snapshot.status === 'VALID' && snapshot.calculationVersion === 3;
++  const valid = snapshot.status === 'VALID' && snapshot.calculationVersion === 4;
+   const pending = fallbackMode || data?.stale || snapshot.stale || !valid || !Number.isFinite(ms) || nowMs - ms >= 300000;
+   const label = Number.isFinite(ms) ? new Intl.DateTimeFormat('pt-BR', {
+     timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+diff --git a/api/_lib/crm-snapshot-publish.js b/api/_lib/crm-snapshot-publish.js
+index 6e06dde..d90d2a5 100644
+--- a/api/_lib/crm-snapshot-publish.js
++++ b/api/_lib/crm-snapshot-publish.js
+@@ -1,7 +1,26 @@
+ const crypto = require('crypto');
+ const { createFirestoreStore } = require('./crm-snapshot-store');
+ const { failure, log } = require('./datacrazy-ingestion');
+-const CALCULATION_VERSION = 3;
++const CALCULATION_VERSION = 4;
++function assessStoredSnapshot(payload, canonicalRows, scope = 'week') {
++  const { compareDealLedgers } = require('./commercial-reconciliation');
++  const snapshot = payload?.snapshot || {};
++  const aggregate = scope === 'month' ? payload?.month?.summary : payload?.weekly?.team?.closers;
++  const revenue = scope === 'month' ? aggregate?.realizado : aggregate?.actualValue;
++  const rows = scope === 'month' ? snapshot.monthlyIncludedDeals : snapshot.includedDeals;
++  const canonicalRevenue = canonicalRows.reduce((s,d)=>s+d.value,0);
++  const delta = Number.isFinite(revenue) ? Math.round((revenue-canonicalRevenue)*100)/100 : null;
++  const comparison = compareDealLedgers(canonicalRows, rows);
++  const complete = snapshot.fetchCompleted === true && snapshot.paginationCompleted === true;
++  const status = !payload || delta === null ? 'INVALID'
++    : delta !== 0 ? 'STALE'
++    : !complete || (snapshot.expectedPages != null && snapshot.pagesFetched !== snapshot.expectedPages) ? 'INCOMPLETE'
++    : !comparison.pass ? 'INVALID' : 'RECONCILED';
++  return { status, generated_at:payload?.generatedAt || snapshot.calculatedAt || null,
++    source_completeness:complete?true:snapshot.fetchCompleted===false||snapshot.paginationCompleted===false?false:null, page_count:snapshot.pagesFetched ?? null, expected_page_count:snapshot.expectedPages ?? null,
++    deal_count:scope==='month' ? aggregate?.totalVendas ?? null : aggregate?.count ?? null,
++    revenue:revenue ?? null, canonical_revenue:canonicalRevenue, delta, comparison };
++}
+ function validateCrmSnapshot(payload) {
+   const m = payload.snapshot;
+   const week = payload.weekly?.team?.closers;
+@@ -9,7 +28,19 @@ function validateCrmSnapshot(payload) {
+   if (!m || m.status !== 'VALID' || m.calculationVersion !== CALCULATION_VERSION || !m.fetchCompleted || !m.paginationCompleted || !m.calculationCompleted || (m.expectedPages !== null && m.pagesFetched !== m.expectedPages)) throw failure('snapshot_quality_gate_failed');
+   if (m.recordsEligible > m.recordsConsidered) throw failure('invalid_eligible_count');
+   if (!week || !month || ![week.actualValue, week.count, month.realizado, month.totalVendas].every(Number.isFinite)) throw failure('invalid_snapshot_metrics');
++  for (const [deals, value, count] of [[m.includedDeals, week.actualValue, week.count], [m.monthlyIncludedDeals, month.realizado, month.totalVendas]]) {
++    if (!Array.isArray(deals) || deals.length !== count || new Set(deals.map(d=>d.id)).size !== deals.length ||
++        deals.some(d=>!d.id || !d.weekKey || !d.competencia || !d.responsibleId || !d.dateField || !d.dateKey || !d.status || !d.role || !Number.isFinite(d.value)) ||
++        Math.abs(deals.reduce((s,d)=>s+d.value,0)-value)>0.005) throw failure('snapshot_deal_reconciliation_failed');
++  }
++  for (const metric of [m.reconciliation?.month,m.reconciliation?.week]) {
++    if (!metric || ['monthly_weekly_delta','overlapping_periods','improper_gaps','orphan_deals','unallocated_revenue','duplicate_attribution_revenue','estimated_value_deals','invalid_financial_deals','unverified_revenue_dates'].some(k=>metric[k] !== 0)) throw failure('snapshot_ledger_invariant_failed');
++  }
+   const rows = payload.weekly.closers || [];
++  for (const row of rows) {
++    const attributed=m.includedDeals.filter(d=>d.responsibleId===row.personId);
++    if(attributed.length!==row.count || Math.abs(attributed.reduce((s,d)=>s+d.value,0)-row.actualValue)>0.005) throw failure('snapshot_role_reconciliation_failed');
++  }
+   if (new Set(rows.map(r => r.personId)).size !== rows.length || Math.abs(rows.reduce((s,r)=>s+r.actualValue,0) - week.actualValue) > 0.005 || rows.reduce((s,r)=>s+r.count,0) !== week.count) throw failure('snapshot_reconciliation_failed');
+ }
+ async function publishCrmSnapshot(payload, { store = createFirestoreStore(), logger = log } = {}) {
+@@ -58,4 +89,4 @@ async function runCrmSnapshot(build, { store = createFirestoreStore(), logger =
+     throw error;
+   }
+ }
+-module.exports = { CALCULATION_VERSION, validateCrmSnapshot, publishCrmSnapshot, runCrmSnapshot };
++module.exports = { CALCULATION_VERSION, assessStoredSnapshot, validateCrmSnapshot, publishCrmSnapshot, runCrmSnapshot };
+diff --git a/api/_lib/crm-source-snapshot.js b/api/_lib/crm-source-snapshot.js
+index 3221329..ca2ffe2 100644
+--- a/api/_lib/crm-source-snapshot.js
++++ b/api/_lib/crm-source-snapshot.js
+@@ -18,10 +18,24 @@ const createSourceService = ({ store = createFirestoreStore(), collect = collect
+     const businesses = JSON.parse(gunzipSync(Buffer.from(encoded.join(''), 'base64')).toString());
+     const hash = crypto.createHash('sha256').update(canonicalJson(businesses)).digest('hex');
+     if (hash !== manifest.datasetHash || businesses.length !== manifest.recordsConsidered) throw failure('dataset_integrity_failed');
+-    return { businesses, metadata: manifest, stale, lastAttempt: attempt || null,
++    let recordPages = {};
++    if (manifest.provenanceChunks?.length) {
++      const parts=[];
++      for(const path of manifest.provenanceChunks){const chunk=await store.read(path);if(!chunk?.data?.content)throw failure('missing_provenance_chunk');parts.push(chunk.data.content);}
++      const json=gunzipSync(Buffer.from(parts.join(''),'base64')).toString();
++      if(crypto.createHash('sha256').update(json).digest('hex')!==manifest.provenanceHash)throw failure('provenance_integrity_failed');
++      recordPages=JSON.parse(json);
++    }
++    return { businesses, recordPages, metadata: manifest, stale, lastAttempt: attempt || null,
+       pagination: { ...manifest, pages: manifest.pagesFetched, totalFetched: manifest.recordsFetched, source: 'datacrazy-complete-snapshot' } };
+   };
+   return {
++    async readOnly() {
++      const prior = await store.read(STATE_PATH);
++      const state = prior?.data || {};
++      const age = clock() - Date.parse(state.current?.fetchCompletedAt || '');
++      return hydrate(state.current, state.lastAttempt, !Number.isFinite(age) || age < 0 || age >= SOURCE_TTL_MS || state.lastAttempt?.status === 'FAILED');
++    },
+     async get({ allowStale = true } = {}) {
+       const prior = await store.read(STATE_PATH);
+       const state = prior?.data || {};
+@@ -64,14 +78,22 @@ const createSourceService = ({ store = createFirestoreStore(), collect = collect
+             chunks.push(path);
+           }
+         }
+-        const manifest = { ...m, sourceVersion: SOURCE_VERSION, status: 'VALID', error: null, chunks };
++        const provenanceChunks=[];
++        const provenanceJson=canonicalJson(result.recordPages || {});
++        const provenanceHash=crypto.createHash('sha256').update(provenanceJson).digest('hex');
++        const provenanceContent=gzipSync(provenanceJson).toString('base64');
++        for(let offset=0;offset<provenanceContent.length;offset+=500000){
++          const path=`crmLiveDatasetChunks/pages-${provenanceHash}-${provenanceChunks.length}`;
++          await store.commit([{path,data:{content:provenanceContent.slice(offset,offset+500000)}}]);provenanceChunks.push(path);
++        }
++        const manifest = { ...m, provenanceChunks, provenanceHash, sourceVersion: SOURCE_VERSION, status: 'VALID', error: null, chunks };
+         // Staging chunks cannot be read as current before this atomic, fenced commit.
+         await store.commit([
+           { path: STATE_PATH, data: { current: manifest, leaseUntil: 0, retryNotBefore: 0, lastAttempt: manifest }, version: leaseVersion },
+           { path: runPath, data: manifest },
+         ]);
+         logger('source_published', { snapshotId, recordsFetched: m.recordsFetched, sync_success_rate: 1, sync_duration: m.durationMs, datacrazy_429_count: m.datacrazy429Count, datacrazy_retry_count: m.retryCount });
+-        return { businesses: result.businesses, metadata: manifest, stale: false, lastAttempt: manifest,
++        return { businesses: result.businesses, recordPages: result.recordPages || {}, metadata: manifest, stale: false, lastAttempt: manifest,
+           pagination: { ...m, pages: m.pagesFetched, totalFetched: m.recordsFetched, source: 'datacrazy-complete-snapshot' } };
+       } catch (error) {
+         const failed = { ...attempt, ...(error.syncMetadata || result?.metadata || {}), status: 'FAILED', failedAt: new Date(clock()).toISOString(),
+@@ -91,4 +113,5 @@ const createSourceService = ({ store = createFirestoreStore(), collect = collect
+ };
+ let service;
+ const getCompleteCrmSource = (options) => (service ||= createSourceService()).get(options);
+-module.exports = { createSourceService, getCompleteCrmSource, SOURCE_TTL_MS, STATE_PATH };
++const readCompleteCrmSource = () => (service ||= createSourceService()).readOnly();
++module.exports = { readCompleteCrmSource, createSourceService, getCompleteCrmSource, SOURCE_TTL_MS, STATE_PATH };
+diff --git a/api/_lib/datacrazy-ingestion.js b/api/_lib/datacrazy-ingestion.js
+index 4440fee..fa44467 100644
+--- a/api/_lib/datacrazy-ingestion.js
++++ b/api/_lib/datacrazy-ingestion.js
+@@ -29,6 +29,7 @@ async function collectBusinesses({ snapshotId = crypto.randomUUID(), fetchImpl =
+     expectedRecords: null, requestsCount: 0, retryCount: 0, datacrazy429Count: 0, durationMs: 0,
+     fetchCompleted: false, paginationCompleted: false };
+   const rows = new Map();
++  const recordPages = {};
+   let lastRequestAt = -Infinity;
+   logger('fetch_started', { snapshotId });
+   const delay = async (ms) => {
+@@ -85,6 +86,7 @@ async function collectBusinesses({ snapshotId = crypto.randomUUID(), fetchImpl =
+         if (!id) throw failure('missing_business_id');
+         const serialized = canonicalJson(business);
+         if (rows.has(id) && rows.get(id).serialized !== serialized) throw failure('conflicting_duplicate_business');
++        (recordPages[id] ||= []).push(page);
+         rows.set(id, { business, serialized });
+       }
+       logger('page_completed', { snapshotId, page, expectedPages: metadata.expectedPages, received: decoded.items.length, recordsFetched: metadata.recordsFetched });
+@@ -98,13 +100,14 @@ async function collectBusinesses({ snapshotId = crypto.randomUUID(), fetchImpl =
+     if (!metadata.paginationCompleted) throw failure('pagination_limit_exceeded');
+     const businesses = [...rows.entries()].sort(([a], [b]) => a.localeCompare(b, 'en')).map(([, row]) => row.business);
+     metadata.recordsConsidered = businesses.length;
++
+     metadata.sourceMaxDate = businesses.map(b => getBusinessClosingDate(b).date?.toISOString()).filter(Boolean).sort().pop() || null;
+     metadata.fetchCompleted = true;
+     metadata.fetchCompletedAt = new Date(clock()).toISOString();
+     metadata.durationMs = clock() - started;
+     metadata.datasetHash = crypto.createHash('sha256').update(canonicalJson(businesses)).digest('hex');
+     logger('fetch_completed', metadata);
+-    return { businesses, metadata };
++    return { businesses, metadata, recordPages };
+   } catch (error) {
+     metadata.durationMs = clock() - started;
+     error.syncMetadata = metadata;
+diff --git a/api/_lib/firestore-admin.js b/api/_lib/firestore-admin.js
+index 293d429..1b264c3 100644
+--- a/api/_lib/firestore-admin.js
++++ b/api/_lib/firestore-admin.js
+@@ -48,6 +48,7 @@ const listCollectionAsAdmin = async (collectionPath, { pageSize = 1000 } = {}) =
+     pageToken = String(response.data?.nextPageToken || "");
+     if (!pageToken) break;
+   }
++  if (pageToken) throw new Error("firestore_pagination_incomplete");
+   return all;
+ };
+ 
+diff --git a/api/_lib/growth-people.js b/api/_lib/growth-people.js
+index df10ecb..dcd6540 100644
+--- a/api/_lib/growth-people.js
++++ b/api/_lib/growth-people.js
+@@ -552,28 +552,12 @@ const summarizeWeeklyCloserProgress = ({ sales = [], goalPeople = [], indexes })
+   return Array.from(rowsByPerson.values());
+ };
+ 
++const { summarizeSdrEvents } = require('./commercial-sdr');
+ const summarizeWeeklySdrProgress = ({ events = [], goalPeople = [], indexes, week }) => {
+-  const rowsByPerson = new Map(
+-    goalPeople
+-      .filter((row) => row.role === 'sdr' || row.role === 'both')
+-      .map((row, index) => [row.personId, { personId: row.personId, role: row.role, targetValue: safeNumber(row.targetValue), goalOrder: index, actualValue: 0, count: 0 }])
+-  );
+-  (Array.isArray(events) ? events : []).forEach((event) => {
+-    const eventType = safeString(event?.eventType);
+-    const outcome = safeString(event?.outcome);
+-    const deletedAt = safeString(event?.deletedAt);
+-    const dateKey = safeString(event?.dateKey);
+-    const sdrUid = safeString(event?.sdrUid);
+-    const email = safeString(event?.sdrEmail).toLowerCase();
+-    if (deletedAt || eventType !== 'meeting' || outcome !== 'show') return;
+-    if (!dateKey || dateKey < week.startDateKey || dateKey > week.endDateKey) return;
+-    const personId = (sdrUid && indexes.bySdrUid.get(sdrUid)) || indexes.bySdrEmail.get(email);
+-    if (!personId || !rowsByPerson.has(personId)) return;
+-    const row = rowsByPerson.get(personId);
+-    row.actualValue += 1;
+-    row.count += 1;
+-  });
+-  return Array.from(rowsByPerson.values());
++  const rows = goalPeople.filter(r=>r.role === 'sdr' || r.role === 'both').map((r,index)=>({personId:r.personId,role:r.role,targetValue:safeNumber(r.targetValue),goalOrder:index,actualValue:0,count:0}));
++  const audit=summarizeSdrEvents({events,indexes,week,eligiblePersonIds:rows.map(r=>r.personId)});
++  for (const event of audit.included) { const row=rows.find(r=>r.personId===event.personId);if(row){row.actualValue++;row.count++;} }
++  return { rows, audit };
+ };
+ 
+ const attachPersonMeta = (rows = [], indexes) =>
+@@ -625,9 +609,11 @@ const buildWeeklyGoalsReadModel = ({ goal = null, globalConfig = null, people =
+   ).map((row) => row.personId === AGGREGATE_OTHERS_PERSON_ID ? { ...row, role: 'closer' } : row);
+   const closedSales = summarizeClosedSales({ businesses, period: week });
+   const closerRows = attachPersonMeta(summarizeWeeklyCloserProgress({ sales: closedSales.sales, goalPeople, indexes }), indexes);
+-  const sdrRows = attachPersonMeta(summarizeWeeklySdrProgress({ events: sdrEvents, goalPeople, indexes, week }), indexes);
++  const sdrResult = summarizeWeeklySdrProgress({ events: sdrEvents, goalPeople, indexes, week });
++  const sdrRows = attachPersonMeta(sdrResult.rows, indexes);
+   return {
+     commercialWeek: week,
++    sdrReconciliation: sdrResult.audit,
+     weeklyGoal,
+     weeklyGoalConfigSource: resolvedConfig.source,
+     weeklyGoalConfigSourceDetails: resolvedConfig.sourceDetails || { teamTarget: '', people: '' },
+diff --git a/api/growth-dashboard.js b/api/growth-dashboard.js
+index 37f710c..d754b3a 100644
+--- a/api/growth-dashboard.js
++++ b/api/growth-dashboard.js
+@@ -282,7 +282,7 @@ const firestoreListDocumentsWithAccessToken = async ({ collectionPath, accessTok
+     if (!pageToken) return { ...res, documents: all };
+   }
+ 
+-  return { ok: true, status: 200, data: null, text: "", documents: all };
++  throw new Error("firestore_pagination_incomplete");
+ };
+ 
+ const firestorePatchDocumentWithAccessToken = async ({ docPath, accessToken, data, updateMaskPaths } = {}) => {

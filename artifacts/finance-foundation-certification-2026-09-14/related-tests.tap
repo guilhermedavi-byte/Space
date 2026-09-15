@@ -1,0 +1,483 @@
+TAP version 13
+# Subtest: Asaas health: missing key performs no request
+ok 1 - Asaas health: missing key performs no request
+  ---
+  duration_ms: 23.031542
+  type: 'test'
+  ...
+# Subtest: Asaas health: validates account response without exposing secret
+ok 2 - Asaas health: validates account response without exposing secret
+  ---
+  duration_ms: 51.861291
+  type: 'test'
+  ...
+# Subtest: Asaas remote errors are sanitized, including body and thrown network details
+ok 3 - Asaas remote errors are sanitized, including body and thrown network details
+  ---
+  duration_ms: 1.046833
+  type: 'test'
+  ...
+# Subtest: Asaas transport: verbs, JSON, timeout, redirect/path restrictions
+ok 4 - Asaas transport: verbs, JSON, timeout, redirect/path restrictions
+  ---
+  duration_ms: 14.24225
+  type: 'test'
+  ...
+# Subtest: Asaas pagination follows hasMore and rejects non-progress
+ok 5 - Asaas pagination follows hasMore and rejects non-progress
+  ---
+  duration_ms: 2.480083
+  type: 'test'
+  ...
+# Subtest: certification permits only the reviewed sandbox target and explicit apply
+ok 6 - certification permits only the reviewed sandbox target and explicit apply
+  ---
+  duration_ms: 9.74375
+  type: 'test'
+  ...
+# Subtest: production, conflicting aliases, non-allowlisted domains and credentials fail closed
+ok 7 - production, conflicting aliases, non-allowlisted domains and credentials fail closed
+  ---
+  duration_ms: 7.45825
+  type: 'test'
+  ...
+# Subtest: JWT role/ref/expiry and explicit production Asaas key are checked beyond hashes
+ok 8 - JWT role/ref/expiry and explicit production Asaas key are checked beyond hashes
+  ---
+  duration_ms: 3.285416
+  type: 'test'
+  ...
+# Subtest: actual CLI refuses unapproved inputs before any fetch, including dry-run and health
+ok 9 - actual CLI refuses unapproved inputs before any fetch, including dry-run and health
+  ---
+  duration_ms: 292.292125
+  type: 'test'
+  ...
+# Subtest: financial normalization uses fixed decimals and preserves confirmed/received/refund distinctions
+ok 10 - financial normalization uses fixed decimals and preserves confirmed/received/refund distinctions
+  ---
+  duration_ms: 7.2205
+  type: 'test'
+  ...
+# Subtest: inbox normalization deduplicates canonical payload, rejects invalid bodies, excludes PII and credentials
+ok 11 - inbox normalization deduplicates canonical payload, rejects invalid bodies, excludes PII and credentials
+  ---
+  duration_ms: 2.417458
+  type: 'test'
+  ...
+# Subtest: comparison identifies missing/status/value/due mismatches without guessing a student
+ok 12 - comparison identifies missing/status/value/due mismatches without guessing a student
+  ---
+  duration_ms: 1.772417
+  type: 'test'
+  ...
+# Subtest: webhook auth/body/persistence acknowledgement and rollout compatibility
+ok 13 - webhook auth/body/persistence acknowledgement and rollout compatibility
+  ---
+  duration_ms: 15.256208
+  type: 'test'
+  ...
+# Subtest: foundation maintenance API: admin/CSRF/feature flag enforced
+ok 14 - foundation maintenance API: admin/CSRF/feature flag enforced
+  ---
+  duration_ms: 1.74
+  type: 'test'
+  ...
+# Subtest: CLI apply blocks production and unverified DB targets
+ok 15 - CLI apply blocks production and unverified DB targets
+  ---
+  duration_ms: 0.403833
+  type: 'test'
+  ...
+# [retention] command failed { code: 'idempotency_key_payload_mismatch' }
+# Subtest: backend local conversa com PostgREST descartável e respeita gates/segurança
+ok 16 - backend local conversa com PostgREST descartável e respeita gates/segurança
+  ---
+  duration_ms: 6061.892
+  type: 'test'
+  ...
+# [retention] command failed { code: 'idempotency_key_payload_mismatch' }
+# Subtest: GET queues retorna fonte nova e filas serializadas
+ok 17 - GET queues retorna fonte nova e filas serializadas
+  ---
+  duration_ms: 11.121875
+  type: 'test'
+  ...
+# Subtest: GET fica bloqueado quando retention v2 está desligada
+ok 18 - GET fica bloqueado quando retention v2 está desligada
+  ---
+  duration_ms: 3.157583
+  type: 'test'
+  ...
+# Subtest: POST bloqueia usuário sem capability
+ok 19 - POST bloqueia usuário sem capability
+  ---
+  duration_ms: 0.757709
+  type: 'test'
+  ...
+# Subtest: POST fica bloqueado quando retention v2 está desligada
+ok 20 - POST fica bloqueado quando retention v2 está desligada
+  ---
+  duration_ms: 0.958
+  type: 'test'
+  ...
+# Subtest: POST exige justificativa em churn manual administrativo
+ok 21 - POST exige justificativa em churn manual administrativo
+  ---
+  duration_ms: 0.927084
+  type: 'test'
+  ...
+# Subtest: POST bloqueia churn involuntário quando a flag está desligada
+ok 22 - POST bloqueia churn involuntário quando a flag está desligada
+  ---
+  duration_ms: 0.313167
+  type: 'test'
+  ...
+# Subtest: POST crítico exige admin mesmo com capability ampla
+ok 23 - POST crítico exige admin mesmo com capability ampla
+  ---
+  duration_ms: 0.383458
+  type: 'test'
+  ...
+# Subtest: POST resolve student/subscription a partir do firestore_student_id
+ok 24 - POST resolve student/subscription a partir do firestore_student_id
+  ---
+  duration_ms: 4.970916
+  type: 'test'
+  ...
+# Subtest: POST exige requested_at saneado no pedido formal
+ok 25 - POST exige requested_at saneado no pedido formal
+  ---
+  duration_ms: 1.141125
+  type: 'test'
+  ...
+# Subtest: POST traduz mismatch de idempotência em conflito controlado
+ok 26 - POST traduz mismatch de idempotência em conflito controlado
+  ---
+  duration_ms: 3.912916
+  type: 'test'
+  ...
+# Subtest: pedido dentro de 7 dias da primeira aula encerra em 1 mês da primeira aula
+ok 27 - pedido dentro de 7 dias da primeira aula encerra em 1 mês da primeira aula
+  ---
+  duration_ms: 9.430417
+  type: 'test'
+  ...
+# Subtest: pedido fora da janela inicial encerra em 2 meses do pedido
+ok 28 - pedido fora da janela inicial encerra em 2 meses do pedido
+  ---
+  duration_ms: 0.242084
+  type: 'test'
+  ...
+# Subtest: command payload preserva retry idempotente e aceita resolução por firestore_student_id
+ok 29 - command payload preserva retry idempotente e aceita resolução por firestore_student_id
+  ---
+  duration_ms: 0.574875
+  type: 'test'
+  ...
+# Subtest: command payload saneia campos e bloqueia mass assignment fora do comando
+ok 30 - command payload saneia campos e bloqueia mass assignment fora do comando
+  ---
+  duration_ms: 6.604375
+  type: 'test'
+  ...
+# Subtest: queues exibem financeiro indisponível sem forçar R$ 0,00
+ok 31 - queues exibem financeiro indisponível sem forçar R$ 0,00
+  ---
+  duration_ms: 1.170375
+  type: 'test'
+  ...
+# Subtest: queues mapeiam caso perdido como desfecho lost
+ok 32 - queues mapeiam caso perdido como desfecho lost
+  ---
+  duration_ms: 0.140166
+  type: 'test'
+  ...
+# Subtest: override administrativo exige justificativa nos comandos críticos
+ok 33 - override administrativo exige justificativa nos comandos críticos
+  ---
+  duration_ms: 0.279667
+  type: 'test'
+  ...
+# Subtest: comandos críticos ficam restritos a admin
+ok 34 - comandos críticos ficam restritos a admin
+  ---
+  duration_ms: 0.089875
+  type: 'test'
+  ...
+# Subtest: projeção pode ser reconstruída a partir do histórico append-only
+ok 35 - projeção pode ser reconstruída a partir do histórico append-only
+  ---
+  duration_ms: 0.581042
+  type: 'test'
+  ...
+# Subtest: awaiting_customer preserva a data final já programada
+ok 36 - awaiting_customer preserva a data final já programada
+  ---
+  duration_ms: 1.565541
+  type: 'test'
+  ...
+# Subtest: continuidade confirmada devolve o caso para scheduled
+ok 37 - continuidade confirmada devolve o caso para scheduled
+  ---
+  duration_ms: 0.281292
+  type: 'test'
+  ...
+# Subtest: delinquency_recovered retorna o financeiro para current
+ok 38 - delinquency_recovered retorna o financeiro para current
+  ---
+  duration_ms: 0.072458
+  type: 'test'
+  ...
+# Subtest: delinquency_started leva o financeiro para delinquent
+ok 39 - delinquency_started leva o financeiro para delinquent
+  ---
+  duration_ms: 0.045291
+  type: 'test'
+  ...
+# Subtest: legacy_import com state_after semeia a projeção reconstruída
+ok 40 - legacy_import com state_after semeia a projeção reconstruída
+  ---
+  duration_ms: 0.056542
+  type: 'test'
+  ...
+# Subtest: sanitizePayloadByCommand ignora campos técnicos fora do contrato
+ok 41 - sanitizePayloadByCommand ignora campos técnicos fora do contrato
+  ---
+  duration_ms: 0.086042
+  type: 'test'
+  ...
+# Subtest: staging falha se apontar para Firebase de produção
+ok 42 - staging falha se apontar para Firebase de produção
+  ---
+  duration_ms: 13.916334
+  type: 'test'
+  ...
+# Subtest: ambiente inválido falha fechado
+ok 43 - ambiente inválido falha fechado
+  ---
+  duration_ms: 0.170625
+  type: 'test'
+  ...
+# Subtest: staging falha se apontar para Supabase de produção
+ok 44 - staging falha se apontar para Supabase de produção
+  ---
+  duration_ms: 0.264958
+  type: 'test'
+  ...
+# Subtest: staging falha se usar Asaas real
+ok 45 - staging falha se usar Asaas real
+  ---
+  duration_ms: 0.218167
+  type: 'test'
+  ...
+# Subtest: staging falha se webhook de produção estiver configurado
+ok 46 - staging falha se webhook de produção estiver configurado
+  ---
+  duration_ms: 1.032417
+  type: 'test'
+  ...
+# Subtest: runtime público de staging expõe banner de teste
+ok 47 - runtime público de staging expõe banner de teste
+  ---
+  duration_ms: 3.335625
+  type: 'test'
+  ...
+# Subtest: runtime-config renderiza banner mesmo quando isolamento falha
+ok 48 - runtime-config renderiza banner mesmo quando isolamento falha
+  ---
+  duration_ms: 2.608209
+  type: 'test'
+  ...
+# Subtest: runtime-config responde 200 no fallback para o script do banner executar
+ok 49 - runtime-config responde 200 no fallback para o script do banner executar
+  ---
+  duration_ms: 1.726042
+  type: 'test'
+  ...
+# Subtest: staging usa service account dedicada quando projectId público não existe
+ok 50 - staging usa service account dedicada quando projectId público não existe
+  ---
+  duration_ms: 0.816625
+  type: 'test'
+  ...
+# Subtest: produção ignora service account de staging
+ok 51 - produção ignora service account de staging
+  ---
+  duration_ms: 2.760708
+  type: 'test'
+  ...
+# Subtest: páginas carregam runtime-config para exibir banner de staging
+ok 52 - páginas carregam runtime-config para exibir banner de staging
+  ---
+  duration_ms: 6.2375
+  type: 'test'
+  ...
+# Subtest: arquivos de exemplo não contêm secrets reais
+ok 53 - arquivos de exemplo não contêm secrets reais
+  ---
+  duration_ms: 0.889083
+  type: 'test'
+  ...
+# Subtest: reset recusa execução fora do staging
+ok 54 - reset recusa execução fora do staging
+  ---
+  duration_ms: 0.442
+  type: 'test'
+  ...
+# Subtest: reset dry-run preserva plano seguro
+ok 55 - reset dry-run preserva plano seguro
+  ---
+  duration_ms: 1.814667
+  type: 'test'
+  ...
+# [ownership] mirror sync not_found {
+#   firestore_doc_id: 'fs-sync-0',
+#   table: 'n8n_alunos_financeiro_space',
+#   strategy: 'firestore_doc_id',
+#   filter: 'firestore_doc_id=eq.fs-sync-0',
+#   rows_affected: 0
+# }
+# [ownership] mirror sync not_found {
+#   firestore_doc_id: 'fs-sync-0',
+#   table: 'n8n_onboarding_alunos_space',
+#   strategy: 'firestore_doc_id',
+#   filter: 'firestore_doc_id=eq.fs-sync-0',
+#   rows_affected: 0
+# }
+# [ownership] mirror sync not_found {
+#   firestore_doc_id: 'fs-sync-0',
+#   table: 'n8n_alunos_financeiro_space',
+#   strategy: 'email',
+#   filter: 'email=eq.sync%40example.com',
+#   rows_affected: 0
+# }
+# [ownership] mirror sync not_found {
+#   firestore_doc_id: 'fs-sync-0',
+#   table: 'n8n_onboarding_alunos_space',
+#   strategy: 'email',
+#   filter: 'email=eq.sync%40example.com',
+#   rows_affected: 0
+# }
+# [ownership] mirror sync not_found {
+#   firestore_doc_id: 'fs-sync-0',
+#   table: 'n8n_onboarding_alunos_space',
+#   strategy: 'aluno_id',
+#   filter: 'aluno_id=eq.fs-sync-0',
+#   rows_affected: 0
+# }
+# [ownership] mirror sync not_found {
+#   firestore_doc_id: 'fs-sync-1',
+#   table: 'n8n_alunos_financeiro_space',
+#   strategy: 'firestore_doc_id',
+#   filter: 'firestore_doc_id=eq.fs-sync-1',
+#   rows_affected: 0
+# }
+# [ownership] mirror sync not_found {
+#   firestore_doc_id: 'fs-sync-1',
+#   table: 'n8n_onboarding_alunos_space',
+#   strategy: 'firestore_doc_id',
+#   filter: 'firestore_doc_id=eq.fs-sync-1',
+#   rows_affected: 0
+# }
+# [ownership] mirror sync ambiguous {
+#   firestore_doc_id: 'fs-sync-1',
+#   table: 'n8n_alunos_financeiro_space',
+#   strategy: 'email',
+#   filter: 'email=eq.sync%40example.com',
+#   candidates: 2,
+#   rows_affected: 0
+# }
+# [ownership] mirror sync ambiguous {
+#   firestore_doc_id: 'fs-sync-1',
+#   table: 'n8n_onboarding_alunos_space',
+#   strategy: 'email',
+#   filter: 'email=eq.sync%40example.com',
+#   candidates: 2,
+#   rows_affected: 0
+# }
+# [ownership] mirror sync result {
+#   firestore_doc_id: 'fs-sync-2',
+#   table: 'n8n_alunos_financeiro_space',
+#   strategy: 'firestore_doc_id',
+#   filter: 'firestore_doc_id=eq.fs-sync-2',
+#   status: 'updated',
+#   rows_affected: 1
+# }
+# [ownership] mirror sync result {
+#   firestore_doc_id: 'fs-sync-2',
+#   table: 'n8n_onboarding_alunos_space',
+#   strategy: 'firestore_doc_id',
+#   filter: 'firestore_doc_id=eq.fs-sync-2',
+#   status: 'updated',
+#   rows_affected: 1
+# }
+# Subtest: aluno somente no Firestore aparece
+ok 56 - aluno somente no Firestore aparece
+  ---
+  duration_ms: 1.373792
+  type: 'test'
+  ...
+# Subtest: aluno nos dois bancos aparece uma vez
+ok 57 - aluno nos dois bancos aparece uma vez
+  ---
+  duration_ms: 0.659917
+  type: 'test'
+  ...
+# Subtest: cancelamento do Firestore prevalece
+ok 58 - cancelamento do Firestore prevalece
+  ---
+  duration_ms: 0.423834
+  type: 'test'
+  ...
+# Subtest: Supabase sem firestore_doc_id não remove o aluno do Firestore
+ok 59 - Supabase sem firestore_doc_id não remove o aluno do Firestore
+  ---
+  duration_ms: 0.51275
+  type: 'test'
+  ...
+# Subtest: dois alunos com nome igual não são fundidos
+ok 60 - dois alunos com nome igual não são fundidos
+  ---
+  duration_ms: 0.716167
+  type: 'test'
+  ...
+# Subtest: match ambíguo por e-mail gera warning e preserva registros
+ok 61 - match ambíguo por e-mail gera warning e preserva registros
+  ---
+  duration_ms: 0.689459
+  type: 'test'
+  ...
+# Subtest: admin-data classifica aluno explícito e legado por markers
+ok 62 - admin-data classifica aluno explícito e legado por markers
+  ---
+  duration_ms: 0.303542
+  type: 'test'
+  ...
+# Subtest: sync do espelho retorna ok=false quando rows_affected = 0
+ok 63 - sync do espelho retorna ok=false quando rows_affected = 0
+  ---
+  duration_ms: 2.954292
+  type: 'test'
+  ...
+# Subtest: sync do espelho diferencia ambiguous e updated
+ok 64 - sync do espelho diferencia ambiguous e updated
+  ---
+  duration_ms: 1.343375
+  type: 'test'
+  ...
+# Subtest: sync do espelho retorna updated com rows_affected explícito
+ok 65 - sync do espelho retorna updated com rows_affected explícito
+  ---
+  duration_ms: 0.805083
+  type: 'test'
+  ...
+1..65
+# tests 65
+# suites 0
+# pass 65
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 6282.653375

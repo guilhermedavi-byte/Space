@@ -1,0 +1,26 @@
+{
+  "certified": false,
+  "historicalStatus": "not_loaded: missing_dealId",
+  "september": {
+    "monthly_realized": 28188,
+    "weekly_realized": 28188,
+    "monthly_weekly_delta": 0,
+    "unverified_revenue_dates": 0,
+    "invalid_financial_deals": 0,
+    "deals": 26,
+    "overlapping_periods": 0,
+    "improper_gaps": 0,
+    "orphan_deals": 0,
+    "unallocated_revenue": 0,
+    "duplicate_attribution_revenue": 0,
+    "duplicate_attributions": 0,
+    "source_duplicate_deals": 0,
+    "unmatched_source_responsibles": 0,
+    "unknown_sdr_links": 26,
+    "estimated_value_deals": 0,
+    "crm_live_metas_delta": 0,
+    "snapshot_delta": null,
+    "snapshot_reconciliation_rate": null
+  },
+  "weekly": 12646
+}

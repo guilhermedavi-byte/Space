@@ -458,6 +458,7 @@ const buildMonthSummary = ({ businesses = [], goal = null, now = new Date() } = 
       : null,
     pipelineKey,
     windowCount: monthWindow.length,
+    includedDeals: closedSales.sales.map(({id,value,dateKey,dateField})=>({id,value,dateKey,dateField})),
   };
 };
 
