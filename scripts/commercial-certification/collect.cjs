@@ -4,13 +4,15 @@ async function collect(reads,{env,onProgress=()=>{}}={}){
   const {collectBusinesses}=require('../../api/_lib/datacrazy-ingestion');
   const retries=[];
   const source=await collectBusinesses({base:env.CRM_API_BASE_URL,apiKey:env.CRM_API_KEY,logger:(event,data)=>{if(event==='request_retry')retries.push({page:data.page,attempt:data.attempt,status:data.status,retryAfterMs:data.retryAfterMs,waitMs:data.waitMs});}});
-  onProgress('datacrazyLoaded');
-  const goals={};for(const key of ['2026-06','2026-07','2026-08','2026-09','2026-10'])goals[key]=await reads.get(`growthGoals/${key}`);
-  const users=await reads.list('users'),growthPeople=await reads.list('growthPeople'),sdrEvents=await reads.list('sdrActivityEvents');
-  const current=await reads.get('crmLiveCache/crm'),history=await reads.list('crmLiveSnapshots');
+  onProgress('datacrazyLoaded',source.metadata);
+  const get=async p=>{onProgress('read_'+p);return reads.get(p);};
+  const list=async p=>{onProgress('read_'+p);return reads.list(p);};
+  const goals={};for(const key of ['2026-06','2026-07','2026-08','2026-09','2026-10'])goals[key]=await get(`growthGoals/${key}`);
+  const users=await list('users'),growthPeople=await list('growthPeople'),sdrEvents=await list('sdrActivityEvents');
+  const current=await get('crmLiveCache/crm'),history=await list('crmLiveSnapshots');
   const snapshotRecords=[...history,current].filter(Boolean),snapshots={};
   for(const record of [...snapshotRecords].sort((a,b)=>String(a.generatedAt||'').localeCompare(String(b.generatedAt||'')))){const payload=record.payload;if(payload?.month?.period?.monthKey)snapshots[payload.month.period.monthKey]=payload;}
-  const globalConfig=await reads.get('growthConfig/crmLiveDefaults');onProgress('firestoreLoaded');
+  const globalConfig=await get('growthConfig/crmLiveDefaults');onProgress('firestoreLoaded');
   // Only explicit absence is no_attribution. A non-null SDR requires an explicit
   // deal->event link and matching actor; meetings alone are NOT origin evidence.
   const evidence=[];

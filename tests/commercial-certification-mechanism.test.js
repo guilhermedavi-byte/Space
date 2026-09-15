@@ -124,3 +124,15 @@ test('worker spawn failure cannot leak the exception or invent zero counters',as
  await h({method:'POST',url:'/api/certify',headers:{host:'audit.vercel.app'}},res);
  assert.equal(res.body.certification,'FAIL');assert.equal(res.body.writesAttempted,null);assert.equal(JSON.stringify(res.body).includes('sensitive'),false);
 });
+test('OAuth failure preserves completed source metadata and exposes only a safe stage/code',()=>{
+ const script=`
+ process.env.APP_ENV='production';
+ process.env.CRM_API_BASE_URL='https://crm.example.test';process.env.CRM_API_KEY='TEST_ONLY_PRIVATE_TOKEN_12345';
+ const {privateKey}=require('node:crypto').generateKeyPairSync('rsa',{modulusLength:2048});
+ process.env.GOOGLE_SERVICE_ACCOUNT_JSON=JSON.stringify({client_email:'test@test.invalid',private_key:privateKey.export({type:'pkcs8',format:'pem'})});
+ global.fetch=async url=>String(url).includes('oauth2.googleapis.com')?new Response('{"error":"test@test.invalid TEST_ONLY_PRIVATE_TOKEN_12345"}',{status:401}):new Response('{"items":[],"total":0}');
+ process.send=r=>process.stdout.write(JSON.stringify(r));process.disconnect=()=>{};
+ require('./scripts/commercial-certification/worker.cjs');`;
+ const output=require('node:child_process').execFileSync(process.execPath,['-e',script],{cwd:require('node:path').resolve(__dirname,'..'),env:{},encoding:'utf8'});
+ const r=JSON.parse(output);assert.equal(r.diagnosticCode,'oauth_token_failed');assert.equal(r.failureStage,'read_growthGoals/2026-06');assert.equal(r.source.complete,true);assert.equal(r.source.pages,1);assert.equal(r.writesAttempted,0);assert.equal(output.includes('test@test.invalid'),false);assert.equal(output.includes('PRIVATE_TOKEN'),false);
+});
