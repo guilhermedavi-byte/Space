@@ -8,10 +8,6 @@
     },
     "api/growth-dashboard.js": {
       "maxDuration": 300
-    },
-    "api/commercial-certify.js": {
-      "maxDuration": 300,
-      "includeFiles": "{scripts/commercial-certification/**,scripts/reconcile-commercial-metrics.js,api/_lib/**,_lib/**,assets/student-lifecycle.js}"
     }
   },
   "headers": [

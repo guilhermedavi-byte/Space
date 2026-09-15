@@ -10,3 +10,6 @@ tests
 
 # Expiring operator-only finance certification tooling.
 scripts/finance-certification
+
+# Completed temporary commercial certification tooling.
+scripts/commercial-certification
