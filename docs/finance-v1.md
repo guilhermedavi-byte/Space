@@ -9,7 +9,7 @@ Quatro workspaces: Visão Geral, Recebíveis, Assinaturas e Clientes. Navegaçã
 `GET /api/finance-v1?view=overview|receivables|subscriptions|customers|receivable` permite somente admin e FINANCE, exige a flag Foundation e usa a conexão configurada no servidor. Nenhum parâmetro escolhe outra conta. Respostas privadas, sem cache HTTP; métodos de escrita recusados.
 
 - Valores, status, recebimentos, auditoria, IDs de cobranças e vínculos acadêmicos: novas projeções `finance_*` da Financial Foundation. Nenhuma tabela financeira legada é fonte do novo frontend.
-- Nomes de clientes e assinaturas: consultas GET pelo cliente central Asaas, com verificação do vínculo da conta, cache de cinco minutos e paginação completa. Essas consultas complementam a Foundation sem gravar objetos nem executar novo backfill. O cache financeiro é de 20 segundos.
+- Nomes de clientes: consultas GET pelo cliente central Asaas, com verificação do vínculo da conta, cache de cinco minutos e paginação completa. Essas consultas complementam a Foundation sem gravar objetos nem executar novo backfill. O cache financeiro é de 20 segundos.
 - Se o diretório Asaas estiver indisponível, o backend utiliza apenas as projeções disponíveis, informa a cobertura incompleta e preserva os dados financeiros. Não inventa nomes, assinaturas ou vínculos.
 - Cliente sem vínculo explícito: **Não vinculado**. Quando existe, mostra o ID acadêmico verificado; não há resolução heurística por nome/e-mail.
 - Drawer expõe somente links HTTPS existentes do domínio Asaas e campos financeiros selecionados da auditoria. Não entrega payload bruto, ator, e-mail, credenciais ou tokens de integrações.
@@ -27,7 +27,7 @@ Valores calculados no backend em centavos inteiros. Fuso do calendário: America
 
 ## Limites explícitos
 
-Não foram executadas novas projeções de customers/subscriptions; o diretório real Asaas complementa essas lacunas por leitura. Alunos vinculados são identificados pelo ID Space disponível, sem consulta heurística ao Firestore. Não há ações de alteração financeira. Histórico exibe as 20 alterações mais recentes da cobrança; a auditoria completa permanece armazenada. O backend interrompe leituras acima de 20 mil registros por tabela ou do limite de 100 páginas Asaas, sem publicar agregados parciais como completos. Cache e leituras não constituem snapshot atômico entre Asaas e Supabase.
+Na preparação da base de Recuperação, assinaturas passaram a usar projeções da Foundation. Nomes de clientes continuam complementados pelo diretório Asaas em leitura. Alunos vinculados recebem contexto Space por ID explícito, sem consulta heurística. Não há ações de alteração financeira. Histórico exibe as 20 alterações mais recentes da cobrança; a auditoria completa permanece armazenada. O backend interrompe leituras acima de 20 mil registros por tabela ou do limite de 100 páginas Asaas, sem publicar agregados parciais como completos. Cache e leituras não constituem snapshot atômico entre Asaas e Supabase.
 
 ## Validação focada
 
@@ -41,4 +41,4 @@ Verificação autenticada no navegador: quatro workspaces carregados; 2.076 rece
 
 KPIs observados em setembro: recebido R$ 77.154,80; a receber R$ 131.443,00; vencido R$ 186.870,00; inadimplência 41,65%. Fórmulas e períodos definidos acima. Evidências sanitizadas em `artifacts/finance-v1/production-ui.json` e `deployment.json`.
 
-Lacuna de identificação: alguns IDs históricos de clientes não retornam nome no diretório atual; a interface informa “Nome não disponível”. Ausência de vínculo acadêmico explícito aparece como “Não vinculado”. A implantação não criou vínculos, transações ou novas projeções de diretório. Assinaturas são consultadas diretamente na API real enquanto sua projeção dedicada permanece incompleta.
+Lacuna de identificação: alguns IDs históricos de clientes não retornam nome no diretório atual; a interface informa “Nome não disponível”. Ausência de vínculo acadêmico explícito aparece como “Não vinculado”. A implantação não criou vínculos, transações ou novas projeções de diretório. A lacuna de projeção de assinaturas foi tratada posteriormente em `docs/finance-recovery-base.md`.

@@ -8,7 +8,7 @@ Sem régua, mensagens, WhatsApp, IA ou ações de recuperação. A UI Financeiro
 
 Assinaturas reais projetadas em `finance_provider_objects`, `resource=subscriptions`, usando a identidade única `(connection_id, resource, external_object_id)` existente. Sincronização administrativa por páginas de até 20 objetos, com cursor retornado, verificação de conta, lease adquirido antes do GET individual, commit transacional e auditoria. Falhas não avançam o cursor da página; repetição usa a mesma identidade sem duplicar. Nunca se deduz exclusão a partir de ausência na listagem. A UI passa a consumir essas projeções. O receiver existente também suporta eventos de assinatura; esta tarefa não afirma entrega externa desses eventos.
 
-`POST /api/finance-recovery-base`, admin e origem da aplicação, `action=sync_subscriptions`, `offset=0` e depois `next_offset`, até `has_more=false`. Não é automação de cobrança; nenhum write é feito no Asaas. Acesso temporário de implantação possui token próprio e prazo, removido no encerramento.
+`POST /api/finance-recovery-base`, admin e origem da aplicação, `action=sync_subscriptions`, `offset=0` e depois `next_offset`, até `has_more=false`. Não é automação de cobrança; nenhum write é feito no Asaas. O acesso temporário usado na implantação foi removido, inclusive do código publicado; o endpoint permanece restrito à sessão administrativa.
 
 ## Identidade
 
@@ -23,3 +23,11 @@ Leitura em lote de alunos Firestore e contratos canônicos Space por IDs exatos.
 ## Validação
 
 Testes focados somente nas mudanças: identidade exata/conflitos/UIDs, contexto canônico sem campos inventados, sincronização sob lease, consumo de projeções e enriquecimento exclusivamente por vínculo. Suítes anteriores não repetidas.
+
+## Resultado em Production — 15/09/2026
+
+- 172 assinaturas projetadas, em nove páginas (oito de 20 e uma de 12), encerrando com `has_more=false`. IDs e contagem persistida em `artifacts/finance-recovery-base/projection.json`.
+- 624 clientes no diretório Asaas, 227 alunos Space e 652 clientes na visão financeira (união com IDs históricos de cobranças).
+- Zero referências externas preenchidas em clientes/assinaturas Asaas; nenhum ID Asaas nos cadastros dos alunos ou correspondência por contrato externo/UID. Portanto, 0 vinculados e 652 **Não vinculados**. Nome e e-mail não foram usados. A falta de identificadores impede preencher contexto Space nesses clientes, sem impedir a operação financeira.
+- Campos de ciclo de vida, aviso prévio, status, plano e responsável CS preparados no backend e UI; nenhum valor foi inventado ou copiado de um aluno sem vínculo.
+- Cinco testes backend/dados e um teste de UI focados nas alterações passaram. Nenhuma suíte anterior, backfill de recebíveis ou auditoria Foundation repetidos.
