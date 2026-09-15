@@ -1,0 +1,12 @@
+{
+  "checked_at": "2026-09-15T17:33:19.493Z",
+  "webhook_id": "2cd1c07d-3563-4f9d-97f6-3894a562d128",
+  "provider_log_observation": "No delivery logs found for the exclusive webhook in Asaas Production / today",
+  "inbox_count": 7,
+  "known_internal_replays": 7,
+  "unmatched_event_count": 0,
+  "external_delivery_proven": false,
+  "foundation_enabled": false,
+  "gate_status": "BLOCKED",
+  "decision": "NO-GO"
+}

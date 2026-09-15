@@ -6,6 +6,10 @@ O código financeiro está integrado à `main` e permanece no deploy automático
 
 Este relatório substitui os estados anteriores de credencial ausente e staging obrigatório. A execução usa **produção autorizada**, Asaas `https://api.asaas.com/v3` e Supabase `space-idiomas-n8n` (`mlpojyvwyqcrelagtgkw`). Nenhuma cobrança, pagamento, estorno ou exclusão foi provocado no Asaas para testar. A migration e os testes anteriores não foram repetidos nesta retomada. Nenhuma UI foi iniciada.
 
+## Gate externo — verificação isolada em 15/09/2026, 17:33 UTC
+
+O painel Asaas, filtrado exclusivamente por `SPACE Financial Foundation Production`, não apresenta nenhuma entrega. A inbox contém sete eventos, todos correlacionados aos replays internos já registrados, e nenhum evento externo novo. Não houve processamento adicional, backfill, repair, teste extra ou alteração da flag. **Gate não comprovado; Foundation desabilitada; NO-GO.** [Evidência mínima sanitizada](../artifacts/finance-production-2026-09-15/external-webhook-gate-recheck.json).
+
 ## Delta da retomada
 
 - Backfill concluído: **2.074 projeções iniciais**. O run `b8ad79c0-c863-491c-9096-07deddb25d73` terminou em 15/09 às 04:56:10 UTC. A retomada após rate limit inseriu 1.936; 138 já estavam persistidas. [Resultado](../artifacts/finance-production-2026-09-15/backfill-apply.json).
