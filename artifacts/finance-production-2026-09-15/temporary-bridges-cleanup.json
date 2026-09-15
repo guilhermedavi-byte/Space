@@ -1,0 +1,35 @@
+{
+  "checked_at": "2026-09-15T17:24:45.123Z",
+  "results": [
+    {
+      "id": "dpl_4xHk2oUVHbSRfxF1sJDYZnqWY9wG",
+      "http": 200,
+      "result": "removed"
+    },
+    {
+      "id": "dpl_GYwVWeutjjpmjpF6Mpc4JqUcjtoM",
+      "http": 200,
+      "result": "removed"
+    },
+    {
+      "id": "dpl_7xFqzPtbhi489wDaatKRUQkrfpRd",
+      "http": 200,
+      "result": "removed"
+    },
+    {
+      "id": "dpl_BdMnbrznHWdfrrSG6LYhfLZUDHnN",
+      "http": 200,
+      "result": "removed"
+    },
+    {
+      "id": "dpl_FxK3WxVSwJYj2ft2MZFB5v8b4RNw",
+      "http": 200,
+      "result": "removed"
+    },
+    {
+      "id": "dpl_2b6RjicE22ZRHJJ4zoEykKcHBwFJ",
+      "http": 200,
+      "result": "removed"
+    }
+  ]
+}

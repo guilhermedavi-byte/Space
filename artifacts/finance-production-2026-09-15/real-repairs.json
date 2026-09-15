@@ -1,0 +1,211 @@
+[
+  {
+    "payment_id": "pay_i7lgjhjd78g4agii",
+    "before": [
+      "MISSING_LOCAL",
+      "UNMATCHED_CUSTOMER"
+    ],
+    "result": {
+      "changed": true,
+      "processed": true,
+      "receivable_id": "e1caf593-b9fc-47fa-9c2a-c30ffb831921",
+      "external_object_id": "pay_i7lgjhjd78g4agii"
+    },
+    "after": [
+      "UNMATCHED_CUSTOMER"
+    ]
+  },
+  {
+    "payment_id": "pay_aplpi1tcfz2f473w",
+    "before": [
+      "MISSING_LOCAL",
+      "UNMATCHED_CUSTOMER"
+    ],
+    "result": {
+      "changed": true,
+      "processed": true,
+      "receivable_id": "d64f149e-44b4-4e48-a26a-eb20d1eba9f0",
+      "external_object_id": "pay_aplpi1tcfz2f473w"
+    },
+    "after": [
+      "UNMATCHED_CUSTOMER"
+    ]
+  },
+  {
+    "payment_id": "pay_qqdu7a03e9055wex",
+    "before": [
+      "STATUS_MISMATCH",
+      "UNMATCHED_CUSTOMER"
+    ],
+    "result": {
+      "changed": true,
+      "processed": true,
+      "receivable_id": "baae85d8-71c7-4d6d-bec0-8dc8845bc3cc",
+      "external_object_id": "pay_qqdu7a03e9055wex"
+    },
+    "after": [
+      "UNMATCHED_CUSTOMER"
+    ]
+  },
+  {
+    "payment_id": "pay_ppa4aecl9qfzc29q",
+    "before": [
+      "STATUS_MISMATCH",
+      "UNMATCHED_CUSTOMER"
+    ],
+    "result": {
+      "changed": true,
+      "processed": true,
+      "receivable_id": "0c1d68fe-c72f-44ad-b3ac-11768a63b34d",
+      "external_object_id": "pay_ppa4aecl9qfzc29q"
+    },
+    "after": [
+      "UNMATCHED_CUSTOMER"
+    ]
+  },
+  {
+    "payment_id": "pay_koz44jxwvhmxyh47",
+    "before": [
+      "STATUS_MISMATCH",
+      "UNMATCHED_CUSTOMER"
+    ],
+    "result": {
+      "changed": true,
+      "processed": true,
+      "receivable_id": "24e83157-6159-4561-9d17-39fab1960b07",
+      "external_object_id": "pay_koz44jxwvhmxyh47"
+    },
+    "after": [
+      "UNMATCHED_CUSTOMER"
+    ]
+  },
+  {
+    "payment_id": "pay_pt5bphu8hbd96qpb",
+    "before": [
+      "STATUS_MISMATCH",
+      "UNMATCHED_CUSTOMER"
+    ],
+    "result": {
+      "changed": true,
+      "processed": true,
+      "receivable_id": "4d4bc427-85ad-4a78-aa28-d39aa5d06654",
+      "external_object_id": "pay_pt5bphu8hbd96qpb"
+    },
+    "after": [
+      "UNMATCHED_CUSTOMER"
+    ]
+  },
+  {
+    "payment_id": "pay_pbs5gbg6uqvzuhgm",
+    "before": [
+      "STATUS_MISMATCH",
+      "UNMATCHED_CUSTOMER"
+    ],
+    "result": {
+      "changed": true,
+      "processed": true,
+      "receivable_id": "d2e4f631-5d61-44c5-8139-6da11295e306",
+      "external_object_id": "pay_pbs5gbg6uqvzuhgm"
+    },
+    "after": [
+      "UNMATCHED_CUSTOMER"
+    ]
+  },
+  {
+    "payment_id": "pay_s7yf9opbxssf2kd9",
+    "before": [
+      "STATUS_MISMATCH",
+      "UNMATCHED_CUSTOMER"
+    ],
+    "result": {
+      "changed": true,
+      "processed": true,
+      "receivable_id": "f10499f2-e3b4-462b-88f3-2f6c1ccbce00",
+      "external_object_id": "pay_s7yf9opbxssf2kd9"
+    },
+    "after": [
+      "UNMATCHED_CUSTOMER"
+    ]
+  },
+  {
+    "payment_id": "pay_xukoujh2s89k49ak",
+    "before": [
+      "STATUS_MISMATCH",
+      "UNMATCHED_CUSTOMER"
+    ],
+    "result": {
+      "changed": true,
+      "processed": true,
+      "receivable_id": "b5e4c315-3b2e-4513-b3dc-68142a9a705f",
+      "external_object_id": "pay_xukoujh2s89k49ak"
+    },
+    "after": [
+      "UNMATCHED_CUSTOMER"
+    ]
+  },
+  {
+    "payment_id": "pay_03vn862nj6zbava3",
+    "before": [
+      "STATUS_MISMATCH",
+      "UNMATCHED_CUSTOMER"
+    ],
+    "result": {
+      "changed": true,
+      "processed": true,
+      "receivable_id": "a46b3fef-d0c2-4f13-95ba-eb667506428c",
+      "external_object_id": "pay_03vn862nj6zbava3"
+    },
+    "after": [
+      "UNMATCHED_CUSTOMER"
+    ]
+  },
+  {
+    "payment_id": "pay_e965cyl5hktbw03s",
+    "before": [
+      "STATUS_MISMATCH",
+      "UNMATCHED_CUSTOMER"
+    ],
+    "result": {
+      "changed": true,
+      "processed": true,
+      "receivable_id": "05bd1f01-43ff-4c75-944a-c46ba03845ce",
+      "external_object_id": "pay_e965cyl5hktbw03s"
+    },
+    "after": [
+      "UNMATCHED_CUSTOMER"
+    ]
+  },
+  {
+    "payment_id": "pay_2ogpsekh7tdbjh3q",
+    "before": [
+      "STATUS_MISMATCH",
+      "VALUE_MISMATCH",
+      "UNMATCHED_CUSTOMER"
+    ],
+    "result": {
+      "changed": true,
+      "processed": true,
+      "receivable_id": "6825f694-9f59-4b1b-abbd-10193791b119",
+      "external_object_id": "pay_2ogpsekh7tdbjh3q"
+    },
+    "after": [
+      "UNMATCHED_CUSTOMER"
+    ]
+  },
+  {
+    "payment_id": "pay_2ya99kugp5r0p47e",
+    "before": [
+      "STATUS_MISMATCH",
+      "UNMATCHED_CUSTOMER"
+    ],
+    "result": {
+      "changed": true,
+      "processed": true,
+      "receivable_id": "2232cc56-14fe-4791-9499-eb4cf3668e5c",
+      "external_object_id": "pay_2ya99kugp5r0p47e"
+    },
+    "after": [
+      "UNMATCHED_CUSTOMER"
+    ]
+  }
+]

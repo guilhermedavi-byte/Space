@@ -1,0 +1,73 @@
+{
+  "checked_at": "2026-09-15T17:14:00.200Z",
+  "source": "real_asaas_production_get",
+  "has_more": false,
+  "payments": [
+    {
+      "payment_id": "pay_7enju3odqgqp7jqg",
+      "status": "REFUNDED",
+      "refund_count": 1,
+      "refund_dates": [
+        "2026-07-13 14:43:20"
+      ],
+      "issues": [
+        "UNMATCHED_CUSTOMER"
+      ]
+    },
+    {
+      "payment_id": "pay_j3fftx93rcxf2hg9",
+      "status": "REFUNDED",
+      "refund_count": 1,
+      "refund_dates": [
+        "2026-06-30 18:09:25"
+      ],
+      "issues": [
+        "UNMATCHED_CUSTOMER"
+      ]
+    },
+    {
+      "payment_id": "pay_bg7sukhacr2vsupz",
+      "status": "REFUNDED",
+      "refund_count": 1,
+      "refund_dates": [
+        "2026-05-04 15:55:52"
+      ],
+      "issues": [
+        "UNMATCHED_CUSTOMER"
+      ]
+    },
+    {
+      "payment_id": "pay_4gm6bn2k8wz3xbnj",
+      "status": "REFUNDED",
+      "refund_count": 1,
+      "refund_dates": [
+        "2026-03-31 14:29:45"
+      ],
+      "issues": [
+        "UNMATCHED_CUSTOMER"
+      ]
+    },
+    {
+      "payment_id": "pay_n43mlrt0sj29nwp3",
+      "status": "REFUNDED",
+      "refund_count": 1,
+      "refund_dates": [
+        "2026-01-31 16:55:27"
+      ],
+      "issues": [
+        "UNMATCHED_CUSTOMER"
+      ]
+    },
+    {
+      "payment_id": "pay_p7bkesrmduasy3xv",
+      "status": "REFUNDED",
+      "refund_count": 1,
+      "refund_dates": [
+        "2026-03-31 14:27:36"
+      ],
+      "issues": [
+        "UNMATCHED_CUSTOMER"
+      ]
+    }
+  ]
+}

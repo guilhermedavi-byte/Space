@@ -1,0 +1,50 @@
+[
+  {
+    "payment_id": "pay_d9bbeb8xxd7k3fda",
+    "before": [
+      "STATUS_MISMATCH",
+      "UNMATCHED_CUSTOMER"
+    ],
+    "result": {
+      "changed": true,
+      "processed": true,
+      "receivable_id": "28b88a03-7237-498a-afd1-3e6f41f9f6d9",
+      "external_object_id": "pay_d9bbeb8xxd7k3fda"
+    },
+    "after": [
+      "UNMATCHED_CUSTOMER"
+    ]
+  },
+  {
+    "payment_id": "pay_gu8268zv0gfm0mgq",
+    "before": [
+      "STATUS_MISMATCH",
+      "UNMATCHED_CUSTOMER"
+    ],
+    "result": {
+      "changed": true,
+      "processed": true,
+      "receivable_id": "248b032a-fcbd-4f70-b4df-5b88741c0b39",
+      "external_object_id": "pay_gu8268zv0gfm0mgq"
+    },
+    "after": [
+      "UNMATCHED_CUSTOMER"
+    ]
+  },
+  {
+    "payment_id": "pay_qc3k8m0przn5a7vt",
+    "before": [
+      "STATUS_MISMATCH",
+      "UNMATCHED_CUSTOMER"
+    ],
+    "result": {
+      "changed": true,
+      "processed": true,
+      "receivable_id": "4216ba99-7ac8-4cde-a073-b7888c735130",
+      "external_object_id": "pay_qc3k8m0przn5a7vt"
+    },
+    "after": [
+      "UNMATCHED_CUSTOMER"
+    ]
+  }
+]

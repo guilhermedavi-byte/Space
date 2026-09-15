@@ -1,0 +1,47 @@
+{
+  "checked_at": "2026-09-15T17:02:54.783Z",
+  "http": 200,
+  "deployment_id": "dpl_2b6RjicE22ZRHJJ4zoEykKcHBwFJ",
+  "status": "PASS",
+  "stage": "inventory",
+  "created": true,
+  "webhook": {
+    "id": "2cd1c07d-3563-4f9d-97f6-3894a562d128",
+    "url": "https://plataforma.spaceschoolbr.com/api/asaas-webhook",
+    "enabled": true,
+    "interrupted": false,
+    "apiVersion": 3,
+    "sendType": "SEQUENTIALLY",
+    "events": [
+      "SUBSCRIPTION_INACTIVATED",
+      "SUBSCRIPTION_DELETED",
+      "SUBSCRIPTION_UPDATED",
+      "SUBSCRIPTION_CREATED",
+      "PAYMENT_REFUNDED",
+      "PAYMENT_RESTORED",
+      "PAYMENT_DELETED",
+      "PAYMENT_OVERDUE",
+      "PAYMENT_RECEIVED",
+      "PAYMENT_CONFIRMED",
+      "PAYMENT_UPDATED",
+      "PAYMENT_CREATED"
+    ]
+  },
+  "preserved": [
+    {
+      "id": "a18cee49-fb17-425d-947a-40bf9344acf0",
+      "enabled": true,
+      "interrupted": false
+    },
+    {
+      "id": "bb6e75bb-5f1a-43ca-9fa2-a28aa5dcfcc6",
+      "enabled": true,
+      "interrupted": false
+    },
+    {
+      "id": "0e0dcc6f-1cc2-451e-84d2-d2654ddb1d6e",
+      "enabled": false,
+      "interrupted": true
+    }
+  ]
+}

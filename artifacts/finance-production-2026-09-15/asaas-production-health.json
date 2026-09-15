@@ -1,0 +1,28 @@
+{
+  "deployment": "space-1vckeq9e3-guilhermedavi-4547s-projects.vercel.app",
+  "checkedAt": "2026-09-15T04:13:44.170Z",
+  "status": "PASS",
+  "stage": "asaas_health",
+  "guards": {
+    "production": true,
+    "supabase": true,
+    "asaasBase": true,
+    "asaasScope": true,
+    "keyPresent": true,
+    "appOrigin": true,
+    "project": true
+  },
+  "health": {
+    "configured": true,
+    "reachable": true,
+    "authenticated": true,
+    "account_accessible": true,
+    "environment": "production",
+    "checked_at": "2026-09-15T04:13:43.668Z",
+    "error": null
+  },
+  "foundationEnabled": false,
+  "connectionConfigured": false,
+  "dedicatedWebhookTokenConfigured": false,
+  "legacyWebhookTokenConfigured": true
+}

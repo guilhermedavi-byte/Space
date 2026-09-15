@@ -1,0 +1,47 @@
+[
+  {
+    "key": "FINANCE_CONNECTION_ID",
+    "status": 201,
+    "productionOnly": true
+  },
+  {
+    "key": "ASAAS_WEBHOOK_TOKEN",
+    "status": 201,
+    "productionOnly": true
+  },
+  {
+    "key": "FINANCE_ENV_SCOPE",
+    "status": 201,
+    "productionOnly": true
+  },
+  {
+    "key": "APP_ENV",
+    "status": 201,
+    "productionOnly": true
+  },
+  {
+    "key": "SUPABASE_ENV_SCOPE",
+    "status": 201,
+    "productionOnly": true
+  },
+  {
+    "key": "FINANCE_FOUNDATION_ENABLED",
+    "status": 201,
+    "productionOnly": true
+  },
+  {
+    "key": "FINANCE_WEBHOOK_INGEST_ENABLED",
+    "status": 201,
+    "productionOnly": true
+  },
+  {
+    "key": "FINANCE_WEBHOOK_PROCESS_INLINE",
+    "status": 201,
+    "productionOnly": true
+  },
+  {
+    "key": "FINANCE_LEGACY_WEBHOOK_COMPAT",
+    "status": 201,
+    "productionOnly": true
+  }
+]
