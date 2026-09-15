@@ -841,11 +841,15 @@ const buildCrmLiveCrmSlice = async ({ goal, globalConfig = null, people, now = n
     now,
   });
   const weeklyTeam = buildWeeklyTeamSummary({ weeklyReadModel });
+  const weeklySales = summarizeClosedSales({ businesses: crm.businesses, period: weeklyReadModel.commercialWeek });
   const calculatedAt = new Date().toISOString();
   const snapshot = {
     ...crm.metadata, chunks: undefined, snapshotId, sourceSnapshotId: crm.metadata.snapshotId,
     status: 'VALID', calculationStartedAt: now.toISOString(), calculatedAt, calculationVersion: CRM_LIVE_READ_MODEL_VERSION,
     calculationCompleted: true, recordsEligible: weeklyTeam.closers.count, error: null,
+    period: { from: weeklyReadModel.commercialWeek.startDateKey, to: weeklyReadModel.commercialWeek.endDateKey },
+    includedDeals: weeklySales.sales.map(sale => ({ id: sale.id, number: sale.business.number ?? sale.business.code ?? null,
+      value: sale.value, dateField: sale.dateField, dateKey: sale.dateKey })),
     durationMs: crm.metadata.durationMs + Date.now() - calculationStarted,
   };
   log('calculation_completed', { snapshotId, actualValue: weeklyTeam.closers.actualValue, count: weeklyTeam.closers.count });

@@ -49,7 +49,7 @@ async function runCrmSnapshot(build, { store = createFirestoreStore(), logger = 
   try {
     const payload = await build(snapshotId);
     validateCrmSnapshot(payload);
-    logger('snapshot_validated', { snapshotId });
+    logger('snapshot_validated', { snapshotId, period: payload.snapshot.period, includedDeals: payload.snapshot.includedDeals });
     return await publishCrmSnapshot(payload, { store, logger });
   } catch (error) {
     await store.commit([{ path, data: { snapshot: { ...processing, ...(error.syncMetadata || error.sourceAttempt || {}), snapshotId, status: 'FAILED', durationMs: Date.now() - Date.parse(processing.startedAt), failedAt: new Date().toISOString(), error: { code: error.code || error.message, status: error.status || 0 }, sourceAttempt: error.sourceAttempt || null } } }])
