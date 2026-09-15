@@ -8,6 +8,9 @@
     },
     "api/growth-dashboard.js": {
       "maxDuration": 300
+    },
+    "api/finance-v1.js": {
+      "maxDuration": 60
     }
   },
   "headers": [
