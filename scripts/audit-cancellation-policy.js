@@ -39,24 +39,24 @@ async function main() {
   // contract as that handler to demonstrate the domain cannot enforce lifecycle.
   const store = { config: { slotDurationMinutes: 30, tzOffsetMinutes: -180, minLeadTimeMinutes: 0, bufferMinutes: 0 },
     teachers: [{ id: 'synthetic-teacher', active: true, workHours: { [dow]: [{ startMin: 600, endMin: 660 }] } }],
-    events: [], ranking: { order: ['synthetic-teacher'] } };
+    studentLifecycles: { 'synthetic-churned-student': { lifecycle_status: 'churned', last_active_date: '2026-01-01' } }, events: [], ranking: { order: ['synthetic-teacher'] } };
   const booking = bookSlotForStudent({ store, studentId: 'synthetic-churned-student', dateKey: bookedDate, startMin: 600 });
   check('E_booking_has_no_contract_boundary', false, booking.ok, 'Booking core; route also does not load lifecycle. Synthetic student label alone has no semantics in the core');
   // Same local contract day, month-end UTC rollover: July 30 23:30 SP = July 31 UTC; target September has only 30 days.
-  const end = computeScheduledServiceEndAt({ requestedAt: '2026-07-31T02:30:00Z' });
+  const end = computeScheduledServiceEndAt({ noticeStartedAt: '2026-07-31T02:30:00Z' });
   const localDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(end);
   check('F_calendar_months_use_business_day', '2026-09-30', localDay, 'JS date arithmetic; request used because legacy has no notice argument');
   let postgres = { status: 'NOT_RUN' };
   if (process.argv.includes('--postgres')) postgres = await sqlProbes();
   const report = { observed_at: new Date().toISOString(), fixtures: 'SYNTHETIC_ONLY', production_writes: false,
-    status: probes.some(row => row.status === 'FAIL') ? 'FAIL' : 'INCOMPLETE', probes, postgres,
+    status: probes.some(row => row.status === 'FAIL') ? 'FAIL' : postgres.status === 'EXECUTED' ? 'PASS' : 'INCOMPLETE', probes, postgres,
     unverified: ['Financial and pedagogical end-to-end A-D', 'External credit/billing idempotency G',
       'Browser/API/database/metrics reconciliation', 'External n8n and Asaas contract boundaries'] };
-  fs.mkdirSync(path.join(root, 'artifacts/cancellation-audit'), { recursive: true });
-  fs.writeFileSync(path.join(root, 'artifacts/cancellation-audit/policy-probes.json'), JSON.stringify(report, null, 2) + '\n');
+  fs.mkdirSync(path.join(root, 'artifacts/cancellation-implementation'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'artifacts/cancellation-implementation/policy-probes.json'), JSON.stringify(report, null, 2) + '\n');
   console.log(JSON.stringify({ status: report.status, probes: probes.length, passed: probes.filter(p => p.status === 'PASS').length,
     failed: probes.filter(p => p.status === 'FAIL').length, postgres }));
-  process.exitCode = report.status === 'FAIL' ? 1 : 2;
+  process.exitCode = report.status === 'PASS' ? 0 : report.status === 'FAIL' ? 1 : 2;
 }
 async function sqlProbes() {
   const name = `space_cancellation_audit_${randomUUID().slice(0, 8)}`;
@@ -70,6 +70,7 @@ async function sqlProbes() {
       try { sql('select 1;'); break; } catch (error) { if (attempt === 79) throw error; await new Promise(r => setTimeout(r, 250)); }
     }
     sql(fs.readFileSync(path.join(root, 'supabase/retention-lifecycle-v2.sql'), 'utf8'));
+    sql(fs.readFileSync(path.join(root, 'supabase/migrations/202609150001_cancellation_lifecycle.sql'), 'utf8'));
     const observed = JSON.parse(sql(`
       begin;
       create temporary table observations (value jsonb);
@@ -86,15 +87,28 @@ async function sqlProbes() {
           'client_action_id','revert','idempotency_key','revert','command_fingerprint','revert'));
         result := result || jsonb_build_object('end_after_reversion',r->'snapshot'->'subscription'->>'scheduled_service_end_at');
         r := public.retention_apply_command(jsonb_build_object('command','register_formal_request','student_id',s,'subscription_id',sub,
-          'client_action_id','request2','idempotency_key','request2','command_fingerprint','request2'));
+          'client_action_id','request2','idempotency_key','request2','command_fingerprint','request2')); 
         c := (r->>'case_id')::uuid;
-        n := ((now() at time zone 'America/Sao_Paulo')::date)::timestamp at time zone 'America/Sao_Paulo';
-        update public.retention_cases set scheduled_service_end_at=n where id=c;
-        update public.subscriptions set scheduled_service_end_at=n where id=sub;
+        -- Fixture has an explicitly confirmed notice and known last active day today.
+        n := ((now() at time zone 'America/Sao_Paulo')::date - interval '2 months') at time zone 'America/Sao_Paulo';
+        update public.retention_cases set cancellation_requested_at=n - interval '1 day' where id=c;
+        r := public.retention_apply_command(jsonb_build_object('command','confirm_cancellation_continuity','case_id',c,
+          'client_action_id','notice','idempotency_key','notice','command_fingerprint','notice', 'payload',jsonb_build_object('notice_started_at',n)));
+        begin
+          perform public.retention_apply_command(jsonb_build_object('command','effectuate_churn','case_id',c,
+            'client_action_id','early','idempotency_key','early','command_fingerprint','early'));
+          result := result || jsonb_build_object('churn_on_last_day',true);
+        exception when others then
+          if SQLERRM <> 'cannot_churn_before_scheduled_end' then raise; end if;
+          result := result || jsonb_build_object('churn_on_last_day',false);
+        end;
+        -- A second, unambiguously expired notice for the retry check.
+        n := n - interval '1 month';
+        update public.retention_cases set notice_started_at=n, last_active_date=((n at time zone 'America/Sao_Paulo')::date + interval '2 months')::date,
+          churn_at=((n at time zone 'America/Sao_Paulo')::date + interval '2 months')::date + 1 where id=c;
         r := public.retention_apply_command(jsonb_build_object('command','effectuate_churn','case_id',c,
           'client_action_id','churn','idempotency_key','churn','command_fingerprint','churn'));
-        result := result || jsonb_build_object('churn_on_last_day',r->'snapshot'->'case'->>'lifecycle_status'='churned',
-          'churn_at_is_processing_time',(r->'snapshot'->'case'->>'churned_at')::timestamptz=now());
+        result := result || jsonb_build_object('churn_at_is_processing_time',(r->'snapshot'->'case'->>'churned_at')::timestamptz=now());
         r := public.retention_apply_command(jsonb_build_object('command','effectuate_churn','case_id',c,
           'client_action_id','churn','idempotency_key','churn','command_fingerprint','churn'));
         result := result || jsonb_build_object('retry_idempotent',r->'idempotent',

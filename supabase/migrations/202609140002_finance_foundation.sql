@@ -321,4 +321,14 @@ do $$ declare r text; begin
   end loop;
   if exists(select 1 from pg_roles where rolname='service_role') then grant execute on function public.finance_rpc(text,jsonb) to service_role; end if;
 end $$;
+-- Standalone staging also creates connections: do not rely on Attendance to enable RLS.
+alter table public.connections enable row level security;
+-- Supabase can grant functions directly to API roles through default privileges.
+do $$ declare r text; begin
+  foreach r in array array['anon','authenticated','service_role'] loop
+    if exists(select 1 from pg_roles where rolname=r) then
+      execute format('revoke all on function public.finance_audit_immutable() from %I',r);
+    end if;
+  end loop;
+end $$;
 commit;

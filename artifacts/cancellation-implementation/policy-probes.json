@@ -1,0 +1,144 @@
+{
+  "observed_at": "2026-09-15T02:15:23.297Z",
+  "fixtures": "SYNTHETIC_ONLY",
+  "production_writes": false,
+  "status": "PASS",
+  "probes": [
+    {
+      "id": "A/B_request_is_distinct_from_notice",
+      "status": "PASS",
+      "expected": "cancellation_requested",
+      "observed": "cancellation_requested",
+      "scope": "JS event projection"
+    },
+    {
+      "id": "A_reverted_is_active_without_churn",
+      "status": "PASS",
+      "expected": {
+        "active": true,
+        "churn": null
+      },
+      "observed": {
+        "active": true,
+        "churn": null
+      },
+      "scope": "Projection only; financial/access not verified"
+    },
+    {
+      "id": "A_import_reversal_must_not_be_churn",
+      "status": "PASS",
+      "expected": {
+        "stage": "saved",
+        "lifecycle": "active"
+      },
+      "observed": {
+        "stage": "saved",
+        "lifecycle": "active"
+      },
+      "scope": "Dry-run import builder"
+    },
+    {
+      "id": "B_notice_start_recorded_explicitly",
+      "status": "PASS",
+      "expected": "2026-09-20T15:00:00Z",
+      "observed": "2026-09-20T15:00:00Z",
+      "scope": "JS event projection"
+    },
+    {
+      "id": "B_open_request_not_in_notice_queue",
+      "status": "PASS",
+      "expected": 0,
+      "observed": 0,
+      "scope": "Backend queue builder"
+    },
+    {
+      "id": "D_notice_not_churned",
+      "status": "PASS",
+      "expected": {
+        "scheduled": true,
+        "churn": null
+      },
+      "observed": {
+        "scheduled": true,
+        "churn": null
+      },
+      "scope": "Projection only; base/access/finance not verified"
+    },
+    {
+      "id": "E_booking_has_no_contract_boundary",
+      "status": "PASS",
+      "expected": false,
+      "observed": false,
+      "scope": "Booking core; route also does not load lifecycle. Synthetic student label alone has no semantics in the core"
+    },
+    {
+      "id": "F_calendar_months_use_business_day",
+      "status": "PASS",
+      "expected": "2026-09-30",
+      "observed": "2026-09-30",
+      "scope": "JS date arithmetic; request used because legacy has no notice argument"
+    },
+    {
+      "id": "A_SQL_reversion_clears_current_end",
+      "status": "PASS",
+      "expected": null,
+      "observed": null,
+      "scope": "Actual RPC in disposable PostgreSQL"
+    },
+    {
+      "id": "B_SQL_request_preserves_financial_status",
+      "status": "PASS",
+      "expected": "current",
+      "observed": "current",
+      "scope": "Actual RPC"
+    },
+    {
+      "id": "B_SQL_request_preserves_independent_pause",
+      "status": "PASS",
+      "expected": "paused_billable",
+      "observed": "paused_billable",
+      "scope": "Actual RPC"
+    },
+    {
+      "id": "C_SQL_no_churn_on_last_active_day",
+      "status": "PASS",
+      "expected": false,
+      "observed": false,
+      "scope": "Actual RPC, business-day midnight fixture"
+    },
+    {
+      "id": "G_SQL_same_command_retry_is_idempotent",
+      "status": "PASS",
+      "expected": {
+        "retry": true,
+        "count": 1
+      },
+      "observed": {
+        "retry": true,
+        "count": 1
+      },
+      "scope": "Actual RPC; does not prove downstream delivery"
+    }
+  ],
+  "postgres": {
+    "status": "EXECUTED",
+    "engine": "postgres:14-alpine",
+    "network": "none",
+    "observations": {
+      "retry_idempotent": true,
+      "churn_event_count": 1,
+      "churn_on_last_day": false,
+      "request_lifecycle": "cancellation_requested",
+      "end_after_reversion": null,
+      "pause_after_request": "paused_billable",
+      "financial_after_request": "current",
+      "churn_at_is_processing_time": false
+    }
+  },
+  "unverified": [
+    "Financial and pedagogical end-to-end A-D",
+    "External credit/billing idempotency G",
+    "Browser/API/database/metrics reconciliation",
+    "External n8n and Asaas contract boundaries"
+  ]
+}

@@ -101,6 +101,14 @@ module.exports = async (req, res) => {
     return;
   }
 
+  if (require('./_lib/retention-flags').isRetentionV2Enabled()) {
+    const session = require('../_lib/session').getSessionFromRequest(req);
+    if (!session) { res.statusCode=401; return res.end('Autenticação necessária.'); }
+    if (session.role === 'student') {
+      try { await require('./_lib/student-lifecycle').assertAccess(session.sub); }
+      catch (error) { res.statusCode=error.status || 503; return res.end('Contrato fora da vigência.'); }
+    }
+  }
   const host = req.headers.host || "localhost";
   const url = new URL(req.url || "/api/sala", `https://${host}`);
   const room = normalizeRoom(url.searchParams.get("room"));

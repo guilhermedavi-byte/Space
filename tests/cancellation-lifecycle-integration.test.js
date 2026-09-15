@@ -1,0 +1,88 @@
+const test=require('node:test');
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+const {createHarness}=require('./helpers/finance-postgres');
+const {buildLegacyRetentionImportSnapshot}=require('../api/_lib/retention-import');
+const policy=require('../assets/student-lifecycle');
+const run=process.env.RUN_CANCELLATION_INTEGRATION==='1';
+test('lifecycle: migration, RPC, API, consumers, import, projection and job end-to-end', {skip:!run,timeout:240000},async()=>{
+ const h=await createHarness();
+ const previous=process.env.RETENTION_V2_ENABLED;
+ const evidence={environment:'disposable PostgreSQL and PostgREST; synthetic Firestore adapter',scenarios:[]};
+ try {
+  process.env.RETENTION_V2_ENABLED='1';
+  for(const file of ['supabase/retention-lifecycle-v2.sql','supabase/retention-lifecycle-v2-provisioning.sql','supabase/migrations/202609150001_cancellation_lifecycle.sql']) h.sql(fs.readFileSync(path.join(__dirname,'..',file),'utf8'));
+  h.sql(fs.readFileSync(path.join(__dirname,'../supabase/migrations/202609150001_cancellation_lifecycle.sql'),'utf8'));
+  h.sql("notify pgrst, 'reload schema';");
+  await new Promise(r=>setTimeout(r,400));
+  const supabasePath=require.resolve('../api/_lib/supabase-rest');
+  require.cache[supabasePath]={id:supabasePath,filename:supabasePath,loaded:true,exports:{supabaseFetch:(route,options={})=>h.request(route,{method:options.method || 'GET',body:options.body})}};
+  delete require.cache[require.resolve('../api/_lib/student-lifecycle')];
+  const service=require('../api/_lib/student-lifecycle');
+  const {syncProjection}=require('../api/_lib/lifecycle-projection');
+  const subjects=JSON.parse(h.sql(`with s as (insert into students(firestore_student_id,full_name) values('local-student','Local') returning id), sub as (insert into subscriptions(student_id,financial_status) select id,'current' from s returning id,student_id) select row_to_json(sub) from sub;`));
+  let counter=0;
+  const command=async(name,payload={},caseId=null,key)=>{
+   const id=key || `action-${++counter}`;
+   const body={command:name,student_id:subjects.student_id,subscription_id:subjects.id,case_id:caseId,
+    actor:{uid:'local-admin',role:'admin',name:'Local'},client_action_id:id,idempotency_key:id,command_fingerprint:id,payload};
+   return (await h.request('/rpc/retention_apply_command',{method:'POST',body:{p_command:body}})).data;
+  };
+  let requested=await command('register_formal_request',{requested_at:new Date(Date.now()-1000).toISOString(),reason:'Synthetic'});
+  let c=requested.case_id;
+  assert.equal(requested.snapshot.case.lifecycle_status,'cancellation_requested');
+  assert.equal(requested.snapshot.subscription.financial_status,'current');
+  assert.equal(requested.snapshot.case.last_active_date,null);
+  let value=await service.getForStudent('local-student');assert.equal(service.isActiveOn(value,new Date()),true);
+  await service.assertSchedule('local-student',policy.addDays(new Date(),30));
+  await service.assertObligation('local-student',policy.dateKey(new Date()),policy.addDays(new Date(),30),subjects.id);
+  const reverted=await command('retract_cancellation',{},c);
+  assert.equal(reverted.snapshot.case.saved_at!==null,true);assert.equal(reverted.snapshot.subscription.scheduled_service_end_at,null);
+  assert.equal(Number(h.sql(`select count(*) from retention_events where case_id='${c}'`)),2);
+  evidence.scenarios.push('A request and reversal: API storage, active pedagogy/schedule/finance and durable events');
+  requested=await command('register_formal_request',{requested_at:new Date(Date.now()-1000).toISOString()});c=requested.case_id;
+  const started=new Date(Date.now()-500).toISOString();
+  let notice=await command('confirm_cancellation_continuity',{notice_started_at:started},c);
+  assert.equal(notice.snapshot.case.last_active_date,policy.noticeDates(started).last_active_date);
+  assert.equal(notice.snapshot.case.churn_at,policy.noticeDates(started).churn_at);
+  value=await service.getForStudent('local-student');const last=notice.snapshot.case.last_active_date;
+  assert.equal(service.isActiveOn(value,last),true);assert.equal(service.isActiveOn(value,policy.addDays(last,1)),false);
+  await service.assertSchedule('local-student',last);
+  await assert.rejects(service.assertSchedule('local-student',policy.addDays(last,1)),/outside_student_service_period/);
+  await assert.rejects(service.assertObligation('local-student',last,policy.addDays(last,1),subjects.id),/outside_student_service_period/);
+  await assert.rejects(command('effectuate_churn',{},c),/cannot_churn_before_scheduled_end/);
+  evidence.scenarios.push('B/C notice: two months, last day active, future schedule/obligation blocked, early churn rejected');
+  let fields={};await syncProjection('local-student',{load:service.getForStudent,read:async()=>({fields,updateTime:'local-v1'}),write:async(id,next)=>{fields=next;}});
+  assert.equal(fields.lifecycle.last_active_date,last);assert.equal(fields.ativo,true);
+  const reopened=await service.decorateStudent({id:'local-student',tipo:'student',ativo:true});
+  assert.equal(policy.getLastActiveDate(reopened.lifecycle),last);
+  evidence.scenarios.push('UI/reload projection shares persisted contract; synthetic Firestore CAS adapter');
+  // Explicitly expired notice, without changing production/system clocks.
+  h.sql(`update retention_cases set notice_started_at='2026-01-10T15:00:00Z',last_active_date='2026-03-10',churn_at='2026-03-11' where id='${c}';
+    update subscriptions set notice_started_at='2026-01-10T15:00:00Z',last_active_date='2026-03-10',churn_at='2026-03-11' where id='${subjects.id}';`);
+  const job=()=>h.request('/rpc/retention_run_scheduled_churn',{method:'POST',body:{p_limit:50}});
+  assert.equal((await job()).data.processed,1);assert.equal((await job()).data.processed,0);
+  const stored=JSON.parse(h.sql(`select row_to_json(r) from retention_cases r where id='${c}'`));
+  assert.equal(stored.churned_at,'2026-03-11T03:00:00+00:00');
+  await assert.rejects(service.assertAccess('local-student'),/student_service_ended/);
+  assert.equal(Number(h.sql(`select count(*) from retention_events where case_id='${c}' and event_type='cancellation_effective'`)),1);
+  assert.equal(h.sql(`select event_type from outbox_events where aggregate_id='${c}' order by created_at desc,id desc limit 1`).length>0,true);
+  evidence.scenarios.push('D delayed churn job records contractual date once and denies future access');
+  const imported=buildLegacyRetentionImportSnapshot({dryRun:false,users:[{id:'import-reversed',tipo:'student',ativo:true,cancelamentosAnteriores:[{dataPedido:'2026-01-01T15:00:00Z',dataEfetivacao:'2026-01-02T15:00:00Z',desfecho:'revertido'}]}]}).payload;
+  for(let n=0;n<2;n++) await h.request('/rpc/retention_import_legacy_snapshot',{method:'POST',body:{p_payload:imported}});
+  assert.equal(h.sql("select lifecycle_status from students where firestore_student_id='import-reversed'"),'active');
+  assert.equal(Number(h.sql("select count(*) from retention_events e join students s on s.id=e.student_id where s.firestore_student_id='import-reversed'")),2);
+  assert.equal(h.sql("select stage from retention_cases c join students s on s.id=c.student_id where s.firestore_student_id='import-reversed'"),'saved');
+  evidence.scenarios.push('Import reversal replay twice: one case, two historical facts, active and no churn');
+  const metrics=(await h.request('/retention_events?select=id,event_type,occurred_at,state_after,payload',{method:'GET'})).data;
+  assert.equal(metrics.filter(e=>e.event_type==='cancellation_effective').length,1);
+  assert.equal(Number(h.sql('select count(*) from charges')),0);
+  evidence.scenarios.push('No request/notice financial cancellation or deletion; append-only history remains');
+ } finally {
+  if(previous===undefined) delete process.env.RETENTION_V2_ENABLED;else process.env.RETENTION_V2_ENABLED=previous;
+  h.cleanup();
+  fs.mkdirSync(path.join(__dirname,'../artifacts/cancellation-implementation'),{recursive:true});
+  fs.writeFileSync(path.join(__dirname,'../artifacts/cancellation-implementation/e2e.json'),JSON.stringify(evidence,null,2));
+ }
+});

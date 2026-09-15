@@ -1,0 +1,410 @@
+{
+  "projectId": "prj_FcxsR8A6rXLVIo2DArdAFDlm7pq8",
+  "teamId": "team_QFoYBpP3YUXGD4agYHZ7I6jV",
+  "httpStatus": 200,
+  "variables": [
+    {
+      "key": "RETENTION_FINANCIAL_KPIS_ENABLED",
+      "type": "sensitive",
+      "environments": [
+        "production"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "RETENTION_INVOLUNTARY_CHURN_ENABLED",
+      "type": "sensitive",
+      "environments": [
+        "production"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "RETENTION_LEGACY_IMPORT_ENABLED",
+      "type": "sensitive",
+      "environments": [
+        "production"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "RETENTION_V2_ENABLED",
+      "type": "sensitive",
+      "environments": [
+        "production"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "GOOGLE_SERVICE_ACCOUNT_JSON",
+      "type": "sensitive",
+      "environments": [
+        "production"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "SUPABASE_URL",
+      "type": "sensitive",
+      "environments": [
+        "preview"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "ASAAS_KEY_SCOPE",
+      "type": "sensitive",
+      "environments": [
+        "preview"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "ASAAS_BASE_URL",
+      "type": "sensitive",
+      "environments": [
+        "preview"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "SPACE_STAGING_SUPABASE_URL",
+      "type": "sensitive",
+      "environments": [
+        "preview"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "SUPABASE_URL",
+      "type": "encrypted",
+      "environments": [
+        "production"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "SUPABASE_SERVICE_ROLE_KEY",
+      "type": "encrypted",
+      "environments": [
+        "production"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "APP_ENV",
+      "type": "sensitive",
+      "environments": [
+        "preview"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "GOOGLE_SERVICE_ACCOUNT_JSON_STAGING",
+      "type": "sensitive",
+      "environments": [
+        "preview"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "SPACE_STAGING_FIREBASE_PROJECT_ID",
+      "type": "sensitive",
+      "environments": [
+        "preview"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID",
+      "type": "sensitive",
+      "environments": [
+        "preview"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "NEXT_PUBLIC_FIREBASE_APP_ID",
+      "type": "sensitive",
+      "environments": [
+        "preview"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID",
+      "type": "sensitive",
+      "environments": [
+        "preview"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET",
+      "type": "sensitive",
+      "environments": [
+        "preview"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "NEXT_PUBLIC_FIREBASE_PROJECT_ID",
+      "type": "sensitive",
+      "environments": [
+        "preview"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN",
+      "type": "sensitive",
+      "environments": [
+        "preview"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "NEXT_PUBLIC_FIREBASE_API_KEY",
+      "type": "sensitive",
+      "environments": [
+        "preview"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "N8N_WEBHOOK_SECRET",
+      "type": "sensitive",
+      "environments": [
+        "preview",
+        "production"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "N8N_PEDAGOGICO_REMARCACAO_AULA_WEBHOOK_URL",
+      "type": "sensitive",
+      "environments": [
+        "preview",
+        "production"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "N8N_PEDAGOGICO_REGISTRO_FALTA_WEBHOOK_URL",
+      "type": "sensitive",
+      "environments": [
+        "preview",
+        "production"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "N8N_PEDAGOGICO_REGISTRO_AULA_WEBHOOK_URL",
+      "type": "sensitive",
+      "environments": [
+        "preview",
+        "production"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "N8N_PEDAGOGICO_PROFESSOR_PRIMEIRA_AULA_WEBHOOK_URL",
+      "type": "sensitive",
+      "environments": [
+        "preview",
+        "production"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "N8N_PEDAGOGICO_ONBOARDING_WEBHOOK_URL",
+      "type": "sensitive",
+      "environments": [
+        "preview",
+        "production"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "N8N_BASE_URL",
+      "type": "sensitive",
+      "environments": [
+        "preview",
+        "production"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "LIVE_VIDEO_PROVIDER",
+      "type": "sensitive",
+      "environments": [
+        "production",
+        "preview"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "JITSI_BASE_URL",
+      "type": "sensitive",
+      "environments": [
+        "production",
+        "preview"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "SPACE_AUTH_SECRET",
+      "type": "sensitive",
+      "environments": [
+        "preview",
+        "production"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "SPACE_PUBLIC_BASE_URL",
+      "type": "sensitive",
+      "environments": [
+        "preview",
+        "production"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "OPENAI_COPILOT_MODEL",
+      "type": "sensitive",
+      "environments": [
+        "preview",
+        "production"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "OPENAI_API_KEY",
+      "type": "sensitive",
+      "environments": [
+        "preview",
+        "production"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "CHATWOOT_API_TOKEN",
+      "type": "sensitive",
+      "environments": [
+        "preview",
+        "production"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "CHATWOOT_INBOX_ID",
+      "type": "sensitive",
+      "environments": [
+        "preview",
+        "production"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "CHATWOOT_ACCOUNT_ID",
+      "type": "sensitive",
+      "environments": [
+        "preview",
+        "production"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "CHATWOOT_BASE_URL",
+      "type": "sensitive",
+      "environments": [
+        "preview",
+        "production"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "GOOGLE_SHEETS_API_KEY",
+      "type": "sensitive",
+      "environments": [
+        "preview",
+        "production"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "FIREBASE_API_KEY",
+      "type": "sensitive",
+      "environments": [
+        "preview",
+        "production"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "CRM_API_BASE_URL",
+      "type": "sensitive",
+      "environments": [
+        "preview",
+        "production"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "CRM_API_KEY",
+      "type": "sensitive",
+      "environments": [
+        "preview",
+        "production"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "ZAPSIGN_TEMPLATE_TOKEN_DIAMOND",
+      "type": "sensitive",
+      "environments": [
+        "preview",
+        "production"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "ZAPSIGN_TEMPLATE_TOKEN_TURMA",
+      "type": "sensitive",
+      "environments": [
+        "preview",
+        "production"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "ZAPSIGN_TEMPLATE_TOKEN_GOLD",
+      "type": "sensitive",
+      "environments": [
+        "preview",
+        "production"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "CRM_WEBHOOK_URL",
+      "type": "sensitive",
+      "environments": [
+        "preview",
+        "production"
+      ],
+      "branchSpecific": false
+    },
+    {
+      "key": "ZAPSIGN_API_TOKEN",
+      "type": "sensitive",
+      "environments": [
+        "preview",
+        "production"
+      ],
+      "branchSpecific": false
+    }
+  ],
+  "pagination": null
+}

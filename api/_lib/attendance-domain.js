@@ -33,9 +33,14 @@ const metadata = (value = {}) => {
   return value;
 };
 
-// Narrower than the platform guard: foundation is staging-only until explicitly promoted.
+// Production requires the explicit Attendance authorization and pinned target/credential.
 const assertAttendanceEnvironment = (env = process.env) => {
   if (env.ATTENDANCE_FOUNDATION_ENABLED !== 'true') fail('attendance_foundation_disabled', 409);
+  if (env.APP_ENV === 'production') {
+    assertAttendanceTarget(env);
+    assertEnvironmentIsolation(env);
+    return;
+  }
   const clean = (value) => String(value || '').trim().replace(/\/+$/, '');
   const current = clean(env.SUPABASE_URL);
   if (env.APP_ENV !== 'staging' || env.SUPABASE_ENV_SCOPE !== 'staging' || !current

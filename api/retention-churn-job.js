@@ -1,6 +1,6 @@
 const { readJsonBody, sendJson } = require("./_lib/http");
 const { runScheduledRetentionChurn } = require("./_lib/retention-store");
-const { isRetentionInvoluntaryChurnEnabled } = require("./_lib/retention-flags");
+const { isRetentionV2Enabled } = require("./_lib/retention-flags");
 
 const constantTimeEqual = (left, right) => {
   const a = Buffer.from(String(left || ""), "utf8");
@@ -21,10 +21,10 @@ module.exports = async (req, res) => {
     return sendJson(res, configuredSecret ? 401 : 503, { error: configuredSecret ? "unauthorized" : "retention_job_not_configured" });
   }
 
-  if (!isRetentionInvoluntaryChurnEnabled()) {
+  if (!isRetentionV2Enabled()) {
     return sendJson(res, 409, {
-      error: "involuntary_churn_disabled",
-      message: "Churn involuntário permanece bloqueado por feature flag.",
+      error: "retention_v2_disabled",
+      message: "Lifecycle canônico permanece desativado neste ambiente.",
     });
   }
 
@@ -41,7 +41,8 @@ module.exports = async (req, res) => {
       limit,
       actor: { uid: "system:retention-cron", name: "Sistema", role: "system" },
     });
-    return sendJson(res, 200, { ok: true, result });
+    const projections = await require('./_lib/lifecycle-projection').drainProjections(limit);
+    return sendJson(res, 200, { ok: true, result, projections });
   } catch (error) {
     console.error("[retention] churn job failed", { code: error?.code || "", message: error?.message || "retention_churn_job_failed" });
     return sendJson(res, 500, {

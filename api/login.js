@@ -106,6 +106,10 @@ module.exports = async (req, res) => {
     }
   }
 
+  if (user.role === 'student') {
+    try { await require('./_lib/student-lifecycle').assertAccess(user.id); }
+    catch (error) { return sendJson(res, error.status || 503, { error: error.code || 'lifecycle_unavailable' }); }
+  }
   const session = createSessionForUser(user);
   attempts.delete(rateKey);
   const cookie = buildSessionCookie(session.token, { maxAgeSeconds: session.maxAgeSeconds, secure: isSecureRequest(req) });

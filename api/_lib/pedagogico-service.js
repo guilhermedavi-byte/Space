@@ -863,6 +863,8 @@ const loadTeacherStudentSheet = async ({ session, alunoId, alunoNome } = {}) => 
     professorNome: String(teacherDoc?.nome || studentDoc?.professorNome || ownedRow?.professor_nome || "").trim(),
     ativo: studentDoc?.ativo !== false,
     criadoEm: studentDoc?.criadoEm || studentDoc?.createdAt || null,
+    lifecycle: studentDoc?.lifecycle || null,
+    lifecycleSubscriptions: studentDoc?.lifecycleSubscriptions || null,
     cancelamento: studentDoc?.cancelamento || null,
     cancelamentosAnteriores: Array.isArray(studentDoc?.cancelamentosAnteriores) ? studentDoc.cancelamentosAnteriores : [],
   };

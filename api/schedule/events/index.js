@@ -506,6 +506,9 @@ module.exports = async (req, res) => {
     if (isCreate) {
       const occurrences = buildOccurrences({ dateKey, recorrente, repeatMode });
       const createdIds = [];
+      for (const key of occurrences) {
+        await require('../../_lib/student-lifecycle').assertScheduleWrite('aulas/new',baseDoc(key),async()=>({}));
+      }
 
       for (const key of occurrences) {
         if (!isValidDateKey(key)) continue;

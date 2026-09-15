@@ -41,9 +41,11 @@ const install = ({ enabled = true, result = { ok: true, processed: 1 } } = {}) =
     filename: flagsPath,
     loaded: true,
     exports: {
-      isRetentionInvoluntaryChurnEnabled: () => enabled,
+      isRetentionV2Enabled: () => enabled,
     },
   };
+  const projectionPath=require.resolve('../api/_lib/lifecycle-projection');
+  require.cache[projectionPath]={id:projectionPath,filename:projectionPath,loaded:true,exports:{drainProjections:async()=>({delivered:0,failed:0})}};
   return require("../api/retention-churn-job");
 };
 
@@ -64,7 +66,7 @@ test("job exige segredo correto e respeita flag", async () => {
   const res = makeRes();
   await handler(makeReq({ secret: "segredo" }), res);
   assert.equal(res.statusCode, 409);
-  assert.equal(res.body.error, "involuntary_churn_disabled");
+  assert.equal(res.body.error, "retention_v2_disabled");
   process.env.RETENTION_CHURN_JOB_SECRET = prev;
 });
 

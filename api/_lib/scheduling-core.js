@@ -159,6 +159,8 @@ const studentHasConflict = (store, studentId, dateKey, startMin, endMin) => {
 };
 
 const bookSlotForStudent = ({ store, studentId, dateKey, startMin, endMin }) => {
+  const subject = store?.studentLifecycles?.[studentId];
+  if (!subject || !require("../../assets/student-lifecycle").canScheduleFor(subject, dateKey)) return { ok: false, error: "outside_student_service_period" };
   const duration = clampInt(store?.config?.slotDurationMinutes, 15, 180);
   const safeStart = clampInt(startMin, 0, 1440);
   const safeEnd = clampInt(endMin != null ? endMin : safeStart + duration, 0, 1440);

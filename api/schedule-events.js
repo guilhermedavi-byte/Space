@@ -1996,6 +1996,9 @@ module.exports = async (req, res) => {
         return;
       }
 
+      for (const candidate of [...candidateDocs, ...(recurringSeriesPlan?.updates || []).map(entry => entry.candidate)]) {
+        await require('./_lib/student-lifecycle').assertScheduleWrite('aulas/new',candidate,async()=>({}));
+      }
       const writes = [];
       const resultIds = [];
 

@@ -1,6 +1,7 @@
 const { createHash } = require('node:crypto');
 const { FinanceError } = require('../api/_lib/finance-domain');
 const policy = require('../config/finance-staging-targets.json');
+const { stagingChannelPolicy } = require('./staging-channel-policy');
 const digest = value => createHash('sha256').update(value).digest('hex');
 const deny = reason => { throw new FinanceError(`finance_certification_${reason}`); };
 const required = (env, key) => {
@@ -27,6 +28,13 @@ function assertFinanceCertificationTarget(env = process.env, targets = policy) {
   for (const key of ['VERCEL_ENV', 'VERCEL_TARGET_ENV']) if (env[key] && !['preview', 'staging'].includes(env[key])) deny('environment_conflict');
   if (env.ASAAS_BASE_URL !== 'https://api-sandbox.asaas.com/v3' || env.ASAAS_KEY_SCOPE !== 'sandbox'
     || (env.ASAAS_ENV && env.ASAAS_ENV !== 'sandbox')) deny('sandbox_required');
+  // Financial staging does not need any messaging/workflow integration.
+  if (env.N8N_ENV_SCOPE !== 'disabled' || Object.entries(env).some(([key, value]) =>
+    value && (/^N8N_.*(?:URL|TOKEN|SECRET)$/.test(key)
+      || /^(?:CHATWOOT_API_TOKEN|CRM_API_KEY|ZAPSIGN_API_TOKEN|TWILIO_AUTH_TOKEN|RESEND_API_KEY|SENDGRID_API_KEY)$/.test(key)))) {
+    deny('outbound_integrations_must_be_disabled');
+  }
+  try { stagingChannelPolicy(env); } catch { deny('channel_allowlist_invalid'); }
   const current = project(required(env, 'SUPABASE_URL'));
   const staging = project(required(env, 'SPACE_STAGING_SUPABASE_URL'));
   const production = project(required(env, 'SPACE_PRODUCTION_SUPABASE_URL'));

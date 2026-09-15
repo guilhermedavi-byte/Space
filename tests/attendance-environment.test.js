@@ -19,6 +19,29 @@ const environment = () => ({ APP_ENV: 'staging', SUPABASE_ENV_SCOPE: 'staging', 
 const options = { environment: 'staging', confirm: true };
 const check = (env, config = policy) => assertAttendanceOperation(env, options, config);
 
+test('produção somente com autorização exata, target conhecido, fingerprint e sinais coerentes', () => {
+  const config = { ...policy, production: { projectRefSha256: digest(prod), serviceRoleKeySha256: digest(key),
+    databasePasswordSha256: digest('synthetic-password') } };
+  const env = { APP_ENV: 'production', SUPABASE_ENV_SCOPE: 'production', VERCEL_ENV: 'production',
+    ATTENDANCE_ALLOW_PRODUCTION_MUTATIONS: 'true', ATTENDANCE_PRODUCTION_PROJECT_REF: prod,
+    SUPABASE_URL: `https://${prod}.supabase.co`, SPACE_PRODUCTION_SUPABASE_URL: `https://${prod}.supabase.co`,
+    SUPABASE_SERVICE_ROLE_KEY: key, ATTENDANCE_PRODUCTION_CONFIRM: `production:${prod}`,
+    ATTENDANCE_PRODUCTION_DATABASE_URL: `postgresql://postgres:synthetic-password@db.${prod}.supabase.co/postgres` };
+  const operation = e => assertAttendanceOperation(e, { environment: 'production', confirm: true }, config);
+  assert.equal(operation(env).environment, 'production');
+  for (const patch of [{ ATTENDANCE_ALLOW_PRODUCTION_MUTATIONS: undefined }, { ATTENDANCE_ALLOW_PRODUCTION_MUTATIONS: 'TRUE' },
+    { SUPABASE_URL: `https://${stage}.supabase.co` }, { SUPABASE_SERVICE_ROLE_KEY: 'sb_secret_wrong' },
+    { ATTENDANCE_PRODUCTION_PROJECT_REF: stage }, { VERCEL_ENV: 'preview' }, { SPACE_APP_ENV: 'staging' },
+    { SUPABASE_ENV_SCOPE: 'staging' }, { SPACE_PRODUCTION_SUPABASE_URL: `https://${stage}.supabase.co` },
+    { ATTENDANCE_PRODUCTION_CONFIRM: `production:${stage}` }, { NEXT_PUBLIC_SUPABASE_URL: `https://${stage}.supabase.co` },
+    { ATTENDANCE_PRODUCTION_DATABASE_URL: `postgresql://postgres:wrong@db.${prod}.supabase.co/postgres` }]) {
+    assert.throws(() => operation({ ...env, ...patch }), /attendance_environment_/);
+  }
+  assert.throws(() => assertAttendanceTarget(env, policy), /target_not_allowlisted/);
+  assert.throws(() => assertAttendanceOperation(env, options, config), /confirmation_required/);
+  assert.throws(() => parseArguments(['--mode=apply','--env-file=x','--environment=production','--confirm-staging']));
+});
+
 test('staging allowlisted, credenciais vinculadas e confirmação permitem; NODE_ENV não identifica ambiente', () => {
   assert.equal(check(environment()).ref, stage);
   const env = environment(); delete env.VERCEL_ENV;

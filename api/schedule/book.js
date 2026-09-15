@@ -110,6 +110,11 @@ module.exports = async (req, res) => {
     events: Array.isArray(events) ? events : [],
   };
 
+  try {
+    const lifecycle = require('../_lib/student-lifecycle');
+    const subject = await lifecycle.getForStudent(studentId);
+    store.studentLifecycles = { [studentId]: subject };
+  } catch (error) { return sendJson(res, error.status || 503, { error: error.code || 'lifecycle_unavailable' }); }
   const result = bookSlotForStudent({ store, studentId, dateKey, startMin, endMin });
   if (!result.ok || !result.event) {
     const failure = result.error || "unknown";
@@ -122,9 +127,10 @@ module.exports = async (req, res) => {
 
   try {
     const docPath = `events/${encodeURIComponent(created.id)}`;
+    const serviceToken = (await require('../../_lib/google-service-account').getGoogleAccessToken({scope:'https://www.googleapis.com/auth/datastore'})).accessToken;
     const patch = await firestorePatchDocument({
       docPath,
-      idToken,
+      idToken: serviceToken,
       data: {
         teacherId: created.teacherId,
         studentId: created.studentId,

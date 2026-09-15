@@ -2,5 +2,9 @@
   "productionProjectRefSha256": [
     "985bd0014b888f7287700d3a3b45b7e4f557e9e4a731485ec07977fb19cd44b2"
   ],
-  "staging": []
+  "staging": [],
+  "production": {
+    "projectRefSha256": "985bd0014b888f7287700d3a3b45b7e4f557e9e4a731485ec07977fb19cd44b2",
+    "serviceRoleKeySha256": "d868be04570cfc35bded4c909f329adc4856dd0900c6574ef3567de70d10d82c"
+  }
 }

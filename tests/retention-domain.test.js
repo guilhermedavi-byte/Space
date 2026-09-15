@@ -11,20 +11,20 @@ const {
   sanitizePayloadByCommand,
 } = require("../api/_lib/retention-domain");
 
-test("pedido dentro de 7 dias da primeira aula encerra em 1 mês da primeira aula", () => {
+test("aviso dura dois meses mesmo perto da primeira aula", () => {
   const result = computeScheduledServiceEndAt({
-    requestedAt: "2026-08-26T12:00:00.000Z",
+    noticeStartedAt: "2026-08-26T12:00:00.000Z",
     firstLessonAt: "2026-08-22T12:00:00.000Z",
   });
-  assert.equal(result.toISOString(), "2026-09-22T12:00:00.000Z");
+  assert.equal(result.toISOString(), "2026-10-26T15:00:00.000Z");
 });
 
-test("pedido fora da janela inicial encerra em 2 meses do pedido", () => {
+test("aviso usa sua própria data de início", () => {
   const result = computeScheduledServiceEndAt({
-    requestedAt: "2026-08-26T12:00:00.000Z",
+    noticeStartedAt: "2026-08-26T12:00:00.000Z",
     firstLessonAt: "2026-08-01T12:00:00.000Z",
   });
-  assert.equal(result.toISOString(), "2026-10-26T12:00:00.000Z");
+  assert.equal(result.toISOString(), "2026-10-26T15:00:00.000Z");
 });
 
 test("command payload preserva retry idempotente e aceita resolução por firestore_student_id", () => {
@@ -126,20 +126,20 @@ test("projeção pode ser reconstruída a partir do histórico append-only", () 
   assert.equal(projection.savedAt, "2026-08-27T12:00:00.000Z");
 });
 
-test("awaiting_customer preserva a data final já programada", () => {
+test("pedido aguardando aluno não programa data final", () => {
   const projection = rebuildCaseProjectionFromEvents([
     { event_type: "register_formal_request", payload: { scheduled_service_end_at: "2026-10-26T12:00:00.000Z" } },
     { event_type: "mark_awaiting_customer" },
   ]);
   assert.equal(projection.stage, "awaiting_customer");
-  assert.equal(projection.scheduledServiceEndAt, "2026-10-26T12:00:00.000Z");
+  assert.equal(projection.scheduledServiceEndAt, null);
 });
 
 test("continuidade confirmada devolve o caso para scheduled", () => {
   const projection = rebuildCaseProjectionFromEvents([
     { event_type: "register_formal_request", payload: { scheduled_service_end_at: "2026-10-26T12:00:00.000Z" } },
     { event_type: "mark_awaiting_customer" },
-    { event_type: "confirm_cancellation_continuity" },
+    { event_type: "confirm_cancellation_continuity", occurred_at: "2026-09-20T15:00:00Z" },
   ]);
   assert.equal(projection.stage, "scheduled");
   assert.equal(projection.lifecycleStatus, "cancellation_scheduled");

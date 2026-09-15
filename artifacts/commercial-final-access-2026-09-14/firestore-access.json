@@ -1,0 +1,6 @@
+{
+  "credentialFilePresent": true,
+  "identityValid": false,
+  "readable": false,
+  "reason": "existing_firebase_cli_identity_rejected"
+}

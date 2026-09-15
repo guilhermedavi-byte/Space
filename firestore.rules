@@ -29,13 +29,32 @@ service cloud.firestore {
         );
     }
 
+    // Lifecycle fields are server-owned projections from Supabase.
+    function withinStudentLifecycle(studentId, day) {
+      let student = get(/databases/$(database)/documents/users/$(studentId)).data;
+      let parts = day.split('-');
+      return student.get('ativo', true)
+        && (student.get('lifecycleChurnAt', null) == null || request.time < student.lifecycleChurnAt)
+        && (student.get('lifecycleLastActiveDay', null) == null
+          || timestamp.date(int(parts[0]), int(parts[1]), int(parts[2])) <= student.lifecycleLastActiveDay);
+    }
+    function lifecycleAllowsLesson(data) {
+      return data.get('status', '') in ['cancelado', 'cancelada', 'realizada', 'falta', 'concluido']
+        || (data.get('alunoId', data.get('studentId', '')) == '')
+        || withinStudentLifecycle(data.get('alunoId', data.get('studentId', '')), data.dateKey);
+    }
+
     // Users (perfil/base de autenticação)
     // - Admin pode listar/ler/alterar qualquer usuário.
     // - Usuário autenticado pode ler seu próprio perfil (necessário para APIs como /api/schedule-events).
     match /users/{userId} {
       allow get: if signedIn() && (request.auth.uid == userId || isAdmin());
       allow list: if isAdmin();
-      allow create, update, delete: if isAdmin();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        'lifecycle', 'lifecycleSubscriptions', 'lifecycleRevision', 'lifecycleChurnAt', 'lifecycleLastActiveDay',
+        'cancelamento', 'cancelamentosAnteriores'
+      ]);
 
       // Admin > Alunos: arquivos do aluno (subcoleção)
       match /files/{fileId} {
@@ -56,11 +75,9 @@ service cloud.firestore {
             && resource.data.professorId == request.auth.uid
           )
         );
-      allow write: if isAdmin()
-        || (
-          isTeacher()
-          && request.resource.data.professorId == request.auth.uid
-        );
+      allow delete: if isAdmin() || (isTeacher() && resource.data.professorId == request.auth.uid);
+      allow create, update: if (isAdmin() || (isTeacher() && request.resource.data.professorId == request.auth.uid))
+        && lifecycleAllowsLesson(request.resource.data);
     }
 
     // Cadastros e operação pedagógica administrados dentro da plataforma.

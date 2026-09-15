@@ -45,6 +45,7 @@ module.exports = async (req, res) => {
 
   const alunoId = String(body?.aluno_id || body?.student_id || body?.email || "").trim();
   try {
+    if (action !== 'sync_progress') await require('../../_lib/student-lifecycle').assertAccess(alunoId);
     const result = await callN8nWorkflow({
       workflow: cfg.workflow,
       envName: cfg.envName,

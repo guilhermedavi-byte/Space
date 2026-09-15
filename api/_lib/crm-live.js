@@ -1,3 +1,4 @@
+const { personalBestCopy } = require("./crm-live-presentation");
 const crypto = require("crypto");
 
 const { getGoogleAccessToken } = require("../../_lib/google-service-account");
@@ -613,51 +614,26 @@ const buildMonthVsPrevious = ({ currentPeriod, currentRealized = 0, currentMonth
   };
 };
 
-const buildPersonalBestHeadline = ({ weeklyRollups = [], currentRows = [], role = "" } = {}) => {
-  const rows = Array.isArray(currentRows) ? currentRows : [];
-  if (!rows.length || !Array.isArray(weeklyRollups) || !weeklyRollups.length) return null;
-  let best = null;
-  rows.forEach((row) => {
+const buildPersonalBestScreens = ({ weeklyRollups = [], currentRows = [], role = "" } = {}) => {
+  const seen = new Set();
+  return (Array.isArray(currentRows) ? currentRows : []).flatMap((row) => {
     const personId = safeString(row?.personId);
-    const targetValue = safeNumber(row?.targetValue);
-    if (!personId || targetValue <= 0) return;
-    const actualValue = safeNumber(row?.actualValue);
-    let historicalBest = 0;
-    weeklyRollups.forEach((rollup) => {
-      const progressRows = Array.isArray(rollup?.peopleProgress?.[role]) ? rollup.peopleProgress[role] : [];
-      const historical = progressRows.find((entry) => safeString(entry?.personId) === personId);
-      if (historical) historicalBest = Math.max(historicalBest, safeNumber(historical.actualValue));
-    });
-    if (historicalBest <= 0 || actualValue > historicalBest) return;
-    const remaining = Math.max(0, Math.ceil(historicalBest - actualValue));
-    if (remaining <= 0) return;
-    const candidate = {
-      personId,
-      displayName: safeString(row?.displayName),
-      photoURL: safeString(row?.photoURL),
-      actualValue,
-      historicalBest,
-      remaining,
-      targetValue,
-      progressPct: safeNumber(row?.progressPct),
+    if (!personId || seen.has(personId) || safeNumber(row?.targetValue) <= 0) return [];
+    seen.add(personId);
+    const historicalBest = (Array.isArray(weeklyRollups) ? weeklyRollups : []).reduce((best, rollup) => {
+      const history = Array.isArray(rollup?.peopleProgress?.[role]) ? rollup.peopleProgress[role] : [];
+      return history.reduce((value, entry) => safeString(entry?.personId) === personId
+        ? Math.max(value, safeNumber(entry.actualValue)) : value, best);
+    }, 0);
+    // A historical record requires a previous positive mark; zero current progress is valid.
+    if (historicalBest <= 0) return [];
+    const item = {
+      id: `personal_best:${role}:${personId}`, type: "personal_best", personId,
+      personName: safeString(row?.displayName), photoURL: safeString(row?.photoURL), role,
+      historicalBest, actualValue: Math.max(0, safeNumber(row?.actualValue)),
     };
-    if (!best || candidate.remaining < best.remaining || (candidate.remaining === best.remaining && candidate.progressPct > best.progressPct)) {
-      best = candidate;
-    }
-  });
-  if (!best) return null;
-  return {
-    id: `personal_best:${role}:${best.personId}`,
-    type: "personal_best",
-    personId: best.personId,
-    personName: best.displayName,
-    photoURL: best.photoURL,
-    role,
-    remaining: best.remaining,
-    historicalBest: best.historicalBest,
-    actualValue: best.actualValue,
-    headline: `${best.displayName} está a ${best.remaining} ${best.remaining === 1 ? "reunião" : "reuniões"} do melhor dele na semana.`,
-  };
+    return [{ ...item, remaining: Math.max(0, historicalBest - item.actualValue + 1), ...personalBestCopy(item) }];
+  }).sort((a, b) => a.personId.localeCompare(b.personId));
 };
 
 const buildWeeklyNewsScreens = ({ month = {}, weekly = {}, previousMonthComparison = null, weeklyRollups = [], now = new Date() } = {}) => {
@@ -677,8 +653,7 @@ const buildWeeklyNewsScreens = ({ month = {}, weekly = {}, previousMonthComparis
     });
   }
 
-  const personalBest = buildPersonalBestHeadline({ weeklyRollups, currentRows: sdrRows, role: "sdrs" });
-  if (personalBest) screens.push(personalBest);
+  screens.push(...buildPersonalBestScreens({ weeklyRollups, currentRows: sdrRows, role: "sdrs" }));
 
   return screens;
 };

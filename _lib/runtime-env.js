@@ -133,7 +133,7 @@ const getEnvironmentPresentation = (env = process.env) => {
 
 const collectWebhookUrls = (env = process.env) =>
   Object.entries(env || {})
-    .filter(([key, value]) => /N8N_.*(?:WEBHOOK_)?URL$/i.test(key) && String(value || "").trim())
+    .filter(([key, value]) => /^N8N_.*(?:WEBHOOK_)?URL$/i.test(key) && String(value || "").trim())
     .map(([key, value]) => ({ key, value: stripTrailingSlash(value) }));
 
 const validateEnvironmentIsolation = (env = process.env) => {
@@ -194,14 +194,38 @@ const validateEnvironmentIsolation = (env = process.env) => {
 
     if (!supabaseUrl) errors.push("staging_missing_supabase_url");
     if (supabaseUrl && prodRefs.supabaseUrl && supabaseUrl === prodRefs.supabaseUrl) errors.push("staging_uses_production_supabase");
+    if (!prodRefs.supabaseUrl || !stagingRefs.supabaseUrl) errors.push("staging_missing_supabase_references");
+    if (supabaseUrl && stagingRefs.supabaseUrl && supabaseUrl !== stagingRefs.supabaseUrl) errors.push("staging_supabase_reference_mismatch");
+    if (scopeHints.supabase && scopeHints.supabase !== "staging") errors.push("staging_uses_production_supabase_scope");
 
     if (!asaasBaseUrl) errors.push("staging_missing_asaas_base_url");
     if (asaasBaseUrl && (!/sandbox/i.test(asaasBaseUrl) || asaasBaseUrl === prodRefs.asaasBaseUrl)) errors.push("staging_uses_production_asaas");
 
     if (scopeHints.asaas && !/sandbox|staging/i.test(scopeHints.asaas)) errors.push("staging_uses_real_asaas_key_scope");
+    if (asaasBaseUrl && asaasBaseUrl !== SANDBOX_ASAAS_BASE_URL) errors.push("staging_asaas_base_not_allowlisted");
 
     if (n8nBaseUrl && prodRefs.n8nBaseUrl && n8nBaseUrl === prodRefs.n8nBaseUrl) errors.push("staging_uses_production_n8n");
     if (scopeHints.n8n && !/staging|disabled|mock/i.test(scopeHints.n8n)) errors.push("staging_uses_production_n8n_scope");
+    const webhookUrls = collectWebhookUrls(env);
+    if (["disabled", "mock"].includes(scopeHints.n8n) && (n8nBaseUrl || webhookUrls.length || getEnv(env, "N8N_WEBHOOK_SECRET"))) {
+      errors.push("staging_disabled_n8n_has_live_configuration");
+    }
+    if (n8nBaseUrl || webhookUrls.length) {
+      if (!prodRefs.n8nBaseUrl || !stagingRefs.n8nBaseUrl) errors.push("staging_missing_n8n_references");
+      if (n8nBaseUrl !== stagingRefs.n8nBaseUrl) errors.push("staging_n8n_reference_mismatch");
+      const withinStaging = (value) => {
+        try {
+          const u = new URL(value), base = new URL(stagingRefs.n8nBaseUrl);
+          return u.protocol === "https:" && !u.username && !u.password && u.origin === base.origin
+            && (u.pathname === base.pathname || u.pathname.startsWith(base.pathname.replace(/\/$/, "") + "/"));
+        } catch { return false; }
+      };
+      if (webhookUrls.some(({ value }) => !withinStaging(value))) errors.push("staging_webhook_not_allowlisted");
+    }
+
+    const serviceAccount = safeParseJson(getFirebaseServiceAccountJsonRaw(env));
+    if (serviceAccount?.project_id && serviceAccount.project_id !== firebaseProjectId) errors.push("staging_firebase_service_account_mismatch");
+    if (serviceAccount?.project_id === prodRefs.firebaseProjectId) errors.push("staging_uses_production_firebase_service_account");
 
     const productionWebhook = collectWebhookUrls(env).find(
       ({ value }) => prodRefs.n8nBaseUrl && value.startsWith(prodRefs.n8nBaseUrl)
@@ -216,6 +240,8 @@ const validateEnvironmentIsolation = (env = process.env) => {
     if (stagingRefs.asaasBaseUrl && asaasBaseUrl === stagingRefs.asaasBaseUrl) errors.push("production_uses_sandbox_asaas");
     if (scopeHints.asaas && /sandbox|staging/i.test(scopeHints.asaas)) errors.push("production_uses_sandbox_asaas_scope");
     if (scopeHints.n8n && /staging|disabled|mock/i.test(scopeHints.n8n)) errors.push("production_uses_staging_n8n_scope");
+    if (scopeHints.supabase === "staging") errors.push("production_uses_staging_supabase_scope");
+    if (scopeHints.firebase === "staging") errors.push("production_uses_staging_firebase_scope");
   }
 
   return {

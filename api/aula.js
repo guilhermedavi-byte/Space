@@ -454,6 +454,10 @@ module.exports = async (req, res) => {
     return;
   }
 
+  if (normalizeRole(session.role) === 'student') {
+    try { await require('./_lib/student-lifecycle').assertAccess(session.sub); }
+    catch (error) { res.statusCode=error.status || 503; return res.end('Contrato fora da vigência ou indisponível para validação.'); }
+  }
   const provider = getVideoProvider(lesson.video_provider);
   const joinData = await provider.getJoinData({ lesson, role: normalizeRole(session.role) });
   const html = buildHtml({

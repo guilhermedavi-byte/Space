@@ -25,7 +25,7 @@ test("importador legado gera dry-run idempotente sem duplicar o snapshot", () =>
   assert.equal(first.report.importedEvents, 1);
 });
 
-test("cancelamento efetivado entra como caso legado encerrado", () => {
+test("cancelamento sem evidência de aviso vai para reconciliação, não churn", () => {
   const snapshot = buildLegacyRetentionImportSnapshot({
     users: [
       {
@@ -42,7 +42,6 @@ test("cancelamento efetivado entra como caso legado encerrado", () => {
     ],
     dryRun: true,
   });
-  assert.equal(snapshot.payload.cases.length, 1);
-  assert.equal(snapshot.payload.cases[0].stage, "lost");
-  assert.equal(snapshot.report.closedCases, 1);
+  assert.equal(snapshot.payload.cases.length, 0);
+  assert.equal(snapshot.report.exceptions[0].reason, "terminal_record_without_explicit_notice");
 });

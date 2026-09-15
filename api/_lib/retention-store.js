@@ -128,10 +128,10 @@ const buildProvisionPayloadFromFirestoreStudent = (student = {}) => {
   const fullName = safeText(student.nome || student.name || "Aluno") || "Aluno";
   const email = safeText(student.email) || null;
   const phone = safeText(student.telefone || student.whatsapp || student.telefoneWhatsapp) || null;
-  const lifecycleStatus =
-    student.ativo === false || student.canceladoEm || student.dataCancelamento
-      ? "churned"
-      : normalizeLifecycleStatus(student.cancelamento ? "cancellation_scheduled" : "active");
+  if (student.ativo === false || student.canceladoEm || student.dataCancelamento || student.cancelamento) {
+    throw buildRetentionStoreError("retention_legacy_reconciliation_required");
+  }
+  const lifecycleStatus = "active";
   const pauseStatus = normalizePauseStatus(student.cancelamento?.aulasSuspensas ? "paused_non_billable" : "none");
   const entryDate = resolveFirestoreEntryDate(student);
   const servicePeriod = resolveCurrentMonthlyServicePeriod({ startDateKey: entryDate.dateKey });
@@ -194,6 +194,23 @@ const invokeRetentionRpc = async (rpcName, payload = {}) => {
   });
   if (Array.isArray(data)) return data[0] || null;
   return data;
+};
+
+const listAllLifecycleRows = async (table, select) => {
+  const rows=[];
+  for (let offset=0;;offset+=1000) {
+    const {data}=await supabaseFetch(`/${table}?select=${select}&order=id.asc&limit=1000&offset=${offset}`);
+    if (!Array.isArray(data)) throw new Error('invalid_lifecycle_rows');
+    rows.push(...data);
+    if(data.length<1000) return rows;
+  }
+};
+const getLifecycleMetrics = async (month) => {
+  const [events,students]=await Promise.all([
+    listAllLifecycleRows('retention_events','id,event_type,occurred_at,state_after,payload'),
+    listAllLifecycleRows('students','id,created_at,subscriptions(*)')
+  ]);
+  return require('./lifecycle-metrics').computeLifecycleMetrics({events,students,month});
 };
 
 const listRetentionCases = async ({ filters = {} } = {}) => {
@@ -267,7 +284,15 @@ const getRetentionCaseTimeline = async ({ caseId } = {}) => {
 };
 
 const applyRetentionCommand = async ({ command } = {}) => {
-  return invokeRetentionRpc("retention_apply_command", { p_command: command });
+  const result = await invokeRetentionRpc("retention_apply_command", { p_command: command });
+  // Command is already durable; an unavailable Firestore projection must be retried,
+  // not presented as a failed command that invites a second cancellation request.
+  const id = result?.snapshot?.student?.firestore_student_id;
+  if (id && require('./retention-flags').isRetentionV2Enabled()) {
+    try { await require('./lifecycle-projection').syncProjection(id); result.projection_status='delivered'; }
+    catch { result.projection_status='pending'; }
+  }
+  return result;
 };
 
 const runLegacyRetentionImport = async ({ payload } = {}) => {
@@ -283,6 +308,7 @@ const runScheduledRetentionChurn = async ({ limit = 50, actor } = {}) => {
 
 module.exports = {
   listRetentionCases,
+  getLifecycleMetrics,
   resolveRetentionSubjectByFirestoreStudentId,
   getRetentionCaseTimeline,
   applyRetentionCommand,

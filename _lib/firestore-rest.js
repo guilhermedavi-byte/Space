@@ -202,6 +202,11 @@ const firestorePatchDocument = async ({ docPath, idToken, data, updateMaskPaths 
   const path = String(docPath || "").replace(/^\/+/, "");
   if (!path || !token) throw new Error("missing_params");
 
+  await require('../api/_lib/student-lifecycle').assertScheduleWrite(path, data, async () => {
+    const existing = await firestoreGetDocument({ docPath: path, idToken });
+    return existing.ok ? decodeFields(existing.data) : {};
+  });
+
   const { apiKey, baseUrl } = getFirestoreRuntime();
   const params = new URLSearchParams();
   params.set("key", apiKey);

@@ -1,0 +1,11 @@
+{
+  "environment": "disposable PostgreSQL and PostgREST; synthetic Firestore adapter",
+  "scenarios": [
+    "A request and reversal: API storage, active pedagogy/schedule/finance and durable events",
+    "B/C notice: two months, last day active, future schedule/obligation blocked, early churn rejected",
+    "UI/reload projection shares persisted contract; synthetic Firestore CAS adapter",
+    "D delayed churn job records contractual date once and denies future access",
+    "Import reversal replay twice: one case, two historical facts, active and no churn",
+    "No request/notice financial cancellation or deletion; append-only history remains"
+  ]
+}

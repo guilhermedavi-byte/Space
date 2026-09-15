@@ -7,3 +7,6 @@ scripts/tmp-*
 
 # Installed dependencies are reproducible from package-lock.json.
 node_modules/
+
+# Temporary, offline certification deployment bundle (never normal app routes).
+.commercial-certification-bundle/

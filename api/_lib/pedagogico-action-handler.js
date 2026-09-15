@@ -163,6 +163,10 @@ const handlePedagogicoLessonAction = (kind) => async (req, res) => {
       }
     }
 
+    if (kind === 'remarcacao_aula' && (body.nova_data_aula || body.nova_data)) {
+      await require('./student-lifecycle').assertSchedule(lesson.firestore_doc_id || lesson.aluno_id,
+        require('../../assets/student-lifecycle').dateKey(body.nova_data_aula || body.nova_data));
+    }
     const payload = normalizePayload(kind, body, lesson);
     const saved = await createLessonRegister({ lesson, session, payload: { ...payload, status: cfg.status } });
     const n8n = await triggerLessonWorkflow({

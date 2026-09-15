@@ -1,0 +1,29 @@
+{
+  "status": 200,
+  "projectId": "prj_FcxsR8A6rXLVIo2DArdAFDlm7pq8",
+  "teamId": "team_QFoYBpP3YUXGD4agYHZ7I6jV",
+  "ssoProtection": {
+    "deploymentType": "all_except_custom_domains"
+  },
+  "passwordProtectionEnabled": false,
+  "protectionBypassConfigured": true,
+  "framework": null,
+  "buildCommand": null,
+  "outputDirectory": null,
+  "nodeVersion": "24.x",
+  "resourceConfig": {
+    "fluid": true,
+    "functionDefaultRegions": [
+      "iad1"
+    ],
+    "buildMachineType": "standard",
+    "buildMachineSelection": "fixed"
+  },
+  "crons": {
+    "enabledAt": 1775616522191,
+    "disabledAt": null,
+    "updatedAt": 1789437199760,
+    "deploymentId": "dpl_6m6s1XaVA5a4mvJA3fnixgKvUwuY",
+    "definitions": []
+  }
+}

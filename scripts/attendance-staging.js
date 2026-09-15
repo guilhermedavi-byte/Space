@@ -12,12 +12,15 @@ const parseArguments = (args) => {
   const options = {};
   const allowed = new Set(['mode', 'env-file', 'environment', 'review-file', 'output']);
   for (const arg of args) {
-    if (arg === '--confirm-staging' && !options.confirm) { options.confirm = true; continue; }
+    if (['--confirm-staging', '--confirm-production'].includes(arg) && !options.confirm) {
+      options.confirm = true; options.confirmEnvironment = arg.slice('--confirm-'.length); continue;
+    }
     const match = /^--([a-z-]+)=(.+)$/.exec(arg);
     if (!match || !allowed.has(match[1]) || Object.hasOwn(options, match[1])) fail('attendance_invalid_arguments');
     options[match[1]] = match[2];
   }
   if (!['preflight', 'inventory', 'apply'].includes(options.mode) || !options['env-file']) fail('attendance_invalid_arguments');
+  if (options.confirm && options.confirmEnvironment !== options.environment) fail('attendance_invalid_arguments');
   return options;
 };
 
@@ -70,7 +73,7 @@ const run = (args, deps = {}) => {
   const options = parseArguments(args);
   const env = readEnvironment(options['env-file'], deps.inherited || process.env);
   const target = assertAttendanceOperation(env, options, deps.policy);
-  const report = { timestamp: new Date().toISOString(), mode: options.mode, environment: 'staging',
+  const report = { timestamp: new Date().toISOString(), mode: options.mode, environment: target.environment || 'staging',
     projectRef: target.maskedRef, migration: path.basename(migrationPath), remoteWrites: false };
   if (options.mode === 'preflight') return { ...report, status: 'configuration_verified_only' };
   const sql = deps.executeSql || executeSql;
@@ -86,7 +89,7 @@ const run = (args, deps = {}) => {
   const migration = fs.readFileSync(migrationPath, 'utf8');
   assertReview(JSON.parse(fs.readFileSync(options['review-file'], 'utf8')), target, before, migration);
   const announce = deps.announce || ((value) => process.stdout.write(`${JSON.stringify(value)}\n`));
-  announce({ timestamp: new Date().toISOString(), phase: 'before_apply', SPACE_ENV: 'staging',
+  announce({ timestamp: new Date().toISOString(), phase: 'before_apply', SPACE_ENV: target.environment || 'staging',
     projectRef: target.maskedRef, hostname: `${target.maskedRef}.supabase.co`,
     migration: path.basename(migrationPath), productionGuardPassed: true });
   // Only this fixed reviewed migration can run. No arbitrary SQL path or command passthrough.

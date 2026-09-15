@@ -1,8 +1,9 @@
+const lifecycle = require("../../assets/student-lifecycle");
 const { createHash } = require("crypto");
 
 const SAO_PAULO_TIME_ZONE = "America/Sao_Paulo";
 
-const LIFECYCLE_STATUSES = ["active", "cancellation_scheduled", "churned"];
+const LIFECYCLE_STATUSES = ["active", "cancellation_requested", "cancellation_scheduled", "churned"];
 const PAUSE_STATUSES = ["none", "paused_billable", "paused_non_billable"];
 const FINANCIAL_STATUSES = ["unknown", "current", "delinquent", "paused", "cancelled"];
 
@@ -67,14 +68,10 @@ const addMonthsPreservingUtcDay = (date, months) => {
   return copy;
 };
 
-const computeScheduledServiceEndAt = ({ requestedAt, firstLessonAt } = {}) => {
-  const requested = requestedAt instanceof Date ? requestedAt : new Date(requestedAt || Date.now());
-  const firstLesson = firstLessonAt ? (firstLessonAt instanceof Date ? firstLessonAt : new Date(firstLessonAt)) : null;
-  if (firstLesson instanceof Date && !Number.isNaN(firstLesson.getTime())) {
-    const diffMs = requested.getTime() - firstLesson.getTime();
-    if (diffMs >= 0 && diffMs <= 7 * 86_400_000) return addMonthsPreservingUtcDay(firstLesson, 1);
-  }
-  return addMonthsPreservingUtcDay(requested, 2);
+// Compatibility name: argument now explicitly means notice start, never request.
+const computeScheduledServiceEndAt = ({ noticeStartedAt } = {}) => {
+  if (!noticeStartedAt) throw new Error("notice_started_at_required");
+  return new Date(`${lifecycle.noticeDates(noticeStartedAt).last_active_date}T12:00:00-03:00`);
 };
 
 const formatMrrDisplay = (value) => {
@@ -134,6 +131,7 @@ const sanitizePayloadByCommand = ({ command, payload = {} } = {}) => {
   }
   if (command === "confirm_cancellation_continuity") {
     return {
+      notice_started_at: sanitizeTimestamp(input.notice_started_at || input.noticeStartedAt),
       detail: sanitizeText(input.detail, 500),
     };
   }
@@ -240,6 +238,10 @@ const normalizeRetentionRow = (row = {}) => ({
   financialStatus: normalizeFinancialStatus(row.financial_status),
   ownerUid: normalizeText(row.owner_uid),
   ownerName: normalizeText(row.owner_name),
+  requestedAt: row.cancellation_requested_at || null,
+  noticeStartedAt: row.notice_started_at || null,
+  lastActiveDate: row.last_active_date || null,
+  churnAt: row.churn_at || null,
   scheduledServiceEndAt: row.scheduled_service_end_at || null,
   firstContactAt: row.first_contact_at || null,
   lastContactAt: row.last_contact_at || null,
@@ -292,7 +294,7 @@ const buildQueuesFromCases = (rows = []) => {
       mrrDisplay: row.mrrDisplay,
       financialUnavailable: row.mrrValue == null,
     };
-    if (row.stage === "scheduled" || row.stage === "awaiting_customer" || (row.stage === "open" && row.caseKind === "formal")) {
+    if (row.lifecycleStatus === "cancellation_scheduled") {
       avisos.push({
         ...base,
         type: "aviso",
@@ -307,9 +309,9 @@ const buildQueuesFromCases = (rows = []) => {
     if (row.stage === "open" || row.stage === "awaiting_customer" || row.stage === "scheduled") {
       decisoes.push({
         ...base,
-        kind: row.caseKind === "risk" ? "candidato_abandono_silencioso" : row.stage === "awaiting_customer" ? "aparenta_abandono_no_aviso" : "aviso_vencido",
+        kind: row.lifecycleStatus === "cancellation_requested" ? "start_notice" : row.caseKind === "risk" ? "candidato_abandono_silencioso" : row.stage === "awaiting_customer" ? "aparenta_abandono_no_aviso" : "aviso_vencido",
         evidence: describeCaseReason(row),
-        actionLabel: row.caseKind === "risk" ? "Abrir ficha" : row.stage === "scheduled" ? "Efetivar" : "Acompanhar",
+        actionLabel: row.lifecycleStatus === "cancellation_requested" ? "Iniciar aviso" : row.caseKind === "risk" ? "Abrir ficha" : row.stage === "scheduled" ? "Efetivar" : "Acompanhar",
         secondaryActionLabel: "Abrir ficha",
       });
     }
@@ -363,13 +365,18 @@ const applyCommandToProjection = (projection = {}, event = {}) => {
   const occurredAt = event?.occurred_at || event?.occurredAt || null;
   const stateAfter = event?.state_after && typeof event.state_after === "object" ? event.state_after : event?.stateAfter && typeof event.stateAfter === "object" ? event.stateAfter : null;
   if (type === "register_formal_request") {
-    current.stage = "scheduled";
-    current.lifecycleStatus = "cancellation_scheduled";
-    current.scheduledServiceEndAt = payload.scheduled_service_end_at || current.scheduledServiceEndAt;
+    current.stage = "open";
+    current.lifecycleStatus = "cancellation_requested";
+    current.requestedAt = payload.requested_at || occurredAt;
   } else if (type === "confirm_cancellation_continuity" || type === "schedule_program_end") {
     current.stage = "scheduled";
     current.lifecycleStatus = "cancellation_scheduled";
-    current.scheduledServiceEndAt = payload.scheduled_service_end_at || current.scheduledServiceEndAt;
+    const start = payload.notice_started_at || occurredAt;
+    const dates = lifecycle.noticeDates(start);
+    current.noticeStartedAt = start;
+    current.lastActiveDate = dates.last_active_date;
+    current.churnAt = dates.churn_at;
+    current.scheduledServiceEndAt = `${dates.last_active_date}T12:00:00-03:00`;
   } else if (type === "mark_awaiting_customer") {
     current.stage = "awaiting_customer";
   } else if (type === "pause_billable") {
@@ -382,10 +389,13 @@ const applyCommandToProjection = (projection = {}, event = {}) => {
     current.stage = "saved";
     current.lifecycleStatus = "active";
     current.savedAt = occurredAt;
+    current.scheduledServiceEndAt = null;
+    current.lastActiveDate = null;
+    current.churnAt = null;
   } else if (type === "effectuate_churn" || type === "cancellation_effective") {
     current.stage = "lost";
     current.lifecycleStatus = "churned";
-    current.churnedAt = occurredAt;
+    current.churnedAt = current.churnAt || occurredAt;
   } else if (type === "reactivate_subscription") {
     current.stage = "saved";
     current.lifecycleStatus = "active";
@@ -401,7 +411,9 @@ const applyCommandToProjection = (projection = {}, event = {}) => {
     current.lifecycleStatus = String(stateAfter.lifecycle_status || stateAfter.lifecycleStatus || current.lifecycleStatus || "").trim() || current.lifecycleStatus;
     current.pauseStatus = String(stateAfter.pause_status || stateAfter.pauseStatus || current.pauseStatus || "").trim() || current.pauseStatus;
     current.financialStatus = String(stateAfter.financial_status || stateAfter.financialStatus || current.financialStatus || "").trim() || current.financialStatus;
-    current.scheduledServiceEndAt = stateAfter.scheduled_service_end_at || stateAfter.scheduledServiceEndAt || current.scheduledServiceEndAt;
+    for (const [sql, js] of Object.entries({scheduled_service_end_at:'scheduledServiceEndAt', cancellation_requested_at:'requestedAt', notice_started_at:'noticeStartedAt', last_active_date:'lastActiveDate', churn_at:'churnAt'})) {
+      if (Object.prototype.hasOwnProperty.call(stateAfter, sql)) current[js] = stateAfter[sql];
+    }
   }
   return current;
 };

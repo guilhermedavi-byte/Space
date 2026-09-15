@@ -2642,7 +2642,9 @@ const handleAdminSheetsMetricsApi = async (req, res) => {
     return parseFloat(String(val).replace(/R\$\s?/g, "").replace(/\./g, "").replace(",", ".")) || 0;
   };
 
-  const alunosAtivos = dataRows.filter((row) => String(row?.[3] || "").trim() === "Ativo").length;
+  const canonicalMetrics = require('./_lib/retention-flags').isRetentionV2Enabled()
+    ? await require('./_lib/retention-store').getLifecycleMetrics(`${year}-${String(monthIndex+1).padStart(2,'0')}`) : null;
+  const alunosAtivos = canonicalMetrics?.ativosAtuais ?? dataRows.filter((row) => String(row?.[3] || "").trim() === "Ativo").length;
 
   const alunosNovosMes = dataRows.filter((row) => {
     const entrada = parsePtBrDate(row?.[1]);
@@ -2650,7 +2652,7 @@ const handleAdminSheetsMetricsApi = async (req, res) => {
     return entrada.getUTCFullYear() === year && entrada.getUTCMonth() === monthIndex;
   }).length;
 
-  const churnMes = dataRows.filter((row) => {
+  const churnMes = canonicalMetrics?.churnNoMes ?? dataRows.filter((row) => {
     const churnRaw = String(row?.[25] || "").trim();
     const churnNorm = normalizeChurnMonthKey(churnRaw);
     return churnNorm && churnKeyNorm && churnNorm === churnKeyNorm;
@@ -2727,6 +2729,7 @@ const handleAdminSheetsMetricsApi = async (req, res) => {
     alunosNovosMes,
     churnMes,
     churnPercentual,
+    churnMethodology: canonicalMetrics ? "canonical_lifecycle_events_over_current_active_base" : "legacy_sheets_column_Z_over_current_active_base",
     ltvMedio,
     tempMedioMeses,
     cac,

@@ -7,6 +7,7 @@ function fixture() {
   const env = {
     APP_ENV: 'staging', SUPABASE_ENV_SCOPE: 'staging', SPACE_APP_ENV: 'staging', VERCEL_ENV: 'preview',
     NODE_ENV: 'production', ASAAS_BASE_URL: 'https://api-sandbox.asaas.com/v3', ASAAS_KEY_SCOPE: 'sandbox',
+    N8N_ENV_SCOPE: 'disabled',
     SUPABASE_URL: `https://${ref}.supabase.co`, SPACE_STAGING_SUPABASE_URL: `https://${ref}.supabase.co`,
     SPACE_PRODUCTION_SUPABASE_URL: `https://${prod}.supabase.co`, FINANCE_STAGING_PROJECT_REF: ref,
     SPACE_PUBLIC_BASE_URL: 'https://staging.space.test', SPACE_PRODUCTION_PUBLIC_BASE_URL: 'https://space.test',
@@ -32,6 +33,9 @@ test('production, conflicting aliases, non-allowlisted domains and credentials f
   const {env, policy} = fixture();
   const cases = [
     {APP_ENV: 'production'}, {APP_ENV: ''}, {SUPABASE_ENV_SCOPE: ''}, {VERCEL_ENV: 'production'},
+    {N8N_ENV_SCOPE: 'staging'}, {N8N_BASE_URL: 'https://workflow.production.test'},
+    {N8N_PEDAGOGICO_ONBOARDING_URL: 'https://workflow.production.test/hook'}, {CHATWOOT_API_TOKEN: 'synthetic'},
+    {STAGING_EMAIL_ALLOWLIST: '*'}, {STAGING_WHATSAPP_ALLOWLIST: '*'}, {STAGING_SMS_ALLOWLIST: '123'},
     {SPACE_APP_ENV: 'production'}, {ASAAS_BASE_URL: 'https://api.asaas.com/v3'}, {ASAAS_KEY_SCOPE: ''},
     {ASAAS_ENV: 'production'}, {SUPABASE_URL: env.SPACE_PRODUCTION_SUPABASE_URL},
     {SPACE_PRODUCTION_SUPABASE_URL: 'https://' + 'q'.repeat(20) + '.supabase.co'},

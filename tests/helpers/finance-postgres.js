@@ -44,7 +44,9 @@ async function createHarness() {
     }
     sql(`create role anon nologin; create role authenticated nologin; create role service_role nologin bypassrls;
       create role authenticator login password 'local-only' noinherit;
-      grant anon, authenticated, service_role to authenticator;`);
+      grant anon, authenticated, service_role to authenticator;
+      alter default privileges for role postgres in schema public grant all on tables to anon, authenticated, service_role;
+      alter default privileges for role postgres in schema public grant execute on functions to anon, authenticated, service_role;`);
     const migrate = () => sql(fs.readFileSync(migrationPath, 'utf8'));
     migrate();
     docker(['run', '--pull=never', '--name', rest, '--network', network, '-p', '127.0.0.1::3000',

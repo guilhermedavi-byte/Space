@@ -46,6 +46,7 @@ const installCommonStubs = ({
     exports: {
       listRetentionCases: async () => listResult,
       getRetentionCaseTimeline: async () => ({ events: [] }),
+      getLifecycleMetrics: async()=>({monthKey:"2026-09"}),
       applyRetentionCommand: async ({ command }) => ({ ...applyResult, receivedCommand: command }),
       resolveRetentionSubjectByFirestoreStudentId: async () => resolvedTargets,
     },
@@ -137,7 +138,7 @@ test("POST exige justificativa em churn manual administrativo", async () => {
   assert.equal(res.body.error, "missing_justification");
 });
 
-test("POST bloqueia churn involuntário quando a flag está desligada", async () => {
+test("POST de churn voluntário usa lifecycle, não flag de inadimplência", async () => {
   const handler = installCommonStubs({ role: "admin", involuntaryEnabled: false });
   const res = makeRes();
   const req = {
@@ -157,8 +158,8 @@ test("POST bloqueia churn involuntário quando a flag está desligada", async ()
     },
   };
   await handler(req, res);
-  assert.equal(res.statusCode, 409);
-  assert.equal(res.body.error, "involuntary_churn_disabled");
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.ok, true);
 });
 
 test("POST crítico exige admin mesmo com capability ampla", async () => {

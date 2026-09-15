@@ -12,7 +12,15 @@ module.exports = async (req, res) => {
     return sendJson(res, 401, { error: "unauthenticated" });
   }
 
-  return sendJson(res, 200, {
+  let lifecycle = null;
+  if (session.role === 'student' && require('./_lib/retention-flags').isRetentionV2Enabled()) {
+    try {
+      const service = require('./_lib/student-lifecycle');
+      lifecycle = await service.getForStudent(session.sub);
+      if (!service.isActiveOn(lifecycle,new Date())) return sendJson(res,403,{error:'student_service_ended'});
+    } catch (error) { return sendJson(res,error.status || 503,{error:error.code || 'lifecycle_unavailable'}); }
+  }
+  return sendJson(res, 200, { lifecycle,
     user: {
       id: String(session.sub || ""),
       role: String(session.role || ""),

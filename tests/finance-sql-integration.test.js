@@ -172,6 +172,10 @@ test('Finance: real PostgreSQL/PostgREST transactional foundation with simulated
         assert.equal(scalar('select count(*) from finance_provider_objects'),'2');
       });
       await t.test('privileges/constraints: browser cannot call RPC, service cannot mutate tables, audit immutable',async()=>{
+        assert.equal(scalar("select relrowsecurity from pg_class where oid='public.connections'::regclass"),'t');
+        for(const role of ['anon','authenticated','service_role']){
+          assert.equal(scalar(`select has_function_privilege('${role}','public.finance_audit_immutable()','EXECUTE')`),'f');
+        }
         for(const role of ['anon','authenticated']){
           const r=await fetch(h.url+'/rpc/finance_rpc',{method:'POST',headers:{Authorization:`Bearer ${h.token(role)}`,'Content-Type':'application/json'},body:JSON.stringify({p_action:'health',p_args:scope})});
           assert.ok([401,403].includes(r.status));

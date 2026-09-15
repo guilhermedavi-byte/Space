@@ -57,6 +57,7 @@ module.exports = async (req, res) => {
           source: isRetentionV2Enabled() ? "retention_v2" : "retention_v2_shadow",
           status: "success",
           loading: false,
+          metrics: await require("./_lib/retention-store").getLifecycleMetrics(filters.month_key || new Date().toISOString().slice(0,7)),
           counts: result.counts,
           queues: result.queues,
           rows: result.rows,
@@ -99,12 +100,7 @@ module.exports = async (req, res) => {
     return sendJson(res, 403, { error: "forbidden" });
   }
 
-  if (commandName === "effectuate_churn" && body?.payload?.mode === "automatic" && !isRetentionInvoluntaryChurnEnabled()) {
-    return sendJson(res, 409, {
-      error: "involuntary_churn_disabled",
-      message: "Churn involuntário permanece bloqueado por feature flag.",
-    });
-  }
+
 
   if (needsOverrideJustification({ command: commandName, role: auth.session?.role, forceOverride: body?.override === true })) {
     if (!hasCapability(auth.session?.role, "retention.override")) {

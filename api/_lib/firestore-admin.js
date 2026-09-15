@@ -49,7 +49,7 @@ const listCollectionAsAdmin = async (collectionPath, { pageSize = 1000 } = {}) =
     if (!pageToken) break;
   }
   if (pageToken) throw new Error("firestore_pagination_incomplete");
-  return all;
+  return Promise.all(all.map(row => path === "users" ? require("./student-lifecycle").decorateStudent(row) : row));
 };
 
 const queryCollectionByDateRangeAsAdmin = async (collectionPath, { dateField = "dateKey", from = "", to = "" } = {}) => {
@@ -125,11 +125,12 @@ const getDocumentAsAdmin = async (docPath) => {
   }
   const fields = decodeFields(response.data);
   const firestoreDocId = getDocIdFromName(response.data?.name);
-  return {
+  const row = {
     ...fields,
     id: typeof fields?.id === "string" && fields.id.trim() ? fields.id : firestoreDocId,
     firestoreDocId,
   };
+  return path.startsWith("users/") ? require("./student-lifecycle").decorateStudent(row) : row;
 };
 
 const createDocumentAsAdmin = async (collectionPath, data) => {

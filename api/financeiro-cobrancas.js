@@ -130,6 +130,18 @@ const handleSave = async (req, res, session) => {
 
   const id = String(body?.id || "").trim();
   let result;
+  // Existing receivables remain payable/collectible after churn. New obligations
+  // require a service period; due date is not a service-period substitute.
+  if (!id) {
+    const contract = await require('./_lib/student-lifecycle').assertObligation(
+      body.firestore_doc_id || body.firestoreDocId || body.aluno_id,
+      body.service_period_start, body.service_period_end, body.subscription_id);
+    if (contract) {
+      patch.subscription_id=contract.id;
+      patch.service_period_start=require('../assets/student-lifecycle').dateKey(body.service_period_start);
+      patch.service_period_end=require('../assets/student-lifecycle').dateKey(body.service_period_end);
+    }
+  }
   if (id) {
     result = await supabaseFetch(`/${FINANCE_TABLE}?id=eq.${encodeURIComponent(id)}`, {
       method: "PATCH",

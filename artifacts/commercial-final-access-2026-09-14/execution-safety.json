@@ -1,0 +1,21 @@
+{
+  "github_workflows_present": false,
+  "package_runner": "npm test / syntax checks; no administrative remote runner",
+  "temporary_environments_remaining": 0,
+  "new_functional_changes_by_this_turn": false,
+  "before": {
+    "firestore_writes": 0,
+    "datacrazy_mutations": 0,
+    "snapshot_writes": 0,
+    "production_deploys": 0
+  },
+  "after": {
+    "firestore_writes": 0,
+    "datacrazy_mutations": 0,
+    "snapshot_writes": 0,
+    "production_deploys": 0
+  },
+  "scope": "Actions executed by this certification attempt; not global production audit logs",
+  "datacrazy_collection_attempted": false,
+  "authenticated_certification_completed": false
+}

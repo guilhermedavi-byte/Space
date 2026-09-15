@@ -18867,6 +18867,7 @@ const fetchLessonLogsFromFirestore = async () => {
 
 const STUDENT_LIFECYCLE_STATE = {
   ACTIVE: "ativo",
+  REQUESTED: "pedido_cancelamento",
   NOTICE: "em_aviso",
   SUSPENDED: "suspenso",
   INACTIVE: "inativo",
@@ -19139,6 +19140,14 @@ const getLifecycleSensorTone = (estado) => {
 
 const getStudentLifecycleState = (aluno) => {
   const meta = aluno && typeof aluno === "object" ? aluno : {};
+  if (meta.lifecycle && globalThis.SpaceLifecycle) {
+    const policy = globalThis.SpaceLifecycle;
+    const state = policy.getLifecycleStatus(meta.lifecycleSubscriptions ? {subscriptions:meta.lifecycleSubscriptions} : meta.lifecycle);
+    if (state === 'churned') return STUDENT_LIFECYCLE_STATE.INACTIVE;
+    if (state === 'cancellation_requested') return STUDENT_LIFECYCLE_STATE.REQUESTED;
+    if (state === 'cancellation_scheduled') return STUDENT_LIFECYCLE_STATE.NOTICE;
+    return STUDENT_LIFECYCLE_STATE.ACTIVE;
+  }
   const cancelamento = normalizeStudentCancellationRecord(meta.cancelamento);
   const wasEffectivelyCancelled = Boolean(cancelamento?.dataEfetivacao) || Boolean(cancelamento?.desfecho);
   const hasLegacyInactiveFlag =
@@ -19510,11 +19519,17 @@ const collectRetentionCancellationRecords = (student) => {
 };
 
 const buildRetentionMetrics = (mesReferencia, dadosPreCarregados = {}, options = {}) => {
+  if (typeof isRetentionV2FeatureEnabled === 'function' && isRetentionV2FeatureEnabled() && globalThis.SpaceLifecycleMetrics) {
+    const students = dadosPreCarregados.students || adminPedagogicoState.students || [];
+    return globalThis.SpaceLifecycleMetrics.computeLifecycleMetrics({month: String(mesReferencia).slice(0,7), withSeries:options.withSeries !== false,
+      events:students.flatMap(student=>student.lifecycleEvents || []),
+      students:students.map(student=>({created_at:student.lifecycleCreatedAt || student.criadoEm, subscriptions:student.lifecycleSubscriptions || [student.lifecycle || {lifecycle_status:student.ativo === false ? 'churned':'active'}]}))});
+  }
   const bounds = getRetentionMonthBounds(mesReferencia);
   const students = Array.isArray(dadosPreCarregados.students) ? dadosPreCarregados.students : [];
   const ativosAtuais = students.filter((student) => {
     const state = getStudentLifecycleState(student);
-    return state === STUDENT_LIFECYCLE_STATE.ACTIVE || state === STUDENT_LIFECYCLE_STATE.NOTICE || state === STUDENT_LIFECYCLE_STATE.SUSPENDED;
+    return state === STUDENT_LIFECYCLE_STATE.ACTIVE || state === STUDENT_LIFECYCLE_STATE.REQUESTED || state === STUDENT_LIFECYCLE_STATE.NOTICE || state === STUDENT_LIFECYCLE_STATE.SUSPENDED;
   }).length;
   let novosNoMes = 0;
   let pedidosNoMes = 0;
@@ -19604,6 +19619,7 @@ const buildRetentionMetrics = (mesReferencia, dadosPreCarregados = {}, options =
 
 const getStudentLifecycleBadgeMeta = (aluno) => {
   const state = getStudentLifecycleState(aluno);
+  if (state === STUDENT_LIFECYCLE_STATE.REQUESTED) return { state, label: "Pedido de cancelamento", tone: "amber" };
   const cancelamento = normalizeStudentCancellationRecord(aluno?.cancelamento);
   if (state === STUDENT_LIFECYCLE_STATE.NOTICE) {
     if (String(cancelamento?.origem || "") === "abandono_confirmado") {
@@ -19665,6 +19681,13 @@ const describeStudentCancellationType = (cancelamento) => {
 
 const buildStudentLifecycleSummary = (aluno) => {
   const state = getStudentLifecycleState(aluno);
+  if (aluno?.lifecycle && globalThis.SpaceLifecycle) {
+    const record = aluno.lifecycleSubscriptions ? {subscriptions:aluno.lifecycleSubscriptions} : aluno.lifecycle;
+    const last = globalThis.SpaceLifecycle.getLastActiveDate(record);
+    const churn = globalThis.SpaceLifecycle.getChurnDate(record);
+    const title = {ativo:'Aluno ativo',pedido_cancelamento:'Pedido de cancelamento',em_aviso:'Aviso prévio',inativo:'Churn'}[state] || 'Aluno ativo';
+    return { state, title, subtitle: last ? `Último dia ativo: ${last}. Churn: ${churn}.` : state === STUDENT_LIFECYCLE_STATE.REQUESTED ? 'Em negociação; sem aviso prévio.' : '' };
+  }
   const cancelamento = normalizeStudentCancellationRecord(aluno?.cancelamento);
   const latest = getAdminStudentLatestLifecycleRecord(aluno);
   if (state === STUDENT_LIFECYCLE_STATE.INACTIVE) {
@@ -21851,6 +21874,15 @@ const renderAdminStudentLifecycleCard = (alunoMeta, options = {}) => {
         }
       </div>
     `;
+  }
+
+  if (state === STUDENT_LIFECYCLE_STATE.REQUESTED) {
+    return `<div class="admin-student-panel-card admin-student-lifecycle-card">
+      <div class="admin-student-panel-title">Pedido de cancelamento</div>
+      <p>Aluno ativo. O aviso prévio ainda não começou.</p>
+      <button type="button" class="button button-outline button-small" data-admin-student-lifecycle-action="start_notice">Iniciar aviso de 2 meses</button>
+      <button type="button" class="button button-outline button-small" data-admin-student-lifecycle-action="revert">Reverter pedido</button>
+    </div>`;
   }
 
   if (state === STUDENT_LIFECYCLE_STATE.ACTIVE) {
@@ -25942,12 +25974,8 @@ const refreshAdminPedagogicoRetentionState = async ({ force = false } = {}) => {
       if (!response.ok) throw new Error(String(payload?.error || "retention_v2_fetch_failed"));
       const queues = payload?.queues && typeof payload.queues === "object" ? payload.queues : { avisos: [], decisoes: [], efetivados: [] };
       const monthKey = String(current.month || createDateKey(new Date()).slice(0, 7));
-      const metrics = buildRetentionMetrics(monthKey, {
-        students: adminPedagogicoState.students,
-        lessonLogs: adminPedagogicoState.lessonLogs,
-        scheduleEvents: adminPedagogicoState.scheduleEvents,
-        classes: adminPedagogicoState.classes,
-      });
+      const metrics = payload.metrics;
+      if (!metrics) throw new Error('lifecycle_metrics_unavailable');
       adminPedagogicoState.retention = {
         status: "success",
         loading: false,
@@ -33918,9 +33946,10 @@ const syncRetentionV2SnapshotToCache = (snapshot) => {
   const pauseStatus = String(studentSnapshot.pause_status || caseSnapshot.pause_status || "none").trim();
   const isChurned = lifecycleStatus === "churned";
   const isScheduled = lifecycleStatus === "cancellation_scheduled";
-  const cancelamento = isScheduled
+  const isRequested = lifecycleStatus === "cancellation_requested";
+  const cancelamento = isScheduled || isRequested
     ? {
-        dataPedido: existing?.cancelamento?.dataPedido || caseSnapshot.created_at || new Date().toISOString(),
+        dataPedido: caseSnapshot.cancellation_requested_at || existing?.cancelamento?.dataPedido || null,
         origem: String(caseSnapshot.case_kind || "") === "legacy_import" ? "abandono_confirmado" : "pedido",
         motivo: existing?.cancelamento?.motivo || "",
         motivoDetalhe: existing?.cancelamento?.motivoDetalhe || "",
@@ -33939,6 +33968,8 @@ const syncRetentionV2SnapshotToCache = (snapshot) => {
     email: String(studentSnapshot.email || existing?.email || "").trim(),
     telefone: String(studentSnapshot.phone || existing?.telefone || "").trim(),
     ativo: !isChurned,
+    lifecycle: { ...caseSnapshot, ...(snapshot.subscription || {}) },
+    lifecycleSubscriptions: snapshot.studentSubscriptions || [snapshot.subscription || caseSnapshot],
     cancelamento: isChurned ? null : cancelamento,
     canceladoEm: isChurned ? caseSnapshot.churned_at || caseSnapshot.closed_at || new Date().toISOString() : null,
     desativadoEm: isChurned ? caseSnapshot.churned_at || caseSnapshot.closed_at || new Date().toISOString() : null,
@@ -33946,13 +33977,15 @@ const syncRetentionV2SnapshotToCache = (snapshot) => {
   });
 };
 
-const submitRetentionV2Command = async ({ command, alunoId, payload = {}, justification = "", override = false } = {}) => {
+const submitRetentionV2Command = async ({ command, alunoId, subscriptionId = "", payload = {}, justification = "", override = false } = {}) => {
   const linkedCase = getAdminRetentionCaseByStudentId(alunoId) || getAdminRetentionDecisionByStudentId(alunoId);
   const body = {
     command,
     caseId: linkedCase?.caseId || "",
     expectedVersion: Number(linkedCase?.version) || 0,
     firestoreStudentId: String(alunoId || "").trim(),
+    subscriptionId,
+    studentId: subscriptionId ? getAdminStudentMetaById(alunoId)?.lifecycleSubscriptions?.find(sub=>sub.id===subscriptionId)?.student_id : "",
     clientActionId: createRetentionClientActionId(),
     justification: String(justification || "").trim(),
     override: override === true,
@@ -34165,6 +34198,8 @@ const applyAdminStudentLifecycleCascadeToCache = (summary) => {
 };
 
 const saveAdminStudentLifecyclePatch = async ({ alunoId, patch = {}, cascade = null } = {}) => {
+  throw new Error("As alterações de ciclo de vida exigem a API canônica de Retenção habilitada.");
+  /* Transitional legacy implementation retained below for historical review; unreachable. */
   const requestedId = String(alunoId || "").trim();
   if (!requestedId) throw new Error("missing_student_id");
   const student = getAdminStudentMetaById(requestedId);
@@ -34427,6 +34462,20 @@ const patchAdminStudentStatus = async ({ alunoId, ativo } = {}) => {
   updateAdminStudentCachedRow(id, patch);
 };
 
+const openAdminStudentStartNoticeModal = ({ alunoId } = {}) => {
+  openModal({ title: "Iniciar aviso prévio", primaryLabel: "Iniciar aviso", secondaryLabel: "Voltar",
+    bodyHtml: `<p>O aluno continuará ativo por 2 meses de calendário.</p><label>Início do aviso<input type="date" data-notice-start value="${globalThis.SpaceLifecycle.dateKey(new Date())}" /></label><p data-notice-error></p>`,
+    onPrimary: () => {
+      const day = modalBody.querySelector('[data-notice-start]').value;
+      submitRetentionV2Command({ command: 'confirm_cancellation_continuity', alunoId,
+        payload: { notice_started_at: day === globalThis.SpaceLifecycle.dateKey(new Date()) ? new Date().toISOString() : `${day}T12:00:00-03:00` } }).then(() => closeModal()).catch(error => {
+          modalBody.querySelector('[data-notice-error]').textContent = error.message;
+        });
+      return false;
+    }
+  });
+};
+
 const openAdminStudentRegisterCancellationModal = ({ alunoId } = {}) => {
   const id = String(alunoId || "").trim();
   if (!id) return;
@@ -34434,12 +34483,13 @@ const openAdminStudentRegisterCancellationModal = ({ alunoId } = {}) => {
   const firstLessonValue = firstLessonDate ? createDateKey(firstLessonDate) : "";
 
   openModal({
-    title: "Registrar cancelamento",
-    primaryLabel: "Confirmar cancelamento",
+    title: "Registrar pedido de cancelamento",
+    primaryLabel: "Registrar pedido",
     secondaryLabel: "Cancelar",
     returnFocusEl: getAdminStudentSheet()?.querySelector('[data-admin-student-lifecycle-action="register_cancel"]') || null,
     bodyHtml: `
       <div class="admin-student-lifecycle-modal">
+        ${(getAdminStudentMetaById(id)?.lifecycleSubscriptions || []).length > 1 ? `<label>Contrato<select data-lifecycle-subscription><option value="">Selecione o contrato</option>${getAdminStudentMetaById(id).lifecycleSubscriptions.map(sub=>`<option value="${escapeHtml(sub.id)}">${escapeHtml(sub.plan_name || sub.external_subscription_key || sub.id)}</option>`).join('')}</select></label>` : ''}
         <label class="admin-student-lifecycle-modal-field">
           <span>Data do pedido</span>
           <input type="date" data-admin-student-cancel-date value="${escapeHtml(createDateKey(new Date()))}" />
@@ -34466,7 +34516,7 @@ const openAdminStudentRegisterCancellationModal = ({ alunoId } = {}) => {
           <textarea rows="3" data-admin-student-cancel-detail placeholder="Contexto adicional"></textarea>
         </label>
         <div class="admin-student-lifecycle-modal-summary" data-admin-student-cancel-summary>
-          Aviso prévio até —. As aulas continuam normalmente até lá.
+          O aluno permanece ativo. O aviso começa somente após confirmação explícita.
         </div>
         <div class="admin-student-lifecycle-modal-error" data-admin-student-cancel-error hidden></div>
       </div>
@@ -34497,9 +34547,8 @@ const openAdminStudentRegisterCancellationModal = ({ alunoId } = {}) => {
 
       const pedidoDate = parseDateKey(pedidoKey);
       const firstDate = isValidDateKey(firstLessonKey) ? parseDateKey(firstLessonKey) : null;
-      const diffMs = pedidoDate && firstDate ? pedidoDate.getTime() - firstDate.getTime() : Number.NaN;
-      const isWithin7d = pedidoDate && firstDate && diffMs >= 0 && diffMs <= 7 * 86_400_000;
-      const dataFimAvisoDate = isWithin7d && firstDate ? addMonthsPreservingDay(firstDate, 1) : addMonthsPreservingDay(pedidoDate, 2);
+      const dataFimAvisoDate = null;
+      const isWithin7d = false;
       const cancelamento = buildStudentCancellationRecord({
         dataPedido: pedidoDate,
         origem: "pedido",
@@ -34510,7 +34559,7 @@ const openAdminStudentRegisterCancellationModal = ({ alunoId } = {}) => {
         eventos: [
           createStudentCancellationHistoryEntry(
             "Pedido registrado",
-            `${isWithin7d ? "Janela de 7 dias" : "Aviso prévio"} até ${formatAdminDate(dataFimAvisoDate)}`
+            "Pedido em negociação; aluno ativo e sem aviso prévio"
           ),
         ],
       });
@@ -34523,8 +34572,9 @@ const openAdminStudentRegisterCancellationModal = ({ alunoId } = {}) => {
             await submitRetentionV2Command({
               command: "register_formal_request",
               alunoId: id,
+              subscriptionId: modalBody?.querySelector("[data-lifecycle-subscription]")?.value || "",
               payload: {
-                requested_at: pedidoDate.toISOString(),
+                requested_at: pedidoKey === globalThis.SpaceLifecycle.dateKey(new Date()) ? new Date().toISOString() : `${pedidoKey}T12:00:00-03:00`,
                 first_lesson_at: firstDate instanceof Date && !Number.isNaN(firstDate.getTime()) ? firstDate.toISOString() : null,
                 reason,
                 detail,
@@ -34568,15 +34618,10 @@ const openAdminStudentRegisterCancellationModal = ({ alunoId } = {}) => {
           ? parseDateKey(firstLessonEl.value)
           : null;
       if (!(pedidoDate instanceof Date) || Number.isNaN(pedidoDate.getTime())) {
-        summaryEl.textContent = "Aviso prévio até —. As aulas continuam normalmente até lá.";
+        summaryEl.textContent = "O aluno permanece ativo. O aviso começa somente após confirmação explícita.";
         return;
       }
-      const diffMs = firstDate instanceof Date ? pedidoDate.getTime() - firstDate.getTime() : Number.NaN;
-      const isWithin7d = firstDate instanceof Date && diffMs >= 0 && diffMs <= 7 * 86_400_000;
-      const endDate = isWithin7d && firstDate ? addMonthsPreservingDay(firstDate, 1) : addMonthsPreservingDay(pedidoDate, 2);
-      summaryEl.textContent = isWithin7d
-        ? `Cancelamento em até 7 dias da primeira aula: sem aviso prévio, aulas até ${formatAdminDate(endDate)}.`
-        : `Aviso prévio até ${formatAdminDate(endDate)}. As aulas continuam normalmente até lá.`;
+      summaryEl.textContent = "Pedido em negociação. Acesso, aulas e financeiro permanecem ativos; sem data de encerramento.";
     };
     dateEl?.addEventListener("input", syncSummary);
     firstLessonEl?.addEventListener("input", syncSummary);
@@ -39090,6 +39135,7 @@ document.addEventListener("click", (event) => {
         const action = String(adminPedRetentionAction.getAttribute("data-admin-ped-retention-action") || "").trim();
         const alunoId = String(adminPedRetentionAction.getAttribute("data-admin-ped-retention-student") || "").trim();
         if (!alunoId) return;
+        if (action === "start_notice") { openAdminStudentStartNoticeModal({ alunoId }); return; }
         if (action === "open_sheet") {
           openStudentSimpleCard({ alunoId }).catch((error) => console.error("[admin] retention open student failed", error));
           return;
@@ -39733,6 +39779,7 @@ document.addEventListener("click", (event) => {
         const alunoId = String(adminStudentsState.history?.alunoId || "").trim();
         if (!alunoId) return;
         const action = String(studentLifecycleAction.getAttribute("data-admin-student-lifecycle-action") || "").trim();
+        if (action === "start_notice") { openAdminStudentStartNoticeModal({ alunoId }); return; }
         if (action === "register_cancel") {
           openAdminStudentRegisterCancellationModal({ alunoId });
           return;

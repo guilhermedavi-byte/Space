@@ -1,3 +1,4 @@
+const { personalBestCopy, sdrRankingPages } = require("./_lib/crm-live-presentation");
 const { describeSnapshot } = require('./_lib/crm-snapshot-freshness');
 const { getSessionFromRequest } = require("../_lib/session");
 const {
@@ -1485,6 +1486,46 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
         .crm-live { padding: 4vh 5vw; }
         .crm-live-screen { gap: 2.2vh; }
       }
+
+      /* SDR pages hold at most four rows. Size content within each row, not the viewport. */
+      .crm-live .crm-live-ranking.is-sdr {
+        grid-auto-rows: minmax(0, 1fr);
+        gap: 1.8vh;
+        align-content: stretch;
+      }
+      .crm-live .crm-live-ranking.is-sdr .crm-live-ranking-row {
+        grid-template-columns: clamp(40px, 7vh, 88px) minmax(0, 1fr) clamp(100px, 14vh, 180px);
+        gap: 1.6vw;
+        padding: .6vh 0;
+        min-width: 0;
+      }
+      .crm-live .crm-live-ranking.is-sdr .crm-live-avatar,
+      .crm-live .crm-live-ranking.is-sdr .crm-live-avatar.is-leader { width: 6.5vh; height: 6.5vh; font-size: 2.2vh; }
+      .crm-live .crm-live-ranking.is-sdr .crm-live-ranking-copy { gap: .65vh; min-width: 0; }
+      .crm-live .crm-live-ranking.is-sdr .crm-live-ranking-row .crm-live-ranking-name { font-size: clamp(16px, 3.1vh, 40px); line-height: 1.15; letter-spacing: -.02em; }
+      .crm-live .crm-live-ranking.is-sdr .crm-live-ranking-sub { font-size: clamp(12px, 2.3vh, 28px); line-height: 1.2; }
+      .crm-live .crm-live-ranking.is-sdr .crm-live-ranking-chase {
+        font-size: clamp(11px, 1.8vh, 23px); line-height: 1.2;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }
+      .crm-live .crm-live-ranking.is-sdr .crm-live-ranking-row .crm-live-ranking-pct { font-size: clamp(20px, 4vh, 52px); line-height: 1.1; letter-spacing: -.03em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+      .crm-live .crm-live-ranking.is-sdr .crm-live-ranking-bar { height: .65vh; min-height: 3px; }
+      .crm-live .crm-live-news.is-personal-best { grid-template-columns: minmax(80px, 18%) minmax(0, 1fr); gap: 3vw; }
+      .crm-live .is-personal-best .crm-live-avatar { width: 14vh; height: 14vh; max-width: 100%; font-size: 4vh; }
+      .crm-live .is-personal-best .crm-live-news-copy { min-width: 0; }
+      .crm-live .is-personal-best .crm-live-news-phrase { font-size: clamp(22px, 4.7vh, 60px); line-height: 1.18; letter-spacing: -.025em; max-width: none; overflow-wrap: anywhere; }
+      .crm-live .is-personal-best .crm-live-news-context { font-size: clamp(14px, 2.8vh, 34px); max-width: none; }
+      @media (max-aspect-ratio: 1/1) {
+        .crm-live .crm-live-news.is-personal-best { grid-template-columns: 1fr; align-content: center; }
+        .crm-live .is-personal-best .crm-live-avatar { width: 10vh; height: 10vh; }
+        .crm-live .crm-live-ranking.is-sdr .crm-live-ranking-row { grid-template-columns: clamp(36px, 5vw, 64px) minmax(0, 1fr) clamp(88px, 12vw, 120px); gap: 2vw; }
+        .crm-live .crm-live-ranking.is-sdr .crm-live-avatar,
+        .crm-live .crm-live-ranking.is-sdr .crm-live-avatar.is-leader { width: clamp(36px, 5vw, 64px); height: clamp(36px, 5vw, 64px); font-size: clamp(14px, 2vw, 24px); }
+        .crm-live .crm-live-stage { height: calc(100% - 72px); }
+        .crm-live .crm-live-footer { font-size: clamp(10px, 1.6vw, 16px); line-height: 1.25; }
+        .crm-live .crm-live-ranking.is-sdr .crm-live-ranking-row .crm-live-ranking-name { font-size: clamp(14px, 2.5vw, 24px); }
+        .crm-live .crm-live-ranking.is-sdr .crm-live-ranking-row .crm-live-ranking-pct { font-size: clamp(18px, 4vw, 32px); }
+      }
     </style>
   </head>
   <body>
@@ -1561,6 +1602,8 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
           },
         };
         const buildScreenKeys = ${buildScreenKeys.toString()};
+        const personalBestCopy = ${personalBestCopy.toString()};
+        const sdrRankingPages = ${sdrRankingPages.toString()};
         const createCrmLiveLoopController = ${createCrmLiveLoopController.toString()};
         const createCrmLiveBuildReloadCoordinator = ${createCrmLiveBuildReloadCoordinator.toString()};
 
@@ -2022,7 +2065,7 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
             }
           };
           addCandidate('closers', true, '');
-          addCandidate('sdrs', true, '');
+          sdrRankingPages(getNested(currentPayload, ['weekly', 'sdrs'], [])).forEach((page) => addCandidate(page.key, true, ''));
           addCandidate('goal', true, '');
           addCandidate('week', true, '');
           safePredicate('team_sdr', () => Number(getNested(currentPayload, ['weekly', 'team', 'sdrs', 'targetValue'], 0)) > 0, 'no_team_sdr_target');
@@ -2168,7 +2211,7 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
             return '<div class="crm-live-empty"><div><strong>Sem dados</strong><div>Nenhuma pessoa com meta nessa semana.</div></div></div>';
           }
           return limited.map((row, index) => {
-            const leader = index === 0;
+            const leader = index + (options.offset || 0) === 0;
             const roleRow = Object.assign({}, row || {}, { role });
             const chaseCopy = role === 'closer'
               ? ((Number(row.missingToGoal || 0) > 0)
@@ -2182,10 +2225,10 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
             return '<div class="crm-live-ranking-row ' + (leader ? 'is-leader' : '') + '">' +
               avatarHtml(row, { leader }) +
               '<div class="crm-live-ranking-copy">' +
-                '<div class="crm-live-ranking-name">' + escapeHtml(row.displayName || '—') + '</div>' +
+                '<div class="crm-live-ranking-name" title="' + escapeHtml(row.displayName || '—') + '">' + escapeHtml(row.displayName || '—') + '</div>' +
                 '<div class="crm-live-ranking-sub">' + escapeHtml(abbreviateProgress(roleRow)) + '</div>' +
                 '<div class="crm-live-ranking-bar"><span style="width:' + clampPercent(row.progressPct || 0).toFixed(1) + '%"></span></div>' +
-                '<div class="crm-live-ranking-chase">' + escapeHtml(chaseCopy) + '</div>' +
+                '<div class="crm-live-ranking-chase" title="' + escapeHtml(chaseCopy) + '">' + escapeHtml(chaseCopy) + '</div>' +
               '</div>' +
               '<div class="crm-live-ranking-metric">' +
                 '<div class="crm-live-ranking-pct">' + escapeHtml(percent(row.progressPct || 0)) + '</div>' +
@@ -2353,12 +2396,12 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
             '</div>' +
           '</section>';
         };
-        const renderRankingScreen = ({ title, rows, role }) => '<section class="crm-live-screen">' +
+        const renderRankingScreen = ({ title, rows, role, offset = 0 }) => '<section class="crm-live-screen">' +
           '<div class="crm-live-shell">' +
             '<div class="crm-live-head">' +
               '<h1 class="crm-live-title">' + escapeHtml(title) + '</h1>' +
             '</div>' +
-            '<div class="crm-live-body"><div class="crm-live-ranking ' + (safeArray(rows).length > 5 ? 'has-many-rows ' : '') + ((role === 'closer' && safeArray(rows).length <= 2) ? '' : 'is-fill') + ' ' + ((role === 'closer' && safeArray(rows).length >= 3) ? 'has-three-rows' : '') + '">' + renderRankingRows(rows, { role: role }) + '</div></div>' +
+            '<div class="crm-live-body"><div class="crm-live-ranking ' + (role === 'sdr' ? 'is-sdr ' : '') + (safeArray(rows).length > 5 ? 'has-many-rows ' : '') + ((role === 'closer' && safeArray(rows).length <= 2) ? '' : 'is-fill') + ' ' + ((role === 'closer' && safeArray(rows).length >= 3) ? 'has-three-rows' : '') + '">' + renderRankingRows(rows, { role: role, offset }) + '</div></div>' +
           '</div>' +
         '</section>';
         const renderTeamProgressScreen = ({ title, actual, target, noun }) => {
@@ -2441,8 +2484,9 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
             context = 'Conta baseada no ticket médio real do período: ' + escapeHtml(moneyShort(item.ticketMedio || 0)) + '.';
           } else if (item.type === 'personal_best') {
             title = 'Recorde pessoal';
-            phrase = '<strong>' + escapeHtml(item.personName || 'Pessoa') + '</strong> está a ' + escapeHtml(String(item.remaining || 0)) + ' ' + ((Number(item.remaining || 0) === 1) ? 'reunião' : 'reuniões') + ' do melhor dele na semana.';
-            context = 'Melhor marca anterior: ' + escapeHtml(String(item.historicalBest || 0)) + ' reuniões.';
+            const copy = personalBestCopy(item);
+            phrase = escapeHtml(copy.headline);
+            context = copy.context;
           } else {
             return '';
           }
@@ -2451,7 +2495,7 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
             '<div class="crm-live-shell">' +
               '<div class="crm-live-head"><h1 class="crm-live-title">' + escapeHtml(title) + '</h1></div>' +
               '<div class="crm-live-body">' +
-                '<div class="crm-live-news ' + (withPhoto ? '' : 'is-no-photo') + '">' +
+                '<div class="crm-live-news ' + (withPhoto ? '' : 'is-no-photo') + (item.type === 'personal_best' ? ' is-personal-best' : '') + '">' +
                   (withPhoto ? media : '') +
                   '<div class="crm-live-news-copy">' +
                     (kicker ? '<div class="crm-live-news-kicker">' + escapeHtml(kicker) + '</div>' : '') +
@@ -2608,6 +2652,13 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
             highlight_sdr: () => renderHighlightScreen({ title: 'SDR destaque de ontem', row: highlight.sdr, role: 'sdr' }),
             boot_error: () => renderBootErrorScreen(),
           };
+          const sdrPages = sdrRankingPages(weekly.sdrs);
+          sdrPages.forEach((page, index) => {
+            screenBuilders[page.key] = () => renderRankingScreen({
+              title: 'Ranking dos SDRs' + (sdrPages.length > 1 ? ' · ' + (index + 1) + '/' + sdrPages.length : ''),
+              rows: page.rows, role: 'sdr', offset: page.offset,
+            });
+          });
           news.forEach((item, index) => {
             screenBuilders['news_' + index] = () => renderNewsScreen(item);
           });
