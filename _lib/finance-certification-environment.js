@@ -23,6 +23,8 @@ const project = value => {
 // Offline, reviewed allowlist: never enroll the target or its credentials from the command's env.
 // A matching hash binds secret provenance; a decoded JWT by itself is not proof of staging.
 function assertFinanceCertificationTarget(env = process.env, targets = policy) {
+  if (env.FINANCE_ENV_SCOPE === 'production') return require('./finance-production-environment').assertFinanceProductionTarget(env);
+  if (env.FINANCE_ENV_SCOPE && env.FINANCE_ENV_SCOPE !== 'staging') deny('environment_conflict');
   if (env.APP_ENV !== 'staging' || env.SUPABASE_ENV_SCOPE !== 'staging') deny('staging_required');
   for (const key of ['SPACE_APP_ENV', 'SPACE_ENV']) if (env[key] && env[key] !== 'staging') deny('environment_conflict');
   for (const key of ['VERCEL_ENV', 'VERCEL_TARGET_ENV']) if (env[key] && !['preview', 'staging'].includes(env[key])) deny('environment_conflict');
@@ -73,6 +75,7 @@ function assertFinanceCertificationTarget(env = process.env, targets = policy) {
   return { project_ref: current.ref, supabase_url: current.url, asaas_environment: 'sandbox', app_origin: appOrigin };
 }
 function assertFinanceCertificationApply(env, flags, targets = policy) {
+  if (env.FINANCE_ENV_SCOPE === 'production') return require('./finance-production-environment').assertFinanceProductionApply(env, flags);
   const target = assertFinanceCertificationTarget(env, targets);
   if (!flags.has('--apply') || env.FINANCE_STAGING_APPLY !== 'YES') deny('apply_confirmation_required');
   return target;

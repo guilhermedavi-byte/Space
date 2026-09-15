@@ -68,3 +68,14 @@ test('CLI apply blocks production and unverified DB targets',()=>{
   }
 });
 module.exports={fixture,invoke};
+test('ingress can buffer before activation; distinct legacy credentials never enter canonical projection',async()=>{
+ let ingested=0,processed=0,legacy=0;
+ const env={FINANCE_FOUNDATION_ENABLED:'false',FINANCE_WEBHOOK_INGEST_ENABLED:'true',FINANCE_WEBHOOK_PROCESS_INLINE:'true',FINANCE_LEGACY_WEBHOOK_COMPAT:'true',ASAAS_WEBHOOK_TOKEN:'canonical-secret',N8N_WEBHOOK_SECRET:'legacy-secret'};
+ const h=createHandler({env,service:()=>({ingestWebhook:async()=>{ingested++;return {event_id:'one'};},processWebhookEvent:async()=>{processed++;}}),legacyHandler:async(req,res)=>{legacy++;res.statusCode=200;res.end('{"legacy":true}');}});
+ assert.equal((await invoke(h,{headers:{'asaas-access-token':'canonical-secret'},body:{event:'PAYMENT_CREATED',payment:fixture()}})).status,200);
+ assert.equal(ingested,1);assert.equal(processed,0);
+ env.FINANCE_FOUNDATION_ENABLED='true';
+ assert.equal((await invoke(h,{headers:{'asaas-access-token':'legacy-secret'}})).legacy,true);assert.equal(legacy,1);assert.equal(ingested,1);
+ assert.equal((await invoke(h,{headers:{'asaas-access-token':'wrong'}})).status,401);
+ assert.equal((await invoke(h,{headers:{authorization:'Bearer canonical-secret'}})).status,401);
+});

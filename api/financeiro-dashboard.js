@@ -1,3 +1,4 @@
+const {assertLegacyFinancialWrite,UNOWNED_FILTER}=require('./_lib/finance-legacy-ownership');
 const { readJsonBody, sendJson } = require("./_lib/http");
 const { getSessionFromRequest } = require("../_lib/session");
 const { supabaseFetch } = require("./_lib/supabase-rest");
@@ -184,11 +185,12 @@ const handlePost = async (req, res, session) => {
   }
 
   if (action === "save_cobranca") {
+    await assertLegacyFinancialWrite({id:String(body?.id||'').trim(),body});
     const payload = buildCobrancaPayload(body);
     if (!payload.aluno_nome) return sendJson(res, 400, { error: "missing_aluno_nome" });
     const id = String(body?.id || "").trim();
     const result = id
-      ? await supabaseFetch(`/${FINANCE_TABLES.cobrancas}?id=eq.${encodeURIComponent(id)}`, { method: "PATCH", body: payload })
+      ? await supabaseFetch(`/${FINANCE_TABLES.cobrancas}?id=eq.${encodeURIComponent(id)}${UNOWNED_FILTER}`, { method: "PATCH", body: payload })
       : await supabaseFetch(`/${FINANCE_TABLES.cobrancas}`, { method: "POST", body: { ...payload, created_at: nowIso } });
     const row = Array.isArray(result.data) ? withChatwootUrl(result.data[0] || null) : null;
     return sendJson(res, 200, { ok: true, row });
@@ -197,6 +199,7 @@ const handlePost = async (req, res, session) => {
   if (action === "confirm_cobranca") {
     const id = String(body?.id || "").trim();
     if (!id) return sendJson(res, 400, { error: "missing_id" });
+    await assertLegacyFinancialWrite({id,body});
     const formaConfirmacao = sanitizePaymentMethod(body?.forma_confirmacao || body?.forma_pagamento || "OUTRO");
     const payload = {
       status: "pago",
@@ -206,7 +209,7 @@ const handlePost = async (req, res, session) => {
       observacao_pagamento: nullableString(body?.observacao_pagamento),
       updated_at: nowIso,
     };
-    await supabaseFetch(`/${FINANCE_TABLES.cobrancas}?id=eq.${encodeURIComponent(id)}`, { method: "PATCH", body: cleanObject(payload) });
+    await supabaseFetch(`/${FINANCE_TABLES.cobrancas}?id=eq.${encodeURIComponent(id)}${UNOWNED_FILTER}`, { method: "PATCH", body: cleanObject(payload) });
     return sendJson(res, 200, { ok: true });
   }
 
@@ -270,6 +273,7 @@ module.exports = async (req, res) => {
     res.setHeader("Allow", "GET, POST, PATCH");
     return sendJson(res, 405, { error: "method_not_allowed" });
   } catch (error) {
+    if(error?.code==='finance_asaas_authoritative')return sendJson(res,409,{error:error.code});
     console.error("[api] financeiro-dashboard failed", error);
     return sendJson(res, 500, { error: error?.code || "finance_dashboard_failed" });
   }
