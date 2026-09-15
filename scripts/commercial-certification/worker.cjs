@@ -9,9 +9,10 @@
     const input=await collect(guard.wrapReads(adapters()),{env:process.env,onProgress:k=>{loaded[k]=true;}});
     const audit=require('../reconcile-commercial-metrics').reconcileExport(input);
     const report=sanitize(project(audit,input,guard.counts),guard.secrets);
+    if(Buffer.byteLength(JSON.stringify(report))>3000000)throw new Error('report_too_large');
     process.send?.(report);
   }catch(e){
-    const code=['missing_credentials','unsafe_output','audit_write_or_network_blocked'].includes(e.message)?e.message:'audit_failed';
+    const code=['missing_credentials','unsafe_output','audit_write_or_network_blocked','report_too_large'].includes(e.message)?e.message:'audit_failed';
     const report=failure(guard?.counts||zero,loaded,code);
     if(e.syncMetadata){const m=e.syncMetadata;report.source={pages:m.pagesFetched??null,expectedPages:m.expectedPages??null,dealCount:m.recordsFetched??null,retries:m.retryCount??null,rateLimits:m.datacrazy429Count??null,complete:false};}
     process.send?.(sanitize(report,guard?.secrets||new Set()));

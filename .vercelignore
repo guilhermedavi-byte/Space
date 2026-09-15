@@ -1,0 +1,9 @@
+.git
+.vercel
+.env*
+node_modules
+artifacts
+docs
+tests
+*.log
+.commercial-certification-bundle

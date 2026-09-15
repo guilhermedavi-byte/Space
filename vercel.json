@@ -1,46 +1,131 @@
 {
   "functions": {
-    "api/crm-live-data.js": { "maxDuration": 300 },
-    "api/crm-live-events.js": { "maxDuration": 300 },
-    "api/growth-dashboard.js": { "maxDuration": 300 }
+    "api/crm-live-data.js": {
+      "maxDuration": 300
+    },
+    "api/crm-live-events.js": {
+      "maxDuration": 300
+    },
+    "api/growth-dashboard.js": {
+      "maxDuration": 300
+    },
+    "api/commercial-certify.js": {
+      "maxDuration": 300,
+      "includeFiles": "{scripts/commercial-certification/**,scripts/reconcile-commercial-metrics.js,api/_lib/**,_lib/**,assets/student-lifecycle.js}"
+    }
   },
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
-        { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
-        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-        { "key": "Permissions-Policy", "value": "geolocation=(), payment=(), usb=()" }
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "SAMEORIGIN"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "geolocation=(), payment=(), usb=()"
+        }
       ]
     },
     {
       "source": "/api/(.*)",
       "headers": [
-        { "key": "Cache-Control", "value": "no-store" }
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
       ]
     }
   ],
   "rewrites": [
-    { "source": "/api/lesson-logs", "destination": "/api/schedule-events?resource=lesson-logs" },
-    { "source": "/api/admin-alerts", "destination": "/api/schedule-events?resource=admin-alerts" },
-    { "source": "/api/crm-test", "destination": "/api/growth-dashboard?api=crm-test" },
-    { "source": "/api/growth-goals/current", "destination": "/api/growth-dashboard?api=growth-goals&mode=current" },
-    { "source": "/api/growth-goals", "destination": "/api/growth-dashboard?api=growth-goals" },
-    { "source": "/api/growth-metrics", "destination": "/api/growth-dashboard?api=growth-metrics" },
-    { "source": "/api/growth-contratos", "destination": "/api/growth-dashboard?api=growth-contratos" },
-    { "source": "/api/admin-sheets-metrics", "destination": "/api/growth-dashboard?api=admin-sheets-metrics" },
-    { "source": "/api/zapsign-webhook", "destination": "/api/growth-dashboard?api=zapsign-webhook" },
-    { "source": "/api/(.*)", "destination": "/api/$1" },
-    { "source": "/financeiro", "destination": "/api/financeiro" },
-    { "source": "/growth/dashboard", "destination": "/api/growth-dashboard" },
-    { "source": "/growth/contratos", "destination": "/api/growth-dashboard?page=contracts" },
-    { "source": "/tv/crm-live", "destination": "/api/crm-live" },
-    { "source": "/tv/cs-live", "destination": "/api/cs-live" },
-    { "source": "/aula/:id/encerramento", "destination": "/api/aula-encerramento?id=:id" },
-    { "source": "/aula/:id", "destination": "/api/aula?id=:id" },
-    { "source": "/sala/:room", "destination": "/api/sala?room=:room" },
-    { "source": "/app", "destination": "/api/app" },
-    { "source": "/app/(.*)", "destination": "/api/app?path=$1" }
+    {
+      "source": "/api/lesson-logs",
+      "destination": "/api/schedule-events?resource=lesson-logs"
+    },
+    {
+      "source": "/api/admin-alerts",
+      "destination": "/api/schedule-events?resource=admin-alerts"
+    },
+    {
+      "source": "/api/crm-test",
+      "destination": "/api/growth-dashboard?api=crm-test"
+    },
+    {
+      "source": "/api/growth-goals/current",
+      "destination": "/api/growth-dashboard?api=growth-goals&mode=current"
+    },
+    {
+      "source": "/api/growth-goals",
+      "destination": "/api/growth-dashboard?api=growth-goals"
+    },
+    {
+      "source": "/api/growth-metrics",
+      "destination": "/api/growth-dashboard?api=growth-metrics"
+    },
+    {
+      "source": "/api/growth-contratos",
+      "destination": "/api/growth-dashboard?api=growth-contratos"
+    },
+    {
+      "source": "/api/admin-sheets-metrics",
+      "destination": "/api/growth-dashboard?api=admin-sheets-metrics"
+    },
+    {
+      "source": "/api/zapsign-webhook",
+      "destination": "/api/growth-dashboard?api=zapsign-webhook"
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
+    },
+    {
+      "source": "/financeiro",
+      "destination": "/api/financeiro"
+    },
+    {
+      "source": "/growth/dashboard",
+      "destination": "/api/growth-dashboard"
+    },
+    {
+      "source": "/growth/contratos",
+      "destination": "/api/growth-dashboard?page=contracts"
+    },
+    {
+      "source": "/tv/crm-live",
+      "destination": "/api/crm-live"
+    },
+    {
+      "source": "/tv/cs-live",
+      "destination": "/api/cs-live"
+    },
+    {
+      "source": "/aula/:id/encerramento",
+      "destination": "/api/aula-encerramento?id=:id"
+    },
+    {
+      "source": "/aula/:id",
+      "destination": "/api/aula?id=:id"
+    },
+    {
+      "source": "/sala/:room",
+      "destination": "/api/sala?room=:room"
+    },
+    {
+      "source": "/app",
+      "destination": "/api/app"
+    },
+    {
+      "source": "/app/(.*)",
+      "destination": "/api/app?path=$1"
+    }
   ]
 }
