@@ -1,12 +1,22 @@
 # Financial Foundation — certificação de produção
 
-**Atualizado em 15/09/2026 UTC. Decisão: NO-GO para a Fase 1.**
+**Atualizado em 15/09/2026 UTC. Decisão vigente: GO para a Fase 1.**
 
-O código financeiro está integrado à `main` e permanece no deploy automático do projeto Vercel `space`. Backfill, reconciliação, repair e processamento interno de eventos históricos reais passaram. O novo webhook está configurado no Asaas, mas **a entrega externa ainda não foi observada**. `FINANCE_FOUNDATION_ENABLED=false`; ingresso durável habilitado para capturar essa primeira entrega.
+O código financeiro está integrado à `main` e permanece no deploy automático do projeto Vercel `space`. Backfill, reconciliação, repair e processamento interno de eventos históricos reais passaram. O webhook exclusivo está configurado no Asaas. **Foundation, ingresso durável e processamento inline estão habilitados em Production.** A entrega externa natural permanece como observação adicional pós-ativação, sem bloquear a Fase 1 por decisão explícita do responsável.
 
 Este relatório substitui os estados anteriores de credencial ausente e staging obrigatório. A execução usa **produção autorizada**, Asaas `https://api.asaas.com/v3` e Supabase `space-idiomas-n8n` (`mlpojyvwyqcrelagtgkw`). Nenhuma cobrança, pagamento, estorno ou exclusão foi provocado no Asaas para testar. A migration e os testes anteriores não foram repetidos nesta retomada. Nenhuma UI foi iniciada.
 
-## Gate externo — verificação isolada em 15/09/2026, 17:33 UTC
+## Ativação autorizada — 15/09/2026, 17:43 UTC
+
+**Financial Foundation habilitada em Production e apta para a Fase 1 — Financeiro V1. GO.** Por instrução explícita do responsável, a entrega externa natural deixa de ser requisito de ativação e passa a ser **observação pós-ativação**, sem converter os replays anteriores em entrega externa comprovada.
+
+- `FINANCE_FOUNDATION_ENABLED=true`, `FINANCE_WEBHOOK_INGEST_ENABLED=true` e `FINANCE_WEBHOOK_PROCESS_INLINE=true`, exclusivamente no projeto Vercel `space`, ambiente Production. [Configuração sanitizada](../artifacts/finance-production-2026-09-15/activation.json).
+- Redeploy Production concluído: [https://space-j946skjnv-guilhermedavi-4547s-projects.vercel.app](https://space-j946skjnv-guilhermedavi-4547s-projects.vercel.app), **READY**, origem GitHub `main`. [Evidência](../artifacts/finance-production-2026-09-15/activation-deployment-ready.json).
+- Domínio público `https://plataforma.spaceschoolbr.com`: HTTP 200; `/api/health`: HTTP 200, `ready`, ambiente production e isolamento válido. Esta confirmação operacional não é uma repetição da certificação funcional. [Evidência](../artifacts/finance-production-2026-09-15/activation-operational.json).
+- Próximo evento externo: **aguardando confirmação adicional em operação**. Ingresso e processamento inline estão ativos; eventual falha permanece registrada na inbox para tratamento.
+- Nenhuma transação artificial, novo backfill, reconciliation, repair, auditoria ou repetição de testes foi executada nesta ativação. Nenhuma credencial foi alterada ou publicada; somente as três flags operacionais foram ajustadas.
+
+## Histórico anterior à ativação — gate observado às 17:33 UTC
 
 O painel Asaas, filtrado exclusivamente por `SPACE Financial Foundation Production`, não apresenta nenhuma entrega. A inbox contém sete eventos, todos correlacionados aos replays internos já registrados, e nenhum evento externo novo. Não houve processamento adicional, backfill, repair, teste extra ou alteração da flag. **Gate não comprovado; Foundation desabilitada; NO-GO.** [Evidência mínima sanitizada](../artifacts/finance-production-2026-09-15/external-webhook-gate-recheck.json).
 
@@ -35,8 +45,8 @@ Após esse deploy automático, o receiver novo aceitou a sexta entrega interna d
 | Health e conexão | Autenticação, acesso à conta e vínculo production validados; chave permaneceu na Vercel | [Health real](../artifacts/finance-production-2026-09-15/asaas-production-health.json), [conexão](../artifacts/finance-production-2026-09-15/connection.json) | PASS |
 | Receiver após deploy automático | GitHub main → Vercel Production READY; replay reconhecido pelo receiver novo | [Deploy](../artifacts/finance-production-2026-09-15/final-deployment.json), [reentrega](../artifacts/finance-production-2026-09-15/post-automatic-deploy-idempotency.json) | PASS |
 | Webhook configurado | Endpoint exclusivo, token dedicado, v3, sequencial; integrações anteriores preservadas | [Configuração](../artifacts/finance-production-2026-09-15/resume-setup-webhook.json) | PASS |
-| Entrega externa Asaas → Space | Nenhuma tentativa encontrada no filtro exclusivo do novo webhook; entradas atuais são replays internos conhecidos | [Observação do painel](../artifacts/finance-production-2026-09-15/external-webhook-observation.json) | BLOCKED |
-| Ativação Foundation | Flag principal permanece false enquanto falta o gate externo; ingestão durável true | [Configuração de rollout](../artifacts/finance-production-2026-09-15/foundation-env-configuration.json) | BLOCKED |
+| Entrega externa Asaas → Space | Confirmação adicional pós-ativação; não bloqueia Fase 1 por decisão explícita. Nenhuma entrega externa foi rotulada como PASS | [Última observação](../artifacts/finance-production-2026-09-15/external-webhook-gate-recheck.json) | NOT OBSERVED |
+| Ativação Foundation | Flag principal, ingresso e processamento inline true em Production; deploy READY e produção operacional | [Ativação](../artifacts/finance-production-2026-09-15/activation.json), [deploy](../artifacts/finance-production-2026-09-15/activation-deployment-ready.json), [operação](../artifacts/finance-production-2026-09-15/activation-operational.json) | PASS |
 | PAYMENT_CREATED | Projeção real via backfill; evento histórico entrou na inbox e foi processado | `pay_5snorexsqacbdpae`; [replays](../artifacts/finance-production-2026-09-15/real-event-replays.json) | PASS |
 | Idempotência | Seis entregas totais do mesmo evento, uma entrada lógica, uma tentativa de processamento, sem receivable duplicado | [Inicial](../artifacts/finance-production-2026-09-15/real-event-replays.json), [após deploy](../artifacts/finance-production-2026-09-15/post-automatic-deploy-idempotency.json) | PASS |
 | PAYMENT_UPDATED | Replay real atualizou vencimento de 14/09 para 15/09 usando GET atual | `pay_foxs2lbj00tk4g3m`; [before/after](../artifacts/finance-production-2026-09-15/real-event-replays.json) | PASS |
@@ -67,7 +77,7 @@ Evidência antes da correção: [quatro respostas individuais e seus mismatches]
 - Supabase service role utilizado apenas no operador privado; Asaas API key permaneceu exclusivamente no runtime Vercel Production. Não houve env pull, cópia da chave ou valores secretos nos artefatos publicados.
 - Connection ID `589367ba-e7c4-4c26-af71-53f97eac31a4` vem da configuração de ambiente, sem hardcode na aplicação. Scope/base/conta são conferidos pelo cliente remoto e binding antes das operações.
 - Snapshots reais anteriores às mutações estão em `/Users/spaceonline/.codex/finance-production-backups/2026-09-15`, diretório 0700 e arquivos 0600. Não foram publicados no Git. Auditoria transacional preserva os efeitos: 3728 registros na observação final.
-- `FINANCE_WEBHOOK_INGEST_ENABLED=true`, `FINANCE_FOUNDATION_ENABLED=false`, `FINANCE_WEBHOOK_PROCESS_INLINE=true` e `FINANCE_LEGACY_WEBHOOK_COMPAT=true`. O token dedicado entra somente no caminho canônico; credenciais legadas distintas continuam no receiver legado. Eventos externos futuros podem ficar pendentes até ativação/processamento autorizado.
+- `FINANCE_WEBHOOK_INGEST_ENABLED=true`, `FINANCE_FOUNDATION_ENABLED=true`, `FINANCE_WEBHOOK_PROCESS_INLINE=true` e `FINANCE_LEGACY_WEBHOOK_COMPAT=true`. O token dedicado entra somente no caminho canônico; credenciais legadas distintas continuam no receiver legado. Eventos externos futuros têm processamento inline ativo; falhas permanecem duravelmente na inbox para tratamento.
 - Os sete eventos atualmente processados são replays internos identificados. `last_webhook_received` e `last_webhook_processed` da telemetria, portanto, **não comprovam entrega pelo Asaas**.
 - Reconciliação foi executada em dry-run real, com snapshot de leitura do Supabase e paginação Asaas. O relatório foi persistido como artefato; `last_reconciliation` no banco permanece null porque não houve run de reconciliação apply. Repairs separados atualizaram `last_repair`.
 - Asaas é um sistema em movimento: a reconciliação é uma observação temporal, não um snapshot atômico entre os dois serviços. Novos eventos ainda precisam de processamento contínuo após o gate de ativação.
@@ -82,8 +92,8 @@ Correção: `api/_lib/finance-foundation.js`, `tests/finance-production-environm
 
 A integração do receiver, guards, CLI, snapshot e ownership já concluída no commit `5c978365` foi preservada; nenhuma migration, UI ou inventário arquitetural foi repetido.
 
-## Pendência exata para GO
+## Decisão vigente e observação pós-ativação
 
-**NO-GO.** Falta observar uma entrega real originada no novo webhook Asaas, correlacionar o ID no painel com a inbox, processar esse evento com sucesso e verificar o estado atual. Só então habilitar a Foundation exclusivamente em Production e confirmar o deploy automático e o processamento subsequente.
+**GO para Fase 1 — Financeiro V1.** A Foundation foi habilitada em Production por autorização explícita, mantendo os resultados reais da certificação já concluída. O redeploy está READY e a aplicação permanece operacional.
 
-A ausência de evento externo observado não é erro de autenticação comprovado nem PASS por replay. Não foram criadas transações artificiais para contornar esse gate. Retry de inbox permanece NOT OBSERVED; deve ser validado quando houver falha recuperável real. Refund histórico indisponível permanece explicitamente separado das projeções reais já verificadas.
+A próxima entrega natural do webhook Asaas será confirmação operacional adicional: correlacionar o evento do provedor com a inbox e seu processamento quando ocorrer. Sua ausência até esta observação não bloqueia mais a Fase 1. Retry de inbox e evento histórico de refund permanecem NOT OBSERVED conforme a matriz; não foram declarados PASS por hipótese.

@@ -1,14 +1,14 @@
-> **Estado operacional — 15/09/2026:** código integrado à `main` e publicado automaticamente em produção. Backfill concluído; 2.076 projeções reconciliadas. Eventos históricos reais processados internamente. Webhook exclusivo configurado, porém entrega externa ainda não observada; `FINANCE_FOUNDATION_ENABLED=false`, ingresso durável habilitado. **NO-GO para Fase 1** até esse gate. Consulte o [relatório atual](finance-foundation-certification.md). Staging/sandbox são opcionais nesta execução autorizada de produção.
+> **Estado operacional — 15/09/2026:** Financial Foundation habilitada em Production no projeto Vercel `space`, com ingestão e processamento inline ativos. Deploy READY e aplicação operacional. **GO para Fase 1 — Financeiro V1.** Por autorização explícita, o próximo evento externo natural será confirmação adicional pós-ativação, sem bloquear a Fase 1. Consulte o [relatório atual](finance-foundation-certification.md).
 >
-> Manutenção de produção exige apply explícito, ator e snapshot privado. O cliente financeiro é GET-only no Asaas. As seções abaixo preservam a descrição original da implementação; a evidência operacional atual está no relatório.
+> Manutenção de produção continua exigindo apply explícito, ator e snapshot privado. O cliente financeiro é GET-only no Asaas. Os resultados da certificação existente foram preservados, sem repetição nesta ativação.
 
 # Financial Foundation — Fase 0
 
 **Data:** 14/09/2026 (execuções também registradas em 15/09 UTC).  
 **Especificação:** [auditoria financeira](finance-architecture-audit.md).  
-**Estado:** implantada em produção com ativação principal pendente de entrega externa do novo webhook; Fase 1 ainda NO-GO.
+**Estado:** habilitada em produção, ingestão e processamento ativos; GO para Fase 1. Próxima entrega externa é observação pós-ativação.
 
-**Homologação posterior:** consultar [relatório de certificação](finance-foundation-certification.md). A CLI recebeu os controles adicionais descritos abaixo; a ausência de ambiente comprovado mantém o resultado NO-GO.
+**Homologação posterior:** consultar [relatório de certificação](finance-foundation-certification.md). A CLI recebeu os controles adicionais descritos abaixo; a decisão operacional vigente e os resultados estão no relatório atualizado.
 
 ## 1. Escopo entregue e decisão de schema
 

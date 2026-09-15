@@ -1,0 +1,24 @@
+{
+  "activated_at": "2026-09-15T17:41:16.219Z",
+  "project": "space",
+  "environment": "Production",
+  "changes": [
+    {
+      "key": "FINANCE_WEBHOOK_INGEST_ENABLED",
+      "value": "true",
+      "target": "production"
+    },
+    {
+      "key": "FINANCE_WEBHOOK_PROCESS_INLINE",
+      "value": "true",
+      "target": "production"
+    },
+    {
+      "key": "FINANCE_FOUNDATION_ENABLED",
+      "value": "true",
+      "target": "production"
+    }
+  ],
+  "external_event": "awaiting_post_activation_observation",
+  "authorization": "user explicitly removed external-delivery prerequisite"
+}
