@@ -881,13 +881,11 @@ const loadGrowthPeople = async ({ idToken, accessToken } = {}) => {
   return docs.map((doc) => decodeGrowthPeopleDoc(doc)).filter(Boolean);
 };
 
-const loadSdrActivityEvents = async ({ idToken, accessToken } = {}) => {
-  const response = accessToken
-    ? await firestoreListDocumentsWithAccessToken({ collectionPath: "sdrActivityEvents", accessToken, pageSize: 2000 })
-    : await firestoreListDocuments({ collectionPath: "sdrActivityEvents", idToken, pageSize: 2000 });
-  if (!response.ok) throw new Error("sdr_activity_list_failed");
-  const docs = Array.isArray(response.documents) ? response.documents : [];
-  return docs.map((doc) => decodeSdrActivityEventDoc(doc)).filter(Boolean);
+const loadSdrActivityEvents = async ({ idToken, accessToken, from, to } = {}) => {
+  return require("./_lib/sdr-activity-read").readSdrEvents({from,to,base:FIRESTORE_BASE,
+    getToken:async()=>accessToken||idToken,
+    decode:doc=>decodeSdrActivityEventDoc(doc)||{},
+  }).then(rows=>rows.filter(row=>row.dateKey&&row.eventType&&row.outcome));
 };
 
 const buildGrowthMetricsPayload = async ({ crm, idToken, periodStart = "", periodEnd = "", filterByCreatedAt = false }) => {
@@ -1407,14 +1405,15 @@ const handleGrowthGoalsApi = async (req, res, url) => {
         }
 
         if (mode === "management") {
-          const firstWeek = listCompetenciaWeeks(competencia)[0];
+          const managementWeeks = listCompetenciaWeeks(competencia);
+          const firstWeek = managementWeeks[0];
           const previousDate = new Date(`${firstWeek.startDateKey}T12:00:00-03:00`);
           previousDate.setDate(previousDate.getDate() - 1);
           const { resolveCommercialWeek } = require("./_lib/commercial-week");
           const previousMonth = resolveCommercialWeek({ now: previousDate }).startDateKey.slice(0, 7);
           const [globalConfig, crm, sdrEvents, previousSnap] = await Promise.all([
             loadCrmLiveDefaultsConfigWithAccessToken({ accessToken }), fetchAllCrmBusinesses(),
-            loadSdrActivityEvents({ accessToken }),
+            loadSdrActivityEvents({ accessToken, from: resolveCommercialWeek({now:previousDate}).startDateKey, to: managementWeeks.at(-1).endDateKey }),
             firestoreGetDocumentWithAccessToken({ docPath: `${GOALS_COLLECTION}/${previousMonth}`, accessToken }),
           ]);
           if (crm?.ok === false || !Array.isArray(crm?.businesses)) throw new Error("commercial_sales_read_failed");
@@ -1426,7 +1425,8 @@ const handleGrowthGoalsApi = async (req, res, url) => {
 
         if (includeWeeklyProgress) {
           const globalConfig = await loadCrmLiveDefaultsConfigWithAccessToken({ accessToken });
-          const [crm, sdrEvents] = await Promise.all([fetchAllCrmBusinesses(), loadSdrActivityEvents({ accessToken })]);
+          const activityWeek = require("./_lib/commercial-week").resolveCommercialWeek({now:requestedWeekDate||new Date()});
+          const [crm, sdrEvents] = await Promise.all([fetchAllCrmBusinesses(), loadSdrActivityEvents({ accessToken, from:activityWeek.startDateKey, to:activityWeek.endDateKey })]);
           payload.weeklyReadModel = buildWeeklyGoalsReadModel({
             goal,
             globalConfig,
@@ -3206,6 +3206,7 @@ module.exports = async (req, res) => {
 };
 
 module.exports.__private = {
+  loadSdrActivityEvents,
   buildGrowthMetricsPayload,
   fetchAllCrmBusinesses,
   fetchAllCrmBusinessesLegacy,
