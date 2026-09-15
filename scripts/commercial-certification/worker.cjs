@@ -1,5 +1,13 @@
 // Executed only by the isolated, short-lived administrative function.
 (async()=>{
+  // Pending promises alone do not retain a Node event loop. Keep the audit alive
+  // until its report is delivered; the parent enforces the execution deadline.
+  const keepAlive=setInterval(()=>{},1000);
+  const deliver=async report=>{
+    if(process.connected===true)await new Promise((resolve,reject)=>process.send(report,error=>error?reject(error):resolve()));
+    else process.send?.(report); // Synthetic in-process transport used by tests.
+  };
+  const progress=stage=>{if(process.connected===true)process.send({kind:'audit_progress',stage});};
   const zero={firestoreWritesAttempted:0,datacrazyMutationsAttempted:0,snapshotWritesAttempted:0,blockedRequests:0};
   const {project,sanitize,failure}=require('./output.cjs');let guard,loaded={},phase='credentials',sourceMetadata;
   try{
@@ -7,13 +15,13 @@
     guard=require('./guard.cjs').createGuard({env:process.env});guard.install();
     const {collect,adapters}=require('./collect.cjs');
     phase='collect';
-    const input=await collect(guard.wrapReads(adapters()),{env:process.env,onProgress:(k,m)=>{phase=k;if(k==='datacrazyLoaded'||k==='firestoreLoaded')loaded[k]=true;if(m)sourceMetadata=m;}});
-    phase='reconcile';
+    const input=await collect(guard.wrapReads(adapters()),{env:process.env,onProgress:(k,m)=>{phase=k;progress(k);if(k==='datacrazyLoaded'||k==='firestoreLoaded')loaded[k]=true;if(m)sourceMetadata=m;}});
+    phase='reconcile';progress(phase);
     const audit=require('../reconcile-commercial-metrics').reconcileExport(input);
-    phase='project_and_sanitize';
+    phase='project_and_sanitize';progress(phase);
     const report=sanitize(project(audit,input,guard.counts),guard.secrets);
     if(Buffer.byteLength(JSON.stringify(report))>3000000)throw new Error('report_too_large');
-    process.send?.(report);
+    await deliver(report);
   }catch(e){
     const code=['missing_credentials','unsafe_output','audit_write_or_network_blocked','report_too_large'].includes(e.message)?e.message:'audit_failed';
     const report=failure(guard?.counts||zero,loaded,code);
@@ -24,6 +32,6 @@
     report.errorType=['Error','TypeError','SyntaxError','RangeError'].includes(e.name)?e.name:'other';
     const m=e.syncMetadata||sourceMetadata;
     if(m)report.source={pages:m.pagesFetched??null,expectedPages:m.expectedPages??null,dealCount:m.recordsFetched??null,retries:m.retryCount??null,rateLimits:m.datacrazy429Count??null,complete:m.fetchCompleted===true&&m.paginationCompleted===true};
-    process.send?.(sanitize(report,guard?.secrets||new Set()));
-  }finally{process.disconnect?.();}
+    await deliver(sanitize(report,guard?.secrets||new Set()));
+  }finally{clearInterval(keepAlive);process.disconnect?.();}
 })().catch(()=>process.exit(1));

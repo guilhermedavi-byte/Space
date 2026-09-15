@@ -12,16 +12,16 @@ function createHandler({manifest,env=process.env,spawn=fork,clock=Date.now}){
     const cleanEnv=Object.fromEntries(['CRM_API_BASE_URL','CRM_API_KEY','GOOGLE_SERVICE_ACCOUNT_JSON'].filter(k=>env[k]).map(k=>[k,env[k]]));
     cleanEnv.APP_ENV='production';cleanEnv.NODE_ENV='production';
     const zero={firestoreWritesAttempted:0,datacrazyMutationsAttempted:0,snapshotWritesAttempted:0,blockedRequests:0};
-    const unknown=code=>({...failure(zero,{},code),writesAttempted:null,counters:Object.fromEntries(Object.keys(zero).map(k=>[k,null])),countersVerified:false});
-    let child;
+    const unknown=code=>({failureStage:lastStage,...failure(zero,{},code),writesAttempted:null,counters:Object.fromEntries(Object.keys(zero).map(k=>[k,null])),countersVerified:false});
+    let child,lastStage=null;
     try{child=spawn(path.join(__dirname,'worker.cjs'),[],{env:cleanEnv,stdio:['ignore','ignore','ignore','ipc'],execArgv:[]});}
     catch{res.statusCode=500;return res.end(JSON.stringify(unknown('worker_start_failed')));}
     let finished=false;
     const done=(report,status=200)=>{if(finished)return;finished=true;clearTimeout(timer);child.kill();res.statusCode=status;res.end(JSON.stringify(report));};
     const timer=setTimeout(()=>done(unknown('execution_timeout'),504),280000);
-    child.once('message',message=>{try{done(sanitize(message,new Set(Object.values(cleanEnv))));}catch{done(unknown('unsafe_output'),500);}});
+    child.on('message',message=>{if(message?.kind==='audit_progress'){if(/^(datacrazyLoaded|firestoreLoaded|reconcile|project_and_sanitize|read_(growthGoals\/2026-(06|07|08|09|10)|users|growthPeople|sdrActivityEvents|crmLiveCache\/crm|crmLiveSnapshots|growthConfig\/crmLiveDefaults))$/.test(message.stage))lastStage=message.stage;return;}try{done(sanitize(message,new Set(Object.values(cleanEnv))));}catch{done(unknown('unsafe_output'),500);}});
     child.once('error',()=>done(unknown('worker_failed'),500));
-    child.once('exit',(code,signal)=>{if(!finished)done({...unknown('worker_failed'),exitCode:Number.isInteger(code)?code:null,exitSignal:['SIGKILL','SIGTERM','SIGABRT','SIGSEGV'].includes(signal)?signal:null},500);});
+    child.once('close',(code,signal)=>{if(!finished)done({...unknown('worker_failed'),exitCode:Number.isInteger(code)?code:null,exitSignal:['SIGKILL','SIGTERM','SIGABRT','SIGSEGV'].includes(signal)?signal:null},500);});
   };
 }
 module.exports={createHandler};
