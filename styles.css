@@ -25956,6 +25956,62 @@ body.has-space-env-banner{padding-top:46px}
 .native-crm-filter {
   padding: 0 12px;
   color: var(--text-muted);
+  cursor: pointer;
+}
+
+.native-crm-filter-wrap {
+  position: relative;
+}
+
+.native-crm-filter-panel {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(560px, calc(100vw - 32px));
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  padding: 14px;
+  background: var(--surface-bg);
+  box-shadow: var(--shadow-md);
+}
+
+.native-crm-filter-panel label {
+  display: grid;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.native-crm-filter-panel select {
+  width: 100%;
+}
+
+.native-crm-filter-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.native-crm-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.native-crm-filter-chips button {
+  min-height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0 10px;
+  background: rgba(255,255,255,.035);
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
 }
 
 .native-crm-segment {
@@ -26136,6 +26192,140 @@ body.has-space-env-banner{padding-top:46px}
 .native-crm-error {
   color: var(--text-muted);
   font-size: 13px;
+}
+
+.native-crm-list {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.native-crm-list-head,
+.native-crm-list-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.native-crm-list-head strong {
+  font-size: 14px;
+}
+
+.native-crm-list-head span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.native-crm-table-wrap {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: auto;
+  background: rgba(255,255,255,.028);
+}
+
+.native-crm-table {
+  width: 100%;
+  min-width: 1040px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.native-crm-table th,
+.native-crm-table td {
+  border-bottom: 1px solid var(--line);
+  padding: 12px;
+  text-align: left;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.native-crm-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-bg);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.native-crm-table th button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+
+.native-crm-table th button.is-active {
+  color: var(--text-main);
+}
+
+.native-crm-table tbody tr {
+  cursor: pointer;
+}
+
+.native-crm-table tbody tr:hover,
+.native-crm-table tbody tr:focus-visible {
+  background: rgba(255,255,255,.045);
+  outline: none;
+}
+
+.native-crm-table td:first-child {
+  min-width: 220px;
+  white-space: normal;
+}
+
+.native-crm-table td:first-child strong,
+.native-crm-table td:first-child span {
+  display: block;
+}
+
+.native-crm-table td:first-child strong {
+  color: var(--text-main);
+  overflow-wrap: anywhere;
+}
+
+.native-crm-table td:first-child span {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.native-crm-status-pill,
+.native-crm-activity-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0 9px;
+  color: var(--text-muted);
+  background: rgba(255,255,255,.035);
+  font-size: 12px;
+}
+
+.native-crm-activity-pill[data-tone="today"] {
+  border-color: rgba(251, 191, 36, .42);
+  color: rgba(251, 191, 36, .95);
+}
+
+.native-crm-activity-pill[data-tone="overdue"] {
+  border-color: rgba(255, 86, 79, .42);
+  color: rgba(255, 86, 79, .95);
+}
+
+.native-crm-activity-pill[data-tone="future"] {
+  border-color: rgba(96, 165, 250, .36);
+  color: rgba(147, 197, 253, .95);
 }
 
 .native-crm-loading,
@@ -26458,6 +26648,7 @@ body.has-space-env-banner{padding-top:46px}
 
 @media (max-width: 620px) {
   .native-crm-actions > * { width: 100%; }
+  .native-crm-filter-panel { position: static; width: 100%; grid-template-columns: 1fr; margin-top: 8px; }
   .native-crm-segment { width: 100%; }
   .native-crm-segment button { flex: 1; min-height: 34px; }
   .native-crm-board { grid-auto-columns: minmax(260px, 86vw); }

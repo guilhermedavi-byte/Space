@@ -12126,11 +12126,32 @@ const nativeCrmState = {
   selectedPipelineId: "",
   search: "",
   mode: "funnel",
+  filtersOpen: false,
+  filters: {
+    stageId: "",
+    status: "",
+    ownerId: "",
+    source: "",
+    activityState: "all",
+    createdRange: "",
+  },
+  list: {
+    rows: [],
+    nextCursor: "",
+    loading: false,
+    error: "",
+    loadedAt: 0,
+    totalVisible: 0,
+    sort: "updatedAt",
+    direction: "desc",
+  },
   drawer: null,
   details: {},
   activityFormOpportunityId: "",
   draggedOpportunityId: "",
 };
+
+let nativeCrmSearchTimer = null;
 
 const moneyFormatterCache = new Map();
 
@@ -12219,28 +12240,72 @@ const getNativeCrmData = () => {
   };
 };
 
+const getNativeCrmAllOpportunities = () => {
+  const { opportunities } = getNativeCrmData();
+  const rows = Array.isArray(nativeCrmState.list?.rows) ? nativeCrmState.list.rows : [];
+  const byId = new Map();
+  opportunities.concat(rows).forEach((opportunity) => {
+    if (opportunity?.id) byId.set(opportunity.id, opportunity);
+  });
+  return Array.from(byId.values());
+};
+
 const selectedCrmPipelineId = () => {
   const { pipelines } = getNativeCrmData();
   return nativeCrmState.selectedPipelineId || pipelines.find((pipeline) => pipeline.isActive)?.id || pipelines[0]?.id || "";
 };
 
-const crmOpportunitiesForStage = (stageId) => {
-  const { opportunities } = getNativeCrmData();
-  const query = String(nativeCrmState.search || "").trim().toLowerCase();
-  return opportunities.filter((opportunity) => {
-    if (opportunity.pipelineId !== selectedCrmPipelineId() || opportunity.stageId !== stageId) return false;
-    if (!query) return true;
+const normalizeCrmText = (value) => String(value || "").trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ");
+const normalizeCrmPhone = (value) => String(value || "").replace(/\D/g, "");
+
+const crmCreatedRangeStart = (range) => {
+  const todayKey = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+  const today = new Date(`${todayKey}T00:00:00-03:00`);
+  if (range === "today") return today;
+  if (range === "7d") return new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000);
+  if (range === "30d") return new Date(today.getTime() - 29 * 24 * 60 * 60 * 1000);
+  if (range === "month") return new Date(`${todayKey.slice(0, 7)}-01T00:00:00-03:00`);
+  return null;
+};
+
+const crmOpportunityActivityState = (opportunity) => (opportunity?.nextActivityId && opportunity.nextActivityAt ? crmActivityTone(opportunity.nextActivityAt) : "none");
+
+const crmOpportunityMatchesFilters = (opportunity) => {
+  const filters = nativeCrmState.filters || {};
+  if (opportunity.pipelineId !== selectedCrmPipelineId()) return false;
+  if (filters.stageId && opportunity.stageId !== filters.stageId) return false;
+  if (filters.status && opportunity.status !== filters.status) return false;
+  if (filters.ownerId && (opportunity.ownerId || "") !== filters.ownerId) return false;
+  if (filters.source && normalizeCrmText(opportunity.source) !== normalizeCrmText(filters.source)) return false;
+  if (filters.activityState && filters.activityState !== "all" && crmOpportunityActivityState(opportunity) !== filters.activityState) return false;
+  const start = crmCreatedRangeStart(filters.createdRange);
+  if (start) {
+    const createdAtMs = Date.parse(opportunity.createdAt || "");
+    if (!Number.isFinite(createdAtMs) || createdAtMs < start.getTime()) return false;
+  }
+  const query = normalizeCrmText(nativeCrmState.search);
+  if (query) {
+    const phoneQuery = normalizeCrmPhone(nativeCrmState.search);
     const contact = opportunity.contact || {};
-    const haystack = [
+    const textMatches = [
       opportunity.title,
+      opportunity.id,
       contact.name,
       contact.email,
       contact.phone,
       opportunity.source,
       opportunity.owner?.name,
-    ].join(" ").toLowerCase();
-    return haystack.includes(query);
-  });
+    ].some((value) => normalizeCrmText(value).includes(query));
+    const phoneMatches = phoneQuery && normalizeCrmPhone(contact.phone).includes(phoneQuery);
+    if (!textMatches && !phoneMatches) return false;
+  }
+  return true;
+};
+
+const getFilteredCrmOpportunities = () => getNativeCrmData().opportunities.filter(crmOpportunityMatchesFilters);
+
+const crmOpportunitiesForStage = (stageId) => {
+  return getFilteredCrmOpportunities().filter((opportunity) => opportunity.stageId === stageId);
 };
 
 const renderNativeCrmOwnerOptions = (selected = "") => {
@@ -12318,6 +12383,189 @@ const renderNativeCrmBoard = () => {
         `;
       }).join("")}
     </div>
+  `;
+};
+
+const crmStatusLabel = (status) => ({
+  open: "Aberta",
+  won: "Ganha",
+  lost: "Perdida",
+}[String(status || "")] || "Aberta");
+
+const crmActivityStateLabel = (state) => ({
+  all: "Todas",
+  overdue: "Atrasadas",
+  today: "Hoje",
+  future: "Futuras",
+  none: "Sem próxima atividade",
+}[String(state || "")] || "Todas");
+
+const crmCreatedRangeLabel = (range) => ({
+  today: "Hoje",
+  "7d": "Últimos 7 dias",
+  "30d": "Últimos 30 dias",
+  month: "Este mês",
+}[String(range || "")] || "");
+
+const crmSortLabel = (sort) => ({
+  createdAt: "Criado em",
+  updatedAt: "Atualizado em",
+  value: "Valor",
+  nextActivity: "Próxima atividade",
+  name: "Nome",
+}[String(sort || "")] || "Atualizado em");
+
+const nativeCrmSourceOptions = (selected = "") => {
+  const sources = Array.from(new Set(getNativeCrmData().opportunities.map((opportunity) => String(opportunity.source || "").trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  return [`<option value="">Todas as origens</option>`]
+    .concat(sources.map((source) => `<option value="${escapeHtml(source)}" ${String(source) === String(selected || "") ? "selected" : ""}>${escapeHtml(source)}</option>`))
+    .join("");
+};
+
+const nativeCrmActiveFilterChipsHtml = () => {
+  const filters = nativeCrmState.filters || {};
+  const { stages, owners } = getNativeCrmData();
+  const chips = [];
+  if (nativeCrmState.search) chips.push(["search", `Busca: ${nativeCrmState.search}`]);
+  if (filters.stageId) chips.push(["stageId", `Etapa: ${stages.find((stage) => stage.id === filters.stageId)?.name || filters.stageId}`]);
+  if (filters.status) chips.push(["status", `Status: ${crmStatusLabel(filters.status)}`]);
+  if (filters.ownerId) chips.push(["ownerId", `Responsável: ${owners.find((owner) => owner.id === filters.ownerId)?.name || filters.ownerId}`]);
+  if (filters.source) chips.push(["source", `Origem: ${filters.source}`]);
+  if (filters.activityState && filters.activityState !== "all") chips.push(["activityState", `Atividade: ${crmActivityStateLabel(filters.activityState)}`]);
+  if (filters.createdRange) chips.push(["createdRange", `Criado: ${crmCreatedRangeLabel(filters.createdRange)}`]);
+  if (!chips.length) return "";
+  return `
+    <div class="native-crm-filter-chips">
+      ${chips.map(([key, label]) => `<button type="button" data-crm-clear-filter="${escapeHtml(key)}">${escapeHtml(label)} ×</button>`).join("")}
+      <button type="button" data-crm-clear-filters>Limpar filtros</button>
+    </div>
+  `;
+};
+
+const nativeCrmFiltersHtml = () => {
+  const pipelineId = selectedCrmPipelineId();
+  const filters = nativeCrmState.filters || {};
+  return `
+    <div class="native-crm-filter-wrap">
+      <button type="button" class="native-crm-filter" data-crm-filter-toggle>Filtros</button>
+      ${nativeCrmState.filtersOpen ? `
+        <div class="native-crm-filter-panel" data-crm-filter-panel>
+          <label><span>Pipeline</span><select data-crm-filter="pipelineId">${renderNativeCrmPipelineOptions(pipelineId)}</select></label>
+          <label><span>Etapa</span><select data-crm-filter="stageId"><option value="">Todas as etapas</option>${renderNativeCrmStageOptions(pipelineId, filters.stageId)}</select></label>
+          <label><span>Status</span><select data-crm-filter="status">
+            <option value="">Todos os status</option>
+            <option value="open" ${filters.status === "open" ? "selected" : ""}>Aberta</option>
+            <option value="won" ${filters.status === "won" ? "selected" : ""}>Ganha</option>
+            <option value="lost" ${filters.status === "lost" ? "selected" : ""}>Perdida</option>
+          </select></label>
+          <label><span>Responsável</span><select data-crm-filter="ownerId"><option value="">Todos os responsáveis</option>${renderNativeCrmOwnerOptions(filters.ownerId).replace('<option value="">Sem responsável</option>', "")}</select></label>
+          <label><span>Origem</span><select data-crm-filter="source">${nativeCrmSourceOptions(filters.source)}</select></label>
+          <label><span>Atividade</span><select data-crm-filter="activityState">
+            <option value="all" ${!filters.activityState || filters.activityState === "all" ? "selected" : ""}>Todas</option>
+            <option value="overdue" ${filters.activityState === "overdue" ? "selected" : ""}>Atrasadas</option>
+            <option value="today" ${filters.activityState === "today" ? "selected" : ""}>Hoje</option>
+            <option value="future" ${filters.activityState === "future" ? "selected" : ""}>Futuras</option>
+            <option value="none" ${filters.activityState === "none" ? "selected" : ""}>Sem próxima atividade</option>
+          </select></label>
+          <label><span>Criado em</span><select data-crm-filter="createdRange">
+            <option value="">Qualquer período</option>
+            <option value="today" ${filters.createdRange === "today" ? "selected" : ""}>Hoje</option>
+            <option value="7d" ${filters.createdRange === "7d" ? "selected" : ""}>Últimos 7 dias</option>
+            <option value="30d" ${filters.createdRange === "30d" ? "selected" : ""}>Últimos 30 dias</option>
+            <option value="month" ${filters.createdRange === "month" ? "selected" : ""}>Este mês</option>
+          </select></label>
+          <div class="native-crm-filter-actions">
+            <button type="button" class="button button-outline button-small" data-crm-clear-filters>Limpar</button>
+          </div>
+        </div>
+      ` : ""}
+    </div>
+  `;
+};
+
+const nativeCrmListParams = ({ cursor = "" } = {}) => {
+  const filters = nativeCrmState.filters || {};
+  const params = new URLSearchParams({
+    view: "list",
+    pipelineId: selectedCrmPipelineId(),
+    search: nativeCrmState.search || "",
+    stageId: filters.stageId || "",
+    status: filters.status || "",
+    ownerId: filters.ownerId || "",
+    source: filters.source || "",
+    activityState: filters.activityState || "all",
+    createdRange: filters.createdRange || "",
+    sort: nativeCrmState.list.sort || "updatedAt",
+    direction: nativeCrmState.list.direction || "desc",
+    limit: "50",
+  });
+  if (cursor) params.set("cursor", cursor);
+  Array.from(params.entries()).forEach(([key, value]) => {
+    if (!value) params.delete(key);
+  });
+  return params;
+};
+
+const nativeCrmListActivityHtml = (opportunity) => {
+  const tone = opportunity.activityState || crmOpportunityActivityState(opportunity);
+  if (!opportunity.nextActivityId) return `<span class="native-crm-activity-pill" data-tone="none">Sem próxima atividade</span>`;
+  return `<span class="native-crm-activity-pill" data-tone="${escapeHtml(tone)}">${escapeHtml(crmActivityStateLabel(tone))} · ${escapeHtml(formatCrmActivityDate(opportunity.nextActivityAt))}</span>`;
+};
+
+const renderNativeCrmList = () => {
+  const rows = Array.isArray(nativeCrmState.list.rows) ? nativeCrmState.list.rows : [];
+  const sortButton = (field, label) => {
+    const active = nativeCrmState.list.sort === field;
+    const arrow = active ? (nativeCrmState.list.direction === "asc" ? " ↑" : " ↓") : "";
+    return `<button type="button" data-crm-sort="${escapeHtml(field)}" class="${active ? "is-active" : ""}">${escapeHtml(label)}${arrow}</button>`;
+  };
+  return `
+    <section class="native-crm-list">
+      <div class="native-crm-list-head">
+        <strong>${nativeCrmState.list.loading && !rows.length ? "Carregando lista…" : `${nativeCrmState.list.totalVisible || rows.length} oportunidades`}</strong>
+        <span>Ordenado por ${escapeHtml(crmSortLabel(nativeCrmState.list.sort))}</span>
+      </div>
+      <div class="native-crm-table-wrap">
+        <table class="native-crm-table">
+          <thead>
+            <tr>
+              <th>${sortButton("name", "Contato")}</th>
+              <th>Etapa</th>
+              <th>Status</th>
+              <th>${sortButton("value", "Valor")}</th>
+              <th>Origem</th>
+              <th>Responsável</th>
+              <th>${sortButton("nextActivity", "Próxima atividade")}</th>
+              <th>${sortButton("createdAt", "Criado em")}</th>
+              <th>${sortButton("updatedAt", "Atualizado em")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map((opportunity) => {
+              const contact = opportunity.contact || {};
+              const stageName = getNativeCrmData().stages.find((stage) => stage.id === opportunity.stageId)?.name || "—";
+              return `
+                <tr data-crm-row="${escapeHtml(opportunity.id)}" tabindex="0">
+                  <td><strong>${escapeHtml(contact.name || opportunity.title || "Lead sem nome")}</strong><span>${escapeHtml([contact.email, contact.phone].filter(Boolean).join(" · ") || opportunity.title || "")}</span></td>
+                  <td>${escapeHtml(stageName)}</td>
+                  <td><span class="native-crm-status-pill">${escapeHtml(crmStatusLabel(opportunity.status))}</span></td>
+                  <td>${escapeHtml(formatCrmMoney(opportunity.value, opportunity.currency) || "—")}</td>
+                  <td>${escapeHtml(opportunity.source || "—")}</td>
+                  <td>${escapeHtml(opportunity.owner?.name || "—")}</td>
+                  <td>${nativeCrmListActivityHtml(opportunity)}</td>
+                  <td>${escapeHtml(formatCrmDateTime(opportunity.createdAt))}</td>
+                  <td>${escapeHtml(formatCrmDateTime(opportunity.updatedAt))}</td>
+                </tr>
+              `;
+            }).join("") || `<tr><td colspan="9"><div class="native-crm-empty">Nenhuma oportunidade encontrada.</div></td></tr>`}
+          </tbody>
+        </table>
+      </div>
+      ${nativeCrmState.list.error ? `<div class="native-crm-form-error">${escapeHtml(nativeCrmState.list.error)}</div>` : ""}
+      <div class="native-crm-list-foot">
+        ${nativeCrmState.list.nextCursor ? `<button type="button" class="button button-outline button-small" data-crm-list-more ${nativeCrmState.list.loading ? "disabled" : ""}>${nativeCrmState.list.loading ? "Carregando…" : "Carregar mais"}</button>` : ""}
+      </div>
+    </section>
   `;
 };
 
@@ -12435,8 +12683,7 @@ const renderNativeCrmDrawer = () => {
   const drawer = nativeCrmState.drawer;
   if (!drawer) return "";
   const isNew = drawer === "new";
-  const { opportunities } = getNativeCrmData();
-  const opportunity = isNew ? null : opportunities.find((row) => row.id === drawer);
+  const opportunity = isNew ? null : getNativeCrmAllOpportunities().find((row) => row.id === drawer);
   if (!isNew && !opportunity) return "";
   const contact = opportunity?.contact || {};
   const pipelineId = opportunity?.pipelineId || selectedCrmPipelineId();
@@ -12538,15 +12785,16 @@ const renderNativeCrm = () => {
         <div class="native-crm-actions">
           <select data-crm-pipeline aria-label="Pipeline">${renderNativeCrmPipelineOptions(pipelineId)}</select>
           <input type="search" placeholder="Buscar lead" value="${escapeHtml(nativeCrmState.search)}" data-crm-search />
-          <button type="button" class="native-crm-filter" disabled>Filtros</button>
+          ${nativeCrmFiltersHtml()}
           <div class="native-crm-segment" aria-label="Visualização">
-            <button type="button" class="is-active" data-crm-view="funnel">Funil</button>
-            <button type="button" data-crm-view="list" disabled>Lista</button>
+            <button type="button" class="${nativeCrmState.mode === "funnel" ? "is-active" : ""}" data-crm-view="funnel">Funil</button>
+            <button type="button" class="${nativeCrmState.mode === "list" ? "is-active" : ""}" data-crm-view="list">Lista</button>
           </div>
           <button type="button" class="button button-solid button-small" data-crm-new>+ Novo lead</button>
         </div>
       </header>
-      ${pipelines.length ? renderNativeCrmBoard() : `<div class="native-crm-empty">Nenhum pipeline disponível.</div>`}
+      ${nativeCrmActiveFilterChipsHtml()}
+      ${pipelines.length ? (nativeCrmState.mode === "list" ? renderNativeCrmList() : renderNativeCrmBoard()) : `<div class="native-crm-empty">Nenhum pipeline disponível.</div>`}
       ${nativeCrmState.error ? `<div class="native-crm-toast">${escapeHtml(nativeCrmState.error)}</div>` : ""}
     </div>
     ${renderNativeCrmDrawer()}
@@ -12570,12 +12818,79 @@ const loadNativeCrm = async ({ force = false } = {}) => {
     nativeCrmState.data = data;
     nativeCrmState.loadedAt = Date.now();
     if (!nativeCrmState.selectedPipelineId) nativeCrmState.selectedPipelineId = selectedCrmPipelineId();
+    if (nativeCrmState.mode === "list") loadNativeCrmList({ reset: true }).catch(() => {});
   } catch (error) {
     nativeCrmState.error = error?.message || "Erro ao carregar CRM.";
   } finally {
     nativeCrmState.loading = false;
     renderNativeCrm();
   }
+};
+
+const updateNativeCrmUrlState = () => {
+  if (!window.history?.replaceState) return;
+  const url = new URL(window.location.href);
+  if (nativeCrmState.mode === "list") url.searchParams.set("view", "list");
+  else url.searchParams.delete("view");
+  const pipelineId = selectedCrmPipelineId();
+  if (pipelineId) url.searchParams.set("pipeline", pipelineId);
+  window.history.replaceState(window.history.state, "", url.toString());
+};
+
+const applyNativeCrmUrlState = () => {
+  const params = new URLSearchParams(window.location.search || "");
+  if (params.get("view") === "list") nativeCrmState.mode = "list";
+  if (params.get("pipeline")) nativeCrmState.selectedPipelineId = params.get("pipeline") || "";
+};
+
+const syncNativeCrmListRowsIntoReadModel = (rows) => {
+  if (!nativeCrmState.data || !Array.isArray(rows)) return;
+  const existing = Array.isArray(nativeCrmState.data.opportunities) ? nativeCrmState.data.opportunities : [];
+  const byId = new Map(existing.map((opportunity) => [opportunity.id, opportunity]));
+  rows.forEach((row) => {
+    if (row?.id) byId.set(row.id, row);
+  });
+  nativeCrmState.data.opportunities = Array.from(byId.values());
+};
+
+const loadNativeCrmList = async ({ reset = false } = {}) => {
+  if (nativeCrmState.list.loading) return;
+  nativeCrmState.list.loading = true;
+  nativeCrmState.list.error = "";
+  if (reset) {
+    nativeCrmState.list.rows = [];
+    nativeCrmState.list.nextCursor = "";
+  }
+  renderNativeCrm();
+  try {
+    const cursor = reset ? "" : nativeCrmState.list.nextCursor;
+    const res = await fetchWithAuth(`/api/crm?${nativeCrmListParams({ cursor }).toString()}`, { method: "GET" });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error || "crm_list_failed");
+    const rows = Array.isArray(data?.rows) ? data.rows : [];
+    nativeCrmState.list.rows = reset ? rows : nativeCrmState.list.rows.concat(rows);
+    nativeCrmState.list.nextCursor = String(data?.nextCursor || "");
+    nativeCrmState.list.totalVisible = Number(data?.totalVisible) || nativeCrmState.list.rows.length;
+    nativeCrmState.list.loadedAt = Date.now();
+    syncNativeCrmListRowsIntoReadModel(rows);
+  } catch (error) {
+    nativeCrmState.list.error = error?.message || "Não foi possível carregar a lista.";
+  } finally {
+    nativeCrmState.list.loading = false;
+    renderNativeCrm();
+  }
+};
+
+const reloadNativeCrmListIfNeeded = () => {
+  if (nativeCrmState.mode === "list") loadNativeCrmList({ reset: true }).catch(() => {});
+};
+
+const scheduleNativeCrmSearchReload = () => {
+  if (nativeCrmSearchTimer) window.clearTimeout(nativeCrmSearchTimer);
+  nativeCrmSearchTimer = window.setTimeout(() => {
+    nativeCrmSearchTimer = null;
+    reloadNativeCrmListIfNeeded();
+  }, 320);
 };
 
 const loadNativeCrmOpportunityDetail = async (opportunityId, { force = false } = {}) => {
@@ -37561,6 +37876,7 @@ const showPanel = (panelName) => {
       navigateApp(roleBasePath(currentRole), { replace: true });
       return;
     }
+    applyNativeCrmUrlState();
     loadNativeCrm({ force: false }).catch((error) => console.error("[crm] load failed:", error));
     return;
   }
@@ -38078,6 +38394,62 @@ document.addEventListener("click", (event) => {
       renderNativeCrm();
       return;
     }
+    const filterToggle = target.closest("[data-crm-filter-toggle]");
+    if (filterToggle instanceof HTMLButtonElement) {
+      event.preventDefault();
+      nativeCrmState.filtersOpen = !nativeCrmState.filtersOpen;
+      renderNativeCrm();
+      return;
+    }
+    const viewButton = target.closest("[data-crm-view]");
+    if (viewButton instanceof HTMLButtonElement) {
+      event.preventDefault();
+      nativeCrmState.mode = String(viewButton.getAttribute("data-crm-view") || "funnel") === "list" ? "list" : "funnel";
+      nativeCrmState.filtersOpen = false;
+      updateNativeCrmUrlState();
+      renderNativeCrm();
+      reloadNativeCrmListIfNeeded();
+      return;
+    }
+    const sortButton = target.closest("[data-crm-sort]");
+    if (sortButton instanceof HTMLButtonElement) {
+      event.preventDefault();
+      const field = String(sortButton.getAttribute("data-crm-sort") || "updatedAt");
+      if (nativeCrmState.list.sort === field) {
+        nativeCrmState.list.direction = nativeCrmState.list.direction === "asc" ? "desc" : "asc";
+      } else {
+        nativeCrmState.list.sort = field;
+        nativeCrmState.list.direction = field === "name" ? "asc" : "desc";
+      }
+      loadNativeCrmList({ reset: true }).catch(() => {});
+      return;
+    }
+    const moreButton = target.closest("[data-crm-list-more]");
+    if (moreButton instanceof HTMLButtonElement) {
+      event.preventDefault();
+      loadNativeCrmList({ reset: false }).catch(() => {});
+      return;
+    }
+    const clearFilters = target.closest("[data-crm-clear-filters]");
+    if (clearFilters instanceof HTMLButtonElement) {
+      event.preventDefault();
+      nativeCrmState.search = "";
+      nativeCrmState.filters = { stageId: "", status: "", ownerId: "", source: "", activityState: "all", createdRange: "" };
+      renderNativeCrm();
+      reloadNativeCrmListIfNeeded();
+      return;
+    }
+    const clearFilter = target.closest("[data-crm-clear-filter]");
+    if (clearFilter instanceof HTMLButtonElement) {
+      event.preventDefault();
+      const key = String(clearFilter.getAttribute("data-crm-clear-filter") || "");
+      if (key === "search") nativeCrmState.search = "";
+      else if (key === "activityState") nativeCrmState.filters.activityState = "all";
+      else if (Object.prototype.hasOwnProperty.call(nativeCrmState.filters, key)) nativeCrmState.filters[key] = "";
+      renderNativeCrm();
+      reloadNativeCrmListIfNeeded();
+      return;
+    }
     const openActivity = target.closest("[data-crm-activity-new]");
     if (openActivity instanceof HTMLButtonElement) {
       event.preventDefault();
@@ -38124,6 +38496,16 @@ document.addEventListener("click", (event) => {
       loadNativeCrmOpportunityDetail(nativeCrmState.drawer, { force: false }).catch(() => {});
       return;
     }
+    const row = target.closest("[data-crm-row]");
+    if (row instanceof HTMLElement && !target.closest("button, a, input, select, textarea")) {
+      event.preventDefault();
+      nativeCrmState.drawer = String(row.getAttribute("data-crm-row") || "");
+      nativeCrmState.activityFormOpportunityId = "";
+      nativeCrmState.error = "";
+      renderNativeCrm();
+      loadNativeCrmOpportunityDetail(nativeCrmState.drawer, { force: false }).catch(() => {});
+      return;
+    }
   }
   const clear = target.closest("[data-finance-filter-clear]");
   if (clear instanceof HTMLButtonElement) {
@@ -38152,6 +38534,7 @@ document.addEventListener("input", (event) => {
   if (target.matches("[data-crm-search]")) {
     nativeCrmState.search = target.value;
     renderNativeCrm();
+    scheduleNativeCrmSearchReload();
   }
 });
 
@@ -38160,7 +38543,23 @@ document.addEventListener("change", (event) => {
   if (!(target instanceof HTMLSelectElement)) return;
   if (target.matches("[data-crm-pipeline]")) {
     nativeCrmState.selectedPipelineId = target.value;
+    nativeCrmState.filters.stageId = "";
+    updateNativeCrmUrlState();
     renderNativeCrm();
+    reloadNativeCrmListIfNeeded();
+    return;
+  }
+  if (target.matches("[data-crm-filter]")) {
+    const key = String(target.getAttribute("data-crm-filter") || "");
+    if (key === "pipelineId") {
+      nativeCrmState.selectedPipelineId = target.value;
+      nativeCrmState.filters.stageId = "";
+      updateNativeCrmUrlState();
+    } else if (Object.prototype.hasOwnProperty.call(nativeCrmState.filters, key)) {
+      nativeCrmState.filters[key] = target.value;
+    }
+    renderNativeCrm();
+    reloadNativeCrmListIfNeeded();
     return;
   }
   if (target.matches("[data-crm-form-pipeline]")) {
@@ -38179,6 +38578,14 @@ document.addEventListener("keydown", (event) => {
   if (card instanceof HTMLElement && (event.key === "Enter" || event.key === " ")) {
     event.preventDefault();
     nativeCrmState.drawer = String(card.getAttribute("data-crm-card") || "");
+    nativeCrmState.activityFormOpportunityId = "";
+    renderNativeCrm();
+    loadNativeCrmOpportunityDetail(nativeCrmState.drawer, { force: false }).catch(() => {});
+  }
+  const row = target.closest("[data-crm-row]");
+  if (row instanceof HTMLElement && (event.key === "Enter" || event.key === " ")) {
+    event.preventDefault();
+    nativeCrmState.drawer = String(row.getAttribute("data-crm-row") || "");
     nativeCrmState.activityFormOpportunityId = "";
     renderNativeCrm();
     loadNativeCrmOpportunityDetail(nativeCrmState.drawer, { force: false }).catch(() => {});
