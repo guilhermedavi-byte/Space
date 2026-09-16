@@ -108,6 +108,15 @@ function createRecoveryOperations({request=supabaseFetch,connectionId=process.en
   if(!result.ok){const e=new Error('finance_recovery_unavailable');e.code=e.message;e.status=503;throw e;}
   return data;
  };
+ const writeDocs=async(docs)=>{
+  const items=docs.filter(Boolean);
+  for(let i=0;i<items.length;i+=200){
+   const batch=items.slice(i,i+200).map(({paymentId,data})=>({update:{name:docName(paymentId,projectId),fields:encodeFields(data).fields},updateMask:{fieldPaths:Object.keys(data)}}));
+   const result=await firestore.commitWritesAsAdmin({writes:batch});
+   if(!result.ok){const e=new Error('finance_recovery_unavailable');e.code=e.message;e.status=503;throw e;}
+  }
+  return {ok:true};
+ };
  const loadCases=async()=>{
   const rows=await firestore.listCollectionAsAdmin('financeRecoveryCases',{pageSize:1000,maxPages:5,decorate:false});
   return rows.filter(row=>row.connection_id===scope());
@@ -148,9 +157,11 @@ function createRecoveryOperations({request=supabaseFetch,connectionId=process.en
  const materializeRules=async(rows=[],today)=>{
   const todayKey=today||new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
   let active=0,pending=0,updated=0,paused=0,stopped=(await stopFinished(rows)).updated;
-  const cases=await casesFor(rows.filter(r=>ACTIVE_GROUPS.has(r.group)).map(r=>r.id));
+  const rawCases=new Map((await loadCases()).map(row=>[row.asaas_payment_id||row.payment_id,row]));
+  const cases=new Map([...rawCases].map(([id,row])=>[id,decorateCase(row)]));
+  const writes=[];
   for(const row of rows.filter(r=>ACTIVE_GROUPS.has(r.group)&&r.due_date)){
-   const currentRaw=await readDoc(row.id)||{},current=cases.get(row.id);
+   const currentRaw=rawCases.get(row.id)||{},current=cases.get(row.id);
    const now=new Date().toISOString(),offset=diffDays(todayKey,row.due_date),dueRule=ruleForOffset(offset),nextRule=nextRuleAfter(offset);
    const promised=currentRaw.promised_payment_date&&currentRaw.status==='promised'&&currentRaw.promised_payment_date>=todayKey;
    const manualPaused=currentRaw.rule_state==='paused'&&currentRaw.pause_reason==='manual';
@@ -168,8 +179,9 @@ function createRecoveryOperations({request=supabaseFetch,connectionId=process.en
    const next={...currentRaw,connection_id:scope(),asaas_payment_id:row.id,asaas_customer_id:row.customer_id||null,status:currentRaw.status||'new',rule_state,current_rule_stage:dueRule?.stage||'Pré-régua',next_action_at,next_action_type,next_action_date:next_action_at,executed_rule_steps:[...executed],pending_internal_events:pendingEvents,last_rule_evaluated_at:now,updated_at:now,created_at:currentRaw.created_at||now,events};
    if(rule_state==='paused')paused++;else active++;
    const comparable=['rule_state','current_rule_stage','next_action_at','next_action_type','status'];
-   if(changed||!current||comparable.some(k=>currentRaw[k]!==next[k])||(currentRaw.executed_rule_steps||[]).length!==next.executed_rule_steps.length||(currentRaw.pending_internal_events||[]).length!==next.pending_internal_events.length){await writeDoc(row.id,next);updated++;}
+   if(changed||!current||comparable.some(k=>currentRaw[k]!==next[k])||(currentRaw.executed_rule_steps||[]).length!==next.executed_rule_steps.length||(currentRaw.pending_internal_events||[]).length!==next.pending_internal_events.length){writes.push({paymentId:row.id,data:next});updated++;}
   }
+  if(writes.length)await writeDocs(writes);
   return {active,pending,paused,stopped,updated};
  };
  const autoRecover=stopFinished;
