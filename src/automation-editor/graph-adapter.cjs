@@ -149,6 +149,7 @@ const flowToCanonical = ({ nodes = [], edges = [] } = {}, baseGraph = {}) => {
   const baseNodes = new Map((Array.isArray(baseGraph.nodes) ? baseGraph.nodes : []).map((node) => [clean(node.id), node]));
   return {
     ...baseGraph,
+    schemaVersion: Number(baseGraph.schemaVersion || baseGraph.schema_version || 1) || 1,
     nodes: nodes.map((node) => {
       const original = node.data?.canonical || baseNodes.get(clean(node.id)) || {};
       return {
@@ -200,7 +201,7 @@ const addCatalogNode = (graph = {}, item = {}, options = {}) => {
     ...options,
     existingIds: new Set(nodes.map((node) => clean(node.id)).filter(Boolean)),
   });
-  return { ...graph, nodes: [...nodes, nextNode] };
+  return { schemaVersion: Number(graph.schemaVersion || 1) || 1, ...graph, nodes: [...nodes, nextNode] };
 };
 
 const removeNodeAndEdges = (graph = {}, nodeId = "") => {

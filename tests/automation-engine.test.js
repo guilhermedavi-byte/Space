@@ -8,44 +8,44 @@ const { AutomationStore } = require("../api/_lib/automation-store");
 const { fingerprint, registerAction, registerCondition } = require("../api/_lib/automation-registries");
 
 registerCondition({
-  type: "test.condition.has-open-opportunity",
+  type: "test.condition",
   async execute({ config }) {
-    return { matched: Boolean(config.matched), marker: "condition-ran" };
+    return { matched: Boolean(config.matched), marker: config.marker || "condition-ran" };
   },
 });
 
 registerAction({
-  type: "test.action.create-opportunity",
+  type: "test.action",
   validateInput(config = {}) {
     if (!config.pipelineId || !config.stageId) throw Object.assign(new Error("missing_test_config"), { retryable: false });
     return true;
   },
   async execute({ context, config, idempotencyKey }) {
     context.__store.actionCalls += 1;
-    return { ok: true, opportunityId: `opp-${context.event.id}`, config, idempotencyKey };
+    context.__store.actionCallsByNode[config.name] = (context.__store.actionCallsByNode[config.name] || 0) + 1;
+    if (context.__store.failOnceFor === config.name) {
+      context.__store.failOnceFor = "";
+      throw Object.assign(new Error(`fail_${config.name}`), { retryable: true });
+    }
+    return { ok: true, action: config.name, opportunityId: `opp-${config.name}-${context.event.id}`, idempotencyKey };
   },
 });
 
-const graph = ({ matched = false } = {}) => ({
-  nodes: [
-    { id: "trigger_1", type: "trigger" },
-    { id: "condition_1", type: "condition", conditionType: "test.condition.has-open-opportunity", config: { matched } },
-    { id: "action_1", type: "action", actionType: "test.action.create-opportunity", config: { pipelineId: "pipe_1", stageId: "stage_1" } },
-    { id: "end_1", type: "end" },
-  ],
-  edges: [
-    { from: "trigger_1", to: "condition_1" },
-    { from: "condition_1", to: "end_1", branch: "true" },
-    { from: "condition_1", to: "action_1", branch: "false" },
-    { from: "action_1", to: "end_1" },
-  ],
+const actionNode = (id, name = id) => ({
+  id,
+  type: "action",
+  actionType: "test.action",
+  config: { pipelineId: "pipe_1", stageId: "stage_1", name },
 });
 
-const version = ({ matched = false } = {}) => ({
+const triggerNode = { id: "trigger_1", type: "trigger", triggerType: "attendance.message.created" };
+const endNode = { id: "end_1", type: "end" };
+
+const version = (graph) => ({
   id: "version_1",
   automation_id: "automation_1",
   trigger: { type: "attendance.message.created", eventType: "attendance.message.created" },
-  graph: graph({ matched }),
+  graph,
   automation: {
     id: "automation_1",
     status: "ACTIVE",
@@ -62,9 +62,36 @@ const event = {
   depth: 0,
 };
 
+const graphLinear = () => ({
+  schemaVersion: 1,
+  nodes: [triggerNode, actionNode("action_1", "A"), endNode],
+  edges: [
+    { id: "e1", from: "trigger_1", to: "action_1" },
+    { id: "e2", from: "action_1", to: "end_1" },
+  ],
+});
+
+const graphCondition = ({ matched = false } = {}) => ({
+  schemaVersion: 1,
+  nodes: [
+    triggerNode,
+    { id: "condition_1", type: "condition", conditionType: "test.condition", config: { matched } },
+    actionNode("action_1", "A"),
+    endNode,
+  ],
+  edges: [
+    { id: "e1", from: "trigger_1", to: "condition_1" },
+    { id: "e2", from: "condition_1", to: "end_1", branch: "true" },
+    { id: "e3", from: "condition_1", to: "action_1", branch: "false" },
+    { id: "e4", from: "action_1", to: "end_1" },
+  ],
+});
+
 class MemoryAutomationStore {
-  constructor({ existingIdempotency = null, versions = [] } = {}) {
+  constructor({ existingIdempotency = null, versions = [], failOnceFor = "" } = {}) {
     this.actionCalls = 0;
+    this.actionCallsByNode = {};
+    this.failOnceFor = failOnceFor;
     this.runs = new Map();
     this.steps = new Map();
     this.idempotency = new Map();
@@ -91,6 +118,12 @@ class MemoryAutomationStore {
     if (existing) return existing;
     const run = { id: `run_${this.runs.size + 1}`, automation_id: automationId, automation_version_id: automationVersionId, event_id: eventId, event_type: eventType, status: "RUNNING" };
     this.runs.set(key, run);
+    return run;
+  }
+
+  async restartRun(runId) {
+    const run = [...this.runs.values()].find((row) => row.id === runId);
+    Object.assign(run, { status: "RUNNING", error: null, current_node_id: null });
     return run;
   }
 
@@ -147,34 +180,101 @@ class MemoryAutomationStore {
   }
 }
 
-test("automation graph validates the supported vertical slice", () => {
-  const result = validateGraph(graph());
+const pathFromStore = (store) => [...store.steps.values()].sort((a, b) => a.input.sequence - b.input.sequence).map((step) => step.nodeId);
+
+test("automation graph validates the supported canonical contract", async () => {
+  const result = await validateGraph(graphCondition());
   assert.equal(result.ok, true);
-  assert.deepEqual(validateGraph({ nodes: [], edges: [] }).ok, false);
+  assert.equal(result.graph.schemaVersion, 1);
+  assert.deepEqual((await validateGraph({ nodes: [], edges: [] })).ok, false);
 });
 
-test("condition false creates one CRM opportunity action with idempotency key", async () => {
+test("linear graph executes Trigger -> Action -> End", async () => {
   const store = new MemoryAutomationStore();
-  const result = await executeVersionForEvent({ store, version: version({ matched: false }), event });
-  assert.equal(result.action.ok, true);
+  const result = await executeVersionForEvent({ store, version: version(graphLinear()), event });
+  assert.deepEqual(result.path, ["trigger_1", "action_1", "end_1"]);
+  assert.deepEqual(pathFromStore(store), ["trigger_1", "action_1", "end_1"]);
   assert.equal(store.actionCalls, 1);
-  const actionStep = store.steps.get("run_1:action_1");
-  assert.equal(actionStep.status, "SUCCESS");
-  assert.equal(actionStep.input.idempotencyKey, "version_1:event_1:action_1");
 });
 
-test("condition true skips CRM creation and finishes successfully", async () => {
+test("condition false follows FALSE branch and creates one action", async () => {
   const store = new MemoryAutomationStore();
-  const result = await executeVersionForEvent({ store, version: version({ matched: true }), event });
-  assert.equal(result.action, "skipped");
+  const result = await executeVersionForEvent({ store, version: version(graphCondition({ matched: false })), event });
+  assert.deepEqual(result.path, ["trigger_1", "condition_1", "action_1", "end_1"]);
+  assert.equal(store.actionCalls, 1);
+  assert.equal(store.steps.has("run_1:action_1"), true);
+});
+
+test("condition true follows TRUE branch without skipped step materialization", async () => {
+  const store = new MemoryAutomationStore();
+  const result = await executeVersionForEvent({ store, version: version(graphCondition({ matched: true })), event });
+  assert.deepEqual(result.path, ["trigger_1", "condition_1", "end_1"]);
   assert.equal(store.actionCalls, 0);
-  assert.equal(store.steps.get("run_1:action_1").status, "SKIPPED");
-  assert.equal([...store.runs.values()][0].status, "SUCCESS");
+  assert.equal(store.steps.has("run_1:action_1"), false);
+});
+
+test("two sequential actions execute with independent idempotency keys", async () => {
+  const graph = {
+    schemaVersion: 1,
+    nodes: [triggerNode, actionNode("action_a", "A"), actionNode("action_b", "B"), endNode],
+    edges: [
+      { from: "trigger_1", to: "action_a" },
+      { from: "action_a", to: "action_b" },
+      { from: "action_b", to: "end_1" },
+    ],
+  };
+  const store = new MemoryAutomationStore();
+  await executeVersionForEvent({ store, version: version(graph), event });
+  assert.deepEqual(pathFromStore(store), ["trigger_1", "action_a", "action_b", "end_1"]);
+  assert.equal(store.idempotency.get("version_1:event_1:action_a").status, "SUCCEEDED");
+  assert.equal(store.idempotency.get("version_1:event_1:action_b").status, "SUCCEEDED");
+  assert.deepEqual(store.actionCallsByNode, { A: 1, B: 1 });
+});
+
+test("two conditions and nested branch execute the drawn path", async () => {
+  const graph = {
+    schemaVersion: 1,
+    nodes: [
+      triggerNode,
+      { id: "condition_a", type: "condition", conditionType: "test.condition", config: { matched: true, marker: "A" } },
+      { id: "condition_b", type: "condition", conditionType: "test.condition", config: { matched: false, marker: "B" } },
+      actionNode("action_false", "false"),
+      actionNode("action_nested", "nested"),
+      endNode,
+    ],
+    edges: [
+      { from: "trigger_1", to: "condition_a" },
+      { from: "condition_a", to: "action_false", branch: "false" },
+      { from: "condition_a", to: "condition_b", branch: "true" },
+      { from: "condition_b", to: "end_1", branch: "true" },
+      { from: "condition_b", to: "action_nested", branch: "false" },
+      { from: "action_false", to: "end_1" },
+      { from: "action_nested", to: "end_1" },
+    ],
+  };
+  const store = new MemoryAutomationStore();
+  const result = await executeVersionForEvent({ store, version: version(graph), event });
+  assert.deepEqual(result.path, ["trigger_1", "condition_a", "condition_b", "action_nested", "end_1"]);
+  assert.deepEqual(store.actionCallsByNode, { nested: 1 });
+});
+
+test("invalid cycle, orphan node, and missing branch are rejected", async () => {
+  const cycle = graphLinear();
+  cycle.edges.push({ from: "action_1", to: "trigger_1" });
+  assert.equal((await validateGraph(cycle)).issues.some((row) => row.code === "graph_cycle_detected"), true);
+
+  const orphan = graphLinear();
+  orphan.nodes.push(actionNode("orphan", "orphan"));
+  assert.equal((await validateGraph(orphan)).issues.some((row) => row.code === "orphan_node" && row.nodeId === "orphan"), true);
+
+  const missingBranch = graphCondition();
+  missingBranch.edges = missingBranch.edges.filter((edge) => edge.branch !== "false");
+  assert.equal((await validateGraph(missingBranch)).issues.some((row) => row.code === "missing_condition_false_edge"), true);
 });
 
 test("succeeded idempotency row prevents duplicate action execution on retry", async () => {
   const key = "version_1:event_1:action_1";
-  const requestFingerprint = fingerprint({ actionType: "test.action.create-opportunity", config: { pipelineId: "pipe_1", stageId: "stage_1" }, eventId: "event_1" });
+  const requestFingerprint = fingerprint({ actionType: "test.action", config: { pipelineId: "pipe_1", stageId: "stage_1", name: "A" }, eventId: "event_1" });
   const store = new MemoryAutomationStore({
     existingIdempotency: {
       key,
@@ -183,14 +283,36 @@ test("succeeded idempotency row prevents duplicate action execution on retry", a
       result: { ok: true, opportunityId: "opp-existing" },
     },
   });
-  const result = await executeVersionForEvent({ store, version: version({ matched: false }), event });
-  assert.equal(result.action, "idempotent");
+  const result = await executeVersionForEvent({ store, version: version(graphLinear()), event });
+  assert.equal(result.action.idempotent, true);
   assert.equal(store.actionCalls, 0);
   assert.equal(store.steps.get("run_1:action_1").output.result.opportunityId, "opp-existing");
 });
 
+test("Action A success and Action B failure retries without repeating Action A side effect", async () => {
+  const graph = {
+    schemaVersion: 1,
+    nodes: [triggerNode, actionNode("action_a", "A"), actionNode("action_b", "B"), endNode],
+    edges: [
+      { from: "trigger_1", to: "action_a" },
+      { from: "action_a", to: "action_b" },
+      { from: "action_b", to: "end_1" },
+    ],
+  };
+  const store = new MemoryAutomationStore({ failOnceFor: "B" });
+  await assert.rejects(() => executeVersionForEvent({ store, version: version(graph), event }), /fail_B/);
+  assert.deepEqual(store.actionCallsByNode, { A: 1, B: 1 });
+  assert.equal([...store.runs.values()][0].status, "FAILED");
+
+  const result = await executeVersionForEvent({ store, version: version(graph), event });
+  assert.deepEqual(result.path, ["trigger_1", "action_a", "action_b", "end_1"]);
+  assert.deepEqual(store.actionCallsByNode, { A: 1, B: 2 });
+  assert.equal(store.idempotency.get("version_1:event_1:action_a").status, "SUCCEEDED");
+  assert.equal(store.idempotency.get("version_1:event_1:action_b").status, "SUCCEEDED");
+});
+
 test("processOneAutomationEvent claims, executes active versions and completes the event", async () => {
-  const store = new MemoryAutomationStore({ versions: [version({ matched: false })] });
+  const store = new MemoryAutomationStore({ versions: [version(graphLinear())] });
   const result = await processOneAutomationEvent({ store, workerId: "worker_1" });
   assert.equal(result.state, "processed");
   assert.equal(result.workflows, 1);
@@ -212,6 +334,7 @@ test("automation migration defines durable event, run and idempotency primitives
     "automation_complete_domain_event",
     "automation_fail_domain_event",
     "FOR UPDATE SKIP LOCKED",
+    "automation_prevent_published_version_mutation",
     "revoke execute on function public.automation_import_attendance_outbox(integer)",
     "grant execute on function public.automation_import_attendance_outbox(integer)",
   ]) {

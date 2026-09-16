@@ -24,6 +24,12 @@ const defaultGraph = ({ pipelineId = "", stageId = "" } = {}) => ({
 
 const trigger = { type: "attendance.message.created", eventType: "attendance.message.created", label: "Nova mensagem recebida" };
 
+const invalidGraphBody = (validation) => ({
+  error: "automation_graph_invalid",
+  issues: validation.issues || [],
+  details: validation.errors || [],
+});
+
 const requireAdmin = async (req, res) => {
   const auth = await resolveAdminRequestAuth(req, { logPrefix: "[automations]" });
   if (!auth.ok) {
@@ -71,8 +77,8 @@ const getAutomation = async (id) => {
 const createAutomation = async (session, body = {}) => {
   const name = clean(body.name) || "Nova mensagem → Criar oportunidade";
   const graph = body.graph && typeof body.graph === "object" ? body.graph : defaultGraph(body);
-  const validation = validateGraph(graph);
-  if (!validation.ok) return { status: 422, body: { error: "invalid_graph", details: validation.errors } };
+  const validation = await validateGraph(graph, { validateCrm: false });
+  if (!validation.ok) return { status: 422, body: invalidGraphBody(validation) };
   const created = await request("/automations", {
     method: "POST",
     headers: { Prefer: "return=representation" },
@@ -83,7 +89,7 @@ const createAutomation = async (session, body = {}) => {
   const versionResult = await request("/automation_versions", {
     method: "POST",
     headers: { Prefer: "return=representation" },
-    body: [{ automation_id: automation.id, version_number: 1, status: "DRAFT", graph, trigger, created_by_uid: session.sub }],
+    body: [{ automation_id: automation.id, version_number: 1, status: "DRAFT", graph: validation.graph, trigger, created_by_uid: session.sub }],
   });
   const version = Array.isArray(versionResult.data) ? versionResult.data[0] : null;
   await request(`/automations?id=eq.${enc(automation.id)}`, { method: "PATCH", body: { draft_version_id: version?.id || null, updated_by_uid: session.sub } });
@@ -99,11 +105,13 @@ const updateDraft = async (session, id, body = {}) => {
     return { status: 409, body: { error: "automation_draft_conflict", updatedAt: automation.updated_at } };
   }
   const graph = body.graph && typeof body.graph === "object" ? body.graph : draft.graph;
+  let nextGraph = graph;
   if (body.allowInvalidDraft !== true) {
-    const validation = validateGraph(graph);
-    if (!validation.ok) return { status: 422, body: { error: "invalid_graph", details: validation.errors } };
+    const validation = await validateGraph(graph, { validateCrm: false });
+    if (!validation.ok) return { status: 422, body: invalidGraphBody(validation) };
+    nextGraph = validation.graph;
   }
-  await request(`/automation_versions?id=eq.${enc(draft.id)}`, { method: "PATCH", body: { graph, trigger } });
+  await request(`/automation_versions?id=eq.${enc(draft.id)}`, { method: "PATCH", body: { graph: nextGraph, trigger } });
   const patch = {};
   if (body.name !== undefined) patch.name = clean(body.name);
   if (body.description !== undefined) patch.description = clean(body.description);
@@ -136,12 +144,12 @@ const publish = async (session, id) => {
   const automation = await getAutomation(id);
   if (!automation?.draft_version) return { status: 404, body: { error: "draft_not_found" } };
   const draft = automation.draft_version;
-  const validation = validateGraph(draft.graph);
-  if (!validation.ok) return { status: 422, body: { error: "invalid_graph", details: validation.errors } };
+  const validation = await validateGraph(draft.graph);
+  if (!validation.ok) return { status: 422, body: invalidGraphBody(validation) };
   if (automation.active_version_id) {
     await request(`/automation_versions?id=eq.${enc(automation.active_version_id)}`, { method: "PATCH", body: { status: "ARCHIVED" } });
   }
-  await request(`/automation_versions?id=eq.${enc(draft.id)}`, { method: "PATCH", body: { status: "ACTIVE", published_by_uid: session.sub, published_at: new Date().toISOString() } });
+  await request(`/automation_versions?id=eq.${enc(draft.id)}`, { method: "PATCH", body: { graph: validation.graph, status: "ACTIVE", published_by_uid: session.sub, published_at: new Date().toISOString() } });
   await request(`/automations?id=eq.${enc(id)}`, { method: "PATCH", body: { status: "ACTIVE", active_version_id: draft.id, draft_version_id: null, updated_by_uid: session.sub } });
   return { status: 200, body: { ok: true, activeVersionId: draft.id } };
 };
@@ -162,7 +170,15 @@ module.exports = async (req, res) => {
 
   try {
     if (req.method === "GET") {
-      if (resource === "catalog") return sendJson(res, 200, { catalog: automationCatalog() });
+      if (resource === "catalog" || action === "catalog") {
+        const catalog = automationCatalog();
+        return sendJson(res, 200, {
+          catalog,
+          triggers: catalog.filter((item) => item.kind === "trigger"),
+          conditions: catalog.filter((item) => item.kind === "condition"),
+          actions: catalog.filter((item) => item.kind === "action"),
+        });
+      }
       if (id && resource === "runs") {
         const runId = clean(url.searchParams.get("runId"));
         if (runId) {

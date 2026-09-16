@@ -38,6 +38,7 @@ const catalogEntry = (entry = {}, kind = "") => ({
   type: clean(entry.type),
   label: clean(entry.label) || clean(entry.type),
   description: clean(entry.description || entry.eventType || entry.category || entry.type),
+  configSchema: entry.configSchema || {},
 });
 
 const automationCatalog = () => [
@@ -83,6 +84,10 @@ registerAction({
   type: "crm.createOpportunity",
   label: "Criar oportunidade",
   category: "CRM",
+  configSchema: {
+    pipelineId: { type: "crm.pipeline", required: true, label: "Pipeline" },
+    stageId: { type: "crm.stage", required: true, dependsOn: "pipelineId", label: "Stage" },
+  },
   validateInput(input = {}) {
     if (!clean(input.pipelineId)) throw Object.assign(new Error("automation_missing_pipeline"), { status: 422 });
     if (!clean(input.stageId)) throw Object.assign(new Error("automation_missing_stage"), { status: 422 });

@@ -95,6 +95,21 @@ class AutomationStore {
     return Array.isArray(data) ? data[0] || null : null;
   }
 
+  async restartRun(runId) {
+    const { data } = await this.request(`/automation_runs?id=eq.${enc(runId)}`, {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: {
+        status: "RUNNING",
+        current_node_id: null,
+        error: null,
+        started_at: nowIso(),
+        finished_at: null,
+      },
+    });
+    return Array.isArray(data) ? data[0] || null : null;
+  }
+
   async upsertStep({ runId, nodeId, nodeType, actionType = null, status, attemptCount = 1, input = {}, output = {}, error = null, startedAt = null, finishedAt = null }) {
     const body = [{
       run_id: runId,

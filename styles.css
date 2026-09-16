@@ -26544,6 +26544,45 @@ button.automations-row:focus-visible,
   font-weight: 700;
 }
 
+.automation-publish-issues {
+  position: absolute;
+  left: 18px;
+  top: 18px;
+  z-index: 6;
+  display: grid;
+  gap: 7px;
+  width: min(360px, calc(100% - 36px));
+  border: 1px solid rgba(255,91,82,.24);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(80,22,25,.94);
+  color: #ffd4d0;
+  box-shadow: 0 16px 45px rgba(0,0,0,.28);
+}
+
+.automation-publish-issues strong {
+  color: #fff;
+  font-size: 13px;
+}
+
+.automation-publish-issues span {
+  color: rgba(255,255,255,.68);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.automation-publish-issues button {
+  border: 0;
+  border-radius: 7px;
+  padding: 7px 8px;
+  background: rgba(255,255,255,.06);
+  color: #ffd4d0;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .automation-properties {
   display: grid;
   align-content: start;

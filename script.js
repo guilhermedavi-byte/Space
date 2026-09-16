@@ -12167,6 +12167,7 @@ const automationsState = {
   crm: null,
   catalog: [],
   editorGraphPreview: null,
+  publishIssues: [],
   error: "",
 };
 
@@ -12236,6 +12237,7 @@ const mountAutomationEditorIsland = () => {
         runDetail: automationsState.runDetail,
         crm: automationsState.crm || {},
         catalog: automationsState.catalog || [],
+        validationIssues: automationsState.publishIssues || [],
         onSaveDraft: saveAutomationDraftFromEditor,
         onGraphPreview: (graph) => {
           automationsState.editorGraphPreview = graph;
@@ -12316,6 +12318,7 @@ const openAutomation = async (id, { render = true } = {}) => {
   automationsState.selected = detail.automation;
   automationsState.runs = Array.isArray(runs?.rows) ? runs.rows : [];
   automationsState.runDetail = null;
+  automationsState.publishIssues = [];
   if (render) renderAutomationsAdmin();
 };
 
@@ -12338,7 +12341,16 @@ const createAutomationFromCrmDefaults = async () => {
 const runAutomationAction = async (id, action) => {
   const res = await fetchWithAuth(`/api/automations?id=${encodeURIComponent(id)}&action=${encodeURIComponent(action)}`, { method: "POST" });
   const data = await res.json().catch(() => null);
-  if (!res.ok) throw new Error(data?.error || `automation_${action}_failed`);
+  if (!res.ok) {
+    if (action === "publish" && data?.error === "automation_graph_invalid") {
+      automationsState.publishIssues = Array.isArray(data.issues) ? data.issues : [];
+      automationsState.error = "Não foi possível publicar. Revise os problemas destacados no workflow.";
+      renderAutomationsAdmin();
+      return;
+    }
+    throw new Error(data?.error || `automation_${action}_failed`);
+  }
+  automationsState.publishIssues = [];
   await loadAutomationsAdmin({ force: true, selectId: id });
 };
 
@@ -12376,6 +12388,7 @@ const saveAutomationDraftFromEditor = async (graph, { baseUpdatedAt = "" } = {})
     throw new Error(data?.error || "automation_save_failed");
   }
   automationsState.editorGraphPreview = graph;
+  automationsState.publishIssues = [];
   if (automationsState.selected) {
     automationsState.selected = {
       ...automationsState.selected,

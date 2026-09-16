@@ -84,6 +84,39 @@ const groupCatalog = (catalog = NODE_CATALOG) => catalog.reduce((groups, item) =
   return groups;
 }, {});
 
+const issueLabel = (issue = {}) => {
+  const labels = {
+    action_requires_one_output: "A ação precisa de uma saída.",
+    action_edge_must_not_branch: "A ação possui uma conexão com branch inválida.",
+    condition_edge_requires_branch: "A condição possui conexão sem SIM/NÃO.",
+    duplicate_edge: "Existe uma conexão duplicada.",
+    duplicate_node_id: "Existe um node com ID duplicado.",
+    edge_missing_source: "Existe uma conexão sem origem válida.",
+    edge_missing_target: "Existe uma conexão sem destino válido.",
+    end_has_output: "Fim não pode ter saída.",
+    graph_cycle_detected: "O workflow possui ciclo.",
+    missing_condition_false_edge: "A condição não possui saída NÃO.",
+    missing_condition_true_edge: "A condição não possui saída SIM.",
+    missing_path_to_end: "Não existe caminho até Fim.",
+    missing_pipeline_id: "Pipeline obrigatório não foi preenchido.",
+    missing_stage_id: "Stage obrigatório não foi preenchido.",
+    node_not_reachable: "Este node não é alcançável a partir do gatilho.",
+    orphan_node: "Este node está órfão.",
+    pipeline_not_found: "Pipeline não existe ou está inativo.",
+    self_loop: "Conexão circular no mesmo node.",
+    single_trigger_required: "O workflow precisa ter exatamente um gatilho.",
+    stage_not_found: "Stage não existe.",
+    stage_not_in_pipeline: "Stage não pertence ao pipeline.",
+    trigger_has_input: "Gatilho não pode ter entrada.",
+    trigger_requires_one_output: "Gatilho precisa de uma saída.",
+    unknown_action: "Ação não registrada.",
+    unknown_condition: "Condição não registrada.",
+    unknown_trigger: "Gatilho não registrado.",
+    unsupported_node_type: "Tipo de node não suportado.",
+  };
+  return labels[issue.code] || issue.message || issue.code || "Problema de validação.";
+};
+
 function PropertiesPanel({ node, crm, onConfigChange, onDeleteNode }) {
   const canonical = node?.data?.canonical || null;
   const pipelines = Array.isArray(crm?.pipelines) ? crm.pipelines : [];
@@ -130,9 +163,18 @@ function PropertiesPanel({ node, crm, onConfigChange, onDeleteNode }) {
   );
 }
 
-function AutomationEditor({ automation, rows, runDetail, crm, catalog, onGraphPreview, onSaveDraft }) {
+function AutomationEditor({ automation, rows, runDetail, crm, catalog, validationIssues, onGraphPreview, onSaveDraft }) {
   const graph = automation?.draft_version?.graph || automation?.active_version?.graph || { nodes: [], edges: [] };
-  const enrichedGraph = useMemo(() => canonicalToFlow(graph, { executionSteps: runDetail?.steps || [] }), [graph, runDetail]);
+  const issues = Array.isArray(validationIssues) ? validationIssues : [];
+  const issuesByNode = useMemo(() => issues.reduce((map, issue) => {
+    if (!issue?.nodeId) return map;
+    map[issue.nodeId] = [...(map[issue.nodeId] || []), issue];
+    return map;
+  }, {}), [issues]);
+  const enrichedGraph = useMemo(() => canonicalToFlow(graph, {
+    executionSteps: runDetail?.steps || [],
+    errors: Object.fromEntries(Object.entries(issuesByNode).map(([nodeId, rows]) => [nodeId, issueLabel(rows[0])])),
+  }), [graph, runDetail, issuesByNode]);
   const decorateNode = (node) => {
     const canonical = node.data?.canonical || {};
     const summary = actionSummary(canonical, crm);
@@ -183,7 +225,8 @@ function AutomationEditor({ automation, rows, runDetail, crm, catalog, onGraphPr
 
   const canonicalFromFlow = (nextNodes = nodes, nextEdges = edges, nextViewport = viewport) => ({
     ...flowToCanonical({ nodes: nextNodes, edges: nextEdges }, graph),
-    viewport: nextViewport,
+    schemaVersion: graph.schemaVersion || 1,
+    ui: { ...(graph.ui || {}), viewport: nextViewport },
   });
 
   const scheduleSave = (nextGraph) => {
@@ -323,6 +366,12 @@ function AutomationEditor({ automation, rows, runDetail, crm, catalog, onGraphPr
     markDirty(nodes, edges, nextViewport);
   };
 
+  const selectIssueNode = (nodeId) => {
+    if (!nodeId) return;
+    setSelectedNodeId(nodeId);
+    setSelectedEdgeId("");
+  };
+
   return (
     <ReactFlowProvider>
       <div className="automation-workbench">
@@ -399,6 +448,17 @@ function AutomationEditor({ automation, rows, runDetail, crm, catalog, onGraphPr
               </div>
             ) : null}
             {connectionError ? <div className="automation-inline-error">{connectionError}</div> : null}
+            {issues.length ? (
+              <div className="automation-publish-issues">
+                <strong>Não foi possível publicar</strong>
+                <span>{issues.length} {issues.length === 1 ? "problema" : "problemas"}</span>
+                {issues.slice(0, 6).map((issue, index) => (
+                  <button key={`${issue.code}:${issue.nodeId || issue.edgeId || index}`} type="button" onClick={() => selectIssueNode(issue.nodeId)}>
+                    {issueLabel(issue)}
+                  </button>
+                ))}
+              </div>
+            ) : null}
             <div className="automation-canvas-metrics">
               <span>{metrics.totalRuns || 0} execuções</span>
               <span>{metrics.successRate || 0}% success</span>
