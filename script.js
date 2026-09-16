@@ -12701,8 +12701,8 @@ const nativeCrmCardHtml = (opportunity) => {
   const ownerName = opportunity.owner?.name || opportunity.owner?.email || "";
   return `
     <article class="native-crm-card" draggable="true" data-crm-card="${escapeHtml(opportunity.id)}" tabindex="0">
-      <div class="native-crm-card-top">
-        ${opportunity.source ? `<span class="native-crm-card-source">${escapeHtml(opportunity.source)}</span>` : `<span></span>`}
+      <div class="native-crm-card-top ${opportunity.source ? "" : "has-no-source"}">
+        ${opportunity.source ? `<span class="native-crm-card-source">${escapeHtml(opportunity.source)}</span>` : ""}
         ${nativeCrmAvatarHtml(opportunity.owner || contact, ownerName || primaryTitle)}
       </div>
       <div class="native-crm-card-main">
@@ -12710,7 +12710,10 @@ const nativeCrmCardHtml = (opportunity) => {
           <strong>${escapeHtml(primaryTitle)}</strong>
           ${secondaryTitle ? `<span>${escapeHtml(secondaryTitle)}</span>` : ""}
         </div>
-        ${money ? `<em>${escapeHtml(money)}</em>` : `<em></em>`}
+      </div>
+      <div class="native-crm-card-value-row">
+        ${money ? `<em>${escapeHtml(money)}</em>` : `<span></span>`}
+        <span class="native-crm-card-status" data-status="${escapeHtml(opportunity.status || "open")}">${escapeHtml(crmStatusLabel(opportunity.status))}</span>
       </div>
       <div class="native-crm-card-footer">
         <div class="native-crm-card-actions">
@@ -12734,7 +12737,7 @@ const renderNativeCrmBoard = () => {
     return `<div class="native-crm-empty">Nenhuma etapa configurada para este pipeline.</div>`;
   }
   return `
-    <div class="native-crm-board" data-crm-board>
+    <div class="native-crm-board" data-crm-board style="--crm-stage-count:${visibleStages.length}">
       ${visibleStages.map((stage) => {
         const opportunities = crmOpportunitiesForStage(stage.id);
         const total = opportunities.reduce((sum, opportunity) => sum + (Number(opportunity.value) || 0), 0);
