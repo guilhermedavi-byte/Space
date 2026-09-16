@@ -147,7 +147,7 @@ const buildAppHtml = ({ sessionJson, role, roleSlug, templateHtml, initialPanel 
     <script src="/assets/student-lifecycle.js"></script>
     <script src="/assets/lifecycle-metrics.js"></script>
     <script src="finance-customer-link.js?v=1"></script>
-    <script src="finance-v1.js?v=12"></script>
+    <script src="finance-v1.js?v=13"></script>
     <script src="script.js"></script>
     <script src="pedagogico-n8n-ui.js"></script>
     <script src="space-office.js"></script>
