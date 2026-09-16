@@ -7,7 +7,7 @@ const {
   getDocumentAsAdmin,
   listCollectionAsAdmin,
 } = require("./_lib/firestore-admin");
-const { FIRESTORE_BASE, encodeFields } = require("./_lib/firestore-rest");
+const { PROJECT_ID, encodeFields } = require("./_lib/firestore-rest");
 
 const COLLECTIONS = {
   pipelines: "crmPipelines",
@@ -22,6 +22,7 @@ const COLLECTIONS = {
 const DEFAULT_PIPELINE_ID = "commercial";
 const DEFAULT_STAGES = ["Novo lead", "Em contato", "Reunião", "Negociação"];
 const VALID_STATUS = new Set(["open", "won", "lost"]);
+const CRM_SCOPE_ID = String(process.env.SPACE_CRM_SCOPE_ID || process.env.CRM_SCOPE_ID || "space-main").trim() || "space-main";
 
 const normalizeRole = (value) => {
   const raw = String(value || "").trim().toLowerCase();
@@ -40,7 +41,16 @@ const canAccessCrm = (req) => {
 const nowIso = () => new Date().toISOString();
 const newId = (prefix) => `${prefix}_${crypto.randomUUID().replace(/-/g, "").slice(0, 24)}`;
 
-const docName = (collection, id) => `${FIRESTORE_BASE}/${collection}/${encodeURIComponent(id)}`;
+const docName = (collection, id) => {
+  const safeCollection = clean(collection);
+  const safeId = clean(id);
+  if (!PROJECT_ID || !safeCollection || !safeId) {
+    const error = new Error("invalid_firestore_document_name");
+    error.code = "invalid_firestore_document_name";
+    throw error;
+  }
+  return `projects/${PROJECT_ID}/databases/(default)/documents/${safeCollection}/${encodeURIComponent(safeId)}`;
+};
 
 const toIso = (value) => {
   if (value instanceof Date) return value.toISOString();
@@ -50,6 +60,7 @@ const toIso = (value) => {
 
 const clean = (value) => String(value || "").trim();
 const lower = (value) => clean(value).toLowerCase();
+const matchesCrmScope = (row) => clean(row?.scopeId) === CRM_SCOPE_ID || !clean(row?.scopeId);
 
 const numberOrNull = (value) => {
   if (value === null || value === undefined || value === "") return null;
@@ -70,6 +81,7 @@ const normalizeDateOnly = (value) => {
 
 const normalizePipeline = (row) => ({
   id: clean(row.id || row.firestoreDocId),
+  scopeId: clean(row.scopeId) || CRM_SCOPE_ID,
   name: clean(row.name),
   isActive: row.isActive !== false,
   createdAt: toIso(row.createdAt),
@@ -78,6 +90,7 @@ const normalizePipeline = (row) => ({
 
 const normalizeStage = (row) => ({
   id: clean(row.id || row.firestoreDocId),
+  scopeId: clean(row.scopeId) || CRM_SCOPE_ID,
   pipelineId: clean(row.pipelineId),
   name: clean(row.name),
   position: Number(row.position) || 0,
@@ -87,6 +100,7 @@ const normalizeStage = (row) => ({
 
 const normalizeContact = (row) => ({
   id: clean(row.id || row.firestoreDocId),
+  scopeId: clean(row.scopeId) || CRM_SCOPE_ID,
   name: clean(row.name),
   phone: clean(row.phone),
   email: clean(row.email),
@@ -96,6 +110,7 @@ const normalizeContact = (row) => ({
 
 const normalizeOpportunity = (row) => ({
   id: clean(row.id || row.firestoreDocId),
+  scopeId: clean(row.scopeId) || CRM_SCOPE_ID,
   contactId: clean(row.contactId),
   pipelineId: clean(row.pipelineId),
   stageId: clean(row.stageId),
@@ -125,26 +140,96 @@ const readBody = async (req) => {
   }
 };
 
-const buildWrite = (collection, id, data) => ({
+const sanitizeFirestoreDiagnostic = (value) => {
+  if (!value) return null;
+  if (typeof value === "string") return value.slice(0, 700);
+  if (typeof value === "object") {
+    const error = value.error && typeof value.error === "object" ? value.error : value;
+    return {
+      code: clean(error.status || error.code),
+      message: clean(error.message).slice(0, 700),
+    };
+  }
+  return String(value).slice(0, 700);
+};
+
+const logCrmFirestoreFailure = ({ operation, scopeId = CRM_SCOPE_ID, response, error } = {}) => {
+  const detail = response
+    ? sanitizeFirestoreDiagnostic(response.data || response.text)
+    : sanitizeFirestoreDiagnostic(error?.details || error?.message || error);
+  console.error("[crm] firestore operation failed", {
+    operation: clean(operation),
+    scopeId,
+    status: response?.status || error?.status || null,
+    code: clean(error?.code || detail?.code || ""),
+    message: detail?.message || (typeof detail === "string" ? detail : ""),
+  });
+};
+
+const isAlreadyExistsResponse = (response) => {
+  const raw = `${response?.status || ""} ${JSON.stringify(response?.data || {})} ${String(response?.text || "")}`.toLowerCase();
+  return raw.includes("already_exists") || raw.includes("already exists") || raw.includes("exists");
+};
+
+const buildWrite = (collection, id, data, options = {}) => ({
   update: {
     name: docName(collection, id),
     fields: encodeFields(data).fields,
   },
+  ...(options.createOnly ? { currentDocument: { exists: false } } : {}),
 });
 
 const ensureDefaultPipeline = async () => {
-  const [pipelinesRaw, stagesRaw] = await Promise.all([
-    listCollectionAsAdmin(COLLECTIONS.pipelines, { maxPages: 5 }).catch(() => []),
-    listCollectionAsAdmin(COLLECTIONS.stages, { maxPages: 5 }).catch(() => []),
-  ]);
+  let pipelinesRaw = [];
+  let stagesRaw = [];
+  try {
+    [pipelinesRaw, stagesRaw] = await Promise.all([
+      listCollectionAsAdmin(COLLECTIONS.pipelines, { maxPages: 5 }),
+      listCollectionAsAdmin(COLLECTIONS.stages, { maxPages: 5 }),
+    ]);
+  } catch (error) {
+    logCrmFirestoreFailure({ operation: "crm.bootstrap.read_existing", error });
+    throw error;
+  }
   const pipelines = pipelinesRaw.map(normalizePipeline).filter((row) => row.id);
   const stages = stagesRaw.map(normalizeStage).filter((row) => row.id);
-  const active = pipelines.find((row) => row.isActive) || pipelines[0] || null;
-  if (active) return { pipelines, stages };
+  const inScopePipeline = (row) => row.scopeId === CRM_SCOPE_ID || (!clean(row.scopeId) && row.id === DEFAULT_PIPELINE_ID);
+  const scopedPipelines = pipelines.filter(inScopePipeline);
+  const active = scopedPipelines.find((row) => row.isActive) || scopedPipelines[0] || null;
+  if (active) {
+    const scopedStages = stages.filter((stage) => stage.pipelineId === active.id && (stage.scopeId === CRM_SCOPE_ID || !clean(stage.scopeId)));
+    const existingStageIds = new Set(scopedStages.map((stage) => stage.id));
+    const stamp = nowIso();
+    const missingStages = DEFAULT_STAGES
+      .map((name, index) => ({
+        id: `${active.id}_stage_${index + 1}`,
+        scopeId: CRM_SCOPE_ID,
+        pipelineId: active.id,
+        name,
+        position: index + 1,
+        createdAt: stamp,
+        updatedAt: stamp,
+      }))
+      .filter((stage) => !existingStageIds.has(stage.id));
+    if (missingStages.length) {
+      const committed = await commitWritesAsAdmin({
+        writes: missingStages.map((stage) => buildWrite(COLLECTIONS.stages, stage.id, stage, { createOnly: true })),
+      });
+      if (!committed.ok && !isAlreadyExistsResponse(committed)) {
+        logCrmFirestoreFailure({ operation: "crm.bootstrap.create_missing_stages", response: committed });
+        const error = new Error("crm_bootstrap_failed");
+        error.status = committed.status || 500;
+        throw error;
+      }
+      return ensureDefaultPipeline();
+    }
+    return { pipelines: scopedPipelines, stages: scopedStages };
+  }
 
   const stamp = nowIso();
   const pipeline = {
     id: DEFAULT_PIPELINE_ID,
+    scopeId: CRM_SCOPE_ID,
     name: "Comercial",
     isActive: true,
     createdAt: stamp,
@@ -152,6 +237,7 @@ const ensureDefaultPipeline = async () => {
   };
   const seededStages = DEFAULT_STAGES.map((name, index) => ({
     id: `${DEFAULT_PIPELINE_ID}_stage_${index + 1}`,
+    scopeId: CRM_SCOPE_ID,
     pipelineId: pipeline.id,
     name,
     position: index + 1,
@@ -159,12 +245,14 @@ const ensureDefaultPipeline = async () => {
     updatedAt: stamp,
   }));
   const writes = [
-    buildWrite(COLLECTIONS.pipelines, pipeline.id, pipeline),
-    ...seededStages.map((stage) => buildWrite(COLLECTIONS.stages, stage.id, stage)),
+    buildWrite(COLLECTIONS.pipelines, pipeline.id, pipeline, { createOnly: true }),
+    ...seededStages.map((stage) => buildWrite(COLLECTIONS.stages, stage.id, stage, { createOnly: true })),
   ];
   const committed = await commitWritesAsAdmin({ writes });
   if (!committed.ok) {
-    const error = new Error("crm_seed_failed");
+    if (isAlreadyExistsResponse(committed)) return ensureDefaultPipeline();
+    logCrmFirestoreFailure({ operation: "crm.bootstrap.create_default_pipeline", response: committed });
+    const error = new Error("crm_bootstrap_failed");
     error.status = committed.status || 500;
     throw error;
   }
@@ -180,7 +268,8 @@ const loadCrmReadModel = async () => {
   ]);
 
   const contacts = contactsRaw.map(normalizeContact).filter((row) => row.id);
-  const contactsById = new Map(contacts.map((row) => [row.id, row]));
+  const scopedContacts = contacts.filter(matchesCrmScope);
+  const contactsById = new Map(scopedContacts.map((row) => [row.id, row]));
   const owners = usersRaw
     .filter((row) => normalizeRole(row.role || row.tipo || row.type) === "growth" || clean(row.tipo) === "growth")
     .map((row) => ({
@@ -192,7 +281,7 @@ const loadCrmReadModel = async () => {
   const ownersById = new Map(owners.map((row) => [row.id, row]));
   const opportunities = opportunitiesRaw
     .map(normalizeOpportunity)
-    .filter((row) => row.id && !row.deletedAt)
+    .filter((row) => row.id && matchesCrmScope(row) && !row.deletedAt)
     .map((row) => ({
       ...row,
       contact: contactsById.get(row.contactId) || null,
@@ -203,7 +292,7 @@ const loadCrmReadModel = async () => {
   return {
     pipelines: seeded.pipelines,
     stages: seeded.stages.sort((left, right) => left.position - right.position),
-    contacts,
+    contacts: scopedContacts,
     opportunities,
     owners,
     generatedAt: nowIso(),
@@ -238,7 +327,7 @@ const findOrBuildContact = ({ contacts, body, stamp }) => {
   }
   const id = newId("contact");
   return {
-    contact: { id, name, phone, email, createdAt: stamp, updatedAt: stamp },
+    contact: { id, scopeId: CRM_SCOPE_ID, name, phone, email, createdAt: stamp, updatedAt: stamp },
     isNew: true,
   };
 };
@@ -247,6 +336,7 @@ const eventWrite = ({ type, opportunityId, contactId, actorId, payload, stamp })
   const id = newId("event");
   return buildWrite(COLLECTIONS.events, id, {
     id,
+    scopeId: CRM_SCOPE_ID,
     type,
     opportunityId: opportunityId || null,
     contactId: contactId || null,
@@ -269,6 +359,7 @@ const handleCreateOpportunity = async ({ session, body }) => {
   const opportunityId = newId("opp");
   const opportunity = {
     id: opportunityId,
+    scopeId: CRM_SCOPE_ID,
     contactId: contact.id,
     pipelineId,
     stageId,
@@ -310,7 +401,8 @@ const handleMoveOpportunity = async ({ session, body }) => {
   } catch (error) {
     return { status: error.status === 404 ? 404 : 500, body: { error: "opportunity_not_found" } };
   }
-  const stages = (await listCollectionAsAdmin(COLLECTIONS.stages, { maxPages: 10 }).catch(() => [])).map(normalizeStage);
+  if (!matchesCrmScope(opportunity)) return { status: 404, body: { error: "opportunity_not_found" } };
+  const stages = (await listCollectionAsAdmin(COLLECTIONS.stages, { maxPages: 10 }).catch(() => [])).map(normalizeStage).filter(matchesCrmScope);
   const targetStage = stages.find((stage) => stage.id === toStageId);
   if (!targetStage || targetStage.pipelineId !== opportunity.pipelineId) return { status: 400, body: { error: "invalid_stage" } };
   if (opportunity.stageId === toStageId) return { status: 200, body: { ok: true, unchanged: true } };
@@ -322,6 +414,7 @@ const handleMoveOpportunity = async ({ session, body }) => {
     buildWrite(COLLECTIONS.opportunities, opportunity.id, updated),
     buildWrite(COLLECTIONS.stageHistory, historyId, {
       id: historyId,
+      scopeId: CRM_SCOPE_ID,
       opportunityId: opportunity.id,
       fromStageId: opportunity.stageId || null,
       toStageId,
@@ -351,13 +444,14 @@ const handleUpdateOpportunity = async ({ session, body }) => {
   } catch (error) {
     return { status: error.status === 404 ? 404 : 500, body: { error: "opportunity_not_found" } };
   }
+  if (!matchesCrmScope(opportunity)) return { status: 404, body: { error: "opportunity_not_found" } };
 
   const stamp = nowIso();
   const requestedPipelineId = clean(body.pipelineId) || opportunity.pipelineId;
   const requestedStageId = clean(body.stageId) || opportunity.stageId;
   const stageChanged = requestedStageId && requestedStageId !== opportunity.stageId;
   if (requestedPipelineId !== opportunity.pipelineId || stageChanged) {
-    const stages = (await listCollectionAsAdmin(COLLECTIONS.stages, { maxPages: 10 }).catch(() => [])).map(normalizeStage);
+    const stages = (await listCollectionAsAdmin(COLLECTIONS.stages, { maxPages: 10 }).catch(() => [])).map(normalizeStage).filter(matchesCrmScope);
     const targetStage = stages.find((stage) => stage.id === requestedStageId);
     if (!targetStage || targetStage.pipelineId !== requestedPipelineId) return { status: 400, body: { error: "invalid_stage" } };
   }
@@ -398,6 +492,7 @@ const handleUpdateOpportunity = async ({ session, body }) => {
     const historyId = newId("stagehist");
     writes.push(buildWrite(COLLECTIONS.stageHistory, historyId, {
       id: historyId,
+      scopeId: CRM_SCOPE_ID,
       opportunityId: next.id,
       fromStageId: opportunity.stageId || null,
       toStageId: requestedStageId,
