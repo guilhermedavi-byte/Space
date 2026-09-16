@@ -12146,6 +12146,7 @@ const nativeCrmState = {
     direction: "desc",
   },
   drawer: null,
+  drawerMode: "view",
   details: {},
   activityFormOpportunityId: "",
   draggedOpportunityId: "",
@@ -12583,12 +12584,14 @@ const nativeCrmCardHtml = (opportunity) => {
   const money = formatCrmMoney(opportunity.value, opportunity.currency);
   const activityTone = opportunity.nextActivityAt ? crmActivityTone(opportunity.nextActivityAt) : "none";
   const activityIcon = nativeCrmIcon(crmActivityTypeIcon(opportunity.nextActivityType));
+  const primaryTitle = contact.name || opportunity.title || "Lead sem nome";
+  const secondaryTitle = opportunity.title && contact.name && opportunity.title.trim().toLowerCase() !== contact.name.trim().toLowerCase() ? opportunity.title : "";
   return `
     <article class="native-crm-card" draggable="true" data-crm-card="${escapeHtml(opportunity.id)}" tabindex="0">
       <div class="native-crm-card-main">
         <div>
-          <strong>${escapeHtml(contact.name || opportunity.title || "Lead sem nome")}</strong>
-          <span>${escapeHtml(opportunity.title || contact.name || "Oportunidade")}</span>
+          <strong>${escapeHtml(primaryTitle)}</strong>
+          ${secondaryTitle ? `<span>${escapeHtml(secondaryTitle)}</span>` : ""}
         </div>
         ${money ? `<em>${escapeHtml(money)}</em>` : ""}
       </div>
@@ -12599,7 +12602,7 @@ const nativeCrmCardHtml = (opportunity) => {
       <div class="native-crm-next-activity" data-tone="${escapeHtml(activityTone)}">
         ${opportunity.nextActivityId
           ? `<span class="native-crm-next-icon">${activityIcon}</span><div><strong>${escapeHtml(opportunity.nextActivityTitle || crmActivityTypeLabel(opportunity.nextActivityType))}</strong><em>${escapeHtml(formatCrmActivityDate(opportunity.nextActivityAt))}</em></div>`
-          : `<span class="native-crm-next-icon">${nativeCrmIcon("calendar")}</span><div><strong>Sem próxima atividade</strong><em>Adicionar follow-up</em></div>`}
+          : `<span class="native-crm-next-icon">${nativeCrmIcon("calendar")}</span><div><strong>Sem atividade</strong><em>Adicionar</em></div>`}
       </div>
     </article>
   `;
@@ -12630,7 +12633,7 @@ const renderNativeCrmBoard = () => {
               <em>${opportunities.length}</em>
             </header>
             <div class="native-crm-column-drop" data-crm-dropzone="${escapeHtml(stage.id)}">
-              ${opportunities.map(nativeCrmCardHtml).join("") || `<div class="native-crm-column-empty">${nativeCrmIcon("dot")}<strong>Nenhuma oportunidade</strong><span>Arraste um lead para esta etapa.</span></div>`}
+              ${opportunities.map(nativeCrmCardHtml).join("") || `<div class="native-crm-column-empty">Nenhum lead</div>`}
             </div>
           </section>
         `;
@@ -12771,7 +12774,7 @@ const renderNativeCrmList = () => {
   const rows = Array.isArray(nativeCrmState.list.rows) ? nativeCrmState.list.rows : [];
   const sortButton = (field, label) => {
     const active = nativeCrmState.list.sort === field;
-    const arrow = active ? (nativeCrmState.list.direction === "asc" ? "Asc" : "Desc") : "";
+    const arrow = active ? (nativeCrmState.list.direction === "asc" ? "↑" : "↓") : "";
     return `<button type="button" data-crm-sort="${escapeHtml(field)}" class="${active ? "is-active" : ""}">${escapeHtml(label)}${active ? `<span>${escapeHtml(arrow)}</span>` : ""}</button>`;
   };
   return `
@@ -12799,9 +12802,12 @@ const renderNativeCrmList = () => {
             ${rows.map((opportunity) => {
               const contact = opportunity.contact || {};
               const stageName = getNativeCrmData().stages.find((stage) => stage.id === opportunity.stageId)?.name || "—";
+              const primaryTitle = contact.name || opportunity.title || "Lead sem nome";
+              const secondaryTitle = [contact.email, contact.phone].filter(Boolean).join(" · ")
+                || (opportunity.title && contact.name && opportunity.title.trim().toLowerCase() !== contact.name.trim().toLowerCase() ? opportunity.title : "");
               return `
                 <tr data-crm-row="${escapeHtml(opportunity.id)}" tabindex="0">
-                  <td><strong>${escapeHtml(contact.name || opportunity.title || "Lead sem nome")}</strong><span>${escapeHtml([contact.email, contact.phone].filter(Boolean).join(" · ") || opportunity.title || "")}</span></td>
+                  <td><strong>${escapeHtml(primaryTitle)}</strong>${secondaryTitle ? `<span>${escapeHtml(secondaryTitle)}</span>` : ""}</td>
                   <td>${escapeHtml(stageName)}</td>
                   <td><span class="native-crm-status-pill">${escapeHtml(crmStatusLabel(opportunity.status))}</span></td>
                   <td class="is-number">${escapeHtml(formatCrmMoney(opportunity.value, opportunity.currency) || "—")}</td>
@@ -12849,6 +12855,96 @@ const nativeCrmNextActivityHtml = (opportunity) => {
     </section>
   `;
 };
+
+const nativeCrmDetailItemHtml = (label, value) => `
+  <div class="native-crm-detail-item">
+    <span>${escapeHtml(label)}</span>
+    <strong>${escapeHtml(value || "—")}</strong>
+  </div>
+`;
+
+const nativeCrmDrawerViewHtml = (opportunity, { pipelineName, stageName, money }) => {
+  const contact = opportunity?.contact || {};
+  return `
+    ${nativeCrmNextActivityHtml(opportunity)}
+    ${nativeCrmActivityFormHtml(opportunity)}
+    ${nativeCrmOpenActivitiesHtml(opportunity)}
+    <section class="native-crm-form-section native-crm-details-section">
+      <h3>Detalhes</h3>
+      <div class="native-crm-detail-list">
+        ${nativeCrmDetailItemHtml("Responsável", opportunity?.owner?.name || opportunity?.owner?.email || "")}
+        ${nativeCrmDetailItemHtml("Origem", opportunity?.source || "")}
+        ${nativeCrmDetailItemHtml("Pipeline", pipelineName)}
+        ${nativeCrmDetailItemHtml("Etapa", stageName)}
+        ${nativeCrmDetailItemHtml("Valor", money || "")}
+        ${nativeCrmDetailItemHtml("Previsão", opportunity?.expectedCloseDate || "")}
+      </div>
+    </section>
+    <section class="native-crm-form-section native-crm-details-section">
+      <h3>Contato</h3>
+      <div class="native-crm-detail-list">
+        ${nativeCrmDetailItemHtml("Nome", contact.name || "")}
+        ${nativeCrmDetailItemHtml("Telefone", contact.phone || "")}
+        ${nativeCrmDetailItemHtml("E-mail", contact.email || "")}
+      </div>
+    </section>
+    <section class="native-crm-form-section native-crm-details-section">
+      <h3>Datas</h3>
+      <div class="native-crm-detail-list">
+        ${nativeCrmDetailItemHtml("Criado em", formatCrmDateTime(opportunity.createdAt))}
+        ${nativeCrmDetailItemHtml("Última atualização", formatCrmDateTime(opportunity.updatedAt))}
+      </div>
+    </section>
+    ${nativeCrmTimelineHtml(opportunity)}
+  `;
+};
+
+const nativeCrmDrawerEditHtml = ({ isNew, opportunity, contact, pipelineId, stageId }) => `
+  ${isNew ? "" : nativeCrmNextActivityHtml(opportunity)}
+  ${isNew ? "" : nativeCrmActivityFormHtml(opportunity)}
+  ${isNew ? "" : nativeCrmOpenActivitiesHtml(opportunity)}
+  <section class="native-crm-form-section">
+    <h3>Informações comerciais</h3>
+    <label><span>Título</span><input name="title" value="${escapeHtml(opportunity?.title || contact.name || "")}" /></label>
+    <div class="native-crm-form-grid">
+      <label><span>Valor</span><input name="value" type="number" min="0" step="0.01" value="${escapeHtml(opportunity?.value ?? "")}" /></label>
+      <label><span>Moeda</span><input name="currency" maxlength="3" value="${escapeHtml(opportunity?.currency || "BRL")}" /></label>
+    </div>
+    <label><span>Origem</span><input name="source" value="${escapeHtml(opportunity?.source || "")}" /></label>
+    <label><span>Responsável</span><select name="ownerId">${renderNativeCrmOwnerOptions(opportunity?.ownerId || "")}</select></label>
+    <div class="native-crm-form-grid">
+      <label><span>Pipeline</span><select name="pipelineId" data-crm-form-pipeline>${renderNativeCrmPipelineOptions(pipelineId)}</select></label>
+      <label><span>Etapa</span><select name="stageId" data-crm-form-stage>${renderNativeCrmStageOptions(pipelineId, stageId)}</select></label>
+    </div>
+    ${isNew ? "" : `
+      <div class="native-crm-form-grid">
+        <label><span>Status</span><select name="status">
+          <option value="open" ${opportunity.status === "open" ? "selected" : ""}>Aberta</option>
+          <option value="won" ${opportunity.status === "won" ? "selected" : ""}>Ganha</option>
+          <option value="lost" ${opportunity.status === "lost" ? "selected" : ""}>Perdida</option>
+        </select></label>
+        <label><span>Previsão</span><input name="expectedCloseDate" type="date" value="${escapeHtml(opportunity.expectedCloseDate || "")}" /></label>
+      </div>
+      <label><span>Motivo de perda</span><input name="lostReason" value="${escapeHtml(opportunity.lostReason || "")}" /></label>
+    `}
+  </section>
+  <section class="native-crm-form-section">
+    <h3>Contato</h3>
+    <label><span>Nome *</span><input name="name" required value="${escapeHtml(contact.name || "")}" /></label>
+    <label><span>Telefone</span><input name="phone" value="${escapeHtml(contact.phone || "")}" /></label>
+    <label><span>E-mail</span><input name="email" type="email" value="${escapeHtml(contact.email || "")}" /></label>
+  </section>
+  ${isNew ? "" : `
+    <section class="native-crm-form-section">
+      <h3>Datas</h3>
+      <div class="native-crm-date-grid">
+        <div><span>Criado em</span><strong>${escapeHtml(formatCrmDateTime(opportunity.createdAt))}</strong></div>
+        <div><span>Última atualização</span><strong>${escapeHtml(formatCrmDateTime(opportunity.updatedAt))}</strong></div>
+      </div>
+    </section>
+  `}
+  ${isNew ? "" : nativeCrmTimelineHtml(opportunity)}
+`;
 
 const nativeCrmActivityFormHtml = (opportunity) => {
   if (nativeCrmState.activityFormOpportunityId !== opportunity?.id) return "";
@@ -12946,71 +13042,35 @@ const renderNativeCrmDrawer = () => {
   const contact = opportunity?.contact || {};
   const pipelineId = opportunity?.pipelineId || selectedCrmPipelineId();
   const stageId = opportunity?.stageId || getNativeCrmData().stages.find((stage) => stage.pipelineId === pipelineId)?.id || "";
+  const pipelineName = getNativeCrmData().pipelines.find((pipeline) => pipeline.id === pipelineId)?.name || "Comercial";
   const stageName = getNativeCrmData().stages.find((stage) => stage.id === stageId)?.name || "Oportunidade";
   const money = opportunity?.value ? formatCrmMoney(opportunity.value, opportunity.currency) : "";
+  const isEditMode = isNew || nativeCrmState.drawerMode === "edit";
   return `
     <div class="native-crm-drawer-backdrop" data-crm-drawer-close></div>
     <aside class="native-crm-drawer" aria-label="${isNew ? "Novo lead" : "Detalhes da oportunidade"}">
-      <form data-crm-form="${isNew ? "new" : "edit"}" data-crm-opportunity-id="${escapeHtml(opportunity?.id || "")}">
+      <form ${isEditMode ? `data-crm-form="${isNew ? "new" : "edit"}"` : ""} data-crm-opportunity-id="${escapeHtml(opportunity?.id || "")}">
         <header class="native-crm-drawer-head">
           <div>
             <span>${isNew ? "Novo lead" : `CRM / ${escapeHtml(stageName)}`}</span>
             <h2>${isNew ? "Nova oportunidade" : escapeHtml(contact.name || opportunity.title || "Oportunidade")}</h2>
-            ${!isNew ? `<p><strong>${escapeHtml(crmStatusLabel(opportunity.status))}</strong>${money ? `<em>${escapeHtml(money)}</em>` : ""}${opportunity.title ? `<small>${escapeHtml(opportunity.title)}</small>` : ""}</p>` : `<p><small>Cadastre contato e dados comerciais para abrir uma oportunidade.</small></p>`}
+            ${!isNew ? `<p><strong>${escapeHtml(stageName)}</strong>${money ? `<em>${escapeHtml(money)}</em>` : ""}<small>${escapeHtml(crmStatusLabel(opportunity.status))}</small></p>` : `<p><small>Cadastre contato e dados comerciais para abrir uma oportunidade.</small></p>`}
           </div>
-          <button type="button" class="native-crm-icon-button" data-crm-drawer-close aria-label="Fechar">${nativeCrmIcon("close")}</button>
+          <div class="native-crm-drawer-actions">
+            ${!isNew && !isEditMode ? `<button type="button" class="button button-outline button-small" data-crm-edit>${nativeCrmIcon("edit")}Editar</button>` : ""}
+            <button type="button" class="native-crm-icon-button" data-crm-drawer-close aria-label="Fechar">${nativeCrmIcon("close")}</button>
+          </div>
         </header>
         <div class="native-crm-drawer-body">
-          ${isNew ? "" : nativeCrmNextActivityHtml(opportunity)}
-          ${isNew ? "" : nativeCrmActivityFormHtml(opportunity)}
-          ${isNew ? "" : nativeCrmOpenActivitiesHtml(opportunity)}
-          <section class="native-crm-form-section">
-            <h3>Informações comerciais</h3>
-            <label><span>Título</span><input name="title" value="${escapeHtml(opportunity?.title || contact.name || "")}" /></label>
-            <div class="native-crm-form-grid">
-              <label><span>Valor</span><input name="value" type="number" min="0" step="0.01" value="${escapeHtml(opportunity?.value ?? "")}" /></label>
-              <label><span>Moeda</span><input name="currency" maxlength="3" value="${escapeHtml(opportunity?.currency || "BRL")}" /></label>
-            </div>
-            <label><span>Origem</span><input name="source" value="${escapeHtml(opportunity?.source || "")}" /></label>
-            <label><span>Responsável</span><select name="ownerId">${renderNativeCrmOwnerOptions(opportunity?.ownerId || "")}</select></label>
-            <div class="native-crm-form-grid">
-              <label><span>Pipeline</span><select name="pipelineId" data-crm-form-pipeline>${renderNativeCrmPipelineOptions(pipelineId)}</select></label>
-              <label><span>Etapa</span><select name="stageId" data-crm-form-stage>${renderNativeCrmStageOptions(pipelineId, stageId)}</select></label>
-            </div>
-            ${isNew ? "" : `
-              <div class="native-crm-form-grid">
-                <label><span>Status</span><select name="status">
-                  <option value="open" ${opportunity.status === "open" ? "selected" : ""}>Aberta</option>
-                  <option value="won" ${opportunity.status === "won" ? "selected" : ""}>Ganha</option>
-                  <option value="lost" ${opportunity.status === "lost" ? "selected" : ""}>Perdida</option>
-                </select></label>
-                <label><span>Previsão</span><input name="expectedCloseDate" type="date" value="${escapeHtml(opportunity.expectedCloseDate || "")}" /></label>
-              </div>
-              <label><span>Motivo de perda</span><input name="lostReason" value="${escapeHtml(opportunity.lostReason || "")}" /></label>
-            `}
-          </section>
-          <section class="native-crm-form-section">
-            <h3>Contato</h3>
-            <label><span>Nome *</span><input name="name" required value="${escapeHtml(contact.name || "")}" /></label>
-            <label><span>Telefone</span><input name="phone" value="${escapeHtml(contact.phone || "")}" /></label>
-            <label><span>E-mail</span><input name="email" type="email" value="${escapeHtml(contact.email || "")}" /></label>
-          </section>
-          ${isNew ? "" : `
-            <section class="native-crm-form-section">
-              <h3>Datas</h3>
-              <div class="native-crm-date-grid">
-                <div><span>Criado em</span><strong>${escapeHtml(formatCrmDateTime(opportunity.createdAt))}</strong></div>
-                <div><span>Última atualização</span><strong>${escapeHtml(formatCrmDateTime(opportunity.updatedAt))}</strong></div>
-              </div>
-            </section>
-          `}
-          ${isNew ? "" : nativeCrmTimelineHtml(opportunity)}
+          ${isEditMode ? nativeCrmDrawerEditHtml({ isNew, opportunity, contact, pipelineId, stageId }) : nativeCrmDrawerViewHtml(opportunity, { pipelineName, stageName, money })}
           <div class="native-crm-form-error" data-crm-form-error hidden></div>
         </div>
-        <footer class="native-crm-drawer-foot">
-          <button type="button" class="button button-outline" data-crm-drawer-close>Cancelar</button>
-          <button type="submit" class="button button-solid" ${nativeCrmState.saving ? "disabled" : ""}>${nativeCrmState.saving ? "Salvando…" : "Salvar"}</button>
-        </footer>
+        ${isEditMode ? `
+          <footer class="native-crm-drawer-foot">
+            <button type="button" class="button button-outline" data-crm-drawer-close>Cancelar</button>
+            <button type="submit" class="button button-solid" ${nativeCrmState.saving ? "disabled" : ""}>${nativeCrmState.saving ? "Salvando…" : "Salvar"}</button>
+          </footer>
+        ` : ""}
       </form>
     </aside>
   `;
@@ -13035,14 +13095,12 @@ const renderNativeCrm = () => {
   }
   const { pipelines } = getNativeCrmData();
   const pipelineId = selectedCrmPipelineId();
-  const pipelineName = pipelines.find((pipeline) => pipeline.id === pipelineId)?.name || "Comercial";
   root.innerHTML = `
     <div class="native-crm-shell">
       <header class="native-crm-head">
         <div class="native-crm-title">
           <div class="native-crm-eyebrow">Comercial</div>
           <h2>CRM</h2>
-          <p>Pipeline ${escapeHtml(pipelineName)} · visão geral das oportunidades</p>
         </div>
         <div class="native-crm-actions">
           <div class="native-crm-toolbar-group">
@@ -13224,6 +13282,7 @@ const submitNativeCrmForm = async (form) => {
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(data?.error || "crm_save_failed");
     nativeCrmState.drawer = null;
+    nativeCrmState.drawerMode = "view";
     nativeCrmState.loadedAt = 0;
     await loadNativeCrm({ force: true });
   } catch (error) {
@@ -38714,7 +38773,15 @@ document.addEventListener("click", (event) => {
     if (openNew instanceof HTMLButtonElement) {
       event.preventDefault();
       nativeCrmState.drawer = "new";
+      nativeCrmState.drawerMode = "edit";
       nativeCrmState.error = "";
+      renderNativeCrm();
+      return;
+    }
+    const editDrawer = target.closest("[data-crm-edit]");
+    if (editDrawer instanceof HTMLButtonElement) {
+      event.preventDefault();
+      nativeCrmState.drawerMode = "edit";
       renderNativeCrm();
       return;
     }
@@ -38805,6 +38872,7 @@ document.addEventListener("click", (event) => {
     if (closeDrawer instanceof HTMLElement) {
       event.preventDefault();
       nativeCrmState.drawer = null;
+      nativeCrmState.drawerMode = "view";
       nativeCrmState.activityFormOpportunityId = "";
       nativeCrmState.error = "";
       renderNativeCrm();
@@ -38814,6 +38882,7 @@ document.addEventListener("click", (event) => {
     if (card instanceof HTMLElement && !target.closest("button, a, input, select, textarea")) {
       event.preventDefault();
       nativeCrmState.drawer = String(card.getAttribute("data-crm-card") || "");
+      nativeCrmState.drawerMode = "view";
       nativeCrmState.activityFormOpportunityId = "";
       nativeCrmState.error = "";
       renderNativeCrm();
@@ -38824,6 +38893,7 @@ document.addEventListener("click", (event) => {
     if (row instanceof HTMLElement && !target.closest("button, a, input, select, textarea")) {
       event.preventDefault();
       nativeCrmState.drawer = String(row.getAttribute("data-crm-row") || "");
+      nativeCrmState.drawerMode = "view";
       nativeCrmState.activityFormOpportunityId = "";
       nativeCrmState.error = "";
       renderNativeCrm();
@@ -38918,6 +38988,7 @@ document.addEventListener("keydown", (event) => {
   if (card instanceof HTMLElement && (event.key === "Enter" || event.key === " ")) {
     event.preventDefault();
     nativeCrmState.drawer = String(card.getAttribute("data-crm-card") || "");
+    nativeCrmState.drawerMode = "view";
     nativeCrmState.activityFormOpportunityId = "";
     renderNativeCrm();
     loadNativeCrmOpportunityDetail(nativeCrmState.drawer, { force: false }).catch(() => {});
@@ -38926,12 +38997,14 @@ document.addEventListener("keydown", (event) => {
   if (row instanceof HTMLElement && (event.key === "Enter" || event.key === " ")) {
     event.preventDefault();
     nativeCrmState.drawer = String(row.getAttribute("data-crm-row") || "");
+    nativeCrmState.drawerMode = "view";
     nativeCrmState.activityFormOpportunityId = "";
     renderNativeCrm();
     loadNativeCrmOpportunityDetail(nativeCrmState.drawer, { force: false }).catch(() => {});
   }
   if (event.key === "Escape" && nativeCrmState.drawer) {
     nativeCrmState.drawer = null;
+    nativeCrmState.drawerMode = "view";
     nativeCrmState.activityFormOpportunityId = "";
     renderNativeCrm();
   }
