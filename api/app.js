@@ -55,8 +55,12 @@ const initialPanelFromPath = (pathParam) => {
   if (slug === "admin" && sub === "status") return "status-plataforma";
   if (slug === "admin" && sub === "guia") return "guia-colaboradores";
   if (slug === "admin" && sub === "financeiro") return "financeiro";
-  if (slug === "admin" && sub === "comercial") return segments[2] === "metas" ? "admin-comercial-metas" : "admin-comercial-usuarios";
+  if (slug === "admin" && sub === "comercial") {
+    if (segments[2] === "crm") return "native-crm";
+    return segments[2] === "metas" ? "admin-comercial-metas" : "admin-comercial-usuarios";
+  }
   if (slug === "growth") {
+    if (sub === "crm") return "native-crm";
     if (sub === "activities" || sub === "atividades") return "activities";
     if (sub === "sdr" || sub === "scripts-vendas" || sub === "objecoes" || sub === "training") return "growth";
     return "growth-dashboard";
@@ -129,7 +133,7 @@ const buildAppHtml = ({ sessionJson, role, roleSlug, templateHtml, initialPanel 
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
     <script src="/api/runtime-config.js"></script>
     <link rel="stylesheet" href="styles.css" />
-    <link rel="stylesheet" href="finance-v1.css?v=3" />
+    <link rel="stylesheet" href="finance-v1.css?v=4" />
   </head>
   <body data-view="interno" data-page="app" data-app-role="${String(roleSlug || "")}" data-initial-panel="${String(initialPanel || "dashboard")}">
     <div class="page-glow page-glow-left" aria-hidden="true"></div>
@@ -142,7 +146,7 @@ const buildAppHtml = ({ sessionJson, role, roleSlug, templateHtml, initialPanel 
     <script src="/assets/student-lifecycle.js"></script>
     <script src="/assets/lifecycle-metrics.js"></script>
     <script src="finance-customer-link.js?v=1"></script>
-    <script src="finance-v1.js?v=5"></script>
+    <script src="finance-v1.js?v=6"></script>
     <script src="script.js"></script>
     <script src="pedagogico-n8n-ui.js"></script>
     <script src="space-office.js"></script>

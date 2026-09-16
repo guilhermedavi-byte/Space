@@ -455,6 +455,9 @@
               <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-comercial-visao-geral" title="Visão Geral">
                 <span class="sidebar-text">Visão Geral</span>
               </button>
+              <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="native-crm" title="CRM">
+                <span class="sidebar-text">CRM</span>
+              </button>
               <a class="sidebar-link sidebar-link-sub" href="/tv/crm-live" title="CRM Live">
                 <span class="sidebar-text">CRM Live</span>
               </a>
@@ -467,6 +470,25 @@
               </button>
             </div>
           </div>
+          <button
+            class="sidebar-link"
+            type="button"
+            data-panel-target="native-crm"
+            data-growth-crm-link
+            title="CRM"
+            hidden
+          >
+            <span class="sidebar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M4.5 7.5h15"></path>
+                <path d="M7 7.5v11"></path>
+                <path d="M12 7.5v11"></path>
+                <path d="M17 7.5v11"></path>
+                <path d="M4.5 18.5h15"></path>
+              </svg>
+            </span>
+            <span class="sidebar-text">CRM</span>
+          </button>
           <button
             class="sidebar-link"
             type="button"
@@ -2047,6 +2069,12 @@
             <div class="commercial-overview-shell commercial-sdr-activity-shell" data-admin-commercial-sdr-activity-content>
               <div class="commercial-overview-loading" aria-label="Carregando atividade SDR"></div>
             </div>
+          </div>
+        </section>
+
+        <section class="platform-panel" data-panel="native-crm" data-hide-platform-header="true" hidden aria-label="CRM">
+          <div class="native-crm" data-native-crm>
+            <div class="native-crm-loading">Carregando CRM…</div>
           </div>
         </section>
 

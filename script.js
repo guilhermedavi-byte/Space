@@ -50,7 +50,7 @@ const PEDAGOGICO_SIDEBAR_ACTIVE_TARGET_BY_TAB = {
   onboarding: "admin-controle-pedagogico-onboarding",
   relatorios: "admin-controle-pedagogico-relatorios",
 };
-const COMERCIAL_SIDEBAR_PANEL_TARGETS = new Set(["admin-comercial-metas", "admin-comercial-visao-geral", "admin-comercial-atividade-sdr", "admin-comercial-usuarios"]);
+const COMERCIAL_SIDEBAR_PANEL_TARGETS = new Set(["native-crm", "admin-comercial-metas", "admin-comercial-visao-geral", "admin-comercial-atividade-sdr", "admin-comercial-usuarios"]);
 const greetingElement = document.querySelector("[data-greeting]");
 const roleEyebrow = document.querySelector("[data-role-eyebrow]");
 const roleSidebarSubtitle = document.querySelector("[data-role-sidebar-subtitle]");
@@ -947,7 +947,7 @@ const syncRoleUI = () => {
         return;
       }
       const target = String(el.getAttribute("data-panel-target") || "");
-      el.hidden = !["growth-dashboard", "growth", "activities", "attendance-connections"].includes(target);
+      el.hidden = !["growth-dashboard", "native-crm", "growth", "activities", "attendance-connections"].includes(target);
     });
     const dashboardTarget = document.querySelector("[data-growth-dashboard-link]");
     if (dashboardTarget instanceof HTMLElement) {
@@ -961,6 +961,10 @@ const syncRoleUI = () => {
       growthLink.hidden = false;
       const text = growthLink.querySelector(".sidebar-text");
       if (text instanceof HTMLElement) text.textContent = "SDR";
+    }
+    const crmLink = document.querySelector("[data-growth-crm-link]");
+    if (crmLink instanceof HTMLElement) {
+      crmLink.hidden = false;
     }
   }
 
@@ -12111,6 +12115,381 @@ const fetchWithAuth = async (input, init = {}) => {
   // Do not forward our custom option to `fetch`.
   if (Object.prototype.hasOwnProperty.call(opts, "forceRefreshIdToken")) delete opts.forceRefreshIdToken;
   return fetch(input, { ...opts, headers, credentials: opts.credentials || "include" });
+};
+
+const nativeCrmState = {
+  loadedAt: 0,
+  loading: false,
+  saving: false,
+  error: "",
+  data: null,
+  selectedPipelineId: "",
+  search: "",
+  mode: "funnel",
+  drawer: null,
+  draggedOpportunityId: "",
+};
+
+const moneyFormatterCache = new Map();
+
+const getMoneyFormatter = (currency) => {
+  const safeCurrency = String(currency || "BRL").trim().toUpperCase() || "BRL";
+  if (!moneyFormatterCache.has(safeCurrency)) {
+    moneyFormatterCache.set(
+      safeCurrency,
+      new Intl.NumberFormat("pt-BR", {
+        style: "currency",
+        currency: safeCurrency,
+        maximumFractionDigits: 0,
+      }),
+    );
+  }
+  return moneyFormatterCache.get(safeCurrency);
+};
+
+const formatCrmMoney = (value, currency = "BRL") => {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return "";
+  try {
+    return getMoneyFormatter(currency).format(n);
+  } catch {
+    return getMoneyFormatter("BRL").format(n);
+  }
+};
+
+const formatCrmDateTime = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "—";
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+    timeZone: "America/Sao_Paulo",
+  }).format(date);
+};
+
+const getNativeCrmRoot = () => document.querySelector("[data-native-crm]");
+
+const getNativeCrmData = () => {
+  const data = nativeCrmState.data && typeof nativeCrmState.data === "object" ? nativeCrmState.data : {};
+  return {
+    pipelines: Array.isArray(data.pipelines) ? data.pipelines : [],
+    stages: Array.isArray(data.stages) ? data.stages : [],
+    opportunities: Array.isArray(data.opportunities) ? data.opportunities : [],
+    owners: Array.isArray(data.owners) ? data.owners : [],
+  };
+};
+
+const selectedCrmPipelineId = () => {
+  const { pipelines } = getNativeCrmData();
+  return nativeCrmState.selectedPipelineId || pipelines.find((pipeline) => pipeline.isActive)?.id || pipelines[0]?.id || "";
+};
+
+const crmOpportunitiesForStage = (stageId) => {
+  const { opportunities } = getNativeCrmData();
+  const query = String(nativeCrmState.search || "").trim().toLowerCase();
+  return opportunities.filter((opportunity) => {
+    if (opportunity.pipelineId !== selectedCrmPipelineId() || opportunity.stageId !== stageId) return false;
+    if (!query) return true;
+    const contact = opportunity.contact || {};
+    const haystack = [
+      opportunity.title,
+      contact.name,
+      contact.email,
+      contact.phone,
+      opportunity.source,
+      opportunity.owner?.name,
+    ].join(" ").toLowerCase();
+    return haystack.includes(query);
+  });
+};
+
+const renderNativeCrmOwnerOptions = (selected = "") => {
+  const { owners } = getNativeCrmData();
+  return [`<option value="">Sem responsável</option>`]
+    .concat(owners.map((owner) => `<option value="${escapeHtml(owner.id)}" ${String(owner.id) === String(selected || "") ? "selected" : ""}>${escapeHtml(owner.name || owner.email || owner.id)}</option>`))
+    .join("");
+};
+
+const renderNativeCrmStageOptions = (pipelineId, selected = "") => {
+  const { stages } = getNativeCrmData();
+  return stages
+    .filter((stage) => stage.pipelineId === pipelineId)
+    .sort((left, right) => Number(left.position || 0) - Number(right.position || 0))
+    .map((stage) => `<option value="${escapeHtml(stage.id)}" ${String(stage.id) === String(selected || "") ? "selected" : ""}>${escapeHtml(stage.name)}</option>`)
+    .join("");
+};
+
+const renderNativeCrmPipelineOptions = (selected = "") => {
+  const { pipelines } = getNativeCrmData();
+  return pipelines
+    .map((pipeline) => `<option value="${escapeHtml(pipeline.id)}" ${String(pipeline.id) === String(selected || "") ? "selected" : ""}>${escapeHtml(pipeline.name)}</option>`)
+    .join("");
+};
+
+const nativeCrmCardHtml = (opportunity) => {
+  const contact = opportunity.contact || {};
+  const money = formatCrmMoney(opportunity.value, opportunity.currency);
+  const ownerName = opportunity.owner?.name || "";
+  return `
+    <article class="native-crm-card" draggable="true" data-crm-card="${escapeHtml(opportunity.id)}" tabindex="0">
+      <div class="native-crm-card-top">
+        <strong>${escapeHtml(contact.name || opportunity.title || "Lead sem nome")}</strong>
+        ${money ? `<span>${escapeHtml(money)}</span>` : ""}
+      </div>
+      <div class="native-crm-card-title">${escapeHtml(opportunity.title || contact.name || "Oportunidade")}</div>
+      <div class="native-crm-card-meta">
+        ${opportunity.source ? `<span>${escapeHtml(opportunity.source)}</span>` : ""}
+        ${ownerName ? `<span>${escapeHtml(ownerName)}</span>` : ""}
+      </div>
+    </article>
+  `;
+};
+
+const renderNativeCrmBoard = () => {
+  const pipelineId = selectedCrmPipelineId();
+  const { stages } = getNativeCrmData();
+  const visibleStages = stages
+    .filter((stage) => stage.pipelineId === pipelineId)
+    .sort((left, right) => Number(left.position || 0) - Number(right.position || 0));
+  if (!visibleStages.length) {
+    return `<div class="native-crm-empty">Nenhuma etapa configurada para este pipeline.</div>`;
+  }
+  return `
+    <div class="native-crm-board" data-crm-board>
+      ${visibleStages.map((stage) => {
+        const opportunities = crmOpportunitiesForStage(stage.id);
+        const total = opportunities.reduce((sum, opportunity) => sum + (Number(opportunity.value) || 0), 0);
+        return `
+          <section class="native-crm-column" data-crm-stage="${escapeHtml(stage.id)}">
+            <header class="native-crm-column-head">
+              <strong>${escapeHtml(stage.name)}</strong>
+              <span>${opportunities.length} leads · ${escapeHtml(formatCrmMoney(total, "BRL") || "R$ 0")}</span>
+            </header>
+            <div class="native-crm-column-drop" data-crm-dropzone="${escapeHtml(stage.id)}">
+              ${opportunities.map(nativeCrmCardHtml).join("") || `<div class="native-crm-column-empty">Sem oportunidades</div>`}
+            </div>
+          </section>
+        `;
+      }).join("")}
+    </div>
+  `;
+};
+
+const renderNativeCrmDrawer = () => {
+  const drawer = nativeCrmState.drawer;
+  if (!drawer) return "";
+  const isNew = drawer === "new";
+  const { opportunities } = getNativeCrmData();
+  const opportunity = isNew ? null : opportunities.find((row) => row.id === drawer);
+  if (!isNew && !opportunity) return "";
+  const contact = opportunity?.contact || {};
+  const pipelineId = opportunity?.pipelineId || selectedCrmPipelineId();
+  const stageId = opportunity?.stageId || getNativeCrmData().stages.find((stage) => stage.pipelineId === pipelineId)?.id || "";
+  return `
+    <div class="native-crm-drawer-backdrop" data-crm-drawer-close></div>
+    <aside class="native-crm-drawer" aria-label="${isNew ? "Novo lead" : "Detalhes da oportunidade"}">
+      <form data-crm-form="${isNew ? "new" : "edit"}" data-crm-opportunity-id="${escapeHtml(opportunity?.id || "")}">
+        <header class="native-crm-drawer-head">
+          <div>
+            <span>${isNew ? "Novo lead" : escapeHtml(getNativeCrmData().stages.find((stage) => stage.id === stageId)?.name || "Oportunidade")}</span>
+            <h2>${isNew ? "Nova oportunidade" : escapeHtml(contact.name || opportunity.title || "Oportunidade")}</h2>
+            ${!isNew ? `<p>${escapeHtml(opportunity.status || "open")}</p>` : ""}
+          </div>
+          <button type="button" class="native-crm-icon-button" data-crm-drawer-close aria-label="Fechar">×</button>
+        </header>
+        <div class="native-crm-drawer-body">
+          <section class="native-crm-form-section">
+            <h3>Informações do contato</h3>
+            <label><span>Nome *</span><input name="name" required value="${escapeHtml(contact.name || "")}" /></label>
+            <label><span>Telefone</span><input name="phone" value="${escapeHtml(contact.phone || "")}" /></label>
+            <label><span>E-mail</span><input name="email" type="email" value="${escapeHtml(contact.email || "")}" /></label>
+          </section>
+          <section class="native-crm-form-section">
+            <h3>Informações comerciais</h3>
+            <label><span>Título</span><input name="title" value="${escapeHtml(opportunity?.title || contact.name || "")}" /></label>
+            <div class="native-crm-form-grid">
+              <label><span>Valor</span><input name="value" type="number" min="0" step="0.01" value="${escapeHtml(opportunity?.value ?? "")}" /></label>
+              <label><span>Moeda</span><input name="currency" maxlength="3" value="${escapeHtml(opportunity?.currency || "BRL")}" /></label>
+            </div>
+            <label><span>Origem</span><input name="source" value="${escapeHtml(opportunity?.source || "")}" /></label>
+            <label><span>Responsável</span><select name="ownerId">${renderNativeCrmOwnerOptions(opportunity?.ownerId || "")}</select></label>
+            <div class="native-crm-form-grid">
+              <label><span>Pipeline</span><select name="pipelineId" data-crm-form-pipeline>${renderNativeCrmPipelineOptions(pipelineId)}</select></label>
+              <label><span>Etapa</span><select name="stageId" data-crm-form-stage>${renderNativeCrmStageOptions(pipelineId, stageId)}</select></label>
+            </div>
+            ${isNew ? "" : `
+              <div class="native-crm-form-grid">
+                <label><span>Status</span><select name="status">
+                  <option value="open" ${opportunity.status === "open" ? "selected" : ""}>Aberta</option>
+                  <option value="won" ${opportunity.status === "won" ? "selected" : ""}>Ganha</option>
+                  <option value="lost" ${opportunity.status === "lost" ? "selected" : ""}>Perdida</option>
+                </select></label>
+                <label><span>Previsão</span><input name="expectedCloseDate" type="date" value="${escapeHtml(opportunity.expectedCloseDate || "")}" /></label>
+              </div>
+              <label><span>Motivo de perda</span><input name="lostReason" value="${escapeHtml(opportunity.lostReason || "")}" /></label>
+            `}
+          </section>
+          ${isNew ? "" : `
+            <section class="native-crm-form-section">
+              <h3>Datas</h3>
+              <div class="native-crm-date-grid">
+                <div><span>Criado em</span><strong>${escapeHtml(formatCrmDateTime(opportunity.createdAt))}</strong></div>
+                <div><span>Última atualização</span><strong>${escapeHtml(formatCrmDateTime(opportunity.updatedAt))}</strong></div>
+              </div>
+            </section>
+          `}
+          <div class="native-crm-form-error" data-crm-form-error hidden></div>
+        </div>
+        <footer class="native-crm-drawer-foot">
+          <button type="button" class="button button-outline" data-crm-drawer-close>Cancelar</button>
+          <button type="submit" class="button button-solid" ${nativeCrmState.saving ? "disabled" : ""}>${nativeCrmState.saving ? "Salvando…" : "Salvar"}</button>
+        </footer>
+      </form>
+    </aside>
+  `;
+};
+
+const renderNativeCrm = () => {
+  const root = getNativeCrmRoot();
+  if (!(root instanceof HTMLElement)) return;
+  if (nativeCrmState.loading && !nativeCrmState.data) {
+    root.innerHTML = `<div class="native-crm-loading">Carregando CRM…</div>`;
+    return;
+  }
+  if (nativeCrmState.error && !nativeCrmState.data) {
+    root.innerHTML = `
+      <div class="native-crm-error">
+        <strong>Não foi possível carregar o CRM.</strong>
+        <span>${escapeHtml(nativeCrmState.error)}</span>
+        <button class="button button-solid button-small" type="button" data-crm-retry>Tentar novamente</button>
+      </div>
+    `;
+    return;
+  }
+  const { pipelines } = getNativeCrmData();
+  const pipelineId = selectedCrmPipelineId();
+  root.innerHTML = `
+    <div class="native-crm-shell">
+      <header class="native-crm-head">
+        <div>
+          <div class="native-crm-eyebrow">Comercial</div>
+          <h2>CRM</h2>
+        </div>
+        <div class="native-crm-actions">
+          <select data-crm-pipeline aria-label="Pipeline">${renderNativeCrmPipelineOptions(pipelineId)}</select>
+          <input type="search" placeholder="Buscar lead" value="${escapeHtml(nativeCrmState.search)}" data-crm-search />
+          <button type="button" class="native-crm-filter" disabled>Filtros</button>
+          <div class="native-crm-segment" aria-label="Visualização">
+            <button type="button" class="is-active" data-crm-view="funnel">Funil</button>
+            <button type="button" data-crm-view="list" disabled>Lista</button>
+          </div>
+          <button type="button" class="button button-solid button-small" data-crm-new>+ Novo lead</button>
+        </div>
+      </header>
+      ${pipelines.length ? renderNativeCrmBoard() : `<div class="native-crm-empty">Nenhum pipeline disponível.</div>`}
+      ${nativeCrmState.error ? `<div class="native-crm-toast">${escapeHtml(nativeCrmState.error)}</div>` : ""}
+    </div>
+    ${renderNativeCrmDrawer()}
+  `;
+};
+
+const loadNativeCrm = async ({ force = false } = {}) => {
+  const now = Date.now();
+  if (!force && nativeCrmState.loading) return;
+  if (!force && nativeCrmState.loadedAt && now - nativeCrmState.loadedAt < 30_000) {
+    renderNativeCrm();
+    return;
+  }
+  nativeCrmState.loading = true;
+  nativeCrmState.error = "";
+  renderNativeCrm();
+  try {
+    const res = await fetchWithAuth("/api/crm", { method: "GET" });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error || "crm_load_failed");
+    nativeCrmState.data = data;
+    nativeCrmState.loadedAt = Date.now();
+    if (!nativeCrmState.selectedPipelineId) nativeCrmState.selectedPipelineId = selectedCrmPipelineId();
+  } catch (error) {
+    nativeCrmState.error = error?.message || "Erro ao carregar CRM.";
+  } finally {
+    nativeCrmState.loading = false;
+    renderNativeCrm();
+  }
+};
+
+const collectCrmFormPayload = (form) => {
+  const fd = new FormData(form);
+  const payload = {};
+  ["name", "phone", "email", "title", "value", "currency", "source", "ownerId", "pipelineId", "stageId", "status", "lostReason", "expectedCloseDate"].forEach((key) => {
+    payload[key] = String(fd.get(key) || "").trim();
+  });
+  return payload;
+};
+
+const submitNativeCrmForm = async (form) => {
+  const kind = String(form.getAttribute("data-crm-form") || "");
+  const errorEl = form.querySelector("[data-crm-form-error]");
+  const payload = collectCrmFormPayload(form);
+  if (!payload.name) {
+    if (errorEl instanceof HTMLElement) {
+      errorEl.textContent = "Informe o nome do contato.";
+      errorEl.hidden = false;
+    }
+    return;
+  }
+  nativeCrmState.saving = true;
+  renderNativeCrm();
+  try {
+    const bodyPayload = {
+      ...payload,
+      action: kind === "new" ? "create_opportunity" : "update_opportunity",
+      id: String(form.getAttribute("data-crm-opportunity-id") || ""),
+    };
+    const res = await fetchWithAuth("/api/crm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(bodyPayload),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error || "crm_save_failed");
+    nativeCrmState.drawer = null;
+    nativeCrmState.loadedAt = 0;
+    await loadNativeCrm({ force: true });
+  } catch (error) {
+    nativeCrmState.error = error?.message || "Não foi possível salvar.";
+    renderNativeCrm();
+  } finally {
+    nativeCrmState.saving = false;
+  }
+};
+
+const moveNativeCrmOpportunity = async (opportunityId, stageId) => {
+  const { opportunities } = getNativeCrmData();
+  const opportunity = opportunities.find((row) => row.id === opportunityId);
+  if (!opportunity || opportunity.stageId === stageId) return;
+  const previousStageId = opportunity.stageId;
+  opportunity.stageId = stageId;
+  opportunity.updatedAt = new Date().toISOString();
+  nativeCrmState.error = "";
+  renderNativeCrm();
+  try {
+    const res = await fetchWithAuth("/api/crm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "move_opportunity", id: opportunityId, stageId }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error || "crm_stage_change_failed");
+    nativeCrmState.loadedAt = 0;
+    await loadNativeCrm({ force: true });
+  } catch (error) {
+    opportunity.stageId = previousStageId;
+    nativeCrmState.error = "Movimento não salvo. A etapa anterior foi restaurada.";
+    renderNativeCrm();
+  }
 };
 
 const getRuntimeFeatureFlags = () => {
@@ -36915,6 +37294,16 @@ const showPanel = (panelName) => {
     return;
   }
 
+  if (panelName === "native-crm") {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (!["admin", "growth"].includes(String(currentRole || ""))) {
+      navigateApp(roleBasePath(currentRole), { replace: true });
+      return;
+    }
+    loadNativeCrm({ force: false }).catch((error) => console.error("[crm] load failed:", error));
+    return;
+  }
+
 	  if (panelName === "growth") {
     window.scrollTo({ top: 0, behavior: "smooth" });
     renderSalesCopilot();
@@ -37134,6 +37523,7 @@ const panelPathForRole = (role, panel) => {
     if (p === "configuracoes-admin") return "/app/admin/configuracoes";
 	    if (p === "financeiro") return financePathForState(role);
     if (p === "admin-comercial-visao-geral") return "/app/admin/comercial";
+    if (p === "native-crm") return "/app/admin/comercial/crm";
     if (p === "admin-comercial-atividade-sdr") return "/app/admin/comercial/pre-vendas";
     if (p === "admin-comercial-metas") return "/app/admin/comercial/metas";
     if (p === "admin-comercial-usuarios") return "/app/admin/comercial/usuarios";
@@ -37146,6 +37536,7 @@ const panelPathForRole = (role, panel) => {
 
   if (normalized === "growth") {
     if (p === "dashboard" || p === "growth-dashboard") return "/app/growth/dashboard";
+    if (p === "native-crm") return "/app/growth/crm";
     if (p === "activities") return "/app/growth/atividades";
     if (["sdr", "scripts-vendas", "objecoes", "training"].includes(p)) return `/app/growth/${p}`;
     return "/app/growth/sdr";
@@ -37226,6 +37617,7 @@ const parseAppRoute = (path) => {
 	      return { role, panel: "financeiro", financeTab };
 	    }
     if (sub === "comercial") {
+      if (detail === "crm") return { role, panel: "native-crm" };
       if (detail === "metas") return { role, panel: "admin-comercial-metas" };
       if (detail === "usuarios") return { role, panel: "admin-comercial-usuarios" };
       if (detail === "atividade-sdr" || detail === "pre-vendas") return { role, panel: "admin-comercial-atividade-sdr" };
@@ -37240,6 +37632,7 @@ const parseAppRoute = (path) => {
 
   if (role === "growth") {
     if (sub === "dashboard" || !sub) return { role, panel: "growth-dashboard" };
+    if (sub === "crm") return { role, panel: "native-crm" };
     if (sub === "activities" || sub === "atividades") return { role, panel: "activities" };
     if (["sdr", "scripts-vendas", "objecoes", "training"].includes(sub)) return { role, panel: "growth", growthTab: sub };
     return { role, panel: "growth-dashboard" };
@@ -37408,6 +37801,39 @@ document.addEventListener(
 document.addEventListener("click", (event) => {
   const target = event.target;
   if (!(target instanceof Element)) return;
+  const crmRoot = target.closest("[data-native-crm]");
+  if (crmRoot instanceof HTMLElement) {
+    const retry = target.closest("[data-crm-retry]");
+    if (retry instanceof HTMLButtonElement) {
+      event.preventDefault();
+      loadNativeCrm({ force: true }).catch(() => {});
+      return;
+    }
+    const openNew = target.closest("[data-crm-new]");
+    if (openNew instanceof HTMLButtonElement) {
+      event.preventDefault();
+      nativeCrmState.drawer = "new";
+      nativeCrmState.error = "";
+      renderNativeCrm();
+      return;
+    }
+    const closeDrawer = target.closest("[data-crm-drawer-close]");
+    if (closeDrawer instanceof HTMLElement) {
+      event.preventDefault();
+      nativeCrmState.drawer = null;
+      nativeCrmState.error = "";
+      renderNativeCrm();
+      return;
+    }
+    const card = target.closest("[data-crm-card]");
+    if (card instanceof HTMLElement && !target.closest("button, a, input, select, textarea")) {
+      event.preventDefault();
+      nativeCrmState.drawer = String(card.getAttribute("data-crm-card") || "");
+      nativeCrmState.error = "";
+      renderNativeCrm();
+      return;
+    }
+  }
   const clear = target.closest("[data-finance-filter-clear]");
   if (clear instanceof HTMLButtonElement) {
     event.preventDefault();
@@ -37416,6 +37842,113 @@ document.addEventListener("click", (event) => {
     financeState.filters.cobrancas = "todos";
     renderFinancePanel();
   }
+});
+
+document.addEventListener("submit", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLFormElement)) return;
+  if (!target.matches("[data-crm-form]")) return;
+  event.preventDefault();
+  submitNativeCrmForm(target).catch((error) => {
+    nativeCrmState.error = error?.message || "Não foi possível salvar.";
+    renderNativeCrm();
+  });
+});
+
+document.addEventListener("input", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement)) return;
+  if (target.matches("[data-crm-search]")) {
+    nativeCrmState.search = target.value;
+    renderNativeCrm();
+  }
+});
+
+document.addEventListener("change", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLSelectElement)) return;
+  if (target.matches("[data-crm-pipeline]")) {
+    nativeCrmState.selectedPipelineId = target.value;
+    renderNativeCrm();
+    return;
+  }
+  if (target.matches("[data-crm-form-pipeline]")) {
+    const form = target.closest("[data-crm-form]");
+    const stageSelect = form?.querySelector("[data-crm-form-stage]");
+    if (stageSelect instanceof HTMLSelectElement) {
+      stageSelect.innerHTML = renderNativeCrmStageOptions(target.value, "");
+    }
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  const card = target.closest("[data-crm-card]");
+  if (card instanceof HTMLElement && (event.key === "Enter" || event.key === " ")) {
+    event.preventDefault();
+    nativeCrmState.drawer = String(card.getAttribute("data-crm-card") || "");
+    renderNativeCrm();
+  }
+  if (event.key === "Escape" && nativeCrmState.drawer) {
+    nativeCrmState.drawer = null;
+    renderNativeCrm();
+  }
+});
+
+document.addEventListener("dragstart", (event) => {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  const card = target.closest("[data-crm-card]");
+  if (!(card instanceof HTMLElement)) return;
+  nativeCrmState.draggedOpportunityId = String(card.getAttribute("data-crm-card") || "");
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", nativeCrmState.draggedOpportunityId);
+  }
+  card.classList.add("is-dragging");
+});
+
+document.addEventListener("dragend", (event) => {
+  const target = event.target;
+  if (target instanceof Element) {
+    const card = target.closest("[data-crm-card]");
+    if (card instanceof HTMLElement) card.classList.remove("is-dragging");
+  }
+  document.querySelectorAll("[data-crm-dropzone].is-over").forEach((node) => node.classList.remove("is-over"));
+  nativeCrmState.draggedOpportunityId = "";
+});
+
+document.addEventListener("dragover", (event) => {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  const dropzone = target.closest("[data-crm-dropzone]");
+  if (!(dropzone instanceof HTMLElement)) return;
+  event.preventDefault();
+  dropzone.classList.add("is-over");
+  if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+});
+
+document.addEventListener("dragleave", (event) => {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  const dropzone = target.closest("[data-crm-dropzone]");
+  if (dropzone instanceof HTMLElement) dropzone.classList.remove("is-over");
+});
+
+document.addEventListener("drop", (event) => {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  const dropzone = target.closest("[data-crm-dropzone]");
+  if (!(dropzone instanceof HTMLElement)) return;
+  event.preventDefault();
+  dropzone.classList.remove("is-over");
+  const opportunityId = event.dataTransfer?.getData("text/plain") || nativeCrmState.draggedOpportunityId;
+  const stageId = String(dropzone.getAttribute("data-crm-dropzone") || "");
+  moveNativeCrmOpportunity(opportunityId, stageId).catch((error) => {
+    nativeCrmState.error = error?.message || "Não foi possível mover.";
+    renderNativeCrm();
+  });
 });
 
 document.addEventListener("click", (event) => {
