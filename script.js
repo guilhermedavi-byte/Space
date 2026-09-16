@@ -12171,6 +12171,8 @@ const automationsState = {
   error: "",
 };
 
+let automationRunPollingTimer = null;
+
 const getAutomationsRoot = () => document.querySelector("[data-automations-admin]");
 
 const automationDraftGraph = (automation) => automation?.draft_version?.graph || automation?.active_version?.graph || null;
@@ -12239,6 +12241,7 @@ const mountAutomationEditorIsland = () => {
         catalog: automationsState.catalog || [],
         validationIssues: automationsState.publishIssues || [],
         onSaveDraft: saveAutomationDraftFromEditor,
+        onBackToEditor: closeAutomationExecutionMode,
         onGraphPreview: (graph) => {
           automationsState.editorGraphPreview = graph;
         },
@@ -12307,6 +12310,7 @@ const loadAutomationsAdmin = async ({ force = false, selectId = "" } = {}) => {
 };
 
 const openAutomation = async (id, { render = true } = {}) => {
+  stopAutomationRunPolling();
   automationsState.selectedId = id;
   const [detailRes, runsRes] = await Promise.all([
     fetchWithAuth(`/api/automations?id=${encodeURIComponent(id)}`),
@@ -12320,6 +12324,30 @@ const openAutomation = async (id, { render = true } = {}) => {
   automationsState.runDetail = null;
   automationsState.publishIssues = [];
   if (render) renderAutomationsAdmin();
+};
+
+const stopAutomationRunPolling = () => {
+  if (automationRunPollingTimer) window.clearTimeout(automationRunPollingTimer);
+  automationRunPollingTimer = null;
+};
+
+const scheduleAutomationRunPolling = () => {
+  stopAutomationRunPolling();
+  const status = String(automationsState.runDetail?.run?.status || "").toUpperCase();
+  if (!["RUNNING", "PENDING"].includes(status) || document.hidden) return;
+  automationRunPollingTimer = window.setTimeout(() => {
+    const runId = String(automationsState.runDetail?.run?.id || "").trim();
+    if (runId) loadAutomationRunDetail(runId, { render: true }).catch((error) => {
+      automationsState.error = error?.message || "Não foi possível atualizar a execução.";
+      renderAutomationsAdmin();
+    });
+  }, 3000);
+};
+
+const closeAutomationExecutionMode = () => {
+  stopAutomationRunPolling();
+  automationsState.runDetail = null;
+  renderAutomationsAdmin();
 };
 
 const createAutomationFromCrmDefaults = async () => {
@@ -12404,14 +12432,15 @@ const saveAutomationDraftFromEditor = async (graph, { baseUpdatedAt = "" } = {})
   return data;
 };
 
-const loadAutomationRunDetail = async (runId) => {
+const loadAutomationRunDetail = async (runId, { render = true } = {}) => {
   const id = String(automationsState.selectedId || automationsState.selected?.id || "").trim();
   if (!id || !runId) return;
   const res = await fetchWithAuth(`/api/automations?id=${encodeURIComponent(id)}&resource=runs&runId=${encodeURIComponent(runId)}`);
   const data = await res.json().catch(() => null);
   if (!res.ok) throw new Error(data?.error || "automation_run_load_failed");
   automationsState.runDetail = data;
-  renderAutomationsAdmin();
+  if (render) renderAutomationsAdmin();
+  scheduleAutomationRunPolling();
 };
 
 let nativeCrmSearchTimer = null;
@@ -39370,6 +39399,11 @@ document.addEventListener(
   },
   true
 );
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) stopAutomationRunPolling();
+  else scheduleAutomationRunPolling();
+});
 
 document.addEventListener("click", (event) => {
   const target = event.target;

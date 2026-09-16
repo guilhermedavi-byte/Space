@@ -15,6 +15,7 @@ import "@xyflow/react/dist/style.css";
 
 const {
   NODE_CATALOG,
+  buildExecutionOverlay,
   canonicalToFlow,
   catalogItemToNode,
   connectNodes,
@@ -28,10 +29,37 @@ const {
 
 const statusMark = (status) => {
   if (status === "SUCCESS") return "✓";
-  if (status === "FAILED") return "!";
+  if (status === "FAILED") return "✕";
   if (status === "RUNNING") return "…";
   if (status === "SKIPPED") return "↷";
   return "";
+};
+
+const statusText = (status = "") => String(status || "").toUpperCase() || "PENDING";
+
+const formatDuration = (ms) => {
+  const n = Number(ms);
+  if (!Number.isFinite(n) || n < 0) return "-";
+  if (n < 1000) return `${Math.round(n)} ms`;
+  return `${Math.round(n / 100) / 10} s`;
+};
+
+const formatTime = (value) => {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(date);
+};
+
+const compactId = (value = "") => {
+  const id = String(value || "");
+  return id.length > 14 ? `${id.slice(0, 8)}...${id.slice(-4)}` : id || "-";
+};
+
+const JsonBlock = ({ value }) => {
+  const text = JSON.stringify(value || {}, null, 2);
+  const large = text.length > 900;
+  return <pre className={`automation-json ${large ? "is-large" : ""}`}>{large ? `${text.slice(0, 900)}\n...` : text}</pre>;
 };
 
 const actionSummary = (node, crm) => {
@@ -51,16 +79,16 @@ const SpaceNode = memo(({ data, selected }) => {
   const isEnd = kind === "end";
   const incomplete = kind === "action" && data.incomplete;
   return (
-    <div className={`automation-canvas-node is-${kind} ${selected ? "is-selected" : ""} ${data.error || incomplete ? "has-error" : ""}`}>
+    <div className={`automation-canvas-node is-${kind} ${selected ? "is-selected" : ""} ${data.error || incomplete ? "has-error" : ""} ${data.executionMode && !data.visited ? "is-unvisited" : ""}`}>
       <Handle type="target" id="in" position={Position.Left} className="automation-canvas-handle in" isConnectable={!["trigger"].includes(kind)} />
       <div className="automation-canvas-node-top">
         <span>{data.typeLabel}</span>
-        {data.status ? <em className={`automation-node-status is-${String(data.status).toLowerCase()}`}>{statusMark(data.status)} {data.status}</em> : null}
+        {data.status ? <em className={`automation-node-status is-${String(data.status).toLowerCase()}`}>{statusMark(data.status)} {data.status}</em> : data.executionMode ? <em className="automation-node-status is-pending">PENDING</em> : null}
       </div>
       <strong>{data.label}</strong>
       {!isEnd ? <small>{data.summary || data.subtitle}</small> : null}
       {incomplete ? <small className="automation-node-error">⚠ Configuração incompleta</small> : null}
-      {data.branch ? <small className="automation-node-branch">Branch {data.branch}</small> : null}
+      {data.branch ? <small className="automation-node-branch">Resultado {data.branch === "NAO" ? "NÃO" : data.branch}</small> : null}
       {data.error ? <small className="automation-node-error">⚠ {data.error}</small> : null}
       {isCondition ? (
         <>
@@ -163,18 +191,81 @@ function PropertiesPanel({ node, crm, onConfigChange, onDeleteNode }) {
   );
 }
 
-function AutomationEditor({ automation, rows, runDetail, crm, catalog, validationIssues, onGraphPreview, onSaveDraft }) {
-  const graph = automation?.draft_version?.graph || automation?.active_version?.graph || { nodes: [], edges: [] };
+function ExecutionInspector({ node, runDetail, onBackToEditor }) {
+  const canonical = node?.data?.canonical || null;
+  const step = node?.data?.executionStep || null;
+  const run = runDetail?.run || null;
+  const version = runDetail?.version || null;
+  const event = runDetail?.event || null;
+  return (
+    <aside className="automation-properties automation-execution-inspector">
+      <button type="button" className="automation-back-button" onClick={onBackToEditor}>Voltar ao editor</button>
+      <section className="automation-run-summary">
+        <span>{statusText(run?.status)}</span>
+        <strong>Version V{version?.versionNumber || "-"}</strong>
+        <small>{formatDuration(run?.duration_ms)} · {run?.event_type || event?.eventType || "-"}</small>
+        <small>Event {compactId(run?.event_id || event?.eventId)}</small>
+      </section>
+      {node ? (
+        <>
+          <header>
+            <span>{node.data?.typeLabel}</span>
+            <h3>{node.data?.label}</h3>
+            <p>{nodeKey(canonical)}</p>
+          </header>
+          <div className="automation-execution-grid">
+            <span>Status</span><strong>{statusText(step?.status)}</strong>
+            <span>Started</span><strong>{formatTime(step?.started_at)}</strong>
+            <span>Finished</span><strong>{formatTime(step?.finished_at)}</strong>
+            <span>Tentativas</span><strong>{step?.attempt_count ?? "-"}</strong>
+            {canonical?.type === "condition" ? <><span>Matched</span><strong>{step?.output?.matched === true ? "SIM" : step?.output?.matched === false ? "NÃO" : "-"}</strong></> : null}
+            {canonical?.type === "action" ? <><span>Action type</span><strong>{canonical.actionType || canonical.action_type || "-"}</strong></> : null}
+            {canonical?.type === "action" ? <><span>Idempotency</span><strong>{step?.input?.idempotencyKey ? `Protected ${compactId(step.input.idempotencyKey)}` : "-"}</strong></> : null}
+          </div>
+          <details>
+            <summary>Input</summary>
+            <JsonBlock value={step?.input || {}} />
+          </details>
+          <details>
+            <summary>Output</summary>
+            <JsonBlock value={step?.output || {}} />
+          </details>
+          {step?.error ? <details open><summary>Erro</summary><JsonBlock value={step.error} /></details> : null}
+        </>
+      ) : (
+        <div className="automation-properties-empty">Selecione um node para ver os dados da execução.</div>
+      )}
+      {event ? (
+        <details>
+          <summary>Evento</summary>
+          <div className="automation-execution-grid">
+            <span>Tipo</span><strong>{event.eventType || "-"}</strong>
+            <span>Origem</span><strong>{event.source || "-"}</strong>
+            <span>Aggregate</span><strong>{event.aggregateType || "-"} · {compactId(event.aggregateId)}</strong>
+            <span>Horário</span><strong>{formatTime(event.occurredAt)}</strong>
+          </div>
+          <JsonBlock value={event.payload || {}} />
+        </details>
+      ) : null}
+    </aside>
+  );
+}
+
+function AutomationEditor({ automation, rows, runs, runDetail, crm, catalog, validationIssues, onGraphPreview, onSaveDraft, onBackToEditor }) {
+  const editorGraph = automation?.draft_version?.graph || automation?.active_version?.graph || { nodes: [], edges: [] };
+  const executionMode = Boolean(runDetail?.run && runDetail?.version?.graph);
+  const graph = executionMode ? runDetail.version.graph : editorGraph;
   const issues = Array.isArray(validationIssues) ? validationIssues : [];
   const issuesByNode = useMemo(() => issues.reduce((map, issue) => {
     if (!issue?.nodeId) return map;
     map[issue.nodeId] = [...(map[issue.nodeId] || []), issue];
     return map;
   }, {}), [issues]);
+  const executionOverlay = useMemo(() => executionMode ? buildExecutionOverlay({ graph, run: runDetail?.run, steps: runDetail?.steps || [] }) : null, [executionMode, graph, runDetail]);
   const enrichedGraph = useMemo(() => canonicalToFlow(graph, {
-    executionSteps: runDetail?.steps || [],
+    executionOverlay,
     errors: Object.fromEntries(Object.entries(issuesByNode).map(([nodeId, rows]) => [nodeId, issueLabel(rows[0])])),
-  }), [graph, runDetail, issuesByNode]);
+  }), [graph, executionOverlay, issuesByNode]);
   const decorateNode = (node) => {
     const canonical = node.data?.canonical || {};
     const summary = actionSummary(canonical, crm);
@@ -237,6 +328,7 @@ function AutomationEditor({ automation, rows, runDetail, crm, catalog, validatio
   };
 
   const markDirty = (nextNodes = nodes, nextEdges = edges, nextViewport = viewport) => {
+    if (executionMode) return;
     scheduleSave(canonicalFromFlow(nextNodes, nextEdges, nextViewport));
   };
 
@@ -292,9 +384,11 @@ function AutomationEditor({ automation, rows, runDetail, crm, catalog, validatio
   const metrics = automation?.metrics || {};
   const version = automation?.draft_version?.version_number || automation?.active_version?.version_number || "-";
   const workflows = Array.isArray(rows) ? rows : [];
+  const runRows = Array.isArray(runs) ? runs : [];
   const catalogGroups = groupCatalog(Array.isArray(catalog) && catalog.length ? catalog : NODE_CATALOG);
 
   const addNode = (item) => {
+    if (executionMode) return;
     const position = {
       x: Math.round((window.innerWidth * 0.5 - viewport.x) / (viewport.zoom || 1)),
       y: Math.round((window.innerHeight * 0.45 - viewport.y) / (viewport.zoom || 1)),
@@ -310,6 +404,7 @@ function AutomationEditor({ automation, rows, runDetail, crm, catalog, validatio
   };
 
   const deleteNode = (nodeId) => {
+    if (executionMode) return;
     const canonical = canonicalFromFlow();
     const relatedEdges = (canonical.edges || []).filter((edge) => edge.from === nodeId || edge.to === nodeId).length;
     if (relatedEdges && !window.confirm(`Excluir esta etapa também removerá ${relatedEdges} conexões.`)) return;
@@ -328,6 +423,7 @@ function AutomationEditor({ automation, rows, runDetail, crm, catalog, validatio
   };
 
   const updateConfig = (nodeId, patch) => {
+    if (executionMode) return;
     const canonical = updateActionConfig(canonicalFromFlow(), nodeId, patch, crm);
     const nextFlow = canonicalToFlow(canonical);
     const nextNodes = nextFlow.nodes.map(decorateNode);
@@ -337,6 +433,7 @@ function AutomationEditor({ automation, rows, runDetail, crm, catalog, validatio
   };
 
   const validateConnection = (connection) => {
+    if (executionMode) return false;
     const result = isValidConnection(canonicalFromFlow(), connection);
     if (!result.ok) setConnectionError(result.reason);
     else setConnectionError("");
@@ -344,6 +441,7 @@ function AutomationEditor({ automation, rows, runDetail, crm, catalog, validatio
   };
 
   const connect = (connection) => {
+    if (executionMode) return;
     const result = connectNodes(canonicalFromFlow(), connection);
     if (!result.ok) {
       setConnectionError(result.reason);
@@ -391,6 +489,21 @@ function AutomationEditor({ automation, rows, runDetail, crm, catalog, validatio
               );
             })}
           </div>
+          <div className="automation-run-list">
+            <header><span>Execuções</span></header>
+            {runRows.length ? runRows.slice(0, 50).map((run) => (
+              <button type="button" key={run.id} className={runDetail?.run?.id === run.id ? "is-active" : ""} data-automation-run={run.id}>
+                <strong>{statusMark(run.status)} {statusText(run.status)}</strong>
+                <span>{formatTime(run.created_at || run.started_at)} · V{run.version_number || run.automation_version_number || "-"} · {formatDuration(run.duration_ms)}</span>
+                <small>{compactId(run.event_id)}</small>
+              </button>
+            )) : (
+              <div className="automation-run-empty">
+                <strong>Nenhuma execução ainda.</strong>
+                <span>Quando esta automação for disparada, as execuções aparecerão aqui.</span>
+              </div>
+            )}
+          </div>
         </aside>
         <main className="automation-builder">
           <header className="automation-builder-head">
@@ -399,12 +512,14 @@ function AutomationEditor({ automation, rows, runDetail, crm, catalog, validatio
               <h2>{automation?.name || "Workflow"}</h2>
             </div>
             <div className="automation-builder-actions">
-              <span className={`automation-status-pill is-${String(automation?.status || "draft").toLowerCase()}`}>{automation?.status || "DRAFT"}</span>
-              <button type="button" className="button button-outline button-small" disabled>Executar teste</button>
-              <button type="button" className={`button button-outline button-small automation-save-state is-${saveState}`} onClick={flushSave}>
-                {saveState === "saving" ? "Salvando..." : saveState === "dirty" ? "Alterações não salvas" : saveState === "error" ? "Erro ao salvar" : "Salvo"}
-              </button>
-              <button type="button" className="button button-solid button-small" data-automation-publish={automation?.id || ""}>Publicar</button>
+              <span className={`automation-status-pill is-${String(executionMode ? runDetail?.run?.status : automation?.status || "draft").toLowerCase()}`}>{executionMode ? `RUN ${statusText(runDetail?.run?.status)}` : automation?.status || "DRAFT"}</span>
+              {executionMode ? <button type="button" className="button button-outline button-small" onClick={onBackToEditor}>Voltar ao editor</button> : <button type="button" className="button button-outline button-small" disabled>Executar teste</button>}
+              {!executionMode ? (
+                <button type="button" className={`button button-outline button-small automation-save-state is-${saveState}`} onClick={flushSave}>
+                  {saveState === "saving" ? "Salvando..." : saveState === "dirty" ? "Alterações não salvas" : saveState === "error" ? "Erro ao salvar" : "Salvo"}
+                </button>
+              ) : null}
+              {!executionMode ? <button type="button" className="button button-solid button-small" data-automation-publish={automation?.id || ""}>Publicar</button> : null}
             </div>
           </header>
           <section className="automation-canvas-shell">
@@ -414,21 +529,21 @@ function AutomationEditor({ automation, rows, runDetail, crm, catalog, validatio
               nodeTypes={nodeTypes}
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
-              onNodeDragStop={onNodeDragStop}
-              onConnect={connect}
-              isValidConnection={validateConnection}
-              onMoveEnd={onMoveEnd}
+              onNodeDragStop={executionMode ? undefined : onNodeDragStop}
+              onConnect={executionMode ? undefined : connect}
+              isValidConnection={executionMode ? undefined : validateConnection}
+              onMoveEnd={executionMode ? undefined : onMoveEnd}
               onNodeClick={(_, node) => { setSelectedNodeId(node.id); setSelectedEdgeId(""); }}
               onEdgeClick={(_, edge) => { setSelectedEdgeId(edge.id); setSelectedNodeId(""); }}
               onPaneClick={() => { setSelectedNodeId(""); setSelectedEdgeId(""); }}
-              defaultViewport={graph.viewport || undefined}
-              fitView={!graph.viewport}
+              defaultViewport={graph.viewport || graph.ui?.viewport || undefined}
+              fitView={!(graph.viewport || graph.ui?.viewport)}
               snapToGrid
               snapGrid={[16, 16]}
               minZoom={0.35}
               maxZoom={1.7}
-              nodesDraggable
-              nodesConnectable
+              nodesDraggable={!executionMode}
+              nodesConnectable={!executionMode}
               elementsSelectable
               proOptions={{ hideAttribution: true }}
             >
@@ -436,8 +551,8 @@ function AutomationEditor({ automation, rows, runDetail, crm, catalog, validatio
               <Controls showInteractive={false} />
               <MiniMap pannable zoomable nodeStrokeWidth={3} />
             </ReactFlow>
-            <button type="button" className="automation-add-node" onClick={() => setPickerOpen((open) => !open)}>+ Adicionar etapa</button>
-            {pickerOpen ? (
+            {!executionMode ? <button type="button" className="automation-add-node" onClick={() => setPickerOpen((open) => !open)}>+ Adicionar etapa</button> : null}
+            {!executionMode && pickerOpen ? (
               <div className="automation-node-picker">
                 {Object.entries(catalogGroups).map(([category, items]) => (
                   <section key={category}>
@@ -448,6 +563,12 @@ function AutomationEditor({ automation, rows, runDetail, crm, catalog, validatio
               </div>
             ) : null}
             {connectionError ? <div className="automation-inline-error">{connectionError}</div> : null}
+            {executionMode ? (
+              <div className="automation-execution-banner">
+                <strong>{statusText(runDetail?.run?.status)}</strong>
+                <span>Version V{runDetail?.version?.versionNumber || "-"} · {formatDuration(runDetail?.run?.duration_ms)} · {executionOverlay?.path?.length || 0} steps</span>
+              </div>
+            ) : null}
             {issues.length ? (
               <div className="automation-publish-issues">
                 <strong>Não foi possível publicar</strong>
@@ -465,7 +586,9 @@ function AutomationEditor({ automation, rows, runDetail, crm, catalog, validatio
             </div>
           </section>
         </main>
-        <PropertiesPanel node={selectedNode} crm={crm} onConfigChange={updateConfig} onDeleteNode={deleteNode} />
+        {executionMode
+          ? <ExecutionInspector node={selectedNode} runDetail={runDetail} onBackToEditor={onBackToEditor} />
+          : <PropertiesPanel node={selectedNode} crm={crm} onConfigChange={updateConfig} onDeleteNode={deleteNode} />}
       </div>
     </ReactFlowProvider>
   );

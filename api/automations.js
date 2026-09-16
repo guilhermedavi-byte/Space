@@ -3,6 +3,7 @@ const { resolveAdminRequestAuth } = require("./_lib/admin-request-auth");
 const { supabaseFetch } = require("./_lib/supabase-rest");
 const { validateGraph } = require("./_lib/automation-engine");
 const { automationCatalog } = require("./_lib/automation-registries");
+const { sanitizeJson } = require("./_lib/automation-store");
 
 const clean = (value) => String(value || "").trim();
 const enc = (value) => encodeURIComponent(clean(value));
@@ -58,6 +59,30 @@ const metricsForRuns = (runs = []) => {
   };
 };
 
+const sequenceOfStep = (step = {}, index = 0) => {
+  const seq = Number(step.input?.sequence || step.sequence_number || step.sequence);
+  return Number.isFinite(seq) && seq > 0 ? seq : index + 1;
+};
+
+const sortedSteps = (steps = []) => (Array.isArray(steps) ? steps : [])
+  .map((step, index) => ({ ...step, __sequence: sequenceOfStep(step, index), __index: index }))
+  .sort((left, right) => left.__sequence - right.__sequence || String(left.created_at || "").localeCompare(String(right.created_at || "")) || left.__index - right.__index)
+  .map(({ __sequence, __index, ...step }) => sanitizeJson(step));
+
+const summarizeEvent = (event = null) => {
+  if (!event) return null;
+  return sanitizeJson({
+    id: event.id,
+    eventId: event.id,
+    eventType: event.event_type,
+    occurredAt: event.occurred_at || event.created_at,
+    source: event.source,
+    aggregateType: event.aggregate_type,
+    aggregateId: event.aggregate_id,
+    payload: event.payload || {},
+  });
+};
+
 const listAutomations = async () => {
   const [{ data: automations }, { data: runs }] = await Promise.all([
     request("/automations?select=*,active_version:automation_versions!automations_active_version_fk(id,version_number,status),draft_version:automation_versions!automations_draft_version_fk(id,version_number,status)&order=created_at.desc"),
@@ -72,6 +97,35 @@ const listAutomations = async () => {
 const getAutomation = async (id) => {
   const { data } = await request(`/automations?id=eq.${enc(id)}&select=*,active_version:automation_versions!automations_active_version_fk(*),draft_version:automation_versions!automations_draft_version_fk(*)&limit=1`);
   return Array.isArray(data) ? data[0] || null : null;
+};
+
+const getRunDetail = async (automationId, runId) => {
+  const { data: runs } = await request(`/automation_runs?id=eq.${enc(runId)}&automation_id=eq.${enc(automationId)}&select=*&limit=1`);
+  const run = Array.isArray(runs) ? runs[0] || null : null;
+  if (!run) return null;
+  const [{ data: versions }, { data: steps }, { data: events }] = await Promise.all([
+    request(`/automation_versions?id=eq.${enc(run.automation_version_id)}&select=id,version_number,status,graph,trigger,published_at&limit=1`),
+    request(`/automation_run_steps?run_id=eq.${enc(run.id)}&select=*&order=created_at.asc`),
+    run.event_id ? request(`/domain_events?id=eq.${enc(run.event_id)}&select=id,event_type,source,aggregate_type,aggregate_id,payload,occurred_at,created_at&limit=1`).catch((error) => {
+      console.error("[automations] run event load failed", { runId: run.id, message: error?.message || "event_load_failed" });
+      return { data: [] };
+    }) : Promise.resolve({ data: [] }),
+  ]);
+  const version = Array.isArray(versions) ? versions[0] || null : null;
+  if (!version) console.error("[automations] run version missing", { runId: run.id, versionId: run.automation_version_id });
+  return {
+    run: sanitizeJson(run),
+    version: version ? {
+      id: version.id,
+      versionNumber: version.version_number,
+      status: version.status,
+      graph: version.graph,
+      trigger: version.trigger,
+      publishedAt: version.published_at,
+    } : null,
+    steps: sortedSteps(steps),
+    event: summarizeEvent(Array.isArray(events) ? events[0] || null : null),
+  };
 };
 
 const createAutomation = async (session, body = {}) => {
@@ -182,14 +236,22 @@ module.exports = async (req, res) => {
       if (id && resource === "runs") {
         const runId = clean(url.searchParams.get("runId"));
         if (runId) {
-          const [{ data: runs }, { data: steps }] = await Promise.all([
-            request(`/automation_runs?id=eq.${enc(runId)}&automation_id=eq.${enc(id)}&select=*&limit=1`),
-            request(`/automation_run_steps?run_id=eq.${enc(runId)}&select=*&order=created_at.asc`),
-          ]);
-          return sendJson(res, 200, { run: Array.isArray(runs) ? runs[0] || null : null, steps: Array.isArray(steps) ? steps : [] });
+          const detail = await getRunDetail(id, runId);
+          if (!detail) return sendJson(res, 404, { error: "automation_run_not_found" });
+          return sendJson(res, 200, detail);
         }
-        const { data } = await request(`/automation_runs?automation_id=eq.${enc(id)}&select=*&order=created_at.desc&limit=100`);
-        return sendJson(res, 200, { rows: Array.isArray(data) ? data : [] });
+        const status = clean(url.searchParams.get("status")).toUpperCase();
+        const limit = Math.min(Math.max(Number(url.searchParams.get("limit")) || 50, 1), 50);
+        const statusFilter = ["SUCCESS", "FAILED", "RUNNING", "PENDING", "CANCELLED"].includes(status) ? `&status=eq.${enc(status)}` : "";
+        const { data } = await request(`/automation_runs?automation_id=eq.${enc(id)}${statusFilter}&select=*&order=created_at.desc&limit=${limit}`);
+        const rows = Array.isArray(data) ? data : [];
+        const versionIds = Array.from(new Set(rows.map((run) => clean(run.automation_version_id)).filter(Boolean)));
+        let versionById = new Map();
+        if (versionIds.length) {
+          const { data: versions } = await request(`/automation_versions?id=in.(${versionIds.map(enc).join(",")})&select=id,version_number`);
+          versionById = new Map((Array.isArray(versions) ? versions : []).map((version) => [version.id, version.version_number]));
+        }
+        return sendJson(res, 200, { rows: rows.map((run) => ({ ...run, version_number: versionById.get(run.automation_version_id) || null })) });
       }
       if (id) return sendJson(res, 200, { automation: await getAutomation(id) });
       return sendJson(res, 200, { rows: await listAutomations() });

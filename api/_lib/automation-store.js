@@ -11,7 +11,7 @@ const sanitizeJson = (value) => {
   if (typeof value !== "object") return value;
   const out = {};
   for (const [key, entry] of Object.entries(value)) {
-    if (/(token|secret|password|authorization|credential|api.?key)/i.test(key)) continue;
+    if (/(token|secret|password|authorization|cookie|credential|api.?key)/i.test(key)) continue;
     out[key] = sanitizeJson(entry);
   }
   return out;

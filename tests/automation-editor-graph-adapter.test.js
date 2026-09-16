@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 
 const {
   NODE_CATALOG,
+  buildExecutionOverlay,
   canonicalToFlow,
   catalogItemToNode,
   connectNodes,
@@ -127,4 +128,73 @@ test("autosave debounces edits and flushes pending draft", async () => {
   await autosave.flush();
   assert.deepEqual(saved, [{ version: 2 }]);
   assert.equal(autosave.pending(), false);
+});
+
+const step = (nodeId, sequence, status = "SUCCESS", output = {}, error = null) => ({
+  node_id: nodeId,
+  node_type: nodeId.split("_")[0],
+  status,
+  input: { sequence },
+  output,
+  error,
+});
+
+test("execution overlay highlights linear success path", () => {
+  const linear = {
+    nodes: [graph.nodes[0], graph.nodes[2], graph.nodes[3]],
+    edges: [
+      { id: "edge_trigger_action", from: "trigger_1", to: "action_1" },
+      { id: "edge_action_end", from: "action_1", to: "end_1" },
+    ],
+  };
+  const overlay = buildExecutionOverlay({ graph: linear, run: { id: "run_1", status: "SUCCESS" }, steps: [step("trigger_1", 1), step("action_1", 2), step("end_1", 3)] });
+  assert.deepEqual(overlay.path, ["trigger_1", "action_1", "end_1"]);
+  assert.equal(overlay.nodes.action_1.status, "SUCCESS");
+  assert.equal(overlay.edges.edge_trigger_action.traversed, true);
+  assert.equal(overlay.edges.edge_action_end.traversed, true);
+});
+
+test("execution overlay highlights only FALSE branch for condition false", () => {
+  const overlay = buildExecutionOverlay({ graph, run: { id: "run_1", status: "SUCCESS" }, steps: [step("trigger_1", 1), step("condition_1", 2, "SUCCESS", { matched: false }), step("action_1", 3)] });
+  assert.equal(overlay.nodes.condition_1.matched, false);
+  assert.equal(overlay.edges.edge_condition_false_action.traversed, true);
+  assert.equal(overlay.edges.edge_condition_true_end, undefined);
+});
+
+test("execution overlay highlights only TRUE branch for condition true", () => {
+  const overlay = buildExecutionOverlay({ graph, run: { id: "run_1", status: "SUCCESS" }, steps: [step("trigger_1", 1), step("condition_1", 2, "SUCCESS", { matched: true }), step("end_1", 3)] });
+  assert.equal(overlay.nodes.condition_1.matched, true);
+  assert.equal(overlay.edges.edge_condition_true_end.traversed, true);
+  assert.equal(overlay.edges.edge_condition_false_action, undefined);
+});
+
+test("execution overlay keeps nested condition path deterministic", () => {
+  const nested = {
+    nodes: [...graph.nodes, { id: "condition_2", type: "condition", conditionType: "crm.contactHasOpenOpportunity" }],
+    edges: [
+      { id: "edge_trigger_condition", from: "trigger_1", to: "condition_1" },
+      { id: "edge_condition_true_condition2", from: "condition_1", to: "condition_2", branch: "true" },
+      { id: "edge_condition2_false_action", from: "condition_2", to: "action_1", branch: "false" },
+      { id: "edge_action_end", from: "action_1", to: "end_1" },
+    ],
+  };
+  const overlay = buildExecutionOverlay({ graph: nested, run: { id: "run_1" }, steps: [step("trigger_1", 1), step("condition_1", 2, "SUCCESS", { matched: true }), step("condition_2", 3, "SUCCESS", { matched: false }), step("action_1", 4), step("end_1", 5)] });
+  assert.deepEqual(overlay.path, ["trigger_1", "condition_1", "condition_2", "action_1", "end_1"]);
+  assert.equal(overlay.edges.edge_condition_true_condition2.traversed, true);
+  assert.equal(overlay.edges.edge_condition2_false_action.traversed, true);
+});
+
+test("execution overlay marks failed node without marking unvisited nodes", () => {
+  const failed = buildExecutionOverlay({ graph, run: { id: "run_1", status: "FAILED" }, steps: [step("trigger_1", 1), step("condition_1", 2, "SUCCESS", { matched: false }), step("action_1", 3, "FAILED", {}, { code: "crm_create_failed" })] });
+  assert.equal(failed.nodes.action_1.status, "FAILED");
+  assert.equal(failed.nodes.action_1.error.code, "crm_create_failed");
+  assert.equal(failed.nodes.end_1, undefined);
+});
+
+test("execution overlay is graph version aware", () => {
+  const v1 = { nodes: [graph.nodes[0], graph.nodes[3]], edges: [{ id: "v1_edge", from: "trigger_1", to: "end_1" }] };
+  const v3 = graph;
+  const overlay = buildExecutionOverlay({ graph: v1, run: { id: "run_v1" }, steps: [step("trigger_1", 1), step("end_1", 2)] });
+  assert.equal(overlay.edges.v1_edge.traversed, true);
+  assert.equal(buildExecutionOverlay({ graph: v3, run: { id: "run_v1" }, steps: [step("trigger_1", 1), step("end_1", 2)] }).edges.v1_edge, undefined);
 });

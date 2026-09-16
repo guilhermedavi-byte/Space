@@ -103,14 +103,60 @@ const handleToBranch = (handle = "") => {
   return "";
 };
 
+const sequenceOfStep = (step = {}, index = 0) => {
+  const inputSeq = Number(step.input?.sequence);
+  if (Number.isFinite(inputSeq) && inputSeq > 0) return inputSeq;
+  const seq = Number(step.sequence_number || step.sequenceNumber || step.sequence);
+  if (Number.isFinite(seq) && seq > 0) return seq;
+  return index + 1;
+};
+
+const orderedExecutionSteps = (steps = []) => (Array.isArray(steps) ? steps : [])
+  .map((step, index) => ({ ...step, __sequence: sequenceOfStep(step, index), __index: index }))
+  .sort((left, right) => left.__sequence - right.__sequence || left.__index - right.__index);
+
+const buildExecutionOverlay = ({ graph = {}, run = {}, steps = [] } = {}) => {
+  const ordered = orderedExecutionSteps(steps);
+  const nodeOverlay = {};
+  const edgeOverlay = {};
+  const path = ordered.map((step) => clean(step.node_id || step.nodeId)).filter(Boolean);
+  const edges = Array.isArray(graph.edges) ? graph.edges : [];
+  for (const step of ordered) {
+    const nodeId = clean(step.node_id || step.nodeId);
+    if (!nodeId) continue;
+    nodeOverlay[nodeId] = {
+      status: clean(step.status || "PENDING").toUpperCase(),
+      sequence: step.__sequence,
+      matched: step.output?.matched,
+      step,
+      error: step.error || null,
+    };
+  }
+  for (let index = 0; index < path.length - 1; index += 1) {
+    const from = path[index];
+    const to = path[index + 1];
+    const edgeIndex = edges.findIndex((row) => clean(row.from || row.source) === from && clean(row.to || row.target) === to);
+    if (edgeIndex < 0) continue;
+    edgeOverlay[edgeId(edges[edgeIndex], edgeIndex)] = { traversed: true, sequence: index + 1 };
+  }
+  return {
+    mode: run?.id ? "execution" : "editor",
+    nodes: nodeOverlay,
+    edges: edgeOverlay,
+    path,
+    status: clean(run?.status),
+  };
+};
+
 const canonicalToFlow = (graph = {}, options = {}) => {
   const nodes = Array.isArray(graph.nodes) ? graph.nodes : [];
   const edges = Array.isArray(graph.edges) ? graph.edges : [];
-  const executionSteps = new Map((Array.isArray(options.executionSteps) ? options.executionSteps : []).map((step) => [clean(step.node_id), step]));
+  const overlay = options.executionOverlay || (options.executionSteps ? buildExecutionOverlay({ graph, run: options.run || {}, steps: options.executionSteps }) : null);
   return {
     nodes: nodes.map((node, index) => {
       const kind = nodeKind(node);
-      const step = executionSteps.get(clean(node.id));
+      const execution = overlay?.nodes?.[clean(node.id)] || null;
+      const step = execution?.step || null;
       return {
         id: clean(node.id) || `node_${index + 1}`,
         type: "spaceNode",
@@ -121,9 +167,13 @@ const canonicalToFlow = (graph = {}, options = {}) => {
           label: nodeLabel(node),
           subtitle: nodeSubtitle(node),
           typeLabel: TYPE_LABELS[kind] || kind,
-          status: step?.status || "",
-          branch: step?.output?.matched === true ? "SIM" : step?.output?.matched === false ? "NAO" : "",
-          error: options.errors?.[node.id] || "",
+          status: execution?.status || "",
+          sequence: execution?.sequence || null,
+          branch: kind === "condition" && step?.output?.matched === true ? "SIM" : kind === "condition" && step?.output?.matched === false ? "NAO" : "",
+          executionStep: step,
+          visited: Boolean(execution),
+          executionMode: Boolean(overlay),
+          error: options.errors?.[node.id] || execution?.error?.code || "",
         },
       };
     }),
@@ -136,8 +186,9 @@ const canonicalToFlow = (graph = {}, options = {}) => {
         sourceHandle,
         targetHandle: clean(edge.targetHandle) || "in",
         label: sourceHandle === "true" ? "SIM" : sourceHandle === "false" ? "NAO" : "",
-        animated: false,
-        data: { canonical: { ...edge }, branch: handleToBranch(sourceHandle) },
+        animated: overlay?.edges?.[edgeId(edge, index)]?.traversed && overlay.status === "RUNNING",
+        className: overlay ? (overlay.edges?.[edgeId(edge, index)]?.traversed ? "is-traversed" : "is-unvisited") : "",
+        data: { canonical: { ...edge }, branch: handleToBranch(sourceHandle), traversed: Boolean(overlay?.edges?.[edgeId(edge, index)]?.traversed) },
         type: "smoothstep",
       };
     }),
@@ -326,6 +377,7 @@ module.exports = {
   TYPE_LABELS,
   addCatalogNode,
   branchToHandle,
+  buildExecutionOverlay,
   canonicalToFlow,
   catalogItemToNode,
   connectNodes,

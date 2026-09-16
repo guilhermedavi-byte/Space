@@ -26167,7 +26167,7 @@ button.automations-row:focus-visible,
 
 .automation-workflows {
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto minmax(150px, .9fr) minmax(220px, 1fr);
   border-right: 1px solid rgba(255,255,255,.075);
   overflow: hidden;
 }
@@ -26212,6 +26212,54 @@ button.automations-row:focus-visible,
   gap: 8px;
   padding: 12px;
   overflow: auto;
+}
+
+.automation-run-list {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-height: 0;
+  border-top: 1px solid rgba(255,255,255,.075);
+  overflow: hidden;
+}
+
+.automation-run-list header {
+  padding: 12px 16px 6px;
+}
+
+.automation-run-list button,
+.automation-run-empty {
+  display: grid;
+  gap: 4px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  margin: 0 12px 8px;
+  padding: 9px 10px;
+  background: transparent;
+  color: var(--text-main);
+  text-align: left;
+}
+
+.automation-run-list button {
+  cursor: pointer;
+}
+
+.automation-run-list button:hover,
+.automation-run-list button:focus-visible,
+.automation-run-list button.is-active {
+  border-color: rgba(255,255,255,.09);
+  background: rgba(255,255,255,.045);
+  outline: none;
+}
+
+.automation-run-list strong {
+  font-size: 12px;
+}
+
+.automation-run-list span,
+.automation-run-list small,
+.automation-run-empty span {
+  color: rgba(255,255,255,.5);
+  font-size: 11px;
 }
 
 .automation-workflow-list button {
@@ -26329,6 +26377,15 @@ button.automations-row:focus-visible,
   stroke-width: 2.4;
 }
 
+.automation-canvas-shell .react-flow__edge.is-traversed .react-flow__edge-path {
+  stroke: #5dcaa5;
+  stroke-width: 2.6;
+}
+
+.automation-canvas-shell .react-flow__edge.is-unvisited {
+  opacity: .28;
+}
+
 .automation-canvas-shell .react-flow__edge-textbg {
   fill: rgba(15,17,23,.9);
 }
@@ -26373,6 +26430,10 @@ button.automations-row:focus-visible,
   box-shadow: 0 0 0 1px rgba(255,91,82,.18), 0 18px 45px rgba(0,0,0,.26);
 }
 
+.automation-canvas-node.is-unvisited {
+  opacity: .46;
+}
+
 .automation-canvas-node.is-trigger { border-color: rgba(255,91,82,.36); }
 .automation-canvas-node.is-condition { border-color: rgba(233,193,93,.38); }
 .automation-canvas-node.is-action { border-color: rgba(93,202,165,.36); }
@@ -26409,6 +26470,7 @@ button.automations-row:focus-visible,
 .automation-node-status.is-failed,
 .automation-node-error { color: #ff5b52; }
 .automation-node-status.is-running { color: #e9c15d; }
+.automation-node-status.is-pending { color: rgba(255,255,255,.42); }
 
 .automation-canvas-handle {
   width: 10px;
@@ -26583,6 +26645,32 @@ button.automations-row:focus-visible,
   cursor: pointer;
 }
 
+.automation-execution-banner {
+  position: absolute;
+  left: 18px;
+  top: 18px;
+  z-index: 5;
+  display: grid;
+  gap: 3px;
+  border: 1px solid rgba(255,255,255,.09);
+  border-radius: 8px;
+  padding: 9px 12px;
+  background: rgba(16,18,24,.86);
+  color: rgba(255,255,255,.76);
+  pointer-events: none;
+}
+
+.automation-execution-banner strong {
+  color: #fff;
+  font-size: 12px;
+}
+
+.automation-execution-banner span {
+  color: rgba(255,255,255,.52);
+  font-size: 11px;
+  font-weight: 700;
+}
+
 .automation-properties {
   display: grid;
   align-content: start;
@@ -26625,6 +26713,69 @@ button.automations-row:focus-visible,
   padding: 0 10px;
   background: rgba(255,255,255,.035);
   color: var(--text-main);
+}
+
+.automation-back-button,
+.automation-execution-inspector details summary {
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 8px;
+  padding: 9px 10px;
+  background: rgba(255,255,255,.04);
+  color: var(--text-main);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.automation-run-summary {
+  display: grid;
+  gap: 4px;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(255,255,255,.035);
+}
+
+.automation-run-summary span {
+  color: #5dcaa5;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .06em;
+}
+
+.automation-run-summary small,
+.automation-execution-grid span {
+  color: rgba(255,255,255,.5);
+  font-size: 11px;
+}
+
+.automation-execution-grid {
+  display: grid;
+  grid-template-columns: minmax(90px, .7fr) minmax(0, 1fr);
+  gap: 8px 10px;
+}
+
+.automation-execution-grid strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+
+.automation-execution-inspector details {
+  display: grid;
+  gap: 8px;
+}
+
+.automation-json {
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 8px;
+  padding: 10px;
+  background: rgba(0,0,0,.24);
+  color: rgba(255,255,255,.76);
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
 }
 
 .automation-danger-button {
