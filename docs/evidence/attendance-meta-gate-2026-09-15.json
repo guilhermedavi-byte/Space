@@ -1,0 +1,89 @@
+{
+  "timestamp": "2026-09-15T04:27:05.884Z",
+  "status": "BLOCKED",
+  "environment": "production principal (mlp…gkw)",
+  "run": "attendance-prod-validation-20260915030312743-c82d54a1",
+  "scope": "Observed local tests and controlled signed localhost HTTP -> production PostgreSQL/PostgREST; no real Meta/Vercel functional E2E",
+  "metrics": {
+    "invalid_signature_accepted": 0,
+    "duplicate_persistence_count": 0,
+    "concurrency_integrity_failure": 0,
+    "cross_team_unauthorized_success": 0,
+    "unexpected_outbound_requests": 0,
+    "unrecoverable_valid_event_loss": 0
+  },
+  "functional": {
+    "synthetic_verification": true,
+    "durable_raw": true,
+    "reprocessing": true,
+    "inbound_text": true,
+    "idempotent_status": true,
+    "real_vercel_api_validated": false,
+    "real_meta_traffic_tested": false,
+    "regression_without_failures": true
+  },
+  "ack": {
+    "transport": "localhost HTTP signed synthetic -> production PostgREST; NOT Vercel/Meta E2E",
+    "samples": 20,
+    "p95_ms": 2101.2493750000003,
+    "target_ms": 500,
+    "target_met": false,
+    "real_vercel_p95_ms": null
+  },
+  "dedicated_tests": {
+    "tests": 15,
+    "pass": 15,
+    "fail": 0,
+    "skipped": 0,
+    "cancelled": 0,
+    "log_sha256": "f0a0316b95f8acd8807e84dbfcd1e3f82e69cab70bf8a0cf0fcbc6e932510e19"
+  },
+  "regression": {
+    "tests": 485,
+    "pass": 477,
+    "fail": 0,
+    "skipped": 8,
+    "cancelled": 0,
+    "log_sha256": "cad8bc2265471b47f1410bcde216975bb2c3b647cd43a92041ec57b0befdda3b"
+  },
+  "database": {
+    "migrations_applied": 2,
+    "new_tables": 2,
+    "new_backend_rpcs": 4,
+    "raws_verified_before_cleanup": 11,
+    "deliveries_verified": 31,
+    "raw_states": {
+      "processed": 9,
+      "unhandled": 2
+    },
+    "cleanup": {
+      "timestamp": "2026-09-15T04:24:22.791471+00:00",
+      "raw_remaining": 0,
+      "items_remaining": 0,
+      "meta_table_count": 2,
+      "connection_remaining": 0,
+      "immutable_trigger_enabled": true
+    }
+  },
+  "blockers": [
+    "META_APP_SECRET absent in inspected sources",
+    "META_WEBHOOK_VERIFY_TOKEN absent in inspected sources",
+    "No trusted Meta WABA/phone mappings configured",
+    "Production Vercel flags/guards absent; route currently 404",
+    "Real Vercel functional verification/HMAC/Firebase E2E pending",
+    "ACK p95 above 500 ms in localhost-to-production sample; Vercel measurement pending"
+  ],
+  "source_sha256": {
+    "api/attendance/meta/webhook.js": "12fe491a103743eb63eac326aa35cd9074922303cd6b6425acf81d7dbc4d1066",
+    "api/_lib/attendance-meta-adapter.js": "af2bfcd4f68ffa2195fad8740a23efb0777513a09e4a12992966876a07f3cace",
+    "api/_lib/attendance-meta-store.js": "60cf20656dd24e8ce72ab4ac7889afd967438f371d43db974a1be2a18509714c",
+    "api/_lib/attendance-meta-processor.js": "ce63a69429422a8d3932263090c879d2dba52908b1dbe95daac3de7128b425a7",
+    "api/_lib/supabase-rest.js": "fe5e5368d837726b07b7e775b4a365c9344537a71c1888a303eb914afa5cf53b",
+    "scripts/attendance-meta-process.js": "0126b82f1feec96f2b432085677541e1679add073c3f67d9aa9149b98a2ea058",
+    "scripts/attendance-meta-validation.js": "28b466942fd8eba2311c30afe58e4511cab328bf33ab58a8bc2aeca4562f315e",
+    "scripts/attendance-meta-inventory.sql": "08a878451f2efb424b3c509a4d73134b9fe357a7f269954d1644f9dec05d4a4a",
+    "supabase/migrations/202609150002_attendance_meta_inbound.sql": "b8e73b388d6d995630e93b94d25ba19d2990710df5b2f1d43311a6ec52184d51",
+    "supabase/migrations/202609150003_attendance_meta_raw_json.sql": "bf9166d6054b03fb3a492f0e1404ae7bf9787eab61309e6f5ce0bf45cf12c2d2",
+    "tests/attendance-meta-inbound.test.js": "12534e93f9b22c22d1af6bfe3bc20c76210897e0a9f61b6becc06d7bc119f5a6"
+  }
+}

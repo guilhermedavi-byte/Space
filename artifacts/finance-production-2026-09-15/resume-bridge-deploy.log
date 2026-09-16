@@ -1,0 +1,49 @@
+Vercel CLI 55.0.0 (Node.js 22.22.3)
+Retrieving project…
+Deploying guilhermedavi-4547s-projects/space
+Uploading [--------------------] (0.0B/268.5KB)
+Uploading [=====---------------] (72.7KB/268.5KB)
+Uploading [==========----------] (147.2KB/268.5KB)
+Uploading [===============-----] (207.3KB/268.5KB)
+Uploading [====================] (268.5KB/268.5KB)
+  Inspect         https://vercel.com/guilhermedavi-4547s-projects/space/2b6RjicE22ZRHJJ4zoEykKcHBwFJ
+▲ Production      https://space-f6n8t6zig-guilhermedavi-4547s-projects.vercel.app
+Building…
+Building…
+Running build in Washington, D.C., USA (East) – iad1
+Build machine configuration: 4 cores, 8 GB
+Retrieving list of deployment files...
+Downloading 336 deployment files...
+Restored build cache from previous deployment (3rwh6stmbBu251YZxTheP6RoJm4S)
+Running "vercel build"
+Vercel CLI 59.16.0
+Installing dependencies...
+up to date in 510ms
+20 packages are looking for funding
+run `npm fund` for details
+Build Completed in /vercel/output [8s]
+Deploying outputs...
+[2K[1A[2K[G▲ Production      https://space-f6n8t6zig-guilhermedavi-4547s-projects.vercel.app
+Completing…
+{
+  "status": "ok",
+  "deployment": {
+    "id": "dpl_2b6RjicE22ZRHJJ4zoEykKcHBwFJ",
+    "url": "https://space-f6n8t6zig-guilhermedavi-4547s-projects.vercel.app",
+    "inspectorUrl": "https://vercel.com/guilhermedavi-4547s-projects/space/2b6RjicE22ZRHJJ4zoEykKcHBwFJ",
+    "readyState": "READY",
+    "target": "production",
+    "deploymentApiUrl": "https://api.vercel.com/v13/deployments/dpl_2b6RjicE22ZRHJJ4zoEykKcHBwFJ"
+  },
+  "message": "Deployment space-f6n8t6zig-guilhermedavi-4547s-projects.vercel.app ready.",
+  "next": [
+    {
+      "command": "vercel inspect space-f6n8t6zig-guilhermedavi-4547s-projects.vercel.app",
+      "when": "Inspect deployment"
+    },
+    {
+      "command": "vercel deploy --prod",
+      "when": "Promote to production"
+    }
+  ]
+}

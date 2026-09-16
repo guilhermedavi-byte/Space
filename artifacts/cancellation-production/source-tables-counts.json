@@ -1,0 +1,144 @@
+{
+  "tables": {
+    "finance_payments": {
+      "count": "0",
+      "sample_fields": []
+    },
+    "payments": {
+      "count": "0",
+      "sample_fields": []
+    },
+    "subscriptions": {
+      "count": "0",
+      "sample_fields": []
+    },
+    "finance_sync_runs": {
+      "count": "0",
+      "sample_fields": []
+    },
+    "finance_receivables": {
+      "count": "0",
+      "sample_fields": []
+    },
+    "space_financeiro_cpf_identity": {
+      "count": "1",
+      "sample_fields": [
+        "cpf_digits",
+        "cpf_masked",
+        "nome",
+        "email",
+        "telefone",
+        "asaas_customer_id",
+        "datacrazy_contact_id",
+        "datacrazy_conversation_id",
+        "platform_student_id",
+        "match_status",
+        "match_notes",
+        "last_asaas_sync_at",
+        "last_datacrazy_sync_at",
+        "last_platform_sync_at",
+        "raw_asaas",
+        "raw_datacrazy",
+        "raw_platform",
+        "created_at",
+        "updated_at"
+      ]
+    },
+    "finance_provider_objects": {
+      "count": "0",
+      "sample_fields": []
+    },
+    "space_financeiro_cpf_sources": {
+      "count": "99",
+      "sample_fields": [
+        "id",
+        "source_system",
+        "source_id",
+        "cpf_digits",
+        "cpf_masked",
+        "cpf_valido",
+        "nome",
+        "email",
+        "telefone",
+        "asaas_customer_id",
+        "datacrazy_contact_id",
+        "datacrazy_conversation_id",
+        "platform_student_id",
+        "raw_payload",
+        "synced_at",
+        "created_at",
+        "updated_at"
+      ]
+    },
+    "finance_object_leases": {
+      "count": "0",
+      "sample_fields": []
+    },
+    "finance_audit_events": {
+      "count": "0",
+      "sample_fields": []
+    },
+    "charges": {
+      "count": "0",
+      "sample_fields": []
+    },
+    "finance_connection_state": {
+      "count": "0",
+      "sample_fields": []
+    },
+    "finance_customer_student_links": {
+      "count": "0",
+      "sample_fields": []
+    },
+    "finance_webhook_events": {
+      "count": "0",
+      "sample_fields": []
+    },
+    "students": {
+      "count": "0",
+      "sample_fields": []
+    },
+    "n8n_alunos_financeiro_space": {
+      "count": "0",
+      "sample_fields": []
+    },
+    "n8n_cobrancas_financeiras_space": {
+      "count": "0",
+      "sample_fields": []
+    },
+    "financial_status_history": {
+      "count": "0",
+      "sample_fields": []
+    },
+    "billing_accounts": {
+      "count": "0",
+      "sample_fields": []
+    },
+    "subscription_status_history": {
+      "count": "0",
+      "sample_fields": []
+    },
+    "space_financeiro_cpf_exceptions": {
+      "count": "1",
+      "sample_fields": [
+        "id",
+        "tipo",
+        "severidade",
+        "cpf_digits",
+        "cpf_masked",
+        "source_system",
+        "source_id",
+        "nome",
+        "email",
+        "telefone",
+        "descricao",
+        "raw_payload",
+        "resolvido",
+        "resolvido_em",
+        "resolvido_por",
+        "created_at"
+      ]
+    }
+  },
+  "scope": "Published REST tables matching contract/finance/credit/student terms; not a complete database backup or private-schema inventory"
+}

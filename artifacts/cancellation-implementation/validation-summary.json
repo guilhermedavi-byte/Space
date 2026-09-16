@@ -1,0 +1,20 @@
+{
+  "implementation": "PASS",
+  "production_certification": "BLOCKED",
+  "full_suite": {
+    "tests": 479,
+    "pass": 479,
+    "fail": 0,
+    "skipped": 0
+  },
+  "new_lifecycle_tests": 24,
+  "existing_and_other_regression_tests": 455,
+  "policy": {
+    "passed": 13,
+    "total": 13
+  },
+  "syntax_checked_javascript_files": 39,
+  "production_mutations": false,
+  "firestore_adapter": "synthetic; real rules/emulator not executed",
+  "external_workflows": "not available for certification"
+}

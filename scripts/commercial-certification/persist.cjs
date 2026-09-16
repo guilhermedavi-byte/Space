@@ -5,6 +5,7 @@ async function persist(stream,directory){
   let text='';for await(const chunk of stream){text+=chunk;if(Buffer.byteLength(text)>3000000)throw new Error('report_too_large');}
   const result=sanitize(JSON.parse(text));
   if(!['PASS','FAIL'].includes(result.certification)||!Object.hasOwn(result,'writesAttempted'))throw new Error('invalid_report_schema');
+  if(result.certification==='PASS'&&(!['authenticatedSourceLoaded','firestoreLoaded','datacrazyLoaded','sdrCertified','closerCertified'].every(k=>result[k]===true)||!['financialDelta','dealIdDelta','duplicateRevenue','unallocatedRevenue','writesAttempted'].every(k=>result[k]===0)))throw new Error('unsubstantiated_pass');
   const root=path.resolve(__dirname,'../../artifacts'),dest=path.resolve(directory);
   if(!dest.startsWith(root+path.sep))throw new Error('output_must_be_under_artifacts');
   fs.mkdirSync(dest,{recursive:true});

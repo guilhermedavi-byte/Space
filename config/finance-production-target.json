@@ -1,0 +1,8 @@
+{
+  "projectRef": "mlpojyvwyqcrelagtgkw",
+  "supabaseUrl": "https://mlpojyvwyqcrelagtgkw.supabase.co",
+  "asaasBaseUrl": "https://api.asaas.com/v3",
+  "appOrigins": ["https://plataforma.spaceschoolbr.com", "https://space-three-sand.vercel.app"],
+  "vercelProjectName": "space",
+  "vercelProjectId": "prj_FcxsR8A6rXLVIo2DArdAFDlm7pq8"
+}

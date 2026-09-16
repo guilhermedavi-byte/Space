@@ -1,0 +1,78 @@
+[
+  {
+    "origin": "internal_replay_of_real_asaas_production_log",
+    "event": "PAYMENT_CONFIRMED",
+    "provider_event_id": "evt_15e444ff9b9ab9ec29294aa1abe68025&1509810712",
+    "payment_id": "pay_8fgj137p8gbkr603",
+    "before": {
+      "receivable_count": 1,
+      "payment_count": 1,
+      "status": "CONFIRMED",
+      "due_date": "2026-09-14"
+    },
+    "after": {
+      "receivable_count": 1,
+      "payment_count": 1,
+      "status": "CONFIRMED",
+      "due_date": "2026-09-14"
+    },
+    "logical_events": [
+      {
+        "id": "f35e52a0-4478-4ce9-88ad-d7ceb279c244",
+        "processing_status": "processed",
+        "attempt_count": 1
+      }
+    ],
+    "deliveries": [
+      {
+        "http": 200,
+        "event_id": "f35e52a0-4478-4ce9-88ad-d7ceb279c244",
+        "duplicate": false,
+        "processed": {
+          "changed": false,
+          "processed": true,
+          "receivable_id": "1f9206a6-f547-4ff7-996d-8024f0516482",
+          "external_object_id": "pay_8fgj137p8gbkr603"
+        }
+      }
+    ]
+  },
+  {
+    "origin": "internal_replay_of_real_asaas_production_log",
+    "event": "PAYMENT_OVERDUE",
+    "provider_event_id": "evt_071da53af2a9613df04213d0157d6b88&1495500497",
+    "payment_id": "pay_0m8p1i31knyx8sua",
+    "before": {
+      "receivable_count": 1,
+      "payment_count": 0,
+      "status": "OVERDUE",
+      "due_date": "2026-09-01"
+    },
+    "after": {
+      "receivable_count": 1,
+      "payment_count": 0,
+      "status": "OVERDUE",
+      "due_date": "2026-09-01"
+    },
+    "logical_events": [
+      {
+        "id": "1ce33bab-5b34-4250-aeb8-58c3060006cb",
+        "processing_status": "processed",
+        "attempt_count": 1
+      }
+    ],
+    "deliveries": [
+      {
+        "http": 200,
+        "event_id": "1ce33bab-5b34-4250-aeb8-58c3060006cb",
+        "duplicate": false,
+        "processed": {
+          "changed": false,
+          "processed": true,
+          "receivable_id": "2bdcde80-5863-464a-884e-ea4ad331a2ec",
+          "external_object_id": "pay_0m8p1i31knyx8sua"
+        }
+      }
+    ]
+  }
+]

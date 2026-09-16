@@ -1,0 +1,14 @@
+{
+  "observed_at": "2026-09-15T02:52:55.914Z",
+  "scope": "read-only preflight; no canary writes performed",
+  "lifecycle_transition_failures": null,
+  "firestore_projection_failures": null,
+  "firestore_ack_lag_seconds": null,
+  "n8n_processing_failures": null,
+  "duplicate_events_in_canonical_retention": 0,
+  "rejected_invalid_transitions": null,
+  "billing_generation_conflicts": null,
+  "pedagogical_entitlement_conflicts": null,
+  "scheduling_eligibility_conflicts": null,
+  "explanation": "Null is unmeasured, not zero. Empty canonical tables do not certify external delivery."
+}

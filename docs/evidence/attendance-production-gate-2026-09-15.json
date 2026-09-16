@@ -1,0 +1,25 @@
+{
+  "foundation": "APPROVED",
+  "scope": "PostgreSQL/PostgREST foundation in the authorized main project; no Meta or deployed Firebase HTTP certification",
+  "validation_run_id": "attendance-prod-validation-20260915022406289-44047af3",
+  "kpis": {
+    "duplicate_persistence_count": 0,
+    "cross_team_unauthorized_success": 0,
+    "concurrency_integrity_failure": 0,
+    "unexpected_external_side_effects": 0,
+    "remaining_test_records_after_cleanup": 0
+  },
+  "externalEffectEvidence": "27 quarantined outbox events, failed/infinity/dispatch_disabled, attempts=0; no transport advancement; no provider calls from this run",
+  "externalConsumerInventoryComplete": false,
+  "backupAvailable": false,
+  "pitrAvailable": false,
+  "legacyDataDeleted": false,
+  "automatedTests": {
+    "dedicatedPostgreSQL17": 51,
+    "operatorTests": 2,
+    "regressionTotal": 446,
+    "regressionPassed": 439,
+    "regressionFailed": 0,
+    "regressionSkipped": 7
+  }
+}

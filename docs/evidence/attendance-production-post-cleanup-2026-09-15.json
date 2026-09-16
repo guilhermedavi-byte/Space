@@ -1,0 +1,11 @@
+{
+  "events": 0,
+  "messages": 0,
+  "audit_rows": 0,
+  "captured_at": "2026-09-15T02:35:00.15643+00:00",
+  "connections": 0,
+  "outbox_rows": 0,
+  "conversations": 0,
+  "immutable_trigger_enabled": true,
+  "security_definer_functions": 8
+}

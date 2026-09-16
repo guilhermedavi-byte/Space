@@ -133,7 +133,8 @@ module.exports = async (req, res) => {
   } catch (error) {
     const code = String(error?.message || error?.code || "retention_command_failed");
     const status =
-      code === "retention_version_conflict" || code === "idempotency_key_payload_mismatch"
+      code === "retention_version_conflict" || code === "idempotency_key_payload_mismatch" ||
+      /^(cannot_|request_requires_|request_not_open|formal_case_already_open|formal_request_not_started|retention_case_|retention_subscription_selection_required|retention_legacy_reconciliation_required|reactivation_requires_|invalid_notice_start|request_cannot_be_future)/.test(code)
         ? 409
         : code === "invalid_retention_command" ||
             code === "missing_client_action_id" ||

@@ -1,0 +1,15 @@
+{
+  "checked_at": "2026-09-15T17:41:54.092Z",
+  "alias": "https://plataforma.spaceschoolbr.com",
+  "deployment_id": "dpl_CkEEN2YSzMMnH8imQJQNNdHBhPt7",
+  "deployment_url": "https://space-dgiompt6r-guilhermedavi-4547s-projects.vercel.app",
+  "ready_state": "READY",
+  "project_id": "prj_FcxsR8A6rXLVIo2DArdAFDlm7pq8",
+  "target": "production",
+  "commit": "995399d93e762b47d0ab4f23fbbc0cdcf806fbd3",
+  "git_source": {
+    "type": "github",
+    "ref": "main",
+    "sha": "995399d93e762b47d0ab4f23fbbc0cdcf806fbd3"
+  }
+}

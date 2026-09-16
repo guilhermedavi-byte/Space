@@ -1,0 +1,81 @@
+{
+  "projectRefMasked": "mlp…gkw",
+  "capturedAt": "2026-09-15T02:47:07.852Z",
+  "role": "postgres",
+  "columns": [
+    {
+      "name": "connection_id",
+      "type": "uuid",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "name": "provider",
+      "type": "text",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "external_account_id",
+      "type": "text",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "external_account_type",
+      "type": "text",
+      "default": "'account'::text",
+      "nullable": "NO"
+    },
+    {
+      "name": "display_name",
+      "type": "text",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "status",
+      "type": "text",
+      "default": "'pending'::text",
+      "nullable": "NO"
+    },
+    {
+      "name": "metadata",
+      "type": "jsonb",
+      "default": "'{}'::jsonb",
+      "nullable": "NO"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamptz",
+      "default": "now()",
+      "nullable": "NO"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamptz",
+      "default": "now()",
+      "nullable": "NO"
+    }
+  ],
+  "indexes": [
+    "CREATE UNIQUE INDEX connections_pkey ON public.connections USING btree (connection_id)",
+    "CREATE UNIQUE INDEX connections_provider_external_account_type_external_account_key ON public.connections USING btree (provider, external_account_type, external_account_id)"
+  ],
+  "database": "postgres",
+  "policies": [],
+  "constraints": [
+    "CHECK (((length(external_account_id) >= 1) AND (length(external_account_id) <= 256)))",
+    "CHECK (attendance_metadata_safe(metadata))",
+    "PRIMARY KEY (connection_id)",
+    "CHECK ((provider ~ '^[a-z][a-z0-9_]{0,63}$'::text))",
+    "UNIQUE (provider, external_account_type, external_account_id)",
+    "CHECK ((status = ANY (ARRAY['pending'::text, 'active'::text, 'disabled'::text])))"
+  ],
+  "connections_acl": "{postgres=arwdDxtm/postgres}",
+  "connections_rls": true,
+  "connections_rows": 0,
+  "financial_tables": 0,
+  "asaas_connections": 0,
+  "finance_rpc_exists": false
+}

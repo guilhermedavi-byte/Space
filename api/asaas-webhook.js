@@ -2,7 +2,7 @@ const legacy = require('./_lib/asaas-webhook-legacy');
 const { createFinanceFoundation } = require('./_lib/finance-foundation');
 const { FinanceError } = require('./_lib/finance-domain');
 const { safeFinanceError } = require('./_lib/finance-store');
-const { timingSafeTextEqual } = require('./_lib/security');
+const { timingSafeTextEqual, validateWebhookSecret } = require('./_lib/security');
 const { sendJson } = require('./_lib/http');
 
 // A bounded parser keeps untrusted input from accumulating after the limit is exceeded.
@@ -21,12 +21,17 @@ function readWebhookBody(req) {
 }
 function createHandler({ service = () => createFinanceFoundation(), env = process.env, legacyHandler = legacy } = {}) {
   return async (req, res) => {
-    if (env.FINANCE_FOUNDATION_ENABLED !== 'true') return legacyHandler(req, res);
+    const enabled=env.FINANCE_FOUNDATION_ENABLED==='true';
+    if(!enabled&&env.FINANCE_WEBHOOK_INGEST_ENABLED!=='true')return legacyHandler(req,res);
     if (req.method !== 'POST') { res.setHeader('Allow', 'POST'); return sendJson(res, 405, { error: 'method_not_allowed' }); }
     const expected = String(env.ASAAS_WEBHOOK_TOKEN || '').trim();
     if (!expected) return sendJson(res, 503, { error: 'finance_webhook_secret_not_configured' });
     const supplied = typeof req.headers?.['asaas-access-token'] === 'string' ? req.headers['asaas-access-token'] : '';
-    if (!supplied || !timingSafeTextEqual(supplied, expected)) return sendJson(res, 401, { error: 'invalid_webhook_secret' });
+    if (!supplied || !timingSafeTextEqual(supplied, expected)) {
+      const legacySecret=env.FINANCE_LEGACY_WEBHOOK_TOKEN||env.ASAAS_WEBHOOK_SECRET||env.N8N_WEBHOOK_SECRET;
+      if(env.FINANCE_LEGACY_WEBHOOK_COMPAT==='true'&&legacySecret&&legacySecret!==expected&&validateWebhookSecret(req,legacySecret).ok)return legacyHandler(req,res);
+      return sendJson(res,401,{error:'invalid_webhook_secret'});
+    }
     try {
       const body = await readWebhookBody(req);
       const foundation = service();
@@ -35,7 +40,7 @@ function createHandler({ service = () => createFinanceFoundation(), env = proces
       // Awaited and bounded; no fire-and-forget serverless promise. A durable queue remains
       // if the process dies, the provider is down, or processing is intentionally disabled.
       let processing = null;
-      if (env.FINANCE_WEBHOOK_PROCESS_INLINE === 'true') {
+      if (enabled && env.FINANCE_WEBHOOK_PROCESS_INLINE === 'true') {
         try { processing = await foundation.processWebhookEvent(receipt.event_id); }
         catch (error) { processing = { error: safeFinanceError(error).code }; }
       }

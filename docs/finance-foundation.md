@@ -1,10 +1,14 @@
+> **Estado operacional — 15/09/2026:** Financial Foundation habilitada em Production no projeto Vercel `space`, com ingestão e processamento inline ativos. Deploy READY e aplicação operacional. **GO para Fase 1 — Financeiro V1.** Por autorização explícita, o próximo evento externo natural será confirmação adicional pós-ativação, sem bloquear a Fase 1. Consulte o [relatório atual](finance-foundation-certification.md).
+>
+> Manutenção de produção continua exigindo apply explícito, ator e snapshot privado. O cliente financeiro é GET-only no Asaas. Os resultados da certificação existente foram preservados, sem repetição nesta ativação.
+
 # Financial Foundation — Fase 0
 
 **Data:** 14/09/2026 (execuções também registradas em 15/09 UTC).  
 **Especificação:** [auditoria financeira](finance-architecture-audit.md).  
-**Estado:** implementação e integração local verificadas; **homologação Asaas sandbox pendente de credenciais**. Não está liberada para produção nem certificada como base pronta para a Fase 1.
+**Estado:** habilitada em produção, ingestão e processamento ativos; GO para Fase 1. Próxima entrega externa é observação pós-ativação.
 
-**Homologação posterior:** consultar [relatório de certificação](finance-foundation-certification.md). A CLI recebeu os controles adicionais descritos abaixo; a ausência de ambiente comprovado mantém o resultado NO-GO.
+**Homologação posterior:** consultar [relatório de certificação](finance-foundation-certification.md). A CLI recebeu os controles adicionais descritos abaixo; a decisão operacional vigente e os resultados estão no relatório atualizado.
 
 ## 1. Escopo entregue e decisão de schema
 

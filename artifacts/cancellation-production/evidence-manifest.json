@@ -1,0 +1,80 @@
+{
+  "files": [
+    {
+      "name": "canary-results.json",
+      "sha256": "5ad4eb0c591874de22a7cc1248065edc9292d0bcb970c047bd30cbeb02e15a0c"
+    },
+    {
+      "name": "certification.json",
+      "sha256": "7fd1967069c135ad9c7d6971a35b0d88b1c228a463dadb39097bd2842243fc08"
+    },
+    {
+      "name": "environment-metadata.json",
+      "sha256": "66190ec20393bbbd0051967b533b006003270c2cf3230257a49a4c075a2b349e"
+    },
+    {
+      "name": "migration-review-before.json",
+      "sha256": "95602c6b9dcb847ad88bb8e709429ede7a8eb7f4c0f0673dece6bbddcbb2db2a"
+    },
+    {
+      "name": "pedagogical-inventory.json",
+      "sha256": "216477039272acf5edca2f22ccb81caf23f12dedf0828bedba6f6a7bd40a8fc9"
+    },
+    {
+      "name": "policy-probes.json",
+      "sha256": "10627dcd4d8256f1b2fc2020ac25280b02facb0dca5e89898c1982d3eec0d082"
+    },
+    {
+      "name": "policy-tests.log",
+      "sha256": "e5e6437e3b3495720447c0e3b043d8a264a994dc2f789e13079c34b01ac4ea9d"
+    },
+    {
+      "name": "postgres17-local-tests.tap",
+      "sha256": "96c095aa7326db7b2ac473a8d4c2ff258da93d84e06fec9479346ea2133018aa"
+    },
+    {
+      "name": "postgrest-schema.json",
+      "sha256": "8730531e15a7f3b175a066e7850639b52f3e86f3db143dab8c3dd9ba51ac7d1c"
+    },
+    {
+      "name": "preflight.json",
+      "sha256": "d7f357d0ab1959673ef798e11672a90b479732f3fa3636051f92c81e3ff88ee7"
+    },
+    {
+      "name": "reconciliation-summary.json",
+      "sha256": "cfe768f362375733a63cca2d04d1486e35301c878ab1072956f1e016c8503d24"
+    },
+    {
+      "name": "reconciliation-tests.tap",
+      "sha256": "ced712c69bd030928fb7acd3e3304c9636bdcb1f721168af6843c228706655cc"
+    },
+    {
+      "name": "reconciliation.csv",
+      "sha256": "9dd97d3178fdcd857a9570fe1217babaeede69cdbd6649f68e9c99b7f3f7414b"
+    },
+    {
+      "name": "rollout-health.json",
+      "sha256": "31e2218ea961100a79ee9034de09be399856f697c1e9007ab6c5057b5b01fff7"
+    },
+    {
+      "name": "runtime-observed.json",
+      "sha256": "b014331f12fa2b521feec7d283edb0ca5f419bf58feed7f91293ff04c6293d95"
+    },
+    {
+      "name": "sql-catalog-before.json",
+      "sha256": "46bf65069e327aa11637d1884c15027c7c9e806da4c7f046eb74978c1f3550a7"
+    },
+    {
+      "name": "supabase-readonly.json",
+      "sha256": "f90a8b787f9707a49c715baf118cb11cc743047470c9a9d9f1a0f59635f4a92a"
+    },
+    {
+      "name": "ui-readonly.json",
+      "sha256": "ae91cec27fc178940210fcc83909bce567a3430406ad5e12eebf529e8f3ba0d2"
+    },
+    {
+      "name": "vercel-project.json",
+      "sha256": "604e4989ac907b61e625c9045bbab37813862541c4fee2f0d7ccc1d4d84243ce"
+    }
+  ]
+}

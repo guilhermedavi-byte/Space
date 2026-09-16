@@ -1,0 +1,40 @@
+TAP version 13
+# Subtest: lifecycle: migration, RPC, API, consumers, import, projection and job end-to-end
+ok 1 - lifecycle: migration, RPC, API, consumers, import, projection and job end-to-end
+  ---
+  duration_ms: 16261.261125
+  type: 'test'
+  ...
+# [retention] command failed { code: 'request_requires_active_subscription' }
+# Subtest: backend local conversa com PostgREST descartável e respeita gates/segurança
+not ok 2 - backend local conversa com PostgREST descartável e respeita gates/segurança
+  ---
+  duration_ms: 14007.278584
+  type: 'test'
+  location: '/Users/spaceonline/Documents/New project/tests/retention-backend-local.test.js:95:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    409 !== 200
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 200
+  actual: 409
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/Users/spaceonline/Documents/New project/tests/retention-backend-local.test.js:289:14)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 1
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 16381.820666

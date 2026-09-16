@@ -1,0 +1,28 @@
+{
+  "observed_at": "2026-09-15T02:57:37.362Z",
+  "authenticated_role": "admin",
+  "writes": false,
+  "observations": [
+    {
+      "page": "/app/admin",
+      "result": "Loaded; legacy dashboard showed 145 active students, without canonical reconciliation."
+    },
+    {
+      "page": "/app/admin/controle-pedagogico?modulo=usuarios",
+      "result": "Loaded; 226 students; legacy labels Suspenso/Abandono visible. No individual status was changed."
+    },
+    {
+      "page": "/app/admin/controle-pedagogico?modulo=retencao",
+      "result": "Loaded; legacy retention UI. Canonical V2 disabled in runtime."
+    },
+    {
+      "page": "/app/admin/ao-vivo",
+      "result": "Agenda loaded; America/São Paulo GMT-03:00; no lesson created, moved or cancelled."
+    },
+    {
+      "page": "/app/admin/financeiro?aba=cobrancas",
+      "result": "Loaded; 0 students, 0 charges, 0 payments, 0 events; Nenhum registro encontrado."
+    }
+  ],
+  "certifies_canaries": false
+}

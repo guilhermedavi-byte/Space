@@ -1,0 +1,47 @@
+{
+  "observed_at": "2026-09-15T02:56:05.772Z",
+  "implementation": "PASS",
+  "production_certification": "BLOCKED",
+  "deployment": "NOT DEPLOYED",
+  "lifecycle_v2": "DISABLED",
+  "local_tests_this_phase": {
+    "postgres17_backend_and_domain_ui": 24,
+    "reconciliation": 3,
+    "failures": 0,
+    "skipped": 0
+  },
+  "policy_checks": {
+    "passed": 13,
+    "total": 13
+  },
+  "previous_full_suite": {
+    "passed": 479,
+    "rerun_this_phase": false
+  },
+  "controlled_production_canaries_run": 0,
+  "production_mutations": 0,
+  "runbook": "docs/cancellation-lifecycle-production-runbook.md",
+  "rollback_fully_executable": false,
+  "blockers": [
+    {
+      "id": "FIRESTORE_EXPORT",
+      "reason": "Firebase CLI credentials expired; Google identity challenge requires user action. Console read session exists, but no complete users export obtained."
+    },
+    {
+      "id": "N8N_WORKFLOWS",
+      "reason": "Production N8N_BASE_URL is sensitive/redacted; instance/workflow IDs and consumers not identified. User asked for instance URL/access."
+    },
+    {
+      "id": "CANONICAL_COVERAGE",
+      "reason": "0 subscriptions vs 226 students visible in UI and 163 distinct pedagogical student references. Global activation cannot safely grant/deny rights until reconciled."
+    },
+    {
+      "id": "SCHEDULER",
+      "reason": "Vercel cron definitions empty; pg_cron absent; RETENTION_CHURN_JOB_SECRET not defined in production env metadata; no external scheduler verified."
+    },
+    {
+      "id": "CANARY",
+      "reason": "No controlled cross-system canary with safe external consumer isolation available."
+    }
+  ]
+}

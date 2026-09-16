@@ -1,0 +1,44 @@
+{
+  "timestamp": "2026-09-15T03:04:33.222Z",
+  "run": "attendance-prod-validation-20260915030312743-c82d54a1",
+  "transport": "localhost HTTP signed synthetic -> production PostgREST; NOT Vercel/Meta E2E",
+  "scenarios": [
+    {
+      "name": "verification_and_forged_signature",
+      "passed": true
+    },
+    {
+      "name": "20_signed_deliveries_one_durable_raw",
+      "passed": true
+    },
+    {
+      "name": "20_processors_one_domain_effect",
+      "passed": true
+    },
+    {
+      "name": "two_distinct_messages_same_contact_concurrent_conversation_creation",
+      "passed": true
+    },
+    {
+      "name": "semantic_replay_metadata_injection_and_cross_team",
+      "passed": true
+    },
+    {
+      "name": "status_read_then_sent_delivered_failed_and_replay",
+      "passed": true
+    },
+    {
+      "name": "unsupported_retained_and_unknown_mapping_retryable",
+      "passed": true
+    }
+  ],
+  "maxConcurrentHttpRequests": 20,
+  "rawEvents": 10,
+  "webhook_ack_samples": 20,
+  "webhook_ack_p95_ms": 2101.2493750000003,
+  "invalid_signature_accepted": 0,
+  "concurrency_integrity_failure": 0,
+  "cross_team_unauthorized_success": 0,
+  "unexpected_outbound_requests": 0,
+  "note": "DB counts, audit, durable retention and monotonic status independently checked by SQL. No real Meta traffic."
+}

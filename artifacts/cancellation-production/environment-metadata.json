@@ -1,0 +1,109 @@
+{
+  "observed_at": "2026-09-15T02:52:03.644Z",
+  "envs": [
+    {
+      "key": "RETENTION_FINANCIAL_KPIS_ENABLED",
+      "type": "sensitive",
+      "value_state": "REDACTED_NOT_MISSING",
+      "target": [
+        "production"
+      ]
+    },
+    {
+      "key": "RETENTION_INVOLUNTARY_CHURN_ENABLED",
+      "type": "sensitive",
+      "value_state": "REDACTED_NOT_MISSING",
+      "target": [
+        "production"
+      ]
+    },
+    {
+      "key": "RETENTION_LEGACY_IMPORT_ENABLED",
+      "type": "sensitive",
+      "value_state": "REDACTED_NOT_MISSING",
+      "target": [
+        "production"
+      ]
+    },
+    {
+      "key": "RETENTION_V2_ENABLED",
+      "type": "sensitive",
+      "value_state": "REDACTED_NOT_MISSING",
+      "target": [
+        "production"
+      ]
+    },
+    {
+      "key": "GOOGLE_SERVICE_ACCOUNT_JSON",
+      "type": "sensitive",
+      "value_state": "REDACTED_NOT_MISSING",
+      "target": [
+        "production"
+      ]
+    },
+    {
+      "key": "N8N_WEBHOOK_SECRET",
+      "type": "sensitive",
+      "value_state": "REDACTED_NOT_MISSING",
+      "target": [
+        "preview",
+        "production"
+      ]
+    },
+    {
+      "key": "N8N_PEDAGOGICO_REMARCACAO_AULA_WEBHOOK_URL",
+      "type": "sensitive",
+      "value_state": "REDACTED_NOT_MISSING",
+      "target": [
+        "preview",
+        "production"
+      ]
+    },
+    {
+      "key": "N8N_PEDAGOGICO_REGISTRO_FALTA_WEBHOOK_URL",
+      "type": "sensitive",
+      "value_state": "REDACTED_NOT_MISSING",
+      "target": [
+        "preview",
+        "production"
+      ]
+    },
+    {
+      "key": "N8N_PEDAGOGICO_REGISTRO_AULA_WEBHOOK_URL",
+      "type": "sensitive",
+      "value_state": "REDACTED_NOT_MISSING",
+      "target": [
+        "preview",
+        "production"
+      ]
+    },
+    {
+      "key": "N8N_PEDAGOGICO_PROFESSOR_PRIMEIRA_AULA_WEBHOOK_URL",
+      "type": "sensitive",
+      "value_state": "REDACTED_NOT_MISSING",
+      "target": [
+        "preview",
+        "production"
+      ]
+    },
+    {
+      "key": "N8N_PEDAGOGICO_ONBOARDING_WEBHOOK_URL",
+      "type": "sensitive",
+      "value_state": "REDACTED_NOT_MISSING",
+      "target": [
+        "preview",
+        "production"
+      ]
+    },
+    {
+      "key": "N8N_BASE_URL",
+      "type": "sensitive",
+      "value_state": "REDACTED_NOT_MISSING",
+      "target": [
+        "preview",
+        "production"
+      ]
+    }
+  ],
+  "retention_churn_job_secret_defined": false
+}

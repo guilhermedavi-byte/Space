@@ -1,0 +1,26 @@
+[
+  {
+    "phase": "after_cleanup",
+    "counts": {
+      "teams": 0,
+      "channels": 0,
+      "contacts": 0,
+      "messages": 0,
+      "audit_logs": 0,
+      "connections": 0,
+      "team_members": 0,
+      "channel_teams": 0,
+      "conversations": 0,
+      "outbox_events": 0,
+      "attendance_members": 0,
+      "contact_identities": 0,
+      "conversation_reads": 0,
+      "conversation_events": 0,
+      "channel_contact_state": 0,
+      "conversation_participants": 0
+    },
+    "validation_run_id": "attendance-prod-validation-20260915022406289-44047af3",
+    "permanent_domain_tables": 14,
+    "remaining_test_records_after_cleanup": 0
+  }
+]

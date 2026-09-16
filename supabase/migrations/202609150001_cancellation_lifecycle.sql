@@ -1,6 +1,8 @@
 -- Space canonical lifecycle. Apply AFTER retention-lifecycle-v2.sql and provisioning.
 -- Additive data changes only; no inferred dates and no historical rewrites.
 begin;
+alter table public.subscriptions add column if not exists legacy_operational_suspended boolean not null default false;
+alter table public.subscriptions alter column billing_cycle drop not null;
 alter table public.outbox_events add column if not exists projection_delivered_at timestamptz;
 alter table public.students drop constraint if exists students_lifecycle_status_check;
 alter table public.students add constraint students_lifecycle_status_check check (lifecycle_status in ('active','cancellation_requested','cancellation_scheduled','churned'));
@@ -491,6 +493,7 @@ begin
          churn_at = case when v_case.lifecycle_status='active' then null else v_case.churn_at end,
          lifecycle_status = v_case.lifecycle_status,
          pause_status = v_case.pause_status,
+         legacy_operational_suspended = case when v_command in ('resume_lessons','reactivate_subscription','pause_billable','pause_non_billable') then false else legacy_operational_suspended end,
          financial_status = v_case.financial_status,
          scheduled_service_end_at = v_scheduled_end_at,
          ended_at = case when v_case.lifecycle_status = 'churned' then v_case.churned_at when v_case.lifecycle_status = 'active' then null else ended_at end,
@@ -734,6 +737,14 @@ declare
   v_conflicts jsonb := '[]'::jsonb;
   v_inserted_event_id uuid;
 begin
+  if p_payload->>'mode' = 'backfill' then
+    if jsonb_array_length(v_cases)<>0 or jsonb_array_length(v_events)<>0 then raise exception 'backfill_must_be_silent'; end if;
+    if exists (select 1 from jsonb_array_elements(v_subscriptions) x where
+      x->>'source_system' is distinct from 'legacy_backfill' or x->>'external_subscription_key' is null or
+      x->>'lifecycle_status' not in ('active','churned') or
+      coalesce(x->>'started_at',x->>'scheduled_service_end_at',x->>'ended_at',x->>'cancellation_requested_at',x->>'notice_started_at',x->>'last_active_date',x->>'churn_at') is not null)
+    then raise exception 'invalid_silent_backfill_payload'; end if;
+  end if;
   if v_dry_run then
     return jsonb_build_object(
       'ok', true,
@@ -761,7 +772,7 @@ begin
       coalesce(nullif(v_row->>'legacy_confidence', ''), 'unknown')
     )
     on conflict (firestore_student_id) do nothing returning id into v_student_id;
-    v_students_written := v_students_written + 1;
+    if v_student_id is not null then v_students_written := v_students_written + 1; end if;
   end loop;
 
   for v_row in select value from jsonb_array_elements(v_subscriptions)
@@ -773,12 +784,12 @@ begin
     end if;
     insert into public.subscriptions (
       student_id, external_subscription_key, plan_name, billing_cycle, lifecycle_status, pause_status, financial_status,
-      started_at, scheduled_service_end_at, ended_at, source_system, legacy_source, legacy_confidence, cancellation_requested_at, notice_started_at, last_active_date, churn_at
+      started_at, scheduled_service_end_at, ended_at, source_system, legacy_source, legacy_confidence, cancellation_requested_at, notice_started_at, last_active_date, churn_at, legacy_operational_suspended
     ) values (
       v_student_id,
       nullif(v_row->>'external_subscription_key', ''),
       nullif(v_row->>'plan_name', ''),
-      coalesce(nullif(v_row->>'billing_cycle', ''), 'monthly'),
+      case when p_payload->>'mode'='backfill' then null else coalesce(nullif(v_row->>'billing_cycle', ''), 'monthly') end,
       coalesce(nullif(v_row->>'lifecycle_status', ''), 'active'),
       coalesce(nullif(v_row->>'pause_status', ''), 'none'),
       coalesce(nullif(v_row->>'financial_status', ''), 'unknown'),
@@ -789,10 +800,11 @@ begin
       coalesce(v_row->'legacy_source', '{}'::jsonb),
       coalesce(nullif(v_row->>'legacy_confidence', ''), 'unknown'),
       nullif(v_row->>'cancellation_requested_at','')::timestamptz, nullif(v_row->>'notice_started_at','')::timestamptz,
-      nullif(v_row->>'last_active_date','')::date, nullif(v_row->>'churn_at','')::date
+      nullif(v_row->>'last_active_date','')::date, nullif(v_row->>'churn_at','')::date,
+      coalesce((v_row->>'legacy_operational_suspended')::boolean,false)
     )
     on conflict (student_id, external_subscription_key) do nothing returning id into v_subscription_id;
-    v_subscriptions_written := v_subscriptions_written + 1;
+    if v_subscription_id is not null then v_subscriptions_written := v_subscriptions_written + 1; end if;
   end loop;
 
   for v_row in select value from jsonb_array_elements(v_cases)

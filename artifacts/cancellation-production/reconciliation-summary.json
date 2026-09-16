@@ -1,0 +1,16 @@
+{
+  "total": 163,
+  "SAFE": 0,
+  "AMBIGUOUS": 163,
+  "CONFLICT": 0,
+  "INVALID": 0,
+  "complete": false,
+  "scope": "Partial: distinct pedagogical student references; NOT a census of Firestore users",
+  "sourceMetadata": {
+    "supabase_project": "mlpojyvwyqcrelagtgkw",
+    "read_only": true,
+    "firestore_export": "BLOCKED_AUTHENTICATION",
+    "ui_students_observed": 226
+  },
+  "mutations": false
+}

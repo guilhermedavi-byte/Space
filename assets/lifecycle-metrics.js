@@ -11,13 +11,14 @@ function computeLifecycleMetrics({events=[],students=[],month,withSeries=true}) 
     let date=null, metric=null;
     if (kind==='register_formal_request') { metric='pedidosNoMes'; date=state.cancellation_requested_at || payload.requested_at || e.occurred_at; }
     if (kind==='retract_cancellation') { metric='revertidosNoMes'; date=e.occurred_at; }
-    if (['confirm_cancellation_continuity','schedule_program_end'].includes(kind) && state.notice_started_at) { metric='avisosNoMes'; date=state.notice_started_at; }
+    if (['confirm_cancellation_continuity','schedule_program_end'].includes(kind) && (state.notice_started_at || payload.notice_started_at)) { metric='avisosNoMes'; date=state.notice_started_at || payload.notice_started_at; }
     if (kind==='cancellation_effective') { metric='churnNoMes'; date=state.churn_at || e.occurred_at; }
     return { metric, date:date ? dateKey(date) : null, event:e };
   });
   const result={monthKey:month,pedidosNoMes:0,revertidosNoMes:0,avisosNoMes:0,churnNoMes:0,byOutcome:{},byReason:{}};
   for (const row of rows) if (row.metric && row.date?.startsWith(month)) {
     result[row.metric]++;
+    if (row.metric==='pedidosNoMes') { const reason=row.event.payload?.reason || 'Sem motivo'; result.byReason[reason]=(result.byReason[reason] || 0)+1; }
     if (row.metric==='churnNoMes') { const reason=row.event.payload?.outcome || row.event.payload?.notes || 'Sem motivo'; result.byOutcome[reason]=(result.byOutcome[reason] || 0)+1; }
   }
   result.ativosAtuais=students.filter(s=>(s.subscriptions || []).some(sub=>isActiveOn(sub,new Date()))).length;

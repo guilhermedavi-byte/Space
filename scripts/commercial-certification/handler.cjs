@@ -11,9 +11,11 @@ function createHandler({manifest,env=process.env,spawn=fork,clock=Date.now}){
     if(started){res.statusCode=409;return res.end('{"error":"already_started"}');}started=true;
     const cleanEnv=Object.fromEntries(['CRM_API_BASE_URL','CRM_API_KEY','GOOGLE_SERVICE_ACCOUNT_JSON'].filter(k=>env[k]).map(k=>[k,env[k]]));
     cleanEnv.APP_ENV='production';cleanEnv.NODE_ENV='production';
-    const child=spawn(path.join(__dirname,'worker.cjs'),[],{env:cleanEnv,stdio:['ignore','ignore','ignore','ipc'],execArgv:[]});
     const zero={firestoreWritesAttempted:0,datacrazyMutationsAttempted:0,snapshotWritesAttempted:0,blockedRequests:0};
     const unknown=code=>({...failure(zero,{},code),writesAttempted:null,counters:Object.fromEntries(Object.keys(zero).map(k=>[k,null])),countersVerified:false});
+    let child;
+    try{child=spawn(path.join(__dirname,'worker.cjs'),[],{env:cleanEnv,stdio:['ignore','ignore','ignore','ipc'],execArgv:[]});}
+    catch{res.statusCode=500;return res.end(JSON.stringify(unknown('worker_start_failed')));}
     let finished=false;
     const done=(report,status=200)=>{if(finished)return;finished=true;clearTimeout(timer);child.kill();res.statusCode=status;res.end(JSON.stringify(report));};
     const timer=setTimeout(()=>done(unknown('execution_timeout'),504),280000);

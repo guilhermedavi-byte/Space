@@ -1,0 +1,929 @@
+{
+  "schema": "public",
+  "version": "PostgreSQL 17.6 on aarch64-unknown-linux-gnu, compiled by gcc (GCC) 15.2.0, 64-bit",
+  "database": "postgres",
+  "functions": [
+    {
+      "hash": "548fa443232ad30506380ea9c11fea00",
+      "name": "retention_apply_command"
+    },
+    {
+      "hash": "c25b3a716fc6d9cd1e73aab3e77dcf98",
+      "name": "retention_case_snapshot"
+    },
+    {
+      "hash": "cd6f5a624543ab3c1ee3842b514214cd",
+      "name": "retention_compute_scheduled_end_at"
+    },
+    {
+      "hash": "cf3333a7309062df8b5c49440b32e403",
+      "name": "retention_get_case_timeline"
+    },
+    {
+      "hash": "5bbb615c22c01e2df59431123e86bebe",
+      "name": "retention_import_legacy_snapshot"
+    },
+    {
+      "hash": "4ad537cb285c9afd0d3e81284a8a7fbd",
+      "name": "retention_list_cases"
+    },
+    {
+      "hash": "4d250263974f003fc02353c47f7d75db",
+      "name": "retention_prevent_history_mutation"
+    },
+    {
+      "hash": "0e6080d425f015300a038791931e8629",
+      "name": "retention_resolve_subject_by_firestore_student_id"
+    },
+    {
+      "hash": "dd3de458a19b292e7385efe195261dfd",
+      "name": "retention_run_scheduled_churn"
+    },
+    {
+      "hash": "9b1889f56258bf9d6554213c05019c76",
+      "name": "retention_set_updated_at"
+    }
+  ],
+  "constraints": [
+    {
+      "name": "students_firestore_student_id_key",
+      "table": "students",
+      "definition": "UNIQUE (firestore_student_id)"
+    },
+    {
+      "name": "students_legacy_confidence_check",
+      "table": "students",
+      "definition": "CHECK ((legacy_confidence = ANY (ARRAY['high'::text, 'medium'::text, 'low'::text, 'unknown'::text])))"
+    },
+    {
+      "name": "students_lifecycle_status_check",
+      "table": "students",
+      "definition": "CHECK ((lifecycle_status = ANY (ARRAY['active'::text, 'cancellation_scheduled'::text, 'churned'::text])))"
+    },
+    {
+      "name": "students_pause_status_check",
+      "table": "students",
+      "definition": "CHECK ((pause_status = ANY (ARRAY['none'::text, 'paused_billable'::text, 'paused_non_billable'::text])))"
+    },
+    {
+      "name": "students_pkey",
+      "table": "students",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "students_version_check",
+      "table": "students",
+      "definition": "CHECK ((version > 0))"
+    },
+    {
+      "name": "subscriptions_billing_account_id_fkey",
+      "table": "subscriptions",
+      "definition": "FOREIGN KEY (billing_account_id) REFERENCES billing_accounts(id) ON DELETE SET NULL"
+    },
+    {
+      "name": "subscriptions_billing_cycle_check",
+      "table": "subscriptions",
+      "definition": "CHECK ((billing_cycle = ANY (ARRAY['weekly'::text, 'monthly'::text, 'quarterly'::text, 'semiannual'::text, 'annual'::text, 'custom'::text])))"
+    },
+    {
+      "name": "subscriptions_check",
+      "table": "subscriptions",
+      "definition": "CHECK ((((fx_rate IS NULL) AND (fx_rate_source IS NULL) AND (fx_rate_date IS NULL)) OR ((fx_rate IS NOT NULL) AND (fx_rate_source IS NOT NULL) AND (fx_rate_date IS NOT NULL))))"
+    },
+    {
+      "name": "subscriptions_check1",
+      "table": "subscriptions",
+      "definition": "CHECK (((ended_at IS NULL) OR (started_at IS NULL) OR (ended_at >= started_at)))"
+    },
+    {
+      "name": "subscriptions_financial_status_check",
+      "table": "subscriptions",
+      "definition": "CHECK ((financial_status = ANY (ARRAY['unknown'::text, 'current'::text, 'delinquent'::text, 'paused'::text, 'cancelled'::text])))"
+    },
+    {
+      "name": "subscriptions_fx_rate_check",
+      "table": "subscriptions",
+      "definition": "CHECK (((fx_rate IS NULL) OR (fx_rate > (0)::numeric)))"
+    },
+    {
+      "name": "subscriptions_legacy_confidence_check",
+      "table": "subscriptions",
+      "definition": "CHECK ((legacy_confidence = ANY (ARRAY['high'::text, 'medium'::text, 'low'::text, 'unknown'::text])))"
+    },
+    {
+      "name": "subscriptions_lifecycle_status_check",
+      "table": "subscriptions",
+      "definition": "CHECK ((lifecycle_status = ANY (ARRAY['active'::text, 'cancellation_scheduled'::text, 'churned'::text])))"
+    },
+    {
+      "name": "subscriptions_mrr_brl_check",
+      "table": "subscriptions",
+      "definition": "CHECK (((mrr_brl IS NULL) OR (mrr_brl >= (0)::numeric)))"
+    },
+    {
+      "name": "subscriptions_original_currency_check",
+      "table": "subscriptions",
+      "definition": "CHECK (((original_currency = ANY (ARRAY['BRL'::text, 'USD'::text])) OR (original_currency IS NULL)))"
+    },
+    {
+      "name": "subscriptions_original_mrr_value_check",
+      "table": "subscriptions",
+      "definition": "CHECK (((original_mrr_value IS NULL) OR (original_mrr_value >= (0)::numeric)))"
+    },
+    {
+      "name": "subscriptions_pause_status_check",
+      "table": "subscriptions",
+      "definition": "CHECK ((pause_status = ANY (ARRAY['none'::text, 'paused_billable'::text, 'paused_non_billable'::text])))"
+    },
+    {
+      "name": "subscriptions_pkey",
+      "table": "subscriptions",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "subscriptions_student_id_external_subscription_key_key",
+      "table": "subscriptions",
+      "definition": "UNIQUE (student_id, external_subscription_key)"
+    },
+    {
+      "name": "subscriptions_student_id_fkey",
+      "table": "subscriptions",
+      "definition": "FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE RESTRICT"
+    },
+    {
+      "name": "subscriptions_version_check",
+      "table": "subscriptions",
+      "definition": "CHECK ((version > 0))"
+    },
+    {
+      "name": "retention_cases_case_kind_check",
+      "table": "retention_cases",
+      "definition": "CHECK ((case_kind = ANY (ARRAY['risk'::text, 'preventive'::text, 'formal'::text, 'legacy_import'::text])))"
+    },
+    {
+      "name": "retention_cases_check",
+      "table": "retention_cases",
+      "definition": "CHECK (((stage = 'lost'::text) = (lifecycle_status = 'churned'::text)))"
+    },
+    {
+      "name": "retention_cases_check1",
+      "table": "retention_cases",
+      "definition": "CHECK (((closed_at IS NULL) OR (closed_at >= created_at)))"
+    },
+    {
+      "name": "retention_cases_financial_status_check",
+      "table": "retention_cases",
+      "definition": "CHECK ((financial_status = ANY (ARRAY['unknown'::text, 'current'::text, 'delinquent'::text, 'paused'::text, 'cancelled'::text])))"
+    },
+    {
+      "name": "retention_cases_legacy_confidence_check",
+      "table": "retention_cases",
+      "definition": "CHECK ((legacy_confidence = ANY (ARRAY['high'::text, 'medium'::text, 'low'::text, 'unknown'::text])))"
+    },
+    {
+      "name": "retention_cases_lifecycle_status_check",
+      "table": "retention_cases",
+      "definition": "CHECK ((lifecycle_status = ANY (ARRAY['active'::text, 'cancellation_scheduled'::text, 'churned'::text])))"
+    },
+    {
+      "name": "retention_cases_pause_status_check",
+      "table": "retention_cases",
+      "definition": "CHECK ((pause_status = ANY (ARRAY['none'::text, 'paused_billable'::text, 'paused_non_billable'::text])))"
+    },
+    {
+      "name": "retention_cases_pkey",
+      "table": "retention_cases",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "retention_cases_risk_level_check",
+      "table": "retention_cases",
+      "definition": "CHECK (((risk_level = ANY (ARRAY['low'::text, 'medium'::text, 'high'::text, 'critical'::text])) OR (risk_level IS NULL)))"
+    },
+    {
+      "name": "retention_cases_source_system_source_ref_key",
+      "table": "retention_cases",
+      "definition": "UNIQUE (source_system, source_ref)"
+    },
+    {
+      "name": "retention_cases_stage_check",
+      "table": "retention_cases",
+      "definition": "CHECK ((stage = ANY (ARRAY['open'::text, 'awaiting_customer'::text, 'scheduled'::text, 'saved'::text, 'cancelled'::text, 'lost'::text])))"
+    },
+    {
+      "name": "retention_cases_student_id_fkey",
+      "table": "retention_cases",
+      "definition": "FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE RESTRICT"
+    },
+    {
+      "name": "retention_cases_subscription_id_fkey",
+      "table": "retention_cases",
+      "definition": "FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE RESTRICT"
+    },
+    {
+      "name": "retention_cases_version_check",
+      "table": "retention_cases",
+      "definition": "CHECK ((version > 0))"
+    }
+  ],
+  "observed_at": "2026-09-15T02:40:46.872432+00:00",
+  "cron_installed": false,
+  "lifecycle_columns": [
+    {
+      "type": "uuid",
+      "table": "charges",
+      "column": "id"
+    },
+    {
+      "type": "uuid",
+      "table": "charges",
+      "column": "subscription_id"
+    },
+    {
+      "type": "uuid",
+      "table": "charges",
+      "column": "billing_account_id"
+    },
+    {
+      "type": "text",
+      "table": "charges",
+      "column": "external_charge_id"
+    },
+    {
+      "type": "text",
+      "table": "charges",
+      "column": "charge_status"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "charges",
+      "column": "due_at"
+    },
+    {
+      "type": "date",
+      "table": "charges",
+      "column": "service_period_start"
+    },
+    {
+      "type": "date",
+      "table": "charges",
+      "column": "service_period_end"
+    },
+    {
+      "type": "numeric",
+      "table": "charges",
+      "column": "amount_brl"
+    },
+    {
+      "type": "numeric",
+      "table": "charges",
+      "column": "original_amount"
+    },
+    {
+      "type": "text",
+      "table": "charges",
+      "column": "original_currency"
+    },
+    {
+      "type": "text",
+      "table": "charges",
+      "column": "source_system"
+    },
+    {
+      "type": "jsonb",
+      "table": "charges",
+      "column": "source_payload"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "charges",
+      "column": "created_at"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "charges",
+      "column": "updated_at"
+    },
+    {
+      "type": "integer",
+      "table": "charges",
+      "column": "version"
+    },
+    {
+      "type": "bigint",
+      "table": "n8n_cobrancas_financeiras_space",
+      "column": "id"
+    },
+    {
+      "type": "text",
+      "table": "n8n_cobrancas_financeiras_space",
+      "column": "id_cobranca_externa"
+    },
+    {
+      "type": "text",
+      "table": "n8n_cobrancas_financeiras_space",
+      "column": "aluno_nome"
+    },
+    {
+      "type": "text",
+      "table": "n8n_cobrancas_financeiras_space",
+      "column": "telefone"
+    },
+    {
+      "type": "text",
+      "table": "n8n_cobrancas_financeiras_space",
+      "column": "email"
+    },
+    {
+      "type": "numeric",
+      "table": "n8n_cobrancas_financeiras_space",
+      "column": "valor"
+    },
+    {
+      "type": "date",
+      "table": "n8n_cobrancas_financeiras_space",
+      "column": "vencimento"
+    },
+    {
+      "type": "text",
+      "table": "n8n_cobrancas_financeiras_space",
+      "column": "status"
+    },
+    {
+      "type": "text",
+      "table": "n8n_cobrancas_financeiras_space",
+      "column": "link_fatura"
+    },
+    {
+      "type": "text",
+      "table": "n8n_cobrancas_financeiras_space",
+      "column": "link_boleto"
+    },
+    {
+      "type": "text",
+      "table": "n8n_cobrancas_financeiras_space",
+      "column": "desconto_tipo"
+    },
+    {
+      "type": "numeric",
+      "table": "n8n_cobrancas_financeiras_space",
+      "column": "desconto_valor"
+    },
+    {
+      "type": "text",
+      "table": "n8n_cobrancas_financeiras_space",
+      "column": "forma_pagamento"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "n8n_cobrancas_financeiras_space",
+      "column": "created_at"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "n8n_cobrancas_financeiras_space",
+      "column": "updated_at"
+    },
+    {
+      "type": "text",
+      "table": "n8n_cobrancas_financeiras_space",
+      "column": "id_conversa_chatwoot"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "n8n_cobrancas_financeiras_space",
+      "column": "pago_em"
+    },
+    {
+      "type": "text",
+      "table": "n8n_cobrancas_financeiras_space",
+      "column": "confirmado_por"
+    },
+    {
+      "type": "text",
+      "table": "n8n_cobrancas_financeiras_space",
+      "column": "forma_confirmacao"
+    },
+    {
+      "type": "text",
+      "table": "n8n_cobrancas_financeiras_space",
+      "column": "observacao_pagamento"
+    },
+    {
+      "type": "uuid",
+      "table": "outbox_events",
+      "column": "id"
+    },
+    {
+      "type": "text",
+      "table": "outbox_events",
+      "column": "aggregate_type"
+    },
+    {
+      "type": "uuid",
+      "table": "outbox_events",
+      "column": "aggregate_id"
+    },
+    {
+      "type": "text",
+      "table": "outbox_events",
+      "column": "event_type"
+    },
+    {
+      "type": "jsonb",
+      "table": "outbox_events",
+      "column": "payload"
+    },
+    {
+      "type": "text",
+      "table": "outbox_events",
+      "column": "delivery_status"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "outbox_events",
+      "column": "available_at"
+    },
+    {
+      "type": "integer",
+      "table": "outbox_events",
+      "column": "attempts"
+    },
+    {
+      "type": "text",
+      "table": "outbox_events",
+      "column": "last_error"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "outbox_events",
+      "column": "created_at"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "outbox_events",
+      "column": "updated_at"
+    },
+    {
+      "type": "uuid",
+      "table": "retention_cases",
+      "column": "id"
+    },
+    {
+      "type": "uuid",
+      "table": "retention_cases",
+      "column": "student_id"
+    },
+    {
+      "type": "uuid",
+      "table": "retention_cases",
+      "column": "subscription_id"
+    },
+    {
+      "type": "text",
+      "table": "retention_cases",
+      "column": "case_kind"
+    },
+    {
+      "type": "text",
+      "table": "retention_cases",
+      "column": "stage"
+    },
+    {
+      "type": "text",
+      "table": "retention_cases",
+      "column": "risk_level"
+    },
+    {
+      "type": "text",
+      "table": "retention_cases",
+      "column": "lifecycle_status"
+    },
+    {
+      "type": "text",
+      "table": "retention_cases",
+      "column": "pause_status"
+    },
+    {
+      "type": "text",
+      "table": "retention_cases",
+      "column": "financial_status"
+    },
+    {
+      "type": "text",
+      "table": "retention_cases",
+      "column": "owner_uid"
+    },
+    {
+      "type": "text",
+      "table": "retention_cases",
+      "column": "owner_name"
+    },
+    {
+      "type": "uuid",
+      "table": "retention_cases",
+      "column": "latest_event_id"
+    },
+    {
+      "type": "text",
+      "table": "retention_cases",
+      "column": "source_ref"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "retention_cases",
+      "column": "scheduled_service_end_at"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "retention_cases",
+      "column": "first_contact_at"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "retention_cases",
+      "column": "last_contact_at"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "retention_cases",
+      "column": "awaiting_customer_since"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "retention_cases",
+      "column": "saved_at"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "retention_cases",
+      "column": "churned_at"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "retention_cases",
+      "column": "closed_at"
+    },
+    {
+      "type": "text",
+      "table": "retention_cases",
+      "column": "close_reason"
+    },
+    {
+      "type": "text",
+      "table": "retention_cases",
+      "column": "source_system"
+    },
+    {
+      "type": "jsonb",
+      "table": "retention_cases",
+      "column": "legacy_source"
+    },
+    {
+      "type": "text",
+      "table": "retention_cases",
+      "column": "legacy_confidence"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "retention_cases",
+      "column": "created_at"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "retention_cases",
+      "column": "updated_at"
+    },
+    {
+      "type": "integer",
+      "table": "retention_cases",
+      "column": "version"
+    },
+    {
+      "type": "uuid",
+      "table": "retention_events",
+      "column": "id"
+    },
+    {
+      "type": "uuid",
+      "table": "retention_events",
+      "column": "case_id"
+    },
+    {
+      "type": "uuid",
+      "table": "retention_events",
+      "column": "student_id"
+    },
+    {
+      "type": "uuid",
+      "table": "retention_events",
+      "column": "subscription_id"
+    },
+    {
+      "type": "text",
+      "table": "retention_events",
+      "column": "event_type"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "retention_events",
+      "column": "occurred_at"
+    },
+    {
+      "type": "text",
+      "table": "retention_events",
+      "column": "actor_uid"
+    },
+    {
+      "type": "text",
+      "table": "retention_events",
+      "column": "actor_name"
+    },
+    {
+      "type": "text",
+      "table": "retention_events",
+      "column": "actor_role"
+    },
+    {
+      "type": "text",
+      "table": "retention_events",
+      "column": "client_action_id"
+    },
+    {
+      "type": "text",
+      "table": "retention_events",
+      "column": "idempotency_key"
+    },
+    {
+      "type": "text",
+      "table": "retention_events",
+      "column": "command_fingerprint"
+    },
+    {
+      "type": "jsonb",
+      "table": "retention_events",
+      "column": "state_before"
+    },
+    {
+      "type": "jsonb",
+      "table": "retention_events",
+      "column": "state_after"
+    },
+    {
+      "type": "jsonb",
+      "table": "retention_events",
+      "column": "payload"
+    },
+    {
+      "type": "text",
+      "table": "retention_events",
+      "column": "source_system"
+    },
+    {
+      "type": "text",
+      "table": "retention_events",
+      "column": "source_confidence"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "retention_events",
+      "column": "created_at"
+    },
+    {
+      "type": "uuid",
+      "table": "service_periods",
+      "column": "id"
+    },
+    {
+      "type": "uuid",
+      "table": "service_periods",
+      "column": "subscription_id"
+    },
+    {
+      "type": "date",
+      "table": "service_periods",
+      "column": "period_start"
+    },
+    {
+      "type": "date",
+      "table": "service_periods",
+      "column": "period_end"
+    },
+    {
+      "type": "text",
+      "table": "service_periods",
+      "column": "source_system"
+    },
+    {
+      "type": "jsonb",
+      "table": "service_periods",
+      "column": "legacy_source"
+    },
+    {
+      "type": "text",
+      "table": "service_periods",
+      "column": "legacy_confidence"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "service_periods",
+      "column": "created_at"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "service_periods",
+      "column": "updated_at"
+    },
+    {
+      "type": "integer",
+      "table": "service_periods",
+      "column": "version"
+    },
+    {
+      "type": "uuid",
+      "table": "students",
+      "column": "id"
+    },
+    {
+      "type": "text",
+      "table": "students",
+      "column": "firestore_student_id"
+    },
+    {
+      "type": "text",
+      "table": "students",
+      "column": "full_name"
+    },
+    {
+      "type": "text",
+      "table": "students",
+      "column": "email"
+    },
+    {
+      "type": "text",
+      "table": "students",
+      "column": "phone"
+    },
+    {
+      "type": "text",
+      "table": "students",
+      "column": "lifecycle_status"
+    },
+    {
+      "type": "text",
+      "table": "students",
+      "column": "pause_status"
+    },
+    {
+      "type": "text",
+      "table": "students",
+      "column": "source_system"
+    },
+    {
+      "type": "jsonb",
+      "table": "students",
+      "column": "legacy_source"
+    },
+    {
+      "type": "text",
+      "table": "students",
+      "column": "legacy_confidence"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "students",
+      "column": "created_at"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "students",
+      "column": "updated_at"
+    },
+    {
+      "type": "integer",
+      "table": "students",
+      "column": "version"
+    },
+    {
+      "type": "uuid",
+      "table": "subscriptions",
+      "column": "id"
+    },
+    {
+      "type": "uuid",
+      "table": "subscriptions",
+      "column": "student_id"
+    },
+    {
+      "type": "uuid",
+      "table": "subscriptions",
+      "column": "billing_account_id"
+    },
+    {
+      "type": "text",
+      "table": "subscriptions",
+      "column": "external_subscription_key"
+    },
+    {
+      "type": "text",
+      "table": "subscriptions",
+      "column": "plan_name"
+    },
+    {
+      "type": "text",
+      "table": "subscriptions",
+      "column": "billing_cycle"
+    },
+    {
+      "type": "text",
+      "table": "subscriptions",
+      "column": "lifecycle_status"
+    },
+    {
+      "type": "text",
+      "table": "subscriptions",
+      "column": "pause_status"
+    },
+    {
+      "type": "text",
+      "table": "subscriptions",
+      "column": "financial_status"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "subscriptions",
+      "column": "started_at"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "subscriptions",
+      "column": "scheduled_service_end_at"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "subscriptions",
+      "column": "ended_at"
+    },
+    {
+      "type": "numeric",
+      "table": "subscriptions",
+      "column": "mrr_brl"
+    },
+    {
+      "type": "numeric",
+      "table": "subscriptions",
+      "column": "original_mrr_value"
+    },
+    {
+      "type": "text",
+      "table": "subscriptions",
+      "column": "original_currency"
+    },
+    {
+      "type": "numeric",
+      "table": "subscriptions",
+      "column": "fx_rate"
+    },
+    {
+      "type": "text",
+      "table": "subscriptions",
+      "column": "fx_rate_source"
+    },
+    {
+      "type": "date",
+      "table": "subscriptions",
+      "column": "fx_rate_date"
+    },
+    {
+      "type": "text",
+      "table": "subscriptions",
+      "column": "source_system"
+    },
+    {
+      "type": "jsonb",
+      "table": "subscriptions",
+      "column": "legacy_source"
+    },
+    {
+      "type": "text",
+      "table": "subscriptions",
+      "column": "legacy_confidence"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "subscriptions",
+      "column": "created_at"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "subscriptions",
+      "column": "updated_at"
+    },
+    {
+      "type": "integer",
+      "table": "subscriptions",
+      "column": "version"
+    }
+  ],
+  "migration_history_table": null
+}

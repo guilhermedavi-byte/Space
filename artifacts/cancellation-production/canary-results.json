@@ -1,0 +1,26 @@
+{
+  "environment": "production",
+  "writes_performed": false,
+  "scenarios": [
+    {
+      "scenario": "A request/reversal",
+      "result": "BLOCKED",
+      "reason": "Complete identity reconciliation and real consumer isolation unavailable"
+    },
+    {
+      "scenario": "B explicit notice",
+      "result": "BLOCKED",
+      "reason": "Complete identity reconciliation and real consumer isolation unavailable"
+    },
+    {
+      "scenario": "C last active day",
+      "result": "BLOCKED",
+      "reason": "Complete identity reconciliation and real consumer isolation unavailable"
+    },
+    {
+      "scenario": "D churn day",
+      "result": "BLOCKED",
+      "reason": "Complete identity reconciliation and real consumer isolation unavailable"
+    }
+  ]
+}

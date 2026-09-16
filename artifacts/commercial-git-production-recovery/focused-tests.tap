@@ -1,0 +1,1157 @@
+TAP version 13
+# Subtest: resolvePeriodRange monta hoje, semana e mês em São Paulo
+ok 1 - resolvePeriodRange monta hoje, semana e mês em São Paulo
+  ---
+  duration_ms: 42.142334
+  type: 'test'
+  ...
+# Subtest: summarizeDailyRows recalcula taxas a partir dos totais agregados
+ok 2 - summarizeDailyRows recalcula taxas a partir dos totais agregados
+  ---
+  duration_ms: 0.348042
+  type: 'test'
+  ...
+# Subtest: Agendado para Feito usa eventos históricos e preserva agendamentos
+ok 3 - Agendado para Feito usa eventos históricos e preserva agendamentos
+  ---
+  duration_ms: 0.241333
+  type: 'test'
+  ...
+# Subtest: Agendado para Feito retorna zero sem agendamentos
+ok 4 - Agendado para Feito retorna zero sem agendamentos
+  ---
+  duration_ms: 0.070375
+  type: 'test'
+  ...
+# Subtest: Pré-Vendas renderiza reuniões feitas e conversão total e por SDR
+ok 5 - Pré-Vendas renderiza reuniões feitas e conversão total e por SDR
+  ---
+  duration_ms: 21.360417
+  type: 'test'
+  ...
+# Subtest: normalizeActivityEvent ignora deletados e marca horário local do evento
+ok 6 - normalizeActivityEvent ignora deletados e marca horário local do evento
+  ---
+  duration_ms: 2.098542
+  type: 'test'
+  ...
+# Subtest: Firestore set blocked before transport
+ok 7 - Firestore set blocked before transport
+  ---
+  duration_ms: 5.212792
+  type: 'test'
+  ...
+# Subtest: Firestore batch blocked before transport
+ok 8 - Firestore batch blocked before transport
+  ---
+  duration_ms: 0.405459
+  type: 'test'
+  ...
+# Subtest: Datacrazy mutation blocked before transport
+ok 9 - Datacrazy mutation blocked before transport
+  ---
+  duration_ms: 0.218959
+  type: 'test'
+  ...
+# Subtest: read adapter does not expose functioning write methods
+ok 10 - read adapter does not expose functioning write methods
+  ---
+  duration_ms: 3.304541
+  type: 'test'
+  ...
+# Subtest: only exact read endpoints allowed; redirects disabled; Request objects rejected
+ok 11 - only exact read endpoints allowed; redirects disabled; Request objects rejected
+  ---
+  duration_ms: 34.31275
+  type: 'test'
+  ...
+# Subtest: sanitizer rejects PII/secret-shaped output email
+ok 12 - sanitizer rejects PII/secret-shaped output email
+  ---
+  duration_ms: 0.594083
+  type: 'test'
+  ...
+# Subtest: sanitizer rejects PII/secret-shaped output dealId
+ok 13 - sanitizer rejects PII/secret-shaped output dealId
+  ---
+  duration_ms: 0.431167
+  type: 'test'
+  ...
+# Subtest: sanitizer rejects PII/secret-shaped output headers
+ok 14 - sanitizer rejects PII/secret-shaped output headers
+  ---
+  duration_ms: 0.574583
+  type: 'test'
+  ...
+# Subtest: sanitizer rejects PII/secret-shaped output dealId
+ok 15 - sanitizer rejects PII/secret-shaped output dealId
+  ---
+  duration_ms: 0.648291
+  type: 'test'
+  ...
+# Subtest: sanitizer rejects PII/secret-shaped output privateKey
+ok 16 - sanitizer rejects PII/secret-shaped output privateKey
+  ---
+  duration_ms: 0.396209
+  type: 'test'
+  ...
+# Subtest: sanitizer rejects PII/secret-shaped output dealId
+ok 17 - sanitizer rejects PII/secret-shaped output dealId
+  ---
+  duration_ms: 0.118625
+  type: 'test'
+  ...
+# Subtest: handler refuses get before spawning
+ok 18 - handler refuses get before spawning
+  ---
+  duration_ms: 3.015333
+  type: 'test'
+  ...
+# Subtest: handler refuses expired before spawning
+ok 19 - handler refuses expired before spawning
+  ---
+  duration_ms: 0.160708
+  type: 'test'
+  ...
+# Subtest: handler refuses wrong-host before spawning
+ok 20 - handler refuses wrong-host before spawning
+  ---
+  duration_ms: 0.070333
+  type: 'test'
+  ...
+# Subtest: handler refuses wrong-env before spawning
+ok 21 - handler refuses wrong-env before spawning
+  ---
+  duration_ms: 0.134916
+  type: 'test'
+  ...
+# Subtest: handler passes only three secrets to child; no logs; single start per instance
+ok 22 - handler passes only three secrets to child; no logs; single start per instance
+  ---
+  duration_ms: 0.926791
+  type: 'test'
+  ...
+# Subtest: complete simulated execution uses real engine and sanitized output; no raw source PII
+ok 23 - complete simulated execution uses real engine and sanitized output; no raw source PII
+  ---
+  duration_ms: 87.799083
+  type: 'test'
+  ...
+# Subtest: incomplete Datacrazy and missing SDR evidence cannot produce PASS
+ok 24 - incomplete Datacrazy and missing SDR evidence cannot produce PASS
+  ---
+  duration_ms: 13.305
+  type: 'test'
+  ...
+# Subtest: collector rejects missing credentials without giving runtime write interfaces
+ok 25 - collector rejects missing credentials without giving runtime write interfaces
+  ---
+  duration_ms: 0.636667
+  type: 'test'
+  ...
+# Subtest: browser-origin request cannot start the audit
+ok 26 - browser-origin request cannot start the audit
+  ---
+  duration_ms: 0.097875
+  type: 'test'
+  ...
+# Subtest: installed guard blocks raw sockets and runtime snapshot publication in an isolated process
+ok 27 - installed guard blocks raw sockets and runtime snapshot publication in an isolated process
+  ---
+  duration_ms: 110.9005
+  type: 'test'
+  ...
+# Subtest: complete worker simulation: real collector, Firestore read adapter, OAuth path, runtime and sanitization
+ok 28 - complete worker simulation: real collector, Firestore read adapter, OAuth path, runtime and sanitization
+  ---
+  duration_ms: 218.279625
+  type: 'test'
+  ...
+# Subtest: incomplete real collector fails before any Firestore read
+ok 29 - incomplete real collector fails before any Firestore read
+  ---
+  duration_ms: 2.494084
+  type: 'test'
+  ...
+# Subtest: worker with missing authentication reports FAIL without network or output secrets
+ok 30 - worker with missing authentication reports FAIL without network or output secrets
+  ---
+  duration_ms: 48.250125
+  type: 'test'
+  ...
+# Subtest: PII rejected before any output file is persisted
+ok 31 - PII rejected before any output file is persisted
+  ---
+  duration_ms: 2.262291
+  type: 'test'
+  ...
+# Subtest: local persistence rejects a PASS without machine-readable proof fields
+ok 32 - local persistence rejects a PASS without machine-readable proof fields
+  ---
+  duration_ms: 0.97775
+  type: 'test'
+  ...
+# Subtest: worker spawn failure cannot leak the exception or invent zero counters
+ok 33 - worker spawn failure cannot leak the exception or invent zero counters
+  ---
+  duration_ms: 0.179042
+  type: 'test'
+  ...
+# Subtest: legacy movement date remains explicit and cannot pass financial certification
+ok 34 - legacy movement date remains explicit and cannot pass financial certification
+  ---
+  duration_ms: 7.2135
+  type: 'test'
+  ...
+# Subtest: SDR evidence missing origin or event timestamp stays not_loaded
+ok 35 - SDR evidence missing origin or event timestamp stays not_loaded
+  ---
+  duration_ms: 0.955917
+  type: 'test'
+  ...
+# Subtest: stored 8385 is mechanically classified STALE against 12646
+ok 36 - stored 8385 is mechanically classified STALE against 12646
+  ---
+  duration_ms: 0.657625
+  type: 'test'
+  ...
+# Subtest: SDR not_loaded does not produce financial zero
+ok 37 - SDR not_loaded does not produce financial zero
+  ---
+  duration_ms: 0.252709
+  type: 'test'
+  ...
+# Subtest: SDR source_error does not produce financial zero
+ok 38 - SDR source_error does not produce financial zero
+  ---
+  duration_ms: 0.391667
+  type: 'test'
+  ...
+# Subtest: SDR explicit no attribution, zero sale and wrong origin are distinct
+ok 39 - SDR explicit no attribution, zero sale and wrong origin are distinct
+  ---
+  duration_ms: 0.373917
+  type: 'test'
+  ...
+# Subtest: closed deals without identity or closing date cannot be certified as zero
+ok 40 - closed deals without identity or closing date cannot be certified as zero
+  ---
+  duration_ms: 1.244833
+  type: 'test'
+  ...
+# Subtest: cross-month weekly ledger preserves each real competence
+ok 41 - cross-month weekly ledger preserves each real competence
+  ---
+  duration_ms: 7.024625
+  type: 'test'
+  ...
+# Subtest: half-open boundary first
+ok 42 - half-open boundary first
+  ---
+  duration_ms: 0.421875
+  type: 'test'
+  ...
+# Subtest: half-open boundary last
+ok 43 - half-open boundary last
+  ---
+  duration_ms: 1.032125
+  type: 'test'
+  ...
+# Subtest: half-open boundary next
+ok 44 - half-open boundary next
+  ---
+  duration_ms: 0.380375
+  type: 'test'
+  ...
+# Subtest: half-open boundary august-before
+ok 45 - half-open boundary august-before
+  ---
+  duration_ms: 2.086875
+  type: 'test'
+  ...
+# Subtest: half-open boundary august-special
+ok 46 - half-open boundary august-special
+  ---
+  duration_ms: 0.553334
+  type: 'test'
+  ...
+# Subtest: half-open boundary special-last
+ok 47 - half-open boundary special-last
+  ---
+  duration_ms: 0.162083
+  type: 'test'
+  ...
+# Subtest: half-open boundary special-next
+ok 48 - half-open boundary special-next
+  ---
+  duration_ms: 0.163542
+  type: 'test'
+  ...
+# Subtest: half-open boundary year
+ok 49 - half-open boundary year
+  ---
+  duration_ms: 0.7175
+  type: 'test'
+  ...
+# Subtest: partition has no overlaps/gaps 2025-02
+ok 50 - partition has no overlaps/gaps 2025-02
+  ---
+  duration_ms: 32.730167
+  type: 'test'
+  ...
+# Subtest: partition has no overlaps/gaps 2024-02
+ok 51 - partition has no overlaps/gaps 2024-02
+  ---
+  duration_ms: 34.256666
+  type: 'test'
+  ...
+# Subtest: partition has no overlaps/gaps 2026-04
+ok 52 - partition has no overlaps/gaps 2026-04
+  ---
+  duration_ms: 27.557875
+  type: 'test'
+  ...
+# Subtest: partition has no overlaps/gaps 2026-07
+ok 53 - partition has no overlaps/gaps 2026-07
+  ---
+  duration_ms: 30.071
+  type: 'test'
+  ...
+# Subtest: partition has no overlaps/gaps 2026-08
+ok 54 - partition has no overlaps/gaps 2026-08
+  ---
+  duration_ms: 31.85975
+  type: 'test'
+  ...
+# Subtest: partition has no overlaps/gaps 2026-12
+ok 55 - partition has no overlaps/gaps 2026-12
+  ---
+  duration_ms: 39.248042
+  type: 'test'
+  ...
+# Subtest: host timezone cannot change commercial date, month, or week
+ok 56 - host timezone cannot change commercial date, month, or week
+  ---
+  duration_ms: 264.539875
+  type: 'test'
+  ...
+# Subtest: date-only values mean Sao Paulo civil date, invalid/ambiguous dates fail
+ok 57 - date-only values mean Sao Paulo civil date, invalid/ambiguous dates fail
+  ---
+  duration_ms: 0.080625
+  type: 'test'
+  ...
+# Subtest: historical DST midnight gap resolves to first real instant
+ok 58 - historical DST midnight gap resolves to first real instant
+  ---
+  duration_ms: 0.20425
+  type: 'test'
+  ...
+# Subtest: created in May and gained at new-week midnight belongs to September
+ok 59 - created in May and gained at new-week midnight belongs to September
+  ---
+  duration_ms: 0.568625
+  type: 'test'
+  ...
+# Subtest: explicit zero remains zero and counts one sale, not a fallback ticket
+ok 60 - explicit zero remains zero and counts one sale, not a fallback ticket
+  ---
+  duration_ms: 0.137666
+  type: 'test'
+  ...
+# Subtest: identical deal IDs counted once; conflicting financial facts reject
+ok 61 - identical deal IDs counted once; conflicting financial facts reject
+  ---
+  duration_ms: 0.395875
+  type: 'test'
+  ...
+# Subtest: revenue preserved in Outros: inactive
+ok 62 - revenue preserved in Outros: inactive
+  ---
+  duration_ms: 1.254125
+  type: 'test'
+  ...
+# Subtest: revenue preserved in Outros: removed
+ok 63 - revenue preserved in Outros: removed
+  ---
+  duration_ms: 0.4955
+  type: 'test'
+  ...
+# Subtest: revenue preserved in Outros: changed-role
+ok 64 - revenue preserved in Outros: changed-role
+  ---
+  duration_ms: 0.643041
+  type: 'test'
+  ...
+# Subtest: revenue preserved in Outros: missing-owner
+ok 65 - revenue preserved in Outros: missing-owner
+  ---
+  duration_ms: 0.7605
+  type: 'test'
+  ...
+# Subtest: revenue preserved in Outros: SDR
+ok 66 - revenue preserved in Outros: SDR
+  ---
+  duration_ms: 0.588625
+  type: 'test'
+  ...
+# Subtest: historical explicit closer role overrides current SDR role
+ok 67 - historical explicit closer role overrides current SDR role
+  ---
+  duration_ms: 0.297417
+  type: 'test'
+  ...
+# Subtest: monthly = clipped weekly partitions, including days from adjacent planning weeks
+ok 68 - monthly = clipped weekly partitions, including days from adjacent planning weeks
+  ---
+  duration_ms: 0.732958
+  type: 'test'
+  ...
+# Subtest: overlapping custom competences are detected, never silently double-assigned
+ok 69 - overlapping custom competences are detected, never silently double-assigned
+  ---
+  duration_ms: 0.241542
+  type: 'test'
+  ...
+# Subtest: monthly and weekly CRM helpers reconcile to management and financial ledger
+ok 70 - monthly and weekly CRM helpers reconcile to management and financial ledger
+  ---
+  duration_ms: 3.215959
+  type: 'test'
+  ...
+# Subtest: deal-level reconciliation detects value drift
+ok 71 - deal-level reconciliation detects value drift
+  ---
+  duration_ms: 0.105041
+  type: 'test'
+  ...
+# Subtest: deal-level reconciliation detects dateKey drift
+ok 72 - deal-level reconciliation detects dateKey drift
+  ---
+  duration_ms: 0.046667
+  type: 'test'
+  ...
+# Subtest: deal-level reconciliation detects dateField drift
+ok 73 - deal-level reconciliation detects dateField drift
+  ---
+  duration_ms: 0.035708
+  type: 'test'
+  ...
+# Subtest: deal-level reconciliation detects weekKey drift
+ok 74 - deal-level reconciliation detects weekKey drift
+  ---
+  duration_ms: 0.191666
+  type: 'test'
+  ...
+# Subtest: deal-level reconciliation detects competencia drift
+ok 75 - deal-level reconciliation detects competencia drift
+  ---
+  duration_ms: 0.0415
+  type: 'test'
+  ...
+# Subtest: deal-level reconciliation detects status drift
+ok 76 - deal-level reconciliation detects status drift
+  ---
+  duration_ms: 0.031
+  type: 'test'
+  ...
+# Subtest: deal-level reconciliation detects responsibleId drift
+ok 77 - deal-level reconciliation detects responsibleId drift
+  ---
+  duration_ms: 0.02875
+  type: 'test'
+  ...
+# Subtest: deal-level reconciliation detects role drift
+ok 78 - deal-level reconciliation detects role drift
+  ---
+  duration_ms: 0.031042
+  type: 'test'
+  ...
+# Subtest: same aggregate does not hide exchanged, duplicate or missing deals
+ok 79 - same aggregate does not hide exchanged, duplicate or missing deals
+  ---
+  duration_ms: 0.078417
+  type: 'test'
+  ...
+# Subtest: SDR events: identity, duplicate, deletion, wrong outcome, missing actor all explicit
+ok 80 - SDR events: identity, duplicate, deletion, wrong outcome, missing actor all explicit
+  ---
+  duration_ms: 0.304709
+  type: 'test'
+  ...
+# Subtest: readOnly source path cannot acquire lease, collect, or publish
+ok 81 - readOnly source path cannot acquire lease, collect, or publish
+  ---
+  duration_ms: 0.383417
+  type: 'test'
+  ...
+# Subtest: publication requires per-deal ledger even when team totals match
+ok 82 - publication requires per-deal ledger even when team totals match
+  ---
+  duration_ms: 0.167667
+  type: 'test'
+  ...
+# Subtest: management preserves weekly calendar, cross-month ownership and historical special week
+ok 83 - management preserves weekly calendar, cross-month ownership and historical special week
+  ---
+  duration_ms: 3.572542
+  type: 'test'
+  ...
+# Subtest: monthly existence is independent from document and weekly defaults
+ok 84 - monthly existence is independent from document and weekly defaults
+  ---
+  duration_ms: 7.314625
+  type: 'test'
+  ...
+# Subtest: explicit week existence, current week and four statuses reflect real storage
+ok 85 - explicit week existence, current week and four statuses reflect real storage
+  ---
+  duration_ms: 2.079708
+  type: 'test'
+  ...
+# Subtest: roster keeps Luis and zero, rejects ghosts and internal names, and retains Outros as bucket
+ok 86 - roster keeps Luis and zero, rejects ghosts and internal names, and retains Outros as bucket
+  ---
+  duration_ms: 1.033416
+  type: 'test'
+  ...
+# Subtest: financial truth matches official sales and planning respects explicit team targets
+ok 87 - financial truth matches official sales and planning respects explicit team targets
+  ---
+  duration_ms: 3.806125
+  type: 'test'
+  ...
+# Subtest: copy is only available with immediately previous saved week, including previous competence
+ok 88 - copy is only available with immediately previous saved week, including previous competence
+  ---
+  duration_ms: 2.162542
+  type: 'test'
+  ...
+# Subtest: historical roles come from period, not current role; model does not mutate inputs
+ok 89 - historical roles come from period, not current role; model does not mutate inputs
+  ---
+  duration_ms: 2.583125
+  type: 'test'
+  ...
+# Subtest: explicit exclusions through aliases are not reintroduced in the editor
+ok 90 - explicit exclusions through aliases are not reintroduced in the editor
+  ---
+  duration_ms: 1.590875
+  type: 'test'
+  ...
+# Subtest: page loads current competence; existing month opens edit with saved amount and no writes
+ok 91 - page loads current competence; existing month opens edit with saved amount and no writes
+  ---
+  duration_ms: 84.618042
+  type: 'test'
+  ...
+# Subtest: empty month uses define and monthly save refreshes existence
+ok 92 - empty month uses define and monthly save refreshes existence
+  ---
+  duration_ms: 36.362167
+  type: 'test'
+  ...
+# Subtest: month arrows and picker navigate, preserve scope and show history as read-only
+ok 93 - month arrows and picker navigate, preserve scope and show history as read-only
+  ---
+  duration_ms: 32.754333
+  type: 'test'
+  ...
+# Subtest: existing week opens edit; new week opens define; neither opening writes
+ok 94 - existing week opens edit; new week opens define; neither opening writes
+  ---
+  duration_ms: 19.166833
+  type: 'test'
+  ...
+# Subtest: copy changes only local draft; save posts configuration without results or record IDs and refreshes status
+ok 95 - copy changes only local draft; save posts configuration without results or record IDs and refreshes status
+  ---
+  duration_ms: 30.998541
+  type: 'test'
+  ...
+# Subtest: save error preserves draft and closing without save never persists copied values
+ok 96 - save error preserves draft and closing without save never persists copied values
+  ---
+  duration_ms: 26.779667
+  type: 'test'
+  ...
+# Subtest: rapid competence changes cannot replace the latest month with a stale response
+ok 97 - rapid competence changes cannot replace the latest month with a stale response
+  ---
+  duration_ms: 13.62475
+  type: 'test'
+  ...
+# Subtest: historical drawer has no save; Escape closes and returns focus
+ok 98 - historical drawer has no save; Escape closes and returns focus
+  ---
+  duration_ms: 17.17725
+  type: 'test'
+  ...
+# Subtest: completed week opens consultation and offers explicit editing only in an editable competence
+ok 99 - completed week opens consultation and offers explicit editing only in an editable competence
+  ---
+  duration_ms: 30.894166
+  type: 'test'
+  ...
+# [commercial-overview][financial-audit] {
+#   periodoSelecionado: {
+#     inicio: '2026-09-09T00:00:00-03:00',
+#     fim: '2026-09-15T23:59:59.999-03:00',
+#     timezone: 'America/Sao_Paulo'
+#   },
+#   origemDados: 'DataCrazy businesses',
+#   pipeline: 'conversao',
+#   quantidadeFechadosEncontrados: 3,
+#   somaReceita: 12650,
+#   ticketMedio: 4216.666666666667,
+#   campoDataUsado: 'lastMovedAt',
+#   distribuicaoCamposData: { lastMovedAt: 2, statusChangedAt: 1 },
+#   negociosExcluidosPorData: 0,
+#   negociosSemDataFechamento: 0,
+#   criadosAntesMasFechadosNoPeriodo: 3,
+#   criadosNoPeriodoMasFechadosFora: 0
+# }
+# [FORECAST DEBUG] {
+#   parte1_fechado: 12650,
+#   parte2_pipeline: 0,
+#   parte3_novosLeads: 0,
+#   forecast_total: 12650,
+#   diasPassados: 7,
+#   diasRestantes: 0,
+#   mediaDiariaLeads: 0,
+#   novosLeadsEsperados: 0,
+#   dealsPipeline_count: 0
+# }
+# Subtest: SDR roster joins real active users and monthly role, includes zero and suppresses orphan/internal names
+ok 100 - SDR roster joins real active users and monthly role, includes zero and suppresses orphan/internal names
+  ---
+  duration_ms: 3.971209
+  type: 'test'
+  ...
+# Subtest: weekly UID overrides legacy defaults by identity without changing historical configuration
+ok 101 - weekly UID overrides legacy defaults by identity without changing historical configuration
+  ---
+  duration_ms: 1.602125
+  type: 'test'
+  ...
+# Subtest: R$12,650 includes all valid closings regardless of closer, goal or result roster, once per deal
+ok 102 - R$12,650 includes all valid closings regardless of closer, goal or result roster, once per deal
+  ---
+  duration_ms: 7.409125
+  type: 'test'
+  ...
+# Subtest: Outros is a closer bucket and its saved target contributes to the team target
+ok 103 - Outros is a closer bucket and its saved target contributes to the team target
+  ---
+  duration_ms: 1.28525
+  type: 'test'
+  ...
+# Subtest: financial date precedence, timezone boundaries and established pipeline rule are shared
+ok 104 - financial date precedence, timezone boundaries and established pipeline rule are shared
+  ---
+  duration_ms: 0.316709
+  type: 'test'
+  ...
+# Subtest: dashboard and CRM weekly total agree for identical periods and equivalent R$12,650 data
+ok 105 - dashboard and CRM weekly total agree for identical periods and equivalent R$12,650 data
+  ---
+  duration_ms: 5.195958
+  type: 'test'
+  ...
+# Subtest: read-only audit explains the synthetic R$8,400 -> R$12,650 difference by deal
+ok 106 - read-only audit explains the synthetic R$8,400 -> R$12,650 difference by deal
+  ---
+  duration_ms: 0.836875
+  type: 'test'
+  ...
+# Subtest: ranking renders the backend names, including eligible SDRs below fifth place
+ok 107 - ranking renders the backend names, including eligible SDRs below fifth place
+  ---
+  duration_ms: 2.751875
+  type: 'test'
+  ...
+# Subtest: mirror financial windows include closed deals without recent movement
+ok 108 - mirror financial windows include closed deals without recent movement
+  ---
+  duration_ms: 2.144208
+  type: 'test'
+  ...
+# Subtest: CRM Live loader reads users, rejects ghosts, and uses the week competence across a month boundary
+ok 109 - CRM Live loader reads users, rejects ghosts, and uses the week competence across a month boundary
+  ---
+  duration_ms: 5.736458
+  type: 'test'
+  ...
+# Subtest: real Firestore adapter sends cache and history in ONE commit with version precondition
+ok 110 - real Firestore adapter sends cache and history in ONE commit with version precondition
+  ---
+  duration_ms: 56.991333
+  type: 'test'
+  ...
+# [crm-live] slice build failed crm Error: crm_failed
+#     at buildCrmLiveCrmSlice (/private/tmp/space-commercial-production/tests/crm-live-auth-scope.test.js:162:15)
+#     at build (/private/tmp/space-commercial-production/api/crm-live-data.js:128:32)
+#     at /private/tmp/space-commercial-production/api/crm-live-data.js:106:48
+#     at runCrmSnapshot (/private/tmp/space-commercial-production/tests/crm-live-auth-scope.test.js:27:49)
+#     at loadSlice (/private/tmp/space-commercial-production/api/crm-live-data.js:106:17)
+#     at async Promise.all (index 0)
+#     at async module.exports (/private/tmp/space-commercial-production/api/crm-live-data.js:124:34)
+#     at async TestContext.<anonymous> (/private/tmp/space-commercial-production/tests/crm-live-auth-scope.test.js:183:3)
+#     at async Test.run (node:internal/test_runner/test:1054:7)
+#     at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+# [crm-live] slice build failed crm Error: crm_failed
+#     at buildCrmLiveCrmSlice (/private/tmp/space-commercial-production/tests/crm-live-auth-scope.test.js:207:15)
+#     at build (/private/tmp/space-commercial-production/api/crm-live-data.js:128:32)
+#     at /private/tmp/space-commercial-production/api/crm-live-data.js:106:48
+#     at runCrmSnapshot (/private/tmp/space-commercial-production/tests/crm-live-auth-scope.test.js:27:49)
+#     at loadSlice (/private/tmp/space-commercial-production/api/crm-live-data.js:106:17)
+#     at async Promise.all (index 0)
+#     at async module.exports (/private/tmp/space-commercial-production/api/crm-live-data.js:124:34)
+#     at async TestContext.<anonymous> (/private/tmp/space-commercial-production/tests/crm-live-auth-scope.test.js:238:5)
+#     at async Test.run (node:internal/test_runner/test:1054:7)
+#     at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+# [crm-live] top-level payload failed Error: crm_failed
+#     at buildCrmLiveCrmSlice (/private/tmp/space-commercial-production/tests/crm-live-auth-scope.test.js:207:15)
+#     at build (/private/tmp/space-commercial-production/api/crm-live-data.js:128:32)
+#     at /private/tmp/space-commercial-production/api/crm-live-data.js:106:48
+#     at runCrmSnapshot (/private/tmp/space-commercial-production/tests/crm-live-auth-scope.test.js:27:49)
+#     at loadSlice (/private/tmp/space-commercial-production/api/crm-live-data.js:106:17)
+#     at async Promise.all (index 0)
+#     at async module.exports (/private/tmp/space-commercial-production/api/crm-live-data.js:124:34)
+#     at async TestContext.<anonymous> (/private/tmp/space-commercial-production/tests/crm-live-auth-scope.test.js:238:5)
+#     at async Test.run (node:internal/test_runner/test:1054:7)
+#     at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+# [session] no cookie found
+# [crm-live] slice build failed crm Error: crm_failed
+#     at buildCrmLiveCrmSlice (/private/tmp/space-commercial-production/tests/crm-live-auth-scope.test.js:323:15)
+#     at build (/private/tmp/space-commercial-production/api/crm-live-data.js:128:32)
+#     at /private/tmp/space-commercial-production/api/crm-live-data.js:106:48
+#     at runCrmSnapshot (/private/tmp/space-commercial-production/tests/crm-live-auth-scope.test.js:27:49)
+#     at loadSlice (/private/tmp/space-commercial-production/api/crm-live-data.js:106:17)
+#     at async Promise.all (index 0)
+#     at async module.exports (/private/tmp/space-commercial-production/api/crm-live-data.js:124:34)
+#     at async TestContext.<anonymous> (/private/tmp/space-commercial-production/tests/crm-live-auth-scope.test.js:344:3)
+#     at async Test.run (node:internal/test_runner/test:1054:7)
+#     at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+# Subtest: cookie da TV passa em /api/crm-live-data
+ok 111 - cookie da TV passa em /api/crm-live-data
+  ---
+  duration_ms: 5.090042
+  type: 'test'
+  ...
+# Subtest: cookie da TV não autentica /api/growth-dashboard?api=growth-metrics
+ok 112 - cookie da TV não autentica /api/growth-dashboard?api=growth-metrics
+  ---
+  duration_ms: 14.880542
+  type: 'test'
+  ...
+# Subtest: sessão comercial autenticada passa em /api/crm-live-data
+ok 113 - sessão comercial autenticada passa em /api/crm-live-data
+  ---
+  duration_ms: 0.676375
+  type: 'test'
+  ...
+# Subtest: cache stale só é reaproveitado se for da mesma semana comercial
+ok 114 - cache stale só é reaproveitado se for da mesma semana comercial
+  ---
+  duration_ms: 1.347375
+  type: 'test'
+  ...
+# Subtest: cache stale de semana anterior é descartado na virada de semana
+ok 115 - cache stale de semana anterior é descartado na virada de semana
+  ---
+  duration_ms: 2.676459
+  type: 'test'
+  ...
+# Subtest: HTML e payload resolvem o mesmo buildId no mesmo processo
+ok 116 - HTML e payload resolvem o mesmo buildId no mesmo processo
+  ---
+  duration_ms: 9.776666
+  type: 'test'
+  ...
+# Subtest: snapshot cacheado não influencia o buildId do payload
+ok 117 - snapshot cacheado não influencia o buildId do payload
+  ---
+  duration_ms: 1.588125
+  type: 'test'
+  ...
+# Subtest: crm-live-data OK e crm-live-events falhando sai do loading e pinta o primeiro slide
+ok 118 - crm-live-data OK e crm-live-events falhando sai do loading e pinta o primeiro slide
+  ---
+  duration_ms: 33.858
+  type: 'test'
+  ...
+# Subtest: fonte não-crítica em erro renderiza estado degradado e continua na rotação
+ok 119 - fonte não-crítica em erro renderiza estado degradado e continua na rotação
+  ---
+  duration_ms: 51.654292
+  type: 'test'
+  ...
+# Subtest: HTML servido executa o script do cliente sem exceção e monta ao menos uma tela
+ok 120 - HTML servido executa o script do cliente sem exceção e monta ao menos uma tela
+  ---
+  duration_ms: 11.28375
+  type: 'test'
+  ...
+# Subtest: modo últimas 24h não renderiza mais o ponteiro de segundos
+ok 121 - modo últimas 24h não renderiza mais o ponteiro de segundos
+  ---
+  duration_ms: 14.076833
+  type: 'test'
+  ...
+# Subtest: 24h01 restantes mantém modo normal
+ok 122 - 24h01 restantes mantém modo normal
+  ---
+  duration_ms: 1.681875
+  type: 'test'
+  ...
+# Subtest: 23h59 restantes ativa modo dividido
+ok 123 - 23h59 restantes ativa modo dividido
+  ---
+  duration_ms: 0.151084
+  type: 'test'
+  ...
+# Subtest: 5 segundos restantes continua no modo dividido sem tempo negativo
+ok 124 - 5 segundos restantes continua no modo dividido sem tempo negativo
+  ---
+  duration_ms: 0.091
+  type: 'test'
+  ...
+# Subtest: ao chegar em zero o modo segue dividido, zera o relógio e entra em estado final
+ok 125 - ao chegar em zero o modo segue dividido, zera o relógio e entra em estado final
+  ---
+  duration_ms: 0.230292
+  type: 'test'
+  ...
+# Subtest: reavalia a janela final mesmo com a página aberta horas antes
+ok 126 - reavalia a janela final mesmo com a página aberta horas antes
+  ---
+  duration_ms: 0.256333
+  type: 'test'
+  ...
+# Subtest: detector em partida a frio só semeia cursor e não dispara eventos
+ok 127 - detector em partida a frio só semeia cursor e não dispara eventos
+  ---
+  duration_ms: 2.767459
+  type: 'test'
+  ...
+# Subtest: detector enfileira venda, meta individual, virada e meta do time em ordem estável
+ok 128 - detector enfileira venda, meta individual, virada e meta do time em ordem estável
+  ---
+  duration_ms: 5.220334
+  type: 'test'
+  ...
+# Subtest: troca de semana reseta metas e líderes sem disparar falso positivo
+ok 129 - troca de semana reseta metas e líderes sem disparar falso positivo
+  ---
+  duration_ms: 0.332667
+  type: 'test'
+  ...
+# Subtest: sale_closed anuncia Outros para vendedor fora de Matheus e Luis
+ok 130 - sale_closed anuncia Outros para vendedor fora de Matheus e Luis
+  ---
+  duration_ms: 0.298917
+  type: 'test'
+  ...
+# Subtest: ranking SDR calcula ultrapassagem por percentual da meta, não por diferença bruta
+ok 131 - ranking SDR calcula ultrapassagem por percentual da meta, não por diferença bruta
+  ---
+  duration_ms: 0.631167
+  type: 'test'
+  ...
+# Subtest: record copy distinguishes beating, tying and surpassing, including singular and zero
+ok 132 - record copy distinguishes beating, tying and surpassing, including singular and zero
+  ---
+  duration_ms: 0.258333
+  type: 'test'
+  ...
+# Subtest: all eligible people reach the carousel, with stable IDs and no duplicates
+ok 133 - all eligible people reach the carousel, with stable IDs and no duplicates
+  ---
+  duration_ms: 5.236
+  type: 'test'
+  ...
+# Subtest: SDR pagination preserves every row, order, values and global offsets
+ok 134 - SDR pagination preserves every row, order, values and global offsets
+  ---
+  duration_ms: 0.752375
+  type: 'test'
+  ...
+# Subtest: pausa da rotação não interrompe timers separados de dados
+ok 135 - pausa da rotação não interrompe timers separados de dados
+  ---
+  duration_ms: 0.834167
+  type: 'test'
+  ...
+# Subtest: seta manual reinicia o cronômetro cheio da tela sem pausar a rotação
+ok 136 - seta manual reinicia o cronômetro cheio da tela sem pausar a rotação
+  ---
+  duration_ms: 0.1615
+  type: 'test'
+  ...
+# Subtest: navegação pula telas condicionais vazias nos dois sentidos
+ok 137 - navegação pula telas condicionais vazias nos dois sentidos
+  ---
+  duration_ms: 0.716708
+  type: 'test'
+  ...
+# Subtest: interrupção aparece mesmo pausado, preserva fila e volta para a tela pausada
+ok 138 - interrupção aparece mesmo pausado, preserva fila e volta para a tela pausada
+  ---
+  duration_ms: 0.719
+  type: 'test'
+  ...
+# Subtest: auto-reload espera fim seguro quando build muda durante interrupção e pausa manual
+ok 139 - auto-reload espera fim seguro quando build muda durante interrupção e pausa manual
+  ---
+  duration_ms: 1.064042
+  type: 'test'
+  ...
+# Subtest: auto-reload não dispara no meio da transição de tela
+ok 140 - auto-reload não dispara no meio da transição de tela
+  ---
+  duration_ms: 0.437083
+  type: 'test'
+  ...
+# Subtest: auto-reload nunca dispara duas vezes para o mesmo build alvo e respeita intervalo mínimo
+ok 141 - auto-reload nunca dispara duas vezes para o mesmo build alvo e respeita intervalo mínimo
+  ---
+  duration_ms: 0.633125
+  type: 'test'
+  ...
+# Subtest: toggle da rotação renderiza um único alvo clicável com ícone correto por estado
+ok 142 - toggle da rotação renderiza um único alvo clicável com ícone correto por estado
+  ---
+  duration_ms: 1.890667
+  type: 'test'
+  ...
+# Subtest: gate 11: pages 1/2 OK, page 3 exhausts 429; recovery publishes one atomic canonical payload
+ok 143 - gate 11: pages 1/2 OK, page 3 exhausts 429; recovery publishes one atomic canonical payload
+  ---
+  duration_ms: 16.136875
+  type: 'test'
+  ...
+# Subtest: normal pagination: terminal page, counts, stable IDs and atomic publication
+ok 144 - normal pagination: terminal page, counts, stable IDs and atomic publication
+  ---
+  duration_ms: 1.358625
+  type: 'test'
+  ...
+# Subtest: 429 recovers with exponential backoff, jitter, Retry-After and same page
+ok 145 - 429 recovers with exponential backoff, jitter, Retry-After and same page
+  ---
+  duration_ms: 0.977542
+  type: 'test'
+  ...
+# Subtest: permanent 429: FAILED attempt, previous source and metric snapshot untouched, cooldown
+ok 146 - permanent 429: FAILED attempt, previous source and metric snapshot untouched, cooldown
+  ---
+  duration_ms: 3.766916
+  type: 'test'
+  ...
+# Subtest: intermediate failure and pagination safety cap cannot publish partial datasets
+ok 147 - intermediate failure and pagination safety cap cannot publish partial datasets
+  ---
+  duration_ms: 1.108084
+  type: 'test'
+  ...
+# Subtest: idempotence: repeated identical IDs do not change total, reordered pages preserve hash; conflicting IDs fail
+ok 148 - idempotence: repeated identical IDs do not change total, reordered pages preserve hash; conflicting IDs fail
+  ---
+  duration_ms: 0.385875
+  type: 'test'
+  ...
+# Subtest: distributed concurrency: only one worker collects; expired worker is fenced
+ok 149 - distributed concurrency: only one worker collects; expired worker is fenced
+  ---
+  duration_ms: 0.763584
+  type: 'test'
+  ...
+# Subtest: quality gate and calculation failure leave current intact
+ok 150 - quality gate and calculation failure leave current intact
+  ---
+  duration_ms: 0.438042
+  type: 'test'
+  ...
+# Subtest: gain date includes restored sale on new day, and SDR revenues remain in team
+ok 151 - gain date includes restored sale on new day, and SDR revenues remain in team
+  ---
+  duration_ms: 1.948709
+  type: 'test'
+  ...
+# Subtest: freshness: legacy, failures and aged browser fallbacks never look fresh
+ok 152 - freshness: legacy, failures and aged browser fallbacks never look fresh
+  ---
+  duration_ms: 6.1915
+  type: 'test'
+  ...
+# Subtest: Retry-After beyond job deadline fails without another request; 401 does not retry
+ok 153 - Retry-After beyond job deadline fails without another request; 401 does not retry
+  ---
+  duration_ms: 0.528875
+  type: 'test'
+  ...
+# Subtest: publication rejects late old sources and failed atomic commits do not change current
+ok 154 - publication rejects late old sources and failed atomic commits do not change current
+  ---
+  duration_ms: 0.45275
+  type: 'test'
+  ...
+# Subtest: request timeout retries and missing IDs fail closed
+ok 155 - request timeout retries and missing IDs fail closed
+  ---
+  duration_ms: 2.253875
+  type: 'test'
+  ...
+# Subtest: daily rollups reconcile full counts idempotently instead of incrementing replayed sales
+ok 156 - daily rollups reconcile full counts idempotently instead of incrementing replayed sales
+  ---
+  duration_ms: 1.146542
+  type: 'test'
+  ...
+# [commercial-overview][financial-audit] {
+#   periodoSelecionado: {
+#     inicio: '2026-05-01T00:00:00-03:00',
+#     fim: '2026-05-12T23:59:59.999-03:00',
+#     timezone: 'America/Sao_Paulo'
+#   },
+#   origemDados: 'DataCrazy businesses',
+#   pipeline: 'conversao',
+#   quantidadeFechadosEncontrados: 2,
+#   somaReceita: 10000,
+#   ticketMedio: 5000,
+#   campoDataUsado: 'statusChangedAt',
+#   distribuicaoCamposData: { statusChangedAt: 3 },
+#   negociosExcluidosPorData: 1,
+#   negociosSemDataFechamento: 0,
+#   criadosAntesMasFechadosNoPeriodo: 1,
+#   criadosNoPeriodoMasFechadosFora: 1
+# }
+# [FORECAST DEBUG] {
+#   parte1_fechado: 10000,
+#   parte2_pipeline: 0,
+#   parte3_novosLeads: 0,
+#   forecast_total: 10000,
+#   diasPassados: 12,
+#   diasRestantes: 0,
+#   mediaDiariaLeads: 0.16666666666666666,
+#   novosLeadsEsperados: 0,
+#   dealsPipeline_count: 0
+# }
+# Subtest: resolveCommercialPeriod mantém calendário quando não há override
+ok 157 - resolveCommercialPeriod mantém calendário quando não há override
+  ---
+  duration_ms: 1.954834
+  type: 'test'
+  ...
+# Subtest: resolveCommercialPeriod aplica janela customizada do comercial
+ok 158 - resolveCommercialPeriod aplica janela customizada do comercial
+  ---
+  duration_ms: 0.437292
+  type: 'test'
+  ...
+# Subtest: forecast 3-partes aceita callback de período customizado
+ok 159 - forecast 3-partes aceita callback de período customizado
+  ---
+  duration_ms: 0.852916
+  type: 'test'
+  ...
+# Subtest: growth metrics mantém o funil por criação e calcula financeiro por fechamento
+ok 160 - growth metrics mantém o funil por criação e calcula financeiro por fechamento
+  ---
+  duration_ms: 8.636166
+  type: 'test'
+  ...
+# Subtest: intervalo comercial inclui 00:00 inicial e 23:59:59 final em São Paulo
+ok 161 - intervalo comercial inclui 00:00 inicial e 23:59:59 final em São Paulo
+  ---
+  duration_ms: 0.370583
+  type: 'test'
+  ...
+# Subtest: API de growth metrics valida e usa periodStart/periodEnd fora do cache mensal
+ok 162 - API de growth metrics valida e usa periodStart/periodEnd fora do cache mensal
+  ---
+  duration_ms: 4.94475
+  type: 'test'
+  ...
+# Subtest: save de growth-goals invalida o cache persistente imediatamente
+ok 163 - save de growth-goals invalida o cache persistente imediatamente
+  ---
+  duration_ms: 1.267209
+  type: 'test'
+  ...
+# Subtest: POST parcial de growth-goals preserva valorMeta existente quando omitido
+ok 164 - POST parcial de growth-goals preserva valorMeta existente quando omitido
+  ---
+  duration_ms: 1.72125
+  type: 'test'
+  ...
+# Subtest: GET de growth-goals aceita weekStart para calcular weeklyReadModel fora da semana atual
+ok 165 - GET de growth-goals aceita weekStart para calcular weeklyReadModel fora da semana atual
+  ---
+  duration_ms: 1.485875
+  type: 'test'
+  ...
+# Subtest: POST de growth-goals aceita salvar weeklyGoal sem exigir valorMeta mensal
+ok 166 - POST de growth-goals aceita salvar weeklyGoal sem exigir valorMeta mensal
+  ---
+  duration_ms: 0.977333
+  type: 'test'
+  ...
+# Subtest: Show Rate usa reuniões feitas dividido por agendamentos da mesma fonte
+ok 167 - Show Rate usa reuniões feitas dividido por agendamentos da mesma fonte
+  ---
+  duration_ms: 1.067083
+  type: 'test'
+  ...
+# Subtest: Show Rate retorna zero quando não há agendamentos
+ok 168 - Show Rate retorna zero quando não há agendamentos
+  ---
+  duration_ms: 0.484416
+  type: 'test'
+  ...
+# Subtest: POST log_call não faz full scan de sdrActivityEvents
+ok 169 - POST log_call não faz full scan de sdrActivityEvents
+  ---
+  duration_ms: 30.387333
+  type: 'test'
+  ...
+# Subtest: POST undo_last consulta apenas a data do dia
+ok 170 - POST undo_last consulta apenas a data do dia
+  ---
+  duration_ms: 1.66375
+  type: 'test'
+  ...
+# Subtest: POST log_call é idempotente quando o mesmo clientRequestId chega duas vezes
+ok 171 - POST log_call é idempotente quando o mesmo clientRequestId chega duas vezes
+  ---
+  duration_ms: 1.0745
+  type: 'test'
+  ...
+# Subtest: POST log_call cria dois eventos para dois cliques legítimos consecutivos
+ok 172 - POST log_call cria dois eventos para dois cliques legítimos consecutivos
+  ---
+  duration_ms: 1.291875
+  type: 'test'
+  ...
+# Subtest: script SDR usa timeout e estado de envio visível no POST
+ok 173 - script SDR usa timeout e estado de envio visível no POST
+  ---
+  duration_ms: 4.757916
+  type: 'test'
+  ...
+# Subtest: Visão Geral exibe reuniões feitas e Show Rate do recorte SDR
+ok 174 - Visão Geral exibe reuniões feitas e Show Rate do recorte SDR
+  ---
+  duration_ms: 4.915958
+  type: 'test'
+  ...
+1..174
+# tests 174
+# suites 0
+# pass 174
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1132.011542

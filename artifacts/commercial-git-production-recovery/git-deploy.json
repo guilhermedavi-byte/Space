@@ -1,0 +1,47 @@
+{
+  "authorizedIdentityFound": true,
+  "githubLogin": "guilhermedavi-byte",
+  "githubPermission": "admin",
+  "gitTransportLoginMatches": true,
+  "vercelMembership": "OWNER",
+  "vercelMembershipConfirmed": true,
+  "githubProfileEmailMatchesVercelOwner": true,
+  "oldGitEmailMatchesAuthorizedProfile": false,
+  "repositoryLocalConfigChanged": true,
+  "globalConfigChanged": false,
+  "originalCommit": "ba080a8292cca4ade4daa16b80dfa8dd03bea830",
+  "newCommit": "8563838af87f4655bbc17e16905ae3e818b14569",
+  "branch": "codex/commercial-authorized-production",
+  "productionBranch": "main",
+  "tree": "75ad109e82004e661aad549f5383fd313ff708a4",
+  "originalTree": "75ad109e82004e661aad549f5383fd313ff708a4",
+  "exactCodeEquivalent": true,
+  "githubAuthorLogin": "guilhermedavi-byte",
+  "githubCommitterLogin": "guilhermedavi-byte",
+  "pushSucceeded": true,
+  "forcePush": false,
+  "deployment": {
+    "id": "dpl_3au5HDx9VzC5SVduNsxCghmMR89t",
+    "url": "space-gk5gnrz29-guilhermedavi-4547s-projects.vercel.app",
+    "state": "READY",
+    "target": "production",
+    "commit": "8563838af87f4655bbc17e16905ae3e818b14569",
+    "mainDomainConfirmed": true
+  },
+  "runtime": {
+    "version": "commercial-certification-v1",
+    "credentialsAvailable": true,
+    "anonymousHttpStatus": 302
+  },
+  "focusedTests": {
+    "pass": 174,
+    "skip": 0,
+    "fail": 0
+  },
+  "fullSuite": {
+    "pass": 435,
+    "skip": 6,
+    "fail": 1,
+    "preexistingFailure": "attendance-api environment error expectation"
+  }
+}

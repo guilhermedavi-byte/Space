@@ -9,6 +9,7 @@ const shouldRun = process.env.RUN_RETENTION_BACKEND_LOCAL === "1";
 const migrationPaths = [
   path.join(__dirname, "..", "supabase", "retention-lifecycle-v2.sql"),
   path.join(__dirname, "..", "supabase", "retention-lifecycle-v2-provisioning.sql"),
+  path.join(__dirname, "..", "supabase", "migrations", "202609150001_cancellation_lifecycle.sql"),
 ];
 const pgImage = process.env.RETENTION_SQL_PG_IMAGE || "postgres:14-alpine";
 const postgrestImage = process.env.RETENTION_POSTGREST_IMAGE || "postgrest/postgrest:v12.2.8";
@@ -118,7 +119,7 @@ test(
       ]);
       for (let attempt = 0; attempt < 40; attempt += 1) {
         try {
-          docker(["exec", containerDb, "pg_isready", "-U", "postgres", "-d", dbName]);
+          docker(["exec", containerDb, "pg_isready", "-h", "127.0.0.1", "-U", "postgres", "-d", dbName]);
           break;
         } catch (error) {
           if (attempt === 39) throw error;
@@ -266,7 +267,7 @@ test(
       );
       assert.equal(res.statusCode, 200);
       const caseId = res.body.result.case_id;
-      assert.equal(res.body.result.snapshot.case.stage, "scheduled");
+      assert.equal(res.body.result.snapshot.case.stage, "open");
       assert.equal(res.body.result.snapshot.student.email, undefined);
 
       res = makeRes();
@@ -275,7 +276,7 @@ test(
           method: "POST",
           url: "/api/retention-cases",
           body: {
-            command: "register_formal_request",
+            command: "register_contact",
             caseId,
             idempotencyKey: "explicit-idem-1",
             clientActionId: "explicit-idem-1",
@@ -293,7 +294,7 @@ test(
           method: "POST",
           url: "/api/retention-cases",
           body: {
-            command: "register_formal_request",
+            command: "register_contact",
             caseId,
             idempotencyKey: "explicit-idem-1",
             clientActionId: "explicit-idem-1",
@@ -371,7 +372,7 @@ test(
         res
       );
       assert.equal(res.statusCode, 409);
-      assert.equal(res.body.error, "involuntary_churn_disabled");
+      assert.equal(res.body.error, "cannot_churn_without_schedule");
 
       importHandler = installHandler({ handlerRelPath: "../api/retention-import", role: "admin", firestoreGuard, supabaseTransport });
       res = makeRes();

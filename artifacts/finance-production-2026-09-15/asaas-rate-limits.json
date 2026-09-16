@@ -1,0 +1,10 @@
+{
+  "observedAt": "2026-09-15T04:27:37.381Z",
+  "request": "GET /payments/{existing-id}",
+  "status": 200,
+  "rate_limits": {
+    "RateLimit-Limit": 100,
+    "RateLimit-Remaining": 99,
+    "RateLimit-Reset": 60
+  }
+}

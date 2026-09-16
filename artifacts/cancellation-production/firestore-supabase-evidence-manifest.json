@@ -1,0 +1,10 @@
+{
+  "canonical-reconciliation-v2.csv": "3deda7dffbd13c110f4f4c4cd507d8ea13feb0890b7e2cd69f8b907d05755fad",
+  "canonical-reconciliation-v2-summary.json": "bd7a1c00d7895e813ec94c90a9cce04e34c30ba1283ab052cdc2c6471dd9b8a6",
+  "student-census.csv": "3deda7dffbd13c110f4f4c4cd507d8ea13feb0890b7e2cd69f8b907d05755fad",
+  "student-census-summary.json": "bd7a1c00d7895e813ec94c90a9cce04e34c30ba1283ab052cdc2c6471dd9b8a6",
+  "persistent-credentials-check.json": "631260ada0f1f4fbc867cfac90d3d07aa3ee7badd3fe27b4a8862af187d90b1e",
+  "source-tables-counts.json": "9be238404a999be9eb165edb394e44a06330a17e5c8fd81a893396d46c76b2ee",
+  "reconciliation-v2-checks.json": "cdc0f5b2f89c84a5763dc322f3ec7890d2bf828e50541be7f547946926263760",
+  "activation-gates-status.json": "4b7220d8f3b8f18c47ac5fd1ebdfbf2cc591e6ebd0c3da0d242951a0cc787917"
+}

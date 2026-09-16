@@ -1,0 +1,11 @@
+{
+  "checked_at": "2026-09-15T17:20:21.222Z",
+  "origin": "internal_replay_after_automatic_deploy",
+  "http": 200,
+  "ok": true,
+  "event_id": "436c8636-ab5b-4baf-9d35-aee1d54dbad2",
+  "duplicate": true,
+  "processing_status": "processed",
+  "processing": null,
+  "total_deliveries_of_this_event": 6
+}

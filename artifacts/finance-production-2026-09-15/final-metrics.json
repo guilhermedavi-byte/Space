@@ -1,0 +1,138 @@
+{
+  "checked_at": "2026-09-15T17:16:56.085Z",
+  "receivables": 2076,
+  "receivable_statuses": {
+    "RECEIVED": 1417,
+    "RECEIVED_IN_CASH": 184,
+    "PENDING": 238,
+    "OVERDUE": 173,
+    "DUNNING_REQUESTED": 26,
+    "CONFIRMED": 27,
+    "REFUNDED": 7,
+    "DELETED": 4
+  },
+  "duplicate_receivable_ids": 0,
+  "payments": 1635,
+  "duplicate_payment_ids": 0,
+  "audits": 3728,
+  "audits_by_source": {
+    "ASAAS_BACKFILL": 3704,
+    "ASAAS_REPAIR": 21,
+    "ADMIN_USER": 1,
+    "ASAAS_WEBHOOK": 2
+  },
+  "audits_by_action": {
+    "created": 2076,
+    "projected": 1635,
+    "updated": 16,
+    "configured": 1
+  },
+  "inbox": [
+    {
+      "id": "05c33bf5-b064-4db4-b857-836cf15378fb",
+      "provider_event_id": "evt_d545b50fbb17a226c5f4f4fd193922b7&1517662892",
+      "event_type": "PAYMENT_DELETED",
+      "external_object_id": "pay_609d66hc68thtmjk",
+      "processing_status": "processed",
+      "attempt_count": 1,
+      "last_error": null,
+      "received_at": "2026-09-15T17:15:37.858053+00:00",
+      "processed_at": "2026-09-15T17:15:41.660036+00:00"
+    },
+    {
+      "id": "1ce33bab-5b34-4250-aeb8-58c3060006cb",
+      "provider_event_id": "evt_071da53af2a9613df04213d0157d6b88&1495500497",
+      "event_type": "PAYMENT_OVERDUE",
+      "external_object_id": "pay_0m8p1i31knyx8sua",
+      "processing_status": "processed",
+      "attempt_count": 1,
+      "last_error": null,
+      "received_at": "2026-09-15T17:10:12.36493+00:00",
+      "processed_at": "2026-09-15T17:10:15.950866+00:00"
+    },
+    {
+      "id": "436c8636-ab5b-4baf-9d35-aee1d54dbad2",
+      "provider_event_id": "evt_05b708f961d739ea7eba7e4db318f621&1516611608",
+      "event_type": "PAYMENT_CREATED",
+      "external_object_id": "pay_5snorexsqacbdpae",
+      "processing_status": "processed",
+      "attempt_count": 1,
+      "last_error": null,
+      "received_at": "2026-09-15T17:06:42.514786+00:00",
+      "processed_at": "2026-09-15T17:06:45.213704+00:00"
+    },
+    {
+      "id": "5959f49c-d5fc-4d44-9c4f-a05ddfe8a7db",
+      "provider_event_id": "evt_2539587467a5b78191b6e3d954172c68&1517667016",
+      "event_type": "PAYMENT_UPDATED",
+      "external_object_id": "pay_foxs2lbj00tk4g3m",
+      "processing_status": "processed",
+      "attempt_count": 1,
+      "last_error": null,
+      "received_at": "2026-09-15T17:06:54.663455+00:00",
+      "processed_at": "2026-09-15T17:06:57.393716+00:00"
+    },
+    {
+      "id": "84f973d4-80c4-453d-a348-f81483ef4619",
+      "provider_event_id": "evt_d26e303b238e509335ac9ba210e51b0f&1516398966",
+      "event_type": "PAYMENT_RECEIVED",
+      "external_object_id": "pay_8yt9ocb41sbw1jgb",
+      "processing_status": "processed",
+      "attempt_count": 1,
+      "last_error": null,
+      "received_at": "2026-09-15T17:06:49.781712+00:00",
+      "processed_at": "2026-09-15T17:06:52.637398+00:00"
+    },
+    {
+      "id": "b6f82bf4-06ae-4dba-b13f-61b3e3fe8199",
+      "provider_event_id": "evt_8bca6171d609c1a46328bb84c9bb7c41&1510641218",
+      "event_type": "PAYMENT_CREDIT_CARD_CAPTURE_REFUSED",
+      "external_object_id": "pay_foxs2lbj00tk4g3m",
+      "processing_status": "processed",
+      "attempt_count": 1,
+      "last_error": null,
+      "received_at": "2026-09-15T17:06:59.690278+00:00",
+      "processed_at": "2026-09-15T17:07:02.473206+00:00"
+    },
+    {
+      "id": "f35e52a0-4478-4ce9-88ad-d7ceb279c244",
+      "provider_event_id": "evt_15e444ff9b9ab9ec29294aa1abe68025&1509810712",
+      "event_type": "PAYMENT_CONFIRMED",
+      "external_object_id": "pay_8fgj137p8gbkr603",
+      "processing_status": "processed",
+      "attempt_count": 1,
+      "last_error": null,
+      "received_at": "2026-09-15T17:10:05.767381+00:00",
+      "processed_at": "2026-09-15T17:10:09.252044+00:00"
+    }
+  ],
+  "health": {
+    "created_at": "2026-09-15T04:18:43.303797+00:00",
+    "updated_at": "2026-09-15T17:15:58.635284+00:00",
+    "environment": "production",
+    "last_repair": "2026-09-15T17:15:58.635284+00:00",
+    "connection_id": "589367ba-e7c4-4c26-af71-53f97eac31a4",
+    "failed_events": 0,
+    "last_backfill": {
+      "id": "b8ad79c0-c863-491c-9096-07deddb25d73",
+      "status": "completed",
+      "started_at": "2026-09-15T04:28:17.15291+00:00",
+      "finished_at": "2026-09-15T04:56:10.427371+00:00"
+    },
+    "pending_events": 0,
+    "connection_health": {
+      "error": null,
+      "reachable": true,
+      "checked_at": "2026-09-15T17:15:56.754Z",
+      "configured": true,
+      "environment": "production",
+      "authenticated": true,
+      "account_accessible": true
+    },
+    "last_health_check": "2026-09-15T17:15:57.280751+00:00",
+    "last_reconciliation": null,
+    "last_webhook_received": "2026-09-15T17:15:37.858053+00:00",
+    "last_webhook_processed": "2026-09-15T17:15:41.660036+00:00",
+    "last_successful_api_call": "2026-09-15T17:15:58.635284+00:00"
+  }
+}

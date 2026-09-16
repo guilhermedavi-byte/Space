@@ -2,15 +2,16 @@ const { randomUUID } = require('node:crypto');
 const { createAsaasClient, AsaasError } = require('./asaas');
 const { createFinanceStore, safeFinanceError } = require('./finance-store');
 const { FinanceError, externalId, uuid, normalizeWebhook, normalizeResource, isSupportedEvent, comparePayment, stable } = require('./finance-domain');
-function createFinanceFoundation({store=createFinanceStore(),client=createAsaasClient(),
+function createFinanceFoundation({store=createFinanceStore(),client=createAsaasClient({readOnly:true}),
   connectionId=process.env.FINANCE_CONNECTION_ID, logger=(entry)=>console.info(JSON.stringify(entry))}={}) {
   const scope=()=>({connection_id:uuid(connectionId)});
   const log=(action,details={})=>logger({domain:'finance_foundation',action,...details});
-  const health=async()=>{
+  const health=async({recordHealth=true}={})=>{
     const checked=await client.checkAsaasConnection();
     if(!connectionId) return checked;
-    return { ...checked, projection:await store.rpc('health',{...scope(),health:checked}) };
+    return { ...checked, projection:await store.rpc('health',{...scope(),...(recordHealth?{health:checked}:{})}) };
   };
+  const observe=()=>store.rpc('health',scope());
   const verifyConnection=async({recordHealth=true}={})=>{
     const registered=await store.rpc('connection',scope());
     const h=await client.checkAsaasConnection();
@@ -70,7 +71,8 @@ function createFinanceFoundation({store=createFinanceStore(),client=createAsaasC
     const refs=await store.rpc('identity',{...scope(),customer_id:snapshot.customer});
     return {dry_run:true,external_object_id:id,issues:comparePayment(local,snapshot,refs)};
   };
-  const sync=async({resource='payments',source='ASAAS_BACKFILL',dryRun=true,filters={},offset=0,limit=100,maxPages=10000,actor='operator'}={})=>{
+  const sync=async({resource='payments',source='ASAAS_BACKFILL',dryRun=true,filters={},offset=0,limit=100,maxPages=10000,actor='operator',inspectLocalOnly=false,concurrency=1}={})=>{
+    if(!Number.isInteger(concurrency)||concurrency<1||concurrency>8)throw new FinanceError('finance_concurrency_invalid');
     if(!['ASAAS_BACKFILL','ASAAS_RECONCILIATION'].includes(source)) throw new FinanceError('finance_source_invalid');
     if(!['payments','customers','subscriptions'].includes(resource)) throw new FinanceError('finance_resource_invalid');
     // Explicit supported windows, never invented updated-since. Unknown filters fail closed.
@@ -78,15 +80,18 @@ function createFinanceFoundation({store=createFinanceStore(),client=createAsaasC
     if(Object.entries(filters).some(([k,v])=>!filterKeys.has(k)||typeof v!=='string'||v.length>256)) throw new FinanceError('finance_filters_invalid');
     await verifyConnection({recordHealth:!dryRun});
     const {run_id}=dryRun ? {run_id:randomUUID()} : await store.rpc('run_start',{...scope(),source,resource,dry_run:false,filters,offset});
-    const report={run_id,source,resource,dry_run:dryRun,examined:0,changed:0,duplicates:0,counts:{},issues:[],issues_truncated:false,next_offset:offset};
+    const report={run_id,source,resource,dry_run:dryRun,examined:0,local_existing:0,changed:0,duplicates:0,counts:{},issues:[],issues_truncated:false,next_offset:offset,local_only_scan:'not_requested'};
     const seen=new Set();
     try {
       for await(const page of client.pages(resource,{filters,offset,limit,maxPages})) {
-        for(const raw of page.data) {
+        const unique=[];
+        for(const raw of page.data){const id=externalId(raw.id);if(seen.has(id)){report.duplicates++;report.counts.DUPLICATE_EXTERNAL_ID=report.duplicates;continue;}seen.add(id);unique.push(raw);}
+        let cursor=0,firstError=null;
+        const worker=async()=>{while(cursor<unique.length&&!firstError){const raw=unique[cursor++];try{
           const id=externalId(raw.id);
-          if(seen.has(id)){report.duplicates++;continue;}seen.add(id);
           const snapshot=normalizeResource(resource,raw);
           const local=await store.rpc('get',{...scope(),resource,external_object_id:id});
+          if(local)report.local_existing++;
           let issues;
           if(resource==='payments'){
             const refs=await store.rpc('identity',{...scope(),customer_id:snapshot.customer});
@@ -101,9 +106,50 @@ function createFinanceFoundation({store=createFinanceStore(),client=createAsaasC
             if(result.busy)throw new FinanceError('finance_object_busy',true,409);
             if(result.changed)report.changed++;}
           report.examined++;
-        }
+        }catch(error){firstError ||= error;}}};
+        // Finish all in-flight objects before persisting failure/cursor. Each object
+        // still re-reads Asaas only after acquiring its own transactional lease.
+        await Promise.all(Array.from({length:Math.min(concurrency,unique.length)},worker));
+        if(firstError)throw firstError;
         report.next_offset=page.nextOffset;
         if(!dryRun)await store.rpc('run_update',{...scope(),run_id,next_offset:report.next_offset,report});
+      }
+      if(inspectLocalOnly && resource==='payments') {
+        if(typeof store.localPaymentIds!=='function')throw new FinanceError('finance_local_scan_unavailable');
+        report.local_only_scan='bounded';
+        for(let page=0;page<maxPages;page++) {
+          const localPage=await store.localPaymentIds(scope().connection_id,{offset:page*limit,limit});
+          for(const rawId of localPage.ids) {
+            const id=externalId(rawId);if(seen.has(id))continue;
+            try {
+              // Asaas can omit deleted payments from lists while GET still returns
+              // the real object with deleted=true. Compare that evidence as well.
+              const remote=await client.request(`/payments/${encodeURIComponent(id)}`);
+              const snapshot=normalizeResource('payments',remote);
+              if(snapshot.id!==id)throw new FinanceError('finance_snapshot_id_mismatch');
+              const local=await store.rpc('get',{...scope(),resource:'payments',external_object_id:id});
+              const refs=await store.rpc('identity',{...scope(),customer_id:snapshot.customer});
+              const issues=comparePayment(local,snapshot,refs);
+              report.individual_lookups=(report.individual_lookups||0)+1;
+              for(const issue of issues)report.counts[issue]=(report.counts[issue]||0)+1;
+              if(issues.some(i=>i!=='MATCH')) {
+                if(report.issues.length<1000)report.issues.push({external_object_id:id,issues,evidence:'asaas_get_existing_outside_list'});
+                else report.issues_truncated=true;
+              }
+              // This scan observes IDs outside the requested listing/filter; any
+              // repair remains an explicit, individually backed-up operation.
+            }
+            catch(error) {
+              if(!(error instanceof AsaasError)||error.code!=='asaas_not_found')throw error;
+              // A GET 404 is evidence of local-only visibility, not proof of deletion.
+              report.counts.LOCAL_ONLY=(report.counts.LOCAL_ONLY||0)+1;
+              if(report.issues.length<1000)report.issues.push({external_object_id:id,issues:['LOCAL_ONLY'],evidence:'asaas_get_404'});
+              else report.issues_truncated=true;
+            }
+          }
+          if(!localPage.hasMore){report.local_only_scan='complete';break;}
+          if(page===maxPages-1)throw new FinanceError('finance_local_scan_limit');
+        }
       }
       if(!dryRun)await store.rpc('run_update',{...scope(),run_id,next_offset:report.next_offset,report,status:'completed'});
       return report;
@@ -121,6 +167,6 @@ function createFinanceFoundation({store=createFinanceStore(),client=createAsaasC
     if(customer.id!==customerId || customer.deleted)throw new FinanceError('finance_customer_invalid');
     return store.rpc('link',{...scope(),customer_id:customerId,firestore_doc_id:firestoreDocId,verified_by:actor});
   };
-  return {health,verifyConnection,ingestWebhook,processWebhookEvent,retryWebhookEvent,drain,repairPaymentById,sync,linkCustomer};
+  return {health,observe,verifyConnection,ingestWebhook,processWebhookEvent,retryWebhookEvent,drain,repairPaymentById,sync,linkCustomer};
 }
 module.exports={createFinanceFoundation};

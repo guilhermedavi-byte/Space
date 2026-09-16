@@ -1,0 +1,2 @@
+identifier,record_ref,conflicting_data,reason,manual_action
+"823acd9ac35d6141","17a61478014336f4","{""requested_at"":""2026-01-01T15:00:00Z"",""legacy_end"":""2026-02-01"",""effective_at"":null}","terminal_record_without_explicit_notice","Reconcile dated retention events and contract; do not infer a notice or churn date."

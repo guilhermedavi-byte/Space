@@ -1,0 +1,138 @@
+{
+  "purpose": "commercial_read_only_certification",
+  "expiresAt": "2026-09-15T02:56:32.122Z",
+  "projectId": "prj_FcxsR8A6rXLVIo2DArdAFDlm7pq8",
+  "teamId": "team_QFoYBpP3YUXGD4agYHZ7I6jV",
+  "route": "/api/certify",
+  "requiredProtection": "all_except_custom_domains_or_stricter",
+  "files": [
+    {
+      "file": "_lib/firestore-rest.js",
+      "sha256": "7d632f9485b1d30ec7eefdf6e3fa70264f20233851c462e517490fdb71bc6844"
+    },
+    {
+      "file": "_lib/forecast-service.js",
+      "sha256": "716223dfd353a68a17cf4a15bb6470983a766e73a9ddc062c884a48e073d5b54"
+    },
+    {
+      "file": "_lib/google-service-account.js",
+      "sha256": "82afb492228d3ec40238c282b9a680988c644f738d7b29a868fc8751cb31d97e"
+    },
+    {
+      "file": "_lib/runtime-env.js",
+      "sha256": "d04acf55ffa7389931dbe21d3c123feca466fb5005adea36f5bedeecda0c4713"
+    },
+    {
+      "file": "api/_lib/commercial-goals.js",
+      "sha256": "012b90a6ac76446201effaf81ff76a4a12f86bbdd91757f39a1286e1c831759c"
+    },
+    {
+      "file": "api/_lib/commercial-period.js",
+      "sha256": "e790d0983fad5d1767caa2fff154c2d5a7be53d69551e514095d2e2ac2d03486"
+    },
+    {
+      "file": "api/_lib/commercial-reconciliation.js",
+      "sha256": "620d2f099e78501698660177fb1637207bfe05d32f30b3354341ee88458283c3"
+    },
+    {
+      "file": "api/_lib/commercial-sales.js",
+      "sha256": "5954d2a5a3f4ae4f00833b9397b09db1287b478cc9569d7a4b1e2ec8009cc8c7"
+    },
+    {
+      "file": "api/_lib/commercial-sdr.js",
+      "sha256": "22c99e8106e6e899580e34c22bea03ac20123db1b6a799454104b9d99412e08d"
+    },
+    {
+      "file": "api/_lib/commercial-time.js",
+      "sha256": "1ed187369e538635dd160b5b2d1f2998594dbbdb19522f81b58746b824d31d09"
+    },
+    {
+      "file": "api/_lib/commercial-week.js",
+      "sha256": "2cea6218ee0d85436272b02c9d7a32891555b846284ff37f16280ca0e37e98af"
+    },
+    {
+      "file": "api/_lib/crm-live-presentation.js",
+      "sha256": "dc7a08a0f52c5b9027ab42450ce564079e8a7848d9098f1ecbd69c10adf0c013"
+    },
+    {
+      "file": "api/_lib/crm-live.js",
+      "sha256": "b2f36bd9845ad140d6fb1f231a9062ea63e36fd2bb3f56398c3a6f17f5ebf36a"
+    },
+    {
+      "file": "api/_lib/crm-snapshot-publish.js",
+      "sha256": "2296f536b014412d9a62e8af80a65b4e6254fda36c9ba1c90e4cdc62467e677c"
+    },
+    {
+      "file": "api/_lib/crm-snapshot-store.js",
+      "sha256": "58ae302033fa57d357afcf58601e01ece88ee72cafbd89b8a7297f9dabeae67a"
+    },
+    {
+      "file": "api/_lib/crm-source-snapshot.js",
+      "sha256": "41d6b0f1afd1747fd34099d0624d1ec6ee36d4ce7eb27ba111a8a99920aed62c"
+    },
+    {
+      "file": "api/_lib/datacrazy-ingestion.js",
+      "sha256": "d56d088340c0162e8c6c64d031315e56dc802d240303cf448eb34b3c507f167b"
+    },
+    {
+      "file": "api/_lib/firestore-admin.js",
+      "sha256": "5a2c9173c49244c5a16a10dff161ecabb7e52159b588c2a462350dd5a868eba8"
+    },
+    {
+      "file": "api/_lib/firestore-rest.js",
+      "sha256": "0a7f9952618a9b1147fb90624c0ce7a6e02dfb5a13ca9f23edf28e1754b7e199"
+    },
+    {
+      "file": "api/_lib/growth-people.js",
+      "sha256": "bb2a4ee357ce4f9e0ba8f0e41cce03348a74d73809dfdaef708054c43fae6a5a"
+    },
+    {
+      "file": "api/_lib/live-tv-access.js",
+      "sha256": "863e3763a42335b6ca3ce18805e3572e871088570f4bc6d1e3dc8d600160868c"
+    },
+    {
+      "file": "api/_lib/retention-flags.js",
+      "sha256": "2c3ef39775f88f5dfc11752882333d4bda559a5436a625db2328fd3a9ed11924"
+    },
+    {
+      "file": "api/_lib/session.js",
+      "sha256": "6f7d41e43f6a08f91a0bba2b681d11317e551fc152895a4cb8a3c8b24362984d"
+    },
+    {
+      "file": "api/_lib/student-lifecycle.js",
+      "sha256": "eb4e3977b431bde2c0978425fbaea6ffc319cbf083167da0f2222e3ff956c7bb"
+    },
+    {
+      "file": "api/_lib/supabase-rest.js",
+      "sha256": "27b42a0dbc3ea1395ab3b077d8eff09def82a0d729c57ebcd9cf422873b0544c"
+    },
+    {
+      "file": "assets/student-lifecycle.js",
+      "sha256": "62550a59c3b2704ff4279217144a4bf4b0bedaf07fc6853900ff0fff8aa4e93c"
+    },
+    {
+      "file": "scripts/commercial-certification/collect.cjs",
+      "sha256": "fe593e35c232874709e9c487407657ecea0e7e9c170084e6d6999cb28722cb88"
+    },
+    {
+      "file": "scripts/commercial-certification/guard.cjs",
+      "sha256": "c29441852d00e94ec8140bbada86c3ed681e5a2e34ca3e09a68cfe8de51fe38e"
+    },
+    {
+      "file": "scripts/commercial-certification/handler.cjs",
+      "sha256": "6b0e710e0f6daf26f9c8dd3dbe3c8f94466077f093cdef51fc30ef0cc29616d6"
+    },
+    {
+      "file": "scripts/commercial-certification/output.cjs",
+      "sha256": "f939f4626ed08a8811011c56bae9b4d276772f23c17ade34460858d0d811e0a4"
+    },
+    {
+      "file": "scripts/commercial-certification/worker.cjs",
+      "sha256": "7679df664f6c98eaa2582eb036b77861b2eaade0f12eef7f47eeb4f46e78939b"
+    },
+    {
+      "file": "scripts/reconcile-commercial-metrics.js",
+      "sha256": "1913d6c9b0b8262c8d3e43340f4ffe8e0e9cfba3bc85b6c14ad270816e61707f"
+    }
+  ]
+}

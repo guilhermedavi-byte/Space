@@ -1,0 +1,15 @@
+{
+  "deployment": "space-k5vtt48di-guilhermedavi-4547s-projects.vercel.app",
+  "checkedAt": "2026-09-15T04:12:33.209Z",
+  "status": "FAIL",
+  "stage": "guards",
+  "guards": {
+    "production": true,
+    "supabase": true,
+    "asaasBase": true,
+    "asaasScope": true,
+    "keyPresent": true,
+    "appOrigin": false,
+    "project": true
+  }
+}

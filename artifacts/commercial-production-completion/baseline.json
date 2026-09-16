@@ -1,0 +1,26 @@
+{
+  "checkedAt": "2026-09-15T03:58:07.502Z",
+  "deployment": {
+    "id": "dpl_8mdX14yQz9tLYvbntnB1NFFNMGZo",
+    "url": "space-ce0zvkois-guilhermedavi-4547s-projects.vercel.app",
+    "target": "production",
+    "state": "READY",
+    "commit": "f59d7d2fec0b484b6d3aa263aed3f76843cc9458"
+  },
+  "aliases": [
+    "plataforma.spaceschoolbr.com",
+    "space-git-main-guilhermedavi-4547s-projects.vercel.app",
+    "space-guilhermedavi-4547s-projects.vercel.app",
+    "space-three-sand.vercel.app"
+  ],
+  "config": {
+    "nodeVersion": "24.x",
+    "framework": null,
+    "buildCommand": null,
+    "outputDirectory": null,
+    "ssoProtection": {
+      "deploymentType": "all_except_custom_domains"
+    },
+    "crons": []
+  }
+}

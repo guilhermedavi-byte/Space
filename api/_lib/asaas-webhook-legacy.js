@@ -63,7 +63,9 @@ module.exports = async (req, res) => {
 
   const auth = validateWebhookSecret(
     req,
-    process.env.ASAAS_WEBHOOK_TOKEN || process.env.ASAAS_WEBHOOK_SECRET || process.env.N8N_WEBHOOK_SECRET
+    process.env.FINANCE_LEGACY_WEBHOOK_COMPAT==='true'
+      ? process.env.FINANCE_LEGACY_WEBHOOK_TOKEN||process.env.ASAAS_WEBHOOK_SECRET||process.env.N8N_WEBHOOK_SECRET
+      : process.env.ASAAS_WEBHOOK_TOKEN||process.env.ASAAS_WEBHOOK_SECRET||process.env.N8N_WEBHOOK_SECRET
   );
   if (!auth.ok) return sendJson(res, auth.status, { error: auth.error });
 
@@ -94,7 +96,7 @@ module.exports = async (req, res) => {
     if (error?.code === "supabase_not_configured") {
       return sendJson(res, 500, { error: "supabase_not_configured" });
     }
-    console.error("[api] asaas webhook failed", error);
+    console.error("[api] asaas webhook failed", {code:"webhook_update_failed"});
     return sendJson(res, 500, { error: "webhook_update_failed" });
   }
 };

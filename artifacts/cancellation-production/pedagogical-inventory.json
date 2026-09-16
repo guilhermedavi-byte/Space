@@ -1,0 +1,18 @@
+{
+  "observed_at": "2026-09-15T02:46:40.938Z",
+  "business_day": "2026-09-14",
+  "source": "n8n_aulas_pedagogicas_space",
+  "rows": 7637,
+  "distinct_nonempty_student_ids": 163,
+  "rows_without_student_id": 0,
+  "future_rows": 2716,
+  "statuses": {
+    "agendada": 6371,
+    "remarcada": 78,
+    "realizada": 647,
+    "falta": 246,
+    "cancelada": 295
+  },
+  "canonical_subscriptions": 0,
+  "interpretation": "Existing pedagogical history is not proof of notice, churn or an active contract. Firestore export required."
+}

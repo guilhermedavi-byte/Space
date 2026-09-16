@@ -1,0 +1,44 @@
+{
+  "offline": true,
+  "credentialsValidated": false,
+  "remoteBootValidated": false,
+  "checks": [
+    {
+      "case": "confirmed_staging_references",
+      "ok": true,
+      "errors": []
+    },
+    {
+      "case": "staging_with_production_supabase",
+      "ok": false,
+      "errors": [
+        "staging_uses_production_supabase",
+        "staging_supabase_reference_mismatch"
+      ]
+    },
+    {
+      "case": "staging_with_production_asaas",
+      "ok": false,
+      "errors": [
+        "staging_uses_production_asaas",
+        "staging_asaas_base_not_allowlisted"
+      ]
+    },
+    {
+      "case": "disabled_n8n_with_url",
+      "ok": false,
+      "errors": [
+        "staging_disabled_n8n_has_live_configuration",
+        "staging_missing_n8n_references",
+        "staging_n8n_reference_mismatch",
+        "staging_webhook_not_allowlisted"
+      ]
+    }
+  ],
+  "allowlistSizes": {
+    "email": 0,
+    "whatsapp": 0,
+    "sms": 0,
+    "admin": 0
+  }
+}

@@ -1,0 +1,101 @@
+TAP version 13
+# Subtest: Meta verification and raw HMAC: valid, forged, absent, changed bytes, duplicate parameters
+ok 1 - Meta verification and raw HMAC: valid, forged, absent, changed bytes, duplicate parameters
+  ---
+  duration_ms: 1.728542
+  type: 'test'
+  ...
+# Subtest: Raw body reads Vercel restored stream without invoking its lazy JSON getter
+ok 2 - Raw body reads Vercel restored stream without invoking its lazy JSON getter
+  ---
+  duration_ms: 3.2525
+  type: 'test'
+  ...
+# Subtest: Envelope preserves opaque identity, batches, unknown types and rejects invalid UTF8/secret fields
+ok 3 - Envelope preserves opaque identity, batches, unknown types and rejects invalid UTF8/secret fields
+  ---
+  duration_ms: 2.40325
+  type: 'test'
+  ...
+# Subtest: HTTP ACK waits for durable capture; all invalid requests rejected; no processing or provider call
+ok 4 - HTTP ACK waits for durable capture; all invalid requests rejected; no processing or provider call
+  ---
+  duration_ms: 113.249
+  type: 'test'
+  ...
+# Subtest: Capture failure never ACKs 200 and outbound always throws before network
+ok 5 - Capture failure never ACKs 200 and outbound always throws before network
+  ---
+  duration_ms: 1.471084
+  type: 'test'
+  ...
+# Subtest: Meta PostgreSQL 17/PostgREST durable processing, replay, concurrency, status, retry and ACL
+    # Subtest: escaped NUL remains durable raw and becomes unhandled without losing payload
+    ok 1 - escaped NUL remains durable raw and becomes unhandled without losing payload
+      ---
+      duration_ms: 129.785125
+      type: 'test'
+      ...
+    # Subtest: 20 deliveries and 20 processors of one event produce one message
+    ok 2 - 20 deliveries and 20 processors of one event produce one message
+      ---
+      duration_ms: 439.660917
+      type: 'test'
+      ...
+    # Subtest: distinct simultaneous messages create one conversation with contiguous sequences
+    ok 3 - distinct simultaneous messages create one conversation with contiguous sequences
+      ---
+      duration_ms: 350.705333
+      type: 'test'
+      ...
+    # Subtest: semantic replay across raw whitespace and malicious internal IDs cannot duplicate or redirect
+    ok 4 - semantic replay across raw whitespace and malicious internal IDs cannot duplicate or redirect
+      ---
+      duration_ms: 251.597333
+      type: 'test'
+      ...
+    # Subtest: outbound receipts monotonic, replay audit once, unknown message recoverable
+    ok 5 - outbound receipts monotonic, replay audit once, unknown message recoverable
+      ---
+      duration_ms: 1152.492417
+      type: 'test'
+      ...
+    # Subtest: unknown retained, payload conflict terminal, crashed lease recovered and retries bounded
+    ok 6 - unknown retained, payload conflict terminal, crashed lease recovered and retries bounded
+      ---
+      duration_ms: 966.879417
+      type: 'test'
+      ...
+    # Subtest: multi-entry raw keeps successful items atomic and recovers failed sibling without duplication
+    ok 7 - multi-entry raw keeps successful items atomic and recovers failed sibling without duplication
+      ---
+      duration_ms: 235.941875
+      type: 'test'
+      ...
+    # Subtest: all raw/RPC access denied to browser roles; outbox fixtures quarantined; cross-team denied
+    ok 8 - all raw/RPC access denied to browser roles; outbox fixtures quarantined; cross-team denied
+      ---
+      duration_ms: 1036.082166
+      type: 'test'
+      ...
+    # Subtest: operator cleanup preserves unrelated raw and immutable trigger, including escaped Unicode fixtures
+    ok 9 - operator cleanup preserves unrelated raw and immutable trigger, including escaped Unicode fixtures
+      ---
+      duration_ms: 634.085625
+      type: 'test'
+      ...
+    1..9
+ok 6 - Meta PostgreSQL 17/PostgREST durable processing, replay, concurrency, status, retry and ACL
+  ---
+  duration_ms: 12005.050333
+  type: 'test'
+  ...
+1..6
+# tests 15
+# suites 0
+# pass 15
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 12473.472375

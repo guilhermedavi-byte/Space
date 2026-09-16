@@ -1,0 +1,22 @@
+{
+  "id": "prj_FcxsR8A6rXLVIo2DArdAFDlm7pq8",
+  "name": "space",
+  "link": {
+    "type": "github",
+    "repo": "Space",
+    "productionBranch": "main"
+  },
+  "crons": {
+    "enabledAt": 1775616522191,
+    "disabledAt": null,
+    "updatedAt": 1789438625458,
+    "deploymentId": "dpl_8mdX14yQz9tLYvbntnB1NFFNMGZo",
+    "definitions": []
+  },
+  "productionDeployment": {
+    "id": "dpl_8mdX14yQz9tLYvbntnB1NFFNMGZo",
+    "url": "space-ce0zvkois-guilhermedavi-4547s-projects.vercel.app",
+    "createdAt": 1789438606245,
+    "readyState": "READY"
+  }
+}

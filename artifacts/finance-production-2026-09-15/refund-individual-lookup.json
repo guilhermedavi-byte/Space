@@ -1,0 +1,12 @@
+{
+  "payment_id": "pay_pscsw7syfsrl6p0t",
+  "status": "REFUNDED",
+  "deleted": false,
+  "refund_dates": [
+    "2026-03-10 08:01:04"
+  ],
+  "refund_statuses": [
+    "DONE"
+  ],
+  "source": "real_asaas_production_get"
+}

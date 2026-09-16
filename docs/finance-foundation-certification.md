@@ -1,163 +1,99 @@
-# Financial Foundation — relatório de homologação
+# Financial Foundation — certificação de produção
 
-**Data:** 14/09/2026, America/Sao_Paulo; execuções em 15/09/2026 UTC.  
-**Decisão:** **NO-GO — Foundation ainda não certificada operacionalmente.**  
-**Motivo:** não foi identificado Supabase staging aprovado nem credencial Asaas sandbox disponível. Nenhum cenário financeiro real foi executado. Os resultados locais não substituem homologação externa.
+**Atualizado em 15/09/2026 UTC. Decisão vigente: GO para a Fase 1.**
 
-## 1. Escopo e limites da execução
+O código financeiro está integrado à `main` e permanece no deploy automático do projeto Vercel `space`. Backfill, reconciliação, repair e processamento interno de eventos históricos reais passaram. O webhook exclusivo está configurado no Asaas. **Foundation, ingresso durável e processamento inline estão habilitados em Production.** A entrega externa natural permanece como observação adicional pós-ativação, sem bloquear a Fase 1 por decisão explícita do responsável.
 
-Foram lidos integralmente [finance-architecture-audit.md](finance-architecture-audit.md) e [finance-foundation.md](finance-foundation.md), e revisada a [migration](../supabase/migrations/202609140002_finance_foundation.sql). A migration não foi modificada nesta etapa.
+Este relatório substitui os estados anteriores de credencial ausente e staging obrigatório. A execução usa **produção autorizada**, Asaas `https://api.asaas.com/v3` e Supabase `space-idiomas-n8n` (`mlpojyvwyqcrelagtgkw`). Nenhuma cobrança, pagamento, estorno ou exclusão foi provocado no Asaas para testar. A migration e os testes anteriores não foram repetidos nesta retomada. Nenhuma UI foi iniciada.
 
-Houve inspeção local de configuração por presença/ausência e identificadores não secretos, e consultas de metadados da Vercel: `vercel env ls preview` e `vercel list space --environment preview --limit 5`, no projeto vinculado `space`. Nenhum valor secreto foi solicitado à Vercel. Não houve chamada a Asaas, Supabase remoto, endpoint do Preview ou aplicação de produção; não houve deploy, alteração de variável remota, registro de webhook ou mudança de flag remota.
+## Ativação autorizada — 15/09/2026, 17:43 UTC
 
-Credenciais Supabase encontradas nos arquivos de produção não foram usadas para autenticar nenhuma chamada. Não foram consultados registros pessoais/financeiros remotos. Nenhum cliente, cobrança, pagamento ou aluno externo foi criado. Não há objeto sandbox a limpar.
+**Financial Foundation habilitada em Production e apta para a Fase 1 — Financeiro V1. GO.** Por instrução explícita do responsável, a entrega externa natural deixa de ser requisito de ativação e passa a ser **observação pós-ativação**, sem converter os replays anteriores em entrega externa comprovada.
 
-[Evidência sanitizada dos ambientes](../artifacts/finance-foundation-certification-2026-09-14/environment-evidence.json) registra fontes locais, presença de variáveis, resumo de metadados Preview, health sem credencial e manifesto vazio de objetos externos.
+- `FINANCE_FOUNDATION_ENABLED=true`, `FINANCE_WEBHOOK_INGEST_ENABLED=true` e `FINANCE_WEBHOOK_PROCESS_INLINE=true`, exclusivamente no projeto Vercel `space`, ambiente Production. [Configuração sanitizada](../artifacts/finance-production-2026-09-15/activation.json).
+- Redeploy Production concluído: [https://space-j946skjnv-guilhermedavi-4547s-projects.vercel.app](https://space-j946skjnv-guilhermedavi-4547s-projects.vercel.app), **READY**, origem GitHub `main`. [Evidência](../artifacts/finance-production-2026-09-15/activation-deployment-ready.json).
+- Domínio público `https://plataforma.spaceschoolbr.com`: HTTP 200; `/api/health`: HTTP 200, `ready`, ambiente production e isolamento válido. Esta confirmação operacional não é uma repetição da certificação funcional. [Evidência](../artifacts/finance-production-2026-09-15/activation-operational.json).
+- Próximo evento externo: **aguardando confirmação adicional em operação**. Ingresso e processamento inline estão ativos; eventual falha permanece registrada na inbox para tratamento.
+- Nenhuma transação artificial, novo backfill, reconciliation, repair, auditoria ou repetição de testes foi executada nesta ativação. Nenhuma credencial foi alterada ou publicada; somente as três flags operacionais foram ajustadas.
 
-## 2. Mapeamento dos ambientes
+## Histórico anterior à ativação — gate observado às 17:33 UTC
 
-| AMBIENTE | SUPABASE | ASAAS | WEBHOOK | FOUNDATION FLAG | SEGURO PARA TESTE? |
-| --- | --- | --- | --- | --- | --- |
-| Produção identificada nas configurações locais | `https://mlpojyvwyqcrelagtgkw.supabase.co`; ref `mlpojyvwyqcrelagtgkw` | Base/chave Asaas ausentes nas cópias inspecionadas | Token dedicado e connection ID ausentes | Ausente nas cópias; estado do deploy não consultado | **Não; proibido nesta tarefa** |
-| Processo da tarefa | URL/chave Supabase ausentes | Base/chave/scope ausentes | Token e connection ID ausentes | Ausente | **Não** |
-| Arquivo privado de homologação | `.env.finance-sandbox`, `.env.staging`, `.env.staging.local`, `.env.preview` e `.env` ausentes | Não disponível | Não disponível | Não disponível | **Não** |
-| Template `scripts/finance-sandbox.env.example` | URLs/credenciais vazias | Base sandbox; chave vazia; scope sandbox | Token vazio; URL exemplo | false; inline true | **Não; exemplo não é ambiente** |
-| Vercel Preview do projeto `space` | Nomes SUPABASE_URL/SPACE_STAGING_SUPABASE_URL cadastrados; valores não consultados nesta tarefa; service role não consta da listagem Preview | ASAAS_BASE_URL/ASAAS_KEY_SCOPE cadastrados; ASAAS_API_KEY ausente da listagem | ASAAS_WEBHOOK_TOKEN e FINANCE_CONNECTION_ID ausentes da listagem | FINANCE_FOUNDATION_ENABLED/FINANCE_WEBHOOK_PROCESS_INLINE ausentes da listagem | **Não; isolamento/configuração insuficientemente comprovados** |
-| Docker local descartável | PostgreSQL 16 + PostgREST 12; sem acesso a URL externa de banco | Respostas simuladas em testes | Handler invocado localmente | Injetada nos testes | **Sim para testes locais; não é homologação sandbox** |
+O painel Asaas, filtrado exclusivamente por `SPACE Financial Foundation Production`, não apresenta nenhuma entrega. A inbox contém sete eventos, todos correlacionados aos replays internos já registrados, e nenhum evento externo novo. Não houve processamento adicional, backfill, repair, teste extra ou alteração da flag. **Gate não comprovado; Foundation desabilitada; NO-GO.** [Evidência mínima sanitizada](../artifacts/finance-production-2026-09-15/external-webhook-gate-recheck.json).
 
-As cópias `.env.local`, `.env.vercel.pull` e `.vercel/.env.production.local` concordam em `VERCEL_ENV=production` e na URL Supabase acima. A presença de service role foi verificada sem exibir seu valor. Não afirmamos que essas cópias comprovem todo o estado atual do deploy de produção.
+## Delta da retomada
 
-O Preview mais recente retornado como **Ready** foi [space-gl1nwvqlk](https://space-gl1nwvqlk-guilhermedavi-4547s-projects.vercel.app), com idade aproximada de duas horas na consulta. **Ele não foi selecionado como ambiente de teste nem acessado.** Não foi comprovado qual commit/configuração financeira está implantado. O domínio está registrado aqui como evidência de descoberta, não como autorização.
+- Backfill concluído: **2.074 projeções iniciais**. O run `b8ad79c0-c863-491c-9096-07deddb25d73` terminou em 15/09 às 04:56:10 UTC. A retomada após rate limit inseriu 1.936; 138 já estavam persistidas. [Resultado](../artifacts/finance-production-2026-09-15/backfill-apply.json).
+- A conferência posterior encontrou duas cobranças novas e mudanças reais durante a pausa. Foram executados **16 repairs por ID**, com backup privado antes de cada mutação. Dois eventos reais históricos também atualizaram projeções: vencimento e exclusão. Total atual: **2.076 recebíveis e 1.635 registros de pagamento**, sem IDs Asaas duplicados. [Métricas](../artifacts/finance-production-2026-09-15/final-metrics.json).
+- Corrigida uma lacuna da reconciliação: cobranças excluídas não apareciam na listagem, mas GET por ID retornava `deleted=true`. Agora essa consulta é normalizada e comparada; um 404 continua sendo apenas evidência de visibilidade local, sem inferir exclusão. IDs fora da listagem são observados; repair permanece explícito e protegido por snapshot.
+- Reconciliação final em `2026-09-15T17:18:20.995Z`: **2.072 itens da listagem + quatro GETs individuais; nenhuma divergência financeira, nenhum ID duplicado ou LOCAL_ONLY por 404**. Há **2.076 UNMATCHED_CUSTOMER**, mantidos sem vínculo heurístico com alunos. [Resultado](../artifacts/finance-production-2026-09-15/reconciliation-final.json).
+- Novo webhook `2cd1c07d-3563-4f9d-97f6-3894a562d128`, URL `https://plataforma.spaceschoolbr.com/api/asaas-webhook`, v3, habilitado, fila não interrompida, envio sequencial e token próprio. Os três webhooks preexistentes foram preservados. [Configuração sanitizada](../artifacts/finance-production-2026-09-15/resume-setup-webhook.json).
 
-A listagem Preview contém variáveis compartilhadas com Production, incluindo SPACE_PUBLIC_BASE_URL, SPACE_AUTH_SECRET e integrações n8n/Chatwoot/CRM/ZapSign. Isso impede inferir isolamento pelo rótulo Preview. O documento de Atendimento relata valores Preview vazios em sua auditoria anterior; essa observação histórica não foi tratada como verificação atual dos valores.
+## Publicação e permanência do receiver
 
-Não há CLI Supabase nem SUPABASE_ACCESS_TOKEN no processo da tarefa. Isso limita a descoberta: não prova inexistência de staging em outra organização/conta. Foi solicitada ao usuário apenas a localização de configuração privada e o alvo autorizado, sem pedir secrets no chat; nenhum alvo adicional estava disponível até o fechamento deste relatório.
+Integração financeira: commit `5c978365b2a97a56ee0960fab4291a932beb7342`. Correção da reconciliação: `cbd64f651b41abf5e26784aea7cbb58e5cc98ad8`. Ambos foram integrados à `main` por avanço normal, preservando as alterações concorrentes de outros módulos.
 
-## 3. Safeguards de homologação
+Deploy automático da correção: [https://space-peypctzcc-guilhermedavi-4547s-projects.vercel.app](https://space-peypctzcc-guilhermedavi-4547s-projects.vercel.app), READY, originado de GitHub `main`. URL estável: [plataforma.spaceschoolbr.com](https://plataforma.spaceschoolbr.com). [Metadados](../artifacts/finance-production-2026-09-15/final-deployment.json).
 
-O guard anterior comparava URL com variável staging, mas não tinha uma allowlist independente de domínio/credenciais nem confirmação adicional de apply. Foi reforçado somente o executor administrativo desta etapa, sem mudar a lógica financeira de projeção ou a API de produção.
+Após esse deploy automático, o receiver novo aceitou a sexta entrega interna do mesmo evento e retornou a **mesma entrada lógica já processada**, com `duplicate=true`. Isso verifica a permanência do código e totaliza **cinco reentregas**, sem novo efeito financeiro. [Evidência](../artifacts/finance-production-2026-09-15/post-automatic-deploy-idempotency.json). Deploys futuros devem continuar usando a `main`; publicação arbitrária de código antigo ainda poderia reverter a rota.
 
-Arquivos: [guard](../_lib/finance-certification-environment.js), [política](../config/finance-staging-targets.json), [CLI](../scripts/finance-foundation.js), [template](../scripts/finance-sandbox.env.example).
+## Matriz de certificação
 
-Controles offline, anteriores a chamadas externas:
-
-- APP_ENV e SUPABASE_ENV_SCOPE devem ser staging; sinais de ambiente contraditórios são recusados. NODE_ENV não prova isolamento.
-- Base exata `https://api-sandbox.asaas.com/v3`, ASAAS_KEY_SCOPE=sandbox e ausência de sinal Asaas production.
-- URL Supabase HTTPS canônica, ref igual à referência staging e FINANCE_STAGING_PROJECT_REF; aliases conflitantes são recusados.
-- Referência de produção conhecida em denylist SHA-256; esse ref nunca pode ser alvo, mesmo se erroneamente acrescentado à allowlist.
-- Exatamente uma entrada previamente revisada em `config/finance-staging-targets.json`. **A lista staging está vazia. Não foi autorizado nenhum projeto por inferência.**
-- Domínio staging exato, distinto das origens de produção revisadas, e webhook exatamente nesse domínio em `/api/asaas-webhook`.
-- Hashes revisados de service role, chave Asaas sandbox e token webhook; aliases de credenciais conflitantes são recusados. JWT Supabase também deve declarar role/ref/validade coerentes. Não se usa decodificação JWT como prova isolada de origem.
-- Chave Asaas explicitamente identificada como production é recusada mesmo se incluída por engano na política.
-- Apply exige simultaneamente `--apply`, `--actor` e `FINANCE_STAGING_APPLY=YES`. Não há bypass.
-- Health com connection ID também exige apply porque persiste telemetria. Dry-run e health sem conexão continuam protegidos contra uso de credenciais de produção.
-- `preflight` é offline: configuração válida não equivale a ambiente homologado.
-
-Para aprovar uma entrada futura, um operador deve obter ref/domínios e a procedência das credenciais pelo ambiente administrativo de staging. Campos da entrada: `projectRef`, `appOrigin`, `productionOrigins`, `serviceRoleKeySha256`, `asaasSandboxKeySha256`, `webhookTokenSha256`. Usar segredos fortes; nunca versionar os valores. Copiar hashes do mesmo arquivo de execução sem comprovar sua procedência não constitui revisão.
-
-Execução real no processo disponível: `node scripts/finance-foundation.js preflight` retornou exit 1 com `finance_certification_staging_required`, sem rede. Os testes adicionais comprovam rejeição de domínios/refs/credenciais indevidos, aliases conflitantes, ausência de allowlist e ausência de confirmação, incluindo invocação real da CLI com fetch instrumentado para detectar qualquer tentativa de rede.
-
-## 4. Migration e inventário
-
-**Supabase staging: BLOCKED. Migration não aplicada; inventários anterior/posterior remotos não produzidos.** Não foi reaproveitada evidência de produção para preencher essa lacuna.
-
-A mesma migration foi aplicada/reaplicada em PostgreSQL Docker descartável. Foram verificados localmente constraints, uniqueness, RLS, restrições de service role/anon/authenticated, RPC transacional, auditoria imutável e coexistência com a migration de Atendimento. Esse último teste não comprova que todo schema legado de um staging ainda desconhecido está intacto.
-
-[Inventário esperado local](../artifacts/finance-foundation-certification-2026-09-14/expected-local-schema.json): tabelas/RLS/ACL, constraints, índices, funções/configuração/ACL e triggers, com hash SHA-256 da migration. **É baseline local; não é inventário Supabase staging.** Antes de aplicar externamente, comparar catálogo real com essa referência, revisar objetos homônimos, consumidores e estruturas legadas. `IF NOT EXISTS` não certifica compatibilidade de objetos preexistentes.
-
-O inventário local contém 10 tabelas (connections + nove finance_*), 38 constraints, 22 índices e duas funções.
-
-## 5. Connection health
-
-Health do cliente no processo disponível, sem chave e sem chamada remota:
-
-```json
-{
-  "configured": false,
-  "reachable": false,
-  "authenticated": false,
-  "account_accessible": false,
-  "environment": null,
-  "error": { "code": "asaas_not_configured", "status": 0, "retryable": false }
-}
-```
-
-`reachable=false` aqui significa que a API não foi consultada por falta de configuração; não é uma falha de disponibilidade medida no Asaas. Não há connection record externo validado. Último webhook recebido/processado, backlog e reconciliação reais são **desconhecidos**, não zero.
-
-## 6. Matriz de certificação externa
-
-Os status abaixo se referem exclusivamente a **Asaas sandbox + Supabase staging + webhook Space implantado**. Falta de pré-requisito é BLOCKED, não FAIL funcional nem PASS por mock.
+**PASS de replay** significa payload histórico real do painel Asaas enviado internamente ao endpoint público, persistido no Supabase real e processado com GET autenticado do estado atual no Asaas. **Não significa entrega externa pelo provedor.** Nenhum mock é apresentado como PASS remoto.
 
 | CENÁRIO | RESULTADO | EVIDÊNCIA | STATUS |
 | --- | --- | --- | --- |
-| Connection | Autenticação/account access não executados | Chave sandbox e alvo staging ausentes; health local asaas_not_configured | BLOCKED |
-| PAYMENT_CREATED | Nenhuma cobrança real criada; cadeia webhook/inbox/projeção não observada | Sem customer/payment/event ID real | BLOCKED |
-| Duplicate delivery | Cinco reentregas reais não executadas | Nenhum evento real capturado | BLOCKED |
-| PAYMENT_UPDATED | Alteração remota e before/after não observados | Sem cobrança sandbox criada | BLOCKED |
-| PAYMENT_OVERDUE | Evento real não observado | Falta ambiente; não se atribui bloqueio a limitação comprovada do sandbox | BLOCKED |
-| PAYMENT_CONFIRMED | Sequência real não observada | Sem liquidação sandbox | BLOCKED |
-| PAYMENT_RECEIVED | Sequência/datas reais não observadas | Sem liquidação sandbox | BLOCKED |
-| PAYMENT_DELETED | Exclusão e GET posterior não executados | Não há evidência real de deleted=true versus 404 | BLOCKED |
-| PAYMENT_REFUNDED | Formato real não capturado | Falta ambiente; suporte do fluxo não foi testado | BLOCKED |
-| Backfill | Dry-run/apply/paginação externos não executados | Sem conta, staging e allowlist | BLOCKED |
-| Reconciliation | Divergência staging não provocada | Nenhuma escrita remota autorizável | BLOCKED |
-| Repair | ID real e inexistente não consultados externamente | Sem cliente remoto validado | BLOCKED |
-| Retry | Falha/recuperação e limite não executados no staging | Somente evidência local separada abaixo | BLOCKED |
-| Webhook auth | Endpoint implantado não testado | Nenhum domínio de homologação aprovado | BLOCKED |
-| Ordering | Não há payload real para reordenar | Somente fixtures locais existentes | BLOCKED |
+| Health e conexão | Autenticação, acesso à conta e vínculo production validados; chave permaneceu na Vercel | [Health real](../artifacts/finance-production-2026-09-15/asaas-production-health.json), [conexão](../artifacts/finance-production-2026-09-15/connection.json) | PASS |
+| Receiver após deploy automático | GitHub main → Vercel Production READY; replay reconhecido pelo receiver novo | [Deploy](../artifacts/finance-production-2026-09-15/final-deployment.json), [reentrega](../artifacts/finance-production-2026-09-15/post-automatic-deploy-idempotency.json) | PASS |
+| Webhook configurado | Endpoint exclusivo, token dedicado, v3, sequencial; integrações anteriores preservadas | [Configuração](../artifacts/finance-production-2026-09-15/resume-setup-webhook.json) | PASS |
+| Entrega externa Asaas → Space | Confirmação adicional pós-ativação; não bloqueia Fase 1 por decisão explícita. Nenhuma entrega externa foi rotulada como PASS | [Última observação](../artifacts/finance-production-2026-09-15/external-webhook-gate-recheck.json) | NOT OBSERVED |
+| Ativação Foundation | Flag principal, ingresso e processamento inline true em Production; deploy READY e produção operacional | [Ativação](../artifacts/finance-production-2026-09-15/activation.json), [deploy](../artifacts/finance-production-2026-09-15/activation-deployment-ready.json), [operação](../artifacts/finance-production-2026-09-15/activation-operational.json) | PASS |
+| PAYMENT_CREATED | Projeção real via backfill; evento histórico entrou na inbox e foi processado | `pay_5snorexsqacbdpae`; [replays](../artifacts/finance-production-2026-09-15/real-event-replays.json) | PASS |
+| Idempotência | Seis entregas totais do mesmo evento, uma entrada lógica, uma tentativa de processamento, sem receivable duplicado | [Inicial](../artifacts/finance-production-2026-09-15/real-event-replays.json), [após deploy](../artifacts/finance-production-2026-09-15/post-automatic-deploy-idempotency.json) | PASS |
+| PAYMENT_UPDATED | Replay real atualizou vencimento de 14/09 para 15/09 usando GET atual | `pay_foxs2lbj00tk4g3m`; [before/after](../artifacts/finance-production-2026-09-15/real-event-replays.json) | PASS |
+| PAYMENT_OVERDUE | Evento histórico real, projeção OVERDUE e nenhuma liquidação indevida | `pay_0m8p1i31knyx8sua`; [replay](../artifacts/finance-production-2026-09-15/real-event-replays-additional.json) | PASS |
+| PAYMENT_CONFIRMED | Replay de confirmação real; um pagamento preservado, sem duplicação | `pay_8fgj137p8gbkr603`; [replay](../artifacts/finance-production-2026-09-15/real-event-replays-additional.json) | PASS |
+| PAYMENT_RECEIVED | Replay de recebimento real; um recebível e um pagamento preservados | `pay_8yt9ocb41sbw1jgb`; [replay](../artifacts/finance-production-2026-09-15/real-event-replays.json) | PASS |
+| PAYMENT_DELETED | Evento histórico real + GET atual com deleted=true; projeção PENDING → DELETED, histórico mantido | `pay_609d66hc68thtmjk`; [payload sanitizado](../artifacts/finance-production-2026-09-15/deleted-payload-sanitized.json), [replay](../artifacts/finance-production-2026-09-15/real-event-replays-deleted.json) | PASS |
+| Projeções de refund | Sete projeções REFUNDED convergentes; seis retornadas no filtro e uma confirmada individualmente e na listagem geral | [Filtro](../artifacts/finance-production-2026-09-15/refund-projections.json), [GET adicional](../artifacts/finance-production-2026-09-15/refund-individual-lookup.json), reconciliação final | PASS |
+| Evento PAYMENT_REFUNDED | Estornos observados ocorreram entre janeiro e julho, fora da retenção de 14 dias dos logs; não foi inventado evento | Mesmas evidências de refund; nenhum replay de PAYMENT_REFUNDED | NOT OBSERVED |
+| Backfill | Paginação concluída e projeções persistidas; execução e retomada auditadas | [Apply](../artifacts/finance-production-2026-09-15/backfill-apply.json), métricas last_backfill completed | PASS |
+| Reconciliation | Detectou divergências reais; após correção e repair, 2.076 objetos sem divergência financeira | [Antes](../artifacts/finance-production-2026-09-15/reconciliation-after.json), [final](../artifacts/finance-production-2026-09-15/reconciliation-final.json) | PASS |
+| Repair por ID | 16 repairs reais, snapshots anteriores, auditoria e comparação posterior; sem writes no Asaas | [13 repairs](../artifacts/finance-production-2026-09-15/real-repairs.json), [3 excluídos](../artifacts/finance-production-2026-09-15/deleted-repairs.json) | PASS |
+| Retry failed → processed | Nenhuma inbox com falha recuperável observada: sete eventos processados, attempt_count=1 | [Métricas](../artifacts/finance-production-2026-09-15/final-metrics.json) | NOT OBSERVED |
+| Retomada de backfill após 429 | Continuação a partir do cursor salvo, com limitação de frequência; concluída sem duplicatas | Apply e run anterior preservados; não equivale ao teste de retry de inbox | PASS |
+| Segurança do webhook | Token ausente/incorreto/Bearer: 401; token correto com corpo inválido: 400 do receiver novo | [Sondas HTTP](../artifacts/finance-production-2026-09-15/production-webhook-security.json) | PASS |
+| Event ordering | Evento de 11/09 entregue após UPDATED de 15/09 não regrediu vencimento atual de 15/09 para 14/09 | Dois IDs reais de `pay_foxs2lbj00tk4g3m`; [before/after](../artifacts/finance-production-2026-09-15/real-event-replays.json) | PASS |
 
-Os cenários críticos obrigatórios continuam bloqueados. A tolerância prevista para refund/overdue não autoriza GO porque os demais fluxos reais também não foram comprovados.
+## Divergência comprovada e regressão
 
-## 7. Testes locais finais — evidência complementar
+A listagem geral não incluía quatro cobranças excluídas; GET por ID retornava HTTP 200 com status anterior e `deleted=true`. O normalizador existente já convertia corretamente isso em DELETED. A lacuna estava no scan de reconciliação: GET bem-sucedido fora da lista era descartado sem comparação.
 
-| Escopo local | Resultado | Evidência | Status local |
-| --- | --- | --- | --- |
-| Foundation, guard de homologação e testes relacionados de ambiente/identidade/Retenção | 65 testes, sem falhas/skips | [TAP](../artifacts/finance-foundation-certification-2026-09-14/related-tests.tap) | PASS |
-| PostgreSQL 16/PostgREST 12 reais, Asaas simulado | 20 testes/subtestes, sem falhas/skips | [TAP](../artifacts/finance-foundation-certification-2026-09-14/postgres-tests.tap) | PASS |
-| Sintaxe JavaScript e diff | Verificação final registrada junto aos artefatos | [Checks](../artifacts/finance-foundation-certification-2026-09-14/checks.txt) | PASS |
+Evidência antes da correção: [quatro respostas individuais e seus mismatches](../artifacts/finance-production-2026-09-15/reconciliation-final-before-local-only-repair.json). Após a correção, a execução remota passou a reportar **quatro STATUS_MISMATCH**: [resultado](../artifacts/finance-production-2026-09-15/reconciliation-regression-remote-before.json). Um replay histórico de exclusão e três repairs corrigiram as projeções; a execução final não encontrou mismatch.
 
-```sh
-RUN_RETENTION_BACKEND_LOCAL=1 node --test \
-  tests/finance-asaas.test.js tests/finance-foundation.test.js \
-  tests/finance-certification-environment.test.js tests/staging-env.test.js \
-  tests/student-ownership.test.js tests/retention-domain.test.js \
-  tests/retention-cases-api.test.js tests/retention-backend-local.test.js
+`tests/finance-reconciliation-existing-outside-list.test.js` reproduz a estrutura observada com IDs/valores sintéticos, e cobre respostas 401/429 e ID divergente sem inferir exclusão. O teste anterior de lookup local-only foi ajustado para retornar um objeto válido. **Três testes focados passaram**: [TAP](../artifacts/finance-production-2026-09-15/reconciliation-regression.tap). Não foi necessário alterar a normalização por hipótese.
 
-RUN_FINANCE_SQL_INTEGRATION=1 node --test tests/finance-sql-integration.test.js
-```
+## Segurança, backup e limites da evidência
 
-O teste HTTP local cobre token ausente, Bearer indevido, token errado, método incorreto, JSON inválido, corpo excessivo e evento aceito; verifica zero persistências antes da primeira requisição válida. Testes SQL cobrem CREATED, 20 reenvios concorrentes, UPDATED/OVERDUE, CONFIRMED/RECEIVED sem duplicação, exclusão/estorno/restauração simulados, ordering, atomicidade/rollback, retries/limite, backfill paginado, reconciliação, repair e permissões. Não são evidência de entrega Asaas ou deploy Vercel.
+- Supabase service role utilizado apenas no operador privado; Asaas API key permaneceu exclusivamente no runtime Vercel Production. Não houve env pull, cópia da chave ou valores secretos nos artefatos publicados.
+- Connection ID `589367ba-e7c4-4c26-af71-53f97eac31a4` vem da configuração de ambiente, sem hardcode na aplicação. Scope/base/conta são conferidos pelo cliente remoto e binding antes das operações.
+- Snapshots reais anteriores às mutações estão em `/Users/spaceonline/.codex/finance-production-backups/2026-09-15`, diretório 0700 e arquivos 0600. Não foram publicados no Git. Auditoria transacional preserva os efeitos: 3728 registros na observação final.
+- `FINANCE_WEBHOOK_INGEST_ENABLED=true`, `FINANCE_FOUNDATION_ENABLED=true`, `FINANCE_WEBHOOK_PROCESS_INLINE=true` e `FINANCE_LEGACY_WEBHOOK_COMPAT=true`. O token dedicado entra somente no caminho canônico; credenciais legadas distintas continuam no receiver legado. Eventos externos futuros têm processamento inline ativo; falhas permanecem duravelmente na inbox para tratamento.
+- Os sete eventos atualmente processados são replays internos identificados. `last_webhook_received` e `last_webhook_processed` da telemetria, portanto, **não comprovam entrega pelo Asaas**.
+- Reconciliação foi executada em dry-run real, com snapshot de leitura do Supabase e paginação Asaas. O relatório foi persistido como artefato; `last_reconciliation` no banco permanece null porque não houve run de reconciliação apply. Repairs separados atualizaram `last_repair`.
+- Asaas é um sistema em movimento: a reconciliação é uma observação temporal, não um snapshot atômico entre os dois serviços. Novos eventos ainda precisam de processamento contínuo após o gate de ativação.
+- Os 2.076 vínculos ausentes com alunos são explícitos. Nenhum nome/e-mail foi usado para associar alunos. As projeções financeiras estão convergentes; a identidade acadêmica não foi certificada.
+- As sete projeções de refund estão validadas por leitura real, mas não houve evento de refund disponível no período dos logs. A [retenção documentada pelo Asaas](https://docs.asaas.com/docs/logs-de-webhooks) é de até 14 dias.
+- Endpoints financeiros legados permanecem. Writes locais de status/valor sobre cobranças com `id_cobranca_externa` agora são recusados pelo guard de ownership; operações manuais sem ownership Asaas continuam no legado.
+- Suítes anteriores já concluídas: 26 testes de código e 21 testes/subtestes SQL, sem repetição nesta retomada. [Código](../artifacts/finance-production-2026-09-15/isolated-production-unit.tap), [SQL](../artifacts/finance-production-2026-09-15/production-final-sql-2.tap). Esses testes locais são complementares, não prova de webhook remoto.
 
-Uma execução intermediária da suíte relacionada teve 64 PASS/1 FAIL por indisponibilidade do socket PostgreSQL durante a inicialização do harness de Retenção. [Log preservado](../artifacts/finance-foundation-certification-2026-09-14/related-tests-initial-startup-failure.tap). A repetição completa, sem alteração nesse harness, terminou em 65 PASS/0 FAIL/0 skipped. Essa instabilidade local não foi atribuída ao Asaas.
+## Arquivos desta retomada
 
-## 8. Divergências e arquivos alterados
+Correção: `api/_lib/finance-foundation.js`, `tests/finance-production-environment.test.js` e `tests/finance-reconciliation-existing-outside-list.test.js`. Relatório: este arquivo. Evidências sanitizadas: `artifacts/finance-production-2026-09-15/`. As ferramentas temporárias ficaram fora do código normal de deploy; os seis deployments temporários foram removidos após verificar ausência de aliases, conforme [registro de limpeza](../artifacts/finance-production-2026-09-15/temporary-bridges-cleanup.json).
 
-**Nenhuma divergência entre payload real e mock foi avaliada**, pois não houve payload real capturado. Nenhuma fixture foi rotulada como proveniente do sandbox. Normalização, processador, cliente Asaas e SQL não foram corrigidos nesta etapa por hipótese.
+A integração do receiver, guards, CLI, snapshot e ownership já concluída no commit `5c978365` foi preservada; nenhuma migration, UI ou inventário arquitetural foi repetido.
 
-Alterações restritas aos controles solicitados e evidência:
+## Decisão vigente e observação pós-ativação
 
-- Criados `_lib/finance-certification-environment.js`, `config/finance-staging-targets.json` e `tests/finance-certification-environment.test.js`.
-- Alterados `scripts/finance-foundation.js`, `scripts/finance-sandbox.env.example` e `tests/finance-foundation.test.js` para safeguard e cobertura HTTP exigida.
-- Atualizado `docs/finance-foundation.md` para documentar os novos requisitos de execução.
-- Criado este relatório e os artefatos em `artifacts/finance-foundation-certification-2026-09-14/`.
+**GO para Fase 1 — Financeiro V1.** A Foundation foi habilitada em Production por autorização explícita, mantendo os resultados reais da certificação já concluída. O redeploy está READY e a aplicação permanece operacional.
 
-Nenhuma mudança de UI, produto financeiro, Atendimento, Recuperação, Chatwoot, Firestore ou infraestrutura externa foi executada. Nenhum commit/deploy foi disparado por esta tarefa; o checkout pode receber commits automáticos de outras rotinas.
-
-## 9. IDs, limpeza e riscos
-
-**Manifesto de objetos sandbox criados: vazio.** Nenhum customer/payment/webhook/connection ID real existe para esta execução. IDs das fixtures locais são sintéticos; bancos/containers criados pelo harness foram removidos pelo próprio harness. Nenhuma limpeza remota foi executada.
-
-Riscos ainda abertos: configuração e procedência do ambiente, versão implantada, grants/schema reais, entrega e latência de webhook, formato real de refund/parciais, semântica de exclusão/404, sequência CONFIRMED/RECEIVED, quota/Retry-After, limites serverless e cobertura de paginação sob alterações simultâneas. Ausência de evidência de falha não equivale a aprovação.
-
-## 10. Desbloqueio e decisão
-
-Para retomar, disponibilizar por mecanismo privado:
-
-1. Supabase staging dedicado: URL/ref, credencial backend própria e meio administrativo SQL staging, com comprovação de isolamento e referências de produção para bloqueio.
-2. Conta e chave Asaas sandbox, token webhook dedicado e domínio Space staging aprovado, sem integrações/creds produtivas herdadas.
-3. Entrada da allowlist revisada independentemente, arquivo privado baseado no template e confirmação explícita para cada apply.
-4. Verificação do deploy staging: commit correto, variáveis efetivas, foundation flag e processamento de inbox; aplicar migration após inventário/comparação e validar conta antes de criar dados.
-
-Depois executar os cenários solicitados com identificador `SPACE_FINANCE_SANDBOX_TEST`, manifestar os IDs/timestamps reais e capturar evidências sanitizadas. Para paginação, usar limite pequeno em execução controlada para demonstrar mais de uma página sem criar volume desnecessário. Reentregas manuais de payloads capturados devem ser identificadas como replay de evento real, distinguindo-as de reentrega pelo próprio Asaas.
-
-**NO-GO para iniciar a Fase 1 — Financeiro V1.** Os controles locais estão verificados; a certificação operacional depende dos fluxos críticos reais. Este relatório não autoriza produção, não habilita flags remotas e não inicia a nova UI.
+A próxima entrega natural do webhook Asaas será confirmação operacional adicional: correlacionar o evento do provedor com a inbox e seu processamento quando ocorrer. Sua ausência até esta observação não bloqueia mais a Fase 1. Retry de inbox e evento histórico de refund permanecem NOT OBSERVED conforme a matriz; não foram declarados PASS por hipótese.

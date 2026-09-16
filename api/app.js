@@ -137,6 +137,8 @@ const buildAppHtml = ({ sessionJson, role, roleSlug, templateHtml, initialPanel 
     </script>
     ${platformVisible}
     ${modalHtml}
+    <script src="/assets/student-lifecycle.js"></script>
+    <script src="/assets/lifecycle-metrics.js"></script>
     <script src="script.js"></script>
     <script src="pedagogico-n8n-ui.js"></script>
     <script src="space-office.js"></script>
@@ -165,6 +167,20 @@ module.exports = async (req, res) => {
     email: String(session.email || ""),
   };
 
+  if (user.role === 'student' && require('./_lib/retention-flags').isRetentionV2Enabled()) {
+    try {
+      const service = require('./_lib/student-lifecycle');
+      const value = await service.getForStudent(user.id);
+      if (!service.isActiveOn(value,new Date())) throw Object.assign(new Error('student_service_ended'),{status:403});
+      user.lifecycle = {subscriptions:value.subscriptions};
+    } catch (error) {
+      res.statusCode = error.status || 503;
+      res.setHeader('Cache-Control','no-store');
+      res.setHeader('Content-Type','text/plain; charset=utf-8');
+      res.end(error.status === 403 ? 'Período de acesso encerrado.' : 'Não foi possível validar seu período de acesso.');
+      return;
+    }
+  }
   const userBasePath = roleToBasePath(user.role);
 
   const host = String(req.headers.host || "localhost");

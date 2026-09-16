@@ -1,9 +1,14 @@
 {
   "functions": {
+    "api/attendance/meta/process.js": { "maxDuration": 120 },
     "api/crm-live-data.js": { "maxDuration": 300 },
     "api/crm-live-events.js": { "maxDuration": 300 },
     "api/growth-dashboard.js": { "maxDuration": 300 }
   },
+  "crons": [
+    { "path": "/api/attendance/meta/process", "schedule": "* * * * *" },
+    { "path": "/api/retention-churn-job", "schedule": "5 3 * * *" }
+  ],
   "headers": [
     {
       "source": "/(.*)",

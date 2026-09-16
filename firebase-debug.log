@@ -1,0 +1,42 @@
+[debug] [2026-09-15T03:54:04.682Z] ----------------------------------------------------------------------
+[debug] [2026-09-15T03:54:04.687Z] Command:       /Users/spaceonline/.nvm/versions/node/v22.22.3/bin/node /Users/spaceonline/.npm/_npx/7750544ccf494d8b/node_modules/firebase-tools/lib/bin/firebase.js projects:list --json
+[debug] [2026-09-15T03:54:04.688Z] CLI Version:   15.26.0
+[debug] [2026-09-15T03:54:04.688Z] Platform:      darwin
+[debug] [2026-09-15T03:54:04.688Z] Node Version:  v22.22.3
+[debug] [2026-09-15T03:54:04.688Z] Detected Agent: codex_cli
+[debug] [2026-09-15T03:54:04.688Z] Time:          Tue Sep 15 2026 00:54:04 GMT-0300 (Brasilia Standard Time)
+[debug] [2026-09-15T03:54:04.688Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-09-15T03:54:04.791Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-09-15T03:54:04.791Z] > authorizing via signed-in user (guilhermedavi@spaceschoolbr.com)
+[debug] [2026-09-15T03:54:04.798Z] Checked if tokens are valid: false, expires at: 1784960235525
+[debug] [2026-09-15T03:54:04.798Z] Checked if tokens are valid: false, expires at: 1784960235525
+[debug] [2026-09-15T03:54:04.798Z] > refreshing access token with scopes: []
+[debug] [2026-09-15T03:54:04.800Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-09-15T03:54:04.800Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-09-15T03:54:05.067Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 400
+[debug] [2026-09-15T03:54:05.068Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[error] Authentication Error: Your credentials are no longer valid. Please run firebase login --reauth
+
+For CI servers and headless environments, generate a new token with firebase login:ci
+[error] Authentication Error: Your credentials are no longer valid. Please run firebase login --reauth
+
+For CI servers and headless environments, generate a new token with firebase login:ci
+[debug] [2026-09-15T03:54:05.068Z] Authentication Error: Your credentials are no longer valid. Please run firebase login --reauth
+
+For CI servers and headless environments, generate a new token with firebase login:ci
+[debug] [2026-09-15T03:54:05.071Z] FirebaseError: Authentication Error: Your credentials are no longer valid. Please run firebase login --reauth
+
+For CI servers and headless environments, generate a new token with firebase login:ci
+    at invalidCredentialError (/Users/spaceonline/.npm/_npx/7750544ccf494d8b/node_modules/firebase-tools/lib/auth.js:178:12)
+    at refreshTokens (/Users/spaceonline/.npm/_npx/7750544ccf494d8b/node_modules/firebase-tools/lib/auth.js:607:15)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async getAccessToken (/Users/spaceonline/.npm/_npx/7750544ccf494d8b/node_modules/firebase-tools/lib/apiv2.js:53:18)
+    at async Client.addAuthHeader (/Users/spaceonline/.npm/_npx/7750544ccf494d8b/node_modules/firebase-tools/lib/apiv2.js:209:21)
+    at async Client.request (/Users/spaceonline/.npm/_npx/7750544ccf494d8b/node_modules/firebase-tools/lib/apiv2.js:156:34)
+    at async getProjectPage (/Users/spaceonline/.npm/_npx/7750544ccf494d8b/node_modules/firebase-tools/lib/management/projects.js:287:17)
+    at async getFirebaseProjectPage (/Users/spaceonline/.npm/_npx/7750544ccf494d8b/node_modules/firebase-tools/lib/management/projects.js:304:23)
+    at async listFirebaseProjects (/Users/spaceonline/.npm/_npx/7750544ccf494d8b/node_modules/firebase-tools/lib/management/projects.js:333:29)
+    at async Command.actionFn (/Users/spaceonline/.npm/_npx/7750544ccf494d8b/node_modules/firebase-tools/lib/commands/projects-list.js:51:20)
+[error] 
+[error] Error: Failed to list Firebase projects. See firebase-debug.log for more info.

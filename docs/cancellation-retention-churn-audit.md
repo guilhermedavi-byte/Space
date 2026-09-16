@@ -234,3 +234,7 @@ Pendências para continuar:
 2. **Dados:** reconciliação aluno→contrato→pagador→cobrança→aula→crédito→acesso→métrica. Não há evidência suficiente para backfill.
 3. **Negócio:** definição de coortes/denominadores e tratamento de contratos históricos ambíguos; cardinalidade de contratos; competência/obrigações já devidas no encerramento. O prazo oficial de 2 meses e a distinção PEDIDO ≠ AVISO ≠ CHURN estão claros e não precisam ser reconfirmados.
 4. **Execução:** implementar mudanças mínimas coordenadas e testes completos A–G depois de compreender os consumidores reais; certificar em staging. Não afirmar que a regra já está compartilhada entre módulos.
+
+## Acompanhamento — implementação da política oficial
+
+O resultado FAIL acima representa a auditoria original e foi preservado, assim como seus artefatos. A correção subsequente está detalhada em [Implementação do lifecycle](cancellation-lifecycle-implementation.md), com inventário arquivo por arquivo, migration aditiva, testes locais e limites de certificação. O [contrato de integração](cancellation-lifecycle-integrations.md) especifica as mudanças pendentes nos consumidores externos. Evidências novas ficam em `artifacts/cancellation-implementation/`; não substituem o baseline `artifacts/cancellation-audit/`.

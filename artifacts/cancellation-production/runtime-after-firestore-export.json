@@ -1,0 +1,8 @@
+{
+  "features": {
+    "retentionV2Enabled": false,
+    "retentionInvoluntaryChurnEnabled": false,
+    "retentionFinancialKpisEnabled": false
+  },
+  "source": "production public runtime"
+}

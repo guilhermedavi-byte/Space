@@ -1,0 +1,148 @@
+TAP version 13
+# Subtest: app real carrega domínio antes da UI e revalida acesso de sessão existente
+ok 1 - app real carrega domínio antes da UI e revalida acesso de sessão existente
+  ---
+  duration_ms: 24.848916
+  type: 'test'
+  ...
+# Subtest: pedido não altera financeiro, pausa, fim ou churn
+ok 2 - pedido não altera financeiro, pausa, fim ou churn
+  ---
+  duration_ms: 1.57475
+  type: 'test'
+  ...
+# Subtest: pedido revertido mantém data do pedido, registra reversão e continua ativo
+ok 3 - pedido revertido mantém data do pedido, registra reversão e continua ativo
+  ---
+  duration_ms: 0.176667
+  type: 'test'
+  ...
+# Subtest: aviso explícito é dois meses, churn é dia seguinte
+ok 4 - aviso explícito é dois meses, churn é dia seguinte
+  ---
+  duration_ms: 17.235792
+  type: 'test'
+  ...
+# Subtest: vigência em 2026-10-15
+ok 5 - vigência em 2026-10-15
+  ---
+  duration_ms: 0.364875
+  type: 'test'
+  ...
+# Subtest: vigência em 2026-11-20
+ok 6 - vigência em 2026-11-20
+  ---
+  duration_ms: 0.253375
+  type: 'test'
+  ...
+# Subtest: vigência em 2026-11-21
+ok 7 - vigência em 2026-11-21
+  ---
+  duration_ms: 0.606333
+  type: 'test'
+  ...
+# Subtest: agenda aceita último dia e recusa dia posterior sem mudar regras de horários
+ok 8 - agenda aceita último dia e recusa dia posterior sem mudar regras de horários
+  ---
+  duration_ms: 0.447542
+  type: 'test'
+  ...
+# Subtest: virada de dia usa São Paulo e independe de job atrasado
+ok 9 - virada de dia usa São Paulo e independe de job atrasado
+  ---
+  duration_ms: 0.2495
+  type: 'test'
+  ...
+# Subtest: calendário 2026-01-31
+ok 10 - calendário 2026-01-31
+  ---
+  duration_ms: 0.27225
+  type: 'test'
+  ...
+# Subtest: calendário 2026-12-31
+ok 11 - calendário 2026-12-31
+  ---
+  duration_ms: 0.377958
+  type: 'test'
+  ...
+# Subtest: calendário 2023-12-31
+ok 12 - calendário 2023-12-31
+  ---
+  duration_ms: 0.126167
+  type: 'test'
+  ...
+# Subtest: calendário 2026-07-31
+ok 13 - calendário 2026-07-31
+  ---
+  duration_ms: 0.040917
+  type: 'test'
+  ...
+# Subtest: calendário 2026-07-31T02:30:00Z
+ok 14 - calendário 2026-07-31T02:30:00Z
+  ---
+  duration_ms: 0.094625
+  type: 'test'
+  ...
+# Subtest: datas inválidas não normalizam silenciosamente
+ok 15 - datas inválidas não normalizam silenciosamente
+  ---
+  duration_ms: 0.236667
+  type: 'test'
+  ...
+# Subtest: contrato simultâneo ativo mantém direitos após churn de outro
+ok 16 - contrato simultâneo ativo mantém direitos após churn de outro
+  ---
+  duration_ms: 0.085375
+  type: 'test'
+  ...
+# Subtest: nenhuma obrigação pode abranger dias posteriores ao contrato
+ok 17 - nenhuma obrigação pode abranger dias posteriores ao contrato
+  ---
+  duration_ms: 0.159125
+  type: 'test'
+  ...
+# Subtest: importação de reversão é determinística, preserva os eventos e não inventa aviso
+ok 18 - importação de reversão é determinística, preserva os eventos e não inventa aviso
+  ---
+  duration_ms: 3.014541
+  type: 'test'
+  ...
+# Subtest: importador emite exceção em vez de inventar churn e datas
+ok 19 - importador emite exceção em vez de inventar churn e datas
+  ---
+  duration_ms: 0.200875
+  type: 'test'
+  ...
+# Subtest: métricas contam quatro eventos separadamente e usam data efetiva de churn atrasado
+ok 20 - métricas contam quatro eventos separadamente e usam data efetiva de churn atrasado
+  ---
+  duration_ms: 3.907375
+  type: 'test'
+  ...
+# Subtest: browser executa exatamente o mesmo domínio de datas
+ok 21 - browser executa exatamente o mesmo domínio de datas
+  ---
+  duration_ms: 2.201833
+  type: 'test'
+  ...
+# Subtest: projeção Firestore é persistida, idempotente e rejeita versão antiga
+ok 22 - projeção Firestore é persistida, idempotente e rejeita versão antiga
+  ---
+  duration_ms: 0.747917
+  type: 'test'
+  ...
+# Subtest: UI distingue pedido, aviso e churn usando o domínio compartilhado
+ok 23 - UI distingue pedido, aviso e churn usando o domínio compartilhado
+  ---
+  duration_ms: 27.574666
+  type: 'test'
+  ...
+1..23
+# tests 23
+# suites 0
+# pass 23
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 184.718208

@@ -1,0 +1,40 @@
+[
+  {
+    "origin": "internal_replay_of_real_asaas_production_log",
+    "event": "PAYMENT_DELETED",
+    "provider_event_id": "evt_d545b50fbb17a226c5f4f4fd193922b7&1517662892",
+    "payment_id": "pay_609d66hc68thtmjk",
+    "before": {
+      "receivable_count": 1,
+      "payment_count": 0,
+      "status": "PENDING",
+      "due_date": "2026-10-16"
+    },
+    "after": {
+      "receivable_count": 1,
+      "payment_count": 0,
+      "status": "DELETED",
+      "due_date": "2026-10-16"
+    },
+    "logical_events": [
+      {
+        "id": "05c33bf5-b064-4db4-b857-836cf15378fb",
+        "processing_status": "processed",
+        "attempt_count": 1
+      }
+    ],
+    "deliveries": [
+      {
+        "http": 200,
+        "event_id": "05c33bf5-b064-4db4-b857-836cf15378fb",
+        "duplicate": false,
+        "processed": {
+          "changed": true,
+          "processed": true,
+          "receivable_id": "4e096b97-bf4a-426a-b4ad-d6a85ad863ca",
+          "external_object_id": "pay_609d66hc68thtmjk"
+        }
+      }
+    ]
+  }
+]

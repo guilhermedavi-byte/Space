@@ -15,7 +15,7 @@ test('inventário e verificação pós-apply executam em PostgreSQL real isolado
     assertObjects(before);
     const inventory = JSON.parse(before);
     assert.ok(inventory.constraints.length > 40);
-    assert.equal(inventory.functions.filter((f) => f.name.startsWith('attendance_')).length, 12);
+    assert.equal(inventory.functions.filter((f) => f.name.startsWith('attendance_')).length, 13);
     assert.equal(inventory.triggers.length, 2);
     assert.equal(before, harness.sql(sql), 'snapshot estável sem alterações de schema');
   } finally { harness.cleanup(); }

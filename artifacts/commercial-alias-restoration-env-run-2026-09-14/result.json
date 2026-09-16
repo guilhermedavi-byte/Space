@@ -1,0 +1,84 @@
+{
+  "recordedAt": "2026-09-15T02:48:19.777Z",
+  "aliasRestoration": {
+    "status": "PASS",
+    "alias": "space-guilhermedavi-4547s-projects.vercel.app",
+    "targetBefore": "dpl_FQfqbSn1NpHR7GJf3ebxBoXN4QPv",
+    "targetAfter": "dpl_8mdX14yQz9tLYvbntnB1NFFNMGZo",
+    "expectedDeployment": "dpl_8mdX14yQz9tLYvbntnB1NFFNMGZo",
+    "canonicalUrl": "space-ce0zvkois-guilhermedavi-4547s-projects.vercel.app",
+    "deploymentReady": true,
+    "deletedRunnerLookupStatus": 404,
+    "mainDomain": "plataforma.spaceschoolbr.com",
+    "mainTargetBefore": "dpl_8mdX14yQz9tLYvbntnB1NFFNMGZo",
+    "mainTargetAfter": "dpl_8mdX14yQz9tLYvbntnB1NFFNMGZo",
+    "mainDomainUnchanged": true,
+    "unrelatedAliasesChanged": 0,
+    "aliasesAfter": [
+      {
+        "alias": "plataforma.spaceschoolbr.com",
+        "target": "dpl_8mdX14yQz9tLYvbntnB1NFFNMGZo"
+      },
+      {
+        "alias": "space-git-main-guilhermedavi-4547s-projects.vercel.app",
+        "target": "dpl_8mdX14yQz9tLYvbntnB1NFFNMGZo"
+      },
+      {
+        "alias": "space-guilhermedavi-4547s-projects.vercel.app",
+        "target": "dpl_8mdX14yQz9tLYvbntnB1NFFNMGZo"
+      },
+      {
+        "alias": "space-three-sand.vercel.app",
+        "target": "dpl_8mdX14yQz9tLYvbntnB1NFFNMGZo"
+      }
+    ],
+    "httpStatus": 302,
+    "deletedDeploymentError": false,
+    "aliasMutations": 1,
+    "verifiedAt": "2026-09-15T02:46:39.436Z"
+  },
+  "envRun": {
+    "exitCode": 0,
+    "scope": "team_QFoYBpP3YUXGD4agYHZ7I6jV",
+    "projectId": "prj_FcxsR8A6rXLVIo2DArdAFDlm7pq8",
+    "environment": "production",
+    "probe": {
+      "CRM_API_BASE_URL": {
+        "present": true,
+        "nonEmpty": false,
+        "usable": false
+      },
+      "CRM_API_KEY": {
+        "present": true,
+        "nonEmpty": false,
+        "usable": false
+      },
+      "GOOGLE_SERVICE_ACCOUNT_JSON": {
+        "present": true,
+        "nonEmpty": false,
+        "usable": false
+      }
+    },
+    "inheritedRequiredVariablesRemovedBeforeProbe": true,
+    "productionSensitiveVarsUsable": false,
+    "serviceAccountParseable": null,
+    "serviceAccountCheck": "NOT_EXECUTED",
+    "datacrazyAuthentication": "NOT_EXECUTED",
+    "firestoreAuthentication": "NOT_EXECUTED",
+    "firestoreRead": "NOT_EXECUTED",
+    "envFilesCreated": 0,
+    "outputExposure": false,
+    "rawOutputPersisted": false
+  },
+  "certification": "NOT EXECUTED",
+  "reason": "production_credentials_empty",
+  "writes": {
+    "firestoreWritesAttempted": 0,
+    "datacrazyMutationsAttempted": 0,
+    "snapshotWritesAttempted": 0,
+    "scope": "task_operations_no_data_client_started"
+  },
+  "deploymentsCreated": 0,
+  "backfillExecuted": false,
+  "releaseReady": false
+}

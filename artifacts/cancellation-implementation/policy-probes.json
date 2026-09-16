@@ -1,5 +1,5 @@
 {
-  "observed_at": "2026-09-15T02:15:23.297Z",
+  "observed_at": "2026-09-15T02:53:16.393Z",
   "fixtures": "SYNTHETIC_ONLY",
   "production_writes": false,
   "status": "PASS",
@@ -69,14 +69,14 @@
       "status": "PASS",
       "expected": false,
       "observed": false,
-      "scope": "Booking core; route also does not load lifecycle. Synthetic student label alone has no semantics in the core"
+      "scope": "Booking core; route loads the same canonical lifecycle"
     },
     {
       "id": "F_calendar_months_use_business_day",
       "status": "PASS",
       "expected": "2026-09-30",
       "observed": "2026-09-30",
-      "scope": "JS date arithmetic; request used because legacy has no notice argument"
+      "scope": "JS date arithmetic from explicit notice start"
     },
     {
       "id": "A_SQL_reversion_clears_current_end",

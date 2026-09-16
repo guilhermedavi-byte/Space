@@ -1,0 +1,42 @@
+{
+  "at": "2026-09-15T17:55:43.755Z",
+  "migration": "PASS",
+  "first": {
+    "ok": true,
+    "dry_run": false,
+    "conflicts": [],
+    "cases_written": 0,
+    "cases_received": 0,
+    "events_skipped": 0,
+    "events_written": 0,
+    "events_received": 0,
+    "students_written": 227,
+    "students_received": 227,
+    "subscriptions_written": 227,
+    "subscriptions_received": 227
+  },
+  "second": {
+    "ok": true,
+    "dry_run": false,
+    "conflicts": [],
+    "cases_written": 0,
+    "cases_received": 0,
+    "events_skipped": 0,
+    "events_written": 0,
+    "events_received": 0,
+    "students_written": 0,
+    "students_received": 227,
+    "subscriptions_written": 0,
+    "subscriptions_received": 227
+  },
+  "idempotency": "PASS",
+  "students": 227,
+  "subscriptions": 227,
+  "access_lost": 0,
+  "access_changed": 0,
+  "active_suspended_preserved": 15,
+  "events": 0,
+  "outbox": 0,
+  "firestore_writes": 0,
+  "flag": "OFF"
+}

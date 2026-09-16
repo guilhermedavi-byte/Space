@@ -1,0 +1,80 @@
+{
+  "observed_at": "2026-09-15T04:08:55.443402+00:00",
+  "production_certification": "BLOCKED",
+  "production_mutations": 0,
+  "deployment": false,
+  "lifecycle_v2": "DISABLED per previous runtime evidence; no flag mutation",
+  "firestore_cli": "Authenticated Cloud Shell used; local credentials remain unavailable",
+  "reauthentication": "Cloud Shell session authorized using existing Google browser account",
+  "ui_records": 227,
+  "canonical_eligible_students": null,
+  "denominator_classification": {
+    "UNKNOWN": 10,
+    "OPERATIONAL_ACTIVE": 201,
+    "OPERATIONAL_SUSPENDED": 15,
+    "CHURNED": 1
+  },
+  "canonical_subscriptions": 0,
+  "prepared_subscriptions": 0,
+  "canonical_coverage_percent": null,
+  "identity_match_rate_percent": null,
+  "previous_partial_ui_pedagogical_exact_matches": 163,
+  "previous_backfill_ambiguous_count": 227,
+  "reconciliation_v2_complete": false,
+  "conflict_count": 7,
+  "orphan_count": null,
+  "invalid_count": null,
+  "lifecycle_divergence_count": null,
+  "projection_error_rate": null,
+  "event_processing_error_rate": null,
+  "duplicate_event_count": null,
+  "invalid_transition_count": null,
+  "canary_cells_passed": 0,
+  "canary_cells_executed": 0,
+  "canary_cells_required": 32,
+  "read_only_table_counts": {
+    "n8n_onboarding_alunos_space": {
+      "content_range": "*/0",
+      "returned_rows": 0
+    },
+    "n8n_alunos_financeiro_space": {
+      "content_range": "*/0",
+      "returned_rows": 0
+    },
+    "n8n_cobrancas_financeiras_space": {
+      "content_range": "*/0",
+      "returned_rows": 0
+    },
+    "students": {
+      "content_range": "*/0",
+      "returned_rows": 0
+    },
+    "subscriptions": {
+      "content_range": "*/0",
+      "returned_rows": 0
+    }
+  },
+  "blockers": [
+    "56 students without plan; contractual linkage and critical dates not found in exported sources",
+    "10 records have unresolved operational eligibility",
+    "7 legacy lifecycle conflicts require evidence-based resolution",
+    "Recoverable database backup and executable rollback not verified",
+    "Migration/backfill/projection/consumer/scheduler/canary gates not reached"
+  ],
+  "verdict": "DO NOT ENABLE",
+  "scope_updated_at": "2026-09-15T03:54:54.917341+00:00",
+  "architecture_scope": [
+    "Firestore",
+    "Supabase"
+  ],
+  "excluded_by_user": [
+    "n8n"
+  ],
+  "scope_note": "User explicitly excludes n8n. Previous n8n requirements are superseded; legacy table names do not establish a running n8n dependency.",
+  "canary_scope_note": "Eight application surfaces backed by Firestore/Supabase, four scenarios each; n8n excluded by explicit user correction.",
+  "firestore_database_verified": "projects/plataforma-space/databases/(default)",
+  "firestore_location_verified": "southamerica-east1",
+  "firestore_export": "PASS: all 266 users, subcollection inventory 266/266, no subcollections found",
+  "ui_firestore_identity_match_rate_percent": 100,
+  "ambiguous_count": 220
+}

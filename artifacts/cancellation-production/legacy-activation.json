@@ -1,0 +1,42 @@
+{
+  "at": "2026-09-15T18:01:55.507187+00:00",
+  "status": "ENABLED",
+  "environment": "production",
+  "domain": "https://plataforma.spaceschoolbr.com",
+  "deployment": "dpl_JC3XpiMbPDqE6SSfueoZLswgmGt1",
+  "deployment_url": "https://space-hi1hbvqlk-guilhermedavi-4547s-projects.vercel.app",
+  "runtime_retention_v2_enabled": true,
+  "migration": "applied",
+  "canonical_students": 227,
+  "canonical_subscriptions": 227,
+  "access_changes": 0,
+  "active_access": 226,
+  "previously_inactive_preserved": 1,
+  "active_suspensions_preserved": 15,
+  "plan_null": 56,
+  "backfill_idempotency": "PASS",
+  "backfill_events": 0,
+  "backfill_firestore_writes": 0,
+  "legacy_historical_fields_required": false,
+  "cron": {
+    "path": "/api/retention-churn-job",
+    "schedule_utc": "5 3 * * *",
+    "time_sao_paulo": "00:05",
+    "auth": "existing CRON_SECRET",
+    "unauthorized_http": 401,
+    "authorized_http": 200,
+    "processed": 0,
+    "failed": 0,
+    "projection_delivered": 0,
+    "projection_failed": 0
+  },
+  "canaries": "PASS \u2014 rollback SQL fixtures and application access boundary",
+  "off_compatible_deployment": "dpl_GqcpcvoMGSURKE8iEpWE8pyKfyWb",
+  "not_claimed": [
+    "No live learner login impersonation",
+    "No real future cancellation elapsed during certification",
+    "No Firestore projection write during silent backfill"
+  ],
+  "n8n": "excluded",
+  "staging": "not used"
+}

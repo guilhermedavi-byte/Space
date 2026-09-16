@@ -1,0 +1,369 @@
+{
+  "indexes": [
+    {
+      "indexdef": "CREATE UNIQUE INDEX charges_pkey ON public.charges USING btree (id)",
+      "indexname": "charges_pkey",
+      "tablename": "charges",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX charges_external_charge_id_key ON public.charges USING btree (external_charge_id)",
+      "indexname": "charges_external_charge_id_key",
+      "tablename": "charges",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE INDEX idx_charges_subscription_id ON public.charges USING btree (subscription_id)",
+      "indexname": "idx_charges_subscription_id",
+      "tablename": "charges",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE INDEX idx_charges_charge_status ON public.charges USING btree (charge_status)",
+      "indexname": "idx_charges_charge_status",
+      "tablename": "charges",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE INDEX idx_charges_due_at ON public.charges USING btree (due_at)",
+      "indexname": "idx_charges_due_at",
+      "tablename": "charges",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX n8n_cobrancas_financeiras_space_pkey ON public.n8n_cobrancas_financeiras_space USING btree (id)",
+      "indexname": "n8n_cobrancas_financeiras_space_pkey",
+      "tablename": "n8n_cobrancas_financeiras_space",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX n8n_cobrancas_financeiras_space_id_cobranca_externa_key ON public.n8n_cobrancas_financeiras_space USING btree (id_cobranca_externa)",
+      "indexname": "n8n_cobrancas_financeiras_space_id_cobranca_externa_key",
+      "tablename": "n8n_cobrancas_financeiras_space",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX outbox_events_pkey ON public.outbox_events USING btree (id)",
+      "indexname": "outbox_events_pkey",
+      "tablename": "outbox_events",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE INDEX idx_outbox_events_delivery_status ON public.outbox_events USING btree (delivery_status, available_at)",
+      "indexname": "idx_outbox_events_delivery_status",
+      "tablename": "outbox_events",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX retention_cases_pkey ON public.retention_cases USING btree (id)",
+      "indexname": "retention_cases_pkey",
+      "tablename": "retention_cases",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX retention_cases_source_system_source_ref_key ON public.retention_cases USING btree (source_system, source_ref)",
+      "indexname": "retention_cases_source_system_source_ref_key",
+      "tablename": "retention_cases",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE INDEX idx_retention_cases_subscription_id ON public.retention_cases USING btree (subscription_id)",
+      "indexname": "idx_retention_cases_subscription_id",
+      "tablename": "retention_cases",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE INDEX idx_retention_cases_student_id ON public.retention_cases USING btree (student_id)",
+      "indexname": "idx_retention_cases_student_id",
+      "tablename": "retention_cases",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE INDEX idx_retention_cases_stage ON public.retention_cases USING btree (stage)",
+      "indexname": "idx_retention_cases_stage",
+      "tablename": "retention_cases",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE INDEX idx_retention_cases_owner_uid ON public.retention_cases USING btree (owner_uid)",
+      "indexname": "idx_retention_cases_owner_uid",
+      "tablename": "retention_cases",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE INDEX idx_retention_cases_scheduled_service_end_at ON public.retention_cases USING btree (scheduled_service_end_at)",
+      "indexname": "idx_retention_cases_scheduled_service_end_at",
+      "tablename": "retention_cases",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX idx_retention_cases_formal_open_unique ON public.retention_cases USING btree (subscription_id) WHERE ((case_kind = 'formal'::text) AND (closed_at IS NULL) AND (stage = ANY (ARRAY['open'::text, 'awaiting_customer'::text, 'scheduled'::text])))",
+      "indexname": "idx_retention_cases_formal_open_unique",
+      "tablename": "retention_cases",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX retention_events_pkey ON public.retention_events USING btree (id)",
+      "indexname": "retention_events_pkey",
+      "tablename": "retention_events",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX retention_events_idempotency_key_key ON public.retention_events USING btree (idempotency_key)",
+      "indexname": "retention_events_idempotency_key_key",
+      "tablename": "retention_events",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE INDEX idx_retention_events_case_id ON public.retention_events USING btree (case_id, occurred_at DESC)",
+      "indexname": "idx_retention_events_case_id",
+      "tablename": "retention_events",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE INDEX idx_retention_events_subscription_id ON public.retention_events USING btree (subscription_id, occurred_at DESC)",
+      "indexname": "idx_retention_events_subscription_id",
+      "tablename": "retention_events",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE INDEX idx_retention_events_client_action_id ON public.retention_events USING btree (client_action_id)",
+      "indexname": "idx_retention_events_client_action_id",
+      "tablename": "retention_events",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX service_periods_pkey ON public.service_periods USING btree (id)",
+      "indexname": "service_periods_pkey",
+      "tablename": "service_periods",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX service_periods_subscription_id_period_start_period_end_key ON public.service_periods USING btree (subscription_id, period_start, period_end)",
+      "indexname": "service_periods_subscription_id_period_start_period_end_key",
+      "tablename": "service_periods",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE INDEX idx_service_periods_subscription_id ON public.service_periods USING btree (subscription_id)",
+      "indexname": "idx_service_periods_subscription_id",
+      "tablename": "service_periods",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE INDEX idx_service_periods_period_start ON public.service_periods USING btree (period_start DESC)",
+      "indexname": "idx_service_periods_period_start",
+      "tablename": "service_periods",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX students_pkey ON public.students USING btree (id)",
+      "indexname": "students_pkey",
+      "tablename": "students",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX students_firestore_student_id_key ON public.students USING btree (firestore_student_id)",
+      "indexname": "students_firestore_student_id_key",
+      "tablename": "students",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX subscriptions_pkey ON public.subscriptions USING btree (id)",
+      "indexname": "subscriptions_pkey",
+      "tablename": "subscriptions",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX subscriptions_student_id_external_subscription_key_key ON public.subscriptions USING btree (student_id, external_subscription_key)",
+      "indexname": "subscriptions_student_id_external_subscription_key_key",
+      "tablename": "subscriptions",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE INDEX idx_subscriptions_student_id ON public.subscriptions USING btree (student_id)",
+      "indexname": "idx_subscriptions_student_id",
+      "tablename": "subscriptions",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE INDEX idx_subscriptions_billing_account_id ON public.subscriptions USING btree (billing_account_id)",
+      "indexname": "idx_subscriptions_billing_account_id",
+      "tablename": "subscriptions",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE INDEX idx_subscriptions_lifecycle_status ON public.subscriptions USING btree (lifecycle_status)",
+      "indexname": "idx_subscriptions_lifecycle_status",
+      "tablename": "subscriptions",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE INDEX idx_subscriptions_pause_status ON public.subscriptions USING btree (pause_status)",
+      "indexname": "idx_subscriptions_pause_status",
+      "tablename": "subscriptions",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE INDEX idx_subscriptions_financial_status ON public.subscriptions USING btree (financial_status)",
+      "indexname": "idx_subscriptions_financial_status",
+      "tablename": "subscriptions",
+      "schemaname": "public",
+      "tablespace": null
+    }
+  ],
+  "version": "PostgreSQL 17.6 on aarch64-unknown-linux-gnu, compiled by gcc (GCC) 15.2.0, 64-bit",
+  "triggers": [
+    {
+      "ddl": "CREATE TRIGGER trg_students_updated_at BEFORE UPDATE ON public.students FOR EACH ROW EXECUTE FUNCTION retention_set_updated_at()",
+      "name": "trg_students_updated_at",
+      "table": "students",
+      "enabled": "O"
+    },
+    {
+      "ddl": "CREATE TRIGGER trg_subscriptions_updated_at BEFORE UPDATE ON public.subscriptions FOR EACH ROW EXECUTE FUNCTION retention_set_updated_at()",
+      "name": "trg_subscriptions_updated_at",
+      "table": "subscriptions",
+      "enabled": "O"
+    },
+    {
+      "ddl": "CREATE TRIGGER trg_service_periods_updated_at BEFORE UPDATE ON public.service_periods FOR EACH ROW EXECUTE FUNCTION retention_set_updated_at()",
+      "name": "trg_service_periods_updated_at",
+      "table": "service_periods",
+      "enabled": "O"
+    },
+    {
+      "ddl": "CREATE TRIGGER trg_retention_cases_updated_at BEFORE UPDATE ON public.retention_cases FOR EACH ROW EXECUTE FUNCTION retention_set_updated_at()",
+      "name": "trg_retention_cases_updated_at",
+      "table": "retention_cases",
+      "enabled": "O"
+    },
+    {
+      "ddl": "CREATE TRIGGER trg_retention_events_immutable_update BEFORE DELETE OR UPDATE ON public.retention_events FOR EACH ROW EXECUTE FUNCTION retention_prevent_history_mutation()",
+      "name": "trg_retention_events_immutable_update",
+      "table": "retention_events",
+      "enabled": "O"
+    },
+    {
+      "ddl": "CREATE TRIGGER trg_charges_updated_at BEFORE UPDATE ON public.charges FOR EACH ROW EXECUTE FUNCTION retention_set_updated_at()",
+      "name": "trg_charges_updated_at",
+      "table": "charges",
+      "enabled": "O"
+    },
+    {
+      "ddl": "CREATE TRIGGER trg_outbox_events_updated_at BEFORE UPDATE ON public.outbox_events FOR EACH ROW EXECUTE FUNCTION retention_set_updated_at()",
+      "name": "trg_outbox_events_updated_at",
+      "table": "outbox_events",
+      "enabled": "O"
+    }
+  ],
+  "functions": [
+    {
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "ddl": "CREATE OR REPLACE FUNCTION public.retention_apply_command(p_command jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public', 'pg_temp'\nAS $function$\ndeclare\n  v_case_id uuid := nullif(p_command->>'case_id', '')::uuid;\n  v_student_id uuid := nullif(p_command->>'student_id', '')::uuid;\n  v_subscription_id uuid := nullif(p_command->>'subscription_id', '')::uuid;\n  v_command text := trim(coalesce(p_command->>'command', ''));\n  v_event_type text := trim(coalesce(p_command->>'event_type', ''));\n  v_actor_uid text := nullif(trim(coalesce(p_command->'actor'->>'uid', '')), '');\n  v_actor_name text := nullif(trim(coalesce(p_command->'actor'->>'name', '')), '');\n  v_actor_role text := nullif(trim(coalesce(p_command->'actor'->>'role', '')), '');\n  v_client_action_id text := trim(coalesce(p_command->>'client_action_id', ''));\n  v_idempotency_key text := trim(coalesce(p_command->>'idempotency_key', ''));\n  v_command_fingerprint text := trim(coalesce(p_command->>'command_fingerprint', ''));\n  v_justification text := nullif(trim(coalesce(p_command->>'justification', '')), '');\n  v_expected_version integer := coalesce((p_command->>'expected_version')::integer, 0);\n  v_payload jsonb := coalesce(p_command->'payload', '{}'::jsonb);\n  v_case public.retention_cases%rowtype;\n  v_existing_event public.retention_events%rowtype;\n  v_prev_lifecycle text;\n  v_prev_pause text;\n  v_prev_financial text;\n  v_prev_stage text;\n  v_new_stage text;\n  v_now timestamptz := now();\n  v_event_id uuid := gen_random_uuid();\n  v_scheduled_end_at timestamptz;\n  v_close_reason text := null;\n  v_state_before jsonb;\n  v_state_after jsonb;\n  v_source_system text := coalesce(nullif(trim(coalesce(p_command->>'source_system', '')), ''), 'api');\n  v_source_confidence text := coalesce(nullif(trim(coalesce(p_command->>'source_confidence', '')), ''), 'high');\n  v_requested_at timestamptz;\n  v_existing_formal_case_id uuid;\nbegin\n  if v_command = '' or v_client_action_id = '' or v_idempotency_key = '' or v_command_fingerprint = '' then\n    raise exception 'invalid_retention_command';\n  end if;\n\n  if v_command not in (\n    'flag_risk',\n    'register_preventive_intent',\n    'register_formal_request',\n    'register_contact',\n    'mark_awaiting_customer',\n    'retract_cancellation',\n    'pause_billable',\n    'pause_non_billable',\n    'resume_lessons',\n    'confirm_cancellation_continuity',\n    'schedule_program_end',\n    'effectuate_churn',\n    'reactivate_subscription',\n    'delinquency_started',\n    'delinquency_recovered'\n  ) then\n    raise exception 'unsupported_retention_command';\n  end if;\n\n  select * into v_existing_event\n  from public.retention_events\n  where idempotency_key = v_idempotency_key;\n\n  if found then\n    if v_existing_event.command_fingerprint <> v_command_fingerprint then\n      raise exception 'idempotency_key_payload_mismatch';\n    end if;\n    return jsonb_build_object(\n      'ok', true,\n      'idempotent', true,\n      'event_id', v_existing_event.id,\n      'case_id', v_existing_event.case_id,\n      'snapshot', public.retention_case_snapshot(v_existing_event.case_id)\n    );\n  end if;\n\n  if v_case_id is null then\n    if v_student_id is null or v_subscription_id is null then\n      raise exception 'missing_case_or_entities';\n    end if;\n\n    if v_command = 'register_formal_request' then\n      select rc.id\n        into v_existing_formal_case_id\n      from public.retention_cases rc\n      where rc.subscription_id = v_subscription_id\n        and rc.case_kind = 'formal'\n        and rc.closed_at is null\n        and rc.stage in ('open', 'awaiting_customer', 'scheduled')\n      limit 1;\n\n      if v_existing_formal_case_id is not null then\n        raise exception 'formal_case_already_open';\n      end if;\n    end if;\n\n    insert into public.retention_cases (\n      student_id,\n      subscription_id,\n      case_kind,\n      stage,\n      risk_level,\n      lifecycle_status,\n      pause_status,\n      financial_status,\n      owner_uid,\n      owner_name,\n      scheduled_service_end_at,\n      source_system,\n      source_ref\n    )\n    values (\n      v_student_id,\n      v_subscription_id,\n      case\n        when v_command = 'flag_risk' then 'risk'\n        when v_command = 'register_preventive_intent' then 'preventive'\n        else 'formal'\n      end,\n      'open',\n      nullif(trim(coalesce(v_payload->>'risk_level', '')), ''),\n      'active',\n      'none',\n      'unknown',\n      v_actor_uid,\n      v_actor_name,\n      null,\n      v_source_system,\n      case when v_source_system = 'legacy_import' then nullif(trim(coalesce(v_payload->>'source_ref', '')), '') else null end\n    )\n    returning * into v_case;\n  else\n    select * into v_case\n    from public.retention_cases\n    where id = v_case_id\n    for update;\n\n    if not found then\n      raise exception 'retention_case_not_found';\n    end if;\n\n    if v_expected_version > 0 and v_case.version <> v_expected_version then\n      raise exception 'retention_version_conflict';\n    end if;\n  end if;\n\n  v_prev_lifecycle := v_case.lifecycle_status;\n  v_prev_pause := v_case.pause_status;\n  v_prev_financial := v_case.financial_status;\n  v_prev_stage := v_case.stage;\n  v_new_stage := v_case.stage;\n  v_scheduled_end_at := v_case.scheduled_service_end_at;\n\n  if v_command = 'flag_risk' then\n    v_case.risk_level := coalesce(nullif(trim(coalesce(v_payload->>'risk_level', '')), ''), v_case.risk_level, 'medium');\n  elsif v_command = 'register_preventive_intent' then\n    if v_case.case_kind = 'formal' and v_case.closed_at is null then\n      raise exception 'formal_case_already_open';\n    end if;\n    v_new_stage := 'open';\n  elsif v_command = 'register_formal_request' then\n    v_requested_at := coalesce(nullif(v_payload->>'requested_at', '')::timestamptz, v_now);\n    v_scheduled_end_at := public.retention_compute_scheduled_end_at(\n      v_requested_at,\n      nullif(v_payload->>'first_lesson_at', '')::timestamptz\n    );\n    v_case.lifecycle_status := 'cancellation_scheduled';\n    v_new_stage := 'scheduled';\n  elsif v_command = 'register_contact' then\n    if v_case.first_contact_at is null then\n      v_case.first_contact_at := v_now;\n    end if;\n    v_case.last_contact_at := v_now;\n  elsif v_command = 'mark_awaiting_customer' then\n    v_new_stage := 'awaiting_customer';\n    v_case.awaiting_customer_since := v_now;\n  elsif v_command = 'retract_cancellation' then\n    if v_case.lifecycle_status = 'churned' then\n      raise exception 'cannot_retract_after_churn';\n    end if;\n    v_case.lifecycle_status := 'active';\n    v_new_stage := 'saved';\n    v_case.saved_at := v_now;\n    v_case.closed_at := v_now;\n    v_close_reason := 'saved';\n  elsif v_command = 'pause_billable' then\n    v_case.pause_status := 'paused_billable';\n  elsif v_command = 'pause_non_billable' then\n    v_case.pause_status := 'paused_non_billable';\n  elsif v_command = 'resume_lessons' then\n    v_case.pause_status := 'none';\n  elsif v_command = 'confirm_cancellation_continuity' then\n    if v_case.lifecycle_status <> 'cancellation_scheduled' then\n      raise exception 'formal_request_not_started';\n    end if;\n    v_new_stage := 'scheduled';\n  elsif v_command = 'schedule_program_end' then\n    v_case.lifecycle_status := 'cancellation_scheduled';\n    v_new_stage := 'scheduled';\n    v_scheduled_end_at := coalesce(nullif(v_payload->>'scheduled_service_end_at', '')::timestamptz, v_case.scheduled_service_end_at, v_now);\n  elsif v_command = 'effectuate_churn' then\n    if v_case.lifecycle_status <> 'cancellation_scheduled' then\n      raise exception 'cannot_churn_without_schedule';\n    end if;\n    if v_case.scheduled_service_end_at is null then\n      raise exception 'cannot_churn_without_scheduled_end_at';\n    end if;\n    if (v_case.scheduled_service_end_at at time zone 'America/Sao_Paulo') > (v_now at time zone 'America/Sao_Paulo') then\n      raise exception 'cannot_churn_before_scheduled_end';\n    end if;\n    if v_case.closed_at is not null and v_case.stage = 'lost' then\n      raise exception 'case_already_lost';\n    end if;\n    v_case.lifecycle_status := 'churned';\n    v_new_stage := 'lost';\n    v_case.churned_at := v_now;\n    v_case.closed_at := v_now;\n    v_close_reason := 'churned';\n  elsif v_command = 'reactivate_subscription' then\n    if v_case.lifecycle_status <> 'churned' then\n      raise exception 'reactivation_requires_churned_case';\n    end if;\n    v_case.lifecycle_status := 'active';\n    v_case.pause_status := 'none';\n    v_new_stage := 'saved';\n    v_case.saved_at := coalesce(v_case.saved_at, v_now);\n    v_case.closed_at := coalesce(v_case.closed_at, v_now);\n    v_close_reason := 'reactivated';\n  elsif v_command = 'delinquency_started' then\n    v_case.financial_status := 'delinquent';\n  elsif v_command = 'delinquency_recovered' then\n    v_case.financial_status := 'current';\n  end if;\n\n  v_state_before := jsonb_build_object(\n    'stage', v_prev_stage,\n    'lifecycle_status', v_prev_lifecycle,\n    'pause_status', v_prev_pause,\n    'financial_status', v_prev_financial,\n    'scheduled_service_end_at', v_case.scheduled_service_end_at\n  );\n\n  update public.retention_cases\n     set risk_level = v_case.risk_level,\n         lifecycle_status = v_case.lifecycle_status,\n         pause_status = v_case.pause_status,\n         financial_status = v_case.financial_status,\n         stage = v_new_stage,\n         scheduled_service_end_at = v_scheduled_end_at,\n         first_contact_at = v_case.first_contact_at,\n         last_contact_at = v_case.last_contact_at,\n         awaiting_customer_since = v_case.awaiting_customer_since,\n         saved_at = v_case.saved_at,\n         churned_at = v_case.churned_at,\n         closed_at = coalesce(v_case.closed_at, case when v_new_stage in ('saved', 'cancelled', 'lost') then v_now else null end),\n         close_reason = coalesce(v_close_reason, v_case.close_reason),\n         latest_event_id = v_event_id,\n         owner_uid = coalesce(v_actor_uid, owner_uid),\n         owner_name = coalesce(v_actor_name, owner_name),\n         version = version + 1\n   where id = v_case.id\n   returning * into v_case;\n\n  update public.subscriptions\n     set lifecycle_status = v_case.lifecycle_status,\n         pause_status = v_case.pause_status,\n         financial_status = v_case.financial_status,\n         scheduled_service_end_at = v_scheduled_end_at,\n         ended_at = case when v_case.lifecycle_status = 'churned' then coalesce(ended_at, v_now) when v_case.lifecycle_status = 'active' then null else ended_at end,\n         version = version + 1\n   where id = v_case.subscription_id;\n\n  update public.students\n     set lifecycle_status = v_case.lifecycle_status,\n         pause_status = v_case.pause_status,\n         version = version + 1\n   where id = v_case.student_id;\n\n  v_state_after := jsonb_build_object(\n    'stage', v_case.stage,\n    'lifecycle_status', v_case.lifecycle_status,\n    'pause_status', v_case.pause_status,\n    'financial_status', v_case.financial_status,\n    'scheduled_service_end_at', v_case.scheduled_service_end_at\n  );\n\n  insert into public.retention_events (\n    id,\n    case_id,\n    student_id,\n    subscription_id,\n    event_type,\n    occurred_at,\n    actor_uid,\n    actor_name,\n    actor_role,\n    client_action_id,\n    idempotency_key,\n    command_fingerprint,\n    state_before,\n    state_after,\n    payload,\n    source_system,\n    source_confidence\n  ) values (\n    v_event_id,\n    v_case.id,\n    v_case.student_id,\n    v_case.subscription_id,\n    coalesce(nullif(v_event_type, ''), case when v_command = 'effectuate_churn' then 'cancellation_effective' else v_command end),\n    v_now,\n    v_actor_uid,\n    v_actor_name,\n    v_actor_role,\n    v_client_action_id,\n    v_idempotency_key,\n    v_command_fingerprint,\n    v_state_before,\n    v_state_after,\n    v_payload,\n    v_source_system,\n    v_source_confidence\n  );\n\n  if v_prev_lifecycle is distinct from v_case.lifecycle_status then\n    insert into public.subscription_status_history (subscription_id, from_status, to_status, reason, retention_event_id)\n    values (v_case.subscription_id, v_prev_lifecycle, v_case.lifecycle_status, v_command, v_event_id);\n  end if;\n\n  if v_prev_pause is distinct from v_case.pause_status then\n    insert into public.pause_status_history (subscription_id, from_status, to_status, reason, retention_event_id)\n    values (v_case.subscription_id, v_prev_pause, v_case.pause_status, v_command, v_event_id);\n  end if;\n\n  if v_prev_financial is distinct from v_case.financial_status then\n    insert into public.financial_status_history (subscription_id, from_status, to_status, reason, retention_event_id)\n    values (v_case.subscription_id, v_prev_financial, v_case.financial_status, v_command, v_event_id);\n  end if;\n\n  insert into public.audit_logs (\n    entity_type,\n    entity_id,\n    action,\n    actor_uid,\n    actor_name,\n    actor_role,\n    justification,\n    payload\n  ) values (\n    'retention_case',\n    v_case.id,\n    v_command,\n    v_actor_uid,\n    v_actor_name,\n    v_actor_role,\n    v_justification,\n    jsonb_build_object(\n      'state_before', v_state_before,\n      'state_after', v_state_after,\n      'has_payload', jsonb_typeof(v_payload) = 'object',\n      'version', v_case.version\n    )\n  );\n\n  insert into public.outbox_events (\n    aggregate_type,\n    aggregate_id,\n    event_type,\n    payload\n  ) values (\n    'retention_case',\n    v_case.id,\n    coalesce(nullif(v_event_type, ''), case when v_command = 'effectuate_churn' then 'cancellation_effective' else v_command end),\n    jsonb_build_object(\n      'case_id', v_case.id,\n      'subscription_id', v_case.subscription_id,\n      'student_id', v_case.student_id,\n      'event_id', v_event_id\n    )\n  );\n\n  return jsonb_build_object(\n    'ok', true,\n    'idempotent', false,\n    'event_id', v_event_id,\n    'case_id', v_case.id,\n    'version', v_case.version,\n    'snapshot', public.retention_case_snapshot(v_case.id)\n  );\nend;\n$function$\n",
+      "name": "retention_apply_command",
+      "owner": "postgres"
+    },
+    {
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "ddl": "CREATE OR REPLACE FUNCTION public.retention_case_snapshot(p_case_id uuid)\n RETURNS jsonb\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public', 'pg_temp'\nAS $function$\n  select jsonb_build_object(\n    'case',\n    jsonb_build_object(\n      'id', rc.id,\n      'case_kind', rc.case_kind,\n      'stage', rc.stage,\n      'risk_level', rc.risk_level,\n      'lifecycle_status', rc.lifecycle_status,\n      'pause_status', rc.pause_status,\n      'financial_status', rc.financial_status,\n      'owner_uid', rc.owner_uid,\n      'owner_name', rc.owner_name,\n      'scheduled_service_end_at', rc.scheduled_service_end_at,\n      'first_contact_at', rc.first_contact_at,\n      'last_contact_at', rc.last_contact_at,\n      'awaiting_customer_since', rc.awaiting_customer_since,\n      'saved_at', rc.saved_at,\n      'churned_at', rc.churned_at,\n      'closed_at', rc.closed_at,\n      'close_reason', rc.close_reason,\n      'created_at', rc.created_at,\n      'updated_at', rc.updated_at,\n      'version', rc.version\n    ),\n    'student',\n    jsonb_build_object(\n      'id', s.id,\n      'firestore_student_id', s.firestore_student_id,\n      'full_name', s.full_name,\n      'lifecycle_status', s.lifecycle_status,\n      'pause_status', s.pause_status,\n      'updated_at', s.updated_at\n    ),\n    'subscription',\n    jsonb_build_object(\n      'id', sub.id,\n      'billing_account_id', sub.billing_account_id,\n      'plan_name', sub.plan_name,\n      'lifecycle_status', sub.lifecycle_status,\n      'pause_status', sub.pause_status,\n      'financial_status', sub.financial_status,\n      'started_at', sub.started_at,\n      'scheduled_service_end_at', sub.scheduled_service_end_at,\n      'ended_at', sub.ended_at,\n      'mrr_brl', sub.mrr_brl,\n      'original_mrr_value', sub.original_mrr_value,\n      'original_currency', sub.original_currency,\n      'fx_rate', sub.fx_rate,\n      'fx_rate_source', sub.fx_rate_source,\n      'fx_rate_date', sub.fx_rate_date,\n      'updated_at', sub.updated_at,\n      'version', sub.version\n    ),\n    'billingAccount',\n    case when ba.id is null then null else jsonb_build_object(\n      'id', ba.id,\n      'display_name', ba.display_name,\n      'external_key', ba.external_key\n    ) end\n  )\n  from public.retention_cases rc\n  join public.students s on s.id = rc.student_id\n  join public.subscriptions sub on sub.id = rc.subscription_id\n  left join public.billing_accounts ba on ba.id = sub.billing_account_id\n  where rc.id = p_case_id\n$function$\n",
+      "name": "retention_case_snapshot",
+      "owner": "postgres"
+    },
+    {
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "ddl": "CREATE OR REPLACE FUNCTION public.retention_compute_scheduled_end_at(p_requested_at timestamp with time zone, p_first_lesson_at timestamp with time zone DEFAULT NULL::timestamp with time zone)\n RETURNS timestamp with time zone\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'public', 'pg_temp'\nAS $function$\ndeclare\n  safe_requested timestamptz := coalesce(p_requested_at, now());\n  diff interval;\nbegin\n  if p_first_lesson_at is not null then\n    diff := safe_requested - p_first_lesson_at;\n    if diff >= interval '0 second' and diff <= interval '7 days' then\n      return p_first_lesson_at + interval '1 month';\n    end if;\n  end if;\n  return safe_requested + interval '2 months';\nend;\n$function$\n",
+      "name": "retention_compute_scheduled_end_at",
+      "owner": "postgres"
+    },
+    {
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "ddl": "CREATE OR REPLACE FUNCTION public.retention_get_case_timeline(p_case_id uuid)\n RETURNS jsonb\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public', 'pg_temp'\nAS $function$\n  select jsonb_build_object(\n    'events',\n    coalesce(\n      jsonb_agg(\n        jsonb_build_object(\n          'id', ev.id,\n          'event_type', ev.event_type,\n          'occurred_at', ev.occurred_at,\n          'origin',\n            case\n              when ev.source_system = 'legacy_import' then 'legacy_import'\n              when coalesce(ev.actor_uid, '') = 'system:retention-cron' then 'automatic'\n              when coalesce(ev.actor_uid, '') <> '' then 'human'\n              else 'automatic'\n            end,\n          'actor_name',\n            case\n              when coalesce(ev.actor_uid, '') = 'system:retention-cron' then 'Sistema'\n              when coalesce(ev.actor_name, '') <> '' then ev.actor_name\n              else null\n            end,\n          'actor_role', nullif(ev.actor_role, ''),\n          'summary', coalesce(nullif(ev.payload->>'reason', ''), nullif(ev.payload->>'detail', ''), nullif(ev.payload->>'notes', ''), nullif(ev.payload->>'outcome', ''), nullif(ev.payload->>'mode', ''), '\u2014'),\n          'state_before', ev.state_before,\n          'state_after', ev.state_after\n        )\n        order by ev.occurred_at asc, ev.created_at asc\n      ),\n      '[]'::jsonb\n    )\n  )\n  from public.retention_events ev\n  where ev.case_id = p_case_id\n$function$\n",
+      "name": "retention_get_case_timeline",
+      "owner": "postgres"
+    },
+    {
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "ddl": "CREATE OR REPLACE FUNCTION public.retention_import_legacy_snapshot(p_payload jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public', 'pg_temp'\nAS $function$\ndeclare\n  v_dry_run boolean := coalesce((p_payload->>'dry_run')::boolean, true);\n  v_students jsonb := coalesce(p_payload->'students', '[]'::jsonb);\n  v_subscriptions jsonb := coalesce(p_payload->'subscriptions', '[]'::jsonb);\n  v_cases jsonb := coalesce(p_payload->'cases', '[]'::jsonb);\n  v_events jsonb := coalesce(p_payload->'events', '[]'::jsonb);\n  v_row jsonb;\n  v_student_id uuid;\n  v_subscription_id uuid;\n  v_case_id uuid;\n  v_students_written integer := 0;\n  v_subscriptions_written integer := 0;\n  v_cases_written integer := 0;\n  v_events_written integer := 0;\n  v_events_skipped integer := 0;\n  v_conflicts jsonb := '[]'::jsonb;\n  v_inserted_event_id uuid;\nbegin\n  if v_dry_run then\n    return jsonb_build_object(\n      'ok', true,\n      'dry_run', true,\n      'students_received', jsonb_array_length(v_students),\n      'subscriptions_received', jsonb_array_length(v_subscriptions),\n      'cases_received', jsonb_array_length(v_cases),\n      'events_received', jsonb_array_length(v_events)\n    );\n  end if;\n\n  for v_row in select value from jsonb_array_elements(v_students)\n  loop\n    insert into public.students (\n      firestore_student_id, full_name, email, phone, lifecycle_status, pause_status, source_system, legacy_source, legacy_confidence\n    ) values (\n      v_row->>'firestore_student_id',\n      coalesce(nullif(v_row->>'full_name', ''), 'Aluno'),\n      nullif(v_row->>'email', ''),\n      nullif(v_row->>'phone', ''),\n      coalesce(nullif(v_row->>'lifecycle_status', ''), 'active'),\n      coalesce(nullif(v_row->>'pause_status', ''), 'none'),\n      coalesce(nullif(v_row->>'source_system', ''), 'legacy_import'),\n      coalesce(v_row->'legacy_source', '{}'::jsonb),\n      coalesce(nullif(v_row->>'legacy_confidence', ''), 'unknown')\n    )\n    on conflict (firestore_student_id) do update\n      set full_name = excluded.full_name,\n          email = coalesce(excluded.email, public.students.email),\n          phone = coalesce(excluded.phone, public.students.phone),\n          lifecycle_status = excluded.lifecycle_status,\n          pause_status = excluded.pause_status,\n          source_system = excluded.source_system,\n          legacy_source = excluded.legacy_source,\n          legacy_confidence = excluded.legacy_confidence,\n          version = public.students.version + 1\n    returning id into v_student_id;\n    v_students_written := v_students_written + 1;\n  end loop;\n\n  for v_row in select value from jsonb_array_elements(v_subscriptions)\n  loop\n    select id into v_student_id from public.students where firestore_student_id = v_row->>'firestore_student_id' limit 1;\n    if v_student_id is null then\n      v_conflicts := v_conflicts || jsonb_build_array(jsonb_build_object('ref', substr(md5(coalesce(v_row->>'firestore_student_id', '')), 1, 10), 'reason', 'student_missing'));\n      continue;\n    end if;\n    insert into public.subscriptions (\n      student_id, external_subscription_key, plan_name, billing_cycle, lifecycle_status, pause_status, financial_status,\n      started_at, scheduled_service_end_at, ended_at, source_system, legacy_source, legacy_confidence\n    ) values (\n      v_student_id,\n      nullif(v_row->>'external_subscription_key', ''),\n      nullif(v_row->>'plan_name', ''),\n      coalesce(nullif(v_row->>'billing_cycle', ''), 'monthly'),\n      coalesce(nullif(v_row->>'lifecycle_status', ''), 'active'),\n      coalesce(nullif(v_row->>'pause_status', ''), 'none'),\n      coalesce(nullif(v_row->>'financial_status', ''), 'unknown'),\n      nullif(v_row->>'started_at', '')::timestamptz,\n      nullif(v_row->>'scheduled_service_end_at', '')::timestamptz,\n      nullif(v_row->>'ended_at', '')::timestamptz,\n      coalesce(nullif(v_row->>'source_system', ''), 'legacy_import'),\n      coalesce(v_row->'legacy_source', '{}'::jsonb),\n      coalesce(nullif(v_row->>'legacy_confidence', ''), 'unknown')\n    )\n    on conflict (student_id, external_subscription_key) do update\n      set plan_name = coalesce(excluded.plan_name, public.subscriptions.plan_name),\n          lifecycle_status = excluded.lifecycle_status,\n          pause_status = excluded.pause_status,\n          financial_status = excluded.financial_status,\n          started_at = coalesce(excluded.started_at, public.subscriptions.started_at),\n          scheduled_service_end_at = coalesce(excluded.scheduled_service_end_at, public.subscriptions.scheduled_service_end_at),\n          ended_at = coalesce(excluded.ended_at, public.subscriptions.ended_at),\n          source_system = excluded.source_system,\n          legacy_source = excluded.legacy_source,\n          legacy_confidence = excluded.legacy_confidence,\n          version = public.subscriptions.version + 1\n    returning id into v_subscription_id;\n    v_subscriptions_written := v_subscriptions_written + 1;\n  end loop;\n\n  for v_row in select value from jsonb_array_elements(v_cases)\n  loop\n    select id into v_student_id from public.students where firestore_student_id = v_row->>'firestore_student_id' limit 1;\n    select id into v_subscription_id\n    from public.subscriptions\n    where student_id = v_student_id\n      and external_subscription_key = nullif(v_row->>'external_subscription_key', '')\n    limit 1;\n    if v_student_id is null or v_subscription_id is null then\n      v_conflicts := v_conflicts || jsonb_build_array(jsonb_build_object('ref', substr(md5(coalesce(v_row->>'firestore_student_id', '')), 1, 10), 'reason', 'case_subject_missing'));\n      continue;\n    end if;\n    insert into public.retention_cases (\n      student_id, subscription_id, case_kind, stage, risk_level, lifecycle_status, pause_status, financial_status,\n      owner_uid, owner_name, source_system, source_ref, scheduled_service_end_at, closed_at, close_reason,\n      legacy_source, legacy_confidence\n    ) values (\n      v_student_id,\n      v_subscription_id,\n      coalesce(nullif(v_row->>'case_kind', ''), 'legacy_import'),\n      coalesce(nullif(v_row->>'stage', ''), 'open'),\n      nullif(v_row->>'risk_level', ''),\n      coalesce(nullif(v_row->>'lifecycle_status', ''), 'active'),\n      coalesce(nullif(v_row->>'pause_status', ''), 'none'),\n      coalesce(nullif(v_row->>'financial_status', ''), 'unknown'),\n      nullif(v_row->>'owner_uid', ''),\n      nullif(v_row->>'owner_name', ''),\n      coalesce(nullif(v_row->>'source_system', ''), 'legacy_import'),\n      coalesce(nullif(v_row->'legacy_source'->>'imported_from', ''), 'legacy_case') || ':' || coalesce(v_row->>'firestore_student_id', '') || ':' || coalesce(v_row->>'scheduled_service_end_at', '') || ':' || coalesce(v_row->>'close_reason', ''),\n      nullif(v_row->>'scheduled_service_end_at', '')::timestamptz,\n      nullif(v_row->>'closed_at', '')::timestamptz,\n      nullif(v_row->>'close_reason', ''),\n      coalesce(v_row->'legacy_source', '{}'::jsonb),\n      coalesce(nullif(v_row->>'legacy_confidence', ''), 'unknown')\n    )\n    on conflict (source_system, source_ref) do update\n      set stage = excluded.stage,\n          lifecycle_status = excluded.lifecycle_status,\n          pause_status = excluded.pause_status,\n          financial_status = excluded.financial_status,\n          scheduled_service_end_at = coalesce(excluded.scheduled_service_end_at, public.retention_cases.scheduled_service_end_at),\n          closed_at = coalesce(excluded.closed_at, public.retention_cases.closed_at),\n          close_reason = coalesce(excluded.close_reason, public.retention_cases.close_reason),\n          legacy_source = excluded.legacy_source,\n          legacy_confidence = excluded.legacy_confidence,\n          version = public.retention_cases.version + 1\n    returning id into v_case_id;\n    v_cases_written := v_cases_written + 1;\n  end loop;\n\n  for v_row in select value from jsonb_array_elements(v_events)\n  loop\n    select id into v_student_id from public.students where firestore_student_id = v_row->>'firestore_student_id' limit 1;\n    select id into v_subscription_id\n    from public.subscriptions\n    where student_id = v_student_id\n      and external_subscription_key = nullif(v_row->>'external_subscription_key', '')\n    limit 1;\n    select id into v_case_id\n    from public.retention_cases\n    where student_id = v_student_id\n      and subscription_id = v_subscription_id\n      and source_system = 'legacy_import'\n    order by created_at asc\n    limit 1;\n    if v_student_id is null or v_subscription_id is null or v_case_id is null then\n      v_conflicts := v_conflicts || jsonb_build_array(jsonb_build_object('ref', substr(md5(coalesce(v_row->>'firestore_student_id', '')), 1, 10), 'reason', 'event_subject_missing'));\n      continue;\n    end if;\n    insert into public.retention_events (\n      case_id, student_id, subscription_id, event_type, occurred_at, actor_uid, actor_name, actor_role,\n      client_action_id, idempotency_key, command_fingerprint, state_before, state_after, payload, source_system, source_confidence\n    ) values (\n      v_case_id,\n      v_student_id,\n      v_subscription_id,\n      coalesce(nullif(v_row->>'event_type', ''), 'legacy_import'),\n      coalesce(nullif(v_row->>'occurred_at', '')::timestamptz, now()),\n      null,\n      null,\n      null,\n      coalesce(nullif(v_row->>'client_action_id', ''), 'legacy'),\n      coalesce(nullif(v_row->>'idempotency_key', ''), md5(v_row::text)),\n      coalesce(nullif(v_row->>'command_fingerprint', ''), md5(v_row::text)),\n      null,\n      jsonb_build_object(\n        'stage', (select rc.stage from public.retention_cases rc where rc.id = v_case_id),\n        'lifecycle_status', (select rc.lifecycle_status from public.retention_cases rc where rc.id = v_case_id),\n        'pause_status', (select rc.pause_status from public.retention_cases rc where rc.id = v_case_id),\n        'financial_status', (select rc.financial_status from public.retention_cases rc where rc.id = v_case_id),\n        'scheduled_service_end_at', (select rc.scheduled_service_end_at from public.retention_cases rc where rc.id = v_case_id)\n      ),\n      coalesce(v_row->'payload', '{}'::jsonb),\n      coalesce(nullif(v_row->>'source_system', ''), 'legacy_import'),\n      coalesce(nullif(v_row->>'source_confidence', ''), 'medium')\n    )\n    on conflict (idempotency_key) do nothing\n    returning id into v_inserted_event_id;\n    if v_inserted_event_id is null then\n      v_events_skipped := v_events_skipped + 1;\n    else\n      v_events_written := v_events_written + 1;\n    end if;\n  end loop;\n\n  return jsonb_build_object(\n    'ok', true,\n    'dry_run', false,\n    'students_received', jsonb_array_length(v_students),\n    'subscriptions_received', jsonb_array_length(v_subscriptions),\n    'cases_received', jsonb_array_length(v_cases),\n    'events_received', jsonb_array_length(v_events),\n    'students_written', v_students_written,\n    'subscriptions_written', v_subscriptions_written,\n    'cases_written', v_cases_written,\n    'events_written', v_events_written,\n    'events_skipped', v_events_skipped,\n    'conflicts', v_conflicts\n  );\nend;\n$function$\n",
+      "name": "retention_import_legacy_snapshot",
+      "owner": "postgres"
+    },
+    {
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "ddl": "CREATE OR REPLACE FUNCTION public.retention_list_cases(p_filters jsonb DEFAULT '{}'::jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'public', 'pg_temp'\nAS $function$\ndeclare\n  v_stage text := nullif(trim(coalesce(p_filters->>'stage', '')), '');\n  v_owner text := nullif(trim(coalesce(p_filters->>'owner_uid', '')), '');\n  v_risk text := nullif(trim(coalesce(p_filters->>'risk_level', '')), '');\n  v_month text := nullif(trim(coalesce(p_filters->>'month_key', '')), '');\n  v_rows jsonb := '[]'::jsonb;\n  v_counts jsonb := '{}'::jsonb;\nbegin\n  select coalesce(jsonb_agg(row_to_json(x)), '[]'::jsonb)\n    into v_rows\n  from (\n    select\n      rc.id,\n      rc.student_id,\n      rc.subscription_id,\n      rc.case_kind,\n      rc.stage,\n      rc.risk_level,\n      rc.lifecycle_status,\n      rc.pause_status,\n      rc.financial_status,\n      rc.owner_uid,\n      rc.owner_name,\n      rc.scheduled_service_end_at,\n      rc.first_contact_at,\n      rc.last_contact_at,\n      rc.awaiting_customer_since,\n      rc.saved_at,\n      rc.churned_at,\n      rc.closed_at,\n      rc.close_reason,\n      rc.version,\n      rc.updated_at,\n      s.firestore_student_id,\n      s.full_name,\n      sub.plan_name,\n      sub.mrr_brl,\n      case\n        when sub.mrr_brl is null then 'Dados financeiros incompletos'\n        else to_char(sub.mrr_brl, 'FM\"R$ \"999999990D00')\n      end as mrr_display\n    from public.retention_cases rc\n    join public.students s on s.id = rc.student_id\n    join public.subscriptions sub on sub.id = rc.subscription_id\n    where (v_stage is null or rc.stage = v_stage)\n      and (v_owner is null or rc.owner_uid = v_owner)\n      and (v_risk is null or rc.risk_level = v_risk)\n      and (v_month is null or to_char(coalesce(rc.scheduled_service_end_at, rc.created_at) at time zone 'America/Sao_Paulo', 'YYYY-MM') = v_month)\n    order by coalesce(rc.scheduled_service_end_at, rc.updated_at) asc, s.full_name asc\n  ) x;\n\n  select jsonb_build_object(\n    'open', count(*) filter (where closed_at is null),\n    'awaiting_customer', count(*) filter (where stage = 'awaiting_customer'),\n    'scheduled', count(*) filter (where stage = 'scheduled'),\n    'saved', count(*) filter (where stage = 'saved' and closed_at is not null),\n    'lost', count(*) filter (where stage = 'lost' and closed_at is not null)\n  )\n  into v_counts\n  from public.retention_cases;\n\n  return jsonb_build_object('rows', v_rows, 'counts', v_counts);\nend;\n$function$\n",
+      "name": "retention_list_cases",
+      "owner": "postgres"
+    },
+    {
+      "acl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "ddl": "CREATE OR REPLACE FUNCTION public.retention_prevent_history_mutation()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'public', 'pg_temp'\nAS $function$\nbegin\n  raise exception 'append_only_relation';\nend;\n$function$\n",
+      "name": "retention_prevent_history_mutation",
+      "owner": "postgres"
+    },
+    {
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "ddl": "CREATE OR REPLACE FUNCTION public.retention_resolve_subject_by_firestore_student_id(p_firestore_student_id text)\n RETURNS jsonb\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public', 'pg_temp'\nAS $function$\n  select jsonb_build_object(\n    'student_id', s.id,\n    'subscription_id', sub.id,\n    'firestore_student_id', s.firestore_student_id\n  )\n  from public.students s\n  join public.subscriptions sub on sub.student_id = s.id\n  where s.firestore_student_id = p_firestore_student_id\n  order by sub.created_at desc\n  limit 1\n$function$\n",
+      "name": "retention_resolve_subject_by_firestore_student_id",
+      "owner": "postgres"
+    },
+    {
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "ddl": "CREATE OR REPLACE FUNCTION public.retention_run_scheduled_churn(p_limit integer DEFAULT 50, p_actor jsonb DEFAULT '{\"uid\": \"system:retention-cron\", \"name\": \"Sistema\", \"role\": \"system\"}'::jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public', 'pg_temp'\nAS $function$\ndeclare\n  v_limit integer := greatest(1, least(coalesce(p_limit, 50), 500));\n  v_row record;\n  v_report jsonb := '[]'::jsonb;\n  v_processed integer := 0;\n  v_skipped integer := 0;\n  v_failed integer := 0;\n  v_now_sp timestamp := now() at time zone 'America/Sao_Paulo';\n  v_result jsonb;\nbegin\n  for v_row in\n    select rc.id, s.firestore_student_id\n    from public.retention_cases rc\n    join public.students s on s.id = rc.student_id\n    where rc.lifecycle_status = 'cancellation_scheduled'\n      and rc.stage in ('scheduled', 'awaiting_customer')\n      and rc.closed_at is null\n      and rc.scheduled_service_end_at is not null\n      and (rc.scheduled_service_end_at at time zone 'America/Sao_Paulo') <= v_now_sp\n    order by rc.scheduled_service_end_at asc\n    limit v_limit\n  loop\n    begin\n      v_result := public.retention_apply_command(\n        jsonb_build_object(\n          'case_id', v_row.id,\n          'command', 'effectuate_churn',\n          'event_type', 'cancellation_effective',\n          'client_action_id', 'cron:' || v_row.id::text,\n          'idempotency_key', 'cron:' || v_row.id::text,\n          'command_fingerprint', md5('effectuate_churn:' || v_row.id::text || ':automatic'),\n          'expected_version', 0,\n          'payload', jsonb_build_object('mode', 'automatic', 'effective_at_sp', v_now_sp::text),\n          'actor', p_actor,\n          'source_system', 'retention_cron',\n          'source_confidence', 'high',\n          'justification', 'scheduled_churn'\n        )\n      );\n      v_processed := v_processed + 1;\n      v_report := v_report || jsonb_build_array(jsonb_build_object('case_ref', substr(md5(coalesce(v_row.firestore_student_id, v_row.id::text)), 1, 10), 'status', 'processed'));\n    exception\n      when sqlstate 'P0001' then\n        v_failed := v_failed + 1;\n        v_report := v_report || jsonb_build_array(jsonb_build_object('case_ref', substr(md5(coalesce(v_row.firestore_student_id, v_row.id::text)), 1, 10), 'status', 'failed', 'error', SQLERRM));\n      when others then\n        v_failed := v_failed + 1;\n        v_report := v_report || jsonb_build_array(jsonb_build_object('case_ref', substr(md5(coalesce(v_row.firestore_student_id, v_row.id::text)), 1, 10), 'status', 'failed', 'error', 'unexpected'));\n    end;\n  end loop;\n\n  select count(*)\n    into v_skipped\n  from public.retention_cases rc\n  where rc.lifecycle_status = 'cancellation_scheduled'\n    and rc.stage in ('scheduled', 'awaiting_customer')\n    and rc.closed_at is null\n    and rc.scheduled_service_end_at is not null\n    and (rc.scheduled_service_end_at at time zone 'America/Sao_Paulo') > v_now_sp;\n\n  return jsonb_build_object(\n    'ok', true,\n    'processed', v_processed,\n    'failed', v_failed,\n    'not_due_yet', v_skipped,\n    'report', v_report\n  );\nend;\n$function$\n",
+      "name": "retention_run_scheduled_churn",
+      "owner": "postgres"
+    },
+    {
+      "acl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "ddl": "CREATE OR REPLACE FUNCTION public.retention_set_updated_at()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'public', 'pg_temp'\nAS $function$\nbegin\n  new.updated_at = now();\n  return new;\nend;\n$function$\n",
+      "name": "retention_set_updated_at",
+      "owner": "postgres"
+    }
+  ],
+  "observed_at": "2026-09-15T02:45:58.908003+00:00",
+  "project_ref": "mlpojyvwyqcrelagtgkw",
+  "data_counts": {
+    "charges": 0,
+    "students": 0,
+    "outbox_events": 0,
+    "subscriptions": 0,
+    "retention_cases": 0,
+    "service_periods": 0,
+    "retention_events": 0,
+    "n8n_cobrancas_financeiras_space": 0
+  },
+  "private_snapshot_sha256": "53f5984c18b53fc2349e77ad160fe6ae678ba62ee945461234e48f4badd8ac54"
+}

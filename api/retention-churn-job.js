@@ -10,19 +10,21 @@ const constantTimeEqual = (left, right) => {
 };
 
 module.exports = async (req, res) => {
-  if (req.method !== "POST") {
-    res.setHeader("Allow", "POST");
+  if (!["POST", "GET"].includes(req.method)) {
+    res.setHeader("Allow", "POST, GET");
     return sendJson(res, 405, { error: "method_not_allowed" });
   }
 
-  const configuredSecret = String(process.env.RETENTION_CHURN_JOB_SECRET || "").trim();
-  const providedSecret = String(req.headers["x-retention-job-secret"] || "").trim();
+  const cron = req.method === "GET";
+  const configuredSecret = String((cron ? process.env.CRON_SECRET : process.env.RETENTION_CHURN_JOB_SECRET) || "").trim();
+  const providedSecret = cron ? String(req.headers.authorization || "").replace(/^Bearer /, "") : String(req.headers["x-retention-job-secret"] || "").trim();
   if (!configuredSecret || !constantTimeEqual(providedSecret, configuredSecret)) {
     return sendJson(res, configuredSecret ? 401 : 503, { error: configuredSecret ? "unauthorized" : "retention_job_not_configured" });
   }
 
   if (!isRetentionV2Enabled()) {
-    return sendJson(res, 409, {
+    return sendJson(res, cron ? 200 : 409, {
+      skipped: true,
       error: "retention_v2_disabled",
       message: "Lifecycle canônico permanece desativado neste ambiente.",
     });
@@ -30,7 +32,7 @@ module.exports = async (req, res) => {
 
   let body = {};
   try {
-    body = await readJsonBody(req);
+    body = cron ? {} : await readJsonBody(req);
   } catch {
     return sendJson(res, 400, { error: "invalid_json" });
   }

@@ -1,0 +1,25 @@
+{
+  "timestamp": "2026-09-15T03:03:58.060Z",
+  "origin": "https://plataforma.spaceschoolbr.com",
+  "authenticated": false,
+  "results": [
+    {
+      "route": "/api/attendance/meta/webhook",
+      "method": "GET",
+      "status": 404,
+      "contentType": "text/plain; charset=utf-8"
+    },
+    {
+      "route": "/api/attendance",
+      "method": "GET",
+      "status": 409,
+      "contentType": "application/json; charset=utf-8"
+    },
+    {
+      "route": "/api/attendance/meta/process",
+      "method": "GET",
+      "status": 404,
+      "contentType": "text/plain; charset=utf-8"
+    }
+  ]
+}

@@ -1,0 +1,160 @@
+{
+  "projectRefMasked": "mlp…gkw",
+  "capturedAt": "2026-09-15T02:53:03.835Z",
+  "sharedConnectionsUnchanged": true,
+  "role": "postgres",
+  "columns": [
+    {
+      "name": "connection_id",
+      "type": "uuid",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "name": "provider",
+      "type": "text",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "external_account_id",
+      "type": "text",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "external_account_type",
+      "type": "text",
+      "default": "'account'::text",
+      "nullable": "NO"
+    },
+    {
+      "name": "display_name",
+      "type": "text",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "status",
+      "type": "text",
+      "default": "'pending'::text",
+      "nullable": "NO"
+    },
+    {
+      "name": "metadata",
+      "type": "jsonb",
+      "default": "'{}'::jsonb",
+      "nullable": "NO"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamptz",
+      "default": "now()",
+      "nullable": "NO"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamptz",
+      "default": "now()",
+      "nullable": "NO"
+    }
+  ],
+  "indexes": [
+    "CREATE UNIQUE INDEX connections_pkey ON public.connections USING btree (connection_id)",
+    "CREATE UNIQUE INDEX connections_provider_external_account_type_external_account_key ON public.connections USING btree (provider, external_account_type, external_account_id)"
+  ],
+  "database": "postgres",
+  "policies": [],
+  "rpc_anon": false,
+  "rpc_auth": false,
+  "inbox_rows": 0,
+  "constraints": [
+    "CHECK (((length(external_account_id) >= 1) AND (length(external_account_id) <= 256)))",
+    "CHECK (attendance_metadata_safe(metadata))",
+    "PRIMARY KEY (connection_id)",
+    "CHECK ((provider ~ '^[a-z][a-z0-9_]{0,63}$'::text))",
+    "UNIQUE (provider, external_account_type, external_account_id)",
+    "CHECK ((status = ANY (ARRAY['pending'::text, 'active'::text, 'disabled'::text])))"
+  ],
+  "finance_rls": 9,
+  "rpc_service": true,
+  "payment_rows": 0,
+  "connections_acl": "{postgres=arwdDxtm/postgres}",
+  "connections_rls": true,
+  "finance_indexes": 20,
+  "receivable_rows": 0,
+  "rpc_search_path": [
+    "search_path=pg_catalog, public"
+  ],
+  "connections_rows": 0,
+  "financial_tables": 9,
+  "asaas_connections": 0,
+  "finance_rpc_exists": true,
+  "finance_constraints": 35,
+  "finance_permissions": [
+    {
+      "table": "finance_audit_events",
+      "anon_select": false,
+      "auth_select": false,
+      "service_write": false,
+      "service_select": true
+    },
+    {
+      "table": "finance_connection_state",
+      "anon_select": false,
+      "auth_select": false,
+      "service_write": false,
+      "service_select": true
+    },
+    {
+      "table": "finance_customer_student_links",
+      "anon_select": false,
+      "auth_select": false,
+      "service_write": false,
+      "service_select": true
+    },
+    {
+      "table": "finance_object_leases",
+      "anon_select": false,
+      "auth_select": false,
+      "service_write": false,
+      "service_select": true
+    },
+    {
+      "table": "finance_payments",
+      "anon_select": false,
+      "auth_select": false,
+      "service_write": false,
+      "service_select": true
+    },
+    {
+      "table": "finance_provider_objects",
+      "anon_select": false,
+      "auth_select": false,
+      "service_write": false,
+      "service_select": true
+    },
+    {
+      "table": "finance_receivables",
+      "anon_select": false,
+      "auth_select": false,
+      "service_write": false,
+      "service_select": true
+    },
+    {
+      "table": "finance_sync_runs",
+      "anon_select": false,
+      "auth_select": false,
+      "service_write": false,
+      "service_select": true
+    },
+    {
+      "table": "finance_webhook_events",
+      "anon_select": false,
+      "auth_select": false,
+      "service_write": false,
+      "service_select": true
+    }
+  ],
+  "rpc_security_definer": true
+}

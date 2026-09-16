@@ -1,0 +1,60 @@
+{
+  "observed_at": "2026-09-15T02:41:37.441Z",
+  "project_ref": "mlpojyvwyqcrelagtgkw",
+  "url": "https://mlpojyvwyqcrelagtgkw.supabase.co",
+  "tables": {
+    "students": {
+      "status": 200,
+      "count": "*/0",
+      "sample_size": 0,
+      "statuses": {}
+    },
+    "subscriptions": {
+      "status": 200,
+      "count": "*/0",
+      "sample_size": 0,
+      "statuses": {}
+    },
+    "retention_cases": {
+      "status": 200,
+      "count": "*/0",
+      "sample_size": 0,
+      "statuses": {}
+    },
+    "retention_events": {
+      "status": 200,
+      "count": "*/0",
+      "sample_size": 0
+    },
+    "service_periods": {
+      "status": 200,
+      "count": "*/0",
+      "sample_size": 0
+    },
+    "charges": {
+      "status": 200,
+      "count": "*/0",
+      "sample_size": 0
+    },
+    "outbox_events": {
+      "status": 200,
+      "count": "*/0",
+      "sample_size": 0
+    },
+    "n8n_cobrancas_financeiras_space": {
+      "status": 200,
+      "count": "*/0",
+      "sample_size": 0
+    },
+    "n8n_alunos_financeiro_space": {
+      "status": 200,
+      "count": "*/0",
+      "sample_size": 0
+    },
+    "n8n_aulas_pedagogicas_space": {
+      "status": 206,
+      "count": "0-999/7637",
+      "sample_size": 1000
+    }
+  }
+}

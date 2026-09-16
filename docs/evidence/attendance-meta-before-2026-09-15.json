@@ -1,0 +1,32 @@
+{
+  "rls": {},
+  "postgres": "17.6",
+  "timestamp": "2026-09-15T03:00:10.797369+00:00",
+  "meta_tables": [],
+  "public_tables": 119,
+  "meta_functions": [
+    {
+      "acl": "{postgres=X/postgres}",
+      "name": "attendance_metadata_safe",
+      "owner": "postgres",
+      "search_path": [
+        "search_path=pg_catalog, public"
+      ],
+      "security_definer": false
+    }
+  ],
+  "foundation_functions": {
+    "attendance_mark_read": "cb21b46101c496cc04c0a4ce0948fbca",
+    "attendance_has_access": "398b35f4a314a0472c1759bd91824f20",
+    "attendance_check_sender": "7508239b47f6bd3bed73876914ca4651",
+    "attendance_record_event": "b2d6b939f6a7dd7512766aa0fa2e2ff6",
+    "attendance_append_message": "c1f715fe4b3c1bbcdb9013fc7ddc0792",
+    "attendance_enqueue_outbox": "b2a36e53c707e9235ce40d3c4d01d6a9",
+    "attendance_ingest_message": "29ddced9a4252bebc9e36f9fd6e59302",
+    "attendance_event_immutable": "423416c6824bb70006c2d5df3f63c46c",
+    "attendance_normalize_phone": "0b2a0f846c90bd015daa08a69a2ee8fe",
+    "attendance_get_conversation": "8579fef88bfc046fa372de342d50f5ab",
+    "attendance_list_conversations": "64816b2b6357a1ad7dce849bfe4b0063",
+    "attendance_update_conversation": "be61d86ac99066511b7d9e4cbd19582c"
+  }
+}

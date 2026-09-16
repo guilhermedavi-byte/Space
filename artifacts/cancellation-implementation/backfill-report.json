@@ -1,0 +1,28 @@
+{
+  "dryRun": true,
+  "scannedUsers": 2,
+  "importedStudents": 1,
+  "openCases": 0,
+  "closedCases": 1,
+  "importedEvents": 2,
+  "anonymizedStudents": [
+    {
+      "studentRef": "3b62cc84de1be960",
+      "lifecycleStatus": "active",
+      "pauseStatus": "none"
+    }
+  ],
+  "exceptions": [
+    {
+      "identifier": "823acd9ac35d6141",
+      "record_ref": "17a61478014336f4",
+      "reason": "terminal_record_without_explicit_notice",
+      "conflicting_data": {
+        "requested_at": "2026-01-01T15:00:00Z",
+        "legacy_end": "2026-02-01",
+        "effective_at": null
+      },
+      "manual_action": "Reconcile dated retention events and contract; do not infer a notice or churn date."
+    }
+  ]
+}

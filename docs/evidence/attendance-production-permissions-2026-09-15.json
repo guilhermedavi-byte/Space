@@ -1,0 +1,218 @@
+[
+  {
+    "allowed": false,
+    "operation": "assignment",
+    "principal": "anon",
+    "error_code": "42501"
+  },
+  {
+    "allowed": false,
+    "operation": "audit",
+    "principal": "anon",
+    "error_code": "42501"
+  },
+  {
+    "allowed": false,
+    "operation": "conversation_read",
+    "principal": "anon",
+    "error_code": "42501"
+  },
+  {
+    "allowed": false,
+    "operation": "identity_link",
+    "principal": "anon",
+    "error_code": "42501"
+  },
+  {
+    "allowed": false,
+    "operation": "inbound",
+    "principal": "anon",
+    "error_code": "42501"
+  },
+  {
+    "allowed": false,
+    "operation": "messages_read",
+    "principal": "anon",
+    "error_code": "42501"
+  },
+  {
+    "allowed": false,
+    "operation": "outbound_intent",
+    "principal": "anon",
+    "error_code": "42501"
+  },
+  {
+    "allowed": false,
+    "operation": "outbox",
+    "principal": "anon",
+    "error_code": "42501"
+  },
+  {
+    "allowed": false,
+    "operation": "status",
+    "principal": "anon",
+    "error_code": "42501"
+  },
+  {
+    "allowed": false,
+    "operation": "assignment",
+    "principal": "authenticated_no_membership",
+    "error_code": "42501"
+  },
+  {
+    "allowed": false,
+    "operation": "audit",
+    "principal": "authenticated_no_membership",
+    "error_code": "42501"
+  },
+  {
+    "allowed": false,
+    "operation": "conversation_read",
+    "principal": "authenticated_no_membership",
+    "error_code": "42501"
+  },
+  {
+    "allowed": false,
+    "operation": "identity_link",
+    "principal": "authenticated_no_membership",
+    "error_code": "42501"
+  },
+  {
+    "allowed": false,
+    "operation": "inbound",
+    "principal": "authenticated_no_membership",
+    "error_code": "42501"
+  },
+  {
+    "allowed": false,
+    "operation": "messages_read",
+    "principal": "authenticated_no_membership",
+    "error_code": "42501"
+  },
+  {
+    "allowed": false,
+    "operation": "outbound_intent",
+    "principal": "authenticated_no_membership",
+    "error_code": "42501"
+  },
+  {
+    "allowed": false,
+    "operation": "outbox",
+    "principal": "authenticated_no_membership",
+    "error_code": "42501"
+  },
+  {
+    "allowed": false,
+    "operation": "status",
+    "principal": "authenticated_no_membership",
+    "error_code": "42501"
+  },
+  {
+    "allowed": false,
+    "operation": "assignment",
+    "principal": "authenticated_with_membership",
+    "error_code": "42501"
+  },
+  {
+    "allowed": false,
+    "operation": "audit",
+    "principal": "authenticated_with_membership",
+    "error_code": "42501"
+  },
+  {
+    "allowed": false,
+    "operation": "conversation_read",
+    "principal": "authenticated_with_membership",
+    "error_code": "42501"
+  },
+  {
+    "allowed": false,
+    "operation": "identity_link",
+    "principal": "authenticated_with_membership",
+    "error_code": "42501"
+  },
+  {
+    "allowed": false,
+    "operation": "inbound",
+    "principal": "authenticated_with_membership",
+    "error_code": "42501"
+  },
+  {
+    "allowed": false,
+    "operation": "messages_read",
+    "principal": "authenticated_with_membership",
+    "error_code": "42501"
+  },
+  {
+    "allowed": false,
+    "operation": "outbound_intent",
+    "principal": "authenticated_with_membership",
+    "error_code": "42501"
+  },
+  {
+    "allowed": false,
+    "operation": "outbox",
+    "principal": "authenticated_with_membership",
+    "error_code": "42501"
+  },
+  {
+    "allowed": false,
+    "operation": "status",
+    "principal": "authenticated_with_membership",
+    "error_code": "42501"
+  },
+  {
+    "allowed": true,
+    "operation": "assignment",
+    "principal": "service_role",
+    "error_code": null
+  },
+  {
+    "allowed": true,
+    "operation": "audit",
+    "principal": "service_role",
+    "error_code": null
+  },
+  {
+    "allowed": true,
+    "operation": "conversation_read",
+    "principal": "service_role",
+    "error_code": null
+  },
+  {
+    "allowed": true,
+    "operation": "identity_link",
+    "principal": "service_role",
+    "error_code": null
+  },
+  {
+    "allowed": true,
+    "operation": "inbound",
+    "principal": "service_role",
+    "error_code": null
+  },
+  {
+    "allowed": true,
+    "operation": "messages_read",
+    "principal": "service_role",
+    "error_code": null
+  },
+  {
+    "allowed": true,
+    "operation": "outbound_intent",
+    "principal": "service_role",
+    "error_code": null
+  },
+  {
+    "allowed": true,
+    "operation": "outbox",
+    "principal": "service_role",
+    "error_code": null
+  },
+  {
+    "allowed": true,
+    "operation": "status",
+    "principal": "service_role",
+    "error_code": null
+  }
+]

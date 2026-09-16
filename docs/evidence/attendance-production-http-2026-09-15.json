@@ -1,0 +1,46 @@
+{
+  "timestamp": "2026-09-15T02:30:53.698Z",
+  "run": "attendance-prod-validation-20260915022406289-44047af3",
+  "scenarios": [
+    {
+      "name": "persistence_and_unidentified_identity",
+      "passed": true
+    },
+    {
+      "name": "replay_after_commit_and_payload_conflict",
+      "passed": true
+    },
+    {
+      "name": "20_concurrent_same_inbound",
+      "passed": true
+    },
+    {
+      "name": "20_concurrent_conversation_creation_sequence_last_message",
+      "passed": true
+    },
+    {
+      "name": "cross_team_and_nonmember_denied",
+      "passed": true
+    },
+    {
+      "name": "outbound_intent_idempotency_timeline_and_read_cursor",
+      "passed": true
+    },
+    {
+      "name": "assignment_concurrency_version_conflict",
+      "passed": true
+    },
+    {
+      "name": "identity_manual_context_and_status_audit",
+      "passed": true
+    },
+    {
+      "name": "invalid_inputs_and_private_helper_denied",
+      "passed": true
+    }
+  ],
+  "maxConcurrentHttpRequests": 20,
+  "cross_team_unauthorized_success": 0,
+  "concurrency_integrity_failure": 0,
+  "note": "Database counts, role matrix, outbox invariants and cleanup must be verified separately by operator SQL."
+}

@@ -13,6 +13,7 @@ const token = (role, secret) => {
 };
 
 async function createHarness() {
+  const pgImage = process.env.ATTENDANCE_TEST_POSTGRES_MAJOR === '17' ? 'postgres:17-alpine' : 'postgres:16-alpine';
   const id = `attendance_${process.pid}_${randomBytes(4).toString('hex')}`;
   const network = `${id}_net`, pg = `${id}_pg`, rest = `${id}_rest`;
   const secret = randomBytes(32).toString('hex');
@@ -35,10 +36,10 @@ async function createHarness() {
   try {
     docker(['info', '--format', '{{.ServerVersion}}']);
     // Never pick up environment credentials or use an external database URL.
-    docker(['image', 'inspect', 'postgres:16-alpine']);
+    docker(['image', 'inspect', pgImage]);
     docker(['image', 'inspect', 'postgrest/postgrest:v12.2.8']);
     docker(['network', 'create', network]);
-    docker(['run', '--pull=never', '--name', pg, '--network', network, '-e', 'POSTGRES_PASSWORD=local-only', '-d', 'postgres:16-alpine']);
+    docker(['run', '--pull=never', '--name', pg, '--network', network, '-e', 'POSTGRES_PASSWORD=local-only', '-d', pgImage]);
     for (let n = 0; ; n++) {
       try { sql('select 1;'); break; } catch (error) { if (n === 39) throw error; await delay(250); }
     }

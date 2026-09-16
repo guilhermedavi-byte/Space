@@ -1,0 +1,70 @@
+{
+  "timestamp": "2026-09-15T03:10:56.749Z",
+  "variables": [
+    {
+      "name": "SUPABASE_URL",
+      "origin": "Vercel Production",
+      "present": true
+    },
+    {
+      "name": "SUPABASE_SERVICE_ROLE_KEY",
+      "origin": "Vercel Production",
+      "present": true
+    },
+    {
+      "name": "APP_ENV",
+      "origin": "Vercel Production",
+      "present": false
+    },
+    {
+      "name": "SUPABASE_ENV_SCOPE",
+      "origin": "Vercel Production",
+      "present": false
+    },
+    {
+      "name": "SPACE_PRODUCTION_SUPABASE_URL",
+      "origin": "Vercel Production",
+      "present": false
+    },
+    {
+      "name": "ATTENDANCE_PRODUCTION_PROJECT_REF",
+      "origin": "Vercel Production",
+      "present": false
+    },
+    {
+      "name": "ATTENDANCE_ALLOW_PRODUCTION_MUTATIONS",
+      "origin": "Vercel Production",
+      "present": false
+    },
+    {
+      "name": "ATTENDANCE_FOUNDATION_ENABLED",
+      "origin": "Vercel Production",
+      "present": false
+    },
+    {
+      "name": "META_INBOUND_ENABLED",
+      "origin": "Vercel Production",
+      "present": false
+    },
+    {
+      "name": "META_OUTBOUND_ENABLED",
+      "origin": "Vercel Production",
+      "present": false
+    },
+    {
+      "name": "META_APP_SECRET",
+      "origin": "Vercel Production",
+      "present": false
+    },
+    {
+      "name": "META_WEBHOOK_VERIFY_TOKEN",
+      "origin": "Vercel Production",
+      "present": false
+    },
+    {
+      "name": "META_APP_ID",
+      "origin": "Vercel Production",
+      "present": false
+    }
+  ]
+}

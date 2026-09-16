@@ -1,0 +1,22 @@
+[
+  {
+    "alias": "plataforma.spaceschoolbr.com",
+    "status": 200,
+    "deploymentId": "dpl_HmHCZzG4MAx7AvqgMLHEFyvkd9qm"
+  },
+  {
+    "alias": "space-three-sand.vercel.app",
+    "status": 200,
+    "deploymentId": "dpl_HmHCZzG4MAx7AvqgMLHEFyvkd9qm"
+  },
+  {
+    "alias": "space-git-main-guilhermedavi-4547s-projects.vercel.app",
+    "status": 200,
+    "deploymentId": "dpl_HmHCZzG4MAx7AvqgMLHEFyvkd9qm"
+  },
+  {
+    "alias": "space-guilhermedavi-4547s-projects.vercel.app",
+    "status": 200,
+    "deploymentId": "dpl_8mdX14yQz9tLYvbntnB1NFFNMGZo"
+  }
+]

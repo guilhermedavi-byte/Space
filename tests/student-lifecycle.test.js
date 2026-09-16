@@ -78,3 +78,14 @@ test('projeção Firestore é persistida, idempotente e rejeita versão antiga',
  snapshot.subscriptions[0]={version:3,lifecycle_status:'churned'};
  const result=await syncProjection('synthetic',deps);assert.equal(result.stale,true);assert.equal(writes,1);
 });
+test('UI distingue pedido, aviso e churn usando o domínio compartilhado',()=>{
+ const source=fs.readFileSync(require.resolve('../script.js'),'utf8');
+ const extract=(name,next)=>source.slice(source.indexOf(`const ${name} =`),source.indexOf(`const ${next} =`));
+ const context={SpaceLifecycle:policy,STUDENT_LIFECYCLE_STATE:{ACTIVE:'active',REQUESTED:'requested',NOTICE:'notice',INACTIVE:'inactive'},normalizeStudentCancellationRecord:()=>null};
+ vm.createContext(context);
+ vm.runInContext(extract('getStudentLifecycleState','RETENTION_CRITICAL_ATTENDANCE_STATES')+extract('getStudentLifecycleBadgeMeta','isStudentLifecycleInactive')+'\nthis.badge=getStudentLifecycleBadgeMeta;',context);
+ assert.equal(context.badge({lifecycle:{lifecycle_status:'cancellation_requested'}}).label,'Pedido de cancelamento');
+ assert.equal(context.badge({lifecycle:{lifecycle_status:'cancellation_scheduled',notice_started_at:'2099-01-01',last_active_date:'2099-03-01',churn_at:'2099-03-02'}}).label,'Aviso prévio');
+ assert.equal(context.badge({lifecycle:{lifecycle_status:'churned',last_active_date:'2020-01-01'}}).label,'Churn');
+ assert.equal(context.badge({lifecycle:{lifecycle_status:'active'}}).state,'active');
+});

@@ -1,0 +1,27 @@
+{
+  "counts": {
+    "teams": 2,
+    "channels": 2,
+    "contacts": 3,
+    "messages": 24,
+    "audit_logs": 31,
+    "connections": 1,
+    "team_members": 3,
+    "channel_teams": 2,
+    "conversations": 4,
+    "outbox_events": 27,
+    "attendance_members": 4,
+    "contact_identities": 3,
+    "conversation_reads": 1,
+    "conversation_events": 31,
+    "channel_contact_state": 4,
+    "conversation_participants": 5
+  },
+  "validation_run_id": "attendance-prod-validation-20260915022406289-44047af3",
+  "outbox_unsafe_count": 0,
+  "audit_event_mismatch": 0,
+  "normalized_identity_count": 3,
+  "missing_last_message_count": 0,
+  "duplicate_persistence_count": 0,
+  "transport_side_effect_count": 0
+}

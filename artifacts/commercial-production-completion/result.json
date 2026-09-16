@@ -1,0 +1,43 @@
+{
+  "certification": "FAIL",
+  "reason": "vercel_commit_author_permission_block",
+  "productionCertified": false,
+  "preparedCommit": "ba080a8292cca4ade4daa16b80dfa8dd03bea830",
+  "preparedBranch": "codex/commercial-production-completion",
+  "productionCommit": "f59d7d2fec0b484b6d3aa263aed3f76843cc9458",
+  "productionDeployment": "dpl_8mdX14yQz9tLYvbntnB1NFFNMGZo",
+  "attempt": {
+    "id": "dpl_5vNDm6tTWCWkMZAK3iQUY1XPGxHG",
+    "state": "BLOCKED",
+    "buildSkipped": true,
+    "alwaysRefuseToBuild": true,
+    "reason": "The deployment was blocked because the commit author does not have permission to create deployments for this project.",
+    "removed": true
+  },
+  "aliasesUnchanged": true,
+  "mainDeploymentUnchanged": true,
+  "tests": {
+    "passed": 114,
+    "failed": 0,
+    "skipped": 0,
+    "initialSetupFailure": "jsdom_unavailable_in_clean_worktree_resolved_with_existing_dependency_path"
+  },
+  "certificationInvocations": 0,
+  "dataRequests": 0,
+  "writes": {
+    "firestore": 0,
+    "datacrazy": 0,
+    "snapshots": 0
+  },
+  "deploymentsCreated": 1,
+  "deploymentsActivated": 0,
+  "temporaryEndpointActive": false,
+  "snapshotsBackedUp": false,
+  "snapshotsChanged": [],
+  "secretsExposed": false,
+  "monthlyReconciliation": null,
+  "closer": null,
+  "sdr": null,
+  "uiValidated": false,
+  "crmLiveComparison": null
+}

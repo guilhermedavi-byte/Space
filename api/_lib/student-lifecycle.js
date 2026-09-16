@@ -66,13 +66,16 @@ async function assertObligation(id, start, end, subscriptionId) {
 // Shared boundary for Firestore scheduling writers (including partial reschedules).
 async function assertScheduleWrite(docPath, data, readExisting) {
   if (!isRetentionV2Enabled() || !/^(aulas|events)\//.test(docPath)) return;
-  let row = data || {};
-  if (!row.alunoId && !row.studentId || !row.dateKey) row = { ...(await readExisting()), ...row };
-  // Cancellation/status/history operations never destroy/refund rights here.
-  if (['cancelado','cancelada','concluido','realizada','falta'].includes(row.status)) return;
+  const previous = await readExisting() || {};
+  const row = { ...previous, ...(data || {}) };
+  const sameAllocation = ['alunoId','studentId','dateKey','startMin','endMin','studentIds']
+    .every(key => JSON.stringify(row[key]) === JSON.stringify(previous[key]));
+  // Only existing, unchanged allocations may receive historical/cancellation updates.
+  if (sameAllocation && previous.dateKey && ['cancelado','cancelada','concluido','realizada','falta'].includes(row.status)) return;
   const id = row.alunoId || row.studentId;
   if (id && row.dateKey) await assertSchedule(id,row.dateKey);
   for (const member of row.studentIds || []) await assertSchedule(member,row.dateKey);
+
 }
 module.exports = { ...policy, fromLegacy, aggregate, contracts, effective, getForStudent, isActiveOn, canScheduleFor,
   decorateStudent, assertSchedule, assertAccess, assertObligation, assertScheduleWrite };

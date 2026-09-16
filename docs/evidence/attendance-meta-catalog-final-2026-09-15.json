@@ -1,0 +1,72 @@
+{
+  "rls": {
+    "attendance_provider_events": true,
+    "attendance_provider_event_items": true
+  },
+  "postgres": "17.6",
+  "timestamp": "2026-09-15T04:25:02.411637+00:00",
+  "meta_tables": [
+    "attendance_provider_event_items",
+    "attendance_provider_events"
+  ],
+  "public_tables": 121,
+  "meta_functions": [
+    {
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "name": "attendance_meta_capture",
+      "owner": "postgres",
+      "search_path": [
+        "search_path=pg_catalog, public"
+      ],
+      "definition_md5": "9082e21a5c3a498367c29592fce289e4",
+      "security_definer": true
+    },
+    {
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "name": "attendance_meta_claim",
+      "owner": "postgres",
+      "search_path": [
+        "search_path=pg_catalog, public"
+      ],
+      "definition_md5": "8c446623befc1665f37650ef2ad1c61b",
+      "security_definer": true
+    },
+    {
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "name": "attendance_meta_complete",
+      "owner": "postgres",
+      "search_path": [
+        "search_path=pg_catalog, public"
+      ],
+      "definition_md5": "da295bd1d7325a962c0416cf33bf4666",
+      "security_definer": true
+    },
+    {
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "name": "attendance_meta_fail",
+      "owner": "postgres",
+      "search_path": [
+        "search_path=pg_catalog, public"
+      ],
+      "definition_md5": "e68289ee6c62be5d82acc6a05a46acac",
+      "security_definer": true
+    }
+  ],
+  "foundation_functions": {
+    "attendance_mark_read": "cb21b46101c496cc04c0a4ce0948fbca",
+    "attendance_has_access": "398b35f4a314a0472c1759bd91824f20",
+    "attendance_check_sender": "7508239b47f6bd3bed73876914ca4651",
+    "attendance_record_event": "b2d6b939f6a7dd7512766aa0fa2e2ff6",
+    "attendance_metadata_safe": "3e8755029b63c24365d0feba8f62139a",
+    "attendance_append_message": "c1f715fe4b3c1bbcdb9013fc7ddc0792",
+    "attendance_enqueue_outbox": "0803d9469cd10abbf5a1f788198d97a9",
+    "attendance_ingest_message": "29ddced9a4252bebc9e36f9fd6e59302",
+    "attendance_event_immutable": "423416c6824bb70006c2d5df3f63c46c",
+    "attendance_normalize_phone": "0b2a0f846c90bd015daa08a69a2ee8fe",
+    "attendance_get_conversation": "8579fef88bfc046fa372de342d50f5ab",
+    "attendance_list_conversations": "64816b2b6357a1ad7dce849bfe4b0063",
+    "attendance_update_conversation": "be61d86ac99066511b7d9e4cbd19582c"
+  },
+  "configured_meta_channels": 0,
+  "configured_meta_connections": 0
+}

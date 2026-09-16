@@ -1,0 +1,51 @@
+{
+  "generated_at": "2026-09-15T04:08:55.443402+00:00",
+  "business_date": "2026-09-15",
+  "architecture_scope": [
+    "Firestore",
+    "Supabase"
+  ],
+  "n8n_required": false,
+  "firestore_export_complete_for_users": true,
+  "full_certification_complete": false,
+  "contract_reconciliation_complete": false,
+  "users_documents": 266,
+  "student_documents": 227,
+  "ui_records": 227,
+  "exact_ui_firestore_matches": 227,
+  "ui_firestore_identity_match_percent": 100,
+  "auth_account_existence_live_verified": false,
+  "operational_categories_observed": {
+    "UNKNOWN": 10,
+    "OPERATIONAL_ACTIVE": 201,
+    "OPERATIONAL_SUSPENDED": 15,
+    "CHURNED": 1
+  },
+  "categories_note": "Evidence labels from legacy records, not certified canonical state. Suspension takes precedence over notice; terminal evidence takes precedence over legacy status.",
+  "canonical_eligible_students": null,
+  "denominator_blocker": "10 abandonment records remain UNKNOWN; contractual eligibility and conflicting lifecycle evidence unresolved. Do not silently exclude them.",
+  "canonical_subscriptions": 0,
+  "prepared_subscriptions": 0,
+  "canonical_coverage_percent": null,
+  "classification_counts": {
+    "SAFE": 0,
+    "SAFE_WITH_DEFAULT": 0,
+    "AMBIGUOUS": 220,
+    "CONFLICT": 7,
+    "ORPHAN": 0,
+    "INVALID": 0,
+    "NOT_ELIGIBLE": 0
+  },
+  "without_plan": 56,
+  "financial_customer_unique_email_matches": 12,
+  "financial_source_rows": 99,
+  "financial_source_note": "Customer snapshots stored in Supabase, not payment/subscription/contract evidence; no external provider was accessed.",
+  "pedagogical_exact_id_matches": 163,
+  "contract_start_verified": 0,
+  "contract_link_verified": 0,
+  "raw_export_sha256": "991760194b3658027b864449d9360c1188771668534add27c31e5b1e7d828419",
+  "csv_sha256": "3deda7dffbd13c110f4f4c4cd507d8ea13feb0890b7e2cd69f8b907d05755fad",
+  "public_pii_policy": "Pseudonymous IDs only; exact IDs, names and emails remain in private input files.",
+  "production_writes": 0,
+  "verdict": "DO NOT ENABLE"
+}

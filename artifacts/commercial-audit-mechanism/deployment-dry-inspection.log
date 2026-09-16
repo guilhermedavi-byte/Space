@@ -1,0 +1,304 @@
+Vercel CLI 55.0.0 (Node.js 22.22.3)
+Retrieving project…
+{
+  "framework": {
+    "name": "Other",
+    "slug": null
+  },
+  "basePath": "/Users/spaceonline/Documents/New project/.commercial-certification-bundle",
+  "fileCount": 36,
+  "totalSize": 246516,
+  "ignoredCount": 3,
+  "ignored": [
+    ".vercel/project.json",
+    "package.json",
+    "vercel.json"
+  ],
+  "directories": [
+    {
+      "path": ".vercel",
+      "fileCount": 36,
+      "size": 246516
+    }
+  ],
+  "largestFiles": [
+    {
+      "path": ".vercel/output/functions/api/certify.func/api/_lib/crm-live.js",
+      "size": 60308,
+      "mode": 33188,
+      "sha": "c1f200f41b8ad167ce5187abfa61f31bb86586c2"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/api/_lib/growth-people.js",
+      "size": 29850,
+      "mode": 33188,
+      "sha": "6c1c26903320b6d7149a15666138d4bb6d7ad531"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/_lib/runtime-env.js",
+      "size": 13120,
+      "mode": 33188,
+      "sha": "08b54926333c1260f3bae36b3d1be72726163a22"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/_lib/firestore-rest.js",
+      "size": 10033,
+      "mode": 33188,
+      "sha": "dedd1a39ae5baf707f5578332a3d6572de6b56de"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/scripts/commercial-certification/output.cjs",
+      "size": 9478,
+      "mode": 33188,
+      "sha": "3dd26f2f8ce482b329bbfc5b91e1a7b8ca114618"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/scripts/reconcile-commercial-metrics.js",
+      "size": 8797,
+      "mode": 33188,
+      "sha": "c43029548f71369ad5f3433d92859dfc405c8f44"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/api/_lib/crm-source-snapshot.js",
+      "size": 8040,
+      "mode": 33188,
+      "sha": "8c4bf5ad31e0f708885f48bbf7c041fddaa248b0"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/api/_lib/live-tv-access.js",
+      "size": 7512,
+      "mode": 33188,
+      "sha": "38ff25b15447c6bdfb2014d5b391bfc26cfa5f15"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/api/_lib/commercial-reconciliation.js",
+      "size": 7463,
+      "mode": 33188,
+      "sha": "d29bc6e2e3eecd73df46eed93337b1476a2285a4"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/api/_lib/crm-snapshot-publish.js",
+      "size": 7336,
+      "mode": 33188,
+      "sha": "b43c4df64293fa86e51b7035fa098896132832e5"
+    }
+  ],
+  "files": [
+    {
+      "path": ".vercel/output/config.json",
+      "size": 162,
+      "mode": 33188,
+      "sha": "e2509717c81ba0658599cdd3ed433ba83b5e4a24"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/_lib/firestore-rest.js",
+      "size": 10033,
+      "mode": 33188,
+      "sha": "dedd1a39ae5baf707f5578332a3d6572de6b56de"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/_lib/forecast-service.js",
+      "size": 5131,
+      "mode": 33188,
+      "sha": "08b085b56c4e527ec00505831c0f7b0cae8592d4"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/_lib/google-service-account.js",
+      "size": 6681,
+      "mode": 33188,
+      "sha": "99309bb48d6c7826843fd0944ad966c2ed3792b5"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/_lib/runtime-env.js",
+      "size": 13120,
+      "mode": 33188,
+      "sha": "08b54926333c1260f3bae36b3d1be72726163a22"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/.vc-config.json",
+      "size": 111,
+      "mode": 33188,
+      "sha": "65af8d3237b42222c0d7f012cc71190e8c3e09f8"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/api/_lib/commercial-goals.js",
+      "size": 4482,
+      "mode": 33188,
+      "sha": "e550b9ecdd2afb93a742df5855701865ab794101"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/api/_lib/commercial-period.js",
+      "size": 3892,
+      "mode": 33188,
+      "sha": "bc15c1cbdc499235f2fa9192bf31e2dbc5e50512"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/api/_lib/commercial-reconciliation.js",
+      "size": 7463,
+      "mode": 33188,
+      "sha": "d29bc6e2e3eecd73df46eed93337b1476a2285a4"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/api/_lib/commercial-sales.js",
+      "size": 3523,
+      "mode": 33188,
+      "sha": "49b7f81fc7225277655890cc358dc662c1b0f418"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/api/_lib/commercial-sdr.js",
+      "size": 3736,
+      "mode": 33188,
+      "sha": "4633306f7e6ba6c48d3a537caa9e0b39186294b3"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/api/_lib/commercial-time.js",
+      "size": 2807,
+      "mode": 33188,
+      "sha": "584c173a18e0eab06c61ce53eb642115d6e83612"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/api/_lib/commercial-week.js",
+      "size": 2292,
+      "mode": 33188,
+      "sha": "1343f672b9cef7c4f04bc565226c81f537d52874"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/api/_lib/crm-live-presentation.js",
+      "size": 1607,
+      "mode": 33188,
+      "sha": "2441daa4dd40eab0bcfd845e36453e69953f3e20"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/api/_lib/crm-live.js",
+      "size": 60308,
+      "mode": 33188,
+      "sha": "c1f200f41b8ad167ce5187abfa61f31bb86586c2"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/api/_lib/crm-snapshot-publish.js",
+      "size": 7336,
+      "mode": 33188,
+      "sha": "b43c4df64293fa86e51b7035fa098896132832e5"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/api/_lib/crm-snapshot-store.js",
+      "size": 2045,
+      "mode": 33188,
+      "sha": "7a73d0dc98ecd80460ce5205113ef45eaf4c36f4"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/api/_lib/crm-source-snapshot.js",
+      "size": 8040,
+      "mode": 33188,
+      "sha": "8c4bf5ad31e0f708885f48bbf7c041fddaa248b0"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/api/_lib/datacrazy-ingestion.js",
+      "size": 7299,
+      "mode": 33188,
+      "sha": "376000c4fb694d75131c3ff579271464473e9b1c"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/api/_lib/firestore-admin.js",
+      "size": 6253,
+      "mode": 33188,
+      "sha": "0dd2ec3e06a852372772a9312e8fcd2a80a5defb"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/api/_lib/firestore-rest.js",
+      "size": 55,
+      "mode": 33188,
+      "sha": "8d49f6f061e1633e8006f05d50b1eb2bb6bfac40"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/api/_lib/growth-people.js",
+      "size": 29850,
+      "mode": 33188,
+      "sha": "6c1c26903320b6d7149a15666138d4bb6d7ad531"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/api/_lib/live-tv-access.js",
+      "size": 7512,
+      "mode": 33188,
+      "sha": "38ff25b15447c6bdfb2014d5b391bfc26cfa5f15"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/api/_lib/retention-flags.js",
+      "size": 698,
+      "mode": 33188,
+      "sha": "c8999a1780fc2c65967de6576ddfe6908a3e82cb"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/api/_lib/session.js",
+      "size": 4537,
+      "mode": 33188,
+      "sha": "83e664cbbcfb29b1a60ce95a5ab4d3be05bd7bc4"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/api/_lib/student-lifecycle.js",
+      "size": 4994,
+      "mode": 33188,
+      "sha": "731bc71afe130405d6dcf3f68bae842f07e82105"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/api/_lib/supabase-rest.js",
+      "size": 2647,
+      "mode": 33188,
+      "sha": "10458b29427cbcb86273abd893af6296eb69f0da"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/assets/student-lifecycle.js",
+      "size": 4654,
+      "mode": 33188,
+      "sha": "b56072e0d351ad8577a885ed3bd6edc8dacdf79d"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/audit-manifest.json",
+      "size": 4909,
+      "mode": 33188,
+      "sha": "7141a0bfb90f1d105754e53ab21f5e8fa7c81e2c"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/index.js",
+      "size": 133,
+      "mode": 33188,
+      "sha": "c15bb376dbd4a7fd0e72e43f51b7fcb83514d376"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/scripts/commercial-certification/collect.cjs",
+      "size": 2875,
+      "mode": 33188,
+      "sha": "ea950066974e41f017bfc9a288a64eab108a3867"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/scripts/commercial-certification/guard.cjs",
+      "size": 5330,
+      "mode": 33188,
+      "sha": "c24ba515d317b2f8222e795d3030dc8d6f1feb28"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/scripts/commercial-certification/handler.cjs",
+      "size": 2177,
+      "mode": 33188,
+      "sha": "92bbdddc8f69b838643fd76e7f474af3401b4805"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/scripts/commercial-certification/output.cjs",
+      "size": 9478,
+      "mode": 33188,
+      "sha": "3dd26f2f8ce482b329bbfc5b91e1a7b8ca114618"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/scripts/commercial-certification/worker.cjs",
+      "size": 1549,
+      "mode": 33188,
+      "sha": "6086ebdd2b0d504d011d0e851b7b490a9189cc19"
+    },
+    {
+      "path": ".vercel/output/functions/api/certify.func/scripts/reconcile-commercial-metrics.js",
+      "size": 8797,
+      "mode": 33188,
+      "sha": "c43029548f71369ad5f3433d92859dfc405c8f44"
+    }
+  ]
+}

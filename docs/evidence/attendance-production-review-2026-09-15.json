@@ -1,0 +1,14 @@
+{
+  "reviewedAt": "2026-09-15T02:25:29.431241+00:00",
+  "project": "space-idiomas-n8n",
+  "maskedRef": "mlp\u2026gkw",
+  "freshInventoryMatchesBaseline": true,
+  "migrationSha256": "0f12a7a7b631b1a377825be9344fe8c48bedd0614ac4e9b35afac2af15fc60c0",
+  "backupAvailable": false,
+  "pitrAvailable": false,
+  "rollback": "Transaction rollback before commit; disable Attendance feature after commit; preserve all legacy structures/data. No destructive down migration.",
+  "sharedSchemaCompatible": true,
+  "localPostgreSQL17TestsPassed": 51,
+  "outboxIsolation": "Synthetic provider attendance_validation, validation namespace, failed status, available_at infinity, no external provider credentials or destinations.",
+  "externalConsumerInventoryComplete": false
+}

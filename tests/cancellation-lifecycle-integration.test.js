@@ -52,6 +52,13 @@ test('lifecycle: migration, RPC, API, consumers, import, projection and job end-
   await assert.rejects(service.assertSchedule('local-student',policy.addDays(last,1)),/outside_student_service_period/);
   await assert.rejects(service.assertObligation('local-student',last,policy.addDays(last,1),subjects.id),/outside_student_service_period/);
   await assert.rejects(command('effectuate_churn',{},c),/cannot_churn_before_scheduled_end/);
+  h.sql(`insert into charges(subscription_id,external_charge_id,charge_status,due_at,service_period_start,service_period_end,amount_brl)
+    values('${subjects.id}','historical-debt','overdue','2027-12-01','2026-01-01','2026-01-31',125);`);
+  assert.throws(()=>h.sql(`insert into service_periods(subscription_id,period_start,period_end) values('${subjects.id}','${last}','${policy.addDays(last,1)}');`),/outside_student_service_period/);
+  assert.throws(()=>h.sql(`insert into charges(subscription_id,service_period_start,service_period_end) values('${subjects.id}','${last}','${policy.addDays(last,1)}');`),/outside_student_service_period/);
+  await assert.rejects(service.assertScheduleWrite('aulas/new',{alunoId:'local-student',dateKey:policy.addDays(last,1),status:'realizada'},async()=>null),/outside_student_service_period/);
+  await assert.rejects(service.assertScheduleWrite('aulas/group',{studentIds:['local-student'],dateKey:policy.addDays(last,1)},async()=>null),/outside_student_service_period/);
+  await service.assertScheduleWrite('aulas/old',{status:'cancelada'},async()=>({alunoId:'local-student',dateKey:policy.addDays(last,1)}));
   evidence.scenarios.push('B/C notice: two months, last day active, future schedule/obligation blocked, early churn rejected');
   let fields={};await syncProjection('local-student',{load:service.getForStudent,read:async()=>({fields,updateTime:'local-v1'}),write:async(id,next)=>{fields=next;}});
   assert.equal(fields.lifecycle.last_active_date,last);assert.equal(fields.ativo,true);
@@ -77,7 +84,9 @@ test('lifecycle: migration, RPC, API, consumers, import, projection and job end-
   evidence.scenarios.push('Import reversal replay twice: one case, two historical facts, active and no churn');
   const metrics=(await h.request('/retention_events?select=id,event_type,occurred_at,state_after,payload',{method:'GET'})).data;
   assert.equal(metrics.filter(e=>e.event_type==='cancellation_effective').length,1);
-  assert.equal(Number(h.sql('select count(*) from charges')),0);
+  assert.equal(Number(h.sql('select count(*) from charges')),1);
+  h.sql("update charges set charge_status='paid' where external_charge_id='historical-debt';");
+  assert.equal(h.sql("select charge_status from charges where external_charge_id='historical-debt'"),'paid');
   evidence.scenarios.push('No request/notice financial cancellation or deletion; append-only history remains');
  } finally {
   if(previous===undefined) delete process.env.RETENTION_V2_ENABLED;else process.env.RETENTION_V2_ENABLED=previous;

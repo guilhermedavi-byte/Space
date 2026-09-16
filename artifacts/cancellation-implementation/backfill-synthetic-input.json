@@ -1,0 +1,4 @@
+[
+ {"id":"synthetic-reversed","tipo":"student","ativo":true,"cancelamentosAnteriores":[{"dataPedido":"2026-01-01T15:00:00Z","dataEfetivacao":"2026-01-02T15:00:00Z","desfecho":"revertido"}]},
+ {"id":"synthetic-ambiguous","tipo":"student","ativo":false,"cancelamento":{"dataPedido":"2026-01-01T15:00:00Z","dataFimAviso":"2026-02-01","desfecho":"churned"}}
+]

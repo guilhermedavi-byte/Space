@@ -1,0 +1,29 @@
+{
+  "capturedAt": "2026-09-15T02:52:43.828Z",
+  "checks": [
+    {
+      "route": "/",
+      "method": "GET",
+      "status": 200,
+      "allow": null
+    },
+    {
+      "route": "/api/asaas-webhook",
+      "method": "GET",
+      "status": 405,
+      "allow": "POST"
+    },
+    {
+      "route": "/api/asaas-webhook",
+      "method": "POST",
+      "status": 401,
+      "allow": null
+    },
+    {
+      "route": "/api/finance-foundation",
+      "method": "GET",
+      "status": 401,
+      "allow": null
+    }
+  ]
+}

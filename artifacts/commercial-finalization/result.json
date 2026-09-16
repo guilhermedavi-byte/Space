@@ -1,0 +1,53 @@
+{
+  "certification": "PASS",
+  "scope": "sdr_and_july_august_snapshots",
+  "sdr": {
+    "status": "PASS",
+    "value": 0,
+    "no_attribution": 126,
+    "source_error": 0,
+    "not_loaded": 0,
+    "financialDelta": 0
+  },
+  "snapshots": [
+    {
+      "month": "2026-07",
+      "status": "PASS",
+      "operation": "created_missing",
+      "previousRevenue": null,
+      "revenue": 56173,
+      "count": 54,
+      "financialDelta": 0,
+      "dealIdDelta": 0,
+      "backupPath": "crmLiveSnapshotBackups/db6e7531157675ba1338ab95e3a48d20f12e4f81e219911bde9df948eb35780c",
+      "path": "crmLiveSnapshots/commercial-certified-2026-07-v4"
+    },
+    {
+      "month": "2026-08",
+      "status": "PASS",
+      "operation": "created_missing",
+      "previousRevenue": null,
+      "revenue": 50320,
+      "count": 44,
+      "financialDelta": 0,
+      "dealIdDelta": 0,
+      "backupPath": "crmLiveSnapshotBackups/7a672b21071042c8f723e871644b94a97aab80c74bbeaded2682120d3ce0e08b",
+      "path": "crmLiveSnapshots/commercial-certified-2026-08-v4"
+    }
+  ],
+  "idempotent": true,
+  "snapshotWrites": 4,
+  "originalBusinessWrites": 0,
+  "finalCommit": "2881c5e0f4d93679e269e7cd009f77863772543a",
+  "finalDeployment": "dpl_GGUc3cRa1xr6R6CxFqSZGaEUMEyu",
+  "productionReady": true,
+  "temporaryEndpointRemoved": true,
+  "ui": {
+    "status": "PASS",
+    "noAttributionLabelVisible": true,
+    "currentSeptemberRevenue": 31968,
+    "currentSeptemberNoAttribution": 29,
+    "sourceUpdatedAtLocal": "2026-09-15 14:03:55 America/Sao_Paulo",
+    "note": "Certification covers the preserved 126-deal baseline; UI uses a newer complete published source."
+  }
+}

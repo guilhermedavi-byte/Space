@@ -1,0 +1,14 @@
+{
+  "event": "meta_processing",
+  "raw_event_id": "c3702f31-85ab-47dc-bff1-09e2d0d24e37",
+  "request_id": "0b05fefa-e94b-44ce-a027-1a3e85cdd00a",
+  "provider": "meta_whatsapp",
+  "state": "processed",
+  "attempt": 2,
+  "event_retry_total": 1,
+  "event_processing_success_total": 1,
+  "event_processing_failure_total": 0,
+  "unhandled_event_total": 0,
+  "inbound_message_created_total": 1,
+  "event_processing_latency": 997.2955
+}

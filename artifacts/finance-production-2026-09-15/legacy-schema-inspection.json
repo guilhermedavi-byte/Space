@@ -1,0 +1,44 @@
+[
+  {
+    "table": "finance_receivables",
+    "accessible": true,
+    "hasRows": false,
+    "fields": []
+  },
+  {
+    "table": "finance_payments",
+    "accessible": true,
+    "hasRows": false,
+    "fields": []
+  },
+  {
+    "table": "finance_webhook_events",
+    "accessible": true,
+    "hasRows": false,
+    "fields": []
+  },
+  {
+    "table": "n8n_eventos_cobranca_space",
+    "accessible": true,
+    "hasRows": false,
+    "fields": []
+  },
+  {
+    "table": "n8n_logs_cobranca_space",
+    "accessible": true,
+    "hasRows": false,
+    "fields": []
+  },
+  {
+    "table": "n8n_pagamentos_asaas_space",
+    "accessible": true,
+    "hasRows": false,
+    "fields": []
+  },
+  {
+    "table": "n8n_cobrancas_financeiras_space",
+    "accessible": true,
+    "hasRows": false,
+    "fields": []
+  }
+]

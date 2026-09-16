@@ -1,0 +1,38 @@
+{
+  "capturedAt": "2026-09-15T02:53:45.478Z",
+  "project": "space-idiomas-n8n",
+  "projectRefMasked": "mlp…gkw",
+  "vercelProject": "space",
+  "asaasBaseUrl": "https://api.asaas.com/v3",
+  "asaasKeyConfigured": false,
+  "webhookTokenPreparedLocally": true,
+  "webhookTokenPublished": false,
+  "foundationEnabled": false,
+  "connectionConfigured": false,
+  "preflightError": "finance_production_asaas_credential_missing",
+  "remoteChecks": [
+    {
+      "table": "finance_connection_state",
+      "status": 200,
+      "range": "*/0"
+    },
+    {
+      "table": "finance_webhook_events",
+      "status": 200,
+      "range": "*/0"
+    },
+    {
+      "table": "finance_receivables",
+      "status": 200,
+      "range": "*/0"
+    },
+    {
+      "table": "finance_payments",
+      "status": 200,
+      "range": "*/0"
+    }
+  ],
+  "migrationSourceSha256": "f44e800b79119b3681873b16a704cbcd01df8d2e2f926fbf9bbad3c7898b7c2d",
+  "migrationAppliedThrough": "Supabase SQL Editor",
+  "cliMigrationLedgerUpdated": false
+}

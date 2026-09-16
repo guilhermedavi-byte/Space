@@ -12,7 +12,7 @@ const getSupabaseConfig = () => {
   return { url, key };
 };
 
-const supabaseFetch = async (path, { method = "GET", headers = {}, body } = {}) => {
+const supabaseFetch = async (path, { method = "GET", headers = {}, body, signal } = {}) => {
   const { url, key } = getSupabaseConfig();
   let res;
   try {
@@ -20,6 +20,7 @@ const supabaseFetch = async (path, { method = "GET", headers = {}, body } = {}) 
       method,
       // A redirect could forward the custom apikey header to a different origin.
       redirect: "error",
+      signal,
       headers: {
         apikey: key,
         Authorization: `Bearer ${key}`,

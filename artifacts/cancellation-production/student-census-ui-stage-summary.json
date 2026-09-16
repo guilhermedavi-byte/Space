@@ -1,0 +1,46 @@
+{
+  "observed_at": "2026-09-15T03:09:39.162761+00:00",
+  "complete": false,
+  "scope": "227 records from authenticated UI CSV; NOT full Firestore export or eligible subscription denominator",
+  "source_private_file": "/tmp/space-cancellation-production/ui-students-2026-09-15.csv",
+  "source_sha256": "6658c660297f252063e01d4dd45e8a0f9deea4df7aaaa794c885bff33bc26875",
+  "ui_displayed_count": 226,
+  "exported_records": 227,
+  "unique_ui_ids": 227,
+  "ui_active_flags": {
+    "sim": 226,
+    "nao": 1
+  },
+  "status_warning": "ativo is a normalized legacy UI flag, not a validated lifecycle status; active UI filter also includes suspended and notice states",
+  "plans": {
+    "Diamond": 99,
+    "Premium": 16,
+    "NOT_EXPORTED_OR_MISSING": 56,
+    "Turma": 14,
+    "Gold": 42
+  },
+  "emails_present": 227,
+  "duplicate_normalized_emails": 0,
+  "pedagogical_distinct_ids": 163,
+  "pedagogical_rows": 7637,
+  "exact_ui_pedagogical_id_matches": 163,
+  "pedagogical_ids_missing_in_ui": 0,
+  "ui_without_pedagogical_rows": 64,
+  "operational_eligible_students": null,
+  "canonical_coverage_percent": null,
+  "full_identity_match_rate": null,
+  "pedagogical_to_ui_id_match_percent": 100,
+  "canonical_subscriptions_last_verified": 0,
+  "full_firestore_export": false,
+  "classification_counts": {
+    "SAFE": 0,
+    "SAFE_WITH_DEFAULT": 0,
+    "AMBIGUOUS": 227,
+    "CONFLICT": 0,
+    "ORPHAN": 0,
+    "INVALID": 0
+  },
+  "classification_warning": "Counts apply only to incomplete export; zero conflicts/orphans/invalid is not proof of absence. No row is safe to backfill without original data.",
+  "pii_policy": "Public IDs pseudonymized using SHA256 first16; exact IDs/names/emails stay in private downloaded source. Missing contractual fields are unknown, not absent.",
+  "mutations": false
+}

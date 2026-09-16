@@ -68,7 +68,7 @@
     const row = contract(student);
     if (row.subscriptions) return row.subscriptions.some(sub => canScheduleFor(sub,on,now));
     if (row.reconciliation_required) return false;
-    return isActiveOn(row, now) && isActiveOn(row, on) && (!row.pause_status || row.pause_status === 'none');
+    return isActiveOn(row, now) && isActiveOn(row, on) && !row.legacy_operational_suspended && (!row.pause_status || row.pause_status === 'none');
   }
   function canCreateObligationFor(student, start, end = start) {
     const row = contract(student);

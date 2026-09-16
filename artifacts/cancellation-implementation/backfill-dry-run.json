@@ -1,0 +1,117 @@
+{
+  "dry_run": true,
+  "students": [
+    {
+      "firestore_student_id": "synthetic-reversed",
+      "full_name": "Aluno",
+      "email": null,
+      "phone": null,
+      "lifecycle_status": "active",
+      "pause_status": "none",
+      "source_system": "legacy_import",
+      "legacy_source": {
+        "legacy_doc": "synthetic-reversed",
+        "imported_at": "2026-09-15T02:21:53.133Z"
+      },
+      "legacy_confidence": "medium"
+    }
+  ],
+  "subscriptions": [
+    {
+      "firestore_student_id": "synthetic-reversed",
+      "external_subscription_key": "firestore:synthetic-reversed",
+      "plan_name": null,
+      "billing_cycle": "monthly",
+      "lifecycle_status": "active",
+      "pause_status": "none",
+      "financial_status": "unknown",
+      "started_at": null,
+      "cancellation_requested_at": null,
+      "notice_started_at": null,
+      "last_active_date": null,
+      "churn_at": null,
+      "ended_at": null,
+      "source_system": "legacy_import"
+    }
+  ],
+  "cases": [
+    {
+      "firestore_student_id": "synthetic-reversed",
+      "external_subscription_key": "firestore:synthetic-reversed",
+      "source_ref": "legacy:synthetic-reversed:c23eccc4131c341a",
+      "case_kind": "legacy_import",
+      "stage": "saved",
+      "lifecycle_status": "active",
+      "pause_status": "none",
+      "financial_status": "unknown",
+      "cancellation_requested_at": "2026-01-01T15:00:00.000Z",
+      "saved_at": "2026-01-02T15:00:00.000Z",
+      "notice_started_at": null,
+      "last_active_date": null,
+      "churn_at": null,
+      "churned_at": null,
+      "created_at": "2026-01-01T15:00:00.000Z",
+      "closed_at": "2026-01-02T15:00:00.000Z",
+      "scheduled_service_end_at": null,
+      "close_reason": "saved",
+      "source_system": "legacy_import",
+      "legacy_source": {
+        "imported_from": "users.cancelamento",
+        "original_record": {
+          "dataPedido": "2026-01-01T15:00:00Z",
+          "dataEfetivacao": "2026-01-02T15:00:00Z",
+          "desfecho": "revertido",
+          "dataFimAviso": null,
+          "eventos": []
+        }
+      },
+      "legacy_confidence": "high"
+    }
+  ],
+  "events": [
+    {
+      "firestore_student_id": "synthetic-reversed",
+      "external_subscription_key": "firestore:synthetic-reversed",
+      "source_ref": "legacy:synthetic-reversed:c23eccc4131c341a",
+      "event_type": "register_formal_request",
+      "occurred_at": "2026-01-01T15:00:00.000Z",
+      "client_action_id": "legacy:synthetic-reversed:c23eccc4131c341a:register_formal_request",
+      "idempotency_key": "legacy:synthetic-reversed:c23eccc4131c341a:register_formal_request",
+      "payload": {
+        "reason": "",
+        "notice_started_at": null,
+        "original_record": {
+          "dataPedido": "2026-01-01T15:00:00Z",
+          "dataEfetivacao": "2026-01-02T15:00:00Z",
+          "desfecho": "revertido",
+          "dataFimAviso": null,
+          "eventos": []
+        }
+      },
+      "source_system": "legacy_import",
+      "source_confidence": "high"
+    },
+    {
+      "firestore_student_id": "synthetic-reversed",
+      "external_subscription_key": "firestore:synthetic-reversed",
+      "source_ref": "legacy:synthetic-reversed:c23eccc4131c341a",
+      "event_type": "retract_cancellation",
+      "occurred_at": "2026-01-02T15:00:00.000Z",
+      "client_action_id": "legacy:synthetic-reversed:c23eccc4131c341a:retract_cancellation",
+      "idempotency_key": "legacy:synthetic-reversed:c23eccc4131c341a:retract_cancellation",
+      "payload": {
+        "reason": "",
+        "notice_started_at": null,
+        "original_record": {
+          "dataPedido": "2026-01-01T15:00:00Z",
+          "dataEfetivacao": "2026-01-02T15:00:00Z",
+          "desfecho": "revertido",
+          "dataFimAviso": null,
+          "eventos": []
+        }
+      },
+      "source_system": "legacy_import",
+      "source_confidence": "high"
+    }
+  ]
+}

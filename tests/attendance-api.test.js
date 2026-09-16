@@ -26,7 +26,7 @@ test('gate de ambiente falha fechado: produção/ausência de staging/flag desli
   for (const env of [
     { APP_ENV:'production' }, { APP_ENV:'staging',SUPABASE_URL:'https://prod.test',SPACE_STAGING_SUPABASE_URL:'https://prod.test',SPACE_PRODUCTION_SUPABASE_URL:'https://prod.test',SUPABASE_ENV_SCOPE:'staging' },
     { APP_ENV:'staging',SUPABASE_URL:'https://stage.test',SUPABASE_ENV_SCOPE:'staging' },
-  ]) assert.throws(()=>assertAttendanceEnvironment({ATTENDANCE_FOUNDATION_ENABLED:'true',...env}),/attendance_staging_not_verified/);
+  ]) assert.throws(()=>assertAttendanceEnvironment({ATTENDANCE_FOUNDATION_ENABLED:'true',...env}),/attendance_staging_not_verified|attendance_environment_production_authorization_required/);
 });
 
 test('assignment revalida existência/papel/ativo do destinatário no Firestore', async () => {

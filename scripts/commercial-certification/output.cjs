@@ -37,11 +37,13 @@ function project(audit,input,counts){
       snapshots.push({snapshotId:record.firestoreDocId||record.id||p.snapshot?.snapshotId||null,scope,period:period.startDateKey+'_'+period.endDateKey,generatedAt:assessment.generated_at,storedDealCount:assessment.deal_count,storedRevenue:assessment.revenue,canonicalDealCount:unique.length,canonicalRevenue:assessment.canonical_revenue,dealIdDelta:comparison(assessment.comparison).dealIdDelta,financialDelta:assessment.delta,status:assessment.status});
     }
   }
+  const auditNumbers=['11396','11296','8895','7580'];
+  const unresolvedBusinessNumbers=auditNumbers.filter(n=>!audit.weekly.rows.some(r=>String(r.number)===n));
   const all=Object.values(months),writesAttempted=counts.firestoreWritesAttempted+counts.datacrazyMutationsAttempted+counts.snapshotWritesAttempted;
   const sdrCertified=all.every(m=>m.sdr.certified&&m.sdr.sdrNotLoadedDeals===0&&m.sdr.sdrSourceErrorDeals===0),closerCertified=all.every(m=>m.closer.certified);
-  const result={certification:audit.certified&&all.every(m=>m.comparisons.sourceMonthly.pass)&&sdrCertified&&closerCertified&&writesAttempted===0&&counts.blockedRequests===0?'PASS':'FAIL',authenticatedSourceLoaded:audit.sourceComplete,firestoreLoaded:true,datacrazyLoaded:audit.sourceComplete,financialDelta:sum(all,'monthlyWeeklyFinancialDelta'),dealIdDelta:all.every(m=>m.monthlyWeeklyDealIdDelta!==null)?sum(all,'monthlyWeeklyDealIdDelta'):null,duplicateRevenue:sum(all,'duplicateRevenue'),unallocatedRevenue:sum(all,'unallocatedRevenue'),sdrCertified,closerCertified,writesAttempted,counters:{...counts},
+  const result={certification:audit.certified&&unresolvedBusinessNumbers.length===0&&all.every(m=>m.comparisons.sourceMonthly.pass)&&sdrCertified&&closerCertified&&writesAttempted===0&&counts.blockedRequests===0?'PASS':'FAIL',authenticatedSourceLoaded:audit.sourceComplete,firestoreLoaded:true,datacrazyLoaded:audit.sourceComplete,financialDelta:sum(all,'monthlyWeeklyFinancialDelta'),dealIdDelta:all.every(m=>m.monthlyWeeklyDealIdDelta!==null)?sum(all,'monthlyWeeklyDealIdDelta'):null,duplicateRevenue:sum(all,'duplicateRevenue'),unallocatedRevenue:sum(all,'unallocatedRevenue'),sdrCertified,closerCertified,writesAttempted,counters:{...counts},
     source:{pages:input.source.pagesFetched,expectedPages:input.source.expectedPages,dealCount:input.source.recordsFetched,retries:input.source.retryCount,rateLimits:input.source.datacrazy429Count,complete:input.source.fetchCompleted&&input.source.paginationCompleted,retryDetails:input.retries||[]},months,snapshots,
-    historicalTargets:{august11:rows(audit.months['2026-08'].ledger.rows.filter(r=>r.dateKey==='2026-08-11')),septemberWeek:{previousStored:8385,previousExpected:12646,previousDelta:4261,currentCanonical:audit.weekly.actualValue,currentStored:audit.weekly.oldSnapshotValue,targets:rows(audit.weekly.rows.filter(r=>['11396','11296','8895','7580'].includes(String(r.number))))}}};
+    historicalTargets:{august11:rows(audit.months['2026-08'].ledger.rows.filter(r=>r.dateKey==='2026-08-11')),septemberWeek:{previousStored:8385,previousExpected:12646,previousDelta:4261,currentCanonical:audit.weekly.actualValue,currentStored:audit.weekly.oldSnapshotValue,unresolvedBusinessNumbers,targets:rows(audit.weekly.rows.filter(r=>['11396','11296','8895','7580'].includes(String(r.number))))}}};
   return result;
 }
 function sanitize(value,secrets=new Set()){
@@ -49,6 +51,7 @@ function sanitize(value,secrets=new Set()){
     if(v===null||typeof v==='boolean')return v;
     if(typeof v==='number'){if(!Number.isFinite(v))throw new Error('unsafe_output');return v;}
     if(typeof v==='string'){
+      if(/^[+\d () .-]+$/.test(v)&&(v.match(/\d/g)||[]).length>=10)throw new Error('unsafe_output');
       if(v.length>160||/@|https?:|Bearer\s|PRIVATE KEY|eyJ[A-Za-z0-9_-]+\./i.test(v)||[...secrets].some(s=>s.length>=8&&v.includes(s)))throw new Error('unsafe_output');
       if(!/^[\p{L}\p{N}_.:+\- /]*$/u.test(v))throw new Error('unsafe_output');return v;
     }

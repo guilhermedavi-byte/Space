@@ -1,0 +1,20 @@
+.codex/logs/
+.DS_Store
+.vercel
+.env*
+tmp-*.json
+scripts/tmp-*
+
+# Installed dependencies are reproducible from package-lock.json.
+node_modules/
+
+# Temporary, offline certification deployment bundle (never normal app routes).
+.commercial-certification-bundle/
+
+# Temporary audit tooling must never ship with the normal application.
+scripts/commercial-certification/**
+tests/commercial-certification-mechanism.test.js
+tests/commercial-certification-local.test.js
+docs/commercial-certification-credential-provisioning.md
+docs/commercial-certification-temporary-runner.md
+artifacts/commercial-audit-mechanism/**

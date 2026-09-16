@@ -20,7 +20,7 @@ module.exports = async (req, res) => {
       if (!service.isActiveOn(lifecycle,new Date())) return sendJson(res,403,{error:'student_service_ended'});
     } catch (error) { return sendJson(res,error.status || 503,{error:error.code || 'lifecycle_unavailable'}); }
   }
-  return sendJson(res, 200, { lifecycle,
+  return sendJson(res, 200, { lifecycle: lifecycle ? {subscriptions:lifecycle.subscriptions} : null,
     user: {
       id: String(session.sub || ""),
       role: String(session.role || ""),

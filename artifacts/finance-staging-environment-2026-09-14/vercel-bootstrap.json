@@ -1,0 +1,72 @@
+{
+  "project": "space-staging",
+  "projectIdMasked": "prj_9Dd…thHz",
+  "environment": "preview",
+  "deploymentCreated": false,
+  "variables": [
+    {
+      "variable": "APP_ENV",
+      "status": "configured"
+    },
+    {
+      "variable": "SPACE_APP_ENV",
+      "status": "configured"
+    },
+    {
+      "variable": "SUPABASE_ENV_SCOPE",
+      "status": "configured"
+    },
+    {
+      "variable": "SUPABASE_URL",
+      "status": "configured"
+    },
+    {
+      "variable": "SPACE_STAGING_SUPABASE_URL",
+      "status": "configured"
+    },
+    {
+      "variable": "SPACE_PRODUCTION_SUPABASE_URL",
+      "status": "configured"
+    },
+    {
+      "variable": "FINANCE_STAGING_PROJECT_REF",
+      "status": "configured"
+    },
+    {
+      "variable": "ASAAS_BASE_URL",
+      "status": "configured"
+    },
+    {
+      "variable": "ASAAS_KEY_SCOPE",
+      "status": "configured"
+    },
+    {
+      "variable": "FIREBASE_ENV_SCOPE",
+      "status": "configured"
+    },
+    {
+      "variable": "NEXT_PUBLIC_FIREBASE_PROJECT_ID",
+      "status": "configured"
+    },
+    {
+      "variable": "SPACE_STAGING_FIREBASE_PROJECT_ID",
+      "status": "configured"
+    },
+    {
+      "variable": "SPACE_PRODUCTION_FIREBASE_PROJECT_ID",
+      "status": "configured"
+    },
+    {
+      "variable": "N8N_ENV_SCOPE",
+      "status": "configured"
+    },
+    {
+      "variable": "FINANCE_FOUNDATION_ENABLED",
+      "status": "configured"
+    },
+    {
+      "variable": "FINANCE_WEBHOOK_PROCESS_INLINE",
+      "status": "configured"
+    }
+  ]
+}

@@ -1,0 +1,185 @@
+{
+  "observed_at": "2026-09-15T02:52:55.911Z",
+  "read_only": true,
+  "status": "BLOCKED",
+  "deployment_changed": false,
+  "lifecycle_v2_enabled": false,
+  "environment": {
+    "vercel": {
+      "id": "prj_FcxsR8A6rXLVIo2DArdAFDlm7pq8",
+      "name": "space",
+      "link": {
+        "type": "github",
+        "repo": "Space",
+        "productionBranch": "main"
+      },
+      "crons": {
+        "enabledAt": 1775616522191,
+        "disabledAt": null,
+        "updatedAt": 1789438625458,
+        "deploymentId": "dpl_8mdX14yQz9tLYvbntnB1NFFNMGZo",
+        "definitions": []
+      },
+      "productionDeployment": {
+        "id": "dpl_8mdX14yQz9tLYvbntnB1NFFNMGZo",
+        "url": "space-ce0zvkois-guilhermedavi-4547s-projects.vercel.app",
+        "createdAt": 1789438606245,
+        "readyState": "READY"
+      }
+    },
+    "supabase": {
+      "project": "space-idiomas-n8n",
+      "project_ref": "mlpojyvwyqcrelagtgkw",
+      "url": "https://mlpojyvwyqcrelagtgkw.supabase.co",
+      "branch": "main",
+      "environment": "PRODUCTION (dashboard verified)",
+      "schema": "public",
+      "version": "PostgreSQL 17.6 on aarch64-unknown-linux-gnu, compiled by gcc (GCC) 15.2.0, 64-bit"
+    },
+    "firestore": {
+      "project": "plataforma-space",
+      "database": "(default)",
+      "region": "southamerica-east1",
+      "console_authenticated": true,
+      "cli_authenticated": false,
+      "published_rules_observed": "2026-07-25; users/aulas allow legacy writes without lifecycle guard"
+    },
+    "n8n": {
+      "instance": null,
+      "workflows": null,
+      "status": "NOT_IDENTIFIED; variable redacted"
+    },
+    "scheduler": {
+      "vercel_definitions": [],
+      "pg_cron_installed": false,
+      "external": null
+    }
+  },
+  "migration": {
+    "file": "supabase/migrations/202609150001_cancellation_lifecycle.sql",
+    "sha256": "2723a8b71329cadf2b60dd24db398fa3e2d7df0b2cff8394cfe2a84602333a3d",
+    "installed": false,
+    "evidence": "New date columns/check states/function absent in real catalog",
+    "migration_history_table": null,
+    "applied": false,
+    "applied_at": null
+  },
+  "tables": {
+    "students": {
+      "status": 200,
+      "count": "*/0",
+      "sample_size": 0,
+      "statuses": {}
+    },
+    "subscriptions": {
+      "status": 200,
+      "count": "*/0",
+      "sample_size": 0,
+      "statuses": {}
+    },
+    "retention_cases": {
+      "status": 200,
+      "count": "*/0",
+      "sample_size": 0,
+      "statuses": {}
+    },
+    "retention_events": {
+      "status": 200,
+      "count": "*/0",
+      "sample_size": 0
+    },
+    "service_periods": {
+      "status": 200,
+      "count": "*/0",
+      "sample_size": 0
+    },
+    "charges": {
+      "status": 200,
+      "count": "*/0",
+      "sample_size": 0
+    },
+    "outbox_events": {
+      "status": 200,
+      "count": "*/0",
+      "sample_size": 0
+    },
+    "n8n_cobrancas_financeiras_space": {
+      "status": 200,
+      "count": "*/0",
+      "sample_size": 0
+    },
+    "n8n_alunos_financeiro_space": {
+      "status": 200,
+      "count": "*/0",
+      "sample_size": 0
+    },
+    "n8n_aulas_pedagogicas_space": {
+      "status": 206,
+      "count": "0-999/7637",
+      "sample_size": 1000
+    }
+  },
+  "ui": {
+    "students_visible": 226,
+    "dashboard_active_students": 145,
+    "counts_have_different_sources": true,
+    "authenticated_admin": true
+  },
+  "reconciliation": {
+    "total": 163,
+    "SAFE": 0,
+    "AMBIGUOUS": 163,
+    "CONFLICT": 0,
+    "INVALID": 0,
+    "complete": false,
+    "scope": "Partial: distinct pedagogical student references; NOT a census of Firestore users",
+    "sourceMetadata": {
+      "supabase_project": "mlpojyvwyqcrelagtgkw",
+      "read_only": true,
+      "firestore_export": "BLOCKED_AUTHENTICATION",
+      "ui_students_observed": 226
+    },
+    "mutations": false
+  },
+  "pedagogical_inventory": {
+    "observed_at": "2026-09-15T02:46:40.938Z",
+    "business_day": "2026-09-14",
+    "source": "n8n_aulas_pedagogicas_space",
+    "rows": 7637,
+    "distinct_nonempty_student_ids": 163,
+    "rows_without_student_id": 0,
+    "future_rows": 2716,
+    "statuses": {
+      "agendada": 6371,
+      "remarcada": 78,
+      "realizada": 647,
+      "falta": 246,
+      "cancelada": 295
+    },
+    "canonical_subscriptions": 0,
+    "interpretation": "Existing pedagogical history is not proof of notice, churn or an active contract. Firestore export required."
+  },
+  "environment_values": "Sensitive values were redacted by Vercel; blank exports DO NOT establish absent production values.",
+  "blockers": [
+    {
+      "id": "FIRESTORE_EXPORT",
+      "reason": "Firebase CLI credentials expired; Google identity challenge requires user action. Console read session exists, but no complete users export obtained."
+    },
+    {
+      "id": "N8N_WORKFLOWS",
+      "reason": "Production N8N_BASE_URL is sensitive/redacted; instance/workflow IDs and consumers not identified. User asked for instance URL/access."
+    },
+    {
+      "id": "CANONICAL_COVERAGE",
+      "reason": "0 subscriptions vs 226 students visible in UI and 163 distinct pedagogical student references. Global activation cannot safely grant/deny rights until reconciled."
+    },
+    {
+      "id": "SCHEDULER",
+      "reason": "Vercel cron definitions empty; pg_cron absent; RETENTION_CHURN_JOB_SECRET not defined in production env metadata; no external scheduler verified."
+    },
+    {
+      "id": "CANARY",
+      "reason": "No controlled cross-system canary with safe external consumer isolation available."
+    }
+  ]
+}

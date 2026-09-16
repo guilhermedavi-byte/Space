@@ -1,5 +1,17 @@
 # Atendimento Space — auditoria técnica e arquitetura WhatsApp
 
+## Política vigente — decisão executiva de 15/09/2026 UTC
+
+**A Space optou temporariamente por usar o ambiente principal como ambiente de desenvolvimento/homologação do módulo Atendimento porque não há usuários ativos na plataforma neste momento**, conforme informado pelo responsável.
+
+A ausência de staging deixou de ser requisito de bloqueio. Produção é permitida somente para o projeto principal conhecido, com credencial vinculada e `ATTENDANCE_ALLOW_PRODUCTION_MUTATIONS=true`; sem isso, o guard continua fail-closed. Os guards dos demais módulos não são relaxados por essa flag.
+
+**Foundation aprovada no PostgreSQL/PostgREST principal:** migration aplicada, catálogo conferido, testes remotos concluídos e fixtures removidas. Relatório vigente: [homologação em produção](attendance-production-validation.md). As referências a staging obrigatório, produção proibida ou homologação pendente no registro abaixo descrevem fases anteriores e foram substituídas por esta decisão.
+
+---
+
+## Registro histórico da fase anterior
+
 Data: 14/09/2026. Status: **discovery e proposta; módulo não implementado**.
 
 ## Leitura rápida

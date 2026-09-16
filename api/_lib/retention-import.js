@@ -78,7 +78,7 @@ function buildLegacyRetentionImportSnapshot({ users = [], dryRun = true, importe
       if (s.effective) facts.push({ type: 'cancellation_effective', at: s.effective });
       for (const fact of facts) payload.events.push({ firestore_student_id: id, external_subscription_key: `firestore:${id}`, source_ref,
         event_type: fact.type, occurred_at: fact.at, client_action_id: `${source_ref}:${fact.type}`, idempotency_key: `${source_ref}:${fact.type}`,
-        payload: { reason: record.motivo || '', original_record: record }, source_system: 'legacy_import', source_confidence: 'high' });
+        payload: { reason: record.motivo || '', notice_started_at: s.notice_started_at || null, original_record: record }, source_system: 'legacy_import', source_confidence: 'high' });
     }
   }
   report.importedEvents = payload.events.length;

@@ -1,0 +1,114 @@
+{
+  "deployment": "space-eczjpjd7g-guilhermedavi-4547s-projects.vercel.app",
+  "checkedAt": "2026-09-15T04:15:41.189Z",
+  "status": "PASS",
+  "stage": "inventory",
+  "inventory": {
+    "payments": {
+      "total": 2074,
+      "hasMore": true
+    },
+    "customers": {
+      "total": 622,
+      "hasMore": true
+    },
+    "subscriptions": {
+      "total": 174,
+      "hasMore": true
+    }
+  },
+  "statuses": {
+    "PENDING": {
+      "total": 250,
+      "sampleId": "pay_5snorexsqacbdpae"
+    },
+    "OVERDUE": {
+      "total": 168,
+      "sampleId": "pay_0m8p1i31knyx8sua"
+    },
+    "CONFIRMED": {
+      "total": 25,
+      "sampleId": "pay_8fgj137p8gbkr603"
+    },
+    "RECEIVED": {
+      "total": 1415,
+      "sampleId": "pay_8yt9ocb41sbw1jgb"
+    },
+    "RECEIVED_IN_CASH": {
+      "total": 183,
+      "sampleId": "pay_06kifoeb02f3wlc1"
+    },
+    "REFUNDED": {
+      "total": 6,
+      "sampleId": "pay_7enju3odqgqp7jqg"
+    }
+  },
+  "webhooks": {
+    "total": 3,
+    "hasMore": false,
+    "data": [
+      {
+        "id": "a18cee49-fb17-425d-947a-40bf9344acf0",
+        "url": "https://api.hubapi.com/[webhook-path-redacted]",
+        "enabled": true,
+        "interrupted": false,
+        "sendType": "NON_SEQUENTIALLY",
+        "events": [
+          "PAYMENT_CREATED"
+        ],
+        "authTokenPresent": false,
+        "matchesDedicated": false,
+        "matchesLegacy": false
+      },
+      {
+        "id": "bb6e75bb-5f1a-43ca-9fa2-a28aa5dcfcc6",
+        "url": "https://api.hubapi.com/[webhook-path-redacted]",
+        "enabled": true,
+        "interrupted": false,
+        "sendType": "SEQUENTIALLY",
+        "events": [
+          "PAYMENT_REFUNDED",
+          "PAYMENT_OVERDUE",
+          "PAYMENT_CONFIRMED",
+          "PAYMENT_CREATED",
+          "PAYMENT_DELETED",
+          "PAYMENT_CREDIT_CARD_CAPTURE_REFUSED",
+          "PAYMENT_RECEIVED",
+          "PAYMENT_UPDATED"
+        ],
+        "authTokenPresent": false,
+        "matchesDedicated": false,
+        "matchesLegacy": false
+      },
+      {
+        "id": "0e0dcc6f-1cc2-451e-84d2-d2654ddb1d6e",
+        "url": "https://n8n-bhc9.srv1686456.hstgr.cloud/webhook/asaas-pagamento-recebido",
+        "enabled": false,
+        "interrupted": true,
+        "sendType": "SEQUENTIALLY",
+        "events": [
+          "PAYMENT_CHECKOUT_VIEWED",
+          "PAYMENT_OVERDUE",
+          "PAYMENT_CONFIRMED",
+          "PAYMENT_DUNNING_RECEIVED",
+          "SUBSCRIPTION_DELETED",
+          "PAYMENT_AUTHORIZED",
+          "SUBSCRIPTION_SPLIT_DIVERGENCE_BLOCK",
+          "SUBSCRIPTION_UPDATED",
+          "PAYMENT_DUNNING_REQUESTED",
+          "SUBSCRIPTION_SPLIT_DISABLED",
+          "PAYMENT_CREATED",
+          "SUBSCRIPTION_INACTIVATED",
+          "SUBSCRIPTION_SPLIT_DIVERGENCE_BLOCK_FINISHED",
+          "PAYMENT_DELETED",
+          "SUBSCRIPTION_CREATED",
+          "PAYMENT_RECEIVED",
+          "PAYMENT_UPDATED"
+        ],
+        "authTokenPresent": false,
+        "matchesDedicated": false,
+        "matchesLegacy": false
+      }
+    ]
+  }
+}

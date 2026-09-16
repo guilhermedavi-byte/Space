@@ -1,0 +1,12 @@
+{
+  "policy_cases_passed": [
+    "active_without_contract",
+    "abandonment_not_automatic_churn",
+    "expired_notice_not_automatic_churn",
+    "early_legacy_exit_requires_review"
+  ],
+  "input_mutations": 0,
+  "csv_repeat_same_sha256": true,
+  "csv_sha256": "3deda7dffbd13c110f4f4c4cd507d8ea13feb0890b7e2cd69f8b907d05755fad",
+  "note": "Offline classification checks; not migration/backfill or cross-system canaries."
+}

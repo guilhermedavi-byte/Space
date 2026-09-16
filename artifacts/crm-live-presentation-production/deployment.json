@@ -1,0 +1,18 @@
+{
+  "id": "dpl_8mdX14yQz9tLYvbntnB1NFFNMGZo",
+  "url": "space-ce0zvkois-guilhermedavi-4547s-projects.vercel.app",
+  "createdAt": 1789438606245,
+  "ready": 1789438625123,
+  "readyState": "READY",
+  "target": "production",
+  "git": {
+    "githubCommitMessage": "Refactor application components and update project configuration",
+    "githubCommitRef": "main",
+    "githubCommitSha": "f59d7d2fec0b484b6d3aa263aed3f76843cc9458",
+    "githubDeployment": "1",
+    "githubOrg": "guilhermedavi-byte",
+    "githubRepo": "Space"
+  },
+  "createdLocal": "2026-09-14T23:16:46.245000-03:00",
+  "readyLocal": "2026-09-14T23:17:05.123000-03:00"
+}

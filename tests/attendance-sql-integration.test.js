@@ -11,11 +11,11 @@ const ids = {
 };
 const quote = (value) => `'${String(value).replace(/'/g, "''")}'`;
 
-test('Atendimento: PostgreSQL 16 + PostgREST reais, constraints, isolamento e concorrência',
+test('Atendimento: PostgreSQL + PostgREST reais, constraints, isolamento e concorrência',
   { skip: process.env.RUN_ATTENDANCE_SQL_INTEGRATION !== '1', timeout: 180000 }, async (t) => {
     const h = await createHarness();
     const store = createAttendanceStore({ request: h.request, checkEnvironment: () => {} });
-    const summary = { engine: 'PostgreSQL 16 / PostgREST 12', externalDatabase: false, scenarios: [], raceWaiters: [] };
+    const summary = { engine: `PostgreSQL ${process.env.ATTENDANCE_TEST_POSTGRES_MAJOR === '17' ? '17' : '16'} / PostgREST 12`, externalDatabase: false, scenarios: [], raceWaiters: [] };
     const scenario = async (name, fn) => t.test(name, async () => { await fn(); summary.scenarios.push(name); });
     const event = (id, contact = 'external-user', patch = {}) => ({
       provider: 'test_provider', connection_id: ids.connection, channel_id: ids.channel,
@@ -266,6 +266,19 @@ test('Atendimento: PostgreSQL 16 + PostgREST reais, constraints, isolamento e co
         h.sql('drop trigger attendance_fail_outbox on public.outbox_events; drop function public.attendance_test_failure();');
         const retry=await store.ingestMessage(event('atomic-failure','atomic-failure'));
         assert.equal(retry.duplicate,false);
+      });
+      await scenario('fixture de certificação persiste outbox isolada antes do commit', async () => {
+        h.sql(`update public.connections set provider='attendance_validation',metadata='{"validation_run_id":"attendance-prod-validation-local"}' where connection_id='${ids.connection}';`);
+        const inbound = await store.ingestMessage(event('quarantined','quarantined',{provider:'attendance_validation'}));
+        const outbound = await store.appendMessage({actorUid:'agent-a',conversationId:inbound.conversation_id,
+          message:{client_request_id:'quarantined-out',content:{text:'Synthetic'}}});
+        for (const id of [inbound.message_id,outbound.message_id]) {
+          const row = scalar(`select row_to_json(x) from (select delivery_status,available_at::text,payload,event_type,attempts from public.outbox_events where aggregate_id='${id}') x;`);
+          assert.equal(row.delivery_status,'failed'); assert.equal(row.available_at,'infinity');
+          assert.equal(row.payload.dispatch_disabled,true); assert.equal(row.attempts,0);
+          assert.match(row.event_type,/^attendance.validation\./);
+        }
+        h.sql(`update public.connections set provider='test_provider',metadata='{}' where connection_id='${ids.connection}';`);
       });
       await scenario('migration reaplicável preserva dados; compatibilidade com SQL de Retenção existente', async () => {
         const before=h.sql('select count(*) from public.messages;');

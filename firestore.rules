@@ -39,9 +39,10 @@ service cloud.firestore {
           || timestamp.date(int(parts[0]), int(parts[1]), int(parts[2])) <= student.lifecycleLastActiveDay);
     }
     function lifecycleAllowsLesson(data) {
-      return data.get('status', '') in ['cancelado', 'cancelada', 'realizada', 'falta', 'concluido']
-        || (data.get('alunoId', data.get('studentId', '')) == '')
-        || withinStudentLifecycle(data.get('alunoId', data.get('studentId', '')), data.dateKey);
+      // Multi-student writes use the server API, which validates every member.
+      return data.get('studentIds', []).size() == 0
+        && ((data.get('alunoId', data.get('studentId', '')) == '')
+          || withinStudentLifecycle(data.get('alunoId', data.get('studentId', '')), data.dateKey));
     }
 
     // Users (perfil/base de autenticação)
@@ -76,8 +77,14 @@ service cloud.firestore {
           )
         );
       allow delete: if isAdmin() || (isTeacher() && resource.data.professorId == request.auth.uid);
-      allow create, update: if (isAdmin() || (isTeacher() && request.resource.data.professorId == request.auth.uid))
+      allow create: if (isAdmin() || (isTeacher() && request.resource.data.professorId == request.auth.uid))
         && lifecycleAllowsLesson(request.resource.data);
+      allow update: if (isAdmin() || (isTeacher() && request.resource.data.professorId == request.auth.uid))
+        && (lifecycleAllowsLesson(request.resource.data)
+          || (request.resource.data.get('status', '') in ['cancelado', 'cancelada', 'realizada', 'falta', 'concluido']
+            && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+              'alunoId', 'studentId', 'studentIds', 'dateKey', 'startMin', 'endMin'
+            ])));
     }
 
     // Cadastros e operação pedagógica administrados dentro da plataforma.

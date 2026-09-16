@@ -1,0 +1,186 @@
+[
+  {
+    "origin": "internal_replay_of_real_asaas_production_log",
+    "event": "PAYMENT_CREATED",
+    "provider_event_id": "evt_05b708f961d739ea7eba7e4db318f621&1516611608",
+    "payment_id": "pay_5snorexsqacbdpae",
+    "before": {
+      "receivable_count": 1,
+      "payment_count": 0,
+      "status": "PENDING",
+      "due_date": "2026-10-24"
+    },
+    "after": {
+      "receivable_count": 1,
+      "payment_count": 0,
+      "status": "PENDING",
+      "due_date": "2026-10-24"
+    },
+    "logical_events": [
+      {
+        "id": "436c8636-ab5b-4baf-9d35-aee1d54dbad2",
+        "processing_status": "processed",
+        "attempt_count": 1
+      }
+    ],
+    "deliveries": [
+      {
+        "http": 200,
+        "event_id": "436c8636-ab5b-4baf-9d35-aee1d54dbad2",
+        "duplicate": false,
+        "processed": {
+          "changed": false,
+          "processed": true,
+          "receivable_id": "ebc2330c-6c87-4316-b56e-49dbdb841842",
+          "external_object_id": "pay_5snorexsqacbdpae"
+        }
+      },
+      {
+        "http": 200,
+        "event_id": "436c8636-ab5b-4baf-9d35-aee1d54dbad2",
+        "duplicate": true,
+        "processed": {
+          "done": true
+        }
+      },
+      {
+        "http": 200,
+        "event_id": "436c8636-ab5b-4baf-9d35-aee1d54dbad2",
+        "duplicate": true,
+        "processed": {
+          "done": true
+        }
+      },
+      {
+        "http": 200,
+        "event_id": "436c8636-ab5b-4baf-9d35-aee1d54dbad2",
+        "duplicate": true,
+        "processed": {
+          "done": true
+        }
+      },
+      {
+        "http": 200,
+        "event_id": "436c8636-ab5b-4baf-9d35-aee1d54dbad2",
+        "duplicate": true,
+        "processed": {
+          "done": true
+        }
+      }
+    ]
+  },
+  {
+    "origin": "internal_replay_of_real_asaas_production_log",
+    "event": "PAYMENT_RECEIVED",
+    "provider_event_id": "evt_d26e303b238e509335ac9ba210e51b0f&1516398966",
+    "payment_id": "pay_8yt9ocb41sbw1jgb",
+    "before": {
+      "receivable_count": 1,
+      "payment_count": 1,
+      "status": "RECEIVED",
+      "due_date": "2026-09-14"
+    },
+    "after": {
+      "receivable_count": 1,
+      "payment_count": 1,
+      "status": "RECEIVED",
+      "due_date": "2026-09-14"
+    },
+    "logical_events": [
+      {
+        "id": "84f973d4-80c4-453d-a348-f81483ef4619",
+        "processing_status": "processed",
+        "attempt_count": 1
+      }
+    ],
+    "deliveries": [
+      {
+        "http": 200,
+        "event_id": "84f973d4-80c4-453d-a348-f81483ef4619",
+        "duplicate": false,
+        "processed": {
+          "changed": false,
+          "processed": true,
+          "receivable_id": "0cdcb820-858e-4126-a665-a69dc63146bb",
+          "external_object_id": "pay_8yt9ocb41sbw1jgb"
+        }
+      }
+    ]
+  },
+  {
+    "origin": "internal_replay_of_real_asaas_production_log",
+    "event": "PAYMENT_UPDATED",
+    "provider_event_id": "evt_2539587467a5b78191b6e3d954172c68&1517667016",
+    "payment_id": "pay_foxs2lbj00tk4g3m",
+    "before": {
+      "receivable_count": 1,
+      "payment_count": 0,
+      "status": "PENDING",
+      "due_date": "2026-09-14"
+    },
+    "after": {
+      "receivable_count": 1,
+      "payment_count": 0,
+      "status": "PENDING",
+      "due_date": "2026-09-15"
+    },
+    "logical_events": [
+      {
+        "id": "5959f49c-d5fc-4d44-9c4f-a05ddfe8a7db",
+        "processing_status": "processed",
+        "attempt_count": 1
+      }
+    ],
+    "deliveries": [
+      {
+        "http": 200,
+        "event_id": "5959f49c-d5fc-4d44-9c4f-a05ddfe8a7db",
+        "duplicate": false,
+        "processed": {
+          "changed": true,
+          "processed": true,
+          "receivable_id": "247f2b55-940f-465c-9051-ec68e7937ce3",
+          "external_object_id": "pay_foxs2lbj00tk4g3m"
+        }
+      }
+    ]
+  },
+  {
+    "origin": "internal_replay_of_real_asaas_production_log",
+    "event": "PAYMENT_CREDIT_CARD_CAPTURE_REFUSED",
+    "provider_event_id": "evt_8bca6171d609c1a46328bb84c9bb7c41&1510641218",
+    "payment_id": "pay_foxs2lbj00tk4g3m",
+    "before": {
+      "receivable_count": 1,
+      "payment_count": 0,
+      "status": "PENDING",
+      "due_date": "2026-09-15"
+    },
+    "after": {
+      "receivable_count": 1,
+      "payment_count": 0,
+      "status": "PENDING",
+      "due_date": "2026-09-15"
+    },
+    "logical_events": [
+      {
+        "id": "b6f82bf4-06ae-4dba-b13f-61b3e3fe8199",
+        "processing_status": "processed",
+        "attempt_count": 1
+      }
+    ],
+    "deliveries": [
+      {
+        "http": 200,
+        "event_id": "b6f82bf4-06ae-4dba-b13f-61b3e3fe8199",
+        "duplicate": false,
+        "processed": {
+          "changed": false,
+          "processed": true,
+          "receivable_id": "247f2b55-940f-465c-9051-ec68e7937ce3",
+          "external_object_id": "pay_foxs2lbj00tk4g3m"
+        }
+      }
+    ]
+  }
+]

@@ -1,0 +1,130 @@
+TAP version 13
+# Subtest: Asaas health: missing key performs no request
+ok 1 - Asaas health: missing key performs no request
+  ---
+  duration_ms: 8.381333
+  type: 'test'
+  ...
+# Subtest: Asaas health: validates account response without exposing secret
+ok 2 - Asaas health: validates account response without exposing secret
+  ---
+  duration_ms: 44.808167
+  type: 'test'
+  ...
+# Subtest: Asaas remote errors are sanitized, including body and thrown network details
+ok 3 - Asaas remote errors are sanitized, including body and thrown network details
+  ---
+  duration_ms: 0.902542
+  type: 'test'
+  ...
+# Subtest: Asaas transport: verbs, JSON, timeout, redirect/path restrictions
+ok 4 - Asaas transport: verbs, JSON, timeout, redirect/path restrictions
+  ---
+  duration_ms: 12.563
+  type: 'test'
+  ...
+# Subtest: Asaas pagination follows hasMore and rejects non-progress
+ok 5 - Asaas pagination follows hasMore and rejects non-progress
+  ---
+  duration_ms: 2.634875
+  type: 'test'
+  ...
+# Subtest: certification permits only the reviewed sandbox target and explicit apply
+ok 6 - certification permits only the reviewed sandbox target and explicit apply
+  ---
+  duration_ms: 7.541
+  type: 'test'
+  ...
+# Subtest: production, conflicting aliases, non-allowlisted domains and credentials fail closed
+ok 7 - production, conflicting aliases, non-allowlisted domains and credentials fail closed
+  ---
+  duration_ms: 6.052375
+  type: 'test'
+  ...
+# Subtest: JWT role/ref/expiry and explicit production Asaas key are checked beyond hashes
+ok 8 - JWT role/ref/expiry and explicit production Asaas key are checked beyond hashes
+  ---
+  duration_ms: 2.600834
+  type: 'test'
+  ...
+# Subtest: actual CLI refuses unapproved inputs before any fetch, including dry-run and health
+ok 9 - actual CLI refuses unapproved inputs before any fetch, including dry-run and health
+  ---
+  duration_ms: 251.273083
+  type: 'test'
+  ...
+# Subtest: financial normalization uses fixed decimals and preserves confirmed/received/refund distinctions
+ok 10 - financial normalization uses fixed decimals and preserves confirmed/received/refund distinctions
+  ---
+  duration_ms: 5.906916
+  type: 'test'
+  ...
+# Subtest: inbox normalization deduplicates canonical payload, rejects invalid bodies, excludes PII and credentials
+ok 11 - inbox normalization deduplicates canonical payload, rejects invalid bodies, excludes PII and credentials
+  ---
+  duration_ms: 2.401625
+  type: 'test'
+  ...
+# Subtest: comparison identifies missing/status/value/due mismatches without guessing a student
+ok 12 - comparison identifies missing/status/value/due mismatches without guessing a student
+  ---
+  duration_ms: 1.683292
+  type: 'test'
+  ...
+# Subtest: webhook auth/body/persistence acknowledgement and rollout compatibility
+ok 13 - webhook auth/body/persistence acknowledgement and rollout compatibility
+  ---
+  duration_ms: 15.68775
+  type: 'test'
+  ...
+# Subtest: foundation maintenance API: admin/CSRF/feature flag enforced
+ok 14 - foundation maintenance API: admin/CSRF/feature flag enforced
+  ---
+  duration_ms: 2.470458
+  type: 'test'
+  ...
+# Subtest: CLI apply blocks production and unverified DB targets
+ok 15 - CLI apply blocks production and unverified DB targets
+  ---
+  duration_ms: 1.435083
+  type: 'test'
+  ...
+# Subtest: production is explicit and independent from staging; writes require separate confirmation
+ok 16 - production is explicit and independent from staging; writes require separate confirmation
+  ---
+  duration_ms: 6.60575
+  type: 'test'
+  ...
+# Subtest: production Asaas client rejects remote financial mutations before transport
+ok 17 - production Asaas client rejects remote financial mutations before transport
+  ---
+  duration_ms: 27.144167
+  type: 'test'
+  ...
+# Subtest: production snapshot precedes mutation and a failed read prevents mutation
+ok 18 - production snapshot precedes mutation and a failed read prevents mutation
+  ---
+  duration_ms: 3.031833
+  type: 'test'
+  ...
+# Subtest: read-only health and observability never send health telemetry to RPC
+ok 19 - read-only health and observability never send health telemetry to RPC
+  ---
+  duration_ms: 0.448083
+  type: 'test'
+  ...
+# Subtest: reconciliation checks local-only IDs by GET and never deletes or fabricates remote state
+ok 20 - reconciliation checks local-only IDs by GET and never deletes or fabricates remote state
+  ---
+  duration_ms: 0.939458
+  type: 'test'
+  ...
+1..20
+# tests 20
+# suites 0
+# pass 20
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 375.999709

@@ -1,0 +1,36 @@
+{
+  "checkedAt": "2026-09-15T03:06:26.828764+00:00",
+  "source": "Vercel CLI: env ls production; env ls --scope; project inspect space --scope",
+  "team": "guilhermedavi-4547s-projects",
+  "project": "space",
+  "projectIdMasked": "prj_Fcx…7pq8",
+  "production": {
+    "ASAAS_API_KEY": "NOT_LISTED",
+    "ASAAS_BASE_URL": "NOT_LISTED",
+    "ASAAS_KEY_SCOPE": "NOT_LISTED",
+    "ASAAS_WEBHOOK_TOKEN": "NOT_LISTED",
+    "FINANCE_CONNECTION_ID": "NOT_LISTED",
+    "FINANCE_FOUNDATION_ENABLED": "NOT_LISTED"
+  },
+  "otherEnvironments": {
+    "ASAAS_BASE_URL": [
+      "Preview"
+    ],
+    "ASAAS_KEY_SCOPE": [
+      "Preview"
+    ],
+    "ASAAS_API_KEY": []
+  },
+  "secretValuesRequested": false,
+  "secretValuesCopied": false,
+  "asaasRequests": 0,
+  "deploymentCreated": false,
+  "remoteWrites": 0,
+  "health": "BLOCKED",
+  "reason": "Asaas credentials not visible in the specified Vercel project/environment; user asked to confirm saved variable metadata.",
+  "browserConfirmation": {
+    "projectTab": "Only ASAAS_BASE_URL and ASAAS_KEY_SCOPE; Preview",
+    "sharedTab": "No results for ASAAS",
+    "valuesRevealed": false
+  }
+}

@@ -1,0 +1,169 @@
+{
+  "observedAt": "2026-09-15T02:21:01.967Z",
+  "source": "Authenticated Supabase dashboard SQL Editor; result transcribed from visible accessibility table",
+  "projectName": "space-staging",
+  "projectRefMasked": "uac…xgm",
+  "classification": "CONFIRMED_STAGING",
+  "productionRefMasked": "mlp…gkw",
+  "before": {
+    "publicTables": 0,
+    "publicFunctions": 0,
+    "publicTriggers": 0,
+    "sqlRole": "postgres"
+  },
+  "migration": {
+    "file": "supabase/migrations/202609140002_finance_foundation.sql",
+    "applied": true,
+    "via": "SQL Editor, then explicit helper ACL restriction",
+    "cliMigrationLedgerUpdated": false,
+    "sourceSha256": "1d685954fea051cd8b32d9b3b3c525152f267fb3be8bc5c7803fc774d925a847",
+    "sourceCanonicalSha256": "c7ce2167af5e3268769b2bab420050ab2d593c01f71d4bf549442f9bff3b7a3f"
+  },
+  "after": {
+    "tables": 10,
+    "indexes": 22,
+    "constraints": 38,
+    "functions": 2,
+    "rlsTables": 10,
+    "immutableTriggers": 1,
+    "financialConnections": 0,
+    "receivables": 0
+  },
+  "tables": [
+    {
+      "name": "connections",
+      "columns": 9,
+      "indexes": 2,
+      "constraints": 3,
+      "rls": true,
+      "anon_select": true,
+      "authenticated_select": true,
+      "service_select": true,
+      "service_write": true
+    },
+    {
+      "name": "finance_audit_events",
+      "columns": 11,
+      "indexes": 2,
+      "constraints": 3,
+      "rls": true,
+      "anon_select": false,
+      "authenticated_select": false,
+      "service_select": true,
+      "service_write": false
+    },
+    {
+      "name": "finance_connection_state",
+      "columns": 8,
+      "indexes": 1,
+      "constraints": 3,
+      "rls": true,
+      "anon_select": false,
+      "authenticated_select": false,
+      "service_select": true,
+      "service_write": false
+    },
+    {
+      "name": "finance_customer_student_links",
+      "columns": 5,
+      "indexes": 1,
+      "constraints": 3,
+      "rls": true,
+      "anon_select": false,
+      "authenticated_select": false,
+      "service_select": true,
+      "service_write": false
+    },
+    {
+      "name": "finance_object_leases",
+      "columns": 5,
+      "indexes": 1,
+      "constraints": 3,
+      "rls": true,
+      "anon_select": false,
+      "authenticated_select": false,
+      "service_select": true,
+      "service_write": false
+    },
+    {
+      "name": "finance_payments",
+      "columns": 12,
+      "indexes": 3,
+      "constraints": 4,
+      "rls": true,
+      "anon_select": false,
+      "authenticated_select": false,
+      "service_select": true,
+      "service_write": false
+    },
+    {
+      "name": "finance_provider_objects",
+      "columns": 8,
+      "indexes": 2,
+      "constraints": 4,
+      "rls": true,
+      "anon_select": false,
+      "authenticated_select": false,
+      "service_select": true,
+      "service_write": false
+    },
+    {
+      "name": "finance_receivables",
+      "columns": 15,
+      "indexes": 5,
+      "constraints": 5,
+      "rls": true,
+      "anon_select": false,
+      "authenticated_select": false,
+      "service_select": true,
+      "service_write": false
+    },
+    {
+      "name": "finance_sync_runs",
+      "columns": 12,
+      "indexes": 1,
+      "constraints": 3,
+      "rls": true,
+      "anon_select": false,
+      "authenticated_select": false,
+      "service_select": true,
+      "service_write": false
+    },
+    {
+      "name": "finance_webhook_events",
+      "columns": 22,
+      "indexes": 4,
+      "constraints": 7,
+      "rls": true,
+      "anon_select": false,
+      "authenticated_select": false,
+      "service_select": true,
+      "service_write": false
+    }
+  ],
+  "functions": [
+    {
+      "name": "finance_rpc",
+      "security_definer": true,
+      "search_path": "pg_catalog, public",
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": true,
+      "source_normalized_md5": "69bb0440781f6a7db9eeddefbb4a474b"
+    },
+    {
+      "name": "finance_audit_immutable",
+      "security_definer": false,
+      "search_path": "pg_catalog, public",
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": false,
+      "source_normalized_md5": "1d71f8b7ce8af7627fe1c411216e5832"
+    }
+  ],
+  "notes": [
+    "Shared connections retains native table grants, protected by RLS without policies; finance_* grants explicitly restricted.",
+    "No production data copied. No Asaas connection/account fabricated.",
+    "Function source MD5 is a whitespace/comment-normalized comparison, not an authentication credential."
+  ]
+}

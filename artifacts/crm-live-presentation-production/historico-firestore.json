@@ -1,0 +1,57 @@
+[
+  {
+    "week": "wk_2026-08-11",
+    "fields": [
+      "actualValue : 44",
+      "displayName : \"Ayres André\"",
+      "personId : \"ayres-andre\"",
+      "targetValue : 40",
+      "actualValue : 27",
+      "displayName : \"Felipe Santos\"",
+      "personId : \"felipe-santos\"",
+      "targetValue : 30",
+      "actualValue : 11",
+      "displayName : \"Luana Mendonça\"",
+      "personId : \"luana-mendonca\"",
+      "targetValue : 30"
+    ]
+  },
+  {
+    "week": "wk_2026-08-19",
+    "fields": [
+      "actualValue : 32",
+      "displayName : \"Ayres André\"",
+      "personId : \"ayres-andre\"",
+      "targetValue : 35",
+      "actualValue : 17",
+      "displayName : \"Luana Mendonça\"",
+      "personId : \"luana-mendonca\"",
+      "targetValue : 25",
+      "actualValue : 16",
+      "displayName : \"Felipe Santos\"",
+      "personId : \"felipe-santos\"",
+      "targetValue : 25"
+    ]
+  },
+  {
+    "week": "wk_2026-08-26",
+    "fields": []
+  },
+  {
+    "week": "wk_2026-09-02",
+    "fields": [
+      "actualValue : 9",
+      "displayName : \"Luana Mendonça\"",
+      "personId : \"luana-mendonca\"",
+      "targetValue : 25",
+      "actualValue : 11",
+      "displayName : \"Ayres André\"",
+      "personId : \"ayres-andre\"",
+      "targetValue : 35",
+      "actualValue : 4",
+      "displayName : \"Felipe Santos\"",
+      "personId : \"felipe-santos\"",
+      "targetValue : 25"
+    ]
+  }
+]

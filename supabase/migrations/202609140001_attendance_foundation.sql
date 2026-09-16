@@ -269,6 +269,28 @@ begin
 end $$;
 
 -- One NORMALIZED inbound message. No HTTP ingress is exposed in this phase.
+-- Synthetic certification connections can never enqueue dispatchable work. Only the
+-- schema operator can provision these connections; application roles cannot edit them.
+create or replace function public.attendance_enqueue_outbox(p_conversation uuid,p_aggregate_type text,p_aggregate_id uuid,p_event_type text,p_payload jsonb)
+returns uuid language plpgsql set search_path=pg_catalog,public as $$
+declare run_id text; result_id uuid;
+begin
+  select c.metadata->>'validation_run_id' into run_id
+    from public.conversations v join public.channels ch using(channel_id)
+    join public.connections c using(connection_id)
+    where v.conversation_id=p_conversation and c.provider='attendance_validation'
+      and c.metadata->>'validation_run_id' ~ '^attendance-prod-validation-[a-zA-Z0-9-]+$';
+  insert into public.outbox_events(aggregate_type,aggregate_id,event_type,payload,delivery_status,available_at,last_error)
+    values(p_aggregate_type,p_aggregate_id,
+      case when run_id is null then p_event_type else 'attendance.validation.'||p_event_type end,
+      p_payload || case when run_id is null then '{}'::jsonb else jsonb_build_object('validation_run_id',run_id,'dispatch_disabled',true) end,
+      case when run_id is null then 'pending' else 'failed' end,
+      case when run_id is null then now() else 'infinity'::timestamptz end,
+      case when run_id is null then null else 'attendance_validation_dispatch_disabled' end)
+    returning id into result_id;
+  return result_id;
+end $$;
+
 create or replace function public.attendance_ingest_message(p_event jsonb)
 returns jsonb language plpgsql security definer set search_path=pg_catalog,public as $$
 declare
@@ -333,8 +355,7 @@ begin
     on conflict(channel_id,contact_id) do update
       set last_customer_message_at=greatest(channel_contact_state.last_customer_message_at,excluded.last_customer_message_at);
   perform public.attendance_record_event(conv.conversation_id,'message.created',null,'provider',jsonb_build_object('message_id',message_uuid,'sequence',conv.message_sequence+1));
-  insert into public.outbox_events(aggregate_type,aggregate_id,event_type,payload)
-    values('attendance.message',message_uuid,'attendance.message.created',jsonb_build_object('message_id',message_uuid,'conversation_id',conv.conversation_id));
+  perform public.attendance_enqueue_outbox(conv.conversation_id,'attendance.message',message_uuid,'attendance.message.created',jsonb_build_object('message_id',message_uuid,'conversation_id',conv.conversation_id));
   result:=jsonb_build_object('conversation_id',conv.conversation_id,'message_id',message_uuid,'sequence',conv.message_sequence+1,'duplicate',false);
   return result;
 end $$;
@@ -373,8 +394,7 @@ begin
     where conversation_id=p_conversation_id;
   perform public.attendance_record_event(p_conversation_id,'message.created',p_actor_uid,'space',jsonb_build_object('message_id',message_uuid,'direction',direction));
   event_name:=case when direction='outbound' then 'attendance.message.pending' else 'attendance.message.created' end;
-  insert into public.outbox_events(aggregate_type,aggregate_id,event_type,payload)
-    values('attendance.message',message_uuid,event_name,jsonb_build_object('message_id',message_uuid,'conversation_id',p_conversation_id));
+  perform public.attendance_enqueue_outbox(p_conversation_id,'attendance.message',message_uuid,event_name,jsonb_build_object('message_id',message_uuid,'conversation_id',p_conversation_id));
   return jsonb_build_object('message_id',message_uuid,'conversation_id',p_conversation_id,'sequence',conv.message_sequence+1,'duplicate',false,
     'status',case when direction='internal' then 'internal' else 'pending' end);
 end $$;
@@ -442,8 +462,7 @@ begin
   update public.conversations set version=version+1,updated_at=clock_timestamp() where conversation_id=p_conversation_id returning * into conv;
   result:=jsonb_build_object('conversation_id',p_conversation_id,'version',conv.version,'duplicate',false);
   perform public.attendance_record_event(p_conversation_id,event_name,p_actor_uid,'space',delta,action_id,fp,result);
-  insert into public.outbox_events(aggregate_type,aggregate_id,event_type,payload)
-    values('attendance.conversation',p_conversation_id,'attendance.conversation.changed',jsonb_build_object('conversation_id',p_conversation_id,'version',conv.version));
+  perform public.attendance_enqueue_outbox(p_conversation_id,'attendance.conversation',p_conversation_id,'attendance.conversation.changed',jsonb_build_object('conversation_id',p_conversation_id,'version',conv.version));
   return result;
 end $$;
 

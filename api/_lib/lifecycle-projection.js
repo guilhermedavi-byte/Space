@@ -41,7 +41,7 @@ async function syncProjection(studentId, { load=service.getForStudent, read, wri
 }
 async function drainProjections(limit=50) {
   const { supabaseFetch } = require('./supabase-rest');
-  const { data } = await supabaseFetch(`/outbox_events?aggregate_type=eq.retention_case&projection_delivered_at=is.null&order=created_at.asc&limit=${Math.min(500,Math.max(1,limit))}`);
+  const { data } = await supabaseFetch(`/outbox_events?aggregate_type=eq.retention_case&projection_delivered_at=is.null&payload->>firestore_student_id=not.is.null&order=created_at.asc&limit=${Math.min(500,Math.max(1,limit))}`);
   const report = { delivered:0, failed:0 };
   for (const event of data || []) {
     const id=event.payload?.firestore_student_id;

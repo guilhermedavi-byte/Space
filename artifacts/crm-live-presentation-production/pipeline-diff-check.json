@@ -1,0 +1,10 @@
+{
+  "api/_lib/datacrazy-ingestion.js": true,
+  "api/_lib/crm-source-snapshot.js": true,
+  "api/_lib/crm-snapshot-store.js": true,
+  "api/_lib/crm-snapshot-publish.js": true,
+  "api/_lib/commercial-sales.js": true,
+  "api/_lib/growth-people.js": true,
+  "api/crm-live-data.js": true,
+  "api/crm-live-events.js": true
+}

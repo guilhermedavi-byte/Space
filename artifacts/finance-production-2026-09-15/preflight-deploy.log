@@ -1,0 +1,49 @@
+{
+  "status": "ok",
+  "deployment": {
+    "id": "dpl_4xHk2oUVHbSRfxF1sJDYZnqWY9wG",
+    "url": "https://space-k5vtt48di-guilhermedavi-4547s-projects.vercel.app",
+    "inspectorUrl": "https://vercel.com/guilhermedavi-4547s-projects/space/4xHk2oUVHbSRfxF1sJDYZnqWY9wG",
+    "readyState": "READY",
+    "target": "production",
+    "deploymentApiUrl": "https://api.vercel.com/v13/deployments/dpl_4xHk2oUVHbSRfxF1sJDYZnqWY9wG"
+  },
+  "message": "Deployment space-k5vtt48di-guilhermedavi-4547s-projects.vercel.app ready.",
+  "next": [
+    {
+      "command": "vercel inspect space-k5vtt48di-guilhermedavi-4547s-projects.vercel.app --cwd /var/folders/tr/wsycg7rj03d3khh0g9r94phm0000gn/T/space-finance-preflight-dXO8YI --scope team_QFoYBpP3YUXGD4agYHZ7I6jV",
+      "when": "Inspect deployment"
+    },
+    {
+      "command": "vercel deploy --prod --cwd /var/folders/tr/wsycg7rj03d3khh0g9r94phm0000gn/T/space-finance-preflight-dXO8YI --scope team_QFoYBpP3YUXGD4agYHZ7I6jV",
+      "when": "Promote to production"
+    }
+  ]
+}
+Vercel CLI 55.0.0 (Node.js 22.22.3)
+Retrieving project…
+Deploying guilhermedavi-4547s-projects/space
+Uploading [--------------------] (0.0B/3.4MB)
+Uploading [=====---------------] (876.7KB/3.4MB)
+Uploading [==========----------] (1.7MB/3.4MB)
+Uploading [===============-----] (2.5MB/3.4MB)
+Uploading [====================] (3.4MB/3.4MB)
+  Inspect         https://vercel.com/guilhermedavi-4547s-projects/space/4xHk2oUVHbSRfxF1sJDYZnqWY9wG
+▲ Production      https://space-k5vtt48di-guilhermedavi-4547s-projects.vercel.app
+Building…
+Building…
+Running build in Washington, D.C., USA (East) – iad1
+Build machine configuration: 4 cores, 8 GB
+Retrieving list of deployment files...
+Downloading 489 deployment files...
+Restored build cache from previous deployment (HmHCZzG4MAx7AvqgMLHEFyvkd9qm)
+Running "vercel build"
+Vercel CLI 59.17.0
+Installing dependencies...
+up to date in 505ms
+20 packages are looking for funding
+run `npm fund` for details
+Build Completed in /vercel/output [7s]
+Deploying outputs...
+[2K[1A[2K[G▲ Production      https://space-k5vtt48di-guilhermedavi-4547s-projects.vercel.app
+Completing…

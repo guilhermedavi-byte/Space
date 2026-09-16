@@ -130,7 +130,7 @@ test(
 
       for (let attempt = 0; attempt < 40; attempt += 1) {
         try {
-          docker(["exec", harness.containerName, "pg_isready", "-U", "postgres", "-d", harness.databaseName]);
+          docker(["exec", harness.containerName, "pg_isready", "-h", "127.0.0.1", "-U", "postgres", "-d", harness.databaseName]);
           break;
         } catch (error) {
           if (attempt === 39) throw error;

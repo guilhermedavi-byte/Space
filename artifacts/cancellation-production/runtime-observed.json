@@ -1,0 +1,18 @@
+{
+  "observed_at": "2026-09-15T02:52:03.636Z",
+  "url": "https://plataforma.spaceschoolbr.com/api/runtime-config.js",
+  "environment": {
+    "appEnv": "production",
+    "label": "production",
+    "titlePrefix": "",
+    "bannerLabel": "",
+    "bannerDetail": "",
+    "showBanner": false
+  },
+  "firebase_project": "plataforma-space",
+  "features": {
+    "retentionV2Enabled": false,
+    "retentionInvoluntaryChurnEnabled": false,
+    "retentionFinancialKpisEnabled": false
+  }
+}

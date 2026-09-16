@@ -1,0 +1,414 @@
+{
+  "component": "datacrazy-sync",
+  "event": "snapshot_validated",
+  "snapshotId": "013cd7a5-ac04-4d32-87d6-31987ef7c149",
+  "period": {
+    "from": "2026-09-09",
+    "to": "2026-09-15"
+  },
+  "includedDeals": [
+    {
+      "id": "0129dcba-bd0c-4046-973c-7d6deace50ef",
+      "number": 11396,
+      "name": "Samuel Luiz da Silva",
+      "value": 1275,
+      "dateKey": "2026-09-10",
+      "dateField": "statusChangedAt",
+      "closingDate": "2026-09-11T01:46:48.772Z",
+      "createdAt": "2026-09-10T03:32:19.664Z",
+      "status": "Fechado",
+      "competencia": "2026-09",
+      "weekKey": "wk_2026-09-09",
+      "responsibleId": "outros",
+      "role": "aggregate",
+      "sourceResponsibleId": "e68fe69c-4887-4d4b-9061-6b2f4f8b602f",
+      "sourceResponsibleName": "Felipe Santos | Space",
+      "resolvedPersonId": "felipe-santos",
+      "attributionMethod": "crmAttendantAlias",
+      "sourceSdrId": null,
+      "sourceSdrName": null,
+      "sourcePages": [
+        1
+      ],
+      "competenciaMemberships": [
+        "2026-09"
+      ],
+      "weekMemberships": [
+        "wk_2026-09-09"
+      ],
+      "valuation": "source_value"
+    },
+    {
+      "id": "0e53af24-6cf1-4d0d-8b6a-34385f8a1038",
+      "number": 11421,
+      "name": "Marcelo Augusto Vieira",
+      "value": 1475,
+      "dateKey": "2026-09-11",
+      "dateField": "statusChangedAt",
+      "closingDate": "2026-09-12T00:10:53.210Z",
+      "createdAt": "2026-09-11T00:45:33.246Z",
+      "status": "Fechado",
+      "competencia": "2026-09",
+      "weekKey": "wk_2026-09-09",
+      "responsibleId": "matheus-afonso",
+      "role": "closer",
+      "sourceResponsibleId": "04d03e9c-3132-4c94-b83e-be6263f4e073",
+      "sourceResponsibleName": "Matheus Afonso Rodrigues",
+      "resolvedPersonId": "matheus-afonso",
+      "attributionMethod": "crmAttendantId",
+      "sourceSdrId": null,
+      "sourceSdrName": null,
+      "sourcePages": [
+        1
+      ],
+      "competenciaMemberships": [
+        "2026-09"
+      ],
+      "weekMemberships": [
+        "wk_2026-09-09"
+      ],
+      "valuation": "source_value"
+    },
+    {
+      "id": "291525cb-d22d-4857-972f-bb1701d06eec",
+      "number": 11420,
+      "name": "Leticia Ferreira de Souza",
+      "value": 1275,
+      "dateKey": "2026-09-10",
+      "dateField": "statusChangedAt",
+      "closingDate": "2026-09-11T01:43:40.971Z",
+      "createdAt": "2026-09-10T23:55:54.458Z",
+      "status": "Fechado",
+      "competencia": "2026-09",
+      "weekKey": "wk_2026-09-09",
+      "responsibleId": "matheus-afonso",
+      "role": "closer",
+      "sourceResponsibleId": "04d03e9c-3132-4c94-b83e-be6263f4e073",
+      "sourceResponsibleName": "Matheus Afonso Rodrigues",
+      "resolvedPersonId": "matheus-afonso",
+      "attributionMethod": "crmAttendantId",
+      "sourceSdrId": null,
+      "sourceSdrName": null,
+      "sourcePages": [
+        1
+      ],
+      "competenciaMemberships": [
+        "2026-09"
+      ],
+      "weekMemberships": [
+        "wk_2026-09-09"
+      ],
+      "valuation": "source_value"
+    },
+    {
+      "id": "2bd71357-630f-4b12-b6fb-cc152948f02a",
+      "number": 11372,
+      "name": "Michelle Quint\u00e3o Ferreira Luna",
+      "value": 1125,
+      "dateKey": "2026-09-14",
+      "dateField": "statusChangedAt",
+      "closingDate": "2026-09-14T14:58:35.357Z",
+      "createdAt": "2026-09-09T03:19:43.933Z",
+      "status": "Fechado",
+      "competencia": "2026-09",
+      "weekKey": "wk_2026-09-09",
+      "responsibleId": "matheus-afonso",
+      "role": "closer",
+      "sourceResponsibleId": "04d03e9c-3132-4c94-b83e-be6263f4e073",
+      "sourceResponsibleName": "Matheus Afonso Rodrigues",
+      "resolvedPersonId": "matheus-afonso",
+      "attributionMethod": "crmAttendantId",
+      "sourceSdrId": null,
+      "sourceSdrName": null,
+      "sourcePages": [
+        1
+      ],
+      "competenciaMemberships": [
+        "2026-09"
+      ],
+      "weekMemberships": [
+        "wk_2026-09-09"
+      ],
+      "valuation": "source_value"
+    },
+    {
+      "id": "53968f8b-20ea-4f9c-b731-f15c96267f85",
+      "number": 9626,
+      "name": "Rog\u00e9rio Monteiro dos Santos",
+      "value": 1230,
+      "dateKey": "2026-09-14",
+      "dateField": "statusChangedAt",
+      "closingDate": "2026-09-15T00:01:57.623Z",
+      "createdAt": "2026-07-25T10:48:22.781Z",
+      "status": "Fechado",
+      "competencia": "2026-09",
+      "weekKey": "wk_2026-09-09",
+      "responsibleId": "luis-eduardo",
+      "role": "closer",
+      "sourceResponsibleId": "d58a9f90-d959-439f-8dc7-aca4fedbb7e6",
+      "sourceResponsibleName": "Luis Eduardo",
+      "resolvedPersonId": "luis-eduardo",
+      "attributionMethod": "crmAttendantId",
+      "sourceSdrId": null,
+      "sourceSdrName": null,
+      "sourcePages": [
+        10
+      ],
+      "competenciaMemberships": [
+        "2026-09"
+      ],
+      "weekMemberships": [
+        "wk_2026-09-09"
+      ],
+      "valuation": "source_value"
+    },
+    {
+      "id": "75c3fb79-22c9-4321-b499-c5e03e410ff3",
+      "number": 11187,
+      "name": "Jo\u00e3o Batista de Oliveira",
+      "value": 1275,
+      "dateKey": "2026-09-14",
+      "dateField": "statusChangedAt",
+      "closingDate": "2026-09-15T01:47:22.856Z",
+      "createdAt": "2026-08-30T15:51:39.491Z",
+      "status": "Fechado",
+      "competencia": "2026-09",
+      "weekKey": "wk_2026-09-09",
+      "responsibleId": "matheus-afonso",
+      "role": "closer",
+      "sourceResponsibleId": "04d03e9c-3132-4c94-b83e-be6263f4e073",
+      "sourceResponsibleName": "Matheus Afonso Rodrigues",
+      "resolvedPersonId": "matheus-afonso",
+      "attributionMethod": "crmAttendantId",
+      "sourceSdrId": null,
+      "sourceSdrName": null,
+      "sourcePages": [
+        2
+      ],
+      "competenciaMemberships": [
+        "2026-09"
+      ],
+      "weekMemberships": [
+        "wk_2026-09-09"
+      ],
+      "valuation": "source_value"
+    },
+    {
+      "id": "7d848fd4-ea24-416f-b023-cbb1b9c066a1",
+      "number": 11274,
+      "name": "Joyce Ferreira de Lima",
+      "value": 1475,
+      "dateKey": "2026-09-10",
+      "dateField": "statusChangedAt",
+      "closingDate": "2026-09-10T19:59:20.035Z",
+      "createdAt": "2026-09-02T13:42:52.390Z",
+      "status": "Fechado",
+      "competencia": "2026-09",
+      "weekKey": "wk_2026-09-09",
+      "responsibleId": "luis-eduardo",
+      "role": "closer",
+      "sourceResponsibleId": "d58a9f90-d959-439f-8dc7-aca4fedbb7e6",
+      "sourceResponsibleName": "Luis Eduardo",
+      "resolvedPersonId": "luis-eduardo",
+      "attributionMethod": "crmAttendantId",
+      "sourceSdrId": null,
+      "sourceSdrName": null,
+      "sourcePages": [
+        2
+      ],
+      "competenciaMemberships": [
+        "2026-09"
+      ],
+      "weekMemberships": [
+        "wk_2026-09-09"
+      ],
+      "valuation": "source_value"
+    },
+    {
+      "id": "8a2a3914-fe28-46e4-aec8-cac93afc2fcf",
+      "number": 10873,
+      "name": "Jackeline Dutra da Silva",
+      "value": 945,
+      "dateKey": "2026-09-14",
+      "dateField": "statusChangedAt",
+      "closingDate": "2026-09-14T17:57:15.927Z",
+      "createdAt": "2026-08-23T00:07:46.138Z",
+      "status": "Fechado",
+      "competencia": "2026-09",
+      "weekKey": "wk_2026-09-09",
+      "responsibleId": "luis-eduardo",
+      "role": "closer",
+      "sourceResponsibleId": "d58a9f90-d959-439f-8dc7-aca4fedbb7e6",
+      "sourceResponsibleName": "Luis Eduardo",
+      "resolvedPersonId": "luis-eduardo",
+      "attributionMethod": "crmAttendantId",
+      "sourceSdrId": null,
+      "sourceSdrName": null,
+      "sourcePages": [
+        4
+      ],
+      "competenciaMemberships": [
+        "2026-09"
+      ],
+      "weekMemberships": [
+        "wk_2026-09-09"
+      ],
+      "valuation": "source_value"
+    },
+    {
+      "id": "9fb010e0-c328-4a5b-87f0-8bbd2679adc3",
+      "number": 8895,
+      "name": "Maikel Alvarenga",
+      "value": 950,
+      "dateKey": "2026-09-11",
+      "dateField": "statusChangedAt",
+      "closingDate": "2026-09-11T22:18:51.771Z",
+      "createdAt": "2026-07-13T04:43:11.312Z",
+      "status": "Fechado",
+      "competencia": "2026-09",
+      "weekKey": "wk_2026-09-09",
+      "responsibleId": "outros",
+      "role": "aggregate",
+      "sourceResponsibleId": "e68fe69c-4887-4d4b-9061-6b2f4f8b602f",
+      "sourceResponsibleName": "Felipe Santos | Space",
+      "resolvedPersonId": "felipe-santos",
+      "attributionMethod": "crmAttendantAlias",
+      "sourceSdrId": null,
+      "sourceSdrName": null,
+      "sourcePages": [
+        13
+      ],
+      "competenciaMemberships": [
+        "2026-09"
+      ],
+      "weekMemberships": [
+        "wk_2026-09-09"
+      ],
+      "valuation": "source_value"
+    },
+    {
+      "id": "cf025c4f-00c3-4ce4-a879-1660d5c002a3",
+      "number": 11401,
+      "name": "Livia Moreira Martins Roberto",
+      "value": 1120,
+      "dateKey": "2026-09-11",
+      "dateField": "statusChangedAt",
+      "closingDate": "2026-09-12T01:18:09.019Z",
+      "createdAt": "2026-09-10T10:58:59.256Z",
+      "status": "Fechado",
+      "competencia": "2026-09",
+      "weekKey": "wk_2026-09-09",
+      "responsibleId": "luis-eduardo",
+      "role": "closer",
+      "sourceResponsibleId": "d58a9f90-d959-439f-8dc7-aca4fedbb7e6",
+      "sourceResponsibleName": "Luis Eduardo",
+      "resolvedPersonId": "luis-eduardo",
+      "attributionMethod": "crmAttendantId",
+      "sourceSdrId": null,
+      "sourceSdrName": null,
+      "sourcePages": [
+        1
+      ],
+      "competenciaMemberships": [
+        "2026-09"
+      ],
+      "weekMemberships": [
+        "wk_2026-09-09"
+      ],
+      "valuation": "source_value"
+    },
+    {
+      "id": "d272dec3-e9a8-497c-b973-1f48455ab99d",
+      "number": 7580,
+      "name": "Eduardo Nunes Moreira",
+      "value": 961,
+      "dateKey": "2026-09-09",
+      "dateField": "statusChangedAt",
+      "closingDate": "2026-09-09T03:00:22.754Z",
+      "createdAt": "2026-05-30T00:40:21.952Z",
+      "status": "Fechado",
+      "competencia": "2026-09",
+      "weekKey": "wk_2026-09-09",
+      "responsibleId": "luis-eduardo",
+      "role": "closer",
+      "sourceResponsibleId": "d58a9f90-d959-439f-8dc7-aca4fedbb7e6",
+      "sourceResponsibleName": "Luis Eduardo",
+      "resolvedPersonId": "luis-eduardo",
+      "attributionMethod": "crmAttendantId",
+      "sourceSdrId": null,
+      "sourceSdrName": null,
+      "sourcePages": [
+        18
+      ],
+      "competenciaMemberships": [
+        "2026-09"
+      ],
+      "weekMemberships": [
+        "wk_2026-09-09"
+      ],
+      "valuation": "source_value"
+    },
+    {
+      "id": "e59c9b78-d6f1-407f-828e-6c9cc2ea9cc7",
+      "number": 11296,
+      "name": "Michel",
+      "value": 1075,
+      "dateKey": "2026-09-09",
+      "dateField": "statusChangedAt",
+      "closingDate": "2026-09-10T00:51:30.546Z",
+      "createdAt": "2026-09-03T13:51:21.994Z",
+      "status": "Fechado",
+      "competencia": "2026-09",
+      "weekKey": "wk_2026-09-09",
+      "responsibleId": "outros",
+      "role": "aggregate",
+      "sourceResponsibleId": "e68fe69c-4887-4d4b-9061-6b2f4f8b602f",
+      "sourceResponsibleName": "Felipe Santos | Space",
+      "resolvedPersonId": "felipe-santos",
+      "attributionMethod": "crmAttendantAlias",
+      "sourceSdrId": null,
+      "sourceSdrName": null,
+      "sourcePages": [
+        2
+      ],
+      "competenciaMemberships": [
+        "2026-09"
+      ],
+      "weekMemberships": [
+        "wk_2026-09-09"
+      ],
+      "valuation": "source_value"
+    },
+    {
+      "id": "f93ef938-9753-40f6-b9d4-84a473e11094",
+      "number": 11287,
+      "name": "Kennedy Lacerda Andrade",
+      "value": 970,
+      "dateKey": "2026-09-09",
+      "dateField": "statusChangedAt",
+      "closingDate": "2026-09-10T01:13:20.955Z",
+      "createdAt": "2026-09-03T02:13:34.538Z",
+      "status": "Fechado",
+      "competencia": "2026-09",
+      "weekKey": "wk_2026-09-09",
+      "responsibleId": "luis-eduardo",
+      "role": "closer",
+      "sourceResponsibleId": "d58a9f90-d959-439f-8dc7-aca4fedbb7e6",
+      "sourceResponsibleName": "Luis Eduardo",
+      "resolvedPersonId": "luis-eduardo",
+      "attributionMethod": "crmAttendantId",
+      "sourceSdrId": null,
+      "sourceSdrName": null,
+      "sourcePages": [
+        2
+      ],
+      "competenciaMemberships": [
+        "2026-09"
+      ],
+      "weekMemberships": [
+        "wk_2026-09-09"
+      ],
+      "valuation": "source_value"
+    }
+  ]
+}

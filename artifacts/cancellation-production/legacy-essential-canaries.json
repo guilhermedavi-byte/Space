@@ -1,0 +1,21 @@
+{
+  "at": "2026-09-15T17:59:18.634048+00:00",
+  "database_canaries": {
+    "request_reversal": "PASS",
+    "two_month_notice": "PASS",
+    "early_churn_blocked": "PASS",
+    "next_day_churn": "PASS",
+    "job_idempotency": "PASS"
+  },
+  "fixture": "production SQL transaction rolled back",
+  "last_day_access_policy": "PASS",
+  "next_day_access_policy": "PASS",
+  "off_release": "dpl_GqcpcvoMGSURKE8iEpWE8pyKfyWb",
+  "off_endpoint": {
+    "unauthorized": 401,
+    "authorized": 200,
+    "skipped": true
+  },
+  "backup_sha256": "b6276c217b58765786ae8d787b4ddddabd3f4da4118308a758ecf88bdcec676d",
+  "migration_sha256": "a9aae06a1a126315cfa76a59f135686924cf197d68a321522b6d18678509c379"
+}

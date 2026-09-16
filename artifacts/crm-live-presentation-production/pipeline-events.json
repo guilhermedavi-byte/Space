@@ -1,0 +1,43 @@
+[
+  {
+    "component": "datacrazy-sync",
+    "event": "snapshot_published",
+    "snapshotId": "013cd7a5-ac04-4d32-87d6-31987ef7c149",
+    "sourceSnapshotId": "7b73d1c4-392d-477f-8381-6a8ca2ee46cf",
+    "eligible_deals_count": 13,
+    "actualValue": 15151,
+    "count": 13,
+    "data_freshness_lag": 38539,
+    "durationMs": 59188
+  },
+  {
+    "component": "datacrazy-sync",
+    "event": "fetch_completed",
+    "snapshotId": "7b73d1c4-392d-477f-8381-6a8ca2ee46cf",
+    "fetchStartedAt": "2026-09-15T02:17:15.413Z",
+    "fetchCompletedAt": "2026-09-15T02:18:10.139Z",
+    "sourceMaxDate": "2026-09-15T02:15:03.272Z",
+    "recordsFetched": 9907,
+    "recordsConsidered": 9907,
+    "pagesFetched": 50,
+    "expectedPages": 50,
+    "expectedRecords": 9907,
+    "requestsCount": 50,
+    "retryCount": 0,
+    "datacrazy429Count": 0,
+    "durationMs": 54726,
+    "fetchCompleted": true,
+    "paginationCompleted": true,
+    "datasetHash": "e3957d08190de66a6bac2306e1ab73710a6ff1a7a7e7f7f160e15829d4411f7d"
+  },
+  {
+    "component": "datacrazy-sync",
+    "event": "source_published",
+    "snapshotId": "7b73d1c4-392d-477f-8381-6a8ca2ee46cf",
+    "recordsFetched": 9907,
+    "sync_success_rate": 1,
+    "sync_duration": 54726,
+    "datacrazy_429_count": 0,
+    "datacrazy_retry_count": 0
+  }
+]

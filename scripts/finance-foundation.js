@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Uses already-exported env, or node --env-file=<sandbox file>. Never loads .env.local implicitly.
+// Uses an explicit private env file. Production is opt-in; Asaas stays read-only.
 const { createAsaasClient } = require('../api/_lib/asaas');
 const { createFinanceStore, safeFinanceError } = require('../api/_lib/finance-store');
 const { createFinanceFoundation } = require('../api/_lib/finance-foundation');
@@ -13,17 +13,30 @@ async function main(argv=process.argv.slice(2)) {
   if(apply&&flags.has('--dry-run'))throw new FinanceError('finance_cli_conflicting_modes');
   const actor=option('--actor','');
   if(apply&&!actor)throw new FinanceError('finance_actor_missing');
-  if(!['preflight','health','init','process','retry','repair','link-customer','backfill','reconcile'].includes(command))throw new FinanceError('finance_command_invalid');
+  if(!['preflight','health','status','init','process','retry','repair','link-customer','backfill','reconcile'].includes(command))throw new FinanceError('finance_command_invalid');
   const target=assertFinanceCertificationTarget(env);
+  const production=env.FINANCE_ENV_SCOPE==='production';
   if(command==='preflight'){
     if(apply)assertApplyEnvironment(env,flags);
     return {configuration_valid:true,remote_verified:false,...target};
   }
   // health persists telemetry when a connection is configured, so it requires apply too.
-  if(command==='health' && env.FINANCE_CONNECTION_ID)assertApplyEnvironment(env,flags);
+  if(command==='health' && env.FINANCE_CONNECTION_ID && (!production || apply))assertApplyEnvironment(env,flags);
   if(apply||command==='init'||command==='process'||command==='retry'||command==='link-customer')assertApplyEnvironment(env,flags);
-  const client=createAsaasClient(),store=createFinanceStore(),service=createFinanceFoundation({store,client});
-  if(command==='health')return service.health();
+  const client=createAsaasClient({readOnly:production});
+  let store=createFinanceStore();
+  if(production && apply && !['health','preflight'].includes(command)) {
+    const {productionSnapshotStore}=require('./finance-production-snapshot');
+    const {supabaseFetch}=require('../api/_lib/supabase-rest');
+    store=productionSnapshotStore(store,{directory:option('--snapshot-dir',''),request:supabaseFetch});
+  }
+  const service=createFinanceFoundation({store,client});
+  if(command==='health'){
+    const result=await service.health({recordHealth:!production||apply});
+    if(production)delete result.account_reference;
+    return result;
+  }
+  if(command==='status')return service.observe();
   if(command==='init'){
     const h=await client.checkAsaasConnection();if(h.error)throw new FinanceError(h.error.code,h.error.retryable);
     return store.rpc('configure',{environment:h.environment,account_reference:h.account_reference,actor});
@@ -41,7 +54,8 @@ async function main(argv=process.argv.slice(2)) {
       const value=option(flag,null);if(value)filters[key]=value;
     }
     return service.sync({source:command==='backfill'?'ASAAS_BACKFILL':'ASAAS_RECONCILIATION',resource:option('--resource','payments'),
-      dryRun:!apply,filters,offset:Number(option('--offset','0')),maxPages:Number(option('--max-pages','10000')),actor});
+      dryRun:!apply,filters,offset:Number(option('--offset','0')),limit:Number(option('--limit','100')),maxPages:Number(option('--max-pages',production?'10':'10000')),actor,
+      inspectLocalOnly:command==='reconcile'&&production,concurrency:Number(option('--concurrency','1'))});
   }
   throw new FinanceError('finance_command_invalid');
 }

@@ -1,4 +1,4 @@
-// Synthetic compliance probes against the ACTUAL legacy implementations.
+// Synthetic compliance probes against the current implementations (probe identifiers retained from the baseline audit).
 // Exit 1 means the official Space policy is not met. No remote writes.
 // node scripts/audit-cancellation-policy.js [--postgres]
 const fs = require('node:fs');
@@ -41,11 +41,11 @@ async function main() {
     teachers: [{ id: 'synthetic-teacher', active: true, workHours: { [dow]: [{ startMin: 600, endMin: 660 }] } }],
     studentLifecycles: { 'synthetic-churned-student': { lifecycle_status: 'churned', last_active_date: '2026-01-01' } }, events: [], ranking: { order: ['synthetic-teacher'] } };
   const booking = bookSlotForStudent({ store, studentId: 'synthetic-churned-student', dateKey: bookedDate, startMin: 600 });
-  check('E_booking_has_no_contract_boundary', false, booking.ok, 'Booking core; route also does not load lifecycle. Synthetic student label alone has no semantics in the core');
+  check('E_booking_has_no_contract_boundary', false, booking.ok, 'Booking core; route loads the same canonical lifecycle');
   // Same local contract day, month-end UTC rollover: July 30 23:30 SP = July 31 UTC; target September has only 30 days.
   const end = computeScheduledServiceEndAt({ noticeStartedAt: '2026-07-31T02:30:00Z' });
   const localDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(end);
-  check('F_calendar_months_use_business_day', '2026-09-30', localDay, 'JS date arithmetic; request used because legacy has no notice argument');
+  check('F_calendar_months_use_business_day', '2026-09-30', localDay, 'JS date arithmetic from explicit notice start');
   let postgres = { status: 'NOT_RUN' };
   if (process.argv.includes('--postgres')) postgres = await sqlProbes();
   const report = { observed_at: new Date().toISOString(), fixtures: 'SYNTHETIC_ONLY', production_writes: false,
@@ -87,7 +87,7 @@ async function sqlProbes() {
           'client_action_id','revert','idempotency_key','revert','command_fingerprint','revert'));
         result := result || jsonb_build_object('end_after_reversion',r->'snapshot'->'subscription'->>'scheduled_service_end_at');
         r := public.retention_apply_command(jsonb_build_object('command','register_formal_request','student_id',s,'subscription_id',sub,
-          'client_action_id','request2','idempotency_key','request2','command_fingerprint','request2')); 
+          'client_action_id','request2','idempotency_key','request2','command_fingerprint','request2'));
         c := (r->>'case_id')::uuid;
         -- Fixture has an explicitly confirmed notice and known last active day today.
         n := ((now() at time zone 'America/Sao_Paulo')::date - interval '2 months') at time zone 'America/Sao_Paulo';

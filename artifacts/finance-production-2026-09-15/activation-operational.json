@@ -1,0 +1,10 @@
+{
+  "checked_at": "2026-09-15T17:43:18.937Z",
+  "origin": "https://plataforma.spaceschoolbr.com",
+  "home_http": 200,
+  "health_http": 200,
+  "health_status": "ready",
+  "environment": "production",
+  "environment_isolation": true,
+  "operational": true
+}

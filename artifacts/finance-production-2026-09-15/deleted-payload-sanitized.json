@@ -1,0 +1,11 @@
+{
+  "source": "Asaas Production webhook log",
+  "id": "evt_d545b50fbb17a226c5f4f4fd193922b7&1517662892",
+  "event": "PAYMENT_DELETED",
+  "dateCreated": "2026-09-15 13:22:43",
+  "payment": {
+    "id": "pay_609d66hc68thtmjk",
+    "status": "PENDING",
+    "deleted": true
+  }
+}

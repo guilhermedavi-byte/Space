@@ -1,0 +1,404 @@
+TAP version 13
+# [crm-live] slice build failed crm Error: crm_failed
+#     at buildCrmLiveCrmSlice (/Users/spaceonline/Documents/New project/tests/crm-live-auth-scope.test.js:162:15)
+#     at build (/Users/spaceonline/Documents/New project/api/crm-live-data.js:128:32)
+#     at /Users/spaceonline/Documents/New project/api/crm-live-data.js:106:48
+#     at runCrmSnapshot (/Users/spaceonline/Documents/New project/tests/crm-live-auth-scope.test.js:27:49)
+#     at loadSlice (/Users/spaceonline/Documents/New project/api/crm-live-data.js:106:17)
+#     at async Promise.all (index 0)
+#     at async module.exports (/Users/spaceonline/Documents/New project/api/crm-live-data.js:124:34)
+#     at async TestContext.<anonymous> (/Users/spaceonline/Documents/New project/tests/crm-live-auth-scope.test.js:183:3)
+#     at async Test.run (node:internal/test_runner/test:1054:7)
+#     at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+# [crm-live] slice build failed crm Error: crm_failed
+#     at buildCrmLiveCrmSlice (/Users/spaceonline/Documents/New project/tests/crm-live-auth-scope.test.js:207:15)
+#     at build (/Users/spaceonline/Documents/New project/api/crm-live-data.js:128:32)
+#     at /Users/spaceonline/Documents/New project/api/crm-live-data.js:106:48
+#     at runCrmSnapshot (/Users/spaceonline/Documents/New project/tests/crm-live-auth-scope.test.js:27:49)
+#     at loadSlice (/Users/spaceonline/Documents/New project/api/crm-live-data.js:106:17)
+#     at async Promise.all (index 0)
+#     at async module.exports (/Users/spaceonline/Documents/New project/api/crm-live-data.js:124:34)
+#     at async TestContext.<anonymous> (/Users/spaceonline/Documents/New project/tests/crm-live-auth-scope.test.js:238:5)
+#     at async Test.run (node:internal/test_runner/test:1054:7)
+#     at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+# [crm-live] top-level payload failed Error: crm_failed
+#     at buildCrmLiveCrmSlice (/Users/spaceonline/Documents/New project/tests/crm-live-auth-scope.test.js:207:15)
+#     at build (/Users/spaceonline/Documents/New project/api/crm-live-data.js:128:32)
+#     at /Users/spaceonline/Documents/New project/api/crm-live-data.js:106:48
+#     at runCrmSnapshot (/Users/spaceonline/Documents/New project/tests/crm-live-auth-scope.test.js:27:49)
+#     at loadSlice (/Users/spaceonline/Documents/New project/api/crm-live-data.js:106:17)
+#     at async Promise.all (index 0)
+#     at async module.exports (/Users/spaceonline/Documents/New project/api/crm-live-data.js:124:34)
+#     at async TestContext.<anonymous> (/Users/spaceonline/Documents/New project/tests/crm-live-auth-scope.test.js:238:5)
+#     at async Test.run (node:internal/test_runner/test:1054:7)
+#     at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+# [session] no cookie found
+# [crm-live] slice build failed crm Error: crm_failed
+#     at buildCrmLiveCrmSlice (/Users/spaceonline/Documents/New project/tests/crm-live-auth-scope.test.js:323:15)
+#     at build (/Users/spaceonline/Documents/New project/api/crm-live-data.js:128:32)
+#     at /Users/spaceonline/Documents/New project/api/crm-live-data.js:106:48
+#     at runCrmSnapshot (/Users/spaceonline/Documents/New project/tests/crm-live-auth-scope.test.js:27:49)
+#     at loadSlice (/Users/spaceonline/Documents/New project/api/crm-live-data.js:106:17)
+#     at async Promise.all (index 0)
+#     at async module.exports (/Users/spaceonline/Documents/New project/api/crm-live-data.js:124:34)
+#     at async TestContext.<anonymous> (/Users/spaceonline/Documents/New project/tests/crm-live-auth-scope.test.js:344:3)
+#     at async Test.run (node:internal/test_runner/test:1054:7)
+#     at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+# Subtest: cookie da TV passa em /api/crm-live-data
+ok 1 - cookie da TV passa em /api/crm-live-data
+  ---
+  duration_ms: 17.710958
+  type: 'test'
+  ...
+# Subtest: cookie da TV não autentica /api/growth-dashboard?api=growth-metrics
+ok 2 - cookie da TV não autentica /api/growth-dashboard?api=growth-metrics
+  ---
+  duration_ms: 25.128125
+  type: 'test'
+  ...
+# Subtest: sessão comercial autenticada passa em /api/crm-live-data
+ok 3 - sessão comercial autenticada passa em /api/crm-live-data
+  ---
+  duration_ms: 1.997375
+  type: 'test'
+  ...
+# Subtest: cache stale só é reaproveitado se for da mesma semana comercial
+ok 4 - cache stale só é reaproveitado se for da mesma semana comercial
+  ---
+  duration_ms: 4.121208
+  type: 'test'
+  ...
+# Subtest: cache stale de semana anterior é descartado na virada de semana
+ok 5 - cache stale de semana anterior é descartado na virada de semana
+  ---
+  duration_ms: 3.260375
+  type: 'test'
+  ...
+# Subtest: HTML e payload resolvem o mesmo buildId no mesmo processo
+ok 6 - HTML e payload resolvem o mesmo buildId no mesmo processo
+  ---
+  duration_ms: 22.877083
+  type: 'test'
+  ...
+# Subtest: snapshot cacheado não influencia o buildId do payload
+ok 7 - snapshot cacheado não influencia o buildId do payload
+  ---
+  duration_ms: 2.79525
+  type: 'test'
+  ...
+# Subtest: crm-live-data OK e crm-live-events falhando sai do loading e pinta o primeiro slide
+ok 8 - crm-live-data OK e crm-live-events falhando sai do loading e pinta o primeiro slide
+  ---
+  duration_ms: 63.547125
+  type: 'test'
+  ...
+# Subtest: fonte não-crítica em erro renderiza estado degradado e continua na rotação
+ok 9 - fonte não-crítica em erro renderiza estado degradado e continua na rotação
+  ---
+  duration_ms: 55.241583
+  type: 'test'
+  ...
+# Subtest: HTML servido executa o script do cliente sem exceção e monta ao menos uma tela
+ok 10 - HTML servido executa o script do cliente sem exceção e monta ao menos uma tela
+  ---
+  duration_ms: 20.596667
+  type: 'test'
+  ...
+# Subtest: modo últimas 24h não renderiza mais o ponteiro de segundos
+ok 11 - modo últimas 24h não renderiza mais o ponteiro de segundos
+  ---
+  duration_ms: 22.871417
+  type: 'test'
+  ...
+# Subtest: 24h01 restantes mantém modo normal
+ok 12 - 24h01 restantes mantém modo normal
+  ---
+  duration_ms: 2.521583
+  type: 'test'
+  ...
+# Subtest: 23h59 restantes ativa modo dividido
+ok 13 - 23h59 restantes ativa modo dividido
+  ---
+  duration_ms: 0.320541
+  type: 'test'
+  ...
+# Subtest: 5 segundos restantes continua no modo dividido sem tempo negativo
+ok 14 - 5 segundos restantes continua no modo dividido sem tempo negativo
+  ---
+  duration_ms: 0.106167
+  type: 'test'
+  ...
+# Subtest: ao chegar em zero o modo segue dividido, zera o relógio e entra em estado final
+ok 15 - ao chegar em zero o modo segue dividido, zera o relógio e entra em estado final
+  ---
+  duration_ms: 0.086541
+  type: 'test'
+  ...
+# Subtest: reavalia a janela final mesmo com a página aberta horas antes
+ok 16 - reavalia a janela final mesmo com a página aberta horas antes
+  ---
+  duration_ms: 0.099083
+  type: 'test'
+  ...
+# Subtest: detector em partida a frio só semeia cursor e não dispara eventos
+ok 17 - detector em partida a frio só semeia cursor e não dispara eventos
+  ---
+  duration_ms: 4.408375
+  type: 'test'
+  ...
+# Subtest: detector enfileira venda, meta individual, virada e meta do time em ordem estável
+ok 18 - detector enfileira venda, meta individual, virada e meta do time em ordem estável
+  ---
+  duration_ms: 2.191292
+  type: 'test'
+  ...
+# Subtest: troca de semana reseta metas e líderes sem disparar falso positivo
+ok 19 - troca de semana reseta metas e líderes sem disparar falso positivo
+  ---
+  duration_ms: 0.696166
+  type: 'test'
+  ...
+# Subtest: sale_closed anuncia Outros para vendedor fora de Matheus e Luis
+ok 20 - sale_closed anuncia Outros para vendedor fora de Matheus e Luis
+  ---
+  duration_ms: 0.933167
+  type: 'test'
+  ...
+# Subtest: ranking SDR calcula ultrapassagem por percentual da meta, não por diferença bruta
+ok 21 - ranking SDR calcula ultrapassagem por percentual da meta, não por diferença bruta
+  ---
+  duration_ms: 7.597459
+  type: 'test'
+  ...
+# Subtest: record copy distinguishes beating, tying and surpassing, including singular and zero
+ok 22 - record copy distinguishes beating, tying and surpassing, including singular and zero
+  ---
+  duration_ms: 3.017
+  type: 'test'
+  ...
+# Subtest: all eligible people reach the carousel, with stable IDs and no duplicates
+ok 23 - all eligible people reach the carousel, with stable IDs and no duplicates
+  ---
+  duration_ms: 7.102541
+  type: 'test'
+  ...
+# Subtest: SDR pagination preserves every row, order, values and global offsets
+ok 24 - SDR pagination preserves every row, order, values and global offsets
+  ---
+  duration_ms: 1.881417
+  type: 'test'
+  ...
+# Subtest: pausa da rotação não interrompe timers separados de dados
+ok 25 - pausa da rotação não interrompe timers separados de dados
+  ---
+  duration_ms: 2.338917
+  type: 'test'
+  ...
+# Subtest: seta manual reinicia o cronômetro cheio da tela sem pausar a rotação
+ok 26 - seta manual reinicia o cronômetro cheio da tela sem pausar a rotação
+  ---
+  duration_ms: 0.521625
+  type: 'test'
+  ...
+# Subtest: navegação pula telas condicionais vazias nos dois sentidos
+ok 27 - navegação pula telas condicionais vazias nos dois sentidos
+  ---
+  duration_ms: 1.941459
+  type: 'test'
+  ...
+# Subtest: interrupção aparece mesmo pausado, preserva fila e volta para a tela pausada
+ok 28 - interrupção aparece mesmo pausado, preserva fila e volta para a tela pausada
+  ---
+  duration_ms: 0.5945
+  type: 'test'
+  ...
+# Subtest: auto-reload espera fim seguro quando build muda durante interrupção e pausa manual
+ok 29 - auto-reload espera fim seguro quando build muda durante interrupção e pausa manual
+  ---
+  duration_ms: 2.09725
+  type: 'test'
+  ...
+# Subtest: auto-reload não dispara no meio da transição de tela
+ok 30 - auto-reload não dispara no meio da transição de tela
+  ---
+  duration_ms: 0.265917
+  type: 'test'
+  ...
+# Subtest: auto-reload nunca dispara duas vezes para o mesmo build alvo e respeita intervalo mínimo
+ok 31 - auto-reload nunca dispara duas vezes para o mesmo build alvo e respeita intervalo mínimo
+  ---
+  duration_ms: 0.31025
+  type: 'test'
+  ...
+# Subtest: toggle da rotação renderiza um único alvo clicável com ícone correto por estado
+ok 32 - toggle da rotação renderiza um único alvo clicável com ícone correto por estado
+  ---
+  duration_ms: 1.272875
+  type: 'test'
+  ...
+# Subtest: gate 11: pages 1/2 OK, page 3 exhausts 429; recovery publishes one atomic canonical payload
+ok 33 - gate 11: pages 1/2 OK, page 3 exhausts 429; recovery publishes one atomic canonical payload
+  ---
+  duration_ms: 35.990916
+  type: 'test'
+  ...
+# Subtest: normal pagination: terminal page, counts, stable IDs and atomic publication
+ok 34 - normal pagination: terminal page, counts, stable IDs and atomic publication
+  ---
+  duration_ms: 2.351541
+  type: 'test'
+  ...
+# Subtest: 429 recovers with exponential backoff, jitter, Retry-After and same page
+ok 35 - 429 recovers with exponential backoff, jitter, Retry-After and same page
+  ---
+  duration_ms: 0.988209
+  type: 'test'
+  ...
+# Subtest: permanent 429: FAILED attempt, previous source and metric snapshot untouched, cooldown
+ok 36 - permanent 429: FAILED attempt, previous source and metric snapshot untouched, cooldown
+  ---
+  duration_ms: 3.2895
+  type: 'test'
+  ...
+# Subtest: intermediate failure and pagination safety cap cannot publish partial datasets
+ok 37 - intermediate failure and pagination safety cap cannot publish partial datasets
+  ---
+  duration_ms: 4.414958
+  type: 'test'
+  ...
+# Subtest: idempotence: repeated identical IDs do not change total, reordered pages preserve hash; conflicting IDs fail
+ok 38 - idempotence: repeated identical IDs do not change total, reordered pages preserve hash; conflicting IDs fail
+  ---
+  duration_ms: 2.251167
+  type: 'test'
+  ...
+# Subtest: distributed concurrency: only one worker collects; expired worker is fenced
+ok 39 - distributed concurrency: only one worker collects; expired worker is fenced
+  ---
+  duration_ms: 3.805917
+  type: 'test'
+  ...
+# Subtest: quality gate and calculation failure leave current intact
+ok 40 - quality gate and calculation failure leave current intact
+  ---
+  duration_ms: 1.700167
+  type: 'test'
+  ...
+# Subtest: gain date includes restored sale on new day, and SDR revenues remain in team
+ok 41 - gain date includes restored sale on new day, and SDR revenues remain in team
+  ---
+  duration_ms: 5.2435
+  type: 'test'
+  ...
+# Subtest: freshness: legacy, failures and aged browser fallbacks never look fresh
+ok 42 - freshness: legacy, failures and aged browser fallbacks never look fresh
+  ---
+  duration_ms: 3.01075
+  type: 'test'
+  ...
+# Subtest: Retry-After beyond job deadline fails without another request; 401 does not retry
+ok 43 - Retry-After beyond job deadline fails without another request; 401 does not retry
+  ---
+  duration_ms: 2.149042
+  type: 'test'
+  ...
+# Subtest: publication rejects late old sources and failed atomic commits do not change current
+ok 44 - publication rejects late old sources and failed atomic commits do not change current
+  ---
+  duration_ms: 2.250208
+  type: 'test'
+  ...
+# Subtest: request timeout retries and missing IDs fail closed
+ok 45 - request timeout retries and missing IDs fail closed
+  ---
+  duration_ms: 3.531667
+  type: 'test'
+  ...
+# Subtest: daily rollups reconcile full counts idempotently instead of incrementing replayed sales
+ok 46 - daily rollups reconcile full counts idempotently instead of incrementing replayed sales
+  ---
+  duration_ms: 5.9945
+  type: 'test'
+  ...
+# [growth-goals] auth header: missing
+# [growth-goals] auth header: missing
+# [api] growth-goals get failed Error: commercial_users_list_failed
+#     at handleGrowthGoalsApi (/Users/spaceonline/Documents/New project/api/growth-dashboard.js:1402:40)
+#     at async module.exports (/Users/spaceonline/Documents/New project/api/growth-dashboard.js:2814:5)
+#     at async Object.request (/Users/spaceonline/Documents/New project/tests/growth-goals-people.test.js:116:5)
+#     at async TestContext.<anonymous> (/Users/spaceonline/Documents/New project/tests/growth-goals-people.test.js:160:17)
+#     at async Test.run (node:internal/test_runner/test:1054:7)
+#     at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+# [growth-goals] auth header: missing
+# Subtest: active Commercial users are the base, independently of configuration, goals or role
+ok 47 - active Commercial users are the base, independently of configuration, goals or role
+  ---
+  duration_ms: 8.259042
+  type: 'test'
+  ...
+# Subtest: goals join by stable identity and selected week, retaining zero targets
+ok 48 - goals join by stable identity and selected week, retaining zero targets
+  ---
+  duration_ms: 3.053583
+  type: 'test'
+  ...
+# Subtest: homonyms stay distinct and duplicate configurations resolve to one real user
+ok 49 - homonyms stay distinct and duplicate configurations resolve to one real user
+  ---
+  duration_ms: 4.244708
+  type: 'test'
+  ...
+# Subtest: GET includes active users even without a month document and never writes
+ok 50 - GET includes active users even without a month document and never writes
+  ---
+  duration_ms: 75.317833
+  type: 'test'
+  ...
+# Subtest: POST saves new user with SDR or Closer, preserving hidden goals, other weeks and monthly total
+ok 51 - POST saves new user with SDR or Closer, preserving hidden goals, other weeks and monthly total
+  ---
+  duration_ms: 36.17675
+  type: 'test'
+  ...
+# Subtest: read failures do not produce incomplete editable data or overwrite existing goals
+ok 52 - read failures do not produce incomplete editable data or overwrite existing goals
+  ---
+  duration_ms: 5.720375
+  type: 'test'
+  ...
+# [growth-goals] auth header: missing
+# [growth-goals] auth header: missing
+# [growth-goals] auth header: missing
+# Subtest: modal renders unconfigured users, retains saved inputs and posts only after Salvar
+ok 53 - modal renders unconfigured users, retains saved inputs and posts only after Salvar
+  ---
+  duration_ms: 150.94825
+  type: 'test'
+  ...
+# Subtest: management GET aggregates the competence in one read-only response
+ok 54 - management GET aggregates the competence in one read-only response
+  ---
+  duration_ms: 78.536083
+  type: 'test'
+  ...
+# Subtest: entity action is create for a new week inside an existing month and update after saving
+ok 55 - entity action is create for a new week inside an existing month and update after saving
+  ---
+  duration_ms: 3.99575
+  type: 'test'
+  ...
+# Subtest: updating a legacy week preserves unknown fields and synchronizes legacy people arrays
+ok 56 - updating a legacy week preserves unknown fields and synchronizes legacy people arrays
+  ---
+  duration_ms: 13.166917
+  type: 'test'
+  ...
+1..56
+# tests 56
+# suites 0
+# pass 56
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 935.842209

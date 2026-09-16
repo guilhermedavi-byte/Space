@@ -851,7 +851,7 @@ const sanitizeSessionUser = (value) => {
   const email = typeof value.email === "string" ? value.email.trim() : "";
   const id = typeof value.id === "string" ? value.id.trim() : "";
   if (!role || !name || !email) return null;
-  return { id, role, name, email };
+  return { id, role, name, email, lifecycle: value.lifecycle || null };
 };
 
 const embeddedSession = sanitizeSessionUser(window.__SPACE_SESSION__);
@@ -1126,8 +1126,11 @@ const syncCreditCycle = (referenceDate = new Date()) => {
   const cycleStart = parseDateKey(appState.cycleStartedAtKey) || parseDateKey(appState.activatedAtKey) || startOfDay(referenceDate);
   let nextRenewal = addBusinessDaysSkippingSunday(cycleStart, CREDIT_CYCLE_BUSINESS_DAYS);
   let didRenew = false;
+  const lifecycle = sessionUser?.lifecycle;
+  if (lifecycle && globalThis.SpaceLifecycle && !globalThis.SpaceLifecycle.isActiveOn(lifecycle, referenceDate)) return nextRenewal;
 
   while (referenceDate.getTime() >= nextRenewal.getTime()) {
+    if (lifecycle && globalThis.SpaceLifecycle && !globalThis.SpaceLifecycle.isActiveOn(lifecycle, nextRenewal)) break;
     didRenew = true;
     appState.cycleStartedAtKey = createDateKey(nextRenewal);
     appState.creditsRemaining = plan.creditsPerCycle;
@@ -19144,6 +19147,8 @@ const getStudentLifecycleState = (aluno) => {
     const policy = globalThis.SpaceLifecycle;
     const state = policy.getLifecycleStatus(meta.lifecycleSubscriptions ? {subscriptions:meta.lifecycleSubscriptions} : meta.lifecycle);
     if (state === 'churned') return STUDENT_LIFECYCLE_STATE.INACTIVE;
+    const lifecycleRows = meta.lifecycleSubscriptions || meta.lifecycle.subscriptions || [meta.lifecycle];
+    if (lifecycleRows.some(row => row.legacy_operational_suspended || (row.pause_status && row.pause_status !== 'none'))) return STUDENT_LIFECYCLE_STATE.SUSPENDED;
     if (state === 'cancellation_requested') return STUDENT_LIFECYCLE_STATE.REQUESTED;
     if (state === 'cancellation_scheduled') return STUDENT_LIFECYCLE_STATE.NOTICE;
     return STUDENT_LIFECYCLE_STATE.ACTIVE;
@@ -19631,7 +19636,7 @@ const getStudentLifecycleBadgeMeta = (aluno) => {
     return { state, label: "Suspenso", tone: "muted" };
   }
   if (state === STUDENT_LIFECYCLE_STATE.INACTIVE) {
-    return { state, label: "Inativo", tone: "gray" };
+    return { state, label: aluno?.lifecycle ? "Churn" : "Inativo", tone: "gray" };
   }
   return { state, label: "", tone: "" };
 };
@@ -33978,7 +33983,8 @@ const syncRetentionV2SnapshotToCache = (snapshot) => {
 };
 
 const submitRetentionV2Command = async ({ command, alunoId, subscriptionId = "", payload = {}, justification = "", override = false } = {}) => {
-  const linkedCase = getAdminRetentionCaseByStudentId(alunoId) || getAdminRetentionDecisionByStudentId(alunoId);
+  const candidateCase = getAdminRetentionCaseByStudentId(alunoId) || getAdminRetentionDecisionByStudentId(alunoId);
+  const linkedCase = subscriptionId && candidateCase?.subscriptionId !== subscriptionId ? null : candidateCase;
   const body = {
     command,
     caseId: linkedCase?.caseId || "",
@@ -37273,7 +37279,7 @@ const ensureSessionOrRedirect = async () => {
         return null;
       }
       const data = await res.json().catch(() => null);
-      sessionUser = sanitizeSessionUser(data?.user) || null;
+      sessionUser = sanitizeSessionUser(data?.user ? {...data.user,lifecycle:data.lifecycle} : null) || null;
       sessionChecked = true;
       return sessionUser;
     })

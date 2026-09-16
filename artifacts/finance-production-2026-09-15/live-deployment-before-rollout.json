@@ -1,0 +1,17 @@
+{
+  "id": "dpl_2pXGddkx5w5n44WmS3hEhkNdjKNi",
+  "url": "space-9v179ahmw-guilhermedavi-4547s-projects.vercel.app",
+  "alias": [
+    "space-three-sand.vercel.app",
+    "plataforma.spaceschoolbr.com",
+    "space-git-main-guilhermedavi-4547s-projects.vercel.app"
+  ],
+  "commit": "c9a1601172ed28e57272234bbc1be6633a8bb5f2",
+  "gitSource": {
+    "ref": "main",
+    "repoId": 1204444061,
+    "sha": "c9a1601172ed28e57272234bbc1be6633a8bb5f2",
+    "type": "github",
+    "prId": null
+  }
+}

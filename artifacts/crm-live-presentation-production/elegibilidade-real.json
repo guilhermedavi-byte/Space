@@ -1,0 +1,77 @@
+{
+  "source": "Histórico: console Firestore crmLiveWeeklyRollups; atual/metas/slides: DOM da TV autenticada em produção. Não é payload sintético nem export bruto da API.",
+  "people": [
+    {
+      "name": "Ayres André",
+      "current": 18,
+      "target": 30,
+      "previousRecord": 44,
+      "eligible": true,
+      "difference": -26,
+      "toBeat": 27,
+      "state": "abaixo",
+      "reason": "Meta positiva e histórico positivo"
+    },
+    {
+      "name": "Felipe Santos",
+      "current": 11,
+      "target": 20,
+      "previousRecord": 27,
+      "eligible": true,
+      "difference": -16,
+      "toBeat": 17,
+      "state": "abaixo",
+      "reason": "Meta positiva e histórico positivo"
+    },
+    {
+      "name": "Luana Mendonça",
+      "current": 10,
+      "target": 20,
+      "previousRecord": 17,
+      "eligible": true,
+      "difference": -7,
+      "toBeat": 8,
+      "state": "abaixo",
+      "reason": "Meta positiva e histórico positivo"
+    },
+    {
+      "name": "Luis Perdigão",
+      "current": 6,
+      "target": 20,
+      "previousRecord": null,
+      "eligible": false,
+      "difference": null,
+      "toBeat": null,
+      "state": null,
+      "reason": "Sem registro nas semanas anteriores consultadas"
+    },
+    {
+      "name": "Guilherme Davi",
+      "current": 0,
+      "target": 0,
+      "previousRecord": null,
+      "eligible": false,
+      "difference": null,
+      "toBeat": null,
+      "state": null,
+      "reason": "Sem meta positiva"
+    },
+    {
+      "name": "Tarcísio Gomes",
+      "current": 0,
+      "target": 0,
+      "previousRecord": null,
+      "eligible": false,
+      "difference": null,
+      "toBeat": null,
+      "state": null,
+      "reason": "Sem meta positiva"
+    }
+  ],
+  "eligibleCount": 3,
+  "renderedRecordSlides": 3,
+  "rankingPages": [
+    4,
+    2
+  ]
+}

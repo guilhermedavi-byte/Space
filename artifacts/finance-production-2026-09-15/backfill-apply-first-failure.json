@@ -1,0 +1,1056 @@
+[
+  {
+    "id": "7c851544-ecdc-4374-8d49-0bb23d116eb6",
+    "connection_id": "589367ba-e7c4-4c26-af71-53f97eac31a4",
+    "source": "ASAAS_BACKFILL",
+    "resource": "payments",
+    "dry_run": false,
+    "filters": {},
+    "status": "failed",
+    "next_offset": 100,
+    "report": {
+      "counts": {
+        "MISSING_LOCAL": 146,
+        "UNMATCHED_CUSTOMER": 146
+      },
+      "issues": [
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_5snorexsqacbdpae"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_0no2n2jzazax59dj"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_63pxobrxqx61iuim"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_npvvggg46a3fierh"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_ocggq7oe8u1xxiwm"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_uksxf1956aw6dfsg"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_dht6oglrhkgxupni"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_jov18yedksuzfrvt"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_8yt9ocb41sbw1jgb"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_s68r33cpbont0zxo"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_fgsvtcb4zeu693xz"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_3qivw8fva8fnsxkl"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_06kifoeb02f3wlc1"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_7y7igy4x2zq47nzw"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_o30hhe06e7zx9men"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_tavzajftpixm1vtx"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_ani6hq9qkfvirnl7"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_s8jmrls9hyjk51lb"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_46iiuf36h5rs3auo"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_trzyphb8l8ekmrww"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_s8ylm8oz4g7mk4b7"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_82oynp67aaw6oh0h"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_pqbi17gnrpdkbmsm"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_8oqz89opd8kev4jt"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_qfokf2ivg0xxz9d9"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_xf0wzzpyhos0qj4m"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_cfc52ety2z50erx1"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_bjarofnmaykwx8ip"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_g1lamf2kj115crxy"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_uz1hvy93j4558yf7"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_yo2kzzrmcmh11zk8"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_mzppdcri6n9ifdi6"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_xi90ktuznw5krzrm"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_470z77i54e5zh91g"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_26say3wtrmoiqytr"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_f8c9wx3a69aus2zl"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_y5kdldillxl78w9a"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_0wrlzg5r21uvepjw"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_e7e629f7rn7bchh1"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_ws1yn0uxyr2d57im"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_b8piet7t2038szve"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_gdvl9bp2vpfkzwml"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_dkuegmrggz4peh21"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_10bvik6mzu6ljri4"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_c58fyv3vquzj30lo"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_jzttuer3nj853onk"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_c59o2tylaui9eo54"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_msk3q4bnkerg1jdq"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_cz8qzccz7yrgaqm3"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_9rf2xi78e02znusv"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_ijpy7ba0a4oe12r4"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_ffh222pj6o4z4hqk"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_li3r1ngbh477xt9j"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_zdofogbof2i7crcm"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_qf6d3mc4ddd1aw96"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_1v7act0bpy0brqt8"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_aqa6oplur7qqfiu5"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_7l1320pzcej92vm5"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_jbd6uyryfek7mwgv"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_4k17nry2tw22y58z"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_jgp04imddyv7g2mf"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_0nr1g6rub5mh5vit"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_6xpc141owptqsh1a"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_rhc4lfvmn3b02tqp"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_fktecmd1emgi0z5r"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_bp7euzb85q0hoxme"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_afq2m1gmmt596ish"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_4thrk0alxrivtqms"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_q2qqfeyqhgupy5nr"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_ff84sy26ztmp6w12"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_foxs2lbj00tk4g3m"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_76a8xh8rpi6naypv"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_xj54h6lbjefsibbq"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_bmq4t9bsoulqxjop"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_gu8268zv0gfm0mgq"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_d9bbeb8xxd7k3fda"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_ywyi1pduoadqujiv"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_8fgj137p8gbkr603"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_39zv4ojhnv09sjdq"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_d9kz822inwj7j9o4"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_nk9axdmd6pg6udxe"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_ec582l3ve56fc75i"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_ehoj1vu1cfe6ixgy"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_8uce5imw1p36az1c"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_pute6q02up8axufa"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_cti9819tzdlk3zao"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_tnwzvrxz2a69gsif"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_idts1tvvfiqip4wt"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_wuloxwgpf5pll63l"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_n9lhp28n85ewx9bu"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_ydg2m8476yqw3zty"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_jvuiytpms86vt6vs"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_kat8ul5d72k5hc5r"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_35dj1dohvr1wct8z"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_e4jcgjz60ix8d3q8"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_kqgtlvbdikdvu231"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_pedihqfoec5pvbbo"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_cz7y17yeqcels53y"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_3zz9qt4kqye3y9us"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_01mkyelgm876hfzt"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_fn8xlpfewepu0rzr"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_0ng5ukok2a6kf3iw"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_sto7nv82tflcadry"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_jt42ch1jghdevelg"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_4ri5kb3g2sbb71wl"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_3evakvk8b2digl63"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_35h9c7su6trn1413"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_o4o1kg0d8uklm4o8"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_23egpn3r4z6st25b"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_6o9c2g7cepkwvdto"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_qy760xbjinizhf3h"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_o8i2i79dypeu82m8"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_609d66hc68thtmjk"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_eld2xpze69lkziuu"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_ytq5vztggs38a37c"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_h0z6g44hfr7u1wl3"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_99luqfjcybgjvcev"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_nuqafbglsge969u9"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_vzsp0yvv0jnr52fm"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_hje3x526rqc0fx4a"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_p7alc2tfyza5orfr"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_s8tt9dqb3iehjl27"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_7njums9hcm8yjqey"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_bkqxnbin7eltsg0i"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_okcab41hd1vwj4ed"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_l9y6qyr9s57rgz58"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_h4gbwcvfuxxuc35i"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_me8zioau1wjg5t1f"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_fkixa0svex1f2mke"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_3swg4eqhk5c1xgox"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_qqdu7a03e9055wex"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_sg5vks63wr050qbn"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_9b7llmjgjblfy5sd"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_48pgp6nfzzjj953a"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_dkko7u8phmm4s3oz"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_3ketui10t66x8r9x"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_btgcey8pgpz3e7r1"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_vz40p154ram9qavr"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_roy2ww3rppeg9dc8"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_axwa0qdh91y10se4"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_6akf7oq6p5bs7dlx"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_3be9ahb50fz601ck"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_gd1as4lavpq9yb8v"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_ijwvwe5l2e4cjykw"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_0tdyo5585dopde3r"
+        },
+        {
+          "issues": [
+            "MISSING_LOCAL",
+            "UNMATCHED_CUSTOMER"
+          ],
+          "external_object_id": "pay_m0a1n57m1x4jlf0b"
+        }
+      ],
+      "run_id": "7c851544-ecdc-4374-8d49-0bb23d116eb6",
+      "source": "ASAAS_BACKFILL",
+      "changed": 138,
+      "dry_run": false,
+      "examined": 138,
+      "resource": "payments",
+      "duplicates": 0,
+      "next_offset": 100,
+      "local_existing": 0,
+      "local_only_scan": "not_requested",
+      "issues_truncated": false
+    },
+    "last_error": "asaas_rate_limited",
+    "started_at": "2026-09-15T04:23:47.668622+00:00",
+    "finished_at": "2026-09-15T04:24:24.681849+00:00"
+  }
+]

@@ -1,3 +1,4 @@
+const {assertLegacyFinancialWrite,UNOWNED_FILTER}=require('./_lib/finance-legacy-ownership');
 const { readJsonBody, sendJson } = require("./_lib/http");
 const { getSessionFromRequest } = require("../_lib/session");
 const { supabaseFetch } = require("./_lib/supabase-rest");
@@ -129,6 +130,7 @@ const handleSave = async (req, res, session) => {
   }
 
   const id = String(body?.id || "").trim();
+  await assertLegacyFinancialWrite({id,body});
   let result;
   // Existing receivables remain payable/collectible after churn. New obligations
   // require a service period; due date is not a service-period substitute.
@@ -143,7 +145,7 @@ const handleSave = async (req, res, session) => {
     }
   }
   if (id) {
-    result = await supabaseFetch(`/${FINANCE_TABLE}?id=eq.${encodeURIComponent(id)}`, {
+    result = await supabaseFetch(`/${FINANCE_TABLE}?id=eq.${encodeURIComponent(id)}${UNOWNED_FILTER}`, {
       method: "PATCH",
       body: patch,
     });
@@ -169,6 +171,7 @@ module.exports = async (req, res) => {
     res.setHeader("Allow", "GET, POST, PATCH");
     return sendJson(res, 405, { error: "method_not_allowed" });
   } catch (error) {
+    if(error?.code==='finance_asaas_authoritative')return sendJson(res,409,{error:error.code});
     if (error?.code === "supabase_not_configured") {
       return sendJson(res, 500, { error: "supabase_not_configured" });
     }
