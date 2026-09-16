@@ -192,6 +192,10 @@ const upsertOnboardingFromContract = async (payload, { source = "platform" } = {
     updated_at: nowIso(),
   };
 
+  if (row.asaas_customer_id) {
+    await require('./finance-customer-link').registerCanonicalPair({customerId:row.asaas_customer_id,
+      studentId:row.firestore_doc_id,actor:'onboarding',source:'contract_creation'});
+  }
   const { data } = await supabaseFetch(`/${ONBOARDING_TABLE}?on_conflict=contract_id`, {
     method: "POST",
     headers: { Prefer: "resolution=merge-duplicates,return=representation" },

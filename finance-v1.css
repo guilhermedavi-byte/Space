@@ -5,3 +5,5 @@
 .fv1-filter-context{font-size:12px;color:var(--text-muted);margin:0 0 18px}.fv1-filter-context strong{color:var(--text-soft);font-weight:500}
 
 .fv1-space-summary{font-size:10px;line-height:1.5;color:var(--text-muted,#9ba3b4);padding:5px 0 0 40px;max-width:390px;white-space:normal}.fv1-drawer-section h4{font-size:12px;margin:16px 0 8px}
+
+.fv1-link-drawer input[type=search]{display:block;width:100%;margin:8px 0 18px;padding:12px;background:#141d25;color:inherit;border:1px solid #39434d;border-radius:8px}.fv1-link-person{display:flex;flex-direction:column;gap:6px;text-align:left;width:100%;margin:8px 0;padding:14px;color:inherit;background:#141d25;border:1px solid #39434d;border-radius:8px;cursor:pointer}.fv1-link-person:hover{border-color:var(--accent,#ff6268)}.fv1-link-person span,.fv1-link-person small{font-size:12px;color:#aeb8c4}.fv1-link-check{display:flex;gap:10px;align-items:flex-start;margin:22px 0}.fv1-link-actions{display:flex;gap:12px}.fv1-link-drawer button:disabled{opacity:.45;cursor:not-allowed}

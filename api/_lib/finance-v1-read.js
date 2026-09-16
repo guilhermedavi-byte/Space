@@ -15,7 +15,7 @@ const sum=(rows,get)=>rows.reduce((a,r)=>{const v=get(r);if(v==null)return a;con
 const fold=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 const days=(due,today)=>due&&due<today?Math.floor((Date.parse(today+'T00:00:00Z')-Date.parse(due+'T00:00:00Z'))/86400000):0;
 const safeLink=value=>{try{const u=new URL(value);return u.protocol==='https:'&&(u.hostname==='asaas.com'||u.hostname.endsWith('.asaas.com'))?u.href:null;}catch{return null;}};
-function cached(loader,ttl){let value,until=0,pending;return async()=>{if(value&&Date.now()<until)return value;if(!pending)pending=loader().then(v=>{value=v;until=Date.now()+ttl;return v;}).finally(()=>{pending=null;});return pending;};}
+function cached(loader,ttl){let value,until=0,pending,generation=0;const read=async()=>{if(value&&Date.now()<until)return value;if(!pending){const g=generation;pending=loader().then(v=>{if(g===generation){value=v;until=Date.now()+ttl;}return v;}).finally(()=>{if(g===generation)pending=null;});}return pending;};read.clear=()=>{generation++;value=null;until=0;pending=null;};return read;}
 function createReader({request=supabaseFetch,client=createAsaasClient({readOnly:true}),connectionId=process.env.FINANCE_CONNECTION_ID,today=todayBR,spaceLoader=space.loadSources,verify=()=>createFinanceFoundation({connectionId,client,logger:()=>{}}).verifyConnection({recordHealth:false})}={}){
  const scope=()=>uuid(connectionId);
  const readAll=async(table,select,extra='')=>{const rows=[];for(let offset=0;offset<20000;offset+=500){const r=await request(`/${table}?connection_id=eq.${scope()}&select=${select}${extra}&order=${table==='finance_customer_student_links'?'asaas_customer_id,firestore_doc_id':'id'}&offset=${offset}&limit=500`);if(!Array.isArray(r.data))throw Error('finance_read_failed');rows.push(...r.data);if(r.data.length<500)return rows;}throw Error('finance_read_limit');};
@@ -45,6 +45,7 @@ function createReader({request=supabaseFetch,client=createAsaasClient({readOnly:
  const paginate=(items,q)=>{const size=30,page=Math.min(Math.max(1,Number(q.page)||1),Math.max(1,Math.ceil(items.length/size)));return {items:items.slice((page-1)*size,page*size),total:items.length,page,pages:Math.max(1,Math.ceil(items.length/size)),page_size:size};};
  const search=(row,q)=>!q||fold([row.name,row.id,row.customer_id,row.subscription_id,...(row.student_ids||[])].join(' ')).includes(fold(q));
  return {async get(view,q={}){
+  if(q.fresh==='1'){core.clear();spaceDirectory.clear();}
   const d=await dataset(),meta=metadata(d);const paymentById=new Map(d.payments.map(p=>[p.asaas_payment_id,p]));
   const receivedValue=r=>PAID.has(r.status)&&r.group!=='closed'?cents(paymentById.get(r.id)?.value):0;
   if(view==='overview'){

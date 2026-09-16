@@ -165,7 +165,15 @@ function createFinanceFoundation({store=createFinanceStore(),client=createAsaasC
     if(!student || !['student','aluno'].includes(String(student.tipo||student.role||student.type).toLowerCase())) throw new FinanceError('finance_identity_unverified');
     const customer=await client.request(`/customers/${customerId}`);
     if(customer.id!==customerId || customer.deleted)throw new FinanceError('finance_customer_invalid');
-    return store.rpc('link',{...scope(),customer_id:customerId,firestore_doc_id:firestoreDocId,verified_by:actor});
+    const lock={...scope(),resource:'customers',external_object_id:customerId,actor,source:'ADMIN_USER'};
+    const lease=await store.rpc('acquire',lock);if(!lease.token)throw new FinanceError('finance_identity_busy',true,409);
+    const started=Date.now();
+    try {
+      const current=await store.rpc('identity',{...scope(),customer_id:customerId});
+      if(current.some(id=>id!==firestoreDocId))throw new FinanceError('finance_identity_already_linked',false,409);
+      if(Date.now()-started>45000)throw new FinanceError('finance_identity_busy',true,409);
+      return await store.rpc('link',{...scope(),customer_id:customerId,firestore_doc_id:firestoreDocId,verified_by:actor});
+    }finally{await store.rpc('release',{...lock,token:lease.token});}
   };
   const syncSubscriptionPage=async({offset=0,limit=20,actor='operator'}={})=>{
     if(!Number.isInteger(offset)||offset<0||!Number.isInteger(limit)||limit<1||limit>20)throw new FinanceError('finance_pagination_invalid');

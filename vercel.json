@@ -17,6 +17,12 @@
     },
     "api/finance-identity-bridge.js": {
       "maxDuration": 300
+    },
+    "api/finance-customer-link.js": {
+      "maxDuration": 60
+    },
+    "api/finance-customer-registration.js": {
+      "maxDuration": 60
     }
   },
   "headers": [

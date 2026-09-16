@@ -175,6 +175,7 @@ const handlePost = async (req, res, session) => {
 
   if (action === "save_aluno") {
     const payload = buildAlunoPayload(body);
+    if(payload.asaas_customer_id)await require('./_lib/finance-customer-link').registerCanonicalPair({customerId:payload.asaas_customer_id,studentId:payload.firestore_doc_id,actor:String(session.sub||session.uid||''),source:'financial_customer_creation'});
     if (!payload.aluno_nome) return sendJson(res, 400, { error: "missing_aluno_nome" });
     const id = String(body?.id || "").trim();
     const result = id
