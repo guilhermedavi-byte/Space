@@ -211,6 +211,8 @@ test("automation migration defines durable event, run and idempotency primitives
     "automation_complete_domain_event",
     "automation_fail_domain_event",
     "FOR UPDATE SKIP LOCKED",
+    "revoke execute on function public.automation_import_attendance_outbox(integer)",
+    "grant execute on function public.automation_import_attendance_outbox(integer)",
   ]) {
     assert.match(sql, new RegExp(fragment.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"));
   }

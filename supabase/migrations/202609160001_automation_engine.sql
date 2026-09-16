@@ -245,6 +245,8 @@ revoke all on public.automations, public.automation_versions, public.automation_
   public.automation_idempotency, public.domain_events from public, anon, authenticated;
 grant select, insert, update on public.automations, public.automation_versions, public.automation_runs, public.automation_run_steps,
   public.automation_idempotency, public.domain_events to service_role;
+revoke execute on function public.automation_import_attendance_outbox(integer), public.automation_claim_domain_event(uuid),
+  public.automation_complete_domain_event(uuid,uuid), public.automation_fail_domain_event(uuid,uuid,text,boolean) from public, anon, authenticated;
 grant execute on function public.automation_import_attendance_outbox(integer), public.automation_claim_domain_event(uuid),
   public.automation_complete_domain_event(uuid,uuid), public.automation_fail_domain_event(uuid,uuid,text,boolean) to service_role;
 
