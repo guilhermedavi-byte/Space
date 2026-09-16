@@ -2,8 +2,14 @@
 const BUCKETS=[{id:'1-3',label:'1–3 dias',min:1,max:3},{id:'4-7',label:'4–7 dias',min:4,max:7},{id:'8-15',label:'8–15 dias',min:8,max:15},{id:'16-30',label:'16–30 dias',min:16,max:30},{id:'30+',label:'30+ dias',min:31,max:Infinity}];
 const STAGES=['D-3','D-1','D0','D+1','D+3','D+7','Intervenção humana'];
 function stage(days){return days < -3?'Fora da régua':days < -1?'D-3':days===-1?'D-1':days===0?'D0':days<3?'D+1':days<7?'D+3':days<16?'D+7':'Intervenção humana';}
-function recovery(rows){
- const items=rows.filter(r=>r.group==='overdue'&&r.days_overdue>0).map(r=>({...r,aging:BUCKETS.find(b=>r.days_overdue>=b.min&&r.days_overdue<=b.max).id,stage:stage(r.days_overdue)}));
+function recovery(rows,cases=new Map()){
+ const items=rows.filter(r=>r.group==='overdue'&&r.days_overdue>0).map(r=>{
+  const item={...r,aging:BUCKETS.find(b=>r.days_overdue>=b.min&&r.days_overdue<=b.max).id,stage:stage(r.days_overdue),recovery_case:cases.get(r.id)||null};
+  item.operational_status=item.recovery_case?.status_label||'Novo';
+  item.next_action_date=item.recovery_case?.next_action_date||item.recovery_case?.promised_payment_date||null;
+  item.next_action_label=item.recovery_case?.last_action_label||'Acompanhar';
+  return item;
+ });
  const total=rs=>rs.reduce((n,r)=>{const value=n+(r.value??0);if(!Number.isSafeInteger(value))throw Error('finance_amount_invalid');return value;},0);
  const customers=new Set(items.map(r=>r.customer_id).filter(Boolean)),linked=new Set(items.filter(r=>r.linked).map(r=>r.customer_id).filter(Boolean));
  const value=total(items);
