@@ -17,6 +17,23 @@ const sum=(rows,get)=>rows.reduce((a,r)=>{const v=get(r);if(v==null)return a;con
 const fold=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 const days=(due,today)=>due&&due<today?Math.floor((Date.parse(today+'T00:00:00Z')-Date.parse(due+'T00:00:00Z'))/86400000):0;
 const safeLink=value=>{try{const u=new URL(value);return u.protocol==='https:'&&(u.hostname==='asaas.com'||u.hostname.endsWith('.asaas.com'))?u.href:null;}catch{return null;}};
+
+async function asaasMonthlyFinancials(client,month){
+ const start=`${month}-01`,end=`${month}-${new Date(Number(month.slice(0,4)),Number(month.slice(5,7)),0).getDate()}`;
+ const statuses=['RECEIVED','DUNNING_RECEIVED','RECEIVED_IN_CASH','CONFIRMED'];
+ const byId=new Map();
+ for(const status of statuses){
+  for await(const page of client.pages('payments',{limit:100,maxPages:80,filters:{status,'dueDate[ge]':start,'dueDate[le]':end}})){
+   for(const p of page.data||[])if(p&&p.id&&statuses.includes(p.status)&&String(p.dueDate||'').startsWith(month))byId.set(p.id,p);
+  }
+ }
+ let received=0,confirmed=0;
+ for(const p of byId.values()){
+  const v=cents(p.value);if(p.status==='CONFIRMED')confirmed+=v;else received+=v;
+ }
+ return byId.size?{source:'asaas_live',count:byId.size,received,confirmed,faturamento:received+confirmed}:null;
+}
+
 function cached(loader,ttl){let value,until=0,pending,generation=0;const read=async()=>{if(value&&Date.now()<until)return value;if(!pending){const g=generation;pending=loader().then(v=>{if(g===generation){value=v;until=Date.now()+ttl;}return v;}).finally(()=>{if(g===generation)pending=null;});}return pending;};read.clear=()=>{generation++;value=null;until=0;pending=null;};return read;}
 function createReader({request=supabaseFetch,client=createAsaasClient({readOnly:true}),connectionId=process.env.FINANCE_CONNECTION_ID,today=todayBR,spaceLoader=space.loadSources,verify=()=>createFinanceFoundation({connectionId,client,logger:()=>{}}).verifyConnection({recordHealth:false})}={}){
  const scope=()=>uuid(connectionId);
@@ -54,8 +71,8 @@ function createReader({request=supabaseFetch,client=createAsaasClient({readOnly:
   const d=await dataset(),meta=metadata(d);const paymentById=new Map(d.payments.map(p=>[p.asaas_payment_id,p]));
   const receivedValue=r=>PAID.has(r.status)&&r.group!=='closed'?cents(paymentById.get(r.id)?.value):0;
   if(view==='overview'){
-   const month=q.month||d.today.slice(0,7);const recon=createFinanceReconciliation({connectionId});const cases=await recon.listCases();const financial=recon.buildFinancials(d.rows,d.payments,cases,month,d.today);const monthRows=d.rows.filter(r=>r.due_date?.startsWith(month));const overdue=d.rows.filter(r=>r.group==='overdue');
-   return {meta,month,kpis:{revenue:financial.faturamento,received:financial.received,confirmed_only:financial.confirmed,due:sum(monthRows.filter(r=>['overdue','upcoming'].includes(r.group)),r=>r.value),overdue:sum(overdue,r=>r.value),delinquency:financial.delinquency_percent,delinquency_value:financial.delinquency_value},definitions:{revenue:'Faturamento consolidado: cada obrigação de cliente reconhecida uma única vez no mês, incluindo recebido fora do Asaas quando conciliado.',received:'Parcela do faturamento já recebida/liquidada.',confirmed_only:'Pagamentos de cliente confirmados e ainda não recebidos.',delinquency:'Vencido do mês atual ÷ total elegível com vencimento no mês atual.'},comparison:{expected:sum(monthRows.filter(r=>r.group!=='closed'),r=>r.value),received:financial.received},aging:[{label:'1–7 dias',min:1,max:7},{label:'8–30 dias',min:8,max:30},{label:'31–60 dias',min:31,max:60},{label:'61–90 dias',min:61,max:90},{label:'90+ dias',min:91,max:Infinity}].map(b=>({label:b.label,count:overdue.filter(r=>r.days_overdue>=b.min&&r.days_overdue<=b.max).length,value:sum(overdue.filter(r=>r.days_overdue>=b.min&&r.days_overdue<=b.max),r=>r.value)})),recent:d.rows.filter(r=>PAID.has(r.status)&&paymentById.get(r.id)?.payment_date).map(r=>({...r,payment_date:paymentById.get(r.id).payment_date})).sort((a,b)=>b.payment_date.localeCompare(a.payment_date)||a.id.localeCompare(b.id)).slice(0,6),alerts:{confirmed:d.rows.filter(r=>r.status==='CONFIRMED').length,missing_payment_dates:d.rows.filter(r=>PAID.has(r.status)&&!paymentById.get(r.id)?.payment_date).length}};
+   const month=q.month||d.today.slice(0,7);const recon=createFinanceReconciliation({connectionId});const cases=await recon.listCases();let financial=recon.buildFinancials(d.rows,d.payments,cases,month,d.today);const live=await asaasMonthlyFinancials(client,month).catch(()=>null);if(live)financial={...financial,faturamento:live.faturamento,received:live.received,confirmed:live.confirmed,source:live.source,count:live.count};const monthRows=d.rows.filter(r=>r.due_date?.startsWith(month));const overdue=d.rows.filter(r=>r.group==='overdue');
+   return {meta:{...meta,revenue_source:financial.source||'Financial Foundation',revenue_payments:financial.count||null},month,kpis:{revenue:financial.faturamento,received:financial.received,confirmed_only:financial.confirmed,due:sum(monthRows.filter(r=>['overdue','upcoming'].includes(r.group)),r=>r.value),overdue:sum(overdue,r=>r.value),delinquency:financial.delinquency_percent,delinquency_value:financial.delinquency_value},definitions:{revenue:'Faturamento no mês: cobranças únicas de clientes com vencimento no mês, recebidas, recebidas em dinheiro ou confirmadas no Asaas.',received:'Cobranças de clientes recebidas/liquidadas no mês.',confirmed_only:'Cobranças de clientes confirmadas e ainda não recebidas.',delinquency:'Vencido do mês atual ÷ total elegível com vencimento no mês atual.'},comparison:{expected:sum(monthRows.filter(r=>r.group!=='closed'),r=>r.value),received:financial.received},aging:[{label:'1–7 dias',min:1,max:7},{label:'8–30 dias',min:8,max:30},{label:'31–60 dias',min:31,max:60},{label:'61–90 dias',min:61,max:90},{label:'90+ dias',min:91,max:Infinity}].map(b=>({label:b.label,count:overdue.filter(r=>r.days_overdue>=b.min&&r.days_overdue<=b.max).length,value:sum(overdue.filter(r=>r.days_overdue>=b.min&&r.days_overdue<=b.max),r=>r.value)})),recent:d.rows.filter(r=>PAID.has(r.status)&&paymentById.get(r.id)?.payment_date).map(r=>({...r,payment_date:paymentById.get(r.id).payment_date})).sort((a,b)=>b.payment_date.localeCompare(a.payment_date)||a.id.localeCompare(b.id)).slice(0,6),alerts:{confirmed:d.rows.filter(r=>r.status==='CONFIRMED').length,missing_payment_dates:d.rows.filter(r=>PAID.has(r.status)&&!paymentById.get(r.id)?.payment_date).length}};
   }
   if(view==='reconciliation'){
    const recon=createFinanceReconciliation({connectionId}),cases=await recon.listCases(),all=recon.buildMovements(d.rows,d.payments,cases);
