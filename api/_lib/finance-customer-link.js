@@ -10,7 +10,7 @@ async function registerCanonicalPair({customerId,studentId,actor,source='creatio
  if(process.env.FINANCE_FOUNDATION_ENABLED!=='true')fail('finance_foundation_disabled',503);
  if(!validCustomer(customerId)||!/^[A-Za-z0-9_-]{1,128}$/.test(studentId||''))fail('canonical_pair_required');
  if(!actor)fail('actor_required',403);
- return foundation.linkCustomer(customerId,studentId,{actor:JSON.stringify({actor,method:source==='manual'?'manual':'id',source:'space.'+source,bridge_version:2}),resolveStudent});
+ return foundation.linkCustomer(customerId,studentId,{actor:JSON.stringify({actor,method:source==='manual'?'manual':'id',source:'space.'+source,bridge_version:2}),resolveStudent,allowDeleted:source==='manual'});
 }
 let cached,pending,until=0;
 async function directory(){if(cached&&Date.now()<until)return cached;if(!pending)pending=(async()=>{const sources=await space.loadSources();const client=createAsaasClient({readOnly:true});await createFinanceFoundation({client,logger:()=>{}}).verifyConnection({recordHealth:false});const customers=[];for await(const p of client.pages('customers',{limit:100,maxPages:100}))customers.push(...p.data);const value={sources,customers};cached=value;until=Date.now()+120000;return value;})().finally(()=>pending=null);return pending;}
@@ -19,7 +19,7 @@ const fold=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLo
 async function search(customerId,q=''){
  if(!validCustomer(customerId)||q.length>160)fail('invalid_query');const {sources,customers}=await directory();
  let customer=customers.find(c=>c.id===customerId);if(!customer){try{customer=await createAsaasClient({readOnly:true}).request('/customers/'+customerId);}catch{fail('customer_unavailable',404);}}
- if(customer.deleted)fail('customer_unavailable',409);
+
  const existing=(await supabaseFetch(`/finance_customer_student_links?connection_id=eq.${process.env.FINANCE_CONNECTION_ID}&asaas_customer_id=eq.${customerId}&select=asaas_customer_id,firestore_doc_id&limit=100`)).data;
  if(existing.length)fail('finance_identity_already_linked',409);
  const row=classify({sources,customers:customers.some(c=>c.id===customerId)?customers:[...customers,customer],existing}).find(r=>r.customer_id===customerId);

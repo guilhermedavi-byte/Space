@@ -157,14 +157,14 @@ function createFinanceFoundation({store=createFinanceStore(),client=createAsaasC
       if(!dryRun)await store.rpc('run_update',{...scope(),run_id,report,status:'failed',error_code:safe.code});
       throw new FinanceError(safe.code,safe.retryable,503);}
   };
-  const linkCustomer=async(customerId,firestoreDocId,{actor,resolveStudent}={})=>{
+  const linkCustomer=async(customerId,firestoreDocId,{actor,resolveStudent,allowDeleted=false}={})=>{
     externalId(customerId);
     if(!actor || typeof resolveStudent!=='function' || !/^[A-Za-z0-9_-]{1,128}$/.test(firestoreDocId)) throw new FinanceError('finance_identity_unverified');
     await verifyConnection();
     const student=await resolveStudent(firestoreDocId);
     if(!student || !['student','aluno'].includes(String(student.tipo||student.role||student.type).toLowerCase())) throw new FinanceError('finance_identity_unverified');
     const customer=await client.request(`/customers/${customerId}`);
-    if(customer.id!==customerId || customer.deleted)throw new FinanceError('finance_customer_invalid');
+    if(customer.id!==customerId || (customer.deleted&&!allowDeleted))throw new FinanceError('finance_customer_invalid');
     const lock={...scope(),resource:'customers',external_object_id:customerId,actor,source:'ADMIN_USER'};
     const lease=await store.rpc('acquire',lock);if(!lease.token)throw new FinanceError('finance_identity_busy',true,409);
     const started=Date.now();

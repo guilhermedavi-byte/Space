@@ -139,7 +139,7 @@ const buildAppHtml = ({ sessionJson, role, roleSlug, templateHtml, initialPanel 
     ${platformVisible}
     ${modalHtml}
     <script src="finance-customer-link.js?v=1"></script>
-    <script src="finance-v1.js?v=3"></script>
+    <script src="finance-v1.js?v=4"></script>
     <script src="script.js"></script>
     <script src="pedagogico-n8n-ui.js"></script>
     <script src="space-office.js"></script>
