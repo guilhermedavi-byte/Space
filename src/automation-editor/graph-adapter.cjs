@@ -4,6 +4,8 @@ const NODE_LABELS = {
   "crm.createOpportunity": "Criar oportunidade",
 };
 
+const DRAFT_UNCONFIGURED_TRIGGER_TYPE = "draft.unconfigured";
+
 const NODE_CATALOG = [
   {
     category: "Gatilhos",
@@ -57,6 +59,7 @@ const nodeKey = (node = {}) => clean(node.triggerType || node.trigger_type || no
 
 const nodeLabel = (node = {}) => {
   if (node.label) return clean(node.label);
+  if (nodeKind(node) === "trigger" && !clean(node.triggerType || node.trigger_type)) return "Escolha um gatilho";
   const key = nodeKey(node);
   if (NODE_LABELS[key]) return NODE_LABELS[key];
   if (nodeKind(node) === "end") return "Fim";
@@ -65,6 +68,7 @@ const nodeLabel = (node = {}) => {
 
 const nodeSubtitle = (node = {}) => {
   if (nodeKind(node) === "end") return "Encerrar fluxo";
+  if (nodeKind(node) === "trigger" && !clean(node.triggerType || node.trigger_type)) return "Configurar gatilho";
   return nodeKey(node) || TYPE_LABELS[nodeKind(node)] || "Node";
 };
 
@@ -246,6 +250,32 @@ const catalogItemToNode = (item = {}, { id = "", position = { x: 0, y: 0 }, exis
   return node;
 };
 
+const neutralTriggerGraph = ({ id = "trigger_1", position = { x: 360, y: 180 }, viewport = { x: 0, y: 0, zoom: 1 } } = {}) => ({
+  schemaVersion: 1,
+  nodes: [{ id, type: "trigger", triggerType: "", config: {}, position }],
+  edges: [],
+  ui: { viewport },
+});
+
+const graphTriggerType = (graph = {}) => {
+  const triggerNode = (Array.isArray(graph.nodes) ? graph.nodes : []).find((node) => nodeKind(node) === "trigger");
+  return clean(triggerNode?.triggerType || triggerNode?.trigger_type);
+};
+
+const triggerMetadataForGraph = (graph = {}) => {
+  const type = graphTriggerType(graph);
+  if (!type) return {};
+  return { type, eventType: type, label: NODE_LABELS[type] || type };
+};
+
+const updateTriggerType = (graph = {}, nodeId = "", triggerType = "") => ({
+  ...graph,
+  nodes: (Array.isArray(graph.nodes) ? graph.nodes : []).map((node) => {
+    if (clean(node.id) !== clean(nodeId) || nodeKind(node) !== "trigger") return node;
+    return { ...node, triggerType: clean(triggerType), config: node.config || {} };
+  }),
+});
+
 const addCatalogNode = (graph = {}, item = {}, options = {}) => {
   const nodes = Array.isArray(graph.nodes) ? graph.nodes : [];
   const nextNode = catalogItemToNode(item, {
@@ -342,6 +372,33 @@ const connectNodes = (graph = {}, connection = {}, id = "") => {
   return { graph: { ...graph, edges: [...(Array.isArray(graph.edges) ? graph.edges : []), edge] }, ok: true, edge };
 };
 
+const addConnectedCatalogNode = (graph = {}, item = {}, connection = {}, options = {}) => {
+  const nodes = Array.isArray(graph.nodes) ? graph.nodes : [];
+  const nextNode = catalogItemToNode(item, {
+    ...options,
+    existingIds: new Set(nodes.map((node) => clean(node.id)).filter(Boolean)),
+  });
+  const withNode = { ...graph, nodes: [...nodes, nextNode] };
+  const connected = connectNodes(withNode, { ...connection, target: nextNode.id }, options.edgeId || "");
+  if (!connected.ok) return { graph, ok: false, reason: connected.reason };
+  return { graph: connected.graph, node: nextNode, edge: connected.edge, ok: true };
+};
+
+const reconnectNodes = (graph = {}, oldEdgeId = "", connection = {}) => {
+  const edges = Array.isArray(graph.edges) ? graph.edges : [];
+  const currentIndex = edges.findIndex((edge, index) => edgeId(edge, index) === clean(oldEdgeId) || clean(edge.id) === clean(oldEdgeId));
+  if (currentIndex < 0) return { graph, ok: false, reason: "edge_not_found" };
+  const oldEdge = edges[currentIndex];
+  const withoutEdge = { ...graph, edges: edges.filter((_, index) => index !== currentIndex) };
+  const nextConnection = {
+    source: connection.source || oldEdge.from || oldEdge.source,
+    target: connection.target || oldEdge.to || oldEdge.target,
+    sourceHandle: connection.sourceHandle || oldEdge.branch || oldEdge.sourceHandle,
+    targetHandle: connection.targetHandle || oldEdge.targetHandle,
+  };
+  return connectNodes(withoutEdge, nextConnection, clean(oldEdge.id));
+};
+
 const removeEdge = (graph = {}, edgeIdToRemove = "") => {
   const id = clean(edgeIdToRemove);
   return { ...graph, edges: (Array.isArray(graph.edges) ? graph.edges : []).filter((edge, index) => edgeId(edge, index) !== id && clean(edge.id) !== id) };
@@ -350,9 +407,28 @@ const removeEdge = (graph = {}, edgeIdToRemove = "") => {
 const createDebouncedAutosave = (save, delay = 700) => {
   let timer = null;
   let lastValue;
+  let inFlight = false;
+  let dirtyWhileSaving = false;
+  let activePromise = Promise.resolve(undefined);
   const run = () => {
     timer = null;
-    return save(lastValue);
+    if (inFlight) {
+      dirtyWhileSaving = true;
+      return activePromise;
+    }
+    inFlight = true;
+    const value = lastValue;
+    activePromise = Promise.resolve(save(value))
+      .finally(() => {
+        inFlight = false;
+        if (dirtyWhileSaving && lastValue !== value) {
+          dirtyWhileSaving = false;
+          run();
+        } else {
+          dirtyWhileSaving = false;
+        }
+      });
+    return activePromise;
   };
   return {
     schedule(value) {
@@ -361,21 +437,23 @@ const createDebouncedAutosave = (save, delay = 700) => {
       timer = setTimeout(run, delay);
     },
     flush() {
-      if (!timer) return Promise.resolve(undefined);
+      if (!timer) return activePromise;
       clearTimeout(timer);
       return Promise.resolve(run());
     },
     pending() {
-      return Boolean(timer);
+      return Boolean(timer || inFlight || dirtyWhileSaving);
     },
   };
 };
 
 module.exports = {
+  DRAFT_UNCONFIGURED_TRIGGER_TYPE,
   NODE_CATALOG,
   NODE_LABELS,
   TYPE_LABELS,
   addCatalogNode,
+  addConnectedCatalogNode,
   branchToHandle,
   buildExecutionOverlay,
   canonicalToFlow,
@@ -383,11 +461,16 @@ module.exports = {
   connectNodes,
   createDebouncedAutosave,
   flowToCanonical,
+  graphTriggerType,
   handleToBranch,
   isValidConnection,
+  neutralTriggerGraph,
   nodeKey,
   nodeLabel,
+  reconnectNodes,
   removeEdge,
   removeNodeAndEdges,
+  triggerMetadataForGraph,
   updateActionConfig,
+  updateTriggerType,
 };

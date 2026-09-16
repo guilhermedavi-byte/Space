@@ -25,7 +25,7 @@ const loadHandlerWithSupabase = (supabaseFetch, { role = "admin" } = {}) => {
   return require("../api/automations");
 };
 
-const invoke = (handler, { method = "GET", url = "/api/automations" } = {}) => new Promise((resolve) => {
+const invoke = (handler, { method = "GET", url = "/api/automations", body = null } = {}) => new Promise((resolve) => {
   const req = new EventEmitter();
   req.method = method;
   req.url = url;
@@ -41,7 +41,73 @@ const invoke = (handler, { method = "GET", url = "/api/automations" } = {}) => n
     },
   };
   handler(req, res);
-  setImmediate(() => req.emit("end"));
+  setImmediate(() => {
+    if (body !== null) req.emit("data", JSON.stringify(body));
+    req.emit("end");
+  });
+});
+
+test("automations API creates draft with exactly one neutral trigger", async () => {
+  const calls = [];
+  const handler = loadHandlerWithSupabase(async (path, options = {}) => {
+    calls.push({ path, options });
+    if (path === "/automations" && options.method === "POST") {
+      assert.equal(options.body[0].name, "Automação sem título");
+      assert.equal(options.body[0].trigger_type, "draft.unconfigured");
+      return { data: [{ id: "automation_new", updated_at: "2026-09-16T10:00:00.000Z" }] };
+    }
+    if (path === "/automation_versions" && options.method === "POST") {
+      const graph = options.body[0].graph;
+      assert.equal(graph.nodes.length, 1);
+      assert.equal(graph.nodes[0].type, "trigger");
+      assert.equal(graph.nodes[0].triggerType, "");
+      assert.equal(graph.edges.length, 0);
+      assert.deepEqual(options.body[0].trigger, {});
+      return { data: [{ id: "version_new" }] };
+    }
+    if (path.startsWith("/automations?id=eq.automation_new") && options.method === "PATCH") return { data: [] };
+    throw new Error(`unexpected_path:${path}`);
+  });
+
+  const res = await invoke(handler, { method: "POST" });
+  assert.equal(res.statusCode, 201);
+  assert.equal(res.body.automationId, "automation_new");
+  assert.equal(calls.length, 3);
+});
+
+test("automations API allows incomplete draft save but publish rejects neutral trigger", async () => {
+  const neutral = {
+    schemaVersion: 1,
+    nodes: [{ id: "trigger_1", type: "trigger", triggerType: "", config: {}, position: { x: 360, y: 180 } }],
+    edges: [],
+  };
+  const handler = loadHandlerWithSupabase(async (path, options = {}) => {
+    if (path.startsWith("/automations?id=eq.automation_1") && !options.method) {
+      return {
+        data: [{
+          id: "automation_1",
+          updated_at: "2026-09-16T10:00:00.000Z",
+          draft_version: { id: "version_1", status: "DRAFT", graph: neutral },
+        }],
+      };
+    }
+    if (path.startsWith("/automation_versions?id=eq.version_1") && options.method === "PATCH") {
+      assert.deepEqual(options.body.graph, neutral);
+      assert.deepEqual(options.body.trigger, {});
+      return { data: [] };
+    }
+    if (path.startsWith("/automations?id=eq.automation_1") && options.method === "PATCH") {
+      assert.equal(options.body.trigger_type, "draft.unconfigured");
+      return { data: [{ updated_at: "2026-09-16T10:00:01.000Z" }] };
+    }
+    throw new Error(`unexpected_path:${path}`);
+  });
+
+  const draftRes = await invoke(handler, { method: "PATCH", url: "/api/automations?id=automation_1", body: { graph: neutral, allowInvalidDraft: true } });
+  assert.equal(draftRes.statusCode, 200);
+  const publishRes = await invoke(handler, { method: "POST", url: "/api/automations?id=automation_1&action=publish" });
+  assert.equal(publishRes.statusCode, 422);
+  assert.equal(publishRes.body.issues.some((issue) => issue.code === "trigger_not_configured" && issue.nodeId === "trigger_1"), true);
 });
 
 test("automations API publish returns structured graph validation issues", async () => {

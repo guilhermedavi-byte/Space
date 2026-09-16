@@ -4,26 +4,16 @@ const { supabaseFetch } = require("./_lib/supabase-rest");
 const { validateGraph } = require("./_lib/automation-engine");
 const { automationCatalog } = require("./_lib/automation-registries");
 const { sanitizeJson } = require("./_lib/automation-store");
+const {
+  DRAFT_UNCONFIGURED_TRIGGER_TYPE,
+  neutralTriggerGraph,
+  triggerMetadataForGraph,
+} = require("../src/automation-editor/graph-adapter.cjs");
 
 const clean = (value) => String(value || "").trim();
 const enc = (value) => encodeURIComponent(clean(value));
 
-const defaultGraph = ({ pipelineId = "", stageId = "" } = {}) => ({
-  nodes: [
-    { id: "trigger_1", type: "trigger", triggerType: "attendance.message.created" },
-    { id: "condition_1", type: "condition", conditionType: "crm.contactHasOpenOpportunity" },
-    { id: "action_1", type: "action", actionType: "crm.createOpportunity", config: { pipelineId, stageId } },
-    { id: "end_1", type: "end" },
-  ],
-  edges: [
-    { from: "trigger_1", to: "condition_1" },
-    { from: "condition_1", to: "end_1", branch: "true" },
-    { from: "condition_1", to: "action_1", branch: "false" },
-    { from: "action_1", to: "end_1" },
-  ],
-});
-
-const trigger = { type: "attendance.message.created", eventType: "attendance.message.created", label: "Nova mensagem recebida" };
+const defaultGraph = () => neutralTriggerGraph();
 
 const invalidGraphBody = (validation) => ({
   error: "automation_graph_invalid",
@@ -129,21 +119,30 @@ const getRunDetail = async (automationId, runId) => {
 };
 
 const createAutomation = async (session, body = {}) => {
-  const name = clean(body.name) || "Nova mensagem → Criar oportunidade";
+  const name = clean(body.name) || "Automação sem título";
   const graph = body.graph && typeof body.graph === "object" ? body.graph : defaultGraph(body);
-  const validation = await validateGraph(graph, { validateCrm: false });
-  if (!validation.ok) return { status: 422, body: invalidGraphBody(validation) };
+  const nextGraph = body.graph && typeof body.graph === "object"
+    ? (await validateGraph(graph, { validateCrm: false })).graph
+    : defaultGraph();
+  const trigger = triggerMetadataForGraph(nextGraph);
   const created = await request("/automations", {
     method: "POST",
     headers: { Prefer: "return=representation" },
-    body: [{ name, description: clean(body.description), status: "DRAFT", trigger_type: "attendance.message.created", created_by_uid: session.sub, updated_by_uid: session.sub }],
+    body: [{
+      name,
+      description: clean(body.description),
+      status: "DRAFT",
+      trigger_type: trigger.type || DRAFT_UNCONFIGURED_TRIGGER_TYPE,
+      created_by_uid: session.sub,
+      updated_by_uid: session.sub,
+    }],
   });
   const automation = Array.isArray(created.data) ? created.data[0] : null;
   if (!automation) return { status: 500, body: { error: "automation_create_failed" } };
   const versionResult = await request("/automation_versions", {
     method: "POST",
     headers: { Prefer: "return=representation" },
-    body: [{ automation_id: automation.id, version_number: 1, status: "DRAFT", graph: validation.graph, trigger, created_by_uid: session.sub }],
+    body: [{ automation_id: automation.id, version_number: 1, status: "DRAFT", graph: nextGraph, trigger, created_by_uid: session.sub }],
   });
   const version = Array.isArray(versionResult.data) ? versionResult.data[0] : null;
   await request(`/automations?id=eq.${enc(automation.id)}`, { method: "PATCH", body: { draft_version_id: version?.id || null, updated_by_uid: session.sub } });
@@ -160,10 +159,12 @@ const updateDraft = async (session, id, body = {}) => {
   }
   const graph = body.graph && typeof body.graph === "object" ? body.graph : draft.graph;
   let nextGraph = graph;
+  let trigger = triggerMetadataForGraph(nextGraph);
   if (body.allowInvalidDraft !== true) {
     const validation = await validateGraph(graph, { validateCrm: false });
     if (!validation.ok) return { status: 422, body: invalidGraphBody(validation) };
     nextGraph = validation.graph;
+    trigger = triggerMetadataForGraph(nextGraph);
   }
   await request(`/automation_versions?id=eq.${enc(draft.id)}`, { method: "PATCH", body: { graph: nextGraph, trigger } });
   const patch = {};
@@ -172,7 +173,7 @@ const updateDraft = async (session, id, body = {}) => {
   const updated = await request(`/automations?id=eq.${enc(id)}`, {
     method: "PATCH",
     headers: { Prefer: "return=representation" },
-    body: { ...patch, updated_by_uid: session.sub },
+    body: { ...patch, trigger_type: trigger.type || DRAFT_UNCONFIGURED_TRIGGER_TYPE, updated_by_uid: session.sub },
   });
   const updatedAutomation = Array.isArray(updated.data) ? updated.data[0] : null;
   return { status: 200, body: { ok: true, updatedAt: updatedAutomation?.updated_at || null } };
@@ -187,7 +188,14 @@ const createNextDraft = async (session, id) => {
   const result = await request("/automation_versions", {
     method: "POST",
     headers: { Prefer: "return=representation" },
-    body: [{ automation_id: id, version_number: nextNumber, status: "DRAFT", graph: base?.graph || defaultGraph(), trigger, created_by_uid: session.sub }],
+    body: [{
+      automation_id: id,
+      version_number: nextNumber,
+      status: "DRAFT",
+      graph: base?.graph || defaultGraph(),
+      trigger: triggerMetadataForGraph(base?.graph || defaultGraph()),
+      created_by_uid: session.sub,
+    }],
   });
   const version = Array.isArray(result.data) ? result.data[0] : null;
   await request(`/automations?id=eq.${enc(id)}`, { method: "PATCH", body: { draft_version_id: version?.id || null, status: automation.status === "ARCHIVED" ? "DRAFT" : automation.status, updated_by_uid: session.sub } });

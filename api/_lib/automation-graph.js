@@ -205,7 +205,8 @@ const validateAutomationGraph = async (graph = {}, options = {}) => {
     const incomingEdges = incoming.get(node.id) || [];
     const outgoingEdges = out.get(node.id) || [];
     if (node.type === "trigger") {
-      if (!triggerRegistry.has(node.triggerType)) issues.push(issue("unknown_trigger", { nodeId: node.id, field: "triggerType" }));
+      if (!node.triggerType) issues.push(issue("trigger_not_configured", { nodeId: node.id, field: "triggerType" }));
+      else if (!triggerRegistry.has(node.triggerType)) issues.push(issue("unknown_trigger", { nodeId: node.id, field: "triggerType" }));
       if (incomingEdges.length) issues.push(issue("trigger_has_input", { nodeId: node.id, field: "edges" }));
       if (outgoingEdges.length !== 1) issues.push(issue("trigger_requires_one_output", { nodeId: node.id, field: "edges" }));
     }

@@ -12169,6 +12169,7 @@ const automationsState = {
   editorGraphPreview: null,
   publishIssues: [],
   error: "",
+  creatingPromise: null,
 };
 
 let automationRunPollingTimer = null;
@@ -12176,6 +12177,13 @@ let automationRunPollingTimer = null;
 const getAutomationsRoot = () => document.querySelector("[data-automations-admin]");
 
 const automationDraftGraph = (automation) => automation?.draft_version?.graph || automation?.active_version?.graph || null;
+
+const neutralAutomationGraph = () => ({
+  schemaVersion: 1,
+  nodes: [{ id: "trigger_1", type: "trigger", triggerType: "", config: {}, position: { x: 360, y: 180 } }],
+  edges: [],
+  ui: { viewport: { x: 0, y: 0, zoom: 1 } },
+});
 
 const automationActionNode = (automation) => {
   const graph = automationDraftGraph(automation);
@@ -12270,7 +12278,7 @@ const renderAutomationsAdmin = () => {
           <span>Admin</span>
           <h2>Automações</h2>
           <p>Crie o primeiro workflow para abrir o canvas visual.</p>
-          <button type="button" class="button button-solid button-small" data-automation-create>Nova mensagem → Criar oportunidade</button>
+          <button type="button" class="button button-solid button-small" data-automation-create>Nova automação</button>
         </div>
       `}
     </div>
@@ -12350,20 +12358,40 @@ const closeAutomationExecutionMode = () => {
   renderAutomationsAdmin();
 };
 
-const createAutomationFromCrmDefaults = async () => {
-  const crm = automationsState.crm || {};
-  const pipelines = Array.isArray(crm.pipelines) ? crm.pipelines : [];
-  const stages = Array.isArray(crm.stages) ? crm.stages : [];
-  const pipelineId = pipelines.find((pipeline) => pipeline.isActive)?.id || pipelines[0]?.id || "";
-  const stageId = stages.find((stage) => stage.pipelineId === pipelineId)?.id || stages[0]?.id || "";
-  const res = await fetchWithAuth("/api/automations", {
+const createAutomationDraft = async () => {
+  const tempId = `local_${Date.now().toString(36)}`;
+  const tempGraph = neutralAutomationGraph();
+  const tempAutomation = {
+    id: tempId,
+    name: "Automação sem título",
+    status: "DRAFT",
+    updated_at: new Date().toISOString(),
+    draft_version: { id: `${tempId}_draft`, version_number: 1, status: "DRAFT", graph: tempGraph },
+    metrics: { totalRuns: 0, successRate: 0 },
+  };
+  automationsState.rows = [tempAutomation, ...(automationsState.rows || [])];
+  automationsState.selectedId = tempId;
+  automationsState.selected = tempAutomation;
+  automationsState.runs = [];
+  automationsState.runDetail = null;
+  automationsState.publishIssues = [];
+  renderAutomationsAdmin();
+  const createPromise = fetchWithAuth("/api/automations", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ pipelineId, stageId }),
-  });
-  const data = await res.json().catch(() => null);
-  if (!res.ok) throw new Error(data?.error || "automation_create_failed");
-  await loadAutomationsAdmin({ force: true, selectId: data?.automationId || "" });
+    body: JSON.stringify({ name: "Automação sem título" }),
+  })
+    .then(async (res) => {
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || "automation_create_failed");
+      await loadAutomationsAdmin({ force: true, selectId: data?.automationId || "" });
+      return data;
+    })
+    .finally(() => {
+      automationsState.creatingPromise = null;
+    });
+  automationsState.creatingPromise = createPromise;
+  return createPromise;
 };
 
 const runAutomationAction = async (id, action) => {
@@ -12401,6 +12429,9 @@ const saveAutomationConfig = async (form) => {
 };
 
 const saveAutomationDraftFromEditor = async (graph, { baseUpdatedAt = "" } = {}) => {
+  if (String(automationsState.selectedId || "").startsWith("local_") && automationsState.creatingPromise) {
+    await automationsState.creatingPromise;
+  }
   const id = String(automationsState.selectedId || automationsState.selected?.id || "").trim();
   if (!id) throw new Error("automation_not_selected");
   const res = await fetchWithAuth(`/api/automations?id=${encodeURIComponent(id)}`, {
@@ -39422,7 +39453,7 @@ document.addEventListener("click", (event) => {
     const createButton = target.closest("[data-automation-create]");
     if (createButton instanceof HTMLButtonElement) {
       event.preventDefault();
-      createAutomationFromCrmDefaults().catch(setError);
+      createAutomationDraft().catch(setError);
       return;
     }
     const openButton = target.closest("[data-automation-open]");

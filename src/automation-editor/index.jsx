@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useMemo, useRef, useState } from "react";
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Background,
@@ -15,6 +15,7 @@ import "@xyflow/react/dist/style.css";
 
 const {
   NODE_CATALOG,
+  addConnectedCatalogNode,
   buildExecutionOverlay,
   canonicalToFlow,
   catalogItemToNode,
@@ -23,8 +24,11 @@ const {
   flowToCanonical,
   isValidConnection,
   nodeKey,
+  reconnectNodes,
+  removeEdge,
   removeNodeAndEdges,
   updateActionConfig,
+  updateTriggerType,
 } = require("./graph-adapter.cjs");
 
 const statusMark = (status) => {
@@ -56,6 +60,8 @@ const compactId = (value = "") => {
   return id.length > 14 ? `${id.slice(0, 8)}...${id.slice(-4)}` : id || "-";
 };
 
+const triggerTypeOf = (node = {}) => String(node?.triggerType || node?.trigger_type || "").trim();
+
 const JsonBlock = ({ value }) => {
   const text = JSON.stringify(value || {}, null, 2);
   const large = text.length > 900;
@@ -77,9 +83,10 @@ const SpaceNode = memo(({ data, selected }) => {
   const kind = data.kind || "action";
   const isCondition = kind === "condition";
   const isEnd = kind === "end";
+  const isNeutralTrigger = kind === "trigger" && !triggerTypeOf(data.canonical || {});
   const incomplete = kind === "action" && data.incomplete;
   return (
-    <div className={`automation-canvas-node is-${kind} ${selected ? "is-selected" : ""} ${data.error || incomplete ? "has-error" : ""} ${data.executionMode && !data.visited ? "is-unvisited" : ""}`}>
+    <div className={`automation-canvas-node is-${kind} ${selected ? "is-selected" : ""} ${isNeutralTrigger ? "is-neutral-trigger" : ""} ${data.orphan ? "is-orphan" : ""} ${data.error || incomplete ? "has-error" : ""} ${data.executionMode && !data.visited ? "is-unvisited" : ""}`}>
       <Handle type="target" id="in" position={Position.Left} className="automation-canvas-handle in" isConnectable={!["trigger"].includes(kind)} />
       <div className="automation-canvas-node-top">
         <span>{data.typeLabel}</span>
@@ -87,6 +94,7 @@ const SpaceNode = memo(({ data, selected }) => {
       </div>
       <strong>{data.label}</strong>
       {!isEnd ? <small>{data.summary || data.subtitle}</small> : null}
+      {data.orphan ? <small className="automation-node-warning">⚠ Não conectado</small> : null}
       {incomplete ? <small className="automation-node-error">⚠ Configuração incompleta</small> : null}
       {data.branch ? <small className="automation-node-branch">Resultado {data.branch === "NAO" ? "NÃO" : data.branch}</small> : null}
       {data.error ? <small className="automation-node-error">⚠ {data.error}</small> : null}
@@ -136,6 +144,7 @@ const issueLabel = (issue = {}) => {
     stage_not_found: "Stage não existe.",
     stage_not_in_pipeline: "Stage não pertence ao pipeline.",
     trigger_has_input: "Gatilho não pode ter entrada.",
+    trigger_not_configured: "Escolha um gatilho antes de publicar.",
     trigger_requires_one_output: "Gatilho precisa de uma saída.",
     unknown_action: "Ação não registrada.",
     unknown_condition: "Condição não registrada.",
@@ -145,7 +154,7 @@ const issueLabel = (issue = {}) => {
   return labels[issue.code] || issue.message || issue.code || "Problema de validação.";
 };
 
-function PropertiesPanel({ node, crm, onConfigChange, onDeleteNode }) {
+function PropertiesPanel({ node, crm, onConfigChange, onDeleteNode, onOpenTriggerPicker }) {
   const canonical = node?.data?.canonical || null;
   const pipelines = Array.isArray(crm?.pipelines) ? crm.pipelines : [];
   const stages = Array.isArray(crm?.stages) ? crm.stages : [];
@@ -153,6 +162,7 @@ function PropertiesPanel({ node, crm, onConfigChange, onDeleteNode }) {
   const pipelineId = config.pipelineId || "";
   const stageOptions = stages.filter((stage) => stage.pipelineId === pipelineId);
   const isAction = canonical?.type === "action";
+  const isNeutralTrigger = canonical?.type === "trigger" && !triggerTypeOf(canonical);
   return (
     <aside className={`automation-properties ${node ? "is-open" : ""}`}>
       {node ? (
@@ -162,7 +172,12 @@ function PropertiesPanel({ node, crm, onConfigChange, onDeleteNode }) {
             <h3>{node.data?.label}</h3>
             <p>{nodeKey(canonical)}</p>
           </header>
-          {isAction ? (
+          {isNeutralTrigger ? (
+            <div className="automation-properties-form">
+              <p>Escolha o evento que inicia esta automação.</p>
+              <button type="button" className="button button-outline button-small" onClick={() => onOpenTriggerPicker(node.id)}>Selecionar gatilho</button>
+            </div>
+          ) : isAction ? (
             <div className="automation-properties-form">
               <label>
                 <span>Pipeline</span>
@@ -252,6 +267,7 @@ function ExecutionInspector({ node, runDetail, onBackToEditor }) {
 }
 
 function AutomationEditor({ automation, rows, runs, runDetail, crm, catalog, validationIssues, onGraphPreview, onSaveDraft, onBackToEditor }) {
+  const shellRef = useRef(null);
   const editorGraph = automation?.draft_version?.graph || automation?.active_version?.graph || { nodes: [], edges: [] };
   const executionMode = Boolean(runDetail?.run && runDetail?.version?.graph);
   const graph = executionMode ? runDetail.version.graph : editorGraph;
@@ -266,23 +282,26 @@ function AutomationEditor({ automation, rows, runs, runDetail, crm, catalog, val
     executionOverlay,
     errors: Object.fromEntries(Object.entries(issuesByNode).map(([nodeId, rows]) => [nodeId, issueLabel(rows[0])])),
   }), [graph, executionOverlay, issuesByNode]);
-  const decorateNode = (node) => {
+  const decorateNode = (node, edgeRows = []) => {
     const canonical = node.data?.canonical || {};
     const summary = actionSummary(canonical, crm);
+    const orphan = canonical.type !== "trigger" && !edgeRows.some((edge) => edge.target === node.id);
     return {
       ...node,
       data: {
         ...node.data,
         summary,
+        orphan,
         incomplete: canonical.type === "action" && (!canonical.config?.pipelineId || !canonical.config?.stageId),
       },
     };
   };
-  const [nodes, setNodes, onNodesChange] = useNodesState(enrichedGraph.nodes.map(decorateNode));
+  const decorateNodes = useCallback((nodeRows, edgeRows) => nodeRows.map((node) => decorateNode(node, edgeRows)), [crm]);
+  const [nodes, setNodes, onNodesChange] = useNodesState(decorateNodes(enrichedGraph.nodes, enrichedGraph.edges));
   const [edges, setEdges, onEdgesChange] = useEdgesState(enrichedGraph.edges);
   const [selectedNodeId, setSelectedNodeId] = useState("");
   const [selectedEdgeId, setSelectedEdgeId] = useState("");
-  const [pickerOpen, setPickerOpen] = useState(false);
+  const [picker, setPicker] = useState({ open: false, mode: "add", x: 18, y: 66, flowPosition: null, connection: null, nodeId: "" });
   const [saveState, setSaveState] = useState("saved");
   const [viewport, setViewport] = useState(enrichedGraph.viewport || { x: 0, y: 0, zoom: 1 });
   const [connectionError, setConnectionError] = useState("");
@@ -290,6 +309,14 @@ function AutomationEditor({ automation, rows, runs, runDetail, crm, catalog, val
   const latestGraph = useRef(graph);
   const automationUpdatedAt = useRef(automation?.updated_at || "");
   const saveDraftRef = useRef(onSaveDraft);
+  const nodesRef = useRef(nodes);
+  const edgesRef = useRef(edges);
+  const viewportRef = useRef(viewport);
+  const reconnectingEdgeRef = useRef(null);
+
+  useEffect(() => { nodesRef.current = nodes; }, [nodes]);
+  useEffect(() => { edgesRef.current = edges; }, [edges]);
+  useEffect(() => { viewportRef.current = viewport; }, [viewport]);
 
   useEffect(() => {
     saveDraftRef.current = onSaveDraft;
@@ -314,7 +341,7 @@ function AutomationEditor({ automation, rows, runs, runDetail, crm, catalog, val
     }, 700);
   }
 
-  const canonicalFromFlow = (nextNodes = nodes, nextEdges = edges, nextViewport = viewport) => ({
+  const canonicalFromFlow = (nextNodes = nodesRef.current, nextEdges = edgesRef.current, nextViewport = viewportRef.current) => ({
     ...flowToCanonical({ nodes: nextNodes, edges: nextEdges }, graph),
     schemaVersion: graph.schemaVersion || 1,
     ui: { ...(graph.ui || {}), viewport: nextViewport },
@@ -338,7 +365,7 @@ function AutomationEditor({ automation, rows, runs, runDetail, crm, catalog, val
   };
 
   useEffect(() => {
-    setNodes(enrichedGraph.nodes.map(decorateNode));
+    setNodes(decorateNodes(enrichedGraph.nodes, enrichedGraph.edges));
     setEdges(enrichedGraph.edges);
     setSelectedNodeId("");
     setSelectedEdgeId("");
@@ -356,7 +383,7 @@ function AutomationEditor({ automation, rows, runs, runDetail, crm, catalog, val
       if (event.key === "Escape") {
         setSelectedNodeId("");
         setSelectedEdgeId("");
-        setPickerOpen(false);
+        setPicker((current) => ({ ...current, open: false }));
         return;
       }
       if (!["Backspace", "Delete"].includes(event.key)) return;
@@ -385,21 +412,90 @@ function AutomationEditor({ automation, rows, runs, runDetail, crm, catalog, val
   const version = automation?.draft_version?.version_number || automation?.active_version?.version_number || "-";
   const workflows = Array.isArray(rows) ? rows : [];
   const runRows = Array.isArray(runs) ? runs : [];
-  const catalogGroups = groupCatalog(Array.isArray(catalog) && catalog.length ? catalog : NODE_CATALOG);
+  const catalogRows = Array.isArray(catalog) && catalog.length ? catalog : NODE_CATALOG;
+  const hasTrigger = nodes.some((node) => node.data?.canonical?.type === "trigger");
+  const pickerItems = catalogRows.filter((item) => {
+    if (picker.mode === "trigger") return item.kind === "trigger";
+    if (picker.mode === "connect") return ["condition", "action", "end"].includes(item.kind);
+    if (item.kind === "trigger" && hasTrigger) return false;
+    return true;
+  });
+  const catalogGroups = groupCatalog(pickerItems);
+
+  const pickerStyle = picker.mode === "add"
+    ? {}
+    : {
+      left: `${Math.max(12, Math.round(picker.x || 18))}px`,
+      top: `${Math.max(12, Math.round(picker.y || 66))}px`,
+      right: "auto",
+      bottom: "auto",
+    };
+
+  const closePicker = () => setPicker((current) => ({ ...current, open: false }));
+
+  const openAddPicker = () => {
+    setPicker((current) => ({
+      ...current,
+      open: !current.open || current.mode !== "add",
+      mode: "add",
+      x: 18,
+      y: 66,
+      connection: null,
+      flowPosition: null,
+      nodeId: "",
+    }));
+  };
+
+  const openTriggerPicker = (nodeId) => {
+    const node = nodesRef.current.find((row) => row.id === nodeId);
+    const rect = shellRef.current?.getBoundingClientRect();
+    const x = node ? Math.round((node.position.x * (viewportRef.current.zoom || 1)) + viewportRef.current.x + 18) : 18;
+    const y = node ? Math.round((node.position.y * (viewportRef.current.zoom || 1)) + viewportRef.current.y + 92) : 66;
+    setPicker({ open: true, mode: "trigger", x: rect ? Math.min(Math.max(12, x), rect.width - 350) : x, y: rect ? Math.min(Math.max(12, y), rect.height - 220) : y, flowPosition: null, connection: null, nodeId });
+  };
 
   const addNode = (item) => {
     if (executionMode) return;
+    if (picker.mode === "trigger") {
+      const canonical = updateTriggerType(canonicalFromFlow(), picker.nodeId || selectedNodeId, item.type);
+      const nextFlow = canonicalToFlow(canonical);
+      const nextNodes = decorateNodes(nextFlow.nodes, nextFlow.edges);
+      setNodes(nextNodes);
+      setEdges(nextFlow.edges);
+      setSelectedNodeId(picker.nodeId || selectedNodeId);
+      setSelectedEdgeId("");
+      closePicker();
+      markDirty(nextNodes, nextFlow.edges);
+      return;
+    }
+    if (picker.mode === "connect" && picker.connection && picker.flowPosition) {
+      const result = addConnectedCatalogNode(canonicalFromFlow(), item, picker.connection, { position: picker.flowPosition });
+      if (!result.ok) {
+        setConnectionError(result.reason);
+        closePicker();
+        return;
+      }
+      const nextFlow = canonicalToFlow(result.graph);
+      const nextNodes = decorateNodes(nextFlow.nodes, nextFlow.edges);
+      setNodes(nextNodes);
+      setEdges(nextFlow.edges);
+      setSelectedNodeId(result.node.id);
+      setSelectedEdgeId("");
+      closePicker();
+      markDirty(nextNodes, nextFlow.edges);
+      return;
+    }
     const position = {
       x: Math.round((window.innerWidth * 0.5 - viewport.x) / (viewport.zoom || 1)),
       y: Math.round((window.innerHeight * 0.45 - viewport.y) / (viewport.zoom || 1)),
     };
     const canonical = catalogItemToNode(item, { position, existingIds: new Set(nodes.map((node) => node.id)) });
-    const flowNode = decorateNode(canonicalToFlow({ nodes: [canonical], edges: [] }, {}).nodes[0]);
+    const flowNode = decorateNodes(canonicalToFlow({ nodes: [canonical], edges: [] }, {}).nodes, edges)[0];
     const nextNodes = [...nodes, flowNode];
     setNodes(nextNodes);
     setSelectedNodeId(flowNode.id);
     setSelectedEdgeId("");
-    setPickerOpen(false);
+    closePicker();
     markDirty(nextNodes, edges);
   };
 
@@ -414,7 +510,7 @@ function AutomationEditor({ automation, rows, runs, runDetail, crm, catalog, val
       return;
     }
     const nextFlow = canonicalToFlow(result.graph);
-    const nextNodes = nextFlow.nodes.map(decorateNode);
+    const nextNodes = decorateNodes(nextFlow.nodes, nextFlow.edges);
     setNodes(nextNodes);
     setEdges(nextFlow.edges);
     setSelectedNodeId("");
@@ -426,7 +522,7 @@ function AutomationEditor({ automation, rows, runs, runDetail, crm, catalog, val
     if (executionMode) return;
     const canonical = updateActionConfig(canonicalFromFlow(), nodeId, patch, crm);
     const nextFlow = canonicalToFlow(canonical);
-    const nextNodes = nextFlow.nodes.map(decorateNode);
+    const nextNodes = decorateNodes(nextFlow.nodes, nextFlow.edges);
     setNodes(nextNodes);
     setSelectedNodeId(nodeId);
     markDirty(nextNodes, edges);
@@ -450,7 +546,82 @@ function AutomationEditor({ automation, rows, runs, runDetail, crm, catalog, val
     setConnectionError("");
     const nextFlow = canonicalToFlow(result.graph);
     setEdges(nextFlow.edges);
+    setPicker((current) => ({ ...current, open: false }));
     markDirty(nodes, nextFlow.edges);
+  };
+
+  const eventPoint = (event) => {
+    const source = event.changedTouches?.[0] || event;
+    return { x: Number(source.clientX || 0), y: Number(source.clientY || 0) };
+  };
+
+  const openConnectionPicker = (event, connection) => {
+    if (!connection?.source) return;
+    const point = eventPoint(event);
+    const rect = shellRef.current?.getBoundingClientRect();
+    const x = rect ? point.x - rect.left : point.x;
+    const y = rect ? point.y - rect.top : point.y;
+    const currentViewport = viewportRef.current || { x: 0, y: 0, zoom: 1 };
+    const zoom = currentViewport.zoom || 1;
+    const flowPosition = {
+      x: Math.round((x - currentViewport.x) / zoom),
+      y: Math.round((y - currentViewport.y) / zoom),
+    };
+    setConnectionError("");
+    setPicker({
+      open: true,
+      mode: "connect",
+      x: rect ? Math.min(Math.max(12, x), rect.width - 350) : x,
+      y: rect ? Math.min(Math.max(12, y), rect.height - 260) : y,
+      flowPosition,
+      connection: {
+        source: connection.source,
+        sourceHandle: connection.sourceHandle || "default",
+        targetHandle: "in",
+      },
+      nodeId: "",
+    });
+  };
+
+  const onConnectEnd = (event, connectionState) => {
+    if (executionMode || reconnectingEdgeRef.current || connectionState?.isValid) return;
+    const from = connectionState?.fromNode?.id || connectionState?.from?.nodeId || connectionState?.fromHandle?.nodeId || "";
+    const sourceHandle = connectionState?.fromHandle?.id || connectionState?.fromHandle?.handleId || connectionState?.from?.handleId || "default";
+    if (from) openConnectionPicker(event, { source: from, sourceHandle });
+  };
+
+  const onReconnect = (oldEdge, connection) => {
+    if (executionMode) return;
+    const result = reconnectNodes(canonicalFromFlow(), oldEdge.id, connection);
+    if (!result.ok) {
+      setConnectionError(result.reason);
+      return;
+    }
+    const nextFlow = canonicalToFlow(result.graph);
+    const nextNodes = decorateNodes(nextFlow.nodes, nextFlow.edges);
+    setNodes(nextNodes);
+    setEdges(nextFlow.edges);
+    setSelectedEdgeId("");
+    setConnectionError("");
+    reconnectingEdgeRef.current = { id: oldEdge.id, reconnected: true };
+    markDirty(nextNodes, nextFlow.edges);
+  };
+
+  const onReconnectStart = (_, edge) => {
+    reconnectingEdgeRef.current = { id: edge.id, reconnected: false };
+  };
+
+  const onReconnectEnd = () => {
+    const current = reconnectingEdgeRef.current;
+    reconnectingEdgeRef.current = null;
+    if (executionMode || !current || current.reconnected) return;
+    const nextGraph = removeEdge(canonicalFromFlow(), current.id);
+    const nextFlow = canonicalToFlow(nextGraph);
+    const nextNodes = decorateNodes(nextFlow.nodes, nextFlow.edges);
+    setNodes(nextNodes);
+    setEdges(nextFlow.edges);
+    setSelectedEdgeId("");
+    markDirty(nextNodes, nextFlow.edges);
   };
 
   const onNodeDragStop = (_, node) => {
@@ -522,7 +693,7 @@ function AutomationEditor({ automation, rows, runs, runDetail, crm, catalog, val
               {!executionMode ? <button type="button" className="button button-solid button-small" data-automation-publish={automation?.id || ""}>Publicar</button> : null}
             </div>
           </header>
-          <section className="automation-canvas-shell">
+          <section className="automation-canvas-shell" ref={shellRef}>
             <ReactFlow
               nodes={nodes}
               edges={edges}
@@ -531,11 +702,19 @@ function AutomationEditor({ automation, rows, runs, runDetail, crm, catalog, val
               onEdgesChange={onEdgesChange}
               onNodeDragStop={executionMode ? undefined : onNodeDragStop}
               onConnect={executionMode ? undefined : connect}
+              onConnectEnd={executionMode ? undefined : onConnectEnd}
+              onReconnect={executionMode ? undefined : onReconnect}
+              onReconnectStart={executionMode ? undefined : onReconnectStart}
+              onReconnectEnd={executionMode ? undefined : onReconnectEnd}
               isValidConnection={executionMode ? undefined : validateConnection}
               onMoveEnd={executionMode ? undefined : onMoveEnd}
-              onNodeClick={(_, node) => { setSelectedNodeId(node.id); setSelectedEdgeId(""); }}
+              onNodeClick={(_, node) => {
+                setSelectedNodeId(node.id);
+                setSelectedEdgeId("");
+                if (!executionMode && node.data?.canonical?.type === "trigger" && !triggerTypeOf(node.data.canonical)) openTriggerPicker(node.id);
+              }}
               onEdgeClick={(_, edge) => { setSelectedEdgeId(edge.id); setSelectedNodeId(""); }}
-              onPaneClick={() => { setSelectedNodeId(""); setSelectedEdgeId(""); }}
+              onPaneClick={() => { setSelectedNodeId(""); setSelectedEdgeId(""); closePicker(); }}
               defaultViewport={graph.viewport || graph.ui?.viewport || undefined}
               fitView={!(graph.viewport || graph.ui?.viewport)}
               snapToGrid
@@ -544,6 +723,8 @@ function AutomationEditor({ automation, rows, runs, runDetail, crm, catalog, val
               maxZoom={1.7}
               nodesDraggable={!executionMode}
               nodesConnectable={!executionMode}
+              edgesReconnectable={!executionMode}
+              reconnectRadius={14}
               elementsSelectable
               proOptions={{ hideAttribution: true }}
             >
@@ -551,15 +732,16 @@ function AutomationEditor({ automation, rows, runs, runDetail, crm, catalog, val
               <Controls showInteractive={false} />
               <MiniMap pannable zoomable nodeStrokeWidth={3} />
             </ReactFlow>
-            {!executionMode ? <button type="button" className="automation-add-node" onClick={() => setPickerOpen((open) => !open)}>+ Adicionar etapa</button> : null}
-            {!executionMode && pickerOpen ? (
-              <div className="automation-node-picker">
+            {!executionMode ? <button type="button" className="automation-add-node" onClick={openAddPicker}>+ Adicionar etapa</button> : null}
+            {!executionMode && picker.open ? (
+              <div className={`automation-node-picker is-${picker.mode}`} style={pickerStyle}>
                 {Object.entries(catalogGroups).map(([category, items]) => (
                   <section key={category}>
                     <h4>{category}</h4>
                     {items.map((item) => <button key={`${item.kind}:${item.type}`} type="button" onClick={() => addNode(item)}><span>{item.label}</span><small>{item.description}</small></button>)}
                   </section>
                 ))}
+                {!Object.keys(catalogGroups).length ? <small>Nenhuma etapa disponível.</small> : null}
               </div>
             ) : null}
             {connectionError ? <div className="automation-inline-error">{connectionError}</div> : null}
@@ -588,7 +770,7 @@ function AutomationEditor({ automation, rows, runs, runDetail, crm, catalog, val
         </main>
         {executionMode
           ? <ExecutionInspector node={selectedNode} runDetail={runDetail} onBackToEditor={onBackToEditor} />
-          : <PropertiesPanel node={selectedNode} crm={crm} onConfigChange={updateConfig} onDeleteNode={deleteNode} />}
+          : <PropertiesPanel node={selectedNode} crm={crm} onConfigChange={updateConfig} onDeleteNode={deleteNode} onOpenTriggerPicker={openTriggerPicker} />}
       </div>
     </ReactFlowProvider>
   );

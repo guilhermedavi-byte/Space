@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 
 const {
   NODE_CATALOG,
+  addConnectedCatalogNode,
   buildExecutionOverlay,
   canonicalToFlow,
   catalogItemToNode,
@@ -10,9 +11,12 @@ const {
   createDebouncedAutosave,
   flowToCanonical,
   isValidConnection,
+  neutralTriggerGraph,
+  reconnectNodes,
   removeEdge,
   removeNodeAndEdges,
   updateActionConfig,
+  updateTriggerType,
 } = require("../src/automation-editor/graph-adapter.cjs");
 
 const graph = {
@@ -60,6 +64,24 @@ test("catalog creates stable canonical nodes", () => {
   });
 });
 
+test("new draft automation starts with one neutral trigger", () => {
+  const draft = neutralTriggerGraph();
+  assert.equal(draft.nodes.length, 1);
+  assert.equal(draft.nodes[0].type, "trigger");
+  assert.equal(draft.nodes[0].triggerType, "");
+  assert.equal(draft.edges.length, 0);
+  const flow = canonicalToFlow(draft);
+  assert.equal(flow.nodes[0].data.label, "Escolha um gatilho");
+});
+
+test("selecting trigger preserves node identity", () => {
+  const draft = neutralTriggerGraph();
+  const selected = updateTriggerType(draft, "trigger_1", "attendance.message.created");
+  assert.equal(selected.nodes.length, 1);
+  assert.equal(selected.nodes[0].id, "trigger_1");
+  assert.equal(selected.nodes[0].triggerType, "attendance.message.created");
+});
+
 test("node deletion removes connected edges and keeps one trigger", () => {
   const result = removeNodeAndEdges(graph, "condition_1");
   assert.equal(result.blocked, "");
@@ -88,6 +110,38 @@ test("connections validate direction, branches, duplicates, and canonical edge o
   const connected = connectNodes(withoutFalseBranch, { source: "condition_1", target: "end_2", sourceHandle: "false" }, "edge_false_end_2");
   assert.equal(connected.ok, true);
   assert.deepEqual(connected.edge, { id: "edge_false_end_2", from: "condition_1", to: "end_2", branch: "false" });
+});
+
+test("connect-to-empty creates a connected node at drop position", () => {
+  const triggerOnly = updateTriggerType(neutralTriggerGraph(), "trigger_1", "attendance.message.created");
+  const condition = NODE_CATALOG.find((item) => item.kind === "condition");
+  const result = addConnectedCatalogNode(
+    triggerOnly,
+    condition,
+    { source: "trigger_1", sourceHandle: "default" },
+    { id: "condition_drop", edgeId: "edge_drop", position: { x: 512.3, y: 144.8 } }
+  );
+  assert.equal(result.ok, true);
+  assert.equal(result.node.id, "condition_drop");
+  assert.deepEqual(result.node.position, { x: 512, y: 145 });
+  assert.deepEqual(result.edge, { id: "edge_drop", from: "trigger_1", to: "condition_drop" });
+});
+
+test("canceling empty-canvas picker leaves graph unchanged", () => {
+  const draft = updateTriggerType(neutralTriggerGraph(), "trigger_1", "attendance.message.created");
+  const before = JSON.stringify(draft);
+  assert.equal(JSON.stringify(draft), before);
+});
+
+test("edge reconnect retargets exactly one canonical edge", () => {
+  const next = reconnectNodes(graph, "edge_condition_false_action", {
+    source: "condition_1",
+    target: "end_1",
+    sourceHandle: "false",
+  });
+  assert.equal(next.ok, true);
+  assert.equal(next.graph.edges.filter((edge) => edge.from === "condition_1" && edge.branch === "false").length, 1);
+  assert.equal(next.graph.edges.find((edge) => edge.id === "edge_condition_false_action").to, "end_1");
 });
 
 test("edge deletion removes the selected canonical edge", () => {
