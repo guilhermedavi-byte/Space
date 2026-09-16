@@ -35,3 +35,24 @@ test('recovery drawer posts a payment promise and refreshes the active case',asy
  assert.deepEqual(JSON.parse(post[1].body),{payment_id:'pay_one',action:'payment_promise',promised_payment_date:'2026-09-20',promised_amount:'123.45',responsible:'CS',note:'Combinado por telefone'});
  dom.window.close();
 });
+
+test('rule engine creates one pending internal event, pauses on promise, and stops when paid',async()=>{
+ const {createRecoveryOperations}=require('../api/_lib/finance-recovery-operations');
+ const store=new Map(),connectionId='589367ba-e7c4-4c26-af71-53f97eac31a4';
+ const firestore={
+  getDocumentAsAdmin:async p=>{const id=decodeURIComponent(p.split('/').pop());if(!store.has(id)){const e=new Error('missing');e.status=404;throw e;}return store.get(id);},
+  listCollectionAsAdmin:async()=>[...store.values()],
+  commitWritesAsAdmin:async({writes})=>{for(const w of writes){const id=decodeURIComponent(w.update.name.split('/').pop());const fields=w.update.fields;const decode=v=>{if('stringValue'in v)return v.stringValue;if('integerValue'in v)return Number(v.integerValue);if('doubleValue'in v)return v.doubleValue;if('booleanValue'in v)return v.booleanValue;if(v.arrayValue)return (v.arrayValue.values||[]).map(decode);if(v.mapValue)return Object.fromEntries(Object.entries(v.mapValue.fields||{}).map(([k,x])=>[k,decode(x)]));return null;};store.set(id,Object.fromEntries(Object.entries(fields).map(([k,v])=>[k,decode(v)])));}return {ok:true};},
+ };
+ const ops=createRecoveryOperations({connectionId,firestore,projectId:'space-test',request:async()=>({data:[{asaas_payment_id:'pay_one',asaas_customer_id:'cus_one'}]})});
+ const row={id:'pay_one',group:'overdue',due_date:'2026-09-13',customer_id:'cus_one',student_ids:[]};
+ let r=await ops.materializeRules([row],'2026-09-16');
+ assert.equal(r.active,1);assert.equal(r.pending,1);
+ r=await ops.materializeRules([row],'2026-09-16');
+ assert.equal(r.pending,1);assert.equal(store.get('pay_one').executed_rule_steps.length,1);
+ await ops.recordAction({payment_id:'pay_one',action:'payment_promise',promised_payment_date:'2026-09-20',promised_amount:'100.00'},'tester');
+ r=await ops.materializeRules([row],'2026-09-17');
+ assert.equal(r.paused,1);assert.equal(store.get('pay_one').next_action_type,'promise_followup');
+ r=await ops.materializeRules([{...row,group:'received'}],'2026-09-18');
+ assert.equal(r.stopped,1);assert.equal(store.get('pay_one').status,'recovered');assert.equal(store.get('pay_one').pending_internal_events.length,0);
+});

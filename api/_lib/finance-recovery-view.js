@@ -6,8 +6,11 @@ function recovery(rows,cases=new Map()){
  const items=rows.filter(r=>r.group==='overdue'&&r.days_overdue>0).map(r=>{
   const item={...r,aging:BUCKETS.find(b=>r.days_overdue>=b.min&&r.days_overdue<=b.max).id,stage:stage(r.days_overdue),recovery_case:cases.get(r.id)||null};
   item.operational_status=item.recovery_case?.status_label||'Novo';
-  item.next_action_date=item.recovery_case?.next_action_date||item.recovery_case?.promised_payment_date||null;
-  item.next_action_label=item.recovery_case?.last_action_label||'Acompanhar';
+  item.stage=item.recovery_case?.current_rule_stage||item.stage;
+  item.rule_state=item.recovery_case?.rule_state_label||'Ativa';
+  item.next_action_date=item.recovery_case?.next_action_at||item.recovery_case?.next_action_date||item.recovery_case?.promised_payment_date||null;
+  item.next_action_label=item.recovery_case?.next_action_type_label||item.recovery_case?.last_action_label||'Acompanhar';
+  item.pending_actions=item.recovery_case?.pending_actions||0;
   return item;
  });
  const total=rs=>rs.reduce((n,r)=>{const value=n+(r.value??0);if(!Number.isSafeInteger(value))throw Error('finance_amount_invalid');return value;},0);
