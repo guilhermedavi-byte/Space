@@ -61,6 +61,11 @@ function createReader({request=supabaseFetch,client=createAsaasClient({readOnly:
    const items=d.rows.filter(r=>(!q.status||q.status==='all'||r.group===q.status)&&search(r,q.q)&&(!q.method||r.method===q.method)&&(!q.from||r.due_date&&r.due_date>=q.from)&&(!q.to||r.due_date&&r.due_date<=q.to)&&(!q.customer||r.customer_id===q.customer)&&(!q.subscription||r.subscription_id===q.subscription)).sort((a,b)=>(a.due_date||'9999').localeCompare(b.due_date||'9999')||a.id.localeCompare(b.id));
    return {meta,...paginate(items,q),counts,filter_context:q.customer?{label:d.customer(q.customer).name||q.customer}:q.subscription?{label:q.subscription}:null,methods:[...new Set(d.rows.map(r=>r.method).filter(Boolean))].map(id=>({id,label:METHOD[id]||id}))};
   }
+  if(view==='recovery'){
+   const {items:all,...summary}=require('./finance-recovery-view').recovery(d.rows);
+   const items=all.filter(r=>search(r,q.q)&&(!q.aging||r.aging===q.aging)&&(!q.stage||r.stage===q.stage)&&(!q.link||q.link===(r.linked?'linked':'unlinked'))).sort((a,b)=>b.days_overdue-a.days_overdue||a.id.localeCompare(b.id));
+   return {meta,...summary,...paginate(items,q)};
+  }
   if(view==='subscriptions')return {meta,...paginate(d.subscriptions.filter(r=>search(r,q.q)&&(!q.status||r.status===q.status)).sort((a,b)=>(a.next_due_date||'9999').localeCompare(b.next_due_date||'9999')||a.id.localeCompare(b.id)),q),statuses:[...new Set(d.subscriptions.map(r=>r.status).filter(Boolean))]};
   if(view==='customers'){
    const ids=new Set([...d.names.keys(),...d.rows.map(r=>r.customer_id),...d.subscriptions.map(r=>r.customer_id)].filter(Boolean));const items=[...ids].map(id=>{const rows=d.rows.filter(r=>r.customer_id===id),overdue=sum(rows.filter(r=>r.group==='overdue'),r=>r.value),open=sum(rows.filter(r=>['overdue','upcoming'].includes(r.group)),r=>r.value);return {id,...d.customer(id),overdue,open,received:sum(rows,receivedValue),count:rows.length,subscriptions:d.subscriptions.filter(s=>s.customer_id===id).map(s=>s.id),financial_status:overdue>0?'overdue':open>0?'open':rows.length?'clear':'none'};}).filter(r=>search(r,q.q)&&(!q.status||r.financial_status===q.status)&&(!q.link||(q.link==='ambiguous'?r.identity_status==='AMBIGUOUS':q.link===(r.linked?'linked':'unlinked')))).sort((a,b)=>b.overdue-a.overdue||String(a.name||a.id).localeCompare(String(b.name||b.id)));
