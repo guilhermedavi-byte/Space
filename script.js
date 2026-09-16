@@ -12417,11 +12417,29 @@ const crmActivityTypeLabel = (type) => ({
 }[String(type || "")] || "Atividade");
 
 const crmActivityTypeIcon = (type) => ({
-  task: "✓",
-  call: "☎",
-  meeting: "◎",
-  follow_up: "↗",
-}[String(type || "")] || "•");
+  task: "check",
+  call: "phone",
+  meeting: "calendar",
+  follow_up: "arrow-up-right",
+}[String(type || "")] || "dot");
+
+const nativeCrmIcon = (name, className = "") => {
+  const attrs = `class="native-crm-svg ${escapeHtml(className)}" viewBox="0 0 24 24" fill="none" aria-hidden="true"`;
+  const common = `stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"`;
+  const paths = {
+    search: `<circle cx="11" cy="11" r="6" ${common}></circle><path d="m16 16 4 4" ${common}></path>`,
+    filter: `<path d="M4 6h16M7 12h10M10 18h4" ${common}></path>`,
+    plus: `<path d="M12 5v14M5 12h14" ${common}></path>`,
+    phone: `<path d="M6.7 5.1 9 4.5l2 4-1.4 1.3c.8 1.8 2.2 3.2 4 4l1.3-1.4 4 2-.6 2.3c-.2.8-.9 1.3-1.7 1.3A11.7 11.7 0 0 1 5.4 6.8c0-.8.5-1.5 1.3-1.7Z" ${common}></path>`,
+    calendar: `<path d="M7 3v4M17 3v4M4 9h16M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" ${common}></path>`,
+    check: `<path d="m5 12 4 4L19 6" ${common}></path>`,
+    "arrow-up-right": `<path d="M7 17 17 7M9 7h8v8" ${common}></path>`,
+    dot: `<circle cx="12" cy="12" r="3" fill="currentColor"></circle>`,
+    close: `<path d="M6 6l12 12M18 6 6 18" ${common}></path>`,
+    sort: `<path d="M8 7h8M10 12h6M12 17h2" ${common}></path>`,
+  };
+  return `<svg ${attrs}>${paths[name] || paths.dot}</svg>`;
+};
 
 const crmActivityTone = (value) => {
   const date = new Date(String(value || ""));
@@ -12536,26 +12554,52 @@ const renderNativeCrmPipelineOptions = (selected = "") => {
     .join("");
 };
 
+const nativeCrmInitials = (name = "") => {
+  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  return (parts.length > 1 ? `${parts[0][0]}${parts[1][0]}` : (parts[0] || "?").slice(0, 2)).toUpperCase();
+};
+
+const nativeCrmOwnerHtml = (opportunity) => {
+  const ownerName = opportunity?.owner?.name || opportunity?.owner?.email || "";
+  if (!ownerName) return "";
+  return `<span class="native-crm-owner"><span>${escapeHtml(nativeCrmInitials(ownerName))}</span>${escapeHtml(ownerName)}</span>`;
+};
+
+const nativeCrmActiveFilterCount = () => {
+  const filters = nativeCrmState.filters || {};
+  return [
+    nativeCrmState.search,
+    filters.stageId,
+    filters.status,
+    filters.ownerId,
+    filters.source,
+    filters.activityState && filters.activityState !== "all" ? filters.activityState : "",
+    filters.createdRange,
+  ].filter(Boolean).length;
+};
+
 const nativeCrmCardHtml = (opportunity) => {
   const contact = opportunity.contact || {};
   const money = formatCrmMoney(opportunity.value, opportunity.currency);
-  const ownerName = opportunity.owner?.name || "";
   const activityTone = opportunity.nextActivityAt ? crmActivityTone(opportunity.nextActivityAt) : "none";
+  const activityIcon = nativeCrmIcon(crmActivityTypeIcon(opportunity.nextActivityType));
   return `
     <article class="native-crm-card" draggable="true" data-crm-card="${escapeHtml(opportunity.id)}" tabindex="0">
-      <div class="native-crm-card-top">
-        <strong>${escapeHtml(contact.name || opportunity.title || "Lead sem nome")}</strong>
-        ${money ? `<span>${escapeHtml(money)}</span>` : ""}
+      <div class="native-crm-card-main">
+        <div>
+          <strong>${escapeHtml(contact.name || opportunity.title || "Lead sem nome")}</strong>
+          <span>${escapeHtml(opportunity.title || contact.name || "Oportunidade")}</span>
+        </div>
+        ${money ? `<em>${escapeHtml(money)}</em>` : ""}
       </div>
-      <div class="native-crm-card-title">${escapeHtml(opportunity.title || contact.name || "Oportunidade")}</div>
       <div class="native-crm-card-meta">
-        ${opportunity.source ? `<span>${escapeHtml(opportunity.source)}</span>` : ""}
-        ${ownerName ? `<span>${escapeHtml(ownerName)}</span>` : ""}
+        ${nativeCrmOwnerHtml(opportunity)}
+        ${opportunity.source ? `<span class="native-crm-card-source">${escapeHtml(opportunity.source)}</span>` : ""}
       </div>
       <div class="native-crm-next-activity" data-tone="${escapeHtml(activityTone)}">
         ${opportunity.nextActivityId
-          ? `<strong>${escapeHtml(crmActivityTypeIcon(opportunity.nextActivityType))} ${escapeHtml(crmActivityTypeLabel(opportunity.nextActivityType))}</strong><span>${escapeHtml(opportunity.nextActivityTitle || "")}</span><em>${escapeHtml(formatCrmActivityDate(opportunity.nextActivityAt))}</em>`
-          : `<strong>Sem próxima atividade</strong><span>Adicionar atividade</span>`}
+          ? `<span class="native-crm-next-icon">${activityIcon}</span><div><strong>${escapeHtml(opportunity.nextActivityTitle || crmActivityTypeLabel(opportunity.nextActivityType))}</strong><em>${escapeHtml(formatCrmActivityDate(opportunity.nextActivityAt))}</em></div>`
+          : `<span class="native-crm-next-icon">${nativeCrmIcon("calendar")}</span><div><strong>Sem próxima atividade</strong><em>Adicionar follow-up</em></div>`}
       </div>
     </article>
   `;
@@ -12578,11 +12622,15 @@ const renderNativeCrmBoard = () => {
         return `
           <section class="native-crm-column" data-crm-stage="${escapeHtml(stage.id)}">
             <header class="native-crm-column-head">
-              <strong>${escapeHtml(stage.name)}</strong>
-              <span>${opportunities.length} leads · ${escapeHtml(formatCrmMoney(total, "BRL") || "R$ 0")}</span>
+              <div>
+                <span class="native-crm-stage-dot"></span>
+                <strong>${escapeHtml(stage.name)}</strong>
+              </div>
+              <span>${escapeHtml(formatCrmMoney(total, "BRL") || "R$ 0")}</span>
+              <em>${opportunities.length}</em>
             </header>
             <div class="native-crm-column-drop" data-crm-dropzone="${escapeHtml(stage.id)}">
-              ${opportunities.map(nativeCrmCardHtml).join("") || `<div class="native-crm-column-empty">Sem oportunidades</div>`}
+              ${opportunities.map(nativeCrmCardHtml).join("") || `<div class="native-crm-column-empty">${nativeCrmIcon("dot")}<strong>Nenhuma oportunidade</strong><span>Arraste um lead para esta etapa.</span></div>`}
             </div>
           </section>
         `;
@@ -12650,11 +12698,13 @@ const nativeCrmActiveFilterChipsHtml = () => {
 const nativeCrmFiltersHtml = () => {
   const pipelineId = selectedCrmPipelineId();
   const filters = nativeCrmState.filters || {};
+  const count = nativeCrmActiveFilterCount();
   return `
     <div class="native-crm-filter-wrap">
-      <button type="button" class="native-crm-filter" data-crm-filter-toggle>Filtros</button>
+      <button type="button" class="native-crm-filter" data-crm-filter-toggle>${nativeCrmIcon("filter")}<span>Filtros</span>${count ? `<strong>${count}</strong>` : ""}</button>
       ${nativeCrmState.filtersOpen ? `
         <div class="native-crm-filter-panel" data-crm-filter-panel>
+          <div class="native-crm-filter-panel-head"><strong>Filtros</strong><span>Aplicação instantânea</span></div>
           <label><span>Pipeline</span><select data-crm-filter="pipelineId">${renderNativeCrmPipelineOptions(pipelineId)}</select></label>
           <label><span>Etapa</span><select data-crm-filter="stageId"><option value="">Todas as etapas</option>${renderNativeCrmStageOptions(pipelineId, filters.stageId)}</select></label>
           <label><span>Status</span><select data-crm-filter="status">
@@ -12713,16 +12763,16 @@ const nativeCrmListParams = ({ cursor = "" } = {}) => {
 
 const nativeCrmListActivityHtml = (opportunity) => {
   const tone = opportunity.activityState || crmOpportunityActivityState(opportunity);
-  if (!opportunity.nextActivityId) return `<span class="native-crm-activity-pill" data-tone="none">Sem próxima atividade</span>`;
-  return `<span class="native-crm-activity-pill" data-tone="${escapeHtml(tone)}">${escapeHtml(crmActivityStateLabel(tone))} · ${escapeHtml(formatCrmActivityDate(opportunity.nextActivityAt))}</span>`;
+  if (!opportunity.nextActivityId) return `<span class="native-crm-activity-pill" data-tone="none">${nativeCrmIcon("calendar")} Sem próxima atividade</span>`;
+  return `<span class="native-crm-activity-pill" data-tone="${escapeHtml(tone)}">${nativeCrmIcon(crmActivityTypeIcon(opportunity.nextActivityType))} ${escapeHtml(crmActivityStateLabel(tone))} · ${escapeHtml(formatCrmActivityDate(opportunity.nextActivityAt))}</span>`;
 };
 
 const renderNativeCrmList = () => {
   const rows = Array.isArray(nativeCrmState.list.rows) ? nativeCrmState.list.rows : [];
   const sortButton = (field, label) => {
     const active = nativeCrmState.list.sort === field;
-    const arrow = active ? (nativeCrmState.list.direction === "asc" ? " ↑" : " ↓") : "";
-    return `<button type="button" data-crm-sort="${escapeHtml(field)}" class="${active ? "is-active" : ""}">${escapeHtml(label)}${arrow}</button>`;
+    const arrow = active ? (nativeCrmState.list.direction === "asc" ? "Asc" : "Desc") : "";
+    return `<button type="button" data-crm-sort="${escapeHtml(field)}" class="${active ? "is-active" : ""}">${escapeHtml(label)}${active ? `<span>${escapeHtml(arrow)}</span>` : ""}</button>`;
   };
   return `
     <section class="native-crm-list">
@@ -12737,7 +12787,7 @@ const renderNativeCrmList = () => {
               <th>${sortButton("name", "Contato")}</th>
               <th>Etapa</th>
               <th>Status</th>
-              <th>${sortButton("value", "Valor")}</th>
+              <th class="is-number">${sortButton("value", "Valor")}</th>
               <th>Origem</th>
               <th>Responsável</th>
               <th>${sortButton("nextActivity", "Próxima atividade")}</th>
@@ -12754,7 +12804,7 @@ const renderNativeCrmList = () => {
                   <td><strong>${escapeHtml(contact.name || opportunity.title || "Lead sem nome")}</strong><span>${escapeHtml([contact.email, contact.phone].filter(Boolean).join(" · ") || opportunity.title || "")}</span></td>
                   <td>${escapeHtml(stageName)}</td>
                   <td><span class="native-crm-status-pill">${escapeHtml(crmStatusLabel(opportunity.status))}</span></td>
-                  <td>${escapeHtml(formatCrmMoney(opportunity.value, opportunity.currency) || "—")}</td>
+                  <td class="is-number">${escapeHtml(formatCrmMoney(opportunity.value, opportunity.currency) || "—")}</td>
                   <td>${escapeHtml(opportunity.source || "—")}</td>
                   <td>${escapeHtml(opportunity.owner?.name || "—")}</td>
                   <td>${nativeCrmListActivityHtml(opportunity)}</td>
@@ -12781,19 +12831,21 @@ const nativeCrmNextActivityHtml = (opportunity) => {
   if (!opportunity?.nextActivityId) {
     return `
       <section class="native-crm-context-card" data-tone="none">
-        <div><span>Próxima atividade</span><strong>Sem próxima atividade</strong></div>
-        <button type="button" class="button button-solid button-small" data-crm-activity-new="${escapeHtml(opportunity?.id || "")}">Adicionar atividade</button>
+        <span class="native-crm-context-icon">${nativeCrmIcon("calendar")}</span>
+        <div><span>Próxima atividade</span><strong>Sem próxima atividade</strong><em>Crie um próximo passo para manter o lead em movimento.</em></div>
+        <button type="button" class="button button-solid button-small" data-crm-activity-new="${escapeHtml(opportunity?.id || "")}">${nativeCrmIcon("plus")}Adicionar</button>
       </section>
     `;
   }
   return `
     <section class="native-crm-context-card" data-tone="${escapeHtml(tone)}">
+      <span class="native-crm-context-icon">${nativeCrmIcon(crmActivityTypeIcon(opportunity.nextActivityType))}</span>
       <div>
         <span>Próxima atividade</span>
-        <strong>${escapeHtml(crmActivityTypeIcon(opportunity.nextActivityType))} ${escapeHtml(opportunity.nextActivityTitle || crmActivityTypeLabel(opportunity.nextActivityType))}</strong>
+        <strong>${escapeHtml(opportunity.nextActivityTitle || crmActivityTypeLabel(opportunity.nextActivityType))}</strong>
         <em>${escapeHtml(formatCrmActivityDate(opportunity.nextActivityAt))}</em>
       </div>
-      <button type="button" class="button button-outline button-small" data-crm-activity-new="${escapeHtml(opportunity.id)}">+ Nova atividade</button>
+      <button type="button" class="button button-outline button-small" data-crm-activity-new="${escapeHtml(opportunity.id)}">${nativeCrmIcon("plus")}Nova atividade</button>
     </section>
   `;
 };
@@ -12840,7 +12892,7 @@ const nativeCrmOpenActivitiesHtml = (opportunity) => {
     <section class="native-crm-form-section">
       <div class="native-crm-section-head">
         <h3>Atividades abertas</h3>
-        <button type="button" class="button button-outline button-small" data-crm-activity-new="${escapeHtml(opportunity.id)}">+ Nova atividade</button>
+        <button type="button" class="button button-outline button-small" data-crm-activity-new="${escapeHtml(opportunity.id)}">${nativeCrmIcon("plus")}Nova atividade</button>
       </div>
       ${detail.loading ? `<div class="native-crm-muted">Carregando atividades…</div>` : ""}
       ${!detail.loading && !openActivities.length ? `<div class="native-crm-muted">Sem atividades abertas.</div>` : ""}
@@ -12849,8 +12901,9 @@ const nativeCrmOpenActivitiesHtml = (opportunity) => {
           const tone = crmActivityTone(activity.dueAt);
           return `
             <article class="native-crm-activity-row" data-tone="${escapeHtml(tone)}">
+              <span class="native-crm-activity-icon">${nativeCrmIcon(crmActivityTypeIcon(activity.type))}</span>
               <div>
-                <strong>${escapeHtml(crmActivityTypeIcon(activity.type))} ${escapeHtml(activity.title || crmActivityTypeLabel(activity.type))}</strong>
+                <strong>${escapeHtml(activity.title || crmActivityTypeLabel(activity.type))}</strong>
                 <span>${escapeHtml(crmActivityTypeLabel(activity.type))} · ${escapeHtml(formatCrmActivityDate(activity.dueAt))}</span>
                 ${activity.description ? `<p>${escapeHtml(activity.description)}</p>` : ""}
               </div>
@@ -12873,10 +12926,10 @@ const nativeCrmTimelineHtml = (opportunity) => {
       <div class="native-crm-timeline">
         ${(detail.timeline || []).map((item) => `
           <article class="native-crm-timeline-item">
-            <time>${escapeHtml(formatCrmDateTime(item.occurredAt))}</time>
+            <span class="native-crm-timeline-dot"></span>
             <strong>${escapeHtml(item.title || "Evento")}</strong>
             ${item.description ? `<span>${escapeHtml(item.description)}</span>` : ""}
-            ${item.actorName ? `<em>por ${escapeHtml(item.actorName)}</em>` : ""}
+            <em>${escapeHtml(formatCrmDateTime(item.occurredAt))}${item.actorName ? ` · por ${escapeHtml(item.actorName)}` : ""}</em>
           </article>
         `).join("")}
       </div>
@@ -12893,28 +12946,24 @@ const renderNativeCrmDrawer = () => {
   const contact = opportunity?.contact || {};
   const pipelineId = opportunity?.pipelineId || selectedCrmPipelineId();
   const stageId = opportunity?.stageId || getNativeCrmData().stages.find((stage) => stage.pipelineId === pipelineId)?.id || "";
+  const stageName = getNativeCrmData().stages.find((stage) => stage.id === stageId)?.name || "Oportunidade";
+  const money = opportunity?.value ? formatCrmMoney(opportunity.value, opportunity.currency) : "";
   return `
     <div class="native-crm-drawer-backdrop" data-crm-drawer-close></div>
     <aside class="native-crm-drawer" aria-label="${isNew ? "Novo lead" : "Detalhes da oportunidade"}">
       <form data-crm-form="${isNew ? "new" : "edit"}" data-crm-opportunity-id="${escapeHtml(opportunity?.id || "")}">
         <header class="native-crm-drawer-head">
           <div>
-            <span>${isNew ? "Novo lead" : escapeHtml(getNativeCrmData().stages.find((stage) => stage.id === stageId)?.name || "Oportunidade")}</span>
+            <span>${isNew ? "Novo lead" : `CRM / ${escapeHtml(stageName)}`}</span>
             <h2>${isNew ? "Nova oportunidade" : escapeHtml(contact.name || opportunity.title || "Oportunidade")}</h2>
-            ${!isNew ? `<p>${escapeHtml(opportunity.status || "open")}${opportunity.value ? ` · ${escapeHtml(formatCrmMoney(opportunity.value, opportunity.currency))}` : ""}</p>` : ""}
+            ${!isNew ? `<p><strong>${escapeHtml(crmStatusLabel(opportunity.status))}</strong>${money ? `<em>${escapeHtml(money)}</em>` : ""}${opportunity.title ? `<small>${escapeHtml(opportunity.title)}</small>` : ""}</p>` : `<p><small>Cadastre contato e dados comerciais para abrir uma oportunidade.</small></p>`}
           </div>
-          <button type="button" class="native-crm-icon-button" data-crm-drawer-close aria-label="Fechar">×</button>
+          <button type="button" class="native-crm-icon-button" data-crm-drawer-close aria-label="Fechar">${nativeCrmIcon("close")}</button>
         </header>
         <div class="native-crm-drawer-body">
           ${isNew ? "" : nativeCrmNextActivityHtml(opportunity)}
           ${isNew ? "" : nativeCrmActivityFormHtml(opportunity)}
           ${isNew ? "" : nativeCrmOpenActivitiesHtml(opportunity)}
-          <section class="native-crm-form-section">
-            <h3>Informações do contato</h3>
-            <label><span>Nome *</span><input name="name" required value="${escapeHtml(contact.name || "")}" /></label>
-            <label><span>Telefone</span><input name="phone" value="${escapeHtml(contact.phone || "")}" /></label>
-            <label><span>E-mail</span><input name="email" type="email" value="${escapeHtml(contact.email || "")}" /></label>
-          </section>
           <section class="native-crm-form-section">
             <h3>Informações comerciais</h3>
             <label><span>Título</span><input name="title" value="${escapeHtml(opportunity?.title || contact.name || "")}" /></label>
@@ -12939,6 +12988,12 @@ const renderNativeCrmDrawer = () => {
               </div>
               <label><span>Motivo de perda</span><input name="lostReason" value="${escapeHtml(opportunity.lostReason || "")}" /></label>
             `}
+          </section>
+          <section class="native-crm-form-section">
+            <h3>Contato</h3>
+            <label><span>Nome *</span><input name="name" required value="${escapeHtml(contact.name || "")}" /></label>
+            <label><span>Telefone</span><input name="phone" value="${escapeHtml(contact.phone || "")}" /></label>
+            <label><span>E-mail</span><input name="email" type="email" value="${escapeHtml(contact.email || "")}" /></label>
           </section>
           ${isNew ? "" : `
             <section class="native-crm-form-section">
@@ -12965,7 +13020,7 @@ const renderNativeCrm = () => {
   const root = getNativeCrmRoot();
   if (!(root instanceof HTMLElement)) return;
   if (nativeCrmState.loading && !nativeCrmState.data) {
-    root.innerHTML = `<div class="native-crm-loading">Carregando CRM…</div>`;
+    root.innerHTML = `<div class="native-crm-shell"><div class="native-crm-skeleton"><span></span><span></span><div></div><div></div><div></div></div></div>`;
     return;
   }
   if (nativeCrmState.error && !nativeCrmState.data) {
@@ -12980,22 +13035,31 @@ const renderNativeCrm = () => {
   }
   const { pipelines } = getNativeCrmData();
   const pipelineId = selectedCrmPipelineId();
+  const pipelineName = pipelines.find((pipeline) => pipeline.id === pipelineId)?.name || "Comercial";
   root.innerHTML = `
     <div class="native-crm-shell">
       <header class="native-crm-head">
-        <div>
+        <div class="native-crm-title">
           <div class="native-crm-eyebrow">Comercial</div>
           <h2>CRM</h2>
+          <p>Pipeline ${escapeHtml(pipelineName)} · visão geral das oportunidades</p>
         </div>
         <div class="native-crm-actions">
-          <select data-crm-pipeline aria-label="Pipeline">${renderNativeCrmPipelineOptions(pipelineId)}</select>
-          <input type="search" placeholder="Buscar lead" value="${escapeHtml(nativeCrmState.search)}" data-crm-search />
-          ${nativeCrmFiltersHtml()}
-          <div class="native-crm-segment" aria-label="Visualização">
-            <button type="button" class="${nativeCrmState.mode === "funnel" ? "is-active" : ""}" data-crm-view="funnel">Funil</button>
-            <button type="button" class="${nativeCrmState.mode === "list" ? "is-active" : ""}" data-crm-view="list">Lista</button>
+          <div class="native-crm-toolbar-group">
+            <select data-crm-pipeline aria-label="Pipeline">${renderNativeCrmPipelineOptions(pipelineId)}</select>
+            <label class="native-crm-search">
+              ${nativeCrmIcon("search")}
+              <input type="search" placeholder="Buscar oportunidades..." value="${escapeHtml(nativeCrmState.search)}" data-crm-search />
+            </label>
+            ${nativeCrmFiltersHtml()}
           </div>
-          <button type="button" class="button button-solid button-small" data-crm-new>+ Novo lead</button>
+          <div class="native-crm-toolbar-group">
+            <div class="native-crm-segment" aria-label="Visualização">
+              <button type="button" class="${nativeCrmState.mode === "funnel" ? "is-active" : ""}" data-crm-view="funnel">Funil</button>
+              <button type="button" class="${nativeCrmState.mode === "list" ? "is-active" : ""}" data-crm-view="list">Lista</button>
+            </div>
+            <button type="button" class="button button-solid button-small native-crm-primary-action" data-crm-new>${nativeCrmIcon("plus")}Novo lead</button>
+          </div>
         </div>
       </header>
       ${nativeCrmActiveFilterChipsHtml()}
