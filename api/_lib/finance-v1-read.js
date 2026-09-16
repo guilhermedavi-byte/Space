@@ -30,6 +30,7 @@ function createReader({request=supabaseFetch,client=createAsaasClient({readOnly:
   await verify();const result={customers:[],subscriptions:[]};
   // Existing central client, GET-only. This enrichment never changes projections.
   for(const resource of ['customers'])for await(const page of client.pages(resource,{limit:100,maxPages:100})){result[resource].push(...page.data.map(r=>resource==='customers'?{id:r.id,name:r.name||null,deleted:r.deleted===true,email:r.email,phone:r.phone,mobilePhone:r.mobilePhone,cpfCnpj:r.cpfCnpj,externalReference:r.externalReference}:{id:r.id,customer:r.customer,status:r.deleted?'DELETED':r.status,value:r.value,cycle:r.cycle,next_due_date:r.nextDueDate,billing_type:r.billingType}));}
+  const financial=await core();await require('./finance-customer-directory').completeCustomers(result.customers,financial.receivables.map(r=>r.asaas_customer_id),client);
   return result;
  },300000);
  const spaceDirectory=cached(async()=>{const sources=await spaceLoader();return {sources,profiles:space.profiles(sources)};},300000);

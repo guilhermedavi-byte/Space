@@ -2,33 +2,39 @@ TAP version 13
 # Subtest: manual link requires authorized role, origin, explicit confirmation and records exact chosen IDs
 ok 1 - manual link requires authorized role, origin, explicit confirmation and records exact chosen IDs
   ---
-  duration_ms: 3.678917
+  duration_ms: 4.092458
   type: 'test'
   ...
 # Subtest: new customer registration rejects missing canonical ID instead of using names or contacts
 ok 2 - new customer registration rejects missing canonical ID instead of using names or contacts
   ---
-  duration_ms: 0.947292
+  duration_ms: 1.35925
   type: 'test'
   ...
 # Subtest: canonical link is serialized, conflicts rejected and lease released
 ok 3 - canonical link is serialized, conflicts rejected and lease released
   ---
-  duration_ms: 1.14125
+  duration_ms: 1.184083
   type: 'test'
   ...
 # Subtest: ambiguity is surfaced with candidate IDs; explicit manual resolution remains authoritative
 ok 4 - ambiguity is surfaced with candidate IDs; explicit manual resolution remains authoritative
   ---
-  duration_ms: 1.32075
+  duration_ms: 1.384334
   type: 'test'
   ...
-1..4
-# tests 4
+# Subtest: historical customers participate in duplicate detection without provider writes
+ok 5 - historical customers participate in duplicate detection without provider writes
+  ---
+  duration_ms: 0.770709
+  type: 'test'
+  ...
+1..5
+# tests 5
 # suites 0
-# pass 4
+# pass 5
 # fail 0
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 96.369209
+# duration_ms 102.540083
