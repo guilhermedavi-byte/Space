@@ -27,3 +27,13 @@ test('unlinked received Asaas entries become reconciliation movements with alloc
  assert.equal(movements[0].value_allocated,100000);
  assert.equal(movements[0].difference,400000);
 });
+
+
+test('groups pending movements by exact origin for batch classification',()=>{
+ const rows=[
+  {asaas_payment_id:'pay_a',status:'RECEIVED_IN_CASH',value:'100.00',due_date:'2026-09-07',billing_type:'PIX',deleted:false,linked:false,student_ids:[],snapshot:{pixTransaction:{payer:{name:'Origem A'}}}},
+  {asaas_payment_id:'pay_b',status:'RECEIVED_IN_CASH',value:'200.00',due_date:'2026-09-08',billing_type:'PIX',deleted:false,linked:false,student_ids:[],snapshot:{pixTransaction:{payer:{name:'Origem A'}}}},
+  {asaas_payment_id:'pay_c',status:'RECEIVED_IN_CASH',value:'50.00',due_date:'2026-09-09',billing_type:'PIX',deleted:false,linked:false,student_ids:[],snapshot:{pixTransaction:{payer:{name:'Origem B'}}}},
+ ];
+ const movements=buildMovements(rows,[],[]);const groups=new Map();for(const m of movements){const g=groups.get(m.origin)||{count:0,value:0};g.count++;g.value+=m.value;groups.set(m.origin,g);}assert.equal(groups.get('Origem A').count,2);assert.equal(groups.get('Origem A').value,30000);
+});

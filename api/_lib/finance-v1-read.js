@@ -68,7 +68,8 @@ function createReader({request=supabaseFetch,client=createAsaasClient({readOnly:
    const recon=createFinanceReconciliation({connectionId}),cases=await recon.listCases(),all=recon.buildMovements(d.rows,d.payments,cases);
    const items=all.filter(m=>search(m,q.q)&&(!q.status||q.status==='all'||m.status===q.status));
    const pending=all.filter(m=>m.status==='pending'||m.status==='partially_reconciled');
-   return {meta,...paginate(items,q),kpis:{pending:pending.length,pending_value:sum(pending,m=>m.difference>0?m.difference:m.value),reconciled_month:all.filter(m=>m.case?.updated_at?.startsWith(d.today.slice(0,7))&&['reconciled','classified'].includes(m.status)).length},statuses:[{id:'all',label:'Todos'},{id:'pending',label:'Pendentes'},{id:'partially_reconciled',label:'Parciais'},{id:'reconciled',label:'Conciliados'},{id:'classified',label:'Classificados'}]};
+   const originMap=new Map();for(const m of pending){const key=m.origin||'Origem não identificada',row=originMap.get(key)||{origin:key,count:0,value:0,classifiable_count:0,classifiable_value:0};row.count++;row.value+=m.difference>0?m.difference:m.value;if(m.status==='pending'&&!m.value_allocated){row.classifiable_count++;row.classifiable_value+=m.value;}originMap.set(key,row);}const origins=[...originMap.values()].sort((a,b)=>b.value-a.value||b.count-a.count).slice(0,12);
+   return {meta,...paginate(items,q),origins,kpis:{pending:pending.length,pending_value:sum(pending,m=>m.difference>0?m.difference:m.value),reconciled_month:all.filter(m=>m.case?.updated_at?.startsWith(d.today.slice(0,7))&&['reconciled','classified'].includes(m.status)).length},statuses:[{id:'all',label:'Todos'},{id:'pending',label:'Pendentes'},{id:'partially_reconciled',label:'Parciais'},{id:'reconciled',label:'Conciliados'},{id:'classified',label:'Classificados'}]};
   }
   if(view==='reconciliation_movement'){
    if(!/^mov_pay_[A-Za-z0-9_-]+$/.test(q.id||''))return {not_found:true};
