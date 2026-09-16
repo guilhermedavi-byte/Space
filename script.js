@@ -26120,8 +26120,8 @@ const ADMIN_PED_URL_MODULE_TO_TAB = {
   configuracoes: "configuracoes",
 };
 
-const FINANCE_TAB_TO_URL = { overview: "visao-geral", recebiveis: "recebiveis", assinaturas: "assinaturas", clientes: "clientes", recuperacao: "recuperacao" };
-const FINANCE_URL_TO_TAB = { recuperacao: "recuperacao", "visao-geral": "overview", dashboard: "overview", overview: "overview", recebiveis: "recebiveis", cobrancas: "recebiveis", pagamentos: "recebiveis", assinaturas: "assinaturas", clientes: "clientes", alunos: "clientes" };
+const FINANCE_TAB_TO_URL = { overview: "visao-geral", recebiveis: "recebiveis", assinaturas: "assinaturas", clientes: "clientes", recuperacao: "recuperacao", conciliacao: "conciliacao" };
+const FINANCE_URL_TO_TAB = { conciliacao: "conciliacao", recuperacao: "recuperacao", "visao-geral": "overview", dashboard: "overview", overview: "overview", recebiveis: "recebiveis", cobrancas: "recebiveis", pagamentos: "recebiveis", assinaturas: "assinaturas", clientes: "clientes", alunos: "clientes" };
 
 const ADMIN_PED_LESSON_RECORD_FILTER_DEFAULTS = {
   periodPreset: "this_month",
@@ -38114,7 +38114,21 @@ const syncSidebarAccordionState = (accordionName, shouldOpen) => {
   return true;
 };
 
+
+const ensureFinanceSidebarItems = () => {
+  const bodyEl = document.querySelector("[data-sidebar-accordion-body='financeiro']");
+  if (!(bodyEl instanceof HTMLElement) || bodyEl.querySelector('[data-finance-tab="conciliacao"]')) return;
+  const btn = document.createElement('button');
+  btn.className = 'sidebar-link sidebar-link-sub';
+  btn.type = 'button';
+  btn.setAttribute('data-finance-tab','conciliacao');
+  btn.title = 'Conciliação';
+  btn.innerHTML = '<span class="sidebar-text">Conciliação</span>';
+  const after = bodyEl.querySelector('[data-finance-tab="recuperacao"]');
+  if (after) after.insertAdjacentElement('afterend', btn); else bodyEl.appendChild(btn);
+};
 const syncFinanceSidebarActiveState = () => {
+  ensureFinanceSidebarItems();
   const activeTab = String(financeState.activeTab || "overview");
   document.querySelectorAll("[data-sidebar-accordion-body='financeiro'] [data-finance-tab]").forEach((link) => {
     if (!(link instanceof HTMLElement)) return;
@@ -40041,7 +40055,7 @@ document.addEventListener(
       event.preventDefault();
       event.stopPropagation();
       const tab = String(financeTab.getAttribute("data-finance-tab") || "").trim();
-      if (["overview", "recebiveis", "assinaturas", "clientes", "recuperacao"].includes(tab)) {
+      if (["overview", "recebiveis", "assinaturas", "clientes", "recuperacao", "conciliacao"].includes(tab)) {
         financeState.activeTab = tab;
         const financeRole = sessionUser?.role || currentRole;
         const isFinanceSidebarItem = financeTab.closest("[data-sidebar-accordion-body='financeiro']") instanceof HTMLElement;
@@ -41893,7 +41907,7 @@ document.addEventListener("click", (event) => {
       if (financeTab instanceof HTMLElement) {
         event.preventDefault();
         const tab = String(financeTab.getAttribute("data-finance-tab") || "").trim();
-        if (["overview", "recebiveis", "assinaturas", "clientes", "recuperacao"].includes(tab)) {
+        if (["overview", "recebiveis", "assinaturas", "clientes", "recuperacao", "conciliacao"].includes(tab)) {
           financeState.activeTab = tab;
         const financeRole = sessionUser?.role || currentRole;
         const isFinanceSidebarItem = financeTab.closest("[data-sidebar-accordion-body='financeiro']") instanceof HTMLElement;
