@@ -12,7 +12,7 @@ test('overview computes cents, month boundaries, aging and excludes confirmed/re
 
 test('overview uses payment competence and ignores due date for revenue',async()=>{
  const {reader,rows}=fixture();rows.push(makeRow('pay_aug_paid_sep','RECEIVED','70.00','2026-08-20'));rows.push(makeRow('pay_oct_confirmed_sep','CONFIRMED','80.00','2026-10-05'));rows.push(makeRow('pay_sep_unpaid','PENDING','90.00','2026-09-20'));rows.push(makeRow('pay_cash_pending','RECEIVED_IN_CASH','500.00','2026-09-05'));
- const r=await reader.get('overview',{month:'2026-09'});assert.equal(r.kpis.received,12030);assert.equal(r.kpis.confirmed_only,12040);assert.equal(r.kpis.revenue,24070);assert.equal(r.meta.revenue_source,'Financial Foundation · Conciliação');
+ const r=await reader.get('overview',{month:'2026-09'});assert.equal(r.kpis.received,12030);assert.equal(r.kpis.confirmed_only,12040);assert.equal(r.kpis.revenue,24070);assert.equal(r.meta.revenue_source,'Financial Foundation · política central de receita');
 });
 
 test('filters use computed overdue, exact customer IDs and stable pagination; no heuristic student linking',async()=>{

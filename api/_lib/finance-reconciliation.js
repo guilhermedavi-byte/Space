@@ -6,11 +6,8 @@ const { getDocumentAsAdmin, listCollectionAsAdmin, commitWritesAsAdmin } = requi
 const { PROJECT_ID, encodeFields } = require('../../_lib/firestore-rest');
 
 const COLLECTION='financeReconciliationCases';
-const NON_REVENUE=new Set(['pf_receivables_transfer','tap_tap_remittance','space_refund','capital_contribution','partner_loan','internal_transfer','non_operational_movement','other']);
+const {PAID_STATUSES:PAID,CLOSED_STATUSES:CLOSED,NON_REVENUE_CLASSIFICATIONS:NON_REVENUE,cents,sumCents,revenueSummary,originRuleMap,rowNeedsConcilation}=require('./finance-revenue-policy');
 const CASH_ELIGIBLE=new Set(['PENDING','OVERDUE','DUNNING_REQUESTED']);
-const PAID=new Set(['RECEIVED','RECEIVED_IN_CASH','DUNNING_RECEIVED']);
-const CLOSED=new Set(['DELETED','REFUNDED','PARTIALLY_REFUNDED','CHARGEBACK_REQUESTED','CHARGEBACK_DISPUTE','AWAITING_CHARGEBACK_REVERSAL']);
-const cents=value=>{if(value==null)return null;if(typeof value==='number'&&Number.isSafeInteger(value))return value;const s=String(value);if(!/^\d+(?:\.\d{1,2})?$/.test(s))return null;const [a,b='']=s.split('.');const n=Number(a)*100+Number(b.padEnd(2,'0'));return Number.isSafeInteger(n)?n:null;};
 const docId=id=>encodeURIComponent(String(id||''));
 const docPath=id=>`${COLLECTION}/${docId(id)}`;
 const docName=(id,projectId=PROJECT_ID)=>`projects/${projectId}/databases/(default)/documents/${docPath(id)}`;
@@ -21,36 +18,17 @@ async function readCase(movementId){try{return await getDocumentAsAdmin(docPath(
 async function writeCase(movementId,data){const result=await commitWritesAsAdmin({writes:[{update:{name:docName(movementId),fields:encodeFields(data).fields},updateMask:{fieldPaths:Object.keys(data)}}]});if(!result.ok){const e=new Error('finance_reconciliation_unavailable');e.status=503;throw e;}return data;}
 async function writeCases(items){for(let i=0;i<items.length;i+=400){const writes=items.slice(i,i+400).map(({movementId,data})=>({update:{name:docName(movementId),fields:encodeFields(data).fields},updateMask:{fieldPaths:Object.keys(data)}}));const result=await commitWritesAsAdmin({writes});if(!result.ok){const e=new Error('finance_reconciliation_unavailable');e.status=503;throw e;}}return items.map(i=>i.data);}
 async function allCases(connectionId){try{return (await listCollectionAsAdmin(COLLECTION,{pageSize:1000,maxPages:20,decorate:false})).filter(r=>r.connection_id===uuid(connectionId));}catch{return [];}}
-function paymentRecognitionDate(row,payment){return payment?.payment_date||payment?.confirmed_date||row?.snapshot?.client_payment_date||row?.snapshot?.payment_date||row?.snapshot?.confirmed_date||row?.due_date||null;}
-function buildFinancials(rows,payments,cases,month,today=new Date().toISOString().slice(0,10)){
- const paymentById=new Map(payments.map(p=>[p.asaas_payment_id,p]));
- const caseByMovement=new Map(cases.map(c=>[c.movement_id,c]));
- const allocatedRevenue=new Map();
- for(const c of cases)for(const a of Array.isArray(c.allocations)?c.allocations:[])if(a?.receivable_id&&a?.revenue_recognized!==false)allocatedRevenue.set(a.receivable_id,Math.max(allocatedRevenue.get(a.receivable_id)||0,cents(a.value)));
- const eligible=r=>!r.deleted&&!CLOSED.has(r.status)&&r.value!=null;
- const recognizedRows=rows.filter(r=>eligible(r)&&!allocatedRevenue.has(r.asaas_payment_id)&&['RECEIVED','RECEIVED_IN_CASH','DUNNING_RECEIVED','CONFIRMED'].includes(r.status)).map(r=>({row:r,payment:paymentById.get(r.asaas_payment_id)}));
- const inMonth=({row,payment})=>String(paymentRecognitionDate(row,payment)||'').startsWith(month);
- const received=sumCents(recognizedRows.filter(x=>inMonth(x)&&PAID.has(x.row.status)),x=>cents(x.payment?.value??x.row.value));
- const confirmed=sumCents(recognizedRows.filter(x=>inMonth(x)&&x.row.status==='CONFIRMED'),x=>cents(x.payment?.value??x.row.value));
- const allocatedMonth=[...allocatedRevenue].filter(([id])=>String((cases.flatMap(c=>c.allocations||[]).find(a=>a.receivable_id===id)||{}).recognized_date||'').startsWith(month));
- const allocatedReceived=sumCents(allocatedMonth,([,v])=>v);
- const faturamento=received+confirmed+allocatedReceived;
- const monthDue=rows.filter(r=>eligible(r)&&String(r.due_date||'').startsWith(month));
- const overdue=monthDue.filter(r=>['PENDING','OVERDUE','DUNNING_REQUESTED'].includes(r.status)&&r.due_date&&r.due_date<today);
- const dueBase=sumCents(monthDue,r=>cents(r.value));
- const overdueValue=sumCents(overdue,r=>cents(r.value));
- return {faturamento,received:received+allocatedReceived,confirmed,delinquency_value:overdueValue,delinquency_percent:dueBase?Math.round(overdueValue/dueBase*10000)/100:null};
-}
-function sumCents(rows,get){return rows.reduce((n,r)=>{const v=get(r);return n+(Number.isSafeInteger(v)?v:0);},0);}
-function movementFromRow(row,payment,caseDoc){
+function buildFinancials(rows,payments,cases,month,today=new Date().toISOString().slice(0,10)){return revenueSummary({rows,payments,cases,month,today});}
+function movementFromRow(row,payment,caseDoc,originRules=new Map()){
  const snapshot=row.snapshot||{},pix=snapshot.pixTransaction||snapshot.pix_transaction||null;
  const value=cents(payment?.value??row.value);
  const allocated=sumCents(Array.isArray(caseDoc?.allocations)?caseDoc.allocations:[],a=>cents(a.value));
- const classification=caseDoc?.classification||null;
- const status=classification?'classified':allocated>0?'partially_reconciled':row.linked?'linked':'pending';
- return {id:`mov_${row.asaas_payment_id}`,payment_id:row.asaas_payment_id,customer_id:row.asaas_customer_id,student_ids:row.student_ids||[],linked:Boolean(row.linked),date:payment?.payment_date||payment?.confirmed_date||snapshot.payment_date||snapshot.confirmed_date||row.due_date,origin:pix?.payer?.name||pix?.payerName||snapshot.description||row.name||row.asaas_customer_id||'Origem não identificada',value,asaas_origin_type:pix?'pixTransaction':(row.billing_type||payment?.billing_type||'payment'),status,classification,value_allocated:allocated,difference:(value||0)-allocated,raw_status:row.status,billing_type:row.billing_type,requires_reconciliation:!row.linked||row.status==='RECEIVED_IN_CASH'||['TRANSFER','DEPOSIT','UNDEFINED'].includes(String(row.billing_type||'')),case:caseDoc||null};
+ const origin=pix?.payer?.name||pix?.payerName||snapshot.description||row.name||row.asaas_customer_id||'Origem não identificada';
+ const classification=caseDoc?.classification||originRules.get(origin)||null;
+ const status=classification?'classified':allocated>0?'partially_reconciled':rowNeedsConcilation(row)?'pending':'linked';
+ return {id:`mov_${row.asaas_payment_id}`,payment_id:row.asaas_payment_id,customer_id:row.asaas_customer_id,student_ids:row.student_ids||[],linked:Boolean(row.linked),date:payment?.payment_date||payment?.confirmed_date||snapshot.payment_date||snapshot.confirmed_date||row.due_date,origin,value,asaas_origin_type:pix?'pixTransaction':(row.billing_type||payment?.billing_type||'payment'),status,classification,value_allocated:allocated,difference:(value||0)-allocated,raw_status:row.status,billing_type:row.billing_type,requires_reconciliation:rowNeedsConcilation(row)||Boolean(classification),case:caseDoc||null};
 }
-function buildMovements(rows,payments,cases){const paymentById=new Map(payments.map(p=>[p.asaas_payment_id,p]));const caseById=new Map(cases.map(c=>[c.movement_id,c]));return rows.filter(r=>!r.deleted&&PAID.has(r.status)).map(r=>movementFromRow(r,paymentById.get(r.asaas_payment_id),caseById.get(`mov_${r.asaas_payment_id}`))).filter(m=>m.requires_reconciliation).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||a.id.localeCompare(b.id));}
+function buildMovements(rows,payments,cases){const paymentById=new Map(payments.map(p=>[p.asaas_payment_id,p]));const caseById=new Map(cases.map(c=>[c.movement_id,c]));const rules=originRuleMap(cases);return rows.filter(r=>!r.deleted&&PAID.has(r.status)).map(r=>movementFromRow(r,paymentById.get(r.asaas_payment_id),caseById.get(`mov_${r.asaas_payment_id}`),rules)).filter(m=>m.requires_reconciliation).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||a.id.localeCompare(b.id));}
 function candidateReceivables(rows,q=''){const needle=String(q||'').trim().toLowerCase();return rows.filter(r=>!r.deleted&&!CLOSED.has(r.status)&&(!needle||[r.asaas_payment_id,r.asaas_customer_id,r.name,...(r.student_ids||[])].join(' ').toLowerCase().includes(needle))).slice(0,80).map(r=>({id:r.asaas_payment_id,name:r.name||'Nome não disponível',customer_id:r.asaas_customer_id,student_ids:r.student_ids||[],status:r.status,value:cents(r.value),due_date:r.due_date,can_cash_receive:CASH_ELIGIBLE.has(r.status)}));}
 function createFinanceReconciliation({connectionId=process.env.FINANCE_CONNECTION_ID,client=createAsaasClient({readOnly:false}),foundation=createFinanceFoundation({client,logger:()=>{}})}={}){
  const listCases=()=>allCases(connectionId);

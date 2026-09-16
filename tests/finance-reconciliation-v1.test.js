@@ -37,3 +37,18 @@ test('groups pending movements by exact origin for batch classification',()=>{
  ];
  const movements=buildMovements(rows,[],[]);const groups=new Map();for(const m of movements){const g=groups.get(m.origin)||{count:0,value:0};g.count++;g.value+=m.value;groups.set(m.origin,g);}assert.equal(groups.get('Origem A').count,2);assert.equal(groups.get('Origem A').value,30000);
 });
+
+test('saved exact-origin non-revenue rule excludes future entries from revenue',()=>{
+ const rows=[
+  {asaas_payment_id:'pay_old',status:'RECEIVED_IN_CASH',value:'100.00',due_date:'2026-09-01',billing_type:'PIX',deleted:false,linked:false,snapshot:{pixTransaction:{payer:{name:'Guilherme Davi'}},payment_date:'2026-09-01'}},
+  {asaas_payment_id:'pay_new',status:'RECEIVED_IN_CASH',value:'200.00',due_date:'2026-09-02',billing_type:'PIX',deleted:false,linked:false,snapshot:{pixTransaction:{payer:{name:'Guilherme Davi'}},payment_date:'2026-09-02'}},
+  {asaas_payment_id:'pay_customer',status:'RECEIVED_IN_CASH',value:'300.00',due_date:'2026-09-03',billing_type:'PIX',deleted:false,linked:true,snapshot:{payment_date:'2026-09-03'}},
+ ];
+ const payments=rows.map(r=>({asaas_payment_id:r.asaas_payment_id,value:r.value,payment_date:r.snapshot.payment_date}));
+ const cases=[{movement_id:'mov_pay_old',origin:'Guilherme Davi',classification:'pf_receivables_transfer',allocations:[]}];
+ const k=buildFinancials(rows,payments,cases,'2026-09');
+ assert.equal(k.faturamento,30000);
+ const future=buildMovements(rows,payments,cases).find(m=>m.id==='mov_pay_new');
+ assert.equal(future.status,'classified');
+ assert.equal(future.classification,'pf_receivables_transfer');
+});
