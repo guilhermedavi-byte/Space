@@ -12689,6 +12689,7 @@ const setFinanceStatus = (message, tone = "") => {
 };
 
 const ensureFinanceLoaded = async ({ force = false } = {}) => {
+  if (body.dataset.activePanel === "financeiro" && window.SpaceFinanceV1) return window.SpaceFinanceV1.open(financeState.activeTab);
   if (!isFinanceAccessRole(currentRole)) return;
   if (!force && financeState.loadedAt && Date.now() - financeState.loadedAt < 30_000) return;
 
@@ -24664,25 +24665,8 @@ const ADMIN_PED_URL_MODULE_TO_TAB = {
   configuracoes: "configuracoes",
 };
 
-const FINANCE_TAB_TO_URL = {
-  overview: "dashboard",
-  alunos: "alunos",
-  cobrancas: "cobrancas",
-  pagamentos: "pagamentos",
-  eventos: "eventos",
-  chatwoot: "conversas",
-};
-
-const FINANCE_URL_TO_TAB = {
-  dashboard: "overview",
-  overview: "overview",
-  alunos: "alunos",
-  cobrancas: "cobrancas",
-  pagamentos: "pagamentos",
-  eventos: "eventos",
-  conversas: "chatwoot",
-  chatwoot: "chatwoot",
-};
+const FINANCE_TAB_TO_URL = { overview: "visao-geral", recebiveis: "recebiveis", assinaturas: "assinaturas", clientes: "clientes" };
+const FINANCE_URL_TO_TAB = { "visao-geral": "overview", dashboard: "overview", overview: "overview", recebiveis: "recebiveis", cobrancas: "recebiveis", pagamentos: "recebiveis", assinaturas: "assinaturas", clientes: "clientes", alunos: "clientes" };
 
 const ADMIN_PED_LESSON_RECORD_FILTER_DEFAULTS = {
   periodPreset: "this_month",
@@ -37092,8 +37076,8 @@ const financePathForState = (role) => {
   const normalized = normalizeRole(role);
   const base = normalized === "admin" ? "/app/admin/financeiro" : "/app/financeiro";
   const tab = String(financeState.activeTab || "overview").trim() || "overview";
-  const tabSlug = FINANCE_TAB_TO_URL[tab] || "dashboard";
-  return withQueryParam(base, "aba", tabSlug, "dashboard");
+  const tabSlug = FINANCE_TAB_TO_URL[tab] || "visao-geral";
+  return withQueryParam(base, "aba", tabSlug, "visao-geral");
 };
 
 const navigateAdminPedagogicoState = ({ replace = false } = {}) => {
@@ -38196,7 +38180,7 @@ document.addEventListener(
       event.preventDefault();
       event.stopPropagation();
       const tab = String(financeTab.getAttribute("data-finance-tab") || "").trim();
-      if (["overview", "alunos", "cobrancas", "pagamentos", "eventos", "chatwoot"].includes(tab)) {
+      if (["overview", "recebiveis", "assinaturas", "clientes"].includes(tab)) {
         financeState.activeTab = tab;
         const financeRole = sessionUser?.role || currentRole;
         const isFinanceSidebarItem = financeTab.closest("[data-sidebar-accordion-body='financeiro']") instanceof HTMLElement;
@@ -40048,7 +40032,7 @@ document.addEventListener("click", (event) => {
       if (financeTab instanceof HTMLElement) {
         event.preventDefault();
         const tab = String(financeTab.getAttribute("data-finance-tab") || "").trim();
-        if (["overview", "alunos", "cobrancas", "pagamentos", "eventos", "chatwoot"].includes(tab)) {
+        if (["overview", "recebiveis", "assinaturas", "clientes"].includes(tab)) {
           financeState.activeTab = tab;
         const financeRole = sessionUser?.role || currentRole;
         const isFinanceSidebarItem = financeTab.closest("[data-sidebar-accordion-body='financeiro']") instanceof HTMLElement;

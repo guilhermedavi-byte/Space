@@ -52,9 +52,12 @@ const buildCommercialGoalsModel = ({ competencia, goal, previousGoal = null, glo
   });
   const month = buildMonthSummary({ businesses, goal, now: new Date(`${competencia}-15T12:00:00-03:00`) });
   const reconciliation = buildCommercialLedger({ competencia, goal, globalConfig, people, businesses, goals: { [competencia]: goal, ...(previousGoal?.competencia ? { [previousGoal.competencia]: previousGoal } : {}) } });
+  const origin=require('./commercial-sdr-origin').buildSdrEvidence(businesses,sdrEvents,{sourceComplete:true,eventsComplete:true});
+  const sdrOrigin=require('./commercial-sdr').reconcileSdrAttribution(reconciliation.rows,origin);
+  const sdrOriginSummary={noAttribution:sdrOrigin.records.filter(r=>r.status==='no_attribution').length,sourceError:sdrOrigin.records.filter(r=>r.status==='source_error').length,notLoaded:sdrOrigin.records.filter(r=>r.status==='not_loaded').length};
   const monthlyExists = goal?.valorMeta != null;
   const distributed = weeks.filter(week => week.exists).reduce((sum, week) => sum + week.summary.targetValue, 0);
-  return { competencia, currentCompetencia: today.slice(0, 7), editable, monthlyExists, goal, month, weeks, reconciliation,
+  return { sdrOriginSummary, competencia, currentCompetencia: today.slice(0, 7), editable, monthlyExists, goal, month, weeks, reconciliation,
     planning: { distributed, difference: month.summary.meta - distributed } };
 };
 

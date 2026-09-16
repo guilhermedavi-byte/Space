@@ -18,3 +18,16 @@ tests/commercial-certification-local.test.js
 docs/commercial-certification-credential-provisioning.md
 docs/commercial-certification-temporary-runner.md
 artifacts/commercial-audit-mechanism/**
+.git
+node_modules
+artifacts
+docs
+tests
+*.log
+.commercial-certification-bundle
+
+# Expiring operator-only finance certification tooling.
+scripts/finance-certification
+
+# Completed temporary commercial certification tooling.
+scripts/commercial-certification

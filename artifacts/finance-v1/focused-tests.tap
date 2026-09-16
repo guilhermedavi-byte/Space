@@ -1,0 +1,46 @@
+TAP version 13
+# Subtest: workspace preserves one table, sends filters, escapes names and opens/closes accessible side drawer
+ok 1 - workspace preserves one table, sends filters, escapes names and opens/closes accessible side drawer
+  ---
+  duration_ms: 107.484375
+  type: 'test'
+  ...
+# Subtest: new finance navigation contains exactly four workspaces and legacy global actions are absent
+ok 2 - new finance navigation contains exactly four workspaces and legacy global actions are absent
+  ---
+  duration_ms: 100.61975
+  type: 'test'
+  ...
+# Subtest: overview computes cents, month boundaries, aging and excludes confirmed/refunded receipts
+ok 3 - overview computes cents, month boundaries, aging and excludes confirmed/refunded receipts
+  ---
+  duration_ms: 7.958042
+  type: 'test'
+  ...
+# Subtest: filters use computed overdue, exact customer IDs and stable pagination; no heuristic student linking
+ok 4 - filters use computed overdue, exact customer IDs and stable pagination; no heuristic student linking
+  ---
+  duration_ms: 10.557833
+  type: 'test'
+  ...
+# Subtest: detail exposes only approved Asaas links and selected audit fields; remote directory failure is explicit
+ok 5 - detail exposes only approved Asaas links and selected audit fields; remote directory failure is explicit
+  ---
+  duration_ms: 1.106
+  type: 'test'
+  ...
+# Subtest: read endpoint authorizes admin/finance only, refuses writes and validates filters before storage
+ok 6 - read endpoint authorizes admin/finance only, refuses writes and validates filters before storage
+  ---
+  duration_ms: 1.083333
+  type: 'test'
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 6
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 802.078542

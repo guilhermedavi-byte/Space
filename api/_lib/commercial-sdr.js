@@ -28,7 +28,7 @@ function reconcileSdrAttribution(rows, { status='not_loaded', evidence=[] }={}) 
   const records=rows.map(row=>{
     const e=byId.get(row.id);
     const validEvidence=e&&typeof e.source==='string'&&e.source.length>0&&(e.sdrId===null||(typeof e.sdrId==='string'&&e.sdrId.length>0&&e.eventId&&Number.isFinite(Date.parse(e.timestamp))));
-    const readStatus=status==='source_error'?'source_error':status!=='loaded'||!validEvidence?'not_loaded'
+    const readStatus=status==='source_error'||e?.status==='source_error'?'source_error':status!=='loaded'||!validEvidence?'not_loaded'
       :duplicateEvidence.has(row.id)?'source_error':e.sdrId===null?'no_attribution':'value';
     return {dealId:row.id,value:row.value,expectedSdr:e?.sdrId??null,calculatedSdr:row.sourceSdrId??null,
       origin:e?.source??null,event:e?.eventId??null,timestamp:e?.timestamp??null,status:readStatus,

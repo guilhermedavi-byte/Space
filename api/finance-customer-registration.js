@@ -1,0 +1,4 @@
+const {timingSafeTextEqual}=require('./_lib/security');
+const {readJsonBody,sendJson}=require('./_lib/http');
+const {registerCanonicalPair}=require('./_lib/finance-customer-link');
+module.exports=async(req,res)=>{res.setHeader('Cache-Control','no-store');if(req.method!=='POST')return sendJson(res,405,{error:'method_not_allowed'});const expected=process.env.N8N_WEBHOOK_SECRET,supplied=req.headers['x-webhook-secret'];if(!expected||typeof supplied!=='string'||!timingSafeTextEqual(supplied,expected))return sendJson(res,401,{error:'unauthorized'});try{const body=await readJsonBody(req);const result=await registerCanonicalPair({customerId:body.asaas_customer_id,studentId:body.firestore_doc_id,actor:'integration',source:'customer_registration'});return sendJson(res,200,result);}catch(e){return sendJson(res,e.code==='canonical_pair_required'?400:e.status===409?409:503,{error:e.code==='canonical_pair_required'?'canonical_pair_required':'registration_not_completed'});}};

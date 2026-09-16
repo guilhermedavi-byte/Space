@@ -16,14 +16,15 @@ const getAccessToken = async () => {
   return String(result?.accessToken || "");
 };
 
-const listCollectionAsAdmin = async (collectionPath, { pageSize = 1000 } = {}) => {
+const listCollectionAsAdmin = async (collectionPath, { pageSize = 1000, maxPages = 20, decorate = true } = {}) => {
   const path = String(collectionPath || "").replace(/^\/+/, "");
   if (!path) throw new Error("missing_collection");
+  if (!Number.isSafeInteger(maxPages) || maxPages < 1 || maxPages > 200) throw new Error("invalid_firestore_page_limit");
   const accessToken = await getAccessToken();
   const all = [];
   let pageToken = "";
 
-  for (let page = 0; page < 20; page += 1) {
+  for (let page = 0; page < maxPages; page += 1) {
     const params = new URLSearchParams();
     params.set("pageSize", String(Math.max(1, Math.min(Number(pageSize) || 1000, 1000))));
     if (pageToken) params.set("pageToken", pageToken);
@@ -49,7 +50,7 @@ const listCollectionAsAdmin = async (collectionPath, { pageSize = 1000 } = {}) =
     if (!pageToken) break;
   }
   if (pageToken) throw new Error("firestore_pagination_incomplete");
-  return Promise.all(all.map(row => path === "users" ? require("./student-lifecycle").decorateStudent(row) : row));
+  return Promise.all(all.map(row => path === "users" && decorate ? require("./student-lifecycle").decorateStudent(row) : row));
 };
 
 const queryCollectionByDateRangeAsAdmin = async (collectionPath, { dateField = "dateKey", from = "", to = "" } = {}) => {

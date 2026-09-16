@@ -1,0 +1,68 @@
+{
+  "at": "2026-09-15T22:56:05.661Z",
+  "reports": [
+    {
+      "analyzed": 655,
+      "by_method": {
+        "id": 0,
+        "document": 0,
+        "phone": 0,
+        "email": 56
+      },
+      "ambiguous": 4,
+      "unmatched": 595,
+      "linked": 20,
+      "pending": 36,
+      "applied": 20,
+      "legacy": {
+        "n8n_alunos_financeiro_space": 0,
+        "n8n_onboarding_alunos_space": 0,
+        "n8n_cobrancas_financeiras_space": 0,
+        "billing_accounts": 0
+      },
+      "space_students": 227
+    },
+    {
+      "analyzed": 655,
+      "by_method": {
+        "id": 0,
+        "document": 0,
+        "phone": 0,
+        "email": 56
+      },
+      "ambiguous": 4,
+      "unmatched": 595,
+      "linked": 40,
+      "pending": 16,
+      "applied": 20,
+      "legacy": {
+        "n8n_alunos_financeiro_space": 0,
+        "n8n_onboarding_alunos_space": 0,
+        "n8n_cobrancas_financeiras_space": 0,
+        "billing_accounts": 0
+      },
+      "space_students": 227
+    },
+    {
+      "analyzed": 655,
+      "by_method": {
+        "id": 0,
+        "document": 0,
+        "phone": 0,
+        "email": 56
+      },
+      "ambiguous": 4,
+      "unmatched": 595,
+      "linked": 56,
+      "pending": 0,
+      "applied": 16,
+      "legacy": {
+        "n8n_alunos_financeiro_space": 0,
+        "n8n_onboarding_alunos_space": 0,
+        "n8n_cobrancas_financeiras_space": 0,
+        "billing_accounts": 0
+      },
+      "space_students": 227
+    }
+  ]
+}

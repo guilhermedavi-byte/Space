@@ -134,6 +134,10 @@ module.exports = async (req, res) => {
       return;
     }
 
+    if(role==='student' && body.asaas_customer_id){
+      try { await require('./_lib/finance-customer-link').registerCanonicalPair({customerId:body.asaas_customer_id,studentId:uid,actor:adminId,source:'student_creation'}); }
+      catch { return sendJson(res,409,{error:'canonical_finance_link_required'}); }
+    }
     // OWNERSHIP: cadastro=Firestore, operação=Supabase (contrato 2026-07-12)
     // Mantemos compatibilidade com chamadas legadas e sincronizamos o espelho
     // desnormalizado no Supabase a partir de users/{uid}.

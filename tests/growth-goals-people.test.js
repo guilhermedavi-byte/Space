@@ -104,7 +104,13 @@ const makeApi = ({ missingGoal = false, failRead = false, failUsers = false, leg
       if (name === '../_lib/session') return { getSessionFromRequest: () => ({ role: 'admin', sub: 'admin-test' }) };
       if (name === '../_lib/google-service-account') return { getGoogleAccessToken: async () => ({ accessToken: 'test-token' }) };
       if (name === '../_lib/firestore-rest') return { ...firestore, FIRESTORE_BASE: 'https://firestore.test/documents', requestJson };
-      if (name === './_lib/crm-source-snapshot') return { getCompleteCrmSource: async () => ({ businesses: [], pagination: {} }) };
+      if (name === './_lib/sdr-activity-read') return { readSdrEvents: async ({ from, to }) => {
+        assert.match(from, /^\d{4}-\d{2}-\d{2}$/);
+        assert.match(to, /^\d{4}-\d{2}-\d{2}$/);
+        assert.ok(from <= to);
+        return [];
+      } };
+      if (name === './_lib/crm-source-snapshot') return { getCompleteCrmSource: async () => ({ businesses: [], pagination: {} }), createSourceService: () => ({ readOnly: async () => ({ businesses: [], pagination: {} }) }) };
       if (name === './_lib/datacrazy-mirror') return { isDatacrazyMirrorEnabled: () => true, fetchAllMirroredBusinesses: async () => ({ businesses: [] }) };
       return localRequire(name);
     },

@@ -525,24 +525,10 @@
               </span>
             </button>
             <div class="sidebar-accordion-body" id="sidebar-financeiro-items" data-sidebar-accordion-body="financeiro" hidden>
-              <button class="sidebar-link sidebar-link-sub" type="button" data-finance-tab="overview" title="Dashboard">
-                <span class="sidebar-text">Dashboard</span>
-              </button>
-              <button class="sidebar-link sidebar-link-sub" type="button" data-finance-tab="alunos" data-sidebar-placeholder="true" title="Alunos financeiros">
-                <span class="sidebar-text">Alunos financeiros</span>
-              </button>
-              <button class="sidebar-link sidebar-link-sub" type="button" data-finance-tab="cobrancas" data-sidebar-placeholder="true" title="Cobranças">
-                <span class="sidebar-text">Cobranças</span>
-              </button>
-              <button class="sidebar-link sidebar-link-sub" type="button" data-finance-tab="pagamentos" data-sidebar-placeholder="true" title="Pagamentos">
-                <span class="sidebar-text">Pagamentos</span>
-              </button>
-              <button class="sidebar-link sidebar-link-sub" type="button" data-finance-tab="eventos" data-sidebar-placeholder="true" title="Eventos">
-                <span class="sidebar-text">Eventos</span>
-              </button>
-              <button class="sidebar-link sidebar-link-sub" type="button" data-finance-tab="chatwoot" data-sidebar-placeholder="true" title="Conversas">
-                <span class="sidebar-text">Conversas</span>
-              </button>
+              <button class="sidebar-link sidebar-link-sub" type="button" data-finance-tab="overview" title="Visão Geral"><span class="sidebar-text">Visão Geral</span></button>
+              <button class="sidebar-link sidebar-link-sub" type="button" data-finance-tab="recebiveis" title="Recebíveis"><span class="sidebar-text">Recebíveis</span></button>
+              <button class="sidebar-link sidebar-link-sub" type="button" data-finance-tab="assinaturas" title="Assinaturas"><span class="sidebar-text">Assinaturas</span></button>
+              <button class="sidebar-link sidebar-link-sub" type="button" data-finance-tab="clientes" title="Clientes"><span class="sidebar-text">Clientes</span></button>
             </div>
           </div>
           <button
@@ -2093,43 +2079,7 @@
 	        </section>
 
           <section class="platform-panel" data-panel="financeiro" data-hide-platform-header="true" hidden aria-label="Financeiro">
-            <div class="finance-shell">
-              <header class="finance-head">
-                <div>
-                  <h2 class="finance-title">Financeiro Space</h2>
-                  <p class="finance-subtitle">Cobranças, pagamentos, Asaas, conversas e automações em um só lugar.</p>
-                </div>
-
-                <div class="finance-actions">
-                  <button class="button button-outline button-small" type="button" data-finance-new-student>Adicionar usuário</button>
-                  <button class="button button-outline button-small" type="button" data-finance-refresh>Atualizar</button>
-                  <button class="button button-solid button-small" type="button" data-finance-new-global>Nova cobrança</button>
-                </div>
-              </header>
-
-              <div class="finance-status" data-finance-status aria-live="polite"></div>
-
-              <div class="finance-summary-grid" data-finance-summary></div>
-
-              <div class="finance-tabs" role="tablist" aria-label="Financeiro">
-                <button class="finance-tab is-active" type="button" role="tab" aria-selected="true" data-finance-tab="overview">Dashboard</button>
-                <button class="finance-tab" type="button" role="tab" aria-selected="false" data-finance-tab="alunos">Alunos</button>
-                <button class="finance-tab" type="button" role="tab" aria-selected="false" data-finance-tab="cobrancas">Cobranças</button>
-                <button class="finance-tab" type="button" role="tab" aria-selected="false" data-finance-tab="pagamentos">Pagamentos recebidos</button>
-                <button class="finance-tab" type="button" role="tab" aria-selected="false" data-finance-tab="eventos">Eventos de cobrança</button>
-                <button class="finance-tab" type="button" role="tab" aria-selected="false" data-finance-tab="chatwoot">Conversas</button>
-              </div>
-
-              <article class="surface-card finance-card" aria-label="Lista de cobranças">
-                <div class="finance-table" data-finance-table="overview"></div>
-                <div class="finance-table" data-finance-table="alunos" hidden></div>
-                <div class="finance-table" data-finance-table="cobrancas" hidden></div>
-                <div class="finance-table" data-finance-table="pagamentos" hidden></div>
-                <div class="finance-table" data-finance-table="eventos" hidden></div>
-                <div class="finance-table" data-finance-table="chatwoot" hidden></div>
-                <div class="finance-empty" data-finance-empty hidden>Nenhum registro encontrado.</div>
-              </article>
-            </div>
+            <div class="fv1" data-finance-v1><div class="fv1-skeleton" role="status" aria-label="Carregando Financeiro"><div></div><div></div><div></div></div></div>
           </section>
 
           <section class="platform-panel" data-panel="admin-controle-pedagogico" data-hide-platform-header="true" hidden aria-label="Pedagógico (Admin)">
