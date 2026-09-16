@@ -16,7 +16,7 @@ test('recovery read model adds operational status and next action without changi
 
 test('recovery drawer posts a payment promise and refreshes the active case',async()=>{
  const row={id:'pay_one',customer_id:'cus_one',name:'Cliente',student_ids:[],linked:false,status:'OVERDUE',status_label:'Vencido',group:'overdue',value:12345,due_date:'2026-09-01',days_overdue:15,method_label:'Pix',subscription_id:null};
- const list={meta:{read_at:'2026-09-16T12:00:00Z'},items:[{...row,aging:'8-15',operational_status:'Novo',next_action_date:null,next_action_label:'Acompanhar'}],total:1,page:1,pages:1,page_size:30,kpis:{overdue:12345,customers:1,ticket:12345,average_days:15},linked:0,unlinked:1,charges:1,missing_values:0,aging:[],stages:[]};
+ const list={meta:{read_at:'2026-09-16T12:00:00Z'},items:[{...row,aging:'8-15',operational_status:'Novo',next_action_date:null,next_action_label:'Acompanhar',approval_required_actions:1,pending_actions:1}],total:1,page:1,pages:1,page_size:30,kpis:{overdue:12345,customers:1,ticket:12345,average_days:15},linked:0,unlinked:1,charges:1,missing_values:0,aging:[],stages:[]};
  const detail={...list,item:row,details:{},links:[],audit:[],recovery_case:null,recovery_events:[]};
  const requests=[];
  const dom=new JSDOM('<body><div data-finance-v1></div></body>',{runScripts:'outside-only',url:'https://space.test/app/admin/financeiro?aba=recuperacao'});
@@ -36,7 +36,24 @@ test('recovery drawer posts a payment promise and refreshes the active case',asy
  dom.window.close();
 });
 
+test('recovery table approves selected historical rule actions',async()=>{
+ const row={id:'pay_one',customer_id:'cus_one',name:'Cliente',student_ids:[],linked:false,status:'OVERDUE',status_label:'Vencido',group:'overdue',value:12345,due_date:'2026-09-01',days_overdue:15,method_label:'Pix',subscription_id:null,aging:'8-15',operational_status:'Novo',next_action_date:null,next_action_label:'Acompanhar',approval_required_actions:1,pending_actions:1};
+ const list={meta:{read_at:'2026-09-16T12:00:00Z'},items:[row],total:1,page:1,pages:1,page_size:30,kpis:{overdue:12345,customers:1,ticket:12345,average_days:15},linked:0,unlinked:1,charges:1,missing_values:0,aging:[],stages:[]};
+ const requests=[];
+ const dom=new JSDOM('<body><div data-finance-v1></div></body>',{runScripts:'outside-only',url:'https://space.test/app/admin/financeiro?aba=recuperacao'});
+ const w=dom.window;w.fetch=async(url,opts={})=>{requests.push([String(url),opts]);return {ok:true,json:async()=>String(url).includes('/api/finance-recovery-actions')?{approved:1}:list};};
+ w.eval(fs.readFileSync('finance-v1.js','utf8'));await w.SpaceFinanceV1.open('recuperacao');await new Promise(r=>setImmediate(r));
+ w.document.querySelector('[data-fv1-rule-select]').checked=true;
+ w.document.querySelector('[data-fv1-approve-selected]').click();
+ await new Promise(r=>setImmediate(r));await new Promise(r=>setImmediate(r));
+ const post=requests.find(([url])=>url.includes('/api/finance-recovery-actions'));
+ assert.deepEqual(JSON.parse(post[1].body),{action:'approve_rule_actions',payment_ids:['pay_one']});
+ dom.window.close();
+});
+
 test('rule engine creates one pending internal event, pauses on promise, and stops when paid',async()=>{
+ const previousActivation=process.env.FINANCE_RECOVERY_AUTOMATION_ACTIVATED_AT;
+ process.env.FINANCE_RECOVERY_AUTOMATION_ACTIVATED_AT='2099-01-01T00:00:00.000Z';
  const {createRecoveryOperations}=require('../api/_lib/finance-recovery-operations');
  const store=new Map(),connectionId='589367ba-e7c4-4c26-af71-53f97eac31a4';
  const firestore={
@@ -50,9 +67,20 @@ test('rule engine creates one pending internal event, pauses on promise, and sto
  assert.equal(r.active,1);assert.equal(r.pending,1);
  r=await ops.materializeRules([row],'2026-09-16');
  assert.equal(r.pending,1);assert.equal(store.get('pay_one').executed_rule_steps.length,1);
+ const pending=store.get('pay_one').pending_internal_events[0];
+ assert.equal(pending.requires_manual_approval,true);
+ assert.equal(pending.auto_dispatchable,false);
+ assert.equal(pending.dispatch_contract,'attendance.finance_recovery_action.v1');
+ assert.equal(pending.receivable.asaas_payment_id,'pay_one');
+ assert.equal(pending.recovery_case.asaas_payment_id,'pay_one');
+ const approved=await ops.recordAction({payment_ids:['pay_one'],action:'approve_rule_actions'},'tester');
+ assert.equal(approved.approved,1);
+ assert.equal(store.get('pay_one').pending_internal_events[0].status,'approved');
+ assert.equal(store.get('pay_one').pending_internal_events[0].auto_dispatchable,false);
  await ops.recordAction({payment_id:'pay_one',action:'payment_promise',promised_payment_date:'2026-09-20',promised_amount:'100.00'},'tester');
  r=await ops.materializeRules([row],'2026-09-17');
  assert.equal(r.paused,1);assert.equal(store.get('pay_one').next_action_type,'promise_followup');
  r=await ops.materializeRules([{...row,group:'received'}],'2026-09-18');
  assert.equal(r.stopped,1);assert.equal(store.get('pay_one').status,'recovered');assert.equal(store.get('pay_one').pending_internal_events.length,0);
+ if(previousActivation===undefined)delete process.env.FINANCE_RECOVERY_AUTOMATION_ACTIVATED_AT;else process.env.FINANCE_RECOVERY_AUTOMATION_ACTIVATED_AT=previousActivation;
 });

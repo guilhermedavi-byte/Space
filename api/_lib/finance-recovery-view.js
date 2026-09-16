@@ -11,6 +11,8 @@ function recovery(rows,cases=new Map()){
   item.next_action_date=item.recovery_case?.next_action_at||item.recovery_case?.next_action_date||item.recovery_case?.promised_payment_date||null;
   item.next_action_label=item.recovery_case?.next_action_type_label||item.recovery_case?.last_action_label||'Acompanhar';
   item.pending_actions=item.recovery_case?.pending_actions||0;
+  item.approval_required_actions=item.recovery_case?.approval_required_actions||0;
+  item.pending_action_ids=Array.isArray(item.recovery_case?.pending_action_ids)?item.recovery_case.pending_action_ids:[];
   return item;
  });
  const total=rs=>rs.reduce((n,r)=>{const value=n+(r.value??0);if(!Number.isSafeInteger(value))throw Error('finance_amount_invalid');return value;},0);

@@ -31,6 +31,7 @@ const ACTION_LABELS = {
   rule_d_plus_3: 'D+3',
   rule_d_plus_7: 'D+7',
   promise_followup: 'Retomar após promessa',
+  approve_rule_actions: 'Aprovação manual de ações da régua',
 };
 const RULES=[
  {stage:'D-3',offset:-3,type:'rule_d_minus_3'},
@@ -43,13 +44,22 @@ const RULES=[
 ];
 const ACTIVE_GROUPS=new Set(['upcoming','overdue']);
 const STOP_GROUPS=new Set(['received','closed']);
-const ACTIONS = new Set(['contact_attempt','payment_promise','followup_delayed','human_intervention','negotiating','pause_rule','resume_rule']);
+const ACTIONS = new Set(['contact_attempt','payment_promise','followup_delayed','human_intervention','negotiating','pause_rule','resume_rule','approve_rule_actions']);
 const clean = (value, max = 1200) => String(value || '').trim().slice(0, max);
 const isDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(String(value || '')) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`));
 const addDays=(date,days)=>{const d=new Date(`${date}T00:00:00Z`);d.setUTCDate(d.getUTCDate()+days);return d.toISOString().slice(0,10);};
 const diffDays=(today,due)=>Math.floor((Date.parse(`${today}T00:00:00Z`)-Date.parse(`${due}T00:00:00Z`))/86400000);
 const ruleForOffset=offset=>RULES.filter(r=>offset>=r.offset).at(-1)||null;
 const nextRuleAfter=offset=>RULES.find(r=>offset<r.offset)||null;
+const DEFAULT_AUTOMATION_ACTIVATED_AT='2026-09-16T19:39:24.000Z';
+const activationDate=()=>process.env.FINANCE_RECOVERY_AUTOMATION_ACTIVATED_AT||DEFAULT_AUTOMATION_ACTIVATED_AT;
+const protectEvent=(event,activatedAt)=>{
+  const base={...event,dispatch_contract:'attendance.finance_recovery_action.v1'};
+  if(event?.status&&event.status!=='pending')return base;
+  const activeAt=activatedAt||activationDate();
+  const historical=!activeAt||String(event.created_at||'')<String(activeAt);
+  return {...base,requires_manual_approval:historical,auto_dispatchable:!historical};
+};
 const amount = (value) => {
   const raw = String(value ?? '').trim().replace(',', '.');
   if (!/^\d+(?:\.\d{1,2})?$/.test(raw)) return null;
@@ -75,7 +85,10 @@ const decorateCase = (row) => row ? {
   next_action_type: row.next_action_type || null,
   next_action_type_label: ACTION_LABELS[row.next_action_type] || row.next_action_type || null,
   pause_reason: row.pause_reason || null,
+  automation_activated_at: row.automation_activated_at || activationDate(),
   pending_actions: Array.isArray(row.pending_internal_events) ? row.pending_internal_events.filter(e=>e?.status==='pending').length : 0,
+  approval_required_actions: Array.isArray(row.pending_internal_events) ? row.pending_internal_events.filter(e=>e?.status==='pending'&&e?.requires_manual_approval).length : 0,
+  pending_action_ids: Array.isArray(row.pending_internal_events) ? row.pending_internal_events.filter(e=>e?.status==='pending'&&e?.requires_manual_approval).map(e=>e.id).filter(Boolean) : [],
 } : null;
 const decorateEvent = (row) => ({
   id: row.id,
@@ -91,7 +104,7 @@ const decorateEvent = (row) => ({
   actor: row.actor || null,
   created_at: row.created_at,
 });
-const internalEvent=(row,rule,now)=>({id:`rule_${row.id}_${rule.stage.replace(/[^A-Za-z0-9]+/g,'_')}`,contract_version:1,source:'finance_recovery_rule',action:'rule_due',action_label:ACTION_LABELS.rule_due,status:'pending',stage:rule.stage,action_type:rule.type,channel:null,delivery:'not_scheduled',can_escalate_human:rule.can_escalate_human===true,asaas_payment_id:row.id,asaas_customer_id:row.customer_id||null,student_ids:row.student_ids||[],due_date:row.due_date||null,created_at:now});
+const internalEvent=(row,rule,now)=>protectEvent({id:`rule_${row.id}_${rule.stage.replace(/[^A-Za-z0-9]+/g,'_')}`,contract_version:1,source:'finance_recovery_rule',action:'rule_due',action_label:ACTION_LABELS.rule_due,status:'pending',stage:rule.stage,action_type:rule.type,channel:null,delivery:'not_scheduled',can_escalate_human:rule.can_escalate_human===true,receivable:{asaas_payment_id:row.id,value:row.value??null,due_date:row.due_date||null,status:row.status||null},recovery_case:{asaas_payment_id:row.id,status:'new'},asaas_payment_id:row.id,asaas_customer_id:row.customer_id||null,customer_id:row.customer_id||null,student_ids:row.student_ids||[],value:row.value??null,due_date:row.due_date||null,created_at:now});
 const docId = (paymentId) => encodeURIComponent(externalId(paymentId));
 const docPath = (paymentId) => `financeRecoveryCases/${docId(paymentId)}`;
 const docName = (paymentId, projectId=PROJECT_ID) => {
@@ -156,6 +169,7 @@ function createRecoveryOperations({request=supabaseFetch,connectionId=process.en
  };
  const materializeRules=async(rows=[],today)=>{
   const todayKey=today||new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+  const activatedAt=activationDate();
   let active=0,pending=0,updated=0,paused=0,stopped=(await stopFinished(rows)).updated;
   const rawCases=new Map((await loadCases()).map(row=>[row.asaas_payment_id||row.payment_id,row]));
   const cases=new Map([...rawCases].map(([id,row])=>[id,decorateCase(row)]));
@@ -169,26 +183,50 @@ function createRecoveryOperations({request=supabaseFetch,connectionId=process.en
    const next_action_at=promised?currentRaw.promised_payment_date:manualPaused?null:nextRule?addDays(row.due_date,nextRule.offset):null;
    const next_action_type=promised?'promise_followup':manualPaused?null:nextRule?.type||null;
    const executed=new Set(Array.isArray(currentRaw.executed_rule_steps)?currentRaw.executed_rule_steps:[]);
-   const pendingEvents=Array.isArray(currentRaw.pending_internal_events)?currentRaw.pending_internal_events.filter(e=>e?.status==='pending'):[];
+   const originalPendingEvents=Array.isArray(currentRaw.pending_internal_events)?currentRaw.pending_internal_events.filter(e=>e?.status==='pending'||e?.status==='approved'):[];
+   const pendingEvents=originalPendingEvents.map(e=>protectEvent(e,activatedAt));
    let events=Array.isArray(currentRaw.events)?currentRaw.events:[],changed=false;
    if(rule_state==='active'&&dueRule&&!executed.has(dueRule.stage)){
     const ev=internalEvent(row,dueRule,now);
     if(!pendingEvents.some(e=>e.id===ev.id))pendingEvents.push(ev);
     executed.add(dueRule.stage);events=[...events,{...ev,status_after:currentRaw.status||'new',actor:'system'}].slice(-80);changed=true;pending++;
-   }else pending+=pendingEvents.length;
-   const next={...currentRaw,connection_id:scope(),asaas_payment_id:row.id,asaas_customer_id:row.customer_id||null,status:currentRaw.status||'new',rule_state,current_rule_stage:dueRule?.stage||'Pré-régua',next_action_at,next_action_type,next_action_date:next_action_at,executed_rule_steps:[...executed],pending_internal_events:pendingEvents,last_rule_evaluated_at:now,updated_at:now,created_at:currentRaw.created_at||now,events};
+   }else pending+=pendingEvents.filter(e=>e?.status==='pending').length;
+   const next={...currentRaw,connection_id:scope(),asaas_payment_id:row.id,asaas_customer_id:row.customer_id||null,status:currentRaw.status||'new',rule_state,current_rule_stage:dueRule?.stage||'Pré-régua',next_action_at,next_action_type,next_action_date:next_action_at,automation_activated_at:activatedAt,executed_rule_steps:[...executed],pending_internal_events:pendingEvents,last_rule_evaluated_at:now,updated_at:now,created_at:currentRaw.created_at||now,events};
    if(rule_state==='paused')paused++;else active++;
    const comparable=['rule_state','current_rule_stage','next_action_at','next_action_type','status'];
-   if(changed||!current||comparable.some(k=>currentRaw[k]!==next[k])||(currentRaw.executed_rule_steps||[]).length!==next.executed_rule_steps.length||(currentRaw.pending_internal_events||[]).length!==next.pending_internal_events.length){writes.push({paymentId:row.id,data:next});updated++;}
+   const approvalChanged=JSON.stringify(originalPendingEvents)!==JSON.stringify(pendingEvents);
+   if(changed||approvalChanged||!current||comparable.some(k=>currentRaw[k]!==next[k])||currentRaw.automation_activated_at!==next.automation_activated_at||(currentRaw.executed_rule_steps||[]).length!==next.executed_rule_steps.length||(currentRaw.pending_internal_events||[]).length!==next.pending_internal_events.length){writes.push({paymentId:row.id,data:next});updated++;}
   }
   if(writes.length)await writeDocs(writes);
   return {active,pending,paused,stopped,updated};
  };
  const autoRecover=stopFinished;
  const recordAction=async(body,actor)=>{
-  const paymentId=externalId(body?.payment_id);
+  const paymentId=body?.payment_id?externalId(body.payment_id):'';
   const action=clean(body?.action,40);
   if(!ACTIONS.has(action)){const e=new Error('finance_recovery_action_invalid');e.code=e.message;e.status=400;throw e;}
+  if(action==='approve_rule_actions'){
+   const ids=[...(Array.isArray(body?.payment_ids)?body.payment_ids:[]),paymentId].filter(Boolean).map(externalId);
+   const wantedActions=new Set((Array.isArray(body?.action_ids)?body.action_ids:[]).map(externalId));
+   const unique=[...new Set(ids)];
+   if(!unique.length){const e=new Error('finance_recovery_payment_invalid');e.code=e.message;e.status=400;throw e;}
+   const now=new Date().toISOString(),approvedBy=clean(actor,160);
+   let approved=0,cases=0;
+   for(const id of unique){
+    const current=await readDoc(id);if(!current)continue;
+    const pending=Array.isArray(current.pending_internal_events)?current.pending_internal_events:[];
+    let changed=false;
+    const nextPending=pending.map(ev=>{
+     const match=ev?.status==='pending'&&ev?.requires_manual_approval&&(wantedActions.size===0||wantedActions.has(ev.id));
+     if(!match)return ev;changed=true;approved++;
+     return {...ev,status:'approved',requires_manual_approval:false,manual_approved:true,approved_at:now,approved_by:approvedBy,auto_dispatchable:false,delivery:'approved_not_dispatched'};
+    });
+    if(!changed)continue;cases++;
+    const audit={id:`evt_${Date.now()}_${Math.random().toString(16).slice(2)}`,action,status_after:current.status||'followup',note:clean(body?.note)||'Ações históricas da régua aprovadas manualmente.',responsible:clean(body?.responsible,160)||null,actor:approvedBy,created_at:now};
+    await writeDoc(id,{...current,pending_internal_events:nextPending,last_action:action,last_event_at:now,updated_at:now,events:[...(Array.isArray(current.events)?current.events:[]),audit].slice(-80)});
+   }
+   return {approved,cases,case:null,events:[]};
+  }
   const payload={connection_id:scope(),asaas_payment_id:paymentId,action,actor:clean(actor,160),note:clean(body?.note),responsible:clean(body?.responsible,160)};
   if(action==='payment_promise'){
    const promised=amount(body?.promised_amount);
