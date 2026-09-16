@@ -12127,6 +12127,8 @@ const nativeCrmState = {
   search: "",
   mode: "funnel",
   drawer: null,
+  details: {},
+  activityFormOpportunityId: "",
   draggedOpportunityId: "",
 };
 
@@ -12167,6 +12169,42 @@ const formatCrmDateTime = (value) => {
     timeStyle: "short",
     timeZone: "America/Sao_Paulo",
   }).format(date);
+};
+
+const formatCrmActivityDate = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "Sem data";
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return "Sem data";
+  const todayKey = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+  const dateKey = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(date);
+  const time = new Intl.DateTimeFormat("pt-BR", { timeStyle: "short", timeZone: "America/Sao_Paulo" }).format(date);
+  if (dateKey === todayKey) return `Hoje, ${time}`;
+  return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" }).format(date);
+};
+
+const crmActivityTypeLabel = (type) => ({
+  task: "Tarefa",
+  call: "Ligação",
+  meeting: "Reunião",
+  follow_up: "Follow-up",
+}[String(type || "")] || "Atividade");
+
+const crmActivityTypeIcon = (type) => ({
+  task: "✓",
+  call: "☎",
+  meeting: "◎",
+  follow_up: "↗",
+}[String(type || "")] || "•");
+
+const crmActivityTone = (value) => {
+  const date = new Date(String(value || ""));
+  if (Number.isNaN(date.getTime())) return "none";
+  const now = new Date();
+  if (date.getTime() < now.getTime()) return "overdue";
+  const todayKey = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(now);
+  const dateKey = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(date);
+  return dateKey === todayKey ? "today" : "future";
 };
 
 const getNativeCrmRoot = () => document.querySelector("[data-native-crm]");
@@ -12232,6 +12270,7 @@ const nativeCrmCardHtml = (opportunity) => {
   const contact = opportunity.contact || {};
   const money = formatCrmMoney(opportunity.value, opportunity.currency);
   const ownerName = opportunity.owner?.name || "";
+  const activityTone = opportunity.nextActivityAt ? crmActivityTone(opportunity.nextActivityAt) : "none";
   return `
     <article class="native-crm-card" draggable="true" data-crm-card="${escapeHtml(opportunity.id)}" tabindex="0">
       <div class="native-crm-card-top">
@@ -12242,6 +12281,11 @@ const nativeCrmCardHtml = (opportunity) => {
       <div class="native-crm-card-meta">
         ${opportunity.source ? `<span>${escapeHtml(opportunity.source)}</span>` : ""}
         ${ownerName ? `<span>${escapeHtml(ownerName)}</span>` : ""}
+      </div>
+      <div class="native-crm-next-activity" data-tone="${escapeHtml(activityTone)}">
+        ${opportunity.nextActivityId
+          ? `<strong>${escapeHtml(crmActivityTypeIcon(opportunity.nextActivityType))} ${escapeHtml(crmActivityTypeLabel(opportunity.nextActivityType))}</strong><span>${escapeHtml(opportunity.nextActivityTitle || "")}</span><em>${escapeHtml(formatCrmActivityDate(opportunity.nextActivityAt))}</em>`
+          : `<strong>Sem próxima atividade</strong><span>Adicionar atividade</span>`}
       </div>
     </article>
   `;
@@ -12277,6 +12321,116 @@ const renderNativeCrmBoard = () => {
   `;
 };
 
+const getNativeCrmDetail = (opportunityId) => nativeCrmState.details[String(opportunityId || "")] || { loading: false, loadedAt: 0, activities: [], timeline: [], error: "" };
+
+const nativeCrmNextActivityHtml = (opportunity) => {
+  const tone = opportunity?.nextActivityAt ? crmActivityTone(opportunity.nextActivityAt) : "none";
+  if (!opportunity?.nextActivityId) {
+    return `
+      <section class="native-crm-context-card" data-tone="none">
+        <div><span>Próxima atividade</span><strong>Sem próxima atividade</strong></div>
+        <button type="button" class="button button-solid button-small" data-crm-activity-new="${escapeHtml(opportunity?.id || "")}">Adicionar atividade</button>
+      </section>
+    `;
+  }
+  return `
+    <section class="native-crm-context-card" data-tone="${escapeHtml(tone)}">
+      <div>
+        <span>Próxima atividade</span>
+        <strong>${escapeHtml(crmActivityTypeIcon(opportunity.nextActivityType))} ${escapeHtml(opportunity.nextActivityTitle || crmActivityTypeLabel(opportunity.nextActivityType))}</strong>
+        <em>${escapeHtml(formatCrmActivityDate(opportunity.nextActivityAt))}</em>
+      </div>
+      <button type="button" class="button button-outline button-small" data-crm-activity-new="${escapeHtml(opportunity.id)}">+ Nova atividade</button>
+    </section>
+  `;
+};
+
+const nativeCrmActivityFormHtml = (opportunity) => {
+  if (nativeCrmState.activityFormOpportunityId !== opportunity?.id) return "";
+  const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const dateValue = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(tomorrow);
+  return `
+    <section class="native-crm-activity-form" data-crm-activity-form-wrap>
+      <div class="native-crm-section-head">
+        <h3>Nova atividade</h3>
+      </div>
+      <div data-crm-activity-form data-crm-opportunity-id="${escapeHtml(opportunity.id)}">
+        <div class="native-crm-form-grid">
+          <label><span>Tipo *</span><select name="activityType" required>
+            <option value="task">Tarefa</option>
+            <option value="call" selected>Ligação</option>
+            <option value="meeting">Reunião</option>
+            <option value="follow_up">Follow-up</option>
+          </select></label>
+          <label><span>Título *</span><input name="activityTitle" required value="Ligação de follow-up" /></label>
+        </div>
+        <div class="native-crm-form-grid">
+          <label><span>Data *</span><input name="activityDate" type="date" required value="${escapeHtml(dateValue)}" /></label>
+          <label><span>Hora *</span><input name="activityTime" type="time" required value="10:00" /></label>
+        </div>
+        <label><span>Responsável</span><select name="activityOwnerId">${renderNativeCrmOwnerOptions(opportunity.ownerId || "")}</select></label>
+        <label><span>Descrição</span><textarea name="activityDescription" rows="3"></textarea></label>
+        <div class="native-crm-form-error" data-crm-activity-error hidden></div>
+        <div class="native-crm-inline-actions">
+          <button type="button" class="button button-outline button-small" data-crm-activity-cancel>Cancelar</button>
+          <button type="button" class="button button-solid button-small" data-crm-activity-submit ${nativeCrmState.saving ? "disabled" : ""}>Salvar atividade</button>
+        </div>
+      </div>
+    </section>
+  `;
+};
+
+const nativeCrmOpenActivitiesHtml = (opportunity) => {
+  const detail = getNativeCrmDetail(opportunity?.id);
+  const openActivities = (detail.activities || []).filter((activity) => activity.status === "open").sort((left, right) => new Date(left.dueAt) - new Date(right.dueAt));
+  return `
+    <section class="native-crm-form-section">
+      <div class="native-crm-section-head">
+        <h3>Atividades abertas</h3>
+        <button type="button" class="button button-outline button-small" data-crm-activity-new="${escapeHtml(opportunity.id)}">+ Nova atividade</button>
+      </div>
+      ${detail.loading ? `<div class="native-crm-muted">Carregando atividades…</div>` : ""}
+      ${!detail.loading && !openActivities.length ? `<div class="native-crm-muted">Sem atividades abertas.</div>` : ""}
+      <div class="native-crm-activity-list">
+        ${openActivities.map((activity) => {
+          const tone = crmActivityTone(activity.dueAt);
+          return `
+            <article class="native-crm-activity-row" data-tone="${escapeHtml(tone)}">
+              <div>
+                <strong>${escapeHtml(crmActivityTypeIcon(activity.type))} ${escapeHtml(activity.title || crmActivityTypeLabel(activity.type))}</strong>
+                <span>${escapeHtml(crmActivityTypeLabel(activity.type))} · ${escapeHtml(formatCrmActivityDate(activity.dueAt))}</span>
+                ${activity.description ? `<p>${escapeHtml(activity.description)}</p>` : ""}
+              </div>
+              <button type="button" class="button button-outline button-small" data-crm-activity-complete="${escapeHtml(activity.id)}">Concluir</button>
+            </article>
+          `;
+        }).join("")}
+      </div>
+    </section>
+  `;
+};
+
+const nativeCrmTimelineHtml = (opportunity) => {
+  const detail = getNativeCrmDetail(opportunity?.id);
+  return `
+    <section class="native-crm-form-section">
+      <h3>Timeline</h3>
+      ${detail.loading ? `<div class="native-crm-muted">Carregando timeline…</div>` : ""}
+      ${!detail.loading && !(detail.timeline || []).length ? `<div class="native-crm-muted">Nenhum evento registrado ainda.</div>` : ""}
+      <div class="native-crm-timeline">
+        ${(detail.timeline || []).map((item) => `
+          <article class="native-crm-timeline-item">
+            <time>${escapeHtml(formatCrmDateTime(item.occurredAt))}</time>
+            <strong>${escapeHtml(item.title || "Evento")}</strong>
+            ${item.description ? `<span>${escapeHtml(item.description)}</span>` : ""}
+            ${item.actorName ? `<em>por ${escapeHtml(item.actorName)}</em>` : ""}
+          </article>
+        `).join("")}
+      </div>
+    </section>
+  `;
+};
+
 const renderNativeCrmDrawer = () => {
   const drawer = nativeCrmState.drawer;
   if (!drawer) return "";
@@ -12295,11 +12449,14 @@ const renderNativeCrmDrawer = () => {
           <div>
             <span>${isNew ? "Novo lead" : escapeHtml(getNativeCrmData().stages.find((stage) => stage.id === stageId)?.name || "Oportunidade")}</span>
             <h2>${isNew ? "Nova oportunidade" : escapeHtml(contact.name || opportunity.title || "Oportunidade")}</h2>
-            ${!isNew ? `<p>${escapeHtml(opportunity.status || "open")}</p>` : ""}
+            ${!isNew ? `<p>${escapeHtml(opportunity.status || "open")}${opportunity.value ? ` · ${escapeHtml(formatCrmMoney(opportunity.value, opportunity.currency))}` : ""}</p>` : ""}
           </div>
           <button type="button" class="native-crm-icon-button" data-crm-drawer-close aria-label="Fechar">×</button>
         </header>
         <div class="native-crm-drawer-body">
+          ${isNew ? "" : nativeCrmNextActivityHtml(opportunity)}
+          ${isNew ? "" : nativeCrmActivityFormHtml(opportunity)}
+          ${isNew ? "" : nativeCrmOpenActivitiesHtml(opportunity)}
           <section class="native-crm-form-section">
             <h3>Informações do contato</h3>
             <label><span>Nome *</span><input name="name" required value="${escapeHtml(contact.name || "")}" /></label>
@@ -12340,6 +12497,7 @@ const renderNativeCrmDrawer = () => {
               </div>
             </section>
           `}
+          ${isNew ? "" : nativeCrmTimelineHtml(opportunity)}
           <div class="native-crm-form-error" data-crm-form-error hidden></div>
         </div>
         <footer class="native-crm-drawer-foot">
@@ -12420,6 +12578,32 @@ const loadNativeCrm = async ({ force = false } = {}) => {
   }
 };
 
+const loadNativeCrmOpportunityDetail = async (opportunityId, { force = false } = {}) => {
+  const id = String(opportunityId || "").trim();
+  if (!id) return;
+  const current = getNativeCrmDetail(id);
+  if (!force && current.loading) return;
+  if (!force && current.loadedAt && Date.now() - current.loadedAt < 15_000) return;
+  nativeCrmState.details[id] = { ...current, loading: true, error: "" };
+  renderNativeCrm();
+  try {
+    const res = await fetchWithAuth(`/api/crm?opportunityId=${encodeURIComponent(id)}`, { method: "GET" });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error || "crm_detail_failed");
+    nativeCrmState.details[id] = {
+      loading: false,
+      loadedAt: Date.now(),
+      activities: Array.isArray(data?.activities) ? data.activities : [],
+      timeline: Array.isArray(data?.timeline) ? data.timeline : [],
+      error: "",
+    };
+  } catch (error) {
+    nativeCrmState.details[id] = { ...current, loading: false, error: error?.message || "Não foi possível carregar o histórico." };
+  } finally {
+    renderNativeCrm();
+  }
+};
+
 const collectCrmFormPayload = (form) => {
   const fd = new FormData(form);
   const payload = {};
@@ -12460,6 +12644,83 @@ const submitNativeCrmForm = async (form) => {
     await loadNativeCrm({ force: true });
   } catch (error) {
     nativeCrmState.error = error?.message || "Não foi possível salvar.";
+    renderNativeCrm();
+  } finally {
+    nativeCrmState.saving = false;
+  }
+};
+
+const collectCrmActivityPayload = (wrap) => {
+  const payload = {};
+  const fieldMap = {
+    type: "activityType",
+    title: "activityTitle",
+    date: "activityDate",
+    time: "activityTime",
+    ownerId: "activityOwnerId",
+    description: "activityDescription",
+  };
+  Object.entries(fieldMap).forEach(([key, name]) => {
+    const field = wrap.querySelector(`[name="${name}"]`);
+    payload[key] = field instanceof HTMLInputElement || field instanceof HTMLSelectElement || field instanceof HTMLTextAreaElement ? String(field.value || "").trim() : "";
+  });
+  payload.opportunityId = String(wrap.getAttribute("data-crm-opportunity-id") || "").trim();
+  return payload;
+};
+
+const createNativeCrmActivity = async (wrap) => {
+  const errorEl = wrap.querySelector("[data-crm-activity-error]");
+  const payload = collectCrmActivityPayload(wrap);
+  if (!payload.type || !payload.title || !payload.date || !payload.time) {
+    if (errorEl instanceof HTMLElement) {
+      errorEl.textContent = "Preencha tipo, título, data e hora.";
+      errorEl.hidden = false;
+    }
+    return;
+  }
+  nativeCrmState.saving = true;
+  renderNativeCrm();
+  try {
+    const res = await fetchWithAuth("/api/crm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "create_activity", ...payload }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error || "crm_activity_create_failed");
+    nativeCrmState.activityFormOpportunityId = "";
+    nativeCrmState.loadedAt = 0;
+    await loadNativeCrm({ force: true });
+    nativeCrmState.drawer = payload.opportunityId;
+    await loadNativeCrmOpportunityDetail(payload.opportunityId, { force: true });
+  } catch (error) {
+    nativeCrmState.error = error?.message || "Não foi possível salvar a atividade.";
+    renderNativeCrm();
+  } finally {
+    nativeCrmState.saving = false;
+  }
+};
+
+const completeNativeCrmActivity = async (activityId) => {
+  const id = String(activityId || "").trim();
+  const opportunityId = String(nativeCrmState.drawer || "").trim();
+  if (!id || !opportunityId) return;
+  nativeCrmState.saving = true;
+  renderNativeCrm();
+  try {
+    const res = await fetchWithAuth("/api/crm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "complete_activity", id }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error || "crm_activity_complete_failed");
+    nativeCrmState.loadedAt = 0;
+    await loadNativeCrm({ force: true });
+    nativeCrmState.drawer = opportunityId;
+    await loadNativeCrmOpportunityDetail(opportunityId, { force: true });
+  } catch (error) {
+    nativeCrmState.error = error?.message || "Não foi possível concluir a atividade.";
     renderNativeCrm();
   } finally {
     nativeCrmState.saving = false;
@@ -37817,10 +38078,38 @@ document.addEventListener("click", (event) => {
       renderNativeCrm();
       return;
     }
+    const openActivity = target.closest("[data-crm-activity-new]");
+    if (openActivity instanceof HTMLButtonElement) {
+      event.preventDefault();
+      nativeCrmState.activityFormOpportunityId = String(openActivity.getAttribute("data-crm-activity-new") || nativeCrmState.drawer || "");
+      renderNativeCrm();
+      return;
+    }
+    const cancelActivity = target.closest("[data-crm-activity-cancel]");
+    if (cancelActivity instanceof HTMLButtonElement) {
+      event.preventDefault();
+      nativeCrmState.activityFormOpportunityId = "";
+      renderNativeCrm();
+      return;
+    }
+    const submitActivity = target.closest("[data-crm-activity-submit]");
+    if (submitActivity instanceof HTMLButtonElement) {
+      event.preventDefault();
+      const wrap = submitActivity.closest("[data-crm-activity-form]");
+      if (wrap instanceof HTMLElement) createNativeCrmActivity(wrap).catch(() => {});
+      return;
+    }
+    const completeActivity = target.closest("[data-crm-activity-complete]");
+    if (completeActivity instanceof HTMLButtonElement) {
+      event.preventDefault();
+      completeNativeCrmActivity(String(completeActivity.getAttribute("data-crm-activity-complete") || "")).catch(() => {});
+      return;
+    }
     const closeDrawer = target.closest("[data-crm-drawer-close]");
     if (closeDrawer instanceof HTMLElement) {
       event.preventDefault();
       nativeCrmState.drawer = null;
+      nativeCrmState.activityFormOpportunityId = "";
       nativeCrmState.error = "";
       renderNativeCrm();
       return;
@@ -37829,8 +38118,10 @@ document.addEventListener("click", (event) => {
     if (card instanceof HTMLElement && !target.closest("button, a, input, select, textarea")) {
       event.preventDefault();
       nativeCrmState.drawer = String(card.getAttribute("data-crm-card") || "");
+      nativeCrmState.activityFormOpportunityId = "";
       nativeCrmState.error = "";
       renderNativeCrm();
+      loadNativeCrmOpportunityDetail(nativeCrmState.drawer, { force: false }).catch(() => {});
       return;
     }
   }
@@ -37888,10 +38179,13 @@ document.addEventListener("keydown", (event) => {
   if (card instanceof HTMLElement && (event.key === "Enter" || event.key === " ")) {
     event.preventDefault();
     nativeCrmState.drawer = String(card.getAttribute("data-crm-card") || "");
+    nativeCrmState.activityFormOpportunityId = "";
     renderNativeCrm();
+    loadNativeCrmOpportunityDetail(nativeCrmState.drawer, { force: false }).catch(() => {});
   }
   if (event.key === "Escape" && nativeCrmState.drawer) {
     nativeCrmState.drawer = null;
+    nativeCrmState.activityFormOpportunityId = "";
     renderNativeCrm();
   }
 });
