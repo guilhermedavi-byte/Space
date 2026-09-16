@@ -12165,6 +12165,7 @@ const automationsState = {
   runs: [],
   runDetail: null,
   crm: null,
+  catalog: [],
   editorGraphPreview: null,
   error: "",
 };
@@ -12234,6 +12235,8 @@ const mountAutomationEditorIsland = () => {
         runs: automationsState.runs || [],
         runDetail: automationsState.runDetail,
         crm: automationsState.crm || {},
+        catalog: automationsState.catalog || [],
+        onSaveDraft: saveAutomationDraftFromEditor,
         onGraphPreview: (graph) => {
           automationsState.editorGraphPreview = graph;
         },
@@ -12276,16 +12279,20 @@ const loadAutomationsAdmin = async ({ force = false, selectId = "" } = {}) => {
   automationsState.error = "";
   renderAutomationsAdmin();
   try {
-    const [automationsRes, crmRes] = await Promise.all([
+    const [automationsRes, crmRes, catalogRes] = await Promise.all([
       fetchWithAuth("/api/automations"),
       fetchWithAuth("/api/crm"),
+      fetchWithAuth("/api/automations?resource=catalog"),
     ]);
     const automations = await automationsRes.json().catch(() => null);
     const crm = await crmRes.json().catch(() => null);
+    const catalog = await catalogRes.json().catch(() => null);
     if (!automationsRes.ok) throw new Error(automations?.error || "automations_load_failed");
     if (!crmRes.ok) throw new Error(crm?.error || "crm_load_failed");
+    if (!catalogRes.ok) throw new Error(catalog?.error || "automation_catalog_load_failed");
     automationsState.rows = Array.isArray(automations.rows) ? automations.rows : [];
     automationsState.crm = crm;
+    automationsState.catalog = Array.isArray(catalog?.catalog) ? catalog.catalog : [];
     automationsState.loadedAt = Date.now();
     const nextId = selectId || automationsState.selectedId || automationsState.rows[0]?.id || "";
     if (nextId) await openAutomation(nextId, { render: false });
@@ -12351,6 +12358,37 @@ const saveAutomationConfig = async (form) => {
   const data = await res.json().catch(() => null);
   if (!res.ok) throw new Error(data?.error || "automation_save_failed");
   await loadAutomationsAdmin({ force: true, selectId: id });
+};
+
+const saveAutomationDraftFromEditor = async (graph, { baseUpdatedAt = "" } = {}) => {
+  const id = String(automationsState.selectedId || automationsState.selected?.id || "").trim();
+  if (!id) throw new Error("automation_not_selected");
+  const res = await fetchWithAuth(`/api/automations?id=${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ graph, baseUpdatedAt, allowInvalidDraft: true }),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    if (res.status === 409 && data?.error === "automation_draft_conflict") {
+      throw new Error("Este rascunho foi alterado em outra sessão. Recarregue antes de continuar.");
+    }
+    throw new Error(data?.error || "automation_save_failed");
+  }
+  automationsState.editorGraphPreview = graph;
+  if (automationsState.selected) {
+    automationsState.selected = {
+      ...automationsState.selected,
+      updated_at: data?.updatedAt || automationsState.selected.updated_at,
+      draft_version: automationsState.selected.draft_version
+        ? { ...automationsState.selected.draft_version, graph }
+        : automationsState.selected.draft_version,
+    };
+  }
+  automationsState.rows = (automationsState.rows || []).map((row) => (
+    row.id === id ? { ...row, updated_at: data?.updatedAt || row.updated_at } : row
+  ));
+  return data;
 };
 
 const loadAutomationRunDetail = async (runId) => {

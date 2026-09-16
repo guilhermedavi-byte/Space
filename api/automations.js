@@ -2,6 +2,7 @@ const { readJsonBody, sendJson } = require("./_lib/http");
 const { resolveAdminRequestAuth } = require("./_lib/admin-request-auth");
 const { supabaseFetch } = require("./_lib/supabase-rest");
 const { validateGraph } = require("./_lib/automation-engine");
+const { automationCatalog } = require("./_lib/automation-registries");
 
 const clean = (value) => String(value || "").trim();
 const enc = (value) => encodeURIComponent(clean(value));
@@ -94,15 +95,25 @@ const updateDraft = async (session, id, body = {}) => {
   if (!automation) return { status: 404, body: { error: "automation_not_found" } };
   const draft = automation.draft_version;
   if (!draft || draft.status !== "DRAFT") return { status: 409, body: { error: "draft_not_found" } };
+  if (body.baseUpdatedAt && automation.updated_at && clean(body.baseUpdatedAt) !== clean(automation.updated_at)) {
+    return { status: 409, body: { error: "automation_draft_conflict", updatedAt: automation.updated_at } };
+  }
   const graph = body.graph && typeof body.graph === "object" ? body.graph : draft.graph;
-  const validation = validateGraph(graph);
-  if (!validation.ok) return { status: 422, body: { error: "invalid_graph", details: validation.errors } };
+  if (body.allowInvalidDraft !== true) {
+    const validation = validateGraph(graph);
+    if (!validation.ok) return { status: 422, body: { error: "invalid_graph", details: validation.errors } };
+  }
   await request(`/automation_versions?id=eq.${enc(draft.id)}`, { method: "PATCH", body: { graph, trigger } });
   const patch = {};
   if (body.name !== undefined) patch.name = clean(body.name);
   if (body.description !== undefined) patch.description = clean(body.description);
-  if (Object.keys(patch).length) await request(`/automations?id=eq.${enc(id)}`, { method: "PATCH", body: { ...patch, updated_by_uid: session.sub } });
-  return { status: 200, body: { ok: true } };
+  const updated = await request(`/automations?id=eq.${enc(id)}`, {
+    method: "PATCH",
+    headers: { Prefer: "return=representation" },
+    body: { ...patch, updated_by_uid: session.sub },
+  });
+  const updatedAutomation = Array.isArray(updated.data) ? updated.data[0] : null;
+  return { status: 200, body: { ok: true, updatedAt: updatedAutomation?.updated_at || null } };
 };
 
 const createNextDraft = async (session, id) => {
@@ -151,6 +162,7 @@ module.exports = async (req, res) => {
 
   try {
     if (req.method === "GET") {
+      if (resource === "catalog") return sendJson(res, 200, { catalog: automationCatalog() });
       if (id && resource === "runs") {
         const runId = clean(url.searchParams.get("runId"));
         if (runId) {

@@ -32,6 +32,21 @@ const getTrigger = (type) => triggers.get(clean(type));
 const getCondition = (type) => conditions.get(clean(type));
 const getAction = (type) => actions.get(clean(type));
 
+const catalogEntry = (entry = {}, kind = "") => ({
+  category: entry.category || (kind === "trigger" ? "Gatilhos" : kind === "condition" ? "Condições" : "Ações"),
+  kind,
+  type: clean(entry.type),
+  label: clean(entry.label) || clean(entry.type),
+  description: clean(entry.description || entry.eventType || entry.category || entry.type),
+});
+
+const automationCatalog = () => [
+  ...Array.from(triggers.values()).map((entry) => catalogEntry(entry, "trigger")),
+  ...Array.from(conditions.values()).map((entry) => catalogEntry(entry, "condition")),
+  ...Array.from(actions.values()).map((entry) => catalogEntry(entry, "action")),
+  { category: "Fluxo", kind: "end", type: "end", label: "Fim", description: "Encerrar fluxo" },
+];
+
 const attendanceIdentityFromContext = (context = {}) => {
   const identity = context.attendance?.identity || {};
   const contact = context.attendance?.contact || {};
@@ -102,6 +117,7 @@ module.exports = {
   getAction,
   getCondition,
   getTrigger,
+  automationCatalog,
   registerAction,
   registerCondition,
   registerTrigger,

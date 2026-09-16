@@ -26324,6 +26324,11 @@ button.automations-row:focus-visible,
   stroke-width: 1.7;
 }
 
+.automation-canvas-shell .react-flow__edge.selected .react-flow__edge-path {
+  stroke: #ff5b52;
+  stroke-width: 2.4;
+}
+
 .automation-canvas-shell .react-flow__edge-textbg {
   fill: rgba(15,17,23,.9);
 }
@@ -26372,6 +26377,9 @@ button.automations-row:focus-visible,
 .automation-canvas-node.is-condition { border-color: rgba(233,193,93,.38); }
 .automation-canvas-node.is-action { border-color: rgba(93,202,165,.36); }
 .automation-canvas-node.is-end { width: 130px; min-height: 58px; align-content: center; }
+.automation-canvas-node.has-error {
+  border-color: rgba(255,91,82,.72);
+}
 
 .automation-canvas-node-top {
   display: flex;
@@ -26427,6 +26435,13 @@ button.automations-row:focus-visible,
   right: 18px;
   bottom: 18px;
   z-index: 5;
+  width: auto;
+  min-width: 0;
+  height: 38px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
 .automation-add-node:disabled {
@@ -26451,6 +26466,82 @@ button.automations-row:focus-visible,
   border-radius: 8px;
   padding: 7px 9px;
   background: rgba(16,18,24,.72);
+}
+
+.automation-node-picker {
+  position: absolute;
+  right: 18px;
+  bottom: 66px;
+  z-index: 6;
+  display: grid;
+  gap: 12px;
+  width: min(330px, calc(100% - 36px));
+  max-height: min(560px, calc(100% - 110px));
+  overflow: auto;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(16,18,24,.97);
+  box-shadow: 0 18px 50px rgba(0,0,0,.34);
+}
+
+.automation-node-picker section {
+  display: grid;
+  gap: 6px;
+}
+
+.automation-node-picker h4 {
+  margin: 0;
+  color: rgba(255,255,255,.5);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.automation-node-picker button {
+  display: grid;
+  gap: 4px;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 8px;
+  padding: 10px;
+  background: rgba(255,255,255,.035);
+  color: var(--text-main);
+  text-align: left;
+  cursor: pointer;
+}
+
+.automation-node-picker button:hover,
+.automation-node-picker button:focus-visible {
+  border-color: rgba(255,91,82,.35);
+  background: rgba(255,91,82,.09);
+  outline: none;
+}
+
+.automation-node-picker span {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.automation-node-picker small {
+  color: rgba(255,255,255,.5);
+  font-size: 11px;
+}
+
+.automation-inline-error {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  z-index: 5;
+  transform: translateX(-50%);
+  max-width: min(520px, calc(100% - 360px));
+  border: 1px solid rgba(255,91,82,.24);
+  border-radius: 8px;
+  padding: 9px 12px;
+  background: rgba(80,22,25,.92);
+  color: #ffd4d0;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .automation-properties {
@@ -26495,6 +26586,37 @@ button.automations-row:focus-visible,
   padding: 0 10px;
   background: rgba(255,255,255,.035);
   color: var(--text-main);
+}
+
+.automation-danger-button {
+  min-height: 38px;
+  border: 1px solid rgba(255,91,82,.24);
+  border-radius: 8px;
+  padding: 0 12px;
+  background: rgba(255,91,82,.1);
+  color: #ffd4d0;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.automation-danger-button:hover,
+.automation-danger-button:focus-visible {
+  background: rgba(255,91,82,.16);
+  outline: none;
+}
+
+.automation-save-state.is-dirty {
+  border-color: rgba(233,193,93,.36);
+  color: #e9c15d;
+}
+
+.automation-save-state.is-saving {
+  color: rgba(255,255,255,.72);
+}
+
+.automation-save-state.is-error {
+  border-color: rgba(255,91,82,.42);
+  color: #ff8f88;
 }
 
 .automation-editor-empty {

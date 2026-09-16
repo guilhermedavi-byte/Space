@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Automation Editor Smoke</title>
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/assets/automation-editor.bundle.css">
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #0b0d11;
+      }
+
+      #root {
+        height: 100vh;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script src="/assets/automation-editor.bundle.js"></script>
+    <script>
+      const graph = {
+        viewport: { x: -40, y: 20, zoom: 0.92 },
+        nodes: [
+          { id: "trigger_1", type: "trigger", triggerType: "attendance.message.created", position: { x: 120, y: 120 } },
+          { id: "condition_1", type: "condition", conditionType: "crm.contactHasOpenOpportunity", position: { x: 420, y: 120 } },
+          { id: "action_1", type: "action", actionType: "crm.createOpportunity", config: { pipelineId: "p1", stageId: "s1" }, position: { x: 720, y: 250 } },
+          { id: "end_1", type: "end", position: { x: 720, y: 20 } }
+        ],
+        edges: [
+          { id: "e1", from: "trigger_1", to: "condition_1" },
+          { id: "e2", from: "condition_1", to: "end_1", branch: "true" },
+          { id: "e3", from: "condition_1", to: "action_1", branch: "false" },
+          { id: "e4", from: "action_1", to: "end_1" }
+        ]
+      };
+
+      window.__automationSmokeSaves = [];
+      window.SpaceAutomationEditor.mount(document.getElementById("root"), {
+        automation: {
+          id: "automation_smoke",
+          name: "Smoke Fase B",
+          status: "DRAFT",
+          updated_at: "2026-09-16T00:00:00.000Z",
+          metrics: { totalRuns: 7, successRate: 100 },
+          draft_version: { id: "version_smoke", version_number: 2, graph }
+        },
+        rows: [{ id: "automation_smoke", name: "Smoke Fase B", status: "DRAFT", draft_version: { version_number: 2 } }],
+        runDetail: null,
+        crm: {
+          pipelines: [{ id: "p1", name: "Comercial", isActive: true }, { id: "p2", name: "Renovação" }],
+          stages: [{ id: "s1", pipelineId: "p1", name: "Novo lead" }, { id: "s2", pipelineId: "p2", name: "Qualificação" }]
+        },
+        catalog: [
+          { category: "Ações", kind: "action", type: "crm.createOpportunity", label: "Criar oportunidade", description: "CRM" },
+          { category: "Fluxo", kind: "end", type: "end", label: "Fim", description: "Encerrar fluxo" }
+        ],
+        onGraphPreview(graph) {
+          window.__automationSmokePreview = graph;
+        },
+        onSaveDraft(graph) {
+          window.__automationSmokeSaves.push(graph);
+          return Promise.resolve({ ok: true, updatedAt: new Date().toISOString() });
+        }
+      });
+    </script>
+  </body>
+</html>
