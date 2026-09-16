@@ -77,6 +77,7 @@ const normalizePipeline = (row) => ({
   scopeId: clean(row.scopeId) || CRM_SCOPE_ID,
   name: clean(row.name),
   isActive: row.isActive !== false,
+  isDefault: row.isDefault === true,
   createdAt: toIso(row.createdAt),
   updatedAt: toIso(row.updatedAt),
 });
@@ -289,7 +290,8 @@ const ensureDefaultPipeline = async () => {
   const pipelines = pipelinesRaw.map(normalizePipeline).filter((row) => row.id);
   const stages = stagesRaw.map(normalizeStage).filter((row) => row.id);
   const scopedPipelines = pipelines.filter((row) => row.scopeId === CRM_SCOPE_ID || (!clean(row.scopeId) && row.id === DEFAULT_PIPELINE_ID));
-  const active = scopedPipelines.find((row) => row.isActive) || scopedPipelines[0] || null;
+  const activePipelines = scopedPipelines.filter((row) => row.isActive);
+  const active = activePipelines.find((row) => row.isDefault) || activePipelines.find((row) => row.id === DEFAULT_PIPELINE_ID) || activePipelines[0] || null;
   if (active) {
     const scopedStages = stages.filter((stage) => stage.pipelineId === active.id && (stage.scopeId === CRM_SCOPE_ID || !clean(stage.scopeId)));
     const existingStageIds = new Set(scopedStages.map((stage) => stage.id));
@@ -303,16 +305,19 @@ const ensureDefaultPipeline = async () => {
       createdAt: stamp,
       updatedAt: stamp,
     })).filter((stage) => !existingStageIds.has(stage.id));
-    if (!missingStages.length) return { pipelines: scopedPipelines, stages: scopedStages };
+    const defaultWrites = activePipelines.some((row) => row.isDefault)
+      ? []
+      : scopedPipelines.map((pipeline) => buildWrite(COLLECTIONS.pipelines, pipeline.id, { ...pipeline, isDefault: pipeline.id === active.id, updatedAt: stamp }));
+    if (!missingStages.length && !defaultWrites.length) return { pipelines: scopedPipelines, stages: scopedStages };
     const committed = await commitWritesAsAdmin({
-      writes: missingStages.map((stage) => buildWrite(COLLECTIONS.stages, stage.id, stage, { createOnly: true })),
+      writes: [...missingStages.map((stage) => buildWrite(COLLECTIONS.stages, stage.id, stage, { createOnly: true })), ...defaultWrites],
     });
     if (!committed.ok && !isAlreadyExistsResponse(committed)) throw Object.assign(new Error("crm_bootstrap_failed"), { status: committed.status || 500 });
     return ensureDefaultPipeline();
   }
 
   const stamp = nowIso();
-  const pipeline = { id: DEFAULT_PIPELINE_ID, scopeId: CRM_SCOPE_ID, name: "Comercial", isActive: true, createdAt: stamp, updatedAt: stamp };
+  const pipeline = { id: DEFAULT_PIPELINE_ID, scopeId: CRM_SCOPE_ID, name: "Comercial", isActive: true, isDefault: true, createdAt: stamp, updatedAt: stamp };
   const seededStages = DEFAULT_STAGES.map((name, index) => ({
     id: `${DEFAULT_PIPELINE_ID}_stage_${index + 1}`,
     scopeId: CRM_SCOPE_ID,
@@ -389,7 +394,7 @@ const findOrBuildContact = ({ contacts, body, stamp }) => {
 };
 
 const validatePipelineStage = (readModel, pipelineId, stageId) => {
-  if (!readModel.pipelines.some((row) => row.id === pipelineId)) throw Object.assign(new Error("invalid_pipeline"), { status: 400 });
+  if (!readModel.pipelines.some((row) => row.id === pipelineId && row.isActive)) throw Object.assign(new Error("invalid_pipeline"), { status: 400 });
   if (!readModel.stages.some((row) => row.id === stageId && row.pipelineId === pipelineId)) throw Object.assign(new Error("invalid_stage"), { status: 400 });
 };
 
@@ -404,7 +409,8 @@ const getOpportunityById = async (id) => {
 
 const createOpportunity = async ({ actorUid = "", input = {}, idempotencyKey = "" } = {}) => {
   const readModel = await loadCrmReadModel();
-  const pipelineId = clean(input.pipelineId) || readModel.pipelines.find((p) => p.isActive)?.id || DEFAULT_PIPELINE_ID;
+  const activePipelines = readModel.pipelines.filter((p) => p.isActive);
+  const pipelineId = clean(input.pipelineId) || activePipelines.find((p) => p.isDefault)?.id || activePipelines[0]?.id || DEFAULT_PIPELINE_ID;
   const stageId = clean(input.stageId) || readModel.stages.find((s) => s.pipelineId === pipelineId)?.id;
   validatePipelineStage(readModel, pipelineId, stageId);
 

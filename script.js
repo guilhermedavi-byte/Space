@@ -12148,6 +12148,8 @@ const nativeCrmState = {
   drawer: null,
   drawerMode: "view",
   closingDialog: null,
+  pipelineManagerOpen: false,
+  pipelineEditor: null,
   details: {},
   activityFormOpportunityId: "",
   draggedOpportunityId: "",
@@ -12162,6 +12164,7 @@ const automationsState = {
   runs: [],
   runDetail: null,
   crm: null,
+  editorGraphPreview: null,
   error: "",
 };
 
@@ -12189,6 +12192,59 @@ const setAutomationActionConfig = (automation, config) => {
 const renderAutomationOptions = (items = [], selected = "") =>
   items.map((item) => `<option value="${escapeHtml(item.id)}" ${String(item.id) === String(selected || "") ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("");
 
+let automationEditorAssetsPromise = null;
+
+const loadAutomationEditorAssets = () => {
+  if (window.SpaceAutomationEditor?.mount) return Promise.resolve(window.SpaceAutomationEditor);
+  if (automationEditorAssetsPromise) return automationEditorAssetsPromise;
+  automationEditorAssetsPromise = new Promise((resolve, reject) => {
+    if (!document.querySelector('link[data-automation-editor-css="true"]')) {
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = "/assets/automation-editor.bundle.css";
+      link.setAttribute("data-automation-editor-css", "true");
+      document.head.appendChild(link);
+    }
+    const existing = document.querySelector('script[data-automation-editor-js="true"]');
+    if (existing) {
+      existing.addEventListener("load", () => resolve(window.SpaceAutomationEditor), { once: true });
+      existing.addEventListener("error", reject, { once: true });
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "/assets/automation-editor.bundle.js";
+    script.defer = true;
+    script.setAttribute("data-automation-editor-js", "true");
+    script.onload = () => window.SpaceAutomationEditor?.mount ? resolve(window.SpaceAutomationEditor) : reject(new Error("automation_editor_unavailable"));
+    script.onerror = () => reject(new Error("automation_editor_load_failed"));
+    document.body.appendChild(script);
+  });
+  return automationEditorAssetsPromise;
+};
+
+const mountAutomationEditorIsland = () => {
+  const root = document.querySelector("[data-automation-editor-root]");
+  if (!(root instanceof HTMLElement)) return;
+  loadAutomationEditorAssets()
+    .then((editor) => {
+      editor.mount(root, {
+        automation: automationsState.selected,
+        rows: automationsState.rows || [],
+        runs: automationsState.runs || [],
+        runDetail: automationsState.runDetail,
+        crm: automationsState.crm || {},
+        onGraphPreview: (graph) => {
+          automationsState.editorGraphPreview = graph;
+        },
+      });
+    })
+    .catch((error) => {
+      automationsState.error = error?.message || "Não foi possível carregar o editor visual.";
+      const currentRoot = getAutomationsRoot();
+      if (currentRoot instanceof HTMLElement) currentRoot.querySelector("[data-automation-editor-root]")?.replaceChildren();
+    });
+};
+
 const renderAutomationsAdmin = () => {
   const root = getAutomationsRoot();
   if (!(root instanceof HTMLElement)) return;
@@ -12197,72 +12253,20 @@ const renderAutomationsAdmin = () => {
     return;
   }
   const rows = automationsState.rows || [];
-  const selected = automationsState.selected;
-  const crm = automationsState.crm || {};
-  const pipelines = Array.isArray(crm.pipelines) ? crm.pipelines : [];
-  const stages = Array.isArray(crm.stages) ? crm.stages : [];
-  const actionNode = automationActionNode(selected);
-  const config = actionNode?.config || {};
-  const pipelineId = config.pipelineId || pipelines.find((p) => p.isActive)?.id || pipelines[0]?.id || "";
-  const stageOptions = stages.filter((stage) => stage.pipelineId === pipelineId);
   root.innerHTML = `
-    <div class="automations-shell">
-      <header class="automations-head">
-        <div><span>Admin</span><h2>Automações</h2></div>
-        <button type="button" class="button button-solid button-small" data-automation-create>Nova mensagem → Criar oportunidade</button>
-      </header>
+    <div class="automations-shell automations-shell-builder">
       ${automationsState.error ? `<div class="automations-error">${escapeHtml(automationsState.error)}</div>` : ""}
-      <div class="automations-layout">
-        <section class="automations-list">
-          <div class="automations-table">
-            <div class="automations-row is-head"><span>Nome</span><span>Status</span><span>Trigger</span><span>Versão</span><span>Execuções</span><span>Success</span><span>Última</span><span>Ações</span></div>
-            ${rows.map((row) => {
-              const metrics = row.metrics || {};
-              return `<button type="button" class="automations-row ${selected?.id === row.id ? "is-active" : ""}" data-automation-open="${escapeHtml(row.id)}">
-                <span>${escapeHtml(row.name)}</span>
-                <span>${escapeHtml(row.status)}</span>
-                <span>${escapeHtml(row.trigger_type || "attendance.message.created")}</span>
-                <span>${escapeHtml(String(row.active_version?.version_number || "-"))}</span>
-                <span>${escapeHtml(String(metrics.totalRuns || 0))}</span>
-                <span>${escapeHtml(String(metrics.successRate || 0))}%</span>
-                <span>${escapeHtml(formatCrmDateTime(metrics.lastRunAt))}</span>
-                <span>${row.status === "ACTIVE" ? "Pausar" : "Abrir"}</span>
-              </button>`;
-            }).join("") || `<div class="automations-empty">Nenhuma automação criada.</div>`}
-          </div>
-        </section>
-        <section class="automations-editor">
-          ${selected ? `
-            <div class="automations-editor-head">
-              <div><span>${escapeHtml(selected.status)}</span><h3>${escapeHtml(selected.name)}</h3></div>
-              <div class="automations-editor-actions">
-                <button type="button" class="button button-outline button-small" data-automation-draft="${escapeHtml(selected.id)}">Editar rascunho</button>
-                <button type="button" class="button button-solid button-small" data-automation-publish="${escapeHtml(selected.id)}">Publicar</button>
-                <button type="button" class="button button-outline button-small" data-automation-pause="${escapeHtml(selected.id)}">Pausar</button>
-              </div>
-            </div>
-            <div class="automation-flow">
-              <div class="automation-node"><strong>Nova mensagem recebida</strong><span>attendance.message.created</span></div>
-              <div class="automation-arrow">↓</div>
-              <div class="automation-node"><strong>Possui oportunidade aberta?</strong><span>crm.contactHasOpenOpportunity</span></div>
-              <div class="automation-branches"><span>NÃO ↓</span><span>SIM → END</span></div>
-              <div class="automation-node is-action"><strong>Criar lead</strong><span>crm.createOpportunity</span></div>
-            </div>
-            <form class="automation-config" data-automation-config="${escapeHtml(selected.id)}">
-              <label><span>Pipeline</span><select name="pipelineId" data-automation-pipeline>${renderAutomationOptions(pipelines, pipelineId)}</select></label>
-              <label><span>Stage</span><select name="stageId">${renderAutomationOptions(stageOptions, config.stageId || stageOptions[0]?.id || "")}</select></label>
-              <button type="submit" class="button button-solid button-small">Salvar configuração</button>
-            </form>
-            <div class="automations-history">
-              <h3>Execuções</h3>
-              ${(automationsState.runs || []).map((run) => `<button type="button" class="automations-run" data-automation-run="${escapeHtml(run.id)}"><span>${escapeHtml(run.status)}</span><span>${escapeHtml(formatCrmDateTime(run.created_at || run.started_at))}</span><span>${escapeHtml(String(run.event_id || "").slice(0, 8))}</span><span>V${escapeHtml(String(run.automation_version_id || "").slice(0, 8))}</span></button>`).join("") || `<div class="automations-empty">Sem execuções ainda.</div>`}
-              ${automationsState.runDetail ? `<div class="automations-run-detail">${(automationsState.runDetail.steps || []).map((step) => `<div><strong>${escapeHtml(step.node_type)}</strong><span>${escapeHtml(step.status)} ${step.output ? escapeHtml(JSON.stringify(step.output).slice(0, 120)) : ""}</span></div>`).join("")}</div>` : ""}
-            </div>
-          ` : `<div class="automations-empty">Selecione ou crie uma automação.</div>`}
-        </section>
-      </div>
+      ${rows.length ? `<div class="automation-editor-host" data-automation-editor-root></div>` : `
+        <div class="automation-editor-empty">
+          <span>Admin</span>
+          <h2>Automações</h2>
+          <p>Crie o primeiro workflow para abrir o canvas visual.</p>
+          <button type="button" class="button button-solid button-small" data-automation-create>Nova mensagem → Criar oportunidade</button>
+        </div>
+      `}
     </div>
   `;
+  if (rows.length) window.requestAnimationFrame(mountAutomationEditorIsland);
 };
 
 const loadAutomationsAdmin = async ({ force = false, selectId = "" } = {}) => {
@@ -12478,6 +12482,7 @@ const nativeCrmIcon = (name, className = "") => {
     close: `<path d="M6 6l12 12M18 6 6 18" ${common}></path>`,
     edit: `<path d="M4 20h4L18.5 9.5a2.1 2.1 0 0 0-4-4L4 16v4Z" ${common}></path><path d="m13.5 6.5 4 4" ${common}></path>`,
     sort: `<path d="M8 7h8M10 12h6M12 17h2" ${common}></path>`,
+    settings: `<path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" ${common}></path><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 0 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1A2 2 0 0 1 4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.3 7A2 2 0 0 1 7.1 4.2l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.6V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1A2 2 0 0 1 19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.1a2 2 0 0 1 0 4H21a1.7 1.7 0 0 0-1.6 1Z" ${common}></path>`,
   };
   return `<svg ${attrs}>${paths[name] || paths.dot}</svg>`;
 };
@@ -12514,9 +12519,12 @@ const getNativeCrmAllOpportunities = () => {
   return Array.from(byId.values());
 };
 
+const getActiveCrmPipelines = () => getNativeCrmData().pipelines.filter((pipeline) => pipeline.isActive !== false);
+
 const selectedCrmPipelineId = () => {
-  const { pipelines } = getNativeCrmData();
-  return nativeCrmState.selectedPipelineId || pipelines.find((pipeline) => pipeline.isActive)?.id || pipelines[0]?.id || "";
+  const activePipelines = getActiveCrmPipelines();
+  const selected = activePipelines.find((pipeline) => pipeline.id === nativeCrmState.selectedPipelineId);
+  return selected?.id || activePipelines.find((pipeline) => pipeline.isDefault)?.id || activePipelines[0]?.id || "";
 };
 
 const normalizeCrmText = (value) => String(value || "").trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ");
@@ -12589,11 +12597,12 @@ const renderNativeCrmStageOptions = (pipelineId, selected = "") => {
 };
 
 const renderNativeCrmPipelineOptions = (selected = "") => {
-  const { pipelines } = getNativeCrmData();
-  return pipelines
+  return getActiveCrmPipelines()
     .map((pipeline) => `<option value="${escapeHtml(pipeline.id)}" ${String(pipeline.id) === String(selected || "") ? "selected" : ""}>${escapeHtml(pipeline.name)}</option>`)
     .join("");
 };
+
+const isNativeCrmAdmin = () => normalizeRole(sessionUser?.role || currentRole) === "admin";
 
 const nativeCrmInitials = (name = "") => {
   const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
@@ -12778,6 +12787,208 @@ const nativeCrmFiltersHtml = () => {
         </div>
       ` : ""}
     </div>
+  `;
+};
+
+const nativeCrmPipelineEditorFromPipeline = (pipelineId = "") => {
+  const { pipelines, stages } = getNativeCrmData();
+  const pipeline = pipelines.find((row) => row.id === pipelineId);
+  if (!pipeline) {
+    return { id: "", isNew: true, name: "", isDefault: false, removedStageIds: [], stages: [{ id: "draft_1", name: "Novo lead", isNew: true }] };
+  }
+  return {
+    id: pipeline.id,
+    isNew: false,
+    name: pipeline.name || "",
+    isDefault: pipeline.isDefault === true,
+    removedStageIds: [],
+    stages: stages
+      .filter((stage) => stage.pipelineId === pipeline.id)
+      .sort((a, b) => Number(a.position || 0) - Number(b.position || 0))
+      .map((stage) => ({ id: stage.id, name: stage.name || "", isNew: false })),
+  };
+};
+
+const nativeCrmPipelineCounts = (pipelineId) => {
+  const { stages, opportunities } = getNativeCrmData();
+  const stageCount = stages.filter((stage) => stage.pipelineId === pipelineId).length;
+  const openCount = opportunities.filter((opportunity) => opportunity.pipelineId === pipelineId && opportunity.status === "open").length;
+  return { stageCount, openCount };
+};
+
+const syncNativeCrmPipelineEditorDraft = () => {
+  const editor = nativeCrmState.pipelineEditor;
+  const root = getNativeCrmRoot();
+  const panel = root?.querySelector("[data-crm-pipeline-editor]");
+  if (!editor || !(panel instanceof HTMLElement)) return editor;
+  const nameInput = panel.querySelector("[data-crm-pipeline-draft-name]");
+  const defaultInput = panel.querySelector("[data-crm-pipeline-draft-default]");
+  const names = Array.from(panel.querySelectorAll("[data-crm-stage-draft-name]"));
+  editor.name = nameInput instanceof HTMLInputElement ? nameInput.value : editor.name;
+  editor.isDefault = defaultInput instanceof HTMLInputElement ? defaultInput.checked : editor.isDefault;
+  editor.stages = editor.stages.map((stage, index) => {
+    const field = names.find((item) => String(item.getAttribute("data-crm-stage-draft-name") || "") === String(index));
+    return { ...stage, name: field instanceof HTMLInputElement ? field.value : stage.name };
+  });
+  return editor;
+};
+
+const setNativeCrmPipelineEditorError = (message) => {
+  nativeCrmState.pipelineEditor = { ...(nativeCrmState.pipelineEditor || nativeCrmPipelineEditorFromPipeline()), error: message || "" };
+  renderNativeCrm();
+};
+
+const validateNativeCrmPipelineEditor = (editor) => {
+  const name = String(editor?.name || "").trim();
+  const stages = Array.isArray(editor?.stages) ? editor.stages.map((stage) => ({ ...stage, name: String(stage.name || "").trim() })) : [];
+  if (!name) return { error: "Informe o nome do pipeline." };
+  if (!stages.length) return { error: "Mantenha pelo menos uma etapa." };
+  if (stages.some((stage) => !stage.name)) return { error: "Informe o nome de todas as etapas." };
+  const keys = stages.map((stage) => normalizeCrmText(stage.name));
+  if (new Set(keys).size !== keys.length) return { error: "As etapas deste pipeline precisam ter nomes únicos." };
+  return { editor: { ...editor, name, stages, removedStageIds: Array.isArray(editor.removedStageIds) ? editor.removedStageIds : [] } };
+};
+
+const runNativeCrmAdminAction = async (action, payload = {}) => {
+  const res = await fetchWithAuth("/api/crm", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action, ...payload }),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(data?.error || `crm_${action}_failed`);
+  return data || {};
+};
+
+const saveNativeCrmPipelineEditor = async () => {
+  const draft = syncNativeCrmPipelineEditorDraft();
+  const result = validateNativeCrmPipelineEditor(draft);
+  if (result.error) {
+    setNativeCrmPipelineEditorError(result.error);
+    return;
+  }
+  const editor = result.editor;
+  nativeCrmState.saving = true;
+  nativeCrmState.error = "";
+  nativeCrmState.pipelineEditor = { ...editor, error: "" };
+  renderNativeCrm();
+  try {
+    let pipelineId = editor.id;
+    const finalStageIds = [];
+    if (editor.isNew) {
+      const created = await runNativeCrmAdminAction("create_pipeline", {
+        name: editor.name,
+        isDefault: editor.isDefault,
+        stages: editor.stages.map((stage) => stage.name),
+      });
+      pipelineId = created.pipelineId || "";
+    } else {
+      await runNativeCrmAdminAction("update_pipeline", { id: pipelineId, name: editor.name, isDefault: editor.isDefault });
+      for (const stageId of editor.removedStageIds || []) {
+        await runNativeCrmAdminAction("delete_stage", { id: stageId });
+      }
+      for (const stage of editor.stages) {
+        if (stage.isNew || String(stage.id || "").startsWith("draft_")) {
+          const created = await runNativeCrmAdminAction("create_stage", { pipelineId, name: stage.name });
+          if (created.stageId) finalStageIds.push(created.stageId);
+        } else {
+          await runNativeCrmAdminAction("update_stage", { id: stage.id, name: stage.name });
+          finalStageIds.push(stage.id);
+        }
+      }
+      await runNativeCrmAdminAction("reorder_stages", { pipelineId, stageIds: finalStageIds });
+    }
+    nativeCrmState.loadedAt = 0;
+    await loadNativeCrm({ force: true });
+    nativeCrmState.pipelineManagerOpen = true;
+    nativeCrmState.pipelineEditor = nativeCrmPipelineEditorFromPipeline(pipelineId);
+    nativeCrmState.selectedPipelineId = getActiveCrmPipelines().some((pipeline) => pipeline.id === pipelineId) ? pipelineId : selectedCrmPipelineId();
+    reloadNativeCrmListIfNeeded();
+  } catch (error) {
+    nativeCrmState.pipelineEditor = { ...editor, error: error?.message || "Não foi possível salvar a estrutura." };
+  } finally {
+    nativeCrmState.saving = false;
+    renderNativeCrm();
+  }
+};
+
+const setNativeCrmPipelineActiveState = async (pipelineId, active) => {
+  const id = String(pipelineId || "").trim();
+  if (!id) return;
+  nativeCrmState.saving = true;
+  renderNativeCrm();
+  try {
+    await runNativeCrmAdminAction(active ? "reactivate_pipeline" : "deactivate_pipeline", { id });
+    nativeCrmState.loadedAt = 0;
+    await loadNativeCrm({ force: true });
+    nativeCrmState.pipelineManagerOpen = true;
+    nativeCrmState.pipelineEditor = nativeCrmPipelineEditorFromPipeline(id);
+    nativeCrmState.selectedPipelineId = selectedCrmPipelineId();
+    reloadNativeCrmListIfNeeded();
+  } catch (error) {
+    nativeCrmState.pipelineEditor = { ...(nativeCrmState.pipelineEditor || nativeCrmPipelineEditorFromPipeline(id)), error: error?.message || "Não foi possível atualizar o pipeline." };
+  } finally {
+    nativeCrmState.saving = false;
+    renderNativeCrm();
+  }
+};
+
+const renderNativeCrmPipelineManager = () => {
+  if (!nativeCrmState.pipelineManagerOpen || !isNativeCrmAdmin()) return "";
+  const { pipelines } = getNativeCrmData();
+  const active = pipelines.filter((pipeline) => pipeline.isActive !== false);
+  const inactive = pipelines.filter((pipeline) => pipeline.isActive === false);
+  const editor = nativeCrmState.pipelineEditor || nativeCrmPipelineEditorFromPipeline(active.find((pipeline) => pipeline.isDefault)?.id || active[0]?.id || "");
+  const currentPipeline = pipelines.find((pipeline) => pipeline.id === editor.id);
+  const rowHtml = (pipeline) => {
+    const counts = nativeCrmPipelineCounts(pipeline.id);
+    return `
+      <button type="button" class="native-crm-pipeline-row ${editor.id === pipeline.id ? "is-active" : ""}" data-crm-pipeline-edit="${escapeHtml(pipeline.id)}">
+        <span><strong>${escapeHtml(pipeline.name || pipeline.id)}</strong><em>${counts.stageCount} etapas${pipeline.isDefault ? " · Padrão" : ""}${pipeline.isActive === false ? " · Inativo" : ""}</em></span>
+        <small>${counts.openCount} abertas</small>
+      </button>
+    `;
+  };
+  return `
+    <div class="native-crm-drawer-backdrop" data-crm-pipeline-manager-close></div>
+    <aside class="native-crm-drawer native-crm-pipeline-manager" aria-label="Gerenciar pipelines">
+      <div class="native-crm-pipeline-manager-shell">
+        <header class="native-crm-drawer-head">
+          <div><span>CRM</span><h2>Pipelines</h2><p><small>Estrutura comercial</small></p></div>
+          <button type="button" class="native-crm-icon-button" data-crm-pipeline-manager-close aria-label="Fechar">${nativeCrmIcon("close")}</button>
+        </header>
+        <div class="native-crm-drawer-body native-crm-pipeline-manager-body">
+          <section class="native-crm-pipeline-list">
+            <div class="native-crm-section-head"><h3>Ativos</h3><button type="button" class="button button-solid button-small" data-crm-pipeline-new>${nativeCrmIcon("plus")}Novo pipeline</button></div>
+            ${active.map(rowHtml).join("") || `<div class="native-crm-muted">Nenhum pipeline ativo.</div>`}
+            ${inactive.length ? `<h3>Inativos</h3>${inactive.map(rowHtml).join("")}` : ""}
+          </section>
+          <section class="native-crm-pipeline-editor" data-crm-pipeline-editor>
+            <label><span>Nome *</span><input name="pipelineName" value="${escapeHtml(editor.name)}" data-crm-pipeline-draft-name /></label>
+            <label class="native-crm-checkline"><input type="checkbox" ${editor.isDefault ? "checked" : ""} ${currentPipeline?.isActive === false ? "disabled" : ""} data-crm-pipeline-draft-default /> <span>Definir como padrão</span></label>
+            <div class="native-crm-section-head"><h3>Etapas</h3><button type="button" class="button button-outline button-small" data-crm-stage-draft-add>${nativeCrmIcon("plus")}Adicionar etapa</button></div>
+            <div class="native-crm-stage-editor-list">
+              ${editor.stages.map((stage, index) => `
+                <div class="native-crm-stage-editor-row" data-crm-stage-draft-index="${index}">
+                  <span class="native-crm-drag-handle">::</span>
+                  <input value="${escapeHtml(stage.name)}" data-crm-stage-draft-name="${index}" />
+                  <button type="button" class="native-crm-icon-button" title="Subir etapa" data-crm-stage-draft-up="${index}" ${index === 0 ? "disabled" : ""}>↑</button>
+                  <button type="button" class="native-crm-icon-button" title="Descer etapa" data-crm-stage-draft-down="${index}" ${index === editor.stages.length - 1 ? "disabled" : ""}>↓</button>
+                  <button type="button" class="native-crm-icon-button" title="Remover etapa" data-crm-stage-draft-remove="${index}" ${editor.stages.length <= 1 ? "disabled" : ""}>${nativeCrmIcon("close")}</button>
+                </div>
+              `).join("")}
+            </div>
+            ${nativeCrmState.pipelineEditor?.error ? `<div class="native-crm-form-error">${escapeHtml(nativeCrmState.pipelineEditor.error)}</div>` : ""}
+            <div class="native-crm-inline-actions">
+              ${!editor.isNew && editor.id ? (pipelines.find((pipeline) => pipeline.id === editor.id)?.isActive === false
+                ? `<button type="button" class="button button-outline button-small" data-crm-pipeline-reactivate="${escapeHtml(editor.id)}">Reativar</button>`
+                : `<button type="button" class="button button-outline button-small native-crm-lost-action" data-crm-pipeline-deactivate="${escapeHtml(editor.id)}">Desativar</button>`) : ""}
+              <button type="button" class="button button-solid button-small" data-crm-pipeline-save ${nativeCrmState.saving ? "disabled" : ""}>${nativeCrmState.saving ? "Salvando..." : "Salvar"}</button>
+            </div>
+          </section>
+        </div>
+      </div>
+    </aside>
   `;
 };
 
@@ -13218,6 +13429,7 @@ const renderNativeCrm = () => {
         <div class="native-crm-actions">
           <div class="native-crm-toolbar-group">
             <select data-crm-pipeline aria-label="Pipeline">${renderNativeCrmPipelineOptions(pipelineId)}</select>
+            ${isNativeCrmAdmin() ? `<button type="button" class="native-crm-filter" data-crm-pipeline-manager-open>${nativeCrmIcon("settings")}<span>Gerenciar</span></button>` : ""}
             <label class="native-crm-search">
               ${nativeCrmIcon("search")}
               <input type="search" placeholder="Buscar oportunidades..." value="${escapeHtml(nativeCrmState.search)}" data-crm-search />
@@ -13238,6 +13450,7 @@ const renderNativeCrm = () => {
       ${nativeCrmState.error ? `<div class="native-crm-toast">${escapeHtml(nativeCrmState.error)}</div>` : ""}
     </div>
     ${renderNativeCrmDrawer()}
+    ${renderNativeCrmPipelineManager()}
     ${renderNativeCrmClosingDialog()}
   `;
 };
@@ -38952,6 +39165,104 @@ document.addEventListener("click", (event) => {
     if (retry instanceof HTMLButtonElement) {
       event.preventDefault();
       loadNativeCrm({ force: true }).catch(() => {});
+      return;
+    }
+    const openPipelineManager = target.closest("[data-crm-pipeline-manager-open]");
+    if (openPipelineManager instanceof HTMLButtonElement) {
+      event.preventDefault();
+      const activePipelines = getActiveCrmPipelines();
+      nativeCrmState.pipelineManagerOpen = true;
+      nativeCrmState.pipelineEditor = nativeCrmPipelineEditorFromPipeline(selectedCrmPipelineId() || activePipelines[0]?.id || "");
+      nativeCrmState.error = "";
+      renderNativeCrm();
+      return;
+    }
+    const closePipelineManager = target.closest("[data-crm-pipeline-manager-close]");
+    if (closePipelineManager instanceof HTMLElement) {
+      event.preventDefault();
+      nativeCrmState.pipelineManagerOpen = false;
+      nativeCrmState.pipelineEditor = null;
+      renderNativeCrm();
+      return;
+    }
+    const newPipeline = target.closest("[data-crm-pipeline-new]");
+    if (newPipeline instanceof HTMLButtonElement) {
+      event.preventDefault();
+      nativeCrmState.pipelineEditor = nativeCrmPipelineEditorFromPipeline("");
+      renderNativeCrm();
+      return;
+    }
+    const editPipeline = target.closest("[data-crm-pipeline-edit]");
+    if (editPipeline instanceof HTMLButtonElement) {
+      event.preventDefault();
+      nativeCrmState.pipelineEditor = nativeCrmPipelineEditorFromPipeline(String(editPipeline.getAttribute("data-crm-pipeline-edit") || ""));
+      renderNativeCrm();
+      return;
+    }
+    const addDraftStage = target.closest("[data-crm-stage-draft-add]");
+    if (addDraftStage instanceof HTMLButtonElement) {
+      event.preventDefault();
+      const editor = syncNativeCrmPipelineEditorDraft() || nativeCrmPipelineEditorFromPipeline("");
+      editor.stages.push({ id: `draft_${Date.now()}`, name: "", isNew: true });
+      nativeCrmState.pipelineEditor = { ...editor, error: "" };
+      renderNativeCrm();
+      return;
+    }
+    const upDraftStage = target.closest("[data-crm-stage-draft-up]");
+    if (upDraftStage instanceof HTMLButtonElement) {
+      event.preventDefault();
+      const index = Number(upDraftStage.getAttribute("data-crm-stage-draft-up"));
+      const editor = syncNativeCrmPipelineEditorDraft();
+      if (editor && index > 0 && index < editor.stages.length) {
+        [editor.stages[index - 1], editor.stages[index]] = [editor.stages[index], editor.stages[index - 1]];
+        nativeCrmState.pipelineEditor = { ...editor, error: "" };
+        renderNativeCrm();
+      }
+      return;
+    }
+    const downDraftStage = target.closest("[data-crm-stage-draft-down]");
+    if (downDraftStage instanceof HTMLButtonElement) {
+      event.preventDefault();
+      const index = Number(downDraftStage.getAttribute("data-crm-stage-draft-down"));
+      const editor = syncNativeCrmPipelineEditorDraft();
+      if (editor && index >= 0 && index < editor.stages.length - 1) {
+        [editor.stages[index], editor.stages[index + 1]] = [editor.stages[index + 1], editor.stages[index]];
+        nativeCrmState.pipelineEditor = { ...editor, error: "" };
+        renderNativeCrm();
+      }
+      return;
+    }
+    const removeDraftStage = target.closest("[data-crm-stage-draft-remove]");
+    if (removeDraftStage instanceof HTMLButtonElement) {
+      event.preventDefault();
+      const index = Number(removeDraftStage.getAttribute("data-crm-stage-draft-remove"));
+      const editor = syncNativeCrmPipelineEditorDraft();
+      if (!editor || editor.stages.length <= 1 || index < 0 || index >= editor.stages.length) return;
+      const stage = editor.stages[index];
+      if (!stage.isNew && !window.confirm("Remover esta etapa? Esta ação só será permitida se não houver oportunidades nela.")) return;
+      editor.stages.splice(index, 1);
+      if (!stage.isNew && stage.id) editor.removedStageIds = Array.from(new Set([...(editor.removedStageIds || []), stage.id]));
+      nativeCrmState.pipelineEditor = { ...editor, error: "" };
+      renderNativeCrm();
+      return;
+    }
+    const savePipeline = target.closest("[data-crm-pipeline-save]");
+    if (savePipeline instanceof HTMLButtonElement) {
+      event.preventDefault();
+      saveNativeCrmPipelineEditor().catch(() => {});
+      return;
+    }
+    const deactivatePipeline = target.closest("[data-crm-pipeline-deactivate]");
+    if (deactivatePipeline instanceof HTMLButtonElement) {
+      event.preventDefault();
+      if (!window.confirm("Desativar este pipeline? Leads abertos bloqueiam a ação.")) return;
+      setNativeCrmPipelineActiveState(String(deactivatePipeline.getAttribute("data-crm-pipeline-deactivate") || ""), false).catch(() => {});
+      return;
+    }
+    const reactivatePipeline = target.closest("[data-crm-pipeline-reactivate]");
+    if (reactivatePipeline instanceof HTMLButtonElement) {
+      event.preventDefault();
+      setNativeCrmPipelineActiveState(String(reactivatePipeline.getAttribute("data-crm-pipeline-reactivate") || ""), true).catch(() => {});
       return;
     }
     const openNew = target.closest("[data-crm-new]");

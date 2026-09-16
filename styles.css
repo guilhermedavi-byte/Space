@@ -26376,7 +26376,8 @@ button.automations-row:focus-visible,
 
 .native-crm-filter-panel label,
 .native-crm-form-section label,
-.native-crm-activity-form label {
+.native-crm-activity-form label,
+.native-crm-pipeline-editor label {
   display: grid;
   gap: 5px;
   color: var(--crm-muted);
@@ -26389,7 +26390,8 @@ button.automations-row:focus-visible,
 .native-crm-form-section textarea,
 .native-crm-activity-form input,
 .native-crm-activity-form select,
-.native-crm-activity-form textarea {
+.native-crm-activity-form textarea,
+.native-crm-pipeline-editor input {
   width: 100%;
   min-width: 0;
   border: 1px solid var(--crm-line);
@@ -26403,7 +26405,8 @@ button.automations-row:focus-visible,
 .native-crm-form-section input,
 .native-crm-form-section select,
 .native-crm-activity-form input,
-.native-crm-activity-form select {
+.native-crm-activity-form select,
+.native-crm-pipeline-editor input {
   min-height: 34px;
   padding: 0 10px;
 }
@@ -26420,7 +26423,8 @@ button.automations-row:focus-visible,
 .native-crm-form-section textarea:focus,
 .native-crm-activity-form input:focus,
 .native-crm-activity-form select:focus,
-.native-crm-activity-form textarea:focus {
+.native-crm-activity-form textarea:focus,
+.native-crm-pipeline-editor input:focus {
   outline: 0;
   border-color: rgba(255,91,82,.5);
   box-shadow: 0 0 0 2px rgba(255,91,82,.14);
@@ -27078,6 +27082,11 @@ button.automations-row:focus-visible,
   cursor: pointer;
 }
 
+.native-crm-icon-button:disabled {
+  opacity: .42;
+  cursor: not-allowed;
+}
+
 .native-crm-drawer-body {
   display: grid;
   gap: 16px;
@@ -27238,6 +27247,116 @@ button.automations-row:focus-visible,
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.native-crm-pipeline-manager {
+  width: min(780px, 100vw);
+}
+
+.native-crm-pipeline-manager-shell {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+}
+
+.native-crm-pipeline-manager-body {
+  grid-template-columns: minmax(210px, 32%) minmax(0, 1fr);
+  align-items: start;
+}
+
+.native-crm-pipeline-list,
+.native-crm-pipeline-editor {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.native-crm-pipeline-list {
+  align-content: start;
+  border-right: 1px solid var(--crm-line);
+  padding-right: 12px;
+}
+
+.native-crm-pipeline-list > h3 {
+  margin: 8px 0 0;
+  color: rgba(255,255,255,.55);
+  font-size: 10px;
+  font-weight: 760;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.native-crm-pipeline-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: 1px solid var(--crm-line);
+  border-radius: 8px;
+  padding: 9px;
+  background: rgba(255,255,255,.025);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.native-crm-pipeline-row:hover,
+.native-crm-pipeline-row.is-active {
+  border-color: rgba(255,91,82,.34);
+  background: rgba(255,91,82,.07);
+}
+
+.native-crm-pipeline-row span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.native-crm-pipeline-row strong {
+  overflow: hidden;
+  color: #fff;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.native-crm-pipeline-row em,
+.native-crm-pipeline-row small {
+  color: var(--crm-muted);
+  font-size: 11px;
+  font-style: normal;
+}
+
+.native-crm-checkline {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+}
+
+.native-crm-checkline input {
+  width: 16px;
+  min-height: 16px;
+  accent-color: var(--crm-accent);
+}
+
+.native-crm-stage-editor-list {
+  display: grid;
+  gap: 7px;
+}
+
+.native-crm-stage-editor-row {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) 34px 34px 34px;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.native-crm-drag-handle {
+  color: rgba(255,255,255,.34);
+  font-size: 13px;
+  text-align: center;
 }
 
 .native-crm-activity-list,
@@ -27449,6 +27568,8 @@ button.automations-row:focus-visible,
   .native-crm-toolbar-group { flex-wrap: wrap; }
   .native-crm-search { width: min(100%, 300px); }
   .native-crm-board { grid-auto-columns: minmax(260px, 292px); }
+  .native-crm-pipeline-manager-body { grid-template-columns: 1fr; }
+  .native-crm-pipeline-list { border-right: 0; border-bottom: 1px solid var(--crm-line); padding: 0 0 12px; }
 }
 
 @media (max-width: 620px) {
@@ -27469,4 +27590,5 @@ button.automations-row:focus-visible,
   .native-crm-form-grid,
   .native-crm-date-grid,
   .native-crm-detail-item { grid-template-columns: 1fr; }
+  .native-crm-stage-editor-row { grid-template-columns: 18px minmax(0, 1fr) 30px 30px 30px; }
 }

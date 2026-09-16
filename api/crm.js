@@ -89,6 +89,8 @@ const numberOrNull = (value) => {
   return Number.isFinite(n) ? n : null;
 };
 
+const normalizedNameKey = (value) => normalizeSearchText(value);
+
 const normalizeCurrency = (value) => {
   const raw = clean(value).toUpperCase();
   return raw || "BRL";
@@ -143,6 +145,7 @@ const normalizePipeline = (row) => ({
   scopeId: clean(row.scopeId) || CRM_SCOPE_ID,
   name: clean(row.name),
   isActive: row.isActive !== false,
+  isDefault: row.isDefault === true,
   createdAt: toIso(row.createdAt),
   updatedAt: toIso(row.updatedAt),
 });
@@ -268,6 +271,8 @@ const buildWrite = (collection, id, data, options = {}) => ({
   ...(options.createOnly ? { currentDocument: { exists: false } } : {}),
 });
 
+const deleteWrite = (collection, id) => ({ delete: docName(collection, id) });
+
 const eventWrite = ({ type, opportunityId, contactId, actorId, payload, stamp }) => {
   const id = newId("event");
   return buildWrite(COLLECTIONS.events, id, {
@@ -302,6 +307,44 @@ const loadActivitiesForOpportunity = async (opportunityId) => {
     .filter((activity) => activity.id && matchesCrmScope(activity) && activity.opportunityId === safeOpportunityId)
     .sort(compareActivityDueAt);
 };
+
+const requireAdmin = (auth) => {
+  if (auth.role !== "admin") return { status: 403, body: { error: "admin_required" } };
+  return null;
+};
+
+const loadCrmStructure = async () => {
+  const [pipelinesRaw, stagesRaw, opportunitiesRaw] = await Promise.all([
+    listCollectionAsAdmin(COLLECTIONS.pipelines, { maxPages: 10 }).catch(() => []),
+    listCollectionAsAdmin(COLLECTIONS.stages, { maxPages: 20 }).catch(() => []),
+    listCollectionAsAdmin(COLLECTIONS.opportunities, { maxPages: 50 }).catch(() => []),
+  ]);
+  return {
+    pipelines: pipelinesRaw.map(normalizePipeline).filter((row) => row.id && matchesCrmScope(row)),
+    stages: stagesRaw.map(normalizeStage).filter((row) => row.id && matchesCrmScope(row)),
+    opportunities: opportunitiesRaw.map(normalizeOpportunity).filter((row) => row.id && matchesCrmScope(row)),
+  };
+};
+
+const assertUniqueStageNames = (stages, pipelineId, { ignoreStageId = "", candidateName = "" } = {}) => {
+  const seen = new Set();
+  const rows = stages
+    .filter((stage) => stage.pipelineId === pipelineId && stage.id !== ignoreStageId)
+    .map((stage) => stage.name)
+    .concat(candidateName ? [candidateName] : []);
+  for (const name of rows) {
+    const key = normalizedNameKey(name);
+    if (!key) return { status: 400, body: { error: "stage_name_required" } };
+    if (seen.has(key)) return { status: 409, body: { error: "duplicate_stage_name" } };
+    seen.add(key);
+  }
+  return null;
+};
+
+const pipelineOpenOpportunityCount = (opportunities, pipelineId) =>
+  opportunities.filter((opportunity) => opportunity.pipelineId === pipelineId && opportunity.status === "open").length;
+
+const stageOpportunityCount = (opportunities, stageId) => opportunities.filter((opportunity) => opportunity.stageId === stageId).length;
 
 const opportunityWithNextActivity = (opportunity, activities, stamp = nowIso()) => ({
   ...opportunity,
@@ -430,7 +473,10 @@ const handleMoveOpportunity = async ({ session, body }) => {
   }
   if (!matchesCrmScope(opportunity)) return { status: 404, body: { error: "opportunity_not_found" } };
   const stages = (await listCollectionAsAdmin(COLLECTIONS.stages, { maxPages: 10 }).catch(() => [])).map(normalizeStage).filter(matchesCrmScope);
+  const pipelines = (await listCollectionAsAdmin(COLLECTIONS.pipelines, { maxPages: 10 }).catch(() => [])).map(normalizePipeline).filter(matchesCrmScope);
   const targetStage = stages.find((stage) => stage.id === toStageId);
+  const targetPipeline = pipelines.find((pipeline) => pipeline.id === opportunity.pipelineId);
+  if (!targetPipeline?.isActive) return { status: 400, body: { error: "invalid_pipeline" } };
   if (!targetStage || targetStage.pipelineId !== opportunity.pipelineId) return { status: 400, body: { error: "invalid_stage" } };
   if (opportunity.stageId === toStageId) return { status: 200, body: { ok: true, unchanged: true } };
 
@@ -453,7 +499,7 @@ const handleMoveOpportunity = async ({ session, body }) => {
       opportunityId: opportunity.id,
       contactId: opportunity.contactId,
       actorId: clean(session.sub),
-      payload: { fromStageId: opportunity.stageId || null, toStageId },
+      payload: { fromStageId: opportunity.stageId || null, toStageId, fromPipelineId: opportunity.pipelineId || null, toPipelineId: opportunity.pipelineId || null },
       stamp,
     }),
   ];
@@ -478,7 +524,14 @@ const handleUpdateOpportunity = async ({ session, body }) => {
   const requestedStageId = clean(body.stageId) || opportunity.stageId;
   const stageChanged = requestedStageId && requestedStageId !== opportunity.stageId;
   if (requestedPipelineId !== opportunity.pipelineId || stageChanged) {
-    const stages = (await listCollectionAsAdmin(COLLECTIONS.stages, { maxPages: 10 }).catch(() => [])).map(normalizeStage).filter(matchesCrmScope);
+    const [stagesRaw, pipelinesRaw] = await Promise.all([
+      listCollectionAsAdmin(COLLECTIONS.stages, { maxPages: 10 }).catch(() => []),
+      listCollectionAsAdmin(COLLECTIONS.pipelines, { maxPages: 10 }).catch(() => []),
+    ]);
+    const stages = stagesRaw.map(normalizeStage).filter(matchesCrmScope);
+    const pipelines = pipelinesRaw.map(normalizePipeline).filter(matchesCrmScope);
+    const targetPipeline = pipelines.find((pipeline) => pipeline.id === requestedPipelineId);
+    if (!targetPipeline?.isActive) return { status: 400, body: { error: "invalid_pipeline" } };
     const targetStage = stages.find((stage) => stage.id === requestedStageId);
     if (!targetStage || targetStage.pipelineId !== requestedPipelineId) return { status: 400, body: { error: "invalid_stage" } };
   }
@@ -531,7 +584,7 @@ const handleUpdateOpportunity = async ({ session, body }) => {
       opportunityId: next.id,
       contactId: next.contactId,
       actorId: clean(session.sub),
-      payload: { fromStageId: opportunity.stageId || null, toStageId: requestedStageId },
+      payload: { fromStageId: opportunity.stageId || null, toStageId: requestedStageId, fromPipelineId: opportunity.pipelineId || null, toPipelineId: requestedPipelineId },
       stamp,
     }));
   }
@@ -652,6 +705,181 @@ const handleReopenOpportunity = async ({ session, body }) => {
   const committed = await commitWritesAsAdmin({ writes });
   if (!committed.ok) return { status: committed.status || 500, body: { error: "crm_reopen_failed" } };
   return { status: 200, body: { ok: true, status: "open" } };
+};
+
+const adminConfigEvent = ({ type, actorId, payload, stamp }) => eventWrite({ type, opportunityId: null, contactId: null, actorId, payload, stamp });
+
+const handleCreatePipeline = async ({ session, body }) => {
+  const name = clean(body.name);
+  if (!name) return { status: 400, body: { error: "pipeline_name_required" } };
+  const rawStages = Array.isArray(body.stages) ? body.stages : [];
+  const stageNames = rawStages.map((stage) => clean(typeof stage === "string" ? stage : stage?.name)).filter(Boolean);
+  if (!stageNames.length) stageNames.push("Novo lead");
+  const duplicateGuard = assertUniqueStageNames(stageNames.map((stageName, index) => ({ id: `draft_${index}`, pipelineId: "draft", name: stageName })), "draft");
+  if (duplicateGuard) return duplicateGuard;
+  const { pipelines } = await loadCrmStructure();
+  const stamp = nowIso();
+  const id = newId("pipeline");
+  const makeDefault = body.isDefault === true || !pipelines.some((pipeline) => pipeline.isActive && pipeline.isDefault);
+  const pipeline = { id, scopeId: CRM_SCOPE_ID, name, isActive: true, isDefault: makeDefault, createdAt: stamp, updatedAt: stamp };
+  const stages = stageNames.map((stageName, index) => ({
+    id: newId("stage"),
+    scopeId: CRM_SCOPE_ID,
+    pipelineId: id,
+    name: stageName,
+    position: index + 1,
+    createdAt: stamp,
+    updatedAt: stamp,
+  }));
+  const writes = [
+    ...pipelines.map((row) => (makeDefault ? buildWrite(COLLECTIONS.pipelines, row.id, { ...row, isDefault: false, updatedAt: stamp }) : null)).filter(Boolean),
+    buildWrite(COLLECTIONS.pipelines, id, pipeline, { createOnly: true }),
+    ...stages.map((stage) => buildWrite(COLLECTIONS.stages, stage.id, stage, { createOnly: true })),
+    adminConfigEvent({ type: "crm.pipeline.created", actorId: clean(session.sub), payload: { pipelineId: id, stageCount: stages.length, isDefault: makeDefault }, stamp }),
+  ];
+  const committed = await commitWritesAsAdmin({ writes });
+  if (!committed.ok) return { status: committed.status || 500, body: { error: "crm_pipeline_create_failed" } };
+  return { status: 201, body: { ok: true, pipelineId: id } };
+};
+
+const handleUpdatePipeline = async ({ session, body }) => {
+  const id = clean(body.id || body.pipelineId);
+  const name = clean(body.name);
+  if (!id || !name) return { status: 400, body: { error: "missing_params" } };
+  const { pipelines } = await loadCrmStructure();
+  const pipeline = pipelines.find((row) => row.id === id);
+  if (!pipeline) return { status: 404, body: { error: "pipeline_not_found" } };
+  const stamp = nowIso();
+  const makeDefault = body.isDefault === true;
+  if (makeDefault && pipeline.isActive === false) return { status: 400, body: { error: "inactive_default_pipeline" } };
+  const writes = [
+    ...pipelines.map((row) => (makeDefault && row.id !== id ? buildWrite(COLLECTIONS.pipelines, row.id, { ...row, isDefault: false, updatedAt: stamp }) : null)).filter(Boolean),
+    buildWrite(COLLECTIONS.pipelines, id, { ...pipeline, name, isDefault: makeDefault ? true : pipeline.isDefault, updatedAt: stamp }),
+    adminConfigEvent({ type: "crm.pipeline.updated", actorId: clean(session.sub), payload: { pipelineId: id, isDefault: makeDefault ? true : pipeline.isDefault }, stamp }),
+  ];
+  const committed = await commitWritesAsAdmin({ writes });
+  if (!committed.ok) return { status: committed.status || 500, body: { error: "crm_pipeline_update_failed" } };
+  return { status: 200, body: { ok: true } };
+};
+
+const handleSetDefaultPipeline = async ({ session, body }) => {
+  const id = clean(body.id || body.pipelineId);
+  const { pipelines } = await loadCrmStructure();
+  const pipeline = pipelines.find((row) => row.id === id);
+  if (!pipeline) return { status: 404, body: { error: "pipeline_not_found" } };
+  if (!pipeline.isActive) return { status: 400, body: { error: "inactive_default_pipeline" } };
+  const stamp = nowIso();
+  const writes = pipelines.map((row) => buildWrite(COLLECTIONS.pipelines, row.id, { ...row, isDefault: row.id === id, updatedAt: stamp }));
+  writes.push(adminConfigEvent({ type: "crm.pipeline.updated", actorId: clean(session.sub), payload: { pipelineId: id, isDefault: true }, stamp }));
+  const committed = await commitWritesAsAdmin({ writes });
+  if (!committed.ok) return { status: committed.status || 500, body: { error: "crm_pipeline_default_failed" } };
+  return { status: 200, body: { ok: true } };
+};
+
+const handleDeactivatePipeline = async ({ session, body }) => {
+  const id = clean(body.id || body.pipelineId);
+  const { pipelines, opportunities } = await loadCrmStructure();
+  const pipeline = pipelines.find((row) => row.id === id);
+  if (!pipeline) return { status: 404, body: { error: "pipeline_not_found" } };
+  const activePipelines = pipelines.filter((row) => row.isActive);
+  if (pipeline.isDefault) return { status: 409, body: { error: "default_pipeline_cannot_deactivate" } };
+  if (activePipelines.length <= 1) return { status: 409, body: { error: "last_active_pipeline" } };
+  const openCount = pipelineOpenOpportunityCount(opportunities, id);
+  if (openCount) return { status: 409, body: { error: "pipeline_has_open_opportunities", openCount } };
+  const stamp = nowIso();
+  const committed = await commitWritesAsAdmin({ writes: [
+    buildWrite(COLLECTIONS.pipelines, id, { ...pipeline, isActive: false, isDefault: false, updatedAt: stamp }),
+    adminConfigEvent({ type: "crm.pipeline.deactivated", actorId: clean(session.sub), payload: { pipelineId: id }, stamp }),
+  ] });
+  if (!committed.ok) return { status: committed.status || 500, body: { error: "crm_pipeline_deactivate_failed" } };
+  return { status: 200, body: { ok: true } };
+};
+
+const handleReactivatePipeline = async ({ session, body }) => {
+  const id = clean(body.id || body.pipelineId);
+  const { pipelines } = await loadCrmStructure();
+  const pipeline = pipelines.find((row) => row.id === id);
+  if (!pipeline) return { status: 404, body: { error: "pipeline_not_found" } };
+  const stamp = nowIso();
+  const makeDefault = !pipelines.some((row) => row.isActive && row.isDefault);
+  const writes = [
+    buildWrite(COLLECTIONS.pipelines, id, { ...pipeline, isActive: true, isDefault: makeDefault ? true : pipeline.isDefault, updatedAt: stamp }),
+    adminConfigEvent({ type: "crm.pipeline.reactivated", actorId: clean(session.sub), payload: { pipelineId: id, isDefault: makeDefault }, stamp }),
+  ];
+  const committed = await commitWritesAsAdmin({ writes });
+  if (!committed.ok) return { status: committed.status || 500, body: { error: "crm_pipeline_reactivate_failed" } };
+  return { status: 200, body: { ok: true } };
+};
+
+const handleCreateStage = async ({ session, body }) => {
+  const pipelineId = clean(body.pipelineId);
+  const name = clean(body.name);
+  if (!pipelineId || !name) return { status: 400, body: { error: "missing_params" } };
+  const { pipelines, stages } = await loadCrmStructure();
+  const pipeline = pipelines.find((row) => row.id === pipelineId);
+  if (!pipeline || !pipeline.isActive) return { status: 404, body: { error: "pipeline_not_found" } };
+  const guard = assertUniqueStageNames(stages, pipelineId, { candidateName: name });
+  if (guard) return guard;
+  const stamp = nowIso();
+  const stage = { id: newId("stage"), scopeId: CRM_SCOPE_ID, pipelineId, name, position: stages.filter((row) => row.pipelineId === pipelineId).length + 1, createdAt: stamp, updatedAt: stamp };
+  const committed = await commitWritesAsAdmin({ writes: [
+    buildWrite(COLLECTIONS.stages, stage.id, stage, { createOnly: true }),
+    adminConfigEvent({ type: "crm.stage.created", actorId: clean(session.sub), payload: { pipelineId, stageId: stage.id }, stamp }),
+  ] });
+  if (!committed.ok) return { status: committed.status || 500, body: { error: "crm_stage_create_failed" } };
+  return { status: 201, body: { ok: true, stageId: stage.id } };
+};
+
+const handleUpdateStage = async ({ session, body }) => {
+  const id = clean(body.id || body.stageId);
+  const name = clean(body.name);
+  if (!id || !name) return { status: 400, body: { error: "missing_params" } };
+  const { stages } = await loadCrmStructure();
+  const stage = stages.find((row) => row.id === id);
+  if (!stage) return { status: 404, body: { error: "stage_not_found" } };
+  const guard = assertUniqueStageNames(stages, stage.pipelineId, { ignoreStageId: id, candidateName: name });
+  if (guard) return guard;
+  const stamp = nowIso();
+  const committed = await commitWritesAsAdmin({ writes: [
+    buildWrite(COLLECTIONS.stages, id, { ...stage, name, updatedAt: stamp }),
+    adminConfigEvent({ type: "crm.stage.updated", actorId: clean(session.sub), payload: { pipelineId: stage.pipelineId, stageId: id }, stamp }),
+  ] });
+  if (!committed.ok) return { status: committed.status || 500, body: { error: "crm_stage_update_failed" } };
+  return { status: 200, body: { ok: true } };
+};
+
+const handleReorderStages = async ({ session, body }) => {
+  const pipelineId = clean(body.pipelineId);
+  const stageIds = Array.isArray(body.stageIds) ? body.stageIds.map(clean).filter(Boolean) : [];
+  if (!pipelineId || !stageIds.length) return { status: 400, body: { error: "missing_params" } };
+  const { stages } = await loadCrmStructure();
+  const current = stages.filter((row) => row.pipelineId === pipelineId).sort((a, b) => a.position - b.position);
+  const currentIds = current.map((stage) => stage.id).sort();
+  if (stageIds.length !== current.length || stageIds.slice().sort().join("|") !== currentIds.join("|")) return { status: 400, body: { error: "invalid_stage_order" } };
+  const byId = new Map(current.map((stage) => [stage.id, stage]));
+  const stamp = nowIso();
+  const writes = stageIds.map((stageId, index) => buildWrite(COLLECTIONS.stages, stageId, { ...byId.get(stageId), position: index + 1, updatedAt: stamp }));
+  writes.push(adminConfigEvent({ type: "crm.stage.reordered", actorId: clean(session.sub), payload: { pipelineId, stageIds }, stamp }));
+  const committed = await commitWritesAsAdmin({ writes });
+  if (!committed.ok) return { status: committed.status || 500, body: { error: "crm_stage_reorder_failed" } };
+  return { status: 200, body: { ok: true } };
+};
+
+const handleDeleteStage = async ({ session, body }) => {
+  const id = clean(body.id || body.stageId);
+  const { stages, opportunities } = await loadCrmStructure();
+  const stage = stages.find((row) => row.id === id);
+  if (!stage) return { status: 404, body: { error: "stage_not_found" } };
+  if (stages.filter((row) => row.pipelineId === stage.pipelineId).length <= 1) return { status: 409, body: { error: "last_stage" } };
+  const count = stageOpportunityCount(opportunities, id);
+  if (count) return { status: 409, body: { error: "stage_has_opportunities", opportunityCount: count } };
+  const stamp = nowIso();
+  const committed = await commitWritesAsAdmin({ writes: [
+    deleteWrite(COLLECTIONS.stages, id),
+    adminConfigEvent({ type: "crm.stage.deleted", actorId: clean(session.sub), payload: { pipelineId: stage.pipelineId, stageId: id }, stamp }),
+  ] });
+  if (!committed.ok) return { status: committed.status || 500, body: { error: "crm_stage_delete_failed" } };
+  return { status: 200, body: { ok: true } };
 };
 
 const handleCreateActivity = async ({ session, body }) => {
@@ -823,6 +1051,21 @@ module.exports = async (req, res) => {
   try {
     const body = await readBody(req);
     const action = clean(body.action);
+    const adminActions = new Set([
+      "create_pipeline",
+      "update_pipeline",
+      "set_default_pipeline",
+      "deactivate_pipeline",
+      "reactivate_pipeline",
+      "create_stage",
+      "update_stage",
+      "reorder_stages",
+      "delete_stage",
+    ]);
+    if (adminActions.has(action)) {
+      const adminGuard = requireAdmin(auth);
+      if (adminGuard) return sendJson(res, adminGuard.status, adminGuard.body);
+    }
     const result =
       action === "create_opportunity"
         ? await handleCreateOpportunityViaService({ session: auth.session, body })
@@ -836,15 +1079,33 @@ module.exports = async (req, res) => {
                 ? await handleMarkOpportunityLost({ session: auth.session, body })
                 : action === "reopen_opportunity"
                   ? await handleReopenOpportunity({ session: auth.session, body })
-                  : action === "create_activity"
-                    ? await handleCreateActivity({ session: auth.session, body })
-                    : action === "update_activity"
-                      ? await handleUpdateActivity({ session: auth.session, body })
-                      : action === "complete_activity"
-                        ? await handleActivityStatusChange({ session: auth.session, body, status: "completed" })
-                        : action === "cancel_activity"
-                          ? await handleActivityStatusChange({ session: auth.session, body, status: "cancelled" })
-                          : { status: 400, body: { error: "invalid_action" } };
+                  : action === "create_pipeline"
+                    ? await handleCreatePipeline({ session: auth.session, body })
+                    : action === "update_pipeline"
+                      ? await handleUpdatePipeline({ session: auth.session, body })
+                      : action === "set_default_pipeline"
+                        ? await handleSetDefaultPipeline({ session: auth.session, body })
+                        : action === "deactivate_pipeline"
+                          ? await handleDeactivatePipeline({ session: auth.session, body })
+                          : action === "reactivate_pipeline"
+                            ? await handleReactivatePipeline({ session: auth.session, body })
+                            : action === "create_stage"
+                              ? await handleCreateStage({ session: auth.session, body })
+                              : action === "update_stage"
+                                ? await handleUpdateStage({ session: auth.session, body })
+                                : action === "reorder_stages"
+                                  ? await handleReorderStages({ session: auth.session, body })
+                                  : action === "delete_stage"
+                                    ? await handleDeleteStage({ session: auth.session, body })
+                                    : action === "create_activity"
+                                      ? await handleCreateActivity({ session: auth.session, body })
+                                      : action === "update_activity"
+                                        ? await handleUpdateActivity({ session: auth.session, body })
+                                        : action === "complete_activity"
+                                          ? await handleActivityStatusChange({ session: auth.session, body, status: "completed" })
+                                          : action === "cancel_activity"
+                                            ? await handleActivityStatusChange({ session: auth.session, body, status: "cancelled" })
+                                            : { status: 400, body: { error: "invalid_action" } };
     return sendJson(res, result.status, result.body);
   } catch (error) {
     console.error("[crm] write failed", error);
