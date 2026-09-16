@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const { executeVersionForEvent, processOneAutomationEvent, validateGraph } = require("../api/_lib/automation-engine");
+const { AutomationStore } = require("../api/_lib/automation-store");
 const { fingerprint, registerAction, registerCondition } = require("../api/_lib/automation-registries");
 
 registerCondition({
@@ -213,6 +214,44 @@ test("automation migration defines durable event, run and idempotency primitives
     "FOR UPDATE SKIP LOCKED",
     "revoke execute on function public.automation_import_attendance_outbox(integer)",
     "grant execute on function public.automation_import_attendance_outbox(integer)",
+  ]) {
+    assert.match(sql, new RegExp(fragment.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"));
+  }
+});
+
+test("attendance context is loaded through the hardened automation RPC", async () => {
+  const calls = [];
+  const store = new AutomationStore({
+    request: async (path, options = {}) => {
+      calls.push({ path, options });
+      return { data: { attendance: { identity: { normalized_phone: "+5511999990000" } } } };
+    },
+  });
+  const result = await store.getAttendanceMessageContext(event);
+  assert.equal(result.attendance.identity.normalized_phone, "+5511999990000");
+  assert.deepEqual(calls, [{
+    path: "/rpc/automation_get_attendance_message_context",
+    options: {
+      method: "POST",
+      body: {
+        p_message_id: "message_1",
+        p_conversation_id: "conversation_1",
+      },
+    },
+  }]);
+});
+
+test("automation attendance context migration keeps table reads behind service_role RPC", () => {
+  const sql = fs.readFileSync(path.join(__dirname, "../supabase/migrations/202609160002_automation_attendance_context.sql"), "utf8");
+  for (const fragment of [
+    "automation_get_attendance_message_context",
+    "security definer set search_path=pg_catalog,public",
+    "from public.messages",
+    "from public.conversations",
+    "from public.contacts",
+    "from public.contact_identities",
+    "revoke execute on function public.automation_get_attendance_message_context(uuid, uuid) from public, anon, authenticated",
+    "grant execute on function public.automation_get_attendance_message_context(uuid, uuid) to service_role",
   ]) {
     assert.match(sql, new RegExp(fragment.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"));
   }

@@ -155,27 +155,10 @@ class AutomationStore {
     const messageId = clean(payload.message_id || event.aggregate_id);
     const conversationId = clean(payload.conversation_id);
     if (!messageId) return { attendance: {} };
-    const [{ data: messages }, { data: conversations }] = await Promise.all([
-      this.request(`/messages?message_id=eq.${enc(messageId)}&select=*&limit=1`),
-      conversationId ? this.request(`/conversations?conversation_id=eq.${enc(conversationId)}&select=*&limit=1`) : Promise.resolve({ data: [] }),
-    ]);
-    const message = Array.isArray(messages) ? messages[0] || null : null;
-    let conversation = Array.isArray(conversations) ? conversations[0] || null : null;
-    if (!conversation && message?.conversation_id) {
-      const { data } = await this.request(`/conversations?conversation_id=eq.${enc(message.conversation_id)}&select=*&limit=1`);
-      conversation = Array.isArray(data) ? data[0] || null : null;
-    }
-    let contact = null;
-    let identity = null;
-    if (conversation?.contact_id) {
-      const [{ data: contacts }, { data: identities }] = await Promise.all([
-        this.request(`/contacts?contact_id=eq.${enc(conversation.contact_id)}&select=*&limit=1`),
-        this.request(`/contact_identities?contact_id=eq.${enc(conversation.contact_id)}&select=*&limit=1`),
-      ]);
-      contact = Array.isArray(contacts) ? contacts[0] || null : null;
-      identity = Array.isArray(identities) ? identities[0] || null : null;
-    }
-    return { attendance: { message, conversation, contact, identity } };
+    return this.rpc("automation_get_attendance_message_context", {
+      p_message_id: messageId,
+      p_conversation_id: conversationId || null,
+    });
   }
 }
 
