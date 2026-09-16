@@ -12151,6 +12151,211 @@ const nativeCrmState = {
   draggedOpportunityId: "",
 };
 
+const automationsState = {
+  loadedAt: 0,
+  loading: false,
+  rows: [],
+  selectedId: "",
+  selected: null,
+  runs: [],
+  runDetail: null,
+  crm: null,
+  error: "",
+};
+
+const getAutomationsRoot = () => document.querySelector("[data-automations-admin]");
+
+const automationDraftGraph = (automation) => automation?.draft_version?.graph || automation?.active_version?.graph || null;
+
+const automationActionNode = (automation) => {
+  const graph = automationDraftGraph(automation);
+  return (Array.isArray(graph?.nodes) ? graph.nodes : []).find((node) => node.type === "action" && (node.actionType || node.action_type) === "crm.createOpportunity") || null;
+};
+
+const setAutomationActionConfig = (automation, config) => {
+  const graph = automationDraftGraph(automation);
+  if (!graph || !Array.isArray(graph.nodes)) return graph;
+  return {
+    ...graph,
+    nodes: graph.nodes.map((node) => {
+      if (node.type !== "action" || (node.actionType || node.action_type) !== "crm.createOpportunity") return node;
+      return { ...node, config: { ...(node.config || {}), ...config } };
+    }),
+  };
+};
+
+const renderAutomationOptions = (items = [], selected = "") =>
+  items.map((item) => `<option value="${escapeHtml(item.id)}" ${String(item.id) === String(selected || "") ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("");
+
+const renderAutomationsAdmin = () => {
+  const root = getAutomationsRoot();
+  if (!(root instanceof HTMLElement)) return;
+  if (automationsState.loading && !automationsState.loadedAt) {
+    root.innerHTML = `<div class="automations-loading">Carregando automações…</div>`;
+    return;
+  }
+  const rows = automationsState.rows || [];
+  const selected = automationsState.selected;
+  const crm = automationsState.crm || {};
+  const pipelines = Array.isArray(crm.pipelines) ? crm.pipelines : [];
+  const stages = Array.isArray(crm.stages) ? crm.stages : [];
+  const actionNode = automationActionNode(selected);
+  const config = actionNode?.config || {};
+  const pipelineId = config.pipelineId || pipelines.find((p) => p.isActive)?.id || pipelines[0]?.id || "";
+  const stageOptions = stages.filter((stage) => stage.pipelineId === pipelineId);
+  root.innerHTML = `
+    <div class="automations-shell">
+      <header class="automations-head">
+        <div><span>Admin</span><h2>Automações</h2></div>
+        <button type="button" class="button button-solid button-small" data-automation-create>Nova mensagem → Criar oportunidade</button>
+      </header>
+      ${automationsState.error ? `<div class="automations-error">${escapeHtml(automationsState.error)}</div>` : ""}
+      <div class="automations-layout">
+        <section class="automations-list">
+          <div class="automations-table">
+            <div class="automations-row is-head"><span>Nome</span><span>Status</span><span>Trigger</span><span>Versão</span><span>Execuções</span><span>Success</span><span>Última</span><span>Ações</span></div>
+            ${rows.map((row) => {
+              const metrics = row.metrics || {};
+              return `<button type="button" class="automations-row ${selected?.id === row.id ? "is-active" : ""}" data-automation-open="${escapeHtml(row.id)}">
+                <span>${escapeHtml(row.name)}</span>
+                <span>${escapeHtml(row.status)}</span>
+                <span>${escapeHtml(row.trigger_type || "attendance.message.created")}</span>
+                <span>${escapeHtml(String(row.active_version?.version_number || "-"))}</span>
+                <span>${escapeHtml(String(metrics.totalRuns || 0))}</span>
+                <span>${escapeHtml(String(metrics.successRate || 0))}%</span>
+                <span>${escapeHtml(formatCrmDateTime(metrics.lastRunAt))}</span>
+                <span>${row.status === "ACTIVE" ? "Pausar" : "Abrir"}</span>
+              </button>`;
+            }).join("") || `<div class="automations-empty">Nenhuma automação criada.</div>`}
+          </div>
+        </section>
+        <section class="automations-editor">
+          ${selected ? `
+            <div class="automations-editor-head">
+              <div><span>${escapeHtml(selected.status)}</span><h3>${escapeHtml(selected.name)}</h3></div>
+              <div class="automations-editor-actions">
+                <button type="button" class="button button-outline button-small" data-automation-draft="${escapeHtml(selected.id)}">Editar rascunho</button>
+                <button type="button" class="button button-solid button-small" data-automation-publish="${escapeHtml(selected.id)}">Publicar</button>
+                <button type="button" class="button button-outline button-small" data-automation-pause="${escapeHtml(selected.id)}">Pausar</button>
+              </div>
+            </div>
+            <div class="automation-flow">
+              <div class="automation-node"><strong>Nova mensagem recebida</strong><span>attendance.message.created</span></div>
+              <div class="automation-arrow">↓</div>
+              <div class="automation-node"><strong>Possui oportunidade aberta?</strong><span>crm.contactHasOpenOpportunity</span></div>
+              <div class="automation-branches"><span>NÃO ↓</span><span>SIM → END</span></div>
+              <div class="automation-node is-action"><strong>Criar lead</strong><span>crm.createOpportunity</span></div>
+            </div>
+            <form class="automation-config" data-automation-config="${escapeHtml(selected.id)}">
+              <label><span>Pipeline</span><select name="pipelineId" data-automation-pipeline>${renderAutomationOptions(pipelines, pipelineId)}</select></label>
+              <label><span>Stage</span><select name="stageId">${renderAutomationOptions(stageOptions, config.stageId || stageOptions[0]?.id || "")}</select></label>
+              <button type="submit" class="button button-solid button-small">Salvar configuração</button>
+            </form>
+            <div class="automations-history">
+              <h3>Execuções</h3>
+              ${(automationsState.runs || []).map((run) => `<button type="button" class="automations-run" data-automation-run="${escapeHtml(run.id)}"><span>${escapeHtml(run.status)}</span><span>${escapeHtml(formatCrmDateTime(run.created_at || run.started_at))}</span><span>${escapeHtml(String(run.event_id || "").slice(0, 8))}</span><span>V${escapeHtml(String(run.automation_version_id || "").slice(0, 8))}</span></button>`).join("") || `<div class="automations-empty">Sem execuções ainda.</div>`}
+              ${automationsState.runDetail ? `<div class="automations-run-detail">${(automationsState.runDetail.steps || []).map((step) => `<div><strong>${escapeHtml(step.node_type)}</strong><span>${escapeHtml(step.status)} ${step.output ? escapeHtml(JSON.stringify(step.output).slice(0, 120)) : ""}</span></div>`).join("")}</div>` : ""}
+            </div>
+          ` : `<div class="automations-empty">Selecione ou crie uma automação.</div>`}
+        </section>
+      </div>
+    </div>
+  `;
+};
+
+const loadAutomationsAdmin = async ({ force = false, selectId = "" } = {}) => {
+  if (!force && automationsState.loading) return;
+  automationsState.loading = true;
+  automationsState.error = "";
+  renderAutomationsAdmin();
+  try {
+    const [automationsRes, crmRes] = await Promise.all([
+      fetchWithAuth("/api/automations"),
+      fetchWithAuth("/api/crm"),
+    ]);
+    const automations = await automationsRes.json().catch(() => null);
+    const crm = await crmRes.json().catch(() => null);
+    if (!automationsRes.ok) throw new Error(automations?.error || "automations_load_failed");
+    if (!crmRes.ok) throw new Error(crm?.error || "crm_load_failed");
+    automationsState.rows = Array.isArray(automations.rows) ? automations.rows : [];
+    automationsState.crm = crm;
+    automationsState.loadedAt = Date.now();
+    const nextId = selectId || automationsState.selectedId || automationsState.rows[0]?.id || "";
+    if (nextId) await openAutomation(nextId, { render: false });
+  } catch (error) {
+    automationsState.error = error?.message || "Não foi possível carregar automações.";
+  } finally {
+    automationsState.loading = false;
+    renderAutomationsAdmin();
+  }
+};
+
+const openAutomation = async (id, { render = true } = {}) => {
+  automationsState.selectedId = id;
+  const [detailRes, runsRes] = await Promise.all([
+    fetchWithAuth(`/api/automations?id=${encodeURIComponent(id)}`),
+    fetchWithAuth(`/api/automations?id=${encodeURIComponent(id)}&resource=runs`),
+  ]);
+  const detail = await detailRes.json().catch(() => null);
+  const runs = await runsRes.json().catch(() => null);
+  if (!detailRes.ok) throw new Error(detail?.error || "automation_detail_failed");
+  automationsState.selected = detail.automation;
+  automationsState.runs = Array.isArray(runs?.rows) ? runs.rows : [];
+  automationsState.runDetail = null;
+  if (render) renderAutomationsAdmin();
+};
+
+const createAutomationFromCrmDefaults = async () => {
+  const crm = automationsState.crm || {};
+  const pipelines = Array.isArray(crm.pipelines) ? crm.pipelines : [];
+  const stages = Array.isArray(crm.stages) ? crm.stages : [];
+  const pipelineId = pipelines.find((pipeline) => pipeline.isActive)?.id || pipelines[0]?.id || "";
+  const stageId = stages.find((stage) => stage.pipelineId === pipelineId)?.id || stages[0]?.id || "";
+  const res = await fetchWithAuth("/api/automations", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ pipelineId, stageId }),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(data?.error || "automation_create_failed");
+  await loadAutomationsAdmin({ force: true, selectId: data?.automationId || "" });
+};
+
+const runAutomationAction = async (id, action) => {
+  const res = await fetchWithAuth(`/api/automations?id=${encodeURIComponent(id)}&action=${encodeURIComponent(action)}`, { method: "POST" });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(data?.error || `automation_${action}_failed`);
+  await loadAutomationsAdmin({ force: true, selectId: id });
+};
+
+const saveAutomationConfig = async (form) => {
+  const id = String(form.getAttribute("data-automation-config") || "").trim();
+  if (!id) return;
+  const formData = new FormData(form);
+  const graph = setAutomationActionConfig(automationsState.selected, {
+    pipelineId: String(formData.get("pipelineId") || "").trim(),
+    stageId: String(formData.get("stageId") || "").trim(),
+  });
+  const res = await fetchWithAuth(`/api/automations?id=${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ graph }),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(data?.error || "automation_save_failed");
+  await loadAutomationsAdmin({ force: true, selectId: id });
+};
+
+const loadAutomationRunDetail = async (runId) => {
+  const id = String(automationsState.selectedId || automationsState.selected?.id || "").trim();
+  if (!id || !runId) return;
+  const res = await fetchWithAuth(`/api/automations?id=${encodeURIComponent(id)}&resource=runs&runId=${encodeURIComponent(runId)}`);
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(data?.error || "automation_run_load_failed");
+  automationsState.runDetail = data;
+  renderAutomationsAdmin();
+};
+
 let nativeCrmSearchTimer = null;
 
 const moneyFormatterCache = new Map();
@@ -37881,6 +38086,16 @@ const showPanel = (panelName) => {
     return;
   }
 
+  if (panelName === "automations") {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (currentRole !== "admin") {
+      navigateApp(roleBasePath(currentRole), { replace: true });
+      return;
+    }
+    loadAutomationsAdmin({ force: false }).catch((error) => console.error("[automations] load failed:", error));
+    return;
+  }
+
 	  if (panelName === "growth") {
     window.scrollTo({ top: 0, behavior: "smooth" });
     renderSalesCopilot();
@@ -38098,6 +38313,7 @@ const panelPathForRole = (role, panel) => {
     if (p === "status-plataforma") return "/app/admin/status";
     if (p === "guia-colaboradores") return "/app/admin/guia";
     if (p === "configuracoes-admin") return "/app/admin/configuracoes";
+    if (p === "automations") return "/app/admin/automacoes";
 	    if (p === "financeiro") return financePathForState(role);
     if (p === "admin-comercial-visao-geral") return "/app/admin/comercial";
     if (p === "native-crm") return "/app/admin/comercial/crm";
@@ -38189,6 +38405,7 @@ const parseAppRoute = (path) => {
       const section = ADMIN_SETTINGS_SECTIONS.some((item) => item.key === detail) ? detail : "meu-perfil";
       return { role, panel: "configuracoes-admin", settingsSection: section };
     }
+    if (sub === "automacoes") return { role, panel: "automations" };
 	    if (sub === "financeiro") {
 	      const financeTab = FINANCE_URL_TO_TAB[String(query.get("aba") || "").trim()] || "overview";
 	      return { role, panel: "financeiro", financeTab };
@@ -38378,6 +38595,49 @@ document.addEventListener(
 document.addEventListener("click", (event) => {
   const target = event.target;
   if (!(target instanceof Element)) return;
+  const automationsRoot = target.closest("[data-automations-admin]");
+  if (automationsRoot instanceof HTMLElement) {
+    const setError = (error) => {
+      automationsState.error = error?.message || "Não foi possível atualizar automações.";
+      renderAutomationsAdmin();
+    };
+    const createButton = target.closest("[data-automation-create]");
+    if (createButton instanceof HTMLButtonElement) {
+      event.preventDefault();
+      createAutomationFromCrmDefaults().catch(setError);
+      return;
+    }
+    const openButton = target.closest("[data-automation-open]");
+    if (openButton instanceof HTMLElement) {
+      event.preventDefault();
+      openAutomation(String(openButton.getAttribute("data-automation-open") || "")).catch(setError);
+      return;
+    }
+    const draftButton = target.closest("[data-automation-draft]");
+    if (draftButton instanceof HTMLButtonElement) {
+      event.preventDefault();
+      runAutomationAction(String(draftButton.getAttribute("data-automation-draft") || ""), "draft").catch(setError);
+      return;
+    }
+    const publishButton = target.closest("[data-automation-publish]");
+    if (publishButton instanceof HTMLButtonElement) {
+      event.preventDefault();
+      runAutomationAction(String(publishButton.getAttribute("data-automation-publish") || ""), "publish").catch(setError);
+      return;
+    }
+    const pauseButton = target.closest("[data-automation-pause]");
+    if (pauseButton instanceof HTMLButtonElement) {
+      event.preventDefault();
+      runAutomationAction(String(pauseButton.getAttribute("data-automation-pause") || ""), "pause").catch(setError);
+      return;
+    }
+    const runButton = target.closest("[data-automation-run]");
+    if (runButton instanceof HTMLButtonElement) {
+      event.preventDefault();
+      loadAutomationRunDetail(String(runButton.getAttribute("data-automation-run") || "")).catch(setError);
+      return;
+    }
+  }
   const crmRoot = target.closest("[data-native-crm]");
   if (crmRoot instanceof HTMLElement) {
     const retry = target.closest("[data-crm-retry]");
@@ -38520,6 +38780,14 @@ document.addEventListener("click", (event) => {
 document.addEventListener("submit", (event) => {
   const target = event.target;
   if (!(target instanceof HTMLFormElement)) return;
+  if (target.matches("[data-automation-config]")) {
+    event.preventDefault();
+    saveAutomationConfig(target).catch((error) => {
+      automationsState.error = error?.message || "Não foi possível salvar a configuração.";
+      renderAutomationsAdmin();
+    });
+    return;
+  }
   if (!target.matches("[data-crm-form]")) return;
   event.preventDefault();
   submitNativeCrmForm(target).catch((error) => {
@@ -38541,6 +38809,14 @@ document.addEventListener("input", (event) => {
 document.addEventListener("change", (event) => {
   const target = event.target;
   if (!(target instanceof HTMLSelectElement)) return;
+  if (target.matches("[data-automation-pipeline]")) {
+    const form = target.closest("[data-automation-config]");
+    const stageSelect = form?.querySelector('select[name="stageId"]');
+    const stages = Array.isArray(automationsState.crm?.stages) ? automationsState.crm.stages : [];
+    const stageOptions = stages.filter((stage) => stage.pipelineId === target.value);
+    if (stageSelect instanceof HTMLSelectElement) stageSelect.innerHTML = renderAutomationOptions(stageOptions, stageOptions[0]?.id || "");
+    return;
+  }
   if (target.matches("[data-crm-pipeline]")) {
     nativeCrmState.selectedPipelineId = target.value;
     nativeCrmState.filters.stageId = "";

@@ -55,6 +55,7 @@ const initialPanelFromPath = (pathParam) => {
   if (slug === "admin" && sub === "status") return "status-plataforma";
   if (slug === "admin" && sub === "guia") return "guia-colaboradores";
   if (slug === "admin" && sub === "financeiro") return "financeiro";
+  if (slug === "admin" && sub === "automacoes") return "automations";
   if (slug === "admin" && sub === "comercial") {
     if (segments[2] === "crm") return "native-crm";
     return segments[2] === "metas" ? "admin-comercial-metas" : "admin-comercial-usuarios";

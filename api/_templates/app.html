@@ -340,6 +340,12 @@
             <p class="sidebar-text">Atendimento</p>
             <button class="sidebar-link" type="button" data-panel-target="attendance-connections" title="Conexões de Atendimento"><span class="sidebar-text">Conexões</span></button>
           </div>
+          <button class="sidebar-link" type="button" data-panel-target="automations" data-admin-only title="Automações">
+            <span class="sidebar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M5 7h7"></path><path d="M12 7l2 2 4-4"></path><path d="M5 17h7"></path><path d="M14 17h5"></path><path d="M17 14v6"></path></svg>
+            </span>
+            <span class="sidebar-text">Automações</span>
+          </button>
           <button
             class="sidebar-link"
             type="button"
@@ -1452,6 +1458,11 @@
         </section>
 
         <section class="platform-panel" data-panel="attendance-connections" data-hide-platform-header="true" hidden aria-label="Conexões de Atendimento"><div data-attendance-connections></div></section>
+        <section class="platform-panel" data-panel="automations" data-hide-platform-header="true" hidden aria-label="Automações">
+          <div class="automations-admin" data-automations-admin>
+            <div class="automations-loading">Carregando automações…</div>
+          </div>
+        </section>
         <section class="platform-panel" data-panel="space-office" data-hide-platform-header="true" hidden aria-label="Space Office">
           <div data-space-office-root></div>
         </section>

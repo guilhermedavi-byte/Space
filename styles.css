@@ -25888,6 +25888,280 @@ body.has-space-env-banner{padding-top:46px}
 .space-goals-period .space-goals-period-title { text-transform: none; }
 .space-goals-period-title::first-letter { text-transform: uppercase; }
 
+/* Admin > Automações */
+.automations-admin,
+.automations-admin * {
+  min-width: 0;
+}
+
+.automations-shell {
+  display: grid;
+  gap: 18px;
+  min-height: calc(100vh - 40px);
+  padding: 28px;
+  color: var(--text-main);
+}
+
+.automations-head,
+.automations-editor-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.automations-head span,
+.automations-editor-head span {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.automations-head h2,
+.automations-editor-head h3,
+.automations-history h3 {
+  margin: 0;
+}
+
+.automations-head h2 {
+  font-size: 28px;
+  line-height: 1.1;
+}
+
+.automations-layout {
+  display: grid;
+  grid-template-columns: minmax(520px, 1.1fr) minmax(360px, .9fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.automations-list,
+.automations-editor {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255,255,255,.028);
+  overflow: hidden;
+}
+
+.automations-editor {
+  display: grid;
+  gap: 18px;
+  padding: 18px;
+}
+
+.automations-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.automations-table {
+  overflow-x: auto;
+}
+
+.automations-row {
+  width: 100%;
+  min-width: 940px;
+  display: grid;
+  grid-template-columns: minmax(180px, 1.2fr) 96px minmax(190px, 1fr) 72px 88px 78px 128px 80px;
+  gap: 12px;
+  align-items: center;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  padding: 13px 14px;
+  background: transparent;
+  color: var(--text-main);
+  text-align: left;
+  font: inherit;
+}
+
+button.automations-row {
+  cursor: pointer;
+}
+
+button.automations-row:hover,
+button.automations-row:focus-visible,
+.automations-row.is-active {
+  background: rgba(255,255,255,.045);
+  outline: none;
+}
+
+.automations-row.is-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-bg);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.automations-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.automation-flow {
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+  background: rgba(255,255,255,.024);
+}
+
+.automation-node {
+  width: min(100%, 420px);
+  display: grid;
+  gap: 5px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: var(--surface-bg);
+}
+
+.automation-node.is-action {
+  border-color: rgba(93,202,165,.28);
+  background: rgba(93,202,165,.07);
+}
+
+.automation-node strong {
+  font-size: 13px;
+}
+
+.automation-node span,
+.automation-arrow,
+.automation-branches {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.automation-branches {
+  width: min(100%, 420px);
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-weight: 800;
+}
+
+.automation-config {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.automation-config label {
+  display: grid;
+  gap: 7px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.automation-config select {
+  min-height: 40px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  padding: 0 12px;
+  background: rgba(255,255,255,.035);
+  color: var(--text-main);
+}
+
+.automations-history {
+  display: grid;
+  gap: 10px;
+}
+
+.automations-run {
+  display: grid;
+  grid-template-columns: 90px 140px 90px 90px;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: rgba(255,255,255,.028);
+  color: var(--text-main);
+  text-align: left;
+  cursor: pointer;
+}
+
+.automations-run:hover,
+.automations-run:focus-visible {
+  background: rgba(255,255,255,.05);
+  outline: none;
+}
+
+.automations-run span,
+.automations-run-detail span {
+  overflow-wrap: anywhere;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.automations-run-detail {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(0,0,0,.12);
+}
+
+.automations-run-detail div {
+  display: grid;
+  gap: 4px;
+}
+
+.automations-empty,
+.automations-loading,
+.automations-error {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 18px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.automations-error {
+  border-color: rgba(255,86,79,.42);
+  color: var(--accent);
+  background: rgba(255,86,79,.06);
+}
+
+@media (max-width: 1180px) {
+  .automations-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .automations-shell {
+    padding: 20px;
+  }
+
+  .automations-head,
+  .automations-editor-head,
+  .automations-editor-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .automation-config,
+  .automations-run {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Comercial > CRM */
 .native-crm {
   width: 100%;
