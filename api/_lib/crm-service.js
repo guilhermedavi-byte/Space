@@ -64,6 +64,10 @@ const numberOrNull = (value) => {
 
 const normalizeCurrency = (value) => clean(value).toUpperCase() || "BRL";
 const normalizeDateOnly = (value) => (/^\d{4}-\d{2}-\d{2}$/.test(clean(value)) ? clean(value) : null);
+const normalizeCountryCode = (value) => {
+  const raw = clean(value).toUpperCase();
+  return /^[A-Z]{2}$/.test(raw) ? raw : "";
+};
 
 const normalizeRole = (value) => {
   const raw = lower(value);
@@ -98,6 +102,7 @@ const normalizeContact = (row) => ({
   name: clean(row.name),
   phone: clean(row.phone),
   email: clean(row.email),
+  countryCode: normalizeCountryCode(row.countryCode || row.country || row.country_code || row.location?.country),
   searchName: normalizeSearchText(row.searchName || row.name),
   searchEmail: normalizeSearchText(row.searchEmail || row.email),
   searchPhone: normalizeSearchPhone(row.searchPhone || row.phone),
@@ -376,6 +381,7 @@ const findOrBuildContact = ({ contacts, body, stamp }) => {
   const name = clean(body.name || body.contactName);
   const phone = clean(body.phone);
   const email = clean(body.email);
+  const countryCode = normalizeCountryCode(body.countryCode || body.country);
   if (!name) throw Object.assign(new Error("contact_name_required"), { status: 400 });
   const targetIdentity = normalizeCrmContactIdentity({ phone, email });
   const existing = contacts.find((contact) => {
@@ -385,11 +391,18 @@ const findOrBuildContact = ({ contacts, body, stamp }) => {
     return sameEmail || samePhone;
   });
   if (existing) {
-    const contact = { ...existing, name: existing.name || name, phone: existing.phone || phone, email: existing.email || email, updatedAt: stamp };
+    const contact = {
+      ...existing,
+      name: existing.name || name,
+      phone: existing.phone || phone,
+      email: existing.email || email,
+      countryCode: countryCode || existing.countryCode || "",
+      updatedAt: stamp,
+    };
     return { contact: { ...contact, ...contactSearchFields(contact) }, isNew: false };
   }
   const id = newId("contact");
-  const contact = { id, scopeId: CRM_SCOPE_ID, name, phone, email, createdAt: stamp, updatedAt: stamp };
+  const contact = { id, scopeId: CRM_SCOPE_ID, name, phone, email, countryCode, createdAt: stamp, updatedAt: stamp };
   return { contact: { ...contact, ...contactSearchFields(contact) }, isNew: true };
 };
 

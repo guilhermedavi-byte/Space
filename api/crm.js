@@ -96,6 +96,11 @@ const normalizeCurrency = (value) => {
   return raw || "BRL";
 };
 
+const normalizeCountryCode = (value) => {
+  const raw = clean(value).toUpperCase();
+  return /^[A-Z]{2}$/.test(raw) ? raw : "";
+};
+
 const normalizeDateOnly = (value) => {
   const raw = clean(value);
   if (!raw) return null;
@@ -166,6 +171,7 @@ const normalizeContact = (row) => ({
   name: clean(row.name),
   phone: clean(row.phone),
   email: clean(row.email),
+  countryCode: normalizeCountryCode(row.countryCode || row.country || row.country_code || row.location?.country),
   searchName: normalizeSearchText(row.searchName || row.name),
   searchEmail: normalizeSearchText(row.searchEmail || row.email),
   searchPhone: normalizeSearchPhone(row.searchPhone || row.phone),
@@ -549,6 +555,7 @@ const handleUpdateOpportunity = async ({ session, body }) => {
         name: clean(body.name || body.contactName) || contact.name,
         phone: clean(body.phone),
         email: clean(body.email),
+        countryCode: normalizeCountryCode(body.countryCode || body.country),
         updatedAt: stamp,
       }
     : null;
