@@ -49,6 +49,7 @@ const initialPanelFromPath = (pathParam) => {
   const segments = String(pathParam || "").split("/").filter(Boolean);
   const slug = segments[0] || "";
   const sub = segments[1] || "";
+  if (["admin", "growth"].includes(slug) && sub === "atendimento") return "attendance-connections";
   if (slug === "financeiro") return "financeiro";
   if (slug === "admin" && sub === "space-office") return "space-office";
   if (slug === "admin" && sub === "status") return "status-plataforma";
@@ -145,6 +146,7 @@ const buildAppHtml = ({ sessionJson, role, roleSlug, templateHtml, initialPanel 
     <script src="script.js"></script>
     <script src="pedagogico-n8n-ui.js"></script>
     <script src="space-office.js"></script>
+    <script src="attendance-connections.js"></script>
   </body>
 </html>`;
 };

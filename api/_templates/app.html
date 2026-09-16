@@ -336,6 +336,10 @@
             </span>
             <span class="sidebar-text">Atividades</span>
           </button>
+          <div data-attendance-access hidden>
+            <p class="sidebar-text">Atendimento</p>
+            <button class="sidebar-link" type="button" data-panel-target="attendance-connections" title="Conexões de Atendimento"><span class="sidebar-text">Conexões</span></button>
+          </div>
           <button
             class="sidebar-link"
             type="button"
@@ -1425,6 +1429,7 @@
           </div>
         </section>
 
+        <section class="platform-panel" data-panel="attendance-connections" data-hide-platform-header="true" hidden aria-label="Conexões de Atendimento"><div data-attendance-connections></div></section>
         <section class="platform-panel" data-panel="space-office" data-hide-platform-header="true" hidden aria-label="Space Office">
           <div data-space-office-root></div>
         </section>

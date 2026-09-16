@@ -910,6 +910,7 @@ const syncRoleUI = () => {
     liveStudentRoot.hidden = currentRole !== "student";
   }
 
+  document.querySelectorAll("[data-attendance-access]").forEach(el => { el.hidden = !["admin", "growth"].includes(currentRole); });
   document.querySelectorAll("[data-admin-only]").forEach((el) => {
     if (el instanceof HTMLElement) {
       el.hidden = currentRole !== "admin" || el.hasAttribute("data-launch-hidden");
@@ -946,7 +947,7 @@ const syncRoleUI = () => {
         return;
       }
       const target = String(el.getAttribute("data-panel-target") || "");
-      el.hidden = !["growth-dashboard", "growth", "activities"].includes(target);
+      el.hidden = !["growth-dashboard", "growth", "activities", "attendance-connections"].includes(target);
     });
     const dashboardTarget = document.querySelector("[data-growth-dashboard-link]");
     if (dashboardTarget instanceof HTMLElement) {
@@ -36978,6 +36979,12 @@ const showPanel = (panelName) => {
     return;
   }
 
+  if (panelName === "attendance-connections") {
+    if (!["admin", "growth"].includes(currentRole)) return navigateApp(roleBasePath(currentRole), { replace: true });
+    window.SpaceAttendanceConnections?.open();
+    return;
+  }
+
   if (panelName === "space-office") {
     window.scrollTo({ top: 0, behavior: "smooth" });
     window.dispatchEvent(new CustomEvent("space-office:open"));
@@ -37101,6 +37108,7 @@ const applyParsedAppRouteState = (parsed) => {
 const panelPathForRole = (role, panel) => {
   const normalized = normalizeRole(role);
   const p = String(panel || "");
+  if (p === "attendance-connections" && ["admin", "growth"].includes(normalized)) return `/app/${normalized}/atendimento/conexoes`;
 
   if (normalized === "teacher") {
     if (p === "activities") return "/app/professor/atividades";
@@ -37176,6 +37184,7 @@ const parseAppRoute = (path) => {
               ? "growth"
             : "";
   if (!role) return null;
+  if (["admin", "growth"].includes(role) && sub === "atendimento") return { role, panel: "attendance-connections" };
 
   if (roleSlug === "financeiro") {
     const financeTab = FINANCE_URL_TO_TAB[String(query.get("aba") || "").trim()] || "overview";
