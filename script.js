@@ -12127,6 +12127,7 @@ const nativeCrmState = {
   search: "",
   mode: "funnel",
   filtersOpen: false,
+  filterPopover: "",
   filters: {
     stageId: "",
     status: "",
@@ -12609,10 +12610,34 @@ const nativeCrmInitials = (name = "") => {
   return (parts.length > 1 ? `${parts[0][0]}${parts[1][0]}` : (parts[0] || "?").slice(0, 2)).toUpperCase();
 };
 
+const nativeCrmAvatarTone = (value = "") => {
+  const tones = ["slate", "coral", "mint", "blue", "amber", "violet"];
+  const raw = String(value || "space").trim();
+  let hash = 0;
+  for (let index = 0; index < raw.length; index += 1) hash = (hash * 31 + raw.charCodeAt(index)) % 997;
+  return tones[Math.abs(hash) % tones.length];
+};
+
+const nativeCrmAvatarHtml = (entity = {}, fallback = "") => {
+  const name = entity?.name || entity?.contactName || entity?.title || fallback || entity?.email || entity?.id || "Opportunity";
+  const photoUrl = String(entity?.photoUrl || entity?.avatarUrl || "").trim();
+  if (photoUrl) {
+    return `<span class="native-crm-avatar has-photo"><img src="${escapeHtml(photoUrl)}" alt="${escapeHtml(name)}" /></span>`;
+  }
+  return `<span class="native-crm-avatar" data-tone="${escapeHtml(nativeCrmAvatarTone(name))}">${escapeHtml(nativeCrmInitials(name))}</span>`;
+};
+
 const nativeCrmOwnerHtml = (opportunity) => {
   const ownerName = opportunity?.owner?.name || opportunity?.owner?.email || "";
   if (!ownerName) return "";
-  return `<span class="native-crm-owner"><span>${escapeHtml(nativeCrmInitials(ownerName))}</span>${escapeHtml(ownerName)}</span>`;
+  return `<span class="native-crm-owner">${nativeCrmAvatarHtml(opportunity?.owner || {}, ownerName)}${escapeHtml(ownerName)}</span>`;
+};
+
+const nativeCrmActivityCompactLabel = (opportunity) => {
+  if (!opportunity?.nextActivityId) return "Sem atividade";
+  const type = crmActivityTypeLabel(opportunity.nextActivityType);
+  const when = formatCrmActivityDate(opportunity.nextActivityAt);
+  return `${type} · ${when}`;
 };
 
 const nativeCrmActiveFilterCount = () => {
