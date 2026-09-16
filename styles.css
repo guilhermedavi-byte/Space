@@ -27059,6 +27059,7 @@ button.automations-row:focus-visible,
 .native-crm-activity-form input,
 .native-crm-activity-form select,
 .native-crm-pipeline-editor input {
+  height: 38px;
   min-height: 36px;
   padding: 0 10px;
 }
