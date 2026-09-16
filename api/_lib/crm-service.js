@@ -117,6 +117,10 @@ const normalizeOpportunity = (row) => ({
   source: clean(row.source) || null,
   status: VALID_STATUS.has(clean(row.status)) ? clean(row.status) : "open",
   lostReason: clean(row.lostReason) || null,
+  lostReasonNote: clean(row.lostReasonNote) || null,
+  closedAt: toIso(row.closedAt),
+  closedBy: clean(row.closedBy) || null,
+  closedValue: numberOrNull(row.closedValue),
   expectedCloseDate: normalizeDateOnly(row.expectedCloseDate),
   nextActivityId: clean(row.nextActivityId) || null,
   nextActivityAt: toIso(row.nextActivityAt),
@@ -346,10 +350,19 @@ const loadCrmReadModel = async () => {
     .map((row) => ({ id: clean(row.uid || row.id || row.firestoreDocId), name: clean(row.nome || row.name || row.email || row.uid || row.id), email: clean(row.email) }))
     .filter((row) => row.id);
   const ownersById = new Map(owners.map((row) => [row.id, row]));
+  const usersById = new Map(usersRaw.map((row) => {
+    const id = clean(row.uid || row.id || row.firestoreDocId);
+    return [id, { id, name: clean(row.nome || row.name || row.displayName || row.email || id), email: clean(row.email) }];
+  }).filter(([id]) => id));
   const opportunities = opportunitiesRaw
     .map(normalizeOpportunity)
     .filter((row) => row.id && matchesCrmScope(row) && !row.deletedAt)
-    .map((row) => ({ ...row, contact: contactsById.get(row.contactId) || null, owner: row.ownerId ? ownersById.get(row.ownerId) || null : null }))
+    .map((row) => ({
+      ...row,
+      contact: contactsById.get(row.contactId) || null,
+      owner: row.ownerId ? ownersById.get(row.ownerId) || null : null,
+      closedByUser: row.closedBy ? usersById.get(row.closedBy) || null : null,
+    }))
     .sort((left, right) => String(right.updatedAt || right.createdAt || "").localeCompare(String(left.updatedAt || left.createdAt || "")));
   return { pipelines: seeded.pipelines, stages: seeded.stages.sort((a, b) => a.position - b.position), contacts: scopedContacts, opportunities, owners, generatedAt: nowIso() };
 };
@@ -415,6 +428,10 @@ const createOpportunity = async ({ actorUid = "", input = {}, idempotencyKey = "
     source: clean(input.source) || null,
     status: "open",
     lostReason: null,
+    lostReasonNote: null,
+    closedAt: null,
+    closedBy: null,
+    closedValue: null,
     expectedCloseDate: normalizeDateOnly(input.expectedCloseDate),
     automationIdempotencyKey: idempotencyKey || null,
     createdAt: stamp,

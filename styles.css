@@ -26922,6 +26922,16 @@ button.automations-row:focus-visible,
   font-size: 11px;
 }
 
+.native-crm-status-pill[data-status="won"] {
+  border-color: rgba(72, 187, 120, .22);
+  color: rgba(142, 226, 174, .9);
+}
+
+.native-crm-status-pill[data-status="lost"] {
+  border-color: rgba(255,91,82,.26);
+  color: #ffaaa5;
+}
+
 .native-crm-activity-pill .native-crm-svg {
   width: 12px;
   height: 12px;
@@ -27133,6 +27143,22 @@ button.automations-row:focus-visible,
   align-items: baseline;
 }
 
+.native-crm-deal-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--crm-line);
+  padding-bottom: 12px;
+}
+
+.native-crm-win-action {
+  color: rgba(142, 226, 174, .94);
+}
+
+.native-crm-lost-action {
+  color: #ffaaa5;
+}
+
 .native-crm-form-error {
   border: 1px solid rgba(255,91,82,.34);
   border-radius: 8px;
@@ -27285,6 +27311,93 @@ button.automations-row:focus-visible,
   border-radius: 999px;
   background: var(--crm-accent);
   box-shadow: 0 0 0 3px #101319;
+}
+
+.native-crm-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1700;
+  background: rgba(0,0,0,.46);
+  animation: native-crm-fade 140ms ease-out;
+}
+
+.native-crm-modal {
+  position: fixed;
+  z-index: 1701;
+  top: 50%;
+  left: 50%;
+  width: min(420px, calc(100vw - 28px));
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--crm-line-strong);
+  border-radius: 10px;
+  background: var(--crm-popover);
+  box-shadow: 0 24px 70px rgba(0,0,0,.42);
+  animation: native-crm-pop 140ms ease-out;
+}
+
+.native-crm-modal header,
+.native-crm-modal footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border-bottom: 1px solid var(--crm-line);
+}
+
+.native-crm-modal footer {
+  border-top: 1px solid var(--crm-line);
+  border-bottom: 0;
+}
+
+.native-crm-modal header span {
+  color: var(--crm-muted);
+  font-size: 11px;
+}
+
+.native-crm-modal h3 {
+  margin: 2px 0 0;
+  color: #fff;
+  font-size: 15px;
+}
+
+.native-crm-modal-body {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.native-crm-modal label {
+  display: grid;
+  gap: 5px;
+  color: var(--crm-muted);
+  font-size: 11px;
+}
+
+.native-crm-modal input,
+.native-crm-modal select,
+.native-crm-modal textarea {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid var(--crm-line);
+  border-radius: 7px;
+  padding: 0 10px;
+  background: rgba(255,255,255,.045);
+  color: var(--text-main);
+}
+
+.native-crm-modal textarea {
+  min-height: 76px;
+  padding-top: 9px;
+  resize: vertical;
+}
+
+.native-crm-modal input:focus,
+.native-crm-modal select:focus,
+.native-crm-modal textarea:focus {
+  outline: 0;
+  border-color: rgba(255,91,82,.5);
+  box-shadow: 0 0 0 2px rgba(255,91,82,.14);
 }
 
 .native-crm-skeleton {

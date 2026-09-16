@@ -12147,6 +12147,7 @@ const nativeCrmState = {
   },
   drawer: null,
   drawerMode: "view",
+  closingDialog: null,
   details: {},
   activityFormOpportunityId: "",
   draggedOpportunityId: "",
@@ -12398,6 +12399,44 @@ const formatCrmDateTime = (value) => {
   }).format(date);
 };
 
+const formatCrmDateTimeInput = (value = new Date()) => {
+  const date = value instanceof Date ? value : new Date(String(value || ""));
+  if (Number.isNaN(date.getTime())) return "";
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "America/Sao_Paulo",
+  }).formatToParts(date).reduce((acc, part) => {
+    acc[part.type] = part.value;
+    return acc;
+  }, {});
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+};
+
+const crmDateTimeInputToIso = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const date = new Date(`${raw}:00-03:00`);
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString();
+};
+
+const CRM_LOST_REASONS = [
+  ["price", "Preço"],
+  ["no_response", "Sem resposta"],
+  ["timing", "Momento inadequado"],
+  ["competitor", "Concorrente"],
+  ["not_qualified", "Não qualificado"],
+  ["no_need", "Sem necessidade percebida"],
+  ["payment", "Pagamento"],
+  ["other", "Outro"],
+];
+
+const crmLostReasonLabel = (reason) => CRM_LOST_REASONS.find(([value]) => value === String(reason || ""))?.[1] || String(reason || "");
+
 const formatCrmActivityDate = (value) => {
   const raw = String(value || "").trim();
   if (!raw) return "Sem data";
@@ -12437,6 +12476,7 @@ const nativeCrmIcon = (name, className = "") => {
     "arrow-up-right": `<path d="M7 17 17 7M9 7h8v8" ${common}></path>`,
     dot: `<circle cx="12" cy="12" r="3" fill="currentColor"></circle>`,
     close: `<path d="M6 6l12 12M18 6 6 18" ${common}></path>`,
+    edit: `<path d="M4 20h4L18.5 9.5a2.1 2.1 0 0 0-4-4L4 16v4Z" ${common}></path><path d="m13.5 6.5 4 4" ${common}></path>`,
     sort: `<path d="M8 7h8M10 12h6M12 17h2" ${common}></path>`,
   };
   return `<svg ${attrs}>${paths[name] || paths.dot}</svg>`;
@@ -12529,7 +12569,7 @@ const crmOpportunityMatchesFilters = (opportunity) => {
 const getFilteredCrmOpportunities = () => getNativeCrmData().opportunities.filter(crmOpportunityMatchesFilters);
 
 const crmOpportunitiesForStage = (stageId) => {
-  return getFilteredCrmOpportunities().filter((opportunity) => opportunity.stageId === stageId);
+  return getFilteredCrmOpportunities().filter((opportunity) => opportunity.stageId === stageId && opportunity.status === "open");
 };
 
 const renderNativeCrmOwnerOptions = (selected = "") => {
@@ -12809,7 +12849,7 @@ const renderNativeCrmList = () => {
                 <tr data-crm-row="${escapeHtml(opportunity.id)}" tabindex="0">
                   <td><strong>${escapeHtml(primaryTitle)}</strong>${secondaryTitle ? `<span>${escapeHtml(secondaryTitle)}</span>` : ""}</td>
                   <td>${escapeHtml(stageName)}</td>
-                  <td><span class="native-crm-status-pill">${escapeHtml(crmStatusLabel(opportunity.status))}</span></td>
+                  <td><span class="native-crm-status-pill" data-status="${escapeHtml(opportunity.status)}">${escapeHtml(crmStatusLabel(opportunity.status))}</span></td>
                   <td class="is-number">${escapeHtml(formatCrmMoney(opportunity.value, opportunity.currency) || "—")}</td>
                   <td>${escapeHtml(opportunity.source || "—")}</td>
                   <td>${escapeHtml(opportunity.owner?.name || "—")}</td>
@@ -12863,12 +12903,51 @@ const nativeCrmDetailItemHtml = (label, value) => `
   </div>
 `;
 
+const nativeCrmClosingSummaryHtml = (opportunity) => {
+  if (!opportunity || opportunity.status === "open") return "";
+  const rows = [];
+  if (opportunity.status === "won") {
+    rows.push(nativeCrmDetailItemHtml("Valor fechado", formatCrmMoney(opportunity.closedValue, opportunity.currency) || "—"));
+  }
+  if (opportunity.status === "lost") {
+    rows.push(nativeCrmDetailItemHtml("Motivo", crmLostReasonLabel(opportunity.lostReason) || "—"));
+    if (opportunity.lostReasonNote) rows.push(nativeCrmDetailItemHtml("Observação", opportunity.lostReasonNote));
+  }
+  rows.push(nativeCrmDetailItemHtml("Fechado em", formatCrmDateTime(opportunity.closedAt)));
+  rows.push(nativeCrmDetailItemHtml("Fechado por", opportunity.closedByUser?.name || opportunity.closedBy || ""));
+  return `
+    <section class="native-crm-form-section native-crm-details-section">
+      <h3>Fechamento</h3>
+      <div class="native-crm-detail-list">${rows.join("")}</div>
+    </section>
+  `;
+};
+
+const nativeCrmDealActionsHtml = (opportunity) => {
+  if (!opportunity) return "";
+  if (opportunity.status === "open") {
+    return `
+      <section class="native-crm-deal-actions" aria-label="Ações comerciais">
+        <button type="button" class="button button-outline button-small native-crm-win-action" data-crm-close-dialog="won">${nativeCrmIcon("check")}Ganhar</button>
+        <button type="button" class="button button-outline button-small native-crm-lost-action" data-crm-close-dialog="lost">Perder</button>
+      </section>
+    `;
+  }
+  return `
+    <section class="native-crm-deal-actions" aria-label="Ações comerciais">
+      <button type="button" class="button button-outline button-small" data-crm-reopen>Reabrir oportunidade</button>
+    </section>
+  `;
+};
+
 const nativeCrmDrawerViewHtml = (opportunity, { pipelineName, stageName, money }) => {
   const contact = opportunity?.contact || {};
   return `
+    ${nativeCrmDealActionsHtml(opportunity)}
     ${nativeCrmNextActivityHtml(opportunity)}
     ${nativeCrmActivityFormHtml(opportunity)}
     ${nativeCrmOpenActivitiesHtml(opportunity)}
+    ${nativeCrmClosingSummaryHtml(opportunity)}
     <section class="native-crm-form-section native-crm-details-section">
       <h3>Detalhes</h3>
       <div class="native-crm-detail-list">
@@ -12917,15 +12996,7 @@ const nativeCrmDrawerEditHtml = ({ isNew, opportunity, contact, pipelineId, stag
       <label><span>Etapa</span><select name="stageId" data-crm-form-stage>${renderNativeCrmStageOptions(pipelineId, stageId)}</select></label>
     </div>
     ${isNew ? "" : `
-      <div class="native-crm-form-grid">
-        <label><span>Status</span><select name="status">
-          <option value="open" ${opportunity.status === "open" ? "selected" : ""}>Aberta</option>
-          <option value="won" ${opportunity.status === "won" ? "selected" : ""}>Ganha</option>
-          <option value="lost" ${opportunity.status === "lost" ? "selected" : ""}>Perdida</option>
-        </select></label>
-        <label><span>Previsão</span><input name="expectedCloseDate" type="date" value="${escapeHtml(opportunity.expectedCloseDate || "")}" /></label>
-      </div>
-      <label><span>Motivo de perda</span><input name="lostReason" value="${escapeHtml(opportunity.lostReason || "")}" /></label>
+      <label><span>Previsão</span><input name="expectedCloseDate" type="date" value="${escapeHtml(opportunity.expectedCloseDate || "")}" /></label>
     `}
   </section>
   <section class="native-crm-form-section">
@@ -12945,6 +13016,46 @@ const nativeCrmDrawerEditHtml = ({ isNew, opportunity, contact, pipelineId, stag
   `}
   ${isNew ? "" : nativeCrmTimelineHtml(opportunity)}
 `;
+
+const renderNativeCrmClosingDialog = () => {
+  const dialog = nativeCrmState.closingDialog;
+  if (!dialog?.type || !nativeCrmState.drawer) return "";
+  const opportunity = getNativeCrmAllOpportunities().find((row) => row.id === nativeCrmState.drawer);
+  if (!opportunity) return "";
+  const type = dialog.type === "lost" ? "lost" : "won";
+  const defaultValue = opportunity.value ?? "";
+  const defaultClosedAt = formatCrmDateTimeInput(new Date());
+  return `
+    <div class="native-crm-modal-backdrop" data-crm-close-dialog-cancel></div>
+    <section class="native-crm-modal" role="dialog" aria-modal="true" aria-label="${type === "won" ? "Marcar como ganha" : "Marcar como perdida"}">
+      <header>
+        <div>
+          <span>Fechamento</span>
+          <h3>${type === "won" ? "Marcar como ganha" : "Marcar como perdida"}</h3>
+        </div>
+        <button type="button" class="native-crm-icon-button" data-crm-close-dialog-cancel aria-label="Fechar">${nativeCrmIcon("close")}</button>
+      </header>
+      <div class="native-crm-modal-body">
+        ${type === "won" ? `
+          <label><span>Valor do fechamento</span><input name="closedValue" type="number" min="0" step="0.01" value="${escapeHtml(defaultValue)}" data-crm-close-value /></label>
+          <label><span>Data do fechamento</span><input name="closedAt" type="datetime-local" value="${escapeHtml(defaultClosedAt)}" data-crm-close-at /></label>
+        ` : `
+          <label><span>Motivo da perda *</span><select name="lostReason" data-crm-lost-reason>
+            <option value="">Selecione um motivo</option>
+            ${CRM_LOST_REASONS.map(([value, label]) => `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`).join("")}
+          </select></label>
+          <label><span>Observação</span><textarea name="lostReasonNote" rows="3" data-crm-lost-note></textarea></label>
+          <label><span>Data do fechamento</span><input name="closedAt" type="datetime-local" value="${escapeHtml(defaultClosedAt)}" data-crm-close-at /></label>
+        `}
+        <div class="native-crm-form-error" data-crm-close-error ${dialog.error ? "" : "hidden"}>${escapeHtml(dialog.error || "")}</div>
+      </div>
+      <footer>
+        <button type="button" class="button button-outline button-small" data-crm-close-dialog-cancel>Cancelar</button>
+        <button type="button" class="button button-solid button-small" data-crm-close-submit="${escapeHtml(type)}" ${nativeCrmState.saving ? "disabled" : ""}>${nativeCrmState.saving ? "Salvando…" : type === "won" ? "Confirmar ganho" : "Confirmar perda"}</button>
+      </footer>
+    </section>
+  `;
+};
 
 const nativeCrmActivityFormHtml = (opportunity) => {
   if (nativeCrmState.activityFormOpportunityId !== opportunity?.id) return "";
@@ -13045,6 +13156,8 @@ const renderNativeCrmDrawer = () => {
   const pipelineName = getNativeCrmData().pipelines.find((pipeline) => pipeline.id === pipelineId)?.name || "Comercial";
   const stageName = getNativeCrmData().stages.find((stage) => stage.id === stageId)?.name || "Oportunidade";
   const money = opportunity?.value ? formatCrmMoney(opportunity.value, opportunity.currency) : "";
+  const drawerValue = opportunity?.status === "won" ? (formatCrmMoney(opportunity.closedValue, opportunity.currency) || money) : money;
+  const statusText = opportunity ? crmStatusLabel(opportunity.status) : "";
   const isEditMode = isNew || nativeCrmState.drawerMode === "edit";
   return `
     <div class="native-crm-drawer-backdrop" data-crm-drawer-close></div>
@@ -13054,7 +13167,7 @@ const renderNativeCrmDrawer = () => {
           <div>
             <span>${isNew ? "Novo lead" : `CRM / ${escapeHtml(stageName)}`}</span>
             <h2>${isNew ? "Nova oportunidade" : escapeHtml(contact.name || opportunity.title || "Oportunidade")}</h2>
-            ${!isNew ? `<p><strong>${escapeHtml(stageName)}</strong>${money ? `<em>${escapeHtml(money)}</em>` : ""}<small>${escapeHtml(crmStatusLabel(opportunity.status))}</small></p>` : `<p><small>Cadastre contato e dados comerciais para abrir uma oportunidade.</small></p>`}
+            ${!isNew ? `<p><strong>${escapeHtml(statusText)}</strong>${drawerValue ? `<em>${escapeHtml(drawerValue)}</em>` : ""}<small>${escapeHtml(stageName)}</small></p>` : `<p><small>Cadastre contato e dados comerciais para abrir uma oportunidade.</small></p>`}
           </div>
           <div class="native-crm-drawer-actions">
             ${!isNew && !isEditMode ? `<button type="button" class="button button-outline button-small" data-crm-edit>${nativeCrmIcon("edit")}Editar</button>` : ""}
@@ -13125,6 +13238,7 @@ const renderNativeCrm = () => {
       ${nativeCrmState.error ? `<div class="native-crm-toast">${escapeHtml(nativeCrmState.error)}</div>` : ""}
     </div>
     ${renderNativeCrmDrawer()}
+    ${renderNativeCrmClosingDialog()}
   `;
 };
 
@@ -13249,7 +13363,7 @@ const loadNativeCrmOpportunityDetail = async (opportunityId, { force = false } =
 const collectCrmFormPayload = (form) => {
   const fd = new FormData(form);
   const payload = {};
-  ["name", "phone", "email", "title", "value", "currency", "source", "ownerId", "pipelineId", "stageId", "status", "lostReason", "expectedCloseDate"].forEach((key) => {
+  ["name", "phone", "email", "title", "value", "currency", "source", "ownerId", "pipelineId", "stageId", "expectedCloseDate"].forEach((key) => {
     payload[key] = String(fd.get(key) || "").trim();
   });
   return payload;
@@ -13368,6 +13482,63 @@ const completeNativeCrmActivity = async (activityId) => {
   } finally {
     nativeCrmState.saving = false;
   }
+};
+
+const runNativeCrmOpportunityAction = async (action, payload = {}) => {
+  const opportunityId = String(payload.id || nativeCrmState.drawer || "").trim();
+  if (!action || !opportunityId) return;
+  nativeCrmState.saving = true;
+  nativeCrmState.error = "";
+  renderNativeCrm();
+  try {
+    const res = await fetchWithAuth("/api/crm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, id: opportunityId, ...payload }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error || "crm_opportunity_action_failed");
+    nativeCrmState.loadedAt = 0;
+    nativeCrmState.closingDialog = null;
+    nativeCrmState.drawerMode = "view";
+    await loadNativeCrm({ force: true });
+    nativeCrmState.drawer = opportunityId;
+    await loadNativeCrmOpportunityDetail(opportunityId, { force: true });
+    reloadNativeCrmListIfNeeded();
+  } catch (error) {
+    const message = error?.message || "Não foi possível atualizar a oportunidade.";
+    if (nativeCrmState.closingDialog) nativeCrmState.closingDialog = { ...nativeCrmState.closingDialog, error: message };
+    else nativeCrmState.error = message;
+    renderNativeCrm();
+  } finally {
+    nativeCrmState.saving = false;
+    renderNativeCrm();
+  }
+};
+
+const submitNativeCrmClosingDialog = (button) => {
+  const type = String(button?.getAttribute("data-crm-close-submit") || "");
+  const modal = button?.closest(".native-crm-modal");
+  if (!(modal instanceof HTMLElement)) return;
+  const closedAt = crmDateTimeInputToIso(modal.querySelector("[data-crm-close-at]")?.value);
+  if (type === "won") {
+    const closedValue = Number(modal.querySelector("[data-crm-close-value]")?.value || 0);
+    if (!Number.isFinite(closedValue) || closedValue < 0) {
+      nativeCrmState.closingDialog = { type: "won", error: "Informe um valor de fechamento válido." };
+      renderNativeCrm();
+      return;
+    }
+    runNativeCrmOpportunityAction("mark_opportunity_won", { closedValue, closedAt }).catch(() => {});
+    return;
+  }
+  const lostReason = String(modal.querySelector("[data-crm-lost-reason]")?.value || "").trim();
+  const lostReasonNote = String(modal.querySelector("[data-crm-lost-note]")?.value || "").trim();
+  if (!lostReason) {
+    nativeCrmState.closingDialog = { type: "lost", error: "Selecione o motivo da perda." };
+    renderNativeCrm();
+    return;
+  }
+  runNativeCrmOpportunityAction("mark_opportunity_lost", { lostReason, lostReasonNote, closedAt }).catch(() => {});
 };
 
 const moveNativeCrmOpportunity = async (opportunityId, stageId) => {
@@ -38785,6 +38956,33 @@ document.addEventListener("click", (event) => {
       renderNativeCrm();
       return;
     }
+    const openCloseDialog = target.closest("[data-crm-close-dialog]");
+    if (openCloseDialog instanceof HTMLButtonElement) {
+      event.preventDefault();
+      const type = String(openCloseDialog.getAttribute("data-crm-close-dialog") || "") === "lost" ? "lost" : "won";
+      nativeCrmState.closingDialog = { type, error: "" };
+      renderNativeCrm();
+      return;
+    }
+    const cancelCloseDialog = target.closest("[data-crm-close-dialog-cancel]");
+    if (cancelCloseDialog instanceof HTMLElement) {
+      event.preventDefault();
+      nativeCrmState.closingDialog = null;
+      renderNativeCrm();
+      return;
+    }
+    const submitCloseDialog = target.closest("[data-crm-close-submit]");
+    if (submitCloseDialog instanceof HTMLButtonElement) {
+      event.preventDefault();
+      submitNativeCrmClosingDialog(submitCloseDialog);
+      return;
+    }
+    const reopenOpportunity = target.closest("[data-crm-reopen]");
+    if (reopenOpportunity instanceof HTMLButtonElement) {
+      event.preventDefault();
+      runNativeCrmOpportunityAction("reopen_opportunity").catch(() => {});
+      return;
+    }
     const filterToggle = target.closest("[data-crm-filter-toggle]");
     if (filterToggle instanceof HTMLButtonElement) {
       event.preventDefault();
@@ -38873,6 +39071,7 @@ document.addEventListener("click", (event) => {
       event.preventDefault();
       nativeCrmState.drawer = null;
       nativeCrmState.drawerMode = "view";
+      nativeCrmState.closingDialog = null;
       nativeCrmState.activityFormOpportunityId = "";
       nativeCrmState.error = "";
       renderNativeCrm();
@@ -39003,8 +39202,14 @@ document.addEventListener("keydown", (event) => {
     loadNativeCrmOpportunityDetail(nativeCrmState.drawer, { force: false }).catch(() => {});
   }
   if (event.key === "Escape" && nativeCrmState.drawer) {
+    if (nativeCrmState.closingDialog) {
+      nativeCrmState.closingDialog = null;
+      renderNativeCrm();
+      return;
+    }
     nativeCrmState.drawer = null;
     nativeCrmState.drawerMode = "view";
+    nativeCrmState.closingDialog = null;
     nativeCrmState.activityFormOpportunityId = "";
     renderNativeCrm();
   }

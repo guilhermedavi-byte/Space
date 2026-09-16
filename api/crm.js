@@ -24,6 +24,7 @@ const COLLECTIONS = {
 const VALID_STATUS = new Set(["open", "won", "lost"]);
 const VALID_ACTIVITY_TYPES = new Set(["task", "call", "meeting", "follow_up"]);
 const VALID_ACTIVITY_STATUS = new Set(["open", "completed", "cancelled"]);
+const VALID_LOST_REASONS = new Set(["price", "no_response", "timing", "competitor", "not_qualified", "no_need", "payment", "other"]);
 const CRM_SCOPE_ID = String(process.env.SPACE_CRM_SCOPE_ID || process.env.CRM_SCOPE_ID || "space-main").trim() || "space-main";
 
 const normalizeRole = (value) => {
@@ -182,6 +183,10 @@ const normalizeOpportunity = (row) => ({
   source: clean(row.source) || null,
   status: VALID_STATUS.has(clean(row.status)) ? clean(row.status) : "open",
   lostReason: clean(row.lostReason) || null,
+  lostReasonNote: clean(row.lostReasonNote) || null,
+  closedAt: toIso(row.closedAt),
+  closedBy: clean(row.closedBy) || null,
+  closedValue: numberOrNull(row.closedValue),
   expectedCloseDate: normalizeDateOnly(row.expectedCloseDate),
   nextActivityId: clean(row.nextActivityId) || null,
   nextActivityAt: toIso(row.nextActivityAt),
@@ -318,14 +323,42 @@ const activityTypeLabel = (type) => ({
   follow_up: "Follow-up",
 }[clean(type)] || "Atividade");
 
+const lostReasonLabel = (reason) => ({
+  price: "Preço",
+  no_response: "Sem resposta",
+  timing: "Momento inadequado",
+  competitor: "Concorrente",
+  not_qualified: "Não qualificado",
+  no_need: "Sem necessidade percebida",
+  payment: "Pagamento",
+  other: "Outro",
+}[clean(reason)] || clean(reason));
+
 const eventTitle = (event) => {
   if (event.type === "crm.opportunity.created") return "Oportunidade criada";
   if (event.type === "crm.opportunity.updated") return "Oportunidade editada";
+  if (event.type === "crm.opportunity.won") return "Oportunidade ganha";
+  if (event.type === "crm.opportunity.lost") return "Oportunidade perdida";
+  if (event.type === "crm.opportunity.reopened") return "Oportunidade reaberta";
   if (event.type === "crm.activity.created") return `${activityTypeLabel(event.payload?.activityType)} criada`;
   if (event.type === "crm.activity.updated") return `${activityTypeLabel(event.payload?.activityType)} atualizada`;
   if (event.type === "crm.activity.completed") return `${activityTypeLabel(event.payload?.activityType)} concluída`;
   if (event.type === "crm.activity.cancelled") return `${activityTypeLabel(event.payload?.activityType)} cancelada`;
   return clean(event.type).replace(/^crm\./, "");
+};
+
+const eventDescription = (event) => {
+  if (event.type === "crm.opportunity.won") {
+    const value = numberOrNull(event.payload?.closedValue);
+    const formatted = value == null ? "" : new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+    return formatted;
+  }
+  if (event.type === "crm.opportunity.lost") {
+    const reason = lostReasonLabel(event.payload?.lostReason);
+    return reason ? `Motivo: ${reason}` : "";
+  }
+  if (event.type === "crm.opportunity.reopened") return "";
+  return event.payload?.title || event.payload?.activityTitle || "";
 };
 
 const buildOpportunityTimeline = async (opportunityId) => {
@@ -345,7 +378,7 @@ const buildOpportunityTimeline = async (opportunityId) => {
       kind: "event",
       type: event.type,
       title: eventTitle(event),
-      description: event.payload?.title || event.payload?.activityTitle || "",
+      description: eventDescription(event),
       actorName: actorName(usersById, event.actorId),
       occurredAt: event.createdAt,
       payload: event.payload,
@@ -474,8 +507,6 @@ const handleUpdateOpportunity = async ({ session, body }) => {
     currency: normalizeCurrency(body.currency),
     ownerId: clean(body.ownerId) || null,
     source: clean(body.source) || null,
-    status: VALID_STATUS.has(clean(body.status)) ? clean(body.status) : opportunity.status,
-    lostReason: clean(body.lostReason) || null,
     expectedCloseDate: normalizeDateOnly(body.expectedCloseDate),
     pipelineId: requestedPipelineId,
     stageId: requestedStageId,
@@ -515,6 +546,112 @@ const handleUpdateOpportunity = async ({ session, body }) => {
   const committed = await commitWritesAsAdmin({ writes });
   if (!committed.ok) return { status: committed.status || 500, body: { error: "crm_update_failed" } };
   return { status: 200, body: { ok: true } };
+};
+
+const handleMarkOpportunityWon = async ({ session, body }) => {
+  const opportunity = await loadOpportunityForWrite(body.id || body.opportunityId);
+  if (!opportunity) return { status: 404, body: { error: "opportunity_not_found" } };
+  if (opportunity.status === "won") return { status: 409, body: { error: "opportunity_already_won" } };
+  if (opportunity.status === "lost") return { status: 409, body: { error: "reopen_before_mark_won" } };
+  const closedValue = numberOrNull(body.closedValue ?? body.value ?? opportunity.value);
+  if (closedValue == null || closedValue < 0) return { status: 400, body: { error: "invalid_closed_value" } };
+  const stamp = nowIso();
+  const closedAt = normalizeTimestamp(body.closedAt) || stamp;
+  const actor = clean(session.sub) || null;
+  const updated = {
+    ...opportunity,
+    status: "won",
+    closedAt,
+    closedBy: actor,
+    closedValue,
+    lostReason: null,
+    lostReasonNote: null,
+    updatedAt: stamp,
+  };
+  const writes = [
+    buildWrite(COLLECTIONS.opportunities, opportunity.id, updated),
+    eventWrite({
+      type: "crm.opportunity.won",
+      opportunityId: opportunity.id,
+      contactId: opportunity.contactId,
+      actorId: actor,
+      payload: { opportunityId: opportunity.id, previousStatus: opportunity.status, closedValue, closedAt, actor },
+      stamp,
+    }),
+  ];
+  const committed = await commitWritesAsAdmin({ writes });
+  if (!committed.ok) return { status: committed.status || 500, body: { error: "crm_mark_won_failed" } };
+  return { status: 200, body: { ok: true, status: "won", closedAt, closedValue } };
+};
+
+const handleMarkOpportunityLost = async ({ session, body }) => {
+  const opportunity = await loadOpportunityForWrite(body.id || body.opportunityId);
+  if (!opportunity) return { status: 404, body: { error: "opportunity_not_found" } };
+  if (opportunity.status === "lost") return { status: 409, body: { error: "opportunity_already_lost" } };
+  if (opportunity.status === "won") return { status: 409, body: { error: "reopen_before_mark_lost" } };
+  const lostReason = clean(body.lostReason);
+  if (!VALID_LOST_REASONS.has(lostReason)) return { status: 400, body: { error: "invalid_lost_reason" } };
+  const stamp = nowIso();
+  const closedAt = normalizeTimestamp(body.closedAt) || stamp;
+  const actor = clean(session.sub) || null;
+  const lostReasonNote = clean(body.lostReasonNote);
+  const updated = {
+    ...opportunity,
+    status: "lost",
+    closedAt,
+    closedBy: actor,
+    closedValue: null,
+    lostReason,
+    lostReasonNote: lostReasonNote || null,
+    updatedAt: stamp,
+  };
+  const writes = [
+    buildWrite(COLLECTIONS.opportunities, opportunity.id, updated),
+    eventWrite({
+      type: "crm.opportunity.lost",
+      opportunityId: opportunity.id,
+      contactId: opportunity.contactId,
+      actorId: actor,
+      payload: { opportunityId: opportunity.id, previousStatus: opportunity.status, lostReason, closedAt, actor },
+      stamp,
+    }),
+  ];
+  const committed = await commitWritesAsAdmin({ writes });
+  if (!committed.ok) return { status: committed.status || 500, body: { error: "crm_mark_lost_failed" } };
+  return { status: 200, body: { ok: true, status: "lost", closedAt, lostReason } };
+};
+
+const handleReopenOpportunity = async ({ session, body }) => {
+  const opportunity = await loadOpportunityForWrite(body.id || body.opportunityId);
+  if (!opportunity) return { status: 404, body: { error: "opportunity_not_found" } };
+  if (opportunity.status === "open") return { status: 409, body: { error: "opportunity_already_open" } };
+  const stamp = nowIso();
+  const actor = clean(session.sub) || null;
+  const previousStatus = opportunity.status;
+  const updated = {
+    ...opportunity,
+    status: "open",
+    closedAt: null,
+    closedBy: null,
+    closedValue: null,
+    lostReason: null,
+    lostReasonNote: null,
+    updatedAt: stamp,
+  };
+  const writes = [
+    buildWrite(COLLECTIONS.opportunities, opportunity.id, updated),
+    eventWrite({
+      type: "crm.opportunity.reopened",
+      opportunityId: opportunity.id,
+      contactId: opportunity.contactId,
+      actorId: actor,
+      payload: { opportunityId: opportunity.id, previousStatus, actor },
+      stamp,
+    }),
+  ];
+  const committed = await commitWritesAsAdmin({ writes });
+  if (!committed.ok) return { status: committed.status || 500, body: { error: "crm_reopen_failed" } };
+  return { status: 200, body: { ok: true, status: "open" } };
 };
 
 const handleCreateActivity = async ({ session, body }) => {
@@ -693,15 +830,21 @@ module.exports = async (req, res) => {
           ? await handleMoveOpportunity({ session: auth.session, body })
           : action === "update_opportunity"
             ? await handleUpdateOpportunity({ session: auth.session, body })
-            : action === "create_activity"
-              ? await handleCreateActivity({ session: auth.session, body })
-              : action === "update_activity"
-                ? await handleUpdateActivity({ session: auth.session, body })
-                : action === "complete_activity"
-                  ? await handleActivityStatusChange({ session: auth.session, body, status: "completed" })
-                  : action === "cancel_activity"
-                    ? await handleActivityStatusChange({ session: auth.session, body, status: "cancelled" })
-                    : { status: 400, body: { error: "invalid_action" } };
+            : action === "mark_opportunity_won"
+              ? await handleMarkOpportunityWon({ session: auth.session, body })
+              : action === "mark_opportunity_lost"
+                ? await handleMarkOpportunityLost({ session: auth.session, body })
+                : action === "reopen_opportunity"
+                  ? await handleReopenOpportunity({ session: auth.session, body })
+                  : action === "create_activity"
+                    ? await handleCreateActivity({ session: auth.session, body })
+                    : action === "update_activity"
+                      ? await handleUpdateActivity({ session: auth.session, body })
+                      : action === "complete_activity"
+                        ? await handleActivityStatusChange({ session: auth.session, body, status: "completed" })
+                        : action === "cancel_activity"
+                          ? await handleActivityStatusChange({ session: auth.session, body, status: "cancelled" })
+                          : { status: 400, body: { error: "invalid_action" } };
     return sendJson(res, result.status, result.body);
   } catch (error) {
     console.error("[crm] write failed", error);
