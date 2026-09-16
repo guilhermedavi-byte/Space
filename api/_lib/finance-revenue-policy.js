@@ -15,7 +15,8 @@ function movementOrigin(row){const s=row?.snapshot||{},pix=s.pixTransaction||s.p
 function rowNeedsConcilation(row){return !row?.linked||row?.status==='RECEIVED_IN_CASH'||AMBIGUOUS_BILLING_TYPES.has(String(row?.billing_type||row?.method||''));}
 function isRevenueRow(row,payment,caseDoc,originClassification){
  if(!row||row.deleted||CLOSED_STATUSES.has(row.status)||!REVENUE_STATUSES.has(row.status))return false;
- if(caseDoc?.classification||originClassification)return false;
+ if(caseDoc?.classification)return false;
+ if(originClassification&&(row.status==='RECEIVED_IN_CASH'||AMBIGUOUS_BILLING_TYPES.has(String(row.billing_type||row.method||''))))return false;
  if(Array.isArray(caseDoc?.allocations)&&caseDoc.allocations.some(a=>a?.revenue_recognized!==false))return true;
  if(row.status==='RECEIVED_IN_CASH')return Boolean(row.linked);
  if(AMBIGUOUS_BILLING_TYPES.has(String(row.billing_type||row.method||'')))return false;

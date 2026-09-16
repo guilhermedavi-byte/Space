@@ -52,3 +52,17 @@ test('saved exact-origin non-revenue rule excludes future entries from revenue',
  assert.equal(future.status,'classified');
  assert.equal(future.classification,'pf_receivables_transfer');
 });
+
+test('origin non-revenue rule does not exclude reliable Asaas customer charges with same name',()=>{
+ const rows=[
+  {asaas_payment_id:'pay_rule',status:'RECEIVED_IN_CASH',value:'100.00',due_date:'2026-09-01',billing_type:'PIX',deleted:false,linked:false,snapshot:{pixTransaction:{payer:{name:'Cliente A'}},payment_date:'2026-09-01'}},
+  {asaas_payment_id:'pay_charge',status:'RECEIVED',value:'250.00',due_date:'2026-09-02',billing_type:'PIX',deleted:false,linked:false,name:'Cliente A',snapshot:{payment_date:'2026-09-02'}},
+  {asaas_payment_id:'pay_confirmed',status:'CONFIRMED',value:'75.00',due_date:'2026-09-03',billing_type:'PIX',deleted:false,linked:false,name:'Cliente A',snapshot:{confirmed_date:'2026-09-03'}},
+ ];
+ const payments=[{asaas_payment_id:'pay_rule',value:'100.00',payment_date:'2026-09-01'},{asaas_payment_id:'pay_charge',value:'250.00',payment_date:'2026-09-02'},{asaas_payment_id:'pay_confirmed',value:'75.00',confirmed_date:'2026-09-03'}];
+ const cases=[{movement_id:'mov_pay_rule',origin:'Cliente A',classification:'pf_receivables_transfer',allocations:[]}];
+ const k=buildFinancials(rows,payments,cases,'2026-09');
+ assert.equal(k.faturamento,32500);
+ assert.equal(k.received,25000);
+ assert.equal(k.confirmed,7500);
+});
