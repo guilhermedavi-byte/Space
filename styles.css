@@ -28287,6 +28287,130 @@ button.automations-row:focus-visible,
   padding-bottom: 10px;
 }
 
+.native-crm-qualification {
+  border-bottom: 1px solid var(--crm-line);
+  padding-bottom: 12px;
+}
+
+.native-crm-qualification-pill {
+  border: 1px solid var(--crm-line);
+  border-radius: 999px;
+  padding: 3px 8px;
+  color: var(--crm-soft);
+  background: rgba(255,255,255,.035);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.native-crm-qualification[data-status="passed"] .native-crm-qualification-pill {
+  border-color: rgba(142,226,174,.22);
+  color: rgba(142,226,174,.96);
+  background: rgba(142,226,174,.06);
+}
+
+.native-crm-qualification[data-status="failed"] .native-crm-qualification-pill {
+  border-color: rgba(255,91,82,.24);
+  color: #ffaaa5;
+  background: rgba(255,91,82,.06);
+}
+
+.native-crm-qualification-score {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--crm-line);
+  border-radius: 8px;
+  padding: 10px;
+  background: rgba(255,255,255,.025);
+}
+
+.native-crm-qualification-score strong {
+  color: #fff;
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.native-crm-qualification-score strong span {
+  color: var(--crm-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.native-crm-qualification-score div {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.native-crm-qualification-score span,
+.native-crm-qualification-score em {
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 999px;
+  padding: 4px 7px;
+  color: rgba(255,255,255,.65);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.native-crm-qualification-score[data-status="passed"] em {
+  color: rgba(142,226,174,.96);
+}
+
+.native-crm-qualification-score[data-status="failed"] em {
+  color: #ffaaa5;
+}
+
+.native-crm-qualification-pending {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  color: var(--crm-muted);
+  font-size: 12px;
+}
+
+.native-crm-qualification-form {
+  display: grid;
+  gap: 10px;
+}
+
+.native-crm-qualification-question {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  border: 1px solid var(--crm-line);
+  border-radius: 8px;
+  padding: 10px;
+  background: rgba(255,255,255,.018);
+}
+
+.native-crm-qualification-question legend {
+  padding: 0 4px;
+  color: rgba(255,255,255,.82);
+  font-size: 12px;
+  font-weight: 720;
+  line-height: 1.3;
+}
+
+.native-crm-qualification-question label {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  color: rgba(255,255,255,.68);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.native-crm-qualification-question input {
+  margin-top: 2px;
+  accent-color: #ff5b52;
+}
+
 .native-crm-win-action {
   color: rgba(142, 226, 174, .94);
 }

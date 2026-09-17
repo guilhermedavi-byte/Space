@@ -13419,6 +13419,91 @@ const nativeCrmClosingSummaryHtml = (opportunity) => {
   `;
 };
 
+const nativeCrmQualificationStatusLabel = (run) => {
+  if (!run) return "Pendente";
+  if (run.status === "in_progress") return "Em andamento";
+  if (run.passed === true || run.status === "passed") return "Aprovado";
+  if (run.status === "failed") return "Reprovado";
+  return "Pendente";
+};
+
+const nativeCrmQualificationSummaryHtml = (run) => {
+  if (!run || run.status === "in_progress") return "";
+  const total = Number(run.totalScore || 0);
+  const fit = Number(run.fitScore || 0);
+  const intent = Number(run.intentScore || 0);
+  const status = nativeCrmQualificationStatusLabel(run);
+  return `
+    <div class="native-crm-qualification-score" data-status="${run.passed === true || run.status === "passed" ? "passed" : "failed"}">
+      <strong>${escapeHtml(String(total))}<span>/100</span></strong>
+      <div>
+        <span>Fit ${escapeHtml(String(fit))}/50</span>
+        <span>Intent ${escapeHtml(String(intent))}/50</span>
+        <em>${escapeHtml(status)}</em>
+      </div>
+    </div>
+  `;
+};
+
+const nativeCrmQualificationHtml = (opportunity) => {
+  const detail = getNativeCrmDetail(opportunity?.id);
+  const qual = detail.qualification;
+  if (detail.loading && !qual) {
+    return `
+      <section class="native-crm-form-section native-crm-qualification">
+        <h3>Qualificação</h3>
+        <div class="native-crm-muted">Carregando qualificação…</div>
+      </section>
+    `;
+  }
+  if (!qual?.version || !Array.isArray(qual.questions) || !qual.questions.length) {
+    return `
+      <section class="native-crm-form-section native-crm-qualification">
+        <h3>Qualificação</h3>
+        <div class="native-crm-muted">Configuração de qualificação indisponível.</div>
+      </section>
+    `;
+  }
+  const run = qual.latestRun || null;
+  const isInProgress = run?.status === "in_progress";
+  const answeredByQuestion = new Map((Array.isArray(qual.answers) ? qual.answers : []).map((answer) => [String(answer.questionId), String(answer.optionId)]));
+  const statusTone = run?.passed === true || run?.status === "passed" ? "passed" : run?.status === "failed" ? "failed" : "pending";
+  return `
+    <section class="native-crm-form-section native-crm-qualification" data-status="${escapeHtml(statusTone)}">
+      <div class="native-crm-section-head">
+        <h3>Qualificação</h3>
+        <span class="native-crm-qualification-pill">${escapeHtml(nativeCrmQualificationStatusLabel(run))}</span>
+      </div>
+      ${nativeCrmQualificationSummaryHtml(run)}
+      ${!run || run.status === "failed" || run.status === "passed" ? `
+        <div class="native-crm-qualification-pending">
+          <span>${run ? "Execute uma nova qualificação se o contexto do lead mudou." : "Questionário SDR obrigatório antes do avanço de etapa."}</span>
+          <button type="button" class="button button-solid button-small" data-crm-qualification-start="${escapeHtml(opportunity.id)}" ${nativeCrmState.saving ? "disabled" : ""}>Iniciar qualificação</button>
+        </div>
+      ` : ""}
+      ${isInProgress ? `
+        <div class="native-crm-qualification-form" data-crm-qualification-form data-crm-opportunity-id="${escapeHtml(opportunity.id)}" data-crm-qualification-run="${escapeHtml(run.id || "")}">
+          ${qual.questions.map((question) => `
+            <fieldset class="native-crm-qualification-question" data-question-id="${escapeHtml(question.id)}">
+              <legend>${escapeHtml(question.title)}</legend>
+              ${(question.options || []).map((option) => `
+                <label>
+                  <input type="radio" name="crm-qual-${escapeHtml(question.id)}" value="${escapeHtml(option.id)}" ${answeredByQuestion.get(question.id) === option.id ? "checked" : ""} />
+                  <span>${escapeHtml(option.label)}</span>
+                </label>
+              `).join("")}
+            </fieldset>
+          `).join("")}
+          <div class="native-crm-form-error" data-crm-qualification-error hidden></div>
+          <div class="native-crm-inline-actions">
+            <button type="button" class="button button-solid button-small" data-crm-qualification-submit ${nativeCrmState.saving ? "disabled" : ""}>Concluir qualificação</button>
+          </div>
+        </div>
+      ` : ""}
+    </section>
+  `;
+};
+
 const nativeCrmDealHeroHtml = (opportunity, { stageName, money }) => {
   const contact = opportunity?.contact || {};
   const primaryTitle = contact.name || opportunity?.title || "Lead sem nome";
@@ -13468,6 +13553,7 @@ const nativeCrmDrawerViewHtml = (opportunity, { pipelineName, stageName, money }
   return `
     ${nativeCrmDealHeroHtml(opportunity, { stageName, money })}
     ${nativeCrmDealActionsHtml(opportunity)}
+    ${nativeCrmQualificationHtml(opportunity)}
     ${nativeCrmNextActivityHtml(opportunity)}
     ${nativeCrmActivityFormHtml(opportunity)}
     ${nativeCrmOpenActivitiesHtml(opportunity)}
@@ -13881,6 +13967,7 @@ const loadNativeCrmOpportunityDetail = async (opportunityId, { force = false } =
       loadedAt: Date.now(),
       activities: Array.isArray(data?.activities) ? data.activities : [],
       timeline: Array.isArray(data?.timeline) ? data.timeline : [],
+      qualification: data?.qualification && typeof data.qualification === "object" ? data.qualification : null,
       error: "",
     };
   } catch (error) {
@@ -14015,6 +14102,77 @@ const completeNativeCrmActivity = async (activityId) => {
   }
 };
 
+const startNativeCrmQualification = async (opportunityId) => {
+  const id = String(opportunityId || "").trim();
+  if (!id) return;
+  nativeCrmState.saving = true;
+  nativeCrmState.error = "";
+  renderNativeCrm();
+  try {
+    const res = await fetchWithAuth("/api/crm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "start_qualification", id }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error || "qualification_start_failed");
+    nativeCrmState.loadedAt = 0;
+    await loadNativeCrm({ force: true });
+    nativeCrmState.drawer = id;
+    await loadNativeCrmOpportunityDetail(id, { force: true });
+  } catch (error) {
+    nativeCrmState.error = error?.message || "Não foi possível iniciar a qualificação.";
+    renderNativeCrm();
+  } finally {
+    nativeCrmState.saving = false;
+    renderNativeCrm();
+  }
+};
+
+const submitNativeCrmQualification = async (wrap) => {
+  if (!(wrap instanceof HTMLElement)) return;
+  const opportunityId = String(wrap.getAttribute("data-crm-opportunity-id") || "").trim();
+  const runId = String(wrap.getAttribute("data-crm-qualification-run") || "").trim();
+  const errorEl = wrap.querySelector("[data-crm-qualification-error]");
+  const questions = Array.from(wrap.querySelectorAll("[data-question-id]"));
+  const answers = [];
+  for (const questionEl of questions) {
+    const questionId = String(questionEl.getAttribute("data-question-id") || "").trim();
+    const selected = questionEl.querySelector('input[type="radio"]:checked');
+    if (!questionId || !(selected instanceof HTMLInputElement)) {
+      if (errorEl instanceof HTMLElement) {
+        errorEl.textContent = "Responda todas as perguntas antes de concluir.";
+        errorEl.hidden = false;
+      }
+      return;
+    }
+    answers.push({ questionId, optionId: String(selected.value || "").trim() });
+  }
+  nativeCrmState.saving = true;
+  nativeCrmState.error = "";
+  renderNativeCrm();
+  try {
+    const res = await fetchWithAuth("/api/crm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "complete_qualification", id: opportunityId, runId, answers }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error || "qualification_complete_failed");
+    nativeCrmState.loadedAt = 0;
+    await loadNativeCrm({ force: true });
+    nativeCrmState.drawer = opportunityId;
+    await loadNativeCrmOpportunityDetail(opportunityId, { force: true });
+    reloadNativeCrmListIfNeeded();
+  } catch (error) {
+    nativeCrmState.error = error?.message || "Não foi possível concluir a qualificação.";
+    renderNativeCrm();
+  } finally {
+    nativeCrmState.saving = false;
+    renderNativeCrm();
+  }
+};
+
 const runNativeCrmOpportunityAction = async (action, payload = {}) => {
   const opportunityId = String(payload.id || nativeCrmState.drawer || "").trim();
   if (!action || !opportunityId) return;
@@ -14088,12 +14246,26 @@ const moveNativeCrmOpportunity = async (opportunityId, stageId) => {
       body: JSON.stringify({ action: "move_opportunity", id: opportunityId, stageId }),
     });
     const data = await res.json().catch(() => null);
-    if (!res.ok) throw new Error(data?.error || "crm_stage_change_failed");
+    if (!res.ok) {
+      const error = new Error(data?.error || "crm_stage_change_failed");
+      error.code = data?.error || "";
+      error.payload = data || null;
+      throw error;
+    }
     nativeCrmState.loadedAt = 0;
     await loadNativeCrm({ force: true });
   } catch (error) {
     opportunity.stageId = previousStageId;
-    nativeCrmState.error = "Movimento não salvo. A etapa anterior foi restaurada.";
+    if (error?.code === "qualification_required" || error?.code === "qualification_failed") {
+      nativeCrmState.error = error.code === "qualification_failed"
+        ? "Lead reprovado na qualificação. A etapa anterior foi restaurada."
+        : "Qualificação obrigatória antes de avançar. A etapa anterior foi restaurada.";
+      nativeCrmState.drawer = opportunityId;
+      nativeCrmState.drawerMode = "view";
+      loadNativeCrmOpportunityDetail(opportunityId, { force: true }).catch(() => {});
+    } else {
+      nativeCrmState.error = "Movimento não salvo. A etapa anterior foi restaurada.";
+    }
     renderNativeCrm();
   }
 };
@@ -39748,6 +39920,19 @@ document.addEventListener("click", (event) => {
     if (completeActivity instanceof HTMLButtonElement) {
       event.preventDefault();
       completeNativeCrmActivity(String(completeActivity.getAttribute("data-crm-activity-complete") || "")).catch(() => {});
+      return;
+    }
+    const startQualification = target.closest("[data-crm-qualification-start]");
+    if (startQualification instanceof HTMLButtonElement) {
+      event.preventDefault();
+      startNativeCrmQualification(String(startQualification.getAttribute("data-crm-qualification-start") || nativeCrmState.drawer || "")).catch(() => {});
+      return;
+    }
+    const submitQualification = target.closest("[data-crm-qualification-submit]");
+    if (submitQualification instanceof HTMLButtonElement) {
+      event.preventDefault();
+      const wrap = submitQualification.closest("[data-crm-qualification-form]");
+      if (wrap instanceof HTMLElement) submitNativeCrmQualification(wrap).catch(() => {});
       return;
     }
     const closeDrawer = target.closest("[data-crm-drawer-close]");

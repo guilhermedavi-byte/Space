@@ -9,6 +9,7 @@ const {
 } = require("./_lib/firestore-admin");
 const { PROJECT_ID, encodeFields } = require("./_lib/firestore-rest");
 const crmService = require("./_lib/crm-service");
+const qualification = require("./_lib/crm-qualification");
 
 const COLLECTIONS = {
   pipelines: "crmPipelines",
@@ -19,6 +20,12 @@ const COLLECTIONS = {
   stageHistory: "crmOpportunityStageHistory",
   events: "crmEvents",
   users: "users",
+  qualificationTemplates: "crmQualificationTemplates",
+  qualificationVersions: "crmQualificationVersions",
+  qualificationQuestions: "crmQualificationQuestions",
+  qualificationOptions: "crmQualificationOptions",
+  qualificationRuns: "crmQualificationRuns",
+  qualificationAnswers: "crmQualificationAnswers",
 };
 
 const VALID_STATUS = new Set(["open", "won", "lost"]);
@@ -161,6 +168,8 @@ const normalizeStage = (row) => ({
   pipelineId: clean(row.pipelineId),
   name: clean(row.name),
   position: Number(row.position) || 0,
+  requiresQualification: row.requiresQualification === true,
+  qualificationGate: clean(row.qualificationGate) || null,
   createdAt: toIso(row.createdAt),
   updatedAt: toIso(row.updatedAt),
 });
@@ -201,6 +210,12 @@ const normalizeOpportunity = (row) => ({
   nextActivityAt: toIso(row.nextActivityAt),
   nextActivityType: clean(row.nextActivityType) || null,
   nextActivityTitle: clean(row.nextActivityTitle) || null,
+  latestQualificationRunId: clean(row.latestQualificationRunId) || null,
+  qualificationStatus: clean(row.qualificationStatus) || null,
+  qualificationScore: numberOrNull(row.qualificationScore),
+  qualificationFitScore: numberOrNull(row.qualificationFitScore),
+  qualificationIntentScore: numberOrNull(row.qualificationIntentScore),
+  qualificationPassed: row.qualificationPassed === true,
   searchTitle: normalizeSearchText(row.searchTitle || row.title),
   createdAt: toIso(row.createdAt),
   updatedAt: toIso(row.updatedAt),
@@ -332,6 +347,90 @@ const loadCrmStructure = async () => {
   };
 };
 
+const normalizeQualificationRows = (rows, normalize) => rows.map((row) => normalize(row, CRM_SCOPE_ID)).filter((row) => row.id && matchesCrmScope(row));
+
+const loadPublishedSdrQualification = async () => {
+  const [templatesRaw, versionsRaw, questionsRaw, optionsRaw] = await Promise.all([
+    listCollectionAsAdmin(COLLECTIONS.qualificationTemplates, { maxPages: 5 }).catch(() => []),
+    listCollectionAsAdmin(COLLECTIONS.qualificationVersions, { maxPages: 5 }).catch(() => []),
+    listCollectionAsAdmin(COLLECTIONS.qualificationQuestions, { maxPages: 10 }).catch(() => []),
+    listCollectionAsAdmin(COLLECTIONS.qualificationOptions, { maxPages: 20 }).catch(() => []),
+  ]);
+  return qualification.selectPublishedSdrConfig({
+    templates: normalizeQualificationRows(templatesRaw, qualification.normalizeTemplate),
+    versions: normalizeQualificationRows(versionsRaw, qualification.normalizeVersion),
+    questions: normalizeQualificationRows(questionsRaw, qualification.normalizeQuestion),
+    options: normalizeQualificationRows(optionsRaw, qualification.normalizeOption),
+  });
+};
+
+const ensurePublishedSdrQualification = async (actorId = "") => {
+  const existing = await loadPublishedSdrQualification();
+  if (existing) return existing;
+  const stamp = nowIso();
+  const seed = qualification.buildSdrSeedRows({ scopeId: CRM_SCOPE_ID, stamp, actorId });
+  const writes = [
+    buildWrite(COLLECTIONS.qualificationTemplates, seed.template.id, seed.template, { createOnly: true }),
+    buildWrite(COLLECTIONS.qualificationVersions, seed.version.id, seed.version, { createOnly: true }),
+    ...seed.questions.map((row) => buildWrite(COLLECTIONS.qualificationQuestions, row.id, row, { createOnly: true })),
+    ...seed.options.map((row) => buildWrite(COLLECTIONS.qualificationOptions, row.id, row, { createOnly: true })),
+  ];
+  const committed = await commitWritesAsAdmin({ writes });
+  const seeded = await loadPublishedSdrQualification();
+  if (seeded) return seeded;
+  if (!committed.ok) return null;
+  return seeded;
+};
+
+const loadQualificationRunsForOpportunity = async (opportunityId) => {
+  const rows = await listCollectionAsAdmin(COLLECTIONS.qualificationRuns, { maxPages: 20 }).catch(() => []);
+  return normalizeQualificationRows(rows, qualification.normalizeRun)
+    .filter((run) => run.opportunityId === opportunityId);
+};
+
+const loadQualificationAnswersForRun = async (runId) => {
+  const rows = await listCollectionAsAdmin(COLLECTIONS.qualificationAnswers, { maxPages: 20 }).catch(() => []);
+  return normalizeQualificationRows(rows, qualification.normalizeAnswer)
+    .filter((answer) => answer.runId === runId)
+    .sort((left, right) => Number(left.position || 0) - Number(right.position || 0));
+};
+
+const loadOpportunityQualificationDetail = async (opportunity) => {
+  const config = await ensurePublishedSdrQualification();
+  if (!config) return { template: null, version: null, questions: [], latestRun: null, answers: [] };
+  const runs = await loadQualificationRunsForOpportunity(opportunity.id);
+  const latestRun = qualification.latestRun(runs);
+  const answers = latestRun ? await loadQualificationAnswersForRun(latestRun.id) : [];
+  const optionsByQuestionId = new Map();
+  config.options.forEach((option) => {
+    if (!optionsByQuestionId.has(option.questionId)) optionsByQuestionId.set(option.questionId, []);
+    optionsByQuestionId.get(option.questionId).push(option);
+  });
+  return {
+    template: config.template,
+    version: config.version,
+    questions: config.questions.map((question) => ({
+      ...question,
+      options: (optionsByQuestionId.get(question.id) || []).slice().sort((left, right) => Number(left.position || 0) - Number(right.position || 0)),
+    })),
+    latestRun,
+    answers,
+  };
+};
+
+const stageGateFailure = async ({ opportunity, toStageId, stages }) => {
+  const runs = await loadQualificationRunsForOpportunity(opportunity.id);
+  const gate = qualification.qualificationMoveGate({ opportunity, toStageId, stages, runs });
+  if (gate.ok) return null;
+  return {
+    status: 409,
+    body: {
+      error: gate.error,
+      qualification: gate.run ? qualification.qualificationSummaryFromRun(gate.run) : null,
+    },
+  };
+};
+
 const assertUniqueStageNames = (stages, pipelineId, { ignoreStageId = "", candidateName = "" } = {}) => {
   const seen = new Set();
   const rows = stages
@@ -393,6 +492,8 @@ const eventTitle = (event) => {
   if (event.type === "crm.activity.updated") return `${activityTypeLabel(event.payload?.activityType)} atualizada`;
   if (event.type === "crm.activity.completed") return `${activityTypeLabel(event.payload?.activityType)} concluída`;
   if (event.type === "crm.activity.cancelled") return `${activityTypeLabel(event.payload?.activityType)} cancelada`;
+  if (event.type === "crm.qualification.started") return "Qualificação iniciada";
+  if (event.type === "crm.qualification.completed") return "Qualificação concluída";
   return clean(event.type).replace(/^crm\./, "");
 };
 
@@ -407,6 +508,12 @@ const eventDescription = (event) => {
     return reason ? `Motivo: ${reason}` : "";
   }
   if (event.type === "crm.opportunity.reopened") return "";
+  if (event.type === "crm.qualification.completed") {
+    const score = Number(event.payload?.totalScore);
+    const scoreLabel = Number.isFinite(score) ? `${score}/100` : "";
+    const status = event.payload?.passed === true ? "Aprovado" : "Reprovado";
+    return [scoreLabel, status].filter(Boolean).join(" · ");
+  }
   return event.payload?.title || event.payload?.activityTitle || "";
 };
 
@@ -451,11 +558,12 @@ const buildOpportunityTimeline = async (opportunityId) => {
 const loadOpportunityDetail = async (opportunityId) => {
   const opportunity = await loadOpportunityForWrite(opportunityId);
   if (!opportunity) return { status: 404, body: { error: "opportunity_not_found" } };
-  const [activities, timeline] = await Promise.all([
+  const [activities, timeline, qualificationDetail] = await Promise.all([
     loadActivitiesForOpportunity(opportunity.id),
     buildOpportunityTimeline(opportunity.id),
+    loadOpportunityQualificationDetail(opportunity),
   ]);
-  return { status: 200, body: { opportunityId: opportunity.id, activities, timeline, generatedAt: nowIso() } };
+  return { status: 200, body: { opportunityId: opportunity.id, activities, timeline, qualification: qualificationDetail, generatedAt: nowIso() } };
 };
 
 const handleCreateOpportunityViaService = async ({ session, body }) => {
@@ -485,6 +593,8 @@ const handleMoveOpportunity = async ({ session, body }) => {
   if (!targetPipeline?.isActive) return { status: 400, body: { error: "invalid_pipeline" } };
   if (!targetStage || targetStage.pipelineId !== opportunity.pipelineId) return { status: 400, body: { error: "invalid_stage" } };
   if (opportunity.stageId === toStageId) return { status: 200, body: { ok: true, unchanged: true } };
+  const blocked = await stageGateFailure({ opportunity, toStageId, stages });
+  if (blocked) return blocked;
 
   const stamp = nowIso();
   const historyId = newId("stagehist");
@@ -540,6 +650,10 @@ const handleUpdateOpportunity = async ({ session, body }) => {
     if (!targetPipeline?.isActive) return { status: 400, body: { error: "invalid_pipeline" } };
     const targetStage = stages.find((stage) => stage.id === requestedStageId);
     if (!targetStage || targetStage.pipelineId !== requestedPipelineId) return { status: 400, body: { error: "invalid_stage" } };
+    if (stageChanged && requestedPipelineId === opportunity.pipelineId) {
+      const blocked = await stageGateFailure({ opportunity, toStageId: requestedStageId, stages });
+      if (blocked) return blocked;
+    }
   }
   let contact = null;
   if (opportunity.contactId) {
@@ -606,6 +720,164 @@ const handleUpdateOpportunity = async ({ session, body }) => {
   const committed = await commitWritesAsAdmin({ writes });
   if (!committed.ok) return { status: committed.status || 500, body: { error: "crm_update_failed" } };
   return { status: 200, body: { ok: true } };
+};
+
+const handleStartQualification = async ({ session, body }) => {
+  const opportunity = await loadOpportunityForWrite(body.id || body.opportunityId);
+  if (!opportunity) return { status: 404, body: { error: "opportunity_not_found" } };
+  const config = await ensurePublishedSdrQualification(clean(session.sub));
+  if (!config) return { status: 500, body: { error: "qualification_config_unavailable" } };
+  const existing = qualification.latestRun((await loadQualificationRunsForOpportunity(opportunity.id)).filter((run) => run.status === "in_progress"));
+  if (existing) return { status: 200, body: { ok: true, runId: existing.id, unchanged: true } };
+  const stamp = nowIso();
+  const runId = newId("qualrun");
+  const actor = clean(session.sub) || null;
+  const run = {
+    id: runId,
+    scopeId: CRM_SCOPE_ID,
+    opportunityId: opportunity.id,
+    contactId: opportunity.contactId || null,
+    templateId: config.template.id,
+    versionId: config.version.id,
+    status: "in_progress",
+    fitScore: 0,
+    intentScore: 0,
+    totalScore: 0,
+    hardGatesPassed: true,
+    passed: false,
+    startedBy: actor,
+    completedBy: null,
+    startedAt: stamp,
+    completedAt: null,
+    thresholdSnapshot: qualification.thresholdSnapshot(config.version),
+    versionNumber: config.version.versionNumber,
+    createdAt: stamp,
+    updatedAt: stamp,
+  };
+  const updatedOpportunity = {
+    ...opportunity,
+    latestQualificationRunId: run.id,
+    qualificationStatus: "in_progress",
+    qualificationScore: 0,
+    qualificationFitScore: 0,
+    qualificationIntentScore: 0,
+    qualificationPassed: false,
+    updatedAt: stamp,
+  };
+  const committed = await commitWritesAsAdmin({ writes: [
+    buildWrite(COLLECTIONS.qualificationRuns, run.id, run, { createOnly: true }),
+    buildWrite(COLLECTIONS.opportunities, opportunity.id, updatedOpportunity),
+    eventWrite({
+      type: "crm.qualification.started",
+      opportunityId: opportunity.id,
+      contactId: opportunity.contactId,
+      actorId: actor,
+      payload: { runId: run.id, templateId: config.template.id, versionId: config.version.id, versionNumber: config.version.versionNumber },
+      stamp,
+    }),
+  ] });
+  if (!committed.ok) return { status: committed.status || 500, body: { error: "qualification_start_failed" } };
+  return { status: 201, body: { ok: true, runId: run.id } };
+};
+
+const handleCompleteQualification = async ({ session, body }) => {
+  const opportunity = await loadOpportunityForWrite(body.id || body.opportunityId);
+  if (!opportunity) return { status: 404, body: { error: "opportunity_not_found" } };
+  const config = await ensurePublishedSdrQualification(clean(session.sub));
+  if (!config) return { status: 500, body: { error: "qualification_config_unavailable" } };
+  const submittedAnswers = Array.isArray(body.answers) ? body.answers : [];
+  const score = qualification.scoreQualification({
+    version: config.version,
+    questions: config.questions,
+    options: config.options,
+    answers: submittedAnswers,
+  });
+  if (!score.questionnaireComplete) {
+    return { status: 400, body: { error: "qualification_incomplete", missingQuestionIds: score.missingQuestionIds } };
+  }
+  const runs = await loadQualificationRunsForOpportunity(opportunity.id);
+  const requestedRunId = clean(body.runId);
+  const currentRun = (requestedRunId ? runs.find((run) => run.id === requestedRunId && run.status === "in_progress") : null)
+    || qualification.latestRun(runs.filter((run) => run.status === "in_progress"));
+  const stamp = nowIso();
+  const actor = clean(session.sub) || null;
+  const runId = currentRun?.id || newId("qualrun");
+  const baseRun = currentRun || {
+    id: runId,
+    scopeId: CRM_SCOPE_ID,
+    opportunityId: opportunity.id,
+    contactId: opportunity.contactId || null,
+    templateId: config.template.id,
+    versionId: config.version.id,
+    startedBy: actor,
+    startedAt: stamp,
+    createdAt: stamp,
+  };
+  const completedRun = {
+    ...baseRun,
+    scopeId: CRM_SCOPE_ID,
+    opportunityId: opportunity.id,
+    contactId: opportunity.contactId || null,
+    templateId: config.template.id,
+    versionId: config.version.id,
+    status: score.status,
+    fitScore: score.fitScore,
+    intentScore: score.intentScore,
+    totalScore: score.totalScore,
+    hardGatesPassed: score.hardGatesPassed,
+    passed: score.passed,
+    completedBy: actor,
+    completedAt: stamp,
+    thresholdSnapshot: score.thresholdSnapshot,
+    versionNumber: config.version.versionNumber,
+    updatedAt: stamp,
+  };
+  const answerWrites = score.answerRows.map((answer) => {
+    const id = `${runId}_${answer.questionId}`;
+    return buildWrite(COLLECTIONS.qualificationAnswers, id, {
+      id,
+      scopeId: CRM_SCOPE_ID,
+      runId,
+      opportunityId: opportunity.id,
+      ...answer,
+      createdAt: stamp,
+    });
+  });
+  const updatedOpportunity = {
+    ...opportunity,
+    latestQualificationRunId: runId,
+    qualificationStatus: completedRun.status,
+    qualificationScore: completedRun.totalScore,
+    qualificationFitScore: completedRun.fitScore,
+    qualificationIntentScore: completedRun.intentScore,
+    qualificationPassed: completedRun.passed,
+    updatedAt: stamp,
+  };
+  const committed = await commitWritesAsAdmin({ writes: [
+    buildWrite(COLLECTIONS.qualificationRuns, runId, completedRun, currentRun ? {} : { createOnly: true }),
+    ...answerWrites,
+    buildWrite(COLLECTIONS.opportunities, opportunity.id, updatedOpportunity),
+    eventWrite({
+      type: "crm.qualification.completed",
+      opportunityId: opportunity.id,
+      contactId: opportunity.contactId,
+      actorId: actor,
+      payload: {
+        runId,
+        templateId: config.template.id,
+        versionId: config.version.id,
+        versionNumber: config.version.versionNumber,
+        fitScore: score.fitScore,
+        intentScore: score.intentScore,
+        totalScore: score.totalScore,
+        passed: score.passed,
+        hardGatesPassed: score.hardGatesPassed,
+      },
+      stamp,
+    }),
+  ] });
+  if (!committed.ok) return { status: committed.status || 500, body: { error: "qualification_complete_failed" } };
+  return { status: 200, body: { ok: true, runId, qualification: qualification.qualificationSummaryFromRun(completedRun) } };
 };
 
 const handleMarkOpportunityWon = async ({ session, body }) => {
@@ -735,6 +1007,8 @@ const handleCreatePipeline = async ({ session, body }) => {
     pipelineId: id,
     name: stageName,
     position: index + 1,
+    requiresQualification: index === 0,
+    qualificationGate: index === 0 ? qualification.QUALIFICATION_TYPE_SDR : null,
     createdAt: stamp,
     updatedAt: stamp,
   }));
@@ -1080,39 +1354,43 @@ module.exports = async (req, res) => {
           ? await handleMoveOpportunity({ session: auth.session, body })
           : action === "update_opportunity"
             ? await handleUpdateOpportunity({ session: auth.session, body })
-            : action === "mark_opportunity_won"
-              ? await handleMarkOpportunityWon({ session: auth.session, body })
-              : action === "mark_opportunity_lost"
-                ? await handleMarkOpportunityLost({ session: auth.session, body })
-                : action === "reopen_opportunity"
-                  ? await handleReopenOpportunity({ session: auth.session, body })
-                  : action === "create_pipeline"
-                    ? await handleCreatePipeline({ session: auth.session, body })
-                    : action === "update_pipeline"
-                      ? await handleUpdatePipeline({ session: auth.session, body })
-                      : action === "set_default_pipeline"
-                        ? await handleSetDefaultPipeline({ session: auth.session, body })
-                        : action === "deactivate_pipeline"
-                          ? await handleDeactivatePipeline({ session: auth.session, body })
-                          : action === "reactivate_pipeline"
-                            ? await handleReactivatePipeline({ session: auth.session, body })
-                            : action === "create_stage"
-                              ? await handleCreateStage({ session: auth.session, body })
-                              : action === "update_stage"
-                                ? await handleUpdateStage({ session: auth.session, body })
-                                : action === "reorder_stages"
-                                  ? await handleReorderStages({ session: auth.session, body })
-                                  : action === "delete_stage"
-                                    ? await handleDeleteStage({ session: auth.session, body })
-                                    : action === "create_activity"
-                                      ? await handleCreateActivity({ session: auth.session, body })
-                                      : action === "update_activity"
-                                        ? await handleUpdateActivity({ session: auth.session, body })
-                                        : action === "complete_activity"
-                                          ? await handleActivityStatusChange({ session: auth.session, body, status: "completed" })
-                                          : action === "cancel_activity"
-                                            ? await handleActivityStatusChange({ session: auth.session, body, status: "cancelled" })
-                                            : { status: 400, body: { error: "invalid_action" } };
+            : action === "start_qualification"
+              ? await handleStartQualification({ session: auth.session, body })
+              : action === "complete_qualification"
+                ? await handleCompleteQualification({ session: auth.session, body })
+                : action === "mark_opportunity_won"
+                  ? await handleMarkOpportunityWon({ session: auth.session, body })
+                  : action === "mark_opportunity_lost"
+                    ? await handleMarkOpportunityLost({ session: auth.session, body })
+                    : action === "reopen_opportunity"
+                      ? await handleReopenOpportunity({ session: auth.session, body })
+                      : action === "create_pipeline"
+                        ? await handleCreatePipeline({ session: auth.session, body })
+                        : action === "update_pipeline"
+                          ? await handleUpdatePipeline({ session: auth.session, body })
+                          : action === "set_default_pipeline"
+                            ? await handleSetDefaultPipeline({ session: auth.session, body })
+                            : action === "deactivate_pipeline"
+                              ? await handleDeactivatePipeline({ session: auth.session, body })
+                              : action === "reactivate_pipeline"
+                                ? await handleReactivatePipeline({ session: auth.session, body })
+                                : action === "create_stage"
+                                  ? await handleCreateStage({ session: auth.session, body })
+                                  : action === "update_stage"
+                                    ? await handleUpdateStage({ session: auth.session, body })
+                                    : action === "reorder_stages"
+                                      ? await handleReorderStages({ session: auth.session, body })
+                                      : action === "delete_stage"
+                                        ? await handleDeleteStage({ session: auth.session, body })
+                                        : action === "create_activity"
+                                          ? await handleCreateActivity({ session: auth.session, body })
+                                          : action === "update_activity"
+                                            ? await handleUpdateActivity({ session: auth.session, body })
+                                            : action === "complete_activity"
+                                              ? await handleActivityStatusChange({ session: auth.session, body, status: "completed" })
+                                              : action === "cancel_activity"
+                                                ? await handleActivityStatusChange({ session: auth.session, body, status: "cancelled" })
+                                                : { status: 400, body: { error: "invalid_action" } };
     return sendJson(res, result.status, result.body);
   } catch (error) {
     console.error("[crm] write failed", error);

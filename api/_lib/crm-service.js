@@ -7,6 +7,7 @@ const {
 } = require("./firestore-admin");
 const { PROJECT_ID, encodeFields } = require("./firestore-rest");
 const { identitiesMatch, normalizeCrmContactIdentity, stableIdFromKey } = require("./crm-identity");
+const qualification = require("./crm-qualification");
 
 const COLLECTIONS = {
   pipelines: "crmPipelines",
@@ -16,6 +17,12 @@ const COLLECTIONS = {
   stageHistory: "crmOpportunityStageHistory",
   events: "crmEvents",
   users: "users",
+  qualificationTemplates: "crmQualificationTemplates",
+  qualificationVersions: "crmQualificationVersions",
+  qualificationQuestions: "crmQualificationQuestions",
+  qualificationOptions: "crmQualificationOptions",
+  qualificationRuns: "crmQualificationRuns",
+  qualificationAnswers: "crmQualificationAnswers",
 };
 
 const DEFAULT_PIPELINE_ID = "commercial";
@@ -92,6 +99,8 @@ const normalizeStage = (row) => ({
   pipelineId: clean(row.pipelineId),
   name: clean(row.name),
   position: Number(row.position) || 0,
+  requiresQualification: row.requiresQualification === true,
+  qualificationGate: clean(row.qualificationGate) || null,
   createdAt: toIso(row.createdAt),
   updatedAt: toIso(row.updatedAt),
 });
@@ -132,6 +141,12 @@ const normalizeOpportunity = (row) => ({
   nextActivityAt: toIso(row.nextActivityAt),
   nextActivityType: clean(row.nextActivityType) || null,
   nextActivityTitle: clean(row.nextActivityTitle) || null,
+  latestQualificationRunId: clean(row.latestQualificationRunId) || null,
+  qualificationStatus: clean(row.qualificationStatus) || null,
+  qualificationScore: numberOrNull(row.qualificationScore),
+  qualificationFitScore: numberOrNull(row.qualificationFitScore),
+  qualificationIntentScore: numberOrNull(row.qualificationIntentScore),
+  qualificationPassed: row.qualificationPassed === true,
   automationIdempotencyKey: clean(row.automationIdempotencyKey) || null,
   searchTitle: normalizeSearchText(row.searchTitle || row.title),
   createdAt: toIso(row.createdAt),
@@ -307,15 +322,29 @@ const ensureDefaultPipeline = async () => {
       pipelineId: active.id,
       name,
       position: index + 1,
+      requiresQualification: index === 0,
+      qualificationGate: index === 0 ? qualification.QUALIFICATION_TYPE_SDR : null,
       createdAt: stamp,
       updatedAt: stamp,
     })).filter((stage) => !existingStageIds.has(stage.id));
+    const hasQualificationGate = scopedStages.concat(missingStages).some(qualification.stageRequiresQualification);
+    const gateStage = scopedStages
+      .slice()
+      .sort((left, right) => Number(left.position || 0) - Number(right.position || 0))[0] || null;
+    const gateWrites = !hasQualificationGate && gateStage
+      ? [buildWrite(COLLECTIONS.stages, gateStage.id, {
+          ...gateStage,
+          requiresQualification: true,
+          qualificationGate: qualification.QUALIFICATION_TYPE_SDR,
+          updatedAt: stamp,
+        })]
+      : [];
     const defaultWrites = activePipelines.some((row) => row.isDefault)
       ? []
       : scopedPipelines.map((pipeline) => buildWrite(COLLECTIONS.pipelines, pipeline.id, { ...pipeline, isDefault: pipeline.id === active.id, updatedAt: stamp }));
-    if (!missingStages.length && !defaultWrites.length) return { pipelines: scopedPipelines, stages: scopedStages };
+    if (!missingStages.length && !defaultWrites.length && !gateWrites.length) return { pipelines: scopedPipelines, stages: scopedStages };
     const committed = await commitWritesAsAdmin({
-      writes: [...missingStages.map((stage) => buildWrite(COLLECTIONS.stages, stage.id, stage, { createOnly: true })), ...defaultWrites],
+      writes: [...missingStages.map((stage) => buildWrite(COLLECTIONS.stages, stage.id, stage, { createOnly: true })), ...defaultWrites, ...gateWrites],
     });
     if (!committed.ok && !isAlreadyExistsResponse(committed)) throw Object.assign(new Error("crm_bootstrap_failed"), { status: committed.status || 500 });
     return ensureDefaultPipeline();
@@ -329,6 +358,8 @@ const ensureDefaultPipeline = async () => {
     pipelineId: pipeline.id,
     name,
     position: index + 1,
+    requiresQualification: index === 0,
+    qualificationGate: index === 0 ? qualification.QUALIFICATION_TYPE_SDR : null,
     createdAt: stamp,
     updatedAt: stamp,
   }));
