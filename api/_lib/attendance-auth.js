@@ -13,11 +13,12 @@ const requireAttendanceAuth = async (req, capability, resolveAuth = resolveAdmin
   const session = getSessionFromRequest(req);
   const sessionRole = normalizeRole(session?.role);
   const sessionUid = String(session?.sub || '').trim();
-  if (sessionUid && ROLE_CAPABILITIES[sessionRole]?.has(capability)) return { uid: sessionUid, role: sessionRole };
+  if (sessionUid && (capability === 'attendance.view' || ROLE_CAPABILITIES[sessionRole]?.has(capability))) return { uid: sessionUid, role: sessionRole };
 
   const auth = await resolveAuth(req, { logPrefix: '[attendance]' });
   if (!auth?.ok) fail('unauthenticated', 401);
-  if (auth.profile?.active !== true || !ROLE_CAPABILITIES[auth.session?.role]?.has(capability)) fail('attendance_forbidden', 403);
+  if (auth.profile?.active !== true) fail('attendance_forbidden', 403);
+  if (capability !== 'attendance.view' && !ROLE_CAPABILITIES[auth.session?.role]?.has(capability)) fail('attendance_forbidden', 403);
   const uid = auth.decoded?.uid;
   if (!uid || uid !== auth.session?.sub || uid !== auth.profile?.user?.id) fail('unauthenticated', 401);
   return { uid, role: auth.session.role };
