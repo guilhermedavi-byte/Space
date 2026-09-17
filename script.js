@@ -19989,7 +19989,7 @@ const loadSdrPanelData = async ({ force = false } = {}) => {
 const normalizeSdrWriteErrorMessage = (error) => {
   const raw = String(error?.message || error?.code || error || "").trim();
   if (!raw) return "Não foi possível salvar o registro. Tente novamente.";
-  if (raw === "timeout") return "O registro demorou demais e não foi salvo. Tente novamente.";
+  if (raw === "timeout") return "O registro ainda está sendo confirmado. Aguarde alguns segundos e atualize antes de tentar novamente.";
   if (["unauthenticated", "unauthorized", "forbidden", "not-authenticated"].includes(raw)) {
     return "Sua sessão expirou e o registro não foi salvo. Atualize a página e entre novamente.";
   }
@@ -20014,7 +20014,7 @@ const postSdrAction = async (payload = {}) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...payload, clientRequestId: requestId }),
       },
-      15_000,
+      45_000,
       "sdr_metrics_write"
     );
     const data = await res.json().catch(() => null);

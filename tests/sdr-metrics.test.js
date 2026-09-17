@@ -238,6 +238,8 @@ test("POST log_call cria dois eventos para dois cliques legítimos consecutivos"
 test("script SDR usa timeout e estado de envio visível no POST", () => {
   const source = fs.readFileSync(path.join(__dirname, "..", "script.js"), "utf8");
   assert.match(source, /fetchWithAuthWithTimeout\(\s*"\s*\/api\/sdr-metrics"/);
+  assert.match(source, /45_000/);
+  assert.match(source, /O registro ainda está sendo confirmado/);
   assert.match(source, /sdrPanelState\.isSubmitting = true/);
   assert.match(source, /Salvando registro…/);
   assert.match(source, /normalizeSdrWriteErrorMessage/);
