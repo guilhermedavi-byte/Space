@@ -449,16 +449,23 @@ const ensureDefaultPipeline = async () => {
 };
 
 const loadCrmReadModel = async (options = {}) => {
+  const startedAt = Date.now();
+  const marks = {};
+  const mark = (key) => {
+    marks[key] = Date.now() - startedAt;
+  };
   const user = options.user && (options.user.role || options.user.tipo || options.user.type) ? options.user : { role: "admin", commercialRoles: [] };
   const workspace = commercialPermissions.normalizeWorkspace(options.workspace);
   const visibleTypes = commercialPermissions.visiblePipelineTypesForUser(user, workspace);
   if (!visibleTypes.length) throw Object.assign(new Error("commercial_workspace_forbidden"), { status: 403 });
   const seeded = await ensureDefaultPipeline();
+  mark("pipeline_ms");
   const [contactsRaw, opportunitiesRaw, usersRaw] = await Promise.all([
     listCollectionAsAdmin(COLLECTIONS.contacts, { maxPages: 50 }).catch(() => []),
     listCollectionAsAdmin(COLLECTIONS.opportunities, { maxPages: 50 }).catch(() => []),
-    listCollectionAsAdmin(COLLECTIONS.users, { maxPages: 20 }).catch(() => []),
+    listCollectionAsAdmin(COLLECTIONS.users, { maxPages: 20, decorate: false }).catch(() => []),
   ]);
+  mark("collections_ms");
   const contacts = contactsRaw.map(normalizeContact).filter((row) => row.id);
   const scopedContacts = contacts.filter(matchesCrmScope);
   const contactsById = new Map(scopedContacts.map((row) => [row.id, row]));
@@ -482,7 +489,7 @@ const loadCrmReadModel = async (options = {}) => {
       closedByUser: row.closedBy ? usersById.get(row.closedBy) || null : null,
     }))
     .sort((left, right) => String(right.updatedAt || right.createdAt || "").localeCompare(String(left.updatedAt || left.createdAt || "")));
-  return {
+  const model = {
     pipelines: seeded.pipelines.filter((pipeline) => visibleTypes.includes(pipeline.pipelineType)),
     stages: seeded.stages.filter((stage) => visiblePipelineIds.has(stage.pipelineId)).sort((a, b) => a.position - b.position),
     contacts: scopedContacts,
@@ -495,6 +502,22 @@ const loadCrmReadModel = async (options = {}) => {
     },
     generatedAt: nowIso(),
   };
+  mark("response_build_ms");
+  const totalMs = Date.now() - startedAt;
+  if (totalMs > 2000) {
+    console.warn("[crm] slow read model", {
+      totalMs,
+      ...marks,
+      workspace: workspace || visibleTypes[0] || "",
+      visibleTypes,
+      pipelines: model.pipelines.length,
+      stages: model.stages.length,
+      opportunities: model.opportunities.length,
+      contacts: model.contacts.length,
+      owners: model.owners.length,
+    });
+  }
+  return model;
 };
 
 const findOrBuildContact = ({ contacts, body, stamp }) => {
