@@ -45,6 +45,7 @@ const makeRes = () => ({
 const loadHandler = ({
   body = { action: "log_call", outcome: "nao_atendeu" },
   authSession = { sub: "growth-1", role: "growth", name: "SDR Teste", email: "sdr@example.com" },
+  failUsers = false,
 } = {}) => {
   let bodyValue = body;
   const originalHttp = require.cache[httpPath];
@@ -91,6 +92,7 @@ const loadHandler = ({
     exports: {
       listCollectionAsAdmin: async (collection) => {
         if (collection === "users") listUsersCount += 1;
+        if (collection === "users" && failUsers) throw new Error("users_unavailable");
         return [];
       },
       queryCollectionByDateRangeAsAdmin: async () => {
@@ -184,6 +186,21 @@ test("POST undo_last consulta apenas a data do dia", async () => {
     assert.equal(stats.listUsersCount, 0);
     assert.equal(stats.dateQueryCount, 1);
     assert.equal(stats.commitCount, 0);
+  } finally {
+    restore();
+  }
+});
+
+test("GET carrega o painel SDR mesmo quando a leitura de usuários falha", async () => {
+  const { handler, stats, restore } = loadHandler({ failUsers: true });
+  try {
+    const res = makeRes();
+    await handler({ method: "GET", headers: { host: "localhost" }, url: "/api/sdr-metrics?days=30" }, res);
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body?.ok, true);
+    assert.equal(res.body?.user?.uid, "growth-1");
+    assert.equal(res.body?.team?.length, 1);
+    assert.equal(stats.listUsersCount, 1);
   } finally {
     restore();
   }

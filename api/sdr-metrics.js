@@ -153,10 +153,15 @@ const listSdrData = async ({ session, days = 30, from = "", to = "" } = {}) => {
   const fromKey = requestedFrom || addDaysToKey(todayKey, -(safeDays - 1));
   const toKey = requestedTo || todayKey;
   const [userRows, eventRows] = await Promise.all([
-    listCollectionAsAdmin("users", { pageSize: 1000 }),
+    listCollectionAsAdmin("users", { pageSize: 1000 }).catch((error) => {
+      console.warn("[sdr-metrics] users lookup unavailable", error?.message || error);
+      return [];
+    }),
     queryCollectionByDateRangeAsAdmin(ACTIVITY_COLLECTION, { from: fromKey, to: toKey }).catch(() => []),
   ]);
+  const sessionUser = normalizeGrowthUser({ id: session?.sub, uid: session?.sub, role: "growth", nome: session?.name, email: session?.email, ativo: true });
   const users = userRows.map(normalizeGrowthUser).filter(Boolean);
+  if (sessionUser && !users.some((user) => user.uid === sessionUser.uid)) users.push(sessionUser);
   const usersByUid = new Map(users.map((user) => [user.uid, user]));
   const events = eventRows
     .map(normalizeEvent)
