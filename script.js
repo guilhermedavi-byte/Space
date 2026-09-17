@@ -12149,6 +12149,8 @@ const nativeCrmState = {
   },
   drawer: null,
   drawerMode: "view",
+  opportunityWorkspaceId: "",
+  qualificationWorkspace: null,
   closingDialog: null,
   pipelineManagerOpen: false,
   pipelineEditor: null,
@@ -12713,6 +12715,7 @@ const nativeCrmIcon = (name, className = "") => {
     mail: `<path d="M5 6h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z" ${common}></path><path d="m4 8 8 5 8-5" ${common}></path>`,
     calendar: `<path d="M7 3v4M17 3v4M4 9h16M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" ${common}></path>`,
     check: `<path d="m5 12 4 4L19 6" ${common}></path>`,
+    "chevron-left": `<path d="m15 18-6-6 6-6" ${common}></path>`,
     "arrow-up-right": `<path d="M7 17 17 7M9 7h8v8" ${common}></path>`,
     dot: `<circle cx="12" cy="12" r="3" fill="currentColor"></circle>`,
     close: `<path d="M6 6l12 12M18 6 6 18" ${common}></path>`,
@@ -13562,6 +13565,15 @@ const renderNativeCrmActions = () => {
 
 const getNativeCrmDetail = (opportunityId) => nativeCrmState.details[String(opportunityId || "")] || { loading: false, loadedAt: 0, activities: [], timeline: [], error: "" };
 
+const getActiveNativeCrmOpportunityId = () => String(
+  nativeCrmState.qualificationWorkspace?.opportunityId
+  || nativeCrmState.opportunityWorkspaceId
+  || (nativeCrmState.drawer && nativeCrmState.drawer !== "new" ? nativeCrmState.drawer : "")
+  || "",
+).trim();
+
+const findNativeCrmOpportunity = (opportunityId) => getNativeCrmAllOpportunities().find((row) => row.id === String(opportunityId || ""));
+
 const nativeCrmNextActivityHtml = (opportunity) => {
   const tone = opportunity?.nextActivityAt ? crmActivityTone(opportunity.nextActivityAt) : "none";
   if (!opportunity?.nextActivityId) {
@@ -14124,10 +14136,235 @@ const nativeCrmDrawerEditHtml = ({ isNew, opportunity, contact, pipelineId, stag
   ${isNew ? "" : nativeCrmTimelineHtml(opportunity)}
 `;
 
+const nativeCrmWorkspaceHeaderHtml = ({ title, subtitle, meta = "", actions = "", backLabel = "Voltar ao CRM" }) => `
+  <header class="native-crm-workspace-head">
+    <button type="button" class="button button-outline button-small" data-crm-workspace-back>${nativeCrmIcon("chevron-left")}${escapeHtml(backLabel)}</button>
+    <div>
+      <h2>${escapeHtml(title)}</h2>
+      ${subtitle ? `<p>${escapeHtml(subtitle)}</p>` : ""}
+      ${meta ? `<div class="native-crm-workspace-meta">${meta}</div>` : ""}
+    </div>
+    <div class="native-crm-workspace-actions">${actions}</div>
+  </header>
+`;
+
+const renderNativeCrmOpportunityWorkspace = () => {
+  const opportunity = findNativeCrmOpportunity(nativeCrmState.opportunityWorkspaceId);
+  if (!opportunity) {
+    return `
+      <div class="native-crm-shell native-crm-workspace-shell">
+        ${nativeCrmWorkspaceHeaderHtml({ title: "Oportunidade", subtitle: "Registro não encontrado nesta visão." })}
+        <main class="native-crm-full-workspace"><div class="native-crm-empty">Não foi possível localizar esta oportunidade.</div></main>
+      </div>
+      ${renderNativeCrmPipelineManager()}
+    `;
+  }
+  const contact = opportunity.contact || {};
+  const { pipelines, stages } = getNativeCrmData();
+  const pipeline = pipelines.find((row) => row.id === opportunity.pipelineId);
+  const stage = stages.find((row) => row.id === opportunity.stageId);
+  const pipelineName = pipeline?.name || "Comercial";
+  const stageName = stage?.name || "Oportunidade";
+  const money = opportunity.value ? formatCrmMoney(opportunity.value, opportunity.currency) : "";
+  const title = contact.name || opportunity.title || "Lead sem nome";
+  const detail = getNativeCrmDetail(opportunity.id);
+  const countryName = crmCountryName(contact.countryCode || contact.country || contact.location?.country);
+  const isEditMode = nativeCrmState.drawerMode === "edit";
+  const workspaceMeta = `
+    <span>${escapeHtml(pipelineName)}</span>
+    <span>${escapeHtml(stageName)}</span>
+    <span>${escapeHtml(crmStatusLabel(opportunity.status))}</span>
+    ${money ? `<span>${escapeHtml(money)}</span>` : ""}
+  `;
+  const actions = `
+    ${!isEditMode ? `<button type="button" class="button button-outline button-small" data-crm-edit>${nativeCrmIcon("edit")}Editar</button>` : ""}
+    ${opportunity.status === "open" ? `
+      <button type="button" class="button button-outline button-small native-crm-win-action" data-crm-close-dialog="won">${nativeCrmIcon("check")}Ganhar</button>
+      <button type="button" class="button button-outline button-small native-crm-lost-action" data-crm-close-dialog="lost">Perder</button>
+    ` : `<button type="button" class="button button-outline button-small" data-crm-reopen>Reabrir</button>`}
+  `;
+  const pipelineType = pipeline?.pipelineType === "closer" ? "closer" : "sdr";
+  const qualificationRun = detail.qualification?.latestRun || null;
+  const qualificationAction = qualificationRun?.status === "in_progress"
+    ? "Continuar qualificação"
+    : qualificationRun?.status === "passed" || qualificationRun?.status === "failed" || qualificationRun?.passed === true
+      ? "Ver qualificação"
+      : "Iniciar qualificação";
+  const editForm = `
+    <form class="native-crm-opportunity-edit" data-crm-form="edit" data-crm-opportunity-id="${escapeHtml(opportunity.id)}">
+      ${nativeCrmDrawerEditHtml({ isNew: false, opportunity, contact, pipelineId: opportunity.pipelineId, stageId: opportunity.stageId })}
+      <div class="native-crm-form-error" data-crm-form-error hidden></div>
+      <footer class="native-crm-workspace-foot">
+        <button type="button" class="button button-outline" data-crm-edit-cancel>Cancelar</button>
+        <button type="submit" class="button button-solid" ${nativeCrmState.saving ? "disabled" : ""}>${nativeCrmState.saving ? "Salvando…" : "Salvar"}</button>
+      </footer>
+    </form>
+  `;
+  return `
+    <div class="native-crm-shell native-crm-workspace-shell">
+      ${nativeCrmWorkspaceHeaderHtml({ title, subtitle: opportunity.title || contact.email || contact.phone || "Workspace comercial", meta: workspaceMeta, actions })}
+      <main class="native-crm-full-workspace">
+        <section class="native-crm-opportunity-layout">
+          <div class="native-crm-opportunity-main">
+            ${isEditMode ? editForm : `
+              ${nativeCrmDealHeroHtml(opportunity, { stageName, money })}
+              ${nativeCrmRecommendedActionPanelHtml(opportunity)}
+              <section class="native-crm-form-section native-crm-primary-work">
+                <div class="native-crm-section-head">
+                  <h3>${pipelineType === "closer" ? "Execução Closer" : "Qualificação SDR"}</h3>
+                  ${pipelineType === "sdr" ? `<button type="button" class="button button-solid button-small" data-crm-qualification-open="${escapeHtml(opportunity.id)}">${escapeHtml(qualificationAction)}</button>` : ""}
+                </div>
+                ${pipelineType === "closer" ? `${nativeCrmCloserValidationHtml(opportunity)}` : `
+                  ${nativeCrmQualificationSummaryHtml(qualificationRun)}
+                  <div class="native-crm-muted">${qualificationRun?.status === "in_progress" ? "Qualificação iniciada. Continue no workspace dedicado." : qualificationRun ? "Resultado disponível no workspace de qualificação." : "Abra o workspace de qualificação para responder o questionário SDR."}</div>
+                `}
+              </section>
+              ${nativeCrmNextActivityHtml(opportunity)}
+              ${nativeCrmActivityFormHtml(opportunity)}
+              ${nativeCrmOpenActivitiesHtml(opportunity)}
+              ${nativeCrmClosingSummaryHtml(opportunity)}
+              ${nativeCrmTimelineHtml(opportunity)}
+            `}
+          </div>
+          <aside class="native-crm-opportunity-side">
+            <section class="native-crm-form-section native-crm-details-section">
+              <h3>Contexto do lead</h3>
+              <div class="native-crm-detail-list">
+                ${nativeCrmDetailItemHtml("Responsável", opportunity.owner?.name || opportunity.owner?.email || "")}
+                ${nativeCrmDetailItemHtml("Origem", opportunity.source || "")}
+                ${nativeCrmDetailItemHtml("País", countryName)}
+                ${nativeCrmDetailItemHtml("Pipeline", pipelineName)}
+                ${nativeCrmDetailItemHtml("Etapa", stageName)}
+                ${nativeCrmDetailItemHtml("Valor", money || "")}
+                ${nativeCrmDetailItemHtml("Previsão", opportunity.expectedCloseDate || "")}
+              </div>
+            </section>
+            <section class="native-crm-form-section native-crm-details-section">
+              <h3>Contato</h3>
+              <div class="native-crm-detail-list">
+                ${nativeCrmDetailItemHtml("Nome", contact.name || "")}
+                ${nativeCrmDetailItemHtml("Telefone", contact.phone || "")}
+                ${nativeCrmDetailItemHtml("E-mail", contact.email || "")}
+                ${nativeCrmDetailItemHtml("País", countryName)}
+              </div>
+            </section>
+            <section class="native-crm-form-section native-crm-details-section">
+              <h3>Datas</h3>
+              <div class="native-crm-detail-list">
+                ${nativeCrmDetailItemHtml("Criado em", formatCrmDateTime(opportunity.createdAt))}
+                ${nativeCrmDetailItemHtml("Última atualização", formatCrmDateTime(opportunity.updatedAt))}
+              </div>
+            </section>
+          </aside>
+        </section>
+      </main>
+      ${nativeCrmState.error ? `<div class="native-crm-toast">${escapeHtml(nativeCrmState.error)}</div>` : ""}
+    </div>
+    ${renderNativeCrmPipelineManager()}
+    ${renderNativeCrmClosingDialog()}
+  `;
+};
+
+const renderNativeCrmQualificationWorkspace = () => {
+  const workspace = nativeCrmState.qualificationWorkspace || {};
+  const opportunity = findNativeCrmOpportunity(workspace.opportunityId);
+  if (!opportunity) {
+    return `
+      <div class="native-crm-shell native-crm-workspace-shell">
+        ${nativeCrmWorkspaceHeaderHtml({ title: "Qualificação SDR", subtitle: "Registro não encontrado." })}
+        <main class="native-crm-full-workspace"><div class="native-crm-empty">Não foi possível localizar esta oportunidade.</div></main>
+      </div>
+    `;
+  }
+  const detail = getNativeCrmDetail(opportunity.id);
+  const qual = detail.qualification;
+  const run = qual?.latestRun || null;
+  const isInProgress = run?.status === "in_progress";
+  const isPassed = run?.passed === true || run?.status === "passed";
+  const isFailed = run?.status === "failed";
+  const questions = Array.isArray(qual?.questions) ? qual.questions : [];
+  const answeredByQuestion = new Map((Array.isArray(qual?.answers) ? qual.answers : []).map((answer) => [String(answer.questionId), String(answer.optionId)]));
+  const answeredCount = questions.filter((question) => answeredByQuestion.has(String(question.id))).length;
+  const pendingTransition = workspace.pendingTransition || null;
+  const subtitle = opportunity.contact?.name || opportunity.title || "Lead";
+  const resultActions = pendingTransition
+    ? isPassed
+      ? `<button type="button" class="button button-solid" data-crm-pending-advance="${escapeHtml(pendingTransition.targetStageId || "")}" data-crm-opportunity-id="${escapeHtml(opportunity.id)}">Avançar para etapa solicitada</button>`
+      : `<button type="button" class="button button-outline" data-crm-opportunity-open="${escapeHtml(opportunity.id)}">Voltar para oportunidade</button>`
+    : `<button type="button" class="button button-outline" data-crm-opportunity-open="${escapeHtml(opportunity.id)}">Voltar para oportunidade</button>`;
+  const progress = questions.length ? `${answeredCount}/${questions.length}` : "0/0";
+  const body = detail.loading && !qual ? `
+    <section class="native-crm-qualification-work-card"><div class="native-crm-muted">Carregando qualificação…</div></section>
+  ` : !qual?.version || !questions.length ? `
+    <section class="native-crm-qualification-work-card">
+      <h3>Configuração indisponível</h3>
+      <div class="native-crm-muted">Não foi possível carregar o questionário SDR.</div>
+    </section>
+  ` : !run ? `
+    <section class="native-crm-qualification-work-card">
+      <h3>Qualificação ainda não iniciada</h3>
+      <p>Inicie o questionário para avaliar fit e intenção antes do avanço comercial.</p>
+      <button type="button" class="button button-solid" data-crm-qualification-start="${escapeHtml(opportunity.id)}">Iniciar qualificação</button>
+    </section>
+  ` : isInProgress ? `
+    <section class="native-crm-qualification-work-card">
+      <div class="native-crm-qualification-progress">
+        <span>Respostas preenchidas</span>
+        <strong>${escapeHtml(progress)}</strong>
+      </div>
+      <div class="native-crm-qualification-form native-crm-qualification-form-large" data-crm-qualification-form data-crm-opportunity-id="${escapeHtml(opportunity.id)}" data-crm-qualification-run="${escapeHtml(run.id || "")}">
+        ${questions.map((question, index) => `
+          <fieldset class="native-crm-qualification-question" data-question-id="${escapeHtml(question.id)}">
+            <legend>${escapeHtml(`${index + 1}. ${question.title}`)}</legend>
+            ${(question.options || []).map((option) => `
+              <label>
+                <input type="radio" name="crm-qual-${escapeHtml(question.id)}" value="${escapeHtml(option.id)}" ${answeredByQuestion.get(String(question.id)) === String(option.id) ? "checked" : ""} />
+                <span>${escapeHtml(option.label)}</span>
+              </label>
+            `).join("")}
+          </fieldset>
+        `).join("")}
+        <div class="native-crm-form-error" data-crm-qualification-error hidden></div>
+        <div class="native-crm-inline-actions">
+          <button type="button" class="button button-outline" data-crm-opportunity-open="${escapeHtml(opportunity.id)}">Voltar sem concluir</button>
+          <button type="button" class="button button-solid" data-crm-qualification-submit ${nativeCrmState.saving ? "disabled" : ""}>${nativeCrmState.saving ? "Salvando…" : "Concluir qualificação"}</button>
+        </div>
+      </div>
+    </section>
+  ` : `
+    <section class="native-crm-qualification-work-card native-crm-qualification-result" data-status="${isPassed ? "passed" : "failed"}">
+      <div class="native-crm-section-head">
+        <h3>${isPassed ? "Lead aprovado" : "Lead reprovado"}</h3>
+        <span class="native-crm-qualification-pill">${escapeHtml(nativeCrmQualificationStatusLabel(run))}</span>
+      </div>
+      ${nativeCrmQualificationSummaryHtml(run)}
+      <p>${isPassed ? "A qualificação foi concluída e o lead está elegível para continuar o fluxo permitido." : "A oportunidade permanece na etapa anterior para preservar o fluxo comercial."}</p>
+      <div class="native-crm-inline-actions">${resultActions}</div>
+    </section>
+  `;
+  return `
+    <div class="native-crm-shell native-crm-workspace-shell">
+      ${nativeCrmWorkspaceHeaderHtml({
+        title: "Qualificação SDR",
+        subtitle,
+        meta: `<span>${escapeHtml(nativeCrmQualificationStatusLabel(run))}</span><span>${escapeHtml(progress)}</span>`,
+        actions: `<button type="button" class="button button-outline button-small" data-crm-opportunity-open="${escapeHtml(opportunity.id)}">Oportunidade</button>`,
+        backLabel: "Voltar",
+      })}
+      <main class="native-crm-full-workspace native-crm-qualification-workspace">
+        ${pendingTransition ? `<section class="native-crm-qualification-pending-stage">Movimento pausado até a aprovação da qualificação.</section>` : ""}
+        ${body}
+      </main>
+      ${nativeCrmState.error ? `<div class="native-crm-toast">${escapeHtml(nativeCrmState.error)}</div>` : ""}
+    </div>
+  `;
+};
+
 const renderNativeCrmClosingDialog = () => {
   const dialog = nativeCrmState.closingDialog;
-  if (!dialog?.type || !nativeCrmState.drawer) return "";
-  const opportunity = getNativeCrmAllOpportunities().find((row) => row.id === nativeCrmState.drawer);
+  const opportunityId = getActiveNativeCrmOpportunityId();
+  if (!dialog?.type || !opportunityId) return "";
+  const opportunity = findNativeCrmOpportunity(opportunityId);
   if (!opportunity) return "";
   const type = dialog.type === "lost" ? "lost" : "won";
   const defaultValue = opportunity.value ?? "";
@@ -14518,6 +14755,69 @@ const renderNativeCrmDrawer = () => {
   `;
 };
 
+const setNativeCrmUrlState = ({ push = false } = {}) => {
+  const historyMethod = push ? "pushState" : "replaceState";
+  if (!window.history?.[historyMethod]) return;
+  const url = new URL(window.location.href);
+  if (nativeCrmState.mode === "list" || nativeCrmState.mode === "analytics" || nativeCrmState.mode === "actions") url.searchParams.set("view", nativeCrmState.mode);
+  else url.searchParams.delete("view");
+  const pipelineId = selectedCrmPipelineId();
+  if (pipelineId) url.searchParams.set("pipeline", pipelineId);
+  else url.searchParams.delete("pipeline");
+  const workspace = getNativeCrmWorkspace();
+  if (workspace) url.searchParams.set("workspace", workspace);
+  else url.searchParams.delete("workspace");
+  const opportunityId = nativeCrmState.qualificationWorkspace?.opportunityId || nativeCrmState.opportunityWorkspaceId || "";
+  if (opportunityId) url.searchParams.set("opportunity", opportunityId);
+  else url.searchParams.delete("opportunity");
+  if (nativeCrmState.qualificationWorkspace?.opportunityId) url.searchParams.set("qualification", "1");
+  else url.searchParams.delete("qualification");
+  window.history[historyMethod](window.history.state, "", url.toString());
+};
+
+const updateNativeCrmUrlState = () => setNativeCrmUrlState({ push: false });
+
+const openNativeCrmOpportunityWorkspace = (opportunityId, { push = true } = {}) => {
+  const id = String(opportunityId || "").trim();
+  if (!id) return;
+  nativeCrmState.opportunityWorkspaceId = id;
+  nativeCrmState.qualificationWorkspace = null;
+  nativeCrmState.drawer = null;
+  nativeCrmState.drawerMode = "view";
+  nativeCrmState.closingDialog = null;
+  nativeCrmState.activityFormOpportunityId = "";
+  nativeCrmState.error = "";
+  setNativeCrmUrlState({ push });
+  renderNativeCrm();
+  loadNativeCrmOpportunityDetail(id, { force: false }).catch(() => {});
+};
+
+const openNativeCrmQualificationWorkspace = (opportunityId, { pendingTransition = null, push = true } = {}) => {
+  const id = String(opportunityId || "").trim();
+  if (!id) return;
+  nativeCrmState.opportunityWorkspaceId = id;
+  nativeCrmState.qualificationWorkspace = { opportunityId: id, pendingTransition };
+  nativeCrmState.drawer = null;
+  nativeCrmState.drawerMode = "view";
+  nativeCrmState.closingDialog = null;
+  nativeCrmState.activityFormOpportunityId = "";
+  nativeCrmState.error = "";
+  setNativeCrmUrlState({ push });
+  renderNativeCrm();
+  loadNativeCrmOpportunityDetail(id, { force: false }).catch(() => {});
+};
+
+const closeNativeCrmWorkspace = ({ push = true } = {}) => {
+  nativeCrmState.opportunityWorkspaceId = "";
+  nativeCrmState.qualificationWorkspace = null;
+  nativeCrmState.drawerMode = "view";
+  nativeCrmState.closingDialog = null;
+  nativeCrmState.activityFormOpportunityId = "";
+  nativeCrmState.error = "";
+  setNativeCrmUrlState({ push });
+  renderNativeCrm();
+};
+
 const renderNativeCrm = () => {
   const root = getNativeCrmRoot();
   if (!(root instanceof HTMLElement)) return;
@@ -14545,6 +14845,14 @@ const renderNativeCrm = () => {
         <div class="native-crm-empty">Seu acesso comercial ainda não foi configurado. Peça a um administrador para definir sua função como SDR ou Closer.</div>
       </div>
     `;
+    return;
+  }
+  if (nativeCrmState.qualificationWorkspace?.opportunityId) {
+    root.innerHTML = renderNativeCrmQualificationWorkspace();
+    return;
+  }
+  if (nativeCrmState.opportunityWorkspaceId) {
+    root.innerHTML = renderNativeCrmOpportunityWorkspace();
     return;
   }
   const workspaceHtml = nativeCrmState.mode === "analytics"
@@ -14627,19 +14935,6 @@ const loadNativeCrm = async ({ force = false } = {}) => {
   }
 };
 
-const updateNativeCrmUrlState = () => {
-  if (!window.history?.replaceState) return;
-  const url = new URL(window.location.href);
-  if (nativeCrmState.mode === "list" || nativeCrmState.mode === "analytics" || nativeCrmState.mode === "actions") url.searchParams.set("view", nativeCrmState.mode);
-  else url.searchParams.delete("view");
-  const pipelineId = selectedCrmPipelineId();
-  if (pipelineId) url.searchParams.set("pipeline", pipelineId);
-  const workspace = getNativeCrmWorkspace();
-  if (workspace) url.searchParams.set("workspace", workspace);
-  else url.searchParams.delete("workspace");
-  window.history.replaceState(window.history.state, "", url.toString());
-};
-
 const applyNativeCrmUrlState = () => {
   const params = new URLSearchParams(window.location.search || "");
   if (params.get("view") === "list") nativeCrmState.mode = "list";
@@ -14647,6 +14942,9 @@ const applyNativeCrmUrlState = () => {
   if (params.get("view") === "actions") nativeCrmState.mode = "actions";
   if (params.get("workspace")) nativeCrmState.workspace = normalizeCrmWorkspace(params.get("workspace")) || nativeCrmState.workspace;
   if (params.get("pipeline")) nativeCrmState.selectedPipelineId = params.get("pipeline") || "";
+  const opportunityId = String(params.get("opportunity") || "").trim();
+  nativeCrmState.opportunityWorkspaceId = opportunityId;
+  nativeCrmState.qualificationWorkspace = opportunityId && params.get("qualification") === "1" ? { opportunityId, pendingTransition: null } : null;
 };
 
 const syncNativeCrmListRowsIntoReadModel = (rows) => {
@@ -14852,10 +15150,13 @@ const submitNativeCrmForm = async (form) => {
     });
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(data?.error || "crm_save_failed");
-    nativeCrmState.drawer = null;
+    const savedId = String(data?.opportunity?.id || bodyPayload.id || "").trim();
+    if (savedId && kind !== "new" && nativeCrmState.opportunityWorkspaceId === bodyPayload.id) nativeCrmState.opportunityWorkspaceId = savedId;
+    else nativeCrmState.drawer = null;
     nativeCrmState.drawerMode = "view";
     nativeCrmState.loadedAt = 0;
     await loadNativeCrm({ force: true });
+    if (savedId && kind !== "new") await loadNativeCrmOpportunityDetail(savedId, { force: true });
   } catch (error) {
     nativeCrmState.error = error?.message || "Não foi possível salvar.";
     renderNativeCrm();
@@ -14905,7 +15206,8 @@ const createNativeCrmActivity = async (wrap) => {
     nativeCrmState.activityFormOpportunityId = "";
     nativeCrmState.loadedAt = 0;
     await loadNativeCrm({ force: true });
-    nativeCrmState.drawer = payload.opportunityId;
+    if (nativeCrmState.opportunityWorkspaceId === payload.opportunityId || nativeCrmState.qualificationWorkspace?.opportunityId === payload.opportunityId) nativeCrmState.opportunityWorkspaceId = payload.opportunityId;
+    else nativeCrmState.drawer = payload.opportunityId;
     await loadNativeCrmOpportunityDetail(payload.opportunityId, { force: true });
   } catch (error) {
     nativeCrmState.error = error?.message || "Não foi possível salvar a atividade.";
@@ -14917,7 +15219,7 @@ const createNativeCrmActivity = async (wrap) => {
 
 const completeNativeCrmActivity = async (activityId) => {
   const id = String(activityId || "").trim();
-  const opportunityId = String(nativeCrmState.drawer || "").trim();
+  const opportunityId = getActiveNativeCrmOpportunityId();
   if (!id || !opportunityId) return;
   nativeCrmState.saving = true;
   renderNativeCrm();
@@ -14931,7 +15233,8 @@ const completeNativeCrmActivity = async (activityId) => {
     if (!res.ok) throw new Error(data?.error || "crm_activity_complete_failed");
     nativeCrmState.loadedAt = 0;
     await loadNativeCrm({ force: true });
-    nativeCrmState.drawer = opportunityId;
+    if (nativeCrmState.opportunityWorkspaceId === opportunityId || nativeCrmState.qualificationWorkspace?.opportunityId === opportunityId) nativeCrmState.opportunityWorkspaceId = opportunityId;
+    else nativeCrmState.drawer = opportunityId;
     await loadNativeCrmOpportunityDetail(opportunityId, { force: true });
   } catch (error) {
     nativeCrmState.error = error?.message || "Não foi possível concluir a atividade.";
@@ -14941,7 +15244,7 @@ const completeNativeCrmActivity = async (activityId) => {
   }
 };
 
-const startNativeCrmQualification = async (opportunityId) => {
+const startNativeCrmQualification = async (opportunityId, { pendingTransition = null, openWorkspace = true } = {}) => {
   const id = String(opportunityId || "").trim();
   if (!id) return;
   nativeCrmState.saving = true;
@@ -14957,7 +15260,15 @@ const startNativeCrmQualification = async (opportunityId) => {
     if (!res.ok) throw new Error(data?.error || "qualification_start_failed");
     nativeCrmState.loadedAt = 0;
     await loadNativeCrm({ force: true });
-    nativeCrmState.drawer = id;
+    if (openWorkspace) {
+      nativeCrmState.opportunityWorkspaceId = id;
+      nativeCrmState.qualificationWorkspace = { opportunityId: id, pendingTransition };
+      nativeCrmState.drawer = null;
+      nativeCrmState.drawerMode = "view";
+      setNativeCrmUrlState({ push: false });
+    } else {
+      nativeCrmState.drawer = id;
+    }
     await loadNativeCrmOpportunityDetail(id, { force: true });
   } catch (error) {
     nativeCrmState.error = error?.message || "Não foi possível iniciar a qualificação.";
@@ -15000,7 +15311,8 @@ const submitNativeCrmQualification = async (wrap) => {
     if (!res.ok) throw new Error(data?.error || "qualification_complete_failed");
     nativeCrmState.loadedAt = 0;
     await loadNativeCrm({ force: true });
-    nativeCrmState.drawer = opportunityId;
+    if (nativeCrmState.qualificationWorkspace?.opportunityId === opportunityId) nativeCrmState.opportunityWorkspaceId = opportunityId;
+    else nativeCrmState.drawer = opportunityId;
     await loadNativeCrmOpportunityDetail(opportunityId, { force: true });
     reloadNativeCrmListIfNeeded();
   } catch (error) {
@@ -15028,7 +15340,8 @@ const runNativeCrmHandoff = async (opportunityId) => {
     if (!res.ok) throw new Error(data?.error || "handoff_failed");
     nativeCrmState.loadedAt = 0;
     await loadNativeCrm({ force: true });
-    nativeCrmState.drawer = id;
+    if (nativeCrmState.opportunityWorkspaceId === id || nativeCrmState.qualificationWorkspace?.opportunityId === id) nativeCrmState.opportunityWorkspaceId = id;
+    else nativeCrmState.drawer = id;
     await loadNativeCrmOpportunityDetail(id, { force: true });
     reloadNativeCrmListIfNeeded();
   } catch (error) {
@@ -15057,7 +15370,8 @@ const setNativeCrmMeetingOutcome = async (opportunityId, meetingOutcome) => {
     if (!res.ok) throw new Error(data?.error || "meeting_outcome_failed");
     nativeCrmState.loadedAt = 0;
     await loadNativeCrm({ force: true });
-    nativeCrmState.drawer = id;
+    if (nativeCrmState.opportunityWorkspaceId === id || nativeCrmState.qualificationWorkspace?.opportunityId === id) nativeCrmState.opportunityWorkspaceId = id;
+    else nativeCrmState.drawer = id;
     await loadNativeCrmOpportunityDetail(id, { force: true });
   } catch (error) {
     nativeCrmState.error = error?.message || "Não foi possível registrar o outcome.";
@@ -15107,7 +15421,8 @@ const submitNativeCrmCloserReview = async (wrap) => {
     if (!res.ok) throw new Error(data?.error || "closer_review_failed");
     nativeCrmState.loadedAt = 0;
     await loadNativeCrm({ force: true });
-    nativeCrmState.drawer = opportunityId;
+    if (nativeCrmState.opportunityWorkspaceId === opportunityId || nativeCrmState.qualificationWorkspace?.opportunityId === opportunityId) nativeCrmState.opportunityWorkspaceId = opportunityId;
+    else nativeCrmState.drawer = opportunityId;
     await loadNativeCrmOpportunityDetail(opportunityId, { force: true });
     reloadNativeCrmListIfNeeded();
   } catch (error) {
@@ -15120,7 +15435,7 @@ const submitNativeCrmCloserReview = async (wrap) => {
 };
 
 const runNativeCrmOpportunityAction = async (action, payload = {}) => {
-  const opportunityId = String(payload.id || nativeCrmState.drawer || "").trim();
+  const opportunityId = String(payload.id || getActiveNativeCrmOpportunityId() || "").trim();
   if (!action || !opportunityId) return;
   nativeCrmState.saving = true;
   nativeCrmState.error = "";
@@ -15139,7 +15454,8 @@ const runNativeCrmOpportunityAction = async (action, payload = {}) => {
     nativeCrmState.drawerMode = "view";
     await loadNativeCrm({ force: true });
     if (nativeCrmState.mode === "actions" || action === "reactivate_opportunity") await loadNativeCrmActions({ force: true });
-    nativeCrmState.drawer = opportunityId;
+    if (nativeCrmState.opportunityWorkspaceId === opportunityId || nativeCrmState.qualificationWorkspace?.opportunityId === opportunityId) nativeCrmState.opportunityWorkspaceId = opportunityId;
+    else nativeCrmState.drawer = opportunityId;
     await loadNativeCrmOpportunityDetail(opportunityId, { force: true });
     reloadNativeCrmListIfNeeded();
   } catch (error) {
@@ -15176,7 +15492,7 @@ const collectNativeCrmActionPayload = (button) => {
 
 const completeNativeCrmQualificationAction = async (button) => {
   const payload = collectNativeCrmActionPayload(button);
-  const opportunityId = String(nativeCrmState.drawer || "").trim();
+  const opportunityId = getActiveNativeCrmOpportunityId();
   const panel = button.closest("[data-crm-action-panel]");
   const errorEl = panel?.querySelector("[data-crm-action-error]");
   if (!payload.id || !opportunityId) return;
@@ -15202,7 +15518,8 @@ const completeNativeCrmQualificationAction = async (button) => {
     nativeCrmState.actions.loadedAt = 0;
     await loadNativeCrm({ force: true });
     await loadNativeCrmActions({ force: true });
-    nativeCrmState.drawer = opportunityId;
+    if (nativeCrmState.opportunityWorkspaceId === opportunityId || nativeCrmState.qualificationWorkspace?.opportunityId === opportunityId) nativeCrmState.opportunityWorkspaceId = opportunityId;
+    else nativeCrmState.drawer = opportunityId;
     await loadNativeCrmOpportunityDetail(opportunityId, { force: true });
   } catch (error) {
     nativeCrmState.error = error?.message || "Não foi possível resolver a ação.";
@@ -15215,7 +15532,7 @@ const completeNativeCrmQualificationAction = async (button) => {
 
 const dismissNativeCrmQualificationAction = async (button) => {
   const actionId = String(button.getAttribute("data-crm-action-dismiss") || "").trim();
-  const opportunityId = String(nativeCrmState.drawer || "").trim();
+  const opportunityId = getActiveNativeCrmOpportunityId();
   const panel = button.closest("[data-crm-action-panel]");
   const reasonField = panel?.querySelector('[name="actionNote"]');
   const dismissedReason = reasonField instanceof HTMLTextAreaElement ? String(reasonField.value || "").trim() : "";
@@ -15235,7 +15552,8 @@ const dismissNativeCrmQualificationAction = async (button) => {
     nativeCrmState.actions.loadedAt = 0;
     await loadNativeCrm({ force: true });
     await loadNativeCrmActions({ force: true });
-    nativeCrmState.drawer = opportunityId;
+    if (nativeCrmState.opportunityWorkspaceId === opportunityId || nativeCrmState.qualificationWorkspace?.opportunityId === opportunityId) nativeCrmState.opportunityWorkspaceId = opportunityId;
+    else nativeCrmState.drawer = opportunityId;
     await loadNativeCrmOpportunityDetail(opportunityId, { force: true });
   } catch (error) {
     nativeCrmState.error = error?.message || "Não foi possível dispensar a ação.";
@@ -15248,7 +15566,7 @@ const dismissNativeCrmQualificationAction = async (button) => {
 
 const assignNativeCrmQualificationAction = async (button) => {
   const actionId = String(button.getAttribute("data-crm-action-assign") || "").trim();
-  const opportunityId = String(nativeCrmState.drawer || "").trim();
+  const opportunityId = getActiveNativeCrmOpportunityId();
   const panel = button.closest("[data-crm-action-panel]");
   const field = panel?.querySelector('[name="actionAssignedTo"]');
   const assignedTo = field instanceof HTMLSelectElement ? String(field.value || "").trim() : "";
@@ -15266,7 +15584,8 @@ const assignNativeCrmQualificationAction = async (button) => {
     if (!res.ok) throw new Error(data?.error || "qualification_action_assign_failed");
     nativeCrmState.actions.loadedAt = 0;
     await loadNativeCrmActions({ force: true });
-    nativeCrmState.drawer = opportunityId;
+    if (nativeCrmState.opportunityWorkspaceId === opportunityId || nativeCrmState.qualificationWorkspace?.opportunityId === opportunityId) nativeCrmState.opportunityWorkspaceId = opportunityId;
+    else nativeCrmState.drawer = opportunityId;
     await loadNativeCrmOpportunityDetail(opportunityId, { force: true });
   } catch (error) {
     nativeCrmState.error = error?.message || "Não foi possível atribuir a ação.";
@@ -15329,11 +15648,14 @@ const moveNativeCrmOpportunity = async (opportunityId, stageId) => {
   } catch (error) {
     opportunity.stageId = previousStageId;
     if (error?.code === "qualification_required" || error?.code === "qualification_failed") {
-      nativeCrmState.error = error.code === "qualification_failed"
-        ? "Lead reprovado na qualificação. A etapa anterior foi restaurada."
-        : "Qualificação obrigatória antes de avançar. A etapa anterior foi restaurada.";
-      nativeCrmState.drawer = opportunityId;
-      nativeCrmState.drawerMode = "view";
+      const pendingTransition = { opportunityId, fromStageId: previousStageId, targetStageId: stageId };
+      if (error.code === "qualification_required") {
+        nativeCrmState.error = "Qualificação obrigatória antes de avançar. A etapa anterior foi restaurada.";
+        startNativeCrmQualification(opportunityId, { pendingTransition, openWorkspace: true }).catch(() => {});
+        return;
+      }
+      nativeCrmState.error = "Lead reprovado na qualificação. A etapa anterior foi restaurada.";
+      openNativeCrmQualificationWorkspace(opportunityId, { pendingTransition, push: true });
       loadNativeCrmOpportunityDetail(opportunityId, { force: true }).catch(() => {});
     } else {
       nativeCrmState.error = "Movimento não salvo. A etapa anterior foi restaurada.";
@@ -40305,7 +40627,10 @@ const showPanel = (panelName) => {
       return;
     }
     applyNativeCrmUrlState();
-    loadNativeCrm({ force: false }).catch((error) => console.error("[crm] load failed:", error));
+    loadNativeCrm({ force: false }).then(() => {
+      const opportunityId = nativeCrmState.qualificationWorkspace?.opportunityId || nativeCrmState.opportunityWorkspaceId;
+      if (opportunityId) loadNativeCrmOpportunityDetail(opportunityId, { force: false }).catch(() => {});
+    }).catch((error) => console.error("[crm] load failed:", error));
     return;
   }
 
@@ -40820,6 +41145,14 @@ document.addEventListener("visibilitychange", () => {
   else scheduleAutomationRunPolling();
 });
 
+window.addEventListener("popstate", () => {
+  if (!getNativeCrmRoot()) return;
+  applyNativeCrmUrlState();
+  renderNativeCrm();
+  const opportunityId = nativeCrmState.qualificationWorkspace?.opportunityId || nativeCrmState.opportunityWorkspaceId;
+  if (opportunityId) loadNativeCrmOpportunityDetail(opportunityId, { force: false }).catch(() => {});
+});
+
 document.addEventListener("click", (event) => {
   const target = event.target;
   if (!(target instanceof Element)) return;
@@ -40886,11 +41219,45 @@ document.addEventListener("click", (event) => {
       loadNativeCrm({ force: true }).catch(() => {});
       return;
     }
+    const workspaceBack = target.closest("[data-crm-workspace-back]");
+    if (workspaceBack instanceof HTMLButtonElement) {
+      event.preventDefault();
+      closeNativeCrmWorkspace({ push: true });
+      return;
+    }
+    const openOpportunityWorkspace = target.closest("[data-crm-opportunity-open]");
+    if (openOpportunityWorkspace instanceof HTMLButtonElement) {
+      event.preventDefault();
+      openNativeCrmOpportunityWorkspace(String(openOpportunityWorkspace.getAttribute("data-crm-opportunity-open") || getActiveNativeCrmOpportunityId()), { push: true });
+      return;
+    }
+    const openQualificationWorkspace = target.closest("[data-crm-qualification-open]");
+    if (openQualificationWorkspace instanceof HTMLButtonElement) {
+      event.preventDefault();
+      const id = String(openQualificationWorkspace.getAttribute("data-crm-qualification-open") || getActiveNativeCrmOpportunityId());
+      const detail = getNativeCrmDetail(id);
+      if (detail.qualification?.latestRun) openNativeCrmQualificationWorkspace(id, { push: true });
+      else startNativeCrmQualification(id, { openWorkspace: true }).catch(() => {});
+      return;
+    }
+    const pendingAdvance = target.closest("[data-crm-pending-advance]");
+    if (pendingAdvance instanceof HTMLButtonElement) {
+      event.preventDefault();
+      const opportunityId = String(pendingAdvance.getAttribute("data-crm-opportunity-id") || getActiveNativeCrmOpportunityId());
+      const stageId = String(pendingAdvance.getAttribute("data-crm-pending-advance") || "");
+      nativeCrmState.qualificationWorkspace = null;
+      nativeCrmState.opportunityWorkspaceId = opportunityId;
+      setNativeCrmUrlState({ push: true });
+      moveNativeCrmOpportunity(opportunityId, stageId).catch(() => {});
+      return;
+    }
     const workspaceButton = target.closest("[data-crm-workspace]");
     if (workspaceButton instanceof HTMLButtonElement) {
       event.preventDefault();
       const changed = setNativeCrmWorkspace(String(workspaceButton.getAttribute("data-crm-workspace") || ""));
       if (!changed) return;
+      nativeCrmState.opportunityWorkspaceId = "";
+      nativeCrmState.qualificationWorkspace = null;
       updateNativeCrmUrlState();
       renderNativeCrm();
       loadNativeCrm({ force: true }).catch(() => {});
@@ -41010,6 +41377,13 @@ document.addEventListener("click", (event) => {
       renderNativeCrm();
       return;
     }
+    const editCancel = target.closest("[data-crm-edit-cancel]");
+    if (editCancel instanceof HTMLButtonElement) {
+      event.preventDefault();
+      nativeCrmState.drawerMode = "view";
+      renderNativeCrm();
+      return;
+    }
     const openCloseDialog = target.closest("[data-crm-close-dialog]");
     if (openCloseDialog instanceof HTMLButtonElement) {
       event.preventDefault();
@@ -41040,7 +41414,7 @@ document.addEventListener("click", (event) => {
     const reactivateOpportunity = target.closest("[data-crm-reactivate]");
     if (reactivateOpportunity instanceof HTMLButtonElement) {
       event.preventDefault();
-      runNativeCrmOpportunityAction("reactivate_opportunity", { id: String(reactivateOpportunity.getAttribute("data-crm-reactivate") || nativeCrmState.drawer || "") }).catch(() => {});
+      runNativeCrmOpportunityAction("reactivate_opportunity", { id: String(reactivateOpportunity.getAttribute("data-crm-reactivate") || getActiveNativeCrmOpportunityId() || "") }).catch(() => {});
       return;
     }
     const filterToggle = target.closest("[data-crm-filter-toggle]");
@@ -41148,7 +41522,7 @@ document.addEventListener("click", (event) => {
     const openActivity = target.closest("[data-crm-activity-new]");
     if (openActivity instanceof HTMLButtonElement) {
       event.preventDefault();
-      nativeCrmState.activityFormOpportunityId = String(openActivity.getAttribute("data-crm-activity-new") || nativeCrmState.drawer || "");
+      nativeCrmState.activityFormOpportunityId = String(openActivity.getAttribute("data-crm-activity-new") || getActiveNativeCrmOpportunityId() || "");
       renderNativeCrm();
       return;
     }
@@ -41175,7 +41549,7 @@ document.addEventListener("click", (event) => {
     const startQualification = target.closest("[data-crm-qualification-start]");
     if (startQualification instanceof HTMLButtonElement) {
       event.preventDefault();
-      startNativeCrmQualification(String(startQualification.getAttribute("data-crm-qualification-start") || nativeCrmState.drawer || "")).catch(() => {});
+      startNativeCrmQualification(String(startQualification.getAttribute("data-crm-qualification-start") || getActiveNativeCrmOpportunityId() || "")).catch(() => {});
       return;
     }
     const submitQualification = target.closest("[data-crm-qualification-submit]");
@@ -41188,14 +41562,14 @@ document.addEventListener("click", (event) => {
     const handoffButton = target.closest("[data-crm-handoff]");
     if (handoffButton instanceof HTMLButtonElement) {
       event.preventDefault();
-      runNativeCrmHandoff(String(handoffButton.getAttribute("data-crm-handoff") || nativeCrmState.drawer || "")).catch(() => {});
+      runNativeCrmHandoff(String(handoffButton.getAttribute("data-crm-handoff") || getActiveNativeCrmOpportunityId() || "")).catch(() => {});
       return;
     }
     const meetingOutcome = target.closest("[data-crm-meeting-outcome]");
     if (meetingOutcome instanceof HTMLButtonElement) {
       event.preventDefault();
       setNativeCrmMeetingOutcome(
-        String(meetingOutcome.getAttribute("data-crm-opportunity-id") || nativeCrmState.drawer || ""),
+        String(meetingOutcome.getAttribute("data-crm-opportunity-id") || getActiveNativeCrmOpportunityId() || ""),
         String(meetingOutcome.getAttribute("data-crm-meeting-outcome") || ""),
       ).catch(() => {});
       return;
@@ -41239,23 +41613,13 @@ document.addEventListener("click", (event) => {
     const card = target.closest("[data-crm-card]");
     if (card instanceof HTMLElement && !target.closest("button, a, input, select, textarea")) {
       event.preventDefault();
-      nativeCrmState.drawer = String(card.getAttribute("data-crm-card") || "");
-      nativeCrmState.drawerMode = "view";
-      nativeCrmState.activityFormOpportunityId = "";
-      nativeCrmState.error = "";
-      renderNativeCrm();
-      loadNativeCrmOpportunityDetail(nativeCrmState.drawer, { force: false }).catch(() => {});
+      openNativeCrmOpportunityWorkspace(String(card.getAttribute("data-crm-card") || ""), { push: true });
       return;
     }
     const row = target.closest("[data-crm-row]");
     if (row instanceof HTMLElement && !target.closest("button, a, input, select, textarea")) {
       event.preventDefault();
-      nativeCrmState.drawer = String(row.getAttribute("data-crm-row") || "");
-      nativeCrmState.drawerMode = "view";
-      nativeCrmState.activityFormOpportunityId = "";
-      nativeCrmState.error = "";
-      renderNativeCrm();
-      loadNativeCrmOpportunityDetail(nativeCrmState.drawer, { force: false }).catch(() => {});
+      openNativeCrmOpportunityWorkspace(String(row.getAttribute("data-crm-row") || ""), { push: true });
       return;
     }
   }
@@ -41377,20 +41741,21 @@ document.addEventListener("keydown", (event) => {
   const card = target.closest("[data-crm-card]");
   if (card instanceof HTMLElement && (event.key === "Enter" || event.key === " ")) {
     event.preventDefault();
-    nativeCrmState.drawer = String(card.getAttribute("data-crm-card") || "");
-    nativeCrmState.drawerMode = "view";
-    nativeCrmState.activityFormOpportunityId = "";
-    renderNativeCrm();
-    loadNativeCrmOpportunityDetail(nativeCrmState.drawer, { force: false }).catch(() => {});
+    openNativeCrmOpportunityWorkspace(String(card.getAttribute("data-crm-card") || ""), { push: true });
   }
   const row = target.closest("[data-crm-row]");
   if (row instanceof HTMLElement && (event.key === "Enter" || event.key === " ")) {
     event.preventDefault();
-    nativeCrmState.drawer = String(row.getAttribute("data-crm-row") || "");
-    nativeCrmState.drawerMode = "view";
-    nativeCrmState.activityFormOpportunityId = "";
-    renderNativeCrm();
-    loadNativeCrmOpportunityDetail(nativeCrmState.drawer, { force: false }).catch(() => {});
+    openNativeCrmOpportunityWorkspace(String(row.getAttribute("data-crm-row") || ""), { push: true });
+  }
+  if (event.key === "Escape" && (nativeCrmState.opportunityWorkspaceId || nativeCrmState.qualificationWorkspace?.opportunityId)) {
+    if (nativeCrmState.closingDialog) {
+      nativeCrmState.closingDialog = null;
+      renderNativeCrm();
+      return;
+    }
+    closeNativeCrmWorkspace({ push: true });
+    return;
   }
   if (event.key === "Escape" && nativeCrmState.drawer) {
     if (nativeCrmState.closingDialog) {
