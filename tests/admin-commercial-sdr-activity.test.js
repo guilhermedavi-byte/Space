@@ -80,6 +80,19 @@ test("Pré-Vendas renderiza reuniões feitas e conversão total e por SDR", () =
   assert.match(activitySource, /filterByRange\(normalizedEvents, range\.fromKey, range\.toKey, \(row\) => row\.dateKey\)/);
 });
 
+test("Pré-Vendas não decora users e não mascara erro da query de eventos", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "api", "_lib", "admin-commercial-sdr-activity.js"), "utf8");
+  assert.match(source, /listCollectionAsAdmin\("users",\s*\{\s*pageSize:\s*1000,\s*decorate:\s*false\s*\}\)/);
+  assert.doesNotMatch(source, /queryCollectionByDateRangeAsAdmin\([\s\S]*?\.catch\(\(\)\s*=>\s*\[\]\)/);
+});
+
+test("Pré-Vendas preserva status, código e requestId no erro frontend", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "script.js"), "utf8");
+  assert.match(source, /error\.status = res\.status/);
+  assert.match(source, /error\.code = data\?\.error \|\| "admin_commercial_sdr_activity_failed"/);
+  assert.match(source, /error\.requestId = data\?\.requestId \|\| ""/);
+});
+
 test("normalizeActivityEvent ignora deletados e marca horário local do evento", () => {
   assert.equal(
     normalizeActivityEvent({

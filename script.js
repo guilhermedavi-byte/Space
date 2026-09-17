@@ -21570,7 +21570,13 @@ const loadAdminCommercialSdrActivity = async ({ force = false } = {}) => {
     const res = await fetchWithAuth(`/api/admin-commercial-sdr-activity?${params.toString()}`, { method: "GET", signal: controller?.signal });
     const networkMs = performance.now() - requestStartedAt;
     const data = await res.json().catch(() => null);
-    if (!res.ok) throw new Error(data?.message || data?.error || "admin_commercial_sdr_activity_failed");
+    if (!res.ok) {
+      const error = new Error(data?.message || "Não foi possível carregar a atividade diária dos SDRs agora.");
+      error.status = res.status;
+      error.code = data?.error || "admin_commercial_sdr_activity_failed";
+      error.requestId = data?.requestId || "";
+      throw error;
+    }
     if (adminCommercialSdrActivityState.activeRequestId !== requestId) return;
 
     const processingStartedAt = performance.now();
@@ -21596,7 +21602,12 @@ const loadAdminCommercialSdrActivity = async ({ force = false } = {}) => {
     }
   } catch (error) {
     if (error?.name === "AbortError" || adminCommercialSdrActivityState.activeRequestId !== requestId) return;
-    console.error("[admin] commercial sdr activity load failed:", error);
+    console.error("[admin] commercial sdr activity load failed:", {
+      status: error?.status || 0,
+      code: error?.code || error?.message || "admin_commercial_sdr_activity_failed",
+      requestId: error?.requestId || "",
+      error,
+    });
     adminCommercialSdrActivityState.error = error?.message || "Não foi possível carregar a atividade SDR agora.";
   } finally {
     if (adminCommercialSdrActivityState.skeletonDelayTimer) {

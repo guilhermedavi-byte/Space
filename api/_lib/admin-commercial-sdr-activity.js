@@ -216,12 +216,12 @@ const loadAdminCommercialSdrActivity = async ({ period = "today", from = "", to 
   const combinedFromKey = previousRange.fromKey < range.fromKey ? previousRange.fromKey : range.fromKey;
   const combinedToKey = previousRange.toKey > range.toKey ? previousRange.toKey : range.toKey;
   const [userRows, eventRows] = await Promise.all([
-    listCollectionAsAdmin("users", { pageSize: 1000 }),
+    listCollectionAsAdmin("users", { pageSize: 1000, decorate: false }),
     queryCollectionByDateRangeAsAdmin(ACTIVITY_COLLECTION, {
       dateField: "dateKey",
       from: combinedFromKey,
       to: combinedToKey,
-    }).catch(() => []),
+    }),
   ]);
   const users = userRows.map(normalizeGrowthUser).filter(Boolean);
   const usersByUid = new Map(users.map((user) => [user.uid, user]));
