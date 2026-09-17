@@ -15327,7 +15327,20 @@ const loadNativeCrm = async ({ force = false } = {}) => {
     renderNativeCrm();
     return;
   }
-  nativeCrmState.loading = true;
+  const cache = spaceCache();
+  const cacheKey = crmCacheKey("crm-board", { workspace: getNativeCrmWorkspace() || nativeCrmState.workspace || "" });
+  let renderedCached = false;
+  if (!force && cache) {
+    const cached = await cache.get(cacheKey).catch(() => null);
+    if (cached?.data) {
+      nativeCrmState.data = cached.data;
+      nativeCrmState.loadedAt = now - Math.min(cached.cacheAgeMs || 0, 25_000);
+      renderedCached = true;
+      renderNativeCrm();
+      window.SpacePerformance?.recordManual?.("crm-board", `cache:${cached.cacheSource}`, 0);
+    }
+  }
+  nativeCrmState.loading = !renderedCached;
   nativeCrmState.error = "";
   nativeCrmState.workspace = getNativeCrmWorkspace() || nativeCrmState.workspace || "sdr";
   window.SpacePerformance?.start?.("crm-board");
@@ -15341,6 +15354,7 @@ const loadNativeCrm = async ({ force = false } = {}) => {
     if (!res.ok) throw new Error(data?.message || data?.error || "crm_load_failed");
     window.SpacePerformance?.dataReady?.("crm-board");
     nativeCrmState.data = data;
+    await cache?.set?.(cacheKey, data).catch(() => {});
     nativeCrmState.loadedAt = Date.now();
     nativeCrmState.workspace = getNativeCrmWorkspace() || nativeCrmState.workspace;
     reconcileNativeCrmWorkspaceSelection({ updateUrl: true });
@@ -15350,7 +15364,7 @@ const loadNativeCrm = async ({ force = false } = {}) => {
     if (nativeCrmState.mode === "qualification_config") loadNativeCrmQualificationConfig({ force: false }).catch(() => {});
     if (nativeCrmState.mode !== "actions" && nativeCrmState.mode !== "analytics" && nativeCrmState.mode !== "qualification_config") refreshNativeCrmActionsBadge().then(renderNativeCrm).catch(() => {});
   } catch (error) {
-    nativeCrmState.error = nativeCrmLoadErrorMessage(error, "Erro ao carregar CRM.");
+    if (!renderedCached) nativeCrmState.error = nativeCrmLoadErrorMessage(error, "Erro ao carregar CRM.");
   } finally {
     nativeCrmState.loading = false;
     renderNativeCrm();
@@ -15383,16 +15397,36 @@ const syncNativeCrmListRowsIntoReadModel = (rows) => {
 
 const loadNativeCrmList = async ({ reset = false } = {}) => {
   if (nativeCrmState.list.loading) return;
-  nativeCrmState.list.loading = true;
+  const cache = spaceCache();
+  const cursor = reset ? "" : nativeCrmState.list.nextCursor;
+  const cacheKey = crmCacheKey("crm-list", Object.fromEntries(nativeCrmListParams({ cursor }).entries()));
+  let renderedCached = false;
+  if (reset && cache) {
+    const cached = await cache.get(cacheKey).catch(() => null);
+    if (cached?.data) {
+      const data = cached.data;
+      const rows = Array.isArray(data?.rows) ? data.rows : [];
+      nativeCrmState.list.rows = rows;
+      nativeCrmState.list.nextCursor = String(data?.nextCursor || "");
+      nativeCrmState.list.totalVisible = Number(data?.totalVisible) || rows.length;
+      nativeCrmState.list.loadedAt = Date.now() - Math.min(cached.cacheAgeMs || 0, 25_000);
+      syncNativeCrmListRowsIntoReadModel(rows);
+      renderedCached = true;
+      renderNativeCrm();
+      window.SpacePerformance?.recordManual?.("crm-list", `cache:${cached.cacheSource}`, 0);
+    }
+  }
+  nativeCrmState.list.loading = !renderedCached;
   nativeCrmState.list.error = "";
   if (reset) {
-    nativeCrmState.list.rows = [];
-    nativeCrmState.list.nextCursor = "";
+    if (!renderedCached) {
+      nativeCrmState.list.rows = [];
+      nativeCrmState.list.nextCursor = "";
+    }
   }
   window.SpacePerformance?.start?.("crm-list");
   renderNativeCrm();
   try {
-    const cursor = reset ? "" : nativeCrmState.list.nextCursor;
     const res = await fetchWithAuthWithTimeout(`/api/crm?${nativeCrmListParams({ cursor }).toString()}`, { method: "GET" }, CRM_API_TIMEOUT_MS, "crm_list");
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(data?.error || "crm_list_failed");
@@ -15403,8 +15437,9 @@ const loadNativeCrmList = async ({ reset = false } = {}) => {
     nativeCrmState.list.totalVisible = Number(data?.totalVisible) || nativeCrmState.list.rows.length;
     nativeCrmState.list.loadedAt = Date.now();
     syncNativeCrmListRowsIntoReadModel(rows);
+    await cache?.set?.(cacheKey, data).catch(() => {});
   } catch (error) {
-    nativeCrmState.list.error = nativeCrmLoadErrorMessage(error, "Não foi possível carregar a lista.");
+    if (!renderedCached) nativeCrmState.list.error = nativeCrmLoadErrorMessage(error, "Não foi possível carregar a lista.");
   } finally {
     nativeCrmState.list.loading = false;
     renderNativeCrm();
@@ -15414,6 +15449,17 @@ const loadNativeCrmList = async ({ reset = false } = {}) => {
 
 const reloadNativeCrmListIfNeeded = () => {
   if (nativeCrmState.mode === "list") loadNativeCrmList({ reset: true }).catch(() => {});
+};
+
+const spaceCache = () => window.SpaceDataCache || null;
+const crmCacheKey = (resource, params = {}) => spaceCache()?.key({ resource, params }) || `${resource}:${JSON.stringify(params)}`;
+const invalidateCrmBoardCache = () => spaceCache()?.invalidate?.("crm-board").catch(() => {});
+const invalidateCrmOpportunityCache = (opportunityId) => {
+  const id = String(opportunityId || "").trim();
+  if (!id) return;
+  spaceCache()?.invalidate?.(`crm-opportunity`).catch(() => {});
+  spaceCache()?.invalidate?.(`crm-timeline`).catch(() => {});
+  spaceCache()?.invalidate?.(`crm-activities`).catch(() => {});
 };
 
 const nativeCrmAnalyticsParams = () => {
@@ -15596,7 +15642,33 @@ const loadNativeCrmOpportunityDetail = async (opportunityId, { force = false } =
   const current = getNativeCrmDetail(id);
   if (!force && current.loading) return;
   if (!force && current.loadedAt && Date.now() - current.loadedAt < 15_000) return;
-  nativeCrmState.details[id] = { ...current, loading: true, error: "" };
+  const cache = spaceCache();
+  const coreKey = crmCacheKey("crm-opportunity-core", { opportunityId: id });
+  const timelineKey = crmCacheKey("crm-timeline", { opportunityId: id });
+  const activitiesKey = crmCacheKey("crm-activities", { opportunityId: id });
+  let renderedCached = false;
+  if (!force && cache) {
+    const [core, timeline, activities] = await Promise.all([
+      cache.get(coreKey).catch(() => null),
+      cache.get(timelineKey).catch(() => null),
+      cache.get(activitiesKey).catch(() => null),
+    ]);
+    if (core?.data) {
+      nativeCrmState.details[id] = {
+        ...current,
+        ...core.data,
+        timeline: Array.isArray(timeline?.data) ? timeline.data : core.data.timeline || [],
+        activities: Array.isArray(activities?.data) ? activities.data : core.data.activities || [],
+        loading: false,
+        loadedAt: Date.now() - Math.min(core.cacheAgeMs || 0, 12_000),
+        error: "",
+      };
+      renderedCached = true;
+      renderNativeCrm();
+      window.SpacePerformance?.recordManual?.("crm-opportunity", `cache:${core.cacheSource}`, 0);
+    }
+  }
+  nativeCrmState.details[id] = { ...getNativeCrmDetail(id), loading: !renderedCached, error: "" };
   window.SpacePerformance?.start?.("crm-opportunity");
   renderNativeCrm();
   try {
@@ -15615,8 +15687,15 @@ const loadNativeCrmOpportunityDetail = async (opportunityId, { force = false } =
       actions: Array.isArray(data?.actions) ? data.actions : [],
       error: "",
     };
+    const core = { ...nativeCrmState.details[id], timeline: [], activities: [] };
+    await Promise.all([
+      cache?.set?.(coreKey, core).catch(() => {}),
+      cache?.set?.(timelineKey, nativeCrmState.details[id].timeline).catch(() => {}),
+      cache?.set?.(activitiesKey, nativeCrmState.details[id].activities).catch(() => {}),
+    ]);
   } catch (error) {
-    nativeCrmState.details[id] = { ...current, loading: false, error: nativeCrmLoadErrorMessage(error, "Não foi possível carregar o histórico.") };
+    if (!renderedCached) nativeCrmState.details[id] = { ...current, loading: false, error: nativeCrmLoadErrorMessage(error, "Não foi possível carregar o histórico.") };
+    else nativeCrmState.details[id] = { ...getNativeCrmDetail(id), loading: false };
   } finally {
     renderNativeCrm();
     window.SpacePerformance?.rendered?.("crm-opportunity");
@@ -15666,6 +15745,8 @@ const submitNativeCrmForm = async (form) => {
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(data?.error || "crm_save_failed");
     const savedId = String(data?.opportunity?.id || bodyPayload.id || "").trim();
+    invalidateCrmBoardCache();
+    invalidateCrmOpportunityCache(savedId || bodyPayload.id);
     if (savedId && kind !== "new" && nativeCrmState.opportunityWorkspaceId === bodyPayload.id) nativeCrmState.opportunityWorkspaceId = savedId;
     else nativeCrmState.drawer = null;
     nativeCrmState.drawerMode = "view";
@@ -15719,6 +15800,8 @@ const createNativeCrmActivity = async (wrap) => {
     });
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(data?.error || "crm_activity_create_failed");
+    invalidateCrmBoardCache();
+    invalidateCrmOpportunityCache(payload.opportunityId);
     nativeCrmState.activityFormOpportunityId = "";
     nativeCrmState.loadedAt = 0;
     await loadNativeCrm({ force: true });
@@ -15747,6 +15830,8 @@ const completeNativeCrmActivity = async (activityId) => {
     });
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(data?.error || "crm_activity_complete_failed");
+    invalidateCrmBoardCache();
+    invalidateCrmOpportunityCache(opportunityId);
     nativeCrmState.loadedAt = 0;
     await loadNativeCrm({ force: true });
     if (nativeCrmState.opportunityWorkspaceId === opportunityId || nativeCrmState.qualificationWorkspace?.opportunityId === opportunityId) nativeCrmState.opportunityWorkspaceId = opportunityId;
@@ -15774,6 +15859,7 @@ const startNativeCrmQualification = async (opportunityId, { pendingTransition = 
     });
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(data?.error || "qualification_start_failed");
+    invalidateCrmOpportunityCache(id);
     nativeCrmState.loadedAt = 0;
     await loadNativeCrm({ force: true });
     if (openWorkspace) {
@@ -15825,6 +15911,8 @@ const submitNativeCrmQualification = async (wrap) => {
     });
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(data?.error || "qualification_complete_failed");
+    invalidateCrmBoardCache();
+    invalidateCrmOpportunityCache(opportunityId);
     nativeCrmState.loadedAt = 0;
     await loadNativeCrm({ force: true });
     if (nativeCrmState.qualificationWorkspace?.opportunityId === opportunityId) nativeCrmState.opportunityWorkspaceId = opportunityId;
@@ -15854,6 +15942,8 @@ const runNativeCrmHandoff = async (opportunityId) => {
     });
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(data?.error || "handoff_failed");
+    invalidateCrmBoardCache();
+    invalidateCrmOpportunityCache(id);
     nativeCrmState.loadedAt = 0;
     await loadNativeCrm({ force: true });
     if (nativeCrmState.opportunityWorkspaceId === id || nativeCrmState.qualificationWorkspace?.opportunityId === id) nativeCrmState.opportunityWorkspaceId = id;
@@ -15884,6 +15974,7 @@ const setNativeCrmMeetingOutcome = async (opportunityId, meetingOutcome) => {
     });
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(data?.error || "meeting_outcome_failed");
+    invalidateCrmOpportunityCache(id);
     nativeCrmState.loadedAt = 0;
     await loadNativeCrm({ force: true });
     if (nativeCrmState.opportunityWorkspaceId === id || nativeCrmState.qualificationWorkspace?.opportunityId === id) nativeCrmState.opportunityWorkspaceId = id;
@@ -15935,6 +16026,8 @@ const submitNativeCrmCloserReview = async (wrap) => {
     });
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(data?.error || "closer_review_failed");
+    invalidateCrmBoardCache();
+    invalidateCrmOpportunityCache(opportunityId);
     nativeCrmState.loadedAt = 0;
     await loadNativeCrm({ force: true });
     if (nativeCrmState.opportunityWorkspaceId === opportunityId || nativeCrmState.qualificationWorkspace?.opportunityId === opportunityId) nativeCrmState.opportunityWorkspaceId = opportunityId;
@@ -15964,6 +16057,8 @@ const runNativeCrmOpportunityAction = async (action, payload = {}) => {
     });
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(data?.error || "crm_opportunity_action_failed");
+    invalidateCrmBoardCache();
+    invalidateCrmOpportunityCache(opportunityId);
     nativeCrmState.loadedAt = 0;
     nativeCrmState.actions.loadedAt = 0;
     nativeCrmState.closingDialog = null;
@@ -16030,6 +16125,8 @@ const completeNativeCrmQualificationAction = async (button) => {
     });
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(data?.error || "qualification_action_complete_failed");
+    invalidateCrmBoardCache();
+    invalidateCrmOpportunityCache(opportunityId);
     nativeCrmState.loadedAt = 0;
     nativeCrmState.actions.loadedAt = 0;
     await loadNativeCrm({ force: true });
@@ -16064,6 +16161,7 @@ const dismissNativeCrmQualificationAction = async (button) => {
     });
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(data?.error || "qualification_action_dismiss_failed");
+    invalidateCrmOpportunityCache(opportunityId);
     nativeCrmState.loadedAt = 0;
     nativeCrmState.actions.loadedAt = 0;
     await loadNativeCrm({ force: true });
@@ -16098,6 +16196,7 @@ const assignNativeCrmQualificationAction = async (button) => {
     });
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(data?.error || "qualification_action_assign_failed");
+    invalidateCrmOpportunityCache(opportunityId);
     nativeCrmState.actions.loadedAt = 0;
     await loadNativeCrmActions({ force: true });
     if (nativeCrmState.opportunityWorkspaceId === opportunityId || nativeCrmState.qualificationWorkspace?.opportunityId === opportunityId) nativeCrmState.opportunityWorkspaceId = opportunityId;
@@ -16159,6 +16258,8 @@ const moveNativeCrmOpportunity = async (opportunityId, stageId) => {
       error.payload = data || null;
       throw error;
     }
+    invalidateCrmBoardCache();
+    invalidateCrmOpportunityCache(opportunityId);
     nativeCrmState.loadedAt = 0;
     await loadNativeCrm({ force: true });
   } catch (error) {
@@ -20922,11 +21023,26 @@ const loadAdminCommercialOverview = async ({ force = false } = {}) => {
     renderAdminCommercialOverview();
     return;
   }
-  adminCommercialOverviewState.isLoading = true;
+  const range = getCommercialOverviewRange();
+  const cache = spaceCache();
+  const cacheKey = cache?.key?.({ resource: "commercial-overview", params: { period: adminCommercialOverviewState.period, start: range.start, end: range.end } });
+  let renderedCached = false;
+  if (!force && cache && cacheKey) {
+    const cached = await cache.get(cacheKey).catch(() => null);
+    if (cached?.data) {
+      adminCommercialOverviewState.crm = cached.data.crm || {};
+      adminCommercialOverviewState.goal = cached.data.goal || null;
+      adminCommercialOverviewState.sdr = cached.data.sdr || {};
+      adminCommercialOverviewState.loadedAt = now - Math.min(cached.cacheAgeMs || 0, 55_000);
+      renderedCached = true;
+      renderAdminCommercialOverview();
+      window.SpacePerformance?.recordManual?.("commercial-overview", `cache:${cached.cacheSource}`, 0);
+    }
+  }
+  adminCommercialOverviewState.isLoading = !renderedCached;
   adminCommercialOverviewState.error = "";
   renderAdminCommercialOverview();
   try {
-    const range = getCommercialOverviewRange();
     if (!isValidDateKey(range.start) || !isValidDateKey(range.end) || range.start > range.end) {
       throw new Error("invalid_commercial_overview_range");
     }
@@ -20954,11 +21070,12 @@ const loadAdminCommercialOverview = async ({ force = false } = {}) => {
     adminCommercialOverviewState.crm = crm || {};
     adminCommercialOverviewState.goal = goalRes.ok ? goalPayload?.goal || null : null;
     adminCommercialOverviewState.sdr = sdr || {};
+    await cache?.set?.(cacheKey, { crm: crm || {}, goal: goalRes.ok ? goalPayload?.goal || null : null, sdr: sdr || {} }).catch(() => {});
     logCommercialOverviewShowRateAudit(range);
     adminCommercialOverviewState.loadedAt = Date.now();
   } catch (error) {
     console.error("[admin] commercial overview load failed:", error);
-    adminCommercialOverviewState.error = "Não foi possível carregar a Visão Geral Comercial agora.";
+    if (!renderedCached) adminCommercialOverviewState.error = "Não foi possível carregar a Visão Geral Comercial agora.";
   } finally {
     adminCommercialOverviewState.isLoading = false;
     renderAdminCommercialOverview();
@@ -22601,6 +22718,20 @@ const loadUsersFromFirestore = async (type) => {
   const state = adminUsersState[safeType];
   if (state.isLoading) return;
   const perfFlow = safeType === "growth" ? "admin-commercial-users" : "";
+  const cache = spaceCache();
+  const cacheKey = safeType === "growth" ? cache?.key?.({ resource: "commercial-users", params: { type: "growth" } }) : "";
+  let renderedCachedRows = false;
+  if (safeType === "growth" && cacheKey) {
+    const cached = await cache.get(cacheKey).catch(() => null);
+    if (cached?.data && Array.isArray(cached.data)) {
+      state.rows = cached.data;
+      state.loadedAt = Date.now() - Math.min(cached.cacheAgeMs || 0, 55_000);
+      renderAdminUsersTable(safeType);
+      renderAdminCommercialUsersTable();
+      window.SpacePerformance?.recordManual?.(perfFlow, `cache:${cached.cacheSource}`, 0);
+      renderedCachedRows = true;
+    }
+  }
   if (perfFlow) window.SpacePerformance?.start?.(perfFlow);
 
   state.isLoading = true;
@@ -22617,6 +22748,7 @@ const loadUsersFromFirestore = async (type) => {
       window.SpacePerformance?.dataReady?.(perfFlow);
     }
     state.rows = Array.isArray(rows) ? rows.filter(Boolean).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")) : [];
+    if (safeType === "growth" && cacheKey) await cache?.set?.(cacheKey, state.rows).catch(() => {});
     state.loadedAt = Date.now();
     setAdminManageStatus(safeType, "");
     renderAdminUsersTable(safeType);
@@ -22629,14 +22761,16 @@ const loadUsersFromFirestore = async (type) => {
     // Surface the root cause for debugging (rules, connectivity, etc.).
     console.error("[admin] loadUsersFromFirestore failed:", safeType, err);
     state.error = typeof err?.message === "string" && err.message ? err.message : "Não foi possível carregar a lista, tente novamente.";
-    if (table instanceof HTMLElement) table.innerHTML = "";
-    if (empty instanceof HTMLElement) empty.hidden = true;
-    if (error instanceof HTMLElement) error.hidden = false;
+    if (!renderedCachedRows) {
+      if (table instanceof HTMLElement) table.innerHTML = "";
+      if (empty instanceof HTMLElement) empty.hidden = true;
+      if (error instanceof HTMLElement) error.hidden = false;
+    }
     const code = typeof err?.code === "string" ? err.code : "";
     let message = "Não foi possível carregar.";
     if (code === "timeout") message = "Tempo esgotado ao carregar. Tente novamente.";
     if (code === "auth/no-current-user") message = "Sessão expirada. Faça login novamente.";
-    setAdminManageStatus(safeType, message, "error");
+    setAdminManageStatus(safeType, renderedCachedRows ? "" : message, renderedCachedRows ? "" : "error");
     if (safeType === "growth") renderAdminCommercialUsersTable();
   } finally {
     state.isLoading = false;
@@ -39478,6 +39612,8 @@ const updateGrowthUserLocally = ({ uid, patch = {} } = {}) => {
   adminUsersState.growth.rows = [...rows].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 };
 
+const invalidateCommercialUsersCache = () => spaceCache()?.invalidate?.("commercial-users").catch(() => {});
+
 const updateAdminUserNameRecord = async ({ uid, role, name, commercialRoles = [] } = {}) => {
   const safeUid = String(uid || "").trim();
   const safeRole = role === "teacher" ? "teacher" : role === "growth" ? "growth" : "student";
@@ -39497,6 +39633,7 @@ const updateAdminUserNameRecord = async ({ uid, role, name, commercialRoles = []
     });
     const data = await response.json().catch(() => null);
     if (!response.ok || !data?.ok) throw new Error(data?.message || data?.errorDetail || data?.error || "growth_user_update_failed");
+    await invalidateCommercialUsersCache();
     updateGrowthUserLocally({ uid: safeUid, patch: { nome: safeName, commercialRoles: roles, initials: getInitials(safeName) } });
     renderAdminUsersTable("growth");
     renderAdminCommercialUsersTable();
@@ -39750,6 +39887,7 @@ const createAdminUserRecord = async ({ role, name, email, password } = {}) => {
       "admin_users_import_sync"
     );
 
+    if (safeRole === "growth") await invalidateCommercialUsersCache();
     return { uid };
   } finally {
     try {
@@ -40031,6 +40169,10 @@ if (adminUserForm instanceof HTMLFormElement) {
       // Refresh lists if visible.
       adminUsersState.teacher.loadedAt = 0;
       adminUsersState.student.loadedAt = 0;
+      if (role === "growth") {
+        await invalidateCommercialUsersCache();
+        adminUsersState.growth.loadedAt = 0;
+      }
       if (body.dataset.activePanel === "professores") {
         loadUsersFromFirestore("teacher");
       }
@@ -40618,6 +40760,7 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
           adminUsersState.teacher.loadedAt = 0;
           adminUsersState.student.loadedAt = 0;
           adminUsersState.growth.loadedAt = 0;
+          if (role === "growth") await invalidateCommercialUsersCache();
 
           if (successEl instanceof HTMLElement) successEl.hidden = false;
           if (role === "financeiro") {
@@ -43004,6 +43147,7 @@ if (closePlatformButton) {
     // Always clear local state first so protected UI doesn't linger if navigation is delayed.
     try {
       clearPlatformStorage();
+      await window.SpaceDataCache?.clearUserScope?.();
     } catch (error) {
       // ignore
     }
@@ -45630,6 +45774,7 @@ document.addEventListener("click", (event) => {
               list[idx] = { ...list[idx], ativo: nextActive };
               adminUsersState[type].rows = [...list].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
             }
+            if (type === "growth") await invalidateCommercialUsersCache();
 	            setAdminManageStatus(type, nextActive ? "Usuário ativado." : "Usuário desativado.", "success");
 	            window.setTimeout(() => setAdminManageStatus(type, ""), 1200);
 	            renderAdminUsersTable(type);

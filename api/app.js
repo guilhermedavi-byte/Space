@@ -144,6 +144,7 @@ const buildAppHtml = ({ sessionJson, role, roleSlug, templateHtml, initialPanel 
     </script>
     ${platformVisible}
     ${modalHtml}
+    <script src="/assets/space-data-cache.js"></script>
     <script src="/assets/student-lifecycle.js"></script>
     <script src="/assets/lifecycle-metrics.js"></script>
     <script src="finance-customer-link.js?v=1"></script>

@@ -1,11 +1,11 @@
 const crypto = require("crypto");
 
-const { sendJson } = require("../_lib/http");
 const { getSessionFromRequest } = require("../_lib/session");
 const {
   commitWritesAsAdmin,
   getDocumentAsAdmin,
   listCollectionAsAdmin,
+  queryCollectionByFieldAsAdmin,
 } = require("./_lib/firestore-admin");
 const { PROJECT_ID, encodeFields } = require("./_lib/firestore-rest");
 const crmService = require("./_lib/crm-service");
@@ -14,7 +14,7 @@ const handoff = require("./_lib/crm-handoff");
 const qualificationAnalytics = require("./_lib/crm-qualification-analytics");
 const qualificationActions = require("./_lib/crm-qualification-actions");
 const commercialPermissions = require("./_lib/commercial-permissions");
-const { createPerformanceTimer } = require("./_lib/performance-observer");
+const { createPerformanceTimer, sendJsonWithPerformance } = require("./_lib/performance-observer");
 
 const COLLECTIONS = {
   pipelines: "crmPipelines",
@@ -365,8 +365,8 @@ const loadActivitiesForOpportunity = async (opportunityId, perf = null) => {
   const safeOpportunityId = clean(opportunityId);
   if (!safeOpportunityId) return [];
   const rows = await (perf
-    ? perf.measure("activities", () => listCollectionAsAdmin(COLLECTIONS.activities, { maxPages: 50 }), { firestore: true })
-    : listCollectionAsAdmin(COLLECTIONS.activities, { maxPages: 50 })).catch(() => []);
+    ? perf.measure("activities", () => queryCollectionByFieldAsAdmin(COLLECTIONS.activities, { field: "opportunityId", value: safeOpportunityId }), { firestore: true })
+    : queryCollectionByFieldAsAdmin(COLLECTIONS.activities, { field: "opportunityId", value: safeOpportunityId })).catch(() => []);
   const activities = rows
     .map(normalizeActivity)
     .filter((activity) => activity.id && matchesCrmScope(activity) && activity.opportunityId === safeOpportunityId)
@@ -891,8 +891,8 @@ const eventDescription = (event) => {
 
 const buildOpportunityTimeline = async (opportunityId, perf = null) => {
   const [eventsRaw, historyRaw, stagesRaw, usersRaw] = await Promise.all([
-    (perf ? perf.measure("timeline_events", () => listCollectionAsAdmin(COLLECTIONS.events, { maxPages: 50 }), { firestore: true }) : listCollectionAsAdmin(COLLECTIONS.events, { maxPages: 50 })).catch(() => []),
-    (perf ? perf.measure("timeline_stageHistory", () => listCollectionAsAdmin(COLLECTIONS.stageHistory, { maxPages: 50 }), { firestore: true }) : listCollectionAsAdmin(COLLECTIONS.stageHistory, { maxPages: 50 })).catch(() => []),
+    (perf ? perf.measure("timeline_events", () => queryCollectionByFieldAsAdmin(COLLECTIONS.events, { field: "opportunityId", value: opportunityId }), { firestore: true }) : queryCollectionByFieldAsAdmin(COLLECTIONS.events, { field: "opportunityId", value: opportunityId })).catch(() => []),
+    (perf ? perf.measure("timeline_stageHistory", () => queryCollectionByFieldAsAdmin(COLLECTIONS.stageHistory, { field: "opportunityId", value: opportunityId }), { firestore: true }) : queryCollectionByFieldAsAdmin(COLLECTIONS.stageHistory, { field: "opportunityId", value: opportunityId })).catch(() => []),
     (perf ? perf.measure("timeline_stages", () => listCollectionAsAdmin(COLLECTIONS.stages, { maxPages: 10 }), { firestore: true }) : listCollectionAsAdmin(COLLECTIONS.stages, { maxPages: 10 })).catch(() => []),
     (perf ? perf.measure("timeline_users", () => listCollectionAsAdmin(COLLECTIONS.users, { maxPages: 20 }), { firestore: true }) : listCollectionAsAdmin(COLLECTIONS.users, { maxPages: 20 })).catch(() => []),
   ]);
@@ -2411,8 +2411,7 @@ const handleReactivateOpportunity = async ({ auth, body }) => {
 module.exports = async (req, res) => {
   const perf = createPerformanceTimer({ req, route: "/api/crm", operation: "crm" });
   const send = (status, body) => {
-    perf.finish(res, body);
-    return sendJson(res, status, body);
+    return sendJsonWithPerformance(req, res, status, body, perf, { etag: req.method === "GET" || req.method === "HEAD" });
   };
   let auth = perf.measure ? await perf.measure("auth", () => Promise.resolve(canAccessCrm(req))) : canAccessCrm(req);
   if (!auth.ok) return send(auth.status, { error: auth.error });

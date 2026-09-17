@@ -9,6 +9,8 @@
   const shiftMonth = (key, offset) => { const [year, month] = key.split('-').map(Number); return new Date(Date.UTC(year, month - 1 + offset, 15)).toISOString().slice(0, 7); };
   const button = (action, label, primary = false) => `<button type="button" class="button button-${primary ? 'solid' : 'outline'} button-small" data-goals-action="${escape(action)}">${escape(label)}</button>`;
   const api = '/api/growth-dashboard?api=growth-goals';
+  const cache = () => window.SpaceDataCache || null;
+  const cacheKey = competencia => cache()?.key?.({ resource: 'commercial-goals', params: { competencia } });
 
   function create({ root, fetchWithAuth, currentCompetencia }) {
     const state = { competencia: currentCompetencia, data: null, request: 0, drawer: null, saving: false };
@@ -37,18 +39,29 @@
       closeDrawer();
       state.competencia = competencia;
       const request = ++state.request;
-      state.data = null;
-      root.innerHTML = `${header()}<div class="space-goals-kpis" aria-busy="true" aria-label="Carregando metas">${Array.from({ length: 4 }, () => '<div class="space-goals-card space-goals-skeleton"></div>').join('')}</div><div class="space-goals-card space-goals-skeleton space-goals-skeleton-large"></div>`;
+      let renderedCached = false;
+      const key = cacheKey(competencia);
+      const cached = key ? await cache()?.get?.(key).catch(() => null) : null;
+      if (cached?.data) {
+        state.data = cached.data;
+        renderedCached = true;
+        render();
+        window.SpacePerformance?.recordManual?.('commercial-goals', `cache:${cached.cacheSource}`, 0);
+      } else {
+        state.data = null;
+        root.innerHTML = `${header()}<div class="space-goals-kpis" aria-busy="true" aria-label="Carregando metas">${Array.from({ length: 4 }, () => '<div class="space-goals-card space-goals-skeleton"></div>').join('')}</div><div class="space-goals-card space-goals-skeleton space-goals-skeleton-large"></div>`;
+      }
       try {
         const response = await fetchWithAuth(`${api}&mode=management&competencia=${encodeURIComponent(competencia)}`, { method: 'GET' });
         const payload = await response.json();
         if (!response.ok || !payload.management) throw new Error('read_failed');
         if (request !== state.request) return;
         state.data = payload.management;
+        await cache()?.set?.(key, payload.management).catch(() => {});
         render();
       } catch (error) {
         if (request !== state.request) return;
-        root.innerHTML = `${header()}<div class="space-goals-card" role="alert"><h3>Não foi possível carregar as metas.</h3><p>Tente novamente para consultar os valores salvos.</p>${button('retry', 'Tentar novamente')}</div>`;
+        if (!renderedCached) root.innerHTML = `${header()}<div class="space-goals-card" role="alert"><h3>Não foi possível carregar as metas.</h3><p>Tente novamente para consultar os valores salvos.</p>${button('retry', 'Tentar novamente')}</div>`;
       }
     }
     function closeDrawer() {
@@ -123,6 +136,7 @@
         const response = await fetchWithAuth(api, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || 'save_failed');
+        await cache()?.invalidate?.('commercial-goals').catch(() => {});
         state.saving = false; closeDrawer();
         notify(week ? 'Metas da semana salvas com sucesso.' : 'Meta mensal salva com sucesso.');
         await load(drawer.competencia);

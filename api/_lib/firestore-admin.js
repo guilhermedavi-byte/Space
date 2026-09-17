@@ -110,6 +110,48 @@ const queryCollectionByDateRangeAsAdmin = async (collectionPath, { dateField = "
     });
 };
 
+const queryCollectionByFieldAsAdmin = async (collectionPath, { field, value, maxResults = 1000 } = {}) => {
+  const path = String(collectionPath || "").replace(/^\/+/, "");
+  const fieldPath = String(field || "").trim();
+  if (!path) throw new Error("missing_collection");
+  if (!fieldPath) throw new Error("missing_field");
+  if (path.includes("/")) throw new Error("nested_collection_query_not_supported");
+  const accessToken = await getAccessToken();
+  const response = await firestoreRunQuery({
+    idToken: accessToken,
+    structuredQuery: {
+      from: [{ collectionId: path }],
+      where: {
+        fieldFilter: {
+          field: { fieldPath },
+          op: "EQUAL",
+          value: encodeValue(value),
+        },
+      },
+      limit: Math.max(1, Math.min(Number(maxResults) || 1000, 1000)),
+    },
+  });
+  if (!response.ok) {
+    const error = new Error("firestore_admin_query_failed");
+    error.status = response.status;
+    error.details = response.data || response.text || null;
+    throw error;
+  }
+  const rows = Array.isArray(response.data) ? response.data : [];
+  return rows
+    .map((row) => row?.document)
+    .filter(Boolean)
+    .map((doc) => {
+      const firestoreDocId = getDocIdFromName(doc.name);
+      const fields = decodeFields(doc);
+      return {
+        ...fields,
+        id: typeof fields?.id === "string" && fields.id.trim() ? fields.id : firestoreDocId,
+        firestoreDocId,
+      };
+    });
+};
+
 const getDocumentAsAdmin = async (docPath) => {
   const path = String(docPath || "").replace(/^\/+/, "");
   if (!path) throw new Error("missing_document_path");
@@ -174,5 +216,6 @@ module.exports = {
   createDocumentAsAdmin,
   getDocumentAsAdmin,
   listCollectionAsAdmin,
+  queryCollectionByFieldAsAdmin,
   queryCollectionByDateRangeAsAdmin,
 };

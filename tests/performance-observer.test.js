@@ -1,17 +1,23 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const { createPerformanceTimer } = require("../api/_lib/performance-observer");
+const { createPerformanceTimer, sendJsonWithPerformance } = require("../api/_lib/performance-observer");
 
 const fakeRes = () => {
   const headers = new Map();
   return {
     headersSent: false,
+    statusCode: 200,
+    body: "",
     setHeader(name, value) {
       headers.set(String(name).toLowerCase(), value);
     },
     getHeader(name) {
       return headers.get(String(name).toLowerCase());
+    },
+    end(value = "") {
+      this.body = value;
+      this.headersSent = true;
     },
   };
 };
@@ -51,4 +57,25 @@ test("performance logs contain metrics but not response payload content", () => 
   assert.equal(lines.length, 1);
   assert.match(lines[0], /"type":"performance"/);
   assert.doesNotMatch(lines[0], /person@example\.com|secret/);
+});
+
+test("sendJsonWithPerformance returns private ETag and 304 on matching GET", () => {
+  const payload = { ok: true, rows: [1, 2, 3] };
+  const firstReq = { method: "GET", headers: {} };
+  const firstRes = fakeRes();
+  sendJsonWithPerformance(firstReq, firstRes, 200, payload, createPerformanceTimer({ req: firstReq }), { etag: true });
+
+  const tag = firstRes.getHeader("etag");
+  assert.match(String(tag), /^"/);
+  assert.equal(firstRes.getHeader("cache-control"), "private, no-store");
+  assert.equal(firstRes.statusCode, 200);
+  assert.deepEqual(JSON.parse(firstRes.body), payload);
+
+  const secondReq = { method: "GET", headers: { "if-none-match": tag } };
+  const secondRes = fakeRes();
+  sendJsonWithPerformance(secondReq, secondRes, 200, payload, createPerformanceTimer({ req: secondReq }), { etag: true });
+
+  assert.equal(secondRes.statusCode, 304);
+  assert.equal(secondRes.body, "");
+  assert.equal(secondRes.getHeader("etag"), tag);
 });

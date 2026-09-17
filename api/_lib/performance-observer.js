@@ -26,6 +26,36 @@ const byteSize = (value) => {
   }
 };
 
+const payloadEtag = (payload) => {
+  try {
+    return `"${crypto.createHash("sha1").update(JSON.stringify(payload ?? {})).digest("base64url").slice(0, 24)}"`;
+  } catch {
+    return "";
+  }
+};
+
+const sendJsonWithPerformance = (req, res, statusCode, payload, perf, { etag = false } = {}) => {
+  if (etag && req?.method === "GET" && statusCode >= 200 && statusCode < 300) {
+    const tag = payloadEtag(payload);
+    if (tag) {
+      res.setHeader("ETag", tag);
+      res.setHeader("Cache-Control", "private, no-store");
+      if (String(req.headers?.["if-none-match"] || "") === tag) {
+        perf?.finish?.(res, {});
+        res.statusCode = 304;
+        res.end("");
+        return;
+      }
+    }
+  }
+  perf?.finish?.(res, payload);
+  const body = JSON.stringify(payload ?? {});
+  res.statusCode = statusCode;
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  if (!res.getHeader?.("Cache-Control")) res.setHeader("Cache-Control", "no-store");
+  res.end(body);
+};
+
 const createPerformanceTimer = ({ req, route = "", operation = "" } = {}) => {
   const requestStart = now();
   const requestId = requestIdFrom(req);
@@ -114,4 +144,4 @@ const createPerformanceTimer = ({ req, route = "", operation = "" } = {}) => {
   return timer;
 };
 
-module.exports = { byteSize, createPerformanceTimer };
+module.exports = { byteSize, createPerformanceTimer, payloadEtag, sendJsonWithPerformance };
