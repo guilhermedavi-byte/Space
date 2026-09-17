@@ -4,6 +4,46 @@ const { requireAttendanceAuth } = require('./_lib/attendance-auth');
 const { assertAttendanceEnvironment, fail, only, uuid, text } = require('./_lib/attendance-domain');
 const { supabaseFetch } = require('./_lib/supabase-rest');
 
+const readConnectionsViaEdge = async (uid) => {
+  const url = String(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/\/+$/, '');
+  const key = String(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || '').trim();
+  if (!url || !key) {
+    const error = new Error('supabase_not_configured');
+    error.code = 'supabase_not_configured';
+    throw error;
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
+  try {
+    const res = await fetch(`${url}/functions/v1/attendance-connections-read`, {
+      method: 'POST',
+      redirect: 'error',
+      signal: controller.signal,
+      headers: {
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ uid: String(uid || '') }),
+    });
+    if (!res.ok) throw Object.assign(new Error('attendance_edge_read_failed'), { status: res.status });
+    const data = await res.json();
+    return {
+      connections: Array.isArray(data.connections) ? data.connections : [],
+      channels: Array.isArray(data.channels) ? data.channels : [],
+      teams: Array.isArray(data.teams) ? data.teams : [],
+      grants: Array.isArray(data.grants) ? data.grants : [],
+      members: Array.isArray(data.members) ? data.members : [],
+      membership: Array.isArray(data.membership) ? data.membership : [],
+    };
+  } catch (error) {
+    if (error?.name === 'AbortError') throw Object.assign(new Error('attendance_edge_read_failed'), { code: 'attendance_edge_read_failed' });
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
 const createHandler = ({ authenticate = requireAttendanceAuth, request = supabaseFetch, checkEnvironment = assertAttendanceEnvironment } = {}) => async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   if (!['GET', 'POST'].includes(req.method)) return sendJson(res, 405, { error: 'method_not_allowed' });
@@ -30,15 +70,37 @@ const createHandler = ({ authenticate = requireAttendanceAuth, request = supabas
       }
     };
     const admin = actor.role === 'admin';
-    const connections = await read('/connections?select=connection_id,provider,external_account_id,external_account_type,display_name,status,created_at,updated_at,metadata&order=created_at.desc', 'connections');
-    const channels = await read('/channels?select=channel_id,connection_id,external_channel_id,display_name,status,default_team_id', 'channels');
-    const teams = await read('/teams?select=team_id,name,active', 'teams');
-    const grants = await read('/channel_teams?select=channel_id,team_id', 'channel_teams');
+    let connections;
+    let channels;
+    let teams;
+    let grants;
     let members = [];
     let membership = [];
-    if (!admin) {
-      members = await read(`/attendance_members?select=enabled&user_uid=eq.${encodeURIComponent(actor.uid)}`, 'attendance_members');
-      membership = await read(`/team_members?select=team_id,member_role,active&user_uid=eq.${encodeURIComponent(actor.uid)}`, 'team_members');
+    try {
+      connections = await read('/connections?select=connection_id,provider,external_account_id,external_account_type,display_name,status,created_at,updated_at,metadata&order=created_at.desc', 'connections');
+      channels = await read('/channels?select=channel_id,connection_id,external_channel_id,display_name,status,default_team_id', 'channels');
+      teams = await read('/teams?select=team_id,name,active', 'teams');
+      grants = await read('/channel_teams?select=channel_id,team_id', 'channel_teams');
+      if (!admin) {
+        members = await read(`/attendance_members?select=enabled&user_uid=eq.${encodeURIComponent(actor.uid)}`, 'attendance_members');
+        membership = await read(`/team_members?select=team_id,member_role,active&user_uid=eq.${encodeURIComponent(actor.uid)}`, 'team_members');
+      }
+    } catch (error) {
+      if (req.method !== 'GET' || request !== supabaseFetch) throw error;
+      console.warn('[attendance-connections] falling back to direct database edge read', {
+        table: error.attendanceTable || 'unknown',
+        status: Number(error.status) || 0,
+        code: String(error.code || error.message || 'unknown').slice(0, 80),
+      });
+      const bundle = await readConnectionsViaEdge(actor.uid);
+      connections = bundle.connections;
+      channels = bundle.channels;
+      teams = bundle.teams;
+      grants = bundle.grants;
+      if (!admin) {
+        members = bundle.members;
+        membership = bundle.membership;
+      }
     }
     const scope = membership.filter(m => members[0]?.enabled && m.active && teams.some(t => t.team_id === m.team_id && t.active));
     const hasTeam = (id, manage = false) => admin || scope.some(m => m.team_id === id && (!manage || m.member_role === 'supervisor'));
