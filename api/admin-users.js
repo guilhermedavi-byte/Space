@@ -2,7 +2,7 @@ const { readJsonBody, sendJson } = require("../_lib/http");
 const { getSessionFromRequest } = require("../_lib/session");
 const { verifyFirebaseIdToken } = require("../_lib/firebase-id-token");
 const { getBearerTokenFromRequest, PROJECT_ID, encodeFields } = require("./_lib/firestore-rest");
-const { commitWritesAsAdmin } = require("./_lib/firestore-admin");
+const { commitWritesAsAdmin, getDocumentAsAdmin } = require("./_lib/firestore-admin");
 const { syncStudentMirrorToSupabase } = require("./_lib/student-mirror-sync");
 const { normalizeCommercialRoles } = require("./_lib/commercial-permissions");
 
@@ -58,7 +58,43 @@ const buildUserCommitDocumentName = (uid) => {
   return `projects/${PROJECT_ID}/databases/(default)/documents/users/${encodeURIComponent(safeUid)}`;
 };
 
-const patchUserAsAdmin = async ({ uid, data }) => {
+const buildAdminAuditCommitDocumentName = (id) => {
+  const safeId = String(id || "").trim();
+  if (!PROJECT_ID) {
+    const error = new Error("missing_firestore_project_id");
+    error.code = "missing_firestore_project_id";
+    throw error;
+  }
+  if (!safeId) {
+    const error = new Error("missing_audit_id");
+    error.code = "missing_audit_id";
+    throw error;
+  }
+  return `projects/${PROJECT_ID}/databases/(default)/documents/adminAuditEvents/${encodeURIComponent(safeId)}`;
+};
+
+const commercialRolesAuditWrite = ({ uid, from = [], to = [], changedBy = "", timestamp = "" }) => {
+  const safeUid = String(uid || "").trim();
+  const stamp = String(timestamp || new Date().toISOString());
+  const id = `commercial_roles_${safeUid}_${Date.now()}`;
+  return {
+    update: {
+      name: buildAdminAuditCommitDocumentName(id),
+      fields: encodeFields({
+        id,
+        type: "commercialRoles.changed",
+        userId: safeUid,
+        from: normalizeCommercialRoles(from),
+        to: normalizeCommercialRoles(to),
+        changedBy: String(changedBy || "").trim(),
+        timestamp: stamp,
+        createdAt: stamp,
+      }).fields,
+    },
+  };
+};
+
+const patchUserAsAdmin = async ({ uid, data, actorId = "" }) => {
   const cleanData = data && typeof data === "object" ? data : {};
   const updateMask = Object.keys(cleanData);
   if (!updateMask.length) {
@@ -66,22 +102,37 @@ const patchUserAsAdmin = async ({ uid, data }) => {
     error.code = "empty_patch";
     throw error;
   }
-  return commitWritesAsAdmin({
-    writes: [
-      {
-        update: {
-          name: buildUserCommitDocumentName(uid),
-          fields: encodeFields(cleanData).fields,
-        },
-        updateMask: {
-          fieldPaths: updateMask,
-        },
-        currentDocument: {
-          exists: true,
-        },
+  const writes = [
+    {
+      update: {
+        name: buildUserCommitDocumentName(uid),
+        fields: encodeFields(cleanData).fields,
       },
-    ],
-  });
+      updateMask: {
+        fieldPaths: updateMask,
+      },
+      currentDocument: {
+        exists: true,
+      },
+    },
+  ];
+  if (Object.prototype.hasOwnProperty.call(cleanData, "commercialRoles")) {
+    let previousRoles = [];
+    try {
+      const previous = await getDocumentAsAdmin(`users/${encodeURIComponent(String(uid || "").trim())}`);
+      previousRoles = normalizeCommercialRoles(previous?.commercialRoles);
+    } catch {
+      previousRoles = [];
+    }
+    writes.push(commercialRolesAuditWrite({
+      uid,
+      from: previousRoles,
+      to: cleanData.commercialRoles,
+      changedBy: actorId,
+      timestamp: cleanData.updatedAt || cleanData.atualizadoEm || new Date().toISOString(),
+    }));
+  }
+  return commitWritesAsAdmin({ writes });
 };
 
 module.exports = async (req, res) => {
@@ -185,7 +236,7 @@ module.exports = async (req, res) => {
   cleanPatch.updatedAt = cleanPatch.atualizadoEm;
 
   try {
-    const result = await patchUserAsAdmin({ uid, data: cleanPatch });
+    const result = await patchUserAsAdmin({ uid, data: cleanPatch, actorId: adminId });
     if (!result.ok) {
       const errorDetail = result.data?.error?.message || result.text || "firestore_patch_failed";
       console.warn("[api] admin-users Firestore patch failed", {
@@ -211,4 +262,10 @@ module.exports = async (req, res) => {
       code: error?.code || "",
     });
   }
+};
+
+module.exports._test = {
+  commercialRolesAuditWrite,
+  normalizeRole,
+  sanitizeUserPatch,
 };

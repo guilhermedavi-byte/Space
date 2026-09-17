@@ -9170,6 +9170,69 @@ body[data-settings-sidebar-expanded="false"] .admin-settings-sidebar-toggle-icon
   accent-color: #52d6b5;
 }
 
+.admin-commercial-rollout-alert {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  border-radius: 8px;
+  background: rgba(245, 158, 11, 0.08);
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 13px;
+}
+
+.admin-commercial-role-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.admin-commercial-role-summary span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(255, 255, 255, 0.64);
+  font-size: 12px;
+}
+
+.admin-commercial-role-summary strong {
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 15px;
+}
+
+.admin-commercial-role-filter {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.admin-commercial-role-filter button {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-commercial-role-filter button.is-active {
+  border-color: rgba(82, 214, 181, 0.38);
+  background: rgba(82, 214, 181, 0.13);
+  color: rgba(255, 255, 255, 0.92);
+}
+
 .admin-users-row + .admin-users-row {
   border-top: 1px solid rgba(255, 255, 255, 0.06);
 }

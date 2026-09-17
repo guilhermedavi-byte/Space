@@ -2,6 +2,7 @@ const { sendJson } = require("../_lib/http");
 const { resolveAdminRequestAuth } = require("./_lib/admin-request-auth");
 const { listCollectionAsAdmin } = require("./_lib/firestore-admin");
 const { isCommercialUser } = require("./_lib/growth-people");
+const { summarizeCommercialRoles } = require("./_lib/commercial-rollout");
 
 const ALLOWED_COLLECTIONS = new Set([
   "users",
@@ -158,6 +159,9 @@ module.exports = async (req, res) => {
       }
     }
     const body = { rows };
+    if (collection === "users" && normalizeUserRoleFilter(type) === "growth") {
+      body.commercialRolesSummary = summarizeCommercialRoles(rows);
+    }
     if (collection === "users" && wantsDebug) {
       body.debug = {
         beforeFilter: fullDebugSummary,

@@ -14542,7 +14542,7 @@ const renderNativeCrm = () => {
   if (!visibleWorkspaces.length && normalizeRole(sessionUser?.role || currentRole) === "growth") {
     root.innerHTML = `
       <div class="native-crm-shell">
-        <div class="native-crm-empty">Seu acesso comercial ainda não foi configurado.</div>
+        <div class="native-crm-empty">Seu acesso comercial ainda não foi configurado. Peça a um administrador para definir sua função como SDR ou Closer.</div>
       </div>
     `;
     return;
@@ -15418,6 +15418,7 @@ let adminUsersState = {
 
 let adminCommercialUsersState = {
   query: "",
+  roleFilter: "all",
 };
 
 let commercialGoalsController = null;
@@ -21514,6 +21515,31 @@ const clonePlainData = (value) => {
 
 const commercialRoleLabel = (role) => (role === "closer" ? "Closer" : "SDR");
 
+const commercialRoleBucket = (roles) => {
+  const normalized = normalizeCrmCommercialRoles(roles);
+  const hasSdr = normalized.includes("sdr");
+  const hasCloser = normalized.includes("closer");
+  if (hasSdr && hasCloser) return "both";
+  if (hasSdr) return "sdr";
+  if (hasCloser) return "closer";
+  return "missing";
+};
+
+const summarizeCommercialRoleRows = (rows = []) => {
+  const summary = { total: 0, sdr: 0, closer: 0, both: 0, missing: 0 };
+  (Array.isArray(rows) ? rows : []).forEach((row) => {
+    summary.total += 1;
+    summary[commercialRoleBucket(row?.commercialRoles)] += 1;
+  });
+  return summary;
+};
+
+const commercialRoleFilterMatches = (row, filter) => {
+  const safeFilter = String(filter || "all").trim().toLowerCase();
+  if (!safeFilter || safeFilter === "all") return true;
+  return commercialRoleBucket(row?.commercialRoles) === safeFilter;
+};
+
 const renderCommercialRoleBadges = (roles) => {
   const normalized = normalizeCrmCommercialRoles(roles);
   if (!normalized.length) return `<span class="admin-badge is-inactive">Sem função</span>`;
@@ -21810,11 +21836,10 @@ const renderAdminUsersTable = (type) => {
 
   if (empty instanceof HTMLElement) empty.hidden = filtered.length > 0;
   table.innerHTML = `
-    <div class="admin-users-row admin-users-row-commercial admin-users-head">
+    <div class="admin-users-row admin-users-head">
       <span> </span>
       <span>Nome</span>
       <span>E-mail</span>
-      <span>Função comercial</span>
       <span>Status</span>
       <span>Cadastro</span>
       <span> </span>
@@ -21860,11 +21885,46 @@ const renderAdminCommercialUsersTable = () => {
   if (!(adminCommercialGrowthTable instanceof HTMLElement)) return;
   const state = adminUsersState.growth || { rows: [], isLoading: false, error: "" };
   const query = String(adminCommercialUsersState.query || "").trim().toLowerCase();
+  const roleFilter = String(adminCommercialUsersState.roleFilter || "all").trim().toLowerCase();
   const rows = Array.isArray(state.rows) ? state.rows : [];
-  const filtered = query ? rows.filter((row) => row.nome.toLowerCase().includes(query) || row.email.toLowerCase().includes(query)) : rows;
+  const summary = summarizeCommercialRoleRows(rows);
+  const filtered = rows.filter((row) => {
+    const matchesQuery = !query || row.nome.toLowerCase().includes(query) || row.email.toLowerCase().includes(query);
+    return matchesQuery && commercialRoleFilterMatches(row, roleFilter);
+  });
+  const summaryEl = document.querySelector("[data-commercial-role-summary]");
+  if (summaryEl instanceof HTMLElement) {
+    summaryEl.innerHTML = [
+      ["SDR", summary.sdr],
+      ["Closer", summary.closer],
+      ["SDR + Closer", summary.both],
+      ["Sem função", summary.missing],
+    ].map(([label, value]) => `<span><strong>${escapeHtml(String(value))}</strong>${escapeHtml(label)}</span>`).join("");
+  }
+  const filterEl = document.querySelector("[data-commercial-role-filter]");
+  if (filterEl instanceof HTMLElement) {
+    const filters = [
+      ["all", "Todos"],
+      ["sdr", "SDR"],
+      ["closer", "Closer"],
+      ["both", "SDR + Closer"],
+      ["missing", "Sem função"],
+    ];
+    filterEl.innerHTML = filters
+      .map(([value, label]) => `<button type="button" class="${roleFilter === value ? "is-active" : ""}" data-commercial-role-filter-value="${escapeHtml(value)}">${escapeHtml(label)}</button>`)
+      .join("");
+  }
+  const rolloutAlert = document.querySelector("[data-commercial-rollout-alert]");
+  const rolloutText = document.querySelector("[data-commercial-rollout-alert-text]");
+  if (rolloutAlert instanceof HTMLElement) {
+    rolloutAlert.hidden = summary.missing < 1 || currentRole !== "admin";
+  }
+  if (rolloutText instanceof HTMLElement) {
+    rolloutText.textContent = `${summary.missing} usuários do Comercial ainda estão sem função SDR/Closer.`;
+  }
 
   if (adminCommercialGrowthStatus instanceof HTMLElement) {
-    adminCommercialGrowthStatus.textContent = state.isLoading ? "Carregando…" : state.error ? "Não foi possível carregar." : `${filtered.length} usuário(s)`;
+    adminCommercialGrowthStatus.textContent = state.isLoading ? "Carregando…" : state.error ? "Não foi possível carregar." : `${filtered.length} de ${summary.total} usuário(s)`;
     adminCommercialGrowthStatus.dataset.tone = state.error ? "error" : "";
   }
   if (adminCommercialGrowthError instanceof HTMLElement) adminCommercialGrowthError.hidden = !state.error;
@@ -21876,10 +21936,11 @@ const renderAdminCommercialUsersTable = () => {
   }
 
   adminCommercialGrowthTable.innerHTML = `
-    <div class="admin-users-row admin-users-head">
+    <div class="admin-users-row admin-users-row-commercial admin-users-head">
       <span> </span>
       <span>Nome</span>
       <span>E-mail</span>
+      <span>Função comercial</span>
       <span>Status</span>
       <span>Cadastro</span>
       <span> </span>
@@ -40819,6 +40880,22 @@ document.addEventListener("visibilitychange", () => {
 document.addEventListener("click", (event) => {
   const target = event.target;
   if (!(target instanceof Element)) return;
+  const commercialRoleFilter = target.closest("[data-commercial-role-filter-value]");
+  if (commercialRoleFilter instanceof HTMLButtonElement) {
+    event.preventDefault();
+    adminCommercialUsersState.roleFilter = String(commercialRoleFilter.getAttribute("data-commercial-role-filter-value") || "all").trim().toLowerCase() || "all";
+    renderAdminCommercialUsersTable();
+    return;
+  }
+  const commercialReview = target.closest("[data-commercial-rollout-review]");
+  if (commercialReview instanceof HTMLButtonElement) {
+    event.preventDefault();
+    adminCommercialUsersState.roleFilter = "missing";
+    renderAdminCommercialUsersTable();
+    const search = document.querySelector("[data-commercial-growth-search]");
+    if (search instanceof HTMLInputElement) search.focus();
+    return;
+  }
   const automationsRoot = target.closest("[data-automations-admin]");
   if (automationsRoot instanceof HTMLElement) {
     const setError = (error) => {
