@@ -64,6 +64,21 @@ function memoryStore() {
       return entries.map(e => { const v = String(++version); docs.set(e.path, { data: structuredClone(e.data), version: v }); return v; });
     } };
 }
+
+test('CRM Live refresh lease serializa workers concorrentes', async () => {
+  const { acquireRefreshLease, REFRESH_STATE_PATH } = require('../api/_lib/crm-live-refresh');
+  const store = memoryStore();
+  const first = await acquireRefreshLease({ store, nowMs: 1000, owner: 'worker-a' });
+  assert.equal(first.ok, true);
+  const second = await acquireRefreshLease({ store, nowMs: 2000, owner: 'worker-b' });
+  assert.equal(second.ok, false);
+  assert.equal(second.state.runId, first.runId);
+  assert.equal((await store.read(REFRESH_STATE_PATH)).data.owner, 'worker-a');
+  const third = await acquireRefreshLease({ store, nowMs: 1000 + 261000, owner: 'worker-c' });
+  assert.equal(third.ok, true);
+  assert.equal((await store.read(REFRESH_STATE_PATH)).data.owner, 'worker-c');
+});
+
 const metricPayload = (metadata, id = 'snapshot-a') => {
   const rows=[{id:'a',value:42,dateKey:'2026-09-09',dateField:'statusChangedAt',weekKey:'wk_2026-09-09',competencia:'2026-09',status:'Fechado',responsibleId:'a',role:'closer'}];
   const metrics={monthly_weekly_delta:0,overlapping_periods:0,improper_gaps:0,orphan_deals:0,unallocated_revenue:0,duplicate_attribution_revenue:0,estimated_value_deals:0,invalid_financial_deals:0,unverified_revenue_dates:0};
@@ -158,7 +173,7 @@ test('freshness: legacy, failures and aged browser fallbacks never look fresh', 
   const now = Date.parse('2026-09-14T12:00:00Z');
   const data = { snapshot: { status:'VALID', calculationVersion:4, fetchCompletedAt:new Date(now).toISOString() } };
   assert.equal(describeSnapshot(data,false,now).pending,false);
-  assert.match(describeSnapshot(data,true,now).text,/Atualização pendente/);
+  assert.match(describeSnapshot(data,true,now).text,/Atualizando/);
   assert.equal(describeSnapshot(data,false,now+301000).pending,true);
   assert.equal(describeSnapshot({generatedAt:new Date(now).toISOString()},false,now).pending,true);
   assert.equal(retryAfterMs('Mon, 14 Sep 2026 12:00:04 GMT',now),4000);

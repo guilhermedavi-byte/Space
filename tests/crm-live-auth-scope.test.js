@@ -1,12 +1,16 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const crmLiveDataPath = require.resolve('../api/crm-live-data');
 const crmLivePath = require.resolve('../api/crm-live');
 const growthDashboardPath = require.resolve('../api/growth-dashboard');
+const crmLiveEventsPath = require.resolve('../api/crm-live-events');
 const sessionPath = require.resolve('../_lib/session');
 const httpPath = require.resolve('../_lib/http');
 const crmLiveLibPath = require.resolve('../api/_lib/crm-live');
+const crmLiveRefreshLibPath = require.resolve('../api/_lib/crm-live-refresh');
 const { resolveCommercialWeek } = require('../api/_lib/growth-people');
 
 const makeRes = () => ({
@@ -19,6 +23,35 @@ const makeRes = () => ({
     this.body = body;
   },
 });
+
+const cachedCrmPayload = (weekKey = 'wk_2026-08-13') => ({
+  snapshot: {
+    status: 'VALID',
+    calculationVersion: 4,
+    fetchCompletedAt: '2026-08-13T12:00:00.000Z',
+    calculatedAt: '2026-08-13T12:00:00.000Z',
+  },
+  weekly: { commercialWeek: { weekKey }, team: { closers: {}, sdrs: {} }, closers: [] },
+  month: {},
+  highlights: {},
+  latestSale: null,
+  unresolved: {},
+  cacheDebug: {},
+  pipeline: { rows: [], windowStartDateKey: '' },
+});
+
+const cachedSdrPayload = (weekKey = 'wk_2026-08-13') => ({
+  weekly: { commercialWeek: { weekKey }, team: { sdrs: { targetValue: 0, actualValue: 0, progressPct: 0 } }, sdrs: [] },
+  highlights: {},
+  unresolved: {},
+  cacheDebug: {},
+});
+
+const readCacheFixture = (weekKey = 'wk_2026-08-13', generatedAt = '2026-08-13T12:00:00.000Z') => async (docId) => {
+  if (docId === 'crm') return { ok: true, data: { payload: cachedCrmPayload(weekKey), generatedAt } };
+  if (docId === 'sdr') return { ok: true, data: { payload: cachedSdrPayload(weekKey), generatedAt } };
+  return { ok: false, status: 404, data: null };
+};
 
 const installHttpStub = () => {
   // Auth tests isolate the publication boundary; pipeline tests exercise its real implementation.
@@ -57,14 +90,18 @@ test('cookie da TV passa em /api/crm-live-data', async () => {
     filename: crmLiveLibPath,
     loaded: true,
     exports: {
-      buildCrmLiveCrmSlice: async () => ({ weekly: { team: { closers: {}, sdrs: {} }, closers: [] }, month: {}, highlights: {}, latestSale: null, unresolved: {}, cacheDebug: {} }),
-      buildCrmLiveSdrSlice: async () => ({ weekly: { commercialWeek: { weekKey: 'wk_2026-08-13' }, team: { closers: {}, sdrs: {} }, sdrs: [] }, highlights: {}, unresolved: {}, cacheDebug: {} }),
+      buildCrmLiveCrmSlice: async () => {
+        throw new Error('reader_must_not_calculate_crm');
+      },
+      buildCrmLiveSdrSlice: async () => {
+        throw new Error('reader_must_not_calculate_sdr');
+      },
       buildWeeklyNewsScreens: () => [],
       decorateLeaderboardComparisons: ({ rows = [] }) => rows,
       validateCookieViewer: async () => ({ ok: true, tokenId: 'tv_test' }),
-      readCacheDoc: async () => ({ ok: false, status: 404, data: null }),
+      readCacheDoc: readCacheFixture(),
       writeCacheDoc: async () => ({ ok: true }),
-      getCacheMeta: () => ({ generatedAt: '', ageMs: Infinity, ageMinutes: 0 }),
+      getCacheMeta: () => ({ generatedAt: '2026-08-13T12:00:00.000Z', ageMs: 120000, ageMinutes: 2 }),
       CRM_CACHE_TTL_MS: 120000,
       SDR_CACHE_TTL_MS: 60000,
       loadWeeklyRollupsHistory: async () => [],
@@ -117,14 +154,18 @@ test('sessão comercial autenticada passa em /api/crm-live-data', async () => {
     filename: crmLiveLibPath,
     loaded: true,
     exports: {
-      buildCrmLiveCrmSlice: async () => ({ weekly: { team: { closers: {}, sdrs: {} }, closers: [], commercialWeek: { weekKey: 'wk_2026-08-13' } }, month: {}, highlights: {}, latestSale: null, unresolved: {}, cacheDebug: {} }),
-      buildCrmLiveSdrSlice: async () => ({ weekly: { commercialWeek: { weekKey: 'wk_2026-08-13' }, team: { closers: {}, sdrs: {} }, sdrs: [] }, highlights: {}, unresolved: {}, cacheDebug: {} }),
+      buildCrmLiveCrmSlice: async () => {
+        throw new Error('reader_must_not_calculate_crm');
+      },
+      buildCrmLiveSdrSlice: async () => {
+        throw new Error('reader_must_not_calculate_sdr');
+      },
       buildWeeklyNewsScreens: () => [],
       decorateLeaderboardComparisons: ({ rows = [] }) => rows,
       validateCookieViewer: async () => ({ ok: false, status: 401, error: 'missing_cookie' }),
-      readCacheDoc: async () => ({ ok: false, status: 404, data: null }),
+      readCacheDoc: readCacheFixture(),
       writeCacheDoc: async () => ({ ok: true }),
-      getCacheMeta: () => ({ generatedAt: '', ageMs: Infinity, ageMinutes: 0 }),
+      getCacheMeta: () => ({ generatedAt: '2026-08-13T12:00:00.000Z', ageMs: 120000, ageMinutes: 2 }),
       CRM_CACHE_TTL_MS: 120000,
       SDR_CACHE_TTL_MS: 60000,
       loadWeeklyRollupsHistory: async () => [],
@@ -185,7 +226,7 @@ test('cache stale só é reaproveitado se for da mesma semana comercial', async 
   assert.equal(res.body?.stale, true);
 });
 
-test('cache stale de semana anterior é descartado na virada de semana', async () => {
+test('cache stale de semana anterior é preservado como último snapshot bom', async () => {
   delete require.cache[crmLiveDataPath];
   installHttpStub();
   require.cache[sessionPath] = {
@@ -236,7 +277,10 @@ test('cache stale de semana anterior é descartado na virada de semana', async (
     const handler = require('../api/crm-live-data');
     const res = makeRes();
     await handler({ method: 'GET', url: '/api/crm-live-data', headers: { host: 'localhost' } }, res);
-    assert.equal(res.statusCode, 500);
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body?.stale, true);
+    assert.equal(res.body?.snapshot?.refreshStatus, 'CRITICAL');
+    assert.equal(res.body?.weekly?.commercialWeek?.weekKey, 'wk_2026-08-11');
   } finally {
     global.Date = RealDate;
   }
@@ -262,8 +306,12 @@ test('HTML e payload resolvem o mesmo buildId no mesmo processo', async () => {
     filename: crmLiveLibPath,
     loaded: true,
     exports: {
-      buildCrmLiveCrmSlice: async () => ({ weekly: { team: { closers: {}, sdrs: {} }, closers: [], commercialWeek: { weekKey: 'wk_2026-08-11' } }, month: {}, highlights: {}, latestSale: null, unresolved: {}, cacheDebug: {} }),
-      buildCrmLiveSdrSlice: async () => ({ weekly: { commercialWeek: { weekKey: 'wk_2026-08-11' }, team: { closers: {}, sdrs: {} }, sdrs: [] }, highlights: {}, unresolved: {}, cacheDebug: {} }),
+      buildCrmLiveCrmSlice: async () => {
+        throw new Error('reader_must_not_calculate_crm');
+      },
+      buildCrmLiveSdrSlice: async () => {
+        throw new Error('reader_must_not_calculate_sdr');
+      },
       buildWeeklyNewsScreens: () => [],
       decorateLeaderboardComparisons: ({ rows = [] }) => rows,
       validateCookieViewer: async () => ({ ok: true, tokenId: 'tv_test' }),
@@ -273,9 +321,9 @@ test('HTML e payload resolvem o mesmo buildId no mesmo processo', async () => {
       clearCookie: () => 'clear_cookie',
       isSecureRequest: () => true,
       CRM_LIVE_COOKIE_NAME: 'space_crm_live',
-      readCacheDoc: async () => ({ ok: false, status: 404, data: null }),
+      readCacheDoc: readCacheFixture('wk_2026-08-11'),
       writeCacheDoc: async () => ({ ok: true }),
-      getCacheMeta: () => ({ generatedAt: '', ageMs: Infinity, ageMinutes: 0 }),
+      getCacheMeta: () => ({ generatedAt: '2026-08-13T12:00:00.000Z', ageMs: 120000, ageMinutes: 2 }),
       CRM_CACHE_TTL_MS: 120000,
       SDR_CACHE_TTL_MS: 60000,
       loadWeeklyRollupsHistory: async () => [],
@@ -347,4 +395,79 @@ test('snapshot cacheado não influencia o buildId do payload', async () => {
   assert.equal(res.body?.buildId, 'live_build_now');
   assert.notEqual(res.body?.buildId, 'cached_old_build');
   delete process.env.CRM_LIVE_BUILD_ID;
+});
+
+test('/api/crm-live-events lê apenas a fila materializada', async () => {
+  delete require.cache[crmLiveEventsPath];
+  installHttpStub();
+  require.cache[sessionPath] = {
+    id: sessionPath,
+    filename: sessionPath,
+    loaded: true,
+    exports: {
+      getSessionFromRequest() {
+        return { role: 'comercial', sub: 'u-1' };
+      },
+    },
+  };
+  let readCount = 0;
+  require.cache[crmLiveLibPath] = {
+    id: crmLiveLibPath,
+    filename: crmLiveLibPath,
+    loaded: true,
+    exports: {
+      CRM_LIVE_EVENTS_COLLECTION: 'crmLiveEventsState',
+      validateCookieViewer: async () => ({ ok: false, status: 401, error: 'missing_cookie' }),
+      readStateDoc: async (collection, docId) => {
+        readCount += 1;
+        assert.equal(collection, 'crmLiveEventsState');
+        assert.equal(docId, 'detector');
+        return {
+          ok: true,
+          data: {
+            initializedAt: '2026-08-13T12:00:00.000Z',
+            queueGeneratedAt: new Date().toISOString(),
+            queueDurationMs: 20000,
+            lastRefreshSnapshotId: 'snapshot-1',
+            pendingEvents: [{ id: 'event-1', type: 'sale_closed' }],
+          },
+        };
+      },
+      writeStateDoc: async () => {
+        throw new Error('reader_must_not_write_event_state');
+      },
+      fetchCrmBusinesses: async () => {
+        throw new Error('reader_must_not_fetch_crm_businesses');
+      },
+      buildCrmLiveEventQueue: () => {
+        throw new Error('reader_must_not_build_event_queue');
+      },
+    },
+  };
+  require.cache[crmLiveRefreshLibPath] = {
+    id: crmLiveRefreshLibPath,
+    filename: crmLiveRefreshLibPath,
+    loaded: true,
+    exports: { DETECTOR_DOC_ID: 'detector', EVENT_QUEUE_DURATION_MS: 20000 },
+  };
+  const handler = require('../api/crm-live-events');
+  const res = makeRes();
+  await handler({ method: 'GET', url: '/api/crm-live-events', headers: { host: 'localhost' } }, res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(readCount, 1);
+  assert.deepEqual(res.body?.events?.map((event) => event.id), ['event-1']);
+  assert.equal(res.body?.debug?.materialized, true);
+});
+
+test('leitores do CRM Live não importam refresh/cálculo/coleta DataCrazy', () => {
+  const dataSource = fs.readFileSync(path.join(__dirname, '../api/crm-live-data.js'), 'utf8');
+  const eventsSource = fs.readFileSync(path.join(__dirname, '../api/crm-live-events.js'), 'utf8');
+  assert.doesNotMatch(dataSource, /\brunCrmSnapshot\b|\bbuildCrmLiveCrmSlice\b|\bbuildCrmLiveSdrSlice\b|\bgetCompleteCrmSource\b/);
+  assert.doesNotMatch(eventsSource, /\bfetchCrmBusinesses\b|\bbuildCrmLiveEventQueue\b|\bwriteStateDoc\b|\bgetCompleteCrmSource\b/);
+});
+
+test('cron dedicado do CRM Live está configurado fora dos leitores', () => {
+  const config = JSON.parse(fs.readFileSync(path.join(__dirname, '../vercel.json'), 'utf8'));
+  assert.ok(config.functions?.['api/crm-live-refresh.js']);
+  assert.ok(config.crons.some((entry) => entry.path === '/api/crm-live-refresh' && entry.schedule === '*/2 * * * *'));
 });
