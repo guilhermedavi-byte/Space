@@ -5,6 +5,7 @@ const { getBearerTokenFromRequest, PROJECT_ID, encodeFields } = require("./_lib/
 const { commitWritesAsAdmin, getDocumentAsAdmin } = require("./_lib/firestore-admin");
 const { syncStudentMirrorToSupabase } = require("./_lib/student-mirror-sync");
 const { normalizeCommercialRoles } = require("./_lib/commercial-permissions");
+const { createPerformanceTimer } = require("./_lib/performance-observer");
 
 const normalizeRole = (value) => {
   const raw = String(value || "").trim().toLowerCase();
@@ -136,41 +137,46 @@ const patchUserAsAdmin = async ({ uid, data, actorId = "" }) => {
 };
 
 module.exports = async (req, res) => {
-  const session = getSessionFromRequest(req);
+  const perf = createPerformanceTimer({ req, route: "/api/admin-users", operation: req.method === "PATCH" ? "admin_users_save" : "admin_users_sync" });
+  const send = (status, body) => {
+    perf.finish(res, body);
+    return sendJson(res, status, body);
+  };
+  const session = await perf.measure("auth", () => Promise.resolve(getSessionFromRequest(req)));
   if (!session) {
-    sendJson(res, 401, { error: "unauthorized" });
+    send(401, { error: "unauthorized" });
     return;
   }
 
   if (String(session.role || "") !== "admin") {
-    sendJson(res, 403, { error: "forbidden" });
+    send(403, { error: "forbidden" });
     return;
   }
 
   const adminId = String(session.sub || "");
   const idToken = getBearerTokenFromRequest(req);
   if (!adminId || !idToken) {
-    sendJson(res, 401, { error: "unauthorized" });
+    send(401, { error: "unauthorized" });
     return;
   }
 
   try {
-    const decoded = await verifyFirebaseIdToken(idToken);
+    const decoded = await perf.measure("firebaseAuth", () => verifyFirebaseIdToken(idToken));
     if (decoded.uid !== adminId) {
-      sendJson(res, 401, { error: "invalid_credentials" });
+      send(401, { error: "invalid_credentials" });
       return;
     }
   } catch (error) {
-    sendJson(res, 401, { error: "invalid_credentials" });
+    send(401, { error: "invalid_credentials" });
     return;
   }
 
   if (req.method === "POST") {
     let body;
     try {
-      body = await readJsonBody(req);
+      body = await perf.measure("requestBody", () => readJsonBody(req));
     } catch (error) {
-      sendJson(res, 400, { error: "invalid_json" });
+      send(400, { error: "invalid_json" });
       return;
     }
 
@@ -181,42 +187,42 @@ module.exports = async (req, res) => {
 
     if (action === "sync_mirror") {
       if (!uid) {
-        sendJson(res, 400, { error: "invalid_request" });
+        send(400, { error: "invalid_request" });
         return;
       }
-      const sync = await syncStudentMirrorToSupabase(uid);
-      sendJson(res, sync.ok ? 200 : 409, { ok: sync.ok, sync });
+      const sync = await perf.measure("syncMirror", () => syncStudentMirrorToSupabase(uid));
+      send(sync.ok ? 200 : 409, { ok: sync.ok, sync });
       return;
     }
 
     if (!uid || !name || !role) {
-      sendJson(res, 400, { error: "invalid_request" });
+      send(400, { error: "invalid_request" });
       return;
     }
 
     if(role==='student' && body.asaas_customer_id){
-      try { await require('./_lib/finance-customer-link').registerCanonicalPair({customerId:body.asaas_customer_id,studentId:uid,actor:adminId,source:'student_creation'}); }
-      catch { return sendJson(res,409,{error:'canonical_finance_link_required'}); }
+      try { await perf.measure("financeLink", () => require('./_lib/finance-customer-link').registerCanonicalPair({customerId:body.asaas_customer_id,studentId:uid,actor:adminId,source:'student_creation'})); }
+      catch { return send(409,{error:'canonical_finance_link_required'}); }
     }
     // OWNERSHIP: cadastro=Firestore, operação=Supabase (contrato 2026-07-12)
     // Mantemos compatibilidade com chamadas legadas e sincronizamos o espelho
     // desnormalizado no Supabase a partir de users/{uid}.
-    const sync = await syncStudentMirrorToSupabase(uid);
-    sendJson(res, 200, { ok: true, sync });
+    const sync = await perf.measure("syncMirror", () => syncStudentMirrorToSupabase(uid));
+    send(200, { ok: true, sync });
     return;
   }
 
   if (req.method !== "PATCH") {
     res.setHeader("Allow", "POST, PATCH");
-    sendJson(res, 405, { error: "method_not_allowed" });
+    send(405, { error: "method_not_allowed" });
     return;
   }
 
   let body;
   try {
-    body = await readJsonBody(req);
+    body = await perf.measure("requestBody", () => readJsonBody(req));
   } catch (error) {
-    sendJson(res, 400, { error: "invalid_json" });
+    send(400, { error: "invalid_json" });
     return;
   }
 
@@ -224,20 +230,20 @@ module.exports = async (req, res) => {
   const patch = body?.patch && typeof body.patch === "object" ? body.patch : null;
   const requestedRole = normalizeRole(body?.role || patch?.tipo);
   if (!uid || !patch) {
-    sendJson(res, 400, { error: "invalid_request" });
+    send(400, { error: "invalid_request" });
     return;
   }
 
   const cleanPatch = sanitizeUserPatch(patch);
   if (!cleanPatch || typeof cleanPatch !== "object" || !Object.keys(cleanPatch).length) {
-    sendJson(res, 400, { error: "empty_patch" });
+    send(400, { error: "empty_patch" });
     return;
   }
   cleanPatch.atualizadoEm = new Date().toISOString();
   cleanPatch.updatedAt = cleanPatch.atualizadoEm;
 
   try {
-    const result = await patchUserAsAdmin({ uid, data: cleanPatch, actorId: adminId });
+    const result = await perf.measure("saveUser", () => patchUserAsAdmin({ uid, data: cleanPatch, actorId: adminId }), { firestore: true });
     if (!result.ok) {
       const errorDetail = result.data?.error?.message || result.text || "firestore_patch_failed";
       console.warn("[api] admin-users Firestore patch failed", {
@@ -245,7 +251,7 @@ module.exports = async (req, res) => {
         status: result.status,
         errorDetail,
       });
-      sendJson(res, result.status || 500, {
+      send(result.status || 500, {
         error: "firestore_patch_failed",
         errorDetail,
         firestoreStatus: result.status || 0,
@@ -254,11 +260,11 @@ module.exports = async (req, res) => {
     }
     // OWNERSHIP: cadastro=Firestore, operação=Supabase (contrato 2026-07-12)
     const shouldSyncStudentMirror = requestedRole ? requestedRole === "student" : !Object.prototype.hasOwnProperty.call(cleanPatch, "commercialRoles");
-    const sync = shouldSyncStudentMirror ? await syncStudentMirrorToSupabase(uid) : { ok: true, skipped: true, reason: "not_student_profile_patch" };
-    sendJson(res, 200, { ok: true, sync });
+    const sync = shouldSyncStudentMirror ? await perf.measure("syncMirror", () => syncStudentMirrorToSupabase(uid)) : { ok: true, skipped: true, reason: "not_student_profile_patch" };
+    send(200, { ok: true, sync });
   } catch (error) {
     console.error("[api] admin-users patch failed", error);
-    sendJson(res, 500, {
+    send(500, {
       error: "admin_users_patch_failed",
       errorDetail: error?.message || String(error || ""),
       code: error?.code || "",

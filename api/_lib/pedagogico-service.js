@@ -430,11 +430,13 @@ const fetchTeachersRows = async ({ limit = 1000 } = {}) => {
   }
 };
 
-const loadAdminDashboard = async ({ session } = {}) => {
+const loadAdminDashboard = async ({ session, perf = null } = {}) => {
   let degraded = false;
   let degradedReason = "";
-  const safe = (label, promise) =>
-    promise.catch((error) => {
+  const safe = (label, promiseOrLoader) => {
+    const loader = typeof promiseOrLoader === "function" ? promiseOrLoader : () => promiseOrLoader;
+    const measured = perf ? perf.measure(label, loader) : loader();
+    return measured.catch((error) => {
       degraded = true;
       if (!degradedReason) degradedReason = label;
       console.error("[pedagogico] dashboard source failed", {
@@ -447,21 +449,22 @@ const loadAdminDashboard = async ({ session } = {}) => {
       });
       return [];
     });
+  };
   const adminId = String(session?.sub || session?.email || "").trim();
   const [onboarding, lessons, registers, alerts, satisfaction, flexge, teachers, reports, financeStudents, preferences] = await Promise.all([
-    safe("onboarding", fetchOnboardingRows("select=*&order=updated_at.desc.nullslast&limit=1000")),
-    safe("lessons", listAllLessons({ limit: 1000 })),
-    safe("registers", listRegisters({ limit: 1000 })),
-    safe("alerts", fetchRows(`/${TABLES.alerts}?select=*&order=created_at.desc.nullslast&limit=1000`, { optional: true })),
-    safe("satisfaction", fetchRows(`/${TABLES.satisfaction}?select=*&order=created_at.desc.nullslast&limit=1000`, { optional: true })),
-    safe("flexge", fetchRows(`/${TABLES.flexge}?select=*&order=flexge_last_sync_at.desc.nullslast&limit=1000`, { optional: true })),
-    safe("teachers", fetchTeachersRows({ limit: 1000 })),
-    safe("reports", fetchRows(`/${TABLES.reports}?select=*&order=created_at.desc.nullslast&limit=200`, { optional: true })),
-    safe("financeStudents", fetchFinanceStudents({ limit: 1000 })),
+    safe("onboarding", () => fetchOnboardingRows("select=*&order=updated_at.desc.nullslast&limit=1000")),
+    safe("lessons", () => listAllLessons({ limit: 1000 })),
+    safe("registers", () => listRegisters({ limit: 1000 })),
+    safe("alerts", () => fetchRows(`/${TABLES.alerts}?select=*&order=created_at.desc.nullslast&limit=1000`, { optional: true })),
+    safe("satisfaction", () => fetchRows(`/${TABLES.satisfaction}?select=*&order=created_at.desc.nullslast&limit=1000`, { optional: true })),
+    safe("flexge", () => fetchRows(`/${TABLES.flexge}?select=*&order=flexge_last_sync_at.desc.nullslast&limit=1000`, { optional: true })),
+    safe("teachers", () => fetchTeachersRows({ limit: 1000 })),
+    safe("reports", () => fetchRows(`/${TABLES.reports}?select=*&order=created_at.desc.nullslast&limit=200`, { optional: true })),
+    safe("financeStudents", () => fetchFinanceStudents({ limit: 1000 })),
     adminId
       ? safe(
           "studentPreferences",
-          fetchRows(
+          () => fetchRows(
             `/${TABLES.adminStudentPreferences}?select=*&admin_id=eq.${safeEncode(adminId)}&limit=2000`,
             { optional: true }
           )

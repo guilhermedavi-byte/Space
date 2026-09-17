@@ -12114,8 +12114,80 @@ const fetchWithAuth = async (input, init = {}) => {
   }
   // Do not forward our custom option to `fetch`.
   if (Object.prototype.hasOwnProperty.call(opts, "forceRefreshIdToken")) delete opts.forceRefreshIdToken;
-  return fetch(input, { ...opts, headers, credentials: opts.credentials || "include" });
+  const response = await fetch(input, { ...opts, headers, credentials: opts.credentials || "include" });
+  window.SpacePerformance?.recordRequest?.(input, response);
+  return response;
 };
+
+window.SpacePerformance = window.SpacePerformance || (() => {
+  const flows = new Map();
+  let active = "";
+  const mark = (name) => {
+    if (window.performance?.mark) {
+      try { performance.mark(name); } catch {}
+    }
+  };
+  const measure = (name, start, end) => {
+    if (window.performance?.measure) {
+      try { performance.measure(name, start, end); } catch {}
+    }
+  };
+  const get = (flow) => {
+    const key = String(flow || active || "").trim();
+    if (!key) return null;
+    if (!flows.has(key)) flows.set(key, { flow: key, requests: 0, payloadBytes: 0, startedAt: Date.now() });
+    return flows.get(key);
+  };
+  const debug = () => {
+    try { return localStorage.getItem("SPACE_PERF_DEBUG") === "1"; } catch { return false; }
+  };
+  return {
+    start(flow) {
+      active = String(flow || "").trim();
+      flows.set(active, { flow: active, requests: 0, payloadBytes: 0, startedAt: Date.now() });
+      mark(`${active}:start`);
+    },
+    mark(flow, step) {
+      mark(`${flow}:${step}`);
+    },
+    dataReady(flow) {
+      const key = String(flow || active || "").trim();
+      mark(`${key}:data-ready`);
+      measure(`${key}:time-to-data`, `${key}:start`, `${key}:data-ready`);
+    },
+    rendered(flow) {
+      const key = String(flow || active || "").trim();
+      mark(`${key}:rendered`);
+      measure(`${key}:time-to-usable-ui`, `${key}:start`, `${key}:rendered`);
+      const row = get(key);
+      if (debug() && row) console.info("[space-performance]", { ...row, totalMs: Date.now() - row.startedAt });
+      if (active === key) active = "";
+    },
+    recordRequest(input, response) {
+      const row = get(active);
+      if (!row) return;
+      const url = typeof input === "string" ? input : input?.url || "";
+      if (!String(url).includes("/api/")) return;
+      row.requests += 1;
+      const len = Number(response?.headers?.get?.("content-length") || 0);
+      if (Number.isFinite(len) && len > 0) row.payloadBytes += len;
+      const requestId = response?.headers?.get?.("x-request-id") || "";
+      if (requestId) row.lastRequestId = requestId;
+    },
+    recordManual(flow, label, payloadBytes = 0) {
+      const row = get(flow || active);
+      if (!row) return;
+      row.requests += 1;
+      row.lastManual = String(label || "");
+      const bytes = Number(payloadBytes) || 0;
+      if (bytes > 0) row.payloadBytes += bytes;
+    },
+    snapshot(flow) {
+      const row = get(flow);
+      return row ? { ...row, totalMs: Date.now() - row.startedAt } : null;
+    },
+  };
+})();
 
 const CRM_API_TIMEOUT_MS = 18_000;
 
@@ -15258,6 +15330,7 @@ const loadNativeCrm = async ({ force = false } = {}) => {
   nativeCrmState.loading = true;
   nativeCrmState.error = "";
   nativeCrmState.workspace = getNativeCrmWorkspace() || nativeCrmState.workspace || "sdr";
+  window.SpacePerformance?.start?.("crm-board");
   renderNativeCrm();
   try {
     const params = new URLSearchParams();
@@ -15266,6 +15339,7 @@ const loadNativeCrm = async ({ force = false } = {}) => {
     const res = await fetchWithAuthWithTimeout(`/api/crm${params.toString() ? `?${params.toString()}` : ""}`, { method: "GET" }, CRM_API_TIMEOUT_MS, "crm_load");
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(data?.message || data?.error || "crm_load_failed");
+    window.SpacePerformance?.dataReady?.("crm-board");
     nativeCrmState.data = data;
     nativeCrmState.loadedAt = Date.now();
     nativeCrmState.workspace = getNativeCrmWorkspace() || nativeCrmState.workspace;
@@ -15280,6 +15354,7 @@ const loadNativeCrm = async ({ force = false } = {}) => {
   } finally {
     nativeCrmState.loading = false;
     renderNativeCrm();
+    window.SpacePerformance?.rendered?.("crm-board");
   }
 };
 
@@ -15314,12 +15389,14 @@ const loadNativeCrmList = async ({ reset = false } = {}) => {
     nativeCrmState.list.rows = [];
     nativeCrmState.list.nextCursor = "";
   }
+  window.SpacePerformance?.start?.("crm-list");
   renderNativeCrm();
   try {
     const cursor = reset ? "" : nativeCrmState.list.nextCursor;
     const res = await fetchWithAuthWithTimeout(`/api/crm?${nativeCrmListParams({ cursor }).toString()}`, { method: "GET" }, CRM_API_TIMEOUT_MS, "crm_list");
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(data?.error || "crm_list_failed");
+    window.SpacePerformance?.dataReady?.("crm-list");
     const rows = Array.isArray(data?.rows) ? data.rows : [];
     nativeCrmState.list.rows = reset ? rows : nativeCrmState.list.rows.concat(rows);
     nativeCrmState.list.nextCursor = String(data?.nextCursor || "");
@@ -15331,6 +15408,7 @@ const loadNativeCrmList = async ({ reset = false } = {}) => {
   } finally {
     nativeCrmState.list.loading = false;
     renderNativeCrm();
+    window.SpacePerformance?.rendered?.("crm-list");
   }
 };
 
@@ -15519,11 +15597,13 @@ const loadNativeCrmOpportunityDetail = async (opportunityId, { force = false } =
   if (!force && current.loading) return;
   if (!force && current.loadedAt && Date.now() - current.loadedAt < 15_000) return;
   nativeCrmState.details[id] = { ...current, loading: true, error: "" };
+  window.SpacePerformance?.start?.("crm-opportunity");
   renderNativeCrm();
   try {
     const res = await fetchWithAuthWithTimeout(`/api/crm?opportunityId=${encodeURIComponent(id)}`, { method: "GET" }, CRM_API_TIMEOUT_MS, "crm_detail");
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(data?.error || "crm_detail_failed");
+    window.SpacePerformance?.dataReady?.("crm-opportunity");
     nativeCrmState.details[id] = {
       loading: false,
       loadedAt: Date.now(),
@@ -15539,6 +15619,7 @@ const loadNativeCrmOpportunityDetail = async (opportunityId, { force = false } =
     nativeCrmState.details[id] = { ...current, loading: false, error: nativeCrmLoadErrorMessage(error, "Não foi possível carregar o histórico.") };
   } finally {
     renderNativeCrm();
+    window.SpacePerformance?.rendered?.("crm-opportunity");
   }
 };
 
@@ -22519,6 +22600,8 @@ const loadUsersFromFirestore = async (type) => {
   const safeType = type === "teacher" ? "teacher" : type === "growth" ? "growth" : "student";
   const state = adminUsersState[safeType];
   if (state.isLoading) return;
+  const perfFlow = safeType === "growth" ? "admin-commercial-users" : "";
+  if (perfFlow) window.SpacePerformance?.start?.(perfFlow);
 
   state.isLoading = true;
   state.error = "";
@@ -22529,6 +22612,10 @@ const loadUsersFromFirestore = async (type) => {
 
   try {
     const rows = await withTimeout(fetchUserRowsFromFirestore(safeType), 15_000, `admin_users_${safeType}`);
+    if (perfFlow) {
+      window.SpacePerformance?.recordManual?.(perfFlow, "firestore_users");
+      window.SpacePerformance?.dataReady?.(perfFlow);
+    }
     state.rows = Array.isArray(rows) ? rows.filter(Boolean).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")) : [];
     state.loadedAt = Date.now();
     setAdminManageStatus(safeType, "");
@@ -22557,6 +22644,7 @@ const loadUsersFromFirestore = async (type) => {
       syncAdminEventUserSelects();
       validateCreateEventDraft();
     }
+    if (perfFlow) window.SpacePerformance?.rendered?.(perfFlow);
   }
 };
 
@@ -34286,6 +34374,7 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
 
   adminPedagogicoState.isLoading = true;
   adminPedRoot.dataset.loading = "true";
+  window.SpacePerformance?.start?.("pedagogico-dashboard");
   setAdminPedagogicoStatus("");
   if (adminPedError instanceof HTMLElement) adminPedError.hidden = true;
   runAdminPedagogicoRenderers();
@@ -34333,7 +34422,11 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
       loadFallback("liveLessons", fetchLiveLessonsForAdminPedagogico(), []),
       loadFallback("scheduleEvents", fetchAdminPedScheduleEvents(), []),
       fetchWithAuth("/api/pedagogico/dashboard")
-        .then(async (res) => (res.ok ? res.json() : { metrics: {} }))
+        .then(async (res) => {
+          const data = res.ok ? await res.json() : { metrics: {} };
+          window.SpacePerformance?.dataReady?.("pedagogico-dashboard");
+          return data;
+        })
         .catch((error) => {
           console.error("[admin-ped] pedagogical dashboard load failed", error);
           return { metrics: {} };
@@ -34566,6 +34659,7 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
   } finally {
     adminPedagogicoState.isLoading = false;
     if (adminPedRoot instanceof HTMLElement) delete adminPedRoot.dataset.loading;
+    window.SpacePerformance?.rendered?.("pedagogico-dashboard");
   }
 };
 

@@ -455,17 +455,23 @@ const loadCrmReadModel = async (options = {}) => {
     marks[key] = Date.now() - startedAt;
   };
   const user = options.user && (options.user.role || options.user.tipo || options.user.type) ? options.user : { role: "admin", commercialRoles: [] };
+  const perf = options.perf || null;
   const workspace = commercialPermissions.normalizeWorkspace(options.workspace);
   const visibleTypes = commercialPermissions.visiblePipelineTypesForUser(user, workspace);
   if (!visibleTypes.length) throw Object.assign(new Error("commercial_workspace_forbidden"), { status: 403 });
-  const seeded = await ensureDefaultPipeline();
+  const seeded = await (perf ? perf.measure("pipelineResolution", ensureDefaultPipeline, { firestore: true }) : ensureDefaultPipeline());
   mark("pipeline_ms");
   const [contactsRaw, opportunitiesRaw, usersRaw] = await Promise.all([
-    listCollectionAsAdmin(COLLECTIONS.contacts, { maxPages: 50 }).catch(() => []),
-    listCollectionAsAdmin(COLLECTIONS.opportunities, { maxPages: 50 }).catch(() => []),
-    listCollectionAsAdmin(COLLECTIONS.users, { maxPages: 20, decorate: false }).catch(() => []),
+    (perf ? perf.measure("contacts_readModel", () => listCollectionAsAdmin(COLLECTIONS.contacts, { maxPages: 50 }), { firestore: true }) : listCollectionAsAdmin(COLLECTIONS.contacts, { maxPages: 50 })).catch(() => []),
+    (perf ? perf.measure("opportunities", () => listCollectionAsAdmin(COLLECTIONS.opportunities, { maxPages: 50 }), { firestore: true }) : listCollectionAsAdmin(COLLECTIONS.opportunities, { maxPages: 50 })).catch(() => []),
+    (perf ? perf.measure("commercialPermissions", () => listCollectionAsAdmin(COLLECTIONS.users, { maxPages: 20, decorate: false }), { firestore: true }) : listCollectionAsAdmin(COLLECTIONS.users, { maxPages: 20, decorate: false })).catch(() => []),
   ]);
   mark("collections_ms");
+  if (perf) {
+    perf.set("contactsCount", contactsRaw.length);
+    perf.set("opportunitiesCount", opportunitiesRaw.length);
+    perf.set("usersCount", usersRaw.length);
+  }
   const contacts = contactsRaw.map(normalizeContact).filter((row) => row.id);
   const scopedContacts = contacts.filter(matchesCrmScope);
   const contactsById = new Map(scopedContacts.map((row) => [row.id, row]));
@@ -621,7 +627,7 @@ const createOpportunity = async ({ actorUid = "", input = {}, idempotencyKey = "
 };
 
 const loadCrmListModel = async (query = {}, options = {}) => {
-  const model = await loadCrmReadModel({ user: options.user, workspace: query.workspace || options.workspace });
+  const model = await loadCrmReadModel({ user: options.user, workspace: query.workspace || options.workspace, perf: options.perf });
   const params = parseListQuery(query);
   if (!params.pipelineId) params.pipelineId = model.pipelines.find((pipeline) => pipeline.isActive)?.id || model.pipelines[0]?.id || "";
   const signature = listSignature(params);

@@ -3,6 +3,7 @@ const { loadUsers, findUserByEmailAndRole, normalizeRole } = require("../_lib/us
 const { createSessionForUser, buildSessionCookie, isSecureRequest } = require("../_lib/session");
 const { verifyFirebaseIdToken } = require("../_lib/firebase-id-token");
 const { fetchUserProfileByUid } = require("../_lib/firestore-user");
+const { createPerformanceTimer } = require("./_lib/performance-observer");
 
 const attempts = new Map();
 const RATE_WINDOW_MS = 15 * 60 * 1000;
@@ -25,16 +26,21 @@ const isRateLimited = (key) => {
 };
 
 module.exports = async (req, res) => {
+  const perf = createPerformanceTimer({ req, route: "/api/login", operation: "login" });
+  const send = (status, body) => {
+    perf.finish(res, body);
+    return sendJson(res, status, body);
+  };
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
-    return sendJson(res, 405, { error: "method_not_allowed" });
+    return send(405, { error: "method_not_allowed" });
   }
 
   let body;
   try {
-    body = await readJsonBody(req);
+    body = await perf.measure("requestBody", () => readJsonBody(req));
   } catch (error) {
-    return sendJson(res, 400, { error: "invalid_request" });
+    return send(400, { error: "invalid_request" });
   }
 
   const role = normalizeRole(body?.role);
@@ -45,32 +51,32 @@ module.exports = async (req, res) => {
 
   if (isRateLimited(rateKey)) {
     res.setHeader("Retry-After", "900");
-    return sendJson(res, 429, { error: "too_many_attempts" });
+    return send(429, { error: "too_many_attempts" });
   }
 
   if (!role) {
-    return sendJson(res, 401, { error: "invalid_credentials" });
+    return send(401, { error: "invalid_credentials" });
   }
 
-  const users = loadUsers();
+  const users = await perf.measure("legacyUsers", () => Promise.resolve(loadUsers()));
   let user = null;
 
   if (idToken) {
     let decoded;
     try {
-      decoded = await verifyFirebaseIdToken(idToken);
+      decoded = await perf.measure("auth", () => verifyFirebaseIdToken(idToken));
     } catch (error) {
-      return sendJson(res, 401, { error: "invalid_credentials" });
+      return send(401, { error: "invalid_credentials" });
     }
 
     try {
-      const profile = await fetchUserProfileByUid({ uid: decoded.uid, idToken });
+      const profile = await perf.measure("firestoreProfile", () => fetchUserProfileByUid({ uid: decoded.uid, idToken }), { firestore: true });
       if (profile && profile.user) {
         if (!profile.active) {
-          return sendJson(res, 403, { error: "user_disabled" });
+          return send(403, { error: "user_disabled" });
         }
         if (normalizeRole(profile.user.role) !== role) {
-          return sendJson(res, 401, { error: "invalid_credentials" });
+          return send(401, { error: "invalid_credentials" });
         }
         user = profile.user;
       }
@@ -83,39 +89,39 @@ module.exports = async (req, res) => {
     }
 
     if (!user) {
-      return sendJson(res, 401, { error: "invalid_credentials" });
+      return send(401, { error: "invalid_credentials" });
     }
   } else {
     if (process.env.ALLOW_LEGACY_LOGIN !== "true") {
-      return sendJson(res, 401, { error: "invalid_credentials" });
+      return send(401, { error: "invalid_credentials" });
     }
     if (!email || !password) {
-      return sendJson(res, 401, { error: "invalid_credentials" });
+      return send(401, { error: "invalid_credentials" });
     }
 
     user = findUserByEmailAndRole(users, { email, role });
     if (!user) {
-      return sendJson(res, 401, { error: "invalid_credentials" });
+      return send(401, { error: "invalid_credentials" });
     }
 
     // eslint-disable-next-line global-require
     const { verifyPassword } = require("../_lib/password");
-    const ok = verifyPassword(password, user.passwordHash);
+    const ok = await perf.measure("auth", () => Promise.resolve(verifyPassword(password, user.passwordHash)));
     if (!ok) {
-      return sendJson(res, 401, { error: "invalid_credentials" });
+      return send(401, { error: "invalid_credentials" });
     }
   }
 
   if (user.role === 'student') {
     try { await require('./_lib/student-lifecycle').assertAccess(user.id); }
-    catch (error) { return sendJson(res, error.status || 503, { error: error.code || 'lifecycle_unavailable' }); }
+    catch (error) { return send(error.status || 503, { error: error.code || 'lifecycle_unavailable' }); }
   }
-  const session = createSessionForUser(user);
+  const session = await perf.measure("session", () => Promise.resolve(createSessionForUser(user)));
   attempts.delete(rateKey);
   const cookie = buildSessionCookie(session.token, { maxAgeSeconds: session.maxAgeSeconds, secure: isSecureRequest(req) });
   res.setHeader("Set-Cookie", cookie);
 
-  return sendJson(res, 200, {
+  return send(200, {
     user: { id: user.id, role: user.role, name: user.name, email: user.email, commercialRoles: Array.isArray(user.commercialRoles) ? user.commercialRoles : [] },
   });
 };

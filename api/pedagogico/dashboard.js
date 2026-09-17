@@ -2,15 +2,21 @@ const { readJsonBody, sendJson } = require("../_lib/http");
 const { supabaseFetch } = require("../_lib/supabase-rest");
 const { resolveAdminRequestAuth } = require("../_lib/admin-request-auth");
 const { TABLES, loadAdminDashboard } = require("../_lib/pedagogico-service");
+const { createPerformanceTimer } = require("../_lib/performance-observer");
 
 module.exports = async (req, res) => {
+  const perf = createPerformanceTimer({ req, route: "/api/pedagogico/dashboard", operation: req.method === "GET" || req.method === "HEAD" ? "pedagogico_dashboard" : "pedagogico_student_status" });
+  const send = (status, body) => {
+    perf.finish(res, body);
+    return sendJson(res, status, body);
+  };
   if (!["GET", "HEAD", "POST", "PATCH"].includes(req.method)) {
     res.setHeader("Allow", "GET, HEAD, POST, PATCH");
-    return sendJson(res, 405, { error: "method_not_allowed" });
+    return send(405, { error: "method_not_allowed" });
   }
-  const auth = await resolveAdminRequestAuth(req, { logPrefix: "[api] pedagogico dashboard auth" });
-  if (!auth.ok) return sendJson(res, auth.status, auth.body);
-  if (auth.session?.role !== "admin") return sendJson(res, 403, { error: "admin_only" });
+  const auth = await perf.measure("auth", () => resolveAdminRequestAuth(req, { logPrefix: "[api] pedagogico dashboard auth" }));
+  if (!auth.ok) return send(auth.status, auth.body);
+  if (auth.session?.role !== "admin") return send(403, { error: "admin_only" });
 
   try {
     if (req.method === "POST" || req.method === "PATCH") {
@@ -19,11 +25,11 @@ module.exports = async (req, res) => {
       const alunoChave = String(body?.aluno_chave || "").trim();
       const status = String(body?.status || "").trim().toLowerCase();
       if (action !== "set_student_status" || !alunoChave || !["ativo", "inativo"].includes(status)) {
-        return sendJson(res, 400, { error: "invalid_payload" });
+        return send(400, { error: "invalid_payload" });
       }
       const adminId = String(auth.session.sub || auth.session.email || "").trim();
       const now = new Date().toISOString();
-      const { data } = await supabaseFetch(
+      const { data } = await perf.measure("saveStudentPreference", () => supabaseFetch(
         `/${TABLES.adminStudentPreferences}?on_conflict=admin_id,aluno_chave`,
         {
           method: "POST",
@@ -36,21 +42,21 @@ module.exports = async (req, res) => {
             updated_at: now,
           },
         }
-      );
-      return sendJson(res, 200, { ok: true, preference: Array.isArray(data) ? data[0] || null : data });
+      ));
+      return send(200, { ok: true, preference: Array.isArray(data) ? data[0] || null : data });
     }
 
-    const dashboard = await loadAdminDashboard({ session: auth.session });
-    return sendJson(res, 200, { ok: true, ...dashboard });
+    const dashboard = await perf.measure("responseBuild", () => loadAdminDashboard({ session: auth.session, perf }));
+    return send(200, { ok: true, ...dashboard });
   } catch (error) {
     console.error("[pedagogico] dashboard failed", error);
     if (req.method === "POST" || req.method === "PATCH") {
-      return sendJson(res, 500, {
+      return send(500, {
         error: error?.code || "student_status_failed",
         message: "Não foi possível salvar a preferência deste acesso.",
       });
     }
-    return sendJson(res, 200, {
+    return send(200, {
       ok: true,
       degraded: true,
       degradedReason: "api_route_error",

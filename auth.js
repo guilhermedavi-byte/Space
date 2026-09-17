@@ -299,12 +299,20 @@ const initLoginForm = (role) => {
         const idToken = typeof credential?.user?.getIdToken === "function" ? await credential.user.getIdToken() : "";
         if (!idToken) throw new Error("missing_id_token");
 
+        try { performance.mark("login:start"); } catch {}
         const res = await fetch("/api/login", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
           body: JSON.stringify({ role: normalizeRole(role), idToken }),
         });
+        try {
+          performance.mark("login:data-ready");
+          performance.measure("login:time-to-data", "login:start", "login:data-ready");
+          performance.mark("login:rendered");
+          performance.measure("login:time-to-usable-ui", "login:start", "login:rendered");
+          if (localStorage.getItem("SPACE_PERF_DEBUG") === "1") console.info("[space-performance]", { flow: "login", requests: 1, requestId: res.headers.get("x-request-id") || "", payloadBytes: Number(res.headers.get("content-length") || 0) });
+        } catch {}
 
         const data = await res.json().catch(() => null);
         if (!res.ok) {

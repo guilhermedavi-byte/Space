@@ -14,6 +14,7 @@ const handoff = require("./_lib/crm-handoff");
 const qualificationAnalytics = require("./_lib/crm-qualification-analytics");
 const qualificationActions = require("./_lib/crm-qualification-actions");
 const commercialPermissions = require("./_lib/commercial-permissions");
+const { createPerformanceTimer } = require("./_lib/performance-observer");
 
 const COLLECTIONS = {
   pipelines: "crmPipelines",
@@ -360,14 +361,18 @@ const loadOpportunityForWrite = async (id) => {
   }
 };
 
-const loadActivitiesForOpportunity = async (opportunityId) => {
+const loadActivitiesForOpportunity = async (opportunityId, perf = null) => {
   const safeOpportunityId = clean(opportunityId);
   if (!safeOpportunityId) return [];
-  const rows = await listCollectionAsAdmin(COLLECTIONS.activities, { maxPages: 50 }).catch(() => []);
-  return rows
+  const rows = await (perf
+    ? perf.measure("activities", () => listCollectionAsAdmin(COLLECTIONS.activities, { maxPages: 50 }), { firestore: true })
+    : listCollectionAsAdmin(COLLECTIONS.activities, { maxPages: 50 })).catch(() => []);
+  const activities = rows
     .map(normalizeActivity)
     .filter((activity) => activity.id && matchesCrmScope(activity) && activity.opportunityId === safeOpportunityId)
     .sort(compareActivityDueAt);
+  if (perf) perf.set("numberOfActivities", activities.length);
+  return activities;
 };
 
 const requireAdmin = (auth) => {
@@ -884,12 +889,12 @@ const eventDescription = (event) => {
   return event.payload?.title || event.payload?.activityTitle || "";
 };
 
-const buildOpportunityTimeline = async (opportunityId) => {
+const buildOpportunityTimeline = async (opportunityId, perf = null) => {
   const [eventsRaw, historyRaw, stagesRaw, usersRaw] = await Promise.all([
-    listCollectionAsAdmin(COLLECTIONS.events, { maxPages: 50 }).catch(() => []),
-    listCollectionAsAdmin(COLLECTIONS.stageHistory, { maxPages: 50 }).catch(() => []),
-    listCollectionAsAdmin(COLLECTIONS.stages, { maxPages: 10 }).catch(() => []),
-    listCollectionAsAdmin(COLLECTIONS.users, { maxPages: 20 }).catch(() => []),
+    (perf ? perf.measure("timeline_events", () => listCollectionAsAdmin(COLLECTIONS.events, { maxPages: 50 }), { firestore: true }) : listCollectionAsAdmin(COLLECTIONS.events, { maxPages: 50 })).catch(() => []),
+    (perf ? perf.measure("timeline_stageHistory", () => listCollectionAsAdmin(COLLECTIONS.stageHistory, { maxPages: 50 }), { firestore: true }) : listCollectionAsAdmin(COLLECTIONS.stageHistory, { maxPages: 50 })).catch(() => []),
+    (perf ? perf.measure("timeline_stages", () => listCollectionAsAdmin(COLLECTIONS.stages, { maxPages: 10 }), { firestore: true }) : listCollectionAsAdmin(COLLECTIONS.stages, { maxPages: 10 })).catch(() => []),
+    (perf ? perf.measure("timeline_users", () => listCollectionAsAdmin(COLLECTIONS.users, { maxPages: 20 }), { firestore: true }) : listCollectionAsAdmin(COLLECTIONS.users, { maxPages: 20 })).catch(() => []),
   ]);
   const stagesById = new Map(stagesRaw.map(normalizeStage).filter(matchesCrmScope).map((stage) => [stage.id, stage]));
   const usersById = new Map(usersRaw.map((row) => [clean(row.uid || row.id || row.firestoreDocId), row]).filter(([id]) => id));
@@ -924,19 +929,23 @@ const buildOpportunityTimeline = async (opportunityId) => {
       occurredAt: row.createdAt,
       payload: { fromStageId: row.fromStageId, toStageId: row.toStageId },
     }));
-  return events.concat(stageItems).sort((left, right) => String(right.occurredAt || "").localeCompare(String(left.occurredAt || "")));
+  const timeline = events.concat(stageItems).sort((left, right) => String(right.occurredAt || "").localeCompare(String(left.occurredAt || "")));
+  if (perf) perf.set("numberOfEvents", timeline.length);
+  return timeline;
 };
 
-const loadOpportunityDetail = async (opportunityId, auth = null) => {
-  const opportunity = await loadOpportunityForWrite(opportunityId);
+const loadOpportunityDetail = async (opportunityId, auth = null, perf = null) => {
+  const opportunity = await (perf
+    ? perf.measure("opportunityCore", () => loadOpportunityForWrite(opportunityId), { firestore: true })
+    : loadOpportunityForWrite(opportunityId));
   if (!opportunity) return { status: 404, body: { error: "opportunity_not_found" } };
   if (auth) {
-    const pipeline = await loadPipelineForOpportunity(opportunity);
+    const pipeline = await (perf ? perf.measure("pipelineResolution", () => loadPipelineForOpportunity(opportunity), { firestore: true }) : loadPipelineForOpportunity(opportunity));
     if (!commercialPermissions.canAccessPipelineType(auth.user || auth.session, pipeline?.pipelineType)) return { status: 403, body: { error: "commercial_workspace_forbidden" } };
   }
   const [activities, timeline, qualificationDetail, handoffBundle, actions] = await Promise.all([
-    loadActivitiesForOpportunity(opportunity.id),
-    buildOpportunityTimeline(opportunity.id),
+    loadActivitiesForOpportunity(opportunity.id, perf),
+    buildOpportunityTimeline(opportunity.id, perf),
     loadOpportunityQualificationDetail(opportunity),
     loadLatestHandoffBundle(opportunity.id),
     loadQualificationActionsForOpportunity(opportunity.id),
@@ -2400,46 +2409,57 @@ const handleReactivateOpportunity = async ({ auth, body }) => {
 };
 
 module.exports = async (req, res) => {
-  let auth = canAccessCrm(req);
-  if (!auth.ok) return sendJson(res, auth.status, { error: auth.error });
-  auth = await resolveCrmAuthContext(auth);
+  const perf = createPerformanceTimer({ req, route: "/api/crm", operation: "crm" });
+  const send = (status, body) => {
+    perf.finish(res, body);
+    return sendJson(res, status, body);
+  };
+  let auth = perf.measure ? await perf.measure("auth", () => Promise.resolve(canAccessCrm(req))) : canAccessCrm(req);
+  if (!auth.ok) return send(auth.status, { error: auth.error });
+  auth = await perf.measure("commercialPermissions", () => resolveCrmAuthContext(auth), { firestore: auth.role === "growth" });
   if (req.method === "GET" || req.method === "HEAD") {
     try {
       const host = String(req.headers.host || "localhost");
       const url = new URL(req.url || "/api/crm", `https://${host}`);
       const opportunityId = clean(url.searchParams.get("opportunityId"));
       if (opportunityId) {
-        const detail = await loadOpportunityDetail(opportunityId, auth);
-        return sendJson(res, detail.status, detail.body);
+        perf.set("operation", "opportunity_detail");
+        const detail = await loadOpportunityDetail(opportunityId, auth, perf);
+        return send(detail.status, detail.body);
       }
       if (clean(url.searchParams.get("view")) === "analytics") {
-        if (auth.role !== "admin") return sendJson(res, 403, { error: "admin_required" });
+        perf.set("operation", "analytics");
+        if (auth.role !== "admin") return send(403, { error: "admin_required" });
         const analytics = await loadQualificationAnalytics(Object.fromEntries(url.searchParams.entries()));
-        return sendJson(res, 200, analytics);
+        return send(200, analytics);
       }
       if (clean(url.searchParams.get("view")) === "qualification_config") {
-        if (auth.role !== "admin") return sendJson(res, 403, { error: "admin_required" });
+        perf.set("operation", "qualification_config");
+        if (auth.role !== "admin") return send(403, { error: "admin_required" });
         const model = await loadQualificationAdminModel(clean(auth.session?.sub));
-        return sendJson(res, 200, model);
+        return send(200, model);
       }
       if (clean(url.searchParams.get("view")) === "actions") {
+        perf.set("operation", "actions");
         const actions = await loadQualificationActionsQueue({ query: Object.fromEntries(url.searchParams.entries()), auth });
-        return sendJson(res, 200, actions);
+        return send(200, actions);
       }
       if (clean(url.searchParams.get("view")) === "list") {
-        const list = await crmService.loadCrmListModel(Object.fromEntries(url.searchParams.entries()), { user: auth.user || auth.session });
-        return sendJson(res, 200, list);
+        perf.set("operation", "list");
+        const list = await perf.measure("responseBuild", () => crmService.loadCrmListModel(Object.fromEntries(url.searchParams.entries()), { user: auth.user || auth.session, perf }));
+        return send(200, list);
       }
-      const model = await crmService.loadCrmReadModel({ user: auth.user || auth.session, workspace: clean(url.searchParams.get("workspace")) });
-      return sendJson(res, 200, model);
+      perf.set("operation", "board");
+      const model = await perf.measure("responseBuild", () => crmService.loadCrmReadModel({ user: auth.user || auth.session, workspace: clean(url.searchParams.get("workspace")), perf }));
+      return send(200, model);
     } catch (error) {
       console.error("[crm] read failed", error);
-      return sendJson(res, error.status || 500, { error: error.message || "crm_read_failed" });
+      return send(error.status || 500, { error: error.message || "crm_read_failed" });
     }
   }
   if (req.method !== "POST" && req.method !== "PATCH") {
     res.setHeader("Allow", "GET, HEAD, POST, PATCH");
-    return sendJson(res, 405, { error: "method_not_allowed" });
+    return send(405, { error: "method_not_allowed" });
   }
 
   try {
@@ -2460,7 +2480,7 @@ module.exports = async (req, res) => {
     ]);
     if (adminActions.has(action)) {
       const adminGuard = requireAdmin(auth);
-      if (adminGuard) return sendJson(res, adminGuard.status, adminGuard.body);
+      if (adminGuard) return send(adminGuard.status, adminGuard.body);
     }
     const result =
       action === "create_opportunity"
@@ -2524,9 +2544,9 @@ module.exports = async (req, res) => {
                                                             : action === "cancel_activity"
                                                               ? await handleActivityStatusChange({ auth, body, status: "cancelled" })
                                                               : { status: 400, body: { error: "invalid_action" } };
-    return sendJson(res, result.status, result.body);
+    return send(result.status, result.body);
   } catch (error) {
     console.error("[crm] write failed", error);
-    return sendJson(res, error.status || 500, { error: error.message || "crm_write_failed" });
+    return send(error.status || 500, { error: error.message || "crm_write_failed" });
   }
 };
