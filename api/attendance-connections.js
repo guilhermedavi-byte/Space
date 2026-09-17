@@ -9,7 +9,7 @@ const createHandler = ({ authenticate = requireAttendanceAuth, request = supabas
   if (!['GET', 'POST'].includes(req.method)) return sendJson(res, 405, { error: 'method_not_allowed' });
   try {
     const actor = await authenticate(req, req.method === 'GET' ? 'attendance.view' : 'attendance.manage');
-    if (!['admin', 'growth'].includes(actor.role)) fail('attendance_forbidden', 403);
+    if (req.method !== 'GET' && !['admin', 'growth'].includes(actor.role)) fail('attendance_forbidden', 403);
     if (req.method !== 'GET') checkEnvironment();
     const isTransientReadFailure = error => error?.status >= 500 || error?.code === 'supabase_transport_failed' || String(error?.message || '').includes('522: Connection timed out');
     const read = async path => {
