@@ -1,3 +1,4 @@
+const https = require("node:https");
 const { assertEnvironmentIsolation } = require("../../_lib/runtime-env");
 
 const getSupabaseConfig = () => {
@@ -14,6 +15,22 @@ const getSupabaseConfig = () => {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const nodeHttpsFetch = (target, { method = "GET", headers = {}, body, timeoutMs = 8000 } = {}) => new Promise((resolve, reject) => {
+  let url;
+  try { url = new URL(target); } catch { reject(Object.assign(new Error("supabase_transport_failed"), { code: "supabase_transport_failed" })); return; }
+  if (url.protocol !== "https:") { reject(Object.assign(new Error("supabase_transport_failed"), { code: "supabase_transport_failed" })); return; }
+  const req = https.request(url, { method, headers, timeout: Math.max(1000, Math.min(Number(timeoutMs) || 8000, 15000)) }, (res) => {
+    const chunks = [];
+    res.on("data", chunk => chunks.push(chunk));
+    res.on("end", () => resolve({ ok: res.statusCode >= 200 && res.statusCode < 300, status: res.statusCode || 0, text: async () => Buffer.concat(chunks).toString("utf8") }));
+  });
+  req.on("timeout", () => req.destroy(Object.assign(new Error("supabase_transport_failed"), { code: "supabase_transport_failed" })));
+  req.on("error", () => reject(Object.assign(new Error("supabase_transport_failed"), { code: "supabase_transport_failed" })));
+  if (body != null) req.write(body);
+  req.end();
+});
+
+
 const shouldRetry = (error) => {
   const status = Number(error?.status) || 0;
   const code = String(error?.code || error?.message || "");
@@ -25,26 +42,39 @@ const supabaseFetchOnce = async (path, { method = "GET", headers = {}, body, sig
   let res;
   const controller = typeof AbortController === "function" && !signal ? new AbortController() : null;
   const timer = controller ? setTimeout(() => controller.abort(), Math.max(1000, Math.min(Number(timeoutMs) || 8000, 15000))) : null;
+  const target = `${url}/rest/v1${path}`;
+  const requestHeaders = {
+    apikey: key,
+    Authorization: `Bearer ${key}`,
+    "Content-Type": "application/json",
+    Prefer: "return=representation",
+    ...headers,
+  };
+  const requestBody = body == null ? undefined : JSON.stringify(body);
   try {
-    res = await fetch(`${url}/rest/v1${path}`, {
+    res = await fetch(target, {
       method,
       // A redirect could forward the custom apikey header to a different origin.
       redirect: "error",
       signal: signal || controller?.signal,
-      headers: {
-        apikey: key,
-        Authorization: `Bearer ${key}`,
-        "Content-Type": "application/json",
-        Prefer: "return=representation",
-        ...headers,
-      },
-      body: body == null ? undefined : JSON.stringify(body),
+      headers: requestHeaders,
+      body: requestBody,
     });
   } catch {
-    // Transport errors may include request headers/URLs. Never propagate their cause.
-    const error = new Error("supabase_transport_failed");
-    error.code = "supabase_transport_failed";
-    throw error;
+    if (method === "GET" && !signal) {
+      try {
+        res = await nodeHttpsFetch(target, { method, headers: requestHeaders, timeoutMs });
+      } catch {
+        const error = new Error("supabase_transport_failed");
+        error.code = "supabase_transport_failed";
+        throw error;
+      }
+    } else {
+      // Transport errors may include request headers/URLs. Never propagate their cause.
+      const error = new Error("supabase_transport_failed");
+      error.code = "supabase_transport_failed";
+      throw error;
+    }
   } finally {
     if (timer) clearTimeout(timer);
   }
