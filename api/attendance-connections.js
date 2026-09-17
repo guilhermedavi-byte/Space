@@ -11,18 +11,35 @@ const createHandler = ({ authenticate = requireAttendanceAuth, request = supabas
     const actor = await authenticate(req, req.method === 'GET' ? 'attendance.view' : 'attendance.manage');
     if (!['admin', 'growth'].includes(actor.role)) fail('attendance_forbidden', 403);
     if (req.method !== 'GET') checkEnvironment();
-    const read = async path => (await request(path)).data || [];
+    const readOptions = req.method === 'GET' && request === supabaseFetch ? { timeoutMs: 15000 } : undefined;
+    const read = async (path, table) => {
+      try {
+        return (await (readOptions ? request(path, readOptions) : request(path))).data || [];
+      } catch (error) {
+        error.attendanceTable = table;
+        error.attendanceEndpoint = path.split('?')[0];
+        if (req.method === 'GET') {
+          console.warn('[attendance-connections] supabase read failed', {
+            table,
+            endpoint: error.attendanceEndpoint,
+            status: Number(error.status) || 0,
+            code: String(error.code || error.message || 'unknown').slice(0, 80),
+          });
+        }
+        throw error;
+      }
+    };
     const admin = actor.role === 'admin';
-    const [connections, channels, teams, grants] = await Promise.all([
-      read('/connections?select=connection_id,provider,external_account_id,external_account_type,display_name,status,created_at,updated_at,metadata&order=created_at.desc'),
-      read('/channels?select=channel_id,connection_id,external_channel_id,display_name,status,default_team_id'),
-      read('/teams?select=team_id,name,active'),
-      read('/channel_teams?select=channel_id,team_id'),
-    ]);
-    const [members, membership] = admin ? [[], []] : await Promise.all([
-      read(`/attendance_members?select=enabled&user_uid=eq.${encodeURIComponent(actor.uid)}`),
-      read(`/team_members?select=team_id,member_role,active&user_uid=eq.${encodeURIComponent(actor.uid)}`),
-    ]);
+    const connections = await read('/connections?select=connection_id,provider,external_account_id,external_account_type,display_name,status,created_at,updated_at,metadata&order=created_at.desc', 'connections');
+    const channels = await read('/channels?select=channel_id,connection_id,external_channel_id,display_name,status,default_team_id', 'channels');
+    const teams = await read('/teams?select=team_id,name,active', 'teams');
+    const grants = await read('/channel_teams?select=channel_id,team_id', 'channel_teams');
+    let members = [];
+    let membership = [];
+    if (!admin) {
+      members = await read(`/attendance_members?select=enabled&user_uid=eq.${encodeURIComponent(actor.uid)}`, 'attendance_members');
+      membership = await read(`/team_members?select=team_id,member_role,active&user_uid=eq.${encodeURIComponent(actor.uid)}`, 'team_members');
+    }
     const scope = membership.filter(m => members[0]?.enabled && m.active && teams.some(t => t.team_id === m.team_id && t.active));
     const hasTeam = (id, manage = false) => admin || scope.some(m => m.team_id === id && (!manage || m.member_role === 'supervisor'));
     const canChannel = (ch, manage = false) => admin || grants.some(g => g.channel_id === ch.channel_id && hasTeam(g.team_id, manage));
