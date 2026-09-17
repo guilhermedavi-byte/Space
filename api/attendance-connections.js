@@ -12,14 +12,17 @@ const createHandler = ({ authenticate = requireAttendanceAuth, request = supabas
     if (!['admin', 'growth'].includes(actor.role)) fail('attendance_forbidden', 403);
     checkEnvironment();
     const read = async path => (await request(path)).data || [];
-    const [connections, channels, teams, grants, members, membership] = await Promise.all([
+    const admin = actor.role === 'admin';
+    const [connections, channels, teams, grants] = await Promise.all([
       read('/connections?select=connection_id,provider,external_account_id,external_account_type,display_name,status,created_at,updated_at,metadata&order=created_at.desc'),
       read('/channels?select=channel_id,connection_id,external_channel_id,display_name,status,default_team_id'),
-      read('/teams?select=team_id,name,active'), read('/channel_teams?select=channel_id,team_id'),
+      read('/teams?select=team_id,name,active'),
+      read('/channel_teams?select=channel_id,team_id'),
+    ]);
+    const [members, membership] = admin ? [[], []] : await Promise.all([
       read(`/attendance_members?select=enabled&user_uid=eq.${encodeURIComponent(actor.uid)}`),
       read(`/team_members?select=team_id,member_role,active&user_uid=eq.${encodeURIComponent(actor.uid)}`),
     ]);
-    const admin = actor.role === 'admin';
     const scope = membership.filter(m => members[0]?.enabled && m.active && teams.some(t => t.team_id === m.team_id && t.active));
     const hasTeam = (id, manage = false) => admin || scope.some(m => m.team_id === id && (!manage || m.member_role === 'supervisor'));
     const canChannel = (ch, manage = false) => admin || grants.some(g => g.channel_id === ch.channel_id && hasTeam(g.team_id, manage));
