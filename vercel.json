@@ -1,7 +1,11 @@
 {
   "functions": {
-    "api/attendance/meta/process.js": { "maxDuration": 120 },
-    "api/automations-process.js": { "maxDuration": 120 },
+    "api/attendance/meta/process.js": {
+      "maxDuration": 120
+    },
+    "api/automations-process.js": {
+      "maxDuration": 120
+    },
     "api/crm-live-data.js": {
       "maxDuration": 300
     },
@@ -31,10 +35,14 @@
     }
   },
   "crons": [
-    { "path": "/api/attendance/meta/process", "schedule": "* * * * *" },
-    { "path": "/api/automations-process", "schedule": "* * * * *" },
-    { "path": "/api/crm-live-refresh", "schedule": "*/2 * * * *" },
-    { "path": "/api/retention-churn-job", "schedule": "5 3 * * *" }
+    {
+      "path": "/api/crm-live-refresh",
+      "schedule": "*/2 * * * *"
+    },
+    {
+      "path": "/api/retention-churn-job",
+      "schedule": "5 3 * * *"
+    }
   ],
   "headers": [
     {
