@@ -10,14 +10,13 @@ const ROLE_CAPABILITIES = Object.fromEntries(['admin', 'growth', 'financeiro', '
   new Set(['attendance.view', 'attendance.reply', 'attendance.manage'])]));
 
 const requireAttendanceAuth = async (req, capability, resolveAuth = resolveAdminRequestAuth) => {
+  const session = getSessionFromRequest(req);
+  const sessionRole = normalizeRole(session?.role);
+  const sessionUid = String(session?.sub || '').trim();
+  if (sessionUid && ROLE_CAPABILITIES[sessionRole]?.has(capability)) return { uid: sessionUid, role: sessionRole };
+
   const auth = await resolveAuth(req, { logPrefix: '[attendance]' });
-  if (!auth?.ok) {
-    const session = getSessionFromRequest(req);
-    const role = normalizeRole(session?.role);
-    const uid = String(session?.sub || '').trim();
-    if (uid && ROLE_CAPABILITIES[role]?.has(capability)) return { uid, role };
-    fail('unauthenticated', 401);
-  }
+  if (!auth?.ok) fail('unauthenticated', 401);
   if (auth.profile?.active !== true || !ROLE_CAPABILITIES[auth.session?.role]?.has(capability)) fail('attendance_forbidden', 403);
   const uid = auth.decoded?.uid;
   if (!uid || uid !== auth.session?.sub || uid !== auth.profile?.user?.id) fail('unauthenticated', 401);
