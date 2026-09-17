@@ -12123,6 +12123,7 @@ const nativeCrmState = {
   saving: false,
   error: "",
   data: null,
+  workspace: "",
   selectedPipelineId: "",
   search: "",
   mode: "funnel",
@@ -12187,6 +12188,23 @@ const nativeCrmState = {
       search: "",
     },
   },
+};
+
+const readNativeCrmWorkspacePreference = () => {
+  try {
+    const value = window.localStorage?.getItem("space.nativeCrm.workspace");
+    return value === "closer" ? "closer" : value === "sdr" ? "sdr" : "";
+  } catch {
+    return "";
+  }
+};
+
+const writeNativeCrmWorkspacePreference = (workspace) => {
+  try {
+    if (workspace === "sdr" || workspace === "closer") window.localStorage?.setItem("space.nativeCrm.workspace", workspace);
+  } catch {
+    // Preference persistence is optional.
+  }
 };
 
 const automationsState = {
@@ -12724,6 +12742,7 @@ const getNativeCrmData = () => {
     stages: Array.isArray(data.stages) ? data.stages : [],
     opportunities: Array.isArray(data.opportunities) ? data.opportunities : [],
     owners: Array.isArray(data.owners) ? data.owners : [],
+    permissions: data.permissions && typeof data.permissions === "object" ? data.permissions : {},
   };
 };
 
@@ -12737,7 +12756,68 @@ const getNativeCrmAllOpportunities = () => {
   return Array.from(byId.values());
 };
 
-const getActiveCrmPipelines = () => getNativeCrmData().pipelines.filter((pipeline) => pipeline.isActive !== false);
+const normalizeCrmCommercialRoles = (roles) => {
+  const values = Array.isArray(roles) ? roles : String(roles || "").split(/[,\s]+/);
+  return Array.from(new Set(values.map((role) => String(role || "").trim().toLowerCase()).filter((role) => role === "sdr" || role === "closer")));
+};
+
+const normalizeCrmWorkspace = (workspace) => (workspace === "closer" ? "closer" : workspace === "sdr" ? "sdr" : "");
+
+const crmPipelineWorkspace = (pipeline) => {
+  const type = String(pipeline?.pipelineType || "").trim().toLowerCase();
+  if (type === "closer") return "closer";
+  if (type === "sdr") return "sdr";
+  return "";
+};
+
+const getNativeCrmVisibleWorkspaces = () => {
+  if (isNativeCrmAdmin()) return ["sdr", "closer"];
+  const { permissions } = getNativeCrmData();
+  const fromServer = Array.isArray(permissions?.visibleWorkspaces)
+    ? permissions.visibleWorkspaces.map(normalizeCrmWorkspace).filter(Boolean)
+    : [];
+  if (fromServer.length) return Array.from(new Set(fromServer));
+  return normalizeCrmCommercialRoles(sessionUser?.commercialRoles);
+};
+
+const getNativeCrmWorkspace = () => {
+  const visible = getNativeCrmVisibleWorkspaces();
+  if (!visible.length) return "";
+  const preferred = normalizeCrmWorkspace(nativeCrmState.workspace) || normalizeCrmWorkspace(readNativeCrmWorkspacePreference());
+  if (preferred && visible.includes(preferred)) return preferred;
+  return visible.includes("sdr") ? "sdr" : visible[0];
+};
+
+const setNativeCrmWorkspace = (workspace) => {
+  const visible = getNativeCrmVisibleWorkspaces();
+  const next = normalizeCrmWorkspace(workspace);
+  if (!next || !visible.includes(next)) return false;
+  nativeCrmState.workspace = next;
+  nativeCrmState.selectedPipelineId = "";
+  nativeCrmState.filters.stageId = "";
+  nativeCrmState.filterPopover = "";
+  nativeCrmState.loadedAt = 0;
+  nativeCrmState.list = { ...nativeCrmState.list, rows: [], nextCursor: "", loadedAt: 0, totalVisible: 0 };
+  nativeCrmState.actions = { ...nativeCrmState.actions, rows: [], counts: { pending: 0 }, loadedAt: 0 };
+  writeNativeCrmWorkspacePreference(next);
+  return true;
+};
+
+const renderNativeCrmWorkspaceSelector = () => {
+  const visible = getNativeCrmVisibleWorkspaces();
+  const workspace = getNativeCrmWorkspace();
+  if (visible.length < 2) return "";
+  return `
+    <div class="native-crm-segment" aria-label="Workspace comercial">
+      ${visible.map((item) => `<button type="button" class="${workspace === item ? "is-active" : ""}" data-crm-workspace="${escapeHtml(item)}">${item === "closer" ? "Closer" : "SDR"}</button>`).join("")}
+    </div>
+  `;
+};
+
+const getActiveCrmPipelines = () => {
+  const workspace = getNativeCrmWorkspace();
+  return getNativeCrmData().pipelines.filter((pipeline) => pipeline.isActive !== false && (!workspace || crmPipelineWorkspace(pipeline) === workspace));
+};
 
 const selectedCrmPipelineId = () => {
   const activePipelines = getActiveCrmPipelines();
@@ -13327,6 +13407,8 @@ const nativeCrmListParams = ({ cursor = "" } = {}) => {
     direction: nativeCrmState.list.direction || "desc",
     limit: "50",
   });
+  const workspace = getNativeCrmWorkspace();
+  if (workspace) params.set("workspace", workspace);
   if (cursor) params.set("cursor", cursor);
   Array.from(params.entries()).forEach(([key, value]) => {
     if (!value) params.delete(key);
@@ -14453,14 +14535,23 @@ const renderNativeCrm = () => {
     `;
     return;
   }
-  const { pipelines } = getNativeCrmData();
+  const activeWorkspacePipelines = getActiveCrmPipelines();
   const pipelineId = selectedCrmPipelineId();
   const pendingActions = Number(nativeCrmState.actions?.counts?.pending || 0);
+  const visibleWorkspaces = getNativeCrmVisibleWorkspaces();
+  if (!visibleWorkspaces.length && normalizeRole(sessionUser?.role || currentRole) === "growth") {
+    root.innerHTML = `
+      <div class="native-crm-shell">
+        <div class="native-crm-empty">Seu acesso comercial ainda não foi configurado.</div>
+      </div>
+    `;
+    return;
+  }
   const workspaceHtml = nativeCrmState.mode === "analytics"
     ? renderNativeCrmAnalytics()
     : nativeCrmState.mode === "actions"
       ? renderNativeCrmActions()
-      : pipelines.length
+      : activeWorkspacePipelines.length
         ? (nativeCrmState.mode === "list" ? renderNativeCrmList() : renderNativeCrmBoard())
         : `<div class="native-crm-empty">Nenhum pipeline disponível.</div>`;
   root.innerHTML = `
@@ -14468,13 +14559,14 @@ const renderNativeCrm = () => {
       <header class="native-crm-head">
         <div class="native-crm-title">
           <h2>CRM</h2>
+          ${renderNativeCrmWorkspaceSelector()}
           <div class="native-crm-pipeline-control">
             <select data-crm-pipeline aria-label="Pipeline">${renderNativeCrmPipelineOptions(pipelineId)}</select>
             ${isNativeCrmAdmin() ? `<button type="button" class="native-crm-icon-button native-crm-pipeline-settings" data-crm-pipeline-manager-open aria-label="Gerenciar pipelines">${nativeCrmIcon("settings")}</button>` : ""}
           </div>
         </div>
         <div class="native-crm-actions">
-          <button type="button" class="button button-solid button-small native-crm-primary-action" data-crm-new>${nativeCrmIcon("plus")}Nova oportunidade</button>
+          ${getNativeCrmWorkspace() === "sdr" ? `<button type="button" class="button button-solid button-small native-crm-primary-action" data-crm-new>${nativeCrmIcon("plus")}Nova oportunidade</button>` : ""}
         </div>
       </header>
       <section class="native-crm-filterbar" aria-label="Filtros do CRM">
@@ -14510,13 +14602,18 @@ const loadNativeCrm = async ({ force = false } = {}) => {
   }
   nativeCrmState.loading = true;
   nativeCrmState.error = "";
+  nativeCrmState.workspace = getNativeCrmWorkspace() || nativeCrmState.workspace || "sdr";
   renderNativeCrm();
   try {
-    const res = await fetchWithAuth("/api/crm", { method: "GET" });
+    const params = new URLSearchParams();
+    const workspace = getNativeCrmWorkspace();
+    if (workspace) params.set("workspace", workspace);
+    const res = await fetchWithAuth(`/api/crm${params.toString() ? `?${params.toString()}` : ""}`, { method: "GET" });
     const data = await res.json().catch(() => null);
-    if (!res.ok) throw new Error(data?.error || "crm_load_failed");
+    if (!res.ok) throw new Error(data?.message || data?.error || "crm_load_failed");
     nativeCrmState.data = data;
     nativeCrmState.loadedAt = Date.now();
+    nativeCrmState.workspace = getNativeCrmWorkspace() || nativeCrmState.workspace;
     if (!nativeCrmState.selectedPipelineId) nativeCrmState.selectedPipelineId = selectedCrmPipelineId();
     if (nativeCrmState.mode === "list") loadNativeCrmList({ reset: true }).catch(() => {});
     if (nativeCrmState.mode === "analytics") loadNativeCrmAnalytics({ force: false }).catch(() => {});
@@ -14537,6 +14634,9 @@ const updateNativeCrmUrlState = () => {
   else url.searchParams.delete("view");
   const pipelineId = selectedCrmPipelineId();
   if (pipelineId) url.searchParams.set("pipeline", pipelineId);
+  const workspace = getNativeCrmWorkspace();
+  if (workspace) url.searchParams.set("workspace", workspace);
+  else url.searchParams.delete("workspace");
   window.history.replaceState(window.history.state, "", url.toString());
 };
 
@@ -14545,6 +14645,7 @@ const applyNativeCrmUrlState = () => {
   if (params.get("view") === "list") nativeCrmState.mode = "list";
   if (params.get("view") === "analytics") nativeCrmState.mode = "analytics";
   if (params.get("view") === "actions") nativeCrmState.mode = "actions";
+  if (params.get("workspace")) nativeCrmState.workspace = normalizeCrmWorkspace(params.get("workspace")) || nativeCrmState.workspace;
   if (params.get("pipeline")) nativeCrmState.selectedPipelineId = params.get("pipeline") || "";
 };
 
@@ -14592,6 +14693,8 @@ const reloadNativeCrmListIfNeeded = () => {
 
 const nativeCrmAnalyticsParams = () => {
   const params = new URLSearchParams({ view: "analytics" });
+  const workspace = getNativeCrmWorkspace();
+  if (workspace) params.set("workspace", workspace);
   const filters = nativeCrmState.analytics?.filters || {};
   Object.entries(filters).forEach(([key, value]) => {
     if (value) params.set(key, String(value));
@@ -14601,6 +14704,8 @@ const nativeCrmAnalyticsParams = () => {
 
 const nativeCrmActionsParams = () => {
   const params = new URLSearchParams({ view: "actions" });
+  const workspace = getNativeCrmWorkspace();
+  if (workspace) params.set("workspace", workspace);
   const filters = nativeCrmState.actions?.filters || {};
   Object.entries(filters).forEach(([key, value]) => {
     if (value) params.set(key, String(value));
@@ -14638,7 +14743,10 @@ const refreshNativeCrmActionsBadge = async () => {
   const state = nativeCrmState.actions;
   if (!state || state.loading || state.loadedAt) return;
   try {
-    const res = await fetchWithAuth("/api/crm?view=actions&status=pending&period=all", { method: "GET" });
+    const params = new URLSearchParams({ view: "actions", status: "pending", period: "all" });
+    const workspace = getNativeCrmWorkspace();
+    if (workspace) params.set("workspace", workspace);
+    const res = await fetchWithAuth(`/api/crm?${params.toString()}`, { method: "GET" });
     const data = await res.json().catch(() => null);
     if (res.ok) state.counts = data?.counts && typeof data.counts === "object" ? data.counts : state.counts;
   } catch {
@@ -21404,7 +21512,15 @@ const clonePlainData = (value) => {
   }
 };
 
-const normalizeUserRow = ({ id, nome, email, tipo, ativo, criadoEm }) => {
+const commercialRoleLabel = (role) => (role === "closer" ? "Closer" : "SDR");
+
+const renderCommercialRoleBadges = (roles) => {
+  const normalized = normalizeCrmCommercialRoles(roles);
+  if (!normalized.length) return `<span class="admin-badge is-inactive">Sem função</span>`;
+  return normalized.map((role) => `<span class="admin-badge is-active">${escapeHtml(commercialRoleLabel(role))}</span>`).join(" ");
+};
+
+const normalizeUserRow = ({ id, nome, email, tipo, ativo, criadoEm, commercialRoles }) => {
   const uid = String(id || "").trim();
   const name = String(nome || "").trim();
   const safeEmail = String(email || "").trim().toLowerCase();
@@ -21417,6 +21533,7 @@ const normalizeUserRow = ({ id, nome, email, tipo, ativo, criadoEm }) => {
     tipo: role,
     ativo: normalizeFirestoreActive(ativo),
     criadoEm: criadoEm || null,
+    commercialRoles: normalizeCrmCommercialRoles(commercialRoles),
     initials: getInitials(name),
   };
 };
@@ -21693,10 +21810,11 @@ const renderAdminUsersTable = (type) => {
 
   if (empty instanceof HTMLElement) empty.hidden = filtered.length > 0;
   table.innerHTML = `
-    <div class="admin-users-row admin-users-head">
+    <div class="admin-users-row admin-users-row-commercial admin-users-head">
       <span> </span>
       <span>Nome</span>
       <span>E-mail</span>
+      <span>Função comercial</span>
       <span>Status</span>
       <span>Cadastro</span>
       <span> </span>
@@ -21771,11 +21889,13 @@ const renderAdminCommercialUsersTable = () => {
         .map((row) => {
           const badgeClass = row.ativo ? "admin-badge is-active" : "admin-badge is-inactive";
           const badgeLabel = row.ativo ? "Ativo" : "Inativo";
+          const commercialRoles = normalizeCrmCommercialRoles(row.commercialRoles);
           return `
-            <div class="admin-users-row" data-admin-user-type="growth" data-admin-user-row="${escapeHtml(row.id)}" data-admin-user-email="${escapeHtml(row.email)}" data-admin-user-name="${escapeHtml(row.nome)}" data-admin-user-active="${row.ativo ? "1" : "0"}">
+            <div class="admin-users-row admin-users-row-commercial" data-admin-user-type="growth" data-admin-user-row="${escapeHtml(row.id)}" data-admin-user-email="${escapeHtml(row.email)}" data-admin-user-name="${escapeHtml(row.nome)}" data-admin-user-active="${row.ativo ? "1" : "0"}" data-admin-commercial-roles="${escapeHtml(commercialRoles.join(","))}">
               <div class="admin-user-avatar" aria-hidden="true">${escapeHtml(row.initials)}</div>
               <div class="admin-user-name">${escapeHtml(row.nome)}</div>
               <div class="admin-user-email">${escapeHtml(row.email)}</div>
+              <div>${renderCommercialRoleBadges(commercialRoles)}</div>
               <div><span class="${badgeClass}">${badgeLabel}</span></div>
               <div class="admin-user-date">${escapeHtml(formatAdminDate(row.criadoEm))}</div>
               <div class="admin-row-actions" data-admin-actions>
@@ -21787,10 +21907,13 @@ const renderAdminCommercialUsersTable = () => {
                   </svg>
                 </button>
                 <div class="admin-actions-menu" role="menu" aria-label="Ações do usuário">
-                  <button class="admin-action-item${row.ativo ? " is-danger" : ""}" type="button" data-admin-action-toggle>
-                    ${row.ativo ? "Desativar" : "Ativar"}
-                  </button>
-                  <button class="admin-action-item" type="button" data-admin-action-reset>
+                <button class="admin-action-item${row.ativo ? " is-danger" : ""}" type="button" data-admin-action-toggle>
+                  ${row.ativo ? "Desativar" : "Ativar"}
+                </button>
+                <button class="admin-action-item" type="button" data-admin-commercial-roles-edit>
+                  Função comercial
+                </button>
+                <button class="admin-action-item" type="button" data-admin-action-reset>
                     Redefinir senha
                   </button>
                 </div>
@@ -21812,6 +21935,80 @@ const renderAdminCommercialUsersPanel = async ({ force = false } = {}) => {
     await loadUsersFromFirestore("growth");
   }
   renderAdminCommercialUsersTable();
+};
+
+const openAdminCommercialRolesModal = ({ uid, name, roles = [] } = {}) => {
+  const userId = String(uid || "").trim();
+  if (!userId) return;
+  const currentRoles = normalizeCrmCommercialRoles(roles);
+  openModal({
+    title: "Função comercial",
+    bodyHtml: `
+      <form class="auth-form" data-admin-commercial-roles-form novalidate>
+        <div class="auth-inline-hint">${escapeHtml(name || "Usuário Growth")}</div>
+        <label class="auth-field">
+          <span>Permissões do CRM</span>
+          <label class="auth-checkbox-row">
+            <input type="checkbox" data-admin-commercial-role="sdr" ${currentRoles.includes("sdr") ? "checked" : ""} />
+            <span>SDR</span>
+          </label>
+          <label class="auth-checkbox-row">
+            <input type="checkbox" data-admin-commercial-role="closer" ${currentRoles.includes("closer") ? "checked" : ""} />
+            <span>Closer</span>
+          </label>
+          <div class="auth-inline-error" data-admin-commercial-roles-error hidden>Selecione pelo menos uma função comercial.</div>
+        </label>
+      </form>
+    `,
+    primaryLabel: "Salvar",
+    secondaryLabel: "Cancelar",
+    hideSecondary: false,
+    showTrash: false,
+    onPrimary: () => {
+      const form = modalBody?.querySelector("[data-admin-commercial-roles-form]");
+      const selected = Array.from(form?.querySelectorAll("[data-admin-commercial-role]:checked") || []).map((input) =>
+        String(input.getAttribute("data-admin-commercial-role") || "")
+      );
+      const commercialRoles = normalizeCrmCommercialRoles(selected);
+      const errorEl = form?.querySelector("[data-admin-commercial-roles-error]");
+      if (!commercialRoles.length) {
+        if (errorEl instanceof HTMLElement) errorEl.hidden = false;
+        return false;
+      }
+      (async () => {
+        if (modalPrimary) modalPrimary.disabled = true;
+        if (modalSecondary) modalSecondary.disabled = true;
+        try {
+          const response = await fetchWithAuth("/api/admin-users", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ uid: userId, patch: { commercialRoles } }),
+          });
+          const data = await response.json().catch(() => null);
+          if (!response.ok || !data?.ok) throw new Error(data?.message || data?.errorDetail || data?.error || "commercial_roles_update_failed");
+          const rows = Array.isArray(adminUsersState.growth?.rows) ? adminUsersState.growth.rows : [];
+          const idx = rows.findIndex((row) => String(row.id || "") === userId);
+          if (idx >= 0) {
+            rows[idx] = { ...rows[idx], commercialRoles };
+            adminUsersState.growth.rows = [...rows];
+          }
+          closeModal();
+          setAdminManageStatus("growth", "Funções comerciais atualizadas.", "success");
+          window.setTimeout(() => setAdminManageStatus("growth", ""), 1200);
+          renderAdminCommercialUsersTable();
+        } catch (error) {
+          console.error("[admin] commercial roles update failed:", error);
+          if (errorEl instanceof HTMLElement) {
+            errorEl.textContent = "Não foi possível salvar agora.";
+            errorEl.hidden = false;
+          }
+          if (modalPrimary) modalPrimary.disabled = false;
+          if (modalSecondary) modalSecondary.disabled = false;
+        }
+      })();
+      return false;
+    },
+  });
 };
 
 const fetchUserRowsFromFirestore = async (tipo) => {
@@ -38372,7 +38569,7 @@ const openAdminStudentActionsPopover = ({ triggerEl, alunoId } = {}) => {
 
 const clampToViewport = (value, min, max) => Math.max(min, Math.min(max, value));
 
-const openAdminActionsPopover = ({ triggerEl, uid, name, email, isActive, userType }) => {
+const openAdminActionsPopover = ({ triggerEl, uid, name, email, isActive, userType, commercialRoles = [] }) => {
   if (!(triggerEl instanceof HTMLElement)) return;
   closeAdminActionsPopover();
 
@@ -38381,6 +38578,7 @@ const openAdminActionsPopover = ({ triggerEl, uid, name, email, isActive, userTy
   const safeEmail = String(email || "").trim();
   const active = Boolean(isActive);
   const safeType = userType === "teacher" || userType === "growth" ? userType : "student";
+  const safeCommercialRoles = normalizeCrmCommercialRoles(commercialRoles);
 
   const toggleLabel = active ? "Desativar" : "Reativar";
   const toggleClass = active ? "admin-action-item is-danger" : "admin-action-item";
@@ -38411,6 +38609,17 @@ const openAdminActionsPopover = ({ triggerEl, uid, name, email, isActive, userTy
       data-admin-action-type="${escapeHtml(safeType)}"
       data-admin-action-active="${active ? "1" : "0"}"
     >${toggleLabel}</button>
+    ${safeType === "growth" ? `
+      <button
+        class="admin-action-item"
+        type="button"
+        data-admin-commercial-roles-edit
+        data-admin-action-uid="${escapeHtml(safeUid)}"
+        data-admin-action-name="${escapeHtml(safeName)}"
+        data-admin-action-type="${escapeHtml(safeType)}"
+        data-admin-commercial-roles="${escapeHtml(safeCommercialRoles.join(","))}"
+      >Função comercial</button>
+    ` : ""}
     <button
       class="admin-action-item"
       type="button"
@@ -39156,6 +39365,24 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
       `
       : "";
 
+  const extraGrowthFields =
+    role === "growth"
+      ? `
+        <label class="auth-field">
+          <span>Função comercial</span>
+          <label class="auth-checkbox-row">
+            <input type="checkbox" data-ac-commercial-role="sdr" />
+            <span>SDR</span>
+          </label>
+          <label class="auth-checkbox-row">
+            <input type="checkbox" data-ac-commercial-role="closer" />
+            <span>Closer</span>
+          </label>
+          <div class="auth-inline-error" data-ac-commercial-roles-error hidden>Selecione SDR, Closer ou ambos.</div>
+        </label>
+      `
+      : "";
+
 	  const bodyHtml = `
 	    <form class="auth-form admin-create-form" data-admin-create-form novalidate>
 	      <label class="auth-field">
@@ -39166,9 +39393,10 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
 	      <label class="auth-field">
 	        <span>E-mail</span>
 	        <input class="auth-input" type="email" autocomplete="email" data-ac-email />
-	        <div class="auth-inline-error" data-ac-email-error hidden>E-mail inválido</div>
-	      </label>
+        <div class="auth-inline-error" data-ac-email-error hidden>E-mail inválido</div>
+      </label>
         ${extraStudentFields}
+        ${extraGrowthFields}
 	      <label class="auth-field">
 	        <span>Senha</span>
 	        <div class="auth-password">
@@ -39249,6 +39477,14 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
       const returnError = role === "student" ? form.querySelector("[data-ac-return-br-error]") : null;
       const goalError = role === "student" ? form.querySelector("[data-ac-goal-error]") : null;
       const englishError = role === "student" ? form.querySelector("[data-ac-english-level-error]") : null;
+      const commercialRoles = role === "growth"
+        ? normalizeCrmCommercialRoles(
+            Array.from(form.querySelectorAll("[data-ac-commercial-role]:checked")).map((input) =>
+              String(input.getAttribute("data-ac-commercial-role") || "")
+            )
+          )
+        : [];
+      const commercialRolesError = role === "growth" ? form.querySelector("[data-ac-commercial-roles-error]") : null;
 
       const nameOk = Boolean(name);
       const emailOk = isValidEmail(email);
@@ -39361,7 +39597,10 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
 	        }
 	      }
 
-      if (!nameOk || !emailOk || !passOk || !confirmOk || !studentOk) {
+      const growthOk = role !== "growth" || commercialRoles.length > 0;
+      if (commercialRolesError instanceof HTMLElement) commercialRolesError.hidden = growthOk;
+
+      if (!nameOk || !emailOk || !passOk || !confirmOk || !studentOk || !growthOk) {
         if (errorEl instanceof HTMLElement) {
           errorEl.textContent = "Preencha todos os campos obrigatórios para continuar.";
           errorEl.hidden = false;
@@ -39381,7 +39620,7 @@ const openAdminCreateUserModal = ({ presetRole } = {}) => {
               fetchWithAuth("/api/admin-create-growth-user", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ nome: name, email, senha: password }),
+                body: JSON.stringify({ nome: name, email, senha: password, commercialRoles }),
               }),
               15_000,
               "admin_create_growth_user"
@@ -40628,6 +40867,16 @@ document.addEventListener("click", (event) => {
     const retry = target.closest("[data-crm-retry]");
     if (retry instanceof HTMLButtonElement) {
       event.preventDefault();
+      loadNativeCrm({ force: true }).catch(() => {});
+      return;
+    }
+    const workspaceButton = target.closest("[data-crm-workspace]");
+    if (workspaceButton instanceof HTMLButtonElement) {
+      event.preventDefault();
+      const changed = setNativeCrmWorkspace(String(workspaceButton.getAttribute("data-crm-workspace") || ""));
+      if (!changed) return;
+      updateNativeCrmUrlState();
+      renderNativeCrm();
       loadNativeCrm({ force: true }).catch(() => {});
       return;
     }
@@ -44243,8 +44492,26 @@ document.addEventListener("click", (event) => {
         const email = row.getAttribute("data-admin-user-email") || "";
         const isActive = row.getAttribute("data-admin-user-active") === "1";
         const userType = getAdminUserTypeFromRow(row);
+        const commercialRoles = String(row.getAttribute("data-admin-commercial-roles") || "").split(",");
         closeAllAdminActionMenus();
-        openAdminActionsPopover({ triggerEl: trigger, uid, name, email, isActive, userType });
+        openAdminActionsPopover({ triggerEl: trigger, uid, name, email, isActive, userType, commercialRoles });
+        return;
+      }
+
+      const commercialRolesAction = target.closest("[data-admin-commercial-roles-edit]");
+      if (commercialRolesAction instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const row = commercialRolesAction.closest("[data-admin-user-row]");
+        const uid = row instanceof HTMLElement ? row.getAttribute("data-admin-user-row") || "" : commercialRolesAction.getAttribute("data-admin-action-uid") || "";
+        const name = row instanceof HTMLElement ? row.getAttribute("data-admin-user-name") || "Usuário Growth" : commercialRolesAction.getAttribute("data-admin-action-name") || "Usuário Growth";
+        const roles = row instanceof HTMLElement ? row.getAttribute("data-admin-commercial-roles") || "" : commercialRolesAction.getAttribute("data-admin-commercial-roles") || "";
+        closeAllAdminActionMenus();
+        closeAdminActionsPopover();
+        openAdminCommercialRolesModal({
+          uid,
+          name,
+          roles: String(roles || "").split(","),
+        });
         return;
       }
 

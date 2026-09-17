@@ -8,6 +8,7 @@ const {
 const { PROJECT_ID, encodeFields } = require("./firestore-rest");
 const { identitiesMatch, normalizeCrmContactIdentity, stableIdFromKey } = require("./crm-identity");
 const qualification = require("./crm-qualification");
+const commercialPermissions = require("./commercial-permissions");
 
 const COLLECTIONS = {
   pipelines: "crmPipelines",
@@ -447,7 +448,11 @@ const ensureDefaultPipeline = async () => {
   return { pipelines: [pipeline, closerPipeline], stages: seededStages.concat(closerStage) };
 };
 
-const loadCrmReadModel = async () => {
+const loadCrmReadModel = async (options = {}) => {
+  const user = options.user && (options.user.role || options.user.tipo || options.user.type) ? options.user : { role: "admin", commercialRoles: [] };
+  const workspace = commercialPermissions.normalizeWorkspace(options.workspace);
+  const visibleTypes = commercialPermissions.visiblePipelineTypesForUser(user, workspace);
+  if (!visibleTypes.length) throw Object.assign(new Error("commercial_workspace_forbidden"), { status: 403 });
   const seeded = await ensureDefaultPipeline();
   const [contactsRaw, opportunitiesRaw, usersRaw] = await Promise.all([
     listCollectionAsAdmin(COLLECTIONS.contacts, { maxPages: 50 }).catch(() => []),
@@ -466,9 +471,10 @@ const loadCrmReadModel = async () => {
     const id = clean(row.uid || row.id || row.firestoreDocId);
     return [id, { id, name: clean(row.nome || row.name || row.displayName || row.email || id), email: clean(row.email) }];
   }).filter(([id]) => id));
+  const visiblePipelineIds = new Set(seeded.pipelines.filter((pipeline) => visibleTypes.includes(pipeline.pipelineType)).map((pipeline) => pipeline.id));
   const opportunities = opportunitiesRaw
     .map(normalizeOpportunity)
-    .filter((row) => row.id && matchesCrmScope(row) && !row.deletedAt)
+    .filter((row) => row.id && matchesCrmScope(row) && !row.deletedAt && visiblePipelineIds.has(row.pipelineId))
     .map((row) => ({
       ...row,
       contact: contactsById.get(row.contactId) || null,
@@ -476,7 +482,19 @@ const loadCrmReadModel = async () => {
       closedByUser: row.closedBy ? usersById.get(row.closedBy) || null : null,
     }))
     .sort((left, right) => String(right.updatedAt || right.createdAt || "").localeCompare(String(left.updatedAt || left.createdAt || "")));
-  return { pipelines: seeded.pipelines, stages: seeded.stages.sort((a, b) => a.position - b.position), contacts: scopedContacts, opportunities, owners, generatedAt: nowIso() };
+  return {
+    pipelines: seeded.pipelines.filter((pipeline) => visibleTypes.includes(pipeline.pipelineType)),
+    stages: seeded.stages.filter((stage) => visiblePipelineIds.has(stage.pipelineId)).sort((a, b) => a.position - b.position),
+    contacts: scopedContacts,
+    opportunities,
+    owners,
+    permissions: {
+      commercialRoles: commercialPermissions.normalizeCommercialRoles(user.commercialRoles),
+      visibleWorkspaces: visibleTypes,
+      workspace: workspace || visibleTypes[0] || "",
+    },
+    generatedAt: nowIso(),
+  };
 };
 
 const findOrBuildContact = ({ contacts, body, stamp }) => {
@@ -522,12 +540,17 @@ const getOpportunityById = async (id) => {
   }
 };
 
-const createOpportunity = async ({ actorUid = "", input = {}, idempotencyKey = "" } = {}) => {
-  const readModel = await loadCrmReadModel();
+const createOpportunity = async ({ actorUid = "", input = {}, idempotencyKey = "", user = {} } = {}) => {
+  const readModel = await loadCrmReadModel({ user, workspace: "sdr" });
   const activePipelines = readModel.pipelines.filter((p) => p.isActive);
   const pipelineId = clean(input.pipelineId) || activePipelines.find((p) => p.isDefault)?.id || activePipelines[0]?.id || DEFAULT_PIPELINE_ID;
   const stageId = clean(input.stageId) || readModel.stages.find((s) => s.pipelineId === pipelineId)?.id;
   validatePipelineStage(readModel, pipelineId, stageId);
+  const pipeline = readModel.pipelines.find((row) => row.id === pipelineId);
+  if (!pipeline || pipeline.pipelineType !== "sdr") throw Object.assign(new Error("invalid_pipeline"), { status: 400 });
+  if (!commercialPermissions.canPerformCrmAction({ user, action: "create_opportunity", pipelineType: pipeline.pipelineType })) {
+    throw Object.assign(new Error("commercial_workspace_forbidden"), { status: 403 });
+  }
 
   const stamp = nowIso();
   const { contact } = findOrBuildContact({ contacts: readModel.contacts, body: input, stamp });
@@ -574,8 +597,8 @@ const createOpportunity = async ({ actorUid = "", input = {}, idempotencyKey = "
   throw Object.assign(new Error("crm_create_failed"), { status: committed.status || 500 });
 };
 
-const loadCrmListModel = async (query = {}) => {
-  const model = await loadCrmReadModel();
+const loadCrmListModel = async (query = {}, options = {}) => {
+  const model = await loadCrmReadModel({ user: options.user, workspace: query.workspace || options.workspace });
   const params = parseListQuery(query);
   if (!params.pipelineId) params.pipelineId = model.pipelines.find((pipeline) => pipeline.isActive)?.id || model.pipelines[0]?.id || "";
   const signature = listSignature(params);

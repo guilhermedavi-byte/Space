@@ -129,6 +129,7 @@ const createSessionForUser = (user) => {
     role: user.role,
     name: user.name,
     email: user.email,
+    commercialRoles: Array.isArray(user.commercialRoles) ? user.commercialRoles : [],
     iat: now,
     exp: now + maxAgeSeconds,
   };

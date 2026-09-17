@@ -4,6 +4,7 @@ const { verifyFirebaseIdToken } = require("../_lib/firebase-id-token");
 const { getBearerTokenFromRequest, PROJECT_ID, encodeFields } = require("./_lib/firestore-rest");
 const { commitWritesAsAdmin } = require("./_lib/firestore-admin");
 const { syncStudentMirrorToSupabase } = require("./_lib/student-mirror-sync");
+const { normalizeCommercialRoles } = require("./_lib/commercial-permissions");
 
 const normalizeRole = (value) => {
   const raw = String(value || "").trim().toLowerCase();
@@ -32,6 +33,14 @@ const sanitizePatchValue = (value) => {
       .map(([key, entryValue]) => [key, sanitizePatchValue(entryValue)])
       .filter(([, entryValue]) => entryValue !== undefined)
   );
+};
+
+const sanitizeUserPatch = (patch = {}) => {
+  const cleanPatch = sanitizePatchValue(patch);
+  if (Object.prototype.hasOwnProperty.call(cleanPatch, "commercialRoles")) {
+    cleanPatch.commercialRoles = normalizeCommercialRoles(cleanPatch.commercialRoles);
+  }
+  return cleanPatch;
 };
 
 const buildUserCommitDocumentName = (uid) => {
@@ -167,7 +176,7 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const cleanPatch = sanitizePatchValue(patch);
+  const cleanPatch = sanitizeUserPatch(patch);
   if (!cleanPatch || typeof cleanPatch !== "object" || !Object.keys(cleanPatch).length) {
     sendJson(res, 400, { error: "empty_patch" });
     return;

@@ -46,7 +46,10 @@ const loadCrmHandler = (initialStore = {}) => {
         }
         return row;
       },
-      listCollectionAsAdmin: async () => [],
+      listCollectionAsAdmin: async (collection) =>
+        Array.from(store.entries())
+          .filter(([key]) => key.startsWith(`${collection}/`))
+          .map(([, value]) => value),
       commitWritesAsAdmin: async ({ writes }) => {
         commits.push(writes);
         writes.forEach((write) => {
@@ -84,8 +87,8 @@ const opportunity = (patch = {}) => ({
   id: "opp_1",
   scopeId: "space-main",
   contactId: "contact_1",
-  pipelineId: "commercial",
-  stageId: "commercial_stage_1",
+  pipelineId: "closer_pipeline",
+  stageId: "closer_stage_1",
   title: "Matheus Afonso",
   value: 10000,
   currency: "BRL",
@@ -102,8 +105,29 @@ const opportunity = (patch = {}) => ({
   ...patch,
 });
 
+const closerUser = () => ({
+  id: "user_closer",
+  uid: "user_closer",
+  nome: "Closer",
+  email: "closer@space.test",
+  tipo: "growth",
+  commercialRoles: ["closer"],
+});
+
+const closerPipeline = () => ({
+  id: "closer_pipeline",
+  scopeId: "space-main",
+  name: "Closer",
+  pipelineType: "closer",
+  isActive: true,
+});
+
 test("mark_opportunity_won snapshots closedValue, closedAt, closedBy and event atomically", async () => {
-  const { handler, store, commits } = loadCrmHandler({ "crmOpportunities/opp_1": opportunity({ lostReason: "price", lostReasonNote: "old" }) });
+  const { handler, store, commits } = loadCrmHandler({
+    "users/user_closer": closerUser(),
+    "crmPipelines/closer_pipeline": closerPipeline(),
+    "crmOpportunities/opp_1": opportunity({ lostReason: "price", lostReasonNote: "old" }),
+  });
   const res = await invoke(handler, {
     action: "mark_opportunity_won",
     id: "opp_1",
@@ -127,7 +151,11 @@ test("mark_opportunity_won snapshots closedValue, closedAt, closedBy and event a
 });
 
 test("mark_opportunity_lost requires reason and persists lost payload", async () => {
-  const { handler, store, commits } = loadCrmHandler({ "crmOpportunities/opp_1": opportunity() });
+  const { handler, store, commits } = loadCrmHandler({
+    "users/user_closer": closerUser(),
+    "crmPipelines/closer_pipeline": closerPipeline(),
+    "crmOpportunities/opp_1": opportunity(),
+  });
   const invalid = await invoke(handler, { action: "mark_opportunity_lost", id: "opp_1" });
   assert.equal(invalid.status, 400);
 
@@ -153,6 +181,8 @@ test("mark_opportunity_lost requires reason and persists lost payload", async ()
 
 test("reopen_opportunity clears closing fields and keeps historical events", async () => {
   const { handler, store, commits } = loadCrmHandler({
+    "users/user_closer": closerUser(),
+    "crmPipelines/closer_pipeline": closerPipeline(),
     "crmOpportunities/opp_1": opportunity({
       status: "lost",
       closedAt: "2026-09-16T19:00:00.000Z",
@@ -178,7 +208,11 @@ test("reopen_opportunity clears closing fields and keeps historical events", asy
 });
 
 test("closing actions reject incoherent duplicate transitions", async () => {
-  const { handler } = loadCrmHandler({ "crmOpportunities/opp_1": opportunity({ status: "won", closedValue: 10000 }) });
+  const { handler } = loadCrmHandler({
+    "users/user_closer": closerUser(),
+    "crmPipelines/closer_pipeline": closerPipeline(),
+    "crmOpportunities/opp_1": opportunity({ status: "won", closedValue: 10000 }),
+  });
   const won = await invoke(handler, { action: "mark_opportunity_won", id: "opp_1", closedValue: 10000 });
   assert.equal(won.status, 409);
   const lost = await invoke(handler, { action: "mark_opportunity_lost", id: "opp_1", lostReason: "price" });

@@ -9150,6 +9150,26 @@ body[data-settings-sidebar-expanded="false"] .admin-settings-sidebar-toggle-icon
   padding: 12px 16px;
 }
 
+.admin-users-row-commercial {
+  grid-template-columns: 52px minmax(0, 1fr) minmax(0, 1.1fr) 160px 120px 150px 52px;
+}
+
+.auth-checkbox-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  margin-right: 12px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.auth-checkbox-row input {
+  width: 16px;
+  height: 16px;
+  accent-color: #52d6b5;
+}
+
 .admin-users-row + .admin-users-row {
   border-top: 1px solid rgba(255, 255, 255, 0.06);
 }

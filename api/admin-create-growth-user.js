@@ -4,6 +4,7 @@ const { getGoogleAccessToken } = require("../_lib/google-service-account");
 const { resolveAdminRequestAuth } = require("./_lib/admin-request-auth");
 const { commitWritesAsAdmin } = require("./_lib/firestore-admin");
 const { PROJECT_ID, encodeFields, requestJson } = require("./_lib/firestore-rest");
+const { normalizeCommercialRoles } = require("./_lib/commercial-permissions");
 
 const CLOUD_PLATFORM_SCOPE = "https://www.googleapis.com/auth/cloud-platform";
 
@@ -75,7 +76,7 @@ const deleteAuthUserBestEffort = async (uid) => {
   }
 };
 
-const createGrowthFirestoreDoc = async ({ uid, nome, email, createdBy }) => {
+const createGrowthFirestoreDoc = async ({ uid, nome, email, commercialRoles, createdBy }) => {
   const nowIso = new Date().toISOString();
   const doc = {
     nome,
@@ -84,6 +85,7 @@ const createGrowthFirestoreDoc = async ({ uid, nome, email, createdBy }) => {
     email,
     tipo: "growth",
     role: "growth",
+    commercialRoles: normalizeCommercialRoles(commercialRoles),
     ativo: true,
     criadoPor: createdBy || "",
     createdBy: createdBy || "",
@@ -168,6 +170,7 @@ module.exports = async (req, res) => {
   const nome = normalizeName(body?.nome || body?.name);
   const email = normalizeEmail(body?.email);
   const senha = String(body?.senha || body?.password || "");
+  const commercialRoles = normalizeCommercialRoles(body?.commercialRoles);
 
   if (!nome) {
     sendJson(res, 400, { error: "missing_name", message: "Informe o nome do usuário Growth." });
@@ -181,12 +184,16 @@ module.exports = async (req, res) => {
     sendJson(res, 400, { error: "weak_password", message: "A senha precisa ter pelo menos 6 caracteres." });
     return;
   }
+  if (!commercialRoles.length) {
+    sendJson(res, 400, { error: "commercial_roles_required", message: "Selecione SDR, Closer ou ambos para liberar o CRM comercial." });
+    return;
+  }
 
   let uid = "";
   try {
     const created = await createAuthUserWithPassword({ email, password: senha, displayName: nome });
     uid = created.uid;
-    const doc = await createGrowthFirestoreDoc({ uid, nome, email, createdBy: auth.session.sub });
+    const doc = await createGrowthFirestoreDoc({ uid, nome, email, commercialRoles, createdBy: auth.session.sub });
     sendJson(res, 200, {
       ok: true,
       user: { id: uid, uid, firestoreDocId: uid, ...doc },

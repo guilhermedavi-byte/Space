@@ -116,6 +116,6 @@ module.exports = async (req, res) => {
   res.setHeader("Set-Cookie", cookie);
 
   return sendJson(res, 200, {
-    user: { id: user.id, role: user.role, name: user.name, email: user.email },
+    user: { id: user.id, role: user.role, name: user.name, email: user.email, commercialRoles: Array.isArray(user.commercialRoles) ? user.commercialRoles : [] },
   });
 };

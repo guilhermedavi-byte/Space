@@ -13,6 +13,7 @@ const qualification = require("./_lib/crm-qualification");
 const handoff = require("./_lib/crm-handoff");
 const qualificationAnalytics = require("./_lib/crm-qualification-analytics");
 const qualificationActions = require("./_lib/crm-qualification-actions");
+const commercialPermissions = require("./_lib/commercial-permissions");
 
 const COLLECTIONS = {
   pipelines: "crmPipelines",
@@ -52,6 +53,25 @@ const canAccessCrm = (req) => {
   const role = normalizeRole(session?.role);
   if (role === "admin" || role === "growth") return { ok: true, session, role };
   return { ok: false, status: session ? 403 : 401, error: session ? "forbidden" : "unauthorized" };
+};
+
+const resolveCrmAuthContext = async (auth) => {
+  if (!auth?.ok) return auth;
+  const session = auth.session || {};
+  let commercialRoles = commercialPermissions.normalizeCommercialRoles(session.commercialRoles);
+  if (auth.role === "growth") {
+    try {
+      const row = await getDocumentAsAdmin(`${COLLECTIONS.users}/${encodeURIComponent(clean(session.sub))}`);
+      commercialRoles = commercialPermissions.normalizeCommercialRoles(row?.commercialRoles);
+    } catch {
+      // Fall back to session roles if the user document is unavailable.
+    }
+  }
+  return {
+    ...auth,
+    session: { ...session, commercialRoles },
+    user: { id: clean(session.sub), role: auth.role, commercialRoles },
+  };
 };
 
 const nowIso = () => new Date().toISOString();
@@ -561,6 +581,7 @@ const loadQualificationActionsQueue = async ({ query = {}, auth }) => {
     actionsRaw,
     contactsRaw,
     opportunitiesRaw,
+    pipelinesRaw,
     handoffsRaw,
     reviewsRaw,
     usersRaw,
@@ -568,6 +589,7 @@ const loadQualificationActionsQueue = async ({ query = {}, auth }) => {
     listCollectionAsAdmin(COLLECTIONS.qualificationActions, { maxPages: 50 }).catch(() => []),
     listCollectionAsAdmin(COLLECTIONS.contacts, { maxPages: 50 }).catch(() => []),
     listCollectionAsAdmin(COLLECTIONS.opportunities, { maxPages: 50 }).catch(() => []),
+    listCollectionAsAdmin(COLLECTIONS.pipelines, { maxPages: 10 }).catch(() => []),
     listCollectionAsAdmin(COLLECTIONS.salesHandoffs, { maxPages: 50 }).catch(() => []),
     listCollectionAsAdmin(COLLECTIONS.closerReviews, { maxPages: 50 }).catch(() => []),
     listCollectionAsAdmin(COLLECTIONS.users, { maxPages: 20 }).catch(() => []),
@@ -575,6 +597,7 @@ const loadQualificationActionsQueue = async ({ query = {}, auth }) => {
   const actions = normalizeActionRows(actionsRaw);
   const contactsById = new Map(contactsRaw.map(normalizeContact).filter(matchesCrmScope).map((row) => [row.id, row]));
   const opportunitiesById = new Map(opportunitiesRaw.map(normalizeOpportunity).filter(matchesCrmScope).map((row) => [row.id, row]));
+  const pipelinesById = new Map(pipelinesRaw.map(normalizePipeline).filter((row) => row.id).map((row) => [row.id, row]));
   const handoffsById = new Map(normalizeQualificationRows(handoffsRaw, handoff.normalizeHandoff).map((row) => [row.id, row]));
   const reviewsById = new Map(normalizeQualificationRows(reviewsRaw, handoff.normalizeReview).map((row) => [row.id, row]));
   const usersById = new Map(usersRaw.map((row) => [clean(row.uid || row.id || row.firestoreDocId), row]).filter(([id]) => id));
@@ -603,6 +626,11 @@ const loadQualificationActionsQueue = async ({ query = {}, auth }) => {
         if (!Number.isFinite(createdMs) || createdMs < start.getTime()) return false;
       }
       const opportunity = opportunitiesById.get(action.opportunityId) || {};
+      const pipeline = pipelinesById.get(opportunity.pipelineId) || {};
+      const pipelineType = commercialPermissions.workspaceForPipelineType(pipeline.pipelineType);
+      const requestedWorkspace = commercialPermissions.normalizeWorkspace(query.workspace);
+      if (requestedWorkspace && pipelineType !== requestedWorkspace) return false;
+      if (pipelineType && !commercialPermissions.canAccessPipelineType(auth.user || auth.session, pipelineType)) return false;
       const contact = contactsById.get(action.contactId || opportunity.contactId) || {};
       if (search && ![contact.name, opportunity.title, action.reason].some((value) => normalizeSearchText(value).includes(search))) return false;
       return true;
@@ -673,6 +701,17 @@ const opportunityWithNextActivity = (opportunity, activities, stamp = nowIso()) 
   ...nextActivityFields(activities),
   updatedAt: stamp,
 });
+
+const loadPipelineForOpportunity = async (opportunity) => {
+  const rows = await listCollectionAsAdmin(COLLECTIONS.pipelines, { maxPages: 10 }).catch(() => []);
+  return rows.map(normalizePipeline).filter(matchesCrmScope).find((pipeline) => pipeline.id === opportunity?.pipelineId) || null;
+};
+
+const crmActionGuard = async ({ auth, action, opportunity, pipelineType }) => {
+  const type = pipelineType || (await loadPipelineForOpportunity(opportunity))?.pipelineType || "";
+  if (commercialPermissions.canPerformCrmAction({ user: auth.user || auth.session, action, pipelineType: type })) return null;
+  return { status: 403, body: { error: "commercial_workspace_forbidden" } };
+};
 
 const actorName = (usersById, id) => {
   const row = usersById.get(clean(id));
@@ -798,9 +837,13 @@ const buildOpportunityTimeline = async (opportunityId) => {
   return events.concat(stageItems).sort((left, right) => String(right.occurredAt || "").localeCompare(String(left.occurredAt || "")));
 };
 
-const loadOpportunityDetail = async (opportunityId) => {
+const loadOpportunityDetail = async (opportunityId, auth = null) => {
   const opportunity = await loadOpportunityForWrite(opportunityId);
   if (!opportunity) return { status: 404, body: { error: "opportunity_not_found" } };
+  if (auth) {
+    const pipeline = await loadPipelineForOpportunity(opportunity);
+    if (!commercialPermissions.canAccessPipelineType(auth.user || auth.session, pipeline?.pipelineType)) return { status: 403, body: { error: "commercial_workspace_forbidden" } };
+  }
   const [activities, timeline, qualificationDetail, handoffBundle, actions] = await Promise.all([
     loadActivitiesForOpportunity(opportunity.id),
     buildOpportunityTimeline(opportunity.id),
@@ -811,16 +854,16 @@ const loadOpportunityDetail = async (opportunityId) => {
   return { status: 200, body: { opportunityId: opportunity.id, activities, timeline, qualification: qualificationDetail, handoff: handoffBundle.latestHandoff, closerReview: handoffBundle.latestReview, actions, generatedAt: nowIso() } };
 };
 
-const handleCreateOpportunityViaService = async ({ session, body }) => {
+const handleCreateOpportunityViaService = async ({ auth, body }) => {
   try {
-    const result = await crmService.createOpportunity({ actorUid: clean(session.sub), input: body });
+    const result = await crmService.createOpportunity({ actorUid: clean(auth.session.sub), input: body, user: auth.user || auth.session });
     return { status: 201, body: { ok: true, opportunityId: result.opportunityId } };
   } catch (error) {
     return { status: error.status || 500, body: { error: error.message || "crm_create_failed" } };
   }
 };
 
-const handleMoveOpportunity = async ({ session, body }) => {
+const handleMoveOpportunity = async ({ auth, body }) => {
   const id = clean(body.id || body.opportunityId);
   const toStageId = clean(body.stageId || body.toStageId);
   if (!id || !toStageId) return { status: 400, body: { error: "missing_params" } };
@@ -831,6 +874,9 @@ const handleMoveOpportunity = async ({ session, body }) => {
     return { status: error.status === 404 ? 404 : 500, body: { error: "opportunity_not_found" } };
   }
   if (!matchesCrmScope(opportunity)) return { status: 404, body: { error: "opportunity_not_found" } };
+  const currentPipelineForGuard = await loadPipelineForOpportunity(opportunity);
+  const initialGuard = await crmActionGuard({ auth, action: "move_opportunity", opportunity, pipelineType: currentPipelineForGuard?.pipelineType });
+  if (initialGuard) return initialGuard;
   const stages = (await listCollectionAsAdmin(COLLECTIONS.stages, { maxPages: 10 }).catch(() => [])).map(normalizeStage).filter(matchesCrmScope);
   const pipelines = (await listCollectionAsAdmin(COLLECTIONS.pipelines, { maxPages: 10 }).catch(() => [])).map(normalizePipeline).filter(matchesCrmScope);
   const targetStage = stages.find((stage) => stage.id === toStageId);
@@ -852,14 +898,14 @@ const handleMoveOpportunity = async ({ session, body }) => {
       opportunityId: opportunity.id,
       fromStageId: opportunity.stageId || null,
       toStageId,
-      changedBy: clean(session.sub) || null,
+      changedBy: clean(auth.session.sub) || null,
       createdAt: stamp,
     }),
     eventWrite({
       type: "crm.opportunity.stage_changed",
       opportunityId: opportunity.id,
       contactId: opportunity.contactId,
-      actorId: clean(session.sub),
+      actorId: clean(auth.session.sub),
       payload: { fromStageId: opportunity.stageId || null, toStageId, fromPipelineId: opportunity.pipelineId || null, toPipelineId: opportunity.pipelineId || null },
       stamp,
     }),
@@ -869,7 +915,7 @@ const handleMoveOpportunity = async ({ session, body }) => {
   return { status: 200, body: { ok: true } };
 };
 
-const handleUpdateOpportunity = async ({ session, body }) => {
+const handleUpdateOpportunity = async ({ auth, body }) => {
   const id = clean(body.id || body.opportunityId);
   if (!id) return { status: 400, body: { error: "missing_opportunity_id" } };
   let opportunity;
@@ -879,6 +925,8 @@ const handleUpdateOpportunity = async ({ session, body }) => {
     return { status: error.status === 404 ? 404 : 500, body: { error: "opportunity_not_found" } };
   }
   if (!matchesCrmScope(opportunity)) return { status: 404, body: { error: "opportunity_not_found" } };
+  const updateGuard = await crmActionGuard({ auth, action: "update_opportunity", opportunity });
+  if (updateGuard) return updateGuard;
 
   const stamp = nowIso();
   const requestedPipelineId = clean(body.pipelineId) || opportunity.pipelineId;
@@ -893,6 +941,7 @@ const handleUpdateOpportunity = async ({ session, body }) => {
     const pipelines = pipelinesRaw.map(normalizePipeline).filter(matchesCrmScope);
     const targetPipeline = pipelines.find((pipeline) => pipeline.id === requestedPipelineId);
     if (!targetPipeline?.isActive) return { status: 400, body: { error: "invalid_pipeline" } };
+    if (!commercialPermissions.canAccessPipelineType(auth.user || auth.session, targetPipeline.pipelineType)) return { status: 403, body: { error: "commercial_workspace_forbidden" } };
     const targetStage = stages.find((stage) => stage.id === requestedStageId);
     if (!targetStage || targetStage.pipelineId !== requestedPipelineId) return { status: 400, body: { error: "invalid_stage" } };
     if (stageChanged && requestedPipelineId === opportunity.pipelineId) {
@@ -942,14 +991,14 @@ const handleUpdateOpportunity = async ({ session, body }) => {
       opportunityId: next.id,
       fromStageId: opportunity.stageId || null,
       toStageId: requestedStageId,
-      changedBy: clean(session.sub) || null,
+      changedBy: clean(auth.session.sub) || null,
       createdAt: stamp,
     }));
     writes.push(eventWrite({
       type: "crm.opportunity.stage_changed",
       opportunityId: next.id,
       contactId: next.contactId,
-      actorId: clean(session.sub),
+      actorId: clean(auth.session.sub),
       payload: { fromStageId: opportunity.stageId || null, toStageId: requestedStageId, fromPipelineId: opportunity.pipelineId || null, toPipelineId: requestedPipelineId },
       stamp,
     }));
@@ -958,7 +1007,7 @@ const handleUpdateOpportunity = async ({ session, body }) => {
     type: "crm.opportunity.updated",
     opportunityId: next.id,
     contactId: next.contactId,
-    actorId: clean(session.sub),
+    actorId: clean(auth.session.sub),
     payload: { status: next.status },
     stamp,
   }));
@@ -967,16 +1016,18 @@ const handleUpdateOpportunity = async ({ session, body }) => {
   return { status: 200, body: { ok: true } };
 };
 
-const handleStartQualification = async ({ session, body }) => {
+const handleStartQualification = async ({ auth, body }) => {
   const opportunity = await loadOpportunityForWrite(body.id || body.opportunityId);
   if (!opportunity) return { status: 404, body: { error: "opportunity_not_found" } };
-  const config = await ensurePublishedSdrQualification(clean(session.sub));
+  const guard = await crmActionGuard({ auth, action: "start_qualification", opportunity });
+  if (guard) return guard;
+  const config = await ensurePublishedSdrQualification(clean(auth.session.sub));
   if (!config) return { status: 500, body: { error: "qualification_config_unavailable" } };
   const existing = qualification.latestRun((await loadQualificationRunsForOpportunity(opportunity.id)).filter((run) => run.status === "in_progress"));
   if (existing) return { status: 200, body: { ok: true, runId: existing.id, unchanged: true } };
   const stamp = nowIso();
   const runId = newId("qualrun");
-  const actor = clean(session.sub) || null;
+  const actor = clean(auth.session.sub) || null;
   const run = {
     id: runId,
     scopeId: CRM_SCOPE_ID,
@@ -1025,10 +1076,12 @@ const handleStartQualification = async ({ session, body }) => {
   return { status: 201, body: { ok: true, runId: run.id } };
 };
 
-const handleCompleteQualification = async ({ session, body }) => {
+const handleCompleteQualification = async ({ auth, body }) => {
   const opportunity = await loadOpportunityForWrite(body.id || body.opportunityId);
   if (!opportunity) return { status: 404, body: { error: "opportunity_not_found" } };
-  const config = await ensurePublishedSdrQualification(clean(session.sub));
+  const guard = await crmActionGuard({ auth, action: "complete_qualification", opportunity });
+  if (guard) return guard;
+  const config = await ensurePublishedSdrQualification(clean(auth.session.sub));
   if (!config) return { status: 500, body: { error: "qualification_config_unavailable" } };
   const submittedAnswers = Array.isArray(body.answers) ? body.answers : [];
   const score = qualification.scoreQualification({
@@ -1045,7 +1098,7 @@ const handleCompleteQualification = async ({ session, body }) => {
   const currentRun = (requestedRunId ? runs.find((run) => run.id === requestedRunId && run.status === "in_progress") : null)
     || qualification.latestRun(runs.filter((run) => run.status === "in_progress"));
   const stamp = nowIso();
-  const actor = clean(session.sub) || null;
+  const actor = clean(auth.session.sub) || null;
   const runId = currentRun?.id || newId("qualrun");
   const baseRun = currentRun || {
     id: runId,
@@ -1125,9 +1178,11 @@ const handleCompleteQualification = async ({ session, body }) => {
   return { status: 200, body: { ok: true, runId, qualification: qualification.qualificationSummaryFromRun(completedRun) } };
 };
 
-const handleHandoffOpportunity = async ({ session, body }) => {
+const handleHandoffOpportunity = async ({ auth, body }) => {
   const opportunity = await loadOpportunityForWrite(body.id || body.opportunityId);
   if (!opportunity) return { status: 404, body: { error: "opportunity_not_found" } };
+  const guard = await crmActionGuard({ auth, action: "handoff_opportunity", opportunity });
+  if (guard) return guard;
   const runs = await loadQualificationRunsForOpportunity(opportunity.id);
   const passedRun = qualification.latestRun(runs.filter((run) => run.status === "passed" && run.passed === true));
   if (!passedRun) return { status: 409, body: { error: "qualification_required" } };
@@ -1156,7 +1211,7 @@ const handleHandoffOpportunity = async ({ session, body }) => {
     toStageId: toStage.id,
   });
   const stamp = nowIso();
-  const actor = clean(session.sub) || null;
+  const actor = clean(auth.session.sub) || null;
   const closerUserId = clean(body.closerUserId) || clean(opportunity.ownerId) || null;
   const salesHandoff = {
     id: handoffId,
@@ -1240,16 +1295,18 @@ const handleHandoffOpportunity = async ({ session, body }) => {
   return { status: 201, body: { ok: true, handoffId: salesHandoff.id } };
 };
 
-const handleSetMeetingOutcome = async ({ session, body }) => {
+const handleSetMeetingOutcome = async ({ auth, body }) => {
   const opportunity = await loadOpportunityForWrite(body.id || body.opportunityId);
   if (!opportunity) return { status: 404, body: { error: "opportunity_not_found" } };
+  const guard = await crmActionGuard({ auth, action: "set_meeting_outcome", opportunity });
+  if (guard) return guard;
   const outcome = clean(body.meetingOutcome);
   if (!handoff.MEETING_OUTCOMES.has(outcome)) return { status: 400, body: { error: "invalid_meeting_outcome" } };
   const { latestHandoff, latestReview } = await loadLatestHandoffBundle(opportunity.id);
   if (!latestHandoff) return { status: 409, body: { error: "handoff_required" } };
   if (latestReview?.status === "completed") return { status: 409, body: { error: "closer_review_completed_is_readonly" } };
   const stamp = nowIso();
-  const actor = clean(session.sub) || null;
+  const actor = clean(auth.session.sub) || null;
   const reviewId = latestReview?.id || newId("closerrev");
   const review = {
     ...(latestReview || {}),
@@ -1291,9 +1348,11 @@ const handleSetMeetingOutcome = async ({ session, body }) => {
   return { status: 200, body: { ok: true, reviewId: review.id, meetingOutcome: outcome } };
 };
 
-const handleCompleteCloserReview = async ({ session, body }) => {
+const handleCompleteCloserReview = async ({ auth, body }) => {
   const opportunity = await loadOpportunityForWrite(body.id || body.opportunityId);
   if (!opportunity) return { status: 404, body: { error: "opportunity_not_found" } };
+  const guard = await crmActionGuard({ auth, action: "complete_closer_review", opportunity });
+  if (guard) return guard;
   const { latestHandoff, latestReview } = await loadLatestHandoffBundle(opportunity.id);
   if (!latestHandoff) return { status: 409, body: { error: "handoff_required" } };
   if (!latestReview) return { status: 409, body: { error: "meeting_outcome_required" } };
@@ -1309,14 +1368,14 @@ const handleCompleteCloserReview = async ({ session, body }) => {
   } catch (error) {
     return { status: error.status || 400, body: { error: error.message } };
   }
-  const config = await ensurePublishedSdrQualification(clean(session.sub));
+  const config = await ensurePublishedSdrQualification(clean(auth.session.sub));
   const weights = handoff.dimensionMaxWeights({ questions: config?.questions || [], options: config?.options || [] });
   const accuracy = handoff.calculateAccuracy({ dimensionValidation: body.dimensionValidation, weights });
   const salesAccepted = body.salesAccepted === true;
   const rejectReason = salesAccepted ? null : clean(body.rejectReason);
   const recommendedAction = handoff.recommendedActionForReview({ salesAccepted, rejectReason });
   const stamp = nowIso();
-  const actor = clean(session.sub) || null;
+  const actor = clean(auth.session.sub) || null;
   const completedReview = {
     ...latestReview,
     closerUserId: latestReview.closerUserId || opportunity.ownerId || actor,
@@ -1421,16 +1480,18 @@ const handleCompleteCloserReview = async ({ session, body }) => {
   return { status: 200, body: { ok: true, reviewId: completedReview.id, accuracyScore: completedReview.accuracyScore, recommendedAction, actionId: generatedAction?.id || null } };
 };
 
-const handleMarkOpportunityWon = async ({ session, body }) => {
+const handleMarkOpportunityWon = async ({ auth, body }) => {
   const opportunity = await loadOpportunityForWrite(body.id || body.opportunityId);
   if (!opportunity) return { status: 404, body: { error: "opportunity_not_found" } };
+  const guard = await crmActionGuard({ auth, action: "mark_opportunity_won", opportunity });
+  if (guard) return guard;
   if (opportunity.status === "won") return { status: 409, body: { error: "opportunity_already_won" } };
   if (opportunity.status === "lost") return { status: 409, body: { error: "reopen_before_mark_won" } };
   const closedValue = numberOrNull(body.closedValue ?? body.value ?? opportunity.value);
   if (closedValue == null || closedValue < 0) return { status: 400, body: { error: "invalid_closed_value" } };
   const stamp = nowIso();
   const closedAt = normalizeTimestamp(body.closedAt) || stamp;
-  const actor = clean(session.sub) || null;
+  const actor = clean(auth.session.sub) || null;
   const updated = {
     ...opportunity,
     status: "won",
@@ -1457,16 +1518,18 @@ const handleMarkOpportunityWon = async ({ session, body }) => {
   return { status: 200, body: { ok: true, status: "won", closedAt, closedValue } };
 };
 
-const handleMarkOpportunityLost = async ({ session, body }) => {
+const handleMarkOpportunityLost = async ({ auth, body }) => {
   const opportunity = await loadOpportunityForWrite(body.id || body.opportunityId);
   if (!opportunity) return { status: 404, body: { error: "opportunity_not_found" } };
+  const guard = await crmActionGuard({ auth, action: "mark_opportunity_lost", opportunity });
+  if (guard) return guard;
   if (opportunity.status === "lost") return { status: 409, body: { error: "opportunity_already_lost" } };
   if (opportunity.status === "won") return { status: 409, body: { error: "reopen_before_mark_lost" } };
   const lostReason = clean(body.lostReason);
   if (!VALID_LOST_REASONS.has(lostReason)) return { status: 400, body: { error: "invalid_lost_reason" } };
   const stamp = nowIso();
   const closedAt = normalizeTimestamp(body.closedAt) || stamp;
-  const actor = clean(session.sub) || null;
+  const actor = clean(auth.session.sub) || null;
   const lostReasonNote = clean(body.lostReasonNote);
   const updated = {
     ...opportunity,
@@ -1494,12 +1557,14 @@ const handleMarkOpportunityLost = async ({ session, body }) => {
   return { status: 200, body: { ok: true, status: "lost", closedAt, lostReason } };
 };
 
-const handleReopenOpportunity = async ({ session, body }) => {
+const handleReopenOpportunity = async ({ auth, body }) => {
   const opportunity = await loadOpportunityForWrite(body.id || body.opportunityId);
   if (!opportunity) return { status: 404, body: { error: "opportunity_not_found" } };
+  const guard = await crmActionGuard({ auth, action: "reopen_opportunity", opportunity });
+  if (guard) return guard;
   if (opportunity.status === "open") return { status: 409, body: { error: "opportunity_already_open" } };
   const stamp = nowIso();
-  const actor = clean(session.sub) || null;
+  const actor = clean(auth.session.sub) || null;
   const previousStatus = opportunity.status;
   const updated = {
     ...opportunity,
@@ -1735,9 +1800,11 @@ const handleDeleteStage = async ({ session, body }) => {
   return { status: 200, body: { ok: true } };
 };
 
-const handleCreateActivity = async ({ session, body }) => {
+const handleCreateActivity = async ({ auth, body }) => {
   const opportunity = await loadOpportunityForWrite(body.opportunityId);
   if (!opportunity) return { status: 404, body: { error: "opportunity_not_found" } };
+  const guard = await crmActionGuard({ auth, action: "create_activity", opportunity });
+  if (guard) return guard;
   const type = normalizeActivityType(body.type);
   const title = clean(body.title);
   const dueAt = activityDueAtFromBody(body);
@@ -1760,7 +1827,7 @@ const handleCreateActivity = async ({ session, body }) => {
     completedBy: null,
     status: "open",
     ownerId: clean(body.ownerId) || null,
-    createdBy: clean(session.sub) || null,
+    createdBy: clean(auth.session.sub) || null,
     createdAt: stamp,
     updatedAt: stamp,
   };
@@ -1773,7 +1840,7 @@ const handleCreateActivity = async ({ session, body }) => {
       type: "crm.activity.created",
       opportunityId: opportunity.id,
       contactId: opportunity.contactId,
-      actorId: clean(session.sub),
+      actorId: clean(auth.session.sub),
       payload: { activityId: activity.id, activityType: activity.type, activityTitle: activity.title, dueAt: activity.dueAt },
       stamp,
     }),
@@ -1794,11 +1861,13 @@ const loadActivityForWrite = async (activityId) => {
   }
 };
 
-const handleUpdateActivity = async ({ session, body }) => {
+const handleUpdateActivity = async ({ auth, body }) => {
   const activity = await loadActivityForWrite(body.id || body.activityId);
   if (!activity) return { status: 404, body: { error: "activity_not_found" } };
   const opportunity = await loadOpportunityForWrite(activity.opportunityId);
   if (!opportunity) return { status: 404, body: { error: "opportunity_not_found" } };
+  const guard = await crmActionGuard({ auth, action: "update_activity", opportunity });
+  if (guard) return guard;
 
   const type = body.type === undefined ? activity.type : normalizeActivityType(body.type);
   const title = body.title === undefined ? activity.title : clean(body.title);
@@ -1828,7 +1897,7 @@ const handleUpdateActivity = async ({ session, body }) => {
       type: "crm.activity.updated",
       opportunityId: opportunity.id,
       contactId: opportunity.contactId,
-      actorId: clean(session.sub),
+      actorId: clean(auth.session.sub),
       payload: { activityId: updated.id, activityType: updated.type, activityTitle: updated.title, dueAt: updated.dueAt },
       stamp,
     }),
@@ -1838,11 +1907,13 @@ const handleUpdateActivity = async ({ session, body }) => {
   return { status: 200, body: { ok: true, activityId: updated.id } };
 };
 
-const handleActivityStatusChange = async ({ session, body, status }) => {
+const handleActivityStatusChange = async ({ auth, body, status }) => {
   const activity = await loadActivityForWrite(body.id || body.activityId);
   if (!activity) return { status: 404, body: { error: "activity_not_found" } };
   const opportunity = await loadOpportunityForWrite(activity.opportunityId);
   if (!opportunity) return { status: 404, body: { error: "opportunity_not_found" } };
+  const guard = await crmActionGuard({ auth, action: status === "completed" ? "complete_activity" : "cancel_activity", opportunity });
+  if (guard) return guard;
   if (activity.status === status) return { status: 200, body: { ok: true, unchanged: true } };
 
   const stamp = nowIso();
@@ -1850,7 +1921,7 @@ const handleActivityStatusChange = async ({ session, body, status }) => {
     ...activity,
     status,
     completedAt: status === "completed" ? stamp : activity.completedAt,
-    completedBy: status === "completed" ? clean(session.sub) || null : activity.completedBy,
+    completedBy: status === "completed" ? clean(auth.session.sub) || null : activity.completedBy,
     updatedAt: stamp,
   };
   const activities = (await loadActivitiesForOpportunity(opportunity.id)).map((row) => row.id === updated.id ? updated : row);
@@ -1863,7 +1934,7 @@ const handleActivityStatusChange = async ({ session, body, status }) => {
       type: eventType,
       opportunityId: opportunity.id,
       contactId: opportunity.contactId,
-      actorId: clean(session.sub),
+      actorId: clean(auth.session.sub),
       payload: { activityId: updated.id, activityType: updated.type, activityTitle: updated.title, dueAt: updated.dueAt, completedAt: updated.completedAt },
       stamp,
     }),
@@ -2056,6 +2127,8 @@ const handleAssignQualificationAction = async ({ auth, body }) => {
 const handleReactivateOpportunity = async ({ auth, body }) => {
   const opportunity = await loadOpportunityForWrite(body.id || body.opportunityId);
   if (!opportunity) return { status: 404, body: { error: "opportunity_not_found" } };
+  const guard = await crmActionGuard({ auth, action: "update_opportunity", opportunity });
+  if (guard) return guard;
   if (auth.role !== "admin" && clean(opportunity.ownerId) !== clean(auth.session?.sub)) return { status: 403, body: { error: "opportunity_reactivate_forbidden" } };
   if (!opportunity.discardedAt) return { status: 200, body: { ok: true, unchanged: true, opportunityId: opportunity.id } };
   const stamp = nowIso();
@@ -2086,15 +2159,16 @@ const handleReactivateOpportunity = async ({ auth, body }) => {
 };
 
 module.exports = async (req, res) => {
-  const auth = canAccessCrm(req);
+  let auth = canAccessCrm(req);
   if (!auth.ok) return sendJson(res, auth.status, { error: auth.error });
+  auth = await resolveCrmAuthContext(auth);
   if (req.method === "GET" || req.method === "HEAD") {
     try {
       const host = String(req.headers.host || "localhost");
       const url = new URL(req.url || "/api/crm", `https://${host}`);
       const opportunityId = clean(url.searchParams.get("opportunityId"));
       if (opportunityId) {
-        const detail = await loadOpportunityDetail(opportunityId);
+        const detail = await loadOpportunityDetail(opportunityId, auth);
         return sendJson(res, detail.status, detail.body);
       }
       if (clean(url.searchParams.get("view")) === "analytics") {
@@ -2107,10 +2181,10 @@ module.exports = async (req, res) => {
         return sendJson(res, 200, actions);
       }
       if (clean(url.searchParams.get("view")) === "list") {
-        const list = await crmService.loadCrmListModel(Object.fromEntries(url.searchParams.entries()));
+        const list = await crmService.loadCrmListModel(Object.fromEntries(url.searchParams.entries()), { user: auth.user || auth.session });
         return sendJson(res, 200, list);
       }
-      const model = await crmService.loadCrmReadModel();
+      const model = await crmService.loadCrmReadModel({ user: auth.user || auth.session, workspace: clean(url.searchParams.get("workspace")) });
       return sendJson(res, 200, model);
     } catch (error) {
       console.error("[crm] read failed", error);
@@ -2142,21 +2216,21 @@ module.exports = async (req, res) => {
     }
     const result =
       action === "create_opportunity"
-        ? await handleCreateOpportunityViaService({ session: auth.session, body })
+        ? await handleCreateOpportunityViaService({ auth, body })
         : action === "move_opportunity"
-          ? await handleMoveOpportunity({ session: auth.session, body })
+          ? await handleMoveOpportunity({ auth, body })
           : action === "update_opportunity"
-            ? await handleUpdateOpportunity({ session: auth.session, body })
+            ? await handleUpdateOpportunity({ auth, body })
             : action === "start_qualification"
-              ? await handleStartQualification({ session: auth.session, body })
+              ? await handleStartQualification({ auth, body })
               : action === "complete_qualification"
-                ? await handleCompleteQualification({ session: auth.session, body })
+                ? await handleCompleteQualification({ auth, body })
                 : action === "handoff_opportunity"
-                  ? await handleHandoffOpportunity({ session: auth.session, body })
+                  ? await handleHandoffOpportunity({ auth, body })
                   : action === "set_meeting_outcome"
-                    ? await handleSetMeetingOutcome({ session: auth.session, body })
+                    ? await handleSetMeetingOutcome({ auth, body })
                     : action === "complete_closer_review"
-                      ? await handleCompleteCloserReview({ session: auth.session, body })
+                      ? await handleCompleteCloserReview({ auth, body })
                       : action === "complete_qualification_action"
                         ? await handleCompleteQualificationAction({ auth, body })
                         : action === "dismiss_qualification_action"
@@ -2165,12 +2239,12 @@ module.exports = async (req, res) => {
                             ? await handleAssignQualificationAction({ auth, body })
                             : action === "reactivate_opportunity"
                               ? await handleReactivateOpportunity({ auth, body })
-                              : action === "mark_opportunity_won"
-                                ? await handleMarkOpportunityWon({ session: auth.session, body })
-                                : action === "mark_opportunity_lost"
-                                  ? await handleMarkOpportunityLost({ session: auth.session, body })
-                                  : action === "reopen_opportunity"
-                                    ? await handleReopenOpportunity({ session: auth.session, body })
+                            : action === "mark_opportunity_won"
+                              ? await handleMarkOpportunityWon({ auth, body })
+                              : action === "mark_opportunity_lost"
+                                ? await handleMarkOpportunityLost({ auth, body })
+                                : action === "reopen_opportunity"
+                                  ? await handleReopenOpportunity({ auth, body })
                                     : action === "create_pipeline"
                                       ? await handleCreatePipeline({ session: auth.session, body })
                                       : action === "update_pipeline"
@@ -2190,13 +2264,13 @@ module.exports = async (req, res) => {
                                                     : action === "delete_stage"
                                                       ? await handleDeleteStage({ session: auth.session, body })
                                                       : action === "create_activity"
-                                                        ? await handleCreateActivity({ session: auth.session, body })
+                                                        ? await handleCreateActivity({ auth, body })
                                                         : action === "update_activity"
-                                                          ? await handleUpdateActivity({ session: auth.session, body })
+                                                          ? await handleUpdateActivity({ auth, body })
                                                           : action === "complete_activity"
-                                                            ? await handleActivityStatusChange({ session: auth.session, body, status: "completed" })
+                                                            ? await handleActivityStatusChange({ auth, body, status: "completed" })
                                                             : action === "cancel_activity"
-                                                              ? await handleActivityStatusChange({ session: auth.session, body, status: "cancelled" })
+                                                              ? await handleActivityStatusChange({ auth, body, status: "cancelled" })
                                                               : { status: 400, body: { error: "invalid_action" } };
     return sendJson(res, result.status, result.body);
   } catch (error) {

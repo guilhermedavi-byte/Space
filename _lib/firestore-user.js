@@ -29,6 +29,11 @@ const normalizeRole = (value) => {
   return "";
 };
 
+const normalizeCommercialRoles = (value) => {
+  const source = Array.isArray(value) ? value : typeof value === "string" ? value.split(/[,\s]+/) : [];
+  return Array.from(new Set(source.map((item) => String(item || "").trim().toLowerCase()).filter((item) => item === "sdr" || item === "closer")));
+};
+
 const readStringField = (fields, key) => {
   if (!fields || typeof fields !== "object") return "";
   const entry = fields[key];
@@ -123,6 +128,7 @@ const normalizeUserProfileFromFields = ({ uid, fields } = {}) => {
       role,
       name,
       email,
+      commercialRoles: normalizeCommercialRoles(rawFields.commercialRoles),
     },
     active,
   };
