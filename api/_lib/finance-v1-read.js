@@ -26,7 +26,7 @@ function createReader({request=supabaseFetch,client=createAsaasClient({readOnly:
  const readAll=async(table,select,extra='',opts={})=>{const rows=[];const pageSize=100;for(let offset=0;offset<20000;offset+=pageSize){const r=await request(`/${table}?connection_id=eq.${scope()}&select=${select}${extra}&order=${table==='finance_customer_student_links'?'asaas_customer_id,firestore_doc_id':'id'}&offset=${offset}&limit=${pageSize}`,opts);if(!Array.isArray(r.data))throw Error('finance_read_failed');rows.push(...r.data);if(r.data.length<pageSize)return rows;}throw Error('finance_read_limit');};
  const optionalReadAll=async(table,select,extra='')=>{const controller=typeof AbortController==='function'?new AbortController():null;const timer=controller?setTimeout(()=>controller.abort(),3500):null;try{return await readAll(table,select,extra,controller?{signal:controller.signal}:{});}catch{return [];}finally{if(timer)clearTimeout(timer);}};
  const core=cached(async()=>{const [receivables,payments]=await Promise.all([
-  readAll('finance_receivables','id,asaas_payment_id,asaas_customer_id,asaas_subscription_id,status,provider_status,value,due_date,billing_type,deleted,snapshot,last_synced_at'),
+  readAll('finance_receivables','id,asaas_payment_id,asaas_customer_id,asaas_subscription_id,status,provider_status,value,due_date,billing_type,deleted,last_synced_at'),
   readAll('finance_payments','id,asaas_payment_id,status,value,payment_date,confirmed_date,refund_value')]);
   const [objects,links]=await Promise.all([
   optionalReadAll('finance_provider_objects','id,resource,external_object_id,snapshot,last_synced_at'),
@@ -91,7 +91,7 @@ function createReader({request=supabaseFetch,client=createAsaasClient({readOnly:
    return {meta,...paginate(items,q)};
   }
   if(view==='receivable'){
-   externalId(q.id);const row=d.rows.find(r=>r.id===q.id);if(!row)return {not_found:true};const raw=d.receivables.find(r=>r.asaas_payment_id===q.id),s=raw.snapshot||{};
+   externalId(q.id);const row=d.rows.find(r=>r.id===q.id);if(!row)return {not_found:true};let raw=d.receivables.find(r=>r.asaas_payment_id===q.id)||{};try{const detail=(await request(`/finance_receivables?connection_id=eq.${scope()}&asaas_payment_id=eq.${encodeURIComponent(q.id)}&select=provider_status,snapshot&limit=1`,{timeoutMs:5000})).data;if(Array.isArray(detail)&&detail[0])raw={...raw,...detail[0]};}catch{}const s=raw.snapshot||{};
    const audit=(await request(`/finance_audit_events?connection_id=eq.${scope()}&object_type=eq.payments&external_object_id=eq.${encodeURIComponent(q.id)}&select=id,source,action,created_at,state_before,state_after&order=created_at.desc,id.desc&limit=21`)).data;
    if(!Array.isArray(audit))throw Error('finance_read_failed');
    const ops=recoveryOps(),caseMap=await ops.casesFor([q.id]),events=await ops.eventsFor(q.id);
