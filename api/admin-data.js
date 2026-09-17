@@ -1,6 +1,6 @@
 const { sendJson } = require("../_lib/http");
 const { resolveAdminRequestAuth } = require("./_lib/admin-request-auth");
-const { listCollectionAsAdmin } = require("./_lib/firestore-admin");
+const { listCollectionAsAdmin, queryCollectionByFieldAsAdmin } = require("./_lib/firestore-admin");
 const { isCommercialUser } = require("./_lib/growth-people");
 const { summarizeCommercialRoles } = require("./_lib/commercial-rollout");
 
@@ -138,16 +138,19 @@ module.exports = async (req, res) => {
   }
 
   try {
-    let rows = await listCollectionAsAdmin(collection);
     const type = String(url.searchParams.get("type") || "").trim().toLowerCase();
     const wantsDebug = url.searchParams.get("debug") === "1";
+    const normalizedType = normalizeUserRoleFilter(type);
+    const canUseGrowthFastPath = collection === "users" && normalizedType === "growth" && !wantsDebug;
+    let rows = canUseGrowthFastPath
+      ? await queryCollectionByFieldAsAdmin(collection, { field: "tipo", value: "growth", maxResults: 1000 })
+      : await listCollectionAsAdmin(collection);
     const focusIds = [
       "kkeegmFko4Xi0wigwpXLDG0Bo5E3",
       "qsZScLZ3NpXnqKB3lIISldK97cL2",
     ];
     const fullDebugSummary = collection === "users" && wantsDebug ? buildUserDebugSummary(rows) : null;
     if (collection === "users" && type) {
-      const normalizedType = normalizeUserRoleFilter(type);
       rows = rows.filter((row) => normalizedType === "growth" ? isCommercialUser(row) : inferLegacyUserRole(row) === normalizedType);
       if (wantsDebug) {
         console.warn("[api] admin-data users debug", {

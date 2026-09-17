@@ -53,6 +53,8 @@ const GOALS_COLLECTION = "growthGoals";
 const GROWTH_METRICS_CACHE_COLLECTION = "growthMetricsCache";
 const GROWTH_METRICS_CACHE_DOC_ID = "overview";
 const GROWTH_METRICS_CACHE_TTL_MS = 15 * 60 * 1000;
+const GROWTH_GOALS_SNAPSHOT_COLLECTION = "growthGoalsSnapshots";
+const GROWTH_GOALS_SNAPSHOT_TTL_MS = 10 * 60 * 1000;
 const DATASTORE_SCOPE = "https://www.googleapis.com/auth/datastore";
 
 const safeJsonForHtml = (value) => {
@@ -323,12 +325,26 @@ const getFirestoreAdminAccessToken = async () => {
   return String(result?.accessToken || "").trim();
 };
 
-const getGrowthMetricsCacheDocPath = () => `${GROWTH_METRICS_CACHE_COLLECTION}/${encodeURIComponent(GROWTH_METRICS_CACHE_DOC_ID)}`;
+const safeFirestoreDocId = (value) =>
+  String(value || "")
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]+/g, "_")
+    .slice(0, 140) || "default";
 
-const readGrowthMetricsCacheDoc = async () => {
+const getGrowthMetricsCacheDocId = ({ periodStart = "", periodEnd = "" } = {}) => {
+  const start = String(periodStart || "").trim();
+  const end = String(periodEnd || "").trim();
+  if (start || end) return `overview_${safeFirestoreDocId(start)}_${safeFirestoreDocId(end)}`;
+  return GROWTH_METRICS_CACHE_DOC_ID;
+};
+
+const getGrowthMetricsCacheDocPath = (params = {}) => `${GROWTH_METRICS_CACHE_COLLECTION}/${encodeURIComponent(getGrowthMetricsCacheDocId(params))}`;
+const getGrowthGoalsSnapshotDocPath = (competencia) => `${GROWTH_GOALS_SNAPSHOT_COLLECTION}/${encodeURIComponent(safeFirestoreDocId(competencia))}`;
+
+const readGrowthMetricsCacheDoc = async (params = {}) => {
   const accessToken = await getFirestoreAdminAccessToken();
   const snap = await firestoreGetDocumentWithAccessToken({
-    docPath: getGrowthMetricsCacheDocPath(),
+    docPath: getGrowthMetricsCacheDocPath(params),
     accessToken,
   });
   if (!snap.ok) return snap;
@@ -343,21 +359,50 @@ const readGrowthMetricsCacheDoc = async () => {
   };
 };
 
-const writeGrowthMetricsCacheDoc = async ({ payload, generatedAt }) => {
+const writeGrowthMetricsCacheDoc = async ({ payload, generatedAt, periodStart = "", periodEnd = "" }) => {
   const accessToken = await getFirestoreAdminAccessToken();
   return firestorePatchDocumentWithAccessToken({
-    docPath: getGrowthMetricsCacheDocPath(),
+    docPath: getGrowthMetricsCacheDocPath({ periodStart, periodEnd }),
     accessToken,
     data: { payload, generatedAt },
     updateMaskPaths: ["payload", "generatedAt"],
   });
 };
 
+const readGrowthGoalsSnapshotDoc = async ({ competencia, accessToken } = {}) => {
+  const snap = await firestoreGetDocumentWithAccessToken({
+    docPath: getGrowthGoalsSnapshotDocPath(competencia),
+    accessToken: accessToken || await getFirestoreAdminAccessToken(),
+  });
+  if (!snap.ok) return snap;
+  const fields = decodeFields(snap.data);
+  return {
+    ok: true,
+    status: snap.status || 200,
+    data: {
+      management: fields?.management && typeof fields.management === "object" ? fields.management : null,
+      generatedAt: typeof fields?.generatedAt === "string" ? fields.generatedAt : "",
+    },
+  };
+};
+
+const writeGrowthGoalsSnapshotDoc = async ({ competencia, management, accessToken }) => {
+  const generatedAt = new Date().toISOString();
+  return firestorePatchDocumentWithAccessToken({
+    docPath: getGrowthGoalsSnapshotDocPath(competencia),
+    accessToken: accessToken || await getFirestoreAdminAccessToken(),
+    data: { competencia, management, generatedAt },
+    updateMaskPaths: ["competencia", "management", "generatedAt"],
+  });
+};
+
 const invalidateGrowthMetricsCacheDoc = async ({ idToken, accessToken } = {}) => {
   try {
     delete globalThis.__growthMetricsCache;
+    delete globalThis.__growthMetricsCacheByPeriod;
   } catch {
     globalThis.__growthMetricsCache = null;
+    globalThis.__growthMetricsCacheByPeriod = null;
   }
   if (String(accessToken || "").trim()) {
     return firestoreDeleteDocumentWithAccessToken({
@@ -368,6 +413,32 @@ const invalidateGrowthMetricsCacheDoc = async ({ idToken, accessToken } = {}) =>
   return firestoreDeleteDocument({
     docPath: getGrowthMetricsCacheDocPath(),
     idToken,
+  });
+};
+
+const invalidateGrowthMetricsCacheDocs = async ({ accessToken } = {}) => {
+  try {
+    delete globalThis.__growthMetricsCache;
+    delete globalThis.__growthMetricsCacheByPeriod;
+  } catch {
+    globalThis.__growthMetricsCache = null;
+    globalThis.__growthMetricsCacheByPeriod = null;
+  }
+  const token = accessToken || await getFirestoreAdminAccessToken();
+  const list = await firestoreListDocumentsWithAccessToken({ collectionPath: GROWTH_METRICS_CACHE_COLLECTION, accessToken: token, pageSize: 200 });
+  if (!list.ok) return list;
+  const docs = Array.isArray(list.documents) ? list.documents : [];
+  await Promise.all(docs.map((doc) => {
+    const id = getDocIdFromName(doc.name);
+    return id ? firestoreDeleteDocumentWithAccessToken({ docPath: `${GROWTH_METRICS_CACHE_COLLECTION}/${encodeURIComponent(id)}`, accessToken: token }) : null;
+  }).filter(Boolean));
+  return { ok: true, deleted: docs.length };
+};
+
+const invalidateGrowthGoalsSnapshotDoc = async ({ competencia, accessToken } = {}) => {
+  return firestoreDeleteDocumentWithAccessToken({
+    docPath: getGrowthGoalsSnapshotDocPath(competencia),
+    accessToken: accessToken || await getFirestoreAdminAccessToken(),
   });
 };
 
@@ -390,6 +461,12 @@ const getGrowthMetricsCacheMeta = (cacheRow = {}) => {
     ageMinutes,
     isFresh: generatedAtMs > 0 && ageMs < GROWTH_METRICS_CACHE_TTL_MS,
   };
+};
+
+const isFreshGeneratedAt = (generatedAt, ttlMs) => {
+  const generatedAtDate = parseIsoDateSafe(generatedAt);
+  const generatedAtMs = generatedAtDate ? generatedAtDate.getTime() : 0;
+  return generatedAtMs > 0 && Math.max(0, Date.now() - generatedAtMs) < ttlMs;
 };
 
 const decorateGrowthMetricsPayload = (payload = {}, { cached = false, stale = false, staleAgeMinutes = null, generatedAt = "" } = {}) => ({
@@ -1406,24 +1483,46 @@ const handleGrowthGoalsApi = async (req, res, url) => {
         }
 
         if (mode === "management") {
-          const managementWeeks = listCompetenciaWeeks(competencia);
-          const firstWeek = managementWeeks[0];
-          const previousDate = new Date(`${firstWeek.startDateKey}T12:00:00-03:00`);
-          previousDate.setDate(previousDate.getDate() - 1);
-          const { resolveCommercialWeek } = require("./_lib/commercial-week");
-          const previousMonth = resolveCommercialWeek({ now: previousDate }).startDateKey.slice(0, 7);
-          const [globalConfig, crm, sdrEvents, previousSnap] = await Promise.all([
-            loadCrmLiveDefaultsConfigWithAccessToken({ accessToken }), fetchAllCrmBusinesses({readOnly:true}),
-            loadSdrActivityEvents({ accessToken, from: resolveCommercialWeek({now:previousDate}).startDateKey, to: managementWeeks.at(-1).endDateKey }),
-            firestoreGetDocumentWithAccessToken({ docPath: `${GOALS_COLLECTION}/${previousMonth}`, accessToken }),
-          ]);
-          if (crm?.ok === false || !Array.isArray(crm?.businesses)) throw new Error("commercial_sales_read_failed");
-          if (!previousSnap.ok && previousSnap.status !== 404) throw new Error("previous_goal_read_failed");
-          payload.management = buildCommercialGoalsModel({ competencia, goal,
-            previousGoal: previousSnap.ok ? decodeGoalDoc(previousSnap.data) : null,
-            globalConfig, people: progressPeople, businesses: crm.businesses, sdrEvents });
-          payload.management.sourceUpdatedAt = crm.sourceUpdatedAt;
-          payload.management.sourceStale = crm.sourceStale;
+          const cachedManagement = await readGrowthGoalsSnapshotDoc({ competencia, accessToken }).catch(() => null);
+          if (cachedManagement?.ok && cachedManagement.data?.management && isFreshGeneratedAt(cachedManagement.data.generatedAt, GROWTH_GOALS_SNAPSHOT_TTL_MS)) {
+            payload.management = {
+              ...cachedManagement.data.management,
+              cached: true,
+              generatedAt: cachedManagement.data.generatedAt,
+            };
+          } else {
+            const managementWeeks = listCompetenciaWeeks(competencia);
+            const firstWeek = managementWeeks[0];
+            const previousDate = new Date(`${firstWeek.startDateKey}T12:00:00-03:00`);
+            previousDate.setDate(previousDate.getDate() - 1);
+            const { resolveCommercialWeek } = require("./_lib/commercial-week");
+            const previousMonth = resolveCommercialWeek({ now: previousDate }).startDateKey.slice(0, 7);
+            const [globalConfig, crm, sdrEvents, previousSnap] = await Promise.all([
+              loadCrmLiveDefaultsConfigWithAccessToken({ accessToken }), fetchAllCrmBusinesses({ readOnly: true }),
+              loadSdrActivityEvents({ accessToken, from: resolveCommercialWeek({ now: previousDate }).startDateKey, to: managementWeeks.at(-1).endDateKey }),
+              firestoreGetDocumentWithAccessToken({ docPath: `${GOALS_COLLECTION}/${previousMonth}`, accessToken }),
+            ]);
+            if (crm?.ok === false || !Array.isArray(crm?.businesses)) throw new Error("commercial_sales_read_failed");
+            if (!previousSnap.ok && previousSnap.status !== 404) throw new Error("previous_goal_read_failed");
+            payload.management = buildCommercialGoalsModel({
+              competencia,
+              goal,
+              previousGoal: previousSnap.ok ? decodeGoalDoc(previousSnap.data) : null,
+              globalConfig,
+              people: progressPeople,
+              businesses: crm.businesses,
+              sdrEvents,
+            });
+            payload.management.sourceUpdatedAt = crm.sourceUpdatedAt;
+            payload.management.sourceStale = crm.sourceStale;
+            payload.management.cached = false;
+            await writeGrowthGoalsSnapshotDoc({ competencia, management: payload.management, accessToken }).catch((snapshotError) => {
+              console.warn("[growth-goals] management snapshot write failed", {
+                competencia,
+                message: snapshotError?.message || String(snapshotError || ""),
+              });
+            });
+          }
         }
 
         if (includeWeeklyProgress) {
@@ -1643,7 +1742,7 @@ const handleGrowthGoalsApi = async (req, res, url) => {
     }
 
     try {
-      const invalidate = await invalidateGrowthMetricsCacheDoc({ accessToken });
+      const invalidate = await invalidateGrowthMetricsCacheDocs({ accessToken });
       if (!invalidate?.ok && invalidate?.status !== 404) {
         console.warn("[growth-goals] cache invalidation failed", {
           status: invalidate?.status || null,
@@ -1654,6 +1753,14 @@ const handleGrowthGoalsApi = async (req, res, url) => {
     } catch (cacheError) {
       console.warn("[growth-goals] cache invalidation threw", cacheError);
     }
+    await invalidateGrowthGoalsSnapshotDoc({ competencia, accessToken }).catch((snapshotError) => {
+      if (snapshotError?.status !== 404) {
+        console.warn("[growth-goals] management snapshot invalidation failed", {
+          competencia,
+          message: snapshotError?.message || String(snapshotError || ""),
+        });
+      }
+    });
 
     sendJson(res, 200, { ok: true, competencia, action: (weeklyGoalInput ? Object.prototype.hasOwnProperty.call(existingWeeklyGoalsRaw, weeklyGoalInput.weekKey) : existingGoal?.valorMeta != null) ? "updated" : "created" });
   } catch (error) {
@@ -1685,14 +1792,17 @@ const handleGrowthMetricsApi = async (req, res) => {
     return;
   }
   const nowMs = Date.now();
-  if (!hasRequestedPeriod && !forceRefresh && globalThis.__growthMetricsCache && globalThis.__growthMetricsCache.expiresAt > nowMs) {
+  const memoryCacheKey = getGrowthMetricsCacheDocId({ periodStart, periodEnd });
+  globalThis.__growthMetricsCacheByPeriod ||= {};
+  const memoryCache = globalThis.__growthMetricsCacheByPeriod[memoryCacheKey];
+  if (!forceRefresh && memoryCache && memoryCache.expiresAt > nowMs) {
     sendJson(
       res,
       200,
-      decorateGrowthMetricsPayload(globalThis.__growthMetricsCache.payload, {
+      decorateGrowthMetricsPayload(memoryCache.payload, {
         cached: true,
         stale: false,
-        generatedAt: globalThis.__growthMetricsCache.generatedAt || "",
+        generatedAt: memoryCache.generatedAt || "",
       })
     );
     return;
@@ -1700,34 +1810,32 @@ const handleGrowthMetricsApi = async (req, res) => {
 
   let cacheRow = null;
   let cacheMeta = null;
-  if (!hasRequestedPeriod) {
-    try {
-      const cachedDoc = await readGrowthMetricsCacheDoc();
-      if (cachedDoc.ok && cachedDoc.data?.payload && typeof cachedDoc.data.payload === "object") {
-        cacheRow = cachedDoc.data;
-        cacheMeta = getGrowthMetricsCacheMeta(cacheRow);
-        if (!forceRefresh && cacheMeta.isFresh) {
-          globalThis.__growthMetricsCache = {
-            payload: cacheRow.payload,
+  try {
+    const cachedDoc = await readGrowthMetricsCacheDoc({ periodStart, periodEnd });
+    if (cachedDoc.ok && cachedDoc.data?.payload && typeof cachedDoc.data.payload === "object") {
+      cacheRow = cachedDoc.data;
+      cacheMeta = getGrowthMetricsCacheMeta(cacheRow);
+      if (!forceRefresh && cacheMeta.isFresh) {
+        globalThis.__growthMetricsCacheByPeriod[memoryCacheKey] = {
+          payload: cacheRow.payload,
+          generatedAt: cacheMeta.generatedAt,
+          expiresAt: Date.now() + 60 * 1000,
+        };
+        sendJson(
+          res,
+          200,
+          decorateGrowthMetricsPayload(cacheRow.payload, {
+            cached: true,
+            stale: false,
+            staleAgeMinutes: cacheMeta.ageMinutes,
             generatedAt: cacheMeta.generatedAt,
-            expiresAt: Date.now() + 60 * 1000,
-          };
-          sendJson(
-            res,
-            200,
-            decorateGrowthMetricsPayload(cacheRow.payload, {
-              cached: true,
-              stale: false,
-              staleAgeMinutes: cacheMeta.ageMinutes,
-              generatedAt: cacheMeta.generatedAt,
-            })
-          );
-          return;
-        }
+          })
+        );
+        return;
       }
-    } catch (error) {
-      console.warn("[growth-metrics] firestore cache read failed", error);
     }
+  } catch (error) {
+    console.warn("[growth-metrics] firestore cache read failed", error);
   }
 
   const idToken = getBearerTokenFromRequest(req);
@@ -1746,20 +1854,19 @@ const handleGrowthMetricsApi = async (req, res) => {
       filterByCreatedAt: hasRequestedPeriod,
     });
     const generatedAt = new Date().toISOString();
-    if (!hasRequestedPeriod) {
-      try {
-        const cacheWrite = await writeGrowthMetricsCacheDoc({ payload, generatedAt });
-        if (!cacheWrite?.ok) {
-          console.warn("[growth-metrics] firestore cache write failed", {
-            status: cacheWrite?.status || null,
-            data: cacheWrite?.data ?? null,
-            text: cacheWrite?.text ?? null,
-          });
-        }
-      } catch (cacheError) {
-        console.warn("[growth-metrics] firestore cache write threw", cacheError);
+    try {
+      const cacheWrite = await writeGrowthMetricsCacheDoc({ payload, generatedAt, periodStart, periodEnd });
+      if (!cacheWrite?.ok) {
+        console.warn("[growth-metrics] firestore cache write failed", {
+          status: cacheWrite?.status || null,
+          data: cacheWrite?.data ?? null,
+          text: cacheWrite?.text ?? null,
+        });
       }
+    } catch (cacheError) {
+      console.warn("[growth-metrics] firestore cache write threw", cacheError);
     }
+    globalThis.__growthMetricsCacheByPeriod[memoryCacheKey] = { payload, generatedAt, expiresAt: Date.now() + 60 * 1000 };
     if (!hasRequestedPeriod) globalThis.__growthMetricsCache = { payload, generatedAt, expiresAt: Date.now() + 60 * 1000 };
     sendJson(res, 200, decorateGrowthMetricsPayload(payload, { cached: false, stale: false, generatedAt }));
   } catch (crmError) {

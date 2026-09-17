@@ -41674,6 +41674,130 @@ const parseAppRoute = (path) => {
   return { role, panel: "dashboard" };
 };
 
+const coldPathPrefetchState = {
+  done: new Set(),
+  hoverTimers: new WeakMap(),
+};
+
+const scheduleIdleWork = (callback, timeout = 2500) => {
+  if (typeof callback !== "function") return;
+  if (typeof window.requestIdleCallback === "function") {
+    window.requestIdleCallback(callback, { timeout });
+    return;
+  }
+  window.setTimeout(callback, Math.min(Number(timeout) || 2500, 1200));
+};
+
+const prefetchWithSpaceCache = async ({ resource, params = {}, url, select = (payload) => payload, maxAge = 60_000 } = {}) => {
+  const cache = spaceCache();
+  if (!cache || !resource || !url) return null;
+  const key = cache.key({ resource, params });
+  const cached = await cache.get(key).catch(() => null);
+  if (cached && Date.now() - Number(cached.lastValidatedAt || cached.cachedAt || 0) < maxAge) return cached.data;
+  const response = await fetchWithAuth(url, { method: "GET" });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(payload?.error || "prefetch_failed");
+  const data = select(payload);
+  if (data != null) await cache.set(key, data).catch(() => {});
+  return data;
+};
+
+const prefetchCommercialOverviewColdPath = async () => {
+  if (currentRole !== "admin") return;
+  const range = getCommercialOverviewRange();
+  const params = { period: adminCommercialOverviewState.period, start: range.start, end: range.end };
+  const cache = spaceCache();
+  const key = cache?.key?.({ resource: "commercial-overview", params });
+  if (!cache || !key || await cache.get(key).catch(() => null)) return;
+  const crmParams = new URLSearchParams({ api: "growth-metrics", periodStart: range.start, periodEnd: range.end });
+  const sdrParams = new URLSearchParams({ from: range.start, to: range.end });
+  const [crmRes, goalRes, sdrRes] = await Promise.all([
+    fetchWithAuth(`/api/growth-dashboard?${crmParams.toString()}`, { method: "GET" }),
+    fetchWithAuth("/api/growth-dashboard?api=growth-goals&mode=current", { method: "GET" }),
+    fetchWithAuth(`/api/sdr-metrics?${sdrParams.toString()}`, { method: "GET" }),
+  ]);
+  const [crm, goalPayload, sdr] = await Promise.all([
+    crmRes.json().catch(() => null),
+    goalRes.json().catch(() => null),
+    sdrRes.json().catch(() => null),
+  ]);
+  if (!crmRes.ok || !sdrRes.ok) return;
+  await cache.set(key, { crm: crm || {}, goal: goalRes.ok ? goalPayload?.goal || null : null, sdr: sdr || {} }).catch(() => {});
+};
+
+const prefetchCommercialGoalsColdPath = () => {
+  if (currentRole !== "admin") return Promise.resolve(null);
+  const competencia = getCompetenciaKeySaoPaulo();
+  return prefetchWithSpaceCache({
+    resource: "commercial-goals",
+    params: { competencia },
+    url: `/api/growth-dashboard?api=growth-goals&mode=management&competencia=${encodeURIComponent(competencia)}`,
+    select: (payload) => payload?.management || null,
+    maxAge: 60_000,
+  });
+};
+
+const prefetchCrmBoardColdPath = () => {
+  if (!["admin", "growth"].includes(String(currentRole || ""))) return Promise.resolve(null);
+  const workspace = getNativeCrmWorkspace() || nativeCrmState.workspace || "";
+  const params = new URLSearchParams();
+  if (workspace) params.set("workspace", workspace);
+  return prefetchWithSpaceCache({
+    resource: "crm-board",
+    params: { workspace },
+    url: `/api/crm${params.toString() ? `?${params.toString()}` : ""}`,
+    maxAge: 60_000,
+  });
+};
+
+const runColdPathPrefetch = (name) => {
+  const safeName = String(name || "").trim();
+  if (!safeName || coldPathPrefetchState.done.has(safeName)) return;
+  coldPathPrefetchState.done.add(safeName);
+  const tasks = {
+    commercialOverview: prefetchCommercialOverviewColdPath,
+    commercialGoals: prefetchCommercialGoalsColdPath,
+    crmBoard: prefetchCrmBoardColdPath,
+  };
+  tasks[safeName]?.().catch((error) => console.debug?.("[prefetch] cold path skipped", safeName, error?.message || error));
+};
+
+const schedulePostLoginColdPathPrefetch = () => {
+  scheduleIdleWork(() => {
+    if (currentRole === "admin") {
+      runColdPathPrefetch("commercialOverview");
+      runColdPathPrefetch("commercialGoals");
+      runColdPathPrefetch("crmBoard");
+    } else if (currentRole === "growth") {
+      runColdPathPrefetch("crmBoard");
+    }
+  }, 3000);
+};
+
+const prefetchForPanelIntent = (panelName) => {
+  const panel = String(panelName || "").trim();
+  if (panel === "admin-comercial-visao-geral") runColdPathPrefetch("commercialOverview");
+  if (panel === "admin-comercial-metas") runColdPathPrefetch("commercialGoals");
+  if (panel === "native-crm") runColdPathPrefetch("crmBoard");
+};
+
+document.addEventListener("pointerover", (event) => {
+  const target = event.target instanceof HTMLElement ? event.target.closest("[data-panel-target]") : null;
+  if (!(target instanceof HTMLElement)) return;
+  const panel = String(target.getAttribute("data-panel-target") || "").trim();
+  if (!panel) return;
+  const previous = coldPathPrefetchState.hoverTimers.get(target);
+  if (previous) window.clearTimeout(previous);
+  const timer = window.setTimeout(() => prefetchForPanelIntent(panel), 180);
+  coldPathPrefetchState.hoverTimers.set(target, timer);
+}, { passive: true });
+
+document.addEventListener("focusin", (event) => {
+  const target = event.target instanceof HTMLElement ? event.target.closest("[data-panel-target]") : null;
+  if (!(target instanceof HTMLElement)) return;
+  prefetchForPanelIntent(target.getAttribute("data-panel-target"));
+});
+
 const ensureSessionOrRedirect = async () => {
   if (sessionUser) {
     sessionChecked = true;
@@ -41735,6 +41859,7 @@ const initAppShell = async () => {
   applyParsedAppRouteState(parsed);
   await enforceForcePasswordChangeIfNeeded();
   showPanel(parsed?.panel || "dashboard");
+  schedulePostLoginColdPathPrefetch();
 
   renderDashboardCharts();
 };

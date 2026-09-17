@@ -84,6 +84,11 @@ const makeApi = ({ missingGoal = false, failRead = false, failUsers = false, leg
       return saved ? { ok: true, status: 200, data: doc(path, saved) } : { ok: false, status: 404 };
     }
     if (path?.startsWith('growthGoals/')) return { ok: false, status: 404 };
+    if (path === 'growthMetricsCache') return { ok: true, status: 200, data: { documents: [] } };
+    if (path === `growthGoalsSnapshots/${month}`) {
+      if (method === 'PATCH') return { ok: true, status: 200, data: doc(path, firestore.decodeFields(options.body)) };
+      return { ok: false, status: 404 };
+    }
     if (path === 'users') {
       if (failUsers) return { ok: false, status: 503 };
       const secondPage = new URL(url).searchParams.has('pageToken');
@@ -253,7 +258,9 @@ test('management GET aggregates the competence in one read-only response', async
   assert.equal(res.body.management.month.summary.meta, 123456);
   assert.equal(res.body.management.competencia, api.month);
   assert.ok(res.body.management.weeks.length >= 4);
-  assert.ok(api.calls.every(call => call.method === 'GET'));
+  assert.ok(api.calls.every(call => call.method === 'GET' || call.path === `growthGoalsSnapshots/${api.month}`));
+  assert.ok(api.calls.some(call => call.method === 'PATCH' && call.path === `growthGoalsSnapshots/${api.month}`));
+  assert.ok(api.calls.filter(call => call.method !== 'GET').every(call => call.path !== `growthGoals/${api.month}`));
 });
 
 test('entity action is create for a new week inside an existing month and update after saving', async () => {

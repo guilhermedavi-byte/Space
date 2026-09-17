@@ -153,6 +153,8 @@ test("API de growth metrics valida e usa periodStart/periodEnd fora do cache men
   assert.match(source, /periodStart > periodEnd/);
   assert.match(source, /params\.set\("filter\[lastMovedAfter\]", String\(lastMovedAfter\)\.trim\(\)\)/);
   assert.match(source, /new Date\(`\$\{periodStart\}T00:00:00-03:00`\)\.toISOString\(\)/);
+  assert.match(source, /readGrowthMetricsCacheDoc\(\{ periodStart, periodEnd \}\)/);
+  assert.match(source, /writeGrowthMetricsCacheDoc\(\{ payload, generatedAt, periodStart, periodEnd \}\)/);
   assert.match(clientSource, /new URLSearchParams\(\{ api: "growth-metrics", periodStart: range\.start, periodEnd: range\.end \}\)/);
   assert.match(clientSource, /crm\?\.period\?\.startDateKey !== range\.start/);
 });
@@ -160,8 +162,34 @@ test("API de growth metrics valida e usa periodStart/periodEnd fora do cache men
 test("save de growth-goals invalida o cache persistente imediatamente", () => {
   const source = fs.readFileSync(path.join(__dirname, "..", "api", "growth-dashboard.js"), "utf8");
   assert.match(source, /const invalidateGrowthMetricsCacheDoc = async/);
-  assert.match(source, /await invalidateGrowthMetricsCacheDoc\(\{ accessToken \}\)/);
+  assert.match(source, /const invalidateGrowthMetricsCacheDocs = async/);
+  assert.match(source, /await invalidateGrowthMetricsCacheDocs\(\{ accessToken \}\)/);
   assert.match(source, /delete globalThis\.__growthMetricsCache/);
+  assert.match(source, /delete globalThis\.__growthMetricsCacheByPeriod/);
+});
+
+test("growth-goals management usa snapshot materializado por competência", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "api", "growth-dashboard.js"), "utf8");
+  assert.match(source, /GROWTH_GOALS_SNAPSHOT_COLLECTION = "growthGoalsSnapshots"/);
+  assert.match(source, /readGrowthGoalsSnapshotDoc\(\{ competencia, accessToken \}\)/);
+  assert.match(source, /writeGrowthGoalsSnapshotDoc\(\{ competencia, management: payload\.management, accessToken \}\)/);
+  assert.match(source, /invalidateGrowthGoalsSnapshotDoc\(\{ competencia, accessToken \}\)/);
+});
+
+test("admin-data usa query direta para usuários comerciais sem debug", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "api", "admin-data.js"), "utf8");
+  assert.match(source, /queryCollectionByFieldAsAdmin\(collection, \{ field: "tipo", value: "growth", maxResults: 1000 \}\)/);
+  assert.match(source, /const canUseGrowthFastPath = collection === "users" && normalizedType === "growth" && !wantsDebug/);
+});
+
+test("prefetch frio agenda overview, metas e CRM sem bloquear a UI", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "script.js"), "utf8");
+  assert.match(source, /const schedulePostLoginColdPathPrefetch = \(\) =>/);
+  assert.match(source, /requestIdleCallback/);
+  assert.match(source, /prefetchCommercialOverviewColdPath/);
+  assert.match(source, /prefetchCommercialGoalsColdPath/);
+  assert.match(source, /prefetchCrmBoardColdPath/);
+  assert.match(source, /document\.addEventListener\("pointerover"/);
 });
 
 test("POST parcial de growth-goals preserva valorMeta existente quando omitido", () => {
