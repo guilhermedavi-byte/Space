@@ -66,3 +66,11 @@ test('origin non-revenue rule does not exclude reliable Asaas customer charges w
  assert.equal(k.received,25000);
  assert.equal(k.confirmed,7500);
 });
+
+test('origin rule guard only applies to treasury or unreconciled transfer movements',()=>{
+ const {originRuleApplies}=require('../api/_lib/finance-revenue-policy');
+ assert.equal(originRuleApplies({status:'RECEIVED',billing_type:'PIX',linked:false}),false);
+ assert.equal(originRuleApplies({status:'CONFIRMED',billing_type:'PIX',linked:false}),false);
+ assert.equal(originRuleApplies({status:'RECEIVED_IN_CASH',billing_type:'PIX',linked:true}),true);
+ assert.equal(originRuleApplies({status:'RECEIVED',billing_type:'TRANSFER',linked:false}),true);
+});
