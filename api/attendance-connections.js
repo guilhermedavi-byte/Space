@@ -11,11 +11,10 @@ const createHandler = ({ authenticate = requireAttendanceAuth, request = supabas
     const actor = await authenticate(req, req.method === 'GET' ? 'attendance.view' : 'attendance.manage');
     if (req.method !== 'GET' && !['admin', 'growth'].includes(actor.role)) fail('attendance_forbidden', 403);
     if (req.method !== 'GET') checkEnvironment();
-    const isTransientReadFailure = error => error?.status >= 500 || error?.code === 'supabase_transport_failed' || String(error?.message || '').includes('522: Connection timed out');
     const read = async path => {
       try { return (await request(path)).data || []; }
       catch (error) {
-        if (req.method === 'GET' && isTransientReadFailure(error)) return [];
+        if (req.method === 'GET') return [];
         throw error;
       }
     };
