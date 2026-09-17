@@ -27520,16 +27520,18 @@ button.automations-row:focus-visible,
 }
 
 .native-crm-record-layout {
-  background:
-    linear-gradient(90deg, rgba(255,255,255,.045), transparent 1px) 320px 0 / 1px 100% no-repeat,
-    linear-gradient(90deg, rgba(255,255,255,.045), transparent 1px) calc(100% - 360px) 0 / 1px 100% no-repeat,
-    #0b0d10;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: 0;
+  min-height: calc(100vh - 75px);
+  background: #0b0d10;
 }
 
 .native-crm-record-column {
   min-width: 0;
   min-height: calc(100vh - 75px);
   padding: 18px;
+  border-left: 1px solid rgba(255,255,255,.045);
 }
 
 .native-crm-record-lead,
@@ -27545,7 +27547,8 @@ button.automations-row:focus-visible,
 .native-crm-record-lead {
   display: grid;
   align-content: start;
-  gap: 18px;
+  gap: 14px;
+  border-left: 0;
 }
 
 .native-crm-record-identity {
@@ -27600,7 +27603,7 @@ button.automations-row:focus-visible,
 .native-crm-inline-field {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(86px, 34%) minmax(0, 1fr) 24px;
+  grid-template-columns: minmax(96px, 36%) minmax(0, 1fr);
   align-items: center;
   gap: 8px;
   min-height: 35px;
@@ -27649,24 +27652,6 @@ button.automations-row:focus-visible,
 .native-crm-inline-field select:focus {
   border-color: rgba(255,255,255,.1);
   background: rgba(255,255,255,.035);
-}
-
-.native-crm-inline-field button {
-  width: 24px;
-  height: 24px;
-  border: 0;
-  border-radius: 6px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  color: transparent;
-  cursor: pointer;
-}
-
-.native-crm-inline-field:focus-within button {
-  color: rgba(142,226,174,.92);
-  background: rgba(142,226,174,.08);
 }
 
 .native-crm-inline-field .native-crm-form-error {
@@ -27744,10 +27729,10 @@ button.automations-row:focus-visible,
 
 .native-crm-record-timeline {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   align-content: start;
-  gap: 14px;
-  padding: 22px 28px;
+  gap: 10px;
+  padding: 18px 22px;
 }
 
 .native-crm-record-column-head {
@@ -27757,17 +27742,12 @@ button.automations-row:focus-visible,
   gap: 10px;
 }
 
-.native-crm-record-column-head strong {
-  color: rgba(255,255,255,.72);
-  font-size: 12px;
-  font-weight: 650;
-}
-
 .native-crm-record-timeline-list {
   position: relative;
   display: grid;
   gap: 0;
-  padding: 3px 0 28px;
+  align-content: start;
+  padding: 2px 0 28px;
 }
 
 .native-crm-record-timeline-list::before {
@@ -27823,29 +27803,12 @@ button.automations-row:focus-visible,
 .native-crm-record-ops {
   display: grid;
   align-content: start;
-  gap: 16px;
+  gap: 12px;
 }
 
-.native-crm-record-next,
 .native-crm-record-activity-group {
   display: grid;
   gap: 9px;
-}
-
-.native-crm-record-next .native-crm-context-card {
-  border: 1px solid rgba(255,255,255,.06);
-  border-radius: 8px;
-  padding: 10px;
-  background: rgba(255,255,255,.022);
-}
-
-.native-crm-record-activity-group h3 {
-  margin: 0;
-  color: rgba(255,255,255,.46);
-  font-size: 10px;
-  font-weight: 760;
-  letter-spacing: .08em;
-  text-transform: uppercase;
 }
 
 .native-crm-record-activity {
@@ -27891,6 +27854,19 @@ button.automations-row:focus-visible,
   color: rgba(255,255,255,.42);
   background: rgba(255,255,255,.012);
   font-size: 12px;
+}
+
+.native-crm-record-skeleton {
+  display: grid;
+  gap: 8px;
+}
+
+.native-crm-record-skeleton span {
+  height: 42px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, rgba(255,255,255,.035), rgba(255,255,255,.07), rgba(255,255,255,.035));
+  background-size: 200% 100%;
+  animation: native-crm-shimmer 1.1s linear infinite;
 }
 
 .native-crm-primary-work .native-crm-closer-review {

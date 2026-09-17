@@ -813,7 +813,9 @@ const lostReasonLabel = (reason) => ({
 
 const eventTitle = (event) => {
   if (event.type === "crm.opportunity.created") return "Oportunidade criada";
-  if (event.type === "crm.opportunity.updated") return "Oportunidade editada";
+  if (event.type === "crm.opportunity.owner_changed") return "Responsável alterado";
+  if (event.type === "crm.opportunity.value_changed") return "Valor da oportunidade alterado";
+  if (event.type === "crm.opportunity.updated") return "";
   if (event.type === "crm.opportunity.won") return "Oportunidade ganha";
   if (event.type === "crm.opportunity.lost") return "Oportunidade perdida";
   if (event.type === "crm.opportunity.reopened") return "Oportunidade reaberta";
@@ -837,6 +839,16 @@ const eventTitle = (event) => {
 };
 
 const eventDescription = (event) => {
+  if (event.type === "crm.opportunity.owner_changed") {
+    return [clean(event.payload?.fromOwnerName) || "Sem responsável", clean(event.payload?.toOwnerName) || "Sem responsável"].join(" → ");
+  }
+  if (event.type === "crm.opportunity.value_changed") {
+    const format = (value) => {
+      const number = numberOrNull(value);
+      return number == null ? "—" : new Intl.NumberFormat("pt-BR", { style: "currency", currency: clean(event.payload?.currency) || "BRL" }).format(number);
+    };
+    return `${format(event.payload?.fromValue)} → ${format(event.payload?.toValue)}`;
+  }
   if (event.type === "crm.opportunity.won") {
     const value = numberOrNull(event.payload?.closedValue);
     const formatted = value == null ? "" : new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
@@ -884,16 +896,21 @@ const buildOpportunityTimeline = async (opportunityId) => {
   const events = eventsRaw
     .map(normalizeEvent)
     .filter((event) => event.id && matchesCrmScope(event) && event.opportunityId === opportunityId && event.type !== "crm.opportunity.stage_changed")
-    .map((event) => ({
-      id: `event_${event.id}`,
-      kind: "event",
-      type: event.type,
-      title: eventTitle(event),
-      description: eventDescription(event),
-      actorName: actorName(usersById, event.actorId),
-      occurredAt: event.createdAt,
-      payload: event.payload,
-    }));
+    .map((event) => {
+      const title = eventTitle(event);
+      if (!title) return null;
+      return {
+        id: `event_${event.id}`,
+        kind: "event",
+        type: event.type,
+        title,
+        description: eventDescription(event),
+        actorName: actorName(usersById, event.actorId),
+        occurredAt: event.createdAt,
+        payload: event.payload,
+      };
+    })
+    .filter(Boolean);
   const stageItems = historyRaw
     .map(normalizeStageHistory)
     .filter((row) => row.id && matchesCrmScope(row) && row.opportunityId === opportunityId)
@@ -1041,6 +1058,9 @@ const handleUpdateOpportunity = async ({ auth, body }) => {
       }
     : null;
   if (nextContact) Object.assign(nextContact, contactSearchFields(nextContact));
+  const usersRawForTimeline = (clean(body.ownerId) !== clean(opportunity.ownerId)) ? await listCollectionAsAdmin(COLLECTIONS.users, { maxPages: 20, decorate: false }).catch(() => []) : [];
+  const usersByIdForTimeline = new Map(usersRawForTimeline.map((row) => [clean(row.uid || row.id || row.firestoreDocId), row]).filter(([id]) => id));
+  const timelineUserName = (id) => actorName(usersByIdForTimeline, id);
   const next = {
     ...opportunity,
     title: clean(body.title) || clean(body.name || body.contactName) || opportunity.title,
@@ -1076,14 +1096,31 @@ const handleUpdateOpportunity = async ({ auth, body }) => {
       stamp,
     }));
   }
-  writes.push(eventWrite({
-    type: "crm.opportunity.updated",
-    opportunityId: next.id,
-    contactId: next.contactId,
-    actorId: clean(auth.session.sub),
-    payload: { status: next.status },
-    stamp,
-  }));
+  if (clean(next.ownerId) !== clean(opportunity.ownerId)) {
+    writes.push(eventWrite({
+      type: "crm.opportunity.owner_changed",
+      opportunityId: next.id,
+      contactId: next.contactId,
+      actorId: clean(auth.session.sub),
+      payload: {
+        fromOwnerId: opportunity.ownerId || null,
+        toOwnerId: next.ownerId || null,
+        fromOwnerName: timelineUserName(opportunity.ownerId),
+        toOwnerName: timelineUserName(next.ownerId),
+      },
+      stamp,
+    }));
+  }
+  if (Number(next.value || 0) !== Number(opportunity.value || 0)) {
+    writes.push(eventWrite({
+      type: "crm.opportunity.value_changed",
+      opportunityId: next.id,
+      contactId: next.contactId,
+      actorId: clean(auth.session.sub),
+      payload: { fromValue: opportunity.value, toValue: next.value, currency: next.currency },
+      stamp,
+    }));
+  }
   const committed = await commitWritesAsAdmin({ writes });
   if (!committed.ok) return { status: committed.status || 500, body: { error: "crm_update_failed" } };
   return { status: 200, body: { ok: true } };

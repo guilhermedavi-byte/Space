@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { Readable } = require("node:stream");
 
-const loadCrmHandler = (initialStore = {}) => {
+const loadCrmHandler = (initialStore = {}, session = { sub: "user_closer", role: "growth", name: "Closer" }) => {
   const store = new Map(Object.entries(initialStore));
   const commits = [];
   const paths = [
@@ -19,7 +19,7 @@ const loadCrmHandler = (initialStore = {}) => {
   });
   require.cache[require.resolve("../_lib/session")] = {
     exports: {
-      getSessionFromRequest: () => ({ sub: "user_closer", role: "growth", name: "Closer" }),
+      getSessionFromRequest: () => session,
     },
   };
   require.cache[require.resolve("../api/_lib/firestore-rest")] = {
@@ -114,12 +114,39 @@ const closerUser = () => ({
   commercialRoles: ["closer"],
 });
 
+const sdrUser = () => ({
+  id: "user_sdr",
+  uid: "user_sdr",
+  nome: "SDR",
+  email: "sdr@space.test",
+  tipo: "growth",
+  commercialRoles: ["sdr"],
+});
+
 const closerPipeline = () => ({
   id: "closer_pipeline",
   scopeId: "space-main",
   name: "Closer",
   pipelineType: "closer",
   isActive: true,
+});
+
+test("SDR-only users cannot close or reopen closer opportunities by forcing API actions", async () => {
+  const { handler, store, commits } = loadCrmHandler({
+    "users/user_sdr": sdrUser(),
+    "crmPipelines/closer_pipeline": closerPipeline(),
+    "crmOpportunities/opp_1": opportunity({ ownerId: "user_sdr", status: "lost" }),
+  }, { sub: "user_sdr", role: "growth", name: "SDR" });
+
+  const won = await invoke(handler, { action: "mark_opportunity_won", id: "opp_1", closedValue: 10000 });
+  const lost = await invoke(handler, { action: "mark_opportunity_lost", id: "opp_1", lostReason: "price" });
+  const reopened = await invoke(handler, { action: "reopen_opportunity", id: "opp_1" });
+
+  assert.equal(won.status, 403);
+  assert.equal(lost.status, 403);
+  assert.equal(reopened.status, 403);
+  assert.equal(store.get("crmOpportunities/opp_1").status, "lost");
+  assert.equal(commits.length, 0);
 });
 
 test("mark_opportunity_won snapshots closedValue, closedAt, closedBy and event atomically", async () => {

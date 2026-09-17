@@ -14231,7 +14231,6 @@ const nativeCrmInlineFieldHtml = ({ opportunity, contact, pipelineId, stageId, l
       ${nativeCrmInlineHiddenFieldsHtml({ opportunity, contact, pipelineId, stageId, omit: name })}
       <span>${escapeHtml(label)}</span>
       ${field}
-      <button type="submit" aria-label="Salvar ${escapeHtml(label)}">${nativeCrmIcon("check")}</button>
       <div class="native-crm-form-error" data-crm-form-error hidden></div>
     </form>
   `;
@@ -14244,8 +14243,16 @@ const nativeCrmOpportunityStatusMetaHtml = (opportunity, { pipelineName, stageNa
   ${money ? `<span>${escapeHtml(money)}</span>` : ""}
 `;
 
-const nativeCrmOpportunityTopActionsHtml = (opportunity) => {
+const nativeCrmCanCloseOpportunity = (opportunity, pipeline) => {
+  if (!opportunity || !pipeline) return false;
+  if (isNativeCrmAdmin()) return true;
+  const visible = getNativeCrmVisibleWorkspaces();
+  return pipeline.pipelineType === "closer" && visible.includes("closer");
+};
+
+const nativeCrmOpportunityTopActionsHtml = (opportunity, pipeline) => {
   if (!opportunity) return "";
+  if (!nativeCrmCanCloseOpportunity(opportunity, pipeline)) return "";
   if (opportunity.status === "open") {
     return `
       <div class="native-crm-record-actions">
@@ -14266,23 +14273,18 @@ const nativeCrmOpportunityLeadColumnHtml = ({ opportunity, contact, pipeline, st
   const qualificationRun = detail.qualification?.latestRun || null;
   const qualificationStatus = nativeCrmQualificationStatusLabel(qualificationRun);
   const qualificationTone = qualificationRun?.passed === true || qualificationRun?.status === "passed" ? "passed" : qualificationRun?.status === "failed" ? "failed" : "pending";
-  const qualificationAction = qualificationRun?.status === "in_progress" ? "Continuar" : qualificationRun ? "Ver" : "Iniciar";
+  const qualificationScore = qualificationRun && qualificationRun.status !== "in_progress" ? `${Number(qualificationRun.totalScore || 0)}/100 · ${qualificationStatus}` : qualificationStatus;
   const ownerDisplay = opportunity.owner?.name || opportunity.owner?.email || "";
+  const primaryName = contact.name || opportunity.title || "Lead sem nome";
+  const secondaryTitle = opportunity.title && normalizeCrmText(opportunity.title) !== normalizeCrmText(primaryName) ? opportunity.title : "";
   return `
     <aside class="native-crm-record-column native-crm-record-lead">
       <section class="native-crm-record-identity">
-        ${nativeCrmAvatarHtml(contact, contact.name || opportunity.title || "Lead")}
+        ${nativeCrmAvatarHtml(contact, primaryName)}
         <div>
-          <span>Opportunity</span>
-          <strong>${escapeHtml(opportunity.title || contact.name || "Lead sem nome")}</strong>
-          ${contact.name && contact.name !== opportunity.title ? `<em>${escapeHtml(contact.name)}</em>` : ""}
+          <strong>${escapeHtml(primaryName)}</strong>
+          ${secondaryTitle ? `<em>${escapeHtml(secondaryTitle)}</em>` : ""}
         </div>
-      </section>
-      <section class="native-crm-record-fieldset">
-        ${nativeCrmInlineFieldHtml({ opportunity, contact, pipelineId: opportunity.pipelineId, stageId: opportunity.stageId, label: "Oportunidade", name: "title", value: opportunity.title || "" })}
-        ${nativeCrmInlineFieldHtml({ opportunity, contact, pipelineId: opportunity.pipelineId, stageId: opportunity.stageId, label: "Contato", name: "name", value: contact.name || "" })}
-        ${nativeCrmInlineFieldHtml({ opportunity, contact, pipelineId: opportunity.pipelineId, stageId: opportunity.stageId, label: "Telefone", name: "phone", value: contact.phone || "" })}
-        ${nativeCrmInlineFieldHtml({ opportunity, contact, pipelineId: opportunity.pipelineId, stageId: opportunity.stageId, label: "E-mail", name: "email", value: contact.email || "", type: "email" })}
       </section>
       <section class="native-crm-record-fieldset">
         ${nativeCrmInlineFieldHtml({ opportunity, contact, pipelineId: opportunity.pipelineId, stageId: opportunity.stageId, label: "Responsável", name: "ownerId", value: opportunity.ownerId || "", display: ownerDisplay, optionsHtml: renderNativeCrmOwnerOptions(opportunity.ownerId || "") })}
@@ -14298,11 +14300,10 @@ const nativeCrmOpportunityLeadColumnHtml = ({ opportunity, contact, pipeline, st
       </section>
       <section class="native-crm-record-mini-panel" data-status="${escapeHtml(qualificationTone)}">
         <div>
-          <span>Qualificação SDR</span>
-          <strong>${escapeHtml(qualificationStatus)}</strong>
-          ${qualificationRun && qualificationRun.status !== "in_progress" ? `<em>${escapeHtml(String(Number(qualificationRun.totalScore || 0)))} / 100</em>` : ""}
+          <span>Qualificação</span>
+          <strong>${escapeHtml(qualificationScore)}</strong>
         </div>
-        ${pipeline?.pipelineType === "sdr" ? `<button type="button" class="native-crm-link-button" data-crm-qualification-open="${escapeHtml(opportunity.id)}">${escapeHtml(qualificationAction)}</button>` : ""}
+        ${pipeline?.pipelineType === "sdr" && qualificationRun ? `<button type="button" class="native-crm-link-button" data-crm-qualification-open="${escapeHtml(opportunity.id)}">Ver qualificação</button>` : ""}
       </section>
       ${nativeCrmClosingSummaryHtml(opportunity)}
       <section class="native-crm-record-fieldset">
@@ -14325,18 +14326,16 @@ const nativeCrmOpportunityTimelineColumnHtml = (opportunity) => {
     <main class="native-crm-record-column native-crm-record-timeline" aria-label="Timeline da oportunidade">
       <div class="native-crm-record-column-head">
         <span>Timeline</span>
-        <strong>${detail.loading ? "Carregando eventos" : `${sorted.length} eventos`}</strong>
       </div>
-      ${detail.loading ? `<div class="native-crm-muted">Carregando histórico…</div>` : ""}
+      ${detail.loading ? `<div class="native-crm-record-skeleton"><span></span><span></span><span></span></div>` : ""}
       ${!detail.loading && !sorted.length ? `<div class="native-crm-record-empty">Nenhum evento registrado ainda.</div>` : ""}
       <div class="native-crm-record-timeline-list">
         ${sorted.map((item) => `
           <article class="native-crm-record-event">
             <span class="native-crm-record-event-dot"></span>
-            <time>${escapeHtml(formatCrmDateTime(item.occurredAt || item.createdAt))}</time>
             <strong>${escapeHtml(item.title || "Evento")}</strong>
             ${item.description ? `<p>${escapeHtml(item.description)}</p>` : ""}
-            ${item.actorName ? `<em>${escapeHtml(item.actorName)}</em>` : ""}
+            <em>${item.actorName ? `por ${escapeHtml(item.actorName)} · ` : ""}${escapeHtml(formatCrmDateTime(item.occurredAt || item.createdAt))}</em>
           </article>
         `).join("")}
       </div>
@@ -14361,29 +14360,21 @@ const nativeCrmActivityRowHtml = (activity) => {
 
 const nativeCrmOpportunityActivityColumnHtml = ({ opportunity, pipeline }) => {
   const detail = getNativeCrmDetail(opportunity.id);
-  const openActivities = (detail.activities || []).filter((activity) => activity.status === "open").sort((left, right) => new Date(left.dueAt) - new Date(right.dueAt));
-  const overdue = openActivities.filter((activity) => crmActivityTone(activity.dueAt) === "overdue");
-  const upcoming = openActivities.filter((activity) => crmActivityTone(activity.dueAt) !== "overdue");
+  const toneRank = { overdue: 0, today: 1, future: 2, none: 3 };
+  const openActivities = (detail.activities || [])
+    .filter((activity) => activity.status === "open")
+    .sort((left, right) => (toneRank[crmActivityTone(left.dueAt)] ?? 9) - (toneRank[crmActivityTone(right.dueAt)] ?? 9) || new Date(left.dueAt) - new Date(right.dueAt));
   return `
     <aside class="native-crm-record-column native-crm-record-ops">
-      <section class="native-crm-record-next">
+      <section class="native-crm-record-activity-group">
         <div class="native-crm-record-column-head">
           <span>Atividades</span>
-          <button type="button" class="native-crm-link-button" data-crm-activity-new="${escapeHtml(opportunity.id)}">${nativeCrmIcon("plus")}Nova</button>
+          <button type="button" class="native-crm-link-button" data-crm-activity-new="${escapeHtml(opportunity.id)}">${nativeCrmIcon("plus")}Nova atividade</button>
         </div>
-        ${nativeCrmNextActivityHtml(opportunity)}
         ${nativeCrmActivityFormHtml(opportunity)}
-      </section>
-      <section class="native-crm-record-activity-group">
-        <h3>Atrasadas</h3>
         ${detail.loading ? `<div class="native-crm-muted">Carregando atividades…</div>` : ""}
-        ${!detail.loading && !overdue.length ? `<div class="native-crm-record-empty">Nada vencido.</div>` : overdue.map(nativeCrmActivityRowHtml).join("")}
+        ${!detail.loading && !openActivities.length ? `<div class="native-crm-record-empty">Nenhuma atividade agendada.</div>` : openActivities.map(nativeCrmActivityRowHtml).join("")}
       </section>
-      <section class="native-crm-record-activity-group">
-        <h3>Abertas</h3>
-        ${!detail.loading && !upcoming.length ? `<div class="native-crm-record-empty">Sem próximas atividades abertas.</div>` : upcoming.map(nativeCrmActivityRowHtml).join("")}
-      </section>
-      ${nativeCrmRecommendedActionPanelHtml(opportunity)}
       ${pipeline?.pipelineType === "closer" ? nativeCrmCloserValidationHtml(opportunity) : ""}
     </aside>
   `;
@@ -14415,7 +14406,7 @@ const renderNativeCrmOpportunityWorkspace = () => {
         title,
         subtitle: opportunity.title && contact.name && opportunity.title !== contact.name ? opportunity.title : contact.email || contact.phone || "Workspace comercial",
         meta: nativeCrmOpportunityStatusMetaHtml(opportunity, { pipelineName, stageName, money }),
-        actions: nativeCrmOpportunityTopActionsHtml(opportunity),
+        actions: nativeCrmOpportunityTopActionsHtml(opportunity, pipeline),
         backLabel: "CRM",
       })}
       <main class="native-crm-full-workspace">
@@ -42334,6 +42325,22 @@ document.addEventListener("change", (event) => {
 document.addEventListener("keydown", (event) => {
   const target = event.target;
   if (!(target instanceof Element)) return;
+  if (target.matches("[data-crm-inline-control]")) {
+    const form = target.closest("[data-crm-inline-form]");
+    if (event.key === "Escape") {
+      event.preventDefault();
+      renderNativeCrm();
+      return;
+    }
+    if (event.key === "Enter" && form instanceof HTMLFormElement && target instanceof HTMLInputElement) {
+      event.preventDefault();
+      submitNativeCrmForm(form).catch((error) => {
+        nativeCrmState.error = error?.message || "Não foi possível salvar.";
+        renderNativeCrm();
+      });
+      return;
+    }
+  }
   const card = target.closest("[data-crm-card]");
   if (card instanceof HTMLElement && (event.key === "Enter" || event.key === " ")) {
     event.preventDefault();
