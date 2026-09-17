@@ -12117,6 +12117,8 @@ const fetchWithAuth = async (input, init = {}) => {
   return fetch(input, { ...opts, headers, credentials: opts.credentials || "include" });
 };
 
+const CRM_API_TIMEOUT_MS = 18_000;
+
 const nativeCrmState = {
   loadedAt: 0,
   loading: false,
@@ -12838,6 +12840,37 @@ const selectedCrmPipelineId = () => {
   const activePipelines = getActiveCrmPipelines();
   const selected = activePipelines.find((pipeline) => pipeline.id === nativeCrmState.selectedPipelineId);
   return selected?.id || activePipelines.find((pipeline) => pipeline.isDefault)?.id || activePipelines[0]?.id || "";
+};
+
+const nativeCrmWorkspaceEmptyMessage = () => {
+  const workspace = getNativeCrmWorkspace();
+  if (workspace === "sdr") return "Nenhum pipeline SDR está configurado.";
+  if (workspace === "closer") return "Nenhum pipeline Closer está configurado.";
+  return "Nenhum pipeline disponível.";
+};
+
+const nativeCrmLoadErrorMessage = (error, fallback = "Não foi possível carregar o CRM.") => {
+  const code = String(error?.code || error?.message || "");
+  if (code === "timeout" || code.includes("timeout")) return "Tempo esgotado ao carregar o CRM. Tente novamente.";
+  if (code === "commercial_workspace_forbidden") return "Seu usuário não tem acesso a este workspace comercial.";
+  return error?.message || fallback;
+};
+
+const reconcileNativeCrmWorkspaceSelection = ({ updateUrl = false } = {}) => {
+  const workspace = getNativeCrmWorkspace();
+  if (workspace) nativeCrmState.workspace = workspace;
+  const activePipelines = getActiveCrmPipelines();
+  const selected = activePipelines.find((pipeline) => pipeline.id === nativeCrmState.selectedPipelineId);
+  const fallback = selected || activePipelines.find((pipeline) => pipeline.isDefault) || activePipelines[0] || null;
+  const nextPipelineId = fallback?.id || "";
+  const pipelineChanged = nativeCrmState.selectedPipelineId !== nextPipelineId;
+  if (pipelineChanged) nativeCrmState.selectedPipelineId = nextPipelineId;
+  if (nativeCrmState.filters.stageId) {
+    const stageAllowed = getNativeCrmData().stages.some((stage) => stage.id === nativeCrmState.filters.stageId && stage.pipelineId === nextPipelineId);
+    if (!stageAllowed) nativeCrmState.filters.stageId = "";
+  }
+  if (updateUrl && pipelineChanged && nativeCrmState.data) updateNativeCrmUrlState();
+  return { pipelineChanged, pipelineId: nextPipelineId };
 };
 
 const normalizeCrmText = (value) => String(value || "").trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ");
@@ -15154,8 +15187,6 @@ const renderNativeCrm = () => {
     `;
     return;
   }
-  const activeWorkspacePipelines = getActiveCrmPipelines();
-  const pipelineId = selectedCrmPipelineId();
   const pendingActions = Number(nativeCrmState.actions?.counts?.pending || 0);
   const visibleWorkspaces = getNativeCrmVisibleWorkspaces();
   if (!visibleWorkspaces.length && normalizeRole(sessionUser?.role || currentRole) === "growth") {
@@ -15174,6 +15205,9 @@ const renderNativeCrm = () => {
     root.innerHTML = renderNativeCrmOpportunityWorkspace();
     return;
   }
+  reconcileNativeCrmWorkspaceSelection();
+  const activeWorkspacePipelines = getActiveCrmPipelines();
+  const pipelineId = selectedCrmPipelineId();
   const workspaceHtml = nativeCrmState.mode === "analytics"
     ? renderNativeCrmAnalytics()
     : nativeCrmState.mode === "actions"
@@ -15182,7 +15216,7 @@ const renderNativeCrm = () => {
         ? renderNativeCrmQualificationConfig()
         : activeWorkspacePipelines.length
           ? (nativeCrmState.mode === "list" ? renderNativeCrmList() : renderNativeCrmBoard())
-          : `<div class="native-crm-empty">Nenhum pipeline disponível.</div>`;
+          : `<div class="native-crm-empty">${escapeHtml(nativeCrmWorkspaceEmptyMessage())}</div>`;
   root.innerHTML = `
     <div class="native-crm-shell">
       <header class="native-crm-head">
@@ -15238,20 +15272,20 @@ const loadNativeCrm = async ({ force = false } = {}) => {
     const params = new URLSearchParams();
     const workspace = getNativeCrmWorkspace();
     if (workspace) params.set("workspace", workspace);
-    const res = await fetchWithAuth(`/api/crm${params.toString() ? `?${params.toString()}` : ""}`, { method: "GET" });
+    const res = await fetchWithAuthWithTimeout(`/api/crm${params.toString() ? `?${params.toString()}` : ""}`, { method: "GET" }, CRM_API_TIMEOUT_MS, "crm_load");
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(data?.message || data?.error || "crm_load_failed");
     nativeCrmState.data = data;
     nativeCrmState.loadedAt = Date.now();
     nativeCrmState.workspace = getNativeCrmWorkspace() || nativeCrmState.workspace;
-    if (!nativeCrmState.selectedPipelineId) nativeCrmState.selectedPipelineId = selectedCrmPipelineId();
+    reconcileNativeCrmWorkspaceSelection({ updateUrl: true });
     if (nativeCrmState.mode === "list") loadNativeCrmList({ reset: true }).catch(() => {});
     if (nativeCrmState.mode === "analytics") loadNativeCrmAnalytics({ force: false }).catch(() => {});
     if (nativeCrmState.mode === "actions") loadNativeCrmActions({ force: false }).catch(() => {});
     if (nativeCrmState.mode === "qualification_config") loadNativeCrmQualificationConfig({ force: false }).catch(() => {});
     if (nativeCrmState.mode !== "actions" && nativeCrmState.mode !== "analytics" && nativeCrmState.mode !== "qualification_config") refreshNativeCrmActionsBadge().then(renderNativeCrm).catch(() => {});
   } catch (error) {
-    nativeCrmState.error = error?.message || "Erro ao carregar CRM.";
+    nativeCrmState.error = nativeCrmLoadErrorMessage(error, "Erro ao carregar CRM.");
   } finally {
     nativeCrmState.loading = false;
     renderNativeCrm();
@@ -15292,7 +15326,7 @@ const loadNativeCrmList = async ({ reset = false } = {}) => {
   renderNativeCrm();
   try {
     const cursor = reset ? "" : nativeCrmState.list.nextCursor;
-    const res = await fetchWithAuth(`/api/crm?${nativeCrmListParams({ cursor }).toString()}`, { method: "GET" });
+    const res = await fetchWithAuthWithTimeout(`/api/crm?${nativeCrmListParams({ cursor }).toString()}`, { method: "GET" }, CRM_API_TIMEOUT_MS, "crm_list");
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(data?.error || "crm_list_failed");
     const rows = Array.isArray(data?.rows) ? data.rows : [];
@@ -15302,7 +15336,7 @@ const loadNativeCrmList = async ({ reset = false } = {}) => {
     nativeCrmState.list.loadedAt = Date.now();
     syncNativeCrmListRowsIntoReadModel(rows);
   } catch (error) {
-    nativeCrmState.list.error = error?.message || "Não foi possível carregar a lista.";
+    nativeCrmState.list.error = nativeCrmLoadErrorMessage(error, "Não foi possível carregar a lista.");
   } finally {
     nativeCrmState.list.loading = false;
     renderNativeCrm();
@@ -15346,7 +15380,7 @@ const loadNativeCrmActions = async ({ force = false } = {}) => {
   state.error = "";
   renderNativeCrm();
   try {
-    const res = await fetchWithAuth(`/api/crm?${nativeCrmActionsParams().toString()}`, { method: "GET" });
+    const res = await fetchWithAuthWithTimeout(`/api/crm?${nativeCrmActionsParams().toString()}`, { method: "GET" }, CRM_API_TIMEOUT_MS, "crm_actions");
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(data?.error || "crm_actions_failed");
     state.rows = Array.isArray(data?.rows) ? data.rows : [];
@@ -15354,7 +15388,7 @@ const loadNativeCrmActions = async ({ force = false } = {}) => {
     state.filterOptions = data?.filterOptions && typeof data.filterOptions === "object" ? data.filterOptions : {};
     state.loadedAt = Date.now();
   } catch (error) {
-    state.error = error?.message || "Não foi possível carregar ações.";
+    state.error = nativeCrmLoadErrorMessage(error, "Não foi possível carregar ações.");
   } finally {
     state.loading = false;
     renderNativeCrm();
@@ -15368,7 +15402,7 @@ const refreshNativeCrmActionsBadge = async () => {
     const params = new URLSearchParams({ view: "actions", status: "pending", period: "all" });
     const workspace = getNativeCrmWorkspace();
     if (workspace) params.set("workspace", workspace);
-    const res = await fetchWithAuth(`/api/crm?${params.toString()}`, { method: "GET" });
+    const res = await fetchWithAuthWithTimeout(`/api/crm?${params.toString()}`, { method: "GET" }, CRM_API_TIMEOUT_MS, "crm_actions_badge");
     const data = await res.json().catch(() => null);
     if (res.ok) state.counts = data?.counts && typeof data.counts === "object" ? data.counts : state.counts;
   } catch {
@@ -15387,13 +15421,13 @@ const loadNativeCrmAnalytics = async ({ force = false } = {}) => {
   state.error = "";
   renderNativeCrm();
   try {
-    const res = await fetchWithAuth(`/api/crm?${nativeCrmAnalyticsParams().toString()}`, { method: "GET" });
+    const res = await fetchWithAuthWithTimeout(`/api/crm?${nativeCrmAnalyticsParams().toString()}`, { method: "GET" }, CRM_API_TIMEOUT_MS, "crm_analytics");
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(data?.error || "crm_analytics_failed");
     state.data = data;
     state.loadedAt = Date.now();
   } catch (error) {
-    state.error = error?.message || "Não foi possível carregar Analytics.";
+    state.error = nativeCrmLoadErrorMessage(error, "Não foi possível carregar Analytics.");
   } finally {
     state.loading = false;
     renderNativeCrm();
@@ -15414,7 +15448,7 @@ const loadNativeCrmQualificationConfig = async ({ force = false } = {}) => {
     const params = new URLSearchParams({ view: "qualification_config" });
     const workspace = getNativeCrmWorkspace();
     if (workspace) params.set("workspace", workspace);
-    const res = await fetchWithAuth(`/api/crm?${params.toString()}`, { method: "GET" });
+    const res = await fetchWithAuthWithTimeout(`/api/crm?${params.toString()}`, { method: "GET" }, CRM_API_TIMEOUT_MS, "crm_qualification_config");
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(data?.error || "qualification_config_failed");
     state.data = data;
@@ -15423,7 +15457,7 @@ const loadNativeCrmQualificationConfig = async ({ force = false } = {}) => {
     state.selectedVersionId = "";
     state.draft = null;
   } catch (error) {
-    state.error = error?.message || "Não foi possível carregar filtros.";
+    state.error = nativeCrmLoadErrorMessage(error, "Não foi possível carregar filtros.");
   } finally {
     state.loading = false;
     renderNativeCrm();
@@ -15496,7 +15530,7 @@ const loadNativeCrmOpportunityDetail = async (opportunityId, { force = false } =
   nativeCrmState.details[id] = { ...current, loading: true, error: "" };
   renderNativeCrm();
   try {
-    const res = await fetchWithAuth(`/api/crm?opportunityId=${encodeURIComponent(id)}`, { method: "GET" });
+    const res = await fetchWithAuthWithTimeout(`/api/crm?opportunityId=${encodeURIComponent(id)}`, { method: "GET" }, CRM_API_TIMEOUT_MS, "crm_detail");
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(data?.error || "crm_detail_failed");
     nativeCrmState.details[id] = {
@@ -15511,7 +15545,7 @@ const loadNativeCrmOpportunityDetail = async (opportunityId, { force = false } =
       error: "",
     };
   } catch (error) {
-    nativeCrmState.details[id] = { ...current, loading: false, error: error?.message || "Não foi possível carregar o histórico." };
+    nativeCrmState.details[id] = { ...current, loading: false, error: nativeCrmLoadErrorMessage(error, "Não foi possível carregar o histórico.") };
   } finally {
     renderNativeCrm();
   }
