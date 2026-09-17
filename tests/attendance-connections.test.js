@@ -23,6 +23,14 @@ test('Frontend renders persisted data safely and exposes pending Meta wizard',as
  assert.match(dom.window.document.body.textContent,/Aguardando configuração Meta/);assert.equal(dom.window.document.querySelector('img'),null);
  dom.window.document.querySelector('[data-ac-new]').click();assert.ok(dom.window.document.querySelector('dialog'));assert.equal(dom.window.document.querySelector('input[type=password]'),null);dom.window.close();
 });
+test('Frontend keeps Meta activation guidance out of list loading errors',async()=>{
+ const {JSDOM}=require('jsdom');const fs=require('fs');
+ const dom=new JSDOM('<body data-initial-panel="attendance-connections"><div data-attendance-connections></div>',{runScripts:'outside-only'});
+ dom.window.fetchWithAuth=async()=>({ok:false,status:409,json:async()=>({error:'conflict'})});
+ dom.window.eval(fs.readFileSync('attendance-connections.js','utf8'));await new Promise(r=>setTimeout(r,0));
+ assert.doesNotMatch(dom.window.document.body.textContent,/Conclua a configuração Meta antes de ativar/);
+ assert.match(dom.window.document.body.textContent,/Conexões indisponíveis/);dom.window.close();
+});
 test('Admin and Growth direct routes render the shared connections panel', async()=>{
  const sessionPath=require.resolve('../_lib/session'), appPath=require.resolve('../api/app');
  const originalSession=require.cache[sessionPath], originalApp=require.cache[appPath];
