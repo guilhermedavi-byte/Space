@@ -9,15 +9,9 @@ const createHandler = ({ authenticate = requireAttendanceAuth, request = supabas
   if (!['GET', 'POST'].includes(req.method)) return sendJson(res, 405, { error: 'method_not_allowed' });
   try {
     const actor = await authenticate(req, req.method === 'GET' ? 'attendance.view' : 'attendance.manage');
-    if (req.method !== 'GET' && !['admin', 'growth'].includes(actor.role)) fail('attendance_forbidden', 403);
+    if (!['admin', 'growth'].includes(actor.role)) fail('attendance_forbidden', 403);
     if (req.method !== 'GET') checkEnvironment();
-    const read = async path => {
-      try { return (await request(path)).data || []; }
-      catch (error) {
-        if (req.method === 'GET') return [];
-        throw error;
-      }
-    };
+    const read = async path => (await request(path)).data || [];
     const admin = actor.role === 'admin';
     const [connections, channels, teams, grants] = await Promise.all([
       read('/connections?select=connection_id,provider,external_account_id,external_account_type,display_name,status,created_at,updated_at,metadata&order=created_at.desc'),

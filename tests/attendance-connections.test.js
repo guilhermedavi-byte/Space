@@ -15,6 +15,18 @@ test('Admin sees persisted connections through a secret-free allowlist', async()
 test('Growth has no visibility or write access outside team scope',async()=>{assert.equal((await run('growth')).body.items.length,0);assert.equal((await run('growth',{action:'rename',connection_id:cid,name:'Other'})).status,403);});
 test('Growth supervisor may create a pending connection, never provision Meta',async()=>{const r=await run('growth',{action:'create',name:'Comercial',team_id:tid},true);assert.equal(r.status,200);assert.equal(r.writes.length,1);assert.equal(r.writes[0].body.status,'pending');assert.match(r.writes[0].body.external_account_id,/^pending:/);});
 test('Pending connections cannot be activated and deletion is rejected',async()=>{assert.equal((await run('admin',{action:'status',connection_id:cid,status:'active'})).status,409);assert.equal((await run('admin',{action:'delete',connection_id:cid})).writes.length,0);const r=await run('admin',{action:'status',connection_id:cid,status:'disabled'});assert.deepEqual(Object.keys(r.writes[0].body).sort(),['metadata','status','updated_at']);});
+
+test('Empty persisted connection list returns 200 with an empty list', async()=>{
+ const handler=createHandler({authenticate:async()=>({role:'admin',uid:'admin'}),checkEnvironment:()=>{},request:async()=>({data:[]})});
+ const req=Readable.from([]);req.method='GET';let result;const res={setHeader(){},end(v){result={status:this.statusCode,body:JSON.parse(v)};}};
+ await handler(req,res);assert.equal(result.status,200);assert.deepEqual(result.body.items,[]);
+});
+test('GET infrastructure failures are not silently masked as an empty list', async()=>{
+ const error=Object.assign(new Error('supabase_request_failed'),{status:522});
+ const handler=createHandler({authenticate:async()=>({role:'admin',uid:'admin'}),checkEnvironment:()=>{},request:async()=>{throw error;}});
+ const req=Readable.from([]);req.method='GET';let result;const res={setHeader(){},end(v){result={status:this.statusCode,body:JSON.parse(v)};}};
+ await handler(req,res);assert.equal(result.status,503);assert.deepEqual(result.body,{error:'attendance_unavailable'});
+});
 test('Frontend renders persisted data safely and exposes pending Meta wizard',async()=>{
  const {JSDOM}=require('jsdom');const fs=require('fs');const payload=(await run('admin')).body;payload.items[0].name='<img src=x onerror=alert(1)>';
  const dom=new JSDOM('<body data-initial-panel="attendance-connections"><div data-attendance-connections></div>',{runScripts:'outside-only'});
