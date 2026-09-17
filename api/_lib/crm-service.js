@@ -157,6 +157,11 @@ const normalizeOpportunity = (row) => ({
   qualificationAccuracy: numberOrNull(row.qualificationAccuracy),
   closerRejectReason: clean(row.closerRejectReason) || null,
   recommendedAction: clean(row.recommendedAction) || null,
+  discardedAt: toIso(row.discardedAt),
+  discardedBy: clean(row.discardedBy) || null,
+  discardedReason: clean(row.discardedReason) || null,
+  reactivatedAt: toIso(row.reactivatedAt),
+  reactivatedBy: clean(row.reactivatedBy) || null,
   automationIdempotencyKey: clean(row.automationIdempotencyKey) || null,
   searchTitle: normalizeSearchText(row.searchTitle || row.title),
   createdAt: toIso(row.createdAt),
@@ -236,6 +241,7 @@ const listSignature = (params) => JSON.stringify({
 });
 
 const opportunityMatchesListParams = (opportunity, params, now = new Date()) => {
+  if (opportunity.discardedAt) return false;
   if (params.pipelineId && opportunity.pipelineId !== params.pipelineId) return false;
   if (params.stageId && opportunity.stageId !== params.stageId) return false;
   if (params.status && opportunity.status !== params.status) return false;

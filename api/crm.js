@@ -12,6 +12,7 @@ const crmService = require("./_lib/crm-service");
 const qualification = require("./_lib/crm-qualification");
 const handoff = require("./_lib/crm-handoff");
 const qualificationAnalytics = require("./_lib/crm-qualification-analytics");
+const qualificationActions = require("./_lib/crm-qualification-actions");
 
 const COLLECTIONS = {
   pipelines: "crmPipelines",
@@ -30,6 +31,7 @@ const COLLECTIONS = {
   qualificationAnswers: "crmQualificationAnswers",
   salesHandoffs: "crmSalesHandoffs",
   closerReviews: "crmCloserReviews",
+  qualificationActions: "crmQualificationActions",
 };
 
 const VALID_STATUS = new Set(["open", "won", "lost"]);
@@ -230,6 +232,11 @@ const normalizeOpportunity = (row) => ({
   qualificationAccuracy: numberOrNull(row.qualificationAccuracy),
   closerRejectReason: clean(row.closerRejectReason) || null,
   recommendedAction: clean(row.recommendedAction) || null,
+  discardedAt: toIso(row.discardedAt),
+  discardedBy: clean(row.discardedBy) || null,
+  discardedReason: clean(row.discardedReason) || null,
+  reactivatedAt: toIso(row.reactivatedAt),
+  reactivatedBy: clean(row.reactivatedBy) || null,
   searchTitle: normalizeSearchText(row.searchTitle || row.title),
   createdAt: toIso(row.createdAt),
   updatedAt: toIso(row.updatedAt),
@@ -432,6 +439,28 @@ const loadCloserReviewsForOpportunity = async (opportunityId) => {
     .sort((left, right) => String(right.completedAt || right.createdAt || "").localeCompare(String(left.completedAt || left.createdAt || "")));
 };
 
+const normalizeActionRows = (rows) => normalizeQualificationRows(rows, qualificationActions.normalizeAction);
+
+const loadQualificationActionsForOpportunity = async (opportunityId) => {
+  const safeOpportunityId = clean(opportunityId);
+  if (!safeOpportunityId) return [];
+  const rows = await listCollectionAsAdmin(COLLECTIONS.qualificationActions, { maxPages: 50 }).catch(() => []);
+  return normalizeActionRows(rows)
+    .filter((row) => row.opportunityId === safeOpportunityId)
+    .sort((left, right) => String(right.createdAt || "").localeCompare(String(left.createdAt || "")));
+};
+
+const loadQualificationActionForWrite = async (actionId) => {
+  const safeId = clean(actionId);
+  if (!safeId) return null;
+  try {
+    const action = qualificationActions.normalizeAction(await getDocumentAsAdmin(`${COLLECTIONS.qualificationActions}/${encodeURIComponent(safeId)}`), CRM_SCOPE_ID);
+    return matchesCrmScope(action) ? action : null;
+  } catch {
+    return null;
+  }
+};
+
 const loadLatestHandoffBundle = async (opportunityId) => {
   const [handoffs, reviews] = await Promise.all([
     loadSalesHandoffsForOpportunity(opportunityId),
@@ -514,6 +543,111 @@ const loadQualificationAnalytics = async (query = {}) => {
   });
 };
 
+const periodStartForActions = (period) => {
+  const key = clean(period || "30d");
+  if (!key || key === "all") return null;
+  const now = new Date();
+  const todayKey = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(now);
+  const today = new Date(`${todayKey}T00:00:00-03:00`);
+  if (key === "today") return today;
+  if (key === "7d") return new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000);
+  if (key === "30d") return new Date(today.getTime() - 29 * 24 * 60 * 60 * 1000);
+  if (key === "90d") return new Date(today.getTime() - 89 * 24 * 60 * 60 * 1000);
+  return null;
+};
+
+const loadQualificationActionsQueue = async ({ query = {}, auth }) => {
+  const [
+    actionsRaw,
+    contactsRaw,
+    opportunitiesRaw,
+    handoffsRaw,
+    reviewsRaw,
+    usersRaw,
+  ] = await Promise.all([
+    listCollectionAsAdmin(COLLECTIONS.qualificationActions, { maxPages: 50 }).catch(() => []),
+    listCollectionAsAdmin(COLLECTIONS.contacts, { maxPages: 50 }).catch(() => []),
+    listCollectionAsAdmin(COLLECTIONS.opportunities, { maxPages: 50 }).catch(() => []),
+    listCollectionAsAdmin(COLLECTIONS.salesHandoffs, { maxPages: 50 }).catch(() => []),
+    listCollectionAsAdmin(COLLECTIONS.closerReviews, { maxPages: 50 }).catch(() => []),
+    listCollectionAsAdmin(COLLECTIONS.users, { maxPages: 20 }).catch(() => []),
+  ]);
+  const actions = normalizeActionRows(actionsRaw);
+  const contactsById = new Map(contactsRaw.map(normalizeContact).filter(matchesCrmScope).map((row) => [row.id, row]));
+  const opportunitiesById = new Map(opportunitiesRaw.map(normalizeOpportunity).filter(matchesCrmScope).map((row) => [row.id, row]));
+  const handoffsById = new Map(normalizeQualificationRows(handoffsRaw, handoff.normalizeHandoff).map((row) => [row.id, row]));
+  const reviewsById = new Map(normalizeQualificationRows(reviewsRaw, handoff.normalizeReview).map((row) => [row.id, row]));
+  const usersById = new Map(usersRaw.map((row) => [clean(row.uid || row.id || row.firestoreDocId), row]).filter(([id]) => id));
+  const status = clean(query.status || "pending");
+  const type = clean(query.type);
+  const sdr = clean(query.sdr);
+  const closer = clean(query.closer);
+  const priority = clean(query.priority);
+  const search = normalizeSearchText(query.search);
+  const start = periodStartForActions(query.period || query.range || "30d");
+  const userName = (id) => actorName(usersById, id);
+  const nowMs = Date.now();
+  const rows = actions
+    .filter((action) => {
+      if (!action.id || !action.type) return false;
+      if (auth.role !== "admin" && !qualificationActions.canManageAction({ role: auth.role, uid: auth.session?.sub, action })) return false;
+      if (status && status !== "all" && action.status !== status) return false;
+      if (type && action.type !== type) return false;
+      if (priority && action.priority !== priority) return false;
+      const handoffRow = handoffsById.get(action.handoffId) || {};
+      const reviewRow = reviewsById.get(action.closerReviewId) || {};
+      if (sdr && clean(handoffRow.sdrUserId || action.metadata?.sdrUserId) !== sdr) return false;
+      if (closer && clean(reviewRow.closerUserId || action.metadata?.closerUserId) !== closer) return false;
+      if (start) {
+        const createdMs = Date.parse(action.createdAt || "");
+        if (!Number.isFinite(createdMs) || createdMs < start.getTime()) return false;
+      }
+      const opportunity = opportunitiesById.get(action.opportunityId) || {};
+      const contact = contactsById.get(action.contactId || opportunity.contactId) || {};
+      if (search && ![contact.name, opportunity.title, action.reason].some((value) => normalizeSearchText(value).includes(search))) return false;
+      return true;
+    })
+    .map((action) => {
+      const opportunity = opportunitiesById.get(action.opportunityId) || {};
+      const contact = contactsById.get(action.contactId || opportunity.contactId) || {};
+      const handoffRow = handoffsById.get(action.handoffId) || {};
+      const reviewRow = reviewsById.get(action.closerReviewId) || {};
+      const dueMs = Date.parse(action.dueAt || "");
+      return {
+        ...action,
+        leadName: contact.name || opportunity.title || "Lead sem nome",
+        opportunityTitle: opportunity.title || "",
+        source: opportunity.source || "",
+        countryCode: contact.countryCode || "",
+        sdrUserId: clean(handoffRow.sdrUserId || action.metadata?.sdrUserId) || null,
+        sdrName: userName(handoffRow.sdrUserId || action.metadata?.sdrUserId),
+        closerUserId: clean(reviewRow.closerUserId || action.metadata?.closerUserId) || null,
+        closerName: userName(reviewRow.closerUserId || action.metadata?.closerUserId),
+        assignedName: userName(action.assignedTo),
+        reviewAt: reviewRow.completedAt || reviewRow.updatedAt || null,
+        overdue: action.status === "pending" && Number.isFinite(dueMs) && dueMs < nowMs,
+      };
+    })
+    .sort((left, right) => {
+      const statusRank = { pending: 0, completed: 1, dismissed: 2 };
+      const priorityRank = { high: 0, normal: 1, low: 2 };
+      return (statusRank[left.status] ?? 9) - (statusRank[right.status] ?? 9)
+        || (priorityRank[left.priority] ?? 9) - (priorityRank[right.priority] ?? 9)
+        || String(right.createdAt || "").localeCompare(String(left.createdAt || ""));
+    });
+  const pendingCount = actions.filter((action) => action.status === "pending" && (auth.role === "admin" || qualificationActions.canManageAction({ role: auth.role, uid: auth.session?.sub, action }))).length;
+  const uniqueOption = (items, valueKey, labelKey) => Array.from(new Map(items.map((row) => [clean(row[valueKey]), clean(row[labelKey] || row[valueKey])]).filter(([id]) => id)).entries()).map(([id, label]) => ({ id, label }));
+  return {
+    rows,
+    counts: { pending: pendingCount },
+    filterOptions: {
+      sdrs: uniqueOption(rows, "sdrUserId", "sdrName"),
+      closers: uniqueOption(rows, "closerUserId", "closerName"),
+    },
+    generatedAt: nowIso(),
+  };
+};
+
 const assertUniqueStageNames = (stages, pipelineId, { ignoreStageId = "", candidateName = "" } = {}) => {
   const seen = new Set();
   const rows = stages
@@ -582,6 +716,11 @@ const eventTitle = (event) => {
   if (event.type === "crm.handoff.rejected") return "Handoff rejeitado";
   if (event.type === "crm.closer_review.completed") return "Closer avaliou o lead";
   if (event.type === "crm.meeting.no_show") return "Reunião marcada como no-show";
+  if (event.type === "crm.qualification_action.created") return "Ação recomendada criada";
+  if (event.type === "crm.qualification_action.completed") return "Ação resolvida";
+  if (event.type === "crm.qualification_action.dismissed") return "Ação dispensada";
+  if (event.type === "crm.opportunity.discarded") return "Lead descartado";
+  if (event.type === "crm.opportunity.reactivated") return "Lead reativado";
   return clean(event.type).replace(/^crm\./, "");
 };
 
@@ -613,6 +752,11 @@ const eventDescription = (event) => {
     const action = clean(event.payload?.recommendedAction);
     return [accepted, accuracyLabel, action ? `Ação: ${action}` : ""].filter(Boolean).join(" · ");
   }
+  if (event.type === "crm.qualification_action.created") return event.payload?.reason || "";
+  if (event.type === "crm.qualification_action.completed") return event.payload?.resolutionNote || event.payload?.resolutionCategory || event.payload?.activityTitle || "";
+  if (event.type === "crm.qualification_action.dismissed") return event.payload?.dismissedReason || "";
+  if (event.type === "crm.opportunity.discarded") return event.payload?.discardedReason || "";
+  if (event.type === "crm.opportunity.reactivated") return "";
   return event.payload?.title || event.payload?.activityTitle || "";
 };
 
@@ -657,13 +801,14 @@ const buildOpportunityTimeline = async (opportunityId) => {
 const loadOpportunityDetail = async (opportunityId) => {
   const opportunity = await loadOpportunityForWrite(opportunityId);
   if (!opportunity) return { status: 404, body: { error: "opportunity_not_found" } };
-  const [activities, timeline, qualificationDetail, handoffBundle] = await Promise.all([
+  const [activities, timeline, qualificationDetail, handoffBundle, actions] = await Promise.all([
     loadActivitiesForOpportunity(opportunity.id),
     buildOpportunityTimeline(opportunity.id),
     loadOpportunityQualificationDetail(opportunity),
     loadLatestHandoffBundle(opportunity.id),
+    loadQualificationActionsForOpportunity(opportunity.id),
   ]);
-  return { status: 200, body: { opportunityId: opportunity.id, activities, timeline, qualification: qualificationDetail, handoff: handoffBundle.latestHandoff, closerReview: handoffBundle.latestReview, generatedAt: nowIso() } };
+  return { status: 200, body: { opportunityId: opportunity.id, activities, timeline, qualification: qualificationDetail, handoff: handoffBundle.latestHandoff, closerReview: handoffBundle.latestReview, actions, generatedAt: nowIso() } };
 };
 
 const handleCreateOpportunityViaService = async ({ session, body }) => {
@@ -1242,9 +1387,38 @@ const handleCompleteCloserReview = async ({ session, body }) => {
       stamp,
     }),
   ];
+  const generatedAction = qualificationActions.buildQualificationActionFromReview({
+    scopeId: CRM_SCOPE_ID,
+    review: completedReview,
+    handoff: updatedHandoff,
+    opportunity: updatedOpportunity,
+    recommendedAction,
+    createdBy: actor,
+    stamp,
+  });
+  if (generatedAction) {
+    writes.push(
+      buildWrite(COLLECTIONS.qualificationActions, generatedAction.id, generatedAction, { createOnly: true }),
+      eventWrite({
+        type: "crm.qualification_action.created",
+        opportunityId: opportunity.id,
+        contactId: opportunity.contactId,
+        actorId: actor,
+        payload: {
+          actionId: generatedAction.id,
+          actionType: generatedAction.type,
+          priority: generatedAction.priority,
+          recommendedAction,
+          reason: generatedAction.reason,
+          assignedTo: generatedAction.assignedTo,
+        },
+        stamp,
+      }),
+    );
+  }
   const committed = await commitWritesAsAdmin({ writes });
   if (!committed.ok) return { status: committed.status || 500, body: { error: "closer_review_failed" } };
-  return { status: 200, body: { ok: true, reviewId: completedReview.id, accuracyScore: completedReview.accuracyScore, recommendedAction } };
+  return { status: 200, body: { ok: true, reviewId: completedReview.id, accuracyScore: completedReview.accuracyScore, recommendedAction, actionId: generatedAction?.id || null } };
 };
 
 const handleMarkOpportunityWon = async ({ session, body }) => {
@@ -1699,6 +1873,218 @@ const handleActivityStatusChange = async ({ session, body, status }) => {
   return { status: 200, body: { ok: true, activityId: updated.id, completedAt: updated.completedAt || null } };
 };
 
+const actionPermissionGuard = ({ auth, action }) => {
+  if (qualificationActions.canManageAction({ role: auth.role, uid: auth.session?.sub, action })) return null;
+  return { status: 403, body: { error: "qualification_action_forbidden" } };
+};
+
+const buildFollowUpFromAction = ({ action, opportunity, body, session, stamp }) => {
+  const dueAt = activityDueAtFromBody(body);
+  if (!dueAt) return { error: { status: 400, body: { error: "invalid_activity_due_at" } } };
+  const activityId = newId("act");
+  const activity = {
+    id: activityId,
+    scopeId: CRM_SCOPE_ID,
+    opportunityId: opportunity.id,
+    contactId: opportunity.contactId || null,
+    type: "follow_up",
+    title: clean(body.title) || "Retomar lead",
+    description: clean(body.resolutionNote || body.description) || null,
+    dueAt,
+    completedAt: null,
+    completedBy: null,
+    status: "open",
+    ownerId: clean(body.ownerId || body.assignedTo || action.assignedTo || opportunity.ownerId) || null,
+    createdBy: clean(session.sub) || null,
+    createdAt: stamp,
+    updatedAt: stamp,
+  };
+  return { activity };
+};
+
+const handleCompleteQualificationAction = async ({ auth, body }) => {
+  const action = await loadQualificationActionForWrite(body.id || body.actionId);
+  if (!action) return { status: 404, body: { error: "qualification_action_not_found" } };
+  const permission = actionPermissionGuard({ auth, action });
+  if (permission) return permission;
+  if (action.status === "completed") return { status: 200, body: { ok: true, unchanged: true, actionId: action.id } };
+  if (action.status === "dismissed") return { status: 409, body: { error: "qualification_action_dismissed" } };
+  const opportunity = await loadOpportunityForWrite(action.opportunityId);
+  if (!opportunity) return { status: 404, body: { error: "opportunity_not_found" } };
+
+  const stamp = nowIso();
+  const actor = clean(auth.session?.sub) || null;
+  const writes = [];
+  let nextOpportunity = { ...opportunity, updatedAt: stamp };
+  let createdActivity = null;
+  const wantsFollowUp = action.type === "nurture" || body.createFollowUp === true || clean(body.resolution) === "follow_up";
+  if (wantsFollowUp) {
+    const result = buildFollowUpFromAction({ action, opportunity, body, session: auth.session, stamp });
+    if (result.error) return result.error;
+    createdActivity = result.activity;
+    const activities = (await loadActivitiesForOpportunity(opportunity.id)).concat(createdActivity);
+    nextOpportunity = opportunityWithNextActivity(nextOpportunity, activities, stamp);
+    writes.push(
+      buildWrite(COLLECTIONS.activities, createdActivity.id, createdActivity),
+      eventWrite({
+        type: "crm.activity.created",
+        opportunityId: opportunity.id,
+        contactId: opportunity.contactId,
+        actorId: actor,
+        payload: { activityId: createdActivity.id, activityType: createdActivity.type, activityTitle: createdActivity.title, dueAt: createdActivity.dueAt },
+        stamp,
+      }),
+    );
+  }
+  if (action.type === "discard_review" && clean(body.resolution) === "discard") {
+    nextOpportunity = {
+      ...nextOpportunity,
+      discardedAt: stamp,
+      discardedBy: actor,
+      discardedReason: clean(body.discardReason || body.resolutionNote || action.reason) || null,
+      updatedAt: stamp,
+    };
+    writes.push(eventWrite({
+      type: "crm.opportunity.discarded",
+      opportunityId: opportunity.id,
+      contactId: opportunity.contactId,
+      actorId: actor,
+      payload: { actionId: action.id, discardedReason: nextOpportunity.discardedReason },
+      stamp,
+    }));
+  }
+  if (action.type === "alignment_review" && !clean(body.resolutionCategory)) {
+    return { status: 400, body: { error: "resolution_category_required" } };
+  }
+  const updatedAction = {
+    ...action,
+    status: "completed",
+    assignedTo: body.assignedTo === undefined ? action.assignedTo : clean(body.assignedTo) || null,
+    dueAt: createdActivity?.dueAt || action.dueAt,
+    completedAt: stamp,
+    completedBy: actor,
+    resolutionNote: clean(body.resolutionNote) || null,
+    resolutionCategory: clean(body.resolutionCategory) || clean(body.resolution) || null,
+    createdActivityId: createdActivity?.id || action.createdActivityId || null,
+    metadata: {
+      ...(action.metadata || {}),
+      resolution: clean(body.resolution) || null,
+      resolutionCategory: clean(body.resolutionCategory) || null,
+    },
+    updatedAt: stamp,
+  };
+  writes.unshift(
+    buildWrite(COLLECTIONS.qualificationActions, action.id, updatedAction),
+    buildWrite(COLLECTIONS.opportunities, opportunity.id, nextOpportunity),
+    eventWrite({
+      type: "crm.qualification_action.completed",
+      opportunityId: opportunity.id,
+      contactId: opportunity.contactId,
+      actorId: actor,
+      payload: {
+        actionId: action.id,
+        actionType: action.type,
+        resolution: clean(body.resolution) || null,
+        resolutionCategory: updatedAction.resolutionCategory,
+        resolutionNote: updatedAction.resolutionNote,
+        activityId: createdActivity?.id || null,
+        activityTitle: createdActivity?.title || null,
+      },
+      stamp,
+    }),
+  );
+  const committed = await commitWritesAsAdmin({ writes });
+  if (!committed.ok) return { status: committed.status || 500, body: { error: "qualification_action_complete_failed" } };
+  return { status: 200, body: { ok: true, actionId: action.id, activityId: createdActivity?.id || null } };
+};
+
+const handleDismissQualificationAction = async ({ auth, body }) => {
+  const action = await loadQualificationActionForWrite(body.id || body.actionId);
+  if (!action) return { status: 404, body: { error: "qualification_action_not_found" } };
+  const permission = actionPermissionGuard({ auth, action });
+  if (permission) return permission;
+  if (action.status === "dismissed") return { status: 200, body: { ok: true, unchanged: true, actionId: action.id } };
+  if (action.status === "completed") return { status: 409, body: { error: "qualification_action_completed" } };
+  const stamp = nowIso();
+  const actor = clean(auth.session?.sub) || null;
+  const updated = {
+    ...action,
+    status: "dismissed",
+    dismissedAt: stamp,
+    dismissedBy: actor,
+    dismissedReason: clean(body.dismissedReason || body.reason) || null,
+    updatedAt: stamp,
+  };
+  const writes = [
+    buildWrite(COLLECTIONS.qualificationActions, action.id, updated),
+    eventWrite({
+      type: "crm.qualification_action.dismissed",
+      opportunityId: action.opportunityId,
+      contactId: action.contactId,
+      actorId: actor,
+      payload: { actionId: action.id, actionType: action.type, dismissedReason: updated.dismissedReason },
+      stamp,
+    }),
+  ];
+  const committed = await commitWritesAsAdmin({ writes });
+  if (!committed.ok) return { status: committed.status || 500, body: { error: "qualification_action_dismiss_failed" } };
+  return { status: 200, body: { ok: true, actionId: action.id } };
+};
+
+const handleAssignQualificationAction = async ({ auth, body }) => {
+  if (auth.role !== "admin") return { status: 403, body: { error: "admin_required" } };
+  const action = await loadQualificationActionForWrite(body.id || body.actionId);
+  if (!action) return { status: 404, body: { error: "qualification_action_not_found" } };
+  if (action.status !== "pending") return { status: 409, body: { error: "qualification_action_not_pending" } };
+  const stamp = nowIso();
+  const assignedTo = clean(body.assignedTo || body.ownerId) || null;
+  const dueAt = body.dueAt === undefined && body.date === undefined && body.time === undefined ? action.dueAt : activityDueAtFromBody(body) || null;
+  const updated = {
+    ...action,
+    assignedTo,
+    dueAt,
+    updatedAt: stamp,
+  };
+  const writes = [
+    buildWrite(COLLECTIONS.qualificationActions, action.id, updated),
+  ];
+  const committed = await commitWritesAsAdmin({ writes });
+  if (!committed.ok) return { status: committed.status || 500, body: { error: "qualification_action_assign_failed" } };
+  return { status: 200, body: { ok: true, actionId: action.id, assignedTo } };
+};
+
+const handleReactivateOpportunity = async ({ auth, body }) => {
+  const opportunity = await loadOpportunityForWrite(body.id || body.opportunityId);
+  if (!opportunity) return { status: 404, body: { error: "opportunity_not_found" } };
+  if (auth.role !== "admin" && clean(opportunity.ownerId) !== clean(auth.session?.sub)) return { status: 403, body: { error: "opportunity_reactivate_forbidden" } };
+  if (!opportunity.discardedAt) return { status: 200, body: { ok: true, unchanged: true, opportunityId: opportunity.id } };
+  const stamp = nowIso();
+  const actor = clean(auth.session?.sub) || null;
+  const updated = {
+    ...opportunity,
+    discardedAt: null,
+    discardedBy: null,
+    discardedReason: null,
+    reactivatedAt: stamp,
+    reactivatedBy: actor,
+    updatedAt: stamp,
+  };
+  const writes = [
+    buildWrite(COLLECTIONS.opportunities, opportunity.id, updated),
+    eventWrite({
+      type: "crm.opportunity.reactivated",
+      opportunityId: opportunity.id,
+      contactId: opportunity.contactId,
+      actorId: actor,
+      payload: { opportunityId: opportunity.id },
+      stamp,
+    }),
+  ];
+  const committed = await commitWritesAsAdmin({ writes });
+  if (!committed.ok) return { status: committed.status || 500, body: { error: "opportunity_reactivate_failed" } };
+  return { status: 200, body: { ok: true, opportunityId: opportunity.id } };
+};
+
 module.exports = async (req, res) => {
   const auth = canAccessCrm(req);
   if (!auth.ok) return sendJson(res, auth.status, { error: auth.error });
@@ -1715,6 +2101,10 @@ module.exports = async (req, res) => {
         if (auth.role !== "admin") return sendJson(res, 403, { error: "admin_required" });
         const analytics = await loadQualificationAnalytics(Object.fromEntries(url.searchParams.entries()));
         return sendJson(res, 200, analytics);
+      }
+      if (clean(url.searchParams.get("view")) === "actions") {
+        const actions = await loadQualificationActionsQueue({ query: Object.fromEntries(url.searchParams.entries()), auth });
+        return sendJson(res, 200, actions);
       }
       if (clean(url.searchParams.get("view")) === "list") {
         const list = await crmService.loadCrmListModel(Object.fromEntries(url.searchParams.entries()));
@@ -1767,39 +2157,47 @@ module.exports = async (req, res) => {
                     ? await handleSetMeetingOutcome({ session: auth.session, body })
                     : action === "complete_closer_review"
                       ? await handleCompleteCloserReview({ session: auth.session, body })
-                      : action === "mark_opportunity_won"
-                        ? await handleMarkOpportunityWon({ session: auth.session, body })
-                        : action === "mark_opportunity_lost"
-                          ? await handleMarkOpportunityLost({ session: auth.session, body })
-                          : action === "reopen_opportunity"
-                            ? await handleReopenOpportunity({ session: auth.session, body })
-                            : action === "create_pipeline"
-                              ? await handleCreatePipeline({ session: auth.session, body })
-                              : action === "update_pipeline"
-                                ? await handleUpdatePipeline({ session: auth.session, body })
-                                : action === "set_default_pipeline"
-                                  ? await handleSetDefaultPipeline({ session: auth.session, body })
-                                  : action === "deactivate_pipeline"
-                                    ? await handleDeactivatePipeline({ session: auth.session, body })
-                                    : action === "reactivate_pipeline"
-                                      ? await handleReactivatePipeline({ session: auth.session, body })
-                                      : action === "create_stage"
-                                        ? await handleCreateStage({ session: auth.session, body })
-                                        : action === "update_stage"
-                                          ? await handleUpdateStage({ session: auth.session, body })
-                                          : action === "reorder_stages"
-                                            ? await handleReorderStages({ session: auth.session, body })
-                                            : action === "delete_stage"
-                                              ? await handleDeleteStage({ session: auth.session, body })
-                                              : action === "create_activity"
-                                                ? await handleCreateActivity({ session: auth.session, body })
-                                                : action === "update_activity"
-                                                  ? await handleUpdateActivity({ session: auth.session, body })
-                                                  : action === "complete_activity"
-                                                    ? await handleActivityStatusChange({ session: auth.session, body, status: "completed" })
-                                                    : action === "cancel_activity"
-                                                      ? await handleActivityStatusChange({ session: auth.session, body, status: "cancelled" })
-                                                      : { status: 400, body: { error: "invalid_action" } };
+                      : action === "complete_qualification_action"
+                        ? await handleCompleteQualificationAction({ auth, body })
+                        : action === "dismiss_qualification_action"
+                          ? await handleDismissQualificationAction({ auth, body })
+                          : action === "assign_qualification_action"
+                            ? await handleAssignQualificationAction({ auth, body })
+                            : action === "reactivate_opportunity"
+                              ? await handleReactivateOpportunity({ auth, body })
+                              : action === "mark_opportunity_won"
+                                ? await handleMarkOpportunityWon({ session: auth.session, body })
+                                : action === "mark_opportunity_lost"
+                                  ? await handleMarkOpportunityLost({ session: auth.session, body })
+                                  : action === "reopen_opportunity"
+                                    ? await handleReopenOpportunity({ session: auth.session, body })
+                                    : action === "create_pipeline"
+                                      ? await handleCreatePipeline({ session: auth.session, body })
+                                      : action === "update_pipeline"
+                                        ? await handleUpdatePipeline({ session: auth.session, body })
+                                        : action === "set_default_pipeline"
+                                          ? await handleSetDefaultPipeline({ session: auth.session, body })
+                                          : action === "deactivate_pipeline"
+                                            ? await handleDeactivatePipeline({ session: auth.session, body })
+                                            : action === "reactivate_pipeline"
+                                              ? await handleReactivatePipeline({ session: auth.session, body })
+                                              : action === "create_stage"
+                                                ? await handleCreateStage({ session: auth.session, body })
+                                                : action === "update_stage"
+                                                  ? await handleUpdateStage({ session: auth.session, body })
+                                                  : action === "reorder_stages"
+                                                    ? await handleReorderStages({ session: auth.session, body })
+                                                    : action === "delete_stage"
+                                                      ? await handleDeleteStage({ session: auth.session, body })
+                                                      : action === "create_activity"
+                                                        ? await handleCreateActivity({ session: auth.session, body })
+                                                        : action === "update_activity"
+                                                          ? await handleUpdateActivity({ session: auth.session, body })
+                                                          : action === "complete_activity"
+                                                            ? await handleActivityStatusChange({ session: auth.session, body, status: "completed" })
+                                                            : action === "cancel_activity"
+                                                              ? await handleActivityStatusChange({ session: auth.session, body, status: "cancelled" })
+                                                              : { status: 400, body: { error: "invalid_action" } };
     return sendJson(res, result.status, result.body);
   } catch (error) {
     console.error("[crm] write failed", error);

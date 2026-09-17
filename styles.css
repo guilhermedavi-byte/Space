@@ -27988,6 +27988,115 @@ button.automations-row:focus-visible,
   color: var(--crm-blue);
 }
 
+.native-crm-actions-queue {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  height: calc(100vh - 126px);
+}
+
+.native-crm-actions-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 32px;
+}
+
+.native-crm-actions-head strong {
+  display: block;
+  color: #fff;
+  font-size: 13px;
+}
+
+.native-crm-actions-head span {
+  color: var(--crm-muted);
+  font-size: 11px;
+}
+
+.native-crm-actions-filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.native-crm-actions-filters input,
+.native-crm-actions-filters select {
+  min-height: 32px;
+  border: 1px solid var(--crm-line);
+  border-radius: 7px;
+  padding: 0 9px;
+  background: rgba(255,255,255,.035);
+  color: var(--crm-soft);
+  font-size: 12px;
+}
+
+.native-crm-actions-filters input {
+  min-width: min(220px, 100%);
+}
+
+.native-crm-actions-table {
+  min-width: 1180px;
+}
+
+.native-crm-actions-table td {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.native-crm-actions-table tr.is-overdue {
+  background: rgba(255,91,82,.035);
+}
+
+.native-crm-actions-table td:nth-child(5) {
+  white-space: normal;
+  line-height: 1.35;
+}
+
+.native-crm-action-type {
+  color: rgba(255,255,255,.86);
+  font-weight: 720;
+}
+
+.native-crm-priority-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  border: 1px solid var(--crm-line);
+  border-radius: 999px;
+  padding: 0 8px;
+  color: var(--crm-muted);
+  background: rgba(255,255,255,.035);
+  font-size: 11px;
+  font-weight: 720;
+}
+
+.native-crm-priority-pill[data-priority="high"] {
+  border-color: rgba(255,91,82,.28);
+  color: #ffaaa5;
+  background: rgba(255,91,82,.07);
+}
+
+.native-crm-priority-pill[data-priority="low"] {
+  color: rgba(142,226,174,.92);
+}
+
+.native-crm-status-pill[data-status="pending"] {
+  border-color: rgba(233,193,93,.24);
+  color: rgba(233,193,93,.96);
+}
+
+.native-crm-status-pill[data-status="completed"] {
+  border-color: rgba(142,226,174,.22);
+  color: rgba(142,226,174,.96);
+}
+
+.native-crm-status-pill[data-status="dismissed"] {
+  color: rgba(255,255,255,.48);
+}
+
 .native-crm-loading,
 .native-crm-error,
 .native-crm-empty {
@@ -28285,6 +28394,59 @@ button.automations-row:focus-visible,
   gap: 8px;
   border-bottom: 1px solid var(--crm-line);
   padding-bottom: 10px;
+}
+
+.native-crm-action-panel {
+  border-bottom: 1px solid var(--crm-line);
+  padding-bottom: 12px;
+}
+
+.native-crm-action-panel p {
+  margin: 0;
+  color: rgba(255,255,255,.68);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.native-crm-action-context,
+.native-crm-action-flags {
+  display: grid;
+  gap: 6px;
+}
+
+.native-crm-action-context {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.native-crm-action-context span,
+.native-crm-action-flags span {
+  display: grid;
+  gap: 3px;
+  border: 1px solid var(--crm-line);
+  border-radius: 8px;
+  padding: 8px;
+  background: rgba(255,255,255,.02);
+  color: var(--crm-muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.native-crm-action-context strong,
+.native-crm-action-flags strong {
+  color: rgba(255,255,255,.82);
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.native-crm-action-flags {
+  grid-template-columns: 1fr;
+}
+
+.native-crm-action-assignment {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px;
 }
 
 .native-crm-qualification {
