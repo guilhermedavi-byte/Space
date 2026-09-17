@@ -23,12 +23,14 @@ function cached(loader,ttl){let value,until=0,pending,generation=0;const read=as
 function createReader({request=supabaseFetch,client=createAsaasClient({readOnly:true}),connectionId=process.env.FINANCE_CONNECTION_ID,today=todayBR,spaceLoader=space.loadSources,verify=()=>createFinanceFoundation({connectionId,client,logger:()=>{}}).verifyConnection({recordHealth:false})}={}){
  const scope=()=>uuid(connectionId);
  const recoveryOps=()=>require('./finance-recovery-operations').createRecoveryOperations({request,connectionId});
- const readAll=async(table,select,extra='')=>{const rows=[];for(let offset=0;offset<20000;offset+=500){const r=await request(`/${table}?connection_id=eq.${scope()}&select=${select}${extra}&order=${table==='finance_customer_student_links'?'asaas_customer_id,firestore_doc_id':'id'}&offset=${offset}&limit=500`);if(!Array.isArray(r.data))throw Error('finance_read_failed');rows.push(...r.data);if(r.data.length<500)return rows;}throw Error('finance_read_limit');};
- const core=cached(async()=>{const [receivables,payments,objects,links]=await Promise.all([
+ const readAll=async(table,select,extra='',opts={})=>{const rows=[];const pageSize=100;for(let offset=0;offset<20000;offset+=pageSize){const r=await request(`/${table}?connection_id=eq.${scope()}&select=${select}${extra}&order=${table==='finance_customer_student_links'?'asaas_customer_id,firestore_doc_id':'id'}&offset=${offset}&limit=${pageSize}`,opts);if(!Array.isArray(r.data))throw Error('finance_read_failed');rows.push(...r.data);if(r.data.length<pageSize)return rows;}throw Error('finance_read_limit');};
+ const optionalReadAll=async(table,select,extra='')=>{const controller=typeof AbortController==='function'?new AbortController():null;const timer=controller?setTimeout(()=>controller.abort(),3500):null;try{return await readAll(table,select,extra,controller?{signal:controller.signal}:{});}catch{return [];}finally{if(timer)clearTimeout(timer);}};
+ const core=cached(async()=>{const [receivables,payments]=await Promise.all([
   readAll('finance_receivables','id,asaas_payment_id,asaas_customer_id,asaas_subscription_id,status,provider_status,value,due_date,billing_type,deleted,snapshot,last_synced_at'),
-  readAll('finance_payments','id,asaas_payment_id,status,value,payment_date,confirmed_date,refund_value'),
-  readAll('finance_provider_objects','id,resource,external_object_id,snapshot,last_synced_at'),
-  readAll('finance_customer_student_links','asaas_customer_id,firestore_doc_id')]);
+  readAll('finance_payments','id,asaas_payment_id,status,value,payment_date,confirmed_date,refund_value')]);
+  const [objects,links]=await Promise.all([
+  optionalReadAll('finance_provider_objects','id,resource,external_object_id,snapshot,last_synced_at'),
+  optionalReadAll('finance_customer_student_links','asaas_customer_id,firestore_doc_id')]);
   return {receivables,payments,objects,links,read_at:new Date().toISOString()};},20000);
  const directory=cached(async()=>{
   await verify();const result={customers:[],subscriptions:[]};

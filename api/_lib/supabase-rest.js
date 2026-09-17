@@ -12,15 +12,25 @@ const getSupabaseConfig = () => {
   return { url, key };
 };
 
-const supabaseFetch = async (path, { method = "GET", headers = {}, body, signal } = {}) => {
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const shouldRetry = (error) => {
+  const status = Number(error?.status) || 0;
+  const code = String(error?.code || error?.message || "");
+  return status === 522 || status === 524 || status === 502 || status === 503 || status === 504 || code === "supabase_transport_failed";
+};
+
+const supabaseFetchOnce = async (path, { method = "GET", headers = {}, body, signal, timeoutMs = 8000 } = {}) => {
   const { url, key } = getSupabaseConfig();
   let res;
+  const controller = typeof AbortController === "function" && !signal ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), Math.max(1000, Math.min(Number(timeoutMs) || 8000, 15000))) : null;
   try {
     res = await fetch(`${url}/rest/v1${path}`, {
       method,
       // A redirect could forward the custom apikey header to a different origin.
       redirect: "error",
-      signal,
+      signal: signal || controller?.signal,
       headers: {
         apikey: key,
         Authorization: `Bearer ${key}`,
@@ -35,6 +45,8 @@ const supabaseFetch = async (path, { method = "GET", headers = {}, body, signal 
     const error = new Error("supabase_transport_failed");
     error.code = "supabase_transport_failed";
     throw error;
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 
   // Sanitize before parsing, including successful responses and nested error payloads.
@@ -72,6 +84,22 @@ const supabaseFetch = async (path, { method = "GET", headers = {}, body, signal 
   }
 
   return { status: res.status, data };
+};
+
+const supabaseFetch = async (path, options = {}) => {
+  const method = String(options.method || "GET").toUpperCase();
+  const attempts = method === "GET" && !options.signal ? 2 : 1;
+  let last;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      return await supabaseFetchOnce(path, options);
+    } catch (error) {
+      last = error;
+      if (attempt + 1 >= attempts || !shouldRetry(error)) throw error;
+      await sleep(250);
+    }
+  }
+  throw last;
 };
 
 module.exports = { supabaseFetch };
