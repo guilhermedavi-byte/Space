@@ -11,6 +11,7 @@ const { PROJECT_ID, encodeFields } = require("./_lib/firestore-rest");
 const crmService = require("./_lib/crm-service");
 const qualification = require("./_lib/crm-qualification");
 const handoff = require("./_lib/crm-handoff");
+const qualificationAnalytics = require("./_lib/crm-qualification-analytics");
 
 const COLLECTIONS = {
   pipelines: "crmPipelines",
@@ -475,6 +476,42 @@ const stageGateFailure = async ({ opportunity, toStageId, stages }) => {
       qualification: gate.run ? qualification.qualificationSummaryFromRun(gate.run) : null,
     },
   };
+};
+
+const loadQualificationAnalytics = async (query = {}) => {
+  const [
+    pipelines,
+    contacts,
+    opportunities,
+    runs,
+    answers,
+    handoffs,
+    reviews,
+    users,
+  ] = await Promise.all([
+    listCollectionAsAdmin(COLLECTIONS.pipelines, { maxPages: 10 }).catch(() => []),
+    listCollectionAsAdmin(COLLECTIONS.contacts, { maxPages: 50 }).catch(() => []),
+    listCollectionAsAdmin(COLLECTIONS.opportunities, { maxPages: 50 }).catch(() => []),
+    listCollectionAsAdmin(COLLECTIONS.qualificationRuns, { maxPages: 50 }).catch(() => []),
+    listCollectionAsAdmin(COLLECTIONS.qualificationAnswers, { maxPages: 50 }).catch(() => []),
+    listCollectionAsAdmin(COLLECTIONS.salesHandoffs, { maxPages: 50 }).catch(() => []),
+    listCollectionAsAdmin(COLLECTIONS.closerReviews, { maxPages: 50 }).catch(() => []),
+    listCollectionAsAdmin(COLLECTIONS.users, { maxPages: 20 }).catch(() => []),
+  ]);
+  const scopeFilter = (row) => matchesCrmScope(row);
+  return qualificationAnalytics.buildCrmQualificationAnalytics({
+    query,
+    rows: {
+      pipelines: pipelines.filter(scopeFilter),
+      contacts: contacts.filter(scopeFilter),
+      opportunities: opportunities.filter(scopeFilter),
+      runs: runs.filter(scopeFilter),
+      answers: answers.filter(scopeFilter),
+      handoffs: handoffs.filter(scopeFilter),
+      reviews: reviews.filter(scopeFilter),
+      users,
+    },
+  });
 };
 
 const assertUniqueStageNames = (stages, pipelineId, { ignoreStageId = "", candidateName = "" } = {}) => {
@@ -1673,6 +1710,11 @@ module.exports = async (req, res) => {
       if (opportunityId) {
         const detail = await loadOpportunityDetail(opportunityId);
         return sendJson(res, detail.status, detail.body);
+      }
+      if (clean(url.searchParams.get("view")) === "analytics") {
+        if (auth.role !== "admin") return sendJson(res, 403, { error: "admin_required" });
+        const analytics = await loadQualificationAnalytics(Object.fromEntries(url.searchParams.entries()));
+        return sendJson(res, 200, analytics);
       }
       if (clean(url.searchParams.get("view")) === "list") {
         const list = await crmService.loadCrmListModel(Object.fromEntries(url.searchParams.entries()));

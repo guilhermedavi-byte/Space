@@ -12154,6 +12154,22 @@ const nativeCrmState = {
   details: {},
   activityFormOpportunityId: "",
   draggedOpportunityId: "",
+  analytics: {
+    loadedAt: 0,
+    loading: false,
+    error: "",
+    data: null,
+    filters: {
+      range: "30d",
+      pipelineSdr: "",
+      pipelineCloser: "",
+      sdr: "",
+      closer: "",
+      source: "",
+      country: "",
+      version: "",
+    },
+  },
 };
 
 const automationsState = {
@@ -13908,6 +13924,231 @@ const nativeCrmTimelineHtml = (opportunity) => {
   `;
 };
 
+const crmAnalyticsPct = (value, decimals = 0) => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "—";
+  return `${(n * 100).toFixed(decimals).replace(".", ",")}%`;
+};
+
+const crmAnalyticsNumber = (value) => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "—";
+  return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(n);
+};
+
+const crmAnalyticsRateLabel = (rateObj, decimals = 0) => {
+  if (!rateObj || rateObj.value == null) return "—";
+  return `${crmAnalyticsPct(rateObj.value, decimals)} (${Number(rateObj.numerator || 0)}/${Number(rateObj.denominator || 0)})`;
+};
+
+const crmAnalyticsSampleBadge = (row) => row?.small ? `<span class="native-crm-analytics-small-sample">Amostra pequena</span>` : "";
+
+const crmAnalyticsSelectOptions = (items = [], selected = "", empty = "Todos") => [`<option value="">${escapeHtml(empty)}</option>`]
+  .concat((Array.isArray(items) ? items : []).map((item) => {
+    const value = typeof item === "string" ? item : item?.id || item?.key || "";
+    const label = typeof item === "string" ? item : item?.name || item?.label || value;
+    return `<option value="${escapeHtml(value)}" ${String(value) === String(selected || "") ? "selected" : ""}>${escapeHtml(label)}</option>`;
+  }))
+  .join("");
+
+const nativeCrmAnalyticsTable = (columns, rows, empty = "Sem dados para o período.") => `
+  <div class="native-crm-analytics-table-wrap">
+    <table class="native-crm-analytics-table">
+      <thead><tr>${columns.map((col) => `<th>${escapeHtml(col.label)}</th>`).join("")}</tr></thead>
+      <tbody>
+        ${(Array.isArray(rows) ? rows : []).map((row) => `
+          <tr>
+            ${columns.map((col) => `<td>${col.render ? col.render(row) : escapeHtml(row[col.key] ?? "—")}</td>`).join("")}
+          </tr>
+        `).join("") || `<tr><td colspan="${columns.length}"><div class="native-crm-empty">${escapeHtml(empty)}</div></td></tr>`}
+      </tbody>
+    </table>
+  </div>
+`;
+
+const renderNativeCrmAnalytics = () => {
+  const state = nativeCrmState.analytics || {};
+  const data = state.data || {};
+  const filters = state.filters || {};
+  if (state.loading && !data.generatedAt) {
+    return `<section class="native-crm-analytics"><div class="native-crm-skeleton"><span></span><span></span><div></div><div></div><div></div></div></section>`;
+  }
+  if (state.error && !data.generatedAt) {
+    return `<section class="native-crm-analytics"><div class="native-crm-error"><strong>Não foi possível carregar Analytics.</strong><span>${escapeHtml(state.error)}</span><button type="button" class="button button-solid button-small" data-crm-analytics-retry>Tentar novamente</button></div></section>`;
+  }
+  const options = data.filterOptions || {};
+  const topKpis = Array.isArray(data.summary?.topKpis) ? data.summary.topKpis : [];
+  const kpiValue = (kpi) => {
+    if (kpi.kind === "money") return formatCrmMoney(kpi.value, "BRL") || "R$ 0";
+    if (kpi.id === "qualification_accuracy") return kpi.value == null ? "—" : `${crmAnalyticsNumber(kpi.value)}%`;
+    return kpi.value == null ? "—" : crmAnalyticsPct(kpi.value, 0);
+  };
+  const period = data.period || {};
+  const topKpiHtml = topKpis.map((kpi) => `
+    <article class="native-crm-analytics-kpi">
+      <span>${escapeHtml(kpi.label || "")}</span>
+      <strong>${escapeHtml(kpiValue(kpi))}</strong>
+      <em>${kpi.kind === "money" ? `${Number(kpi.numerator || 0)} ganhos` : `${Number(kpi.numerator || 0)} / ${Number(kpi.denominator || 0)}`}</em>
+    </article>
+  `).join("");
+  const funnel = Array.isArray(data.funnel) ? data.funnel : [];
+  const funnelHtml = funnel.map((step, index) => `
+    <div class="native-crm-analytics-funnel-row">
+      <span>${escapeHtml(step.label)}</span>
+      <strong>${Number(step.count || 0)}</strong>
+      <em>${index === 0 ? "base" : crmAnalyticsPct(step.conversion, 0)} ${crmAnalyticsSampleBadge(step)}</em>
+    </div>
+  `).join("");
+  const scoreBands = nativeCrmAnalyticsTable([
+    { label: "Score", render: (row) => escapeHtml(row.label) },
+    { label: "Runs", render: (row) => `${Number(row.qualificationRuns || 0)} ${crmAnalyticsSampleBadge(row)}` },
+    { label: "Handoffs", render: (row) => Number(row.handoffs || 0) },
+    { label: "Acceptance", render: (row) => crmAnalyticsRateLabel(row.acceptanceRate, 0) },
+    { label: "Win", render: (row) => crmAnalyticsRateLabel(row.winRate, 0) },
+    { label: "Revenue", render: (row) => escapeHtml(formatCrmMoney(row.closedRevenue, "BRL") || "—") },
+  ], data.scoreBands || []);
+  const dimensionRows = nativeCrmAnalyticsTable([
+    { label: "Dimensão", render: (row) => escapeHtml(row.dimension) },
+    { label: "Confirmed", render: (row) => crmAnalyticsPct(row.confirmedRate, 0) },
+    { label: "Partial", render: (row) => crmAnalyticsPct(row.partialRate, 0) },
+    { label: "Contradicted", render: (row) => crmAnalyticsPct(row.contradictedRate, 0) },
+    { label: "Not discussed", render: (row) => crmAnalyticsPct(row.notDiscussedRate, 0) },
+    { label: "Effective", render: (row) => `${crmAnalyticsPct(row.effectiveAccuracy, 0)} ${crmAnalyticsSampleBadge(row)}` },
+  ], data.dimensionAccuracy || []);
+  const sdrRows = nativeCrmAnalyticsTable([
+    { label: "SDR", render: (row) => escapeHtml(row.name) },
+    { label: "Qualifications", render: (row) => `${Number(row.qualifications || 0)} ${crmAnalyticsSampleBadge(row)}` },
+    { label: "Pass", render: (row) => crmAnalyticsRateLabel(row.passRate, 0) },
+    { label: "Handoffs", render: (row) => Number(row.handoffs || 0) },
+    { label: "Held", render: (row) => Number(row.held || 0) },
+    { label: "Acceptance", render: (row) => crmAnalyticsRateLabel(row.acceptanceRate, 0) },
+    { label: "Accuracy", render: (row) => row.qualificationAccuracy == null ? "—" : `${crmAnalyticsNumber(row.qualificationAccuracy)}%` },
+    { label: "Won", render: (row) => Number(row.won || 0) },
+    { label: "Revenue", render: (row) => escapeHtml(formatCrmMoney(row.closedRevenue, "BRL") || "—") },
+  ], data.sdrPerformance || []);
+  const closerRows = nativeCrmAnalyticsTable([
+    { label: "Closer", render: (row) => escapeHtml(row.name) },
+    { label: "Handoffs", render: (row) => `${Number(row.handoffs || 0)} ${crmAnalyticsSampleBadge(row)}` },
+    { label: "Held", render: (row) => Number(row.held || 0) },
+    { label: "Feedback", render: (row) => crmAnalyticsRateLabel(row.feedbackCompletion, 0) },
+    { label: "Acceptance", render: (row) => crmAnalyticsRateLabel(row.acceptanceRate, 0) },
+    { label: "Win", render: (row) => crmAnalyticsRateLabel(row.winRate, 0) },
+    { label: "Revenue", render: (row) => escapeHtml(formatCrmMoney(row.closedRevenue, "BRL") || "—") },
+    { label: "Cycle", render: (row) => row.salesCycleAvgDays == null ? "—" : `${crmAnalyticsNumber(row.salesCycleAvgDays)}d` },
+  ], data.closerPerformance || []);
+  const simpleDistColumns = [
+    { label: "Item", render: (row) => escapeHtml(row.label) },
+    { label: "Count", render: (row) => `${Number(row.count || 0)} ${crmAnalyticsSampleBadge(row)}` },
+    { label: "%", render: (row) => crmAnalyticsPct(row.share, 0) },
+  ];
+  const sourceRows = nativeCrmAnalyticsTable([
+    { label: "Source", render: (row) => escapeHtml(row.label) },
+    { label: "Qualified", render: (row) => `${Number(row.leadsQualified || 0)} ${crmAnalyticsSampleBadge(row)}` },
+    { label: "Pass", render: (row) => crmAnalyticsRateLabel(row.passRate, 0) },
+    { label: "Handoffs", render: (row) => Number(row.handoffs || 0) },
+    { label: "Acceptance", render: (row) => crmAnalyticsRateLabel(row.acceptanceRate, 0) },
+    { label: "Win", render: (row) => crmAnalyticsRateLabel(row.winRate, 0) },
+    { label: "Revenue", render: (row) => escapeHtml(formatCrmMoney(row.closedRevenue, "BRL") || "—") },
+    { label: "Rev/Handoff", render: (row) => escapeHtml(formatCrmMoney(row.revenuePerHandoff, "BRL") || "—") },
+  ], data.sources || []);
+  const countryRows = nativeCrmAnalyticsTable([
+    { label: "Country", render: (row) => escapeHtml(row.label) },
+    { label: "Qualifications", render: (row) => `${Number(row.qualifications || 0)} ${crmAnalyticsSampleBadge(row)}` },
+    { label: "Pass", render: (row) => crmAnalyticsRateLabel(row.passRate, 0) },
+    { label: "Acceptance", render: (row) => crmAnalyticsRateLabel(row.acceptanceRate, 0) },
+    { label: "Win", render: (row) => crmAnalyticsRateLabel(row.winRate, 0) },
+    { label: "Revenue", render: (row) => escapeHtml(formatCrmMoney(row.closedRevenue, "BRL") || "—") },
+  ], data.countries || []);
+  const questionRows = nativeCrmAnalyticsTable([
+    { label: "Question", render: (row) => `<strong>${escapeHtml(row.question || "—")}</strong><span>${escapeHtml(row.answer || "—")}</span>` },
+    { label: "N", render: (row) => `${Number(row.n || 0)} ${crmAnalyticsSampleBadge(row)}` },
+    { label: "Avg Score", render: (row) => crmAnalyticsNumber(row.avgTotalScore) },
+    { label: "Acceptance", render: (row) => crmAnalyticsRateLabel(row.closerAcceptance, 0) },
+    { label: "Win", render: (row) => crmAnalyticsRateLabel(row.winRate, 0) },
+    { label: "Acc Lift", render: (row) => row.acceptanceLift == null ? "—" : `${crmAnalyticsNumber(row.acceptanceLift)}x` },
+    { label: "Win Lift", render: (row) => row.winLift == null ? "—" : `${crmAnalyticsNumber(row.winLift)}x` },
+  ], data.questionAnswers || []);
+  const versionRows = nativeCrmAnalyticsTable([
+    { label: "Version", render: (row) => escapeHtml(row.label) },
+    { label: "Completed", render: (row) => `${Number(row.completed || 0)} ${crmAnalyticsSampleBadge(row)}` },
+    { label: "Pass", render: (row) => crmAnalyticsRateLabel(row.passRate, 0) },
+    { label: "Acceptance", render: (row) => crmAnalyticsRateLabel(row.acceptanceRate, 0) },
+    { label: "Accuracy", render: (row) => row.accuracy == null ? "—" : `${crmAnalyticsNumber(row.accuracy)}%` },
+    { label: "Win", render: (row) => crmAnalyticsRateLabel(row.winRate, 0) },
+    { label: "Rev/Handoff", render: (row) => escapeHtml(formatCrmMoney(row.revenuePerHandoff, "BRL") || "—") },
+  ], data.versions || []);
+  const thresholdRows = nativeCrmAnalyticsTable([
+    { label: "Threshold", render: (row) => `>= ${Number(row.threshold || 0)}` },
+    { label: "Eligible", render: (row) => `${Number(row.eligibleHandoffs || 0)} ${crmAnalyticsSampleBadge(row)}` },
+    { label: "% Total", render: (row) => crmAnalyticsPct(row.shareOfTotal, 0) },
+    { label: "Acceptance", render: (row) => crmAnalyticsRateLabel(row.observedAcceptance, 0) },
+    { label: "Wins", render: (row) => Number(row.observedWins || 0) },
+    { label: "Revenue", render: (row) => escapeHtml(formatCrmMoney(row.observedClosedRevenue, "BRL") || "—") },
+  ], data.thresholdAnalysis || []);
+  const dq = data.dataQuality || {};
+  return `
+    <section class="native-crm-analytics">
+      <header class="native-crm-analytics-head">
+        <div>
+          <span>Revenue Operations</span>
+          <h3>Qualification Analytics</h3>
+          <p>Período: ${escapeHtml(period.label || "")} · ${escapeHtml(period.timeZone || "America/Sao_Paulo")}</p>
+        </div>
+        <button type="button" class="button button-outline button-small" data-crm-analytics-retry>${state.loading ? "Atualizando…" : "Atualizar"}</button>
+      </header>
+      <div class="native-crm-analytics-filters">
+        <select data-crm-analytics-filter="range">
+          <option value="7d" ${filters.range === "7d" ? "selected" : ""}>Últimos 7 dias</option>
+          <option value="30d" ${filters.range === "30d" ? "selected" : ""}>Últimos 30 dias</option>
+          <option value="month" ${filters.range === "month" ? "selected" : ""}>Este mês</option>
+          <option value="previous_month" ${filters.range === "previous_month" ? "selected" : ""}>Mês anterior</option>
+          <option value="90d" ${filters.range === "90d" ? "selected" : ""}>Últimos 90 dias</option>
+        </select>
+        <select data-crm-analytics-filter="pipelineSdr">${crmAnalyticsSelectOptions(options.pipelinesSdr, filters.pipelineSdr, "Pipeline SDR")}</select>
+        <select data-crm-analytics-filter="pipelineCloser">${crmAnalyticsSelectOptions(options.pipelinesCloser, filters.pipelineCloser, "Pipeline Closer")}</select>
+        <select data-crm-analytics-filter="sdr">${crmAnalyticsSelectOptions(options.sdrs, filters.sdr, "SDR")}</select>
+        <select data-crm-analytics-filter="closer">${crmAnalyticsSelectOptions(options.closers, filters.closer, "Closer")}</select>
+        <select data-crm-analytics-filter="source">${crmAnalyticsSelectOptions(options.sources, filters.source, "Origem")}</select>
+        <select data-crm-analytics-filter="country">${crmAnalyticsSelectOptions(options.countries, filters.country, "País")}</select>
+        <select data-crm-analytics-filter="version">${crmAnalyticsSelectOptions(options.versions, filters.version, "Versão")}</select>
+      </div>
+      ${state.error ? `<div class="native-crm-form-error">${escapeHtml(state.error)}</div>` : ""}
+      <div class="native-crm-analytics-kpis">${topKpiHtml}</div>
+      <div class="native-crm-analytics-grid">
+        <section class="native-crm-analytics-panel"><h3>Qualification Funnel</h3><div class="native-crm-analytics-funnel">${funnelHtml}</div></section>
+        <section class="native-crm-analytics-panel"><h3>Data Quality</h3>
+          <div class="native-crm-analytics-quality">
+            <span>Completed runs <strong>${Number(dq.completedRuns || 0)}</strong></span>
+            <span>Handoffs <strong>${Number(dq.handoffs || 0)}</strong></span>
+            <span>Held <strong>${Number(dq.heldMeetings || 0)}</strong></span>
+            <span>Reviews <strong>${Number(dq.reviewsCompleted || 0)}</strong></span>
+            <span>Closed <strong>${Number(dq.closedOpportunities || 0)}</strong></span>
+            <span>Review completion <strong>${crmAnalyticsRateLabel(dq.reviewCompletionRate, 0)}</strong></span>
+            <span>Missing owner <strong>${Number(dq.missingOwner || 0)}</strong></span>
+            <span>Missing source <strong>${Number(dq.missingSource || 0)}</strong></span>
+            <span>Missing country <strong>${Number(dq.missingCountry || 0)}</strong></span>
+          </div>
+        </section>
+      </div>
+      <section class="native-crm-analytics-panel"><h3>Score Calibration</h3>${scoreBands}</section>
+      <section class="native-crm-analytics-panel"><h3>Threshold Analysis</h3>${thresholdRows}</section>
+      <section class="native-crm-analytics-panel"><h3>Dimension Accuracy</h3>${dimensionRows}</section>
+      <div class="native-crm-analytics-grid">
+        <section class="native-crm-analytics-panel"><h3>SDR</h3>${sdrRows}</section>
+        <section class="native-crm-analytics-panel"><h3>Closer</h3>${closerRows}</section>
+      </div>
+      <div class="native-crm-analytics-grid">
+        <section class="native-crm-analytics-panel"><h3>Reject Reasons</h3>${nativeCrmAnalyticsTable(simpleDistColumns, data.rejectReasons || [])}</section>
+        <section class="native-crm-analytics-panel"><h3>Recommended Actions</h3>${nativeCrmAnalyticsTable(simpleDistColumns, data.recommendedActions || [])}</section>
+      </div>
+      <section class="native-crm-analytics-panel"><h3>Source Quality</h3>${sourceRows}</section>
+      <section class="native-crm-analytics-panel"><h3>Country Quality</h3>${countryRows}</section>
+      <section class="native-crm-analytics-panel"><h3>Question / Answer Analysis</h3>${questionRows}</section>
+      <section class="native-crm-analytics-panel"><h3>Version Comparison</h3>${versionRows}</section>
+    </section>
+  `;
+};
+
 const renderNativeCrmDrawer = () => {
   const drawer = nativeCrmState.drawer;
   if (!drawer) return "";
@@ -13992,10 +14233,11 @@ const renderNativeCrm = () => {
         <div class="native-crm-segment" aria-label="Visualização">
           <button type="button" class="${nativeCrmState.mode === "funnel" ? "is-active" : ""}" data-crm-view="funnel">Funil</button>
           <button type="button" class="${nativeCrmState.mode === "list" ? "is-active" : ""}" data-crm-view="list">Lista</button>
+          ${isNativeCrmAdmin() ? `<button type="button" class="${nativeCrmState.mode === "analytics" ? "is-active" : ""}" data-crm-view="analytics">Analytics</button>` : ""}
         </div>
       </section>
       <main class="native-crm-workspace">
-        ${pipelines.length ? (nativeCrmState.mode === "list" ? renderNativeCrmList() : renderNativeCrmBoard()) : `<div class="native-crm-empty">Nenhum pipeline disponível.</div>`}
+        ${nativeCrmState.mode === "analytics" ? renderNativeCrmAnalytics() : pipelines.length ? (nativeCrmState.mode === "list" ? renderNativeCrmList() : renderNativeCrmBoard()) : `<div class="native-crm-empty">Nenhum pipeline disponível.</div>`}
       </main>
       ${nativeCrmState.error ? `<div class="native-crm-toast">${escapeHtml(nativeCrmState.error)}</div>` : ""}
     </div>
@@ -14023,6 +14265,7 @@ const loadNativeCrm = async ({ force = false } = {}) => {
     nativeCrmState.loadedAt = Date.now();
     if (!nativeCrmState.selectedPipelineId) nativeCrmState.selectedPipelineId = selectedCrmPipelineId();
     if (nativeCrmState.mode === "list") loadNativeCrmList({ reset: true }).catch(() => {});
+    if (nativeCrmState.mode === "analytics") loadNativeCrmAnalytics({ force: false }).catch(() => {});
   } catch (error) {
     nativeCrmState.error = error?.message || "Erro ao carregar CRM.";
   } finally {
@@ -14034,7 +14277,7 @@ const loadNativeCrm = async ({ force = false } = {}) => {
 const updateNativeCrmUrlState = () => {
   if (!window.history?.replaceState) return;
   const url = new URL(window.location.href);
-  if (nativeCrmState.mode === "list") url.searchParams.set("view", "list");
+  if (nativeCrmState.mode === "list" || nativeCrmState.mode === "analytics") url.searchParams.set("view", nativeCrmState.mode);
   else url.searchParams.delete("view");
   const pipelineId = selectedCrmPipelineId();
   if (pipelineId) url.searchParams.set("pipeline", pipelineId);
@@ -14044,6 +14287,7 @@ const updateNativeCrmUrlState = () => {
 const applyNativeCrmUrlState = () => {
   const params = new URLSearchParams(window.location.search || "");
   if (params.get("view") === "list") nativeCrmState.mode = "list";
+  if (params.get("view") === "analytics") nativeCrmState.mode = "analytics";
   if (params.get("pipeline")) nativeCrmState.selectedPipelineId = params.get("pipeline") || "";
 };
 
@@ -14087,6 +14331,39 @@ const loadNativeCrmList = async ({ reset = false } = {}) => {
 
 const reloadNativeCrmListIfNeeded = () => {
   if (nativeCrmState.mode === "list") loadNativeCrmList({ reset: true }).catch(() => {});
+};
+
+const nativeCrmAnalyticsParams = () => {
+  const params = new URLSearchParams({ view: "analytics" });
+  const filters = nativeCrmState.analytics?.filters || {};
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value) params.set(key, String(value));
+  });
+  return params;
+};
+
+const loadNativeCrmAnalytics = async ({ force = false } = {}) => {
+  const state = nativeCrmState.analytics;
+  if (!state || state.loading) return;
+  if (!force && state.loadedAt && Date.now() - state.loadedAt < 30_000) {
+    renderNativeCrm();
+    return;
+  }
+  state.loading = true;
+  state.error = "";
+  renderNativeCrm();
+  try {
+    const res = await fetchWithAuth(`/api/crm?${nativeCrmAnalyticsParams().toString()}`, { method: "GET" });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error || "crm_analytics_failed");
+    state.data = data;
+    state.loadedAt = Date.now();
+  } catch (error) {
+    state.error = error?.message || "Não foi possível carregar Analytics.";
+  } finally {
+    state.loading = false;
+    renderNativeCrm();
+  }
 };
 
 const scheduleNativeCrmSearchReload = () => {
@@ -40101,12 +40378,20 @@ document.addEventListener("click", (event) => {
     const viewButton = target.closest("[data-crm-view]");
     if (viewButton instanceof HTMLButtonElement) {
       event.preventDefault();
-      nativeCrmState.mode = String(viewButton.getAttribute("data-crm-view") || "funnel") === "list" ? "list" : "funnel";
+      const requestedView = String(viewButton.getAttribute("data-crm-view") || "funnel");
+      nativeCrmState.mode = requestedView === "list" ? "list" : requestedView === "analytics" ? "analytics" : "funnel";
       nativeCrmState.filtersOpen = false;
       nativeCrmState.filterPopover = "";
       updateNativeCrmUrlState();
       renderNativeCrm();
       reloadNativeCrmListIfNeeded();
+      if (nativeCrmState.mode === "analytics") loadNativeCrmAnalytics({ force: false }).catch(() => {});
+      return;
+    }
+    const analyticsRetry = target.closest("[data-crm-analytics-retry]");
+    if (analyticsRetry instanceof HTMLButtonElement) {
+      event.preventDefault();
+      loadNativeCrmAnalytics({ force: true }).catch(() => {});
       return;
     }
     const sortButton = target.closest("[data-crm-sort]");
@@ -40318,6 +40603,16 @@ document.addEventListener("change", (event) => {
     }
     renderNativeCrm();
     reloadNativeCrmListIfNeeded();
+    return;
+  }
+  if (target.matches("[data-crm-analytics-filter]")) {
+    const key = String(target.getAttribute("data-crm-analytics-filter") || "");
+    if (Object.prototype.hasOwnProperty.call(nativeCrmState.analytics.filters, key)) {
+      nativeCrmState.analytics.filters[key] = target.value;
+      nativeCrmState.analytics.loadedAt = 0;
+      renderNativeCrm();
+      loadNativeCrmAnalytics({ force: true }).catch(() => {});
+    }
     return;
   }
   if (target.matches("[data-crm-form-pipeline]")) {
