@@ -165,8 +165,8 @@ test("POST log_call não faz full scan de sdrActivityEvents", async () => {
     const res = makeRes();
     await handler({ method: "POST", headers: {}, url: "/api/sdr-metrics" }, res);
     assert.equal(res.statusCode, 200);
-    assert.equal(stats.listUsersCount, 1);
-    assert.equal(stats.dateQueryCount, 2);
+    assert.equal(stats.listUsersCount, 0);
+    assert.equal(stats.dateQueryCount, 1);
     assert.equal(stats.commitCount, 2);
   } finally {
     restore();
@@ -201,7 +201,7 @@ test("POST log_call é idempotente quando o mesmo clientRequestId chega duas vez
     assert.equal(first.statusCode, 200);
     assert.equal(second.statusCode, 200);
     assert.equal(stats.commitCount, 4);
-    assert.equal(stats.dateQueryCount, 4);
+    assert.equal(stats.dateQueryCount, 2);
   } finally {
     restore();
   }
@@ -217,7 +217,8 @@ test("POST log_call cria dois eventos para dois cliques legítimos consecutivos"
     const first = makeRes();
     await handler({ method: "POST", headers: {}, url: "/api/sdr-metrics" }, first);
     assert.equal(first.statusCode, 200);
-    assert.equal(first.body?.payload?.events?.length, 1);
+    assert.equal(first.body?.stat?.totalCalls, 1);
+    assert.equal(first.body?.payload, undefined);
 
     const second = makeRes();
     setBody({
@@ -227,9 +228,10 @@ test("POST log_call cria dois eventos para dois cliques legítimos consecutivos"
     });
     await handler({ method: "POST", headers: {}, url: "/api/sdr-metrics" }, second);
     assert.equal(second.statusCode, 200);
-    assert.equal(second.body?.payload?.events?.length, 2);
+    assert.equal(second.body?.stat?.totalCalls, 2);
+    assert.equal(second.body?.payload, undefined);
     assert.equal(stats.commitCount, 4);
-    assert.equal(stats.dateQueryCount, 4);
+    assert.equal(stats.dateQueryCount, 2);
   } finally {
     restore();
   }

@@ -20026,7 +20026,12 @@ const postSdrAction = async (payload = {}) => {
       return;
     }
     sdrPanelState.loadedAt = 0;
-    await loadSdrPanelData({ force: true });
+    try {
+      await loadSdrPanelData({ force: true });
+    } catch (refreshError) {
+      console.warn("[sdr] refresh after write failed", refreshError);
+      sdrPanelState.error = "Registro salvo. Atualize o painel para ver os números mais recentes.";
+    }
   } catch (error) {
     sdrPanelState.retryRequest = { requestId, signature, createdAt: Date.now() };
     throw new Error(normalizeSdrWriteErrorMessage(error));
