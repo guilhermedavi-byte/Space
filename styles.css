@@ -27907,14 +27907,21 @@ button.automations-row:focus-visible,
 }
 
 .native-crm-qualification-workspace {
-  display: grid;
-  align-content: start;
-  gap: 14px;
+  min-height: calc(100vh - 70px);
+  background:
+    radial-gradient(circle at top left, rgba(255,91,82,.08), transparent 32%),
+    linear-gradient(180deg, rgba(255,255,255,.018), transparent 34%),
+    #0a0c10;
 }
 
 .native-crm-qualification-work-card {
-  width: min(860px, 100%);
-  margin: 0 auto;
+  display: grid;
+  gap: 14px;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 10px;
+  padding: 22px;
+  background: rgba(255,255,255,.03);
+  box-shadow: 0 18px 50px rgba(0,0,0,.18);
 }
 
 .native-crm-qualification-work-card h3 {
@@ -27932,11 +27939,11 @@ button.automations-row:focus-visible,
 }
 
 .native-crm-qualification-form-large {
-  gap: 12px;
+  gap: 14px;
 }
 
 .native-crm-qualification-form-large .native-crm-qualification-question {
-  padding: 14px;
+  padding: 18px;
 }
 
 .native-crm-qualification-progress,
@@ -27959,11 +27966,145 @@ button.automations-row:focus-visible,
 }
 
 .native-crm-qualification-pending-stage {
-  width: min(860px, 100%);
-  margin: 0 auto;
   border-color: rgba(233,193,93,.22);
   color: rgba(255,232,174,.84);
   background: rgba(233,193,93,.06);
+}
+
+.native-crm-qualification-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 18px;
+  width: min(1320px, 100%);
+  margin: 0 auto;
+  padding: 18px;
+  align-items: start;
+}
+
+.native-crm-qualification-content {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.native-crm-qualification-hero {
+  display: grid;
+  gap: 10px;
+  border: 1px solid rgba(255,255,255,.075);
+  border-radius: 12px;
+  padding: 24px;
+  background:
+    linear-gradient(135deg, rgba(255,91,82,.11), transparent 46%),
+    rgba(255,255,255,.035);
+}
+
+.native-crm-qualification-hero > span,
+.native-crm-qualification-side-card span,
+.native-crm-admin-config-head span,
+.native-crm-record-column-head span {
+  color: rgba(255,255,255,.42);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.native-crm-qualification-hero h3 {
+  margin: 0;
+  color: #fff;
+  font-size: 28px;
+  font-weight: 780;
+  line-height: 1.05;
+}
+
+.native-crm-qualification-hero p {
+  max-width: 650px;
+  margin: 0;
+  color: rgba(255,255,255,.68);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.native-crm-qualification-progressbar {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255,255,255,.08);
+}
+
+.native-crm-qualification-progressbar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #ff5b52, #e9c15d);
+  transition: width 160ms ease;
+}
+
+.native-crm-qualification-main-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.native-crm-qualification-side {
+  position: sticky;
+  top: 18px;
+  display: grid;
+  gap: 12px;
+}
+
+.native-crm-qualification-side-card {
+  display: grid;
+  gap: 5px;
+  border: 1px solid rgba(255,255,255,.075);
+  border-radius: 10px;
+  padding: 14px;
+  background: rgba(255,255,255,.035);
+}
+
+.native-crm-qualification-side-card strong {
+  overflow: hidden;
+  color: rgba(255,255,255,.92);
+  font-size: 16px;
+  line-height: 1.18;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.native-crm-qualification-side-card em {
+  overflow: hidden;
+  color: rgba(255,255,255,.52);
+  font-size: 12px;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.native-crm-qualification-side-actions {
+  display: grid;
+  gap: 9px;
+}
+
+.native-crm-qualification-cta {
+  min-height: 42px;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 8px;
+  padding: 0 14px;
+  background: rgba(255,255,255,.045);
+  color: rgba(255,255,255,.86);
+  font-size: 13px;
+  font-weight: 760;
+  cursor: pointer;
+}
+
+.native-crm-qualification-cta.is-primary {
+  border-color: rgba(255,91,82,.42);
+  background: linear-gradient(180deg, rgba(255,91,82,.95), rgba(214,64,57,.95));
+  color: #fff;
+}
+
+.native-crm-qualification-cta:disabled {
+  opacity: .55;
+  cursor: not-allowed;
 }
 
 .native-crm-board {
@@ -29173,35 +29314,79 @@ button.automations-row:focus-visible,
 
 .native-crm-qualification-question {
   display: grid;
-  gap: 7px;
+  gap: 10px;
   margin: 0;
-  border: 1px solid var(--crm-line);
-  border-radius: 8px;
-  padding: 10px;
-  background: rgba(255,255,255,.018);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 12px;
+  padding: 18px;
+  background: linear-gradient(180deg, rgba(255,255,255,.042), rgba(255,255,255,.022));
 }
 
 .native-crm-qualification-question legend {
-  padding: 0 4px;
-  color: rgba(255,255,255,.82);
-  font-size: 12px;
-  font-weight: 720;
-  line-height: 1.3;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+  color: rgba(255,255,255,.9);
+  font-size: 16px;
+  font-weight: 760;
+  line-height: 1.25;
+}
+
+.native-crm-qualification-question legend span {
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  background: rgba(255,255,255,.05);
+  color: rgba(255,255,255,.54);
+  font-size: 11px;
+  font-weight: 800;
 }
 
 .native-crm-qualification-question label {
+  position: relative;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: start;
-  gap: 8px;
-  color: rgba(255,255,255,.68);
-  font-size: 12px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  min-height: 48px;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 10px;
+  padding: 13px 14px;
+  background: rgba(255,255,255,.022);
+  color: rgba(255,255,255,.74);
+  font-size: 13px;
   line-height: 1.35;
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease, color 140ms ease, box-shadow 140ms ease;
+}
+
+.native-crm-qualification-question label:hover {
+  border-color: rgba(255,255,255,.18);
+  background: rgba(255,255,255,.045);
+  color: rgba(255,255,255,.9);
+}
+
+.native-crm-qualification-question label:has(input:checked) {
+  border-color: rgba(255,91,82,.55);
+  background: rgba(255,91,82,.11);
+  box-shadow: inset 0 0 0 1px rgba(255,91,82,.16);
+  color: #fff;
+}
+
+.native-crm-qualification-question label > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .native-crm-qualification-question input {
-  margin-top: 2px;
-  accent-color: #ff5b52;
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .native-crm-closer-review {
@@ -29219,6 +29404,233 @@ button.automations-row:focus-visible,
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.native-crm-admin-config {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 14px;
+  min-height: calc(100vh - 126px);
+}
+
+.native-crm-admin-config-list {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+  border-right: 1px solid var(--crm-line);
+  padding-right: 12px;
+}
+
+.native-crm-config-template {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  min-height: 62px;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 8px;
+  padding: 11px;
+  background: rgba(255,255,255,.025);
+  text-align: left;
+  cursor: pointer;
+}
+
+.native-crm-config-template:hover,
+.native-crm-config-template.is-active {
+  border-color: rgba(255,91,82,.32);
+  background: rgba(255,91,82,.075);
+}
+
+.native-crm-config-template strong {
+  overflow: hidden;
+  color: rgba(255,255,255,.9);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.native-crm-config-template span {
+  color: rgba(255,255,255,.48);
+  font-size: 11px;
+}
+
+.native-crm-admin-config-editor {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  min-width: 0;
+  padding-bottom: 24px;
+}
+
+.native-crm-admin-config-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: end;
+  border: 1px solid rgba(255,255,255,.075);
+  border-radius: 10px;
+  padding: 16px;
+  background: rgba(255,255,255,.032);
+}
+
+.native-crm-admin-config-head h3 {
+  margin: 3px 0 4px;
+  color: #fff;
+  font-size: 24px;
+  line-height: 1.12;
+}
+
+.native-crm-admin-config-head p {
+  margin: 0;
+  color: rgba(255,255,255,.58);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.native-crm-admin-config-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(78px, 1fr));
+  gap: 8px;
+}
+
+.native-crm-admin-config-summary span {
+  display: grid;
+  gap: 3px;
+  min-height: 54px;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 8px;
+  padding: 9px;
+  background: rgba(255,255,255,.03);
+  color: rgba(255,255,255,.46);
+  font-size: 10.5px;
+  font-weight: 760;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.native-crm-admin-config-summary strong {
+  color: #fff;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.native-crm-admin-config-panel,
+.native-crm-admin-question {
+  display: grid;
+  gap: 12px;
+  border: 1px solid rgba(255,255,255,.075);
+  border-radius: 10px;
+  padding: 14px;
+  background: rgba(255,255,255,.025);
+}
+
+.native-crm-admin-config-panel label,
+.native-crm-admin-question label {
+  display: grid;
+  gap: 5px;
+  color: rgba(255,255,255,.48);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.native-crm-admin-config-panel input,
+.native-crm-admin-config-panel select,
+.native-crm-admin-question input,
+.native-crm-admin-question select,
+.native-crm-admin-option input {
+  min-height: 34px;
+  min-width: 0;
+  border: 1px solid rgba(255,255,255,.085);
+  border-radius: 7px;
+  padding: 0 10px;
+  background: rgba(7,9,12,.62);
+  color: rgba(255,255,255,.86);
+  font-size: 12px;
+}
+
+.native-crm-admin-question-list {
+  display: grid;
+  gap: 10px;
+}
+
+.native-crm-admin-question header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.native-crm-admin-question header strong {
+  color: rgba(255,255,255,.86);
+  font-size: 13px;
+}
+
+.native-crm-admin-question header div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.native-crm-checkline {
+  grid-template-columns: auto minmax(0, 1fr) !important;
+  align-items: center;
+  align-content: center;
+  gap: 8px !important;
+  min-height: 34px;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 7px;
+  padding: 0 10px;
+  background: rgba(255,255,255,.025);
+  color: rgba(255,255,255,.68) !important;
+}
+
+.native-crm-checkline input {
+  min-height: 0;
+  accent-color: #ff5b52;
+}
+
+.native-crm-admin-option-list {
+  display: grid;
+  gap: 8px;
+}
+
+.native-crm-admin-option {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 88px 110px 34px;
+  gap: 8px;
+  align-items: center;
+}
+
+.native-crm-admin-option label {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 7px;
+  padding: 0 8px;
+  background: rgba(255,255,255,.02);
+  color: rgba(255,255,255,.64);
+  font-size: 11px;
+}
+
+.native-crm-admin-option label input {
+  min-height: 0;
+  accent-color: #ff5b52;
+}
+
+.native-crm-admin-config-foot {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid rgba(255,255,255,.075);
+  padding: 12px 0 0;
+  background: var(--crm-bg);
 }
 
 .native-crm-segmented button,
@@ -29906,7 +30318,10 @@ button.automations-row:focus-visible,
   .native-crm-facets { order: 3; flex-basis: 100%; }
   .native-crm-board { grid-auto-columns: minmax(300px, 320px); }
   .native-crm-workspace-head,
-  .native-crm-opportunity-layout { grid-template-columns: 1fr; }
+  .native-crm-opportunity-layout,
+  .native-crm-qualification-layout,
+  .native-crm-admin-config,
+  .native-crm-admin-config-head { grid-template-columns: 1fr; }
   .native-crm-record-layout {
     min-height: auto;
     background: #0b0d10;
@@ -29920,9 +30335,15 @@ button.automations-row:focus-visible,
   }
   .native-crm-record-timeline { padding: 18px; }
   .native-crm-workspace-actions { justify-content: flex-start; }
-  .native-crm-opportunity-side { position: static; }
+  .native-crm-opportunity-side,
+  .native-crm-qualification-side,
+  .native-crm-admin-config-list,
+  .native-crm-admin-config-foot { position: static; }
   .native-crm-pipeline-manager-body { grid-template-columns: 1fr; }
   .native-crm-pipeline-list { border-right: 0; border-bottom: 1px solid var(--crm-line); padding: 0 0 12px; }
+  .native-crm-admin-config-list { border-right: 0; border-bottom: 1px solid var(--crm-line); padding: 0 0 12px; }
+  .native-crm-admin-config-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .native-crm-admin-option { grid-template-columns: minmax(0, 1fr) 80px 106px 34px; }
 }
 
 @media (max-width: 620px) {
@@ -29937,6 +30358,10 @@ button.automations-row:focus-visible,
   .native-crm-opportunity-main,
   .native-crm-opportunity-side,
   .native-crm-qualification-work-card { padding: 12px; }
+  .native-crm-qualification-layout { padding: 10px; gap: 10px; }
+  .native-crm-qualification-hero,
+  .native-crm-qualification-question { padding: 14px; }
+  .native-crm-qualification-hero h3 { font-size: 22px; }
   .native-crm-record-column { padding: 14px 12px; }
   .native-crm-inline-field,
   .native-crm-inline-field.is-readonly { grid-template-columns: 1fr; gap: 3px; }
@@ -29964,5 +30389,8 @@ button.automations-row:focus-visible,
   .native-crm-form-grid,
   .native-crm-date-grid,
   .native-crm-detail-item { grid-template-columns: 1fr; }
+  .native-crm-admin-config-summary,
+  .native-crm-admin-option { grid-template-columns: 1fr; }
+  .native-crm-admin-config-foot { flex-direction: column; }
   .native-crm-stage-editor-row { grid-template-columns: 18px minmax(0, 1fr) 30px 30px 30px; }
 }

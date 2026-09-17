@@ -405,6 +405,79 @@ const loadPublishedSdrQualification = async () => {
   });
 };
 
+const loadQualificationConfigRows = async () => {
+  const [templatesRaw, versionsRaw, questionsRaw, optionsRaw] = await Promise.all([
+    listCollectionAsAdmin(COLLECTIONS.qualificationTemplates, { maxPages: 10 }).catch(() => []),
+    listCollectionAsAdmin(COLLECTIONS.qualificationVersions, { maxPages: 20 }).catch(() => []),
+    listCollectionAsAdmin(COLLECTIONS.qualificationQuestions, { maxPages: 50 }).catch(() => []),
+    listCollectionAsAdmin(COLLECTIONS.qualificationOptions, { maxPages: 100 }).catch(() => []),
+  ]);
+  return {
+    templates: normalizeQualificationRows(templatesRaw, qualification.normalizeTemplate),
+    versions: normalizeQualificationRows(versionsRaw, qualification.normalizeVersion),
+    questions: normalizeQualificationRows(questionsRaw, qualification.normalizeQuestion),
+    options: normalizeQualificationRows(optionsRaw, qualification.normalizeOption),
+  };
+};
+
+const buildQualificationAdminModel = ({ templates = [], versions = [], questions = [], options = [] } = {}) => {
+  const optionsByQuestionId = new Map();
+  options.forEach((option) => {
+    if (!optionsByQuestionId.has(option.questionId)) optionsByQuestionId.set(option.questionId, []);
+    optionsByQuestionId.get(option.questionId).push(option);
+  });
+  const questionsByVersionId = new Map();
+  questions.forEach((question) => {
+    if (!questionsByVersionId.has(question.versionId)) questionsByVersionId.set(question.versionId, []);
+    questionsByVersionId.get(question.versionId).push({
+      ...question,
+      options: (optionsByQuestionId.get(question.id) || []).slice().sort((left, right) => Number(left.position || 0) - Number(right.position || 0)),
+    });
+  });
+  const versionsByTemplateId = new Map();
+  versions.forEach((version) => {
+    if (!versionsByTemplateId.has(version.templateId)) versionsByTemplateId.set(version.templateId, []);
+    versionsByTemplateId.get(version.templateId).push({
+      ...version,
+      questions: (questionsByVersionId.get(version.id) || []).slice().sort((left, right) => Number(left.position || 0) - Number(right.position || 0)),
+    });
+  });
+  const rows = templates
+    .filter((template) => template.type === qualification.QUALIFICATION_TYPE_SDR)
+    .map((template) => ({
+      ...template,
+      versions: (versionsByTemplateId.get(template.id) || []).slice().sort((left, right) => Number(right.versionNumber || 0) - Number(left.versionNumber || 0)),
+    }))
+    .sort((left, right) => String(right.updatedAt || "").localeCompare(String(left.updatedAt || "")));
+  return {
+    templates: rows,
+    activeTemplateId: rows.find((template) => template.isActive !== false)?.id || rows[0]?.id || "",
+  };
+};
+
+const loadQualificationAdminModel = async (actorId = "") => {
+  await ensurePublishedSdrQualification(actorId);
+  return buildQualificationAdminModel(await loadQualificationConfigRows());
+};
+
+const loadQualificationConfigByVersion = async (versionId) => {
+  const id = clean(versionId);
+  if (!id) return null;
+  const rows = await loadQualificationConfigRows();
+  const version = rows.versions.find((row) => row.id === id);
+  if (!version) return null;
+  const template = rows.templates.find((row) => row.id === version.templateId && row.type === qualification.QUALIFICATION_TYPE_SDR);
+  if (!template) return null;
+  const questions = rows.questions
+    .filter((question) => question.versionId === version.id)
+    .sort((left, right) => Number(left.position || 0) - Number(right.position || 0));
+  const questionIds = new Set(questions.map((question) => question.id));
+  const options = rows.options
+    .filter((option) => questionIds.has(option.questionId))
+    .sort((left, right) => Number(left.position || 0) - Number(right.position || 0));
+  return { template, version, questions, options };
+};
+
 const ensurePublishedSdrQualification = async (actorId = "") => {
   const existing = await loadPublishedSdrQualification();
   if (existing) return existing;
@@ -1081,7 +1154,12 @@ const handleCompleteQualification = async ({ auth, body }) => {
   if (!opportunity) return { status: 404, body: { error: "opportunity_not_found" } };
   const guard = await crmActionGuard({ auth, action: "complete_qualification", opportunity });
   if (guard) return guard;
-  const config = await ensurePublishedSdrQualification(clean(auth.session.sub));
+  const runs = await loadQualificationRunsForOpportunity(opportunity.id);
+  const requestedRunId = clean(body.runId);
+  const currentRun = (requestedRunId ? runs.find((run) => run.id === requestedRunId && run.status === "in_progress") : null)
+    || qualification.latestRun(runs.filter((run) => run.status === "in_progress"));
+  const config = (currentRun?.versionId ? await loadQualificationConfigByVersion(currentRun.versionId) : null)
+    || await ensurePublishedSdrQualification(clean(auth.session.sub));
   if (!config) return { status: 500, body: { error: "qualification_config_unavailable" } };
   const submittedAnswers = Array.isArray(body.answers) ? body.answers : [];
   const score = qualification.scoreQualification({
@@ -1093,10 +1171,6 @@ const handleCompleteQualification = async ({ auth, body }) => {
   if (!score.questionnaireComplete) {
     return { status: 400, body: { error: "qualification_incomplete", missingQuestionIds: score.missingQuestionIds } };
   }
-  const runs = await loadQualificationRunsForOpportunity(opportunity.id);
-  const requestedRunId = clean(body.runId);
-  const currentRun = (requestedRunId ? runs.find((run) => run.id === requestedRunId && run.status === "in_progress") : null)
-    || qualification.latestRun(runs.filter((run) => run.status === "in_progress"));
   const stamp = nowIso();
   const actor = clean(auth.session.sub) || null;
   const runId = currentRun?.id || newId("qualrun");
@@ -1703,6 +1777,136 @@ const handleReactivatePipeline = async ({ session, body }) => {
   return { status: 200, body: { ok: true } };
 };
 
+const CRM_QUALIFICATION_DIMENSIONS = new Set(["need_fit", "economic_readiness", "decision_readiness", "pain", "impact", "urgency", "commitment"]);
+
+const cleanQualificationQuestionsPayload = (questions = []) => {
+  const rows = Array.isArray(questions) ? questions : [];
+  return rows.map((question, questionIndex) => {
+    const title = clean(question.title);
+    const dimension = CRM_QUALIFICATION_DIMENSIONS.has(clean(question.dimension)) ? clean(question.dimension) : "need_fit";
+    const options = (Array.isArray(question.options) ? question.options : []).map((option, optionIndex) => ({
+      label: clean(option.label),
+      points: Number.isFinite(Number(option.points)) ? Number(option.points) : 0,
+      hardFail: option.hardFail === true,
+      position: optionIndex + 1,
+    })).filter((option) => option.label);
+    return {
+      title,
+      dimension,
+      isHardGate: question.isHardGate === true,
+      required: question.required !== false,
+      position: questionIndex + 1,
+      options,
+    };
+  }).filter((question) => question.title && question.options.length >= 2);
+};
+
+const handleSaveQualificationFilter = async ({ session, body }) => {
+  const stamp = nowIso();
+  const actor = clean(session.sub) || null;
+  const rows = await loadQualificationConfigRows();
+  const templateId = clean(body.templateId) || clean(body.id) || "qual_tpl_sdr";
+  const existingTemplate = rows.templates.find((template) => template.id === templateId) || null;
+  const template = {
+    ...(existingTemplate || {}),
+    id: existingTemplate?.id || templateId,
+    scopeId: CRM_SCOPE_ID,
+    name: clean(body.name) || existingTemplate?.name || "Filtro SDR",
+    type: qualification.QUALIFICATION_TYPE_SDR,
+    isActive: true,
+    createdAt: existingTemplate?.createdAt || stamp,
+    updatedAt: stamp,
+  };
+  const sourceVersionId = clean(body.versionId);
+  const sourceVersion = rows.versions.find((version) => version.id === sourceVersionId && version.templateId === template.id) || null;
+  const existingDraft = sourceVersion?.status === "draft"
+    ? sourceVersion
+    : rows.versions
+      .filter((version) => version.templateId === template.id && version.status === "draft")
+      .sort((left, right) => Number(right.versionNumber || 0) - Number(left.versionNumber || 0))[0] || null;
+  const maxVersionNumber = rows.versions
+    .filter((version) => version.templateId === template.id)
+    .reduce((max, version) => Math.max(max, Number(version.versionNumber || 0)), 0);
+  const version = {
+    ...(existingDraft || {}),
+    id: existingDraft?.id || newId("qualver"),
+    scopeId: CRM_SCOPE_ID,
+    templateId: template.id,
+    versionNumber: existingDraft?.versionNumber || maxVersionNumber + 1 || 1,
+    status: "draft",
+    totalThreshold: Number(body.totalThreshold) || qualification.DEFAULT_THRESHOLDS.totalThreshold,
+    minimumFitScore: Number(body.minimumFitScore) || qualification.DEFAULT_THRESHOLDS.minimumFitScore,
+    minimumIntentScore: Number(body.minimumIntentScore) || qualification.DEFAULT_THRESHOLDS.minimumIntentScore,
+    createdAt: existingDraft?.createdAt || stamp,
+    publishedAt: null,
+    createdBy: existingDraft?.createdBy || actor,
+  };
+  const questions = cleanQualificationQuestionsPayload(body.questions);
+  if (!questions.length) return { status: 400, body: { error: "qualification_questions_required" } };
+  const existingQuestions = rows.questions.filter((question) => question.versionId === version.id);
+  const existingQuestionIds = new Set(existingQuestions.map((question) => question.id));
+  const existingOptions = rows.options.filter((option) => existingQuestionIds.has(option.questionId));
+  const nextQuestions = questions.map((questionRow) => ({
+    id: newId("qualq"),
+    scopeId: CRM_SCOPE_ID,
+    versionId: version.id,
+    title: questionRow.title,
+    dimension: questionRow.dimension,
+    position: questionRow.position,
+    required: questionRow.required,
+    isHardGate: questionRow.isHardGate,
+    createdAt: stamp,
+  }));
+  const nextOptions = questions.flatMap((questionRow, questionIndex) =>
+    questionRow.options.map((optionRow) => ({
+      id: newId("qualopt"),
+      scopeId: CRM_SCOPE_ID,
+      questionId: nextQuestions[questionIndex].id,
+      label: optionRow.label,
+      points: optionRow.points,
+      position: optionRow.position,
+      hardFail: optionRow.hardFail,
+    })),
+  );
+  const writes = [
+    buildWrite(COLLECTIONS.qualificationTemplates, template.id, template),
+    buildWrite(COLLECTIONS.qualificationVersions, version.id, version),
+    ...existingOptions.map((option) => deleteWrite(COLLECTIONS.qualificationOptions, option.id)),
+    ...existingQuestions.map((question) => deleteWrite(COLLECTIONS.qualificationQuestions, question.id)),
+    ...nextQuestions.map((questionRow) => buildWrite(COLLECTIONS.qualificationQuestions, questionRow.id, questionRow, { createOnly: true })),
+    ...nextOptions.map((optionRow) => buildWrite(COLLECTIONS.qualificationOptions, optionRow.id, optionRow, { createOnly: true })),
+    adminConfigEvent({ type: "crm.qualification_filter.draft_saved", actorId: actor, payload: { templateId: template.id, versionId: version.id, questionCount: nextQuestions.length }, stamp }),
+  ];
+  const committed = await commitWritesAsAdmin({ writes });
+  if (!committed.ok) return { status: committed.status || 500, body: { error: "qualification_filter_save_failed" } };
+  return { status: 200, body: { ok: true, templateId: template.id, versionId: version.id, model: await loadQualificationAdminModel(actor) } };
+};
+
+const handlePublishQualificationFilter = async ({ session, body }) => {
+  const stamp = nowIso();
+  const actor = clean(session.sub) || null;
+  const rows = await loadQualificationConfigRows();
+  const versionId = clean(body.versionId);
+  const version = rows.versions.find((row) => row.id === versionId);
+  if (!version) return { status: 404, body: { error: "qualification_version_not_found" } };
+  if (version.status === "published") return { status: 200, body: { ok: true, versionId, unchanged: true, model: await loadQualificationAdminModel(actor) } };
+  const questions = rows.questions.filter((question) => question.versionId === version.id);
+  const questionIds = new Set(questions.map((question) => question.id));
+  const options = rows.options.filter((option) => questionIds.has(option.questionId));
+  if (!questions.length || questions.some((question) => options.filter((option) => option.questionId === question.id).length < 2)) {
+    return { status: 400, body: { error: "qualification_version_incomplete" } };
+  }
+  const previousPublished = rows.versions.filter((row) => row.templateId === version.templateId && row.status === "published" && row.id !== version.id);
+  const writes = [
+    ...previousPublished.map((row) => buildWrite(COLLECTIONS.qualificationVersions, row.id, { ...row, status: "archived" })),
+    buildWrite(COLLECTIONS.qualificationVersions, version.id, { ...version, status: "published", publishedAt: stamp }),
+    adminConfigEvent({ type: "crm.qualification_filter.published", actorId: actor, payload: { templateId: version.templateId, versionId: version.id, versionNumber: version.versionNumber }, stamp }),
+  ];
+  const committed = await commitWritesAsAdmin({ writes });
+  if (!committed.ok) return { status: committed.status || 500, body: { error: "qualification_filter_publish_failed" } };
+  return { status: 200, body: { ok: true, versionId: version.id, model: await loadQualificationAdminModel(actor) } };
+};
+
 const handleCreateStage = async ({ session, body }) => {
   const pipelineId = clean(body.pipelineId);
   const name = clean(body.name);
@@ -2176,6 +2380,11 @@ module.exports = async (req, res) => {
         const analytics = await loadQualificationAnalytics(Object.fromEntries(url.searchParams.entries()));
         return sendJson(res, 200, analytics);
       }
+      if (clean(url.searchParams.get("view")) === "qualification_config") {
+        if (auth.role !== "admin") return sendJson(res, 403, { error: "admin_required" });
+        const model = await loadQualificationAdminModel(clean(auth.session?.sub));
+        return sendJson(res, 200, model);
+      }
       if (clean(url.searchParams.get("view")) === "actions") {
         const actions = await loadQualificationActionsQueue({ query: Object.fromEntries(url.searchParams.entries()), auth });
         return sendJson(res, 200, actions);
@@ -2209,6 +2418,8 @@ module.exports = async (req, res) => {
       "update_stage",
       "reorder_stages",
       "delete_stage",
+      "save_qualification_filter",
+      "publish_qualification_filter",
     ]);
     if (adminActions.has(action)) {
       const adminGuard = requireAdmin(auth);
@@ -2263,6 +2474,10 @@ module.exports = async (req, res) => {
                                                     ? await handleReorderStages({ session: auth.session, body })
                                                     : action === "delete_stage"
                                                       ? await handleDeleteStage({ session: auth.session, body })
+                                                      : action === "save_qualification_filter"
+                                                        ? await handleSaveQualificationFilter({ session: auth.session, body })
+                                                        : action === "publish_qualification_filter"
+                                                          ? await handlePublishQualificationFilter({ session: auth.session, body })
                                                       : action === "create_activity"
                                                         ? await handleCreateActivity({ auth, body })
                                                         : action === "update_activity"

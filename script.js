@@ -12173,6 +12173,16 @@ const nativeCrmState = {
       version: "",
     },
   },
+  qualificationConfig: {
+    loadedAt: 0,
+    loading: false,
+    saving: false,
+    error: "",
+    data: null,
+    selectedTemplateId: "",
+    selectedVersionId: "",
+    draft: null,
+  },
   actions: {
     rows: [],
     counts: { pending: 0 },
@@ -12716,6 +12726,8 @@ const nativeCrmIcon = (name, className = "") => {
     calendar: `<path d="M7 3v4M17 3v4M4 9h16M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" ${common}></path>`,
     check: `<path d="m5 12 4 4L19 6" ${common}></path>`,
     "chevron-left": `<path d="m15 18-6-6 6-6" ${common}></path>`,
+    "chevron-up": `<path d="m18 15-6-6-6 6" ${common}></path>`,
+    "chevron-down": `<path d="m6 9 6 6 6-6" ${common}></path>`,
     "arrow-up-right": `<path d="M7 17 17 7M9 7h8v8" ${common}></path>`,
     dot: `<circle cx="12" cy="12" r="3" fill="currentColor"></circle>`,
     close: `<path d="M6 6l12 12M18 6 6 18" ${common}></path>`,
@@ -14409,12 +14421,15 @@ const renderNativeCrmQualificationWorkspace = () => {
   const answeredCount = questions.filter((question) => answeredByQuestion.has(String(question.id))).length;
   const pendingTransition = workspace.pendingTransition || null;
   const subtitle = opportunity.contact?.name || opportunity.title || "Lead";
+  const missingCount = Math.max(0, questions.length - answeredCount);
+  const statusLabel = nativeCrmQualificationStatusLabel(run);
   const resultActions = pendingTransition
     ? isPassed
-      ? `<button type="button" class="button button-solid" data-crm-pending-advance="${escapeHtml(pendingTransition.targetStageId || "")}" data-crm-opportunity-id="${escapeHtml(opportunity.id)}">Avançar para etapa solicitada</button>`
-      : `<button type="button" class="button button-outline" data-crm-opportunity-open="${escapeHtml(opportunity.id)}">Voltar para oportunidade</button>`
-    : `<button type="button" class="button button-outline" data-crm-opportunity-open="${escapeHtml(opportunity.id)}">Voltar para oportunidade</button>`;
+      ? `<button type="button" class="native-crm-qualification-cta is-primary" data-crm-pending-advance="${escapeHtml(pendingTransition.targetStageId || "")}" data-crm-opportunity-id="${escapeHtml(opportunity.id)}">Avançar para etapa solicitada</button>`
+      : `<button type="button" class="native-crm-qualification-cta" data-crm-opportunity-open="${escapeHtml(opportunity.id)}">Voltar para oportunidade</button>`
+    : `<button type="button" class="native-crm-qualification-cta" data-crm-opportunity-open="${escapeHtml(opportunity.id)}">Voltar para oportunidade</button>`;
   const progress = questions.length ? `${answeredCount}/${questions.length}` : "0/0";
+  const percent = questions.length ? Math.round((answeredCount / questions.length) * 100) : 0;
   const body = detail.loading && !qual ? `
     <section class="native-crm-qualification-work-card"><div class="native-crm-muted">Carregando qualificação…</div></section>
   ` : !qual?.version || !questions.length ? `
@@ -14426,18 +14441,14 @@ const renderNativeCrmQualificationWorkspace = () => {
     <section class="native-crm-qualification-work-card">
       <h3>Qualificação ainda não iniciada</h3>
       <p>Inicie o questionário para avaliar fit e intenção antes do avanço comercial.</p>
-      <button type="button" class="button button-solid" data-crm-qualification-start="${escapeHtml(opportunity.id)}">Iniciar qualificação</button>
+      <button type="button" class="native-crm-qualification-cta is-primary" data-crm-qualification-start="${escapeHtml(opportunity.id)}">Iniciar qualificação</button>
     </section>
   ` : isInProgress ? `
-    <section class="native-crm-qualification-work-card">
-      <div class="native-crm-qualification-progress">
-        <span>Respostas preenchidas</span>
-        <strong>${escapeHtml(progress)}</strong>
-      </div>
+    <section class="native-crm-qualification-main-panel">
       <div class="native-crm-qualification-form native-crm-qualification-form-large" data-crm-qualification-form data-crm-opportunity-id="${escapeHtml(opportunity.id)}" data-crm-qualification-run="${escapeHtml(run.id || "")}">
         ${questions.map((question, index) => `
           <fieldset class="native-crm-qualification-question" data-question-id="${escapeHtml(question.id)}">
-            <legend>${escapeHtml(`${index + 1}. ${question.title}`)}</legend>
+            <legend><span>${escapeHtml(String(index + 1).padStart(2, "0"))}</span>${escapeHtml(question.title)}</legend>
             ${(question.options || []).map((option) => `
               <label>
                 <input type="radio" name="crm-qual-${escapeHtml(question.id)}" value="${escapeHtml(option.id)}" ${answeredByQuestion.get(String(question.id)) === String(option.id) ? "checked" : ""} />
@@ -14447,17 +14458,13 @@ const renderNativeCrmQualificationWorkspace = () => {
           </fieldset>
         `).join("")}
         <div class="native-crm-form-error" data-crm-qualification-error hidden></div>
-        <div class="native-crm-inline-actions">
-          <button type="button" class="button button-outline" data-crm-opportunity-open="${escapeHtml(opportunity.id)}">Voltar sem concluir</button>
-          <button type="button" class="button button-solid" data-crm-qualification-submit ${nativeCrmState.saving ? "disabled" : ""}>${nativeCrmState.saving ? "Salvando…" : "Concluir qualificação"}</button>
-        </div>
       </div>
     </section>
   ` : `
     <section class="native-crm-qualification-work-card native-crm-qualification-result" data-status="${isPassed ? "passed" : "failed"}">
       <div class="native-crm-section-head">
         <h3>${isPassed ? "Lead aprovado" : "Lead reprovado"}</h3>
-        <span class="native-crm-qualification-pill">${escapeHtml(nativeCrmQualificationStatusLabel(run))}</span>
+        <span class="native-crm-qualification-pill">${escapeHtml(statusLabel)}</span>
       </div>
       ${nativeCrmQualificationSummaryHtml(run)}
       <p>${isPassed ? "A qualificação foi concluída e o lead está elegível para continuar o fluxo permitido." : "A oportunidade permanece na etapa anterior para preservar o fluxo comercial."}</p>
@@ -14469,13 +14476,47 @@ const renderNativeCrmQualificationWorkspace = () => {
       ${nativeCrmWorkspaceHeaderHtml({
         title: "Qualificação SDR",
         subtitle,
-        meta: `<span>${escapeHtml(nativeCrmQualificationStatusLabel(run))}</span><span>${escapeHtml(progress)}</span>`,
-        actions: `<button type="button" class="button button-outline button-small" data-crm-opportunity-open="${escapeHtml(opportunity.id)}">Oportunidade</button>`,
+        meta: `<span>${escapeHtml(statusLabel)}</span><span>${escapeHtml(progress)} respondidas</span>`,
+        actions: `<button type="button" class="native-crm-record-action" data-crm-opportunity-open="${escapeHtml(opportunity.id)}">Oportunidade</button>`,
         backLabel: "Voltar",
       })}
       <main class="native-crm-full-workspace native-crm-qualification-workspace">
-        ${pendingTransition ? `<section class="native-crm-qualification-pending-stage">Movimento pausado até a aprovação da qualificação.</section>` : ""}
-        ${body}
+        <section class="native-crm-qualification-layout">
+          <div class="native-crm-qualification-content">
+            <div class="native-crm-qualification-hero">
+              <span>Filtro SDR</span>
+              <h3>${escapeHtml(qual?.template?.name || "Qualificação comercial")}</h3>
+              <p>Responda com precisão para liberar o avanço comercial sem expor score durante o preenchimento.</p>
+              <div class="native-crm-qualification-progressbar"><span style="width:${escapeHtml(String(percent))}%"></span></div>
+            </div>
+            ${pendingTransition ? `<section class="native-crm-qualification-pending-stage">Movimento pausado até a aprovação da qualificação.</section>` : ""}
+            ${body}
+          </div>
+          <aside class="native-crm-qualification-side">
+            <section class="native-crm-qualification-side-card">
+              <span>Lead</span>
+              <strong>${escapeHtml(subtitle)}</strong>
+              <em>${escapeHtml(opportunity.title || "Opportunity")}</em>
+            </section>
+            <section class="native-crm-qualification-side-card">
+              <span>Progresso</span>
+              <strong>${escapeHtml(progress)}</strong>
+              <em>${escapeHtml(`${missingCount} faltantes`)}</em>
+            </section>
+            <section class="native-crm-qualification-side-card">
+              <span>Status</span>
+              <strong>${escapeHtml(statusLabel)}</strong>
+              <em>${pendingTransition ? "Movimento pendente" : "Fluxo SDR"}</em>
+            </section>
+            ${pendingTransition ? `<section class="native-crm-qualification-side-card"><span>Etapa destino</span><strong>${escapeHtml(pendingTransition.targetStageId || "Solicitada")}</strong><em>Avanço após aprovação</em></section>` : ""}
+            ${isInProgress ? `
+              <div class="native-crm-qualification-side-actions">
+                <button type="button" class="native-crm-qualification-cta" data-crm-opportunity-open="${escapeHtml(opportunity.id)}">Voltar sem concluir</button>
+                <button type="button" class="native-crm-qualification-cta is-primary" data-crm-qualification-submit ${nativeCrmState.saving ? "disabled" : ""}>${nativeCrmState.saving ? "Salvando…" : "Concluir qualificação"}</button>
+              </div>
+            ` : ""}
+          </aside>
+        </section>
       </main>
       ${nativeCrmState.error ? `<div class="native-crm-toast">${escapeHtml(nativeCrmState.error)}</div>` : ""}
     </div>
@@ -14835,6 +14876,162 @@ const renderNativeCrmAnalytics = () => {
   `;
 };
 
+const CRM_QUALIFICATION_DIMENSIONS = [
+  ["need_fit", "Fit / necessidade"],
+  ["economic_readiness", "Prontidão econômica"],
+  ["decision_readiness", "Decisão"],
+  ["pain", "Dor"],
+  ["impact", "Impacto"],
+  ["urgency", "Urgência"],
+  ["commitment", "Compromisso"],
+];
+
+const crmQualificationDimensionLabel = (value) => Object.fromEntries(CRM_QUALIFICATION_DIMENSIONS)[String(value || "")] || "Fit / necessidade";
+
+const nativeCrmQualificationConfigTemplates = () => Array.isArray(nativeCrmState.qualificationConfig.data?.templates) ? nativeCrmState.qualificationConfig.data.templates : [];
+
+const nativeCrmQualificationSelectedTemplate = () => {
+  const templates = nativeCrmQualificationConfigTemplates();
+  return templates.find((template) => template.id === nativeCrmState.qualificationConfig.selectedTemplateId) || templates[0] || null;
+};
+
+const nativeCrmQualificationPreferredVersion = (template) => {
+  const versions = Array.isArray(template?.versions) ? template.versions : [];
+  return versions.find((version) => version.id === nativeCrmState.qualificationConfig.selectedVersionId)
+    || versions.find((version) => version.status === "draft")
+    || versions.find((version) => version.status === "published")
+    || versions[0]
+    || null;
+};
+
+const nativeCrmQualificationDraftFromVersion = (template, version) => ({
+  templateId: template?.id || "",
+  versionId: version?.status === "draft" ? version.id : "",
+  name: template?.name || "Filtro SDR",
+  totalThreshold: Number(version?.totalThreshold || 65),
+  minimumFitScore: Number(version?.minimumFitScore || 30),
+  minimumIntentScore: Number(version?.minimumIntentScore || 30),
+  questions: (Array.isArray(version?.questions) ? version.questions : []).map((question) => ({
+    localId: question.id || `q_${Date.now()}_${Math.random()}`,
+    title: question.title || "",
+    dimension: question.dimension || "need_fit",
+    isHardGate: question.isHardGate === true,
+    required: question.required !== false,
+    options: (Array.isArray(question.options) ? question.options : []).map((option) => ({
+      localId: option.id || `o_${Date.now()}_${Math.random()}`,
+      label: option.label || "",
+      points: Number(option.points || 0),
+      hardFail: option.hardFail === true,
+    })),
+  })),
+});
+
+const ensureNativeCrmQualificationDraft = () => {
+  const template = nativeCrmQualificationSelectedTemplate();
+  const version = nativeCrmQualificationPreferredVersion(template);
+  const state = nativeCrmState.qualificationConfig;
+  if (!state.draft || state.draft.templateId !== template?.id || (state.selectedVersionId && state.draft.versionId !== state.selectedVersionId && version?.status === "draft")) {
+    state.selectedTemplateId = template?.id || "";
+    state.selectedVersionId = version?.id || "";
+    state.draft = nativeCrmQualificationDraftFromVersion(template, version);
+  }
+  return state.draft;
+};
+
+const renderNativeCrmQualificationConfig = () => {
+  const state = nativeCrmState.qualificationConfig;
+  if (state.loading && !state.data) return `<section class="native-crm-admin-config"><div class="native-crm-muted">Carregando filtros…</div></section>`;
+  if (state.error && !state.data) return `<section class="native-crm-admin-config"><div class="native-crm-form-error">${escapeHtml(state.error)}</div></section>`;
+  const templates = nativeCrmQualificationConfigTemplates();
+  const template = nativeCrmQualificationSelectedTemplate();
+  const versions = Array.isArray(template?.versions) ? template.versions : [];
+  const published = versions.find((version) => version.status === "published") || null;
+  const draft = ensureNativeCrmQualificationDraft();
+  const questionCount = draft.questions.length;
+  const optionCount = draft.questions.reduce((sum, question) => sum + question.options.length, 0);
+  return `
+    <section class="native-crm-admin-config">
+      <aside class="native-crm-admin-config-list">
+        <div class="native-crm-record-column-head">
+          <span>Filtros SDR</span>
+          <strong>${escapeHtml(String(templates.length))}</strong>
+        </div>
+        ${templates.map((row) => `
+          <button type="button" class="native-crm-config-template ${row.id === template?.id ? "is-active" : ""}" data-crm-qualification-template="${escapeHtml(row.id)}">
+            <strong>${escapeHtml(row.name || "Filtro SDR")}</strong>
+            <span>${escapeHtml((row.versions || []).find((version) => version.status === "published") ? "Publicado" : "Sem versão publicada")}</span>
+          </button>
+        `).join("")}
+      </aside>
+      <main class="native-crm-admin-config-editor">
+        <header class="native-crm-admin-config-head">
+          <div>
+            <span>Configuração de qualificação</span>
+            <h3>${escapeHtml(draft.name || "Filtro SDR")}</h3>
+            <p>Edite em draft e publique uma versão para governar a operação dos SDRs.</p>
+          </div>
+          <div class="native-crm-admin-config-summary">
+            <span><strong>${escapeHtml(String(questionCount))}</strong>Perguntas</span>
+            <span><strong>${escapeHtml(String(optionCount))}</strong>Respostas</span>
+            <span><strong>${escapeHtml(String(draft.totalThreshold))}</strong>Mínimo</span>
+            <span><strong>${published ? `v${escapeHtml(String(published.versionNumber))}` : "—"}</strong>Publicado</span>
+          </div>
+        </header>
+        ${state.error ? `<div class="native-crm-form-error">${escapeHtml(state.error)}</div>` : ""}
+        <section class="native-crm-admin-config-panel">
+          <label><span>Nome do filtro</span><input data-crm-qualification-draft="name" value="${escapeHtml(draft.name)}" /></label>
+          <div class="native-crm-form-grid">
+            <label><span>Score mínimo total</span><input type="number" min="0" step="1" data-crm-qualification-draft="totalThreshold" value="${escapeHtml(String(draft.totalThreshold))}" /></label>
+            <label><span>Fit mínimo</span><input type="number" min="0" step="1" data-crm-qualification-draft="minimumFitScore" value="${escapeHtml(String(draft.minimumFitScore))}" /></label>
+            <label><span>Intent mínimo</span><input type="number" min="0" step="1" data-crm-qualification-draft="minimumIntentScore" value="${escapeHtml(String(draft.minimumIntentScore))}" /></label>
+          </div>
+        </section>
+        <section class="native-crm-admin-question-list">
+          <div class="native-crm-section-head">
+            <h3>Perguntas e respostas</h3>
+            <button type="button" class="button button-outline button-small" data-crm-qualification-question-add>${nativeCrmIcon("plus")}Pergunta</button>
+          </div>
+          ${draft.questions.map((question, questionIndex) => `
+            <article class="native-crm-admin-question" data-question-index="${questionIndex}">
+              <header>
+                <strong>${escapeHtml(`Pergunta ${questionIndex + 1}`)}</strong>
+                <div>
+                  <button type="button" class="native-crm-icon-button" data-crm-qualification-question-move="${questionIndex}" data-direction="up" aria-label="Subir">${nativeCrmIcon("chevron-up")}</button>
+                  <button type="button" class="native-crm-icon-button" data-crm-qualification-question-move="${questionIndex}" data-direction="down" aria-label="Descer">${nativeCrmIcon("chevron-down")}</button>
+                  <button type="button" class="native-crm-icon-button" data-crm-qualification-question-remove="${questionIndex}" aria-label="Remover">${nativeCrmIcon("close")}</button>
+                </div>
+              </header>
+              <label><span>Título da pergunta</span><input data-crm-qualification-question-field="title" data-question-index="${questionIndex}" value="${escapeHtml(question.title)}" /></label>
+              <div class="native-crm-form-grid">
+                <label><span>Dimensão</span><select data-crm-qualification-question-field="dimension" data-question-index="${questionIndex}">
+                  ${CRM_QUALIFICATION_DIMENSIONS.map(([value, label]) => `<option value="${escapeHtml(value)}" ${question.dimension === value ? "selected" : ""}>${escapeHtml(label)}</option>`).join("")}
+                </select></label>
+                <label class="native-crm-checkline"><input type="checkbox" data-crm-qualification-question-field="isHardGate" data-question-index="${questionIndex}" ${question.isHardGate ? "checked" : ""} /><span>Hard gate</span></label>
+              </div>
+              <div class="native-crm-admin-option-list">
+                ${question.options.map((option, optionIndex) => `
+                  <div class="native-crm-admin-option" data-question-index="${questionIndex}" data-option-index="${optionIndex}">
+                    <input data-crm-qualification-option-field="label" data-question-index="${questionIndex}" data-option-index="${optionIndex}" value="${escapeHtml(option.label)}" placeholder="Texto da resposta" />
+                    <input type="number" step="1" data-crm-qualification-option-field="points" data-question-index="${questionIndex}" data-option-index="${optionIndex}" value="${escapeHtml(String(option.points))}" aria-label="Score" />
+                    <label><input type="checkbox" data-crm-qualification-option-field="hardFail" data-question-index="${questionIndex}" data-option-index="${optionIndex}" ${option.hardFail ? "checked" : ""} />Hard fail</label>
+                    <button type="button" class="native-crm-icon-button" data-crm-qualification-option-remove="${questionIndex}:${optionIndex}" aria-label="Remover resposta">${nativeCrmIcon("close")}</button>
+                  </div>
+                `).join("")}
+                <button type="button" class="button button-outline button-small" data-crm-qualification-option-add="${questionIndex}">${nativeCrmIcon("plus")}Resposta</button>
+              </div>
+            </article>
+          `).join("")}
+        </section>
+        <footer class="native-crm-admin-config-foot">
+          <button type="button" class="button button-outline" data-crm-qualification-config-reload>Descartar alterações</button>
+          <button type="button" class="button button-outline" data-crm-qualification-config-save ${state.saving ? "disabled" : ""}>${state.saving ? "Salvando…" : "Salvar draft"}</button>
+          <button type="button" class="button button-solid" data-crm-qualification-config-publish ${state.saving ? "disabled" : ""}>Publicar versão</button>
+        </footer>
+      </main>
+    </section>
+  `;
+};
+
 const renderNativeCrmDrawer = () => {
   const drawer = nativeCrmState.drawer;
   if (!drawer) return "";
@@ -14881,7 +15078,7 @@ const setNativeCrmUrlState = ({ push = false } = {}) => {
   const historyMethod = push ? "pushState" : "replaceState";
   if (!window.history?.[historyMethod]) return;
   const url = new URL(window.location.href);
-  if (nativeCrmState.mode === "list" || nativeCrmState.mode === "analytics" || nativeCrmState.mode === "actions") url.searchParams.set("view", nativeCrmState.mode);
+  if (nativeCrmState.mode === "list" || nativeCrmState.mode === "analytics" || nativeCrmState.mode === "actions" || nativeCrmState.mode === "qualification_config") url.searchParams.set("view", nativeCrmState.mode);
   else url.searchParams.delete("view");
   const pipelineId = selectedCrmPipelineId();
   if (pipelineId) url.searchParams.set("pipeline", pipelineId);
@@ -14981,9 +15178,11 @@ const renderNativeCrm = () => {
     ? renderNativeCrmAnalytics()
     : nativeCrmState.mode === "actions"
       ? renderNativeCrmActions()
-      : activeWorkspacePipelines.length
-        ? (nativeCrmState.mode === "list" ? renderNativeCrmList() : renderNativeCrmBoard())
-        : `<div class="native-crm-empty">Nenhum pipeline disponível.</div>`;
+      : nativeCrmState.mode === "qualification_config"
+        ? renderNativeCrmQualificationConfig()
+        : activeWorkspacePipelines.length
+          ? (nativeCrmState.mode === "list" ? renderNativeCrmList() : renderNativeCrmBoard())
+          : `<div class="native-crm-empty">Nenhum pipeline disponível.</div>`;
   root.innerHTML = `
     <div class="native-crm-shell">
       <header class="native-crm-head">
@@ -15010,6 +15209,7 @@ const renderNativeCrm = () => {
           <button type="button" class="${nativeCrmState.mode === "list" ? "is-active" : ""}" data-crm-view="list">Lista</button>
           <button type="button" class="${nativeCrmState.mode === "actions" ? "is-active" : ""}" data-crm-view="actions">Ações${pendingActions ? ` ${escapeHtml(String(pendingActions))}` : ""}</button>
           ${isNativeCrmAdmin() ? `<button type="button" class="${nativeCrmState.mode === "analytics" ? "is-active" : ""}" data-crm-view="analytics">Analytics</button>` : ""}
+          ${isNativeCrmAdmin() ? `<button type="button" class="${nativeCrmState.mode === "qualification_config" ? "is-active" : ""}" data-crm-view="qualification_config">Qualificação</button>` : ""}
         </div>
       </section>
       <main class="native-crm-workspace">
@@ -15048,7 +15248,8 @@ const loadNativeCrm = async ({ force = false } = {}) => {
     if (nativeCrmState.mode === "list") loadNativeCrmList({ reset: true }).catch(() => {});
     if (nativeCrmState.mode === "analytics") loadNativeCrmAnalytics({ force: false }).catch(() => {});
     if (nativeCrmState.mode === "actions") loadNativeCrmActions({ force: false }).catch(() => {});
-    else refreshNativeCrmActionsBadge().then(renderNativeCrm).catch(() => {});
+    if (nativeCrmState.mode === "qualification_config") loadNativeCrmQualificationConfig({ force: false }).catch(() => {});
+    if (nativeCrmState.mode !== "actions" && nativeCrmState.mode !== "analytics" && nativeCrmState.mode !== "qualification_config") refreshNativeCrmActionsBadge().then(renderNativeCrm).catch(() => {});
   } catch (error) {
     nativeCrmState.error = error?.message || "Erro ao carregar CRM.";
   } finally {
@@ -15062,6 +15263,7 @@ const applyNativeCrmUrlState = () => {
   if (params.get("view") === "list") nativeCrmState.mode = "list";
   if (params.get("view") === "analytics") nativeCrmState.mode = "analytics";
   if (params.get("view") === "actions") nativeCrmState.mode = "actions";
+  if (params.get("view") === "qualification_config") nativeCrmState.mode = "qualification_config";
   if (params.get("workspace")) nativeCrmState.workspace = normalizeCrmWorkspace(params.get("workspace")) || nativeCrmState.workspace;
   if (params.get("pipeline")) nativeCrmState.selectedPipelineId = params.get("pipeline") || "";
   const opportunityId = String(params.get("opportunity") || "").trim();
@@ -15196,6 +15398,85 @@ const loadNativeCrmAnalytics = async ({ force = false } = {}) => {
     state.loading = false;
     renderNativeCrm();
   }
+};
+
+const loadNativeCrmQualificationConfig = async ({ force = false } = {}) => {
+  const state = nativeCrmState.qualificationConfig;
+  if (!state || state.loading) return;
+  if (!force && state.loadedAt && Date.now() - state.loadedAt < 30_000) {
+    renderNativeCrm();
+    return;
+  }
+  state.loading = true;
+  state.error = "";
+  renderNativeCrm();
+  try {
+    const params = new URLSearchParams({ view: "qualification_config" });
+    const workspace = getNativeCrmWorkspace();
+    if (workspace) params.set("workspace", workspace);
+    const res = await fetchWithAuth(`/api/crm?${params.toString()}`, { method: "GET" });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error || "qualification_config_failed");
+    state.data = data;
+    state.loadedAt = Date.now();
+    state.selectedTemplateId = state.selectedTemplateId || data?.activeTemplateId || data?.templates?.[0]?.id || "";
+    state.selectedVersionId = "";
+    state.draft = null;
+  } catch (error) {
+    state.error = error?.message || "Não foi possível carregar filtros.";
+  } finally {
+    state.loading = false;
+    renderNativeCrm();
+  }
+};
+
+const saveNativeCrmQualificationConfig = async ({ publish = false } = {}) => {
+  const state = nativeCrmState.qualificationConfig;
+  const draft = ensureNativeCrmQualificationDraft();
+  if (!draft) return;
+  state.saving = true;
+  state.error = "";
+  renderNativeCrm();
+  try {
+    const saveRes = await fetchWithAuth("/api/crm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "save_qualification_filter", ...draft }),
+    });
+    const saveData = await saveRes.json().catch(() => null);
+    if (!saveRes.ok) throw new Error(saveData?.error || "qualification_filter_save_failed");
+    state.data = saveData?.model || state.data;
+    state.loadedAt = Date.now();
+    state.selectedTemplateId = saveData?.templateId || draft.templateId;
+    state.selectedVersionId = saveData?.versionId || "";
+    state.draft = null;
+    if (publish) {
+      const publishRes = await fetchWithAuth("/api/crm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "publish_qualification_filter", versionId: state.selectedVersionId }),
+      });
+      const publishData = await publishRes.json().catch(() => null);
+      if (!publishRes.ok) throw new Error(publishData?.error || "qualification_filter_publish_failed");
+      state.data = publishData?.model || state.data;
+      state.loadedAt = Date.now();
+      state.selectedVersionId = "";
+      state.draft = null;
+    }
+  } catch (error) {
+    state.error = error?.message || "Não foi possível salvar o filtro.";
+  } finally {
+    state.saving = false;
+    renderNativeCrm();
+  }
+};
+
+const mutateNativeCrmQualificationDraft = (mutator) => {
+  const draft = ensureNativeCrmQualificationDraft();
+  if (!draft || typeof mutator !== "function") return;
+  mutator(draft);
+  nativeCrmState.qualificationConfig.draft = { ...draft, questions: draft.questions.map((question) => ({ ...question, options: question.options.map((option) => ({ ...option })) })) };
+  renderNativeCrm();
 };
 
 const scheduleNativeCrmSearchReload = () => {
@@ -41584,7 +41865,15 @@ document.addEventListener("click", (event) => {
     if (viewButton instanceof HTMLButtonElement) {
       event.preventDefault();
       const requestedView = String(viewButton.getAttribute("data-crm-view") || "funnel");
-      nativeCrmState.mode = requestedView === "list" ? "list" : requestedView === "analytics" ? "analytics" : requestedView === "actions" ? "actions" : "funnel";
+      nativeCrmState.mode = requestedView === "list"
+        ? "list"
+        : requestedView === "analytics"
+          ? "analytics"
+          : requestedView === "actions"
+            ? "actions"
+            : requestedView === "qualification_config"
+              ? "qualification_config"
+              : "funnel";
       nativeCrmState.filtersOpen = false;
       nativeCrmState.filterPopover = "";
       updateNativeCrmUrlState();
@@ -41592,6 +41881,7 @@ document.addEventListener("click", (event) => {
       reloadNativeCrmListIfNeeded();
       if (nativeCrmState.mode === "analytics") loadNativeCrmAnalytics({ force: false }).catch(() => {});
       if (nativeCrmState.mode === "actions") loadNativeCrmActions({ force: false }).catch(() => {});
+      if (nativeCrmState.mode === "qualification_config") loadNativeCrmQualificationConfig({ force: false }).catch(() => {});
       return;
     }
     const actionsRetry = target.closest("[data-crm-actions-retry]");
@@ -41604,6 +41894,96 @@ document.addEventListener("click", (event) => {
     if (analyticsRetry instanceof HTMLButtonElement) {
       event.preventDefault();
       loadNativeCrmAnalytics({ force: true }).catch(() => {});
+      return;
+    }
+    const pickQualificationTemplate = target.closest("[data-crm-qualification-template]");
+    if (pickQualificationTemplate instanceof HTMLButtonElement) {
+      event.preventDefault();
+      nativeCrmState.qualificationConfig.selectedTemplateId = String(pickQualificationTemplate.getAttribute("data-crm-qualification-template") || "");
+      nativeCrmState.qualificationConfig.selectedVersionId = "";
+      nativeCrmState.qualificationConfig.draft = null;
+      renderNativeCrm();
+      return;
+    }
+    const reloadQualificationConfig = target.closest("[data-crm-qualification-config-reload]");
+    if (reloadQualificationConfig instanceof HTMLButtonElement) {
+      event.preventDefault();
+      nativeCrmState.qualificationConfig.draft = null;
+      loadNativeCrmQualificationConfig({ force: true }).catch(() => {});
+      return;
+    }
+    const saveQualificationConfig = target.closest("[data-crm-qualification-config-save]");
+    if (saveQualificationConfig instanceof HTMLButtonElement) {
+      event.preventDefault();
+      saveNativeCrmQualificationConfig({ publish: false }).catch(() => {});
+      return;
+    }
+    const publishQualificationConfig = target.closest("[data-crm-qualification-config-publish]");
+    if (publishQualificationConfig instanceof HTMLButtonElement) {
+      event.preventDefault();
+      saveNativeCrmQualificationConfig({ publish: true }).catch(() => {});
+      return;
+    }
+    const addQualificationQuestion = target.closest("[data-crm-qualification-question-add]");
+    if (addQualificationQuestion instanceof HTMLButtonElement) {
+      event.preventDefault();
+      mutateNativeCrmQualificationDraft((draft) => {
+        draft.questions.push({
+          localId: `q_${Date.now()}`,
+          title: "Nova pergunta",
+          dimension: "need_fit",
+          isHardGate: false,
+          required: true,
+          options: [
+            { localId: `o_${Date.now()}_1`, label: "Resposta positiva", points: 10, hardFail: false },
+            { localId: `o_${Date.now()}_2`, label: "Resposta negativa", points: 0, hardFail: false },
+          ],
+        });
+      });
+      return;
+    }
+    const moveQualificationQuestion = target.closest("[data-crm-qualification-question-move]");
+    if (moveQualificationQuestion instanceof HTMLButtonElement) {
+      event.preventDefault();
+      const index = Number(moveQualificationQuestion.getAttribute("data-crm-qualification-question-move"));
+      const direction = String(moveQualificationQuestion.getAttribute("data-direction") || "");
+      mutateNativeCrmQualificationDraft((draft) => {
+        const targetIndex = direction === "up" ? index - 1 : index + 1;
+        if (index < 0 || targetIndex < 0 || index >= draft.questions.length || targetIndex >= draft.questions.length) return;
+        [draft.questions[index], draft.questions[targetIndex]] = [draft.questions[targetIndex], draft.questions[index]];
+      });
+      return;
+    }
+    const removeQualificationQuestion = target.closest("[data-crm-qualification-question-remove]");
+    if (removeQualificationQuestion instanceof HTMLButtonElement) {
+      event.preventDefault();
+      const index = Number(removeQualificationQuestion.getAttribute("data-crm-qualification-question-remove"));
+      mutateNativeCrmQualificationDraft((draft) => {
+        if (draft.questions.length <= 1) return;
+        draft.questions.splice(index, 1);
+      });
+      return;
+    }
+    const addQualificationOption = target.closest("[data-crm-qualification-option-add]");
+    if (addQualificationOption instanceof HTMLButtonElement) {
+      event.preventDefault();
+      const questionIndex = Number(addQualificationOption.getAttribute("data-crm-qualification-option-add"));
+      mutateNativeCrmQualificationDraft((draft) => {
+        const question = draft.questions[questionIndex];
+        if (!question) return;
+        question.options.push({ localId: `o_${Date.now()}`, label: "Nova resposta", points: 0, hardFail: false });
+      });
+      return;
+    }
+    const removeQualificationOption = target.closest("[data-crm-qualification-option-remove]");
+    if (removeQualificationOption instanceof HTMLButtonElement) {
+      event.preventDefault();
+      const [questionIndex, optionIndex] = String(removeQualificationOption.getAttribute("data-crm-qualification-option-remove") || "").split(":").map(Number);
+      mutateNativeCrmQualificationDraft((draft) => {
+        const question = draft.questions[questionIndex];
+        if (!question || question.options.length <= 2) return;
+        question.options.splice(optionIndex, 1);
+      });
       return;
     }
     const sortButton = target.closest("[data-crm-sort]");
@@ -41811,6 +42191,34 @@ document.addEventListener("input", (event) => {
       loadNativeCrmActions({ force: true }).catch(() => {});
     }, 320);
   }
+  if (target.matches("[data-crm-qualification-draft]")) {
+    const key = String(target.getAttribute("data-crm-qualification-draft") || "");
+    const draft = ensureNativeCrmQualificationDraft();
+    if (key === "name") draft.name = target.value;
+    if (key === "totalThreshold" || key === "minimumFitScore" || key === "minimumIntentScore") draft[key] = Number(target.value) || 0;
+  }
+  if (target.matches("[data-crm-qualification-question-field]")) {
+    const key = String(target.getAttribute("data-crm-qualification-question-field") || "");
+    const questionIndex = Number(target.getAttribute("data-question-index"));
+    const draft = ensureNativeCrmQualificationDraft();
+    const question = draft.questions[questionIndex];
+    if (question) {
+      if (target instanceof HTMLInputElement && target.type === "checkbox") question[key] = target.checked;
+      else question[key] = target.value;
+    }
+  }
+  if (target.matches("[data-crm-qualification-option-field]")) {
+    const key = String(target.getAttribute("data-crm-qualification-option-field") || "");
+    const questionIndex = Number(target.getAttribute("data-question-index"));
+    const optionIndex = Number(target.getAttribute("data-option-index"));
+    const draft = ensureNativeCrmQualificationDraft();
+    const option = draft.questions[questionIndex]?.options?.[optionIndex];
+    if (option) {
+      if (target instanceof HTMLInputElement && target.type === "checkbox") option[key] = target.checked;
+      else if (key === "points") option[key] = Number(target.value) || 0;
+      else option[key] = target.value;
+    }
+  }
 });
 
 document.addEventListener("change", (event) => {
@@ -41865,6 +42273,10 @@ document.addEventListener("change", (event) => {
       renderNativeCrm();
       loadNativeCrmActions({ force: true }).catch(() => {});
     }
+    return;
+  }
+  if (target.matches("[data-crm-qualification-draft], [data-crm-qualification-question-field], [data-crm-qualification-option-field]")) {
+    target.dispatchEvent(new Event("input", { bubbles: true }));
     return;
   }
   if (target.matches("[data-crm-form-pipeline]")) {
