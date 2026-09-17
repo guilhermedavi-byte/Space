@@ -1,27 +1,7 @@
 const { sendJson } = require("../_lib/http");
 const { getSessionFromRequest } = require("../_lib/session");
-const { resolveCommercialPeriod } = require("./_lib/commercial-period");
-const { buildWeeklyGoalsReadModel } = require("./_lib/growth-people");
-const {
-  CRM_LIVE_EVENTS_COLLECTION,
-  buildCrmLiveEventQueue,
-  buildWeeklyTeamSummary,
-  fetchCrmBusinesses,
-  loadCurrentGoal,
-  loadApplicableWeeklyGoal,
-  loadCrmLiveDefaultsConfig,
-  loadGrowthPeople,
-  loadSdrEventsRange,
-  writeWeeklyRollup,
-  readStateDoc,
-  validateCookieViewer,
-  writeStateDoc,
-} = require("./_lib/crm-live");
-
-const { summarizeClosedSales } = require("./_lib/commercial-sales");
-
-const DETECTOR_DOC_ID = "detector";
-const EVENT_QUEUE_DURATION_MS = 20_000;
+const { CRM_LIVE_EVENTS_COLLECTION, readStateDoc, validateCookieViewer } = require("./_lib/crm-live");
+const { DETECTOR_DOC_ID, EVENT_QUEUE_DURATION_MS } = require("./_lib/crm-live-refresh");
 
 const normalizeRole = (value) => {
   const raw = String(value || "").trim().toLowerCase();
@@ -46,24 +26,8 @@ const canReadCrmLive = async (req) => {
   return { ok: false, status: byCookie.status || 401, error: byCookie.error || "unauthorized" };
 };
 
-const safeNumber = (value) => {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
-};
-
-const buildMonthSummaryForDetector = ({ businesses = [], goal = null, period }) => {
-  const realized = summarizeClosedSales({ businesses, period }).actualValue;
-  const meta = safeNumber(goal?.valorMeta);
-  return {
-    summary: {
-      meta,
-      realizado: realized,
-      gap: meta > 0 ? Math.max(0, meta - realized) : 0,
-    },
-  };
-};
-
 module.exports = async (req, res) => {
+  const startedAt = Date.now();
   if (req.method !== "GET" && req.method !== "HEAD") {
     res.setHeader("Allow", "GET, HEAD");
     return sendJson(res, 405, { error: "method_not_allowed" });
@@ -72,112 +36,38 @@ module.exports = async (req, res) => {
   const auth = await canReadCrmLive(req);
   if (!auth?.ok) return sendJson(res, auth?.status || 401, { error: auth?.error || "unauthorized" });
 
-  const startedAt = Date.now();
   try {
-    const now = new Date();
-    const [goal, globalConfig, people, detectorStateSnap] = await Promise.all([
-      loadCurrentGoal({ now }),
-      loadCrmLiveDefaultsConfig(),
-      loadGrowthPeople(),
-      readStateDoc(CRM_LIVE_EVENTS_COLLECTION, DETECTOR_DOC_ID),
-    ]);
-
-    const weeklyGoal = await loadApplicableWeeklyGoal({ goal, now });
-    const monthPeriod = resolveCommercialPeriod({
-      now,
-      periodStart: String(goal?.periodStart || ""),
-      periodEnd: String(goal?.periodEnd || ""),
-    });
-
-    const previousState = detectorStateSnap.ok ? detectorStateSnap.data : null;
-    const cursor = String(previousState?.cursor || "").trim();
-
-    // Reuse the same complete source as the payload; do not scan Datacrazy twice per poll.
-    const wonMonth = await fetchCrmBusinesses({ includeClosings: true });
-    if (wonMonth.stale) return sendJson(res, 200, { ok: true, stale: true, events: [], generatedAt: wonMonth.metadata.fetchCompletedAt, snapshotId: wonMonth.metadata.snapshotId });
-    const wonSinceCursor = { businesses: wonMonth.businesses.filter(b => String(b.status || '') === 'won'), pagination: wonMonth.pagination };
-
-    const weeklyProbe = buildWeeklyGoalsReadModel({
-      goal: weeklyGoal,
-      globalConfig,
-      people,
-      businesses: wonMonth.businesses,
-      sdrEvents: [],
-      now,
-    });
-    const currentWeek = weeklyProbe.commercialWeek;
-    const sdrEvents = await loadSdrEventsRange({
-      fromKey: currentWeek.startDateKey,
-      toKey: currentWeek.endDateKey,
-    });
-    const weeklyReadModel = buildWeeklyGoalsReadModel({
-      goal: weeklyGoal,
-      globalConfig,
-      people,
-      businesses: wonMonth.businesses,
-      sdrEvents,
-      now,
-    });
-    const team = buildWeeklyTeamSummary({ weeklyReadModel });
-    const monthSummary = buildMonthSummaryForDetector({
-      businesses: wonMonth.businesses,
-      goal,
-      period: monthPeriod,
-    });
-
-    const detection = buildCrmLiveEventQueue({
-      previousState,
-      weeklyReadModel,
-      weekTeamSummary: team,
-      freshWonBusinesses: wonSinceCursor.businesses,
-      monthSummary,
-      now,
-    });
-
-    await writeStateDoc({
-      collection: CRM_LIVE_EVENTS_COLLECTION,
-      docId: DETECTOR_DOC_ID,
-      data: detection.nextState,
-      updateMaskPaths: ["cursor", "initializedAt", "updatedAt", "lastLeaders", "currentWeek", "announcedSaleIds"],
-    });
-
-    await writeWeeklyRollup({
-      weeklyReadModel,
-      weekTeamSummary: team,
-      now,
-    }).catch((error) => {
-      console.warn("[crm-live-events] weekly rollup write failed", error);
-    });
-
-    if (!detection.coldStart && detection.newSales.length) {
-      await require('./_lib/crm-daily-rollups').publishDailyCounts({ businesses: wonMonth.businesses, source: wonMonth.metadata, period: monthPeriod });
-    }
-
+    const stateSnap = await readStateDoc(CRM_LIVE_EVENTS_COLLECTION, DETECTOR_DOC_ID);
+    const state = stateSnap.ok && stateSnap.data ? stateSnap.data : null;
+    const generatedAt = String(state?.queueGeneratedAt || "");
+    const ageMs = Date.now() - Date.parse(generatedAt || "");
+    const queueDurationMs = Number(state?.queueDurationMs || EVENT_QUEUE_DURATION_MS) || EVENT_QUEUE_DURATION_MS;
+    const freshQueue = generatedAt && Number.isFinite(ageMs) && ageMs >= 0 && ageMs <= queueDurationMs;
+    const events = freshQueue && Array.isArray(state?.pendingEvents) ? state.pendingEvents : [];
     return sendJson(res, 200, {
       ok: true,
-      coldStart: detection.coldStart,
-      weekRolled: detection.weekRolled,
-      generatedAt: now.toISOString(),
-      queueDurationMs: EVENT_QUEUE_DURATION_MS,
-      events: detection.events,
+      coldStart: Boolean(state?.initializedAt) === false,
+      weekRolled: false,
+      generatedAt: generatedAt || new Date().toISOString(),
+      queueDurationMs,
+      events,
       debug: {
-        cursorUsed: cursor || null,
-        freshWonFetched: wonSinceCursor.pagination?.totalFetched || 0,
-        monthWonFetched: wonMonth.pagination?.totalFetched || 0,
+        materialized: true,
+        lastRefreshSnapshotId: state?.lastRefreshSnapshotId || "",
+        queueAgeMs: Number.isFinite(ageMs) ? Math.max(0, ageMs) : null,
+        reader_response_time_ms: Date.now() - startedAt,
+        ...(state?.debug && typeof state.debug === "object" ? state.debug : {}),
       },
     });
   } catch (error) {
-    console.error("[crm-live-events] detector failed", {
+    console.error("[crm-live-events] read-only queue failed", {
       status: Number(error?.status || 0) || 500,
       code: error?.code || error?.error || error?.message || "crm_live_events_failed",
-      message: error?.message || "Não foi possível processar as interrupções do CRM Live agora.",
-      elapsedMs: Number(error?.elapsedMs || 0) || (Date.now() - startedAt),
-      upstream: error?.request || null,
-      details: error?.details || null,
+      elapsedMs: Date.now() - startedAt,
     });
     return sendJson(res, error?.status || 500, {
       error: error?.code || error?.error || "crm_live_events_failed",
-      message: error?.message || "Não foi possível processar as interrupções do CRM Live agora.",
+      message: "Não foi possível ler a fila de interrupções do CRM Live agora.",
     });
   }
 };

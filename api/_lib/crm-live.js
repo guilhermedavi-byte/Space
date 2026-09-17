@@ -386,9 +386,13 @@ const loadSdrEventsRange = async ({ fromKey, toKey } = {}) => {
   return rows.map(decodeSdrEventRow).filter(Boolean);
 };
 
-// All Live readers share one complete, leased Datacrazy dataset. No per-TV remote scans.
-const fetchCrmBusinesses = async ({ lastMovedAfter = "", status = "" } = {}) => {
-  const source = await require('./crm-source-snapshot').getCompleteCrmSource();
+// Readers use the last complete, published source only. The refresh worker is
+// the only path allowed to collect from DataCrazy.
+const fetchCrmBusinesses = async ({ lastMovedAfter = "", status = "", refreshSource = false, sourceAllowStale = true } = {}) => {
+  const sourceService = require('./crm-source-snapshot');
+  const source = refreshSource
+    ? await sourceService.getCompleteCrmSource({ allowStale: sourceAllowStale })
+    : await sourceService.readCompleteCrmSource();
   let businesses = source.businesses;
   if (status) businesses = businesses.filter(b => extractBusinessStatus(b) === status);
   if (lastMovedAfter) businesses = businesses.filter(b => {
@@ -398,7 +402,8 @@ const fetchCrmBusinesses = async ({ lastMovedAfter = "", status = "" } = {}) => 
   return { ...source, businesses };
 };
 
-const fetchCrmWindow = async ({ startDateKey } = {}) => fetchCrmBusinesses({ startDateKey, includeClosings: true });
+const fetchCrmWindow = async ({ startDateKey, refreshSource = false, sourceAllowStale = true } = {}) =>
+  fetchCrmBusinesses({ startDateKey, includeClosings: true, refreshSource, sourceAllowStale });
 
 const choosePipelineKey = chooseCommercialPipeline;
 
@@ -756,7 +761,7 @@ const buildUnresolvedBuckets = ({ businesses = [], people = [], goal, globalConf
   };
 };
 
-const buildCrmLiveCrmSlice = async ({ goal, globalConfig = null, people, now = new Date(), snapshotId = crypto.randomUUID() } = {}) => {
+const buildCrmLiveCrmSlice = async ({ goal, globalConfig = null, people, now = new Date(), snapshotId = crypto.randomUUID(), refreshSource = false, sourceAllowStale = true } = {}) => {
   const weeklyGoal = await loadApplicableWeeklyGoal({ goal, now });
   const monthPeriod = resolveCommercialPeriod({
     now,
@@ -767,7 +772,7 @@ const buildCrmLiveCrmSlice = async ({ goal, globalConfig = null, people, now = n
   const crmWindowStartDateKey = [monthPeriod.startDateKey, tenDaysAgoKey].filter(Boolean).sort()[0] || monthPeriod.startDateKey;
   // Pipeline é estoque, não ciclo: por isso a tela "Dinheiro na mesa" usa a janela mais ampla
   // entre o início do ciclo comercial e os últimos 10 dias de movimentação.
-  const crm = await fetchCrmWindow({ startDateKey: crmWindowStartDateKey });
+  const crm = await fetchCrmWindow({ startDateKey: crmWindowStartDateKey, refreshSource, sourceAllowStale });
   if (crm.stale) throw Object.assign(new Error('crm_source_stale'), { status: 503, sourceAttempt: crm.lastAttempt });
   const calculationStarted = Date.now();
   const { log } = require('./datacrazy-ingestion');

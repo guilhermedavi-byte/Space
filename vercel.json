@@ -8,6 +8,9 @@
     "api/crm-live-events.js": {
       "maxDuration": 300
     },
+    "api/crm-live-refresh.js": {
+      "maxDuration": 300
+    },
     "api/growth-dashboard.js": {
       "maxDuration": 300
     },
@@ -30,6 +33,7 @@
   "crons": [
     { "path": "/api/attendance/meta/process", "schedule": "* * * * *" },
     { "path": "/api/automations-process", "schedule": "* * * * *" },
+    { "path": "/api/crm-live-refresh", "schedule": "*/2 * * * *" },
     { "path": "/api/retention-churn-job", "schedule": "5 3 * * *" }
   ],
   "headers": [
