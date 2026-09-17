@@ -222,6 +222,7 @@ module.exports = async (req, res) => {
 
   const uid = String(body?.uid || "").trim();
   const patch = body?.patch && typeof body.patch === "object" ? body.patch : null;
+  const requestedRole = normalizeRole(body?.role || patch?.tipo);
   if (!uid || !patch) {
     sendJson(res, 400, { error: "invalid_request" });
     return;
@@ -252,7 +253,8 @@ module.exports = async (req, res) => {
       return;
     }
     // OWNERSHIP: cadastro=Firestore, operação=Supabase (contrato 2026-07-12)
-    const sync = await syncStudentMirrorToSupabase(uid);
+    const shouldSyncStudentMirror = requestedRole ? requestedRole === "student" : !Object.prototype.hasOwnProperty.call(cleanPatch, "commercialRoles");
+    const sync = shouldSyncStudentMirror ? await syncStudentMirrorToSupabase(uid) : { ok: true, skipped: true, reason: "not_student_profile_patch" };
     sendJson(res, 200, { ok: true, sync });
   } catch (error) {
     console.error("[api] admin-users patch failed", error);

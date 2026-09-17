@@ -15418,7 +15418,6 @@ let adminUsersState = {
 
 let adminCommercialUsersState = {
   query: "",
-  roleFilter: "all",
 };
 
 let commercialGoalsController = null;
@@ -21534,12 +21533,6 @@ const summarizeCommercialRoleRows = (rows = []) => {
   return summary;
 };
 
-const commercialRoleFilterMatches = (row, filter) => {
-  const safeFilter = String(filter || "all").trim().toLowerCase();
-  if (!safeFilter || safeFilter === "all") return true;
-  return commercialRoleBucket(row?.commercialRoles) === safeFilter;
-};
-
 const renderCommercialRoleBadges = (roles) => {
   const normalized = normalizeCrmCommercialRoles(roles);
   if (!normalized.length) return `<span class="admin-badge is-inactive">Sem função</span>`;
@@ -21885,13 +21878,9 @@ const renderAdminCommercialUsersTable = () => {
   if (!(adminCommercialGrowthTable instanceof HTMLElement)) return;
   const state = adminUsersState.growth || { rows: [], isLoading: false, error: "" };
   const query = String(adminCommercialUsersState.query || "").trim().toLowerCase();
-  const roleFilter = String(adminCommercialUsersState.roleFilter || "all").trim().toLowerCase();
   const rows = Array.isArray(state.rows) ? state.rows : [];
   const summary = summarizeCommercialRoleRows(rows);
-  const filtered = rows.filter((row) => {
-    const matchesQuery = !query || row.nome.toLowerCase().includes(query) || row.email.toLowerCase().includes(query);
-    return matchesQuery && commercialRoleFilterMatches(row, roleFilter);
-  });
+  const filtered = query ? rows.filter((row) => row.nome.toLowerCase().includes(query) || row.email.toLowerCase().includes(query)) : rows;
   const summaryEl = document.querySelector("[data-commercial-role-summary]");
   if (summaryEl instanceof HTMLElement) {
     summaryEl.innerHTML = [
@@ -21900,19 +21889,6 @@ const renderAdminCommercialUsersTable = () => {
       ["SDR + Closer", summary.both],
       ["Sem função", summary.missing],
     ].map(([label, value]) => `<span><strong>${escapeHtml(String(value))}</strong>${escapeHtml(label)}</span>`).join("");
-  }
-  const filterEl = document.querySelector("[data-commercial-role-filter]");
-  if (filterEl instanceof HTMLElement) {
-    const filters = [
-      ["all", "Todos"],
-      ["sdr", "SDR"],
-      ["closer", "Closer"],
-      ["both", "SDR + Closer"],
-      ["missing", "Sem função"],
-    ];
-    filterEl.innerHTML = filters
-      .map(([value, label]) => `<button type="button" class="${roleFilter === value ? "is-active" : ""}" data-commercial-role-filter-value="${escapeHtml(value)}">${escapeHtml(label)}</button>`)
-      .join("");
   }
   const rolloutAlert = document.querySelector("[data-commercial-rollout-alert]");
   const rolloutText = document.querySelector("[data-commercial-rollout-alert-text]");
@@ -21971,9 +21947,6 @@ const renderAdminCommercialUsersTable = () => {
                 <button class="admin-action-item${row.ativo ? " is-danger" : ""}" type="button" data-admin-action-toggle>
                   ${row.ativo ? "Desativar" : "Ativar"}
                 </button>
-                <button class="admin-action-item" type="button" data-admin-commercial-roles-edit>
-                  Função comercial
-                </button>
                 <button class="admin-action-item" type="button" data-admin-action-reset>
                     Redefinir senha
                   </button>
@@ -21996,80 +21969,6 @@ const renderAdminCommercialUsersPanel = async ({ force = false } = {}) => {
     await loadUsersFromFirestore("growth");
   }
   renderAdminCommercialUsersTable();
-};
-
-const openAdminCommercialRolesModal = ({ uid, name, roles = [] } = {}) => {
-  const userId = String(uid || "").trim();
-  if (!userId) return;
-  const currentRoles = normalizeCrmCommercialRoles(roles);
-  openModal({
-    title: "Função comercial",
-    bodyHtml: `
-      <form class="auth-form" data-admin-commercial-roles-form novalidate>
-        <div class="auth-inline-hint">${escapeHtml(name || "Usuário Growth")}</div>
-        <label class="auth-field">
-          <span>Permissões do CRM</span>
-          <label class="auth-checkbox-row">
-            <input type="checkbox" data-admin-commercial-role="sdr" ${currentRoles.includes("sdr") ? "checked" : ""} />
-            <span>SDR</span>
-          </label>
-          <label class="auth-checkbox-row">
-            <input type="checkbox" data-admin-commercial-role="closer" ${currentRoles.includes("closer") ? "checked" : ""} />
-            <span>Closer</span>
-          </label>
-          <div class="auth-inline-error" data-admin-commercial-roles-error hidden>Selecione pelo menos uma função comercial.</div>
-        </label>
-      </form>
-    `,
-    primaryLabel: "Salvar",
-    secondaryLabel: "Cancelar",
-    hideSecondary: false,
-    showTrash: false,
-    onPrimary: () => {
-      const form = modalBody?.querySelector("[data-admin-commercial-roles-form]");
-      const selected = Array.from(form?.querySelectorAll("[data-admin-commercial-role]:checked") || []).map((input) =>
-        String(input.getAttribute("data-admin-commercial-role") || "")
-      );
-      const commercialRoles = normalizeCrmCommercialRoles(selected);
-      const errorEl = form?.querySelector("[data-admin-commercial-roles-error]");
-      if (!commercialRoles.length) {
-        if (errorEl instanceof HTMLElement) errorEl.hidden = false;
-        return false;
-      }
-      (async () => {
-        if (modalPrimary) modalPrimary.disabled = true;
-        if (modalSecondary) modalSecondary.disabled = true;
-        try {
-          const response = await fetchWithAuth("/api/admin-users", {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ uid: userId, patch: { commercialRoles } }),
-          });
-          const data = await response.json().catch(() => null);
-          if (!response.ok || !data?.ok) throw new Error(data?.message || data?.errorDetail || data?.error || "commercial_roles_update_failed");
-          const rows = Array.isArray(adminUsersState.growth?.rows) ? adminUsersState.growth.rows : [];
-          const idx = rows.findIndex((row) => String(row.id || "") === userId);
-          if (idx >= 0) {
-            rows[idx] = { ...rows[idx], commercialRoles };
-            adminUsersState.growth.rows = [...rows];
-          }
-          closeModal();
-          setAdminManageStatus("growth", "Funções comerciais atualizadas.", "success");
-          window.setTimeout(() => setAdminManageStatus("growth", ""), 1200);
-          renderAdminCommercialUsersTable();
-        } catch (error) {
-          console.error("[admin] commercial roles update failed:", error);
-          if (errorEl instanceof HTMLElement) {
-            errorEl.textContent = "Não foi possível salvar agora.";
-            errorEl.hidden = false;
-          }
-          if (modalPrimary) modalPrimary.disabled = false;
-          if (modalSecondary) modalSecondary.disabled = false;
-        }
-      })();
-      return false;
-    },
-  });
 };
 
 const fetchUserRowsFromFirestore = async (tipo) => {
@@ -38630,7 +38529,7 @@ const openAdminStudentActionsPopover = ({ triggerEl, alunoId } = {}) => {
 
 const clampToViewport = (value, min, max) => Math.max(min, Math.min(max, value));
 
-const openAdminActionsPopover = ({ triggerEl, uid, name, email, isActive, userType, commercialRoles = [] }) => {
+const openAdminActionsPopover = ({ triggerEl, uid, name, email, isActive, userType }) => {
   if (!(triggerEl instanceof HTMLElement)) return;
   closeAdminActionsPopover();
 
@@ -38639,7 +38538,6 @@ const openAdminActionsPopover = ({ triggerEl, uid, name, email, isActive, userTy
   const safeEmail = String(email || "").trim();
   const active = Boolean(isActive);
   const safeType = userType === "teacher" || userType === "growth" ? userType : "student";
-  const safeCommercialRoles = normalizeCrmCommercialRoles(commercialRoles);
 
   const toggleLabel = active ? "Desativar" : "Reativar";
   const toggleClass = active ? "admin-action-item is-danger" : "admin-action-item";
@@ -38670,17 +38568,6 @@ const openAdminActionsPopover = ({ triggerEl, uid, name, email, isActive, userTy
       data-admin-action-type="${escapeHtml(safeType)}"
       data-admin-action-active="${active ? "1" : "0"}"
     >${toggleLabel}</button>
-    ${safeType === "growth" ? `
-      <button
-        class="admin-action-item"
-        type="button"
-        data-admin-commercial-roles-edit
-        data-admin-action-uid="${escapeHtml(safeUid)}"
-        data-admin-action-name="${escapeHtml(safeName)}"
-        data-admin-action-type="${escapeHtml(safeType)}"
-        data-admin-commercial-roles="${escapeHtml(safeCommercialRoles.join(","))}"
-      >Função comercial</button>
-    ` : ""}
     <button
       class="admin-action-item"
       type="button"
@@ -38720,7 +38607,16 @@ const getAdminUserTypeFromRow = (rowEl) => {
   return "student";
 };
 
-const updateAdminUserNameRecord = async ({ uid, role, name } = {}) => {
+const updateGrowthUserLocally = ({ uid, patch = {} } = {}) => {
+  const safeUid = String(uid || "").trim();
+  const rows = Array.isArray(adminUsersState.growth?.rows) ? adminUsersState.growth.rows : [];
+  const idx = rows.findIndex((row) => String(row.id || "") === safeUid);
+  if (idx < 0) return;
+  rows[idx] = { ...rows[idx], ...patch };
+  adminUsersState.growth.rows = [...rows].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+};
+
+const updateAdminUserNameRecord = async ({ uid, role, name, commercialRoles = [] } = {}) => {
   const safeUid = String(uid || "").trim();
   const safeRole = role === "teacher" ? "teacher" : role === "growth" ? "growth" : "student";
   const safeName = String(name || "").trim();
@@ -38728,6 +38624,23 @@ const updateAdminUserNameRecord = async ({ uid, role, name } = {}) => {
     const err = new Error("invalid_admin_user_edit");
     err.code = "invalid_admin_user_edit";
     throw err;
+  }
+
+  if (safeRole === "growth") {
+    const roles = normalizeCrmCommercialRoles(commercialRoles);
+    const response = await fetchWithAuth("/api/admin-users", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ uid: safeUid, role: "growth", patch: { nome: safeName, tipo: "growth", commercialRoles: roles } }),
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok || !data?.ok) throw new Error(data?.message || data?.errorDetail || data?.error || "growth_user_update_failed");
+    updateGrowthUserLocally({ uid: safeUid, patch: { nome: safeName, commercialRoles: roles, initials: getInitials(safeName) } });
+    renderAdminUsersTable("growth");
+    renderAdminCommercialUsersTable();
+    setAdminManageStatus("growth", "Usuário atualizado.", "success");
+    window.setTimeout(() => setAdminManageStatus("growth", ""), 1200);
+    return;
   }
 
   const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_user_edit");
@@ -38779,25 +38692,45 @@ const updateAdminUserNameRecord = async ({ uid, role, name } = {}) => {
   }
 };
 
-const openAdminUserEditModal = ({ uid, role, name, email } = {}) => {
+const openAdminUserEditModal = ({ uid, role, name, email, commercialRoles = [] } = {}) => {
   const safeUid = String(uid || "").trim();
   const safeRole = role === "teacher" ? "teacher" : role === "growth" ? "growth" : "student";
   const safeName = String(name || "").trim();
   const safeEmail = String(email || "").trim();
+  const safeCommercialRoles = normalizeCrmCommercialRoles(commercialRoles);
   if (!safeUid) return;
 
   openModal({
     title: safeRole === "teacher" ? "Editar professor" : safeRole === "student" ? "Editar aluno" : "Editar usuário",
     bodyHtml: `
-      <div style="display:grid; gap:12px;">
-        <label class="modal-field">
-          <span>Nome</span>
-          <input class="modal-input" type="text" value="${escapeHtml(safeName)}" data-admin-user-edit-name />
-        </label>
-        <label class="modal-field">
-          <span>E-mail</span>
-          <input class="modal-input" type="email" value="${escapeHtml(safeEmail)}" disabled />
-        </label>
+      <div style="display:grid; gap:14px;">
+        <section class="admin-user-edit-section">
+          <h3>Dados do usuário</h3>
+          <label class="modal-field">
+            <span>Nome</span>
+            <input class="modal-input" type="text" value="${escapeHtml(safeName)}" data-admin-user-edit-name />
+          </label>
+          <label class="modal-field">
+            <span>E-mail</span>
+            <input class="modal-input" type="email" value="${escapeHtml(safeEmail)}" disabled />
+          </label>
+        </section>
+        ${safeRole === "growth" ? `
+          <section class="admin-user-edit-section">
+            <h3>Acesso / permissões</h3>
+            <div class="auth-inline-hint">Define qual workspace do CRM este usuário pode acessar.</div>
+            <div class="admin-commercial-role-checks" aria-label="Função comercial">
+              <label class="auth-checkbox-row">
+                <input type="checkbox" data-admin-user-edit-commercial-role="sdr" ${safeCommercialRoles.includes("sdr") ? "checked" : ""} />
+                <span>SDR</span>
+              </label>
+              <label class="auth-checkbox-row">
+                <input type="checkbox" data-admin-user-edit-commercial-role="closer" ${safeCommercialRoles.includes("closer") ? "checked" : ""} />
+                <span>Closer</span>
+              </label>
+            </div>
+          </section>
+        ` : ""}
         <div class="modal-inline-error" data-admin-user-edit-error hidden>—</div>
       </div>
     `,
@@ -38809,6 +38742,13 @@ const openAdminUserEditModal = ({ uid, role, name, email } = {}) => {
       const input = modalBody?.querySelector("[data-admin-user-edit-name]");
       const err = modalBody?.querySelector("[data-admin-user-edit-error]");
       const nextName = input instanceof HTMLInputElement ? input.value.trim() : "";
+      const nextCommercialRoles = safeRole === "growth"
+        ? normalizeCrmCommercialRoles(
+            Array.from(modalBody?.querySelectorAll("[data-admin-user-edit-commercial-role]:checked") || []).map((el) =>
+              String(el.getAttribute("data-admin-user-edit-commercial-role") || "")
+            )
+          )
+        : [];
       if (!(err instanceof HTMLElement)) return false;
       err.hidden = true;
       err.textContent = "";
@@ -38819,15 +38759,18 @@ const openAdminUserEditModal = ({ uid, role, name, email } = {}) => {
       }
       if (modalPrimary) modalPrimary.disabled = true;
       if (modalSecondary) modalSecondary.disabled = true;
+      const previousPrimaryLabel = modalPrimary ? modalPrimary.textContent : "";
+      if (modalPrimary) modalPrimary.textContent = "Salvando…";
       (async () => {
         try {
-          await updateAdminUserNameRecord({ uid: safeUid, role: safeRole, name: nextName });
+          await updateAdminUserNameRecord({ uid: safeUid, role: safeRole, name: nextName, commercialRoles: nextCommercialRoles });
           closeModal();
         } catch (error) {
           console.error("[admin] update user failed:", error);
           err.textContent = "Não foi possível salvar agora. Tente novamente.";
           err.hidden = false;
           if (modalPrimary) modalPrimary.disabled = false;
+          if (modalPrimary) modalPrimary.textContent = previousPrimaryLabel || "Salvar";
           if (modalSecondary) modalSecondary.disabled = false;
         }
       })();
@@ -40880,20 +40823,16 @@ document.addEventListener("visibilitychange", () => {
 document.addEventListener("click", (event) => {
   const target = event.target;
   if (!(target instanceof Element)) return;
-  const commercialRoleFilter = target.closest("[data-commercial-role-filter-value]");
-  if (commercialRoleFilter instanceof HTMLButtonElement) {
-    event.preventDefault();
-    adminCommercialUsersState.roleFilter = String(commercialRoleFilter.getAttribute("data-commercial-role-filter-value") || "all").trim().toLowerCase() || "all";
-    renderAdminCommercialUsersTable();
-    return;
-  }
   const commercialReview = target.closest("[data-commercial-rollout-review]");
   if (commercialReview instanceof HTMLButtonElement) {
     event.preventDefault();
-    adminCommercialUsersState.roleFilter = "missing";
-    renderAdminCommercialUsersTable();
+    adminCommercialUsersState.query = "";
     const search = document.querySelector("[data-commercial-growth-search]");
-    if (search instanceof HTMLInputElement) search.focus();
+    if (search instanceof HTMLInputElement) {
+      search.value = "";
+      search.focus();
+    }
+    renderAdminCommercialUsersTable();
     return;
   }
   const automationsRoot = target.closest("[data-automations-admin]");
@@ -44569,26 +44508,8 @@ document.addEventListener("click", (event) => {
         const email = row.getAttribute("data-admin-user-email") || "";
         const isActive = row.getAttribute("data-admin-user-active") === "1";
         const userType = getAdminUserTypeFromRow(row);
-        const commercialRoles = String(row.getAttribute("data-admin-commercial-roles") || "").split(",");
         closeAllAdminActionMenus();
-        openAdminActionsPopover({ triggerEl: trigger, uid, name, email, isActive, userType, commercialRoles });
-        return;
-      }
-
-      const commercialRolesAction = target.closest("[data-admin-commercial-roles-edit]");
-      if (commercialRolesAction instanceof HTMLButtonElement) {
-        event.preventDefault();
-        const row = commercialRolesAction.closest("[data-admin-user-row]");
-        const uid = row instanceof HTMLElement ? row.getAttribute("data-admin-user-row") || "" : commercialRolesAction.getAttribute("data-admin-action-uid") || "";
-        const name = row instanceof HTMLElement ? row.getAttribute("data-admin-user-name") || "Usuário Growth" : commercialRolesAction.getAttribute("data-admin-action-name") || "Usuário Growth";
-        const roles = row instanceof HTMLElement ? row.getAttribute("data-admin-commercial-roles") || "" : commercialRolesAction.getAttribute("data-admin-commercial-roles") || "";
-        closeAllAdminActionMenus();
-        closeAdminActionsPopover();
-        openAdminCommercialRolesModal({
-          uid,
-          name,
-          roles: String(roles || "").split(","),
-        });
+        openAdminActionsPopover({ triggerEl: trigger, uid, name, email, isActive, userType });
         return;
       }
 
@@ -44717,10 +44638,11 @@ document.addEventListener("click", (event) => {
         const name = row instanceof HTMLElement ? row.getAttribute("data-admin-user-name") || "Usuário" : editAction.getAttribute("data-admin-action-name") || "Usuário";
         const email = row instanceof HTMLElement ? row.getAttribute("data-admin-user-email") || "" : editAction.getAttribute("data-admin-action-email") || "";
         const type = row instanceof HTMLElement ? getAdminUserTypeFromRow(row) : String(editAction.getAttribute("data-admin-action-type") || "").trim() || "student";
+        const commercialRoles = row instanceof HTMLElement ? String(row.getAttribute("data-admin-commercial-roles") || "").split(",") : [];
 
         closeAllAdminActionMenus();
         closeAdminActionsPopover();
-        openAdminUserEditModal({ uid, role: type, name, email });
+        openAdminUserEditModal({ uid, role: type, name, email, commercialRoles });
         return;
       }
 

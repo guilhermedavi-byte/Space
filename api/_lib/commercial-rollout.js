@@ -19,14 +19,7 @@ const summarizeCommercialRoles = (rows = []) => {
   return summary;
 };
 
-const matchesCommercialRoleFilter = (row = {}, filter = "all") => {
-  const safeFilter = String(filter || "all").trim().toLowerCase();
-  if (!safeFilter || safeFilter === "all") return true;
-  return commercialRoleBucket(row.commercialRoles) === safeFilter;
-};
-
 module.exports = {
   commercialRoleBucket,
-  matchesCommercialRoleFilter,
   summarizeCommercialRoles,
 };

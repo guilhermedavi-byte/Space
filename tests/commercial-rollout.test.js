@@ -21,18 +21,6 @@ test("commercial rollout summary counts SDR, Closer, both and missing users", ()
   });
 });
 
-test("commercial rollout filters isolate unconfigured Growth users", () => {
-  const rows = [
-    { id: "sdr", commercialRoles: ["sdr"] },
-    { id: "closer", commercialRoles: ["closer"] },
-    { id: "both", commercialRoles: ["sdr", "closer"] },
-    { id: "missing", commercialRoles: [] },
-  ];
-  assert.deepEqual(rows.filter((row) => rollout.matchesCommercialRoleFilter(row, "missing")).map((row) => row.id), ["missing"]);
-  assert.deepEqual(rows.filter((row) => rollout.matchesCommercialRoleFilter(row, "both")).map((row) => row.id), ["both"]);
-  assert.equal(rows.every((row) => rollout.matchesCommercialRoleFilter(row, "all")), true);
-});
-
 const loadAdminUsersHandler = ({ session = { sub: "admin_1", role: "admin" }, previousRoles = ["sdr"] } = {}) => {
   const writes = [];
   const modules = [
@@ -99,6 +87,7 @@ test("admin commercial role update writes user patch and audit event", async () 
   const { handler, writes } = loadAdminUsersHandler({ previousRoles: ["sdr"] });
   const res = await invoke(handler, { uid: "growth_1", patch: { commercialRoles: ["closer", "sdr", "bogus"] } });
   assert.equal(res.status, 200);
+  assert.equal(res.body.sync.skipped, true);
   assert.equal(writes.length, 2);
   assert.deepEqual(writes[0].update.fields.commercialRoles, ["closer", "sdr"]);
   assert.equal(writes[1].update.fields.type, "commercialRoles.changed");
