@@ -325,14 +325,16 @@ const latestRun = (runs = []) =>
 
 const latestPassedRun = (runs = []) => latestRun((Array.isArray(runs) ? runs : []).filter((run) => run.status === "passed" && run.passed === true));
 
-const stageRequiresQualification = (stage = {}) => bool(stage.requiresQualification) || clean(stage.qualificationGate) === QUALIFICATION_TYPE_SDR;
+const stageRequiresQualification = (stage = {}) => bool(stage.requiresQualification)
+  || bool(stage.requiresQualificationToExit)
+  || clean(stage.qualificationGate) === QUALIFICATION_TYPE_SDR;
 
 const isForwardMovePastGate = ({ fromStageId, toStageId, stages = [] }) => {
   if (!clean(fromStageId) || !clean(toStageId) || clean(fromStageId) === clean(toStageId)) return false;
   const fromStage = stages.find((stage) => clean(stage.id) === clean(fromStageId));
   const toStage = stages.find((stage) => clean(stage.id) === clean(toStageId));
-  if (!fromStage || !toStage || fromStage.pipelineId !== toStage.pipelineId) return false;
-  return stageRequiresQualification(fromStage) && Number(toStage.position || 0) > Number(fromStage.position || 0);
+  if (!fromStage || !toStage) return false;
+  return stageRequiresQualification(fromStage);
 };
 
 const qualificationMoveGate = ({ opportunity = {}, toStageId, stages = [], runs = [] }) => {
@@ -365,11 +367,34 @@ const assertCanMutatePublishedConfig = (row = {}) => {
   return true;
 };
 
+const assertQualificationConfigMutable = ({ version = null, question = null, option = null, versions = [], questions = [] } = {}) => {
+  if (version) return assertCanMutatePublishedConfig(version);
+  if (question) {
+    const parentVersion = versions.find((row) => clean(row.id) === clean(question.versionId));
+    if (PUBLISHED_STATUSES.has(clean(parentVersion?.status))) {
+      const error = new Error("published_qualification_question_is_immutable");
+      error.status = 409;
+      throw error;
+    }
+  }
+  if (option) {
+    const parentQuestion = questions.find((row) => clean(row.id) === clean(option.questionId));
+    const parentVersion = versions.find((row) => clean(row.id) === clean(parentQuestion?.versionId));
+    if (PUBLISHED_STATUSES.has(clean(parentVersion?.status))) {
+      const error = new Error("published_qualification_option_is_immutable");
+      error.status = 409;
+      throw error;
+    }
+  }
+  return true;
+};
+
 module.exports = {
   COLLECTION_KEYS,
   DEFAULT_THRESHOLDS,
   QUALIFICATION_TYPE_SDR,
   assertCanMutatePublishedConfig,
+  assertQualificationConfigMutable,
   buildSdrSeedRows,
   isForwardMovePastGate,
   latestRun,

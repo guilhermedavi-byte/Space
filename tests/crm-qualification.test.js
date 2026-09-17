@@ -88,6 +88,14 @@ test("published qualification versions are immutable", () => {
     () => qualification.assertCanMutatePublishedConfig(seed.version),
     /published_qualification_version_is_immutable/,
   );
+  assert.throws(
+    () => qualification.assertQualificationConfigMutable({ question: seed.questions[0], versions: [seed.version] }),
+    /published_qualification_question_is_immutable/,
+  );
+  assert.throws(
+    () => qualification.assertQualificationConfigMutable({ option: seed.options[0], questions: seed.questions, versions: [seed.version] }),
+    /published_qualification_option_is_immutable/,
+  );
   assert.equal(qualification.assertCanMutatePublishedConfig({ status: "draft" }), true);
 });
 

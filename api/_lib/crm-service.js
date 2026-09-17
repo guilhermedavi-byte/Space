@@ -87,6 +87,7 @@ const normalizePipeline = (row) => ({
   id: clean(row.id || row.firestoreDocId),
   scopeId: clean(row.scopeId) || CRM_SCOPE_ID,
   name: clean(row.name),
+  pipelineType: ["general", "sdr", "closer"].includes(clean(row.pipelineType)) ? clean(row.pipelineType) : "general",
   isActive: row.isActive !== false,
   isDefault: row.isDefault === true,
   createdAt: toIso(row.createdAt),
@@ -100,7 +101,10 @@ const normalizeStage = (row) => ({
   name: clean(row.name),
   position: Number(row.position) || 0,
   requiresQualification: row.requiresQualification === true,
+  requiresQualificationToExit: row.requiresQualificationToExit === true,
   qualificationGate: clean(row.qualificationGate) || null,
+  handoffTargetPipelineId: clean(row.handoffTargetPipelineId) || null,
+  handoffTargetStageId: clean(row.handoffTargetStageId) || null,
   createdAt: toIso(row.createdAt),
   updatedAt: toIso(row.updatedAt),
 });
@@ -147,6 +151,12 @@ const normalizeOpportunity = (row) => ({
   qualificationFitScore: numberOrNull(row.qualificationFitScore),
   qualificationIntentScore: numberOrNull(row.qualificationIntentScore),
   qualificationPassed: row.qualificationPassed === true,
+  latestHandoffId: clean(row.latestHandoffId) || null,
+  closerReviewStatus: clean(row.closerReviewStatus) || null,
+  salesAccepted: row.salesAccepted === null || row.salesAccepted === undefined ? null : row.salesAccepted === true,
+  qualificationAccuracy: numberOrNull(row.qualificationAccuracy),
+  closerRejectReason: clean(row.closerRejectReason) || null,
+  recommendedAction: clean(row.recommendedAction) || null,
   automationIdempotencyKey: clean(row.automationIdempotencyKey) || null,
   searchTitle: normalizeSearchText(row.searchTitle || row.title),
   createdAt: toIso(row.createdAt),
@@ -316,6 +326,30 @@ const ensureDefaultPipeline = async () => {
     const scopedStages = stages.filter((stage) => stage.pipelineId === active.id && (stage.scopeId === CRM_SCOPE_ID || !clean(stage.scopeId)));
     const existingStageIds = new Set(scopedStages.map((stage) => stage.id));
     const stamp = nowIso();
+    const closerPipeline = scopedPipelines.find((pipeline) => pipeline.pipelineType === "closer") || {
+      id: "closer",
+      scopeId: CRM_SCOPE_ID,
+      name: "Closer",
+      pipelineType: "closer",
+      isActive: true,
+      isDefault: false,
+      createdAt: stamp,
+      updatedAt: stamp,
+    };
+    const closerStage = stages.find((stage) => stage.pipelineId === closerPipeline.id && (stage.scopeId === CRM_SCOPE_ID || !clean(stage.scopeId))) || {
+      id: `${closerPipeline.id}_stage_1`,
+      scopeId: CRM_SCOPE_ID,
+      pipelineId: closerPipeline.id,
+      name: "Recebido",
+      position: 1,
+      requiresQualification: false,
+      requiresQualificationToExit: false,
+      qualificationGate: null,
+      handoffTargetPipelineId: null,
+      handoffTargetStageId: null,
+      createdAt: stamp,
+      updatedAt: stamp,
+    };
     const missingStages = DEFAULT_STAGES.map((name, index) => ({
       id: `${active.id}_stage_${index + 1}`,
       scopeId: CRM_SCOPE_ID,
@@ -323,7 +357,10 @@ const ensureDefaultPipeline = async () => {
       name,
       position: index + 1,
       requiresQualification: index === 0,
+      requiresQualificationToExit: index === 0,
       qualificationGate: index === 0 ? qualification.QUALIFICATION_TYPE_SDR : null,
+      handoffTargetPipelineId: index === 0 ? closerPipeline.id : null,
+      handoffTargetStageId: index === 0 ? closerStage.id : null,
       createdAt: stamp,
       updatedAt: stamp,
     })).filter((stage) => !existingStageIds.has(stage.id));
@@ -335,23 +372,46 @@ const ensureDefaultPipeline = async () => {
       ? [buildWrite(COLLECTIONS.stages, gateStage.id, {
           ...gateStage,
           requiresQualification: true,
+          requiresQualificationToExit: true,
           qualificationGate: qualification.QUALIFICATION_TYPE_SDR,
+          handoffTargetPipelineId: gateStage.handoffTargetPipelineId || closerPipeline.id,
+          handoffTargetStageId: gateStage.handoffTargetStageId || closerStage.id,
           updatedAt: stamp,
         })]
       : [];
+    const pipelineTypeWrites = [
+      active.pipelineType === "general" ? buildWrite(COLLECTIONS.pipelines, active.id, { ...active, pipelineType: "sdr", updatedAt: stamp }) : null,
+      scopedPipelines.some((pipeline) => pipeline.id === closerPipeline.id) ? null : buildWrite(COLLECTIONS.pipelines, closerPipeline.id, closerPipeline, { createOnly: true }),
+      stages.some((stage) => stage.id === closerStage.id) ? null : buildWrite(COLLECTIONS.stages, closerStage.id, closerStage, { createOnly: true }),
+    ].filter(Boolean);
     const defaultWrites = activePipelines.some((row) => row.isDefault)
       ? []
       : scopedPipelines.map((pipeline) => buildWrite(COLLECTIONS.pipelines, pipeline.id, { ...pipeline, isDefault: pipeline.id === active.id, updatedAt: stamp }));
-    if (!missingStages.length && !defaultWrites.length && !gateWrites.length) return { pipelines: scopedPipelines, stages: scopedStages };
+    if (!missingStages.length && !defaultWrites.length && !gateWrites.length && !pipelineTypeWrites.length) return { pipelines: scopedPipelines, stages: scopedStages };
     const committed = await commitWritesAsAdmin({
-      writes: [...missingStages.map((stage) => buildWrite(COLLECTIONS.stages, stage.id, stage, { createOnly: true })), ...defaultWrites, ...gateWrites],
+      writes: [...missingStages.map((stage) => buildWrite(COLLECTIONS.stages, stage.id, stage, { createOnly: true })), ...defaultWrites, ...gateWrites, ...pipelineTypeWrites],
     });
     if (!committed.ok && !isAlreadyExistsResponse(committed)) throw Object.assign(new Error("crm_bootstrap_failed"), { status: committed.status || 500 });
     return ensureDefaultPipeline();
   }
 
   const stamp = nowIso();
-  const pipeline = { id: DEFAULT_PIPELINE_ID, scopeId: CRM_SCOPE_ID, name: "Comercial", isActive: true, isDefault: true, createdAt: stamp, updatedAt: stamp };
+  const pipeline = { id: DEFAULT_PIPELINE_ID, scopeId: CRM_SCOPE_ID, name: "Comercial", pipelineType: "sdr", isActive: true, isDefault: true, createdAt: stamp, updatedAt: stamp };
+  const closerPipeline = { id: "closer", scopeId: CRM_SCOPE_ID, name: "Closer", pipelineType: "closer", isActive: true, isDefault: false, createdAt: stamp, updatedAt: stamp };
+  const closerStage = {
+    id: "closer_stage_1",
+    scopeId: CRM_SCOPE_ID,
+    pipelineId: closerPipeline.id,
+    name: "Recebido",
+    position: 1,
+    requiresQualification: false,
+    requiresQualificationToExit: false,
+    qualificationGate: null,
+    handoffTargetPipelineId: null,
+    handoffTargetStageId: null,
+    createdAt: stamp,
+    updatedAt: stamp,
+  };
   const seededStages = DEFAULT_STAGES.map((name, index) => ({
     id: `${DEFAULT_PIPELINE_ID}_stage_${index + 1}`,
     scopeId: CRM_SCOPE_ID,
@@ -359,21 +419,26 @@ const ensureDefaultPipeline = async () => {
     name,
     position: index + 1,
     requiresQualification: index === 0,
+    requiresQualificationToExit: index === 0,
     qualificationGate: index === 0 ? qualification.QUALIFICATION_TYPE_SDR : null,
+    handoffTargetPipelineId: index === 0 ? closerPipeline.id : null,
+    handoffTargetStageId: index === 0 ? closerStage.id : null,
     createdAt: stamp,
     updatedAt: stamp,
   }));
   const committed = await commitWritesAsAdmin({
     writes: [
       buildWrite(COLLECTIONS.pipelines, pipeline.id, pipeline, { createOnly: true }),
+      buildWrite(COLLECTIONS.pipelines, closerPipeline.id, closerPipeline, { createOnly: true }),
       ...seededStages.map((stage) => buildWrite(COLLECTIONS.stages, stage.id, stage, { createOnly: true })),
+      buildWrite(COLLECTIONS.stages, closerStage.id, closerStage, { createOnly: true }),
     ],
   });
   if (!committed.ok) {
     if (isAlreadyExistsResponse(committed)) return ensureDefaultPipeline();
     throw Object.assign(new Error("crm_bootstrap_failed"), { status: committed.status || 500 });
   }
-  return { pipelines: [pipeline], stages: seededStages };
+  return { pipelines: [pipeline, closerPipeline], stages: seededStages.concat(closerStage) };
 };
 
 const loadCrmReadModel = async () => {

@@ -28411,6 +28411,104 @@ button.automations-row:focus-visible,
   accent-color: #ff5b52;
 }
 
+.native-crm-closer-review {
+  border-bottom: 1px solid var(--crm-line);
+  padding-bottom: 12px;
+}
+
+.native-crm-closer-context {
+  color: var(--crm-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.native-crm-segmented {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.native-crm-segmented button,
+.native-crm-segmented label {
+  min-height: 28px;
+  border: 1px solid var(--crm-line);
+  border-radius: 7px;
+  padding: 5px 8px;
+  background: rgba(255,255,255,.025);
+  color: rgba(255,255,255,.66);
+  font-size: 11px;
+  font-weight: 720;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.native-crm-segmented label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.native-crm-segmented input {
+  margin: 0;
+  accent-color: #ff5b52;
+}
+
+.native-crm-segmented button.is-selected,
+.native-crm-segmented label:has(input:checked) {
+  border-color: rgba(255,91,82,.34);
+  background: rgba(255,91,82,.08);
+  color: #fff;
+}
+
+.native-crm-closer-form,
+.native-crm-closer-dimensions,
+.native-crm-closer-dimension-result {
+  display: grid;
+  gap: 9px;
+}
+
+.native-crm-closer-reason {
+  display: grid;
+  gap: 5px;
+}
+
+.native-crm-closer-reason span {
+  color: var(--crm-muted);
+  font-size: 11px;
+}
+
+.native-crm-closer-dimension {
+  display: grid;
+  grid-template-columns: minmax(92px, 22%) minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.native-crm-closer-dimension > strong {
+  color: rgba(255,255,255,.78);
+  font-size: 12px;
+}
+
+.native-crm-closer-dimension-result {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.native-crm-closer-dimension-result span {
+  display: grid;
+  gap: 3px;
+  border: 1px solid var(--crm-line);
+  border-radius: 8px;
+  padding: 8px;
+  background: rgba(255,255,255,.02);
+  color: var(--crm-muted);
+  font-size: 11px;
+}
+
+.native-crm-closer-dimension-result strong {
+  color: rgba(255,255,255,.78);
+  font-size: 12px;
+}
+
 .native-crm-win-action {
   color: rgba(142, 226, 174, .94);
 }

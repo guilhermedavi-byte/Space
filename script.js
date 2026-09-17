@@ -13448,6 +13448,10 @@ const nativeCrmQualificationSummaryHtml = (run) => {
 const nativeCrmQualificationHtml = (opportunity) => {
   const detail = getNativeCrmDetail(opportunity?.id);
   const qual = detail.qualification;
+  const { stages, pipelines } = getNativeCrmData();
+  const currentStage = stages.find((stage) => stage.id === opportunity?.stageId);
+  const currentPipeline = pipelines.find((pipeline) => pipeline.id === opportunity?.pipelineId);
+  const canHandoff = (run) => run && (run.passed === true || run.status === "passed") && currentPipeline?.pipelineType !== "closer" && currentStage?.handoffTargetPipelineId && currentStage?.handoffTargetStageId;
   if (detail.loading && !qual) {
     return `
       <section class="native-crm-form-section native-crm-qualification">
@@ -13475,6 +13479,12 @@ const nativeCrmQualificationHtml = (opportunity) => {
         <span class="native-crm-qualification-pill">${escapeHtml(nativeCrmQualificationStatusLabel(run))}</span>
       </div>
       ${nativeCrmQualificationSummaryHtml(run)}
+      ${canHandoff(run) ? `
+        <div class="native-crm-qualification-pending">
+          <span>Lead elegível para handoff comercial.</span>
+          <button type="button" class="button button-solid button-small" data-crm-handoff="${escapeHtml(opportunity.id)}" ${nativeCrmState.saving ? "disabled" : ""}>Enviar para Closer</button>
+        </div>
+      ` : ""}
       ${!run || run.status === "failed" || run.status === "passed" ? `
         <div class="native-crm-qualification-pending">
           <span>${run ? "Execute uma nova qualificação se o contexto do lead mudou." : "Questionário SDR obrigatório antes do avanço de etapa."}</span>
@@ -13497,6 +13507,142 @@ const nativeCrmQualificationHtml = (opportunity) => {
           <div class="native-crm-form-error" data-crm-qualification-error hidden></div>
           <div class="native-crm-inline-actions">
             <button type="button" class="button button-solid button-small" data-crm-qualification-submit ${nativeCrmState.saving ? "disabled" : ""}>Concluir qualificação</button>
+          </div>
+        </div>
+      ` : ""}
+    </section>
+  `;
+};
+
+const CRM_CLOSER_DIMENSIONS = [
+  ["need_fit", "Fit"],
+  ["economic_readiness", "Financeiro"],
+  ["decision_readiness", "Decisão"],
+  ["pain", "Dor"],
+  ["impact", "Impacto"],
+  ["urgency", "Urgência"],
+  ["commitment", "Compromisso"],
+];
+
+const CRM_CLOSER_VALIDATION_OPTIONS = [
+  ["confirmed", "Confirmada"],
+  ["partial", "Parcial"],
+  ["contradicted", "Contradita"],
+  ["not_discussed", "Não discutida"],
+];
+
+const CRM_CLOSER_REJECT_REASONS = [
+  ["no_fit", "Sem fit"],
+  ["low_pain", "Dor insuficiente"],
+  ["low_urgency", "Baixa urgência"],
+  ["financial", "Sem capacidade financeira"],
+  ["decision_authority", "Sem autonomia para decisão"],
+  ["expectation_mismatch", "Expectativa desalinhada"],
+  ["incorrect_sdr_information", "Informação incorreta do SDR"],
+  ["other", "Outro"],
+];
+
+const crmRecommendedActionLabel = (value) => ({
+  continue_sales: "Continuar negociação",
+  nurture_recommended: "Nurture recomendado",
+  lower_plan_or_nurture_recommended: "Plano inferior ou nurture",
+  discard_recommended: "Descartar recomendado",
+  alignment_review_required: "Revisar alinhamento",
+  sdr_coaching_flag: "Coaching SDR",
+}[String(value || "")] || String(value || ""));
+
+const crmRejectReasonLabel = (value) => Object.fromEntries(CRM_CLOSER_REJECT_REASONS)[String(value || "")] || "";
+
+const nativeCrmCloserValidationHtml = (opportunity) => {
+  const { pipelines } = getNativeCrmData();
+  const pipeline = pipelines.find((row) => row.id === opportunity?.pipelineId);
+  if (pipeline?.pipelineType !== "closer") return "";
+  const detail = getNativeCrmDetail(opportunity?.id);
+  const salesHandoff = detail.handoff;
+  const review = detail.closerReview;
+  if (detail.loading && !salesHandoff) {
+    return `
+      <section class="native-crm-form-section native-crm-closer-review">
+        <h3>Validação do lead</h3>
+        <div class="native-crm-muted">Carregando handoff…</div>
+      </section>
+    `;
+  }
+  if (!salesHandoff) {
+    return `
+      <section class="native-crm-form-section native-crm-closer-review">
+        <h3>Validação do lead</h3>
+        <div class="native-crm-muted">Nenhum handoff encontrado para esta oportunidade.</div>
+      </section>
+    `;
+  }
+  if (review?.status === "completed") {
+    const accepted = review.salesAccepted === true;
+    return `
+      <section class="native-crm-form-section native-crm-closer-review" data-status="${accepted ? "accepted" : "rejected"}">
+        <div class="native-crm-section-head">
+          <h3>Validação do Closer</h3>
+          <span class="native-crm-qualification-pill">${accepted ? "Lead aceito" : "Lead rejeitado"}</span>
+        </div>
+        <div class="native-crm-qualification-score" data-status="${accepted ? "passed" : "failed"}">
+          <strong>${review.accuracyScore == null ? "—" : escapeHtml(String(review.accuracyScore))}<span>%</span></strong>
+          <div>
+            <span>Accuracy</span>
+            ${review.rejectReason ? `<span>${escapeHtml(crmRejectReasonLabel(review.rejectReason))}</span>` : ""}
+            <em>${escapeHtml(crmRecommendedActionLabel(review.primaryRecommendedAction))}</em>
+          </div>
+        </div>
+        <div class="native-crm-closer-dimension-result">
+          ${CRM_CLOSER_DIMENSIONS.map(([key, label]) => `<span><strong>${escapeHtml(label)}</strong>${escapeHtml(Object.fromEntries(CRM_CLOSER_VALIDATION_OPTIONS)[review.dimensionValidation?.[key]] || "Não discutida")}</span>`).join("")}
+        </div>
+      </section>
+    `;
+  }
+  const outcome = review?.meetingOutcome || "";
+  const outcomeButtons = [
+    ["held", "Held"],
+    ["no_show", "No-show"],
+    ["cancelled", "Cancelada"],
+    ["rescheduled", "Remarcada"],
+  ].map(([value, label]) => `<button type="button" class="${outcome === value ? "is-selected" : ""}" data-crm-meeting-outcome="${escapeHtml(value)}" data-crm-opportunity-id="${escapeHtml(opportunity.id)}">${escapeHtml(label)}</button>`).join("");
+  return `
+    <section class="native-crm-form-section native-crm-closer-review">
+      <div class="native-crm-section-head">
+        <h3>Validação do lead</h3>
+        <span class="native-crm-qualification-pill">${outcome ? "Reunião registrada" : "Aguardando reunião"}</span>
+      </div>
+      <div class="native-crm-closer-context">
+        <span>Handoff SDR recebido. Registre o outcome antes de avaliar a qualidade.</span>
+      </div>
+      <div class="native-crm-segmented native-crm-meeting-outcomes">${outcomeButtons}</div>
+      ${outcome && outcome !== "held" ? `<div class="native-crm-muted">Esse outcome não abre avaliação de qualidade do lead.</div>` : ""}
+      ${outcome === "held" ? `
+        <div class="native-crm-closer-form" data-crm-closer-review-form data-crm-opportunity-id="${escapeHtml(opportunity.id)}">
+          <fieldset class="native-crm-qualification-question">
+            <legend>Este lead deveria ter chegado ao Closer?</legend>
+            <div class="native-crm-segmented">
+              <label><input type="radio" name="salesAccepted" value="true" checked /><span>Sim</span></label>
+              <label><input type="radio" name="salesAccepted" value="false" /><span>Não</span></label>
+            </div>
+          </fieldset>
+          <label class="native-crm-closer-reason"><span>Motivo se rejeitado</span><select name="rejectReason">
+            <option value="">Selecione</option>
+            ${CRM_CLOSER_REJECT_REASONS.map(([value, label]) => `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`).join("")}
+          </select></label>
+          <label class="native-crm-closer-reason"><span>Nota opcional</span><textarea name="rejectNote" rows="2"></textarea></label>
+          <div class="native-crm-closer-dimensions">
+            ${CRM_CLOSER_DIMENSIONS.map(([key, label]) => `
+              <div class="native-crm-closer-dimension" data-dimension="${escapeHtml(key)}">
+                <strong>${escapeHtml(label)}</strong>
+                <div class="native-crm-segmented">
+                  ${CRM_CLOSER_VALIDATION_OPTIONS.map(([value, optionLabel]) => `<label><input type="radio" name="dimension-${escapeHtml(key)}" value="${escapeHtml(value)}" ${value === "not_discussed" ? "checked" : ""} /><span>${escapeHtml(optionLabel)}</span></label>`).join("")}
+                </div>
+              </div>
+            `).join("")}
+          </div>
+          <div class="native-crm-form-error" data-crm-closer-review-error hidden></div>
+          <div class="native-crm-inline-actions">
+            <button type="button" class="button button-solid button-small" data-crm-closer-review-submit ${nativeCrmState.saving ? "disabled" : ""}>Concluir avaliação</button>
           </div>
         </div>
       ` : ""}
@@ -13554,6 +13700,7 @@ const nativeCrmDrawerViewHtml = (opportunity, { pipelineName, stageName, money }
     ${nativeCrmDealHeroHtml(opportunity, { stageName, money })}
     ${nativeCrmDealActionsHtml(opportunity)}
     ${nativeCrmQualificationHtml(opportunity)}
+    ${nativeCrmCloserValidationHtml(opportunity)}
     ${nativeCrmNextActivityHtml(opportunity)}
     ${nativeCrmActivityFormHtml(opportunity)}
     ${nativeCrmOpenActivitiesHtml(opportunity)}
@@ -13968,6 +14115,8 @@ const loadNativeCrmOpportunityDetail = async (opportunityId, { force = false } =
       activities: Array.isArray(data?.activities) ? data.activities : [],
       timeline: Array.isArray(data?.timeline) ? data.timeline : [],
       qualification: data?.qualification && typeof data.qualification === "object" ? data.qualification : null,
+      handoff: data?.handoff && typeof data.handoff === "object" ? data.handoff : null,
+      closerReview: data?.closerReview && typeof data.closerReview === "object" ? data.closerReview : null,
       error: "",
     };
   } catch (error) {
@@ -14166,6 +14315,113 @@ const submitNativeCrmQualification = async (wrap) => {
     reloadNativeCrmListIfNeeded();
   } catch (error) {
     nativeCrmState.error = error?.message || "Não foi possível concluir a qualificação.";
+    renderNativeCrm();
+  } finally {
+    nativeCrmState.saving = false;
+    renderNativeCrm();
+  }
+};
+
+const runNativeCrmHandoff = async (opportunityId) => {
+  const id = String(opportunityId || "").trim();
+  if (!id) return;
+  nativeCrmState.saving = true;
+  nativeCrmState.error = "";
+  renderNativeCrm();
+  try {
+    const res = await fetchWithAuth("/api/crm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "handoff_opportunity", id }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error || "handoff_failed");
+    nativeCrmState.loadedAt = 0;
+    await loadNativeCrm({ force: true });
+    nativeCrmState.drawer = id;
+    await loadNativeCrmOpportunityDetail(id, { force: true });
+    reloadNativeCrmListIfNeeded();
+  } catch (error) {
+    nativeCrmState.error = error?.message || "Não foi possível enviar para o Closer.";
+    renderNativeCrm();
+  } finally {
+    nativeCrmState.saving = false;
+    renderNativeCrm();
+  }
+};
+
+const setNativeCrmMeetingOutcome = async (opportunityId, meetingOutcome) => {
+  const id = String(opportunityId || "").trim();
+  const outcome = String(meetingOutcome || "").trim();
+  if (!id || !outcome) return;
+  nativeCrmState.saving = true;
+  nativeCrmState.error = "";
+  renderNativeCrm();
+  try {
+    const res = await fetchWithAuth("/api/crm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "set_meeting_outcome", id, meetingOutcome: outcome }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error || "meeting_outcome_failed");
+    nativeCrmState.loadedAt = 0;
+    await loadNativeCrm({ force: true });
+    nativeCrmState.drawer = id;
+    await loadNativeCrmOpportunityDetail(id, { force: true });
+  } catch (error) {
+    nativeCrmState.error = error?.message || "Não foi possível registrar o outcome.";
+    renderNativeCrm();
+  } finally {
+    nativeCrmState.saving = false;
+    renderNativeCrm();
+  }
+};
+
+const submitNativeCrmCloserReview = async (wrap) => {
+  if (!(wrap instanceof HTMLElement)) return;
+  const opportunityId = String(wrap.getAttribute("data-crm-opportunity-id") || "").trim();
+  const salesAcceptedValue = wrap.querySelector('input[name="salesAccepted"]:checked')?.value;
+  const salesAccepted = salesAcceptedValue !== "false";
+  const rejectReason = String(wrap.querySelector('[name="rejectReason"]')?.value || "").trim();
+  const rejectNote = String(wrap.querySelector('[name="rejectNote"]')?.value || "").trim();
+  const errorEl = wrap.querySelector("[data-crm-closer-review-error]");
+  if (!salesAccepted && !rejectReason) {
+    if (errorEl instanceof HTMLElement) {
+      errorEl.textContent = "Informe o motivo da rejeição.";
+      errorEl.hidden = false;
+    }
+    return;
+  }
+  if (!salesAccepted && rejectReason === "other" && !rejectNote) {
+    if (errorEl instanceof HTMLElement) {
+      errorEl.textContent = "Descreva o motivo quando selecionar Outro.";
+      errorEl.hidden = false;
+    }
+    return;
+  }
+  const dimensionValidation = {};
+  CRM_CLOSER_DIMENSIONS.forEach(([key]) => {
+    dimensionValidation[key] = wrap.querySelector(`input[name="dimension-${key}"]:checked`)?.value || "not_discussed";
+  });
+  nativeCrmState.saving = true;
+  nativeCrmState.error = "";
+  renderNativeCrm();
+  try {
+    const res = await fetchWithAuth("/api/crm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "complete_closer_review", id: opportunityId, salesAccepted, rejectReason, rejectNote, dimensionValidation }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error || "closer_review_failed");
+    nativeCrmState.loadedAt = 0;
+    await loadNativeCrm({ force: true });
+    nativeCrmState.drawer = opportunityId;
+    await loadNativeCrmOpportunityDetail(opportunityId, { force: true });
+    reloadNativeCrmListIfNeeded();
+  } catch (error) {
+    nativeCrmState.error = error?.message || "Não foi possível concluir a avaliação.";
     renderNativeCrm();
   } finally {
     nativeCrmState.saving = false;
@@ -39933,6 +40189,28 @@ document.addEventListener("click", (event) => {
       event.preventDefault();
       const wrap = submitQualification.closest("[data-crm-qualification-form]");
       if (wrap instanceof HTMLElement) submitNativeCrmQualification(wrap).catch(() => {});
+      return;
+    }
+    const handoffButton = target.closest("[data-crm-handoff]");
+    if (handoffButton instanceof HTMLButtonElement) {
+      event.preventDefault();
+      runNativeCrmHandoff(String(handoffButton.getAttribute("data-crm-handoff") || nativeCrmState.drawer || "")).catch(() => {});
+      return;
+    }
+    const meetingOutcome = target.closest("[data-crm-meeting-outcome]");
+    if (meetingOutcome instanceof HTMLButtonElement) {
+      event.preventDefault();
+      setNativeCrmMeetingOutcome(
+        String(meetingOutcome.getAttribute("data-crm-opportunity-id") || nativeCrmState.drawer || ""),
+        String(meetingOutcome.getAttribute("data-crm-meeting-outcome") || ""),
+      ).catch(() => {});
+      return;
+    }
+    const submitCloserReview = target.closest("[data-crm-closer-review-submit]");
+    if (submitCloserReview instanceof HTMLButtonElement) {
+      event.preventDefault();
+      const wrap = submitCloserReview.closest("[data-crm-closer-review-form]");
+      if (wrap instanceof HTMLElement) submitNativeCrmCloserReview(wrap).catch(() => {});
       return;
     }
     const closeDrawer = target.closest("[data-crm-drawer-close]");

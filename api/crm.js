@@ -10,6 +10,7 @@ const {
 const { PROJECT_ID, encodeFields } = require("./_lib/firestore-rest");
 const crmService = require("./_lib/crm-service");
 const qualification = require("./_lib/crm-qualification");
+const handoff = require("./_lib/crm-handoff");
 
 const COLLECTIONS = {
   pipelines: "crmPipelines",
@@ -26,6 +27,8 @@ const COLLECTIONS = {
   qualificationOptions: "crmQualificationOptions",
   qualificationRuns: "crmQualificationRuns",
   qualificationAnswers: "crmQualificationAnswers",
+  salesHandoffs: "crmSalesHandoffs",
+  closerReviews: "crmCloserReviews",
 };
 
 const VALID_STATUS = new Set(["open", "won", "lost"]);
@@ -156,6 +159,7 @@ const normalizePipeline = (row) => ({
   id: clean(row.id || row.firestoreDocId),
   scopeId: clean(row.scopeId) || CRM_SCOPE_ID,
   name: clean(row.name),
+  pipelineType: ["general", "sdr", "closer"].includes(clean(row.pipelineType)) ? clean(row.pipelineType) : "general",
   isActive: row.isActive !== false,
   isDefault: row.isDefault === true,
   createdAt: toIso(row.createdAt),
@@ -169,7 +173,10 @@ const normalizeStage = (row) => ({
   name: clean(row.name),
   position: Number(row.position) || 0,
   requiresQualification: row.requiresQualification === true,
+  requiresQualificationToExit: row.requiresQualificationToExit === true,
   qualificationGate: clean(row.qualificationGate) || null,
+  handoffTargetPipelineId: clean(row.handoffTargetPipelineId) || null,
+  handoffTargetStageId: clean(row.handoffTargetStageId) || null,
   createdAt: toIso(row.createdAt),
   updatedAt: toIso(row.updatedAt),
 });
@@ -216,6 +223,12 @@ const normalizeOpportunity = (row) => ({
   qualificationFitScore: numberOrNull(row.qualificationFitScore),
   qualificationIntentScore: numberOrNull(row.qualificationIntentScore),
   qualificationPassed: row.qualificationPassed === true,
+  latestHandoffId: clean(row.latestHandoffId) || null,
+  closerReviewStatus: clean(row.closerReviewStatus) || null,
+  salesAccepted: row.salesAccepted === null || row.salesAccepted === undefined ? null : row.salesAccepted === true,
+  qualificationAccuracy: numberOrNull(row.qualificationAccuracy),
+  closerRejectReason: clean(row.closerRejectReason) || null,
+  recommendedAction: clean(row.recommendedAction) || null,
   searchTitle: normalizeSearchText(row.searchTitle || row.title),
   createdAt: toIso(row.createdAt),
   updatedAt: toIso(row.updatedAt),
@@ -395,6 +408,39 @@ const loadQualificationAnswersForRun = async (runId) => {
     .sort((left, right) => Number(left.position || 0) - Number(right.position || 0));
 };
 
+const dimensionScoresFromAnswers = (answers = []) => {
+  return (Array.isArray(answers) ? answers : []).reduce((acc, answer) => {
+    const dimension = clean(answer.dimension);
+    if (!dimension) return acc;
+    acc[dimension] = (Number(acc[dimension]) || 0) + (Number(answer.points) || 0);
+    return acc;
+  }, {});
+};
+
+const loadSalesHandoffsForOpportunity = async (opportunityId) => {
+  const rows = await listCollectionAsAdmin(COLLECTIONS.salesHandoffs, { maxPages: 20 }).catch(() => []);
+  return normalizeQualificationRows(rows, handoff.normalizeHandoff)
+    .filter((row) => row.opportunityId === opportunityId)
+    .sort((left, right) => String(right.handoffAt || right.createdAt || "").localeCompare(String(left.handoffAt || left.createdAt || "")));
+};
+
+const loadCloserReviewsForOpportunity = async (opportunityId) => {
+  const rows = await listCollectionAsAdmin(COLLECTIONS.closerReviews, { maxPages: 20 }).catch(() => []);
+  return normalizeQualificationRows(rows, handoff.normalizeReview)
+    .filter((row) => row.opportunityId === opportunityId)
+    .sort((left, right) => String(right.completedAt || right.createdAt || "").localeCompare(String(left.completedAt || left.createdAt || "")));
+};
+
+const loadLatestHandoffBundle = async (opportunityId) => {
+  const [handoffs, reviews] = await Promise.all([
+    loadSalesHandoffsForOpportunity(opportunityId),
+    loadCloserReviewsForOpportunity(opportunityId),
+  ]);
+  const latestHandoff = handoffs[0] || null;
+  const latestReview = latestHandoff ? reviews.find((review) => review.handoffId === latestHandoff.id) || null : null;
+  return { latestHandoff, latestReview };
+};
+
 const loadOpportunityQualificationDetail = async (opportunity) => {
   const config = await ensurePublishedSdrQualification();
   if (!config) return { template: null, version: null, questions: [], latestRun: null, answers: [] };
@@ -494,6 +540,11 @@ const eventTitle = (event) => {
   if (event.type === "crm.activity.cancelled") return `${activityTypeLabel(event.payload?.activityType)} cancelada`;
   if (event.type === "crm.qualification.started") return "Qualificação iniciada";
   if (event.type === "crm.qualification.completed") return "Qualificação concluída";
+  if (event.type === "crm.handoff.created") return "Enviado para Closer";
+  if (event.type === "crm.handoff.accepted") return "Handoff aceito";
+  if (event.type === "crm.handoff.rejected") return "Handoff rejeitado";
+  if (event.type === "crm.closer_review.completed") return "Closer avaliou o lead";
+  if (event.type === "crm.meeting.no_show") return "Reunião marcada como no-show";
   return clean(event.type).replace(/^crm\./, "");
 };
 
@@ -513,6 +564,17 @@ const eventDescription = (event) => {
     const scoreLabel = Number.isFinite(score) ? `${score}/100` : "";
     const status = event.payload?.passed === true ? "Aprovado" : "Reprovado";
     return [scoreLabel, status].filter(Boolean).join(" · ");
+  }
+  if (event.type === "crm.handoff.created") {
+    const closer = clean(event.payload?.closerName || event.payload?.closerUserId);
+    return closer ? `Closer: ${closer}` : "";
+  }
+  if (event.type === "crm.closer_review.completed") {
+    const accepted = event.payload?.salesAccepted === true ? "Lead aceito" : "Lead rejeitado";
+    const accuracy = Number(event.payload?.accuracyScore);
+    const accuracyLabel = Number.isFinite(accuracy) ? `Accuracy: ${accuracy}%` : "";
+    const action = clean(event.payload?.recommendedAction);
+    return [accepted, accuracyLabel, action ? `Ação: ${action}` : ""].filter(Boolean).join(" · ");
   }
   return event.payload?.title || event.payload?.activityTitle || "";
 };
@@ -558,12 +620,13 @@ const buildOpportunityTimeline = async (opportunityId) => {
 const loadOpportunityDetail = async (opportunityId) => {
   const opportunity = await loadOpportunityForWrite(opportunityId);
   if (!opportunity) return { status: 404, body: { error: "opportunity_not_found" } };
-  const [activities, timeline, qualificationDetail] = await Promise.all([
+  const [activities, timeline, qualificationDetail, handoffBundle] = await Promise.all([
     loadActivitiesForOpportunity(opportunity.id),
     buildOpportunityTimeline(opportunity.id),
     loadOpportunityQualificationDetail(opportunity),
+    loadLatestHandoffBundle(opportunity.id),
   ]);
-  return { status: 200, body: { opportunityId: opportunity.id, activities, timeline, qualification: qualificationDetail, generatedAt: nowIso() } };
+  return { status: 200, body: { opportunityId: opportunity.id, activities, timeline, qualification: qualificationDetail, handoff: handoffBundle.latestHandoff, closerReview: handoffBundle.latestReview, generatedAt: nowIso() } };
 };
 
 const handleCreateOpportunityViaService = async ({ session, body }) => {
@@ -880,6 +943,273 @@ const handleCompleteQualification = async ({ session, body }) => {
   return { status: 200, body: { ok: true, runId, qualification: qualification.qualificationSummaryFromRun(completedRun) } };
 };
 
+const handleHandoffOpportunity = async ({ session, body }) => {
+  const opportunity = await loadOpportunityForWrite(body.id || body.opportunityId);
+  if (!opportunity) return { status: 404, body: { error: "opportunity_not_found" } };
+  const runs = await loadQualificationRunsForOpportunity(opportunity.id);
+  const passedRun = qualification.latestRun(runs.filter((run) => run.status === "passed" && run.passed === true));
+  if (!passedRun) return { status: 409, body: { error: "qualification_required" } };
+  const existingForRun = (await loadSalesHandoffsForOpportunity(opportunity.id)).find((row) => row.qualificationRunId === passedRun.id);
+  if (existingForRun) return { status: 200, body: { ok: true, handoffId: existingForRun.id, unchanged: true } };
+  const [stagesRaw, pipelinesRaw] = await Promise.all([
+    listCollectionAsAdmin(COLLECTIONS.stages, { maxPages: 20 }).catch(() => []),
+    listCollectionAsAdmin(COLLECTIONS.pipelines, { maxPages: 10 }).catch(() => []),
+  ]);
+  const stages = stagesRaw.map(normalizeStage).filter(matchesCrmScope);
+  const pipelines = pipelinesRaw.map(normalizePipeline).filter(matchesCrmScope);
+  const fromStage = stages.find((stage) => stage.id === opportunity.stageId);
+  if (!fromStage || !qualification.stageRequiresQualification(fromStage)) return { status: 400, body: { error: "handoff_not_configured_for_stage" } };
+  const toPipelineId = clean(body.targetPipelineId) || fromStage.handoffTargetPipelineId;
+  const toStageId = clean(body.targetStageId) || fromStage.handoffTargetStageId;
+  const toPipeline = pipelines.find((pipeline) => pipeline.id === toPipelineId);
+  const toStage = stages.find((stage) => stage.id === toStageId);
+  if (!toPipeline?.isActive || toPipeline.pipelineType !== "closer") return { status: 400, body: { error: "invalid_handoff_target_pipeline" } };
+  if (!toStage || toStage.pipelineId !== toPipeline.id) return { status: 400, body: { error: "invalid_handoff_target_stage" } };
+
+  const answers = await loadQualificationAnswersForRun(passedRun.id);
+  const handoffId = handoff.handoffIdForTransition({
+    opportunityId: opportunity.id,
+    qualificationRunId: passedRun.id,
+    toPipelineId: toPipeline.id,
+    toStageId: toStage.id,
+  });
+  const stamp = nowIso();
+  const actor = clean(session.sub) || null;
+  const closerUserId = clean(body.closerUserId) || clean(opportunity.ownerId) || null;
+  const salesHandoff = {
+    id: handoffId,
+    scopeId: CRM_SCOPE_ID,
+    opportunityId: opportunity.id,
+    contactId: opportunity.contactId || null,
+    qualificationRunId: passedRun.id,
+    qualificationVersionId: passedRun.versionId,
+    qualificationVersionNumber: passedRun.versionNumber,
+    sdrUserId: passedRun.completedBy || passedRun.startedBy || actor,
+    closerUserId,
+    fromPipelineId: opportunity.pipelineId,
+    fromStageId: opportunity.stageId,
+    toPipelineId: toPipeline.id,
+    toStageId: toStage.id,
+    fitScore: passedRun.fitScore,
+    intentScore: passedRun.intentScore,
+    totalScore: passedRun.totalScore,
+    dimensionScores: dimensionScoresFromAnswers(answers),
+    thresholdSnapshot: passedRun.thresholdSnapshot,
+    qualifiedAt: passedRun.completedAt,
+    handoffAt: stamp,
+    status: "pending",
+    createdAt: stamp,
+    updatedAt: stamp,
+  };
+  const historyId = newId("stagehist");
+  const updatedOpportunity = {
+    ...opportunity,
+    pipelineId: toPipeline.id,
+    stageId: toStage.id,
+    ownerId: closerUserId || opportunity.ownerId || null,
+    latestHandoffId: salesHandoff.id,
+    closerReviewStatus: "pending",
+    updatedAt: stamp,
+  };
+  const writes = [
+    buildWrite(COLLECTIONS.salesHandoffs, salesHandoff.id, salesHandoff, { createOnly: true }),
+    buildWrite(COLLECTIONS.opportunities, opportunity.id, updatedOpportunity),
+    buildWrite(COLLECTIONS.stageHistory, historyId, {
+      id: historyId,
+      scopeId: CRM_SCOPE_ID,
+      opportunityId: opportunity.id,
+      fromStageId: opportunity.stageId || null,
+      toStageId: toStage.id,
+      changedBy: actor,
+      createdAt: stamp,
+    }),
+    eventWrite({
+      type: "crm.handoff.created",
+      opportunityId: opportunity.id,
+      contactId: opportunity.contactId,
+      actorId: actor,
+      payload: {
+        opportunityId: opportunity.id,
+        handoffId: salesHandoff.id,
+        qualificationRunId: passedRun.id,
+        sdrUserId: salesHandoff.sdrUserId,
+        closerUserId,
+        fromPipelineId: opportunity.pipelineId,
+        fromStageId: opportunity.stageId,
+        toPipelineId: toPipeline.id,
+        toStageId: toStage.id,
+        fitScore: passedRun.fitScore,
+        intentScore: passedRun.intentScore,
+        totalScore: passedRun.totalScore,
+      },
+      stamp,
+    }),
+    eventWrite({
+      type: "crm.opportunity.stage_changed",
+      opportunityId: opportunity.id,
+      contactId: opportunity.contactId,
+      actorId: actor,
+      payload: { fromStageId: opportunity.stageId || null, toStageId: toStage.id, fromPipelineId: opportunity.pipelineId || null, toPipelineId: toPipeline.id || null },
+      stamp,
+    }),
+  ];
+  const committed = await commitWritesAsAdmin({ writes });
+  if (!committed.ok) return { status: committed.status || 500, body: { error: "handoff_failed" } };
+  return { status: 201, body: { ok: true, handoffId: salesHandoff.id } };
+};
+
+const handleSetMeetingOutcome = async ({ session, body }) => {
+  const opportunity = await loadOpportunityForWrite(body.id || body.opportunityId);
+  if (!opportunity) return { status: 404, body: { error: "opportunity_not_found" } };
+  const outcome = clean(body.meetingOutcome);
+  if (!handoff.MEETING_OUTCOMES.has(outcome)) return { status: 400, body: { error: "invalid_meeting_outcome" } };
+  const { latestHandoff, latestReview } = await loadLatestHandoffBundle(opportunity.id);
+  if (!latestHandoff) return { status: 409, body: { error: "handoff_required" } };
+  if (latestReview?.status === "completed") return { status: 409, body: { error: "closer_review_completed_is_readonly" } };
+  const stamp = nowIso();
+  const actor = clean(session.sub) || null;
+  const reviewId = latestReview?.id || newId("closerrev");
+  const review = {
+    ...(latestReview || {}),
+    id: reviewId,
+    scopeId: CRM_SCOPE_ID,
+    handoffId: latestHandoff.id,
+    opportunityId: opportunity.id,
+    contactId: opportunity.contactId || null,
+    closerUserId: clean(body.closerUserId) || latestHandoff.closerUserId || opportunity.ownerId || actor,
+    meetingOutcome: outcome,
+    salesAccepted: null,
+    rejectReason: null,
+    rejectNote: null,
+    dimensionValidation: latestReview?.dimensionValidation || {},
+    accuracyScore: null,
+    accuracyDenominator: 0,
+    primaryRecommendedAction: null,
+    status: "pending",
+    createdAt: latestReview?.createdAt || stamp,
+    completedAt: null,
+    updatedAt: stamp,
+  };
+  const writes = [
+    buildWrite(COLLECTIONS.closerReviews, review.id, review, latestReview ? {} : { createOnly: true }),
+    buildWrite(COLLECTIONS.opportunities, opportunity.id, { ...opportunity, latestHandoffId: latestHandoff.id, closerReviewStatus: outcome === "held" ? "pending" : outcome, updatedAt: stamp }),
+  ];
+  if (outcome === "no_show") {
+    writes.push(eventWrite({
+      type: "crm.meeting.no_show",
+      opportunityId: opportunity.id,
+      contactId: opportunity.contactId,
+      actorId: actor,
+      payload: { opportunityId: opportunity.id, handoffId: latestHandoff.id, reviewId: review.id, closerUserId: review.closerUserId },
+      stamp,
+    }));
+  }
+  const committed = await commitWritesAsAdmin({ writes });
+  if (!committed.ok) return { status: committed.status || 500, body: { error: "meeting_outcome_failed" } };
+  return { status: 200, body: { ok: true, reviewId: review.id, meetingOutcome: outcome } };
+};
+
+const handleCompleteCloserReview = async ({ session, body }) => {
+  const opportunity = await loadOpportunityForWrite(body.id || body.opportunityId);
+  if (!opportunity) return { status: 404, body: { error: "opportunity_not_found" } };
+  const { latestHandoff, latestReview } = await loadLatestHandoffBundle(opportunity.id);
+  if (!latestHandoff) return { status: 409, body: { error: "handoff_required" } };
+  if (!latestReview) return { status: 409, body: { error: "meeting_outcome_required" } };
+  try {
+    handoff.assertReviewMutable(latestReview);
+    handoff.assertReviewCanComplete({
+      meetingOutcome: latestReview.meetingOutcome,
+      salesAccepted: body.salesAccepted,
+      rejectReason: body.rejectReason,
+      rejectNote: body.rejectNote,
+      dimensionValidation: body.dimensionValidation,
+    });
+  } catch (error) {
+    return { status: error.status || 400, body: { error: error.message } };
+  }
+  const config = await ensurePublishedSdrQualification(clean(session.sub));
+  const weights = handoff.dimensionMaxWeights({ questions: config?.questions || [], options: config?.options || [] });
+  const accuracy = handoff.calculateAccuracy({ dimensionValidation: body.dimensionValidation, weights });
+  const salesAccepted = body.salesAccepted === true;
+  const rejectReason = salesAccepted ? null : clean(body.rejectReason);
+  const recommendedAction = handoff.recommendedActionForReview({ salesAccepted, rejectReason });
+  const stamp = nowIso();
+  const actor = clean(session.sub) || null;
+  const completedReview = {
+    ...latestReview,
+    closerUserId: latestReview.closerUserId || opportunity.ownerId || actor,
+    meetingOutcome: "held",
+    salesAccepted,
+    rejectReason,
+    rejectNote: clean(body.rejectNote) || null,
+    dimensionValidation: accuracy.dimensionValidation,
+    accuracyScore: accuracy.accuracyScore,
+    accuracyDenominator: accuracy.accuracyDenominator,
+    primaryRecommendedAction: recommendedAction,
+    status: "completed",
+    completedAt: stamp,
+    updatedAt: stamp,
+  };
+  const nextHandoffStatus = salesAccepted ? "accepted" : "rejected";
+  const updatedHandoff = { ...latestHandoff, status: nextHandoffStatus, closerUserId: completedReview.closerUserId, updatedAt: stamp };
+  const updatedOpportunity = {
+    ...opportunity,
+    latestHandoffId: latestHandoff.id,
+    closerReviewStatus: "completed",
+    salesAccepted,
+    qualificationAccuracy: completedReview.accuracyScore,
+    closerRejectReason: rejectReason,
+    recommendedAction,
+    updatedAt: stamp,
+  };
+  const writes = [
+    buildWrite(COLLECTIONS.closerReviews, completedReview.id, completedReview),
+    buildWrite(COLLECTIONS.salesHandoffs, latestHandoff.id, updatedHandoff),
+    buildWrite(COLLECTIONS.opportunities, opportunity.id, updatedOpportunity),
+    eventWrite({
+      type: "crm.closer_review.completed",
+      opportunityId: opportunity.id,
+      contactId: opportunity.contactId,
+      actorId: actor,
+      payload: {
+        opportunityId: opportunity.id,
+        handoffId: latestHandoff.id,
+        reviewId: completedReview.id,
+        salesAccepted,
+        rejectReason,
+        accuracyScore: completedReview.accuracyScore,
+        recommendedAction,
+        closerUserId: completedReview.closerUserId,
+      },
+      stamp,
+    }),
+    eventWrite({
+      type: salesAccepted ? "crm.handoff.accepted" : "crm.handoff.rejected",
+      opportunityId: opportunity.id,
+      contactId: opportunity.contactId,
+      actorId: actor,
+      payload: {
+        opportunityId: opportunity.id,
+        handoffId: latestHandoff.id,
+        qualificationRunId: latestHandoff.qualificationRunId,
+        sdrUserId: latestHandoff.sdrUserId,
+        closerUserId: completedReview.closerUserId,
+        fromPipelineId: latestHandoff.fromPipelineId,
+        fromStageId: latestHandoff.fromStageId,
+        toPipelineId: latestHandoff.toPipelineId,
+        toStageId: latestHandoff.toStageId,
+        fitScore: latestHandoff.fitScore,
+        intentScore: latestHandoff.intentScore,
+        totalScore: latestHandoff.totalScore,
+      },
+      stamp,
+    }),
+  ];
+  const committed = await commitWritesAsAdmin({ writes });
+  if (!committed.ok) return { status: committed.status || 500, body: { error: "closer_review_failed" } };
+  return { status: 200, body: { ok: true, reviewId: completedReview.id, accuracyScore: completedReview.accuracyScore, recommendedAction } };
+};
+
 const handleMarkOpportunityWon = async ({ session, body }) => {
   const opportunity = await loadOpportunityForWrite(body.id || body.opportunityId);
   if (!opportunity) return { status: 404, body: { error: "opportunity_not_found" } };
@@ -991,6 +1321,7 @@ const adminConfigEvent = ({ type, actorId, payload, stamp }) => eventWrite({ typ
 const handleCreatePipeline = async ({ session, body }) => {
   const name = clean(body.name);
   if (!name) return { status: 400, body: { error: "pipeline_name_required" } };
+  const pipelineType = ["general", "sdr", "closer"].includes(clean(body.pipelineType)) ? clean(body.pipelineType) : "general";
   const rawStages = Array.isArray(body.stages) ? body.stages : [];
   const stageNames = rawStages.map((stage) => clean(typeof stage === "string" ? stage : stage?.name)).filter(Boolean);
   if (!stageNames.length) stageNames.push("Novo lead");
@@ -1000,15 +1331,18 @@ const handleCreatePipeline = async ({ session, body }) => {
   const stamp = nowIso();
   const id = newId("pipeline");
   const makeDefault = body.isDefault === true || !pipelines.some((pipeline) => pipeline.isActive && pipeline.isDefault);
-  const pipeline = { id, scopeId: CRM_SCOPE_ID, name, isActive: true, isDefault: makeDefault, createdAt: stamp, updatedAt: stamp };
+  const pipeline = { id, scopeId: CRM_SCOPE_ID, name, pipelineType, isActive: true, isDefault: makeDefault, createdAt: stamp, updatedAt: stamp };
   const stages = stageNames.map((stageName, index) => ({
     id: newId("stage"),
     scopeId: CRM_SCOPE_ID,
     pipelineId: id,
     name: stageName,
     position: index + 1,
-    requiresQualification: index === 0,
-    qualificationGate: index === 0 ? qualification.QUALIFICATION_TYPE_SDR : null,
+    requiresQualification: pipelineType === "sdr" && index === 0,
+    requiresQualificationToExit: pipelineType === "sdr" && index === 0,
+    qualificationGate: pipelineType === "sdr" && index === 0 ? qualification.QUALIFICATION_TYPE_SDR : null,
+    handoffTargetPipelineId: null,
+    handoffTargetStageId: null,
     createdAt: stamp,
     updatedAt: stamp,
   }));
@@ -1016,7 +1350,7 @@ const handleCreatePipeline = async ({ session, body }) => {
     ...pipelines.map((row) => (makeDefault ? buildWrite(COLLECTIONS.pipelines, row.id, { ...row, isDefault: false, updatedAt: stamp }) : null)).filter(Boolean),
     buildWrite(COLLECTIONS.pipelines, id, pipeline, { createOnly: true }),
     ...stages.map((stage) => buildWrite(COLLECTIONS.stages, stage.id, stage, { createOnly: true })),
-    adminConfigEvent({ type: "crm.pipeline.created", actorId: clean(session.sub), payload: { pipelineId: id, stageCount: stages.length, isDefault: makeDefault }, stamp }),
+    adminConfigEvent({ type: "crm.pipeline.created", actorId: clean(session.sub), payload: { pipelineId: id, stageCount: stages.length, isDefault: makeDefault, pipelineType }, stamp }),
   ];
   const committed = await commitWritesAsAdmin({ writes });
   if (!committed.ok) return { status: committed.status || 500, body: { error: "crm_pipeline_create_failed" } };
@@ -1032,11 +1366,12 @@ const handleUpdatePipeline = async ({ session, body }) => {
   if (!pipeline) return { status: 404, body: { error: "pipeline_not_found" } };
   const stamp = nowIso();
   const makeDefault = body.isDefault === true;
+  const pipelineType = ["general", "sdr", "closer"].includes(clean(body.pipelineType)) ? clean(body.pipelineType) : pipeline.pipelineType;
   if (makeDefault && pipeline.isActive === false) return { status: 400, body: { error: "inactive_default_pipeline" } };
   const writes = [
     ...pipelines.map((row) => (makeDefault && row.id !== id ? buildWrite(COLLECTIONS.pipelines, row.id, { ...row, isDefault: false, updatedAt: stamp }) : null)).filter(Boolean),
-    buildWrite(COLLECTIONS.pipelines, id, { ...pipeline, name, isDefault: makeDefault ? true : pipeline.isDefault, updatedAt: stamp }),
-    adminConfigEvent({ type: "crm.pipeline.updated", actorId: clean(session.sub), payload: { pipelineId: id, isDefault: makeDefault ? true : pipeline.isDefault }, stamp }),
+    buildWrite(COLLECTIONS.pipelines, id, { ...pipeline, name, pipelineType, isDefault: makeDefault ? true : pipeline.isDefault, updatedAt: stamp }),
+    adminConfigEvent({ type: "crm.pipeline.updated", actorId: clean(session.sub), payload: { pipelineId: id, isDefault: makeDefault ? true : pipeline.isDefault, pipelineType }, stamp }),
   ];
   const committed = await commitWritesAsAdmin({ writes });
   if (!committed.ok) return { status: committed.status || 500, body: { error: "crm_pipeline_update_failed" } };
@@ -1102,7 +1437,21 @@ const handleCreateStage = async ({ session, body }) => {
   const guard = assertUniqueStageNames(stages, pipelineId, { candidateName: name });
   if (guard) return guard;
   const stamp = nowIso();
-  const stage = { id: newId("stage"), scopeId: CRM_SCOPE_ID, pipelineId, name, position: stages.filter((row) => row.pipelineId === pipelineId).length + 1, createdAt: stamp, updatedAt: stamp };
+  const requiresQualification = body.requiresQualification === true || body.requiresQualificationToExit === true;
+  const stage = {
+    id: newId("stage"),
+    scopeId: CRM_SCOPE_ID,
+    pipelineId,
+    name,
+    position: stages.filter((row) => row.pipelineId === pipelineId).length + 1,
+    requiresQualification,
+    requiresQualificationToExit: requiresQualification,
+    qualificationGate: requiresQualification ? qualification.QUALIFICATION_TYPE_SDR : null,
+    handoffTargetPipelineId: clean(body.handoffTargetPipelineId) || null,
+    handoffTargetStageId: clean(body.handoffTargetStageId) || null,
+    createdAt: stamp,
+    updatedAt: stamp,
+  };
   const committed = await commitWritesAsAdmin({ writes: [
     buildWrite(COLLECTIONS.stages, stage.id, stage, { createOnly: true }),
     adminConfigEvent({ type: "crm.stage.created", actorId: clean(session.sub), payload: { pipelineId, stageId: stage.id }, stamp }),
@@ -1121,8 +1470,20 @@ const handleUpdateStage = async ({ session, body }) => {
   const guard = assertUniqueStageNames(stages, stage.pipelineId, { ignoreStageId: id, candidateName: name });
   if (guard) return guard;
   const stamp = nowIso();
+  const requiresQualification = body.requiresQualification === undefined && body.requiresQualificationToExit === undefined
+    ? qualification.stageRequiresQualification(stage)
+    : body.requiresQualification === true || body.requiresQualificationToExit === true;
   const committed = await commitWritesAsAdmin({ writes: [
-    buildWrite(COLLECTIONS.stages, id, { ...stage, name, updatedAt: stamp }),
+    buildWrite(COLLECTIONS.stages, id, {
+      ...stage,
+      name,
+      requiresQualification,
+      requiresQualificationToExit: requiresQualification,
+      qualificationGate: requiresQualification ? qualification.QUALIFICATION_TYPE_SDR : null,
+      handoffTargetPipelineId: body.handoffTargetPipelineId === undefined ? stage.handoffTargetPipelineId : clean(body.handoffTargetPipelineId) || null,
+      handoffTargetStageId: body.handoffTargetStageId === undefined ? stage.handoffTargetStageId : clean(body.handoffTargetStageId) || null,
+      updatedAt: stamp,
+    }),
     adminConfigEvent({ type: "crm.stage.updated", actorId: clean(session.sub), payload: { pipelineId: stage.pipelineId, stageId: id }, stamp }),
   ] });
   if (!committed.ok) return { status: committed.status || 500, body: { error: "crm_stage_update_failed" } };
@@ -1358,39 +1719,45 @@ module.exports = async (req, res) => {
               ? await handleStartQualification({ session: auth.session, body })
               : action === "complete_qualification"
                 ? await handleCompleteQualification({ session: auth.session, body })
-                : action === "mark_opportunity_won"
-                  ? await handleMarkOpportunityWon({ session: auth.session, body })
-                  : action === "mark_opportunity_lost"
-                    ? await handleMarkOpportunityLost({ session: auth.session, body })
-                    : action === "reopen_opportunity"
-                      ? await handleReopenOpportunity({ session: auth.session, body })
-                      : action === "create_pipeline"
-                        ? await handleCreatePipeline({ session: auth.session, body })
-                        : action === "update_pipeline"
-                          ? await handleUpdatePipeline({ session: auth.session, body })
-                          : action === "set_default_pipeline"
-                            ? await handleSetDefaultPipeline({ session: auth.session, body })
-                            : action === "deactivate_pipeline"
-                              ? await handleDeactivatePipeline({ session: auth.session, body })
-                              : action === "reactivate_pipeline"
-                                ? await handleReactivatePipeline({ session: auth.session, body })
-                                : action === "create_stage"
-                                  ? await handleCreateStage({ session: auth.session, body })
-                                  : action === "update_stage"
-                                    ? await handleUpdateStage({ session: auth.session, body })
-                                    : action === "reorder_stages"
-                                      ? await handleReorderStages({ session: auth.session, body })
-                                      : action === "delete_stage"
-                                        ? await handleDeleteStage({ session: auth.session, body })
-                                        : action === "create_activity"
-                                          ? await handleCreateActivity({ session: auth.session, body })
-                                          : action === "update_activity"
-                                            ? await handleUpdateActivity({ session: auth.session, body })
-                                            : action === "complete_activity"
-                                              ? await handleActivityStatusChange({ session: auth.session, body, status: "completed" })
-                                              : action === "cancel_activity"
-                                                ? await handleActivityStatusChange({ session: auth.session, body, status: "cancelled" })
-                                                : { status: 400, body: { error: "invalid_action" } };
+                : action === "handoff_opportunity"
+                  ? await handleHandoffOpportunity({ session: auth.session, body })
+                  : action === "set_meeting_outcome"
+                    ? await handleSetMeetingOutcome({ session: auth.session, body })
+                    : action === "complete_closer_review"
+                      ? await handleCompleteCloserReview({ session: auth.session, body })
+                      : action === "mark_opportunity_won"
+                        ? await handleMarkOpportunityWon({ session: auth.session, body })
+                        : action === "mark_opportunity_lost"
+                          ? await handleMarkOpportunityLost({ session: auth.session, body })
+                          : action === "reopen_opportunity"
+                            ? await handleReopenOpportunity({ session: auth.session, body })
+                            : action === "create_pipeline"
+                              ? await handleCreatePipeline({ session: auth.session, body })
+                              : action === "update_pipeline"
+                                ? await handleUpdatePipeline({ session: auth.session, body })
+                                : action === "set_default_pipeline"
+                                  ? await handleSetDefaultPipeline({ session: auth.session, body })
+                                  : action === "deactivate_pipeline"
+                                    ? await handleDeactivatePipeline({ session: auth.session, body })
+                                    : action === "reactivate_pipeline"
+                                      ? await handleReactivatePipeline({ session: auth.session, body })
+                                      : action === "create_stage"
+                                        ? await handleCreateStage({ session: auth.session, body })
+                                        : action === "update_stage"
+                                          ? await handleUpdateStage({ session: auth.session, body })
+                                          : action === "reorder_stages"
+                                            ? await handleReorderStages({ session: auth.session, body })
+                                            : action === "delete_stage"
+                                              ? await handleDeleteStage({ session: auth.session, body })
+                                              : action === "create_activity"
+                                                ? await handleCreateActivity({ session: auth.session, body })
+                                                : action === "update_activity"
+                                                  ? await handleUpdateActivity({ session: auth.session, body })
+                                                  : action === "complete_activity"
+                                                    ? await handleActivityStatusChange({ session: auth.session, body, status: "completed" })
+                                                    : action === "cancel_activity"
+                                                      ? await handleActivityStatusChange({ session: auth.session, body, status: "cancelled" })
+                                                      : { status: 400, body: { error: "invalid_action" } };
     return sendJson(res, result.status, result.body);
   } catch (error) {
     console.error("[crm] write failed", error);
