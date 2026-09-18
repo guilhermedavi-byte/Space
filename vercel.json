@@ -155,11 +155,7 @@
     },
     {
       "source": "/admin/sdr",
-      "destination": "/api/app?path=admin/sdr"
-    },
-    {
-      "source": "/admin/sdr/(.*)",
-      "destination": "/api/app?path=admin/sdr/$1"
+      "destination": "/api/app?path=admin/comercial/pre-vendas/painel-sdr"
     },
     {
       "source": "/app",

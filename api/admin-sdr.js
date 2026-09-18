@@ -3,6 +3,7 @@ const { resolveAdminRequestAuth } = require('./_lib/admin-request-auth');
 const { commitWritesAsAdmin } = require('./_lib/firestore-admin');
 const { PROJECT_ID, encodeFields } = require('./_lib/firestore-rest');
 const { loadAdminCommercialSdrActivity, addDaysToKey } = require('./_lib/admin-commercial-sdr-activity');
+const { supabaseFetch } = require('./_lib/supabase-rest');
 
 const TIME_ZONE = 'America/Sao_Paulo';
 const FAVORITES_COLLECTION = 'sdrCallFavorites';
@@ -47,6 +48,108 @@ const resolveRange = ({ period = 'last7', from = '', to = '', now = new Date() }
   if (p === 'last_month') { const r = lastMonthRange(today); return { period: p, fromKey: r.from, toKey: r.to }; }
   return { period: 'last7', fromKey: addDaysToKey(today, -6), toKey: today };
 };
+
+const first = (row, keys, fallback = '') => {
+  for (const key of keys) if (row && row[key] != null && clean(row[key]) !== '') return row[key];
+  return fallback;
+};
+const parseMaybeJson = value => {
+  if (!value) return null;
+  if (typeof value === 'object') return value;
+  try { return JSON.parse(String(value)); } catch { return String(value); }
+};
+const asArray = value => Array.isArray(value) ? value : value && typeof value === 'object' ? Object.values(value) : [];
+const localPartsFromIso = value => {
+  const raw = clean(value);
+  if (!raw) return { dateKey: '', time: '' };
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return { dateKey: parseDateKey(raw.slice(0, 10)), time: raw.slice(11, 16) };
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('sv-SE', { timeZone: TIME_ZONE, year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', hour12:false }).formatToParts(d).filter(x=>x.type!=='literal').map(x=>[x.type,x.value]));
+  return { dateKey: `${parts.year}-${parts.month}-${parts.day}`, time: `${parts.hour}:${parts.minute}` };
+};
+const normalizeScorecard = analysis => {
+  const src = analysis && typeof analysis === 'object' ? (analysis.criteria || analysis.scorecard || analysis.scores || analysis.dimensions || {}) : {};
+  const entries = Array.isArray(src) ? src.map(item => [first(item, ['name','label','criterion','criterio'], ''), item]) : Object.entries(src || {});
+  return entries.map(([name, value]) => {
+    const score = typeof value === 'object' ? first(value, ['score','value','nota','rating'], null) : value;
+    return { name: clean(name), score: Number.isFinite(Number(score)) ? Number(score) : null };
+  }).filter(x => x.name);
+};
+const normalizeList = value => Array.isArray(value) ? value.map(clean).filter(Boolean) : clean(value) ? [clean(value)] : [];
+const normalizeAnalysisStatus = value => {
+  const raw = clean(value).toLowerCase();
+  if (!raw) return 'completed';
+  if (raw.includes('transcrib')) return 'transcribing';
+  if (raw.includes('analis') || raw.includes('analyz')) return 'analyzing';
+  if (raw.includes('erro') || raw.includes('error') || raw.includes('fail')) return 'error';
+  if (raw.includes('conclu') || raw.includes('done') || raw.includes('complete') || raw.includes('success')) return 'completed';
+  return raw;
+};
+const normalizeScoredCall = (row = {}) => {
+  const analysis = parseMaybeJson(first(row, ['analysis','analise','ai_analysis','evaluation','score_json'], null));
+  const started = first(row, ['recording_started_at','call_started_at','started_at','created_at','updated_at'], '');
+  const local = localPartsFromIso(started);
+  const duration = first(row, ['duration_seconds','duration_sec','call_duration_seconds'], null);
+  const durationMillis = first(row, ['duration_millis','duration_ms'], null);
+  const score = first(row, ['score','nota','ia_score','overall_score'], analysis && typeof analysis === 'object' ? first(analysis, ['score','nota','overall_score'], null) : null);
+  const script = first(row, ['script_adherence','script_score','aderencia_script'], analysis && typeof analysis === 'object' ? first(analysis, ['script_adherence','script_score','aderencia_script'], null) : null);
+  const recordingId = clean(first(row, ['recording_id','recordingId'], ''));
+  const callLegId = clean(first(row, ['call_leg_id','callLegId'], ''));
+  const sessionId = clean(first(row, ['call_session_id','callSessionId','session_id'], ''));
+  const id = clean(first(row, ['id'], '')) || recordingId || callLegId || sessionId;
+  const outcome = clean(first(row, ['outcome','result','resultado'], analysis && typeof analysis === 'object' ? first(analysis, ['outcome','result','resultado'], '') : '')).toLowerCase();
+  const transcript = clean(first(row, ['transcription','transcript','transcricao','transcription_text'], ''));
+  const analysisStatus = normalizeAnalysisStatus(first(row, ['analysis_status','processing_status','status'], score !== null ? 'completed' : transcript ? 'analyzing' : recordingId ? 'transcribing' : 'pending'));
+  const callStatus = /não|nao|miss|no.?answer|unanswered/.test(outcome) ? 'unanswered' : 'connected';
+  return {
+    id,
+    sourceKind: 'ai_score',
+    dateKey: local.dateKey,
+    time: local.time,
+    createdAt: clean(first(row, ['created_at','updated_at'], '')),
+    sdrUid: clean(first(row, ['sdr_id','sdr_uid','user_uid','user_id'], '')),
+    sdrName: clean(first(row, ['sdr','sdr_name','sdrName','user_name','agent_name','agent'], '')) || 'SDR',
+    leadName: clean(first(row, ['lead','lead_name','contact_name','customer_name'], '')),
+    phone: clean(first(row, ['phone','lead_phone','from_number','to_number','customer_phone'], '')),
+    durationSeconds: Number.isFinite(Number(duration)) ? Number(duration) : Number.isFinite(Number(durationMillis)) ? Math.round(Number(durationMillis) / 1000) : null,
+    score: Number.isFinite(Number(score)) ? Number(score) : null,
+    scriptAdherence: Number.isFinite(Number(script)) ? Number(script) : null,
+    outcome: /sched|agend/.test(outcome) ? 'scheduled' : /show/.test(outcome) && !/no/.test(outcome) ? 'show' : /no.?show/.test(outcome) ? 'noshow' : /sale|venda/.test(outcome) ? 'sale' : outcome || 'none',
+    outcomeLabel: clean(first(row, ['outcome_label','resultado_label'], '')) || (outcome || 'Sem resultado'),
+    recording: clean(first(row, ['recording_url','audio_url','recording'], '')),
+    recordingId,
+    callId: callLegId || sessionId || id,
+    callLegId,
+    callSessionId: sessionId,
+    connectionId: clean(first(row, ['connection_id'], '')),
+    fromNumber: clean(first(row, ['from_number'], '')),
+    toNumber: clean(first(row, ['to_number'], '')),
+    transcriptAvailable: Boolean(transcript),
+    transcript,
+    analysis,
+    status: callStatus,
+    analysisStatus,
+    scorecard: normalizeScorecard(analysis),
+    summary: typeof analysis === 'object' ? clean(first(analysis, ['summary','resumo'], '')) : clean(analysis),
+    strengths: typeof analysis === 'object' ? normalizeList(first(analysis, ['strengths','pontos_fortes','acertos'], [])) : [],
+    weaknesses: typeof analysis === 'object' ? normalizeList(first(analysis, ['weaknesses','pontos_melhoria','erros'], [])) : [],
+    recommendations: typeof analysis === 'object' ? normalizeList(first(analysis, ['recommendations','recomendacoes'], [])) : [],
+    missedOpportunity: typeof analysis === 'object' ? clean(first(analysis, ['missed_opportunity','best_missed_opportunity','melhor_oportunidade'], '')) : '',
+    biggestMistake: typeof analysis === 'object' ? clean(first(analysis, ['biggest_mistake','maior_erro'], '')) : '',
+    nextImprovement: typeof analysis === 'object' ? clean(first(analysis, ['next_action','next_improvement','proxima_melhoria'], '')) : '',
+  };
+};
+const loadScoredCalls = async ({ request = supabaseFetch, limit = 200 } = {}) => {
+  try {
+    const res = await request(`/sdr_call_scores?select=*&order=created_at.desc&limit=${Math.max(1, Math.min(Number(limit)||200, 500))}`, { timeoutMs: 15000 });
+    const rows = Array.isArray(res.data) ? res.data : [];
+    return { ok: true, table: 'sdr_call_scores', rows, calls: rows.map(normalizeScoredCall).filter(call => call.id), columns: rows[0] ? Object.keys(rows[0]) : [] };
+  } catch (error) {
+    return { ok: false, table: 'sdr_call_scores', rows: [], calls: [], columns: [], error: String(error.code || error.message || 'sdr_call_scores_unavailable').slice(0, 80) };
+  }
+};
+const avg = rows => { const nums = rows.map(Number).filter(Number.isFinite); return nums.length ? nums.reduce((a,b)=>a+b,0)/nums.length : null; };
+
 const firestoreDocName = (collection, id) => {
   if (!PROJECT_ID) throw Object.assign(new Error('missing_project_id'), { status: 503 });
   return `projects/${PROJECT_ID}/databases/(default)/documents/${collection}/${encodeURIComponent(id)}`;
@@ -91,9 +194,10 @@ const buildTimeline = (calls, fromKey, toKey) => {
   });
   return [...map.values()].map(row => ({ ...row, conversion: pct(row.scheduled, row.calls) }));
 };
-const aggregateSdr = (row = {}, calls = []) => {
+const aggregateSdr = (row = {}, calls = [], scoredCalls = []) => {
   const uid = clean(row.sdrUid || row.uid);
   const own = calls.filter(call => call.sdrUid === uid);
+  const ownScores = scoredCalls.filter(call => (call.sdrUid && call.sdrUid === uid) || (!call.sdrUid && clean(call.sdrName).toLowerCase() === clean(row.sdrName || row.nome).toLowerCase()));
   const totalCalls = own.filter(call => call.status !== 'meeting').length;
   const connected = own.filter(call => call.status === 'connected').length;
   const scheduled = own.filter(call => call.outcome === 'scheduled').length;
@@ -107,8 +211,8 @@ const aggregateSdr = (row = {}, calls = []) => {
     active: row.ativo !== false,
     calls: totalCalls,
     connected,
-    over1m: null,
-    over5m: null,
+    over1m: ownScores.filter(call => Number(call.durationSeconds) >= 60).length || null,
+    over5m: ownScores.filter(call => Number(call.durationSeconds) >= 300).length || null,
     scheduled,
     callToScheduleRate: pct(scheduled, totalCalls),
     shows,
@@ -117,15 +221,16 @@ const aggregateSdr = (row = {}, calls = []) => {
     sales: 0,
     showToSaleRate: null,
     revenue: 0,
-    avgScore: null,
-    scriptAdherence: null,
+    analyzedCalls: ownScores.length,
+    avgScore: avg(ownScores.map(call => call.score)),
+    scriptAdherence: avg(ownScores.map(call => call.scriptAdherence)),
     trend: buildTimeline(own, own[own.length - 1]?.dateKey || '', own[0]?.dateKey || '').slice(-8),
   };
 };
 const buildFunnel = summary => {
   const calls = number(summary.totalCalls);
   const connected = number(summary.answered);
-  const relevant = null;
+  const relevant = number(summary.over1m);
   const scheduled = number(summary.scheduled);
   const shows = number(summary.shows);
   const sales = 0;
@@ -151,8 +256,17 @@ const filterCalls = (calls, { sdr = 'all', status = 'all', score = 'all', result
   if (sdr && sdr !== 'all' && call.sdrUid !== sdr) return false;
   if (status === 'connected' && call.status !== 'connected') return false;
   if (status === 'unanswered' && call.status !== 'unanswered') return false;
-  if (['over1m', 'over2m', 'over5m', 'over10m'].includes(status)) return false;
-  if (score && score !== 'all') return false;
+  if (status === 'over1m' && (Number(call.durationSeconds) || 0) < 60) return false;
+  if (status === 'over2m' && (Number(call.durationSeconds) || 0) < 120) return false;
+  if (status === 'over5m' && (Number(call.durationSeconds) || 0) < 300) return false;
+  if (status === 'over10m' && (Number(call.durationSeconds) || 0) < 600) return false;
+  if (score && score !== 'all') {
+    const value = Number(call.score);
+    if (!Number.isFinite(value)) return false;
+    if (score === '80' && value < 80) return false;
+    if (score === '60' && (value < 60 || value >= 80)) return false;
+    if (score === 'low' && value >= 60) return false;
+  }
   if (result && result !== 'all') {
     if (result === 'scheduled' && call.outcome !== 'scheduled') return false;
     if (result === 'show' && call.outcome !== 'show') return false;
@@ -163,35 +277,39 @@ const filterCalls = (calls, { sdr = 'all', status = 'all', score = 'all', result
   }
   return true;
 });
-const buildModel = async (query = {}) => {
+const buildModel = async (query = {}, deps = {}) => {
   const range = resolveRange(query);
   const activity = await loadAdminCommercialSdrActivity({ period: 'custom', from: range.fromKey, to: range.toKey });
+  const scoreSource = await loadScoredCalls({ request: deps.request || supabaseFetch });
+  const rawScoredCalls = scoreSource.calls.filter(call => !call.dateKey || (call.dateKey >= range.fromKey && call.dateKey <= range.toKey));
   const rawCalls = (activity.events || []).map(normalizeCall);
   const calls = filterCalls(rawCalls, query);
   const summary = {
     totalCalls: calls.filter(c => c.status !== 'meeting').length,
     connected: calls.filter(c => c.status === 'connected').length,
     answered: calls.filter(c => c.status === 'connected').length,
-    over1m: null, over2m: null, over5m: null, over10m: null,
-    totalDurationSeconds: null,
-    avgDurationSeconds: null,
+    over1m: rawScoredCalls.filter(c => Number(c.durationSeconds) >= 60).length || null, over2m: rawScoredCalls.filter(c => Number(c.durationSeconds) >= 120).length || null, over5m: rawScoredCalls.filter(c => Number(c.durationSeconds) >= 300).length || null, over10m: rawScoredCalls.filter(c => Number(c.durationSeconds) >= 600).length || null,
+    totalDurationSeconds: rawScoredCalls.some(c => c.durationSeconds != null) ? rawScoredCalls.reduce((sum,c)=>sum+number(c.durationSeconds),0) : null,
+    avgDurationSeconds: avg(rawScoredCalls.map(c => c.durationSeconds)),
     scheduled: calls.filter(c => c.outcome === 'scheduled').length,
     shows: calls.filter(c => c.outcome === 'show').length,
     noShows: calls.filter(c => c.outcome === 'noshow').length,
-    sales: 0,
-    revenue: 0,
+    sales: null,
+    revenue: null,
     avgTicket: null,
     analyzedCalls: 0,
-    avgScore: null,
-    scriptAdherence: null,
+    analyzedCalls: ownScores.length,
+    avgScore: avg(ownScores.map(call => call.score)),
+    scriptAdherence: avg(ownScores.map(call => call.scriptAdherence)),
   };
-  const sdrs = (activity.sdrs || []).map(row => aggregateSdr(row, rawCalls)).filter(row => !query.sdr || query.sdr === 'all' || row.uid === query.sdr);
+  const sdrs = (activity.sdrs || []).map(row => aggregateSdr(row, rawCalls, rawScoredCalls)).filter(row => !query.sdr || query.sdr === 'all' || row.uid === query.sdr);
   const sdrOptions = (activity.sdrs || []).map(row => ({ uid: clean(row.sdrUid), name: clean(row.sdrName) || 'SDR', email: clean(row.sdrEmail) }));
-  const selectedCall = query.callId ? calls.find(call => call.id === query.callId) || null : null;
+  const filteredScoredCalls = filterCalls(rawScoredCalls, query);
+  const selectedCall = query.callId ? rawScoredCalls.find(call => call.id === query.callId) || calls.find(call => call.id === query.callId) || null : null;
   return {
     ok: true,
     generatedAt: new Date().toISOString(),
-    source: { operational: 'Firestore/sdrActivityEvents', callAnalysis: 'pending_postgres_telnyx_n8n', usesMockData: false },
+    source: { operational: 'Firestore/sdrActivityEvents', callAnalysis: scoreSource.ok ? 'Postgres/sdr_call_scores' : 'sdr_call_scores_unavailable', usesMockData: false, scoreTable: scoreSource.table, scoreRows: scoreSource.rows.length, scoreColumns: scoreSource.columns, scoreError: scoreSource.error || null },
     filters: { period: range.period, fromKey: range.fromKey, toKey: range.toKey, sdr: query.sdr || 'all', status: query.status || 'all', score: query.score || 'all', result: query.result || 'all' },
     sdrOptions,
     kpis: { ...summary, callToScheduleRate: pct(summary.scheduled, summary.totalCalls), showRate: pct(summary.shows, summary.scheduled), showToSaleRate: null },
@@ -199,14 +317,15 @@ const buildModel = async (query = {}) => {
     timeline: buildTimeline(calls, range.fromKey, range.toKey),
     sdrs,
     ranking: sdrs,
-    calls: calls.slice(0, 100),
-    callsTotal: calls.length,
+    calls: filteredScoredCalls.slice(0, 100),
+    operationalEvents: calls.slice(0, 100),
+    callsTotal: filteredScoredCalls.length,
     objections: [],
     scorecard: { criteria: [], teamAverage: null, note: 'Aguardando análises IA persistidas.' },
     coaching: sdrs.map(row => ({ sdrUid: row.uid, sdrName: row.name, skill: 'Dados insuficientes', evidence: 'Ainda não há scorecards IA suficientes no período.', recommendation: 'Aguardar processamento das calls pela esteira Telnyx/n8n/IA.' })),
     library: { best: [], review: [], training: [] },
     insights: buildInsights({ summary, sdrs }),
-    selectedCall: selectedCall ? { ...selectedCall, transcript: '', analysis: null, scorecard: [], recommendations: [], transcriptStatus: 'Transcrição ausente', analysisText: 'Análise pendente ou indisponível para esta ligação.' } : null,
+    selectedCall: selectedCall ? { ...selectedCall, transcriptStatus: selectedCall.transcript ? 'Transcrição concluída' : 'Transcrição ausente', analysisText: selectedCall.summary || (selectedCall.analysis ? 'Análise disponível.' : 'Análise pendente ou indisponível para esta ligação.') } : null,
   };
 };
 const handleFavorite = async ({ body, session }) => {
@@ -243,4 +362,4 @@ const createHandler = ({ build = buildModel, authResolver = resolveAdminRequestA
 };
 module.exports = createHandler();
 module.exports.createHandler = createHandler;
-module.exports.__private = { resolveRange, buildModel, normalizeCall, filterCalls };
+module.exports.__private = { resolveRange, buildModel, normalizeCall, normalizeScoredCall, filterCalls, loadScoredCalls };

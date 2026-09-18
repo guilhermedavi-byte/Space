@@ -41891,7 +41891,7 @@ const panelPathForRole = (role, panel) => {
 
   if (normalized === "admin") {
     if (p === "activities") return "/app/admin/atividades";
-    if (p === "admin-sdr") return "/app/admin/sdr";
+    if (p === "admin-sdr") return "/app/admin/comercial/pre-vendas/painel-sdr";
     if (["sdr", "scripts-vendas", "objecoes", "training"].includes(p)) return `/app/admin/growth/${p}`;
     if (p === "professores" || p === "alunos") return adminPedagogicoPathForState();
     if (p === "admin-controle-pedagogico") return adminPedagogicoPathForState();
@@ -42002,6 +42002,7 @@ const parseAppRoute = (path) => {
       if (detail === "crm") return { role, panel: "native-crm" };
       if (detail === "metas") return { role, panel: "admin-comercial-metas" };
       if (detail === "usuarios") return { role, panel: "admin-comercial-usuarios" };
+      if (detail === "pre-vendas" && segments[4] === "painel-sdr") return { role, panel: "admin-sdr" };
       if (detail === "atividade-sdr" || detail === "pre-vendas") return { role, panel: "admin-comercial-atividade-sdr" };
       return { role, panel: "admin-comercial-visao-geral" };
     }

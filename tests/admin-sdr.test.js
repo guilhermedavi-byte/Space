@@ -40,11 +40,49 @@ test('range resolver covers requested date filters', () => {
 });
 
 test('admin SDR route boots the dedicated panel and script', async () => {
-  const req = Readable.from([]); req.method = 'GET'; req.url = '/api/app?path=admin/sdr'; req.headers = { host: 'localhost', cookie: 'space_session=' + createSessionForUser({ id: 'admin', role: 'admin', name: 'Admin', email: 'admin@example.com' }).token };
+  const req = Readable.from([]); req.method = 'GET'; req.url = '/api/app?path=admin/comercial/pre-vendas/painel-sdr'; req.headers = { host: 'localhost', cookie: 'space_session=' + createSessionForUser({ id: 'admin', role: 'admin', name: 'Admin', email: 'admin@example.com' }).token };
   let body = ''; const res = { statusCode: 200, setHeader(){}, end(v=''){ body += v; } };
   await appHandler(req, res);
   assert.equal(res.statusCode, 200);
   assert.match(body, /data-initial-panel="admin-sdr"/);
   assert.match(body, /data-admin-sdr/);
   assert.match(body, /src="admin-sdr\.js"/);
+});
+
+
+test('admin SDR normalizes scored calls from Postgres/N8N payload', () => {
+  const call = __private.normalizeScoredCall({
+    id: 'score-1',
+    recording_id: 'rec-1',
+    call_leg_id: 'leg-1',
+    sdr_name: 'Ana SDR',
+    lead_name: 'Lead Exemplo',
+    phone: '+5534999999999',
+    duration_seconds: 92,
+    recording_url: 'https://cdn.example/audio.mp3',
+    transcription: 'Olá, aqui é a Ana falando da Space.',
+    score: 87,
+    script_adherence: 91,
+    status: 'completed',
+    outcome: 'agendamento',
+    analysis: {
+      summary: 'Boa condução comercial.',
+      strengths: ['Rapport claro'],
+      weaknesses: ['Explorar dor antes'],
+      criteria: [{ name: 'Abertura', score: 90 }],
+    },
+    created_at: '2026-09-18T13:20:00.000Z',
+  });
+
+  assert.equal(call.id, 'score-1');
+  assert.equal(call.status, 'connected');
+  assert.equal(call.analysisStatus, 'completed');
+  assert.equal(call.sdrName, 'Ana SDR');
+  assert.equal(call.leadName, 'Lead Exemplo');
+  assert.equal(call.durationSeconds, 92);
+  assert.equal(call.score, 87);
+  assert.equal(call.scriptAdherence, 91);
+  assert.equal(call.transcript, 'Olá, aqui é a Ana falando da Space.');
+  assert.equal(call.scorecard[0].name, 'Abertura');
+  assert.equal(call.scorecard[0].score, 90);
 });
