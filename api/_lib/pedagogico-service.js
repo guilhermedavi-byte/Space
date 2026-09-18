@@ -1,5 +1,12 @@
 const { supabaseFetch } = require("./supabase-rest");
 const { listCollectionAsAdmin, getDocumentAsAdmin } = require("./firestore-admin");
+const { getGoogleAccessToken } = require("../../_lib/google-service-account");
+const {
+  FIRESTORE_BASE,
+  decodeFields,
+  encodeFields,
+  requestJson,
+} = require("./firestore-rest");
 
 const TABLES = {
   onboarding: "n8n_onboarding_alunos_space",
@@ -14,6 +21,142 @@ const TABLES = {
   financeStudents: "n8n_alunos_financeiro_space",
   adminStudentPreferences: "n8n_preferencias_alunos_pedagogico_space",
 };
+
+const DATASTORE_SCOPE = "https://www.googleapis.com/auth/datastore";
+const PEDAGOGICAL_OVERVIEW_SNAPSHOT_COLLECTION = "pedagogicalOverviewSnapshots";
+const PEDAGOGICAL_OVERVIEW_SNAPSHOT_DOC_ID = "overview_v1";
+const PEDAGOGICAL_OVERVIEW_SNAPSHOT_SCHEMA_VERSION = 1;
+const PEDAGOGICAL_OVERVIEW_SNAPSHOT_TTL_MS = 5 * 60 * 1000;
+const PEDAGOGICAL_OVERVIEW_SNAPSHOT_STALE_MS = 60 * 60 * 1000;
+
+const getFirestoreAdminAccessToken = async () => {
+  const result = await getGoogleAccessToken({ scope: DATASTORE_SCOPE });
+  return String(result?.accessToken || "").trim();
+};
+
+const getPedagogicalOverviewSnapshotDocPath = () =>
+  `${PEDAGOGICAL_OVERVIEW_SNAPSHOT_COLLECTION}/${encodeURIComponent(PEDAGOGICAL_OVERVIEW_SNAPSHOT_DOC_ID)}`;
+
+const firestoreGetDocumentWithAccessToken = async ({ docPath, accessToken } = {}) => {
+  const token = String(accessToken || "").trim();
+  const path = String(docPath || "").replace(/^\/+/, "");
+  if (!token || !path) throw new Error("missing_params");
+  return requestJson(`${FIRESTORE_BASE}/${encodeURI(path)}`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+};
+
+const firestorePatchDocumentWithAccessToken = async ({ docPath, accessToken, data, updateMaskPaths } = {}) => {
+  const token = String(accessToken || "").trim();
+  const path = String(docPath || "").replace(/^\/+/, "");
+  if (!token || !path) throw new Error("missing_params");
+  const params = new URLSearchParams();
+  const mask = Array.isArray(updateMaskPaths) ? updateMaskPaths.filter(Boolean) : [];
+  mask.forEach((fieldPath) => params.append("updateMask.fieldPaths", fieldPath));
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  return requestJson(`${FIRESTORE_BASE}/${encodeURI(path)}${suffix}`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${token}` },
+    body: encodeFields(data),
+  });
+};
+
+const parseIsoMs = (value) => {
+  const ms = Date.parse(String(value || ""));
+  return Number.isFinite(ms) ? ms : 0;
+};
+
+const getSnapshotFreshness = (generatedAt, nowMs = Date.now()) => {
+  const generatedAtMs = parseIsoMs(generatedAt);
+  const ageMs = generatedAtMs ? Math.max(0, nowMs - generatedAtMs) : Number.POSITIVE_INFINITY;
+  return {
+    generatedAtMs,
+    ageMs,
+    fresh: generatedAtMs > 0 && ageMs < PEDAGOGICAL_OVERVIEW_SNAPSHOT_TTL_MS,
+    usable: generatedAtMs > 0 && ageMs < PEDAGOGICAL_OVERVIEW_SNAPSHOT_STALE_MS,
+  };
+};
+
+const readPedagogicalOverviewSnapshot = async ({ accessToken } = {}) => {
+  const snap = await firestoreGetDocumentWithAccessToken({
+    docPath: getPedagogicalOverviewSnapshotDocPath(),
+    accessToken: accessToken || await getFirestoreAdminAccessToken(),
+  });
+  if (!snap.ok) return snap;
+  const fields = decodeFields(snap.data);
+  return {
+    ok: true,
+    status: snap.status || 200,
+    payload: fields?.payload && typeof fields.payload === "object" ? fields.payload : null,
+    meta: fields?.meta && typeof fields.meta === "object" ? fields.meta : {},
+  };
+};
+
+const writePedagogicalOverviewSnapshot = async ({ payload, accessToken } = {}) => {
+  const generatedAt = new Date().toISOString();
+  const meta = {
+    generatedAt,
+    period: "rolling",
+    schemaVersion: PEDAGOGICAL_OVERVIEW_SNAPSHOT_SCHEMA_VERSION,
+  };
+  const result = await firestorePatchDocumentWithAccessToken({
+    docPath: getPedagogicalOverviewSnapshotDocPath(),
+    accessToken: accessToken || await getFirestoreAdminAccessToken(),
+    data: { payload, meta },
+    updateMaskPaths: ["payload", "meta"],
+  });
+  return { ...result, payload, meta };
+};
+
+const compactOverviewStudent = (row = {}) => ({
+  id: String(row.id || row.aluno_id || row.firestore_doc_id || "").trim(),
+  aluno_id: String(row.aluno_id || row.id || row.firestore_doc_id || "").trim(),
+  aluno_chave: String(row.aluno_chave || "").trim(),
+  nome: String(row.nome || row.aluno_nome || "Aluno").trim(),
+  aluno_nome: String(row.aluno_nome || row.nome || "Aluno").trim(),
+  professorId: String(row.professorId || row.professor_id || "").trim(),
+  teacherId: String(row.teacherId || row.professorId || row.professor_id || "").trim(),
+  professor_id: String(row.professor_id || row.professorId || "").trim(),
+  criadoEm: row.criadoEm || row.createdAt || row.created_at || "",
+  createdAt: row.createdAt || row.criadoEm || row.created_at || "",
+  updatedAt: row.updatedAt || row.updated_at || "",
+  cancelamento: row.cancelamento || null,
+  cancelamentosAnteriores: Array.isArray(row.cancelamentosAnteriores) ? row.cancelamentosAnteriores : [],
+  lifecycle: row.lifecycle || null,
+  ativo: row.ativo !== false,
+  ativo_acesso: row.ativo_acesso !== false,
+});
+
+const compactOverviewTeacher = (row = {}) => ({
+  id: String(row.id || row.professor_id || row.teacher_id || "").trim(),
+  nome: String(row.nome || row.name || row.professor_nome || row.teacher_name || "Professor").trim(),
+});
+
+const compactOverviewOnboarding = (row = {}) => ({
+  id: String(row.id || row.aluno_id || "").trim(),
+  aluno_id: String(row.aluno_id || row.id || "").trim(),
+  aluno_nome: String(row.aluno_nome || row.nome || "Aluno").trim(),
+  assinou_em: row.assinou_em || "",
+  created_at: row.created_at || "",
+  createdAt: row.createdAt || "",
+  updated_at: row.updated_at || "",
+  primeira_aula_em: row.primeira_aula_em || "",
+  status_onboarding: row.status_onboarding || "",
+  aulas_realizadas: row.aulas_realizadas ?? null,
+  total_aulas_realizadas: row.total_aulas_realizadas ?? null,
+});
+
+const compactPedagogicalOverviewPayload = (dashboard = {}) => ({
+  degraded: Boolean(dashboard.degraded),
+  degradedReason: String(dashboard.degradedReason || ""),
+  warning: dashboard.warning,
+  metrics: dashboard.metrics && typeof dashboard.metrics === "object" ? dashboard.metrics : {},
+  students: (Array.isArray(dashboard.students) ? dashboard.students : []).map(compactOverviewStudent),
+  teachers: (Array.isArray(dashboard.teachers) ? dashboard.teachers : []).map(compactOverviewTeacher),
+  onboarding: (Array.isArray(dashboard.onboarding) ? dashboard.onboarding : []).map(compactOverviewOnboarding),
+  riskStudents: (Array.isArray(dashboard.riskStudents) ? dashboard.riskStudents : []).map(compactOverviewStudent).slice(0, 50),
+});
 
 // OWNERSHIP: cadastro=Firestore, operação=Supabase (contrato 2026-07-12)
 // - cadastro: nome, email, telefone, tipo, ativo, plano, professorId, cancelamento
@@ -523,6 +666,80 @@ const loadAdminDashboard = async ({ session, perf = null } = {}) => {
   };
 };
 
+const rebuildPedagogicalOverviewSnapshot = async ({ session, accessToken, perf = null } = {}) => {
+  globalThis.__pedagogicalOverviewSnapshotRebuildPromise ||= null;
+  if (globalThis.__pedagogicalOverviewSnapshotRebuildPromise) {
+    return globalThis.__pedagogicalOverviewSnapshotRebuildPromise;
+  }
+  globalThis.__pedagogicalOverviewSnapshotRebuildPromise = (async () => {
+    const dashboard = await loadAdminDashboard({ session, perf });
+    const payload = compactPedagogicalOverviewPayload(dashboard);
+    const written = await writePedagogicalOverviewSnapshot({ payload, accessToken });
+    return {
+      ...payload,
+      snapshot: {
+        cached: false,
+        stale: false,
+        rebuilding: false,
+        generatedAt: written.meta.generatedAt,
+        period: written.meta.period,
+        schemaVersion: written.meta.schemaVersion,
+      },
+    };
+  })().finally(() => {
+    globalThis.__pedagogicalOverviewSnapshotRebuildPromise = null;
+  });
+  return globalThis.__pedagogicalOverviewSnapshotRebuildPromise;
+};
+
+const loadAdminOverviewSnapshot = async ({ session, perf = null } = {}) => {
+  const accessToken = await getFirestoreAdminAccessToken();
+  const snapshot = await (perf
+    ? perf.measure("overviewSnapshotRead", () => readPedagogicalOverviewSnapshot({ accessToken }), { firestore: true })
+    : readPedagogicalOverviewSnapshot({ accessToken }));
+  const hasPayload = snapshot?.ok && snapshot.payload && typeof snapshot.payload === "object";
+  const freshness = getSnapshotFreshness(snapshot?.meta?.generatedAt);
+  if (hasPayload && freshness.fresh && Number(snapshot.meta?.schemaVersion) === PEDAGOGICAL_OVERVIEW_SNAPSHOT_SCHEMA_VERSION) {
+    return {
+      ...snapshot.payload,
+      snapshot: {
+        cached: true,
+        stale: false,
+        rebuilding: false,
+        generatedAt: snapshot.meta.generatedAt || "",
+        period: snapshot.meta.period || "rolling",
+        schemaVersion: snapshot.meta.schemaVersion || PEDAGOGICAL_OVERVIEW_SNAPSHOT_SCHEMA_VERSION,
+      },
+    };
+  }
+
+  if (hasPayload && freshness.usable && Number(snapshot.meta?.schemaVersion) === PEDAGOGICAL_OVERVIEW_SNAPSHOT_SCHEMA_VERSION) {
+    if (!globalThis.__pedagogicalOverviewSnapshotRebuildPromise) {
+      rebuildPedagogicalOverviewSnapshot({ session, accessToken, perf: null }).catch((error) => {
+        console.warn("[pedagogico] overview snapshot rebuild failed", {
+          message: error?.message || String(error || ""),
+          code: error?.code || "",
+        });
+      });
+    }
+    return {
+      ...snapshot.payload,
+      snapshot: {
+        cached: true,
+        stale: true,
+        rebuilding: true,
+        generatedAt: snapshot.meta.generatedAt || "",
+        period: snapshot.meta.period || "rolling",
+        schemaVersion: snapshot.meta.schemaVersion || PEDAGOGICAL_OVERVIEW_SNAPSHOT_SCHEMA_VERSION,
+      },
+    };
+  }
+
+  return perf
+    ? perf.measure("overviewSnapshotBuild", () => rebuildPedagogicalOverviewSnapshot({ session, accessToken, perf }))
+    : rebuildPedagogicalOverviewSnapshot({ session, accessToken, perf });
+};
+
 const lessonToTeacherEvent = (lesson) => {
   if (!lesson || typeof lesson !== "object") return null;
   const id = String(lesson.id || "").trim();
@@ -902,6 +1119,7 @@ module.exports = {
   listAllLessons,
   listRegisters,
   loadAdminDashboard,
+  loadAdminOverviewSnapshot,
   loadStudentCard,
   loadTeacherStudentSheet,
   loadTeacherStudents,
@@ -909,4 +1127,10 @@ module.exports = {
   mergePedagogicalStudents,
   fetchFinanceStudents,
   isMissingRelation,
+  _test: {
+    compactPedagogicalOverviewPayload,
+    getSnapshotFreshness,
+    PEDAGOGICAL_OVERVIEW_SNAPSHOT_SCHEMA_VERSION,
+    PEDAGOGICAL_OVERVIEW_SNAPSHOT_TTL_MS,
+  },
 };

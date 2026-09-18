@@ -1,7 +1,7 @@
 const { readJsonBody, sendJson } = require("../_lib/http");
 const { supabaseFetch } = require("../_lib/supabase-rest");
 const { resolveAdminRequestAuth } = require("../_lib/admin-request-auth");
-const { TABLES, loadAdminDashboard } = require("../_lib/pedagogico-service");
+const { TABLES, loadAdminDashboard, loadAdminOverviewSnapshot } = require("../_lib/pedagogico-service");
 const { createPerformanceTimer } = require("../_lib/performance-observer");
 
 module.exports = async (req, res) => {
@@ -46,7 +46,12 @@ module.exports = async (req, res) => {
       return send(200, { ok: true, preference: Array.isArray(data) ? data[0] || null : data });
     }
 
-    const dashboard = await perf.measure("responseBuild", () => loadAdminDashboard({ session: auth.session, perf }));
+    const host = String(req.headers.host || "localhost");
+    const url = new URL(req.url || "/api/pedagogico/dashboard", `https://${host}`);
+    const view = String(url.searchParams.get("view") || "").trim().toLowerCase();
+    const dashboard = view === "overview"
+      ? await perf.measure("responseBuild", () => loadAdminOverviewSnapshot({ session: auth.session, perf }))
+      : await perf.measure("responseBuild", () => loadAdminDashboard({ session: auth.session, perf }));
     return send(200, { ok: true, ...dashboard });
   } catch (error) {
     console.error("[pedagogico] dashboard failed", error);

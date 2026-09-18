@@ -33889,12 +33889,14 @@ const loadAdminPedOverviewV2Data = async ({ force = false } = {}) => {
   }
   if (adminPedOverviewV2State.loadPromise) return adminPedOverviewV2State.loadPromise;
   adminPedOverviewV2State.loadPromise = (async () => {
-    const [eventsRes, liveRes, onboardingRes] = await Promise.allSettled([
+    const [dashboardRes, eventsRes, liveRes] = await Promise.allSettled([
+      fetchWithAuth("/api/pedagogico/dashboard?view=overview", { method: "GET" }),
       fetchWithAuth("/api/schedule-events", { method: "GET" }),
       fetchWithAuth("/api/live-lessons?scope=pedagogico&include_records=1&limit=500", { method: "GET" }),
-      fetchWithAuth("/api/pedagogico/onboarding", { method: "GET" }),
     ]);
+    let dashboardPayload = null;
     const sourceStatus = {
+      dashboard: "ok",
       events: "ok",
       liveLessons: "ok",
       onboarding: "ok",
@@ -33906,6 +33908,29 @@ const loadAdminPedOverviewV2Data = async ({ force = false } = {}) => {
     let records = [];
     let onboardingRows = [];
 
+    if (dashboardRes.status === "fulfilled" && dashboardRes.value?.ok) {
+      dashboardPayload = await dashboardRes.value.json().catch(() => null);
+      if (Array.isArray(dashboardPayload?.students) && dashboardPayload.students.length) {
+        adminPedagogicoState.students = dashboardPayload.students;
+        adminPedagogicoState.studentsById = new Map(
+          dashboardPayload.students
+            .map((s) => [String(s?.id || s?.aluno_id || ""), s])
+            .filter(([id]) => Boolean(id))
+        );
+      }
+      if (Array.isArray(dashboardPayload?.teachers) && dashboardPayload.teachers.length) {
+        adminPedagogicoState.teachers = dashboardPayload.teachers;
+        adminPedagogicoState.teachersById = buildAdminTeacherMap(dashboardPayload.teachers);
+      }
+      adminPedagogicoState.pedagogicalOps = dashboardPayload && typeof dashboardPayload === "object" ? dashboardPayload : {};
+      onboardingRows = Array.isArray(dashboardPayload?.onboarding) ? dashboardPayload.onboarding : [];
+      sourceStatus.students = Array.isArray(adminPedagogicoState.students) && adminPedagogicoState.students.length ? "ok" : "degraded";
+      sourceStatus.teachers = Array.isArray(adminPedagogicoState.teachers) && adminPedagogicoState.teachers.length ? "ok" : "degraded";
+    } else {
+      sourceStatus.dashboard = "degraded";
+      sourceStatus.onboarding = "degraded";
+      console.warn("[pedov2] overview snapshot unavailable", dashboardRes.status === "rejected" ? dashboardRes.reason : dashboardRes.value?.status);
+    }
     if (eventsRes.status === "fulfilled" && eventsRes.value?.ok) {
       const payload = await eventsRes.value.json().catch(() => null);
       events = Array.isArray(payload?.events) ? payload.events : [];
@@ -33921,13 +33946,6 @@ const loadAdminPedOverviewV2Data = async ({ force = false } = {}) => {
     } else {
       sourceStatus.liveLessons = "degraded";
       console.warn("[pedov2] live-lessons unavailable", liveRes.status === "rejected" ? liveRes.reason : liveRes.value?.status);
-    }
-    if (onboardingRes.status === "fulfilled" && onboardingRes.value?.ok) {
-      const payload = await onboardingRes.value.json().catch(() => null);
-      onboardingRows = Array.isArray(payload?.onboarding) ? payload.onboarding : [];
-    } else {
-      sourceStatus.onboarding = "degraded";
-      console.warn("[pedov2] onboarding unavailable", onboardingRes.status === "rejected" ? onboardingRes.reason : onboardingRes.value?.status);
     }
 
     adminPedOverviewV2State.rawData = {
@@ -34490,6 +34508,26 @@ const runAdminPedagogicoRenderers = () => {
   return { failed, failedNames };
 };
 
+const runAdminPedagogicoOverviewRenderers = () => {
+  const renderers = [
+    renderAdminPedagogicoMetrics,
+    renderAdminPedagogicoTabs,
+    renderAdminPedOverviewV2,
+  ];
+  let failed = 0;
+  const failedNames = [];
+  renderers.forEach((render) => {
+    try {
+      render();
+    } catch (error) {
+      failed += 1;
+      failedNames.push(render?.name || "unknown");
+      console.error("[admin-ped] overview render failed", render?.name || "unknown", error);
+    }
+  });
+  return { failed, failedNames };
+};
+
 const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
   if (currentRole !== "admin") return;
   if (!(adminPedRoot instanceof HTMLElement)) return;
@@ -34511,9 +34549,20 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
   window.SpacePerformance?.start?.("pedagogico-dashboard");
   setAdminPedagogicoStatus("");
   if (adminPedError instanceof HTMLElement) adminPedError.hidden = true;
-  runAdminPedagogicoRenderers();
+  const overviewOnly = adminPedagogicoState.activeTab === "overview";
+  if (overviewOnly) runAdminPedagogicoOverviewRenderers();
+  else runAdminPedagogicoRenderers();
 
   try {
+    if (overviewOnly) {
+      await loadAdminPedOverviewV2Data({ force });
+      window.SpacePerformance?.dataReady?.("pedagogico-dashboard");
+      const { failed, failedNames } = runAdminPedagogicoOverviewRenderers();
+      const detail = failedNames.length ? `Renderers com falha: ${failedNames.join(", ")}` : "";
+      if (failedNames.length) console.warn("[admin-ped] overview renderers failed", failedNames);
+      setAdminPedagogicoStatus(failed ? "Alguns blocos não puderam ser exibidos agora." : "", failed ? "warn" : "", detail);
+      return;
+    }
     const loadFallback = (label, promise, fallback) =>
       promise.catch((error) => {
         console.error(`[admin-ped] ${label} load failed`, error);
