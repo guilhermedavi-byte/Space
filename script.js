@@ -947,7 +947,7 @@ const syncRoleUI = () => {
         return;
       }
       const target = String(el.getAttribute("data-panel-target") || "");
-      el.hidden = !["growth-dashboard", "native-crm", "growth", "activities", "attendance-connections"].includes(target);
+      el.hidden = !["growth-dashboard", "native-crm", "growth", "activities", "attendance-inbox", "attendance-connections"].includes(target);
     });
     const dashboardTarget = document.querySelector("[data-growth-dashboard-link]");
     if (dashboardTarget instanceof HTMLElement) {
@@ -41440,6 +41440,12 @@ const showPanel = (panelName) => {
     return;
   }
 
+  if (panelName === "attendance-inbox") {
+    if (!["admin", "growth"].includes(currentRole)) return navigateApp(roleBasePath(currentRole), { replace: true });
+    window.SpaceAttendanceInbox?.open();
+    return;
+  }
+
   if (panelName === "attendance-connections") {
     if (!["admin", "growth"].includes(currentRole)) return navigateApp(roleBasePath(currentRole), { replace: true });
     window.SpaceAttendanceConnections?.open();
@@ -41569,6 +41575,7 @@ const applyParsedAppRouteState = (parsed) => {
 const panelPathForRole = (role, panel) => {
   const normalized = normalizeRole(role);
   const p = String(panel || "");
+  if (p === "attendance-inbox" && ["admin", "growth"].includes(normalized)) return `/app/${normalized}/atendimento/caixa-de-entrada`;
   if (p === "attendance-connections" && ["admin", "growth"].includes(normalized)) return `/app/${normalized}/atendimento/conexoes`;
 
   if (normalized === "teacher") {
@@ -41648,7 +41655,7 @@ const parseAppRoute = (path) => {
               ? "growth"
             : "";
   if (!role) return null;
-  if (["admin", "growth"].includes(role) && sub === "atendimento") return { role, panel: "attendance-connections" };
+  if (["admin", "growth"].includes(role) && sub === "atendimento") return { role, panel: detail === "conexoes" ? "attendance-connections" : "attendance-inbox" };
 
   if (roleSlug === "financeiro") {
     const financeTab = FINANCE_URL_TO_TAB[String(query.get("aba") || "").trim()] || "overview";
@@ -41705,6 +41712,7 @@ const parseAppRoute = (path) => {
   }
 
   if (role === "growth") {
+    if (sub === "atendimento") return { role, panel: detail === "conexoes" ? "attendance-connections" : "attendance-inbox" };
     if (sub === "dashboard" || !sub) return { role, panel: "growth-dashboard" };
     if (sub === "crm") return { role, panel: "native-crm" };
     if (sub === "activities" || sub === "atividades") return { role, panel: "activities" };
