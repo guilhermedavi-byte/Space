@@ -68,6 +68,7 @@ const createHandler = ({ authenticate = requireAttendanceAuth, request = supabas
       p_display_phone: cleanGraphText(phone.display_phone_number),
       p_verified_name: cleanGraphText(phone.verified_name),
       p_actor_uid: actor.uid,
+      p_role: actor.role,
     } });
     return sendJson(res, 200, { ok: true, connection: rpc.data || {} });
   } catch (error) {

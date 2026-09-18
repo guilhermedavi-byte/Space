@@ -37,6 +37,8 @@ test('Server exchanges authorization code and updates existing connection throug
   assert.equal(rpc.args[1].body.p_connection_id, cid);
   assert.equal(rpc.args[1].body.p_waba_id, '930157746803742');
   assert.equal(rpc.args[1].body.p_phone_number_id, '1298764056655056');
+  assert.equal(rpc.args[1].body.p_actor_uid, 'actor');
+  assert.equal(rpc.args[1].body.p_role, 'admin');
   assert.doesNotMatch(JSON.stringify(r.body), /AUTH_CODE_ONLY_TO_BACKEND|SERVER_SIDE_TOKEN/);
 });
 

@@ -4,7 +4,8 @@ create or replace function public.attendance_complete_meta_embedded_signup(
   p_phone_number_id text,
   p_display_phone text default null,
   p_verified_name text default null,
-  p_actor_uid text default null
+  p_actor_uid text default null,
+  p_role text default null
 )
 returns jsonb
 language plpgsql security definer set search_path=public as $$
@@ -13,6 +14,7 @@ declare
   v_team_id uuid;
   v_channel_id uuid;
   v_display text := nullif(btrim(coalesce(p_display_phone, p_verified_name, p_phone_number_id)), '');
+  v_is_admin boolean := lower(coalesce(p_role, '')) = 'admin';
 begin
   if p_waba_id is null or btrim(p_waba_id) = '' or length(p_waba_id) > 128 then
     raise exception using errcode='22023', message='attendance_invalid_waba';
@@ -31,6 +33,10 @@ begin
     raise exception using errcode='42501', message='attendance_connection_forbidden';
   end if;
 
+  if coalesce(v_connection.metadata->>'setup_pending', 'false') <> 'true' and v_connection.status <> 'pending' then
+    raise exception using errcode='22023', message='attendance_connection_not_pending';
+  end if;
+
   select ch.default_team_id into v_team_id
   from public.channels ch
   where ch.connection_id = p_connection_id
@@ -41,6 +47,18 @@ begin
 
   if v_team_id is null or not exists(select 1 from public.teams t where t.team_id = v_team_id and t.active is true) then
     raise exception using errcode='42501', message='attendance_team_forbidden';
+  end if;
+
+  if not v_is_admin then
+    if p_actor_uid is null or btrim(p_actor_uid) = '' then
+      raise exception using errcode='42501', message='attendance_actor_forbidden';
+    end if;
+    if not exists(select 1 from public.attendance_members am where am.user_uid = p_actor_uid and am.enabled is true) then
+      raise exception using errcode='42501', message='attendance_actor_forbidden';
+    end if;
+    if not exists(select 1 from public.team_members tm where tm.user_uid = p_actor_uid and tm.team_id = v_team_id and tm.active is true and tm.member_role = 'supervisor') then
+      raise exception using errcode='42501', message='attendance_team_forbidden';
+    end if;
   end if;
 
   update public.connections
@@ -83,5 +101,6 @@ begin
 end $$;
 
 revoke all on function public.attendance_complete_meta_embedded_signup(uuid,text,text,text,text,text) from public,anon,authenticated,service_role;
-grant execute on function public.attendance_complete_meta_embedded_signup(uuid,text,text,text,text,text) to service_role;
+revoke all on function public.attendance_complete_meta_embedded_signup(uuid,text,text,text,text,text,text) from public,anon,authenticated,service_role;
+grant execute on function public.attendance_complete_meta_embedded_signup(uuid,text,text,text,text,text,text) to service_role;
 notify pgrst,'reload schema';
