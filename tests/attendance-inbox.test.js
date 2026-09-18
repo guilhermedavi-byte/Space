@@ -59,6 +59,25 @@ test('Frontend renders empty inbox and disabled composer', async () => {
   dom.window.close();
 });
 
+
+test('Frontend renders conversation list, chat messages and contact panel from API payload', async () => {
+  const { JSDOM } = require('jsdom'); const fs = require('fs');
+  const cid = '11111111-1111-4111-8111-111111111111';
+  const list = { rows: [{ conversation_id: cid, status: 'open', team: { name: 'Atendimento' }, connection: { provider: 'meta_whatsapp', name: 'Space | Suporte' }, contact: { name: 'Maria', phone: '+553499999999' }, last_message: { text: 'Oi Space', direction: 'inbound' }, last_message_at: '2026-09-17T12:00:00Z', unread_count: 1 }], teams: [{ team_id: '22222222-2222-4222-8222-222222222222', name: 'Atendimento' }] };
+  const detail = { conversation: { conversation_id: cid, status: 'open', team: { name: 'Atendimento' }, channel: { name: 'WhatsApp' }, connection: { provider: 'meta_whatsapp', name: 'Space | Suporte' }, last_message_at: '2026-09-17T12:00:00Z' }, contact: { name: 'Maria', phone: '+553499999999', created_at: '2026-09-17T11:00:00Z' }, participants: [], messages: [{ message_id: 'm1', sequence: 1, direction: 'inbound', kind: 'text', content: { text: 'Mensagem recebida' }, transport_status: 'received', received_at: '2026-09-17T12:00:00Z' }], composer: { enabled: false, reason: 'Envio será habilitado após concluir a conexão com a Meta.' } };
+  const dom = new JSDOM('<body data-initial-panel="attendance-inbox"><div data-attendance-inbox></div>', { runScripts: 'outside-only' });
+  dom.window.fetchWithAuth = async (url) => ({ ok: true, json: async () => String(url).includes('conversation_id') ? detail : list });
+  dom.window.eval(fs.readFileSync('attendance-inbox.js', 'utf8'));
+  await new Promise(r => setTimeout(r, 20));
+  assert.match(dom.window.document.body.textContent, /Maria/);
+  dom.window.document.querySelector('[data-ai-select]').click();
+  await new Promise(r => setTimeout(r, 20));
+  assert.match(dom.window.document.body.textContent, /Mensagem recebida/);
+  assert.match(dom.window.document.body.textContent, /\+553499999999/);
+  assert.equal(dom.window.document.querySelector('.ai-send').disabled, true);
+  dom.window.close();
+});
+
 test('Admin and Growth direct inbox routes render shared panel', async () => {
   const sessionPath = require.resolve('../_lib/session'), appPath = require.resolve('../api/app');
   const originalSession = require.cache[sessionPath], originalApp = require.cache[appPath];
