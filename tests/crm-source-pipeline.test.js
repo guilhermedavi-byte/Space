@@ -211,3 +211,17 @@ test('daily rollups reconcile full counts idempotently instead of incrementing r
   assert.equal((await store.read('crmLiveDailyRollups/2026-09-09')).data.count,2);
   await assert.rejects(publishDailyCounts({...args,source:{...args.source,paginationCompleted:false}},{store}));
 });
+
+test('performance publication rejects mixed periods/generations and invalid conversions atomically',async()=>{
+ const store=memoryStore(),source=await harness([response(200,[deal('a')])]).run();
+ const original=metricPayload(source.metadata);
+ original.snapshot.period={from:'2026-09-09',to:'2026-09-15'};
+ original.performance={snapshotId:original.snapshot.snapshotId,period:{...original.snapshot.period},conversions:{sdr:[{personId:'s',targetValue:20,numerator:20,denominator:100,conversionRate:20}],closers:[]}};
+ await publishCrmSnapshot(original,{store,logger:silent});
+ const before=await store.read('crmLiveCache/crm');
+ for(const change of [p=>p.snapshotId='other',p=>p.period.from='2026-09-16',p=>p.conversions.sdr[0].conversionRate=null,p=>p.conversions.sdr[0].targetValue=0,p=>p.conversions.sdr.push({...p.conversions.sdr[0],denominator:0,conversionRate:Infinity})]){
+  const invalid=structuredClone(original);change(invalid.performance);
+  await assert.rejects(publishCrmSnapshot(invalid,{store,logger:silent}),/performance/);
+  assert.deepEqual(await store.read('crmLiveCache/crm'),before);
+ }
+});

@@ -344,7 +344,7 @@ test('fonte não-crítica em erro renderiza estado degradado e continua na rota�
 
   assert.match(booted.root.innerHTML, /Modo degradado/);
   assert.match(booted.root.innerHTML, /Interrupções indisponíveis/);
-  assert.equal((booted.dotsEl.innerHTML.match(/crm-live-dot/g) || []).length, 6);
+  assert.equal((booted.dotsEl.innerHTML.match(/crm-live-dot/g) || []).length, 8);
 
   booted.nextButton.click();
   booted.nextButton.click();

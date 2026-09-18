@@ -1,4 +1,3 @@
-const { personalBestCopy } = require("./crm-live-presentation");
 const crypto = require("crypto");
 
 const { getGoogleAccessToken } = require("../../_lib/google-service-account");
@@ -374,6 +373,7 @@ const decodeSdrEventRow = (row = {}) => {
     sdrName: safeString(row.sdrName),
     source: safeString(row.source),
     createdAt: safeString(row.createdAt),
+    time: safeString(row.time),
   };
 };
 
@@ -619,31 +619,8 @@ const buildMonthVsPrevious = ({ currentPeriod, currentRealized = 0, currentMonth
   };
 };
 
-const buildPersonalBestScreens = ({ weeklyRollups = [], currentRows = [], role = "" } = {}) => {
-  const seen = new Set();
-  return (Array.isArray(currentRows) ? currentRows : []).flatMap((row) => {
-    const personId = safeString(row?.personId);
-    if (!personId || seen.has(personId) || safeNumber(row?.targetValue) <= 0) return [];
-    seen.add(personId);
-    const historicalBest = (Array.isArray(weeklyRollups) ? weeklyRollups : []).reduce((best, rollup) => {
-      const history = Array.isArray(rollup?.peopleProgress?.[role]) ? rollup.peopleProgress[role] : [];
-      return history.reduce((value, entry) => safeString(entry?.personId) === personId
-        ? Math.max(value, safeNumber(entry.actualValue)) : value, best);
-    }, 0);
-    // A historical record requires a previous positive mark; zero current progress is valid.
-    if (historicalBest <= 0) return [];
-    const item = {
-      id: `personal_best:${role}:${personId}`, type: "personal_best", personId,
-      personName: safeString(row?.displayName), photoURL: safeString(row?.photoURL), role,
-      historicalBest, actualValue: Math.max(0, safeNumber(row?.actualValue)),
-    };
-    return [{ ...item, remaining: Math.max(0, historicalBest - item.actualValue + 1), ...personalBestCopy(item) }];
-  }).sort((a, b) => a.personId.localeCompare(b.personId));
-};
-
 const buildWeeklyNewsScreens = ({ month = {}, weekly = {}, previousMonthComparison = null, weeklyRollups = [], now = new Date() } = {}) => {
   const screens = [];
-  const sdrRows = Array.isArray(weekly?.sdrs) ? weekly.sdrs : [];
   const weekProjection = buildWeeklyProjection({ weeklyTeam: weekly?.team?.closers, commercialWeek: weekly?.commercialWeek, now });
 
   if (weekly?.team?.closers && weekly?.commercialWeek) {
@@ -658,7 +635,7 @@ const buildWeeklyNewsScreens = ({ month = {}, weekly = {}, previousMonthComparis
     });
   }
 
-  screens.push(...buildPersonalBestScreens({ weeklyRollups, currentRows: sdrRows, role: "sdrs" }));
+  // Personal records are snapshot-derived candidates, rendered in one slot per cycle.
 
   return screens;
 };
@@ -761,7 +738,7 @@ const buildUnresolvedBuckets = ({ businesses = [], people = [], goal, globalConf
   };
 };
 
-const buildCrmLiveCrmSlice = async ({ goal, globalConfig = null, people, now = new Date(), snapshotId = crypto.randomUUID(), refreshSource = false, sourceAllowStale = true } = {}) => {
+const buildCrmLiveCrmSlice = async ({ goal, globalConfig = null, people, now = new Date(), snapshotId = crypto.randomUUID(), refreshSource = false, sourceAllowStale = true, activityEvents = null } = {}) => {
   const weeklyGoal = await loadApplicableWeeklyGoal({ goal, now });
   const monthPeriod = resolveCommercialPeriod({
     now,
@@ -828,6 +805,13 @@ const buildCrmLiveCrmSlice = async ({ goal, globalConfig = null, people, now = n
   const ledgerGoals = { [monthPeriod.monthKey]: goal, [previousMonthKey]: previousGoal, [nextMonthKey]: nextGoal };
   const monthLedger = buildCommercialLedger({ competencia: monthPeriod.monthKey, goal, globalConfig, people, businesses: crm.businesses, recordPages: crm.recordPages, goals: ledgerGoals });
   const weekLedger = buildCommercialLedger({ competencia: monthPeriod.monthKey, goal, globalConfig, people, businesses: crm.businesses, recordPages: crm.recordPages, goals: ledgerGoals, periodOverride: weeklyReadModel.commercialWeek });
+  const completeActivityEvents = activityEvents || await loadSdrEventsRange({ fromKey: '2000-01-01', toKey: formatSaoPauloDateKey(now) });
+  const sdrSnapshot = await buildCrmLiveSdrSlice({ goal, globalConfig, people, now, activityEvents: completeActivityEvents, applicableWeeklyGoal: weeklyGoal });
+  sdrSnapshot.snapshotId = snapshotId;
+  const performance = require('./crm-live-performance').buildLivePerformance({
+    people, closerRows: weeklyReadModel.progress.closers, sdrRows: sdrSnapshot.weekly.sdrs,
+    businesses: crm.businesses, events: completeActivityEvents, period: weeklyReadModel.commercialWeek, now, snapshotId,
+  });
   const calculatedAt = new Date().toISOString();
   const snapshot = {
     ...crm.metadata, chunks: undefined, snapshotId, sourceSnapshotId: crm.metadata.snapshotId,
@@ -842,6 +826,8 @@ const buildCrmLiveCrmSlice = async ({ goal, globalConfig = null, people, now = n
   log('calculation_completed', { snapshotId, actualValue: weeklyTeam.closers.actualValue, count: weeklyTeam.closers.count });
   return {
     snapshot,
+    performance,
+    sdrSnapshot,
     readModelVersion: CRM_LIVE_READ_MODEL_VERSION,
     generatedAt: new Date().toISOString(),
     month: monthSummary,
@@ -884,12 +870,12 @@ const buildCrmLiveCrmSlice = async ({ goal, globalConfig = null, people, now = n
   };
 };
 
-const buildCrmLiveSdrSlice = async ({ goal, globalConfig = null, people, now = new Date() } = {}) => {
-  const weeklyGoal = await loadApplicableWeeklyGoal({ goal, now });
+const buildCrmLiveSdrSlice = async ({ goal, globalConfig = null, people, now = new Date(), activityEvents = null, applicableWeeklyGoal } = {}) => {
+  const weeklyGoal = applicableWeeklyGoal === undefined ? await loadApplicableWeeklyGoal({ goal, now }) : applicableWeeklyGoal;
   const sdrWeek = resolveCommercialWeek({ now });
   const yesterdayKey = formatSaoPauloDateKey(new Date(now.getTime() - 86400000));
   const sdrFromKey = sdrWeek.startDateKey < yesterdayKey ? sdrWeek.startDateKey : yesterdayKey;
-  const sdrEvents = await loadSdrEventsRange({ fromKey: sdrFromKey, toKey: sdrWeek.endDateKey });
+  const sdrEvents = activityEvents || await loadSdrEventsRange({ fromKey: sdrFromKey, toKey: sdrWeek.endDateKey });
   const weeklyReadModel = buildWeeklyGoalsReadModel({
     goal: weeklyGoal,
     globalConfig,
@@ -940,13 +926,11 @@ const buildCrmLiveSdrSlice = async ({ goal, globalConfig = null, people, now = n
 const buildCrmLivePayload = async ({ now = new Date() } = {}) => {
   const goal = await loadCurrentGoal({ now });
   const [globalConfig, people] = await Promise.all([loadCrmLiveDefaultsConfig(), loadGrowthPeople()]);
-  const [crm, sdr] = await Promise.all([
-    buildCrmLiveCrmSlice({ goal, globalConfig, people, now }),
-    buildCrmLiveSdrSlice({ goal, globalConfig, people, now }),
-  ]);
-  const closers = decorateLeaderboardComparisons({ rows: crm.weekly?.closers || [], discrete: false });
-  const sdrs = decorateLeaderboardComparisons({ rows: sdr.weekly?.sdrs || [], discrete: true });
-  const weeklyHistory = await loadWeeklyRollupsHistory({ limit: 32 });
+  const crm = await buildCrmLiveCrmSlice({ goal, globalConfig, people, now });
+  const sdr = crm.sdrSnapshot;
+  const { isLivePerformanceEligible } = require('./crm-live-eligibility');
+  const closers = decorateLeaderboardComparisons({ rows: (crm.weekly?.closers || []).filter(isLivePerformanceEligible), discrete: false });
+  const sdrs = decorateLeaderboardComparisons({ rows: (sdr.weekly?.sdrs || []).filter(isLivePerformanceEligible), discrete: true });
   const news = buildWeeklyNewsScreens({
     month: crm.month,
     weekly: {
@@ -959,13 +943,14 @@ const buildCrmLivePayload = async ({ now = new Date() } = {}) => {
       sdrs,
     },
     previousMonthComparison: crm.monthComparison || null,
-    weeklyRollups: weeklyHistory.filter((row) => row.weekKey !== safeString(crm.weekly?.commercialWeek?.weekKey)),
     now,
   });
   return {
     generatedAt: new Date().toISOString(),
     month: crm.month,
     news,
+    recordCandidates: crm.performance.recordCandidates,
+    conversions: crm.performance.conversions,
     weekly: {
       commercialWeek: crm.weekly.commercialWeek || sdr.weekly.commercialWeek,
       team: {

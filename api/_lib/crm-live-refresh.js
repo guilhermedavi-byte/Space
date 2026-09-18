@@ -188,7 +188,7 @@ const runCrmLiveRefresh = async ({ store = createFirestoreStore(), now = new Dat
       (snapshotId) => buildCrmLiveCrmSlice({ goal, globalConfig, people, now, snapshotId, refreshSource: true, sourceAllowStale: false }),
       { store, logger: log }
     );
-    const sdrPayload = await buildCrmLiveSdrSlice({ goal, globalConfig, people, now });
+    const sdrPayload = crmPayload.sdrSnapshot || await buildCrmLiveSdrSlice({ goal, globalConfig, people, now });
     await writeCacheDoc({ docId: "sdr", payload: sdrPayload, generatedAt: now.toISOString() });
     const events = await refreshCrmLiveEvents({ goal, globalConfig, people, now });
     const durationMs = Date.now() - startedAt;

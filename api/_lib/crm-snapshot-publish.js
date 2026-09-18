@@ -36,6 +36,19 @@ function validateCrmSnapshot(payload) {
   for (const metric of [m.reconciliation?.month,m.reconciliation?.week]) {
     if (!metric || ['monthly_weekly_delta','overlapping_periods','improper_gaps','orphan_deals','unallocated_revenue','duplicate_attribution_revenue','estimated_value_deals','invalid_financial_deals','unverified_revenue_dates'].some(k=>metric[k] !== 0)) throw failure('snapshot_ledger_invariant_failed');
   }
+  if (payload.performance) {
+    const performance = payload.performance;
+    if (performance.snapshotId !== m.snapshotId || performance.period?.from !== m.period.from || performance.period?.to !== m.period.to) throw failure('performance_snapshot_mismatch');
+    if (payload.sdrSnapshot && (payload.sdrSnapshot.snapshotId !== m.snapshotId ||
+        payload.sdrSnapshot.weekly?.commercialWeek?.startDateKey !== m.period.from ||
+        payload.sdrSnapshot.weekly?.commercialWeek?.endDateKey !== m.period.to)) throw failure('performance_sdr_snapshot_mismatch');
+    for (const rows of Object.values(performance.conversions)) for (const row of rows) {
+      if (!require('./crm-live-eligibility').isLivePerformanceEligible(row) || !Number.isFinite(row.numerator) || row.numerator < 0 ||
+          (row.denominator !== null && (!Number.isFinite(row.denominator) || row.denominator < 0)) ||
+          (row.conversionRate !== null && !Number.isFinite(row.conversionRate)) ||
+          (row.denominator === null || row.denominator === 0 ? row.conversionRate !== null : !Number.isFinite(row.conversionRate) || Math.abs(row.conversionRate - row.numerator / row.denominator * 100) > 0.00001)) throw failure('invalid_performance_metrics');
+    }
+  }
   const rows = payload.weekly.closers || [];
   for (const row of rows) {
     const attributed=m.includedDeals.filter(d=>d.responsibleId===row.personId);

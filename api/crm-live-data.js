@@ -1,3 +1,4 @@
+const { isLivePerformanceEligible } = require("./_lib/crm-live-eligibility");
 const { sendJson } = require("../_lib/http");
 const { getSessionFromRequest } = require("../_lib/session");
 const {
@@ -5,7 +6,6 @@ const {
   buildWeeklyNewsScreens,
   decorateLeaderboardComparisons,
   getCacheMeta,
-  loadWeeklyRollupsHistory,
   readCacheDoc,
   validateCookieViewer,
 } = require("./_lib/crm-live");
@@ -115,16 +115,16 @@ module.exports = async (req, res) => {
         buildId,
       });
     }
-    const effectiveSdrSlice = sdrSlice || {
+    const effectiveSdrSlice = (crmSlice?.payload?.sdrSnapshot ? { payload: crmSlice.payload.sdrSnapshot, meta: crmSlice.meta, cached: true } : sdrSlice) || {
       payload: { weekly: { sdrs: [], team: { sdrs: { targetValue: 0, actualValue: 0, progressPct: 0 } } }, highlights: {}, unresolved: {}, cacheDebug: {} },
       meta: { generatedAt: "" },
       cached: false,
     };
 
-    const closers = decorateLeaderboardComparisons({ rows: crmSlice.payload.weekly?.closers || [], discrete: false });
-    const sdrs = decorateLeaderboardComparisons({ rows: effectiveSdrSlice.payload.weekly?.sdrs || [], discrete: true });
+    const closers = decorateLeaderboardComparisons({ rows: (crmSlice.payload.weekly?.closers || []).filter(isLivePerformanceEligible), discrete: false });
+    const sdrs = decorateLeaderboardComparisons({ rows: (effectiveSdrSlice.payload.weekly?.sdrs || []).filter(isLivePerformanceEligible), discrete: true });
     const weekKey = crmSlice.payload.weekly?.commercialWeek?.weekKey || effectiveSdrSlice.payload.weekly?.commercialWeek?.weekKey || "";
-    const weeklyRollups = await loadWeeklyRollupsHistory({ limit: 32 });
+    const weeklyRollups = []; // Record history is computed once in the published performance snapshot.
     const news = buildWeeklyNewsScreens({
       month: crmSlice.payload.month,
       weekly: {
@@ -141,6 +141,11 @@ module.exports = async (req, res) => {
       weeklyRollups: weeklyRollups.filter((row) => row.weekKey !== weekKey),
       now: new Date(),
     });
+
+    if (url.searchParams.get('auditPerformance') === '1') {
+      if (auth.mode !== 'session' || !['admin', 'growth'].includes(normalizeRole(auth.session?.role))) return sendJson(res, 403, { error: 'audit_admin_required' });
+      return sendJson(res, 200, { snapshotId: crmSlice.payload.snapshot?.snapshotId, performance: crmSlice.payload.performance || null });
+    }
 
     const freshness = classifyFreshness({ snapshot: crmSlice.payload.snapshot || {}, generatedAt: crmSlice.meta?.generatedAt || "", nowMs: Date.now() });
     const sourceDate = freshness.lastSuccessfulRefreshAt || crmSlice.meta?.generatedAt || "";
@@ -168,7 +173,10 @@ module.exports = async (req, res) => {
       snapshot: snapshotQuality,
       calculationVersion: CRM_LIVE_READ_MODEL_VERSION,
       month: crmSlice.payload.month,
-      news,
+      news: news.filter(item => item.type !== 'personal_best'),
+      recordCandidates: crmSlice.payload.performance?.recordCandidates || [],
+      conversions: crmSlice.payload.performance?.conversions || { sdr: [], closers: [] },
+      performance: crmSlice.payload.performance ? { version: crmSlice.payload.performance.version, snapshotId: crmSlice.payload.performance.snapshotId, period: crmSlice.payload.performance.period, sources: crmSlice.payload.performance.sources } : null,
       pipeline: crmSlice.payload.pipeline || { rows: [], windowStartDateKey: "" },
       weekly: {
         commercialWeek: crmSlice.payload.weekly?.commercialWeek || effectiveSdrSlice.payload.weekly?.commercialWeek,
@@ -182,8 +190,8 @@ module.exports = async (req, res) => {
       highlights: {
         dayKey: crmSlice.payload.highlights?.dayKey || effectiveSdrSlice.payload.highlights?.dayKey || "",
         weekKey: crmSlice.payload.highlights?.weekKey || effectiveSdrSlice.payload.highlights?.weekKey || "",
-        closer: crmSlice.payload.highlights?.closer || null,
-        sdr: effectiveSdrSlice.payload.highlights?.sdr || null,
+        closer: isLivePerformanceEligible(crmSlice.payload.highlights?.closer) ? crmSlice.payload.highlights.closer : null,
+        sdr: isLivePerformanceEligible(effectiveSdrSlice.payload.highlights?.sdr) ? effectiveSdrSlice.payload.highlights.sdr : null,
       },
       latestSale: crmSlice.payload.latestSale || null,
       unresolved: {

@@ -15,8 +15,12 @@ function buildScreenKeys(currentPayload, { getNested, safeArray } = {}) {
   if (Number(read(currentPayload, ['weekly', 'team', 'sdrs', 'targetValue'], 0)) > 0) keys.push('team_sdr');
   if (toArray(read(currentPayload, ['pipeline', 'rows'], [])).length) keys.push('pipeline');
   toArray(read(currentPayload, ['news'], [])).forEach((item, index) => {
-    if (item && item.type) keys.push('news_' + index);
+    if (item && item.type && item.type !== 'personal_best') keys.push('news_' + index);
   });
+  if (toArray(currentPayload?.recordCandidates).length) keys.push('personal_record');
+  for (const [role, source] of [['sdr', 'sdr'], ['closer', 'closers']]) {
+    if (currentPayload?.conversions) for (let page = 0; page < Math.max(1, Math.ceil(toArray(currentPayload.conversions[source]).length / 4)); page++) keys.push('conversion_' + role + '_' + page);
+  }
   const closerHighlight = read(currentPayload, ['highlights', 'closer'], null);
   const sdrHighlight = read(currentPayload, ['highlights', 'sdr'], null);
   if (closerHighlight && Number(closerHighlight.dailyValue || 0) > 0) keys.push('highlight_closer');
@@ -34,12 +38,14 @@ function createLiveTvLoopController({
   clearTimeoutFn = clearTimeout,
   buildKeys = buildScreenKeys,
   onScreenChange = () => {},
+  onCycleComplete = () => {},
   onInterruptionStart = () => {},
   onInterruptionEnd = () => {},
 } = {}) {
   let payload = null;
   let screenKeys = [];
   let activeIndex = 0;
+  let cycleVisited = new Set();
   let paused = false;
   let rotationTimer = null;
   let interruptionTimer = null;
@@ -49,6 +55,7 @@ function createLiveTvLoopController({
   const getActiveKey = () => (screenKeys[activeIndex] || '');
 
   const emitScreenChange = () => {
+    if (getActiveKey()) cycleVisited.add(getActiveKey());
     onScreenChange({
       activeIndex,
       activeKey: getActiveKey(),
@@ -70,7 +77,11 @@ function createLiveTvLoopController({
     if (paused || activeInterruption || screenKeys.length <= 1) return;
     rotationTimer = setIntervalFn(() => {
       if (!screenKeys.length) return;
+      const wraps = activeIndex === screenKeys.length - 1;
       activeIndex = (activeIndex + 1) % screenKeys.length;
+      if (wraps && screenKeys.every(key => cycleVisited.has(key))) {
+        cycleVisited.clear(); onCycleComplete();
+      }
       emitScreenChange();
     }, rotateMs);
   };
@@ -103,7 +114,11 @@ function createLiveTvLoopController({
     if (!screenKeys.length) return false;
     const size = screenKeys.length;
     const delta = direction < 0 ? -1 : 1;
+    const wraps = delta > 0 && activeIndex === size - 1;
     activeIndex = (activeIndex + delta + size) % size;
+    if (wraps && screenKeys.every(key => cycleVisited.has(key))) {
+      cycleVisited.clear(); onCycleComplete();
+    }
     emitScreenChange();
     startRotation();
     return true;

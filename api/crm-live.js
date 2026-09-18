@@ -1,4 +1,4 @@
-const { personalBestCopy, sdrRankingPages } = require("./_lib/crm-live-presentation");
+const { personalBestCopy, sdrRankingPages, createRecordRoundRobin } = require("./_lib/crm-live-presentation");
 const { describeSnapshot } = require('./_lib/crm-snapshot-freshness');
 const { getSessionFromRequest } = require("../_lib/session");
 const {
@@ -1516,6 +1516,12 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
       .crm-live .is-personal-best .crm-live-news-phrase { font-size: clamp(22px, 4.7vh, 60px); line-height: 1.18; letter-spacing: -.025em; max-width: none; overflow-wrap: anywhere; }
       .crm-live .is-personal-best .crm-live-news-context { font-size: clamp(14px, 2.8vh, 34px); max-width: none; }
       @media (max-aspect-ratio: 1/1) {
+        .crm-live .crm-live-ranking:not(.is-sdr) .crm-live-ranking-row { grid-template-columns: 10vw minmax(0, 1fr) 20vw; gap: 2vw; }
+        .crm-live .crm-live-ranking:not(.is-sdr) .crm-live-avatar { width: 9vw; height: 9vw; font-size: 3vw; }
+        .crm-live .crm-live-ranking:not(.is-sdr) .crm-live-ranking-name { font-size: 4vw; }
+        .crm-live .crm-live-ranking:not(.is-sdr) .crm-live-ranking-pct { font-size: 5vw; }
+        .crm-live .crm-live-ranking:not(.is-sdr) .crm-live-ranking-sub,
+        .crm-live .crm-live-ranking:not(.is-sdr) .crm-live-ranking-chase { font-size: 2.6vw; }
         .crm-live .crm-live-news.is-personal-best { grid-template-columns: 1fr; align-content: center; }
         .crm-live .is-personal-best .crm-live-avatar { width: 10vh; height: 10vh; }
         .crm-live .crm-live-ranking.is-sdr .crm-live-ranking-row { grid-template-columns: clamp(36px, 5vw, 64px) minmax(0, 1fr) clamp(88px, 12vw, 120px); gap: 2vw; }
@@ -1603,6 +1609,8 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
         };
         const buildScreenKeys = ${buildScreenKeys.toString()};
         const personalBestCopy = ${personalBestCopy.toString()};
+        const createRecordRoundRobin = ${createRecordRoundRobin.toString()};
+        const recordRotation = createRecordRoundRobin();
         const sdrRankingPages = ${sdrRankingPages.toString()};
         const createCrmLiveLoopController = ${createCrmLiveLoopController.toString()};
         const createCrmLiveBuildReloadCoordinator = ${createCrmLiveBuildReloadCoordinator.toString()};
@@ -1930,6 +1938,7 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
           if (getNested(data, ['highlights', 'closer'], null)) rows.push(data.highlights.closer);
           if (getNested(data, ['highlights', 'sdr'], null)) rows.push(data.highlights.sdr);
           rows.push.apply(rows, safeArray(getNested(data, ['news'], [])).filter(Boolean));
+          rows.push.apply(rows, safeArray(data.recordCandidates).map(row => ({ ...row, displayName: row.personName })));
           preloadImages(rows);
         };
         const runtimeSessionStorage = (() => {
@@ -2066,12 +2075,15 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
           };
           addCandidate('closers', true, '');
           sdrRankingPages(getNested(currentPayload, ['weekly', 'sdrs'], [])).forEach((page) => addCandidate(page.key, true, ''));
+          sdrRankingPages(getNested(currentPayload, ['conversions', 'closers'], [])).forEach((page, index) => addCandidate('conversion_closer_' + index, true, ''));
           addCandidate('goal', true, '');
+          sdrRankingPages(getNested(currentPayload, ['conversions', 'sdr'], [])).forEach((page, index) => addCandidate('conversion_sdr_' + index, true, ''));
           addCandidate('week', true, '');
+          addCandidate('personal_record', safeArray(currentPayload.recordCandidates).length > 0, 'no_record_history');
           safePredicate('team_sdr', () => Number(getNested(currentPayload, ['weekly', 'team', 'sdrs', 'targetValue'], 0)) > 0, 'no_team_sdr_target');
           safePredicate('pipeline', () => safeArray(getNested(currentPayload, ['pipeline', 'rows'], [])).length > 0, 'empty_pipeline');
           safeArray(getNested(currentPayload, ['news'], [])).forEach((item, index) => {
-            safePredicate('news_' + index, () => !!(item && item.type), 'news_without_type');
+            safePredicate('news_' + index, () => !!(item && item.type && item.type !== 'personal_best'), 'news_without_type');
           });
           safePredicate('highlight_closer', () => {
             const closerHighlight = getNested(currentPayload, ['highlights', 'closer'], null);
@@ -2404,6 +2416,23 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
             '<div class="crm-live-body"><div class="crm-live-ranking ' + (role === 'sdr' ? 'is-sdr ' : '') + (safeArray(rows).length > 5 ? 'has-many-rows ' : '') + ((role === 'closer' && safeArray(rows).length <= 2) ? '' : 'is-fill') + ' ' + ((role === 'closer' && safeArray(rows).length >= 3) ? 'has-three-rows' : '') + '">' + renderRankingRows(rows, { role: role, offset }) + '</div></div>' +
           '</div>' +
         '</section>';
+        const renderConversionScreen = ({ title, rows, role }) => {
+          const numeratorNoun = role === 'closer' ? 'vendas' : 'agendamentos';
+          const denominatorNoun = role === 'closer' ? 'reuniões realizadas' : 'ligações';
+          const items = safeArray(rows).map(row => {
+            const value = Number.isFinite(row.conversionRate) ? percent(row.conversionRate) : '—';
+            const sample = String(row.numerator) + ' ' + (row.numerator === 1 ? (role === 'closer' ? 'venda' : 'agendamento') : numeratorNoun) + ' de ' + (row.denominator === null ? '—' : String(row.denominator)) + ' ' + (row.denominator === 1 ? (role === 'closer' ? 'reunião realizada' : 'ligação') : denominatorNoun);
+            const note = row.denominatorStatus === 'unavailable' ? 'Base de reuniões por closer indisponível' : row.denominator === 0 ? 'Sem amostra no período' : 'Nesta semana';
+            return '<div class="crm-live-ranking-row">' + avatarHtml(row) +
+              '<div class="crm-live-ranking-copy"><div class="crm-live-ranking-name" title="' + escapeHtml(row.displayName) + '">' + escapeHtml(row.displayName) + '</div>' +
+              '<div class="crm-live-ranking-sub">' + escapeHtml(sample) + '</div>' +
+              '<div class="crm-live-ranking-bar"><span style="width:' + clampPercent(row.conversionRate || 0).toFixed(1) + '%"></span></div>' +
+              '<div class="crm-live-ranking-chase">' + escapeHtml(note) + '</div></div>' +
+              '<div class="crm-live-ranking-metric"><div class="crm-live-ranking-pct">' + escapeHtml(value) + '</div></div></div>';
+          }).join('');
+          return '<section class="crm-live-screen"><div class="crm-live-shell"><div class="crm-live-head"><h1 class="crm-live-title">' + escapeHtml(title) + '</h1></div>' +
+            '<div class="crm-live-body"><div class="crm-live-ranking is-sdr is-fill">' + (items || '<div class="crm-live-empty">Nenhuma pessoa elegível com dados disponíveis.</div>') + '</div></div></div></section>';
+        };
         const renderTeamProgressScreen = ({ title, actual, target, noun }) => {
           const progress = target > 0 ? (Number(actual || 0) / Number(target || 0)) * 100 : 0;
           return '<section class="crm-live-screen">' +
@@ -2591,6 +2620,7 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
           rotateMs: ROTATE_MS,
           eventScreenMs: EVENT_SCREEN_MS,
           buildKeys: (currentPayload) => resolveVisibleScreenKeys(currentPayload, new Date()),
+          onCycleComplete: () => recordRotation.advance(),
           onScreenChange: (state) => {
             active = state.activeIndex;
             screenKeys = state.screenKeys;
@@ -2630,10 +2660,12 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
           const highlight = payload.highlights || {};
           const pipeline = payload.pipeline || {};
           const news = safeArray(payload.news);
+          recordRotation.setCandidates(payload.recordCandidates);
           screenKeys = safeArray(screenKeys).length ? safeArray(screenKeys) : resolveVisibleScreenKeys(payload, new Date());
           if (!screenKeys.length) screenKeys = ['boot_error'];
           if (active >= screenKeys.length) active = 0;
           const screenBuilders = {
+            personal_record: () => renderNewsScreen(recordRotation.current()),
             goal: () => renderGoalScreen(weekly),
             week: () => renderWeekScreen(weekly),
             closers: () => renderRankingScreen({ title: 'Ranking dos closers', rows: weekly.closers, role: 'closer' }),
@@ -2652,6 +2684,14 @@ const buildHtml = ({ buildId = 'dev-local' } = {}) => `<!DOCTYPE html>
             highlight_sdr: () => renderHighlightScreen({ title: 'SDR destaque de ontem', row: highlight.sdr, role: 'sdr' }),
             boot_error: () => renderBootErrorScreen(),
           };
+          for (const [role, source, label] of [['closer', 'closers', 'Closers'], ['sdr', 'sdr', 'SDRs']]) {
+            const pages = sdrRankingPages(getNested(payload, ['conversions', source], []));
+            pages.forEach((page, index) => {
+              screenBuilders['conversion_' + role + '_' + index] = () => renderConversionScreen({
+                rows: page.rows, role, title: 'Taxa de conversão dos ' + label + (pages.length > 1 ? ' · ' + (index + 1) + '/' + pages.length : ''),
+              });
+            });
+          }
           const sdrPages = sdrRankingPages(weekly.sdrs);
           sdrPages.forEach((page, index) => {
             screenBuilders[page.key] = () => renderRankingScreen({
