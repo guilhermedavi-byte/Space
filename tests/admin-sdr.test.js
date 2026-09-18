@@ -52,19 +52,14 @@ test('admin SDR route boots the dedicated panel and script', async () => {
 
 test('admin SDR normalizes scored calls from Postgres/N8N payload', () => {
   const call = __private.normalizeScoredCall({
-    id: 'score-1',
     recording_id: 'rec-1',
     call_leg_id: 'leg-1',
-    sdr_name: 'Ana SDR',
-    lead_name: 'Lead Exemplo',
-    phone: '+5534999999999',
+    sdr: 'Ana SDR',
+    to_number: '+5534999999999',
     duration_seconds: 92,
     recording_url: 'https://cdn.example/audio.mp3',
-    transcription: 'Olá, aqui é a Ana falando da Space.',
+    transcript: 'Olá, aqui é a Ana falando da Space.',
     score: 87,
-    script_adherence: 91,
-    status: 'completed',
-    outcome: 'agendamento',
     analysis: {
       summary: 'Boa condução comercial.',
       strengths: ['Rapport claro'],
@@ -74,14 +69,14 @@ test('admin SDR normalizes scored calls from Postgres/N8N payload', () => {
     created_at: '2026-09-18T13:20:00.000Z',
   });
 
-  assert.equal(call.id, 'score-1');
+  assert.equal(call.id, 'rec-1');
   assert.equal(call.status, 'connected');
   assert.equal(call.analysisStatus, 'completed');
   assert.equal(call.sdrName, 'Ana SDR');
-  assert.equal(call.leadName, 'Lead Exemplo');
+  assert.equal(call.phone, '+5534999999999');
   assert.equal(call.durationSeconds, 92);
   assert.equal(call.score, 87);
-  assert.equal(call.scriptAdherence, 91);
+  assert.equal(call.scriptAdherence, null);
   assert.equal(call.transcript, 'Olá, aqui é a Ana falando da Space.');
   assert.equal(call.scorecard[0].name, 'Abertura');
   assert.equal(call.scorecard[0].score, 90);
@@ -94,13 +89,10 @@ test('admin SDR buildModel uses scored calls for IA summary without mock data', 
       sdrs: [{ sdrUid: 's1', sdrName: 'Ana SDR', sdrEmail: 'ana@example.com' }],
     }),
     request: async () => ({ data: [{
-      id: 'score-2',
-      sdr_id: 's1',
-      sdr_name: 'Ana SDR',
+      recording_id: 'score-2',
+      sdr: 'Ana SDR',
       duration_seconds: 130,
       score: 82,
-      script_adherence: 76,
-      analysis_status: 'completed',
       created_at: '2026-09-18T12:00:00.000Z',
     }] }),
   });
@@ -111,4 +103,51 @@ test('admin SDR buildModel uses scored calls for IA summary without mock data', 
   assert.equal(model.kpis.avgScore, 82);
   assert.equal(model.sdrs[0].analyzedCalls, 1);
   assert.equal(model.calls.length, 1);
+});
+
+test('admin SDR loads transcript and analysis only in recording detail', async () => {
+  const calls = [];
+  const request = async (path) => {
+    calls.push(path);
+    if (path.includes('recording_id=eq.rec-detail')) {
+      return { data: [{
+        recording_id: 'rec-detail',
+        call_leg_id: 'leg-detail',
+        call_session_id: 'session-detail',
+        connection_id: 'conn-detail',
+        sdr: 'Ana SDR',
+        from_number: '+100',
+        to_number: '+200',
+        started_at: '2026-09-18T12:00:00.000Z',
+        ended_at: '2026-09-18T12:03:00.000Z',
+        duration_seconds: 180,
+        transcript: 'Transcrição completa',
+        score: 91,
+        analysis: 'Análise textual completa',
+        recording_url: 'https://cdn.example/detail.mp3',
+        created_at: '2026-09-18T12:04:00.000Z',
+      }] };
+    }
+    return { data: [{
+      recording_id: 'rec-detail',
+      sdr: 'Ana SDR',
+      to_number: '+200',
+      duration_seconds: 180,
+      score: 91,
+      started_at: '2026-09-18T12:00:00.000Z',
+      created_at: '2026-09-18T12:04:00.000Z',
+    }] };
+  };
+  const model = await __private.buildModel({ period: 'today', callId: 'rec-detail' }, {
+    activity: async () => ({ events: [], sdrs: [] }),
+    request,
+  });
+
+  assert.equal(model.calls[0].transcript, '');
+  assert.equal(model.calls[0].recording, '');
+  assert.equal(model.selectedCall.transcript, 'Transcrição completa');
+  assert.equal(model.selectedCall.analysisText, 'Análise textual completa');
+  assert.equal(model.selectedCall.recording, 'https://cdn.example/detail.mp3');
+  assert.ok(calls.some(path => path.includes('select=recording_id,sdr,to_number,duration_seconds,score,started_at,created_at')));
+  assert.ok(calls.some(path => path.includes('select=recording_id,call_leg_id,call_session_id,connection_id,sdr,from_number,to_number,started_at,ended_at,duration_seconds,transcript,score,analysis,recording_url,created_at')));
 });

@@ -86,51 +86,49 @@ const normalizeAnalysisStatus = value => {
   return raw;
 };
 const normalizeScoredCall = (row = {}) => {
-  const analysis = parseMaybeJson(first(row, ['analysis','analise','ai_analysis','evaluation','score_json'], null));
-  const started = first(row, ['recording_started_at','call_started_at','started_at','created_at','updated_at'], '');
+  const analysis = parseMaybeJson(row.analysis ?? null);
+  const started = row.started_at || row.created_at || row.ended_at || '';
   const local = localPartsFromIso(started);
-  const duration = first(row, ['duration_seconds','duration_sec','call_duration_seconds'], null);
-  const durationMillis = first(row, ['duration_millis','duration_ms'], null);
-  const score = first(row, ['score','nota','ia_score','overall_score'], analysis && typeof analysis === 'object' ? first(analysis, ['score','nota','overall_score'], null) : null);
-  const script = first(row, ['script_adherence','script_score','aderencia_script'], analysis && typeof analysis === 'object' ? first(analysis, ['script_adherence','script_score','aderencia_script'], null) : null);
-  const recordingId = clean(first(row, ['recording_id','recordingId'], ''));
-  const callLegId = clean(first(row, ['call_leg_id','callLegId'], ''));
-  const sessionId = clean(first(row, ['call_session_id','callSessionId','session_id'], ''));
-  const id = clean(first(row, ['id'], '')) || recordingId || callLegId || sessionId;
-  const outcome = clean(first(row, ['outcome','result','resultado'], analysis && typeof analysis === 'object' ? first(analysis, ['outcome','result','resultado'], '') : '')).toLowerCase();
-  const transcript = clean(first(row, ['transcription','transcript','transcricao','transcription_text'], ''));
-  const analysisStatus = normalizeAnalysisStatus(first(row, ['analysis_status','processing_status','status'], score !== null ? 'completed' : transcript ? 'analyzing' : recordingId ? 'transcribing' : 'pending'));
-  const callStatus = /não|nao|miss|no.?answer|unanswered/.test(outcome) ? 'unanswered' : 'connected';
+  const duration = row.duration_seconds;
+  const score = row.score;
+  const recordingId = clean(row.recording_id);
+  const callLegId = clean(row.call_leg_id);
+  const sessionId = clean(row.call_session_id);
+  const transcript = Object.prototype.hasOwnProperty.call(row, 'transcript') ? clean(row.transcript) : '';
+  const analysisStatus = normalizeAnalysisStatus(score != null ? 'completed' : transcript ? 'analyzing' : 'pending');
+  const summary = typeof analysis === 'object' ? clean(first(analysis, ['summary','resumo'], '')) : clean(analysis);
   return {
-    id,
+    id: recordingId,
     sourceKind: 'ai_score',
     dateKey: local.dateKey,
     time: local.time,
-    createdAt: clean(first(row, ['created_at','updated_at'], '')),
-    sdrUid: clean(first(row, ['sdr_id','sdr_uid','user_uid','user_id'], '')),
-    sdrName: clean(first(row, ['sdr','sdr_name','sdrName','user_name','agent_name','agent'], '')) || 'SDR',
-    leadName: clean(first(row, ['lead','lead_name','contact_name','customer_name'], '')),
-    phone: clean(first(row, ['phone','lead_phone','from_number','to_number','customer_phone'], '')),
-    durationSeconds: Number.isFinite(Number(duration)) ? Number(duration) : Number.isFinite(Number(durationMillis)) ? Math.round(Number(durationMillis) / 1000) : null,
+    createdAt: clean(row.created_at),
+    startedAt: clean(row.started_at),
+    endedAt: clean(row.ended_at),
+    sdrUid: clean(row.sdr),
+    sdrName: clean(row.sdr) || 'SDR',
+    leadName: '',
+    phone: clean(row.to_number),
+    durationSeconds: Number.isFinite(Number(duration)) ? Number(duration) : null,
     score: Number.isFinite(Number(score)) ? Number(score) : null,
-    scriptAdherence: Number.isFinite(Number(script)) ? Number(script) : null,
-    outcome: /sched|agend/.test(outcome) ? 'scheduled' : /show/.test(outcome) && !/no/.test(outcome) ? 'show' : /no.?show/.test(outcome) ? 'noshow' : /sale|venda/.test(outcome) ? 'sale' : outcome || 'none',
-    outcomeLabel: clean(first(row, ['outcome_label','resultado_label'], '')) || (outcome || 'Sem resultado'),
-    recording: clean(first(row, ['recording_url','audio_url','recording'], '')),
+    scriptAdherence: null,
+    outcome: 'none',
+    outcomeLabel: '—',
+    recording: clean(row.recording_url),
     recordingId,
-    callId: callLegId || sessionId || id,
+    callId: callLegId || sessionId || recordingId,
     callLegId,
     callSessionId: sessionId,
-    connectionId: clean(first(row, ['connection_id'], '')),
-    fromNumber: clean(first(row, ['from_number'], '')),
-    toNumber: clean(first(row, ['to_number'], '')),
+    connectionId: clean(row.connection_id),
+    fromNumber: clean(row.from_number),
+    toNumber: clean(row.to_number),
     transcriptAvailable: Boolean(transcript),
     transcript,
     analysis,
-    status: callStatus,
+    status: 'connected',
     analysisStatus,
     scorecard: normalizeScorecard(analysis),
-    summary: typeof analysis === 'object' ? clean(first(analysis, ['summary','resumo'], '')) : clean(analysis),
+    summary,
     strengths: typeof analysis === 'object' ? normalizeList(first(analysis, ['strengths','pontos_fortes','acertos'], [])) : [],
     weaknesses: typeof analysis === 'object' ? normalizeList(first(analysis, ['weaknesses','pontos_melhoria','erros'], [])) : [],
     recommendations: typeof analysis === 'object' ? normalizeList(first(analysis, ['recommendations','recomendacoes'], [])) : [],
@@ -139,14 +137,40 @@ const normalizeScoredCall = (row = {}) => {
     nextImprovement: typeof analysis === 'object' ? clean(first(analysis, ['next_action','next_improvement','proxima_melhoria'], '')) : '',
   };
 };
-const loadScoredCalls = async ({ request = supabaseFetch, limit = 200 } = {}) => {
+const SCORE_LIST_SELECT = 'recording_id,sdr,to_number,duration_seconds,score,started_at,created_at';
+const SCORE_DETAIL_SELECT = 'recording_id,call_leg_id,call_session_id,connection_id,sdr,from_number,to_number,started_at,ended_at,duration_seconds,transcript,score,analysis,recording_url,created_at';
+const scoreRangeParams = ({ fromKey = '', toKey = '' } = {}) => {
+  const params = [];
+  if (parseDateKey(fromKey)) params.push(`created_at=gte.${encodeURIComponent(`${fromKey}T00:00:00-03:00`)}`);
+  if (parseDateKey(toKey)) params.push(`created_at=lt.${encodeURIComponent(`${addDaysToKey(toKey, 1)}T00:00:00-03:00`)}`);
+  return params.length ? `&${params.join('&')}` : '';
+};
+const loadScoredCalls = async ({ request = supabaseFetch, limit = 10, offset = 0, fromKey = '', toKey = '' } = {}) => {
   try {
-    const res = await request(`/sdr_call_scores?select=*&order=created_at.desc&limit=${Math.max(1, Math.min(Number(limit)||200, 500))}`, { timeoutMs: 15000 });
+    const safeLimit = Math.max(1, Math.min(Number(limit)||10, 100));
+    const safeOffset = Math.max(0, Number(offset)||0);
+    const res = await request(`/sdr_call_scores?select=${SCORE_LIST_SELECT}${scoreRangeParams({ fromKey, toKey })}&order=created_at.desc&limit=${safeLimit}&offset=${safeOffset}`, { timeoutMs: 15000 });
     const rows = Array.isArray(res.data) ? res.data : [];
     return { ok: true, table: 'sdr_call_scores', rows, calls: rows.map(normalizeScoredCall).filter(call => call.id), columns: rows[0] ? Object.keys(rows[0]) : [] };
   } catch (error) {
     return { ok: false, table: 'sdr_call_scores', rows: [], calls: [], columns: [], error: String(error.code || error.message || 'sdr_call_scores_unavailable').slice(0, 80) };
   }
+};
+const loadScoredCallStats = async ({ request = supabaseFetch, limit = 500, fromKey = '', toKey = '' } = {}) => {
+  try {
+    const res = await request(`/sdr_call_scores?select=${SCORE_LIST_SELECT}${scoreRangeParams({ fromKey, toKey })}&order=created_at.desc&limit=${Math.max(1, Math.min(Number(limit)||500, 1000))}`, { timeoutMs: 15000 });
+    const rows = Array.isArray(res.data) ? res.data : [];
+    return { ok: true, table: 'sdr_call_scores', rows, calls: rows.map(normalizeScoredCall).filter(call => call.id), columns: rows[0] ? Object.keys(rows[0]) : [] };
+  } catch (error) {
+    return { ok: false, table: 'sdr_call_scores', rows: [], calls: [], columns: [], error: String(error.code || error.message || 'sdr_call_scores_unavailable').slice(0, 80) };
+  }
+};
+const loadScoredCallDetail = async ({ request = supabaseFetch, recordingId } = {}) => {
+  const id = clean(recordingId);
+  if (!id) return null;
+  const res = await request(`/sdr_call_scores?select=${SCORE_DETAIL_SELECT}&recording_id=eq.${encodeURIComponent(id)}&limit=1`, { timeoutMs: 15000 });
+  const row = Array.isArray(res.data) ? res.data[0] : null;
+  return row ? normalizeScoredCall(row) : null;
 };
 const avg = rows => { const nums = rows.map(Number).filter(Number.isFinite); return nums.length ? nums.reduce((a,b)=>a+b,0)/nums.length : null; };
 
@@ -197,7 +221,8 @@ const buildTimeline = (calls, fromKey, toKey) => {
 const aggregateSdr = (row = {}, calls = [], scoredCalls = []) => {
   const uid = clean(row.sdrUid || row.uid);
   const own = calls.filter(call => call.sdrUid === uid);
-  const ownScores = scoredCalls.filter(call => (call.sdrUid && call.sdrUid === uid) || (!call.sdrUid && clean(call.sdrName).toLowerCase() === clean(row.sdrName || row.nome).toLowerCase()));
+  const rowName = clean(row.sdrName || row.nome).toLowerCase();
+  const ownScores = scoredCalls.filter(call => (call.sdrUid && call.sdrUid === uid) || (rowName && clean(call.sdrName).toLowerCase() === rowName));
   const totalCalls = own.filter(call => call.status !== 'meeting').length;
   const connected = own.filter(call => call.status === 'connected').length;
   const scheduled = own.filter(call => call.outcome === 'scheduled').length;
@@ -253,7 +278,7 @@ const buildInsights = ({ summary, sdrs }) => {
   return items;
 };
 const filterCalls = (calls, { sdr = 'all', status = 'all', score = 'all', result = 'all' } = {}) => calls.filter(call => {
-  if (sdr && sdr !== 'all' && call.sdrUid !== sdr) return false;
+  if (sdr && sdr !== 'all' && call.sdrUid !== sdr && call.sdrName !== sdr) return false;
   if (status === 'connected' && call.status !== 'connected') return false;
   if (status === 'unanswered' && call.status !== 'unanswered') return false;
   if (status === 'over1m' && (Number(call.durationSeconds) || 0) < 60) return false;
@@ -281,9 +306,15 @@ const filterCalls = (calls, { sdr = 'all', status = 'all', score = 'all', result
 });
 const buildModel = async (query = {}, deps = {}) => {
   const range = resolveRange(query);
+  const page = Math.max(1, Number(query.page) || 1);
+  const pageSize = Math.max(1, Math.min(Number(query.pageSize) || (query.tab === 'calls' ? 25 : 10), 100));
+  const offset = (page - 1) * pageSize;
+  const request = deps.request || supabaseFetch;
   const activity = deps.activity ? await deps.activity({ period: 'custom', from: range.fromKey, to: range.toKey, range }) : await loadAdminCommercialSdrActivity({ period: 'custom', from: range.fromKey, to: range.toKey });
-  const scoreSource = await loadScoredCalls({ request: deps.request || supabaseFetch });
-  const rawScoredCalls = scoreSource.calls.filter(call => !call.dateKey || (call.dateKey >= range.fromKey && call.dateKey <= range.toKey));
+  const statsSource = await loadScoredCallStats({ request, fromKey: range.fromKey, toKey: range.toKey });
+  const scoreSource = await loadScoredCalls({ request, fromKey: range.fromKey, toKey: range.toKey, limit: pageSize, offset });
+  const rawScoredCalls = statsSource.calls;
+  const pageScoredCalls = scoreSource.calls;
   const rawCalls = (activity.events || []).map(normalizeCall);
   const calls = filterCalls(rawCalls, query);
   const summary = {
@@ -303,14 +334,18 @@ const buildModel = async (query = {}, deps = {}) => {
     avgScore: avg(rawScoredCalls.map(call => call.score)),
     scriptAdherence: avg(rawScoredCalls.map(call => call.scriptAdherence)),
   };
-  const sdrs = (activity.sdrs || []).map(row => aggregateSdr(row, rawCalls, rawScoredCalls)).filter(row => !query.sdr || query.sdr === 'all' || row.uid === query.sdr);
-  const sdrOptions = (activity.sdrs || []).map(row => ({ uid: clean(row.sdrUid), name: clean(row.sdrName) || 'SDR', email: clean(row.sdrEmail) }));
-  const filteredScoredCalls = filterCalls(rawScoredCalls, query);
-  const selectedCall = query.callId ? rawScoredCalls.find(call => call.id === query.callId) || calls.find(call => call.id === query.callId) || null : null;
+  const operationalSdrs = (activity.sdrs || []).map(row => aggregateSdr(row, rawCalls, rawScoredCalls));
+  const scoreOnlySdrs = [...new Set(rawScoredCalls.map(call => call.sdrName).filter(Boolean))]
+    .filter(name => !operationalSdrs.some(row => clean(row.name).toLowerCase() === clean(name).toLowerCase()))
+    .map(name => aggregateSdr({ sdrUid: name, sdrName: name, sdrEmail: '' }, rawCalls, rawScoredCalls));
+  const sdrs = [...operationalSdrs, ...scoreOnlySdrs].filter(row => !query.sdr || query.sdr === 'all' || row.uid === query.sdr || row.name === query.sdr);
+  const sdrOptions = [...new Map([...operationalSdrs, ...scoreOnlySdrs].map(row => [row.uid || row.name, { uid: row.uid || row.name, name: row.name || 'SDR', email: row.email || '' }])).values()];
+  const filteredScoredCalls = filterCalls(pageScoredCalls, query);
+  const selectedCall = query.callId ? await loadScoredCallDetail({ request, recordingId: query.callId }).catch(() => null) : null;
   return {
     ok: true,
     generatedAt: new Date().toISOString(),
-    source: { operational: 'Firestore/sdrActivityEvents', callAnalysis: scoreSource.ok ? 'Postgres/sdr_call_scores' : 'sdr_call_scores_unavailable', usesMockData: false, scoreTable: scoreSource.table, scoreRows: scoreSource.rows.length, scoreColumns: scoreSource.columns, scoreError: scoreSource.error || null },
+    source: { operational: 'Firestore/sdrActivityEvents', callAnalysis: statsSource.ok ? 'Postgres/sdr_call_scores' : 'sdr_call_scores_unavailable', usesMockData: false, scoreTable: statsSource.table, scoreRows: statsSource.rows.length, scoreColumns: statsSource.columns, scoreError: statsSource.error || scoreSource.error || null },
     filters: { period: range.period, fromKey: range.fromKey, toKey: range.toKey, sdr: query.sdr || 'all', status: query.status || 'all', score: query.score || 'all', result: query.result || 'all' },
     sdrOptions,
     kpis: { ...summary, callToScheduleRate: pct(summary.scheduled, summary.totalCalls), showRate: pct(summary.shows, summary.scheduled), showToSaleRate: null },
@@ -318,9 +353,10 @@ const buildModel = async (query = {}, deps = {}) => {
     timeline: buildTimeline(calls, range.fromKey, range.toKey),
     sdrs,
     ranking: sdrs,
-    calls: filteredScoredCalls.slice(0, 100),
+    calls: filteredScoredCalls,
     operationalEvents: calls.slice(0, 100),
-    callsTotal: filteredScoredCalls.length,
+    callsTotal: rawScoredCalls.length,
+    pagination: { page, pageSize, hasNext: pageScoredCalls.length === pageSize, hasPrevious: page > 1 },
     objections: [],
     scorecard: { criteria: [], teamAverage: null, note: 'Aguardando análises IA persistidas.' },
     coaching: sdrs.map(row => ({ sdrUid: row.uid, sdrName: row.name, skill: 'Dados insuficientes', evidence: 'Ainda não há scorecards IA suficientes no período.', recommendation: 'Aguardar processamento das calls pela esteira Telnyx/n8n/IA.' })),
