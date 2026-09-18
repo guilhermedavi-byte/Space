@@ -1,0 +1,110 @@
+TAP version 13
+# Subtest: autenticação existente: perfil atual ativo, UID consistente, role interna elegível
+not ok 1 - autenticação existente: perfil atual ativo, UID consistente, role interna elegível
+  ---
+  duration_ms: 2.169875
+  type: 'test'
+  location: '/private/tmp/space-baseline.ohUrbK/tests/attendance-api.test.js:15:1'
+  failureType: 'testCodeFailure'
+  error: "Cannot read properties of undefined (reading 'cookie')"
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    parseCookies (/private/tmp/space-baseline.ohUrbK/_lib/session.js:78:37)
+    getSessionFromRequest (/private/tmp/space-baseline.ohUrbK/_lib/session.js:116:19)
+    requireAttendanceAuth (/private/tmp/space-baseline.ohUrbK/api/_lib/attendance-auth.js:13:19)
+    TestContext.<anonymous> (/private/tmp/space-baseline.ohUrbK/tests/attendance-api.test.js:16:23)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.start (node:internal/test_runner/test:944:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+  ...
+# Subtest: gate de ambiente falha fechado: produção/ausência de staging/flag desligada
+ok 2 - gate de ambiente falha fechado: produção/ausência de staging/flag desligada
+  ---
+  duration_ms: 0.977625
+  type: 'test'
+  ...
+# Subtest: assignment revalida existência/papel/ativo do destinatário no Firestore
+ok 3 - assignment revalida existência/papel/ativo do destinatário no Firestore
+  ---
+  duration_ms: 0.76725
+  type: 'test'
+  ...
+# Subtest: mensagens/metadata/commands rejeitam injeção de ator, secrets, inbound público e identity HTTP
+ok 4 - mensagens/metadata/commands rejeitam injeção de ator, secrets, inbound público e identity HTTP
+  ---
+  duration_ms: 2.501792
+  type: 'test'
+  ...
+# Subtest: POST usa somente UID autenticado e retorna intenção pending, sem envio externo
+ok 5 - POST usa somente UID autenticado e retorna intenção pending, sem envio externo
+  ---
+  duration_ms: 1.822917
+  type: 'test'
+  ...
+# Subtest: API não expõe ingestão/provider/identity e autenticação falha antes do store
+ok 6 - API não expõe ingestão/provider/identity e autenticação falha antes do store
+  ---
+  duration_ms: 0.49425
+  type: 'test'
+  ...
+# Subtest: agente sem supervisão não consulta identidade do destinatário ao tentar atribuir
+ok 7 - agente sem supervisão não consulta identidade do destinatário ao tentar atribuir
+  ---
+  duration_ms: 0.284334
+  type: 'test'
+  ...
+# Subtest: erros SQL mapeiam conflito/isolamento sem retornar payload upstream
+ok 8 - erros SQL mapeiam conflito/isolamento sem retornar payload upstream
+  ---
+  duration_ms: 1.952459
+  type: 'test'
+  ...
+# Subtest: store usa RPC parametrizada e checa ambiente em cada operação
+ok 9 - store usa RPC parametrizada e checa ambiente em cada operação
+  ---
+  duration_ms: 0.9725
+  type: 'test'
+  ...
+# Subtest: workspace preserves one table, sends filters, escapes names and opens/closes accessible side drawer
+ok 10 - workspace preserves one table, sends filters, escapes names and opens/closes accessible side drawer
+  ---
+  duration_ms: 146.030625
+  type: 'test'
+  ...
+# Subtest: new finance navigation contains exactly five workspaces and legacy global actions are absent
+not ok 11 - new finance navigation contains exactly five workspaces and legacy global actions are absent
+  ---
+  duration_ms: 102.145875
+  type: 'test'
+  location: '/private/tmp/space-baseline.ohUrbK/tests/finance-v1-ui.test.js:11:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    0 !== 2
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 2
+  actual: 0
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/private/tmp/space-baseline.ohUrbK/tests/finance-v1-ui.test.js:13:146)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+1..11
+# tests 11
+# suites 0
+# pass 9
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1636.42525

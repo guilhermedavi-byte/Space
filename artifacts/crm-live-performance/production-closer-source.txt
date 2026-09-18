@@ -1,0 +1,327 @@
+- link "Pular para o conteúdo principal":
+  - /url: "#main"
+- navigation "Produtos do Console do Firebase":
+  - heading "Console do Firebase (acessar a lista de projetos)" [level=2]:
+    - link "Console do Firebase (acessar a lista de projetos)":
+      - /url: "#"
+      - img "Logotipo do Firebase"
+  - img: search
+  - combobox "Pesquise produtos e recursos"
+  - link "Visão geral do projeto":
+    - /url: "#"
+    - img: gmp_nav20_overview
+    - generic: Visão geral do projeto
+  - menu:
+    - menuitem "Configurações":
+      - img: settings
+      - generic: Configurações
+      - img: chevron_right
+- separator
+- generic: Atalhos do projeto
+- group "Atalhos do projeto":
+  - link "Firestore":
+    - /url: "#"
+    - img: gmp_firestore
+    - generic: Firestore
+    - button "Ocultar Firestore"
+    - button "Fixar Firestore"
+  - link "Storage":
+    - /url: "#"
+    - img: gmp_nav20_storage
+    - generic: Storage
+    - button "Ocultar Storage"
+    - button "Fixar Storage"
+  - link "Authentication":
+    - /url: "#"
+    - img: gmp_nav20_auth
+    - generic: Authentication
+    - button "Ocultar Authentication"
+    - button "Fixar Authentication"
+- separator
+- generic: Categorias dos produtos
+- menu "Categorias dos produtos":
+  - menuitem "Bancos de dados e armazenamento":
+    - generic: Bancos de dados e armazenamento
+    - img: chevron_right
+  - menuitem "Segurança":
+    - generic: Segurança
+    - img: chevron_right
+  - menuitem "Serviços de IA":
+    - generic: Serviços de IA
+    - img: chevron_right
+  - menuitem "Hospedagem e sem servidor":
+    - generic: Hospedagem e sem servidor
+    - img: chevron_right
+  - menuitem "DevOps e engajamento":
+    - generic: DevOps e engajamento
+    - img: chevron_right
+  - menuitem "Analytics":
+    - generic: Analytics
+    - img: chevron_right
+- separator
+- 'group "Plano de faturamento: Blaze"':
+  - generic "Nome do plano de faturamento":
+    - generic: "Plano de faturamento:"
+    - text: Blaze
+  - generic "Descrição do plano de faturamento": Pagamento por utilização
+  - button "Modificar plano de faturamento":
+    - generic: Modificar
+- separator
+- button "Alternar barra lateral de navegação" [expanded]:
+  - img: chevron_left
+- banner:
+  - button "Plataforma Space (Abrir o menu \"Selecionar projeto\")":
+    - text: Plataforma Space
+    - img: arrow_drop_down
+- main [active]:
+  - region "Cabeçalho do produto":
+    - navigation "Breadcrumbs":
+      - link "Cloud Firestore"
+      - text: chevron_right
+    - heading "Banco de dados" [level=2]
+    - button "Undefined parameter - DATABASE_ID selecione um banco de dados":
+      - generic: (default)
+      - img: arrow_drop_down
+    - button "Pergunte ao Gemini sobre os conceitos básicos para usar o Firestore":
+      - img: spark
+      - text: Pergunte ao Gemini sobre os conceitos básicos para usar o Firestore
+    - tablist "Recursos do produto":
+      - 'tab "Guia selecionada: Dados" [selected]':
+        - generic: Dados
+      - tab "Regras":
+        - generic: Regras
+      - tab "Índices":
+        - generic: Índices
+      - tab "Recuperação de desastres":
+        - generic: Recuperação de desastres
+      - tab "Uso":
+        - generic: Uso
+      - tab "Query Insights":
+        - generic: Query Insights
+        - alert:
+          - button "Dispensar":
+            - img: close
+          - img: gmp_firestore
+          - generic: Entenda o desempenho da consulta
+          - generic: Identifique e resolva problemas com consultas que exigem mais tempo ou recursos para serem executadas.
+          - link "Saiba mais (abre a documentação do Firebase em uma nova guia)":
+            - /url: https://firebase.google.com/docs/firestore/enterprise/query-insights?hl=pt-BR&authuser=0
+            - text: Saiba mais open_in_new
+  - img: security
+  - generic: Proteja os recursos do Cloud Firestore de abusos, como fraude de faturamento ou phishing
+  - link "Configurar o App Check":
+    - /url: "#"
+    - generic: Configurar o App Check
+  - button "Dispensar":
+    - img: close
+  - button "Menu de links externos para recursos no Google Cloud":
+    - img: filter_drama
+    - generic: Mais no Google Cloud
+    - img: keyboard_arrow_down
+  - radiogroup "Escolha como visualizar seus dados":
+    - radio "Visualização do painel" [checked]:
+      - generic: Visualização do painel
+    - radio "Criador de consultas":
+      - generic: Criador de consultas
+  - button "ações relacionadas ao banco de dados do Firestore":
+    - img: more_vert
+  - link "navegação raiz":
+    - /url: "#"
+    - img: home
+  - img: keyboard_arrow_right
+  - link "Navegação crmCloserReviews":
+    - /url: "#"
+    - text: crmCloserReviews
+  - button "Editar caminho":
+    - img: mode_edit
+  - img: gmp_firestore
+  - generic: (default)
+  - button "Acessar detalhes do banco de dados":
+    - img: info
+  - button "Iniciar coleção":
+    - img: add
+    - generic: Iniciar coleção
+  - button "ações para activities":
+    - img: more_vert
+  - button "Navegação por activities": activities
+  - img: chevron_right
+  - button "ações para adminAuditEvents":
+    - img: more_vert
+  - button "Navegação por adminAuditEvents": adminAuditEvents
+  - img: chevron_right
+  - button "ações para aulas":
+    - img: more_vert
+  - button "Navegação por aulas": aulas
+  - img: chevron_right
+  - button "ações para classes":
+    - img: more_vert
+  - button "Navegação por classes": classes
+  - img: chevron_right
+  - button "ações para crmActivities":
+    - img: more_vert
+  - button "Navegação por crmActivities": crmActivities
+  - img: chevron_right
+  - button "ações para crmContacts":
+    - img: more_vert
+  - button "Navegação por crmContacts": crmContacts
+  - img: chevron_right
+  - button "ações para crmEvents":
+    - img: more_vert
+  - button "Navegação por crmEvents": crmEvents
+  - img: chevron_right
+  - button "ações para crmLiveAccessTokens":
+    - img: more_vert
+  - button "Navegação por crmLiveAccessTokens": crmLiveAccessTokens
+  - img: chevron_right
+  - button "ações para crmLiveCache":
+    - img: more_vert
+  - button "Navegação por crmLiveCache": crmLiveCache
+  - img: chevron_right
+  - button "ações para crmLiveDailyRollups":
+    - img: more_vert
+  - button "Navegação por crmLiveDailyRollups": crmLiveDailyRollups
+  - img: chevron_right
+  - button "ações para crmLiveDatasetChunks":
+    - img: more_vert
+  - button "Navegação por crmLiveDatasetChunks": crmLiveDatasetChunks
+  - img: chevron_right
+  - button "ações para crmLiveEventsState":
+    - img: more_vert
+  - button "Navegação por crmLiveEventsState": crmLiveEventsState
+  - img: chevron_right
+  - button "ações para crmLiveRefresh":
+    - img: more_vert
+  - button "Navegação por crmLiveRefresh": crmLiveRefresh
+  - img: chevron_right
+  - button "ações para crmLiveSnapshotBackups":
+    - img: more_vert
+  - button "Navegação por crmLiveSnapshotBackups": crmLiveSnapshotBackups
+  - img: chevron_right
+  - button "ações para crmLiveSnapshots":
+    - img: more_vert
+  - button "Navegação por crmLiveSnapshots": crmLiveSnapshots
+  - img: chevron_right
+  - button "ações para crmLiveSync":
+    - img: more_vert
+  - button "Navegação por crmLiveSync": crmLiveSync
+  - img: chevron_right
+  - button "ações para crmLiveSyncRuns":
+    - img: more_vert
+  - button "Navegação por crmLiveSyncRuns": crmLiveSyncRuns
+  - img: chevron_right
+  - button "ações para crmLiveWeeklyRollups":
+    - img: more_vert
+  - button "Navegação por crmLiveWeeklyRollups": crmLiveWeeklyRollups
+  - img: chevron_right
+  - button "ações para crmOpportunities":
+    - img: more_vert
+  - button "Navegação por crmOpportunities": crmOpportunities
+  - img: chevron_right
+  - button "ações para crmOpportunityStageHistory":
+    - img: more_vert
+  - button "Navegação por crmOpportunityStageHistory": crmOpportunityStageHistory
+  - img: chevron_right
+  - button "ações para crmPipelines":
+    - img: more_vert
+  - button "Navegação por crmPipelines": crmPipelines
+  - img: chevron_right
+  - button "ações para crmQualificationOptions":
+    - img: more_vert
+  - button "Navegação por crmQualificationOptions": crmQualificationOptions
+  - img: chevron_right
+  - button "ações para crmQualificationQuestions":
+    - img: more_vert
+  - button "Navegação por crmQualificationQuestions": crmQualificationQuestions
+  - img: chevron_right
+  - button "ações para crmQualificationRuns":
+    - img: more_vert
+  - button "Navegação por crmQualificationRuns": crmQualificationRuns
+  - img: chevron_right
+  - button "ações para crmQualificationTemplates":
+    - img: more_vert
+  - button "Navegação por crmQualificationTemplates": crmQualificationTemplates
+  - img: chevron_right
+  - button "ações para crmQualificationVersions":
+    - img: more_vert
+  - button "Navegação por crmQualificationVersions": crmQualificationVersions
+  - img: chevron_right
+  - button "ações para crmStages":
+    - img: more_vert
+  - button "Navegação por crmStages": crmStages
+  - img: chevron_right
+  - button "ações para financeDashboardSnapshots":
+    - img: more_vert
+  - button "Navegação por financeDashboardSnapshots": financeDashboardSnapshots
+  - img: chevron_right
+  - button "ações para financeReconciliationCases":
+    - img: more_vert
+  - button "Navegação por financeReconciliationCases": financeReconciliationCases
+  - img: chevron_right
+  - button "ações para financeRecoveryCases":
+    - img: more_vert
+  - button "Navegação por financeRecoveryCases": financeRecoveryCases
+  - img: chevron_right
+  - button "ações para growthGoals":
+    - img: more_vert
+  - button "Navegação por growthGoals": growthGoals
+  - img: chevron_right
+  - button "ações para growthMetricsCache":
+    - img: more_vert
+  - button "Navegação por growthMetricsCache": growthMetricsCache
+  - img: chevron_right
+  - button "ações para growthPeople":
+    - img: more_vert
+  - button "Navegação por growthPeople": growthPeople
+  - img: chevron_right
+  - button "ações para leads":
+    - img: more_vert
+  - button "Navegação por leads": leads
+  - img: chevron_right
+  - button "ações para lessonLogs":
+    - img: more_vert
+  - button "Navegação por lessonLogs": lessonLogs
+  - img: chevron_right
+  - button "ações para pedagogico_pending_writes":
+    - img: more_vert
+  - button "Navegação por pedagogico_pending_writes": pedagogico_pending_writes
+  - img: chevron_right
+  - button "ações para sdrActivityEvents":
+    - img: more_vert
+  - button "Navegação por sdrActivityEvents": sdrActivityEvents
+  - img: chevron_right
+  - button "ações para sdrDailyStats":
+    - img: more_vert
+  - button "Navegação por sdrDailyStats": sdrDailyStats
+  - img: chevron_right
+  - button "ações para users":
+    - img: more_vert
+  - button "Navegação por users": users
+  - img: chevron_right
+  - img: collections_bookmark
+  - generic: crmCloserReviews
+  - button "abrir filtro de documentos":
+    - generic: filter_list
+  - button "ações para coleção":
+    - img: more_vert
+  - button "Adicionar documento":
+    - img: add
+    - generic: Adicionar documento
+  - generic: Não há documentos nesta coleção
+  - img: place
+  - generic: "Local do banco de dados: southamerica-east1"
+- generic "Gemini no Firebase":
+  - 'button "Conta do Google: Guilherme Davi | Space (guilhermedavi@spaceschoolbr.com)"':
+  - button "Abrir alertas":
+    - img: notifications
+  - button "Conversar com o Gemini (Option + G)":
+    - img: spark
+  - button "Ajuda":
+    - img: contact_support
+  - separator
+  - button "Ativar o Cloud Shell":
+    - tooltip "Turbine seu desenvolvimento! Use o Cloud Shell para acessar a CLI integrada do Firebase e executar emuladores do Firebase diretamente em uma máquina virtual.":
+      - generic: Turbine seu desenvolvimento! Use o Cloud Shell para acessar a CLI integrada do Firebase e executar emuladores do Firebase diretamente em uma máquina virtual.
+  - button "Ativar/desativar o painel de aprendizado":
+    - img: school
+  - 'button "Tema atual: escuro, ajustar o tema"':
+    - img: light_mode
