@@ -133,6 +133,20 @@ test("growth metrics mantém o funil por criação e calcula financeiro por fech
   });
 });
 
+test("growth metrics snapshot inclui rankings estruturados de motivos do CRM", async () => {
+  const payload = await buildGrowthMetricsPayload({
+    crm: { businesses: [] },
+    periodStart: "2026-09-01",
+    periodEnd: "2026-09-30",
+    filterByCreatedAt: true,
+  });
+
+  assert.deepEqual(payload.structuredReasons, {
+    sdr: { total: 0, items: [] },
+    closer: { total: 0, items: [] },
+  });
+});
+
 test("intervalo comercial inclui 00:00 inicial e 23:59:59 final em São Paulo", () => {
   const period = resolveCommercialPeriod({
     now: new Date("2026-09-01T12:00:00-03:00"),

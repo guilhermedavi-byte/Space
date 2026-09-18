@@ -181,7 +181,7 @@ test("mark_opportunity_won snapshots closedValue, closedAt, closedBy and event a
   assert.equal(updated.lostReason, null);
   assert.equal(updated.lostReasonNote, null);
   assert.equal(commits.at(-1).length, 2);
-  const event = commits.at(-1).find((write) => write.update.fields.type === "crm.opportunity.won").update.fields;
+  const event = commits.at(-1).find((write) => write.update?.fields?.type === "crm.opportunity.won").update.fields;
   assert.equal(event.payload.previousStatus, "open");
   assert.equal(event.payload.closedValue, 12345);
   assert.equal(event.payload.actor, "user_closer");
@@ -211,7 +211,7 @@ test("mark_opportunity_lost requires reason and persists lost payload", async ()
   assert.equal(updated.lostReason, "competitor");
   assert.equal(updated.lostReasonNote, "Fechou com outro fornecedor");
   assert.equal(updated.closedBy, "user_closer");
-  const event = commits.at(-1).find((write) => write.update.fields.type === "crm.opportunity.lost").update.fields;
+  const event = commits.at(-1).find((write) => write.update?.fields?.type === "crm.opportunity.lost").update.fields;
   assert.equal(event.payload.lostReason, "competitor");
   assert.equal(event.payload.previousStatus, "open");
 });
@@ -301,6 +301,7 @@ test("reopen_opportunity clears closing fields and keeps historical events", asy
       lostReason: "price",
       lostReasonNote: "Caro",
     }),
+    "growthMetricsCache/overview_2026-09-01_2026-09-30": { id: "overview_2026-09-01_2026-09-30" },
   });
 
   const res = await invoke(handler, { action: "reopen_opportunity", id: "opp_1" });
@@ -313,7 +314,8 @@ test("reopen_opportunity clears closing fields and keeps historical events", asy
   assert.equal(updated.closedValue, null);
   assert.equal(updated.lostReason, null);
   assert.equal(updated.lostReasonNote, null);
-  const event = commits.at(-1).find((write) => write.update.fields.type === "crm.opportunity.reopened").update.fields;
+  assert.equal(store.has("growthMetricsCache/overview_2026-09-01_2026-09-30"), false);
+  const event = commits.at(-1).find((write) => write.update?.fields?.type === "crm.opportunity.reopened").update.fields;
   assert.equal(event.payload.previousStatus, "lost");
 });
 
