@@ -36,9 +36,12 @@ function revenueSummary({rows=[],payments=[],cases=[],month,today=new Date().toI
  const allocatedMonth=allocated.filter(a=>String(a.recognized_date||'').startsWith(month));
  const allocatedReceived=sumCents(allocatedMonth,a=>cents(a.value));
  const monthDue=rows.filter(r=>!r.deleted&&!CLOSED_STATUSES.has(r.status)&&String(r.due_date||'').startsWith(month));
- const overdue=monthDue.filter(r=>['PENDING','OVERDUE','DUNNING_REQUESTED'].includes(r.status)&&r.due_date&&r.due_date<today);
- const dueBase=sumCents(monthDue,r=>cents(r.value));
+ const cutoff=today&&String(today).startsWith(month)?today:String(today||'')<month?null:`${month}-${new Date(Number(month.slice(0,4)),Number(month.slice(5,7)),0).getDate().toString().padStart(2,'0')}`;
+ const dueToDate=cutoff?monthDue.filter(r=>r.due_date&&r.due_date<=cutoff):[];
+ const overdue=dueToDate.filter(r=>['PENDING','OVERDUE','DUNNING_REQUESTED'].includes(r.status));
+ const dueBase=sumCents(dueToDate,r=>cents(r.value));
+ const monthDueBase=sumCents(monthDue,r=>cents(r.value));
  const delinquencyValue=sumCents(overdue,r=>cents(r.value));
- return {faturamento:received+confirmed+allocatedReceived,received:received+allocatedReceived,confirmed,count:inMonth.length+allocatedMonth.length,source:'Financial Foundation · política central de receita',delinquency_value:delinquencyValue,delinquency_percent:dueBase?Math.round(delinquencyValue/dueBase*10000)/100:null,origin_rules:originRules.size};
+ return {faturamento:received+confirmed+allocatedReceived,received:received+allocatedReceived,confirmed,count:inMonth.length+allocatedMonth.length,source:'Financial Foundation · política central de receita',delinquency_value:delinquencyValue,delinquency_percent:dueBase?Math.round(delinquencyValue/dueBase*10000)/100:null,delinquency_due_base:dueBase,delinquency_month_due_base:monthDueBase,origin_rules:originRules.size};
 }
 module.exports={PAID_STATUSES,REVENUE_STATUSES,CLOSED_STATUSES,NON_REVENUE_CLASSIFICATIONS,AMBIGUOUS_BILLING_TYPES,cents,sumCents,paymentCompetenceDate,originRuleMap,movementOrigin,rowNeedsConcilation,originRuleApplies,isRevenueRow,revenueSummary};
