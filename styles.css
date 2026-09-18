@@ -17809,6 +17809,19 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   font-weight: 650;
 }
 
+.commercial-overview-reason-row {
+  grid-template-columns: 28px minmax(0, 1fr) auto auto;
+  padding: 10px 12px;
+}
+
+.commercial-overview-reason-row em {
+  color: rgba(255, 255, 255, 0.52);
+}
+
+.commercial-overview-reason-row i u {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.5), rgba(255, 86, 79, 0.58));
+}
+
 .commercial-overview-detail-link {
   justify-self: start;
   padding: 10px 13px;

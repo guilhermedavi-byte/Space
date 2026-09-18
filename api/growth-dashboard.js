@@ -41,6 +41,7 @@ const {
 const crypto = require("crypto");
 const { validateWebhookSecret } = require("./_lib/security");
 const { fetchAllMirroredBusinesses, isDatacrazyMirrorEnabled } = require("./_lib/datacrazy-mirror");
+const crmReasons = require("./_lib/crm-reasons");
 
 const sendRedirect = (res, location) => {
   res.statusCode = 302;
@@ -56,10 +57,31 @@ const GROWTH_METRICS_CACHE_TTL_MS = 15 * 60 * 1000;
 const GROWTH_GOALS_SNAPSHOT_COLLECTION = "growthGoalsSnapshots";
 const GROWTH_GOALS_SNAPSHOT_TTL_MS = 10 * 60 * 1000;
 const DATASTORE_SCOPE = "https://www.googleapis.com/auth/datastore";
+const CRM_EVENTS_COLLECTION = "crmEvents";
 
 const safeJsonForHtml = (value) => {
   // Prevent `</script>` injection when embedding JSON in HTML.
   return JSON.stringify(value ?? {}).replace(/</g, "\\u003c");
+};
+
+const loadCrmStructuredReasonRankings = async ({ idToken, commercialPeriod } = {}) => {
+  if (!idToken) return crmReasons.buildStructuredReasonRankingsFromEvents([], { period: commercialPeriod });
+  try {
+    const snap = await firestoreListDocuments({ collectionPath: CRM_EVENTS_COLLECTION, idToken, pageSize: 2000 });
+    const events = (Array.isArray(snap?.documents) ? snap.documents : Array.isArray(snap) ? snap : [])
+      .map((doc) => {
+        const decoded = decodeFields(doc?.fields ? doc : { fields: doc });
+        return {
+          id: getDocIdFromName(doc?.name) || decoded.id || decoded.firestoreDocId || "",
+          ...decoded,
+        };
+      })
+      .filter((event) => event.id || event.type);
+    return crmReasons.buildStructuredReasonRankingsFromEvents(events, { period: commercialPeriod });
+  } catch (error) {
+    console.warn("[growth-metrics] structured CRM reason rankings unavailable", error?.message || error);
+    return crmReasons.buildStructuredReasonRankingsFromEvents([], { period: commercialPeriod });
+  }
 };
 
 const roleToBasePath = (role) => {
@@ -994,6 +1016,7 @@ const buildGrowthMetricsPayload = async ({ crm, idToken, periodStart = "", perio
     periodStart: periodStart || goalPeriodStart,
     periodEnd: periodEnd || goalPeriodEnd,
   });
+  const structuredReasons = await loadCrmStructuredReasonRankings({ idToken, commercialPeriod });
 
   const wasCreatedInPeriod = (business) => {
     const createdAt = business?.createdAt || business?.created_at || null;
@@ -1353,6 +1376,7 @@ const buildGrowthMetricsPayload = async ({ crm, idToken, periodStart = "", perio
     ritmoNecessario,
     planosVendidos,
     rankingTime,
+    structuredReasons,
     ultimaVenda,
     forecastBreakdown,
     stageBreakdown,

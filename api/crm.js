@@ -13,6 +13,7 @@ const qualification = require("./_lib/crm-qualification");
 const handoff = require("./_lib/crm-handoff");
 const qualificationAnalytics = require("./_lib/crm-qualification-analytics");
 const qualificationActions = require("./_lib/crm-qualification-actions");
+const crmReasons = require("./_lib/crm-reasons");
 const commercialPermissions = require("./_lib/commercial-permissions");
 const { createPerformanceTimer, sendJsonWithPerformance } = require("./_lib/performance-observer");
 
@@ -34,12 +35,13 @@ const COLLECTIONS = {
   salesHandoffs: "crmSalesHandoffs",
   closerReviews: "crmCloserReviews",
   qualificationActions: "crmQualificationActions",
+  growthMetricsCache: "growthMetricsCache",
 };
 
 const VALID_STATUS = new Set(["open", "won", "lost"]);
 const VALID_ACTIVITY_TYPES = new Set(["task", "call", "meeting", "follow_up"]);
 const VALID_ACTIVITY_STATUS = new Set(["open", "completed", "cancelled"]);
-const VALID_LOST_REASONS = new Set(["price", "no_response", "timing", "competitor", "not_qualified", "no_need", "payment", "other"]);
+const VALID_LOST_REASONS = new Set(crmReasons.CLOSER_LOST_REASONS.map(([value]) => value).concat(Object.keys(crmReasons.CLOSER_LOST_LEGACY_LABELS)));
 const CRM_SCOPE_ID = String(process.env.SPACE_CRM_SCOPE_ID || process.env.CRM_SCOPE_ID || "space-main").trim() || "space-main";
 
 const normalizeRole = (value) => {
@@ -256,6 +258,7 @@ const normalizeOpportunity = (row) => ({
   discardedAt: toIso(row.discardedAt),
   discardedBy: clean(row.discardedBy) || null,
   discardedReason: clean(row.discardedReason) || null,
+  discardedReasonNote: clean(row.discardedReasonNote) || null,
   reactivatedAt: toIso(row.reactivatedAt),
   reactivatedBy: clean(row.reactivatedBy) || null,
   searchTitle: normalizeSearchText(row.searchTitle || row.title),
@@ -335,6 +338,14 @@ const buildWrite = (collection, id, data, options = {}) => ({
 });
 
 const deleteWrite = (collection, id) => ({ delete: docName(collection, id) });
+
+const growthOverviewCacheInvalidationWrites = async () => {
+  const rows = await listCollectionAsAdmin(COLLECTIONS.growthMetricsCache, { maxPages: 10 }).catch(() => []);
+  return rows
+    .map((row) => clean(row.id || row.firestoreDocId))
+    .filter((id) => id && id.startsWith("overview"))
+    .map((id) => deleteWrite(COLLECTIONS.growthMetricsCache, id));
+};
 
 const eventWrite = ({ type, opportunityId, contactId, actorId, payload, stamp }) => {
   const id = newId("event");
@@ -858,16 +869,7 @@ const activityTypeLabel = (type) => ({
   follow_up: "Follow-up",
 }[clean(type)] || "Atividade");
 
-const lostReasonLabel = (reason) => ({
-  price: "Preço",
-  no_response: "Sem resposta",
-  timing: "Momento inadequado",
-  competitor: "Concorrente",
-  not_qualified: "Não qualificado",
-  no_need: "Sem necessidade percebida",
-  payment: "Pagamento",
-  other: "Outro",
-}[clean(reason)] || clean(reason));
+const lostReasonLabel = crmReasons.closerLostReasonLabel;
 
 const eventTitle = (event) => {
   if (event.type === "crm.opportunity.created") return "Oportunidade criada";
@@ -891,7 +893,7 @@ const eventTitle = (event) => {
   if (event.type === "crm.qualification_action.created") return "Ação recomendada criada";
   if (event.type === "crm.qualification_action.completed") return "Ação resolvida";
   if (event.type === "crm.qualification_action.dismissed") return "Ação dispensada";
-  if (event.type === "crm.opportunity.discarded") return "Lead descartado";
+  if (event.type === "crm.opportunity.discarded") return "Lead desqualificado";
   if (event.type === "crm.opportunity.reactivated") return "Lead reativado";
   return clean(event.type).replace(/^crm\./, "");
 };
@@ -937,7 +939,11 @@ const eventDescription = (event) => {
   if (event.type === "crm.qualification_action.created") return event.payload?.reason || "";
   if (event.type === "crm.qualification_action.completed") return event.payload?.resolutionNote || event.payload?.resolutionCategory || event.payload?.activityTitle || "";
   if (event.type === "crm.qualification_action.dismissed") return event.payload?.dismissedReason || "";
-  if (event.type === "crm.opportunity.discarded") return event.payload?.discardedReason || "";
+  if (event.type === "crm.opportunity.discarded") {
+    const reason = crmReasons.sdrDiscardReasonLabel(event.payload?.discardReason || event.payload?.discardedReason);
+    const note = clean(event.payload?.discardReasonNote || event.payload?.discardedNote);
+    return [reason ? `Motivo: ${reason}` : "", note].filter(Boolean).join(" · ");
+  }
   if (event.type === "crm.opportunity.reactivated") return "";
   return event.payload?.title || event.payload?.activityTitle || "";
 };
@@ -1700,10 +1706,11 @@ const handleMarkOpportunityLost = async ({ auth, body }) => {
   if (opportunity.status === "won") return { status: 409, body: { error: "reopen_before_mark_lost" } };
   const lostReason = clean(body.lostReason);
   if (!VALID_LOST_REASONS.has(lostReason)) return { status: 400, body: { error: "invalid_lost_reason" } };
+  const lostReasonNote = clean(body.lostReasonNote);
+  if (lostReason === "other" && !lostReasonNote) return { status: 400, body: { error: "lost_reason_note_required" } };
   const stamp = nowIso();
   const closedAt = normalizeTimestamp(body.closedAt) || stamp;
   const actor = clean(auth.session.sub) || null;
-  const lostReasonNote = clean(body.lostReasonNote);
   const updated = {
     ...opportunity,
     status: "lost",
@@ -1721,13 +1728,51 @@ const handleMarkOpportunityLost = async ({ auth, body }) => {
       opportunityId: opportunity.id,
       contactId: opportunity.contactId,
       actorId: actor,
-      payload: { opportunityId: opportunity.id, previousStatus: opportunity.status, lostReason, closedAt, actor },
+      payload: { opportunityId: opportunity.id, previousStatus: opportunity.status, lostReason, lostReasonNote: lostReasonNote || null, closedAt, closedBy: actor, actor },
       stamp,
     }),
+    ...(await growthOverviewCacheInvalidationWrites()),
   ];
   const committed = await commitWritesAsAdmin({ writes });
   if (!committed.ok) return { status: committed.status || 500, body: { error: "crm_mark_lost_failed" } };
   return { status: 200, body: { ok: true, status: "lost", closedAt, lostReason } };
+};
+
+const handleDiscardOpportunity = async ({ auth, body }) => {
+  const opportunity = await loadOpportunityForWrite(body.id || body.opportunityId);
+  if (!opportunity) return { status: 404, body: { error: "opportunity_not_found" } };
+  const guard = await crmActionGuard({ auth, action: "update_opportunity", opportunity });
+  if (guard) return guard;
+  if (auth.role !== "admin" && clean(opportunity.ownerId) !== clean(auth.session?.sub)) return { status: 403, body: { error: "opportunity_discard_forbidden" } };
+  const discardReason = clean(body.discardReason || body.reason);
+  const discardReasonNote = clean(body.discardReasonNote || body.note);
+  if (!crmReasons.isValidSdrDiscardReason(discardReason)) return { status: 400, body: { error: "discard_reason_required" } };
+  if (discardReason === "other" && !discardReasonNote) return { status: 400, body: { error: "discard_reason_note_required" } };
+  const stamp = nowIso();
+  const actor = clean(auth.session?.sub) || null;
+  const updated = {
+    ...opportunity,
+    discardedAt: stamp,
+    discardedBy: actor,
+    discardedReason: discardReason,
+    discardedReasonNote: discardReasonNote || null,
+    updatedAt: stamp,
+  };
+  const writes = [
+    buildWrite(COLLECTIONS.opportunities, opportunity.id, updated),
+    eventWrite({
+      type: "crm.opportunity.discarded",
+      opportunityId: opportunity.id,
+      contactId: opportunity.contactId,
+      actorId: actor,
+      payload: { opportunityId: opportunity.id, discardReason, discardReasonNote: discardReasonNote || null, discardedBy: actor, discardedAt: stamp },
+      stamp,
+    }),
+    ...(await growthOverviewCacheInvalidationWrites()),
+  ];
+  const committed = await commitWritesAsAdmin({ writes });
+  if (!committed.ok) return { status: committed.status || 500, body: { error: "crm_discard_failed" } };
+  return { status: 200, body: { ok: true, opportunityId: opportunity.id, discardedAt: stamp, discardReason } };
 };
 
 const handleReopenOpportunity = async ({ auth, body }) => {
@@ -1759,6 +1804,7 @@ const handleReopenOpportunity = async ({ auth, body }) => {
       payload: { opportunityId: opportunity.id, previousStatus, actor },
       stamp,
     }),
+    ...(await growthOverviewCacheInvalidationWrites()),
   ];
   const committed = await commitWritesAsAdmin({ writes });
   if (!committed.ok) return { status: committed.status || 500, body: { error: "crm_reopen_failed" } };
@@ -2439,11 +2485,16 @@ const handleCompleteQualificationAction = async ({ auth, body }) => {
     );
   }
   if (action.type === "discard_review" && clean(body.resolution) === "discard") {
+    const discardReason = clean(body.discardReason || action.metadata?.rejectReason || action.metadata?.reject_reason || action.rejectReason);
+    const discardReasonNote = clean(body.discardReasonNote || body.resolutionNote || action.reason);
+    if (!crmReasons.isValidSdrDiscardReason(discardReason)) return { status: 400, body: { error: "discard_reason_required" } };
+    if (discardReason === "other" && !discardReasonNote) return { status: 400, body: { error: "discard_reason_note_required" } };
     nextOpportunity = {
       ...nextOpportunity,
       discardedAt: stamp,
       discardedBy: actor,
-      discardedReason: clean(body.discardReason || body.resolutionNote || action.reason) || null,
+      discardedReason: discardReason,
+      discardedReasonNote: discardReasonNote || null,
       updatedAt: stamp,
     };
     writes.push(eventWrite({
@@ -2451,7 +2502,7 @@ const handleCompleteQualificationAction = async ({ auth, body }) => {
       opportunityId: opportunity.id,
       contactId: opportunity.contactId,
       actorId: actor,
-      payload: { actionId: action.id, discardedReason: nextOpportunity.discardedReason },
+      payload: { actionId: action.id, opportunityId: opportunity.id, discardReason, discardReasonNote: discardReasonNote || null, discardedBy: actor, discardedAt: stamp },
       stamp,
     }));
   }
@@ -2495,6 +2546,9 @@ const handleCompleteQualificationAction = async ({ auth, body }) => {
       stamp,
     }),
   );
+  if (action.type === "discard_review" && clean(body.resolution) === "discard") {
+    writes.push(...(await growthOverviewCacheInvalidationWrites()));
+  }
   const committed = await commitWritesAsAdmin({ writes });
   if (!committed.ok) return { status: committed.status || 500, body: { error: "qualification_action_complete_failed" } };
   return { status: 200, body: { ok: true, actionId: action.id, activityId: createdActivity?.id || null } };
@@ -2569,6 +2623,7 @@ const handleReactivateOpportunity = async ({ auth, body }) => {
     discardedAt: null,
     discardedBy: null,
     discardedReason: null,
+    discardedReasonNote: null,
     reactivatedAt: stamp,
     reactivatedBy: actor,
     updatedAt: stamp,
@@ -2583,6 +2638,7 @@ const handleReactivateOpportunity = async ({ auth, body }) => {
       payload: { opportunityId: opportunity.id },
       stamp,
     }),
+    ...(await growthOverviewCacheInvalidationWrites()),
   ];
   const committed = await commitWritesAsAdmin({ writes });
   if (!committed.ok) return { status: committed.status || 500, body: { error: "opportunity_reactivate_failed" } };
@@ -2690,12 +2746,14 @@ module.exports = async (req, res) => {
                             ? await handleAssignQualificationAction({ auth, body })
                             : action === "reactivate_opportunity"
                               ? await handleReactivateOpportunity({ auth, body })
-                            : action === "mark_opportunity_won"
-                              ? await handleMarkOpportunityWon({ auth, body })
-                              : action === "mark_opportunity_lost"
-                                ? await handleMarkOpportunityLost({ auth, body })
-                                : action === "reopen_opportunity"
-                                  ? await handleReopenOpportunity({ auth, body })
+                              : action === "discard_opportunity"
+                                ? await handleDiscardOpportunity({ auth, body })
+                                : action === "mark_opportunity_won"
+                                  ? await handleMarkOpportunityWon({ auth, body })
+                                  : action === "mark_opportunity_lost"
+                                    ? await handleMarkOpportunityLost({ auth, body })
+                                    : action === "reopen_opportunity"
+                                      ? await handleReopenOpportunity({ auth, body })
                                     : action === "create_pipeline"
                                       ? await handleCreatePipeline({ session: auth.session, body })
                                       : action === "update_pipeline"

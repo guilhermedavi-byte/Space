@@ -9,6 +9,7 @@ const { PROJECT_ID, encodeFields } = require("./firestore-rest");
 const { identitiesMatch, normalizeCrmContactIdentity, stableIdFromKey } = require("./crm-identity");
 const qualification = require("./crm-qualification");
 const commercialPermissions = require("./commercial-permissions");
+const crmReasons = require("./crm-reasons");
 
 const COLLECTIONS = {
   pipelines: "crmPipelines",
@@ -161,6 +162,7 @@ const normalizeOpportunity = (row) => ({
   discardedAt: toIso(row.discardedAt),
   discardedBy: clean(row.discardedBy) || null,
   discardedReason: clean(row.discardedReason) || null,
+  discardedReasonNote: clean(row.discardedReasonNote) || null,
   reactivatedAt: toIso(row.reactivatedAt),
   reactivatedBy: clean(row.reactivatedBy) || null,
   automationIdempotencyKey: clean(row.automationIdempotencyKey) || null,
@@ -501,6 +503,10 @@ const loadCrmReadModel = async (options = {}) => {
     contacts: scopedContacts,
     opportunities,
     owners,
+    reasonOptions: {
+      sdrDiscard: crmReasons.SDR_DISCARD_REASONS.map(([value, label]) => ({ value, label })),
+      closerLost: crmReasons.CLOSER_LOST_REASONS.map(([value, label]) => ({ value, label })),
+    },
     permissions: {
       commercialRoles: commercialPermissions.normalizeCommercialRoles(user.commercialRoles),
       visibleWorkspaces: visibleTypes,

@@ -12226,6 +12226,7 @@ const nativeCrmState = {
   opportunityWorkspaceId: "",
   qualificationWorkspace: null,
   closingDialog: null,
+  discardDialog: null,
   pipelineManagerOpen: false,
   pipelineEditor: null,
   details: {},
@@ -12683,16 +12684,44 @@ const crmDateTimeInputToIso = (value) => {
 
 const CRM_LOST_REASONS = [
   ["price", "Preço"],
-  ["no_response", "Sem resposta"],
+  ["financial", "Sem condição financeira"],
   ["timing", "Momento inadequado"],
+  ["no_response", "Sem resposta"],
   ["competitor", "Concorrente"],
-  ["not_qualified", "Não qualificado"],
+  ["decision_authority", "Sem autonomia para decisão"],
   ["no_need", "Sem necessidade percebida"],
-  ["payment", "Pagamento"],
+  ["expectation_mismatch", "Expectativa desalinhada"],
+  ["lost_to_other_solution", "Escolheu outra solução"],
   ["other", "Outro"],
 ];
 
-const crmLostReasonLabel = (reason) => CRM_LOST_REASONS.find(([value]) => value === String(reason || ""))?.[1] || String(reason || "");
+const CRM_SDR_DISCARD_REASONS = [
+  ["no_fit", "Sem fit"],
+  ["financial", "Sem condição financeira"],
+  ["low_pain", "Dor insuficiente"],
+  ["low_urgency", "Baixa urgência"],
+  ["timing", "Momento inadequado"],
+  ["decision_authority", "Sem autonomia para decisão"],
+  ["no_response", "Sem resposta"],
+  ["not_interested", "Sem interesse"],
+  ["duplicate", "Lead duplicado"],
+  ["invalid_contact", "Contato inválido"],
+  ["other", "Outro"],
+];
+
+const nativeCrmReasonOptions = (key, fallback = []) => {
+  const data = getNativeCrmData();
+  const rows = Array.isArray(data?.reasonOptions?.[key]) ? data.reasonOptions[key] : [];
+  const normalized = rows
+    .map((row) => [String(row?.value || "").trim(), String(row?.label || "").trim()])
+    .filter(([value, label]) => value && label);
+  return normalized.length ? normalized : fallback;
+};
+
+const nativeCrmCloserLostReasons = () => nativeCrmReasonOptions("closerLost", CRM_LOST_REASONS);
+const nativeCrmSdrDiscardReasons = () => nativeCrmReasonOptions("sdrDiscard", CRM_SDR_DISCARD_REASONS);
+const crmLostReasonLabel = (reason) => nativeCrmCloserLostReasons().find(([value]) => value === String(reason || ""))?.[1] || String(reason || "");
+const crmSdrDiscardReasonLabel = (reason) => nativeCrmSdrDiscardReasons().find(([value]) => value === String(reason || ""))?.[1] || String(reason || "");
 
 const CRM_COUNTRY_OPTIONS = [
   ["", "Selecione"],
@@ -14123,6 +14152,7 @@ const nativeCrmRecommendedActionPanelHtml = (opportunity) => {
     `;
   } else if (action.type === "discard_review") {
     controls = `
+      <label><span>Motivo do descarte</span><select name="actionDiscardReason">${nativeCrmSdrDiscardReasons().map(([value, label]) => `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`).join("")}</select></label>
       ${noteField}
       <div class="native-crm-inline-actions">
         ${dismissButton}
@@ -14326,6 +14356,13 @@ const nativeCrmCanCloseOpportunity = (opportunity, pipeline) => {
   return pipeline.pipelineType === "closer" && visible.includes("closer");
 };
 
+const nativeCrmCanDiscardOpportunity = (opportunity, pipeline) => {
+  if (!opportunity || !pipeline || opportunity.discardedAt) return false;
+  if (isNativeCrmAdmin()) return pipeline.pipelineType === "sdr";
+  const visible = getNativeCrmVisibleWorkspaces();
+  return pipeline.pipelineType === "sdr" && visible.includes("sdr");
+};
+
 const nativeCrmOpportunityTopActionsHtml = (opportunity, pipeline) => {
   if (!opportunity) return "";
   if (!nativeCrmCanCloseOpportunity(opportunity, pipeline)) return "";
@@ -14381,6 +14418,15 @@ const nativeCrmOpportunityLeadColumnHtml = ({ opportunity, contact, pipeline, st
         </div>
         ${pipeline?.pipelineType === "sdr" && qualificationRun ? `<button type="button" class="native-crm-link-button" data-crm-qualification-open="${escapeHtml(opportunity.id)}">Ver qualificação</button>` : ""}
       </section>
+      ${nativeCrmCanDiscardOpportunity(opportunity, pipeline) ? `
+        <section class="native-crm-record-mini-panel" data-status="pending">
+          <div>
+            <span>Saída SDR</span>
+            <strong>Lead fora do fluxo?</strong>
+          </div>
+          <button type="button" class="native-crm-link-button" data-crm-discard-dialog="${escapeHtml(opportunity.id)}">Desqualificar lead</button>
+        </section>
+      ` : ""}
       ${nativeCrmClosingSummaryHtml(opportunity)}
       <section class="native-crm-record-fieldset">
         ${nativeCrmInlineFieldHtml({ opportunity, contact, pipelineId: opportunity.pipelineId, stageId: opportunity.stageId, label: "Criado em", name: "createdAt", display: formatCrmDateTime(opportunity.createdAt), readonly: true })}
@@ -14649,7 +14695,7 @@ const renderNativeCrmClosingDialog = () => {
         ` : `
           <label><span>Motivo da perda *</span><select name="lostReason" data-crm-lost-reason>
             <option value="">Selecione um motivo</option>
-            ${CRM_LOST_REASONS.map(([value, label]) => `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`).join("")}
+            ${nativeCrmCloserLostReasons().map(([value, label]) => `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`).join("")}
           </select></label>
           <label><span>Observação</span><textarea name="lostReasonNote" rows="3" data-crm-lost-note></textarea></label>
           <label><span>Data do fechamento</span><input name="closedAt" type="datetime-local" value="${escapeHtml(defaultClosedAt)}" data-crm-close-at /></label>
@@ -14659,6 +14705,38 @@ const renderNativeCrmClosingDialog = () => {
       <footer>
         <button type="button" class="button button-outline button-small" data-crm-close-dialog-cancel>Cancelar</button>
         <button type="button" class="button button-solid button-small" data-crm-close-submit="${escapeHtml(type)}" ${nativeCrmState.saving ? "disabled" : ""}>${nativeCrmState.saving ? "Salvando…" : type === "won" ? "Confirmar ganho" : "Confirmar perda"}</button>
+      </footer>
+    </section>
+  `;
+};
+
+const renderNativeCrmDiscardDialog = () => {
+  const dialog = nativeCrmState.discardDialog;
+  const opportunityId = dialog?.opportunityId || "";
+  if (!opportunityId) return "";
+  const opportunity = findNativeCrmOpportunity(opportunityId);
+  if (!opportunity) return "";
+  return `
+    <div class="native-crm-modal-backdrop" data-crm-discard-dialog-cancel></div>
+    <section class="native-crm-modal" role="dialog" aria-modal="true" aria-label="Desqualificar lead">
+      <header>
+        <div>
+          <span>Saída SDR</span>
+          <h3>Desqualificar lead</h3>
+        </div>
+        <button type="button" class="native-crm-icon-button" data-crm-discard-dialog-cancel aria-label="Fechar">${nativeCrmIcon("close")}</button>
+      </header>
+      <div class="native-crm-modal-body">
+        <label><span>Motivo *</span><select name="discardReason" data-crm-discard-reason>
+          <option value="">Selecione um motivo</option>
+          ${nativeCrmSdrDiscardReasons().map(([value, label]) => `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`).join("")}
+        </select></label>
+        <label><span>Observação</span><textarea name="discardReasonNote" rows="3" data-crm-discard-note></textarea></label>
+        <div class="native-crm-form-error" data-crm-discard-error ${dialog.error ? "" : "hidden"}>${escapeHtml(dialog.error || "")}</div>
+      </div>
+      <footer>
+        <button type="button" class="button button-outline button-small" data-crm-discard-dialog-cancel>Cancelar</button>
+        <button type="button" class="button button-solid button-small" data-crm-discard-submit="${escapeHtml(opportunityId)}" ${nativeCrmState.saving ? "disabled" : ""}>${nativeCrmState.saving ? "Salvando…" : "Confirmar descarte"}</button>
       </footer>
     </section>
   `;
@@ -15410,6 +15488,7 @@ const renderNativeCrm = () => {
     ${renderNativeCrmDrawer()}
     ${renderNativeCrmPipelineManager()}
     ${renderNativeCrmClosingDialog()}
+    ${renderNativeCrmDiscardDialog()}
   `;
 };
 
@@ -16195,6 +16274,7 @@ const runNativeCrmOpportunityAction = async (action, payload = {}) => {
     nativeCrmState.loadedAt = 0;
     nativeCrmState.actions.loadedAt = 0;
     nativeCrmState.closingDialog = null;
+    nativeCrmState.discardDialog = null;
     nativeCrmState.drawerMode = "view";
     await loadNativeCrm({ force: true });
     if (nativeCrmState.mode === "actions" || action === "reactivate_opportunity") await loadNativeCrmActions({ force: true });
@@ -16205,6 +16285,7 @@ const runNativeCrmOpportunityAction = async (action, payload = {}) => {
   } catch (error) {
     const message = error?.message || "Não foi possível atualizar a oportunidade.";
     if (nativeCrmState.closingDialog) nativeCrmState.closingDialog = { ...nativeCrmState.closingDialog, error: message };
+    else if (nativeCrmState.discardDialog) nativeCrmState.discardDialog = { ...nativeCrmState.discardDialog, error: message };
     else nativeCrmState.error = message;
     renderNativeCrm();
   } finally {
@@ -16225,12 +16306,12 @@ const collectNativeCrmActionPayload = (button) => {
     resolution,
     resolutionNote: fieldValue("actionNote"),
     resolutionCategory: fieldValue("actionResolutionCategory"),
+    discardReason: fieldValue("actionDiscardReason"),
     ownerId: fieldValue("actionOwnerId"),
     date: fieldValue("actionDate"),
     time: fieldValue("actionTime"),
   };
   if (resolution === "follow_up") payload.createFollowUp = true;
-  if (resolution === "discard") payload.discardReason = payload.resolutionNote || "Descarte confirmado pela revisão gerencial.";
   return payload;
 };
 
@@ -16243,6 +16324,20 @@ const completeNativeCrmQualificationAction = async (button) => {
   if (payload.createFollowUp && (!payload.date || !payload.time)) {
     if (errorEl instanceof HTMLElement) {
       errorEl.textContent = "Defina data e hora do retorno.";
+      errorEl.hidden = false;
+    }
+    return;
+  }
+  if (payload.resolution === "discard" && !payload.discardReason) {
+    if (errorEl instanceof HTMLElement) {
+      errorEl.textContent = "Selecione o motivo do descarte.";
+      errorEl.hidden = false;
+    }
+    return;
+  }
+  if (payload.resolution === "discard" && payload.discardReason === "other" && !payload.resolutionNote) {
+    if (errorEl instanceof HTMLElement) {
+      errorEl.textContent = "Informe uma observação para Outro.";
       errorEl.hidden = false;
     }
     return;
@@ -16366,7 +16461,31 @@ const submitNativeCrmClosingDialog = (button) => {
     renderNativeCrm();
     return;
   }
+  if (lostReason === "other" && !lostReasonNote) {
+    nativeCrmState.closingDialog = { type: "lost", error: "Informe uma observação para Outro." };
+    renderNativeCrm();
+    return;
+  }
   runNativeCrmOpportunityAction("mark_opportunity_lost", { lostReason, lostReasonNote, closedAt }).catch(() => {});
+};
+
+const submitNativeCrmDiscardDialog = (button) => {
+  const opportunityId = String(button?.getAttribute("data-crm-discard-submit") || "").trim();
+  const modal = button?.closest(".native-crm-modal");
+  if (!opportunityId || !(modal instanceof HTMLElement)) return;
+  const discardReason = String(modal.querySelector("[data-crm-discard-reason]")?.value || "").trim();
+  const discardReasonNote = String(modal.querySelector("[data-crm-discard-note]")?.value || "").trim();
+  if (!discardReason) {
+    nativeCrmState.discardDialog = { opportunityId, error: "Selecione o motivo do descarte." };
+    renderNativeCrm();
+    return;
+  }
+  if (discardReason === "other" && !discardReasonNote) {
+    nativeCrmState.discardDialog = { opportunityId, error: "Informe uma observação para Outro." };
+    renderNativeCrm();
+    return;
+  }
+  runNativeCrmOpportunityAction("discard_opportunity", { id: opportunityId, discardReason, discardReasonNote }).catch(() => {});
 };
 
 const moveNativeCrmOpportunity = async (opportunityId, stageId) => {
@@ -20845,6 +20964,32 @@ const renderCommercialOverviewRanking = (rows = []) => {
   `;
 };
 
+const renderCommercialOverviewReasonRanking = (ranking = {}) => {
+  const items = (Array.isArray(ranking?.items) ? ranking.items : []).filter((row) => Number(row?.count || 0) > 0).slice(0, 5);
+  if (!items.length) return `<div class="commercial-overview-empty">Sem perdas registradas no período.</div>`;
+  const max = Math.max(...items.map((row) => Number(row?.count || 0)), 1);
+  return `
+    <div class="commercial-overview-ranking commercial-overview-reason-ranking">
+      ${items
+        .map((row, index) => {
+          const count = Math.max(0, Number(row?.count || 0));
+          const percentage = Math.max(0, Number(row?.percentage || 0));
+          const width = Math.max(5, Math.round((count / max) * 100));
+          return `
+            <div class="commercial-overview-rank-row commercial-overview-reason-row">
+              <span>${index + 1}</span>
+              <strong>${escapeHtml(String(row?.label || row?.reason || "Sem motivo"))}</strong>
+              <em>${escapeHtml(`${count} lead${count === 1 ? "" : "s"}`)}</em>
+              <b>${escapeHtml(formatPercentPtBr(percentage, percentage % 1 ? 1 : 0))}</b>
+              <i aria-hidden="true"><u style="width:${width}%"></u></i>
+            </div>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+};
+
 const formatCommercialOverviewMonthShort = (monthKey = "") => {
   const raw = String(monthKey || "").trim();
   if (!/^\d{4}-\d{2}$/.test(raw)) return raw || "—";
@@ -21132,6 +21277,17 @@ const renderAdminCommercialOverview = () => {
       <article class="commercial-overview-card">
         <div class="commercial-overview-card-head"><h3>Ranking de responsáveis</h3></div>
         ${renderCommercialOverviewRanking(crm.rankingTime)}
+      </article>
+    </section>
+
+    <section class="commercial-overview-section commercial-overview-two-col">
+      <article class="commercial-overview-card">
+        <div class="commercial-overview-card-head"><h3>Top 5 motivos — SDR</h3></div>
+        ${renderCommercialOverviewReasonRanking(crm?.structuredReasons?.sdr)}
+      </article>
+      <article class="commercial-overview-card">
+        <div class="commercial-overview-card-head"><h3>Top 5 motivos de perda — Closer</h3></div>
+        ${renderCommercialOverviewReasonRanking(crm?.structuredReasons?.closer)}
       </article>
     </section>
 
@@ -42401,6 +42557,27 @@ document.addEventListener("click", (event) => {
     if (submitCloseDialog instanceof HTMLButtonElement) {
       event.preventDefault();
       submitNativeCrmClosingDialog(submitCloseDialog);
+      return;
+    }
+    const openDiscardDialog = target.closest("[data-crm-discard-dialog]");
+    if (openDiscardDialog instanceof HTMLButtonElement) {
+      event.preventDefault();
+      const opportunityId = String(openDiscardDialog.getAttribute("data-crm-discard-dialog") || getActiveNativeCrmOpportunityId() || "").trim();
+      if (opportunityId) nativeCrmState.discardDialog = { opportunityId, error: "" };
+      renderNativeCrm();
+      return;
+    }
+    const cancelDiscardDialog = target.closest("[data-crm-discard-dialog-cancel]");
+    if (cancelDiscardDialog instanceof HTMLElement) {
+      event.preventDefault();
+      nativeCrmState.discardDialog = null;
+      renderNativeCrm();
+      return;
+    }
+    const submitDiscardDialog = target.closest("[data-crm-discard-submit]");
+    if (submitDiscardDialog instanceof HTMLButtonElement) {
+      event.preventDefault();
+      submitNativeCrmDiscardDialog(submitDiscardDialog);
       return;
     }
     const reopenOpportunity = target.closest("[data-crm-reopen]");

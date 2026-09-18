@@ -53,9 +53,11 @@ const loadCrmHandler = (initialStore = {}, session = { sub: "user_closer", role:
       commitWritesAsAdmin: async ({ writes }) => {
         commits.push(writes);
         writes.forEach((write) => {
-          const parts = String(write.update.name || "").split("/documents/")[1].split("/");
+          const name = String(write.update?.name || write.delete || "");
+          const parts = name.split("/documents/")[1].split("/");
           const key = `${parts[0]}/${decodeURIComponent(parts[1])}`;
-          store.set(key, write.update.fields);
+          if (write.delete) store.delete(key);
+          else store.set(key, write.update.fields);
         });
         return { ok: true, status: 200 };
       },
@@ -128,6 +130,14 @@ const closerPipeline = () => ({
   scopeId: "space-main",
   name: "Closer",
   pipelineType: "closer",
+  isActive: true,
+});
+
+const sdrPipeline = () => ({
+  id: "sdr_pipeline",
+  scopeId: "space-main",
+  name: "SDR",
+  pipelineType: "sdr",
   isActive: true,
 });
 
@@ -204,6 +214,79 @@ test("mark_opportunity_lost requires reason and persists lost payload", async ()
   const event = commits.at(-1).find((write) => write.update.fields.type === "crm.opportunity.lost").update.fields;
   assert.equal(event.payload.lostReason, "competitor");
   assert.equal(event.payload.previousStatus, "open");
+});
+
+test("mark_opportunity_lost requires note when reason is other and invalidates overview cache", async () => {
+  const { handler, store, commits } = loadCrmHandler({
+    "users/user_closer": closerUser(),
+    "crmPipelines/closer_pipeline": closerPipeline(),
+    "crmOpportunities/opp_1": opportunity(),
+    "growthMetricsCache/overview_2026-09-01_2026-09-30": { id: "overview_2026-09-01_2026-09-30" },
+  });
+  const missingNote = await invoke(handler, { action: "mark_opportunity_lost", id: "opp_1", lostReason: "other" });
+  assert.equal(missingNote.status, 400);
+  assert.equal(store.has("growthMetricsCache/overview_2026-09-01_2026-09-30"), true);
+
+  const res = await invoke(handler, {
+    action: "mark_opportunity_lost",
+    id: "opp_1",
+    lostReason: "other",
+    lostReasonNote: "Motivo específico",
+  });
+
+  assert.equal(res.status, 200);
+  assert.equal(store.get("crmOpportunities/opp_1").lostReasonNote, "Motivo específico");
+  assert.equal(store.has("growthMetricsCache/overview_2026-09-01_2026-09-30"), false);
+  assert.ok(commits.at(-1).some((write) => String(write.delete || "").includes("/growthMetricsCache/overview_2026-09-01_2026-09-30")));
+});
+
+test("discard_opportunity requires structured SDR reason and other note", async () => {
+  const { handler, store } = loadCrmHandler({
+    "users/user_sdr": sdrUser(),
+    "crmPipelines/sdr_pipeline": sdrPipeline(),
+    "crmOpportunities/opp_1": opportunity({ ownerId: "user_sdr", pipelineId: "sdr_pipeline", stageId: "sdr_stage_1" }),
+  }, { sub: "user_sdr", role: "growth", name: "SDR" });
+
+  const missing = await invoke(handler, { action: "discard_opportunity", id: "opp_1" });
+  const otherMissingNote = await invoke(handler, { action: "discard_opportunity", id: "opp_1", discardReason: "other" });
+
+  assert.equal(missing.status, 400);
+  assert.equal(otherMissingNote.status, 400);
+  assert.equal(store.get("crmOpportunities/opp_1").discardedAt, undefined);
+});
+
+test("discard_opportunity persists SDR reason event and reactivate clears active discard fields", async () => {
+  const { handler, store, commits } = loadCrmHandler({
+    "users/user_sdr": sdrUser(),
+    "crmPipelines/sdr_pipeline": sdrPipeline(),
+    "crmOpportunities/opp_1": opportunity({ ownerId: "user_sdr", pipelineId: "sdr_pipeline", stageId: "sdr_stage_1" }),
+    "growthMetricsCache/overview_2026-09-01_2026-09-30": { id: "overview_2026-09-01_2026-09-30" },
+  }, { sub: "user_sdr", role: "growth", name: "SDR" });
+
+  const discarded = await invoke(handler, {
+    action: "discard_opportunity",
+    id: "opp_1",
+    discardReason: "financial",
+    discardReasonNote: "Sem orçamento agora",
+  });
+
+  assert.equal(discarded.status, 200);
+  const afterDiscard = store.get("crmOpportunities/opp_1");
+  assert.equal(afterDiscard.discardedBy, "user_sdr");
+  assert.equal(afterDiscard.discardedReason, "financial");
+  assert.equal(afterDiscard.discardedReasonNote, "Sem orçamento agora");
+  assert.equal(store.has("growthMetricsCache/overview_2026-09-01_2026-09-30"), false);
+  const discardEvent = commits.at(-1).find((write) => write.update?.fields?.type === "crm.opportunity.discarded").update.fields;
+  assert.equal(discardEvent.payload.discardReason, "financial");
+  assert.equal(discardEvent.payload.discardedBy, "user_sdr");
+
+  const reactivated = await invoke(handler, { action: "reactivate_opportunity", id: "opp_1" });
+  assert.equal(reactivated.status, 200);
+  const afterReactivate = store.get("crmOpportunities/opp_1");
+  assert.equal(afterReactivate.discardedAt, null);
+  assert.equal(afterReactivate.discardedBy, null);
+  assert.equal(afterReactivate.discardedReason, null);
+  assert.equal(afterReactivate.discardedReasonNote, null);
 });
 
 test("reopen_opportunity clears closing fields and keeps historical events", async () => {
