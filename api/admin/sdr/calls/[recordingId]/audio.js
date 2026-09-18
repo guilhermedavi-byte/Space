@@ -19,7 +19,7 @@ const createHandler = ({ authResolver = resolveAdminRequestAuth, telnyxFetch = f
     return sendJson(res, 405, { error: 'method_not_allowed' });
   }
 
-  const diagnostic = { path: '/api/admin/sdr/calls/:recordingId/audio', mode: new URL(req.url || '/', 'https://localhost').searchParams.get('format') || 'redirect' };
+  const diagnostic = { path: '/api/admin/sdr/calls/:recordingId/audio', mode: new URL(req.url || '/', 'https://localhost').searchParams.get('format') === 'json' ? 'json' : 'redirect' };
   const reply = (status, body) => {
     console.info('[admin-sdr-audio] diagnostic', { ...diagnostic, finalStatus: status });
     return sendJson(res, status, body);
@@ -28,7 +28,6 @@ const createHandler = ({ authResolver = resolveAdminRequestAuth, telnyxFetch = f
     const rawKey = String(process.env.TELNYX_API_KEY || '');
     const trimmedKey = rawKey.trim();
     const token = trimmedKey.replace(/^(?:Bearer\s+)+/i, '').trim();
-    Object.assign(diagnostic, { keyExists: Boolean(rawKey), keyLength: trimmedKey.length, startsWithKEY: trimmedKey.startsWith('KEY'), hasOuterWhitespace: rawKey !== trimmedKey, hasNewline: /[\r\n]/.test(rawKey), hadBearerPrefix: /^Bearer\s/i.test(trimmedKey), source: 'TELNYX_API_KEY' });
     const auth = await authResolver(req, { logPrefix: '[admin-sdr-audio]' });
     diagnostic.appAuthStatus = auth.ok ? 200 : auth.status;
     if (!auth.ok) return reply(auth.status, auth.body);
@@ -49,9 +48,7 @@ const createHandler = ({ authResolver = resolveAdminRequestAuth, telnyxFetch = f
     diagnostic.telnyxStatus = response.status;
     diagnostic.hasMp3 = Boolean(body?.data?.download_urls?.mp3);
     if (!response.ok) {
-      const redact = value => clean(value).split(token).join('[redacted]').replace(/Bearer\s+\S+|KEY\S+|https?:\/\/\S+/gi, '[redacted]').slice(0, 300);
-      diagnostic.telnyxErrors = (Array.isArray(body.errors) ? body.errors : [body.error || {}]).slice(0, 3).map(error => ({ code: redact(error.code), title: redact(error.title), detail: redact(error.detail || error.message) }));
-      console.warn('[admin-sdr-audio] Telnyx unavailable', { status: response.status });
+      diagnostic.telnyxErrorCodes = (Array.isArray(body.errors) ? body.errors : []).slice(0, 3).map(error => /^\d{1,8}$/.test(String(error.code)) ? String(error.code) : 'unknown');
       return reply(502, { error: 'recording_unavailable' });
     }
 

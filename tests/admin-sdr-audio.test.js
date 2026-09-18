@@ -83,3 +83,30 @@ test('unauthenticated audio request never calls Telnyx', async () => {
   const res = await invoke(createHandler({ authResolver: async () => ({ ok: false, status: 401, body: { error: 'unauthenticated' } }), telnyxFetch: () => { throw new Error('must not call'); } }));
   assert.equal(res.status, 401);
 });
+
+test('Telnyx 401 is an upstream 502, distinct from application auth, with redacted diagnostics', async () => {
+  const old = process.env.TELNYX_API_KEY;
+  const info = console.info;
+  const warn = console.warn;
+  const logs = [];
+  process.env.TELNYX_API_KEY = 'KEY-private-test';
+  console.info = (...args) => logs.push(args);
+  console.warn = (...args) => logs.push(args);
+  try {
+    const result = await invoke(createHandler({
+      authResolver: async () => ({ ok: true, session: { role: 'admin' } }),
+      telnyxFetch: async () => ({ ok: false, status: 401, json: async () => ({ errors: [{ code: '10009', title: 'Authentication failed', detail: 'Invalid Bearer KEY-private-test https://private.example?token=hidden' }] }) }),
+    }), { url: '/api/admin/sdr/calls/rec_123/audio?format=json' });
+    assert.equal(result.status, 502);
+    const diagnostic = logs.find(args => args[0].includes('diagnostic'))[1];
+    assert.equal(diagnostic.appAuthStatus, 200);
+    assert.equal(diagnostic.telnyxStatus, 401);
+    assert.equal(diagnostic.finalStatus, 502);
+    assert.ok(!JSON.stringify(logs).includes('KEY-private-test'));
+    assert.ok(!JSON.stringify(logs).includes('token=hidden'));
+  } finally {
+    if (old === undefined) delete process.env.TELNYX_API_KEY; else process.env.TELNYX_API_KEY = old;
+    console.info = info;
+    console.warn = warn;
+  }
+});
