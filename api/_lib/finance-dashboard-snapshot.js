@@ -4,7 +4,7 @@ const { uuid } = require('./finance-domain');
 const SNAPSHOT_SOURCE = 'FINANCE_OVERVIEW_SNAPSHOT';
 const INVALIDATION_SOURCE = 'FINANCE_OVERVIEW_INVALIDATION';
 const RESOURCE = 'overview';
-const OVERVIEW_SNAPSHOT_SCHEMA = 'finance_overview_2026_09_18_v3';
+const OVERVIEW_SNAPSHOT_SCHEMA = 'finance_overview_2026_09_18_v4';
 const memory = new Map();
 const invalidations = new Map();
 
