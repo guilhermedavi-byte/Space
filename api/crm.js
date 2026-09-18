@@ -441,10 +441,12 @@ const buildQualificationAdminModel = ({ templates = [], versions = [], questions
   });
   const versionsByTemplateId = new Map();
   versions.forEach((version) => {
+    const versionQuestions = (questionsByVersionId.get(version.id) || []).slice().sort((left, right) => Number(left.position || 0) - Number(right.position || 0));
     if (!versionsByTemplateId.has(version.templateId)) versionsByTemplateId.set(version.templateId, []);
     versionsByTemplateId.get(version.templateId).push({
       ...version,
-      questions: (questionsByVersionId.get(version.id) || []).slice().sort((left, right) => Number(left.position || 0) - Number(right.position || 0)),
+      questions: versionQuestions,
+      scoreMax: qualificationScoreMaximums({ questions: versionQuestions, options: versionQuestions.flatMap((question) => question.options || []) }),
     });
   });
   const rows = templates
@@ -458,6 +460,57 @@ const buildQualificationAdminModel = ({ templates = [], versions = [], questions
     templates: rows,
     activeTemplateId: rows.find((template) => template.isActive !== false)?.id || rows[0]?.id || "",
   };
+};
+
+const qualificationScoreMaximums = ({ questions = [], options = [] } = {}) => {
+  const optionsByQuestionId = new Map();
+  options.forEach((option) => {
+    if (!optionsByQuestionId.has(option.questionId)) optionsByQuestionId.set(option.questionId, []);
+    optionsByQuestionId.get(option.questionId).push(option);
+  });
+  return questions.reduce((totals, question) => {
+    const max = (optionsByQuestionId.get(question.id) || []).reduce((best, option) => Math.max(best, Number(option.points || 0)), 0);
+    const dimension = clean(question.dimension);
+    const next = { ...totals, total: totals.total + max };
+    if (["need_fit", "economic_readiness", "decision_readiness"].includes(dimension)) next.fit += max;
+    if (["pain", "impact", "urgency", "commitment"].includes(dimension)) next.intent += max;
+    return next;
+  }, { total: 0, fit: 0, intent: 0 });
+};
+
+const validateQualificationVersionForPublish = ({ version = {}, questions = [], options = [] } = {}) => {
+  const errors = [];
+  const byQuestion = new Map();
+  options.forEach((option) => {
+    if (!byQuestion.has(option.questionId)) byQuestion.set(option.questionId, []);
+    byQuestion.get(option.questionId).push(option);
+  });
+  const numberFields = [
+    ["totalThreshold", version.totalThreshold, "Pontuação mínima total inválida."],
+    ["minimumFitScore", version.minimumFitScore, "Pontuação mínima Fit inválida."],
+    ["minimumIntentScore", version.minimumIntentScore, "Pontuação mínima Intent inválida."],
+  ];
+  numberFields.forEach(([, value, message]) => {
+    const number = Number(value);
+    if (!Number.isFinite(number) || number < 0) errors.push(message);
+  });
+  if (!questions.length) errors.push("Adicione pelo menos uma pergunta.");
+  questions.forEach((question, index) => {
+    if (!clean(question.title)) errors.push(`Pergunta ${index + 1}: informe o texto.`);
+    if (!CRM_QUALIFICATION_DIMENSIONS.has(clean(question.dimension))) errors.push(`Pergunta ${index + 1}: dimensão inválida.`);
+    const questionOptions = byQuestion.get(question.id) || [];
+    if (!questionOptions.length) errors.push(`Pergunta ${index + 1}: adicione pelo menos uma resposta.`);
+    questionOptions.forEach((option, optionIndex) => {
+      if (!clean(option.label)) errors.push(`Pergunta ${index + 1}, resposta ${optionIndex + 1}: informe o texto.`);
+      const points = Number(option.points);
+      if (!Number.isFinite(points) || points < 0) errors.push(`Pergunta ${index + 1}, resposta ${optionIndex + 1}: pontos inválidos.`);
+    });
+  });
+  const scoreMax = qualificationScoreMaximums({ questions, options });
+  if (Number(version.totalThreshold) > scoreMax.total) errors.push("Pontuação mínima total maior que o score máximo.");
+  if (Number(version.minimumFitScore) > scoreMax.fit) errors.push("Pontuação mínima Fit maior que o score Fit máximo.");
+  if (Number(version.minimumIntentScore) > scoreMax.intent) errors.push("Pontuação mínima Intent maior que o score Intent máximo.");
+  return { ok: errors.length === 0, errors, scoreMax };
 };
 
 const loadQualificationAdminModel = async (actorId = "") => {
@@ -1835,7 +1888,7 @@ const cleanQualificationQuestionsPayload = (questions = []) => {
       points: Number.isFinite(Number(option.points)) ? Number(option.points) : 0,
       hardFail: option.hardFail === true,
       position: optionIndex + 1,
-    })).filter((option) => option.label);
+    }));
     return {
       title,
       dimension,
@@ -1844,7 +1897,41 @@ const cleanQualificationQuestionsPayload = (questions = []) => {
       position: questionIndex + 1,
       options,
     };
-  }).filter((question) => question.title && question.options.length >= 2);
+  });
+};
+
+const qualificationDraftSourceVersion = (rows, templateId, sourceVersionId = "") => {
+  const templateVersions = rows.versions.filter((version) => version.templateId === templateId);
+  return templateVersions.find((version) => version.id === clean(sourceVersionId))
+    || templateVersions.find((version) => version.status === "published")
+    || templateVersions.sort((left, right) => Number(right.versionNumber || 0) - Number(left.versionNumber || 0))[0]
+    || null;
+};
+
+const cloneQualificationVersionWrites = ({ rows, sourceVersion, draftVersion, stamp }) => {
+  const sourceQuestions = rows.questions
+    .filter((question) => question.versionId === sourceVersion.id)
+    .sort((left, right) => Number(left.position || 0) - Number(right.position || 0));
+  const sourceQuestionIds = new Set(sourceQuestions.map((question) => question.id));
+  const sourceOptions = rows.options
+    .filter((option) => sourceQuestionIds.has(option.questionId))
+    .sort((left, right) => Number(left.position || 0) - Number(right.position || 0));
+  const nextQuestions = sourceQuestions.map((question) => ({
+    ...question,
+    id: newId("qualq"),
+    versionId: draftVersion.id,
+    createdAt: stamp,
+  }));
+  const nextQuestionBySourceId = new Map(sourceQuestions.map((question, index) => [question.id, nextQuestions[index]]));
+  const nextOptions = sourceOptions.map((option) => ({
+    ...option,
+    id: newId("qualopt"),
+    questionId: nextQuestionBySourceId.get(option.questionId)?.id || "",
+  })).filter((option) => option.questionId);
+  return [
+    ...nextQuestions.map((question) => buildWrite(COLLECTIONS.qualificationQuestions, question.id, question, { createOnly: true })),
+    ...nextOptions.map((option) => buildWrite(COLLECTIONS.qualificationOptions, option.id, option, { createOnly: true })),
+  ];
 };
 
 const handleSaveQualificationFilter = async ({ session, body }) => {
@@ -1888,7 +1975,6 @@ const handleSaveQualificationFilter = async ({ session, body }) => {
     createdBy: existingDraft?.createdBy || actor,
   };
   const questions = cleanQualificationQuestionsPayload(body.questions);
-  if (!questions.length) return { status: 400, body: { error: "qualification_questions_required" } };
   const existingQuestions = rows.questions.filter((question) => question.versionId === version.id);
   const existingQuestionIds = new Set(existingQuestions.map((question) => question.id));
   const existingOptions = rows.options.filter((option) => existingQuestionIds.has(option.questionId));
@@ -1921,11 +2007,107 @@ const handleSaveQualificationFilter = async ({ session, body }) => {
     ...existingQuestions.map((question) => deleteWrite(COLLECTIONS.qualificationQuestions, question.id)),
     ...nextQuestions.map((questionRow) => buildWrite(COLLECTIONS.qualificationQuestions, questionRow.id, questionRow, { createOnly: true })),
     ...nextOptions.map((optionRow) => buildWrite(COLLECTIONS.qualificationOptions, optionRow.id, optionRow, { createOnly: true })),
-    adminConfigEvent({ type: "crm.qualification_filter.draft_saved", actorId: actor, payload: { templateId: template.id, versionId: version.id, questionCount: nextQuestions.length }, stamp }),
+    ...(existingDraft ? [] : [adminConfigEvent({ type: "qualification_version_created", actorId: actor, payload: { templateId: template.id, versionId: version.id, versionNumber: version.versionNumber }, stamp })]),
   ];
   const committed = await commitWritesAsAdmin({ writes });
   if (!committed.ok) return { status: committed.status || 500, body: { error: "qualification_filter_save_failed" } };
   return { status: 200, body: { ok: true, templateId: template.id, versionId: version.id, model: await loadQualificationAdminModel(actor) } };
+};
+
+const handleCreateQualificationTemplate = async ({ session, body }) => {
+  const name = clean(body.name);
+  if (!name) return { status: 400, body: { error: "qualification_template_name_required" } };
+  const type = clean(body.type) || qualification.QUALIFICATION_TYPE_SDR;
+  if (type !== qualification.QUALIFICATION_TYPE_SDR) return { status: 400, body: { error: "unsupported_qualification_type" } };
+  const stamp = nowIso();
+  const actor = clean(session.sub) || null;
+  const template = {
+    id: newId("qualtpl"),
+    scopeId: CRM_SCOPE_ID,
+    name,
+    type,
+    isActive: true,
+    createdAt: stamp,
+    updatedAt: stamp,
+  };
+  const version = {
+    id: newId("qualver"),
+    scopeId: CRM_SCOPE_ID,
+    templateId: template.id,
+    versionNumber: 1,
+    status: "draft",
+    ...qualification.DEFAULT_THRESHOLDS,
+    createdAt: stamp,
+    publishedAt: null,
+    createdBy: actor,
+  };
+  const writes = [
+    buildWrite(COLLECTIONS.qualificationTemplates, template.id, template, { createOnly: true }),
+    buildWrite(COLLECTIONS.qualificationVersions, version.id, version, { createOnly: true }),
+    adminConfigEvent({ type: "qualification_version_created", actorId: actor, payload: { templateId: template.id, versionId: version.id, versionNumber: 1 }, stamp }),
+  ];
+  const committed = await commitWritesAsAdmin({ writes });
+  if (!committed.ok) return { status: committed.status || 500, body: { error: "qualification_template_create_failed" } };
+  return { status: 201, body: { ok: true, templateId: template.id, versionId: version.id, model: await loadQualificationAdminModel(actor) } };
+};
+
+const handleCreateQualificationDraft = async ({ session, body }) => {
+  const stamp = nowIso();
+  const actor = clean(session.sub) || null;
+  const rows = await loadQualificationConfigRows();
+  const templateId = clean(body.templateId);
+  const template = rows.templates.find((row) => row.id === templateId && row.type === qualification.QUALIFICATION_TYPE_SDR);
+  if (!template) return { status: 404, body: { error: "qualification_template_not_found" } };
+  const existingDraft = rows.versions.find((version) => version.templateId === template.id && version.status === "draft");
+  if (existingDraft) return { status: 200, body: { ok: true, templateId: template.id, versionId: existingDraft.id, model: await loadQualificationAdminModel(actor) } };
+  const sourceVersion = qualificationDraftSourceVersion(rows, template.id, body.versionId);
+  if (!sourceVersion) return { status: 409, body: { error: "qualification_source_version_required" } };
+  const maxVersionNumber = rows.versions
+    .filter((version) => version.templateId === template.id)
+    .reduce((max, version) => Math.max(max, Number(version.versionNumber || 0)), 0);
+  const draftVersion = {
+    ...sourceVersion,
+    id: newId("qualver"),
+    status: "draft",
+    versionNumber: maxVersionNumber + 1,
+    createdAt: stamp,
+    publishedAt: null,
+    createdBy: actor,
+  };
+  const writes = [
+    buildWrite(COLLECTIONS.qualificationVersions, draftVersion.id, draftVersion, { createOnly: true }),
+    ...cloneQualificationVersionWrites({ rows, sourceVersion, draftVersion, stamp }),
+    buildWrite(COLLECTIONS.qualificationTemplates, template.id, { ...template, updatedAt: stamp }),
+    adminConfigEvent({ type: "qualification_version_created", actorId: actor, payload: { templateId: template.id, sourceVersionId: sourceVersion.id, versionId: draftVersion.id, versionNumber: draftVersion.versionNumber }, stamp }),
+  ];
+  const committed = await commitWritesAsAdmin({ writes });
+  if (!committed.ok) return { status: committed.status || 500, body: { error: "qualification_draft_create_failed" } };
+  return { status: 201, body: { ok: true, templateId: template.id, versionId: draftVersion.id, model: await loadQualificationAdminModel(actor) } };
+};
+
+const handleDeleteQualificationDraft = async ({ session, body }) => {
+  const stamp = nowIso();
+  const actor = clean(session.sub) || null;
+  const rows = await loadQualificationConfigRows();
+  const versionId = clean(body.versionId);
+  const version = rows.versions.find((row) => row.id === versionId);
+  if (!version) return { status: 404, body: { error: "qualification_version_not_found" } };
+  if (version.status !== "draft") return { status: 409, body: { error: "only_draft_can_be_deleted" } };
+  const runsRaw = await listCollectionAsAdmin(COLLECTIONS.qualificationRuns, { maxPages: 50 }).catch(() => []);
+  const hasRuns = normalizeQualificationRows(runsRaw, qualification.normalizeRun).some((run) => run.versionId === version.id);
+  if (hasRuns) return { status: 409, body: { error: "qualification_version_has_runs" } };
+  const questions = rows.questions.filter((question) => question.versionId === version.id);
+  const questionIds = new Set(questions.map((question) => question.id));
+  const options = rows.options.filter((option) => questionIds.has(option.questionId));
+  const writes = [
+    ...options.map((option) => deleteWrite(COLLECTIONS.qualificationOptions, option.id)),
+    ...questions.map((question) => deleteWrite(COLLECTIONS.qualificationQuestions, question.id)),
+    deleteWrite(COLLECTIONS.qualificationVersions, version.id),
+    adminConfigEvent({ type: "qualification_draft_deleted", actorId: actor, payload: { templateId: version.templateId, versionId: version.id, versionNumber: version.versionNumber }, stamp }),
+  ];
+  const committed = await commitWritesAsAdmin({ writes });
+  if (!committed.ok) return { status: committed.status || 500, body: { error: "qualification_draft_delete_failed" } };
+  return { status: 200, body: { ok: true, model: await loadQualificationAdminModel(actor) } };
 };
 
 const handlePublishQualificationFilter = async ({ session, body }) => {
@@ -1939,14 +2121,13 @@ const handlePublishQualificationFilter = async ({ session, body }) => {
   const questions = rows.questions.filter((question) => question.versionId === version.id);
   const questionIds = new Set(questions.map((question) => question.id));
   const options = rows.options.filter((option) => questionIds.has(option.questionId));
-  if (!questions.length || questions.some((question) => options.filter((option) => option.questionId === question.id).length < 2)) {
-    return { status: 400, body: { error: "qualification_version_incomplete" } };
-  }
+  const validation = validateQualificationVersionForPublish({ version, questions, options });
+  if (!validation.ok) return { status: 400, body: { error: "qualification_version_invalid", validationErrors: validation.errors, scoreMax: validation.scoreMax } };
   const previousPublished = rows.versions.filter((row) => row.templateId === version.templateId && row.status === "published" && row.id !== version.id);
   const writes = [
     ...previousPublished.map((row) => buildWrite(COLLECTIONS.qualificationVersions, row.id, { ...row, status: "archived" })),
     buildWrite(COLLECTIONS.qualificationVersions, version.id, { ...version, status: "published", publishedAt: stamp }),
-    adminConfigEvent({ type: "crm.qualification_filter.published", actorId: actor, payload: { templateId: version.templateId, versionId: version.id, versionNumber: version.versionNumber }, stamp }),
+    adminConfigEvent({ type: "qualification_version_published", actorId: actor, payload: { templateId: version.templateId, versionId: version.id, versionNumber: version.versionNumber, scoreMax: validation.scoreMax }, stamp }),
   ];
   const committed = await commitWritesAsAdmin({ writes });
   if (!committed.ok) return { status: committed.status || 500, body: { error: "qualification_filter_publish_failed" } };
@@ -2474,8 +2655,11 @@ module.exports = async (req, res) => {
       "update_stage",
       "reorder_stages",
       "delete_stage",
+      "create_qualification_template",
+      "create_qualification_draft",
       "save_qualification_filter",
       "publish_qualification_filter",
+      "delete_qualification_draft",
     ]);
     if (adminActions.has(action)) {
       const adminGuard = requireAdmin(auth);
@@ -2530,10 +2714,16 @@ module.exports = async (req, res) => {
                                                     ? await handleReorderStages({ session: auth.session, body })
                                                     : action === "delete_stage"
                                                       ? await handleDeleteStage({ session: auth.session, body })
-                                                      : action === "save_qualification_filter"
-                                                        ? await handleSaveQualificationFilter({ session: auth.session, body })
-                                                        : action === "publish_qualification_filter"
-                                                          ? await handlePublishQualificationFilter({ session: auth.session, body })
+                                                      : action === "create_qualification_template"
+                                                        ? await handleCreateQualificationTemplate({ session: auth.session, body })
+                                                        : action === "create_qualification_draft"
+                                                          ? await handleCreateQualificationDraft({ session: auth.session, body })
+                                                          : action === "save_qualification_filter"
+                                                            ? await handleSaveQualificationFilter({ session: auth.session, body })
+                                                            : action === "publish_qualification_filter"
+                                                              ? await handlePublishQualificationFilter({ session: auth.session, body })
+                                                              : action === "delete_qualification_draft"
+                                                                ? await handleDeleteQualificationDraft({ session: auth.session, body })
                                                       : action === "create_activity"
                                                         ? await handleCreateActivity({ auth, body })
                                                         : action === "update_activity"

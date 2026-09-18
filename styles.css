@@ -29389,6 +29389,59 @@ button.automations-row:focus-visible,
   min-height: calc(100vh - 126px);
 }
 
+.native-crm-settings-shell {
+  display: grid;
+  gap: 14px;
+}
+
+.native-crm-settings-tabs,
+.native-crm-version-strip,
+.native-crm-builder-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.native-crm-settings-tabs button,
+.native-crm-version-strip button {
+  min-height: 31px;
+  border: 1px solid rgba(255,255,255,.075);
+  border-radius: 7px;
+  padding: 0 10px;
+  background: rgba(255,255,255,.026);
+  color: rgba(255,255,255,.62);
+  font-size: 12px;
+  font-weight: 760;
+  cursor: pointer;
+}
+
+.native-crm-settings-tabs button.is-active,
+.native-crm-version-strip button.is-active {
+  border-color: rgba(255,91,82,.34);
+  background: rgba(255,91,82,.1);
+  color: #fff;
+}
+
+.native-crm-settings-empty {
+  max-width: 680px;
+}
+
+.native-crm-settings-empty h3,
+.native-crm-publish-confirm h3,
+.native-crm-admin-question.is-preview h3 {
+  margin: 0;
+  color: #fff;
+}
+
+.native-crm-settings-empty p,
+.native-crm-publish-confirm p {
+  margin: 0;
+  color: rgba(255,255,255,.58);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .native-crm-admin-config-list {
   position: sticky;
   top: 0;
@@ -29430,6 +29483,12 @@ button.automations-row:focus-visible,
 .native-crm-config-template span {
   color: rgba(255,255,255,.48);
   font-size: 11px;
+}
+
+.native-crm-config-template em {
+  color: rgba(255,255,255,.62);
+  font-size: 11px;
+  font-style: normal;
 }
 
 .native-crm-admin-config-editor {
@@ -29492,6 +29551,17 @@ button.automations-row:focus-visible,
   line-height: 1;
 }
 
+.native-crm-save-status {
+  justify-self: start;
+  border: 1px solid rgba(142,226,174,.16);
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: rgba(142,226,174,.07);
+  color: rgba(194,245,211,.9);
+  font-size: 11px;
+  font-weight: 750;
+}
+
 .native-crm-admin-config-panel,
 .native-crm-admin-question {
   display: grid;
@@ -29543,6 +29613,13 @@ button.automations-row:focus-visible,
   font-size: 13px;
 }
 
+.native-crm-admin-question header > span {
+  margin-right: auto;
+  color: rgba(255,255,255,.46);
+  font-size: 11px;
+  font-weight: 700;
+}
+
 .native-crm-admin-question header div {
   display: flex;
   align-items: center;
@@ -29572,9 +29649,17 @@ button.automations-row:focus-visible,
   gap: 8px;
 }
 
+.native-crm-option-list-title {
+  color: rgba(255,255,255,.42);
+  font-size: 10px;
+  font-weight: 820;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
 .native-crm-admin-option {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) 88px 110px 34px;
+  grid-template-columns: minmax(180px, 1fr) 88px 180px 34px;
   gap: 8px;
   align-items: center;
 }
@@ -29595,6 +29680,76 @@ button.automations-row:focus-visible,
 .native-crm-admin-option label input {
   min-height: 0;
   accent-color: #ff5b52;
+}
+
+.native-crm-hardfail-note {
+  margin: -2px 0 4px;
+  color: rgba(255,191,128,.8);
+  font-size: 11px;
+}
+
+.native-crm-score-max {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.native-crm-score-max span,
+.native-crm-preview-option,
+.native-crm-publish-confirm div span {
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 8px;
+  padding: 9px 10px;
+  background: rgba(255,255,255,.025);
+  color: rgba(255,255,255,.56);
+  font-size: 12px;
+}
+
+.native-crm-score-max strong,
+.native-crm-preview-option strong {
+  color: #fff;
+}
+
+.native-crm-admin-question.is-preview {
+  gap: 14px;
+}
+
+.native-crm-preview-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.native-crm-preview-option em {
+  border-radius: 999px;
+  padding: 4px 7px;
+  background: rgba(255,191,128,.1);
+  color: rgba(255,211,154,.9);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 760;
+}
+
+.native-crm-publish-confirm {
+  display: grid;
+  gap: 10px;
+  border: 1px solid rgba(255,91,82,.22);
+  border-radius: 10px;
+  padding: 14px;
+  background: rgba(255,91,82,.075);
+}
+
+.native-crm-publish-confirm div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.native-crm-publish-confirm footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .native-crm-admin-config-foot {
