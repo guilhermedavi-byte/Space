@@ -32,7 +32,7 @@ test('Frontend renders persisted data safely and exposes pending Meta wizard',as
  const dom=new JSDOM('<body data-initial-panel="attendance-connections"><div data-attendance-connections></div>',{runScripts:'outside-only'});
  dom.window.fetchWithAuth=async()=>({ok:true,json:async()=>payload});dom.window.HTMLDialogElement.prototype.showModal=function(){this.open=true;};
  dom.window.eval(fs.readFileSync('attendance-connections.js','utf8'));await new Promise(r=>setTimeout(r,0));
- assert.match(dom.window.document.body.textContent,/Aguardando configuração Meta/);assert.equal(dom.window.document.querySelector('img'),null);
+ assert.match(dom.window.document.body.textContent,/Configuração da Meta pendente/);assert.equal(dom.window.document.querySelector('img'),null);
  dom.window.document.querySelector('[data-ac-new]').click();assert.ok(dom.window.document.querySelector('dialog'));assert.equal(dom.window.document.querySelector('input[type=password]'),null);dom.window.close();
 });
 test('Frontend keeps Meta activation guidance out of list loading errors',async()=>{
