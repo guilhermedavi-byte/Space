@@ -1,5 +1,6 @@
 const { randomUUID } = require('node:crypto');
 const { createAsaasClient, AsaasError } = require('./asaas');
+const { invalidateOverviewSnapshots } = require('./finance-dashboard-snapshot');
 const { createFinanceStore, safeFinanceError } = require('./finance-store');
 const { FinanceError, externalId, uuid, normalizeWebhook, normalizeResource, isSupportedEvent, comparePayment, stable } = require('./finance-domain');
 function createFinanceFoundation({store=createFinanceStore(),client=createAsaasClient({readOnly:true}),
@@ -38,6 +39,7 @@ function createFinanceFoundation({store=createFinanceStore(),client=createAsaasC
       if(snapshot.id!==id) throw new FinanceError('finance_snapshot_id_mismatch');
       const result=await store.rpc('commit',{...lock,snapshot});
       log('object_projected',{resource,event_id:event?.id||null,external_object_id:id,changed:result.changed});
+      if(result.changed)invalidateOverviewSnapshots(connectionId,{reason:`${resource}_projected`}).catch(()=>{});
       return result;
     } catch(error) {
       const safe=safeFinanceError(error);
@@ -172,7 +174,9 @@ function createFinanceFoundation({store=createFinanceStore(),client=createAsaasC
       const current=await store.rpc('identity',{...scope(),customer_id:customerId});
       if(current.some(id=>id!==firestoreDocId))throw new FinanceError('finance_identity_already_linked',false,409);
       if(Date.now()-started>45000)throw new FinanceError('finance_identity_busy',true,409);
-      return await store.rpc('link',{...scope(),customer_id:customerId,firestore_doc_id:firestoreDocId,verified_by:actor});
+      const result=await store.rpc('link',{...scope(),customer_id:customerId,firestore_doc_id:firestoreDocId,verified_by:actor});
+      invalidateOverviewSnapshots(connectionId,{reason:'customer_linked'}).catch(()=>{});
+      return result;
     }finally{await store.rpc('release',{...lock,token:lease.token});}
   };
   const syncSubscriptionPage=async({offset=0,limit=20,actor='operator'}={})=>{

@@ -1,5 +1,5 @@
 const test=require('node:test'),assert=require('node:assert/strict');
-const {createReader,cents}=require('../api/_lib/finance-v1-read');const {createHandler}=require('../api/finance-v1');
+const {createReader,cents,OVERVIEW_SNAPSHOT_SCHEMA}=require('../api/_lib/finance-v1-read');const {createHandler}=require('../api/finance-v1');
 const C='11111111-1111-4111-8111-111111111111';
 const makeRow=(id,status,value,due,extra={})=>({id,asaas_payment_id:id,asaas_customer_id:'cus_one',status,provider_status:status,value,due_date:due,deleted:false,billing_type:'PIX',snapshot:{},...extra});
 function fixture({directoryFails=false,payments=[]}={}){const calls=[];const rows=[makeRow('pay_late','PENDING','100.10','2026-09-01'),makeRow('pay_future','PENDING','200.20','2026-09-25'),makeRow('pay_paid','RECEIVED','50.30','2026-09-10'),makeRow('pay_confirmed','CONFIRMED','40.40','2026-09-11'),makeRow('pay_refund','REFUNDED','90.90','2026-09-12'),makeRow('pay_deleted','DELETED','99.99','2026-09-13',{deleted:true}),makeRow('pay_today','PENDING','10.00','2026-09-15')];
@@ -15,6 +15,19 @@ test('overview uses payment competence and ignores due date for revenue',async()
  const r=await reader.get('overview',{month:'2026-09'});assert.equal(r.kpis.received,12030);assert.equal(r.kpis.confirmed_only,12040);assert.equal(r.kpis.revenue,24070);assert.equal(r.meta.revenue_source,'Financial Foundation · política central de receita');
 });
 
+
+
+test('overview uses valid read-model snapshot before canonical dataset',async()=>{
+ const payload={meta:{revenue_policy:'backend_central_v1',overview_snapshot_schema:OVERVIEW_SNAPSHOT_SCHEMA},month:'2026-09',kpis:{revenue:12345,received:10000,confirmed_only:2345,overdue:0},definitions:{},comparison:{},aging:[],recent:[],alerts:{}};
+ const reader=createReader({connectionId:C,today:()=> '2026-09-15',snapshotStore:{readOverviewSnapshot:async()=>({payload,snapshot_at:new Date().toISOString()}),readOverviewInvalidation:async()=>null,writeOverviewSnapshot:async()=>{throw Error('should_not_write');}},verify:async()=>{},request:async()=>{throw Error('should_not_read_canonical');},client:{pages:async function*(){throw Error('should_not_call_asaas');}},spaceLoader:async()=>{throw Error('should_not_load_space');}});
+ const r=await reader.get('overview',{month:'2026-09'});assert.equal(r.kpis.revenue,12345);assert.equal(r.meta.overview_cache_status,'hit');assert.equal(r.stale,false);
+});
+
+test('overview ignores stale-schema snapshot and rebuilds canonically',async()=>{
+ const {reader,calls}=fixture();let wrote=false;reader.get;const stale={payload:{meta:{revenue_policy:'backend_central_v1',overview_snapshot_schema:'old'},month:'2026-09',kpis:{revenue:1}},snapshot_at:new Date().toISOString()};
+ const rebuilt=createReader({connectionId:C,spaceLoader:async()=>({users:[],students:[],contracts:[]}),today:()=> '2026-09-15',snapshotStore:{readOverviewSnapshot:async()=>stale,readOverviewInvalidation:async()=>null,writeOverviewSnapshot:async()=>{wrote=true;}},fallbackClientFactory:()=>({pages:async function*(){yield{data:[]};}}),verify:async()=>{},request:async(path)=>{calls.push(path);return {data:{finance_receivables:[].x}&&({finance_receivables:[makeRow('pay_paid','RECEIVED','50.30','2026-09-10')],finance_payments:[{asaas_payment_id:'pay_paid',status:'RECEIVED',value:'50.30',payment_date:'2026-09-10'}],finance_provider_objects:[],finance_customer_student_links:[]}[path.split('?')[0].slice(1)]||[])};},client:{pages:async function*(){yield{data:[]};}}});
+ const r=await rebuilt.get('overview',{month:'2026-09'});assert.equal(r.kpis.revenue,5030);assert.equal(r.meta.overview_cache_status,'miss');assert.equal(wrote,true);assert.ok(calls.length>0);
+});
 
 test('overview fallback never computes revenue from raw Asaas live read',async()=>{
  const failing=createReader({connectionId:C,spaceLoader:async()=>({users:[],students:[],contracts:[]}),today:()=> '2026-09-15',snapshotStore:{readOverviewSnapshot:async()=>null,writeOverviewSnapshot:async()=>({ok:true})},fallbackClientFactory:()=>({pages:async function*(){yield{data:[{id:'pay_live',customer:'cus_live',status:'RECEIVED',value:999999,paymentDate:'2026-09-10',dueDate:'2026-09-10',billingType:'PIX'}]};}}),verify:async()=>{},request:async()=>{throw Error('supabase_timeout');},client:{pages:async function*(){yield{data:[]};}}});
