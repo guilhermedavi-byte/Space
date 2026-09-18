@@ -19,16 +19,25 @@ const createHandler = ({ authResolver = resolveAdminRequestAuth, telnyxFetch = f
     return sendJson(res, 405, { error: 'method_not_allowed' });
   }
 
+  const diagnostic = { path: '/api/admin/sdr/calls/:recordingId/audio', mode: new URL(req.url || '/', 'https://localhost').searchParams.get('format') || 'redirect' };
+  const reply = (status, body) => {
+    console.info('[admin-sdr-audio] diagnostic', { ...diagnostic, finalStatus: status });
+    return sendJson(res, status, body);
+  };
   try {
+    const rawKey = String(process.env.TELNYX_API_KEY || '');
+    const trimmedKey = rawKey.trim();
+    const token = trimmedKey.replace(/^(?:Bearer\s+)+/i, '').trim();
+    Object.assign(diagnostic, { keyExists: Boolean(rawKey), keyLength: trimmedKey.length, startsWithKEY: trimmedKey.startsWith('KEY'), hasOuterWhitespace: rawKey !== trimmedKey, hasNewline: /[\r\n]/.test(rawKey), hadBearerPrefix: /^Bearer\s/i.test(trimmedKey), source: 'TELNYX_API_KEY' });
     const auth = await authResolver(req, { logPrefix: '[admin-sdr-audio]' });
-    if (!auth.ok) return sendJson(res, auth.status, auth.body);
-    if (clean(auth.session?.role).toLowerCase() !== 'admin') return sendJson(res, 403, { error: 'admin_only' });
+    diagnostic.appAuthStatus = auth.ok ? 200 : auth.status;
+    if (!auth.ok) return reply(auth.status, auth.body);
+    if (clean(auth.session?.role).toLowerCase() !== 'admin') return reply(403, { error: 'admin_only' });
 
     const recordingId = extractRecordingId(req);
-    if (!recordingId) return sendJson(res, 422, { error: 'invalid_recording_id' });
+    if (!recordingId) return reply(422, { error: 'invalid_recording_id' });
 
-    const token = clean(process.env.TELNYX_API_KEY || process.env.TELNYX_API_TOKEN || process.env.Telnyx || '');
-    if (!token) return sendJson(res, 503, { error: 'telnyx_not_configured' });
+    if (!token) return reply(503, { error: 'telnyx_not_configured' });
 
     const response = await telnyxFetch(`https://api.telnyx.com/v2/recordings/${encodeURIComponent(recordingId)}`, {
       method: 'GET',
@@ -37,24 +46,29 @@ const createHandler = ({ authResolver = resolveAdminRequestAuth, telnyxFetch = f
       signal: AbortSignal.timeout(15000),
     });
     const body = await response.json().catch(() => ({}));
+    diagnostic.telnyxStatus = response.status;
+    diagnostic.hasMp3 = Boolean(body?.data?.download_urls?.mp3);
     if (!response.ok) {
+      const redact = value => clean(value).split(token).join('[redacted]').replace(/Bearer\s+\S+|KEY\S+|https?:\/\/\S+/gi, '[redacted]').slice(0, 300);
+      diagnostic.telnyxErrors = (Array.isArray(body.errors) ? body.errors : [body.error || {}]).slice(0, 3).map(error => ({ code: redact(error.code), title: redact(error.title), detail: redact(error.detail || error.message) }));
       console.warn('[admin-sdr-audio] Telnyx unavailable', { status: response.status });
-      return sendJson(res, 502, { error: 'recording_unavailable' });
+      return reply(502, { error: 'recording_unavailable' });
     }
 
     const mp3 = clean(body?.data?.download_urls?.mp3);
     if (!/^https:\/\//i.test(mp3)) {
       console.warn('[admin-sdr-audio] mp3 missing', { status: response.status, hasMp3: false });
-      return sendJson(res, 404, { error: 'recording_audio_unavailable' });
+      return reply(404, { error: 'recording_audio_unavailable' });
     }
-    if (new URL(req.url, 'https://localhost').searchParams.get('format') === 'json') return sendJson(res, 200, { url: mp3 });
+    if (new URL(req.url, 'https://localhost').searchParams.get('format') === 'json') return reply(200, { url: mp3 });
 
+    console.info('[admin-sdr-audio] diagnostic', { ...diagnostic, finalStatus: 307 });
     res.statusCode = 307;
     res.setHeader('Location', mp3);
     return res.end();
   } catch (error) {
     console.error('[admin-sdr-audio] failed', { code: error?.name === 'TimeoutError' ? 'timeout' : 'audio_failed' });
-    return sendJson(res, 502, { error: 'recording_unavailable' });
+    return reply(502, { error: 'recording_unavailable' });
   }
 };
 

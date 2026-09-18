@@ -60,16 +60,15 @@ test('SDR audio endpoint sanitizes recording id from the route', () => {
   assert.equal(_private.extractRecordingId(req), 'rec_123-24bad');
 });
 
-test('audio JSON mode accepts existing Production env and never returns the API key', async () => {
+test('audio JSON uses only TELNYX_API_KEY, trims whitespace and avoids duplicate Bearer', async () => {
   const saved = { ...process.env };
-  delete process.env.TELNYX_API_KEY;
-  delete process.env.TELNYX_API_TOKEN;
-  process.env.Telnyx = 'private-production-key';
+  process.env.TELNYX_API_KEY = ' \nBearer KEY-private-production-key\r\n';
+  process.env.Telnyx = 'obsolete-key';
   try {
     const handler = createHandler({
       authResolver: async () => ({ ok: true, session: { role: 'admin' } }),
       telnyxFetch: async (_url, options) => {
-        assert.equal(options.headers.Authorization, 'Bearer private-production-key');
+        assert.equal(options.headers.Authorization, 'Bearer KEY-private-production-key');
         return { ok: true, json: async () => ({ data: { download_urls: { mp3: 'https://audio.example/fresh.mp3' } } }) };
       },
     });
