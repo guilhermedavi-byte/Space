@@ -59,3 +59,28 @@ test('SDR audio endpoint sanitizes recording id from the route', () => {
   const req = { headers: { host: 'localhost' }, url: '/api/admin/sdr/calls/rec_123-%24bad/audio' };
   assert.equal(_private.extractRecordingId(req), 'rec_123-24bad');
 });
+
+test('audio JSON mode accepts existing Production env and never returns the API key', async () => {
+  const saved = { ...process.env };
+  delete process.env.TELNYX_API_KEY;
+  delete process.env.TELNYX_API_TOKEN;
+  process.env.Telnyx = 'private-production-key';
+  try {
+    const handler = createHandler({
+      authResolver: async () => ({ ok: true, session: { role: 'admin' } }),
+      telnyxFetch: async (_url, options) => {
+        assert.equal(options.headers.Authorization, 'Bearer private-production-key');
+        return { ok: true, json: async () => ({ data: { download_urls: { mp3: 'https://audio.example/fresh.mp3' } } }) };
+      },
+    });
+    const res = await invoke(handler, { url: '/api/admin/sdr/calls/rec_123/audio?format=json' });
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.json, { url: 'https://audio.example/fresh.mp3' });
+    assert.ok(!res.body.includes('private-production-key'));
+  } finally { process.env = saved; }
+});
+
+test('unauthenticated audio request never calls Telnyx', async () => {
+  const res = await invoke(createHandler({ authResolver: async () => ({ ok: false, status: 401, body: { error: 'unauthenticated' } }), telnyxFetch: () => { throw new Error('must not call'); } }));
+  assert.equal(res.status, 401);
+});

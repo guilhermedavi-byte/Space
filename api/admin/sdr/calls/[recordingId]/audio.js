@@ -27,25 +27,33 @@ const createHandler = ({ authResolver = resolveAdminRequestAuth, telnyxFetch = f
     const recordingId = extractRecordingId(req);
     if (!recordingId) return sendJson(res, 422, { error: 'invalid_recording_id' });
 
-    const token = clean(process.env.TELNYX_API_KEY || process.env.TELNYX_API_TOKEN || '');
+    const token = clean(process.env.TELNYX_API_KEY || process.env.TELNYX_API_TOKEN || process.env.Telnyx || '');
     if (!token) return sendJson(res, 503, { error: 'telnyx_not_configured' });
 
     const response = await telnyxFetch(`https://api.telnyx.com/v2/recordings/${encodeURIComponent(recordingId)}`, {
       method: 'GET',
       headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
       redirect: 'error',
+      signal: AbortSignal.timeout(15000),
     });
     const body = await response.json().catch(() => ({}));
-    if (!response.ok) return sendJson(res, response.status || 502, { error: 'recording_unavailable' });
+    if (!response.ok) {
+      console.warn('[admin-sdr-audio] Telnyx unavailable', { status: response.status });
+      return sendJson(res, 502, { error: 'recording_unavailable' });
+    }
 
     const mp3 = clean(body?.data?.download_urls?.mp3);
-    if (!/^https:\/\//i.test(mp3)) return sendJson(res, 404, { error: 'recording_audio_unavailable' });
+    if (!/^https:\/\//i.test(mp3)) {
+      console.warn('[admin-sdr-audio] mp3 missing', { status: response.status, hasMp3: false });
+      return sendJson(res, 404, { error: 'recording_audio_unavailable' });
+    }
+    if (new URL(req.url, 'https://localhost').searchParams.get('format') === 'json') return sendJson(res, 200, { url: mp3 });
 
     res.statusCode = 307;
     res.setHeader('Location', mp3);
     return res.end();
   } catch (error) {
-    console.error('[admin-sdr-audio] failed', { code: error?.code || error?.message || 'audio_failed' });
+    console.error('[admin-sdr-audio] failed', { code: error?.name === 'TimeoutError' ? 'timeout' : 'audio_failed' });
     return sendJson(res, 502, { error: 'recording_unavailable' });
   }
 };

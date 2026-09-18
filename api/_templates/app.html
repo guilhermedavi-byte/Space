@@ -336,11 +336,6 @@
             </span>
             <span class="sidebar-text">Atividades</span>
           </button>
-          <div data-attendance-access hidden>
-            <p class="sidebar-text">Atendimento</p>
-            <button class="sidebar-link" type="button" data-panel-target="attendance-inbox" title="Caixa de entrada de Atendimento"><span class="sidebar-text">Caixa de entrada</span></button>
-            <button class="sidebar-link" type="button" data-panel-target="attendance-connections" title="Conexões de Atendimento"><span class="sidebar-text">Conexões</span></button>
-          </div>
           <button class="sidebar-link" type="button" data-panel-target="automations" data-admin-only title="Automações">
             <span class="sidebar-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none"><path d="M5 7h7"></path><path d="M12 7l2 2 4-4"></path><path d="M5 17h7"></path><path d="M14 17h5"></path><path d="M17 14v6"></path></svg>
@@ -433,7 +428,7 @@
               </button>
             </div>
           </div>
-          <div class="sidebar-accordion" data-sidebar-accordion="comercial" data-admin-only>
+          <div class="sidebar-accordion" data-sidebar-accordion="comercial" data-attendance-access hidden>
             <button
               class="sidebar-link sidebar-accordion-toggle"
               type="button"
@@ -459,23 +454,28 @@
               </span>
             </button>
             <div class="sidebar-accordion-body" id="sidebar-comercial-items" data-sidebar-accordion-body="comercial" hidden>
-              <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-comercial-visao-geral" title="Visão Geral">
+          <div data-attendance-access hidden>
+            <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="attendance-inbox" title="Caixa de entrada de Atendimento"><span class="sidebar-text">Caixa de entrada</span></button>
+            <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="attendance-connections" title="Conexões de Atendimento"><span class="sidebar-text">Conexões</span></button>
+          </div>
+
+              <button data-admin-only class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-comercial-visao-geral" title="Visão Geral">
                 <span class="sidebar-text">Visão Geral</span>
               </button>
-              <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="native-crm" title="CRM">
+              <button data-admin-only class="sidebar-link sidebar-link-sub" type="button" data-panel-target="native-crm" title="CRM">
                 <span class="sidebar-text">CRM</span>
               </button>
-              <a class="sidebar-link sidebar-link-sub" href="/tv/crm-live" title="CRM Live">
+              <a data-admin-only class="sidebar-link sidebar-link-sub" href="/tv/crm-live" title="CRM Live">
                 <span class="sidebar-text">CRM Live</span>
               </a>
-              <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-comercial-atividade-sdr" title="Pré-Vendas">
+              <button data-admin-only class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-comercial-atividade-sdr" title="Pré-Vendas">
                 <span class="sidebar-text">Pré-Vendas</span>
               </button>
-              <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-sdr" title="Painel SDR">
+              <button data-admin-only class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-sdr" title="Painel SDR">
                 <span class="sidebar-text">↳ Painel SDR</span>
               </button>
-              <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-comercial-metas" title="Metas"><span class="sidebar-text">Metas</span></button>
-              <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-comercial-usuarios" title="Usuários">
+              <button data-admin-only class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-comercial-metas" title="Metas"><span class="sidebar-text">Metas</span></button>
+              <button data-admin-only class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-comercial-usuarios" title="Usuários">
                 <span class="sidebar-text">Usuários</span>
               </button>
             </div>

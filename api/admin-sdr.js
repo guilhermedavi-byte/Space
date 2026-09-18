@@ -149,8 +149,16 @@ const loadScoredCalls = async ({ request = supabaseFetch, limit = 10, offset = 0
   try {
     const safeLimit = Math.max(1, Math.min(Number(limit)||10, 100));
     const safeOffset = Math.max(0, Number(offset)||0);
-    const res = await request(`/sdr_call_scores?select=${SCORE_LIST_SELECT}${scoreRangeParams({ fromKey, toKey })}&order=created_at.desc&limit=${safeLimit}&offset=${safeOffset}`, { timeoutMs: 15000 });
-    const rows = Array.isArray(res.data) ? res.data : [];
+    // Merge the two sorted streams so null started_at uses created_at before pagination.
+    const base = `/sdr_call_scores?select=${SCORE_LIST_SELECT}${scoreRangeParams({ fromKey, toKey })}`;
+    const take = safeOffset + safeLimit;
+    const results = await Promise.all([
+      request(`${base}&started_at=not.is.null&order=started_at.desc,recording_id.desc&limit=${take}`, { timeoutMs: 15000 }),
+      request(`${base}&started_at=is.null&order=created_at.desc,recording_id.desc&limit=${take}`, { timeoutMs: 15000 }),
+    ]);
+    const rows = [...new Map(results.flatMap(res => Array.isArray(res.data) ? res.data : []).map(row => [row.recording_id, row])).values()]
+      .sort((a, b) => (Date.parse(b.started_at || b.created_at) || 0) - (Date.parse(a.started_at || a.created_at) || 0) || String(b.recording_id).localeCompare(String(a.recording_id)))
+      .slice(safeOffset, safeOffset + safeLimit);
     return { ok: true, table: 'sdr_call_scores', rows, calls: rows.map(normalizeScoredCall).filter(call => call.id), columns: rows[0] ? Object.keys(rows[0]) : [] };
   } catch (error) {
     return { ok: false, table: 'sdr_call_scores', rows: [], calls: [], columns: [], error: String(error.code || error.message || 'sdr_call_scores_unavailable').slice(0, 80) };

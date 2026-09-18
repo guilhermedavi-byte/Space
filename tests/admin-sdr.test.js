@@ -151,3 +151,16 @@ test('admin SDR loads transcript and analysis only in recording detail', async (
   assert.ok(calls.some(path => path.includes('select=recording_id,sdr,to_number,duration_seconds,score,started_at,created_at')));
   assert.ok(calls.some(path => path.includes('select=recording_id,call_leg_id,call_session_id,connection_id,sdr,from_number,to_number,started_at,ended_at,duration_seconds,transcript,score,analysis,recording_url,created_at')));
 });
+
+test('calls merge started_at and created_at fallback before paging newest first', async () => {
+  const urls = [];
+  const result = await __private.loadScoredCalls({ limit: 2, offset: 1, request: async url => {
+    urls.push(url);
+    return { data: url.includes('started_at=not.is.null') ? [
+      { recording_id: 'new', started_at: '2026-09-18T15:00:00Z', created_at: '2026-09-18T16:00:00Z' },
+      { recording_id: 'old', started_at: '2026-09-18T12:00:00Z', created_at: '2026-09-18T17:00:00Z' },
+    ] : [{ recording_id: 'fallback', started_at: null, created_at: '2026-09-18T14:00:00Z' }] };
+  } });
+  assert.deepEqual(result.rows.map(row => row.recording_id), ['fallback', 'old']);
+  assert.ok(urls.every(url => url.includes('limit=3')));
+});
