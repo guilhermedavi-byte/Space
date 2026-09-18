@@ -16,7 +16,7 @@ function createHandler({session=getSessionFromRequest,reader,env=process.env}={}
   if(view==='receivable'&&!/^pay_[A-Za-z0-9_-]+$/.test(q.id||''))return send(400,{error:'finance_filter_invalid'});
   if(view==='reconciliation_movement'&&!/^mov_pay_[A-Za-z0-9_-]+$/.test(q.id||''))return send(400,{error:'finance_filter_invalid'});
   if(!['overview','receivables','subscriptions','customers','receivable','recovery','reconciliation','reconciliation_movement'].includes(view)||Object.values(q).some(v=>v.length>160)||q.month&&!/^\d{4}-(0[1-9]|1[0-2])$/.test(q.month)||q.page&&(!/^\d{1,4}$/.test(q.page)||Number(q.page)<1)||['from','to'].some(k=>q[k]&&(!/^\d{4}-\d{2}-\d{2}$/.test(q[k])||Number.isNaN(Date.parse(q[k]))||new Date(q[k]).toISOString().slice(0,10)!==q[k]))||q.from&&q.to&&q.from>q.to)return send(400,{error:'finance_filter_invalid'});
-  try{service ||= createReader();const result=await perf.measure('financeRead',()=>service.get(view,q));return send(result.not_found?404:200,result);}
+  try{const bearer=String(req.headers?.authorization||'').match(/^Bearer\s+(.+)$/i)?.[1]||'';const activeReader=reader||(view==='overview'&&bearer?createReader({commercialGoalIdToken:bearer}):(service ||= createReader()));const result=await perf.measure('financeRead',()=>activeReader.get(view,q));return send(result.not_found?404:200,result);}
   catch{return send(503,{error:'finance_read_unavailable'});}
  };
 }
