@@ -1,4 +1,3 @@
-const { randomUUID } = require('node:crypto');
 const { readJsonBody, sendJson } = require('../_lib/http');
 const { requireAttendanceAuth } = require('./_lib/attendance-auth');
 const { assertAttendanceEnvironment, fail, only, uuid, text } = require('./_lib/attendance-domain');
@@ -140,8 +139,7 @@ const createHandler = ({ authenticate = requireAttendanceAuth, request = supabas
     if (body.action === 'create') {
       uuid(body.team_id); text(body.name, 100);
       if (!editableTeams.some(t => t.team_id === body.team_id)) fail('attendance_forbidden', 403);
-      await request('/connections', { method: 'POST', body: { provider: 'meta_whatsapp', external_account_type: 'waba', external_account_id: `pending:${randomUUID()}`,
-        display_name: body.name.trim(), status: 'pending', metadata: { setup_pending: true, default_team_id: body.team_id } } });
+      await request('/rpc/attendance_create_pending_connection', { method: 'POST', body: { p_name: body.name.trim(), p_team_id: body.team_id } });
     } else {
       uuid(body.connection_id);
       const c = connections.find(c => c.connection_id === body.connection_id && visible(c));
