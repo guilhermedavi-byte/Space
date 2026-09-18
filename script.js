@@ -41641,6 +41641,16 @@ const showPanel = (panelName) => {
     return;
   }
 
+  if (panelName === "admin-sdr") {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (currentRole !== "admin") {
+      navigateApp(roleBasePath(currentRole), { replace: true });
+      return;
+    }
+    window.SpaceAdminSdr?.open();
+    return;
+  }
+
   if (panelName === "native-crm") {
     window.scrollTo({ top: 0, behavior: "smooth" });
     if (!["admin", "growth"].includes(String(currentRole || ""))) {
@@ -41881,6 +41891,7 @@ const panelPathForRole = (role, panel) => {
 
   if (normalized === "admin") {
     if (p === "activities") return "/app/admin/atividades";
+    if (p === "admin-sdr") return "/app/admin/sdr";
     if (["sdr", "scripts-vendas", "objecoes", "training"].includes(p)) return `/app/admin/growth/${p}`;
     if (p === "professores" || p === "alunos") return adminPedagogicoPathForState();
     if (p === "admin-controle-pedagogico") return adminPedagogicoPathForState();
@@ -41965,6 +41976,7 @@ const parseAppRoute = (path) => {
 
   if (role === "admin") {
     if (sub === "atividades") return { role, panel: "activities" };
+    if (sub === "sdr") return { role, panel: "admin-sdr" };
     if (sub === "professores") return { role, panel: "admin-controle-pedagogico", redirectTo: "/app/admin/controle-pedagogico?modulo=usuarios", pedagogicoGroup: "alunosTurmas", pedagogicoTab: "pessoas", pedagogicoPeopleTab: "teachers" };
     if (sub === "alunos") return { role, panel: "admin-controle-pedagogico", redirectTo: "/app/admin/controle-pedagogico?modulo=usuarios", pedagogicoGroup: "alunosTurmas", pedagogicoTab: "pessoas", pedagogicoPeopleTab: "students" };
     if (sub === "controle-pedagogico") {

@@ -53,6 +53,7 @@ const initialPanelFromPath = (pathParam) => {
     if (segments[2] === "conexoes") return "attendance-connections";
     return "attendance-inbox";
   }
+  if (slug === "admin" && sub === "sdr") return "admin-sdr";
   if (slug === "financeiro") return "financeiro";
   if (slug === "admin" && sub === "space-office") return "space-office";
   if (slug === "admin" && sub === "status") return "status-plataforma";
@@ -153,6 +154,7 @@ const buildAppHtml = ({ sessionJson, role, roleSlug, templateHtml, initialPanel 
     <script src="finance-customer-link.js?v=1"></script>
     <script src="finance-v1.js?v=23"></script>
     <script src="script.js"></script>
+    <script src="admin-sdr.js"></script>
     <script src="pedagogico-n8n-ui.js"></script>
     <script src="space-office.js"></script>
     <script src="attendance-connections.js"></script>

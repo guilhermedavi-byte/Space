@@ -341,6 +341,10 @@
             <button class="sidebar-link" type="button" data-panel-target="attendance-inbox" title="Caixa de entrada de Atendimento"><span class="sidebar-text">Caixa de entrada</span></button>
             <button class="sidebar-link" type="button" data-panel-target="attendance-connections" title="Conexões de Atendimento"><span class="sidebar-text">Conexões</span></button>
           </div>
+          <button class="sidebar-link" type="button" data-panel-target="admin-sdr" data-admin-only title="SDR">
+            <span class="sidebar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M4 19V5"></path><path d="M4 19h16"></path><path d="M8 15l3-3 3 2 5-7"></path><path d="M17 7h2v2"></path></svg></span>
+            <span class="sidebar-text">SDR</span>
+          </button>
           <button class="sidebar-link" type="button" data-panel-target="automations" data-admin-only title="Automações">
             <span class="sidebar-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none"><path d="M5 7h7"></path><path d="M12 7l2 2 4-4"></path><path d="M5 17h7"></path><path d="M14 17h5"></path><path d="M17 14v6"></path></svg>
@@ -1460,6 +1464,7 @@
 
         <section class="platform-panel" data-panel="attendance-inbox" data-hide-platform-header="true" hidden aria-label="Caixa de entrada de Atendimento"><div data-attendance-inbox></div></section>
         <section class="platform-panel" data-panel="attendance-connections" data-hide-platform-header="true" hidden aria-label="Conexões de Atendimento"><div data-attendance-connections></div></section>
+        <section class="platform-panel" data-panel="admin-sdr" data-hide-platform-header="true" hidden aria-label="Admin - SDR"><div data-admin-sdr></div></section>
         <section class="platform-panel" data-panel="automations" data-hide-platform-header="true" hidden aria-label="Automações">
           <div class="automations-admin" data-automations-admin>
             <div class="automations-loading">Carregando automações…</div>
@@ -2876,5 +2881,6 @@
     <script src="/assets/student-lifecycle.js"></script>
     <script src="/assets/lifecycle-metrics.js"></script>
     <script src="script.js"></script>
+    <script src="admin-sdr.js"></script>
   </body>
 </html>

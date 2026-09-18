@@ -154,6 +154,14 @@
       "destination": "/api/sala?room=:room"
     },
     {
+      "source": "/admin/sdr",
+      "destination": "/api/app?path=admin/sdr"
+    },
+    {
+      "source": "/admin/sdr/(.*)",
+      "destination": "/api/app?path=admin/sdr/$1"
+    },
+    {
       "source": "/app",
       "destination": "/api/app"
     },
