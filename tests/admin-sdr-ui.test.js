@@ -37,3 +37,46 @@ test('SDR filters collapse and audio resolves through authenticated request', as
   assert.equal(doc.body.style.overflow, '');
   dom.window.close();
 });
+
+const transcriptView = async (transcript, sdrName = 'Luana') => {
+  const dom = new JSDOM('<div data-admin-sdr></div>', { runScripts: 'outside-only', url: 'https://space.example' });
+  dom.window.HTMLMediaElement.prototype.pause = () => {};
+  dom.window.fetchWithAuth = async () => ({ ok: true, json: async () => ({ selectedCall: { recordingId: 'transcript-test', sdrName, transcript } }) });
+  dom.window.eval(fs.readFileSync('admin-sdr.js', 'utf8'));
+  await dom.window.SpaceAdminSdr.open();
+  dom.window.document.querySelector('[data-asdr-detail-tab="transcript"]').click();
+  return dom;
+};
+
+test('transcript displays only explicit seller/lead attribution and escapes content', async () => {
+  const dom = await transcriptView('[00:01] Luana: Olá!\n[00:02] Lead: <img src=x onerror=alert(1)> Tudo bem.\nSpeaker 2: Sim.');
+  const doc = dom.window.document;
+  assert.equal(doc.querySelector('.seller .asdr-speaker').textContent, 'Vendedor');
+  assert.equal(doc.querySelector('.lead .asdr-speaker').textContent, 'Lead');
+  assert.equal(doc.querySelector('.unknown .asdr-speaker').textContent, 'Speaker 2');
+  assert.equal(doc.querySelector('.asdr-utterance time').textContent, '00:01');
+  assert.equal(doc.querySelector('.asdr-conversation img'), null);
+  assert.ok(doc.querySelector('.lead p').textContent.includes('<img'));
+  dom.window.close();
+});
+
+test('unlabelled transcript remains unattributed and complete in short blocks', async () => {
+  const source = 'Olá, tudo bem? Quero aprender inglês para trabalhar. '.repeat(40).trim();
+  const dom = await transcriptView(source);
+  const doc = dom.window.document;
+  const blocks = [...doc.querySelectorAll('.asdr-utterance p')];
+  assert.ok(blocks.length > 4);
+  assert.ok(blocks.every(block => block.textContent.length <= 650));
+  assert.equal(blocks.map(block => block.textContent).join(' '), source);
+  assert.equal(doc.querySelector('.asdr-utterance.seller, .asdr-utterance.lead'), null);
+  dom.window.close();
+});
+
+test('structured transcript handles explicit roles and exact SDR names with punctuation', async () => {
+  const dom = await transcriptView(JSON.stringify({ segments: [{ role: 'seller', text: 'Olá.' }, { role: 'lead', text: 'Bom dia.' }] }));
+  assert.equal(dom.window.document.querySelectorAll('.asdr-utterance').length, 2);
+  dom.window.close();
+  const named = await transcriptView('Ana (SDR): Oi.\nCliente: Olá.', 'Ana (SDR)');
+  assert.equal(named.window.document.querySelectorAll('.asdr-utterance.seller').length, 1);
+  named.window.close();
+});
