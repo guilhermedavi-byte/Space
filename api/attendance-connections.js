@@ -102,6 +102,7 @@ const createHandler = ({ authenticate = requireAttendanceAuth, request = supabas
         membership = bundle.membership;
       }
     }
+    connections = connections.filter(c => c.provider === 'meta_whatsapp');
     const scope = membership.filter(m => members[0]?.enabled && m.active && teams.some(t => t.team_id === m.team_id && t.active));
     const hasTeam = (id, manage = false) => admin || scope.some(m => m.team_id === id && (!manage || m.member_role === 'supervisor'));
     const canChannel = (ch, manage = false) => admin || grants.some(g => g.channel_id === ch.channel_id && hasTeam(g.team_id, manage));
