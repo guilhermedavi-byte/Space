@@ -86,7 +86,15 @@ const createHandler = ({ authenticate = requireAttendanceAuth, request = supabas
         membership = await read(`/team_members?select=team_id,member_role,active&user_uid=eq.${encodeURIComponent(actor.uid)}`, 'team_members');
       }
     } catch (error) {
-      if (req.method !== 'GET' || request !== supabaseFetch) throw error;
+      if (request !== supabaseFetch) throw error;
+      if (req.method !== 'GET') {
+        console.warn('[attendance-connections] supabase prewrite read failed', {
+          table: error.attendanceTable || 'unknown',
+          endpoint: error.attendanceEndpoint || 'unknown',
+          status: Number(error.status) || 0,
+          code: String(error.code || error.message || 'unknown').slice(0, 80),
+        });
+      }
       console.warn('[attendance-connections] falling back to direct database edge read', {
         table: error.attendanceTable || 'unknown',
         status: Number(error.status) || 0,
