@@ -86,3 +86,29 @@ test('admin SDR normalizes scored calls from Postgres/N8N payload', () => {
   assert.equal(call.scorecard[0].name, 'Abertura');
   assert.equal(call.scorecard[0].score, 90);
 });
+
+test('admin SDR buildModel uses scored calls for IA summary without mock data', async () => {
+  const model = await __private.buildModel({ period: 'today' }, {
+    activity: async () => ({
+      events: [],
+      sdrs: [{ sdrUid: 's1', sdrName: 'Ana SDR', sdrEmail: 'ana@example.com' }],
+    }),
+    request: async () => ({ data: [{
+      id: 'score-2',
+      sdr_id: 's1',
+      sdr_name: 'Ana SDR',
+      duration_seconds: 130,
+      score: 82,
+      script_adherence: 76,
+      analysis_status: 'completed',
+      created_at: '2026-09-18T12:00:00.000Z',
+    }] }),
+  });
+
+  assert.equal(model.source.callAnalysis, 'Postgres/sdr_call_scores');
+  assert.equal(model.source.scoreRows, 1);
+  assert.equal(model.kpis.analyzedCalls, 1);
+  assert.equal(model.kpis.avgScore, 82);
+  assert.equal(model.sdrs[0].analyzedCalls, 1);
+  assert.equal(model.calls.length, 1);
+});

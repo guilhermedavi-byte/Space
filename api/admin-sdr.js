@@ -263,9 +263,11 @@ const filterCalls = (calls, { sdr = 'all', status = 'all', score = 'all', result
   if (score && score !== 'all') {
     const value = Number(call.score);
     if (!Number.isFinite(value)) return false;
-    if (score === '80' && value < 80) return false;
-    if (score === '60' && (value < 60 || value >= 80)) return false;
-    if (score === 'low' && value >= 60) return false;
+    if (score === '90' && value < 90) return false;
+    if (score === '80' && (value < 80 || value >= 90)) return false;
+    if (score === '70' && (value < 70 || value >= 80)) return false;
+    if (score === '60' && (value < 60 || value >= 70)) return false;
+    if ((score === 'lt60' || score === 'low') && value >= 60) return false;
   }
   if (result && result !== 'all') {
     if (result === 'scheduled' && call.outcome !== 'scheduled') return false;
@@ -279,7 +281,7 @@ const filterCalls = (calls, { sdr = 'all', status = 'all', score = 'all', result
 });
 const buildModel = async (query = {}, deps = {}) => {
   const range = resolveRange(query);
-  const activity = await loadAdminCommercialSdrActivity({ period: 'custom', from: range.fromKey, to: range.toKey });
+  const activity = deps.activity ? await deps.activity({ period: 'custom', from: range.fromKey, to: range.toKey, range }) : await loadAdminCommercialSdrActivity({ period: 'custom', from: range.fromKey, to: range.toKey });
   const scoreSource = await loadScoredCalls({ request: deps.request || supabaseFetch });
   const rawScoredCalls = scoreSource.calls.filter(call => !call.dateKey || (call.dateKey >= range.fromKey && call.dateKey <= range.toKey));
   const rawCalls = (activity.events || []).map(normalizeCall);
@@ -297,10 +299,9 @@ const buildModel = async (query = {}, deps = {}) => {
     sales: null,
     revenue: null,
     avgTicket: null,
-    analyzedCalls: 0,
-    analyzedCalls: ownScores.length,
-    avgScore: avg(ownScores.map(call => call.score)),
-    scriptAdherence: avg(ownScores.map(call => call.scriptAdherence)),
+    analyzedCalls: rawScoredCalls.length,
+    avgScore: avg(rawScoredCalls.map(call => call.score)),
+    scriptAdherence: avg(rawScoredCalls.map(call => call.scriptAdherence)),
   };
   const sdrs = (activity.sdrs || []).map(row => aggregateSdr(row, rawCalls, rawScoredCalls)).filter(row => !query.sdr || query.sdr === 'all' || row.uid === query.sdr);
   const sdrOptions = (activity.sdrs || []).map(row => ({ uid: clean(row.sdrUid), name: clean(row.sdrName) || 'SDR', email: clean(row.sdrEmail) }));
