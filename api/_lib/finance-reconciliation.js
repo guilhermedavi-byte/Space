@@ -18,7 +18,7 @@ async function readCase(movementId){try{return await getDocumentAsAdmin(docPath(
 async function writeCase(movementId,data){const result=await commitWritesAsAdmin({writes:[{update:{name:docName(movementId),fields:encodeFields(data).fields},updateMask:{fieldPaths:Object.keys(data)}}]});if(!result.ok){const e=new Error('finance_reconciliation_unavailable');e.status=503;throw e;}return data;}
 async function writeCases(items){for(let i=0;i<items.length;i+=400){const writes=items.slice(i,i+400).map(({movementId,data})=>({update:{name:docName(movementId),fields:encodeFields(data).fields},updateMask:{fieldPaths:Object.keys(data)}}));const result=await commitWritesAsAdmin({writes});if(!result.ok){const e=new Error('finance_reconciliation_unavailable');e.status=503;throw e;}}return items.map(i=>i.data);}
 async function allCases(connectionId){try{return (await listCollectionAsAdmin(COLLECTION,{pageSize:1000,maxPages:20,decorate:false})).filter(r=>r.connection_id===uuid(connectionId));}catch{return [];}}
-function buildFinancials(rows,payments,cases,month,today=new Date().toISOString().slice(0,10)){return revenueSummary({rows,payments,cases,month,today});}
+function buildFinancials(rows,payments,cases,month,today=new Date().toISOString().slice(0,10),links=[],connectionId=null){return revenueSummary({connectionId,rows,payments,cases,links,month,today});}
 function movementFromRow(row,payment,caseDoc,originRules=new Map()){
  const snapshot=row.snapshot||{},pix=snapshot.pixTransaction||snapshot.pix_transaction||null;
  const value=cents(payment?.value??row.value);
@@ -55,6 +55,7 @@ function createFinanceReconciliation({connectionId=process.env.FINANCE_CONNECTIO
   if(docs.length)await writeCases(docs);return {origin,classification,matched:movements.length,classified:docs.length,value:sumCents(selected,m=>m.value)};
  };
  const undo=async({body,actor}={})=>{const movementId=String(body?.movement_id||'');const prior=await readCase(movementId);if(!prior){const e=new Error('finance_reconciliation_not_found');e.status=404;throw e;}const now=new Date().toISOString();const next={...prior,status:'reopened',allocations:[],classification:null,updated_at:now,events:[...(Array.isArray(prior.events)?prior.events:[]),event('undo_reconciliation',actor,{status:'reopened'},body?.note)].slice(-100)};await writeCase(movementId,next);return next;};
- return {listCases,confirm,classifyOrigin,undo,buildMovements,candidateReceivables,buildFinancials};
+ const buildFinancialsForConnection=(rows,payments,cases,month,today=new Date().toISOString().slice(0,10),links=[])=>buildFinancials(rows,payments,cases,month,today,links,connectionId);
+ return {listCases,confirm,classifyOrigin,undo,buildMovements,candidateReceivables,buildFinancials:buildFinancialsForConnection};
 }
 module.exports={createFinanceReconciliation,buildMovements,candidateReceivables,buildFinancials,NON_REVENUE};

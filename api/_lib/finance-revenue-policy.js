@@ -25,18 +25,9 @@ function isRevenueRow(row,payment,caseDoc,originClassification){
  if(AMBIGUOUS_BILLING_TYPES.has(String(row.billing_type||row.method||'')))return false;
  return true;
 }
-function revenueSummary({rows=[],payments=[],cases=[],month,today=new Date().toISOString().slice(0,10)}={}){
- const paymentById=new Map(payments.map(p=>[p.asaas_payment_id,p]));
- const caseByMovement=new Map(cases.map(c=>[c.movement_id,c]));
- const originRules=originRuleMap(cases);
- const allocated=[];const allocatedIds=new Set();
- for(const c of cases)for(const a of Array.isArray(c.allocations)?c.allocations:[])if(a?.receivable_id&&a?.revenue_recognized!==false){allocated.push(a);allocatedIds.add(a.receivable_id);}
- const recognized=rows.filter(r=>!allocatedIds.has(r.asaas_payment_id)).map(row=>({row,payment:paymentById.get(row.asaas_payment_id),caseDoc:caseByMovement.get(`mov_${row.asaas_payment_id}`),originClassification:originRules.get(movementOrigin(row))})).filter(x=>isRevenueRow(x.row,x.payment,x.caseDoc,x.originClassification));
- const inMonth=recognized.filter(x=>String(paymentCompetenceDate(x.row,x.payment)||'').startsWith(month));
- const received=sumCents(inMonth.filter(x=>PAID_STATUSES.has(x.row.status)),x=>cents(x.payment?.value??x.row.value));
- const confirmed=sumCents(inMonth.filter(x=>x.row.status==='CONFIRMED'),x=>cents(x.payment?.value??x.row.value));
- const allocatedMonth=allocated.filter(a=>String(a.recognized_date||'').startsWith(month));
- const allocatedReceived=sumCents(allocatedMonth,a=>cents(a.value));
+function revenueSummary({rows=[],payments=[],cases=[],links=[],month,today=new Date().toISOString().slice(0,10),connectionId=null}={}){
+ const {getRevenueSummary}=require('./finance-revenue-ledger');
+ const s=getRevenueSummary({connectionId,rows,payments,cases,links,month,today});
  const monthDue=rows.filter(r=>!r.deleted&&!CLOSED_STATUSES.has(r.status)&&String(r.due_date||'').startsWith(month));
  const cutoff=today&&String(today).startsWith(month)?today:String(today||'')<month?null:`${month}-${new Date(Number(month.slice(0,4)),Number(month.slice(5,7)),0).getDate().toString().padStart(2,'0')}`;
  const dueToDate=cutoff?monthDue.filter(r=>r.due_date&&r.due_date<=cutoff):[];
@@ -44,6 +35,6 @@ function revenueSummary({rows=[],payments=[],cases=[],month,today=new Date().toI
  const dueBase=sumCents(dueToDate,r=>cents(r.value));
  const monthDueBase=sumCents(monthDue,r=>cents(r.value));
  const delinquencyValue=sumCents(overdue,r=>cents(r.value));
- return {faturamento:received+confirmed+allocatedReceived,received:received+allocatedReceived,confirmed,count:inMonth.length+allocatedMonth.length,source:'Financial Foundation · política central de receita',delinquency_value:delinquencyValue,delinquency_percent:dueBase?Math.round(delinquencyValue/dueBase*10000)/100:null,delinquency_due_base:dueBase,delinquency_month_due_base:monthDueBase,origin_rules:originRules.size};
+ return {faturamento:s.revenue,received:s.received,confirmed:s.confirmed,count:s.count,source:'Financial Foundation · política central de receita',ledger_version:s.ledger_version,duplicate_economic_events:s.duplicate_economic_events,certified_period:s.certified_period,finance_data_inconsistent:s.finance_data_inconsistent,finance_data_issues:s.finance_data_issues||[],raw_revenue:s.raw_revenue,raw_received:s.raw_received,raw_confirmed:s.raw_confirmed,delinquency_value:delinquencyValue,delinquency_percent:dueBase?Math.round(delinquencyValue/dueBase*10000)/100:null,delinquency_due_base:dueBase,delinquency_month_due_base:monthDueBase};
 }
 module.exports={PAID_STATUSES,REVENUE_STATUSES,CLOSED_STATUSES,NON_REVENUE_CLASSIFICATIONS,CUSTOMER_PAYMENT_UNALLOCATED_CLASSIFICATIONS,AMBIGUOUS_BILLING_TYPES,cents,sumCents,paymentCompetenceDate,originRuleMap,movementOrigin,rowNeedsConcilation,originRuleApplies,isRevenueRow,revenueSummary};
