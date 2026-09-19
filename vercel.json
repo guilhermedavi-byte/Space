@@ -32,6 +32,9 @@
     },
     "api/finance-customer-registration.js": {
       "maxDuration": 60
+    },
+    "api/finance-september-certification.js": {
+      "maxDuration": 300
     }
   },
   "crons": [
