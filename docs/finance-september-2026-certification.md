@@ -66,4 +66,4 @@ Data da execução: 2026-09-19. Ambiente: Production. Escopo: read-only para cer
 
 ## Pendências
 
-Setembro está certificado: o Tap Tap de R$ 1.275,03 foi definido pela regra permanente como `CUSTOMER_PAYMENT_UNALLOCATED`, sem duplicar `RECEIVED_IN_CASH`; o item de R$ 1.200,00 é refund/estorno, fora de receita; o item de R$ 1.120,00 foi pago em 2026-08-31, fora da competência de setembro. Saldo não classificado: R$ 0,00.
+Setembro está certificado: o Tap Tap de R$ 1.275,03 foi definido pela regra permanente como `CUSTOMER_PAYMENT_UNALLOCATED`, com natureza econômica conhecida e alocação ainda pendente; quando for vinculado a uma cobrança, não altera o valor já reconhecido nem duplica `RECEIVED_IN_CASH`. O item de R$ 1.200,00 é refund/estorno, fora de receita; o item de R$ 1.120,00 foi pago em 2026-08-31, fora da competência de setembro. Saldo não classificado: R$ 0,00.
