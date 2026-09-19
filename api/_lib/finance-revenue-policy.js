@@ -1,5 +1,5 @@
-const PAID_STATUSES=new Set(['RECEIVED','RECEIVED_IN_CASH','DUNNING_RECEIVED']);
-const REVENUE_STATUSES=new Set(['RECEIVED','RECEIVED_IN_CASH','DUNNING_RECEIVED','CONFIRMED']);
+const PAID_STATUSES=new Set(['RECEIVED','RECEIVED_IN_CASH']);
+const REVENUE_STATUSES=new Set(['RECEIVED','RECEIVED_IN_CASH','CONFIRMED']);
 const CLOSED_STATUSES=new Set(['DELETED','REFUNDED','PARTIALLY_REFUNDED','CHARGEBACK_REQUESTED','CHARGEBACK_DISPUTE','AWAITING_CHARGEBACK_REVERSAL']);
 const NON_REVENUE_CLASSIFICATIONS=new Set(['pf_receivables_transfer','space_refund','capital_contribution','partner_loan','internal_transfer','non_operational_movement','other']);
 const CUSTOMER_PAYMENT_UNALLOCATED_CLASSIFICATIONS=new Set(['tap_tap_remittance']);

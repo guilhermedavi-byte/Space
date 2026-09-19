@@ -58,7 +58,7 @@ module.exports=async(req,res)=>{try{const user=getSessionFromRequest(req);if(!us
  const summary={month,
   total_gross_asaas_cents:creditTx.reduce((s,t)=>s+txValue(t),0),
   recognized_customer_revenue_cents:summarize(ledger,x=>x.revenue_recognized),
-  received_cents:summarize(ledger,x=>x.revenue_recognized&&['RECEIVED','RECEIVED_IN_CASH','DUNNING_RECEIVED'].includes(x.status)),
+  received_cents:summarize(ledger,x=>x.revenue_recognized&&['RECEIVED','RECEIVED_IN_CASH'].includes(x.status)),
   confirmed_cents:summarize(ledger,x=>x.revenue_recognized&&x.status==='CONFIRMED'),
   received_in_cash_cents:summarize(ledger,x=>x.revenue_recognized&&x.status==='RECEIVED_IN_CASH'),
   pf_transfers_cents:summarize(ledger,x=>!x.revenue_recognized&&x.nature==='TREASURY_TRANSFER'&&/pf_receivables_transfer|guilherme/i.test(`${x.reason} ${x.origin}`)),
