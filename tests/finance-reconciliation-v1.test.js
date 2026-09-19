@@ -38,7 +38,7 @@ test('groups pending movements by exact origin for batch classification',()=>{
  const movements=buildMovements(rows,[],[]);const groups=new Map();for(const m of movements){const g=groups.get(m.origin)||{count:0,value:0};g.count++;g.value+=m.value;groups.set(m.origin,g);}assert.equal(groups.get('Origem A').count,2);assert.equal(groups.get('Origem A').value,30000);
 });
 
-test('saved exact-origin non-revenue rule excludes future entries from revenue',()=>{
+test('received in cash customer charges count as revenue despite origin triage rule',()=>{
  const rows=[
   {asaas_payment_id:'pay_old',status:'RECEIVED_IN_CASH',value:'100.00',due_date:'2026-09-01',billing_type:'PIX',deleted:false,linked:false,snapshot:{pixTransaction:{payer:{name:'Guilherme Davi'}},payment_date:'2026-09-01'}},
   {asaas_payment_id:'pay_new',status:'RECEIVED_IN_CASH',value:'200.00',due_date:'2026-09-02',billing_type:'PIX',deleted:false,linked:false,snapshot:{pixTransaction:{payer:{name:'Guilherme Davi'}},payment_date:'2026-09-02'}},
@@ -47,7 +47,7 @@ test('saved exact-origin non-revenue rule excludes future entries from revenue',
  const payments=rows.map(r=>({asaas_payment_id:r.asaas_payment_id,value:r.value,payment_date:r.snapshot.payment_date}));
  const cases=[{movement_id:'mov_pay_old',origin:'Guilherme Davi',classification:'pf_receivables_transfer',allocations:[]}];
  const k=buildFinancials(rows,payments,cases,'2026-09');
- assert.equal(k.faturamento,30000);
+ assert.equal(k.faturamento,60000);
  const future=buildMovements(rows,payments,cases).find(m=>m.id==='mov_pay_new');
  assert.equal(future.status,'classified');
  assert.equal(future.classification,'pf_receivables_transfer');
@@ -62,8 +62,8 @@ test('origin non-revenue rule does not exclude reliable Asaas customer charges w
  const payments=[{asaas_payment_id:'pay_rule',value:'100.00',payment_date:'2026-09-01'},{asaas_payment_id:'pay_charge',value:'250.00',payment_date:'2026-09-02'},{asaas_payment_id:'pay_confirmed',value:'75.00',confirmed_date:'2026-09-03'}];
  const cases=[{movement_id:'mov_pay_rule',origin:'Cliente A',classification:'pf_receivables_transfer',allocations:[]}];
  const k=buildFinancials(rows,payments,cases,'2026-09');
- assert.equal(k.faturamento,32500);
- assert.equal(k.received,25000);
+ assert.equal(k.faturamento,42500);
+ assert.equal(k.received,35000);
  assert.equal(k.confirmed,7500);
 });
 
@@ -71,6 +71,6 @@ test('origin rule guard only applies to treasury or unreconciled transfer moveme
  const {originRuleApplies}=require('../api/_lib/finance-revenue-policy');
  assert.equal(originRuleApplies({status:'RECEIVED',billing_type:'PIX',linked:false}),false);
  assert.equal(originRuleApplies({status:'CONFIRMED',billing_type:'PIX',linked:false}),false);
- assert.equal(originRuleApplies({status:'RECEIVED_IN_CASH',billing_type:'PIX',linked:true}),true);
+ assert.equal(originRuleApplies({status:'RECEIVED_IN_CASH',billing_type:'PIX',linked:true}),false);
  assert.equal(originRuleApplies({status:'RECEIVED',billing_type:'TRANSFER',linked:false}),true);
 });
