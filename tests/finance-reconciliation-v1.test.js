@@ -74,3 +74,13 @@ test('origin rule guard only applies to treasury or unreconciled transfer moveme
  assert.equal(originRuleApplies({status:'RECEIVED_IN_CASH',billing_type:'PIX',linked:true}),false);
  assert.equal(originRuleApplies({status:'RECEIVED',billing_type:'TRANSFER',linked:false}),true);
 });
+
+test('tap tap remittance is unallocated customer payment revenue until allocated',()=>{
+ const {buildFinancials}=require('../api/_lib/finance-reconciliation');
+ const rows=[{asaas_payment_id:'pay_tap',status:'RECEIVED',value:'1275.03',due_date:'2026-09-01',billing_type:'PIX',deleted:false,linked:false,snapshot:{payment_date:'2026-09-01'}}];
+ const payments=[{asaas_payment_id:'pay_tap',value:'1275.03',payment_date:'2026-09-01'}];
+ const cases=[{movement_id:'mov_pay_tap',origin:'Tap Tap Send Payments Canada I Davi',classification:'tap_tap_remittance',allocations:[]}];
+ const k=buildFinancials(rows,payments,cases,'2026-09');
+ assert.equal(k.faturamento,127503);
+ assert.equal(k.received,127503);
+});

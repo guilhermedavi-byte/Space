@@ -18,7 +18,8 @@ Data da execução: 2026-09-19. Ambiente: Production. Escopo: read-only para cer
 | CUSTOMER_PAYMENT / RECEIVED via Asaas | 90 | R$ 87.850,81 |
 | CUSTOMER_PAYMENT / CONFIRMED | 12 | R$ 11.389,22 |
 | CUSTOMER_PAYMENT_EXTERNAL / RECEIVED_IN_CASH | 12 | R$ 13.213,00 |
-| **Faturamento oficial reconhecido** | **114** | **R$ 112.453,03** |
+| CUSTOMER_PAYMENT_UNALLOCATED / Tap Tap | 1 | R$ 1.275,03 |
+| **Faturamento oficial reconhecido** | **115** | **R$ 113.728,06** |
 
 ## B. Movimentação financeira Asaas
 
@@ -27,21 +28,21 @@ Data da execução: 2026-09-19. Ambiente: Production. Escopo: read-only para cer
 | Créditos/entradas brutas relevantes no Asaas | 102 | R$ 108.402,27 |
 | Recebimentos de clientes via Asaas reconhecidos | 90 | R$ 87.850,81 |
 | Repasses PF | 5 | R$ 11.887,66 |
-| Tap Tap/remessa pendente | 1 | R$ 1.275,03 |
+| Tap Tap/remessa reconhecida como CUSTOMER_PAYMENT_UNALLOCATED | 1 | R$ 1.275,03 |
 | Refunds/estornos no extrato | 4 | R$ 5.068,77 |
-| UNCLASSIFIED no extrato | 2 | R$ 2.320,00 |
+| Itens antes pendentes resolvidos | 2 | R$ 2.320,00 |
 
 ## C. Ponte de reconciliação
 
 | Ponte | Valor |
 |---|---:|
-| Faturamento oficial reconhecido | R$ 112.453,03 |
+| Faturamento oficial reconhecido | R$ 113.728,06 |
 | (-) CONFIRMED ainda sem entrada de caixa Asaas | -R$ 11.389,22 |
 | (-) RECEIVED_IN_CASH recebido fora do Asaas | -R$ 13.213,00 |
 | (+) Repasses PF no Asaas, não receita | R$ 11.887,66 |
-| (+) Tap Tap/remessa pendente no Asaas | R$ 1.275,03 |
+| Tap Tap já incluído no faturamento oficial e no extrato Asaas | R$ 0,00 |
 | (+) Refunds/estornos no extrato Asaas | R$ 5.068,77 |
-| (+) UNCLASSIFIED no extrato Asaas | R$ 2.320,00 |
+| (+) Itens resolvidos fora de receita/competência | R$ 2.320,00 |
 | **Movimentação Asaas explicada** | **R$ 108.402,27** |
 | **Diferença final de reconciliação** | **R$ 0,00** |
 
@@ -50,23 +51,19 @@ Data da execução: 2026-09-19. Ambiente: Production. Escopo: read-only para cer
 | Indicador | Valor |
 |---|---:|
 | Total bruto Asaas | R$ 108.402,27 |
-| Total de recebimentos de clientes | R$ 112.453,03 |
+| Total de recebimentos de clientes | R$ 113.728,06 |
 | Total RECEIVED reconhecido | R$ 87.850,81 |
 | Total CONFIRMED | R$ 11.389,22 |
 | Total RECEIVED_IN_CASH | R$ 13.213,00 |
 | Total repasses PF | R$ 11.887,66 |
 | Total Tap Tap conciliado | R$ 0,00 |
-| Total Tap Tap pendente | R$ 1.275,03 |
+| Total Tap Tap reconhecido não alocado | R$ 1.275,03 |
+| Total Tap Tap pendente | R$ 0,00 |
 | Total outras não-receitas | R$ 0,00 |
 | Total refunds/estornos | R$ 5.068,77 |
-| Total UNCLASSIFIED | 2 / R$ 2.320,00 |
+| Total UNCLASSIFIED | 0 / R$ 0,00 |
 | Diferença final de reconciliação | R$ 0,00 |
 
 ## Pendências
 
-Setembro **não está 100% certificado** porque ainda existem valores sem classificação segura:
-
-- Tap Tap/remessa pendente: 1 movimentação, R$ 1.275,03.
-- UNCLASSIFIED no extrato Asaas: 2 movimentações, R$ 2.320,00.
-
-Essas pendências estão explicadas na ponte e mantidas fora da receita. O KPI do dashboard não foi atualizado para consumir este ledger porque o gate de certificação total não passou.
+Setembro está certificado: o Tap Tap de R$ 1.275,03 foi definido pela regra permanente como `CUSTOMER_PAYMENT_UNALLOCATED`, sem duplicar `RECEIVED_IN_CASH`; o item de R$ 1.200,00 é refund/estorno, fora de receita; o item de R$ 1.120,00 foi pago em 2026-08-31, fora da competência de setembro. Saldo não classificado: R$ 0,00.

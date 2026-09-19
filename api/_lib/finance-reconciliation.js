@@ -6,7 +6,7 @@ const { getDocumentAsAdmin, listCollectionAsAdmin, commitWritesAsAdmin } = requi
 const { PROJECT_ID, encodeFields } = require('../../_lib/firestore-rest');
 
 const COLLECTION='financeReconciliationCases';
-const {PAID_STATUSES:PAID,CLOSED_STATUSES:CLOSED,NON_REVENUE_CLASSIFICATIONS:NON_REVENUE,cents,sumCents,revenueSummary,originRuleMap,rowNeedsConcilation}=require('./finance-revenue-policy');
+const {PAID_STATUSES:PAID,CLOSED_STATUSES:CLOSED,NON_REVENUE_CLASSIFICATIONS:NON_REVENUE,CUSTOMER_PAYMENT_UNALLOCATED_CLASSIFICATIONS:UNALLOCATED_REVENUE,cents,sumCents,revenueSummary,originRuleMap,rowNeedsConcilation}=require('./finance-revenue-policy');
 const CASH_ELIGIBLE=new Set(['PENDING','OVERDUE','DUNNING_REQUESTED']);
 const docId=id=>encodeURIComponent(String(id||''));
 const docPath=id=>`${COLLECTION}/${docId(id)}`;
@@ -36,7 +36,7 @@ function createFinanceReconciliation({connectionId=process.env.FINANCE_CONNECTIO
   const movementId=String(body?.movement_id||'');if(!/^mov_pay_[A-Za-z0-9_-]+$/.test(movementId)){const e=new Error('finance_reconciliation_invalid');e.status=400;throw e;}
   const allocations=Array.isArray(body?.allocations)?body.allocations:[];
   const classification=String(body?.classification||'').trim();
-  if(classification&&!NON_REVENUE.has(classification)){const e=new Error('finance_reconciliation_classification_invalid');e.status=400;throw e;}
+  if(classification&&!NON_REVENUE.has(classification)&&!UNALLOCATED_REVENUE.has(classification)){const e=new Error('finance_reconciliation_classification_invalid');e.status=400;throw e;}
   const now=new Date().toISOString(),before=await readCase(movementId),prior=before&&typeof before==='object'?before:{};
   const valid=[];
   for(const raw of allocations){const id=externalId(raw.receivable_id||raw.payment_id);const value=asMoney(raw.value);if(!value)continue;const row=rows.find(r=>r.asaas_payment_id===id);if(!row||row.deleted||CLOSED.has(row.status))continue;valid.push({receivable_id:id,asaas_payment_id:id,customer_id:row.asaas_customer_id||null,student_ids:row.student_ids||[],value,recognized_date:row.snapshot?.client_payment_date||row.snapshot?.payment_date||row.snapshot?.confirmed_date||now.slice(0,10),revenue_recognized:true,status_before:row.status});}
@@ -48,7 +48,7 @@ function createFinanceReconciliation({connectionId=process.env.FINANCE_CONNECTIO
 
  const classifyOrigin=async({body,actor,rows=[],payments=[]}={})=>{
   const origin=String(body?.origin||'').trim();const classification=String(body?.classification||'').trim();
-  if(!origin||origin.length>1200||!NON_REVENUE.has(classification)){const e=new Error('finance_reconciliation_classification_invalid');e.status=400;throw e;}
+  if(!origin||origin.length>1200||(!NON_REVENUE.has(classification)&&!UNALLOCATED_REVENUE.has(classification))){const e=new Error('finance_reconciliation_classification_invalid');e.status=400;throw e;}
   const cases=await listCases();const caseById=new Map(cases.map(c=>[c.movement_id,c]));const movements=buildMovements(rows,payments,cases).filter(m=>m.origin===origin&&m.status==='pending'&&!m.value_allocated);
   const limit=Math.min(Math.max(Number(body?.limit)||500,1),500);const selected=movements.slice(0,limit);const now=new Date().toISOString();
   const docs=[];for(const m of selected){const prior=caseById.get(m.id)||{};const status='classified';const next={...prior,connection_id:uuid(connectionId),movement_id:m.id,status,classification,origin,allocations:[],updated_at:now,created_at:prior.created_at||now,events:[...(Array.isArray(prior.events)?prior.events:[]),event('classify_origin_batch',actor,{status,classification,origin},body?.note)].slice(-100)};docs.push({movementId:m.id,data:next});}

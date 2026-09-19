@@ -14,7 +14,7 @@ const clean=s=>String(s||'').replace(/[\r\n\t]+/g,' ').slice(0,160);
 const dateOfTx=t=>String(t.date||t.transactionDate||t.effectiveDate||t.createdDate||t.dateCreated||'').slice(0,10);
 const txValue=t=>moneyCents(Math.abs(Number(t.value??t.amount??0)));
 const isCredit=t=>Number(t.value??t.amount??0)>0||String(t.type||t.operation||'').toUpperCase().includes('CREDIT');
-const classificationNature=c=>({pf_receivables_transfer:'TREASURY_TRANSFER',tap_tap_remittance:'UNCLASSIFIED',space_refund:'REFUND',capital_contribution:'CAPITAL_CONTRIBUTION',partner_loan:'OWNER_LOAN',internal_transfer:'TREASURY_TRANSFER',non_operational_movement:'UNCLASSIFIED',other:'UNCLASSIFIED'}[c]||'UNCLASSIFIED');
+const classificationNature=c=>({pf_receivables_transfer:'TREASURY_TRANSFER',tap_tap_remittance:'CUSTOMER_PAYMENT_UNALLOCATED',space_refund:'REFUND',capital_contribution:'CAPITAL_CONTRIBUTION',partner_loan:'OWNER_LOAN',internal_transfer:'TREASURY_TRANSFER',non_operational_movement:'UNCLASSIFIED',other:'UNCLASSIFIED'}[c]||'UNCLASSIFIED');
 function summarize(items,pred){return items.filter(pred).reduce((s,x)=>s+(x.value_cents||0),0);}
 function buildLedger({rows,payments,cases,links,month}){
  const paymentById=new Map(payments.map(p=>[p.asaas_payment_id,p]));
@@ -32,7 +32,7 @@ function buildLedger({rows,payments,cases,links,month}){
   if(hasAllocation){reason='receita considerada via alocação de conciliação';}
   else if(row.deleted||CLOSED_STATUSES.has(row.status)){nature=row.status&&String(row.status).includes('REFUND')?'REFUND':'UNCLASSIFIED';reason='cobrança encerrada/cancelada/estornada';}
   else if(row.status==='RECEIVED_IN_CASH'){revenue=true;nature='CUSTOMER_PAYMENT_EXTERNAL';reason='cobrança real de cliente marcada RECEIVED_IN_CASH';}
-  else if(caseDoc?.classification){nature=classificationNature(caseDoc.classification);reason=`classificação de conciliação: ${caseDoc.classification}`;}
+  else if(caseDoc?.classification){nature=classificationNature(caseDoc.classification);if(caseDoc.classification==='tap_tap_remittance'&&!(Array.isArray(caseDoc.allocations)&&caseDoc.allocations.some(a=>a?.revenue_recognized!==false))){revenue=true;reason='Tap Tap Send Payments: pagamento de cliente não alocado';}else reason=`classificação de conciliação: ${caseDoc.classification}`;}
   else if(isRevenueRow(row,payment,caseDoc,originRules.get(origin))){revenue=true;nature='CUSTOMER_PAYMENT';reason=row.status==='CONFIRMED'?'pagamento de cliente confirmado':'pagamento de cliente recebido';}
   else if(AMBIGUOUS_BILLING_TYPES.has(String(row.billing_type||row.method||''))){nature='UNCLASSIFIED';reason='movimentação ambígua sem vínculo confiável';}
   add({event_id:`payment:${row.asaas_payment_id}`,payment_id:row.asaas_payment_id,movement_id:`mov_${row.asaas_payment_id}`,customer_id:row.asaas_customer_id||null,student_id:linkByCustomer.get(row.asaas_customer_id)?.firestore_doc_id||null,student_linked:linked,date:comp||row.due_date||null,value_cents:moneyCents(payment?.value??row.value),status:row.status,origin:clean(origin),billing_type:row.billing_type||null,nature,revenue_recognized:revenue&&String(comp||'').startsWith(month),reason});
@@ -63,7 +63,7 @@ module.exports=async(req,res)=>{try{const user=getSessionFromRequest(req);if(!us
   received_in_cash_cents:summarize(ledger,x=>x.revenue_recognized&&x.status==='RECEIVED_IN_CASH'),
   pf_transfers_cents:summarize(ledger,x=>!x.revenue_recognized&&x.nature==='TREASURY_TRANSFER'&&/pf_receivables_transfer|guilherme/i.test(`${x.reason} ${x.origin}`)),
   tap_tap_reconciled_cents:summarize(ledger,x=>x.revenue_recognized&&/tap\s*tap|remessa/i.test(`${x.reason} ${x.origin}`)),
-  tap_tap_pending_cents:summarize(ledger,x=>!x.revenue_recognized&&/tap\s*tap|remessa|tap_tap/i.test(`${x.reason} ${x.origin}`)),
+  tap_tap_pending_cents:summarize(ledger,x=>x.nature==='CUSTOMER_PAYMENT_UNALLOCATED'||(!x.revenue_recognized&&/tap\s*tap|remessa|tap_tap/i.test(`${x.reason} ${x.origin}`))),
   other_non_revenue_cents:summarize(ledger,x=>!x.revenue_recognized&&['OWNER_REIMBURSEMENT','CAPITAL_CONTRIBUTION','OWNER_LOAN','TREASURY_TRANSFER'].includes(x.nature)&&!/pf_receivables_transfer|guilherme/i.test(`${x.reason} ${x.origin}`)),
   refunds_cents:summarize(ledger,x=>!x.revenue_recognized&&x.nature==='REFUND'),
   unclassified_count:ledger.filter(x=>!x.revenue_recognized&&x.nature==='UNCLASSIFIED'&&String(x.date||'').startsWith(month)).length,

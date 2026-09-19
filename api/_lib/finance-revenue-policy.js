@@ -1,7 +1,8 @@
 const PAID_STATUSES=new Set(['RECEIVED','RECEIVED_IN_CASH','DUNNING_RECEIVED']);
 const REVENUE_STATUSES=new Set(['RECEIVED','RECEIVED_IN_CASH','DUNNING_RECEIVED','CONFIRMED']);
 const CLOSED_STATUSES=new Set(['DELETED','REFUNDED','PARTIALLY_REFUNDED','CHARGEBACK_REQUESTED','CHARGEBACK_DISPUTE','AWAITING_CHARGEBACK_REVERSAL']);
-const NON_REVENUE_CLASSIFICATIONS=new Set(['pf_receivables_transfer','tap_tap_remittance','space_refund','capital_contribution','partner_loan','internal_transfer','non_operational_movement','other']);
+const NON_REVENUE_CLASSIFICATIONS=new Set(['pf_receivables_transfer','space_refund','capital_contribution','partner_loan','internal_transfer','non_operational_movement','other']);
+const CUSTOMER_PAYMENT_UNALLOCATED_CLASSIFICATIONS=new Set(['tap_tap_remittance']);
 const AMBIGUOUS_BILLING_TYPES=new Set(['TRANSFER','DEPOSIT','UNDEFINED']);
 const cents=value=>{if(value==null)return null;if(typeof value==='number'&&Number.isSafeInteger(value))return value;const s=String(value);if(!/^\d+(?:\.\d{1,2})?$/.test(s))return null;const [a,b='']=s.split('.');const n=Number(a)*100+Number(b.padEnd(2,'0'));return Number.isSafeInteger(n)?n:null;};
 const sumCents=(rows,get)=>rows.reduce((n,r)=>{const v=get(r);return n+(Number.isSafeInteger(v)?v:0);},0);
@@ -17,6 +18,7 @@ function originRuleApplies(row){return AMBIGUOUS_BILLING_TYPES.has(String(row?.b
 function isRevenueRow(row,payment,caseDoc,originClassification){
  if(!row||row.deleted||CLOSED_STATUSES.has(row.status)||!REVENUE_STATUSES.has(row.status))return false;
  if(row.status==='RECEIVED_IN_CASH')return true;
+ if(CUSTOMER_PAYMENT_UNALLOCATED_CLASSIFICATIONS.has(caseDoc?.classification))return !(Array.isArray(caseDoc?.allocations)&&caseDoc.allocations.some(a=>a?.revenue_recognized!==false));
  if(caseDoc?.classification)return false;
  if(originClassification&&originRuleApplies(row))return false;
  if(Array.isArray(caseDoc?.allocations)&&caseDoc.allocations.some(a=>a?.revenue_recognized!==false))return true;
@@ -44,4 +46,4 @@ function revenueSummary({rows=[],payments=[],cases=[],month,today=new Date().toI
  const delinquencyValue=sumCents(overdue,r=>cents(r.value));
  return {faturamento:received+confirmed+allocatedReceived,received:received+allocatedReceived,confirmed,count:inMonth.length+allocatedMonth.length,source:'Financial Foundation · política central de receita',delinquency_value:delinquencyValue,delinquency_percent:dueBase?Math.round(delinquencyValue/dueBase*10000)/100:null,delinquency_due_base:dueBase,delinquency_month_due_base:monthDueBase,origin_rules:originRules.size};
 }
-module.exports={PAID_STATUSES,REVENUE_STATUSES,CLOSED_STATUSES,NON_REVENUE_CLASSIFICATIONS,AMBIGUOUS_BILLING_TYPES,cents,sumCents,paymentCompetenceDate,originRuleMap,movementOrigin,rowNeedsConcilation,originRuleApplies,isRevenueRow,revenueSummary};
+module.exports={PAID_STATUSES,REVENUE_STATUSES,CLOSED_STATUSES,NON_REVENUE_CLASSIFICATIONS,CUSTOMER_PAYMENT_UNALLOCATED_CLASSIFICATIONS,AMBIGUOUS_BILLING_TYPES,cents,sumCents,paymentCompetenceDate,originRuleMap,movementOrigin,rowNeedsConcilation,originRuleApplies,isRevenueRow,revenueSummary};
