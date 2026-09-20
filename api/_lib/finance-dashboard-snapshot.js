@@ -1,10 +1,10 @@
 const { supabaseFetch } = require('./supabase-rest');
 const { uuid } = require('./finance-domain');
 
-const SNAPSHOT_SOURCE = 'FINANCE_OVERVIEW_SNAPSHOT';
+const SNAPSHOT_SOURCE = 'FINANCE_OVERVIEW_READ_MODEL';
 const INVALIDATION_SOURCE = 'FINANCE_OVERVIEW_INVALIDATION';
 const RESOURCE = 'overview';
-const OVERVIEW_SNAPSHOT_SCHEMA = 'finance_overview_2026_09_19_ledger_v1';
+const OVERVIEW_SNAPSHOT_SCHEMA = 'finance_overview_read_model_2026_09_19_ledger_v1';
 const memory = new Map();
 const invalidations = new Map();
 

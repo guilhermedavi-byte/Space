@@ -41604,6 +41604,7 @@ const showPanel = (panelName) => {
   if (panelName === "financeiro") {
     window.scrollTo({ top: 0, behavior: "smooth" });
     if (isFinanceAccessRole(currentRole)) {
+      runColdPathPrefetch("financeOverview");
       ensureFinanceLoaded({ force: false }).catch(() => {});
     } else {
       navigateApp(roleBasePath(currentRole), { replace: true });
@@ -42061,6 +42062,18 @@ const prefetchWithSpaceCache = async ({ resource, params = {}, url, select = (pa
   return data;
 };
 
+
+const prefetchFinanceOverviewColdPath = () => {
+  if (!isFinanceAccessRole(currentRole)) return Promise.resolve(null);
+  const month = getCompetenciaKeySaoPaulo();
+  return prefetchWithSpaceCache({
+    resource: "finance-overview",
+    params: { month },
+    url: `/api/finance-v1?view=overview&month=${encodeURIComponent(month)}`,
+    maxAge: 60_000,
+  });
+};
+
 const prefetchCommercialOverviewColdPath = async () => {
   if (currentRole !== "admin") return;
   const range = getCommercialOverviewRange();
@@ -42117,6 +42130,7 @@ const runColdPathPrefetch = (name) => {
     commercialOverview: prefetchCommercialOverviewColdPath,
     commercialGoals: prefetchCommercialGoalsColdPath,
     crmBoard: prefetchCrmBoardColdPath,
+    financeOverview: prefetchFinanceOverviewColdPath,
   };
   tasks[safeName]?.().catch((error) => console.debug?.("[prefetch] cold path skipped", safeName, error?.message || error));
 };
@@ -42127,6 +42141,9 @@ const schedulePostLoginColdPathPrefetch = () => {
       runColdPathPrefetch("commercialOverview");
       runColdPathPrefetch("commercialGoals");
       runColdPathPrefetch("crmBoard");
+      runColdPathPrefetch("financeOverview");
+    } else if (currentRole === "FINANCE") {
+      runColdPathPrefetch("financeOverview");
     } else if (currentRole === "growth") {
       runColdPathPrefetch("crmBoard");
     }
@@ -42138,6 +42155,7 @@ const prefetchForPanelIntent = (panelName) => {
   if (panel === "admin-comercial-visao-geral") runColdPathPrefetch("commercialOverview");
   if (panel === "admin-comercial-metas") runColdPathPrefetch("commercialGoals");
   if (panel === "native-crm") runColdPathPrefetch("crmBoard");
+  if (panel === "financeiro") runColdPathPrefetch("financeOverview");
 };
 
 document.addEventListener("pointerover", (event) => {
