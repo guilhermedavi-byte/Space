@@ -12260,6 +12260,8 @@ const nativeCrmState = {
     data: null,
     selectedTemplateId: "",
     selectedVersionId: "",
+    selectedWorkflowId: "",
+    workflowDraft: null,
     draft: null,
   },
   actions: {
@@ -15133,6 +15135,173 @@ const ensureNativeCrmQualificationDraft = () => {
   return state.draft;
 };
 
+const CRM_WORKFLOW_ACTIVITY_TYPES = [
+  ["task", "Tarefa"],
+  ["call", "Ligação"],
+  ["meeting", "Reunião"],
+  ["follow_up", "Follow-up"],
+];
+
+const CRM_WORKFLOW_DELAY_UNITS = [
+  ["immediate", "Imediatamente"],
+  ["hours", "hora(s) depois"],
+  ["days", "dia(s) depois"],
+];
+
+const nativeCrmWorkflowRows = () => Array.isArray(nativeCrmState.qualificationConfig.data?.workflows) ? nativeCrmState.qualificationConfig.data.workflows : [];
+const nativeCrmWorkflowPipelines = () => Array.isArray(nativeCrmState.qualificationConfig.data?.pipelines) ? nativeCrmState.qualificationConfig.data.pipelines : getNativeCrmData().pipelines;
+const nativeCrmWorkflowStages = () => Array.isArray(nativeCrmState.qualificationConfig.data?.stages) ? nativeCrmState.qualificationConfig.data.stages : getNativeCrmData().stages;
+
+const nativeCrmSelectedWorkflow = () => {
+  const workflows = nativeCrmWorkflowRows();
+  return workflows.find((workflow) => workflow.id === nativeCrmState.qualificationConfig.selectedWorkflowId) || workflows[0] || null;
+};
+
+const nativeCrmPreferredWorkflowVersion = (workflow) => {
+  const versions = Array.isArray(workflow?.versions) ? workflow.versions : [];
+  return versions.find((version) => version.status === "draft")
+    || versions.find((version) => version.id === workflow?.activeVersionId)
+    || versions.find((version) => version.status === "published")
+    || versions[0]
+    || null;
+};
+
+const nativeCrmWorkflowDraftFromVersion = (workflow, version) => {
+  const fallbackPipeline = nativeCrmWorkflowPipelines().find((pipeline) => pipeline.pipelineType === "sdr") || nativeCrmWorkflowPipelines()[0] || {};
+  const pipelineId = workflow?.pipelineId || fallbackPipeline.id || "";
+  const fallbackStage = nativeCrmWorkflowStages().find((stage) => stage.pipelineId === pipelineId) || {};
+  return {
+    id: workflow?.id || "",
+    versionId: version?.id || "",
+    name: workflow?.name || "Cadência Novo Lead",
+    workspaceType: workflow?.workspaceType || fallbackPipeline.pipelineType || "sdr",
+    pipelineId,
+    triggerStageId: workflow?.triggerStageId || fallbackStage.id || "",
+    isActive: workflow?.isActive === true,
+    steps: (Array.isArray(version?.steps) && version.steps.length ? version.steps : [
+      { activityType: "call", title: "Ligação 01", delayUnit: "immediate", delayAmount: 0 },
+      { activityType: "call", title: "Ligação 02", delayUnit: "days", delayAmount: 1 },
+      { activityType: "follow_up", title: "Follow-up", delayUnit: "days", delayAmount: 3 },
+    ]).map((step) => ({
+      id: step.id || "",
+      activityType: step.activityType || "task",
+      title: step.title || "",
+      description: step.description || "",
+      delayAmount: Number(step.delayAmount || 0),
+      delayUnit: step.delayUnit || "immediate",
+    })),
+  };
+};
+
+const ensureNativeCrmWorkflowDraft = () => {
+  const state = nativeCrmState.qualificationConfig;
+  const workflow = nativeCrmSelectedWorkflow();
+  const version = nativeCrmPreferredWorkflowVersion(workflow);
+  if (!state.workflowDraft || state.workflowDraft.id !== (workflow?.id || "") || state.workflowDraft.versionId !== (version?.id || "")) {
+    state.selectedWorkflowId = workflow?.id || "";
+    state.workflowDraft = nativeCrmWorkflowDraftFromVersion(workflow, version);
+  }
+  return state.workflowDraft;
+};
+
+const mutateNativeCrmWorkflowDraft = (mutator, { render = true } = {}) => {
+  const draft = ensureNativeCrmWorkflowDraft();
+  const next = { ...draft, steps: draft.steps.map((step) => ({ ...step })) };
+  mutator(next);
+  nativeCrmState.qualificationConfig.workflowDraft = next;
+  nativeCrmState.qualificationConfig.saveStatus = "";
+  if (render) renderNativeCrm();
+};
+
+const renderNativeCrmWorkflowConfig = () => {
+  const state = nativeCrmState.qualificationConfig;
+  const workflows = nativeCrmWorkflowRows();
+  const draft = ensureNativeCrmWorkflowDraft();
+  const selected = nativeCrmSelectedWorkflow();
+  const pipelines = nativeCrmWorkflowPipelines().filter((pipeline) => pipeline.pipelineType === draft.workspaceType);
+  const stages = nativeCrmWorkflowStages().filter((stage) => stage.pipelineId === draft.pipelineId);
+  const version = nativeCrmPreferredWorkflowVersion(selected);
+  const status = selected?.isActive ? "Ativa" : "Inativa";
+  return `
+    <section class="native-crm-admin-config native-crm-workflow-builder">
+      <aside class="native-crm-admin-config-list">
+        <div class="native-crm-record-column-head">
+          <span>Workflows</span>
+          <button type="button" class="native-crm-link-button" data-crm-workflow-new>${nativeCrmIcon("plus")}Novo workflow</button>
+        </div>
+        ${workflows.length ? workflows.map((workflow) => `
+          <button type="button" class="native-crm-config-template ${workflow.id === selected?.id ? "is-active" : ""}" data-crm-workflow-pick="${escapeHtml(workflow.id)}">
+            <strong>${escapeHtml(workflow.name || "Workflow")}</strong>
+            <span>${escapeHtml((workflow.workspaceType || "sdr").toUpperCase())} · ${escapeHtml(workflow.pipelineName || "Pipeline")}</span>
+            <em>${escapeHtml(workflow.triggerStageName || "Etapa")} · ${escapeHtml(String((workflow.versions?.find((row) => row.id === workflow.activeVersionId)?.steps || []).length || workflow.versions?.[0]?.steps?.length || 0))} atividades · ${workflow.isActive ? "Ativa" : "Inativa"}</em>
+          </button>
+        `).join("") : `<div class="native-crm-muted">Nenhum workflow configurado.</div>`}
+      </aside>
+      <main class="native-crm-admin-config-editor">
+        <header class="native-crm-admin-config-head">
+          <div>
+            <span>Stage enter → Activities</span>
+            <h3>${escapeHtml(draft.name || "Novo workflow")}</h3>
+            <p>${selected ? `Versão ${escapeHtml(String(version?.versionNumber || 1))} · ${escapeHtml(status)}` : "Rascunho novo"}</p>
+          </div>
+          <div class="native-crm-admin-config-summary">
+            <span><strong>${escapeHtml(String(draft.steps.length))}</strong>Atividades</span>
+            <span><strong>${escapeHtml(draft.workspaceType.toUpperCase())}</strong>Workspace</span>
+            <span><strong>${selected?.runCount || 0}</strong>Runs</span>
+          </div>
+        </header>
+        ${state.error ? `<div class="native-crm-form-error">${escapeHtml(state.error)}</div>` : ""}
+        ${state.saveStatus ? `<div class="native-crm-save-status">${escapeHtml(state.saveStatus)}</div>` : ""}
+        <section class="native-crm-admin-config-panel">
+          <div class="native-crm-section-head"><h3>Trigger</h3><span>V1 executa quando a oportunidade entra em uma etapa.</span></div>
+          <label><span>Nome</span><input data-crm-workflow-field="name" value="${escapeHtml(draft.name)}" /></label>
+          <div class="native-crm-form-grid">
+            <label><span>Workspace</span><select data-crm-workflow-field="workspaceType">
+              <option value="sdr" ${draft.workspaceType === "sdr" ? "selected" : ""}>SDR</option>
+              <option value="closer" ${draft.workspaceType === "closer" ? "selected" : ""}>Closer</option>
+            </select></label>
+            <label><span>Pipeline</span><select data-crm-workflow-field="pipelineId">
+              ${pipelines.map((pipeline) => `<option value="${escapeHtml(pipeline.id)}" ${pipeline.id === draft.pipelineId ? "selected" : ""}>${escapeHtml(pipeline.name)}</option>`).join("")}
+            </select></label>
+            <label><span>Quando entrar na etapa</span><select data-crm-workflow-field="triggerStageId">
+              ${stages.map((stage) => `<option value="${escapeHtml(stage.id)}" ${stage.id === draft.triggerStageId ? "selected" : ""}>${escapeHtml(stage.name)}</option>`).join("")}
+            </select></label>
+          </div>
+        </section>
+        <section class="native-crm-admin-config-panel">
+          <div class="native-crm-section-head"><h3>Atividades</h3><button type="button" class="button button-outline button-small" data-crm-workflow-step-add>${nativeCrmIcon("plus")}Adicionar atividade</button></div>
+          <div class="native-crm-workflow-step-list">
+            ${draft.steps.map((step, index) => `
+              <article class="native-crm-workflow-step" data-workflow-step-index="${index}">
+                <div class="native-crm-workflow-step-grip">${nativeCrmIcon("sort")}</div>
+                <strong>${escapeHtml(String(index + 1))}</strong>
+                <input data-crm-workflow-step-field="title" data-step-index="${index}" value="${escapeHtml(step.title)}" placeholder="Título" />
+                <select data-crm-workflow-step-field="activityType" data-step-index="${index}">
+                  ${CRM_WORKFLOW_ACTIVITY_TYPES.map(([value, label]) => `<option value="${escapeHtml(value)}" ${step.activityType === value ? "selected" : ""}>${escapeHtml(label)}</option>`).join("")}
+                </select>
+                <div class="native-crm-workflow-delay">
+                  <input type="number" min="0" step="1" data-crm-workflow-step-field="delayAmount" data-step-index="${index}" value="${escapeHtml(String(step.delayAmount || 0))}" ${step.delayUnit === "immediate" ? "disabled" : ""} />
+                  <select data-crm-workflow-step-field="delayUnit" data-step-index="${index}">
+                    ${CRM_WORKFLOW_DELAY_UNITS.map(([value, label]) => `<option value="${escapeHtml(value)}" ${step.delayUnit === value ? "selected" : ""}>${escapeHtml(label)}</option>`).join("")}
+                  </select>
+                </div>
+                <button type="button" class="native-crm-icon-button" data-crm-workflow-step-move="${index}" data-direction="up" aria-label="Subir">${nativeCrmIcon("chevron-up")}</button>
+                <button type="button" class="native-crm-icon-button" data-crm-workflow-step-move="${index}" data-direction="down" aria-label="Descer">${nativeCrmIcon("chevron-down")}</button>
+                <button type="button" class="native-crm-icon-button" data-crm-workflow-step-remove="${index}" aria-label="Remover">${nativeCrmIcon("close")}</button>
+              </article>
+            `).join("")}
+          </div>
+        </section>
+        <footer class="native-crm-admin-config-foot">
+          ${selected ? `<button type="button" class="button button-outline" data-crm-workflow-toggle="${escapeHtml(selected.id)}" data-active="${selected.isActive ? "false" : "true"}">${selected.isActive ? "Desativar" : "Ativar"}</button>` : ""}
+          <button type="button" class="button button-outline" data-crm-workflow-save ${state.saving ? "disabled" : ""}>${state.saving ? "Salvando…" : "Salvar draft"}</button>
+          <button type="button" class="button button-solid" data-crm-workflow-publish ${state.saving ? "disabled" : ""}>Publicar e ativar</button>
+        </footer>
+      </main>
+    </section>
+  `;
+};
+
 const renderNativeCrmQualificationConfig = () => {
   const state = nativeCrmState.qualificationConfig;
   if (state.loading && !state.data) return `<section class="native-crm-admin-config"><div class="native-crm-muted">Carregando filtros…</div></section>`;
@@ -15155,7 +15324,8 @@ const renderNativeCrmQualificationConfig = () => {
     <section class="native-crm-settings-shell">
       <nav class="native-crm-settings-tabs" aria-label="Configurações CRM">
         <button type="button" data-crm-settings-section="pipelines" class="${state.configSection === "pipelines" ? "is-active" : ""}">Pipelines</button>
-        <button type="button" data-crm-settings-section="qualification" class="${state.configSection !== "pipelines" ? "is-active" : ""}">Qualificação</button>
+        <button type="button" data-crm-settings-section="qualification" class="${state.configSection === "qualification" ? "is-active" : ""}">Qualificação</button>
+        <button type="button" data-crm-settings-section="workflows" class="${state.configSection === "workflows" ? "is-active" : ""}">Workflows</button>
       </nav>
       ${state.configSection === "pipelines" ? `
         <section class="native-crm-admin-config-panel native-crm-settings-empty">
@@ -15163,7 +15333,7 @@ const renderNativeCrmQualificationConfig = () => {
           <p>Use o gerenciador de pipelines no topo do CRM para criar etapas, reordenar e alterar padrões.</p>
           <button type="button" class="button button-outline" data-crm-pipeline-manager>Abrir pipelines</button>
         </section>
-      ` : `
+      ` : state.configSection === "workflows" ? renderNativeCrmWorkflowConfig() : `
     <section class="native-crm-admin-config" data-readonly="${readOnly ? "true" : "false"}">
       <aside class="native-crm-admin-config-list">
         <div class="native-crm-record-column-head">
@@ -15822,6 +15992,84 @@ const postNativeCrmQualificationAdminAction = async (payload, fallbackError) => 
     state.draft = null;
     state.preview = false;
     state.publishConfirm = false;
+    state.saveStatus = "Salvo";
+  } catch (error) {
+    state.error = error?.message || fallbackError;
+    state.saveStatus = "";
+  } finally {
+    state.saving = false;
+    renderNativeCrm();
+  }
+};
+
+const saveNativeCrmWorkflowConfig = async ({ publish = false } = {}) => {
+  const state = nativeCrmState.qualificationConfig;
+  const draft = ensureNativeCrmWorkflowDraft();
+  if (!draft) return;
+  state.saving = true;
+  state.error = "";
+  state.saveStatus = "Salvando...";
+  renderNativeCrm();
+  try {
+    const saveRes = await fetchWithAuth("/api/crm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "save_crm_workflow", ...draft }),
+    });
+    const saveData = await saveRes.json().catch(() => null);
+    if (!saveRes.ok) {
+      const details = Array.isArray(saveData?.validationErrors) ? `: ${saveData.validationErrors.join(" ")}` : "";
+      throw new Error(`${saveData?.error || "crm_workflow_save_failed"}${details}`);
+    }
+    state.data = saveData?.model || state.data;
+    state.loadedAt = Date.now();
+    state.selectedWorkflowId = saveData?.workflowId || draft.id || state.selectedWorkflowId;
+    state.workflowDraft = null;
+    state.saveStatus = "Salvo";
+    if (publish) {
+      const publishRes = await fetchWithAuth("/api/crm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "publish_crm_workflow", versionId: saveData?.versionId }),
+      });
+      const publishData = await publishRes.json().catch(() => null);
+      if (!publishRes.ok) {
+        const details = Array.isArray(publishData?.validationErrors) ? `: ${publishData.validationErrors.join(" ")}` : "";
+        throw new Error(`${publishData?.error || "crm_workflow_publish_failed"}${details}`);
+      }
+      state.data = publishData?.model || state.data;
+      state.loadedAt = Date.now();
+      state.selectedWorkflowId = publishData?.workflowId || state.selectedWorkflowId;
+      state.workflowDraft = null;
+      state.saveStatus = "Publicado";
+    }
+  } catch (error) {
+    state.error = error?.message || "Não foi possível salvar workflow.";
+    state.saveStatus = "";
+  } finally {
+    state.saving = false;
+    renderNativeCrm();
+  }
+};
+
+const postNativeCrmWorkflowAction = async (payload, fallbackError) => {
+  const state = nativeCrmState.qualificationConfig;
+  state.saving = true;
+  state.error = "";
+  state.saveStatus = "Salvando...";
+  renderNativeCrm();
+  try {
+    const res = await fetchWithAuth("/api/crm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error || fallbackError);
+    state.data = data?.model || state.data;
+    state.loadedAt = Date.now();
+    state.selectedWorkflowId = data?.workflowId || state.selectedWorkflowId;
+    state.workflowDraft = null;
     state.saveStatus = "Salvo";
   } catch (error) {
     state.error = error?.message || fallbackError;
@@ -42696,7 +42944,77 @@ document.addEventListener("click", (event) => {
     if (settingsSection instanceof HTMLButtonElement) {
       event.preventDefault();
       nativeCrmState.qualificationConfig.configSection = String(settingsSection.getAttribute("data-crm-settings-section") || "qualification");
+      nativeCrmState.qualificationConfig.error = "";
+      nativeCrmState.qualificationConfig.saveStatus = "";
       renderNativeCrm();
+      return;
+    }
+    const newWorkflow = target.closest("[data-crm-workflow-new]");
+    if (newWorkflow instanceof HTMLButtonElement) {
+      event.preventDefault();
+      nativeCrmState.qualificationConfig.selectedWorkflowId = "";
+      nativeCrmState.qualificationConfig.workflowDraft = nativeCrmWorkflowDraftFromVersion(null, null);
+      renderNativeCrm();
+      return;
+    }
+    const pickWorkflow = target.closest("[data-crm-workflow-pick]");
+    if (pickWorkflow instanceof HTMLButtonElement) {
+      event.preventDefault();
+      nativeCrmState.qualificationConfig.selectedWorkflowId = String(pickWorkflow.getAttribute("data-crm-workflow-pick") || "");
+      nativeCrmState.qualificationConfig.workflowDraft = null;
+      renderNativeCrm();
+      return;
+    }
+    const addWorkflowStep = target.closest("[data-crm-workflow-step-add]");
+    if (addWorkflowStep instanceof HTMLButtonElement) {
+      event.preventDefault();
+      mutateNativeCrmWorkflowDraft((draft) => {
+        draft.steps.push({ activityType: "call", title: `Ligação ${String(draft.steps.length + 1).padStart(2, "0")}`, delayUnit: "days", delayAmount: draft.steps.length });
+      });
+      return;
+    }
+    const moveWorkflowStep = target.closest("[data-crm-workflow-step-move]");
+    if (moveWorkflowStep instanceof HTMLButtonElement) {
+      event.preventDefault();
+      const index = Number(moveWorkflowStep.getAttribute("data-crm-workflow-step-move"));
+      const direction = String(moveWorkflowStep.getAttribute("data-direction") || "");
+      mutateNativeCrmWorkflowDraft((draft) => {
+        const nextIndex = direction === "up" ? index - 1 : index + 1;
+        if (nextIndex < 0 || nextIndex >= draft.steps.length) return;
+        const [item] = draft.steps.splice(index, 1);
+        draft.steps.splice(nextIndex, 0, item);
+      });
+      return;
+    }
+    const removeWorkflowStep = target.closest("[data-crm-workflow-step-remove]");
+    if (removeWorkflowStep instanceof HTMLButtonElement) {
+      event.preventDefault();
+      const index = Number(removeWorkflowStep.getAttribute("data-crm-workflow-step-remove"));
+      mutateNativeCrmWorkflowDraft((draft) => {
+        if (draft.steps.length > 1) draft.steps.splice(index, 1);
+      });
+      return;
+    }
+    const saveWorkflow = target.closest("[data-crm-workflow-save]");
+    if (saveWorkflow instanceof HTMLButtonElement) {
+      event.preventDefault();
+      saveNativeCrmWorkflowConfig({ publish: false }).catch(() => {});
+      return;
+    }
+    const publishWorkflow = target.closest("[data-crm-workflow-publish]");
+    if (publishWorkflow instanceof HTMLButtonElement) {
+      event.preventDefault();
+      saveNativeCrmWorkflowConfig({ publish: true }).catch(() => {});
+      return;
+    }
+    const toggleWorkflow = target.closest("[data-crm-workflow-toggle]");
+    if (toggleWorkflow instanceof HTMLButtonElement) {
+      event.preventDefault();
+      postNativeCrmWorkflowAction({
+        action: "toggle_crm_workflow",
+        id: String(toggleWorkflow.getAttribute("data-crm-workflow-toggle") || ""),
+        isActive: String(toggleWorkflow.getAttribute("data-active") || "") === "true",
+      }, "crm_workflow_toggle_failed").catch(() => {});
       return;
     }
     const newQualificationTemplate = target.closest("[data-crm-qualification-template-new]");
@@ -43038,7 +43356,7 @@ document.addEventListener("focusout", (event) => {
 
 document.addEventListener("input", (event) => {
   const target = event.target;
-  if (!(target instanceof HTMLInputElement)) return;
+  if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement)) return;
   if (target.matches("[data-crm-search]")) {
     nativeCrmState.search = target.value;
     renderNativeCrm();
@@ -43081,6 +43399,34 @@ document.addEventListener("input", (event) => {
       else if (key === "points") option[key] = Number(target.value) || 0;
       else option[key] = target.value;
     }
+  }
+  if (target.matches("[data-crm-workflow-field]")) {
+    const key = String(target.getAttribute("data-crm-workflow-field") || "");
+    const shouldRender = key === "workspaceType" || key === "pipelineId";
+    mutateNativeCrmWorkflowDraft((draft) => {
+      draft[key] = target.value;
+      if (key === "workspaceType") {
+        const pipeline = nativeCrmWorkflowPipelines().find((row) => row.pipelineType === draft.workspaceType) || nativeCrmWorkflowPipelines()[0] || {};
+        draft.pipelineId = pipeline.id || "";
+        draft.triggerStageId = nativeCrmWorkflowStages().find((stage) => stage.pipelineId === draft.pipelineId)?.id || "";
+      }
+      if (key === "pipelineId") {
+        draft.triggerStageId = nativeCrmWorkflowStages().find((stage) => stage.pipelineId === draft.pipelineId)?.id || "";
+      }
+    }, { render: shouldRender });
+  }
+  if (target.matches("[data-crm-workflow-step-field]")) {
+    const key = String(target.getAttribute("data-crm-workflow-step-field") || "");
+    const index = Number(target.getAttribute("data-step-index"));
+    mutateNativeCrmWorkflowDraft((draft) => {
+      const step = draft.steps[index];
+      if (!step) return;
+      if (key === "delayAmount") step[key] = Number(target.value) || 0;
+      else {
+        step[key] = target.value;
+        if (key === "delayUnit" && target.value === "immediate") step.delayAmount = 0;
+      }
+    }, { render: key === "delayUnit" });
   }
 });
 
@@ -43138,7 +43484,7 @@ document.addEventListener("change", (event) => {
     }
     return;
   }
-  if (target.matches("[data-crm-qualification-draft], [data-crm-qualification-question-field], [data-crm-qualification-option-field]")) {
+  if (target.matches("[data-crm-qualification-draft], [data-crm-qualification-question-field], [data-crm-qualification-option-field], [data-crm-workflow-field], [data-crm-workflow-step-field]")) {
     target.dispatchEvent(new Event("input", { bubbles: true }));
     return;
   }

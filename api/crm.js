@@ -444,6 +444,52 @@ const loadQualificationConfigRows = async () => {
   };
 };
 
+const loadWorkflowConfigRows = async () => {
+  const [workflowsRaw, versionsRaw, stepsRaw, runsRaw] = await Promise.all([
+    listCollectionAsAdmin(COLLECTIONS.workflows, { maxPages: 20 }).catch(() => []),
+    listCollectionAsAdmin(COLLECTIONS.workflowVersions, { maxPages: 50 }).catch(() => []),
+    listCollectionAsAdmin(COLLECTIONS.workflowSteps, { maxPages: 100 }).catch(() => []),
+    listCollectionAsAdmin(COLLECTIONS.workflowRuns, { maxPages: 50 }).catch(() => []),
+  ]);
+  return {
+    workflows: workflowsRaw.map((row) => crmWorkflows.normalizeWorkflow(row, CRM_SCOPE_ID)).filter((row) => row.id && matchesCrmScope(row)),
+    versions: versionsRaw.map((row) => crmWorkflows.normalizeWorkflowVersion(row, CRM_SCOPE_ID)).filter((row) => row.id && matchesCrmScope(row)),
+    steps: stepsRaw.map((row) => crmWorkflows.normalizeWorkflowStep(row, CRM_SCOPE_ID)).filter((row) => row.id && matchesCrmScope(row)),
+    runs: runsRaw.map((row) => crmWorkflows.normalizeWorkflowRun(row, CRM_SCOPE_ID)).filter((row) => row.id && matchesCrmScope(row)),
+  };
+};
+
+const buildWorkflowAdminModel = ({ workflows = [], versions = [], steps = [], runs = [] } = {}, structure = {}) => {
+  const stepsByVersionId = new Map();
+  steps.forEach((step) => {
+    if (!stepsByVersionId.has(step.versionId)) stepsByVersionId.set(step.versionId, []);
+    stepsByVersionId.get(step.versionId).push(step);
+  });
+  const versionsByWorkflowId = new Map();
+  versions.forEach((version) => {
+    if (!versionsByWorkflowId.has(version.workflowId)) versionsByWorkflowId.set(version.workflowId, []);
+    versionsByWorkflowId.get(version.workflowId).push({
+      ...version,
+      steps: (stepsByVersionId.get(version.id) || []).slice().sort((left, right) => Number(left.position || 0) - Number(right.position || 0)),
+    });
+  });
+  const runsByWorkflowId = new Map();
+  runs.forEach((run) => runsByWorkflowId.set(run.workflowId, (runsByWorkflowId.get(run.workflowId) || 0) + 1));
+  const pipelinesById = new Map((structure.pipelines || []).map((pipeline) => [pipeline.id, pipeline]));
+  const stagesById = new Map((structure.stages || []).map((stage) => [stage.id, stage]));
+  return {
+    workflows: workflows
+      .map((workflow) => ({
+        ...workflow,
+        pipelineName: pipelinesById.get(workflow.pipelineId)?.name || "",
+        triggerStageName: stagesById.get(workflow.triggerStageId)?.name || "",
+        runCount: runsByWorkflowId.get(workflow.id) || 0,
+        versions: (versionsByWorkflowId.get(workflow.id) || []).slice().sort((left, right) => Number(right.versionNumber || 0) - Number(left.versionNumber || 0)),
+      }))
+      .sort((left, right) => String(right.updatedAt || "").localeCompare(String(left.updatedAt || ""))),
+  };
+};
+
 const buildQualificationAdminModel = ({ templates = [], versions = [], questions = [], options = [] } = {}) => {
   const optionsByQuestionId = new Map();
   options.forEach((option) => {
@@ -534,7 +580,17 @@ const validateQualificationVersionForPublish = ({ version = {}, questions = [], 
 
 const loadQualificationAdminModel = async (actorId = "") => {
   await ensurePublishedSdrQualification(actorId);
-  return buildQualificationAdminModel(await loadQualificationConfigRows());
+  const [qualificationRows, workflowRows, structure] = await Promise.all([
+    loadQualificationConfigRows(),
+    loadWorkflowConfigRows(),
+    loadCrmStructure(),
+  ]);
+  return {
+    ...buildQualificationAdminModel(qualificationRows),
+    workflows: buildWorkflowAdminModel(workflowRows, structure).workflows,
+    pipelines: structure.pipelines,
+    stages: structure.stages,
+  };
 };
 
 const loadQualificationConfigByVersion = async (versionId) => {
@@ -857,6 +913,221 @@ const loadPipelineForOpportunity = async (opportunity) => {
   return rows.map(normalizePipeline).filter(matchesCrmScope).find((pipeline) => pipeline.id === opportunity?.pipelineId) || null;
 };
 
+const workflowActivityWrites = ({ workflow, version, steps, opportunity, stamp, actor }) => {
+  const baseDate = new Date(stamp);
+  return steps.map((step) => {
+    const activityId = newId("act");
+    return {
+      id: activityId,
+      scopeId: CRM_SCOPE_ID,
+      opportunityId: opportunity.id,
+      contactId: opportunity.contactId || null,
+      type: step.activityType,
+      title: step.title,
+      description: step.description || null,
+      dueAt: crmWorkflows.dueAtForStep(baseDate, step),
+      completedAt: null,
+      completedBy: null,
+      status: "open",
+      ownerId: opportunity.ownerId || null,
+      createdBy: actor,
+      createdAt: stamp,
+      updatedAt: stamp,
+      workflowRunId: "",
+      workflowId: workflow.id,
+      workflowStepId: step.id,
+      workflowVersionId: version.id,
+    };
+  });
+};
+
+const loadWorkflowDoc = async (workflowId) => {
+  try {
+    const row = await getDocumentAsAdmin(`${COLLECTIONS.workflows}/${encodeURIComponent(workflowId)}`);
+    const workflow = crmWorkflows.normalizeWorkflow(row, CRM_SCOPE_ID);
+    return workflow.id && matchesCrmScope(workflow) ? workflow : null;
+  } catch {
+    return null;
+  }
+};
+
+const loadWorkflowVersionDoc = async (versionId) => {
+  try {
+    const row = await getDocumentAsAdmin(`${COLLECTIONS.workflowVersions}/${encodeURIComponent(versionId)}`);
+    const version = crmWorkflows.normalizeWorkflowVersion(row, CRM_SCOPE_ID);
+    return version.id && matchesCrmScope(version) ? version : null;
+  } catch {
+    return null;
+  }
+};
+
+const loadWorkflowRunDoc = async (runId) => {
+  try {
+    const row = await getDocumentAsAdmin(`${COLLECTIONS.workflowRuns}/${encodeURIComponent(runId)}`);
+    const run = crmWorkflows.normalizeWorkflowRun(row, CRM_SCOPE_ID);
+    return run.id && matchesCrmScope(run) ? run : null;
+  } catch {
+    return null;
+  }
+};
+
+const queryWorkflowStepsByVersion = async (versionId) =>
+  (await queryCollectionByFieldAsAdmin(COLLECTIONS.workflowSteps, { field: "versionId", value: versionId }).catch(() => []))
+    .map((row) => crmWorkflows.normalizeWorkflowStep(row, CRM_SCOPE_ID))
+    .filter((row) => row.id && matchesCrmScope(row))
+    .sort((left, right) => left.position - right.position);
+
+const queryWorkflowRunsByOpportunity = async (opportunityId) =>
+  (await queryCollectionByFieldAsAdmin(COLLECTIONS.workflowRuns, { field: "opportunityId", value: opportunityId }).catch(() => []))
+    .map((row) => crmWorkflows.normalizeWorkflowRun(row, CRM_SCOPE_ID))
+    .filter((row) => row.id && matchesCrmScope(row));
+
+const queryActivitiesByWorkflowRun = async (workflowRunId) =>
+  (await queryCollectionByFieldAsAdmin(COLLECTIONS.activities, { field: "workflowRunId", value: workflowRunId }).catch(() => []))
+    .map(normalizeActivity)
+    .filter((row) => row.id && matchesCrmScope(row));
+
+const startWorkflowsForStageEnter = async ({ opportunity, toStageId, actor, stamp }) => {
+  const [workflowsRaw, existingRuns, opportunityActivities] = await Promise.all([
+    queryCollectionByFieldAsAdmin(COLLECTIONS.workflows, { field: "triggerStageId", value: toStageId }).catch(() => []),
+    queryWorkflowRunsByOpportunity(opportunity.id),
+    loadActivitiesForOpportunity(opportunity.id),
+  ]);
+  const workflows = workflowsRaw.map((row) => crmWorkflows.normalizeWorkflow(row, CRM_SCOPE_ID)).filter((row) => row.id && matchesCrmScope(row) && row.pipelineId === opportunity.pipelineId && row.isActive && row.activeVersionId);
+  const active = [];
+  for (const workflow of workflows) {
+    const version = await loadWorkflowVersionDoc(workflow.activeVersionId);
+    if (version?.status === "published") active.push({ workflow, version });
+  }
+  if (!active.length) return { started: 0 };
+  const existingKeys = new Set(existingRuns.map((run) => run.idempotencyKey).filter(Boolean));
+  const writes = [];
+  let started = 0;
+  let nextActivities = opportunityActivities;
+  for (const { workflow, version } of active) {
+    const idempotencyKey = `${opportunity.id}:${workflow.id}:${version.versionNumber}:${toStageId}`;
+    if (existingKeys.has(idempotencyKey)) continue;
+    const steps = await queryWorkflowStepsByVersion(version.id);
+    if (!steps.length) continue;
+    const runId = newId("wfrun");
+    const activities = workflowActivityWrites({ workflow, version, steps, opportunity, stamp, actor }).map((activity) => ({ ...activity, workflowRunId: runId }));
+    const run = {
+      id: runId,
+      scopeId: CRM_SCOPE_ID,
+      workflowId: workflow.id,
+      workflowVersionId: version.id,
+      workflowVersion: version.versionNumber,
+      opportunityId: opportunity.id,
+      triggerStageId: toStageId,
+      status: "active",
+      idempotencyKey,
+      startedAt: stamp,
+      completedAt: null,
+      cancelledAt: null,
+      createdAt: stamp,
+      updatedAt: stamp,
+    };
+    writes.push(
+      buildWrite(COLLECTIONS.workflowRuns, run.id, run, { createOnly: true }),
+      ...activities.map((activity) => buildWrite(COLLECTIONS.activities, activity.id, activity, { createOnly: true })),
+      eventWrite({
+        type: "crm.workflow.started",
+        opportunityId: opportunity.id,
+        contactId: opportunity.contactId,
+        actorId: actor,
+        payload: { workflowRunId: run.id, workflowId: workflow.id, workflowVersion: version.versionNumber, workflowName: workflow.name, activityCount: activities.length },
+        stamp,
+      }),
+    );
+    nextActivities = nextActivities.concat(activities);
+    started += 1;
+  }
+  if (!writes.length) return { started: 0 };
+  writes.push(buildWrite(COLLECTIONS.opportunities, opportunity.id, opportunityWithNextActivity(opportunity, nextActivities, stamp)));
+  const committed = await commitWritesAsAdmin({ writes });
+  if (!committed.ok) throw new Error("crm_workflow_start_failed");
+  return { started };
+};
+
+const cancelRunsForStageExit = async ({ opportunity, fromStageId, actor, stamp }) => {
+  if (!fromStageId) return { cancelled: 0 };
+  const [runs, activities] = await Promise.all([
+    queryWorkflowRunsByOpportunity(opportunity.id),
+    loadActivitiesForOpportunity(opportunity.id),
+  ]);
+  const activeRuns = runs.filter((run) => run.triggerStageId === fromStageId && run.status === "active");
+  if (!activeRuns.length) return { cancelled: 0 };
+  const workflowPairs = await Promise.all(activeRuns.map((run) => loadWorkflowDoc(run.workflowId).then((workflow) => [run.workflowId, workflow])));
+  const workflowsById = new Map(workflowPairs);
+  const runIds = new Set(activeRuns.map((run) => run.id));
+  const stampMs = Date.parse(stamp);
+  const cancellable = activities.filter((activity) =>
+    runIds.has(activity.workflowRunId)
+    && activity.status === "open"
+    && Number.isFinite(Date.parse(activity.dueAt || ""))
+    && Date.parse(activity.dueAt) > stampMs
+  );
+  const updatedActivities = activities.map((activity) =>
+    cancellable.some((row) => row.id === activity.id)
+      ? { ...activity, status: "cancelled", updatedAt: stamp }
+      : activity
+  );
+  const writes = [
+    ...cancellable.map((activity) => buildWrite(COLLECTIONS.activities, activity.id, { ...activity, status: "cancelled", updatedAt: stamp })),
+    ...activeRuns.map((run) => buildWrite(COLLECTIONS.workflowRuns, run.id, { ...run, status: "cancelled", cancelledAt: stamp, updatedAt: stamp })),
+    ...activeRuns.map((run) => eventWrite({
+      type: "crm.workflow.cancelled",
+      opportunityId: opportunity.id,
+      contactId: opportunity.contactId,
+      actorId: actor,
+      payload: { workflowRunId: run.id, workflowId: run.workflowId, workflowName: workflowsById.get(run.workflowId)?.name || "", cancelledActivities: cancellable.filter((activity) => activity.workflowRunId === run.id).length },
+      stamp,
+    })),
+    buildWrite(COLLECTIONS.opportunities, opportunity.id, opportunityWithNextActivity(opportunity, updatedActivities, stamp)),
+  ];
+  const committed = await commitWritesAsAdmin({ writes });
+  if (!committed.ok) throw new Error("crm_workflow_cancel_failed");
+  return { cancelled: activeRuns.length };
+};
+
+const runWorkflowStageSideEffects = async ({ opportunity, fromStageId, toStageId, actor, stamp }) => {
+  try {
+    await cancelRunsForStageExit({ opportunity, fromStageId, actor, stamp });
+    await startWorkflowsForStageEnter({ opportunity: { ...opportunity, stageId: toStageId }, toStageId, actor, stamp });
+  } catch (error) {
+    await commitWritesAsAdmin({ writes: [eventWrite({
+      type: "crm.workflow.failed",
+      opportunityId: opportunity.id,
+      contactId: opportunity.contactId,
+      actorId: actor,
+      payload: { opportunityId: opportunity.id, fromStageId, toStageId, error: clean(error.message) || "crm_workflow_execution_failed" },
+      stamp: nowIso(),
+    })] }).catch(() => null);
+  }
+};
+
+const completeWorkflowRunIfSettled = async ({ activity, opportunity, actor, stamp }) => {
+  const workflowRunId = clean(activity.workflowRunId);
+  if (!workflowRunId) return;
+  const run = await loadWorkflowRunDoc(workflowRunId);
+  if (!run || run.status !== "active") return;
+  const runActivities = (await queryActivitiesByWorkflowRun(workflowRunId)).map((row) => row.id === activity.id ? activity : row);
+  if (!runActivities.length || !runActivities.every((row) => row.status === "completed" || row.status === "cancelled")) return;
+  const workflow = await loadWorkflowDoc(run.workflowId);
+  const committed = await commitWritesAsAdmin({ writes: [
+    buildWrite(COLLECTIONS.workflowRuns, run.id, { ...run, status: "completed", completedAt: stamp, updatedAt: stamp }),
+    eventWrite({
+      type: "crm.workflow.completed",
+      opportunityId: opportunity.id,
+      contactId: opportunity.contactId,
+      actorId: actor,
+      payload: { workflowRunId: run.id, workflowId: run.workflowId, workflowName: workflow?.name || "", activityCount: runActivities.length },
+      stamp,
+    }),
+  ] });
+  if (!committed.ok) throw new Error("crm_workflow_complete_failed");
+};
+
 const crmActionGuard = async ({ auth, action, opportunity, pipelineType }) => {
   const type = pipelineType || (await loadPipelineForOpportunity(opportunity))?.pipelineType || "";
   if (commercialPermissions.canPerformCrmAction({ user: auth.user || auth.session, action, pipelineType: type })) return null;
@@ -1094,6 +1365,7 @@ const handleMoveOpportunity = async ({ auth, body }) => {
   ];
   const committed = await commitWritesAsAdmin({ writes });
   if (!committed.ok) return { status: committed.status || 500, body: { error: "crm_stage_change_failed" } };
+  await runWorkflowStageSideEffects({ opportunity: updated, fromStageId: opportunity.stageId || null, toStageId, actor: clean(auth.session.sub) || null, stamp });
   return { status: 200, body: { ok: true } };
 };
 
@@ -2204,6 +2476,94 @@ const handlePublishQualificationFilter = async ({ session, body }) => {
   return { status: 200, body: { ok: true, versionId: version.id, model: await loadQualificationAdminModel(actor) } };
 };
 
+const latestWorkflowVersionNumber = (versions, workflowId) =>
+  versions.filter((row) => row.workflowId === workflowId).reduce((max, row) => Math.max(max, Number(row.versionNumber || 0)), 0);
+
+const handleSaveCrmWorkflow = async ({ session, body }) => {
+  const stamp = nowIso();
+  const actor = clean(session.sub) || null;
+  const workflowId = clean(body.id || body.workflowId) || newId("workflow");
+  const [workflowRows, structure] = await Promise.all([loadWorkflowConfigRows(), loadCrmStructure()]);
+  const existing = workflowRows.workflows.find((row) => row.id === workflowId) || null;
+  const workflowDraft = crmWorkflows.workflowDraftFromPayload({ body, existingWorkflow: existing || {}, stamp, actor });
+  const draftVersion = workflowRows.versions.find((row) => row.workflowId === workflowId && row.status === "draft") || {
+    id: newId("wfver"),
+    scopeId: CRM_SCOPE_ID,
+    workflowId,
+    versionNumber: latestWorkflowVersionNumber(workflowRows.versions, workflowId) + 1,
+    status: "draft",
+    publishedAt: null,
+    createdBy: actor,
+    createdAt: stamp,
+    updatedAt: stamp,
+  };
+  const workflow = {
+    id: workflowId,
+    scopeId: CRM_SCOPE_ID,
+    name: workflowDraft.name,
+    pipelineId: workflowDraft.pipelineId,
+    triggerStageId: workflowDraft.triggerStageId,
+    workspaceType: workflowDraft.workspaceType,
+    isActive: existing ? existing.isActive : false,
+    activeVersionId: existing?.activeVersionId || null,
+    version: existing?.version || 0,
+    createdBy: existing?.createdBy || actor,
+    createdAt: existing?.createdAt || stamp,
+    updatedAt: stamp,
+  };
+  const steps = crmWorkflows.stepsFromPayload({ body, workflowId, versionId: draftVersion.id, stamp, newId, scopeId: CRM_SCOPE_ID });
+  const validation = crmWorkflows.validateWorkflowDraft({ workflow, steps, stages: structure.stages, pipelines: structure.pipelines });
+  if (!validation.ok) return { status: 400, body: { error: "workflow_invalid", validationErrors: validation.errors } };
+  const existingDraftSteps = workflowRows.steps.filter((step) => step.versionId === draftVersion.id);
+  const committed = await commitWritesAsAdmin({ writes: [
+    buildWrite(COLLECTIONS.workflows, workflow.id, workflow, { createOnly: !existing }),
+    buildWrite(COLLECTIONS.workflowVersions, draftVersion.id, { ...draftVersion, updatedAt: stamp }, { createOnly: !workflowRows.versions.some((row) => row.id === draftVersion.id) }),
+    ...existingDraftSteps.map((step) => deleteWrite(COLLECTIONS.workflowSteps, step.id)),
+    ...steps.map((step) => buildWrite(COLLECTIONS.workflowSteps, step.id, step, { createOnly: true })),
+    adminConfigEvent({ type: "crm.workflow.draft_saved", actorId: actor, payload: { workflowId: workflow.id, versionId: draftVersion.id, versionNumber: draftVersion.versionNumber }, stamp }),
+  ] });
+  if (!committed.ok) return { status: committed.status || 500, body: { error: "crm_workflow_save_failed" } };
+  return { status: 200, body: { ok: true, workflowId: workflow.id, versionId: draftVersion.id, model: await loadQualificationAdminModel(actor) } };
+};
+
+const handlePublishCrmWorkflow = async ({ session, body }) => {
+  const stamp = nowIso();
+  const actor = clean(session.sub) || null;
+  const versionId = clean(body.versionId);
+  const [workflowRows, structure] = await Promise.all([loadWorkflowConfigRows(), loadCrmStructure()]);
+  const version = workflowRows.versions.find((row) => row.id === versionId);
+  if (!version) return { status: 404, body: { error: "workflow_version_not_found" } };
+  const workflow = workflowRows.workflows.find((row) => row.id === version.workflowId);
+  if (!workflow) return { status: 404, body: { error: "workflow_not_found" } };
+  const steps = workflowRows.steps.filter((step) => step.versionId === version.id).sort((left, right) => left.position - right.position);
+  const validation = crmWorkflows.validateWorkflowDraft({ workflow, steps, stages: structure.stages, pipelines: structure.pipelines });
+  if (!validation.ok) return { status: 400, body: { error: "workflow_invalid", validationErrors: validation.errors } };
+  const previousPublished = workflowRows.versions.filter((row) => row.workflowId === workflow.id && row.status === "published" && row.id !== version.id);
+  const committed = await commitWritesAsAdmin({ writes: [
+    ...previousPublished.map((row) => buildWrite(COLLECTIONS.workflowVersions, row.id, { ...row, status: "archived", updatedAt: stamp })),
+    buildWrite(COLLECTIONS.workflowVersions, version.id, { ...version, status: "published", publishedAt: stamp, updatedAt: stamp }),
+    buildWrite(COLLECTIONS.workflows, workflow.id, { ...workflow, isActive: body.isActive === false ? false : true, activeVersionId: version.id, version: version.versionNumber, updatedAt: stamp }),
+    adminConfigEvent({ type: "crm.workflow.published", actorId: actor, payload: { workflowId: workflow.id, versionId: version.id, versionNumber: version.versionNumber }, stamp }),
+  ] });
+  if (!committed.ok) return { status: committed.status || 500, body: { error: "crm_workflow_publish_failed" } };
+  return { status: 200, body: { ok: true, workflowId: workflow.id, versionId: version.id, model: await loadQualificationAdminModel(actor) } };
+};
+
+const handleToggleCrmWorkflow = async ({ session, body }) => {
+  const stamp = nowIso();
+  const actor = clean(session.sub) || null;
+  const workflowRows = await loadWorkflowConfigRows();
+  const workflow = workflowRows.workflows.find((row) => row.id === clean(body.id || body.workflowId));
+  if (!workflow) return { status: 404, body: { error: "workflow_not_found" } };
+  const isActive = body.isActive === true;
+  const committed = await commitWritesAsAdmin({ writes: [
+    buildWrite(COLLECTIONS.workflows, workflow.id, { ...workflow, isActive, updatedAt: stamp }),
+    adminConfigEvent({ type: isActive ? "crm.workflow.activated" : "crm.workflow.deactivated", actorId: actor, payload: { workflowId: workflow.id }, stamp }),
+  ] });
+  if (!committed.ok) return { status: committed.status || 500, body: { error: "crm_workflow_toggle_failed" } };
+  return { status: 200, body: { ok: true, workflowId: workflow.id, model: await loadQualificationAdminModel(actor) } };
+};
+
 const handleCreateStage = async ({ session, body }) => {
   const pipelineId = clean(body.pipelineId);
   const name = clean(body.name);
@@ -2442,6 +2802,7 @@ const handleActivityStatusChange = async ({ auth, body, status }) => {
   ];
   const committed = await commitWritesAsAdmin({ writes });
   if (!committed.ok) return { status: committed.status || 500, body: { error: "crm_activity_status_failed" } };
+  await completeWorkflowRunIfSettled({ activity: updated, opportunity, actor: clean(auth.session.sub) || null, stamp }).catch((error) => console.warn("[crm] workflow run completion failed", error?.message || error));
   return { status: 200, body: { ok: true, activityId: updated.id, completedAt: updated.completedAt || null } };
 };
 
@@ -2740,6 +3101,9 @@ module.exports = async (req, res) => {
       "save_qualification_filter",
       "publish_qualification_filter",
       "delete_qualification_draft",
+      "save_crm_workflow",
+      "publish_crm_workflow",
+      "toggle_crm_workflow",
     ]);
     if (adminActions.has(action)) {
       const adminGuard = requireAdmin(auth);
@@ -2806,6 +3170,12 @@ module.exports = async (req, res) => {
                                                               ? await handlePublishQualificationFilter({ session: auth.session, body })
                                                               : action === "delete_qualification_draft"
                                                                 ? await handleDeleteQualificationDraft({ session: auth.session, body })
+                                                                : action === "save_crm_workflow"
+                                                                  ? await handleSaveCrmWorkflow({ session: auth.session, body })
+                                                                  : action === "publish_crm_workflow"
+                                                                    ? await handlePublishCrmWorkflow({ session: auth.session, body })
+                                                                    : action === "toggle_crm_workflow"
+                                                                      ? await handleToggleCrmWorkflow({ session: auth.session, body })
                                                       : action === "create_activity"
                                                         ? await handleCreateActivity({ auth, body })
                                                         : action === "update_activity"
