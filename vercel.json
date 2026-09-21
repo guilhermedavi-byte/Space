@@ -35,6 +35,9 @@
     },
     "api/finance-september-certification.js": {
       "maxDuration": 300
+    },
+    "api/finance-overview-rebuild.js": {
+      "maxDuration": 300
     }
   },
   "crons": [
@@ -45,6 +48,10 @@
     {
       "path": "/api/retention-churn-job",
       "schedule": "5 3 * * *"
+    },
+    {
+      "path": "/api/finance-overview-rebuild",
+      "schedule": "10 3 * * *"
     }
   ],
   "headers": [

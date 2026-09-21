@@ -50,6 +50,25 @@ const readOverviewInvalidation = async (connectionId, deps = {}) => {
   }
 };
 
+
+const closeStaleOverviewInvalidations = async (connectionId, deps = {}) => {
+  const request = deps.request || supabaseFetch;
+  const cutoff = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+  let rows = [];
+  try {
+    const result = await request(`/finance_sync_runs?connection_id=eq.${uuid(connectionId)}&source=eq.${encodeURIComponent(INVALIDATION_SOURCE)}&resource=eq.${RESOURCE}&finished_at=is.null&started_at=lt.${encodeURIComponent(cutoff)}&select=id,started_at&order=started_at.asc&limit=50`, { method: 'GET', timeoutMs: 3000 });
+    rows = Array.isArray(result.data) ? result.data : [];
+  } catch { return { closed: 0 }; }
+  let closed = 0;
+  for (const row of rows) {
+    try {
+      await rpc(request, 'run_update', { connection_id: uuid(connectionId), run_id: row.id, next_offset: 0, status: 'failed', error_code: 'stale_invalidation_replaced', report: { kind: 'finance_v1_overview_invalidation_cleanup', stale_run_id: row.id, cleaned_at: new Date().toISOString() } });
+      closed++;
+    } catch {}
+  }
+  return { closed };
+};
+
 const writeReportRun = async (connectionId, source, report, request) => {
   const base = { connection_id: uuid(connectionId), source, resource: RESOURCE, dry_run: true, filters: { month: report.month || null, kind: report.kind }, offset: 0 };
   const started = await rpc(request, 'run_start', base);
@@ -77,4 +96,4 @@ const invalidateOverviewSnapshots = async (connectionId, { reason = 'finance_dat
   catch (error) { invalidations.set(data.id, data); throw error; }
 };
 
-module.exports = { OVERVIEW_SNAPSHOT_SCHEMA, readOverviewSnapshot, readOverviewInvalidation, writeOverviewSnapshot, invalidateOverviewSnapshots };
+module.exports = { OVERVIEW_SNAPSHOT_SCHEMA, readOverviewSnapshot, readOverviewInvalidation, writeOverviewSnapshot, invalidateOverviewSnapshots, closeStaleOverviewInvalidations };

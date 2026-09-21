@@ -39,7 +39,7 @@ function createFinanceFoundation({store=createFinanceStore(),client=createAsaasC
       if(snapshot.id!==id) throw new FinanceError('finance_snapshot_id_mismatch');
       const result=await store.rpc('commit',{...lock,snapshot});
       log('object_projected',{resource,event_id:event?.id||null,external_object_id:id,changed:result.changed});
-      if(result.changed)invalidateOverviewSnapshots(connectionId,{reason:`${resource}_projected`}).catch(()=>{});
+      if(result.changed){const reason=`${resource}_projected`;await invalidateOverviewSnapshots(connectionId,{reason});if(!['ASAAS_BACKFILL','ASAAS_RECONCILIATION'].includes(source)){const {rebuildOverviewMonths,paymentMonths,saoPauloMonth}=require('./finance-overview-rebuild');await rebuildOverviewMonths({connectionId,months:resource==='payments'?paymentMonths(snapshot):[saoPauloMonth()],reason});}}
       return result;
     } catch(error) {
       const safe=safeFinanceError(error);
@@ -175,7 +175,7 @@ function createFinanceFoundation({store=createFinanceStore(),client=createAsaasC
       if(current.some(id=>id!==firestoreDocId))throw new FinanceError('finance_identity_already_linked',false,409);
       if(Date.now()-started>45000)throw new FinanceError('finance_identity_busy',true,409);
       const result=await store.rpc('link',{...scope(),customer_id:customerId,firestore_doc_id:firestoreDocId,verified_by:actor});
-      invalidateOverviewSnapshots(connectionId,{reason:'customer_linked'}).catch(()=>{});
+      await invalidateOverviewSnapshots(connectionId,{reason:'customer_linked'});{const {rebuildOverviewMonths,saoPauloMonth}=require('./finance-overview-rebuild');await rebuildOverviewMonths({connectionId,months:[saoPauloMonth()],reason:'customer_linked'});}
       return result;
     }finally{await store.rpc('release',{...lock,token:lease.token});}
   };
