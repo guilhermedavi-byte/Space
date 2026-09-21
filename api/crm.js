@@ -14,6 +14,7 @@ const handoff = require("./_lib/crm-handoff");
 const qualificationAnalytics = require("./_lib/crm-qualification-analytics");
 const qualificationActions = require("./_lib/crm-qualification-actions");
 const crmReasons = require("./_lib/crm-reasons");
+const crmWorkflows = require("./_lib/crm-workflows");
 const commercialPermissions = require("./_lib/commercial-permissions");
 const { createPerformanceTimer, sendJsonWithPerformance } = require("./_lib/performance-observer");
 
@@ -32,6 +33,10 @@ const COLLECTIONS = {
   qualificationOptions: "crmQualificationOptions",
   qualificationRuns: "crmQualificationRuns",
   qualificationAnswers: "crmQualificationAnswers",
+  workflows: "crmWorkflows",
+  workflowVersions: "crmWorkflowVersions",
+  workflowSteps: "crmWorkflowSteps",
+  workflowRuns: "crmWorkflowRuns",
   salesHandoffs: "crmSalesHandoffs",
   closerReviews: "crmCloserReviews",
   qualificationActions: "crmQualificationActions",
@@ -292,6 +297,9 @@ const normalizeActivity = (row) => ({
   createdBy: clean(row.createdBy) || null,
   createdAt: toIso(row.createdAt),
   updatedAt: toIso(row.updatedAt),
+  workflowRunId: clean(row.workflowRunId) || null,
+  workflowId: clean(row.workflowId) || null,
+  workflowStepId: clean(row.workflowStepId) || null,
 });
 
 const normalizeEvent = (row) => ({
@@ -895,6 +903,10 @@ const eventTitle = (event) => {
   if (event.type === "crm.qualification_action.dismissed") return "Ação dispensada";
   if (event.type === "crm.opportunity.discarded") return "Lead desqualificado";
   if (event.type === "crm.opportunity.reactivated") return "Lead reativado";
+  if (event.type === "crm.workflow.started") return "Cadência iniciada";
+  if (event.type === "crm.workflow.completed") return "Cadência concluída";
+  if (event.type === "crm.workflow.cancelled") return "Cadência cancelada";
+  if (event.type === "crm.workflow.failed") return "Cadência não iniciada";
   return clean(event.type).replace(/^crm\./, "");
 };
 
@@ -945,6 +957,18 @@ const eventDescription = (event) => {
     return [reason ? `Motivo: ${reason}` : "", note].filter(Boolean).join(" · ");
   }
   if (event.type === "crm.opportunity.reactivated") return "";
+  if (event.type === "crm.workflow.started") {
+    const name = clean(event.payload?.workflowName) || "Cadência";
+    const count = Number(event.payload?.activityCount) || 0;
+    return `${name} · ${count} atividade${count === 1 ? "" : "s"} programada${count === 1 ? "" : "s"}`;
+  }
+  if (event.type === "crm.workflow.cancelled") {
+    const name = clean(event.payload?.workflowName) || "Cadência";
+    const count = Number(event.payload?.cancelledActivities) || 0;
+    return `${name} · ${count} atividade${count === 1 ? "" : "s"} futura${count === 1 ? "" : "s"} cancelada${count === 1 ? "" : "s"}`;
+  }
+  if (event.type === "crm.workflow.completed") return clean(event.payload?.workflowName) || "Cadência";
+  if (event.type === "crm.workflow.failed") return clean(event.payload?.error) || "Falha ao iniciar cadência";
   return event.payload?.title || event.payload?.activityTitle || "";
 };
 
