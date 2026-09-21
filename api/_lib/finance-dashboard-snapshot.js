@@ -23,7 +23,6 @@ const readOverviewSnapshot = async (connectionId, month, deps = {}) => {
   const request = deps.request || supabaseFetch;
   const id = key(connectionId, month);
   const cached = memory.get(id);
-  if (validSnapshot(cached)) return cached;
   try {
     const rows = await latestRunReport(connectionId, SNAPSHOT_SOURCE, request);
     const found = rows.map(r => ({ ...(r.report || {}), run_id: r.id, snapshot_at: r.report?.snapshot_at || r.finished_at || r.started_at }))
