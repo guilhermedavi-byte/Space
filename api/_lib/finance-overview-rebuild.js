@@ -12,7 +12,7 @@ async function rebuildOverviewMonths({ connectionId = process.env.FINANCE_CONNEC
   const rebuilt = [];
   for (const month of targetMonths) {
     const result = await reader.get('overview', { month, fresh: '1', snapshot: '0' });
-    rebuilt.push({ month, snapshot_at: result?.snapshot_at || result?.meta?.snapshot_at || null, revenue: result?.kpis?.revenue ?? null, reason });
+    rebuilt.push({ month, snapshot_at: result?.snapshot_at || result?.meta?.snapshot_at || null, revenue: result?.kpis?.revenue ?? null, overdue: result?.kpis?.overdue ?? null, delinquency: result?.kpis?.delinquency ?? null, freshness: result?.meta?.overdue_freshness || null, reason });
   }
   return { ok: true, rebuilt };
 }

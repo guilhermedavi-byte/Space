@@ -30,8 +30,10 @@ function revenueSummary({rows=[],payments=[],cases=[],links=[],month,today=new D
  const s=getRevenueSummary({connectionId,rows,payments,cases,links,month,today});
  const monthDue=rows.filter(r=>!r.deleted&&!CLOSED_STATUSES.has(r.status)&&String(r.due_date||'').startsWith(month));
  const cutoff=today&&String(today).startsWith(month)?today:String(today||'')<month?null:`${month}-${new Date(Number(month.slice(0,4)),Number(month.slice(5,7)),0).getDate().toString().padStart(2,'0')}`;
- const dueToDate=cutoff?monthDue.filter(r=>r.due_date&&r.due_date<=cutoff):[];
- const overdue=dueToDate.filter(r=>['PENDING','OVERDUE','DUNNING_REQUESTED'].includes(r.status));
+ const currentMonth=cutoff&&String(today||'').startsWith(month);
+ const dueToDate=cutoff?monthDue.filter(r=>r.due_date&&(currentMonth?r.due_date<cutoff:r.due_date<=cutoff)):[];
+ const overdueCutoff=currentMonth?today:cutoff;
+ const overdue=overdueCutoff?monthDue.filter(r=>r.due_date&&r.due_date<overdueCutoff&&['PENDING','OVERDUE','DUNNING_REQUESTED'].includes(r.status)):[];
  const dueBase=sumCents(dueToDate,r=>cents(r.value));
  const monthDueBase=sumCents(monthDue,r=>cents(r.value));
  const delinquencyValue=sumCents(overdue,r=>cents(r.value));
