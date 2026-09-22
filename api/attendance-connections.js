@@ -2,6 +2,7 @@ const { readJsonBody, sendJson } = require('../_lib/http');
 const { requireAttendanceAuth } = require('./_lib/attendance-auth');
 const { assertAttendanceEnvironment, fail, only, uuid, text } = require('./_lib/attendance-domain');
 const { supabaseFetch } = require('./_lib/supabase-rest');
+const { isEvolution, publicFields, handleEvolution } = require('./_lib/attendance-evolution');
 
 const readConnectionsViaEdge = async (uid) => {
   const url = String(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/\/+$/, '');
@@ -43,11 +44,16 @@ const readConnectionsViaEdge = async (uid) => {
   }
 };
 
-const createHandler = ({ authenticate = requireAttendanceAuth, request = supabaseFetch, checkEnvironment = assertAttendanceEnvironment } = {}) => async (req, res) => {
+const createHandler = ({ authenticate = requireAttendanceAuth, request = supabaseFetch, checkEnvironment = assertAttendanceEnvironment, evolutionClient } = {}) => async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
-  if (!['GET', 'POST'].includes(req.method)) return sendJson(res, 405, { error: 'method_not_allowed' });
+  if (!['GET', 'POST', 'PATCH', 'DELETE'].includes(req.method)) return sendJson(res, 405, { error: 'method_not_allowed' });
   try {
-    const actor = await authenticate(req, req.method === 'GET' ? 'attendance.view' : 'attendance.manage');
+    const route = new URL(req.url || '/', 'https://space.invalid');
+    const id = req.query?.connection || route.searchParams.get('connection');
+    const suffix = req.query?.operation || route.searchParams.get('operation');
+    const operations = { GET: suffix === 'qr' ? 'qr' : !suffix ? 'detail' : null, POST: ['refresh-qr','reconnect','disconnect','pairing-code'].includes(suffix) ? suffix : null, PATCH: !suffix ? 'edit' : null, DELETE: !suffix ? 'disable' : null };
+    if ((id && !operations[req.method]) || (!id && !['GET','POST'].includes(req.method))) return sendJson(res,405,{error:'method_not_allowed'});
+    const actor = await authenticate(req, req.method === 'GET' && suffix !== 'qr' ? 'attendance.view' : 'attendance.manage');
     if (!['admin', 'growth'].includes(actor.role)) fail('attendance_forbidden', 403);
     if (req.method !== 'GET') checkEnvironment();
     const readOptions = req.method === 'GET' && request === supabaseFetch ? { timeoutMs: 15000 } : undefined;
@@ -109,7 +115,7 @@ const createHandler = ({ authenticate = requireAttendanceAuth, request = supabas
         membership = bundle.membership;
       }
     }
-    connections = connections.filter(c => c.provider === 'meta_whatsapp');
+    connections = connections.filter(c => c.provider === 'meta_whatsapp' || isEvolution(c));
     const scope = membership.filter(m => members[0]?.enabled && m.active && teams.some(t => t.team_id === m.team_id && t.active));
     const hasTeam = (id, manage = false) => admin || scope.some(m => m.team_id === id && (!manage || m.member_role === 'supervisor'));
     const canChannel = (ch, manage = false) => admin || grants.some(g => g.channel_id === ch.channel_id && hasTeam(g.team_id, manage));
@@ -118,23 +124,27 @@ const createHandler = ({ authenticate = requireAttendanceAuth, request = supabas
     // A connection-level change affects every channel, so Growth must supervise all of them.
     const manageable = c => !c.metadata?.validation_run_id && c.provider !== 'attendance_validation' && (admin || (allChannels(c).length ? allChannels(c).every(ch => canChannel(ch, true)) : c.metadata?.setup_pending === true && hasTeam(c.metadata.default_team_id, true)));
     const editableTeams = teams.filter(t => t.active && hasTeam(t.team_id, true));
-    if (req.method === 'GET') {
-      return sendJson(res, 200, {
-        permissions: { create: editableTeams.length > 0, technical: admin },
-        teams: teams.filter(t => admin || hasTeam(t.team_id)).map(t => ({ team_id: t.team_id, name: t.name })),
-        create_teams: editableTeams.map(t => ({ team_id: t.team_id, name: t.name })),
-        items: connections.filter(visible).map(c => {
-          const list = allChannels(c).filter(ch => canChannel(ch));
-          const pending = c.metadata?.setup_pending === true || c.status === 'pending' || c.metadata?.disabled_previous_status === 'pending';
-          return { connection_id: c.connection_id, name: c.display_name, provider: c.provider, status: c.status,
-            setup_pending: pending, waba_id: c.external_account_type === 'waba' && !c.external_account_id.startsWith('pending:') ? c.external_account_id : null,
-            created_at: c.created_at, updated_at: c.updated_at, draft_team_id: c.metadata?.setup_pending === true ? c.metadata.default_team_id : null,
-            can_edit: manageable(c), can_activate: manageable(c) && !pending && list.some(ch => ch.status === 'active'),
-            channels: list.map(ch => ({ ...ch, allowed_teams: grants.filter(g => g.channel_id === ch.channel_id && hasTeam(g.team_id, true)).map(g => g.team_id) })) };
-        }),
-      });
+    const serialize = c => {
+      const list = allChannels(c).filter(ch => canChannel(ch));
+      const pending = c.metadata?.setup_pending === true || c.status === 'pending' || c.metadata?.disabled_previous_status === 'pending';
+      return { connection_id:c.connection_id, name:c.display_name, provider:c.provider, status:c.status,
+        setup_pending:pending, waba_id:c.external_account_type==='waba' && !c.external_account_id.startsWith('pending:') ? c.external_account_id : null,
+        created_at:c.created_at, updated_at:c.updated_at, draft_team_id:c.metadata?.default_team_id || null,
+        can_edit:manageable(c), can_activate:manageable(c) && !pending && list.some(ch=>ch.status==='active'),
+        ...publicFields(c),
+        channels:list.map(ch=>({...ch,allowed_teams:grants.filter(g=>g.channel_id===ch.channel_id && hasTeam(g.team_id,true)).map(g=>g.team_id)})) };
+    };
+    const body = req.method === 'GET' || req.method === 'DELETE' ? {} : await readJsonBody(req).catch(() => fail('attendance_invalid_json',400));
+    if (id || body.provider === 'evolution_whatsapp') {
+      const result = await handleEvolution({req, body, id, operation:operations[req.method], actor, connections, editableTeams, visible, manageable, request, checkEnvironment, serialize, ...(evolutionClient ? {client:evolutionClient} : {})});
+      return sendJson(res,200,result);
     }
-    const body = await readJsonBody(req).catch(() => fail('attendance_invalid_json', 400));
+    if (req.method === 'GET') return sendJson(res,200,{
+      permissions:{create:editableTeams.length>0,technical:admin,evolution_ready:process.env.EVOLUTION_ONBOARDING_ENABLED==='true' && !!process.env.EVOLUTION_API_KEY && !!process.env.EVOLUTION_API_URL,adopt:process.env.EVOLUTION_ONBOARDING_ENABLED==='true' && admin && editableTeams.length>0 && !!process.env.EVOLUTION_INSTANCE_NAME && !connections.some(c=>isEvolution(c)&&c.external_account_id===process.env.EVOLUTION_INSTANCE_NAME.trim())},
+      teams:teams.filter(t=>admin||hasTeam(t.team_id)).map(t=>({team_id:t.team_id,name:t.name})),
+      create_teams:editableTeams.map(t=>({team_id:t.team_id,name:t.name})),
+      items:connections.filter(visible).map(serialize),
+    });
     only(body, ['action', 'connection_id', 'name', 'team_id', 'channel_id', 'status']);
     if (body.action === 'create') {
       uuid(body.team_id); text(body.name, 100);
@@ -144,6 +154,7 @@ const createHandler = ({ authenticate = requireAttendanceAuth, request = supabas
       uuid(body.connection_id);
       const c = connections.find(c => c.connection_id === body.connection_id && visible(c));
       if (!c || !manageable(c)) fail('attendance_forbidden', 403);
+      if (isEvolution(c)) fail('attendance_use_evolution_route',409);
       const patch = {};
       if (body.action === 'rename') { text(body.name, 100); patch.display_name = body.name.trim(); }
       else if (body.action === 'status') {
@@ -167,7 +178,9 @@ const createHandler = ({ authenticate = requireAttendanceAuth, request = supabas
     }
     return sendJson(res, 200, { ok: true });
   } catch (error) {
-    const status = [400, 401, 403, 409, 422].includes(error.status) ? error.status : 503;
+    const status = error.code === '42501' ? 403 : error.code === '55P03' ? 409 : [400,401,403,409,422].includes(error.status) ? error.status : 503;
+    const safeErrors = new Set(['evolution_not_configured','evolution_configuration_error','evolution_unavailable','evolution_instance_missing','evolution_protected_instance','evolution_disabled','evolution_pairing_not_supported']);
+    if (safeErrors.has(error.code)) return sendJson(res,status,{error:error.code});
     return sendJson(res, status, { error: status === 503 ? 'attendance_unavailable' : 'attendance_request_rejected' });
   }
 };
