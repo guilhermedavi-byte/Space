@@ -41,7 +41,7 @@ module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'POST') return sendJson(res, 405, { error: 'method_not_allowed' });
   try {
-    const expected = String(process.env.EVOLUTION_WEBHOOK_SECRET || '').trim();
+    const expected = String(process.env.EVOLUTION_WEBHOOK_SECRET || process.env.EVOLUTION_API_KEY || '').trim();
     const supplied = String(req.headers['x-space-evolution-secret'] || '').trim();
     if (!expected || expected.length < 24 || !equal(expected, supplied)) return sendJson(res, 401, { error: 'unauthorized' });
 
