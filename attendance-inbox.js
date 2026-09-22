@@ -41,7 +41,7 @@
     const row = activeRow();
     const detailConv = state.detail?.conversation;
     const composer = state.detail?.composer || { enabled:false, reason:'Envio será habilitado após concluir a conexão com a Meta.' };
-    return `<section class="ai-pane ai-chat"><header class="ai-chat-head"><div><h2 class="ai-chat-title">${esc(row ? titleFor(row) : 'Conversa')}</h2><p class="ai-chat-sub">${esc((detailConv?.connection?.name || row?.connection?.name || 'Atendimento'))} · ${esc(detailConv?.team?.name || row?.team?.name || 'Time')}</p></div><span class="ai-status">${esc(detailConv?.status || row?.status || '—')}</span></header>${renderMessages()}<div class="ai-composer"><textarea disabled placeholder="Responder mensagem"></textarea><div class="ai-row"><p class="ai-composer-note">${esc(composer.reason || 'Envio indisponível no momento.')}</p><button class="ai-send" disabled>Enviar</button></div></div></section>`;
+    return `<section class="ai-pane ai-chat"><header class="ai-chat-head"><div><h2 class="ai-chat-title">${esc(row ? titleFor(row) : 'Conversa')}</h2><p class="ai-chat-sub">${esc((detailConv?.connection?.name || row?.connection?.name || 'Atendimento'))} · ${esc(detailConv?.team?.name || row?.team?.name || 'Time')}</p></div><span class="ai-status">${esc(detailConv?.status || row?.status || '—')}</span></header>${renderMessages()}<div class="ai-composer"><textarea data-ai-compose ${composer.enabled?'':'disabled'} placeholder="${composer.enabled?'Responder mensagem':'Envio indisponível'}"></textarea><div class="ai-row"><p class="ai-composer-note">${esc(composer.reason || (composer.enabled?'Envio pelo WhatsApp conectado.':'Envio indisponível no momento.'))}</p><button class="ai-send" data-ai-send ${composer.enabled?'':'disabled'}>Enviar</button></div></div></section>`;
   }
   function renderContact() {
     const contact = state.detail?.contact || activeRow()?.contact;
@@ -67,6 +67,40 @@
     } catch (error) { state.error = error.message; }
     finally { state.loading = false; render(); }
   }
+  async function sendMessage() {
+    if (!state.selected || !state.detail?.composer?.enabled) return;
+    const input = root.querySelector('[data-ai-compose]');
+    const button = root.querySelector('[data-ai-send]');
+    const text = String(input?.value || '').trim();
+    if (!text) return;
+    if (text.length > 4000) { state.error = 'Mensagem muito longa.'; return render(); }
+    if (button) button.disabled = true;
+    if (input) input.disabled = true;
+    try {
+      const response = await fetchWithAuth('/api/attendance-inbox', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({conversation_id:state.selected,text,client_request_id:crypto.randomUUID()})
+      });
+      const payload = await response.json().catch(()=>({}));
+      if (!response.ok) {
+        const reasons = {
+          evolution_not_configured:'A integração do WhatsApp ainda não está configurada.',
+          evolution_configuration_error:'A Evolution recusou a autenticação do servidor.',
+          evolution_unavailable:'O WhatsApp está indisponível no momento.',
+          attendance_channel_disabled:'Reconecte o WhatsApp para enviar mensagens.',
+          attendance_invalid_recipient:'O telefone deste contato não é válido para envio.'
+        };
+        throw new Error(reasons[payload.error] || 'Não foi possível enviar a mensagem.');
+      }
+      if (input) input.value='';
+      await loadDetail(state.selected,{silent:true});
+      await load({silent:true});
+    } catch (error) {
+      state.error = error.message || 'Não foi possível enviar a mensagem.';
+      render();
+    }
+  }
   async function loadDetail(id, { silent = false } = {}) {
     state.selected = id;
     if (!silent) { state.detailLoading = true; state.error = ''; render(); }
@@ -83,6 +117,7 @@
     const button = event.target.closest('button'); if (!button) return;
     if (button.hasAttribute('data-ai-refresh')) return load();
     if (button.hasAttribute('data-ai-retry') && state.selected) return loadDetail(state.selected);
+    if (button.hasAttribute('data-ai-send')) return sendMessage();
     const filter = button.getAttribute('data-ai-filter');
     if (filter) { state.filter = filter; state.selected = ''; state.detail = null; return load(); }
     const id = button.getAttribute('data-ai-select');
@@ -90,6 +125,11 @@
   });
   root.addEventListener('change', event => { if (event.target.matches('[data-ai-team]')) { state.team_id = event.target.value; state.selected = ''; state.detail = null; load(); } });
   root.addEventListener('input', event => { if (event.target.matches('[data-ai-search]')) { state.q = event.target.value; clearTimeout(root._aiSearch); root._aiSearch = setTimeout(() => load(), 260); } });
+  root.addEventListener('keydown', event => {
+    if (!event.target.matches('[data-ai-compose]') || event.key !== 'Enter' || event.shiftKey) return;
+    event.preventDefault();
+    sendMessage();
+  });
   window.SpaceAttendanceInbox = { open };
   if (document.body.dataset.initialPanel === 'attendance-inbox') open();
 })();
