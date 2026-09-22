@@ -139,7 +139,7 @@ const buildAppHtml = ({ sessionJson, role, roleSlug, templateHtml, initialPanel 
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
     <script src="/api/runtime-config.js"></script>
     <link rel="stylesheet" href="styles.css" />
-    <link rel="stylesheet" href="finance-v1.css?v=7" />
+    <link rel="stylesheet" href="finance-v1.css?v=8" />
   </head>
   <body data-view="interno" data-page="app" data-app-role="${String(roleSlug || "")}" data-initial-panel="${String(initialPanel || "dashboard")}">
     <div class="page-glow page-glow-left" aria-hidden="true"></div>
@@ -153,7 +153,7 @@ const buildAppHtml = ({ sessionJson, role, roleSlug, templateHtml, initialPanel 
     <script src="/assets/student-lifecycle.js"></script>
     <script src="/assets/lifecycle-metrics.js"></script>
     <script src="finance-customer-link.js?v=1"></script>
-    <script src="finance-v1.js?v=30"></script>
+    <script src="finance-v1.js?v=31"></script>
     <script src="script.js"></script>
     <script src="admin-sdr.js"></script>
     <script src="pedagogico-n8n-ui.js"></script>
