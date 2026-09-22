@@ -78,6 +78,18 @@ const createHandler = ({ authenticate = requireAttendanceAuth, request = supabas
       const number = String(contact.phone || '').replace(/\D/g, '');
       if (!instance || !/^\d{7,16}$/.test(number)) fail('attendance_invalid_recipient', 422);
 
+      if (actor.role === 'admin') {
+        await request('/rpc/attendance_ensure_admin_member', {
+          method: 'POST',
+          body: {
+            p_actor_uid: actor.uid,
+            p_role: actor.role,
+            p_team_id: detail?.conversation?.team?.team_id
+          },
+          timeoutMs: 15000,
+        });
+      }
+
       const appended = await request('/rpc/attendance_append_message', {
         method: 'POST',
         body: {
