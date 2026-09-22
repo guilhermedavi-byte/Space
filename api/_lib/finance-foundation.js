@@ -3,6 +3,7 @@ const { createAsaasClient, AsaasError } = require('./asaas');
 const { invalidateOverviewSnapshots } = require('./finance-dashboard-snapshot');
 const { createFinanceStore, safeFinanceError } = require('./finance-store');
 const { FinanceError, externalId, uuid, normalizeWebhook, normalizeResource, isSupportedEvent, comparePayment, stable } = require('./finance-domain');
+const { resolvePaymentNature } = require('./finance-receivable-nature-resolver');
 function createFinanceFoundation({store=createFinanceStore(),client=createAsaasClient({readOnly:true}),
   connectionId=process.env.FINANCE_CONNECTION_ID, logger=(entry)=>console.info(JSON.stringify(entry))}={}) {
   const scope=()=>({connection_id:uuid(connectionId)});
@@ -39,6 +40,7 @@ function createFinanceFoundation({store=createFinanceStore(),client=createAsaasC
       if(snapshot.id!==id) throw new FinanceError('finance_snapshot_id_mismatch');
       const result=await store.rpc('commit',{...lock,snapshot});
       log('object_projected',{resource,event_id:event?.id||null,external_object_id:id,changed:result.changed});
+      if(result.changed&&resource==='payments'){await resolvePaymentNature({connectionId,paymentId:id,apply:true,actor}).catch(error=>log('receivable_nature_resolver_failed',{external_object_id:id,error:error?.message||'nature_resolver_failed'}));}
       if(result.changed){const reason=`${resource}_projected`;await invalidateOverviewSnapshots(connectionId,{reason});if(!['ASAAS_BACKFILL','ASAAS_RECONCILIATION'].includes(source)){const {rebuildOverviewMonths,paymentMonths,saoPauloMonth}=require('./finance-overview-rebuild');await rebuildOverviewMonths({connectionId,months:resource==='payments'?paymentMonths(snapshot):[saoPauloMonth()],reason});}}
       return result;
     } catch(error) {

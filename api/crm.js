@@ -1966,6 +1966,9 @@ const handleMarkOpportunityWon = async ({ auth, body }) => {
   if (closedValue == null || closedValue < 0) return { status: 400, body: { error: "invalid_closed_value" } };
   const stamp = nowIso();
   const closedAt = normalizeTimestamp(body.closedAt) || stamp;
+  const financeNatureRaw = clean(body.financeReceivableNature || body.financialNature || body.receivableNature);
+  const financeNature = ['ACQUISITION_ONE_OFF','RECURRING_FIRST_PAYMENT','RECURRING','NON_RECURRING_OTHER'].includes(financeNatureRaw) ? financeNatureRaw : null;
+  const financeContext = { crm_opportunity_id: opportunity.id, customer_id: clean(body.asaasCustomerId || body.customerId) || null, contract_id: clean(body.contractId || body.contratoId) || null, subscription_id: clean(body.subscriptionId || body.asaasSubscriptionId) || null, receivable_nature: financeNature };
   const actor = clean(auth.session.sub) || null;
   const updated = {
     ...opportunity,
@@ -1984,13 +1987,13 @@ const handleMarkOpportunityWon = async ({ auth, body }) => {
       opportunityId: opportunity.id,
       contactId: opportunity.contactId,
       actorId: actor,
-      payload: { opportunityId: opportunity.id, previousStatus: opportunity.status, closedValue, closedAt, actor },
+      payload: { opportunityId: opportunity.id, previousStatus: opportunity.status, closedValue, closedAt, actor, finance: financeContext },
       stamp,
     }),
   ];
   const committed = await commitWritesAsAdmin({ writes });
   if (!committed.ok) return { status: committed.status || 500, body: { error: "crm_mark_won_failed" } };
-  return { status: 200, body: { ok: true, status: "won", closedAt, closedValue } };
+  return { status: 200, body: { ok: true, status: "won", closedAt, closedValue, finance: financeContext } };
 };
 
 const handleMarkOpportunityLost = async ({ auth, body }) => {
@@ -2006,6 +2009,9 @@ const handleMarkOpportunityLost = async ({ auth, body }) => {
   if (lostReason === "other" && !lostReasonNote) return { status: 400, body: { error: "lost_reason_note_required" } };
   const stamp = nowIso();
   const closedAt = normalizeTimestamp(body.closedAt) || stamp;
+  const financeNatureRaw = clean(body.financeReceivableNature || body.financialNature || body.receivableNature);
+  const financeNature = ['ACQUISITION_ONE_OFF','RECURRING_FIRST_PAYMENT','RECURRING','NON_RECURRING_OTHER'].includes(financeNatureRaw) ? financeNatureRaw : null;
+  const financeContext = { crm_opportunity_id: opportunity.id, customer_id: clean(body.asaasCustomerId || body.customerId) || null, contract_id: clean(body.contractId || body.contratoId) || null, subscription_id: clean(body.subscriptionId || body.asaasSubscriptionId) || null, receivable_nature: financeNature };
   const actor = clean(auth.session.sub) || null;
   const updated = {
     ...opportunity,

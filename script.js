@@ -29476,8 +29476,8 @@ const ADMIN_PED_URL_MODULE_TO_TAB = {
   configuracoes: "configuracoes",
 };
 
-const FINANCE_TAB_TO_URL = { overview: "visao-geral", recebiveis: "recebiveis", assinaturas: "assinaturas", clientes: "clientes", recuperacao: "recuperacao", conciliacao: "conciliacao" };
-const FINANCE_URL_TO_TAB = { conciliacao: "conciliacao", recuperacao: "recuperacao", "visao-geral": "overview", dashboard: "overview", overview: "overview", recebiveis: "recebiveis", cobrancas: "recebiveis", pagamentos: "recebiveis", assinaturas: "assinaturas", clientes: "clientes", alunos: "clientes" };
+const FINANCE_TAB_TO_URL = { overview: "visao-geral", recebiveis: "recebiveis", assinaturas: "assinaturas", clientes: "clientes", recuperacao: "recuperacao", pendencias: "pendencias", fechamento: "fechamento", conciliacao: "conciliacao" };
+const FINANCE_URL_TO_TAB = { conciliacao: "conciliacao", recuperacao: "recuperacao", pendencias: "pendencias", fechamento: "fechamento", "fechamento-mensal": "fechamento", "visao-geral": "overview", dashboard: "overview", overview: "overview", recebiveis: "recebiveis", cobrancas: "recebiveis", pagamentos: "recebiveis", assinaturas: "assinaturas", clientes: "clientes", alunos: "clientes" };
 
 const ADMIN_PED_LESSON_RECORD_FILTER_DEFAULTS = {
   periodPreset: "this_month",
@@ -41623,7 +41623,10 @@ const syncSidebarAccordionState = (accordionName, shouldOpen) => {
 
 const ensureFinanceSidebarItems = () => {
   const bodyEl = document.querySelector("[data-sidebar-accordion-body='financeiro']");
-  if (!(bodyEl instanceof HTMLElement) || bodyEl.querySelector('[data-finance-tab="conciliacao"]')) return;
+  if (!(bodyEl instanceof HTMLElement)) return;
+  if (!bodyEl.querySelector('[data-finance-tab="pendencias"]')) { const p=document.createElement('button');p.className='sidebar-link sidebar-link-sub';p.type='button';p.setAttribute('data-finance-tab','pendencias');p.title='Pendências';p.innerHTML='<span class="sidebar-text">Pendências</span>';bodyEl.appendChild(p); }
+  if (!bodyEl.querySelector('[data-finance-tab="fechamento"]')) { const f=document.createElement('button');f.className='sidebar-link sidebar-link-sub';f.type='button';f.setAttribute('data-finance-tab','fechamento');f.title='Fechamento mensal';f.innerHTML='<span class="sidebar-text">Fechamento mensal</span>';bodyEl.appendChild(f); }
+  if (bodyEl.querySelector('[data-finance-tab="conciliacao"]')) return;
   const btn = document.createElement('button');
   btn.className = 'sidebar-link sidebar-link-sub';
   btn.type = 'button';
