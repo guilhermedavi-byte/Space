@@ -58,3 +58,14 @@ test('native wizard displays QR, updates to connected and stops polling when clo
  const count=requests.length;w.document.querySelector('dialog').close();await scheduled.find(x=>x.ms===4000).fn();assert.equal(requests.length,count);
  assert.equal(w.document.querySelector('dialog'),null);dom.window.close();
 });
+test('adoption observes the configured active instance without provisioning or connecting',async()=>{
+ const previous=process.env.EVOLUTION_INSTANCE_NAME;process.env.EVOLUTION_INSTANCE_NAME='space-suporte';
+ try {
+  const calls=[],writes=[];
+  const c={connection_id:cid,provider:'evolution_whatsapp',external_account_type:'instance',external_account_id:'space-suporte',display_name:'Suporte',status:'active',metadata:{}};
+  const handler=createHandler({authenticate:async()=>({role:'admin',uid:'admin'}),checkEnvironment:()=>{},request:async(path,opts)=>{if(opts){writes.push(opts.body);return {data:c};}return {data:path.startsWith('/teams?')?[{team_id:team,active:true}]:[]};},evolutionClient:async(op,name)=>{calls.push({op,name});return [{name,connectionStatus:'open'}];}});
+  const req=Readable.from([JSON.stringify({action:'adopt',provider:'evolution_whatsapp',name:'Suporte',team_id:team})]);req.method='POST';req.headers={};let code;
+  await handler(req,{setHeader(){},end(){code=this.statusCode;}});
+  assert.equal(code,200);assert.deepEqual(calls,[{op:'find',name:'space-suporte'}]);assert.deepEqual(writes.map(w=>w.p_action),['adopt','sync']);assert.equal(writes[1].p_id,cid);
+ } finally {if(previous===undefined)delete process.env.EVOLUTION_INSTANCE_NAME;else process.env.EVOLUTION_INSTANCE_NAME=previous;}
+});
