@@ -13,6 +13,7 @@ const limit = (value, fallback = 50) => {
   if (!Number.isFinite(n)) return fallback;
   return Math.max(1, Math.min(n, 50));
 };
+const { canonicalAvatar } = require('./_lib/attendance-avatar');
 const { contactProfile } = require('./_lib/attendance-contact-profile');
 const publicError = (error) => {
   const status = [400, 401, 403, 409, 422].includes(Number(error.status)) ? Number(error.status)
@@ -295,7 +296,7 @@ const createHandler = ({ authenticate = requireAttendanceAuth, request = supabas
           })
           .catch(() => {});
       }
-      payload.contact = sanitizePayload(await resolveProfile(payload));
+      payload.contact = sanitizePayload(canonicalAvatar(await resolveProfile(payload)));
       const conn = payload?.conversation?.connection || {};
       const enabled = conn.provider === 'evolution_whatsapp' && conn.status === 'active' && conn.setup_pending !== true;
       payload.composer = enabled
@@ -313,7 +314,7 @@ const createHandler = ({ authenticate = requireAttendanceAuth, request = supabas
     if (teamId) filters.team_id = teamId;
     const result = await request('/rpc/attendance_inbox_list', { method: 'POST', body: { p_actor_uid: actor.uid, p_role: actor.role, p_filters: filters }, timeoutMs: 15000 });
     const data = result.data || {};
-    return sendJson(res, 200, sanitizePayload({ rows: Array.isArray(data.rows) ? data.rows : [], teams: Array.isArray(data.teams) ? data.teams : [], limit: data.limit || filters.limit }));
+    return sendJson(res, 200, sanitizePayload({ rows: Array.isArray(data.rows) ? data.rows.map(row => ({...row, contact:canonicalAvatar(row.contact)})) : [], teams: Array.isArray(data.teams) ? data.teams : [], limit: data.limit || filters.limit }));
   } catch (error) {
     const { status, error: publicCode } = publicError(error);
     if (status === 503) {

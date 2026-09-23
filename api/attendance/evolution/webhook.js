@@ -53,46 +53,11 @@ const mediaOf = message => {
   };
 };
 const { compactEvolutionMessage } = require('../../_lib/attendance-media-envelope');
-const evolutionPost = async (path, body) => {
-  const key = String(process.env.EVOLUTION_API_KEY || '').trim();
-  let base;
-  try { base = new URL(String(process.env.EVOLUTION_API_URL || '').trim()); } catch { return null; }
-  if (!key || base.protocol !== 'https:') return null;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 8000);
-  try {
-    const response = await fetch(base.href.replace(/\/$/, '') + path, {
-      method: 'POST',
-      redirect: 'error',
-      signal: controller.signal,
-      headers: { apikey: key, 'Content-Type': 'application/json' },
-      body: JSON.stringify(body || {})
-    });
-    if (!response.ok) return null;
-    return await response.json().catch(() => null);
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timer);
-  }
-};
-const refreshAvatar = async ({ instance, connectionId, externalIdentifier, identifierType, phone }) => {
-  if (!phone) return;
-  const payload = await evolutionPost(`/chat/fetchProfilePictureUrl/${encodeURIComponent(instance)}`, { number: phone });
-  const url = String(payload?.profilePictureUrl || payload?.picture || '').trim();
-  if (!/^https:\/\/.{8,2048}$/i.test(url)) return;
-  await supabaseFetch('/rpc/attendance_update_contact_avatar_by_identity', {
-    method: 'POST',
-    body: {
-      p_connection_id: connectionId,
-      p_identifier_type: identifierType,
-      p_external_identifier: externalIdentifier,
-      p_avatar_url: url,
-      p_avatar_source: 'whatsapp_profile',
-      p_avatar_expires_at: null
-    }
-  }).catch(() => {});
-};
+// Optional identity enrichment: shared TTL/cache, never gates message ingestion.
+const { byIdentity: refreshContactAvatar, logFailure: logAvatarFailure } = require('../../_lib/attendance-avatar');
+const refreshAvatar = ({ connectionId, externalIdentifier, identifierType }) => refreshContactAvatar({
+  connection_id: connectionId, identifier_type: identifierType, external_identifier: externalIdentifier
+});
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
@@ -167,7 +132,7 @@ module.exports = async (req, res) => {
           }
         }
       });
-      refreshAvatar({ instance, connectionId: connection.connection_id, externalIdentifier: remoteJid, identifierType: 'whatsapp_jid', phone }).catch(() => {});
+      refreshAvatar({ instance, connectionId: connection.connection_id, externalIdentifier: remoteJid, identifierType: 'whatsapp_jid', phone }).catch(logAvatarFailure);
       return sendJson(res, 200, { ok: true });
     }
 

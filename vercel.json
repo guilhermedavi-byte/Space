@@ -38,6 +38,9 @@
     },
     "api/finance-overview-rebuild.js": {
       "maxDuration": 300
+    },
+    "api/attendance-inbox/avatar-backfill.js": {
+      "maxDuration": 240
     }
   },
   "crons": [

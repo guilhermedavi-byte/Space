@@ -50,3 +50,15 @@ test('Ogg metadata with infinite browser duration keeps the declared duration',a
  assert.equal(dom.window.document.querySelector('.ai-audio-time').textContent,'0:10');assert.doesNotMatch(dom.window.document.body.textContent,/Infinity|NaN/);
  }finally{dom.window.close();}
 });
+test('voice notes share contact avatar across list header inspector and inbound; outbound uses Space',async()=>{
+ const dom=new JSDOM('<body data-initial-panel="attendance-inbox"><div data-attendance-inbox></div>',{runScripts:'outside-only',url:'https://space.example'});
+ try{
+ const contact={name:'Clarice Margarida',avatar_url:'/api/attendance-inbox/avatar?contact_id=c'};const row={conversation_id:'c',contact,status:'open'};
+ dom.window.fetchWithAuth=async url=>({ok:true,json:async()=>String(url).includes('conversation_id')?{conversation:row,contact,messages:[{message_id:'in',direction:'inbound',kind:'audio'},{message_id:'out',direction:'outbound',kind:'audio'}],composer:{enabled:false}}:{rows:[row],teams:[]}});
+ dom.window.eval(fs.readFileSync('attendance-inbox.js','utf8'));await tick();dom.window.document.querySelector('[data-ai-select]').click();await tick();
+ const doc=dom.window.document;const src=doc.querySelector('.ai-item img').src;
+ for(const selector of ['.ai-chat-head img','.ai-profile img','.ai-msg.inbound .ai-audio img'])assert.equal(doc.querySelector(selector).src,src);
+ assert.equal(doc.querySelector('.ai-msg.outbound .ai-audio .ai-avatar').textContent,'S');assert.equal(doc.querySelector('.ai-msg.outbound .ai-audio img'),null);
+ const img=doc.querySelector('.ai-msg.inbound .ai-audio img');img.dispatchEvent(new dom.window.Event('error'));assert.equal(doc.querySelector('.ai-msg.inbound .ai-audio img'),null);assert.match(doc.querySelector('.ai-msg.inbound .ai-audio .ai-avatar').textContent,/CM/);
+ }finally{dom.window.close();}
+});
