@@ -41,7 +41,7 @@ async function collectHealth(now = new Date()) {
       signals.overdue_support_activities=support.filter(row => safeDay(row.prazo) && safeDay(row.prazo)<day).length;
       signals.critical_support_activities=support.filter(row => row.prioridade==='Alta').length;
       signals.activity_ids=open.map(row=>row.id);
-      monitored.push('overdue_retention_activity');
+      monitored.push('overdue_retention_activity','critical_support_activity');
     }
     const studentLogs=(logs||[]).filter(log => log.alunoId===student.student_id && safeDay(log.dateKey) && log.dateKey>=H.addDays(day,-30) && log.dateKey<=day);
     const dedupLogs=[...new Map(studentLogs.map(log => [log.eventId || log.id,log])).values()].sort((a,b)=>b.dateKey.localeCompare(a.dateKey));
@@ -54,7 +54,7 @@ async function collectHealth(now = new Date()) {
       if(signals.consecutive_no_shows<0) signals.consecutive_no_shows=observed.length;
       signals.last_class_at=observed.find(log=>log.statusAula==='realizada')?.dateKey || null;
       signals.rescheduled_classes_30d=dedupLogs.filter(log=>log.statusAula==='remarcada').length;
-      monitored.push('consecutive_absences');
+      monitored.push('consecutive_absences','low_attendance');
     }
     const studentLinks=(links||[]).filter(link=>link.firestore_doc_id===student.student_id);
     const ids=new Set(studentLinks.map(link=>`${link.connection_id}:${link.asaas_customer_id}`));

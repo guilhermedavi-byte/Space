@@ -22,6 +22,7 @@ function scoreHealth(signals = {}) {
   }
   if (finite(signals.attendance_rate_30d)) {
     scores.attendance = clamp(Number(signals.attendance_rate_30d));
+    if (scores.attendance < 80) factor('low_attendance','attention',`Presença registrada de ${Math.round(scores.attendance)}% em 30 dias`,'attendance_rate_30d',signals.attendance_rate_30d,80);
     if (signals.consecutive_no_shows >= 2) { scores.attendance = Math.min(scores.attendance,40); factor('consecutive_absences','high',`${signals.consecutive_no_shows} faltas consecutivas`,'consecutive_no_shows',signals.consecutive_no_shows,2); }
   }
   if (finite(signals.days_since_progress)) {
@@ -36,6 +37,7 @@ function scoreHealth(signals = {}) {
   }
   if (signals.support_observed === true) {
     scores.relationship = clamp(100 - Math.min(60, (signals.overdue_support_activities || 0) * 30) - Math.min(30, (signals.critical_support_activities || 0) * 15));
+    if (signals.critical_support_activities > 0) factor('critical_support_activity','attention',`${signals.critical_support_activities} atividade(s) de suporte/retenção de alta prioridade`,'critical_support_activities',signals.critical_support_activities,1);
     if (signals.overdue_support_activities > 0) factor('overdue_retention_activity','high',`${signals.overdue_support_activities} atividade(s) de suporte/retenção vencida(s)`,'overdue_support_activities',signals.overdue_support_activities,1);
   }
   const available = Object.keys(WEIGHTS).filter(key => scores[key] != null);
