@@ -97,10 +97,11 @@ async function readIntelligence(month) {
   const populations=await all('retention_population_snapshots',`snapshot_date=gte.${H.addDays(day,-400)}`,'snapshot_date.desc');
   const latest=populations[0];
   if(!latest) return {rows:[],alerts:[],events:[],trend:[],summary:null,snapshot_date:null,analytics:{},missing:['Snapshot inicial ainda não disponível']};
-  const [daily,history,alerts,events,cases]=await Promise.all([
+  const [daily,history,alerts,events,cases,openingRows]=await Promise.all([
     all('student_health_daily',`snapshot_date=eq.${latest.snapshot_date}`,'student_id'),
     all('student_health_daily',`snapshot_date=in.(${H.addDays(latest.snapshot_date,-7)},${H.addDays(latest.snapshot_date,-14)})`,'snapshot_date,student_id'),
     all('retention_alerts'),all('retention_health_events',`snapshot_date=gte.${H.addDays(day,-90)}`),all('retention_cases'),
+    all('student_health_daily',`snapshot_date=eq.${month}-01`,'student_id'),
   ]);
   const rows=daily.map(row=>{
     const data=row.data;
@@ -115,13 +116,14 @@ async function readIntelligence(month) {
   const closed=saved.length+lost.length;
   const churn=operationalCases.filter(row=>row.churned_at?.startsWith(month));
   const start=populations.find(row=>row.snapshot_date===`${month}-01`);
+  const openingIds=new Set(openingRows.filter(row=>row.data?.is_active).flatMap(row=>row.data.canonical_ids||[]));
   const notices=requested.filter(row=>row.notice_started_at);
   const resolvedNotices=notices.filter(row=>row.churned_at||row.saved_at);
   const byReason={};churn.forEach(row=>{const reason=row.close_reason||'Sem motivo registrado';byReason[reason]=(byReason[reason]||0)+1;});
   const firstContacts=requested.filter(row=>row.first_contact_at && new Date(row.first_contact_at)>=new Date(row.cancellation_requested_at)).map(row=>(new Date(row.first_contact_at)-new Date(row.cancellation_requested_at))/3600000);
   const analytics={month,requests_mtd:requested.length,saved:saved.length,churn_mtd:churn.length,save_rate:closed?100*saved.length/closed:null,save_cohort_size:closed,
-    base_start:start?.active_students??null,logo_churn:start?.active_students?100*new Set(churn.map(row=>row.student_id)).size/start.active_students:null,
-    request_rate:start?.active_students?100*new Set(requested.map(row=>row.student_id)).size/start.active_students:null,
+    base_start:start?.active_students??null,logo_churn:start?.active_students?100*new Set(churn.filter(row=>openingIds.has(row.student_id)).map(row=>row.student_id)).size/start.active_students:null,
+    request_rate:start?.active_students?100*new Set(requested.filter(row=>openingIds.has(row.student_id)).map(row=>row.student_id)).size/start.active_students:null,
     request_to_notice:requested.length?100*notices.length/requested.length:null,notice_to_churn:resolvedNotices.length?100*resolvedNotices.filter(row=>row.churned_at).length/resolvedNotices.length:null,
     first_contact_hours:firstContacts.length?firstContacts.reduce((a,b)=>a+b,0)/firstContacts.length:null,first_contact_coverage:requested.length?100*firstContacts.length/requested.length:0,
     grr:null,nrr:null,revenue_churn:null,revenue_saved:null,reasons:byReason,methodology:'Casos da cohort de pedido no mês; Save Rate sobre desfechos conhecidos. Base inicial somente snapshot do dia 1.'};

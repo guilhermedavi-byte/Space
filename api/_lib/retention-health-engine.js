@@ -66,6 +66,7 @@ function executive(rows) {
   const known = risk.filter(row => finite(row.mrr));
   const healthyActive = active.filter(row => row.health_tier === 'healthy' && row.lifecycle === 'active').length;
   return { active_students: active.length, ...counts, healthy_active: healthyActive, healthy_active_pct: active.length ? 100 * healthyActive / active.length : null,
+    health_mean: active.filter(row=>row.health_score!=null).length ? active.filter(row=>row.health_score!=null).reduce((sum,row)=>sum+row.health_score,0)/active.filter(row=>row.health_score!=null).length : null,
     health_coverage_pct: active.length ? active.reduce((sum,row) => sum + row.score_coverage_pct,0) / active.length : 0,
     active_mrr: active.length && active.every(row => finite(row.mrr)) ? active.reduce((sum,row) => sum + Number(row.mrr),0) : null,
     mrr_at_risk: known.length ? known.reduce((sum,row) => sum + Number(row.mrr),0) : null, mrr_known_count: known.length, mrr_risk_count: risk.length,

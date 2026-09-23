@@ -27721,6 +27721,7 @@ const getStudentProfileJourney = hist => {
   (hist.profileResources?.activities?.rows || []).filter(row => !activityEvents.some(event => event.activityId === row.id)).forEach(row => add('Atividades', row.id, row.criadoEm, `Atividade — ${row.titulo}`, activityProfileDetail(row)));
 
   (hist.profileResources?.financial?.rows || []).forEach(row => add("Financeiro", row.id, row.data_pagamento || row.created_at, row.profileKind, [row.status, studentProfileMoney(row.valor)].filter(Boolean).join(" · ")));
+  (hist.healthEvents || []).forEach(event => add('Health',event.id,event.date,event.title,event.detail));
   const registered = hist.alunoMeta?.criadoEm || hist.alunoMeta?.createdAt;
   if (registered) add("Cadastro", hist.alunoId, registered, "Cadastro do aluno", "");
   return events.sort((a, b) => b.time - a.time || String(a.id).localeCompare(String(b.id)));
@@ -28202,7 +28203,12 @@ const renderStudentSheetInto = ({ sheetEl, hist, mode = "admin" } = {}) => {
     </div>
   `;
   bindStudentProfileTabs(sheetEl, hist, mode);
-  if (mode === "admin") globalThis.SpaceRetentionIntelligence?.hydrateStudent(sheetEl, hist.alunoId, fetchWithAuth);
+  if (mode === "admin") globalThis.SpaceRetentionIntelligence?.hydrateStudent(sheetEl, hist.alunoId, fetchWithAuth).then(() => {
+    if (hist !== adminStudentsState.history || !sheetEl.isConnected) return;
+    hist.healthEvents = globalThis.SpaceRetentionIntelligence.studentEvents(hist.alunoId);
+    const historyPanel = sheetEl.querySelector('[data-student-profile-panel="history"]');
+    if (historyPanel) historyPanel.innerHTML = renderStudentProfileHistory(hist);
+  });
 };
 
 const renderAdminStudentSheet = () => {
