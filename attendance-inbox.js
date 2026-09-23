@@ -1,52 +1,71 @@
 (() => {
   const root = document.querySelector('[data-attendance-inbox]');
   if (!root) return;
-
-  const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const fmt = value => value ? new Date(value).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '';
   const dateOf = value => { const d = value ? new Date(value) : null; return d && Number.isFinite(d.getTime()) ? d : null; };
   const sameDay = (a, b) => a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-  const fmtTime = value => {
-    const d = dateOf(value);
-    return d ? d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
-  };
-  const fmtShort = value => {
-    const d = dateOf(value);
-    return d ? d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+  const dayLabel = value => {
+    const d = dateOf(value); if (!d) return '';
+    const today = new Date(), yesterday = new Date(); yesterday.setDate(today.getDate() - 1);
+    if (sameDay(d, today)) return 'Hoje';
+    if (sameDay(d, yesterday)) return 'Ontem';
+    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
   };
   const relative = value => {
-    const d = dateOf(value);
-    if (!d) return '';
+    const d = dateOf(value); if (!d) return '';
     const minutes = Math.max(0, Math.floor((Date.now() - d.getTime()) / 60000));
     if (minutes < 1) return 'agora';
     if (minutes < 60) return `${minutes} min`;
     if (minutes < 1440 && sameDay(d, new Date())) return `${Math.floor(minutes / 60)} h`;
     return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
   };
-  const dayLabel = value => {
-    const d = dateOf(value);
-    if (!d) return '';
-    const today = new Date();
-    const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
-    if (sameDay(d, today)) return 'Hoje';
-    if (sameDay(d, yesterday)) return 'Ontem';
-    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' });
-  };
   const money = (value, currency = 'BRL') => value == null ? '' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency }).format(Number(value) || 0);
-  const statusLabel = value => ({ open: 'Em atendimento', pending: 'Aguardando', resolved: 'Resolvida', closed: 'Resolvida' }[value] || value || '');
-  const transportLabel = value => ({ pending: 'Aguardando', sending: 'Enviando', accepted: 'Enviada', sent: 'Enviada', delivered: 'Entregue', read: 'Lida', failed: 'Falhou', received: 'Recebida', internal: 'Interna' }[value] || '');
-  const transportMark = value => ({ pending: '...', sending: '...', accepted: '✓', sent: '✓', delivered: '✓✓', read: '✓✓', failed: '!' }[value] || '');
-  const mediaText = kind => ({ audio: 'Audio', image: 'Foto', video: 'Video', document: 'Documento', sticker: 'Sticker', location: 'Localização', contact: 'Contato' }[kind] || 'Mensagem');
-  const previewText = msg => msg?.text || msg?.content?.text || msg?.content?.body || mediaText(msg?.kind);
-  const titleFor = row => row?.contact?.name || row?.contact?.phone || 'Contato sem nome';
-  const initials = value => String(value || '?').trim().split(/\s+/).slice(0, 2).map(part => Array.from(part)[0] || '').join('').toUpperCase() || '?';
-  const safeUrl = value => {
-    try { const url = new URL(String(value || '')); return url.protocol === 'https:' && !url.username && !url.password ? url.href : ''; }
-    catch { return ''; }
+  const labels = { open: 'Em atendimento', pending: 'Aguardando', resolved: 'Resolvida', received: 'Recebida', pending_send: 'Na fila', sending: 'Enviando', accepted: 'Aceita', sent: 'Enviada', delivered: 'Entregue', read: 'Lida', failed: 'Falha' };
+  const label = value => labels[value] || value || '';
+  const state = { rows: [], teams: [], selected: '', detail: null, loading: false, detailLoading: false, sending: false, actioning: '', error: '', composerError: '', q: '', filter: 'all', team_id: '', menuOpen: false, viewer: null, media: new Map() };
+  let poll;
+  const drafts = new Map();
+  const ui = { tab: 'person', contactHidden: false, listHidden: false, accordions: {} };
+  const icons = { inbox: '<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 13h5l2 3h4l2-3h5"/>', search:'<circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/>', filter:'<path d="M4 7h16M7 12h10M10 17h4"/>', panel:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/>', refresh:'<path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 3M4 15l2 3a7 7 0 0 0 12-1"/>', chat:'<path d="M21 11a9 9 0 0 1-13 8l-5 2 2-5A9 9 0 1 1 21 11Z"/>', attach:'<path d="m8 12 6-6a3 3 0 0 1 4 4l-8 8a5 5 0 0 1-7-7l8-8"/>', quick:'<path d="m13 2-8 12h6l-1 8 9-13h-7Z"/>', emoji:'<circle cx="12" cy="12" r="9"/><path d="M8 14q4 5 8 0M8 9h.01M16 9h.01"/>', ai:'<path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z"/>', send:'<path d="m4 4 17 8-17 8 3-8-3-8Zm3 8h14"/>', back:'<path d="m14 5-7 7 7 7"/>' };
+  const icon = name => `<svg viewBox="0 0 24 24" aria-hidden="true">${icons[name] || icons.chat}</svg>`;
+  const style = document.createElement('style');
+  style.textContent = `
+  body[data-active-panel="attendance-inbox"] .platform-main{padding:0!important;min-height:0}
+  body[data-active-panel="attendance-inbox"] .platform-panel{margin:0;padding:0}
+  .ai{--ai-line:rgba(255,255,255,.07);--ai-muted:#969aa7;--ai-accent:var(--accent,#ff564f);height:100dvh;width:100%;min-width:0;color:#eeeff3;font-size:13px;line-height:1.5}
+  .ai *{box-sizing:border-box}.ai [hidden]{display:none!important}.ai button,.ai input,.ai select,.ai textarea{font:inherit}.ai button,.ai a,.ai summary,.ai input,.ai select,.ai textarea{transition:background 150ms,border-color 150ms,color 150ms}.ai button{cursor:pointer}.ai button:disabled{cursor:not-allowed;opacity:.4}.ai :focus-visible{outline:2px solid var(--ai-accent);outline-offset:3px}.ai p{margin:0}.ai svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+  .ai-shell{height:100%;display:flex;flex-direction:column;background:#15171d}.ai-head{height:56px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 24px;border-bottom:1px solid var(--ai-line);gap:16px}.ai-title{font-size:15px;font-weight:600;letter-spacing:-.025em;margin:0}.ai-toolbar-title,.ai-row,.ai-person,.ai-actions,.ai-tools{display:flex;align-items:center;gap:8px}.ai-row{justify-content:space-between}.ai-count{color:var(--ai-muted);background:#23252d;border-radius:6px;padding:1px 7px;font-size:11px}.ai-indicator{font-size:11px;color:var(--ai-muted);display:flex;align-items:center;gap:6px}.ai-indicator:before{content:'';height:5px;width:5px;background:#90bba1;border-radius:50%}
+  .ai-grid{display:grid;grid-template-columns:310px minmax(0,1fr) 320px;flex:1;min-height:0;min-width:0}.ai-grid.is-no-contact{grid-template-columns:310px minmax(0,1fr)}.ai-grid.is-list-collapsed{grid-template-columns:minmax(0,1fr) 320px}.ai-grid.is-no-contact.is-list-collapsed{grid-template-columns:minmax(0,1fr)}.ai-grid.is-list-collapsed>.ai-conversations{display:none}.ai-pane{min-height:0;min-width:0;overflow:hidden;border:0;border-radius:0}.ai-conversations{display:flex;flex-direction:column;background:#191b22;border-right:1px solid var(--ai-line)}.ai-list-head{padding:16px 16px 0;display:grid;gap:12px}.ai-search-wrap{display:flex;align-items:center;gap:8px;background:#22242c;border:1px solid var(--ai-line);border-radius:8px;padding:0 10px;color:var(--ai-muted)}.ai-input{width:100%;min-width:0;border:0;background:transparent;color:#eee;padding:8px 0;outline-offset:0!important}.ai-input::placeholder,.ai-composer textarea::placeholder{color:#838794}.ai-select{min-width:0;max-width:205px;border:0;background:#191b22;color:#c4c7d1;padding:4px 0;font-size:12px!important}.ai-filters{display:flex;gap:16px;border-bottom:1px solid var(--ai-line)}.ai-chip{border:0;border-bottom:2px solid transparent;background:transparent;color:var(--ai-muted);padding:8px 0 10px;font-size:12px!important}.ai-chip.is-active{color:#f2f3f6;border-bottom-color:var(--ai-accent)}.ai-filter-pop{position:relative}.ai-filter-pop>summary{list-style:none;cursor:pointer}.ai-filter-pop>summary::-webkit-details-marker{display:none}.ai-popover{position:absolute;top:36px;right:0;width:195px;padding:8px;background:#252730;border:1px solid var(--ai-line);border-radius:10px;z-index:5;box-shadow:0 8px 24px #0003}.ai-popover .ai-chip{width:100%;text-align:left;padding:8px;border:0;border-radius:6px}.ai-popover .is-active{background:var(--accent-soft)}
+  .ai-list{flex:1;overflow-y:auto;padding:8px}.ai-item{position:relative;display:grid;grid-template-columns:40px minmax(0,1fr) auto;align-items:center;column-gap:10px;width:100%;height:74px;border:0;border-radius:8px;background:transparent;color:inherit;text-align:left;padding:10px}.ai-item:hover{background:#22252e}.ai-item.is-active{background:#2a272e}.ai-item.is-active:before{content:'';position:absolute;left:0;top:24px;bottom:24px;width:2px;border-radius:2px;background:var(--ai-accent)}.ai-item-copy{min-width:0}.ai-name{display:block;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ai-snippet{font-size:11px;color:var(--ai-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:4px!important}.ai-item-end{display:grid;justify-items:end;gap:9px}.ai-time{color:#838794;font-size:10px;white-space:nowrap}.ai-badge{font-size:10px;font-weight:600;border-radius:6px;background:var(--accent-soft);color:#ff9e95;min-width:18px;text-align:center;padding:1px 4px}.ai-channel-dot{display:inline-flex;color:#94bba2;vertical-align:middle;margin-right:3px}.ai-channel-dot svg{width:11px;height:11px}.ai-avatar{position:relative;display:inline-grid;place-items:center;flex:0 0 36px;width:36px;height:36px;border-radius:12px;background:#343540;color:#d9d5de;overflow:hidden;font-weight:600;font-size:12px}.ai-avatar img{position:absolute;width:100%;height:100%;object-fit:cover}.ai-person{min-width:0}.ai-person>span:last-child{min-width:0}.ai-person strong{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:13px;font-weight:600}
+  .ai-chat{display:flex;flex-direction:column;background:#13151b}.ai-chat-head{position:sticky;top:0;display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:72px;padding:12px 24px;border-bottom:1px solid var(--ai-line);background:#17191f;z-index:1}.ai-chat-head>.ai-row{min-width:0;gap:12px}.ai-mini,.ai-meta{font-size:11px;color:var(--ai-muted)}.ai-mini{margin-top:3px!important}.ai-status{color:#b7baC5;font-size:10px;white-space:nowrap}.ai-actions{flex-wrap:wrap;gap:6px}.ai-action,.ai-refresh,.ai-icon,.ai-send{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--ai-line);border-radius:8px;background:transparent;color:#cdd0da;min-height:30px;padding:5px 9px;text-decoration:none;font-size:11px!important;white-space:nowrap}.ai-icon{width:30px;padding:5px;border-color:transparent}.ai-action:hover,.ai-refresh:hover,.ai-icon:hover,.ai-chip:hover{background:#2b2d36;color:#fff}.ai-chat-head .ai-actions{flex-wrap:nowrap}.ai-chat-head .ai-action{border:0}.ai-chat-head .ai-action[data-ai-op="resolve"]{background:#292d33}.ai-messages{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:12px;padding:24px 32px;scroll-behavior:smooth}.ai-day{display:flex;align-items:center;gap:16px;align-self:stretch;color:#8e929e;font-size:10px;margin:12px 0 20px}.ai-day:before,.ai-day:after{content:'';height:1px;background:var(--ai-line);flex:1}.ai-msg{max-width:85%;border:0;border-radius:10px;padding:12px 14px;font-size:13px;line-height:1.6;overflow-wrap:anywhere}.ai-msg>div:first-child{white-space:pre-wrap}.ai-msg.inbound{align-self:flex-start;background:#252831;border-bottom-left-radius:3px}.ai-msg.outbound{align-self:flex-end;background:#353039;border-bottom-right-radius:3px}.ai-msg.internal{align-self:center;background:#302c24}.ai-msg-time{font-size:9px;color:#a1a0ab;margin-top:6px;text-align:right}.ai-quote{border-left:2px solid #92909e;padding:6px 10px;margin-bottom:8px;background:#ffffff06;color:#b5b4bf;font-size:11px}.ai-media{display:grid;gap:8px;min-width:0}.ai-media audio,.ai-media video{width:100%;max-width:360px}.ai-media img{display:block;max-width:100%;max-height:360px;border-radius:8px}.ai-doc{display:flex;align-items:center;gap:10px;color:inherit;text-decoration:none;padding:8px;background:#ffffff06;border-radius:8px}.ai-doc-icon{padding:8px}.ai-location,.ai-unavailable{color:#c5c6cf}.ai-caption{margin-top:8px!important}
+  .ai-composer{margin:8px 24px 20px;border:1px solid #ffffff12;border-radius:12px;background:#22252d;box-shadow:0 4px 14px #0001;overflow:hidden;flex-shrink:0}.ai-composer:focus-within{border-color:#ffffff28}.ai-compose-label{display:flex;align-items:center;gap:6px;padding:12px 14px 0;color:#b7bac4;font-size:11px}.ai-compose-label svg{width:13px;height:13px}.ai-composer textarea{display:block;width:100%;border:0;outline:none;background:transparent;color:#eee;padding:12px 14px;min-height:88px;max-height:200px;resize:vertical;font-size:13px;line-height:1.6}.ai-composer-footer{padding:8px 10px;display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--ai-line);gap:8px}.ai-send{background:var(--ai-accent);color:#fff;border:0;padding:7px 13px;font-weight:600}.ai-send:hover{background:#ed4943}.ai-composer-hint{padding:0 14px 8px;color:var(--ai-muted);font-size:10px}.ai-form-error{color:#ffa89d;padding:8px 14px;font-size:12px}.ai-tools{gap:2px}.ai-shortcut{font-size:10px;color:#8e929d;margin-right:8px}
+  .ai-pane--contact{background:#191b22;border-left:1px solid var(--ai-line);overflow-y:auto}.ai-contact{padding:20px;display:flex;flex-direction:column;gap:16px}.ai-profile{display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;padding:8px 0}.ai-profile .ai-avatar{width:64px;height:64px;flex-basis:64px;border-radius:20px;font-size:20px}.ai-contact-name{font-size:15px;font-weight:600;margin:4px 0 0;letter-spacing:-.02em}.ai-inspector-heading{display:flex;justify-content:space-between;align-items:center;color:var(--ai-muted);font-size:11px}.ai-context-tabs{display:flex;border-bottom:1px solid var(--ai-line);gap:20px}.ai-section{border-bottom:1px solid var(--ai-line);padding:0 0 16px}.ai-section summary{cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;padding:4px 0 12px}.ai-section summary:after{content:'⌄';color:var(--ai-muted)}.ai-section:not([open]) summary:after{content:'›'}.ai-card-title{font-size:11px;font-weight:600;color:#d9dbe2}.ai-info{display:grid;grid-template-columns:104px minmax(0,1fr);gap:8px;padding:6px 0}.ai-info-label{font-size:11px;color:var(--ai-muted)}.ai-info-value{font-size:11px;color:#d2d4de;overflow-wrap:anywhere}.ai-context-content{display:grid;gap:16px}.ai-candidate{width:100%;border:1px solid var(--ai-line);border-radius:8px;background:#ffffff03;padding:10px;text-align:left;color:#ddd;margin:4px 0}.ai-candidate small{display:block;color:var(--ai-muted);margin-top:4px}.ai-empty,.ai-error{flex:1;min-height:180px;display:grid;place-items:center;text-align:center;color:var(--ai-muted);padding:24px}.ai-empty h2{font-size:16px;color:#d7dae2;font-weight:500;letter-spacing:-.02em}.ai-empty p{font-size:12px;max-width:280px;line-height:1.8}.ai-empty-symbol{display:inline-grid;place-items:center;width:56px;height:56px;background:#22252c;border:1px solid var(--ai-line);border-radius:16px;color:#999da9;margin-bottom:8px}.ai-empty-symbol svg{width:24px;height:24px}.ai-skel{height:64px;margin:8px;border-radius:8px;background:#ffffff06;animation:ai-pulse 1.3s ease-in-out infinite alternate}@keyframes ai-pulse{to{opacity:.4}}.ai-mobile-back{display:none}
+  @media(min-width:1500px){.ai-grid{grid-template-columns:320px minmax(0,1fr) 340px}}
+  @media(max-width:1250px){.ai-grid{grid-template-columns:300px minmax(0,1fr) 300px}.ai-chat-head{padding:12px 16px;flex-wrap:wrap}.ai-chat-head .ai-actions{margin-left:auto}.ai-messages{padding:20px}.ai-contact{padding:16px}.ai-info{grid-template-columns:90px minmax(0,1fr)}}
+  @media(max-width:1050px){.ai-grid{grid-template-columns:300px minmax(0,1fr);position:relative}.ai-pane--contact{position:absolute;right:0;top:0;bottom:0;width:320px;max-width:100%;z-index:4;box-shadow:-10px 0 30px #0003}.ai-grid.is-list-collapsed{grid-template-columns:minmax(0,1fr)}.ai-shortcut{display:none}}
+  @media(max-width:700px){.ai-head{padding:0 16px}.ai-indicator{display:none}.ai-grid,.ai-grid.is-no-contact{grid-template-columns:minmax(0,1fr)}.ai-grid:not(.has-selection) .ai-chat{display:none}.ai-grid.has-selection .ai-conversations{display:none}.ai-grid.has-selection .ai-chat{display:flex}.ai-mobile-back{display:inline-flex}.ai-composer{margin:8px 12px 12px}.ai-messages{padding:16px}.ai-msg{max-width:92%}.ai-chat-head .ai-status{display:none}.ai-title{font-size:14px}.ai-chat-head .ai-mini{max-width:210px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}}
+  @media(prefers-reduced-motion:reduce){.ai *{transition:none!important;animation:none!important;scroll-behavior:auto}}
+`;
+  style.textContent += `.ai-audio{display:grid;grid-template-columns:32px minmax(60px,1fr) auto;align-items:center;gap:8px;min-width:200px}.ai-audio-btn{border:0;border-radius:50%;width:32px;height:32px;background:#ffffff12;color:#eee}.ai-audio-track{height:5px;background:#ffffff20;border-radius:4px;cursor:pointer;overflow:hidden}.ai-audio-fill{height:100%;background:#b6a4af}.ai-audio-time,.ai-audio-label{font-size:10px;color:var(--ai-muted)}.ai-audio-label{grid-column:2/4}.ai-image-wrap{border:0;background:transparent;padding:0;max-width:320px}.ai-video{max-width:100%;border-radius:8px}.ai-viewer{position:fixed;inset:0;z-index:1000;background:#08090dee;display:grid;place-items:center;padding:32px}.ai-viewer img{max-width:94vw;max-height:88vh;border-radius:8px}.ai-viewer button{position:absolute;right:20px;top:20px;width:36px;height:36px;border:1px solid var(--ai-line);background:#272a32;color:#fff;border-radius:8px;font-size:24px}.ai-chat-head .ai-actions{gap:2px}.ai-chat-head .ai-action{font-size:10px!important;padding:5px 7px}`;
+  document.head.append(style);
+  const api = async (params = {}) => {
+    const query = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => { if (v != null && String(v).trim()) query.set(k, String(v).trim()); });
+    const response = await fetchWithAuth(`/api/attendance-inbox${query.size ? `?${query}` : ''}`);
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(response.status === 403 ? 'Você não tem permissão para acessar estas conversas.' : 'Caixa de entrada indisponível.');
+    return payload;
   };
-  const avatar = (contact, size = 'sm') => {
+  const mediaText = kind => ({ audio:'🎤 Áudio', image:'📷 Imagem', video:'🎥 Vídeo', document:'📎 Documento', sticker:'Sticker', location:'Localização', contact:'Contato' })[kind] || 'Mensagem';
+  const titleFor = row => row?.contact?.name || row?.contact?.phone || 'Contato sem nome';
+  const msgText = msg => msg?.text || msg?.content?.text || msg?.content?.body || mediaText(msg?.kind);
+  const initials = value => String(value || '?').trim().split(/\s+/).slice(0,2).map(part => Array.from(part)[0] || '').join('').toUpperCase() || '?';
+  const photoUrl = value => { try { const u = new URL(value); return u.protocol === 'https:' && !u.username && !u.password ? u.href : ''; } catch { return ''; } };
+  const avatar = contact => {
     const name = contact?.name || contact?.phone || 'Contato';
-    const url = safeUrl(contact?.photo_url || contact?.avatar_url || contact?.avatar?.url || contact?.whatsapp_avatar_url);
-    return `<span class="ai-avatar ai-avatar--${esc(size)}" aria-label="${esc(name)}"><span>${esc(initials(name))}</span>${url ? `<img src="${esc(url)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" data-ai-avatar>` : ''}</span>`;
+    const url = photoUrl(contact?.photo_url || contact?.avatar_url || contact?.avatar?.url || contact?.whatsapp_avatar_url);
+    return `<span class="ai-avatar" aria-label="${esc(name)}"><span>${esc(initials(name))}</span>${url ? `<img src="${esc(url)}" alt="" referrerpolicy="no-referrer" data-ai-avatar>` : ''}</span>`;
   };
   const mediaUrl = msg => `/api/attendance-inbox/media?message_id=${encodeURIComponent(msg.message_id)}`;
   const mediaMeta = msg => msg?.media || msg?.content?.media || {};
@@ -57,64 +76,6 @@
     if (n >= 1024) return `${Math.round(n / 1024)} KB`;
     return `${n} B`;
   };
-  const state = {
-    rows: [], teams: [], selected: '', detail: null, loading: false, detailLoading: false,
-    sending: false, actioning: '', error: '', composerError: '', q: '', filter: 'all',
-    team_id: '', menuOpen: false, viewer: null, media: new Map(),
-  };
-  const drafts = new Map();
-  let poll = null;
-
-  const style = document.createElement('style');
-  style.textContent = `
-.ai{height:calc(100vh - 28px);min-height:680px;padding:14px;color:#eef5fb;background:#0a141e}.ai *{box-sizing:border-box}.ai button,.ai input,.ai textarea,.ai select{font:inherit}.ai-shell{height:100%;display:grid;grid-template-rows:auto 1fr;overflow:hidden;border:1px solid rgba(255,255,255,.075);border-radius:14px;background:#0e1b27}.ai-head{min-height:58px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:16px;border-bottom:1px solid rgba(255,255,255,.07);background:#101f2c}.ai-kicker{margin:0 0 2px;color:rgba(157,187,209,.72);font-size:10px;font-weight:800;letter-spacing:.14em;text-transform:uppercase}.ai-title{margin:0;font-size:1.12rem;line-height:1.15;font-weight:760}.ai-sub{margin:3px 0 0;color:rgba(238,245,251,.5);font-size:.76rem}.ai-grid{min-height:0;display:grid;grid-template-columns:348px minmax(420px,1fr) 326px}.ai-pane{min-width:0;min-height:0;overflow:hidden;background:#0e1b27}.ai-list-pane{border-right:1px solid rgba(255,255,255,.07)}.ai-context-pane{border-left:1px solid rgba(255,255,255,.07)}.ai-refresh,.ai-chip,.ai-send,.ai-icon-btn,.ai-primary,.ai-menu-item,.ai-link-btn,.ai-candidate{appearance:none;border:0;color:inherit;background:transparent;cursor:pointer}.ai-refresh{height:30px;padding:0 10px;border:1px solid rgba(255,255,255,.08);border-radius:8px;color:rgba(238,245,251,.68);font-size:.74rem;font-weight:650}.ai-refresh:hover{background:rgba(255,255,255,.055);color:#fff}.ai-scroll{scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.14) transparent}.ai-scroll::-webkit-scrollbar{width:7px;height:7px}.ai-scroll::-webkit-scrollbar-track{background:transparent}.ai-scroll::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:999px}.ai-scroll::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.22)}.ai-list-head{padding:10px 10px 8px;border-bottom:1px solid rgba(255,255,255,.065);display:grid;gap:8px}.ai-input,.ai-select{width:100%;height:34px;border:1px solid rgba(255,255,255,.08);border-radius:8px;background:#0b1722;color:#eef5fb;padding:0 10px;outline:0;font-size:.8rem}.ai-input:focus,.ai-select:focus{border-color:rgba(255,106,96,.44);box-shadow:0 0 0 2px rgba(255,106,96,.08)}.ai-list-tools{display:grid;grid-template-columns:1fr 126px;gap:7px}.ai-filters{display:flex;gap:5px;overflow:auto;padding-bottom:1px}.ai-chip{height:26px;flex:0 0 auto;padding:0 8px;border-radius:999px;color:rgba(238,245,251,.56);font-size:.68rem;font-weight:700}.ai-chip:hover{background:rgba(255,255,255,.045);color:#fff}.ai-chip.is-active{background:rgba(255,106,96,.13);color:#ffd6d2}.ai-list{height:100%;overflow:auto;padding:5px}.ai-item{position:relative;width:100%;height:76px;border:0;border-radius:9px;background:transparent;color:#eef5fb;text-align:left;padding:8px 8px 8px 10px;display:grid;grid-template-columns:40px 1fr;gap:9px;align-items:center;cursor:pointer}.ai-item:before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:2px;border-radius:999px;background:transparent}.ai-item:hover{background:rgba(255,255,255,.035)}.ai-item.is-active{background:rgba(255,255,255,.065)}.ai-item.is-active:before{background:#ff6a60}.ai-item-body{min-width:0;display:grid;gap:4px}.ai-item-top,.ai-item-meta,.ai-row{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}.ai-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.88rem;font-weight:760}.ai-time{flex:0 0 auto;color:rgba(238,245,251,.42);font-size:.68rem}.ai-snippet{margin:0;color:rgba(238,245,251,.58);font-size:.76rem;line-height:1.22;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ai-meta{min-width:0;color:rgba(238,245,251,.42);font-size:.68rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ai-dot{display:inline-block;width:5px;height:5px;margin:0 5px 1px;border-radius:50%;background:#25d366}.ai-badge{flex:0 0 auto;min-width:17px;height:17px;padding:0 5px;border-radius:999px;background:#ff6a60;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:.64rem;font-weight:800}.ai-avatar{position:relative;display:inline-grid;place-items:center;flex:0 0 auto;border-radius:50%;overflow:hidden;background:#27394a;color:#eaf2f8;font-weight:760}.ai-avatar span{position:relative;z-index:1}.ai-avatar img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:2}.ai-avatar--sm{width:38px;height:38px;font-size:.72rem}.ai-avatar--xs{width:36px;height:36px;font-size:.7rem}.ai-avatar--lg{width:54px;height:54px;font-size:.98rem}.ai-chat{height:100%;display:grid;grid-template-rows:auto 1fr auto;background:#0b1722}.ai-chat-empty{height:100%;display:grid;place-items:center;padding:28px;text-align:center;color:rgba(238,245,251,.56)}.ai-chat-empty strong{display:block;margin-bottom:6px;color:#eef5fb;font-size:1rem}.ai-chat-head{min-height:58px;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.07);display:flex;align-items:center;justify-content:space-between;gap:12px;background:#0f1d29}.ai-chat-person{display:flex;align-items:center;gap:10px;min-width:0}.ai-chat-name{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.94rem;font-weight:760}.ai-chat-sub{margin:2px 0 0;color:rgba(238,245,251,.47);font-size:.72rem}.ai-status{display:inline-flex;height:25px;align-items:center;border-radius:999px;padding:0 9px;background:rgba(255,255,255,.055);color:rgba(238,245,251,.66);font-size:.68rem;font-weight:700}.ai-head-actions{position:relative;display:flex;align-items:center;gap:7px}.ai-primary{height:30px;padding:0 11px;border-radius:8px;background:#ff6a60;color:#fff;font-size:.74rem;font-weight:760}.ai-primary:hover{background:#ff7a71}.ai-icon-btn{width:30px;height:30px;border-radius:8px;color:rgba(238,245,251,.7);font-size:1rem;line-height:1}.ai-icon-btn:hover{background:rgba(255,255,255,.065);color:#fff}.ai-menu{position:absolute;right:0;top:36px;z-index:20;width:190px;padding:6px;border:1px solid rgba(255,255,255,.09);border-radius:10px;background:#132433;box-shadow:0 18px 40px rgba(0,0,0,.35)}.ai-menu-item{width:100%;height:32px;border-radius:7px;padding:0 9px;text-align:left;color:rgba(238,245,251,.8);font-size:.75rem}.ai-menu-item:hover{background:rgba(255,255,255,.065);color:#fff}.ai-menu-item.is-danger{color:#ffaaa5}.ai-messages{height:100%;overflow:auto;padding:14px 18px 18px;display:flex;flex-direction:column;gap:7px;background:#0b1722}.ai-day{align-self:center;margin:7px 0 5px;padding:3px 8px;border-radius:999px;background:rgba(255,255,255,.055);color:rgba(238,245,251,.5);font-size:.66rem;font-weight:700}.ai-msg{max-width:68%;border-radius:13px;padding:8px 10px 6px;font-size:.84rem;line-height:1.42;white-space:pre-wrap;word-break:break-word}.ai-msg.inbound{align-self:flex-start;border-top-left-radius:5px;background:#132331;color:#eef5fb}.ai-msg.outbound{align-self:flex-end;border-top-right-radius:5px;background:#183149;color:#eef5fb}.ai-msg.internal{align-self:center;background:rgba(251,191,36,.08);color:#ffe7a6}.ai-msg-time{margin-top:5px;display:flex;justify-content:flex-end;gap:5px;color:rgba(238,245,251,.42);font-size:.64rem;line-height:1}.ai-msg-status.is-read{color:#7fb8ff}.ai-msg-status.is-failed{color:#ffaaa5}.ai-quote{margin-bottom:7px;padding:6px 8px;border-left:2px solid rgba(157,187,209,.45);border-radius:7px;background:rgba(0,0,0,.13);color:rgba(238,245,251,.56);font-size:.72rem}.ai-composer{border-top:1px solid rgba(255,255,255,.07);background:#0f1d29;padding:9px 11px}.ai-composer-inner{display:grid;grid-template-columns:32px 1fr auto;align-items:end;gap:8px}.ai-plus{width:32px;height:32px;border-radius:8px;border:1px solid rgba(255,255,255,.08);display:grid;place-items:center;color:rgba(238,245,251,.58)}.ai-compose{min-height:38px;max-height:116px;width:100%;resize:none;overflow:auto;border:1px solid rgba(255,255,255,.08);border-radius:10px;background:#0b1722;color:#eef5fb;padding:9px 11px;line-height:1.32;outline:0}.ai-compose:focus{border-color:rgba(255,106,96,.42)}.ai-send{height:36px;border-radius:9px;padding:0 13px;background:rgba(255,255,255,.06);color:rgba(238,245,251,.46);font-size:.76rem;font-weight:760}.ai-send.is-active{background:#ff6a60;color:#fff}.ai-send:disabled{cursor:not-allowed}.ai-form-error{margin:6px 40px 0;color:#ffaaa5;font-size:.72rem}.ai-context{height:100%;overflow:auto;padding:14px;background:#0e1b27}.ai-context-empty{height:100%;display:grid;place-items:center;text-align:center;color:rgba(238,245,251,.56);padding:24px}.ai-profile{display:grid;grid-template-columns:54px 1fr;gap:11px;align-items:center;margin-bottom:13px}.ai-profile-name{margin:0;color:#fff;font-size:.96rem;font-weight:760}.ai-profile-phone{margin:3px 0 0;color:rgba(238,245,251,.5);font-size:.74rem}.ai-actions{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px}.ai-link-btn,.ai-candidate{min-height:28px;border-radius:8px;background:rgba(255,255,255,.055);color:rgba(238,245,251,.72);padding:0 9px;text-decoration:none;font-size:.72rem;font-weight:700}.ai-link-btn:hover,.ai-candidate:hover{background:rgba(255,255,255,.085);color:#fff}.ai-section{padding:12px 0;border-top:1px solid rgba(255,255,255,.07)}.ai-section-title{margin:0 0 10px;color:rgba(157,187,209,.72);font-size:.66rem;font-weight:800;letter-spacing:.11em;text-transform:uppercase}.ai-field{display:grid;gap:3px;margin:0 0 10px}.ai-field:last-child{margin-bottom:0}.ai-label{color:rgba(238,245,251,.42);font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em}.ai-value{color:rgba(238,245,251,.86);font-size:.79rem;line-height:1.35;word-break:break-word}.ai-muted{color:rgba(238,245,251,.48);font-size:.76rem}.ai-crm-empty{display:grid;gap:9px}.ai-create{justify-self:start;height:28px;border-radius:8px;background:rgba(255,106,96,.12);color:#ffd6d2;padding:0 10px;font-size:.72rem;font-weight:760}.ai-candidate{height:auto;width:100%;text-align:left;padding:8px 9px}.ai-candidate small{display:block;margin-top:3px;color:rgba(238,245,251,.48)}.ai-media{display:grid;gap:7px}.ai-image-wrap{display:block;position:relative;max-width:min(320px,100%);min-height:92px;border-radius:11px;overflow:hidden;background:rgba(255,255,255,.05)}.ai-image-wrap:before{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(255,255,255,.03),rgba(255,255,255,.09),rgba(255,255,255,.03));background-size:220% 100%;animation:ai-shimmer 1.2s infinite}.ai-image-wrap img{position:relative;z-index:1;display:block;width:100%;max-height:330px;object-fit:cover;border-radius:11px}.ai-unavailable{padding:10px 11px;border-radius:10px;background:rgba(255,255,255,.055);color:rgba(238,245,251,.58);font-size:.78rem}.ai-caption{margin:0;color:rgba(238,245,251,.76);font-size:.78rem}.ai-audio{display:grid;grid-template-columns:34px 1fr auto;gap:9px;align-items:center;min-width:min(300px,64vw)}.ai-audio-btn{width:34px;height:34px;border:0;border-radius:50%;background:rgba(255,255,255,.11);color:#fff;cursor:pointer}.ai-audio-track{height:4px;border-radius:999px;background:rgba(255,255,255,.15);overflow:hidden;cursor:pointer}.ai-audio-fill{width:0;height:100%;background:#9dbbd1}.ai-audio-time{color:rgba(238,245,251,.58);font-size:.68rem;font-variant-numeric:tabular-nums}.ai-audio-label{grid-column:2 / 4;color:rgba(238,245,251,.42);font-size:.68rem}.ai-doc{display:flex;align-items:center;gap:9px;min-width:min(300px,64vw);padding:10px;border-radius:10px;background:rgba(255,255,255,.055);color:#fff;text-decoration:none}.ai-doc-icon{width:32px;height:32px;border-radius:8px;display:grid;place-items:center;background:rgba(157,187,209,.14)}.ai-doc small{color:rgba(238,245,251,.48)}.ai-video{width:min(340px,100%);border-radius:11px;background:#07111a}.ai-location{padding:10px;border-radius:10px;background:rgba(255,255,255,.055);color:rgba(238,245,251,.78)}.ai-viewer{position:fixed;inset:0;z-index:1000;background:rgba(3,8,13,.82);display:grid;place-items:center;padding:28px}.ai-viewer img{max-width:min(94vw,1100px);max-height:88vh;border-radius:12px;box-shadow:0 24px 80px rgba(0,0,0,.45)}.ai-viewer button{position:fixed;top:18px;right:18px;width:34px;height:34px;border:0;border-radius:10px;background:rgba(255,255,255,.1);color:#fff;cursor:pointer}.ai-skel{height:66px;border-radius:9px;background:linear-gradient(90deg,rgba(255,255,255,.035),rgba(255,255,255,.08),rgba(255,255,255,.035));background-size:220% 100%;animation:ai-shimmer 1.2s infinite}@keyframes ai-shimmer{to{background-position:-220% 0}}@media(max-width:1180px){.ai-grid{grid-template-columns:328px minmax(400px,1fr)}.ai-context-pane{display:none}}@media(max-width:780px){.ai{height:auto;min-height:100vh;padding:8px}.ai-grid{grid-template-columns:1fr;height:auto}.ai-list-pane{border-right:0;border-bottom:1px solid rgba(255,255,255,.07)}.ai-list{max-height:430px}.ai-chat{min-height:560px}.ai-msg{max-width:86%}.ai-head{align-items:flex-start}.ai-sub{display:none}}`;
-  document.head.append(style);
-
-  const api = async (params = {}) => {
-    const query = new URLSearchParams();
-    Object.entries(params).forEach(([key, value]) => { if (value != null && String(value).trim()) query.set(key, String(value).trim()); });
-    const response = await fetchWithAuth(`/api/attendance-inbox${query.size ? `?${query}` : ''}`);
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(response.status === 403 ? 'Você não tem permissão para acessar estas conversas.' : 'Caixa de entrada indisponível.');
-    return payload;
-  };
-
-  function field(name, value) {
-    if (value == null || value === '') return '';
-    return `<div class="ai-field"><span class="ai-label">${esc(name)}</span><span class="ai-value">${esc(value)}</span></div>`;
-  }
-  function section(title, rows, extra = '') {
-    const body = rows.map(([name, value]) => field(name, value)).join('') + extra;
-    return body ? `<section class="ai-section"><h3 class="ai-section-title">${esc(title)}</h3>${body}</section>` : '';
-  }
-  function activeRow() {
-    return state.rows.find(row => row.conversation_id === state.selected) || state.detail?.conversation || null;
-  }
-  function canSend() {
-    return Boolean(state.detail?.composer?.enabled && (drafts.get(state.selected) || '').trim() && !state.sending);
-  }
-  function primaryAction(conv) {
-    if (!conv || conv.status === 'resolved') return { key: 'reopen', label: 'Reabrir' };
-    if (!conv.assigned_user_uid) return { key: 'assign', label: 'Assumir' };
-    return { key: 'resolve', label: 'Resolver' };
-  }
-
-  function renderList() {
-    if (state.loading) return `<div class="ai-list ai-scroll">${Array.from({ length: 8 }).map(() => '<div class="ai-skel"></div>').join('')}</div>`;
-    if (!state.rows.length) return '<div class="ai-chat-empty"><div><strong>Nenhuma conversa encontrada</strong><span>As conversas reais aparecerão aqui.</span></div></div>';
-    return `<div class="ai-list ai-scroll">${state.rows.map(row => {
-      const meta = ['WhatsApp', row.assigned_user_uid || 'Sem responsável'].filter(Boolean).join(' · ');
-      return `<button class="ai-item ${row.conversation_id === state.selected ? 'is-active' : ''}" type="button" data-ai-select="${esc(row.conversation_id)}">
-        ${avatar(row.contact, 'sm')}
-        <span class="ai-item-body">
-          <span class="ai-item-top"><strong class="ai-name">${esc(titleFor(row))}</strong><span class="ai-time">${esc(relative(row.last_message_at || row.updated_at))}</span></span>
-          <span class="ai-snippet">${esc(previewText(row.last_message))}</span>
-          <span class="ai-item-meta"><span class="ai-meta"><span class="ai-dot"></span>${esc(meta)}</span>${row.unread_count ? `<span class="ai-badge">${esc(row.unread_count)}</span>` : ''}</span>
-        </span>
-      </button>`;
-    }).join('')}</div>`;
-  }
-
   function renderQuoted(msg) {
     return msg?.quoted ? `<div class="ai-quote">${esc(msg.quoted.direction === 'outbound' ? 'Você' : 'Contato')} · ${esc(mediaText(msg.quoted.kind))}<br>${esc(msg.quoted.text || mediaText(msg.quoted.kind))}</div>` : '';
   }
@@ -132,7 +93,7 @@
     const pct = item.duration ? Math.min(100, Math.max(0, item.current / item.duration * 100)) : 0;
     return `<div class="ai-audio" data-ai-audio="${esc(msg.message_id)}">
       <audio preload="metadata" src="${esc(mediaUrl(msg))}"></audio>
-      <button class="ai-audio-btn" type="button" data-ai-audio-toggle="${esc(msg.message_id)}">${item.loading ? '...' : item.playing ? 'II' : '▶'}</button>
+      <button class="ai-audio-btn" type="button" aria-label="${item.playing ? 'Pausar áudio' : 'Reproduzir áudio'}" data-ai-audio-toggle="${esc(msg.message_id)}">${item.loading ? '...' : item.playing ? 'II' : '▶'}</button>
       <div class="ai-audio-track" data-ai-audio-seek="${esc(msg.message_id)}"><div class="ai-audio-fill" style="width:${pct}%"></div></div>
       <span class="ai-audio-time">${esc(fmtDuration(item.duration || item.current || 0))}</span>
       <span class="ai-audio-label">audio</span>
@@ -155,91 +116,70 @@
     }
     if (msg.kind === 'location') return `<div class="ai-location">${esc(msg.content?.address || 'Localização compartilhada')}</div>`;
     if (msg.kind === 'contact') return `<div class="ai-location">${esc(msg.content?.name || 'Contato compartilhado')}<br>${esc(msg.content?.phone || '')}</div>`;
-    return `<div>${esc(previewText(msg))}</div>`;
+    return `<div>${esc(msgText(msg))}</div>`;
   }
   function renderMessageBody(msg) {
     const mediaKinds = ['audio', 'image', 'video', 'document', 'sticker', 'location', 'contact'];
-    return `${renderQuoted(msg)}${mediaKinds.includes(msg.kind) ? renderMedia(msg) : `<div>${esc(previewText(msg))}</div>`}`;
+    return `${renderQuoted(msg)}${mediaKinds.includes(msg.kind) ? renderMedia(msg) : `<div>${esc(msgText(msg))}</div>`}`;
+  }
+  const field = ([name, value]) => value ? `<div class="ai-info"><p class="ai-info-label">${esc(name)}</p><p class="ai-info-value">${esc(value)}</p></div>` : '';
+  const section = (title, rows) => {
+    const body = rows.map(field).join('');
+    return body ? `<details class="ai-section" data-ai-accordion="${esc(title)}" ${ui.accordions[title] === false ? '' : 'open'}><summary class="ai-card-title">${esc(title)}</summary>${body}</details>` : '';
+  };
+  function renderList() {
+    if (state.loading) return `<div class="ai-list">${Array.from({ length: 6 }).map(() => '<div class="ai-skel"></div>').join('')}</div>`;
+    if (!state.rows.length) return '<div class="ai-empty"><div><h2>Nenhuma conversa encontrada</h2><p>A Caixa de entrada mostrará conversas reais assim que houver mensagens recebidas.</p></div></div>';
+    return `<div class="ai-list" aria-label="Conversas">${state.rows.map(row => `<button class="ai-item ${row.conversation_id === state.selected ? 'is-active' : ''}" aria-pressed="${row.conversation_id === state.selected}" data-ai-select="${esc(row.conversation_id)}">${avatar(row.contact)}<span class="ai-item-copy"><strong class="ai-name">${esc(titleFor(row))}</strong><span class="ai-snippet" style="display:block"><span class="ai-channel-dot" title="WhatsApp">${icon('chat')}</span>${esc(msgText(row.last_message))}</span></span><span class="ai-item-end"><span class="ai-time" title="${esc(fmt(row.last_message_at || row.updated_at))}">${esc(relative(row.last_message_at || row.updated_at))}</span>${row.unread_count ? `<span class="ai-badge" aria-label="${esc(row.unread_count)} não lidas">${esc(row.unread_count)}</span>` : '<span class="ai-time">·</span>'}</span></button>`).join('')}</div>`;
   }
   function renderMessages() {
-    if (state.detailLoading) return '<div class="ai-messages ai-scroll"><div class="ai-skel"></div><div class="ai-skel"></div><div class="ai-skel"></div></div>';
+    if (state.detailLoading) return '<div class="ai-messages"><div class="ai-skel"></div><div class="ai-skel"></div><div class="ai-skel"></div></div>';
+    if (!state.selected) return `<div class="ai-empty"><div><span class="ai-empty-symbol">${icon('inbox')}</span><h2>Um espaço para cada conversa</h2><p>Selecione uma pessoa ao lado para continuar o atendimento com todo o contexto.</p></div></div>`;
     const messages = state.detail?.messages || [];
-    if (!messages.length) return '<div class="ai-chat-empty"><div><strong>Sem mensagens</strong><span>As mensagens aparecerão aqui em ordem cronológica.</span></div></div>';
+    if (!messages.length) return '<div class="ai-empty"><div><h2>Sem mensagens</h2><p>As mensagens aparecerão aqui em ordem cronológica.</p></div></div>';
     let last = '';
-    return `<div class="ai-messages ai-scroll" data-ai-messages>${messages.map(msg => {
-      const when = msg.received_at || msg.provider_timestamp;
-      const day = dayLabel(when);
-      const sep = day && day !== last ? (last = day, `<div class="ai-day">${esc(day)}</div>`) : '';
-      const mark = msg.direction === 'outbound' ? transportMark(msg.transport_status) : '';
-      const statusClass = msg.transport_status === 'read' ? 'is-read' : msg.transport_status === 'failed' ? 'is-failed' : '';
-      return `${sep}<article class="ai-msg ${esc(msg.direction || 'inbound')}">${renderMessageBody(msg)}<div class="ai-msg-time"><span>${esc(fmtTime(when))}</span>${mark ? `<span class="ai-msg-status ${statusClass}" title="${esc(transportLabel(msg.transport_status))}">${esc(mark)}</span>` : ''}</div></article>`;
-    }).join('')}</div>`;
+    return `<div class="ai-messages" data-ai-messages>${messages.map(msg => { const when = msg.received_at || msg.provider_timestamp; const day = dayLabel(when); const sep = day && day !== last ? (last = day, `<div class="ai-day">${esc(day)}</div>`) : ''; return `${sep}<article class="ai-msg ${esc(msg.direction || 'inbound')}">${renderMessageBody(msg)}<div class="ai-msg-time">${esc(fmt(when))} · ${esc(msg.direction === 'outbound' ? label(msg.transport_status) : msg.direction === 'internal' ? 'Interna' : 'Recebida')}</div></article>`; }).join('')}</div>`;
   }
-
-  function renderConversationMenu(conv) {
-    if (!state.menuOpen || !conv) return '';
-    const resolved = conv.status === 'resolved';
-    return `<div class="ai-menu" data-ai-menu>
-      ${!resolved ? `<button class="ai-menu-item" data-ai-op="assign">Assumir</button>` : ''}
-      ${conv.assigned_user_uid && !resolved ? `<button class="ai-menu-item" data-ai-op="unassign">Remover responsável</button>` : ''}
-      ${!resolved ? `<button class="ai-menu-item" data-ai-op="transfer">Transferir</button>` : ''}
-      ${!resolved ? `<button class="ai-menu-item is-danger" data-ai-op="resolve">Resolver</button>` : `<button class="ai-menu-item" data-ai-op="reopen">Reabrir</button>`}
-    </div>`;
+  function canSend() { return Boolean(state.detail?.composer?.enabled && (drafts.get(state.selected) || '').trim() && !state.sending); }
+  function renderConversationActions(conv) {
+    if (!state.selected) return '';
+    return `<div class="ai-actions"><button class="ai-action" data-ai-op="assign" ${state.actioning ? 'disabled' : ''}>Assumir</button><button class="ai-action" data-ai-op="transfer" ${state.actioning ? 'disabled' : ''}>Transferir</button><button class="ai-action" data-ai-op="unassign" ${!conv.assigned_user_uid || state.actioning ? 'disabled' : ''}>Sem responsável</button>${conv.status === 'resolved' ? `<button class="ai-action" data-ai-op="reopen" ${state.actioning ? 'disabled' : ''}>Reabrir</button>` : `<button class="ai-action" data-ai-op="resolve" ${state.actioning ? 'disabled' : ''}>Resolver</button>`}</div>`;
   }
   function renderChat() {
-    if (!state.selected) {
-      return `<section class="ai-pane ai-chat"><div class="ai-chat-empty"><div><strong>Selecione uma conversa</strong><span>Escolha uma conversa na lista para começar.</span></div></div></section>`;
-    }
-    const conv = state.detail?.conversation || activeRow() || {};
-    const contact = state.detail?.contact || conv.contact || {};
-    const composer = state.detail?.composer || { enabled: false, reason: 'Envio indisponível.' };
-    const primary = primaryAction(conv);
-    return `<section class="ai-pane ai-chat">
-      <header class="ai-chat-head">
-        <div class="ai-chat-person">${avatar(contact, 'xs')}<span><span class="ai-chat-name">${esc(contact.name || titleFor(conv))}</span><p class="ai-chat-sub">WhatsApp · ${esc(conv.team?.name || 'Atendimento')}</p></span></div>
-        <div class="ai-head-actions"><span class="ai-status">${esc(statusLabel(conv.status))}</span><button class="ai-primary" type="button" data-ai-op="${esc(primary.key)}">${esc(primary.label)}</button><button class="ai-icon-btn" type="button" data-ai-menu-toggle aria-label="Mais ações">...</button>${renderConversationMenu(conv)}</div>
-      </header>
-      ${renderMessages()}
-      ${composer.enabled ? `<form class="ai-composer" data-ai-composer><div class="ai-composer-inner"><button class="ai-plus" type="button" aria-label="Anexar" disabled>+</button><textarea class="ai-compose ai-scroll" data-ai-compose rows="1" placeholder="Digite uma mensagem...">${esc(drafts.get(state.selected) || '')}</textarea><button class="ai-send ${canSend() ? 'is-active' : ''}" data-ai-send type="submit" ${canSend() ? '' : 'disabled'}>Enviar</button></div>${state.composerError ? `<p class="ai-form-error">${esc(state.composerError)}</p>` : ''}</form>` : `<div class="ai-composer"><p class="ai-muted">${esc(composer.reason || 'Envio indisponível.')}</p></div>`}
-    </section>`;
+    const conv = state.detail?.conversation || state.rows.find(row => row.conversation_id === state.selected) || {};
+    const composer = state.detail?.composer || { enabled: false, reason: 'Selecione uma conversa para responder.' };
+    return `<section class="ai-pane ai-chat" aria-label="Conversa">${state.selected ? `<header class="ai-chat-head"><div class="ai-row"><button class="ai-icon ai-mobile-back" data-ai-back aria-label="Voltar às conversas">${icon('back')}</button><span class="ai-person">${avatar(state.detail?.contact || conv.contact)}<span><strong>${esc(titleFor(state.detail || conv))}</strong><p class="ai-mini">WhatsApp · ${esc(conv.team?.name || 'Time')} · ${esc(conv.assigned_user_name || (conv.assigned_user_uid ? 'Atribuída' : 'Sem responsável'))}</p></span></span><span class="ai-status">${esc(label(conv.status))}</span></div><div class="ai-actions">${renderConversationActions(conv)}<button class="ai-icon" data-ai-toggle-contact aria-label="${ui.contactHidden ? 'Mostrar' : 'Recolher'} perfil" title="Perfil da pessoa" aria-expanded="${!ui.contactHidden}">${icon('panel')}</button></div></header>` : ''}${renderMessages()}${state.selected && composer.enabled ? `<div class="ai-composer"><div class="ai-compose-label">${icon('chat')} Responder por WhatsApp</div><textarea aria-label="Mensagem" data-ai-compose ${composer.enabled ? '' : 'disabled'} placeholder="${composer.enabled ? 'Escreva uma resposta…' : 'Envio indisponível'}">${esc(drafts.get(state.selected) || '')}</textarea>${state.composerError ? `<p class="ai-form-error" role="alert">${esc(state.composerError)}</p>` : ''}<div class="ai-composer-hint">${esc(composer.reason || '')}</div><div class="ai-composer-footer"><div class="ai-tools">${[['attach','Anexos'],['quick','Respostas rápidas'],['emoji','Emoji'],['ai','Assistente IA']].map(([key,name]) => `<span title="${name} — ainda indisponível"><button class="ai-icon" disabled aria-label="${name} — ainda indisponível">${icon(key)}</button></span>`).join('')}</div><div class="ai-row"><span class="ai-shortcut">⇧ Enter para nova linha</span><button class="ai-send" data-ai-send ${canSend() ? '' : 'disabled'}>${state.sending ? 'Enviando' : 'Enviar'}${icon('send')}</button></div></div></div>` : state.selected ? `<div class="ai-composer"><p class="ai-composer-hint">${esc(composer.reason || 'Envio indisponível.')}</p></div>` : ''}</section>`;
   }
-
-  function renderContext() {
-    if (!state.selected) return '<aside class="ai-pane ai-context-pane"><div class="ai-context-empty"><div><strong>Dados da pessoa</strong><br><span>Selecione uma conversa.</span></div></div></aside>';
+  function renderContact() {
     const detail = state.detail || {};
     const contact = detail.contact || {};
     const conv = detail.conversation || {};
     const ctx = detail.context || {};
-    const person = ctx.person || {};
+    const person = ctx.person;
     const opp = ctx.crm?.opportunity;
     const student = ctx.student;
     const actions = ctx.actions || {};
     const candidates = ctx.identity?.candidates || [];
-    const name = person.name || contact.name || contact.phone || 'Contato';
-    const actionHtml = [actions.open_person_url ? `<a class="ai-link-btn" href="${esc(actions.open_person_url)}">Ver pessoa</a>` : '', actions.open_crm_url ? `<a class="ai-link-btn" href="${esc(actions.open_crm_url)}">Abrir CRM</a>` : '', actions.open_student_url ? `<a class="ai-link-btn" href="${esc(actions.open_student_url)}">Abrir aluno</a>` : '', actions.can_unlink_person ? '<button class="ai-link-btn" data-ai-unlink>Remover vínculo</button>' : ''].join('');
-    const crmExtra = opp ? '' : `<div class="ai-crm-empty"><p class="ai-muted">Nenhuma oportunidade ativa</p>${actions.can_create_opportunity ? '<button class="ai-create" data-ai-create-opportunity>+ Criar oportunidade</button>' : ''}</div>`;
-    const candidatesHtml = candidates.length && !ctx.identity?.linked ? `<section class="ai-section"><h3 class="ai-section-title">Possíveis vínculos</h3>${candidates.map(c => `<button class="ai-candidate" type="button" data-ai-link-person="${esc(c.id)}"><strong>${esc(c.name || c.id)}</strong><small>${esc([c.relation, c.phone, c.email].filter(Boolean).join(' · '))}</small></button>`).join('')}</section>` : '';
-    return `<aside class="ai-pane ai-context-pane"><div class="ai-context ai-scroll">
-      <div class="ai-profile">${avatar({ ...contact, name, avatar_url: person.avatar_url || contact.avatar_url }, 'lg')}<div><h2 class="ai-profile-name">${esc(name)}</h2><p class="ai-profile-phone">${esc(person.phone || contact.phone || '')}</p></div></div>
-      ${actionHtml ? `<div class="ai-actions">${actionHtml}</div>` : ''}
-      ${section('Contato', [['Telefone', person.phone || contact.phone], ['Email', person.email || contact.email]])}
-      ${section('Atendimento', [['Responsável', conv.assigned_user_uid || 'Não atribuído'], ['Time', conv.team?.name], ['Status', statusLabel(conv.status)]])}
-      ${section('CRM', opp ? [['Oportunidade', opp.title || opp.id], ['Etapa', opp.stage], ['Próxima atividade', opp.next_activity ? `${opp.next_activity.title} · ${fmtShort(opp.next_activity.due_at)}` : ''], ['Valor', money(opp.value, opp.currency)]] : [], crmExtra)}
-      ${section('Aluno', student ? [['Status', student.status], ['Professor', student.teacher], ['Plano', student.product]] : [])}
-      ${candidatesHtml}
-    </div></aside>`;
+    if (!state.selected) return '<aside class="ai-pane ai-pane--contact ai-empty"><div><h2>Dados da pessoa</h2><p>Selecione uma conversa.</p></div></aside>';
+    const actionHtml = `<div class="ai-actions">${actions.open_person_url ? `<a class="ai-action" href="${esc(actions.open_person_url)}">Abrir pessoa</a>` : ''}${actions.open_crm_url ? `<a class="ai-action" href="${esc(actions.open_crm_url)}">Abrir oportunidade</a>` : ''}${actions.open_student_url ? `<a class="ai-action" href="${esc(actions.open_student_url)}">Abrir aluno</a>` : ''}${actions.can_create_opportunity ? '<button class="ai-action" data-ai-create-opportunity>Criar oportunidade</button>' : ''}${actions.can_unlink_person ? '<button class="ai-action" data-ai-unlink>Remover vínculo</button>' : ''}</div>`;
+    const candidatesHtml = candidates.length && !ctx.identity?.linked ? `<section class="ai-section"><p class="ai-card-title">Possíveis correspondências</p>${candidates.map(c => `<button class="ai-candidate" data-ai-link-person="${esc(c.id)}"><strong>${esc(c.name || c.id)}</strong><small>${esc([c.relation, c.phone, c.email].filter(Boolean).join(' · '))}</small></button>`).join('')}</section>` : '';
+    const personContent = `${section('Contato', [['Nome', contact.name], ['Telefone', person?.phone || contact.phone], ['Email', person?.email || contact.email], ['Relação com a Space', contact.relationship || (student ? 'Aluno' : opp ? 'Lead' : 'Não vinculada')]])}${section('Atendimento', [['Canal', conv.channel?.name || 'WhatsApp'], ['Time', conv.team?.name], ['Responsável', conv.assigned_user_name || (conv.assigned_user_uid ? 'Atribuído' : 'Não atribuído')], ['Status', label(conv.status)], ['Criado em', fmt(conv.created_at || contact.created_at)], ['Última atividade', fmt(conv.last_message_at || conv.updated_at)], ['Total de mensagens', String(detail.stats?.message_count ?? (detail.messages || []).length)], ['Não lidas', String(detail.stats?.unread_count ?? 0)]])}${section('Vínculos', [['Pessoa vinculada', person?.name || contact.relationship || 'Não vinculada'], ['Aluno vinculado', student?.name || student?.id], ['Oportunidade', opp?.title || opp?.id]])}${candidatesHtml}${actionHtml}`;
+    const journeyContent = `${section('CRM', opp ? [['Oportunidade', opp.title || opp.id], ['Pipeline', opp.pipeline], ['Etapa', opp.stage], ['Responsável', opp.owner], ['Valor', money(opp.value, opp.currency)], ['Próxima atividade', opp.next_activity ? `${opp.next_activity.title} · ${fmt(opp.next_activity.due_at)}` : ''], ['Última atividade', fmt(opp.last_activity_at)]] : [['Oportunidade', 'Nenhuma oportunidade vinculada']])}${section('Aluno', student ? [['Status', student.status], ['Professor', student.teacher], ['Plano/produto', student.product], ['Ciclo de vida', student.lifecycle], ['Início', fmt(student.started_at)], ['Último dia ativo', student.last_active_date]] : [['Cadastro', 'Nenhum aluno vinculado']])}${section('Acompanhamento', [['Saúde e risco de churn', 'Não disponível nesta conversa'], ['Aulas e atividades', 'Consulte o cadastro do aluno']])}`;
+    const financeContent = `${section('Plano', [['Plano/produto', student?.product || 'Não informado']])}${section('Financeiro', [['Situação financeira', 'Não disponível nesta conversa']])}<p class="ai-mini">Consulte o cadastro para visualizar as informações financeiras disponíveis.</p>${actions.open_student_url ? `<a class="ai-action" href="${esc(actions.open_student_url)}">Abrir aluno</a>` : ''}`;
+    return `<aside class="ai-pane ai-pane--contact" aria-label="Perfil da pessoa"><div class="ai-contact"><div class="ai-inspector-heading">Contexto da pessoa<button class="ai-icon" data-ai-toggle-contact aria-label="Recolher perfil" title="Recolher perfil">${icon('panel')}</button></div><div class="ai-profile">${avatar({ ...contact, name: person?.name || contact.name, avatar_url: person?.avatar_url || contact.avatar_url })}<h2 class="ai-contact-name">${esc(person?.name || contact.name || contact.phone || 'Contato')}</h2><p class="ai-mini">${esc(contact.relationship || (student ? 'Aluno' : opp ? 'Lead' : 'Contato Space'))}</p></div><div class="ai-context-tabs" role="tablist" aria-label="Contexto">${[['person','Pessoa'],['journey','Jornada'],['finance','Financeiro']].map(([key,title]) => `<button id="ai-tab-${key}" class="ai-chip ${ui.tab === key ? 'is-active' : ''}" data-ai-tab="${key}" role="tab" aria-selected="${ui.tab === key}" aria-controls="ai-context">${title}</button>`).join('')}</div><div class="ai-context-content" id="ai-context" role="tabpanel" aria-labelledby="ai-tab-${ui.tab}">${ui.tab === 'person' ? personContent : ui.tab === 'journey' ? journeyContent : financeContent}</div></div></aside>`;
   }
-
   function renderViewer() {
     return state.viewer ? `<div class="ai-viewer" data-ai-viewer-close><img src="${esc(state.viewer)}" alt=""><button type="button" data-ai-viewer-close>×</button></div>` : '';
   }
   function render() {
-    root.innerHTML = `<div class="ai"><div class="ai-shell"><header class="ai-head"><div><p class="ai-kicker">Atendimento</p><h1 class="ai-title">Caixa de entrada</h1><p class="ai-sub">Conversas reais do WhatsApp, com contexto da pessoa.</p></div><button class="ai-refresh" type="button" data-ai-refresh>Atualizar</button></header>${state.error && !state.selected ? `<div class="ai-chat-empty"><div><strong>${esc(state.error)}</strong><span>Tente atualizar em alguns segundos.</span></div></div>` : `<main class="ai-grid"><section class="ai-pane ai-list-pane"><div class="ai-list-head"><input class="ai-input" data-ai-search placeholder="Buscar nome ou telefone" value="${esc(state.q)}"><div class="ai-list-tools"><div class="ai-filters ai-scroll">${['all', 'unread', 'mine', 'unassigned'].map(f => `<button class="ai-chip ${state.filter === f ? 'is-active' : ''}" data-ai-filter="${f}" type="button">${esc({ all: 'Todas', unread: 'Não lidas', mine: 'Minhas', unassigned: 'Sem responsável' }[f])}</button>`).join('')}</div><select class="ai-select" data-ai-team><option value="">Time</option>${state.teams.map(t => `<option value="${esc(t.team_id)}" ${state.team_id === t.team_id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></div></div>${renderList()}</section>${renderChat()}${renderContext()}</main>`}</div>${renderViewer()}</div>`;
+    const scroll = root.querySelector('[data-ai-messages]');
+    const scrollTop = scroll?.scrollTop;
+    const keepScroll = scroll && scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight > 80;
+    root.innerHTML = `<div class="ai"><div class="ai-shell"><header class="ai-head"><div class="ai-toolbar-title"><button class="ai-icon" data-ai-toggle-list title="${ui.listHidden ? 'Mostrar' : 'Recolher'} conversas" aria-label="${ui.listHidden ? 'Mostrar' : 'Recolher'} conversas" aria-expanded="${!ui.listHidden}">${icon('panel')}</button><h1 class="ai-title">Caixa de entrada</h1><span class="ai-count" title="Conversas nesta lista">${state.rows.length}</span></div><div class="ai-actions"><span class="ai-indicator">${state.rows.reduce((n,row) => n + (Number(row.unread_count) || 0),0)} não lidas</span><button class="ai-refresh" data-ai-refresh title="Atualizar conversas">${icon('refresh')} Atualizar</button></div></header>${state.error && !state.selected ? `<div class="ai-error" role="alert"><p>${esc(state.error)}</p><button class="ai-refresh" data-ai-refresh>Tentar novamente</button></div>` : `<div class="ai-grid ${!state.selected || ui.contactHidden ? 'is-no-contact' : ''} ${ui.listHidden ? 'is-list-collapsed' : ''} ${state.selected ? 'has-selection' : ''}"><section class="ai-pane ai-conversations" aria-label="Lista de conversas"><div class="ai-list-head"><label class="ai-search-wrap">${icon('search')}<input class="ai-input" data-ai-search aria-label="Buscar pessoa ou telefone" placeholder="Buscar conversas" value="${esc(state.q)}"></label><div class="ai-row"><select class="ai-select" data-ai-team aria-label="Time"><option value="">Todos os times</option>${state.teams.map(t => `<option value="${esc(t.team_id)}" ${state.team_id === t.team_id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select><details class="ai-filter-pop"><summary class="ai-icon" title="Mais filtros" aria-label="Mais filtros">${icon('filter')}${state.filter === 'unassigned' ? '<span class="ai-badge">1</span>' : ''}</summary><div class="ai-popover"><button class="ai-chip ${state.filter === 'unassigned' ? 'is-active' : ''}" data-ai-filter="unassigned">Sem responsável</button><button class="ai-chip" data-ai-filter="all">Limpar filtro</button></div></details></div><nav class="ai-filters" aria-label="Filtrar conversas">${['all','mine','unread'].map(f => `<button class="ai-chip ${state.filter === f ? 'is-active' : ''}" aria-pressed="${state.filter === f}" data-ai-filter="${f}">${esc({all:'Todas',mine:'Minhas',unread:'Não lidas'}[f])}</button>`).join('')}</nav></div>${renderList()}</section>${renderChat()}${state.selected && !ui.contactHidden ? renderContact() : ''}</div>`}</div>${renderViewer()}</div>`;
     wireMedia();
     const messages = root.querySelector('[data-ai-messages]');
-    if (messages && !messages.dataset.userScrolled) messages.scrollTop = messages.scrollHeight;
+    if (messages) messages.scrollTop = keepScroll ? scrollTop : messages.scrollHeight;
   }
-
   async function postAction(action, extra = {}, options = {}) {
     if (!state.selected) return null;
     const operational = ['assign', 'unassign', 'resolve', 'reopen', 'transfer'].includes(action);
@@ -304,6 +244,7 @@
     if (poll) clearInterval(poll);
     poll = setInterval(() => {
       if (!root.isConnected) return clearInterval(poll);
+      if (document.hidden || root.contains(document.activeElement) || state.sending || [...root.querySelectorAll('audio,video')].some(media => !media.paused)) return;
       load({ silent: true }).then(() => state.selected ? loadDetail(state.selected, { silent: true }) : null);
     }, 7000);
   }
@@ -315,7 +256,7 @@
       const audio = wrapper.querySelector('audio');
       const item = audioState(id);
       audio.currentTime = item.current || 0;
-      audio.onloadedmetadata = () => { item.duration = audio.duration || 0; render(); };
+      audio.onloadedmetadata = () => { item.duration = audio.duration || 0; const time = wrapper.querySelector('.ai-audio-time'); if (time) time.textContent = fmtDuration(item.duration); };
       audio.ontimeupdate = () => { item.current = audio.currentTime || 0; const fill = wrapper.querySelector('.ai-audio-fill'); if (fill && item.duration) fill.style.width = `${Math.min(100, item.current / item.duration * 100)}%`; const time = wrapper.querySelector('.ai-audio-time'); if (time) time.textContent = fmtDuration(item.duration || item.current); };
       audio.onplay = () => { item.playing = true; };
       audio.onpause = () => { item.playing = false; };
@@ -330,7 +271,7 @@
     try {
       if (audio.paused) {
         root.querySelectorAll('[data-ai-audio] audio').forEach(other => { if (other !== audio) other.pause(); });
-        item.loading = true; render();
+        item.loading = true;
         await audio.play();
         item.loading = false; item.playing = true;
       } else {
@@ -339,7 +280,8 @@
     } catch {
       item.error = true;
     }
-    render();
+    const button = wrapper.querySelector('[data-ai-audio-toggle]');
+    if (button) { button.textContent = item.playing ? 'II' : '▶'; button.setAttribute('aria-label', item.playing ? 'Pausar áudio' : 'Reproduzir áudio'); }
   }
   function seekAudio(id, event) {
     const wrapper = root.querySelector(`[data-ai-audio="${CSS.escape(id)}"]`);
@@ -361,6 +303,11 @@
     if (mediaViewer) { state.viewer = mediaViewer.getAttribute('data-ai-viewer'); return render(); }
     const button = event.target.closest('button');
     if (!button) return;
+    if (button.hasAttribute('data-ai-send')) return sendMessage();
+    if (button.hasAttribute('data-ai-toggle-contact')) { ui.contactHidden = !ui.contactHidden; return render(); }
+    if (button.hasAttribute('data-ai-toggle-list')) { ui.listHidden = !ui.listHidden; return render(); }
+    if (button.hasAttribute('data-ai-back')) { state.selected = ''; state.detail = null; return render(); }
+    const tab = button.getAttribute('data-ai-tab'); if (tab) { ui.tab = tab; render(); root.querySelector(`[data-ai-tab="${tab}"]`)?.focus(); return; }
     if (button.hasAttribute('data-ai-refresh')) return load();
     if (button.hasAttribute('data-ai-menu-toggle')) { state.menuOpen = !state.menuOpen; return render(); }
     const op = button.getAttribute('data-ai-op'); if (op) return runOperationalAction(op);
@@ -375,6 +322,7 @@
   root.addEventListener('submit', event => {
     if (event.target.matches('[data-ai-composer]')) { event.preventDefault(); sendMessage(); }
   });
+  root.addEventListener('toggle', event => { if (event.target.matches('[data-ai-accordion]')) ui.accordions[event.target.dataset.aiAccordion] = event.target.open; }, true);
   root.addEventListener('change', event => {
     if (event.target.matches('[data-ai-team]')) { state.team_id = event.target.value; state.selected = ''; state.detail = null; load(); }
   });
