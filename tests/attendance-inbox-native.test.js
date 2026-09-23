@@ -40,3 +40,13 @@ test('Workspace tabs, filters and collapsible panels preserve drafts without pos
   assert.equal(calls.some(call=>call.options?.method==='POST'),false);
  }finally{dom.window.close();}
 });
+test('Ogg metadata with infinite browser duration keeps the declared duration',async()=>{
+ const dom=new JSDOM('<body data-initial-panel="attendance-inbox"><div data-attendance-inbox></div>',{runScripts:'outside-only'});
+ try{
+ const row={conversation_id:'a',contact:{name:'Pessoa'},status:'open'};
+ dom.window.fetchWithAuth=async url=>({ok:true,json:async()=>String(url).includes('conversation_id')?{conversation:row,contact:row.contact,messages:[{message_id:'audio',kind:'audio',content:{media:{mime_type:'audio/ogg; codecs=opus',duration:10}}}],composer:{enabled:false}}:{rows:[row],teams:[]}});
+ dom.window.eval(fs.readFileSync('attendance-inbox.js','utf8'));await tick();dom.window.document.querySelector('[data-ai-select]').click();await tick();
+ const audio=dom.window.document.querySelector('audio');Object.defineProperty(audio,'duration',{value:Infinity});audio.dispatchEvent(new dom.window.Event('loadedmetadata'));
+ assert.equal(dom.window.document.querySelector('.ai-audio-time').textContent,'0:10');assert.doesNotMatch(dom.window.document.body.textContent,/Infinity|NaN/);
+ }finally{dom.window.close();}
+});

@@ -77,3 +77,8 @@ test('proxy returns authenticated inline bytes with safe private headers',async(
  const r=await invoke({authenticate:async()=>({uid:'u',role:'admin'}),request:async()=>({data:{message,connection}}),mediaResolver:async()=>({buffer:Buffer.from('abc'),mime:'image/jpeg',filename:'a"\r\n.jpg',source:'storage'})});
  assert.equal(r.status,200);assert.equal(r.headers['Content-Length'],3);assert.equal(r.headers['Content-Type'],'image/jpeg');assert.match(r.headers['Cache-Control'],/private/);assert.match(r.headers['Content-Disposition'],/^inline/);assert.doesNotMatch(r.headers['Content-Disposition'],/[\r\n]/);
 });
+test('audio byte ranges support metadata/seek and invalid ranges return 416',async()=>{
+ const handler=createHandler({authenticate:async()=>({uid:'u',role:'admin'}),request:async()=>({data:{message:{...message,kind:'audio'},connection}}),mediaResolver:async()=>({buffer:Buffer.from('abcdefghij'),mime:'audio/ogg; codecs="opus"',filename:'audio.ogg',source:'storage'})});
+ const call=async range=>{const headers={};let result;await handler({method:'GET',url:`/?message_id=${id}`,headers:{range}},{setHeader(k,v){headers[k]=v},end(body){result={status:this.statusCode,headers,body}}});return result;};
+ const r=await call('bytes=3-5');assert.equal(r.status,206);assert.equal(r.body.toString(),'def');assert.equal(r.headers['Content-Range'],'bytes 3-5/10');assert.equal(r.headers['Content-Length'],3);assert.equal((await call('bytes=30-')).status,416);
+});

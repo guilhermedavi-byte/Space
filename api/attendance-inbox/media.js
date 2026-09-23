@@ -25,15 +25,31 @@ const createHandler = ({ authenticate = requireAttendanceAuth, request = supabas
     if (!['audio', 'image', 'video', 'document', 'sticker'].includes(message.kind)) fail('attendance_media_not_found', 404);
     const media = await mediaResolver({ asset: data.asset || {}, message, connection: data.connection || {}, reloadAsset: async () => (await readAsset()).data?.asset || {} });
     if (!media?.buffer || !media.mime) fail('attendance_media_unavailable', 404);
-    res.statusCode = 200;
+    const total = media.buffer.length;
+    let start = 0, end = total - 1;
+    const range = req.method === 'GET' ? req.headers?.range : null;
+    if (range) {
+      const match = /^bytes=(\d*)-(\d*)$/.exec(String(range));
+      if (!match || (!match[1] && !match[2])) {
+        res.setHeader('Content-Range', `bytes */${total}`); return sendJson(res, 416, { error: 'invalid_range' });
+      }
+      start = match[1] ? Number(match[1]) : Math.max(0, total - Number(match[2]));
+      end = match[1] && match[2] ? Math.min(Number(match[2]), total - 1) : total - 1;
+      if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start > end || start >= total) {
+        res.setHeader('Content-Range', `bytes */${total}`); return sendJson(res, 416, { error: 'invalid_range' });
+      }
+      res.setHeader('Content-Range', `bytes ${start}-${end}/${total}`);
+    }
+    res.statusCode = range ? 206 : 200;
+    res.setHeader('Accept-Ranges', 'bytes');
     res.setHeader('Content-Type', media.mime);
-    res.setHeader('Content-Length', media.buffer.length);
+    res.setHeader('Content-Length', end - start + 1);
     res.setHeader('Content-Disposition', `${message.kind === 'document' ? 'attachment' : 'inline'}; filename="${safeFilename(media.filename)}"`);
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Vary', 'Cookie, Authorization');
     res.setHeader('X-Attendance-Media-Source', media.source || 'storage');
     if (req.method === 'HEAD') return res.end();
-    return res.end(media.buffer);
+    return res.end(media.buffer.subarray(start, end + 1));
   } catch (error) {
     const status = error.code === '42501' ? 403 : [400, 401, 403, 404, 409, 422].includes(error.status) ? error.status : 503;
     if (status === 503) console.warn('[attendance-media] failed', { code: ERROR_CODES.has(error.code) ? error.code : 'media_backend_failed' });

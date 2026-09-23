@@ -103,11 +103,13 @@
     return state.media.get(id);
   }
   function fmtDuration(seconds) {
-    const n = Math.max(0, Math.floor(Number(seconds) || 0));
+    const n = Number.isFinite(Number(seconds)) ? Math.max(0, Math.floor(Number(seconds))) : 0;
     return `${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}`;
   }
   function renderAudio(msg) {
     const item = audioState(msg.message_id);
+    const declaredDuration = Number(mediaMeta(msg).duration_seconds ?? mediaMeta(msg).duration);
+    if ((!Number.isFinite(item.duration) || !item.duration) && Number.isFinite(declaredDuration) && declaredDuration > 0) item.duration = declaredDuration;
     if (item.error) return '<div class="ai-unavailable">Audio indisponível</div>';
     const pct = item.duration ? Math.min(100, Math.max(0, item.current / item.duration * 100)) : 0;
     return `<div class="ai-audio" data-ai-audio="${esc(msg.message_id)}">
@@ -401,7 +403,7 @@
       wiredMedia.add(audio);
       const item = audioState(id);
       audio.currentTime = item.current || 0;
-      audio.onloadedmetadata = () => { item.duration = audio.duration || 0; const time = wrapper.querySelector('.ai-audio-time'); if (time) time.textContent = fmtDuration(item.duration); };
+      audio.onloadedmetadata = audio.ondurationchange = () => { if (Number.isFinite(audio.duration) && audio.duration > 0) item.duration = audio.duration; const time = wrapper.querySelector('.ai-audio-time'); if (time) time.textContent = fmtDuration(item.duration); };
       audio.ontimeupdate = () => { item.current = audio.currentTime || 0; const fill = wrapper.querySelector('.ai-audio-fill'); if (fill && item.duration) fill.style.width = `${Math.min(100, item.current / item.duration * 100)}%`; const time = wrapper.querySelector('.ai-audio-time'); if (time) time.textContent = fmtDuration(item.duration || item.current); };
       audio.onplay = () => { item.playing = true; const button=wrapper.querySelector('[data-ai-audio-toggle]'); if(button){button.textContent='II';button.setAttribute('aria-label','Pausar áudio');} };
       audio.onpause = () => { item.playing = false; const button=wrapper.querySelector('[data-ai-audio-toggle]'); if(button){button.textContent='▶';button.setAttribute('aria-label','Reproduzir áudio');} };
