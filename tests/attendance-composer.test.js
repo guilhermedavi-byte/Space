@@ -53,3 +53,17 @@ test('composer tools insert at the cursor and denied microphone keeps text usabl
  w.document.querySelector('[data-composer-tool="mic"]').click();await tick();assert.match(w.document.body.textContent,/Permissão do microfone não concedida/);assert.equal(w.document.querySelector('[data-ai-compose]').disabled,false);assert.equal(w.document.querySelector('[data-ai-send]').disabled,false);
  w.document.querySelector('[data-composer-tool="quick"]').click();await tick();w.document.querySelector('[data-insert-quick]').click();assert.match(w.document.querySelector('[data-ai-compose]').value,/Olá!/);dom.window.close();
 });
+test('attachment button targets a real file input and previews selected files',async()=>{
+ const {JSDOM}=require('jsdom'),fs=require('fs');const dom=new JSDOM('<body data-initial-panel="attendance-inbox"><div data-attendance-inbox></div>',{runScripts:'outside-only',url:'https://plataforma.spaceschoolbr.com',pretendToBeVisual:true});const w=dom.window;
+ const row={conversation_id:cid,status:'open',team:{name:'Atendimento',team_id:uid},contact:{name:'Teste'}};
+ w.fetchWithAuth=async(url)=>({ok:true,json:async()=>String(url).includes('conversation_id')?{conversation:row,contact:row.contact,messages:[],composer:{enabled:true}}:{rows:[row],teams:[]}});
+ w.URL.createObjectURL=()=> 'blob:test';w.URL.revokeObjectURL=()=>{};
+ w.eval(fs.readFileSync('attendance-inbox.js','utf8'));const tick=()=>new Promise(r=>setTimeout(r,0));await tick();await tick();w.document.querySelector('[data-ai-select]').click();await tick();await tick();
+ const input=w.document.querySelector('[data-composer-file]');assert.ok(input);assert.equal(input.hidden,false);assert.match(input.className,/ai-composer-file/);
+ let clicked=false;input.click=()=>{clicked=true;};w.document.querySelector('[data-composer-tool="attach"]').click();assert.equal(clicked,true);
+ const file=new w.File([new Uint8Array([1,2,3])],'comprovante.png',{type:'image/png'});
+ Object.defineProperty(input,'files',{value:[file],configurable:true});input.dispatchEvent(new w.Event('change',{bubbles:true}));await tick();
+ assert.match(w.document.body.textContent,/comprovante\.png/);
+ assert.match(w.document.body.textContent,/3 B/);
+ assert.equal(w.document.querySelector('[data-ai-send]').disabled,false);dom.window.close();
+});
