@@ -38514,7 +38514,7 @@ const loadAdminSettingsProfile = async ({ force = false } = {}) => {
 };
 
 const normalizeAdminAccessRow = (id, raw = {}) => {
-  const role = normalizeRole(raw?.tipo || raw?.role || raw?.type);
+  const role = normalizeRole(raw?.tipo || raw?.role || raw?.type || "admin");
   if (role !== "admin") return null;
   const nome = String(raw?.nome || raw?.name || raw?.displayName || raw?.email || "Administrador").trim();
   const email = String(raw?.email || "").trim().toLowerCase();
