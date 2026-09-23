@@ -27,7 +27,7 @@ async function collectHealth(now = new Date()) {
     optional('connections',all('finance_connection_state','','connection_id')),
     optional('cases',all('retention_cases')),
   ]);
-  const population = H.activePopulation(users,canonical,subscriptions,day);
+  const population = H.activePopulation(users,canonical,subscriptions,day).map(row=>({...row,teacher_name:users.find(user=>(user.firestoreDocId||user.id)===row.teacher)?.nome||null}));
   if (!population.length) throw Error('empty_operational_roster');
   const rows = population.map(student => {
     const monitored = [], signals = { financial_status:'unknown' };
@@ -105,7 +105,7 @@ async function readIntelligence(month) {
   ]);
   const rows=daily.map(row=>{
     const data=row.data;
-    const delta=days=> {const previous=history.find(item=>item.student_id===row.student_id && item.snapshot_date===H.addDays(latest.snapshot_date,-days)); return previous && previous.score_coverage_pct===row.score_coverage_pct && H.finite(previous.health_score) && H.finite(row.health_score) ? row.health_score-previous.health_score:null;};
+    const delta=days=> {const previous=history.find(item=>item.student_id===row.student_id && item.snapshot_date===H.addDays(latest.snapshot_date,-days)); return previous && previous.score_coverage_pct===row.score_coverage_pct && JSON.stringify(previous.missing_dimensions)===JSON.stringify(row.missing_dimensions) && H.finite(previous.health_score) && H.finite(row.health_score) ? row.health_score-previous.health_score:null;};
     return {...data,health_change_7d:delta(7),health_change_14d:delta(14)};
   });
   const canonicalIds=new Set(rows.flatMap(row=>row.canonical_ids||[]));
