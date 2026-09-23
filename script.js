@@ -11174,6 +11174,11 @@ const activityStudentName = (id) => {
   return (activitiesState.students || []).find(student => String(student.id || "") === safeId)?.nome || safeId || "Sem aluno vinculado";
 };
 
+const activityStudentInfo = (id) => {
+  const safeId = String(id || "").trim();
+  return (activitiesState.students || []).find(student => String(student.id || "") === safeId) || null;
+};
+
 const activityTimelineEventText = (event = {}) => {
   const type = String(event.eventType || "").trim();
   const actor = String(event.actorNameSnapshot || event.actorName || "Sistema").trim();
@@ -11206,20 +11211,33 @@ const renderActivityUserOptions = (selected = "") => {
   return [`<option value="">Sem responsável</option>`].concat(users.map(user => `<option value="${escapeHtml(String(user.id || ""))}" ${String(user.id || "") === String(selected || "") ? "selected" : ""}>${escapeHtml(String(user.nome || "Usuário"))}</option>`)).join("");
 };
 
+const renderActivityStudentOptions = (selected = "") => {
+  const students = Array.isArray(activitiesState.students) ? activitiesState.students : [];
+  return [`<option value="">Sem aluno vinculado</option>`].concat(students.map(student => `<option value="${escapeHtml(String(student.id || ""))}" ${String(student.id || "") === String(selected || "") ? "selected" : ""}>${escapeHtml(String(student.nome || "Aluno"))}${student.email ? ` · ${escapeHtml(String(student.email))}` : ""}</option>`)).join("");
+};
+
+const isActivityItemOverdue = (dateKey) => {
+  const date = parseDateKey(String(dateKey || ""));
+  if (!date) return false;
+  return date < startOfDay(new Date());
+};
+
 const renderActivityWorkspace = (workspace = {}) => {
   const activity = workspace.activity || {};
   const comments = Array.isArray(workspace.comments) ? workspace.comments : [];
   const checklist = Array.isArray(workspace.checklist) ? workspace.checklist : [];
   const events = Array.isArray(workspace.events) ? workspace.events : [];
-  const statusMeta = getActivityStatusMeta(activity.status);
   const priorityMeta = getActivityPriorityMeta(activity.prioridade);
   const done = checklist.filter(item => item.completed).length;
   const total = checklist.length;
   const pct = total ? Math.round((done / total) * 100) : 0;
-  const timeline = [
-    ...events.map(event => ({ kind: "event", time: Date.parse(event.occurredAt) || 0, event })),
-    ...comments.map(comment => ({ kind: "comment", time: Date.parse(comment.createdAt) || 0, comment })),
-  ].sort((a, b) => a.time - b.time);
+  const student = activityStudentInfo(activity.studentId);
+  const currentUserId = String(sessionUser?.id || "").trim();
+  const canAdminComments = currentRole === "admin" || sessionUser?.isSuperAdmin === true;
+  const visibleComments = comments.slice().sort((a, b) => (Date.parse(a.createdAt) || 0) - (Date.parse(b.createdAt) || 0));
+  const visibleEvents = events.slice().sort((a, b) => (Date.parse(b.occurredAt) || 0) - (Date.parse(a.occurredAt) || 0));
+  const notes = String(activity.observacoes || "").trim();
+  const propRow = (label, html) => `<label class="actws-prop"><span>${escapeHtml(label)}</span>${html}</label>`;
   return `
     <div class="actws" data-activity-workspace="${escapeHtml(activity.id)}">
       <header class="actws-head">
@@ -11228,7 +11246,7 @@ const renderActivityWorkspace = (workspace = {}) => {
           <div class="actws-head-meta">
             <span>${escapeHtml(activity.tipo || "Sem tipo")}</span>
             <span class="actws-dot"></span>
-            <span class="pedteacher-badge ${escapeHtml(priorityMeta.className)}">${escapeHtml(priorityMeta.label)}</span>
+            <span>${escapeHtml(priorityMeta.label)}</span>
             <span>${escapeHtml(activity.prazo ? formatAdminDate(activity.prazo) : "Sem prazo")}</span>
             <span>${escapeHtml(activityStudentName(activity.studentId))}</span>
           </div>
@@ -11247,63 +11265,94 @@ const renderActivityWorkspace = (workspace = {}) => {
       <div class="actws-grid">
         <aside class="actws-panel actws-details is-active" data-actws-panel="details">
           <form id="actws-details-form" class="actws-details-form" data-actws-details-form>
-            <label><span>Status</span><select class="admin-ped-select" name="status">${ACTIVITY_STATUS_OPTIONS.map(option => `<option value="${escapeHtml(option)}" ${option === normalizeActivityStatus(activity.status) ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}</select></label>
-            <label><span>Aluno vinculado</span><input class="admin-ped-select" name="studentId" value="${escapeHtml(activity.studentId || "")}" /></label>
-            <label><span>Responsável</span><select class="admin-ped-select" name="responsavelId">${renderActivityUserOptions(activity.responsavelId)}</select></label>
-            <label><span>Prazo</span><input class="admin-ped-select" type="date" name="prazo" value="${escapeHtml(activity.prazo || "")}" /></label>
-            <label><span>Prioridade</span><select class="admin-ped-select" name="prioridade">${ACTIVITY_PRIORITY_OPTIONS.map(option => `<option value="${escapeHtml(option)}" ${option === normalizeActivityPriority(activity.prioridade) ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}</select></label>
-            <label><span>Tipo</span><input class="admin-ped-select" name="tipo" value="${escapeHtml(activity.tipo || "")}" /></label>
-            <div class="actws-kv"><span>Criada por</span><strong>${escapeHtml(activityUserName(activity.criadoPor, activity.criadoPor))}</strong></div>
-            <div class="actws-kv"><span>Data de criação</span><strong>${escapeHtml(activity.criadoEm ? formatAdminHistoryStamp(activity.criadoEm) : "—")}</strong></div>
-            <div class="actws-kv"><span>Última atualização</span><strong>${escapeHtml(activity.atualizadoEm ? formatAdminHistoryStamp(activity.atualizadoEm) : "—")}</strong></div>
-            <div class="actws-kv"><span>Concluída em</span><strong>${escapeHtml(activity.completedAt ? formatAdminHistoryStamp(activity.completedAt) : "—")}</strong></div>
-            <label class="actws-wide"><span>Descrição</span><textarea class="admin-ped-select activities-textarea" name="descricao" rows="5">${escapeHtml(activity.descricao || "")}</textarea></label>
-            <label class="actws-wide"><span>Observações</span><textarea class="admin-ped-select activities-textarea" name="observacoes" rows="5">${escapeHtml(activity.observacoes || "")}</textarea></label>
-            <button class="ped-btn-save" type="submit">Salvar detalhes</button>
+            <section class="actws-section">
+              <h3>Propriedades</h3>
+              ${propRow("Status", `<select name="status">${ACTIVITY_STATUS_OPTIONS.map(option => `<option value="${escapeHtml(option)}" ${option === normalizeActivityStatus(activity.status) ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}</select>`)}
+              ${propRow("Responsável", `<select name="responsavelId">${renderActivityUserOptions(activity.responsavelId)}</select>`)}
+              ${propRow("Prazo", `<input type="date" name="prazo" value="${escapeHtml(activity.prazo || "")}" />`)}
+              ${propRow("Prioridade", `<select name="prioridade">${ACTIVITY_PRIORITY_OPTIONS.map(option => `<option value="${escapeHtml(option)}" ${option === normalizeActivityPriority(activity.prioridade) ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}</select>`)}
+              ${propRow("Tipo", `<input name="tipo" value="${escapeHtml(activity.tipo || "")}" placeholder="Sem tipo" />`)}
+              ${propRow("Aluno", `<select name="studentId">${renderActivityStudentOptions(activity.studentId)}</select>${student?.email ? `<small>${escapeHtml(student.email)}</small>` : ""}`)}
+            </section>
+            <section class="actws-section">
+              <h3>Metadados</h3>
+              <div class="actws-kv"><span>Criada por</span><strong>${escapeHtml(activityUserName(activity.criadoPor, activity.criadoPor))}</strong></div>
+              <div class="actws-kv"><span>Data de criação</span><strong>${escapeHtml(activity.criadoEm ? formatAdminHistoryStamp(activity.criadoEm) : "—")}</strong></div>
+              <div class="actws-kv"><span>Última atualização</span><strong>${escapeHtml(activity.atualizadoEm ? formatAdminHistoryStamp(activity.atualizadoEm) : "—")}</strong></div>
+              <div class="actws-kv"><span>Concluída em</span><strong>${escapeHtml(activity.completedAt ? formatAdminHistoryStamp(activity.completedAt) : "—")}</strong></div>
+            </section>
+            <section class="actws-section actws-section-context">
+              <h3>Contexto</h3>
+              <label class="actws-text-block"><span>Descrição</span><textarea name="descricao" rows="6" placeholder="Adicione o contexto principal da atividade…">${escapeHtml(activity.descricao || "")}</textarea></label>
+              <label class="actws-text-block"><span>Notas internas</span><textarea name="observacoes" rows="${notes ? "4" : "2"}" placeholder="Notas internas opcionais…">${escapeHtml(notes)}</textarea></label>
+            </section>
+            <button class="actws-save-subtle" type="submit">Salvar alterações</button>
           </form>
         </aside>
         <main class="actws-panel actws-timeline" data-actws-panel="timeline">
-          <div class="actws-feed">
-            ${timeline.length ? timeline.map(item => item.kind === "comment" ? `
-              <article class="actws-comment">
-                ${activityAvatarHtml(item.comment.authorNameSnapshot, item.comment.authorPhotoSnapshot)}
-                <div>
-                  <div class="actws-comment-head"><strong>${escapeHtml(item.comment.authorNameSnapshot || "Usuário")}</strong><time>${escapeHtml(item.comment.createdAt ? formatAdminHistoryStamp(item.comment.createdAt) : "Agora")}</time></div>
-                  <p>${escapeHtml(item.comment.body)}</p>
+          <div class="actws-feed" data-actws-feed>
+            <section class="actws-discussion">
+              <div class="actws-section-head"><h3>Discussão</h3><span>${escapeHtml(String(visibleComments.length))}</span></div>
+              <div class="actws-comments" data-actws-comments>
+                ${visibleComments.length ? visibleComments.map(comment => {
+                  const canManage = !comment.legacy && !comment.deletedAt && (canAdminComments || String(comment.authorId || "") === currentUserId);
+                  return `
+              <article class="actws-comment ${comment.deletedAt ? "is-deleted" : ""}" data-actws-comment="${escapeHtml(comment.id)}">
+                ${activityAvatarHtml(comment.authorNameSnapshot, comment.authorPhotoSnapshot)}
+                <div class="actws-comment-main">
+                  <div class="actws-comment-head"><strong>${escapeHtml(comment.authorNameSnapshot || "Usuário")}</strong><time>${escapeHtml(comment.createdAt ? formatAdminHistoryStamp(comment.createdAt) : "Agora")}${comment.editedAt && !comment.deletedAt ? " · editado" : ""}</time>${canManage ? `<button type="button" class="actws-icon-action" data-actws-comment-menu="${escapeHtml(comment.id)}" aria-label="Ações do comentário">•••</button>` : ""}</div>
+                  <p data-actws-comment-body>${escapeHtml(comment.deletedAt ? "Comentário removido" : comment.body)}</p>
+                  ${canManage ? `<form class="actws-comment-edit-form" data-actws-comment-edit-form="${escapeHtml(comment.id)}" hidden><textarea name="body" rows="3">${escapeHtml(comment.body)}</textarea><div><button type="submit">Salvar</button><button type="button" data-actws-comment-cancel="${escapeHtml(comment.id)}">Cancelar</button></div></form><div class="actws-comment-menu" data-actws-comment-menu-popover="${escapeHtml(comment.id)}" hidden><button type="button" data-actws-comment-edit="${escapeHtml(comment.id)}">Editar comentário</button><button type="button" data-actws-comment-delete="${escapeHtml(comment.id)}">Excluir comentário</button></div>` : ""}
                 </div>
               </article>
-            ` : `
-              <div class="actws-event"><span>○</span><p>${escapeHtml(activityTimelineEventText(item.event))} · ${escapeHtml(item.event.occurredAt ? formatAdminHistoryStamp(item.event.occurredAt) : "")}</p></div>
-            `).join("") : `<div class="actws-empty">Nenhuma movimentação registrada ainda.</div>`}
+                  `;
+                }).join("") : `<div class="actws-empty">Nenhum comentário ainda.</div>`}
+              </div>
+              <button type="button" class="actws-add-inline" data-actws-comment-compose-toggle>+ Adicionar comentário</button>
+              <form class="actws-comment-form" data-actws-comment-form hidden>
+                <textarea name="comment" rows="3" placeholder="Escreva um comentário…"></textarea>
+                <div class="actws-form-actions"><span>Enter envia · Shift+Enter quebra linha</span><button type="submit">Enviar</button><button type="button" data-actws-comment-compose-cancel>Cancelar</button></div>
+              </form>
+            </section>
+            <section class="actws-activity-log">
+              <div class="actws-section-head"><h3>Atividade</h3><span>${escapeHtml(String(visibleEvents.length))}</span></div>
+              <div class="actws-events">
+                ${visibleEvents.length ? visibleEvents.map(event => `<div class="actws-event"><span>○</span><p>${escapeHtml(activityTimelineEventText(event))}<time>${escapeHtml(event.occurredAt ? formatAdminHistoryStamp(event.occurredAt) : "")}</time></p></div>`).join("") : `<div class="actws-empty">Nenhum evento registrado.</div>`}
+              </div>
+            </section>
           </div>
-          <form class="actws-comment-form" data-actws-comment-form>
-            <textarea class="admin-ped-select" name="comment" rows="3" placeholder="Adicionar comentário…"></textarea>
-            <button class="ped-btn-save" type="submit">Enviar</button>
-          </form>
         </main>
         <aside class="actws-panel actws-checklist" data-actws-panel="checklist">
-          <div class="actws-check-head"><strong>${escapeHtml(`${done} de ${total} concluídos · ${pct}%`)}</strong><span><i style="width:${escapeHtml(String(pct))}%"></i></span></div>
+          <div class="actws-check-head"><div><h3>Checklist</h3><strong>${escapeHtml(`${done} de ${total} concluídos · ${pct}%`)}</strong></div><span><i style="width:${escapeHtml(String(pct))}%"></i></span></div>
           <div class="actws-check-list">
             ${checklist.length ? checklist.map(item => `
-              <article class="actws-check-item" data-actws-check-item="${escapeHtml(item.id)}">
+              <article class="actws-check-item ${item.completed ? "is-done" : ""} ${isActivityItemOverdue(item.dueDate) && !item.completed ? "is-overdue" : ""}" data-actws-check-item="${escapeHtml(item.id)}">
                 <input type="checkbox" data-actws-check-toggle="${escapeHtml(item.id)}" ${item.completed ? "checked" : ""} />
                 <div class="actws-check-copy">
-                  <input class="actws-check-title" value="${escapeHtml(item.title || "")}" data-actws-check-title="${escapeHtml(item.id)}" />
-                  <div class="actws-check-meta">
-                    <select data-actws-check-assignee="${escapeHtml(item.id)}">${renderActivityUserOptions(item.assigneeId)}</select>
-                    <input type="date" value="${escapeHtml(item.dueDate || "")}" data-actws-check-due="${escapeHtml(item.id)}" />
+                  <div class="actws-check-line"><strong>${escapeHtml(item.title || "Item sem título")}</strong><button type="button" class="actws-icon-action" data-actws-check-edit="${escapeHtml(item.id)}" aria-label="Editar item">•••</button></div>
+                  <div class="actws-check-readable"><span>${escapeHtml(item.assigneeNameSnapshot || activityUserName(item.assigneeId, "Sem responsável"))}</span>${item.dueDate ? `<span>${escapeHtml(formatAdminDate(item.dueDate))}</span>` : `<span>Sem prazo</span>`}</div>
+                  <form class="actws-check-edit-form" data-actws-check-edit-form="${escapeHtml(item.id)}" hidden>
+                    <input name="title" value="${escapeHtml(item.title || "")}" />
+                    <select name="assigneeId">${renderActivityUserOptions(item.assigneeId)}</select>
+                    <input type="date" name="dueDate" value="${escapeHtml(item.dueDate || "")}" />
+                    <div><button type="submit">Salvar</button><button type="button" data-actws-check-cancel="${escapeHtml(item.id)}">Cancelar</button><button type="button" data-actws-check-delete="${escapeHtml(item.id)}">Excluir</button></div>
+                  </form>
+                  <div class="actws-check-menu" data-actws-check-menu="${escapeHtml(item.id)}" hidden>
+                    <button type="button" data-actws-check-open-edit="${escapeHtml(item.id)}">Editar item</button>
+                    <button type="button" data-actws-check-delete="${escapeHtml(item.id)}">Excluir item</button>
                   </div>
                 </div>
               </article>
             `).join("") : `<div class="actws-empty">Nenhum item no checklist.</div>`}
           </div>
-          <form class="actws-add-check" data-actws-check-add-form>
-            <input class="admin-ped-select" name="title" placeholder="+ Adicionar item" />
+          <button type="button" class="actws-add-inline" data-actws-check-add-toggle>+ Adicionar item</button>
+          <form class="actws-add-check" data-actws-check-add-form hidden>
+            <input name="title" placeholder="Título do item" />
             <div class="actws-check-meta">
               <select name="assigneeId">${renderActivityUserOptions("")}</select>
-              <input class="admin-ped-select" type="date" name="dueDate" />
+              <input type="date" name="dueDate" />
             </div>
-            <button class="ped-btn-save" type="submit">Adicionar</button>
+            <div class="actws-form-actions"><button type="submit">Salvar</button><button type="button" data-actws-check-add-cancel>Cancelar</button></div>
           </form>
         </aside>
       </div>
@@ -11822,6 +11871,129 @@ const bindActivitiesUi = () => {
       const target = event.target;
       if (!(target instanceof Element)) return;
       if (target.closest("[data-activities-drawer-close]")) return closeActivitiesDrawer();
+      const composeToggle = target.closest("[data-actws-comment-compose-toggle]");
+      if (composeToggle instanceof HTMLElement) {
+        const workspace = composeToggle.closest("[data-activity-workspace]");
+        const form = workspace?.querySelector("[data-actws-comment-form]");
+        if (form instanceof HTMLElement) {
+          form.hidden = false;
+          composeToggle.hidden = true;
+          form.querySelector("textarea")?.focus();
+        }
+        return;
+      }
+      if (target.closest("[data-actws-comment-compose-cancel]")) {
+        const workspace = target.closest("[data-activity-workspace]");
+        const form = workspace?.querySelector("[data-actws-comment-form]");
+        const trigger = workspace?.querySelector("[data-actws-comment-compose-toggle]");
+        if (form instanceof HTMLFormElement) {
+          form.reset();
+          form.hidden = true;
+        }
+        if (trigger instanceof HTMLElement) trigger.hidden = false;
+        return;
+      }
+      const commentMenuButton = target.closest("[data-actws-comment-menu]");
+      if (commentMenuButton instanceof HTMLElement) {
+        const commentId = String(commentMenuButton.getAttribute("data-actws-comment-menu") || "").trim();
+        const menu = activitiesDrawer.querySelector(`[data-actws-comment-menu-popover="${CSS.escape(commentId)}"]`);
+        if (menu instanceof HTMLElement) menu.hidden = !menu.hidden;
+        return;
+      }
+      const commentEditButton = target.closest("[data-actws-comment-edit]");
+      if (commentEditButton instanceof HTMLElement) {
+        const commentId = String(commentEditButton.getAttribute("data-actws-comment-edit") || "").trim();
+        const article = activitiesDrawer.querySelector(`[data-actws-comment="${CSS.escape(commentId)}"]`);
+        article?.classList.add("is-editing");
+        const form = article?.querySelector(`[data-actws-comment-edit-form="${CSS.escape(commentId)}"]`);
+        const menu = article?.querySelector(`[data-actws-comment-menu-popover="${CSS.escape(commentId)}"]`);
+        if (form instanceof HTMLElement) form.hidden = false;
+        if (menu instanceof HTMLElement) menu.hidden = true;
+        form?.querySelector("textarea")?.focus();
+        return;
+      }
+      const commentCancelButton = target.closest("[data-actws-comment-cancel]");
+      if (commentCancelButton instanceof HTMLElement) {
+        const commentId = String(commentCancelButton.getAttribute("data-actws-comment-cancel") || "").trim();
+        const article = activitiesDrawer.querySelector(`[data-actws-comment="${CSS.escape(commentId)}"]`);
+        article?.classList.remove("is-editing");
+        const form = article?.querySelector(`[data-actws-comment-edit-form="${CSS.escape(commentId)}"]`);
+        if (form instanceof HTMLElement) form.hidden = true;
+        return;
+      }
+      const commentDeleteButton = target.closest("[data-actws-comment-delete]");
+      if (commentDeleteButton instanceof HTMLElement) {
+        const workspace = commentDeleteButton.closest("[data-activity-workspace]");
+        const id = String(workspace?.getAttribute("data-activity-workspace") || "").trim();
+        const commentId = String(commentDeleteButton.getAttribute("data-actws-comment-delete") || "").trim();
+        const article = activitiesDrawer.querySelector(`[data-actws-comment="${CSS.escape(commentId)}"]`);
+        article?.classList.add("is-sending");
+        patchActivityWorkspace(id, { commentAction: "delete", commentId })
+          .then(data => { if (activitiesDrawerBody instanceof HTMLElement) activitiesDrawerBody.innerHTML = renderActivityWorkspace(data); })
+          .catch(error => { console.error("[activities] comment delete failed:", error); article?.classList.remove("is-sending"); setActivitiesStatus("Não foi possível excluir o comentário.", "error"); });
+        return;
+      }
+      const checkAddToggle = target.closest("[data-actws-check-add-toggle]");
+      if (checkAddToggle instanceof HTMLElement) {
+        const workspace = checkAddToggle.closest("[data-activity-workspace]");
+        const form = workspace?.querySelector("[data-actws-check-add-form]");
+        if (form instanceof HTMLElement) {
+          form.hidden = false;
+          checkAddToggle.hidden = true;
+          form.querySelector("input")?.focus();
+        }
+        return;
+      }
+      if (target.closest("[data-actws-check-add-cancel]")) {
+        const workspace = target.closest("[data-activity-workspace]");
+        const form = workspace?.querySelector("[data-actws-check-add-form]");
+        const trigger = workspace?.querySelector("[data-actws-check-add-toggle]");
+        if (form instanceof HTMLFormElement) {
+          form.reset();
+          form.hidden = true;
+        }
+        if (trigger instanceof HTMLElement) trigger.hidden = false;
+        return;
+      }
+      const checkEditMenuButton = target.closest("[data-actws-check-edit]");
+      if (checkEditMenuButton instanceof HTMLElement) {
+        const itemId = String(checkEditMenuButton.getAttribute("data-actws-check-edit") || "").trim();
+        const menu = activitiesDrawer.querySelector(`[data-actws-check-menu="${CSS.escape(itemId)}"]`);
+        if (menu instanceof HTMLElement) menu.hidden = !menu.hidden;
+        return;
+      }
+      const checkOpenEdit = target.closest("[data-actws-check-open-edit]");
+      if (checkOpenEdit instanceof HTMLElement) {
+        const itemId = String(checkOpenEdit.getAttribute("data-actws-check-open-edit") || "").trim();
+        const item = activitiesDrawer.querySelector(`[data-actws-check-item="${CSS.escape(itemId)}"]`);
+        item?.classList.add("is-editing");
+        const form = item?.querySelector(`[data-actws-check-edit-form="${CSS.escape(itemId)}"]`);
+        const menu = item?.querySelector(`[data-actws-check-menu="${CSS.escape(itemId)}"]`);
+        if (form instanceof HTMLElement) form.hidden = false;
+        if (menu instanceof HTMLElement) menu.hidden = true;
+        return;
+      }
+      const checkCancel = target.closest("[data-actws-check-cancel]");
+      if (checkCancel instanceof HTMLElement) {
+        const itemId = String(checkCancel.getAttribute("data-actws-check-cancel") || "").trim();
+        const item = activitiesDrawer.querySelector(`[data-actws-check-item="${CSS.escape(itemId)}"]`);
+        item?.classList.remove("is-editing");
+        const form = item?.querySelector(`[data-actws-check-edit-form="${CSS.escape(itemId)}"]`);
+        if (form instanceof HTMLElement) form.hidden = true;
+        return;
+      }
+      const checkDelete = target.closest("[data-actws-check-delete]");
+      if (checkDelete instanceof HTMLElement) {
+        const workspace = checkDelete.closest("[data-activity-workspace]");
+        const id = String(workspace?.getAttribute("data-activity-workspace") || "").trim();
+        const itemId = String(checkDelete.getAttribute("data-actws-check-delete") || "").trim();
+        const item = activitiesDrawer.querySelector(`[data-actws-check-item="${CSS.escape(itemId)}"]`);
+        item?.classList.add("is-sending");
+        patchActivityWorkspace(id, { checklistAction: "delete", itemId })
+          .then(data => { if (activitiesDrawerBody instanceof HTMLElement) activitiesDrawerBody.innerHTML = renderActivityWorkspace(data); })
+          .catch(error => { console.error("[activities] checklist delete failed:", error); item?.classList.remove("is-sending"); setActivitiesStatus("Não foi possível excluir o item.", "error"); });
+        return;
+      }
       const tabButton = target.closest("[data-actws-tab]");
       if (tabButton instanceof HTMLElement) {
         const workspace = tabButton.closest("[data-activity-workspace]");
@@ -11865,6 +12037,7 @@ const bindActivitiesUi = () => {
       form.dataset.saving = "true";
       const formData = new FormData(form);
       let payload = null;
+      let optimisticEl = null;
       if (form.matches("[data-actws-details-form]")) {
         payload = {
           titulo: String(formData.get("titulo") || workspace.querySelector(".actws-title-input")?.value || "").trim(),
@@ -11879,9 +12052,34 @@ const bindActivitiesUi = () => {
         };
       } else if (form.matches("[data-actws-comment-form]")) {
         payload = { comment: String(formData.get("comment") || "").trim() };
+        if (!payload.comment) {
+          delete form.dataset.saving;
+          return;
+        }
+        const commentsEl = workspace.querySelector("[data-actws-comments]");
+        const tempId = `pending-${Date.now()}`;
+        const pending = document.createElement("article");
+        pending.className = "actws-comment is-pending";
+        pending.setAttribute("data-actws-comment", tempId);
+        pending.innerHTML = `${activityAvatarHtml(sessionUser?.name || "Você", sessionUser?.photoURL || "")}<div class="actws-comment-main"><div class="actws-comment-head"><strong>${escapeHtml(sessionUser?.name || "Você")}</strong><time>Enviando…</time></div><p>${escapeHtml(payload.comment)}</p></div>`;
+        commentsEl?.appendChild(pending);
+        optimisticEl = pending;
+        form.reset();
       } else if (form.matches("[data-actws-check-add-form]")) {
         payload = {
           checklistAction: "add",
+          title: String(formData.get("title") || "").trim(),
+          assigneeId: String(formData.get("assigneeId") || "").trim(),
+          dueDate: String(formData.get("dueDate") || "").trim(),
+        };
+      } else if (form.matches("[data-actws-comment-edit-form]")) {
+        const commentId = String(form.getAttribute("data-actws-comment-edit-form") || "").trim();
+        payload = { commentAction: "edit", commentId, body: String(formData.get("body") || "").trim() };
+      } else if (form.matches("[data-actws-check-edit-form]")) {
+        const itemId = String(form.getAttribute("data-actws-check-edit-form") || "").trim();
+        payload = {
+          checklistAction: "update",
+          itemId,
           title: String(formData.get("title") || "").trim(),
           assigneeId: String(formData.get("assigneeId") || "").trim(),
           dueDate: String(formData.get("dueDate") || "").trim(),
@@ -11890,7 +12088,7 @@ const bindActivitiesUi = () => {
       if (!payload) { delete form.dataset.saving; return; }
       patchActivityWorkspace(id, payload)
         .then(data => { if (activitiesDrawerBody instanceof HTMLElement) activitiesDrawerBody.innerHTML = renderActivityWorkspace(data); setActivitiesStatus("Salvo ✓", "success"); window.setTimeout(() => setActivitiesStatus(""), 1800); })
-        .catch(error => { console.error("[activities] workspace submit failed:", error); setActivitiesStatus("Não foi possível salvar agora.", "error"); })
+        .catch(error => { console.error("[activities] workspace submit failed:", error); optimisticEl?.remove(); setActivitiesStatus("Não foi possível salvar agora.", "error"); })
         .finally(() => { delete form.dataset.saving; });
     });
     activitiesDrawer.addEventListener("change", (event) => {
@@ -11956,6 +12154,12 @@ const bindActivitiesUi = () => {
     }
   });
   document.addEventListener("keydown", (event) => {
+    const target = event.target;
+    if (target instanceof HTMLTextAreaElement && target.closest("[data-actws-comment-form]") && event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      target.closest("form")?.requestSubmit();
+      return;
+    }
     if (event.key === "Escape" && activitiesState.filterPopoverEl) closeActivitiesFiltersPopover();
     if (event.key === "Escape" && activitiesState.drawer.isOpen) closeActivitiesDrawer();
   });

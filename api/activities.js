@@ -91,6 +91,8 @@ const normalizeComment = (row = {}) => ({
   body: safeText(row.body || row.text || row.texto || row.comentario),
   createdAt: row.createdAt || row.criadoEm || null,
   editedAt: row.editedAt || null,
+  deletedAt: row.deletedAt || null,
+  deletedBy: safeText(row.deletedBy),
   legacy: row.legacy === true,
 });
 
@@ -107,6 +109,8 @@ const normalizeChecklistItem = (row = {}) => ({
   createdAt: row.createdAt || row.criadoEm || null,
   createdBy: safeText(row.createdBy || row.criadoPor),
   updatedAt: row.updatedAt || row.atualizadoEm || null,
+  deletedAt: row.deletedAt || null,
+  deletedBy: safeText(row.deletedBy),
 });
 
 const canAccessActivity = (session, activity) => {
@@ -209,7 +213,7 @@ const sortByTimeAsc = (rows, field = 'createdAt') =>
 
 const decorateActivityCollections = (activity, { comments = [], checklist = [] } = {}) => ({
   ...activity,
-  commentsCount: comments.length || Number(activity.commentsCount) || 0,
+  commentsCount: comments.filter(comment => !comment.deletedAt).length || Number(activity.commentsCount) || 0,
   checklistTotal: checklist.length || Number(activity.checklistTotal) || 0,
   checklistDone: checklist.filter(item => item.completed).length || Number(activity.checklistDone) || 0,
 });
@@ -230,7 +234,7 @@ const readActivityWorkspace = async (activity) => {
     })
   ).filter(comment => comment.body);
   const comments = sortByTimeAsc([...legacyComments, ...commentRows.map(normalizeComment)], 'createdAt');
-  const checklist = sortByTimeAsc(checklistRows.map(normalizeChecklistItem), 'createdAt');
+  const checklist = sortByTimeAsc(checklistRows.map(normalizeChecklistItem).filter(item => !item.deletedAt), 'createdAt');
   const events = sortByTimeAsc(eventRows, 'occurredAt');
   return { activity: decorateActivityCollections(activity, { comments, checklist }), comments, checklist, events };
 };
@@ -320,6 +324,48 @@ const addActivityComment = async ({ activity, document, body, session }) => {
   return normalizeComment({ ...comment, createdAt: now });
 };
 
+const commitCommentAction = async ({ activity, document, body, session }) => {
+  const action = safeText(body?.commentAction);
+  const commentId = safeText(body?.commentId);
+  if (!commentId) throw Object.assign(new Error('missing_comment_id'), { status: 400 });
+  const commentDoc = await readChildDocument(COMMENTS_COLLECTION, commentId);
+  const existing = commentDoc ? normalizeComment(commentDoc.row) : null;
+  if (!existing || existing.activityId !== activity.id || existing.legacy) throw Object.assign(new Error('comment_not_found'), { status: 404 });
+  const actor = actorFromSession(session);
+  const role = normalizeRole(session?.role);
+  if (role !== 'admin' && existing.authorId !== actor.id) throw Object.assign(new Error('comment_forbidden'), { status: 403 });
+  const now = new Date().toISOString();
+  const prefix = FIRESTORE_BASE.split('/v1/')[1];
+  const patch = { ...commentDoc.row, id: commentId };
+  let eventType = 'comment_updated';
+  if (action === 'edit') {
+    const text = safeText(body?.body);
+    if (!text) throw Object.assign(new Error('missing_comment_body'), { status: 400 });
+    patch.body = text;
+    patch.editedAt = new Date(now);
+  } else if (action === 'delete') {
+    patch.body = '';
+    patch.deletedAt = new Date(now);
+    patch.deletedBy = actor.id;
+    patch.editedAt = new Date(now);
+    eventType = 'comment_deleted';
+  } else {
+    throw Object.assign(new Error('invalid_comment_action'), { status: 400 });
+  }
+  await commitActivityAppend({
+    activity,
+    document,
+    writes: [{ update: { name: `${prefix}/${COMMENTS_COLLECTION}/${commentId}`, ...encodeFields(patch) }, updateMask: { fieldPaths: Object.keys(patch) }, currentDocument: { updateTime: commentDoc.updateTime } }],
+    eventType,
+    actor,
+    before: existing.deletedAt ? { ...existing, body: '' } : existing,
+    after: normalizeComment({ ...patch, editedAt: now, deletedAt: action === 'delete' ? now : patch.deletedAt }),
+    metadata: { commentId },
+    seed: `${commentId}:${eventType}:${now}`,
+  });
+  return normalizeComment({ ...patch, editedAt: now, deletedAt: action === 'delete' ? now : patch.deletedAt });
+};
+
 const commitChecklistAction = async ({ activity, document, body, session }) => {
   const action = safeText(body?.checklistAction || body?.action);
   const actor = actorFromSession(session);
@@ -370,6 +416,10 @@ const commitChecklistAction = async ({ activity, document, body, session }) => {
     patch.completedAt = completed ? new Date(now) : null;
     patch.completedBy = completed ? actor.id : '';
     eventType = completed ? 'checklist_item_completed' : 'checklist_item_reopened';
+  } else if (action === 'delete') {
+    patch.deletedAt = new Date(now);
+    patch.deletedBy = actor.id;
+    eventType = 'checklist_item_deleted';
   } else if (action === 'update') {
     if (Object.hasOwn(body || {}, 'title')) patch.title = safeText(body.title) || existing.title;
     if (Object.hasOwn(body || {}, 'assigneeId')) {
@@ -463,12 +513,14 @@ module.exports = async (req, res) => {
       const commentsByActivity = new Map();
       commentRows.forEach(row => {
         const activityId = safeText(row.activityId);
+        if (row.deletedAt) return;
         if (activityId) commentsByActivity.set(activityId, (commentsByActivity.get(activityId) || 0) + 1);
       });
       const checklistByActivity = new Map();
       checklistRows.forEach(row => {
         const activityId = safeText(row.activityId);
         if (!activityId) return;
+        if (row.deletedAt) return;
         const current = checklistByActivity.get(activityId) || { total: 0, done: 0 };
         current.total += 1;
         if (row.completed === true) current.done += 1;
@@ -573,6 +625,11 @@ module.exports = async (req, res) => {
       if (Object.prototype.hasOwnProperty.call(body || {}, "tipo")) patch.tipo = safeText(body?.tipo);
       if (Object.prototype.hasOwnProperty.call(body || {}, "observacoes")) patch.observacoes = safeText(body?.observacoes);
       if (Object.hasOwn(body || {}, "studentId")) patch.studentId = safeText(body.studentId);
+      if (safeText(body?.commentAction)) {
+        const comment = await commitCommentAction({ activity: existing, document, body, session });
+        const workspace = await readActivityWorkspace({ ...existing, atualizadoEm: new Date().toISOString() });
+        return sendJson(res, 200, { ...workspace, comment });
+      }
       if (safeText(body?.comment) && body?.workspace === true) {
         const comment = await addActivityComment({ activity: existing, document, body: body.comment, session });
         const workspace = await readActivityWorkspace({ ...existing, atualizadoEm: new Date().toISOString() });
