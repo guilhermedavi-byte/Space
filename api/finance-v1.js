@@ -17,7 +17,7 @@ function createHandler({session=getSessionFromRequest,reader,env=process.env}={}
   const q=Object.fromEntries(new URL(req.url||'/', 'https://space.invalid').searchParams);const view=q.view||'overview';
   if(String(user.role||'')==='admin'){
     const map={overview:'overview',receivables:'receivables',subscriptions:'subscriptions',customers:'customers',receivable:'receivables',recovery:'recovery',reconciliation:'pending',reconciliation_movement:'pending',exceptions:'pending',closing:'closing'};
-    const perm=`financeiro.${map[view]||'overview'}`;
+    const perm=`financeiro.${map[view]||'overview'}.view`;
     const guard=await requireAdminPermission(req,perm);if(!guard.ok)return send(guard.status,guard.body);
   }
   perf.set('operation',`finance_${view}`);

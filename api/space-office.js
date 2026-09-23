@@ -15,7 +15,7 @@ const readRows = async (path) => {
 };
 
 module.exports = async (req, res) => {
-  const guard = await requireAdminPermission(req, "spaceOffice");
+  const guard = await requireAdminPermission(req, "spaceOffice.overview.view");
   if (!guard.ok) return sendJson(res, guard.status || 403, guard.body || { error: "forbidden" });
   const session = guard.session;
   if (!isAdmin(session)) {

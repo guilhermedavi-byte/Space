@@ -64,7 +64,7 @@ const ADMIN_PERMISSION_REGISTRY = {
     children: {
       overview: withActions({ label: "Visão Geral", panel: "admin-comercial-visao-geral", routes: ["/app/admin/comercial"], apis: ["/api/growth-dashboard?api=growth-metrics", "/api/sdr-metrics"], legacyKey: "comercial.overview" }),
       crm: withActions({ label: "CRM", panel: "native-crm", routes: ["/app/admin/comercial/crm"], apis: ["/api/crm"], legacyKey: "comercial.crm" }, ["view", "create", "update", { key: "delete", label: "Excluir", sensitive: true }]),
-      crmLive: withActions({ label: "CRM Live", href: "/tv/crm-live", routes: ["/tv/crm-live"], apis: ["/api/crm-live-data", "/api/crm-live-events"], legacyKey: "comercial.crmLive" }),
+      crmLive: withActions({ label: "CRM Live", href: "/tv/crm-live", routes: ["/tv/crm-live"], apis: ["/api/crm-live-data", "/api/crm-live-events"], legacyKey: "comercial.crmLive" }, ["view", { key: "update", label: "Atualizar/gerenciar TV", sensitive: true }]),
       preSales: withActions({ label: "Pré-Vendas", panel: "admin-comercial-atividade-sdr", routes: ["/app/admin/comercial/pre-vendas"], apis: ["/api/admin-commercial-sdr-activity"], legacyKey: "comercial.preSales" }),
       sdrPanel: withActions({ label: "Painel SDR", panel: "admin-sdr", routes: ["/app/admin/comercial/pre-vendas/painel-sdr"], apis: ["/api/admin-sdr", "/api/admin/sdr/calls/:id/audio"], legacyKey: "comercial.sdrPanel" }, ["view", "update"]),
       goals: withActions({ label: "Metas", panel: "admin-comercial-metas", routes: ["/app/admin/comercial/metas"], apis: ["/api/growth-dashboard?api=growth-goals"], legacyKey: "comercial.goals" }, ["view", "create", "update", { key: "delete", label: "Excluir", sensitive: true }]),
@@ -365,8 +365,12 @@ const backfillExistingAdminPermissions = async ({ actorUserId } = {}) => {
   const now = new Date().toISOString();
   adminRows.forEach((row) => {
     const uid = String(row?.firestoreDocId || row?.id || row?.uid || "").trim();
-    if (!uid || row?.isSuperAdmin === true || Array.isArray(row?.adminPermissions)) return;
-    const perms = ALL_ADMIN_PERMISSION_KEYS.slice();
+    if (!uid || row?.isSuperAdmin === true) return;
+    const existing = row?.adminPermissions || row?.permissions;
+    const perms = normalizeAdminPermissions(existing, { fallbackFullAccess: true });
+    const existingList = Array.isArray(existing) ? existing.map((item) => String(item || "").trim()).filter(Boolean) : [];
+    const alreadyCanonical = existingList.length === perms.length && existingList.every((item, index) => item === perms[index]);
+    if (alreadyCanonical) return;
     writes.push({
       update: {
         name: buildUserCommitDocumentName(uid),

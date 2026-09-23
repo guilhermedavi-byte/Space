@@ -6,7 +6,7 @@ module.exports = async (req, res) => {
   try {
     const session = requireGrowthAccessFromRequest(req);
     if (String(session?.role || "").trim().toLowerCase() === "admin") {
-      const guard = await requireAdminPermission(req, "comercial.preSales");
+      const guard = await requireAdminPermission(req, "comercial.preSales.view");
       if (!guard.ok) return sendJson(res, guard.status, guard.body);
     }
 

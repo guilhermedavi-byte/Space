@@ -18,28 +18,35 @@ assert.ok(ADMIN_PERMISSION_REGISTRY.financeiro.children.overview, "registry incl
 assert.ok(ADMIN_PERMISSION_REGISTRY.settings.children.accesses, "registry includes settings.accesses");
 
 const flat = flattenRegistry();
-assert.ok(flat.length > 20, "registry flattens module/submodule permissions");
+assert.ok(flat.length >= 40 && flat.length <= 80, "registry keeps useful enterprise granularity");
 assert.strictEqual(new Set(ALL_ADMIN_PERMISSION_KEYS).size, ALL_ADMIN_PERMISSION_KEYS.length, "permission keys are unique");
 
-assert.deepStrictEqual(normalizeAdminPermissions(["dashboard", "nope", "comercial.crm", "comercial.crm"]), ["dashboard", "comercial.crm"]);
+assert.deepStrictEqual(normalizeAdminPermissions(["dashboard", "nope", "comercial.crm", "comercial.crm"]), [
+  "dashboard.overview.view",
+  "comercial.crm.view",
+  "comercial.crm.create",
+  "comercial.crm.update",
+  "comercial.crm.delete",
+]);
 
 const superAdmin = { role: "admin", isSuperAdmin: true, adminPermissions: [] };
-assert.strictEqual(canAdminAccess(superAdmin, "financeiro.closing"), true, "super admin bypasses matrix");
+assert.strictEqual(canAdminAccess(superAdmin, "financeiro.closing.view"), true, "super admin bypasses matrix");
 
 const fullAdmin = { role: "admin" };
 assert.strictEqual(adminAccessPayloadForUser(fullAdmin).adminPermissions.length, ALL_ADMIN_PERMISSION_KEYS.length, "missing permissions fallback preserves existing admins");
 
-const limitedAdmin = { role: "admin", adminPermissions: ["comercial.overview", "comercial.crm"] };
-assert.strictEqual(canAdminAccess(limitedAdmin, "comercial.crm"), true, "limited admin can access granted permission");
-assert.strictEqual(canAdminAccess(limitedAdmin, "comercial.goals"), false, "limited admin cannot access missing permission");
-assert.strictEqual(canAdminAccess(limitedAdmin, "financeiro.overview"), false, "limited admin cannot access missing module");
-assert.strictEqual(canAdminAccess({ role: "student", tipo: "admin" }, "dashboard"), true, "tipo is the canonical role field for legacy admin users");
+const limitedAdmin = { role: "admin", adminPermissions: ["comercial.overview.view", "comercial.crm.view", "comercial.crm.update"] };
+assert.strictEqual(canAdminAccess(limitedAdmin, "comercial.crm.view"), true, "limited admin can access granted permission");
+assert.strictEqual(canAdminAccess(limitedAdmin, "comercial.crm.delete"), false, "limited admin cannot delete without delete permission");
+assert.strictEqual(canAdminAccess(limitedAdmin, "comercial.goals.view"), false, "limited admin cannot access missing permission");
+assert.strictEqual(canAdminAccess(limitedAdmin, "financeiro.overview.view"), false, "limited admin cannot access missing module");
+assert.strictEqual(canAdminAccess({ role: "student", tipo: "admin" }, "dashboard.overview.view"), true, "tipo is the canonical role field for legacy admin users");
 
-assert.strictEqual(permissionForAdminPanel("native-crm"), "comercial.crm");
-assert.strictEqual(permissionForAdminPanel("admin-comercial-metas"), "comercial.goals");
-assert.strictEqual(permissionForAdminPanel("financeiro", { financeTab: "recebiveis" }), "financeiro.receivables");
-assert.strictEqual(permissionForAdminPanel("configuracoes-admin", { settingsSection: "acessos" }), "settings.accesses");
-assert.strictEqual(permissionForAdminPanel("admin-controle-pedagogico", { pedagogicoTab: "pessoas" }), "pedagogico.users");
+assert.strictEqual(permissionForAdminPanel("native-crm"), "comercial.crm.view");
+assert.strictEqual(permissionForAdminPanel("admin-comercial-metas"), "comercial.goals.view");
+assert.strictEqual(permissionForAdminPanel("financeiro", { financeTab: "recebiveis" }), "financeiro.receivables.view");
+assert.strictEqual(permissionForAdminPanel("configuracoes-admin", { settingsSection: "acessos" }), "settings.accesses.view");
+assert.strictEqual(permissionForAdminPanel("admin-controle-pedagogico", { pedagogicoTab: "pessoas" }), "pedagogico.users.view");
 
 const patch = buildAdminPermissionPatchWrites({
   targetUser: limitedAdmin,
@@ -47,8 +54,9 @@ const patch = buildAdminPermissionPatchWrites({
   permissions: ["dashboard", "activities"],
   actorUserId: "super-admin",
 });
-assert.deepStrictEqual(patch.before, ["comercial.overview", "comercial.crm"]);
-assert.deepStrictEqual(patch.after, ["dashboard", "activities"]);
+assert.deepStrictEqual(patch.before, ["comercial.overview.view", "comercial.crm.view", "comercial.crm.update"]);
+assert.ok(patch.after.includes("dashboard.overview.view"));
+assert.ok(patch.after.includes("activities.activity.delete"));
 assert.strictEqual(patch.writes.length, 2, "permission save writes user patch and audit event");
 
 console.log("admin permissions focused tests passed");

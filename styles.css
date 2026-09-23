@@ -30866,3 +30866,6 @@ button.automations-row:focus-visible,
 .student-profile-record p { margin: 8px 0 0; white-space: pre-wrap; color: rgba(255,255,255,.7); }
 @media (max-width: 640px) { .student-profile-tabs { gap: 22px; } .student-profile-record { padding: 16px; } }
 @media (prefers-reduced-motion: reduce) { .student-profile-tabs [role="tab"] { transition: none; } }
+
+/* Preserve meaningful multi-line activity snapshots in all student timelines. */
+.student-profile-record p { white-space: pre-wrap; overflow-wrap: anywhere; }

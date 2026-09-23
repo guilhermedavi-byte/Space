@@ -1,7 +1,9 @@
+const { randomUUID } = require("node:crypto");
+const { planActivityChange, studentOf, EVENTS_COLLECTION } = require("./_lib/activity-events");
 const { getGoogleAccessToken } = require("../_lib/google-service-account");
 const { sendJson, readJsonBody } = require("./_lib/http");
 const { getSessionFromRequest } = require("./_lib/session");
-const { listCollectionAsAdmin, createDocumentAsAdmin } = require("./_lib/firestore-admin");
+const { listCollectionAsAdmin } = require("./_lib/firestore-admin");
 const { requireAdminPermission } = require("./_lib/admin-permissions");
 const {
   FIRESTORE_BASE,
@@ -49,9 +51,10 @@ const normalizeActivity = (row = {}) => {
   const responsavelId = safeText(row.responsavelId);
   const tipo = safeText(row.tipo);
   return {
+    ...row,
     id: safeText(row.id),
     titulo: safeText(row.titulo),
-    studentId: safeText(row.studentId || row.alunoId || row.firestore_student_id),
+    studentId: studentOf(row),
     descricao: safeText(row.descricao),
     status,
     responsavelId,
@@ -133,40 +136,38 @@ const getAccessToken = async () => {
   return safeText(result?.accessToken);
 };
 
-const patchDocumentAsAdmin = async (collectionPath, id, data) => {
-  const token = await getAccessToken();
-  const updateMaskPaths = Object.keys(data || {}).filter(Boolean);
-  const params = new URLSearchParams();
-  updateMaskPaths.forEach((key) => params.append("updateMask.fieldPaths", key));
-  const url = `${FIRESTORE_BASE}/${encodeURI(String(collectionPath || "").replace(/^\/+/, ""))}/${encodeURIComponent(String(id || ""))}?${params.toString()}`;
-  const response = await requestJson(url, {
-    method: "PATCH",
-    headers: { Authorization: `Bearer ${token}` },
-    body: encodeFields(data),
-  });
-  if (!response.ok) {
-    const error = new Error("firestore_admin_patch_failed");
-    error.status = response.status;
-    throw error;
-  }
-  return {
-    id: getDocIdFromName(response.data?.name),
-    ...decodeFields(response.data),
-  };
+const validId = id => /^[A-Za-z0-9_-]{1,128}$/.test(id);
+const readDocument = async (collection, id) => {
+  if (!validId(id)) throw Object.assign(new Error('invalid_id'), { status: 400 });
+  const response = await requestJson(`${FIRESTORE_BASE}/${collection}/${id}`, { headers: { Authorization: `Bearer ${await getAccessToken()}` } });
+  if (response.status === 404) return null;
+  if (!response.ok) throw Object.assign(new Error('read_failed'), { status: response.status });
+  return { row: { ...decodeFields(response.data), id }, updateTime: response.data.updateTime };
 };
-
-const deleteDocumentAsAdmin = async (collectionPath, id) => {
-  const token = await getAccessToken();
-  const url = `${FIRESTORE_BASE}/${encodeURI(String(collectionPath || "").replace(/^\/+/, ""))}/${encodeURIComponent(String(id || ""))}`;
-  const response = await requestJson(url, {
-    method: "DELETE",
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!response.ok) {
-    const error = new Error("firestore_admin_delete_failed");
-    error.status = response.status;
-    throw error;
+const validateStudent = async id => {
+  if (!id) return;
+  const doc = await readDocument(USERS_COLLECTION, id);
+  if (!doc || normalizeUserRole(doc.row.tipo || doc.row.role) !== 'student') throw Object.assign(new Error('invalid_student'), { status: 400 });
+};
+const commitActivity = async ({ id, document, patch, session, archive = false }) => {
+  if (Object.hasOwn(patch, 'studentId')) await validateStudent(patch.studentId);
+  const responsibleId = patch.responsavelId ?? document?.row?.responsavelId;
+  if (responsibleId) {
+    const responsible = await readDocument(USERS_COLLECTION, responsibleId);
+    patch.responsavelNome = safeText(responsible?.row?.nome || responsible?.row?.name);
   }
+  const { next, events } = planActivityChange({ id, before: document?.row, patch, actor: { id: session.sub, name: session.nome || session.name }, now: new Date().toISOString(), archive });
+  const prefix = FIRESTORE_BASE.split('/v1/')[1];
+  const writes = [{ update: { name: `${prefix}/activities/${id}`, ...encodeFields(next) }, currentDocument: document ? { updateTime: document.updateTime } : { exists: false } },
+    ...events.map(event => ({ update: { name: `${prefix}/${EVENTS_COLLECTION}/${event.id}`, ...encodeFields(event) }, currentDocument: { exists: false } }))];
+  const response = await requestJson(`${FIRESTORE_BASE}:commit`, { method: 'POST', headers: { Authorization: `Bearer ${await getAccessToken()}` }, body: { writes } });
+  if (!response.ok) throw Object.assign(new Error('activity_commit_failed'), { status: [409, 412].includes(response.status) || response.data?.error?.status === 'FAILED_PRECONDITION' ? 409 : response.status });
+  return normalizeActivity(next);
+};
+const queryStudentEvents = async studentId => {
+  const response = await requestJson(`${FIRESTORE_BASE}:runQuery`, { method: 'POST', headers: { Authorization: `Bearer ${await getAccessToken()}` }, body: { structuredQuery: { from: [{ collectionId: EVENTS_COLLECTION }], where: { fieldFilter: { field: { fieldPath: 'studentId' }, op: 'EQUAL', value: { stringValue: studentId } } } } } });
+  if (!response.ok) throw new Error('activity_events_read_failed');
+  return (response.data || []).filter(row => row.document).map(row => ({ ...decodeFields(row.document), id: getDocIdFromName(row.document.name) }));
 };
 
 const parseRequest = async (req) => {
@@ -185,6 +186,8 @@ module.exports = async (req, res) => {
   const host = String(req.headers.host || "localhost");
   const url = new URL(req.url || "/api/activities", `https://${host}`);
   const id = safeText(url.searchParams.get("id"));
+  const studentId = safeText(url.searchParams.get("studentId"));
+  if ((id && !validId(id)) || (studentId && !validId(studentId))) return sendJson(res, 400, { error: "invalid_id" });
   if (role === "admin") {
     const action = req.method === "POST" ? "create" : req.method === "DELETE" ? "delete" : req.method === "PATCH" ? "update" : "view";
     const guard = await requireAdminPermission(req, `activities.activity.${action}`);
@@ -193,18 +196,22 @@ module.exports = async (req, res) => {
 
   if (req.method === "GET") {
     try {
-      const [activityRows, userRows] = await Promise.all([
-        listCollectionAsAdmin(ACTIVITIES_COLLECTION, { pageSize: 2000 }).catch(() => []),
-        listCollectionAsAdmin(USERS_COLLECTION, { pageSize: 1500 }).catch(() => []),
+      const [activityRows, userRows, eventRows] = await Promise.all([
+        listCollectionAsAdmin(ACTIVITIES_COLLECTION, { pageSize: 2000 }),
+        listCollectionAsAdmin(USERS_COLLECTION, { pageSize: 1500, decorate: false }),
+        studentId ? queryStudentEvents(studentId) : Promise.resolve([]),
       ]);
       const activities = sortActivities(
         activityRows
-          .map(normalizeActivity)
+          .map(row => normalizeActivity({ ...row, id: row.firestoreDocId || row.id }))
           .filter((row) => row.id && row.titulo)
+          .filter(row => studentId ? row.studentId === studentId : !row.isArchived)
           .filter((row) => canAccessActivity(session, row))
       );
       return sendJson(res, 200, {
-        activities,
+        activities: activities.map(row => ({ ...row, responsavelNome: userRows.find(user => (user.firestoreDocId || user.id) === row.responsavelId)?.nome || row.responsavelNome || '' })),
+        events: eventRows.filter(event => canAccessActivity(session, event.snapshot || {})),
+        students: userRows.filter(row => normalizeUserRole(row.tipo || row.role) === 'student').map(row => ({ id: row.firestoreDocId || row.id, nome: row.nome || row.nomeCompleto || row.name || '', email: row.email || '' })),
         users: listVisibleUsers(session, userRows),
         directoryUsers: listActivityDirectoryUsers(session, userRows),
         permissions: {
@@ -233,6 +240,7 @@ module.exports = async (req, res) => {
     const now = new Date();
     const payload = {
       titulo,
+      studentId: safeText(body?.studentId),
       descricao: safeText(body?.descricao),
       status: ALLOWED_STATUSES.has(String(body?.status || "").trim()) ? String(body.status).trim() : "Pendente",
       responsavelId: responsavelId || null,
@@ -243,14 +251,14 @@ module.exports = async (req, res) => {
       criadoEm: now,
       atualizadoEm: now,
       observacoes: safeText(body?.observacoes),
-      comentarios: [],
+      comentarios: safeText(body?.comment) ? [{ id: randomUUID(), text: safeText(body.comment), authorId: session.sub, authorName: session.nome || session.name || "", createdAt: now.toISOString() }] : [],
     };
     try {
-      const created = normalizeActivity(await createDocumentAsAdmin(ACTIVITIES_COLLECTION, payload));
+      const created = await commitActivity({ id: randomUUID(), patch: payload, session });
       return sendJson(res, 201, { activity: created });
     } catch (error) {
       console.error("[api] activities create failed", error);
-      return sendJson(res, 500, { error: "activities_create_failed" });
+      return sendJson(res, [400, 409].includes(error.status) ? error.status : 500, { error: error.status === 400 ? "invalid_student" : "activities_create_failed" });
     }
   }
 
@@ -263,8 +271,8 @@ module.exports = async (req, res) => {
       return sendJson(res, 400, { error: "invalid_json" });
     }
     try {
-      const rows = await listCollectionAsAdmin(ACTIVITIES_COLLECTION, { pageSize: 2000 });
-      const existing = rows.map(normalizeActivity).find((row) => row.id === id);
+      const document = await readDocument(ACTIVITIES_COLLECTION, id);
+      const existing = document ? normalizeActivity(document.row) : null;
       if (!existing) return sendJson(res, 404, { error: "not_found" });
       if (!canAccessActivity(session, existing)) return sendJson(res, 403, { error: "forbidden" });
 
@@ -273,6 +281,7 @@ module.exports = async (req, res) => {
         : existing.responsavelId;
       if (!canAssignResponsavel(session, nextResponsavelId)) return sendJson(res, 403, { error: "forbidden_responsavel" });
 
+      if (existing.isArchived) return sendJson(res, 409, { error: "activity_archived" });
       const patch = {
         atualizadoEm: new Date(),
       };
@@ -288,22 +297,25 @@ module.exports = async (req, res) => {
       }
       if (Object.prototype.hasOwnProperty.call(body || {}, "tipo")) patch.tipo = safeText(body?.tipo);
       if (Object.prototype.hasOwnProperty.call(body || {}, "observacoes")) patch.observacoes = safeText(body?.observacoes);
-      const updated = normalizeActivity(await patchDocumentAsAdmin(ACTIVITIES_COLLECTION, id, patch));
+      if (safeText(body?.comment)) patch.comentarios = [...existing.comentarios, { id: randomUUID(), text: safeText(body.comment), authorId: session.sub, authorName: session.nome || session.name || "", createdAt: new Date().toISOString() }];
+      if (Object.hasOwn(body || {}, "studentId")) patch.studentId = safeText(body.studentId);
+      const updated = await commitActivity({ id, document, patch, session });
       return sendJson(res, 200, { activity: updated });
     } catch (error) {
       console.error("[api] activities patch failed", error);
-      return sendJson(res, error?.status === 404 ? 404 : 500, { error: "activities_patch_failed" });
+      return sendJson(res, [400, 404, 409].includes(error?.status) ? error.status : 500, { error: "activities_patch_failed" });
     }
   }
 
   if (req.method === "DELETE") {
     if (!id) return sendJson(res, 400, { error: "missing_id" });
     try {
-      const rows = await listCollectionAsAdmin(ACTIVITIES_COLLECTION, { pageSize: 2000 });
-      const existing = rows.map(normalizeActivity).find((row) => row.id === id);
+      const document = await readDocument(ACTIVITIES_COLLECTION, id);
+      const existing = document ? normalizeActivity(document.row) : null;
       if (!existing) return sendJson(res, 404, { error: "not_found" });
       if (!canAccessActivity(session, existing)) return sendJson(res, 403, { error: "forbidden" });
-      await deleteDocumentAsAdmin(ACTIVITIES_COLLECTION, id);
+      if (existing.isArchived) return sendJson(res, 200, { ok: true });
+      await commitActivity({ id, document, patch: {}, session, archive: true });
       return sendJson(res, 200, { ok: true });
     } catch (error) {
       console.error("[api] activities delete failed", error);

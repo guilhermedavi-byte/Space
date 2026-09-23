@@ -1506,7 +1506,8 @@ module.exports = async (req, res) => {
   const url = new URL(req.url || "/api/schedule-events", `https://${host}`);
   const resource = String(url.searchParams.get("resource") || "").trim().toLowerCase();
   if (role === "admin") {
-    const guard = await requireAdminPermission(req, resource === "lesson-logs" ? "pedagogico.lessons" : "pedagogico.agenda");
+    const action = req.method === "GET" || req.method === "HEAD" ? "view" : req.method === "DELETE" ? "delete" : req.method === "POST" ? "create" : "update";
+    const guard = await requireAdminPermission(req, resource === "lesson-logs" ? `pedagogico.lessons.${action === "delete" ? "update" : action}` : `pedagogico.agenda.${action}`);
     if (!guard.ok) return sendJson(res, guard.status, guard.body);
   }
 

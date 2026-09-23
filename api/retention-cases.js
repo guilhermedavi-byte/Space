@@ -19,7 +19,7 @@ const requireAuth = async (req, capability) => {
     };
   }
   if (String(auth.session?.role || "") === "admin") {
-    const perm = await requireResolvedAdminPermission(auth, "pedagogico.retention");
+    const perm = await requireResolvedAdminPermission(auth, "pedagogico.retention.view");
     if (!perm.ok) return perm;
   }
   return auth;

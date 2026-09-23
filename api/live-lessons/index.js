@@ -30,7 +30,7 @@ module.exports = async (req, res) => {
     return;
   }
   if (role === "admin") {
-    const guard = await requireAdminPermission(req, "pedagogico.agenda");
+    const guard = await requireAdminPermission(req, "pedagogico.agenda.view");
     if (!guard.ok) return sendJson(res, guard.status, guard.body);
   }
 

@@ -125,7 +125,7 @@ module.exports = async (req, res) => {
         sendJson(res, 403, { error: "forbidden" });
         return;
       }
-      const permissionGuard = await requireAdminPermission(req, "pedagogico.repositions");
+      const permissionGuard = await requireAdminPermission(req, "pedagogico.repositions.update");
       if (!permissionGuard.ok) {
         sendJson(res, permissionGuard.status, permissionGuard.body);
         return;
@@ -330,7 +330,7 @@ module.exports = async (req, res) => {
       sendJson(res, 403, { error: "forbidden" });
       return;
     }
-    const permissionGuard = await requireAdminPermission(req, "pedagogico.repositions");
+    const permissionGuard = await requireAdminPermission(req, "pedagogico.repositions.view");
     if (!permissionGuard.ok) {
       sendJson(res, permissionGuard.status, permissionGuard.body);
       return;

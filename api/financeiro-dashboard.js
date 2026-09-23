@@ -269,7 +269,7 @@ module.exports = async (req, res) => {
   if (!session) return sendJson(res, 401, { error: "unauthorized" });
   if (!canAccessFinance(session)) return sendJson(res, 403, { error: "forbidden" });
   if (String(session.role || "") === "admin") {
-    const guard = await requireAdminPermission(req, "financeiro.overview");
+    const guard = await requireAdminPermission(req, "financeiro.overview.view");
     if (!guard.ok) return sendJson(res, guard.status, guard.body);
   }
 

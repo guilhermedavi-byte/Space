@@ -53,7 +53,14 @@ const createHandler = ({ authenticate = requireAttendanceAuth, request = supabas
     const suffix = req.query?.operation || route.searchParams.get('operation');
     const operations = { GET: suffix === 'qr' ? 'qr' : !suffix ? 'detail' : null, POST: ['refresh-qr','reconnect','disconnect','pairing-code'].includes(suffix) ? suffix : null, PATCH: !suffix ? 'edit' : null, DELETE: !suffix ? 'disable' : null };
     if ((id && !operations[req.method]) || (!id && !['GET','POST'].includes(req.method))) return sendJson(res,405,{error:'method_not_allowed'});
-    const actor = await authenticate(req, req.method === 'GET' && suffix !== 'qr' ? 'attendance.view' : 'attendance.manage', undefined, { adminPermission: 'attendance.connections' });
+    const adminPermission = req.method === 'GET' && suffix !== 'qr'
+      ? 'attendance.connections.view'
+      : req.method === 'POST' && !id
+        ? 'attendance.connections.create'
+        : req.method === 'DELETE'
+          ? 'attendance.connections.delete'
+          : 'attendance.connections.update';
+    const actor = await authenticate(req, req.method === 'GET' && suffix !== 'qr' ? 'attendance.view' : 'attendance.manage', undefined, { adminPermission });
     if (!['admin', 'growth'].includes(actor.role)) fail('attendance_forbidden', 403);
     if (req.method !== 'GET') checkEnvironment();
     const readOptions = req.method === 'GET' && request === supabaseFetch ? { timeoutMs: 15000 } : undefined;

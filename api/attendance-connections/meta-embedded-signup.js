@@ -40,7 +40,7 @@ const createHandler = ({ authenticate = requireAttendanceAuth, request = supabas
   if (req.method !== 'POST') return sendJson(res, 405, { error: 'method_not_allowed' });
   try {
     checkEnvironment();
-    const actor = await authenticate(req, 'attendance.manage', undefined, { adminPermission: 'attendance.connections' });
+    const actor = await authenticate(req, 'attendance.manage', undefined, { adminPermission: 'attendance.connections.create' });
     if (!['admin', 'growth'].includes(actor.role)) fail('attendance_forbidden', 403);
     const body = await readJsonBody(req).catch(() => fail('attendance_invalid_json', 400));
     only(body, ['connection_id', 'code', 'session', 'state']);

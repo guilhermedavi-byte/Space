@@ -392,7 +392,7 @@ const createHandler = ({ build = buildModel, authResolver = resolveAdminRequestA
     const auth = await authResolver(req, { logPrefix: '[admin-sdr]' });
     if (!auth.ok) return sendJson(res, auth.status, auth.body);
     if (clean(auth.session?.role).toLowerCase() !== 'admin') return sendJson(res, 403, { error: 'admin_only' });
-    const perm = await requireResolvedAdminPermission(auth, 'comercial.sdrPanel');
+    const perm = await requireResolvedAdminPermission(auth, 'comercial.sdrPanel.view');
     if (!perm.ok) return sendJson(res, perm.status, perm.body);
     if (req.method === 'POST') {
       const body = await readJsonBody(req);

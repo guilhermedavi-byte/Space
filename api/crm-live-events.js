@@ -16,7 +16,7 @@ const canReadViaSession = async (req) => {
   const session = getSessionFromRequest(req);
   const role = normalizeRole(session?.role);
   if (role === "admin") {
-    const guard = await requireAdminPermission(req, "comercial.crmLive");
+    const guard = await requireAdminPermission(req, "comercial.crmLive.view");
     if (!guard.ok) return { ok: false, status: guard.status || 403, error: guard.body?.error || "forbidden" };
     return { ok: true, mode: "session", session };
   }

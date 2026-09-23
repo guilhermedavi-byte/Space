@@ -33,7 +33,7 @@ const createHandler = ({ authResolver = resolveAdminRequestAuth, telnyxFetch = f
     diagnostic.appAuthStatus = auth.ok ? 200 : auth.status;
     if (!auth.ok) return reply(auth.status, auth.body);
     if (clean(auth.session?.role).toLowerCase() !== 'admin') return reply(403, { error: 'admin_only' });
-    const perm = await requireResolvedAdminPermission(auth, 'comercial.sdrPanel');
+    const perm = await requireResolvedAdminPermission(auth, 'comercial.sdrPanel.view');
     if (!perm.ok) return reply(perm.status, perm.body);
 
     const recordingId = extractRecordingId(req);

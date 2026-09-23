@@ -11149,14 +11149,15 @@ const saveActivityForm = async ({ id = "", payload } = {}) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload || {}),
     });
-    if (!res.ok) throw new Error(`activities_save_failed:${res.status}`);
+    if (!res.ok) throw new Error(res.status === 409 ? "A atividade mudou. Atualize a lista e tente novamente." : `activities_save_failed:${res.status}`);
     closeActivitiesDrawer();
+    refreshOpenStudentActivities();
     await loadActivities({ force: true, silent: true });
     setActivitiesStatus("Salvo ✓", "success");
     window.setTimeout(() => setActivitiesStatus(""), 2000);
   } catch (error) {
     console.error("[activities] save failed:", error);
-    setActivitiesStatus("Não foi possível salvar agora.", "error");
+    setActivitiesStatus(error.message.startsWith("A atividade mudou") ? error.message : "Não foi possível salvar agora.", "error");
   }
 };
 
@@ -11168,6 +11169,7 @@ const deleteActivityById = async (id) => {
     const res = await fetchWithAuth(`/api/activities?id=${encodeURIComponent(safeId)}`, { method: "DELETE" });
     if (!res.ok) throw new Error(`activities_delete_failed:${res.status}`);
     closeActivitiesDrawer();
+    refreshOpenStudentActivities();
     await loadActivities({ force: true, silent: true });
     setActivitiesStatus("Atividade excluída.", "success");
     window.setTimeout(() => setActivitiesStatus(""), 2000);
@@ -11177,6 +11179,36 @@ const deleteActivityById = async (id) => {
   }
 };
 
+const bindActivityStudentPicker = (form, students, initialId) => {
+  const input = form.querySelector('#activity-student-search');
+  const value = form.elements.namedItem('studentId');
+  const options = form.querySelector('#activity-student-options');
+  const select = id => {
+    value.value = id;
+    input.value = students.find(row => row.id === id)?.nome || (id ? `Aluno ${id}` : '');
+    input.setCustomValidity(''); options.hidden = true; input.setAttribute('aria-expanded', 'false');
+  };
+  const render = () => {
+    const query = normalizeSearchText(input.value);
+    const rows = students.filter(row => normalizeSearchText(`${row.nome} ${row.email}`).includes(query));
+    options.innerHTML = `<button type="button" role="option" aria-selected="${!value.value}" class="activities-responsible-option" data-student-pick="">Nenhum aluno vinculado</button>` + rows.map(row => `<button type="button" role="option" aria-selected="${value.value === row.id}" class="activities-responsible-option" data-student-pick="${escapeHtml(row.id)}"><span>${escapeHtml(row.nome || 'Aluno')}</span><small>${escapeHtml(row.email || '')}</small></button>`).join('');
+    options.hidden = false; input.setAttribute('aria-expanded', 'true');
+  };
+  select(initialId);
+  input.addEventListener('focus', render);
+  input.addEventListener('input', () => { input.setCustomValidity('Selecione um aluno da lista ou Nenhum aluno vinculado.'); render(); });
+  options.addEventListener('click', event => { const pick = event.target.closest('[data-student-pick]'); if (pick) { select(pick.dataset.studentPick); input.focus(); options.hidden = true; input.setAttribute('aria-expanded', 'false'); } });
+  form.querySelector('[data-activity-student-combobox]').addEventListener('keydown', event => {
+    if (event.key === 'Escape') { event.preventDefault(); select(value.value); input.focus(); options.hidden = true; input.setAttribute('aria-expanded', 'false'); }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); if (options.hidden) render(); const items = [...options.querySelectorAll('button')]; const index = items.indexOf(document.activeElement); items[(index + (event.key === 'ArrowDown' ? 1 : items.length - 1) + items.length) % items.length]?.focus(); }
+  });
+  form.querySelector('[data-activity-student-combobox]').addEventListener('focusout', event => { if (!event.currentTarget.contains(event.relatedTarget)) { options.hidden = true; input.setAttribute('aria-expanded', 'false'); } });
+};
+
+const refreshOpenStudentActivities = () => {
+  [adminStudentsState.history, teacherStudentsState.history].forEach(hist => { if (hist?.profileResources) delete hist.profileResources.activities; hist?.refreshActivities?.(); });
+};
+
 const openActivitiesDrawer = ({ activity = null } = {}) => {
   const drawerEl = ensureActivitiesDrawerInBody();
   if (!(drawerEl instanceof HTMLElement) || !(activitiesDrawerBody instanceof HTMLElement)) return;
@@ -11184,6 +11216,7 @@ const openActivitiesDrawer = ({ activity = null } = {}) => {
   const current = activity && typeof activity === "object"
     ? {
         id: String(activity.id || ""),
+        studentId: String(activity.studentId || ""),
         titulo: String(activity.titulo || ""),
         descricao: String(activity.descricao || ""),
         status: normalizeActivityStatus(activity.status),
@@ -11217,6 +11250,13 @@ const openActivitiesDrawer = ({ activity = null } = {}) => {
   activitiesDrawerBody.innerHTML = `
     <form class="activities-form" data-activities-form="${escapeHtml(current.id)}">
       <label class="activities-field"><span>Título</span><input class="admin-ped-select" type="text" name="titulo" value="${escapeHtml(current.titulo)}" required /></label>
+      <div class="activities-field"><label for="activity-student-search">Aluno vinculado</label>
+        <div class="activities-responsible-combobox" data-activity-student-combobox>
+          <input type="hidden" name="studentId" value="${escapeHtml(current.studentId || '')}" />
+          <input id="activity-student-search" class="admin-ped-select" type="search" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="activity-student-options" placeholder="Buscar por nome ou email" autocomplete="off" />
+          <div id="activity-student-options" class="activities-responsible-options" role="listbox" hidden></div>
+        </div>
+      </div>
       <label class="activities-field"><span>Descrição</span><textarea class="admin-ped-select activities-textarea" name="descricao" rows="4">${escapeHtml(current.descricao)}</textarea></label>
       <div class="activities-grid2">
         <label class="activities-field"><span>Status</span><select class="admin-ped-select" name="status">${ACTIVITY_STATUS_OPTIONS.map((option) => `<option value="${escapeHtml(option)}" ${option === current.status ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}</select></label>
@@ -11236,6 +11276,7 @@ const openActivitiesDrawer = ({ activity = null } = {}) => {
       </div>
       <label class="activities-field"><span>Tipo</span><input class="admin-ped-select" type="text" name="tipo" value="${escapeHtml(current.tipo)}" list="activities-type-options" /><datalist id="activities-type-options">${getActivityTypeOptions().map((option) => `<option value="${escapeHtml(option)}"></option>`).join("")}</datalist></label>
       <label class="activities-field"><span>Observações</span><textarea class="admin-ped-select activities-textarea" name="observacoes" rows="5">${escapeHtml(current.observacoes)}</textarea></label>
+      <label class="activities-field"><span>Adicionar comentário</span><textarea class="admin-ped-select activities-textarea" name="comment" rows="2"></textarea></label>
       <div class="activities-form-actions">
         ${current.id ? `<button class="ped-btn-close" type="button" data-activities-delete="${escapeHtml(current.id)}">Excluir</button>` : `<span></span>`}
         <button class="ped-btn-save" type="submit">${current.id ? "Salvar alterações" : "Criar atividade"}</button>
@@ -11244,6 +11285,7 @@ const openActivitiesDrawer = ({ activity = null } = {}) => {
   `;
   const form = activitiesDrawerBody.querySelector("[data-activities-form]");
   if (form instanceof HTMLFormElement) {
+    bindActivityStudentPicker(form, activitiesState.students || [], current.studentId || '');
     const responsibleValue = form.querySelector("[data-activities-responsible-value]");
     const responsibleSearch = form.querySelector("[data-activities-responsible-search]");
     const responsibleOptions = form.querySelector("[data-activities-responsible-options]");
@@ -11316,10 +11358,14 @@ const openActivitiesDrawer = ({ activity = null } = {}) => {
     });
     form.addEventListener("submit", (event) => {
       event.preventDefault();
+      if (form.dataset.saving) return;
+      form.dataset.saving = "true";
       const formData = new FormData(form);
       saveActivityForm({
         id: current.id,
         payload: {
+          comment: String(formData.get("comment") || "").trim(),
+          studentId: String(formData.get("studentId") || ""),
           titulo: String(formData.get("titulo") || "").trim(),
           descricao: String(formData.get("descricao") || "").trim(),
           status: normalizeActivityStatus(formData.get("status")),
@@ -11329,7 +11375,7 @@ const openActivitiesDrawer = ({ activity = null } = {}) => {
           tipo: String(formData.get("tipo") || "").trim(),
           observacoes: String(formData.get("observacoes") || "").trim(),
         },
-      }).catch(() => {});
+      }).finally(() => { delete form.dataset.saving; });
     });
   }
   body.classList.add("is-modal-open");
@@ -11523,6 +11569,7 @@ const loadActivities = async ({ force = false, silent = false } = {}) => {
     const res = await fetchWithAuth("/api/activities", { method: "GET" });
     if (!res.ok) throw new Error(`activities_load_failed:${res.status}`);
     const data = await res.json().catch(() => ({}));
+    activitiesState.students = Array.isArray(data?.students) ? data.students : [];
     activitiesState.items = Array.isArray(data?.activities) ? data.activities : [];
     activitiesState.users = Array.isArray(data?.users) ? data.users : [];
     activitiesState.directoryUsers = Array.isArray(data?.directoryUsers) ? data.directoryUsers : Array.isArray(data?.users) ? data.users : [];
@@ -26390,14 +26437,15 @@ const formatRetentionTimelineStateSummary = (state) => {
 
 const renderAdminStudentRetentionTimelineHtml = ({ hist } = {}) => {
   const state = hist?.retentionTimeline && typeof hist.retentionTimeline === "object" ? hist.retentionTimeline : {};
-  if (!isRetentionV2FeatureEnabled()) return "";
-  if (state.loading) {
+  const operational = studentActivityEvents(hist);
+  if (!isRetentionV2FeatureEnabled() && !operational.length) return studentProfileEmpty("Nenhum evento de retenção ainda.");
+  if (state.loading && !operational.length) {
     return `<div class="admin-student-simple-empty">Carregando timeline de retenção…</div>`;
   }
-  if (state.error) {
+  if (state.error && !operational.length) {
     return `<div class="admin-student-simple-empty is-error">${escapeHtml(String(state.error || "Não foi possível carregar a timeline canônica."))}</div>`;
   }
-  const events = Array.isArray(state.events) ? state.events : [];
+  const events = [...(isRetentionV2FeatureEnabled() && Array.isArray(state.events) ? state.events : []), ...operational.map(event => ({ ...event, occurred_at: event.occurredAt, operational: true }))].sort((a, b) => (Date.parse(b.occurred_at) || 0) - (Date.parse(a.occurred_at) || 0));
   if (!events.length) {
     return `<div class="admin-student-simple-empty admin-student-simple-empty-center">Nenhum evento canônico de retenção ainda.</div>`;
   }
@@ -26405,6 +26453,7 @@ const renderAdminStudentRetentionTimelineHtml = ({ hist } = {}) => {
     <div class="admin-students-timeline admin-student-simple-history admin-student-timeline-v2">
       ${events
         .map((event) => {
+          if (event.operational) return `<article class="student-profile-record"><div class="student-profile-record-meta"><span>Atividades</span><time>${escapeHtml(formatAdminHistoryStamp(event.occurredAt))}</time></div><strong>${escapeHtml(activityEventLabel(event.eventType))} — ${escapeHtml(event.snapshot?.titulo || '')}</strong><p>${escapeHtml(activityProfileDetail(event.snapshot || {}, event))}</p></article>`;
           const origin = String(event?.origin || "automatic").trim();
           const title = getRetentionTimelineEventLabel(event?.event_type);
           const stamp = event?.occurred_at ? formatAdminHistoryStamp(event.occurred_at) : "—";
@@ -27005,12 +27054,18 @@ const studentProfileRelated = (row, hist) => {
 const studentProfileMoney = value => value == null || value === "" || !Number.isFinite(Number(value)) ? "—" : new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(value));
 const renderStudentProfileTabs = (hist, mode) => `<div class="student-profile-tabs" role="tablist" aria-label="Áreas da ficha do aluno">${STUDENT_PROFILE_TABS.map(([key, label]) => `<button type="button" role="tab" id="student-${mode}-tab-${key}" aria-controls="student-${mode}-panel-${key}" aria-selected="${(hist.activeTab || 'history') === key}" tabindex="${(hist.activeTab || 'history') === key ? '0' : '-1'}" data-student-profile-tab="${key}">${label}</button>`).join("")}</div>`;
 const studentProfilePanel = (key, html, hist, mode) => `<div class="student-profile-panel" role="tabpanel" id="student-${mode}-panel-${key}" aria-labelledby="student-${mode}-tab-${key}" tabindex="0" data-student-profile-panel="${key}" ${key === "arquivos" ? 'data-admin-student-tab-panel="arquivos"' : ''} ${(hist.activeTab || "history") === key ? "" : "hidden"}>${html}</div>`;
+const activityEventLabel = type => ({ activity_created: 'Atividade criada', activity_updated: 'Atividade atualizada', activity_completed: 'Atividade concluída', activity_reopened: 'Atividade reaberta', activity_archived: 'Atividade arquivada', student_linked: 'Aluno vinculado', student_unlinked: 'Aluno desvinculado' }[type] || 'Atividade');
+const activityProfileDetail = (row, event) => [row.descricao, row.observacoes && `Observações: ${row.observacoes}`, ...(row.comentarios || []).map(comment => typeof comment === 'string' ? comment : [comment.authorName || comment.nome || comment.autorNome, comment.text || comment.texto || comment.body || comment.comentario].filter(Boolean).join(': ')), row.responsavelId && `Responsável: ${row.responsavelNome || row.responsavelId}`, row.prioridade && `Prioridade: ${row.prioridade}`, row.tipo && `Tipo: ${row.tipo}`, row.prazo && `Prazo: ${formatAdminDate(row.prazo)}`, row.criadoEm && `Criada: ${formatAdminHistoryStamp(row.criadoEm)}`, row.completedAt && `Última conclusão: ${formatAdminHistoryStamp(row.completedAt)}`, event && `Registrado por: ${event.actorName || event.actorId}`, event?.eventType === 'activity_completed' && `Concluída por: ${event.actorName || event.actorId}`, row.isArchived && 'Arquivada'].filter(Boolean).join('\n');
+const studentActivityEvents = hist => hist.profileResources?.activities?.events || [];
 const getStudentProfileJourney = hist => {
   const events = [];
   const add = (source, id, date, title, detail) => events.push({ source, id, date, title, detail, time: Date.parse(date) || 0 });
   (hist.items || []).forEach((item, i) => add("Pedagógico", item.id || i, item.createdAt || item.dateKey, item.kind === "comment" ? "Comentário pedagógico" : "Registro de aula", item.summaryText || item.observacoes || ""));
   (hist.retentionTimeline?.events || []).forEach((event, i) => add("Retenção", event.id || i, event.occurred_at, getRetentionTimelineEventLabel(event.event_type), event.summary || ""));
-  (hist.profileResources?.activities?.rows || []).forEach(row => add("Atividades", row.id, row.criadoEm, row.titulo, row.status));
+  const activityEvents = studentActivityEvents(hist);
+  activityEvents.forEach(event => add('Atividades', event.id, event.occurredAt, `${activityEventLabel(event.eventType)} — ${event.snapshot?.titulo || ''}`, activityProfileDetail(event.snapshot || {}, event)));
+  (hist.profileResources?.activities?.rows || []).filter(row => !activityEvents.some(event => event.activityId === row.id)).forEach(row => add('Atividades', row.id, row.criadoEm, `Atividade — ${row.titulo}`, activityProfileDetail(row)));
+
   (hist.profileResources?.financial?.rows || []).forEach(row => add("Financeiro", row.id, row.data_pagamento || row.created_at, row.profileKind, [row.status, studentProfileMoney(row.valor)].filter(Boolean).join(" · ")));
   const registered = hist.alunoMeta?.criadoEm || hist.alunoMeta?.createdAt;
   if (registered) add("Cadastro", hist.alunoId, registered, "Cadastro do aluno", "");
@@ -27028,7 +27083,7 @@ const renderStudentProfileResource = (key, hist, mode) => {
   if (state.error) return `<div class="student-profile-empty student-profile-error" role="status">${escapeHtml(state.error)} <button type="button" class="admin-student-file-btn" data-student-profile-retry="${key}">Tentar novamente</button></div>`;
   const rows = state.rows || [];
   if (!rows.length) return studentProfileEmpty(key === "financial" ? "Nenhum registro financeiro disponível." : "Nenhuma atividade registrada para este aluno.");
-  return `<div class="student-profile-records">${rows.map(row => `<article class="student-profile-record"><div class="student-profile-record-meta"><span>${escapeHtml(key === "financial" ? row.profileKind : row.status)}</span><span>${escapeHtml(key === "financial" ? row.status || "" : row.prioridade || "")}</span></div><strong>${escapeHtml(key === "financial" ? studentProfileMoney(row.valor) : row.titulo)}</strong><p>${escapeHtml(key === "financial" ? row.data_pagamento ? `Pagamento: ${formatAdminDate(row.data_pagamento)}` : row.vencimento ? `Vencimento: ${formatAdminDate(row.vencimento)}` : "" : row.descricao || "")}</p>${key === "activities" && row.prazo ? `<span>Prazo: ${escapeHtml(formatAdminDate(row.prazo))}</span>` : ""}</article>`).join("")}</div>`;
+  return `<div class="student-profile-records">${rows.map(row => `<article class="student-profile-record"><div class="student-profile-record-meta"><span>${escapeHtml(key === "financial" ? row.profileKind : row.status)}</span><span>${escapeHtml(key === "financial" ? row.status || "" : row.prioridade || "")}</span></div><strong>${escapeHtml(key === "financial" ? studentProfileMoney(row.valor) : row.titulo)}</strong><p>${escapeHtml(key === "financial" ? row.data_pagamento ? `Pagamento: ${formatAdminDate(row.data_pagamento)}` : row.vencimento ? `Vencimento: ${formatAdminDate(row.vencimento)}` : "" : activityProfileDetail(row))}</p>${key === "activities" && row.prazo ? `<span>Prazo: ${escapeHtml(formatAdminDate(row.prazo))}</span>` : ""}</article>`).join("")}</div>`;
 };
 const bindStudentProfileTabs = (sheetEl, hist, mode) => {
   let root = sheetEl.querySelector("[data-student-profile-content]");
@@ -27039,6 +27094,8 @@ const bindStudentProfileTabs = (sheetEl, hist, mode) => {
     root = sheetEl.querySelector("[data-student-profile-content]");
     if (!root?.isConnected) return;
     root.querySelector('[data-student-profile-panel="history"]').innerHTML = renderStudentProfileHistory(hist);
+    const retentionSlot = root.querySelector("[data-student-profile-retention]");
+    if (retentionSlot) retentionSlot.innerHTML = renderAdminStudentRetentionTimelineHtml({ hist });
     ["financial", "activities"].forEach(key => { root.querySelector(`[data-student-profile-panel="${key}"]`).innerHTML = renderStudentProfileResource(key, hist, mode); });
   };
   const load = async (key, force = false) => {
@@ -27061,10 +27118,10 @@ const bindStudentProfileTabs = (sheetEl, hist, mode) => {
     update();
     try {
       // Use the existing read-only dashboard; finance-v1 can materialize recovery rules.
-      const response = await fetchWithAuth(key === "financial" ? `/api/financeiro-dashboard?student_id=${encodeURIComponent(hist.alunoId)}` : "/api/activities", { method: "GET" });
+      const response = await fetchWithAuth(key === "financial" ? `/api/financeiro-dashboard?student_id=${encodeURIComponent(hist.alunoId)}` : `/api/activities?studentId=${encodeURIComponent(hist.alunoId)}`, { method: "GET" });
       if (!response.ok) throw new Error(response.status === 403 ? "Você não tem permissão para consultar estes registros." : "Não foi possível carregar os registros.");
       const data = await response.json();
-      if (key === "activities") state.rows = (data.activities || []).filter(row => studentProfileRelated(row, hist));
+      if (key === "activities") { state.rows = (data.activities || []).filter(row => studentProfileRelated(row, hist)); state.events = (data.events || []).filter(row => studentProfileRelated(row, hist)); }
       else {
         if (data.errors && Object.keys(data.errors).length) throw new Error("Não foi possível carregar todos os registros financeiros.");
         const cid = hist.alunoMeta?.asaas_customer_id;
@@ -27081,6 +27138,7 @@ const bindStudentProfileTabs = (sheetEl, hist, mode) => {
     root.querySelectorAll("[data-student-profile-tab]").forEach(button => { const selected = button.dataset.studentProfileTab === key; button.setAttribute("aria-selected", String(selected)); button.tabIndex = selected ? 0 : -1; });
     root.querySelectorAll("[data-student-profile-panel]").forEach(panel => { panel.hidden = panel.dataset.studentProfilePanel !== key; });
     load(key);
+    if (key === "retention") load("activities");
     if (key === "history" && hist.alunoMeta) { load("financial"); load("activities"); }
   };
   root.addEventListener("click", event => {
@@ -27095,6 +27153,7 @@ const bindStudentProfileTabs = (sheetEl, hist, mode) => {
     const next = event.key === "ArrowRight" ? (index + 1) % tabs.length : event.key === "ArrowLeft" ? (index + tabs.length - 1) % tabs.length : event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : -1;
     if (next < 0) return; event.preventDefault(); select(tabs[next].dataset.studentProfileTab); tabs[next].focus();
   });
+  hist.refreshActivities = () => { if (isCurrent() && sheetEl.isConnected) load("activities", true); };
   update();
   if (mode !== "teacher") renderAdminStudentFilesTab();
   select(hist.activeTab || "history");
@@ -27431,19 +27490,18 @@ const renderStudentSheetInto = ({ sheetEl, hist, mode = "admin" } = {}) => {
       <section class="admin-student-sheet-right admin-student-simple-right" aria-label="Detalhes do aluno" data-student-profile-content>
         ${renderStudentProfileTabs(hist, mode)}
         ${studentProfilePanel("history", renderStudentProfileHistory(hist), hist, mode)}
-        ${studentProfilePanel("retention", isRetentionV2FeatureEnabled()
-            ? `
+        ${studentProfilePanel("retention", `
               <div class="admin-student-history-header">
                 <div>
                   <div class="admin-student-panel-title">Timeline de retenção</div>
-                  <div class="admin-student-history-subtitle">Eventos canônicos do caso, com origem e mudança de estado.</div>
+                  <div class="admin-student-history-subtitle">Eventos de retenção e atividades relacionadas ao aluno.</div>
                 </div>
               </div>
               <div class="admin-student-panel-card admin-student-timeline-card">
-                ${retentionTimelineHtml}
+                <div data-student-profile-retention>${retentionTimelineHtml}</div>
               </div>
             `
-            : "" || studentProfileEmpty("Nenhum evento de retenção disponível."), hist, mode)}
+            , hist, mode)}
         ${studentProfilePanel("pedagogical", `        <div class="admin-student-history-header">
           <div>
             <div class="admin-student-panel-title">Histórico Pedagógico</div>

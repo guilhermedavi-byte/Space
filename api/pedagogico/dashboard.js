@@ -18,7 +18,7 @@ module.exports = async (req, res) => {
   const auth = await perf.measure("auth", () => resolveAdminRequestAuth(req, { logPrefix: "[api] pedagogico dashboard auth" }));
   if (!auth.ok) return send(auth.status, auth.body);
   if (auth.session?.role !== "admin") return send(403, { error: "admin_only" });
-  const perm = await requireResolvedAdminPermission(auth, "pedagogico.overview");
+  const perm = await requireResolvedAdminPermission(auth, "pedagogico.overview.view");
   if (!perm.ok) return send(perm.status, perm.body);
 
   try {

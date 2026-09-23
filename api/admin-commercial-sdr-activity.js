@@ -16,7 +16,7 @@ module.exports = async (req, res) => {
     if (String(auth.session?.role || "").trim().toLowerCase() !== "admin") {
       return sendJson(res, 403, { error: "admin_only", message: "Acesso restrito ao admin." });
     }
-    const perm = await requireResolvedAdminPermission(auth, "comercial.preSales");
+    const perm = await requireResolvedAdminPermission(auth, "comercial.preSales.view");
     if (!perm.ok) return sendJson(res, perm.status, perm.body);
 
     const host = String(req.headers.host || "localhost");

@@ -139,7 +139,7 @@ const getAuthorizedSession = async (req) => {
     return { ok: false, status: 403, body: { error: "forbidden", message: "Acesso restrito ao time Growth." } };
   }
   if (role === "admin") {
-    const perm = await requireResolvedAdminPermission(auth, "comercial.overview");
+    const perm = await requireResolvedAdminPermission(auth, "comercial.overview.view");
     if (!perm.ok) return { ok: false, status: perm.status, body: perm.body };
   }
   return { ok: true, session: auth.session, profile: auth.profile, role };

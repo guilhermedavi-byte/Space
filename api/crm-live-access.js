@@ -10,7 +10,7 @@ const normalizeRole = (value) => {
 };
 
 const requireAdmin = async (req, res) => {
-  const guard = await requireAdminPermission(req, "comercial.crmLive");
+  const guard = await requireAdminPermission(req, "comercial.crmLive.update");
   if (!guard.ok) {
     sendJson(res, guard.status || 403, guard.body || { error: "forbidden" });
     return null;
