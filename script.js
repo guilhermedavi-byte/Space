@@ -17150,7 +17150,7 @@ const ADMIN_SETTINGS_SECTIONS = [
 
 const getVisibleAdminSettingsSections = () => {
   if (normalizeRole(currentRole) === "teacher") return ADMIN_SETTINGS_SECTIONS.filter((item) => item.key === "meu-perfil");
-  const isSuperAdmin = adminSettingsState?.profileMeta?.isSuperAdmin === true;
+  const isSuperAdmin = adminSettingsState?.profileMeta?.isSuperAdmin === true || sessionUser?.isSuperAdmin === true;
   return ADMIN_SETTINGS_SECTIONS.filter((item) => {
     if (item.key === "acessos") return isSuperAdmin && canAdmin("settings.accesses");
     return !item.superAdminOnly || isSuperAdmin;
