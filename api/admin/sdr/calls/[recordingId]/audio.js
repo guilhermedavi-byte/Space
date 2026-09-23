@@ -13,7 +13,7 @@ const extractRecordingId = req => {
   return idx >= 0 ? safeRecordingId(parts[idx + 1]) : '';
 };
 
-const createHandler = ({ authResolver = resolveAdminRequestAuth, telnyxFetch = fetch } = {}) => async (req, res) => {
+const createHandler = ({ authResolver = resolveAdminRequestAuth, permissionResolver = requireResolvedAdminPermission, telnyxFetch = fetch } = {}) => async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     res.setHeader('Allow', 'GET, HEAD');
@@ -33,7 +33,7 @@ const createHandler = ({ authResolver = resolveAdminRequestAuth, telnyxFetch = f
     diagnostic.appAuthStatus = auth.ok ? 200 : auth.status;
     if (!auth.ok) return reply(auth.status, auth.body);
     if (clean(auth.session?.role).toLowerCase() !== 'admin') return reply(403, { error: 'admin_only' });
-    const perm = await requireResolvedAdminPermission(auth, 'comercial.sdrPanel.view');
+    const perm = await permissionResolver(auth, 'comercial.sdrPanel.view');
     if (!perm.ok) return reply(perm.status, perm.body);
 
     const recordingId = extractRecordingId(req);

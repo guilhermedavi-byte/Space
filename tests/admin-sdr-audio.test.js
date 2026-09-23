@@ -23,6 +23,7 @@ test('SDR audio endpoint redirects to a fresh Telnyx mp3 URL', async () => {
   const calls = [];
   const handler = createHandler({
     authResolver: async () => ({ ok: true, session: { role: 'admin', sub: 'admin' } }),
+    permissionResolver: async () => ({ ok: true }),
     telnyxFetch: async (url, options) => {
       calls.push({ url, options });
       return { ok: true, json: async () => ({ data: { download_urls: { mp3: 'https://audio.example/fresh.mp3' } } }) };
@@ -41,7 +42,7 @@ test('SDR audio endpoint redirects to a fresh Telnyx mp3 URL', async () => {
 test('SDR audio endpoint fails closed when Telnyx key is missing', async () => {
   const old = process.env.TELNYX_API_KEY;
   delete process.env.TELNYX_API_KEY;
-  const handler = createHandler({ authResolver: async () => ({ ok: true, session: { role: 'admin', sub: 'admin' } }) });
+  const handler = createHandler({ authResolver: async () => ({ ok: true, session: { role: 'admin', sub: 'admin' } }), permissionResolver: async () => ({ ok: true }) });
   const res = await invoke(handler);
   process.env.TELNYX_API_KEY = old;
   assert.equal(res.status, 503);
@@ -67,6 +68,7 @@ test('audio JSON uses only TELNYX_API_KEY, trims whitespace and avoids duplicate
   try {
     const handler = createHandler({
       authResolver: async () => ({ ok: true, session: { role: 'admin' } }),
+      permissionResolver: async () => ({ ok: true }),
       telnyxFetch: async (_url, options) => {
         assert.equal(options.headers.Authorization, 'Bearer KEY-private-production-key');
         return { ok: true, json: async () => ({ data: { download_urls: { mp3: 'https://audio.example/fresh.mp3' } } }) };
@@ -95,6 +97,7 @@ test('Telnyx 401 is an upstream 502, distinct from application auth, with redact
   try {
     const result = await invoke(createHandler({
       authResolver: async () => ({ ok: true, session: { role: 'admin' } }),
+      permissionResolver: async () => ({ ok: true }),
       telnyxFetch: async () => ({ ok: false, status: 401, json: async () => ({ errors: [{ code: '10009', title: 'Authentication failed', detail: 'Invalid Bearer KEY-private-test https://private.example?token=hidden' }] }) }),
     }), { url: '/api/admin/sdr/calls/rec_123/audio?format=json' });
     assert.equal(result.status, 502);

@@ -126,6 +126,27 @@ test('admin SDR buildModel uses scored calls for IA summary without mock data', 
   assert.equal(model.calls.length, 1);
 });
 
+
+
+test('admin SDR maps short IA SDR names to operational SDR users', async () => {
+  assert.equal(__private.namesMatch('Luana Mendonça', 'Luana'), true);
+  assert.equal(__private.namesMatch('Felipe Santos', 'Felipe'), true);
+  assert.equal(__private.namesMatch('Ayres André', 'André'), true);
+  const model = await __private.buildModel({ period: 'today' }, {
+    activity: async () => ({
+      events: [{ id: 'e1', sdrUid: 'u-luana', sdrName: 'Luana Mendonça', eventType: 'call', outcome: 'atendeu', dateKey: '2026-09-18' }],
+      sdrs: [{ sdrUid: 'u-luana', sdrName: 'Luana Mendonça', sdrEmail: 'luana@example.com' }],
+    }),
+    request: async () => ({ data: [{ recording_id: 'rec-luana', sdr: 'Luana', duration_seconds: 130, score: 82, created_at: '2026-09-18T12:00:00.000Z' }] }),
+  });
+  const luana = model.sdrs.find(row => row.uid === 'u-luana');
+  assert.equal(luana.analyzedCalls, 1);
+  assert.equal(luana.avgScore, 82);
+  assert.equal(model.sdrs.some(row => row.uid === 'Luana'), false);
+  assert.equal(model.calls[0].sdrUid, 'u-luana');
+  assert.equal(model.calls[0].sdrName, 'Luana Mendonça');
+  assert.equal(model.calls[0].aiSdrName, 'Luana');
+});
 test('admin SDR loads transcript and analysis only in recording detail', async () => {
   const calls = [];
   const request = async (path) => {

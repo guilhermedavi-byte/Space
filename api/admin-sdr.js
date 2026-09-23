@@ -227,11 +227,22 @@ const buildTimeline = (calls, fromKey, toKey) => {
   });
   return [...map.values()].map(row => ({ ...row, conversion: pct(row.scheduled, row.calls) }));
 };
+const normalizePersonKey = value => clean(value).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+const personTokens = value => normalizePersonKey(value).split(/\s+/).filter(token => token.length >= 3);
+const namesMatch = (a, b) => {
+  const left = personTokens(a); const right = personTokens(b);
+  if (!left.length || !right.length) return false;
+  const leftSet = new Set(left); const rightSet = new Set(right);
+  return left.some(token => rightSet.has(token)) || right.some(token => leftSet.has(token));
+};
+const attachScoredCallSdrs = (scoredCalls = [], sdrRows = []) => scoredCalls.map(call => {
+  const matched = (sdrRows || []).find(row => namesMatch(row.sdrName || row.nome || row.uid, call.sdrName));
+  return matched ? { ...call, sdrUid: clean(matched.sdrUid || matched.uid) || call.sdrUid, sdrName: clean(matched.sdrName || matched.nome) || call.sdrName, aiSdrName: call.sdrName } : call;
+});
 const aggregateSdr = (row = {}, calls = [], scoredCalls = []) => {
   const uid = clean(row.sdrUid || row.uid);
   const own = calls.filter(call => call.sdrUid === uid);
-  const rowName = clean(row.sdrName || row.nome).toLowerCase();
-  const ownScores = scoredCalls.filter(call => (call.sdrUid && call.sdrUid === uid) || (rowName && clean(call.sdrName).toLowerCase() === rowName));
+  const ownScores = scoredCalls.filter(call => (uid && call.sdrUid === uid) || namesMatch(row.sdrName || row.nome, call.sdrName || call.aiSdrName));
   const totalCalls = own.filter(call => call.status !== 'meeting').length;
   const connected = own.filter(call => call.status === 'connected').length;
   const scheduled = own.filter(call => call.outcome === 'scheduled').length;
@@ -322,8 +333,9 @@ const buildModel = async (query = {}, deps = {}) => {
   const activity = deps.activity ? await deps.activity({ period: 'custom', from: range.fromKey, to: range.toKey, range }) : await loadAdminCommercialSdrActivity({ period: 'custom', from: range.fromKey, to: range.toKey });
   const statsSource = await loadScoredCallStats({ request, fromKey: range.fromKey, toKey: range.toKey });
   const scoreSource = await loadScoredCalls({ request, fromKey: range.fromKey, toKey: range.toKey, limit: pageSize, offset });
-  const rawScoredCalls = statsSource.calls;
-  const pageScoredCalls = scoreSource.calls;
+  const operationalRows = activity.sdrs || [];
+  const rawScoredCalls = attachScoredCallSdrs(statsSource.calls, operationalRows);
+  const pageScoredCalls = attachScoredCallSdrs(scoreSource.calls, operationalRows);
   const rawCalls = (activity.events || []).map(normalizeCall);
   const calls = filterCalls(rawCalls, query);
   const summary = {
@@ -343,9 +355,9 @@ const buildModel = async (query = {}, deps = {}) => {
     avgScore: avg(rawScoredCalls.map(call => call.score)),
     scriptAdherence: avg(rawScoredCalls.map(call => call.scriptAdherence)),
   };
-  const operationalSdrs = (activity.sdrs || []).map(row => aggregateSdr(row, rawCalls, rawScoredCalls));
-  const scoreOnlySdrs = [...new Set(rawScoredCalls.map(call => call.sdrName).filter(Boolean))]
-    .filter(name => !operationalSdrs.some(row => clean(row.name).toLowerCase() === clean(name).toLowerCase()))
+  const operationalSdrs = operationalRows.map(row => aggregateSdr(row, rawCalls, rawScoredCalls));
+  const scoreOnlySdrs = [...new Set(rawScoredCalls.filter(call => !call.sdrUid).map(call => call.sdrName).filter(Boolean))]
+    .filter(name => !operationalSdrs.some(row => namesMatch(row.name, name)))
     .map(name => aggregateSdr({ sdrUid: name, sdrName: name, sdrEmail: '' }, rawCalls, rawScoredCalls));
   const sdrs = [...operationalSdrs, ...scoreOnlySdrs].filter(row => !query.sdr || query.sdr === 'all' || row.uid === query.sdr || row.name === query.sdr);
   const sdrOptions = [...new Map([...operationalSdrs, ...scoreOnlySdrs].map(row => [row.uid || row.name, { uid: row.uid || row.name, name: row.name || 'SDR', email: row.email || '' }])).values()];
@@ -410,4 +422,4 @@ const createHandler = ({ build = buildModel, authResolver = resolveAdminRequestA
 };
 module.exports = createHandler();
 module.exports.createHandler = createHandler;
-module.exports.__private = { resolveRange, buildModel, normalizeCall, normalizeScoredCall, filterCalls, loadScoredCalls };
+module.exports.__private = { resolveRange, buildModel, normalizeCall, normalizeScoredCall, filterCalls, loadScoredCalls, namesMatch, attachScoredCallSdrs };
