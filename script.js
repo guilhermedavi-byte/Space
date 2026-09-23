@@ -38718,7 +38718,7 @@ const renderAdminSettingsPanel = () => {
     contentEl.innerHTML = renderAdminSettingsProfile();
     return;
   }
-  if (adminSettingsState.activeSection === "acessos" && adminSettingsState.profileMeta?.isSuperAdmin === true) {
+  if (adminSettingsState.activeSection === "acessos" && (adminSettingsState.profileMeta?.isSuperAdmin === true || sessionUser?.isSuperAdmin === true)) {
     contentEl.innerHTML = renderAdminSettingsAccesses();
     loadAdminAccessRows({ force: false })
       .catch((error) => console.error("[admin] access list init failed:", error))
