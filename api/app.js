@@ -73,7 +73,6 @@ const routeStateFromPath = (pathParam, searchParams = new URLSearchParams()) => 
   if (slug === "admin" && sub === "automacoes") return { panel: "automations" };
   if (slug === "admin" && sub === "comercial") {
     if (segments[2] === "crm") return { panel: "native-crm" };
-    if (segments[2] === "growth") return { panel: "growth" };
     if (segments[2] === "pre-vendas" && segments[3] === "painel-sdr") return { panel: "admin-sdr" };
     if (segments[2] === "pre-vendas" || segments[2] === "atividade-sdr") return { panel: "admin-comercial-atividade-sdr" };
     if (segments[2] === "metas") return { panel: "admin-comercial-metas" };
@@ -91,7 +90,7 @@ const routeStateFromPath = (pathParam, searchParams = new URLSearchParams()) => 
     if (sub === "sdr" || sub === "scripts-vendas" || sub === "objecoes" || sub === "training") return { panel: "growth" };
     return { panel: "growth-dashboard" };
   }
-  if (slug === "admin" && sub === "growth") return { panel: "growth" };
+  if (slug === "admin" && sub === "growth") return { panel: "admin-comercial-visao-geral" };
   if (slug === "admin" && sub === "configuracoes") {
     const settingsSections = new Set(["meu-perfil", "acessos", "tags", "planos", "motivos-cancelamento", "listas", "campos-adicionais", "integracoes", "conexoes", "status", "lixeira"]);
     return { panel: "configuracoes-admin", settingsSection: settingsSections.has(segments[2]) ? segments[2] : "meu-perfil" };

@@ -50,7 +50,7 @@ const PEDAGOGICO_SIDEBAR_ACTIVE_TARGET_BY_TAB = {
   onboarding: "admin-controle-pedagogico-onboarding",
   relatorios: "admin-controle-pedagogico-relatorios",
 };
-const COMERCIAL_SIDEBAR_PANEL_TARGETS = new Set(["native-crm", "admin-comercial-metas", "admin-comercial-visao-geral", "admin-comercial-atividade-sdr", "admin-sdr", "growth", "admin-comercial-usuarios"]);
+const COMERCIAL_SIDEBAR_PANEL_TARGETS = new Set(["native-crm", "admin-comercial-metas", "admin-comercial-visao-geral", "admin-comercial-atividade-sdr", "admin-sdr", "admin-comercial-usuarios"]);
 const greetingElement = document.querySelector("[data-greeting]");
 const roleEyebrow = document.querySelector("[data-role-eyebrow]");
 const roleSidebarSubtitle = document.querySelector("[data-role-sidebar-subtitle]");
@@ -927,7 +927,6 @@ const permissionForPanel = (panelName) => {
   if (panel === "native-crm") return "comercial.crm.view";
   if (panel === "admin-comercial-atividade-sdr") return "comercial.preSales.view";
   if (panel === "admin-sdr") return "comercial.sdrPanel.view";
-  if (panel === "growth") return "comercial.growth.view";
   if (panel === "admin-comercial-metas") return "comercial.goals.view";
   if (panel === "admin-comercial-usuarios") return "comercial.users.view";
   if (panel === "financeiro") {
@@ -21699,7 +21698,7 @@ const renderAdminCommercialOverview = () => {
         ${renderCommercialOverviewKpi({ label: "Reuniões feitas", value: sdrStats.shows, series: sdrSeries("shows"), tone: "green" })}
         ${renderCommercialOverviewKpi({ label: "Show rate", value: formatPercentPtBr(sdrStats.showRate, 1), series: sdrSeries("shows"), tone: "amber" })}
       </div>
-      <a class="commercial-overview-detail-link" href="/app/admin/comercial/growth" data-panel-target="growth" data-growth-tab-target="sdr">Ver detalhes no módulo SDR</a>
+      <a class="commercial-overview-detail-link" href="/app/admin/comercial/pre-vendas/painel-sdr" data-panel-target="admin-sdr">Ver detalhes no Painel SDR</a>
     </section>
   `;
   initCommercialOverviewMotion();
@@ -42579,15 +42578,15 @@ const showPanel = (panelName) => {
   }
 
 	  if (panelName === "growth") {
+    if (currentRole === "admin") {
+      navigateApp("/app/admin/comercial", { replace: true });
+      return;
+    }
     window.scrollTo({ top: 0, behavior: "smooth" });
     renderSalesCopilot();
     loadSalesCopilotData().catch((error) => console.error("[growth copilot] initial load failed:", error));
     if (salesCopilotState.activeTab === "sdr") loadSdrPanelData({ force: false }).catch((error) => console.error("[sdr] initial load failed:", error));
     if (salesCopilotState.activeTab === "training") loadSalesCopilotTraining().catch((error) => console.error("[growth copilot] training failed", error));
-    if (currentRole === "admin") {
-      loadUsersFromFirestore("growth");
-      loadAdminGrowthGoals();
-    }
     if (!isGrowthAccessRole(currentRole)) {
       navigateApp(roleBasePath(currentRole), { replace: true });
     }
@@ -42753,7 +42752,6 @@ const financePathForState = (role) => {
 const growthCommercialPathForState = (role = currentRole, tab = salesCopilotState?.activeTab || "sdr") => {
   const normalized = normalizeRole(role);
   const safeTab = ["sdr", "scripts-vendas", "objecoes", "training"].includes(String(tab || "")) ? String(tab) : "sdr";
-  if (normalized === "admin") return safeTab === "sdr" ? "/app/admin/comercial/growth" : `/app/admin/comercial/growth/${safeTab}`;
   return safeTab === "sdr" ? "/app/growth/comercial/painel-sdr" : `/app/growth/comercial/${safeTab}`;
 };
 
@@ -42796,7 +42794,6 @@ const panelPathForRole = (role, panel) => {
   if (normalized === "admin") {
     if (p === "activities") return "/app/admin/atividades";
     if (p === "admin-sdr") return "/app/admin/comercial/pre-vendas/painel-sdr";
-    if (["sdr", "scripts-vendas", "objecoes", "training"].includes(p)) return growthCommercialPathForState("admin", p);
     if (p === "professores" || p === "alunos") return adminPedagogicoPathForState();
     if (p === "admin-controle-pedagogico") return adminPedagogicoPathForState();
     if (["admin-controle-pedagogico-aulas", "admin-controle-pedagogico-pessoas", "admin-controle-pedagogico-retencao", "admin-controle-pedagogico-reposicoes", "admin-controle-pedagogico-qualidade", "admin-controle-pedagogico-onboarding", "admin-controle-pedagogico-relatorios"].includes(p)) return adminPedagogicoPathForState();
@@ -42810,7 +42807,6 @@ const panelPathForRole = (role, panel) => {
     if (p === "admin-comercial-atividade-sdr") return "/app/admin/comercial/pre-vendas";
     if (p === "admin-comercial-metas") return "/app/admin/comercial/metas";
     if (p === "admin-comercial-usuarios") return "/app/admin/comercial/usuarios";
-	    if (p === "growth") return growthCommercialPathForState("admin");
     if (p === "gravadas") return "/app/admin/gravadas";
     if (p === "ao-vivo") return "/app/admin/ao-vivo";
     if (p === "materiais") return "/app/admin/materiais";
@@ -42903,20 +42899,13 @@ const parseAppRoute = (path) => {
 	    }
     if (sub === "comercial") {
       if (detail === "crm") return { role, panel: "native-crm" };
-      if (detail === "growth") {
-        const growthTab = ["scripts-vendas", "objecoes", "training"].includes(segments[4]) ? segments[4] : "sdr";
-        return { role, panel: "growth", growthTab };
-      }
       if (detail === "metas") return { role, panel: "admin-comercial-metas" };
       if (detail === "usuarios") return { role, panel: "admin-comercial-usuarios" };
       if (detail === "pre-vendas" && segments[4] === "painel-sdr") return { role, panel: "admin-sdr" };
       if (detail === "atividade-sdr" || detail === "pre-vendas") return { role, panel: "admin-comercial-atividade-sdr" };
       return { role, panel: "admin-comercial-visao-geral" };
     }
-	    if (sub === "growth") {
-	      const growthTab = ["sdr", "scripts-vendas", "objecoes", "training"].includes(detail) ? detail : "sdr";
-	      return { role, panel: "growth", growthTab, redirectTo: growthCommercialPathForState("admin", growthTab) };
-	    }
+	    if (sub === "growth") return { role, panel: "admin-comercial-visao-geral", redirectTo: "/app/admin/comercial" };
     if (sub === "ao-vivo") return { role, panel: "ao-vivo" };
     if (sub === "gravadas") return { role, panel: "gravadas" };
     if (sub === "materiais") return { role, panel: "materiais" };

@@ -67,7 +67,6 @@ const ADMIN_PERMISSION_REGISTRY = {
       crmLive: withActions({ label: "CRM Live", href: "/tv/crm-live", routes: ["/tv/crm-live"], apis: ["/api/crm-live-data", "/api/crm-live-events"], legacyKey: "comercial.crmLive" }, ["view", { key: "update", label: "Atualizar/gerenciar TV", sensitive: true }]),
       preSales: withActions({ label: "Pré-Vendas", panel: "admin-comercial-atividade-sdr", routes: ["/app/admin/comercial/pre-vendas"], apis: ["/api/admin-commercial-sdr-activity"], legacyKey: "comercial.preSales" }),
       sdrPanel: withActions({ label: "Painel SDR", panel: "admin-sdr", routes: ["/app/admin/comercial/pre-vendas/painel-sdr"], apis: ["/api/admin-sdr", "/api/admin/sdr/calls/:id/audio"], legacyKey: "comercial.sdrPanel" }, ["view", "update"]),
-      growth: withActions({ label: "Growth", panel: "growth", routes: ["/app/admin/comercial/growth", "/app/admin/growth"], apis: ["/api/growth-dashboard?api=growth-metrics"], legacyKey: "growth" }),
       goals: withActions({ label: "Metas", panel: "admin-comercial-metas", routes: ["/app/admin/comercial/metas"], apis: ["/api/growth-dashboard?api=growth-goals"], legacyKey: "comercial.goals" }, ["view", "create", "update", { key: "delete", label: "Excluir", sensitive: true }]),
       users: withActions({ label: "Usuários", panel: "admin-comercial-usuarios", routes: ["/app/admin/comercial/usuarios"], apis: ["/api/admin-create-growth-user", "/api/admin-users"], legacyKey: "comercial.users" }, ["view", "create", "update", "deactivate", { key: "delete", label: "Excluir", sensitive: true }]),
     },
@@ -173,11 +172,7 @@ const normalizeRole = (value) => {
 const normalizeAdminPermissions = (value, { fallbackFullAccess = false } = {}) => {
   if (fallbackFullAccess && !Array.isArray(value)) return ALL_ADMIN_PERMISSION_KEYS.slice();
   const source = Array.isArray(value) ? value : typeof value === "string" ? value.split(/[,\s]+/) : [];
-  const normalized = new Set(source.flatMap(expandAdminPermissionInput).filter((item) => VALID_ADMIN_PERMISSION_KEYS.has(item)));
-  if (normalized.has("comercial.preSales.view") && VALID_ADMIN_PERMISSION_KEYS.has("comercial.growth.view")) {
-    normalized.add("comercial.growth.view");
-  }
-  return Array.from(normalized);
+  return Array.from(new Set(source.flatMap(expandAdminPermissionInput).filter((item) => VALID_ADMIN_PERMISSION_KEYS.has(item))));
 };
 
 const isSuperAdminUser = (user) => normalizeRole(user?.tipo || user?.role || user?.type) === "admin" && user?.isSuperAdmin === true;
@@ -246,7 +241,6 @@ const permissionForAdminPanel = (panel, state = {}) => {
   if (safePanel === "native-crm") return "comercial.crm.view";
   if (safePanel === "admin-comercial-atividade-sdr") return "comercial.preSales.view";
   if (safePanel === "admin-sdr") return "comercial.sdrPanel.view";
-  if (safePanel === "growth") return "comercial.growth.view";
   if (safePanel === "admin-comercial-metas") return "comercial.goals.view";
   if (safePanel === "admin-comercial-usuarios") return "comercial.users.view";
   if (safePanel === "financeiro") {

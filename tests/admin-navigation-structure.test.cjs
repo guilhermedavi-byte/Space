@@ -34,7 +34,7 @@ const commercialLabels = Array.from(document.querySelectorAll("[data-sidebar-acc
   .filter(Boolean);
 assert.ok(commercialLabels.includes("CRM"), "Comercial contains CRM");
 assert.ok(commercialLabels.includes("Painel SDR") || commercialLabels.includes("↳ Painel SDR"), "Comercial contains Painel SDR");
-assert.ok(commercialLabels.includes("Growth"), "Comercial contains Growth");
+assert.ok(!commercialLabels.includes("Growth"), "Comercial admin does not contain Growth");
 
 const expectedSettingsOrder = [
   "meu-perfil",
@@ -99,8 +99,9 @@ const invokeApp = async (pathParam) => {
   assert.match(legacyStatus.body, /data-initial-panel="configuracoes-admin"/, "legacy Status route opens Configurações");
 
   const commercialGrowth = await invokeApp("admin/comercial/growth");
-  assert.strictEqual(commercialGrowth.statusCode, 200, "Comercial > Growth route is available");
-  assert.match(commercialGrowth.body, /data-initial-panel="growth"/, "Comercial > Growth opens the Growth workspace");
+  assert.strictEqual(commercialGrowth.statusCode, 200, "legacy admin Growth route does not error");
+  assert.match(commercialGrowth.body, /data-initial-panel="admin-comercial-visao-geral"/, "legacy admin Growth route opens Comercial overview");
+  assert.doesNotMatch(commercialGrowth.body, /data-initial-panel="growth"/, "legacy admin Growth route does not open Growth");
 
   console.log("admin navigation structure tests passed");
 })().catch((error) => {

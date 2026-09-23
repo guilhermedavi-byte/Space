@@ -14,7 +14,7 @@ const {
 } = require("../api/_lib/admin-permissions");
 
 assert.ok(ADMIN_PERMISSION_REGISTRY.comercial.children.crm, "registry includes comercial.crm");
-assert.ok(ADMIN_PERMISSION_REGISTRY.comercial.children.growth, "registry includes comercial.growth");
+assert.ok(!ADMIN_PERMISSION_REGISTRY.comercial.children.growth, "registry does not expose Growth in admin access");
 assert.ok(ADMIN_PERMISSION_REGISTRY.financeiro.children.overview, "registry includes financeiro.overview");
 assert.ok(ADMIN_PERMISSION_REGISTRY.settings.children.accesses, "registry includes settings.accesses");
 assert.ok(ADMIN_PERMISSION_REGISTRY.settings.children.status, "registry includes settings.status");
@@ -34,7 +34,7 @@ assert.deepStrictEqual(normalizeAdminPermissions(["dashboard", "nope", "comercia
 ]);
 assert.deepStrictEqual(normalizeAdminPermissions(["status"]), ["settings.status.view"], "legacy status grants settings.status.view");
 assert.deepStrictEqual(normalizeAdminPermissions(["guide"]), [], "removed guide permissions are not normalized");
-assert.ok(normalizeAdminPermissions(["comercial.preSales.view"]).includes("comercial.growth.view"), "legacy pre-sales access keeps Growth workspace access");
+assert.deepStrictEqual(normalizeAdminPermissions(["growth", "comercial.growth.view"]), [], "Growth permissions are removed from admin access");
 
 const superAdmin = { role: "admin", isSuperAdmin: true, adminPermissions: [] };
 assert.strictEqual(canAdminAccess(superAdmin, "financeiro.closing.view"), true, "super admin bypasses matrix");
@@ -51,7 +51,7 @@ assert.strictEqual(canAdminAccess({ role: "student", tipo: "admin" }, "dashboard
 
 assert.strictEqual(permissionForAdminPanel("native-crm"), "comercial.crm.view");
 assert.strictEqual(permissionForAdminPanel("admin-comercial-metas"), "comercial.goals.view");
-assert.strictEqual(permissionForAdminPanel("growth"), "comercial.growth.view");
+assert.strictEqual(permissionForAdminPanel("growth"), "");
 assert.strictEqual(permissionForAdminPanel("financeiro", { financeTab: "recebiveis" }), "financeiro.receivables.view");
 assert.strictEqual(permissionForAdminPanel("configuracoes-admin", { settingsSection: "acessos" }), "settings.accesses.view");
 assert.strictEqual(permissionForAdminPanel("configuracoes-admin", { settingsSection: "status" }), "settings.status.view");
