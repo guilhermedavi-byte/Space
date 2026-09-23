@@ -11250,6 +11250,31 @@ const getActivityWorkspaceDescription = (activity = {}) => {
   return [description, "Notas legadas:", legacyNotes].filter(Boolean).join("\n\n");
 };
 
+const getActivityStatusTone = (status = "") => {
+  const normalized = normalizeActivityStatus(status);
+  if (normalized === "Feito") return "success";
+  if (normalized === "Em andamento") return "info";
+  return "warning";
+};
+
+const getActivityPriorityTone = (priority = "") => {
+  const normalized = normalizeActivityPriority(priority);
+  if (normalized === "Alta") return "danger";
+  if (normalized === "Baixa") return "success";
+  return "warning";
+};
+
+const renderActivityStudentInline = (student = null) => {
+  if (!student?.nome) return `<span class="actws-student-inline is-empty"><span class="actws-mini-avatar">—</span><span>Sem aluno vinculado</span></span>`;
+  return `<span class="actws-student-inline" title="${escapeHtml(student.email || student.nome)}"><span class="actws-mini-avatar">${escapeHtml(getInitials(student.nome))}</span><span>${escapeHtml(student.nome)}</span></span>`;
+};
+
+const renderActivityChecklistAssignee = (item = {}) => {
+  const name = String(item.assigneeNameSnapshot || activityUserName(item.assigneeId, "Sem responsável") || "Sem responsável").trim();
+  if (!item.assigneeId && !item.assigneeNameSnapshot) return `<span>Sem responsável</span>`;
+  return `<span class="actws-check-assignee"><span class="actws-mini-avatar">${escapeHtml(getInitials(name))}</span>${escapeHtml(name)}</span>`;
+};
+
 const renderActivityWorkspace = (workspace = {}) => {
   const isCreateMode = workspace.mode === "create" || !workspace.activity?.id;
   const activity = getDefaultActivityDraft(workspace.activity || {});
@@ -11265,7 +11290,9 @@ const renderActivityWorkspace = (workspace = {}) => {
   const canAdminComments = currentRole === "admin" || sessionUser?.isSuperAdmin === true;
   const visibleComments = comments.slice().sort((a, b) => (Date.parse(a.createdAt) || 0) - (Date.parse(b.createdAt) || 0));
   const visibleEvents = events.slice().sort((a, b) => (Date.parse(b.occurredAt) || 0) - (Date.parse(a.occurredAt) || 0));
-  const propRow = (label, html) => `<label class="actws-prop"><span>${escapeHtml(label)}</span>${html}</label>`;
+  const statusTone = getActivityStatusTone(activity.status);
+  const priorityTone = getActivityPriorityTone(activity.prioridade);
+  const propRow = (label, html, className = "") => `<label class="actws-prop ${escapeHtml(className)}"><span>${escapeHtml(label)}</span>${html}</label>`;
   const titleValue = activity.titulo || "";
   const titlePlaceholder = isCreateMode ? "Nova atividade" : "Atividade";
   const descriptionValue = getActivityWorkspaceDescription(activity);
@@ -11276,6 +11303,8 @@ const renderActivityWorkspace = (workspace = {}) => {
         <div class="actws-titleblock">
           <input class="actws-title-input" name="titulo" value="${escapeHtml(titleValue)}" placeholder="${escapeHtml(titlePlaceholder)}" form="actws-details-form" required />
           <div class="actws-head-meta">
+            <span class="actws-head-status is-${escapeHtml(statusTone)}">${escapeHtml(normalizeActivityStatus(activity.status))}</span>
+            <span class="actws-dot"></span>
             <span>${escapeHtml(linkedStudentName)}</span>
           </div>
         </div>
@@ -11293,13 +11322,16 @@ const renderActivityWorkspace = (workspace = {}) => {
         <aside class="actws-panel actws-details is-active" data-actws-panel="details">
           <form id="actws-details-form" class="actws-details-form" data-actws-details-form>
             <section class="actws-section">
-              <h3>Propriedades</h3>
-              ${propRow("Status", `<select name="status">${ACTIVITY_STATUS_OPTIONS.map(option => `<option value="${escapeHtml(option)}" ${option === normalizeActivityStatus(activity.status) ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}</select>`)}
+              <h3>Execução</h3>
+              ${propRow("Status", `<select name="status">${ACTIVITY_STATUS_OPTIONS.map(option => `<option value="${escapeHtml(option)}" ${option === normalizeActivityStatus(activity.status) ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}</select>`, `is-status is-${statusTone}`)}
               ${propRow("Responsável", `<select name="responsavelId">${renderActivityUserOptions(activity.responsavelId)}</select>`)}
               ${propRow("Prazo", `<input type="date" name="prazo" value="${escapeHtml(activity.prazo || "")}" />`)}
-              ${propRow("Prioridade", `<select name="prioridade">${ACTIVITY_PRIORITY_OPTIONS.map(option => `<option value="${escapeHtml(option)}" ${option === normalizeActivityPriority(activity.prioridade) ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}</select>`)}
+            </section>
+            <section class="actws-section">
+              <h3>Classificação</h3>
+              ${propRow("Prioridade", `<select name="prioridade">${ACTIVITY_PRIORITY_OPTIONS.map(option => `<option value="${escapeHtml(option)}" ${option === normalizeActivityPriority(activity.prioridade) ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}</select>`, `is-priority is-${priorityTone}`)}
               ${propRow("Tipo", `<input name="tipo" value="${escapeHtml(activity.tipo || "")}" placeholder="Sem tipo" />`)}
-              ${propRow("Aluno", `<select name="studentId">${renderActivityStudentOptions(activity.studentId)}</select>${student?.email ? `<small>${escapeHtml(student.email)}</small>` : ""}`)}
+              ${propRow("Aluno", `<span class="actws-prop-display">${renderActivityStudentInline(student)}</span><select name="studentId">${renderActivityStudentOptions(activity.studentId)}</select>${student?.email ? `<small>${escapeHtml(student.email)}</small>` : ""}`, "is-student")}
             </section>
             <details class="actws-details-meta">
               <summary>Detalhes</summary>
@@ -11318,7 +11350,7 @@ const renderActivityWorkspace = (workspace = {}) => {
               <textarea name="descricao" rows="${descriptionValue ? "5" : "3"}" form="actws-details-form" placeholder="Adicione uma descrição…">${escapeHtml(descriptionValue)}</textarea>
             </section>
             <section class="actws-discussion">
-              <div class="actws-section-head"><h3>Discussão</h3><span>${escapeHtml(String(visibleComments.length))}</span></div>
+              <div class="actws-section-head"><h3><span class="actws-heading-mark"></span>Discussão</h3><span>${escapeHtml(String(visibleComments.length))}</span></div>
               <div class="actws-comments" data-actws-comments>
                 ${isCreateMode ? `<div class="actws-empty actws-empty-state">Crie a atividade para iniciar a discussão.</div>` : visibleComments.length ? visibleComments.map(comment => {
                   const canManage = !comment.legacy && !comment.deletedAt && (canAdminComments || String(comment.authorId || "") === currentUserId);
@@ -11334,7 +11366,7 @@ const renderActivityWorkspace = (workspace = {}) => {
                   `;
                 }).join("") : `<div class="actws-empty">Nenhum comentário ainda.</div>`}
               </div>
-              ${isCreateMode ? "" : `<button type="button" class="actws-add-inline" data-actws-comment-compose-toggle>+ Adicionar comentário</button>
+              ${isCreateMode ? "" : `<button type="button" class="actws-add-inline" data-actws-comment-compose-toggle>＋ Adicionar comentário</button>
               <form class="actws-comment-form" data-actws-comment-form hidden>
                 <textarea name="comment" rows="3" placeholder="Escreva um comentário…"></textarea>
                 <div class="actws-form-actions"><span>Enter envia · Shift+Enter quebra linha</span><button type="submit">Enviar</button><button type="button" data-actws-comment-compose-cancel>Cancelar</button></div>
@@ -11356,7 +11388,7 @@ const renderActivityWorkspace = (workspace = {}) => {
                 <input type="checkbox" data-actws-check-toggle="${escapeHtml(item.id)}" ${item.completed ? "checked" : ""} />
                 <div class="actws-check-copy">
                   <div class="actws-check-line"><strong>${escapeHtml(item.title || "Item sem título")}</strong><button type="button" class="actws-icon-action" data-actws-check-edit="${escapeHtml(item.id)}" aria-label="Editar item">•••</button></div>
-                  <div class="actws-check-readable"><span>${escapeHtml(item.assigneeNameSnapshot || activityUserName(item.assigneeId, "Sem responsável"))}</span>${item.dueDate ? `<span>${escapeHtml(formatAdminDate(item.dueDate))}</span>` : `<span>Sem prazo</span>`}</div>
+                  <div class="actws-check-readable">${renderActivityChecklistAssignee(item)}${item.dueDate ? `<span class="${isActivityItemOverdue(item.dueDate) && !item.completed ? "is-overdue-date" : ""}">${escapeHtml(formatAdminDate(item.dueDate))}</span>` : `<span>Sem prazo</span>`}</div>
                   <form class="actws-check-edit-form" data-actws-check-edit-form="${escapeHtml(item.id)}" hidden>
                     <input name="title" value="${escapeHtml(item.title || "")}" />
                     <select name="assigneeId">${renderActivityUserOptions(item.assigneeId)}</select>
@@ -11369,9 +11401,9 @@ const renderActivityWorkspace = (workspace = {}) => {
                   </div>
                 </div>
               </article>
-            `).join("") : `<div class="actws-empty">Nenhum item no checklist.</div>`}
+            `).join("") : `<div class="actws-empty actws-check-empty"><span>✓</span><strong>Nenhum item ainda</strong></div>`}
           </div>
-          ${isCreateMode ? "" : `<button type="button" class="actws-add-inline" data-actws-check-add-toggle>+ Adicionar item</button>
+          ${isCreateMode ? "" : `<button type="button" class="actws-add-inline" data-actws-check-add-toggle>＋ Adicionar item</button>
           <form class="actws-add-check" data-actws-check-add-form hidden>
             <input name="title" placeholder="Título do item" />
             <div class="actws-check-meta">
