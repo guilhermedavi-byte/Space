@@ -8777,11 +8777,87 @@ body[data-settings-sidebar-expanded="false"] .admin-settings-sidebar-toggle-icon
   align-content: start;
 }
 
+.admin-settings-photo-preview {
+  width: 112px;
+  height: 112px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: rgba(89, 144, 189, 0.12);
+  border: 1px solid rgba(89, 144, 189, 0.24);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 26px;
+  font-weight: 900;
+}
+
+.admin-settings-photo-preview img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
 .admin-settings-photo-copy {
   font-size: 13px;
   font-weight: 650;
   line-height: 1.6;
   color: rgba(255, 255, 255, 0.62);
+}
+
+.admin-student-inline-photo-status.is-success {
+  color: rgba(129, 222, 161, 0.96);
+}
+
+.profile-avatar-menu {
+  position: absolute;
+  z-index: 3000;
+  min-width: 156px;
+  padding: 6px;
+  display: grid;
+  gap: 2px;
+  border-radius: 8px;
+  background: rgba(14, 18, 24, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.42);
+}
+
+.profile-avatar-menu button {
+  width: 100%;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 13px;
+  font-weight: 750;
+  text-align: left;
+  cursor: pointer;
+}
+
+.profile-avatar-menu button:hover,
+.profile-avatar-menu button:focus-visible {
+  outline: none;
+  background: rgba(89, 144, 189, 0.16);
+  color: rgba(255, 255, 255, 0.98);
+}
+
+.profile-avatar-lightbox {
+  width: min(72vw, 520px);
+  display: grid;
+  place-items: center;
+}
+
+.profile-avatar-lightbox img {
+  max-width: 100%;
+  max-height: min(68vh, 520px);
+  display: block;
+  border-radius: 8px;
+  object-fit: contain;
 }
 
 .admin-settings-placeholder {
@@ -16717,6 +16793,10 @@ body[data-app-role="growth"] .platform-main {
 
 .growth-v2-user-feedback[data-tone="loading"] {
   color: rgba(150, 200, 255, 0.92);
+}
+
+.growth-v2-user-feedback[data-tone="success"] {
+  color: rgba(129, 222, 161, 0.96);
 }
 
 .growth-v2-avatar-wrap {

@@ -180,12 +180,43 @@ const uploadBufferToFirebaseStorage = async ({ objectPath, buffer, contentType, 
   };
 };
 
+const deleteFirebaseStorageObject = async ({ objectPath } = {}) => {
+  const safePath = safeString(objectPath);
+  if (!safePath) return { ok: true, skipped: true };
+  const bucket = getStorageBucketName();
+  const access = await getGoogleAccessToken({ scope: STORAGE_SCOPE });
+  const accessToken = safeString(access?.accessToken);
+  if (!accessToken) {
+    const error = new Error("missing_storage_access_token");
+    error.code = "missing_storage_access_token";
+    throw error;
+  }
+  const url = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(bucket)}/o/${encodeURIComponent(safePath)}`;
+  const res = await fetch(url, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+  if (res.status === 404) return { ok: true, missing: true };
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    const error = new Error("storage_delete_failed");
+    error.code = "storage_delete_failed";
+    error.status = res.status;
+    error.details = text || null;
+    throw error;
+  }
+  return { ok: true };
+};
+
 module.exports = {
   ALLOWED_MIME_TYPES,
   MAX_PROFILE_PHOTO_BYTES,
   OUTPUT_MIME,
   OUTPUT_SIZE_PX,
   buildFirebaseDownloadUrl,
+  deleteFirebaseStorageObject,
   decodeBase64ImagePayload,
   parseJsonBodyWithLimit,
   transformProfilePhotoBuffer,

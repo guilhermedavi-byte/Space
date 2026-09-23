@@ -29,11 +29,17 @@ module.exports = async (req, res) => {
     adminPermissions: Array.isArray(session.adminPermissions) ? session.adminPermissions : [],
     adminPermissionsVersion: Number(session.adminPermissionsVersion || 0) || 0,
   };
+  let profilePhoto = { photoURL: "", photoStoragePath: "", avatarUpdatedAt: "" };
   if (session.role === "growth" || session.role === "admin") {
     try {
       const row = await getDocumentAsAdmin(`users/${encodeURIComponent(String(session.sub || ""))}`);
       if (session.role === "growth") commercialRoles = normalizeCommercialRoles(row?.commercialRoles);
       if (session.role === "admin") adminAccess = adminAccessPayloadForUser(row);
+      profilePhoto = {
+        photoURL: String(row?.photoURL || row?.photoUrl || ""),
+        photoStoragePath: String(row?.photoStoragePath || ""),
+        avatarUpdatedAt: String(row?.avatarUpdatedAt || row?.updatedAt || ""),
+      };
     } catch {
       // Keep session value if the user document cannot be read.
     }
@@ -48,6 +54,9 @@ module.exports = async (req, res) => {
       isSuperAdmin: adminAccess.isSuperAdmin,
       adminPermissions: adminAccess.adminPermissions,
       adminPermissionsVersion: adminAccess.adminPermissionsVersion,
+      photoURL: profilePhoto.photoURL,
+      photoStoragePath: profilePhoto.photoStoragePath,
+      avatarUpdatedAt: profilePhoto.avatarUpdatedAt,
     },
   });
 };

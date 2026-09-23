@@ -861,6 +861,9 @@ const sanitizeSessionUser = (value) => {
     isSuperAdmin: value.isSuperAdmin === true,
     adminPermissions,
     adminPermissionsVersion: Number(value.adminPermissionsVersion || 0) || 0,
+    photoURL: typeof value.photoURL === "string" ? value.photoURL.trim() : "",
+    photoStoragePath: typeof value.photoStoragePath === "string" ? value.photoStoragePath.trim() : "",
+    avatarUpdatedAt: typeof value.avatarUpdatedAt === "string" ? value.avatarUpdatedAt.trim() : "",
   };
 };
 
@@ -17184,6 +17187,10 @@ let adminSettingsState = {
   inlineSaveTimer: 0,
   photoSaving: false,
   photoError: "",
+  photoStatus: "",
+  photoStatusTone: "",
+  previewURL: "",
+  previewObjectURL: "",
   accessRows: [],
   accessLoadedAt: 0,
   accessLoading: false,
@@ -20500,6 +20507,8 @@ const growthProfileState = {
   photoStoragePath: "",
   photoSaving: false,
   photoError: "",
+  photoStatus: "",
+  photoStatusTone: "",
   previewURL: "",
   previewObjectURL: "",
 };
@@ -20548,8 +20557,11 @@ const renderGrowthProfileAvatar = () => {
     ? "Enviando foto…"
     : growthProfileState.photoError
       ? String(growthProfileState.photoError)
-      : "";
-  setGrowthAvatarFeedback(feedback, growthProfileState.photoSaving ? "loading" : growthProfileState.photoError ? "error" : "");
+      : String(growthProfileState.photoStatus || "");
+  setGrowthAvatarFeedback(
+    feedback,
+    growthProfileState.photoSaving ? "loading" : growthProfileState.photoError ? "error" : growthProfileState.photoStatusTone || ""
+  );
 };
 
 const loadGrowthOwnProfile = async ({ force = false } = {}) => {
@@ -20567,6 +20579,13 @@ const loadGrowthOwnProfile = async ({ force = false } = {}) => {
     const data = snap && typeof snap.data === "function" ? snap.data() : null;
     growthProfileState.photoURL = String(data?.photoURL || data?.photoUrl || "").trim();
     growthProfileState.photoStoragePath = String(data?.photoStoragePath || "").trim();
+    growthProfileState.photoStatus = "";
+    growthProfileState.photoStatusTone = "";
+    if (sessionUser) {
+      sessionUser.photoURL = growthProfileState.photoURL;
+      sessionUser.photoStoragePath = growthProfileState.photoStoragePath;
+      sessionUser.avatarUpdatedAt = String(data?.avatarUpdatedAt || data?.updatedAt || "").trim();
+    }
     growthProfileState.loadedAt = Date.now();
   } finally {
     growthProfileState.loading = false;
@@ -20631,7 +20650,245 @@ const describeGrowthAvatarUploadError = (error, responseData) => {
   if (code === "image_too_large" || code === "payload_too_large") return "A imagem deve ter no máximo 5 MB.";
   if (code === "unsupported_image_type") return "Use apenas JPG, PNG ou WEBP.";
   if (code === "invalid_credentials" || code === "unauthorized") return "Sua sessão expirou. Entre novamente para trocar a foto.";
+  if (code === "avatar_profile_update_failed") return "A foto foi enviada, mas não foi possível salvar no perfil.";
   return "Não foi possível enviar a foto agora.";
+};
+
+let profileAvatarMenuEl = null;
+let profileAvatarMenuTrigger = null;
+
+const currentProfileAvatarContext = () => (normalizeRole(currentRole) === "growth" ? "growth" : "admin");
+
+const getCurrentProfileAvatarUrl = (context = currentProfileAvatarContext()) => {
+  if (context === "growth") return String(growthProfileState.previewURL || growthProfileState.photoURL || sessionUser?.photoURL || "").trim();
+  return String(adminSettingsState.previewURL || adminSettingsState.profileMeta?.photoURL || sessionUser?.photoURL || "").trim();
+};
+
+const revokeAdminAvatarPreviewObjectUrl = () => {
+  if (adminSettingsState.previewObjectURL) {
+    try {
+      URL.revokeObjectURL(adminSettingsState.previewObjectURL);
+    } catch {}
+    adminSettingsState.previewObjectURL = "";
+  }
+};
+
+const setCurrentProfileAvatarStatus = (context, message = "", tone = "") => {
+  if (context === "growth") {
+    growthProfileState.photoError = tone === "error" ? String(message || "") : "";
+    growthProfileState.photoStatus = tone === "error" ? "" : String(message || "");
+    growthProfileState.photoStatusTone = tone === "error" ? "" : tone;
+    renderGrowthProfileAvatar();
+    return;
+  }
+  adminSettingsState.photoError = tone === "error" ? String(message || "") : "";
+  adminSettingsState.photoStatus = tone === "error" ? "" : String(message || "");
+  adminSettingsState.photoStatusTone = tone === "error" ? "" : tone;
+  renderAdminSettingsPanel();
+};
+
+const setCurrentProfileAvatarSaving = (context, isSaving) => {
+  if (context === "growth") {
+    growthProfileState.photoSaving = Boolean(isSaving);
+    renderGrowthProfileAvatar();
+    return;
+  }
+  adminSettingsState.photoSaving = Boolean(isSaving);
+  renderAdminSettingsPanel();
+};
+
+const applyCurrentProfileAvatar = ({ context = currentProfileAvatarContext(), photoURL = "", photoStoragePath = "", avatarUpdatedAt = "" } = {}) => {
+  const safeUrl = String(photoURL || "").trim();
+  const safePath = String(photoStoragePath || "").trim();
+  const safeUpdatedAt = String(avatarUpdatedAt || "").trim();
+  if (sessionUser) {
+    sessionUser.photoURL = safeUrl;
+    sessionUser.photoStoragePath = safePath;
+    sessionUser.avatarUpdatedAt = safeUpdatedAt;
+  }
+  if (context === "growth") {
+    growthProfileState.photoURL = safeUrl;
+    growthProfileState.photoStoragePath = safePath;
+    growthProfileState.loadedAt = Date.now();
+    growthProfileState.previewURL = "";
+    revokeGrowthPreviewObjectUrl();
+    renderGrowthProfileAvatar();
+    return;
+  }
+  adminSettingsState.profileMeta = {
+    ...(adminSettingsState.profileMeta || {}),
+    photoURL: safeUrl,
+    photoStoragePath: safePath,
+    avatarUpdatedAt: safeUpdatedAt,
+  };
+  adminSettingsState.profileLoadedAt = Date.now();
+  adminSettingsState.previewURL = "";
+  revokeAdminAvatarPreviewObjectUrl();
+  renderAdminSettingsPanel();
+};
+
+const closeProfileAvatarMenu = ({ returnFocus = false } = {}) => {
+  if (profileAvatarMenuEl instanceof HTMLElement) {
+    profileAvatarMenuEl.remove();
+  }
+  profileAvatarMenuEl = null;
+  if (profileAvatarMenuTrigger instanceof HTMLElement) {
+    profileAvatarMenuTrigger.setAttribute("aria-expanded", "false");
+    if (returnFocus) {
+      try {
+        profileAvatarMenuTrigger.focus();
+      } catch {}
+    }
+  }
+  profileAvatarMenuTrigger = null;
+};
+
+const openProfileAvatarMenu = ({ trigger, input, context = currentProfileAvatarContext() } = {}) => {
+  if (!(trigger instanceof HTMLElement) || !(input instanceof HTMLInputElement)) return;
+  const currentUrl = getCurrentProfileAvatarUrl(context);
+  closeProfileAvatarMenu();
+  const menu = document.createElement("div");
+  menu.className = "profile-avatar-menu";
+  menu.setAttribute("role", "menu");
+  menu.dataset.avatarMenuContext = context;
+  const actions = currentUrl
+    ? [
+        ["view", "Ver foto"],
+        ["edit", "Editar foto"],
+        ["remove", "Remover foto"],
+      ]
+    : [["edit", "Editar foto"]];
+  menu.innerHTML = actions
+    .map(([action, label]) => `<button type="button" role="menuitem" data-profile-avatar-action="${escapeHtml(action)}">${escapeHtml(label)}</button>`)
+    .join("");
+  document.body.appendChild(menu);
+  const rect = trigger.getBoundingClientRect();
+  const menuRect = menu.getBoundingClientRect();
+  const top = Math.min(window.innerHeight - menuRect.height - 12, Math.max(12, rect.bottom + 8));
+  const left = Math.min(window.innerWidth - menuRect.width - 12, Math.max(12, rect.left));
+  menu.style.top = `${top + window.scrollY}px`;
+  menu.style.left = `${left + window.scrollX}px`;
+  profileAvatarMenuEl = menu;
+  profileAvatarMenuTrigger = trigger;
+  trigger.setAttribute("aria-expanded", "true");
+  menu.querySelector("button")?.focus();
+  menu.addEventListener("click", (event) => {
+    const target = event.target instanceof Element ? event.target.closest("[data-profile-avatar-action]") : null;
+    if (!(target instanceof HTMLButtonElement)) return;
+    const action = String(target.dataset.profileAvatarAction || "");
+    closeProfileAvatarMenu({ returnFocus: action !== "edit" });
+    if (action === "edit") {
+      input.click();
+      return;
+    }
+    if (action === "view") {
+      openCurrentProfileAvatarLightbox({ context, returnFocusEl: trigger });
+      return;
+    }
+    if (action === "remove") {
+      confirmRemoveCurrentProfileAvatar({ context, returnFocusEl: trigger });
+    }
+  });
+};
+
+const openCurrentProfileAvatarLightbox = ({ context = currentProfileAvatarContext(), returnFocusEl = null } = {}) => {
+  const photoURL = getCurrentProfileAvatarUrl(context);
+  if (!photoURL) return;
+  openModal({
+    title: "Foto de perfil",
+    bodyHtml: `<div class="profile-avatar-lightbox"><img src="${escapeHtml(photoURL)}" alt="Foto de perfil" /></div>`,
+    primaryLabel: "Fechar",
+    hideSecondary: true,
+    returnFocusEl,
+    onPrimary: () => closeModal(),
+  });
+};
+
+const confirmRemoveCurrentProfileAvatar = ({ context = currentProfileAvatarContext(), returnFocusEl = null } = {}) => {
+  if (!getCurrentProfileAvatarUrl(context)) return;
+  openModal({
+    title: "Remover foto de perfil?",
+    bodyHtml: `<p class="modal-helper-text">Sua foto será removida do perfil e o avatar voltará para as iniciais.</p>`,
+    primaryLabel: "Remover",
+    secondaryLabel: "Cancelar",
+    returnFocusEl,
+    onPrimary: async () => {
+      if (modalPrimary instanceof HTMLButtonElement) modalPrimary.disabled = true;
+      setCurrentProfileAvatarSaving(context, true);
+      try {
+        const response = await withTimeout(fetchWithAuth("/api/profile-avatar", { method: "DELETE" }), 30_000, "profile_avatar_remove");
+        const data = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(describeGrowthAvatarUploadError(null, data));
+        applyCurrentProfileAvatar({ context, photoURL: "", photoStoragePath: "", avatarUpdatedAt: String(data?.avatarUpdatedAt || "") });
+        setCurrentProfileAvatarStatus(context, "Foto de perfil removida.", "success");
+        closeModal();
+      } catch (error) {
+        setCurrentProfileAvatarStatus(context, error?.message || "Não foi possível remover a foto agora.", "error");
+      } finally {
+        setCurrentProfileAvatarSaving(context, false);
+        if (modalPrimary instanceof HTMLButtonElement && modalOverlay instanceof HTMLElement && !modalOverlay.hidden) modalPrimary.disabled = false;
+      }
+    },
+  });
+};
+
+const uploadCurrentProfileAvatarFile = async ({ file, context = currentProfileAvatarContext() } = {}) => {
+  if (!file) return;
+  if (file.size > AVATAR_MAX_BYTES) {
+    setCurrentProfileAvatarStatus(context, "A imagem deve ter no máximo 5 MB.", "error");
+    return;
+  }
+  if (!AVATAR_ALLOWED_TYPES.has(String(file.type || "").trim().toLowerCase())) {
+    setCurrentProfileAvatarStatus(context, "Use apenas JPG, PNG ou WEBP.", "error");
+    return;
+  }
+  setCurrentProfileAvatarSaving(context, true);
+  setCurrentProfileAvatarStatus(context, "", "");
+  try {
+    const resizedBlob = await resizeAvatarFileForUpload(file);
+    const previewObjectURL = URL.createObjectURL(resizedBlob);
+    if (context === "growth") {
+      revokeGrowthPreviewObjectUrl();
+      growthProfileState.previewObjectURL = previewObjectURL;
+      growthProfileState.previewURL = previewObjectURL;
+      renderGrowthProfileAvatar();
+    } else {
+      revokeAdminAvatarPreviewObjectUrl();
+      adminSettingsState.previewObjectURL = previewObjectURL;
+      adminSettingsState.previewURL = previewObjectURL;
+      renderAdminSettingsPanel();
+    }
+    const dataBase64 = await readBlobAsDataUrl(resizedBlob);
+    const response = await withTimeout(
+      fetchWithAuth("/api/profile-avatar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dataBase64 }),
+      }),
+      45_000,
+      "profile_avatar_upload"
+    );
+    const data = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(describeGrowthAvatarUploadError(null, data));
+    applyCurrentProfileAvatar({
+      context,
+      photoURL: String(data?.photoURL || ""),
+      photoStoragePath: String(data?.photoStoragePath || ""),
+      avatarUpdatedAt: String(data?.avatarUpdatedAt || ""),
+    });
+    setCurrentProfileAvatarStatus(context, "Foto de perfil atualizada.", "success");
+  } catch (error) {
+    if (context === "growth") {
+      growthProfileState.previewURL = "";
+      revokeGrowthPreviewObjectUrl();
+    } else {
+      adminSettingsState.previewURL = "";
+      revokeAdminAvatarPreviewObjectUrl();
+    }
+    setCurrentProfileAvatarStatus(context, error?.message || "Não foi possível enviar a foto agora.", "error");
+  } finally {
+    setCurrentProfileAvatarSaving(context, false);
+  }
 };
 
 const renderGrowthRanking = (rows) => {
@@ -38635,9 +38892,16 @@ const loadAdminSettingsProfile = async ({ force = false } = {}) => {
       email: String(data?.email || sessionUser?.email || "").trim(),
       telefone: String(data?.telefone || data?.phone || "").trim(),
       photoURL: String(data?.photoURL || data?.photoUrl || "").trim(),
+      photoStoragePath: String(data?.photoStoragePath || "").trim(),
+      avatarUpdatedAt: String(data?.avatarUpdatedAt || data?.updatedAt || "").trim(),
       isSuperAdmin: data?.isSuperAdmin === true,
       criadoEm: data?.criadoEm || null,
     };
+    if (sessionUser) {
+      sessionUser.photoURL = adminSettingsState.profileMeta.photoURL;
+      sessionUser.photoStoragePath = adminSettingsState.profileMeta.photoStoragePath;
+      sessionUser.avatarUpdatedAt = adminSettingsState.profileMeta.avatarUpdatedAt;
+    }
     adminSettingsState.profileLoadedAt = Date.now();
   } catch (error) {
     console.error("[admin] settings profile load failed:", error);
@@ -38648,6 +38912,8 @@ const loadAdminSettingsProfile = async ({ force = false } = {}) => {
       email: String(sessionUser?.email || "").trim(),
       telefone: "",
       photoURL: "",
+      photoStoragePath: "",
+      avatarUpdatedAt: "",
       isSuperAdmin: false,
       criadoEm: null,
     };
@@ -38811,21 +39077,22 @@ const renderAdminSettingsProfile = () => {
   const name = String(meta?.nome || sessionUser?.name || "Administrador").trim() || "Administrador";
   const email = String(meta?.email || sessionUser?.email || "").trim();
   const phone = String(meta?.telefone || "").trim();
-  const photoURL = String(meta?.photoURL || "").trim();
+  const photoURL = String(adminSettingsState.previewURL || meta?.photoURL || "").trim();
   const createdLabel = meta?.criadoEm ? formatAdminDate(meta.criadoEm) : "—";
   const initials = getInitials(name);
   const error = String(adminSettingsState.profileError || "").trim();
-  const photoStatus = adminSettingsState.photoSaving ? "Enviando foto…" : adminSettingsState.photoError ? String(adminSettingsState.photoError) : "";
+  const photoStatus = adminSettingsState.photoSaving ? "Enviando foto…" : adminSettingsState.photoError ? String(adminSettingsState.photoError) : String(adminSettingsState.photoStatus || "");
+  const photoStatusTone = adminSettingsState.photoSaving ? "is-loading" : adminSettingsState.photoError ? "is-error" : adminSettingsState.photoStatusTone === "success" ? " is-success" : "";
   return `
     <div class="admin-settings-page">
       <div class="surface-card admin-settings-hero">
         <div class="admin-settings-hero-main">
           <div class="admin-student-avatar-wrap">
-            <button type="button" class="admin-student-avatar admin-student-avatar-photo" data-admin-settings-avatar-trigger aria-label="Alterar imagem de perfil" ${adminSettingsState.photoSaving ? "disabled" : ""}>
+            <button type="button" class="admin-student-avatar admin-student-avatar-photo" data-admin-settings-avatar-trigger aria-label="Abrir menu da foto de perfil" aria-haspopup="menu" aria-expanded="false" ${adminSettingsState.photoSaving ? "disabled" : ""}>
               ${photoURL ? `<img class="admin-student-avatar-image" src="${escapeHtml(photoURL)}" alt="" />` : `<span class="admin-student-avatar-initials">${escapeHtml(initials)}</span>`}
             </button>
             <span class="admin-student-avatar-edit" aria-hidden="true">${adminSettingsState.photoSaving ? "…" : "✎"}</span>
-            <input type="file" hidden accept="image/*" data-admin-settings-avatar-file />
+            <input type="file" hidden accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" data-admin-settings-avatar-file />
           </div>
           <div class="admin-settings-hero-copy">
             <div class="admin-settings-hero-name">${escapeHtml(name)}</div>
@@ -38851,8 +39118,11 @@ const renderAdminSettingsProfile = () => {
         <section class="surface-card admin-settings-card">
           <div class="admin-student-panel-title">Imagem de perfil</div>
           <div class="admin-settings-photo-card">
-            <div class="admin-settings-photo-copy">Use a mesma imagem exibida no topo. Clique no avatar para enviar uma nova foto.</div>
-            ${photoStatus ? `<div class="admin-student-inline-photo-status${adminSettingsState.photoSaving ? " is-loading" : " is-error"}">${escapeHtml(photoStatus)}</div>` : ""}
+            <div class="admin-settings-photo-preview">
+              ${photoURL ? `<img src="${escapeHtml(photoURL)}" alt="" />` : `<span>${escapeHtml(initials)}</span>`}
+            </div>
+            <div class="admin-settings-photo-copy">Esta imagem é a foto oficial do seu perfil e aparece nos pontos da plataforma que usam seu usuário.</div>
+            ${photoStatus ? `<div class="admin-student-inline-photo-status ${escapeHtml(photoStatusTone)}">${escapeHtml(photoStatus)}</div>` : ""}
           </div>
         </section>
       </div>
@@ -45156,12 +45426,22 @@ document.addEventListener("pointerdown", (event) => {
 document.addEventListener("click", (event) => {
   const target = event.target;
   if (!(target instanceof Element)) return;
+  if (profileAvatarMenuEl instanceof HTMLElement && !profileAvatarMenuEl.contains(target) && !target.closest("[data-growth-avatar-trigger]") && !target.closest("[data-admin-settings-avatar-trigger]")) {
+    closeProfileAvatarMenu();
+  }
   const growthAvatarTrigger = target.closest("[data-growth-avatar-trigger]");
-  if (!(growthAvatarTrigger instanceof HTMLButtonElement)) return;
+  const adminAvatarTrigger = target.closest("[data-admin-settings-avatar-trigger]");
+  const trigger = growthAvatarTrigger instanceof HTMLButtonElement ? growthAvatarTrigger : adminAvatarTrigger instanceof HTMLButtonElement ? adminAvatarTrigger : null;
+  if (!(trigger instanceof HTMLButtonElement)) return;
   event.preventDefault();
-  const wrap = growthAvatarTrigger.closest(".growth-v2-avatar-wrap");
-  const input = wrap instanceof HTMLElement ? wrap.querySelector("[data-growth-avatar-file]") : null;
-  if (input instanceof HTMLInputElement) input.click();
+  const wrap = trigger.closest(".growth-v2-avatar-wrap, .admin-student-avatar-wrap");
+  const input = wrap instanceof HTMLElement ? wrap.querySelector("[data-growth-avatar-file], [data-admin-settings-avatar-file]") : null;
+  if (input instanceof HTMLInputElement) openProfileAvatarMenu({ trigger, input, context: growthAvatarTrigger ? "growth" : "admin" });
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  if (profileAvatarMenuEl instanceof HTMLElement) closeProfileAvatarMenu({ returnFocus: true });
 });
 
 document.addEventListener("click", (event) => {
@@ -46556,14 +46836,6 @@ document.addEventListener("click", (event) => {
 
       const settingsInlineControl = target.closest("[data-admin-settings-inline-control]");
       if (settingsInlineControl instanceof HTMLInputElement || settingsInlineControl instanceof HTMLSelectElement || settingsInlineControl instanceof HTMLTextAreaElement) {
-        return;
-      }
-
-      const settingsAvatarTrigger = target.closest("[data-admin-settings-avatar-trigger]");
-      if (settingsAvatarTrigger instanceof HTMLButtonElement) {
-        event.preventDefault();
-        const input = document.querySelector("[data-admin-settings-avatar-file]");
-        if (input instanceof HTMLInputElement) input.click();
         return;
       }
 
@@ -49053,94 +49325,18 @@ document.addEventListener(
     }
     if (target instanceof HTMLInputElement && target.matches("[data-admin-settings-avatar-file]")) {
       const file = target.files && target.files[0] ? target.files[0] : null;
-      const uid = String(sessionUser?.id || "").trim();
-      if (!uid || !file) return;
-      adminSettingsState.photoSaving = true;
-      adminSettingsState.photoError = "";
-      renderAdminSettingsPanel();
-      (async () => {
-        try {
-          const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_settings_avatar_upload");
-          const safeName = String(file.name || "photo").replace(/[^a-zA-Z0-9._-]+/g, "_");
-          const storagePath = `admin_profiles/${uid}/${Date.now()}_${safeName}`;
-          const storageRef = firebase.ref(firebase.primaryStorage, storagePath);
-          await withTimeout(firebase.uploadBytes(storageRef, file), 45_000, "storage_upload_admin_settings_avatar");
-          const url = await withTimeout(firebase.getDownloadURL(storageRef), 12_000, "storage_get_url_admin_settings_avatar");
-          await saveAdminSettingsProfilePatch({ photoURL: url, photoStoragePath: storagePath });
-          adminSettingsState.profileMeta = { ...(adminSettingsState.profileMeta || {}), photoURL: url, photoStoragePath: storagePath };
-          adminSettingsState.photoSaving = false;
-          adminSettingsState.photoError = "";
-          renderAdminSettingsPanel();
-        } catch (error) {
-          console.error("[admin] settings avatar upload failed:", error);
-          adminSettingsState.photoSaving = false;
-          adminSettingsState.photoError = "Não foi possível enviar a foto agora.";
-          renderAdminSettingsPanel();
-        } finally {
-          target.value = "";
-        }
-      })();
+      if (!file) return;
+      uploadCurrentProfileAvatarFile({ file, context: "admin" }).finally(() => {
+        target.value = "";
+      });
       return;
     }
     if (target instanceof HTMLInputElement && target.matches("[data-growth-avatar-file]")) {
       const file = target.files && target.files[0] ? target.files[0] : null;
-      const uid = String(sessionUser?.id || "").trim();
-      if (!uid || !file) return;
-      if (file.size > AVATAR_MAX_BYTES) {
-        growthProfileState.photoError = "A imagem deve ter no máximo 5 MB.";
-        renderGrowthProfileAvatar();
+      if (!file) return;
+      uploadCurrentProfileAvatarFile({ file, context: "growth" }).finally(() => {
         target.value = "";
-        return;
-      }
-      if (!AVATAR_ALLOWED_TYPES.has(String(file.type || "").trim().toLowerCase())) {
-        growthProfileState.photoError = "Use apenas JPG, PNG ou WEBP.";
-        renderGrowthProfileAvatar();
-        target.value = "";
-        return;
-      }
-      growthProfileState.photoSaving = true;
-      growthProfileState.photoError = "";
-      renderGrowthProfileAvatar();
-      (async () => {
-        try {
-          const resizedBlob = await resizeAvatarFileForUpload(file);
-          const previewObjectURL = URL.createObjectURL(resizedBlob);
-          revokeGrowthPreviewObjectUrl();
-          growthProfileState.previewObjectURL = previewObjectURL;
-          growthProfileState.previewURL = previewObjectURL;
-          renderGrowthProfileAvatar();
-          const dataBase64 = await readBlobAsDataUrl(resizedBlob);
-          const response = await withTimeout(
-            fetchWithAuth("/api/growth-profile-photo", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ dataBase64 }),
-            }),
-            45_000,
-            "growth_profile_photo_upload"
-          );
-          const data = await response.json().catch(() => null);
-          if (!response.ok) {
-            throw new Error(describeGrowthAvatarUploadError(null, data));
-          }
-          growthProfileState.photoURL = String(data?.photoURL || "").trim();
-          growthProfileState.photoStoragePath = String(data?.photoStoragePath || "").trim();
-          growthProfileState.loadedAt = Date.now();
-          growthProfileState.photoError = "";
-          growthProfileState.previewURL = "";
-          revokeGrowthPreviewObjectUrl();
-          renderGrowthProfileAvatar();
-        } catch (error) {
-          growthProfileState.photoError = error?.message || "Não foi possível enviar a foto agora.";
-          growthProfileState.previewURL = "";
-          revokeGrowthPreviewObjectUrl();
-          renderGrowthProfileAvatar();
-        } finally {
-          growthProfileState.photoSaving = false;
-          renderGrowthProfileAvatar();
-          target.value = "";
-        }
-      })();
+      });
       return;
     }
     if (!(target instanceof HTMLSelectElement)) return;
