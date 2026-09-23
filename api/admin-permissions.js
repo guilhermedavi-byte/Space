@@ -18,7 +18,7 @@ const normalizeRole = (value) => {
 
 const adminRow = (row = {}) => {
   const id = String(row?.firestoreDocId || row?.id || row?.uid || "").trim();
-  if (!id || normalizeRole(row?.role || row?.tipo || row?.type) !== "admin") return null;
+  if (!id || normalizeRole(row?.tipo || row?.role || row?.type) !== "admin") return null;
   const access = adminAccessPayloadForUser(row);
   return {
     id,

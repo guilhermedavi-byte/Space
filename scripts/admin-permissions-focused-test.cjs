@@ -33,6 +33,7 @@ const limitedAdmin = { role: "admin", adminPermissions: ["comercial.overview", "
 assert.strictEqual(canAdminAccess(limitedAdmin, "comercial.crm"), true, "limited admin can access granted permission");
 assert.strictEqual(canAdminAccess(limitedAdmin, "comercial.goals"), false, "limited admin cannot access missing permission");
 assert.strictEqual(canAdminAccess(limitedAdmin, "financeiro.overview"), false, "limited admin cannot access missing module");
+assert.strictEqual(canAdminAccess({ role: "student", tipo: "admin" }, "dashboard"), true, "tipo is the canonical role field for legacy admin users");
 
 assert.strictEqual(permissionForAdminPanel("native-crm"), "comercial.crm");
 assert.strictEqual(permissionForAdminPanel("admin-comercial-metas"), "comercial.goals");

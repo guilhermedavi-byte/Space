@@ -96,10 +96,10 @@ const normalizeAdminPermissions = (value, { fallbackFullAccess = false } = {}) =
   return Array.from(new Set(source.map((item) => String(item || "").trim()).filter((item) => VALID_ADMIN_PERMISSION_KEYS.has(item))));
 };
 
-const isSuperAdminUser = (user) => normalizeRole(user?.role || user?.tipo || user?.type) === "admin" && user?.isSuperAdmin === true;
+const isSuperAdminUser = (user) => normalizeRole(user?.tipo || user?.role || user?.type) === "admin" && user?.isSuperAdmin === true;
 
 const adminAccessPayloadForUser = (user) => {
-  const role = normalizeRole(user?.role || user?.tipo || user?.type);
+  const role = normalizeRole(user?.tipo || user?.role || user?.type);
   const isSuperAdmin = role === "admin" && user?.isSuperAdmin === true;
   return {
     isSuperAdmin,
@@ -119,7 +119,7 @@ const loadAdminAccessForUid = async (uid) => {
   const safeUid = String(uid || "").trim();
   if (!safeUid) return null;
   const row = await getDocumentAsAdmin(`users/${encodeURIComponent(safeUid)}`);
-  if (normalizeRole(row?.role || row?.tipo || row?.type) !== "admin") return null;
+  if (normalizeRole(row?.tipo || row?.role || row?.type) !== "admin") return null;
   return { user: row, ...adminAccessPayloadForUser(row) };
 };
 
@@ -219,7 +219,7 @@ const auditWrite = ({ event, actorUserId, targetUserId, before, after, createdAt
 };
 
 const buildAdminPermissionPatchWrites = ({ targetUser, targetUid, permissions, actorUserId, event = "admin_permissions_updated" }) => {
-  const before = normalizeAdminPermissions(targetUser?.adminPermissions || targetUser?.permissions, { fallbackFullAccess: normalizeRole(targetUser?.role || targetUser?.tipo) === "admin" });
+  const before = normalizeAdminPermissions(targetUser?.adminPermissions || targetUser?.permissions, { fallbackFullAccess: normalizeRole(targetUser?.tipo || targetUser?.role) === "admin" });
   const after = normalizeAdminPermissions(permissions);
   const now = new Date().toISOString();
   const nextVersion = (Number(targetUser?.adminPermissionsVersion || 0) || 0) + 1;
@@ -262,7 +262,7 @@ const saveAdminPermissions = async ({ actorUserId, targetUid, permissions }) => 
     throw error;
   }
   const target = await getDocumentAsAdmin(`users/${encodeURIComponent(safeTargetUid)}`);
-  if (normalizeRole(target?.role || target?.tipo) !== "admin" || target?.isSuperAdmin === true) {
+  if (normalizeRole(target?.tipo || target?.role) !== "admin" || target?.isSuperAdmin === true) {
     const error = new Error("invalid_target");
     error.status = 403;
     throw error;
@@ -279,7 +279,7 @@ const saveAdminPermissions = async ({ actorUserId, targetUid, permissions }) => 
 
 const backfillExistingAdminPermissions = async ({ actorUserId } = {}) => {
   const rows = await listCollectionAsAdmin("users", { pageSize: 1500 });
-  const adminRows = rows.filter((row) => normalizeRole(row?.role || row?.tipo || row?.type) === "admin");
+  const adminRows = rows.filter((row) => normalizeRole(row?.tipo || row?.role || row?.type) === "admin");
   const writes = [];
   const changed = [];
   const now = new Date().toISOString();
