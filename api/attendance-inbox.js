@@ -72,7 +72,11 @@ const createHandler = ({ authenticate = requireAttendanceAuth, request = supabas
         fail('attendance_channel_disabled', 409);
       }
       const instance = clean(connection.instance_name || '', 100) || clean(
-        (await request('/connections?select=external_account_id&connection_id=eq.' + encodeURIComponent(connection.connection_id), { timeoutMs: 8000 })).data?.[0]?.external_account_id,
+        (await request('/rpc/attendance_evolution_instance_for_connection', {
+          method: 'POST',
+          body: { p_connection_id: connection.connection_id },
+          timeoutMs: 8000
+        })).data,
         100
       );
       const number = String(contact.phone || '').replace(/\D/g, '');
