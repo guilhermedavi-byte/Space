@@ -55,7 +55,7 @@ test('Frontend renders empty inbox and disabled composer', async () => {
   dom.window.eval(fs.readFileSync('attendance-inbox.js', 'utf8'));
   await new Promise(r => setTimeout(r, 20));
   assert.match(dom.window.document.body.textContent, /Nenhuma conversa encontrada/);
-  assert.match(dom.window.document.body.textContent, /Envio será habilitado/);
+  assert.match(dom.window.document.body.textContent, /Selecione uma conversa para responder/);
   dom.window.close();
 });
 
@@ -80,8 +80,11 @@ test('Frontend renders conversation list, chat messages and contact panel from A
 
 test('Admin and Growth direct inbox routes render shared panel', async () => {
   const sessionPath = require.resolve('../_lib/session'), appPath = require.resolve('../api/app');
+  const firestorePath = require.resolve('../api/_lib/firestore-admin');
+  const originalFirestore = require.cache[firestorePath];
   const originalSession = require.cache[sessionPath], originalApp = require.cache[appPath];
   try {
+    require.cache[firestorePath] = { id: firestorePath, filename: firestorePath, loaded: true, exports: { getDocumentAsAdmin: async () => ({role:'admin',isSuperAdmin:true}) } };
     for (const role of ['admin', 'growth']) {
       require.cache[sessionPath] = { id: sessionPath, filename: sessionPath, loaded: true, exports: { getSessionFromRequest: () => ({ sub: 'test', role, name: 'Teste' }) } };
       delete require.cache[appPath]; const res = { setHeader(){}, end(body){ this.body = body; } };
@@ -91,6 +94,7 @@ test('Admin and Growth direct inbox routes render shared panel', async () => {
       assert.match(res.body, /src="attendance-inbox.js"/);
     }
   } finally {
+    if (originalFirestore) require.cache[firestorePath] = originalFirestore; else delete require.cache[firestorePath];
     if (originalSession) require.cache[sessionPath] = originalSession; else delete require.cache[sessionPath];
     if (originalApp) require.cache[appPath] = originalApp; else delete require.cache[appPath];
   }
