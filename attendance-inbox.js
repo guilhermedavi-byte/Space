@@ -66,6 +66,7 @@
   @media(prefers-reduced-motion:reduce){.ai *{transition:none!important;animation:none!important;scroll-behavior:auto}}
 `;
   style.textContent += `.ai-audio{display:grid;grid-template-columns:32px minmax(60px,1fr) auto;align-items:center;gap:8px;min-width:200px}.ai-audio-btn{border:0;border-radius:50%;width:32px;height:32px;background:#ffffff12;color:#eee}.ai-audio-track{height:5px;background:#ffffff20;border-radius:4px;cursor:pointer;overflow:hidden}.ai-audio-fill{height:100%;background:#b6a4af}.ai-audio-time,.ai-audio-label{font-size:10px;color:var(--ai-muted)}.ai-audio-label{grid-column:2/4}.ai-image-wrap{border:0;background:transparent;padding:0;max-width:320px}.ai-video{max-width:100%;border-radius:8px}.ai-viewer{position:fixed;inset:0;z-index:1000;background:#08090dee;display:grid;place-items:center;padding:32px}.ai-viewer img{max-width:94vw;max-height:88vh;border-radius:8px}.ai-viewer button{position:absolute;right:20px;top:20px;width:36px;height:36px;border:1px solid var(--ai-line);background:#272a32;color:#fff;border-radius:8px;font-size:24px}.ai-chat-head .ai-actions{gap:2px}.ai-chat-head .ai-action{font-size:10px!important;padding:5px 7px}`;
+  style.textContent += `.ai-image-wrap:has(img:not([data-ai-image-loaded])){min-width:120px;min-height:96px;background:rgba(255,255,255,.04);animation:ai-pulse 1.3s ease-in-out infinite alternate}`;
   document.head.append(style);
   const api = async (params = {}, signal) => {
     const query = new URLSearchParams();
@@ -75,9 +76,9 @@
     if (!response.ok) throw new Error(response.status === 403 ? 'Você não tem permissão para acessar estas conversas.' : 'Caixa de entrada indisponível.');
     return payload;
   };
-  const mediaText = kind => ({ audio:'🎤 Áudio', image:'📷 Imagem', video:'🎥 Vídeo', document:'📎 Documento', sticker:'Sticker', location:'Localização', contact:'Contato' })[kind] || 'Mensagem';
+  const mediaText = kind => ({ audio:'🎤 Áudio', image:'📷 Foto', video:'🎥 Vídeo', document:'📎 Documento', sticker:'Sticker', location:'Localização', contact:'Contato' })[kind] || 'Mensagem';
   const titleFor = row => row?.contact?.name || row?.contact?.phone || 'Contato sem nome';
-  const msgText = msg => msg?.text || msg?.content?.text || msg?.content?.body || mediaText(msg?.kind);
+  const msgText = msg => msg?.kind && msg.kind !== 'text' ? mediaText(msg.kind) : msg?.text || msg?.content?.text || msg?.content?.body || mediaText(msg?.kind);
   const initials = value => String(value || '?').trim().split(/\s+/).slice(0,2).map(part => Array.from(part)[0] || '').join('').toUpperCase() || '?';
   const photoUrl = value => { try { const u = new URL(value); return u.protocol === 'https:' && !u.username && !u.password ? u.href : ''; } catch { return ''; } };
   const avatar = contact => {
@@ -107,7 +108,7 @@
   }
   function renderAudio(msg) {
     const item = audioState(msg.message_id);
-    if (item.error || mediaMeta(msg).fetch_status === 'failed') return '<div class="ai-unavailable">Audio indisponível</div>';
+    if (item.error) return '<div class="ai-unavailable">Audio indisponível</div>';
     const pct = item.duration ? Math.min(100, Math.max(0, item.current / item.duration * 100)) : 0;
     return `<div class="ai-audio" data-ai-audio="${esc(msg.message_id)}">
       <audio preload="metadata" src="${esc(mediaUrl(msg))}"></audio>
@@ -120,7 +121,7 @@
   function renderMedia(msg) {
     const meta = mediaMeta(msg);
     const caption = msg.content?.text || meta.caption || '';
-    if (meta.fetch_status === 'failed') return `<div class="ai-unavailable">Mídia indisponível</div>${caption ? `<p class="ai-caption">${esc(caption)}</p>` : ''}`;
+    // A previous backend failure is retryable through the authenticated proxy.
     if (msg.kind === 'audio') return renderAudio(msg);
     if (msg.kind === 'image' || msg.kind === 'sticker') {
       const src = mediaUrl(msg);
@@ -212,7 +213,7 @@
       } else if (current.nodeType === 1) {
         const disclosure = current.tagName === 'DETAILS';
         const keepComposerHeight = current.tagName === 'TEXTAREA' && current.value === next.value;
-        for (const attr of [...current.attributes]) if (!next.hasAttribute(attr.name) && !(disclosure && attr.name === 'open') && !(keepComposerHeight && attr.name === 'style')) current.removeAttribute(attr.name);
+        for (const attr of [...current.attributes]) if (!next.hasAttribute(attr.name) && !(disclosure && attr.name === 'open') && !(keepComposerHeight && attr.name === 'style') && attr.name !== 'data-ai-image-loaded') current.removeAttribute(attr.name);
         for (const attr of [...next.attributes]) if (!(disclosure && attr.name === 'open') && current.getAttribute(attr.name) !== attr.value) current.setAttribute(attr.name, attr.value);
         if (current.tagName === 'TEXTAREA') {
           if (current.value !== next.value) current.value = next.value;
@@ -402,8 +403,9 @@
       audio.currentTime = item.current || 0;
       audio.onloadedmetadata = () => { item.duration = audio.duration || 0; const time = wrapper.querySelector('.ai-audio-time'); if (time) time.textContent = fmtDuration(item.duration); };
       audio.ontimeupdate = () => { item.current = audio.currentTime || 0; const fill = wrapper.querySelector('.ai-audio-fill'); if (fill && item.duration) fill.style.width = `${Math.min(100, item.current / item.duration * 100)}%`; const time = wrapper.querySelector('.ai-audio-time'); if (time) time.textContent = fmtDuration(item.duration || item.current); };
-      audio.onplay = () => { item.playing = true; };
-      audio.onpause = () => { item.playing = false; };
+      audio.onplay = () => { item.playing = true; const button=wrapper.querySelector('[data-ai-audio-toggle]'); if(button){button.textContent='II';button.setAttribute('aria-label','Pausar áudio');} };
+      audio.onpause = () => { item.playing = false; const button=wrapper.querySelector('[data-ai-audio-toggle]'); if(button){button.textContent='▶';button.setAttribute('aria-label','Reproduzir áudio');} };
+      audio.onended = audio.onpause;
       audio.onerror = () => { item.error = true; render(); };
     });
   }
@@ -470,6 +472,7 @@
   root.addEventListener('change', event => {
     if (event.target.matches('[data-ai-team]')) { state.team_id = event.target.value; load(); }
   });
+  root.addEventListener('load', event => { if (event.target.matches?.('[data-ai-media-img]')) event.target.dataset.aiImageLoaded = 'true'; }, true);
   root.addEventListener('error', event => {
     if (event.target.matches?.('[data-ai-avatar]')) event.target.remove();
     if (event.target.matches?.('[data-ai-media-img]')) {

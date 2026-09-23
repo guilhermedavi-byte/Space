@@ -1,144 +1,146 @@
+const { randomUUID } = require('node:crypto');
 const { supabaseFetch } = require('./supabase-rest');
-
-const clean = (value, max = 200) => String(value || '').trim().slice(0, max);
 const MAX_BYTES = 24 * 1024 * 1024;
 const MIME = {
-  audio: new Set(['audio/ogg', 'audio/mpeg', 'audio/mp4', 'audio/aac', 'audio/wav', 'audio/webm']),
-  image: new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']),
-  video: new Set(['video/mp4', 'video/webm', 'video/quicktime']),
-  document: null,
-  sticker: new Set(['image/webp', 'image/png'])
+  audio: new Set(['audio/ogg','audio/mpeg','audio/mp4','audio/aac','audio/wav','audio/webm']),
+  image: new Set(['image/jpeg','image/png','image/webp','image/gif']),
+  video: new Set(['video/mp4','video/webm','video/quicktime']),
+  sticker: new Set(['image/webp','image/png'])
 };
-
-function mediaLabel(kind) {
-  return ({ audio: 'Áudio', image: 'Imagem', video: 'Vídeo', document: 'Documento', sticker: 'Sticker' })[kind] || 'Mídia';
+const ERROR_CODES = new Set(['media_not_found','provider_fetch_failed','unsupported_mime','invalid_base64','media_too_large','storage_upload_failed','storage_download_failed','provider_message_missing','media_fetching','media_asset_failed']);
+const clean = (v, max=200) => String(v ?? '').trim().slice(0,max);
+const mediaError = code => Object.assign(new Error(code), { code, status: code === 'media_fetching' ? 409 : ['provider_message_missing','media_not_found'].includes(code) ? 404 : 503 });
+const mediaLabel = kind => ({audio:'Áudio',image:'Imagem',video:'Vídeo',document:'Documento',sticker:'Sticker'})[kind] || 'Mídia';
+const mimeBase = mime => String(mime || '').split(';')[0].trim().toLowerCase();
+function safeMime(kind,value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (raw.length > 120 || /[\r\n\0]/.test(raw)) return '';
+  const base = mimeBase(raw);
+  if (kind === 'document') return /^[a-z0-9.+-]+\/[a-z0-9.+-]+$/.test(base) ? base : 'application/octet-stream';
+  if (!MIME[kind]?.has(base)) return '';
+  // Only a bounded codec parameter is useful for inline audio/video. Never reflect arbitrary parameters.
+  const codec = raw.match(/;\s*codecs\s*=\s*"?([a-z0-9., _-]{1,64})"?\s*$/);
+  return codec && ['audio','video'].includes(kind) ? `${base}; codecs="${codec[1].trim()}"` : base;
 }
-
-function safeMime(kind, value) {
-  const mime = clean(value, 120).toLowerCase();
-  if (!mime) return kind === 'document' ? 'application/octet-stream' : '';
-  if (kind === 'document') return mime.length <= 120 ? mime : 'application/octet-stream';
-  return MIME[kind]?.has(mime) ? mime : '';
+function safeFilename(value) { return clean(value || 'media',180).normalize('NFKD').replace(/[^\x20-\x7e]|["\\/;<>]/g,'_') || 'media'; }
+function extensionFor(mime) {
+  return ({'audio/ogg':'ogg','audio/mpeg':'mp3','audio/mp4':'m4a','audio/aac':'aac','audio/wav':'wav','audio/webm':'webm','image/jpeg':'jpg','image/png':'png','image/webp':'webp','image/gif':'gif','video/mp4':'mp4','video/webm':'webm','video/quicktime':'mov','application/pdf':'pdf'})[mimeBase(mime)] || 'bin';
 }
-
-function extensionFor(mime, kind) {
-  return ({
-    'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'audio/aac': 'aac', 'audio/wav': 'wav', 'audio/webm': 'webm',
-    'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif',
-    'video/mp4': 'mp4', 'video/webm': 'webm', 'video/quicktime': 'mov',
-    'application/pdf': 'pdf'
-  })[mime] || (kind === 'document' ? 'bin' : 'dat');
-}
-
-function storagePath({ messageId, kind, mime }) {
-  const id = clean(messageId, 64).replace(/[^a-zA-Z0-9-]/g, '');
-  return `attendance/${id.slice(0, 2)}/${id}.${extensionFor(mime, kind)}`;
-}
-
+const storagePath = (id,mime) => `attendance/${id.slice(0,2)}/${id}.${extensionFor(mime)}`;
 function evolutionMediaBody(message) {
+  const id = clean(message?.external_message_id || message?.metadata?.evolution_message?.key?.id,256);
+  return id ? { key: { id } } : null;
+}
+function storedEnvelope(message) {
   const stored = message?.metadata?.evolution_message;
-  if (stored && typeof stored === 'object') return stored;
-  return { key: { id: message?.external_message_id } };
+  const src = stored?.message?.[`${message.kind}Message`];
+  return stored?.key?.id && src?.mediaKey && (src.url || src.directPath) ? stored : null;
 }
-
-async function evolutionBase64({ instance, message }) {
-  const key = String(process.env.EVOLUTION_API_KEY || '').trim();
-  let base;
-  try { base = new URL(String(process.env.EVOLUTION_API_URL || '').trim()); } catch { return null; }
-  if (!key || base.protocol !== 'https:' || !/^[a-zA-Z0-9_-]{1,100}$/.test(instance || '')) return null;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 15000);
-  try {
-    const response = await fetch(base.href.replace(/\/$/, '') + `/chat/getBase64FromMediaMessage/${encodeURIComponent(instance)}`, {
-      method: 'POST',
-      redirect: 'error',
-      signal: controller.signal,
-      headers: { apikey: key, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: evolutionMediaBody(message), convertToMp4: false })
-    });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) return null;
-    const b64 = clean(payload?.base64 || payload?.data?.base64 || payload?.media || '', MAX_BYTES * 2);
-    return b64 ? { base64: b64.replace(/^data:[^;]+;base64,/, ''), mime: clean(payload?.mimetype || payload?.mimeType || payload?.data?.mimetype, 120) } : null;
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timer);
+async function boundedBody(response,limit,code) {
+  if (Number(response.headers.get('content-length')) > limit) { await response.body?.cancel(); throw mediaError(code); }
+  const chunks=[];let size=0;
+  for await (const chunk of response.body || []) { size+=chunk.length;if(size>limit)throw mediaError(code);chunks.push(Buffer.from(chunk)); }
+  return Buffer.concat(chunks);
+}
+function decodeBase64(value) {
+  if(typeof value !== 'string')throw mediaError('invalid_base64');
+  const b64=value.replace(/^data:[^,]{1,150};base64,/, '').replace(/\s/g,'');
+  if(b64.length>Math.ceil(MAX_BYTES/3)*4)throw mediaError('media_too_large');
+  if(!b64 || b64.length%4!==0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(b64))throw mediaError('invalid_base64');
+  const buffer=Buffer.from(b64,'base64');
+  if(!buffer.length || buffer.toString('base64')!==b64)throw mediaError('invalid_base64');
+  if(buffer.length>MAX_BYTES)throw mediaError('media_too_large');
+  return buffer;
+}
+function createMediaService({ request=supabaseFetch, fetchImpl=(...args)=>fetch(...args), env=process.env, sleep=ms=>new Promise(r=>setTimeout(r,ms)) }={}) {
+  const flights=new Map();
+  const mark=async(id,patch)=>{
+    try {return (await request('/rpc/attendance_upsert_media_asset',{method:'POST',body:{p_message_id:id,p_asset:patch},timeoutMs:10000})).data;}
+    catch {throw mediaError('media_asset_failed');}
+  };
+  async function provider(instance,message) {
+    let url;try{url=new URL(env.EVOLUTION_API_URL);}catch{throw mediaError('provider_fetch_failed');}
+    if(url.protocol!=='https:' || url.username || url.password || !env.EVOLUTION_API_KEY || !/^[\w-]{1,100}$/.test(instance))throw mediaError('provider_fetch_failed');
+    const candidates=[evolutionMediaBody(message),storedEnvelope(message)].filter(Boolean);
+    if(!candidates.length)throw mediaError('provider_message_missing');
+    let last='provider_fetch_failed';
+    for(const body of candidates){
+      try{
+        const response=await fetchImpl(url.href.replace(/\/$/,'')+`/chat/getBase64FromMediaMessage/${encodeURIComponent(instance)}`,{
+          method:'POST',redirect:'error',signal:AbortSignal.timeout(15000),headers:{apikey:env.EVOLUTION_API_KEY,'Content-Type':'application/json'},body:JSON.stringify({message:body,convertToMp4:false})});
+        if(!response.ok){const text=(await boundedBody(response,32768,'provider_fetch_failed')).toString();last=/message not found|message.*missing/i.test(text)||response.status===404?'provider_message_missing':'provider_fetch_failed';continue;}
+        const payload=JSON.parse((await boundedBody(response,Math.ceil(MAX_BYTES/3)*4+65536,'media_too_large')).toString());
+        const value=payload?.base64 ?? payload?.data?.base64 ?? payload?.media;
+        return {buffer:decodeBase64(value),mime:payload?.mimetype || payload?.mimeType || payload?.data?.mimetype};
+      }catch(error){last=ERROR_CODES.has(error.code)?error.code:'provider_fetch_failed';if(['media_too_large','invalid_base64'].includes(last))throw mediaError(last);}
+    }
+    throw mediaError(last);
   }
-}
-
-function getSupabaseStorageConfig() {
-  const url = String(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/\/+$/, '');
-  const key = String(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || '').trim();
-  const bucket = clean(process.env.ATTENDANCE_MEDIA_BUCKET || 'attendance-media', 80);
-  if (!url || !key || !/^https:\/\//i.test(url) || !/^[a-zA-Z0-9._-]+$/.test(bucket)) return null;
-  return { url, key, bucket };
-}
-
-async function uploadStorage(path, buffer, mime) {
-  const cfg = getSupabaseStorageConfig();
-  if (!cfg) return false;
-  const response = await fetch(`${cfg.url}/storage/v1/object/${encodeURIComponent(cfg.bucket)}/${path.split('/').map(encodeURIComponent).join('/')}`, {
-    method: 'PUT',
-    redirect: 'error',
-    headers: { Authorization: `Bearer ${cfg.key}`, apikey: cfg.key, 'Content-Type': mime, 'x-upsert': 'true' },
-    body: buffer
-  }).catch(() => null);
-  return !!response?.ok;
-}
-
-async function downloadStorage(path) {
-  const cfg = getSupabaseStorageConfig();
-  if (!cfg || !path) return null;
-  const response = await fetch(`${cfg.url}/storage/v1/object/authenticated/${encodeURIComponent(cfg.bucket)}/${String(path).split('/').map(encodeURIComponent).join('/')}`, {
-    method: 'GET',
-    redirect: 'error',
-    headers: { Authorization: `Bearer ${cfg.key}`, apikey: cfg.key }
-  }).catch(() => null);
-  if (!response?.ok) return null;
-  return Buffer.from(await response.arrayBuffer());
-}
-
-async function markMedia(messageId, patch) {
-  await supabaseFetch('/rpc/attendance_upsert_media_asset', { method: 'POST', body: { p_message_id: messageId, p_asset: patch } }).catch(() => {});
-}
-
-async function resolveMedia({ asset, message, connection }) {
-  const kind = clean(message?.kind, 40);
-  const declared = message?.metadata?.media || message?.content?.media || {};
-  const readyPath = asset?.fetch_status === 'ready' ? clean(asset.storage_path, 500) : '';
-  const readyMime = safeMime(kind, asset?.mime_type || declared.mime_type);
-  if (readyPath && readyMime) {
-    const cached = await downloadStorage(readyPath);
-    if (cached) return { buffer: cached, mime: readyMime, filename: asset?.filename || declared.filename || `${mediaLabel(kind)}.${extensionFor(readyMime, kind)}` };
+  function storageConfig(path) {
+    const url=String(env.SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/\/+$/,'');
+    const key=env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_KEY;
+    const bucket=env.ATTENDANCE_MEDIA_BUCKET || 'attendance-media';
+    if(!/^https:\/\//.test(url)||!key||!/^[\w.-]+$/.test(bucket)||!/^attendance\/[a-f0-9]{2}\/[a-f0-9-]{36}\.[a-z0-9]+$/.test(path))throw mediaError('storage_download_failed');
+    return {url,bucket,path,headers:{apikey:key,Authorization:`Bearer ${key}`}};
   }
-  const instance = clean(connection?.instance_name || connection?.external_account_id || message?.metadata?.instance, 100);
-  const fetched = await evolutionBase64({ instance, message });
-  const mime = safeMime(kind, fetched?.mime || declared.mime_type);
-  if (!fetched?.base64 || !mime) {
-    await markMedia(message.message_id, { fetch_status: 'failed', error_code: 'media_unavailable', media_type: kind, mime_type: declared.mime_type || null });
-    return null;
+  async function storageDownload(asset,message) {
+    const mime=safeMime(message.kind,asset.mime_type);
+    if(!mime || asset.storage_path!==storagePath(message.message_id,mime))throw mediaError('storage_download_failed');
+    const cfg=storageConfig(asset.storage_path);
+    try{
+      const r=await fetchImpl(`${cfg.url}/storage/v1/object/authenticated/${cfg.bucket}/${cfg.path}`,{headers:cfg.headers,redirect:'error',signal:AbortSignal.timeout(15000)});
+      if(!r.ok)throw mediaError('storage_download_failed');
+      const buffer=await boundedBody(r,MAX_BYTES,'media_too_large');if(!buffer.length)throw mediaError('storage_download_failed');
+      return {buffer,mime,filename:safeFilename(asset.filename),source:'storage'};
+    }catch(error){throw mediaError(ERROR_CODES.has(error.code)?error.code:'storage_download_failed');}
   }
-  const buffer = Buffer.from(fetched.base64, 'base64');
-  if (!buffer.length || buffer.length > MAX_BYTES) {
-    await markMedia(message.message_id, { fetch_status: 'failed', error_code: 'media_size_invalid', media_type: kind, mime_type: mime });
-    return null;
+  async function storageUpload(path,buffer,mime) {
+    try{
+      const cfg=storageConfig(path);
+      // POST creates a missing object; x-upsert handles an existing deterministic cache entry.
+      const r=await fetchImpl(`${cfg.url}/storage/v1/object/${cfg.bucket}/${cfg.path}`,{method:'POST',headers:{...cfg.headers,'Content-Type':mime,'x-upsert':'true'},body:buffer,redirect:'error',signal:AbortSignal.timeout(15000)});
+      if(!r.ok)throw mediaError('storage_upload_failed');
+    }catch{throw mediaError('storage_upload_failed');}
   }
-  const path = storagePath({ messageId: message.message_id, kind, mime });
-  const uploaded = await uploadStorage(path, buffer, mime);
-  await markMedia(message.message_id, {
-    fetch_status: uploaded ? 'ready' : 'failed',
-    error_code: uploaded ? null : 'storage_upload_failed',
-    media_type: kind,
-    mime_type: mime,
-    filename: declared.filename || `${mediaLabel(kind)}.${extensionFor(mime, kind)}`,
-    size_bytes: buffer.length,
-    duration_seconds: declared.duration || null,
-    storage_path: uploaded ? path : null,
-    provider_media_id: message.external_message_id || null,
-    external_message_id: message.external_message_id || null
-  });
-  return uploaded ? { buffer, mime, filename: declared.filename || `${mediaLabel(kind)}.${extensionFor(mime, kind)}` } : null;
+  async function run({asset={},message,connection={},reloadAsset}) {
+    const id=message.message_id,kind=message.kind,declared=message.metadata?.media || message.content?.media || {};
+    if(!['image','audio','video','document','sticker'].includes(kind))throw mediaError('media_not_found');
+    let cacheBroken=false;
+    if(asset.fetch_status==='ready'){
+      try{return await storageDownload(asset,message);}catch(error){cacheBroken=true;console.warn('[attendance-media]',{message_id:id,code:error.code});}
+    }
+    const token=randomUUID();
+    const lease=await mark(id,{fetch_status:'fetching',fetch_token:token,retry_ready:cacheBroken});
+    if(!lease?.claimed){
+      if(lease?.asset?.fetch_status==='ready')return storageDownload(lease.asset,message);
+      // Cross-worker coalescing. Stale leases are reclaimable by the next request after 90 seconds.
+      if(reloadAsset)for(let i=0;i<20;i++){await sleep(500);const latest=await reloadAsset();if(latest?.fetch_status==='ready')return storageDownload(latest,message);if(latest?.fetch_status==='failed')throw mediaError('provider_fetch_failed');}
+      throw mediaError('media_fetching');
+    }
+    try{
+      if(Number(declared.size)>MAX_BYTES)throw mediaError('media_too_large');
+      if(connection.provider && connection.provider!=='evolution_whatsapp')throw mediaError('provider_fetch_failed');
+      const fetched=await provider(clean(connection.instance_name || connection.external_account_id,100),message);
+      const mime=safeMime(kind,fetched.mime || declared.mime_type);
+      if(!mime)throw mediaError('unsupported_mime');
+      const path=storagePath(id,mime), filename=safeFilename(declared.filename || `${mediaLabel(kind)}.${extensionFor(mime)}`);
+      await storageUpload(path,fetched.buffer,mime);
+      await mark(id,{fetch_status:'ready',fetch_token:token,media_type:kind,mime_type:mime,filename,size_bytes:fetched.buffer.length,
+        duration_seconds:declared.duration ?? null,storage_path:path,provider_media_id:message.external_message_id || null,external_message_id:message.external_message_id || null,error_code:null});
+      return {buffer:fetched.buffer,mime,filename,source:'provider'};
+    }catch(error){
+      const code=ERROR_CODES.has(error.code)?error.code:'provider_fetch_failed';
+      await mark(id,{fetch_status:'failed',fetch_token:token,error_code:code}).catch(()=>{});
+      throw mediaError(code);
+    }
+  }
+  function resolveMedia(input){
+    const id=input.message?.message_id;
+    if(!id)return Promise.reject(mediaError('media_not_found'));
+    if(flights.has(id))return flights.get(id);
+    const promise=run(input).finally(()=>flights.delete(id));flights.set(id,promise);return promise;
+  }
+  return {resolveMedia};
 }
-
-module.exports = { mediaLabel, resolveMedia };
+const {resolveMedia}=createMediaService();
+module.exports={resolveMedia,createMediaService,mediaLabel,safeMime,safeFilename,evolutionMediaBody,decodeBase64,MAX_BYTES,ERROR_CODES};
