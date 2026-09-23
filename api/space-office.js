@@ -1,5 +1,5 @@
 const { sendJson } = require("./_lib/http");
-const { getSessionFromRequest } = require("./_lib/session");
+const { requireAdminPermission } = require("./_lib/admin-permissions");
 const { supabaseFetch } = require("./_lib/supabase-rest");
 
 const isAdmin = (session) => String(session?.role || "").trim().toLowerCase() === "admin";
@@ -15,11 +15,9 @@ const readRows = async (path) => {
 };
 
 module.exports = async (req, res) => {
-  const session = getSessionFromRequest(req);
-  if (!session) {
-    sendJson(res, 401, { error: "unauthorized" });
-    return;
-  }
+  const guard = await requireAdminPermission(req, "spaceOffice");
+  if (!guard.ok) return sendJson(res, guard.status || 403, guard.body || { error: "forbidden" });
+  const session = guard.session;
   if (!isAdmin(session)) {
     sendJson(res, 403, { error: "admin_only" });
     return;

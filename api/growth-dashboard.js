@@ -42,6 +42,7 @@ const crypto = require("crypto");
 const { validateWebhookSecret } = require("./_lib/security");
 const { fetchAllMirroredBusinesses, isDatacrazyMirrorEnabled } = require("./_lib/datacrazy-mirror");
 const crmReasons = require("./_lib/crm-reasons");
+const { requireAdminPermission } = require("./_lib/admin-permissions");
 
 const sendRedirect = (res, location) => {
   res.statusCode = 302;
@@ -2940,16 +2941,31 @@ module.exports = async (req, res) => {
   }
 
   if (api === "growth-metrics") {
+    const session = getSessionFromRequest(req);
+    if (normalizeRole(session?.role) === "admin") {
+      const guard = await requireAdminPermission(req, "comercial.overview");
+      if (!guard.ok) return sendJson(res, guard.status, guard.body);
+    }
     await handleGrowthMetricsApi(req, res);
     return;
   }
 
   if (api === "growth-goals") {
+    const session = getSessionFromRequest(req);
+    if (normalizeRole(session?.role) === "admin") {
+      const guard = await requireAdminPermission(req, "comercial.goals");
+      if (!guard.ok) return sendJson(res, guard.status, guard.body);
+    }
     await handleGrowthGoalsApi(req, res, url);
     return;
   }
 
   if (api === "growth-contratos") {
+    const session = getSessionFromRequest(req);
+    if (normalizeRole(session?.role) === "admin") {
+      const guard = await requireAdminPermission(req, "comercial.overview");
+      if (!guard.ok) return sendJson(res, guard.status, guard.body);
+    }
     await handleGrowthContractsApi(req, res, url);
     return;
   }

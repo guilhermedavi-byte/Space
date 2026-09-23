@@ -2,6 +2,7 @@ const crypto = require("crypto");
 
 const { readJsonBody, sendJson } = require("../_lib/http");
 const { resolveAdminRequestAuth } = require("./_lib/admin-request-auth");
+const { requireResolvedAdminPermission } = require("./_lib/admin-permissions");
 const { commitWritesAsAdmin, listCollectionAsAdmin, queryCollectionByDateRangeAsAdmin } = require("./_lib/firestore-admin");
 const { PROJECT_ID, encodeFields } = require("./_lib/firestore-rest");
 
@@ -136,6 +137,10 @@ const getAuthorizedSession = async (req) => {
   const role = normalizeRole(auth.session?.role);
   if (role !== "growth" && role !== "admin") {
     return { ok: false, status: 403, body: { error: "forbidden", message: "Acesso restrito ao time Growth." } };
+  }
+  if (role === "admin") {
+    const perm = await requireResolvedAdminPermission(auth, "comercial.overview");
+    if (!perm.ok) return { ok: false, status: perm.status, body: perm.body };
   }
   return { ok: true, session: auth.session, profile: auth.profile, role };
 };

@@ -1,6 +1,7 @@
 const { sendJson } = require("../_lib/http");
 const { getSessionFromRequest } = require("../_lib/session");
 const { listLiveLessons, listLessonRegisters, summarizeLiveLessons, normalizeRole, isAdminRole } = require("../_lib/live-lessons");
+const { requireAdminPermission } = require("../_lib/admin-permissions");
 
 const buildDegradedWarning = (error) => {
   const reason = String(error?.code || error?.message || "").trim().toLowerCase();
@@ -27,6 +28,10 @@ module.exports = async (req, res) => {
   if (!["admin", "teacher", "student"].includes(role)) {
     sendJson(res, 403, { error: "forbidden" });
     return;
+  }
+  if (role === "admin") {
+    const guard = await requireAdminPermission(req, "pedagogico.agenda");
+    if (!guard.ok) return sendJson(res, guard.status, guard.body);
   }
 
   const host = String(req.headers.host || "localhost");

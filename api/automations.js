@@ -1,5 +1,6 @@
 const { readJsonBody, sendJson } = require("./_lib/http");
 const { resolveAdminRequestAuth } = require("./_lib/admin-request-auth");
+const { requireResolvedAdminPermission } = require("./_lib/admin-permissions");
 const { supabaseFetch } = require("./_lib/supabase-rest");
 const { validateGraph } = require("./_lib/automation-engine");
 const { automationCatalog } = require("./_lib/automation-registries");
@@ -29,6 +30,11 @@ const requireAdmin = async (req, res) => {
   }
   if (String(auth.session?.role || "") !== "admin") {
     sendJson(res, 403, { error: "forbidden" });
+    return null;
+  }
+  const perm = await requireResolvedAdminPermission(auth, "automations");
+  if (!perm.ok) {
+    sendJson(res, perm.status, perm.body);
     return null;
   }
   return auth.session;

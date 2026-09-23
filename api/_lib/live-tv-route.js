@@ -41,6 +41,7 @@ async function handleLiveTvPageRequest(req, res, {
   cookieName,
   buildHtml,
   buildId,
+  authorizeSession,
 } = {}) {
   if (req.method !== "GET" && req.method !== "HEAD") {
     res.setHeader("Allow", "GET, HEAD");
@@ -77,7 +78,11 @@ async function handleLiveTvPageRequest(req, res, {
 
   const session = getSessionFromRequest(req);
   const role = resolveRole(session, normalizeRole);
-  const allowedBySession = Array.isArray(sessionRoles) && sessionRoles.includes(role);
+  let allowedBySession = Array.isArray(sessionRoles) && sessionRoles.includes(role);
+  if (allowedBySession && typeof authorizeSession === "function") {
+    const result = await authorizeSession({ req, session, role });
+    allowedBySession = Boolean(result?.ok);
+  }
   const cookieViewer = allowedBySession ? { ok: true } : await validateCookieViewer(req);
   if (!cookieViewer?.ok) {
     deny(res, { secure, clearCookie: (options) => clearCookie({ ...options, path: cookiePath }), message: unauthorizedMessage });

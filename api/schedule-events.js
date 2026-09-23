@@ -7,6 +7,7 @@ const { commitWritesAsAdmin, getDocumentAsAdmin, listCollectionAsAdmin } = requi
 const { DEFAULT_CONFIG } = require("../_lib/scheduling-firestore");
 const { fetchUserProfileByUid } = require("../_lib/firestore-user");
 const { supabaseFetch } = require("./_lib/supabase-rest");
+const { requireAdminPermission } = require("./_lib/admin-permissions");
 const {
   addDaysToDateKey,
   clampInt,
@@ -1504,6 +1505,10 @@ module.exports = async (req, res) => {
   const host = String(req.headers.host || "localhost");
   const url = new URL(req.url || "/api/schedule-events", `https://${host}`);
   const resource = String(url.searchParams.get("resource") || "").trim().toLowerCase();
+  if (role === "admin") {
+    const guard = await requireAdminPermission(req, resource === "lesson-logs" ? "pedagogico.lessons" : "pedagogico.agenda");
+    if (!guard.ok) return sendJson(res, guard.status, guard.body);
+  }
 
   if (resource === "lesson-logs") {
     await handleLessonLogsApi(req, res, { idToken, role, requesterId, url, sessionEmail, parsedBody: body });

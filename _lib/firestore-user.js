@@ -129,6 +129,9 @@ const normalizeUserProfileFromFields = ({ uid, fields } = {}) => {
       name,
       email,
       commercialRoles: normalizeCommercialRoles(rawFields.commercialRoles),
+      isSuperAdmin: rawFields.isSuperAdmin === true,
+      adminPermissions: Array.isArray(rawFields.adminPermissions) ? rawFields.adminPermissions : Array.isArray(rawFields.permissions) ? rawFields.permissions : undefined,
+      adminPermissionsVersion: Number(rawFields.adminPermissionsVersion || 0) || 0,
     },
     active,
   };

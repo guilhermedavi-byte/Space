@@ -1,5 +1,6 @@
 const {getSessionFromRequest}=require('../_lib/session');
 const {canAccessFinance}=require('./_lib/finance-integrations');
+const {requireAdminPermission}=require('./_lib/admin-permissions');
 const {createReader}=require('./_lib/finance-v1-read');
 const {createPerformanceTimer}=require('./_lib/performance-observer');
 const crypto=require('crypto');
@@ -14,6 +15,11 @@ function createHandler({session=getSessionFromRequest,reader,env=process.env}={}
   if(req.method!=='GET'){res.setHeader('Allow','GET');return send(405,{error:'read_only'});}
   if(env.FINANCE_FOUNDATION_ENABLED!=='true')return send(503,{error:'finance_foundation_disabled'});
   const q=Object.fromEntries(new URL(req.url||'/', 'https://space.invalid').searchParams);const view=q.view||'overview';
+  if(String(user.role||'')==='admin'){
+    const map={overview:'overview',receivables:'receivables',subscriptions:'subscriptions',customers:'customers',receivable:'receivables',recovery:'recovery',reconciliation:'pending',reconciliation_movement:'pending',exceptions:'pending',closing:'closing'};
+    const perm=`financeiro.${map[view]||'overview'}`;
+    const guard=await requireAdminPermission(req,perm);if(!guard.ok)return send(guard.status,guard.body);
+  }
   perf.set('operation',`finance_${view}`);
   if(view==='receivable'&&!/^pay_[A-Za-z0-9_-]+$/.test(q.id||''))return send(400,{error:'finance_filter_invalid'});
   if(view==='reconciliation_movement'&&!/^mov_pay_[A-Za-z0-9_-]+$/.test(q.id||''))return send(400,{error:'finance_filter_invalid'});

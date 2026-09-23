@@ -6,9 +6,11 @@ const { commitWritesAsAdmin, getDocumentAsAdmin } = require("./_lib/firestore-ad
 const { syncStudentMirrorToSupabase } = require("./_lib/student-mirror-sync");
 const { normalizeCommercialRoles } = require("./_lib/commercial-permissions");
 const { createPerformanceTimer } = require("./_lib/performance-observer");
+const { requireAdminPermission } = require("./_lib/admin-permissions");
 
 const normalizeRole = (value) => {
   const raw = String(value || "").trim().toLowerCase();
+  if (raw === "admin" || raw === "administrador") return "admin";
   if (raw === "teacher" || raw === "professor") return "teacher";
   if (raw === "student" || raw === "aluno") return "student";
   if (raw === "growth") return "growth";
@@ -38,6 +40,13 @@ const sanitizePatchValue = (value) => {
 
 const sanitizeUserPatch = (patch = {}) => {
   const cleanPatch = sanitizePatchValue(patch);
+  ["adminPermissions", "permissions", "adminPermissionsVersion", "permissionsUpdatedAt", "permissionsUpdatedBy", "isSuperAdmin"].forEach((key) => {
+    if (Object.prototype.hasOwnProperty.call(cleanPatch, key)) {
+      const error = new Error("sensitive_admin_field_forbidden");
+      error.code = "sensitive_admin_field_forbidden";
+      throw error;
+    }
+  });
   if (Object.prototype.hasOwnProperty.call(cleanPatch, "commercialRoles")) {
     cleanPatch.commercialRoles = normalizeCommercialRoles(cleanPatch.commercialRoles);
   }
@@ -195,8 +204,14 @@ module.exports = async (req, res) => {
       return;
     }
 
-    if (!uid || !name || !role) {
+    if (!uid || !name || !role || role === "admin") {
       send(400, { error: "invalid_request" });
+      return;
+    }
+    const postPermission = role === "growth" ? "comercial.users" : "pedagogico.users";
+    const postPermissionGuard = await requireAdminPermission(req, postPermission);
+    if (!postPermissionGuard.ok) {
+      send(postPermissionGuard.status, postPermissionGuard.body);
       return;
     }
 
@@ -228,15 +243,35 @@ module.exports = async (req, res) => {
 
   const uid = String(body?.uid || "").trim();
   const patch = body?.patch && typeof body.patch === "object" ? body.patch : null;
-  const requestedRole = normalizeRole(body?.role || patch?.tipo);
+  const requestedRole = normalizeRole(body?.role || patch?.tipo || patch?.role);
   if (!uid || !patch) {
     send(400, { error: "invalid_request" });
     return;
   }
 
-  const cleanPatch = sanitizeUserPatch(patch);
+  let cleanPatch;
+  try {
+    cleanPatch = sanitizeUserPatch(patch);
+  } catch (error) {
+    if (error?.code === "sensitive_admin_field_forbidden") {
+      send(403, { error: "sensitive_admin_field_forbidden" });
+      return;
+    }
+    throw error;
+  }
   if (!cleanPatch || typeof cleanPatch !== "object" || !Object.keys(cleanPatch).length) {
     send(400, { error: "empty_patch" });
+    return;
+  }
+  const targetAdminRole = normalizeRole(cleanPatch.tipo || cleanPatch.role);
+  if (targetAdminRole === "admin") {
+    send(403, { error: "admin_role_escalation_forbidden" });
+    return;
+  }
+  const permission = Object.prototype.hasOwnProperty.call(cleanPatch, "commercialRoles") || requestedRole === "growth" ? "comercial.users" : "pedagogico.users";
+  const permissionGuard = await requireAdminPermission(req, permission);
+  if (!permissionGuard.ok) {
+    send(permissionGuard.status, permissionGuard.body);
     return;
   }
   cleanPatch.atualizadoEm = new Date().toISOString();

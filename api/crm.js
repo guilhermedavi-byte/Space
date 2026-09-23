@@ -16,6 +16,7 @@ const qualificationActions = require("./_lib/crm-qualification-actions");
 const crmReasons = require("./_lib/crm-reasons");
 const crmWorkflows = require("./_lib/crm-workflows");
 const commercialPermissions = require("./_lib/commercial-permissions");
+const { requireAdminPermission } = require("./_lib/admin-permissions");
 const { createPerformanceTimer, sendJsonWithPerformance } = require("./_lib/performance-observer");
 
 const COLLECTIONS = {
@@ -3043,6 +3044,10 @@ module.exports = async (req, res) => {
   };
   let auth = perf.measure ? await perf.measure("auth", () => Promise.resolve(canAccessCrm(req))) : canAccessCrm(req);
   if (!auth.ok) return send(auth.status, { error: auth.error });
+  if (auth.role === "admin") {
+    const guard = await requireAdminPermission(req, "comercial.crm");
+    if (!guard.ok) return send(guard.status, guard.body);
+  }
   auth = await perf.measure("commercialPermissions", () => resolveCrmAuthContext(auth), { firestore: auth.role === "growth" });
   if (req.method === "GET" || req.method === "HEAD") {
     try {

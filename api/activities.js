@@ -2,6 +2,7 @@ const { getGoogleAccessToken } = require("../_lib/google-service-account");
 const { sendJson, readJsonBody } = require("./_lib/http");
 const { getSessionFromRequest } = require("./_lib/session");
 const { listCollectionAsAdmin, createDocumentAsAdmin } = require("./_lib/firestore-admin");
+const { requireAdminPermission } = require("./_lib/admin-permissions");
 const {
   FIRESTORE_BASE,
   decodeFields,
@@ -179,6 +180,10 @@ module.exports = async (req, res) => {
   const auth = await parseRequest(req);
   if (!auth.ok) return sendJson(res, auth.status, auth.body);
   const { session, role } = auth;
+  if (role === "admin") {
+    const guard = await requireAdminPermission(req, "activities");
+    if (!guard.ok) return sendJson(res, guard.status, guard.body);
+  }
 
   const host = String(req.headers.host || "localhost");
   const url = new URL(req.url || "/api/activities", `https://${host}`);

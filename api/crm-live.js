@@ -1,6 +1,7 @@
 const { personalBestCopy, sdrRankingPages, createRecordRoundRobin } = require("./_lib/crm-live-presentation");
 const { describeSnapshot } = require('./_lib/crm-snapshot-freshness');
 const { getSessionFromRequest } = require("../_lib/session");
+const { requireAdminPermission } = require("./_lib/admin-permissions");
 const {
   buildCookie,
   buildCrmLiveReadCookie,
@@ -2931,6 +2932,10 @@ module.exports = async (req, res) => handleLiveTvPageRequest(req, res, {
   cookieName: CRM_LIVE_COOKIE_NAME,
   buildHtml,
   buildId: getCrmLiveBuildId(),
+  authorizeSession: async ({ req: request, role }) => {
+    if (role !== "admin") return { ok: true };
+    return requireAdminPermission(request, "comercial.crmLive");
+  },
 });
 
 module.exports.buildHtml = buildHtml;

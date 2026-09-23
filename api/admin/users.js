@@ -2,6 +2,7 @@ const { readJsonBody, sendJson } = require("../../_lib/http");
 const { getSessionFromRequest } = require("../../_lib/session");
 const { verifyFirebaseIdToken } = require("../../_lib/firebase-id-token");
 const { getBearerTokenFromRequest } = require("../../_lib/firestore-rest");
+const { requireAdminPermission } = require("../_lib/admin-permissions");
 
 const normalizeRole = (value) => {
   const raw = String(value || "").trim().toLowerCase();
@@ -61,6 +62,12 @@ module.exports = async (req, res) => {
 
   if (!uid || !name || !role) {
     sendJson(res, 400, { error: "invalid_request" });
+    return;
+  }
+  const permission = role === "growth" ? "comercial.users" : "pedagogico.users";
+  const permissionGuard = await requireAdminPermission(req, permission);
+  if (!permissionGuard.ok) {
+    sendJson(res, permissionGuard.status, permissionGuard.body);
     return;
   }
 

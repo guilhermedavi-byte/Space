@@ -4,6 +4,7 @@ const { getGoogleAccessToken } = require("../_lib/google-service-account");
 const { resolveAdminRequestAuth } = require("./_lib/admin-request-auth");
 const { commitWritesAsAdmin, getDocumentAsAdmin } = require("./_lib/firestore-admin");
 const { PROJECT_ID, encodeFields, requestJson } = require("./_lib/firestore-rest");
+const { ALL_ADMIN_PERMISSION_KEYS, normalizeAdminPermissions } = require("./_lib/admin-permissions");
 
 const CLOUD_PLATFORM_SCOPE = "https://www.googleapis.com/auth/cloud-platform";
 
@@ -75,8 +76,19 @@ const deleteAuthUserBestEffort = async (uid) => {
   }
 };
 
-const createAdminFirestoreDoc = async ({ uid, nome, email, createdBy }) => {
+const buildAdminAuditCommitDocumentName = (id) => {
+  const safeId = String(id || "").trim();
+  if (!PROJECT_ID) {
+    const error = new Error("missing_firestore_project_id");
+    error.code = "missing_firestore_project_id";
+    throw error;
+  }
+  return `projects/${PROJECT_ID}/databases/(default)/documents/adminAuditEvents/${encodeURIComponent(safeId)}`;
+};
+
+const createAdminFirestoreDoc = async ({ uid, nome, email, createdBy, permissions }) => {
   const nowIso = new Date().toISOString();
+  const adminPermissions = normalizeAdminPermissions(permissions);
   const doc = {
     nome,
     name: nome,
@@ -86,6 +98,11 @@ const createAdminFirestoreDoc = async ({ uid, nome, email, createdBy }) => {
     role: "admin",
     ativo: true,
     isSuperAdmin: false,
+    adminPermissions,
+    permissions: adminPermissions,
+    adminPermissionsVersion: 1,
+    permissionsUpdatedAt: nowIso,
+    permissionsUpdatedBy: createdBy || "",
     criadoPor: createdBy || "",
     createdBy: createdBy || "",
     criadoEm: nowIso,
@@ -100,6 +117,19 @@ const createAdminFirestoreDoc = async ({ uid, nome, email, createdBy }) => {
         update: {
           name: buildUserCommitDocumentName(uid),
           fields: encodeFields(doc).fields,
+        },
+      },
+      {
+        update: {
+          name: buildAdminAuditCommitDocumentName(`admin_created_${uid}_${Date.now()}`),
+          fields: encodeFields({
+            event: "admin_created",
+            actorUserId: createdBy || "",
+            targetUserId: uid,
+            before: [],
+            after: adminPermissions,
+            createdAt: nowIso,
+          }).fields,
         },
       },
     ],
@@ -183,6 +213,8 @@ module.exports = async (req, res) => {
   const nome = normalizeName(body?.nome || body?.name);
   const email = normalizeEmail(body?.email);
   const senha = String(body?.senha || body?.password || "");
+  const fullAccess = body?.fullAccess !== false;
+  const requestedPermissions = fullAccess ? ALL_ADMIN_PERMISSION_KEYS : normalizeAdminPermissions(body?.permissions);
 
   if (!nome) {
     sendJson(res, 400, { error: "missing_name", message: "Informe o nome do administrador." });
@@ -196,15 +228,19 @@ module.exports = async (req, res) => {
     sendJson(res, 400, { error: "weak_password", message: "A senha precisa ter pelo menos 6 caracteres." });
     return;
   }
+  if (!fullAccess && (!Array.isArray(body?.permissions) || requestedPermissions.length !== body.permissions.length)) {
+    sendJson(res, 400, { error: "invalid_permission_key", message: "A lista de permissões contém chave inválida." });
+    return;
+  }
 
   let uid = "";
   try {
     const created = await createAuthUserWithPassword({ email, password: senha, displayName: nome });
     uid = created.uid;
-    await createAdminFirestoreDoc({ uid, nome, email, createdBy: auth.session.sub });
+    await createAdminFirestoreDoc({ uid, nome, email, createdBy: auth.session.sub, permissions: requestedPermissions });
     sendJson(res, 200, {
       ok: true,
-      user: { id: uid, uid, nome, email, tipo: "admin", role: "admin", ativo: true, isSuperAdmin: false },
+      user: { id: uid, uid, nome, email, tipo: "admin", role: "admin", ativo: true, isSuperAdmin: false, adminPermissions: requestedPermissions },
     });
   } catch (error) {
     if (uid) await deleteAuthUserBestEffort(uid);

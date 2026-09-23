@@ -5,6 +5,7 @@ const { resolveAdminRequestAuth } = require("./_lib/admin-request-auth");
 const { commitWritesAsAdmin } = require("./_lib/firestore-admin");
 const { PROJECT_ID, encodeFields, requestJson } = require("./_lib/firestore-rest");
 const { normalizeCommercialRoles } = require("./_lib/commercial-permissions");
+const { requireResolvedAdminPermission } = require("./_lib/admin-permissions");
 
 const CLOUD_PLATFORM_SCOPE = "https://www.googleapis.com/auth/cloud-platform";
 
@@ -156,6 +157,11 @@ module.exports = async (req, res) => {
   }
   if (String(auth.session?.role || "") !== "admin") {
     sendJson(res, 403, { error: "forbidden", message: "Apenas administradores podem criar usuários Growth." });
+    return;
+  }
+  const perm = await requireResolvedAdminPermission(auth, "comercial.users");
+  if (!perm.ok) {
+    sendJson(res, perm.status, perm.body);
     return;
   }
 

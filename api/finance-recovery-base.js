@@ -1,5 +1,6 @@
 const {getSessionFromRequest}=require('../_lib/session');
 const {readJsonBody,sendJson}=require('./_lib/http');
+const {requireAdminPermission}=require('./_lib/admin-permissions');
 const {createAsaasClient}=require('./_lib/asaas');
 const {createFinanceFoundation}=require('./_lib/finance-foundation');
 const {supabaseFetch}=require('./_lib/supabase-rest');
@@ -8,6 +9,7 @@ module.exports=async(req,res)=>{
  res.setHeader('Cache-Control','private, no-store');
  const user=getSessionFromRequest(req);
  if(user?.role!=='admin')return sendJson(res,403,{error:'forbidden'});
+ const guard=await requireAdminPermission(req,'financeiro.recovery');if(!guard.ok)return sendJson(res,guard.status,guard.body);
  if(process.env.FINANCE_FOUNDATION_ENABLED!=='true')return sendJson(res,503,{error:'foundation_disabled'});
  if(!['GET','POST'].includes(req.method))return sendJson(res,405,{error:'method_not_allowed'});
  if(req.method==='POST'&&req.headers.origin!==process.env.SPACE_PUBLIC_BASE_URL)return sendJson(res,403,{error:'invalid_origin'});

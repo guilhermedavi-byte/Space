@@ -2,6 +2,14 @@ const fs = require("fs");
 const path = require("path");
 
 const { getSessionFromRequest } = require("../_lib/session");
+const { getDocumentAsAdmin } = require("./_lib/firestore-admin");
+const {
+  ADMIN_PERMISSION_REGISTRY,
+  adminAccessPayloadForUser,
+  canAdminAccess,
+  firstAllowedAdminRoute,
+  permissionForAdminPanel,
+} = require("./_lib/admin-permissions");
 
 const ROLE_TO_SLUG = {
   student: "aluno",
@@ -45,35 +53,49 @@ const loadTemplate = () => {
   return fs.readFileSync(templatePath, "utf8");
 };
 
-const initialPanelFromPath = (pathParam) => {
+const routeStateFromPath = (pathParam, searchParams = new URLSearchParams()) => {
   const segments = String(pathParam || "").split("/").filter(Boolean);
   const slug = segments[0] || "";
   const sub = segments[1] || "";
   if (["admin", "growth"].includes(slug) && sub === "atendimento") {
-    if (segments[2] === "conexoes") return "attendance-connections";
-    return "attendance-inbox";
+    if (segments[2] === "conexoes") return { panel: "attendance-connections" };
+    return { panel: "attendance-inbox" };
   }
-  if (slug === "admin" && sub === "sdr") return "admin-sdr";
-  if (slug === "financeiro") return "financeiro";
-  if (slug === "admin" && sub === "space-office") return "space-office";
-  if (slug === "admin" && sub === "status") return "status-plataforma";
-  if (slug === "admin" && sub === "guia") return "guia-colaboradores";
-  if (slug === "admin" && sub === "financeiro") return "financeiro";
-  if (slug === "admin" && sub === "automacoes") return "automations";
+  if (slug === "admin" && sub === "atividades") return { panel: "activities" };
+  if (slug === "admin" && sub === "sdr") return { panel: "admin-sdr" };
+  if (slug === "financeiro") return { panel: "financeiro" };
+  if (slug === "admin" && sub === "space-office") return { panel: "space-office" };
+  if (slug === "admin" && sub === "status") return { panel: "status-plataforma" };
+  if (slug === "admin" && sub === "guia") return { panel: "guia-colaboradores" };
+  if (slug === "admin" && sub === "financeiro") {
+    const financeMap = { recebiveis: "recebiveis", assinaturas: "assinaturas", clientes: "clientes", recuperacao: "recuperacao", pendencias: "pendencias", fechamento: "fechamento" };
+    return { panel: "financeiro", financeTab: financeMap[String(searchParams.get("aba") || "")] || "overview" };
+  }
+  if (slug === "admin" && sub === "automacoes") return { panel: "automations" };
   if (slug === "admin" && sub === "comercial") {
-    if (segments[2] === "crm") return "native-crm";
-    if (segments[2] === "pre-vendas" && segments[3] === "painel-sdr") return "admin-sdr";
-    return segments[2] === "metas" ? "admin-comercial-metas" : "admin-comercial-usuarios";
+    if (segments[2] === "crm") return { panel: "native-crm" };
+    if (segments[2] === "pre-vendas" && segments[3] === "painel-sdr") return { panel: "admin-sdr" };
+    if (segments[2] === "pre-vendas" || segments[2] === "atividade-sdr") return { panel: "admin-comercial-atividade-sdr" };
+    if (segments[2] === "metas") return { panel: "admin-comercial-metas" };
+    if (segments[2] === "usuarios") return { panel: "admin-comercial-usuarios" };
+    return { panel: "admin-comercial-visao-geral" };
   }
   if (slug === "growth") {
-    if (sub === "crm") return "native-crm";
-    if (sub === "activities" || sub === "atividades") return "activities";
-    if (sub === "sdr" || sub === "scripts-vendas" || sub === "objecoes" || sub === "training") return "growth";
-    return "growth-dashboard";
+    if (sub === "crm") return { panel: "native-crm" };
+    if (sub === "activities" || sub === "atividades") return { panel: "activities" };
+    if (sub === "sdr" || sub === "scripts-vendas" || sub === "objecoes" || sub === "training") return { panel: "growth" };
+    return { panel: "growth-dashboard" };
   }
-  if (slug === "admin" && sub === "growth") return "growth";
-  return "dashboard";
+  if (slug === "admin" && sub === "growth") return { panel: "growth" };
+  if (slug === "admin" && sub === "configuracoes") return { panel: "configuracoes-admin", settingsSection: segments[2] === "acessos" ? "acessos" : "meu-perfil" };
+  if (slug === "admin" && sub === "controle-pedagogico") {
+    const map = { aulas: "aulas", usuarios: "pessoas", retencao: "retencao", reposicoes: "reposicoes", qualidade: "qualidade", onboarding: "onboarding", relatorios: "relatorios" };
+    return { panel: "admin-controle-pedagogico", pedagogicoTab: map[String(searchParams.get("modulo") || "")] || "overview" };
+  }
+  return { panel: "dashboard" };
 };
+
+const initialPanelFromPath = (pathParam, searchParams) => routeStateFromPath(pathParam, searchParams).panel || "dashboard";
 
 const applyInitialPanel = (html, panelName) => {
   const target = String(panelName || "dashboard").trim() || "dashboard";
@@ -105,7 +127,7 @@ const applyInitialRole = (html, role) => {
   return out;
 };
 
-const buildAppHtml = ({ sessionJson, role, roleSlug, templateHtml, initialPanel }) => {
+const buildAppHtml = ({ sessionJson, registryJson, role, roleSlug, templateHtml, initialPanel }) => {
   const raw = String(templateHtml || "");
   const platformStart = raw.indexOf('<div class="platform-shell"');
   const modalStart = raw.indexOf('<div class="modal-overlay"');
@@ -146,6 +168,7 @@ const buildAppHtml = ({ sessionJson, role, roleSlug, templateHtml, initialPanel 
     <div class="page-glow page-glow-right" aria-hidden="true"></div>
     <script>
       window.__SPACE_SESSION__ = ${sessionJson};
+      window.__SPACE_ADMIN_PERMISSION_REGISTRY__ = ${registryJson};
     </script>
     ${platformVisible}
     ${modalHtml}
@@ -183,6 +206,9 @@ module.exports = async (req, res) => {
     role: String(session.role || ""),
     name: String(session.name || ""),
     email: String(session.email || ""),
+    isSuperAdmin: session.isSuperAdmin === true,
+    adminPermissions: Array.isArray(session.adminPermissions) ? session.adminPermissions : [],
+    adminPermissionsVersion: Number(session.adminPermissionsVersion || 0) || 0,
   };
 
   if (user.role === 'student' && require('./_lib/retention-flags').isRetentionV2Enabled()) {
@@ -222,11 +248,34 @@ module.exports = async (req, res) => {
     return;
   }
 
+  if (String(user.role || "") === "admin") {
+    try {
+      const row = await getDocumentAsAdmin(`users/${encodeURIComponent(user.id)}`);
+      Object.assign(user, adminAccessPayloadForUser(row));
+      const routeState = routeStateFromPath(pathParam, url.searchParams);
+      const permission = permissionForAdminPanel(routeState.panel, routeState);
+      if (permission && !canAdminAccess(row, permission)) {
+        sendRedirect(res, firstAllowedAdminRoute(row));
+        return;
+      }
+    } catch (error) {
+      sendRedirect(res, userBasePath);
+      return;
+    }
+  }
+
   let html;
   try {
     const template = loadTemplate();
     const roleSlug = ROLE_TO_SLUG[String(user.role || "")] || ROLE_TO_SLUG.student;
-    html = buildAppHtml({ sessionJson: safeJsonForHtml(user), role: user.role, roleSlug, templateHtml: template, initialPanel: initialPanelFromPath(pathParam) });
+    html = buildAppHtml({
+      sessionJson: safeJsonForHtml(user),
+      registryJson: safeJsonForHtml(ADMIN_PERMISSION_REGISTRY),
+      role: user.role,
+      roleSlug,
+      templateHtml: template,
+      initialPanel: initialPanelFromPath(pathParam, url.searchParams),
+    });
   } catch (error) {
     res.statusCode = 500;
     res.setHeader("Content-Type", "text/plain; charset=utf-8");

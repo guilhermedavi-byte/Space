@@ -1,5 +1,6 @@
 const { readJsonBody, sendJson } = require('../_lib/http');
 const { resolveAdminRequestAuth } = require('./_lib/admin-request-auth');
+const { requireResolvedAdminPermission } = require('./_lib/admin-permissions');
 const { commitWritesAsAdmin } = require('./_lib/firestore-admin');
 const { PROJECT_ID, encodeFields } = require('./_lib/firestore-rest');
 const { loadAdminCommercialSdrActivity, addDaysToKey } = require('./_lib/admin-commercial-sdr-activity');
@@ -391,6 +392,8 @@ const createHandler = ({ build = buildModel, authResolver = resolveAdminRequestA
     const auth = await authResolver(req, { logPrefix: '[admin-sdr]' });
     if (!auth.ok) return sendJson(res, auth.status, auth.body);
     if (clean(auth.session?.role).toLowerCase() !== 'admin') return sendJson(res, 403, { error: 'admin_only' });
+    const perm = await requireResolvedAdminPermission(auth, 'comercial.sdrPanel');
+    if (!perm.ok) return sendJson(res, perm.status, perm.body);
     if (req.method === 'POST') {
       const body = await readJsonBody(req);
       if (clean(body.action) === 'favorite_call') { const result = await handleFavorite({ body, session: auth.session }); return sendJson(res, result.status, result.body); }

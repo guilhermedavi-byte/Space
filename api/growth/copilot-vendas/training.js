@@ -1,9 +1,14 @@
 const { readJsonBody, sendJson } = require("../../_lib/http");
 const { listResource, requireGrowthAccessFromRequest, saveResource } = require("../../_lib/growth-copilot");
+const { requireAdminPermission } = require("../../_lib/admin-permissions");
 
 module.exports = async (req, res) => {
   try {
     const session = requireGrowthAccessFromRequest(req);
+    if (String(session?.role || "").trim().toLowerCase() === "admin") {
+      const guard = await requireAdminPermission(req, "comercial.preSales");
+      if (!guard.ok) return sendJson(res, guard.status, guard.body);
+    }
     if (req.method === "GET") {
       const [feedback, phrases, insights, objections, scripts] = await Promise.all([
         listResource("feedback"),

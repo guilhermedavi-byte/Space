@@ -1,6 +1,7 @@
 const { isLivePerformanceEligible } = require("./_lib/crm-live-eligibility");
 const { sendJson } = require("../_lib/http");
 const { getSessionFromRequest } = require("../_lib/session");
+const { requireAdminPermission } = require("./_lib/admin-permissions");
 const {
   CRM_LIVE_READ_MODEL_VERSION,
   buildWeeklyNewsScreens,
@@ -24,15 +25,20 @@ const normalizeRole = (value) => {
   return "";
 };
 
-const canReadViaSession = (req) => {
+const canReadViaSession = async (req) => {
   const session = getSessionFromRequest(req);
   const role = normalizeRole(session?.role);
-  if (role === "admin" || role === "growth" || role === "commercial") return { ok: true, mode: "session", session };
+  if (role === "admin") {
+    const guard = await requireAdminPermission(req, "comercial.crmLive");
+    if (!guard.ok) return { ok: false, status: guard.status || 403, error: guard.body?.error || "forbidden" };
+    return { ok: true, mode: "session", session };
+  }
+  if (role === "growth" || role === "commercial") return { ok: true, mode: "session", session };
   return null;
 };
 
 const canReadCrmLive = async (req) => {
-  const bySession = canReadViaSession(req);
+  const bySession = await canReadViaSession(req);
   if (bySession) return bySession;
   const byCookie = await validateCookieViewer(req);
   if (byCookie.ok) return { ok: true, mode: "tv", tokenId: byCookie.tokenId };

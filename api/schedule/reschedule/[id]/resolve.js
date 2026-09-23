@@ -1,6 +1,7 @@
 const { readJsonBody, sendJson } = require("../../../_lib/http");
 const { getSessionFromRequest } = require("../../../_lib/session");
 const { verifyFirebaseIdToken } = require("../../../_lib/firebase-id-token");
+const { requireAdminPermission } = require("../../../_lib/admin-permissions");
 const { DEFAULT_CONFIG } = require("../../../_lib/scheduling-firestore");
 const {
   clampInt,
@@ -72,6 +73,11 @@ module.exports = async (req, res) => {
   const role = normalizeRole(session.role);
   if (role !== "admin") {
     sendJson(res, 403, { error: "forbidden" });
+    return;
+  }
+  const permissionGuard = await requireAdminPermission(req, "pedagogico.repositions");
+  if (!permissionGuard.ok) {
+    sendJson(res, permissionGuard.status, permissionGuard.body);
     return;
   }
 
@@ -218,4 +224,3 @@ module.exports = async (req, res) => {
     sendJson(res, 500, { error: "internal_error" });
   }
 };
-

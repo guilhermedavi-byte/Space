@@ -137,6 +137,10 @@ const createSessionForUser = (user) => {
     role: user.role,
     name: user.name,
     email: user.email,
+    commercialRoles: Array.isArray(user.commercialRoles) ? user.commercialRoles : [],
+    isSuperAdmin: user.isSuperAdmin === true,
+    adminPermissions: Array.isArray(user.adminPermissions) ? user.adminPermissions : [],
+    adminPermissionsVersion: Number(user.adminPermissionsVersion || 0) || 0,
     iat: now,
     exp: now + maxAgeSeconds,
   };

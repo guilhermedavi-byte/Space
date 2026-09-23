@@ -1,5 +1,6 @@
 const { sendJson } = require('../../../../_lib/http');
 const { resolveAdminRequestAuth } = require('../../../../_lib/admin-request-auth');
+const { requireResolvedAdminPermission } = require('../../../../_lib/admin-permissions');
 
 const clean = value => String(value == null ? '' : value).trim();
 const safeRecordingId = value => clean(value).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 160);
@@ -32,6 +33,8 @@ const createHandler = ({ authResolver = resolveAdminRequestAuth, telnyxFetch = f
     diagnostic.appAuthStatus = auth.ok ? 200 : auth.status;
     if (!auth.ok) return reply(auth.status, auth.body);
     if (clean(auth.session?.role).toLowerCase() !== 'admin') return reply(403, { error: 'admin_only' });
+    const perm = await requireResolvedAdminPermission(auth, 'comercial.sdrPanel');
+    if (!perm.ok) return reply(perm.status, perm.body);
 
     const recordingId = extractRecordingId(req);
     if (!recordingId) return reply(422, { error: 'invalid_recording_id' });

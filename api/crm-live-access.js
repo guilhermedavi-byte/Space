@@ -1,5 +1,5 @@
 const { readJsonBody, sendJson } = require("../_lib/http");
-const { getSessionFromRequest } = require("../_lib/session");
+const { requireAdminPermission } = require("./_lib/admin-permissions");
 const { createAccessTokenRecord, listAccessTokens, revokeAccessToken } = require("./_lib/crm-live");
 
 const normalizeRole = (value) => {
@@ -9,21 +9,21 @@ const normalizeRole = (value) => {
   return "";
 };
 
-const requireAdmin = (req, res) => {
-  const session = getSessionFromRequest(req);
-  if (!session) {
-    sendJson(res, 401, { error: "unauthorized" });
+const requireAdmin = async (req, res) => {
+  const guard = await requireAdminPermission(req, "comercial.crmLive");
+  if (!guard.ok) {
+    sendJson(res, guard.status || 403, guard.body || { error: "forbidden" });
     return null;
   }
-  if (normalizeRole(session.role) !== "admin") {
+  if (normalizeRole(guard.session?.role) !== "admin") {
     sendJson(res, 403, { error: "forbidden" });
     return null;
   }
-  return session;
+  return guard.session;
 };
 
 module.exports = async (req, res) => {
-  const session = requireAdmin(req, res);
+  const session = await requireAdmin(req, res);
   if (!session) return;
 
   if (req.method === "GET" || req.method === "HEAD") {

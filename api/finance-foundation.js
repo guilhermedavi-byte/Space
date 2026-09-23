@@ -1,5 +1,6 @@
 const { getSessionFromRequest } = require('../_lib/session');
 const { readJsonBody, sendJson } = require('./_lib/http');
+const { requireAdminPermission } = require('./_lib/admin-permissions');
 const { createFinanceFoundation } = require('./_lib/finance-foundation');
 const { FinanceError } = require('./_lib/finance-domain');
 const { safeFinanceError } = require('./_lib/finance-store');
@@ -8,6 +9,7 @@ function createHandler({ session=getSessionFromRequest, service=()=>createFinanc
     const user=session(req);
     if(!user)return sendJson(res,401,{error:'unauthorized'});
     if(user.role!=='admin')return sendJson(res,403,{error:'forbidden'});
+    const guard=await requireAdminPermission(req,'financeiro.overview');if(!guard.ok)return sendJson(res,guard.status,guard.body);
     if(env.FINANCE_FOUNDATION_ENABLED!=='true')return sendJson(res,503,{error:'finance_foundation_disabled'});
     try {
       const f=service();

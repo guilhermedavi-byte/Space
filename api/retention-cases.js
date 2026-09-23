@@ -1,5 +1,6 @@
 const { readJsonBody, sendJson } = require("./_lib/http");
 const { resolveAdminRequestAuth } = require("./_lib/admin-request-auth");
+const { requireResolvedAdminPermission } = require("./_lib/admin-permissions");
 const { hasCapability } = require("./_lib/retention-capabilities");
 const { isRetentionInvoluntaryChurnEnabled, isRetentionV2Enabled } = require("./_lib/retention-flags");
 const { COMMAND_CAPABILITY, buildCommandPayload, needsOverrideJustification, isRetentionCommandRoleAllowed } = require("./_lib/retention-domain");
@@ -16,6 +17,10 @@ const requireAuth = async (req, capability) => {
       status: 403,
       body: { error: "forbidden", missingCapability: capability },
     };
+  }
+  if (String(auth.session?.role || "") === "admin") {
+    const perm = await requireResolvedAdminPermission(auth, "pedagogico.retention");
+    if (!perm.ok) return perm;
   }
   return auth;
 };

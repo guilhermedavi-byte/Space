@@ -48,7 +48,7 @@ const createHandler = ({ authenticate = requireAttendanceAuth, request = supabas
   res.setHeader('Cache-Control', 'no-store');
   if (!['GET', 'POST'].includes(req.method)) return sendJson(res, 405, { error: 'method_not_allowed' });
   try {
-    const actor = await authenticate(req, req.method === 'POST' ? 'attendance.reply' : 'attendance.view');
+    const actor = await authenticate(req, req.method === 'POST' ? 'attendance.reply' : 'attendance.view', undefined, { adminPermission: 'attendance.inbox' });
     if (!['admin', 'growth'].includes(actor.role)) fail('attendance_forbidden', 403);
     const url = new URL(req.url || '/', 'https://space.local');
 

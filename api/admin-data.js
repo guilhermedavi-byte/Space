@@ -3,6 +3,7 @@ const { resolveAdminRequestAuth } = require("./_lib/admin-request-auth");
 const { listCollectionAsAdmin, queryCollectionByFieldAsAdmin } = require("./_lib/firestore-admin");
 const { isCommercialUser } = require("./_lib/growth-people");
 const { summarizeCommercialRoles } = require("./_lib/commercial-rollout");
+const { requireResolvedAdminPermission } = require("./_lib/admin-permissions");
 
 const ALLOWED_COLLECTIONS = new Set([
   "users",
@@ -136,9 +137,19 @@ module.exports = async (req, res) => {
   if (!ALLOWED_COLLECTIONS.has(collection)) {
     return sendJson(res, 400, { error: "invalid_collection" });
   }
+  const type = String(url.searchParams.get("type") || "").trim().toLowerCase();
+  const collectionPermission =
+    collection === "users" && normalizeUserRoleFilter(type) === "growth"
+      ? "comercial.users"
+      : collection === "lessonLogs"
+        ? "pedagogico.lessons"
+        : collection === "teacherOnboardingProgress" || collection === "teacherQuizSubmissions" || collection === "onboardingContents" || collection === "onboardingQuizzes"
+          ? "pedagogico.onboarding"
+          : "pedagogico.users";
+  const perm = await requireResolvedAdminPermission(auth, collectionPermission);
+  if (!perm.ok) return sendJson(res, perm.status, perm.body);
 
   try {
-    const type = String(url.searchParams.get("type") || "").trim().toLowerCase();
     const wantsDebug = url.searchParams.get("debug") === "1";
     const normalizedType = normalizeUserRoleFilter(type);
     const canUseGrowthFastPath = collection === "users" && normalizedType === "growth" && !wantsDebug;

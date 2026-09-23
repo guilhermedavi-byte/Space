@@ -1,6 +1,7 @@
 const { readJsonBody, sendJson } = require("../_lib/http");
 const { supabaseFetch } = require("../_lib/supabase-rest");
 const { resolveAdminRequestAuth } = require("../_lib/admin-request-auth");
+const { requireResolvedAdminPermission } = require("../_lib/admin-permissions");
 const { TABLES, loadAdminDashboard, loadAdminOverviewSnapshot } = require("../_lib/pedagogico-service");
 const { createPerformanceTimer } = require("../_lib/performance-observer");
 
@@ -17,6 +18,8 @@ module.exports = async (req, res) => {
   const auth = await perf.measure("auth", () => resolveAdminRequestAuth(req, { logPrefix: "[api] pedagogico dashboard auth" }));
   if (!auth.ok) return send(auth.status, auth.body);
   if (auth.session?.role !== "admin") return send(403, { error: "admin_only" });
+  const perm = await requireResolvedAdminPermission(auth, "pedagogico.overview");
+  if (!perm.ok) return send(perm.status, perm.body);
 
   try {
     if (req.method === "POST" || req.method === "PATCH") {

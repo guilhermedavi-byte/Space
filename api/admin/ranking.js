@@ -1,6 +1,7 @@
 const { readJsonBody, sendJson } = require("../../_lib/http");
 const { getSessionFromRequest } = require("../../_lib/session");
 const { verifyFirebaseIdToken } = require("../../_lib/firebase-id-token");
+const { requireAdminPermission } = require("../_lib/admin-permissions");
 const {
   decodeFields,
   firestoreGetDocument,
@@ -63,6 +64,11 @@ module.exports = async (req, res) => {
 
   if (String(session.role || "") !== "admin") {
     sendJson(res, 403, { error: "forbidden" });
+    return;
+  }
+  const permissionGuard = await requireAdminPermission(req, "pedagogico.users");
+  if (!permissionGuard.ok) {
+    sendJson(res, permissionGuard.status, permissionGuard.body);
     return;
   }
 

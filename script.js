@@ -851,15 +851,97 @@ const sanitizeSessionUser = (value) => {
   const email = typeof value.email === "string" ? value.email.trim() : "";
   const id = typeof value.id === "string" ? value.id.trim() : "";
   if (!role || !name || !email) return null;
-  return { id, role, name, email, lifecycle: value.lifecycle || null };
+  const adminPermissions = Array.isArray(value.adminPermissions) ? value.adminPermissions.map((item) => String(item || "").trim()).filter(Boolean) : [];
+  return {
+    id,
+    role,
+    name,
+    email,
+    lifecycle: value.lifecycle || null,
+    isSuperAdmin: value.isSuperAdmin === true,
+    adminPermissions,
+    adminPermissionsVersion: Number(value.adminPermissionsVersion || 0) || 0,
+  };
 };
 
 const embeddedSession = sanitizeSessionUser(window.__SPACE_SESSION__);
 let sessionUser = embeddedSession;
 let sessionChecked = Boolean(embeddedSession);
 let sessionRefreshPromise = null;
+let permissionRefreshPromise = null;
 
 let currentRole = embeddedSession?.role || "student";
+const ADMIN_PERMISSION_REGISTRY = window.__SPACE_ADMIN_PERMISSION_REGISTRY__ && typeof window.__SPACE_ADMIN_PERMISSION_REGISTRY__ === "object" ? window.__SPACE_ADMIN_PERMISSION_REGISTRY__ : {};
+const flattenAdminPermissionRegistry = (registry = ADMIN_PERMISSION_REGISTRY) => {
+  const out = [];
+  Object.entries(registry || {}).forEach(([key, value]) => {
+    if (!value || typeof value !== "object") return;
+    if (value.children && typeof value.children === "object") {
+      Object.entries(value.children).forEach(([childKey, child]) => out.push({ key: `${key}.${childKey}`, moduleKey: key, childKey, ...(child || {}) }));
+    } else {
+      out.push({ key, moduleKey: key, ...(value || {}) });
+    }
+  });
+  return out;
+};
+const ADMIN_PERMISSION_ITEMS = flattenAdminPermissionRegistry();
+const ALL_ADMIN_PERMISSION_KEYS = ADMIN_PERMISSION_ITEMS.map((item) => item.key);
+const adminPermissionSet = () => new Set(Array.isArray(sessionUser?.adminPermissions) ? sessionUser.adminPermissions : []);
+const canAdmin = (permission) => {
+  const key = String(permission || "").trim();
+  if (normalizeRole(currentRole) !== "admin") return true;
+  if (sessionUser?.isSuperAdmin === true) return true;
+  return adminPermissionSet().has(key);
+};
+const permissionForPanel = (panelName) => {
+  const panel = String(panelName || "").trim();
+  if (panel === "dashboard") return "dashboard";
+  if (panel === "activities") return "activities";
+  if (panel === "automations") return "automations";
+  if (panel === "status-plataforma") return "status";
+  if (panel === "guia-colaboradores") return "guide";
+  if (panel === "space-office") return "spaceOffice";
+  if (panel === "attendance-inbox") return "attendance.inbox";
+  if (panel === "attendance-connections") return "attendance.connections";
+  if (panel === "configuracoes-admin") return adminSettingsState?.activeSection === "acessos" ? "settings.accesses" : "settings.profile";
+  if (panel === "admin-comercial-visao-geral") return "comercial.overview";
+  if (panel === "native-crm") return "comercial.crm";
+  if (panel === "admin-comercial-atividade-sdr") return "comercial.preSales";
+  if (panel === "admin-sdr") return "comercial.sdrPanel";
+  if (panel === "growth") return "comercial.preSales";
+  if (panel === "admin-comercial-metas") return "comercial.goals";
+  if (panel === "admin-comercial-usuarios") return "comercial.users";
+  if (panel === "financeiro") {
+    const map = { overview: "overview", recebiveis: "receivables", assinaturas: "subscriptions", clientes: "customers", recuperacao: "recovery", pendencias: "pending", fechamento: "closing" };
+    return `financeiro.${map[String(financeState?.activeTab || "overview")] || "overview"}`;
+  }
+  if (panel === "ao-vivo") return "pedagogico.agenda";
+  if (panel && panel.startsWith("admin-controle-pedagogico")) {
+    const map = { aulas: "lessons", pessoas: "users", retencao: "retention", reposicoes: "repositions", qualidade: "quality", onboarding: "onboarding", relatorios: "reports" };
+    return `pedagogico.${map[String(adminPedagogicoState?.activeTab || "overview")] || "overview"}`;
+  }
+  return "";
+};
+const firstAllowedAdminPanel = () => {
+  const allowed = sessionUser?.isSuperAdmin === true ? ALL_ADMIN_PERMISSION_KEYS : Array.from(adminPermissionSet());
+  const preferred = ["dashboard", "activities", "pedagogico.overview", "comercial.overview", "comercial.crm", "financeiro.overview", "settings.profile"];
+  const key = preferred.find((item) => allowed.includes(item)) || allowed[0] || "settings.profile";
+  const item = ADMIN_PERMISSION_ITEMS.find((entry) => entry.key === key);
+  return item?.panel || "configuracoes-admin";
+};
+const applyFirstAllowedAdminState = () => {
+  const allowed = sessionUser?.isSuperAdmin === true ? ALL_ADMIN_PERMISSION_KEYS : Array.from(adminPermissionSet());
+  const preferred = ["dashboard", "activities", "pedagogico.overview", "comercial.overview", "comercial.crm", "financeiro.overview", "settings.profile"];
+  const key = preferred.find((item) => allowed.includes(item)) || allowed[0] || "settings.profile";
+  const item = ADMIN_PERMISSION_ITEMS.find((entry) => entry.key === key) || {};
+  if (item.financeTab) financeState.activeTab = item.financeTab;
+  if (item.settingsSection) adminSettingsState.activeSection = item.settingsSection;
+  if (item.key?.startsWith("pedagogico.")) {
+    const map = { overview: "overview", agenda: "overview", lessons: "aulas", users: "pessoas", retention: "retencao", repositions: "reposicoes", quality: "qualidade", onboarding: "onboarding", reports: "relatorios" };
+    adminPedagogicoState.activeTab = map[item.childKey] || "overview";
+  }
+  return item.panel || "configuracoes-admin";
+};
 
 const syncRoleUI = () => {
   const def = ROLE_DEFS[currentRole] || ROLE_DEFS.student;
@@ -973,6 +1055,28 @@ const syncRoleUI = () => {
       el.hidden = currentRole !== "teacher";
     }
   });
+
+  if (currentRole === "admin") {
+    document.querySelectorAll("[data-panel-target]").forEach((el) => {
+      if (!(el instanceof HTMLElement)) return;
+      const permission = permissionForPanel(el.getAttribute("data-panel-target"));
+      if (permission) el.hidden = !canAdmin(permission);
+    });
+    document.querySelectorAll("[data-finance-tab]").forEach((el) => {
+      if (!(el instanceof HTMLElement)) return;
+      const tab = String(el.getAttribute("data-finance-tab") || "overview").trim();
+      const map = { overview: "overview", recebiveis: "receivables", assinaturas: "subscriptions", clientes: "customers", recuperacao: "recovery", pendencias: "pending", fechamento: "closing" };
+      el.hidden = !canAdmin(`financeiro.${map[tab] || "overview"}`);
+    });
+    document.querySelectorAll('a.sidebar-link[href="/tv/crm-live"]').forEach((el) => {
+      if (el instanceof HTMLElement) el.hidden = !canAdmin("comercial.crmLive");
+    });
+    document.querySelectorAll("[data-sidebar-accordion]").forEach((accordion) => {
+      if (!(accordion instanceof HTMLElement)) return;
+      const visibleChild = Array.from(accordion.querySelectorAll("[data-panel-target], [data-finance-tab], a.sidebar-link")).some((child) => child instanceof HTMLElement && !child.hidden);
+      accordion.hidden = !visibleChild;
+    });
+  }
 
   // Defensive: ensure Admin sidebar contains the Pedagógico accordion (some deploys may serve an older template).
   if (currentRole === "admin") {
@@ -1283,6 +1387,7 @@ const openModal = ({
   onPrimary,
   onSecondary,
   onTrash,
+  onOpen,
   returnFocusEl = null,
 } = {}) => {
   if (!modalOverlay || !modalTitle || !modalBody || !modalPrimary || !modalSecondary) return;
@@ -1307,6 +1412,7 @@ const openModal = ({
   if (modalTrash) {
     modalTrash.hidden = !showTrash;
   }
+  if (typeof onOpen === "function") onOpen();
 
   window.setTimeout(() => {
     modalPrimary.focus();
@@ -12116,7 +12222,33 @@ const fetchWithAuth = async (input, init = {}) => {
   if (Object.prototype.hasOwnProperty.call(opts, "forceRefreshIdToken")) delete opts.forceRefreshIdToken;
   const response = await fetch(input, { ...opts, headers, credentials: opts.credentials || "include" });
   window.SpacePerformance?.recordRequest?.(input, response);
+  const url = typeof input === "string" ? input : input?.url || "";
+  if (response.status === 403 && String(url).includes("/api/") && !String(url).includes("/api/me")) {
+    refreshSessionPermissions().catch(() => {});
+  }
   return response;
+};
+
+const refreshSessionPermissions = async () => {
+  if (permissionRefreshPromise) return permissionRefreshPromise;
+  permissionRefreshPromise = fetch("/api/me", { credentials: "include", cache: "no-store" })
+    .then(async (res) => {
+      if (!res.ok) return null;
+      const data = await res.json().catch(() => null);
+      const next = sanitizeSessionUser(data?.user ? { ...data.user, lifecycle: data.lifecycle } : null);
+      if (next) {
+        sessionUser = next;
+        window.__SPACE_SESSION__ = { ...(window.__SPACE_SESSION__ || {}), ...next };
+        currentRole = next.role;
+        syncRoleUI();
+        if (typeof renderAdminSettingsPanel === "function" && body.dataset.activePanel === "configuracoes-admin") renderAdminSettingsPanel();
+      }
+      return next;
+    })
+    .finally(() => {
+      permissionRefreshPromise = null;
+    });
+  return permissionRefreshPromise;
 };
 
 window.SpacePerformance = window.SpacePerformance || (() => {
@@ -17019,7 +17151,10 @@ const ADMIN_SETTINGS_SECTIONS = [
 const getVisibleAdminSettingsSections = () => {
   if (normalizeRole(currentRole) === "teacher") return ADMIN_SETTINGS_SECTIONS.filter((item) => item.key === "meu-perfil");
   const isSuperAdmin = adminSettingsState?.profileMeta?.isSuperAdmin === true;
-  return ADMIN_SETTINGS_SECTIONS.filter((item) => !item.superAdminOnly || isSuperAdmin);
+  return ADMIN_SETTINGS_SECTIONS.filter((item) => {
+    if (item.key === "acessos") return isSuperAdmin && canAdmin("settings.accesses");
+    return !item.superAdminOnly || isSuperAdmin;
+  });
 };
 
 let adminSettingsState = {
@@ -38390,6 +38525,8 @@ const normalizeAdminAccessRow = (id, raw = {}) => {
     criadoEm: raw?.criadoEm || raw?.createdAt || raw?.created_at || null,
     ativo: raw?.ativo !== false,
     isSuperAdmin: raw?.isSuperAdmin === true,
+    adminPermissions: Array.isArray(raw?.adminPermissions) ? raw.adminPermissions : [],
+    adminPermissionsVersion: Number(raw?.adminPermissionsVersion || 0) || 0,
   };
 };
 
@@ -38407,21 +38544,10 @@ const loadAdminAccessRows = async ({ force = false } = {}) => {
   adminSettingsState.accessLoading = true;
   adminSettingsState.accessError = "";
   try {
-    const firebase = await withTimeout(loadFirebaseAdminApi(), 8000, "firebase_init_admin_accesses");
-    const user = await waitForFirebaseAuthReady(firebase, 5000);
-    if (!user) {
-      const err = new Error("firebase_not_authenticated");
-      err.code = "auth/no-current-user";
-      throw err;
-    }
-    const snap = await withTimeout(firebase.getDocs(firebase.collection(firebase.primaryDb, "users")), 12_000, "firestore_get_admin_accesses");
-    const rows = [];
-    snap.forEach((docSnap) => {
-      const data = docSnap.data ? docSnap.data() : {};
-      const row = normalizeAdminAccessRow(docSnap.id, data);
-      if (row) rows.push(row);
-    });
-    adminSettingsState.accessRows = rows.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+    const response = await withTimeout(fetchWithAuth("/api/admin-permissions", { method: "GET" }), 15_000, "admin_permissions_list");
+    const data = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(data?.error || "admin_permissions_list_failed");
+    adminSettingsState.accessRows = (Array.isArray(data?.admins) ? data.admins : []).map((row) => normalizeAdminAccessRow(row.id || row.uid, row)).filter(Boolean);
     adminSettingsState.accessLoadedAt = Date.now();
   } catch (error) {
     console.error("[admin] access list load failed:", error);
@@ -38465,6 +38591,7 @@ const renderAdminSettingsAccesses = () => {
                     <span>Nome</span>
                     <span>E-mail</span>
                     <span>Criação</span>
+                    <span>Ações</span>
                   </div>
                   ${rows
                     .map(
@@ -38476,6 +38603,7 @@ const renderAdminSettingsAccesses = () => {
                           </div>
                           <span>${escapeHtml(row.email || "—")}</span>
                           <span>${escapeHtml(formatAdminDate(row.criadoEm))}</span>
+                          <span>${row.isSuperAdmin ? "—" : `<button class="button button-outline button-small" type="button" data-acessos-manage="${escapeHtml(row.id)}">Gerenciar acessos</button>`}</span>
                         </div>
                       `
                     )
@@ -38625,6 +38753,138 @@ const setAcessosModalError = (message) => {
   }
 };
 
+const renderAdminPermissionMatrix = (selected = [], { disabled = false } = {}) => {
+  const selectedSet = new Set(Array.isArray(selected) ? selected : []);
+  return `
+    <div class="acessos-permissions-matrix" data-admin-permission-matrix>
+      ${Object.entries(ADMIN_PERMISSION_REGISTRY || {}).map(([moduleKey, module]) => {
+        const children = module?.children && typeof module.children === "object"
+          ? Object.entries(module.children).map(([childKey, child]) => ({ key: `${moduleKey}.${childKey}`, label: child?.label || childKey }))
+          : [{ key: moduleKey, label: module?.label || moduleKey }];
+        const checkedCount = children.filter((child) => selectedSet.has(child.key)).length;
+        const parentChecked = checkedCount === children.length;
+        return `
+          <section class="acessos-permission-module" data-permission-module="${escapeHtml(moduleKey)}">
+            <label class="acessos-permission-parent">
+              <input type="checkbox" data-permission-parent="${escapeHtml(moduleKey)}" ${parentChecked ? "checked" : ""} ${disabled ? "disabled" : ""} />
+              <span>${escapeHtml(module?.label || moduleKey)}</span>
+            </label>
+            <div class="acessos-permission-children">
+              ${children.map((child) => `
+                <label class="acessos-permission-child">
+                  <input type="checkbox" data-permission-key="${escapeHtml(child.key)}" data-permission-parent-key="${escapeHtml(moduleKey)}" value="${escapeHtml(child.key)}" ${selectedSet.has(child.key) ? "checked" : ""} ${disabled ? "disabled" : ""} />
+                  <span>${escapeHtml(child.label)}</span>
+                </label>
+              `).join("")}
+            </div>
+          </section>
+        `;
+      }).join("")}
+    </div>
+  `;
+};
+
+const syncPermissionMatrixState = (root = modalBody) => {
+  const scope = root instanceof HTMLElement ? root : document;
+  scope.querySelectorAll("[data-permission-parent]").forEach((parent) => {
+    if (!(parent instanceof HTMLInputElement)) return;
+    const moduleKey = String(parent.getAttribute("data-permission-parent") || "");
+    const children = Array.from(scope.querySelectorAll(`[data-permission-parent-key="${CSS.escape(moduleKey)}"]`)).filter((el) => el instanceof HTMLInputElement);
+    const checked = children.filter((child) => child.checked).length;
+    parent.checked = children.length > 0 && checked === children.length;
+    parent.indeterminate = checked > 0 && checked < children.length;
+  });
+};
+
+const readPermissionMatrixValues = (root = modalBody) => {
+  const scope = root instanceof HTMLElement ? root : document;
+  return Array.from(scope.querySelectorAll("[data-permission-key]"))
+    .filter((input) => input instanceof HTMLInputElement && input.checked)
+    .map((input) => String(input.value || "").trim())
+    .filter(Boolean);
+};
+
+const bindPermissionMatrixEvents = (root = modalBody) => {
+  const scope = root instanceof HTMLElement ? root : document;
+  scope.querySelectorAll("[data-permission-parent]").forEach((parent) => {
+    if (!(parent instanceof HTMLInputElement)) return;
+    parent.addEventListener("change", () => {
+      const moduleKey = String(parent.getAttribute("data-permission-parent") || "");
+      scope.querySelectorAll(`[data-permission-parent-key="${CSS.escape(moduleKey)}"]`).forEach((child) => {
+        if (child instanceof HTMLInputElement) child.checked = parent.checked;
+      });
+      syncPermissionMatrixState(scope);
+    });
+  });
+  scope.querySelectorAll("[data-permission-key]").forEach((child) => {
+    if (child instanceof HTMLInputElement) child.addEventListener("change", () => syncPermissionMatrixState(scope));
+  });
+  syncPermissionMatrixState(scope);
+};
+
+const invalidateAdminPermissionCaches = () => {
+  adminSettingsState.accessLoadedAt = 0;
+  sessionRefreshPromise = null;
+  try { window.SpaceDataCache?.clearUserScope?.(); } catch {}
+  try { window.SpaceDataCache?.invalidate?.("permissions"); } catch {}
+  try { window.SpaceDataCache?.invalidate?.("current-user"); } catch {}
+};
+
+const openAdminAccessManageModal = (adminId) => {
+  const row = (Array.isArray(adminSettingsState.accessRows) ? adminSettingsState.accessRows : []).find((item) => String(item.id || "") === String(adminId || ""));
+  if (!row || row.isSuperAdmin) return;
+  openModal({
+    title: "Gerenciar acessos",
+    bodyHtml: `
+      <div class="acessos-form">
+        <div class="acessos-modal-person">
+          <strong>${escapeHtml(row.nome || "Administrador")}</strong>
+          <span>${escapeHtml(row.email || "—")}</span>
+        </div>
+        ${renderAdminPermissionMatrix(row.adminPermissions)}
+        <div class="acessos-modal-error" data-acessos-modal-error hidden></div>
+      </div>
+    `,
+    primaryLabel: "Salvar alterações",
+    secondaryLabel: "Cancelar",
+    hideSecondary: false,
+    showTrash: false,
+    onOpen: () => bindPermissionMatrixEvents(modalBody),
+    onPrimary: () => {
+      (async () => {
+        const previousLabel = modalPrimary instanceof HTMLButtonElement ? modalPrimary.textContent : "";
+        try {
+          setAcessosModalError("");
+          if (modalPrimary instanceof HTMLButtonElement) {
+            modalPrimary.disabled = true;
+            modalPrimary.textContent = "Salvando…";
+          }
+          const permissions = readPermissionMatrixValues(modalBody);
+          const response = await withTimeout(fetchWithAuth("/api/admin-permissions", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ uid: row.id, permissions }),
+          }), 15_000, "admin_permissions_save");
+          const data = await response.json().catch(() => null);
+          if (!response.ok) throw new Error(data?.error || "admin_permissions_save_failed");
+          adminSettingsState.accessRows = (Array.isArray(data?.admins) ? data.admins : adminSettingsState.accessRows).map((item) => normalizeAdminAccessRow(item.id || item.uid, item)).filter(Boolean);
+          adminSettingsState.accessLoadedAt = Date.now();
+          invalidateAdminPermissionCaches();
+          closeModal();
+          renderAdminSettingsPanel();
+        } catch (error) {
+          setAcessosModalError("Não foi possível salvar os acessos agora.");
+          if (modalPrimary instanceof HTMLButtonElement) {
+            modalPrimary.disabled = false;
+            modalPrimary.textContent = previousLabel || "Salvar alterações";
+          }
+        }
+      })();
+      return false;
+    },
+  });
+};
+
 const openAdminAccessCreateModal = () => {
   if (adminSettingsState.profileMeta?.isSuperAdmin !== true) return;
   openModal({
@@ -38648,6 +38908,13 @@ const openAdminAccessCreateModal = () => {
           <span>Confirmar senha</span>
           <input class="auth-input acessos-input" type="password" autocomplete="new-password" data-acessos-password-confirm />
         </label>
+        <label class="acessos-permission-parent">
+          <input type="checkbox" data-acessos-full-access checked />
+          <span>Acesso completo</span>
+        </label>
+        <div data-acessos-granular hidden>
+          ${renderAdminPermissionMatrix(ALL_ADMIN_PERMISSION_KEYS)}
+        </div>
         <div class="acessos-modal-error" data-acessos-modal-error hidden></div>
       </form>
     `,
@@ -38655,6 +38922,16 @@ const openAdminAccessCreateModal = () => {
     secondaryLabel: "Cancelar",
     hideSecondary: false,
     showTrash: false,
+    onOpen: () => {
+      const fullAccessEl = modalBody?.querySelector("[data-acessos-full-access]");
+      const granularEl = modalBody?.querySelector("[data-acessos-granular]");
+      bindPermissionMatrixEvents(modalBody);
+      if (fullAccessEl instanceof HTMLInputElement && granularEl instanceof HTMLElement) {
+        fullAccessEl.addEventListener("change", () => {
+          granularEl.hidden = fullAccessEl.checked;
+        });
+      }
+    },
     onPrimary: () => {
       const nameEl = modalBody?.querySelector("[data-acessos-name]");
       const emailEl = modalBody?.querySelector("[data-acessos-email]");
@@ -38664,6 +38941,9 @@ const openAdminAccessCreateModal = () => {
       const email = emailEl instanceof HTMLInputElement ? emailEl.value.trim().toLowerCase() : "";
       const senha = passwordEl instanceof HTMLInputElement ? passwordEl.value : "";
       const confirm = confirmEl instanceof HTMLInputElement ? confirmEl.value : "";
+      const fullAccessEl = modalBody?.querySelector("[data-acessos-full-access]");
+      const fullAccess = fullAccessEl instanceof HTMLInputElement ? fullAccessEl.checked : true;
+      const permissions = fullAccess ? ALL_ADMIN_PERMISSION_KEYS : readPermissionMatrixValues(modalBody);
       const emailOk = isValidEmail(email);
       const passwordOk = senha.length >= 6;
       const confirmOk = senha === confirm && Boolean(confirm);
@@ -38702,7 +38982,7 @@ const openAdminAccessCreateModal = () => {
             fetchWithAuth("/api/admin-create-user", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ nome, email, senha }),
+              body: JSON.stringify({ nome, email, senha, fullAccess, permissions }),
             }),
             15_000,
             "admin_create_access_user"
@@ -38714,6 +38994,7 @@ const openAdminAccessCreateModal = () => {
             throw error;
           }
           adminSettingsState.accessLoadedAt = 0;
+          invalidateAdminPermissionCaches();
           await loadAdminAccessRows({ force: true });
           closeModal();
           renderAdminSettingsPanel();
@@ -41782,6 +42063,27 @@ const cleanupAdminPedagogicoLegacyNav = () => {
 };
 
 const showPanel = (panelName) => {
+  if (currentRole === "admin") {
+    const permission = permissionForPanel(panelName);
+    if (permission && !canAdmin(permission)) {
+      const fallback = applyFirstAllowedAdminState();
+      if (fallback && fallback !== panelName) {
+        navigateApp(panelPathForRole(currentRole, fallback), { replace: true });
+        return;
+      }
+      panels.forEach((panel) => {
+        const isVisible = panel.dataset.panel === "configuracoes-admin";
+        panel.classList.toggle("is-visible", isVisible);
+        panel.hidden = !isVisible;
+      });
+      body.dataset.activePanel = "access-denied";
+      const contentEl = getAdminSettingsContent?.();
+      if (contentEl instanceof HTMLElement) {
+        contentEl.innerHTML = `<div class="surface-card admin-settings-placeholder"><div class="admin-settings-placeholder-kicker">Acesso</div><div class="admin-settings-placeholder-title">Acesso não autorizado</div><div class="admin-settings-placeholder-sub">Seu usuário não possui permissão para abrir esta área.</div></div>`;
+      }
+      return;
+    }
+  }
   if (currentRole === "teacher" && !pedagogicoState.lastLoadedAt) {
     // Keep pending badge up to date even if the teacher doesn't open the panel.
     renderTeacherPedagogico({ silent: true }).catch(() => {});
@@ -45904,6 +46206,13 @@ document.addEventListener("click", (event) => {
             if (adminSettingsState.activeSection === "acessos") renderAdminSettingsPanel();
           });
         renderAdminSettingsPanel();
+        return;
+      }
+
+      const acessosManage = target.closest("[data-acessos-manage]");
+      if (acessosManage instanceof HTMLButtonElement) {
+        event.preventDefault();
+        openAdminAccessManageModal(acessosManage.getAttribute("data-acessos-manage") || "");
         return;
       }
 

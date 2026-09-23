@@ -1,6 +1,7 @@
 const {assertLegacyFinancialWrite,UNOWNED_FILTER}=require('./_lib/finance-legacy-ownership');
 const { readJsonBody, sendJson } = require("./_lib/http");
 const { getSessionFromRequest } = require("../_lib/session");
+const { requireAdminPermission } = require("./_lib/admin-permissions");
 const { supabaseFetch } = require("./_lib/supabase-rest");
 const {
   FINANCE_TABLES,
@@ -267,6 +268,10 @@ module.exports = async (req, res) => {
   const session = getSessionFromRequest(req);
   if (!session) return sendJson(res, 401, { error: "unauthorized" });
   if (!canAccessFinance(session)) return sendJson(res, 403, { error: "forbidden" });
+  if (String(session.role || "") === "admin") {
+    const guard = await requireAdminPermission(req, "financeiro.overview");
+    if (!guard.ok) return sendJson(res, guard.status, guard.body);
+  }
 
   try {
     if (req.method === "GET") return await handleGet(res);

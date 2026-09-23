@@ -122,6 +122,15 @@ module.exports = async (req, res) => {
   res.setHeader("Set-Cookie", cookie);
 
   return send(200, {
-    user: { id: user.id, role: user.role, name: user.name, email: user.email, commercialRoles: Array.isArray(user.commercialRoles) ? user.commercialRoles : [] },
+    user: {
+      id: user.id,
+      role: user.role,
+      name: user.name,
+      email: user.email,
+      commercialRoles: Array.isArray(user.commercialRoles) ? user.commercialRoles : [],
+      isSuperAdmin: user.isSuperAdmin === true,
+      adminPermissions: Array.isArray(user.adminPermissions) ? user.adminPermissions : [],
+      adminPermissionsVersion: Number(user.adminPermissionsVersion || 0) || 0,
+    },
   });
 };

@@ -1,6 +1,7 @@
 const { sendJson } = require("../_lib/http");
 const { resolveAdminRequestAuth } = require("./_lib/admin-request-auth");
 const { loadAdminCommercialSdrActivity } = require("./_lib/admin-commercial-sdr-activity");
+const { requireResolvedAdminPermission } = require("./_lib/admin-permissions");
 
 module.exports = async (req, res) => {
   const requestId = `sdr_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -15,6 +16,8 @@ module.exports = async (req, res) => {
     if (String(auth.session?.role || "").trim().toLowerCase() !== "admin") {
       return sendJson(res, 403, { error: "admin_only", message: "Acesso restrito ao admin." });
     }
+    const perm = await requireResolvedAdminPermission(auth, "comercial.preSales");
+    if (!perm.ok) return sendJson(res, perm.status, perm.body);
 
     const host = String(req.headers.host || "localhost");
     const url = new URL(req.url || "/api/admin-commercial-sdr-activity", `https://${host}`);
