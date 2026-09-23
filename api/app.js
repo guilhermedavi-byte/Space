@@ -73,6 +73,7 @@ const routeStateFromPath = (pathParam, searchParams = new URLSearchParams()) => 
   if (slug === "admin" && sub === "automacoes") return { panel: "automations" };
   if (slug === "admin" && sub === "comercial") {
     if (segments[2] === "crm") return { panel: "native-crm" };
+    if (segments[2] === "growth") return { panel: "growth" };
     if (segments[2] === "pre-vendas" && segments[3] === "painel-sdr") return { panel: "admin-sdr" };
     if (segments[2] === "pre-vendas" || segments[2] === "atividade-sdr") return { panel: "admin-comercial-atividade-sdr" };
     if (segments[2] === "metas") return { panel: "admin-comercial-metas" };
@@ -80,6 +81,11 @@ const routeStateFromPath = (pathParam, searchParams = new URLSearchParams()) => 
     return { panel: "admin-comercial-visao-geral" };
   }
   if (slug === "growth") {
+    if (sub === "comercial") {
+      if (segments[2] === "crm") return { panel: "native-crm" };
+      if (["painel-sdr", "scripts-vendas", "objecoes", "training"].includes(segments[2])) return { panel: "growth" };
+      return { panel: "growth-dashboard" };
+    }
     if (sub === "crm") return { panel: "native-crm" };
     if (sub === "activities" || sub === "atividades") return { panel: "activities" };
     if (sub === "sdr" || sub === "scripts-vendas" || sub === "objecoes" || sub === "training") return { panel: "growth" };

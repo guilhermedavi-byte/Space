@@ -10,6 +10,7 @@ const loadCrmHandler = (initialStore = {}, { role = "admin" } = {}) => {
     "../api/_lib/firestore-admin",
     "../api/_lib/firestore-rest",
     "../api/_lib/crm-service",
+    "../api/_lib/admin-permissions",
     "../_lib/session",
   ];
   paths.forEach((path) => {
@@ -33,6 +34,11 @@ const loadCrmHandler = (initialStore = {}, { role = "admin" } = {}) => {
       createOpportunity: async () => ({ opportunityId: "unused" }),
       loadCrmListModel: async () => ({ rows: [] }),
       loadCrmReadModel: async () => ({ pipelines: [], stages: [], contacts: [], opportunities: [], owners: [] }),
+    },
+  };
+  require.cache[require.resolve("../api/_lib/admin-permissions")] = {
+    exports: {
+      requireAdminPermission: async () => ({ ok: true }),
     },
   };
   require.cache[require.resolve("../api/_lib/firestore-admin")] = {

@@ -2,6 +2,7 @@ const assert = require("assert");
 const fs = require("fs");
 const path = require("path");
 const { Readable } = require("stream");
+const { JSDOM } = require("jsdom");
 const { createSessionForUser } = require("../_lib/session");
 
 const root = path.resolve(__dirname, "..");
@@ -16,6 +17,24 @@ assert.strictEqual(count(template, 'data-panel="guia-colaboradores"'), 0, "Guide
 assert.strictEqual(count(template, 'data-panel-target="status-plataforma"'), 0, "Status is not a top-level sidebar entry");
 assert.strictEqual(count(template, 'data-panel="status-plataforma"'), 0, "Status is rendered inside Configurações");
 assert.strictEqual(count(template, 'data-panel-target="ao-vivo"'), 1, "Agenda is exposed only once in the app shell");
+assert.strictEqual(count(template, "data-growth-crm-link"), 0, "CRM is not exposed through the legacy Growth top-level link");
+assert.strictEqual(count(template, "data-growth-sdr-link"), 0, "SDR is not exposed through the legacy Growth top-level link");
+
+const dom = new JSDOM(template);
+const document = dom.window.document;
+const topLevelLabels = Array.from(document.querySelectorAll(".sidebar-nav > .sidebar-link"))
+  .map((item) => item.textContent.replace(/\s+/g, " ").trim())
+  .filter(Boolean);
+assert.ok(!topLevelLabels.includes("CRM"), "CRM is not a main sidebar item");
+assert.ok(!topLevelLabels.includes("SDR"), "SDR is not a main sidebar item");
+assert.ok(!topLevelLabels.includes("Growth"), "Growth is not a main sidebar item");
+
+const commercialLabels = Array.from(document.querySelectorAll("[data-sidebar-accordion-body='comercial'] .sidebar-link-sub"))
+  .map((item) => item.textContent.replace(/\s+/g, " ").trim())
+  .filter(Boolean);
+assert.ok(commercialLabels.includes("CRM"), "Comercial contains CRM");
+assert.ok(commercialLabels.includes("Painel SDR") || commercialLabels.includes("↳ Painel SDR"), "Comercial contains Painel SDR");
+assert.ok(commercialLabels.includes("Growth"), "Comercial contains Growth");
 
 const expectedSettingsOrder = [
   "meu-perfil",
@@ -78,6 +97,10 @@ const invokeApp = async (pathParam) => {
   const legacyStatus = await invokeApp("admin/status");
   assert.strictEqual(legacyStatus.statusCode, 200, "legacy Status route stays available");
   assert.match(legacyStatus.body, /data-initial-panel="configuracoes-admin"/, "legacy Status route opens Configurações");
+
+  const commercialGrowth = await invokeApp("admin/comercial/growth");
+  assert.strictEqual(commercialGrowth.statusCode, 200, "Comercial > Growth route is available");
+  assert.match(commercialGrowth.body, /data-initial-panel="growth"/, "Comercial > Growth opens the Growth workspace");
 
   console.log("admin navigation structure tests passed");
 })().catch((error) => {

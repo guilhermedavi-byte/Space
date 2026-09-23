@@ -50,7 +50,7 @@ const PEDAGOGICO_SIDEBAR_ACTIVE_TARGET_BY_TAB = {
   onboarding: "admin-controle-pedagogico-onboarding",
   relatorios: "admin-controle-pedagogico-relatorios",
 };
-const COMERCIAL_SIDEBAR_PANEL_TARGETS = new Set(["native-crm", "admin-comercial-metas", "admin-comercial-visao-geral", "admin-comercial-atividade-sdr", "admin-comercial-usuarios"]);
+const COMERCIAL_SIDEBAR_PANEL_TARGETS = new Set(["native-crm", "admin-comercial-metas", "admin-comercial-visao-geral", "admin-comercial-atividade-sdr", "admin-sdr", "growth", "admin-comercial-usuarios"]);
 const greetingElement = document.querySelector("[data-greeting]");
 const roleEyebrow = document.querySelector("[data-role-eyebrow]");
 const roleSidebarSubtitle = document.querySelector("[data-role-sidebar-subtitle]");
@@ -927,7 +927,7 @@ const permissionForPanel = (panelName) => {
   if (panel === "native-crm") return "comercial.crm.view";
   if (panel === "admin-comercial-atividade-sdr") return "comercial.preSales.view";
   if (panel === "admin-sdr") return "comercial.sdrPanel.view";
-  if (panel === "growth") return "comercial.preSales.view";
+  if (panel === "growth") return "comercial.growth.view";
   if (panel === "admin-comercial-metas") return "comercial.goals.view";
   if (panel === "admin-comercial-usuarios") return "comercial.users.view";
   if (panel === "financeiro") {
@@ -1030,6 +1030,12 @@ const syncRoleUI = () => {
     }
   });
 
+  document.querySelectorAll("[data-growth-only]").forEach((el) => {
+    if (el instanceof HTMLElement) {
+      el.hidden = currentRole !== "growth";
+    }
+  });
+
   if (currentRole === "FINANCE") {
     document.querySelectorAll("[data-panel-target]").forEach((el) => {
       if (!(el instanceof HTMLElement)) return;
@@ -1057,16 +1063,6 @@ const syncRoleUI = () => {
       const dashboardLink = dashboardTarget.querySelector(".sidebar-text");
       if (dashboardLink instanceof HTMLElement) dashboardLink.textContent = "Dashboard";
     }
-    const growthLink = document.querySelector("[data-growth-sdr-link]") || document.querySelector('[data-panel-target="growth"]');
-    if (growthLink instanceof HTMLElement) {
-      growthLink.hidden = false;
-      const text = growthLink.querySelector(".sidebar-text");
-      if (text instanceof HTMLElement) text.textContent = "SDR";
-    }
-    const crmLink = document.querySelector("[data-growth-crm-link]");
-    if (crmLink instanceof HTMLElement) {
-      crmLink.hidden = false;
-    }
   }
 
   document.querySelectorAll("[data-teacher-only]").forEach((el) => {
@@ -1084,6 +1080,10 @@ const syncRoleUI = () => {
   if (currentRole === "admin") {
     document.querySelectorAll("[data-panel-target]").forEach((el) => {
       if (!(el instanceof HTMLElement)) return;
+      if (el.hasAttribute("data-growth-only")) {
+        el.hidden = true;
+        return;
+      }
       const permission = permissionForPanel(el.getAttribute("data-panel-target"));
       if (permission) el.hidden = !canAdmin(permission);
     });
@@ -21699,7 +21699,7 @@ const renderAdminCommercialOverview = () => {
         ${renderCommercialOverviewKpi({ label: "Reuniões feitas", value: sdrStats.shows, series: sdrSeries("shows"), tone: "green" })}
         ${renderCommercialOverviewKpi({ label: "Show rate", value: formatPercentPtBr(sdrStats.showRate, 1), series: sdrSeries("shows"), tone: "amber" })}
       </div>
-      <a class="commercial-overview-detail-link" href="/app/admin/growth/sdr" data-panel-target="growth" data-growth-tab-target="sdr">Ver detalhes no módulo SDR</a>
+      <a class="commercial-overview-detail-link" href="/app/admin/comercial/growth" data-panel-target="growth" data-growth-tab-target="sdr">Ver detalhes no módulo SDR</a>
     </section>
   `;
   initCommercialOverviewMotion();
@@ -42750,6 +42750,13 @@ const financePathForState = (role) => {
   return withQueryParam(base, "aba", tabSlug, "visao-geral");
 };
 
+const growthCommercialPathForState = (role = currentRole, tab = salesCopilotState?.activeTab || "sdr") => {
+  const normalized = normalizeRole(role);
+  const safeTab = ["sdr", "scripts-vendas", "objecoes", "training"].includes(String(tab || "")) ? String(tab) : "sdr";
+  if (normalized === "admin") return safeTab === "sdr" ? "/app/admin/comercial/growth" : `/app/admin/comercial/growth/${safeTab}`;
+  return safeTab === "sdr" ? "/app/growth/comercial/painel-sdr" : `/app/growth/comercial/${safeTab}`;
+};
+
 const navigateAdminPedagogicoState = ({ replace = false } = {}) => {
   navigateApp(adminPedagogicoPathForState(), { replace });
 };
@@ -42789,7 +42796,7 @@ const panelPathForRole = (role, panel) => {
   if (normalized === "admin") {
     if (p === "activities") return "/app/admin/atividades";
     if (p === "admin-sdr") return "/app/admin/comercial/pre-vendas/painel-sdr";
-    if (["sdr", "scripts-vendas", "objecoes", "training"].includes(p)) return `/app/admin/growth/${p}`;
+    if (["sdr", "scripts-vendas", "objecoes", "training"].includes(p)) return growthCommercialPathForState("admin", p);
     if (p === "professores" || p === "alunos") return adminPedagogicoPathForState();
     if (p === "admin-controle-pedagogico") return adminPedagogicoPathForState();
     if (["admin-controle-pedagogico-aulas", "admin-controle-pedagogico-pessoas", "admin-controle-pedagogico-retencao", "admin-controle-pedagogico-reposicoes", "admin-controle-pedagogico-qualidade", "admin-controle-pedagogico-onboarding", "admin-controle-pedagogico-relatorios"].includes(p)) return adminPedagogicoPathForState();
@@ -42803,7 +42810,7 @@ const panelPathForRole = (role, panel) => {
     if (p === "admin-comercial-atividade-sdr") return "/app/admin/comercial/pre-vendas";
     if (p === "admin-comercial-metas") return "/app/admin/comercial/metas";
     if (p === "admin-comercial-usuarios") return "/app/admin/comercial/usuarios";
-	    if (p === "growth") return "/app/admin/growth";
+	    if (p === "growth") return growthCommercialPathForState("admin");
     if (p === "gravadas") return "/app/admin/gravadas";
     if (p === "ao-vivo") return "/app/admin/ao-vivo";
     if (p === "materiais") return "/app/admin/materiais";
@@ -42812,10 +42819,11 @@ const panelPathForRole = (role, panel) => {
 
   if (normalized === "growth") {
     if (p === "dashboard" || p === "growth-dashboard") return "/app/growth/dashboard";
-    if (p === "native-crm") return "/app/growth/crm";
+    if (p === "native-crm") return "/app/growth/comercial/crm";
     if (p === "activities") return "/app/growth/atividades";
-    if (["sdr", "scripts-vendas", "objecoes", "training"].includes(p)) return `/app/growth/${p}`;
-    return "/app/growth/sdr";
+    if (["sdr", "scripts-vendas", "objecoes", "training"].includes(p)) return growthCommercialPathForState("growth", p);
+    if (p === "growth") return growthCommercialPathForState("growth");
+    return growthCommercialPathForState("growth");
   }
 
   if (normalized === "FINANCE") {
@@ -42895,13 +42903,20 @@ const parseAppRoute = (path) => {
 	    }
     if (sub === "comercial") {
       if (detail === "crm") return { role, panel: "native-crm" };
+      if (detail === "growth") {
+        const growthTab = ["scripts-vendas", "objecoes", "training"].includes(segments[4]) ? segments[4] : "sdr";
+        return { role, panel: "growth", growthTab };
+      }
       if (detail === "metas") return { role, panel: "admin-comercial-metas" };
       if (detail === "usuarios") return { role, panel: "admin-comercial-usuarios" };
       if (detail === "pre-vendas" && segments[4] === "painel-sdr") return { role, panel: "admin-sdr" };
       if (detail === "atividade-sdr" || detail === "pre-vendas") return { role, panel: "admin-comercial-atividade-sdr" };
       return { role, panel: "admin-comercial-visao-geral" };
     }
-	    if (sub === "growth") return { role, panel: "growth", growthTab: ["sdr", "scripts-vendas", "objecoes", "training"].includes(detail) ? detail : "sdr" };
+	    if (sub === "growth") {
+	      const growthTab = ["sdr", "scripts-vendas", "objecoes", "training"].includes(detail) ? detail : "sdr";
+	      return { role, panel: "growth", growthTab, redirectTo: growthCommercialPathForState("admin", growthTab) };
+	    }
     if (sub === "ao-vivo") return { role, panel: "ao-vivo" };
     if (sub === "gravadas") return { role, panel: "gravadas" };
     if (sub === "materiais") return { role, panel: "materiais" };
@@ -42911,9 +42926,15 @@ const parseAppRoute = (path) => {
   if (role === "growth") {
     if (sub === "atendimento") return { role, panel: detail === "conexoes" ? "attendance-connections" : "attendance-inbox" };
     if (sub === "dashboard" || !sub) return { role, panel: "growth-dashboard" };
-    if (sub === "crm") return { role, panel: "native-crm" };
+    if (sub === "comercial") {
+      if (detail === "crm") return { role, panel: "native-crm" };
+      const growthTab = detail === "painel-sdr" ? "sdr" : ["scripts-vendas", "objecoes", "training"].includes(detail) ? detail : "";
+      if (growthTab) return { role, panel: "growth", growthTab };
+      return { role, panel: "growth-dashboard" };
+    }
+    if (sub === "crm") return { role, panel: "native-crm", redirectTo: "/app/growth/comercial/crm" };
     if (sub === "activities" || sub === "atividades") return { role, panel: "activities" };
-    if (["sdr", "scripts-vendas", "objecoes", "training"].includes(sub)) return { role, panel: "growth", growthTab: sub };
+    if (["sdr", "scripts-vendas", "objecoes", "training"].includes(sub)) return { role, panel: "growth", growthTab: sub, redirectTo: growthCommercialPathForState("growth", sub) };
     return { role, panel: "growth-dashboard" };
   }
 
