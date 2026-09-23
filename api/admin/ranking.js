@@ -66,7 +66,7 @@ module.exports = async (req, res) => {
     sendJson(res, 403, { error: "forbidden" });
     return;
   }
-  const permissionGuard = await requireAdminPermission(req, "pedagogico.users");
+  const permissionGuard = await requireAdminPermission(req, "pedagogico.users.view");
   if (!permissionGuard.ok) {
     sendJson(res, permissionGuard.status, permissionGuard.body);
     return;

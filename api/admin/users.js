@@ -64,7 +64,7 @@ module.exports = async (req, res) => {
     sendJson(res, 400, { error: "invalid_request" });
     return;
   }
-  const permission = role === "growth" ? "comercial.users" : "pedagogico.users";
+  const permission = role === "growth" ? "comercial.users.update" : "pedagogico.users.update";
   const permissionGuard = await requireAdminPermission(req, permission);
   if (!permissionGuard.ok) {
     sendJson(res, permissionGuard.status, permissionGuard.body);

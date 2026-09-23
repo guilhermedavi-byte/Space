@@ -57,6 +57,11 @@ const compactEvolutionMessage = (d, message) => {
   const type = kindOf(unwrap);
   const src = unwrap.imageMessage || unwrap.videoMessage || unwrap.audioMessage || unwrap.documentMessage || unwrap.stickerMessage || null;
   if (!src || type === 'text') return null;
+  const numberish = value => {
+    const raw = typeof value === 'bigint' ? value.toString() : value?.toString ? value.toString() : value;
+    const n = Number(raw);
+    return Number.isFinite(n) && n >= 0 ? Math.min(n, 100 * 1024 * 1024) : undefined;
+  };
   return {
     key: {
       id: String(d?.key?.id || '').slice(0, 256),
@@ -73,8 +78,8 @@ const compactEvolutionMessage = (d, message) => {
         mimetype: typeof src.mimetype === 'string' ? src.mimetype.slice(0, 120) : undefined,
         fileSha256: typeof src.fileSha256 === 'string' ? src.fileSha256.slice(0, 256) : undefined,
         fileEncSha256: typeof src.fileEncSha256 === 'string' ? src.fileEncSha256.slice(0, 256) : undefined,
-        fileLength: src.fileLength ?? undefined,
-        seconds: src.seconds ?? undefined,
+        fileLength: numberish(src.fileLength),
+        seconds: numberish(src.seconds),
         fileName: typeof src.fileName === 'string' ? src.fileName.slice(0, 220) : undefined,
         caption: typeof src.caption === 'string' ? src.caption.slice(0, 2000) : undefined
       }

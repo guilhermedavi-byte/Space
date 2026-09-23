@@ -4,6 +4,7 @@ const { listCollectionAsAdmin } = require("./_lib/firestore-admin");
 const {
   ADMIN_PERMISSION_REGISTRY,
   adminAccessPayloadForUser,
+  areAdminPermissionInputsValid,
   backfillExistingAdminPermissions,
   isSuperAdminUser,
   normalizeAdminPermissions,
@@ -84,7 +85,7 @@ module.exports = async (req, res) => {
     const permissions = normalizeAdminPermissions(body?.permissions);
     if (!targetUid) return sendJson(res, 400, { error: "missing_target" });
     if (!Array.isArray(body?.permissions)) return sendJson(res, 400, { error: "invalid_permissions" });
-    if (permissions.length !== body.permissions.length) return sendJson(res, 400, { error: "invalid_permission_key" });
+    if (!areAdminPermissionInputsValid(body.permissions)) return sendJson(res, 400, { error: "invalid_permission_key" });
 
     try {
       const saved = await saveAdminPermissions({ actorUserId: auth.session.sub, targetUid, permissions });

@@ -876,11 +876,27 @@ const flattenAdminPermissionRegistry = (registry = ADMIN_PERMISSION_REGISTRY) =>
   const out = [];
   Object.entries(registry || {}).forEach(([key, value]) => {
     if (!value || typeof value !== "object") return;
-    if (value.children && typeof value.children === "object") {
-      Object.entries(value.children).forEach(([childKey, child]) => out.push({ key: `${key}.${childKey}`, moduleKey: key, childKey, ...(child || {}) }));
-    } else {
-      out.push({ key, moduleKey: key, ...(value || {}) });
-    }
+    Object.entries(value.children || {}).forEach(([childKey, child]) => {
+      const resourceKey = child?.resource || `${key}.${childKey}`;
+      const actions = Array.isArray(child?.actions) && child.actions.length ? child.actions : [{ key: "view", label: "Visualizar" }];
+      actions.forEach((action, actionIndex) => {
+        const actionKey = String(action?.key || action || "").trim();
+        if (!actionKey) return;
+        out.push({
+          ...(child || {}),
+          key: `${resourceKey}.${actionKey}`,
+          moduleKey: key,
+          childKey,
+          resourceKey,
+          actionKey,
+          actionLabel: action?.label || actionKey,
+          sensitive: action?.sensitive === true || child?.sensitive === true,
+          dependencies: Array.isArray(action?.dependencies) ? action.dependencies : actionKey === "view" ? [] : [`${resourceKey}.view`],
+          sortOrder: Number(action?.sortOrder ?? actionIndex) || 0,
+          actions,
+        });
+      });
+    });
   });
   return out;
 };
@@ -895,44 +911,44 @@ const canAdmin = (permission) => {
 };
 const permissionForPanel = (panelName) => {
   const panel = String(panelName || "").trim();
-  if (panel === "dashboard") return "dashboard";
-  if (panel === "activities") return "activities";
-  if (panel === "automations") return "automations";
-  if (panel === "status-plataforma") return "status";
-  if (panel === "guia-colaboradores") return "guide";
-  if (panel === "space-office") return "spaceOffice";
-  if (panel === "attendance-inbox") return "attendance.inbox";
-  if (panel === "attendance-connections") return "attendance.connections";
-  if (panel === "configuracoes-admin") return adminSettingsState?.activeSection === "acessos" ? "settings.accesses" : "settings.profile";
-  if (panel === "admin-comercial-visao-geral") return "comercial.overview";
-  if (panel === "native-crm") return "comercial.crm";
-  if (panel === "admin-comercial-atividade-sdr") return "comercial.preSales";
-  if (panel === "admin-sdr") return "comercial.sdrPanel";
-  if (panel === "growth") return "comercial.preSales";
-  if (panel === "admin-comercial-metas") return "comercial.goals";
-  if (panel === "admin-comercial-usuarios") return "comercial.users";
+  if (panel === "dashboard") return "dashboard.overview.view";
+  if (panel === "activities") return "activities.activity.view";
+  if (panel === "automations") return "automations.flows.view";
+  if (panel === "status-plataforma") return "status.overview.view";
+  if (panel === "guia-colaboradores") return "guide.overview.view";
+  if (panel === "space-office") return "spaceOffice.overview.view";
+  if (panel === "attendance-inbox") return "attendance.inbox.view";
+  if (panel === "attendance-connections") return "attendance.connections.view";
+  if (panel === "configuracoes-admin") return adminSettingsState?.activeSection === "acessos" ? "settings.accesses.view" : "settings.profile.view";
+  if (panel === "admin-comercial-visao-geral") return "comercial.overview.view";
+  if (panel === "native-crm") return "comercial.crm.view";
+  if (panel === "admin-comercial-atividade-sdr") return "comercial.preSales.view";
+  if (panel === "admin-sdr") return "comercial.sdrPanel.view";
+  if (panel === "growth") return "comercial.preSales.view";
+  if (panel === "admin-comercial-metas") return "comercial.goals.view";
+  if (panel === "admin-comercial-usuarios") return "comercial.users.view";
   if (panel === "financeiro") {
     const map = { overview: "overview", recebiveis: "receivables", assinaturas: "subscriptions", clientes: "customers", recuperacao: "recovery", pendencias: "pending", fechamento: "closing" };
-    return `financeiro.${map[String(financeState?.activeTab || "overview")] || "overview"}`;
+    return `financeiro.${map[String(financeState?.activeTab || "overview")] || "overview"}.view`;
   }
-  if (panel === "ao-vivo") return "pedagogico.agenda";
+  if (panel === "ao-vivo") return "pedagogico.agenda.view";
   if (panel && panel.startsWith("admin-controle-pedagogico")) {
     const map = { aulas: "lessons", pessoas: "users", retencao: "retention", reposicoes: "repositions", qualidade: "quality", onboarding: "onboarding", relatorios: "reports" };
-    return `pedagogico.${map[String(adminPedagogicoState?.activeTab || "overview")] || "overview"}`;
+    return `pedagogico.${map[String(adminPedagogicoState?.activeTab || "overview")] || "overview"}.view`;
   }
   return "";
 };
 const firstAllowedAdminPanel = () => {
   const allowed = sessionUser?.isSuperAdmin === true ? ALL_ADMIN_PERMISSION_KEYS : Array.from(adminPermissionSet());
-  const preferred = ["dashboard", "activities", "pedagogico.overview", "comercial.overview", "comercial.crm", "financeiro.overview", "settings.profile"];
-  const key = preferred.find((item) => allowed.includes(item)) || allowed[0] || "settings.profile";
+  const preferred = ["dashboard.overview.view", "activities.activity.view", "pedagogico.overview.view", "comercial.overview.view", "comercial.crm.view", "financeiro.overview.view", "settings.profile.view"];
+  const key = preferred.find((item) => allowed.includes(item)) || allowed[0] || "settings.profile.view";
   const item = ADMIN_PERMISSION_ITEMS.find((entry) => entry.key === key);
   return item?.panel || "configuracoes-admin";
 };
 const applyFirstAllowedAdminState = () => {
   const allowed = sessionUser?.isSuperAdmin === true ? ALL_ADMIN_PERMISSION_KEYS : Array.from(adminPermissionSet());
-  const preferred = ["dashboard", "activities", "pedagogico.overview", "comercial.overview", "comercial.crm", "financeiro.overview", "settings.profile"];
-  const key = preferred.find((item) => allowed.includes(item)) || allowed[0] || "settings.profile";
+  const preferred = ["dashboard.overview.view", "activities.activity.view", "pedagogico.overview.view", "comercial.overview.view", "comercial.crm.view", "financeiro.overview.view", "settings.profile.view"];
+  const key = preferred.find((item) => allowed.includes(item)) || allowed[0] || "settings.profile.view";
   const item = ADMIN_PERMISSION_ITEMS.find((entry) => entry.key === key) || {};
   if (item.financeTab) financeState.activeTab = item.financeTab;
   if (item.settingsSection) adminSettingsState.activeSection = item.settingsSection;
@@ -1066,10 +1082,10 @@ const syncRoleUI = () => {
       if (!(el instanceof HTMLElement)) return;
       const tab = String(el.getAttribute("data-finance-tab") || "overview").trim();
       const map = { overview: "overview", recebiveis: "receivables", assinaturas: "subscriptions", clientes: "customers", recuperacao: "recovery", pendencias: "pending", fechamento: "closing" };
-      el.hidden = !canAdmin(`financeiro.${map[tab] || "overview"}`);
+      el.hidden = !canAdmin(`financeiro.${map[tab] || "overview"}.view`);
     });
     document.querySelectorAll('a.sidebar-link[href="/tv/crm-live"]').forEach((el) => {
-      if (el instanceof HTMLElement) el.hidden = !canAdmin("comercial.crmLive");
+      if (el instanceof HTMLElement) el.hidden = !canAdmin("comercial.crmLive.view");
     });
     document.querySelectorAll("[data-sidebar-accordion]").forEach((accordion) => {
       if (!(accordion instanceof HTMLElement)) return;
@@ -1267,6 +1283,7 @@ const formatRenewalDate = (date) => {
 let modalPrimaryHandler = null;
 let modalSecondaryHandler = null;
 let modalTrashHandler = null;
+let modalBeforeCloseHandler = null;
 let activeModalKind = "";
 let modalReturnFocusEl = null;
 let createEventDraft = null;
@@ -1350,14 +1367,17 @@ const clearTeacherCalendarSelection = () => {
   body.classList.remove("is-cal-dragging");
 };
 
-const closeModal = () => {
+const closeModal = ({ force = false } = {}) => {
   if (!modalOverlay) return;
+  if (!force && typeof modalBeforeCloseHandler === "function" && modalBeforeCloseHandler() === false) return false;
   clearFinanceChatPolling();
   modalOverlay.hidden = true;
   body.classList.remove("is-modal-open");
+  if (modalDialog instanceof HTMLElement) modalDialog.classList.remove("modal-dialog-wide");
   modalPrimaryHandler = null;
   modalSecondaryHandler = null;
   modalTrashHandler = null;
+  modalBeforeCloseHandler = null;
   if (modalTrash) {
     modalTrash.hidden = true;
   }
@@ -1388,6 +1408,7 @@ const openModal = ({
   onSecondary,
   onTrash,
   onOpen,
+  onBeforeClose,
   returnFocusEl = null,
 } = {}) => {
   if (!modalOverlay || !modalTitle || !modalBody || !modalPrimary || !modalSecondary) return;
@@ -1408,6 +1429,7 @@ const openModal = ({
   modalPrimaryHandler = typeof onPrimary === "function" ? onPrimary : null;
   modalSecondaryHandler = typeof onSecondary === "function" ? onSecondary : null;
   modalTrashHandler = typeof onTrash === "function" ? onTrash : null;
+  modalBeforeCloseHandler = typeof onBeforeClose === "function" ? onBeforeClose : null;
 
   if (modalTrash) {
     modalTrash.hidden = !showTrash;
@@ -27039,7 +27061,7 @@ const bindStudentProfileTabs = (sheetEl, hist, mode) => {
     update();
     try {
       // Use the existing read-only dashboard; finance-v1 can materialize recovery rules.
-      const response = await fetchWithAuth(key === "financial" ? "/api/financeiro-dashboard" : "/api/activities", { method: "GET" });
+      const response = await fetchWithAuth(key === "financial" ? `/api/financeiro-dashboard?student_id=${encodeURIComponent(hist.alunoId)}` : "/api/activities", { method: "GET" });
       if (!response.ok) throw new Error(response.status === 403 ? "Você não tem permissão para consultar estes registros." : "Não foi possível carregar os registros.");
       const data = await response.json();
       if (key === "activities") state.rows = (data.activities || []).filter(row => studentProfileRelated(row, hist));
@@ -27059,6 +27081,7 @@ const bindStudentProfileTabs = (sheetEl, hist, mode) => {
     root.querySelectorAll("[data-student-profile-tab]").forEach(button => { const selected = button.dataset.studentProfileTab === key; button.setAttribute("aria-selected", String(selected)); button.tabIndex = selected ? 0 : -1; });
     root.querySelectorAll("[data-student-profile-panel]").forEach(panel => { panel.hidden = panel.dataset.studentProfilePanel !== key; });
     load(key);
+    if (key === "history" && hist.alunoMeta) { load("financial"); load("activities"); }
   };
   root.addEventListener("click", event => {
     const tab = event.target.closest("[data-student-profile-tab]");
@@ -38866,39 +38889,135 @@ const setAcessosModalError = (message) => {
   }
 };
 
-const renderAdminPermissionMatrix = (selected = [], { disabled = false } = {}) => {
+const renderAdminPermissionMatrix = (selected = [], { disabled = false, trackChanges = true } = {}) => {
   const selectedSet = new Set(Array.isArray(selected) ? selected : []);
+  const modules = Object.entries(ADMIN_PERMISSION_REGISTRY || {})
+    .map(([moduleKey, module]) => {
+      const resources = Object.entries(module?.children || {})
+        .map(([childKey, child]) => {
+          const resourceKey = child?.resource || `${moduleKey}.${childKey}`;
+          const actions = (Array.isArray(child?.actions) && child.actions.length ? child.actions : [{ key: "view", label: "Visualizar" }])
+            .map((action, index) => {
+              const actionKey = String(action?.key || action || "").trim();
+              return actionKey ? {
+                key: actionKey,
+                label: action?.label || actionKey,
+                permissionKey: `${resourceKey}.${actionKey}`,
+                sensitive: action?.sensitive === true || child?.sensitive === true,
+                dependencies: Array.isArray(action?.dependencies) ? action.dependencies : actionKey === "view" ? [] : [`${resourceKey}.view`],
+                sortOrder: Number(action?.sortOrder ?? index) || 0,
+              } : null;
+            })
+            .filter(Boolean);
+          return actions.length ? {
+            key: resourceKey,
+            label: child?.label || childKey,
+            description: child?.description || "",
+            actions,
+          } : null;
+        })
+        .filter(Boolean);
+      return resources.length ? { key: moduleKey, label: module?.label || moduleKey, resources } : null;
+    })
+    .filter(Boolean);
+  const actionOrder = ["view", "create", "update", "status", "deactivate", "reply", "assign", "run", "manage", "manage_permissions", "delete"];
+  const actionLabels = {};
+  modules.forEach((module) => module.resources.forEach((resource) => resource.actions.forEach((action) => { actionLabels[action.key] = action.label; })));
+  const actionKeys = Array.from(new Set(modules.flatMap((module) => module.resources.flatMap((resource) => resource.actions.map((action) => action.key)))))
+    .sort((left, right) => {
+      const li = actionOrder.indexOf(left);
+      const ri = actionOrder.indexOf(right);
+      return (li < 0 ? 999 : li) - (ri < 0 ? 999 : ri) || String(left).localeCompare(String(right), "pt-BR");
+    });
   return `
-    <div class="acessos-permissions-matrix" data-admin-permission-matrix>
-      ${Object.entries(ADMIN_PERMISSION_REGISTRY || {}).map(([moduleKey, module]) => {
-        const children = module?.children && typeof module.children === "object"
-          ? Object.entries(module.children).map(([childKey, child]) => ({ key: `${moduleKey}.${childKey}`, label: child?.label || childKey }))
-          : [{ key: moduleKey, label: module?.label || moduleKey }];
-        const checkedCount = children.filter((child) => selectedSet.has(child.key)).length;
-        const parentChecked = checkedCount === children.length;
+    <div class="acessos-permissions-shell" data-admin-permission-matrix data-track-changes="${trackChanges ? "true" : "false"}" data-initial-permissions="${escapeHtml(JSON.stringify(Array.from(selectedSet).sort()))}">
+      <div class="acessos-permissions-toolbar">
+        <label class="acessos-permission-search">
+          <span>Buscar permissão</span>
+          <input type="search" autocomplete="off" placeholder="Ex.: excluir, atividade, metas" data-permission-search ${disabled ? "disabled" : ""} />
+        </label>
+        <div class="acessos-permission-tools">
+          <button class="button button-outline button-small" type="button" data-permission-expand-all>Expandir todos</button>
+          <button class="button button-outline button-small" type="button" data-permission-collapse-all>Recolher todos</button>
+        </div>
+      </div>
+      <div class="acessos-permission-modules">
+      ${modules.map((module) => {
+        const moduleKeys = module.resources.flatMap((resource) => resource.actions.map((action) => action.permissionKey));
+        const checkedCount = moduleKeys.filter((key) => selectedSet.has(key)).length;
+        const moduleTotal = moduleKeys.length;
+        const parentChecked = checkedCount === moduleTotal;
+        const statusLabel = checkedCount === 0 ? "Sem acesso" : checkedCount === moduleTotal ? "Acesso completo" : `${checkedCount} de ${moduleTotal}`;
         return `
-          <section class="acessos-permission-module" data-permission-module="${escapeHtml(moduleKey)}">
-            <label class="acessos-permission-parent">
-              <input type="checkbox" data-permission-parent="${escapeHtml(moduleKey)}" ${parentChecked ? "checked" : ""} ${disabled ? "disabled" : ""} />
-              <span>${escapeHtml(module?.label || moduleKey)}</span>
-            </label>
-            <div class="acessos-permission-children">
-              ${children.map((child) => `
-                <label class="acessos-permission-child">
-                  <input type="checkbox" data-permission-key="${escapeHtml(child.key)}" data-permission-parent-key="${escapeHtml(moduleKey)}" value="${escapeHtml(child.key)}" ${selectedSet.has(child.key) ? "checked" : ""} ${disabled ? "disabled" : ""} />
-                  <span>${escapeHtml(child.label)}</span>
-                </label>
-              `).join("")}
+          <details class="acessos-permission-module" data-permission-module="${escapeHtml(module.key)}">
+            <summary class="acessos-permission-summary">
+              <span class="acessos-permission-summary-main">
+                <input type="checkbox" data-permission-parent="${escapeHtml(module.key)}" aria-label="Acesso completo a ${escapeHtml(module.label)}" ${parentChecked ? "checked" : ""} ${disabled ? "disabled" : ""} />
+                <span>
+                  <strong>${escapeHtml(module.label)}</strong>
+                  <em data-permission-module-status>${escapeHtml(statusLabel)}</em>
+                </span>
+              </span>
+              <span class="acessos-permission-chevron" aria-hidden="true">›</span>
+            </summary>
+            <div class="acessos-permission-panel">
+              <div class="acessos-permission-grid" style="--permission-columns: ${Math.max(actionKeys.length, 1)}">
+                <div class="acessos-permission-grid-head">Recurso</div>
+                ${actionKeys.map((actionKey) => `<div class="acessos-permission-grid-head is-action">${escapeHtml(actionLabels[actionKey] || actionKey)}</div>`).join("")}
+                ${module.resources.map((resource) => {
+                  const resourceKeys = resource.actions.map((action) => action.permissionKey);
+                  const resourceSelected = resourceKeys.filter((key) => selectedSet.has(key)).length;
+                  const actionMap = new Map(resource.actions.map((action) => [action.key, action]));
+                  return `
+                    <div class="acessos-permission-resource" data-permission-resource="${escapeHtml(resource.key)}" data-permission-search-text="${escapeHtml([module.label, resource.label, ...resource.actions.map((action) => `${action.label} ${action.key}`)].join(" ").toLowerCase())}">
+                      <label class="acessos-permission-resource-label">
+                        <input type="checkbox" data-permission-resource-parent="${escapeHtml(resource.key)}" ${resourceSelected === resourceKeys.length ? "checked" : ""} ${disabled ? "disabled" : ""} />
+                        <span>
+                          <strong>${escapeHtml(resource.label)}</strong>
+                          ${resource.description ? `<small>${escapeHtml(resource.description)}</small>` : ""}
+                        </span>
+                      </label>
+                      ${actionKeys.map((actionKey) => {
+                        const action = actionMap.get(actionKey);
+                        if (!action) return `<span class="acessos-permission-cell is-empty" aria-hidden="true"></span>`;
+                        return `
+                          <label class="acessos-permission-cell${action.sensitive ? " is-sensitive" : ""}" title="${escapeHtml(action.label)}">
+                            <input type="checkbox" data-permission-key="${escapeHtml(action.permissionKey)}" data-permission-parent-key="${escapeHtml(module.key)}" data-permission-resource-key="${escapeHtml(resource.key)}" data-permission-action="${escapeHtml(action.key)}" data-permission-dependencies="${escapeHtml((action.dependencies || []).join(","))}" value="${escapeHtml(action.permissionKey)}" ${selectedSet.has(action.permissionKey) ? "checked" : ""} ${disabled ? "disabled" : ""} />
+                            <span aria-hidden="true"></span>
+                            ${action.sensitive ? `<em>Sensível</em>` : ""}
+                          </label>
+                        `;
+                      }).join("")}
+                    </div>
+                  `;
+                }).join("")}
+              </div>
             </div>
-          </section>
+          </details>
         `;
       }).join("")}
+      </div>
     </div>
   `;
 };
 
 const syncPermissionMatrixState = (root = modalBody) => {
   const scope = root instanceof HTMLElement ? root : document;
+  const selected = readPermissionMatrixValues(scope).sort();
+  const initialRaw = String(scope.querySelector("[data-admin-permission-matrix]")?.getAttribute("data-initial-permissions") || "[]");
+  let initial = [];
+  try { initial = JSON.parse(initialRaw); } catch {}
+  const dirty = JSON.stringify(selected) !== JSON.stringify(Array.isArray(initial) ? initial.slice().sort() : []);
+  const matrixEl = scope.querySelector("[data-admin-permission-matrix]");
+  if (modalPrimary instanceof HTMLButtonElement && matrixEl?.getAttribute("data-track-changes") === "true") modalPrimary.disabled = !dirty;
+  scope.querySelectorAll("[data-permission-resource-parent]").forEach((parent) => {
+    if (!(parent instanceof HTMLInputElement)) return;
+    const resourceKey = String(parent.getAttribute("data-permission-resource-parent") || "");
+    const children = Array.from(scope.querySelectorAll(`[data-permission-resource-key="${CSS.escape(resourceKey)}"]`)).filter((el) => el instanceof HTMLInputElement);
+    const checked = children.filter((child) => child.checked).length;
+    parent.checked = children.length > 0 && checked === children.length;
+    parent.indeterminate = checked > 0 && checked < children.length;
+  });
   scope.querySelectorAll("[data-permission-parent]").forEach((parent) => {
     if (!(parent instanceof HTMLInputElement)) return;
     const moduleKey = String(parent.getAttribute("data-permission-parent") || "");
@@ -38906,6 +39025,9 @@ const syncPermissionMatrixState = (root = modalBody) => {
     const checked = children.filter((child) => child.checked).length;
     parent.checked = children.length > 0 && checked === children.length;
     parent.indeterminate = checked > 0 && checked < children.length;
+    const moduleEl = parent.closest("[data-permission-module]");
+    const statusEl = moduleEl?.querySelector("[data-permission-module-status]");
+    if (statusEl instanceof HTMLElement) statusEl.textContent = checked === 0 ? "Sem acesso" : checked === children.length ? "Acesso completo" : `${checked} de ${children.length}`;
   });
 };
 
@@ -38919,8 +39041,24 @@ const readPermissionMatrixValues = (root = modalBody) => {
 
 const bindPermissionMatrixEvents = (root = modalBody) => {
   const scope = root instanceof HTMLElement ? root : document;
+  const enforceDependencies = (input) => {
+    if (!(input instanceof HTMLInputElement)) return;
+    const resourceKey = String(input.getAttribute("data-permission-resource-key") || "");
+    const action = String(input.getAttribute("data-permission-action") || "");
+    if (!resourceKey) return;
+    if (input.checked && action !== "view") {
+      const view = scope.querySelector(`[data-permission-key="${CSS.escape(`${resourceKey}.view`)}"]`);
+      if (view instanceof HTMLInputElement) view.checked = true;
+    }
+    if (!input.checked && action === "view") {
+      scope.querySelectorAll(`[data-permission-resource-key="${CSS.escape(resourceKey)}"]`).forEach((child) => {
+        if (child instanceof HTMLInputElement && child !== input) child.checked = false;
+      });
+    }
+  };
   scope.querySelectorAll("[data-permission-parent]").forEach((parent) => {
     if (!(parent instanceof HTMLInputElement)) return;
+    parent.addEventListener("click", (event) => event.stopPropagation());
     parent.addEventListener("change", () => {
       const moduleKey = String(parent.getAttribute("data-permission-parent") || "");
       scope.querySelectorAll(`[data-permission-parent-key="${CSS.escape(moduleKey)}"]`).forEach((child) => {
@@ -38929,9 +39067,48 @@ const bindPermissionMatrixEvents = (root = modalBody) => {
       syncPermissionMatrixState(scope);
     });
   });
-  scope.querySelectorAll("[data-permission-key]").forEach((child) => {
-    if (child instanceof HTMLInputElement) child.addEventListener("change", () => syncPermissionMatrixState(scope));
+  scope.querySelectorAll("[data-permission-resource-parent]").forEach((parent) => {
+    if (!(parent instanceof HTMLInputElement)) return;
+    parent.addEventListener("change", () => {
+      const resourceKey = String(parent.getAttribute("data-permission-resource-parent") || "");
+      scope.querySelectorAll(`[data-permission-resource-key="${CSS.escape(resourceKey)}"]`).forEach((child) => {
+        if (child instanceof HTMLInputElement) child.checked = parent.checked;
+      });
+      syncPermissionMatrixState(scope);
+    });
   });
+  scope.querySelectorAll("[data-permission-key]").forEach((child) => {
+    if (child instanceof HTMLInputElement) child.addEventListener("change", () => {
+      enforceDependencies(child);
+      syncPermissionMatrixState(scope);
+    });
+  });
+  const search = scope.querySelector("[data-permission-search]");
+  if (search instanceof HTMLInputElement) {
+    search.addEventListener("input", () => {
+      const query = search.value.trim().toLowerCase();
+      scope.querySelectorAll("[data-permission-module]").forEach((moduleEl) => {
+        if (!(moduleEl instanceof HTMLElement)) return;
+        let visibleRows = 0;
+        moduleEl.querySelectorAll("[data-permission-resource]").forEach((row) => {
+          if (!(row instanceof HTMLElement)) return;
+          const text = String(row.getAttribute("data-permission-search-text") || "");
+          const visible = !query || text.includes(query);
+          row.hidden = !visible;
+          if (visible) visibleRows += 1;
+        });
+        moduleEl.hidden = visibleRows === 0;
+        if (query && moduleEl instanceof HTMLDetailsElement && visibleRows > 0) moduleEl.open = true;
+      });
+    });
+  }
+  const setOpen = (open) => scope.querySelectorAll("[data-permission-module]").forEach((moduleEl) => {
+    if (moduleEl instanceof HTMLDetailsElement) moduleEl.open = open;
+  });
+  const expand = scope.querySelector("[data-permission-expand-all]");
+  const collapse = scope.querySelector("[data-permission-collapse-all]");
+  if (expand instanceof HTMLButtonElement) expand.addEventListener("click", () => setOpen(true));
+  if (collapse instanceof HTMLButtonElement) collapse.addEventListener("click", () => setOpen(false));
   syncPermissionMatrixState(scope);
 };
 
@@ -38962,7 +39139,16 @@ const openAdminAccessManageModal = (adminId) => {
     secondaryLabel: "Cancelar",
     hideSecondary: false,
     showTrash: false,
-    onOpen: () => bindPermissionMatrixEvents(modalBody),
+    onOpen: () => {
+      if (modalDialog instanceof HTMLElement) modalDialog.classList.add("modal-dialog-wide");
+      bindPermissionMatrixEvents(modalBody);
+    },
+    onBeforeClose: () => {
+      const current = readPermissionMatrixValues(modalBody).sort();
+      const initial = Array.isArray(row.adminPermissions) ? row.adminPermissions.slice().sort() : [];
+      if (JSON.stringify(current) === JSON.stringify(initial)) return true;
+      return window.confirm("Descartar alterações de acesso não salvas?");
+    },
     onPrimary: () => {
       (async () => {
         const previousLabel = modalPrimary instanceof HTMLButtonElement ? modalPrimary.textContent : "";
@@ -38983,7 +39169,7 @@ const openAdminAccessManageModal = (adminId) => {
           adminSettingsState.accessRows = (Array.isArray(data?.admins) ? data.admins : adminSettingsState.accessRows).map((item) => normalizeAdminAccessRow(item.id || item.uid, item)).filter(Boolean);
           adminSettingsState.accessLoadedAt = Date.now();
           invalidateAdminPermissionCaches();
-          closeModal();
+          closeModal({ force: true });
           renderAdminSettingsPanel();
         } catch (error) {
           setAcessosModalError("Não foi possível salvar os acessos agora.");
@@ -39026,7 +39212,7 @@ const openAdminAccessCreateModal = () => {
           <span>Acesso completo</span>
         </label>
         <div data-acessos-granular hidden>
-          ${renderAdminPermissionMatrix(ALL_ADMIN_PERMISSION_KEYS)}
+          ${renderAdminPermissionMatrix(ALL_ADMIN_PERMISSION_KEYS, { trackChanges: false })}
         </div>
         <div class="acessos-modal-error" data-acessos-modal-error hidden></div>
       </form>
@@ -39038,6 +39224,7 @@ const openAdminAccessCreateModal = () => {
     onOpen: () => {
       const fullAccessEl = modalBody?.querySelector("[data-acessos-full-access]");
       const granularEl = modalBody?.querySelector("[data-acessos-granular]");
+      if (modalDialog instanceof HTMLElement) modalDialog.classList.add("modal-dialog-wide");
       bindPermissionMatrixEvents(modalBody);
       if (fullAccessEl instanceof HTMLInputElement && granularEl instanceof HTMLElement) {
         fullAccessEl.addEventListener("change", () => {
@@ -39109,7 +39296,7 @@ const openAdminAccessCreateModal = () => {
           adminSettingsState.accessLoadedAt = 0;
           invalidateAdminPermissionCaches();
           await loadAdminAccessRows({ force: true });
-          closeModal();
+          closeModal({ force: true });
           renderAdminSettingsPanel();
         } catch (error) {
           console.error("[admin] create access user failed:", error);

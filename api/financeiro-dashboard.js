@@ -274,7 +274,17 @@ module.exports = async (req, res) => {
   }
 
   try {
-    if (req.method === "GET") return await handleGet(res);
+    if (req.method === "GET") {
+      const params = new URL(req.url || '/', 'https://space.invalid').searchParams;
+      if (params.has('student_id')) {
+        const studentId = params.get('student_id');
+        if (!/^[A-Za-z0-9_-]{1,128}$/.test(studentId || '')) return sendJson(res, 400, { error: 'invalid_student_id' });
+        const data = await require('./_lib/student-profile-finance').readStudentProfileFinance(studentId);
+        res.setHeader('Cache-Control', 'private, no-store');
+        return sendJson(res, 200, data);
+      }
+      return await handleGet(res);
+    }
     if (req.method === "POST" || req.method === "PATCH") return await handlePost(req, res, session);
     res.setHeader("Allow", "GET, POST, PATCH");
     return sendJson(res, 405, { error: "method_not_allowed" });

@@ -32,7 +32,10 @@ const requireAdmin = async (req, res) => {
     sendJson(res, 403, { error: "forbidden" });
     return null;
   }
-  const perm = await requireResolvedAdminPermission(auth, "automations");
+  const url = new URL(req.url || "/api/automations", `https://${String(req.headers.host || "localhost")}`);
+  const action = clean(url.searchParams.get("action"));
+  const permissionAction = req.method === "GET" ? "view" : req.method === "POST" && !clean(url.searchParams.get("id")) ? "create" : action === "publish" || action === "pause" ? "run" : "update";
+  const perm = await requireResolvedAdminPermission(auth, `automations.flows.${permissionAction}`);
   if (!perm.ok) {
     sendJson(res, perm.status, perm.body);
     return null;

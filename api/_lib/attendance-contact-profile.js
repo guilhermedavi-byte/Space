@@ -4,7 +4,7 @@ const safePhoto = value => {
   try { const url = new URL(clean(value)); return url.protocol === 'https:' && !url.username && !url.password ? url.href : ''; }
   catch { return ''; }
 };
-const photo = row => safePhoto(row?.photoURL || row?.photoUrl || row?.avatar_url || row?.avatarUrl);
+const photo = row => safePhoto(row?.photoURL || row?.photoUrl || row?.avatar_url || row?.avatarUrl || row?.avatar?.url);
 // Resolve only explicit Attendance links, after the conversation's access check.
 // Never search the master register by phone or expose entire source documents.
 async function contactProfile(payload, read = getDocumentAsAdmin) {

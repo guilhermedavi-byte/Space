@@ -2943,7 +2943,7 @@ module.exports = async (req, res) => {
   if (api === "growth-metrics") {
     const session = getSessionFromRequest(req);
     if (normalizeRole(session?.role) === "admin") {
-      const guard = await requireAdminPermission(req, "comercial.overview");
+      const guard = await requireAdminPermission(req, "comercial.overview.view");
       if (!guard.ok) return sendJson(res, guard.status, guard.body);
     }
     await handleGrowthMetricsApi(req, res);
@@ -2953,7 +2953,8 @@ module.exports = async (req, res) => {
   if (api === "growth-goals") {
     const session = getSessionFromRequest(req);
     if (normalizeRole(session?.role) === "admin") {
-      const guard = await requireAdminPermission(req, "comercial.goals");
+      const action = req.method === "GET" || req.method === "HEAD" ? "view" : "update";
+      const guard = await requireAdminPermission(req, `comercial.goals.${action}`);
       if (!guard.ok) return sendJson(res, guard.status, guard.body);
     }
     await handleGrowthGoalsApi(req, res, url);
@@ -2963,7 +2964,7 @@ module.exports = async (req, res) => {
   if (api === "growth-contratos") {
     const session = getSessionFromRequest(req);
     if (normalizeRole(session?.role) === "admin") {
-      const guard = await requireAdminPermission(req, "comercial.overview");
+      const guard = await requireAdminPermission(req, "comercial.overview.view");
       if (!guard.ok) return sendJson(res, guard.status, guard.body);
     }
     await handleGrowthContractsApi(req, res, url);

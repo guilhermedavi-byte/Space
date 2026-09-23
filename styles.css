@@ -23994,6 +23994,216 @@ body.has-space-env-banner{padding-top:46px}
   background: rgba(7, 9, 16, 0.72);
 }
 
+.modal-dialog.modal-dialog-wide {
+  width: min(900px, 92vw);
+  max-height: 85vh;
+}
+
+.acessos-permissions-shell {
+  display: grid;
+  gap: 14px;
+  min-height: 0;
+}
+
+.acessos-permissions-toolbar {
+  position: sticky;
+  top: -14px;
+  z-index: 2;
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 2px 0 12px;
+  background: #151820;
+}
+
+.acessos-permission-search {
+  display: grid;
+  gap: 7px;
+  min-width: min(360px, 100%);
+}
+
+.acessos-permission-search span {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.acessos-permission-search input {
+  min-height: 40px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 12px;
+  background: rgba(7, 9, 16, 0.7);
+  color: var(--text-main);
+  padding: 0 13px;
+  font: 700 0.9rem "Plus Jakarta Sans", system-ui, sans-serif;
+  outline: none;
+}
+
+.acessos-permission-search input:focus {
+  border-color: rgba(255, 86, 79, 0.5);
+  box-shadow: 0 0 0 3px rgba(255, 86, 79, 0.12);
+}
+
+.acessos-permission-tools {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.acessos-permission-modules {
+  display: grid;
+  gap: 10px;
+}
+
+.acessos-permission-module {
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+  overflow: hidden;
+}
+
+.acessos-permission-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 62px;
+  padding: 14px 16px;
+  cursor: pointer;
+  list-style: none;
+  transition: background-color 150ms ease;
+}
+
+.acessos-permission-summary::-webkit-details-marker {
+  display: none;
+}
+
+.acessos-permission-summary:hover {
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.acessos-permission-summary-main,
+.acessos-permission-resource-label {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+}
+
+.acessos-permission-summary strong,
+.acessos-permission-resource-label strong {
+  display: block;
+  color: var(--text-main);
+  font-size: 0.95rem;
+  line-height: 1.25;
+}
+
+.acessos-permission-summary em,
+.acessos-permission-resource-label small {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.acessos-permission-chevron {
+  color: var(--text-muted);
+  font-size: 1.35rem;
+  line-height: 1;
+  transform: rotate(0deg);
+  transition: transform 160ms ease;
+}
+
+.acessos-permission-module[open] .acessos-permission-chevron {
+  transform: rotate(90deg);
+}
+
+.acessos-permission-panel {
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  padding: 12px;
+}
+
+.acessos-permission-grid {
+  display: grid;
+  grid-template-columns: minmax(210px, 1.1fr) repeat(var(--permission-columns), minmax(82px, 0.34fr));
+  gap: 0;
+  min-width: 720px;
+}
+
+.acessos-permission-grid-head {
+  display: flex;
+  align-items: center;
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.acessos-permission-grid-head.is-action {
+  justify-content: center;
+  min-height: 32px;
+  text-align: center;
+}
+
+.acessos-permission-resource {
+  display: contents;
+}
+
+.acessos-permission-resource[hidden],
+.acessos-permission-module[hidden] {
+  display: none;
+}
+
+.acessos-permission-resource-label {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 10px 8px 10px 0;
+}
+
+.acessos-permission-cell {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 54px;
+  color: var(--text-muted);
+}
+
+.acessos-permission-cell.is-empty {
+  opacity: 0.35;
+}
+
+.acessos-permission-cell.is-empty::before {
+  content: "—";
+}
+
+.acessos-permission-summary input,
+.acessos-permission-resource-label input,
+.acessos-permission-cell input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.acessos-permission-cell em {
+  border: 1px solid rgba(251, 191, 36, 0.22);
+  border-radius: 999px;
+  background: rgba(251, 191, 36, 0.09);
+  color: #f8d582;
+  padding: 2px 6px;
+  font-size: 0.63rem;
+  font-style: normal;
+  font-weight: 900;
+}
+
 @media (max-width: 760px) {
   .acessos-hero,
   .acessos-card-head {
@@ -24008,6 +24218,23 @@ body.has-space-env-banner{padding-top:46px}
   .acessos-row,
   .acessos-row-head {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .acessos-permissions-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .acessos-permission-tools {
+    justify-content: stretch;
+  }
+
+  .acessos-permission-tools .button {
+    flex: 1 1 0;
+  }
+
+  .acessos-permission-panel {
+    overflow-x: auto;
   }
 }
 

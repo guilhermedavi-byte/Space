@@ -4,7 +4,7 @@ const { getGoogleAccessToken } = require("../_lib/google-service-account");
 const { resolveAdminRequestAuth } = require("./_lib/admin-request-auth");
 const { commitWritesAsAdmin, getDocumentAsAdmin } = require("./_lib/firestore-admin");
 const { PROJECT_ID, encodeFields, requestJson } = require("./_lib/firestore-rest");
-const { ALL_ADMIN_PERMISSION_KEYS, normalizeAdminPermissions } = require("./_lib/admin-permissions");
+const { ALL_ADMIN_PERMISSION_KEYS, areAdminPermissionInputsValid, normalizeAdminPermissions } = require("./_lib/admin-permissions");
 
 const CLOUD_PLATFORM_SCOPE = "https://www.googleapis.com/auth/cloud-platform";
 
@@ -228,7 +228,7 @@ module.exports = async (req, res) => {
     sendJson(res, 400, { error: "weak_password", message: "A senha precisa ter pelo menos 6 caracteres." });
     return;
   }
-  if (!fullAccess && (!Array.isArray(body?.permissions) || requestedPermissions.length !== body.permissions.length)) {
+  if (!fullAccess && (!Array.isArray(body?.permissions) || !areAdminPermissionInputsValid(body.permissions))) {
     sendJson(res, 400, { error: "invalid_permission_key", message: "A lista de permissões contém chave inválida." });
     return;
   }

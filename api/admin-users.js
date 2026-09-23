@@ -208,7 +208,7 @@ module.exports = async (req, res) => {
       send(400, { error: "invalid_request" });
       return;
     }
-    const postPermission = role === "growth" ? "comercial.users" : "pedagogico.users";
+    const postPermission = role === "growth" ? "comercial.users.create" : "pedagogico.users.create";
     const postPermissionGuard = await requireAdminPermission(req, postPermission);
     if (!postPermissionGuard.ok) {
       send(postPermissionGuard.status, postPermissionGuard.body);
@@ -268,7 +268,7 @@ module.exports = async (req, res) => {
     send(403, { error: "admin_role_escalation_forbidden" });
     return;
   }
-  const permission = Object.prototype.hasOwnProperty.call(cleanPatch, "commercialRoles") || requestedRole === "growth" ? "comercial.users" : "pedagogico.users";
+  const permission = Object.prototype.hasOwnProperty.call(cleanPatch, "commercialRoles") || requestedRole === "growth" ? "comercial.users.update" : "pedagogico.users.update";
   const permissionGuard = await requireAdminPermission(req, permission);
   if (!permissionGuard.ok) {
     send(permissionGuard.status, permissionGuard.body);

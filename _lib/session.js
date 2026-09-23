@@ -75,7 +75,7 @@ const verifyJwt = (token) => {
 };
 
 const parseCookies = (req) => {
-  const header = String(req.headers.cookie || "");
+  const header = String(req?.headers?.cookie || "");
   const pairs = header.split(";").map((p) => p.trim()).filter(Boolean);
   const out = {};
   for (const pair of pairs) {
@@ -89,7 +89,7 @@ const parseCookies = (req) => {
 };
 
 const isSecureRequest = (req) => {
-  const forwarded = String(req.headers["x-forwarded-proto"] || "").toLowerCase();
+  const forwarded = String(req?.headers?.["x-forwarded-proto"] || "").toLowerCase();
   if (forwarded) return forwarded === "https";
   return false;
 };

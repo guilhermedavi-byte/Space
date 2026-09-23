@@ -159,7 +159,7 @@ module.exports = async (req, res) => {
     sendJson(res, 403, { error: "forbidden", message: "Apenas administradores podem criar usuários Growth." });
     return;
   }
-  const perm = await requireResolvedAdminPermission(auth, "comercial.users");
+  const perm = await requireResolvedAdminPermission(auth, "comercial.users.create");
   if (!perm.ok) {
     sendJson(res, perm.status, perm.body);
     return;

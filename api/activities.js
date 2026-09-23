@@ -181,14 +181,15 @@ module.exports = async (req, res) => {
   const auth = await parseRequest(req);
   if (!auth.ok) return sendJson(res, auth.status, auth.body);
   const { session, role } = auth;
-  if (role === "admin") {
-    const guard = await requireAdminPermission(req, "activities");
-    if (!guard.ok) return sendJson(res, guard.status, guard.body);
-  }
 
   const host = String(req.headers.host || "localhost");
   const url = new URL(req.url || "/api/activities", `https://${host}`);
   const id = safeText(url.searchParams.get("id"));
+  if (role === "admin") {
+    const action = req.method === "POST" ? "create" : req.method === "DELETE" ? "delete" : req.method === "PATCH" ? "update" : "view";
+    const guard = await requireAdminPermission(req, `activities.activity.${action}`);
+    if (!guard.ok) return sendJson(res, guard.status, guard.body);
+  }
 
   if (req.method === "GET") {
     try {

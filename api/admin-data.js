@@ -140,12 +140,12 @@ module.exports = async (req, res) => {
   const type = String(url.searchParams.get("type") || "").trim().toLowerCase();
   const collectionPermission =
     collection === "users" && normalizeUserRoleFilter(type) === "growth"
-      ? "comercial.users"
+      ? "comercial.users.view"
       : collection === "lessonLogs"
-        ? "pedagogico.lessons"
+        ? "pedagogico.lessons.view"
         : collection === "teacherOnboardingProgress" || collection === "teacherQuizSubmissions" || collection === "onboardingContents" || collection === "onboardingQuizzes"
-          ? "pedagogico.onboarding"
-          : "pedagogico.users";
+          ? "pedagogico.onboarding.view"
+          : "pedagogico.users.view";
   const perm = await requireResolvedAdminPermission(auth, collectionPermission);
   if (!perm.ok) return sendJson(res, perm.status, perm.body);
 
