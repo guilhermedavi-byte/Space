@@ -4,7 +4,7 @@ const sharp = require('sharp');
 const MAX_BYTES = 2 * 1024 * 1024;
 const codes = new Set(['avatar_provider_failed','avatar_no_photo','avatar_privacy_restricted','avatar_invalid_url','avatar_invalid_image','avatar_storage_failed','avatar_fetching','avatar_cache_failed']);
 const error = code => Object.assign(new Error(code), { code });
-const logFailure = e => console.warn('[attendance-avatar]', { code: codes.has(e?.code) ? e.code : 'avatar_cache_failed' });
+const logFailure = e => console.warn('[attendance-avatar]', { code: codes.has(e?.code) ? e.code : 'avatar_cache_failed', db_code: /^[0-9A-Z]{5}$/.test(e?.code || '') ? e.code : undefined });
 function profileUrl(value) {
   try {
     const u = new URL(value);
