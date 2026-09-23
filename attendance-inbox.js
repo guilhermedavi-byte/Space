@@ -23,8 +23,26 @@
   const money = (value, currency = 'BRL') => value == null ? '' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency }).format(Number(value) || 0);
   const labels = { open: 'Em atendimento', pending: 'Aguardando', resolved: 'Resolvida', received: 'Recebida', pending_send: 'Na fila', sending: 'Enviando', accepted: 'Aceita', sent: 'Enviada', delivered: 'Entregue', read: 'Lida', failed: 'Falha' };
   const label = value => labels[value] || value || '';
-  const state = { rows: [], teams: [], selected: '', detail: null, loading: false, detailLoading: false, sending: false, actioning: '', error: '', composerError: '', q: '', filter: 'all', team_id: '', menuOpen: false, viewer: null, media: new Map() };
-  let poll;
+  const state = { rows: [], teams: [], selectedConversationId: '', loading: false, hasLoaded: false, isFetching: false, detailLoading: false, sending: false, actioning: '', error: '', composerError: '', q: '', filter: 'all', team_id: '', menuOpen: false, viewer: null, media: new Map() };
+  let poll, pollRunning = false, started = false, listRequest = null, detailRequest = null;
+  let listVersion = 0, detailVersion = 0;
+  const detailsById = new Map(), rowsById = new Map(), readSequences = new Map();
+  const wiredMedia = new WeakSet(), pendingReads = new Map();
+  Object.defineProperty(state, 'detail', { get: () => detailsById.get(state.selectedConversationId) || null });
+  // Opt-in diagnostic events contain identifiers and event codes only, never message/contact data.
+  const diagnosticErrors = [];
+  const trace = (event, conversationId = state.selectedConversationId, code = '') => {
+    if (event === 'inbox_error') { diagnosticErrors.push({ conversationId, code, at: Date.now() }); if (diagnosticErrors.length > 30) diagnosticErrors.shift(); }
+    if (window.SpaceAttendanceInboxDebug === true) root.dispatchEvent(new CustomEvent('attendance-inbox-debug', { detail: { event, conversationId, code } }));
+  };
+  function selectConversation(id) {
+    if (state.selectedConversationId === id) return;
+    detailRequest?.controller.abort(); detailVersion += 1; detailRequest = null;
+    state.selectedConversationId = id;
+    state.detailLoading = Boolean(id && !detailsById.has(id));
+    state.composerError = ''; state.viewer = null;
+    trace('selectedConversationId_changed', id);
+  }
   const drafts = new Map();
   const ui = { tab: 'person', contactHidden: false, listHidden: false, accordions: {} };
   const icons = { inbox: '<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 13h5l2 3h4l2-3h5"/>', search:'<circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/>', filter:'<path d="M4 7h16M7 12h10M10 17h4"/>', panel:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/>', refresh:'<path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 3M4 15l2 3a7 7 0 0 0 12-1"/>', chat:'<path d="M21 11a9 9 0 0 1-13 8l-5 2 2-5A9 9 0 1 1 21 11Z"/>', attach:'<path d="m8 12 6-6a3 3 0 0 1 4 4l-8 8a5 5 0 0 1-7-7l8-8"/>', quick:'<path d="m13 2-8 12h6l-1 8 9-13h-7Z"/>', emoji:'<circle cx="12" cy="12" r="9"/><path d="M8 14q4 5 8 0M8 9h.01M16 9h.01"/>', ai:'<path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z"/>', send:'<path d="m4 4 17 8-17 8 3-8-3-8Zm3 8h14"/>', back:'<path d="m14 5-7 7 7 7"/>' };
@@ -49,10 +67,10 @@
 `;
   style.textContent += `.ai-audio{display:grid;grid-template-columns:32px minmax(60px,1fr) auto;align-items:center;gap:8px;min-width:200px}.ai-audio-btn{border:0;border-radius:50%;width:32px;height:32px;background:#ffffff12;color:#eee}.ai-audio-track{height:5px;background:#ffffff20;border-radius:4px;cursor:pointer;overflow:hidden}.ai-audio-fill{height:100%;background:#b6a4af}.ai-audio-time,.ai-audio-label{font-size:10px;color:var(--ai-muted)}.ai-audio-label{grid-column:2/4}.ai-image-wrap{border:0;background:transparent;padding:0;max-width:320px}.ai-video{max-width:100%;border-radius:8px}.ai-viewer{position:fixed;inset:0;z-index:1000;background:#08090dee;display:grid;place-items:center;padding:32px}.ai-viewer img{max-width:94vw;max-height:88vh;border-radius:8px}.ai-viewer button{position:absolute;right:20px;top:20px;width:36px;height:36px;border:1px solid var(--ai-line);background:#272a32;color:#fff;border-radius:8px;font-size:24px}.ai-chat-head .ai-actions{gap:2px}.ai-chat-head .ai-action{font-size:10px!important;padding:5px 7px}`;
   document.head.append(style);
-  const api = async (params = {}) => {
+  const api = async (params = {}, signal) => {
     const query = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => { if (v != null && String(v).trim()) query.set(k, String(v).trim()); });
-    const response = await fetchWithAuth(`/api/attendance-inbox${query.size ? `?${query}` : ''}`);
+    const response = await fetchWithAuth(`/api/attendance-inbox${query.size ? `?${query}` : ''}`, { signal });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(response.status === 403 ? 'Você não tem permissão para acessar estas conversas.' : 'Caixa de entrada indisponível.');
     return payload;
@@ -130,29 +148,29 @@
   function renderList() {
     if (state.loading) return `<div class="ai-list">${Array.from({ length: 6 }).map(() => '<div class="ai-skel"></div>').join('')}</div>`;
     if (!state.rows.length) return '<div class="ai-empty"><div><h2>Nenhuma conversa encontrada</h2><p>A Caixa de entrada mostrará conversas reais assim que houver mensagens recebidas.</p></div></div>';
-    return `<div class="ai-list" aria-label="Conversas">${state.rows.map(row => `<button class="ai-item ${row.conversation_id === state.selected ? 'is-active' : ''}" aria-pressed="${row.conversation_id === state.selected}" data-ai-select="${esc(row.conversation_id)}">${avatar(row.contact)}<span class="ai-item-copy"><strong class="ai-name">${esc(titleFor(row))}</strong><span class="ai-snippet" style="display:block"><span class="ai-channel-dot" title="WhatsApp">${icon('chat')}</span>${esc(msgText(row.last_message))}</span></span><span class="ai-item-end"><span class="ai-time" title="${esc(fmt(row.last_message_at || row.updated_at))}">${esc(relative(row.last_message_at || row.updated_at))}</span>${row.unread_count ? `<span class="ai-badge" aria-label="${esc(row.unread_count)} não lidas">${esc(row.unread_count)}</span>` : '<span class="ai-time">·</span>'}</span></button>`).join('')}</div>`;
+    return `<div class="ai-list" aria-label="Conversas">${state.rows.map(row => `<button class="ai-item ${row.conversation_id === state.selectedConversationId ? 'is-active' : ''}" aria-pressed="${row.conversation_id === state.selectedConversationId}" data-ai-select="${esc(row.conversation_id)}">${avatar(row.contact)}<span class="ai-item-copy"><strong class="ai-name">${esc(titleFor(row))}</strong><span class="ai-snippet" style="display:block"><span class="ai-channel-dot" title="WhatsApp">${icon('chat')}</span>${esc(msgText(row.last_message))}</span></span><span class="ai-item-end"><span class="ai-time" title="${esc(fmt(row.last_message_at || row.updated_at))}">${esc(relative(row.last_message_at || row.updated_at))}</span>${row.unread_count ? `<span class="ai-badge" aria-label="${esc(row.unread_count)} não lidas">${esc(row.unread_count)}</span>` : '<span class="ai-time">·</span>'}</span></button>`).join('')}</div>`;
   }
   function renderMessages() {
-    if (state.detailLoading) return '<div class="ai-messages"><div class="ai-skel"></div><div class="ai-skel"></div><div class="ai-skel"></div></div>';
-    if (!state.selected) return `<div class="ai-empty"><div><span class="ai-empty-symbol">${icon('inbox')}</span><h2>Um espaço para cada conversa</h2><p>Selecione uma conversa ao lado para continuar o atendimento com todo o contexto.</p></div></div>`;
+    if (state.detailLoading && !state.detail) return '<div class="ai-messages"><div class="ai-skel"></div><div class="ai-skel"></div><div class="ai-skel"></div></div>';
+    if (!state.selectedConversationId) return `<div class="ai-empty"><div><span class="ai-empty-symbol">${icon('inbox')}</span><h2>Um espaço para cada conversa</h2><p>Selecione uma conversa ao lado para continuar o atendimento com todo o contexto.</p></div></div>`;
     const messages = state.detail?.messages || [];
     if (!messages.length) return '<div class="ai-empty"><div><h2>Sem mensagens</h2><p>As mensagens aparecerão aqui em ordem cronológica.</p></div></div>';
     let last = '';
-    return `<div class="ai-messages" data-ai-messages>${messages.map(msg => { const when = msg.received_at || msg.provider_timestamp; const day = dayLabel(when); const sep = day && day !== last ? (last = day, `<div class="ai-day">${esc(day)}</div>`) : ''; return `${sep}<article class="ai-msg ${esc(msg.direction || 'inbound')}">${renderMessageBody(msg)}<div class="ai-msg-time">${esc(fmt(when))} · ${esc(msg.direction === 'outbound' ? label(msg.transport_status) : msg.direction === 'internal' ? 'Interna' : 'Recebida')}</div></article>`; }).join('')}</div>`;
+    return `<div class="ai-messages" data-ai-messages>${messages.map(msg => { const when = msg.received_at || msg.provider_timestamp; const day = dayLabel(when); const sep = day && day !== last ? (last = day, `<div class="ai-day">${esc(day)}</div>`) : ''; return `${sep}<article data-ai-message-id="${esc(msg.message_id)}" class="ai-msg ${esc(msg.direction || 'inbound')}">${renderMessageBody(msg)}<div class="ai-msg-time">${esc(fmt(when))} · ${esc(msg.direction === 'outbound' ? label(msg.transport_status) : msg.direction === 'internal' ? 'Interna' : 'Recebida')}</div></article>`; }).join('')}</div>`;
   }
-  function canSend() { return Boolean(state.detail?.composer?.enabled && (drafts.get(state.selected) || '').trim() && !state.sending); }
+  function canSend() { return Boolean(state.detail?.composer?.enabled && (drafts.get(state.selectedConversationId) || '').trim() && !state.sending); }
   function renderConversationActions(conv) {
-    if (!state.selected) return '';
+    if (!state.selectedConversationId) return '';
     const busy = state.actioning ? 'disabled' : '';
     return `<div class="ai-actions"><button class="ai-action" data-ai-op="assign" ${busy}>Assumir</button><details class="ai-filter-pop"><summary class="ai-icon" aria-label="Mais ações" title="Mais ações">···</summary><div class="ai-popover"><button class="ai-action" data-ai-op="transfer" ${busy}>Transferir</button><button class="ai-action" data-ai-op="unassign" ${!conv.assigned_user_uid || state.actioning ? 'disabled' : ''}>Sem responsável</button></div></details>${conv.status === 'resolved' ? `<button class="ai-action" data-ai-op="reopen" ${busy}>Reabrir</button>` : `<button class="ai-action" data-ai-op="resolve" ${busy}>Resolver</button>`}</div>`;
   }
   function renderChat() {
-    const conv = state.detail?.conversation || state.rows.find(row => row.conversation_id === state.selected) || {};
+    const conv = state.detail?.conversation || rowsById.get(state.selectedConversationId) || {};
     const composer = state.detail?.composer || { enabled: false, reason: 'Selecione uma conversa para responder.' };
-    return `<section class="ai-pane ai-chat" aria-label="Conversa">${state.selected ? `<header class="ai-chat-head"><div class="ai-row"><button class="ai-icon ai-mobile-back" data-ai-back aria-label="Voltar às conversas">${icon('back')}</button><span class="ai-person">${avatar(state.detail?.contact || conv.contact)}<span><strong>${esc(titleFor(state.detail || conv))}</strong><p class="ai-mini">WhatsApp · ${esc(conv.team?.name || 'Time')} · ${esc(conv.assigned_user_name || (conv.assigned_user_uid ? 'Atribuída' : 'Sem responsável'))}</p></span></span><span class="ai-status">${esc(label(conv.status))}</span></div><div class="ai-actions">${renderConversationActions(conv)}<button class="ai-icon" data-ai-toggle-contact aria-label="${ui.contactHidden ? 'Mostrar' : 'Recolher'} perfil" title="Perfil da pessoa" aria-expanded="${!ui.contactHidden}">${icon('panel')}</button></div></header>` : ''}${renderMessages()}${state.selected && composer.enabled ? `<div class="ai-composer"><div class="ai-compose-label">${icon('chat')} Responder por WhatsApp</div><textarea aria-label="Mensagem" data-ai-compose ${composer.enabled ? '' : 'disabled'} placeholder="${composer.enabled ? 'Escreva uma resposta…' : 'Envio indisponível'}">${esc(drafts.get(state.selected) || '')}</textarea>${state.composerError ? `<p class="ai-form-error" role="alert">${esc(state.composerError)}</p>` : ''}<div class="ai-composer-hint">${esc(composer.reason || '')}</div><div class="ai-composer-footer"><div class="ai-tools">${[['attach','Anexos'],['quick','Respostas rápidas'],['emoji','Emoji'],['ai','Assistente IA']].map(([key,name]) => `<span title="${name} — ainda indisponível"><button class="ai-icon" disabled aria-label="${name} — ainda indisponível">${icon(key)}</button></span>`).join('')}</div><div class="ai-row"><span class="ai-shortcut">⇧ Enter para nova linha</span><button class="ai-send" data-ai-send ${canSend() ? '' : 'disabled'}>${state.sending ? 'Enviando' : 'Enviar'}${icon('send')}</button></div></div></div>` : state.selected ? `<div class="ai-composer"><p class="ai-composer-hint">${esc(composer.reason || 'Envio indisponível.')}</p></div>` : ''}</section>`;
+    return `<section class="ai-pane ai-chat" aria-label="Conversa">${state.selectedConversationId ? `<header class="ai-chat-head"><div class="ai-row"><button class="ai-icon ai-mobile-back" data-ai-back aria-label="Voltar às conversas">${icon('back')}</button><span class="ai-person">${avatar(state.detail?.contact || conv.contact)}<span><strong>${esc(titleFor(state.detail || conv))}</strong><p class="ai-mini">WhatsApp · ${esc(conv.team?.name || 'Time')} · ${esc(conv.assigned_user_name || (conv.assigned_user_uid ? 'Atribuída' : 'Sem responsável'))}</p></span></span><span class="ai-status">${esc(label(conv.status))}</span></div><div class="ai-actions">${renderConversationActions(conv)}<button class="ai-icon" data-ai-toggle-contact aria-label="${ui.contactHidden ? 'Mostrar' : 'Recolher'} perfil" title="Perfil da pessoa" aria-expanded="${!ui.contactHidden}">${icon('panel')}</button></div></header>` : ''}${renderMessages()}${state.selectedConversationId && composer.enabled ? `<div class="ai-composer"><div class="ai-compose-label">${icon('chat')} Responder por WhatsApp</div><textarea aria-label="Mensagem" data-ai-compose ${composer.enabled ? '' : 'disabled'} placeholder="${composer.enabled ? 'Escreva uma resposta…' : 'Envio indisponível'}">${esc(drafts.get(state.selectedConversationId) || '')}</textarea>${state.composerError ? `<p class="ai-form-error" role="alert">${esc(state.composerError)}</p>` : ''}<div class="ai-composer-hint">${esc(composer.reason || '')}</div><div class="ai-composer-footer"><div class="ai-tools">${[['attach','Anexos'],['quick','Respostas rápidas'],['emoji','Emoji'],['ai','Assistente IA']].map(([key,name]) => `<span title="${name} — ainda indisponível"><button class="ai-icon" disabled aria-label="${name} — ainda indisponível">${icon(key)}</button></span>`).join('')}</div><div class="ai-row"><span class="ai-shortcut">⇧ Enter para nova linha</span><button class="ai-send" data-ai-send ${canSend() ? '' : 'disabled'}>${state.sending ? 'Enviando' : 'Enviar'}${icon('send')}</button></div></div></div>` : state.selectedConversationId ? `<div class="ai-composer"><p class="ai-composer-hint">${esc(state.composerError || composer.reason || 'Envio indisponível.')}</p></div>` : ''}</section>`;
   }
   function renderContact() {
-    const detail = state.detail || {};
+    const detail = state.detail || { conversation: rowsById.get(state.selectedConversationId), contact: rowsById.get(state.selectedConversationId)?.contact };
     const contact = detail.contact || {};
     const conv = detail.conversation || {};
     const ctx = detail.context || {};
@@ -161,7 +179,7 @@
     const student = ctx.student;
     const actions = ctx.actions || {};
     const candidates = ctx.identity?.candidates || [];
-    if (!state.selected) return '<aside class="ai-pane ai-pane--contact ai-empty"><div><h2>Dados da pessoa</h2><p>Selecione uma conversa.</p></div></aside>';
+    if (!state.selectedConversationId) return '<aside class="ai-pane ai-pane--contact ai-empty"><div><h2>Dados da pessoa</h2><p>Selecione uma conversa.</p></div></aside>';
     const actionHtml = `<div class="ai-actions">${actions.open_person_url ? `<a class="ai-action" href="${esc(actions.open_person_url)}">Abrir pessoa</a>` : ''}${actions.open_crm_url ? `<a class="ai-action" href="${esc(actions.open_crm_url)}">Abrir oportunidade</a>` : ''}${actions.open_student_url ? `<a class="ai-action" href="${esc(actions.open_student_url)}">Abrir aluno</a>` : ''}${actions.can_create_opportunity ? '<button class="ai-action" data-ai-create-opportunity>Criar oportunidade</button>' : ''}${actions.can_unlink_person ? '<button class="ai-action" data-ai-unlink>Remover vínculo</button>' : ''}</div>`;
     const candidatesHtml = candidates.length && !ctx.identity?.linked ? `<section class="ai-section"><p class="ai-card-title">Possíveis correspondências</p>${candidates.map(c => `<button class="ai-candidate" data-ai-link-person="${esc(c.id)}"><strong>${esc(c.name || c.id)}</strong><small>${esc([c.relation, c.phone, c.email].filter(Boolean).join(' · '))}</small></button>`).join('')}</section>` : '';
     const personContent = `${section('Contato', [['Nome', contact.name], ['Telefone', person?.phone || contact.phone], ['Email', person?.email || contact.email], ['Relação com a Space', contact.relationship || (student ? 'Aluno' : opp ? 'Lead' : 'Não vinculada')]])}${section('Atendimento', [['Canal', conv.channel?.name || 'WhatsApp'], ['Time', conv.team?.name], ['Responsável', conv.assigned_user_name || (conv.assigned_user_uid ? 'Atribuído' : 'Não atribuído')], ['Status', label(conv.status)], ['Criado em', fmt(conv.created_at || contact.created_at)], ['Última atividade', fmt(conv.last_message_at || conv.updated_at)], ['Total de mensagens', String(detail.stats?.message_count ?? (detail.messages || []).length)], ['Não lidas', String(detail.stats?.unread_count ?? 0)]])}${section('Vínculos', [['Pessoa vinculada', person?.name || contact.relationship || 'Não vinculada'], ['Aluno vinculado', student?.name || student?.id], ['Oportunidade', opp?.title || opp?.id]])}${candidatesHtml}${actionHtml}`;
@@ -172,89 +190,214 @@
   function renderViewer() {
     return state.viewer ? `<div class="ai-viewer" data-ai-viewer-close><img src="${esc(state.viewer)}" alt=""><button type="button" data-ai-viewer-close>×</button></div>` : '';
   }
+  function nodeKey(node) {
+    if (node.nodeType !== 1) return '';
+    for (const attr of ['data-ai-select', 'data-ai-message-id', 'data-ai-accordion', 'data-ai-tab', 'data-ai-op']) {
+      if (node.getAttribute(attr)) return `${attr}:${node.getAttribute(attr)}`;
+    }
+    if (node.matches('.ai-day')) return `day:${node.textContent}`;
+    return node.id || '';
+  }
+  function reconcile(parent, desired) {
+    const old = [...parent.childNodes];
+    const keyed = new Map(old.filter(n => nodeKey(n)).map(n => [nodeKey(n), n]));
+    const used = new Set();
+    let cursor = parent.firstChild;
+    for (const next of [...desired.childNodes]) {
+      const key = nodeKey(next);
+      let current = key ? keyed.get(key) : old.find(n => !used.has(n) && !nodeKey(n) && n.nodeType === next.nodeType && n.nodeName === next.nodeName);
+      if (!current || current.nodeName !== next.nodeName) current = next.cloneNode(true);
+      else if (current.nodeType === 3) {
+        if (current.nodeValue !== next.nodeValue) current.nodeValue = next.nodeValue;
+      } else if (current.nodeType === 1) {
+        const disclosure = current.tagName === 'DETAILS';
+        const keepComposerHeight = current.tagName === 'TEXTAREA' && current.value === next.value;
+        for (const attr of [...current.attributes]) if (!next.hasAttribute(attr.name) && !(disclosure && attr.name === 'open') && !(keepComposerHeight && attr.name === 'style')) current.removeAttribute(attr.name);
+        for (const attr of [...next.attributes]) if (!(disclosure && attr.name === 'open') && current.getAttribute(attr.name) !== attr.value) current.setAttribute(attr.name, attr.value);
+        if (current.tagName === 'TEXTAREA') {
+          if (current.value !== next.value) current.value = next.value;
+        } else if (current.tagName === 'INPUT') {
+          if (current !== document.activeElement && current.value !== next.value) current.value = next.value;
+        } else if (!['AUDIO', 'VIDEO', 'IMG'].includes(current.tagName)) reconcile(current, next);
+      }
+      used.add(current);
+      if (current !== cursor) parent.insertBefore(current, cursor);
+      cursor = current.nextSibling;
+    }
+    for (const node of old) if (!used.has(node)) node.remove();
+  }
   function render() {
     const scroll = root.querySelector('[data-ai-messages]');
     const scrollTop = scroll?.scrollTop;
     const keepScroll = scroll && scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight > 80;
-    root.innerHTML = `<div class="ai"><div class="ai-shell"><header class="ai-head"><div class="ai-toolbar-title"><button class="ai-icon" data-ai-toggle-list title="${ui.listHidden ? 'Mostrar' : 'Recolher'} conversas" aria-label="${ui.listHidden ? 'Mostrar' : 'Recolher'} conversas" aria-expanded="${!ui.listHidden}">${icon('panel')}</button><h1 class="ai-title">Caixa de entrada</h1><span class="ai-count" title="Conversas nesta lista">${state.rows.length}</span></div><div class="ai-actions"><span class="ai-indicator">${state.rows.reduce((n,row) => n + (Number(row.unread_count) || 0),0)} não lidas</span><button class="ai-refresh" data-ai-refresh title="Atualizar conversas">${icon('refresh')} Atualizar</button></div></header>${state.error && !state.selected ? `<div class="ai-error" role="alert"><p>${esc(state.error)}</p><button class="ai-refresh" data-ai-refresh>Tentar novamente</button></div>` : `<div class="ai-grid ${!state.selected || ui.contactHidden ? 'is-no-contact' : ''} ${ui.listHidden ? 'is-list-collapsed' : ''} ${state.selected ? 'has-selection' : ''}"><section class="ai-pane ai-conversations" aria-label="Lista de conversas"><div class="ai-list-head"><label class="ai-search-wrap">${icon('search')}<input class="ai-input" data-ai-search aria-label="Buscar pessoa ou telefone" placeholder="Buscar conversas" value="${esc(state.q)}"></label><div class="ai-row"><select class="ai-select" data-ai-team aria-label="Time"><option value="">Todos os times</option>${state.teams.map(t => `<option value="${esc(t.team_id)}" ${state.team_id === t.team_id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select><details class="ai-filter-pop"><summary class="ai-icon" title="Mais filtros" aria-label="Mais filtros">${icon('filter')}${state.filter === 'unassigned' ? '<span class="ai-badge">1</span>' : ''}</summary><div class="ai-popover"><button class="ai-chip ${state.filter === 'unassigned' ? 'is-active' : ''}" data-ai-filter="unassigned">Sem responsável</button><button class="ai-chip" data-ai-filter="all">Limpar filtro</button></div></details></div><nav class="ai-filters" aria-label="Filtrar conversas">${['all','mine','unread'].map(f => `<button class="ai-chip ${state.filter === f ? 'is-active' : ''}" aria-pressed="${state.filter === f}" data-ai-filter="${f}">${esc({all:'Todas',mine:'Minhas',unread:'Não lidas'}[f])}</button>`).join('')}</nav></div>${renderList()}</section>${renderChat()}${state.selected && !ui.contactHidden ? renderContact() : ''}</div>`}</div>${renderViewer()}</div>`;
+    const template = document.createElement('template');
+    template.innerHTML = `<div class="ai"><div class="ai-shell"><header class="ai-head"><div class="ai-toolbar-title"><button class="ai-icon" data-ai-toggle-list title="${ui.listHidden ? 'Mostrar' : 'Recolher'} conversas" aria-label="${ui.listHidden ? 'Mostrar' : 'Recolher'} conversas" aria-expanded="${!ui.listHidden}">${icon('panel')}</button><h1 class="ai-title">Caixa de entrada</h1><span class="ai-count" title="Conversas nesta lista">${state.rows.length}</span></div><div class="ai-actions"><span class="ai-indicator">${state.rows.reduce((n,row) => n + (Number(row.unread_count) || 0),0)} não lidas</span><button class="ai-refresh" data-ai-refresh title="Atualizar conversas">${icon('refresh')} Atualizar</button></div></header>${state.error && !state.hasLoaded ? `<div class="ai-error" role="alert"><p>${esc(state.error)}</p><button class="ai-refresh" data-ai-refresh>Tentar novamente</button></div>` : `<div class="ai-grid ${!state.selectedConversationId || ui.contactHidden ? 'is-no-contact' : ''} ${ui.listHidden ? 'is-list-collapsed' : ''} ${state.selectedConversationId ? 'has-selection' : ''}"><section class="ai-pane ai-conversations" aria-label="Lista de conversas"><div class="ai-list-head"><label class="ai-search-wrap">${icon('search')}<input class="ai-input" data-ai-search aria-label="Buscar pessoa ou telefone" placeholder="Buscar conversas" value="${esc(state.q)}"></label><div class="ai-row"><select class="ai-select" data-ai-team aria-label="Time"><option value="">Todos os times</option>${state.teams.map(t => `<option value="${esc(t.team_id)}" ${state.team_id === t.team_id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select><details class="ai-filter-pop"><summary class="ai-icon" title="Mais filtros" aria-label="Mais filtros">${icon('filter')}${state.filter === 'unassigned' ? '<span class="ai-badge">1</span>' : ''}</summary><div class="ai-popover"><button class="ai-chip ${state.filter === 'unassigned' ? 'is-active' : ''}" data-ai-filter="unassigned">Sem responsável</button><button class="ai-chip" data-ai-filter="all">Limpar filtro</button></div></details></div><nav class="ai-filters" aria-label="Filtrar conversas">${['all','mine','unread'].map(f => `<button class="ai-chip ${state.filter === f ? 'is-active' : ''}" aria-pressed="${state.filter === f}" data-ai-filter="${f}">${esc({all:'Todas',mine:'Minhas',unread:'Não lidas'}[f])}</button>`).join('')}</nav></div>${renderList()}</section>${renderChat()}${state.selectedConversationId && !ui.contactHidden ? renderContact() : ''}</div>`}</div>${renderViewer()}</div>`;
+    for (const selector of ['.ai-chat', '.ai-chat-head', '.ai-messages', '.ai-pane--contact']) {
+      const node = template.content.querySelector(selector);
+      if (node) node.dataset.conversationId = state.selectedConversationId;
+    }
+    reconcile(root, template.content);
     wireMedia();
     const messages = root.querySelector('[data-ai-messages]');
     if (messages) messages.scrollTop = keepScroll ? scrollTop : messages.scrollHeight;
   }
   async function postAction(action, extra = {}, options = {}) {
-    if (!state.selected) return null;
+    const id = options.conversationId || state.selectedConversationId;
+    if (!id) return null;
     const operational = ['assign', 'unassign', 'resolve', 'reopen', 'transfer'].includes(action);
-    const body = operational ? { action: 'update', update: action, conversation_id: state.selected, ...extra } : { action, conversation_id: state.selected, ...extra };
+    const body = operational ? { action: 'update', update: action, conversation_id: id, ...extra } : { action, conversation_id: id, ...extra };
     const response = await fetchWithAuth('/api/attendance-inbox', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      const message = payload.error || 'Não foi possível concluir a ação.';
-      if (!options.quiet) { state.composerError = message; render(); }
-      throw new Error(message);
+      if (!options.quiet && state.selectedConversationId === id) { state.composerError = 'Não foi possível concluir a ação.'; render(); }
+      trace('inbox_error', id, `action_http_${response.status}`);
+      throw new Error('Não foi possível concluir a ação.');
     }
-    if (options.refresh !== false) { await loadDetail(state.selected, { silent: true }); await load({ silent: true }); }
+    if (options.refresh !== false) {
+      // Invalidate only the acted-on conversation; never follow a changed selection.
+      if (state.selectedConversationId === id) await loadDetail(id, { silent: true, force: true });
+      else detailsById.delete(id);
+      await load({ silent: true });
+    }
     return payload;
   }
-  async function load({ silent = false } = {}) {
-    if (!silent) { state.loading = true; state.error = ''; render(); }
-    try {
-      const payload = await api({ q: state.q, filter: state.filter, team_id: state.team_id, limit: 50 });
-      state.rows = Array.isArray(payload.rows) ? payload.rows : [];
-      state.teams = Array.isArray(payload.teams) ? payload.teams : [];
-      state.error = '';
-      if (state.selected && !state.rows.some(row => row.conversation_id === state.selected)) state.selected = '';
-    } catch (error) { state.error = error.message; }
-    finally { state.loading = false; render(); }
+  function requestWithTimeout(params, controller) {
+    const timer = setTimeout(() => controller.abort(), 20000);
+    // Race abort explicitly: auth wrappers may not forward AbortSignal until auth resolves.
+    return new Promise((resolve, reject) => {
+      const abort = () => reject(new DOMException('Request cancelled', 'AbortError'));
+      controller.signal.addEventListener('abort', abort, { once: true });
+      api(params, controller.signal).then(resolve, reject).finally(() => controller.signal.removeEventListener('abort', abort));
+    }).finally(() => clearTimeout(timer));
   }
-  async function loadDetail(id, { silent = false } = {}) {
-    state.selected = id;
-    state.menuOpen = false;
-    if (!silent) { state.detailLoading = true; state.error = ''; state.composerError = ''; render(); }
-    try {
-      state.detail = await api({ conversation_id: id, limit: 100 });
-      const sequence = Math.max(0, ...(state.detail.messages || []).map(msg => Number(msg.sequence) || 0));
-      if (sequence) {
-        await postAction('read', { sequence }, { refresh: false, quiet: true }).catch(() => {});
-        state.rows = state.rows.map(row => row.conversation_id === id ? { ...row, unread_count: 0 } : row);
+  function load({ silent = false } = {}) {
+    const params = { q: state.q, filter: state.filter, team_id: state.team_id, limit: 50 };
+    const key = JSON.stringify(params);
+    if (listRequest?.key === key) return listRequest.promise;
+    listRequest?.controller.abort();
+    const version = ++listVersion, controller = new AbortController();
+    const request = { key, controller };
+    listRequest = request;
+    state.isFetching = true;
+    state.loading = !state.hasLoaded;
+    if (state.loading) { state.error = ''; render(); }
+    trace('conversation_list_refetch_started');
+    request.promise = (async () => {
+      try {
+        const payload = await requestWithTimeout(params, controller);
+        if (version !== listVersion) return;
+        if (!Array.isArray(payload.rows)) throw new Error('invalid_list');
+        const seen = new Set();
+        state.rows = payload.rows.filter(row => typeof row.conversation_id === 'string' && row.conversation_id && !seen.has(row.conversation_id) && seen.add(row.conversation_id));
+        state.rows.forEach(row => rowsById.set(row.conversation_id, row));
+        // A refresh/filter/ordering change cannot evict the selected identity.
+        const selected = rowsById.get(state.selectedConversationId);
+        if (selected && !seen.has(state.selectedConversationId)) state.rows.unshift(selected);
+        state.teams = Array.isArray(payload.teams) ? payload.teams : state.teams;
+        state.hasLoaded = true; state.error = '';
+        trace('conversation_list_refetch_finished');
+      } catch (error) {
+        if (version !== listVersion) return;
+        trace('inbox_error', state.selectedConversationId, error.name === 'AbortError' ? 'list_timeout' : 'list_failed');
+        if (!state.hasLoaded) state.error = 'Caixa de entrada indisponível.';
+      } finally {
+        if (version === listVersion) { listRequest = null; state.isFetching = false; state.loading = false; render(); }
       }
-      state.error = '';
-    } catch (error) { state.error = error.message; }
-    finally { state.detailLoading = false; render(); }
+    })();
+    return request.promise;
+  }
+  function loadDetail(id, { silent = false, force = false } = {}) {
+    if (!silent) { trace('conversation_clicked', id); selectConversation(id); state.menuOpen = false; render(); }
+    if (id !== state.selectedConversationId) return Promise.resolve();
+    if (detailRequest?.id === id && !force) return detailRequest.promise;
+    detailRequest?.controller.abort();
+    const version = ++detailVersion, controller = new AbortController();
+    const request = { id, controller }; detailRequest = request;
+    const current = () => version === detailVersion && id === state.selectedConversationId;
+    trace('messages_request_started', id); trace('contact_request_started', id);
+    request.promise = (async () => {
+      try {
+        const payload = await requestWithTimeout({ conversation_id: id, limit: 100 }, controller);
+        if (!current()) { trace('response_discarded', id); return; }
+        if (payload.conversation?.conversation_id !== id) throw new Error('identity_mismatch');
+        // Contact, context and messages arrive in the same response and commit atomically.
+        detailsById.set(id, payload);
+        state.detailLoading = false; state.composerError = '';
+        trace('messages_request_finished', id); trace('contact_request_finished', id);
+        render();
+        const sequence = Math.max(0, ...(payload.messages || []).map(msg => Number(msg.sequence) || 0));
+        if (sequence > (readSequences.get(id) || 0) && !pendingReads.has(id)) {
+          // A slow read acknowledgement must not stall GET refreshes or follow a new selection.
+          const acknowledgement = postAction('read', { sequence }, { conversationId: id, refresh: false, quiet: true })
+            .then(() => {
+              readSequences.set(id, sequence);
+              const latest = Math.max(0, ...(detailsById.get(id)?.messages || []).map(msg => Number(msg.sequence) || 0));
+              if (id === state.selectedConversationId && latest <= sequence) {
+                state.rows = state.rows.map(row => row.conversation_id === id ? { ...row, unread_count: 0 } : row); render();
+              }
+            })
+            .catch(() => trace('inbox_error', id, 'read_failed'))
+            .finally(() => pendingReads.delete(id));
+          pendingReads.set(id, acknowledgement);
+        }
+      } catch (error) {
+        if (!current()) return;
+        trace('inbox_error', id, error.message === 'identity_mismatch' ? 'identity_mismatch' : error.name === 'AbortError' ? 'detail_timeout' : 'detail_failed');
+        if (!detailsById.has(id)) state.composerError = 'Não foi possível carregar esta conversa. Tente atualizar.';
+      } finally {
+        if (current()) { detailRequest = null; state.detailLoading = false; render(); }
+      }
+    })();
+    return request.promise;
   }
   async function sendMessage() {
-    const text = String(drafts.get(state.selected) || '').trim();
-    if (!text || !state.selected || state.sending) return;
+    const id = state.selectedConversationId;
+    const text = String(drafts.get(id) || '').trim();
+    if (!text || !id || !canSend()) return;
     state.sending = true; state.composerError = ''; render();
     try {
-      await postAction('message', { text, client_request_id: crypto.randomUUID() });
-      drafts.delete(state.selected);
+      await postAction('message', { text, client_request_id: crypto.randomUUID() }, { conversationId: id });
+      if ((drafts.get(id) || '').trim() === text) drafts.delete(id);
     } catch (error) {
-      state.composerError = error.message || 'Não foi possível enviar a mensagem.';
-    } finally {
-      state.sending = false; render();
-    }
+      if (state.selectedConversationId === id) state.composerError = error.message;
+    } finally { state.sending = false; render(); }
   }
   async function runOperationalAction(action) {
-    if (!state.selected || state.actioning) return;
+    const id = state.selectedConversationId;
+    if (!id || state.actioning) return;
     state.actioning = action; state.menuOpen = false; state.composerError = ''; render();
-    try { await postAction(action); }
-    catch (error) { state.composerError = error.message || 'Não foi possível concluir a ação.'; }
+    try { await postAction(action, {}, { conversationId: id }); }
+    catch (error) { if (state.selectedConversationId === id) state.composerError = error.message; }
     finally { state.actioning = ''; render(); }
   }
+  async function refresh() {
+    const id = state.selectedConversationId;
+    await Promise.all([load({ silent: true }), id ? loadDetail(id, { silent: true }) : Promise.resolve()]);
+  }
   function startPoll() {
-    if (poll) clearInterval(poll);
-    poll = setInterval(() => {
-      if (!root.isConnected) return clearInterval(poll);
-      if (document.hidden || root.contains(document.activeElement) || state.sending || [...root.querySelectorAll('audio,video')].some(media => !media.paused)) return;
-      load({ silent: true }).then(() => state.selected ? loadDetail(state.selected, { silent: true }) : null);
+    clearTimeout(poll);
+    poll = setTimeout(async () => {
+      if (!root.isConnected) { started = false; return; }
+      const panel = root.closest('[data-panel]');
+      if (!document.hidden && !panel?.hidden && !pollRunning) {
+        pollRunning = true;
+        try { await refresh(); } finally { pollRunning = false; }
+      }
+      startPoll();
     }, 7000);
   }
-  async function open() { await load(); startPoll(); }
+  async function open() {
+    if (started) return listRequest?.promise;
+    started = true;
+    await load(); startPoll();
+  }
 
   function wireMedia() {
     root.querySelectorAll('[data-ai-audio]').forEach(wrapper => {
       const id = wrapper.getAttribute('data-ai-audio');
       const audio = wrapper.querySelector('audio');
+      if (wiredMedia.has(audio)) return;
+      wiredMedia.add(audio);
       const item = audioState(id);
       audio.currentTime = item.current || 0;
       audio.onloadedmetadata = () => { item.duration = audio.duration || 0; const time = wrapper.querySelector('.ai-audio-time'); if (time) time.textContent = fmtDuration(item.duration); };
@@ -307,16 +450,16 @@
     if (button.hasAttribute('data-ai-send')) return sendMessage();
     if (button.hasAttribute('data-ai-toggle-contact')) { ui.contactHidden = !ui.contactHidden; return render(); }
     if (button.hasAttribute('data-ai-toggle-list')) { ui.listHidden = !ui.listHidden; return render(); }
-    if (button.hasAttribute('data-ai-back')) { state.selected = ''; state.detail = null; return render(); }
+    if (button.hasAttribute('data-ai-back')) { selectConversation(''); return render(); }
     const tab = button.getAttribute('data-ai-tab'); if (tab) { ui.tab = tab; render(); root.querySelector(`[data-ai-tab="${tab}"]`)?.focus(); return; }
-    if (button.hasAttribute('data-ai-refresh')) return load();
+    if (button.hasAttribute('data-ai-refresh')) return refresh();
     if (button.hasAttribute('data-ai-menu-toggle')) { state.menuOpen = !state.menuOpen; return render(); }
     const op = button.getAttribute('data-ai-op'); if (op) return runOperationalAction(op);
-    if (button.hasAttribute('data-ai-create-opportunity')) return postAction('create_opportunity');
-    if (button.hasAttribute('data-ai-unlink') && confirm('Remover o vínculo desta pessoa com a conversa?')) return postAction('unlink_person');
-    const personId = button.getAttribute('data-ai-link-person'); if (personId) return postAction('link_person', { person_id: personId });
+    if (button.hasAttribute('data-ai-create-opportunity')) return postAction('create_opportunity').catch(() => {});
+    if (button.hasAttribute('data-ai-unlink') && confirm('Remover o vínculo desta pessoa com a conversa?')) return postAction('unlink_person').catch(() => {});
+    const personId = button.getAttribute('data-ai-link-person'); if (personId) return postAction('link_person', { person_id: personId }).catch(() => {});
     const filter = button.getAttribute('data-ai-filter');
-    if (filter) { state.filter = filter; state.selected = ''; state.detail = null; return load(); }
+    if (filter) { state.filter = filter; return load(); }
     const id = button.getAttribute('data-ai-select');
     if (id) return loadDetail(id);
   });
@@ -325,7 +468,7 @@
   });
   root.addEventListener('toggle', event => { if (event.target.matches('[data-ai-accordion]')) ui.accordions[event.target.dataset.aiAccordion] = event.target.open; }, true);
   root.addEventListener('change', event => {
-    if (event.target.matches('[data-ai-team]')) { state.team_id = event.target.value; state.selected = ''; state.detail = null; load(); }
+    if (event.target.matches('[data-ai-team]')) { state.team_id = event.target.value; load(); }
   });
   root.addEventListener('error', event => {
     if (event.target.matches?.('[data-ai-avatar]')) event.target.remove();
@@ -335,8 +478,8 @@
     }
   }, true);
   root.addEventListener('input', event => {
-    if (event.target.matches('[data-ai-compose]') && state.selected) {
-      drafts.set(state.selected, event.target.value);
+    if (event.target.matches('[data-ai-compose]') && state.selectedConversationId) {
+      drafts.set(state.selectedConversationId, event.target.value);
       event.target.style.height = '38px';
       event.target.style.height = `${Math.min(event.target.scrollHeight, 116)}px`;
       state.composerError = '';
@@ -358,6 +501,6 @@
     }
   }, true);
 
-  window.SpaceAttendanceInbox = { open };
+  window.SpaceAttendanceInbox = { open, getDiagnostics: () => diagnosticErrors.map(item => ({ ...item })) };
   if (document.body.dataset.initialPanel === 'attendance-inbox') open();
 })();
