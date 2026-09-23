@@ -36,3 +36,34 @@ test('forecast v2 uses one continuous conditional curve across due-date boundary
   assert.ok(probabilities.every(p => p != null && p >= 0 && p <= 100));
   assert.equal(forecast.forecast_sample_quality.quality, 'recurring_classified');
 });
+
+test('right-censored unpaid receivables prevent D+90 recovery from becoming 100%', () => {
+  const rows = [];
+  const payments = [];
+  for (let i = 0; i < 70; i += 1) {
+    const id = `pay_paid_d90_${i}`;
+    rows.push({ id, asaas_payment_id: id, status: 'RECEIVED', due_date: '2026-05-01', value: 10000, receivable_nature: 'RECURRING' });
+    payments.push({ asaas_payment_id: id, status: 'RECEIVED', value: '100.00', payment_date: '2026-07-30' });
+  }
+  for (let i = 0; i < 30; i += 1) {
+    const id = `pay_censored_d90_${i}`;
+    rows.push({ id, asaas_payment_id: id, status: 'OVERDUE', due_date: '2026-05-01', value: 10000, receivable_nature: 'RECURRING' });
+  }
+  rows.push({ id: 'pay_current_overdue', asaas_payment_id: 'pay_current_overdue', status: 'OVERDUE', due_date: '2026-09-10', value: 100000, receivable_nature: 'RECURRING' });
+  const forecast = buildFinanceForecastV2({ rows, payments, cases: [], today: '2026-09-15', month: '2026-09', financial: { faturamento: 0 }, commercial_target: { value: 0, realized: 0 } });
+  assert.equal(forecast.recovery_curve['D+90'].recovered_rate, 70);
+  assert.equal(forecast.overdue_eventual_d90_rate, 70);
+  assert.equal(forecast.overdue_eventual_d90, 70000);
+});
+
+test('censored observation remains at risk through censor day and leaves afterwards', () => {
+  const { modelFromObservations } = require('../api/_lib/finance-forecast-v2');
+  const model = modelFromObservations([
+    { value: 10000, paid: true, eventDay: 10 },
+    { value: 10000, paid: false, censorDay: 30 },
+    { value: 10000, paid: true, eventDay: 40 }
+  ]);
+  assert.equal(model.riskAt(30).length, 2);
+  assert.equal(model.riskAt(31).length, 1);
+  assert.equal(model.conditional(0, 90).probability < 1, true);
+});
