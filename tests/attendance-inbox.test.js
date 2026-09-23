@@ -150,14 +150,15 @@ test('Evolution message append, provider send and transport update remain sequen
   assert.equal(r.calls[2].body.p_status, 'sent');
 });
 
-test('Frontend renders empty inbox and disabled composer', async () => {
+test('Frontend renders empty inbox without an inactive composer', async () => {
   const { JSDOM } = require('jsdom'); const fs = require('fs');
   const dom = new JSDOM('<body data-initial-panel="attendance-inbox"><div data-attendance-inbox></div>', { runScripts: 'outside-only' });
   dom.window.fetchWithAuth = async () => ({ ok: true, json: async () => ({ rows: [], teams: [], limit: 50 }) });
   dom.window.eval(fs.readFileSync('attendance-inbox.js', 'utf8'));
   await new Promise(r => setTimeout(r, 20));
   assert.match(dom.window.document.body.textContent, /Nenhuma conversa encontrada/);
-  assert.match(dom.window.document.body.textContent, /Selecione uma conversa para responder/);
+  assert.match(dom.window.document.body.textContent, /Selecione uma conversa/);
+  assert.equal(dom.window.document.querySelector('[data-ai-compose]'), null);
   dom.window.close();
 });
 
@@ -176,7 +177,7 @@ test('Frontend renders conversation list, chat messages and contact panel from A
   await new Promise(r => setTimeout(r, 20));
   assert.match(dom.window.document.body.textContent, /Mensagem recebida/);
   assert.match(dom.window.document.body.textContent, /\+553499999999/);
-  assert.equal(dom.window.document.querySelector('.ai-send').disabled, true);
+  assert.equal(dom.window.document.querySelector('[data-ai-compose]'), null);
   dom.window.close();
 });
 

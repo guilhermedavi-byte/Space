@@ -23291,6 +23291,11 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 .activities-grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .activities-field{display:grid;gap:8px}
 .activities-field>span{font-size:12px;font-weight:700;color:rgba(255,255,255,.78)}
+.activities-field>label[for="activity-student-search"]{font-size:12px;font-weight:700;color:rgba(255,255,255,.78)}
+[data-activity-student-combobox] #activity-student-search{margin:0;font-weight:400}
+[data-activity-student-combobox] #activity-student-search::placeholder{font:inherit;opacity:1;color:rgba(255,255,255,.48)}
+#activity-student-options .activities-responsible-option{font-size:13px;font-weight:400}
+#activity-student-options .activities-responsible-option small{font-weight:400}
 .activities-responsible-combobox{position:relative}
 .activities-responsible-combobox .activities-responsible-search{width:100%;margin:0}
 .activities-responsible-combobox .activities-responsible-search:focus{border-bottom-right-radius:0;border-bottom-left-radius:0}
