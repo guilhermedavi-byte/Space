@@ -11222,8 +11222,37 @@ const isActivityItemOverdue = (dateKey) => {
   return date < startOfDay(new Date());
 };
 
+const getDefaultActivityDraft = (activity = {}) => {
+  const canAssignOthers = Boolean(activitiesState.permissions?.canAssignOthers) || currentRole === "admin" || currentRole === "growth";
+  return {
+    id: String(activity.id || ""),
+    studentId: String(activity.studentId || ""),
+    titulo: String(activity.titulo || ""),
+    descricao: String(activity.descricao || ""),
+    status: normalizeActivityStatus(activity.status || "Pendente"),
+    responsavelId: String(activity.responsavelId || (canAssignOthers ? "" : sessionUser?.id || "")),
+    prazo: String(activity.prazo || ""),
+    prioridade: normalizeActivityPriority(activity.prioridade || "Média"),
+    tipo: String(activity.tipo || ""),
+    observacoes: String(activity.observacoes || ""),
+    criadoPor: String(activity.criadoPor || ""),
+    criadoEm: activity.criadoEm || "",
+    atualizadoEm: activity.atualizadoEm || "",
+    completedAt: activity.completedAt || "",
+  };
+};
+
+const getActivityWorkspaceDescription = (activity = {}) => {
+  const description = String(activity.descricao || "").trim();
+  const legacyNotes = String(activity.observacoes || "").trim();
+  if (!legacyNotes) return description;
+  if (description && normalizeSearchText(description).includes(normalizeSearchText(legacyNotes))) return description;
+  return [description, "Notas legadas:", legacyNotes].filter(Boolean).join("\n\n");
+};
+
 const renderActivityWorkspace = (workspace = {}) => {
-  const activity = workspace.activity || {};
+  const isCreateMode = workspace.mode === "create" || !workspace.activity?.id;
+  const activity = getDefaultActivityDraft(workspace.activity || {});
   const comments = Array.isArray(workspace.comments) ? workspace.comments : [];
   const checklist = Array.isArray(workspace.checklist) ? workspace.checklist : [];
   const events = Array.isArray(workspace.events) ? workspace.events : [];
@@ -11236,24 +11265,22 @@ const renderActivityWorkspace = (workspace = {}) => {
   const canAdminComments = currentRole === "admin" || sessionUser?.isSuperAdmin === true;
   const visibleComments = comments.slice().sort((a, b) => (Date.parse(a.createdAt) || 0) - (Date.parse(b.createdAt) || 0));
   const visibleEvents = events.slice().sort((a, b) => (Date.parse(b.occurredAt) || 0) - (Date.parse(a.occurredAt) || 0));
-  const notes = String(activity.observacoes || "").trim();
   const propRow = (label, html) => `<label class="actws-prop"><span>${escapeHtml(label)}</span>${html}</label>`;
+  const titleValue = activity.titulo || "";
+  const titlePlaceholder = isCreateMode ? "Nova atividade" : "Atividade";
+  const descriptionValue = getActivityWorkspaceDescription(activity);
+  const linkedStudentName = student?.nome || "Sem aluno vinculado";
   return `
-    <div class="actws" data-activity-workspace="${escapeHtml(activity.id)}">
+    <div class="actws" data-activity-workspace="${escapeHtml(activity.id)}" data-actws-mode="${isCreateMode ? "create" : "edit"}">
       <header class="actws-head">
         <div class="actws-titleblock">
-          <input class="actws-title-input" name="titulo" value="${escapeHtml(activity.titulo || "Atividade")}" form="actws-details-form" />
+          <input class="actws-title-input" name="titulo" value="${escapeHtml(titleValue)}" placeholder="${escapeHtml(titlePlaceholder)}" form="actws-details-form" required />
           <div class="actws-head-meta">
-            <span>${escapeHtml(activity.tipo || "Sem tipo")}</span>
-            <span class="actws-dot"></span>
-            <span>${escapeHtml(priorityMeta.label)}</span>
-            <span>${escapeHtml(activity.prazo ? formatAdminDate(activity.prazo) : "Sem prazo")}</span>
-            <span>${escapeHtml(activityStudentName(activity.studentId))}</span>
+            <span>${escapeHtml(linkedStudentName)}</span>
           </div>
         </div>
         <div class="actws-actions">
-          <button class="ped-btn-save" type="button" data-actws-toggle-done="${escapeHtml(activity.id)}">${normalizeActivityStatus(activity.status) === "Feito" ? "Reabrir" : "Concluir"}</button>
-          <button class="activities-drawer-close" type="button" data-actws-archive="${escapeHtml(activity.id)}" aria-label="Arquivar atividade">•••</button>
+          ${isCreateMode ? `<button class="ped-btn-save" type="submit" form="actws-details-form">Criar atividade</button>` : `<button class="ped-btn-save" type="button" data-actws-toggle-done="${escapeHtml(activity.id)}">${normalizeActivityStatus(activity.status) === "Feito" ? "Reabrir" : "Concluir"}</button><button class="activities-drawer-close" type="button" data-actws-archive="${escapeHtml(activity.id)}" aria-label="Arquivar atividade">•••</button>`}
           <button class="activities-drawer-close" type="button" data-activities-drawer-close aria-label="Fechar">×</button>
         </div>
       </header>
@@ -11274,27 +11301,26 @@ const renderActivityWorkspace = (workspace = {}) => {
               ${propRow("Tipo", `<input name="tipo" value="${escapeHtml(activity.tipo || "")}" placeholder="Sem tipo" />`)}
               ${propRow("Aluno", `<select name="studentId">${renderActivityStudentOptions(activity.studentId)}</select>${student?.email ? `<small>${escapeHtml(student.email)}</small>` : ""}`)}
             </section>
-            <section class="actws-section">
-              <h3>Metadados</h3>
-              <div class="actws-kv"><span>Criada por</span><strong>${escapeHtml(activityUserName(activity.criadoPor, activity.criadoPor))}</strong></div>
+            <details class="actws-details-meta">
+              <summary>Detalhes</summary>
+              <div class="actws-kv"><span>Criada por</span><strong>${escapeHtml(isCreateMode ? "—" : activityUserName(activity.criadoPor, activity.criadoPor))}</strong></div>
               <div class="actws-kv"><span>Data de criação</span><strong>${escapeHtml(activity.criadoEm ? formatAdminHistoryStamp(activity.criadoEm) : "—")}</strong></div>
               <div class="actws-kv"><span>Última atualização</span><strong>${escapeHtml(activity.atualizadoEm ? formatAdminHistoryStamp(activity.atualizadoEm) : "—")}</strong></div>
               <div class="actws-kv"><span>Concluída em</span><strong>${escapeHtml(activity.completedAt ? formatAdminHistoryStamp(activity.completedAt) : "—")}</strong></div>
-            </section>
-            <section class="actws-section actws-section-context">
-              <h3>Contexto</h3>
-              <label class="actws-text-block"><span>Descrição</span><textarea name="descricao" rows="6" placeholder="Adicione o contexto principal da atividade…">${escapeHtml(activity.descricao || "")}</textarea></label>
-              <label class="actws-text-block"><span>Notas internas</span><textarea name="observacoes" rows="${notes ? "4" : "2"}" placeholder="Notas internas opcionais…">${escapeHtml(notes)}</textarea></label>
-            </section>
-            <button class="actws-save-subtle" type="submit">Salvar alterações</button>
+            </details>
+            <button class="actws-save-subtle" type="submit">${isCreateMode ? "Criar atividade" : "Salvar alterações"}</button>
           </form>
         </aside>
         <main class="actws-panel actws-timeline" data-actws-panel="timeline">
           <div class="actws-feed" data-actws-feed>
+            <section class="actws-description">
+              <div class="actws-section-head"><h3>Descrição</h3></div>
+              <textarea name="descricao" rows="${descriptionValue ? "5" : "3"}" form="actws-details-form" placeholder="Adicione uma descrição…">${escapeHtml(descriptionValue)}</textarea>
+            </section>
             <section class="actws-discussion">
               <div class="actws-section-head"><h3>Discussão</h3><span>${escapeHtml(String(visibleComments.length))}</span></div>
               <div class="actws-comments" data-actws-comments>
-                ${visibleComments.length ? visibleComments.map(comment => {
+                ${isCreateMode ? `<div class="actws-empty actws-empty-state">Crie a atividade para iniciar a discussão.</div>` : visibleComments.length ? visibleComments.map(comment => {
                   const canManage = !comment.legacy && !comment.deletedAt && (canAdminComments || String(comment.authorId || "") === currentUserId);
                   return `
               <article class="actws-comment ${comment.deletedAt ? "is-deleted" : ""}" data-actws-comment="${escapeHtml(comment.id)}">
@@ -11308,24 +11334,24 @@ const renderActivityWorkspace = (workspace = {}) => {
                   `;
                 }).join("") : `<div class="actws-empty">Nenhum comentário ainda.</div>`}
               </div>
-              <button type="button" class="actws-add-inline" data-actws-comment-compose-toggle>+ Adicionar comentário</button>
+              ${isCreateMode ? "" : `<button type="button" class="actws-add-inline" data-actws-comment-compose-toggle>+ Adicionar comentário</button>
               <form class="actws-comment-form" data-actws-comment-form hidden>
                 <textarea name="comment" rows="3" placeholder="Escreva um comentário…"></textarea>
                 <div class="actws-form-actions"><span>Enter envia · Shift+Enter quebra linha</span><button type="submit">Enviar</button><button type="button" data-actws-comment-compose-cancel>Cancelar</button></div>
-              </form>
+              </form>`}
             </section>
-            <section class="actws-activity-log">
-              <div class="actws-section-head"><h3>Atividade</h3><span>${escapeHtml(String(visibleEvents.length))}</span></div>
+            <details class="actws-activity-log">
+              <summary>Atividade · ${escapeHtml(String(visibleEvents.length))}</summary>
               <div class="actws-events">
-                ${visibleEvents.length ? visibleEvents.map(event => `<div class="actws-event"><span>○</span><p>${escapeHtml(activityTimelineEventText(event))}<time>${escapeHtml(event.occurredAt ? formatAdminHistoryStamp(event.occurredAt) : "")}</time></p></div>`).join("") : `<div class="actws-empty">Nenhum evento registrado.</div>`}
+                ${isCreateMode ? `<div class="actws-empty actws-empty-state">A atividade ainda não foi criada.</div>` : visibleEvents.length ? visibleEvents.map(event => `<div class="actws-event"><span>○</span><p>${escapeHtml(activityTimelineEventText(event))}<time>${escapeHtml(event.occurredAt ? formatAdminHistoryStamp(event.occurredAt) : "")}</time></p></div>`).join("") : `<div class="actws-empty">Nenhum evento registrado.</div>`}
               </div>
-            </section>
+            </details>
           </div>
         </main>
         <aside class="actws-panel actws-checklist" data-actws-panel="checklist">
-          <div class="actws-check-head"><div><h3>Checklist</h3><strong>${escapeHtml(`${done} de ${total} concluídos · ${pct}%`)}</strong></div><span><i style="width:${escapeHtml(String(pct))}%"></i></span></div>
+          <div class="actws-check-head"><div><h3>Checklist</h3><strong>${escapeHtml(`${done}/${total}`)}</strong></div><span><i style="width:${escapeHtml(String(pct))}%"></i></span></div>
           <div class="actws-check-list">
-            ${checklist.length ? checklist.map(item => `
+            ${isCreateMode ? `<div class="actws-empty actws-empty-state">Crie a atividade para liberar o checklist.</div>` : checklist.length ? checklist.map(item => `
               <article class="actws-check-item ${item.completed ? "is-done" : ""} ${isActivityItemOverdue(item.dueDate) && !item.completed ? "is-overdue" : ""}" data-actws-check-item="${escapeHtml(item.id)}">
                 <input type="checkbox" data-actws-check-toggle="${escapeHtml(item.id)}" ${item.completed ? "checked" : ""} />
                 <div class="actws-check-copy">
@@ -11345,7 +11371,7 @@ const renderActivityWorkspace = (workspace = {}) => {
               </article>
             `).join("") : `<div class="actws-empty">Nenhum item no checklist.</div>`}
           </div>
-          <button type="button" class="actws-add-inline" data-actws-check-add-toggle>+ Adicionar item</button>
+          ${isCreateMode ? "" : `<button type="button" class="actws-add-inline" data-actws-check-add-toggle>+ Adicionar item</button>
           <form class="actws-add-check" data-actws-check-add-form hidden>
             <input name="title" placeholder="Título do item" />
             <div class="actws-check-meta">
@@ -11353,7 +11379,7 @@ const renderActivityWorkspace = (workspace = {}) => {
               <input type="date" name="dueDate" />
             </div>
             <div class="actws-form-actions"><button type="submit">Salvar</button><button type="button" data-actws-check-add-cancel>Cancelar</button></div>
-          </form>
+          </form>`}
         </aside>
       </div>
     </div>
@@ -11406,180 +11432,45 @@ const patchActivityWorkspace = async (id, payload = {}) => {
   return data;
 };
 
-const openActivitiesDrawer = ({ activity = null } = {}) => {
-  if (activity?.id) return openActivityWorkspace(activity);
+const createActivityWorkspace = async (payload = {}) => {
+  const res = await fetchWithAuth("/api/activities", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(String(data?.error || `activity_workspace_create_failed:${res.status}`));
+  const createdId = String(data?.activity?.id || "").trim();
+  if (!createdId) throw new Error("activity_workspace_create_missing_id");
+  await loadActivities({ force: true, silent: true });
+  refreshOpenStudentActivities();
+  activitiesState.drawer = { isOpen: true, id: createdId };
+  return loadActivityWorkspace(createdId);
+};
+
+const openActivityCreateWorkspace = (activity = {}) => {
   const drawerEl = ensureActivitiesDrawerInBody();
   if (!(drawerEl instanceof HTMLElement) || !(activitiesDrawerBody instanceof HTMLElement)) return;
-  const canAssignOthers = Boolean(activitiesState.permissions?.canAssignOthers) || currentRole === "admin" || currentRole === "growth";
-  const current = activity && typeof activity === "object"
-    ? {
-        id: String(activity.id || ""),
-        studentId: String(activity.studentId || ""),
-        titulo: String(activity.titulo || ""),
-        descricao: String(activity.descricao || ""),
-        status: normalizeActivityStatus(activity.status),
-        responsavelId: String(activity.responsavelId || ""),
-        prazo: String(activity.prazo || ""),
-        prioridade: normalizeActivityPriority(activity.prioridade),
-        tipo: String(activity.tipo || ""),
-        observacoes: String(activity.observacoes || ""),
-      }
-    : {
-        id: "",
-        titulo: "",
-        descricao: "",
-        status: "Pendente",
-        responsavelId: canAssignOthers ? "" : String(sessionUser?.id || ""),
-        prazo: "",
-        prioridade: "Média",
-        tipo: "",
-        observacoes: "",
-      };
-  if (activitiesDrawerTitle instanceof HTMLElement) activitiesDrawerTitle.textContent = current.id ? "Editar atividade" : "Nova atividade";
-  if (activitiesDrawerSub instanceof HTMLElement) activitiesDrawerSub.textContent = current.id ? "Atualize os detalhes e salve." : "Preencha os dados principais da tarefa.";
-  const allUsers = Array.isArray(activitiesState.users) ? activitiesState.users : [];
-  const directoryUsers = Array.isArray(activitiesState.directoryUsers) ? activitiesState.directoryUsers : [];
-  const users = canAssignOthers
-    ? (directoryUsers.length ? directoryUsers : allUsers)
-    : allUsers.filter((user) => {
-        const userId = String(user.id || "");
-        return userId === String(sessionUser?.id || "") || userId === current.responsavelId;
-      });
-  activitiesDrawerBody.innerHTML = `
-    <form class="activities-form" data-activities-form="${escapeHtml(current.id)}">
-      <label class="activities-field"><span>Título</span><input class="admin-ped-select" type="text" name="titulo" value="${escapeHtml(current.titulo)}" required /></label>
-      <div class="activities-field"><label for="activity-student-search">Aluno vinculado</label>
-        <div class="activities-responsible-combobox" data-activity-student-combobox>
-          <input type="hidden" name="studentId" value="${escapeHtml(current.studentId || '')}" />
-          <input id="activity-student-search" class="admin-ped-select" type="search" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="activity-student-options" placeholder="Buscar por nome ou email" autocomplete="off" />
-          <div id="activity-student-options" class="activities-responsible-options" role="listbox" hidden></div>
-        </div>
-      </div>
-      <label class="activities-field"><span>Descrição</span><textarea class="admin-ped-select activities-textarea" name="descricao" rows="4">${escapeHtml(current.descricao)}</textarea></label>
-      <div class="activities-grid2">
-        <label class="activities-field"><span>Status</span><select class="admin-ped-select" name="status">${ACTIVITY_STATUS_OPTIONS.map((option) => `<option value="${escapeHtml(option)}" ${option === current.status ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}</select></label>
-        <label class="activities-field"><span>Prioridade</span><select class="admin-ped-select" name="prioridade">${ACTIVITY_PRIORITY_OPTIONS.map((option) => `<option value="${escapeHtml(option)}" ${option === current.prioridade ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}</select></label>
-      </div>
-      <div class="activities-grid2">
-        <label class="activities-field"><span>Responsável</span>${
-          canAssignOthers
-            ? `<div class="activities-responsible-combobox" data-activities-responsible-combobox>
-                <input type="hidden" name="responsavelId" value="${escapeHtml(current.responsavelId)}" data-activities-responsible-value />
-                <input class="admin-ped-select activities-responsible-search" type="search" data-activities-responsible-search placeholder="Buscar responsável..." autocomplete="off" />
-                <div class="activities-responsible-options" data-activities-responsible-options hidden></div>
-              </div>`
-            : `<select class="admin-ped-select" name="responsavelId" disabled><option value="">Sem responsável</option>${users.map((user) => `<option value="${escapeHtml(String(user.id || ""))}">${escapeHtml(String(user.nome || "Usuário"))}</option>`).join("")}</select>`
-        }</label>
-        <label class="activities-field"><span>Prazo</span><input class="admin-ped-select" type="date" name="prazo" value="${escapeHtml(current.prazo)}" /></label>
-      </div>
-      <label class="activities-field"><span>Tipo</span><input class="admin-ped-select" type="text" name="tipo" value="${escapeHtml(current.tipo)}" list="activities-type-options" /><datalist id="activities-type-options">${getActivityTypeOptions().map((option) => `<option value="${escapeHtml(option)}"></option>`).join("")}</datalist></label>
-      <label class="activities-field"><span>Observações</span><textarea class="admin-ped-select activities-textarea" name="observacoes" rows="5">${escapeHtml(current.observacoes)}</textarea></label>
-      <label class="activities-field"><span>Adicionar comentário</span><textarea class="admin-ped-select activities-textarea" name="comment" rows="2"></textarea></label>
-      <div class="activities-form-actions">
-        ${current.id ? `<button class="ped-btn-close" type="button" data-activities-delete="${escapeHtml(current.id)}">Excluir</button>` : `<span></span>`}
-        <button class="ped-btn-save" type="submit">${current.id ? "Salvar alterações" : "Criar atividade"}</button>
-      </div>
-    </form>
-  `;
-  const form = activitiesDrawerBody.querySelector("[data-activities-form]");
-  if (form instanceof HTMLFormElement) {
-    bindActivityStudentPicker(form, activitiesState.students || [], current.studentId || '');
-    const responsibleValue = form.querySelector("[data-activities-responsible-value]");
-    const responsibleSearch = form.querySelector("[data-activities-responsible-search]");
-    const responsibleOptions = form.querySelector("[data-activities-responsible-options]");
-    const getSelectedResponsibleId = () =>
-      responsibleValue instanceof HTMLInputElement
-        ? String(responsibleValue.value || "").trim()
-        : String(form.elements.namedItem("responsavelId")?.value || "").trim();
-    const setResponsibleSelection = (id) => {
-      const safeId = String(id || "").trim();
-      const selectedUser = users.find((user) => String(user.id || "") === safeId) || null;
-      if (responsibleValue instanceof HTMLInputElement) responsibleValue.value = safeId;
-      if (responsibleSearch instanceof HTMLInputElement) responsibleSearch.value = selectedUser ? selectedUser.nome || "Usuário" : "";
-      if (responsibleOptions instanceof HTMLElement) responsibleOptions.hidden = true;
-    };
-    const renderResponsibleOptions = (query = "") => {
-      if (!(responsibleOptions instanceof HTMLElement)) return;
-      const selectedValue = getSelectedResponsibleId();
-      const normalizedQuery = normalizeSearchText(query);
-      const filteredUsers = users.filter((user) => {
-        if (!normalizedQuery) return true;
-        const haystack = normalizeSearchText([user.nome, user.email, user.role].filter(Boolean).join(" "));
-        return haystack.includes(normalizedQuery);
-      });
-      const selectedUser = selectedValue ? users.find((user) => String(user.id || "") === selectedValue) : null;
-      const optionUsers = selectedUser && !filteredUsers.some((user) => String(user.id || "") === selectedValue)
-        ? [selectedUser, ...filteredUsers]
-        : filteredUsers;
-      responsibleOptions.innerHTML = `
-        <button class="activities-responsible-option ${selectedValue ? "" : "is-active"}" type="button" data-activities-responsible-pick="">
-          <span>Sem responsável</span>
-        </button>
-        ${
-          optionUsers.length
-            ? optionUsers
-                .map((user) => {
-                  const id = String(user.id || "");
-                  return `<button class="activities-responsible-option ${id === selectedValue ? "is-active" : ""}" type="button" data-activities-responsible-pick="${escapeHtml(id)}"><span>${escapeHtml(String(user.nome || "Usuário"))}</span><small>${escapeHtml(String(user.email || user.role || ""))}</small></button>`;
-                })
-                .join("")
-            : `<div class="activities-responsible-empty">Nenhum responsável encontrado</div>`
-        }
-      `;
-      responsibleOptions.hidden = false;
-    };
-    if (responsibleSearch instanceof HTMLInputElement) {
-      setResponsibleSelection(current.responsavelId);
-      responsibleSearch.addEventListener("focus", () => renderResponsibleOptions(responsibleSearch.value));
-      responsibleSearch.addEventListener("input", () => {
-        if (responsibleValue instanceof HTMLInputElement) responsibleValue.value = "";
-        renderResponsibleOptions(responsibleSearch.value);
-      });
-    }
-    if (responsibleOptions instanceof HTMLElement) {
-      responsibleOptions.addEventListener("mousedown", (event) => event.preventDefault());
-      responsibleOptions.addEventListener("click", (event) => {
-        const target = event.target;
-        if (!(target instanceof Element)) return;
-        const pick = target.closest("[data-activities-responsible-pick]");
-        if (!(pick instanceof HTMLElement)) return;
-        setResponsibleSelection(pick.getAttribute("data-activities-responsible-pick") || "");
-      });
-    }
-    form.addEventListener("focusout", (event) => {
-      if (!(responsibleOptions instanceof HTMLElement)) return;
-      const nextTarget = event.relatedTarget;
-      if (nextTarget instanceof Node && form.querySelector("[data-activities-responsible-combobox]")?.contains(nextTarget)) return;
-      window.setTimeout(() => {
-        if (responsibleOptions instanceof HTMLElement) responsibleOptions.hidden = true;
-      }, 120);
-    });
-    form.addEventListener("submit", (event) => {
-      event.preventDefault();
-      if (form.dataset.saving) return;
-      form.dataset.saving = "true";
-      const formData = new FormData(form);
-      saveActivityForm({
-        id: current.id,
-        payload: {
-          comment: String(formData.get("comment") || "").trim(),
-          studentId: String(formData.get("studentId") || ""),
-          titulo: String(formData.get("titulo") || "").trim(),
-          descricao: String(formData.get("descricao") || "").trim(),
-          status: normalizeActivityStatus(formData.get("status")),
-          responsavelId: canAssignOthers ? String(formData.get("responsavelId") || "").trim() : String(sessionUser?.id || "").trim(),
-          prazo: String(formData.get("prazo") || "").trim(),
-          prioridade: normalizeActivityPriority(formData.get("prioridade")),
-          tipo: String(formData.get("tipo") || "").trim(),
-          observacoes: String(formData.get("observacoes") || "").trim(),
-        },
-      }).finally(() => { delete form.dataset.saving; });
-    });
-  }
+  if (activitiesDrawerTitle instanceof HTMLElement) activitiesDrawerTitle.textContent = "";
+  if (activitiesDrawerSub instanceof HTMLElement) activitiesDrawerSub.textContent = "";
   body.classList.add("is-modal-open");
   drawerEl.hidden = false;
-  activitiesState.drawer = { isOpen: true, id: current.id };
+  drawerEl.classList.add("is-workspace");
+  activitiesState.drawer = { isOpen: true, id: "", mode: "create" };
+  activitiesDrawerBody.innerHTML = renderActivityWorkspace({
+    mode: "create",
+    activity: getDefaultActivityDraft(activity),
+    comments: [],
+    checklist: [],
+    events: [],
+  });
   window.requestAnimationFrame(() => drawerEl.classList.add("is-open"));
+  activitiesDrawerBody.querySelector(".actws-title-input")?.focus();
+};
+
+const openActivitiesDrawer = ({ activity = null } = {}) => {
+  if (activity?.id) return openActivityWorkspace(activity);
+  return openActivityCreateWorkspace(activity || {});
 };
 
 const renderActivitiesListView = (items) => {
@@ -12033,7 +11924,8 @@ const bindActivitiesUi = () => {
       if (!(workspace instanceof HTMLElement)) return;
       event.preventDefault();
       const id = String(workspace.getAttribute("data-activity-workspace") || "").trim();
-      if (!id || form.dataset.saving) return;
+      const isCreateMode = workspace.getAttribute("data-actws-mode") === "create";
+      if ((!id && !isCreateMode) || form.dataset.saving) return;
       form.dataset.saving = "true";
       const formData = new FormData(form);
       let payload = null;
@@ -12048,9 +11940,18 @@ const bindActivitiesUi = () => {
           prioridade: normalizeActivityPriority(formData.get("prioridade")),
           tipo: String(formData.get("tipo") || "").trim(),
           descricao: String(formData.get("descricao") || "").trim(),
-          observacoes: String(formData.get("observacoes") || "").trim(),
         };
+        if (!payload.titulo) {
+          workspace.querySelector(".actws-title-input")?.focus();
+          setActivitiesStatus("Informe um título para criar a atividade.", "error");
+          delete form.dataset.saving;
+          return;
+        }
       } else if (form.matches("[data-actws-comment-form]")) {
+        if (isCreateMode) {
+          delete form.dataset.saving;
+          return;
+        }
         payload = { comment: String(formData.get("comment") || "").trim() };
         if (!payload.comment) {
           delete form.dataset.saving;
@@ -12066,6 +11967,10 @@ const bindActivitiesUi = () => {
         optimisticEl = pending;
         form.reset();
       } else if (form.matches("[data-actws-check-add-form]")) {
+        if (isCreateMode) {
+          delete form.dataset.saving;
+          return;
+        }
         payload = {
           checklistAction: "add",
           title: String(formData.get("title") || "").trim(),
@@ -12086,8 +11991,16 @@ const bindActivitiesUi = () => {
         };
       }
       if (!payload) { delete form.dataset.saving; return; }
-      patchActivityWorkspace(id, payload)
-        .then(data => { if (activitiesDrawerBody instanceof HTMLElement) activitiesDrawerBody.innerHTML = renderActivityWorkspace(data); setActivitiesStatus("Salvo ✓", "success"); window.setTimeout(() => setActivitiesStatus(""), 1800); })
+      const request = isCreateMode && form.matches("[data-actws-details-form]")
+        ? createActivityWorkspace(payload)
+        : patchActivityWorkspace(id, payload);
+      setActivitiesStatus(isCreateMode ? "Criando atividade…" : "Salvando atividade…");
+      request
+        .then(data => {
+          if (activitiesDrawerBody instanceof HTMLElement) activitiesDrawerBody.innerHTML = renderActivityWorkspace(data);
+          setActivitiesStatus(isCreateMode ? "Atividade criada ✓" : "Salvo ✓", "success");
+          window.setTimeout(() => setActivitiesStatus(""), 1800);
+        })
         .catch(error => { console.error("[activities] workspace submit failed:", error); optimisticEl?.remove(); setActivitiesStatus("Não foi possível salvar agora.", "error"); })
         .finally(() => { delete form.dataset.saving; });
     });
@@ -12097,6 +12010,7 @@ const bindActivitiesUi = () => {
       const workspace = target.closest("[data-activity-workspace]");
       if (!(workspace instanceof HTMLElement)) return;
       const id = String(workspace.getAttribute("data-activity-workspace") || "").trim();
+      if (!id) return;
       const toggle = target.closest("[data-actws-check-toggle]");
       if (toggle instanceof HTMLInputElement) {
         const itemId = String(toggle.getAttribute("data-actws-check-toggle") || "").trim();
