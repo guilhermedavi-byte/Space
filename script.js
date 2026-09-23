@@ -914,12 +914,15 @@ const permissionForPanel = (panelName) => {
   if (panel === "dashboard") return "dashboard.overview.view";
   if (panel === "activities") return "activities.activity.view";
   if (panel === "automations") return "automations.flows.view";
-  if (panel === "status-plataforma") return "status.overview.view";
-  if (panel === "guia-colaboradores") return "guide.overview.view";
+  if (panel === "status-plataforma") return "settings.status.view";
   if (panel === "space-office") return "spaceOffice.overview.view";
   if (panel === "attendance-inbox") return "attendance.inbox.view";
   if (panel === "attendance-connections") return "attendance.connections.view";
-  if (panel === "configuracoes-admin") return adminSettingsState?.activeSection === "acessos" ? "settings.accesses.view" : "settings.profile.view";
+  if (panel === "configuracoes-admin") {
+    if (adminSettingsState?.activeSection === "acessos") return "settings.accesses.view";
+    if (adminSettingsState?.activeSection === "status") return "settings.status.view";
+    return "settings.profile.view";
+  }
   if (panel === "admin-comercial-visao-geral") return "comercial.overview.view";
   if (panel === "native-crm") return "comercial.crm.view";
   if (panel === "admin-comercial-atividade-sdr") return "comercial.preSales.view";
@@ -1072,11 +1075,20 @@ const syncRoleUI = () => {
     }
   });
 
+  document.querySelectorAll("[data-settings-access]").forEach((el) => {
+    if (el instanceof HTMLElement) {
+      el.hidden = !["admin", "teacher"].includes(currentRole);
+    }
+  });
+
   if (currentRole === "admin") {
     document.querySelectorAll("[data-panel-target]").forEach((el) => {
       if (!(el instanceof HTMLElement)) return;
       const permission = permissionForPanel(el.getAttribute("data-panel-target"));
       if (permission) el.hidden = !canAdmin(permission);
+    });
+    document.querySelectorAll("[data-settings-access]").forEach((el) => {
+      if (el instanceof HTMLElement) el.hidden = getVisibleAdminSettingsSections().length === 0;
     });
     document.querySelectorAll("[data-finance-tab]").forEach((el) => {
       if (!(el instanceof HTMLElement)) return;
@@ -1092,74 +1104,6 @@ const syncRoleUI = () => {
       const visibleChild = Array.from(accordion.querySelectorAll("[data-panel-target], [data-finance-tab], a.sidebar-link")).some((child) => child instanceof HTMLElement && !child.hidden);
       accordion.hidden = !visibleChild;
     });
-  }
-
-  // Defensive: ensure Admin sidebar contains the Pedagógico accordion (some deploys may serve an older template).
-  if (currentRole === "admin") {
-    try {
-      const sidebarNav = document.querySelector(".sidebar-nav");
-      if (sidebarNav instanceof HTMLElement) {
-        // Also ensure Admin sidebar contains the Pedagógico accordion.
-        const existingPedAccordion = sidebarNav.querySelector("[data-sidebar-accordion='pedagogico']");
-        if (!(existingPedAccordion instanceof HTMLElement)) {
-          const accordion = document.createElement("div");
-          accordion.className = "sidebar-accordion";
-          accordion.setAttribute("data-sidebar-accordion", "pedagogico");
-          accordion.setAttribute("data-admin-only", "");
-          accordion.innerHTML = `
-            <button
-              class="sidebar-link sidebar-accordion-toggle"
-              type="button"
-              data-sidebar-accordion-toggle="pedagogico"
-              aria-expanded="false"
-              aria-controls="sidebar-pedagogico-items"
-              title="Pedagógico"
-            >
-              <span class="sidebar-link-main">
-                <span class="sidebar-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none">
-                    <path d="M9 5.5h8"></path>
-                    <path d="M9 9h8"></path>
-                    <path d="M9 12.5h8"></path>
-                    <path d="M9 16h6"></path>
-                    <path d="M7 4.5h-.6A2.9 2.9 0 0 0 3.5 7.4v11.2A2.9 2.9 0 0 0 6.4 21.5h11.2a2.9 2.9 0 0 0 2.9-2.9V7.4a2.9 2.9 0 0 0-2.9-2.9H17"></path>
-                    <path d="M8.5 3.5h4a1 1 0 0 1 1 1v2h-6v-2a1 1 0 0 1 1-1Z"></path>
-                  </svg>
-                </span>
-                <span class="sidebar-text">Pedagógico</span>
-              </span>
-              <span class="sidebar-accordion-chevron" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none">
-                  <path d="m8 10 4 4 4-4"></path>
-                </svg>
-              </span>
-            </button>
-            <div class="sidebar-accordion-body" id="sidebar-pedagogico-items" data-sidebar-accordion-body="pedagogico" hidden>
-              <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-controle-pedagogico" title="Visão Geral"><span class="sidebar-text">Visão Geral</span></button>
-              <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="ao-vivo" title="Agenda"><span class="sidebar-text">Agenda</span></button>
-              <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-controle-pedagogico-aulas" data-sidebar-placeholder="true" title="Registros de Aulas"><span class="sidebar-text">Registros de Aulas</span></button>
-              <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-controle-pedagogico-pessoas" data-sidebar-placeholder="true" title="Usuários"><span class="sidebar-text">Usuários</span></button>
-              <button class="sidebar-link sidebar-link-sub sidebar-link-with-badge" type="button" data-panel-target="admin-controle-pedagogico-retencao" data-sidebar-placeholder="true" title="Retenção"><span class="sidebar-link-main"><span class="sidebar-text">Retenção</span></span><span class="sidebar-badge" data-admin-ped-retention-badge hidden>0</span></button>
-              <button class="sidebar-link sidebar-link-sub sidebar-link-with-badge" type="button" data-panel-target="admin-controle-pedagogico-reposicoes" data-sidebar-placeholder="true" title="Reposições"><span class="sidebar-link-main"><span class="sidebar-text">Reposições</span></span><span class="sidebar-badge" data-admin-ped-reposicoes-badge hidden>0</span></button>
-              <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-controle-pedagogico-qualidade" data-sidebar-placeholder="true" title="Qualidade"><span class="sidebar-text">Qualidade</span></button>
-              <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-controle-pedagogico-onboarding" data-sidebar-placeholder="true" title="Onboarding"><span class="sidebar-text">Onboarding</span></button>
-              <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-controle-pedagogico-relatorios" data-sidebar-placeholder="true" title="Relatórios"><span class="sidebar-text">Relatórios</span></button>
-            </div>
-          `;
-          // Insert after "Alunos" when possible, otherwise after "Professores", otherwise append.
-          const after =
-            sidebarNav.querySelector('[data-panel-target="alunos"]') ||
-            sidebarNav.querySelector('[data-panel-target="professores"]');
-          if (after && after.parentNode === sidebarNav) {
-            after.insertAdjacentElement("afterend", accordion);
-          } else {
-            sidebarNav.appendChild(accordion);
-          }
-        }
-      }
-    } catch {
-      // ignore
-    }
   }
 
   const teacherWorkHoursBtn = document.querySelector("[data-teacher-work-hours]");
@@ -17215,6 +17159,7 @@ const ADMIN_SETTINGS_SECTIONS = [
   { key: "campos-adicionais", label: "Campos adicionais" },
   { key: "integracoes", label: "Integrações" },
   { key: "conexoes", label: "Conexões" },
+  { key: "status", label: "Status" },
   { key: "lixeira", label: "Lixeira" },
 ];
 
@@ -17223,6 +17168,7 @@ const getVisibleAdminSettingsSections = () => {
   const isSuperAdmin = adminSettingsState?.profileMeta?.isSuperAdmin === true || sessionUser?.isSuperAdmin === true;
   return ADMIN_SETTINGS_SECTIONS.filter((item) => {
     if (item.key === "acessos") return isSuperAdmin && canAdmin("settings.accesses");
+    if (item.key === "status") return canAdmin("settings.status.view");
     return !item.superAdminOnly || isSuperAdmin;
   });
 };
@@ -38825,6 +38771,42 @@ const renderAdminSettingsPlaceholder = (section) => {
   `;
 };
 
+const renderAdminSettingsStatus = () => `
+  <div class="launch-page">
+    <div class="launch-page-head">
+      <div>
+        <span class="eyebrow">Lançamento interno</span>
+        <h2>Status da plataforma</h2>
+        <p>Checklist rápido para saber se a plataforma está pronta para uso dos colaboradores.</p>
+      </div>
+      <button class="button button-solid button-small" type="button" data-platform-status-refresh>Atualizar status</button>
+    </div>
+
+    <div class="launch-status-banner" data-platform-status-banner>
+      <span class="launch-status-dot" aria-hidden="true"></span>
+      <div>
+        <strong data-platform-status-title>Verificando…</strong>
+        <p data-platform-status-subtitle>Consultando integrações principais.</p>
+      </div>
+    </div>
+
+    <div class="launch-status-grid" data-platform-status-grid>
+      <article class="launch-status-card">
+        <span class="launch-status-skeleton">Carregando status…</span>
+      </article>
+    </div>
+
+    <article class="launch-note-card">
+      <h3>Pendências que dependem de ação externa</h3>
+      <ul>
+        <li>Pagar a fatura da Vercel para evitar suspensão do projeto.</li>
+        <li>Colar o token de webhook configurado na Vercel dentro do Asaas e ZapSign.</li>
+        <li>Conta de serviço Firebase é opcional agora, mas recomendada para rotinas administrativas futuras.</li>
+      </ul>
+    </article>
+  </div>
+`;
+
 const renderAdminSettingsProfile = () => {
   const meta = adminSettingsState.profileMeta || {};
   const name = String(meta?.nome || sessionUser?.name || "Administrador").trim() || "Administrador";
@@ -38926,6 +38908,11 @@ const renderAdminSettingsPanel = () => {
           if (latestContentEl instanceof HTMLElement) latestContentEl.innerHTML = renderAdminSettingsAccesses();
         }
       });
+    return;
+  }
+  if (adminSettingsState.activeSection === "status") {
+    contentEl.innerHTML = renderAdminSettingsStatus();
+    renderPlatformLaunchStatus({ force: false });
     return;
   }
   contentEl.innerHTML = renderAdminSettingsPlaceholder(adminSettingsState.activeSection);
@@ -42674,13 +42661,7 @@ const showPanel = (panelName) => {
   }
 
   if (panelName === "status-plataforma") {
-    window.scrollTo({ top: 0, behavior: "smooth" });
-    renderPlatformLaunchStatus({ force: false });
-    return;
-  }
-
-  if (panelName === "guia-colaboradores") {
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    openAdminSettingsSection("status", { updateRoute: false });
     return;
   }
 
@@ -42813,8 +42794,7 @@ const panelPathForRole = (role, panel) => {
     if (p === "admin-controle-pedagogico") return adminPedagogicoPathForState();
     if (["admin-controle-pedagogico-aulas", "admin-controle-pedagogico-pessoas", "admin-controle-pedagogico-retencao", "admin-controle-pedagogico-reposicoes", "admin-controle-pedagogico-qualidade", "admin-controle-pedagogico-onboarding", "admin-controle-pedagogico-relatorios"].includes(p)) return adminPedagogicoPathForState();
     if (p === "space-office") return "/app/admin/space-office";
-    if (p === "status-plataforma") return "/app/admin/status";
-    if (p === "guia-colaboradores") return "/app/admin/guia";
+    if (p === "status-plataforma") return "/app/admin/configuracoes/status";
     if (p === "configuracoes-admin") return "/app/admin/configuracoes";
     if (p === "automations") return "/app/admin/automacoes";
 	    if (p === "financeiro") return financePathForState(role);
@@ -42903,8 +42883,7 @@ const parseAppRoute = (path) => {
         : { role, panel: "admin-controle-pedagogico", pedagogicoGroup: "operacao", pedagogicoTab: "overview" };
     }
     if (sub === "space-office") return { role, panel: "space-office" };
-    if (sub === "status") return { role, panel: "status-plataforma" };
-    if (sub === "guia") return { role, panel: "guia-colaboradores" };
+    if (sub === "status") return { role, panel: "configuracoes-admin", settingsSection: "status", redirectTo: "/app/admin/configuracoes/status" };
     if (sub === "configuracoes") {
       const section = ADMIN_SETTINGS_SECTIONS.some((item) => item.key === detail) ? detail : "meu-perfil";
       return { role, panel: "configuracoes-admin", settingsSection: section };
@@ -44708,27 +44687,6 @@ document.addEventListener("click", (event) => {
     return;
   }
 
-  const copyMessage = target.closest("[data-copy-collaborator-message]");
-  if (copyMessage instanceof HTMLButtonElement) {
-    event.preventDefault();
-    const message = document.querySelector("[data-collaborator-message]");
-    const feedback = document.querySelector("[data-copy-collaborator-feedback]");
-    const text = message instanceof HTMLElement ? message.textContent.trim() : "";
-    if (!text) return;
-    const done = () => {
-      if (feedback instanceof HTMLElement) {
-        feedback.hidden = false;
-        window.setTimeout(() => {
-          feedback.hidden = true;
-        }, 1800);
-      }
-    };
-    if (navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(text).then(done).catch(() => {});
-    } else {
-      done();
-    }
-  }
 });
 
 if (closePlatformButton) {

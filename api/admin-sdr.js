@@ -386,13 +386,13 @@ const handleFavorite = async ({ body, session }) => {
   if (!response.ok) return { status: response.status || 500, body: { error: 'favorite_write_failed' } };
   return { status: 200, body: { ok: true } };
 };
-const createHandler = ({ build = buildModel, authResolver = resolveAdminRequestAuth } = {}) => async (req, res) => {
+const createHandler = ({ build = buildModel, authResolver = resolveAdminRequestAuth, permissionResolver = requireResolvedAdminPermission } = {}) => async (req, res) => {
   if (!['GET', 'POST', 'HEAD'].includes(req.method)) { res.setHeader('Allow', 'GET, POST, HEAD'); return sendJson(res, 405, { error: 'method_not_allowed' }); }
   try {
     const auth = await authResolver(req, { logPrefix: '[admin-sdr]' });
     if (!auth.ok) return sendJson(res, auth.status, auth.body);
     if (clean(auth.session?.role).toLowerCase() !== 'admin') return sendJson(res, 403, { error: 'admin_only' });
-    const perm = await requireResolvedAdminPermission(auth, 'comercial.sdrPanel.view');
+    const perm = await permissionResolver(auth, 'comercial.sdrPanel.view');
     if (!perm.ok) return sendJson(res, perm.status, perm.body);
     if (req.method === 'POST') {
       const body = await readJsonBody(req);

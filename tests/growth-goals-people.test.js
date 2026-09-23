@@ -109,6 +109,7 @@ const makeApi = ({ missingGoal = false, failRead = false, failUsers = false, leg
       if (name === '../_lib/session') return { getSessionFromRequest: () => ({ role: 'admin', sub: 'admin-test' }) };
       if (name === '../_lib/google-service-account') return { getGoogleAccessToken: async () => ({ accessToken: 'test-token' }) };
       if (name === '../_lib/firestore-rest') return { ...firestore, FIRESTORE_BASE: 'https://firestore.test/documents', requestJson };
+      if (name === './_lib/admin-permissions') return { requireAdminPermission: async () => ({ ok: true }) };
       if (name === './_lib/sdr-activity-read') return { readSdrEvents: async ({ from, to }) => {
         assert.match(from, /^\d{4}-\d{2}-\d{2}$/);
         assert.match(to, /^\d{4}-\d{2}-\d{2}$/);

@@ -16,6 +16,9 @@ const {
 assert.ok(ADMIN_PERMISSION_REGISTRY.comercial.children.crm, "registry includes comercial.crm");
 assert.ok(ADMIN_PERMISSION_REGISTRY.financeiro.children.overview, "registry includes financeiro.overview");
 assert.ok(ADMIN_PERMISSION_REGISTRY.settings.children.accesses, "registry includes settings.accesses");
+assert.ok(ADMIN_PERMISSION_REGISTRY.settings.children.status, "registry includes settings.status");
+assert.ok(!ADMIN_PERMISSION_REGISTRY.status, "status is not a top-level module");
+assert.ok(!ADMIN_PERMISSION_REGISTRY.guide, "guide module was removed from the admin registry");
 
 const flat = flattenRegistry();
 assert.ok(flat.length >= 40 && flat.length <= 80, "registry keeps useful enterprise granularity");
@@ -28,6 +31,8 @@ assert.deepStrictEqual(normalizeAdminPermissions(["dashboard", "nope", "comercia
   "comercial.crm.update",
   "comercial.crm.delete",
 ]);
+assert.deepStrictEqual(normalizeAdminPermissions(["status"]), ["settings.status.view"], "legacy status grants settings.status.view");
+assert.deepStrictEqual(normalizeAdminPermissions(["guide"]), [], "removed guide permissions are not normalized");
 
 const superAdmin = { role: "admin", isSuperAdmin: true, adminPermissions: [] };
 assert.strictEqual(canAdminAccess(superAdmin, "financeiro.closing.view"), true, "super admin bypasses matrix");
@@ -46,6 +51,9 @@ assert.strictEqual(permissionForAdminPanel("native-crm"), "comercial.crm.view");
 assert.strictEqual(permissionForAdminPanel("admin-comercial-metas"), "comercial.goals.view");
 assert.strictEqual(permissionForAdminPanel("financeiro", { financeTab: "recebiveis" }), "financeiro.receivables.view");
 assert.strictEqual(permissionForAdminPanel("configuracoes-admin", { settingsSection: "acessos" }), "settings.accesses.view");
+assert.strictEqual(permissionForAdminPanel("configuracoes-admin", { settingsSection: "status" }), "settings.status.view");
+assert.strictEqual(permissionForAdminPanel("status-plataforma"), "settings.status.view");
+assert.strictEqual(permissionForAdminPanel("guia-colaboradores"), "");
 assert.strictEqual(permissionForAdminPanel("admin-controle-pedagogico", { pedagogicoTab: "pessoas" }), "pedagogico.users.view");
 
 const patch = buildAdminPermissionPatchWrites({

@@ -65,8 +65,7 @@ const routeStateFromPath = (pathParam, searchParams = new URLSearchParams()) => 
   if (slug === "admin" && sub === "sdr") return { panel: "admin-sdr" };
   if (slug === "financeiro") return { panel: "financeiro" };
   if (slug === "admin" && sub === "space-office") return { panel: "space-office" };
-  if (slug === "admin" && sub === "status") return { panel: "status-plataforma" };
-  if (slug === "admin" && sub === "guia") return { panel: "guia-colaboradores" };
+  if (slug === "admin" && sub === "status") return { panel: "configuracoes-admin", settingsSection: "status" };
   if (slug === "admin" && sub === "financeiro") {
     const financeMap = { recebiveis: "recebiveis", assinaturas: "assinaturas", clientes: "clientes", recuperacao: "recuperacao", pendencias: "pendencias", fechamento: "fechamento" };
     return { panel: "financeiro", financeTab: financeMap[String(searchParams.get("aba") || "")] || "overview" };
@@ -87,7 +86,10 @@ const routeStateFromPath = (pathParam, searchParams = new URLSearchParams()) => 
     return { panel: "growth-dashboard" };
   }
   if (slug === "admin" && sub === "growth") return { panel: "growth" };
-  if (slug === "admin" && sub === "configuracoes") return { panel: "configuracoes-admin", settingsSection: segments[2] === "acessos" ? "acessos" : "meu-perfil" };
+  if (slug === "admin" && sub === "configuracoes") {
+    const settingsSections = new Set(["meu-perfil", "acessos", "tags", "planos", "motivos-cancelamento", "listas", "campos-adicionais", "integracoes", "conexoes", "status", "lixeira"]);
+    return { panel: "configuracoes-admin", settingsSection: settingsSections.has(segments[2]) ? segments[2] : "meu-perfil" };
+  }
   if (slug === "admin" && sub === "controle-pedagogico") {
     const map = { aulas: "aulas", usuarios: "pessoas", retencao: "retencao", reposicoes: "reposicoes", qualidade: "qualidade", onboarding: "onboarding", relatorios: "relatorios" };
     return { panel: "admin-controle-pedagogico", pedagogicoTab: map[String(searchParams.get("modulo") || "")] || "overview" };
@@ -230,6 +232,13 @@ module.exports = async (req, res) => {
   const host = String(req.headers.host || "localhost");
   const url = new URL(req.url || "/api/app", `https://${host}`);
   const pathParam = String(url.searchParams.get("path") || "").replace(/^\/+/, "").replace(/\/+$/, "");
+  if (/^admin\/guia(?:\/|$)/i.test(pathParam)) {
+    res.statusCode = 404;
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.setHeader("Cache-Control", "no-store");
+    res.end("Módulo não encontrado.");
+    return;
+  }
 
   const requestedSlug = pathParam.split("/")[0] || "";
   const requestedRole = slugToRole(requestedSlug);

@@ -2,7 +2,6 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { Readable } = require('node:stream');
 const { createHandler, __private } = require('../api/admin-sdr');
-const appHandler = require('../api/app');
 const { createSessionForUser } = require('../_lib/session');
 
 const invoke = async (handler, { method = 'GET', url = '/api/admin-sdr', body } = {}) => {
@@ -18,6 +17,7 @@ const invoke = async (handler, { method = 'GET', url = '/api/admin-sdr', body } 
 test('admin SDR API builds real operational model without mock metrics', async () => {
   const handler = createHandler({
     authResolver: async () => ({ ok: true, session: { role: 'admin', sub: 'admin' } }),
+    permissionResolver: async () => ({ ok: true }),
     build: async () => ({ ok: true, source: { usesMockData: false }, kpis: { totalCalls: 2 }, sdrs: [{ uid: 's1', name: 'SDR' }], calls: [] }),
   });
   const res = await invoke(handler);
@@ -40,13 +40,34 @@ test('range resolver covers requested date filters', () => {
 });
 
 test('admin SDR route boots the dedicated panel and script', async () => {
+  const appPath = require.resolve('../api/app');
+  const firestoreAdminPath = require.resolve('../api/_lib/firestore-admin');
+  const previousApp = require.cache[appPath];
+  const previousFirestoreAdmin = require.cache[firestoreAdminPath];
+  require.cache[firestoreAdminPath] = {
+    id: firestoreAdminPath,
+    filename: firestoreAdminPath,
+    loaded: true,
+    exports: {
+      getDocumentAsAdmin: async () => ({ tipo: 'admin', role: 'admin', isSuperAdmin: true }),
+    },
+  };
+  delete require.cache[appPath];
+  const appHandler = require('../api/app');
   const req = Readable.from([]); req.method = 'GET'; req.url = '/api/app?path=admin/comercial/pre-vendas/painel-sdr'; req.headers = { host: 'localhost', cookie: 'space_session=' + createSessionForUser({ id: 'admin', role: 'admin', name: 'Admin', email: 'admin@example.com' }).token };
   let body = ''; const res = { statusCode: 200, setHeader(){}, end(v=''){ body += v; } };
-  await appHandler(req, res);
-  assert.equal(res.statusCode, 200);
-  assert.match(body, /data-initial-panel="admin-sdr"/);
-  assert.match(body, /data-admin-sdr/);
-  assert.match(body, /src="admin-sdr\.js"/);
+  try {
+    await appHandler(req, res);
+    assert.equal(res.statusCode, 200);
+    assert.match(body, /data-initial-panel="admin-sdr"/);
+    assert.match(body, /data-admin-sdr/);
+    assert.match(body, /src="admin-sdr\.js"/);
+  } finally {
+    if (previousApp) require.cache[appPath] = previousApp;
+    else delete require.cache[appPath];
+    if (previousFirestoreAdmin) require.cache[firestoreAdminPath] = previousFirestoreAdmin;
+    else delete require.cache[firestoreAdminPath];
+  }
 });
 
 

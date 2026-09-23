@@ -95,10 +95,9 @@ const ADMIN_PERMISSION_REGISTRY = {
     children: {
       profile: withActions({ label: "Meu perfil", panel: "configuracoes-admin", settingsSection: "meu-perfil", routes: ["/app/admin/configuracoes"], legacyKey: "settings.profile" }, ["view", "update"]),
       accesses: withActions({ label: "Acessos", panel: "configuracoes-admin", settingsSection: "acessos", routes: ["/app/admin/configuracoes/acessos"], apis: ["/api/admin-permissions", "/api/admin-create-user"], legacyKey: "settings.accesses" }, ["view", { key: "manage_permissions", label: "Gerenciar permissões", sensitive: true }]),
+      status: withActions({ label: "Status", panel: "configuracoes-admin", settingsSection: "status", routes: ["/app/admin/configuracoes/status", "/app/admin/status"], apis: ["/api/health"], legacyKey: "status" }),
     },
   },
-  status: { label: "Status", children: { overview: withActions({ label: "Status", panel: "status-plataforma", routes: ["/app/admin/status"], apis: ["/api/health"], legacyKey: "status" }) } },
-  guide: { label: "Guia", children: { overview: withActions({ label: "Guia", panel: "guia-colaboradores", routes: ["/app/admin/guia"], legacyKey: "guide" }) } },
   spaceOffice: { label: "Space Office", children: { overview: withActions({ label: "Space Office", panel: "space-office", routes: ["/app/admin/space-office"], apis: ["/api/space-office"], legacyKey: "spaceOffice" }) } },
 };
 
@@ -229,12 +228,15 @@ const permissionForAdminPanel = (panel, state = {}) => {
   if (safePanel === "dashboard") return "dashboard.overview.view";
   if (safePanel === "activities") return "activities.activity.view";
   if (safePanel === "automations") return "automations.flows.view";
-  if (safePanel === "status-plataforma") return "status.overview.view";
-  if (safePanel === "guia-colaboradores") return "guide.overview.view";
+  if (safePanel === "status-plataforma") return "settings.status.view";
   if (safePanel === "space-office") return "spaceOffice.overview.view";
   if (safePanel === "attendance-inbox") return "attendance.inbox.view";
   if (safePanel === "attendance-connections") return "attendance.connections.view";
-  if (safePanel === "configuracoes-admin") return settingsSection === "acessos" ? "settings.accesses.view" : "settings.profile.view";
+  if (safePanel === "configuracoes-admin") {
+    if (settingsSection === "acessos") return "settings.accesses.view";
+    if (settingsSection === "status") return "settings.status.view";
+    return "settings.profile.view";
+  }
   if (safePanel === "admin-comercial-visao-geral") return "comercial.overview.view";
   if (safePanel === "native-crm") return "comercial.crm.view";
   if (safePanel === "admin-comercial-atividade-sdr") return "comercial.preSales.view";
