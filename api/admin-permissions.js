@@ -23,6 +23,8 @@ const adminRow = (row = {}) => {
   return {
     id,
     uid: id,
+    role: "admin",
+    tipo: "admin",
     nome: String(row?.nome || row?.name || row?.displayName || row?.email || "Administrador").trim(),
     email: String(row?.email || "").trim().toLowerCase(),
     criadoEm: row?.criadoEm || row?.createdAt || row?.created_at || null,
