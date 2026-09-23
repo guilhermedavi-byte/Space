@@ -206,11 +206,14 @@ const listAllLifecycleRows = async (table, select) => {
   }
 };
 const getLifecycleMetrics = async (month) => {
-  const [events,students]=await Promise.all([
+  const [events,students,roster,snapshots]=await Promise.all([
     listAllLifecycleRows('retention_events','id,event_type,occurred_at,state_after,payload'),
-    listAllLifecycleRows('students','id,created_at,subscriptions(*)')
+    listAllLifecycleRows('students','id,firestore_student_id,created_at,subscriptions(*)'),
+    require('./firestore-admin').listCollectionAsAdmin('users',{decorate:false}),
+    supabaseFetch(`/retention_population_snapshots?snapshot_date=eq.${month}-01&select=*`).then(r=>r.data)
   ]);
-  return require('./lifecycle-metrics').computeLifecycleMetrics({events,students,month});
+  const ids=new Set(roster.filter(r=>['student','aluno'].includes(r.tipo||r.role)).map(r=>r.firestoreDocId||r.id));
+  return require('./lifecycle-metrics').computeLifecycleMetrics({events,students:students.filter(r=>ids.has(r.firestore_student_id)),month,populationSnapshot:snapshots?.[0]||null});
 };
 
 const listRetentionCases = async ({ filters = {} } = {}) => {

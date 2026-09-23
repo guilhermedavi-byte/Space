@@ -25240,9 +25240,8 @@ const buildRetentionMetrics = (mesReferencia, dadosPreCarregados = {}, options =
     });
   });
 
-  // Sem snapshot histórico confiável de alunos ativos no primeiro dia; aproximamos por ativos atuais + churn efetivado no mês − cadastros do mês.
-  const ativosInicioMes = Math.max(ativosAtuais, ativosAtuais + churnNoMes - novosNoMes);
-  const percent = (value) => (ativosInicioMes > 0 ? (Number(value || 0) / ativosInicioMes) * 100 : 0);
+  const ativosInicioMes = null;
+  const percent = () => null;
   const casosFechadosNoMes = revertidosNoMes + churnNoMes;
   if (options.withSeries !== false) {
     for (let i = 5; i >= 0; i -= 1) {
@@ -25269,7 +25268,7 @@ const buildRetentionMetrics = (mesReferencia, dadosPreCarregados = {}, options =
     monthKey: bounds.key,
     ativosAtuais,
     ativosInicioMes,
-    ativosInicioMesApproach: "aproximado_por_ativos_atuais_churn_e_novos",
+    ativosInicioMesApproach: "Dados insuficientes",
     novosNoMes,
     pedidosNoMes,
     churnNoMes,
@@ -28155,6 +28154,7 @@ const renderStudentSheetInto = ({ sheetEl, hist, mode = "admin" } = {}) => {
       </aside>
 
       <section class="admin-student-sheet-right admin-student-simple-right" aria-label="Detalhes do aluno" data-student-profile-content>
+        ${mode === "admin" ? `<div data-retention-health-student="${escapeHtml(hist.alunoId)}"></div>` : ""}
         ${renderStudentProfileTabs(hist, mode)}
         ${studentProfilePanel("history", renderStudentProfileHistory(hist), hist, mode)}
         ${studentProfilePanel("retention", `
@@ -28202,6 +28202,7 @@ const renderStudentSheetInto = ({ sheetEl, hist, mode = "admin" } = {}) => {
     </div>
   `;
   bindStudentProfileTabs(sheetEl, hist, mode);
+  if (mode === "admin") globalThis.SpaceRetentionIntelligence?.hydrateStudent(sheetEl, hist.alunoId, fetchWithAuth);
 };
 
 const renderAdminStudentSheet = () => {
@@ -31552,7 +31553,7 @@ const renderAdminPedagogicoReposicoesPanel = () => {
   `;
 };
 
-const formatRetentionPercent = (value) => `${(Number(value || 0)).toFixed(1).replace(".", ",")}%`;
+const formatRetentionPercent = (value) => value == null ? "Dados insuficientes" : `${Number(value).toFixed(1).replace(".", ",")}%`;
 
 const renderAdminPedRetentionMetrics = (metrics) => {
   const m = metrics && typeof metrics === "object" ? metrics : buildRetentionMetrics(createDateKey(new Date()).slice(0, 7), {});
@@ -31564,7 +31565,7 @@ const renderAdminPedRetentionMetrics = (metrics) => {
       <div class="pedretain-metrics-head">
         <div>
           <h2 class="pedretain-section-title">Métricas do mês</h2>
-          <p class="pedretain-metrics-sub">Denominador: ${escapeHtml(String(m.ativosInicioMes || 0))} ativos no início do mês (${escapeHtml(m.ativosInicioMesApproach || "aproximado")}).</p>
+          <p class="pedretain-metrics-sub">${m.ativosInicioMes == null ? "Base inicial: Dados insuficientes — snapshots iniciados daqui para frente." : `Base inicial observada: ${escapeHtml(String(m.ativosInicioMes))} alunos.`}</p>
         </div>
         <label class="pedretain-month">
           <span>Mês</span>
@@ -31634,7 +31635,7 @@ const hydrateAdminPedRetentionChart = async () => {
   });
 };
 
-const renderAdminPedagogicoRetentionPanel = () => {
+const renderAdminPedagogicoRetentionOperations = () => {
   if (!(adminPedRetention instanceof HTMLElement)) return;
   const retentionState = adminPedagogicoState.retention && typeof adminPedagogicoState.retention === "object" ? adminPedagogicoState.retention : {};
   const status = String(retentionState.status || "idle").trim();
@@ -31726,6 +31727,17 @@ const renderAdminPedagogicoRetentionPanel = () => {
     </div>
   `;
   hydrateAdminPedRetentionChart().catch((error) => console.warn("[Retention] chart failed", error));
+};
+
+const renderAdminPedagogicoRetentionPanel = () => {
+  renderAdminPedagogicoRetentionOperations();
+  if (adminPedRetention instanceof HTMLElement && globalThis.SpaceRetentionIntelligence) {
+    globalThis.SpaceRetentionIntelligence.mount(adminPedRetention, {
+      fetch: fetchWithAuth,
+      openStudent: id => openStudentSimpleCard({ alunoId: id }),
+      openActivity: async draft => { await loadActivities({ force: false, silent: true }); openActivityCreateWorkspace(draft); },
+    });
+  }
 };
 
 const refreshAdminPedagogicoRetentionState = async ({ force = false } = {}) => {

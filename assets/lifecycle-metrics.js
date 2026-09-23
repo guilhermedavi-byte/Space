@@ -3,8 +3,8 @@
  else root.SpaceLifecycleMetrics=factory(root.SpaceLifecycle);
 })(typeof globalThis !== 'undefined' ? globalThis : this,function(policy){
 const {dateKey,isActiveOn}=policy;
-// Preserve the existing pedagogical denominator approximation. Only event semantics change.
-function computeLifecycleMetrics({events=[],students=[],month,withSeries=true}) {
+// Historical rates require an observed opening population, never reverse-estimated counts.
+function computeLifecycleMetrics({events=[],students=[],month,withSeries=true,populationSnapshot=null,activeCount=null}) {
   const rows = events.map(e => {
     const state=e.state_after || {}, payload=e.payload || {};
     const kind=e.event_type;
@@ -23,13 +23,14 @@ function computeLifecycleMetrics({events=[],students=[],month,withSeries=true}) 
   }
   result.ativosAtuais=students.filter(s=>(s.subscriptions || []).some(sub=>isActiveOn(sub,new Date()))).length;
   result.novosNoMes=students.filter(s=>s.created_at && dateKey(s.created_at).startsWith(month)).length;
-  result.ativosInicioMes=Math.max(result.ativosAtuais,result.ativosAtuais+result.churnNoMes-result.novosNoMes);
-  result.ativosInicioMesApproach='aproximado_por_ativos_atuais_churn_e_novos';
-  const percent=n=>result.ativosInicioMes ? 100*n/result.ativosInicioMes : 0;
+  if (Number.isInteger(activeCount)) result.ativosAtuais=activeCount;
+  result.ativosInicioMes=populationSnapshot?.snapshot_date===month+'-01' ? populationSnapshot.active_students : null;
+  result.ativosInicioMesApproach=result.ativosInicioMes==null?'Dados insuficientes':'snapshot diário canônico';
+  const percent=n=>result.ativosInicioMes ? 100*n/result.ativosInicioMes : null;
   result.pedidosPct=percent(result.pedidosNoMes); result.churnPct=percent(result.churnNoMes);
   result.casosFechadosNoMes=result.revertidosNoMes+result.churnNoMes;
   result.reversalRate=result.casosFechadosNoMes ? 100*result.revertidosNoMes/result.casosFechadosNoMes : null;
-  result.methodology='lifecycle_events_v1_existing_approximate_base';
+  result.methodology='lifecycle_events_with_observed_population';
   result.series6m=[];
   if(withSeries) for(let offset=5;offset>=0;offset--) {
     const d=new Date(month+'-01T12:00:00Z');d.setUTCMonth(d.getUTCMonth()-offset);

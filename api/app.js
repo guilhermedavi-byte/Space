@@ -182,6 +182,7 @@ const buildAppHtml = ({ sessionJson, registryJson, role, roleSlug, templateHtml,
     <script src="/assets/space-data-cache.js"></script>
     <script src="/assets/student-lifecycle.js"></script>
     <script src="/assets/lifecycle-metrics.js"></script>
+    <script src="/assets/retention-intelligence.js"></script>
     <script src="finance-customer-link.js?v=1"></script>
     <script src="finance-v1.js?v=31"></script>
     <script src="script.js"></script>
