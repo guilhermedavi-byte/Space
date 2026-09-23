@@ -89,10 +89,10 @@ function createMediaService({ request=supabaseFetch, fetchImpl=(...args)=>fetch(
     const cfg=storageConfig(asset.storage_path);
     try{
       const r=await fetchImpl(`${cfg.url}/storage/v1/object/authenticated/${cfg.bucket}/${cfg.path}`,{headers:cfg.headers,redirect:'error',signal:AbortSignal.timeout(15000)});
-      if(!r.ok)throw mediaError('storage_download_failed');
+      if(!r.ok)throw Object.assign(mediaError('storage_download_failed'),{cacheMissing:r.status===404});
       const buffer=await boundedBody(r,MAX_BYTES,'media_too_large');if(!buffer.length)throw mediaError('storage_download_failed');
       return {buffer,mime,filename:safeFilename(asset.filename),source:'storage'};
-    }catch(error){throw mediaError(ERROR_CODES.has(error.code)?error.code:'storage_download_failed');}
+    }catch(error){throw Object.assign(mediaError(ERROR_CODES.has(error.code)?error.code:'storage_download_failed'),{cacheMissing:error.cacheMissing===true});}
   }
   async function storageUpload(path,buffer,mime) {
     try{
@@ -107,7 +107,11 @@ function createMediaService({ request=supabaseFetch, fetchImpl=(...args)=>fetch(
     if(!['image','audio','video','document','sticker'].includes(kind))throw mediaError('media_not_found');
     let cacheBroken=false;
     if(asset.fetch_status==='ready'){
-      try{return await storageDownload(asset,message);}catch(error){cacheBroken=true;console.warn('[attendance-media]',{message_id:id,code:error.code});}
+      try{return await storageDownload(asset,message);}catch(error){
+        // A temporary Storage outage must not invalidate a ready asset or download it again.
+        if(!error.cacheMissing)throw error;
+        cacheBroken=true;console.warn('[attendance-media]',{message_id:id,code:error.code});
+      }
     }
     const token=randomUUID();
     const lease=await mark(id,{fetch_status:'fetching',fetch_token:token,retry_ready:cacheBroken});

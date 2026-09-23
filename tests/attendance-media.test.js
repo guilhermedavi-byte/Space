@@ -35,6 +35,11 @@ test('ready asset reads Storage without provider or writes',async()=>{
  const h=harness({asset:{fetch_status:'ready',mime_type:'image/jpeg',storage_path:`attendance/88/${id}.jpg`,filename:'photo.jpg'}});
  assert.equal((await h.run()).source,'storage');assert.equal(h.calls.length,1);assert.equal(h.writes.length,0);
 });
+test('temporary Storage failure preserves ready cache without provider calls or writes',async()=>{
+ const h=harness({storageFail:true,asset:{fetch_status:'ready',mime_type:'image/jpeg',storage_path:`attendance/88/${id}.jpg`}});
+ await assert.rejects(h.run(),{code:'storage_download_failed'});
+ assert.equal(h.calls.length,1);assert.equal(h.writes.length,0);
+});
 for(const [name,options,code] of [
  ['provider failure',{providerStatus:500},'provider_fetch_failed'],
  ['Storage failure',{storageFail:true},'storage_upload_failed'],
