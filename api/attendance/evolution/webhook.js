@@ -49,18 +49,24 @@ module.exports = async (req, res) => {
     const instance = String(payload?.instance || '').trim();
     const event = String(payload?.event || '').trim().toLowerCase();
     if (!/^[a-zA-Z0-9_-]{1,100}$/.test(instance)) return sendJson(res, 202, { ok: true });
+    if (event === 'ping') return sendJson(res, 200, { ok: true, ignored: 'ping' });
 
-    const connectionRows = (await supabaseFetch(
-      '/connections?select=connection_id,external_account_id,status,metadata&provider=eq.evolution_whatsapp&external_account_id=eq.' + encodeURIComponent(instance)
-    )).data || [];
-    const connection = connectionRows[0];
-    if (!connection) return sendJson(res, 202, { ok: true });
-
-    const channels = (await supabaseFetch(
-      '/channels?select=channel_id,default_team_id,status&connection_id=eq.' + encodeURIComponent(connection.connection_id) + '&limit=1'
-    )).data || [];
-    const channel = channels[0];
-    if (!channel) return sendJson(res, 202, { ok: true });
+    const resolved = (await supabaseFetch('/rpc/attendance_evolution_resolve_instance', {
+      method: 'POST',
+      body: { p_instance_name: instance }
+    })).data || {};
+    if (!resolved.found) return sendJson(res, 202, { ok: true });
+    if (!resolved.channel_id) return sendJson(res, 202, { ok: true, ignored: 'no_channel' });
+    const connection = {
+      connection_id: resolved.connection_id,
+      status: resolved.connection_status,
+      metadata: resolved.connection_metadata || {}
+    };
+    const channel = {
+      channel_id: resolved.channel_id,
+      default_team_id: resolved.team_id,
+      status: resolved.channel_status
+    };
 
     if (event === 'messages.upsert') {
       const d = payload.data || {};
