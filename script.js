@@ -11068,6 +11068,7 @@ const closeActivitiesDrawer = () => {
   const drawerEl = ensureActivitiesDrawerInBody();
   if (drawerEl instanceof HTMLElement) {
     drawerEl.classList.remove("is-open");
+    drawerEl.classList.remove("is-workspace");
     window.setTimeout(() => {
       drawerEl.hidden = true;
     }, 180);
@@ -11156,7 +11157,208 @@ const refreshOpenStudentActivities = () => {
   [adminStudentsState.history, teacherStudentsState.history].forEach(hist => { if (hist?.profileResources) delete hist.profileResources.activities; hist?.refreshActivities?.(); });
 };
 
+const activityAvatarHtml = (name, photo = "") => {
+  const safePhoto = String(photo || "").trim();
+  if (safePhoto) return `<span class="actws-avatar"><img src="${escapeHtml(safePhoto)}" alt="" loading="lazy" /></span>`;
+  return `<span class="actws-avatar">${escapeHtml(getInitials(name || "U"))}</span>`;
+};
+
+const activityUserName = (id, fallback = "") => {
+  const safeId = String(id || "").trim();
+  const users = [...(activitiesState.directoryUsers || []), ...(activitiesState.users || [])];
+  return users.find(user => String(user.id || "") === safeId)?.nome || fallback || safeId || "Sem responsável";
+};
+
+const activityStudentName = (id) => {
+  const safeId = String(id || "").trim();
+  return (activitiesState.students || []).find(student => String(student.id || "") === safeId)?.nome || safeId || "Sem aluno vinculado";
+};
+
+const activityTimelineEventText = (event = {}) => {
+  const type = String(event.eventType || "").trim();
+  const actor = String(event.actorNameSnapshot || event.actorName || "Sistema").trim();
+  const before = event.before == null || event.before === "" ? "" : String(event.before);
+  const after = event.after == null || event.after === "" ? "" : String(event.after);
+  const title = String(event.snapshot?.titulo || event.metadata?.title || "").trim();
+  const labels = {
+    activity_created: `${actor} criou a atividade`,
+    activity_updated: `${actor} atualizou a atividade`,
+    status_changed: `${actor} alterou status${before || after ? ` de ${before || "—"} para ${after || "—"}` : ""}`,
+    assignee_changed: `${actor} alterou responsável`,
+    due_date_changed: `${actor} alterou prazo${before || after ? ` de ${before || "—"} para ${after || "—"}` : ""}`,
+    priority_changed: `${actor} alterou prioridade${before || after ? ` de ${before || "—"} para ${after || "—"}` : ""}`,
+    student_linked: `${actor} vinculou aluno`,
+    student_unlinked: `${actor} desvinculou aluno`,
+    comment_added: `${actor} comentou`,
+    checklist_item_added: `${actor} criou item no checklist`,
+    checklist_item_completed: `${actor} concluiu item do checklist`,
+    checklist_item_reopened: `${actor} reabriu item do checklist`,
+    checklist_item_updated: `${actor} atualizou item do checklist`,
+    activity_completed: `${actor} concluiu a atividade${title ? ` ${title}` : ""}`,
+    activity_reopened: `${actor} reabriu a atividade`,
+    activity_archived: `${actor} arquivou a atividade`,
+  };
+  return labels[type] || `${actor} registrou evento`;
+};
+
+const renderActivityUserOptions = (selected = "") => {
+  const users = activitiesState.directoryUsers?.length ? activitiesState.directoryUsers : activitiesState.users || [];
+  return [`<option value="">Sem responsável</option>`].concat(users.map(user => `<option value="${escapeHtml(String(user.id || ""))}" ${String(user.id || "") === String(selected || "") ? "selected" : ""}>${escapeHtml(String(user.nome || "Usuário"))}</option>`)).join("");
+};
+
+const renderActivityWorkspace = (workspace = {}) => {
+  const activity = workspace.activity || {};
+  const comments = Array.isArray(workspace.comments) ? workspace.comments : [];
+  const checklist = Array.isArray(workspace.checklist) ? workspace.checklist : [];
+  const events = Array.isArray(workspace.events) ? workspace.events : [];
+  const statusMeta = getActivityStatusMeta(activity.status);
+  const priorityMeta = getActivityPriorityMeta(activity.prioridade);
+  const done = checklist.filter(item => item.completed).length;
+  const total = checklist.length;
+  const pct = total ? Math.round((done / total) * 100) : 0;
+  const timeline = [
+    ...events.map(event => ({ kind: "event", time: Date.parse(event.occurredAt) || 0, event })),
+    ...comments.map(comment => ({ kind: "comment", time: Date.parse(comment.createdAt) || 0, comment })),
+  ].sort((a, b) => a.time - b.time);
+  return `
+    <div class="actws" data-activity-workspace="${escapeHtml(activity.id)}">
+      <header class="actws-head">
+        <div class="actws-titleblock">
+          <input class="actws-title-input" name="titulo" value="${escapeHtml(activity.titulo || "Atividade")}" form="actws-details-form" />
+          <div class="actws-head-meta">
+            <span>${escapeHtml(activity.tipo || "Sem tipo")}</span>
+            <span class="actws-dot"></span>
+            <span class="pedteacher-badge ${escapeHtml(priorityMeta.className)}">${escapeHtml(priorityMeta.label)}</span>
+            <span>${escapeHtml(activity.prazo ? formatAdminDate(activity.prazo) : "Sem prazo")}</span>
+            <span>${escapeHtml(activityStudentName(activity.studentId))}</span>
+          </div>
+        </div>
+        <div class="actws-actions">
+          <button class="ped-btn-save" type="button" data-actws-toggle-done="${escapeHtml(activity.id)}">${normalizeActivityStatus(activity.status) === "Feito" ? "Reabrir" : "Concluir"}</button>
+          <button class="activities-drawer-close" type="button" data-actws-archive="${escapeHtml(activity.id)}" aria-label="Arquivar atividade">•••</button>
+          <button class="activities-drawer-close" type="button" data-activities-drawer-close aria-label="Fechar">×</button>
+        </div>
+      </header>
+      <div class="actws-tabs" role="tablist" aria-label="Workspace da atividade">
+        <button type="button" data-actws-tab="details" class="is-active">Detalhes</button>
+        <button type="button" data-actws-tab="timeline">Discussão</button>
+        <button type="button" data-actws-tab="checklist">Checklist</button>
+      </div>
+      <div class="actws-grid">
+        <aside class="actws-panel actws-details is-active" data-actws-panel="details">
+          <form id="actws-details-form" class="actws-details-form" data-actws-details-form>
+            <label><span>Status</span><select class="admin-ped-select" name="status">${ACTIVITY_STATUS_OPTIONS.map(option => `<option value="${escapeHtml(option)}" ${option === normalizeActivityStatus(activity.status) ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}</select></label>
+            <label><span>Aluno vinculado</span><input class="admin-ped-select" name="studentId" value="${escapeHtml(activity.studentId || "")}" /></label>
+            <label><span>Responsável</span><select class="admin-ped-select" name="responsavelId">${renderActivityUserOptions(activity.responsavelId)}</select></label>
+            <label><span>Prazo</span><input class="admin-ped-select" type="date" name="prazo" value="${escapeHtml(activity.prazo || "")}" /></label>
+            <label><span>Prioridade</span><select class="admin-ped-select" name="prioridade">${ACTIVITY_PRIORITY_OPTIONS.map(option => `<option value="${escapeHtml(option)}" ${option === normalizeActivityPriority(activity.prioridade) ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}</select></label>
+            <label><span>Tipo</span><input class="admin-ped-select" name="tipo" value="${escapeHtml(activity.tipo || "")}" /></label>
+            <div class="actws-kv"><span>Criada por</span><strong>${escapeHtml(activityUserName(activity.criadoPor, activity.criadoPor))}</strong></div>
+            <div class="actws-kv"><span>Data de criação</span><strong>${escapeHtml(activity.criadoEm ? formatAdminHistoryStamp(activity.criadoEm) : "—")}</strong></div>
+            <div class="actws-kv"><span>Última atualização</span><strong>${escapeHtml(activity.atualizadoEm ? formatAdminHistoryStamp(activity.atualizadoEm) : "—")}</strong></div>
+            <div class="actws-kv"><span>Concluída em</span><strong>${escapeHtml(activity.completedAt ? formatAdminHistoryStamp(activity.completedAt) : "—")}</strong></div>
+            <label class="actws-wide"><span>Descrição</span><textarea class="admin-ped-select activities-textarea" name="descricao" rows="5">${escapeHtml(activity.descricao || "")}</textarea></label>
+            <label class="actws-wide"><span>Observações</span><textarea class="admin-ped-select activities-textarea" name="observacoes" rows="5">${escapeHtml(activity.observacoes || "")}</textarea></label>
+            <button class="ped-btn-save" type="submit">Salvar detalhes</button>
+          </form>
+        </aside>
+        <main class="actws-panel actws-timeline" data-actws-panel="timeline">
+          <div class="actws-feed">
+            ${timeline.length ? timeline.map(item => item.kind === "comment" ? `
+              <article class="actws-comment">
+                ${activityAvatarHtml(item.comment.authorNameSnapshot, item.comment.authorPhotoSnapshot)}
+                <div>
+                  <div class="actws-comment-head"><strong>${escapeHtml(item.comment.authorNameSnapshot || "Usuário")}</strong><time>${escapeHtml(item.comment.createdAt ? formatAdminHistoryStamp(item.comment.createdAt) : "Agora")}</time></div>
+                  <p>${escapeHtml(item.comment.body)}</p>
+                </div>
+              </article>
+            ` : `
+              <div class="actws-event"><span>○</span><p>${escapeHtml(activityTimelineEventText(item.event))} · ${escapeHtml(item.event.occurredAt ? formatAdminHistoryStamp(item.event.occurredAt) : "")}</p></div>
+            `).join("") : `<div class="actws-empty">Nenhuma movimentação registrada ainda.</div>`}
+          </div>
+          <form class="actws-comment-form" data-actws-comment-form>
+            <textarea class="admin-ped-select" name="comment" rows="3" placeholder="Adicionar comentário…"></textarea>
+            <button class="ped-btn-save" type="submit">Enviar</button>
+          </form>
+        </main>
+        <aside class="actws-panel actws-checklist" data-actws-panel="checklist">
+          <div class="actws-check-head"><strong>${escapeHtml(`${done} de ${total} concluídos · ${pct}%`)}</strong><span><i style="width:${escapeHtml(String(pct))}%"></i></span></div>
+          <div class="actws-check-list">
+            ${checklist.length ? checklist.map(item => `
+              <article class="actws-check-item" data-actws-check-item="${escapeHtml(item.id)}">
+                <input type="checkbox" data-actws-check-toggle="${escapeHtml(item.id)}" ${item.completed ? "checked" : ""} />
+                <div class="actws-check-copy">
+                  <input class="actws-check-title" value="${escapeHtml(item.title || "")}" data-actws-check-title="${escapeHtml(item.id)}" />
+                  <div class="actws-check-meta">
+                    <select data-actws-check-assignee="${escapeHtml(item.id)}">${renderActivityUserOptions(item.assigneeId)}</select>
+                    <input type="date" value="${escapeHtml(item.dueDate || "")}" data-actws-check-due="${escapeHtml(item.id)}" />
+                  </div>
+                </div>
+              </article>
+            `).join("") : `<div class="actws-empty">Nenhum item no checklist.</div>`}
+          </div>
+          <form class="actws-add-check" data-actws-check-add-form>
+            <input class="admin-ped-select" name="title" placeholder="+ Adicionar item" />
+            <div class="actws-check-meta">
+              <select name="assigneeId">${renderActivityUserOptions("")}</select>
+              <input class="admin-ped-select" type="date" name="dueDate" />
+            </div>
+            <button class="ped-btn-save" type="submit">Adicionar</button>
+          </form>
+        </aside>
+      </div>
+    </div>
+  `;
+};
+
+const loadActivityWorkspace = async (id) => {
+  const res = await fetchWithAuth(`/api/activities?id=${encodeURIComponent(id)}`, { method: "GET" });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(String(data?.error || `activity_workspace_load_failed:${res.status}`));
+  activitiesState.users = Array.isArray(data?.users) ? data.users : activitiesState.users;
+  activitiesState.directoryUsers = Array.isArray(data?.directoryUsers) ? data.directoryUsers : activitiesState.directoryUsers;
+  activitiesState.students = Array.isArray(data?.students) ? data.students : activitiesState.students;
+  return data;
+};
+
+const openActivityWorkspace = async (activity) => {
+  const drawerEl = ensureActivitiesDrawerInBody();
+  if (!(drawerEl instanceof HTMLElement) || !(activitiesDrawerBody instanceof HTMLElement)) return;
+  const id = String(activity?.id || "").trim();
+  if (!id) return;
+  if (activitiesDrawerTitle instanceof HTMLElement) activitiesDrawerTitle.textContent = "";
+  if (activitiesDrawerSub instanceof HTMLElement) activitiesDrawerSub.textContent = "";
+  activitiesDrawerBody.innerHTML = `<div class="actws-loading">Carregando workspace…</div>`;
+  body.classList.add("is-modal-open");
+  drawerEl.hidden = false;
+  drawerEl.classList.add("is-workspace");
+  activitiesState.drawer = { isOpen: true, id };
+  window.requestAnimationFrame(() => drawerEl.classList.add("is-open"));
+  try {
+    const workspace = await loadActivityWorkspace(id);
+    if (activitiesState.drawer.id !== id) return;
+    activitiesDrawerBody.innerHTML = renderActivityWorkspace(workspace);
+  } catch (error) {
+    console.error("[activities] workspace failed:", error);
+    activitiesDrawerBody.innerHTML = `<div class="actws-empty">Não foi possível abrir esta atividade agora.</div>`;
+  }
+};
+
+const patchActivityWorkspace = async (id, payload = {}) => {
+  const res = await fetchWithAuth(`/api/activities?id=${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...payload, workspace: true }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(String(data?.error || `activity_workspace_patch_failed:${res.status}`));
+  await loadActivities({ force: true, silent: true });
+  refreshOpenStudentActivities();
+  return data;
+};
+
 const openActivitiesDrawer = ({ activity = null } = {}) => {
+  if (activity?.id) return openActivityWorkspace(activity);
   const drawerEl = ensureActivitiesDrawerInBody();
   if (!(drawerEl instanceof HTMLElement) || !(activitiesDrawerBody instanceof HTMLElement)) return;
   const canAssignOthers = Boolean(activitiesState.permissions?.canAssignOthers) || currentRole === "admin" || currentRole === "growth";
@@ -11620,9 +11822,105 @@ const bindActivitiesUi = () => {
       const target = event.target;
       if (!(target instanceof Element)) return;
       if (target.closest("[data-activities-drawer-close]")) return closeActivitiesDrawer();
+      const tabButton = target.closest("[data-actws-tab]");
+      if (tabButton instanceof HTMLElement) {
+        const workspace = tabButton.closest("[data-activity-workspace]");
+        const key = String(tabButton.getAttribute("data-actws-tab") || "details");
+        workspace?.querySelectorAll("[data-actws-tab]").forEach(button => button.classList.toggle("is-active", button === tabButton));
+        workspace?.querySelectorAll("[data-actws-panel]").forEach(panel => panel.classList.toggle("is-active", panel.getAttribute("data-actws-panel") === key));
+        return;
+      }
+      const toggleDone = target.closest("[data-actws-toggle-done]");
+      if (toggleDone instanceof HTMLElement) {
+        const id = String(toggleDone.getAttribute("data-actws-toggle-done") || "").trim();
+        const current = (activitiesState.items || []).find(item => String(item.id || "") === id);
+        const workspaceRoot = activitiesDrawer.querySelector(`[data-activity-workspace="${CSS.escape(id)}"]`);
+        const currentStatus = workspaceRoot?.querySelector('select[name="status"]')?.value || current?.status || "Pendente";
+        toggleDone.setAttribute("disabled", "true");
+        patchActivityWorkspace(id, { status: normalizeActivityStatus(currentStatus) === "Feito" ? "Pendente" : "Feito" })
+          .then(data => { if (activitiesDrawerBody instanceof HTMLElement) activitiesDrawerBody.innerHTML = renderActivityWorkspace(data); })
+          .catch(error => { console.error("[activities] toggle done failed:", error); setActivitiesStatus("Não foi possível atualizar o status.", "error"); })
+          .finally(() => toggleDone.removeAttribute("disabled"));
+        return;
+      }
+      const archiveButton = target.closest("[data-actws-archive]");
+      if (archiveButton instanceof HTMLElement) {
+        const id = String(archiveButton.getAttribute("data-actws-archive") || "").trim();
+        deleteActivityById(id).catch(() => {});
+        return;
+      }
       const deleteButton = target.closest("[data-activities-delete]");
       if (deleteButton instanceof HTMLElement) {
         deleteActivityById(String(deleteButton.getAttribute("data-activities-delete") || "")).catch(() => {});
+      }
+    });
+    activitiesDrawer.addEventListener("submit", (event) => {
+      const form = event.target;
+      if (!(form instanceof HTMLFormElement)) return;
+      const workspace = form.closest("[data-activity-workspace]");
+      if (!(workspace instanceof HTMLElement)) return;
+      event.preventDefault();
+      const id = String(workspace.getAttribute("data-activity-workspace") || "").trim();
+      if (!id || form.dataset.saving) return;
+      form.dataset.saving = "true";
+      const formData = new FormData(form);
+      let payload = null;
+      if (form.matches("[data-actws-details-form]")) {
+        payload = {
+          titulo: String(formData.get("titulo") || workspace.querySelector(".actws-title-input")?.value || "").trim(),
+          status: normalizeActivityStatus(formData.get("status")),
+          studentId: String(formData.get("studentId") || "").trim(),
+          responsavelId: String(formData.get("responsavelId") || "").trim(),
+          prazo: String(formData.get("prazo") || "").trim(),
+          prioridade: normalizeActivityPriority(formData.get("prioridade")),
+          tipo: String(formData.get("tipo") || "").trim(),
+          descricao: String(formData.get("descricao") || "").trim(),
+          observacoes: String(formData.get("observacoes") || "").trim(),
+        };
+      } else if (form.matches("[data-actws-comment-form]")) {
+        payload = { comment: String(formData.get("comment") || "").trim() };
+      } else if (form.matches("[data-actws-check-add-form]")) {
+        payload = {
+          checklistAction: "add",
+          title: String(formData.get("title") || "").trim(),
+          assigneeId: String(formData.get("assigneeId") || "").trim(),
+          dueDate: String(formData.get("dueDate") || "").trim(),
+        };
+      }
+      if (!payload) { delete form.dataset.saving; return; }
+      patchActivityWorkspace(id, payload)
+        .then(data => { if (activitiesDrawerBody instanceof HTMLElement) activitiesDrawerBody.innerHTML = renderActivityWorkspace(data); setActivitiesStatus("Salvo ✓", "success"); window.setTimeout(() => setActivitiesStatus(""), 1800); })
+        .catch(error => { console.error("[activities] workspace submit failed:", error); setActivitiesStatus("Não foi possível salvar agora.", "error"); })
+        .finally(() => { delete form.dataset.saving; });
+    });
+    activitiesDrawer.addEventListener("change", (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const workspace = target.closest("[data-activity-workspace]");
+      if (!(workspace instanceof HTMLElement)) return;
+      const id = String(workspace.getAttribute("data-activity-workspace") || "").trim();
+      const toggle = target.closest("[data-actws-check-toggle]");
+      if (toggle instanceof HTMLInputElement) {
+        const itemId = String(toggle.getAttribute("data-actws-check-toggle") || "").trim();
+        patchActivityWorkspace(id, { checklistAction: "toggle", itemId, completed: toggle.checked })
+          .then(data => { if (activitiesDrawerBody instanceof HTMLElement) activitiesDrawerBody.innerHTML = renderActivityWorkspace(data); })
+          .catch(error => { console.error("[activities] checklist toggle failed:", error); setActivitiesStatus("Não foi possível atualizar o checklist.", "error"); });
+        return;
+      }
+      const titleInput = target.closest("[data-actws-check-title]");
+      const assigneeInput = target.closest("[data-actws-check-assignee]");
+      const dueInput = target.closest("[data-actws-check-due]");
+      const itemId = String(titleInput?.getAttribute("data-actws-check-title") || assigneeInput?.getAttribute("data-actws-check-assignee") || dueInput?.getAttribute("data-actws-check-due") || "").trim();
+      if (itemId) {
+        const row = workspace.querySelector(`[data-actws-check-item="${CSS.escape(itemId)}"]`);
+        patchActivityWorkspace(id, {
+          checklistAction: "update",
+          itemId,
+          title: row?.querySelector("[data-actws-check-title]")?.value || "",
+          assigneeId: row?.querySelector("[data-actws-check-assignee]")?.value || "",
+          dueDate: row?.querySelector("[data-actws-check-due]")?.value || "",
+        }).then(data => { if (activitiesDrawerBody instanceof HTMLElement) activitiesDrawerBody.innerHTML = renderActivityWorkspace(data); })
+          .catch(error => { console.error("[activities] checklist update failed:", error); setActivitiesStatus("Não foi possível atualizar o checklist.", "error"); });
       }
     });
   }
@@ -27260,8 +27558,8 @@ const studentProfileRelated = (row, hist) => {
 const studentProfileMoney = value => value == null || value === "" || !Number.isFinite(Number(value)) ? "—" : new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(value));
 const renderStudentProfileTabs = (hist, mode) => `<div class="student-profile-tabs" role="tablist" aria-label="Áreas da ficha do aluno">${STUDENT_PROFILE_TABS.map(([key, label]) => `<button type="button" role="tab" id="student-${mode}-tab-${key}" aria-controls="student-${mode}-panel-${key}" aria-selected="${(hist.activeTab || 'history') === key}" tabindex="${(hist.activeTab || 'history') === key ? '0' : '-1'}" data-student-profile-tab="${key}">${label}</button>`).join("")}</div>`;
 const studentProfilePanel = (key, html, hist, mode) => `<div class="student-profile-panel" role="tabpanel" id="student-${mode}-panel-${key}" aria-labelledby="student-${mode}-tab-${key}" tabindex="0" data-student-profile-panel="${key}" ${key === "arquivos" ? 'data-admin-student-tab-panel="arquivos"' : ''} ${(hist.activeTab || "history") === key ? "" : "hidden"}>${html}</div>`;
-const activityEventLabel = type => ({ activity_created: 'Atividade criada', activity_updated: 'Atividade atualizada', activity_completed: 'Atividade concluída', activity_reopened: 'Atividade reaberta', activity_archived: 'Atividade arquivada', student_linked: 'Aluno vinculado', student_unlinked: 'Aluno desvinculado' }[type] || 'Atividade');
-const activityProfileDetail = (row, event) => [row.descricao, row.observacoes && `Observações: ${row.observacoes}`, ...(row.comentarios || []).map(comment => typeof comment === 'string' ? comment : [comment.authorName || comment.nome || comment.autorNome, comment.text || comment.texto || comment.body || comment.comentario].filter(Boolean).join(': ')), row.responsavelId && `Responsável: ${row.responsavelNome || row.responsavelId}`, row.prioridade && `Prioridade: ${row.prioridade}`, row.tipo && `Tipo: ${row.tipo}`, row.prazo && `Prazo: ${formatAdminDate(row.prazo)}`, row.criadoEm && `Criada: ${formatAdminHistoryStamp(row.criadoEm)}`, row.completedAt && `Última conclusão: ${formatAdminHistoryStamp(row.completedAt)}`, event && `Registrado por: ${event.actorName || event.actorId}`, event?.eventType === 'activity_completed' && `Concluída por: ${event.actorName || event.actorId}`, row.isArchived && 'Arquivada'].filter(Boolean).join('\n');
+const activityEventLabel = type => ({ activity_created: 'Atividade criada', activity_updated: 'Atividade atualizada', status_changed: 'Status alterado', assignee_changed: 'Responsável alterado', due_date_changed: 'Prazo alterado', priority_changed: 'Prioridade alterada', comment_added: 'Comentário adicionado', checklist_item_added: 'Checklist criado', checklist_item_completed: 'Checklist concluído', checklist_item_reopened: 'Checklist reaberto', activity_completed: 'Atividade concluída', activity_reopened: 'Atividade reaberta', activity_archived: 'Atividade arquivada', student_linked: 'Aluno vinculado', student_unlinked: 'Aluno desvinculado' }[type] || 'Atividade');
+const activityProfileDetail = (row, event) => [row.descricao, row.observacoes && `Observações: ${row.observacoes}`, row.responsavelId && `Responsável: ${row.responsavelNome || row.responsavelId}`, row.prioridade && `Prioridade: ${row.prioridade}`, row.tipo && `Tipo: ${row.tipo}`, row.prazo && `Prazo: ${formatAdminDate(row.prazo)}`, Number(row.commentsCount) ? `${Number(row.commentsCount)} comentários` : "", Number(row.checklistTotal) ? `${Number(row.checklistDone || 0)}/${Number(row.checklistTotal)} itens` : "", row.criadoEm && `Criada: ${formatAdminHistoryStamp(row.criadoEm)}`, row.completedAt && `Última conclusão: ${formatAdminHistoryStamp(row.completedAt)}`, event && `Registrado por: ${event.actorNameSnapshot || event.actorName || event.actorId}`, event?.eventType === 'activity_completed' && `Concluída por: ${event.actorNameSnapshot || event.actorName || event.actorId}`, row.isArchived && 'Arquivada'].filter(Boolean).join('\n');
 const studentActivityEvents = hist => hist.profileResources?.activities?.events || [];
 const getStudentProfileJourney = hist => {
   const events = [];
@@ -27269,7 +27567,8 @@ const getStudentProfileJourney = hist => {
   (hist.items || []).forEach((item, i) => add("Pedagógico", item.id || i, item.createdAt || item.dateKey, item.kind === "comment" ? "Comentário pedagógico" : "Registro de aula", item.summaryText || item.observacoes || ""));
   (hist.retentionTimeline?.events || []).forEach((event, i) => add("Retenção", event.id || i, event.occurred_at, getRetentionTimelineEventLabel(event.event_type), event.summary || ""));
   const activityEvents = studentActivityEvents(hist);
-  activityEvents.forEach(event => add('Atividades', event.id, event.occurredAt, `${activityEventLabel(event.eventType)} — ${event.snapshot?.titulo || ''}`, activityProfileDetail(event.snapshot || {}, event)));
+  const milestones = new Set(["activity_created", "activity_completed", "activity_reopened", "activity_archived"]);
+  activityEvents.filter(event => milestones.has(String(event.eventType || ""))).forEach(event => add('Atividades', event.id, event.occurredAt, `${activityEventLabel(event.eventType)} — ${event.snapshot?.titulo || ''}`, activityProfileDetail(event.snapshot || {}, event)));
   (hist.profileResources?.activities?.rows || []).filter(row => !activityEvents.some(event => event.activityId === row.id)).forEach(row => add('Atividades', row.id, row.criadoEm, `Atividade — ${row.titulo}`, activityProfileDetail(row)));
 
   (hist.profileResources?.financial?.rows || []).forEach(row => add("Financeiro", row.id, row.data_pagamento || row.created_at, row.profileKind, [row.status, studentProfileMoney(row.valor)].filter(Boolean).join(" · ")));
@@ -27289,7 +27588,13 @@ const renderStudentProfileResource = (key, hist, mode) => {
   if (state.error) return `<div class="student-profile-empty student-profile-error" role="status">${escapeHtml(state.error)} <button type="button" class="admin-student-file-btn" data-student-profile-retry="${key}">Tentar novamente</button></div>`;
   const rows = state.rows || [];
   if (!rows.length) return studentProfileEmpty(key === "financial" ? "Nenhum registro financeiro disponível." : "Nenhuma atividade registrada para este aluno.");
-  return `<div class="student-profile-records">${rows.map(row => `<article class="student-profile-record"><div class="student-profile-record-meta"><span>${escapeHtml(key === "financial" ? row.profileKind : row.status)}</span><span>${escapeHtml(key === "financial" ? row.status || "" : row.prioridade || "")}</span></div><strong>${escapeHtml(key === "financial" ? studentProfileMoney(row.valor) : row.titulo)}</strong><p>${escapeHtml(key === "financial" ? row.data_pagamento ? `Pagamento: ${formatAdminDate(row.data_pagamento)}` : row.vencimento ? `Vencimento: ${formatAdminDate(row.vencimento)}` : "" : activityProfileDetail(row))}</p>${key === "activities" && row.prazo ? `<span>Prazo: ${escapeHtml(formatAdminDate(row.prazo))}</span>` : ""}</article>`).join("")}</div>`;
+  return `<div class="student-profile-records">${rows.map(row => {
+    if (key !== "activities") return `<article class="student-profile-record"><div class="student-profile-record-meta"><span>${escapeHtml(row.profileKind)}</span><span>${escapeHtml(row.status || "")}</span></div><strong>${escapeHtml(studentProfileMoney(row.valor))}</strong><p>${escapeHtml(row.data_pagamento ? `Pagamento: ${formatAdminDate(row.data_pagamento)}` : row.vencimento ? `Vencimento: ${formatAdminDate(row.vencimento)}` : "")}</p></article>`;
+    const completed = row.completedAt ? `Concluída ${formatAdminHistoryStamp(row.completedAt)}` : row.criadoEm ? `Criada ${formatAdminHistoryStamp(row.criadoEm)}` : "";
+    const checklist = Number(row.checklistTotal) ? `${Number(row.checklistDone || 0)}/${Number(row.checklistTotal)} itens` : "0/0 itens";
+    const comments = `${Number(row.commentsCount || 0)} comentário${Number(row.commentsCount || 0) === 1 ? "" : "s"}`;
+    return `<button type="button" class="student-profile-record student-profile-activity-record" data-student-activity-open="${escapeHtml(row.id)}"><div class="student-profile-record-meta"><span>${escapeHtml(row.status)}</span><span>${escapeHtml(row.prioridade || "")}</span></div><strong>${escapeHtml(row.titulo)}</strong><p>${escapeHtml([row.responsavelNome || row.responsavelId || "Sem responsável", comments, checklist, completed].filter(Boolean).join(" · "))}</p></button>`;
+  }).join("")}</div>`;
 };
 const bindStudentProfileTabs = (sheetEl, hist, mode) => {
   let root = sheetEl.querySelector("[data-student-profile-content]");
@@ -27352,6 +27657,12 @@ const bindStudentProfileTabs = (sheetEl, hist, mode) => {
     if (tab) select(tab.dataset.studentProfileTab);
     const retry = event.target.closest("[data-student-profile-retry]");
     if (retry) load(retry.dataset.studentProfileRetry, true);
+    const activityOpen = event.target.closest("[data-student-activity-open]");
+    if (activityOpen) {
+      const activityId = String(activityOpen.getAttribute("data-student-activity-open") || "").trim();
+      const activity = (hist.profileResources?.activities?.rows || []).find(row => String(row.id || "") === activityId);
+      if (activity) openActivitiesDrawer({ activity });
+    }
   });
   root.querySelector('[role="tablist"]').addEventListener("keydown", event => {
     const tabs = [...root.querySelectorAll('[role="tab"]')];

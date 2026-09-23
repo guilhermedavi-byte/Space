@@ -1,5 +1,5 @@
 const { randomUUID } = require("node:crypto");
-const { planActivityChange, studentOf, EVENTS_COLLECTION } = require("./_lib/activity-events");
+const { buildActivityEvent, planActivityChange, studentOf, EVENTS_COLLECTION } = require("./_lib/activity-events");
 const { getGoogleAccessToken } = require("../_lib/google-service-account");
 const { sendJson, readJsonBody } = require("./_lib/http");
 const { getSessionFromRequest } = require("./_lib/session");
@@ -15,6 +15,8 @@ const {
 
 const DATASTORE_SCOPE = "https://www.googleapis.com/auth/datastore";
 const ACTIVITIES_COLLECTION = "activities";
+const COMMENTS_COLLECTION = "activity_comments";
+const CHECKLIST_COLLECTION = "activity_checklist";
 const USERS_COLLECTION = "users";
 const ALLOWED_STATUSES = new Set(["Pendente", "Em andamento", "Feito"]);
 const ALLOWED_PRIORITIES = new Set(["Alta", "Média", "Baixa"]);
@@ -73,8 +75,39 @@ const normalizeActivity = (row = {}) => {
     atualizadoEm: row.atualizadoEm || null,
     observacoes: safeText(row.observacoes),
     comentarios: Array.isArray(row.comentarios) ? row.comentarios : [],
+    commentsCount: Number(row.commentsCount) || 0,
+    checklistTotal: Number(row.checklistTotal) || 0,
+    checklistDone: Number(row.checklistDone) || 0,
   };
 };
+
+const normalizeComment = (row = {}) => ({
+  id: safeText(row.id),
+  activityId: safeText(row.activityId),
+  studentId: studentOf(row),
+  authorId: safeText(row.authorId),
+  authorNameSnapshot: safeText(row.authorNameSnapshot || row.authorName || row.autorNome),
+  authorPhotoSnapshot: safeText(row.authorPhotoSnapshot || row.authorPhoto || row.photoURL),
+  body: safeText(row.body || row.text || row.texto || row.comentario),
+  createdAt: row.createdAt || row.criadoEm || null,
+  editedAt: row.editedAt || null,
+  legacy: row.legacy === true,
+});
+
+const normalizeChecklistItem = (row = {}) => ({
+  id: safeText(row.id),
+  activityId: safeText(row.activityId),
+  title: safeText(row.title || row.titulo),
+  completed: row.completed === true,
+  completedAt: row.completedAt || null,
+  completedBy: safeText(row.completedBy),
+  assigneeId: safeText(row.assigneeId || row.responsavelId),
+  assigneeNameSnapshot: safeText(row.assigneeNameSnapshot || row.responsavelNome),
+  dueDate: normalizeOptionalDate(row.dueDate || row.prazo),
+  createdAt: row.createdAt || row.criadoEm || null,
+  createdBy: safeText(row.createdBy || row.criadoPor),
+  updatedAt: row.updatedAt || row.atualizadoEm || null,
+});
 
 const canAccessActivity = (session, activity) => {
   const role = normalizeRole(session?.role);
@@ -151,6 +184,56 @@ const readDocument = async (collection, id) => {
   if (!response.ok) throw Object.assign(new Error('read_failed'), { status: response.status });
   return { row: { ...decodeFields(response.data), id }, updateTime: response.data.updateTime };
 };
+const readChildDocument = async (collection, id) => readDocument(collection, id);
+
+const actorFromSession = (session = {}) => ({
+  id: safeText(session.sub),
+  name: safeText(session.nome || session.name || session.email || session.sub),
+  photo: safeText(session.photoURL || session.picture || session.avatarUrl),
+});
+
+const queryByField = async (collection, fieldPath, value) => {
+  const safeValue = safeText(value);
+  if (!safeValue) return [];
+  const response = await requestJson(`${FIRESTORE_BASE}:runQuery`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${await getAccessToken()}` },
+    body: { structuredQuery: { from: [{ collectionId: collection }], where: { fieldFilter: { field: { fieldPath }, op: 'EQUAL', value: { stringValue: safeValue } } } } },
+  });
+  if (!response.ok) throw new Error('activity_child_read_failed');
+  return (response.data || []).filter(row => row.document).map(row => ({ ...decodeFields(row.document), id: getDocIdFromName(row.document.name) }));
+};
+
+const sortByTimeAsc = (rows, field = 'createdAt') =>
+  rows.slice().sort((a, b) => (Date.parse(a?.[field] || a?.occurredAt || a?.criadoEm) || 0) - (Date.parse(b?.[field] || b?.occurredAt || b?.criadoEm) || 0));
+
+const decorateActivityCollections = (activity, { comments = [], checklist = [] } = {}) => ({
+  ...activity,
+  commentsCount: comments.length || Number(activity.commentsCount) || 0,
+  checklistTotal: checklist.length || Number(activity.checklistTotal) || 0,
+  checklistDone: checklist.filter(item => item.completed).length || Number(activity.checklistDone) || 0,
+});
+
+const readActivityWorkspace = async (activity) => {
+  const [commentRows, checklistRows, eventRows] = await Promise.all([
+    queryByField(COMMENTS_COLLECTION, 'activityId', activity.id),
+    queryByField(CHECKLIST_COLLECTION, 'activityId', activity.id),
+    queryByField(EVENTS_COLLECTION, 'activityId', activity.id),
+  ]);
+  const legacyComments = (Array.isArray(activity.comentarios) ? activity.comentarios : []).map((comment, index) =>
+    normalizeComment({
+      ...(comment && typeof comment === 'object' ? comment : { body: comment }),
+      id: safeText(comment?.id) || `legacy-${index}`,
+      activityId: activity.id,
+      studentId: activity.studentId,
+      legacy: true,
+    })
+  ).filter(comment => comment.body);
+  const comments = sortByTimeAsc([...legacyComments, ...commentRows.map(normalizeComment)], 'createdAt');
+  const checklist = sortByTimeAsc(checklistRows.map(normalizeChecklistItem), 'createdAt');
+  const events = sortByTimeAsc(eventRows, 'occurredAt');
+  return { activity: decorateActivityCollections(activity, { comments, checklist }), comments, checklist, events };
+};
 const validateStudent = async id => {
   if (!id) return;
   const doc = await readDocument(USERS_COLLECTION, id);
@@ -163,7 +246,7 @@ const commitActivity = async ({ id, document, patch, session, archive = false })
     const responsible = await readDocument(USERS_COLLECTION, responsibleId);
     patch.responsavelNome = safeText(responsible?.row?.nome || responsible?.row?.name);
   }
-  const { next, events } = planActivityChange({ id, before: document?.row, patch, actor: { id: session.sub, name: session.nome || session.name }, now: new Date().toISOString(), archive });
+  const { next, events } = planActivityChange({ id, before: document?.row, patch, actor: actorFromSession(session), now: new Date().toISOString(), archive });
   const prefix = FIRESTORE_BASE.split('/v1/')[1];
   const stored = { ...next };
   for (const key of ['criadoEm', 'atualizadoEm', 'completedAt', 'archivedAt']) {
@@ -175,6 +258,142 @@ const commitActivity = async ({ id, document, patch, session, archive = false })
   const response = await requestJson(`${FIRESTORE_BASE}:commit`, { method: 'POST', headers: { Authorization: `Bearer ${await getAccessToken()}` }, body: { writes } });
   if (!response.ok) throw Object.assign(new Error('activity_commit_failed'), { status: [409, 412].includes(response.status) || response.data?.error?.status === 'FAILED_PRECONDITION' ? 409 : response.status });
   return normalizeActivity(next);
+};
+
+const commitActivityAppend = async ({ activity, document, writes, eventType, actor, before = null, after = null, metadata = {}, seed = randomUUID() }) => {
+  const now = new Date().toISOString();
+  const revision = (Number(activity.revision) || 0) + 1;
+  const next = { ...activity, revision, atualizadoEm: now };
+  const event = buildActivityEvent({
+    activityId: activity.id,
+    revision,
+    eventType,
+    studentId: activity.studentId,
+    actor,
+    now,
+    before,
+    after,
+    metadata,
+    snapshot: { ...next },
+    seed,
+  });
+  const prefix = FIRESTORE_BASE.split('/v1/')[1];
+  const stored = { revision, atualizadoEm: new Date(now) };
+  const commitWrites = [
+    { update: { name: `${prefix}/activities/${activity.id}`, ...encodeFields(stored) }, updateMask: { fieldPaths: ['revision', 'atualizadoEm'] }, currentDocument: { updateTime: document.updateTime } },
+    ...writes,
+    { update: { name: `${prefix}/${EVENTS_COLLECTION}/${event.id}`, ...encodeFields(event) }, currentDocument: { exists: false } },
+  ];
+  const response = await requestJson(`${FIRESTORE_BASE}:commit`, { method: 'POST', headers: { Authorization: `Bearer ${await getAccessToken()}` }, body: { writes: commitWrites } });
+  if (!response.ok) throw Object.assign(new Error('activity_append_failed'), { status: [409, 412].includes(response.status) || response.data?.error?.status === 'FAILED_PRECONDITION' ? 409 : response.status });
+  return event;
+};
+
+const addActivityComment = async ({ activity, document, body, session }) => {
+  const text = safeText(body);
+  if (!text) throw Object.assign(new Error('missing_comment'), { status: 400 });
+  const now = new Date().toISOString();
+  const actor = actorFromSession(session);
+  const id = randomUUID();
+  const prefix = FIRESTORE_BASE.split('/v1/')[1];
+  const comment = {
+    id,
+    activityId: activity.id,
+    studentId: activity.studentId,
+    authorId: actor.id,
+    authorNameSnapshot: actor.name || 'Usuário',
+    authorPhotoSnapshot: actor.photo || '',
+    body: text,
+    createdAt: new Date(now),
+    editedAt: null,
+  };
+  await commitActivityAppend({
+    activity,
+    document,
+    writes: [{ update: { name: `${prefix}/${COMMENTS_COLLECTION}/${id}`, ...encodeFields(comment) }, currentDocument: { exists: false } }],
+    eventType: 'comment_added',
+    actor,
+    after: { commentId: id, body: text },
+    metadata: { commentId: id },
+    seed: id,
+  });
+  return normalizeComment({ ...comment, createdAt: now });
+};
+
+const commitChecklistAction = async ({ activity, document, body, session }) => {
+  const action = safeText(body?.checklistAction || body?.action);
+  const actor = actorFromSession(session);
+  const now = new Date().toISOString();
+  const prefix = FIRESTORE_BASE.split('/v1/')[1];
+  if (action === 'add') {
+    const title = safeText(body?.title);
+    if (!title) throw Object.assign(new Error('missing_checklist_title'), { status: 400 });
+    const assigneeId = safeText(body?.assigneeId);
+    const assignee = assigneeId ? await readDocument(USERS_COLLECTION, assigneeId) : null;
+    const id = randomUUID();
+    const item = {
+      id,
+      activityId: activity.id,
+      title,
+      completed: false,
+      completedAt: null,
+      completedBy: '',
+      assigneeId,
+      assigneeNameSnapshot: safeText(assignee?.row?.nome || assignee?.row?.name),
+      dueDate: normalizeOptionalDate(body?.dueDate),
+      createdAt: new Date(now),
+      createdBy: actor.id,
+      updatedAt: new Date(now),
+    };
+    await commitActivityAppend({
+      activity,
+      document,
+      writes: [{ update: { name: `${prefix}/${CHECKLIST_COLLECTION}/${id}`, ...encodeFields(item) }, currentDocument: { exists: false } }],
+      eventType: 'checklist_item_added',
+      actor,
+      after: { itemId: id, title },
+      metadata: { checklistItemId: id },
+      seed: id,
+    });
+    return normalizeChecklistItem({ ...item, createdAt: now, updatedAt: now });
+  }
+  const itemId = safeText(body?.itemId);
+  if (!itemId) throw Object.assign(new Error('missing_checklist_item'), { status: 400 });
+  const itemDoc = await readChildDocument(CHECKLIST_COLLECTION, itemId);
+  const existing = itemDoc ? normalizeChecklistItem(itemDoc.row) : null;
+  if (!existing || existing.activityId !== activity.id) throw Object.assign(new Error('checklist_not_found'), { status: 404 });
+  const patch = { ...existing, updatedAt: new Date(now) };
+  let eventType = 'activity_updated';
+  if (action === 'toggle') {
+    const completed = body.completed === undefined ? !existing.completed : body.completed === true;
+    patch.completed = completed;
+    patch.completedAt = completed ? new Date(now) : null;
+    patch.completedBy = completed ? actor.id : '';
+    eventType = completed ? 'checklist_item_completed' : 'checklist_item_reopened';
+  } else if (action === 'update') {
+    if (Object.hasOwn(body || {}, 'title')) patch.title = safeText(body.title) || existing.title;
+    if (Object.hasOwn(body || {}, 'assigneeId')) {
+      patch.assigneeId = safeText(body.assigneeId);
+      const assignee = patch.assigneeId ? await readDocument(USERS_COLLECTION, patch.assigneeId) : null;
+      patch.assigneeNameSnapshot = safeText(assignee?.row?.nome || assignee?.row?.name);
+    }
+    if (Object.hasOwn(body || {}, 'dueDate')) patch.dueDate = normalizeOptionalDate(body.dueDate);
+    eventType = 'checklist_item_updated';
+  } else {
+    throw Object.assign(new Error('invalid_checklist_action'), { status: 400 });
+  }
+  await commitActivityAppend({
+    activity,
+    document,
+    writes: [{ update: { name: `${prefix}/${CHECKLIST_COLLECTION}/${itemId}`, ...encodeFields(patch) }, updateMask: { fieldPaths: Object.keys(patch) }, currentDocument: { updateTime: itemDoc.updateTime } }],
+    eventType,
+    actor,
+    before: existing,
+    after: patch,
+    metadata: { checklistItemId: itemId },
+    seed: `${itemId}:${eventType}:${patch.updatedAt.toISOString ? patch.updatedAt.toISOString() : now}`,
+  });
+  return normalizeChecklistItem({ ...patch, updatedAt: now, completedAt: patch.completedAt ? now : null });
 };
 const queryByStudent = async (collection, studentId) => {
   const fields = collection === EVENTS_COLLECTION ? ['studentId'] : ['studentId', 'alunoId', 'firestore_student_id'];
@@ -210,6 +429,21 @@ module.exports = async (req, res) => {
 
   if (req.method === "GET") {
     try {
+      if (id) {
+        const document = await readDocument(ACTIVITIES_COLLECTION, id);
+        const existing = document ? normalizeActivity(document.row) : null;
+        if (!existing) return sendJson(res, 404, { error: "not_found" });
+        if (!canAccessActivity(session, existing)) return sendJson(res, 403, { error: "forbidden" });
+        const workspace = await readActivityWorkspace(existing);
+        const userRows = await listCollectionAsAdmin(USERS_COLLECTION, { pageSize: 1500, decorate: false });
+        return sendJson(res, 200, {
+          ...workspace,
+          students: userRows.filter(row => normalizeUserRole(row.tipo || row.role) === 'student').map(row => ({ id: row.firestoreDocId || row.id, nome: row.nome || row.nomeCompleto || row.name || '', email: row.email || '' })),
+          users: listVisibleUsers(session, userRows),
+          directoryUsers: listActivityDirectoryUsers(session, userRows),
+          permissions: { role, canViewAll: role === "admin", canAssignOthers: role === "admin" || role === "growth" },
+        });
+      }
       const [activityRows, userRows, eventRows] = await Promise.all([
         studentId ? queryByStudent(ACTIVITIES_COLLECTION, studentId) : listCollectionAsAdmin(ACTIVITIES_COLLECTION, { pageSize: 2000 }),
         listCollectionAsAdmin(USERS_COLLECTION, { pageSize: 1500, decorate: false }),
@@ -222,8 +456,35 @@ module.exports = async (req, res) => {
           .filter(row => studentId ? row.studentId === studentId : !row.isArchived)
           .filter((row) => canAccessActivity(session, row))
       );
+      const [commentRows, checklistRows] = await Promise.all([
+        listCollectionAsAdmin(COMMENTS_COLLECTION, { pageSize: 3000 }).catch(() => []),
+        listCollectionAsAdmin(CHECKLIST_COLLECTION, { pageSize: 3000 }).catch(() => []),
+      ]);
+      const commentsByActivity = new Map();
+      commentRows.forEach(row => {
+        const activityId = safeText(row.activityId);
+        if (activityId) commentsByActivity.set(activityId, (commentsByActivity.get(activityId) || 0) + 1);
+      });
+      const checklistByActivity = new Map();
+      checklistRows.forEach(row => {
+        const activityId = safeText(row.activityId);
+        if (!activityId) return;
+        const current = checklistByActivity.get(activityId) || { total: 0, done: 0 };
+        current.total += 1;
+        if (row.completed === true) current.done += 1;
+        checklistByActivity.set(activityId, current);
+      });
       return sendJson(res, 200, {
-        activities: activities.map(row => ({ ...row, responsavelNome: userRows.find(user => (user.firestoreDocId || user.id) === row.responsavelId)?.nome || row.responsavelNome || '' })),
+        activities: activities.map(row => {
+          const checklist = checklistByActivity.get(row.id) || {};
+          return {
+            ...row,
+            responsavelNome: userRows.find(user => (user.firestoreDocId || user.id) === row.responsavelId)?.nome || row.responsavelNome || '',
+            commentsCount: (commentsByActivity.get(row.id) || 0) + (Array.isArray(row.comentarios) ? row.comentarios.length : 0),
+            checklistTotal: checklist.total || 0,
+            checklistDone: checklist.done || 0,
+          };
+        }),
         events: eventRows.filter(event => canAccessActivity(session, event.snapshot || {})),
         students: userRows.filter(row => normalizeUserRole(row.tipo || row.role) === 'student').map(row => ({ id: row.firestoreDocId || row.id, nome: row.nome || row.nomeCompleto || row.name || '', email: row.email || '' })),
         users: listVisibleUsers(session, userRows),
@@ -311,9 +572,23 @@ module.exports = async (req, res) => {
       }
       if (Object.prototype.hasOwnProperty.call(body || {}, "tipo")) patch.tipo = safeText(body?.tipo);
       if (Object.prototype.hasOwnProperty.call(body || {}, "observacoes")) patch.observacoes = safeText(body?.observacoes);
-      if (safeText(body?.comment)) patch.comentarios = [...existing.comentarios, { id: randomUUID(), text: safeText(body.comment), authorId: session.sub, authorName: session.nome || session.name || "", createdAt: new Date().toISOString() }];
       if (Object.hasOwn(body || {}, "studentId")) patch.studentId = safeText(body.studentId);
+      if (safeText(body?.comment) && body?.workspace === true) {
+        const comment = await addActivityComment({ activity: existing, document, body: body.comment, session });
+        const workspace = await readActivityWorkspace({ ...existing, atualizadoEm: new Date().toISOString() });
+        return sendJson(res, 200, { ...workspace, comment });
+      }
+      if (safeText(body?.checklistAction || body?.action)) {
+        const item = await commitChecklistAction({ activity: existing, document, body, session });
+        const workspace = await readActivityWorkspace({ ...existing, atualizadoEm: new Date().toISOString() });
+        return sendJson(res, 200, { ...workspace, checklistItem: item });
+      }
+      if (safeText(body?.comment)) patch.comentarios = [...existing.comentarios, { id: randomUUID(), text: safeText(body.comment), authorId: session.sub, authorName: session.nome || session.name || "", createdAt: new Date().toISOString() }];
       const updated = await commitActivity({ id, document, patch, session });
+      if (body?.workspace === true) {
+        const workspace = await readActivityWorkspace(updated);
+        return sendJson(res, 200, workspace);
+      }
       return sendJson(res, 200, { activity: updated });
     } catch (error) {
       console.error("[api] activities patch failed", error);
