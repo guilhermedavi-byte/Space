@@ -11197,7 +11197,8 @@ const bindActivityStudentPicker = (form, students, initialId) => {
   select(initialId);
   input.addEventListener('focus', render);
   input.addEventListener('input', () => { input.setCustomValidity('Selecione um aluno da lista ou Nenhum aluno vinculado.'); render(); });
-  options.addEventListener('click', event => { const pick = event.target.closest('[data-student-pick]'); if (pick) { select(pick.dataset.studentPick); input.focus(); options.hidden = true; input.setAttribute('aria-expanded', 'false'); } });
+  options.addEventListener('mousedown', event => event.preventDefault());
+  options.addEventListener('click', event => { const pick = event.target.closest('[data-student-pick]'); if (pick) { const id = pick.dataset.studentPick; input.focus(); select(id); } });
   form.querySelector('[data-activity-student-combobox]').addEventListener('keydown', event => {
     if (event.key === 'Escape') { event.preventDefault(); select(value.value); input.focus(); options.hidden = true; input.setAttribute('aria-expanded', 'false'); }
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); if (options.hidden) render(); const items = [...options.querySelectorAll('button')]; const index = items.indexOf(document.activeElement); items[(index + (event.key === 'ArrowDown' ? 1 : items.length - 1) + items.length) % items.length]?.focus(); }
@@ -26438,7 +26439,9 @@ const formatRetentionTimelineStateSummary = (state) => {
 const renderAdminStudentRetentionTimelineHtml = ({ hist } = {}) => {
   const state = hist?.retentionTimeline && typeof hist.retentionTimeline === "object" ? hist.retentionTimeline : {};
   const operational = studentActivityEvents(hist);
-  if (!isRetentionV2FeatureEnabled() && !operational.length) return studentProfileEmpty("Nenhum evento de retenção ainda.");
+  const activityError = hist?.profileResources?.activities?.error;
+  const warning = [state.error, activityError].filter(Boolean).map(error => `<p class="student-profile-error" role="status">${escapeHtml(error)}</p>`).join("");
+  if (!isRetentionV2FeatureEnabled() && !operational.length) return warning || studentProfileEmpty("Nenhum evento de retenção ainda.");
   if (state.loading && !operational.length) {
     return `<div class="admin-student-simple-empty">Carregando timeline de retenção…</div>`;
   }
@@ -26447,9 +26450,10 @@ const renderAdminStudentRetentionTimelineHtml = ({ hist } = {}) => {
   }
   const events = [...(isRetentionV2FeatureEnabled() && Array.isArray(state.events) ? state.events : []), ...operational.map(event => ({ ...event, occurred_at: event.occurredAt, operational: true }))].sort((a, b) => (Date.parse(b.occurred_at) || 0) - (Date.parse(a.occurred_at) || 0));
   if (!events.length) {
-    return `<div class="admin-student-simple-empty admin-student-simple-empty-center">Nenhum evento canônico de retenção ainda.</div>`;
+    return warning || `<div class="admin-student-simple-empty admin-student-simple-empty-center">Nenhum evento de retenção ainda.</div>`;
   }
   return `
+    ${warning}
     <div class="admin-students-timeline admin-student-simple-history admin-student-timeline-v2">
       ${events
         .map((event) => {
@@ -27073,7 +27077,7 @@ const getStudentProfileJourney = hist => {
 };
 const renderStudentProfileHistory = hist => {
   const events = getStudentProfileJourney(hist);
-  const notice = hist.historyError || hist.retentionTimeline?.error;
+  const notice = hist.historyError || hist.retentionTimeline?.error || hist.profileResources?.activities?.error;
   return `<div class="admin-student-history-header"><div><div class="admin-student-panel-title">Histórico</div><div class="admin-student-history-subtitle">A jornada do aluno, com os registros mais recentes primeiro.</div></div></div>${notice ? `<p class="student-profile-error" role="status">${escapeHtml(notice)}</p>` : ""}${hist.historyLoading || hist.retentionTimeline?.loading ? '<p role="status">Carregando registros…</p>' : ''}${events.length ? `<div class="student-profile-journey">${events.map(event => `<article class="student-profile-record"><div class="student-profile-record-meta"><span>${escapeHtml(event.source)}</span><time>${escapeHtml(event.date ? formatAdminHistoryStamp(event.date) : "Data não informada")}</time></div><strong>${escapeHtml(event.title)}</strong>${event.detail ? `<p>${escapeHtml(event.detail)}</p>` : ''}</article>`).join("")}</div>` : !hist.historyLoading && !hist.retentionTimeline?.loading ? studentProfileEmpty("Nenhum registro no histórico ainda.") : ''}`;
 };
 const renderStudentProfileResource = (key, hist, mode) => {

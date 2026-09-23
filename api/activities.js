@@ -51,7 +51,14 @@ const normalizeActivity = (row = {}) => {
   const responsavelId = safeText(row.responsavelId);
   const tipo = safeText(row.tipo);
   return {
-    ...row,
+    completedAt: row.completedAt || null,
+    completedBy: safeText(row.completedBy),
+    responsavelNome: safeText(row.responsavelNome),
+    isArchived: row.isArchived === true,
+    archivedAt: row.archivedAt || null,
+    archivedBy: safeText(row.archivedBy),
+    hasStudentHistory: row.hasStudentHistory === true,
+    revision: Number(row.revision) || 0,
     id: safeText(row.id),
     titulo: safeText(row.titulo),
     studentId: studentOf(row),
@@ -158,15 +165,22 @@ const commitActivity = async ({ id, document, patch, session, archive = false })
   }
   const { next, events } = planActivityChange({ id, before: document?.row, patch, actor: { id: session.sub, name: session.nome || session.name }, now: new Date().toISOString(), archive });
   const prefix = FIRESTORE_BASE.split('/v1/')[1];
-  const writes = [{ update: { name: `${prefix}/activities/${id}`, ...encodeFields(next) }, currentDocument: document ? { updateTime: document.updateTime } : { exists: false } },
+  const stored = { ...next };
+  for (const key of ['criadoEm', 'atualizadoEm', 'completedAt', 'archivedAt']) {
+    if (stored[key] && Number.isFinite(new Date(stored[key]).getTime())) stored[key] = new Date(stored[key]);
+  }
+  const fieldPaths = Object.keys(next).filter(key => JSON.stringify(next[key]) !== JSON.stringify(document?.row?.[key]));
+  const writes = [{ update: { name: `${prefix}/activities/${id}`, ...encodeFields(stored) }, ...(document ? { updateMask: { fieldPaths } } : {}), currentDocument: document ? { updateTime: document.updateTime } : { exists: false } },
     ...events.map(event => ({ update: { name: `${prefix}/${EVENTS_COLLECTION}/${event.id}`, ...encodeFields(event) }, currentDocument: { exists: false } }))];
   const response = await requestJson(`${FIRESTORE_BASE}:commit`, { method: 'POST', headers: { Authorization: `Bearer ${await getAccessToken()}` }, body: { writes } });
   if (!response.ok) throw Object.assign(new Error('activity_commit_failed'), { status: [409, 412].includes(response.status) || response.data?.error?.status === 'FAILED_PRECONDITION' ? 409 : response.status });
   return normalizeActivity(next);
 };
-const queryStudentEvents = async studentId => {
-  const response = await requestJson(`${FIRESTORE_BASE}:runQuery`, { method: 'POST', headers: { Authorization: `Bearer ${await getAccessToken()}` }, body: { structuredQuery: { from: [{ collectionId: EVENTS_COLLECTION }], where: { fieldFilter: { field: { fieldPath: 'studentId' }, op: 'EQUAL', value: { stringValue: studentId } } } } } });
-  if (!response.ok) throw new Error('activity_events_read_failed');
+const queryByStudent = async (collection, studentId) => {
+  const fields = collection === EVENTS_COLLECTION ? ['studentId'] : ['studentId', 'alunoId', 'firestore_student_id'];
+  const filters = fields.map(fieldPath => ({ fieldFilter: { field: { fieldPath }, op: 'EQUAL', value: { stringValue: studentId } } }));
+  const response = await requestJson(`${FIRESTORE_BASE}:runQuery`, { method: 'POST', headers: { Authorization: `Bearer ${await getAccessToken()}` }, body: { structuredQuery: { from: [{ collectionId: collection }], where: filters.length === 1 ? filters[0] : { compositeFilter: { op: 'OR', filters } } } } });
+  if (!response.ok) throw new Error('activity_read_failed');
   return (response.data || []).filter(row => row.document).map(row => ({ ...decodeFields(row.document), id: getDocIdFromName(row.document.name) }));
 };
 
@@ -197,9 +211,9 @@ module.exports = async (req, res) => {
   if (req.method === "GET") {
     try {
       const [activityRows, userRows, eventRows] = await Promise.all([
-        listCollectionAsAdmin(ACTIVITIES_COLLECTION, { pageSize: 2000 }),
+        studentId ? queryByStudent(ACTIVITIES_COLLECTION, studentId) : listCollectionAsAdmin(ACTIVITIES_COLLECTION, { pageSize: 2000 }),
         listCollectionAsAdmin(USERS_COLLECTION, { pageSize: 1500, decorate: false }),
-        studentId ? queryStudentEvents(studentId) : Promise.resolve([]),
+        studentId ? queryByStudent(EVENTS_COLLECTION, studentId) : Promise.resolve([]),
       ]);
       const activities = sortActivities(
         activityRows
