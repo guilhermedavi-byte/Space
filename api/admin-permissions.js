@@ -18,7 +18,7 @@ const normalizeRole = (value) => {
 
 const adminRow = (row = {}) => {
   const id = String(row?.firestoreDocId || row?.id || row?.uid || "").trim();
-  if (!id || normalizeRole(row?.tipo || row?.role || row?.type) !== "admin") return null;
+  if (!id || normalizeRole(row?.tipo || row?.role || row?.type || row?.perfil || row?.profile || row?.cargo) !== "admin") return null;
   const access = adminAccessPayloadForUser(row);
   return {
     id,
@@ -37,7 +37,16 @@ const adminRow = (row = {}) => {
 
 const loadAdmins = async () => {
   const rows = await listCollectionAsAdmin("users", { pageSize: 1500 });
-  return rows.map(adminRow).filter(Boolean).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  const admins = rows.map(adminRow).filter(Boolean).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  if (!admins.length) {
+    const roleKeys = {};
+    rows.forEach((row) => {
+      const value = String(row?.tipo || row?.role || row?.type || row?.perfil || row?.profile || row?.cargo || "").trim() || "(empty)";
+      roleKeys[value] = (roleKeys[value] || 0) + 1;
+    });
+    console.warn("[admin-permissions] empty admin list", { totalUsers: rows.length, roleKeys });
+  }
+  return admins;
 };
 
 module.exports = async (req, res) => {
