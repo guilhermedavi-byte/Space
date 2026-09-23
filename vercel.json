@@ -41,6 +41,9 @@
     },
     "api/attendance-inbox/avatar-backfill.js": {
       "maxDuration": 240
+    },
+    "api/attendance-inbox/composer.js": {
+      "maxDuration": 120
     }
   },
   "crons": [

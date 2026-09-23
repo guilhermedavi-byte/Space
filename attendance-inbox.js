@@ -37,6 +37,7 @@
   };
   function selectConversation(id) {
     if (state.selectedConversationId === id) return;
+    cancelRecording(); composerPopover=''; aiResult=''; selection={start:0,end:0};
     detailRequest?.controller.abort(); detailVersion += 1; detailRequest = null;
     state.selectedConversationId = id;
     state.detailLoading = Boolean(id && !detailsById.has(id));
@@ -67,6 +68,7 @@
 `;
   style.textContent += `.ai-audio{display:grid;grid-template-columns:36px 32px minmax(60px,1fr) auto;align-items:center;gap:8px;min-width:200px}.ai-audio-btn{border:0;border-radius:50%;width:32px;height:32px;background:#ffffff12;color:#eee}.ai-audio-track{height:5px;background:#ffffff20;border-radius:4px;cursor:pointer;overflow:hidden}.ai-audio-fill{height:100%;background:#b6a4af}.ai-audio-time,.ai-audio-label{font-size:10px;color:var(--ai-muted)}.ai-audio-label{grid-column:3/5}.ai-audio .ai-avatar{grid-row:1/3}.ai-image-wrap{border:0;background:transparent;padding:0;max-width:320px}.ai-video{max-width:100%;border-radius:8px}.ai-viewer{position:fixed;inset:0;z-index:1000;background:#08090dee;display:grid;place-items:center;padding:32px}.ai-viewer img{max-width:94vw;max-height:88vh;border-radius:8px}.ai-viewer button{position:absolute;right:20px;top:20px;width:36px;height:36px;border:1px solid var(--ai-line);background:#272a32;color:#fff;border-radius:8px;font-size:24px}.ai-chat-head .ai-actions{gap:2px}.ai-chat-head .ai-action{font-size:10px!important;padding:5px 7px}`;
   style.textContent += `.ai-image-wrap:has(img:not([data-ai-image-loaded])){min-width:120px;min-height:96px;background:rgba(255,255,255,.04);animation:ai-pulse 1.3s ease-in-out infinite alternate}`;
+  style.textContent += `.ai-composer{position:relative}.ai-composer-popover{position:absolute;bottom:58px;left:8px;width:min(350px,calc(100% - 16px));max-height:340px;overflow-y:auto;background:#252831;border:1px solid #424651;border-radius:10px;box-shadow:0 12px 35px #0008;padding:32px 12px 12px;z-index:25;display:grid;gap:8px}.ai-pop-close{position:absolute;right:4px;top:3px}.ai-emoji-categories{display:flex;flex-wrap:wrap;gap:3px}.ai-emoji-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:4px}.ai-emoji-grid button{font-size:20px}.ai-quick-row{display:flex;gap:4px}.ai-quick-row>.ai-action{display:grid;min-width:0;text-align:left;width:100%}.ai-quick-row small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:#a9acb8;max-width:260px}.ai-composer-popover textarea{background:#1e2028;border:1px solid #444;min-height:90px}.ai-compose-asset{padding:8px 12px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--ai-line)}.ai-compose-asset img{width:55px;height:55px;object-fit:cover;border-radius:7px}.ai-compose-asset video{width:130px;max-height:85px}.ai-compose-asset audio{width:min(230px,55%);height:35px}.ai-compose-asset strong{font-size:11px;overflow-wrap:anywhere}.ai-compose-asset small{display:block;color:#aaa;font-size:10px}.ai-recording{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:10px;font-size:11px}.ai-record-dot{width:7px;height:7px;background:#ff625a;border-radius:50%}.ai-tools button:focus-visible,.ai-composer-popover button:focus-visible{outline:2px solid var(--ai-accent);outline-offset:2px}.ai-tools button:hover{background:#343744}@media(max-width:700px){.ai-shortcut{display:none}.ai-compose-asset{flex-wrap:wrap}.ai-composer-footer{padding:6px}.ai-tools{gap:0}}`;
   document.head.append(style);
   const api = async (params = {}, signal) => {
     const query = new URLSearchParams();
@@ -162,7 +164,97 @@
     let last = '';
     return `<div class="ai-messages" data-ai-messages>${messages.map(msg => { const when = msg.received_at || msg.provider_timestamp; const day = dayLabel(when); const sep = day && day !== last ? (last = day, `<div class="ai-day">${esc(day)}</div>`) : ''; return `${sep}<article data-ai-message-id="${esc(msg.message_id)}" class="ai-msg ${esc(msg.direction || 'inbound')}">${renderMessageBody(msg, {contact:state.detail?.contact, author:msg.author || {name:'Space'}})}<div class="ai-msg-time">${esc(fmt(when))} · ${esc(msg.direction === 'outbound' ? label(msg.transport_status) : msg.direction === 'internal' ? 'Interna' : 'Recebida')}</div></article>`; }).join('')}</div>`;
   }
-  function canSend() { return Boolean(state.detail?.composer?.enabled && (drafts.get(state.selectedConversationId) || '').trim() && !state.sending); }
+  const attachments = new Map();
+  let composerPopover = '', quickReplies = [], quickCanManage = false, quickQuery = '', quickEdit = null, composerBusy = false, aiResult = '';
+  let selection = {start:0,end:0}, recording = null;
+  const emojiGroups={recent:[],pessoas:['😀','😊','😍','🤔','😅','🥳','😔','🙋'],gestos:['👍','👏','🙏','🤝','💪','👋','👌','❤️'],simbolos:['✅','✨','🎉','💡','⭐','❓','📍','🔔'],objetos:['📚','📅','📞','💻','📝','🎧','🚀','☕']};
+  let emojiCategory='recent';
+  try{const recent=JSON.parse(localStorage.getItem('space_attendance_emojis')||'[]');emojiGroups.recent=Array.isArray(recent)?recent.filter(e=>typeof e==='string'&&e.length<20).slice(0,16):[];}catch{}
+  const composerApi = async (action,fields={},cid=state.selectedConversationId)=>{
+    const r=await fetchWithAuth('/api/attendance-inbox/composer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,conversation_id:cid,...fields})});
+    const d=await r.json();if(!r.ok){const messages={upload_invalid_file:'Arquivo inválido ou não permitido.',upload_invalid_mime:'Formato de arquivo não permitido.',upload_too_large:'Arquivo maior que o limite permitido.',upload_size_mismatch:'Upload incompleto. Selecione o arquivo novamente.',send_unconfirmed:'Envio ainda não confirmado. Confira a conversa antes de tentar novamente para evitar duplicidade.',assistant_unavailable:'Assistente indisponível agora. Seu rascunho foi preservado.',composer_empty_draft:'Escreva uma mensagem antes de pedir este ajuste.',voice_caption_not_supported:'Áudio não aceita legenda. Seu texto foi preservado.',attendance_channel_disabled:'Esta conversa não está disponível para envio.'};throw Object.assign(new Error(messages[d.error]||(r.status===403?'Você não tem permissão para esta ação.':'Não foi possível concluir. Tente novamente.')),{code:d.error});}return d;
+  };
+  function insertDraft(text,replace=false){const id=state.selectedConversationId;const old=drafts.get(id)||'';const start=replace?0:Math.min(selection.start,old.length),end=replace?old.length:Math.min(selection.end,old.length);const value=old.slice(0,start)+text+old.slice(end);drafts.set(id,value);composerPopover='';aiResult='';render();const field=root.querySelector('[data-ai-compose]');if(field){field.value=value;field.focus();field.setSelectionRange(start+text.length,start+text.length);selection={start:start+text.length,end:start+text.length};}}
+  function clearAttachment(id=state.selectedConversationId){const item=attachments.get(id);if(item?.url)URL.revokeObjectURL(item.url);attachments.delete(id);}
+  function selectAttachment(file,voice=false,duration=0){
+    if(!file)return;
+    const ext=file.name.split('.').pop().toLowerCase();const groups={image:['jpg','jpeg','png','webp'],video:['mp4','webm'],document:['pdf','doc','docx','xls','xlsx','csv','txt'],audio:['mp3','ogg','m4a','wav']};
+    let kind=Object.keys(groups).find(k=>groups[k].includes(ext));if(ext==='webm'&&file.type.startsWith('audio/'))kind='audio';
+    const mb={image:8,video:24,document:['csv','txt'].includes(ext)?2:20,audio:16}[kind];
+    if(!kind||!file.size||file.size>mb*1024*1024){state.composerError=kind?`Limite: ${mb} MB para este arquivo.`:'Formato de arquivo não permitido.';render();return;}
+    clearAttachment();attachments.set(state.selectedConversationId,{file,kind,voice,duration,url:URL.createObjectURL(file),id:crypto.randomUUID(),uploaded:false,stage:'',uncertain:false});state.composerError='';composerPopover='';render();
+  }
+  function renderAttachment(){const a=attachments.get(state.selectedConversationId);if(!a)return '';return `<div class="ai-compose-asset">${a.kind==='image'?`<img src="${esc(a.url)}" alt="Prévia do anexo">`:a.kind==='audio'?`<audio controls preload="metadata" src="${esc(a.url)}" aria-label="Ouvir áudio antes de enviar"></audio>`:a.kind==='video'?`<video controls preload="metadata" src="${esc(a.url)}" aria-label="Prévia do vídeo"></video>`:'<span aria-hidden="true">📄</span>'}<div><strong>${esc(a.voice?'Mensagem de voz':a.file.name)}</strong><small>${esc(sizeText(a.file.size))}${a.voice?' · '+fmtDuration(a.duration):''}${a.stage?' · '+esc(a.stage):''}</small></div><button class="ai-icon" type="button" data-composer-remove title="Remover anexo" aria-label="Remover anexo" ${state.sending?'disabled':''}>×</button></div>${a.kind==='audio'?'<p class="ai-composer-hint">Áudio enviado sem legenda. O texto do rascunho será preservado.</p>':''}`;}
+  function renderRecording(){if(!recording||recording.cid!==state.selectedConversationId)return '';return `<div class="ai-recording" role="status"><span class="ai-record-dot"></span><span data-record-clock>${fmtDuration(recording.elapsed||0)}</span><span>${recording.phase==='requesting_permission'?'Solicitando microfone…':recording.phase==='paused'?'Pausado':'Gravando'}</span><button type="button" class="ai-action" data-rec-pause ${recording.phase==='requesting_permission'?'disabled':''}>${recording.phase==='paused'?'Continuar':'Pausar'}</button><button type="button" class="ai-action" data-rec-stop ${recording.phase==='requesting_permission'?'disabled':''}>Finalizar</button><button type="button" class="ai-action" data-rec-cancel>Cancelar</button></div>`;}
+  function renderComposerPopover(){
+    if(!composerPopover)return '';
+    let inner='';
+    if(composerPopover==='emoji')inner=`<div class="ai-emoji-categories">${Object.keys(emojiGroups).map(k=>`<button type="button" class="ai-chip" data-emoji-category="${k}">${esc({recent:'Recentes',pessoas:'Pessoas',gestos:'Gestos',simbolos:'Símbolos',objetos:'Objetos'}[k])}</button>`).join('')}</div><div class="ai-emoji-grid">${(emojiGroups[emojiCategory].length?emojiGroups[emojiCategory]:emojiGroups.pessoas).map(e=>`<button type="button" class="ai-icon" title="${esc(e)}" aria-label="Inserir ${esc(e)}" data-insert-emoji="${esc(e)}">${esc(e)}</button>`).join('')}</div>`;
+    if(composerPopover==='quick')inner=`<input class="ai-input" data-quick-search aria-label="Buscar resposta rápida" placeholder="Buscar resposta…" value="${esc(quickQuery)}">${quickReplies.filter(r=>(r.title+' '+r.body).toLowerCase().includes(quickQuery.toLowerCase())).map(r=>`<div class="ai-quick-row"><button type="button" class="ai-action" data-insert-quick="${esc(r.id)}"><strong>${esc(r.title)}</strong><small>${esc(r.body)}</small></button>${quickCanManage?`<button type="button" class="ai-icon" title="Editar resposta" aria-label="Editar ${esc(r.title)}" data-edit-quick="${esc(r.id)}">✎</button>`:''}</div>`).join('')||'<p>Nenhuma resposta cadastrada.</p>'}${quickCanManage?'<button type="button" class="ai-action" data-new-quick>Nova resposta rápida</button>':''}`;
+    if(composerPopover==='quick-edit')inner=`<label>Título<input class="ai-input" data-quick-title maxlength="100" value="${esc(quickEdit?.title||'')}"></label><label>Resposta<textarea class="ai-input" data-quick-body maxlength="4000">${esc(quickEdit?.body||'')}</textarea></label><button type="button" class="ai-action" data-save-quick>Salvar para este time</button>${quickEdit?.id?'<button type="button" class="ai-action" data-disable-quick>Desativar resposta</button>':''}`;
+    if(composerPopover==='ai')inner=Object.entries({suggest:'Sugerir resposta',improve:'Melhorar texto',shorter:'Deixar mais curto',professional:'Mais profissional',friendly:'Mais amigável'}).map(([k,v])=>`<button type="button" class="ai-action" data-assist="${k}" ${composerBusy?'disabled':''}>✨ ${v}</button>`).join('')+(composerBusy?'<p role="status">Preparando sugestão…</p>':'')+(aiResult?`<p>${esc(aiResult)}</p><button type="button" class="ai-action" data-use-ai>Usar sugestão</button>`:'');
+    return `<div class="ai-composer-popover" role="region" aria-label="Ferramentas da mensagem"><button type="button" class="ai-icon ai-pop-close" data-close-composer aria-label="Fechar ferramentas" title="Fechar">×</button>${inner}</div>`;
+  }
+  async function startRecording(){
+    if(recording||state.sending)return;
+    if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder){state.composerError='Este navegador não permite gravar áudio. Você pode anexar um arquivo de áudio.';return render();}
+    const cid=state.selectedConversationId;recording={cid,phase:'requesting_permission',elapsed:0};const requestedRecording=recording;render();
+    let stream;
+    try{
+      stream=await navigator.mediaDevices.getUserMedia({audio:true});
+      if(recording!==requestedRecording){stream.getTracks().forEach(t=>t.stop());return;}
+      const type=['audio/webm;codecs=opus','audio/ogg;codecs=opus','audio/mp4'].find(t=>MediaRecorder.isTypeSupported(t));
+      const recorder=new MediaRecorder(stream,type?{mimeType:type}:undefined);const run=recording;Object.assign(run,{recorder,stream,chunks:[],size:0,phase:'recording',lastTick:Date.now(),elapsed:0});
+      recorder.ondataavailable=e=>{if(e.data.size){run.chunks.push(e.data);run.size+=e.data.size;if(run.size>16*1024*1024){state.composerError='A gravação excedeu 16 MB.';cancelRecording();render();}}};
+      recorder.onstop=()=>{stream.getTracks().forEach(t=>t.stop());clearInterval(run.timer);if(run.cancelled)return;const mime=recorder.mimeType.split(';')[0];const ext=({'audio/webm':'webm','audio/ogg':'ogg','audio/mp4':'m4a'})[mime];if(!ext){state.composerError='Formato de gravação não suportado. Anexe um áudio.';recording=null;return render();}const file=new File(run.chunks,`mensagem-voz.${ext}`,{type:mime});recording=null;if(cid===state.selectedConversationId)selectAttachment(file,true,run.elapsed);};
+      recorder.onerror=()=>{state.composerError='Falha ao gravar áudio. Tente novamente.';cancelRecording();render();};
+      recorder.start(1000);run.timer=setInterval(()=>{const now=Date.now();if(run.phase==='recording')run.elapsed+=(now-run.lastTick)/1000;run.lastTick=now;const clock=root.querySelector('[data-record-clock]');if(clock)clock.textContent=fmtDuration(run.elapsed);if(run.elapsed>=120&&recorder.state!=='inactive'){run.phase='preview';recorder.stop();}},250);render();
+    }catch(e){stream?.getTracks().forEach(t=>t.stop());if(recording!==requestedRecording)return;recording=null;state.composerError=e.name==='NotAllowedError'?'Permissão do microfone não concedida.':'Não foi possível acessar o microfone.';render();}
+  }
+  function cancelRecording(){const run=recording;recording=null;if(!run)return;run.cancelled=true;clearInterval(run.timer);if(run.recorder?.state!=='inactive'&&run.recorder)run.recorder.stop();run.stream?.getTracks().forEach(t=>t.stop());}
+  async function sendAttachment(){
+    const cid=state.selectedConversationId,a=attachments.get(cid);if(!a||state.sending||recording||a.uncertain)return;
+    const draft=drafts.get(cid)||'';state.sending=true;state.composerError='';a.stage='Preparando…';render();
+    try{
+      if(!a.uploaded){const prepared=await composerApi('prepare',{upload_id:a.id,filename:a.file.name,mime:a.file.type,size:a.file.size,voice_note:a.voice,duration:a.duration},cid);a.stage='Enviando arquivo…';render();
+        const r=await fetch(prepared.upload_url,{method:'PUT',headers:{'Content-Type':prepared.mime,'x-upsert':'false'},body:a.file,credentials:'omit',redirect:'error',signal:AbortSignal.timeout(90000)});
+        if(!r.ok&&r.status!==409)throw new Error('Upload não concluído. Tente novamente.');a.uploaded=true;}
+      a.stage='Enviando ao WhatsApp…';render();await composerApi('send',{upload_id:a.id,caption:a.kind==='audio'?'':draft},cid);
+      clearAttachment(cid);if(a.kind!=='audio'&&drafts.get(cid)===draft)drafts.delete(cid);if(state.selectedConversationId===cid)await loadDetail(cid,{silent:true});await load({silent:true});
+    }catch(e){a.stage='Falha';a.uncertain=e.code==='send_unconfirmed';if(cid===state.selectedConversationId)state.composerError=e.message;}
+    finally{state.sending=false;render();}
+  }
+  root.addEventListener('pointerdown',event=>{if(event.target.closest('[data-composer-tool]')){const field=root.querySelector('[data-ai-compose]');if(field)selection={start:field.selectionStart,end:field.selectionEnd};}});
+  root.addEventListener('click',async event=>{
+    const b=event.target.closest('button');if(!b||b.disabled)return;
+    const tool=b.dataset.composerTool;
+    try{
+      if(tool){
+        if(tool==='attach'){root.querySelector('[data-composer-file]').click();return;}
+        if(tool==='mic'){composerPopover='';return startRecording();}
+        if(tool==='quick'){composerBusy=true;render();const cid=state.selectedConversationId;try{const d=await composerApi('replies');if(cid!==state.selectedConversationId)return;quickReplies=d.items||[];quickCanManage=!!d.can_manage;quickQuery='';}finally{composerBusy=false;} }
+        composerPopover=composerPopover===tool?'':tool;return render();
+      }
+      if(b.hasAttribute('data-composer-remove')){clearAttachment();return render();}
+      if(b.hasAttribute('data-close-composer')){composerPopover='';return render();}
+      if(b.dataset.emojiCategory){emojiCategory=b.dataset.emojiCategory;return render();}
+      if(b.dataset.insertEmoji){const e=b.dataset.insertEmoji;emojiGroups.recent=[e,...emojiGroups.recent.filter(x=>x!==e)].slice(0,16);try{localStorage.setItem('space_attendance_emojis',JSON.stringify(emojiGroups.recent));}catch{}return insertDraft(e);}
+      if(b.dataset.insertQuick){const r=quickReplies.find(r=>r.id===b.dataset.insertQuick);if(r)insertDraft(r.body);return;}
+      if(b.hasAttribute('data-new-quick')||b.dataset.editQuick){quickEdit=quickReplies.find(r=>r.id===b.dataset.editQuick)||null;composerPopover='quick-edit';return render();}
+      if(b.hasAttribute('data-save-quick')||b.hasAttribute('data-disable-quick')){b.disabled=true;const title=root.querySelector('[data-quick-title]').value,body=root.querySelector('[data-quick-body]').value;await composerApi('save_reply',{...(quickEdit?.id?{id:quickEdit.id}:{}),title,body,team_id:quickEdit?.team_id??state.detail.conversation.team.team_id,active:!b.hasAttribute('data-disable-quick')});composerPopover='';return render();}
+      if(b.dataset.assist){const cid=state.selectedConversationId,draft=drafts.get(cid)||'';composerBusy=true;render();try{const r=await composerApi('assist',{mode:b.dataset.assist,text:draft},cid);if(cid!==state.selectedConversationId)return;if((drafts.get(cid)||'')===draft)insertDraft(r.text,true);else aiResult=r.text;}finally{composerBusy=false;render();}return;}
+      if(b.hasAttribute('data-use-ai'))return insertDraft(aiResult,true);
+      if(b.hasAttribute('data-rec-cancel')){cancelRecording();return render();}
+      if(b.hasAttribute('data-rec-stop')&&recording?.recorder){recording.phase='preview';recording.recorder.stop();return;}
+      if(b.hasAttribute('data-rec-pause')&&recording?.recorder){if(recording.phase==='paused'){recording.lastTick=Date.now();recording.recorder.resume();recording.phase='recording';}else{recording.recorder.pause();recording.phase='paused';}recording.stream.getAudioTracks().forEach(t=>t.enabled=recording.phase==='recording');render();}
+    }catch(e){composerBusy=false;state.composerError=e.message;render();}
+  });
+  root.addEventListener('change',e=>{if(e.target.matches('[data-composer-file]')){selectAttachment(e.target.files[0]);e.target.value='';}});
+  root.addEventListener('input',e=>{if(e.target.matches('[data-quick-search]')){quickQuery=e.target.value;render();}});
+  root.addEventListener('keydown',e=>{if(e.key==='Escape'&&composerPopover){composerPopover='';render();root.querySelector('[data-ai-compose]')?.focus();}});
+  window.addEventListener('pagehide',()=>{cancelRecording();for(const id of attachments.keys())clearAttachment(id);});
+  document.addEventListener('visibilitychange',()=>{if(document.hidden&&recording?.phase==='recording'){recording.recorder.pause();recording.phase='paused';recording.stream.getAudioTracks().forEach(t=>t.enabled=false);render();}});
+  function canSend() { return Boolean(state.detail?.composer?.enabled && ((drafts.get(state.selectedConversationId)||'').trim()||attachments.has(state.selectedConversationId)) && !state.sending && !recording && !attachments.get(state.selectedConversationId)?.uncertain); }
   function renderConversationActions(conv) {
     if (!state.selectedConversationId) return '';
     const busy = state.actioning ? 'disabled' : '';
@@ -171,7 +263,7 @@
   function renderChat() {
     const conv = state.detail?.conversation || rowsById.get(state.selectedConversationId) || {};
     const composer = state.detail?.composer || { enabled: false, reason: 'Selecione uma conversa para responder.' };
-    return `<section class="ai-pane ai-chat" aria-label="Conversa">${state.selectedConversationId ? `<header class="ai-chat-head"><div class="ai-row"><button class="ai-icon ai-mobile-back" data-ai-back aria-label="Voltar às conversas">${icon('back')}</button><span class="ai-person">${avatar(state.detail?.contact || conv.contact)}<span><strong>${esc(titleFor(state.detail || conv))}</strong><p class="ai-mini">WhatsApp · ${esc(conv.team?.name || 'Time')} · ${esc(conv.assigned_user_name || (conv.assigned_user_uid ? 'Atribuída' : 'Sem responsável'))}</p></span></span><span class="ai-status">${esc(label(conv.status))}</span></div><div class="ai-actions">${renderConversationActions(conv)}<button class="ai-icon" data-ai-toggle-contact aria-label="${ui.contactHidden ? 'Mostrar' : 'Recolher'} perfil" title="Perfil da pessoa" aria-expanded="${!ui.contactHidden}">${icon('panel')}</button></div></header>` : ''}${renderMessages()}${state.selectedConversationId && composer.enabled ? `<div class="ai-composer"><div class="ai-compose-label">${icon('chat')} Responder por WhatsApp</div><textarea aria-label="Mensagem" data-ai-compose ${composer.enabled ? '' : 'disabled'} placeholder="${composer.enabled ? 'Escreva uma resposta…' : 'Envio indisponível'}">${esc(drafts.get(state.selectedConversationId) || '')}</textarea>${state.composerError ? `<p class="ai-form-error" role="alert">${esc(state.composerError)}</p>` : ''}<div class="ai-composer-hint">${esc(composer.reason || '')}</div><div class="ai-composer-footer"><div class="ai-tools">${[['attach','Anexos'],['quick','Respostas rápidas'],['emoji','Emoji'],['ai','Assistente IA']].map(([key,name]) => `<span title="${name} — ainda indisponível"><button class="ai-icon" disabled aria-label="${name} — ainda indisponível">${icon(key)}</button></span>`).join('')}</div><div class="ai-row"><span class="ai-shortcut">⇧ Enter para nova linha</span><button class="ai-send" data-ai-send ${canSend() ? '' : 'disabled'}>${state.sending ? 'Enviando' : 'Enviar'}${icon('send')}</button></div></div></div>` : state.selectedConversationId ? `<div class="ai-composer"><p class="ai-composer-hint">${esc(state.composerError || composer.reason || 'Envio indisponível.')}</p></div>` : ''}</section>`;
+    return `<section class="ai-pane ai-chat" aria-label="Conversa">${state.selectedConversationId ? `<header class="ai-chat-head"><div class="ai-row"><button class="ai-icon ai-mobile-back" data-ai-back aria-label="Voltar às conversas">${icon('back')}</button><span class="ai-person">${avatar(state.detail?.contact || conv.contact)}<span><strong>${esc(titleFor(state.detail || conv))}</strong><p class="ai-mini">WhatsApp · ${esc(conv.team?.name || 'Time')} · ${esc(conv.assigned_user_name || (conv.assigned_user_uid ? 'Atribuída' : 'Sem responsável'))}</p></span></span><span class="ai-status">${esc(label(conv.status))}</span></div><div class="ai-actions">${renderConversationActions(conv)}<button class="ai-icon" data-ai-toggle-contact aria-label="${ui.contactHidden ? 'Mostrar' : 'Recolher'} perfil" title="Perfil da pessoa" aria-expanded="${!ui.contactHidden}">${icon('panel')}</button></div></header>` : ''}${renderMessages()}${state.selectedConversationId && composer.enabled ? `<div class="ai-composer"><div class="ai-compose-label">${icon('chat')} Responder por WhatsApp</div>${renderRecording()}${renderAttachment()}${renderComposerPopover()}<input type="file" hidden data-composer-file accept=".jpg,.jpeg,.png,.webp,.mp4,.webm,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.mp3,.ogg,.m4a,.wav"><textarea aria-label="Mensagem" data-ai-compose ${composer.enabled && !state.sending && !recording ? '' : 'disabled'} placeholder="${composer.enabled ? 'Escreva uma resposta…' : 'Envio indisponível'}">${esc(drafts.get(state.selectedConversationId) || '')}</textarea>${state.composerError ? `<p class="ai-form-error" role="alert">${esc(state.composerError)}</p>` : ''}<div class="ai-composer-hint">${esc(composer.reason || '')}</div><div class="ai-composer-footer"><div class="ai-tools">${[['attach','Anexos'],['quick','Respostas rápidas'],['emoji','Emoji'],['ai','Assistente IA']].map(([key,name]) => `<button type="button" class="ai-icon" data-composer-tool="${key}" title="${name}" aria-label="${name}" ${state.sending||recording||composerBusy?'disabled':''}>${icon(key)}</button>`).join('')}</div><div class="ai-row"><button type="button" class="ai-icon" data-composer-tool="mic" aria-label="Gravar áudio" title="Gravar áudio" ${state.sending||recording||attachments.has(state.selectedConversationId)?'disabled':''}>🎙</button><span class="ai-shortcut">⇧ Enter para nova linha</span><button class="ai-send" data-ai-send ${canSend() ? '' : 'disabled'}>${state.sending ? 'Enviando' : 'Enviar'}${icon('send')}</button></div></div></div>` : state.selectedConversationId ? `<div class="ai-composer"><p class="ai-composer-hint">${esc(state.composerError || composer.reason || 'Envio indisponível.')}</p></div>` : ''}</section>`;
   }
   function renderContact() {
     const detail = state.detail || { conversation: rowsById.get(state.selectedConversationId), contact: rowsById.get(state.selectedConversationId)?.contact };
@@ -357,7 +449,9 @@
   async function sendMessage() {
     const id = state.selectedConversationId;
     const text = String(drafts.get(id) || '').trim();
-    if (!text || !id || !canSend()) return;
+    if (!id || !canSend()) return;
+    if(attachments.has(id))return sendAttachment();
+    if(!text)return;
     state.sending = true; state.composerError = ''; render();
     try {
       await postAction('message', { text, client_request_id: crypto.randomUUID() }, { conversationId: id });

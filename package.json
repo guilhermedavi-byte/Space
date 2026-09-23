@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@xyflow/react": "^12.11.6",
+    "cfb": "^1.2.2",
     "file-type": "^22.0.1",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
