@@ -134,7 +134,7 @@
   }
   function renderMessages() {
     if (state.detailLoading) return '<div class="ai-messages"><div class="ai-skel"></div><div class="ai-skel"></div><div class="ai-skel"></div></div>';
-    if (!state.selected) return `<div class="ai-empty"><div><span class="ai-empty-symbol">${icon('inbox')}</span><h2>Um espaço para cada conversa</h2><p>Selecione uma pessoa ao lado para continuar o atendimento com todo o contexto.</p></div></div>`;
+    if (!state.selected) return `<div class="ai-empty"><div><span class="ai-empty-symbol">${icon('inbox')}</span><h2>Um espaço para cada conversa</h2><p>Selecione uma conversa ao lado para continuar o atendimento com todo o contexto.</p></div></div>`;
     const messages = state.detail?.messages || [];
     if (!messages.length) return '<div class="ai-empty"><div><h2>Sem mensagens</h2><p>As mensagens aparecerão aqui em ordem cronológica.</p></div></div>';
     let last = '';
@@ -143,7 +143,8 @@
   function canSend() { return Boolean(state.detail?.composer?.enabled && (drafts.get(state.selected) || '').trim() && !state.sending); }
   function renderConversationActions(conv) {
     if (!state.selected) return '';
-    return `<div class="ai-actions"><button class="ai-action" data-ai-op="assign" ${state.actioning ? 'disabled' : ''}>Assumir</button><button class="ai-action" data-ai-op="transfer" ${state.actioning ? 'disabled' : ''}>Transferir</button><button class="ai-action" data-ai-op="unassign" ${!conv.assigned_user_uid || state.actioning ? 'disabled' : ''}>Sem responsável</button>${conv.status === 'resolved' ? `<button class="ai-action" data-ai-op="reopen" ${state.actioning ? 'disabled' : ''}>Reabrir</button>` : `<button class="ai-action" data-ai-op="resolve" ${state.actioning ? 'disabled' : ''}>Resolver</button>`}</div>`;
+    const busy = state.actioning ? 'disabled' : '';
+    return `<div class="ai-actions"><button class="ai-action" data-ai-op="assign" ${busy}>Assumir</button><details class="ai-filter-pop"><summary class="ai-icon" aria-label="Mais ações" title="Mais ações">···</summary><div class="ai-popover"><button class="ai-action" data-ai-op="transfer" ${busy}>Transferir</button><button class="ai-action" data-ai-op="unassign" ${!conv.assigned_user_uid || state.actioning ? 'disabled' : ''}>Sem responsável</button></div></details>${conv.status === 'resolved' ? `<button class="ai-action" data-ai-op="reopen" ${busy}>Reabrir</button>` : `<button class="ai-action" data-ai-op="resolve" ${busy}>Resolver</button>`}</div>`;
   }
   function renderChat() {
     const conv = state.detail?.conversation || state.rows.find(row => row.conversation_id === state.selected) || {};

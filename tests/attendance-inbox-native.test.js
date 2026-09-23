@@ -18,3 +18,25 @@ test('Inbox presents person identity and preserves drafts across conversations a
  const img=doc.querySelector('.ai-contact img');img.dispatchEvent(new dom.window.Event('error'));assert.equal(doc.querySelector('.ai-contact img'),null);assert.match(doc.querySelector('.ai-contact .ai-avatar').textContent,/PS/);
  }finally{dom.window.close();}
 });
+test('Workspace tabs, filters and collapsible panels preserve drafts without posting',async()=>{
+ const dom=new JSDOM('<body data-initial-panel="attendance-inbox"><div data-attendance-inbox></div>',{runScripts:'outside-only'});
+ try {
+  const calls=[];
+  const row={conversation_id:'a',contact:{name:'Pessoa Space'},status:'open',team:{name:'Suporte'}};
+  dom.window.fetchWithAuth=async(url,options)=>{calls.push({url,options});return {ok:true,json:async()=>String(url).includes('conversation_id')?{conversation:row,contact:row.contact,messages:[],composer:{enabled:true},context:{student:{product:'Individual'},actions:{can_create_opportunity:true}}}:{rows:[row],teams:[]}}};
+  dom.window.eval(fs.readFileSync('attendance-inbox.js','utf8'));await tick();
+  const doc=dom.window.document;
+  assert.equal(doc.querySelector('.ai-pane--contact'),null);
+  doc.querySelector('[data-ai-select]').click();await tick();
+  const input=doc.querySelector('[data-ai-compose]');input.value='Rascunho preservado';input.dispatchEvent(new dom.window.Event('input',{bubbles:true}));
+  doc.querySelector('[data-ai-tab="journey"]').click();assert.match(doc.querySelector('[role="tabpanel"]').textContent,/Individual/);
+  doc.querySelector('[data-ai-tab="finance"]').click();assert.match(doc.querySelector('[role="tabpanel"]').textContent,/Não disponível/);
+  doc.querySelector('[data-ai-toggle-contact]').click();assert.equal(doc.querySelector('.ai-pane--contact'),null);
+  doc.querySelector('[data-ai-toggle-contact]').click();assert.ok(doc.querySelector('.ai-pane--contact'));
+  doc.querySelector('[data-ai-toggle-list]').click();assert.ok(doc.querySelector('.is-list-collapsed'));
+  assert.equal(doc.querySelector('[data-ai-compose]').value,'Rascunho preservado');
+  doc.querySelector('[data-ai-toggle-list]').click();
+  assert.ok(doc.querySelector('[data-ai-filter="unassigned"]').closest('details'));
+  assert.equal(calls.some(call=>call.options?.method==='POST'),false);
+ }finally{dom.window.close();}
+});
