@@ -10,12 +10,19 @@ const limit = (value, fallback = 50) => {
   if (!Number.isFinite(n)) return fallback;
   return Math.max(1, Math.min(n, 50));
 };
-const sanitizePayload = (value) => {
-  const text = JSON.stringify(value || {});
-  if (/(token|secret|authorization|credential|api[_-]?key|webhook_raw|raw_event)/i.test(text)) {
-    return JSON.parse(text.replace(/token|secret|authorization|credential|api[_-]?key|webhook_raw|raw_event/gi, 'redacted'));
+const { contactProfile } = require('./_lib/attendance-contact-profile');
+const sanitizePayload = value => {
+  if (Array.isArray(value)) return value.map(sanitizePayload);
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value)
+    .filter(([key]) => !/(token|secret|authorization|credential|api[_-]?key|webhook|raw_event|instance|metadata)/i.test(key))
+    .map(([key, entry]) => [key, sanitizePayload(entry)]));
+  if (typeof value !== 'string') return value;
+  let safe = value;
+  for (const key of ['EVOLUTION_API_KEY', 'EVOLUTION_INSTANCE_TOKEN', 'SUPABASE_SERVICE_ROLE_KEY', 'META_APP_SECRET', 'META_ACCESS_TOKEN', 'META_WEBHOOK_VERIFY_TOKEN']) {
+    const secret = process.env[key];
+    if (secret) safe = safe.split(secret).join('[redacted]');
   }
-  return value;
+  return safe;
 };
 const evolutionRequest = async (instance, number, text) => {
   const key = String(process.env.EVOLUTION_API_KEY || '').trim();
@@ -44,7 +51,7 @@ const evolutionRequest = async (instance, number, text) => {
   } finally { clearTimeout(timer); }
 };
 
-const createHandler = ({ authenticate = requireAttendanceAuth, request = supabaseFetch, sendEvolution = evolutionRequest } = {}) => async (req, res) => {
+const createHandler = ({ authenticate = requireAttendanceAuth, request = supabaseFetch, sendEvolution = evolutionRequest, resolveProfile = contactProfile } = {}) => async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   if (!['GET', 'POST'].includes(req.method)) return sendJson(res, 405, { error: 'method_not_allowed' });
   try {
@@ -130,11 +137,12 @@ const createHandler = ({ authenticate = requireAttendanceAuth, request = supabas
       const body = { p_actor_uid: actor.uid, p_role: actor.role, p_conversation_id: conversationId, p_after: after, p_limit: limit(url.searchParams.get('limit'), 50) };
       const result = await request('/rpc/attendance_inbox_detail', { method: 'POST', body, timeoutMs: 15000 });
       const payload = sanitizePayload(result.data || {});
+      payload.contact = sanitizePayload(await resolveProfile(payload));
       const conn = payload?.conversation?.connection || {};
       const enabled = conn.provider === 'evolution_whatsapp' && conn.status === 'active' && conn.setup_pending !== true;
       payload.composer = enabled
-        ? { enabled: true, reason: 'Responder pelo WhatsApp conectado via Evolution.' }
-        : { enabled: false, reason: conn.provider === 'evolution_whatsapp' ? 'Reconecte o WhatsApp para enviar mensagens.' : 'Envio será habilitado após concluir a conexão com a Meta.' };
+        ? { enabled: true, reason: 'Responda à conversa pelo WhatsApp.' }
+        : { enabled: false, reason: 'Envio indisponível. Solicite ajuda à equipe responsável pelo atendimento.' };
       return sendJson(res, 200, payload);
     }
     const filter = clean(url.searchParams.get('filter'), 24) || 'all';
@@ -151,7 +159,7 @@ const createHandler = ({ authenticate = requireAttendanceAuth, request = supabas
   } catch (error) {
     const status = [400, 401, 403, 409, 422].includes(error.status) ? error.status : Number(error.status) === 42501 || String(error.code || '') === '42501' ? 403 : 503;
     if (status === 503) {
-      console.warn('[attendance-inbox] request failed', { status: Number(error.status) || 0, code: String(error.code || error.message || 'unknown').slice(0, 80) });
+      console.warn('[attendance-inbox] request failed', { status });
     }
     const safe = new Set(['evolution_not_configured','evolution_configuration_error','evolution_unavailable','attendance_channel_disabled','attendance_invalid_recipient']);
     return sendJson(res, status, { error: safe.has(error.code) ? error.code : status === 503 ? 'attendance_unavailable' : 'attendance_request_rejected' });

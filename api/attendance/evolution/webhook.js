@@ -36,6 +36,91 @@ const normalizePhone = jid => {
   const raw = String(jid || '').split('@')[0].split(':')[0].replace(/\D/g, '');
   return /^\d{7,16}$/.test(raw) ? raw : '';
 };
+const mediaOf = message => {
+  const unwrap = message?.documentWithCaptionMessage?.message || message || {};
+  const type = kindOf(unwrap);
+  const src = unwrap.imageMessage || unwrap.videoMessage || unwrap.audioMessage || unwrap.documentMessage || unwrap.stickerMessage || null;
+  if (!src || type === 'text') return null;
+  const size = Number(src.fileLength?.low ?? src.fileLength ?? src.fileLength?.toString?.());
+  const duration = Number(src.seconds ?? src.duration);
+  return {
+    media_type: type,
+    mime_type: String(src.mimetype || src.mimeType || '').slice(0, 120) || null,
+    filename: String(src.fileName || src.title || '').slice(0, 220) || null,
+    size: Number.isFinite(size) && size > 0 ? Math.min(size, 100 * 1024 * 1024) : null,
+    duration: Number.isFinite(duration) && duration >= 0 ? Math.min(duration, 24 * 60 * 60) : null,
+    caption: textOf(message) || null
+  };
+};
+const compactEvolutionMessage = (d, message) => {
+  const unwrap = message?.documentWithCaptionMessage?.message || message || {};
+  const type = kindOf(unwrap);
+  const src = unwrap.imageMessage || unwrap.videoMessage || unwrap.audioMessage || unwrap.documentMessage || unwrap.stickerMessage || null;
+  if (!src || type === 'text') return null;
+  return {
+    key: {
+      id: String(d?.key?.id || '').slice(0, 256),
+      remoteJid: String(d?.key?.remoteJid || d?.key?.remoteJidAlt || '').slice(0, 256),
+      fromMe: d?.key?.fromMe === true,
+      participant: String(d?.key?.participant || '').slice(0, 256) || null
+    },
+    messageType: `${type}Message`,
+    message: {
+      [`${type}Message`]: {
+        url: typeof src.url === 'string' ? src.url.slice(0, 2048) : undefined,
+        directPath: typeof src.directPath === 'string' ? src.directPath.slice(0, 2048) : undefined,
+        mediaKey: typeof src.mediaKey === 'string' ? src.mediaKey.slice(0, 256) : undefined,
+        mimetype: typeof src.mimetype === 'string' ? src.mimetype.slice(0, 120) : undefined,
+        fileSha256: typeof src.fileSha256 === 'string' ? src.fileSha256.slice(0, 256) : undefined,
+        fileEncSha256: typeof src.fileEncSha256 === 'string' ? src.fileEncSha256.slice(0, 256) : undefined,
+        fileLength: src.fileLength ?? undefined,
+        seconds: src.seconds ?? undefined,
+        fileName: typeof src.fileName === 'string' ? src.fileName.slice(0, 220) : undefined,
+        caption: typeof src.caption === 'string' ? src.caption.slice(0, 2000) : undefined
+      }
+    }
+  };
+};
+const evolutionPost = async (path, body) => {
+  const key = String(process.env.EVOLUTION_API_KEY || '').trim();
+  let base;
+  try { base = new URL(String(process.env.EVOLUTION_API_URL || '').trim()); } catch { return null; }
+  if (!key || base.protocol !== 'https:') return null;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  try {
+    const response = await fetch(base.href.replace(/\/$/, '') + path, {
+      method: 'POST',
+      redirect: 'error',
+      signal: controller.signal,
+      headers: { apikey: key, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body || {})
+    });
+    if (!response.ok) return null;
+    return await response.json().catch(() => null);
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+};
+const refreshAvatar = async ({ instance, connectionId, externalIdentifier, identifierType, phone }) => {
+  if (!phone) return;
+  const payload = await evolutionPost(`/chat/fetchProfilePictureUrl/${encodeURIComponent(instance)}`, { number: phone });
+  const url = String(payload?.profilePictureUrl || payload?.picture || '').trim();
+  if (!/^https:\/\/.{8,2048}$/i.test(url)) return;
+  await supabaseFetch('/rpc/attendance_update_contact_avatar_by_identity', {
+    method: 'POST',
+    body: {
+      p_connection_id: connectionId,
+      p_identifier_type: identifierType,
+      p_external_identifier: externalIdentifier,
+      p_avatar_url: url,
+      p_avatar_source: 'whatsapp_profile',
+      p_avatar_expires_at: null
+    }
+  }).catch(() => {});
+};
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
@@ -79,7 +164,9 @@ module.exports = async (req, res) => {
 
       const text = textOf(d.message);
       const kind = kindOf(d.message);
-      const content = text ? { text } : { text: '[' + kind + ']' };
+      const media = mediaOf(d.message);
+      const content = text ? { text } : {};
+      if (media) content.media = { ...media, fetch_status: 'pending' };
       await supabaseFetch('/rpc/attendance_ingest_message', {
         method: 'POST',
         body: {
@@ -99,10 +186,16 @@ module.exports = async (req, res) => {
             content,
             provider_timestamp: stampOf(d.messageTimestamp),
             external_reply_to_id: d?.message?.extendedTextMessage?.contextInfo?.stanzaId || null,
-            metadata: { provider: 'evolution_whatsapp', instance }
+            metadata: {
+              provider: 'evolution_whatsapp',
+              instance,
+              media: media ? { ...media, fetch_status: 'pending' } : undefined,
+              evolution_message: compactEvolutionMessage(d, d.message)
+            }
           }
         }
       });
+      refreshAvatar({ instance, connectionId: connection.connection_id, externalIdentifier: remoteJid, identifierType: 'whatsapp_jid', phone }).catch(() => {});
       return sendJson(res, 200, { ok: true });
     }
 

@@ -51,6 +51,7 @@ const normalizeActivity = (row = {}) => {
   return {
     id: safeText(row.id),
     titulo: safeText(row.titulo),
+    studentId: safeText(row.studentId || row.alunoId || row.firestore_student_id),
     descricao: safeText(row.descricao),
     status,
     responsavelId,

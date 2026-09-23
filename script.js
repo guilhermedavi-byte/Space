@@ -19036,11 +19036,11 @@ const renderAdminStudentFilesTab = () => {
               })
               .join("")}
           </div>`
-        : `<div class="admin-student-files-empty">Nenhum arquivo.</div>`;
+        : `<div class="admin-student-files-empty">Nenhum documento cadastrado.</div>`;
 
   panel.innerHTML = `
     <div class="admin-student-panel-card">
-      <div class="admin-student-panel-title">Arquivos</div>
+      <div class="admin-student-panel-title">Documentos</div>
       <div class="admin-student-files-upload">
         <div class="admin-student-upload-zone" data-admin-student-files-upload-zone role="button" tabindex="0">
           <strong>Enviar arquivos</strong>
@@ -19065,14 +19065,15 @@ const ensureAdminStudentFilesLoaded = async ({ force = false } = {}) => {
   renderAdminStudentFilesTab();
   try {
     const files = await readAdminStudentFilesFromFirestore({ alunoId });
-    adminStudentsState.history.files = files;
-    adminStudentsState.history.filesLoadedAt = Date.now();
+    if (adminStudentsState.history !== hist) return;
+    hist.files = files;
+    hist.filesLoadedAt = Date.now();
   } catch (error) {
     console.error("[admin] load student files failed:", error);
-    adminStudentsState.history.filesError = "Não foi possível carregar os arquivos.";
+    hist.filesError = "Não foi possível carregar os arquivos.";
   } finally {
-    adminStudentsState.history.filesLoading = false;
-    renderAdminStudentFilesTab();
+    hist.filesLoading = false;
+    if (adminStudentsState.history === hist) renderAdminStudentFilesTab();
   }
 };
 
@@ -26969,6 +26970,113 @@ const getTeacherStudentLinkedClasses = (studentId) => {
     });
 };
 
+// One sheet, with independent content panels. Existing lifecycle/comment actions stay mounted.
+const STUDENT_PROFILE_TABS = [
+  ["history", "Histórico"], ["retention", "Retenção"], ["pedagogical", "Pedagógico"],
+  ["financial", "Financeiro"], ["activities", "Atividades"], ["arquivos", "Documentos"],
+];
+const studentProfileEmpty = (message) => `<div class="student-profile-empty">${escapeHtml(message)}</div>`;
+const studentProfileRelated = (row, hist) => {
+  const ids = new Set([hist.alunoId, hist.alunoMeta?.id, hist.alunoMeta?.firestoreDocId].filter(Boolean).map(String));
+  return [row.studentId, row.alunoId, row.firestore_student_id, row.firestore_doc_id].some(id => id && ids.has(String(id)));
+};
+const studentProfileMoney = value => value == null || value === "" || !Number.isFinite(Number(value)) ? "—" : new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(value));
+const renderStudentProfileTabs = (hist, mode) => `<div class="student-profile-tabs" role="tablist" aria-label="Áreas da ficha do aluno">${STUDENT_PROFILE_TABS.map(([key, label]) => `<button type="button" role="tab" id="student-${mode}-tab-${key}" aria-controls="student-${mode}-panel-${key}" aria-selected="${(hist.activeTab || 'history') === key}" tabindex="${(hist.activeTab || 'history') === key ? '0' : '-1'}" data-student-profile-tab="${key}">${label}</button>`).join("")}</div>`;
+const studentProfilePanel = (key, html, hist, mode) => `<div class="student-profile-panel" role="tabpanel" id="student-${mode}-panel-${key}" aria-labelledby="student-${mode}-tab-${key}" tabindex="0" data-student-profile-panel="${key}" ${key === "arquivos" ? 'data-admin-student-tab-panel="arquivos"' : ''} ${(hist.activeTab || "history") === key ? "" : "hidden"}>${html}</div>`;
+const getStudentProfileJourney = hist => {
+  const events = [];
+  const add = (source, id, date, title, detail) => events.push({ source, id, date, title, detail, time: Date.parse(date) || 0 });
+  (hist.items || []).forEach((item, i) => add("Pedagógico", item.id || i, item.createdAt || item.dateKey, item.kind === "comment" ? "Comentário pedagógico" : "Registro de aula", item.summaryText || item.observacoes || ""));
+  (hist.retentionTimeline?.events || []).forEach((event, i) => add("Retenção", event.id || i, event.occurred_at, getRetentionTimelineEventLabel(event.event_type), event.summary || ""));
+  (hist.profileResources?.activities?.rows || []).forEach(row => add("Atividades", row.id, row.criadoEm, row.titulo, row.status));
+  (hist.profileResources?.financial?.rows || []).forEach(row => add("Financeiro", row.id, row.data_pagamento || row.created_at, row.profileKind, [row.status, studentProfileMoney(row.valor)].filter(Boolean).join(" · ")));
+  const registered = hist.alunoMeta?.criadoEm || hist.alunoMeta?.createdAt;
+  if (registered) add("Cadastro", hist.alunoId, registered, "Cadastro do aluno", "");
+  return events.sort((a, b) => b.time - a.time || String(a.id).localeCompare(String(b.id)));
+};
+const renderStudentProfileHistory = hist => {
+  const events = getStudentProfileJourney(hist);
+  const notice = hist.historyError || hist.retentionTimeline?.error;
+  return `<div class="admin-student-history-header"><div><div class="admin-student-panel-title">Histórico</div><div class="admin-student-history-subtitle">A jornada do aluno, com os registros mais recentes primeiro.</div></div></div>${notice ? `<p class="student-profile-error" role="status">${escapeHtml(notice)}</p>` : ""}${hist.historyLoading || hist.retentionTimeline?.loading ? '<p role="status">Carregando registros…</p>' : ''}${events.length ? `<div class="student-profile-journey">${events.map(event => `<article class="student-profile-record"><div class="student-profile-record-meta"><span>${escapeHtml(event.source)}</span><time>${escapeHtml(event.date ? formatAdminHistoryStamp(event.date) : "Data não informada")}</time></div><strong>${escapeHtml(event.title)}</strong>${event.detail ? `<p>${escapeHtml(event.detail)}</p>` : ''}</article>`).join("")}</div>` : !hist.historyLoading && !hist.retentionTimeline?.loading ? studentProfileEmpty("Nenhum registro no histórico ainda.") : ''}`;
+};
+const renderStudentProfileResource = (key, hist, mode) => {
+  if (key === "financial" && mode === "teacher") return studentProfileEmpty("Dados financeiros restritos a usuários autorizados.");
+  const state = hist.profileResources?.[key];
+  if (!state || state.loading) return studentProfileEmpty("Carregando registros…");
+  if (state.error) return `<div class="student-profile-empty student-profile-error" role="status">${escapeHtml(state.error)} <button type="button" class="admin-student-file-btn" data-student-profile-retry="${key}">Tentar novamente</button></div>`;
+  const rows = state.rows || [];
+  if (!rows.length) return studentProfileEmpty(key === "financial" ? "Nenhum registro financeiro disponível." : "Nenhuma atividade registrada para este aluno.");
+  return `<div class="student-profile-records">${rows.map(row => `<article class="student-profile-record"><div class="student-profile-record-meta"><span>${escapeHtml(key === "financial" ? row.profileKind : row.status)}</span><span>${escapeHtml(key === "financial" ? row.status || "" : row.prioridade || "")}</span></div><strong>${escapeHtml(key === "financial" ? studentProfileMoney(row.valor) : row.titulo)}</strong><p>${escapeHtml(key === "financial" ? row.data_pagamento ? `Pagamento: ${formatAdminDate(row.data_pagamento)}` : row.vencimento ? `Vencimento: ${formatAdminDate(row.vencimento)}` : "" : row.descricao || "")}</p>${key === "activities" && row.prazo ? `<span>Prazo: ${escapeHtml(formatAdminDate(row.prazo))}</span>` : ""}</article>`).join("")}</div>`;
+};
+const bindStudentProfileTabs = (sheetEl, hist, mode) => {
+  let root = sheetEl.querySelector("[data-student-profile-content]");
+  if (!root) return;
+  const isCurrent = () => hist === (mode === "teacher" ? teacherStudentsState.history : adminStudentsState.history);
+  const update = () => {
+    if (!isCurrent()) return;
+    root = sheetEl.querySelector("[data-student-profile-content]");
+    if (!root?.isConnected) return;
+    root.querySelector('[data-student-profile-panel="history"]').innerHTML = renderStudentProfileHistory(hist);
+    ["financial", "activities"].forEach(key => { root.querySelector(`[data-student-profile-panel="${key}"]`).innerHTML = renderStudentProfileResource(key, hist, mode); });
+  };
+  const load = async (key, force = false) => {
+    if (key === "arquivos") {
+      if (mode !== "teacher") return ensureAdminStudentFilesLoaded({ force });
+      hist.profileResources ||= {};
+      const panel = root.querySelector('[data-student-profile-panel="arquivos"]');
+      try {
+        const files = !force && hist.profileResources.documents?.loaded ? hist.profileResources.documents.files : await readAdminStudentFilesFromFirestore({ alunoId: hist.alunoId });
+        if (!root.isConnected || !isCurrent()) return;
+        hist.profileResources.documents = { loaded: true, files };
+        panel.innerHTML = files.length ? files.map(f => `<div class="student-profile-record"><strong>${escapeHtml(f.fileName)}</strong>${/^https:\/\//i.test(f.fileUrl) ? `<a class="admin-student-file-btn" href="${escapeHtml(f.fileUrl)}" target="_blank" rel="noopener">Abrir</a>` : ""}</div>`).join("") : studentProfileEmpty("Nenhum documento cadastrado.");
+      } catch { if (root.isConnected) panel.innerHTML = studentProfileEmpty("Não foi possível carregar os documentos."); }
+      return;
+    }
+    if (!["financial", "activities"].includes(key) || key === "financial" && mode === "teacher") return;
+    hist.profileResources ||= {};
+    if (hist.profileResources[key]?.loading || hist.profileResources[key]?.loaded && !force) return;
+    const state = hist.profileResources[key] = { loading: true, rows: [] };
+    update();
+    try {
+      // Use the existing read-only dashboard; finance-v1 can materialize recovery rules.
+      const response = await fetchWithAuth(key === "financial" ? "/api/financeiro-dashboard" : "/api/activities", { method: "GET" });
+      if (!response.ok) throw new Error(response.status === 403 ? "Você não tem permissão para consultar estes registros." : "Não foi possível carregar os registros.");
+      const data = await response.json();
+      if (key === "activities") state.rows = (data.activities || []).filter(row => studentProfileRelated(row, hist));
+      else {
+        if (data.errors && Object.keys(data.errors).length) throw new Error("Não foi possível carregar todos os registros financeiros.");
+        const cid = hist.alunoMeta?.asaas_customer_id;
+        const matches = row => studentProfileRelated(row, hist) || Boolean(cid && row.asaas_customer_id === cid);
+        state.rows = [...(data.cobrancas || []).filter(matches).map(row => ({ ...row, profileKind: "Cobrança" })), ...(data.pagamentos || []).filter(matches).map(row => ({ ...row, profileKind: "Pagamento" }))];
+      }
+      state.loaded = true;
+    } catch (error) { state.error = error.message || "Não foi possível carregar os registros."; }
+    finally { state.loading = false; update(); }
+  };
+  const select = key => {
+    if (!STUDENT_PROFILE_TABS.some(([id]) => id === key)) return;
+    hist.activeTab = key;
+    root.querySelectorAll("[data-student-profile-tab]").forEach(button => { const selected = button.dataset.studentProfileTab === key; button.setAttribute("aria-selected", String(selected)); button.tabIndex = selected ? 0 : -1; });
+    root.querySelectorAll("[data-student-profile-panel]").forEach(panel => { panel.hidden = panel.dataset.studentProfilePanel !== key; });
+    load(key);
+  };
+  root.addEventListener("click", event => {
+    const tab = event.target.closest("[data-student-profile-tab]");
+    if (tab) select(tab.dataset.studentProfileTab);
+    const retry = event.target.closest("[data-student-profile-retry]");
+    if (retry) load(retry.dataset.studentProfileRetry, true);
+  });
+  root.querySelector('[role="tablist"]').addEventListener("keydown", event => {
+    const tabs = [...root.querySelectorAll('[role="tab"]')];
+    const index = tabs.indexOf(event.target); if (index < 0) return;
+    const next = event.key === "ArrowRight" ? (index + 1) % tabs.length : event.key === "ArrowLeft" ? (index + tabs.length - 1) % tabs.length : event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : -1;
+    if (next < 0) return; event.preventDefault(); select(tabs[next].dataset.studentProfileTab); tabs[next].focus();
+  });
+  update();
+  if (mode !== "teacher") renderAdminStudentFilesTab();
+  select(hist.activeTab || "history");
+};
+
 const renderStudentSheetInto = ({ sheetEl, hist, mode = "admin" } = {}) => {
   if (!(sheetEl instanceof HTMLElement) || !hist) return;
   const cfg = getStudentSheetModeConfig(mode);
@@ -27297,9 +27405,10 @@ const renderStudentSheetInto = ({ sheetEl, hist, mode = "admin" } = {}) => {
         }
       </aside>
 
-      <section class="admin-student-sheet-right admin-student-simple-right" aria-label="Detalhes do aluno">
-        ${
-          isRetentionV2FeatureEnabled()
+      <section class="admin-student-sheet-right admin-student-simple-right" aria-label="Detalhes do aluno" data-student-profile-content>
+        ${renderStudentProfileTabs(hist, mode)}
+        ${studentProfilePanel("history", renderStudentProfileHistory(hist), hist, mode)}
+        ${studentProfilePanel("retention", isRetentionV2FeatureEnabled()
             ? `
               <div class="admin-student-history-header">
                 <div>
@@ -27311,9 +27420,8 @@ const renderStudentSheetInto = ({ sheetEl, hist, mode = "admin" } = {}) => {
                 ${retentionTimelineHtml}
               </div>
             `
-            : ""
-        }
-        <div class="admin-student-history-header">
+            : "" || studentProfileEmpty("Nenhum evento de retenção disponível."), hist, mode)}
+        ${studentProfilePanel("pedagogical", `        <div class="admin-student-history-header">
           <div>
             <div class="admin-student-panel-title">Histórico Pedagógico</div>
             <div class="admin-student-history-subtitle">Linha do tempo das aulas e comentários do aluno.</div>
@@ -27338,9 +27446,14 @@ const renderStudentSheetInto = ({ sheetEl, hist, mode = "admin" } = {}) => {
         <div class="admin-student-panel-card admin-student-timeline-card">
           <div data-admin-student-history-slot>${historyHtml}</div>
         </div>
+`, hist, mode)}
+        ${studentProfilePanel("financial", renderStudentProfileResource("financial", hist, mode), hist, mode)}
+        ${studentProfilePanel("activities", renderStudentProfileResource("activities", hist, mode), hist, mode)}
+        ${studentProfilePanel("arquivos", studentProfileEmpty("Nenhum documento cadastrado."), hist, mode)}
       </section>
     </div>
   `;
+  bindStudentProfileTabs(sheetEl, hist, mode);
 };
 
 const renderAdminStudentSheet = () => {
