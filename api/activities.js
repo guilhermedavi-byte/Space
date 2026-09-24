@@ -7,6 +7,9 @@ const { listCollectionAsAdmin } = require("./_lib/firestore-admin");
 const { requireAdminPermission } = require("./_lib/admin-permissions");
 const {
   buildActivityCommentNotifications,
+  buildActivityMutationNotifications,
+  buildChecklistAssignmentNotifications,
+  buildChecklistCompletedNotifications,
   commitNotifications,
   resolveCommentMentions,
 } = require("./_lib/notification-service");
@@ -224,6 +227,25 @@ const notifyActivityComment = async ({ activity, comment, actor }) => {
   }
 };
 
+const notifyActivityMutation = async ({ before, after, actor, eventId }) => {
+  try {
+    await commitNotifications(buildActivityMutationNotifications({ before, after, actor, eventId }));
+  } catch (error) {
+    console.error("[api] activity mutation notifications failed", error);
+  }
+};
+
+const notifyChecklistMutation = async ({ activity, before = {}, after = {}, actor, eventId }) => {
+  try {
+    await commitNotifications([
+      ...buildChecklistAssignmentNotifications({ activity, before, after, actor, eventId }),
+      ...buildChecklistCompletedNotifications({ activity, before, after, actor, eventId }),
+    ]);
+  } catch (error) {
+    console.error("[api] checklist notifications failed", error);
+  }
+};
+
 const queryByField = async (collection, fieldPath, value) => {
   const safeValue = safeText(value);
   if (!safeValue) return [];
@@ -289,7 +311,12 @@ const commitActivity = async ({ id, document, patch, session, archive = false })
     ...events.map(event => ({ update: { name: `${prefix}/${EVENTS_COLLECTION}/${event.id}`, ...encodeFields(event) }, currentDocument: { exists: false } }))];
   const response = await requestJson(`${FIRESTORE_BASE}:commit`, { method: 'POST', headers: { Authorization: `Bearer ${await getAccessToken()}` }, body: { writes } });
   if (!response.ok) throw Object.assign(new Error('activity_commit_failed'), { status: [409, 412].includes(response.status) || response.data?.error?.status === 'FAILED_PRECONDITION' ? 409 : response.status });
-  return normalizeActivity(next);
+  const normalized = normalizeActivity(next);
+  if (document) {
+    const eventId = events.map(event => event.id).filter(Boolean).join(':');
+    await notifyActivityMutation({ before: normalizeActivity({ ...document.row, id }), after: normalized, actor: actorFromSession(session), eventId });
+  }
+  return normalized;
 };
 
 const commitActivityAppend = async ({ activity, document, writes, eventType, actor, before = null, after = null, metadata = {}, seed = randomUUID() }) => {
@@ -436,7 +463,9 @@ const commitChecklistAction = async ({ activity, document, body, session }) => {
       metadata: { checklistItemId: id },
       seed: id,
     });
-    return normalizeChecklistItem({ ...item, createdAt: now, updatedAt: now });
+    const normalized = normalizeChecklistItem({ ...item, createdAt: now, updatedAt: now });
+    await notifyChecklistMutation({ activity, before: {}, after: normalized, actor, eventId: id });
+    return normalized;
   }
   const itemId = safeText(body?.itemId);
   if (!itemId) throw Object.assign(new Error('missing_checklist_item'), { status: 400 });
@@ -478,7 +507,9 @@ const commitChecklistAction = async ({ activity, document, body, session }) => {
     metadata: { checklistItemId: itemId },
     seed: `${itemId}:${eventType}:${patch.updatedAt.toISOString ? patch.updatedAt.toISOString() : now}`,
   });
-  return normalizeChecklistItem({ ...patch, updatedAt: now, completedAt: patch.completedAt ? now : null });
+  const normalized = normalizeChecklistItem({ ...patch, updatedAt: now, completedAt: patch.completedAt ? now : null });
+  await notifyChecklistMutation({ activity, before: existing, after: normalized, actor, eventId: `${itemId}:${eventType}` });
+  return normalized;
 };
 const queryByStudent = async (collection, studentId) => {
   const fields = collection === EVENTS_COLLECTION ? ['studentId'] : ['studentId', 'alunoId', 'firestore_student_id'];

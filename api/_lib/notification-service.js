@@ -57,8 +57,18 @@ const resolveCommentMentions = ({ mentions = [], users = [], actorUserId = "" } 
     .filter((mention) => mention.userId !== safeText(actorUserId));
 };
 
-const buildIdempotencyKey = ({ recipientUserId, type, resourceType, resourceId, activityId, commentId } = {}) =>
-  [recipientUserId, type, resourceType, resourceId, activityId, commentId].map(safeText).join(":");
+const buildIdempotencyKey = ({
+  recipientUserId,
+  type,
+  resourceType,
+  resourceId,
+  activityId,
+  commentId,
+  checklistItemId,
+  eventId,
+  deltaKey,
+} = {}) =>
+  [recipientUserId, type, resourceType, resourceId, activityId, commentId, checklistItemId, eventId, deltaKey].map(safeText).join(":");
 
 const notificationIdFromKey = (key) => `ntf_${createHash("sha256").update(String(key || "")).digest("hex").slice(0, 32)}`;
 
@@ -73,6 +83,7 @@ const normalizeNotification = (row = {}) => ({
   resourceId: safeText(row.resourceId),
   activityId: safeText(row.activityId),
   commentId: safeText(row.commentId),
+  checklistItemId: safeText(row.checklistItemId),
   preview: safeText(row.preview),
   metadata: row.metadata && typeof row.metadata === "object" ? row.metadata : {},
   readAt: row.readAt || null,
@@ -88,15 +99,17 @@ const buildNotificationWrite = (notification = {}) => {
     id,
     ...notification,
     createdAt: now,
-    readAt: notification.readAt || null,
     idempotencyKey,
   });
+  const writable = { ...row };
+  delete writable.readAt;
   const prefix = FIRESTORE_BASE.split("/v1/")[1];
   return {
     update: {
       name: `${prefix}/${NOTIFICATIONS_COLLECTION}/${id}`,
-      ...encodeFields(row),
+      ...encodeFields(writable),
     },
+    updateMask: { fieldPaths: Object.keys(writable) },
   };
 };
 
@@ -159,11 +172,190 @@ const getUnreadCountForUser = async (recipientUserId) => {
 };
 
 const commitNotifications = async (notifications = []) => {
-  const writes = (Array.isArray(notifications) ? notifications : []).filter(Boolean).map(buildNotificationWrite);
+  const seen = new Set();
+  const safeNotifications = (Array.isArray(notifications) ? notifications : [])
+    .filter(Boolean)
+    .map((notification) => normalizeNotification(notification))
+    .filter((notification) => notification.recipientUserId && notification.recipientUserId !== notification.actorUserId)
+    .filter((notification) => {
+      const key = notification.idempotencyKey || buildIdempotencyKey(notification);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  const writes = safeNotifications.map(buildNotificationWrite);
   if (!writes.length) return { ok: true, count: 0 };
   const response = await commitWritesAsAdmin({ writes });
   if (!response.ok) throw Object.assign(new Error("notifications_commit_failed"), { status: response.status });
   return { ok: true, count: writes.length };
+};
+
+const getActivityAssigneeIds = (activity = {}) => {
+  const raw = [
+    activity.responsavelId,
+    activity.assigneeId,
+    ...(Array.isArray(activity.responsavelIds) ? activity.responsavelIds : []),
+    ...(Array.isArray(activity.assigneeIds) ? activity.assigneeIds : []),
+    ...(Array.isArray(activity.assignees) ? activity.assignees.map((item) => item?.id || item?.userId || item) : []),
+  ];
+  return Array.from(new Set(raw.map(safeText).filter(Boolean)));
+};
+
+const getDelta = (before = [], after = []) => {
+  const beforeSet = new Set((Array.isArray(before) ? before : []).map(safeText).filter(Boolean));
+  return (Array.isArray(after) ? after : []).map(safeText).filter(Boolean).filter((id) => !beforeSet.has(id));
+};
+
+const baseActivityNotification = ({ activity = {}, actor = {}, type, recipientUserId, preview = "", metadata = {}, eventId = "", deltaKey = "" } = {}) => ({
+  recipientUserId,
+  actorUserId: safeText(actor.id),
+  actorNameSnapshot: safeText(actor.name),
+  actorPhotoSnapshot: safeText(actor.photo),
+  type,
+  resourceType: "activity",
+  resourceId: safeText(activity.id),
+  activityId: safeText(activity.id),
+  preview,
+  metadata: {
+    activityTitle: safeText(activity.titulo),
+    studentId: safeText(activity.studentId),
+    ...metadata,
+  },
+  idempotencyKey: buildIdempotencyKey({
+    recipientUserId,
+    type,
+    resourceType: "activity",
+    resourceId: safeText(activity.id),
+    activityId: safeText(activity.id),
+    eventId,
+    deltaKey,
+  }),
+});
+
+const buildActivityAssignmentNotifications = ({ before = {}, after = {}, actor = {}, eventId = "" } = {}) => {
+  const beforeAssignees = getActivityAssigneeIds(before);
+  const afterAssignees = getActivityAssigneeIds(after);
+  const assigned = getDelta(beforeAssignees, afterAssignees);
+  const unassigned = getDelta(afterAssignees, beforeAssignees);
+  return [
+    ...assigned.map((recipientUserId) => baseActivityNotification({
+      activity: after,
+      actor,
+      recipientUserId,
+      type: "activity_assigned",
+      preview: "Você foi atribuído como responsável.",
+      eventId,
+      deltaKey: `assigned:${recipientUserId}`,
+    })),
+    ...unassigned.map((recipientUserId) => baseActivityNotification({
+      activity: before,
+      actor,
+      recipientUserId,
+      type: "activity_unassigned",
+      preview: "Você foi removido da responsabilidade.",
+      eventId,
+      deltaKey: `unassigned:${recipientUserId}`,
+    })),
+  ];
+};
+
+const buildActivityDueDateNotifications = ({ before = {}, after = {}, actor = {}, eventId = "" } = {}) => {
+  const beforeDate = safeText(before.prazo || before.dueDate);
+  const afterDate = safeText(after.prazo || after.dueDate);
+  if (beforeDate === afterDate) return [];
+  return getActivityAssigneeIds(after).map((recipientUserId) => baseActivityNotification({
+    activity: after,
+    actor,
+    recipientUserId,
+    type: "activity_due_date_changed",
+    preview: "Prazo da atividade alterado.",
+    metadata: { beforeDueDate: beforeDate, afterDueDate: afterDate },
+    eventId,
+    deltaKey: `due:${beforeDate || "none"}:${afterDate || "none"}`,
+  }));
+};
+
+const buildActivityCompletedNotifications = ({ before = {}, after = {}, actor = {}, eventId = "" } = {}) => {
+  if (safeText(before.status) === "Feito" || safeText(after.status) !== "Feito") return [];
+  return getActivityAssigneeIds(after).map((recipientUserId) => baseActivityNotification({
+    activity: after,
+    actor,
+    recipientUserId,
+    type: "activity_completed",
+    preview: "Atividade finalizada.",
+    eventId,
+    deltaKey: "completed",
+  }));
+};
+
+const buildActivityMutationNotifications = ({ before = {}, after = {}, actor = {}, eventId = "" } = {}) => [
+  ...buildActivityAssignmentNotifications({ before, after, actor, eventId }),
+  ...buildActivityDueDateNotifications({ before, after, actor, eventId }),
+  ...buildActivityCompletedNotifications({ before, after, actor, eventId }),
+];
+
+const baseChecklistNotification = ({ activity = {}, item = {}, actor = {}, recipientUserId, type, preview = "", metadata = {}, eventId = "", deltaKey = "" } = {}) => ({
+  ...baseActivityNotification({
+    activity,
+    actor,
+    recipientUserId,
+    type,
+    preview,
+    metadata: {
+      checklistItemId: safeText(item.id),
+      checklistTitle: safeText(item.title || item.titulo),
+      ...metadata,
+    },
+    eventId,
+    deltaKey,
+  }),
+  checklistItemId: safeText(item.id),
+});
+
+const buildChecklistAssignmentNotifications = ({ activity = {}, before = {}, after = {}, actor = {}, eventId = "" } = {}) => {
+  const beforeId = safeText(before.assigneeId || before.responsavelId);
+  const afterId = safeText(after.assigneeId || after.responsavelId);
+  if (beforeId === afterId) return [];
+  const out = [];
+  if (afterId) {
+    out.push(baseChecklistNotification({
+      activity,
+      item: after,
+      actor,
+      recipientUserId: afterId,
+      type: "activity_checklist_assigned",
+      preview: safeText(after.title || after.titulo),
+      eventId,
+      deltaKey: `checklist-assigned:${safeText(after.id)}:${afterId}`,
+    }));
+  }
+  if (beforeId) {
+    out.push(baseChecklistNotification({
+      activity,
+      item: before,
+      actor,
+      recipientUserId: beforeId,
+      type: "activity_checklist_unassigned",
+      preview: safeText(before.title || before.titulo),
+      eventId,
+      deltaKey: `checklist-unassigned:${safeText(before.id)}:${beforeId}`,
+    }));
+  }
+  return out;
+};
+
+const buildChecklistCompletedNotifications = ({ activity = {}, before = {}, after = {}, actor = {}, eventId = "" } = {}) => {
+  if (before.completed === true || after.completed !== true) return [];
+  return getActivityAssigneeIds(activity).map((recipientUserId) => baseChecklistNotification({
+    activity,
+    item: after,
+    actor,
+    recipientUserId,
+    type: "activity_checklist_completed",
+    preview: safeText(after.title || after.titulo),
+    eventId,
+    deltaKey: `checklist-completed:${safeText(after.id)}`,
+  }));
 };
 
 const buildActivityCommentNotifications = ({ activity = {}, comment = {}, actor = {}, mentions = [] } = {}) => {
@@ -178,7 +370,7 @@ const buildActivityCommentNotifications = ({ activity = {}, comment = {}, actor 
       metadata: { mentionedDisplayName: mention.displayName },
     });
   });
-  [activity.responsavelId, activity.criadoPor].map(safeText).forEach((recipientUserId) => {
+  getActivityAssigneeIds(activity).forEach((recipientUserId) => {
     if (!recipientUserId || recipientUserId === actorId || mentionedIds.has(recipientUserId)) return;
     if (recipients.some((item) => item.recipientUserId === recipientUserId)) return;
     recipients.push({ recipientUserId, type: "activity_comment", metadata: {} });
@@ -193,6 +385,14 @@ const buildActivityCommentNotifications = ({ activity = {}, comment = {}, actor 
     activityId: safeText(activity.id),
     commentId: safeText(comment.id),
     preview: safeText(comment.body).slice(0, 180),
+    idempotencyKey: buildIdempotencyKey({
+      recipientUserId: item.recipientUserId,
+      type: item.type,
+      resourceType: "activity",
+      resourceId: safeText(activity.id),
+      activityId: safeText(activity.id),
+      commentId: safeText(comment.id),
+    }),
     metadata: {
       activityTitle: safeText(activity.titulo),
       studentId: safeText(activity.studentId),
@@ -204,9 +404,16 @@ const buildActivityCommentNotifications = ({ activity = {}, comment = {}, actor 
 module.exports = {
   NOTIFICATIONS_COLLECTION,
   buildActivityCommentNotifications,
+  buildActivityMutationNotifications,
+  buildActivityAssignmentNotifications,
+  buildActivityCompletedNotifications,
+  buildActivityDueDateNotifications,
   buildIdempotencyKey,
+  buildChecklistAssignmentNotifications,
+  buildChecklistCompletedNotifications,
   buildNotificationWrite,
   commitNotifications,
+  getActivityAssigneeIds,
   getUnreadCountForUser,
   isMentionableUser,
   listNotificationsForUser,

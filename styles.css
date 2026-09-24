@@ -23579,6 +23579,7 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 .actws-comment.is-deleted p{color:rgba(255,255,255,.38);font-style:italic}
 .actws-comment.is-pending{opacity:.65}
 .actws-comment.is-sending,.actws-check-item.is-sending{opacity:.55;pointer-events:none}
+.actws-comment.is-highlighted,.actws-check-item.is-highlighted{background:rgba(255,86,79,.09);border-radius:12px;box-shadow:0 0 0 1px rgba(255,86,79,.16)}
 .actws-icon-action{appearance:none;border:0;background:transparent;color:rgba(255,255,255,.36);width:26px;height:24px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font:inherit;font-size:14px;font-weight:800;cursor:pointer;opacity:0;transition:opacity .14s ease,background .14s ease,color .14s ease}
 .actws-comment:hover .actws-icon-action,.actws-check-item:hover .actws-icon-action,.actws-icon-action:focus-visible{opacity:1}
 .actws-icon-action:hover{background:rgba(255,255,255,.06);color:rgba(255,255,255,.8)}

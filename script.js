@@ -7958,6 +7958,17 @@ const notificationTitle = (item = {}) => {
   const actor = String(item.actorNameSnapshot || "Alguém").trim();
   if (item.type === "activity_mention") return `${actor} mencionou você`;
   if (item.type === "activity_comment") return `${actor} comentou em uma atividade`;
+  if (item.type === "activity_assigned") return `${actor} atribuiu você como responsável`;
+  if (item.type === "activity_unassigned") return `${actor} removeu você como responsável`;
+  if (item.type === "activity_checklist_assigned") return `${actor} atribuiu um item de checklist a você`;
+  if (item.type === "activity_checklist_unassigned") return `${actor} removeu você de um item de checklist`;
+  if (item.type === "activity_checklist_completed") return `${actor} concluiu um item de checklist`;
+  if (item.type === "activity_due_date_changed") {
+    const before = item.metadata?.beforeDueDate ? formatAdminDate(item.metadata.beforeDueDate) : "Sem prazo";
+    const after = item.metadata?.afterDueDate ? formatAdminDate(item.metadata.afterDueDate) : "Sem prazo";
+    return `${actor} alterou o prazo de ${before} para ${after}`;
+  }
+  if (item.type === "activity_completed") return `${actor} finalizou uma atividade`;
   return "Nova notificação";
 };
 
@@ -7965,6 +7976,24 @@ const notificationMeta = (item = {}) => {
   const title = String(item.metadata?.activityTitle || "").trim();
   const stamp = item.createdAt ? formatAdminHistoryStamp(item.createdAt) : "";
   return [title, stamp].filter(Boolean).join(" · ");
+};
+
+const highlightActivityWorkspaceTarget = (notification = {}) => {
+  const commentId = String(notification?.commentId || "").trim();
+  const checklistItemId = String(notification?.checklistItemId || notification?.metadata?.checklistItemId || "").trim();
+  window.setTimeout(() => {
+    const selector = commentId
+      ? `[data-actws-comment="${CSS.escape(commentId)}"]`
+      : checklistItemId
+        ? `[data-actws-check-item="${CSS.escape(checklistItemId)}"]`
+        : "";
+    if (!selector) return;
+    const target = activitiesDrawerBody?.querySelector(selector);
+    if (!(target instanceof HTMLElement)) return;
+    target.classList.add("is-highlighted");
+    target.scrollIntoView({ block: "center", behavior: "smooth" });
+    window.setTimeout(() => target.classList.remove("is-highlighted"), 2200);
+  }, 260);
 };
 
 const renderNotificationsPanel = () => {
@@ -8071,8 +8100,8 @@ const bindNotificationsUi = () => {
           navigateApp(panelPathForRole(currentRole, "activities"), { replace: false });
           bindActivitiesUi();
           loadActivities({ force: true, silent: true })
-            .then(() => openActivityWorkspace({ id: next.activityId }))
-            .catch(() => openActivityWorkspace({ id: next.activityId }));
+            .then(() => openActivityWorkspace({ id: next.activityId }).then(() => highlightActivityWorkspaceTarget(next)))
+            .catch(() => openActivityWorkspace({ id: next.activityId }).then(() => highlightActivityWorkspaceTarget(next)));
         }
       })
       .catch((error) => console.error("[notifications] mark read failed:", error));

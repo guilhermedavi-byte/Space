@@ -39,7 +39,14 @@ function app() {
     './_lib/http': { readJsonBody: async req => req.body, sendJson: (res, status, body) => Object.assign(res, { status, body }) },
     './_lib/session': { getSessionFromRequest: req => req.session || { role: 'admin', sub: 'admin', nome: 'Admin' } },
     './_lib/admin-permissions': { requireAdminPermission: async () => ({ ok: true }) },
-    './_lib/notification-service': { buildActivityCommentNotifications: () => [], commitNotifications: async () => ({ ok: true }), resolveCommentMentions: () => [] },
+    './_lib/notification-service': {
+      buildActivityCommentNotifications: () => [],
+      buildActivityMutationNotifications: () => [],
+      buildChecklistAssignmentNotifications: () => [],
+      buildChecklistCompletedNotifications: () => [],
+      commitNotifications: async () => ({ ok: true }),
+      resolveCommentMentions: () => [],
+    },
     './_lib/firestore-admin': { listCollectionAsAdmin: async collection => [...docs].filter(([key]) => key.split('/')[0] === collection).map(([key, doc]) => ({ ...doc.fields, id: key.split('/')[1], firestoreDocId: key.split('/')[1] })) },
     './_lib/firestore-rest': { FIRESTORE_BASE: 'https://firestore.googleapis.com/v1/projects/p/databases/(default)/documents', decodeFields: doc => doc.fields, encodeFields: fields => ({ fields }), getDocIdFromName: name => name.split('/').pop(), requestJson },
   };
