@@ -22,3 +22,11 @@ test("Registros de Aulas usa fallback explícito só pelo legacy occurrence map"
   assert.match(script, /statusLabel = "Remarcada"/);
   assert.match(script, /statusLabel = "Cancelada"/);
 });
+
+
+test("Registros de Aulas inclui aulas Supabase/Vexa mesmo quando existem schedule events", () => {
+  assert.match(script, /const normalizedLessons = normalizePedov2LiveLessons/);
+  assert.match(script, /\[\.\.\.normalizedLessons, \.\.\.normalizedEvents, \.\.\.fallbackClassRows\]/);
+  assert.match(script, /recordsByLessonId: recordsIndex\.byLessonId/);
+  assert.match(script, /source: "live-lessons"/);
+});
